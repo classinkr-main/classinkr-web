@@ -800,6 +800,8 @@ export default function LeadsBoardClient() {
   const [filter, setFilter] = useState<LeadFilter>(initialFilter)
   const [searchQuery, setSearchQuery] = useState("")
   const [sourceDetailFilter, setSourceDetailFilter] = useState("all")
+  // 인사이트 '채널별 전환율'에서 ?source=로 진입하는 유입경로(source) 필터.
+  const [channelSource, setChannelSource] = useState(searchParams.get("source")?.trim() ?? "")
   const [leadMagnetFilter, setLeadMagnetFilter] = useState("all")
   const [selected, setSelected] = useState<LeadRecord | null>(null)
   const [logs, setLogs] = useState<ContactLogRecord[]>([])
@@ -1120,6 +1122,7 @@ export default function LeadsBoardClient() {
     return lead.status === filter
   }).filter((lead) => {
     if (sourceDetailFilter !== "all" && getLeadSourceDetail(lead) !== sourceDetailFilter) return false
+    if (channelSource && lead.source !== channelSource) return false
     if (leadMagnetFilter !== "all" && lead.lead_magnet !== leadMagnetFilter) return false
     if (!normalizedSearch) return true
 
@@ -1432,15 +1435,19 @@ export default function LeadsBoardClient() {
             ))}
           </select>
         </div>
-        {(sourceDetailFilter !== "all" || leadMagnetFilter !== "all" || searchQuery.trim()) && (
+        {(sourceDetailFilter !== "all" || leadMagnetFilter !== "all" || channelSource || searchQuery.trim()) && (
           <div className="mt-3 flex items-center justify-between gap-3 text-[12px] text-[#1a1a1a]/45">
-            <span>현재 조건 {filtered.length}건</span>
+            <span>
+              현재 조건 {filtered.length}건
+              {channelSource ? ` · 채널 ‘${channelSource}’` : ""}
+            </span>
             <button
               type="button"
               onClick={() => {
                 setSearchQuery("")
                 setSourceDetailFilter("all")
                 setLeadMagnetFilter("all")
+                setChannelSource("")
               }}
               className="font-medium text-[#084734] hover:text-[#063d2a]"
             >

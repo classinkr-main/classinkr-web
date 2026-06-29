@@ -184,9 +184,19 @@ export default function CrmInsightsClient() {
 
   const funnelStages = leadKpis
     ? [
-        { label: "신규 유입", count: leadKpis.total, color: "#1a1a1a" },
-        { label: "응대", count: Math.max(0, leadKpis.total - (leadKpis.byStatus?.new ?? 0)), color: "#7A520F" },
-        { label: "전환", count: leadKpis.byStatus?.converted ?? 0, color: "#084734" },
+        { label: "신규 유입", count: leadKpis.total, color: "#1a1a1a", href: "/admin/crm/customers/leads" },
+        {
+          label: "응대",
+          count: Math.max(0, leadKpis.total - (leadKpis.byStatus?.new ?? 0)),
+          color: "#7A520F",
+          href: "/admin/crm/customers/leads?filter=contacted",
+        },
+        {
+          label: "전환",
+          count: leadKpis.byStatus?.converted ?? 0,
+          color: "#084734",
+          href: "/admin/crm/customers/leads?filter=converted",
+        },
       ]
     : []
 
@@ -235,7 +245,11 @@ export default function CrmInsightsClient() {
                 const stepRate =
                   i === 0 ? null : funnelStages[i - 1].count > 0 ? stage.count / funnelStages[i - 1].count : 0
                 return (
-                  <div key={stage.label} className="flex items-center gap-3">
+                  <Link
+                    key={stage.label}
+                    href={stage.href}
+                    className="-mx-1 flex items-center gap-3 rounded-lg px-1 py-0.5 transition-colors hover:bg-[#fafaf8]"
+                  >
                     <span className="w-14 shrink-0 text-[12px] font-semibold text-[#1a1a1a]/55">{stage.label}</span>
                     <div className="h-7 flex-1 overflow-hidden rounded-lg bg-[#fafaf8]">
                       <div
@@ -249,7 +263,7 @@ export default function CrmInsightsClient() {
                       {Math.round(pctOfTotal * 100)}%
                       {stepRate != null ? ` · 전환 ${Math.round(stepRate * 100)}%` : ""}
                     </span>
-                  </div>
+                  </Link>
                 )
               })}
             </div>
@@ -265,7 +279,11 @@ export default function CrmInsightsClient() {
             </div>
             <div className="space-y-2">
               {channels.map((ch) => (
-                <div key={ch.source} className="flex items-center gap-3">
+                <Link
+                  key={ch.source}
+                  href={`/admin/crm/customers/leads?source=${encodeURIComponent(ch.source)}`}
+                  className="-mx-1 flex items-center gap-3 rounded-md px-1 py-0.5 transition-colors hover:bg-[#fafaf8]"
+                >
                   <span className="w-28 shrink-0 truncate text-[12px] font-semibold text-[#111110]" title={ch.source}>
                     {ch.source}
                   </span>
@@ -279,7 +297,7 @@ export default function CrmInsightsClient() {
                     <b className="text-[#084734]">{Math.round(ch.rate * 100)}%</b> ·{" "}
                     {ch.converted.toLocaleString("ko-KR")}/{ch.total.toLocaleString("ko-KR")}
                   </span>
-                </div>
+                </Link>
               ))}
             </div>
             <p className="mt-2 text-[10px] text-[#1a1a1a]/35">전환율 = 전환 리드 / 전체 리드(채널별) · 건수 상위 8개</p>
