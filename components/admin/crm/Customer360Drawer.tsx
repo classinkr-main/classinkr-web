@@ -25,6 +25,7 @@ import {
   RefreshCw,
   Sparkles,
   StickyNote,
+  Tag,
   User2,
   X,
 } from "lucide-react"
@@ -277,6 +278,9 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [activityTab, setActivityTab] = useState<"timeline" | "feed">("timeline")
   const [eventsExpanded, setEventsExpanded] = useState(false)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState("")
+  const [tagBusy, setTagBusy] = useState(false)
   const [noteKind, setNoteKind] = useState<"manual_note" | "meeting_minutes">("manual_note")
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
@@ -353,6 +357,22 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     const timer = setTimeout(() => setSavedMsg(null), 2200)
     return () => clearTimeout(timer)
   }, [savedMsg])
+
+  // 라벨(수기 태그) — 고객 전환 시 재조회. 시스템 파생 플래그와 별개.
+  useEffect(() => {
+    setTags([])
+    setTagInput("")
+    if (!customerKey) return
+    let alive = true
+    adminFetchJson<{ tags: string[] }>(`/api/admin/crm/customers/${encodeURIComponent(customerKey)}/tags`)
+      .then((result) => {
+        if (alive) setTags(result.tags ?? [])
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [customerKey])
 
   const header = data?.header
   const displayName = header?.name ?? name ?? "고객"
@@ -605,6 +625,44 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     }
   }, [url])
 
+  const handleAddTag = useCallback(async () => {
+    const clean = tagInput.trim()
+    if (!clean || !customerKey) return
+    setTagBusy(true)
+    try {
+      const result = await adminFetchJson<{ tags: string[] }>(
+        `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/tags`,
+        { method: "POST", body: JSON.stringify({ tag: clean }) }
+      )
+      setTags(result.tags ?? [])
+      setTagInput("")
+      setSavedMsg("라벨을 추가했어요")
+    } catch {
+      // 실패 시 현재 라벨 유지
+    } finally {
+      setTagBusy(false)
+    }
+  }, [tagInput, customerKey])
+
+  const handleRemoveTag = useCallback(
+    async (tag: string) => {
+      if (!customerKey) return
+      setTagBusy(true)
+      try {
+        const result = await adminFetchJson<{ tags: string[] }>(
+          `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/tags?tag=${encodeURIComponent(tag)}`,
+          { method: "DELETE" }
+        )
+        setTags(result.tags ?? [])
+      } catch {
+        // 실패 시 현재 라벨 유지
+      } finally {
+        setTagBusy(false)
+      }
+    },
+    [customerKey]
+  )
+
   if (!customerKey) return null
 
   return (
@@ -713,6 +771,53 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
               <span>{data.health.warnings.join(" ")}</span>
             </div>
           ) : null}
+
+          {/* 라벨 — 수기 분류(시스템 파생 플래그와 별개) */}
+          <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+            <SectionTitle icon={<Tag className="h-3.5 w-3.5" />}>라벨</SectionTitle>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 rounded-full border border-[#e8e8e4] bg-[#fafaf8] px-2.5 py-1 text-[12px] font-medium text-[#111110]"
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveTag(tag)}
+                    disabled={tagBusy}
+                    className="text-[#1a1a1a]/35 transition-colors hover:text-[#B85C33] disabled:opacity-50"
+                    aria-label={`${tag} 라벨 삭제`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                value={tagInput}
+                onChange={(event) => setTagInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault()
+                    void handleAddTag()
+                  }
+                }}
+                placeholder={tags.length ? "라벨 추가" : "라벨 추가 (예: VIP·강남·재계약 대상)"}
+                className="h-7 min-w-[120px] flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#084734]"
+              />
+              {tagInput.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => void handleAddTag()}
+                  disabled={tagBusy}
+                  className="inline-flex h-7 shrink-0 items-center rounded-lg bg-[#084734] px-2.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  추가
+                </button>
+              ) : null}
+            </div>
+            <p className="mt-1.5 text-[10px] text-[#1a1a1a]/35">수기 라벨 — 시스템 자동 플래그와 별개로 직접 분류·세그먼트</p>
+          </section>
 
           {/* 다음 액션 추천 — 규칙 기반 파생(Derived). 공식 데이터를 대체하지 않는다. */}
           {recommendation ? (
