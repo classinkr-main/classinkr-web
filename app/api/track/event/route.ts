@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
 
 const ALLOWED_EVENTS = new Set([
@@ -14,6 +14,7 @@ const ALLOWED_EVENTS = new Set([
   "view_demo_video",
   "begin_checkout",
   "purchase",
+  "page_exit",
   "chatbot_teaser_shown",
   "chatbot_teaser_clicked",
   "chatbot_teaser_dismissed",
@@ -22,8 +23,9 @@ const ALLOWED_EVENTS = new Set([
 ])
 
 const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
-  page_view: new Set(["path", "title", "referrer"]),
+  page_view: new Set(["path", "title", "referrer", "event_id"]),
   click_cta: new Set([
+    "event_id",
     "button",
     "page",
     "destination",
@@ -33,15 +35,15 @@ const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
     "gate",
     "slug",
     "event_slug",
-    "event_id",
   ]),
-  submit_demo_request: new Set(["source", "lead_id", "stored", "event_slug"]),
-  submit_newsletter: new Set(["source", "lead_magnet", "post_slug", "gate"]),
-  download_materials: new Set(["asset_id", "page", "source", "lead_magnet", "post_slug", "gate"]),
-  view_resource_card: new Set(["source", "lead_magnet", "gate", "tier", "category"]),
-  view_resource: new Set(["source", "lead_magnet", "gate", "tier", "category"]),
-  view_demo_video: new Set(["button", "page"]),
+  submit_demo_request: new Set(["event_id", "source", "lead_id", "stored", "event_slug"]),
+  submit_newsletter: new Set(["event_id", "source", "lead_magnet", "post_slug", "gate"]),
+  download_materials: new Set(["event_id", "asset_id", "page", "source", "lead_magnet", "post_slug", "gate"]),
+  view_resource_card: new Set(["event_id", "source", "lead_magnet", "gate", "tier", "category"]),
+  view_resource: new Set(["event_id", "source", "lead_magnet", "gate", "tier", "category"]),
+  view_demo_video: new Set(["event_id", "button", "page", "source", "seminar"]),
   begin_checkout: new Set([
+    "event_id",
     "button",
     "page",
     "mode",
@@ -54,12 +56,20 @@ const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
     "value",
     "currency",
   ]),
-  purchase: new Set(["value", "currency"]),
-  chatbot_teaser_shown: new Set(["path"]),
-  chatbot_teaser_clicked: new Set(["path"]),
-  chatbot_teaser_dismissed: new Set(["path"]),
-  chatbot_opened: new Set(["source"]),
-  chatbot_first_question: new Set(["path"]),
+  purchase: new Set(["event_id", "transaction_id", "value", "currency"]),
+  page_exit: new Set([
+    "event_id",
+    "path",
+    "title",
+    "duration_ms",
+    "exit_type",
+    "next_path",
+  ]),
+  chatbot_teaser_shown: new Set(["event_id", "path"]),
+  chatbot_teaser_clicked: new Set(["event_id", "path"]),
+  chatbot_teaser_dismissed: new Set(["event_id", "path"]),
+  chatbot_opened: new Set(["event_id", "source"]),
+  chatbot_first_question: new Set(["event_id", "path"]),
 }
 
 const PII_PATTERNS = [
@@ -81,7 +91,7 @@ export async function POST(req: NextRequest) {
   }
 
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "track-event", {
+  const { allowed } = await checkRateLimitDistributed(ip, "track-event", {
     windowMs: 60_000,
     max: 120,
   })

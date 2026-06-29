@@ -8,7 +8,7 @@ import {
   CONSENT_POLICY_VERSION,
   type ConsentRecord,
 } from "@/lib/consent/consent"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
   }
 
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "consent", { windowMs: 60_000, max: 30 })
+  const { allowed } = await checkRateLimitDistributed(ip, "consent", { windowMs: 60_000, max: 30 })
   if (!allowed) {
     return NextResponse.json({ ok: false }, { status: 429 })
   }

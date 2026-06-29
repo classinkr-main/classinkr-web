@@ -242,6 +242,7 @@ export function SubscriptionCheckoutPanel() {
             orderId: string
             checkoutToken: string
             orderName: string
+            conversionEventId?: string
             amount: number
             amountKrw: number
             amountUsd: number
@@ -263,6 +264,7 @@ export function SubscriptionCheckoutPanel() {
         plan_id: planId,
         billing_cycle: billingCycle,
         account_count: clampAccountCount(accountCount),
+        event_id: payload.conversionEventId,
         value: payload.amountKrw,
         currency: "KRW",
       })

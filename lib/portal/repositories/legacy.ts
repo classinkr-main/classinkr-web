@@ -203,6 +203,7 @@ async function buildLegacyDealDetailPayload(partner: Partner): Promise<DealDetai
     closed_at: partner.pipeline_stage === "completed" ? partner.updated_at : null,
     notes: partner.notes,
     created_by: partner.created_by,
+    owner_id: partner.created_by,
     created_at: partner.created_at,
     updated_at: partner.updated_at,
   };

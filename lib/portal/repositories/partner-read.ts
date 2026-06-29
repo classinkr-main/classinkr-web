@@ -98,12 +98,14 @@ function historyToDealListItem(
     closed_at: history.deal_status === "closed" ? history.deal_updated_at : null,
     notes: null,
     created_by: null,
+    owner_id: null,
     created_at: history.deal_created_at,
     updated_at: history.deal_updated_at,
     customer_name: detail.customer.name,
     customer_contact_name: detail.customer.contact_name,
     customer_region_label: detail.customer.region_label,
     customer_campus_name: detail.customer.campus_name,
+    owner_name: null,
   };
 }
 

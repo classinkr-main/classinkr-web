@@ -2,6 +2,12 @@ export interface ProviderAvailability {
   google: boolean
   naver: boolean
   kakao: boolean
+  apple: boolean
+}
+
+function isEnabled(value: string | undefined): boolean {
+  const v = value?.trim().toLowerCase()
+  return v === "true" || v === "1"
 }
 
 /**
@@ -17,5 +23,8 @@ export function resolveProviderAvailability(env: ProviderEnv): ProviderAvailabil
     google: true,
     naver: Boolean(env.NAVER_CLIENT_ID?.trim() && env.NAVER_CLIENT_SECRET?.trim()),
     kakao: Boolean(env.KAKAO_REST_API_KEY?.trim()),
+    // Apple은 Supabase 네이티브 프로바이더(앱 측 시크릿 불필요). Supabase에 설정한 뒤
+    // APPLE_LOGIN_ENABLED=true 로 노출한다.
+    apple: isEnabled(env.APPLE_LOGIN_ENABLED),
   }
 }

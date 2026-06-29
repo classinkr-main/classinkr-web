@@ -19,7 +19,7 @@
 1. [정체성과 원칙](./identity.md)
 2. [정보 구조와 메뉴 관점](./information-architecture.md)
 3. [도메인 모델과 원장 구조](./domain-model.md)
-4. [하드웨어 시트 해석 기준](./sheet-interpretation.md)
+4. [하드웨어 시트 해석 기준](./sheet-interpretation.md) — 백업 후 이관 기준 포함
 5. [데이터 계약](./data-contracts.md)
 6. [견적서 스펙과 UX](./quote-document-spec.md)
 7. [상태 흐름과 전이 규칙](./state-flow.md)

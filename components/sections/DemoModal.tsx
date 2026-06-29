@@ -104,6 +104,7 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 source: "demo_modal",
                 lead_id: data.leadId,
                 stored: data.stored,
+                event_id: data.conversionEventId,
             })
             toast.success("상담 요청이 접수되었어요")
             setSubmitted(true)

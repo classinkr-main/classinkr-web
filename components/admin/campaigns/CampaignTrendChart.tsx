@@ -143,9 +143,9 @@ export function CampaignTrendChart({ data }: CampaignTrendChartProps) {
                 type="monotone"
                 dataKey="leads"
                 name="leads"
-                stroke="#1a73e8"
+                stroke="#111110"
                 strokeWidth={2}
-                dot={{ r: 3, fill: "#1a73e8", strokeWidth: 0 }}
+                dot={{ r: 3, fill: "#111110", strokeWidth: 0 }}
                 activeDot={{ r: 4 }}
               />
             </ComposedChart>

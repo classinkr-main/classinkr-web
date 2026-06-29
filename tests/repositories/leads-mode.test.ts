@@ -64,7 +64,7 @@ describe("saveLead", () => {
         },
         error: null,
       })
-    const insert = vi.fn(() => ({
+    const insert = vi.fn((_payload: Record<string, unknown>) => ({
       select: () => ({ single }),
     }))
     const from = vi.fn(() => ({ insert }))
@@ -118,7 +118,7 @@ describe("saveLead", () => {
         message: "permission denied for table leads",
       },
     })
-    const insert = vi.fn(() => ({
+    const insert = vi.fn((_payload: Record<string, unknown>) => ({
       select: () => ({ single }),
     }))
     const from = vi.fn(() => ({ insert }))

@@ -5,6 +5,7 @@ import {
   getXiaoshouyiOwnerNameMap,
   resolveOwnerName,
 } from "@/lib/external-crm/owner-names"
+import { deriveCustomerRegion, regionCandidatesFromPayload } from "@/lib/crm/region-label"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { fetchSupabasePages } from "@/lib/supabase/pagination"
 
@@ -79,6 +80,7 @@ export interface NeoCrmCustomerDetail {
     name: string
     ownerName: string
     phone: string | null
+    region: string | null
     createdAt: string | null
     updatedAt: string | null
   } | null
@@ -169,7 +171,21 @@ function buildSyncHealth(shroffAccountSyncedAt: string | null) {
   }
 }
 
+let neoCustomersCache: { at: number; value: NeoCrmCustomerList } | null = null
+const NEO_CUSTOMERS_CACHE_TTL_MS = 60_000
+
+// 60초 인메모리 캐시 — NEO 동기화 데이터는 1일 1회 갱신이라 짧은 staleness가 무해하고,
+// 우선순위 큐·통합 고객·os-summary가 매 요청마다 external_crm_records 5000×3 스캔하던 비용을 완화한다.
+// (Fluid Compute 인스턴스 재사용 시 요청 간 유지. 성공 결과만 캐시.)
 export async function getNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
+  const cached = neoCustomersCache
+  if (cached && Date.now() - cached.at < NEO_CUSTOMERS_CACHE_TTL_MS) return cached.value
+  const value = await computeNeoCrmCustomers()
+  if (value.ok) neoCustomersCache = { at: Date.now(), value }
+  return value
+}
+
+async function computeNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
   const sb = createSupabaseAdminClient()
   const generatedAt = new Date().toISOString()
 
@@ -429,6 +445,10 @@ export async function getNeoCrmCustomerDetail(accountId: string): Promise<NeoCrm
       name: account.display_name ?? payloadString(account.payload, "accountName") ?? account.external_id,
       ownerName: resolveOwnerName(account.owner_name, ownerNames),
       phone: payloadString(account.payload, "phone"),
+      region: (() => {
+        const derived = deriveCustomerRegion(regionCandidatesFromPayload(account.payload))
+        return derived.source === "unspecified" ? null : derived.label
+      })(),
       createdAt: toIso(account.payload?.["createdAt"]),
       updatedAt: account.occurred_at ?? toIso(account.payload?.["updatedAt"]),
     },

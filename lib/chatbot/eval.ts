@@ -28,6 +28,7 @@ interface GoldenCase {
   expectMode: string[]
   expectPathIncludes?: string
   expectHeadingIncludes?: string
+  expectSources?: boolean
 }
 
 interface Judgement {
@@ -52,6 +53,7 @@ export interface GoldenEvalReport {
   deterministic: {
     categoryMatch: number
     modeOk: number
+    sourceApplicable: number
     withSources: number
     categoryMatchRate: number
     modeOkRate: number
@@ -71,6 +73,7 @@ export interface GoldenEvalReport {
 interface GoldenEvalCaseResult {
   categoryMatch: number
   modeOk: number
+  sourceApplicable: number
   withSources: number
   judged: number
   faithfulHits: number
@@ -188,6 +191,11 @@ async function evaluateGoldenCase(
   const isExpectedHeadingOk =
     !testCase.expectHeadingIncludes ||
     result.sources.some((source) => (source.heading ?? "").includes(testCase.expectHeadingIncludes ?? ""))
+  const sourceApplicable = Boolean(testCase.expectPathIncludes || testCase.expectHeadingIncludes)
+    ? 1
+    : testCase.expectSources === false
+      ? 0
+      : 1
 
   let judged = 0
   let faithfulHits = 0
@@ -222,7 +230,8 @@ async function evaluateGoldenCase(
   return {
     categoryMatch: isCategoryMatch ? 1 : 0,
     modeOk: isModeOk ? 1 : 0,
-    withSources: hasSources ? 1 : 0,
+    sourceApplicable,
+    withSources: sourceApplicable && hasSources ? 1 : 0,
     judged,
     faithfulHits,
     hallucinations,
@@ -268,6 +277,7 @@ export async function runGoldenEval(
     (acc, result) => ({
       categoryMatch: acc.categoryMatch + result.categoryMatch,
       modeOk: acc.modeOk + result.modeOk,
+      sourceApplicable: acc.sourceApplicable + result.sourceApplicable,
       withSources: acc.withSources + result.withSources,
       judged: acc.judged + result.judged,
       faithfulHits: acc.faithfulHits + result.faithfulHits,
@@ -278,6 +288,7 @@ export async function runGoldenEval(
     {
       categoryMatch: 0,
       modeOk: 0,
+      sourceApplicable: 0,
       withSources: 0,
       judged: 0,
       faithfulHits: 0,
@@ -292,6 +303,8 @@ export async function runGoldenEval(
 
   const total = cases.length
   const rate = (value: number) => (total === 0 ? 0 : value / total)
+  const sourceRate =
+    totals.sourceApplicable === 0 ? 0 : totals.withSources / totals.sourceApplicable
 
   return {
     total,
@@ -299,10 +312,11 @@ export async function runGoldenEval(
     deterministic: {
       categoryMatch: totals.categoryMatch,
       modeOk: totals.modeOk,
+      sourceApplicable: totals.sourceApplicable,
       withSources: totals.withSources,
       categoryMatchRate: rate(totals.categoryMatch),
       modeOkRate: rate(totals.modeOk),
-      sourceRate: rate(totals.withSources),
+      sourceRate,
     },
     judge: {
       enabled: useJudge,

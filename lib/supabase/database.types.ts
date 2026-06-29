@@ -9,8 +9,9 @@
 
 /* ─── Enum Types ─── */
 
-export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "PARTNER";
+export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "PARTNER" | "BRANCH";
 export type AdminStatus = "INVITED" | "ACTIVE" | "SUSPENDED";
+export type AdminCrmTeamRole = "branch_director" | "manager" | "admin" | "ops";
 
 export type BlogPostStatus = "DRAFT" | "IN_REVIEW" | "PUBLISHED" | "ARCHIVED";
 
@@ -31,6 +32,13 @@ export interface AdminProfile {
   status: AdminStatus;
   invited_by: string | null;
   last_login_at: string | null;
+  branch_name: string | null;
+  crm_team_role: AdminCrmTeamRole;
+  crm_assignable: boolean;
+  crm_owner_key: string | null;
+  crm_owner_aliases: string[];
+  neo_owner_id: string | null;
+  crm_sort_order: number;
   created_at: string;
   updated_at: string;
 }
@@ -181,6 +189,210 @@ export interface LeadContactLog {
   contacted_at: string;
   contacted_by: string | null;
 }
+
+export type CrmCustomerEventTargetType = "lead" | "neo_account" | "customer" | "deal" | "unknown";
+export type CrmCustomerEventSourceType =
+  | "manual_note"
+  | "meeting_minutes"
+  | "recording"
+  | "calendar_event"
+  | "lead_contact_log"
+  | "external_crm"
+  | "sheet";
+export type CrmCustomerEventSentiment = "positive" | "neutral" | "risk";
+
+export interface CrmCustomerEvent {
+  id: string;
+  target_type: CrmCustomerEventTargetType;
+  target_id: string | null;
+  target_label: string | null;
+  source_type: CrmCustomerEventSourceType;
+  source_id: string | null;
+  occurred_at: string;
+  title: string;
+  summary: string | null;
+  body: string | null;
+  meeting_purpose: string | null;
+  owner_name: string | null;
+  attendees: Record<string, unknown>[];
+  decisions: Record<string, unknown>[];
+  blockers: Record<string, unknown>[];
+  next_actions: Record<string, unknown>[];
+  sentiment: CrmCustomerEventSentiment;
+  stage_signal: string | null;
+  tags: string[];
+  recording_storage_path: string | null;
+  recording_file_name: string | null;
+  recording_mime_type: string | null;
+  recording_size_bytes: number | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CrmTaskTargetType = "lead" | "neo_account" | "customer" | "deal" | "unknown";
+export type CrmTaskType =
+  | "call"
+  | "kakao"
+  | "email"
+  | "meeting"
+  | "quote"
+  | "demo"
+  | "install"
+  | "renewal"
+  | "cs_checkin"
+  | "data_fix"
+  | "other";
+export type CrmTaskPriority = "low" | "normal" | "high" | "urgent";
+export type CrmTaskStatus = "open" | "done" | "snoozed" | "canceled";
+
+export interface CrmTask {
+  id: string;
+  target_type: CrmTaskTargetType;
+  target_id: string | null;
+  target_label: string | null;
+  owner_key: string | null;
+  owner_name_snapshot: string | null;
+  task_type: CrmTaskType;
+  title: string;
+  detail: string | null;
+  due_at: string | null;
+  snoozed_until: string | null;
+  priority: CrmTaskPriority;
+  status: CrmTaskStatus;
+  source_event_id: string | null;
+  created_by: string | null;
+  assigned_by: string | null;
+  completed_at: string | null;
+  completed_by: string | null;
+  outcome: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CrmTaskInsert = Omit<CrmTask, "id" | "created_at" | "updated_at"> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+export type CrmTaskUpdate = Partial<Omit<CrmTask, "id" | "created_at">>;
+
+export type CrmDealStage = "consult" | "demo" | "quote" | "decision" | "order" | "won" | "lost";
+export type CrmDealStatus = "open" | "won" | "lost";
+
+export interface CrmDeal {
+  id: string;
+  target_type: CrmTaskTargetType;
+  target_id: string | null;
+  target_label: string | null;
+  owner_key: string | null;
+  owner_name_snapshot: string | null;
+  title: string;
+  stage: CrmDealStage;
+  status: CrmDealStatus;
+  expected_amount: number | null;
+  expected_close_at: string | null;
+  next_task_id: string | null;
+  quote_ref: string | null;
+  order_ref: string | null;
+  risk_note: string | null;
+  created_by: string | null;
+  closed_at: string | null;
+  closed_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CrmDealInsert = Omit<CrmDeal, "id" | "created_at" | "updated_at"> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+export type CrmDealUpdate = Partial<Omit<CrmDeal, "id" | "created_at">>;
+
+export type CrmCaptureSourceType = "pasted_table" | "pasted_text" | "public_event" | "single";
+export type CrmCaptureBatchStatus = "draft" | "parsed" | "reviewed" | "applied" | "partial_failed" | "canceled";
+export type CrmCaptureActivityType =
+  | "event_attended"
+  | "visit"
+  | "demo_call"
+  | "check_in_call"
+  | "installation"
+  | "consultation"
+  | "quote_sent"
+  | "onboarding"
+  | "cs_issue"
+  | "memo";
+export type CrmCaptureMatchStatus =
+  | "confirmed_customer"
+  | "confirmed_lead"
+  | "multiple_candidates"
+  | "new_lead_candidate"
+  | "needs_review"
+  | "duplicate_in_batch";
+export type CrmCaptureApplyStatus = "pending" | "applied" | "skipped" | "failed";
+
+export interface CrmCaptureBatch {
+  id: string;
+  source_type: CrmCaptureSourceType;
+  source_id: string | null;
+  source_label: string | null;
+  default_activity_type: CrmCaptureActivityType;
+  default_task_enabled: boolean;
+  default_task_offset_days: number;
+  raw_input_storage_path: string | null;
+  status: CrmCaptureBatchStatus;
+  row_count: number;
+  event_created_count: number;
+  task_created_count: number;
+  lead_created_count: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CrmCaptureBatchInsert = Omit<CrmCaptureBatch, "id" | "created_at" | "updated_at"> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+export type CrmCaptureBatchUpdate = Partial<Omit<CrmCaptureBatch, "id" | "created_at">>;
+
+export interface CrmCaptureRow {
+  id: string;
+  batch_id: string;
+  row_index: number;
+  raw_text: string;
+  organization_name: string | null;
+  contact_name: string | null;
+  phone: string | null;
+  email: string | null;
+  region_label: string | null;
+  activity_type: CrmCaptureActivityType;
+  memo: string | null;
+  match_status: CrmCaptureMatchStatus;
+  matched_target_type: "lead" | "neo_account" | "customer" | "deal" | null;
+  matched_target_id: string | null;
+  matched_target_label: string | null;
+  match_candidates: Record<string, unknown>[];
+  selected: boolean;
+  create_task: boolean;
+  task_due_at: string | null;
+  apply_status: CrmCaptureApplyStatus;
+  created_event_id: string | null;
+  created_task_id: string | null;
+  created_lead_id: string | null;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CrmCaptureRowInsert = Omit<CrmCaptureRow, "id" | "created_at" | "updated_at"> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+export type CrmCaptureRowUpdate = Partial<Omit<CrmCaptureRow, "id" | "created_at">>;
 
 export type NewsletterStatus = "active" | "unsubscribed";
 
@@ -437,8 +649,23 @@ export type HwSaleItemUpdate = Partial<Omit<HwSaleItem, "id">>;
 
 export type AdminProfileInsert = Omit<
   AdminProfile,
-  "created_at" | "updated_at"
+  | "created_at"
+  | "updated_at"
+  | "branch_name"
+  | "crm_team_role"
+  | "crm_assignable"
+  | "crm_owner_key"
+  | "crm_owner_aliases"
+  | "neo_owner_id"
+  | "crm_sort_order"
 > & {
+  branch_name?: string | null;
+  crm_team_role?: AdminCrmTeamRole;
+  crm_assignable?: boolean;
+  crm_owner_key?: string | null;
+  crm_owner_aliases?: string[];
+  neo_owner_id?: string | null;
+  crm_sort_order?: number;
   created_at?: string;
   updated_at?: string;
 };
@@ -494,6 +721,13 @@ export type ClientEventUpdate = Partial<Omit<ClientEvent, "id" | "created_at">>;
 
 export type LeadContactLogInsert = Omit<LeadContactLog, "id"> & { id?: string };
 export type LeadContactLogUpdate = Partial<Omit<LeadContactLog, "id">>;
+
+export type CrmCustomerEventInsert = Omit<CrmCustomerEvent, "id" | "created_at" | "updated_at"> & {
+  id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+export type CrmCustomerEventUpdate = Partial<Omit<CrmCustomerEvent, "id" | "created_at">>;
 
 export type PartnerInsert = Omit<Partner, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
 export type PartnerUpdate = Partial<Omit<Partner, "id" | "created_at">>;
@@ -594,6 +828,31 @@ export interface Database {
         Row: LeadContactLog;
         Insert: LeadContactLogInsert;
         Update: LeadContactLogUpdate;
+      };
+      crm_customer_events: {
+        Row: CrmCustomerEvent;
+        Insert: CrmCustomerEventInsert;
+        Update: CrmCustomerEventUpdate;
+      };
+      crm_tasks: {
+        Row: CrmTask;
+        Insert: CrmTaskInsert;
+        Update: CrmTaskUpdate;
+      };
+      crm_deals: {
+        Row: CrmDeal;
+        Insert: CrmDealInsert;
+        Update: CrmDealUpdate;
+      };
+      crm_capture_batches: {
+        Row: CrmCaptureBatch;
+        Insert: CrmCaptureBatchInsert;
+        Update: CrmCaptureBatchUpdate;
+      };
+      crm_capture_rows: {
+        Row: CrmCaptureRow;
+        Insert: CrmCaptureRowInsert;
+        Update: CrmCaptureRowUpdate;
       };
       partners: {
         Row: Partner;

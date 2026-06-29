@@ -49,6 +49,7 @@ current_lint.txt
 next-env.d.ts
 .gstack/
 _antigravity_reset_backup/
+tmp/
 tmp_audit/
 .codex-audit/
 .superpowers/

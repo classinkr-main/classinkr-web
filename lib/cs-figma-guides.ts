@@ -632,28 +632,28 @@ function hasKnownWebLiveChatVisibilityIntent(normalizedQuestion: string) {
 
 function findKnownCsFigmaIntentSlug(normalizedQuestion: string) {
   if (hasKnownWebLiveChatVisibilityIntent(normalizedQuestion)) return "web-live-create"
-  if (hasDashboardWebLiveCreateProcedureIntent(normalizedQuestion)) return "cs-figma-digest-383"
-  if (hasElectronicBoardLocalRecordingProcedureIntent(normalizedQuestion)) return "cs-figma-digest-481"
-  if (hasReplayValidityProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1009"
-  if (hasReplayAnalyticsProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1555"
-  if (hasSharedDrivePermissionProcedureIntent(normalizedQuestion)) return "cs-figma-digest-967"
-  if (hasSubAccountSettingsProcedureIntent(normalizedQuestion)) return "cs-figma-digest-946"
-  if (hasStorageDeletionProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1292"
-  if (hasAccountUsageDetailProcedureIntent(normalizedQuestion)) return "cs-figma-digest-665"
-  if (hasLessonTeacherSettingsProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1031"
-  if (hasCourseTeacherChangeProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1062"
-  if (hasStudentNicknameSyncProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1104"
-  if (hasCourseNicknameOptionIntent(normalizedQuestion)) return "cs-figma-digest-1133"
-  if (hasLessonDeletionProcedureIntent(normalizedQuestion)) return "cs-figma-digest-687"
-  if (hasElectronicBoardLogReportProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1514"
-  if (hasClassinXReinstallProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1875"
+  if (hasDashboardWebLiveCreateProcedureIntent(normalizedQuestion)) return "cs-figma-digest-350"
+  if (hasElectronicBoardLocalRecordingProcedureIntent(normalizedQuestion)) return "cs-figma-digest-449"
+  if (hasReplayValidityProcedureIntent(normalizedQuestion)) return "cs-figma-digest-982"
+  if (hasReplayAnalyticsProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1558"
+  if (hasSharedDrivePermissionProcedureIntent(normalizedQuestion)) return "cs-figma-digest-940"
+  if (hasSubAccountSettingsProcedureIntent(normalizedQuestion)) return "cs-figma-digest-919"
+  if (hasStorageDeletionProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1294"
+  if (hasAccountUsageDetailProcedureIntent(normalizedQuestion)) return "cs-figma-digest-633"
+  if (hasLessonTeacherSettingsProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1004"
+  if (hasCourseTeacherChangeProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1035"
+  if (hasStudentNicknameSyncProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1102"
+  if (hasCourseNicknameOptionIntent(normalizedQuestion)) return "cs-figma-digest-1131"
+  if (hasLessonDeletionProcedureIntent(normalizedQuestion)) return "cs-figma-digest-655"
+  if (hasElectronicBoardLogReportProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1516"
+  if (hasClassinXReinstallProcedureIntent(normalizedQuestion)) return "cs-figma-digest-1863"
   return null
 }
 
 const POLICY_BOUNDARY_ALLOWED_KNOWN_INTENT_SLUGS = new Set([
-  "cs-figma-digest-946",
-  "cs-figma-digest-967",
-  "cs-figma-digest-1292",
+  "cs-figma-digest-919",
+  "cs-figma-digest-940",
+  "cs-figma-digest-1294",
 ])
 
 export function findCsFigmaGuideForQuestion(question: string): CsFigmaGuide | null {
@@ -726,7 +726,7 @@ export function findCsFigmaGuideForQuestion(question: string): CsFigmaGuide | nu
     }
     if (hasRecordingDownload && guide.slug === "recording-download-share") score += 24
     if (hasAppDownload) {
-      if (guide.slug === "cs-figma-digest-1599") score += 28
+      if (guide.slug === "cs-figma-digest-1602") score += 28
       if (haystack.includes("수업 녹화 데이터") || haystack.includes("녹화본 다운로드")) score -= 16
     }
     const knownIntentMatched = knownIntentSlug === guide.slug

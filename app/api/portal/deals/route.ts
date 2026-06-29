@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
       closed_at: null,
       notes: body.notes ?? null,
       created_by: ctx.userId ?? null,
+      owner_id: ctx.userId ?? null,
     });
 
     const actor = getActorInfo(ctx);

@@ -1,16 +1,23 @@
 "use client"
 
-import { useState, useEffect, useCallback, type ReactNode } from "react"
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react"
 import Link from "next/link"
 import {
   RefreshCw, Building2, Calendar, PhoneCall,
   ExternalLink, AlertCircle, Activity, BarChart3,
   CircleDollarSign, FileText, Handshake,
-  MapPin, ReceiptText, Target, TrendingUp,
+  MapPin, ReceiptText, Target, TrendingUp, UserPlus,
 } from "lucide-react"
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
 import NeoCrmTeamPanel from "@/components/admin/crm/NeoCrmTeamPanel"
+import CrmCoverageStrip from "@/components/admin/crm/CrmCoverageStrip"
+import CrmPriorityQueuePanel from "@/components/admin/crm/CrmPriorityQueuePanel"
+import CrmWeekAheadPanel from "@/components/admin/crm/CrmWeekAheadPanel"
+import CrmCustomerPicker from "@/components/admin/crm/CrmCustomerPicker"
+import Customer360Drawer from "@/components/admin/crm/Customer360Drawer"
+import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
+import { getRecentCustomers, type RecentCustomer } from "@/lib/crm/recent-customers"
 import { Toast } from "@/components/admin/crm/leads/shared"
 
 // 현황 = 한국팀 아침 지휘대. 액션 밴드(딥링크) + Neo CRM 팀 패널 + 돈 흐름 요약만.
@@ -325,38 +332,139 @@ const BRANCH_KPI_DEFS: Array<{
   hintLabel: string
   icon: ReactNode
 }> = [
-  { key: "LD", label: "Lead", hintLabel: "잠재고객", icon: <PhoneCall className="h-4 w-4" /> },
-  { key: "ACC", label: "Account", hintLabel: "고객", icon: <Building2 className="h-4 w-4" /> },
-  { key: "OPP", label: "Opportunity", hintLabel: "상기", icon: <BarChart3 className="h-4 w-4" /> },
-  { key: "SOL", label: "Solution", hintLabel: "솔루션", icon: <Activity className="h-4 w-4" /> },
-  { key: "VST", label: "Visit", hintLabel: "방문", icon: <MapPin className="h-4 w-4" /> },
+  { key: "LD", label: "리드", hintLabel: "잠재고객", icon: <PhoneCall className="h-4 w-4" /> },
+  { key: "ACC", label: "고객", hintLabel: "고객", icon: <Building2 className="h-4 w-4" /> },
+  { key: "OPP", label: "확정 임박", hintLabel: "상기", icon: <BarChart3 className="h-4 w-4" /> },
+  { key: "SOL", label: "솔루션", hintLabel: "솔루션", icon: <Activity className="h-4 w-4" /> },
+  { key: "VST", label: "방문", hintLabel: "방문", icon: <MapPin className="h-4 w-4" /> },
 ]
 
-function CrmNeoKpis({
+function sumBranchKpi(rows: BranchKpiMemberRow[], metric: BranchKpiMetricKey) {
+  return rows.reduce(
+    (total, row) => {
+      const value = row.kpi?.[metric]
+      total.actual += Number(value?.actual ?? 0)
+      total.goal += Number(value?.goal ?? 0)
+      return total
+    },
+    { actual: 0, goal: 0 }
+  )
+}
+
+// 총/팀별/개인별 공용 매트릭스 — 행(팀 또는 개인)별로 5개 지표 actual·기준·달성률을 표로.
+function BranchKpiMatrix({
+  rows,
+  emptyLabel,
+}: {
+  rows: Array<{ key: string; label: string; sub?: string; members: BranchKpiMemberRow[] }>
+  emptyLabel: string
+}) {
+  if (rows.length === 0) {
+    return (
+      <p className="rounded-xl bg-[#fafaf8] px-3 py-4 text-center text-[12px] text-[#1a1a1a]/35">{emptyLabel}</p>
+    )
+  }
+  return (
+    <div className="-mx-1 overflow-x-auto px-1">
+      <table className="w-full min-w-[560px] border-collapse text-left">
+        <thead>
+          <tr className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1a1a1a]/35">
+            <th className="px-2 pb-2 font-semibold">이름</th>
+            {BRANCH_KPI_DEFS.map((d) => (
+              <th key={d.key} className="px-2 pb-2 text-right font-semibold">
+                {d.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key} className="border-t border-[#f0f0ec]">
+              <td className="px-2 py-2 align-top">
+                <p className="text-[13px] font-semibold text-[#111110]">{row.label}</p>
+                {row.sub ? <p className="text-[11px] text-[#1a1a1a]/40">{row.sub}</p> : null}
+              </td>
+              {BRANCH_KPI_DEFS.map((d) => {
+                const totals = sumBranchKpi(row.members, d.key)
+                const rate = totals.goal > 0 ? totals.actual / totals.goal : null
+                return (
+                  <td key={d.key} className="px-2 py-2 text-right align-top tabular-nums">
+                    <p
+                      className={`text-[13px] font-bold ${
+                        rate == null || rate >= 0.7 ? "text-[#111110]" : "text-[#B85C33]"
+                      }`}
+                    >
+                      {formatKpiActual(totals.actual)}
+                    </p>
+                    <p className="text-[10px] text-[#1a1a1a]/35">
+                      /{formatKpiActual(totals.goal)} · {formatPercent(rate)}
+                    </p>
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// 하단 성과 KPI 보드 — 총·팀별·개인별을 한곳에 정리한다.
+function CrmTeamKpiBoard({
   overview,
   branchKpis,
   loading,
   branchError,
-  compact = false,
 }: {
   overview: AdminCrmOverview | null
   branchKpis: BranchKpiResponse | null
   loading: boolean
   branchError: string | null
-  compact?: boolean
 }) {
   const loadingValue = loading && !overview ? "..." : null
   const neoCrm = overview?.neoCrm ?? null
   const neoKpis = neoCrm?.kpis
+  const members = useMemo(() => branchKpis?.members ?? [], [branchKpis])
 
-  const content = (
-    <>
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+  const teamRows = useMemo(() => {
+    const map = new Map<string, BranchKpiMemberRow[]>()
+    for (const member of members) {
+      const key = member.team?.trim() || "미지정"
+      const list = map.get(key)
+      if (list) list.push(member)
+      else map.set(key, [member])
+    }
+    return Array.from(map.entries()).map(([team, rows]) => ({
+      key: team,
+      label: team,
+      sub: `${rows.length}명`,
+      members: rows,
+    }))
+  }, [members])
+
+  const memberRows = useMemo(
+    () =>
+      members.map((member, index) => ({
+        key: `${member.member}-${index}`,
+        label: member.member,
+        sub: member.team ?? undefined,
+        members: [member],
+      })),
+    [members]
+  )
+
+  const sectionLabel = "text-[11px] font-bold uppercase tracking-[0.1em] text-[#1a1a1a]/40"
+  const branchEmpty = branchError ?? "이번 달 KPI 레코드가 없습니다."
+
+  return (
+    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Neo CRM KPI</p>
-          <h2 className="mt-1 text-[17px] font-bold text-[#111110]">지사관리식 KPI</h2>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Performance KPI</p>
+          <h2 className="mt-1 text-[17px] font-bold text-[#111110]">KPI · 총 · 팀별 · 개인별</h2>
           <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
-            {CRM_BRANCH_KPI_MONTH} · Neo CRM에 찍힌 완료량 기준 · 기준/완료/달성률
+            {CRM_BRANCH_KPI_MONTH} · 외부 CRM 동기화 완료량 기준 · 기준/완료/달성률
           </p>
         </div>
         <span className="inline-flex h-8 items-center rounded-full bg-[#ECFDF5] px-3 text-[12px] font-semibold text-[#084734]">
@@ -364,68 +472,74 @@ function CrmNeoKpis({
         </span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <CrmMeasurementTile
-          icon={<CircleDollarSign className="h-4 w-4" />}
-          label="SalesPerformance"
-          value={loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}
-          hint={`완료 ${formatNumber(neoKpis?.salesCountMonth)}건 · Neo CRM 실제 매출`}
-          tone="text-[#084734]"
-        />
-        <CrmMeasurementTile
-          icon={<BarChart3 className="h-4 w-4" />}
-          label="Opportunity"
-          value={loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
-          hint={`상기 완료량 ${formatNumber(neoKpis?.opportunityCountMonth)}건 · Neo CRM 원표기`}
-          tone="text-[#084734]"
-        />
-        <CrmMeasurementTile
-          icon={<Building2 className="h-4 w-4" />}
-          label="Account"
-          value={loadingValue ?? formatNumber(neoKpis?.activeAccountCountMonth)}
-          hint={`고객 완료량 · 전체 ${formatNumber(neoKpis?.accountCount)}개`}
-          tone="text-[#111110]"
-        />
-        <CrmMeasurementTile
-          icon={<ReceiptText className="h-4 w-4" />}
-          label="Collection"
-          value={loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}
-          hint={`수금 완료량 ${formatNumber(neoKpis?.collectionCountMonth)}건 · 30일 ${formatCurrency(
-            neoKpis?.collectionAmount30d
-          )}`}
-          tone="text-[#111110]"
-        />
+      <div>
+        <p className={sectionLabel}>총 · 한국팀 전체</p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <CrmMeasurementTile
+            icon={<CircleDollarSign className="h-4 w-4" />}
+            label="동기화 매출"
+            value={loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}
+            hint={`완료 ${formatNumber(neoKpis?.salesCountMonth)}건 · 본사 CRM 원천`}
+            tone="text-[#084734]"
+          />
+          <CrmMeasurementTile
+            icon={<BarChart3 className="h-4 w-4" />}
+            label="확정 임박"
+            value={loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
+            hint={`상기 완료량 ${formatNumber(neoKpis?.opportunityCountMonth)}건 · USD 원천`}
+            tone="text-[#084734]"
+          />
+          <CrmMeasurementTile
+            icon={<Building2 className="h-4 w-4" />}
+            label="동기화 고객"
+            value={loadingValue ?? formatNumber(neoKpis?.activeAccountCountMonth)}
+            hint={`고객 완료량 · 전체 ${formatNumber(neoKpis?.accountCount)}개`}
+            tone="text-[#111110]"
+          />
+          <CrmMeasurementTile
+            icon={<ReceiptText className="h-4 w-4" />}
+            label="동기화 수금"
+            value={loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}
+            hint={`수금 완료량 ${formatNumber(neoKpis?.collectionCountMonth)}건 · 30일 ${formatCurrency(
+              neoKpis?.collectionAmount30d
+            )}`}
+            tone="text-[#111110]"
+          />
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {BRANCH_KPI_DEFS.map((item) => {
+            const totals = aggregateBranchKpi(branchKpis, item.key)
+            const rate = totals.goal > 0 ? totals.actual / totals.goal : null
+            return (
+              <CrmMeasurementTile
+                key={item.key}
+                icon={item.icon}
+                label={item.label}
+                value={branchError ? "-" : loading && !branchKpis ? "..." : formatKpiActual(totals.actual)}
+                hint={
+                  branchError ??
+                  `${item.hintLabel} · 기준 ${formatKpiActual(totals.goal)} · 달성률 ${formatPercent(rate)}`
+                }
+                tone={rate == null || rate >= 0.7 ? "text-[#084734]" : "text-[#B85C33]"}
+              />
+            )
+          })}
+        </div>
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {BRANCH_KPI_DEFS.map((item) => {
-          const totals = aggregateBranchKpi(branchKpis, item.key)
-          const rate = totals.goal > 0 ? totals.actual / totals.goal : null
-          return (
-            <CrmMeasurementTile
-              key={item.key}
-              icon={item.icon}
-              label={item.label}
-              value={branchError ? "-" : loading && !branchKpis ? "..." : formatKpiActual(totals.actual)}
-              hint={
-                branchError ??
-                `${item.hintLabel} 완료량 · KPI 기준 ${formatKpiActual(totals.goal)} · 달성률 ${formatPercent(rate)}`
-              }
-              tone={rate == null || rate >= 0.7 ? "text-[#084734]" : "text-[#B85C33]"}
-            />
-          )
-        })}
+      <div className="mt-5 border-t border-[#f0f0ec] pt-4">
+        <p className={sectionLabel}>팀별</p>
+        <div className="mt-2">
+          <BranchKpiMatrix rows={teamRows} emptyLabel={branchEmpty} />
+        </div>
       </div>
-    </>
-  )
 
-  if (compact) {
-    return <div className="mt-4 border-t border-[#f0f0ec] pt-4">{content}</div>
-  }
-
-  return (
-    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-      {content}
+      <div className="mt-5 border-t border-[#f0f0ec] pt-4">
+        <p className={sectionLabel}>개인별</p>
+        <div className="mt-2">
+          <BranchKpiMatrix rows={memberRows} emptyLabel={branchEmpty} />
+        </div>
+      </div>
     </section>
   )
 }
@@ -434,11 +548,15 @@ function CrmOperationsDashboard({
   overview,
   loading,
   error,
+  part = "all",
 }: {
   overview: AdminCrmOverview | null
   loading: boolean
   error: string | null
+  part?: "all" | "revenue" | "risk"
 }) {
+  const showRevenue = part !== "risk"
+  const showRisk = part !== "revenue"
   const revenue = overview?.business.revenue
   const kpis = overview?.business.kpis
   const neoCrm = overview?.neoCrm ?? null
@@ -450,12 +568,13 @@ function CrmOperationsDashboard({
 
   return (
     <>
+      {showRevenue ? (
       <div className="mb-4">
         <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Neo CRM Korea Scope</p>
-              <h2 className="mt-1 text-[18px] font-bold text-[#111110]">한국팀 돈 흐름 우선순위</h2>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Customer Revenue Scope</p>
+              <h2 className="mt-1 text-[18px] font-bold text-[#111110]">고객 돈흐름 우선순위</h2>
             </div>
             <span className="inline-flex h-9 items-center rounded-lg bg-[#fafaf8] px-3 text-[12px] font-semibold text-[#1a1a1a]/50">
               Sync {formatOverviewDate(neoCrm?.latestSyncedAt ?? overview?.externalSnapshots.latestSyncedAt)}
@@ -473,7 +592,7 @@ function CrmOperationsDashboard({
             <div className="border-t border-[#084734]/18 pt-4">
               <div className="flex items-center gap-2 text-[#084734]/70">
                 <CircleDollarSign className="h-5 w-5" />
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em]">Delivery Revenue</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em]">인식 매출</p>
               </div>
               <p className="mt-2 text-4xl font-bold tracking-[-0.045em] text-[#084734] sm:text-[42px]">
                 {loadingValue ?? formatCurrency(revenue?.deliveryTotalAmount)}
@@ -495,11 +614,11 @@ function CrmOperationsDashboard({
               </div>
               <div className="mt-3 grid gap-2 text-[12px] text-[#1a1a1a]/45 sm:grid-cols-2">
                 <span>견적 {loadingValue ?? formatCurrency(revenue?.acceptedQuoteAmount)}</span>
-                <span>Neo Sales {loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}</span>
-                <span>Opportunity {loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}</span>
-                <span>Order {loadingValue ?? formatCurrency(revenue?.contractedAmount)}</span>
-                <span>Delivery {loadingValue ?? formatCurrency(revenue?.deliveryTotalAmount)}</span>
-                <span>Collection {loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}</span>
+                <span>동기화 매출 {loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}</span>
+                <span>확정 임박 {loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}</span>
+                <span>계약 {loadingValue ?? formatCurrency(revenue?.contractedAmount)}</span>
+                <span>인식 매출 {loadingValue ?? formatCurrency(revenue?.deliveryTotalAmount)}</span>
+                <span>동기화 수금 {loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}</span>
                 <span className={(revenue?.outstandingAmount ?? 0) > 0 ? "font-semibold text-[#B85C33]" : ""}>
                   미수 {loadingValue ?? formatCurrency(revenue?.outstandingAmount)}
                 </span>
@@ -510,7 +629,7 @@ function CrmOperationsDashboard({
             <div className="grid gap-4 sm:grid-cols-2">
               <CrmMetricTile
                 icon={<FileText className="h-4 w-4" />}
-                label="Quotes"
+                label="견적"
                 value={loadingValue ?? formatCurrency(revenue?.acceptedQuoteAmount)}
                 hint={`견적서 ${loadingValue ?? formatNumber(kpis?.quoteDocumentCount)}건`}
               />
@@ -518,39 +637,39 @@ function CrmOperationsDashboard({
                 icon={<BarChart3 className="h-4 w-4" />}
                 label="오더 (확정 임박)"
                 value={loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
-                hint={`Opportunity ${loadingValue ?? formatNumber(neoKpis?.opportunityCountMonth)}건 · USD`}
+                hint={`외부 CRM ${loadingValue ?? formatNumber(neoKpis?.opportunityCountMonth)}건 · USD`}
                 tone="text-[#084734]"
               />
               <CrmMetricTile
                 icon={<TrendingUp className="h-4 w-4" />}
-                label="Neo Sales"
+                label="동기화 매출"
                 value={loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}
-                hint={`SalesPerformance ${loadingValue ?? formatNumber(neoKpis?.salesCountMonth)} records · actual`}
+                hint={`본사 CRM ${loadingValue ?? formatNumber(neoKpis?.salesCountMonth)}건 · actual`}
                 tone="text-[#084734]"
               />
               <CrmMetricTile
                 icon={<ReceiptText className="h-4 w-4" />}
-                label="Collection"
+                label="동기화 수금"
                 value={loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}
-                hint={`Collection__c ${loadingValue ?? formatNumber(neoKpis?.collectionCountMonth)} records · current month`}
+                hint={`외부 CRM ${loadingValue ?? formatNumber(neoKpis?.collectionCountMonth)}건 · current month`}
               />
               <CrmMetricTile
                 icon={<Building2 className="h-4 w-4" />}
-                label="Neo Account"
+                label="동기화 고객"
                 value={loadingValue ?? formatNumber(neoKpis?.accountCount)}
-                hint={`active this month ${loadingValue ?? formatNumber(neoKpis?.activeAccountCountMonth)} · snapshot account`}
+                hint={`이번 달 활성 ${loadingValue ?? formatNumber(neoKpis?.activeAccountCountMonth)} · 외부 CRM 원천`}
               />
               <CrmMetricTile
                 icon={<Handshake className="h-4 w-4" />}
-                label="Order"
+                label="계약"
                 value={loadingValue ?? formatCurrency(revenue?.contractedAmount)}
                 hint={`활성 거래 ${loadingValue ?? formatNumber(kpis?.activeDealCount)}건`}
               />
               <CrmMetricTile
                 icon={<Building2 className="h-4 w-4" />}
-                label="Customers"
+                label="고객"
                 value={loadingValue ?? formatNumber(kpis?.customerCount)}
-                hint={`파트너 계정 ${formatNumber(kpis?.partnerAccountCount)}개`}
+                hint={`파트너 고객 ${formatNumber(kpis?.partnerAccountCount)}개`}
               />
             </div>
           </div>
@@ -562,86 +681,89 @@ function CrmOperationsDashboard({
           ) : null}
           {neoSyncWarning ? (
             <p className="mt-3 rounded-xl bg-[#FEF3EE] px-3 py-2 text-[12px] leading-relaxed text-[#B85C33]">
-              Neo CRM sync check: {neoSyncWarning}
+              외부 CRM sync check: {neoSyncWarning}
             </p>
           ) : null}
         </section>
       </div>
+      ) : null}
 
-      <div className="mb-4 grid gap-3 xl:grid-cols-[0.75fr_1.25fr]">
-        {/* 미응답/오버듀 카운트는 상단 액션 밴드로 통합 — 여기엔 수납 리스크 신호만 보존 */}
-        <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Payment Risk</p>
-              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">수납 리스크</h2>
+      {showRisk ? (
+      <div className="mb-4 space-y-3">
+        {/* 수납 리스크 — 슬림 한 줄 */}
+        <section className="rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <ReceiptText className="h-4 w-4 text-[#1a1a1a]/30" />
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/30">수납 리스크</span>
+              </div>
+              <span className="text-[12px] text-[#1a1a1a]/45">
+                미수 거래{" "}
+                <b className={`text-[15px] font-bold ${(kpis?.paymentRiskCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
+                  {loadingValue ?? formatNumber(kpis?.paymentRiskCount)}
+                </b>
+              </span>
+              <span className="text-[12px] text-[#1a1a1a]/45">
+                미수 합계{" "}
+                <b className={`text-[15px] font-bold ${(revenue?.outstandingAmount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
+                  {loadingValue ?? formatCurrency(revenue?.outstandingAmount)}
+                </b>
+              </span>
             </div>
             <Link
               href="/admin/crm/deals"
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
             >
               Deals에서 처리
               <ExternalLink className="h-3.5 w-3.5" />
             </Link>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <CrmMetricTile
-              icon={<ReceiptText className="h-4 w-4" />}
-              label="Payment Risk"
-              value={loadingValue ?? formatNumber(kpis?.paymentRiskCount)}
-              hint="미수 또는 부분 수납 거래"
-              tone={(kpis?.paymentRiskCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}
-            />
-            <CrmMetricTile
-              icon={<CircleDollarSign className="h-4 w-4" />}
-              label="Outstanding"
-              value={loadingValue ?? formatCurrency(revenue?.outstandingAmount)}
-              hint="미수 금액 합계"
-              tone={(revenue?.outstandingAmount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}
-            />
-          </div>
         </section>
 
+        {/* 최근 고객별 로그 — 간소화(6건, 요약줄 제거) */}
         <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Customer Timeline</p>
-              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">최근 고객별 로그</h2>
-            </div>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="text-[14px] font-bold text-[#111110]">최근 고객별 로그</h2>
             <Link
               href="/admin/crm/customers/accounts"
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+              className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
             >
               고객사 보기
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink className="h-3 w-3" />
             </Link>
           </div>
           {logs.length === 0 ? (
-            <p className="rounded-xl bg-[#fafaf8] px-3 py-8 text-center text-[13px] text-[#1a1a1a]/30">
+            <p className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#1a1a1a]/30">
               {loading && !overview ? "불러오는 중..." : "최근 고객 로그가 없습니다."}
             </p>
           ) : (
             <div className="divide-y divide-[#f0f0ec]">
-              {logs.slice(0, 8).map((log) => (
+              {logs.slice(0, 6).map((log) => (
                 <Link
                   key={log.id}
                   href={log.href}
-                  className="grid gap-3 py-3 transition-colors hover:bg-[#fafaf8] sm:grid-cols-[112px_minmax(0,1fr)_140px]"
+                  className="flex items-center gap-2.5 py-2 transition-colors hover:bg-[#fafaf8]"
                 >
-                  <div className="flex items-start gap-2">
-                    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${getCustomerLogTone(log.kind)}`}>
-                      <CustomerLogIcon kind={log.kind} />
-                      {getCustomerLogKindLabel(log.kind)}
-                    </span>
+                  <span
+                    className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getCustomerLogTone(
+                      log.kind
+                    )}`}
+                  >
+                    <CustomerLogIcon kind={log.kind} />
+                    {getCustomerLogKindLabel(log.kind)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[12px] font-semibold text-[#111110]">
+                      {log.customerName ?? log.partnerAccountName ?? "고객 미지정"}
+                    </p>
+                    <p className="truncate text-[11px] text-[#1a1a1a]/45">{log.title}</p>
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold text-[#111110]">{log.customerName ?? log.partnerAccountName ?? "고객 미지정"}</p>
-                    <p className="mt-0.5 truncate text-[12px] text-[#1a1a1a]/45">{log.title}</p>
-                    {log.summary ? <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/30">{log.summary}</p> : null}
-                  </div>
-                  <div className="text-left sm:text-right">
-                    <p className="text-[12px] font-semibold text-[#111110]">{log.amount == null ? log.status ?? "-" : formatCurrency(log.amount)}</p>
-                    <p className="mt-0.5 text-[11px] text-[#1a1a1a]/35">{formatOverviewDate(log.occurredAt)}</p>
+                  <div className="shrink-0 text-right">
+                    <p className="text-[12px] font-semibold text-[#111110]">
+                      {log.amount == null ? log.status ?? "-" : formatCurrency(log.amount)}
+                    </p>
+                    <p className="text-[11px] text-[#1a1a1a]/35">{formatOverviewDate(log.occurredAt)}</p>
                   </div>
                 </Link>
               ))}
@@ -649,6 +771,7 @@ function CrmOperationsDashboard({
           )}
         </section>
       </div>
+      ) : null}
     </>
   )
 }
@@ -659,6 +782,16 @@ export default function CrmPage() {
   const [leadKpisLoading, setLeadKpisLoading] = useState(true)
   const [, setLeadKpisError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [drawerTarget, setDrawerTarget] = useState<{ key: string; name: string } | null>(null)
+  const [sidebarTab, setSidebarTab] = useState<"priority" | "week">("priority")
+  const [recentCustomers, setRecentCustomers] = useState<RecentCustomer[]>([])
+  const [leadModalOpen, setLeadModalOpen] = useState(false)
+
+  // 고객 바로 가기 — 최근 본 고객(로컬). 드로어 열고 닫을 때마다 갱신.
+  useEffect(() => {
+    setRecentCustomers(getRecentCustomers())
+  }, [drawerTarget])
   const [crmOverview, setCrmOverview] = useState<AdminCrmOverview | null>(null)
   const [crmOverviewLoading, setCrmOverviewLoading] = useState(true)
   const [crmOverviewError, setCrmOverviewError] = useState<string | null>(null)
@@ -760,9 +893,11 @@ export default function CrmPage() {
         <div>
           <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin · CRM</p>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">CRM 홈</h1>
-          <p className="mt-1 text-[13px] text-[#1a1a1a]/42">한국팀 Neo CRM · 견적 → Opportunity → Order → Delivery</p>
+          <p className="mt-1 text-[13px] text-[#1a1a1a]/42">
+            ClassIn 고객 DB 기준 · 시트와 외부 CRM은 동기화 참고자료
+          </p>
         </div>
-        <div className="grid gap-2 sm:grid-cols-4 xl:flex xl:justify-end">
+        <div className="grid gap-2 sm:grid-cols-5 xl:flex xl:justify-end">
           <Link
             href="/admin/crm/customers/leads"
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
@@ -778,12 +913,20 @@ export default function CrmPage() {
             견적·매출
           </Link>
           <Link
-            href="/admin/crm/customers/accounts"
+            href="/admin/crm/customers/unified"
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
           >
             <Building2 className="h-3.5 w-3.5" />
             고객·후속
           </Link>
+          <button
+            type="button"
+            onClick={() => setLeadModalOpen(true)}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            리드 등록
+          </button>
           <Button
             variant="outline"
             size="sm"
@@ -801,18 +944,42 @@ export default function CrmPage() {
         </div>
       </div>
 
-      <NeoCrmTeamPanel
-        refreshKey={neoCrmRefreshKey}
-        topKpiSlot={
-          <CrmNeoKpis
-            overview={crmOverview}
-            branchKpis={branchKpis}
-            loading={pageRefreshing}
-            branchError={branchKpisError}
-            compact
-          />
-        }
-      />
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0">
+      {/* 고객 검색 — 떠올린 고객을 바로 카드로 (canon §4.2) */}
+      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">고객 검색</p>
+        <CrmCustomerPicker
+          label={searchQuery}
+          linkedId=""
+          onFreeText={setSearchQuery}
+          onClear={() => setSearchQuery("")}
+          onPick={(pick) => {
+            setDrawerTarget({
+              key: `${pick.targetType === "neo_account" ? "neo" : "lead"}:${pick.targetId}`,
+              name: pick.targetLabel,
+            })
+            setSearchQuery("")
+          }}
+        />
+        <p className="mt-1.5 text-[11px] text-[#1a1a1a]/35">학원명·이름·전화로 검색해 바로 고객 카드를 엽니다.</p>
+        {recentCustomers.length > 0 ? (
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]/30">바로 가기</span>
+            {recentCustomers.slice(0, 6).map((rc) => (
+              <button
+                key={rc.key}
+                type="button"
+                onClick={() => setDrawerTarget({ key: rc.key, name: rc.name })}
+                className="inline-flex items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4] hover:bg-[#fafaf8]"
+              >
+                <span className="max-w-[120px] truncate">{rc.name}</span>
+                <span className="text-[10px] text-[#1a1a1a]/35">{rc.sourceLabel}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </section>
 
       {/* 지금 처리 — 오늘 우선순위 액션 밴드 (리드 보드 딥링크) */}
       <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
@@ -923,9 +1090,70 @@ export default function CrmPage() {
       </section>
 
       <CrmOperationsDashboard
+        part="revenue"
         overview={crmOverview}
         loading={crmOverviewLoading}
         error={crmOverviewError}
+      />
+          <CrmCoverageStrip />
+        </div>
+
+        <aside className="flex flex-col gap-4">
+          <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+            <div className="mb-3 flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
+              {(
+                [
+                  { key: "priority", label: "오늘 연락" },
+                  { key: "week", label: "이번 주 할 일" },
+                ] as const
+              ).map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setSidebarTab(t.key)}
+                  className={`h-8 flex-1 rounded-md px-3 text-[12px] font-semibold transition-colors ${
+                    sidebarTab === t.key ? "bg-[#111110] text-white" : "text-[#1a1a1a]/55 hover:text-[#111110]"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {sidebarTab === "priority" ? (
+              <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} compact embedded />
+            ) : (
+              <CrmWeekAheadPanel compact embedded />
+            )}
+          </section>
+        </aside>
+      </div>
+
+      <NeoCrmTeamPanel refreshKey={neoCrmRefreshKey} />
+      <CrmTeamKpiBoard
+        overview={crmOverview}
+        branchKpis={branchKpis}
+        loading={pageRefreshing}
+        branchError={branchKpisError}
+      />
+
+      {/* 맨 하단 — 수납 리스크 + 최근 고객별 로그 (간소화) */}
+      <CrmOperationsDashboard
+        part="risk"
+        overview={crmOverview}
+        loading={crmOverviewLoading}
+        error={crmOverviewError}
+      />
+
+      <Customer360Drawer
+        customerKey={drawerTarget?.key ?? null}
+        name={drawerTarget?.name}
+        onClose={() => setDrawerTarget(null)}
+      />
+
+      <LeadRegisterModal
+        open={leadModalOpen}
+        onClose={() => setLeadModalOpen(false)}
+        onDone={() => void fetchLeadKpis({ force: true })}
       />
 
       {toast && <Toast msg={toast.msg} type={toast.type} />}

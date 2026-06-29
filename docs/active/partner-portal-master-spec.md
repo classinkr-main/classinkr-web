@@ -2,11 +2,18 @@
 
 기준 시점: 2026-04-04
 
-이 문서는 파트너 운영과 파트너 포털의 현재 `단일 진입 문서`다.
-운영 규칙, 화면 구조, 레이아웃, 탭 내용, 상태 전환 UX, 구현 방향을 한 번에 묶는다.
+이 문서는 2026-04-04 기준 파트너 운영과 파트너 포털의 `단일 진입 문서`였다.
+현재는 운영 규칙, 도메인 구조, 거래건 중심 UX, 문서/설치/수납 원칙의 상세 근거로 유지한다.
+
+2026-06-26 운영 메모:
+
+- 기능 배치와 제품 면 재분배 판단은 [partner-portal-redistribution-plan-2026-06-26.md](./partner-portal-redistribution-plan-2026-06-26.md)를 우선한다.
+- 이 문서는 `partner_accounts -> customers -> deals` 도메인 모델, 거래건 중심 UX, 문서/설치/수납 원칙의 상세 근거로 유지한다.
+- 현재 구현 경로는 주로 `app/api/portal`, `lib/portal`, `components/portal`, `app/share`이며, 구 `app/partner`, `app/api/partner`, `lib/partner-portal` 표현은 현재 코드와 대조해 읽는다.
 
 보조 문서:
 
+- [partner-portal-redistribution-plan-2026-06-26.md](./partner-portal-redistribution-plan-2026-06-26.md)
 - [partner-portal-document-hub-guidelines.md](./partner-portal-document-hub-guidelines.md)
 - [partner-portal-document-hub-wireframes.md](./partner-portal-document-hub-wireframes.md)
 - [partner-portal-front-back-contract.md](./partner-portal-front-back-contract.md)
@@ -23,12 +30,16 @@
 
 문서 우선순위:
 
-1. 이 문서
-2. 문서 허브 세부 원칙은 `partner-portal-document-hub-guidelines.md`
-3. 화면/UX는 `partner-portal-document-hub-wireframes.md`, `partner-portal-front-back-contract.md`
-4. 개발 순서는 `partner-portal-implementation-roadmap.md`, 문서 허브 투입 순서는 `partner-portal-document-hub-execution-plan.md`
+1. 제품 면/기능 배치 판단은 `partner-portal-redistribution-plan-2026-06-26.md`
+2. 도메인 모델과 거래건 중심 운영 원칙은 이 문서
+3. 문서 허브 세부 원칙은 `partner-portal-document-hub-guidelines.md`
+4. 화면/UX는 `partner-portal-document-hub-wireframes.md`, `partner-portal-front-back-contract.md`
+5. 개발 순서는 `partner-portal-implementation-roadmap.md`, 문서 허브 투입 순서는 `partner-portal-document-hub-execution-plan.md`
 
 ## 1. 제품 한 줄 정의
+
+아래 정의는 거래건 중심 도메인 원칙을 설명하기 위한 기존 full-workspace 관점이다.
+제품 면 재배치 판단은 [partner-portal-redistribution-plan-2026-06-26.md](./partner-portal-redistribution-plan-2026-06-26.md)를 우선한다.
 
 파트너 포털은 `파트너사 대표와 ClassIn 팀을 위한 거래 운영 워크스페이스`다.
 

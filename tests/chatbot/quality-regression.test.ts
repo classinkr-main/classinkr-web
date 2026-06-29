@@ -175,6 +175,16 @@ describe("chatbot quality regressions", () => {
         expected: "연동",
         forbidden: ["양방향 자동 동기화 기본", "계약 없이 바로 가능", "API 키 여기서 발급"],
       },
+      {
+        question: "외부 LMS 연동 질문이 있어요",
+        expected: "연동",
+        forbidden: ["개인정보", "반복 질문", "FAQ"],
+      },
+      {
+        question: "네이버 로그인 연동 최신 정보 알려줘",
+        expected: "확인",
+        forbidden: ["검수된 상담 Q&A", "반복 질문", "FAQ"],
+      },
     ]
 
     for (const testCase of cases) {

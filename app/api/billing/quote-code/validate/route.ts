@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { validateQuoteCode, type QuoteCodeKind } from "@/lib/billing/quote-codes"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 
 function parseKind(value: unknown): QuoteCodeKind {
   if (value === "subscription") return "subscription"
@@ -10,7 +10,7 @@ function parseKind(value: unknown): QuoteCodeKind {
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "billing-quote-code-validate", {
+  const { allowed } = await checkRateLimitDistributed(ip, "billing-quote-code-validate", {
     windowMs: 60_000,
     max: 20,
   })
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const normalizedCode = code.trim().toUpperCase()
 
     if (normalizedCode) {
-      const codeLimit = checkRateLimit(normalizedCode, "billing-quote-code-value", {
+      const codeLimit = await checkRateLimitDistributed(normalizedCode, "billing-quote-code-value", {
         windowMs: 5 * 60_000,
         max: 25,
       })

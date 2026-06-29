@@ -46,6 +46,13 @@ export function SeminarPlayer({ slug, youtubeId, title, isPlaceholder }: Seminar
         className="group relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-[16px] border border-black/[0.08] bg-[#111110] shadow-[rgba(0,0,0,0.06)_0px_6px_22px]"
         aria-label={`${title} 재생`}
       >
+        {/* maxresdefault 는 일부 영상에 없어 404 가 날 수 있다. 항상 존재하는
+            hqdefault 를 아래에 깔고 그 위에 maxres 를 얹어, 고화질이 있으면 덮고
+            없으면 hqdefault 가 비치도록 한다(포스터가 검게 비는 것 방지). */}
+        <span
+          className="absolute inset-0 bg-cover bg-center opacity-65 transition-all duration-500 group-hover:scale-105 group-hover:opacity-75"
+          style={{ backgroundImage: `url(https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg)` }}
+        />
         <span
           className="absolute inset-0 bg-cover bg-center opacity-65 transition-all duration-500 group-hover:scale-105 group-hover:opacity-75"
           style={{

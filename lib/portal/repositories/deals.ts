@@ -82,7 +82,7 @@ export async function listDealListItems(
   const { data, error } = await query;
   if (error) throw error;
 
-  return ((data ?? []) as Array<
+  const rows = (data ?? []) as Array<
     Deal & {
       customers: {
         name: string | null;
@@ -91,12 +91,31 @@ export async function listDealListItems(
         campus_name: string | null;
       };
     }
-  >).map((deal) => ({
+  >;
+
+  // owner_id → 담당자 이름. deals↔admin_profiles 직접 FK가 없어 별도 조회로 매핑.
+  const ownerIds = Array.from(
+    new Set(rows.map((deal) => deal.owner_id).filter((id): id is string => Boolean(id)))
+  );
+  const ownerNameById = new Map<string, string>();
+  if (ownerIds.length > 0) {
+    const { data: owners } = await supabase
+      .from("admin_profiles")
+      .select("user_id, display_name")
+      .in("user_id", ownerIds);
+    for (const owner of (owners as { user_id: string; display_name: string | null }[] | null) ??
+      []) {
+      ownerNameById.set(owner.user_id, owner.display_name ?? "");
+    }
+  }
+
+  return rows.map((deal) => ({
     ...deal,
     customer_name: deal.customers?.name ?? null,
     customer_contact_name: deal.customers?.contact_name ?? null,
     customer_region_label: deal.customers?.region_label ?? null,
     customer_campus_name: deal.customers?.campus_name ?? null,
+    owner_name: deal.owner_id ? ownerNameById.get(deal.owner_id) ?? null : null,
   }));
 }
 

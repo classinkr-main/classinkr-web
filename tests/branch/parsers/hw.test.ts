@@ -41,6 +41,37 @@ describe("hw parsers", () => {
     expect(out[0].serials).toEqual(["S1", "S2"])
   })
 
+  it("outbound fills merged destination cells down so matching customers sync for each product row", () => {
+    const grid: FormattedCell[][] = [
+      Array(13).fill(c("")),
+      [c(""), c(""), c("Somang"), c('75" IFP'), c(1), c(""), c(""), c(""), c("익산 유투엠"), c(""), c("배송 예정"), c("Sales"), c("")],
+      [c(""), c(""), c("Somang"), c("STD1"), c(1), c(""), c(""), c(""), c(""), c(""), c("배송 예정"), c("Sales"), c("")],
+      [c(""), c(""), c("Somang"), c("T1(promoted)"), c(1), c(""), c(""), c(""), c(""), c(""), c("배송 예정"), c("Sales"), c("")],
+    ]
+
+    const out = parseOutbound(grid)
+
+    expect(out.map((row) => row.destination)).toEqual(["익산 유투엠", "익산 유투엠", "익산 유투엠"])
+    expect(out[1].raw).toMatchObject({
+      destination: "익산 유투엠",
+      destination_cell_value: null,
+      destination_filled_from_previous: true,
+    })
+  })
+
+  it("outbound clears filled destination after a blank separator row", () => {
+    const grid: FormattedCell[][] = [
+      Array(13).fill(c("")),
+      [c(""), c(""), c("Somang"), c('75" IFP'), c(1), c(""), c(""), c(""), c("익산 유투엠"), c(""), c("배송 예정"), c("Sales"), c("")],
+      Array(13).fill(c("")),
+      [c(""), c(""), c("Han"), c('86" IFP'), c(1), c(""), c(""), c(""), c(""), c(""), c("배송 예정"), c("Sales"), c("")],
+    ]
+
+    const out = parseOutbound(grid)
+
+    expect(out.map((row) => row.destination)).toEqual(["익산 유투엠", null])
+  })
+
   it("stock subtracts the outbound block from the inbound block by logistics number", () => {
     const grid: FormattedCell[][] = [
       [c("입출고"), c("제품명"), c("분류"), c("물류No."), c(""), c(""), c("합계")],

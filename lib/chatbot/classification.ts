@@ -16,6 +16,7 @@ export type ChatbotIntent =
   | "admin_operations"
   | "classroom_consulting"
   | "sales_consulting"
+  | "self_knowledge"
   | "docs_lookup"
 
 export type HandoffIntent = "demo" | "support"

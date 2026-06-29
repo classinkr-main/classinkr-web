@@ -204,6 +204,7 @@ const demoDealDetails: Record<string, DealDetailPayload> = {
   "demo-deal-1": {
     deal: {
       id: "demo-deal-1",
+      owner_id: null,
       partner_account_id: "demo-account",
       customer_id: "demo-customer-1",
       deal_code: "D-2026-001",
@@ -390,6 +391,7 @@ const demoDealDetails: Record<string, DealDetailPayload> = {
   "demo-deal-2": {
     deal: {
       id: "demo-deal-2",
+      owner_id: null,
       partner_account_id: "demo-account",
       customer_id: "demo-customer-1",
       deal_code: "D-2026-011",
@@ -467,6 +469,7 @@ const demoDealDetails: Record<string, DealDetailPayload> = {
   "demo-deal-3": {
     deal: {
       id: "demo-deal-3",
+      owner_id: null,
       partner_account_id: "demo-account",
       customer_id: "demo-customer-2",
       deal_code: "D-2026-004",

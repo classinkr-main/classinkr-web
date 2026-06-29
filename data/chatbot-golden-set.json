@@ -1,7 +1,7 @@
 {
-  "_comment": "챗봇 품질 평가용 골든 Q&A 스타터 셋. lib/chatbot/eval.ts 가 사용한다. 운영팀이 실제 자주 묻는 질문과 기대 출처로 계속 보강할 것. expectCategory=detectCategory 기대값, expectMode=허용 answerMode, expectPathIncludes=출처 urlPath 부분일치(선택).",
+  "_comment": "챗봇 품질 평가용 골든 Q&A 스타터 셋. lib/chatbot/eval.ts 가 사용한다. 운영팀이 실제 자주 묻는 질문과 기대 출처로 계속 보강할 것. expectCategory=detectCategory 기대값, expectMode=허용 answerMode, expectPathIncludes=출처 urlPath 부분일치(선택), expectSources=false는 자체 안내처럼 출처가 없어도 정상인 케이스.",
   "cases": [
-    { "id": "identity-academy-os", "question": "Classin을 학원 시스템 OS라고 하는 이유가 뭔가요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/academy-system-os-positioning" },
+    { "id": "identity-academy-os", "question": "Classin을 수업 시스템 OS라고 하는 이유가 뭔가요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/academy-system-os-positioning" },
     { "id": "identity-basic-intro", "question": "클래스인이 뭐야?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/academy-system-os-positioning", "expectHeadingIncludes": "Classin 한 줄 소개" },
     { "id": "identity-zoom-difference", "question": "Classin은 Zoom이랑 뭐가 달라요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/academy-system-os-positioning", "expectHeadingIncludes": "핵심 포지셔닝" },
     { "id": "identity-casual-difference", "question": "클래스인 뭐가 다른거에요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/academy-system-os-positioning", "expectHeadingIncludes": "핵심 포지셔닝" },
@@ -36,6 +36,8 @@
     { "id": "consult-contact", "question": "도입 상담을 받아보고 싶습니다", "expectCategory": "consultation", "expectMode": ["handoff", "doc_suggestion"] },
     { "id": "software-ai", "question": "AI 자동 채점 기능이 있나요?", "expectCategory": "classroom", "expectMode": ["direct_answer", "doc_suggestion", "handoff"] },
     { "id": "vague-greeting", "question": "안녕하세요", "expectCategory": "general", "expectMode": ["clarifying_question", "fallback"] },
+    { "id": "self-identity-role", "question": "너는 누구야? 정체성이 뭐야?", "expectCategory": "general", "expectMode": ["direct_answer"], "expectSources": false },
+    { "id": "self-conversation-data-use", "question": "내 질문과 답변도 데이터로 활용해?", "expectCategory": "general", "expectMode": ["direct_answer"], "expectSources": false },
     { "id": "stories-subject", "question": "우리 같은 국어학원 도입 사례 있어요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/customer-stories" },
     { "id": "stories-reviews", "question": "다른 학원 도입 후기 궁금해요", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/customer-stories" },
     { "id": "stories-similar", "question": "비슷한 학원 도입 사례 보여주세요", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/customer-stories" },

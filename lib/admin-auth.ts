@@ -62,6 +62,11 @@ export const BRANCH_READ_ADMIN_API_ROLES: readonly AdminApiRole[] = [
   "ADMIN",
   "BRANCH",
 ]
+export const CRM_STAFF_ADMIN_API_ROLES: readonly AdminApiRole[] = [
+  "SUPER_ADMIN",
+  "ADMIN",
+  "BRANCH",
+]
 
 interface UserRecord {
   name: string

@@ -23,7 +23,7 @@ const page: SegmentLandingPageData = {
     title: "전자칠판을 바꾸지 말고,",
     titleAccent: "교실 수업 흐름을 바꾸세요",
     body:
-      "패널 크기와 판서감만 비교하면 절반만 보는 겁니다. 보드·수업·EDB·녹화·복습·LMS를 한 흐름으로 잇는 교실 시스템을 비교하세요.",
+      "화면 크기와 판서감만 비교하면 Classin Board의 가치는 작게 보입니다. Classin은 수업 시스템 OS 관점으로 OPS 기반 보드, 수업 소프트웨어, EDB, 녹화, 복습, LMS, 관리자 데이터를 교실 한 흐름으로 연결합니다.",
     image: {
       src: "/images/l/test1/test1-hero.png",
       alt: "딥그린 스튜디오에 놓인 ClassIn 전자칠판 — 화이트 라운드 프레임과 이동식 스탠드",

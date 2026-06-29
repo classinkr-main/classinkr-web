@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 
 import { getPublicUserContext } from "@/lib/auth/public-user"
 import { signOutPublicSession } from "@/lib/auth/session-logout"
@@ -20,6 +20,6 @@ export async function GET() {
   })
 }
 
-export async function DELETE() {
-  return signOutPublicSession()
+export async function DELETE(req: NextRequest) {
+  return signOutPublicSession(req)
 }

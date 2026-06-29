@@ -9,10 +9,13 @@ import {
   MessageSquare, Tag, Save, Loader2, Plus,
   PhoneCall, Bell, UserPlus, Link2, ExternalLink,
   Clock, Search, Check,
+  Activity, Download, LogIn, MousePointerClick, ShieldCheck,
 } from "lucide-react"
+import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
 
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
+import type { LeadActivity, LeadActivityBadge } from "@/lib/repositories/lead-activity"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/repositories/contact-logs"
 import type { PublicEvent } from "@/lib/types/public-events"
@@ -53,6 +56,69 @@ type ConvertLeadResponse = {
     deal_code?: string | null
   }
   lead: LeadRecord
+}
+
+// ─── 활동 인텔리전스 헬퍼 ──────────────────────────────────────
+const PROVIDER_LABEL: Record<string, string> = {
+  google: "Google",
+  naver: "네이버",
+  kakao: "카카오",
+  email: "이메일",
+}
+
+const ACTIVITY_EVENT_LABEL: Record<string, string> = {
+  view_demo_video: "데모 영상 시청",
+  click_cta: "CTA 클릭",
+  begin_checkout: "결제 시작",
+  page_view: "페이지 조회",
+  submit_contact: "문의 제출",
+  submit_demo: "데모 신청",
+  newsletter_subscribe: "뉴스레터 구독",
+}
+
+function providerLabel(provider: string | null) {
+  if (!provider) return "로그인"
+  return PROVIDER_LABEL[provider] ?? provider
+}
+
+function formatActivityTime(iso: string) {
+  const date = new Date(iso)
+  const diffMs = Date.now() - date.getTime()
+  const mins = Math.floor(diffMs / 60_000)
+  if (mins < 1) return "방금"
+  if (mins < 60) return `${mins}분 전`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}시간 전`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}일 전`
+  return date.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })
+}
+
+// 리스트 행 한눈 배지 — 로그인 공급자 + 다운로드 수. 신호 없으면 렌더 안 함.
+function LeadActivityChip({ badge }: { badge?: LeadActivityBadge }) {
+  if (!badge || (!badge.authenticated && badge.downloadCount === 0)) return null
+  const providerText = badge.providers.map(providerLabel).join(", ") || "로그인"
+  return (
+    <span className="inline-flex items-center gap-1">
+      {badge.authenticated && (
+        <span
+          title={`${providerText} 로그인`}
+          className="inline-flex items-center rounded-full bg-[#ECFDF5] px-1.5 py-0.5 text-[10px] font-medium text-[#084734]"
+        >
+          <LogIn className="h-2.5 w-2.5" />
+        </span>
+      )}
+      {badge.downloadCount > 0 && (
+        <span
+          title={`자료 ${badge.downloadCount}건 다운로드`}
+          className="inline-flex items-center gap-0.5 rounded-full bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55"
+        >
+          <Download className="h-2.5 w-2.5" />
+          {badge.downloadCount}
+        </span>
+      )}
+    </span>
+  )
 }
 
 // ─── 연락 로그 폼 ──────────────────────────────────────────────
@@ -147,6 +213,8 @@ function LeadDrawer({
   logs,
   logsLoading,
   events,
+  activity,
+  activityLoading,
   onClose,
   onStatusChange,
   onNotesChange,
@@ -161,6 +229,8 @@ function LeadDrawer({
   logs: ContactLogRecord[]
   logsLoading: boolean
   events: PublicEvent[]
+  activity: LeadActivity | null
+  activityLoading: boolean
   onClose: () => void
   onStatusChange: (id: string, status: LeadStatus) => void
   onNotesChange: (id: string, notes: string) => Promise<void>
@@ -202,6 +272,27 @@ function LeadDrawer({
     { label: "Current Page", value: lead.current_page },
     { label: "Referrer", value: lead.referrer },
   ].filter((item) => item.value)
+
+  const activityTimeline = useMemo(() => {
+    if (!activity) return []
+    const items: { kind: "download" | "event"; at: string; title: string; meta: string | null }[] = [
+      ...activity.downloads.map((d) => ({
+        kind: "download" as const,
+        at: d.createdAt,
+        title: getLeadMagnetLabel(d.slug) || d.slug,
+        meta: d.source,
+      })),
+      ...activity.events
+        .filter((e) => e.eventName !== "download_materials")
+        .map((e) => ({
+          kind: "event" as const,
+          at: e.createdAt,
+          title: ACTIVITY_EVENT_LABEL[e.eventName] ?? e.eventName,
+          meta: e.page,
+        })),
+    ]
+    return items.sort((a, b) => b.at.localeCompare(a.at)).slice(0, 14)
+  }, [activity])
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
@@ -261,6 +352,12 @@ function LeadDrawer({
                 </span>
               )}
               <ScoreBadge score={score} />
+              {activity?.summary.authenticated && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-medium text-[#084734]">
+                  <LogIn className="h-3 w-3" />
+                  {providerLabel(activity.summary.providers[0] ?? null)} 로그인
+                </span>
+              )}
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60 hover:bg-[#f0f0ec] transition-all shrink-0">
@@ -327,6 +424,117 @@ function LeadDrawer({
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* 활동 인텔리전스 — 로그인/다운로드/행동 신호 */}
+          <div className="border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">
+                <Activity className="h-3 w-3" />활동 인텔리전스
+              </p>
+              {activity?.summary.lastActivityAt && (
+                <span className="text-[11px] text-[#1a1a1a]/40">
+                  최근 {formatActivityTime(activity.summary.lastActivityAt)}
+                </span>
+              )}
+            </div>
+
+            {activityLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-[#1a1a1a]/30" />
+              </div>
+            ) : !activity ||
+              (!activity.summary.authenticated &&
+                activity.summary.downloadCount === 0 &&
+                activity.summary.eventCount === 0) ? (
+              <p className="py-2 text-[12px] text-[#1a1a1a]/25">
+                연결된 로그인·행동 데이터가 없습니다. (폼 제출만)
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {/* 신원 + 동의 */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {activity.summary.authenticated ? (
+                    activity.summary.providers.length > 0 ? (
+                      activity.summary.providers.map((p) => (
+                        <span
+                          key={p}
+                          className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-medium text-[#084734]"
+                        >
+                          <LogIn className="h-3 w-3" />
+                          {providerLabel(p)}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-medium text-[#084734]">
+                        <LogIn className="h-3 w-3" />로그인됨
+                      </span>
+                    )
+                  ) : (
+                    <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/45">
+                      비로그인
+                    </span>
+                  )}
+                  {activity.summary.marketingConsent && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/55">
+                      <ShieldCheck className="h-3 w-3" />마케팅 동의
+                    </span>
+                  )}
+                </div>
+
+                {/* 카운트 */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#1a1a1a]/35">
+                      <Download className="h-3 w-3" />자료 다운로드
+                    </div>
+                    <p className="mt-0.5 text-[15px] font-bold text-[#111110]">
+                      {activity.summary.downloadCount}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-[#1a1a1a]/35">
+                      <MousePointerClick className="h-3 w-3" />행동 이벤트
+                    </div>
+                    <p className="mt-0.5 text-[15px] font-bold text-[#111110]">
+                      {activity.summary.eventCount}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 타임라인 */}
+                {activityTimeline.length > 0 && (
+                  <div className="space-y-2">
+                    {activityTimeline.map((item, idx) => (
+                      <div key={`${item.kind}-${item.at}-${idx}`} className="flex gap-2.5">
+                        <div
+                          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                            item.kind === "download"
+                              ? "bg-[#ECFDF5] text-[#084734]"
+                              : "bg-[#f0f0ec] text-[#1a1a1a]/50"
+                          }`}
+                        >
+                          {item.kind === "download" ? (
+                            <Download className="h-3 w-3" />
+                          ) : (
+                            <MousePointerClick className="h-3 w-3" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[12px] font-medium text-[#111110]">{item.title}</p>
+                          {item.meta && (
+                            <p className="truncate text-[11px] text-[#1a1a1a]/40">{item.meta}</p>
+                          )}
+                        </div>
+                        <span className="shrink-0 text-[10px] text-[#1a1a1a]/30">
+                          {formatActivityTime(item.at)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {attributionItems.length > 0 && (
@@ -584,20 +792,28 @@ export default function LeadsBoardClient() {
     return raw && (LEAD_FILTER_KEYS as string[]).includes(raw) ? (raw as LeadFilter) : "all"
   })()
   const focusRisk = searchParams.get("focus") === "risk"
+  const deepLinkedLeadId = searchParams.get("lead")?.trim() ?? ""
 
   const [leads, setLeads] = useState<LeadRecord[]>([])
+  const [leadModalOpen, setLeadModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState<LeadFilter>(initialFilter)
   const [searchQuery, setSearchQuery] = useState("")
   const [sourceDetailFilter, setSourceDetailFilter] = useState("all")
+  // 인사이트 '채널별 전환율'에서 ?source=로 진입하는 유입경로(source) 필터.
+  const [channelSource, setChannelSource] = useState(searchParams.get("source")?.trim() ?? "")
   const [leadMagnetFilter, setLeadMagnetFilter] = useState("all")
   const [selected, setSelected] = useState<LeadRecord | null>(null)
   const [logs, setLogs] = useState<ContactLogRecord[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
+  const [activity, setActivity] = useState<LeadActivity | null>(null)
+  const [activityLoading, setActivityLoading] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [events, setEvents] = useState<PublicEvent[]>([])
+  const [activitySummary, setActivitySummary] = useState<Record<string, LeadActivityBadge>>({})
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(() => new Set())
   const [deletingIds, setDeletingIds] = useState<Set<string>>(() => new Set())
+  const [dismissedDeepLinkedLeadId, setDismissedDeepLinkedLeadId] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -607,6 +823,24 @@ export default function LeadsBoardClient() {
         if (!cancelled) setEvents(Array.isArray(data) ? data : [])
       } catch {
         /* noop — 행사 연결 UI는 events 없어도 동작 */
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  // 리드별 활동 배지 맵 — 1회 로드, 실패해도 배지만 비운다.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const data = await adminFetchJsonCached<{ summary: Record<string, LeadActivityBadge> }>(
+          "/api/admin/leads/activity-summary",
+          undefined,
+          { ttlMs: 60_000 }
+        )
+        if (!cancelled) setActivitySummary(data?.summary ?? {})
+      } catch {
+        /* noop — 배지는 보조 정보 */
       }
     })()
     return () => { cancelled = true }
@@ -645,6 +879,18 @@ export default function LeadsBoardClient() {
     } finally { setLogsLoading(false) }
   }, [])
 
+  // 활동 인텔리전스는 보조 정보 — 실패해도 토스트로 방해하지 않고 빈 상태로 둔다.
+  const fetchActivity = useCallback(async (leadId: string) => {
+    setActivityLoading(true)
+    try {
+      const res = await adminFetch(`/api/admin/leads/${leadId}/activity`)
+      const data = await readAdminResponse<LeadActivity>(res, "활동 데이터를 불러오지 못했습니다.")
+      setActivity(data)
+    } catch {
+      setActivity(null)
+    } finally { setActivityLoading(false) }
+  }, [])
+
   useEffect(() => {
     void fetchLeads()
   }, [fetchLeads])
@@ -662,12 +908,36 @@ export default function LeadsBoardClient() {
     }
   }, [leads]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 드로어 열릴 때 로그 로드
+  useEffect(() => {
+    if (
+      !deepLinkedLeadId ||
+      loading ||
+      leads.length === 0 ||
+      selected?.id === deepLinkedLeadId ||
+      dismissedDeepLinkedLeadId === deepLinkedLeadId
+    )
+      return
+    const match = leads.find((lead) => lead.id === deepLinkedLeadId)
+    if (match) setSelected(match)
+  }, [deepLinkedLeadId, dismissedDeepLinkedLeadId, leads, loading, selected?.id])
+
+  const closeSelectedLead = useCallback(() => {
+    setSelected(null)
+    if (deepLinkedLeadId) setDismissedDeepLinkedLeadId(deepLinkedLeadId)
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has("lead")) return
+    url.searchParams.delete("lead")
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
+  }, [deepLinkedLeadId])
+
+  // 드로어 열릴 때 로그 + 활동 인텔리전스 로드
   useEffect(() => {
     if (selected) {
       fetchLogs(selected.id)
+      fetchActivity(selected.id)
     } else {
       setLogs([])
+      setActivity(null)
     }
   }, [selected?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -852,6 +1122,7 @@ export default function LeadsBoardClient() {
     return lead.status === filter
   }).filter((lead) => {
     if (sourceDetailFilter !== "all" && getLeadSourceDetail(lead) !== sourceDetailFilter) return false
+    if (channelSource && lead.source !== channelSource) return false
     if (leadMagnetFilter !== "all" && lead.lead_magnet !== leadMagnetFilter) return false
     if (!normalizedSearch) return true
 
@@ -969,15 +1240,25 @@ export default function LeadsBoardClient() {
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">리드</h1>
           <p className="mt-1 text-[13px] text-[#1a1a1a]/42">신규 유입 → 응대 → 전환 파이프라인</p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void fetchLeads({ force: true })}
-          disabled={loading}
-          className="w-full gap-1.5 sm:w-auto"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />새로고침
-        </Button>
+        <div className="flex w-full gap-2 sm:w-auto">
+          <button
+            type="button"
+            onClick={() => setLeadModalOpen(true)}
+            className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 sm:flex-none"
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            리드 등록
+          </button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void fetchLeads({ force: true })}
+            disabled={loading}
+            className="flex-1 gap-1.5 sm:flex-none"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />새로고침
+          </Button>
+        </div>
       </div>
 
       {/* 리드 응대 큐 */}
@@ -1154,15 +1435,19 @@ export default function LeadsBoardClient() {
             ))}
           </select>
         </div>
-        {(sourceDetailFilter !== "all" || leadMagnetFilter !== "all" || searchQuery.trim()) && (
+        {(sourceDetailFilter !== "all" || leadMagnetFilter !== "all" || channelSource || searchQuery.trim()) && (
           <div className="mt-3 flex items-center justify-between gap-3 text-[12px] text-[#1a1a1a]/45">
-            <span>현재 조건 {filtered.length}건</span>
+            <span>
+              현재 조건 {filtered.length}건
+              {channelSource ? ` · 채널 ‘${channelSource}’` : ""}
+            </span>
             <button
               type="button"
               onClick={() => {
                 setSearchQuery("")
                 setSourceDetailFilter("all")
                 setLeadMagnetFilter("all")
+                setChannelSource("")
               }}
               className="font-medium text-[#084734] hover:text-[#063d2a]"
             >
@@ -1261,6 +1546,7 @@ export default function LeadsBoardClient() {
                           {lead.name ?? "No name"}
                         </p>
                         <ScoreBadge score={calcScore(lead)} />
+                        <LeadActivityChip badge={activitySummary[lead.id]} />
                       </div>
                       <p className="mt-1 truncate text-[12px] text-[#1a1a1a]/50">
                         {lead.org ?? lead.phone ?? lead.email ?? "-"}
@@ -1443,6 +1729,7 @@ export default function LeadsBoardClient() {
                       <div className="flex items-center gap-1.5">
                         {lead.name ?? "—"}
                         <ScoreBadge score={calcScore(lead)} />
+                        <LeadActivityChip badge={activitySummary[lead.id]} />
                       </div>
                     </td>
                     <td className="px-5 py-4 text-[#1a1a1a]/55">{lead.org ?? "—"}</td>
@@ -1520,7 +1807,9 @@ export default function LeadsBoardClient() {
           logs={logs}
           logsLoading={logsLoading}
           events={events}
-          onClose={() => setSelected(null)}
+          activity={activity}
+          activityLoading={activityLoading}
+          onClose={closeSelectedLead}
           onStatusChange={handleStatus}
           onNotesChange={handleNotes}
           onFollowUpChange={handleFollowUp}
@@ -1531,6 +1820,12 @@ export default function LeadsBoardClient() {
           onConvert={handleConvert}
         />
       )}
+
+      <LeadRegisterModal
+        open={leadModalOpen}
+        onClose={() => setLeadModalOpen(false)}
+        onDone={() => void fetchLeads({ force: true })}
+      />
 
       {toast && <Toast msg={toast.msg} type={toast.type} />}
     </div>

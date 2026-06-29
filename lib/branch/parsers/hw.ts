@@ -57,19 +57,30 @@ export function parseInbound(grid: FormattedCell[][]): HwInboundParsed[] {
 
 export function parseOutbound(grid: FormattedCell[][]): HwOutboundParsed[] {
   const out: HwOutboundParsed[] = []
+  let lastDestination: string | null = null
   for (let r = 1; r < grid.length; r++) {
     const row = grid[r] ?? []
-    const product = s(row[3]?.value); if (!product) continue
+    const product = s(row[3]?.value)
+    if (!product) {
+      if (row.every((cell) => !s(cell?.value))) lastDestination = null
+      continue
+    }
+    const explicitDestination = s(row[8]?.value)
+    const destination = explicitDestination ?? lastDestination
+    if (explicitDestination) lastDestination = explicitDestination
     const plannedByColor = isPlannedOutboundBg(row[10]?.bg)
     const progress = s(row[10]?.value) ?? (plannedByColor ? "배송 예정" : null)
     out.push({
       logistics_no: s(row[0]?.value), outbound_date: date(row[1]?.value),
       owner: s(row[2]?.value), product, quantity: n(row[4]?.value) ?? 0,
-      revenue: n(row[6]?.value), destination: s(row[8]?.value),
+      revenue: n(row[6]?.value), destination,
       serials: arr(row[9]?.value), progress,
       type: s(row[11]?.value), remarks: s(row[12]?.value),
       raw: {
         values: rawValues(row),
+        destination,
+        destination_cell_value: explicitDestination,
+        destination_filled_from_previous: !explicitDestination && Boolean(destination),
         planned_by_color: plannedByColor,
         progress_cell_bg: row[10]?.bg ?? null,
       },

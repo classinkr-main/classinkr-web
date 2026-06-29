@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getPublicUserContext } from "@/lib/auth/public-user"
 import { ANONYMOUS_ID_COOKIE } from "@/lib/consent/consent"
 import { prepareMaterialDownload } from "@/lib/materials"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
 
 interface RouteContext {
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   }
 
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "material-download", {
+  const { allowed } = await checkRateLimitDistributed(ip, "material-download", {
     windowMs: 60_000,
     max: 20,
   })

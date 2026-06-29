@@ -19,6 +19,16 @@ import {
 } from "lucide-react"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { StatCard } from "@/components/admin/StatCard"
+import {
+  EmptyState,
+  KpiSkeleton,
+  MiniFunnel,
+  SectionCard,
+  SectionSkeleton,
+  Skeleton,
+  SOURCE_PALETTE,
+  type FunnelStage,
+} from "@/components/admin/viz"
 import type { LeadRecord, SiteSettings } from "@/lib/site-settings-types"
 import type { CalendarEvent } from "@/lib/calendar-data"
 import type { BlogPost } from "@/lib/blog-types"
@@ -87,64 +97,7 @@ function statusToneClasses(tone: "neutral" | "info" | "warning" | "danger" | "su
   }
 }
 
-function SectionCard({
-  title,
-  description,
-  action,
-  children,
-}: {
-  title: string
-  description?: string
-  action?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <section className="bg-white rounded-2xl border border-[#e8e8e4] overflow-hidden">
-      <div className="flex items-start justify-between gap-4 border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
-        <div>
-          <h2 className="text-[14px] font-semibold text-[#111110]">{title}</h2>
-          {description && <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">{description}</p>}
-        </div>
-        {action}
-      </div>
-      <div className="p-4 sm:p-6">{children}</div>
-    </section>
-  )
-}
-
-function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`bg-[#f0f0ec] rounded-lg animate-pulse ${className}`} />
-}
-
-function SectionSkeleton({ rows = 4 }: { rows?: number }) {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex items-center gap-3">
-          <Skeleton className="w-9 h-9 rounded-xl shrink-0" />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="w-2/3 h-3" />
-            <Skeleton className="w-1/2 h-2.5" />
-          </div>
-          <Skeleton className="w-16 h-5 rounded-full" />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function KpiSkeleton() {
-  return (
-    <div className="bg-white rounded-2xl border border-[#e8e8e4] p-5 space-y-3">
-      <Skeleton className="w-8 h-8 rounded-xl" />
-      <Skeleton className="w-20 h-3" />
-      <Skeleton className="w-14 h-7" />
-      <Skeleton className="w-24 h-3" />
-    </div>
-  )
-}
-
-const DONUT_COLORS = ["#111110", "#4b8cf7", "#22c55e"]
+// SectionCard·Skeleton·SectionSkeleton·KpiSkeleton·EmptyState는 @/components/admin/viz로 이관(중복 제거).
 
 // Recharts는 무거우므로 KPI 카드가 먼저 그려진 뒤 차트만 지연 로드한다.
 const LeadTrendChart = dynamic(
@@ -154,6 +107,11 @@ const LeadTrendChart = dynamic(
 const SourcePie = dynamic(
   () => import("@/components/admin/overview/OverviewCharts").then((m) => m.SourcePie),
   { ssr: false, loading: () => <Skeleton className="h-[140px]" /> }
+)
+// KPI 카드 미니 추이 — Recharts 경계를 overview가 소유.
+const Sparkline = dynamic(
+  () => import("@/components/admin/viz/Sparkline").then((m) => m.Sparkline),
+  { ssr: false, loading: () => <div className="h-[30px]" /> }
 )
 const SOURCE_LABEL: Record<string, string> = {
   demo_modal: "데모 신청",
@@ -169,7 +127,7 @@ const STATUS_LABEL: Record<string, string> = {
 }
 const STATUS_COLOR: Record<string, string> = {
   new: "bg-[#ECFDF5] text-[#084734]",
-  contacted: "bg-yellow-50 text-yellow-600",
+  contacted: "bg-amber-50 text-amber-700",
   converted: "bg-[#D1FAE5] text-[#065c41]",
   closed: "bg-[#f0f0ec] text-[#1a1a1a]/40",
 }
@@ -191,7 +149,7 @@ const PUBLISH_STATUS_LABEL: Record<BlogPost["status"], string> = {
 }
 const PUBLISH_STATUS_COLOR: Record<BlogPost["status"], string> = {
   draft: "bg-amber-50 text-amber-700",
-  review: "bg-sky-50 text-sky-700",
+  review: "bg-[#ECFDF5] text-[#084734]",
   published: "bg-green-50 text-green-700",
   archived: "bg-[#f0f0ec] text-[#1a1a1a]/40",
 }
@@ -244,52 +202,23 @@ interface OsSummaryPayload {
   events: { count: number; target: number }
 }
 
-function EmptyState({
-  title,
-  description,
-  action,
-}: {
-  title: string
-  description: string
-  action?: React.ReactNode
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] px-4 py-10 text-center sm:py-12">
-      <p className="text-[14px] font-medium text-[#111110]">{title}</p>
-      <p className="text-[12px] text-[#1a1a1a]/40 mt-1 max-w-sm leading-relaxed">{description}</p>
-      {action && <div className="mt-4">{action}</div>}
-    </div>
-  )
-}
-
-function SignalChip({
-  href,
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  href: string
-  label: string
-  value: string
-  hint: string
-  tone: "neutral" | "info" | "warning" | "success" | "danger"
-}) {
-  return (
-    <a
-      href={href}
-      className="group flex items-start justify-between gap-4 rounded-2xl border border-[#e8e8e4] bg-white/90 px-4 py-4 shadow-[0_1px_0_rgba(17,17,16,0.02)] backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_12px_30px_rgba(17,17,16,0.04)] sm:flex-row"
-    >
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusToneClasses(tone)}`}>{label}</span>
-        </div>
-        <p className="mt-2 text-[17px] font-bold tracking-[-0.03em] text-[#111110] sm:text-[18px]">{value}</p>
-        <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/40">{hint}</p>
-      </div>
-      <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[#1a1a1a]/25 transition-colors group-hover:text-[#111110]" />
-    </a>
-  )
+interface VisitorStatsPayload {
+  today: {
+    date: string
+    homeVisitors: number
+    homePageViews: number
+  }
+  totals: {
+    homeVisitors: number
+    homePageViews: number
+    visitors: number
+    pageViews: number
+  }
+  daily: Array<{
+    date: string
+    homeVisitors: number
+    homePageViews: number
+  }>
 }
 
 export default function OverviewPage() {
@@ -305,6 +234,7 @@ export default function OverviewPage() {
   const [branchSummary, setBranchSummary] = useState<BranchSummaryPayload | null>(null)
   const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(null)
   const [osSummary, setOsSummary] = useState<OsSummaryPayload | null>(null)
+  const [visitorStats, setVisitorStats] = useState<VisitorStatsPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [chartRange, setChartRange] = useState<7 | 30>(7)
 
@@ -334,6 +264,9 @@ export default function OverviewPage() {
       })
       void fetchJson<OsSummaryPayload>("/api/admin/os-summary").then((data) => {
         if (!cancelled) setOsSummary(data ?? null)
+      })
+      void fetchJson<VisitorStatsPayload>("/api/admin/visitor-stats?range=7").then((data) => {
+        if (!cancelled) setVisitorStats(data ?? null)
       })
 
       // 대시보드는 앞으로 7일치 일정만 쓰므로 전체 일정 대신 해당 월만 요청한다.
@@ -499,12 +432,10 @@ export default function OverviewPage() {
     thisWeekLeads,
     weekTrend,
     thisMonthLeads,
-    monthTrend,
     convertedThisMonth,
     convertedTrend,
     pieData,
     recentLeads,
-    topBranch,
   } = leadAgg
 
   const chartData = useMemo(
@@ -522,7 +453,6 @@ export default function OverviewPage() {
   const chartTotal = useMemo(() => chartData.reduce((sum, point) => sum + point.count, 0), [chartData])
 
   const {
-    draftBlogPosts,
     publishedBlogPosts,
     ctaCoverage,
     recentPosts,
@@ -548,7 +478,7 @@ export default function OverviewPage() {
     }
   }, [blogPosts])
 
-  const { recentCampaigns, failedCampaigns, draftCampaigns, sentCampaigns, latestFailedCampaign } = useMemo(() => {
+  const { recentCampaigns, draftCampaigns, sentCampaigns, latestFailedCampaign } = useMemo(() => {
     const recentCampaigns = [...campaigns]
       .sort((a, b) => scoreDate(b.sentAt ?? b.createdAt) - scoreDate(a.sentAt ?? a.createdAt))
       .slice(0, 4)
@@ -564,7 +494,7 @@ export default function OverviewPage() {
     }
   }, [campaigns])
 
-  const { upcomingEvents, activeAssigneeCount, unassignedEventCount, busiestAssignee, nextUpcomingEvent } = useMemo(() => {
+  const { upcomingEvents, nextUpcomingEvent } = useMemo(() => {
     const upcomingEvents = [...calendarEvents]
       .filter((event) => isWithinNextDays(event.date, 7))
       .sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? ""))
@@ -614,6 +544,13 @@ export default function OverviewPage() {
   const instagramViews = instagramDashboard?.summary.totalViews ?? 0
   const instagramMediaCount = instagramDashboard?.summary.mediaCount ?? 0
   const instagramAverageViews = instagramDashboard?.summary.averageViews ?? 0
+  const visitorTodayIndex =
+    visitorStats?.daily.findIndex((day) => day.date === visitorStats.today.date) ?? -1
+  const visitorYesterday =
+    visitorStats && visitorTodayIndex > 0 ? visitorStats.daily[visitorTodayIndex - 1] : null
+  const homeVisitorTrend = visitorStats
+    ? visitorStats.today.homeVisitors - (visitorYesterday?.homeVisitors ?? 0)
+    : 0
 
   const connections = [
     {
@@ -642,61 +579,12 @@ export default function OverviewPage() {
     },
   ]
 
-  const teamSummaryItems = [
-    {
-      title: "세일즈 퍼널",
-      value: `${activePipelineLeads}건`,
-      badge: newLeads > 0 ? `신규 ${newLeads}` : "신규 없음",
-      description:
-        total > 0
-          ? `전체 ${total}건 · 연락중 ${contactedLeads}건 · 전환 ${converted}건 · 종료 ${closedLeads}건`
-          : "리드가 쌓이면 신규, 연락중, 전환 상태를 퍼널로 보여줍니다.",
-      href: "/admin/crm",
-      action: "CRM 열기",
-      tone: newLeads > 0 ? ("warning" as const) : ("neutral" as const),
-    },
-    {
-      title: "담당자 커버리지",
-      value: activeAssigneeCount > 0 ? `${activeAssigneeCount}명` : "대기",
-      badge: unassignedEventCount > 0 ? `미배정 ${unassignedEventCount}` : "배정 안정",
-      description:
-        upcomingEvents.length > 0
-          ? `${upcomingEvents.length}개 일정 · ${busiestAssignee ? `${busiestAssignee[0]} ${busiestAssignee[1]}건 집중` : "담당자 정보 없음"}`
-          : "이번 주 팀 일정이 등록되면 담당자별 집중도를 표시합니다.",
-      href: "/admin/calendar",
-      action: "캘린더",
-      tone: unassignedEventCount > 0 ? ("warning" as const) : activeAssigneeCount > 0 ? ("success" as const) : ("neutral" as const),
-    },
-    {
-      title: "캠페인 상태",
-      value: `${campaigns.length}건`,
-      badge: failedCampaigns.length > 0 ? `실패 ${failedCampaigns.length}` : `발송 ${sentCampaigns.length}`,
-      description:
-        campaigns.length > 0
-          ? `초안 ${draftCampaigns.length}건 · 발송 ${sentCampaigns.length}건 · 대상 구독자 ${subscriberCount}명`
-          : "캠페인 초안과 발송 이력이 생기면 상태를 집계합니다.",
-      href: "/admin/campaigns",
-      action: "캠페인",
-      tone: failedCampaigns.length > 0 ? ("danger" as const) : draftCampaigns.length > 0 ? ("info" as const) : ("neutral" as const),
-    },
-    {
-      title: "문서/콘텐츠 상태",
-      value: `${publishedBlogPosts.length}개`,
-      badge: publishedPostsWithoutCta > 0 ? `CTA 미완 ${publishedPostsWithoutCta}` : "CTA 안정",
-      description:
-        blogPosts.length > 0
-          ? `공개 ${publishedBlogPosts.length}개 · 초안 ${draftBlogPosts}개 · CTA 커버리지 ${publishedBlogPosts.length > 0 ? `${ctaCoverage}%` : "대기"}`
-          : "문서와 블로그가 쌓이면 공개/초안/CTA 상태를 함께 보여줍니다.",
-      href: "/admin/blog",
-      action: "문서 확인",
-      tone: publishedPostsWithoutCta > 0 ? ("warning" as const) : publishedBlogPosts.length > 0 ? ("success" as const) : ("neutral" as const),
-    },
-  ]
-  const statusFunnelItems = [
-    { label: STATUS_LABEL.new, value: newLeads, tone: newLeads > 0 ? ("warning" as const) : ("neutral" as const) },
-    { label: STATUS_LABEL.contacted, value: contactedLeads, tone: contactedLeads > 0 ? ("info" as const) : ("neutral" as const) },
-    { label: STATUS_LABEL.converted, value: converted, tone: converted > 0 ? ("success" as const) : ("neutral" as const) },
-    { label: STATUS_LABEL.closed, value: closedLeads, tone: "neutral" as const },
+  // 세일즈 퍼널 시각화용 단계 (MiniFunnel).
+  const funnelStages: FunnelStage[] = [
+    { label: STATUS_LABEL.new, value: newLeads, tone: newLeads > 0 ? "caution" : "brand", href: "/admin/crm" },
+    { label: STATUS_LABEL.contacted, value: contactedLeads, href: "/admin/crm" },
+    { label: STATUS_LABEL.converted, value: converted, href: "/admin/crm" },
+    { label: STATUS_LABEL.closed, value: closedLeads, tone: "neutral", href: "/admin/crm" },
   ]
 
   const missingConnections = connections.filter((connection) => !connection.value?.trim())
@@ -705,49 +593,6 @@ export default function OverviewPage() {
     missingConnectionLabels.length > 2
       ? `${missingConnectionLabels.slice(0, 2).join(", ")} 외 ${missingConnectionLabels.length - 2}개`
       : missingConnectionLabels.join(", ")
-  const urgentRiskCount = [
-    newLeads > 0,
-    Boolean(latestFailedCampaign),
-    missingConnections.length > 0,
-    criticalOpenBugs.length > 0,
-    publishedPostsWithoutCta > 0,
-  ].filter(Boolean).length
-  const topSignals = [
-    {
-      label: "세일즈 파이프라인",
-      value: `${activePipelineLeads}건`,
-      hint:
-        total > 0
-          ? `신규 ${newLeads}건 · 연락중 ${contactedLeads}건 · 전환율 ${convRate}%`
-          : "문의가 들어오면 파이프라인 총량을 표시합니다.",
-      href: "/admin/crm",
-      tone: newLeads > 0 ? ("warning" as const) : activePipelineLeads > 0 ? ("info" as const) : ("neutral" as const),
-    },
-    {
-      label: "급한 리스크",
-      value: urgentRiskCount > 0 ? `${urgentRiskCount}건` : "안정",
-      hint:
-        urgentRiskCount > 0
-          ? "신규 리드, 캠페인 실패, 연동 누락, 이슈를 우선 점검합니다."
-          : "주의 등급 이상의 운영 알림이 없습니다.",
-      href: urgentRiskCount > 0 ? "/admin/dev" : "/admin/settings",
-      tone: urgentRiskCount > 0 ? ("warning" as const) : ("success" as const),
-    },
-    {
-      label: "이번 주 유입",
-      value: `${thisWeekLeads}건`,
-      hint: topBranch ? `${topBranch[0]} ${topBranch[1]}건 · 지난주 대비 ${weekTrend >= 0 ? "+" : ""}${weekTrend}건` : weekTrend >= 0 ? `지난주 대비 +${weekTrend}건` : `지난주 대비 ${weekTrend}건`,
-      href: "/admin/crm",
-      tone: weekTrend >= 0 ? ("info" as const) : ("warning" as const),
-    },
-    {
-      label: "캠페인/문서",
-      value: `${sentCampaigns.length}/${publishedBlogPosts.length}`,
-      hint: `발송 캠페인 ${sentCampaigns.length}건 · 공개 문서 ${publishedBlogPosts.length}개 · CTA ${publishedBlogPosts.length > 0 ? `${ctaCoverage}%` : "대기"}`,
-      href: "/admin/campaigns",
-      tone: failedCampaigns.length > 0 || publishedPostsWithoutCta > 0 ? ("warning" as const) : ("info" as const),
-    },
-  ]
   const operationalAlertItems: Array<OverviewOperationalAlert | null> = [
     newLeads > 0
       ? {
@@ -862,14 +707,16 @@ export default function OverviewPage() {
     (item) => item.tone === "warning" || item.tone === "danger"
   ).length
 
-  // 운영 OS 요약 스트립 타일 — 기존에 흩어진 신호를 읽기 전용으로 합성.
-  const NORMAL_ACCENT = "bg-[#ECFDF5]"
-  const NORMAL_ICON = "text-[#084734]"
-  const WARNING_ACCENT = "bg-[#FEF3EE]"
-  const WARNING_ICON = "text-[#B85C33]"
-  const AMBER_ACCENT = "bg-amber-50"
-  const AMBER_ICON = "text-amber-700"
   const fmt = (value: number) => COMPACT_NUMBER.format(value)
+
+  // KPI 카드 스파크라인 데이터.
+  const sparkLeads = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (13 - i))
+    return leadAgg.dayCount[d.toDateString()] ?? 0
+  })
+  const sparkRevenue = branchSummary?.monthly_series.revenue_cum ?? []
+  const sparkVisitors = visitorStats?.daily.map((day) => day.homeVisitors) ?? []
 
   const pipelineCoverage = (() => {
     const series = branchSummary?.monthly_series
@@ -886,68 +733,143 @@ export default function OverviewPage() {
 
   return (
     <div className="relative overflow-hidden px-4 pt-6 pb-16 sm:px-6 sm:pt-8 lg:px-8 lg:pb-20">
-      <section className="relative mb-8 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-4 sm:p-5">
-        <div className="mb-4 flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <h2 className="text-[14px] font-semibold text-[#111110]">운영 OS · 요약</h2>
-            <span className="rounded-full border border-[#D1FAE5] bg-[#ECFDF5] px-2 py-0.5 text-[10px] font-medium text-[#084734]">
-              베타
-            </span>
-            <span className="rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/40">
-              읽기 전용
-            </span>
-          </div>
-          <p className="text-[11px] text-[#1a1a1a]/45">흩어진 운영 신호를 한 줄로 — 클릭하면 상세로 이동</p>
+      {/* 헤더 */}
+      <div className="relative mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin</p>
+          <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Overview</h1>
+          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
+            세일즈 파이프라인, 오늘의 주의 신호, 트래픽과 매출 흐름을 한 화면에서 점검하는 운영 허브입니다.
+          </p>
         </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { href: "/admin/crm", label: "문의 관리" },
+            { href: "/admin/campaigns", label: "캠페인" },
+            { href: "/admin/settings", label: "설정" },
+          ].map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/70 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+            >
+              {link.label}
+              <ChevronRight className="h-3 w-3" />
+            </a>
+          ))}
+        </div>
+      </div>
+
+      {/* (a) 커맨드 바 — 핵심 KPI + 스파크라인 */}
+      <section className="relative mb-6 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-4 sm:p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <h2 className="text-[14px] font-semibold text-[#111110]">핵심 지표</h2>
+          <span className="text-[11px] text-[#1a1a1a]/45">오늘 운영 상태를 한눈에</span>
+        </div>
+        {loading ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <KpiSkeleton key={i} />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <StatCard
+              icon={<Users className="h-4 w-4" />}
+              label="세일즈 파이프라인"
+              value={activePipelineLeads}
+              sub={`신규 ${newLeads} · 연락중 ${contactedLeads}`}
+              tone={newLeads > 0 ? "caution" : "brand"}
+              sparkline={<Sparkline data={sparkLeads} tone={newLeads > 0 ? "caution" : "brand"} />}
+              href="/admin/crm"
+            />
+            <StatCard
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="이번 주 유입"
+              value={thisWeekLeads}
+              sub={`오늘 +${todayLeads} · 이번 달 ${thisMonthLeads}`}
+              trend={{ value: weekTrend, label: "지난주 대비" }}
+              sparkline={<Sparkline data={sparkLeads.slice(7)} />}
+              href="/admin/crm"
+            />
+            <StatCard
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              label="전환율"
+              value={`${convRate}%`}
+              sub={`전환 ${converted}건 · 이번 달 ${convertedThisMonth}건`}
+              trend={{ value: convertedTrend, label: "지난달 대비" }}
+              tone="brand"
+              href="/admin/crm"
+            />
+            <StatCard
+              icon={<Eye className="h-4 w-4" />}
+              label="오늘 홈 방문자"
+              value={visitorStats ? visitorStats.today.homeVisitors : "…"}
+              sub={
+                visitorStats
+                  ? `7일 ${visitorStats.totals.homeVisitors}명 · PV ${visitorStats.today.homePageViews}`
+                  : "동의 기반 집계"
+              }
+              trend={visitorStats ? { value: homeVisitorTrend, label: "전일 대비" } : undefined}
+              tone="brand"
+              sparkline={sparkVisitors.length ? <Sparkline data={sparkVisitors} /> : undefined}
+              href="/admin/traffic"
+            />
+            <StatCard
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="매출 페이싱(연)"
+              value={branchSummary ? `${Math.round(branchSummary.revenue.pacing_pct)}%` : "…"}
+              sub={
+                branchSummary
+                  ? `확정 ${fmt(branchSummary.revenue.confirmed)} / 목표 ${fmt(branchSummary.revenue.goal)}`
+                  : "불러오는 중"
+              }
+              tone="brand"
+              sparkline={sparkRevenue.length ? <Sparkline data={sparkRevenue} /> : undefined}
+              href="/admin/branch"
+            />
+          </div>
+        )}
+      </section>
+
+      {/* (a') 운영 OS — 보조 지표 (demote) */}
+      <section className="mb-6">
+        <div className="mb-3 flex items-center gap-2">
+          <h2 className="text-[13px] font-semibold text-[#1a1a1a]/70">운영 OS</h2>
+          <span className="rounded-full border border-[#D1FAE5] bg-[#ECFDF5] px-2 py-0.5 text-[10px] font-medium text-[#084734]">
+            베타
+          </span>
+          <span className="rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/40">
+            읽기 전용
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
           <StatCard
-            icon={<TrendingUp className="w-4 h-4" />}
-            label="매출 페이싱(연)"
-            value={branchSummary ? `${Math.round(branchSummary.revenue.pacing_pct)}%` : "…"}
-            sub={
-              branchSummary
-                ? `확정 ${fmt(branchSummary.revenue.confirmed)} / 목표 ${fmt(branchSummary.revenue.goal)}`
-                : "불러오는 중"
-            }
-            accent={NORMAL_ACCENT}
-            iconColor={NORMAL_ICON}
-            href="/admin/branch"
-          />
-          <StatCard
-            icon={<TrendingUp className="w-4 h-4" />}
-            label="파이프 커버리지"
-            value={
-              !branchSummary
-                ? "…"
-                : pipelineCoverage != null
-                  ? `${pipelineCoverage.toFixed(1)}x`
-                  : "—"
-            }
-            sub="예상 파이프 ÷ 잔여목표 (≥2.0x 권장)"
-            accent={pipelineCoverage != null && pipelineCoverage < 2.0 ? WARNING_ACCENT : NORMAL_ACCENT}
-            iconColor={pipelineCoverage != null && pipelineCoverage < 2.0 ? WARNING_ICON : NORMAL_ICON}
-            href="/admin/branch"
-          />
-          <StatCard
-            icon={<AlertCircle className="w-4 h-4" />}
+            icon={<AlertCircle className="h-4 w-4" />}
             label="골든타임 24h"
             value={osLeadUnresponded24h != null ? `${osLeadUnresponded24h}건` : "…"}
             sub="24h 미응답 인바운드"
-            accent={osLeadUnresponded24h && osLeadUnresponded24h > 0 ? WARNING_ACCENT : NORMAL_ACCENT}
-            iconColor={osLeadUnresponded24h && osLeadUnresponded24h > 0 ? WARNING_ICON : NORMAL_ICON}
+            tone={osLeadUnresponded24h && osLeadUnresponded24h > 0 ? "danger" : "brand"}
             href="/admin/crm"
           />
           <StatCard
-            icon={<CalendarDays className="w-4 h-4" />}
+            icon={<TrendingUp className="h-4 w-4" />}
+            label="파이프 커버리지"
+            value={!branchSummary ? "…" : pipelineCoverage != null ? `${pipelineCoverage.toFixed(1)}x` : "—"}
+            sub="예상 파이프 ÷ 잔여목표 (≥2.0x 권장)"
+            tone={pipelineCoverage != null && pipelineCoverage < 2.0 ? "danger" : "brand"}
+            href="/admin/branch"
+          />
+          <StatCard
+            icon={<CalendarDays className="h-4 w-4" />}
             label="리뉴얼 D-90"
             value={osSummary ? `${osSummary.renewal.expiringSoonCount}건` : "…"}
             sub="만료 임박 (선제 대응)"
-            accent={NORMAL_ACCENT}
-            iconColor={NORMAL_ICON}
+            tone="brand"
             href="/admin/crm/customers/accounts"
           />
           <StatCard
-            icon={<Link2 className="w-4 h-4" />}
+            icon={<Link2 className="h-4 w-4" />}
             label="매칭 커버리지"
             value={osMatchingCoverage != null ? `${osMatchingCoverage}%` : "…"}
             sub={
@@ -955,12 +877,11 @@ export default function OverviewPage() {
                 ? `연결 ${osSummary.matching.linked}/${osSummary.matching.total} · 검토 ${osSummary.matching.needsReview}`
                 : "불러오는 중"
             }
-            accent={osMatchingCoverage != null && osMatchingCoverage < 80 ? AMBER_ACCENT : NORMAL_ACCENT}
-            iconColor={osMatchingCoverage != null && osMatchingCoverage < 80 ? AMBER_ICON : NORMAL_ICON}
+            tone={osMatchingCoverage != null && osMatchingCoverage < 80 ? "caution" : "brand"}
             href="/admin/crm/matching"
           />
           <StatCard
-            icon={<CheckCircle2 className="w-4 h-4" />}
+            icon={<CheckCircle2 className="h-4 w-4" />}
             label="진척(HW/콘텐츠/행사)"
             value={osSummary ? `${osSummary.hw.boards86}/${osSummary.hw.target}` : "…"}
             sub={
@@ -968,152 +889,79 @@ export default function OverviewPage() {
                 ? `블로그 ${osSummary.content.blogPublished}/${osSummary.content.target} · 행사 ${osSummary.events.count}/${osSummary.events.target}`
                 : "불러오는 중"
             }
-            accent="bg-[#F6F5F4]"
-            iconColor="text-[#615D59]"
+            tone="neutral"
             href="/admin/branch"
           />
         </div>
       </section>
 
-      <div className="relative mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
-          <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">Overview</h1>
-          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            팀 전체 세일즈 퍼널, 급한 리스크, 담당자 커버리지, 캠페인과 문서 상태를 한 화면에서 점검하는 운영 허브입니다.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <a
-            href="/admin/crm"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#e8e8e4] bg-white text-[12px] font-medium text-[#1a1a1a]/70 hover:text-[#111110] hover:border-[#c8c8c4] transition-colors"
-          >
-            문의 관리
-            <ChevronRight className="w-3 h-3" />
-          </a>
-          <a
-            href="/admin/campaigns"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#e8e8e4] bg-white text-[12px] font-medium text-[#1a1a1a]/70 hover:text-[#111110] hover:border-[#c8c8c4] transition-colors"
-          >
-            캠페인
-            <ChevronRight className="w-3 h-3" />
-          </a>
-          <a
-            href="/admin/settings"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#e8e8e4] bg-white text-[12px] font-medium text-[#1a1a1a]/70 hover:text-[#111110] hover:border-[#c8c8c4] transition-colors"
-          >
-            설정
-            <ChevronRight className="w-3 h-3" />
-          </a>
-        </div>
-      </div>
-
-      {!loading && newLeads > 0 && (
-        <div className="relative mb-6 flex flex-col gap-3 rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] px-4 py-3 shadow-[0_1px_0_rgba(8,71,52,0.04)] sm:flex-row sm:items-center">
-          <AlertCircle className="w-4 h-4 text-[#084734] shrink-0" />
-          <p className="text-[13px] text-[#084734] font-medium">
-            세일즈 퍼널에 신규 문의 <span className="font-bold">{newLeads}건</span>이 대기 중입니다.
-          </p>
-          <a
-            href="/admin/crm"
-            className="text-[12px] text-[#065c41] hover:text-[#084734] font-medium flex items-center gap-1 shrink-0 transition-colors sm:ml-auto"
-          >
-            문의 관리 <ArrowUpRight className="w-3 h-3" />
-          </a>
-        </div>
-      )}
-
-      <div className="relative mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {loading ? (
-          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[124px] rounded-2xl" />)
-        ) : (
-          topSignals.map((signal) => (
-            <SignalChip
-              key={signal.label}
-              href={signal.href}
-              label={signal.label}
-              value={signal.value}
-              hint={signal.hint}
-              tone={signal.tone}
+      {/* (b) 오늘 할 일 / 주의 신호 — 배너·시그널칩·리스크 통합 */}
+      <div className="mb-6">
+        <SectionCard
+          title="오늘 할 일 / 주의 신호"
+          description="문의·캠페인·연동·일정·배포 신호를 우선순위로 모았습니다. 클릭하면 상세로 이동."
+          action={
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusToneClasses(
+                actionableOperationalAlertCount > 0 ? "warning" : operationalAlerts.length > 0 ? "info" : "success"
+              )}`}
+            >
+              {actionableOperationalAlertCount > 0
+                ? `주의 ${actionableOperationalAlertCount}`
+                : operationalAlerts.length > 0
+                  ? `최근 ${operationalAlerts.length}`
+                  : "정상"}
+            </span>
+          }
+        >
+          {loading ? (
+            <SectionSkeleton rows={4} />
+          ) : operationalAlerts.length === 0 ? (
+            <EmptyState
+              title="지금은 운영 주의 신호가 없습니다."
+              description="문의, 캠페인, 연동, 일정, 배포 변경이 안정 상태면 이 영역은 비어 있습니다."
             />
-          ))
-        )}
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2">
+              {operationalAlerts.map((item) => (
+                <a
+                  key={item.id}
+                  href={item.href}
+                  className="group flex items-start gap-3 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_10px_24px_rgba(17,17,16,0.04)]"
+                >
+                  <div className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border ${statusToneClasses(item.tone)}`}>
+                    <ShieldAlert className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${statusToneClasses(item.tone)}`}>
+                        {item.scope}
+                      </span>
+                      <span className="text-[11px] text-[#1a1a1a]/35">{item.meta}</span>
+                    </div>
+                    <p className="mt-1 truncate text-[13px] font-semibold text-[#111110]">{item.title}</p>
+                    <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/40">{item.description}</p>
+                  </div>
+                  <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#1a1a1a]/35 group-hover:text-[#111110]">
+                    {item.action}
+                    <ChevronRight className="h-3 w-3" />
+                  </span>
+                </a>
+              ))}
+            </div>
+          )}
+        </SectionCard>
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 mb-8">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <KpiSkeleton key={i} />
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 mb-8">
-          <StatCard
-            icon={<Users className="w-4 h-4" />}
-            label="전체 리드"
-            value={total}
-            sub={`오늘 +${todayLeads} · 이번 달 ${thisMonthLeads}`}
-            trend={{ value: monthTrend, label: "지난달 대비" }}
-            href="/admin/crm"
-          />
-          <StatCard
-            icon={<TrendingUp className="w-4 h-4" />}
-            label="신규 리드"
-            value={newLeads}
-            sub="미처리 문의"
-            accent="bg-[#ECFDF5]"
-            iconColor="text-[#084734]"
-            href="/admin/crm"
-          />
-          <StatCard
-            icon={<CheckCircle2 className="w-4 h-4" />}
-            label="전환율"
-            value={`${convRate}%`}
-            sub={`전환 ${converted}건 · 이번 달 ${convertedThisMonth}건`}
-            trend={{ value: convertedTrend, label: "지난달 대비" }}
-            accent="bg-green-50"
-            iconColor="text-green-500"
-          />
-          <StatCard
-            icon={<TrendingUp className="w-4 h-4" />}
-            label="주간 유입"
-            value={thisWeekLeads}
-            trend={{ value: weekTrend, label: "지난주 대비" }}
-            accent="bg-[#F6F5F4]"
-            iconColor="text-[#615D59]"
-          />
-          <StatCard
-            icon={<Mail className="w-4 h-4" />}
-            label="구독자"
-            value={subscriberCount}
-            sub="활성 구독자"
-            accent="bg-orange-50"
-            iconColor="text-orange-500"
-            href="/admin/campaigns"
-          />
-          <StatCard
-            icon={<Eye className="w-4 h-4" />}
-            label="인스타 조회수"
-            value={instagramDashboard ? COMPACT_NUMBER.format(instagramViews) : "연결 필요"}
-            sub={
-              instagramDashboard
-                ? `최근 ${instagramMediaCount}개 · 평균 ${COMPACT_NUMBER.format(instagramAverageViews)}`
-                : "콘텐츠 탭에서 확인"
-            }
-            accent="bg-[#FEF3EE]"
-            iconColor="text-[#B85C33]"
-          />
-          <StatCard icon={<FileText className="w-4 h-4" />} label="블로그" value={blogPosts.length} sub="발행된 포스트" href="/admin/blog" />
-        </div>
-      )}
+      {/* 핵심 KPI는 상단 커맨드 바로, 신규 리드 배너·시그널칩은 주의 신호 피드로 통합됨 */}
 
       <div className="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 shadow-[0_1px_0_rgba(17,17,16,0.02)] sm:p-6">
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <p className="text-[14px] font-semibold text-[#111110]">홈페이지 유입 추이</p>
+              <p className="text-[14px] font-semibold text-[#111110]">문의 유입 추이</p>
               <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">
-                최근 {chartRange}일 · {chartTotal}건
+                최근 {chartRange}일 · 문의 접수 {chartTotal}건
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1142,7 +990,7 @@ export default function OverviewPage() {
             <Skeleton className="h-[180px]" />
           ) : chartTotal === 0 ? (
             <div className="flex h-[180px] flex-col items-center justify-center rounded-xl border border-dashed border-[#ecece8] bg-[#fafaf8]">
-              <p className="text-[13px] font-medium text-[#1a1a1a]/50">최근 {chartRange}일 유입이 없습니다</p>
+              <p className="text-[13px] font-medium text-[#1a1a1a]/50">최근 {chartRange}일 문의 유입이 없습니다</p>
               <p className="mt-1 text-[11px] text-[#1a1a1a]/35">문의가 들어오면 일별 추이가 표시됩니다.</p>
             </div>
           ) : (
@@ -1161,12 +1009,12 @@ export default function OverviewPage() {
             <div className="flex items-center justify-center h-[180px] text-[12px] text-[#1a1a1a]/30">데이터 없음</div>
           ) : (
             <>
-              <SourcePie data={pieData} colors={DONUT_COLORS} />
+              <SourcePie data={pieData} colors={SOURCE_PALETTE} />
               <div className="space-y-1.5 mt-2">
                 {pieData.map((d, i) => (
                   <div key={i} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: SOURCE_PALETTE[i % SOURCE_PALETTE.length] }} />
                       <span className="text-[12px] text-[#1a1a1a]/60">{d.name}</span>
                     </div>
                     <span className="text-[12px] font-medium text-[#111110]">{d.value}</span>
@@ -1219,19 +1067,8 @@ export default function OverviewPage() {
           </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3 border-b border-[#e8e8e4] bg-[#fafaf8] p-4 sm:grid-cols-4 sm:px-6">
-                {statusFunnelItems.map((item) => (
-                  <a
-                    key={item.label}
-                    href="/admin/crm"
-                    className="rounded-xl border border-[#e8e8e4] bg-white px-3 py-3 transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4]"
-                  >
-                    <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${statusToneClasses(item.tone)}`}>
-                      {item.label}
-                    </span>
-                    <p className="mt-2 text-[22px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{item.value}</p>
-                  </a>
-                ))}
+              <div className="border-b border-[#e8e8e4] bg-[#fafaf8] p-4 sm:px-6">
+                <MiniFunnel stages={funnelStages} />
               </div>
               <ul>
                 {recentLeads.map((lead) => (
@@ -1266,47 +1103,8 @@ export default function OverviewPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
-        <SectionCard
-          title="팀 현황 요약"
-          description="퍼널, 담당자, 캠페인, 문서 상태를 팀 단위로 압축해 봅니다."
-          action={
-            <a href="/admin/crm" className="text-[12px] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors flex items-center gap-1">
-              CRM 열기 <ArrowUpRight className="w-3 h-3" />
-            </a>
-          }
-        >
-          {loading ? (
-            <SectionSkeleton rows={4} />
-          ) : (
-            <div className="space-y-3">
-              {teamSummaryItems.map((item) => (
-                <a
-                  key={item.title}
-                  href={item.href}
-                  className="group flex items-start gap-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_10px_24px_rgba(17,17,16,0.04)]"
-                >
-                  <div className={`mt-0.5 w-9 h-9 rounded-xl border flex items-center justify-center ${statusToneClasses(item.tone)}`}>
-                    <CheckCircle2 className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-[13px] font-semibold text-[#111110]">{item.title}</p>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${statusToneClasses(item.tone)}`}>{item.badge}</span>
-                    </div>
-                    <p className="mt-1 text-[18px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{item.value}</p>
-                    <p className="text-[12px] text-[#1a1a1a]/40 mt-1.5 leading-relaxed">{item.description}</p>
-                  </div>
-                  <span className="text-[12px] font-medium text-[#1a1a1a]/35 group-hover:text-[#111110] flex items-center gap-1 shrink-0">
-                    {item.action}
-                    <ChevronRight className="w-3 h-3" />
-                  </span>
-                </a>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-
+      {/* (e) 드릴다운 그리드 — 일정 / 콘텐츠 / 캠페인 */}
+      <div className="grid grid-cols-1 gap-6 mt-6 xl:grid-cols-3">
         <SectionCard
           title="이번 주 일정"
           description="월별 캘린더의 핵심 일정만 먼저 보여줍니다."
@@ -1372,9 +1170,7 @@ export default function OverviewPage() {
             </div>
           )}
         </SectionCard>
-      </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
         <SectionCard
           title="문서/콘텐츠 상태"
           description="최근 수정 문서와 공개/초안 흐름을 확인합니다."
@@ -1484,127 +1280,92 @@ export default function OverviewPage() {
         </SectionCard>
       </div>
 
-      <div className="mt-6">
+      {/* 연동 상태 + 채널 지표 */}
+      <div className="grid grid-cols-1 gap-6 mt-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <SectionCard
-          title="급한 리스크 / 연동 상태"
-          description="세일즈, 캠페인, 문서, 외부 연결의 이상 징후를 한 곳에서 점검합니다."
+          title="연동 상태"
+          description="외부 전송 경로(시트·Webhook·채널톡·이메일)를 점검합니다."
           action={
-            <a href="/admin/settings" className="text-[12px] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors flex items-center gap-1">
-              설정 열기 <ArrowUpRight className="w-3 h-3" />
-            </a>
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusToneClasses(
+                missingConnections.length > 0 ? "warning" : "success"
+              )}`}
+            >
+              {missingConnections.length > 0 ? `미연결 ${missingConnections.length}` : "연결됨"}
+            </span>
           }
         >
           {loading ? (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <SectionSkeleton rows={3} />
-              <SectionSkeleton rows={4} />
-            </div>
+            <SectionSkeleton rows={4} />
           ) : (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-[13px] font-semibold text-[#111110]">리스크 알림 내역</p>
-                    <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">즉시 대응, 상태 점검, 최근 변경을 우선순위로 정렬합니다.</p>
-                  </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusToneClasses(actionableOperationalAlertCount > 0 ? "warning" : operationalAlerts.length > 0 ? "info" : "success")}`}>
-                    {actionableOperationalAlertCount > 0 ? `주의 ${actionableOperationalAlertCount}` : operationalAlerts.length > 0 ? `최근 ${operationalAlerts.length}` : "정상"}
-                  </span>
-                </div>
-
-                {operationalAlerts.length === 0 ? (
-                  <EmptyState
-                    title="지금은 운영 주의 신호가 없습니다."
-                    description="문의, 캠페인, 연동, 일정, 배포 변경이 안정 상태면 이 영역은 비어 있습니다."
-                    action={
-                      <a
-                        href="/admin/dev"
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#111110] text-white text-[12px] font-medium"
-                      >
-                        Dev Mode 열기
-                        <ChevronRight className="w-3 h-3" />
-                      </a>
-                    }
-                  />
-                ) : (
-                  <div className="space-y-3">
-                    {operationalAlerts.map((item) => (
-                      <a
-                        key={item.id}
-                        href={item.href}
-                        className="group flex items-start gap-3 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_10px_24px_rgba(17,17,16,0.04)]"
-                      >
-                        <div className={`mt-0.5 w-9 h-9 rounded-xl border flex items-center justify-center ${statusToneClasses(item.tone)}`}>
-                          <ShieldAlert className="w-4 h-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${statusToneClasses(item.tone)}`}>
-                              {item.scope}
-                            </span>
-                            <span className="text-[11px] text-[#1a1a1a]/35">{item.meta}</span>
-                          </div>
-                          <p className="mt-1 text-[13px] font-semibold text-[#111110] truncate">{item.title}</p>
-                          <p className="text-[12px] text-[#1a1a1a]/40 mt-1 leading-relaxed">{item.description}</p>
-                        </div>
-                        <span className="text-[12px] font-medium text-[#1a1a1a]/35 group-hover:text-[#111110] flex items-center gap-1 shrink-0">
-                          {item.action}
-                          <ChevronRight className="w-3 h-3" />
-                        </span>
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-[13px] font-semibold text-[#111110]">연동 상태</p>
-                    <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">외부 전송 경로를 점검합니다.</p>
-                  </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusToneClasses(missingConnections.length > 0 ? "warning" : "success")}`}>
-                    {missingConnections.length > 0 ? `미연결 ${missingConnections.length}` : "연결됨"}
-                  </span>
-                </div>
-
-                {connections.length === 0 ? null : (
-                  <div className="space-y-3">
-                    {connections.map((connection) => {
-                      const connected = Boolean(connection.value?.trim())
-                      return (
-                        <a
-                          key={connection.label}
-                          href={connection.href}
-                          className="group flex items-start gap-3 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_10px_24px_rgba(17,17,16,0.04)]"
+            <div className="grid gap-3 sm:grid-cols-2">
+              {connections.map((connection) => {
+                const connected = Boolean(connection.value?.trim())
+                return (
+                  <a
+                    key={connection.label}
+                    href={connection.href}
+                    className="group flex items-start gap-3 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_10px_24px_rgba(17,17,16,0.04)]"
+                  >
+                    <div
+                      className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border ${
+                        connected ? "border-green-100 bg-green-50 text-green-700" : "border-amber-100 bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      <Link2 className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-[13px] font-semibold text-[#111110]">{connection.label}</p>
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[10px] ${
+                            connected ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
+                          }`}
                         >
-                          <div
-                            className={`mt-0.5 w-9 h-9 rounded-xl border flex items-center justify-center ${
-                              connected ? "bg-green-50 text-green-700 border-green-100" : "bg-amber-50 text-amber-700 border-amber-100"
-                            }`}
-                          >
-                            <Link2 className="w-4 h-4" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="text-[13px] font-semibold text-[#111110]">{connection.label}</p>
-                              <span
-                                className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                                  connected ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"
-                                }`}
-                              >
-                                {connected ? "연결됨" : "설정 필요"}
-                              </span>
-                            </div>
-                            <p className="text-[12px] text-[#1a1a1a]/40 mt-1">{connection.description}</p>
-                          </div>
-                          <ChevronRight className="w-3.5 h-3.5 text-[#1a1a1a]/25 group-hover:text-[#111110] shrink-0 mt-1" />
-                        </a>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
+                          {connected ? "연결됨" : "설정 필요"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[12px] text-[#1a1a1a]/40">{connection.description}</p>
+                    </div>
+                  </a>
+                )
+              })}
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard title="채널 지표" description="구독자·소셜·콘텐츠 요약.">
+          {loading ? (
+            <SectionSkeleton rows={3} />
+          ) : (
+            <div className="grid grid-cols-1 gap-3">
+              <StatCard
+                icon={<Mail className="h-4 w-4" />}
+                label="구독자"
+                value={subscriberCount}
+                sub="활성 구독자"
+                tone="brand"
+                href="/admin/campaigns"
+              />
+              <StatCard
+                icon={<Eye className="h-4 w-4" />}
+                label="인스타 조회수"
+                value={instagramDashboard ? COMPACT_NUMBER.format(instagramViews) : "연결 필요"}
+                sub={
+                  instagramDashboard
+                    ? `최근 ${instagramMediaCount}개 · 평균 ${COMPACT_NUMBER.format(instagramAverageViews)}`
+                    : "콘텐츠 탭에서 확인"
+                }
+                tone={instagramDashboard ? "danger" : "neutral"}
+              />
+              <StatCard
+                icon={<FileText className="h-4 w-4" />}
+                label="블로그"
+                value={blogPosts.length}
+                sub="발행된 포스트"
+                tone="neutral"
+                href="/admin/blog"
+              />
             </div>
           )}
         </SectionCard>

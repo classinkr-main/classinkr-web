@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
   Building2,
@@ -249,7 +250,7 @@ function CustomerDetailPanel({
         <div className="sticky top-0 z-10 border-b border-[#f0f0ec] bg-white px-5 py-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Neo CRM Account</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Customer Sync Source</p>
               <h3 className="mt-1 truncate text-[18px] font-bold text-[#111110]">
                 {account?.name ?? (loading ? "불러오는 중..." : "고객")}
               </h3>
@@ -344,11 +345,11 @@ function CustomerDetailPanel({
                   </div>
                 )
               ) : tab === "orders" ? (
-                <MoneySection title="오더 (Opportunity · USD)" items={detail.orders} emptyLabel="오더가 없습니다." format={formatUSD} />
+                <MoneySection title="오더 (USD)" items={detail.orders} emptyLabel="오더가 없습니다." format={formatUSD} />
               ) : tab === "collections" ? (
-                <MoneySection title="수금 (Collection · CNY)" items={detail.collections} emptyLabel="수금 기록이 없습니다." format={formatCNY} />
+                <MoneySection title="수금 (CNY)" items={detail.collections} emptyLabel="수금 기록이 없습니다." format={formatCNY} />
               ) : (
-                <MoneySection title="성과 (SalesPerformance · CNY)" items={detail.performances} emptyLabel="성과 기록이 없습니다." format={formatCNY} />
+                <MoneySection title="성과 (CNY)" items={detail.performances} emptyLabel="성과 기록이 없습니다." format={formatCNY} />
               )}
             </>
           ) : null}
@@ -372,6 +373,8 @@ function KpiTile({ icon, label, value, hint, tone = "text-[#111110]" }: { icon: 
 }
 
 export default function NeoCrmCustomersClient() {
+  const searchParams = useSearchParams()
+  const deepLinkedAccountId = searchParams.get("account")?.trim() ?? ""
   const [data, setData] = useState<NeoCrmCustomerList | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -381,6 +384,7 @@ export default function NeoCrmCustomersClient() {
   const [expiringOnly, setExpiringOnly] = useState(false)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
+  const [dismissedDeepLinkedAccountId, setDismissedDeepLinkedAccountId] = useState<string | null>(null)
 
   const load = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
@@ -402,6 +406,25 @@ export default function NeoCrmCustomersClient() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (
+      !deepLinkedAccountId ||
+      selectedAccountId === deepLinkedAccountId ||
+      dismissedDeepLinkedAccountId === deepLinkedAccountId
+    )
+      return
+    setSelectedAccountId(deepLinkedAccountId)
+  }, [deepLinkedAccountId, dismissedDeepLinkedAccountId, selectedAccountId])
+
+  const closeSelectedAccount = useCallback(() => {
+    setSelectedAccountId(null)
+    if (deepLinkedAccountId) setDismissedDeepLinkedAccountId(deepLinkedAccountId)
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has("account")) return
+    url.searchParams.delete("account")
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
+  }, [deepLinkedAccountId])
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
@@ -455,13 +478,13 @@ export default function NeoCrmCustomersClient() {
     <div>
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Neo CRM · Customers</p>
-          <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">고객 (학원)</h1>
+          <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Customer Sync · 외부 CRM</p>
+          <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">고객 원천 데이터</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            본사 Neo CRM account 기준 한국팀 고객. EEO 계정의 잔액·만료·최근 수업과 오더를 함께 봅니다.
+            외부 CRM에서 동기화된 고객 참고자료입니다. ClassIn 고객 DB의 보조 원천으로 사용합니다.
           </p>
           <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
-            ShroffAccount sync {formatDateTime(syncHealth?.shroffAccountSyncedAt)}
+            잔액·만료 원천 sync {formatDateTime(syncHealth?.shroffAccountSyncedAt)}
             {syncHealth ? ` · ${formatAgeHours(syncHealth.shroffAccountAgeHours)}` : ""}
           </p>
         </div>
@@ -479,7 +502,7 @@ export default function NeoCrmCustomersClient() {
       {error ? <div className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">{error}</div> : null}
       {syncHealth?.isShroffAccountStale ? (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-800">
-          ShroffAccount snapshot이 {formatAgeHours(syncHealth.shroffAccountAgeHours)} 데이터입니다. 만료일·잔액이 원본 CRM과
+          잔액·만료 원천 데이터가 {formatAgeHours(syncHealth.shroffAccountAgeHours)} 데이터입니다. 만료일·잔액이 외부 CRM과
           다를 수 있으니 외부 CRM 동기화 후 확인하세요.
         </div>
       ) : null}
@@ -487,7 +510,7 @@ export default function NeoCrmCustomersClient() {
       <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiTile
           icon={<Building2 className="h-4 w-4" />}
-          label="고객 (account)"
+          label="동기화 고객"
           value={loading && !data ? "..." : formatNumber(summary?.totalCount)}
           hint={`EEO 연결 ${formatNumber(summary?.withEeoCount)}`}
         />
@@ -495,7 +518,7 @@ export default function NeoCrmCustomersClient() {
           icon={<CalendarClock className="h-4 w-4" />}
           label="만료 임박"
           value={loading && !data ? "..." : formatNumber(summary?.expiringSoonCount)}
-          hint="60일 이내 만료 EEO 계정"
+          hint="60일 이내 만료 고객"
           tone={(summary?.expiringSoonCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}
         />
         <KpiTile
@@ -509,7 +532,7 @@ export default function NeoCrmCustomersClient() {
           icon={<Wallet className="h-4 w-4" />}
           label="총 오더"
           value={loading && !data ? "..." : formatUSD(summary?.totalOrderAmount)}
-          hint="Opportunity 금액 합 (USD)"
+          hint="외부 CRM 오더 금액 합 (USD)"
         />
       </section>
 
@@ -639,11 +662,11 @@ export default function NeoCrmCustomersClient() {
       ) : null}
 
       {selectedAccountId ? (
-        <CustomerDetailPanel
-          key={selectedAccountId}
-          accountId={selectedAccountId}
-          onClose={() => setSelectedAccountId(null)}
-        />
+          <CustomerDetailPanel
+            key={selectedAccountId}
+            accountId={selectedAccountId}
+            onClose={closeSelectedAccount}
+          />
       ) : null}
     </div>
   )

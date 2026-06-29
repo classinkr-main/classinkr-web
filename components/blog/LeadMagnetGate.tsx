@@ -14,6 +14,7 @@ import { PublicLoginDialog } from "@/components/auth/PublicLoginDialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { trackEvent } from "@/lib/analytics"
+import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import {
   getLeadMagnetItemCount,
   getLeadMagnetPublicGateLabel,
@@ -69,6 +70,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
           email,
           source,
           leadMagnet: leadMagnet.slug,
+          attribution: collectLeadAttribution(),
         }),
       })
       const data = await res.json()
@@ -79,6 +81,7 @@ export function LeadMagnetGate({ leadMagnet, postSlug }: Props) {
           lead_magnet: leadMagnet.slug,
           post_slug: postSlug,
           gate: leadMagnet.gate,
+          event_id: data.conversionEventId,
         })
         setSubmitted(true)
       } else {

@@ -7,7 +7,7 @@ import {
 } from "@/lib/admin-auth"
 import { signOutAdminSession } from "@/lib/admin-auth-logout"
 import { ADMIN_AUTH_ERROR_CODE } from "@/lib/admin-auth-errors"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 
 export async function GET(req: NextRequest) {
   const cookie = req.cookies.get("admin_session")?.value
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
 // POST — 레거시 관리자 비밀번호 로그인
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "admin-auth", {
+  const { allowed } = await checkRateLimitDistributed(ip, "admin-auth", {
     windowMs: 5 * 60_000,
     max: 10,
   })

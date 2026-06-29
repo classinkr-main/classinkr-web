@@ -127,6 +127,7 @@ export interface Deal {
   closed_at: string | null;
   notes: string | null;
   created_by: string | null;
+  owner_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -136,6 +137,7 @@ export interface DealListItem extends Deal {
   customer_contact_name: string | null;
   customer_region_label: string | null;
   customer_campus_name: string | null;
+  owner_name: string | null;
 }
 
 export interface DealLineItem {

@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { CheckCircle2, Loader2, Mail, ArrowRight, Sparkles } from "lucide-react"
 import { trackEvent } from "@/lib/analytics"
+import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -74,13 +75,16 @@ export function NewsletterModal({
       const res = await fetch("/api/newsletter/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, source }),
+        body: JSON.stringify({ email, source, attribution: collectLeadAttribution() }),
       })
 
       const data = await res.json()
 
       if (res.ok && data.ok) {
-        trackEvent("submit_newsletter", { source })
+        trackEvent("submit_newsletter", {
+          source,
+          event_id: data.conversionEventId,
+        })
         setSubmitted(true)
       } else {
         setError(data.error || "구독에 실패했습니다.")

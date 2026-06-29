@@ -49,4 +49,47 @@ describe("chatbot query route timeout fallback", () => {
       "[POST /api/chatbot/query] timed out; returning deterministic fallback."
     )
   })
+
+  it("clears the timeout timer after a normal chatbot response resolves first", async () => {
+    vi.useFakeTimers()
+    vi.stubEnv("CHATBOT_ROUTE_TIMEOUT_MS", "5")
+
+    vi.doMock("@/lib/chatbot/service", () => {
+      class ChatbotInputError extends Error {
+        status = 400
+      }
+
+      return {
+        ChatbotInputError,
+        handleChatbotQuery: vi.fn().mockResolvedValue({
+          answer: "정상 응답입니다.",
+          answerMode: "direct_answer",
+          confidence: 0.9,
+          needsHandoff: false,
+          handoffIntent: "demo",
+          sources: [],
+          suggestedQuestions: [],
+          unresolved: false,
+        }),
+      }
+    })
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { POST } = await import("@/app/api/chatbot/query/route")
+
+    const response = await POST(
+      new NextRequest("https://classin.ai.kr/api/chatbot/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "도입 상담이 궁금해요" }),
+      })
+    )
+    const data = await response.json()
+
+    await vi.advanceTimersByTimeAsync(6)
+
+    expect(response.status).toBe(200)
+    expect(data.answer).toBe("정상 응답입니다.")
+    expect(warnSpy).not.toHaveBeenCalled()
+  })
 })

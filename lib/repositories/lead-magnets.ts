@@ -16,6 +16,7 @@ import type {
   LeadMagnetSection,
   LeadMagnetSourceLink,
   LeadMagnetStatus,
+  LeadMagnetStoryGuide,
   LeadMagnetTier,
   LeadMagnetWorksheet,
   LeadMagnetWorksheetRow,
@@ -134,6 +135,23 @@ function normalizePdfGuide(value: unknown): LeadMagnetPdfGuide | undefined {
   }
 }
 
+function normalizeStoryGuide(value: unknown): LeadMagnetStoryGuide | undefined {
+  const raw = asRecord(value)
+  if (Object.keys(raw).length === 0) return undefined
+
+  const beats = stringArray(raw.beats)
+  const story = {
+    eyebrow: stringValue(raw.eyebrow),
+    title: stringValue(raw.title),
+    body: stringValue(raw.body),
+    beats,
+    takeaway: stringValue(raw.takeaway),
+  }
+
+  if (!story.title || !story.body || beats.length === 0) return undefined
+  return story
+}
+
 function normalizeExpertVoice(value: unknown): LeadMagnetExpertVoice | undefined {
   const raw = asRecord(value)
   const speaker = stringValue(raw.speaker)
@@ -247,6 +265,7 @@ export function normalizeLeadMagnet(input: unknown): LeadMagnet {
     deliverables: stringArray(raw.deliverables),
     consultationPrep: stringArray(raw.consultationPrep),
     sourceLinks: normalizeSourceLinks(raw.sourceLinks),
+    storyGuide: normalizeStoryGuide(raw.storyGuide),
     pdfGuide: normalizePdfGuide(raw.pdfGuide),
     expertVoice: normalizeExpertVoice(raw.expertVoice),
     worksheet: normalizeWorksheet(raw.worksheet),

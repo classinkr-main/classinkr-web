@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import type { LeadSource } from "@/lib/lead-types"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { resolveLeadSource, submitLeadCapture } from "@/lib/server/lead-capture"
 
 const PAGE_FORM_SOURCE_MAP = {
@@ -42,10 +42,17 @@ function pickString(...values: unknown[]) {
 
 function isWebhookAuthorized(req: NextRequest) {
   const secret = process.env.PAGE_WEBHOOK_SECRET?.trim()
-  if (!secret) return process.env.NODE_ENV !== "production"
+  // 시크릿이 설정돼 있으면 NODE_ENV와 무관하게 항상 유효한 토큰을 요구한다(FAIL CLOSED).
+  if (secret) {
+    return (
+      req.headers.get("x-webhook-secret") === secret ||
+      req.headers.get("authorization") === `Bearer ${secret}`
+    )
+  }
+  // 시크릿이 정말로 미설정일 때만 로컬 개발 우회를 허용한다.
+  // Vercel(프리뷰 포함)에서는 VERCEL이 항상 설정되므로 절대 우회 불가.
   return (
-    req.headers.get("x-webhook-secret") === secret ||
-    req.headers.get("authorization") === `Bearer ${secret}`
+    process.env.NODE_ENV === "development" && !process.env.VERCEL
   )
 }
 
@@ -131,7 +138,7 @@ export async function POST(req: NextRequest) {
   }
 
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "page-webhook", {
+  const { allowed } = await checkRateLimitDistributed(ip, "page-webhook", {
     windowMs: 60_000,
     max: 10,
   })

@@ -11,8 +11,10 @@ import {
   Bot,
   Building2,
   CalendarDays,
+  ChevronLeft,
   ChevronRight,
   Code2,
+  Eye,
   FileText,
   Globe,
   LayoutDashboard,
@@ -22,6 +24,7 @@ import {
   Megaphone,
   MessageSquare,
   MoreHorizontal,
+  PackageCheck,
   Search,
   Settings,
   SquareChevronLeft,
@@ -30,7 +33,7 @@ import {
   Users,
   X,
 } from "lucide-react"
-import { clearAdminSessionStorage, warmAdminRequestCache } from "@/lib/admin-client"
+import { adminFetchJsonCached, clearAdminSessionStorage, warmAdminRequestCache } from "@/lib/admin-client"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
@@ -56,6 +59,7 @@ const NAV: NavItem[] = [
   { href: "/admin/crm", label: "CRM", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "sales" },
   { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "sales" },
   { href: "/admin/quotes", label: "견적·문서", icon: <FileText className="h-4 w-4" />, roles: STAFF_ADMIN, section: "sales" },
+  { href: "/admin/commercial/board", label: "딜 파이프라인", icon: <LayoutDashboard className="h-4 w-4" />, roles: STAFF_ADMIN, section: "sales", badge: "New" },
   { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
   { href: "/admin/materials", label: "자료 퍼널", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing", badge: "New" },
   { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing" },
@@ -65,6 +69,8 @@ const NAV: NavItem[] = [
   { href: "/admin/chatbot", label: "챗봇 운영", icon: <Bot className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs", badge: "Ops" },
   { href: "/admin/docs", label: "가이드 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs" },
   { href: "/admin/branch", label: "KR Team", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
+  { href: "/admin/hardware", label: "하드웨어 재고", icon: <PackageCheck className="h-4 w-4" />, roles: STAFF_ADMIN, section: "performance", badge: "Ops" },
+  { href: "/admin/traffic", label: "방문자/트래픽", icon: <Eye className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/ops", label: "Ops Health", icon: <Activity className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "New" },
   { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
@@ -116,6 +122,13 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/branch/summary?team=ALL&period=Q",
     "/api/admin/branch/kpi?team=ALL&period=Q",
   ],
+  "/admin/hardware": ["/api/admin/hardware"],
+  "/admin/traffic": [
+    "/api/admin/visitor-stats?range=30",
+    "/api/admin/homepage-flow?range=30",
+    "/api/admin/event-counts?range=30",
+    "/api/admin/marketing/conversions/status",
+  ],
   "/admin/analytics": [
     "/api/admin/leads",
     "/api/admin/subscribers",
@@ -144,10 +157,41 @@ const SECTION_META: Record<SidebarSection, { label: string; description: string 
   system: { label: "시스템", description: "권한, 설정, 감사, 개발 도구" },
 }
 
+// 사이드바 nav 전용 초미니멀 스크롤바: 4px 폭 + 투명 트랙 + hover 시에만 또렷한 thumb.
+const MINIMAL_SCROLLBAR =
+  "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/10 hover:[&::-webkit-scrollbar-thumb]:bg-black/20"
+
+// CRM 진입 시 사이드바에서 펼치는 하위 섹션(= 기존 상단 탭의 이전). 활성 판별은 경로 prefix.
+const CRM_CHILD_NAV: Array<{ href: string; label: string; match: (p: string) => boolean }> = [
+  { href: "/admin/crm", label: "현황", match: (p) => p === "/admin/crm" },
+  {
+    href: "/admin/crm/customers/unified",
+    label: "고객",
+    match: (p) => p.startsWith("/admin/crm/customers") || p.startsWith("/admin/crm/partners/customers"),
+  },
+  { href: "/admin/crm/activity", label: "기록", match: (p) => p.startsWith("/admin/crm/activity") },
+  {
+    href: "/admin/crm/deals",
+    label: "돈흐름",
+    match: (p) =>
+      p.startsWith("/admin/crm/deals") || p.startsWith("/admin/crm/revenue") || p.startsWith("/admin/crm/partners"),
+  },
+  { href: "/admin/crm/insights", label: "인사이트", match: (p) => p.startsWith("/admin/crm/insights") },
+  { href: "/admin/crm/matching", label: "연동", match: (p) => p.startsWith("/admin/crm/matching") },
+]
+
+// 저장된 세그먼트 — 고객 하위 퀵필터(?view=). 카운트는 통합 API summary.viewCounts.
+const CRM_SEGMENTS: Array<{ view: string; label: string }> = [
+  { view: "expiring", label: "만료 임박" },
+  { view: "dormant", label: "30일+ 미접촉" },
+  { view: "hot_lead", label: "고전환 리드" },
+  { view: "upsell", label: "업셀 후보" },
+]
+
 const MOBILE_PRIMARY_HREFS = [
   "/admin/overview",
   "/admin/crm",
-  "/admin/materials",
+  "/admin/quotes",
   "/admin/chatbot",
 ] as const
 
@@ -189,7 +233,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
     if (typeof window === "undefined") return false
     return localStorage.getItem("admin_sidebar_collapsed") === "true"
   })
-  const [isDesktop, setIsDesktop] = useState(false)
+  const [isDesktop, setIsDesktop] = useState<boolean | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
@@ -202,7 +246,31 @@ export default function AdminSidebar({ role, name, email }: Props) {
     return () => media.removeEventListener("change", update)
   }, [])
 
-  const effectiveCollapsed = isDesktop && collapsed
+  const effectiveCollapsed = isDesktop === true && collapsed
+  const inCrm = pathname?.startsWith("/admin/crm") ?? false
+  const [crmSegCounts, setCrmSegCounts] = useState<Record<string, number> | null>(null)
+  // CRM 하위탭 접기 — admin layout이 유지 마운트라 네비게이션 동안 상태 보존(하드 리로드만 리셋).
+  // CRM 드릴인 nav — 진입 시 기본 글로벌 탭이 접히고 CRM 하위 패널이 열린다. '← 전체 메뉴'로 복귀.
+  const [navView, setNavView] = useState<"auto" | "global">("auto")
+  const crmDrill = inCrm && navView !== "global" && !effectiveCollapsed
+
+  // CRM 진입 시에만 세그먼트 카운트 1회 lazy 로드(캐시, 논블로킹). 미로드 시 라벨만 표시.
+  useEffect(() => {
+    if (!inCrm || crmSegCounts) return
+    let alive = true
+    adminFetchJsonCached<{ summary?: { viewCounts?: Record<string, number> } }>(
+      "/api/admin/crm/customers/unified?limit=1",
+      undefined,
+      { cacheKey: "sidebar:crm-seg-counts", ttlMs: 120_000, staleWhileRevalidateMs: 300_000 }
+    )
+      .then((d) => {
+        if (alive) setCrmSegCounts(d?.summary?.viewCounts ?? null)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [inCrm, crmSegCounts])
 
   const toggle = () => {
     setCollapsed((prev) => {
@@ -321,7 +389,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
           {currentNavItem?.label ?? "Admin"}
         </h1>
       </div>
-      {!isDesktop ? <AdminNotificationsBell placement="inline" /> : null}
+      {isDesktop === false ? <AdminNotificationsBell placement="inline" /> : null}
     </header>
 
     {mobileMenuOpen ? (
@@ -356,7 +424,66 @@ export default function AdminSidebar({ role, name, email }: Props) {
           </div>
 
           <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
-            {groupedNav.map(({ section, items }, groupIndex) => (
+            {crmDrill ? (
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => setNavView("global")}
+                  className="mb-1 flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-[13px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  전체 메뉴
+                </button>
+                <div className="flex items-center gap-2 px-3 pb-1">
+                  <Users className="h-4 w-4 text-[#1a1a1a]/45" />
+                  <p className="text-[13px] font-bold text-[#111110]">CRM</p>
+                </div>
+                {CRM_CHILD_NAV.map((child) => {
+                  const childActive = child.match(pathname ?? "")
+                  return (
+                    <div key={`mobile-${child.href}`}>
+                      <Link
+                        href={child.href}
+                        onClick={() => {
+                          warmAdminTab(child.href)
+                          setMobileMenuOpen(false)
+                        }}
+                        className={`flex min-h-11 items-center rounded-md px-3 text-[14px] font-medium transition-colors ${
+                          childActive
+                            ? "bg-[#111110] text-white"
+                            : "text-[#1a1a1a]/65 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                        }`}
+                      >
+                        {child.label}
+                      </Link>
+                      {child.href === "/admin/crm/customers/unified" ? (
+                        <div className="ml-3 mt-0.5 space-y-px border-l border-[#e8e8e4] pl-3">
+                          {CRM_SEGMENTS.map((seg) => {
+                            const count = crmSegCounts?.[seg.view]
+                            return (
+                              <Link
+                                key={`mobile-${seg.view}`}
+                                href={`/admin/crm/customers/unified?view=${seg.view}`}
+                                onClick={() => setMobileMenuOpen(false)}
+                                className="flex min-h-9 items-center gap-2 rounded px-3 text-[12px] text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                              >
+                                <span className="flex-1 truncate">{seg.label}</span>
+                                {count != null ? (
+                                  <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[10px] font-semibold tabular-nums text-[#1a1a1a]/55">
+                                    {count}
+                                  </span>
+                                ) : null}
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              groupedNav.map(({ section, items }, groupIndex) => (
               <div key={`mobile-${section}`} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
                 <div className="px-3 pb-2">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
@@ -374,9 +501,11 @@ export default function AdminSidebar({ role, name, email }: Props) {
                         onFocus={() => warmAdminTab(item.href)}
                         onMouseEnter={() => scheduleWarmAdminTab(item.href)}
                         onMouseLeave={cancelWarmAdminTab}
+                        onPointerDown={() => warmAdminTab(item.href)}
                         onTouchStart={() => warmAdminTab(item.href)}
                         onClick={() => {
                           warmAdminTab(item.href)
+                          if (item.href === "/admin/crm") setNavView("auto")
                           setMobileMenuOpen(false)
                         }}
                         className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
@@ -401,7 +530,8 @@ export default function AdminSidebar({ role, name, email }: Props) {
                   })}
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </nav>
 
           <div className="border-t border-[#e8e8e4] p-3">
@@ -432,7 +562,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
               onFocus={() => warmAdminTab(item.href)}
               onMouseEnter={() => scheduleWarmAdminTab(item.href)}
               onMouseLeave={cancelWarmAdminTab}
+              onPointerDown={() => warmAdminTab(item.href)}
               onTouchStart={() => warmAdminTab(item.href)}
+              onClick={() => warmAdminTab(item.href)}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none transition-colors ${
                 isActive
                   ? "bg-[#111110] text-white"
@@ -469,7 +601,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
             <p className="text-[15px] font-semibold text-[#111110]">Admin</p>
           </div>
         )}
-        {isDesktop ? <AdminNotificationsBell placement="inline" /> : null}
+        {isDesktop === true ? <AdminNotificationsBell placement="inline" /> : null}
         <button
           onClick={toggle}
           className={`rounded-md p-1 text-[#1a1a1a]/30 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] ${
@@ -510,8 +642,64 @@ export default function AdminSidebar({ role, name, email }: Props) {
         </button>
       </div>
 
-      <nav className={`min-h-0 flex-1 px-3 py-4 lg:overflow-y-auto ${effectiveCollapsed ? "lg:px-2" : ""}`}>
-        {groupedNav.map(({ section, items }, groupIndex) => (
+      <nav className={`min-h-0 flex-1 overflow-y-auto px-3 py-4 ${MINIMAL_SCROLLBAR} ${effectiveCollapsed ? "lg:px-2" : ""}`}>
+        {crmDrill ? (
+          <div className="space-y-0.5">
+            <button
+              type="button"
+              onClick={() => setNavView("global")}
+              className="mb-2 flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              전체 메뉴
+            </button>
+            <div className="mb-1 flex items-center gap-2 px-3">
+              <Users className="h-4 w-4 text-[#1a1a1a]/45" />
+              <p className="text-[13px] font-bold text-[#111110]">CRM</p>
+            </div>
+            {CRM_CHILD_NAV.map((child) => {
+              const childActive = child.match(pathname ?? "")
+              return (
+                <div key={child.href}>
+                  <Link
+                    href={child.href}
+                    onMouseEnter={() => scheduleWarmAdminTab(child.href)}
+                    onClick={() => warmAdminTab(child.href)}
+                    className={`flex items-center rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
+                      childActive
+                        ? "bg-[#111110] text-white"
+                        : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                    }`}
+                  >
+                    {child.label}
+                  </Link>
+                  {child.href === "/admin/crm/customers/unified" ? (
+                    <div className="mb-1 ml-3 mt-0.5 space-y-px border-l border-[#e8e8e4] pl-2.5">
+                      {CRM_SEGMENTS.map((seg) => {
+                        const count = crmSegCounts?.[seg.view]
+                        return (
+                          <Link
+                            key={seg.view}
+                            href={`/admin/crm/customers/unified?view=${seg.view}`}
+                            className="flex items-center gap-2 rounded px-2.5 py-1 text-[11px] text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                          >
+                            <span className="flex-1 truncate">{seg.label}</span>
+                            {count != null ? (
+                              <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[10px] font-semibold tabular-nums text-[#1a1a1a]/55">
+                                {count}
+                              </span>
+                            ) : null}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          groupedNav.map(({ section, items }, groupIndex) => (
           <div key={section} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
             {!effectiveCollapsed && (
               <div className="px-3 pb-2">
@@ -527,7 +715,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
               {items.map((item) => {
                 const isActive = isNavActive(item.href)
 
-                return (
+                const linkEl = (
                   <Link
                     key={item.href}
                     href={item.href}
@@ -535,7 +723,12 @@ export default function AdminSidebar({ role, name, email }: Props) {
                     onFocus={() => warmAdminTab(item.href)}
                     onMouseEnter={() => scheduleWarmAdminTab(item.href)}
                     onMouseLeave={cancelWarmAdminTab}
+                    onPointerDown={() => warmAdminTab(item.href)}
                     onTouchStart={() => warmAdminTab(item.href)}
+                    onClick={() => {
+                      warmAdminTab(item.href)
+                      if (item.href === "/admin/crm") setNavView("auto")
+                    }}
                     className={`group flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors ${
                       effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
                     } ${
@@ -562,36 +755,20 @@ export default function AdminSidebar({ role, name, email }: Props) {
                     )}
                   </Link>
                 )
+
+                return linkEl
               })}
             </div>
           </div>
-        ))}
+          ))
+        )}
       </nav>
 
-      {!effectiveCollapsed && (
-        <div className="shrink-0 px-3 pb-3">
-          <div className="mb-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 py-3">
-            <p className="text-[11px] font-medium text-[#111110]">오늘 빠른 이동</p>
-            <div className="mt-2 flex flex-nowrap gap-1.5 overflow-x-auto pb-1">
-              {visibleNav.slice(0, 3).map((item) => (
-                <Link
-                  key={`quick-${item.href}`}
-                  href={item.href}
-                  onFocus={() => warmAdminTab(item.href)}
-                  onMouseEnter={() => scheduleWarmAdminTab(item.href)}
-                  onMouseLeave={cancelWarmAdminTab}
-                  onTouchStart={() => warmAdminTab(item.href)}
-                  className="inline-flex shrink-0 items-center rounded-md border border-[#e8e8e4] bg-white px-2 py-1 text-[11px] text-[#1a1a1a]/55 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className={`shrink-0 pb-5 ${effectiveCollapsed ? "px-2 lg:px-2" : "px-3"}`}>
+      <div className={`relative shrink-0 pt-3 pb-5 ${effectiveCollapsed ? "px-2 lg:px-2" : "px-3"}`}>
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-white to-transparent"
+        />
         <button
           onClick={handleLogout}
           title={effectiveCollapsed ? "로그아웃" : undefined}

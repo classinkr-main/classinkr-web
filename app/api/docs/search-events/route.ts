@@ -4,7 +4,7 @@ import {
   DocsAnalyticsInputError,
   saveDocsSearchEvent,
 } from "@/lib/docs-analytics"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 
 async function readJson(req: NextRequest) {
   try {
@@ -16,7 +16,7 @@ async function readJson(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "docs-search-events", {
+  const { allowed } = await checkRateLimitDistributed(ip, "docs-search-events", {
     windowMs: 60_000,
     max: 60,
   })

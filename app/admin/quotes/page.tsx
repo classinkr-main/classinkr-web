@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import {
   ChevronRight,
   ClipboardList,
@@ -15,8 +15,14 @@ import HardwareQuotesPanel from "@/components/admin/documents/HardwareQuotesPane
 import SoftwareQuoteCodesPanel from "@/components/admin/documents/SoftwareQuoteCodesPanel"
 import { ContractsPanel } from "@/components/admin/documents/ContractsPanel"
 import { ReceiptsPanel } from "@/components/admin/documents/ReceiptsPanel"
+import type { StandardQuoteTemplateId } from "@/lib/standard-quote-template"
 
 type DocumentTab = "hardware" | "software" | "contracts" | "receipts" | "links"
+type HardwareQuoteQuickAction = "new" | StandardQuoteTemplateId
+type HardwareQuoteQuickActionRequest = {
+  key: string
+  action: HardwareQuoteQuickAction
+} | null
 
 interface DocumentTabItem {
   key: DocumentTab
@@ -58,6 +64,32 @@ const DOCUMENT_TABS: DocumentTabItem[] = [
   },
 ]
 
+const QUICK_QUOTE_ACTIONS: Array<{
+  action: HardwareQuoteQuickAction
+  label: string
+  description: string
+  href: string
+}> = [
+  {
+    action: "new",
+    label: "빠른 견적 작성",
+    description: "리드 없이 고객명만 입력해 견적을 바로 만듭니다.",
+    href: "/admin/quotes/new",
+  },
+  {
+    action: "recording_studio",
+    label: "녹화 세트 견적",
+    description: "86형 보드, T1, 벽걸이, 자동 녹화 1년 패키지",
+    href: "/admin/quotes/recording-studio",
+  },
+  {
+    action: "online_suite",
+    label: "AI Suite 견적",
+    description: "월 구독형 통합 학원 패키지 견적",
+    href: "/admin/quotes/ai-suite",
+  },
+]
+
 const SALES_PROGRESS = [
   {
     label: "견적 생성",
@@ -79,18 +111,51 @@ const SALES_PROGRESS = [
   },
 ]
 
-function tabFromSearch() {
-  if (typeof window === "undefined") return "hardware" as DocumentTab
-
-  const params = new URLSearchParams(window.location.search)
-  const raw = params.get("tab") ?? params.get("type")
-
+function normalizeDocumentTab(raw: string | null): DocumentTab {
   if (raw === "software" || raw === "software-code" || raw === "sw") return "software"
   if (raw === "contract" || raw === "contracts") return "contracts"
   if (raw === "receipt" || raw === "receipts") return "receipts"
   if (raw === "links" || raw === "shares") return "links"
 
   return "hardware"
+}
+
+function normalizeHardwareQuoteAction(raw: string | null): HardwareQuoteQuickAction | null {
+  if (!raw) return null
+  if (raw === "new" || raw === "quick" || raw === "quote") return "new"
+  if (
+    raw === "recording_studio" ||
+    raw === "online_suite" ||
+    raw === "board_86" ||
+    raw === "board_75" ||
+    raw === "camera_t1"
+  ) {
+    return raw
+  }
+  return null
+}
+
+function tabFromParams(params: Pick<URLSearchParams, "get">) {
+  return normalizeDocumentTab(params.get("tab") ?? params.get("type"))
+}
+
+function tabFromSearch() {
+  if (typeof window === "undefined") return "hardware" as DocumentTab
+  return tabFromParams(new URLSearchParams(window.location.search))
+}
+
+function quickActionFromParams(params: Pick<URLSearchParams, "get" | "toString">): HardwareQuoteQuickActionRequest {
+  const action = normalizeHardwareQuoteAction(params.get("action") ?? params.get("quick"))
+  if (!action) return null
+  return {
+    action,
+    key: params.toString(),
+  }
+}
+
+function quickActionFromSearch() {
+  if (typeof window === "undefined") return null
+  return quickActionFromParams(new URLSearchParams(window.location.search))
 }
 
 function SalesProgressStrip() {
@@ -144,14 +209,37 @@ function PanelShell({
 }
 
 export default function QuotesPage() {
+  const quickActionSequenceRef = useRef(0)
   const [activeTab, setActiveTab] = useState<DocumentTab>(() => tabFromSearch())
+  const [hardwareQuickAction, setHardwareQuickAction] = useState<HardwareQuoteQuickActionRequest>(() =>
+    quickActionFromSearch()
+  )
 
   const handleTabChange = (tab: DocumentTab) => {
     setActiveTab(tab)
+    setHardwareQuickAction(null)
 
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href)
       url.searchParams.set("tab", tab)
+      url.searchParams.delete("action")
+      url.searchParams.delete("quick")
+      window.history.replaceState(null, "", url.toString())
+    }
+  }
+
+  const openHardwareQuickAction = (action: HardwareQuoteQuickAction) => {
+    quickActionSequenceRef.current += 1
+    setActiveTab("hardware")
+    setHardwareQuickAction({
+      action,
+      key: `manual-${action}-${quickActionSequenceRef.current}`,
+    })
+
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href)
+      url.searchParams.set("tab", "hardware")
+      url.searchParams.set("action", action)
       window.history.replaceState(null, "", url.toString())
     }
   }
@@ -183,6 +271,30 @@ export default function QuotesPage() {
         </div>
 
         <SalesProgressStrip />
+
+        <div className="mt-5 grid gap-2 lg:grid-cols-3">
+          {QUICK_QUOTE_ACTIONS.map((item) => (
+            <a
+              key={item.action}
+              href={item.href}
+              onClick={(event) => {
+                event.preventDefault()
+                openHardwareQuickAction(item.action)
+              }}
+              className="group flex min-h-[92px] items-start justify-between gap-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-4 text-left transition-colors hover:border-[#D1FAE5] hover:bg-[#ECFDF5]"
+            >
+              <span className="min-w-0">
+                <span className="text-[13px] font-bold text-[#111110]">{item.label}</span>
+                <span className="mt-1 block text-[12px] leading-relaxed text-[#1a1a1a]/50">
+                  {item.description}
+                </span>
+              </span>
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#084734] ring-1 ring-[#D1FAE5] transition-colors group-hover:bg-[#084734] group-hover:text-white">
+                <ChevronRight className="h-4 w-4" />
+              </span>
+            </a>
+          ))}
+        </div>
 
         <div className="admin-scroll-snap-x no-scrollbar -mx-4 mt-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-5">
           {DOCUMENT_TABS.map((tab) => {
@@ -221,7 +333,12 @@ export default function QuotesPage() {
       </div>
 
       <div className="px-0 py-0">
-        {activeTab === "hardware" && <HardwareQuotesPanel />}
+        {activeTab === "hardware" && (
+          <HardwareQuotesPanel
+            quickAction={hardwareQuickAction}
+            onQuickActionConsumed={() => setHardwareQuickAction(null)}
+          />
+        )}
         {activeTab === "software" && <SoftwareQuoteCodesPanel />}
         {activeTab === "contracts" && <ContractsPanel />}
         {activeTab === "receipts" && <ReceiptsPanel />}

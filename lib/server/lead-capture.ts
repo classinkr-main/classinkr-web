@@ -2,6 +2,10 @@ import "server-only"
 
 import { triggerOnSubmitRules } from "@/lib/automation-engine"
 import type { LeadPayload, LeadSource } from "@/lib/lead-types"
+import {
+  type MarketingRequestMeta,
+  sendServerConversion,
+} from "@/lib/marketing/server-conversions"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import { saveLead } from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/repositories/marketing"
@@ -88,6 +92,7 @@ export interface LeadSubmissionSuccess {
   stored: boolean
   warnings: string[]
   leadId?: string
+  conversionEventId?: string
 }
 
 export interface LeadSubmissionError {
@@ -105,6 +110,10 @@ export type LeadSubmissionResult =
       status: number
       body: LeadSubmissionError
     }
+
+export interface LeadCaptureContext {
+  requestMeta?: MarketingRequestMeta | null
+}
 
 function normalizeString(value: unknown) {
   if (typeof value !== "string") return undefined
@@ -247,7 +256,10 @@ function buildLeadNotificationMessage(body: LeadPayload) {
     .join(" / ")
 }
 
-export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionResult> {
+export async function submitLeadCapture(
+  raw: unknown,
+  context: LeadCaptureContext = {}
+): Promise<LeadSubmissionResult> {
   let submissionKey: string | null = null
 
   try {
@@ -287,6 +299,7 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
     let stored = false
     let savedLeadId: string | undefined
     let storageError: string | undefined
+    let conversionEventId: string | undefined
 
     const notes = body.eventSlug ? setEventToken("", body.eventSlug) : undefined
 
@@ -310,6 +323,7 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
         referrer: body.referrer,
       })
       savedLeadId = savedLead.id
+      conversionEventId = `lead:${savedLead.id}`
       stored = true
     } catch (error) {
       console.error("[lead-capture] saveLead error:", error)
@@ -353,6 +367,30 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
     }
 
     if (stored) {
+      void sendServerConversion({
+        eventId: conversionEventId ?? `lead:${savedLeadId}`,
+        metaEventName:
+          body.source === "newsletter" ? "CompleteRegistration" : "Lead",
+        ga4EventName: "generate_lead",
+        requestMeta: context.requestMeta ?? null,
+        sourceUrl: body.currentPage ?? body.landingPage ?? context.requestMeta?.sourceUrl,
+        user: {
+          email: body.email,
+          phone: body.phone,
+          externalId: savedLeadId,
+          allowHashedUserData: body.marketingConsent === true,
+        },
+        customData: {
+          lead_id: savedLeadId,
+          source: body.source,
+          source_detail: body.sourceDetail,
+          lead_magnet: body.leadMagnet,
+          event_slug: body.eventSlug,
+        },
+      }).catch((error) => {
+        console.warn("[lead-capture] server conversion failed:", error)
+      })
+
       void emitNotificationEvent({
         eventType: "lead.created",
         notificationType: "action_required",
@@ -443,6 +481,7 @@ export async function submitLeadCapture(raw: unknown): Promise<LeadSubmissionRes
         ok: true,
         stored,
         leadId: savedLeadId,
+        conversionEventId,
         warnings: [...(storageError ? [storageError] : []), ...errors],
       },
     }

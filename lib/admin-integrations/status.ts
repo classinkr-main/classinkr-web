@@ -453,11 +453,27 @@ function buildMetaStatus(): AdminIntegrationStatus {
 }
 
 function buildAnalyticsPixelsStatus(): AdminIntegrationStatus {
-  const configured =
+  const browserConfigured =
     hasConfiguredAnalyticsId("NEXT_PUBLIC_GTM_ID") ||
     hasConfiguredAnalyticsId("NEXT_PUBLIC_META_PIXEL_ID") ||
     hasConfiguredAnalyticsId("NEXT_PUBLIC_KAKAO_PIXEL_ID") ||
+    hasEnv("NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL") ||
     hasEnv("NEXT_PUBLIC_INTERNAL_TRACKING_ENABLED")
+  const metaCapiConfigured =
+    hasAnyEnv(["META_DATASET_ID", "NEXT_PUBLIC_META_PIXEL_ID"]) &&
+    hasAnyEnv(["META_CAPI_ACCESS_TOKEN", "META_ACCESS_TOKEN"])
+  const ga4ServerConfigured = hasAllEnv(["GA4_MEASUREMENT_ID", "GA4_API_SECRET"])
+  const configured =
+    browserConfigured ||
+    metaCapiConfigured ||
+    ga4ServerConfigured
+  const hasPartialServerConfig = hasAnyEnv([
+    "META_DATASET_ID",
+    "META_CAPI_ACCESS_TOKEN",
+    "META_ACCESS_TOKEN",
+    "GA4_MEASUREMENT_ID",
+    "GA4_API_SECRET",
+  ])
 
   return {
     key: "analytics_pixels",
@@ -468,14 +484,21 @@ function buildAnalyticsPixelsStatus(): AdminIntegrationStatus {
       "NEXT_PUBLIC_GTM_ID",
       "NEXT_PUBLIC_META_PIXEL_ID",
       "NEXT_PUBLIC_KAKAO_PIXEL_ID",
+      "NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL",
       "NEXT_PUBLIC_INTERNAL_TRACKING_ENABLED",
+      "META_DATASET_ID",
+      "META_CAPI_ACCESS_TOKEN",
+      "GA4_MEASUREMENT_ID",
+      "GA4_API_SECRET",
     ]),
-    health: healthForPresence(configured, false),
+    health: healthForPresence(configured, hasPartialServerConfig),
     requiredKeys: [
       "NEXT_PUBLIC_GTM_ID",
       "NEXT_PUBLIC_META_PIXEL_ID",
       "NEXT_PUBLIC_KAKAO_PIXEL_ID",
       "NEXT_PUBLIC_INTERNAL_TRACKING_ENABLED",
+      "META_DATASET_ID + META_CAPI_ACCESS_TOKEN for Meta CAPI",
+      "GA4_MEASUREMENT_ID + GA4_API_SECRET for GA4 Measurement Protocol",
     ],
     adminHref: "/admin/analytics",
   }

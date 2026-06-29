@@ -557,3 +557,43 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
     overdueFollowUpCount: overdueFollowUpRes.count ?? 0,
   };
 }
+
+export interface LeadChannelStat {
+  source: string;
+  total: number;
+  converted: number;
+  rate: number;
+}
+
+// 채널(source)별 전환율 — leads의 source+status 단일 조회로 집계. 상위 N개(건수순).
+export async function getLeadChannelStats(limit = 8): Promise<LeadChannelStat[]> {
+  let rows: Array<{ source: string | null; status: string }>;
+  if (!USE_SUPABASE) {
+    const leads = await getLeads();
+    rows = leads.map((lead) => ({ source: lead.source ?? null, status: lead.status }));
+  } else {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase.from("leads").select("source, status");
+    if (error) throw new Error(`[leads] 채널 집계 실패: ${error.message ?? "unknown database error"}`);
+    rows = (data ?? []) as Array<{ source: string | null; status: string }>;
+  }
+
+  const map = new Map<string, { total: number; converted: number }>();
+  for (const row of rows) {
+    const key = (row.source && row.source.trim()) || "기타";
+    const agg = map.get(key) ?? { total: 0, converted: 0 };
+    agg.total += 1;
+    if (row.status === "converted") agg.converted += 1;
+    map.set(key, agg);
+  }
+
+  return Array.from(map.entries())
+    .map(([source, value]) => ({
+      source,
+      total: value.total,
+      converted: value.converted,
+      rate: value.total > 0 ? value.converted / value.total : 0,
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit);
+}

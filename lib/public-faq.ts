@@ -24,11 +24,11 @@ export const PUBLIC_FAQ_CATEGORIES: PublicFaqCategory[] = [
     label: "소프트웨어",
     eyebrow: "Software FAQ",
     title: "플랫폼 도입과 운영에 대한 질문",
-    description: "Classin을 단순 화상수업 도구가 아니라 학원 시스템 OS로 도입할 때 가장 많이 확인하시는 내용을 정리했습니다.",
-    highlights: ["학원 시스템 OS", "EDB·녹화·LMS", "관리자 데이터"],
+    description: "Classin을 단순 화상수업 도구가 아니라 수업 시스템 OS로 도입할 때 가장 많이 확인하시는 내용을 정리했습니다.",
+    highlights: ["수업 시스템 OS", "EDB·녹화·LMS", "관리자 데이터"],
     items: [
       {
-        question: "Classin을 학원 시스템 OS라고 보는 이유는 무엇인가요?",
+        question: "Classin을 수업 시스템 OS라고 보는 이유는 무엇인가요?",
         answer: CLASSIN_POSITIONING.oneLine,
       },
       {

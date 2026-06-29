@@ -5,7 +5,12 @@ import type {
 } from "@/lib/partners-types"
 import { getProductBySku } from "@/lib/product-templates"
 
-export type StandardQuoteTemplateId = "camera_t1" | "board_75" | "board_86"
+export type StandardQuoteTemplateId =
+  | "camera_t1"
+  | "board_75"
+  | "board_86"
+  | "recording_studio"
+  | "online_suite"
 export type StandardQuoteOptionSelections = Record<string, QuoteOptionSelectionValue | undefined>
 
 type TemplateLinePreset = {
@@ -90,6 +95,10 @@ const STANDARD_PRICE_BOARD_75 = getProductBySku("board-75")?.unit_price ?? 4_900
 const STANDARD_PRICE_CAMERA_T1 = getProductBySku("camera-t1")?.unit_price ?? 1_200_000
 const STANDARD_PRICE_STAND = getProductBySku("stand")?.unit_price ?? 500_000
 const STANDARD_PRICE_WALL_MOUNT = getProductBySku("wall-mount")?.unit_price ?? 500_000
+const STANDARD_PRICE_RECORDING_STUDIO =
+  getProductBySku("ai-studio-recording-set")?.unit_price ?? 7_800_000
+const STANDARD_PRICE_ONLINE_SUITE_MONTHLY =
+  getProductBySku("online-suite-monthly")?.unit_price ?? 400_000
 
 export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
   {
@@ -377,6 +386,131 @@ export const STANDARD_QUOTE_TEMPLATES: StandardQuoteTemplatePreset[] = [
       },
     ],
   },
+  {
+    id: "recording_studio",
+    label: "올인원 녹화수업 세트",
+    description: '86" 전자칠판 + T1 + 벽걸이 + 자동 녹화 1년',
+    lines: [
+      {
+        itemType: "hardware",
+        itemCode: "ai-studio-recording-set",
+        itemName: "올인원 녹화수업 세트",
+        itemDescription: '86" Classin 전자칠판 + AI 카메라 + 벽걸이 + 자동 녹화 1년 이용권',
+        quantity: 1,
+        quantityUnit: "세트",
+        unitPrice: STANDARD_PRICE_RECORDING_STUDIO,
+        quantityEditable: true,
+        priceEditable: true,
+      },
+    ],
+    optionGroups: [
+      {
+        id: "payment_plan",
+        label: "결제 방식",
+        description: "고객에게 보일 결제 조건을 견적서에 바로 반영합니다.",
+        control: "radio",
+        defaultValue: "one_time",
+        options: [
+          { value: "one_time", label: "일시 납부", description: "총액 기준으로 안내합니다." },
+          { value: "12_month", label: "12개월 할부", description: "12개월 할부 가능 문구를 표시합니다." },
+        ],
+      },
+      {
+        id: "delivery_policy",
+        label: "설치 배송비",
+        description: "OMO1 패키지 기준 설치/배송 포함 안내를 표시합니다.",
+        control: "toggle",
+        defaultValue: true,
+        enabledLabel: "포함",
+        disabledLabel: "별도",
+      },
+    ],
+    quickPresets: [
+      {
+        id: "recording_studio_default",
+        label: "녹화 세트",
+        description: '86" + T1 + 벽걸이 + 자동 녹화 1년',
+        templateId: "recording_studio",
+        optionSelections: {
+          payment_plan: "one_time",
+          delivery_policy: true,
+        },
+      },
+      {
+        id: "recording_studio_installment",
+        label: "12개월 할부형",
+        description: "설치 배송 포함 + 12개월 할부 안내",
+        templateId: "recording_studio",
+        optionSelections: {
+          payment_plan: "12_month",
+          delivery_policy: true,
+        },
+      },
+    ],
+  },
+  {
+    id: "online_suite",
+    label: "구독형 AI Suite",
+    description: "전자칠판·카메라·무제한 녹화/수업·랜딩페이지·인가 대행",
+    lines: [
+      {
+        itemType: "service",
+        itemCode: "online-suite-monthly",
+        itemName: "구독형 통합 학원 패키지",
+        itemDescription: "전자칠판 · 카메라 · 무제한 녹화 및 수업 · 랜딩페이지 · 온라인 관련 사업자 인가 대행",
+        quantity: 1,
+        quantityUnit: "월",
+        unitPrice: STANDARD_PRICE_ONLINE_SUITE_MONTHLY,
+        quantityEditable: true,
+        priceEditable: true,
+      },
+    ],
+    optionGroups: [
+      {
+        id: "contract_term",
+        label: "계약 기간",
+        description: "구독/할부 기준 기간을 견적 메모에 표시합니다.",
+        control: "radio",
+        defaultValue: "36_month",
+        options: [
+          { value: "36_month", label: "36개월", description: "OMO1 기본 구독 조건" },
+          { value: "12_month", label: "12개월", description: "단기 파일럿 제안" },
+          { value: "custom", label: "협의", description: "조건을 별도 협의합니다." },
+        ],
+      },
+      {
+        id: "landing_page",
+        label: "랜딩페이지 제작",
+        description: "패키지에 랜딩페이지 제작을 포함합니다.",
+        control: "toggle",
+        defaultValue: true,
+        enabledLabel: "포함",
+        disabledLabel: "제외",
+      },
+      {
+        id: "authorization_support",
+        label: "인가 대행",
+        description: "온라인 관련 사업자 인가 대행 안내를 포함합니다.",
+        control: "toggle",
+        defaultValue: true,
+        enabledLabel: "포함",
+        disabledLabel: "제외",
+      },
+    ],
+    quickPresets: [
+      {
+        id: "online_suite_default",
+        label: "AI Suite",
+        description: "월 40만원 구독형 풀 패키지",
+        templateId: "online_suite",
+        optionSelections: {
+          contract_term: "36_month",
+          landing_page: true,
+          authorization_support: true,
+        },
+      },
+    ],
+  },
 ]
 
 type BuildConfigurableStandardQuoteInput = {
@@ -460,6 +594,8 @@ function getExistingLineMap(existingItems: PartnerQuoteDetailsInput["lineItems"]
 }
 
 function inferTemplateIdFromItemCode(itemCode?: string | null): StandardQuoteTemplateId {
+  if (itemCode === "ai-studio-recording-set") return "recording_studio"
+  if (itemCode === "online-suite-monthly") return "online_suite"
   if (itemCode === "board-75") return "board_75"
   if (itemCode === "board-86") return "board_86"
   return "camera_t1"
@@ -757,7 +893,48 @@ export function buildConfigurableStandardQuoteDetails({
     readSelectionString(defaultSelections, "installation_mode", "included_quote")
   )
 
-  if (resolvedTemplateId === "camera_t1") {
+  if (resolvedTemplateId === "recording_studio") {
+    const paymentPlan = readSelectionString(selections, "payment_plan", "one_time")
+    const deliveryIncluded = readSelectionBoolean(selections, "delivery_policy", true)
+
+    addOptionalLine("recording-studio-condition", {
+      itemType: "note_only",
+      itemName: paymentPlan === "12_month" ? "12개월 할부 안내" : "납품 조건",
+      itemDescription: paymentPlan === "12_month"
+        ? "설치 배송비 포함 · 12개월 할부 가능"
+        : deliveryIncluded
+          ? "설치 배송비 포함"
+          : "설치 배송비 별도 협의",
+      quantity: 1,
+      unitPrice: 0,
+      lineStatus: "informational",
+      optionGroupId: "payment_plan",
+      optionId: paymentPlan,
+      priceLocked: true,
+    })
+  } else if (resolvedTemplateId === "online_suite") {
+    const contractTerm = readSelectionString(selections, "contract_term", "36_month")
+    const includeLanding = readSelectionBoolean(selections, "landing_page", true)
+    const includeAuthorization = readSelectionBoolean(selections, "authorization_support", true)
+    const notes = [
+      contractTerm === "36_month" ? "36개월 구독/할부 기준" : contractTerm === "12_month" ? "12개월 파일럿 기준" : "계약 기간 별도 협의",
+      includeLanding ? "랜딩페이지 제작 포함" : "랜딩페이지 제작 제외",
+      includeAuthorization ? "온라인 관련 사업자 인가 대행 포함" : "인가 대행 제외",
+      "설치 배송비 별도",
+    ]
+
+    addOptionalLine("online-suite-condition", {
+      itemType: "note_only",
+      itemName: "구독 조건",
+      itemDescription: notes.join(" · "),
+      quantity: 1,
+      unitPrice: 0,
+      lineStatus: "informational",
+      optionGroupId: "contract_term",
+      optionId: contractTerm,
+      priceLocked: true,
+    })
+  } else if (resolvedTemplateId === "camera_t1") {
     if (installationMode === "included_quote") {
       addOptionalLine("camera-install", {
         itemType: "installation",

@@ -20,6 +20,10 @@ async function loadLeadCapture(options?: {
   const saveLead = vi.fn()
   const emitNotificationEvent = vi.fn().mockResolvedValue(undefined)
   const postJson = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+  const sendServerConversion = vi.fn().mockResolvedValue({
+    meta: { status: "fulfilled", value: { skipped: true } },
+    ga4: { status: "fulfilled", value: { skipped: true } },
+  })
   const settings = {
     googleSheetWebhookUrl: "",
     leadWebhookUrl: "",
@@ -42,12 +46,15 @@ async function loadLeadCapture(options?: {
   vi.doMock("@/lib/repositories/settings", () => ({
     getResolvedSettings: vi.fn().mockResolvedValue(settings),
   }))
+  vi.doMock("@/lib/marketing/server-conversions", () => ({
+    sendServerConversion,
+  }))
   vi.doMock("@/lib/server/post-json", () => ({
     postJson,
   }))
 
   const leadCapture = await import("@/lib/server/lead-capture")
-  return { ...leadCapture, saveLead, emitNotificationEvent, postJson }
+  return { ...leadCapture, saveLead, emitNotificationEvent, postJson, sendServerConversion }
 }
 
 describe("submitLeadCapture duplicate handling", () => {
@@ -88,17 +95,30 @@ describe("submitLeadCapture duplicate handling", () => {
   })
 
   it("drops duplicates only after a lead has been accepted", async () => {
-    const { submitLeadCapture, saveLead } = await loadLeadCapture()
+    const { submitLeadCapture, saveLead, sendServerConversion } = await loadLeadCapture()
     saveLead.mockResolvedValue({ id: "lead-1" })
 
     const first = await submitLeadCapture(baseLead)
     const second = await submitLeadCapture(baseLead)
 
     expect(first.status).toBe(200)
-    expect(first.body).toMatchObject({ ok: true, stored: true, leadId: "lead-1" })
+    expect(first.body).toMatchObject({
+      ok: true,
+      stored: true,
+      leadId: "lead-1",
+      conversionEventId: "lead:lead-1",
+    })
     expect(second.status).toBe(200)
     expect(second.body).toMatchObject({ ok: true, stored: false })
     expect(saveLead).toHaveBeenCalledTimes(1)
+    expect(sendServerConversion).toHaveBeenCalledTimes(1)
+    expect(sendServerConversion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: "lead:lead-1",
+        metaEventName: "Lead",
+        ga4EventName: "generate_lead",
+      })
+    )
   })
 
   it("does not collapse different lead-magnet submissions from the same email", async () => {

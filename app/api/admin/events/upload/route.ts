@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { sanitizePublicUrl } from "@/lib/safe-public-url"
 import { validateImageFile } from "@/lib/server/image-validation"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (err) return err
 
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "admin-event-image-upload", UPLOAD_RATE_LIMIT)
+  const { allowed } = await checkRateLimitDistributed(ip, "admin-event-image-upload", UPLOAD_RATE_LIMIT)
   if (!allowed) {
     return NextResponse.json({ error: "Too many requests." }, { status: 429 })
   }

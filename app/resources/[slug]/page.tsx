@@ -58,6 +58,7 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
 
   const itemCount = getLeadMagnetItemCount(magnet)
   const pdfGuide = magnet.pdfGuide
+  const storyGuide = magnet.storyGuide
   const expertVoice = magnet.expertVoice
   const worksheet = magnet.worksheet
   const caseCards = magnet.caseCards
@@ -141,8 +142,43 @@ export default async function ResourcePage({ params }: ResourcePageProps) {
               </div>
             </div>
 
-            <ResourceDownloadForm resource={downloadResource} />
-          </div>
+          <ResourceDownloadForm resource={downloadResource} />
+        </div>
+
+          {storyGuide ? (
+            <section className="mt-8 border border-black/[0.08] bg-white p-6 md:p-8">
+              <p className="text-[12px] font-bold uppercase tracking-[0.18em] text-[#084734]/60">
+                {storyGuide.eyebrow}
+              </p>
+              <div className="mt-3 grid gap-7 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1fr)]">
+                <div>
+                  <h2 className="text-2xl font-bold leading-tight text-[#111110]">
+                    {storyGuide.title}
+                  </h2>
+                  <p className="mt-4 text-[15px] leading-7 text-[#615D59]">
+                    {storyGuide.body}
+                  </p>
+                  {storyGuide.takeaway ? (
+                    <p className="mt-5 border-l-2 border-[#084734] bg-[#F6F5F4] px-4 py-3 text-[14px] font-semibold leading-7 text-[#31302E]">
+                      {storyGuide.takeaway}
+                    </p>
+                  ) : null}
+                </div>
+                <ol className="divide-y divide-black/[0.08] border-y border-black/[0.08]">
+                  {storyGuide.beats.map((beat, index) => (
+                    <li key={beat} className="grid grid-cols-[34px_minmax(0,1fr)] gap-3 py-4">
+                      <span className="text-[13px] font-bold text-[#084734]">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <span className="text-[14px] leading-6 text-[#31302E]">
+                        {beat}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </section>
+          ) : null}
 
           {expertVoice ? (
             <section className="mt-8 border border-black/[0.08] bg-[#ECFDF5]/40 p-6 md:p-8">

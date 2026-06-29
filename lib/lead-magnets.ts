@@ -42,6 +42,14 @@ export interface LeadMagnetPdfGuide {
   expertNote: string
 }
 
+export interface LeadMagnetStoryGuide {
+  eyebrow: string
+  title: string
+  body: string
+  beats: readonly string[]
+  takeaway: string
+}
+
 /** 자료에 사람 목소리를 입히는 바이라인 코멘트(파일럿: showroom/calculator). */
 export interface LeadMagnetExpertVoice {
   /** 화자. 예: "목동 쇼룸 상담팀". */
@@ -130,6 +138,7 @@ export interface LeadMagnet {
   deliverables: readonly string[]
   consultationPrep: readonly string[]
   sourceLinks?: readonly LeadMagnetSourceLink[]
+  storyGuide?: LeadMagnetStoryGuide
   pdfGuide?: LeadMagnetPdfGuide
   salesPlaybook?: LeadMagnetSalesPlaybook
   /** 바이라인 코멘트(사람 목소리). 파일럿 자료에만 존재. */

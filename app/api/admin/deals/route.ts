@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { verifyAdmin } from "@/lib/admin-auth";
+import { getVerifiedAdminContext, verifyAdmin } from "@/lib/admin-auth";
 import { listDealListItems } from "@/lib/portal/repositories/deals";
 import type { DealStage, DealStatus } from "@/lib/portal/types";
 
@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
       status,
     });
 
-    return NextResponse.json({ deals });
+    // "내 담당" 필터 기준 — 레거시 공유 admin은 userId가 없어 null.
+    const ctx = await getVerifiedAdminContext(req);
+    return NextResponse.json({ deals, currentUserId: ctx?.userId ?? null });
   } catch (error) {
     console.error("[GET /api/admin/deals]", error);
     return NextResponse.json({ error: "Failed to fetch deals" }, { status: 500 });

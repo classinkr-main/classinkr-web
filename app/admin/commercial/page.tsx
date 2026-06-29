@@ -18,6 +18,7 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { adminFetchJsonCached } from "@/lib/admin-client";
+import { DealOwnerControl } from "@/components/admin/commercial/DealOwnerControl";
 import type {
   CommercialOverviewPayload,
   CommercialOverviewRange,
@@ -859,6 +860,19 @@ export default function AdminCommercialPage() {
                     <p className="mt-1 text-sm text-[#1a1a1a]/50">
                       {dealDetail.customer.name} · 최근 수정 {formatDateTime(dealDetail.deal.updated_at)}
                     </p>
+                    <div className="mt-3">
+                      <DealOwnerControl
+                        dealId={dealDetail.deal.id}
+                        ownerId={dealDetail.deal.owner_id}
+                        onAssigned={(nextOwnerId) =>
+                          setDealDetail((prev) =>
+                            prev
+                              ? { ...prev, deal: { ...prev.deal, owner_id: nextOwnerId } }
+                              : prev
+                          )
+                        }
+                      />
+                    </div>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <span className="rounded-full bg-white border border-[#e8e8e4] px-2.5 py-1 text-[10px] font-medium text-[#1a1a1a]/70">
                         {dealDetail.deal.payment_status}

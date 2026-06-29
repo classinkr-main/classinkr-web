@@ -8,6 +8,7 @@ import {
   classifyChatbotQuestion,
   type ChatbotIntent,
 } from "@/lib/chatbot/classification"
+import { findChatbotSelfKnowledgeEntry } from "@/lib/chatbot/self-knowledge"
 import {
   generateGeminiFinalAnswer,
   streamGeminiFinalAnswer,
@@ -381,6 +382,10 @@ function normalizeQuestion(raw: unknown): NormalizedQuestion {
   }
 }
 
+export function validateChatbotQueryInput(input: ChatbotQueryRequest): void {
+  normalizeQuestion(input.message)
+}
+
 function isGreetingOnly(question: NormalizedQuestion) {
   return /^(안녕|안녕하세요|하이|hello|hi)[.!?\s]*$/i.test(question.normalized)
 }
@@ -392,7 +397,7 @@ const CAPABILITY_REQUEST_RE =
   /되나요|돼요|가능|지원|제공|처리|관리|기능|자동|연동|만들|추가|하려고|하고\s*싶|쓸\s*수|사용할\s*수/i
 
 const PROMPT_OR_SECURITY_ABUSE_RE =
-  /sql\s*injection|sqli|union\s+select|drop\s+table|or\s+1\s*=\s*1|information_schema|xp_cmdshell|xss|csrf|ssrf|rce|프롬프트\s*인젝션|system\s*prompt|developer\s*(?:message|instruction)|시스템\s*프롬프트|개발자\s*메시지|내부\s*(?:프롬프트|규칙|지시)|(?:프롬프트|prompt|지시문).{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}(?:프롬프트|prompt|지시문)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
+  /sql\s*injection|sqli|union\s+select|drop\s+table|or\s+1\s*=\s*1|information_schema|xp_cmdshell|xss|csrf|ssrf|rce|프롬프트\s*인젝션|system\s*prompt|developer\s*(?:message|instruction)|시스템\s*프롬프트|개발자\s*메시지|(?:개발자|시스템|숨겨진|비공개).{0,12}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|(?:개발자|시스템).{0,10}(?:준|받은).{0,10}(?:지침|규칙|지시|명령어?|명령문).{0,16}(?:원문|보여|출력|공개|알려|노출|그대로)|내부\s*(?:프롬프트|규칙|지시|명령어?|명령문)|(?:프롬프트|prompt|지시문).{0,16}(?:보여|출력|공개|알려|노출|그대로)|(?:보여|출력|공개|알려|노출).{0,16}(?:프롬프트|prompt|지시문)|(?:이전|위|앞선).{0,12}(?:지시|규칙|프롬프트).{0,12}(?:무시|잊어|삭제)|보안.{0,12}(?:뚫|우회|공격)|취약점.{0,12}(?:공격|악용|우회)|해킹.{0,12}(?:방법|공격|뚫|탈취|우회)|(?:비밀번호|토큰|api\s*key|관리자).{0,12}(?:탈취|훔|우회|크랙)/i
 const CRIMINAL_ABUSE_RE =
   /(?:범죄|불법|사기|피싱|스미싱|절도|도둑|마약|폭탄|무기|살인|폭행).{0,18}(?:방법|하는\s*법|계획|도와|만들|제조|우회|탈취|공격|훔|숨기|피하)|(?:방법|하는\s*법|계획).{0,18}(?:범죄|불법|사기|피싱|스미싱|절도|마약|폭탄|무기|살인|폭행)/i
 const TOKEN_WASTE_RE =
@@ -420,7 +425,7 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
       response: {
         answer: [
           "학원 결제 기능은 제공하지 않습니다.",
-          "Classin은 수업, 전자칠판, 녹화, EDB, LMS, 관리자 데이터를 중심으로 쓰는 학원 시스템 OS이고, 학원비 결제·수납·정산은 기존 학원 관리 시스템이나 별도 결제/정산 연동 범위로 분리해 설계하는 편이 맞습니다.",
+          "Classin은 수업, 전자칠판, 녹화, EDB, LMS, 관리자 데이터를 중심으로 쓰는 수업 시스템 OS이고, 학원비 결제·수납·정산은 기존 학원 관리 시스템이나 별도 결제/정산 연동 범위로 분리해 설계하는 편이 맞습니다.",
           "요금/견적은 전자칠판, OPS, 카메라, 스탠드/벽걸이, 소프트웨어, 설치·온보딩 구성 기준으로 안내할 수 있어요.",
         ].join("\n\n"),
         answerMode: "direct_answer",
@@ -503,6 +508,24 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
       category: "general",
       intent: "docs_lookup",
       handoffIntent: "support",
+    }
+  }
+
+  const selfKnowledgeEntry = findChatbotSelfKnowledgeEntry(question.redacted)
+  if (selfKnowledgeEntry) {
+    return {
+      response: {
+        answer: selfKnowledgeEntry.answer.join("\n\n"),
+        answerMode: "direct_answer",
+        confidence: 0.92,
+        needsHandoff: false,
+        sources: [],
+        suggestedQuestions: selfKnowledgeEntry.suggestedQuestions,
+        unresolved: false,
+      },
+      category: "general",
+      intent: "self_knowledge",
+      handoffIntent: "demo",
     }
   }
 
@@ -844,7 +867,7 @@ function buildPositioningSource(question: NormalizedQuestion): ChatbotSource | n
         : CLASSIN_POSITIONING.chatbot.identitySummary
 
   return {
-    title: "Classin을 학원 시스템 OS로 이해하기",
+    title: "Classin을 수업 시스템 OS로 이해하기",
     heading,
     urlPath: "/docs/start/academy-system-os-positioning",
     category: "onboarding",
@@ -2601,28 +2624,55 @@ async function ensureSession(
 
   const supabase = createSupabaseAdminClient()
   const requestedSessionId = sessionId ?? normalizeOptionalUuid(input.sessionId)
+  const callerAnonymousId = normalizeString(input.anonymousId) ?? null
+
+  // 보안: 세션은 anonymous_id(브라우저별 익명 식별자)에 소유권이 묶인다.
+  // 호출자가 기존 sessionId를 제시하면 그 세션의 저장된 owner와 현재 호출자의
+  // anonymous_id가 일치할 때만 이어 쓴다. 불일치(또는 null-owner 규칙 위반)면
+  // 남의 세션에 절대 붙지 못하도록 새 세션을 발급한다.
+  //
+  // null-owner 규칙(보수적/fail-safe): owner와 caller가 둘 다 동일한 non-null 값일
+  // 때만 소유로 인정한다. 즉
+  //  - owner=null  세션은 누구도(non-null caller 포함) 이어 쓸 수 없다.
+  //  - caller=null 호출자는 어떤(이전에 owner가 있던) 세션도 claim할 수 없다.
+  //  - owner=null & caller=null 도 일치로 보지 않는다(공유 익명 풀이 서로 섞이는 것 방지).
+  const isOwner = (sessionOwner: string | null) =>
+    callerAnonymousId !== null && sessionOwner !== null && sessionOwner === callerAnonymousId
+
+  let resumableSessionId: string | undefined
 
   if (requestedSessionId) {
     const { data } = await supabase
       .from("chat_sessions")
-      .select("id")
+      .select("id, anonymous_id")
       .eq("id", requestedSessionId)
       .maybeSingle()
 
-    if (data?.id) return data.id as string
+    if (data?.id) {
+      // 기존 세션이 존재할 때만 소유권을 확인한다. 일치하면 이어 쓰고,
+      // 불일치면 절대 붙지 않고(아래에서 새 세션 발급) 제시된 id도 버린다.
+      if (isOwner((data.anonymous_id as string | null) ?? null)) {
+        return data.id as string
+      }
+    } else {
+      // 아직 존재하지 않는 id면 호출자가 처음 만드는 세션이므로 그대로 그 id로 생성한다.
+      resumableSessionId = requestedSessionId
+    }
   }
 
   const context = getContextObject(input.context)
   const utm = getContextObject(context.utm)
   const sessionInsert: Record<string, unknown> = {
     channel: normalizeChatSessionChannel(context.channel),
-    anonymous_id: normalizeString(input.anonymousId) ?? null,
+    anonymous_id: callerAnonymousId,
     user_agent: meta.userAgent ?? null,
     referrer: meta.referrer ?? null,
     utm,
   }
 
-  if (requestedSessionId) sessionInsert.id = requestedSessionId
+  // 소유권이 확인된 신규 세션(아직 row 없음)만 제시된 id를 재사용한다.
+  // 남의 세션 id였던 경우 resumableSessionId 가 undefined 이므로 새 id가 발급된다.
+  if (resumableSessionId) sessionInsert.id = resumableSessionId
 
   const { data, error } = await supabase
     .from("chat_sessions")
@@ -2631,7 +2681,9 @@ async function ensureSession(
     .single()
 
   if (error) {
-    if (requestedSessionId && error.code === "23505") return requestedSessionId
+    // 같은 id로 동시 생성 경쟁(23505)이 난 경우에만 그 id를 신뢰한다.
+    // 이 분기는 우리가 직접 id를 지정해 insert한 신규 세션에서만 발생한다.
+    if (resumableSessionId && error.code === "23505") return resumableSessionId
     console.warn("[chatbot] failed to create session:", error.message)
     return undefined
   }
@@ -2879,6 +2931,8 @@ interface ChatbotCore {
 
 interface BuildChatbotCoreOptions {
   sessionId?: string
+  // 세션 소유권 검증용 — 이력 로드 시 세션 owner 와 대조한다.
+  anonymousId?: string | null
   generateAnswer?: boolean
 }
 
@@ -3016,12 +3070,33 @@ export function normalizeSessionHistoryForGemini(
 }
 
 // 세션 대화 이력 로드 — 검색과 병렬로 돌릴 수 있게 분리. 실패해도 빈 배열로 안전 폴백.
+//
+// 보안(심층 방어): ensureSession 의 소유권 검사와 별개로, 이력 로드 자체도
+// 호출자의 anonymous_id 가 세션 owner 와 일치할 때만 수행한다. 일치하지 않으면
+// 빈 이력을 돌려 남의 대화가 Gemini 프롬프트로 새어 들어가지 못하게 막는다.
+// null-owner 규칙은 ensureSession 과 동일(둘 다 동일한 non-null 값일 때만 소유 인정).
 async function loadSessionHistory(
-  sessionId: string
+  sessionId: string,
+  callerAnonymousId?: string | null
 ): Promise<{ role: "user" | "model"; parts: { text: string }[] }[]> {
   if (!hasSupabaseServerEnv()) return []
   try {
     const supabase = createSupabaseAdminClient()
+
+    const owner = normalizeString(callerAnonymousId) ?? null
+    // owner 가 없는(null) 호출자는 어떤 세션의 이력도 로드할 수 없다 — fail-safe.
+    if (owner === null) return []
+
+    const { data: session } = await supabase
+      .from("chat_sessions")
+      .select("anonymous_id")
+      .eq("id", sessionId)
+      .maybeSingle()
+
+    // 세션이 없거나(owner 미확인) owner 가 불일치하면 이력을 노출하지 않는다.
+    const sessionOwner = (session?.anonymous_id as string | null) ?? null
+    if (sessionOwner === null || sessionOwner !== owner) return []
+
     const { data, error } = await supabase
       .from("chat_messages")
       .select("role, content")
@@ -3155,7 +3230,7 @@ async function buildChatbotCore(
   // history는 검색·분류와 무관하므로 검색과 병렬로 시작해 두고 Gemini 직전에만 await한다.
   const historyPromise: Promise<{ role: "user" | "model"; parts: { text: string }[] }[]> =
     shouldGenerateAnswer && options.sessionId
-      ? loadSessionHistory(options.sessionId)
+      ? loadSessionHistory(options.sessionId, options.anonymousId)
       : Promise.resolve([])
 
   const { sources, warning, cacheHit } = await searchKnowledgeSourcesWithinBudget(question)
@@ -3217,7 +3292,10 @@ export async function handleChatbotQuery(
   const requestedSessionId = normalizeOptionalUuid(input.sessionId)
   const sessionId = requestedSessionId ?? (hasSupabaseServerEnv() ? crypto.randomUUID() : undefined)
   const answerEventId = hasSupabaseServerEnv() ? crypto.randomUUID() : undefined
-  const core = await buildChatbotCore(input.message, { sessionId: requestedSessionId })
+  const core = await buildChatbotCore(input.message, {
+    sessionId: requestedSessionId,
+    anonymousId: normalizeString(input.anonymousId) ?? null,
+  })
 
   void persistExchange(
     input,
@@ -3249,13 +3327,14 @@ export async function handleChatbotQuery(
 export async function evaluateChatbotQuery(
   message: string,
   options: { generateAnswer?: boolean } = {}
-): Promise<ChatbotQueryResponse & { detectedCategory: string }> {
+): Promise<ChatbotQueryResponse & { detectedCategory: string; detectedIntent: ChatbotIntent }> {
   const core = await buildChatbotCore(message, { generateAnswer: options.generateAnswer })
   return {
     ...core.response,
     handoffIntent: core.handoffIntent,
     warning: core.warning,
     detectedCategory: core.category,
+    detectedIntent: core.intent,
   }
 }
 
@@ -3265,6 +3344,8 @@ export interface ChatbotStreamMeta {
   needsHandoff: boolean
   unresolved: boolean
   handoffIntent: HandoffIntent
+  detectedCategory: string
+  detectedIntent: ChatbotIntent
   sources: ChatbotSource[]
   suggestedQuestions: string[]
   sessionId?: string
@@ -3361,6 +3442,8 @@ export async function streamChatbotQuery(
 
   const emitMeta = (
     response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">,
+    category: string,
+    intent: ChatbotIntent,
     handoffIntent: HandoffIntent,
     warning?: string
   ) => {
@@ -3372,6 +3455,8 @@ export async function streamChatbotQuery(
         needsHandoff: response.needsHandoff,
         unresolved: response.unresolved,
         handoffIntent,
+        detectedCategory: category,
+        detectedIntent: intent,
         sources: shouldExposeSources(input) ? response.sources : [],
         suggestedQuestions: response.suggestedQuestions,
         sessionId,
@@ -3387,7 +3472,7 @@ export async function streamChatbotQuery(
     const cached = getCachedAnswer(cachedQuestion)
     if (cached) {
       emit({ type: "replace", answer: cached.response.answer })
-      emitMeta(cached.response, cached.handoffIntent, cached.warning)
+      emitMeta(cached.response, cached.category, cached.intent, cached.handoffIntent, cached.warning)
       void persistExchange(
         input,
         cachedQuestion,
@@ -3405,7 +3490,9 @@ export async function streamChatbotQuery(
   }
 
   // 이력은 검색·분류와 무관하므로 검색과 병렬로 시작해 두고 스트리밍 직전에만 await 한다.
-  const historyPromise = requestedSessionId ? loadSessionHistory(requestedSessionId) : Promise.resolve([])
+  const historyPromise = requestedSessionId
+    ? loadSessionHistory(requestedSessionId, normalizeString(input.anonymousId) ?? null)
+    : Promise.resolve([])
 
   // 검색·분류·결정형 초안까지는 기존 코어를 그대로 재사용(중복 방지). Gemini 호출만 스트리밍으로 대체.
   const core = await buildChatbotCore(input.message, { generateAnswer: false })
@@ -3428,7 +3515,7 @@ export async function streamChatbotQuery(
     setCachedAnswer(question, { response, category, intent, handoffIntent, warning })
   }
 
-  emitMeta(response, handoffIntent, warning)
+  emitMeta(response, category, intent, handoffIntent, warning)
 
   void persistExchange(
     input,
@@ -3494,10 +3581,22 @@ export async function saveChatbotFeedback(raw: unknown) {
 
   if (error) throw new Error(error.message)
 
-  await maybeCreateChannelTalkFeedbackHandoff(answerEventId, {
-    rating,
-    comment: comment ? redactPii(comment.replace(/\s+/g, " ").trim()) : null,
-  })
+  try {
+    await maybeCreateChannelTalkFeedbackHandoff(answerEventId, {
+      rating,
+      comment: comment ? redactPii(comment.replace(/\s+/g, " ").trim()) : null,
+    })
+  } catch (error) {
+    console.warn(
+      "[chatbot] feedback handoff failed:",
+      error instanceof Error ? error.message : error
+    )
+    return {
+      ok: true,
+      stored: true,
+      warning: "피드백은 저장했지만 후속 전달은 처리하지 못했습니다.",
+    }
+  }
 
   return { ok: true, stored: true }
 }

@@ -1,16 +1,14 @@
-const BLOCKED_CONTENT_TAGS = [
-  "script",
-  "style",
-  "iframe",
-  "object",
-  "embed",
-  "form",
-  "template",
-  "svg",
-  "math",
-]
+import sanitizeHtmlLib from "sanitize-html"
 
-const ALLOWED_TAGS = new Set([
+// Output-side defense for operator-authored `content_html` (quote/contract share
+// pages, admin quote view, marketing campaign HTML) rendered via
+// `sanitizeMarketingHtml`. This was previously a hand-rolled regex sanitizer;
+// it is now backed by the vetted `sanitize-html` library (a real HTML parser),
+// which is far more robust against parser-differential / mutation-XSS attacks
+// while preserving the original allowlist and visual behavior.
+
+// Tags that may appear in the output. Anything not listed is discarded.
+const ALLOWED_TAGS = [
   "a",
   "b",
   "blockquote",
@@ -41,121 +39,100 @@ const ALLOWED_TAGS = new Set([
   "tr",
   "u",
   "ul",
-])
+]
 
-const VOID_TAGS = new Set(["br", "hr"])
-
-const ATTRIBUTES_BY_TAG: Record<string, Set<string>> = {
-  a: new Set(["href", "rel", "target", "title"]),
-  td: new Set(["colspan", "rowspan"]),
-  th: new Set(["colspan", "rowspan"]),
+// Per-tag attribute allowlist. Only `a` and `td`/`th` carry attributes; every
+// other tag is stripped of all attributes. Matches the original behavior.
+const ALLOWED_ATTRIBUTES: Record<string, string[]> = {
+  a: ["href", "rel", "target", "title"],
+  td: ["colspan", "rowspan"],
+  th: ["colspan", "rowspan"],
 }
 
-const ATTR_RE = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g
+// URL schemes permitted on `href`. Relative URLs, fragment (`#…`), query
+// (`?…`), and protocol-relative (`//…`) links are handled by
+// `allowProtocolRelative` + `allowedSchemesAppliedToAttributes`. Crucially,
+// `javascript:` and `data:` are NOT in this list, so they are stripped.
+const ALLOWED_SCHEMES = ["http", "https", "mailto", "tel"]
 
-function escapeAttribute(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-}
+const SANITIZE_OPTIONS: sanitizeHtmlLib.IOptions = {
+  allowedTags: ALLOWED_TAGS,
+  allowedAttributes: ALLOWED_ATTRIBUTES,
+  // Disallowed tags (script, style, iframe, object, embed, form, template,
+  // svg, math, …) are dropped entirely, including their text content. This
+  // mirrors the original BLOCKED_CONTENT_TAGS handling.
+  disallowedTagsMode: "discard",
+  nonTextTags: ["script", "style", "textarea", "noscript", "title"],
+  allowedSchemes: ALLOWED_SCHEMES,
+  allowedSchemesByTag: {
+    a: ALLOWED_SCHEMES,
+  },
+  // Apply scheme filtering to href specifically (in addition to default
+  // src/etc.), so `javascript:`/`data:` hrefs are rejected.
+  allowedSchemesAppliedToAttributes: ["href", "src", "cite"],
+  allowProtocolRelative: true,
+  // Drop HTML comments (and conditional-comment payloads).
+  allowedClasses: {},
+  parser: {
+    lowerCaseTags: true,
+    lowerCaseAttributeNames: true,
+  },
+  transformTags: {
+    a: (tagName, attribs) => {
+      const next: Record<string, string> = {}
 
-function normalizeUrlForCheck(value: string) {
-  return value
-    .replace(/&colon;/gi, ":")
-    .replace(/&#0*58;/gi, ":")
-    .replace(/&#x0*3a;/gi, ":")
-    .replace(/[\u0000-\u001F\u007F\s]+/g, "")
-    .toLowerCase()
-}
-
-function isSafeHref(value: string) {
-  const normalized = normalizeUrlForCheck(value)
-  if (!normalized) return false
-  if (normalized.startsWith("#") || normalized.startsWith("/") || normalized.startsWith("?")) {
-    return true
-  }
-  if (normalized.startsWith("//")) return true
-  return /^(https?:|mailto:|tel:)/.test(normalized)
-}
-
-function sanitizeAttributes(tagName: string, rawAttributes: string) {
-  const allowedAttributes = ATTRIBUTES_BY_TAG[tagName]
-  if (!allowedAttributes || !rawAttributes.trim()) return ""
-
-  const parts: string[] = []
-  let hrefSeen = false
-  let targetBlank = false
-
-  for (const match of rawAttributes.matchAll(ATTR_RE)) {
-    const rawName = match[1]
-    const name = rawName.toLowerCase()
-    const value = match[2] ?? match[3] ?? match[4] ?? ""
-
-    if (
-      name.startsWith("on") ||
-      name === "style" ||
-      name === "srcdoc" ||
-      name === "xmlns" ||
-      name.startsWith("xlink")
-    ) {
-      continue
-    }
-
-    if (!allowedAttributes.has(name)) continue
-    if ((name === "colspan" || name === "rowspan") && !/^[1-9]\d{0,2}$/.test(value)) {
-      continue
-    }
-    if (name === "href") {
-      if (!isSafeHref(value)) continue
-      hrefSeen = true
-    }
-    if (name === "target") {
-      if (value !== "_blank") continue
-      targetBlank = true
-    }
-    if (name === "rel" && !hrefSeen) continue
-
-    parts.push(`${name}="${escapeAttribute(value)}"`)
-  }
-
-  if (tagName === "a" && targetBlank) {
-    const relIndex = parts.findIndex((part) => part.startsWith("rel="))
-    if (relIndex >= 0) {
-      parts[relIndex] = `rel="${escapeAttribute("noopener noreferrer")}"`
-    } else {
-      parts.push(`rel="${escapeAttribute("noopener noreferrer")}"`)
-    }
-  }
-
-  return parts.length ? ` ${parts.join(" ")}` : ""
-}
-
-export function sanitizeMarketingHtml(html: string) {
-  let sanitized = html
-
-  for (const tag of BLOCKED_CONTENT_TAGS) {
-    sanitized = sanitized.replace(
-      new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}>`, "gi"),
-      ""
-    )
-  }
-
-  sanitized = sanitized
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<\/?([a-zA-Z][\w:-]*)([^<>]*)>/g, (fullTag, rawTagName: string, rawAttributes: string) => {
-      const tagName = rawTagName.toLowerCase()
-      if (!ALLOWED_TAGS.has(tagName)) return ""
-
-      const isClosingTag = /^<\//.test(fullTag)
-      if (isClosingTag) {
-        return VOID_TAGS.has(tagName) ? "" : `</${tagName}>`
+      if (typeof attribs.href === "string") {
+        next.href = attribs.href
+      }
+      if (typeof attribs.title === "string") {
+        next.title = attribs.title
+      }
+      // `target` may only be `_blank`; anything else is dropped.
+      const targetBlank = attribs.target === "_blank"
+      if (targetBlank) {
+        next.target = "_blank"
+      }
+      // `rel` is only meaningful alongside an href; when opening a new tab we
+      // force `noopener noreferrer`. Otherwise pass through an explicit rel
+      // only when there is an href.
+      if (next.href) {
+        if (targetBlank) {
+          next.rel = "noopener noreferrer"
+        } else if (typeof attribs.rel === "string") {
+          next.rel = attribs.rel
+        }
+      } else if (targetBlank) {
+        // No href but target=_blank: still harden against reverse-tabnabbing.
+        next.rel = "noopener noreferrer"
       }
 
-      const attributes = sanitizeAttributes(tagName, rawAttributes)
-      return VOID_TAGS.has(tagName) ? `<${tagName}${attributes}>` : `<${tagName}${attributes}>`
-    })
+      return { tagName, attribs: next }
+    },
+    td: (tagName, attribs) => ({
+      tagName,
+      attribs: filterSpanAttrs(attribs),
+    }),
+    th: (tagName, attribs) => ({
+      tagName,
+      attribs: filterSpanAttrs(attribs),
+    }),
+  },
+}
 
-  return sanitized
+// colspan/rowspan must be a small positive integer (1-999), matching the
+// original `^[1-9]\d{0,2}$` constraint. Invalid values are dropped.
+function filterSpanAttrs(attribs: Record<string, string>): Record<string, string> {
+  const next: Record<string, string> = {}
+  for (const name of ["colspan", "rowspan"]) {
+    const value = attribs[name]
+    if (typeof value === "string" && /^[1-9]\d{0,2}$/.test(value)) {
+      next[name] = value
+    }
+  }
+  return next
+}
+
+export function sanitizeMarketingHtml(html: string): string {
+  if (!html) return ""
+  return sanitizeHtmlLib(html, SANITIZE_OPTIONS)
 }

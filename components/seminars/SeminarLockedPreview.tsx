@@ -48,8 +48,8 @@ export function SeminarLockedPreview({ slug, title, posterUrl }: SeminarLockedPr
             >
               로그인하고 전체 보기
             </button>
-            <p className="mt-3 text-[11px] leading-5 text-[#A39E98]">
-              구글 · 네이버 계정으로 10초 만에 시청
+            <p className="mt-3 text-[11px] leading-5 text-[#615D59]">
+              간편 로그인으로 10초 만에 시청
             </p>
           </div>
         </div>
@@ -60,7 +60,7 @@ export function SeminarLockedPreview({ slug, title, posterUrl }: SeminarLockedPr
         onOpenChange={setDialogOpen}
         nextPath={`/events/videos/${slug}`}
         title="로그인하고 영상 보기"
-        description="행사 영상은 가입된 회원에게만 제공됩니다. 구글 또는 네이버 계정으로 로그인해 주세요."
+        description="행사 영상은 가입된 회원에게 제공됩니다. 간편 로그인으로 바로 시청하실 수 있습니다."
       />
     </>
   )

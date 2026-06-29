@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { verifyUnsubscribeToken } from "@/lib/server/security-tokens"
 import { unsubscribe } from "@/lib/repositories/marketing"
 
@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "newsletter-unsubscribe", {
+  const { allowed } = await checkRateLimitDistributed(ip, "newsletter-unsubscribe", {
     windowMs: 60_000,
     max: 10,
   })

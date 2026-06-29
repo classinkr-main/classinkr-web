@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { confirmTossPayment } from "@/lib/billing/toss"
-import { checkRateLimit, getClientIp } from "@/lib/server/rate-limit"
+import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import {
   getSoftwareCheckoutOrder,
   markSoftwareCheckoutOrderPaid,
+  type SoftwareCheckoutOrder,
 } from "@/lib/server/software-checkout"
+import {
+  getMarketingRequestMeta,
+  sendServerConversion,
+} from "@/lib/marketing/server-conversions"
 import { verifyCheckoutToken } from "@/lib/server/security-tokens"
 
 function parseAmount(value: unknown) {
@@ -19,9 +24,67 @@ function parseAmount(value: unknown) {
   return Number.isFinite(amount) && amount > 0 ? amount : null
 }
 
+function getPurchaseConversionEventId(orderId: string) {
+  return `purchase:${orderId}`
+}
+
+function getRawPrepareValue(order: SoftwareCheckoutOrder, key: string) {
+  const rawPrepare = order.rawPrepare
+  if (!rawPrepare || typeof rawPrepare !== "object" || Array.isArray(rawPrepare)) {
+    return undefined
+  }
+
+  const attribution = rawPrepare.attribution
+  if (!attribution || typeof attribution !== "object" || Array.isArray(attribution)) {
+    return undefined
+  }
+
+  const value = (attribution as Record<string, unknown>)[key]
+  return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+function emitPurchaseConversion(req: NextRequest, order: SoftwareCheckoutOrder) {
+  const conversionEventId = getPurchaseConversionEventId(order.orderId)
+  const sourceUrl =
+    getRawPrepareValue(order, "currentPage") ??
+    getRawPrepareValue(order, "landingPage") ??
+    `${req.nextUrl.origin}/checkout/success`
+
+  void sendServerConversion({
+    eventId: conversionEventId,
+    metaEventName: "Purchase",
+    ga4EventName: "purchase",
+    requestMeta: getMarketingRequestMeta(req, {
+      sourceUrl,
+      fbclid: getRawPrepareValue(order, "fbclid"),
+    }),
+    sourceUrl,
+    user: {
+      email: order.buyerEmail,
+      phone: order.buyerPhone,
+      externalId: order.orderId,
+      allowHashedUserData: true,
+    },
+    customData: {
+      transaction_id: order.orderId,
+      order_id: order.orderId,
+      value: order.amount,
+      currency: order.currency,
+      content_name: order.orderName,
+      checkout_mode: order.mode,
+      plan_id: order.planId,
+      billing_cycle: order.billingCycle,
+    },
+  }).catch((error) => {
+    console.warn("[billing/checkout/confirm] server conversion failed:", error)
+  })
+
+  return conversionEventId
+}
+
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req)
-  const { allowed } = checkRateLimit(ip, "billing-checkout-confirm", {
+  const { allowed } = await checkRateLimitDistributed(ip, "billing-checkout-confirm", {
     windowMs: 60_000,
     max: 20,
   })
@@ -65,7 +128,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (existingOrder.status === "paid" && existingOrder.paymentKey === paymentKey) {
-      return NextResponse.json({ order: existingOrder })
+      return NextResponse.json({
+        order: {
+          ...existingOrder,
+          conversionEventId: getPurchaseConversionEventId(existingOrder.orderId),
+        },
+      })
     }
 
     const confirmation = await confirmTossPayment({
@@ -91,7 +159,12 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    return NextResponse.json({ order })
+    return NextResponse.json({
+      order: {
+        ...order,
+        conversionEventId: emitPurchaseConversion(req, order),
+      },
+    })
   } catch (error) {
     console.error("[billing/checkout/confirm] POST error:", error)
     return NextResponse.json(

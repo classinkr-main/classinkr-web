@@ -23,7 +23,7 @@ const page: SegmentLandingPageData = {
     title: "강사가 바뀌어도,",
     titleAccent: "수업 품질은 그대로",
     body:
-      "에이스 강사의 노하우가 개인 PC에만 남으면 자산이 아닙니다. EDB 교안·녹화·LMS로 학원의 수업 기준으로 남기세요.",
+      "수업 자료는 강사 PC에, 녹화와 과제는 다른 도구에, 상담 기록은 메신저에 흩어져 있나요? Classin은 수업 시스템 OS로 EDB 교안, 수업 녹화, LMS, 관리자 데이터를 한 흐름으로 묶어 학원식 수업 운영 기준을 남깁니다.",
     image: {
       src: "/images/l/test2/test2-hero.png",
       alt: "ClassIn 전자칠판에 표준 수업 템플릿을 띄우고 수업을 준비하는 강사가 있는 학원 교실",

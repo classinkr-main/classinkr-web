@@ -20,6 +20,13 @@ function isExpired(expiresAt?: string | null) {
   return new Date(expiresAt).getTime() < Date.now();
 }
 
+/** 공유 토큰 기본 유효기간: 생성 시점으로부터 30일. */
+const DEFAULT_SHARE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function defaultShareExpiry(): string {
+  return new Date(Date.now() + DEFAULT_SHARE_TTL_MS).toISOString();
+}
+
 type QuoteVersionCandidate = Pick<
   QuoteDocumentVersion,
   | "id"
@@ -337,7 +344,8 @@ export async function ensureContractDocumentShare(input: {
   const share = await createContractDocumentShare({
     contract_document_version_id: version.id,
     access_mode: accessMode,
-    expires_at: input.expires_at ?? null,
+    // 토큰이 영구 유효해지지 않도록 기본 30일 TTL을 부여한다.
+    expires_at: input.expires_at ?? defaultShareExpiry(),
     created_by: input.created_by ?? null,
   });
 

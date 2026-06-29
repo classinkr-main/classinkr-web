@@ -45,7 +45,7 @@ export function EventFunnelCompareChart({
           }}
         />
         <Bar dataKey="리드" fill="#84827a" radius={[4, 4, 0, 0]} />
-        <Bar dataKey="신청" fill="#1a73e8" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="신청" fill="#D97706" radius={[4, 4, 0, 0]} />
         <Bar dataKey="참석" fill="#084734" radius={[4, 4, 0, 0]} />
         <Bar dataKey="딜" fill="#B85C33" radius={[4, 4, 0, 0]} />
       </BarChart>

@@ -5,10 +5,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 export const BRANCH_HW_CACHE_TAG = "branch-hw"
 const BRANCH_HW_REVALIDATE_SECONDS = 60
 
-export interface HwInbound { id: string; logistics_no: string | null; inbound_date: string | null; product: string; quantity: number; unit_price: number | null; amount: number | null; serials: string[]; storage: string | null; importer: string | null; remarks: string | null; synced_at: string }
-export interface HwOutbound { id: string; logistics_no: string | null; outbound_date: string | null; owner: string | null; product: string; quantity: number; revenue: number | null; destination: string | null; serials: string[]; progress: string | null; type: string | null; remarks: string | null; synced_at: string }
-export interface HwStock { id: string; product: string; category: string | null; quantity: number }
-export interface HwSalesMonthly { id: string; fiscal_year: number; fiscal_month: number; product: string; quantity: number }
+export interface HwInbound { id: string; logistics_no: string | null; inbound_date: string | null; product: string; quantity: number; unit_price: number | null; amount: number | null; serials: string[]; storage: string | null; importer: string | null; remarks: string | null; raw: unknown; synced_at: string }
+export interface HwOutbound { id: string; logistics_no: string | null; outbound_date: string | null; owner: string | null; product: string; quantity: number; revenue: number | null; destination: string | null; serials: string[]; progress: string | null; type: string | null; remarks: string | null; raw: unknown; synced_at: string }
+export interface HwStock { id: string; product: string; category: string | null; quantity: number; raw: unknown; synced_at: string }
+export interface HwSalesMonthly { id: string; fiscal_year: number; fiscal_month: number; product: string; quantity: number; raw: unknown; synced_at: string }
 
 async function listAllUncached<T>(table: string): Promise<T[]> {
   const sb = createSupabaseAdminClient()
@@ -42,6 +42,11 @@ export const listHwInbound = () => listCachedHwInbound()
 export const listHwOutbound = () => listCachedHwOutbound()
 export const listHwStock = () => listCachedHwStock()
 export const listHwSalesMonthly = () => listCachedHwSalesMonthly()
+
+export const listFreshHwInbound = () => listAllUncached<HwInbound>("branch_hw_inbound")
+export const listFreshHwOutbound = () => listAllUncached<HwOutbound>("branch_hw_outbound")
+export const listFreshHwStock = () => listAllUncached<HwStock>("branch_hw_stock")
+export const listFreshHwSalesMonthly = () => listAllUncached<HwSalesMonthly>("branch_hw_sales_monthly")
 
 async function replaceVia(fn: string, rows: unknown[]): Promise<number> {
   const sb = createSupabaseAdminClient()

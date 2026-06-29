@@ -38,4 +38,12 @@ describe("resolveProviderAvailability", () => {
       resolveProviderAvailability({ KAKAO_REST_API_KEY: "   " }).kakao
     ).toBe(false)
   })
+
+  it("enables apple only when APPLE_LOGIN_ENABLED is truthy", () => {
+    expect(resolveProviderAvailability({}).apple).toBe(false)
+    expect(resolveProviderAvailability({ APPLE_LOGIN_ENABLED: "true" }).apple).toBe(true)
+    expect(resolveProviderAvailability({ APPLE_LOGIN_ENABLED: "1" }).apple).toBe(true)
+    expect(resolveProviderAvailability({ APPLE_LOGIN_ENABLED: "false" }).apple).toBe(false)
+    expect(resolveProviderAvailability({ APPLE_LOGIN_ENABLED: "  " }).apple).toBe(false)
+  })
 })
