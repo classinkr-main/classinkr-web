@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import {
   RefreshCw, Building2, Calendar, PhoneCall,
   ExternalLink, AlertCircle, Activity, BarChart3,
@@ -22,6 +23,12 @@ import { Toast } from "@/components/admin/crm/leads/shared"
 
 // 현황 = 한국팀 아침 지휘대. 액션 밴드(딥링크) + Neo CRM 팀 패널 + 돈 흐름 요약만.
 // 리드 관리 보드 전체는 /admin/crm/customers/leads (LeadsBoardClient)로 이동했다.
+
+// Recharts 번들을 현황 초기 로드에서 분리 — 차트는 지연 로드.
+const CrmHomeCharts = dynamic(() => import("@/components/admin/crm/CrmHomeCharts"), {
+  ssr: false,
+  loading: () => <div className="h-40 animate-pulse rounded-xl bg-[#fafaf8]" />,
+})
 
 const CRM_ACTION_KPIS_URL = "/api/admin/crm/action-kpis"
 const CRM_OVERVIEW_URL = "/api/admin/crm/overview"
@@ -1129,6 +1136,17 @@ export default function CrmPage() {
           </section>
         </aside>
       </div>
+
+      {/* 분석 · 시각화 — 리드 KPI 기반 차트(지연 로드) */}
+      {leadKpis && leadKpis.total > 0 ? (
+        <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-[15px] font-bold text-[#111110]">분석 · 시각화</h2>
+            <span className="text-[11px] text-[#1a1a1a]/35">리드 KPI 기준</span>
+          </div>
+          <CrmHomeCharts leadKpis={leadKpis} />
+        </section>
+      ) : null}
 
       {/* 팀 성과 · KPI 보고 — 보고성 블록, 기본 접힘(작업대 집중) */}
       <section className="mb-4 overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
