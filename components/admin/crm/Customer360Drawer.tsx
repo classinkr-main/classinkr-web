@@ -232,6 +232,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [dealAmount, setDealAmount] = useState("")
   const [activityTab, setActivityTab] = useState<"timeline" | "feed">("timeline")
   const [eventsExpanded, setEventsExpanded] = useState(false)
+  const [savedMsg, setSavedMsg] = useState<string | null>(null)
   const [noteKind, setNoteKind] = useState<"manual_note" | "meeting_minutes">("manual_note")
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
@@ -239,13 +240,17 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const url = customerKey ? `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/360` : null
 
   const load = useCallback(
-    async (options?: { force?: boolean }) => {
+    async (options?: { force?: boolean; expanded?: boolean }) => {
       if (!url) return
       setLoading(true)
       setError(null)
+      // expanded일 때는 '전체 활동 보기'로 펼친 50건을 유지하도록 같은 URL/캐시키로 재조회한다.
+      const base = options?.expanded ? `${url}?eventsLimit=50` : url
+      const cacheKey = options?.expanded ? `${url}:all` : url
+      const fetchUrl = options?.force ? `${base}${base.includes("?") ? "&" : "?"}_=${Date.now()}` : base
       try {
-        const next = await adminFetchJsonCached<Customer360>(options?.force ? `${url}?_=${Date.now()}` : url, undefined, {
-          cacheKey: url,
+        const next = await adminFetchJsonCached<Customer360>(fetchUrl, undefined, {
+          cacheKey,
           ttlMs: 15_000,
           staleWhileRevalidateMs: 60_000,
           force: options?.force,
@@ -298,6 +303,13 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     }
   }, [data, customerKey])
 
+  // 저장/처리 성공 시 잠깐 '저장됨' 토스트를 띄우고 자동 해제 — 작업대 보상 즉시성.
+  useEffect(() => {
+    if (!savedMsg) return
+    const timer = setTimeout(() => setSavedMsg(null), 2200)
+    return () => clearTimeout(timer)
+  }, [savedMsg])
+
   const header = data?.header
   const displayName = header?.name ?? name ?? "고객"
   const targetType = data?.source ?? (customerKey?.startsWith("neo:") ? "neo_account" : "lead")
@@ -305,8 +317,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
 
   const refetch = useCallback(async () => {
     if (url) clearAdminRequestCache()
-    await load({ force: true })
-  }, [load, url])
+    await load({ force: true, expanded: eventsExpanded })
+  }, [load, url, eventsExpanded])
 
   const handleAddNote = useCallback(async () => {
     const body = note.trim()
@@ -319,6 +331,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
         body: JSON.stringify({ targetType, targetId: entityId, targetLabel: displayName, sourceType: noteKind, body }),
       })
       setNote("")
+      setSavedMsg("기록을 저장했어요")
       await refetch()
     } catch (err) {
       setError(err instanceof Error ? err.message : "메모 저장에 실패했습니다.")
@@ -348,6 +361,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
       setTaskTitle("")
       setTaskDue("")
       setTaskFormOpen(false)
+      setSavedMsg("할 일을 추가했어요")
       await refetch()
     } catch (err) {
       setError(err instanceof Error ? err.message : "할 일 저장에 실패했습니다.")
@@ -373,6 +387,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             assignToMe: true,
           }),
         })
+        setSavedMsg("CS 할 일을 만들었어요")
         await refetch()
       } catch (err) {
         setError(err instanceof Error ? err.message : "CS 할 일 생성에 실패했습니다.")
@@ -392,6 +407,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
           method: "PATCH",
           body: JSON.stringify({ action: "complete", outcome: "고객 360에서 완료" }),
         })
+        setSavedMsg("할 일을 완료했어요")
         await refetch()
       } catch (err) {
         setError(err instanceof Error ? err.message : "할 일 완료에 실패했습니다.")
@@ -424,6 +440,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
       setDealAmount("")
       setDealStage("consult")
       setDealFormOpen(false)
+      setSavedMsg("딜을 추가했어요")
       await refetch()
     } catch (err) {
       setError(err instanceof Error ? err.message : "딜 저장에 실패했습니다.")
@@ -521,6 +538,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
           assignToMe: true,
         }),
       })
+      setSavedMsg("추천 할 일을 만들었어요")
       await refetch()
     } catch (err) {
       setError(err instanceof Error ? err.message : "추천 실행에 실패했습니다.")
@@ -530,19 +548,18 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   }, [recommendation, customerKey, targetType, entityId, displayName, refetch])
 
   const loadMoreEvents = useCallback(async () => {
-    if (!customerKey) return
+    if (!url) return
     setEventsExpanded(true)
     try {
-      const next = await adminFetchJsonCached<Customer360>(
-        `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/360?eventsLimit=50`,
-        undefined,
-        { cacheKey: `customer360:${customerKey}:all`, ttlMs: 15_000 }
-      )
+      const next = await adminFetchJsonCached<Customer360>(`${url}?eventsLimit=50`, undefined, {
+        cacheKey: `${url}:all`,
+        ttlMs: 15_000,
+      })
       setData(next)
     } catch {
       // 실패 시 현재 데이터 유지
     }
-  }, [customerKey])
+  }, [url])
 
   if (!customerKey) return null
 
@@ -610,7 +627,10 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             ) : null}
             <button
               type="button"
-              onClick={() => focusSection("c360-deal")}
+              onClick={() => {
+                setDealFormOpen(true)
+                focusSection("c360-deal")
+              }}
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
             >
               <CircleDollarSign className="h-3.5 w-3.5" />견적
@@ -624,6 +644,15 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </button>
           </div>
         </div>
+
+        {savedMsg ? (
+          <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
+            <div className="flex items-center gap-1.5 rounded-full bg-[#084734] px-3.5 py-2 text-[12px] font-semibold text-white shadow-lg">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {savedMsg}
+            </div>
+          </div>
+        ) : null}
 
         {/* body */}
         <div className="flex-1 space-y-5 overflow-y-auto bg-[#f5f5f2] p-5">
