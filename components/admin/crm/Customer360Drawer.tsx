@@ -672,8 +672,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
       setTags(result.tags ?? [])
       setTagInput("")
       setSavedMsg("라벨을 추가했어요")
-    } catch {
-      // 실패 시 현재 라벨 유지
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "라벨 추가에 실패했습니다.")
     } finally {
       setTagBusy(false)
     }
@@ -689,8 +689,9 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
           { method: "DELETE" }
         )
         setTags(result.tags ?? [])
-      } catch {
-        // 실패 시 현재 라벨 유지
+        setSavedMsg("라벨을 지웠어요")
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "라벨 삭제에 실패했습니다.")
       } finally {
         setTagBusy(false)
       }

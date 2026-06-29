@@ -253,10 +253,10 @@ function getCustomerLogKindLabel(kind: AdminCrmCustomerLogKind) {
 }
 
 function getCustomerLogTone(kind: AdminCrmCustomerLogKind) {
-  if (kind === "payment") return "border-emerald-100 bg-emerald-50 text-emerald-700"
+  if (kind === "payment") return "border-[#D6E8DE] bg-[#ECFDF5] text-[#084734]"
   if (kind === "order") return "border-[#D6E8DE] bg-[#ECFDF5] text-[#084734]"
   if (kind === "quote") return "border-[#F3E6B8] bg-[#FFF9EB] text-[#8D6C1F]"
-  if (kind === "visit") return "border-sky-100 bg-sky-50 text-sky-700"
+  if (kind === "visit") return "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55"
   if (kind === "call") return "border-[#e8e8e4] bg-[#fafaf8] text-[#111110]"
   return "border-[#e8e8e4] bg-white text-[#1a1a1a]/50"
 }

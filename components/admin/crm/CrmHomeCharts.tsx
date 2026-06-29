@@ -3,7 +3,7 @@
 import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 
 import { ChartTooltip } from "../viz/ChartTheme"
-import { CHART, SOURCE_PALETTE, axisTick, cursorLine } from "../viz/theme"
+import { CHART, axisTick, cursorLine } from "../viz/theme"
 
 // 현황 분석·시각화 — 리드 KPI(byStatus) 기반. Recharts를 별도 모듈로 분리해 next/dynamic 지연 로드.
 interface LeadKpisLike {
@@ -11,11 +11,13 @@ interface LeadKpisLike {
   byStatus: Record<"new" | "contacted" | "converted" | "closed", number>
 }
 
+// 상태별 명시 색 — '신규'에 검정(SOURCE_PALETTE[0])이 가서 비활성처럼 읽히던 문제 방지.
+// 그린 계열 + 웜뉴트럴만(DESIGN 팔레트): 전환=brand 그린(성공), 신규=옅은 그린(유입), 종료=뮤트.
 const STATUS_ORDER = [
-  { key: "new", label: "신규" },
-  { key: "contacted", label: "접촉" },
-  { key: "converted", label: "전환" },
-  { key: "closed", label: "종료" },
+  { key: "new", label: "신규", color: "#6EE7B7" },
+  { key: "contacted", label: "접촉", color: "#84827a" },
+  { key: "converted", label: "전환", color: "#084734" },
+  { key: "closed", label: "종료", color: "#d8d8d2" },
 ] as const
 
 export default function CrmHomeCharts({ leadKpis }: { leadKpis: LeadKpisLike | null }) {
@@ -24,6 +26,7 @@ export default function CrmHomeCharts({ leadKpis }: { leadKpis: LeadKpisLike | n
   const statusData = STATUS_ORDER.map((status) => ({
     name: status.label,
     value: leadKpis.byStatus?.[status.key] ?? 0,
+    color: status.color,
   }))
   const funnelData = [
     { name: "신규 유입", value: leadKpis.total },
@@ -38,20 +41,17 @@ export default function CrmHomeCharts({ leadKpis }: { leadKpis: LeadKpisLike | n
         <ResponsiveContainer width="100%" height={160}>
           <PieChart>
             <Pie data={statusData} cx="50%" cy="50%" innerRadius={38} outerRadius={62} dataKey="value" strokeWidth={0}>
-              {statusData.map((entry, index) => (
-                <Cell key={entry.name} fill={SOURCE_PALETTE[index % SOURCE_PALETTE.length]} />
+              {statusData.map((entry) => (
+                <Cell key={entry.name} fill={entry.color} />
               ))}
             </Pie>
             <Tooltip content={<ChartTooltip />} />
           </PieChart>
         </ResponsiveContainer>
         <div className="mt-1 flex flex-wrap justify-center gap-x-3 gap-y-1">
-          {statusData.map((entry, index) => (
+          {statusData.map((entry) => (
             <span key={entry.name} className="inline-flex items-center gap-1 text-[11px] text-[#1a1a1a]/55">
-              <span
-                className="inline-block h-2 w-2 rounded-full"
-                style={{ backgroundColor: SOURCE_PALETTE[index % SOURCE_PALETTE.length] }}
-              />
+              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
               {entry.name} {entry.value.toLocaleString("ko-KR")}
             </span>
           ))}
