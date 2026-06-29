@@ -424,7 +424,66 @@ export default function AdminSidebar({ role, name, email }: Props) {
           </div>
 
           <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
-            {groupedNav.map(({ section, items }, groupIndex) => (
+            {crmDrill ? (
+              <div className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => setNavView("global")}
+                  className="mb-1 flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-[13px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  전체 메뉴
+                </button>
+                <div className="flex items-center gap-2 px-3 pb-1">
+                  <Users className="h-4 w-4 text-[#1a1a1a]/45" />
+                  <p className="text-[13px] font-bold text-[#111110]">CRM</p>
+                </div>
+                {CRM_CHILD_NAV.map((child) => {
+                  const childActive = child.match(pathname ?? "")
+                  return (
+                    <div key={`mobile-${child.href}`}>
+                      <Link
+                        href={child.href}
+                        onClick={() => {
+                          warmAdminTab(child.href)
+                          setMobileMenuOpen(false)
+                        }}
+                        className={`flex min-h-11 items-center rounded-md px-3 text-[14px] font-medium transition-colors ${
+                          childActive
+                            ? "bg-[#111110] text-white"
+                            : "text-[#1a1a1a]/65 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                        }`}
+                      >
+                        {child.label}
+                      </Link>
+                      {child.href === "/admin/crm/customers/unified" ? (
+                        <div className="ml-3 mt-0.5 space-y-px border-l border-[#e8e8e4] pl-3">
+                          {CRM_SEGMENTS.map((seg) => {
+                            const count = crmSegCounts?.[seg.view]
+                            return (
+                              <Link
+                                key={`mobile-${seg.view}`}
+                                href={`/admin/crm/customers/unified?view=${seg.view}`}
+                                onClick={() => setMobileMenuOpen(false)}
+                                className="flex min-h-9 items-center gap-2 rounded px-3 text-[12px] text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                              >
+                                <span className="flex-1 truncate">{seg.label}</span>
+                                {count != null ? (
+                                  <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[10px] font-semibold tabular-nums text-[#1a1a1a]/55">
+                                    {count}
+                                  </span>
+                                ) : null}
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              groupedNav.map(({ section, items }, groupIndex) => (
               <div key={`mobile-${section}`} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
                 <div className="px-3 pb-2">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
@@ -446,6 +505,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
                         onTouchStart={() => warmAdminTab(item.href)}
                         onClick={() => {
                           warmAdminTab(item.href)
+                          if (item.href === "/admin/crm") setNavView("auto")
                           setMobileMenuOpen(false)
                         }}
                         className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
@@ -470,7 +530,8 @@ export default function AdminSidebar({ role, name, email }: Props) {
                   })}
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </nav>
 
           <div className="border-t border-[#e8e8e4] p-3">
