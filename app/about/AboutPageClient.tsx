@@ -92,7 +92,7 @@ const TIMELINE = [
   {
     year: "2021",
     title: "글로벌 유니콘",
-    desc: "Tencent·Hillhouse·SIG 등의 투자로 누적 5억 달러 이상을 유치하며 시리즈 D 에듀테크 유니콘으로 도약, 공교육 시장까지 영역을 확장했습니다.",
+    desc: "Tencent·Hillhouse·SIG 등의 투자로 누적 5억 달러 이상을 유치하며 시리즈 D 에듀테크 유니콘으로 도약, 공교육 시장까지 영역을 확장했습니다. (EEO 공식 기준)",
   },
   {
     year: "2022",
@@ -330,6 +330,9 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
                 )
               })}
             </div>
+            <p className="relative mt-8 text-center text-[12px] text-white/45">
+              전 세계 누적 수치 · EEO 공식 소개 기준
+            </p>
           </div>
         </div>
       </section>

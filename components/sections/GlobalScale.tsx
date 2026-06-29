@@ -55,6 +55,9 @@ export function GlobalScale() {
             )
           })}
         </div>
+        <p className="mt-6 text-center text-[12px] text-[#615D59]">
+          전 세계 누적 수치 · EEO 공식 소개 기준
+        </p>
       </div>
     </section>
   )
