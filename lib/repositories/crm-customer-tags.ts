@@ -84,6 +84,19 @@ export async function getTagsForTargets(
   return map
 }
 
+// 통합 리스트용 — 전체 태그 맵(키 `${targetType}:${targetId}`). 태그 테이블은 소규모라 단일 조회.
+export async function getAllCustomerTagsMap(): Promise<Record<string, string[]>> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase.from(TABLE).select("target_type, target_id, tag")
+  if (error) throw new Error(`[crm-tags] 전체 맵 실패: ${error.message ?? "unknown"}`)
+  const map: Record<string, string[]> = {}
+  for (const row of data ?? []) {
+    const key = targetKey(row.target_type as string, row.target_id as string)
+    ;(map[key] ??= []).push(row.tag as string)
+  }
+  return map
+}
+
 // 필터 옵션 — 사용 중인 태그와 건수(많이 쓰인 순).
 export async function listAllCustomerTags(): Promise<CrmCustomerTagStat[]> {
   const supabase = createSupabaseAdminClient()

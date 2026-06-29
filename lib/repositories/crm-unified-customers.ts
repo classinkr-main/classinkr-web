@@ -11,6 +11,7 @@ import {
   type CrmPrioritySource,
 } from "@/lib/crm/priority"
 import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
+import { getAllCustomerTagsMap } from "./crm-customer-tags"
 
 export type CrmUnifiedCustomerSource = CrmPrioritySource
 export type CrmUnifiedLifecycle = "new_lead" | "active_lead" | "account_risk" | "active_account" | "closed"
@@ -47,6 +48,7 @@ export interface CrmUnifiedCustomerRow {
   updatedAt: string | null
   expireAt: string | null
   balance: number | null
+  tags: string[]
 }
 
 export interface CrmUnifiedCustomersOptions {
@@ -56,6 +58,7 @@ export interface CrmUnifiedCustomersOptions {
   view?: CrmUnifiedSavedView
   owner?: string
   ownerKeys?: string[]
+  tag?: string
   limit?: number
   offset?: number
   now?: Date
@@ -84,6 +87,7 @@ export interface CrmUnifiedCustomers {
     highPriorityCount: number
     ownerCount: number
     viewCounts: Record<string, number>
+    availableTags: string[]
   }
   pagination: {
     limit: number
@@ -241,6 +245,7 @@ export async function getCrmUnifiedCustomers(
       const priority = buildLeadPriorityItem(lead, now)
       rows.push({
         key: `lead:${lead.id}`,
+        tags: [],
         source: "lead",
         sourceLabel: "리드",
         name: leadName(lead),
@@ -271,6 +276,7 @@ export async function getCrmUnifiedCustomers(
       const orderLabel = formatUSD(account.orderAmount)
       rows.push({
         key: `neo:${account.accountId}`,
+        tags: [],
         source: "neo_account",
         sourceLabel: "고객",
         name: account.name,
@@ -305,6 +311,15 @@ export async function getCrmUnifiedCustomers(
     warnings.push("외부 CRM 고객 동기화 목록을 불러오지 못했습니다.")
   }
 
+  // 수기 라벨 — 소규모 태그 테이블을 한 번 읽어 행에 부착(없으면 graceful 빈 맵).
+  const tagsMap = await getAllCustomerTagsMap().catch(() => ({}) as Record<string, string[]>)
+  for (const row of rows) {
+    const idPart = row.key.slice(row.key.indexOf(":") + 1)
+    row.tags = tagsMap[`${row.source}:${idPart}`] ?? []
+  }
+  const availableTags = Array.from(new Set(Object.values(tagsMap).flat())).sort((a, b) => a.localeCompare(b, "ko"))
+  const tagFilter = (options.tag ?? "").trim()
+
   const query = normalize(options.q)
   const ownerKeys = new Set(uniqueOwnerKeys([options.owner, ...(options.ownerKeys ?? [])]))
   const source = options.source ?? "all"
@@ -315,6 +330,7 @@ export async function getCrmUnifiedCustomers(
   const baseRows = rows.filter((row) => {
     if (source !== "all" && row.source !== source) return false
     if (lifecycle !== "all" && row.lifecycle !== lifecycle) return false
+    if (tagFilter && !row.tags.includes(tagFilter)) return false
     if (!rowMatchesOwner(row, ownerKeys)) return false
     if (!includesQuery(row, query)) return false
     return true
@@ -413,6 +429,7 @@ export async function getCrmUnifiedCustomers(
       highPriorityCount: filtered.filter((row) => row.score >= 68).length,
       ownerCount: owners.length,
       viewCounts,
+      availableTags,
     },
     pagination: {
       limit,
