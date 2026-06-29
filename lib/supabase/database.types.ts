@@ -779,6 +779,20 @@ export type CrmCustomerEventInsert = Omit<CrmCustomerEvent, "id" | "created_at" 
 };
 export type CrmCustomerEventUpdate = Partial<Omit<CrmCustomerEvent, "id" | "created_at">>;
 
+export interface CrmCustomerTag {
+  id: string;
+  target_type: CrmCustomerEventTargetType;
+  target_id: string;
+  tag: string;
+  created_at: string;
+  created_by: string | null;
+}
+export type CrmCustomerTagInsert = Omit<CrmCustomerTag, "id" | "created_at"> & {
+  id?: string;
+  created_at?: string;
+};
+export type CrmCustomerTagUpdate = Partial<Omit<CrmCustomerTag, "id" | "created_at">>;
+
 export type PartnerInsert = Omit<Partner, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
 export type PartnerUpdate = Partial<Omit<Partner, "id" | "created_at">>;
 
@@ -883,6 +897,11 @@ export interface Database {
         Row: CrmCustomerEvent;
         Insert: CrmCustomerEventInsert;
         Update: CrmCustomerEventUpdate;
+      };
+      crm_customer_tags: {
+        Row: CrmCustomerTag;
+        Insert: CrmCustomerTagInsert;
+        Update: CrmCustomerTagUpdate;
       };
       crm_tasks: {
         Row: CrmTask;

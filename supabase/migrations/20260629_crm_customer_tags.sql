@@ -28,3 +28,9 @@ CREATE POLICY "Admins manage CRM customer tags"
   FOR ALL
   USING (is_active_admin())
   WITH CHECK (is_active_admin());
+
+-- 태그 길이 가드 — 저장소 정규화(40자)와 동일한 제약을 DB에서도 강제(빈 값/과길이 차단).
+ALTER TABLE public.crm_customer_tags
+  DROP CONSTRAINT IF EXISTS crm_customer_tags_tag_len_check;
+ALTER TABLE public.crm_customer_tags
+  ADD CONSTRAINT crm_customer_tags_tag_len_check CHECK (char_length(tag) BETWEEN 1 AND 40);

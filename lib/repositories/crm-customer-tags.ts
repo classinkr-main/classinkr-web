@@ -4,12 +4,11 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export type CrmTagTargetType = "lead" | "neo_account" | "customer" | "unknown"
 
-export interface CrmCustomerTagStat {
-  tag: string
-  count: number
-}
-
 const TABLE = "crm_customer_tags"
+
+// 전체 태그 맵 캐시 — 통합 리스트가 매 로드마다 전체 스캔하지 않도록 30초 유지. 추가/삭제 시 무효화.
+let tagsMapCache: { at: number; value: Record<string, string[]> } | null = null
+const TAGS_MAP_CACHE_TTL_MS = 30_000
 
 // 태그 정규화 — 공백 정리 + 길이 제한. 빈 문자열은 호출부에서 거른다.
 export function normalizeTag(raw: string): string {
@@ -47,6 +46,7 @@ export async function addCustomerTag(
     { onConflict: "target_type,target_id,tag", ignoreDuplicates: true }
   )
   if (error) throw new Error(`[crm-tags] 추가 실패: ${error.message ?? "unknown"}`)
+  tagsMapCache = null
   return getCustomerTags(targetType, targetId)
 }
 
@@ -64,28 +64,14 @@ export async function removeCustomerTag(
     .eq("target_id", targetId)
     .eq("tag", clean)
   if (error) throw new Error(`[crm-tags] 삭제 실패: ${error.message ?? "unknown"}`)
+  tagsMapCache = null
   return getCustomerTags(targetType, targetId)
 }
 
-// 리스트용 일괄 조회 — 반환 맵 키는 `${targetType}:${targetId}`.
-export async function getTagsForTargets(
-  targets: Array<{ targetType: CrmTagTargetType; targetId: string }>
-): Promise<Record<string, string[]>> {
-  const ids = Array.from(new Set(targets.map((target) => target.targetId).filter(Boolean)))
-  if (ids.length === 0) return {}
-  const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase.from(TABLE).select("target_type, target_id, tag").in("target_id", ids)
-  if (error) throw new Error(`[crm-tags] 일괄 조회 실패: ${error.message ?? "unknown"}`)
-  const map: Record<string, string[]> = {}
-  for (const row of data ?? []) {
-    const key = targetKey(row.target_type as string, row.target_id as string)
-    ;(map[key] ??= []).push(row.tag as string)
-  }
-  return map
-}
-
-// 통합 리스트용 — 전체 태그 맵(키 `${targetType}:${targetId}`). 태그 테이블은 소규모라 단일 조회.
+// 통합 리스트용 — 전체 태그 맵(키 `${targetType}:${targetId}`). 소규모 테이블 단일 조회 + 30초 캐시.
 export async function getAllCustomerTagsMap(): Promise<Record<string, string[]>> {
+  const cached = tagsMapCache
+  if (cached && Date.now() - cached.at < TAGS_MAP_CACHE_TTL_MS) return cached.value
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase.from(TABLE).select("target_type, target_id, tag")
   if (error) throw new Error(`[crm-tags] 전체 맵 실패: ${error.message ?? "unknown"}`)
@@ -94,20 +80,6 @@ export async function getAllCustomerTagsMap(): Promise<Record<string, string[]>>
     const key = targetKey(row.target_type as string, row.target_id as string)
     ;(map[key] ??= []).push(row.tag as string)
   }
+  tagsMapCache = { at: Date.now(), value: map }
   return map
-}
-
-// 필터 옵션 — 사용 중인 태그와 건수(많이 쓰인 순).
-export async function listAllCustomerTags(): Promise<CrmCustomerTagStat[]> {
-  const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase.from(TABLE).select("tag")
-  if (error) throw new Error(`[crm-tags] 태그 목록 실패: ${error.message ?? "unknown"}`)
-  const counts = new Map<string, number>()
-  for (const row of data ?? []) {
-    const tag = row.tag as string
-    counts.set(tag, (counts.get(tag) ?? 0) + 1)
-  }
-  return Array.from(counts.entries())
-    .map(([tag, count]) => ({ tag, count }))
-    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, "ko"))
 }
