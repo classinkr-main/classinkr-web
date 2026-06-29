@@ -152,12 +152,14 @@ function FunnelRow({
   icon,
   label,
   amount,
+  currency = "KRW",
   meta,
   state,
 }: {
   icon: React.ReactNode
   label: string
   amount: number | null
+  currency?: "KRW" | "USD"
   meta?: string | null
   state: "done" | "warn" | "pending"
 }) {
@@ -184,7 +186,7 @@ function FunnelRow({
         ) : null}
       </div>
       <span className={`shrink-0 text-[13px] font-bold ${state === "warn" ? "text-[#B85C33]" : "text-[#111110]"}`}>
-        {amount == null ? "-" : `₩${formatAmount(amount)}`}
+        {formatMoney(amount, currency)}
       </span>
     </div>
   )
@@ -207,6 +209,13 @@ function formatDay(value: string | null | undefined) {
 function formatAmount(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return "-"
   return new Intl.NumberFormat("ko-KR").format(value)
+}
+
+// NEO 오더/수납은 USD 네이티브($), 견적(Deal Lite)은 KRW(₩) — 출처별 통화를 맞춘다.
+function formatMoney(value: number | null | undefined, currency: "KRW" | "USD" = "KRW") {
+  if (value == null || !Number.isFinite(value)) return "-"
+  if (currency === "USD") return `$${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
+  return `₩${value.toLocaleString("ko-KR")}`
 }
 
 function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
@@ -796,6 +805,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                       icon={<Receipt className="h-3.5 w-3.5" />}
                       label="오더"
                       amount={orderTotal}
+                      currency="USD"
                       meta={orderTotal != null ? "NEO 오더 · 공식 원천" : "오더 없음"}
                       state={orderTotal != null && orderTotal > 0 ? "done" : "pending"}
                     />
@@ -804,9 +814,10 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                       icon={<Coins className="h-3.5 w-3.5" />}
                       label="수납"
                       amount={collectionTotal}
+                      currency="USD"
                       meta={
                         outstanding != null && outstanding > 0
-                          ? `미수 ₩${formatAmount(outstanding)}`
+                          ? `미수 ${formatMoney(outstanding, "USD")}`
                           : collectionTotal != null
                             ? "NEO 수납 · 공식 원천"
                             : "수납 기록 없음"
@@ -828,6 +839,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                           icon={<Sparkles className="h-3.5 w-3.5" />}
                           label="갱신 예상"
                           amount={orderTotal}
+                          currency="USD"
                           meta="직전 계약 기준 추정 · 만료 임박(파생)"
                           state="pending"
                         />
