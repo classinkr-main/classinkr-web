@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react"
+import { TONE, type Tone } from "./viz/theme"
 
 export interface StatCardTrend {
   value: number
@@ -16,8 +17,14 @@ export interface StatCardProps {
   value: string | number
   sub?: string
   trend?: StatCardTrend
+  // tone을 주면 4톤(neutral·brand·caution·danger)에서 accent/iconColor를 도출한다.
+  // 레거시 accent/iconColor는 tone 미지정 시 폴백으로 유지(기존 호출부 무손상).
+  tone?: Tone
   accent?: string
   iconColor?: string
+  // KPI 카드 아래 미니 추이. <Sparkline/>을 next/dynamic으로 감싼 노드를 슬롯으로 받는다
+  // (StatCard 자체는 Recharts-free 유지).
+  sparkline?: React.ReactNode
   // 주면 카드 전체가 해당 경로로 이동하는 드릴다운 링크가 된다.
   href?: string
 }
@@ -37,18 +44,24 @@ export function StatCard({
   value,
   sub,
   trend,
+  tone,
   accent = "bg-[#f0f0ec]",
   iconColor = "text-[#1a1a1a]/50",
+  sparkline,
   href,
 }: StatCardProps) {
   const positive = trend ? (trend.invert ? trend.value < 0 : trend.value > 0) : false
   const neutral = trend ? trend.value === 0 : false
 
+  // tone 우선 → 없으면 레거시 accent/iconColor.
+  const resolvedAccent = tone ? TONE[tone].surfaceClass : accent
+  const resolvedIcon = tone ? TONE[tone].iconClass : iconColor
+
   const body = (
     <>
       <div className="mb-3 flex items-start justify-between">
-        <div className={`inline-flex rounded-xl p-2 ${accent}`}>
-          <span className={iconColor}>{icon}</span>
+        <div className={`inline-flex rounded-xl p-2 ${resolvedAccent}`}>
+          <span className={resolvedIcon}>{icon}</span>
         </div>
         {trend && (
           <span
@@ -75,6 +88,7 @@ export function StatCard({
       <p className="text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{value}</p>
       {sub && <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">{sub}</p>}
       {trend && <p className="mt-0.5 text-[11px] text-[#1a1a1a]/30">{trend.label}</p>}
+      {sparkline && <div className="mt-3 -mb-1">{sparkline}</div>}
     </>
   )
 

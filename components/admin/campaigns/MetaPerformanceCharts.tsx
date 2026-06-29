@@ -180,7 +180,7 @@ export function MetaPerformanceCharts({ rows, currency = "USD" }: MetaPerformanc
                   yAxisId="spend"
                   dataKey="spend"
                   name="광고비"
-                  fill="#0866FF"
+                  fill="#B85C33"
                   radius={[4, 4, 0, 0]}
                   maxBarSize={42}
                 />

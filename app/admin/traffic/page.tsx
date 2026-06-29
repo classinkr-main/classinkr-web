@@ -2,10 +2,7 @@
 
 import dynamic from "next/dynamic"
 import { useEffect, useState } from "react"
-import type { ReactNode } from "react"
 import {
-  ArrowDownRight,
-  ArrowUpRight,
   BarChart2,
   CheckCircle2,
   ChevronRight,
@@ -13,12 +10,12 @@ import {
   Download,
   Eye,
   Link2,
-  Minus,
   MousePointerClick,
   Users,
   XCircle,
 } from "lucide-react"
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { InsightCard, MetricRankList, Panel, StatTile, TableEmpty } from "@/components/admin/viz"
 
 // 방문자/트래픽 전용 대시보드.
 // 기존 /admin/analytics 안에 묻혀 있던 "홈페이지 흐름 · 추적 현황"을 따로 모은 화면이다.
@@ -132,143 +129,6 @@ const DailyEventCountsChart = dynamic(
   { ssr: false, loading: () => <div className="h-56 rounded-xl bg-[#f0f0ec]" /> }
 )
 
-function trendTone(value: number) {
-  if (value > 0) return "text-green-600 bg-green-50"
-  if (value < 0) return "text-[#B85C33] bg-[#FEF3EE]"
-  return "text-[#1a1a1a]/40 bg-[#f0f0ec]"
-}
-
-function TrendBadge({ value }: { value: number }) {
-  return (
-    <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium ${trendTone(value)}`}>
-      {value === 0 ? <Minus className="h-3 w-3" /> : value > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-      {Math.abs(value)}
-    </span>
-  )
-}
-
-function SummaryCard({
-  icon,
-  label,
-  value,
-  hint,
-  trend,
-}: {
-  icon: ReactNode
-  label: string
-  value: string | number
-  hint?: string
-  trend?: number
-}) {
-  return (
-    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="inline-flex rounded-xl bg-[#f0f0ec] p-2 text-[#1a1a1a]/50">{icon}</div>
-        {typeof trend === "number" && <TrendBadge value={trend} />}
-      </div>
-      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/40">{label}</p>
-      <p className="text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{value}</p>
-      {hint && <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">{hint}</p>}
-    </div>
-  )
-}
-
-function InsightCard({
-  eyebrow,
-  title,
-  description,
-  tone = "neutral",
-}: {
-  eyebrow: string
-  title: string
-  description: string
-  tone?: "neutral" | "warning" | "info"
-}) {
-  const toneClasses: Record<NonNullable<typeof tone>, string> = {
-    neutral: "bg-[#fafaf8] border-[#e8e8e4]",
-    warning: "bg-amber-50/70 border-amber-100",
-    info: "bg-[#ECFDF5]/70 border-[#D1FAE5]",
-  }
-  return (
-    <div className={`rounded-2xl border px-4 py-4 ${toneClasses[tone]}`}>
-      <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">{eyebrow}</p>
-      <p className="mt-2 text-[14px] font-semibold tracking-[-0.01em] text-[#111110]">{title}</p>
-      <p className="mt-1.5 text-[12px] leading-relaxed text-[#1a1a1a]/45">{description}</p>
-    </div>
-  )
-}
-
-function Panel({
-  title,
-  description,
-  action,
-  children,
-}: {
-  title: string
-  description?: string
-  action?: ReactNode
-  children: ReactNode
-}) {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-      <div className="flex flex-col gap-3 border-b border-[#e8e8e4] px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-        <div>
-          <h2 className="text-[14px] font-semibold text-[#111110]">{title}</h2>
-          {description && <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">{description}</p>}
-        </div>
-        {action}
-      </div>
-      <div className="p-4 sm:p-6">{children}</div>
-    </section>
-  )
-}
-
-function MetricRankList({
-  rows,
-  empty,
-  getLabel,
-  getValue,
-  getMeta,
-  getMagnitude,
-}: {
-  rows: HomepageFlowPageRow[]
-  empty: string
-  getLabel: (row: HomepageFlowPageRow) => string
-  getValue: (row: HomepageFlowPageRow) => string
-  getMeta: (row: HomepageFlowPageRow) => string
-  getMagnitude: (row: HomepageFlowPageRow) => number
-}) {
-  if (rows.length === 0) {
-    return <p className="py-8 text-[12px] text-[#1a1a1a]/45">{empty}</p>
-  }
-  const max = Math.max(1, ...rows.map((row) => getMagnitude(row)))
-  return (
-    <div className="space-y-3">
-      {rows.map((row) => {
-        const width = Math.max(8, Math.round((getMagnitude(row) / max) * 100))
-        return (
-          <div key={`${row.path}-${getValue(row)}`} className="space-y-1.5">
-            <div className="flex items-start justify-between gap-3 text-[12px]">
-              <div className="min-w-0">
-                <p className="truncate font-mono text-[#111110]">{getLabel(row)}</p>
-                <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">{getMeta(row)}</p>
-              </div>
-              <span className="shrink-0 font-semibold text-[#111110]">{getValue(row)}</span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-[#f0f0ec]">
-              <div className="h-full rounded-full bg-[#084734]" style={{ width: `${width}%` }} />
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function TableEmpty({ message }: { message: string }) {
-  return <p className="py-8 text-center text-[12px] text-[#1a1a1a]/30">{message}</p>
-}
-
 function StatusRow({ label, ok, detail }: { label: string; ok: boolean; detail: string }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e8e8e4] bg-white px-3 py-2.5">
@@ -365,27 +225,27 @@ export default function TrafficPage() {
 
       {/* ── 방문자 수 기본 ─────────────────────────────── */}
       <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <SummaryCard
+        <StatTile
           icon={<Users className="h-4 w-4" />}
           label="오늘 방문자"
           value={visitorStats ? visitorStats.today.visitors.toLocaleString() : "..."}
           hint={`전체 페이지 · 홈 ${visitorStats?.today.homeVisitors.toLocaleString() ?? 0}명`}
           trend={visitorTrend}
         />
-        <SummaryCard
+        <StatTile
           icon={<BarChart2 className="h-4 w-4" />}
           label="오늘 홈 방문자"
           value={visitorStats ? visitorStats.today.homeVisitors.toLocaleString() : "..."}
           hint={`홈 페이지뷰 ${visitorStats?.today.homePageViews.toLocaleString() ?? 0}회`}
           trend={homeVisitorTrend}
         />
-        <SummaryCard
+        <StatTile
           icon={<Users className="h-4 w-4" />}
           label={`${range}일 방문자`}
           value={visitorStats ? visitorStats.totals.visitors.toLocaleString() : "..."}
           hint={`홈 ${visitorStats?.totals.homeVisitors.toLocaleString() ?? 0}명`}
         />
-        <SummaryCard
+        <StatTile
           icon={<Eye className="h-4 w-4" />}
           label={`${range}일 페이지뷰`}
           value={visitorStats ? visitorStats.totals.pageViews.toLocaleString() : "..."}
@@ -421,25 +281,25 @@ export default function TrafficPage() {
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <SummaryCard
+        <StatTile
           icon={<Users className="h-4 w-4" />}
           label="홈 방문자"
           value={homepageFlow ? homepageFlow.totals.homeVisitors.toLocaleString() : "..."}
           hint={`홈 PV ${homepageFlow?.totals.homePageViews.toLocaleString() ?? 0}회`}
         />
-        <SummaryCard
+        <StatTile
           icon={<BarChart2 className="h-4 w-4" />}
           label="전체 페이지뷰"
           value={homepageFlow ? homepageFlow.totals.pageViews.toLocaleString() : "..."}
           hint={`방문자 ${homepageFlow?.totals.visitors.toLocaleString() ?? 0}명`}
         />
-        <SummaryCard
+        <StatTile
           icon={<ChevronRight className="h-4 w-4" />}
           label="이탈 후보"
           value={homepageFlow ? homepageFlow.totals.exits.toLocaleString() : "..."}
           hint="pagehide 기준 · 내부 이동 제외"
         />
-        <SummaryCard
+        <StatTile
           icon={<Clock3 className="h-4 w-4" />}
           label="평균 체류"
           value={homepageFlow ? formatDuration(homepageFlow.totals.avgDwellSeconds) : "..."}
@@ -483,13 +343,13 @@ export default function TrafficPage() {
                   eyebrow="Home"
                   title={`${homepageFlow.totals.homeVisitors.toLocaleString()}명`}
                   description={`홈 조회 ${homepageFlow.totals.homePageViews.toLocaleString()}회`}
-                  tone="info"
+                  tone="brand"
                 />
                 <InsightCard
                   eyebrow="Exit"
                   title={`${homepageFlow.totals.exits.toLocaleString()}회`}
                   description="pagehide로 잡힌 사이트 이탈 후보입니다. SPA 내부 이동은 제외합니다."
-                  tone={homepageFlow.totals.exits > 0 ? "warning" : "neutral"}
+                  tone={homepageFlow.totals.exits > 0 ? "caution" : "neutral"}
                 />
                 <InsightCard
                   eyebrow="Dwell"

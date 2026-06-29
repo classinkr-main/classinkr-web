@@ -794,7 +794,7 @@ function TimelineRow({ events }: { events: PublicEvent[] }) {
                 event.status === "진행 중"
                   ? "bg-[#084734]"
                   : event.status === "예정"
-                    ? "bg-[#1a73e8]"
+                    ? "bg-[#D97706]"
                     : "bg-[#84827a]"
               return (
                 <div key={event.id} className="relative h-7">
@@ -1805,8 +1805,8 @@ export default function AdminCampaignsPage() {
     }
     return [
       { key: "impressions", label: "노출", value: impressions, color: "#84827a" },
-      { key: "leads", label: "리드", value: leads, color: "#1a73e8" },
-      { key: "applications", label: "신청", value: applications, color: "#0866FF" },
+      { key: "leads", label: "리드", value: leads, color: "#111110" },
+      { key: "applications", label: "신청", value: applications, color: "#D97706" },
       { key: "qualifiedLeads", label: "유효 리드", value: qualifiedLeads, color: "#084734" },
       { key: "attendees", label: "참석", value: attendees, color: "#084734" },
       { key: "deals", label: "딜", value: deals, color: "#B85C33" },

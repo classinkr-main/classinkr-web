@@ -436,7 +436,7 @@ const CAMPAIGN_STATUS_COLOR: Record<EmailCampaign["status"], string> = {
   failed: "bg-[#FEF3EE] text-[#B85C33]",
 }
 
-const CHART_COLORS = ["#111110", "#084734", "#065c41", "#f59e0b", "#B85C33"]
+const CHART_COLORS = ["#111110", "#084734", "#065c41", "#B85C33", "#84827a"]
 
 function ChartSkeleton({ className = "h-[220px]" }: { className?: string }) {
   return <div className={`${className} rounded-xl bg-[#f0f0ec]`} />
