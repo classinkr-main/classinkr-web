@@ -231,6 +231,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [dealStage, setDealStage] = useState<CrmDealStage>("consult")
   const [dealAmount, setDealAmount] = useState("")
   const [activityTab, setActivityTab] = useState<"timeline" | "feed">("timeline")
+  const [eventsExpanded, setEventsExpanded] = useState(false)
   const [noteKind, setNoteKind] = useState<"manual_note" | "meeting_minutes">("manual_note")
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
@@ -271,6 +272,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     setDealStage("consult")
     setDealAmount("")
     setActivityTab("timeline")
+    setEventsExpanded(false)
     setNoteKind("manual_note")
     setDealFormOpen(false)
     setTaskFormOpen(false)
@@ -526,6 +528,21 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
       setActingId(null)
     }
   }, [recommendation, customerKey, targetType, entityId, displayName, refetch])
+
+  const loadMoreEvents = useCallback(async () => {
+    if (!customerKey) return
+    setEventsExpanded(true)
+    try {
+      const next = await adminFetchJsonCached<Customer360>(
+        `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/360?eventsLimit=50`,
+        undefined,
+        { cacheKey: `customer360:${customerKey}:all`, ttlMs: 15_000 }
+      )
+      setData(next)
+    } catch {
+      // 실패 시 현재 데이터 유지
+    }
+  }, [customerKey])
 
   if (!customerKey) return null
 
@@ -1166,6 +1183,17 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   ))}
                 </ul>
               )}
+              {activityTab === "timeline" &&
+              !eventsExpanded &&
+              data.activity.summary.total > data.activity.rows.length ? (
+                <button
+                  type="button"
+                  onClick={() => void loadMoreEvents()}
+                  className="mt-2.5 inline-flex w-full items-center justify-center rounded-lg border border-[#e8e8e4] bg-white py-2 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                >
+                  전체 활동 보기 (최대 50)
+                </button>
+              ) : null}
             </section>
           ) : null}
 
