@@ -75,6 +75,23 @@ describe("CRM priority rules", () => {
     expect(item?.score).toBeLessThan(70)
   })
 
+  it("prioritizes depleted prepaid balance even when subscription expiry is not near", () => {
+    const item = buildNeoAccountPriorityItem(
+      account({
+        balance: 0,
+        expireAt: "2026-12-31T00:00:00.000Z",
+        riskLevel: "soon",
+        riskReasons: [{ code: "depleted_balance", label: "충전 잔액 소진" }],
+      }),
+      NOW
+    )
+
+    expect(item?.action).toBe("renew_account")
+    expect(item?.actionLabel).toBe("충전 안내")
+    expect(item?.bucket).toBe("today")
+    expect(item?.reason).toContain("충전 잔액")
+  })
+
   it("sorts higher score before older due date", () => {
     const low = buildLeadPriorityItem(
       lead({ id: "low", timestamp: "2026-06-26T08:00:00.000Z", source: "newsletter" }),

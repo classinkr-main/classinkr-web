@@ -17,6 +17,8 @@ export async function GET(req: NextRequest) {
   const chain = await runExternalCrmSyncChain("cron")
   const result = {
     ...chain.sync,
+    neoCustomerSnapshots: chain.neoCustomerSnapshots ?? null,
+    neoCustomerSnapshotsError: chain.neoCustomerSnapshotsError ?? null,
     candidates: chain.candidates ?? null,
     candidatesError: chain.candidatesError ?? null,
   }
