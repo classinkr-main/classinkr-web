@@ -3,9 +3,12 @@
 
 export type CustomerFlag = "vip" | "hot" | "new" | "expiring" | "due" | "dormant" | "upsell"
 
+// 색→의미 1:1 (DESIGN.md: 그린만 포화색, 파랑/보라 금지):
+//   검정=VIP(최우선 가치) · 그린=긍정·기회(핫/신규/업셀) · amber=만료임박 · warm(#B85C33)=미수 · gray=휴면.
+// 이전 위반: vip 인디고(보라 계열), hot이 due와 같은 미수색으로 색→의미가 깨졌음.
 export const FLAG_META: Record<CustomerFlag, { label: string; bg: string; color: string; border: string }> = {
-  vip: { label: "VIP", bg: "#f4f3ff", color: "#4338ca", border: "#e4e2fb" },
-  hot: { label: "핫", bg: "#FEF3EE", color: "#B85C33", border: "#f3ddd0" },
+  vip: { label: "VIP", bg: "#111110", color: "#ffffff", border: "#111110" },
+  hot: { label: "핫", bg: "#ECFDF5", color: "#084734", border: "#D7EBDD" },
   new: { label: "신규", bg: "#ECFDF5", color: "#084734", border: "#D7EBDD" },
   expiring: { label: "만료임박", bg: "#FBF1E0", color: "#7A520F", border: "#ECD29C" },
   due: { label: "미수", bg: "#FEF3EE", color: "#B85C33", border: "#f3ddd0" },
