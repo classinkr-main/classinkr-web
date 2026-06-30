@@ -58,7 +58,7 @@ export default function CrmHomeCharts({ leadKpis }: { leadKpis: LeadKpisLike | n
         </div>
       </div>
       <div>
-        <p className="mb-1 text-[12px] font-semibold text-[#1a1a1a]/45">전환 퍼널</p>
+        <p className="mb-1 text-[12px] font-semibold text-[#1a1a1a]/45">리드 전환 퍼널 · 건수</p>
         <ResponsiveContainer width="100%" height={160}>
           <BarChart data={funnelData} layout="vertical" margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
             <XAxis type="number" hide />

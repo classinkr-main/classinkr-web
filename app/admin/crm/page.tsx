@@ -20,6 +20,7 @@ import Customer360Drawer from "@/components/admin/crm/Customer360Drawer"
 import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
 import { getRecentCustomers, type RecentCustomer } from "@/lib/crm/recent-customers"
 import { Toast } from "@/components/admin/crm/leads/shared"
+import { formatCNY, formatKRWAbbrev, CRM_CURRENCY_BADGE, type CrmCurrency } from "@/lib/crm/money-format"
 
 // 현황 = 한국팀 아침 지휘대. 액션 밴드(딥링크) + Neo CRM 팀 패널 + 돈 흐름 요약만.
 // 리드 관리 보드 전체는 /admin/crm/customers/leads (LeadsBoardClient)로 이동했다.
@@ -222,20 +223,24 @@ function formatNumber(value: number | null | undefined) {
   return Number(value ?? 0).toLocaleString("ko-KR")
 }
 
-function formatCurrency(value: number | null | undefined) {
-  const amount = Number(value ?? 0)
-  if (Math.abs(amount) >= 100_000_000) {
-    return `${(amount / 100_000_000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}억`
-  }
-  if (Math.abs(amount) >= 10_000) {
-    return `${Math.round(amount / 10_000).toLocaleString("ko-KR")}만`
-  }
-  return amount.toLocaleString("ko-KR")
+// 일정 칩(월/일) — 우측 aside "설치·방문 일정" 표기용.
+function monthDayParts(value: string | null | undefined): { month: string; day: string } {
+  if (!value) return { month: "", day: "-" }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return { month: "", day: "-" }
+  return { month: `${date.getMonth() + 1}월`, day: String(date.getDate()) }
 }
 
 // 오더(Opportunity)는 달러($)로 기재된다 — 매출·수금(CNY)과 통화가 다름.
 function formatUSD(value: number | null | undefined) {
   return `$${Number(value ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+}
+
+// 고객 로그 금액은 종류별 통화가 다르다 — 오더=USD($), 수납=CNY(¥), 그 외(견적 등)=자체 집계 ₩.
+function formatLogAmount(kind: AdminCrmCustomerLogKind, value: number | null | undefined) {
+  if (kind === "order") return formatUSD(value)
+  if (kind === "payment") return formatCNY(value)
+  return formatKRWAbbrev(value)
 }
 
 function formatPercent(value: number | null | undefined) {
@@ -489,7 +494,7 @@ function CrmTeamKpiBoard({
           <CrmMeasurementTile
             icon={<CircleDollarSign className="h-4 w-4" />}
             label="동기화 매출"
-            value={loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}
+            value={loadingValue ?? formatCNY(neoKpis?.salesAmountMonth)}
             hint={`완료 ${formatNumber(neoKpis?.salesCountMonth)}건 · 본사 CRM 원천`}
             tone="text-[#084734]"
           />
@@ -510,8 +515,8 @@ function CrmTeamKpiBoard({
           <CrmMeasurementTile
             icon={<ReceiptText className="h-4 w-4" />}
             label="동기화 수금"
-            value={loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}
-            hint={`수금 완료량 ${formatNumber(neoKpis?.collectionCountMonth)}건 · 30일 ${formatCurrency(
+            value={loadingValue ?? formatCNY(neoKpis?.collectionAmountMonth)}
+            hint={`수금 완료량 ${formatNumber(neoKpis?.collectionCountMonth)}건 · 30일 ${formatCNY(
               neoKpis?.collectionAmount30d
             )}`}
             tone="text-[#111110]"
@@ -550,6 +555,230 @@ function CrmTeamKpiBoard({
         <div className="mt-2">
           <BranchKpiMatrix rows={memberRows} emptyLabel={branchEmpty} />
         </div>
+      </div>
+    </section>
+  )
+}
+
+// 통화 칩 — 서로 다른 통화(₩/$/¥)를 인접 배치할 때 기호·출처를 분리해 합산 오독을 막는다.
+function CurrencyChip({ currency, tone = "light" }: { currency: CrmCurrency; tone?: "light" | "dark" }) {
+  const meta = CRM_CURRENCY_BADGE[currency]
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold ${
+        tone === "dark" ? "bg-white/15 text-white/80" : "bg-[#fafaf8] text-[#1a1a1a]/45"
+      }`}
+    >
+      <span>{meta.symbol}</span>
+      <span className="font-semibold">{meta.label}</span>
+    </span>
+  )
+}
+
+// 코크핏 KPI 히어로 — 흩어진 핵심 지표를 상단 한 밴드로 합성(B 코크핏 이식). snapshot 필드만 재배치(추가 fetch 0).
+// 통화 3종이 인접하므로 카드마다 통화 칩을 강제: 인식매출·미수=₩(자체집계), 오더=$(USD), 동기화=¥(CNY).
+function CrmCockpitHero({ overview, loading }: { overview: AdminCrmOverview | null; loading: boolean }) {
+  const revenue = overview?.business.revenue
+  const kpis = overview?.business.kpis
+  const neoKpis = overview?.neoCrm?.kpis
+  const loadingValue = loading && !overview ? "..." : null
+  const riskCount = kpis?.paymentRiskCount ?? 0
+  const hasRisk = riskCount > 0 || (revenue?.outstandingAmount ?? 0) > 0
+
+  return (
+    <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {/* 1. 이번 달 인식 매출 — 다크 히어로 (자체집계 ₩) */}
+      <div className="rounded-2xl bg-[#084734] p-4 text-white shadow-[0_8px_22px_rgba(8,71,52,0.18)]">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 opacity-80">
+            <CircleDollarSign className="h-3.5 w-3.5" />
+            <span className="text-[10.5px] font-bold uppercase tracking-[0.12em]">이번 달 인식 매출</span>
+          </div>
+          <CurrencyChip currency="KRW" tone="dark" />
+        </div>
+        <p className="mt-2 text-[28px] font-bold leading-none tracking-[-0.03em]">
+          {loadingValue ?? formatKRWAbbrev(revenue?.deliveryTotalAmount)}
+        </p>
+        <p className="mt-1.5 text-[11.5px] opacity-75">
+          견적 {loadingValue ?? formatKRWAbbrev(revenue?.acceptedQuoteAmount)} · 계약{" "}
+          {loadingValue ?? formatKRWAbbrev(revenue?.contractedAmount)}
+        </p>
+      </div>
+
+      {/* 2. 오더 · 확정 임박 (USD) */}
+      <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[#1a1a1a]/40">
+            <BarChart3 className="h-3.5 w-3.5" />
+            <span className="text-[10.5px] font-bold uppercase tracking-[0.12em]">오더 · 확정 임박</span>
+          </div>
+          <CurrencyChip currency="USD" />
+        </div>
+        <p className="mt-2 text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]">
+          {loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
+        </p>
+        <p className="mt-1.5 text-[11.5px] text-[#1a1a1a]/45">
+          이번 달 {loadingValue ?? formatNumber(neoKpis?.opportunityCountMonth)}건 · USD 원천
+        </p>
+      </div>
+
+      {/* 3. 동기화 매출 · 수금 (CNY) */}
+      <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[#1a1a1a]/40">
+            <TrendingUp className="h-3.5 w-3.5" />
+            <span className="text-[10.5px] font-bold uppercase tracking-[0.12em]">동기화 매출 · 수금</span>
+          </div>
+          <CurrencyChip currency="CNY" />
+        </div>
+        <p className="mt-2 text-[28px] font-bold leading-none tracking-[-0.03em] text-[#084734]">
+          {loadingValue ?? formatCNY(neoKpis?.salesAmountMonth)}
+        </p>
+        <p className="mt-1.5 text-[11.5px] text-[#1a1a1a]/45">
+          수금 {loadingValue ?? formatCNY(neoKpis?.collectionAmountMonth)} · NEO 원천
+        </p>
+      </div>
+
+      {/* 4. 미수 · 이탈 위험 (자체집계 ₩ + 건수) */}
+      <Link
+        href="/admin/crm/deals"
+        className={`group rounded-2xl border p-4 transition-colors ${
+          hasRisk ? "border-[#F6D5C5] bg-[#FEF3EE] hover:bg-[#FCE9E0]" : "border-[#e8e8e4] bg-white hover:bg-[#fafaf8]"
+        }`}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className={`flex items-center gap-1.5 ${hasRisk ? "text-[#B85C33]" : "text-[#1a1a1a]/40"}`}>
+            <AlertCircle className="h-3.5 w-3.5" />
+            <span className="text-[10.5px] font-bold uppercase tracking-[0.12em]">미수 · 이탈 위험</span>
+          </div>
+          <CurrencyChip currency="KRW" />
+        </div>
+        <p className={`mt-2 text-[28px] font-bold leading-none tracking-[-0.03em] ${hasRisk ? "text-[#B85C33]" : "text-[#111110]"}`}>
+          {loadingValue ?? formatNumber(riskCount)}
+          <span className="ml-1 text-[15px] font-bold">곳</span>
+        </p>
+        <p className="mt-1.5 text-[11.5px] text-[#1a1a1a]/45">
+          미수 합계 {loadingValue ?? formatKRWAbbrev(revenue?.outstandingAmount)} · Deals에서 처리
+        </p>
+      </Link>
+    </div>
+  )
+}
+
+// 활동 목표 달성률 게이지 — branch KPI(LD/ACC/OPP/SOL/VST) actual/goal 합산. 매출 아닌 "활동" 목표임을 명시.
+function ActivityGoalGauge({ branchKpis }: { branchKpis: BranchKpiResponse | null }) {
+  const totals = BRANCH_KPI_DEFS.reduce(
+    (acc, def) => {
+      const t = aggregateBranchKpi(branchKpis, def.key)
+      acc.actual += t.actual
+      acc.goal += t.goal
+      return acc
+    },
+    { actual: 0, goal: 0 }
+  )
+  if (totals.goal <= 0) return null
+  const ratio = totals.actual / totals.goal
+  const pct = Math.round(ratio * 100)
+  const radius = 16
+  const circumference = 2 * Math.PI * radius
+  const dash = circumference * Math.min(1, Math.max(0, ratio))
+  const tone = ratio >= 0.7 ? "#084734" : "#B85C33"
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="relative h-12 w-12 shrink-0">
+        <svg viewBox="0 0 40 40" className="h-12 w-12 -rotate-90">
+          <circle cx="20" cy="20" r={radius} fill="none" stroke="#f0f0ec" strokeWidth="5" />
+          <circle
+            cx="20"
+            cy="20"
+            r={radius}
+            fill="none"
+            stroke={tone}
+            strokeWidth="5"
+            strokeLinecap="round"
+            strokeDasharray={`${dash} ${circumference}`}
+          />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-[#111110]">
+          {pct}%
+        </span>
+      </div>
+      <div className="leading-tight">
+        <p className="text-[11px] font-semibold text-[#111110]">활동 목표 달성률</p>
+        <p className="text-[10px] text-[#1a1a1a]/40">리드·고객·방문 등 5지표 합산 · 매출 아님</p>
+      </div>
+    </div>
+  )
+}
+
+// 활동 목표 달성 랭킹 — branch KPI(5지표) actual/goal 합산 달성률로 개인 정렬. 더미 아님(실 KPI 레코드).
+function CrmRankingBoard({ branchKpis }: { branchKpis: BranchKpiResponse | null }) {
+  const ranked = useMemo(() => {
+    const members = branchKpis?.members ?? []
+    return members
+      .map((member) => {
+        const totals = BRANCH_KPI_DEFS.reduce(
+          (acc, def) => {
+            const value = member.kpi?.[def.key]
+            acc.actual += Number(value?.actual ?? 0)
+            acc.goal += Number(value?.goal ?? 0)
+            return acc
+          },
+          { actual: 0, goal: 0 }
+        )
+        const ratio = totals.goal > 0 ? totals.actual / totals.goal : 0
+        return { member: member.member, team: member.team, ratio }
+      })
+      .filter((row) => row.ratio > 0)
+      .sort((a, b) => b.ratio - a.ratio)
+  }, [branchKpis])
+
+  if (ranked.length === 0) return null
+  const max = ranked[0].ratio || 1
+
+  return (
+    <section className="mt-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      <div className="mb-3">
+        <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#1a1a1a]/40">Performance Ranking</p>
+        <h3 className="mt-0.5 text-[15px] font-bold text-[#111110]">활동 목표 달성 랭킹</h3>
+        <p className="text-[11px] text-[#1a1a1a]/35">5지표(리드·고객·확정·솔루션·방문) 합산 달성률 · 규칙 기반</p>
+      </div>
+      <div className="divide-y divide-[#f0f0ec]">
+        {ranked.slice(0, 10).map((row, index) => (
+          <div key={`${row.member}-${index}`} className="flex items-center gap-3 py-2">
+            <span
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[12px] font-bold ${
+                index === 0
+                  ? "bg-[#084734] text-white"
+                  : index <= 2
+                    ? "bg-[#ECFDF5] text-[#084734]"
+                    : "bg-[#fafaf8] text-[#1a1a1a]/50"
+              }`}
+            >
+              {index + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-semibold text-[#111110]">
+                {row.member}
+                {row.team ? <span className="ml-1.5 text-[11px] font-medium text-[#1a1a1a]/40">{row.team}</span> : null}
+              </p>
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[#f0f0ec]">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.max(4, Math.round((row.ratio / max) * 100))}%`,
+                    backgroundColor: row.ratio >= 0.7 ? "#084734" : "#B85C33",
+                  }}
+                />
+              </div>
+            </div>
+            <span
+              className={`shrink-0 text-[13px] font-bold tabular-nums ${row.ratio >= 0.7 ? "text-[#111110]" : "text-[#B85C33]"}`}
+            >
+              {Math.round(row.ratio * 100)}%
+            </span>
+          </div>
+        ))}
       </div>
     </section>
   )
@@ -606,7 +835,7 @@ function CrmOperationsDashboard({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em]">인식 매출</p>
               </div>
               <p className="mt-2 text-4xl font-bold tracking-[-0.045em] text-[#084734] sm:text-[42px]">
-                {loadingValue ?? formatCurrency(revenue?.deliveryTotalAmount)}
+                {loadingValue ?? formatKRWAbbrev(revenue?.deliveryTotalAmount)}
               </p>
               {/* 오더는 거의 확정 매출 — Delivery와 같은 급의 서브 히어로 (USD 네이티브) */}
               <div className="mt-4 border-t border-[#084734]/10 pt-3">
@@ -624,16 +853,16 @@ function CrmOperationsDashboard({
                 </p>
               </div>
               <div className="mt-3 grid gap-2 text-[12px] text-[#1a1a1a]/45 sm:grid-cols-2">
-                <span>견적 {loadingValue ?? formatCurrency(revenue?.acceptedQuoteAmount)}</span>
-                <span>동기화 매출 {loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}</span>
+                <span>견적 {loadingValue ?? formatKRWAbbrev(revenue?.acceptedQuoteAmount)}</span>
+                <span>동기화 매출 {loadingValue ?? formatCNY(neoKpis?.salesAmountMonth)}</span>
                 <span>확정 임박 {loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}</span>
-                <span>계약 {loadingValue ?? formatCurrency(revenue?.contractedAmount)}</span>
-                <span>인식 매출 {loadingValue ?? formatCurrency(revenue?.deliveryTotalAmount)}</span>
-                <span>동기화 수금 {loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}</span>
+                <span>계약 {loadingValue ?? formatKRWAbbrev(revenue?.contractedAmount)}</span>
+                <span>인식 매출 {loadingValue ?? formatKRWAbbrev(revenue?.deliveryTotalAmount)}</span>
+                <span>동기화 수금 {loadingValue ?? formatCNY(neoKpis?.collectionAmountMonth)}</span>
                 <span className={(revenue?.outstandingAmount ?? 0) > 0 ? "font-semibold text-[#B85C33]" : ""}>
-                  미수 {loadingValue ?? formatCurrency(revenue?.outstandingAmount)}
+                  미수 {loadingValue ?? formatKRWAbbrev(revenue?.outstandingAmount)}
                 </span>
-                <span>수납 {loadingValue ?? formatCurrency(revenue?.paidAmount)}</span>
+                <span>수납 {loadingValue ?? formatKRWAbbrev(revenue?.paidAmount)}</span>
               </div>
             </div>
 
@@ -641,7 +870,7 @@ function CrmOperationsDashboard({
               <CrmMetricTile
                 icon={<FileText className="h-4 w-4" />}
                 label="견적"
-                value={loadingValue ?? formatCurrency(revenue?.acceptedQuoteAmount)}
+                value={loadingValue ?? formatKRWAbbrev(revenue?.acceptedQuoteAmount)}
                 hint={`견적서 ${loadingValue ?? formatNumber(kpis?.quoteDocumentCount)}건`}
               />
               <CrmMetricTile
@@ -654,14 +883,14 @@ function CrmOperationsDashboard({
               <CrmMetricTile
                 icon={<TrendingUp className="h-4 w-4" />}
                 label="동기화 매출"
-                value={loadingValue ?? formatCurrency(neoKpis?.salesAmountMonth)}
+                value={loadingValue ?? formatCNY(neoKpis?.salesAmountMonth)}
                 hint={`본사 CRM ${loadingValue ?? formatNumber(neoKpis?.salesCountMonth)}건 · actual`}
                 tone="text-[#084734]"
               />
               <CrmMetricTile
                 icon={<ReceiptText className="h-4 w-4" />}
                 label="동기화 수금"
-                value={loadingValue ?? formatCurrency(neoKpis?.collectionAmountMonth)}
+                value={loadingValue ?? formatCNY(neoKpis?.collectionAmountMonth)}
                 hint={`외부 CRM ${loadingValue ?? formatNumber(neoKpis?.collectionCountMonth)}건 · current month`}
               />
               <CrmMetricTile
@@ -673,7 +902,7 @@ function CrmOperationsDashboard({
               <CrmMetricTile
                 icon={<Handshake className="h-4 w-4" />}
                 label="계약"
-                value={loadingValue ?? formatCurrency(revenue?.contractedAmount)}
+                value={loadingValue ?? formatKRWAbbrev(revenue?.contractedAmount)}
                 hint={`활성 거래 ${loadingValue ?? formatNumber(kpis?.activeDealCount)}건`}
               />
               <CrmMetricTile
@@ -718,7 +947,7 @@ function CrmOperationsDashboard({
               <span className="text-[12px] text-[#1a1a1a]/45">
                 미수 합계{" "}
                 <b className={`text-[15px] font-bold ${(revenue?.outstandingAmount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
-                  {loadingValue ?? formatCurrency(revenue?.outstandingAmount)}
+                  {loadingValue ?? formatKRWAbbrev(revenue?.outstandingAmount)}
                 </b>
               </span>
             </div>
@@ -772,7 +1001,7 @@ function CrmOperationsDashboard({
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-[12px] font-semibold text-[#111110]">
-                      {log.amount == null ? log.status ?? "-" : formatCurrency(log.amount)}
+                      {log.amount == null ? log.status ?? "-" : formatLogAmount(log.kind, log.amount)}
                     </p>
                     <p className="text-[11px] text-[#1a1a1a]/35">{formatOverviewDate(log.occurredAt)}</p>
                   </div>
@@ -795,11 +1024,12 @@ export default function CrmPage() {
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [drawerTarget, setDrawerTarget] = useState<{ key: string; name: string } | null>(null)
-  const [sidebarTab, setSidebarTab] = useState<"priority" | "week">("priority")
   const [recentCustomers, setRecentCustomers] = useState<RecentCustomer[]>([])
   const [leadModalOpen, setLeadModalOpen] = useState(false)
   // 팀 성과·KPI 보고는 보고성 블록 — 기본 접힘으로 첫 화면을 작업대에 집중시킨다.
   const [teamReportOpen, setTeamReportOpen] = useState(false)
+  // 매출 상세(견적/계약/수금 분해)는 상단 KPI 히어로와 중복 — 기본 접힘, 필요 시 펼침.
+  const [revenueDetailOpen, setRevenueDetailOpen] = useState(false)
 
   // 고객 바로 가기 — 최근 본 고객(로컬). 드로어 열고 닫을 때마다 갱신.
   useEffect(() => {
@@ -957,6 +1187,9 @@ export default function CrmPage() {
         </div>
       </div>
 
+      {/* 코크핏 KPI 히어로 — 흩어진 핵심 지표를 상단 한 밴드로 (B 코크핏 이식) */}
+      <CrmCockpitHero overview={crmOverview} loading={crmOverviewLoading} />
+
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0">
       {/* 고객 검색 — 떠올린 고객을 바로 카드로 (canon §4.2) */}
@@ -975,7 +1208,16 @@ export default function CrmPage() {
             setSearchQuery("")
           }}
         />
-        <p className="mt-1.5 text-[11px] text-[#1a1a1a]/35">학원명·이름·전화로 검색해 바로 고객 카드를 엽니다.</p>
+        <p className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-[#1a1a1a]/35">
+          학원명·이름·전화로 검색해 바로 고객 카드를 엽니다.
+          <span className="inline-flex items-center gap-1">
+            어디서든
+            <kbd className="rounded border border-[#e8e8e4] bg-[#fafaf8] px-1 py-0.5 text-[10px] font-semibold text-[#1a1a1a]/45">
+              ⌘K
+            </kbd>
+            로 빠른 이동·검색
+          </span>
+        </p>
         {recentCustomers.length > 0 ? (
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5">
             <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]/30">바로 가기</span>
@@ -994,15 +1236,18 @@ export default function CrmPage() {
         ) : null}
       </section>
 
-      {/* 지금 처리 — 오늘 우선순위 액션 밴드 (리드 보드 딥링크) */}
+      {/* 우선순위 작업대 — A 워크스페이스 이식: 3소스 룰베이스 큐를 본문 메인으로 승격 */}
+      <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} />
+
+      {/* 리드·일정 빠른 지표 — 집계 딥링크(작업대와 별개, 한눈 카운트) */}
       <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Action Queue</p>
-            <h2 className="mt-1 text-[18px] font-bold text-[#111110]">지금 처리</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Quick Stats</p>
+            <h2 className="mt-1 text-[18px] font-bold text-[#111110]">리드·일정 요약</h2>
           </div>
           <span className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[12px] font-medium text-[#1a1a1a]/55">
-            오늘 우선순위
+            딥링크
           </span>
         </div>
 
@@ -1102,40 +1347,74 @@ export default function CrmPage() {
         ) : null}
       </section>
 
-      <CrmOperationsDashboard
-        part="revenue"
-        overview={crmOverview}
-        loading={crmOverviewLoading}
-        error={crmOverviewError}
-      />
+      {/* 매출 상세 — 상단 KPI 히어로와 중복이라 기본 접힘(견적/계약/수금 분해는 펼쳐 확인) */}
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={() => setRevenueDetailOpen((value) => !value)}
+          className="flex w-full items-center justify-between gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3 transition-colors hover:bg-[#fafaf8]"
+          aria-expanded={revenueDetailOpen}
+        >
+          <span className="flex items-center gap-2">
+            <CircleDollarSign className="h-4 w-4 text-[#1a1a1a]/40" />
+            <span className="text-[14px] font-bold text-[#111110]">매출 상세 · 견적 / 계약 / 수금</span>
+            <span className="hidden text-[11px] text-[#1a1a1a]/35 sm:inline">상단 KPI 분해 · 통화별</span>
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${revenueDetailOpen ? "" : "-rotate-90"}`}
+          />
+        </button>
+        {revenueDetailOpen ? (
+          <div className="mt-3">
+            <CrmOperationsDashboard
+              part="revenue"
+              overview={crmOverview}
+              loading={crmOverviewLoading}
+              error={crmOverviewError}
+            />
+          </div>
+        ) : null}
+      </div>
           <CrmCoverageStrip />
         </div>
 
         <aside className="flex flex-col gap-4">
+          {/* 이번 주 할 일 — 작업대(본문)와 역할 분리: aside는 주간 일정·버킷 조망 */}
+          <CrmWeekAheadPanel compact />
+
+          {/* 설치·방문 일정 — upcomingThisWeek(install|visit) 상위 3건 */}
           <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-            <div className="mb-3 flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
-              {(
-                [
-                  { key: "priority", label: "오늘 연락" },
-                  { key: "week", label: "이번 주 할 일" },
-                ] as const
-              ).map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setSidebarTab(t.key)}
-                  className={`h-8 flex-1 rounded-md px-3 text-[12px] font-semibold transition-colors ${
-                    sidebarTab === t.key ? "bg-[#111110] text-white" : "text-[#1a1a1a]/55 hover:text-[#111110]"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
+            <div className="mb-3 flex items-center gap-1.5 text-[#1a1a1a]/45">
+              <Calendar className="h-3.5 w-3.5" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.08em]">설치·방문 일정</p>
             </div>
-            {sidebarTab === "priority" ? (
-              <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} compact embedded />
+            {(crmOverview?.business.upcomingThisWeek.items.length ?? 0) === 0 ? (
+              <p className="rounded-xl bg-[#fafaf8] px-3 py-4 text-center text-[12px] text-[#1a1a1a]/35">
+                {crmOverviewLoading && !crmOverview ? "불러오는 중..." : "예정된 설치·방문이 없습니다."}
+              </p>
             ) : (
-              <CrmWeekAheadPanel compact embedded />
+              <ul className="space-y-2">
+                {crmOverview?.business.upcomingThisWeek.items.slice(0, 3).map((item) => {
+                  const parts = monthDayParts(item.startsAt)
+                  return (
+                    <li key={item.id}>
+                      <Link href={item.href} className="flex items-center gap-2.5 transition-colors hover:opacity-80">
+                        <span className="flex h-9 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-[#ECFDF5] text-[#084734]">
+                          <span className="text-[9px] font-semibold leading-none">{parts.month}</span>
+                          <span className="text-[13px] font-bold leading-tight">{parts.day}</span>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[12px] font-semibold text-[#111110]">{item.title}</p>
+                          <p className="truncate text-[11px] text-[#1a1a1a]/45">
+                            {item.kind === "install" ? "설치" : "방문"}
+                            {item.customerName ? ` · ${item.customerName}` : ""}
+                          </p>
+                        </div>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
             )}
           </section>
         </aside>
@@ -1143,9 +1422,12 @@ export default function CrmPage() {
 
       {/* 성과 분석 — CRM 매출 데이터 기준 팀/개인/월 (지연 로드, 로딩/빈/에러 내부 처리) */}
       <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-[15px] font-bold text-[#111110]">성과 분석 · 팀/개인</h2>
-          <span className="text-[11px] text-[#1a1a1a]/35">CRM 매출 데이터 기준 · 최근 6개월</span>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-[15px] font-bold text-[#111110]">성과 분석 · 팀/개인</h2>
+            <p className="text-[11px] text-[#1a1a1a]/35">CRM 매출(¥, REV 동기화) 기준 · 최근 6개월</p>
+          </div>
+          <ActivityGoalGauge branchKpis={branchKpis} />
         </div>
         <CrmPerformanceCharts />
       </section>
@@ -1187,6 +1469,7 @@ export default function CrmPage() {
               loading={pageRefreshing}
               branchError={branchKpisError}
             />
+            <CrmRankingBoard branchKpis={branchKpis} />
           </div>
         ) : null}
       </section>

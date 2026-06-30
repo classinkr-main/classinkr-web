@@ -22,3 +22,27 @@ export function formatUSD(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "-"
   return `$${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
 }
+
+/**
+ * 자체 집계 원화 표기(₩7,360만 / ₩1.2억). 만 미만은 ₩ 원단위.
+ * ClassIn 자체 DB(인식매출·견적·계약·미수 등) 전용 — NEO/REV(CNY) 값에는 절대 쓰지 말 것(formatCNY 사용).
+ */
+export function formatKRWAbbrev(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "-"
+  const abs = Math.abs(value)
+  if (abs >= 100_000_000) return `₩${(value / 100_000_000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}억`
+  if (abs >= 10_000) return `₩${Math.round(value / 10_000).toLocaleString("ko-KR")}만`
+  return `₩${value.toLocaleString("ko-KR")}`
+}
+
+export type CrmCurrency = "KRW" | "USD" | "CNY"
+
+/**
+ * KPI 카드·타일의 통화 칩 메타. 서로 다른 통화(₩ 자체집계 / $ 오더 / ¥ NEO 동기화)를
+ * 한 화면에 인접 배치할 때 기호·출처를 시각적으로 분리해 합산 오독을 막는다.
+ */
+export const CRM_CURRENCY_BADGE: Record<CrmCurrency, { symbol: string; label: string }> = {
+  KRW: { symbol: "₩", label: "자체 집계" },
+  USD: { symbol: "$", label: "NEO 오더" },
+  CNY: { symbol: "¥", label: "NEO 동기화" },
+}

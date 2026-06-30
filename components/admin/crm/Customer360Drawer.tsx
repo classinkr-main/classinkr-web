@@ -22,7 +22,6 @@ import {
   Phone,
   PhoneCall,
   Plus,
-  Receipt,
   RefreshCw,
   Sparkles,
   StickyNote,
@@ -32,12 +31,13 @@ import {
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
-import { formatCNY, formatUSD } from "@/lib/crm/money-format"
+import { formatCNY, formatUSD, CRM_CURRENCY_BADGE, type CrmCurrency } from "@/lib/crm/money-format"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import CrmCustomerFlags from "./CrmCustomerFlags"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
+import { computeCustomerHealth, HEALTH_BAND_STYLE } from "@/lib/crm/customer-health"
 import { CS_MOTIONS, type CsMotion } from "@/lib/crm/cs-motions"
-import type { Customer360, Customer360Severity } from "@/lib/repositories/crm-customer-360"
+import type { Customer360 } from "@/lib/repositories/crm-customer-360"
 import type { CrmDealStage } from "@/lib/repositories/crm-deals"
 import type { CrmTaskType } from "@/lib/repositories/crm-tasks"
 
@@ -65,20 +65,6 @@ interface Props {
   customerKey: string | null
   name?: string | null
   onClose: () => void
-}
-
-const SEVERITY_CLASS: Record<Customer360Severity, string> = {
-  critical: "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]",
-  high: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
-  medium: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
-  low: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
-}
-
-const SEVERITY_LABEL: Record<Customer360Severity, string> = {
-  critical: "긴급",
-  high: "높음",
-  medium: "주의",
-  low: "안정",
 }
 
 const SERVICE_RISK_LABEL: Record<string, string> = {
@@ -170,47 +156,31 @@ function formatFunnelMoney(amount: number | null, currency: "KRW" | "USD" | "CNY
   return formatMoney(amount, "KRW")
 }
 
-// 견적/오더/수납 진행 — 공식 원천(NEO orders/collections) + 작업 캐시(Deal Lite)에서 파생.
-function FunnelRow({
-  icon,
+// 견적/오더/수납/미수 4타일 — 단계별 통화가 달라(₩/$/¥) 타일마다 통화 칩을 강제해 합산 오독을 막는다.
+function MoneyTile({
   label,
+  currency,
   amount,
-  currency = "KRW",
   meta,
-  state,
+  warn = false,
 }: {
-  icon: React.ReactNode
   label: string
+  currency: CrmCurrency
   amount: number | null
-  currency?: "KRW" | "USD" | "CNY"
-  meta?: string | null
-  state: "done" | "warn" | "pending"
+  meta?: string
+  warn?: boolean
 }) {
-  const mark =
-    state === "done" ? (
-      <CheckCircle2 className="h-4 w-4 text-[#084734]" />
-    ) : state === "warn" ? (
-      <AlertTriangle className="h-4 w-4 text-[#B85C33]" />
-    ) : (
-      <span className="h-2 w-2 rounded-full bg-[#d8d8d2]" />
-    )
+  const badge = CRM_CURRENCY_BADGE[currency]
   return (
-    <div className="flex items-center gap-3">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#fafaf8] text-[#1a1a1a]/45">
-        {mark}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[#111110]">
-          <span className="text-[#1a1a1a]/40">{icon}</span>
-          {label}
-        </div>
-        {meta ? (
-          <p className={`text-[11px] ${state === "warn" ? "text-[#B85C33]" : "text-[#1a1a1a]/40"}`}>{meta}</p>
-        ) : null}
+    <div className={`rounded-xl px-3 py-2.5 ${warn ? "bg-[#FEF3EE]" : "bg-[#fafaf8]"}`}>
+      <div className="flex items-center justify-between gap-1">
+        <span className={`text-[11px] font-semibold ${warn ? "text-[#B85C33]" : "text-[#1a1a1a]/45"}`}>{label}</span>
+        <span className="rounded-full bg-white px-1 py-0.5 text-[9px] font-bold text-[#1a1a1a]/40">{badge.symbol}</span>
       </div>
-      <span className={`shrink-0 text-[13px] font-bold ${state === "warn" ? "text-[#B85C33]" : "text-[#111110]"}`}>
+      <p className={`mt-1 text-[15px] font-bold ${warn ? "text-[#B85C33]" : "text-[#111110]"}`}>
         {formatFunnelMoney(amount, currency)}
-      </span>
+      </p>
+      {meta ? <p className="mt-0.5 text-[10px] text-[#1a1a1a]/35">{meta}</p> : null}
     </div>
   )
 }
@@ -644,6 +614,43 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     return { title, reason: reasons.slice(0, 3).join(" · ") || "우선순위 신호 기준 추천" }
   }, [data, header])
 
+  // 고객 요약 — LLM 아님. 위치·단계·위험·만료·미수 신호를 규칙으로 합성한 한 문장(Derived).
+  const derivedSummary = useMemo(() => {
+    if (!data?.found || !header) return null
+    const segs: string[] = []
+    if (targetType === "neo_account") segs.push(`${header.region ?? "지역 미상"} 소재 고객`)
+    else segs.push(`${header.statusLabel ?? "리드"} 단계`)
+    if (header.ownerName) segs.push(`담당 ${header.ownerName}`)
+    if (data.risk?.severity === "critical") segs.push("이탈 위험 긴급")
+    else if (data.risk?.severity === "high") segs.push("이탈 위험 높음")
+    if (data.serviceRisk && (data.serviceRisk.level === "urgent" || data.serviceRisk.level === "soon"))
+      segs.push("계약 만료 임박")
+    if ((money?.totalBalance ?? 0) > 0) segs.push(`미수 잔액 ${formatCNY(money?.totalBalance ?? null)}`)
+    if (header.priorityReason) segs.push(header.priorityReason)
+    return segs.length > 0 ? segs.join(" · ") : null
+  }, [data, header, targetType, money])
+
+  // 최근접 만료까지 일수 — 건강도 산식 입력.
+  const daysToExpire = useMemo(() => {
+    const iso = data?.risk?.nearestExpireAt
+    if (!iso) return null
+    const due = new Date(iso)
+    if (Number.isNaN(due.getTime())) return null
+    return Math.round((due.getTime() - Date.now()) / 86_400_000)
+  }, [data])
+
+  // 고객 건강도 — 규칙 기반 단일 점수(lib/crm/customer-health SSOT). 헤더 배지로 노출.
+  const health = useMemo(() => {
+    if (!data?.found) return null
+    return computeCustomerHealth({
+      riskSeverity: data.risk?.severity ?? null,
+      serviceLevel: data.serviceRisk?.level ?? null,
+      hasOutstanding: (money?.totalBalance ?? 0) > 0,
+      daysToExpire,
+      lastContactDays: null,
+    })
+  }, [data, money, daysToExpire])
+
   const handleRunRecommendation = useCallback(async () => {
     if (!recommendation || !customerKey) return
     setActingId("rec")
@@ -755,9 +762,17 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   {header.statusLabel}
                 </span>
               ) : null}
-              {data?.risk ? (
-                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${SEVERITY_CLASS[data.risk.severity]}`}>
-                  리스크 {SEVERITY_LABEL[data.risk.severity]}
+              {health ? (
+                <span
+                  className="rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+                  style={{
+                    color: HEALTH_BAND_STYLE[health.band].fc,
+                    backgroundColor: HEALTH_BAND_STYLE[health.band].bg,
+                    borderColor: HEALTH_BAND_STYLE[health.band].bd,
+                  }}
+                  title="규칙 기반 건강도 점수(0~100) — 리스크·서비스 위험·미수·만료 신호 합성"
+                >
+                  건강도 {health.score} · {health.label}
                 </span>
               ) : null}
               {headerFlags.length > 0 ? <CrmCustomerFlags flags={headerFlags} max={5} /> : null}
@@ -843,6 +858,17 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{data.health.warnings.join(" ")}</span>
             </div>
+          ) : null}
+
+          {/* 고객 요약 — 규칙 기반 한 문장(Derived). AI/LLM 아님 — 신호 합성. */}
+          {derivedSummary ? (
+            <section className="rounded-2xl border border-[#D7EBDD] bg-[#ECFDF5] p-4">
+              <div className="mb-1 flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-[#084734]" />
+                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#084734]">고객 요약 · 규칙 기반</span>
+              </div>
+              <p className="text-[13px] leading-relaxed text-[#1d1d1b]">{derivedSummary}</p>
+            </section>
           ) : null}
 
           {/* 라벨 — 수기 분류(시스템 파생 플래그와 별개) */}
@@ -1032,60 +1058,32 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                 <p className="text-[12px] text-[#1a1a1a]/40">리드 단계 · 연결된 딜 없음</p>
               ) : moneyVisible || quoteTotal != null ? (
                 <div className="space-y-3">
-                  <div className="space-y-2">
-                    <FunnelRow
-                      icon={<CircleDollarSign className="h-3.5 w-3.5" />}
+                  {/* 견적(₩)→오더($)→수납(¥)→미수·잔액(¥) 4타일. 통화가 단계별로 달라 타일마다 통화 칩 강제. */}
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <MoneyTile
                       label="견적"
+                      currency="KRW"
                       amount={quoteTotal}
-                      meta={quoteTotal != null ? `Deal Lite ${data.deals.summary.total}건 · 작업 캐시` : "연결된 견적 없음"}
-                      state={quoteTotal != null && quoteTotal > 0 ? "done" : "pending"}
+                      meta={quoteTotal != null ? `Deal Lite ${data.deals.summary.total}건` : "연결 없음"}
                     />
-                    <ArrowRight className="ml-2.5 h-3.5 w-3.5 rotate-90 text-[#d8d8d2]" />
-                    <FunnelRow
-                      icon={<Receipt className="h-3.5 w-3.5" />}
-                      label="오더"
-                      amount={orderTotal}
-                      currency="USD"
-                      meta={orderTotal != null ? "NEO 오더 · 공식 원천" : "오더 없음"}
-                      state={orderTotal != null && orderTotal > 0 ? "done" : "pending"}
-                    />
-                    <ArrowRight className="ml-2.5 h-3.5 w-3.5 rotate-90 text-[#d8d8d2]" />
-                    <FunnelRow
-                      icon={<Coins className="h-3.5 w-3.5" />}
-                      label="수납"
-                      amount={collectionTotal}
+                    <MoneyTile label="오더" currency="USD" amount={orderTotal} meta={orderTotal != null ? "NEO 공식" : "오더 없음"} />
+                    <MoneyTile label="수납" currency="CNY" amount={collectionTotal} meta={collectionTotal != null ? "NEO 공식" : "기록 없음"} />
+                    <MoneyTile
+                      label="미수 · 잔액"
                       currency="CNY"
-                      meta={
-                        outstanding != null && outstanding > 0
-                          ? `미수 ${formatUSD(outstanding)}`
-                          : collectionTotal != null
-                            ? "NEO 수납 · 공식 원천"
-                            : "수납 기록 없음"
-                      }
-                      state={
-                        outstanding != null && outstanding > 0
-                          ? "warn"
-                          : collectionTotal != null && collectionTotal > 0
-                            ? "done"
-                            : "pending"
-                      }
+                      amount={money?.totalBalance ?? null}
+                      meta="NEO 잔액"
+                      warn={(money?.totalBalance ?? 0) > 0}
                     />
-                    {(data.serviceRisk?.level === "urgent" || data.serviceRisk?.level === "soon") &&
-                    orderTotal != null &&
-                    orderTotal > 0 ? (
-                      <>
-                        <ArrowRight className="ml-2.5 h-3.5 w-3.5 rotate-90 text-[#d8d8d2]" />
-                        <FunnelRow
-                          icon={<Sparkles className="h-3.5 w-3.5" />}
-                          label="갱신 예상"
-                          amount={orderTotal}
-                          currency="USD"
-                          meta="직전 계약 기준 추정 · 만료 임박(파생)"
-                          state="pending"
-                        />
-                      </>
-                    ) : null}
                   </div>
+                  {(data.serviceRisk?.level === "urgent" || data.serviceRisk?.level === "soon") &&
+                  orderTotal != null &&
+                  orderTotal > 0 ? (
+                    <div className="flex items-center gap-1.5 rounded-lg bg-[#FBF1E0] px-2.5 py-1.5 text-[11px] font-medium text-[#7A520F]">
+                      <Sparkles className="h-3 w-3 shrink-0" />
+                      갱신 예상 {formatUSD(orderTotal)} · 직전 계약 기준 추정(만료 임박)
+                    </div>
+                  ) : null}
 
                   {/* 수금 · 성과 합계 — 둘 다 CNY(¥). 수금은 위 funnel 합계와 동일. */}
                   <div className="grid grid-cols-2 gap-2 border-t border-[#f0f0ec] pt-3">

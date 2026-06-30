@@ -231,6 +231,9 @@ export default function CrmPriorityQueuePanel({
               ClassIn Operation
             </p>
             <h2 className="mt-1 text-[18px] font-bold text-[#111110]">고객 운영 우선순위</h2>
+            <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+              규칙 기반 우선순위 · 응답지연·만료·미수 신호 가중<span className="text-[#1a1a1a]/30">(Derived)</span>
+            </p>
           </div>
         )}
         <div className={`flex flex-col gap-2 ${compact || embedded ? "" : "sm:flex-row sm:items-center"}`}>
