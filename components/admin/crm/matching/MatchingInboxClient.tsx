@@ -42,8 +42,8 @@ const SOURCE_LABEL: Record<CrmMatchingSourceSystem, string> = {
 
 const SOURCE_TONE: Record<CrmMatchingSourceSystem, string> = {
   branch_rev_sheet: "border-amber-100 bg-amber-50 text-amber-700",
-  xiaoshouyi: "border-sky-100 bg-sky-50 text-sky-700",
-  lead: "border-emerald-100 bg-emerald-50 text-emerald-700",
+  xiaoshouyi: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
+  lead: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
 }
 
 const STATUS_LABEL: Record<CrmSourceLinkStatus, string> = {
@@ -54,8 +54,8 @@ const STATUS_LABEL: Record<CrmSourceLinkStatus, string> = {
 }
 
 const STATUS_TONE: Record<CrmSourceLinkStatus, string> = {
-  candidate: "border-sky-100 bg-sky-50 text-sky-700",
-  confirmed: "border-emerald-100 bg-emerald-50 text-emerald-700",
+  candidate: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
+  confirmed: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
   rejected: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/45",
   stale: "border-amber-100 bg-amber-50 text-amber-700",
 }
@@ -444,7 +444,7 @@ export default function MatchingInboxClient() {
 
       {error ? <div className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">{error}</div> : null}
       {notice ? (
-        <div className="mb-6 border-l-2 border-emerald-200 pl-3 text-[13px] text-emerald-700">{notice}</div>
+        <div className="mb-6 border-l-2 border-[#D7EBDD] pl-3 text-[13px] text-[#084734]">{notice}</div>
       ) : null}
       {(data?.warnings ?? []).map((warning) => (
         <div key={warning} className="mb-6 border-l-2 border-amber-200 pl-3 text-[13px] text-amber-800">
@@ -524,7 +524,7 @@ export default function MatchingInboxClient() {
           type="button"
           onClick={() => void bulkUpdate(Array.from(selectedIds), "confirm")}
           disabled={bulkPending || selectedIds.size === 0}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 text-[12px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2.5 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
         >
           {bulkPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
           선택 {formatNumber(selectedIds.size)}건 확정
@@ -706,7 +706,7 @@ export default function MatchingInboxClient() {
                             type="button"
                             onClick={() => void updateSourceLink(row.linkId as string, "confirm")}
                             disabled={pendingLinkId === row.linkId}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
                             title="확정"
                             aria-label="확정"
                           >

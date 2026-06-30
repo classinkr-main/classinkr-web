@@ -3,7 +3,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { AlertTriangle, Building2, ChevronLeft, ChevronRight, ExternalLink, Filter, PhoneCall, RefreshCw, Search, UserPlus, UserRound } from "lucide-react"
+import { AlertTriangle, Building2, ChevronLeft, ChevronRight, ExternalLink, Filter, PhoneCall, RefreshCw, Search, Tag, UserPlus, UserRound } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import type {
@@ -46,6 +46,7 @@ interface CrmUnifiedCustomers {
     highPriorityCount: number
     ownerCount: number
     viewCounts?: Record<string, number>
+    availableTags?: string[]
   }
   pagination: {
     limit: number
@@ -111,6 +112,7 @@ function listUrl(input: {
   lifecycle: LifecycleFilter
   owner: string
   view: SavedViewFilter
+  tag: string
   offset: number
 }) {
   const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(input.offset) })
@@ -119,6 +121,7 @@ function listUrl(input: {
   if (input.lifecycle !== "all") params.set("lifecycle", input.lifecycle)
   if (input.view !== "all") params.set("view", input.view)
   if (input.owner) params.set("owner", input.owner)
+  if (input.tag) params.set("tag", input.tag)
   return `/api/admin/crm/customers/unified?${params.toString()}`
 }
 
@@ -141,6 +144,23 @@ function scoreTone(score: number) {
 
 function normalizeText(value: string | null | undefined) {
   return value?.trim().toLowerCase() ?? ""
+}
+
+function TagChips({ tags }: { tags: string[] }) {
+  if (!tags.length) return null
+  return (
+    <span className="mt-1 flex flex-wrap gap-1">
+      {tags.slice(0, 3).map((tag) => (
+        <span
+          key={tag}
+          className="rounded border border-[#e8e8e4] bg-[#fafaf8] px-1.5 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55"
+        >
+          {tag}
+        </span>
+      ))}
+      {tags.length > 3 ? <span className="self-center text-[10px] text-[#1a1a1a]/35">+{tags.length - 3}</span> : null}
+    </span>
+  )
 }
 
 function sourceBadge(row: CrmUnifiedCustomerRow) {
@@ -189,6 +209,7 @@ export default function CrmUnifiedCustomersClient() {
   const [lifecycle, setLifecycle] = useState<LifecycleFilter>("all")
   const [owner, setOwner] = useState("")
   const [savedView, setSavedView] = useState<SavedViewFilter>("all")
+  const [tagFilter, setTagFilter] = useState("")
   const [data, setData] = useState<CrmUnifiedCustomers | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -252,7 +273,7 @@ export default function CrmUnifiedCustomersClient() {
   const loadPage = useCallback(
     async (offset: number, options?: { force?: boolean; append?: boolean }) => {
       const append = Boolean(options?.append)
-      const url = listUrl({ query: deferredQuery, source, lifecycle, owner, view: savedView, offset })
+      const url = listUrl({ query: deferredQuery, source, lifecycle, owner, view: savedView, tag: tagFilter, offset })
       const cached = !append && !options?.force ? getCachedAdminJson<CrmUnifiedCustomers>(url, { cacheKey: url }) : null
       const requestId = ++requestSeq.current
 
@@ -286,7 +307,7 @@ export default function CrmUnifiedCustomersClient() {
         }
       }
     },
-    [deferredQuery, source, lifecycle, owner, savedView]
+    [deferredQuery, source, lifecycle, owner, savedView, tagFilter]
   )
 
   useEffect(() => {
@@ -480,6 +501,41 @@ export default function CrmUnifiedCustomersClient() {
             })}
           </div>
 
+          {data?.summary.availableTags?.length ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="inline-flex h-8 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
+                <Tag className="h-3.5 w-3.5" />
+                라벨
+              </span>
+              {data.summary.availableTags.map((tag) => {
+                const isActive = tagFilter === tag
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setTagFilter((current) => (current === tag ? "" : tag))}
+                    className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
+                      isActive
+                        ? "border-[#111110] bg-[#111110] text-white"
+                        : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#c8c8c4] hover:text-[#111110]"
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                )
+              })}
+              {tagFilter ? (
+                <button
+                  type="button"
+                  onClick={() => setTagFilter("")}
+                  className="h-8 px-2 text-[12px] font-medium text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
+                >
+                  초기화
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
           {data ? (
             <div className="mt-4 grid gap-2 sm:grid-cols-4">
               <div className="rounded-xl bg-[#fafaf8] p-3">
@@ -588,6 +644,7 @@ export default function CrmUnifiedCustomersClient() {
                           </button>
                           <CrmContactValue value={row.contact} className="mt-0.5" />
                           <CrmCustomerFlags flags={rowToFlags(row)} max={4} className="mt-1" />
+                          <TagChips tags={row.tags} />
                         </div>
                         <Link
                           href={`/admin/crm/customers/${encodeURIComponent(row.key)}`}
@@ -638,6 +695,7 @@ export default function CrmUnifiedCustomersClient() {
                       <p className="truncate text-[14px] font-bold text-[#111110]">{row.name}</p>
                       <CrmContactValue value={row.contact} className="pointer-events-auto mt-0.5" />
                       <CrmCustomerFlags flags={rowToFlags(row)} max={4} className="mt-1.5" />
+                      <TagChips tags={row.tags} />
                     </div>
                     <span className={`text-[20px] font-bold tabular-nums ${scoreTone(row.score)}`}>{row.score}</span>
                   </div>

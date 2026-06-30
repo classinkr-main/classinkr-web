@@ -41,14 +41,15 @@ type AnalyticsTab =
   | "flow"
   | "tracking"
 
+// "홈페이지 흐름"(flow)·"추적 현황"(tracking)은 /admin/traffic와 중복이라 탭바에서 제외한다.
+// activeTab은 이 배열로만 검증되므로(아래 488행) 두 탭은 도달 불가가 되고, Analytics는 비즈니스 분석에 집중한다.
+// 해당 렌더 블록(1600행대~)은 후속 정리 대상이며, 공유 상태(visitorStats 등)는 상단 KPI에서 계속 쓰이므로 남겨둔다.
 const ANALYTICS_TABS: Array<{ key: AnalyticsTab; label: string }> = [
   { key: "leads", label: "리드" },
   { key: "sources", label: "소스" },
   { key: "content", label: "콘텐츠" },
   { key: "campaigns", label: "이메일 캠페인" },
   { key: "events", label: "행사 퍼널" },
-  { key: "flow", label: "홈페이지 흐름" },
-  { key: "tracking", label: "추적 현황" },
 ]
 
 interface ClientEventCounts {

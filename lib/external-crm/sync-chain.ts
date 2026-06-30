@@ -9,9 +9,15 @@ import {
   type GenerateExternalCrmLinkCandidatesResult,
   generateExternalCrmLinkCandidates,
 } from "@/lib/repositories/crm-source-links"
+import {
+  type RefreshCrmNeoCustomerSnapshotsResult,
+  refreshCrmNeoCustomerSnapshotsFromExternalRecords,
+} from "@/lib/repositories/crm-neo-customer-snapshots"
 
 export interface ExternalCrmSyncChainResult {
   sync: ExternalCrmSyncResult
+  neoCustomerSnapshots?: RefreshCrmNeoCustomerSnapshotsResult
+  neoCustomerSnapshotsError?: string
   candidates?: GenerateExternalCrmLinkCandidatesResult
   candidatesError?: string
 }
@@ -75,6 +81,15 @@ export async function runExternalCrmSyncChain(
 ): Promise<ExternalCrmSyncChainResult> {
   const sync = await syncXiaoshouyiSnapshots(trigger, options)
   const result: ExternalCrmSyncChainResult = { sync }
+
+  if (sync.ok && !sync.skipped) {
+    try {
+      result.neoCustomerSnapshots = await refreshCrmNeoCustomerSnapshotsFromExternalRecords()
+    } catch (error) {
+      result.neoCustomerSnapshotsError = error instanceof Error ? error.message : String(error)
+      console.error("[external-crm sync-chain] NEO customer snapshot refresh failed", error)
+    }
+  }
 
   if (sync.ok && !sync.skipped && !sync.cached) {
     try {

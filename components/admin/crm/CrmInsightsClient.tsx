@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, CalendarClock, ExternalLink, RefreshCw, ShieldCheck, TrendingUp } from "lucide-react"
+import { AlertTriangle, CalendarClock, ChevronDown, ExternalLink, FileText, RefreshCw, ShieldCheck, TrendingUp } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import type {
@@ -116,6 +116,8 @@ export default function CrmInsightsClient() {
   const [error, setError] = useState<string | null>(null)
   const [leadKpis, setLeadKpis] = useState<LeadFunnelKpis | null>(null)
   const [channels, setChannels] = useState<LeadChannelStat[]>([])
+  // 주간 리포트(narrative)는 보고성 — 기본 접힘으로 스캔 지표(퍼널·채널·KPI)를 먼저.
+  const [reportOpen, setReportOpen] = useState(false)
 
   const load = useCallback(async (options?: { force?: boolean }) => {
     const cached = getCachedAdminJson<CrmInsights>(INSIGHTS_URL, { cacheKey: INSIGHTS_URL })
@@ -207,7 +209,7 @@ export default function CrmInsightsClient() {
   const businessUnavailable = hasUnavailableSource(data, "business")
 
   return (
-    <div className="min-h-screen bg-[#F6F5F4] px-4 py-6 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#F6F5F4] px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -230,7 +232,21 @@ export default function CrmInsightsClient() {
           </button>
         </div>
 
-        <CrmManagerReportPanel />
+        <button
+          type="button"
+          onClick={() => setReportOpen((value) => !value)}
+          className="mb-4 flex w-full items-center justify-between gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-2.5 transition-colors hover:bg-[#fafaf8]"
+          aria-expanded={reportOpen}
+        >
+          <span className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
+            <FileText className="h-4 w-4 text-[#1a1a1a]/40" />
+            지사장 주간 점검 · 리포트
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${reportOpen ? "" : "-rotate-90"}`}
+          />
+        </button>
+        {reportOpen ? <CrmManagerReportPanel /> : null}
 
         {funnelStages.length > 0 && funnelStages[0].count > 0 ? (
           <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">

@@ -30,8 +30,8 @@ import type {
 } from "@/lib/admin-crm-revenue-types"
 
 const STATUS_TONE: Record<CrmRevenueSourceStatus, string> = {
-  connected: "border-emerald-100 bg-emerald-50 text-emerald-700",
-  configured: "border-sky-100 bg-sky-50 text-sky-700",
+  connected: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
+  configured: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
   not_configured: "border-[#e8e8e4] bg-white text-[#1a1a1a]/45",
   error: "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]",
 }
@@ -53,10 +53,10 @@ const WRITE_STATUS_LABEL: Record<string, string> = {
 }
 
 const WRITE_STATUS_TONE: Record<string, string> = {
-  draft: "border-sky-100 bg-sky-50 text-sky-700",
+  draft: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
   approved: "border-amber-100 bg-amber-50 text-amber-700",
   sent: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/45",
-  succeeded: "border-emerald-100 bg-emerald-50 text-emerald-700",
+  succeeded: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
   failed: "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]",
   cancelled: "border-[#e8e8e4] bg-white text-[#1a1a1a]/35",
 }
@@ -319,7 +319,7 @@ function ReadinessPanel({
 
       {report ? (
         <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px]">
-          <div className="border-t border-emerald-100 pt-2 text-emerald-700">OK {report.summary.ok}</div>
+          <div className="border-t border-[#D7EBDD] pt-2 text-[#084734]">OK {report.summary.ok}</div>
           <div className="border-t border-amber-100 pt-2 text-amber-700">주의 {report.summary.warning}</div>
           <div className="border-t border-[#F6D5C5] pt-2 text-[#B85C33]">막힘 {report.summary.blocked}</div>
         </div>
@@ -1008,7 +1008,7 @@ export default function AdminCrmRevenuePage() {
                                   type="button"
                                   onClick={() => void updateWriteRequest(request.id, "approve")}
                                   disabled={updatingWriteRequestId === approveKey}
-                                  className="inline-flex h-7 items-center gap-1 rounded-lg border border-emerald-100 bg-emerald-50 px-2 text-[11px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50"
+                                  className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
                                 >
                                   {updatingWriteRequestId === approveKey ? (
                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1093,12 +1093,12 @@ export default function AdminCrmRevenuePage() {
                 <p className="text-[12px] font-semibold text-[#111110]">{point.month}</p>
                 <div className="grid gap-2">
                   {[
-                    ["견적", point.quotedAmount, "bg-sky-300"],
+                    ["견적", point.quotedAmount, "bg-[#84827a]"],
                     ["계약", point.contractedAmount, "bg-[#084734]"],
-                    ["입금", point.paidAmount, "bg-emerald-400"],
+                    ["입금", point.paidAmount, "bg-[#084734]"],
                     ["예상", point.expectedAmount, "bg-amber-300"],
                     ["시트 확정", point.sheetConfirmedAmount, "bg-[#065c41]"],
-                    ["시트 임박", point.sheetHighConfidenceAmount, "bg-blue-400"],
+                    ["시트 임박", point.sheetHighConfidenceAmount, "bg-[#b8b6ae]"],
                     ["시트 예상", point.sheetExpectedAmount, "bg-[#6EE7B7]"],
                   ].map(([label, amount, color]) => {
                     const numericAmount = Number(amount)

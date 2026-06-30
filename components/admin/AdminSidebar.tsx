@@ -54,25 +54,38 @@ const ALL_STAFF: SidebarRole[]    = ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER"]
 const STAFF_ADMIN: SidebarRole[]  = ["SUPER_ADMIN", "ADMIN"]
 const STAFF_EDITOR: SidebarRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
 
+// IA 재편(2026-06-29): 직무 흐름대로 섹션 정렬 + 중복/오배치 정리.
+// - 자료 퍼널(/materials)은 리드마그넷의 읽기 facade라 nav에서 제거하고, /lead-magnets를 "자료 퍼널"로 통일해 marketing으로 이동.
+// - 하드웨어 재고는 분석이 아니라 SCM 운영 콘솔이라 system(운영·시스템)으로 이동.
+// - 고객 지원은 docs → chatbot → channel-talk 파이프라인 순서.
 const NAV: NavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "home" },
+
+  // 영업
   { href: "/admin/crm", label: "CRM", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "sales" },
   { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "sales" },
-  { href: "/admin/quotes", label: "견적·문서", icon: <FileText className="h-4 w-4" />, roles: STAFF_ADMIN, section: "sales" },
   { href: "/admin/commercial/board", label: "딜 파이프라인", icon: <LayoutDashboard className="h-4 w-4" />, roles: STAFF_ADMIN, section: "sales", badge: "New" },
+  { href: "/admin/quotes", label: "견적·문서", icon: <FileText className="h-4 w-4" />, roles: STAFF_ADMIN, section: "sales" },
+
+  // 마케팅
   { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
-  { href: "/admin/materials", label: "자료 퍼널", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing", badge: "New" },
   { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing" },
+  { href: "/admin/lead-magnets", label: "자료 퍼널", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing" },
   { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
-  { href: "/admin/lead-magnets", label: "리드마그넷", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs", badge: "Preview" },
-  { href: "/admin/channel-talk", label: "채널톡 상담", icon: <MessageSquare className="h-4 w-4" />, roles: STAFF_ADMIN, section: "cs", badge: "New" },
-  { href: "/admin/chatbot", label: "챗봇 운영", icon: <Bot className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs", badge: "Ops" },
+
+  // 고객 지원 (docs → chatbot → channel-talk)
   { href: "/admin/docs", label: "가이드 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs" },
-  { href: "/admin/branch", label: "KR Team", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
-  { href: "/admin/hardware", label: "하드웨어 재고", icon: <PackageCheck className="h-4 w-4" />, roles: STAFF_ADMIN, section: "performance", badge: "Ops" },
-  { href: "/admin/traffic", label: "방문자/트래픽", icon: <Eye className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
+  { href: "/admin/chatbot", label: "챗봇 운영", icon: <Bot className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs", badge: "Ops" },
+  { href: "/admin/channel-talk", label: "채널톡 상담", icon: <MessageSquare className="h-4 w-4" />, roles: STAFF_ADMIN, section: "cs", badge: "New" },
+
+  // 분석
   { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
+  { href: "/admin/traffic", label: "방문자/트래픽", icon: <Eye className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
+  { href: "/admin/branch", label: "KR Team", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
+
+  // 운영·시스템
   { href: "/admin/ops", label: "Ops Health", icon: <Activity className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "New" },
+  { href: "/admin/hardware", label: "하드웨어 재고", icon: <PackageCheck className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "Ops" },
   { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
   { href: "/admin/users", label: "회원 관리", icon: <UserCog className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
   { href: "/admin/dev", label: "Dev Mode", icon: <Code2 className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "Beta" },
@@ -105,7 +118,7 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/event-metrics",
     "/api/admin/meta/campaigns?datePreset=last_30d&limit=50",
   ],
-  "/admin/materials": [
+  "/admin/lead-magnets": [
     "/api/admin/lead-magnets",
     "/api/admin/lead-magnets/metrics?days=30",
   ],
@@ -150,11 +163,11 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
 
 const SECTION_META: Record<SidebarSection, { label: string; description: string }> = {
   home: { label: "홈", description: "오늘 먼저 볼 운영 허브" },
-  sales: { label: "고객 관리", description: "CRM, 일정, 견적·문서" },
-  marketing: { label: "마케팅 운영", description: "캠페인, 콘텐츠, 공개 행사" },
-  cs: { label: "고객 지원", description: "상담, 가이드 문서, 리드마그넷" },
-  performance: { label: "분석", description: "성과, 매출, 지점 운영 확인" },
-  system: { label: "시스템", description: "권한, 설정, 감사, 개발 도구" },
+  sales: { label: "영업", description: "CRM, 일정, 딜·문서" },
+  marketing: { label: "마케팅", description: "캠페인, 콘텐츠, 자료 퍼널" },
+  cs: { label: "고객 지원", description: "가이드 문서, 챗봇, 채널톡" },
+  performance: { label: "분석", description: "비즈니스·웹·팀 성과" },
+  system: { label: "운영·시스템", description: "상태, 재고, 설정, 권한" },
 }
 
 // 사이드바 nav 전용 초미니멀 스크롤바: 4px 폭 + 투명 트랙 + hover 시에만 또렷한 thumb.
@@ -162,8 +175,21 @@ const MINIMAL_SCROLLBAR =
   "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/10 hover:[&::-webkit-scrollbar-thumb]:bg-black/20"
 
 // CRM 진입 시 사이드바에서 펼치는 하위 섹션(= 기존 상단 탭의 이전). 활성 판별은 경로 prefix.
+// CRM 핵심 3탭 — 현황(후속조치+분석+시각화) · 고객(DB·360·연락입력·라벨링) · 기록(전체 로그).
+// 돈흐름/인사이트/연동은 어드민(딜보드·견적·Analytics)과 겹치거나 백오피스라 최상위에서 내림.
+// 라우트(deals/insights/matching/revenue/partners)는 보존 — 딥링크·북마크는 현황 탭 active로 귀속.
 const CRM_CHILD_NAV: Array<{ href: string; label: string; match: (p: string) => boolean }> = [
-  { href: "/admin/crm", label: "현황", match: (p) => p === "/admin/crm" },
+  {
+    href: "/admin/crm",
+    label: "현황",
+    match: (p) =>
+      p === "/admin/crm" ||
+      p.startsWith("/admin/crm/insights") ||
+      p.startsWith("/admin/crm/deals") ||
+      p.startsWith("/admin/crm/revenue") ||
+      p.startsWith("/admin/crm/matching") ||
+      (p.startsWith("/admin/crm/partners") && !p.startsWith("/admin/crm/partners/customers")),
+  },
   {
     href: "/admin/crm/customers/unified",
     label: "고객DB",
@@ -171,8 +197,6 @@ const CRM_CHILD_NAV: Array<{ href: string; label: string; match: (p: string) => 
   },
   { href: "/admin/crm/activity", label: "기록", match: (p) => p.startsWith("/admin/crm/activity") },
   { href: "/admin/crm/capture", label: "참석자 입력", match: (p) => p.startsWith("/admin/crm/capture") },
-  { href: "/admin/crm/insights", label: "인사이트", match: (p) => p.startsWith("/admin/crm/insights") },
-  { href: "/admin/crm/matching", label: "연동", match: (p) => p.startsWith("/admin/crm/matching") },
 ]
 
 // 저장된 세그먼트 — 고객 하위 퀵필터(?view=). 카운트는 통합 API summary.viewCounts.

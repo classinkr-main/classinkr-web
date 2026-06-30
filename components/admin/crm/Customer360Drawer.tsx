@@ -9,6 +9,7 @@ import {
   Building2,
   CalendarClock,
   CheckCircle2,
+  ChevronDown,
   CircleDollarSign,
   ClipboardList,
   Coins,
@@ -17,6 +18,7 @@ import {
   FileText,
   ListChecks,
   Loader2,
+  MessageSquare,
   Phone,
   PhoneCall,
   Plus,
@@ -24,6 +26,7 @@ import {
   RefreshCw,
   Sparkles,
   StickyNote,
+  Tag,
   User2,
   X,
 } from "lucide-react"
@@ -111,6 +114,8 @@ const TASK_TYPE_OPTIONS: Array<{ value: CrmTaskType; label: string }> = [
 const EVENT_SOURCE_LABEL: Record<string, string> = {
   manual_note: "메모",
   meeting_minutes: "회의록",
+  call: "콜",
+  sms: "문자",
   recording: "녹음",
   calendar_event: "캘린더",
   lead_contact_log: "리드 연락",
@@ -122,12 +127,22 @@ const EVENT_SOURCE_LABEL: Record<string, string> = {
 const EVENT_SOURCE_ICON: Record<string, React.ReactNode> = {
   manual_note: <StickyNote className="h-3.5 w-3.5" />,
   meeting_minutes: <FileText className="h-3.5 w-3.5" />,
+  call: <PhoneCall className="h-3.5 w-3.5" />,
+  sms: <MessageSquare className="h-3.5 w-3.5" />,
   recording: <FileAudio className="h-3.5 w-3.5" />,
   calendar_event: <CalendarClock className="h-3.5 w-3.5" />,
   lead_contact_log: <PhoneCall className="h-3.5 w-3.5" />,
   external_crm: <Building2 className="h-3.5 w-3.5" />,
   sheet: <ClipboardList className="h-3.5 w-3.5" />,
 }
+
+// 연락 입력 — 콜/문자/메모/회의록을 한 컴포저에서. sourceType로 그대로 저장돼 타임라인에 유형 표시.
+const NOTE_KIND_OPTIONS = [
+  { key: "manual_note", label: "메모", icon: <StickyNote className="h-3 w-3" />, placeholder: "빠른 메모 입력 후 저장", rows: 2 },
+  { key: "call", label: "콜", icon: <PhoneCall className="h-3 w-3" />, placeholder: "통화 내용·결과 입력 후 저장", rows: 2 },
+  { key: "sms", label: "문자", icon: <MessageSquare className="h-3 w-3" />, placeholder: "문자 내용 입력 후 저장", rows: 2 },
+  { key: "meeting_minutes", label: "회의록", icon: <FileText className="h-3 w-3" />, placeholder: "회의록 붙여넣기/입력 후 저장", rows: 4 },
+] as const
 
 function sumAmounts(values: Array<number | null | undefined>): number | null {
   let total = 0
@@ -226,6 +241,62 @@ function formatMoney(value: number | null | undefined, currency: "KRW" | "USD" =
   return `₩${value.toLocaleString("ko-KR")}`
 }
 
+// 다가오는 일정 — 예정 콜/미팅 날짜 상대 표기.
+function dueRelativeLabel(value: string | null | undefined): string {
+  if (!value) return "기한 미정"
+  const due = new Date(value)
+  if (Number.isNaN(due.getTime())) return "기한 미정"
+  const now = new Date()
+  const dayMs = 86_400_000
+  const dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime()
+  const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const diff = Math.round((dueDay - todayDay) / dayMs)
+  if (diff === 0) return "오늘"
+  if (diff === 1) return "내일"
+  return `D-${diff}`
+}
+
+function monthDayParts(value: string | null | undefined): { month: string; day: string } {
+  if (!value) return { month: "", day: "-" }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return { month: "", day: "-" }
+  return { month: `${date.getMonth() + 1}월`, day: String(date.getDate()) }
+}
+
+// 비핵심 섹션 — 기본 접힘. 첫 화면은 핵심만, 필요할 때 펼쳐 보는 컴팩트 패턴.
+function CollapsibleSection({
+  icon,
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  icon: React.ReactNode
+  title: React.ReactNode
+  defaultOpen?: boolean
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-2"
+        aria-expanded={open}
+      >
+        <span className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-[#1a1a1a]/45">
+          {icon}
+          {title}
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${open ? "" : "-rotate-90"}`}
+        />
+      </button>
+      {open ? <div className="mt-3">{children}</div> : null}
+    </section>
+  )
+}
+
 function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
     <h3 className="mb-2 flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-[#1a1a1a]/45">
@@ -251,7 +322,10 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [activitySource, setActivitySource] = useState<"all" | "manual_note" | "meeting_minutes">("all")
   const [eventsExpanded, setEventsExpanded] = useState(false)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
-  const [noteKind, setNoteKind] = useState<"manual_note" | "meeting_minutes">("manual_note")
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState("")
+  const [tagBusy, setTagBusy] = useState(false)
+  const [noteKind, setNoteKind] = useState<"manual_note" | "meeting_minutes" | "call" | "sms">("manual_note")
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
 
@@ -328,6 +402,22 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     const timer = setTimeout(() => setSavedMsg(null), 2200)
     return () => clearTimeout(timer)
   }, [savedMsg])
+
+  // 라벨(수기 태그) — 고객 전환 시 재조회. 시스템 파생 플래그와 별개.
+  useEffect(() => {
+    setTags([])
+    setTagInput("")
+    if (!customerKey) return
+    let alive = true
+    adminFetchJson<{ tags: string[] }>(`/api/admin/crm/customers/${encodeURIComponent(customerKey)}/tags`)
+      .then((result) => {
+        if (alive) setTags(result.tags ?? [])
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [customerKey])
 
   const header = data?.header
   const displayName = header?.name ?? name ?? "고객"
@@ -593,6 +683,59 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     }
   }, [url])
 
+  const handleAddTag = useCallback(async () => {
+    const clean = tagInput.trim()
+    if (!clean || !customerKey) return
+    setTagBusy(true)
+    try {
+      const result = await adminFetchJson<{ tags: string[] }>(
+        `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/tags`,
+        { method: "POST", body: JSON.stringify({ tag: clean }) }
+      )
+      setTags(result.tags ?? [])
+      setTagInput("")
+      setSavedMsg("라벨을 추가했어요")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "라벨 추가에 실패했습니다.")
+    } finally {
+      setTagBusy(false)
+    }
+  }, [tagInput, customerKey])
+
+  const handleRemoveTag = useCallback(
+    async (tag: string) => {
+      if (!customerKey) return
+      setTagBusy(true)
+      try {
+        const result = await adminFetchJson<{ tags: string[] }>(
+          `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/tags?tag=${encodeURIComponent(tag)}`,
+          { method: "DELETE" }
+        )
+        setTags(result.tags ?? [])
+        setSavedMsg("라벨을 지웠어요")
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "라벨 삭제에 실패했습니다.")
+      } finally {
+        setTagBusy(false)
+      }
+    },
+    [customerKey]
+  )
+
+  const noteMeta = NOTE_KIND_OPTIONS.find((option) => option.key === noteKind) ?? NOTE_KIND_OPTIONS[0]
+
+  // 다가오는 일정 — 기한 있는 열린 할 일 중 오늘 이후만, 가까운 순. (전체 할 일은 아래 목록.)
+  const upcomingTasks = useMemo(() => {
+    const rows = data?.tasks?.rows ?? []
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    return rows
+      .filter((task) => task.dueAt && new Date(task.dueAt).getTime() >= todayStart)
+      .slice()
+      .sort((a, b) => new Date(a.dueAt as string).getTime() - new Date(b.dueAt as string).getTime())
+      .slice(0, 4)
+  }, [data])
+
   if (!customerKey) return null
 
   return (
@@ -687,7 +830,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
         ) : null}
 
         {/* body */}
-        <div className="flex-1 space-y-5 overflow-y-auto bg-[#f5f5f2] p-5">
+        <div className="flex-1 space-y-3 overflow-y-auto bg-[#f5f5f2] p-4">
           {error ? (
             <div className="flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -701,6 +844,53 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
               <span>{data.health.warnings.join(" ")}</span>
             </div>
           ) : null}
+
+          {/* 라벨 — 수기 분류(시스템 파생 플래그와 별개) */}
+          <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+            <SectionTitle icon={<Tag className="h-3.5 w-3.5" />}>라벨</SectionTitle>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 rounded-full border border-[#e8e8e4] bg-[#fafaf8] px-2.5 py-1 text-[12px] font-medium text-[#111110]"
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveTag(tag)}
+                    disabled={tagBusy}
+                    className="text-[#1a1a1a]/35 transition-colors hover:text-[#B85C33] disabled:opacity-50"
+                    aria-label={`${tag} 라벨 삭제`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                value={tagInput}
+                onChange={(event) => setTagInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault()
+                    void handleAddTag()
+                  }
+                }}
+                placeholder={tags.length ? "라벨 추가" : "라벨 추가 (예: VIP·강남·재계약 대상)"}
+                className="h-7 min-w-[120px] flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#084734]"
+              />
+              {tagInput.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => void handleAddTag()}
+                  disabled={tagBusy}
+                  className="inline-flex h-7 shrink-0 items-center rounded-lg bg-[#084734] px-2.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  추가
+                </button>
+              ) : null}
+            </div>
+            <p className="mt-1.5 text-[10px] text-[#1a1a1a]/35">수기 라벨 — 시스템 자동 플래그와 별개로 직접 분류·세그먼트</p>
+          </section>
 
           {/* 다음 액션 추천 — 규칙 기반 파생(Derived). 공식 데이터를 대체하지 않는다. */}
           {recommendation ? (
@@ -740,6 +930,33 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
               <Loader2 className="h-4 w-4 animate-spin" />
               고객 정보를 불러오는 중입니다...
             </div>
+          ) : null}
+
+          {/* 다가오는 일정 — 기한 있는 열린 할 일 */}
+          {data && upcomingTasks.length > 0 ? (
+            <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+              <SectionTitle icon={<CalendarClock className="h-3.5 w-3.5" />}>다가오는 일정</SectionTitle>
+                <ul className="space-y-1.5">
+                  {upcomingTasks.map((task) => {
+                    const parts = monthDayParts(task.dueAt)
+                    return (
+                      <li key={task.id} className="flex items-center gap-2.5">
+                        <span className="flex h-9 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-[#ECFDF5] text-[#084734]">
+                          <span className="text-[9px] font-semibold leading-none">{parts.month}</span>
+                          <span className="text-[13px] font-bold leading-tight">{parts.day}</span>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[12px] font-semibold text-[#111110]">{task.title}</p>
+                          <p className="text-[11px] text-[#1a1a1a]/45">
+                            {dueRelativeLabel(task.dueAt)}
+                            {task.ownerNameSnapshot ? ` · ${task.ownerNameSnapshot}` : ""}
+                          </p>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+            </section>
           ) : null}
 
           {/* contacts + risk */}
@@ -911,9 +1128,13 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
               ) : (
                 <p className="text-[12px] text-[#1a1a1a]/40">표시할 수금·성과 데이터가 없습니다.</p>
               )}
+            </section>
+          ) : null}
 
-              {/* 핵심 정보 — 동일 섹션 내 타이트 그리드로 통합 */}
-              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-[#f0f0ec] pt-3 text-[12px]">
+          {/* 핵심 정보 — 참고 데이터, 기본 접힘 */}
+          {data ? (
+            <CollapsibleSection icon={<Sparkles className="h-3.5 w-3.5" />} title="핵심 정보">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12px]">
                 <div>
                   <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객 가치 (LTV) · 추정</p>
                   <p className="text-[15px] font-bold text-[#111110]">{ltv == null ? "-" : `₩${formatAmount(ltv)}`}</p>
@@ -948,7 +1169,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
               <p className="mt-2 text-[10px] text-[#1a1a1a]/35">
                 LTV는 수납·오더 기준 추정값 · 수금/성과/잔액은 위안화(¥), 오더는 달러($) · 공식 원천 NEO
               </p>
-            </section>
+            </CollapsibleSection>
           ) : null}
 
           {/* deals (Deal Lite) */}
@@ -1222,12 +1443,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
 
               <div className="mb-3 flex flex-col gap-2 border-b border-[#f0f0ec] pb-3">
                 <div className="inline-flex w-fit rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
-                  {(
-                    [
-                      { key: "manual_note", label: "메모", icon: <StickyNote className="h-3 w-3" /> },
-                      { key: "meeting_minutes", label: "회의록", icon: <FileText className="h-3 w-3" /> },
-                    ] as const
-                  ).map((kind) => (
+                  {NOTE_KIND_OPTIONS.map((kind) => (
                     <button
                       key={kind.key}
                       type="button"
@@ -1245,8 +1461,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   id="c360-note"
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
-                  placeholder={noteKind === "meeting_minutes" ? "회의록 붙여넣기/입력 후 저장" : "빠른 메모 입력 후 저장"}
-                  rows={noteKind === "meeting_minutes" ? 4 : 2}
+                  placeholder={noteMeta.placeholder}
+                  rows={noteMeta.rows}
                   className="rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
                 />
                 <button
@@ -1255,8 +1471,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   disabled={!note.trim() || actingId === "note"}
                   className="inline-flex h-9 items-center justify-center gap-1 self-end rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-40"
                 >
-                  {noteKind === "meeting_minutes" ? <FileText className="h-3.5 w-3.5" /> : <StickyNote className="h-3.5 w-3.5" />}
-                  {noteKind === "meeting_minutes" ? "회의록 저장" : "메모 저장"}
+                  {noteMeta.icon}
+                  {noteMeta.label} 저장
                 </button>
               </div>
 

@@ -35,6 +35,8 @@ type SourceType =
   | "lead_contact_log"
   | "external_crm"
   | "sheet"
+  | "call"
+  | "sms"
 type Sentiment = "all" | "positive" | "neutral" | "risk"
 type FormMode = "manual_note" | "meeting_minutes" | "recording"
 
@@ -127,6 +129,8 @@ const TARGET_OPTIONS: Array<{ key: TargetType; label: string }> = [
 const SOURCE_FILTERS: Array<{ key: SourceType; label: string }> = [
   { key: "all", label: "전체" },
   { key: "manual_note", label: "메모" },
+  { key: "call", label: "콜" },
+  { key: "sms", label: "문자" },
   { key: "meeting_minutes", label: "회의록" },
   { key: "recording", label: "녹음" },
   { key: "calendar_event", label: "캘린더" },
@@ -184,6 +188,8 @@ function formatFileSize(value: number | null | undefined) {
 
 function sourceLabel(source: CrmEventRecord["sourceType"]) {
   if (source === "meeting_minutes") return "회의록"
+  if (source === "call") return "콜"
+  if (source === "sms") return "문자"
   if (source === "recording") return "녹음"
   if (source === "calendar_event") return "캘린더"
   if (source === "lead_contact_log") return "연락 로그"

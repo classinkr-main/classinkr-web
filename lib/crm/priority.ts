@@ -171,6 +171,7 @@ export function buildNeoAccountPriorityItem(
   const nowMs = now.getTime()
   const expiryDays = daysFromNow(account.expireAt, nowMs)
   const inactiveDays = account.lastClassAt ? Math.floor((nowMs - (parseTime(account.lastClassAt) ?? nowMs)) / DAY_MS) : null
+  const riskReasonCodes = new Set(account.riskReasons?.map((reason) => reason.code).filter(Boolean))
 
   let action: CrmPriorityAction | null = null
   let actionLabel = ""
@@ -212,6 +213,16 @@ export function buildNeoAccountPriorityItem(
     reason = `${expiryDays}일 내 만료 예정`
     score = 48
     dueAt = account.expireAt
+  } else if (
+    riskReasonCodes.has("depleted_balance") ||
+    (account.balance != null && Number(account.balance) <= 0)
+  ) {
+    action = "renew_account"
+    actionLabel = "충전 안내"
+    bucket = "today"
+    reason = "충전 잔액 소진"
+    score = account.riskLevel === "urgent" ? 82 : 70
+    dueAt = account.updatedAt ?? account.lastClassAt ?? null
   }
 
   if (!action) return null

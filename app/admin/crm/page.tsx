@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import {
   RefreshCw, Building2, Calendar, PhoneCall,
   ExternalLink, AlertCircle, Activity, BarChart3,
-  CircleDollarSign, FileText, Handshake,
+  CircleDollarSign, FileText, Handshake, ChevronDown,
   MapPin, ReceiptText, Target, TrendingUp, UserPlus,
 } from "lucide-react"
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
@@ -22,6 +23,16 @@ import { Toast } from "@/components/admin/crm/leads/shared"
 
 // 현황 = 한국팀 아침 지휘대. 액션 밴드(딥링크) + Neo CRM 팀 패널 + 돈 흐름 요약만.
 // 리드 관리 보드 전체는 /admin/crm/customers/leads (LeadsBoardClient)로 이동했다.
+
+// Recharts 번들을 현황 초기 로드에서 분리 — 차트는 지연 로드.
+const CrmHomeCharts = dynamic(() => import("@/components/admin/crm/CrmHomeCharts"), {
+  ssr: false,
+  loading: () => <div className="h-40 animate-pulse rounded-xl bg-[#fafaf8]" />,
+})
+const CrmPerformanceCharts = dynamic(() => import("@/components/admin/crm/CrmPerformanceCharts"), {
+  ssr: false,
+  loading: () => <div className="h-44 animate-pulse rounded-xl bg-[#fafaf8]" />,
+})
 
 const CRM_ACTION_KPIS_URL = "/api/admin/crm/action-kpis"
 const CRM_OVERVIEW_URL = "/api/admin/crm/overview"
@@ -246,10 +257,10 @@ function getCustomerLogKindLabel(kind: AdminCrmCustomerLogKind) {
 }
 
 function getCustomerLogTone(kind: AdminCrmCustomerLogKind) {
-  if (kind === "payment") return "border-emerald-100 bg-emerald-50 text-emerald-700"
+  if (kind === "payment") return "border-[#D6E8DE] bg-[#ECFDF5] text-[#084734]"
   if (kind === "order") return "border-[#D6E8DE] bg-[#ECFDF5] text-[#084734]"
   if (kind === "quote") return "border-[#F3E6B8] bg-[#FFF9EB] text-[#8D6C1F]"
-  if (kind === "visit") return "border-sky-100 bg-sky-50 text-sky-700"
+  if (kind === "visit") return "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55"
   if (kind === "call") return "border-[#e8e8e4] bg-[#fafaf8] text-[#111110]"
   return "border-[#e8e8e4] bg-white text-[#1a1a1a]/50"
 }
@@ -787,6 +798,8 @@ export default function CrmPage() {
   const [sidebarTab, setSidebarTab] = useState<"priority" | "week">("priority")
   const [recentCustomers, setRecentCustomers] = useState<RecentCustomer[]>([])
   const [leadModalOpen, setLeadModalOpen] = useState(false)
+  // 팀 성과·KPI 보고는 보고성 블록 — 기본 접힘으로 첫 화면을 작업대에 집중시킨다.
+  const [teamReportOpen, setTeamReportOpen] = useState(false)
 
   // 고객 바로 가기 — 최근 본 고객(로컬). 드로어 열고 닫을 때마다 갱신.
   useEffect(() => {
@@ -1128,13 +1141,55 @@ export default function CrmPage() {
         </aside>
       </div>
 
-      <NeoCrmTeamPanel refreshKey={neoCrmRefreshKey} />
-      <CrmTeamKpiBoard
-        overview={crmOverview}
-        branchKpis={branchKpis}
-        loading={pageRefreshing}
-        branchError={branchKpisError}
-      />
+      {/* 성과 분석 — CRM 매출 데이터 기준 팀/개인/월 (지연 로드, 로딩/빈/에러 내부 처리) */}
+      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-[15px] font-bold text-[#111110]">성과 분석 · 팀/개인</h2>
+          <span className="text-[11px] text-[#1a1a1a]/35">CRM 매출 데이터 기준 · 최근 6개월</span>
+        </div>
+        <CrmPerformanceCharts />
+      </section>
+
+      {/* 분석 · 시각화 — 리드 KPI 기반 차트(지연 로드) */}
+      {leadKpis && leadKpis.total > 0 ? (
+        <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-[15px] font-bold text-[#111110]">분석 · 시각화</h2>
+            <span className="text-[11px] text-[#1a1a1a]/35">리드 KPI 기준</span>
+          </div>
+          <CrmHomeCharts leadKpis={leadKpis} />
+        </section>
+      ) : null}
+
+      {/* 팀 성과 · KPI 보고 — 보고성 블록, 기본 접힘(작업대 집중) */}
+      <section className="mb-4 overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+        <button
+          type="button"
+          onClick={() => setTeamReportOpen((value) => !value)}
+          className="flex w-full items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[#fafaf8]"
+          aria-expanded={teamReportOpen}
+        >
+          <span className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-[#1a1a1a]/40" />
+            <span className="text-[14px] font-bold text-[#111110]">팀 성과 · KPI 보고</span>
+            <span className="hidden text-[11px] text-[#1a1a1a]/35 sm:inline">총 · 팀별 · 개인별 · NEO 팀 현황</span>
+          </span>
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${teamReportOpen ? "" : "-rotate-90"}`}
+          />
+        </button>
+        {teamReportOpen ? (
+          <div className="border-t border-[#f0f0ec] p-4">
+            <NeoCrmTeamPanel refreshKey={neoCrmRefreshKey} />
+            <CrmTeamKpiBoard
+              overview={crmOverview}
+              branchKpis={branchKpis}
+              loading={pageRefreshing}
+              branchError={branchKpisError}
+            />
+          </div>
+        ) : null}
+      </section>
 
       {/* 맨 하단 — 수납 리스크 + 최근 고객별 로그 (간소화) */}
       <CrmOperationsDashboard
@@ -1143,6 +1198,24 @@ export default function CrmPage() {
         loading={crmOverviewLoading}
         error={crmOverviewError}
       />
+
+      {/* 심화 — 최상위 탭에서 내린 분석/백오피스 화면으로의 경량 진입(딥링크 보존) */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px]">
+        <span className="text-[#1a1a1a]/35">심화 보기</span>
+        {[
+          { href: "/admin/crm/insights", label: "인사이트 분석" },
+          { href: "/admin/crm/deals", label: "돈흐름 상세" },
+          { href: "/admin/crm/matching", label: "데이터 점검" },
+        ].map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="inline-flex h-7 items-center rounded-lg border border-[#e8e8e4] bg-white px-2.5 font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+          >
+            {link.label}
+          </Link>
+        ))}
+      </div>
 
       <Customer360Drawer
         customerKey={drawerTarget?.key ?? null}

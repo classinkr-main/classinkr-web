@@ -34,6 +34,8 @@ export async function POST(req: NextRequest) {
     const chain = await runExternalCrmSyncChain("manual", { force, recentSyncTtlMs })
     const result = {
       ...chain.sync,
+      neoCustomerSnapshots: chain.neoCustomerSnapshots ?? null,
+      neoCustomerSnapshotsError: chain.neoCustomerSnapshotsError ?? null,
       candidates: chain.candidates ?? null,
       candidatesError: chain.candidatesError ?? null,
     }

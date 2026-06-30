@@ -2,6 +2,7 @@
 
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
   ArrowDownToLine,
   ArrowRightLeft,
@@ -510,6 +511,7 @@ export default function HardwareInventoryClient() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [confirmQtys, setConfirmQtys] = useState<Record<string, string>>({})
   const sheetPanelRef = useRef<HTMLElement>(null)
+  const reduceMotion = useReducedMotion()
 
   useEffect(() => {
     if (!sheetOpen && pendingMovement == null && voidTarget == null) return
@@ -1667,12 +1669,18 @@ export default function HardwareInventoryClient() {
             </div>
             )}
 
+            <AnimatePresence>
             {sheetOpen && (
-              <div
+              <motion.div
+                key="quick-sheet"
                 className="fixed inset-0 z-40 flex justify-end bg-black/35 backdrop-blur-[2px]"
                 onClick={() => setSheetOpen(false)}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: reduceMotion ? 0 : 0.16 }}
               >
-                <aside
+                <motion.aside
                   ref={sheetPanelRef}
                   role="dialog"
                   aria-modal="true"
@@ -1680,6 +1688,10 @@ export default function HardwareInventoryClient() {
                   onKeyDown={trapTab}
                   onClick={(event) => event.stopPropagation()}
                   className="flex h-full w-full flex-col overflow-y-auto border-l border-[rgba(0,0,0,0.08)] bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.05)] sm:max-w-md"
+                  initial={reduceMotion ? { opacity: 0 } : { x: "100%" }}
+                  animate={reduceMotion ? { opacity: 1 } : { x: 0 }}
+                  exit={reduceMotion ? { opacity: 0 } : { x: "100%" }}
+                  transition={{ duration: reduceMotion ? 0 : 0.22, ease: [0.2, 0, 0, 1] }}
                 >
                   <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] bg-white px-5 py-4">
                     <div>
@@ -2036,9 +2048,10 @@ export default function HardwareInventoryClient() {
                     </button>
                     </div>
                   </form>
-                </aside>
-              </div>
+                </motion.aside>
+              </motion.div>
             )}
+            </AnimatePresence>
 
             {activeTab === "history" && (
             <div className="mt-6 space-y-4">

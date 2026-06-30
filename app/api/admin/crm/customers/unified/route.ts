@@ -74,6 +74,7 @@ export async function GET(req: NextRequest) {
       view: parseSavedView(url.searchParams.get("view")),
       owner: isMine ? undefined : ownerParam,
       ownerKeys,
+      tag: url.searchParams.get("tag") ?? undefined,
       limit: parseBoundedInt(url.searchParams.get("limit"), 100, 1, 200),
       offset: parseBoundedInt(url.searchParams.get("offset"), 0, 0, 100_000),
     })

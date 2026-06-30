@@ -17,7 +17,7 @@ function getOverviewStatusLabel(status: AdminCrmOverviewStatus) {
 }
 
 function getOverviewStatusTone(status: AdminCrmOverviewStatus) {
-  if (status === "ok") return "border-emerald-100 bg-emerald-50 text-emerald-700"
+  if (status === "ok") return "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]"
   if (status === "warning") return "border-amber-100 bg-amber-50 text-amber-700"
   return "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
 }
