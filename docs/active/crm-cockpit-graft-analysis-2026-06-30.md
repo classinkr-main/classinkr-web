@@ -329,3 +329,10 @@
 - **3.3 건강도 도넛(집계):** 코크핏 집계 도넛은 overview 서버 집계(안전/주의/위험 분포) 신설이 선행 필요 → 보류. 단 **per-고객 건강도 점수는 360 헤더에 적용 완료**, 룰 SSOT(`customer-health.ts`)도 확보.
 - **3.5 드로어 컴포넌트 분할 리팩터:** 동작 변화 없는 순수 리팩터 + 회귀 위험 큼 → 보류.
 - **3.6 LLM(AI 요약/통화분석/코치/⌘K 자연어):** LLM/STT 백엔드 부재 → 보류(C 스킵 방침과 동일).
+
+### 9.1 추가 적용 (건강도 집계 도넛 · 매출목표 self-serve)
+- **고객 건강도 도넛(집계)** — 보류 해제·적용 완료. `getCrmUnifiedCustomers`가 반환하는 전 고객 행(`score`·`lifecycle`·`expireAt`·`balance`)을 `computeCustomerHealth` SSOT로 매핑해 활성 고객(neo_account) 안전/주의/위험 **실분포**를 계산(가짜 분포 아님). snapshot RPC 미변경 — 새 경로 `getCrmUnifiedCustomers` summary에 `healthDistribution` 추가 + 엔드포인트 `GET /api/admin/crm/health-distribution` + 코크핏 우측 도넛(`CrmHealthDonut`). 데이터 없으면 자동 숨김(null-safe).
+- **매출 목표 self-serve** — 코크핏 매출추이 헤더 인라인 에디터(¥만 입력)로 `POST /api/admin/crm/revenue-target` 저장 → 목표선·달성률·월말추정 즉시 반영. SQL 불필요(단 `crm_revenue_target` 마이그레이션은 선행).
+
+### 9.2 마이그레이션 적용 안내(중요)
+`crm_revenue_target` 테이블 생성 DDL은 이 작업 환경에서 적용 불가 — supabase CLI 없음, `config.toml` 없음, `.env.local`에 서비스 키만 있고 Postgres 연결 문자열(DATABASE_URL) 없음(PostgREST 서비스 키로는 CRUD만 가능, `CREATE TABLE` 불가). **적용 방법(택1):** ① Supabase 대시보드 SQL 에디터에 `supabase/migrations/20260630_crm_revenue_target.sql` 붙여넣기 실행, 또는 ② CLI 링크 후 `supabase db push`. 적용 전까지 매출 목표선/달성률은 자연 degrade(에러 없음). 건강도 도넛은 마이그레이션과 무관(활성 고객 데이터가 있으면 표시).

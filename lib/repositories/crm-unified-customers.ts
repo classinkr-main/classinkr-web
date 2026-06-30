@@ -11,6 +11,7 @@ import {
   type CrmPrioritySource,
 } from "@/lib/crm/priority"
 import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
+import { computeCustomerHealth, type CustomerHealthBand } from "@/lib/crm/customer-health"
 import { getAllCustomerTagsMap } from "./crm-customer-tags"
 
 export type CrmUnifiedCustomerSource = CrmPrioritySource
@@ -51,6 +52,14 @@ export interface CrmUnifiedCustomerRow {
   tags: string[]
 }
 
+// 활성 고객(neo_account) 건강도 분포 — computeCustomerHealth(SSOT)로 매핑한 실집계.
+export interface CrmHealthDistribution {
+  total: number
+  safe: number
+  watch: number
+  risk: number
+}
+
 export interface CrmUnifiedCustomersOptions {
   q?: string
   source?: CrmUnifiedCustomerSource | "all"
@@ -89,6 +98,8 @@ export interface CrmUnifiedCustomers {
     viewCounts: Record<string, number>
     availableTags: string[]
   }
+  // 활성 고객 건강도 분포 — 현재 검색/필터와 무관한 전역 집계(코크핏 도넛용).
+  healthDistribution: CrmHealthDistribution
   pagination: {
     limit: number
     offset: number
@@ -197,6 +208,22 @@ function daysUntil(iso: string | null, nowMs: number): number | null {
   const time = new Date(iso).getTime()
   if (Number.isNaN(time)) return null
   return (time - nowMs) / 86_400_000
+}
+
+// 우선순위 점수 → 리스크 등급(목록 severity와 동일 임계). 건강도 입력으로 사용.
+function severityFromScore(score: number): "critical" | "high" | "medium" | "low" {
+  return score >= 85 ? "critical" : score >= 68 ? "high" : score >= 42 ? "medium" : "low"
+}
+
+// 활성 고객(neo_account) 행 → 건강도 밴드. score·만료·잔액·라이프사이클 신호를 SSOT 산식에 투입.
+function rowHealthBand(row: CrmUnifiedCustomerRow, nowMs: number): CustomerHealthBand {
+  return computeCustomerHealth({
+    riskSeverity: severityFromScore(row.score),
+    serviceLevel: row.lifecycle === "account_risk" ? "soon" : "normal",
+    hasOutstanding: (row.balance ?? 0) > 0,
+    daysToExpire: daysUntil(row.expireAt, nowMs),
+    lastContactDays: null,
+  }).band
 }
 
 function matchesSavedView(
@@ -372,6 +399,17 @@ export async function getCrmUnifiedCustomers(
     const bIndex = sortedKeys.get(b.key) ?? Number.MAX_SAFE_INTEGER
     return aIndex - bIndex
   })
+  // 활성 고객 건강도 분포 — 전역(필터 무관). 코크핏 도넛이 읽는 단일 진실원.
+  const healthDistribution = rows.reduce<CrmHealthDistribution>(
+    (acc, row) => {
+      if (row.source !== "neo_account") return acc
+      acc.total += 1
+      acc[rowHealthBand(row, nowMs)] += 1
+      return acc
+    },
+    { total: 0, safe: 0, watch: 0, risk: 0 }
+  )
+
   const limit = clampInteger(options.limit, 100, 1, 200)
   const offset = clampInteger(options.offset, 0, 0, 100_000)
   const owners = buildOwnerOptions(rows)
@@ -431,6 +469,7 @@ export async function getCrmUnifiedCustomers(
       viewCounts,
       availableTags,
     },
+    healthDistribution,
     pagination: {
       limit,
       offset,
