@@ -1,7 +1,7 @@
 import "server-only"
 
 import { createHash } from "crypto"
-import { revalidateTag } from "next/cache"
+import { revalidateTag, unstable_cache } from "next/cache"
 
 import { listFreshHwInbound, listFreshHwOutbound, listFreshHwStock } from "@/lib/repositories/branch-hw"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -1028,7 +1028,7 @@ function movementDate(movement: HardwareMovement) {
   return Number.isFinite(time) ? time : 0
 }
 
-export async function getHardwareDashboard(): Promise<HardwareDashboard> {
+async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
   const [items, movements, importRun] = await Promise.all([
     listHardwareItems(),
     listAllHardwareMovements(),
@@ -1208,6 +1208,18 @@ export async function getHardwareDashboard(): Promise<HardwareDashboard> {
     },
     importRun,
   }
+}
+
+// 대시보드 = 전체 ledger 집계 비용. 쓰기 6경로가 HARDWARE_INVENTORY_CACHE_TAG로 즉시 무효화하므로
+// 수정은 바로 반영되고, Date.now() 기반 30일 창의 시간 드리프트만 revalidate 상한(120s)으로 제한.
+const getHardwareDashboardCached = unstable_cache(
+  () => getHardwareDashboardUncached(),
+  ["hardware-dashboard"],
+  { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 120 }
+)
+
+export function getHardwareDashboard(): Promise<HardwareDashboard> {
+  return getHardwareDashboardCached()
 }
 
 export interface InboundUnitPriceBasis {
