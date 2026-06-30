@@ -23,7 +23,9 @@ describe("public FAQ CS Figma usage entries", () => {
         expect.objectContaining({
           question: "코스 QR 초대 링크는 어디서 활성화하나요?",
           answer: expect.stringContaining("코스 가입 허용"),
-          guideHref: "/docs/admin/cs-figma-digest-1197",
+          // 실제 가이드 슬러그는 digest 1195번 항목("코스 내 초대 활성화(QR, Link 등)").
+          // 1197은 어떤 가이드에도 없는 dead 링크였음(소스/테스트 동시 오타).
+          guideHref: "/docs/admin/cs-figma-digest-1195",
         }),
       ])
     )

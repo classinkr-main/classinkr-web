@@ -130,7 +130,13 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/docs/analytics?days=30",
     "/api/admin/docs/alpha-readiness",
   ],
-  "/admin/docs": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
+  "/admin/docs": [
+    "/api/admin/docs",
+    "/api/admin/docs/analytics?days=30",
+    // 보강 큐 탭(문서 센터로 병합됨)을 호버 시 미리 데워둔다.
+    "/api/admin/docs/gaps",
+    "/api/admin/docs/alpha-readiness",
+  ],
   "/admin/branch": [
     "/api/admin/branch/summary?team=ALL&period=Q",
     "/api/admin/branch/kpi?team=ALL&period=Q",

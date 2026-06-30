@@ -20,7 +20,12 @@ describe("admin docs alpha readiness surface", () => {
   })
 
   it("shows alpha readiness in the docs gap admin workspace", () => {
-    const source = readFileSync(join(process.cwd(), "app/admin/docs/gaps/page.tsx"), "utf8")
+    // IA 재설계(admin-ia-redesign-2026-06-29 §3·§6): 보강 큐 화면은 독립 page에서
+    // 문서 센터 "보강 큐" 탭이 렌더하는 DocsGapsPanel 컴포넌트로 이전됨.
+    const source = readFileSync(
+      join(process.cwd(), "components/admin/docs/DocsGapsPanel.tsx"),
+      "utf8"
+    )
 
     expect(source).toContain("/api/admin/docs/alpha-readiness")
     expect(source).toContain("알파 준비도")
