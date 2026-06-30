@@ -414,6 +414,41 @@ describe("importHardwareFromBranchSheets", () => {
     expect(new Set(keys).size).toBe(keys.length)
   })
 
+  it("includes inbound unit_price/amount_usd in the change-detection digest", async () => {
+    const base = {
+      id: "x",
+      logistics_no: "H9",
+      inbound_date: "2026-06-01",
+      product: "86 IFP",
+      quantity: 3,
+      serials: [],
+      storage: "창고",
+      importer: "Classin",
+      remarks: null,
+      raw: { values: ["", "2026-06-01", "86 IFP"] },
+    }
+    // Same fingerprint group; only the inbound cost differs. Without cost in the
+    // digest these two rows would hash identically and a cost-only edit would be
+    // invisible to the additive merge's PASS 2b.
+    listFreshHwInbound.mockResolvedValue([
+      { ...base, unit_price: 100, amount: 300 },
+      { ...base, unit_price: 200, amount: 600 },
+    ])
+    listFreshHwOutbound.mockResolvedValue([])
+    listFreshHwStock.mockResolvedValue([])
+    const { importHardwareFromBranchSheets } = await loadRepository()
+
+    await importHardwareFromBranchSheets({ actor: "admin@example.com" })
+
+    const rows = operations.find(
+      (op) => op.method === "rpc" && op.fn === "replace_hardware_sheet_import"
+    )?.args?.rows as Array<Record<string, unknown>>
+    expect(rows).toHaveLength(2)
+    const digests = rows.map((r) => r.source_digest)
+    expect(digests.every((d) => typeof d === "string" && d)).toBe(true)
+    expect(digests[0]).not.toBe(digests[1])
+  })
+
   it("routes to the additive merge RPC only when the flag is enabled", async () => {
     const prev = process.env.HARDWARE_SHEET_ADDITIVE_MERGE
     process.env.HARDWARE_SHEET_ADDITIVE_MERGE = "1"

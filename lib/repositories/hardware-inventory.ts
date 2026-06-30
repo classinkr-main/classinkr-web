@@ -687,6 +687,7 @@ function assignSheetImportIdentity(rows: ImportMovementRow[]) {
       row.source_digest = hashSourceKey([
         row.quantity, row.status ?? "", row.from_location ?? "", row.to_location ?? "",
         row.owner ?? "", (row.serials ?? []).join("|"), row.memo ?? "", row.reference_no ?? "",
+        String(row.unit_price ?? ""), String(row.amount_usd ?? ""),
       ])
     })
   }
