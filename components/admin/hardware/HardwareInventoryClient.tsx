@@ -7,9 +7,8 @@ import {
   ArrowDownToLine,
   ArrowRightLeft,
   ArrowUpFromLine,
-  Boxes,
+  Camera,
   CheckCheck,
-  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -20,14 +19,16 @@ import {
   Link2,
   ListChecks,
   Minus,
-  MapPin,
+  Monitor,
   Plus,
+  Projector,
   RefreshCw,
   RotateCcw,
   Save,
+  Search,
   Settings2,
-  TrendingDown,
   UploadCloud,
+  Users,
   Wrench,
   X,
   type LucideIcon,
@@ -215,15 +216,12 @@ const HARDWARE_TABS: Array<{ id: HardwareTab; label: string; icon: LucideIcon; d
   { id: "history", label: "내역", icon: ListChecks, description: "전체 원장" },
 ]
 
-type HardwareSectionKey = "stock" | "outbound" | "quick" | "alerts" | "movements" | "statusBoard"
+type HardwareSectionKey = "stock" | "outbound" | "alerts"
 
 const DEFAULT_OPEN_SECTIONS: Record<HardwareSectionKey, boolean> = {
   stock: true,
   outbound: true,
-  quick: true,
   alerts: true,
-  movements: true,
-  statusBoard: true,
 }
 
 const MOVEMENT_LABEL: Record<HardwareMovementType, string> = {
@@ -248,6 +246,75 @@ const ALERT_TONE: Record<HardwareAlert["severity"], string> = {
   critical: "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]",
   warning: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
   info: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
+}
+
+// 재고 위치 맵 — 한 줄에서 확인하는 6개 위치. "창고"=warehouseStock, "배송 예정"=plannedOut,
+// 나머지는 stock row의 locationBalances에서 읽는다(고객/샘플/사무실/수리는 repository가 그대로 내보냄).
+const LOCATION_MAP_ORDER = ["창고", "배송 예정", "고객", "샘플", "사무실", "수리"] as const
+
+const LOC_TONE: Record<string, string> = {
+  창고: "#084734",
+  "배송 예정": "#A8741A",
+  고객: "#B43E3E",
+  샘플: "#084734",
+  사무실: "#615D59",
+  수리: "#31302E",
+}
+
+function locationQuantity(row: HardwareStockRow, location: string): number {
+  if (location === "창고") return row.warehouseStock
+  if (location === "배송 예정") return row.plannedOut
+  return row.locationBalances.find((balance) => balance.location === location)?.quantity ?? 0
+}
+
+type PeriodGranularity = "month" | "quarter" | "year"
+
+// 출고 기간 집계 버킷 키/라벨. occurred_at(YYYY-MM-DD) 문자열 기준.
+function periodKey(date: string, granularity: PeriodGranularity): { key: string; label: string } {
+  const year = date.slice(0, 4)
+  const month = Number(date.slice(5, 7)) || 1
+  if (granularity === "year") return { key: year, label: `${year}년` }
+  if (granularity === "quarter") {
+    const quarter = Math.ceil(month / 3)
+    return { key: `${year}Q${quarter}`, label: `${year}년 ${quarter}분기` }
+  }
+  return { key: date.slice(0, 7), label: `${year}년 ${month}월` }
+}
+
+// 제품 칩용 단축명 (기간 집계 칩에서 길이 절약).
+function shortProductName(name: string): string {
+  return name
+    .replace(/\s*전자칠판/g, "")
+    .replace(/\s*추적 카메라/g, "")
+    .replace(/\s*광각 카메라/g, "")
+    .replace(/\s*이동형 스탠드/g, " 스탠드")
+    .replace(/\s*윈도우 모듈/g, "")
+    .trim()
+}
+
+// 출고 도착지를 고객 라벨로 환원한다. 일반 위치(고객/창고/샘플/사무실/수리)는 "고객(미지정)"으로 묶는다.
+const GENERIC_LOCATIONS = new Set<string>(["고객", "창고", "샘플", "사무실", "수리", "외부/고객"])
+
+function customerLabel(value: string | null | undefined): string {
+  const text = (value ?? "").trim()
+  if (!text || GENERIC_LOCATIONS.has(text)) return "고객(미지정)"
+  return text
+}
+
+// movement에 연결된 CRM 참조를 best-effort로 추출 (reference_no의 deal:/xiaoshouyi: 또는 memo의 "CRM 연동:" 라인).
+function extractCrmLink(movement: HardwareMovement): { label: string; reference: string | null } | null {
+  const ref = (movement.reference_no ?? "").trim()
+  if (/^deal:/i.test(ref) || /^xiaoshouyi:/i.test(ref)) {
+    return { label: /^deal:/i.test(ref) ? "포털 딜" : "외부 CRM", reference: ref }
+  }
+  const memoLine = (movement.memo ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => /^CRM 연동:/.test(line))
+  if (memoLine) {
+    return { label: memoLine.replace(/^CRM 연동:\s*/, "") || "CRM 연동", reference: ref || null }
+  }
+  return null
 }
 
 function todayKey() {
@@ -343,33 +410,6 @@ function confidenceClass(value: HardwareCrmOrderCandidate["confidence"]) {
   return "bg-[#F6F5F4] text-[#615D59]"
 }
 
-function StatCard({
-  icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: ReactNode
-  label: string
-  value: string
-  hint: string
-}) {
-  return (
-    <div className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#615D59]">{label}</p>
-          <p className="mt-2 text-[26px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{value}</p>
-        </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#ECFDF5] text-[#084734]">
-          {icon}
-        </div>
-      </div>
-      <p className="mt-3 text-[12px] leading-relaxed text-[#615D59]">{hint}</p>
-    </div>
-  )
-}
-
 function SectionHeader({
   title,
   description,
@@ -393,7 +433,7 @@ function SectionHeader({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="group flex min-w-0 flex-1 items-start gap-3 text-left"
+        className="group flex min-w-0 flex-1 cursor-pointer items-start gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
       >
         <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F6F5F4] text-[#615D59] transition group-hover:bg-[#ECFDF5] group-hover:text-[#084734]">
           <ToggleIcon className="h-4 w-4" />
@@ -438,7 +478,7 @@ function PaginationControls<T>({
           disabled={pagination.currentPage <= 1}
           aria-label="이전 페이지"
           title="이전 페이지"
-          className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] cursor-pointer bg-white text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -449,7 +489,7 @@ function PaginationControls<T>({
           disabled={pagination.currentPage >= pagination.totalPages}
           aria-label="다음 페이지"
           title="다음 페이지"
-          className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] cursor-pointer bg-white text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -510,17 +550,27 @@ export default function HardwareInventoryClient() {
   const [voidReason, setVoidReason] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [confirmQtys, setConfirmQtys] = useState<Record<string, string>>({})
+  const [entrySub, setEntrySub] = useState<"inbound" | "outbound">("inbound")
+  const [outPeriod, setOutPeriod] = useState<PeriodGranularity>("month")
+  const [openPeriods, setOpenPeriods] = useState<Record<string, boolean>>({})
+  const [inboundSearch, setInboundSearch] = useState("")
+  const [search, setSearch] = useState("")
+  const [customerFilter, setCustomerFilter] = useState("")
+  const [detailId, setDetailId] = useState<string | null>(null)
   const sheetPanelRef = useRef<HTMLElement>(null)
+  const detailPanelRef = useRef<HTMLElement>(null)
   const reduceMotion = useReducedMotion()
 
   useEffect(() => {
-    if (!sheetOpen && pendingMovement == null && voidTarget == null) return
+    if (!sheetOpen && pendingMovement == null && voidTarget == null && detailId == null) return
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return
       if (pendingMovement) {
         if (busy !== "movement") setPendingMovement(null)
       } else if (voidTarget) {
         if (voidingId == null) setVoidTarget(null)
+      } else if (detailId) {
+        setDetailId(null)
       } else if (sheetOpen) {
         setSheetOpen(false)
       }
@@ -532,7 +582,7 @@ export default function HardwareInventoryClient() {
       document.removeEventListener("keydown", onKey)
       document.body.style.overflow = previousOverflow
     }
-  }, [sheetOpen, pendingMovement, voidTarget, busy, voidingId])
+  }, [sheetOpen, pendingMovement, voidTarget, detailId, busy, voidingId])
 
   useEffect(() => {
     if (!sheetOpen) return
@@ -585,13 +635,32 @@ export default function HardwareInventoryClient() {
     let rows = data?.movements ?? []
     if (historyType !== "all") rows = rows.filter((movement) => movement.movement_type === historyType)
     if (productFilter) rows = rows.filter((movement) => movement.item_id === productFilter)
+    if (customerFilter) rows = rows.filter((movement) => customerLabel(movement.to_location) === customerFilter)
+    const query = search.trim().toLowerCase()
+    if (query) {
+      rows = rows.filter((movement) =>
+        [
+          movement.product_name,
+          movement.to_location,
+          movement.reference_no,
+          movementLot(movement),
+          movement.owner,
+          movement.memo,
+          movement.status,
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(query))
+      )
+    }
     const sorted = [...rows].sort((a, b) => {
       const aTime = new Date(a.occurred_at ?? a.created_at).getTime()
       const bTime = new Date(b.occurred_at ?? b.created_at).getTime()
       return historySort === "asc" ? aTime - bTime : bTime - aTime
     })
     return sorted
-  }, [data?.movements, historyType, productFilter, historySort])
+  }, [data?.movements, historyType, productFilter, customerFilter, search, historySort])
+
+  const hasHistoryFilter = historyType !== "all" || productFilter !== "" || customerFilter !== "" || search.trim() !== ""
 
   const plannedMovementQuantity = useMemo(
     () => (data?.plannedMovements ?? []).reduce((total, movement) => total + movement.quantity, 0),
@@ -621,23 +690,173 @@ export default function HardwareInventoryClient() {
     [filteredMovements, movementsPage]
   )
 
-  const coreIfpSummary = useMemo(() => {
+  const categoryCards = useMemo(() => {
     const stockRows = data?.stock ?? []
-    const ifp86 = stockRows.find((row) => isCoreIfpProduct(row.product, "86")) ?? null
-    const ifp75 = stockRows.find((row) => isCoreIfpProduct(row.product, "75")) ?? null
-    const pair = [ifp86, ifp75].filter((row): row is HardwareStockRow => Boolean(row))
-    const sum = (field: keyof Pick<HardwareStockRow, "warehouseStock" | "availableStock" | "plannedOut" | "outbound30d">) =>
-      pair.reduce((total, row) => total + row[field], 0)
-
-    return {
-      ifp86,
-      ifp75,
-      warehouseStock: sum("warehouseStock"),
-      availableStock: sum("availableStock"),
-      plannedOut: sum("plannedOut"),
-      outbound30d: sum("outbound30d"),
+    const sumBy = (match: (row: HardwareStockRow) => boolean) => {
+      const matched = stockRows.filter(match)
+      return {
+        available: matched.reduce((total, row) => total + row.availableStock, 0),
+        warehouse: matched.reduce((total, row) => total + row.warehouseStock, 0),
+        planned: matched.reduce((total, row) => total + row.plannedOut, 0),
+        out30: matched.reduce((total, row) => total + row.outbound30d, 0),
+        count: matched.length,
+      }
     }
+    const isCamera = (row: HardwareStockRow) =>
+      /카메라|camera/i.test(`${row.category ?? ""} ${row.product}`) || /\bT1\b|\bS1\b/i.test(row.product)
+    const isStand = (row: HardwareStockRow) =>
+      /스탠드|stand/i.test(`${row.category ?? ""} ${row.product}`) || /\bSTD/i.test(row.product)
+    return [
+      { key: "ifp86", label: "86인치 전자칠판", icon: Monitor, tone: { bg: "#ECFDF5", fg: "#084734" }, ...sumBy((row) => isCoreIfpProduct(row.product, "86")) },
+      { key: "ifp75", label: "75인치 전자칠판", icon: Monitor, tone: { bg: "#ECFDF5", fg: "#084734" }, ...sumBy((row) => isCoreIfpProduct(row.product, "75")) },
+      { key: "camera", label: "카메라 (T1·S1)", icon: Camera, tone: { bg: "#FBF1E0", fg: "#A8741A" }, ...sumBy(isCamera) },
+      { key: "stand", label: "스탠드 (STD1)", icon: Projector, tone: { bg: "#F6F5F4", fg: "#615D59" }, ...sumBy(isStand) },
+    ]
   }, [data?.stock])
+
+  const locationMap = useMemo(() => {
+    const stockRows = data?.stock ?? []
+    const totals: Record<string, number> = {}
+    for (const name of LOCATION_MAP_ORDER) totals[name] = 0
+    for (const row of stockRows) {
+      for (const name of LOCATION_MAP_ORDER) totals[name] += locationQuantity(row, name)
+    }
+    const maxTotal = Math.max(1, ...LOCATION_MAP_ORDER.map((name) => totals[name]))
+    const locationTotals = LOCATION_MAP_ORDER.map((name) => ({
+      name,
+      quantity: totals[name],
+      tone: LOC_TONE[name],
+      pct: totals[name] > 0 ? `${Math.max(4, Math.round((totals[name] / maxTotal) * 100))}%` : "0%",
+    }))
+    const matrixRows = stockRows.map((row) => {
+      const cells = LOCATION_MAP_ORDER.map((name) => ({
+        label: name === "배송 예정" ? "예정" : name,
+        qty: locationQuantity(row, name),
+        tone: LOC_TONE[name],
+      }))
+      const rowMax = Math.max(1, ...cells.map((cell) => cell.qty))
+      return {
+        itemId: row.itemId,
+        product: row.product,
+        available: row.availableStock,
+        out30: row.outbound30d,
+        cells: cells.map((cell) => ({
+          ...cell,
+          pct: cell.qty > 0 ? `${Math.max(12, Math.round((cell.qty / rowMax) * 100))}%` : "0%",
+        })),
+      }
+    })
+    return { locationTotals, matrixRows }
+  }, [data?.stock])
+
+  const inboundLots = useMemo(() => {
+    const inbound = (data?.movements ?? []).filter((movement) => movement.movement_type === "inbound" && !movement.voided_at)
+    const groups = new Map<
+      string,
+      { lot: string; date: string; importer: string | null; items: HardwareMovement[]; totalQty: number; totalAmount: number; hasAmount: boolean }
+    >()
+    for (const movement of inbound) {
+      const lot = movementLot(movement) ?? "미지정"
+      if (!groups.has(lot)) {
+        groups.set(lot, { lot, date: movement.occurred_at?.slice(0, 10) ?? "-", importer: movement.importer, items: [], totalQty: 0, totalAmount: 0, hasAmount: false })
+      }
+      const group = groups.get(lot)!
+      group.items.push(movement)
+      group.totalQty += movement.quantity
+      if (movement.amount_usd != null) {
+        group.totalAmount += movement.amount_usd
+        group.hasAmount = true
+      }
+      if (!group.importer && movement.importer) group.importer = movement.importer
+      const date = movement.occurred_at?.slice(0, 10)
+      if (date && (group.date === "-" || date < group.date)) group.date = date
+    }
+    let lots = Array.from(groups.values()).sort((a, b) => (a.lot < b.lot ? 1 : -1))
+    const query = inboundSearch.trim().toLowerCase()
+    if (query) {
+      lots = lots.filter(
+        (group) => group.lot.toLowerCase().includes(query) || group.items.some((item) => item.product_name.toLowerCase().includes(query))
+      )
+    }
+    return {
+      lots,
+      totalQty: inbound.reduce((total, movement) => total + movement.quantity, 0),
+      totalAmount: inbound.reduce((total, movement) => total + (movement.amount_usd ?? 0), 0),
+      hasAnyAmount: inbound.some((movement) => movement.amount_usd != null),
+    }
+  }, [data?.movements, inboundSearch])
+
+  const outboundBuckets = useMemo(() => {
+    const sales = (data?.movements ?? []).filter(
+      (movement) =>
+        movement.movement_type === "outbound" &&
+        !movement.voided_at &&
+        !/예정|예약|대기/.test(movement.status ?? "") &&
+        !/샘플|사무실|수리|sample|repair/i.test(`${movement.to_location ?? ""} ${movement.status ?? ""}`)
+    )
+    const buckets = new Map<string, { key: string; label: string; total: number; byProduct: Map<string, number>; byCustomer: Map<string, number> }>()
+    for (const movement of sales) {
+      const date = movement.occurred_at?.slice(0, 10) ?? movement.created_at.slice(0, 10)
+      const { key, label } = periodKey(date, outPeriod)
+      if (!buckets.has(key)) buckets.set(key, { key, label, total: 0, byProduct: new Map(), byCustomer: new Map() })
+      const bucket = buckets.get(key)!
+      bucket.total += movement.quantity
+      bucket.byProduct.set(movement.product_name, (bucket.byProduct.get(movement.product_name) ?? 0) + movement.quantity)
+      const customer = customerLabel(movement.to_location)
+      bucket.byCustomer.set(customer, (bucket.byCustomer.get(customer) ?? 0) + movement.quantity)
+    }
+    const list = Array.from(buckets.values()).sort((a, b) => (a.key < b.key ? 1 : -1))
+    const maxTotal = Math.max(1, ...list.map((bucket) => bucket.total))
+    return list.map((bucket) => ({
+      key: bucket.key,
+      label: bucket.label,
+      total: bucket.total,
+      pct: `${Math.max(6, Math.round((bucket.total / maxTotal) * 100))}%`,
+      chips: Array.from(bucket.byProduct.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([product, qty]) => ({ product: shortProductName(product), qty })),
+      customers: Array.from(bucket.byCustomer.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, qty]) => ({ name, qty })),
+    }))
+  }, [data?.movements, outPeriod])
+
+  const historyCustomers = useMemo(() => {
+    const set = new Set<string>()
+    for (const movement of data?.movements ?? []) {
+      if (movement.movement_type !== "outbound") continue
+      const label = customerLabel(movement.to_location)
+      if (label !== "고객(미지정)") set.add(label)
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "ko"))
+  }, [data?.movements])
+
+  const detailMovement = useMemo(
+    () => (data?.movements ?? []).find((movement) => movement.id === detailId) ?? null,
+    [data?.movements, detailId]
+  )
+
+  const detailFacts = detailMovement
+    ? [
+        { label: "날짜", value: formatDate(detailMovement.occurred_at) },
+        { label: "수량", value: `${formatNumber(detailMovement.quantity)}대` },
+        { label: "담당자", value: detailMovement.owner ?? "-" },
+        { label: "경로", value: `${detailMovement.from_location ?? "-"} → ${detailMovement.to_location ?? "-"}` },
+        ...(detailMovement.movement_type === "inbound"
+          ? [
+              { label: "단가 (USD)", value: detailMovement.unit_price != null ? formatCurrency(detailMovement.unit_price, "USD") : "-" },
+              { label: "매입액 (USD)", value: detailMovement.amount_usd != null ? formatCurrency(detailMovement.amount_usd, "USD") : "-" },
+            ]
+          : []),
+      ]
+    : []
+  const detailCrm = detailMovement ? extractCrmLink(detailMovement) : null
+  const detailCanEdit =
+    detailMovement != null &&
+    detailMovement.source === "admin_manual" &&
+    detailMovement.voided_at == null &&
+    !detailMovement.converted_from_movement_id &&
+    !detailMovement.converted_to_movement_id
 
   const quickPickGroups = useMemo(() => {
     const featured: Array<{ row: HardwareStockRow; rank: number }> = []
@@ -653,50 +872,6 @@ export default function HardwareInventoryClient() {
       etc: etc.sort(byRank).map((entry) => entry.row),
     }
   }, [data?.stock])
-
-  const statusBoard = useMemo(() => {
-    const stockRows = data?.stock ?? []
-    const movements = data?.movements ?? []
-
-    const latestOwnerFor = (productName: string, location: string) => {
-      for (const movement of movements) {
-        if (movement.voided_at) continue
-        if (movement.to_location !== location) continue
-        if (movement.product_name !== productName) continue
-        return {
-          owner: movement.owner?.trim() || null,
-          memo: movement.memo?.trim() || null,
-        }
-      }
-      return null
-    }
-
-    const collectByLocation = (location: string) => {
-      const rows = stockRows
-        .map((row) => ({
-          product: row.product,
-          quantity: row.locationBalances.find((balance) => balance.location === location)?.quantity ?? 0,
-        }))
-        .filter((row) => row.quantity > 0)
-        .sort((a, b) => b.quantity - a.quantity)
-        .map((row) => ({ ...row, hint: latestOwnerFor(row.product, location) }))
-      const total = rows.reduce((sum, row) => sum + row.quantity, 0)
-      return { rows, total }
-    }
-
-    const sample = collectByLocation("샘플")
-    const repair = collectByLocation("수리")
-    const recentReturns = movements
-      .filter((movement) => movement.movement_type === "return" && !movement.voided_at)
-      .slice(0, 5)
-
-    return {
-      sample,
-      repair,
-      recentReturns,
-      count: sample.rows.length + repair.rows.length + recentReturns.length,
-    }
-  }, [data?.stock, data?.movements])
 
   const toggleSection = (section: HardwareSectionKey) => {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }))
@@ -717,7 +892,6 @@ export default function HardwareInventoryClient() {
     setSelectedItemId(itemId)
     setCustomProduct("")
     setQuantity("1")
-    setOpenSections((current) => ({ ...current, quick: true }))
     setSheetOpen(true)
     applyPreset(presetKey)
     window.requestAnimationFrame(() => {
@@ -765,7 +939,6 @@ export default function HardwareInventoryClient() {
     setImporter(movement.importer ?? "")
     setSerialsText((movement.serials ?? []).join(", "))
     setEditingId(movement.id)
-    setOpenSections((current) => ({ ...current, quick: true }))
     setSheetOpen(true)
   }
 
@@ -845,7 +1018,6 @@ export default function HardwareInventoryClient() {
     applyPreset("planned")
     setCustomProduct("")
     setQuantity("1")
-    setOpenSections((current) => ({ ...current, quick: true }))
     setSheetOpen(true)
     window.requestAnimationFrame(() => {
       formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
@@ -1097,7 +1269,7 @@ export default function HardwareInventoryClient() {
               type="button"
               onClick={() => void refresh()}
               disabled={loading || busy != null}
-              className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:opacity-60"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
               새로고침
@@ -1106,7 +1278,7 @@ export default function HardwareInventoryClient() {
               type="button"
               onClick={() => void importSheet()}
               disabled={busy != null}
-              className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
             >
               <UploadCloud className={`h-3.5 w-3.5 ${busy === "import" ? "animate-pulse" : ""}`} />
               {busy === "import" ? "싱크·백업 중" : "싱크·백업 후 가져오기"}
@@ -1125,7 +1297,7 @@ export default function HardwareInventoryClient() {
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
                 aria-current={active ? "page" : undefined}
-                className={`inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-[13px] font-bold transition ${
+                className={`inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-t-md border-b-2 px-4 py-3 text-[13px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 ${
                   active
                     ? "border-[#084734] text-[#084734]"
                     : "border-transparent text-[#615D59] hover:text-[#111110]"
@@ -1167,36 +1339,41 @@ export default function HardwareInventoryClient() {
             {activeTab === "home" && (
             <div className="space-y-4">
             <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <StatCard
-                icon={<Boxes className="h-4 w-4" />}
-                label="86/75 실제 가용"
-                value={`${formatNumber(coreIfpSummary.warehouseStock)}대`}
-                hint={`86" ${formatNumber(coreIfpSummary.ifp86?.warehouseStock ?? 0)}대 · 75" ${formatNumber(coreIfpSummary.ifp75?.warehouseStock ?? 0)}대`}
-              />
-              <StatCard
-                icon={<CheckCircle2 className="h-4 w-4" />}
-                label="86/75 예상 가용"
-                value={`${formatNumber(coreIfpSummary.availableStock)}대`}
-                hint={`배송 예정 차감 후 · 86" ${formatNumber(coreIfpSummary.ifp86?.availableStock ?? 0)}대 · 75" ${formatNumber(coreIfpSummary.ifp75?.availableStock ?? 0)}대`}
-              />
-              <StatCard
-                icon={<Clock3 className="h-4 w-4" />}
-                label="86/75 배송 예정"
-                value={`${formatNumber(coreIfpSummary.plannedOut)}대`}
-                hint={`86" ${formatNumber(coreIfpSummary.ifp86?.plannedOut ?? 0)}대 · 75" ${formatNumber(coreIfpSummary.ifp75?.plannedOut ?? 0)}대`}
-              />
-              <StatCard
-                icon={<TrendingDown className="h-4 w-4" />}
-                label="86/75 30일 출고"
-                value={`${formatNumber(coreIfpSummary.outbound30d)}대`}
-                hint={`86" ${formatNumber(coreIfpSummary.ifp86?.outbound30d ?? 0)}대 · 75" ${formatNumber(coreIfpSummary.ifp75?.outbound30d ?? 0)}대`}
-              />
+              {categoryCards.map((card) => {
+                const CardIcon = card.icon
+                return (
+                  <div
+                    key={card.key}
+                    className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-bold tracking-[0.04em] text-[#615D59]">{card.label}</p>
+                        <p className="mt-2 flex items-baseline gap-1.5">
+                          <span className="text-[28px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]">{formatNumber(card.available)}</span>
+                          <span className="text-[13px] font-semibold text-[#615D59]">가용</span>
+                        </p>
+                      </div>
+                      <span
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                        style={{ backgroundColor: card.tone.bg, color: card.tone.fg }}
+                      >
+                        <CardIcon className="h-[18px] w-[18px]" />
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <span className="rounded-full bg-[#F6F5F4] px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#31302E]">창고 {formatNumber(card.warehouse)}</span>
+                      <span className="rounded-full bg-[#FBF1E0] px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#A8741A]">예정 {formatNumber(card.planned)}</span>
+                      <span className="rounded-full bg-[#ECFDF5] px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#084734]">30일 {formatNumber(card.out30)}</span>
+                    </div>
+                  </div>
+                )
+              })}
             </section>
 
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <section
               data-testid="hardware-planned-info-panel"
-              className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+              className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
             >
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3">
                 <div className="flex min-w-0 items-start gap-3">
@@ -1215,7 +1392,7 @@ export default function HardwareInventoryClient() {
                   <button
                     type="button"
                     onClick={startPlannedEntry}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white transition hover:bg-[#065c41]"
+                    className="inline-flex items-center gap-1.5 cursor-pointer rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
                   >
                     <Clock3 className="h-3.5 w-3.5" />
                     예상 출고 등록
@@ -1254,7 +1431,7 @@ export default function HardwareInventoryClient() {
                             onChange={(event) => setConfirmQtys((current) => ({ ...current, [movement.id]: event.target.value }))}
                             aria-label="확정 수량"
                             title="확정 수량 (부분 확정 가능)"
-                            className="h-8 w-14 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-center text-[11px] font-bold text-[#111110] outline-none focus:border-[#084734]"
+                            className="h-8 w-14 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-center text-[11px] font-bold text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                           />
                           <input
                             type="date"
@@ -1262,12 +1439,12 @@ export default function HardwareInventoryClient() {
                             onChange={(event) => setConfirmDates((current) => ({ ...current, [movement.id]: event.target.value }))}
                             aria-label="출고 확정일"
                             title="출고 확정일"
-                            className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
+                            className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11px] font-semibold text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                           />
                           <button
                             type="button"
                             onClick={() => editMovement(movement)}
-                            className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4]"
+                            className="cursor-pointer rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
                           >
                             수정
                           </button>
@@ -1275,7 +1452,7 @@ export default function HardwareInventoryClient() {
                             type="button"
                             onClick={() => void confirmPlannedMovement(movement)}
                             disabled={confirmingId === movement.id || busy != null}
-                            className="inline-flex items-center gap-1 rounded-md bg-[#084734] px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60"
+                            className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-[#084734] px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <CheckCheck className="h-3.5 w-3.5" />
                             {confirmingId === movement.id ? "확정 중" : "출고 확정"}
@@ -1289,115 +1466,86 @@ export default function HardwareInventoryClient() {
               )}
             </section>
 
-            <section
-              data-testid="hardware-status-board"
-              className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
-            >
-              <SectionHeader
-                title="특수 상태"
-                description="샘플·대여 보유, 수리 중, 최근 반납을 한눈에."
-                open={openSections.statusBoard}
-                onToggle={() => toggleSection("statusBoard")}
-                meta={<span className="text-[11px] font-semibold text-[#615D59]">{formatNumber(statusBoard.count)}건</span>}
-              />
-              {openSections.statusBoard && (
-                <div className="space-y-3 p-4">
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#084734]">
-                        <span className="h-2 w-2 rounded-full bg-[#084734]" />
-                        샘플·대여 보유
-                      </span>
-                      <span className="text-[11px] font-bold text-[#111110]">{formatNumber(statusBoard.sample.total)}대</span>
-                    </div>
-                    <div className="mt-1.5 space-y-1">
-                      {statusBoard.sample.rows.length === 0 ? (
-                        <p className="rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-semibold text-[#615D59]">현재 샘플 없음</p>
-                      ) : (
-                        <>
-                          {statusBoard.sample.rows.slice(0, 4).map((row) => (
-                            <div key={row.product} className="rounded-md bg-[#ECFDF5] px-2.5 py-1.5">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="truncate text-[12px] font-bold text-[#111110]">{row.product}</span>
-                                <span className="shrink-0 text-[12px] font-bold text-[#084734]">{formatNumber(row.quantity)}대</span>
-                              </div>
-                              <p className="mt-0.5 truncate text-[11px] text-[#615D59]">
-                                {row.hint?.owner ?? "담당자 미정"}
-                                {row.hint?.memo ? ` · ${row.hint.memo}` : ""}
-                              </p>
-                            </div>
-                          ))}
-                          {statusBoard.sample.rows.length > 4 && (
-                            <p className="text-[11px] font-semibold text-[#615D59]">+{statusBoard.sample.rows.length - 4} more</p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#A8741A]">
-                        <span className="h-2 w-2 rounded-full bg-[#31302E]" />
-                        수리 중
-                      </span>
-                      <span className="text-[11px] font-bold text-[#111110]">{formatNumber(statusBoard.repair.total)}대</span>
-                    </div>
-                    <div className="mt-1.5 space-y-1">
-                      {statusBoard.repair.rows.length === 0 ? (
-                        <p className="rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-semibold text-[#615D59]">현재 수리 없음</p>
-                      ) : (
-                        <>
-                          {statusBoard.repair.rows.slice(0, 4).map((row) => (
-                            <div key={row.product} className="rounded-md bg-[#FBF1E0] px-2.5 py-1.5">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="truncate text-[12px] font-bold text-[#111110]">{row.product}</span>
-                                <span className="shrink-0 text-[12px] font-bold text-[#A8741A]">{formatNumber(row.quantity)}대</span>
-                              </div>
-                              <p className="mt-0.5 truncate text-[11px] text-[#615D59]">
-                                {row.hint?.owner ?? "담당자 미정"}
-                                {row.hint?.memo ? ` · ${row.hint.memo}` : ""}
-                              </p>
-                            </div>
-                          ))}
-                          {statusBoard.repair.rows.length > 4 && (
-                            <p className="text-[11px] font-semibold text-[#615D59]">+{statusBoard.repair.rows.length - 4} more</p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#615D59]">
-                        <span className="h-2 w-2 rounded-full bg-[#615D59]" />
-                        최근 반납·회수
-                      </span>
-                      <span className="text-[11px] font-bold text-[#111110]">{formatNumber(statusBoard.recentReturns.length)}건</span>
-                    </div>
-                    <div className="mt-1.5 space-y-1">
-                      {statusBoard.recentReturns.length === 0 ? (
-                        <p className="rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-semibold text-[#615D59]">최근 반납 없음</p>
-                      ) : (
-                        statusBoard.recentReturns.map((movement) => (
-                          <div key={movement.id} className="rounded-md bg-[#F6F5F4] px-2.5 py-1.5">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="truncate text-[12px] font-bold text-[#111110]">{movement.product_name}</span>
-                              <span className="shrink-0 text-[12px] font-bold text-[#31302E]">{formatNumber(movement.quantity)}대</span>
-                            </div>
-                            <p className="mt-0.5 truncate text-[11px] text-[#615D59]">
-                              {movement.from_location ?? "-"} → {movement.to_location ?? "-"} · {formatDate(movement.occurred_at)}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
+            <section className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+              <div className="border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
+                <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">재고 위치 맵</p>
+                <p className="mt-1 text-[12px] text-[#615D59]">창고 가용 · 배송 예정 · 고객 · 샘플 · 사무실 · 수리 재고를 한 줄에서 확인합니다.</p>
+              </div>
+              <div className="grid lg:grid-cols-[280px_minmax(0,1fr)]">
+                <div className="border-b border-[rgba(0,0,0,0.08)] px-5 py-[18px] lg:border-b-0 lg:border-r">
+                  <p className="text-[12px] font-bold text-[#111110]">위치별 총량</p>
+                  <div className="mt-3.5 flex flex-col gap-3">
+                    {locationMap.locationTotals.map((loc) => (
+                      <div key={loc.name}>
+                        <div className="flex items-center justify-between gap-3 text-[12px]">
+                          <span className="font-semibold text-[#31302E]">{loc.name}</span>
+                          <span className="font-bold tabular-nums text-[#111110]">{formatNumber(loc.quantity)}대</span>
+                        </div>
+                        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#F6F5F4]">
+                          <div className="h-full rounded-full" style={{ backgroundColor: loc.tone, width: loc.pct }} />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              )}
+                <div className="overflow-x-auto">
+                  <div className="min-w-[680px]">
+                    {locationMap.matrixRows.map((row) => (
+                      <div
+                        key={row.itemId}
+                        className="grid grid-cols-[200px_minmax(0,1fr)_150px] items-center gap-4 border-t border-[rgba(0,0,0,0.06)] px-5 py-3.5 first:border-t-0"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-bold text-[#111110]">{row.product}</p>
+                          <p className="mt-1 text-[11px] tabular-nums text-[#615D59]">
+                            예상 가용 {formatNumber(row.available)}대 · 30일 {formatNumber(row.out30)}대
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-3 gap-x-3 gap-y-2 sm:grid-cols-6">
+                          {row.cells.map((cell) => (
+                            <div key={cell.label} className="min-w-0">
+                              <div className="flex items-center justify-between gap-1 text-[11px]">
+                                <span className="truncate font-semibold text-[#615D59]">{cell.label}</span>
+                                <span className="font-bold tabular-nums text-[#111110]">{formatNumber(cell.qty)}</span>
+                              </div>
+                              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#F6F5F4]">
+                                <div className="h-full rounded-full" style={{ backgroundColor: cell.tone, width: cell.pct }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => prepareQuickEntry(row.itemId, "sale")}
+                            className="cursor-pointer rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#FCE9E9] hover:text-[#B43E3E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
+                          >
+                            출고
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => prepareQuickEntry(row.itemId, "planned")}
+                            className="cursor-pointer rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#FBF1E0] hover:text-[#A8741A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
+                          >
+                            예정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => prepareQuickEntry(row.itemId, "inbound")}
+                            className="cursor-pointer rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#ECFDF5] hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
+                          >
+                            입고
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {locationMap.matrixRows.length === 0 && (
+                      <p className="px-5 py-10 text-center text-[13px] text-[#615D59]">재고 데이터가 없습니다.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </section>
-            </div>
 
             <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
               <SectionHeader
@@ -1415,7 +1563,7 @@ export default function HardwareInventoryClient() {
               {openSections.stock && (
                 <>
                   <div className="overflow-x-auto">
-                    <table className="min-w-[1040px] w-full border-collapse text-left">
+                    <table className="min-w-[860px] w-full border-collapse text-left">
                       <thead className="bg-[#F6F5F4] text-[11px] font-bold uppercase tracking-[0.05em] text-[#615D59]">
                         <tr>
                           <th className="px-5 py-3">품목</th>
@@ -1423,7 +1571,6 @@ export default function HardwareInventoryClient() {
                           <th className="px-4 py-3 text-right">배송 예정</th>
                           <th className="px-4 py-3 text-right">예상</th>
                           <th className="px-4 py-3 text-right">30일</th>
-                          <th className="px-4 py-3">위치</th>
                           <th className="px-4 py-3 text-right">빠른 처리</th>
                           <th className="px-5 py-3 text-right">상태</th>
                         </tr>
@@ -1431,13 +1578,13 @@ export default function HardwareInventoryClient() {
                       <tbody className="divide-y divide-[rgba(0,0,0,0.06)]">
                         {stockPagination.totalItems === 0 ? (
                           <tr>
-                            <td colSpan={8} className="px-5 py-10 text-center text-[13px] text-[#615D59]">
+                            <td colSpan={7} className="px-5 py-10 text-center text-[13px] text-[#615D59]">
                               아직 하드웨어 원장 데이터가 없습니다. 시트 가져오기를 먼저 실행하세요.
                             </td>
                           </tr>
                         ) : (
                           stockPagination.pageItems.map((row) => (
-                            <tr key={row.itemId} className="align-top">
+                            <tr key={row.itemId} className="align-top transition-colors hover:bg-[#FAFAF8]">
                               <td className="px-5 py-3.5">
                                 <p className="text-[13px] font-bold text-[#111110]">{row.product}</p>
                                 <p className="mt-1 text-[11px] text-[#615D59]">
@@ -1458,54 +1605,39 @@ export default function HardwareInventoryClient() {
                                   </div>
                                 )}
                               </td>
-                              <td className="px-4 py-3.5 text-right text-[14px] font-bold text-[#111110]">
+                              <td className="px-4 py-3.5 text-right text-[14px] font-bold tabular-nums text-[#111110]">
                                 {formatNumber(row.warehouseStock)}
                               </td>
-                              <td className="px-4 py-3.5 text-right text-[13px] font-semibold text-[#A8741A]">
+                              <td className="px-4 py-3.5 text-right text-[13px] font-semibold tabular-nums text-[#A8741A]">
                                 {formatNumber(row.plannedOut)}
                               </td>
-                              <td className="px-4 py-3.5 text-right text-[16px] font-bold tracking-[-0.02em] text-[#111110]">
+                              <td className="px-4 py-3.5 text-right text-[16px] font-bold tabular-nums tracking-[-0.02em] text-[#111110]">
                                 {formatNumber(row.availableStock)}
                               </td>
                               <td className="px-4 py-3.5 text-right">
-                                <p className="text-[13px] font-semibold text-[#111110]">{formatNumber(row.outbound30d)}</p>
-                                <p className="mt-1 text-[11px] text-[#615D59]">주 {formatAvg(row.weeklyOutboundAvg)}대</p>
-                              </td>
-                              <td className="px-4 py-3.5">
-                                <div className="flex max-w-[260px] flex-wrap gap-1.5">
-                                  {row.locationBalances.slice(0, 3).map((loc) => (
-                                    <span key={loc.location} className="inline-flex items-center gap-1 rounded-full bg-[#F6F5F4] px-2 py-1 text-[11px] font-semibold text-[#31302E]">
-                                      <MapPin className="h-3 w-3 text-[#615D59]" />
-                                      {loc.location} {formatNumber(loc.quantity)}
-                                    </span>
-                                  ))}
-                                  {row.locationBalances.length > 3 && (
-                                    <span className="rounded-full bg-[#ECFDF5] px-2 py-1 text-[11px] font-semibold text-[#084734]">
-                                      +{row.locationBalances.length - 3}
-                                    </span>
-                                  )}
-                                </div>
+                                <p className="text-[13px] font-semibold tabular-nums text-[#111110]">{formatNumber(row.outbound30d)}</p>
+                                <p className="mt-1 text-[11px] tabular-nums text-[#615D59]">주 {formatAvg(row.weeklyOutboundAvg)}대</p>
                               </td>
                               <td className="px-4 py-3.5 text-right">
                                 <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
                                   <button
                                     type="button"
                                     onClick={() => prepareQuickEntry(row.itemId, "sale")}
-                                    className="rounded-md px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-white hover:text-[#B43E3E]"
+                                    className="cursor-pointer rounded-md px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#FCE9E9] hover:text-[#B43E3E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
                                   >
                                     출고
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => prepareQuickEntry(row.itemId, "planned")}
-                                    className="rounded-md px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-white hover:text-[#A8741A]"
+                                    className="cursor-pointer rounded-md px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#FBF1E0] hover:text-[#A8741A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
                                   >
                                     예정
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => prepareQuickEntry(row.itemId, "inbound")}
-                                    className="rounded-md px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-white hover:text-[#084734]"
+                                    className="cursor-pointer rounded-md px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#ECFDF5] hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
                                   >
                                     입고
                                   </button>
@@ -1607,65 +1739,204 @@ export default function HardwareInventoryClient() {
             )}
 
             {activeTab === "entry" && (
-            <div className="mt-6 space-y-6">
+            <div className="mt-6 space-y-5">
               <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                <div className="border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
-                  <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">빠른 기록</p>
-                  <p className="mt-1 text-[12px] text-[#615D59]">유형을 고르면 입력 시트가 열립니다. 재고·예상 출고 목록에서 바로 열 수도 있습니다.</p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 p-5 sm:grid-cols-4">
-                  {ENTRY_PRESETS.map((option) => {
-                    const Icon = option.icon
-                    return (
-                      <button
-                        key={option.key}
-                        type="button"
-                        onClick={() => {
-                          applyPreset(option.key)
-                          setSheetOpen(true)
-                        }}
-                        className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-3 text-left transition hover:bg-[#F6F5F4]"
-                      >
-                        <span className="flex items-center gap-2 text-[12px] font-bold text-[#31302E]">
-                          <Icon className="h-3.5 w-3.5" />
-                          {option.label}
-                        </span>
-                        <span className="mt-1 block text-[11px] text-[#615D59]">{option.description}</span>
-                      </button>
-                    )
-                  })}
+                <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+                  <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setEntrySub("inbound")}
+                      className={`cursor-pointer rounded-md px-3.5 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
+                        entrySub === "inbound" ? "bg-white text-[#084734] shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "text-[#615D59] hover:text-[#111110]"
+                      }`}
+                    >
+                      입고 · 물량번호
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEntrySub("outbound")}
+                      className={`cursor-pointer rounded-md px-3.5 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
+                        entrySub === "outbound" ? "bg-white text-[#084734] shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "text-[#615D59] hover:text-[#111110]"
+                      }`}
+                    >
+                      출고 · 기간 집계
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openFreshSheet}
+                    className="inline-flex items-center gap-1.5 cursor-pointer rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    빠른 기록
+                  </button>
                 </div>
               </section>
 
-              <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                <div className="flex items-center justify-between border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
-                  <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">최근 기록</p>
-                  <button type="button" onClick={() => setActiveTab("history")} className="text-[11px] font-bold text-[#084734] transition hover:underline">
-                    전체 내역 →
-                  </button>
-                </div>
-                <div className="divide-y divide-[rgba(0,0,0,0.06)]">
-                  {(data?.movements ?? []).slice(0, 6).map((movement) => (
-                    <div key={movement.id} className={`px-5 py-3 ${movement.voided_at ? "opacity-55" : ""}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className={`truncate text-[12.5px] font-bold text-[#111110] ${movement.voided_at ? "line-through" : ""}`}>{movement.product_name}</p>
-                          <p className="mt-1 text-[11px] text-[#615D59]">
-                            {formatDate(movement.occurred_at)} · {movement.to_location ?? movement.from_location ?? "위치 미정"}
-                            {movementLot(movement) ? ` · lot ${movementLot(movement)}` : ""}
+              {entrySub === "inbound" && (
+                <section className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
+                    <div className="min-w-0">
+                      <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">입고 물량 (물량번호별)</p>
+                      <p className="mt-1 text-[12px] text-[#615D59]">한 물량번호(lot)에 여러 품목이 함께 입고됩니다. 물량번호·품목으로 검색하세요. 매입 단가는 USD 기준입니다.</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4">
+                      <label className="relative block">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#A39E98]" />
+                        <input
+                          value={inboundSearch}
+                          onChange={(event) => setInboundSearch(event.target.value)}
+                          placeholder="물량번호·품목 검색"
+                          className="h-9 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-8 pr-3 text-[12.5px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 sm:w-[210px]"
+                        />
+                      </label>
+                      <div className="flex gap-5">
+                        <div className="text-right">
+                          <p className="text-[11px] font-semibold text-[#615D59]">총 입고</p>
+                          <p className="mt-0.5 text-[17px] font-bold tracking-[-0.02em] tabular-nums text-[#111110]">{formatNumber(inboundLots.totalQty)}대</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[11px] font-semibold text-[#615D59]">총 매입액</p>
+                          <p className="mt-0.5 text-[17px] font-bold tracking-[-0.02em] tabular-nums text-[#084734]">
+                            {inboundLots.hasAnyAmount ? formatCurrency(inboundLots.totalAmount, "USD") : "-"}
                           </p>
                         </div>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${MOVEMENT_TONE[movement.movement_type]}`}>
-                          {MOVEMENT_LABEL[movement.movement_type]} {formatNumber(movement.quantity)}
-                        </span>
                       </div>
                     </div>
-                  ))}
-                  {(data?.movements ?? []).length === 0 && (
-                    <p className="px-5 py-8 text-center text-[13px] text-[#615D59]">아직 기록이 없습니다. 위에서 유형을 선택해 기록하세요.</p>
-                  )}
-                </div>
-              </section>
+                  </div>
+                  <div className="flex flex-col">
+                    {inboundLots.lots.map((lot) => (
+                      <div key={lot.lot} className="border-t border-[rgba(0,0,0,0.06)] px-5 py-4 first:border-t-0">
+                        <div className="flex flex-wrap items-center justify-between gap-2.5">
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <span className="inline-flex rounded-md bg-[#ECFDF5] px-2.5 py-1 text-[14px] font-bold tracking-[0.02em] text-[#084734]">{lot.lot}</span>
+                            <span className="text-[12px] text-[#615D59]">
+                              {lot.date} · {lot.importer ?? "수입자 미상"} · {formatNumber(lot.items.length)}개 품목
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="text-[12px] font-semibold text-[#615D59]">
+                              총 <span className="font-bold tabular-nums text-[#111110]">{formatNumber(lot.totalQty)}대</span>
+                            </span>
+                            <span className="text-[13px] font-bold tabular-nums text-[#084734]">{lot.hasAmount ? formatCurrency(lot.totalAmount, "USD") : "-"}</span>
+                          </div>
+                        </div>
+                        <div className="mt-2.5 overflow-x-auto rounded-lg border border-[rgba(0,0,0,0.06)]">
+                          <div className="min-w-[520px]">
+                            <div className="grid grid-cols-[1.6fr_80px_110px_120px] gap-2.5 bg-[#F6F5F4] px-3.5 py-2 text-[10.5px] font-bold uppercase tracking-[0.04em] text-[#615D59]">
+                              <span>품목</span>
+                              <span className="text-right">수량</span>
+                              <span className="text-right">단가</span>
+                              <span className="text-right">금액</span>
+                            </div>
+                            {lot.items.map((item) => (
+                              <div key={item.id} className="grid grid-cols-[1.6fr_80px_110px_120px] items-center gap-2.5 border-t border-[rgba(0,0,0,0.05)] px-3.5 py-2">
+                                <span className="truncate text-[12.5px] font-semibold text-[#111110]">{item.product_name}</span>
+                                <span className="text-right text-[13px] font-bold tabular-nums text-[#111110]">{formatNumber(item.quantity)}대</span>
+                                <span className="text-right text-[12px] tabular-nums text-[#615D59]">{item.unit_price != null ? formatCurrency(item.unit_price, "USD") : "-"}</span>
+                                <span className="text-right text-[12.5px] font-bold tabular-nums text-[#084734]">{item.amount_usd != null ? formatCurrency(item.amount_usd, "USD") : "-"}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {inboundLots.lots.length === 0 && (
+                      <p className="px-5 py-10 text-center text-[13px] text-[#615D59]">
+                        {inboundSearch.trim() ? "검색 결과가 없습니다." : "입고 기록이 없습니다. 빠른 기록에서 입고를 등록하거나 시트를 가져오세요."}
+                      </p>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              {entrySub === "outbound" && (
+                <section className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
+                    <div>
+                      <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">기간별 출고 집계</p>
+                      <p className="mt-1 text-[12px] text-[#615D59]">확정 출고(샘플·수리 제외) 기준 기간 집계. 행을 클릭하면 고객사별 출고량이 펼쳐집니다. 매출 금액은 외부 CRM 수금 연동 후 표시됩니다.</p>
+                    </div>
+                    <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
+                      {([["month", "월"], ["quarter", "분기"], ["year", "연"]] as const).map(([key, label]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setOutPeriod(key)}
+                          className={`cursor-pointer rounded-md px-3.5 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
+                            outPeriod === key ? "bg-white text-[#084734] shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "text-[#615D59] hover:text-[#111110]"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    {outboundBuckets.map((bucket) => {
+                      const open = Boolean(openPeriods[bucket.key])
+                      return (
+                        <div key={bucket.key} className="border-t border-[rgba(0,0,0,0.06)] first:border-t-0">
+                          <button
+                            type="button"
+                            onClick={() => setOpenPeriods((current) => ({ ...current, [bucket.key]: !current[bucket.key] }))}
+                            className="block w-full cursor-pointer px-5 py-4 text-left transition hover:bg-[#FAFAF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-[#A39E98] transition-transform ${open ? "rotate-90" : ""}`} />
+                                <p className="text-[13px] font-bold text-[#111110]">{bucket.label}</p>
+                              </div>
+                              <span className="shrink-0 text-[12px] font-semibold tabular-nums text-[#615D59]">{formatNumber(bucket.total)}대</span>
+                            </div>
+                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#F6F5F4]">
+                              <div className="h-full rounded-full bg-[#B43E3E]" style={{ width: bucket.pct }} />
+                            </div>
+                            <div className="mt-2.5 flex flex-wrap gap-1.5">
+                              {bucket.chips.map((chip) => (
+                                <span key={chip.product} className="inline-flex items-center gap-1.5 rounded-full bg-[#F6F5F4] px-2.5 py-1 text-[11px] font-semibold text-[#31302E]">
+                                  {chip.product}
+                                  <span className="font-bold tabular-nums text-[#111110]">{formatNumber(chip.qty)}</span>
+                                </span>
+                              ))}
+                            </div>
+                          </button>
+                          {open && (
+                            <div className="px-5 pb-4">
+                              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59]">고객사별 모음</p>
+                              <div className="overflow-hidden rounded-lg border border-[rgba(0,0,0,0.06)]">
+                                <div className="grid grid-cols-[1.6fr_80px] gap-2.5 bg-[#F6F5F4] px-3.5 py-2 text-[10.5px] font-bold uppercase tracking-[0.04em] text-[#615D59]">
+                                  <span>고객사</span>
+                                  <span className="text-right">수량</span>
+                                </div>
+                                {bucket.customers.map((customer) => (
+                                  <div key={customer.name} className="grid grid-cols-[1.6fr_80px] items-center gap-2.5 border-t border-[rgba(0,0,0,0.05)] px-3.5 py-2">
+                                    <span className="truncate text-[12.5px] font-semibold text-[#111110]">{customer.name}</span>
+                                    <span className="text-right text-[13px] font-bold tabular-nums text-[#111110]">{formatNumber(customer.qty)}대</span>
+                                  </div>
+                                ))}
+                                <div className="grid grid-cols-[1.6fr_80px] items-center gap-2.5 border-t border-[rgba(0,0,0,0.1)] bg-[#FAFAF8] px-3.5 py-2.5">
+                                  <span className="text-[12px] font-bold text-[#111110]">전체 합계</span>
+                                  <span className="text-right text-[13px] font-bold tabular-nums text-[#111110]">{formatNumber(bucket.total)}대</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {outboundBuckets.length === 0 && (
+                      <p className="px-5 py-10 text-center text-[13px] text-[#615D59]">해당 기간 확정 출고 집계가 없습니다.</p>
+                    )}
+                  </div>
+                </section>
+              )}
+
+              <div className="flex justify-end">
+                <button type="button" onClick={() => setActiveTab("history")} className="cursor-pointer rounded text-[11px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40">
+                  전체 내역 →
+                </button>
+              </div>
             </div>
             )}
 
@@ -1702,7 +1973,7 @@ export default function HardwareInventoryClient() {
                       type="button"
                       onClick={() => setSheetOpen(false)}
                       aria-label="닫기"
-                      className="flex h-8 w-8 items-center justify-center rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+                      className="flex h-8 w-8 items-center justify-center cursor-pointer rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -1723,7 +1994,7 @@ export default function HardwareInventoryClient() {
                             key={option.key}
                             type="button"
                             onClick={() => applyPreset(option.key)}
-                            className={`rounded-lg border px-3 py-2.5 text-left transition ${
+                            className={`cursor-pointer rounded-lg border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100 ${
                               active
                                 ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
                                 : "border-[rgba(0,0,0,0.08)] bg-white text-[#31302E] hover:bg-[#F6F5F4]"
@@ -1747,7 +2018,7 @@ export default function HardwareInventoryClient() {
                           setSelectedItemId(event.target.value)
                           setCustomProduct("")
                         }}
-                        className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
+                        className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] font-semibold text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                       >
                         {(data?.items ?? []).map((item) => (
                           <option key={item.id} value={item.id}>{item.name}</option>
@@ -1761,7 +2032,7 @@ export default function HardwareInventoryClient() {
                         value={customProduct}
                         onChange={(event) => setCustomProduct(event.target.value)}
                         placeholder="예: OPS 케이블"
-                        className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+                        className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734]"
                       />
                     </label>
 
@@ -1778,7 +2049,7 @@ export default function HardwareInventoryClient() {
                                   setSelectedItemId(row.itemId)
                                   setCustomProduct("")
                                 }}
-                                className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                                className={`cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
                                   selectedItemId === row.itemId && !customProduct.trim()
                                     ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
                                     : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
@@ -1791,7 +2062,7 @@ export default function HardwareInventoryClient() {
                         )}
                         {quickPickGroups.etc.length > 0 && (
                           <>
-                            <span className="mt-2.5 block text-[11px] font-bold text-[#A39E98]">기타</span>
+                            <span className="mt-2.5 block text-[11px] font-bold text-[#615D59]">기타</span>
                             <div className="mt-1.5 flex flex-wrap gap-1.5">
                               {quickPickGroups.etc.map((row) => (
                                 <button
@@ -1801,7 +2072,7 @@ export default function HardwareInventoryClient() {
                                     setSelectedItemId(row.itemId)
                                     setCustomProduct("")
                                   }}
-                                  className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                                  className={`cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
                                     selectedItemId === row.itemId && !customProduct.trim()
                                       ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
                                       : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
@@ -1823,7 +2094,7 @@ export default function HardwareInventoryClient() {
                           <button
                             type="button"
                             onClick={() => adjustQuantity(-1)}
-                            className="flex items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+                            className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
                             aria-label="수량 줄이기"
                           >
                             <Minus className="h-3.5 w-3.5" />
@@ -1838,7 +2109,7 @@ export default function HardwareInventoryClient() {
                           <button
                             type="button"
                             onClick={() => adjustQuantity(1)}
-                            className="flex items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+                            className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
                             aria-label="수량 늘리기"
                           >
                             <Plus className="h-3.5 w-3.5" />
@@ -1867,7 +2138,7 @@ export default function HardwareInventoryClient() {
                           type="date"
                           value={occurredAt}
                           onChange={(event) => setOccurredAt(event.target.value)}
-                          className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734]"
+                          className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                         />
                       </label>
                     </div>
@@ -1880,7 +2151,7 @@ export default function HardwareInventoryClient() {
                           onChange={(event) => setFromLocation(event.target.value)}
                           placeholder="창고"
                           list="hardware-location-options"
-                          className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+                          className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734]"
                         />
                       </label>
                       <label className="block">
@@ -1890,7 +2161,7 @@ export default function HardwareInventoryClient() {
                           onChange={(event) => setToLocation(event.target.value)}
                           placeholder="고객/창고/샘플/사무실"
                           list="hardware-location-options"
-                          className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+                          className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734]"
                         />
                       </label>
                     </div>
@@ -1901,7 +2172,7 @@ export default function HardwareInventoryClient() {
                         <input
                           value={owner}
                           onChange={(event) => setOwner(event.target.value)}
-                          className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734]"
+                          className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                         />
                       </label>
                       <label className="block">
@@ -1909,7 +2180,7 @@ export default function HardwareInventoryClient() {
                         <input
                           value={status}
                           onChange={(event) => setStatus(event.target.value)}
-                          className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734]"
+                          className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                         />
                       </label>
                     </div>
@@ -1921,7 +2192,7 @@ export default function HardwareInventoryClient() {
                         onChange={(event) => setLotNo(event.target.value)}
                         placeholder="입고: 신규 lot · 출고: 기존 lot 선택"
                         list="hardware-lot-options"
-                        className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+                        className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734]"
                       />
                     </label>
 
@@ -1937,7 +2208,7 @@ export default function HardwareInventoryClient() {
                               step="0.01"
                               value={unitPrice}
                               onChange={(event) => setUnitPrice(event.target.value)}
-                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734]"
+                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                             />
                           </label>
                           <label className="block">
@@ -1948,7 +2219,7 @@ export default function HardwareInventoryClient() {
                               step="0.01"
                               value={amountUsd}
                               onChange={(event) => setAmountUsd(event.target.value)}
-                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734]"
+                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                             />
                           </label>
                         </div>
@@ -1961,7 +2232,7 @@ export default function HardwareInventoryClient() {
                               step="0.01"
                               value={amountCny}
                               onChange={(event) => setAmountCny(event.target.value)}
-                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734]"
+                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                             />
                           </label>
                           <label className="block">
@@ -1971,7 +2242,7 @@ export default function HardwareInventoryClient() {
                               onChange={(event) => setStorageLocation(event.target.value)}
                               list="hardware-location-options"
                               placeholder="창고"
-                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734]"
                             />
                           </label>
                         </div>
@@ -1981,7 +2252,7 @@ export default function HardwareInventoryClient() {
                             value={importer}
                             onChange={(event) => setImporter(event.target.value)}
                             placeholder="예: Classin"
-                            className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+                            className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734]"
                           />
                         </label>
                         <label className="block">
@@ -1990,7 +2261,7 @@ export default function HardwareInventoryClient() {
                             value={serialsText}
                             onChange={(event) => setSerialsText(event.target.value)}
                             placeholder="예: SN001, SN002"
-                            className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+                            className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734]"
                           />
                         </label>
                       </div>
@@ -2002,7 +2273,7 @@ export default function HardwareInventoryClient() {
                         value={referenceNo}
                         onChange={(event) => setReferenceNo(event.target.value)}
                         placeholder="내부 번호 또는 CRM 참조"
-                        className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734]"
+                        className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734]"
                       />
                     </label>
 
@@ -2024,7 +2295,7 @@ export default function HardwareInventoryClient() {
                         value={memo}
                         onChange={(event) => setMemo(event.target.value)}
                         rows={3}
-                        className="mt-1 w-full resize-none rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#084734]"
+                        className="mt-1 w-full resize-none rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                       />
                     </label>
 
@@ -2041,7 +2312,7 @@ export default function HardwareInventoryClient() {
                     <button
                       type="submit"
                       disabled={busy != null || (!customProduct.trim() && !selectedItem)}
-                      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60"
+                      className="inline-flex h-10 w-full items-center justify-center gap-2 cursor-pointer rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <Save className="h-4 w-4" />
                       {editingId ? "수정 저장" : "기록 저장"}
@@ -2056,8 +2327,38 @@ export default function HardwareInventoryClient() {
             {activeTab === "history" && (
             <div className="mt-6 space-y-4">
                 <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#111110]">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <label className="relative block min-w-[240px] flex-1 sm:max-w-[440px]">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
+                      <input
+                        value={search}
+                        onChange={(event) => {
+                          setSearch(event.target.value)
+                          setMovementsPage(1)
+                        }}
+                        placeholder="품목·고객사·물량번호·담당자·특이사항 검색"
+                        className="h-10 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                      />
+                    </label>
+                    {hasHistoryFilter && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHistoryType("all")
+                          setProductFilter("")
+                          setCustomerFilter("")
+                          setSearch("")
+                          setMovementsPage(1)
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4]"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        필터 초기화
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-3.5 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex w-12 shrink-0 items-center gap-1.5 text-[12px] font-bold text-[#111110]">
                       <Filter className="h-3.5 w-3.5 text-[#615D59]" />
                       유형
                     </span>
@@ -2071,7 +2372,7 @@ export default function HardwareInventoryClient() {
                             setHistoryType(type)
                             setMovementsPage(1)
                           }}
-                          className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                          className={`cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
                             active
                               ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
                               : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
@@ -2092,7 +2393,7 @@ export default function HardwareInventoryClient() {
                               setHistorySort(order)
                               setMovementsPage(1)
                             }}
-                            className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                            className={`cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
                               active
                                 ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
                                 : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
@@ -2105,15 +2406,15 @@ export default function HardwareInventoryClient() {
                     </span>
                   </div>
                   {(data?.stock ?? []).length > 0 ? (
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <span className="text-[12px] font-bold text-[#111110]">제품</span>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                      <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">제품</span>
                       <button
                         type="button"
                         onClick={() => {
                           setProductFilter("")
                           setMovementsPage(1)
                         }}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                        className={`cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
                           productFilter === ""
                             ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
                             : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
@@ -2131,7 +2432,7 @@ export default function HardwareInventoryClient() {
                               setProductFilter(active ? "" : row.itemId)
                               setMovementsPage(1)
                             }}
-                            className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                            className={`cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
                               active
                                 ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
                                 : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
@@ -2143,67 +2444,124 @@ export default function HardwareInventoryClient() {
                       })}
                     </div>
                   ) : null}
+                  {historyCustomers.length > 0 ? (
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                      <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">고객사</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomerFilter("")
+                          setMovementsPage(1)
+                        }}
+                        className={`cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
+                          customerFilter === ""
+                            ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                            : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
+                        }`}
+                      >
+                        전체
+                      </button>
+                      {historyCustomers.map((customer) => {
+                        const active = customerFilter === customer
+                        return (
+                          <button
+                            key={customer}
+                            type="button"
+                            onClick={() => {
+                              setCustomerFilter(active ? "" : customer)
+                              setMovementsPage(1)
+                            }}
+                            className={`cursor-pointer rounded-full border px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
+                              active
+                                ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                                : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
+                            }`}
+                          >
+                            {customer}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : null}
                 </section>
-                <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                  <SectionHeader
-                    title="입출고 기록"
-                    open={openSections.movements}
-                    onToggle={() => toggleSection("movements")}
-                    meta={<span className="text-[11px] font-semibold text-[#615D59]">{formatNumber(movementsPagination.totalItems)}건</span>}
-                  />
-                  {openSections.movements && (
-                    <>
-                      <div className="divide-y divide-[rgba(0,0,0,0.06)]">
-                        {movementsPagination.pageItems.map((movement) => (
-                          <div key={movement.id} className={`px-5 py-3 ${movement.voided_at ? "opacity-55" : ""}`}>
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className={`truncate text-[12.5px] font-bold text-[#111110] ${movement.voided_at ? "line-through" : ""}`}>{movement.product_name}</p>
-                                <p className="mt-1 text-[11px] text-[#615D59]">
-                                  {formatDate(movement.occurred_at)} · {movement.to_location ?? movement.from_location ?? "위치 미정"}
-                                  {movementLot(movement) ? ` · lot ${movementLot(movement)}` : ""}
-                                  {movement.amount_usd != null ? ` · $${formatNumber(movement.amount_usd)}` : ""}
-                                  {movement.source === "sheet_import" ? " · 시트" : ""}
-                                </p>
-                              </div>
-                              <div className="flex shrink-0 items-center gap-2">
-                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${MOVEMENT_TONE[movement.movement_type]}`}>
-                                  {MOVEMENT_LABEL[movement.movement_type]} {formatNumber(movement.quantity)}
-                                </span>
-                                {movement.voided_at ? (
-                                  <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[11px] font-bold text-[#615D59]">취소됨</span>
-                                ) : movement.source === "admin_manual" ? (
-                                  <>
-                                    {!movement.converted_from_movement_id && !movement.converted_to_movement_id && (
-                                      <button
-                                        type="button"
-                                        onClick={() => editMovement(movement)}
-                                        className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4]"
-                                      >
-                                        수정
-                                      </button>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={() => void voidMovement(movement)}
-                                      disabled={voidingId === movement.id}
-                                      className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:opacity-60"
-                                    >
-                                      {voidingId === movement.id ? "취소 중" : "취소"}
-                                    </button>
-                                  </>
-                                ) : null}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                        {movementsPagination.totalItems === 0 && (
-                          <p className="px-5 py-8 text-center text-[13px] text-[#615D59]">입출고 기록이 없습니다.</p>
-                        )}
+
+                <section className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                  <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
+                    <div className="min-w-0">
+                      <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">상세 내역 (로그)</p>
+                      <p className="mt-1 text-[12px] text-[#615D59]">물량번호·고객사·날짜·담당자·특이사항. 행을 클릭하면 상세와 CRM 연계가 열립니다.</p>
+                    </div>
+                    <span className="shrink-0 text-[11px] font-semibold text-[#615D59]">{formatNumber(movementsPagination.totalItems)}건</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[940px]">
+                      <div className="grid grid-cols-[84px_1.5fr_1.2fr_96px_84px_1.4fr_92px_22px] items-center gap-3 bg-[#F6F5F4] px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59]">
+                        <span>물량번호</span>
+                        <span>고객사 · 참조</span>
+                        <span>품목 · 수량</span>
+                        <span>날짜</span>
+                        <span>담당자</span>
+                        <span>특이사항</span>
+                        <span className="text-right">유형</span>
+                        <span />
                       </div>
-                      <PaginationControls pagination={movementsPagination} label="건" onPageChange={setMovementsPage} />
-                    </>
-                  )}
+                      {movementsPagination.pageItems.map((movement) => {
+                        const lot = movementLot(movement)
+                        return (
+                          <div
+                            key={movement.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setDetailId(movement.id)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault()
+                                setDetailId(movement.id)
+                              }
+                            }}
+                            className={`grid cursor-pointer grid-cols-[84px_1.5fr_1.2fr_96px_84px_1.4fr_92px_22px] items-center gap-3 border-t border-[rgba(0,0,0,0.06)] px-5 py-3 transition hover:bg-[#FAFAF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 ${
+                              movement.voided_at ? "opacity-55" : ""
+                            }`}
+                          >
+                            <span>
+                              <span className={`inline-flex rounded px-1.5 py-0.5 text-[11px] font-bold ${lot ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#F6F5F4] text-[#A39E98]"}`}>
+                                {lot ?? "-"}
+                              </span>
+                            </span>
+                            <span className="min-w-0">
+                              <span className={`block truncate text-[12.5px] font-bold text-[#111110] ${movement.voided_at ? "line-through" : ""}`}>
+                                {movement.to_location ?? (movement.movement_type === "inbound" ? "매입 입고" : MOVEMENT_LABEL[movement.movement_type])}
+                              </span>
+                              <span className="mt-0.5 block truncate text-[11px] text-[#615D59]">
+                                {movement.reference_no ?? (movement.source === "sheet_import" ? "시트 이관" : movement.importer ?? "내부 처리")}
+                              </span>
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block truncate text-[12px] font-semibold text-[#111110]">{movement.product_name}</span>
+                              <span className="mt-0.5 block text-[11px] tabular-nums text-[#615D59]">
+                                {formatNumber(movement.quantity)}대 · {movement.status ?? MOVEMENT_LABEL[movement.movement_type]}
+                              </span>
+                            </span>
+                            <span className="text-[11.5px] text-[#31302E]">{formatDate(movement.occurred_at)}</span>
+                            <span className="truncate text-[11.5px] text-[#31302E]">{movement.owner ?? "-"}</span>
+                            <span className="truncate text-[11.5px] text-[#615D59]">{movement.memo?.trim() ? movement.memo.trim() : "—"}</span>
+                            <span className="text-right">
+                              <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${MOVEMENT_TONE[movement.movement_type]}`}>
+                                {MOVEMENT_LABEL[movement.movement_type]} {formatNumber(movement.quantity)}
+                              </span>
+                            </span>
+                            <span className="text-[#A39E98]">
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            </span>
+                          </div>
+                        )
+                      })}
+                      {movementsPagination.totalItems === 0 && (
+                        <p className="px-5 py-10 text-center text-[13px] text-[#615D59]">입출고 기록이 없습니다.</p>
+                      )}
+                    </div>
+                  </div>
+                  <PaginationControls pagination={movementsPagination} label="건" onPageChange={setMovementsPage} />
                 </section>
             </div>
             )}
@@ -2211,11 +2569,149 @@ export default function HardwareInventoryClient() {
         )}
       </main>
 
-      {!sheetOpen && !pendingMovement && !voidTarget && (
+      <AnimatePresence>
+        {detailMovement && (
+          <motion.div
+            key="detail-sheet"
+            className="fixed inset-0 z-[45] flex justify-end bg-black/35 backdrop-blur-[2px]"
+            onClick={() => setDetailId(null)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduceMotion ? 0 : 0.16 }}
+          >
+            <motion.aside
+              ref={detailPanelRef}
+              role="dialog"
+              aria-modal="true"
+              aria-label="기록 상세"
+              onClick={(event) => event.stopPropagation()}
+              className="flex h-full w-full flex-col overflow-y-auto border-l border-[rgba(0,0,0,0.08)] bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.06)] sm:max-w-[460px]"
+              initial={reduceMotion ? { opacity: 0 } : { x: "100%" }}
+              animate={reduceMotion ? { opacity: 1 } : { x: 0 }}
+              exit={reduceMotion ? { opacity: 0 } : { x: "100%" }}
+              transition={{ duration: reduceMotion ? 0 : 0.22, ease: [0.2, 0, 0, 1] }}
+            >
+              <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] bg-white px-5 py-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${MOVEMENT_TONE[detailMovement.movement_type]}`}>
+                      {MOVEMENT_LABEL[detailMovement.movement_type]} {formatNumber(detailMovement.quantity)}
+                    </span>
+                    {movementLot(detailMovement) ? (
+                      <span className="inline-flex rounded-md bg-[#ECFDF5] px-2 py-0.5 text-[12px] font-bold text-[#084734]">{movementLot(detailMovement)}</span>
+                    ) : null}
+                    {detailMovement.voided_at ? (
+                      <span className="inline-flex rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[11px] font-bold text-[#615D59]">취소됨</span>
+                    ) : null}
+                  </div>
+                  <p className="mt-2 text-[16px] font-bold tracking-[-0.01em] text-[#111110]">{detailMovement.product_name}</p>
+                  <p className="mt-0.5 text-[12px] text-[#615D59]">
+                    {detailMovement.to_location ? `${detailMovement.to_location} · ` : ""}
+                    {detailMovement.reference_no ?? detailMovement.status ?? MOVEMENT_LABEL[detailMovement.movement_type]}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDetailId(null)}
+                  aria-label="닫기"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center cursor-pointer rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-4 p-5">
+                <div className="grid grid-cols-2 gap-2.5">
+                  {detailFacts.map((fact) => (
+                    <div key={fact.label} className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 py-2.5">
+                      <p className="text-[11px] font-semibold text-[#615D59]">{fact.label}</p>
+                      <p className="mt-0.5 text-[13px] font-bold text-[#111110]">{fact.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {detailMovement.memo?.trim() ? (
+                  <div className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2.5">
+                    <p className="text-[11px] font-bold text-[#7A520F]">특이사항</p>
+                    <p className="mt-1 whitespace-pre-line text-[12.5px] leading-relaxed text-[#7A520F]">{detailMovement.memo.trim()}</p>
+                  </div>
+                ) : null}
+
+                {detailCrm ? (
+                  <div className="overflow-hidden rounded-xl border border-[#BDEFD8] bg-white">
+                    <div className="flex items-center gap-2.5 bg-[#ECFDF5] px-4 py-3">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#084734] text-white">
+                        <Users className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-bold text-[#084734]">CRM 연계</p>
+                        <p className="mt-0.5 truncate text-[11px] text-[#065c41]">{detailCrm.label}</p>
+                      </div>
+                    </div>
+                    {detailCrm.reference ? (
+                      <p className="px-4 py-3 text-[12px] text-[#31302E]">
+                        참조 <span className="font-bold text-[#111110]">{detailCrm.reference}</span>
+                      </p>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-[rgba(0,0,0,0.14)] bg-[#FAFAF8] p-4 text-center">
+                    <p className="text-[13px] font-bold text-[#111110]">
+                      {detailMovement.movement_type === "inbound" ? "매입 입고 — 연결된 고객 없음" : "연결된 고객사 없음"}
+                    </p>
+                    <p className="mt-1 text-[11.5px] text-[#615D59]">
+                      {detailMovement.movement_type === "inbound"
+                        ? `${detailMovement.importer ?? "공급사"} · 물량번호 ${movementLot(detailMovement) ?? "-"} 입고 건입니다.`
+                        : "출고 기록 시 CRM 실제 오더와 연동하면 여기에 표시됩니다."}
+                    </p>
+                  </div>
+                )}
+
+                {detailCanEdit ? (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!detailMovement) return
+                        const target = detailMovement
+                        setDetailId(null)
+                        editMovement(target)
+                      }}
+                      className="inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
+                    >
+                      <Settings2 className="h-4 w-4" />
+                      수정
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!detailMovement) return
+                        const target = detailMovement
+                        setDetailId(null)
+                        voidMovement(target)
+                      }}
+                      className="inline-flex h-10 flex-1 cursor-pointer items-center justify-center rounded-md border border-[#F2B8B8] bg-white text-[13px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43E3E]/40 active:scale-[0.98] motion-reduce:active:scale-100"
+                    >
+                      기록 취소
+                    </button>
+                  </div>
+                ) : detailMovement.source === "sheet_import" && !detailMovement.voided_at ? (
+                  <p className="rounded-lg bg-[#F6F5F4] px-3 py-2.5 text-center text-[11.5px] font-semibold text-[#615D59]">
+                    시트 이관 기록은 여기서 수정·취소할 수 없습니다.
+                  </p>
+                ) : null}
+              </div>
+            </motion.aside>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {!sheetOpen && !pendingMovement && !voidTarget && !detailId && (
         <button
           type="button"
           onClick={openFreshSheet}
-          className="fixed bottom-6 right-6 z-30 inline-flex items-center gap-1.5 rounded-full bg-[#084734] px-4 py-3 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(0,0,0,0.12)] transition hover:bg-[#065c41]"
+          className="fixed bottom-6 right-6 z-30 inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-[#084734] px-4 py-3 text-[13px] font-bold text-white shadow-[0_2px_8px_rgba(0,0,0,0.12)] transition hover:bg-[#065c41] hover:shadow-[0_4px_14px_rgba(0,0,0,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8] active:scale-95 motion-reduce:active:scale-100"
           aria-label="빠른 기록 열기"
         >
           <Plus className="h-4 w-4" />
@@ -2249,7 +2745,7 @@ export default function HardwareInventoryClient() {
                   onChange={(event) => setVoidReason(event.target.value)}
                   autoFocus
                   placeholder="예: 중복 입력"
-                  className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/30"
+                  className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                 />
               </label>
             </div>
@@ -2258,7 +2754,7 @@ export default function HardwareInventoryClient() {
                 type="button"
                 onClick={() => setVoidTarget(null)}
                 disabled={voidingId != null}
-                className="inline-flex h-10 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] disabled:opacity-60"
+                className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
               >
                 닫기
               </button>
@@ -2266,7 +2762,7 @@ export default function HardwareInventoryClient() {
                 type="button"
                 onClick={() => void confirmVoid()}
                 disabled={voidingId != null}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#B43E3E] px-4 text-[13px] font-bold text-white transition hover:bg-[#9A3434] disabled:opacity-60"
+                className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md bg-[#B43E3E] px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#9A3434] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43E3E]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {voidingId != null ? "취소 중" : "기록 취소"}
               </button>
@@ -2297,7 +2793,7 @@ export default function HardwareInventoryClient() {
               <button
                 type="button"
                 onClick={closeCrmConfirmation}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+                className="flex h-8 w-8 shrink-0 items-center justify-center cursor-pointer rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
                 aria-label="닫기"
               >
                 <X className="h-4 w-4" />
@@ -2379,7 +2875,7 @@ export default function HardwareInventoryClient() {
                             setSelectedCrmCandidateId(candidate.id)
                             setCrmAutoReflect(true)
                           }}
-                          className={`w-full rounded-lg border px-3 py-3 text-left transition ${
+                          className={`w-full cursor-pointer rounded-lg border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100 ${
                             selected
                               ? "border-[#084734] bg-[#ECFDF5]"
                               : "border-[rgba(0,0,0,0.08)] bg-white hover:bg-[#F6F5F4]"
@@ -2428,7 +2924,7 @@ export default function HardwareInventoryClient() {
                 type="button"
                 onClick={() => void createMovementFromDraft(pendingMovement, null)}
                 disabled={busy === "movement"}
-                className="inline-flex h-10 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] disabled:opacity-60"
+                className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
               >
                 연동 없이 기록
               </button>
@@ -2436,7 +2932,7 @@ export default function HardwareInventoryClient() {
                 type="button"
                 onClick={() => void createMovementFromDraft(pendingMovement, crmAutoReflect ? selectedCrmCandidate : null)}
                 disabled={busy === "movement" || crmLoading || (crmAutoReflect && !selectedCrmCandidate)}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60"
+                className="inline-flex h-10 items-center justify-center gap-2 cursor-pointer rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Save className="h-4 w-4" />
                 {crmAutoReflect ? "CRM 연동 후 기록" : "기록 저장"}
