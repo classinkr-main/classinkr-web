@@ -29,6 +29,10 @@ const CrmHomeCharts = dynamic(() => import("@/components/admin/crm/CrmHomeCharts
   ssr: false,
   loading: () => <div className="h-40 animate-pulse rounded-xl bg-[#fafaf8]" />,
 })
+const CrmPerformanceCharts = dynamic(() => import("@/components/admin/crm/CrmPerformanceCharts"), {
+  ssr: false,
+  loading: () => <div className="h-44 animate-pulse rounded-xl bg-[#fafaf8]" />,
+})
 
 const CRM_ACTION_KPIS_URL = "/api/admin/crm/action-kpis"
 const CRM_OVERVIEW_URL = "/api/admin/crm/overview"
@@ -1136,6 +1140,15 @@ export default function CrmPage() {
           </section>
         </aside>
       </div>
+
+      {/* 성과 분석 — CRM 매출 데이터 기준 팀/개인/월 (지연 로드, 로딩/빈/에러 내부 처리) */}
+      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-[15px] font-bold text-[#111110]">성과 분석 · 팀/개인</h2>
+          <span className="text-[11px] text-[#1a1a1a]/35">CRM 매출 데이터 기준 · 최근 6개월</span>
+        </div>
+        <CrmPerformanceCharts />
+      </section>
 
       {/* 분석 · 시각화 — 리드 KPI 기반 차트(지연 로드) */}
       {leadKpis && leadKpis.total > 0 ? (
