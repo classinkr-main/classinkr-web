@@ -1,5 +1,7 @@
 import "server-only"
 
+import { cache } from "react"
+
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import {
   docsCategories as staticDocsCategories,
@@ -297,7 +299,9 @@ async function fetchDocsContentFromSupabase(): Promise<DocsContent> {
   return { categories, docs }
 }
 
-export async function getDocsContent(): Promise<DocsContent> {
+// /docs/[category]·[slug] 등은 generateMetadata와 본문에서 같은 콘텐츠를 두 번 fetch한다.
+// 요청 스코프 cache()로 요청당 1회 fetch+머지로 합침(폴백/머지 동작은 그대로).
+export const getDocsContent = cache(async (): Promise<DocsContent> => {
   if (!shouldUseSupabaseDocs()) {
     return staticDocsContent
   }
@@ -311,7 +315,7 @@ export async function getDocsContent(): Promise<DocsContent> {
     )
     return staticDocsContent
   }
-}
+})
 
 export function getStaticDocsContent(): DocsContent {
   return staticDocsContent

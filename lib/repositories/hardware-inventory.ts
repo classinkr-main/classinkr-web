@@ -1037,10 +1037,21 @@ export async function getHardwareDashboard(): Promise<HardwareDashboard> {
   const activeMovements = movements.filter((movement) => !movement.voided_at)
   const cutoff30d = Date.now() - TREND_WINDOW_DAYS * 24 * 60 * 60 * 1000
 
+  // item_id별로 한 번만 버킷팅 — 기존 items.map 안 activeMovements.filter는 O(items×movements).
+  // activeMovements 순서를 유지하며 push하므로 항목별 정렬은 filter와 동일.
+  const movementsByItem = new Map<string, HardwareMovement[]>()
+  for (const movement of activeMovements) {
+    const id = movement.item_id
+    if (!id) continue
+    const bucket = movementsByItem.get(id)
+    if (bucket) bucket.push(movement)
+    else movementsByItem.set(id, [movement])
+  }
+
   const rows = items
     .filter((item) => item.active)
     .map((item): HardwareStockRow => {
-      const itemMovements = activeMovements.filter((movement) => movement.item_id === item.id)
+      const itemMovements = movementsByItem.get(item.id) ?? []
       const locationBalances = new Map<string, number>()
       const lotBalances = new Map<string, number>()
       let plannedOut = 0

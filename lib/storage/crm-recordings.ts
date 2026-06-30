@@ -103,3 +103,25 @@ export async function createCrmRecordingSignedUrl(path: string, expiresInSeconds
   if (error) return null
   return data.signedUrl
 }
+
+// 여러 경로를 한 번의 storage 라운드트립으로 서명 — 행마다 createSignedUrl 호출(N+1) 회피.
+// 반환: path → signedUrl Map(서명 실패/누락 경로는 빠짐, 호출부에서 null 폴백).
+export async function createCrmRecordingSignedUrls(
+  paths: string[],
+  expiresInSeconds = 60 * 60
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>()
+  const unique = [...new Set(paths.filter(Boolean))]
+  if (unique.length === 0) return result
+
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase.storage
+    .from(CRM_RECORDINGS_BUCKET)
+    .createSignedUrls(unique, expiresInSeconds)
+
+  if (error || !data) return result
+  for (const entry of data) {
+    if (entry.path && entry.signedUrl) result.set(entry.path, entry.signedUrl)
+  }
+  return result
+}

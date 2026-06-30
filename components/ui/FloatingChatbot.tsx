@@ -1,6 +1,6 @@
 "use client"
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react"
+import { FormEvent, memo, useEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -451,7 +451,8 @@ function bulletLineValue(line: string) {
     return line.match(/^[-•]\s+(.+)$/)?.[1]?.trim()
 }
 
-function MessageContent({ content, role }: { content: string; role: ChatMessage["role"] }) {
+// 이전 메시지들은 props(원시값)가 그대로라 memo로 재파싱(sanitize+split+regex) 건너뜀 — 스트리밍 버블만 갱신.
+const MessageContent = memo(function MessageContent({ content, role }: { content: string; role: ChatMessage["role"] }) {
     const visibleContent = role === "assistant" ? sanitizeVisibleAssistantText(content) : content
     const blocks = visibleContent
         .trim()
@@ -531,7 +532,7 @@ function MessageContent({ content, role }: { content: string; role: ChatMessage[
             })}
         </div>
     )
-}
+})
 
 function AnswerCopyButton({ message }: { message: ChatMessage }) {
     const [state, setState] = useState<"idle" | "copied" | "failed">("idle")

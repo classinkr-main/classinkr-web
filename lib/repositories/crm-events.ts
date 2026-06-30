@@ -1,6 +1,6 @@
 import "server-only"
 
-import { createCrmRecordingSignedUrl } from "@/lib/storage/crm-recordings"
+import { createCrmRecordingSignedUrls } from "@/lib/storage/crm-recordings"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type {
   AttendeeOrigin,
@@ -346,13 +346,18 @@ export function buildCrmCustomerEventInsert(
 }
 
 async function recordsWithSignedUrls(rows: CrmCustomerEvent[]) {
-  return Promise.all(
-    rows.map(async (row) => {
-      const signedUrl = row.recording_storage_path
-        ? await createCrmRecordingSignedUrl(row.recording_storage_path)
-        : null
-      return toRecord(row, signedUrl)
-    })
+  // 페이지 내 모든 녹취 경로를 한 번에 일괄 서명(N+1 → 1 라운드트립).
+  const paths = rows
+    .map((row) => row.recording_storage_path)
+    .filter((path): path is string => Boolean(path))
+  const signedByPath = paths.length
+    ? await createCrmRecordingSignedUrls(paths)
+    : new Map<string, string>()
+  return rows.map((row) =>
+    toRecord(
+      row,
+      row.recording_storage_path ? signedByPath.get(row.recording_storage_path) ?? null : null
+    )
   )
 }
 
