@@ -1,15 +1,19 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import {
   AlertCircle,
   ArrowRight,
+  Building2,
   Check,
   CircleDollarSign,
   Database,
   FileSpreadsheet,
+  FileText,
+  Handshake,
   Loader2,
+  ReceiptText,
   RefreshCw,
   RotateCcw,
   ServerCog,
@@ -217,6 +221,32 @@ function MetricCard({
       </p>
       <p className="mt-2 text-2xl font-bold tracking-[-0.04em] text-[#111110]">{value}</p>
       <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
+    </div>
+  )
+}
+
+// KR Team 보드(현황) 측정 타일 차용 — 소프트박스 + 대문자 라벨 + 큰 값.
+function MeasureTile({
+  icon,
+  label,
+  value,
+  hint,
+  tone = "text-[#111110]",
+}: {
+  icon: ReactNode
+  label: string
+  value: string
+  hint: string
+  tone?: string
+}) {
+  return (
+    <div className="rounded-xl bg-[#fafaf8] px-3 py-3">
+      <div className="flex items-center gap-1.5 text-[#1a1a1a]/40">
+        {icon}
+        <p className="text-[11px] font-semibold uppercase tracking-[0.1em]">{label}</p>
+      </div>
+      <p className={`mt-2 text-[22px] font-bold leading-none tracking-[-0.03em] ${tone}`}>{value}</p>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
     </div>
   )
 }
@@ -603,55 +633,82 @@ export default function AdminCrmRevenuePage() {
         </div>
       ) : null}
 
-      <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="딜리버리 총매출"
-          value={loading && !data ? "..." : formatCurrency(data?.summary.deliveryTotalAmount ?? 0)}
-          hint="본사 CRM 원천의 인식 매출 합산"
-        />
-        <MetricCard
-          label="계약 기준"
-          value={loading && !data ? "..." : formatCurrency(data?.summary.contractedAmount ?? 0)}
-          hint="보조 확인용 계약 금액 합계"
-        />
-        <MetricCard
-          label="입금 완료"
-          value={loading && !data ? "..." : formatCurrency(data?.summary.paidAmount ?? 0)}
-          hint="영수증 수납과 V2 paid amount 기준"
-        />
-        <MetricCard
-          label="미수/대기"
-          value={loading && !data ? "..." : formatCurrency(data?.summary.outstandingAmount ?? 0)}
-          hint="확정 대비 미수, 부분 수납 리스크"
-        />
-      </section>
+      {/* 총 매출 요약 — CRM 홈(Overview) 히어로 + KR Team 보드 측정 타일 융합 */}
+      <section className="mb-6 rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
+        <div className="mb-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">Total Revenue</p>
+          <h2 className="mt-1 text-[17px] font-bold text-[#111110]">총 매출 · 파이프라인</h2>
+        </div>
 
-      <section className="mb-8 grid gap-8 border-b border-[#f0f0ec] pb-6 md:grid-cols-2 xl:grid-cols-5">
-        <MetricCard
-          label="예상 파이프라인"
-          value={loading && !data ? "..." : formatCurrency(data?.summary.expectedPipelineAmount ?? 0)}
-          hint={`${formatNumber(data?.summary.activeDealCount ?? 0)}건의 active 거래`}
-        />
-        <MetricCard
-          label="견적 총액"
-          value={formatCurrency(data?.summary.quotedAmount ?? 0)}
-          hint={`승인/전환 ${formatCurrency(data?.summary.acceptedQuoteAmount ?? 0)}`}
-        />
-        <MetricCard
-          label="고객사"
-          value={formatNumber(data?.summary.customerCount ?? 0)}
-          hint="V2 고객사 테이블 기준"
-        />
-        <MetricCard
-          label="파트너 고객"
-          value={formatNumber(data?.summary.partnerCount ?? 0)}
-          hint="레거시 파트너 + 파트너 고객"
-        />
-        <MetricCard
-          label="소스 레코드"
-          value={formatNumber(data?.summary.sourceRecordCount ?? 0)}
-          hint="필드 제한 쿼리로 집계한 원천 데이터"
-        />
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
+          {/* 히어로 — 인식 매출 (홈 대시보드 차용) */}
+          <div className="border-t border-[#084734]/18 pt-4">
+            <div className="flex items-center gap-2 text-[#084734]/70">
+              <CircleDollarSign className="h-5 w-5" />
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em]">딜리버리 총매출</p>
+            </div>
+            <p className="mt-2 text-4xl font-bold tracking-[-0.045em] text-[#084734] sm:text-[40px]">
+              {loading && !data ? "..." : formatCurrency(data?.summary.deliveryTotalAmount ?? 0)}
+            </p>
+            <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+              본사 CRM 원천의 인식 매출 합산 · 보조 지표는 우측 타일에서 확인
+            </p>
+          </div>
+
+          {/* 보조 지표 — KR Team 보드 측정 타일 차용 */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+            <MeasureTile
+              icon={<Handshake className="h-4 w-4" />}
+              label="계약 기준"
+              value={loading && !data ? "..." : formatCurrency(data?.summary.contractedAmount ?? 0)}
+              hint="보조 확인용 계약 합계"
+            />
+            <MeasureTile
+              icon={<ReceiptText className="h-4 w-4" />}
+              label="입금 완료"
+              value={loading && !data ? "..." : formatCurrency(data?.summary.paidAmount ?? 0)}
+              hint="영수증 수납 · V2 paid"
+              tone="text-[#084734]"
+            />
+            <MeasureTile
+              icon={<AlertCircle className="h-4 w-4" />}
+              label="미수/대기"
+              value={loading && !data ? "..." : formatCurrency(data?.summary.outstandingAmount ?? 0)}
+              hint="확정 대비 미수 리스크"
+              tone={(data?.summary.outstandingAmount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}
+            />
+            <MeasureTile
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="예상 파이프라인"
+              value={loading && !data ? "..." : formatCurrency(data?.summary.expectedPipelineAmount ?? 0)}
+              hint={`active ${formatNumber(data?.summary.activeDealCount ?? 0)}건`}
+            />
+            <MeasureTile
+              icon={<FileText className="h-4 w-4" />}
+              label="견적 총액"
+              value={formatCurrency(data?.summary.quotedAmount ?? 0)}
+              hint={`승인/전환 ${formatCurrency(data?.summary.acceptedQuoteAmount ?? 0)}`}
+            />
+            <MeasureTile
+              icon={<Building2 className="h-4 w-4" />}
+              label="고객사"
+              value={formatNumber(data?.summary.customerCount ?? 0)}
+              hint="V2 고객사 테이블 기준"
+            />
+            <MeasureTile
+              icon={<Building2 className="h-4 w-4" />}
+              label="파트너 고객"
+              value={formatNumber(data?.summary.partnerCount ?? 0)}
+              hint="레거시 + 파트너 고객"
+            />
+            <MeasureTile
+              icon={<Database className="h-4 w-4" />}
+              label="소스 레코드"
+              value={formatNumber(data?.summary.sourceRecordCount ?? 0)}
+              hint="필드 제한 집계 원천"
+            />
+          </div>
+        </div>
       </section>
 
       {data?.sheet ? (

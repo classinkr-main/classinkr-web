@@ -48,9 +48,27 @@ interface ChannelData {
 interface FaqSuggestion {
   question: string
   count: number
+  category?: string
   coveredByGoldenSet: boolean
   lastAskedAt?: string
   sampleConversationIds: string[]
+  sampleQuestions?: string[]
+}
+
+const FAQ_CATEGORY_LABELS: Record<string, string> = {
+  billing: "결제·요금",
+  hardware: "하드웨어",
+  troubleshooting: "장애·오류",
+  onboarding: "도입·온보딩",
+  admin: "관리자",
+  classroom: "수업·운영",
+  consultation: "상담",
+  general: "일반",
+}
+
+function faqCategoryLabel(category?: string) {
+  if (!category) return "일반"
+  return FAQ_CATEGORY_LABELS[category] ?? "일반"
 }
 
 interface SyncResult {
@@ -266,24 +284,39 @@ export default function ChannelTalkPage() {
                 <span className="ml-auto text-[12px] text-[#1a1a1a]/40">{suggestions.length}건</span>
               </div>
               <ul>
-                {suggestions.map((suggestion) => (
-                  <li
-                    key={suggestion.question}
-                    className="flex items-center gap-3 border-b border-[#e8e8e4] px-5 py-3.5 last:border-0"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-medium text-[#111110]">
-                        {suggestion.question}
-                      </p>
-                      <p className="text-[11px] text-[#1a1a1a]/40">
-                        최근 질문 {formatWhen(suggestion.lastAskedAt)}
-                      </p>
-                    </div>
-                    <span className="shrink-0 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#084734]">
-                      {suggestion.count}회
-                    </span>
-                  </li>
-                ))}
+                {suggestions.map((suggestion) => {
+                  const extraSamples = (suggestion.sampleQuestions ?? []).filter(
+                    (sample) => sample.trim() !== suggestion.question.trim()
+                  )
+                  return (
+                    <li
+                      key={suggestion.question}
+                      className="flex items-start gap-3 border-b border-[#e8e8e4] px-5 py-3.5 last:border-0"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-medium text-[#111110]">
+                          {suggestion.question}
+                        </p>
+                        {extraSamples.length > 0 ? (
+                          <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/50">
+                            유사 질문: {extraSamples.join(" · ")}
+                          </p>
+                        ) : null}
+                        <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+                          최근 질문 {formatWhen(suggestion.lastAskedAt)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#084734]">
+                          {suggestion.count}회
+                        </span>
+                        <span className="rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55">
+                          {faqCategoryLabel(suggestion.category)}
+                        </span>
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
               <p className="border-t border-[#e8e8e4] bg-[#fafaf8] px-5 py-3 text-[11px] text-[#1a1a1a]/45">
                 자주 묻는데 챗봇 골든셋에 없는 질문입니다.{" "}

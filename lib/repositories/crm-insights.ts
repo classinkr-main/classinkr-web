@@ -163,7 +163,7 @@ export async function getCrmInsights(): Promise<CrmInsights> {
     risks.push({
       id: "payment-risk",
       title: `미수 리스크 ${overview.business.kpis.paymentRiskCount.toLocaleString("ko-KR")}건`,
-      detail: "돈흐름 탭에서 계약·수납 상태를 확인하세요.",
+      detail: "Revenue 탭에서 계약·수납 상태를 확인하세요.",
       href: "/admin/crm/deals",
       tone: "risk",
     })

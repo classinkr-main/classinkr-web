@@ -154,7 +154,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (isLoginPage) return <>{children}</>
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-[#FAFAF8] lg:flex-row">
+    <div className="flex min-h-[100dvh] flex-col bg-[#FAFAF8] lg:h-[100dvh] lg:flex-row lg:overflow-hidden">
       {session ? (
         <AdminSidebar
           role={session.role}
@@ -178,7 +178,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </aside>
       )}
-      <main className="min-w-0 flex-1 overflow-x-hidden pt-16 pb-24 lg:pt-0 lg:pb-0">
+      <main className="min-w-0 flex-1 overflow-x-hidden pt-16 pb-24 lg:overflow-y-auto lg:overscroll-contain lg:pt-0 lg:pb-0">
         <div className="mx-auto w-full max-w-[1320px]">
           <RouteTransition tone="admin">{children}</RouteTransition>
         </div>

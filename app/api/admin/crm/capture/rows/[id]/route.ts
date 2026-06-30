@@ -16,6 +16,14 @@ const MATCH_STATUSES = new Set<string>([
   "duplicate_in_batch",
 ])
 const TARGET_TYPES = new Set<string>(["lead", "neo_account", "customer", "deal"])
+const ATTENDEE_ORIGINS = new Set<string>([
+  "ad_lead",
+  "site_lead",
+  "new_lead",
+  "existing_customer",
+  "partner_customer",
+  "unknown",
+])
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
@@ -63,6 +71,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (raw.matchedTargetId !== undefined) patch.matched_target_id = typeof raw.matchedTargetId === "string" ? raw.matchedTargetId : null
     if (raw.matchedTargetLabel !== undefined) patch.matched_target_label = typeof raw.matchedTargetLabel === "string" ? raw.matchedTargetLabel : null
+    if (raw.attendeeOrigin !== undefined) {
+      if (raw.attendeeOrigin === null) patch.attendee_origin = null
+      else if (typeof raw.attendeeOrigin === "string" && ATTENDEE_ORIGINS.has(raw.attendeeOrigin)) {
+        patch.attendee_origin = raw.attendeeOrigin as CrmCaptureRowUpdate["attendee_origin"]
+      } else {
+        return NextResponse.json({ error: "Invalid attendeeOrigin" }, { status: 400 })
+      }
+    }
 
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 })

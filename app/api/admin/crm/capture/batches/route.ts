@@ -31,9 +31,13 @@ export async function POST(req: NextRequest) {
     const offset = Number(raw.defaultTaskOffsetDays ?? 1)
     const defaultTaskOffsetDays = Number.isFinite(offset) ? Math.max(0, Math.min(Math.floor(offset), 60)) : 1
 
+    const publicEventId =
+      typeof raw.publicEventId === "string" && raw.publicEventId.trim() ? raw.publicEventId.trim() : null
+
     const batch = await createCaptureBatch({
       sourceType,
       sourceLabel: typeof raw.sourceLabel === "string" ? raw.sourceLabel : null,
+      publicEventId,
       defaultActivityType,
       defaultTaskEnabled,
       defaultTaskOffsetDays,

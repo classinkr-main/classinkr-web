@@ -201,6 +201,16 @@ export type CrmCustomerEventSourceType =
   | "sheet";
 export type CrmCustomerEventSentiment = "positive" | "neutral" | "risk";
 
+// 행사 참석자 출신(origin) — 확정 시점 스냅샷.
+// 설계: docs/active/event-attendee-tracking-plan-2026-06-29.md
+export type AttendeeOrigin =
+  | "ad_lead"
+  | "site_lead"
+  | "new_lead"
+  | "existing_customer"
+  | "partner_customer"
+  | "unknown";
+
 export interface CrmCustomerEvent {
   id: string;
   target_type: CrmCustomerEventTargetType;
@@ -221,6 +231,8 @@ export interface CrmCustomerEvent {
   sentiment: CrmCustomerEventSentiment;
   stage_signal: string | null;
   tags: string[];
+  public_event_id: string | null;
+  attendee_origin: AttendeeOrigin | null;
   recording_storage_path: string | null;
   recording_file_name: string | null;
   recording_mime_type: string | null;
@@ -337,6 +349,7 @@ export interface CrmCaptureBatch {
   source_type: CrmCaptureSourceType;
   source_id: string | null;
   source_label: string | null;
+  public_event_id: string | null;
   default_activity_type: CrmCaptureActivityType;
   default_task_enabled: boolean;
   default_task_offset_days: number;
@@ -375,6 +388,7 @@ export interface CrmCaptureRow {
   matched_target_id: string | null;
   matched_target_label: string | null;
   match_candidates: Record<string, unknown>[];
+  attendee_origin: AttendeeOrigin | null;
   selected: boolean;
   create_task: boolean;
   task_due_at: string | null;

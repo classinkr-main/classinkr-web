@@ -650,6 +650,8 @@ interface ImportMovementRow {
   reference_no: string | null
   memo: string | null
   serials: string[]
+  unit_price: number | null
+  amount_usd: number | null
   source_table: string
   source_key: string
   raw: unknown
@@ -812,6 +814,10 @@ export async function importHardwareFromBranchSheets(
         reference_no: cleanString(row.logistics_no),
         memo: cleanString(row.remarks),
         serials: row.serials ?? [],
+        // Inbound cost is imported in USD (hardware is sourced in USD); the parser
+        // already stripped any currency symbol so the number is currency-agnostic.
+        unit_price: row.unit_price,
+        amount_usd: row.amount,
         source_table: "branch_hw_inbound",
         source_key: hashSourceKey(["inbound", index, row.logistics_no, row.inbound_date, row.product, row.quantity, row.serials, row.storage, row.remarks]),
         raw: row.raw ?? {},
@@ -842,6 +848,9 @@ export async function importHardwareFromBranchSheets(
         reference_no: cleanString(row.logistics_no),
         memo: [row.type, row.remarks].map(cleanString).filter(Boolean).join(" · ") || null,
         serials: row.serials ?? [],
+        // Outbound revenue lives in branch_hw_outbound; inbound-cost fields stay null here.
+        unit_price: null,
+        amount_usd: null,
         source_table: "branch_hw_outbound",
         source_key: hashSourceKey(["outbound", index, row.logistics_no, row.outbound_date, row.owner, row.product, row.quantity, row.destination, row.progress, row.type, row.remarks]),
         raw: row.raw ?? {},
@@ -879,6 +888,8 @@ export async function importHardwareFromBranchSheets(
         reference_no: null,
         memo: `재고현황 현재고 ${row.quantity}대 기준 보정`,
         serials: [],
+        unit_price: null,
+        amount_usd: null,
         source_table: "branch_hw_stock",
         source_key: hashSourceKey([
           "stock-reconciliation",
@@ -1130,6 +1141,91 @@ export async function getHardwareDashboard(): Promise<HardwareDashboard> {
     },
     importRun,
   }
+}
+
+export interface InboundUnitPriceBasis {
+  unitPrice: number | null
+  currency: "USD"
+  source: "lot" | "product_avg" | null
+}
+
+/**
+ * Inbound-cost valuation basis for a hardware item, in USD.
+ *
+ * - `lotKey` provided → "실매출" (lot-specific) basis: the average inbound unit
+ *   price across non-voided inbound movements whose `movementLotKey` matches.
+ *   Falls back to `amount_usd / quantity` per row when `unit_price` is null.
+ * - no lot match (or no `lotKey`) → "예상" (product) basis: the quantity-weighted
+ *   average inbound unit price for the item.
+ * - no priced inbound at all → `{ unitPrice: null, source: null }` (caller shows
+ *   "미산정"). Currency is always USD; no FX is fabricated here.
+ */
+export async function getInboundUnitPriceBasis(input: {
+  itemId: string
+  lotKey?: string | null
+}): Promise<InboundUnitPriceBasis> {
+  const itemId = cleanString(input.itemId)
+  if (!itemId) return { unitPrice: null, currency: "USD", source: null }
+
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_movements")
+    .select("quantity,lot_no,reference_no,source,unit_price,amount_usd")
+    .eq("item_id", itemId)
+    .eq("movement_type", "inbound")
+    .is("voided_at", null)
+  if (error) throw error
+
+  const inboundRows = (data ?? []) as Array<
+    Pick<HardwareMovement, "quantity" | "lot_no" | "reference_no" | "source" | "unit_price" | "amount_usd">
+  >
+
+  // Per-row inbound unit price in USD: prefer explicit unit_price, else derive
+  // from amount_usd / quantity. Returns null when neither yields a usable number.
+  const rowUnitPrice = (row: (typeof inboundRows)[number]): number | null => {
+    if (row.unit_price != null && Number.isFinite(row.unit_price)) return row.unit_price
+    if (
+      row.amount_usd != null &&
+      Number.isFinite(row.amount_usd) &&
+      Number.isFinite(row.quantity) &&
+      row.quantity > 0
+    ) {
+      return row.amount_usd / row.quantity
+    }
+    return null
+  }
+
+  const lotKey = cleanString(input.lotKey)
+  if (lotKey) {
+    // movementLotKey: lot_no first, else reference_no for sheet_import rows.
+    const lotRows = inboundRows.filter((row) => {
+      const key =
+        cleanString(row.lot_no) ??
+        (row.source === "sheet_import" ? cleanString(row.reference_no) : null)
+      return key === lotKey
+    })
+    const priced = lotRows.map(rowUnitPrice).filter((value): value is number => value != null)
+    if (priced.length > 0) {
+      const avg = priced.reduce((sum, value) => sum + value, 0) / priced.length
+      return { unitPrice: avg, currency: "USD", source: "lot" }
+    }
+  }
+
+  // Product fallback: quantity-weighted average inbound unit price.
+  let weightedSum = 0
+  let weightTotal = 0
+  for (const row of inboundRows) {
+    const price = rowUnitPrice(row)
+    if (price == null) continue
+    const weight = Number.isFinite(row.quantity) && row.quantity > 0 ? row.quantity : 1
+    weightedSum += price * weight
+    weightTotal += weight
+  }
+  if (weightTotal > 0) {
+    return { unitPrice: weightedSum / weightTotal, currency: "USD", source: "product_avg" }
+  }
+
+  return { unitPrice: null, currency: "USD", source: null }
 }
 
 export const hardwareInventoryDefaults = {

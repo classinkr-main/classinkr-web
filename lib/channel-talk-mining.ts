@@ -7,12 +7,17 @@
  */
 
 import type { ChannelConversationRecord } from "@/lib/repositories/channel-conversations"
+import { detectChatbotCategory, type ChatbotCategory } from "@/lib/chatbot/classification"
 
 export interface FaqSuggestion {
   question: string
   normalizedQuestion: string
   count: number
+  // 챗봇 분류기와 동일한 카테고리 — 어드민이 추천 질문/문서 갭에 카테고리별로 반영할 수 있게 한다.
+  category: ChatbotCategory
   sampleConversationIds: string[]
+  // 같은 군집의 실제 고객 문장(최근순, 중복 제거, 최대 3개) — 의도 뉘앙스 파악용.
+  sampleQuestions: string[]
   coveredByGoldenSet: boolean
   lastAskedAt?: string
 }
@@ -73,6 +78,21 @@ function getConversationCandidates(conversation: ChannelConversationRecord) {
   return candidates
 }
 
+// 군집 내 실제 고객 문장에서 대표 샘플을 뽑는다 — 최근순, 같은 표현(verbatim) 중복 제거, 최대 3개.
+// 문장 부호만 다른 변형은 서로 다른 표현으로 보존해 어드민이 실제 어투를 확인할 수 있게 한다.
+function pickSampleQuestions(samples: { text: string; at?: string }[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const sample of [...samples].sort((a, b) => (b.at ?? "").localeCompare(a.at ?? ""))) {
+    const text = sample.text.replace(/\s+/g, " ").trim()
+    if (!text || seen.has(text)) continue
+    seen.add(text)
+    out.push(text)
+    if (out.length >= 3) break
+  }
+  return out
+}
+
 export function mineFaqSuggestions(
   conversations: ChannelConversationRecord[],
   goldenQuestions: string[],
@@ -85,7 +105,12 @@ export function mineFaqSuggestions(
 
   const clusters = new Map<
     string,
-    { question: string; ids: Set<string>; lastAskedAt?: string }
+    {
+      question: string
+      ids: Set<string>
+      lastAskedAt?: string
+      samples: { text: string; at?: string }[]
+    }
   >()
 
   for (const conversation of conversations) {
@@ -96,6 +121,7 @@ export function mineFaqSuggestions(
       const existing = clusters.get(normalized)
       if (existing) {
         existing.ids.add(conversation.id)
+        existing.samples.push({ text: candidate.question, at: candidate.at })
         if (
           candidate.at &&
           (!existing.lastAskedAt || candidate.at > existing.lastAskedAt)
@@ -107,6 +133,7 @@ export function mineFaqSuggestions(
           question: candidate.question,
           ids: new Set([conversation.id]),
           lastAskedAt: candidate.at,
+          samples: [{ text: candidate.question, at: candidate.at }],
         })
       }
     }
@@ -117,7 +144,9 @@ export function mineFaqSuggestions(
       question: value.question,
       normalizedQuestion: normalized,
       count: value.ids.size,
+      category: detectChatbotCategory(value.question),
       sampleConversationIds: [...value.ids].slice(0, 5),
+      sampleQuestions: pickSampleQuestions(value.samples),
       coveredByGoldenSet: goldenSet.has(normalized),
       lastAskedAt: value.lastAskedAt,
     }))

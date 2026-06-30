@@ -2,6 +2,7 @@ import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type {
+  AttendeeOrigin,
   CrmCaptureActivityType,
   CrmCaptureBatch,
   CrmCaptureBatchStatus,
@@ -18,6 +19,7 @@ export interface CaptureBatchRecord {
   sourceType: CrmCaptureSourceType
   sourceId: string | null
   sourceLabel: string | null
+  publicEventId: string | null
   defaultActivityType: CrmCaptureActivityType
   defaultTaskEnabled: boolean
   defaultTaskOffsetDays: number
@@ -48,6 +50,7 @@ export interface CaptureRowRecord {
   matchedTargetId: string | null
   matchedTargetLabel: string | null
   matchCandidates: Record<string, unknown>[]
+  attendeeOrigin: AttendeeOrigin | null
   selected: boolean
   createTask: boolean
   taskDueAt: string | null
@@ -66,6 +69,7 @@ function toBatchRecord(row: CrmCaptureBatch): CaptureBatchRecord {
     sourceType: row.source_type,
     sourceId: row.source_id,
     sourceLabel: row.source_label,
+    publicEventId: row.public_event_id,
     defaultActivityType: row.default_activity_type,
     defaultTaskEnabled: row.default_task_enabled,
     defaultTaskOffsetDays: row.default_task_offset_days,
@@ -98,6 +102,7 @@ export function toCaptureRowRecord(row: CrmCaptureRow): CaptureRowRecord {
     matchedTargetId: row.matched_target_id,
     matchedTargetLabel: row.matched_target_label,
     matchCandidates: row.match_candidates ?? [],
+    attendeeOrigin: row.attendee_origin,
     selected: row.selected,
     createTask: row.create_task,
     taskDueAt: row.task_due_at,
@@ -114,6 +119,7 @@ export function toCaptureRowRecord(row: CrmCaptureRow): CaptureRowRecord {
 export interface CreateCaptureBatchInput {
   sourceType: CrmCaptureSourceType
   sourceLabel?: string | null
+  publicEventId?: string | null
   defaultActivityType: CrmCaptureActivityType
   defaultTaskEnabled: boolean
   defaultTaskOffsetDays: number
@@ -127,6 +133,7 @@ export async function createCaptureBatch(input: CreateCaptureBatchInput): Promis
     .insert({
       source_type: input.sourceType,
       source_label: input.sourceLabel?.trim() || null,
+      public_event_id: input.publicEventId ?? null,
       default_activity_type: input.defaultActivityType,
       default_task_enabled: input.defaultTaskEnabled,
       default_task_offset_days: input.defaultTaskOffsetDays,
@@ -193,6 +200,7 @@ export async function replaceCaptureRows(
     matched_target_id: row.matchedTargetId,
     matched_target_label: row.matchedTargetLabel,
     match_candidates: row.matchCandidates as unknown as Record<string, unknown>[],
+    attendee_origin: null,
     selected: isConfirmed(row.matchStatus),
     create_task: batch.defaultTaskEnabled && hasTemplate,
     task_due_at: batch.defaultTaskEnabled ? captureTaskDueAt(activityType, now, batch.defaultTaskOffsetDays) : null,

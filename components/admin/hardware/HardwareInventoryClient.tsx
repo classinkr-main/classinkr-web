@@ -198,22 +198,13 @@ const ENTRY_PRESETS: Array<{
 
 const LOCATION_OPTIONS = ["고객", "창고", "샘플", "사무실", "수리"] as const
 
-const LOCATION_MATRIX: Array<{ key: string; label: string; tone: string }> = [
-  { key: "창고", label: "창고", tone: "bg-[#084734]" },
-  { key: "배송 예정", label: "배송 예정", tone: "bg-[#A8741A]" },
-  { key: "고객", label: "고객", tone: "bg-[#B43E3E]" },
-  { key: "샘플", label: "샘플", tone: "bg-[#084734]" },
-  { key: "사무실", label: "사무실", tone: "bg-[#615D59]" },
-  { key: "수리", label: "수리", tone: "bg-[#31302E]" },
-]
-
 const QUICK_QUANTITIES = [1, 2, 5, 10]
 
-const LOCATION_PAGE_SIZE = 6
 const STOCK_PAGE_SIZE = 8
 const OUTBOUND_PAGE_SIZE = 6
 const ALERT_PAGE_SIZE = 5
 const MOVEMENT_PAGE_SIZE = 6
+const PLANNED_PAGE_SIZE = 5
 
 type HardwareTab = "home" | "entry" | "history"
 
@@ -223,15 +214,15 @@ const HARDWARE_TABS: Array<{ id: HardwareTab; label: string; icon: LucideIcon; d
   { id: "history", label: "내역", icon: ListChecks, description: "전체 원장" },
 ]
 
-type HardwareSectionKey = "location" | "stock" | "outbound" | "quick" | "alerts" | "movements"
+type HardwareSectionKey = "stock" | "outbound" | "quick" | "alerts" | "movements" | "statusBoard"
 
 const DEFAULT_OPEN_SECTIONS: Record<HardwareSectionKey, boolean> = {
-  location: true,
   stock: true,
   outbound: true,
   quick: true,
   alerts: true,
   movements: true,
+  statusBoard: true,
 }
 
 const MOVEMENT_LABEL: Record<HardwareMovementType, string> = {
@@ -286,9 +277,21 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("ko-KR").format(value)
 }
 
-function formatCurrency(value: number | null) {
+const CURRENCY_FORMAT: Record<"KRW" | "USD" | "CNY", { locale: string; symbol: string; fractionDigits: number }> = {
+  KRW: { locale: "ko-KR", symbol: "₩", fractionDigits: 0 },
+  USD: { locale: "en-US", symbol: "$", fractionDigits: 2 },
+  CNY: { locale: "zh-CN", symbol: "¥", fractionDigits: 2 },
+}
+
+function formatCurrency(value: number | null, currency: "KRW" | "USD" | "CNY" = "KRW") {
   if (value == null) return "-"
-  return `${new Intl.NumberFormat("ko-KR").format(value)}원`
+  const { locale, symbol, fractionDigits } = CURRENCY_FORMAT[currency]
+  const amount = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(value)
+  // KRW keeps the original trailing-원 form; USD/CNY use a leading symbol.
+  return currency === "KRW" ? `${amount}원` : `${symbol}${amount}`
 }
 
 function formatAvg(value: number) {
@@ -311,6 +314,20 @@ function statusClass(row: HardwareStockRow) {
 
 function isCoreIfpProduct(product: string, size: "75" | "86") {
   return new RegExp(`^${size}["”]?\\s*IFP`, "i").test(product)
+}
+
+// "제품 빠른 선택" 칩 추천 순위.
+// 상단 추천(아래 순서대로) → 기타(110"/DT1/S1) → 그 외 제품은 칩에서 숨김(품목 드롭다운으로 선택 가능).
+// (promoted) 변형도 같은 SKU로 묶이도록 정규식으로 매칭한다.
+const QUICK_PICK_FEATURED: RegExp[] = [/86["”]?\s*IFP/i, /75["”]?\s*IFP/i, /\bSTD1\b/i, /\bT1\b/i]
+const QUICK_PICK_ETC: RegExp[] = [/110["”]?\s*IFP/i, /\bDT1\b/i, /\bS1\b/i]
+
+function quickPickRank(product: string): { group: "featured" | "etc"; rank: number } | null {
+  const featured = QUICK_PICK_FEATURED.findIndex((re) => re.test(product))
+  if (featured !== -1) return { group: "featured", rank: featured }
+  const etc = QUICK_PICK_ETC.findIndex((re) => re.test(product))
+  if (etc !== -1) return { group: "etc", rank: etc }
+  return null
 }
 
 function confidenceCopy(value: HardwareCrmOrderCandidate["confidence"]) {
@@ -475,14 +492,15 @@ export default function HardwareInventoryClient() {
   const [importer, setImporter] = useState("")
   const [serialsText, setSerialsText] = useState("")
   const [openSections, setOpenSections] = useState<Record<HardwareSectionKey, boolean>>(() => ({ ...DEFAULT_OPEN_SECTIONS }))
-  const [locationPage, setLocationPage] = useState(1)
   const [stockPage, setStockPage] = useState(1)
   const [outboundPage, setOutboundPage] = useState(1)
   const [alertsPage, setAlertsPage] = useState(1)
   const [movementsPage, setMovementsPage] = useState(1)
+  const [plannedPage, setPlannedPage] = useState(1)
   const [activeTab, setActiveTab] = useState<HardwareTab>("home")
   const [productFilter, setProductFilter] = useState<string>("")
   const [historyType, setHistoryType] = useState<HardwareMovementType | "all">("all")
+  const [historySort, setHistorySort] = useState<"desc" | "asc">("desc")
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [confirmDates, setConfirmDates] = useState<Record<string, string>>({})
   const [voidingId, setVoidingId] = useState<string | null>(null)
@@ -551,30 +569,6 @@ export default function HardwareInventoryClient() {
     [activePresetKey]
   )
 
-  const locationTotals = useMemo(() => {
-    const totals = new Map<string, number>()
-    for (const row of data?.stock ?? []) {
-      for (const location of row.locationBalances) {
-        if (location.quantity <= 0) continue
-        totals.set(location.location, (totals.get(location.location) ?? 0) + location.quantity)
-      }
-    }
-    return LOCATION_OPTIONS.map((location) => ({
-      location,
-      quantity: totals.get(location) ?? 0,
-    }))
-  }, [data?.stock])
-
-  const maxLocationTotal = useMemo(
-    () => Math.max(1, ...locationTotals.map((location) => location.quantity)),
-    [locationTotals]
-  )
-
-  const locationPagination = useMemo(
-    () => paginateAdminList(data?.stock ?? [], { currentPage: locationPage, pageSize: LOCATION_PAGE_SIZE }),
-    [data?.stock, locationPage]
-  )
-
   const stockPagination = useMemo(
     () => paginateAdminList(data?.stock ?? [], { currentPage: stockPage, pageSize: STOCK_PAGE_SIZE }),
     [data?.stock, stockPage]
@@ -589,12 +583,22 @@ export default function HardwareInventoryClient() {
     let rows = data?.movements ?? []
     if (historyType !== "all") rows = rows.filter((movement) => movement.movement_type === historyType)
     if (productFilter) rows = rows.filter((movement) => movement.item_id === productFilter)
-    return rows
-  }, [data?.movements, historyType, productFilter])
+    const sorted = [...rows].sort((a, b) => {
+      const aTime = new Date(a.occurred_at ?? a.created_at).getTime()
+      const bTime = new Date(b.occurred_at ?? b.created_at).getTime()
+      return historySort === "asc" ? aTime - bTime : bTime - aTime
+    })
+    return sorted
+  }, [data?.movements, historyType, productFilter, historySort])
 
   const plannedMovementQuantity = useMemo(
     () => (data?.plannedMovements ?? []).reduce((total, movement) => total + movement.quantity, 0),
     [data?.plannedMovements]
+  )
+
+  const plannedPagination = useMemo(
+    () => paginateAdminList(data?.plannedMovements ?? [], { currentPage: plannedPage, pageSize: PLANNED_PAGE_SIZE }),
+    [data?.plannedMovements, plannedPage]
   )
 
   const lotOptions = useMemo(() => {
@@ -632,6 +636,65 @@ export default function HardwareInventoryClient() {
       outbound30d: sum("outbound30d"),
     }
   }, [data?.stock])
+
+  const quickPickGroups = useMemo(() => {
+    const featured: Array<{ row: HardwareStockRow; rank: number }> = []
+    const etc: Array<{ row: HardwareStockRow; rank: number }> = []
+    for (const row of data?.stock ?? []) {
+      const ranked = quickPickRank(row.product)
+      if (!ranked) continue
+      ;(ranked.group === "featured" ? featured : etc).push({ row, rank: ranked.rank })
+    }
+    const byRank = (a: { rank: number }, b: { rank: number }) => a.rank - b.rank
+    return {
+      featured: featured.sort(byRank).map((entry) => entry.row),
+      etc: etc.sort(byRank).map((entry) => entry.row),
+    }
+  }, [data?.stock])
+
+  const statusBoard = useMemo(() => {
+    const stockRows = data?.stock ?? []
+    const movements = data?.movements ?? []
+
+    const latestOwnerFor = (productName: string, location: string) => {
+      for (const movement of movements) {
+        if (movement.voided_at) continue
+        if (movement.to_location !== location) continue
+        if (movement.product_name !== productName) continue
+        return {
+          owner: movement.owner?.trim() || null,
+          memo: movement.memo?.trim() || null,
+        }
+      }
+      return null
+    }
+
+    const collectByLocation = (location: string) => {
+      const rows = stockRows
+        .map((row) => ({
+          product: row.product,
+          quantity: row.locationBalances.find((balance) => balance.location === location)?.quantity ?? 0,
+        }))
+        .filter((row) => row.quantity > 0)
+        .sort((a, b) => b.quantity - a.quantity)
+        .map((row) => ({ ...row, hint: latestOwnerFor(row.product, location) }))
+      const total = rows.reduce((sum, row) => sum + row.quantity, 0)
+      return { rows, total }
+    }
+
+    const sample = collectByLocation("샘플")
+    const repair = collectByLocation("수리")
+    const recentReturns = movements
+      .filter((movement) => movement.movement_type === "return" && !movement.voided_at)
+      .slice(0, 5)
+
+    return {
+      sample,
+      repair,
+      recentReturns,
+      count: sample.rows.length + repair.rows.length + recentReturns.length,
+    }
+  }, [data?.stock, data?.movements])
 
   const toggleSection = (section: HardwareSectionKey) => {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }))
@@ -806,11 +869,6 @@ export default function HardwareInventoryClient() {
 
   const adjustQuantity = (delta: number) => {
     setQuantity((current) => String(Math.max(1, Number(current || 0) + delta)))
-  }
-
-  const matrixQuantity = (row: HardwareStockRow, location: string) => {
-    if (location === "배송 예정") return row.plannedOut
-    return row.locationBalances.find((item) => item.location === location)?.quantity ?? 0
   }
 
   const selectedCrmCandidate = useMemo(
@@ -1105,8 +1163,8 @@ export default function HardwareInventoryClient() {
         ) : (
           <>
             {activeTab === "home" && (
-            <div>
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="space-y-4">
+            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <StatCard
                 icon={<Boxes className="h-4 w-4" />}
                 label="86/75 실제 가용"
@@ -1133,11 +1191,12 @@ export default function HardwareInventoryClient() {
               />
             </section>
 
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <section
               data-testid="hardware-planned-info-panel"
-              className="mt-6 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+              className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
             >
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3">
                 <div className="flex min-w-0 items-start gap-3">
                   <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#FBF1E0] text-[#A8741A]">
                     <Clock3 className="h-4 w-4" />
@@ -1166,356 +1225,382 @@ export default function HardwareInventoryClient() {
                   현재 배송 예정 기록이 없습니다. 예상 출고 등록으로 미리 차감할 물량을 잡아두세요.
                 </p>
               ) : (
-                <div className="divide-y divide-[rgba(0,0,0,0.06)]">
-                  {(data?.plannedMovements ?? []).map((movement) => (
-                    <div
-                      key={movement.id}
-                      data-testid="hardware-planned-info-row"
-                      data-movement-id={movement.id}
-                      className="grid gap-3 px-5 py-3.5 md:grid-cols-[1.3fr_1fr_auto] md:items-center"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-bold text-[#111110]">{movement.product_name}</p>
-                        <p className="mt-1 text-[11px] text-[#615D59]">
-                          {movement.occurred_at ? formatDate(movement.occurred_at) : "일자 미정"} · {movement.to_location ?? "도착지 미정"} · {movement.owner ?? "담당자 미정"}
+                <>
+                  <div className="divide-y divide-[rgba(0,0,0,0.06)]">
+                    {plannedPagination.pageItems.map((movement) => (
+                      <div
+                        key={movement.id}
+                        data-testid="hardware-planned-info-row"
+                        data-movement-id={movement.id}
+                        className="grid gap-3 px-5 py-3 md:grid-cols-[1.3fr_1fr_auto] md:items-center"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-bold text-[#111110]">{movement.product_name}</p>
+                          <p className="mt-1 text-[11px] text-[#615D59]">
+                            {movement.occurred_at ? formatDate(movement.occurred_at) : "일자 미정"} · {movement.to_location ?? "도착지 미정"} · {movement.owner ?? "담당자 미정"}
+                          </p>
+                        </div>
+                        <p className="text-[12px] font-bold text-[#A8741A]">
+                          {formatNumber(movement.quantity)}대{movement.status ? ` · ${movement.status}` : ""}
                         </p>
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                          <input
+                            type="number"
+                            min={1}
+                            max={movement.quantity}
+                            value={confirmQtys[movement.id] ?? String(movement.quantity)}
+                            onChange={(event) => setConfirmQtys((current) => ({ ...current, [movement.id]: event.target.value }))}
+                            aria-label="확정 수량"
+                            title="확정 수량 (부분 확정 가능)"
+                            className="h-8 w-14 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-center text-[11px] font-bold text-[#111110] outline-none focus:border-[#084734]"
+                          />
+                          <input
+                            type="date"
+                            value={confirmDates[movement.id] ?? todayKey()}
+                            onChange={(event) => setConfirmDates((current) => ({ ...current, [movement.id]: event.target.value }))}
+                            aria-label="출고 확정일"
+                            title="출고 확정일"
+                            className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => editMovement(movement)}
+                            className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4]"
+                          >
+                            수정
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void confirmPlannedMovement(movement)}
+                            disabled={confirmingId === movement.id || busy != null}
+                            className="inline-flex items-center gap-1 rounded-md bg-[#084734] px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60"
+                          >
+                            <CheckCheck className="h-3.5 w-3.5" />
+                            {confirmingId === movement.id ? "확정 중" : "출고 확정"}
+                          </button>
+                        </div>
                       </div>
-                      <p className="text-[12px] font-bold text-[#A8741A]">
-                        {formatNumber(movement.quantity)}대{movement.status ? ` · ${movement.status}` : ""}
-                      </p>
-                      <div className="flex flex-wrap items-center justify-end gap-1.5">
-                        <input
-                          type="number"
-                          min={1}
-                          max={movement.quantity}
-                          value={confirmQtys[movement.id] ?? String(movement.quantity)}
-                          onChange={(event) => setConfirmQtys((current) => ({ ...current, [movement.id]: event.target.value }))}
-                          aria-label="확정 수량"
-                          title="확정 수량 (부분 확정 가능)"
-                          className="h-8 w-14 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-center text-[11px] font-bold text-[#111110] outline-none focus:border-[#084734]"
-                        />
-                        <input
-                          type="date"
-                          value={confirmDates[movement.id] ?? todayKey()}
-                          onChange={(event) => setConfirmDates((current) => ({ ...current, [movement.id]: event.target.value }))}
-                          aria-label="출고 확정일"
-                          title="출고 확정일"
-                          className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => editMovement(movement)}
-                          className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4]"
-                        >
-                          수정
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void confirmPlannedMovement(movement)}
-                          disabled={confirmingId === movement.id || busy != null}
-                          className="inline-flex items-center gap-1 rounded-md bg-[#084734] px-2.5 py-1.5 text-[11px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60"
-                        >
-                          <CheckCheck className="h-3.5 w-3.5" />
-                          {confirmingId === movement.id ? "확정 중" : "출고 확정"}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                  <PaginationControls pagination={plannedPagination} label="건" onPageChange={setPlannedPage} />
+                </>
               )}
             </section>
 
-            <section className="mt-6 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+            <section
+              data-testid="hardware-status-board"
+              className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+            >
               <SectionHeader
-                title="재고 위치 맵"
-                description="창고 가용, 배송 예정, 고객 판매 완료, 샘플/사무실/수리 재고를 한 줄에서 확인합니다."
-                open={openSections.location}
-                onToggle={() => toggleSection("location")}
-                meta={<span className="text-[11px] font-semibold text-[#615D59]">{formatNumber(locationPagination.totalItems)}개 품목</span>}
-                actions={
-                  openSections.location ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {ENTRY_PRESETS.slice(0, 4).map((preset) => {
-                        const PresetIcon = preset.icon
-                        return (
-                          <button
-                            key={preset.key}
-                            type="button"
-                            onClick={() => {
-                              applyPreset(preset.key)
-                              setSheetOpen(true)
-                            }}
-                            className="inline-flex items-center gap-1 rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#ECFDF5] hover:text-[#084734]"
-                          >
-                            <PresetIcon className="h-3.5 w-3.5" />
-                            {preset.label}
-                          </button>
-                        )
-                      })}
+                title="특수 상태"
+                description="샘플·대여 보유, 수리 중, 최근 반납을 한눈에."
+                open={openSections.statusBoard}
+                onToggle={() => toggleSection("statusBoard")}
+                meta={<span className="text-[11px] font-semibold text-[#615D59]">{formatNumber(statusBoard.count)}건</span>}
+              />
+              {openSections.statusBoard && (
+                <div className="space-y-3 p-4">
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#084734]">
+                        <span className="h-2 w-2 rounded-full bg-[#084734]" />
+                        샘플·대여 보유
+                      </span>
+                      <span className="text-[11px] font-bold text-[#111110]">{formatNumber(statusBoard.sample.total)}대</span>
                     </div>
-                  ) : null
+                    <div className="mt-1.5 space-y-1">
+                      {statusBoard.sample.rows.length === 0 ? (
+                        <p className="rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-semibold text-[#615D59]">현재 샘플 없음</p>
+                      ) : (
+                        <>
+                          {statusBoard.sample.rows.slice(0, 4).map((row) => (
+                            <div key={row.product} className="rounded-md bg-[#ECFDF5] px-2.5 py-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="truncate text-[12px] font-bold text-[#111110]">{row.product}</span>
+                                <span className="shrink-0 text-[12px] font-bold text-[#084734]">{formatNumber(row.quantity)}대</span>
+                              </div>
+                              <p className="mt-0.5 truncate text-[11px] text-[#615D59]">
+                                {row.hint?.owner ?? "담당자 미정"}
+                                {row.hint?.memo ? ` · ${row.hint.memo}` : ""}
+                              </p>
+                            </div>
+                          ))}
+                          {statusBoard.sample.rows.length > 4 && (
+                            <p className="text-[11px] font-semibold text-[#615D59]">+{statusBoard.sample.rows.length - 4} more</p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#A8741A]">
+                        <span className="h-2 w-2 rounded-full bg-[#31302E]" />
+                        수리 중
+                      </span>
+                      <span className="text-[11px] font-bold text-[#111110]">{formatNumber(statusBoard.repair.total)}대</span>
+                    </div>
+                    <div className="mt-1.5 space-y-1">
+                      {statusBoard.repair.rows.length === 0 ? (
+                        <p className="rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-semibold text-[#615D59]">현재 수리 없음</p>
+                      ) : (
+                        <>
+                          {statusBoard.repair.rows.slice(0, 4).map((row) => (
+                            <div key={row.product} className="rounded-md bg-[#FBF1E0] px-2.5 py-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="truncate text-[12px] font-bold text-[#111110]">{row.product}</span>
+                                <span className="shrink-0 text-[12px] font-bold text-[#A8741A]">{formatNumber(row.quantity)}대</span>
+                              </div>
+                              <p className="mt-0.5 truncate text-[11px] text-[#615D59]">
+                                {row.hint?.owner ?? "담당자 미정"}
+                                {row.hint?.memo ? ` · ${row.hint.memo}` : ""}
+                              </p>
+                            </div>
+                          ))}
+                          {statusBoard.repair.rows.length > 4 && (
+                            <p className="text-[11px] font-semibold text-[#615D59]">+{statusBoard.repair.rows.length - 4} more</p>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#615D59]">
+                        <span className="h-2 w-2 rounded-full bg-[#615D59]" />
+                        최근 반납·회수
+                      </span>
+                      <span className="text-[11px] font-bold text-[#111110]">{formatNumber(statusBoard.recentReturns.length)}건</span>
+                    </div>
+                    <div className="mt-1.5 space-y-1">
+                      {statusBoard.recentReturns.length === 0 ? (
+                        <p className="rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-semibold text-[#615D59]">최근 반납 없음</p>
+                      ) : (
+                        statusBoard.recentReturns.map((movement) => (
+                          <div key={movement.id} className="rounded-md bg-[#F6F5F4] px-2.5 py-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate text-[12px] font-bold text-[#111110]">{movement.product_name}</span>
+                              <span className="shrink-0 text-[12px] font-bold text-[#31302E]">{formatNumber(movement.quantity)}대</span>
+                            </div>
+                            <p className="mt-0.5 truncate text-[11px] text-[#615D59]">
+                              {movement.from_location ?? "-"} → {movement.to_location ?? "-"} · {formatDate(movement.occurred_at)}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+            </div>
+
+            <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+              <SectionHeader
+                title="현재 재고"
+                description="최소재고와 최근 출고량을 같이 보고 주문 시점을 판단합니다."
+                open={openSections.stock}
+                onToggle={() => toggleSection("stock")}
+                meta={
+                  <div className="text-right text-[11px] text-[#615D59]">
+                    <p>마지막 이관 {data?.importRun?.finished_at ? formatDate(data.importRun.finished_at) : "없음"}</p>
+                    <p className="mt-0.5 font-semibold">{formatNumber(stockPagination.totalItems)}개 품목</p>
+                  </div>
                 }
               />
-              {openSections.location && (
+              {openSections.stock && (
                 <>
-                  <div className="grid gap-0 lg:grid-cols-[290px_minmax(0,1fr)]">
-                    <div className="border-b border-[rgba(0,0,0,0.08)] p-5 lg:border-b-0 lg:border-r">
-                      <p className="text-[12px] font-bold text-[#111110]">위치별 총량</p>
-                      <div className="mt-3 space-y-3">
-                        {locationTotals.map((location) => (
-                          <div key={location.location}>
-                            <div className="flex items-center justify-between gap-3 text-[12px]">
-                              <span className="font-semibold text-[#31302E]">{location.location}</span>
-                              <span className="font-bold text-[#111110]">{formatNumber(location.quantity)}대</span>
-                            </div>
-                            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#F6F5F4]">
-                              <div
-                                className="h-full rounded-full bg-[#084734]"
-                                style={{ width: location.quantity > 0 ? `${Math.max(4, Math.round((location.quantity / maxLocationTotal) * 100))}%` : "0%" }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="overflow-x-auto">
-                      <div className="min-w-[760px] divide-y divide-[rgba(0,0,0,0.06)]">
-                        {locationPagination.totalItems === 0 ? (
-                          <p className="px-5 py-10 text-center text-[13px] text-[#615D59]">시트 가져오기 또는 입고 기록 후 위치 맵이 표시됩니다.</p>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[1040px] w-full border-collapse text-left">
+                      <thead className="bg-[#F6F5F4] text-[11px] font-bold uppercase tracking-[0.05em] text-[#615D59]">
+                        <tr>
+                          <th className="px-5 py-3">품목</th>
+                          <th className="px-4 py-3 text-right">실제</th>
+                          <th className="px-4 py-3 text-right">배송 예정</th>
+                          <th className="px-4 py-3 text-right">예상</th>
+                          <th className="px-4 py-3 text-right">30일</th>
+                          <th className="px-4 py-3">위치</th>
+                          <th className="px-4 py-3 text-right">빠른 처리</th>
+                          <th className="px-5 py-3 text-right">상태</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[rgba(0,0,0,0.06)]">
+                        {stockPagination.totalItems === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="px-5 py-10 text-center text-[13px] text-[#615D59]">
+                              아직 하드웨어 원장 데이터가 없습니다. 시트 가져오기를 먼저 실행하세요.
+                            </td>
+                          </tr>
                         ) : (
-                          locationPagination.pageItems.map((row) => {
-                            const rowMax = Math.max(1, ...LOCATION_MATRIX.map((location) => matrixQuantity(row, location.key)))
-                            return (
-                              <div key={row.itemId} className="grid gap-4 px-5 py-4 lg:grid-cols-[210px_minmax(0,1fr)_152px] lg:items-center">
-                                <div className="min-w-0">
-                                  <p className="truncate text-[13px] font-bold text-[#111110]">{row.product}</p>
-                                  <p className="mt-1 text-[11px] text-[#615D59]">
-                                    예상 가용 {formatNumber(row.availableStock)}대 · 30일 {formatNumber(row.outbound30d)}대
-                                  </p>
+                          stockPagination.pageItems.map((row) => (
+                            <tr key={row.itemId} className="align-top">
+                              <td className="px-5 py-3.5">
+                                <p className="text-[13px] font-bold text-[#111110]">{row.product}</p>
+                                <p className="mt-1 text-[11px] text-[#615D59]">
+                                  {row.category ?? "미분류"} · 최소 {row.reorderPoint}대 · 리드타임 {row.leadTimeDays}일
+                                </p>
+                                {row.lotBalances.length > 0 && (
+                                  <div className="mt-1.5 flex flex-wrap gap-1">
+                                    {row.lotBalances.slice(0, 5).map((lot) => (
+                                      <span key={lot.lot} className="rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[11px] font-semibold text-[#31302E]">
+                                        {lot.lot} {formatNumber(lot.quantity)}
+                                      </span>
+                                    ))}
+                                    {row.lotBalances.length > 5 && (
+                                      <span className="rounded bg-[#ECFDF5] px-1.5 py-0.5 text-[11px] font-semibold text-[#084734]">
+                                        +{row.lotBalances.length - 5}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3.5 text-right text-[14px] font-bold text-[#111110]">
+                                {formatNumber(row.warehouseStock)}
+                              </td>
+                              <td className="px-4 py-3.5 text-right text-[13px] font-semibold text-[#A8741A]">
+                                {formatNumber(row.plannedOut)}
+                              </td>
+                              <td className="px-4 py-3.5 text-right text-[16px] font-bold tracking-[-0.02em] text-[#111110]">
+                                {formatNumber(row.availableStock)}
+                              </td>
+                              <td className="px-4 py-3.5 text-right">
+                                <p className="text-[13px] font-semibold text-[#111110]">{formatNumber(row.outbound30d)}</p>
+                                <p className="mt-1 text-[11px] text-[#615D59]">주 {formatAvg(row.weeklyOutboundAvg)}대</p>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <div className="flex max-w-[260px] flex-wrap gap-1.5">
+                                  {row.locationBalances.slice(0, 3).map((loc) => (
+                                    <span key={loc.location} className="inline-flex items-center gap-1 rounded-full bg-[#F6F5F4] px-2 py-1 text-[11px] font-semibold text-[#31302E]">
+                                      <MapPin className="h-3 w-3 text-[#615D59]" />
+                                      {loc.location} {formatNumber(loc.quantity)}
+                                    </span>
+                                  ))}
+                                  {row.locationBalances.length > 3 && (
+                                    <span className="rounded-full bg-[#ECFDF5] px-2 py-1 text-[11px] font-semibold text-[#084734]">
+                                      +{row.locationBalances.length - 3}
+                                    </span>
+                                  )}
                                 </div>
-                                <div className="grid grid-cols-6 gap-2">
-                                  {LOCATION_MATRIX.map((location) => {
-                                    const qty = matrixQuantity(row, location.key)
-                                    const width = qty > 0 ? Math.max(12, Math.round((qty / rowMax) * 100)) : 0
-                                    return (
-                                      <div key={location.key} className="min-w-0">
-                                        <div className="flex items-center justify-between gap-1 text-[11px]">
-                                          <span className="truncate font-semibold text-[#615D59]">{location.label}</span>
-                                          <span className="font-bold text-[#111110]">{formatNumber(qty)}</span>
-                                        </div>
-                                        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#F6F5F4]">
-                                          <div className={`h-full rounded-full ${location.tone}`} style={{ width: `${width}%` }} />
-                                        </div>
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                                <div className="flex justify-end gap-1.5">
+                              </td>
+                              <td className="px-4 py-3.5 text-right">
+                                <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
                                   <button
                                     type="button"
                                     onClick={() => prepareQuickEntry(row.itemId, "sale")}
-                                    className="rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#FCE9E9] hover:text-[#B43E3E]"
+                                    className="rounded-md px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-white hover:text-[#B43E3E]"
                                   >
                                     출고
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => prepareQuickEntry(row.itemId, "planned")}
-                                    className="rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#FBF1E0] hover:text-[#A8741A]"
+                                    className="rounded-md px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-white hover:text-[#A8741A]"
                                   >
                                     예정
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => prepareQuickEntry(row.itemId, "inbound")}
-                                    className="rounded-md bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition hover:bg-[#ECFDF5] hover:text-[#084734]"
+                                    className="rounded-md px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-white hover:text-[#084734]"
                                   >
                                     입고
                                   </button>
                                 </div>
-                              </div>
-                            )
-                          })
+                              </td>
+                              <td className="px-5 py-3.5 text-right">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${statusClass(row)}`}>
+                                  {statusCopy(row)}
+                                </span>
+                                {row.daysUntilStockout != null && (
+                                  <p className="mt-1.5 text-[11px] text-[#615D59]">예상 {row.daysUntilStockout}일</p>
+                                )}
+                              </td>
+                            </tr>
+                          ))
                         )}
-                      </div>
-                    </div>
+                      </tbody>
+                    </table>
                   </div>
-                  <PaginationControls pagination={locationPagination} label="품목" onPageChange={setLocationPage} />
+                  <PaginationControls pagination={stockPagination} label="품목" onPageChange={setStockPage} />
+                </>
+              )}
+            </section>
+
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <section className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+              <SectionHeader
+                title="알림"
+                description="부족, 주문 검토, 배송 예정 항목입니다."
+                open={openSections.alerts}
+                onToggle={() => toggleSection("alerts")}
+                meta={<span className="text-[11px] font-semibold text-[#615D59]">{formatNumber(alertsPagination.totalItems)}건</span>}
+              />
+              {openSections.alerts && (
+                <>
+                  <div className="space-y-2 p-4">
+                    {alertsPagination.totalItems === 0 ? (
+                      <div className="rounded-lg bg-[#ECFDF5] px-4 py-3 text-[12px] font-semibold text-[#084734]">
+                        현재 알림이 없습니다.
+                      </div>
+                    ) : (
+                      alertsPagination.pageItems.map((alert) => (
+                        <div key={alert.id} className={`rounded-lg border px-3 py-2.5 ${ALERT_TONE[alert.severity]}`}>
+                          <p className="text-[12px] font-bold">{alert.product} · {alert.title}</p>
+                          <p className="mt-1 text-[11px] opacity-80">{alert.detail}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <PaginationControls pagination={alertsPagination} label="건" onPageChange={setAlertsPage} />
+                </>
+              )}
+            </section>
+
+            <section className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+              <SectionHeader
+                title="나간 기록"
+                description="고객사 기준으로 최근 출고·배송 예정 물량이 어디로 갔는지 확인합니다."
+                open={openSections.outbound}
+                onToggle={() => toggleSection("outbound")}
+                meta={<span className="text-[11px] font-semibold text-[#615D59]">{formatNumber(outboundPagination.totalItems)}건</span>}
+              />
+              {openSections.outbound && (
+                <>
+                  {outboundPagination.totalItems > 0 && (
+                    <div className="hidden grid-cols-[1.1fr_1fr_120px] gap-3 border-b border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.05em] text-[#615D59] md:grid">
+                      <span>고객사</span>
+                      <span>제품</span>
+                      <span className="text-right">수량</span>
+                    </div>
+                  )}
+                  <div className="divide-y divide-[rgba(0,0,0,0.06)]">
+                    {outboundPagination.totalItems === 0 ? (
+                      <p className="px-5 py-8 text-center text-[13px] text-[#615D59]">출고 기록이 없습니다.</p>
+                    ) : (
+                      outboundPagination.pageItems.map((movement) => (
+                        <div key={movement.id} className="grid gap-3 px-5 py-3 md:grid-cols-[1.1fr_1fr_120px] md:items-center">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-bold text-[#111110]">{movement.to_location ?? "도착지 미정"}</p>
+                            <p className="mt-1 text-[11px] text-[#615D59]">
+                              {formatDate(movement.occurred_at)} · {movement.owner ?? "담당자 미정"}
+                            </p>
+                          </div>
+                          <p className="text-[12px] font-semibold text-[#31302E]">
+                            {movement.product_name}
+                            {movement.status ? <span className="ml-2 text-[#A8741A]">{movement.status}</span> : null}
+                          </p>
+                          <p className="text-right text-[14px] font-bold text-[#111110]">{formatNumber(movement.quantity)}대</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <PaginationControls pagination={outboundPagination} label="건" onPageChange={setOutboundPage} />
                 </>
               )}
             </section>
             </div>
-            )}
-
-            {activeTab === "home" && (
-            <div className="mt-6 space-y-6">
-                <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                  <SectionHeader
-                    title="현재 재고"
-                    description="최소재고와 최근 출고량을 같이 보고 주문 시점을 판단합니다."
-                    open={openSections.stock}
-                    onToggle={() => toggleSection("stock")}
-                    meta={
-                      <div className="text-right text-[11px] text-[#615D59]">
-                        <p>마지막 이관 {data?.importRun?.finished_at ? formatDate(data.importRun.finished_at) : "없음"}</p>
-                        <p className="mt-0.5 font-semibold">{formatNumber(stockPagination.totalItems)}개 품목</p>
-                      </div>
-                    }
-                  />
-                  {openSections.stock && (
-                    <>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-[1040px] w-full border-collapse text-left">
-                          <thead className="bg-[#F6F5F4] text-[11px] font-bold uppercase tracking-[0.05em] text-[#615D59]">
-                            <tr>
-                              <th className="px-5 py-3">품목</th>
-                              <th className="px-4 py-3 text-right">실제</th>
-                              <th className="px-4 py-3 text-right">배송 예정</th>
-                              <th className="px-4 py-3 text-right">예상</th>
-                              <th className="px-4 py-3 text-right">30일</th>
-                              <th className="px-4 py-3">위치</th>
-                              <th className="px-4 py-3 text-right">빠른 처리</th>
-                              <th className="px-5 py-3 text-right">상태</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-[rgba(0,0,0,0.06)]">
-                            {stockPagination.totalItems === 0 ? (
-                              <tr>
-                                <td colSpan={8} className="px-5 py-10 text-center text-[13px] text-[#615D59]">
-                                  아직 하드웨어 원장 데이터가 없습니다. 시트 가져오기를 먼저 실행하세요.
-                                </td>
-                              </tr>
-                            ) : (
-                              stockPagination.pageItems.map((row) => (
-                                <tr key={row.itemId} className="align-top">
-                                  <td className="px-5 py-4">
-                                    <p className="text-[13px] font-bold text-[#111110]">{row.product}</p>
-                                    <p className="mt-1 text-[11px] text-[#615D59]">
-                                      {row.category ?? "미분류"} · 최소 {row.reorderPoint}대 · 리드타임 {row.leadTimeDays}일
-                                    </p>
-                                    {row.lotBalances.length > 0 && (
-                                      <div className="mt-1.5 flex flex-wrap gap-1">
-                                        {row.lotBalances.slice(0, 5).map((lot) => (
-                                          <span key={lot.lot} className="rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[11px] font-semibold text-[#31302E]">
-                                            {lot.lot} {formatNumber(lot.quantity)}
-                                          </span>
-                                        ))}
-                                        {row.lotBalances.length > 5 && (
-                                          <span className="rounded bg-[#ECFDF5] px-1.5 py-0.5 text-[11px] font-semibold text-[#084734]">
-                                            +{row.lotBalances.length - 5}
-                                          </span>
-                                        )}
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td className="px-4 py-4 text-right text-[14px] font-bold text-[#111110]">
-                                    {formatNumber(row.warehouseStock)}
-                                  </td>
-                                  <td className="px-4 py-4 text-right text-[13px] font-semibold text-[#A8741A]">
-                                    {formatNumber(row.plannedOut)}
-                                  </td>
-                                  <td className="px-4 py-4 text-right text-[16px] font-bold tracking-[-0.02em] text-[#111110]">
-                                    {formatNumber(row.availableStock)}
-                                  </td>
-                                  <td className="px-4 py-4 text-right">
-                                    <p className="text-[13px] font-semibold text-[#111110]">{formatNumber(row.outbound30d)}</p>
-                                    <p className="mt-1 text-[11px] text-[#615D59]">주 {formatAvg(row.weeklyOutboundAvg)}대</p>
-                                  </td>
-                                  <td className="px-4 py-4">
-                                    <div className="flex max-w-[260px] flex-wrap gap-1.5">
-                                      {row.locationBalances.slice(0, 3).map((loc) => (
-                                        <span key={loc.location} className="inline-flex items-center gap-1 rounded-full bg-[#F6F5F4] px-2 py-1 text-[11px] font-semibold text-[#31302E]">
-                                          <MapPin className="h-3 w-3 text-[#615D59]" />
-                                          {loc.location} {formatNumber(loc.quantity)}
-                                        </span>
-                                      ))}
-                                      {row.locationBalances.length > 3 && (
-                                        <span className="rounded-full bg-[#ECFDF5] px-2 py-1 text-[11px] font-semibold text-[#084734]">
-                                          +{row.locationBalances.length - 3}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="px-4 py-4 text-right">
-                                    <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
-                                      <button
-                                        type="button"
-                                        onClick={() => prepareQuickEntry(row.itemId, "sale")}
-                                        className="rounded-md px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-white hover:text-[#B43E3E]"
-                                      >
-                                        출고
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => prepareQuickEntry(row.itemId, "planned")}
-                                        className="rounded-md px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-white hover:text-[#A8741A]"
-                                      >
-                                        예정
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => prepareQuickEntry(row.itemId, "inbound")}
-                                        className="rounded-md px-2 py-1 text-[11px] font-bold text-[#31302E] transition hover:bg-white hover:text-[#084734]"
-                                      >
-                                        입고
-                                      </button>
-                                    </div>
-                                  </td>
-                                  <td className="px-5 py-4 text-right">
-                                    <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${statusClass(row)}`}>
-                                      {statusCopy(row)}
-                                    </span>
-                                    {row.daysUntilStockout != null && (
-                                      <p className="mt-1.5 text-[11px] text-[#615D59]">예상 {row.daysUntilStockout}일</p>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                      <PaginationControls pagination={stockPagination} label="품목" onPageChange={setStockPage} />
-                    </>
-                  )}
-                </section>
-
-                <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                  <SectionHeader
-                    title="나간 기록"
-                    description="최근 출고/배송 예정 기준으로 어디로 갔는지 확인합니다."
-                    open={openSections.outbound}
-                    onToggle={() => toggleSection("outbound")}
-                    meta={<span className="text-[11px] font-semibold text-[#615D59]">{formatNumber(outboundPagination.totalItems)}건</span>}
-                  />
-                  {openSections.outbound && (
-                    <>
-                      <div className="divide-y divide-[rgba(0,0,0,0.06)]">
-                        {outboundPagination.totalItems === 0 ? (
-                          <p className="px-5 py-8 text-center text-[13px] text-[#615D59]">출고 기록이 없습니다.</p>
-                        ) : (
-                          outboundPagination.pageItems.map((movement) => (
-                            <div key={movement.id} className="grid gap-3 px-5 py-3.5 md:grid-cols-[1.1fr_1fr_120px] md:items-center">
-                              <div>
-                                <p className="text-[13px] font-bold text-[#111110]">{movement.product_name}</p>
-                                <p className="mt-1 text-[11px] text-[#615D59]">
-                                  {formatDate(movement.occurred_at)} · {movement.owner ?? "담당자 미정"}
-                                </p>
-                              </div>
-                              <p className="text-[12px] font-semibold text-[#31302E]">
-                                {movement.to_location ?? "도착지 미정"}
-                                {movement.status ? <span className="ml-2 text-[#A8741A]">{movement.status}</span> : null}
-                              </p>
-                              <p className="text-right text-[14px] font-bold text-[#111110]">{formatNumber(movement.quantity)}대</p>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                      <PaginationControls pagination={outboundPagination} label="건" onPageChange={setOutboundPage} />
-                    </>
-                  )}
-                </section>
             </div>
             )}
 
@@ -1668,28 +1753,54 @@ export default function HardwareInventoryClient() {
                       />
                     </label>
 
-                    {(data?.stock ?? []).length > 0 && (
+                    {(quickPickGroups.featured.length > 0 || quickPickGroups.etc.length > 0) && (
                       <div>
                         <span className="text-[11px] font-bold text-[#615D59]">제품 빠른 선택</span>
-                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          {data?.stock.map((row) => (
-                            <button
-                              key={row.itemId}
-                              type="button"
-                              onClick={() => {
-                                setSelectedItemId(row.itemId)
-                                setCustomProduct("")
-                              }}
-                              className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
-                                selectedItemId === row.itemId && !customProduct.trim()
-                                  ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                  : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
-                              }`}
-                            >
-                              {row.product} · 예상 {formatNumber(row.availableStock)}
-                            </button>
-                          ))}
-                        </div>
+                        {quickPickGroups.featured.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {quickPickGroups.featured.map((row) => (
+                              <button
+                                key={row.itemId}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedItemId(row.itemId)
+                                  setCustomProduct("")
+                                }}
+                                className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                                  selectedItemId === row.itemId && !customProduct.trim()
+                                    ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                                    : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
+                                }`}
+                              >
+                                {row.product} · 예상 {formatNumber(row.availableStock)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {quickPickGroups.etc.length > 0 && (
+                          <>
+                            <span className="mt-2.5 block text-[11px] font-bold text-[#A39E98]">기타</span>
+                            <div className="mt-1.5 flex flex-wrap gap-1.5">
+                              {quickPickGroups.etc.map((row) => (
+                                <button
+                                  key={row.itemId}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedItemId(row.itemId)
+                                    setCustomProduct("")
+                                  }}
+                                  className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                                    selectedItemId === row.itemId && !customProduct.trim()
+                                      ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                                      : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
+                                  }`}
+                                >
+                                  {row.product} · 예상 {formatNumber(row.availableStock)}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
 
@@ -1929,39 +2040,6 @@ export default function HardwareInventoryClient() {
               </div>
             )}
 
-            {activeTab === "home" && (
-            <div className="mt-6">
-                <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                  <SectionHeader
-                    title="알림"
-                    description="부족, 주문 검토, 배송 예정 항목입니다."
-                    open={openSections.alerts}
-                    onToggle={() => toggleSection("alerts")}
-                    meta={<span className="text-[11px] font-semibold text-[#615D59]">{formatNumber(alertsPagination.totalItems)}건</span>}
-                  />
-                  {openSections.alerts && (
-                    <>
-                      <div className="space-y-2 p-4">
-                        {alertsPagination.totalItems === 0 ? (
-                          <div className="rounded-lg bg-[#ECFDF5] px-4 py-3 text-[12px] font-semibold text-[#084734]">
-                            현재 알림이 없습니다.
-                          </div>
-                        ) : (
-                          alertsPagination.pageItems.map((alert) => (
-                            <div key={alert.id} className={`rounded-lg border px-3 py-2.5 ${ALERT_TONE[alert.severity]}`}>
-                              <p className="text-[12px] font-bold">{alert.product} · {alert.title}</p>
-                              <p className="mt-1 text-[11px] opacity-80">{alert.detail}</p>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                      <PaginationControls pagination={alertsPagination} label="건" onPageChange={setAlertsPage} />
-                    </>
-                  )}
-                </section>
-            </div>
-            )}
-
             {activeTab === "history" && (
             <div className="mt-6 space-y-4">
                 <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
@@ -1990,6 +2068,28 @@ export default function HardwareInventoryClient() {
                         </button>
                       )
                     })}
+                    <span className="ml-auto inline-flex items-center gap-1.5">
+                      {(["desc", "asc"] as const).map((order) => {
+                        const active = historySort === order
+                        return (
+                          <button
+                            key={order}
+                            type="button"
+                            onClick={() => {
+                              setHistorySort(order)
+                              setMovementsPage(1)
+                            }}
+                            className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                              active
+                                ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                                : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
+                            }`}
+                          >
+                            {order === "desc" ? "최신순" : "오래된순"}
+                          </button>
+                        )
+                      })}
+                    </span>
                   </div>
                   {(data?.stock ?? []).length > 0 ? (
                     <div className="mt-3 flex flex-wrap items-center gap-2">

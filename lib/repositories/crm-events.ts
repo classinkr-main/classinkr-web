@@ -3,6 +3,7 @@ import "server-only"
 import { createCrmRecordingSignedUrl } from "@/lib/storage/crm-recordings"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type {
+  AttendeeOrigin,
   CrmCustomerEvent,
   CrmCustomerEventInsert,
   CrmCustomerEventSentiment,
@@ -11,6 +12,7 @@ import type {
 } from "@/lib/supabase/database.types"
 
 export type {
+  AttendeeOrigin,
   CrmCustomerEventSentiment,
   CrmCustomerEventSourceType,
   CrmCustomerEventTargetType,
@@ -63,6 +65,8 @@ export interface CrmCustomerEventRecord {
   sentiment: CrmCustomerEventSentiment
   stageSignal: string | null
   tags: string[]
+  publicEventId: string | null
+  attendeeOrigin: AttendeeOrigin | null
   recording: CrmCustomerEventRecording | null
   createdBy: string | null
   createdAt: string
@@ -88,6 +92,8 @@ export interface CrmCustomerEventCreateInput {
   sentiment?: CrmCustomerEventSentiment
   stageSignal?: string | null
   tags?: string[]
+  publicEventId?: string | null
+  attendeeOrigin?: AttendeeOrigin | null
   recording?: {
     storagePath: string
     fileName: string
@@ -286,6 +292,8 @@ function toRecord(row: CrmCustomerEvent, signedUrl: string | null): CrmCustomerE
     sentiment: row.sentiment,
     stageSignal: row.stage_signal,
     tags: row.tags ?? [],
+    publicEventId: row.public_event_id,
+    attendeeOrigin: row.attendee_origin,
     recording,
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -325,6 +333,8 @@ export function buildCrmCustomerEventInsert(
     sentiment: input.sentiment ?? "neutral",
     stage_signal: trimOrNull(input.stageSignal),
     tags: [...new Set((input.tags ?? []).map((tag) => tag.trim()).filter(Boolean))],
+    public_event_id: trimOrNull(input.publicEventId),
+    attendee_origin: input.attendeeOrigin ?? null,
     recording_storage_path: input.recording?.storagePath ?? null,
     recording_file_name: input.recording?.fileName ?? null,
     recording_mime_type: input.recording?.mimeType ?? null,

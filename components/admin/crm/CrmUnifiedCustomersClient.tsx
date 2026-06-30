@@ -16,6 +16,7 @@ import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 import Customer360Drawer from "./Customer360Drawer"
 import LeadRegisterModal from "./LeadRegisterModal"
 import CrmCustomerFlags from "./CrmCustomerFlags"
+import CrmContactValue from "./CrmContactValue"
 import { deriveCustomerFlags, type CustomerFlag } from "@/lib/crm/customer-flags"
 
 type SourceFilter = "all" | CrmUnifiedCustomerSource
@@ -577,19 +578,21 @@ export default function CrmUnifiedCustomersClient() {
                   <tr key={row.key} className="transition-colors hover:bg-[#fafaf8]">
                     <td className="px-4 py-3">
                       <div className="flex min-w-0 items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => openDrawer(row.key, row.name)}
-                          className="group min-w-0 text-left"
-                        >
-                          <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
-                          <p className="truncate text-[12px] text-[#1a1a1a]/42">{row.contact ?? "-"}</p>
+                        <div className="min-w-0 flex-1">
+                          <button
+                            type="button"
+                            onClick={() => openDrawer(row.key, row.name)}
+                            className="group block max-w-full text-left"
+                          >
+                            <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
+                          </button>
+                          <CrmContactValue value={row.contact} className="mt-0.5" />
                           <CrmCustomerFlags flags={rowToFlags(row)} max={4} className="mt-1" />
-                        </button>
+                        </div>
                         <Link
-                          href={row.href}
+                          href={`/admin/crm/customers/${encodeURIComponent(row.key)}`}
                           className="shrink-0 text-[#1a1a1a]/25 transition-colors hover:text-[#111110]"
-                          aria-label="원본 화면 열기"
+                          aria-label="고객 상세 페이지 열기"
                         >
                           <ExternalLink className="h-3.5 w-3.5" />
                         </Link>
@@ -621,33 +624,36 @@ export default function CrmUnifiedCustomersClient() {
 
           <div className="divide-y divide-[#f0f0ec] lg:hidden">
             {data?.rows.map((row) => (
-              <button
-                key={row.key}
-                type="button"
-                onClick={() => openDrawer(row.key, row.name)}
-                className="block w-full p-4 text-left transition-colors hover:bg-[#fafaf8]"
-              >
-                <div className="mb-2 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="mb-1">{sourceBadge(row)}</div>
-                    <p className="truncate text-[14px] font-bold text-[#111110]">{row.name}</p>
-                    <p className="truncate text-[12px] text-[#1a1a1a]/42">{row.contact ?? "-"}</p>
-                    <CrmCustomerFlags flags={rowToFlags(row)} max={4} className="mt-1.5" />
+              <div key={row.key} className="relative transition-colors hover:bg-[#fafaf8]">
+                <button
+                  type="button"
+                  onClick={() => openDrawer(row.key, row.name)}
+                  aria-label={`${row.name} 상세 보기`}
+                  className="absolute inset-0 z-0"
+                />
+                <div className="pointer-events-none relative z-10 p-4">
+                  <div className="mb-2 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="mb-1">{sourceBadge(row)}</div>
+                      <p className="truncate text-[14px] font-bold text-[#111110]">{row.name}</p>
+                      <CrmContactValue value={row.contact} className="pointer-events-auto mt-0.5" />
+                      <CrmCustomerFlags flags={rowToFlags(row)} max={4} className="mt-1.5" />
+                    </div>
+                    <span className={`text-[20px] font-bold tabular-nums ${scoreTone(row.score)}`}>{row.score}</span>
                   </div>
-                  <span className={`text-[20px] font-bold tabular-nums ${scoreTone(row.score)}`}>{row.score}</span>
+                  <div className="grid grid-cols-2 gap-2 text-[12px]">
+                    <div>
+                      <p className="text-[11px] font-semibold text-[#1a1a1a]/35">다음 액션</p>
+                      <p className="mt-0.5 font-semibold text-[#111110]">{row.nextActionLabel}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold text-[#1a1a1a]/35">담당</p>
+                      <p className="mt-0.5 font-semibold text-[#111110]">{row.ownerName ?? "미배정"}</p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[12px] text-[#1a1a1a]/45">{row.priorityReason}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-[12px]">
-                  <div>
-                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">다음 액션</p>
-                    <p className="mt-0.5 font-semibold text-[#111110]">{row.nextActionLabel}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">담당</p>
-                    <p className="mt-0.5 font-semibold text-[#111110]">{row.ownerName ?? "미배정"}</p>
-                  </div>
-                </div>
-                <p className="mt-2 text-[12px] text-[#1a1a1a]/45">{row.priorityReason}</p>
-              </button>
+              </div>
             ))}
           </div>
 

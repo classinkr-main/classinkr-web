@@ -166,16 +166,11 @@ const CRM_CHILD_NAV: Array<{ href: string; label: string; match: (p: string) => 
   { href: "/admin/crm", label: "현황", match: (p) => p === "/admin/crm" },
   {
     href: "/admin/crm/customers/unified",
-    label: "고객",
+    label: "고객DB",
     match: (p) => p.startsWith("/admin/crm/customers") || p.startsWith("/admin/crm/partners/customers"),
   },
   { href: "/admin/crm/activity", label: "기록", match: (p) => p.startsWith("/admin/crm/activity") },
-  {
-    href: "/admin/crm/deals",
-    label: "돈흐름",
-    match: (p) =>
-      p.startsWith("/admin/crm/deals") || p.startsWith("/admin/crm/revenue") || p.startsWith("/admin/crm/partners"),
-  },
+  { href: "/admin/crm/capture", label: "참석자 입력", match: (p) => p.startsWith("/admin/crm/capture") },
   { href: "/admin/crm/insights", label: "인사이트", match: (p) => p.startsWith("/admin/crm/insights") },
   { href: "/admin/crm/matching", label: "연동", match: (p) => p.startsWith("/admin/crm/matching") },
 ]
@@ -423,7 +418,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
             </p>
           </div>
 
-          <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
+          <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
             {crmDrill ? (
               <div className="space-y-1">
                 <button
@@ -590,7 +585,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
     </nav>
 
     <aside
-      className={`hidden shrink-0 flex-col border-r border-[#e8e8e4] bg-white lg:sticky lg:top-0 lg:flex lg:h-[100dvh] lg:min-h-0 ${
+      className={`hidden shrink-0 flex-col border-r border-[#e8e8e4] bg-white lg:flex lg:h-[100dvh] lg:min-h-0 ${
         effectiveCollapsed ? "lg:w-16" : "lg:w-60"
       }`}
     >
@@ -642,7 +637,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
         </button>
       </div>
 
-      <nav className={`min-h-0 flex-1 overflow-y-auto px-3 py-4 ${MINIMAL_SCROLLBAR} ${effectiveCollapsed ? "lg:px-2" : ""}`}>
+      <nav className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 ${MINIMAL_SCROLLBAR} ${effectiveCollapsed ? "lg:px-2" : ""}`}>
         {crmDrill ? (
           <div className="space-y-0.5">
             <button

@@ -37,6 +37,7 @@ import { TopPerformersTable } from "@/components/admin/campaigns/TopPerformersTa
 import type { PerformerRow } from "@/components/admin/campaigns/TopPerformersTable"
 import { CampaignExportButton } from "@/components/admin/campaigns/CampaignExportButton"
 import type { ExportColumn } from "@/components/admin/campaigns/CampaignExportButton"
+import { EventOriginMatrix } from "@/components/admin/campaigns/EventOriginMatrix"
 import type { TrendPoint } from "@/components/admin/campaigns/CampaignTrendChart"
 import type { ChannelEfficiencyRow } from "@/components/admin/campaigns/ChannelEfficiencyChart"
 import type { MetaPerfRow } from "@/components/admin/campaigns/MetaPerformanceCharts"
@@ -2443,6 +2444,8 @@ export default function AdminCampaignsPage() {
               disabled={loading}
             />
           </div>
+
+          <EventOriginMatrix className="mb-4" />
 
           {loading ? (
             <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] py-16 text-center text-[13px] text-[#1a1a1a]/30">

@@ -2,9 +2,11 @@ import "server-only"
 
 import { createCrmCustomerEvent } from "@/lib/repositories/crm-events"
 import { createCrmTask, inferTaskTypeFromTitle } from "@/lib/repositories/crm-tasks"
-import { saveLead } from "@/lib/repositories/leads"
+import { getLeadById, saveLead } from "@/lib/repositories/leads"
 import type { CrmCustomerEventTargetType } from "@/lib/supabase/database.types"
+import { setEventToken } from "@/lib/types/event-metrics"
 import { captureActivityLabel } from "./activity-types"
+import { deriveAttendeeOrigin } from "./origin"
 import {
   getCaptureBatchWithRows,
   updateBatchCounts,
@@ -68,6 +70,8 @@ export async function applyCaptureBatch(
           phone: row.phone ?? undefined,
           email: row.email ?? undefined,
           message: row.memo ?? undefined,
+          // 행사 명단이면 리드에도 토큰을 달아 리드 쪽 집계와 일관성 유지
+          notes: batch.publicEventId ? setEventToken("", batch.publicEventId) : undefined,
           timestamp: now.toISOString(),
         })
         createdLeadId = lead.id
@@ -78,6 +82,28 @@ export async function applyCaptureBatch(
       }
 
       const activityLabel = captureActivityLabel(row.activityType)
+
+      // 참석자 출신(origin) — 행에 수동 지정(override)이 있으면 우선, 없으면 자동 도출.
+      let attendeeOrigin = row.attendeeOrigin
+      if (!attendeeOrigin) {
+        // 기존 리드 매칭이면 그 리드의 source로 ad/site 구분.
+        let leadSource: string | null = null
+        let leadHasAdClickId = false
+        if (targetType === "lead" && row.matchStatus !== "new_lead_candidate" && targetId) {
+          const matchedLead = await getLeadById(targetId)
+          leadSource = matchedLead?.source ?? null
+          leadHasAdClickId = Boolean(
+            matchedLead?.gclid || matchedLead?.fbclid || matchedLead?.msclkid || matchedLead?.ttclid
+          )
+        }
+        attendeeOrigin = deriveAttendeeOrigin({
+          matchedTargetType: targetType,
+          createdNewLead: row.matchStatus === "new_lead_candidate",
+          leadSource,
+          leadHasAdClickId,
+        })
+      }
+
       const event = await createCrmCustomerEvent({
         targetType: targetTypeOrUnknown(targetType),
         targetId,
@@ -87,6 +113,8 @@ export async function applyCaptureBatch(
         occurredAt: now.toISOString(),
         title: `${activityLabel} 기록`,
         summary: row.memo,
+        publicEventId: batch.publicEventId,
+        attendeeOrigin,
         ownerName: createdBy,
         createdBy,
       })

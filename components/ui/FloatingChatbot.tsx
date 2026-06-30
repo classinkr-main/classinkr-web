@@ -46,6 +46,8 @@ const CHATBOT_REQUEST_TIMEOUT_MS = 14_000
 const STARTER_SUGGESTION_LIMIT = 4
 const FOLLOW_UP_SUGGESTION_LIMIT = 3
 const ANSWER_SCROLL_TOP_OFFSET_PX = 32
+// 공용 진입 이징 — 메시지·출처·추천 질문 등 대화 표면 애니메이션을 한 곡선으로 맞춘다.
+const EASING_SOFT_ENTER = [0.22, 1, 0.36, 1] as const
 
 interface ChatbotSource {
     title: string
@@ -185,10 +187,10 @@ function getHandoffTopic(intent?: HandoffIntent) {
     return intent === "demo" ? "도입 상담" : "계정/접속/기술 지원"
 }
 
-function getConsultationHint(intent?: HandoffIntent) {
-    return intent === "demo"
-        ? "최근 질문만 함께 넘겨 도입 상담을 바로 이어갈게요."
-        : "최근 질문만 함께 넘겨 담당자가 바로 확인할게요."
+function formatActionMessage(intent: HandoffIntent, draftLineCount: number) {
+    return draftLineCount >= 3
+        ? `${getHandoffTopic(intent)} 전용 상담 흐름으로 바로 연결해요.`
+        : `${getHandoffTopic(intent)} 상담을 연결하고 담당자가 바로 이어서 확인할게요.`
 }
 
 function AssistantMeta({ message }: { message: ChatMessage }) {
@@ -226,11 +228,18 @@ function ConsultationBridge({
     message: ChatMessage
     sessionId?: string
 }) {
-    const [state, setState] = useState<"idle" | "opened" | "failed">("idle")
+    const shouldReduceMotion = useReducedMotion()
+    const [state, setState] = useState<"idle" | "opened" | "copied" | "failed">("idle")
+    const [toast, setToast] = useState<{
+        type: "info" | "success" | "error"
+        text: string
+    } | null>(null)
     const draft = useMemo(
         () => buildConsultationDraft(messages, message),
         [messages, message]
     )
+    const intentLabel = message.handoffIntent === "support" ? "실시간 상담 연결" : "도입 상담 남기기"
+    const draftLineCount = draft.split("\n").length
     const topic = getHandoffTopic(message.handoffIntent)
     const contactHref = `/contact?${new URLSearchParams({
         source: "chatbot",
@@ -241,6 +250,10 @@ function ConsultationBridge({
     function openConsultation() {
         const anonymousId = getChannelTalkAnonymousId()
         const profile = buildHandoffProfile(messages, message, sessionId)
+        setToast({
+            type: "info",
+            text: "상담창을 여는 중입니다.",
+        })
         const opened = openChannelTalk({
             memberId: anonymousId ? buildChannelTalkMemberId(anonymousId) : undefined,
             profile,
@@ -249,50 +262,99 @@ function ConsultationBridge({
         })
 
         setState(opened ? "opened" : "failed")
+        setToast({
+            type: opened ? "success" : "error",
+            text: opened
+                ? "상담창에 요약이 입력됐어요. 전송하면 담당자가 바로 이어서 확인합니다."
+                : "상담창 열기 실패: 브라우저 제약이나 인증 상태를 확인한 뒤 문의폼으로 이동해 주세요.",
+        })
+    }
+
+    async function copyDraft() {
+        try {
+            if (!navigator?.clipboard?.writeText) {
+                throw new Error("clipboard_not_supported")
+            }
+            await navigator.clipboard.writeText(draft)
+            setState("copied")
+            setToast({
+                type: "success",
+                text: "요약을 복사했어요. 문의폼에 붙여 넣으면 그대로 제출됩니다.",
+            })
+        } catch {
+            setState("failed")
+            setToast({
+                type: "error",
+                text: "요약 복사에 실패했어요. 문의폼으로 이동해 수동으로 붙여 넣어 주세요.",
+            })
+        }
     }
 
     return (
-        <div className="mt-3 border-t border-[#084734]/10 pt-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-[11rem] flex-1">
-                    <div className="flex items-center gap-2 text-[12px] font-bold text-[#084734]">
-                        <MessageCircle className="h-4 w-4 shrink-0" />
-                        상담 연결
-                    </div>
-                    <p className="mt-1 text-[11px] leading-4 text-[#615D59]">
-                        {getConsultationHint(message.handoffIntent)}
-                    </p>
-                </div>
-                <button
+        <motion.div
+            initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+            animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            transition={{ duration: shouldReduceMotion ? 0.01 : 0.28, ease: EASING_SOFT_ENTER }}
+            className="mt-3 border-t border-[#084734]/10 pt-3"
+        >
+            <div className="flex items-center gap-2 text-[12px] font-bold text-[#084734]">
+                <MessageCircle className="h-4 w-4" />
+                상담 연결
+            </div>
+            <p className="mt-1 text-[11px] leading-4 text-[#615D59]">
+                {formatActionMessage(message.handoffIntent ?? "support", draftLineCount)}
+            </p>
+            <div className="mt-2 rounded-[12px] border border-white/70 bg-[#ECFDF5]/45 px-3 py-2 text-[12px] leading-5 text-[#3B3835] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+                <p className="whitespace-pre-line [overflow-wrap:anywhere]">{draft}</p>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                <motion.button
                     type="button"
                     onClick={openConsultation}
-                    className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-[6px] bg-[#084734] px-3 text-xs font-bold text-white shadow-[0_6px_14px_rgba(8,71,52,0.16)] transition-colors hover:bg-[#065c41]"
+                    whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
+                    whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] bg-[#084734] px-3 text-xs font-bold text-white shadow-[0_6px_14px_rgba(8,71,52,0.18)] transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
                 >
                     <MessageCircle className="h-3.5 w-3.5" />
-                    상담 연결
-                </button>
-            </div>
-            {state === "failed" ? (
+                    {intentLabel}
+                </motion.button>
+                <motion.button
+                    type="button"
+                    onClick={() => void copyDraft()}
+                    whileHover={shouldReduceMotion ? undefined : { scale: 1.03 }}
+                    whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
+                    className="inline-flex h-9 items-center justify-center gap-1.5 rounded-[8px] border border-white/70 bg-white/70 px-3 text-xs font-bold text-[#111110] transition-colors hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
+                >
+                    {state === "copied" ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    요약 복사
+                </motion.button>
                 <Link
                     href={contactHref}
-                    className="mt-2 inline-flex h-8 items-center justify-center rounded-[6px] px-2 text-xs font-bold text-[#084734] transition-colors hover:bg-white/70"
+                    className="inline-flex h-9 items-center justify-center rounded-[8px] px-2 text-xs font-bold text-[#615D59] transition-colors hover:bg-white/70 hover:text-[#084734]"
                 >
-                    문의폼으로 남기기
+                    문의폼으로 이어서 남기기
                 </Link>
-            ) : null}
-            {state !== "idle" ? (
+            </div>
+            {toast ? (
                 <p
                     className={cn(
                         "mt-2 text-[11px] leading-4",
-                        state === "failed" ? "text-[#7A2A13]" : "text-[#615D59]"
+                        toast.type === "error" ? "text-[#7A2A13]" : "text-[#615D59]"
                     )}
                 >
-                    {state === "opened"
-                        ? "상담창에 맥락이 준비됐어요. 전송하면 담당자가 이어서 확인합니다."
-                        : "상담창을 열 수 없어 문의폼으로 대신 남길 수 있어요."}
+                    {toast.text}
                 </p>
             ) : null}
-        </div>
+            {state !== "idle" ? (
+                <p className="mt-2 text-[11px] leading-4 text-[#615D59]">
+                    {state === "opened"
+                        ? "상담창이 열렸어요. 입력된 요약을 전송하면 채널톡 상담 수신함으로 이어집니다."
+                        : state === "copied"
+                          ? "요약을 복사했어요."
+                          : "상담창을 열 수 없으면 문의폼으로 남겨주세요."}
+                </p>
+            ) : null}
+        </motion.div>
     )
 }
 
@@ -507,29 +569,56 @@ function AnswerCopyButton({ message }: { message: ChatMessage }) {
 }
 
 function SourceLinks({ sources }: { sources?: ChatbotSource[] }) {
+    const shouldReduceMotion = useReducedMotion()
     const visibleSources = sources?.slice(0, 2) ?? []
     if (visibleSources.length === 0) return null
 
     return (
         <div className="mt-3 space-y-1.5 border-t border-[#084734]/10 pt-3">
             <div className="text-[11px] font-bold text-[#615D59]">참고한 가이드</div>
-            {visibleSources.map((source) => (
-                <Link
-                    key={`${source.urlPath}:${source.heading ?? source.title}`}
-                    href={source.urlPath}
-                    className="block rounded-[12px] border border-white/70 bg-white/60 px-3 py-2 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:bg-[#ECFDF5]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
-                >
-                    <span className="flex items-start justify-between gap-2 text-[12px] font-bold leading-5 text-[#111110]">
-                        <span>{source.title}</span>
-                        <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#084734]" aria-hidden />
-                    </span>
-                    {source.heading ? (
-                        <span className="mt-0.5 block text-[11px] leading-4 text-[#615D59]">
-                            {source.heading}
-                        </span>
-                    ) : null}
-                </Link>
-            ))}
+            {visibleSources.map((source, index) => {
+                // 첫 번째 출처는 점수가 가장 높은 '가장 관련 높은' 가이드 — 시각적으로 강조한다.
+                const isTopMatch = index === 0
+                return (
+                    <motion.div
+                        key={`${source.urlPath}:${source.heading ?? source.title}`}
+                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+                        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                        transition={{
+                            duration: shouldReduceMotion ? 0.01 : 0.26,
+                            ease: EASING_SOFT_ENTER,
+                            delay: shouldReduceMotion ? 0 : index * 0.07,
+                        }}
+                    >
+                        <Link
+                            href={source.urlPath}
+                            className={cn(
+                                "block rounded-[12px] border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25",
+                                isTopMatch
+                                    ? "border-[#084734]/25 bg-[#ECFDF5]/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.70),0_2px_8px_rgba(8,71,52,0.06)] hover:bg-[#ECFDF5]"
+                                    : "border-white/70 bg-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] hover:bg-[#ECFDF5]/90"
+                            )}
+                        >
+                            <span className="flex items-start justify-between gap-2 text-[12px] font-bold leading-5 text-[#111110]">
+                                <span className="flex min-w-0 items-center gap-1.5">
+                                    {isTopMatch ? (
+                                        <span className="shrink-0 rounded-full bg-[#084734] px-1.5 py-0.5 text-[9px] font-bold leading-none text-white">
+                                            추천
+                                        </span>
+                                    ) : null}
+                                    <span className="min-w-0">{source.title}</span>
+                                </span>
+                                <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#084734]" aria-hidden />
+                            </span>
+                            {source.heading ? (
+                                <span className="mt-0.5 block text-[11px] leading-4 text-[#615D59]">
+                                    {source.heading}
+                                </span>
+                            ) : null}
+                        </Link>
+                    </motion.div>
+                )
+            })}
         </div>
     )
 }
@@ -1058,7 +1147,7 @@ export function FloatingChatbot() {
                                             data-chat-message-id={message.id}
                                             initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}
                                             animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
-                                            transition={{ duration: shouldReduceMotion ? 0.01 : 0.28, ease: [0.22, 1, 0.36, 1] }}
+                                            transition={{ duration: shouldReduceMotion ? 0.01 : 0.28, ease: EASING_SOFT_ENTER }}
                                             className={cn(
                                                 "flex",
                                                 message.role === "user" ? "justify-end" : "justify-start"
@@ -1092,17 +1181,25 @@ export function FloatingChatbot() {
                                                         ) : null}
                                                         {(message.suggestedQuestions?.length ?? 0) > 0 ? (
                                                             <div className="mt-3 grid gap-2">
-                                                                {message.suggestedQuestions?.slice(0, getSuggestionLimit(message)).map((question) => (
-                                                                    <button
+                                                                {message.suggestedQuestions?.slice(0, getSuggestionLimit(message)).map((question, index) => (
+                                                                    <motion.button
                                                                         key={question}
                                                                         type="button"
                                                                         disabled={isSending}
                                                                         onClick={() => sendQuestion(question)}
+                                                                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+                                                                        animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                                                                        transition={{
+                                                                            duration: shouldReduceMotion ? 0.01 : 0.24,
+                                                                            ease: EASING_SOFT_ENTER,
+                                                                            delay: shouldReduceMotion ? 0 : index * 0.06,
+                                                                        }}
+                                                                        whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
                                                                         className="flex w-full items-center justify-between gap-2 whitespace-normal break-keep rounded-[12px] border border-[#084734]/15 bg-white/60 px-3.5 py-2.5 text-left text-[12px] font-semibold leading-5 text-[#084734] shadow-[inset_0_1px_0_rgba(255,255,255,0.60)] transition-colors hover:border-[#084734]/30 hover:bg-[#ECFDF5]/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25"
                                                                     >
                                                                         <span>{question}</span>
                                                                         <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                                                                    </button>
+                                                                    </motion.button>
                                                                 ))}
                                                             </div>
                                                         ) : null}

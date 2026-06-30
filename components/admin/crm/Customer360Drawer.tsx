@@ -29,6 +29,7 @@ import {
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
+import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import CrmCustomerFlags from "./CrmCustomerFlags"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
@@ -147,6 +148,13 @@ function focusSection(id: string) {
   if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) el.focus()
 }
 
+// 출처별 통화로 금액을 표기 — 견적=KRW(₩, 내부 Classin), 오더=USD($), 수납·잔액=CNY(¥, 만단위).
+function formatFunnelMoney(amount: number | null, currency: "KRW" | "USD" | "CNY") {
+  if (currency === "USD") return formatUSD(amount)
+  if (currency === "CNY") return formatCNY(amount)
+  return formatMoney(amount, "KRW")
+}
+
 // 견적/오더/수납 진행 — 공식 원천(NEO orders/collections) + 작업 캐시(Deal Lite)에서 파생.
 function FunnelRow({
   icon,
@@ -159,7 +167,7 @@ function FunnelRow({
   icon: React.ReactNode
   label: string
   amount: number | null
-  currency?: "KRW" | "USD"
+  currency?: "KRW" | "USD" | "CNY"
   meta?: string | null
   state: "done" | "warn" | "pending"
 }) {
@@ -186,7 +194,7 @@ function FunnelRow({
         ) : null}
       </div>
       <span className={`shrink-0 text-[13px] font-bold ${state === "warn" ? "text-[#B85C33]" : "text-[#111110]"}`}>
-        {formatMoney(amount, currency)}
+        {formatFunnelMoney(amount, currency)}
       </span>
     </div>
   )
@@ -240,6 +248,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [dealStage, setDealStage] = useState<CrmDealStage>("consult")
   const [dealAmount, setDealAmount] = useState("")
   const [activityTab, setActivityTab] = useState<"timeline" | "feed">("timeline")
+  const [activitySource, setActivitySource] = useState<"all" | "manual_note" | "meeting_minutes">("all")
   const [eventsExpanded, setEventsExpanded] = useState(false)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
   const [noteKind, setNoteKind] = useState<"manual_note" | "meeting_minutes">("manual_note")
@@ -286,6 +295,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     setDealStage("consult")
     setDealAmount("")
     setActivityTab("timeline")
+    setActivitySource("all")
     setEventsExpanded(false)
     setNoteKind("manual_note")
     setDealFormOpen(false)
@@ -484,6 +494,15 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const quoteTotal = useMemo(() => sumAmounts((data?.deals.rows ?? []).map((d) => d.expectedAmount)), [data])
   const orderTotal = money?.totalOrderAmount ?? null
   const collectionTotal = useMemo(() => sumAmounts((money?.collections ?? []).map((c) => c.amount)), [money])
+  const performanceTotal = useMemo(() => sumAmounts((money?.performances ?? []).map((p) => p.amount)), [money])
+  // 최근 성과 몇 건만 노출(드로어는 요약). 발생일 desc 정렬 후 상위 3건.
+  const recentPerformances = useMemo(
+    () =>
+      [...(money?.performances ?? [])]
+        .sort((a, b) => (b.occurredAt ?? "").localeCompare(a.occurredAt ?? ""))
+        .slice(0, 3),
+    [money]
+  )
   const outstanding = orderTotal != null && collectionTotal != null ? orderTotal - collectionTotal : null
   const ltv = collectionTotal ?? orderTotal ?? quoteTotal ?? null
 
@@ -510,8 +529,12 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
 
   // 특이사항 피드 = 위험 신호가 있는 활동만.
   const feedRows = useMemo(() => (data?.activity.rows ?? []).filter((event) => event.sentiment === "risk"), [data])
-  const timelineRows = data?.activity.rows ?? []
-  const visibleActivity = activityTab === "feed" ? feedRows : timelineRows
+  // 타임라인은 출처(메모/회의록) 필터를 적용. 피드는 위험 신호 전용이라 필터 비적용.
+  const visibleActivity = useMemo(() => {
+    const base = activityTab === "feed" ? feedRows : data?.activity.rows ?? []
+    if (activityTab === "feed" || activitySource === "all") return base
+    return base.filter((event) => event.sourceType === activitySource)
+  }, [activityTab, activitySource, feedRows, data])
 
   // 다음 액션 추천 — 규칙 기반(nextAction·우선순위 사유·서비스 위험 합성). AI 아님, 출처 표시.
   const recommendation = useMemo(() => {
@@ -784,10 +807,10 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </section>
           ) : null}
 
-          {/* money — 견적 → 오더 → 수납 */}
+          {/* 수금 · 성과 — 견적 → 오더 → 수납 흐름 + 성과/수금 합계 + 핵심 정보 통합 */}
           {data ? (
             <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-              <SectionTitle icon={<Coins className="h-3.5 w-3.5" />}>돈 흐름 · 견적 → 오더 → 수납</SectionTitle>
+              <SectionTitle icon={<Coins className="h-3.5 w-3.5" />}>수금 · 성과</SectionTitle>
               {targetType === "lead" ? (
                 <p className="text-[12px] text-[#1a1a1a]/40">리드 단계 · 연결된 딜 없음</p>
               ) : moneyVisible || quoteTotal != null ? (
@@ -814,10 +837,10 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                       icon={<Coins className="h-3.5 w-3.5" />}
                       label="수납"
                       amount={collectionTotal}
-                      currency="USD"
+                      currency="CNY"
                       meta={
                         outstanding != null && outstanding > 0
-                          ? `미수 ${formatMoney(outstanding, "USD")}`
+                          ? `미수 ${formatUSD(outstanding)}`
                           : collectionTotal != null
                             ? "NEO 수납 · 공식 원천"
                             : "수납 기록 없음"
@@ -846,13 +869,39 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                       </>
                     ) : null}
                   </div>
+
+                  {/* 수금 · 성과 합계 — 둘 다 CNY(¥). 수금은 위 funnel 합계와 동일. */}
+                  <div className="grid grid-cols-2 gap-2 border-t border-[#f0f0ec] pt-3">
+                    <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
+                      <p className="text-[11px] font-semibold text-[#1a1a1a]/35">수금 합계</p>
+                      <p className="text-[15px] font-bold text-[#111110]">{formatCNY(collectionTotal)}</p>
+                    </div>
+                    <div className="rounded-xl bg-[#ECFDF5] px-3 py-2">
+                      <p className="text-[11px] font-semibold text-[#084734]/70">성과 합계</p>
+                      <p className="text-[15px] font-bold text-[#084734]">{formatCNY(performanceTotal)}</p>
+                    </div>
+                  </div>
+                  {recentPerformances.length ? (
+                    <div className="space-y-1.5">
+                      {recentPerformances.map((perf) => (
+                        <div key={perf.id} className="flex items-center justify-between gap-2 text-[12px]">
+                          <span className="min-w-0 truncate font-medium text-[#111110]">{perf.title}</span>
+                          <span className="shrink-0 text-[#1a1a1a]/45">
+                            {formatCNY(perf.amount)}
+                            {perf.occurredAt ? ` · ${formatDay(perf.occurredAt)}` : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
                   {money?.eeoAccounts.length ? (
                     <div className="space-y-1.5 border-t border-[#f0f0ec] pt-3">
                       {money.eeoAccounts.slice(0, 4).map((eeo) => (
                         <div key={eeo.id} className="flex items-center justify-between gap-2 text-[12px]">
                           <span className="truncate font-medium text-[#111110]">{eeo.name}</span>
                           <span className="shrink-0 text-[#1a1a1a]/45">
-                            잔액 {formatAmount(eeo.balance)} · 만료 {formatDay(eeo.expireAt)}
+                            잔액 {formatCNY(eeo.balance)} · 만료 {formatDay(eeo.expireAt)}
                           </span>
                         </div>
                       ))}
@@ -860,25 +909,18 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   ) : null}
                 </div>
               ) : (
-                <p className="text-[12px] text-[#1a1a1a]/40">표시할 돈흐름 데이터가 없습니다.</p>
+                <p className="text-[12px] text-[#1a1a1a]/40">표시할 수금·성과 데이터가 없습니다.</p>
               )}
-            </section>
-          ) : null}
 
-          {/* 핵심 정보 */}
-          {data ? (
-            <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-              <SectionTitle icon={<Sparkles className="h-3.5 w-3.5" />}>핵심 정보</SectionTitle>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12px]">
+              {/* 핵심 정보 — 동일 섹션 내 타이트 그리드로 통합 */}
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-[#f0f0ec] pt-3 text-[12px]">
                 <div>
                   <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객 가치 (LTV) · 추정</p>
                   <p className="text-[15px] font-bold text-[#111110]">{ltv == null ? "-" : `₩${formatAmount(ltv)}`}</p>
                 </div>
                 <div>
                   <p className="text-[11px] font-semibold text-[#1a1a1a]/35">잔액 합계</p>
-                  <p className="text-[15px] font-bold text-[#111110]">
-                    {money?.totalBalance == null ? "-" : `₩${formatAmount(money.totalBalance)}`}
-                  </p>
+                  <p className="text-[15px] font-bold text-[#111110]">{formatCNY(money?.totalBalance ?? null)}</p>
                 </div>
                 <div>
                   <p className="text-[11px] font-semibold text-[#1a1a1a]/35">담당</p>
@@ -903,7 +945,9 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   <p className="font-medium text-[#111110]">{header?.createdAt ? formatDay(header.createdAt) : "-"}</p>
                 </div>
               </div>
-              <p className="mt-2 text-[10px] text-[#1a1a1a]/35">LTV는 수납·오더 기준 추정값 · 공식 잔액/만료는 NEO 원천</p>
+              <p className="mt-2 text-[10px] text-[#1a1a1a]/35">
+                LTV는 수납·오더 기준 추정값 · 수금/성과/잔액은 위안화(¥), 오더는 달러($) · 공식 원천 NEO
+              </p>
             </section>
           ) : null}
 
@@ -1150,6 +1194,32 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                 ))}
               </div>
 
+              {/* 출처 필터 — 타임라인에서 메모/회의록만 빠르게 추림. 피드(위험 전용)에는 비표시. */}
+              {activityTab === "timeline" ? (
+                <div className="mb-3 inline-flex flex-wrap gap-1">
+                  {(
+                    [
+                      { key: "all", label: "전체" },
+                      { key: "manual_note", label: "메모" },
+                      { key: "meeting_minutes", label: "회의록" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setActivitySource(opt.key)}
+                      className={`inline-flex h-7 items-center rounded-full border px-2.5 text-[11px] font-semibold transition-colors ${
+                        activitySource === opt.key
+                          ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                          : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#111110] hover:text-[#111110]"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
               <div className="mb-3 flex flex-col gap-2 border-b border-[#f0f0ec] pb-3">
                 <div className="inline-flex w-fit rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
                   {(
@@ -1192,36 +1262,53 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
 
               {visibleActivity.length === 0 ? (
                 <p className="text-[12px] text-[#1a1a1a]/40">
-                  {activityTab === "feed" ? "특이사항(위험) 기록이 없습니다." : "기록된 활동이 없습니다."}
+                  {activityTab === "feed"
+                    ? "특이사항(위험) 기록이 없습니다."
+                    : activitySource === "manual_note"
+                      ? "메모가 없습니다."
+                      : activitySource === "meeting_minutes"
+                        ? "회의록이 없습니다."
+                        : "기록된 활동이 없습니다."}
                 </p>
               ) : (
                 <ul className="space-y-2.5">
-                  {visibleActivity.map((event) => (
-                    <li key={event.id} className="flex gap-2.5">
-                      <span
-                        className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${
-                          event.sentiment === "risk" ? "bg-[#FEF3EE] text-[#B85C33]" : "bg-[#fafaf8] text-[#1a1a1a]/45"
-                        }`}
-                      >
-                        {EVENT_SOURCE_ICON[event.sourceType] ?? <ClipboardList className="h-3.5 w-3.5" />}
-                      </span>
-                      <div className="min-w-0 flex-1 border-b border-[#f5f5f2] pb-2.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-semibold text-[#1a1a1a]/45">
-                            {EVENT_SOURCE_LABEL[event.sourceType] ?? event.sourceType}
-                          </span>
-                          <span className="text-[11px] text-[#1a1a1a]/35">{formatDate(event.occurredAt)}</span>
-                          {event.sentiment === "risk" ? (
-                            <span className="rounded bg-[#FEF3EE] px-1.5 py-0.5 text-[10px] font-semibold text-[#B85C33]">위험</span>
+                  {visibleActivity.map((event) => {
+                    // 메모·회의록은 본문이 핵심 — 클램프 없이 펼쳐 보여주고, 그 외는 요약 2줄로 압축.
+                    const isMemo = event.sourceType === "manual_note" || event.sourceType === "meeting_minutes"
+                    const memoText = event.body ?? event.summary
+                    const author = event.ownerName ?? event.createdBy
+                    return (
+                      <li key={event.id} className="flex gap-2.5">
+                        <span
+                          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${
+                            event.sentiment === "risk" ? "bg-[#FEF3EE] text-[#B85C33]" : "bg-[#fafaf8] text-[#1a1a1a]/45"
+                          }`}
+                        >
+                          {EVENT_SOURCE_ICON[event.sourceType] ?? <ClipboardList className="h-3.5 w-3.5" />}
+                        </span>
+                        <div className="min-w-0 flex-1 border-b border-[#f5f5f2] pb-2.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[11px] font-semibold text-[#1a1a1a]/45">
+                              {EVENT_SOURCE_LABEL[event.sourceType] ?? event.sourceType}
+                            </span>
+                            <span className="text-[11px] text-[#1a1a1a]/35">{formatDate(event.occurredAt)}</span>
+                            {author ? <span className="text-[11px] text-[#1a1a1a]/35">· {author}</span> : null}
+                            {event.sentiment === "risk" ? (
+                              <span className="rounded bg-[#FEF3EE] px-1.5 py-0.5 text-[10px] font-semibold text-[#B85C33]">위험</span>
+                            ) : null}
+                          </div>
+                          <p className="mt-0.5 text-[12px] font-semibold text-[#111110]">{event.title}</p>
+                          {isMemo ? (
+                            memoText ? (
+                              <p className="mt-0.5 whitespace-pre-wrap text-[12px] text-[#1a1a1a]/55">{memoText}</p>
+                            ) : null
+                          ) : event.summary || event.body ? (
+                            <p className="mt-0.5 line-clamp-2 text-[12px] text-[#1a1a1a]/55">{event.summary ?? event.body}</p>
                           ) : null}
                         </div>
-                        <p className="mt-0.5 text-[12px] font-semibold text-[#111110]">{event.title}</p>
-                        {event.summary || event.body ? (
-                          <p className="mt-0.5 line-clamp-2 text-[12px] text-[#1a1a1a]/55">{event.summary ?? event.body}</p>
-                        ) : null}
-                      </div>
-                    </li>
-                  ))}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
               {activityTab === "timeline" &&
@@ -1238,19 +1325,28 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </section>
           ) : null}
 
-          {/* escape hatch to full source screen */}
+          {/* escape hatch — 신규 360 상세 페이지가 주 동선, 원본 화면은 보조 */}
           {header || name ? (
-            <Link
-              href={
-                targetType === "neo_account"
-                  ? `/admin/crm/customers/accounts?account=${encodeURIComponent(entityId)}`
-                  : `/admin/crm/customers/leads?lead=${encodeURIComponent(entityId)}`
-              }
-              className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
-            >
-              원본 화면 열기
-              <ExternalLink className="h-3 w-3" />
-            </Link>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <Link
+                href={`/admin/crm/customers/${encodeURIComponent(customerKey)}`}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#084734] px-4 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                자세히 보기
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+              <Link
+                href={
+                  targetType === "neo_account"
+                    ? `/admin/crm/customers/accounts?account=${encodeURIComponent(entityId)}`
+                    : `/admin/crm/customers/leads?lead=${encodeURIComponent(entityId)}`
+                }
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1a1a1a]/40 transition-colors hover:text-[#111110]"
+              >
+                원본 화면 열기
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </div>
           ) : null}
         </div>
       </div>
