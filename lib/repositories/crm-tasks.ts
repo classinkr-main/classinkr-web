@@ -131,7 +131,7 @@ function nullableIso(value: string | null | undefined) {
 }
 
 function safeSearch(value: string | null | undefined) {
-  return value?.trim().replace(/[%,()]/g, " ").replace(/\s+/g, " ") ?? ""
+  return value?.trim().replace(/[%,()\\]/g, " ").replace(/\s+/g, " ") ?? ""
 }
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {

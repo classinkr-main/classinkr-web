@@ -837,7 +837,7 @@ export async function importHardwareFromBranchSheets(
     inbound.forEach((row) => {
       const product = normalizeProductName(row.product)
       const item = itemsByName.get(product)
-      if (!item || row.quantity <= 0) {
+      if (!item || !Number.isFinite(row.quantity) || row.quantity <= 0) {
         skipped += 1
         return
       }
@@ -869,7 +869,7 @@ export async function importHardwareFromBranchSheets(
     outbound.forEach((row) => {
       const product = normalizeProductName(row.product)
       const item = itemsByName.get(product)
-      if (!item || row.quantity <= 0) {
+      if (!item || !Number.isFinite(row.quantity) || row.quantity <= 0) {
         skipped += 1
         return
       }

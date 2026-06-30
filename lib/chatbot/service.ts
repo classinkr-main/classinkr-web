@@ -533,7 +533,7 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
 }
 
 function sanitizeLikeToken(token: string) {
-  return token.replace(/[%_,()]/g, "").slice(0, 40)
+  return token.replace(/[%_,()\\]/g, "").slice(0, 40)
 }
 
 function compactText(value: string, maxLength = 220) {

@@ -55,11 +55,13 @@ export async function applyCaptureBatch(
       continue
     }
 
+    // 직전 부분 실패로 리드가 이미 생성됐을 수 있어 try 밖에서 선언 — 실패 패치에도 담아
+    // 재시도 시 중복 saveLead를 막는다.
+    let createdLeadId = row.createdLeadId
     try {
       let targetType = row.matchedTargetType
       let targetId = row.matchedTargetId
       let targetLabel = row.matchedTargetLabel
-      let createdLeadId = row.createdLeadId
 
       // 선택된 신규 리드 후보 → 리드 생성 후 타깃으로 사용
       if (!targetId && row.matchStatus === "new_lead_candidate" && !createdLeadId) {
@@ -79,6 +81,10 @@ export async function applyCaptureBatch(
         targetId = lead.id
         targetLabel = lead.org || lead.name || row.organizationName || null
         leadCreated += 1
+      } else if (!targetId && createdLeadId) {
+        // 재시도: 리드는 이미 생성됐으니 중복 없이 그 리드를 타깃으로 사용.
+        targetType = "lead"
+        targetId = createdLeadId
       }
 
       const activityLabel = captureActivityLabel(row.activityType)
@@ -153,6 +159,8 @@ export async function applyCaptureBatch(
       failed += 1
       await updateCaptureRowApplyResult(row.id, {
         apply_status: "failed",
+        // 리드가 이미 생성됐다면 기록 — 재시도 시 중복 생성 방지.
+        created_lead_id: createdLeadId,
         error_message: error instanceof Error ? error.message : "적용 실패",
       }).catch(() => {})
     }

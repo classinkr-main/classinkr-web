@@ -272,7 +272,7 @@ function clampInteger(value: number | undefined, fallback: number, min: number, 
 }
 
 function safeSearch(value: string | null | undefined) {
-  return value?.trim().replace(/[%,()]/g, " ").replace(/\s+/g, " ") ?? ""
+  return value?.trim().replace(/[%,()\\]/g, " ").replace(/\s+/g, " ") ?? ""
 }
 
 function fetchExternalRows<T>(
