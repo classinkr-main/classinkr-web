@@ -704,8 +704,22 @@ interface HardwareSheetImportSnapshot {
   created_at: string
 }
 
+// row.raw 등 unknown 데이터에 BigInt/순환참조가 섞이면 JSON.stringify가 throw → import 전체 중단.
+// 안전 직렬화: BigInt는 문자열로, 순환은 생략. 정상 데이터는 출력 동일이라 checksum 불변.
+function safeStringify(value: unknown): string {
+  const seen = new WeakSet<object>()
+  return JSON.stringify(value, (_key, val) => {
+    if (typeof val === "bigint") return val.toString()
+    if (typeof val === "object" && val !== null) {
+      if (seen.has(val)) return undefined
+      seen.add(val)
+    }
+    return val
+  })
+}
+
 function checksumImportSnapshot(value: unknown) {
-  return createHash("sha256").update(JSON.stringify(value)).digest("hex")
+  return createHash("sha256").update(safeStringify(value)).digest("hex")
 }
 
 function getImportWarehouseBalances(rows: ImportMovementRow[]) {
