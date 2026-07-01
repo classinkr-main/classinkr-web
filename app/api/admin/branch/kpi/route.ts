@@ -6,6 +6,7 @@ import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
 import { parseKpiBlocks, selectKpiRows, KPI_METRICS, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
+import { readDshFromActiveImport, readKpiBlocksFromActiveImport, readRevDealsFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
 import { listMembersByTeam, memberPacing, teamPacing } from "@/lib/branch/computations/pacing"
 import { fyOf, resolvePeriodDate } from "@/lib/branch/fiscal"
 
@@ -28,14 +29,27 @@ function readPeriodParam(url: URL): BranchPeriod | NextResponse {
 }
 
 const readDsh = unstable_cache(
-  async (fy: number) => parseDsh(await readRangeWithFormat(envSheetId("dashboard"), DSH_RANGE), fy),
+  async (fy: number) => {
+    const imported = await readDshFromActiveImport(fy)
+    if (imported) return imported
+    return parseDsh(await readRangeWithFormat(envSheetId("dashboard"), DSH_RANGE), fy)
+  },
   ["branch-dsh"], { revalidate: 60, tags: ["branch-dsh"] },
 )
 
 const readKpiBlocks = unstable_cache(
-  async () => parseKpiBlocks(await readRangeWithFormat(envSheetId("dashboard"), KPI_RANGE)),
+  async (fy: number) => {
+    const imported = await readKpiBlocksFromActiveImport(fy)
+    if (imported) return imported
+    return parseKpiBlocks(await readRangeWithFormat(envSheetId("dashboard"), KPI_RANGE))
+  },
   ["branch-kpi"], { revalidate: 60, tags: ["branch-kpi"] },
 )
+
+async function readRevDeals(fy: number, team: BranchTeam) {
+  const imported = await readRevDealsFromActiveImport(fy, { team })
+  return imported ?? listBranchRevDeals({ team })
+}
 
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req, BRANCH_READ_ADMIN_API_ROLES); if (err) return err
@@ -46,7 +60,8 @@ export async function GET(req: NextRequest) {
   if (!now) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
     const teams = team === "ALL" ? ["BD", "MKT", "CSM"] : [team]
-    const [dsh, kpiBlocks, deals] = await Promise.all([readDsh(fyOf(now)), readKpiBlocks(), listBranchRevDeals({ team })])
+    const fy = fyOf(now)
+    const [dsh, kpiBlocks, deals] = await Promise.all([readDsh(fy), readKpiBlocks(fy), readRevDeals(fy, team)])
     const kpiRows = selectKpiRows(kpiBlocks, period, now)
     const kpiRowsByMember = new Map(kpiRows.map((row) => [row.member, row]))
     const dealsByManager = new Map<string, typeof deals>()

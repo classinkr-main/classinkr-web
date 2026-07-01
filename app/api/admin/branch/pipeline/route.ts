@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
+import { readRevDealsFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
 import { listRevRevenue } from "@/lib/branch/computations/pipeline"
-import { resolvePeriodDate } from "@/lib/branch/fiscal"
+import { fyOf, resolvePeriodDate } from "@/lib/branch/fiscal"
 
 type BranchTeam = "ALL" | "BD" | "MKT" | "CSM"
 type BranchPeriod = "M" | "Q" | "Y"
@@ -33,7 +34,8 @@ export async function GET(req: NextRequest) {
   const periodDate = period ? resolvePeriodDate(period, url.searchParams.get("month"), new Date()) : null
   if (period && !periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
-    const deals = await listBranchRevDeals({ team })
+    const fy = fyOf(periodDate ?? new Date())
+    const deals = await readRevDealsFromActiveImport(fy, { team }) ?? await listBranchRevDeals({ team })
     const rows = listRevRevenue(deals, {
       team,
       manager: url.searchParams.get("manager") ?? undefined,
