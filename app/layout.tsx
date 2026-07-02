@@ -5,7 +5,7 @@ import { AppChrome } from "@/components/AppChrome";
 import { JsonLd } from "@/components/seo/JsonLd";
 import Script from "next/script";
 import { CONSENT_POLICY_VERSION } from "@/lib/consent/consent";
-import { GOOGLE_ADS_ID } from "@/lib/analytics-config";
+import { GA4_ID, GOOGLE_ADS_ID } from "@/lib/analytics-config";
 import {
   DEFAULT_OG_IMAGE_PATH,
   DEFAULT_SITE_TITLE,
@@ -67,7 +67,7 @@ export default function RootLayout({
           strategy="afterInteractive"
         />
         <Script id="gtag-ads-init" strategy="afterInteractive">
-          {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${GOOGLE_ADS_ID}');`}
+          {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${GOOGLE_ADS_ID}');${GA4_ID ? `gtag('config','${GA4_ID}');` : ""}`}
         </Script>
         <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
         <link
