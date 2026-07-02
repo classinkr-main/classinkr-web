@@ -16,6 +16,7 @@ import {
   Gauge,
   ListChecks,
   Loader2,
+  Lock,
   Pencil,
   Plus,
   RefreshCw,
@@ -2303,41 +2304,441 @@ function DraftQueue({
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// 다중월 밀도 매트릭스 (REV Phase 1, 읽기 전용)
+// 다중월 밀도 매트릭스 (REV Phase 1 읽기 전용 → Phase 2 딜행 월 셀 인라인 편집)
 // 열: [고객 200 sticky-left] [상품 56] [월 12칸×64 요약 / 확장 시 5×34] [연간 96 sticky-right]
 // sticky 3방향(좌·우·하단 합계행) — 각 상태별 불투명 배경으로 비침 방지.
 // ─────────────────────────────────────────────────────────────────────────
 
+// ── Phase 2: 인라인 편집 인프라 ─────────────────────────────────────────────
+// 편집은 "딜행(sourceDealId 보유) × 비확정 월" 셀만. 그룹 소계·주차 확장 칸·시트 확정 셀은 잠금.
+// 커밋 1건 = createDraft 1건(새 저장경로 없음). 낙관적 표시는 drafts 배열에서 파생.
+
+// 셀 좌표 = 행 id + 회계월. 편집가능 셀 순회(방향키/Tab)의 단위.
+interface MatrixCellCoord {
+  rowId: string
+  month: string
+}
+
+// 셀에 걸린 미검수(draft|checked) 초안 요약. 낙관적 앰버 표시·툴팁용.
+interface MatrixPendingDraft {
+  amount: number
+  confidence: DraftConfidence
+}
+
+// 편집 input이 받는 문자열 → 원 단위 정수. rail의 safeAmount와 동일 규칙(¥·콤마·공백 제거).
+// 만 단위 입력은 지원하지 않는다(rail이 원 단위 String을 쓰므로 저장 정합을 위해 원 단위 고정).
+function parseMatrixAmount(value: string): number {
+  const normalized = value.replace(/[^\d.-]/g, "")
+  if (!normalized) return 0
+  const numeric = Number(normalized)
+  return Number.isFinite(numeric) ? Math.max(Math.round(numeric), 0) : 0
+}
+
+// 딜행 × 월 셀이 시트 확정(편집 불가)인지. monthlyRed 플래그 또는 확정액이 그 달 금액을 덮으면 잠금.
+// 적용된 초안(ledgerOrigin==="draft")도 monthlyRed[month]=true라 잠금으로 취급(이미 장부 반영분).
+function isMatrixCellLocked(row: LedgerRevenueRow, month: string): boolean {
+  const amount = rowMonthAmount(row, month)
+  if (amount <= 0) return false // 미입력 = 편집 가능(예정 추가)
+  if (row.monthlyRed?.[month]) return true
+  const confirmed = mapNumberValue(row.monthlyConfirmed, month)
+  return confirmed > 0 && confirmed >= amount
+}
+
+// 딜행 셀이 편집 가능한지 — 딜행(그룹 소계 제외)이면서 잠금 아님. 미래월 제한은 두지 않는다.
+function isMatrixCellEditable(row: LedgerRevenueRow, month: string): boolean {
+  return !isMatrixCellLocked(row, month)
+}
+
+// 셀의 우세 확도 → 편집 팝오버 기본 선택값. 확정>고확도>예정 순, 없으면 예정.
+function dominantCellConfidence(bucket: RevMonthlyBucket): DraftConfidence {
+  if (bucket.total <= 0) return "expected"
+  if (bucket.confirmed >= bucket.high && bucket.confirmed >= bucket.open) return "confirmed"
+  if (bucket.high >= bucket.open) return "high-confidence"
+  return "expected"
+}
+
+const MATRIX_CONFIDENCE_COLOR: Record<DraftConfidence, string> = {
+  expected: "#A8741A",
+  "high-confidence": "#1E5DA8",
+  confirmed: "#084734",
+}
+
+// 셀 아래 붙는 3버튼 확도 팝오버 + 커밋/취소. input은 부모 셀이 렌더(포커스 관리), 여기는 확도만.
+const RevMatrixEditPopover = memo(function RevMatrixEditPopover({
+  confidence,
+  onPickConfidence,
+}: {
+  confidence: DraftConfidence
+  onPickConfidence: (next: DraftConfidence) => void
+}) {
+  return (
+    <div
+      className="absolute left-0 top-full z-40 mt-0.5 flex items-center gap-0.5 rounded-md border border-[rgba(0,0,0,0.12)] bg-white p-0.5 shadow-lg"
+      onMouseDown={(event) => event.preventDefault()} // input 포커스 유지(blur 커밋 방지)
+    >
+      {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
+        const activeColor = MATRIX_CONFIDENCE_COLOR[option.id]
+        const active = option.id === confidence
+        return (
+          <button
+            key={option.id}
+            type="button"
+            title={`확도: ${option.label}`}
+            onClick={() => onPickConfidence(option.id)}
+            className="rounded px-1.5 py-0.5 text-[10px] font-bold leading-none transition"
+            style={
+              active
+                ? { backgroundColor: activeColor, color: "#FFFFFF" }
+                : { color: activeColor, backgroundColor: "transparent" }
+            }
+          >
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+})
+
+// 매트릭스 셀 편집 상태기계. 셀렉트/편집버퍼/키보드/fill-down/편집가능 셀 순회.
+// 커밋은 부모가 주입한 onCommitCell(rowId, month, amount, confidence) 호출 — 저장 로직은 부모 소유.
+function useMatrixEditor({
+  editableCells,
+  cellValue,
+  cellConfidence,
+  onCommitCell,
+}: {
+  editableCells: MatrixCellCoord[] // 렌더 순서(행 위→아래, 월 좌→우)로 정렬된 편집가능 셀
+  cellValue: (coord: MatrixCellCoord) => number // 커밋 기준값(원 단위) — fill-down 소스
+  cellConfidence: (coord: MatrixCellCoord) => DraftConfidence // 셀 우세 확도(팝오버 기본값)
+  onCommitCell: (rowId: string, month: string, amount: number, confidence: DraftConfidence) => void
+}) {
+  const [selected, setSelected] = useState<MatrixCellCoord | null>(null)
+  const [editing, setEditing] = useState<MatrixCellCoord | null>(null)
+  const [buffer, setBuffer] = useState("")
+  const [editConfidence, setEditConfidence] = useState<DraftConfidence>("expected")
+
+  // 편집가능 셀 순번 조회 O(1) — 방향키/Tab 이동에 사용.
+  const indexByKey = useMemo(() => {
+    const map = new Map<string, number>()
+    editableCells.forEach((coord, index) => map.set(`${coord.rowId}::${coord.month}`, index))
+    return map
+  }, [editableCells])
+
+  const coordKey = (coord: MatrixCellCoord) => `${coord.rowId}::${coord.month}`
+  const isSelected = useCallback(
+    (rowId: string, month: string) => selected?.rowId === rowId && selected.month === month,
+    [selected],
+  )
+  const isEditing = useCallback(
+    (rowId: string, month: string) => editing?.rowId === rowId && editing.month === month,
+    [editing],
+  )
+
+  const selectCell = useCallback((rowId: string, month: string) => {
+    setEditing(null)
+    setSelected({ rowId, month })
+  }, [])
+
+  const beginEdit = useCallback(
+    (rowId: string, month: string, seed?: string) => {
+      const coord = { rowId, month }
+      setSelected(coord)
+      setEditConfidence(cellConfidence(coord))
+      // seed(타이핑 첫 글자)면 그 값으로, 아니면 기존 커밋값(0은 빈칸)으로 시작.
+      if (seed != null) {
+        setBuffer(seed.replace(/[^\d]/g, ""))
+      } else {
+        const current = cellValue(coord)
+        setBuffer(current > 0 ? String(current) : "")
+      }
+      setEditing(coord)
+    },
+    [cellConfidence, cellValue],
+  )
+
+  const cancelEdit = useCallback(() => {
+    setEditing(null)
+    setBuffer("")
+  }, [])
+
+  // 현재 편집 버퍼를 커밋(부모 onCommitCell). 값이 이전과 같으면 스킵(중복 draft 방지).
+  const commitBuffer = useCallback(
+    (coord: MatrixCellCoord, confidence: DraftConfidence): boolean => {
+      const amount = parseMatrixAmount(buffer)
+      const previous = cellValue(coord)
+      const previousConfidence = cellConfidence(coord)
+      // 금액·확도 둘 다 그대로면 저장하지 않는다.
+      if (amount === previous && confidence === previousConfidence) return false
+      if (amount <= 0 && previous <= 0) return false
+      onCommitCell(coord.rowId, coord.month, amount, confidence)
+      return true
+    },
+    [buffer, cellConfidence, cellValue, onCommitCell],
+  )
+
+  const moveSelection = useCallback(
+    (from: MatrixCellCoord, delta: number) => {
+      const index = indexByKey.get(coordKey(from))
+      if (index == null) return
+      const nextIndex = index + delta
+      if (nextIndex < 0 || nextIndex >= editableCells.length) return
+      setEditing(null)
+      setSelected(editableCells[nextIndex])
+    },
+    [editableCells, indexByKey],
+  )
+
+  // 같은 행에서 다음 셀(오른쪽 우선). Tab/Shift+Tab·Enter(아래) 커밋 후 이동에 공유.
+  const moveWithinRowOrNext = useCallback(
+    (from: MatrixCellCoord, direction: "right" | "left" | "down") => {
+      const index = indexByKey.get(coordKey(from))
+      if (index == null) return
+      if (direction === "down") {
+        // 아래 = 같은 열(month)에서 index 뒤쪽 첫 번째 같은 month 셀.
+        for (let i = index + 1; i < editableCells.length; i += 1) {
+          if (editableCells[i].month === from.month) {
+            setSelected(editableCells[i])
+            return
+          }
+        }
+        return
+      }
+      const delta = direction === "right" ? 1 : -1
+      const nextIndex = index + delta
+      if (nextIndex < 0 || nextIndex >= editableCells.length) return
+      setSelected(editableCells[nextIndex])
+    },
+    [editableCells, indexByKey],
+  )
+
+  // 편집 중 input keydown. Enter=커밋+아래, Tab=커밋+오른쪽, Shift+Tab=커밋+왼쪽, Esc=취소.
+  // 방향키는 캐럿 이동(기본 동작) — stopPropagation 없이 통과시킨다.
+  const onEditingKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>, coord: MatrixCellCoord) => {
+      if (event.key === "Enter") {
+        event.preventDefault()
+        commitBuffer(coord, editConfidence)
+        setEditing(null)
+        moveWithinRowOrNext(coord, "down")
+        return
+      }
+      if (event.key === "Tab") {
+        event.preventDefault()
+        commitBuffer(coord, editConfidence)
+        setEditing(null)
+        moveWithinRowOrNext(coord, event.shiftKey ? "left" : "right")
+        return
+      }
+      if (event.key === "Escape") {
+        event.preventDefault()
+        cancelEdit()
+      }
+    },
+    [cancelEdit, commitBuffer, editConfidence, moveWithinRowOrNext],
+  )
+
+  // 셀렉트(비편집) keydown. 방향키=이동, Enter/F2/숫자=편집 진입, Ctrl/Cmd+D=위 값 채우기.
+  const onSelectedKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLTableCellElement>, coord: MatrixCellCoord) => {
+      if ((event.ctrlKey || event.metaKey) && (event.key === "d" || event.key === "D")) {
+        event.preventDefault()
+        // 위 셀 = 같은 열(month)에서 index 앞쪽 첫 번째 같은 month 셀의 커밋값.
+        const index = indexByKey.get(coordKey(coord))
+        if (index == null) return
+        for (let i = index - 1; i >= 0; i -= 1) {
+          if (editableCells[i].month === coord.month) {
+            const value = cellValue(editableCells[i])
+            if (value > 0) onCommitCell(coord.rowId, coord.month, value, cellConfidence(coord))
+            return
+          }
+        }
+        return
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault()
+        moveSelection(coord, 1)
+        return
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault()
+        moveSelection(coord, -1)
+        return
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault()
+        moveWithinRowOrNext(coord, "down")
+        return
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault()
+        const index = indexByKey.get(coordKey(coord))
+        if (index == null) return
+        for (let i = index - 1; i >= 0; i -= 1) {
+          if (editableCells[i].month === coord.month) {
+            setSelected(editableCells[i])
+            return
+          }
+        }
+        return
+      }
+      if (event.key === "Enter" || event.key === "F2") {
+        event.preventDefault()
+        beginEdit(coord.rowId, coord.month)
+        return
+      }
+      if (/^[0-9]$/.test(event.key)) {
+        event.preventDefault()
+        beginEdit(coord.rowId, coord.month, event.key)
+      }
+    },
+    [beginEdit, cellConfidence, cellValue, editableCells, indexByKey, moveSelection, moveWithinRowOrNext, onCommitCell],
+  )
+
+  return {
+    selected,
+    editing,
+    buffer,
+    setBuffer,
+    editConfidence,
+    setEditConfidence,
+    isSelected,
+    isEditing,
+    selectCell,
+    beginEdit,
+    cancelEdit,
+    commitBuffer,
+    onEditingKeyDown,
+    onSelectedKeyDown,
+  }
+}
+
+type MatrixEditor = ReturnType<typeof useMatrixEditor>
+
 // 매트릭스 셀 본문 숫자. ¥ 없이 축약(formatWeekAmount) — 밀도 우선, 툴팁에 정확 금액.
+// Phase 2: edit* props가 오면 딜행 편집 셀(잠금/미검수/셀렉트/편집 4상태). 없으면(그룹 소계) 읽기전용.
 const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   bucket,
   mismatch = false,
   bgClass,
+  month,
+  rowId,
+  editable = false,
+  locked = false,
+  pending = null,
+  editor = null,
 }: {
   bucket: RevMonthlyBucket
   mismatch?: boolean
   bgClass: string
+  month?: string
+  rowId?: string
+  editable?: boolean
+  locked?: boolean
+  pending?: MatrixPendingDraft | null
+  editor?: MatrixEditor | null
 }) {
   const tone = mismatch ? "mismatch" : matrixBucketTone(bucket)
-  const title =
+  const interactive = Boolean(editor && month && rowId)
+  const selected = interactive ? editor!.isSelected(rowId!, month!) : false
+  const isEditingCell = interactive ? editor!.isEditing(rowId!, month!) : false
+  // 방향키 이동은 selected 상태만 바꾸므로 DOM 포커스를 직접 옮겨야 다음 keydown이 새 셀에서 잡힌다.
+  // (클릭은 native focus가 되지만 키보드 이동은 안 됨.) 편집 중이 아닐 때만 셀 자체에 포커스.
+  const cellRef = useRef<HTMLTableCellElement | null>(null)
+  useEffect(() => {
+    if (interactive && editable && selected && !isEditingCell) {
+      cellRef.current?.focus()
+    }
+  }, [interactive, editable, selected, isEditingCell])
+  const confidenceLabel = (value: DraftConfidence) =>
+    DRAFT_CONFIDENCE_OPTIONS.find((option) => option.id === value)?.label ?? value
+  const baseTitle =
     bucket.total > 0
       ? `합계 ${formatMoney(bucket.total)} · 확정 ${formatMoney(bucket.confirmed)} · 고확도 ${formatMoney(bucket.high)} · 예정 ${formatMoney(bucket.open)}${mismatch ? " · 주차·월 불일치" : ""}`
       : "미입력"
+  const title = locked
+    ? `${baseTitle} · 시트 확정 — 편집 불가`
+    : pending
+      ? `${baseTitle} · 미검수 초안 ${formatMoney(pending.amount)} (${confidenceLabel(pending.confidence)})`
+      : editable
+        ? `${baseTitle} · 클릭·Enter로 편집`
+        : baseTitle
+
+  // 편집 진입 셀: input + 확도 팝오버.
+  if (isEditingCell && interactive) {
+    return (
+      <td
+        className={`relative px-0.5 text-right align-middle ${mismatch ? "bg-[#FCE9E9]" : bgClass} ring-2 ring-inset ring-[#084734]/40`}
+        style={{ width: MATRIX_MONTH_W, minWidth: MATRIX_MONTH_W, maxWidth: MATRIX_MONTH_W }}
+      >
+        <input
+          autoFocus
+          inputMode="numeric"
+          value={editor!.buffer}
+          onChange={(event) => editor!.setBuffer(event.target.value)}
+          onKeyDown={(event) => editor!.onEditingKeyDown(event, { rowId: rowId!, month: month! })}
+          onBlur={() => {
+            editor!.commitBuffer({ rowId: rowId!, month: month! }, editor!.editConfidence)
+            editor!.cancelEdit()
+          }}
+          aria-label={`${formatMonthLabel(month!)} 금액(원 단위)`}
+          className="h-6 w-full bg-transparent px-1 text-right text-[11px] font-bold tabular-nums text-[#111110] outline-none"
+        />
+        <RevMatrixEditPopover confidence={editor!.editConfidence} onPickConfidence={editor!.setEditConfidence} />
+      </td>
+    )
+  }
+
+  const bg = mismatch ? "bg-[#FCE9E9]" : bgClass
+  const cellClassName = `relative px-1.5 text-right align-middle tabular-nums ${
+    mismatch ? "border-l-2 border-l-[#B43E3E]" : "border-l border-[#F2F1EE]"
+  } ${bg} ${interactive && editable ? "cursor-cell" : ""} ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${
+    pending ? "shadow-[inset_0_-2px_0_0_#D4A017]" : ""
+  } focus-visible:outline-none`
+
+  const interactiveHandlers = interactive
+    ? {
+        tabIndex: editable ? 0 : -1,
+        role: "gridcell" as const,
+        onClick: () => {
+          if (editable) editor!.selectCell(rowId!, month!)
+        },
+        onDoubleClick: () => {
+          if (editable) editor!.beginEdit(rowId!, month!)
+        },
+        onKeyDown: (event: React.KeyboardEvent<HTMLTableCellElement>) => {
+          if (!editable || !selected) return
+          editor!.onSelectedKeyDown(event, { rowId: rowId!, month: month! })
+        },
+      }
+    : {}
+
   return (
     <td
+      ref={cellRef}
       title={title}
-      className={`px-1.5 text-right align-middle tabular-nums ${
-        mismatch ? "border-l-2 border-l-[#B43E3E] bg-[#FCE9E9]" : `border-l border-[#F2F1EE] ${bgClass}`
-      }`}
+      className={cellClassName}
       style={{ width: MATRIX_MONTH_W, minWidth: MATRIX_MONTH_W, maxWidth: MATRIX_MONTH_W }}
+      {...interactiveHandlers}
     >
+      {pending && (
+        <span
+          aria-hidden
+          className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#D4A017]"
+        />
+      )}
       {bucket.total > 0 ? (
-        <span className={`inline-flex items-center justify-end gap-0.5 text-[11px] leading-none ${MATRIX_TONE[tone]}`}>
-          {mismatch && <AlertTriangle className="h-2.5 w-2.5 shrink-0" />}
+        <span
+          className={`inline-flex items-center justify-end gap-0.5 text-[11px] leading-none ${
+            pending ? "font-bold text-[#7A520F]" : MATRIX_TONE[tone]
+          }`}
+        >
+          {locked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#A39E98]" aria-label="시트 확정" />}
+          {mismatch && !locked && <AlertTriangle className="h-2.5 w-2.5 shrink-0" />}
           {formatWeekAmount(bucket.total)}
         </span>
       ) : (
-        <span className={`text-[11px] leading-none ${MATRIX_TONE.empty}`}>·</span>
+        <span className={`text-[11px] leading-none ${editable ? "text-[#C9C5BF]" : MATRIX_TONE.empty}`}>·</span>
       )}
     </td>
   )
@@ -2388,19 +2789,31 @@ function RevMatrixWeekCells({
   return <>{cells}</>
 }
 
+// 딜행 스트립에만 주입되는 편집 컨텍스트. 그룹 소계행은 이 값을 넘기지 않아 읽기전용 유지.
+interface RevMatrixEditContext {
+  rowId: string
+  editor: MatrixEditor
+  editableOf: (month: string) => boolean
+  lockedOf: (month: string) => boolean
+  pendingOf: (month: string) => MatrixPendingDraft | null
+}
+
 // 12개월(요약/확장 혼재)에 걸친 월 셀 스트립 — 그룹행·딜행이 공유한다.
+// editContext가 오면(딜행) 비확장 월 셀이 편집 셀이 된다. 확장(주차) 칸은 Phase 3 전까지 읽기전용.
 function RevMatrixMonthStrip({
   monthlyByRowOrGroup,
   weeklyByMonth,
   months,
   expandedMonths,
   bgClass,
+  editContext = null,
 }: {
   monthlyByRowOrGroup: Record<string, RevMonthlyBucket>
   weeklyByMonth: (month: string) => { weeks: number[]; inferred: boolean; monthOnlyAmount: number; mismatch: boolean } | null
   months: string[]
   expandedMonths: Set<string>
   bgClass: string
+  editContext?: RevMatrixEditContext | null
 }) {
   return (
     <>
@@ -2424,6 +2837,12 @@ function RevMatrixMonthStrip({
             bucket={bucket}
             mismatch={weeklyByMonth(month)?.mismatch ?? false}
             bgClass={bgClass}
+            month={editContext ? month : undefined}
+            rowId={editContext?.rowId}
+            editable={editContext ? editContext.editableOf(month) : false}
+            locked={editContext ? editContext.lockedOf(month) : false}
+            pending={editContext ? editContext.pendingOf(month) : null}
+            editor={editContext?.editor ?? null}
           />
         )
       })}
@@ -2564,6 +2983,8 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   active,
   selectedMonth,
   onOpen,
+  editor = null,
+  pendingByCell = null,
 }: {
   view: RevRowView
   grouped: boolean
@@ -2572,6 +2993,8 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   active: boolean
   selectedMonth: string
   onOpen: (row: LedgerRevenueRow) => void
+  editor?: MatrixEditor | null
+  pendingByCell?: Map<string, MatrixPendingDraft> | null
 }) {
   const { row, draftRow, productCategory, monthlyByMonth } = view
   const rowBg = active
@@ -2596,6 +3019,16 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
       mismatch: rowWeeklyMismatch(row, month) !== null,
     }
   }
+  // 편집 컨텍스트는 editor가 주입될 때만(딜행) — 그룹 소계행에는 이 컴포넌트를 쓰지 않으므로 항상 딜행.
+  const editContext: RevMatrixEditContext | null = editor
+    ? {
+        rowId: row.id,
+        editor,
+        editableOf: (month) => isMatrixCellEditable(row, month),
+        lockedOf: (month) => isMatrixCellLocked(row, month),
+        pendingOf: (month) => pendingByCell?.get(`${row.id}::${month}`) ?? null,
+      }
+    : null
   return (
     <tr className={`group h-7 border-t border-[#F2F1EE] transition ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FBFBFA] hover:bg-[#FAFAF8]" : "hover:bg-[#FAFAF8]"}`}>
       <td
@@ -2635,6 +3068,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
         months={months}
         expandedMonths={expandedMonths}
         bgClass={rowBg}
+        editContext={editContext}
       />
       <td
         className={`sticky right-0 z-10 border-l border-[rgba(0,0,0,0.08)] px-2 text-right align-middle tabular-nums ${rowBg}`}
@@ -3559,6 +3993,141 @@ export default function SalesLedgerWorkbench() {
     () => 3 + matrixMonths.reduce((sum, month) => sum + (expandedRevMonths.has(month) ? 5 : 1), 0),
     [matrixMonths, expandedRevMonths],
   )
+
+  // ── Phase 2: 매트릭스 인라인 편집 배선 ─────────────────────────────────────
+  // 현재 페이지에서 실제로 보이는 딜행(접힌 그룹 하위행 제외)만 대상. row.id로 좌표 부여.
+  const visibleDealRows = useMemo(() => {
+    const list: LedgerRevenueRow[] = []
+    for (const group of visibleGroups) {
+      const grouped = group.rows.length > 1
+      const expanded = expandedRevGroups.has(group.key)
+      if (grouped && !expanded) continue // 접힌 그룹 하위행은 렌더 안 됨 → 편집 대상 아님
+      for (const row of group.rows) list.push(row)
+    }
+    return list
+  }, [visibleGroups, expandedRevGroups])
+
+  const rowById = useMemo(() => {
+    const map = new Map<string, LedgerRevenueRow>()
+    for (const row of visibleDealRows) map.set(row.id, row)
+    return map
+  }, [visibleDealRows])
+
+  // 편집가능 셀 좌표(렌더 순서: 행 위→아래, 월 좌→우). 확장(주차)·잠금·확장월은 제외.
+  // 방향키/Tab 순회의 단일 소스. matrixMonths는 4→3 회계연도 순.
+  const editableCells = useMemo<MatrixCellCoord[]>(() => {
+    const cells: MatrixCellCoord[] = []
+    for (const row of visibleDealRows) {
+      for (const month of matrixMonths) {
+        if (expandedRevMonths.has(month)) continue // 주차 확장 칸은 Phase 3 전까지 편집 불가
+        if (!isMatrixCellEditable(row, month)) continue
+        cells.push({ rowId: row.id, month })
+      }
+    }
+    return cells
+  }, [visibleDealRows, matrixMonths, expandedRevMonths])
+
+  // 미검수(draft|checked) 초안 → 셀 낙관적 표시. drafts에서 파생(별도 버퍼 없음).
+  // 매칭: 초안 sourceDealId == 행 sourceDealId(또는 id) && 초안 month == 셀 month.
+  // 같은 셀에 여러 초안이 있으면 가장 최근(drafts 앞쪽) 것을 표시.
+  const pendingByCell = useMemo(() => {
+    const map = new Map<string, MatrixPendingDraft>()
+    const pending = drafts.filter((draft) => draft.status === "draft" || draft.status === "checked")
+    for (const row of visibleDealRows) {
+      const dealKey = row.sourceDealId ?? row.id
+      for (const draft of pending) {
+        const draftDealId = draft.sourceDealId ?? metadataString(draft.metadata, "sourceDealId")
+        if (draft.kind === "edit-row" ? draftDealId !== dealKey : draft.customer.trim() !== row.customer.trim()) continue
+        const cellKey = `${row.id}::${draft.month}`
+        if (map.has(cellKey)) continue // 이미 더 최근 초안이 있음
+        map.set(cellKey, { amount: draft.amount, confidence: draftConfidenceFromMetadata(draft.metadata) })
+      }
+    }
+    return map
+  }, [drafts, visibleDealRows])
+
+  // 커밋 기준값(원 단위): 그 달 표시 금액. 편집 진입 초기값·fill-down·중복 판정 소스.
+  const matrixCellValue = useCallback(
+    (coord: MatrixCellCoord) => {
+      const row = rowById.get(coord.rowId)
+      return row ? rowMonthAmount(row, coord.month) : 0
+    },
+    [rowById],
+  )
+
+  // 셀 우세 확도 → 편집 팝오버 기본 선택. 미검수 초안이 있으면 그 확도 우선.
+  const matrixCellConfidence = useCallback(
+    (coord: MatrixCellCoord): DraftConfidence => {
+      const pending = pendingByCell.get(`${coord.rowId}::${coord.month}`)
+      if (pending) return pending.confidence
+      const row = rowById.get(coord.rowId)
+      return row ? dominantCellConfidence(rowMonthBucket(row, coord.month)) : "expected"
+    },
+    [pendingByCell, rowById],
+  )
+
+  // 셀 커밋 1건 = createDraft 1건. buildDraftInput의 metadata 키·단위 규약을 그대로 따른다.
+  // kind: sourceDealId 있으면 edit-row(항상 있음, 시트 딜행), 없으면 new-row.
+  // operation: 그 달에 기존 금액 있으면 amount-change, 없던 달이면 forecast-add.
+  const onCommitCell = useCallback(
+    (rowId: string, month: string, amount: number, confidence: DraftConfidence) => {
+      const row = rowById.get(rowId)
+      if (!row) return
+      const sourceDealId = row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)
+      const kind: DraftKind = sourceDealId ? "edit-row" : "new-row"
+      const priorAmount = rowMonthAmount(row, month)
+      const operation: DraftOperation = priorAmount > 0 ? "amount-change" : "forecast-add"
+      const productCategory = rowProductCategory(row)
+      const input: LedgerDraftInput = {
+        kind,
+        sourceDealId,
+        sourceSheetRow: row.sheetRow ?? null,
+        sourceSnapshot: {
+          capturedAt: new Date().toISOString(),
+          origin: "rev-matrix-cell",
+          selectedMonth: month,
+          row: {
+            id: row.id,
+            customer: row.customer,
+            manager: row.manager,
+            team: row.team,
+            region: row.region,
+            productVersion: row.productVersion,
+            monthAmount: priorAmount,
+          },
+        },
+        customer: row.customer.trim(),
+        manager: (row.manager ?? "").trim(),
+        team: (row.team ?? (team === "ALL" ? "BD" : team)).trim(),
+        month,
+        amount,
+        note: "",
+        metadata: {
+          source: "sales-ledger-workbench",
+          origin: "rev-matrix-cell",
+          lens,
+          period,
+          team,
+          operation,
+          productCategory,
+          fromMonth: month,
+          week: "month",
+          confidence,
+          quantity: null,
+          sourceDealId: sourceDealId ?? null,
+        },
+      }
+      void createDraft(input)
+    },
+    [createDraft, lens, period, rowById, team],
+  )
+
+  const matrixEditor = useMatrixEditor({
+    editableCells,
+    cellValue: matrixCellValue,
+    cellConfidence: matrixCellConfidence,
+    onCommitCell,
+  })
 
   const toggleRevMonth = useCallback((month: string) => {
     setExpandedRevMonths((prev) => {
@@ -5019,6 +5588,8 @@ export default function SalesLedgerWorkbench() {
                                     active={selectedRow?.id === row.id}
                                     selectedMonth={selectedMonth}
                                     onOpen={loadDealDetail}
+                                    editor={matrixEditor}
+                                    pendingByCell={pendingByCell}
                                   />
                                 )
                               })}
