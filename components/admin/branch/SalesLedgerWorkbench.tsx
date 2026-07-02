@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertTriangle,
   ArrowDownNarrowWide,
@@ -49,7 +49,11 @@ import {
   YAxis,
 } from "recharts"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
-import { classifySalesLedgerProductCategory } from "@/lib/branch/product-category"
+import {
+  classifySalesLedgerProductCategory,
+  classifySalesLedgerSoftwareSubtype,
+  type SalesLedgerSoftwareSubtype,
+} from "@/lib/branch/product-category"
 import {
   PERIODS,
   TEAMS,
@@ -72,7 +76,7 @@ type RevSortKey = "customer" | "product" | "manager" | "team" | "region" | "mont
 type RevSortDirection = "asc" | "desc"
 type RevProductCategory = "all" | "software" | "hardware" | "unknown"
 type RevOriginFilter = "all" | "sheet" | "draft"
-type RevForecastFilter = "all" | "has-week" | "month-only" | "confirmed" | "open"
+type RevForecastFilter = "all" | "has-week" | "month-only" | "confirmed" | "open" | "week-mismatch"
 type DraftOperation = "forecast-add" | "period-shift" | "quantity-change" | "amount-change"
 type RevWeeklySource = "explicit" | "inferred" | "month-only" | "empty"
 
@@ -179,6 +183,8 @@ interface LedgerDraftResponse {
   error?: string
 }
 
+type DraftConfidence = "expected" | "high-confidence" | "confirmed"
+
 interface DraftForm {
   operation: DraftOperation
   customer: string
@@ -188,9 +194,25 @@ interface DraftForm {
   month: string
   fromMonth: string
   week: string
+  confidence: DraftConfidence
   amount: string
   quantity: string
   note: string
+}
+
+const DRAFT_CONFIDENCE_OPTIONS: Array<{ id: DraftConfidence; label: string }> = [
+  { id: "expected", label: "예정" },
+  { id: "high-confidence", label: "고확도" },
+  { id: "confirmed", label: "확정" },
+]
+
+function isDraftConfidence(value: unknown): value is DraftConfidence {
+  return value === "expected" || value === "high-confidence" || value === "confirmed"
+}
+
+function draftConfidenceFromMetadata(metadata: Record<string, unknown> | null | undefined): DraftConfidence {
+  const raw = metadataString(metadata, "confidence")?.replace("_", "-")
+  return isDraftConfidence(raw) ? raw : "expected"
 }
 
 interface KpiMetricView {
@@ -217,6 +239,18 @@ interface RevWeeklySplit {
   total: number
 }
 
+// 모바일 카드·데스크톱 테이블이 공유하는 행 단위 파생값. 두 렌더가 각자 계산하던
+// draftRow/productCategory/weeklySplit/monthAmount/mismatch를 한 번만 계산해 재사용한다.
+interface RevRowView {
+  row: LedgerRevenueRow
+  draftRow: boolean
+  productCategory: Exclude<RevProductCategory, "all">
+  weeklySplit: RevWeeklySplit
+  monthAmount: number
+  monthConfirmedAmount: number
+  mismatch: { weekly: number; monthly: number; diff: number } | null
+}
+
 interface RevManagerSummary {
   manager: string
   total: number
@@ -233,6 +267,27 @@ interface RevProductSummary {
   highConfidence: number
   open: number
   rows: number
+}
+
+// 같은 고객(customerGroupKey)의 HW/SW/미분류 행 묶음. REV 테이블은 이 그룹 단위로
+// 페이지네이션·아코디언을 돌리고, 하위 행은 그룹을 펼쳤을 때 노출된다.
+interface RevCustomerGroup {
+  key: string
+  customer: string
+  rows: LedgerRevenueRow[]
+  monthTotal: number
+  monthConfirmed: number
+  revenueTotal: number
+  weeks: number[]
+  hasExplicitWeeks: boolean
+  monthOnlyAmount: number
+  categoryTotals: Record<Exclude<RevProductCategory, "all">, number>
+  categories: Array<Exclude<RevProductCategory, "all">>
+  managers: string[]
+  teams: string[]
+  regions: string[]
+  hasDraft: boolean
+  mismatchCount: number
 }
 
 interface KpiMemberView {
@@ -261,7 +316,6 @@ const REV_PRODUCT_FILTERS: Array<{ id: RevProductCategory; label: string }> = [
   { id: "all", label: "상품 전체" },
   { id: "software", label: "SW" },
   { id: "hardware", label: "HW" },
-  { id: "unknown", label: "미분류" },
 ]
 const REV_ORIGIN_FILTERS: Array<{ id: RevOriginFilter; label: string }> = [
   { id: "all", label: "원천 전체" },
@@ -274,6 +328,7 @@ const REV_FORECAST_FILTERS: Array<{ id: RevForecastFilter; label: string }> = [
   { id: "month-only", label: "월합계만 있음" },
   { id: "confirmed", label: "확정 포함" },
   { id: "open", label: "예정/고확도 남음" },
+  { id: "week-mismatch", label: "주차·월 합계 불일치" },
 ]
 const DRAFT_OPERATIONS: Array<{ id: DraftOperation; label: string; description: string }> = [
   { id: "forecast-add", label: "예상 매출 추가", description: "새 고객 또는 기존 고객의 예상 금액을 큐에 올립니다." },
@@ -323,6 +378,14 @@ function buildFiscalMonthOptions(now: Date) {
     const value = `${month >= 4 ? fy : fy + 1}-${String(month).padStart(2, "0")}`
     return { value, label: `${rawMonth}월`, current: value === current }
   })
+}
+
+// "YYYY-MM" 문자열에 개월수를 더하고 뺀다. monthOptions(현재 회계연도 12개월)와 달리
+// 연도 경계를 자유롭게 넘나든다 — REV 탭 전월/익월 스테퍼는 회계연도에 갇히면 안 된다.
+function shiftMonth(ym: string, delta: number): string {
+  const [year, month] = ym.split("-").map(Number)
+  const date = new Date(Date.UTC(year, month - 1 + delta, 1))
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
 }
 
 function formatMoney(value: number | null | undefined) {
@@ -387,7 +450,7 @@ function isStoredProductCategory(value: unknown): value is Exclude<RevProductCat
 function productCategoryMeta(category: RevProductCategory) {
   if (category === "software") {
     return {
-      label: "SW 추정",
+      label: "SW",
       shortLabel: "SW",
       className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
       color: "#084734",
@@ -395,18 +458,19 @@ function productCategoryMeta(category: RevProductCategory) {
   }
   if (category === "hardware") {
     return {
-      label: "HW 추정",
+      label: "HW",
       shortLabel: "HW",
       className: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
       color: "#A8741A",
     }
   }
   if (category === "unknown") {
+    // 과거 저장 데이터 호환용 — 신규 분류는 HW 아니면 전부 SW.
     return {
-      label: "미분류",
-      shortLabel: "미분류",
-      className: "border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59]",
-      color: "#A39E98",
+      label: "SW",
+      shortLabel: "SW",
+      className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
+      color: "#084734",
     }
   }
   return {
@@ -432,7 +496,9 @@ function productCategoryFromText(...values: Array<string | null | undefined>): E
 
 function rowProductCategory(row: Pick<LedgerRevenueRow, "customer" | "productVersion" | "draftMetadata">): Exclude<RevProductCategory, "all"> {
   const stored = metadataString(row.draftMetadata, "productCategory")
-  if (isStoredProductCategory(stored)) return stored
+  if (stored === "hardware") return "hardware"
+  // 저장값이 software든 legacy unknown이든 HW가 아니면 전부 SW로 본다.
+  if (isStoredProductCategory(stored)) return "software"
   return classifySalesLedgerProductCategory({
     product: row.productVersion,
     account: row.customer,
@@ -449,6 +515,17 @@ function ProductCategoryPill({ category, compact = false }: { category: RevProdu
   )
 }
 
+// KPI_METRIC_ORDER 상 우선순위. 시트 표기 편차("LD"/"Lead"/"ld")에 흔들리지 않게 대소문자 무시.
+function kpiMetricRank(metric: string) {
+  const needle = metric.trim().toLowerCase()
+  const index = KPI_METRIC_ORDER.findIndex((name) => name.toLowerCase() === needle)
+  return index === -1 ? KPI_METRIC_ORDER.length : index
+}
+
+function kpiMetricCompare(a: { metric: string }, b: { metric: string }) {
+  return kpiMetricRank(a.metric) - kpiMetricRank(b.metric) || compareText(a.metric, b.metric)
+}
+
 function orderedKpiMetrics(kpi: BranchKpiMemberRow["kpi"]): KpiMetricView[] {
   return Object.entries(kpi)
     .map(([metric, pair]) => ({
@@ -457,13 +534,7 @@ function orderedKpiMetrics(kpi: BranchKpiMemberRow["kpi"]): KpiMetricView[] {
       actual: pair.actual,
       pct: pair.goal > 0 ? (pair.actual / pair.goal) * 100 : 0,
     }))
-    .sort((a, b) => {
-      const aIndex = KPI_METRIC_ORDER.indexOf(a.metric)
-      const bIndex = KPI_METRIC_ORDER.indexOf(b.metric)
-      const safeA = aIndex === -1 ? KPI_METRIC_ORDER.length : aIndex
-      const safeB = bIndex === -1 ? KPI_METRIC_ORDER.length : bIndex
-      return safeA - safeB || compareText(a.metric, b.metric)
-    })
+    .sort(kpiMetricCompare)
 }
 
 function kpiStatusTone(pct: number) {
@@ -613,6 +684,17 @@ function rowHasWeeklyInput(row: LedgerRevenueRow, month: string) {
   return rowWeeklySplit(row, month).source === "explicit"
 }
 
+// 주차 입력(explicit) 합계와 월 금액이 어긋난 검수 대상 행. 반올림 오차 ¥1 이내는 정상으로 본다.
+// 시트에서 주차 셀만 고치고 월 합계를 안 고친(또는 반대) 케이스를 잡는 용도.
+function rowWeeklyMismatch(row: LedgerRevenueRow, month: string): { weekly: number; monthly: number; diff: number } | null {
+  const split = rowWeeklySplit(row, month)
+  if (split.source !== "explicit") return null
+  const monthly = rowMonthAmount(row, month)
+  const diff = split.total - monthly
+  if (Math.abs(diff) <= 1) return null
+  return { weekly: split.total, monthly, diff }
+}
+
 function rowMatchesForecastFilter(row: LedgerRevenueRow, month: string, filter: RevForecastFilter) {
   if (filter === "all") return true
   const amount = rowMonthAmount(row, month)
@@ -620,6 +702,7 @@ function rowMatchesForecastFilter(row: LedgerRevenueRow, month: string, filter: 
   if (filter === "month-only") return amount > 0 && rowWeeklySplit(row, month).source === "month-only"
   if (filter === "confirmed") return rowMonthConfirmed(row, month) > 0
   if (filter === "open") return rowMonthHighConfidence(row, month) + rowMonthOpen(row, month) > 0
+  if (filter === "week-mismatch") return rowWeeklyMismatch(row, month) !== null
   return true
 }
 
@@ -637,22 +720,56 @@ function WeeklySourceBadge({ source }: { source: RevWeeklySource }) {
   )
 }
 
-function MiniWeekBars({ split }: { split: RevWeeklySplit }) {
-  const max = Math.max(...split.weeks, 1)
+// 주차 셀용 축약 숫자 — 시트처럼 원시 수치를 그대로 읽을 수 있게 ¥ 기호 없이 표기.
+// 1만 미만은 콤마 정수, 이상은 "N.N만"(10만 이상은 소수 생략)으로 칸 폭을 지킨다.
+function formatWeekAmount(value: number) {
+  if (value >= 100_000) return `${(value / 10_000).toLocaleString("ko-KR", { maximumFractionDigits: 0 })}만`
+  if (value >= 10_000) return `${(value / 10_000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}만`
+  return value.toLocaleString("ko-KR", { maximumFractionDigits: 0 })
+}
+
+// W1~W5 실수치 5칸. explicit=진한 숫자, inferred(일자 추정)=회색 숫자,
+// month-only=월합계만 배지+금액, empty=점 5개. 시트 검수용이라 막대 대신 숫자를 그대로 노출한다.
+function WeekNumbersCell({
+  weeks,
+  inferred = false,
+  monthOnlyAmount = 0,
+}: {
+  weeks: number[]
+  inferred?: boolean
+  monthOnlyAmount?: number
+}) {
+  const hasWeeks = weeks.some((value) => value > 0)
+  if (!hasWeeks && monthOnlyAmount > 0) {
+    return (
+      <div className="flex items-center justify-end gap-1.5">
+        <span className="rounded bg-[#FBF1E0] px-1.5 py-0.5 text-[9.5px] font-bold text-[#7A520F]">월합계만</span>
+        <span className="text-[11px] font-bold tabular-nums text-[#7A520F]">{formatWeekAmount(monthOnlyAmount)}</span>
+      </div>
+    )
+  }
+  if (!hasWeeks) {
+    return (
+      <div className="grid grid-cols-5 gap-1 text-right text-[10.5px] tabular-nums text-[#DDD9D3]">
+        {weeks.map((_, index) => (
+          <span key={index}>·</span>
+        ))}
+      </div>
+    )
+  }
   return (
-    <div className="grid grid-cols-5 gap-1" aria-label={`REV ${split.source} weekly distribution`}>
-      {split.weeks.map((value, index) => {
-        const height = value > 0 ? Math.max(18, Math.round((value / max) * 34)) : 8
-        return (
-          <div key={index} className="flex h-10 flex-col justify-end gap-1">
-            <div
-              className={`rounded-sm ${split.source === "explicit" ? "bg-[#084734]" : "bg-[#A39E98]"}`}
-              style={{ height }}
-              title={`W${index + 1} ${formatMoney(value)}`}
-            />
-          </div>
-        )
-      })}
+    <div className="grid grid-cols-5 items-center gap-1 text-right tabular-nums">
+      {weeks.map((value, index) => (
+        <span
+          key={index}
+          title={`W${index + 1} ${formatMoney(value)}`}
+          className={`text-[10.5px] leading-tight ${
+            value > 0 ? (inferred ? "font-semibold text-[#A39E98]" : "font-bold text-[#111110]") : "text-[#DDD9D3]"
+          }`}
+        >
+          {value > 0 ? formatWeekAmount(value) : "·"}
+        </span>
+      ))}
     </div>
   )
 }
@@ -1345,6 +1462,8 @@ interface BreakdownNumbersRow {
   open: number
   total: number
   count: number
+  // 상위 행의 분해(예: SW 하위 유형)라 합계 행에서 다시 더하면 이중 계산되는 행.
+  excludeFromTotals?: boolean
 }
 
 function numberCell(value: number, tone = "text-[#111110]") {
@@ -1360,7 +1479,7 @@ function BreakdownNumbersTable({ rows, emptyLabel }: { rows: BreakdownNumbersRow
       </div>
     )
   }
-  const totals = rows.reduce(
+  const totals = rows.filter((row) => !row.excludeFromTotals).reduce(
     (acc, row) => ({
       confirmed: acc.confirmed + row.confirmed,
       highConfidence: acc.highConfidence + row.highConfidence,
@@ -1412,10 +1531,12 @@ function BreakdownNumbersTable({ rows, emptyLabel }: { rows: BreakdownNumbersRow
 
 function RevWeekNumbersTable({
   data,
+  month,
   monthGoal,
   monthRowCount,
 }: {
   data: RevWeekPoint[]
+  month: string
   monthGoal: number | null
   monthRowCount: number
 }) {
@@ -1431,6 +1552,14 @@ function RevWeekNumbersTable({
   const cumulative = data.map((_, index) =>
     data.slice(0, index + 1).reduce((sum, week) => sum + week.total, 0),
   )
+  // 월 목표를 일수 비중으로 주차에 분배한 누적 목표선(pace).
+  // W1=1~7일 … W5=29일~말일. 누적 달성률이 pace보다 뒤지면 경고 톤.
+  const [paceYear, paceMonth] = month.split("-").map(Number)
+  const daysInMonth = Number.isFinite(paceYear) && Number.isFinite(paceMonth)
+    ? new Date(Date.UTC(paceYear, paceMonth, 0)).getUTCDate()
+    : 30
+  const paceRatios = data.map((_, index) => Math.min((index + 1) * 7, daysInMonth) / daysInMonth)
+  const paceAmounts = monthGoal != null && monthGoal > 0 ? paceRatios.map((ratio) => monthGoal * ratio) : null
   const seriesRows = [
     { key: "confirmed" as const, label: "확정", tone: "text-[#084734]" },
     { key: "highConfidence" as const, label: "고확도", tone: "text-[#1E5DA8]" },
@@ -1480,20 +1609,39 @@ function RevWeekNumbersTable({
             ))}
             <td className="py-2.5 pl-2 font-bold text-[#111110]">{formatMoney(monthTotal)}</td>
           </tr>
+          {paceAmounts && (
+            <tr className="border-t border-[#F0F0EC] text-[11px]">
+              <td className="py-2 pr-2 text-left font-bold text-[#615D59]">누적 목표(pace)</td>
+              {data.map((week, index) => (
+                <td key={`pace-${week.week}`} className="px-2 py-2">
+                  <p className="font-semibold text-[#615D59]">{formatMoney(paceAmounts[index])}</p>
+                  <p className="mt-0.5 text-[9.5px] font-semibold text-[#A39E98]">{formatPercent(paceRatios[index] * 100)}</p>
+                </td>
+              ))}
+              <td className="py-2 pl-2 font-semibold text-[#615D59]">{formatMoney(monthGoal ?? 0)}</td>
+            </tr>
+          )}
           <tr className="border-t border-[#F0F0EC]">
             <td className="py-2 pr-2 text-left font-bold text-[#615D59]">누적{monthGoal != null && monthGoal > 0 ? " · 달성률" : ""}</td>
-            {data.map((week, index) => (
-              <td key={`cum-${week.week}`} className="px-2 py-2">
-                <p className="font-bold text-[#111110]">{formatMoney(cumulative[index])}</p>
-                {monthGoal != null && monthGoal > 0 && (
-                  <p className="mt-0.5 text-[9.5px] font-semibold text-[#A39E98]">{formatPercent((cumulative[index] / monthGoal) * 100)}</p>
-                )}
-              </td>
-            ))}
+            {data.map((week, index) => {
+              const behindPace = paceAmounts ? cumulative[index] < paceAmounts[index] : false
+              return (
+                <td key={`cum-${week.week}`} className="px-2 py-2">
+                  <p className="font-bold text-[#111110]">{formatMoney(cumulative[index])}</p>
+                  {monthGoal != null && monthGoal > 0 && (
+                    <p className={`mt-0.5 text-[9.5px] font-bold ${behindPace ? "text-[#B43E3E]" : "text-[#084734]"}`}>
+                      {formatPercent((cumulative[index] / monthGoal) * 100)}
+                    </p>
+                  )}
+                </td>
+              )
+            })}
             <td className="py-2 pl-2">
               <p className="font-bold text-[#111110]">{formatMoney(monthTotal)}</p>
               {monthGoal != null && monthGoal > 0 && (
-                <p className="mt-0.5 text-[9.5px] font-semibold text-[#A39E98]">{formatPercent((monthTotal / monthGoal) * 100)}</p>
+                <p className={`mt-0.5 text-[9.5px] font-bold ${monthTotal < monthGoal ? "text-[#B43E3E]" : "text-[#084734]"}`}>
+                  {formatPercent((monthTotal / monthGoal) * 100)}
+                </p>
               )}
             </td>
           </tr>
@@ -1521,6 +1669,57 @@ interface MonthlyPlanRow {
   actualCum: number
   trendCum: number
   confirmed: boolean
+}
+
+interface WeeklyCloseRunView {
+  id: string
+  startedAt: string
+  sourceName: string
+  rowCounts: Record<string, number>
+  dataSource: string
+}
+
+type WeeklyCloseBucketId = "new" | "increased" | "decreased" | "dropped" | "unchanged"
+
+interface WeeklyCloseBucketView {
+  count: number
+  baseAmount: number
+  headAmount: number
+  delta: number
+}
+
+interface WeeklyCloseDiffView {
+  month: string
+  baseTotal: number
+  headTotal: number
+  delta: number
+  buckets: Record<WeeklyCloseBucketId, WeeklyCloseBucketView>
+  confirmedDelta: number
+  highConfidenceDelta: number
+  movers: Array<{
+    key: string
+    account: string
+    team: string | null
+    manager: string | null
+    baseAmount: number
+    headAmount: number
+    delta: number
+    bucket: WeeklyCloseBucketId
+  }>
+}
+
+const WEEKLY_CLOSE_BUCKET_META: Array<{ id: WeeklyCloseBucketId; label: string; tone: string }> = [
+  { id: "new", label: "신규", tone: "text-[#084734]" },
+  { id: "increased", label: "증액", tone: "text-[#1E5DA8]" },
+  { id: "decreased", label: "감액", tone: "text-[#A8741A]" },
+  { id: "dropped", label: "소멸", tone: "text-[#B43E3E]" },
+  { id: "unchanged", label: "유지", tone: "text-[#615D59]" },
+]
+
+function formatSignedMoney(value: number) {
+  if (value === 0) return "±0"
+  const sign = value > 0 ? "+" : "-"
+  return `${sign}${formatMoney(Math.abs(value))}`
 }
 
 function DshMonthlyNumbersTable({ rows, selectedMonth }: { rows: MonthlyPlanRow[]; selectedMonth: string }) {
@@ -2035,6 +2234,236 @@ function DraftQueue({
   )
 }
 
+// 데스크톱 REV 테이블 그룹 헤더 행. memo로 감싸 expanded/selected/onSelect/onToggle이
+// 안 바뀐 그룹은 리렌더를 건너뛴다(그룹 하나 펼침·선택 시 나머지 수십 개 그룹 재계산 방지).
+const RevGroupHeaderRow = memo(function RevGroupHeaderRow({
+  group,
+  expanded,
+  selected,
+  onSelect,
+  onToggle,
+}: {
+  group: RevCustomerGroup
+  expanded: boolean
+  selected: boolean
+  onSelect: (key: string) => void
+  onToggle: (key: string) => void
+}) {
+  return (
+    <tr
+      onClick={() => onSelect(group.key)}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault()
+          onSelect(group.key)
+        }
+      }}
+      tabIndex={0}
+      title="클릭: 우측 요약 · 펼치기 버튼: 하위 행 펼침"
+      aria-label={`${group.customer} ${group.rows.length}건 — 우측 요약 열기`}
+      className={`group cursor-pointer border-t border-[#F0F0EC] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 ${
+        selected ? "bg-[#ECFDF5]" : expanded ? "bg-[#F6F5F4]" : "hover:bg-[#FAFAF8]"
+      }`}
+    >
+      <td
+        className={`sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] px-3 py-2 ${
+          selected ? "bg-[#ECFDF5]" : expanded ? "bg-[#F6F5F4]" : "bg-white group-hover:bg-[#FAFAF8]"
+        }`}
+      >
+        <div className="flex max-w-[190px] items-center gap-1.5">
+          <span className="min-w-0 truncate font-bold text-[#111110]">{group.customer}</span>
+          <span className="shrink-0 rounded-full bg-[#ECFDF5] px-1.5 py-0.5 text-[10px] font-bold text-[#084734]">{group.rows.length}건</span>
+          {group.hasDraft && (
+            <span className="shrink-0 rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-bold text-[#7A520F]">장부</span>
+          )}
+          {group.mismatchCount > 0 && (
+            <span
+              title="주차 입력 합계와 월 금액이 어긋난 행 포함"
+              className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-[#FCE9E9] px-1.5 py-0.5 text-[10px] font-bold text-[#B43E3E]"
+            >
+              <AlertTriangle className="h-2.5 w-2.5" />
+              불일치 {group.mismatchCount}
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-2">
+        <div className="flex flex-wrap items-center gap-1">
+          {group.categories.map((category) => (
+            <span
+              key={category}
+              className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9.5px] font-bold tabular-nums ${productCategoryMeta(category).className}`}
+            >
+              {productCategoryMeta(category).shortLabel} {formatWeekAmount(group.categoryTotals[category])}
+            </span>
+          ))}
+        </div>
+      </td>
+      <td className="px-2 py-2 text-[11.5px] text-[#615D59]">
+        <span title={group.managers.join(", ")} className="block max-w-[92px] truncate">{group.managers.join(", ") || "-"}</span>
+      </td>
+      <td className="px-2 py-2 text-[11.5px] text-[#615D59]">{group.teams.join("·") || "-"}</td>
+      <td className="px-2 py-2 text-[11.5px] text-[#615D59]">
+        <span title={group.regions.join(", ")} className="block max-w-[76px] truncate">{group.regions.join("·") || "-"}</span>
+      </td>
+      <td className="px-2 py-2">
+        <WeekNumbersCell weeks={group.weeks} inferred={!group.hasExplicitWeeks} monthOnlyAmount={group.monthOnlyAmount} />
+        {group.monthOnlyAmount > 0 && group.weeks.some((value) => value > 0) && (
+          <p className="mt-0.5 text-right text-[9.5px] font-semibold text-[#7A520F]">+월합계만 {formatWeekAmount(group.monthOnlyAmount)}</p>
+        )}
+      </td>
+      <td className="px-3 py-2 text-right tabular-nums">
+        {group.monthTotal > 0 ? (
+          <>
+            <span className="font-bold text-[#111110]">{formatMoney(group.monthTotal)}</span>
+            {group.monthConfirmed > 0 && (
+              <span className="ml-1 text-[10px] font-semibold text-[#084734]">확정 {formatWeekAmount(group.monthConfirmed)}</span>
+            )}
+          </>
+        ) : (
+          <span className="font-semibold text-[#C9C5BF]">–</span>
+        )}
+      </td>
+      <td className="px-3 py-2 text-right font-bold tabular-nums text-[#111110]">{formatMoney(group.revenueTotal)}</td>
+      <td className="px-3 py-2 text-right">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggle(group.key)
+          }}
+          aria-expanded={expanded}
+          aria-label={`${group.customer} ${group.rows.length}건 ${expanded ? "접기" : "펼치기"}`}
+          className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] px-2 text-[11px] font-bold text-[#615D59] transition hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+        >
+          {expanded ? "접기" : "펼치기"}
+          <ChevronRight className={`h-3 w-3 transition-transform ${expanded ? "rotate-90" : ""}`} />
+        </button>
+      </td>
+    </tr>
+  )
+})
+
+// 데스크톱 REV 테이블 상세(개별 딜) 행. view/active/grouped가 안 바뀐 행은 리렌더 스킵 —
+// 행 선택 하이라이트 변경 시 선택 전/후 2행만 다시 그린다.
+const RevDetailRow = memo(function RevDetailRow({
+  view,
+  grouped,
+  active,
+  selectedMonth,
+  onOpen,
+}: {
+  view: RevRowView
+  grouped: boolean
+  active: boolean
+  selectedMonth: string
+  onOpen: (row: LedgerRevenueRow) => void
+}) {
+  const { row, draftRow, productCategory, weeklySplit, monthAmount, monthConfirmedAmount, mismatch } = view
+  const subLine = draftRow
+    ? `${row.draftKind === "edit-row" ? "수정 적용" : "신규 적용"} · ${formatMonthLabel(row.draftMonth ?? selectedMonth)}${row.draftNote ? ` · ${row.draftNote}` : ""}`
+    : [row.status, row.dealType].filter(Boolean).join(" · ")
+  return (
+    <tr
+      className={`group border-t border-[#F0F0EC] transition ${
+        active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FBFBFA] hover:bg-[#FAFAF8]" : "hover:bg-[#FAFAF8]"
+      }`}
+    >
+      <td
+        className={`sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] py-1.5 pr-3 ${grouped ? "border-l-2 border-l-[#DDE7E2] pl-8" : "pl-3"} ${
+          active
+            ? "bg-[#ECFDF5]"
+            : draftRow
+              ? "bg-[#FFFCF5] group-hover:bg-[#FBF1E0]"
+              : grouped
+                ? "bg-[#FBFBFA] group-hover:bg-[#FAFAF8]"
+                : "bg-white group-hover:bg-[#FAFAF8]"
+        }`}
+      >
+        <div className="flex max-w-[190px] items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => void onOpen(row)}
+            className="min-w-0 truncate text-left font-bold text-[#111110] underline-offset-2 hover:text-[#084734] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+            aria-label={`${row.customer} 상세 열기`}
+          >
+            {row.customer}
+          </button>
+          {subLine && (
+            <span title={subLine} className={`min-w-0 truncate text-[10.5px] font-semibold ${draftRow ? "text-[#7A520F]" : "text-[#A39E98]"}`}>
+              {subLine}
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="px-2 py-1.5">
+        <div className="flex items-center gap-1.5">
+          <ProductCategoryPill category={productCategory} compact />
+          <span
+            title={row.productVersion ?? undefined}
+            className="max-w-[110px] truncate text-[10.5px] font-semibold text-[#615D59]"
+          >
+            {row.productVersion || metadataString(row.draftMetadata, "productCategory") || "-"}
+          </span>
+        </div>
+      </td>
+      <td className="px-2 py-1.5 text-[11.5px] text-[#615D59]">{row.manager ?? "-"}</td>
+      <td className="px-2 py-1.5 text-[11.5px] text-[#615D59]">{row.team ?? "-"}</td>
+      <td className="px-2 py-1.5 text-[11.5px] text-[#615D59]">{row.region ?? "-"}</td>
+      <td className="px-2 py-1.5" title={`주차 출처: ${weeklySplit.source === "explicit" ? "주차 입력" : weeklySplit.source === "inferred" ? "일자 추정" : weeklySplit.source === "month-only" ? "월합계만" : "금액 없음"}`}>
+        <WeekNumbersCell
+          weeks={weeklySplit.source === "explicit" || weeklySplit.source === "inferred" ? weeklySplit.weeks : [0, 0, 0, 0, 0]}
+          inferred={weeklySplit.source === "inferred"}
+          monthOnlyAmount={weeklySplit.source === "month-only" ? weeklySplit.total : 0}
+        />
+        {mismatch && (
+          <p
+            title={`주차 합계 ${formatMoney(mismatch.weekly)} ≠ 월 금액 ${formatMoney(mismatch.monthly)} (차이 ${formatMoney(mismatch.diff)})`}
+            className="mt-0.5 flex items-center justify-end gap-0.5 text-right text-[9.5px] font-bold text-[#B43E3E]"
+          >
+            <AlertTriangle className="h-2.5 w-2.5" />
+            주차합 {formatWeekAmount(mismatch.weekly)} ≠ 월 {formatWeekAmount(mismatch.monthly)}
+          </p>
+        )}
+      </td>
+      <td className="px-3 py-1.5 text-right tabular-nums">
+        {monthAmount > 0 ? (
+          <>
+            <span className="font-bold text-[#111110]">{formatMoney(monthAmount)}</span>
+            {monthConfirmedAmount > 0 ? (
+              <span className="ml-1 text-[10px] font-semibold text-[#084734]">확정</span>
+            ) : (
+              <span className="ml-1 text-[10px] font-semibold text-[#A39E98]">미확정</span>
+            )}
+          </>
+        ) : (
+          <span className="font-semibold text-[#C9C5BF]">–</span>
+        )}
+      </td>
+      <td className="px-3 py-1.5 text-right font-bold tabular-nums text-[#111110]">{formatMoney(row.revenue)}</td>
+      <td className="px-3 py-1.5 text-right">
+        <div className="flex items-center justify-end gap-1.5">
+          <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+            draftRow ? "bg-[#FBF1E0] text-[#7A520F]" : "bg-[#F6F5F4] text-[#615D59]"
+          }`}>
+            {draftRow ? "장부" : "시트"}
+          </span>
+          <button
+            type="button"
+            onClick={() => void onOpen(row)}
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] px-2 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+            aria-label={`${row.customer} 상세 열기`}
+          >
+            열기
+            <ChevronRight className="h-3 w-3" />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+})
+
 export default function SalesLedgerWorkbench() {
   const [team, setTeam] = useState<Team>("ALL")
   const [period, setPeriod] = useState<Period>("Q")
@@ -2054,10 +2483,12 @@ export default function SalesLedgerWorkbench() {
   const [revSortDirection, setRevSortDirection] = useState<RevSortDirection>("desc")
   const [revPageSize, setRevPageSize] = useState<RevPageSize>(50)
   const [revPage, setRevPage] = useState(1)
+  const [expandedRevGroups, setExpandedRevGroups] = useState<Set<string>>(() => new Set())
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(true)
   const [railView, setRailView] = useState<RailView>("detail")
   const [railSwitcherOpen, setRailSwitcherOpen] = useState(false)
   const [selectedRow, setSelectedRow] = useState<LedgerRevenueRow | null>(null)
+  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null)
   const [detail, setDetail] = useState<DealDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
@@ -2082,15 +2513,179 @@ export default function SalesLedgerWorkbench() {
   } = useLedgerDraftQueue()
   const monthOptions = useMemo(() => buildFiscalMonthOptions(new Date()), [])
 
+  // 주간 마감(Weekly Close): 스냅샷 run 목록 + 두 run의 선택 월 diff.
+  const [wcRuns, setWcRuns] = useState<WeeklyCloseRunView[]>([])
+  const [wcBase, setWcBase] = useState("")
+  const [wcHead, setWcHead] = useState("")
+  const [wcDiff, setWcDiff] = useState<WeeklyCloseDiffView | null>(null)
+  const [wcLoading, setWcLoading] = useState(false)
+  const [wcError, setWcError] = useState<string | null>(null)
+  const [wcSnapshotting, setWcSnapshotting] = useState(false)
+  const [wcNotice, setWcNotice] = useState<string | null>(null)
+
+  const loadWeeklyCloseRuns = useCallback(async () => {
+    setWcError(null)
+    try {
+      const data = await adminFetchJson<{ runs?: WeeklyCloseRunView[] }>(
+        "/api/admin/branch/ledger/weekly-close",
+        { cache: "no-cache" },
+      )
+      const runs = data.runs ?? []
+      setWcRuns(runs)
+      setWcHead((current) => (current && runs.some((run) => run.id === current) ? current : runs[0]?.id ?? ""))
+      setWcBase((current) => (current && runs.some((run) => run.id === current) ? current : runs[1]?.id ?? ""))
+    } catch (error) {
+      setWcError(errorMessage(error))
+    }
+  }, [])
+
+  useEffect(() => {
+    if (lens === "dsh") void loadWeeklyCloseRuns()
+  }, [lens, loadWeeklyCloseRuns])
+
+  useEffect(() => {
+    if (lens !== "dsh" || !wcBase || !wcHead || wcBase === wcHead) {
+      setWcDiff(null)
+      return
+    }
+    let active = true
+    setWcLoading(true)
+    adminFetchJson<{ diff?: WeeklyCloseDiffView }>(
+      `/api/admin/branch/ledger/weekly-close?base=${encodeURIComponent(wcBase)}&head=${encodeURIComponent(wcHead)}&month=${encodeURIComponent(selectedMonth)}`,
+      { cache: "no-cache" },
+    )
+      .then((data) => {
+        if (!active) return
+        setWcDiff(data.diff ?? null)
+        setWcError(null)
+      })
+      .catch((error) => {
+        if (active) setWcError(errorMessage(error))
+      })
+      .finally(() => {
+        if (active) setWcLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [lens, selectedMonth, wcBase, wcHead])
+
+  const captureWeeklySnapshot = useCallback(async () => {
+    setWcSnapshotting(true)
+    setWcNotice(null)
+    setWcError(null)
+    try {
+      const result = await adminFetchJson<{ run: WeeklyCloseRunView; unchanged: boolean }>(
+        "/api/admin/branch/ledger/weekly-close",
+        { method: "POST" },
+      )
+      setWcNotice(
+        result.unchanged
+          ? "직전 스냅샷과 동일한 상태라 새로 기록하지 않았습니다."
+          : `스냅샷 기록 완료 · 행 ${(result.run.rowCounts?.rev_lines ?? 0).toLocaleString("ko-KR")}건`,
+      )
+      await loadWeeklyCloseRuns()
+      if (!result.unchanged) {
+        setWcBase((current) => (current === result.run.id ? "" : current) || wcHead)
+        setWcHead(result.run.id)
+      }
+    } catch (error) {
+      setWcError(errorMessage(error))
+    } finally {
+      setWcSnapshotting(false)
+    }
+  }, [loadWeeklyCloseRuns, wcHead])
+
+  // 필터 상태 URL 동기화 — 새로고침/링크 공유 시 렌즈·월·검색·필터·정렬이 유지된다.
+  // 마운트 시 한 번 읽고(urlReady 전에는 쓰지 않음), 이후 변경마다 replaceState로 반영(히스토리 오염 없음).
+  const defaultMonthRef = useRef(ymKeyUtc(new Date()))
+  const [urlReady, setUrlReady] = useState(false)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const lensParam = params.get("lens")
+    if (lensParam === "dsh" || lensParam === "rev" || lensParam === "kpi") setLens(lensParam)
+    const monthParam = params.get("month")
+    if (monthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam)) setSelectedMonth(monthParam)
+    const periodParam = params.get("period")
+    if (periodParam && (PERIODS as string[]).includes(periodParam)) setPeriod(periodParam as Period)
+    const teamParam = params.get("team")
+    if (teamParam && (TEAMS as string[]).includes(teamParam)) setTeam(teamParam as Team)
+    const q = params.get("q")
+    if (q) setQuery(q)
+    const mgr = params.get("mgr")
+    if (mgr) setManagerFilter(mgr)
+    const region = params.get("region")
+    if (region) setRegionFilter(region)
+    const prod = params.get("prod")
+    if (prod === "software" || prod === "hardware" || prod === "unknown") setProductFilter(prod)
+    const status = params.get("status")
+    if (status) setRevStatusFilter(status)
+    const dealType = params.get("type")
+    if (dealType) setRevDealTypeFilter(dealType)
+    const origin = params.get("origin")
+    if (origin === "sheet" || origin === "draft") setRevOriginFilter(origin)
+    const fc = params.get("fc")
+    if (fc && REV_FORECAST_FILTERS.some((item) => item.id === fc)) setRevForecastFilter(fc as RevForecastFilter)
+    const sort = params.get("sort")
+    if (sort && sort in REV_SORT_LABELS) setRevSortKey(sort as RevSortKey)
+    const dir = params.get("dir")
+    if (dir === "asc" || dir === "desc") setRevSortDirection(dir)
+    const ps = Number(params.get("ps"))
+    if ((REV_PAGE_SIZES as readonly number[]).includes(ps)) setRevPageSize(ps as RevPageSize)
+    setUrlReady(true)
+  }, [])
+
+  useEffect(() => {
+    if (!urlReady) return
+    const params = new URLSearchParams()
+    if (lens !== "rev") params.set("lens", lens)
+    if (selectedMonth !== defaultMonthRef.current) params.set("month", selectedMonth)
+    if (period !== "Q") params.set("period", period)
+    if (team !== "ALL") params.set("team", team)
+    if (query.trim()) params.set("q", query.trim())
+    if (managerFilter !== "ALL") params.set("mgr", managerFilter)
+    if (regionFilter !== "ALL") params.set("region", regionFilter)
+    if (productFilter !== "all") params.set("prod", productFilter)
+    if (revStatusFilter !== "ALL") params.set("status", revStatusFilter)
+    if (revDealTypeFilter !== "ALL") params.set("type", revDealTypeFilter)
+    if (revOriginFilter !== "all") params.set("origin", revOriginFilter)
+    if (revForecastFilter !== "all") params.set("fc", revForecastFilter)
+    if (revSortKey !== "revenue") params.set("sort", revSortKey)
+    if (revSortDirection !== "desc") params.set("dir", revSortDirection)
+    if (revPageSize !== 50) params.set("ps", String(revPageSize))
+    const search = params.toString()
+    const nextUrl = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    if (nextUrl !== currentUrl) window.history.replaceState(null, "", nextUrl)
+  }, [
+    urlReady,
+    lens,
+    selectedMonth,
+    period,
+    team,
+    query,
+    managerFilter,
+    regionFilter,
+    productFilter,
+    revStatusFilter,
+    revDealTypeFilter,
+    revOriginFilter,
+    revForecastFilter,
+    revSortKey,
+    revSortDirection,
+    revPageSize,
+  ])
+
   const defaultDraftForm = useMemo<DraftForm>(() => ({
     operation: "forecast-add",
     customer: "",
     manager: "",
     team: team === "ALL" ? "BD" : team,
-    productCategory: "unknown",
+    productCategory: "software",
     month: selectedMonth,
     fromMonth: selectedMonth,
     week: "month",
+    confidence: "expected",
     amount: "",
     quantity: "",
     note: "",
@@ -2420,6 +3015,19 @@ export default function SalesLedgerWorkbench() {
     () => filteredRows.filter((row) => rowMonthAmount(row, selectedMonth) > 0).length,
     [filteredRows, selectedMonth],
   )
+  // 검수 인박스: 필터와 무관하게 전체 행 기준으로 세고, 칩 클릭으로 해당 필터에 점프.
+  const revInboxCounts = useMemo(() => {
+    let weekMismatch = 0
+    let monthOnly = 0
+    let open = 0
+    for (const row of rows) {
+      if (rowWeeklyMismatch(row, selectedMonth)) weekMismatch += 1
+      const amount = rowMonthAmount(row, selectedMonth)
+      if (amount > 0 && rowWeeklySplit(row, selectedMonth).source === "month-only") monthOnly += 1
+      if (rowMonthHighConfidence(row, selectedMonth) + rowMonthOpen(row, selectedMonth) > 0) open += 1
+    }
+    return { weekMismatch, monthOnly, open }
+  }, [rows, selectedMonth])
   const dshWeekProjection = useMemo(() => buildRevWeekProjection(rows, selectedMonth), [rows, selectedMonth])
   const dshPeakWeek = useMemo(
     () => dshWeekProjection.slice().sort((a, b) => b.total - a.total)[0],
@@ -2437,38 +3045,207 @@ export default function SalesLedgerWorkbench() {
     }))
   }, [revTopManagers])
   const revProductTableRows = useMemo<BreakdownNumbersRow[]>(() => {
-    return revProductSummary.map((row) => ({
-      id: row.category,
-      label: <ProductCategoryPill category={row.category} />,
-      confirmed: row.confirmed,
-      highConfidence: row.highConfidence,
-      open: row.open,
-      total: row.total,
-      count: row.rows,
-    }))
-  }, [revProductSummary])
+    // SW는 과금 리듬(구독/충전·소비)별 하위행으로 분해해 함께 보여준다.
+    const subtypeTotals = new Map<SalesLedgerSoftwareSubtype, { confirmed: number; highConfidence: number; open: number; total: number; count: number }>()
+    for (const row of filteredRows) {
+      if (rowProductCategory(row) !== "software") continue
+      const total = rowMonthAmount(row, selectedMonth)
+      if (total <= 0) continue
+      const subtype = classifySalesLedgerSoftwareSubtype({
+        product: row.productVersion,
+        account: row.customer,
+        rawText: row.draftMetadata,
+      })
+      const current = subtypeTotals.get(subtype) ?? { confirmed: 0, highConfidence: 0, open: 0, total: 0, count: 0 }
+      current.confirmed += rowMonthConfirmed(row, selectedMonth)
+      current.highConfidence += rowMonthHighConfidence(row, selectedMonth)
+      current.open += rowMonthOpen(row, selectedMonth)
+      current.total += total
+      current.count += 1
+      subtypeTotals.set(subtype, current)
+    }
 
-  const revTotalPages = Math.max(1, Math.ceil(filteredRows.length / revPageSize))
+    const SW_SUBTYPE_LABELS: Array<{ id: SalesLedgerSoftwareSubtype; label: string }> = [
+      { id: "subscription", label: "구독" },
+      { id: "recharge", label: "충전·소비" },
+      { id: "other", label: "기타" },
+    ]
+
+    const result: BreakdownNumbersRow[] = []
+    for (const row of revProductSummary) {
+      result.push({
+        id: row.category,
+        label: <ProductCategoryPill category={row.category} />,
+        confirmed: row.confirmed,
+        highConfidence: row.highConfidence,
+        open: row.open,
+        total: row.total,
+        count: row.rows,
+      })
+      if (row.category !== "software") continue
+      for (const subtype of SW_SUBTYPE_LABELS) {
+        const totals = subtypeTotals.get(subtype.id)
+        if (!totals || totals.count === 0) continue
+        result.push({
+          id: `software-${subtype.id}`,
+          label: <span className="pl-3 text-[10.5px] font-semibold text-[#615D59]">└ {subtype.label}</span>,
+          confirmed: totals.confirmed,
+          highConfidence: totals.highConfidence,
+          open: totals.open,
+          total: totals.total,
+          count: totals.count,
+          excludeFromTotals: true,
+        })
+      }
+    }
+    return result
+  }, [filteredRows, revProductSummary, selectedMonth])
+
+  // filteredRows(정렬 반영)를 고객 단위로 묶는다. Map 삽입 순서 = 정렬상 첫 등장 순서라
+  // 그룹 순서도 기존 정렬 UX를 그대로 따른다. 페이지네이션·아코디언은 그룹 단위.
+  const revCustomerGroups = useMemo<RevCustomerGroup[]>(() => {
+    const groups = new Map<string, RevCustomerGroup>()
+    for (const row of filteredRows) {
+      const key = customerGroupKey(row.customer) || row.id
+      let group = groups.get(key)
+      if (!group) {
+        group = {
+          key,
+          customer: row.customer || "미지정",
+          rows: [],
+          monthTotal: 0,
+          monthConfirmed: 0,
+          revenueTotal: 0,
+          weeks: [0, 0, 0, 0, 0],
+          hasExplicitWeeks: false,
+          monthOnlyAmount: 0,
+          categoryTotals: { software: 0, hardware: 0, unknown: 0 },
+          categories: [],
+          managers: [],
+          teams: [],
+          regions: [],
+          hasDraft: false,
+          mismatchCount: 0,
+        }
+        groups.set(key, group)
+      }
+      group.rows.push(row)
+      const monthAmount = rowMonthAmount(row, selectedMonth)
+      group.monthTotal += monthAmount
+      group.monthConfirmed += rowMonthConfirmed(row, selectedMonth)
+      group.revenueTotal += row.revenue
+      const split = rowWeeklySplit(row, selectedMonth)
+      if (split.source === "explicit" || split.source === "inferred") {
+        split.weeks.forEach((value, index) => {
+          group!.weeks[index] += value
+        })
+        if (split.source === "explicit") group.hasExplicitWeeks = true
+      } else if (split.source === "month-only") {
+        group.monthOnlyAmount += monthAmount
+      }
+      const category = rowProductCategory(row)
+      group.categoryTotals[category] += monthAmount
+      if (!group.categories.includes(category)) group.categories.push(category)
+      if (row.manager && !group.managers.includes(row.manager)) group.managers.push(row.manager)
+      if (row.team && !group.teams.includes(row.team)) group.teams.push(row.team)
+      if (row.region && !group.regions.includes(row.region)) group.regions.push(row.region)
+      if (row.ledgerOrigin === "draft") group.hasDraft = true
+      if (rowWeeklyMismatch(row, selectedMonth)) group.mismatchCount += 1
+    }
+    // 그룹 정렬은 그룹 대표값(합계·첫 값) 기준으로 다시 계산한다. 첫 등장 순서에 기대면
+    // 정렬 키가 합계(월 금액·실적)일 때 그룹 순서가 행 최댓값 기준으로 어긋난다.
+    const direction = revSortDirection === "asc" ? 1 : -1
+    const dominantCategory = (group: RevCustomerGroup) => {
+      const entries = Object.entries(group.categoryTotals) as Array<[Exclude<RevProductCategory, "all">, number]>
+      entries.sort((a, b) => b[1] - a[1])
+      return productCategoryMeta(entries[0][0]).label
+    }
+    return Array.from(groups.values()).sort((a, b) => {
+      let result = 0
+      if (revSortKey === "revenue") result = a.revenueTotal - b.revenueTotal
+      if (revSortKey === "month") result = a.monthTotal - b.monthTotal
+      if (revSortKey === "customer") result = compareText(a.customer, b.customer)
+      if (revSortKey === "product") result = compareText(dominantCategory(a), dominantCategory(b))
+      if (revSortKey === "manager") result = compareText(a.managers[0], b.managers[0])
+      if (revSortKey === "team") result = compareText(a.teams[0], b.teams[0])
+      if (revSortKey === "region") result = compareText(a.regions[0], b.regions[0])
+      if (revSortKey === "origin") result = (a.hasDraft ? 0 : 1) - (b.hasDraft ? 0 : 1)
+      const primary = result * direction
+      if (primary !== 0) return primary
+      return compareText(a.customer, b.customer)
+    })
+  }, [filteredRows, revSortDirection, revSortKey, selectedMonth])
+
+  const revTotalPages = Math.max(1, Math.ceil(revCustomerGroups.length / revPageSize))
   const clampedRevPage = Math.min(revPage, revTotalPages)
   const revPageStartIndex = (clampedRevPage - 1) * revPageSize
-  const visibleRows = useMemo(() => {
-    return filteredRows.slice(revPageStartIndex, revPageStartIndex + revPageSize)
-  }, [filteredRows, revPageSize, revPageStartIndex])
-  const visibleGroupStats = useMemo(() => {
-    const stats = new Map<string, { rows: number; total: number; software: number; hardware: number; unknown: number }>()
-    for (const row of visibleRows) {
-      const key = customerGroupKey(row.customer)
-      const current = stats.get(key) ?? { rows: 0, total: 0, software: 0, hardware: 0, unknown: 0 }
-      const category = rowProductCategory(row)
-      current.rows += 1
-      current.total += rowMonthAmount(row, selectedMonth)
-      current[category] += rowMonthAmount(row, selectedMonth)
-      stats.set(key, current)
+  const visibleGroups = useMemo(() => {
+    return revCustomerGroups.slice(revPageStartIndex, revPageStartIndex + revPageSize)
+  }, [revCustomerGroups, revPageSize, revPageStartIndex])
+  const revRangeStart = revCustomerGroups.length === 0 ? 0 : revPageStartIndex + 1
+  const revRangeEnd = Math.min(revCustomerGroups.length, revPageStartIndex + visibleGroups.length)
+
+  // 모바일 카드 목록과 데스크톱 테이블이 같은 행을 각자 렌더링하면서 draftRow/productCategory/
+  // weeklySplit/monthAmount/mismatch를 두 곳에서 따로 계산했다 — 한 번만 계산해 공유한다.
+  const revRowViews = useMemo(() => {
+    const views = new Map<string, RevRowView>()
+    for (const group of visibleGroups) {
+      for (const row of group.rows) {
+        if (views.has(row.id)) continue
+        views.set(row.id, {
+          row,
+          draftRow: row.ledgerOrigin === "draft",
+          productCategory: rowProductCategory(row),
+          weeklySplit: rowWeeklySplit(row, selectedMonth),
+          monthAmount: rowMonthAmount(row, selectedMonth),
+          monthConfirmedAmount: rowMonthConfirmed(row, selectedMonth),
+          mismatch: rowWeeklyMismatch(row, selectedMonth),
+        })
+      }
     }
-    return stats
-  }, [selectedMonth, visibleRows])
-  const revRangeStart = filteredRows.length === 0 ? 0 : revPageStartIndex + 1
-  const revRangeEnd = Math.min(filteredRows.length, revPageStartIndex + visibleRows.length)
+    return views
+  }, [visibleGroups, selectedMonth])
+
+  const toggleRevGroup = useCallback((key: string) => {
+    setExpandedRevGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
+  // 현재 페이지에서 묶음(2행 이상) 그룹만 펼치기/접기 대상.
+  const multiRowGroupKeys = useMemo(
+    () => visibleGroups.filter((group) => group.rows.length > 1).map((group) => group.key),
+    [visibleGroups],
+  )
+  const allRevGroupsExpanded = multiRowGroupKeys.length > 0 && multiRowGroupKeys.every((key) => expandedRevGroups.has(key))
+  const toggleAllRevGroups = useCallback(() => {
+    setExpandedRevGroups((prev) => {
+      const next = new Set(prev)
+      const everyExpanded = multiRowGroupKeys.length > 0 && multiRowGroupKeys.every((key) => next.has(key))
+      if (everyExpanded) multiRowGroupKeys.forEach((key) => next.delete(key))
+      else multiRowGroupKeys.forEach((key) => next.add(key))
+      return next
+    })
+  }, [multiRowGroupKeys])
+
+  // 그룹 헤더 클릭 = 우측 상세 패널에 고객 통합(HW+SW 합산) 요약만 로드.
+  // 하위 행 펼침은 셰브론/펼치기 버튼(toggleRevGroup)으로만 — 접힘=우측 요약, 펼침=아래 행.
+  const selectRevGroup = useCallback((key: string) => {
+    setSelectedGroupKey(key)
+    setSelectedRow(null)
+    setDetail(null)
+    setDetailError(null)
+    setSidePanelCollapsed(false)
+    setRailView("detail")
+  }, [])
+
+  const selectedGroup = useMemo(
+    () => (selectedGroupKey ? revCustomerGroups.find((group) => group.key === selectedGroupKey) ?? null : null),
+    [revCustomerGroups, selectedGroupKey],
+  )
   const revControlsDirty = Boolean(query.trim()) ||
     managerFilter !== "ALL" ||
     regionFilter !== "ALL" ||
@@ -2525,13 +3302,7 @@ export default function SalesLedgerWorkbench() {
         actual: value.actual,
         pct: value.goal > 0 ? (value.actual / value.goal) * 100 : 0,
       }))
-      .sort((a, b) => {
-        const aIndex = KPI_METRIC_ORDER.indexOf(a.metric)
-        const bIndex = KPI_METRIC_ORDER.indexOf(b.metric)
-        const safeA = aIndex === -1 ? KPI_METRIC_ORDER.length : aIndex
-        const safeB = bIndex === -1 ? KPI_METRIC_ORDER.length : bIndex
-        return safeA - safeB || compareText(a.metric, b.metric)
-      })
+      .sort(kpiMetricCompare)
   }, [members])
 
   const kpiActivityGoal = kpiActivityRows.reduce((sum, metric) => sum + metric.goal, 0)
@@ -2599,6 +3370,7 @@ export default function SalesLedgerWorkbench() {
 
   const loadDealDetail = useCallback(async (row: LedgerRevenueRow) => {
     setSelectedRow(row)
+    setSelectedGroupKey(null)
     setSidePanelCollapsed(false)
     setRailView("detail")
     setDetail(null)
@@ -2615,6 +3387,7 @@ export default function SalesLedgerWorkbench() {
       month: row.draftMonth ?? selectedMonth,
       fromMonth: metadataString(row.draftMetadata, "fromMonth") ?? row.draftMonth ?? selectedMonth,
       week: metadataString(row.draftMetadata, "week") ?? "month",
+      confidence: draftConfidenceFromMetadata(row.draftMetadata),
       amount: row.revenue ? String(Math.round(row.revenue)) : "",
       quantity: metadataNumberString(row.draftMetadata, "quantity"),
       note: row.draftNote ?? "",
@@ -2709,6 +3482,7 @@ export default function SalesLedgerWorkbench() {
         productCategory: draftForm.productCategory,
         fromMonth: draftForm.fromMonth,
         week: draftForm.week,
+        confidence: draftForm.confidence,
         quantity: draftForm.quantity.trim() ? safeAmount(draftForm.quantity) : null,
       },
     }
@@ -2735,10 +3509,11 @@ export default function SalesLedgerWorkbench() {
       customer: draft.customer,
       manager: draft.manager,
       team: draft.team || (team === "ALL" ? "BD" : team),
-      productCategory: isStoredProductCategory(draft.metadata?.productCategory) ? draft.metadata.productCategory : "unknown",
+      productCategory: draft.metadata?.productCategory === "hardware" ? "hardware" : "software",
       month: draft.month,
       fromMonth: metadataString(draft.metadata, "fromMonth") ?? draft.month,
       week: metadataString(draft.metadata, "week") ?? "month",
+      confidence: draftConfidenceFromMetadata(draft.metadata),
       amount: draft.amount ? String(Math.round(draft.amount)) : "",
       quantity: metadataNumberString(draft.metadata, "quantity"),
       note: draft.note,
@@ -2811,7 +3586,7 @@ export default function SalesLedgerWorkbench() {
   const draftAmountInvalid = !draftForm.amount.trim() || draftAmountValue <= 0
   const draftQuantityInvalid = draftForm.operation === "quantity-change" && draftForm.quantity.trim() !== "" && safeAmount(draftForm.quantity) <= 0
   const draftFormInvalid = !draftForm.customer.trim() || draftAmountInvalid || draftQuantityInvalid
-  const selectedProductCategory = selectedRow ? rowProductCategory(selectedRow) : "unknown"
+  const selectedProductCategory = selectedRow ? rowProductCategory(selectedRow) : "software"
   const selectedDraftOperation = DRAFT_OPERATIONS.find((item) => item.id === draftForm.operation) ?? DRAFT_OPERATIONS[0]
   const prepareDraftOperation = useCallback((operation: DraftOperation) => {
     const operationLabel = DRAFT_OPERATIONS.find((item) => item.id === operation)?.label ?? "입력"
@@ -3099,6 +3874,188 @@ export default function SalesLedgerWorkbench() {
                     {kpi.loading && !kpi.data ? <LoadingPanel label="KPI 데이터를 불러오는 중" /> : <MemberBarChart rows={members} />}
                   </section>
                 </div>
+
+                <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
+                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
+                        <CalendarDays className="h-4 w-4 text-[#084734]" />
+                        주간 마감 (Weekly Close)
+                      </p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-[#615D59]">
+                        스냅샷 두 개를 {formatMonthLabel(selectedMonth)} 기준으로 비교 — 신규/증액/감액/소멸과 확도 전환을 수치로 봅니다.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void captureWeeklySnapshot()}
+                      disabled={wcSnapshotting}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11.5px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60"
+                    >
+                      {wcSnapshotting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                      지금 스냅샷
+                    </button>
+                  </div>
+
+                  {(wcNotice || wcError) && (
+                    <div className={`mb-3 rounded-md border px-3 py-2 text-[11.5px] font-semibold ${
+                      wcError ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]" : "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                    }`}>
+                      {wcError ?? wcNotice}
+                    </div>
+                  )}
+
+                  {wcRuns.length < 2 ? (
+                    <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-5 text-[12px] leading-relaxed text-[#615D59]">
+                      저장된 스냅샷 {wcRuns.length.toLocaleString("ko-KR")}개 — 스냅샷이 2개 이상 쌓이면 주간 비교가 열립니다. 매주 같은 요일에
+                      &ldquo;지금 스냅샷&rdquo;을 눌러 상태를 기록하세요.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-[#615D59]">
+                        <label className="inline-flex items-center gap-1.5">
+                          기준
+                          <select
+                            value={wcBase}
+                            onChange={(event) => setWcBase(event.target.value)}
+                            className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11.5px] font-semibold text-[#111110] outline-none"
+                          >
+                            {wcRuns.map((run) => (
+                              <option key={run.id} value={run.id} disabled={run.id === wcHead}>
+                                {formatDateTime(run.startedAt)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <ChevronRight className="h-3.5 w-3.5 text-[#A39E98]" />
+                        <label className="inline-flex items-center gap-1.5">
+                          현재
+                          <select
+                            value={wcHead}
+                            onChange={(event) => setWcHead(event.target.value)}
+                            className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11.5px] font-semibold text-[#111110] outline-none"
+                          >
+                            {wcRuns.map((run) => (
+                              <option key={run.id} value={run.id} disabled={run.id === wcBase}>
+                                {formatDateTime(run.startedAt)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {wcLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#615D59]" />}
+                        {wcDiff && (
+                          <span className="ml-auto tabular-nums">
+                            합계 {formatMoney(wcDiff.baseTotal)} → {formatMoney(wcDiff.headTotal)}
+                            <span className={`ml-1.5 font-bold ${wcDiff.delta >= 0 ? "text-[#084734]" : "text-[#B43E3E]"}`}>
+                              {formatSignedMoney(wcDiff.delta)}
+                            </span>
+                          </span>
+                        )}
+                      </div>
+
+                      {wcDiff ? (
+                        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+                          <div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full min-w-[380px] text-right text-[11.5px] tabular-nums">
+                                <thead>
+                                  <tr className="text-[10px] uppercase tracking-[0.08em] text-[#615D59]">
+                                    <th className="py-1.5 pr-2 text-left font-bold">구분</th>
+                                    <th className="px-2 py-1.5 font-bold">건수</th>
+                                    <th className="px-2 py-1.5 font-bold">기준</th>
+                                    <th className="px-2 py-1.5 font-bold">현재</th>
+                                    <th className="py-1.5 pl-2 font-bold">Δ</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {WEEKLY_CLOSE_BUCKET_META.map((meta) => {
+                                    const bucket = wcDiff.buckets[meta.id]
+                                    return (
+                                      <tr key={meta.id} className="border-t border-[#F0F0EC]">
+                                        <td className={`py-2 pr-2 text-left font-bold ${meta.tone}`}>{meta.label}</td>
+                                        <td className="px-2 py-2 font-semibold text-[#615D59]">{bucket.count.toLocaleString("ko-KR")}</td>
+                                        <td className="px-2 py-2">{numberCell(bucket.baseAmount)}</td>
+                                        <td className="px-2 py-2">{numberCell(bucket.headAmount)}</td>
+                                        <td className={`py-2 pl-2 font-bold ${bucket.delta > 0 ? "text-[#084734]" : bucket.delta < 0 ? "text-[#B43E3E]" : "text-[#A39E98]"}`}>
+                                          {formatSignedMoney(bucket.delta)}
+                                        </td>
+                                      </tr>
+                                    )
+                                  })}
+                                  <tr className="border-t-2 border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] text-[12px]">
+                                    <td className="py-2 pr-2 text-left font-bold text-[#111110]">합계</td>
+                                    <td className="px-2 py-2 font-semibold text-[#615D59]">
+                                      {Object.values(wcDiff.buckets).reduce((sum, bucket) => sum + bucket.count, 0).toLocaleString("ko-KR")}
+                                    </td>
+                                    <td className="px-2 py-2">{numberCell(wcDiff.baseTotal)}</td>
+                                    <td className="px-2 py-2">{numberCell(wcDiff.headTotal)}</td>
+                                    <td className={`py-2 pl-2 font-bold ${wcDiff.delta >= 0 ? "text-[#084734]" : "text-[#B43E3E]"}`}>
+                                      {formatSignedMoney(wcDiff.delta)}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-[#615D59]">
+                              <span>
+                                확정 전환 <span className={`font-bold tabular-nums ${wcDiff.confirmedDelta >= 0 ? "text-[#084734]" : "text-[#B43E3E]"}`}>{formatSignedMoney(wcDiff.confirmedDelta)}</span>
+                              </span>
+                              <span>
+                                고확도 전환 <span className={`font-bold tabular-nums ${wcDiff.highConfidenceDelta >= 0 ? "text-[#1E5DA8]" : "text-[#B43E3E]"}`}>{formatSignedMoney(wcDiff.highConfidenceDelta)}</span>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <p className="mb-1.5 text-[11px] font-bold text-[#615D59]">변동 상위 {wcDiff.movers.length}건</p>
+                            {wcDiff.movers.length === 0 ? (
+                              <div className="rounded-md border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-3 text-[11px] text-[#615D59]">
+                                {formatMonthLabel(selectedMonth)}에 두 스냅샷 간 변동이 없습니다.
+                              </div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full min-w-[420px] text-right text-[11.5px] tabular-nums">
+                                  <thead>
+                                    <tr className="text-[10px] uppercase tracking-[0.08em] text-[#615D59]">
+                                      <th className="py-1.5 pr-2 text-left font-bold">고객</th>
+                                      <th className="px-2 py-1.5 text-left font-bold">담당</th>
+                                      <th className="px-2 py-1.5 font-bold">기준 → 현재</th>
+                                      <th className="py-1.5 pl-2 font-bold">Δ</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {wcDiff.movers.map((mover) => {
+                                      const meta = WEEKLY_CLOSE_BUCKET_META.find((item) => item.id === mover.bucket)
+                                      return (
+                                        <tr key={mover.key} className="border-t border-[#F0F0EC]">
+                                          <td className="max-w-[150px] truncate py-2 pr-2 text-left font-bold text-[#111110]">
+                                            {mover.account}
+                                            {meta && <span className={`ml-1.5 text-[9.5px] font-bold ${meta.tone}`}>{meta.label}</span>}
+                                          </td>
+                                          <td className="px-2 py-2 text-left text-[11px] text-[#615D59]">{mover.manager ?? "-"}</td>
+                                          <td className="px-2 py-2 font-semibold text-[#615D59]">
+                                            {formatMoney(mover.baseAmount)} → {formatMoney(mover.headAmount)}
+                                          </td>
+                                          <td className={`py-2 pl-2 font-bold ${mover.delta > 0 ? "text-[#084734]" : "text-[#B43E3E]"}`}>
+                                            {formatSignedMoney(mover.delta)}
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-4 text-[12px] text-[#615D59]">
+                          기준과 현재 스냅샷을 서로 다르게 선택하면 {formatMonthLabel(selectedMonth)} 비교 수치가 나옵니다.
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
               </div>
             )}
 
@@ -3107,12 +4064,46 @@ export default function SalesLedgerWorkbench() {
             <div className="border-b border-[rgba(0,0,0,0.08)] p-4">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <div>
-                  <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
-                    <FileSpreadsheet className="h-4 w-4 text-[#084734]" />
-                    REV 매출 행
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
+                      <FileSpreadsheet className="h-4 w-4 text-[#084734]" />
+                      REV 매출 행
+                    </p>
+                    <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMonth((month) => shiftMonth(month, -1))}
+                        aria-label="이전 달"
+                        title="이전 달"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                      >
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="min-w-[64px] px-1 text-center text-[12px] font-bold text-[#111110]">
+                        {formatMonthLabel(selectedMonth)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMonth((month) => shiftMonth(month, 1))}
+                        aria-label="다음 달"
+                        title="다음 달"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                      >
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {selectedMonth !== ymKeyUtc(new Date()) && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMonth(ymKeyUtc(new Date()))}
+                        className="text-[11px] font-bold text-[#084734] underline-offset-2 hover:underline"
+                      >
+                        이번 달로
+                      </button>
+                    )}
+                  </div>
                   <p className="mt-1 text-[11px] text-[#615D59]">
-                    검색 결과 {filteredRows.length.toLocaleString("ko-KR")}건 · {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")} 표시 · DB 신규 반영 {additiveAppliedDraftRows.length.toLocaleString("ko-KR")}건 포함
+                    검색 결과 {filteredRows.length.toLocaleString("ko-KR")}행 · 고객 {revCustomerGroups.length.toLocaleString("ko-KR")}곳 · {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")}곳 표시 · DB 신규 반영 {additiveAppliedDraftRows.length.toLocaleString("ko-KR")}건 포함
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -3188,6 +4179,16 @@ export default function SalesLedgerWorkbench() {
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
                     초기화
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleAllRevGroups}
+                    disabled={multiRowGroupKeys.length === 0}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label={allRevGroupsExpanded ? "고객 묶음 모두 접기" : "고객 묶음 모두 펼치기"}
+                  >
+                    <ChevronRight className={`h-3.5 w-3.5 transition-transform ${allRevGroupsExpanded ? "rotate-90" : ""}`} />
+                    {allRevGroupsExpanded ? "모두 접기" : "모두 펼치기"}
                   </button>
                 </div>
               </div>
@@ -3380,7 +4381,7 @@ export default function SalesLedgerWorkbench() {
                         피크 {revPeakWeek?.week ?? "-"} · {formatMoney(revPeakWeek?.total)}
                       </span>
                     </div>
-                    <RevWeekNumbersTable data={revWeekProjection} monthGoal={revMonthGoal} monthRowCount={revMonthRowCount} />
+                    <RevWeekNumbersTable data={revWeekProjection} month={selectedMonth} monthGoal={revMonthGoal} monthRowCount={revMonthRowCount} />
                   </section>
 
                   <div className="grid gap-4 xl:grid-cols-2">
@@ -3396,115 +4397,227 @@ export default function SalesLedgerWorkbench() {
                     </section>
                     <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
                       <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-[12px] font-bold text-[#111110]">상품군 추정 수치</p>
-                        <span className="text-[10.5px] font-bold text-[#615D59]">검수 보조</span>
+                        <p className="text-[12px] font-bold text-[#111110]">상품군 수치</p>
+                        <span className="text-[10.5px] font-bold text-[#615D59]">HW 판정 외 전부 SW</span>
                       </div>
                       <BreakdownNumbersTable rows={revProductTableRows} emptyLabel="선택 월에 상품군을 추정할 수 있는 REV 금액이 없습니다." />
                     </section>
                   </div>
                 </div>
 
-                <div className="space-y-3 p-3 md:hidden">
+                <div className="flex flex-wrap items-center gap-2 border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-2.5">
+                  <label className="relative min-w-[190px] flex-1 md:max-w-[300px]">
+                    <span className="sr-only">고객 테이블 검색</span>
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#A39E98]" />
+                    <input
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="고객, 담당자, 상태 검색"
+                      className="h-8 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-8 pr-2 text-[11.5px] font-semibold text-[#111110] outline-none transition focus:border-[#084734]"
+                    />
+                  </label>
+                  <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-white p-[2px]" aria-label="고객 테이블 상품군 필터">
+                    {REV_PRODUCT_FILTERS.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setProductFilter(item.id)}
+                        className={`rounded px-2 py-1 text-[10.5px] font-bold transition ${
+                          productFilter === item.id ? "bg-[#111110] text-white" : "text-[#615D59] hover:text-[#111110]"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                  <select
+                    value={managerFilter}
+                    onChange={(event) => setManagerFilter(event.target.value)}
+                    className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11.5px] font-semibold text-[#111110] outline-none"
+                    aria-label="고객 테이블 담당자 필터"
+                  >
+                    <option value="ALL">담당자 전체</option>
+                    {managerOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                  </select>
+                  <select
+                    value={regionFilter}
+                    onChange={(event) => setRegionFilter(event.target.value)}
+                    className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11.5px] font-semibold text-[#111110] outline-none"
+                    aria-label="고객 테이블 지역 필터"
+                  >
+                    <option value="ALL">지역 전체</option>
+                    {regionOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                  </select>
+                  <div className="flex flex-wrap items-center gap-1.5" aria-label="검수 인박스">
+                    {([
+                      ["week-mismatch", "불일치", revInboxCounts.weekMismatch, "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"],
+                      ["month-only", "월합계만", revInboxCounts.monthOnly, "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"],
+                      ["open", "예정 남음", revInboxCounts.open, "border-[#BFDBFE] bg-[#EFF6FF] text-[#1E5DA8]"],
+                    ] as Array<[RevForecastFilter, string, number, string]>).map(([id, label, count, tone]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setRevForecastFilter((current) => (current === id ? "all" : id))}
+                        aria-pressed={revForecastFilter === id}
+                        title={`${label} 행만 보기 (다시 누르면 해제)`}
+                        className={`inline-flex h-7 items-center gap-1 rounded-full border px-2 text-[10px] font-bold tabular-nums transition ${
+                          revForecastFilter === id ? "ring-2 ring-[#084734]/25" : ""
+                        } ${count > 0 ? tone : "border-[rgba(0,0,0,0.08)] bg-white text-[#A39E98]"}`}
+                      >
+                        {label} {count.toLocaleString("ko-KR")}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="ml-auto text-[10.5px] font-bold tabular-nums text-[#615D59]">
+                    고객 {revCustomerGroups.length.toLocaleString("ko-KR")}곳 · 행 {filteredRows.length.toLocaleString("ko-KR")}건
+                  </span>
+                  <button
+                    type="button"
+                    onClick={resetRevFilters}
+                    disabled={!revControlsDirty}
+                    className="inline-flex h-8 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[10.5px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+                    aria-label="고객 테이블 검색·필터 초기화"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    초기화
+                  </button>
+                </div>
+
+                <div className="space-y-2 p-3 md:hidden">
                   {filteredRows.length === 0 && (
                     <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-6 text-center text-[12px] text-[#615D59]">
                       조건에 맞는 REV 행이 없습니다.
                     </div>
                   )}
-                  {visibleRows.map((row) => {
-                    const active = selectedRow?.id === row.id
-                    const draftRow = row.ledgerOrigin === "draft"
-                    const productCategory = rowProductCategory(row)
-                    const weeklySplit = rowWeeklySplit(row, selectedMonth)
-                    const groupStats = visibleGroupStats.get(customerGroupKey(row.customer))
+                  {visibleGroups.map((group) => {
+                    const grouped = group.rows.length > 1
+                    const expanded = !grouped || expandedRevGroups.has(group.key)
                     return (
-                      <article
-                        key={row.id}
-                        className={`rounded-lg border p-3 transition ${
-                          active ? "border-[#BDEFD8] bg-[#ECFDF5]" : draftRow ? "border-[#ECD29C] bg-[#FFFCF5]" : "border-[rgba(0,0,0,0.08)] bg-white"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <button
-                              type="button"
-                              onClick={() => void loadDealDetail(row)}
-                              className="min-h-10 max-w-full text-left text-[13px] font-bold text-[#111110] underline-offset-2 hover:text-[#084734] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-                              aria-label={`${row.customer} 상세 열기`}
-                            >
-                              {row.customer}
-                            </button>
-                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                              <ProductCategoryPill category={productCategory} compact />
-                              <WeeklySourceBadge source={weeklySplit.source} />
-                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                                draftRow ? "bg-[#FBF1E0] text-[#7A520F]" : "bg-[#F6F5F4] text-[#615D59]"
-                              }`}>
-                                {draftRow ? "장부 입력" : "시트 원본"}
-                              </span>
-                            </div>
-                          </div>
-                          <p className="shrink-0 text-right text-[15px] font-bold text-[#111110]">
-                            {formatMoney(rowMonthAmount(row, selectedMonth) || row.revenue)}
-                          </p>
-                        </div>
-                        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_104px] gap-3">
-                          <div className="min-w-0 rounded-md bg-[#FAFAF8] p-2">
-                            <p className="truncate text-[11px] font-semibold text-[#615D59]">
-                              {[row.manager, row.team, row.region].filter(Boolean).join(" · ") || "-"}
-                            </p>
-                            <p className="mt-1 truncate text-[11px] font-semibold text-[#615D59]">
-                              {[row.status, row.dealType, row.productVersion].filter(Boolean).join(" · ") || "상세 분류 없음"}
-                            </p>
-                            {groupStats && groupStats.rows > 1 && (
-                              <p className="mt-2 text-[10.5px] font-bold text-[#615D59]">
-                                같은 고객 {groupStats.rows}건 · SW {formatMoney(groupStats.software)} · HW {formatMoney(groupStats.hardware)}
-                              </p>
-                            )}
-                          </div>
-                          <MiniWeekBars split={weeklySplit} />
-                        </div>
-                        <div className="mt-3 flex items-center justify-end">
+                      <article key={group.key} className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
+                        {grouped && (
                           <button
                             type="button"
-                            onClick={() => void loadDealDetail(row)}
-                            className="inline-flex min-h-10 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-                            aria-label={`${row.customer} 상세 열기`}
+                            onClick={() => toggleRevGroup(group.key)}
+                            aria-expanded={expanded}
+                            className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
                           >
-                            상세
-                            <ChevronRight className="h-3.5 w-3.5" />
+                            <span className="min-w-0">
+                              <span className="block truncate text-[13px] font-bold text-[#111110]">{group.customer}</span>
+                              <span className="mt-0.5 block text-[10.5px] font-semibold text-[#615D59]">
+                                {group.rows.length}건 · SW {formatMoney(group.categoryTotals.software)} · HW {formatMoney(group.categoryTotals.hardware)}
+                              </span>
+                            </span>
+                            <span className="flex shrink-0 items-center gap-2">
+                              <span className="text-[14px] font-bold tabular-nums text-[#111110]">{formatMoney(group.monthTotal || group.revenueTotal)}</span>
+                              <ChevronRight className={`h-4 w-4 text-[#615D59] transition-transform ${expanded ? "rotate-90" : ""}`} />
+                            </span>
                           </button>
-                        </div>
+                        )}
+                        {expanded &&
+                          group.rows.map((row) => {
+                            const view = revRowViews.get(row.id)
+                            if (!view) return null
+                            const { draftRow, productCategory, weeklySplit, monthAmount, mismatch } = view
+                            const active = selectedRow?.id === row.id
+                            return (
+                              <div
+                                key={row.id}
+                                className={`px-3 py-2.5 ${grouped ? "border-t border-[#F0F0EC]" : ""} ${
+                                  active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5]" : ""
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    {!grouped && (
+                                      <button
+                                        type="button"
+                                        onClick={() => void loadDealDetail(row)}
+                                        className="max-w-full truncate text-left text-[13px] font-bold text-[#111110] underline-offset-2 hover:text-[#084734] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                                        aria-label={`${row.customer} 상세 열기`}
+                                      >
+                                        {row.customer}
+                                      </button>
+                                    )}
+                                    <div className={`flex flex-wrap items-center gap-1.5 ${grouped ? "" : "mt-1"}`}>
+                                      <ProductCategoryPill category={productCategory} compact />
+                                      <WeeklySourceBadge source={weeklySplit.source} />
+                                      {draftRow && (
+                                        <span className="rounded-full bg-[#FBF1E0] px-2 py-0.5 text-[10px] font-bold text-[#7A520F]">장부 입력</span>
+                                      )}
+                                    </div>
+                                    <p className="mt-1 truncate text-[10.5px] font-semibold text-[#615D59]">
+                                      {[row.manager, row.team, row.region, row.status, row.dealType, row.productVersion].filter(Boolean).join(" · ") || "-"}
+                                    </p>
+                                  </div>
+                                  <div className="shrink-0 text-right">
+                                    <p className="text-[13px] font-bold tabular-nums text-[#111110]">
+                                      {formatMoney(monthAmount || row.revenue)}
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={() => void loadDealDetail(row)}
+                                      className="mt-1 inline-flex items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                                      aria-label={`${row.customer} 상세 열기`}
+                                    >
+                                      상세
+                                      <ChevronRight className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                                <div className="mt-1.5">
+                                  <WeekNumbersCell
+                                    weeks={weeklySplit.source === "explicit" || weeklySplit.source === "inferred" ? weeklySplit.weeks : [0, 0, 0, 0, 0]}
+                                    inferred={weeklySplit.source === "inferred"}
+                                    monthOnlyAmount={weeklySplit.source === "month-only" ? weeklySplit.total : 0}
+                                  />
+                                  {mismatch && (
+                                    <p className="mt-0.5 flex items-center justify-end gap-0.5 text-[9.5px] font-bold text-[#B43E3E]">
+                                      <AlertTriangle className="h-2.5 w-2.5" />
+                                      주차합 {formatWeekAmount(mismatch.weekly)} ≠ 월 {formatWeekAmount(mismatch.monthly)}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
                       </article>
                     )
                   })}
                 </div>
 
                 <div className="hidden overflow-x-auto md:block">
-                  <table className="min-w-[1080px] w-full text-left text-[12px]">
+                  <table className="min-w-[1280px] w-full text-left text-[12px]">
                     <thead className="bg-[#FAFAF8] text-[11px] uppercase tracking-[0.08em] text-[#615D59]">
                       <tr>
-                        <th className="px-4 py-3">
+                        <th className="sticky left-0 z-20 w-[220px] min-w-[220px] max-w-[220px] border-r border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 py-2">
                           <RevSortHeader label="고객/계정" sortKey="customer" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} />
                         </th>
-                        <th className="px-3 py-3">
+                        <th className="px-2 py-2">
                           <RevSortHeader label="상품" sortKey="product" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} />
                         </th>
-                        <th className="px-3 py-3">
+                        <th className="px-2 py-2">
                           <RevSortHeader label="담당자" sortKey="manager" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} />
                         </th>
-                        <th className="px-3 py-3">
+                        <th className="px-2 py-2">
                           <RevSortHeader label="팀" sortKey="team" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} />
                         </th>
-                        <th className="px-3 py-3">
+                        <th className="px-2 py-2">
                           <RevSortHeader label="지역" sortKey="region" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} />
                         </th>
-                        <th className="px-4 py-3 text-right">
+                        <th className="w-[190px] px-2 py-2">
+                          <div className="grid grid-cols-5 gap-1 text-right normal-case">
+                            {["W1", "W2", "W3", "W4", "W5"].map((week) => (
+                              <span key={week} className="text-[10px] font-bold">{week}</span>
+                            ))}
+                          </div>
+                        </th>
+                        <th className="px-3 py-2 text-right">
                           <RevSortHeader label={`${formatMonthLabel(selectedMonth)} 금액`} sortKey="month" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} align="right" />
                         </th>
-                        <th className="px-4 py-3 text-right">
+                        <th className="px-3 py-2 text-right">
                           <RevSortHeader label="실적" sortKey="revenue" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} align="right" />
                         </th>
-                        <th className="px-4 py-3 text-right">
+                        <th className="px-3 py-2 text-right">
                           <RevSortHeader label="상태" sortKey="origin" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} align="right" />
                         </th>
                       </tr>
@@ -3512,102 +4625,41 @@ export default function SalesLedgerWorkbench() {
                     <tbody>
                       {filteredRows.length === 0 && (
                         <tr>
-                          <td colSpan={8} className="px-4 py-12 text-center text-[#615D59]">
+                          <td colSpan={9} className="px-4 py-12 text-center text-[#615D59]">
                             조건에 맞는 REV 행이 없습니다.
                           </td>
                         </tr>
                       )}
-                      {visibleRows.map((row) => {
-                        const active = selectedRow?.id === row.id
-                        const draftRow = row.ledgerOrigin === "draft"
-                        const productCategory = rowProductCategory(row)
-                        const weeklySplit = rowWeeklySplit(row, selectedMonth)
-                        const monthAmount = rowMonthAmount(row, selectedMonth)
-                        const monthConfirmedAmount = rowMonthConfirmed(row, selectedMonth)
+                      {visibleGroups.map((group) => {
+                        const grouped = group.rows.length > 1
+                        const expanded = expandedRevGroups.has(group.key)
                         return (
-                          <tr
-                            key={row.id}
-                            className={`border-t border-[#F0F0EC] transition ${
-                              active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : "hover:bg-[#FAFAF8]"
-                            }`}
-                          >
-                            <td className="px-4 py-3">
-                              <div className="flex max-w-[340px] items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => void loadDealDetail(row)}
-                                  className="min-h-10 min-w-0 truncate text-left font-bold text-[#111110] underline-offset-2 hover:text-[#084734] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-                                  aria-label={`${row.customer} 상세 열기`}
-                                >
-                                  {row.customer}
-                                </button>
-                                <ProductCategoryPill category={productCategory} compact />
-                                {draftRow && (
-                                  <span className="shrink-0 rounded-full bg-[#FBF1E0] px-2 py-0.5 text-[10px] font-bold text-[#7A520F]">
-                                    장부 입력
-                                  </span>
-                                )}
-                              </div>
-                              {draftRow && (
-                                <p className="mt-1 max-w-[300px] truncate text-[10.5px] font-semibold text-[#7A520F]">
-                                  {row.draftKind === "edit-row" ? "수정 적용" : "신규 적용"} · {formatMonthLabel(row.draftMonth ?? selectedMonth)}
-                                  {row.draftNote ? ` · ${row.draftNote}` : ""}
-                                </p>
-                              )}
-                              {!draftRow && (row.status || row.dealType || row.productVersion) && (
-                                <p className="mt-1 max-w-[320px] truncate text-[10.5px] font-semibold text-[#615D59]">
-                                  {[row.status, row.dealType].filter(Boolean).join(" · ")}
-                                </p>
-                              )}
-                              <div className="mt-1">
-                                <WeeklySourceBadge source={weeklySplit.source} />
-                              </div>
-                            </td>
-                            <td className="px-3 py-3">
-                              <ProductCategoryPill category={productCategory} />
-                              <p className="mt-1 max-w-[150px] truncate text-[10.5px] font-semibold text-[#615D59]">
-                                {row.productVersion || metadataString(row.draftMetadata, "productCategory") || "-"}
-                              </p>
-                            </td>
-                            <td className="px-3 py-3 text-[#615D59]">{row.manager ?? "-"}</td>
-                            <td className="px-3 py-3">
-                              <span className="rounded-full bg-[#F6F5F4] px-2 py-1 text-[11px] font-bold text-[#615D59]">{row.team ?? "-"}</span>
-                            </td>
-                            <td className="px-3 py-3 text-[#615D59]">{row.region ?? "-"}</td>
-                            <td className="px-4 py-3 text-right tabular-nums">
-                              {monthAmount > 0 ? (
-                                <>
-                                  <p className="font-bold text-[#111110]">{formatMoney(monthAmount)}</p>
-                                  {monthConfirmedAmount > 0 ? (
-                                    <p className="mt-0.5 text-[10px] font-semibold text-[#084734]">확정 {formatMoney(monthConfirmedAmount)}</p>
-                                  ) : (
-                                    <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">미확정</p>
-                                  )}
-                                </>
-                              ) : (
-                                <span className="font-semibold text-[#C9C5BF]">–</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-right font-bold text-[#111110]">{formatMoney(row.revenue)}</td>
-                            <td className="px-4 py-3 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${
-                                  draftRow ? "bg-[#FBF1E0] text-[#7A520F]" : "bg-[#F6F5F4] text-[#615D59]"
-                                }`}>
-                                  {draftRow ? "장부 입력" : "시트 원본"}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => void loadDealDetail(row)}
-                                  className="inline-flex min-h-10 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] px-2.5 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-                                  aria-label={`${row.customer} 상세 열기`}
-                                >
-                                  열기
-                                  <ChevronRight className="h-3 w-3" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
+                          <Fragment key={group.key}>
+                            {grouped && (
+                              <RevGroupHeaderRow
+                                group={group}
+                                expanded={expanded}
+                                selected={selectedGroup?.key === group.key}
+                                onSelect={selectRevGroup}
+                                onToggle={toggleRevGroup}
+                              />
+                            )}
+                            {(!grouped || expanded) &&
+                              group.rows.map((row) => {
+                                const view = revRowViews.get(row.id)
+                                if (!view) return null
+                                return (
+                                  <RevDetailRow
+                                    key={row.id}
+                                    view={view}
+                                    grouped={grouped}
+                                    active={selectedRow?.id === row.id}
+                                    selectedMonth={selectedMonth}
+                                    onOpen={loadDealDetail}
+                                  />
+                                )
+                              })}
+                          </Fragment>
                         )
                       })}
                     </tbody>
@@ -3615,7 +4667,7 @@ export default function SalesLedgerWorkbench() {
                 </div>
                 <div className="flex flex-col gap-3 border-t border-[rgba(0,0,0,0.08)] px-4 py-3 text-[12px] text-[#615D59] sm:flex-row sm:items-center sm:justify-between">
                   <p className="font-semibold">
-                    {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")} / {filteredRows.length.toLocaleString("ko-KR")}건
+                    {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")} / 고객 {revCustomerGroups.length.toLocaleString("ko-KR")}곳 · 행 {filteredRows.length.toLocaleString("ko-KR")}건
                   </p>
                   <div className="flex items-center gap-2">
                     <button
@@ -4005,9 +5057,99 @@ export default function SalesLedgerWorkbench() {
               <p className="mt-1 text-[11px] text-[#615D59]">REV 행 선택 시 월별 금액과 수정 초안 입력</p>
             </div>
             <div className="p-4">
-              {!selectedRow ? (
+              {selectedGroup && !selectedRow ? (
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="min-w-0 truncate text-[15px] font-bold tracking-[-0.01em] text-[#111110]">{selectedGroup.customer}</p>
+                    <span className="shrink-0 rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] font-bold text-[#084734]">
+                      {selectedGroup.rows.length}건 통합
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] font-semibold text-[#615D59]">
+                    {[selectedGroup.managers.join(", "), selectedGroup.teams.join("·"), selectedGroup.regions.join("·")]
+                      .filter(Boolean)
+                      .join(" · ") || "-"}
+                  </p>
+                  <div className="mt-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-[11.5px] font-bold text-[#111110]">HW+SW 합산 · {formatMonthLabel(selectedMonth)}</p>
+                      <span className="text-[10px] font-bold text-[#615D59]">선택 월</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      {selectedGroup.categories.map((category) => (
+                        <div key={category} className="flex items-center justify-between gap-2 text-[11px]">
+                          <ProductCategoryPill category={category} compact />
+                          <span className="font-bold tabular-nums text-[#111110]">{formatMoney(selectedGroup.categoryTotals[category])}</span>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between gap-2 border-t border-[rgba(0,0,0,0.08)] pt-1.5 text-[11.5px]">
+                        <span className="font-bold text-[#615D59]">월 합계</span>
+                        <span className="font-bold tabular-nums text-[#111110]">{formatMoney(selectedGroup.monthTotal)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 text-[11px]">
+                        <span className="font-semibold text-[#615D59]">확정</span>
+                        <span className="font-bold tabular-nums text-[#084734]">{formatMoney(selectedGroup.monthConfirmed)}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 text-[11px]">
+                        <span className="font-semibold text-[#615D59]">실적 합계</span>
+                        <span className="font-bold tabular-nums text-[#111110]">{formatMoney(selectedGroup.revenueTotal)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-[11.5px] font-bold text-[#111110]">주차 합산</p>
+                      {selectedGroup.mismatchCount > 0 && (
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FCE9E9] px-1.5 py-0.5 text-[10px] font-bold text-[#B43E3E]">
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          불일치 {selectedGroup.mismatchCount}행
+                        </span>
+                      )}
+                    </div>
+                    <div className="mb-1 grid grid-cols-5 gap-1 text-right text-[9.5px] font-bold text-[#A39E98]">
+                      {["W1", "W2", "W3", "W4", "W5"].map((week) => (
+                        <span key={week}>{week}</span>
+                      ))}
+                    </div>
+                    <WeekNumbersCell
+                      weeks={selectedGroup.weeks}
+                      inferred={!selectedGroup.hasExplicitWeeks}
+                      monthOnlyAmount={selectedGroup.monthOnlyAmount}
+                    />
+                    {selectedGroup.monthOnlyAmount > 0 && selectedGroup.weeks.some((value) => value > 0) && (
+                      <p className="mt-1 text-right text-[9.5px] font-semibold text-[#7A520F]">+월합계만 {formatWeekAmount(selectedGroup.monthOnlyAmount)}</p>
+                    )}
+                  </div>
+                  <div className="mt-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
+                    <p className="border-b border-[rgba(0,0,0,0.08)] px-3 py-2 text-[11.5px] font-bold text-[#111110]">구성 행 {selectedGroup.rows.length}건</p>
+                    <div className="max-h-[260px] overflow-y-auto">
+                      {selectedGroup.rows.map((row) => (
+                        <button
+                          key={row.id}
+                          type="button"
+                          onClick={() => void loadDealDetail(row)}
+                          className="flex w-full items-center justify-between gap-2 border-t border-[#F0F0EC] px-3 py-2 text-left transition first:border-t-0 hover:bg-[#FAFAF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/30"
+                        >
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <ProductCategoryPill category={rowProductCategory(row)} compact />
+                            <span className="min-w-0 truncate text-[11px] font-semibold text-[#615D59]">
+                              {row.productVersion || row.dealType || row.status || "-"}
+                            </span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-1.5">
+                            <span className="text-[11.5px] font-bold tabular-nums text-[#111110]">
+                              {formatMoney(rowMonthAmount(row, selectedMonth) || row.revenue)}
+                            </span>
+                            <ChevronRight className="h-3 w-3 text-[#A39E98]" />
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : !selectedRow ? (
                 <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-4 text-[12px] leading-relaxed text-[#615D59]">
-                  왼쪽 REV 행을 선택하면 상세 데이터, 월별 금액, 담당자 KPI와 수정 입력 폼이 열립니다.
+                  왼쪽 REV 행을 선택하면 상세 데이터, 월별 금액, 담당자 KPI와 수정 입력 폼이 열립니다. 고객 묶음 헤더를 누르면 HW+SW 통합 요약이 열립니다.
                 </div>
               ) : detailLoading ? (
                 <LoadingPanel label="행 상세를 불러오는 중" />
@@ -4285,6 +5427,33 @@ export default function SalesLedgerWorkbench() {
                     {[1, 2, 3, 4, 5].map((week) => <option key={week} value={`w${week}`}>W{week}</option>)}
                   </select>
                 </label>
+              </div>
+              <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
+                <p className="mb-1.5 text-[11px] font-bold text-[#615D59]">확도</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {DRAFT_CONFIDENCE_OPTIONS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setDraftForm((current) => ({ ...current, confidence: option.id }))}
+                      aria-pressed={draftForm.confidence === option.id}
+                      className={`min-h-8 rounded-md px-2 py-1 text-[11px] font-bold transition ${
+                        draftForm.confidence === option.id
+                          ? option.id === "confirmed"
+                            ? "bg-[#084734] text-white"
+                            : option.id === "high-confidence"
+                              ? "bg-[#1E5DA8] text-white"
+                              : "bg-[#A8741A] text-white"
+                          : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[10.5px] leading-relaxed text-[#615D59]">
+                  초안 적용 시 확도가 함께 기록됩니다. 예정 → 고확도 → 확정 전환도 이 폼으로 남깁니다.
+                </p>
               </div>
               {draftForm.operation === "period-shift" && (
                 <label className="block text-[11px] font-bold text-[#615D59]">

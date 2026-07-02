@@ -85,13 +85,64 @@ export function classifySalesLedgerProductCategory(
     softwareScore += scoreText(text, SOFTWARE_PATTERNS) * item.weight
   }
 
-  if (hardwareScore < MIN_CATEGORY_SCORE && softwareScore < MIN_CATEGORY_SCORE) return "unknown"
-  if (hardwareScore === softwareScore) return "unknown"
-  return hardwareScore > softwareScore ? "hardware" : "software"
+  // Operating rule: only rows with a clear hardware signal are hardware; everything
+  // else is software (subscription/recharge variants are still software revenue).
+  // "unknown" stays in the type union only for legacy stored metadata.
+  if (hardwareScore >= MIN_CATEGORY_SCORE && hardwareScore > softwareScore) return "hardware"
+  return "software"
 }
 
 export function classifySalesLedgerProductCategoryFromText(
   ...values: unknown[]
 ): SalesLedgerProductCategory {
   return classifySalesLedgerProductCategory({ rawText: values })
+}
+
+// Software subtypes: subscription vs recharge/consumption billing rhythms.
+// Non-hardware revenue is all software, but the product numbers view splits
+// these rhythms apart. Falls back to "other" when signals are absent or tied.
+export type SalesLedgerSoftwareSubtype = "subscription" | "recharge" | "other"
+
+const SUBSCRIPTION_PATTERNS: PatternScore[] = [
+  { pattern: /(subscription|annual\s*(plan|seat)?|yearly|license|licence|seat|learning\s*space|business\s*plan)/i, score: 3 },
+  {
+    // Korean: subscription/annual/license/licence/seat/recurring/plan keywords, ASCII-escaped.
+    pattern:
+      /(\uAD6C\uB3C5|\uC5F0\uAC04|\uB77C\uC774\uC120\uC2A4|\uB77C\uC774\uC13C\uC2A4|\uC88C\uC11D|\uC815\uAE30|\uD50C\uB79C)/,
+    score: 3,
+  },
+]
+
+const RECHARGE_PATTERNS: PatternScore[] = [
+  { pattern: /(consumption|recharge|prepaid|top\s*-?up|credit|coin|point|pay\s*as\s*you\s*go)/i, score: 3 },
+  {
+    // Korean: recharge/consumption/point/credit/prepaid/metered keywords, ASCII-escaped.
+    pattern:
+      /(\uCDA9\uC804|\uC18C\uBE44|\uD3EC\uC778\uD2B8|\uD06C\uB808\uB527|\uC120\uBD88|\uC885\uB7C9)/,
+    score: 3,
+  },
+]
+
+export function classifySalesLedgerSoftwareSubtype(
+  input: SalesLedgerProductCategoryInput,
+): SalesLedgerSoftwareSubtype {
+  const texts: WeightedText[] = [
+    { value: input.product, weight: 2 },
+    { value: input.account, weight: 1 },
+    { value: input.rawText, weight: 1 },
+  ]
+
+  let subscriptionScore = 0
+  let rechargeScore = 0
+
+  for (const item of texts) {
+    const text = normalizeText(item.value)
+    if (!text) continue
+    subscriptionScore += scoreText(text, SUBSCRIPTION_PATTERNS) * item.weight
+    rechargeScore += scoreText(text, RECHARGE_PATTERNS) * item.weight
+  }
+
+  if (subscriptionScore < MIN_CATEGORY_SCORE && rechargeScore < MIN_CATEGORY_SCORE) return "other"
+  if (subscriptionScore === rechargeScore) return "other"
+  return subscriptionScore > rechargeScore ? "subscription" : "recharge"
 }

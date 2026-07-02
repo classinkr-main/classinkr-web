@@ -70,6 +70,12 @@ function normalizedWeeklyPayments(value: unknown): Record<string, number[]> | nu
   return Object.keys(weekly).length > 0 ? weekly : null
 }
 
+// deal.raw.weeklyPayments가 정석 경로 — lib/branch/parsers/rev.ts의 parseRev가 헤더로
+// 찾은 실제 주차 열(block.weekIdxs)에서 직접 읽어 raw에 실어 보낸다(항상 monthly_payments와
+// 정합). 아래 고정 오프셋 재추정은 그 필드가 없는 "재동기화 전" 레거시 DB 행에 대한
+// 하위호환 폴백일 뿐이다 — 모든 월 블록이 4월~3월 순서로 예외 없이 6칸(합계1+주차5)
+// 연속 배치돼 있다고 가정하므로, 시트가 그 가정과 어긋나면 그 뒤 월들의 주차 값이
+// 통째로 밀려 읽힌다. 재동기화하면 이 폴백은 더 이상 타지 않는다.
 function weeklyPaymentsFromRaw(deal: BranchRevDeal): Record<string, number[]> {
   const importedWeekly = normalizedWeeklyPayments(deal.raw?.weeklyPayments)
   if (importedWeekly) return importedWeekly

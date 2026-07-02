@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   classifySalesLedgerProductCategory,
   classifySalesLedgerProductCategoryFromText,
+  classifySalesLedgerSoftwareSubtype,
 } from "../../lib/branch/product-category"
 
 describe("classifySalesLedgerProductCategory", () => {
@@ -57,14 +58,39 @@ describe("classifySalesLedgerProductCategory", () => {
     ).toBe("software")
   })
 
-  it("returns unknown for empty or generic REV text", () => {
-    expect(classifySalesLedgerProductCategory({})).toBe("unknown")
+  it("falls back to software for empty or generic REV text (HW 아니면 SW 규칙)", () => {
+    expect(classifySalesLedgerProductCategory({})).toBe("software")
     expect(
       classifySalesLedgerProductCategory({
         product: "v2",
         account: "Sunrise Academy",
         rawText: "renewal memo",
       }),
-    ).toBe("unknown")
+    ).toBe("software")
+  })
+
+  it("keeps hardware when hardware signals outrank software signals", () => {
+    expect(
+      classifySalesLedgerProductCategory({
+        product: "86 IFP whiteboard + ClassIn license bundle",
+      }),
+    ).toBe("hardware")
+  })
+})
+
+describe("classifySalesLedgerSoftwareSubtype", () => {
+  it("classifies subscription from English and Korean cues", () => {
+    expect(classifySalesLedgerSoftwareSubtype({ product: "ClassIn annual subscription 120 seats" })).toBe("subscription")
+    expect(classifySalesLedgerSoftwareSubtype({ product: "연간 구독 50계정" })).toBe("subscription")
+  })
+
+  it("classifies recharge from consumption cues", () => {
+    expect(classifySalesLedgerSoftwareSubtype({ product: "Business Consumption" })).toBe("recharge")
+    expect(classifySalesLedgerSoftwareSubtype({ product: "포인트 충전" })).toBe("recharge")
+  })
+
+  it("falls back to other when signals are absent", () => {
+    expect(classifySalesLedgerSoftwareSubtype({ product: "Nobook" })).toBe("other")
+    expect(classifySalesLedgerSoftwareSubtype({})).toBe("other")
   })
 })

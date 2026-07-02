@@ -23,7 +23,7 @@ describe("public FAQ CS Figma usage entries", () => {
         expect.objectContaining({
           question: "코스 QR 초대 링크는 어디서 활성화하나요?",
           answer: expect.stringContaining("코스 가입 허용"),
-          guideHref: "/docs/admin/cs-figma-digest-1197",
+          guideHref: "/docs/admin/cs-figma-digest-1195",
         }),
       ])
     )

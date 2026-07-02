@@ -25,7 +25,7 @@ describe("chatbot RAG source relevance", () => {
 
     expect(result.detectedCategory).toBe("onboarding")
     expect(result.sources[0]).toMatchObject({
-      title: "Classin을 학원 시스템 OS로 이해하기",
+      title: "Classin을 수업 시스템 OS로 이해하기",
       heading: "핵심 포지셔닝",
       urlPath: "/docs/start/academy-system-os-positioning",
     })
@@ -48,7 +48,7 @@ describe("chatbot RAG source relevance", () => {
 
       expect(result.detectedCategory).toBe("onboarding")
       expect(result.sources[0]).toMatchObject({
-        title: "Classin을 학원 시스템 OS로 이해하기",
+        title: "Classin을 수업 시스템 OS로 이해하기",
         heading: "핵심 포지셔닝",
         urlPath: "/docs/start/academy-system-os-positioning",
       })
@@ -75,7 +75,7 @@ describe("chatbot RAG source relevance", () => {
 
       expect(result.detectedCategory).toBe("onboarding")
       expect(result.sources[0]).toMatchObject({
-        title: "Classin을 학원 시스템 OS로 이해하기",
+        title: "Classin을 수업 시스템 OS로 이해하기",
         heading: "Classin 한 줄 소개",
         urlPath: "/docs/start/academy-system-os-positioning",
       })
@@ -405,7 +405,7 @@ describe("chatbot RAG source relevance", () => {
 
     expect(result.detectedCategory).toBe("admin")
     expect(result.sources[0]).toMatchObject({
-      title: "Classin을 학원 시스템 OS로 이해하기",
+      title: "Classin을 수업 시스템 OS로 이해하기",
       heading: "API와 정직한 연동 범위",
       urlPath: "/docs/start/academy-system-os-positioning",
     })

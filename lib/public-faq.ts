@@ -143,7 +143,7 @@ export const PUBLIC_FAQ_CATEGORIES: PublicFaqCategory[] = [
         question: "코스 QR 초대 링크는 어디서 활성화하나요?",
         answer:
           "PC 코스 화면 좌측 상단의 코스 이름을 클릭한 뒤 코스 설정으로 들어갑니다. 코스 설정 페이지에서 코스 관리를 선택하고, 코스 관리 안의 코스 가입 허용 옵션을 활성화합니다. 이후 학생에게 QR 또는 초대 링크를 전달하면 코스 가입 안내가 가능합니다.",
-        guideHref: "/docs/admin/cs-figma-digest-1197",
+        guideHref: "/docs/admin/cs-figma-digest-1195",
       },
       {
         question: "학생이 모바일에서 숙제를 사진으로 업로드하려면 어떻게 하나요?",

@@ -1,5 +1,7 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
+
 import type { DshBreakdownRow, DshOutput, DshRow } from "@/lib/branch/parsers/dsh"
 import { KPI_METRICS, type KpiBlocks, type KpiMetric, type KpiPair, type KpiRow } from "@/lib/branch/parsers/kpi"
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
@@ -12,10 +14,6 @@ type SalesLedgerTabKey = "dsh" | "rev" | "kpi"
 
 interface ActiveSourceRow {
   import_run_id: string
-}
-
-interface ImportRunStatusRow {
-  status: string
 }
 
 interface DshDbRow {
@@ -90,6 +88,29 @@ function isMissingSalesLedgerImportTableError(error: { code?: string; message?: 
   )
 }
 
+const FETCH_PAGE_SIZE = 1000
+
+type PostgrestErrorish = { code?: string; message?: string; details?: string; hint?: string }
+
+// PostgREST(Supabase)는 요청당 반환 행 수를 기본 1000으로 캡한다. import_run 단위 전량
+// 조회(rev period entries는 행×월×주차라 한 해가 차면 수천 행)가 캡에 걸리면 에러 없이
+// 잘려 월 합계가 조용히 틀어진다 — 짧은 페이지가 나올 때까지 range로 이어 읽는다.
+// buildQuery는 매 페이지 새 쿼리를 만들어야 하며(빌더는 1회용), 안정적 페이징을 위해
+// 반드시 결정적 order를 포함해야 한다.
+async function fetchAllRows<T>(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: PostgrestErrorish | null }>,
+): Promise<{ rows: T[]; error: PostgrestErrorish | null }> {
+  const rows: T[] = []
+  for (let from = 0; ; from += FETCH_PAGE_SIZE) {
+    const { data, error } = await buildQuery(from, from + FETCH_PAGE_SIZE - 1)
+    if (error) return { rows: [], error }
+    const page = (data ?? []) as T[]
+    rows.push(...page)
+    if (page.length < FETCH_PAGE_SIZE) break
+  }
+  return { rows, error: null }
+}
+
 function toNumber(value: number | string | null | undefined) {
   const numeric = Number(value ?? 0)
   return Number.isFinite(numeric) ? numeric : 0
@@ -116,13 +137,18 @@ function addWeeklyPayment(target: Record<string, number[]>, month: string, weekL
   target[month] = values
 }
 
-async function getActiveImportRunId(tabKey: SalesLedgerTabKey, fiscalYear: number): Promise<string | null> {
+// 액티브 임포트 포인터 조회는 summary/kpi/pipeline이 요청마다 부르는 핫패스다.
+// ①run 상태 확인을 inner join으로 합쳐 왕복 1회로, ②60초 unstable_cache로 감싸
+// "임포트 없음(null)"이 대부분인 현재 상태에서 요청당 Supabase 왕복을 없앤다.
+// 액티브 소스 전환(임포트 스크립트)은 앱 밖에서 일어나므로 최대 60초 지연 허용.
+async function lookupActiveImportRunId(tabKey: SalesLedgerTabKey, fiscalYear: number): Promise<string | null> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("sales_ledger_active_sources")
-    .select("import_run_id")
+    .select("import_run_id, sales_ledger_import_runs!inner(status)")
     .eq("tab_key", tabKey)
     .eq("fiscal_year", fiscalYear)
+    .eq("sales_ledger_import_runs.status", "succeeded")
     .maybeSingle()
 
   if (error) {
@@ -130,22 +156,17 @@ async function getActiveImportRunId(tabKey: SalesLedgerTabKey, fiscalYear: numbe
     throw new Error(`[sales-ledger-imports] active source lookup failed: ${error.message}`)
   }
 
-  const importRunId = (data as ActiveSourceRow | null)?.import_run_id ?? null
-  if (!importRunId) return null
+  return (data as ActiveSourceRow | null)?.import_run_id ?? null
+}
 
-  const { data: run, error: runError } = await supabase
-    .from("sales_ledger_import_runs")
-    .select("status")
-    .eq("id", importRunId)
-    .eq("status", "succeeded")
-    .maybeSingle()
+const getCachedActiveImportRunId = unstable_cache(
+  async (tabKey: SalesLedgerTabKey, fiscalYear: number) => lookupActiveImportRunId(tabKey, fiscalYear),
+  ["sales-ledger-active-import-run"],
+  { revalidate: 60, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG] },
+)
 
-  if (runError) {
-    if (isMissingSalesLedgerImportTableError(runError)) return null
-    throw new Error(`[sales-ledger-imports] active import run status check failed: ${runError.message}`)
-  }
-
-  return (run as ImportRunStatusRow | null)?.status === "succeeded" ? importRunId : null
+async function getActiveImportRunId(tabKey: SalesLedgerTabKey, fiscalYear: number): Promise<string | null> {
+  return getCachedActiveImportRunId(tabKey, fiscalYear)
 }
 
 export async function readDshFromActiveImport(fiscalYear: number): Promise<DshOutput | null> {
@@ -153,10 +174,14 @@ export async function readDshFromActiveImport(fiscalYear: number): Promise<DshOu
   if (!importRunId) return null
 
   const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase
-    .from("branch_dsh_rows")
-    .select("row_level,row_kind,team,member,category,status_type,channel,annual,q1,q2,q3,q4,months")
-    .eq("import_run_id", importRunId)
+  const { rows: data, error } = await fetchAllRows<DshDbRow>((from, to) =>
+    supabase
+      .from("branch_dsh_rows")
+      .select("row_level,row_kind,team,member,category,status_type,channel,annual,q1,q2,q3,q4,months")
+      .eq("import_run_id", importRunId)
+      .order("id")
+      .range(from, to),
+  )
 
   if (error) {
     if (isMissingSalesLedgerImportTableError(error)) return null
@@ -167,7 +192,7 @@ export async function readDshFromActiveImport(fiscalYear: number): Promise<DshOu
   const members: Record<string, string> = {}
   const breakdown: DshBreakdownRow[] = []
 
-  for (const row of (data ?? []) as DshDbRow[]) {
+  for (const row of data) {
     if (row.row_kind !== "goal" && row.row_kind !== "status") continue
     const months = row.months ?? {}
     if (row.row_level === "breakdown") {
@@ -210,26 +235,29 @@ export async function readRevDealsFromActiveImport(
   if (!importRunId) return null
 
   const supabase = createSupabaseAdminClient()
-  let lineQuery = supabase
-    .from("branch_rev_lines")
-    .select("id,source_row,source_record_key,account_name,branch_contact,location,scale,importance,team,manager,status,deal_type,product,first_payment,remark,total_amount,raw,created_at")
-    .eq("import_run_id", importRunId)
-
-  if (filter?.team && filter.team !== "ALL") lineQuery = lineQuery.eq("team", filter.team)
-
-  const { data: lineData, error: lineError } = await lineQuery
+  const { rows: lines, error: lineError } = await fetchAllRows<RevLineDbRow>((from, to) => {
+    let lineQuery = supabase
+      .from("branch_rev_lines")
+      .select("id,source_row,source_record_key,account_name,branch_contact,location,scale,importance,team,manager,status,deal_type,product,first_payment,remark,total_amount,raw,created_at")
+      .eq("import_run_id", importRunId)
+    if (filter?.team && filter.team !== "ALL") lineQuery = lineQuery.eq("team", filter.team)
+    return lineQuery.order("source_row").range(from, to)
+  })
   if (lineError) {
     if (isMissingSalesLedgerImportTableError(lineError)) return null
     throw new Error(`[sales-ledger-imports] REV line import read failed: ${lineError.message}`)
   }
 
-  const lines = (lineData ?? []) as RevLineDbRow[]
   if (lines.length === 0) return null
 
-  const { data: entryData, error: entryError } = await supabase
-    .from("branch_rev_period_entries")
-    .select("rev_line_id,period_month,amount,confidence,source_week")
-    .eq("import_run_id", importRunId)
+  const { rows: entryData, error: entryError } = await fetchAllRows<RevPeriodEntryDbRow>((from, to) =>
+    supabase
+      .from("branch_rev_period_entries")
+      .select("rev_line_id,period_month,amount,confidence,source_week")
+      .eq("import_run_id", importRunId)
+      .order("id")
+      .range(from, to),
+  )
 
   if (entryError) {
     if (isMissingSalesLedgerImportTableError(entryError)) return null
@@ -237,7 +265,7 @@ export async function readRevDealsFromActiveImport(
   }
 
   const entriesByLineId = new Map<string, RevPeriodEntryDbRow[]>()
-  for (const entry of (entryData ?? []) as RevPeriodEntryDbRow[]) {
+  for (const entry of entryData) {
     const entries = entriesByLineId.get(entry.rev_line_id) ?? []
     entries.push(entry)
     entriesByLineId.set(entry.rev_line_id, entries)
@@ -347,27 +375,41 @@ export async function readKpiBlocksFromActiveImport(fiscalYear: number): Promise
   if (!importRunId) return null
 
   const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase
-    .from("branch_kpi_rows")
-    .select("period_key,period_month,row_kind,team,member,metrics")
-    .eq("import_run_id", importRunId)
+  const { rows: dbRows, error } = await fetchAllRows<KpiDbRow>((from, to) =>
+    supabase
+      .from("branch_kpi_rows")
+      .select("period_key,period_month,row_kind,team,member,metrics")
+      .eq("import_run_id", importRunId)
+      .order("id")
+      .range(from, to),
+  )
 
   if (error) {
     if (isMissingSalesLedgerImportTableError(error)) return null
     throw new Error(`[sales-ledger-imports] KPI import read failed: ${error.message}`)
   }
 
-  const dbRows = (data ?? []) as KpiDbRow[]
   if (dbRows.length === 0) return null
 
-  const fyRows = dbRows.filter((row) => !row.period_month)
-  const months: Record<number, KpiRow[]> = {}
+  // period_month별로 한 번만 버킷팅 — 기존 구현은 행마다 전체 filter + rowsToKpiRows를
+  // 반복 계산(O(n²))했고 같은 월을 여러 번 다시 만들었다.
+  const fyRows: KpiDbRow[] = []
+  const rowsByMonth = new Map<number, KpiDbRow[]>()
   for (const row of dbRows) {
-    if (!row.period_month) continue
+    if (!row.period_month) {
+      fyRows.push(row)
+      continue
+    }
     const month = Number(row.period_month.slice(5, 7))
     if (!Number.isFinite(month)) continue
-    const rowsForMonth = dbRows.filter((candidate) => candidate.period_month === row.period_month)
-    months[month] = rowsToKpiRows(rowsForMonth)
+    const bucket = rowsByMonth.get(month)
+    if (bucket) bucket.push(row)
+    else rowsByMonth.set(month, [row])
+  }
+
+  const months: Record<number, KpiRow[]> = {}
+  for (const [month, rows] of rowsByMonth) {
+    months[month] = rowsToKpiRows(rows)
   }
 
   return {
