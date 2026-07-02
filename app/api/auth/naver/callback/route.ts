@@ -41,12 +41,23 @@ function getSafeNextUrl(req: NextRequest) {
   }
 }
 
+function clearOAuthCookies(response: NextResponse) {
+  const options = {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  }
+  response.cookies.set(STATE_COOKIE, "", options)
+  response.cookies.set(NEXT_COOKIE, "", options)
+}
+
 function redirectWithError(req: NextRequest, code: string) {
   const nextUrl = getSafeNextUrl(req)
   nextUrl.searchParams.set("auth_error", code)
   const response = NextResponse.redirect(nextUrl)
-  response.cookies.set(STATE_COOKIE, "", { maxAge: 0, path: "/" })
-  response.cookies.set(NEXT_COOKIE, "", { maxAge: 0, path: "/" })
+  clearOAuthCookies(response)
   return response
 }
 
@@ -203,8 +214,7 @@ export async function GET(req: NextRequest) {
 
   const nextUrl = getSafeNextUrl(req)
   const response = NextResponse.redirect(nextUrl)
-  response.cookies.set(STATE_COOKIE, "", { maxAge: 0, path: "/" })
-  response.cookies.set(NEXT_COOKIE, "", { maxAge: 0, path: "/" })
+  clearOAuthCookies(response)
 
   try {
     const accessToken = await exchangeNaverCode(req, code, state)

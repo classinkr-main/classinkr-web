@@ -14,6 +14,12 @@ export async function signOutAdminSession(logContext: string) {
   }
 
   const res = NextResponse.json({ ok: true })
-  res.cookies.set("admin_session", "", { maxAge: 0, path: "/" })
+  res.cookies.set("admin_session", "", {
+    httpOnly: true,
+    maxAge: 0,
+    path: "/",
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+  })
   return res
 }

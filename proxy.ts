@@ -168,7 +168,13 @@ function redirectToAdminLogin(request: NextRequest) {
   url.pathname = ADMIN_LOGIN_PATH
   url.search = ""
   const response = NextResponse.redirect(url)
-  response.cookies.set("admin_session", "", { maxAge: 0, path: "/" })
+  response.cookies.set("admin_session", "", {
+    httpOnly: true,
+    maxAge: 0,
+    path: "/",
+    sameSite: "strict",
+    secure: process.env.NODE_ENV === "production",
+  })
   return response
 }
 
