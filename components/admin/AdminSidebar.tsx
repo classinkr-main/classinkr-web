@@ -25,6 +25,7 @@ import {
   MessageSquare,
   MoreHorizontal,
   PackageCheck,
+  ReceiptText,
   Search,
   Settings,
   SquareChevronLeft,
@@ -82,6 +83,7 @@ const NAV: NavItem[] = [
   { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/traffic", label: "방문자/트래픽", icon: <Eye className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
   { href: "/admin/branch", label: "KR Team", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
+  { href: "/admin/branch/ledger", label: "매출 장부", icon: <ReceiptText className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance", badge: "MVP" },
 
   // 운영·시스템
   { href: "/admin/ops", label: "Ops Health", icon: <Activity className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "New" },
@@ -130,10 +132,20 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/docs/analytics?days=30",
     "/api/admin/docs/alpha-readiness",
   ],
-  "/admin/docs": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
+  "/admin/docs": [
+    "/api/admin/docs",
+    "/api/admin/docs/analytics?days=30",
+    "/api/admin/docs/alpha-readiness",
+    "/api/admin/docs/gaps",
+  ],
   "/admin/branch": [
     "/api/admin/branch/summary?team=ALL&period=Q",
     "/api/admin/branch/kpi?team=ALL&period=Q",
+  ],
+  "/admin/branch/ledger": [
+    "/api/admin/branch/summary?team=ALL&period=Q",
+    "/api/admin/branch/kpi?team=ALL&period=Q",
+    "/api/admin/branch/pipeline?team=ALL&period=Q",
   ],
   "/admin/hardware": ["/api/admin/hardware"],
   "/admin/traffic": [
@@ -317,7 +329,10 @@ export default function AdminSidebar({ role, name, email }: Props) {
     () => NAV.filter((item) => item.roles.includes(normalizedRole)),
     [normalizedRole]
   )
-  const isNavActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
+  const isNavActive = (href: string) => {
+    if (href === "/admin/branch") return pathname === href
+    return pathname === href || pathname.startsWith(`${href}/`)
+  }
   const currentNavItem = visibleNav.find((item) => isNavActive(item.href)) ?? visibleNav[0]
   const mobilePrimaryNav = MOBILE_PRIMARY_HREFS
     .map((href) => visibleNav.find((item) => item.href === href))
@@ -613,23 +628,42 @@ export default function AdminSidebar({ role, name, email }: Props) {
         effectiveCollapsed ? "lg:w-16" : "lg:w-60"
       }`}
     >
-      <div className="flex shrink-0 items-center gap-1 border-b border-[#e8e8e4] px-4 py-4 sm:px-5 lg:pt-6 lg:pb-4">
-        {!effectiveCollapsed && (
-          <div className="flex-1">
-            <p className="mb-0.5 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Classin</p>
-            <p className="text-[15px] font-semibold text-[#111110]">Admin</p>
-          </div>
+      <div className={`flex shrink-0 border-b border-[#e8e8e4] ${
+        effectiveCollapsed
+          ? "flex-col items-center gap-2 px-2 py-3"
+          : "items-center gap-1 px-4 py-4 sm:px-5 lg:pt-6 lg:pb-4"
+      }`}>
+        {effectiveCollapsed ? (
+          <>
+            <button
+              type="button"
+              onClick={toggle}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+              aria-label="사이드바 열기"
+              title="사이드바 열기"
+            >
+              <SquareChevronRight className="h-[18px] w-[18px]" />
+            </button>
+            {isDesktop === true ? <AdminNotificationsBell placement="inline" /> : null}
+          </>
+        ) : (
+          <>
+            <div className="flex-1">
+              <p className="mb-0.5 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Classin</p>
+              <p className="text-[15px] font-semibold text-[#111110]">Admin</p>
+            </div>
+            {isDesktop === true ? <AdminNotificationsBell placement="inline" /> : null}
+            <button
+              type="button"
+              onClick={toggle}
+              className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+              aria-label="사이드바 닫기"
+              title="사이드바 닫기"
+            >
+              <SquareChevronLeft className="h-[18px] w-[18px]" />
+            </button>
+          </>
         )}
-        {isDesktop === true ? <AdminNotificationsBell placement="inline" /> : null}
-        <button
-          onClick={toggle}
-          className={`rounded-md p-1 text-[#1a1a1a]/30 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] ${
-            effectiveCollapsed ? "lg:mx-auto" : ""
-          }`}
-          title={effectiveCollapsed ? "사이드바 열기" : "사이드바 닫기"}
-        >
-          {effectiveCollapsed ? <SquareChevronRight className="h-4 w-4" /> : <SquareChevronLeft className="h-4 w-4" />}
-        </button>
       </div>
 
       {!effectiveCollapsed && (
