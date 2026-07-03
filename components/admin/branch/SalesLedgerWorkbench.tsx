@@ -442,8 +442,8 @@ function MatrixToneLegend() {
         </span>
       ))}
       <span>· 잠금=시트확정/장부반영</span>
-      <span className="hidden 2xl:inline">· 합산 셀 주황=확도 혼합 포함</span>
-      <span className="hidden text-[#A39E98] 2xl:inline">· Enter 편집 · Tab 이동 · Ctrl+D 아래 복사 · Esc 취소</span>
+      <span className="hidden xl:inline">· 합산 셀 주황=확도 혼합 포함</span>
+      <span className="hidden text-[#A39E98] xl:inline">· Enter 편집 · Tab 이동 · Ctrl+D 아래 복사 · Esc 취소</span>
     </span>
   )
 }
@@ -5269,8 +5269,11 @@ export default function SalesLedgerWorkbench() {
     revPageSize !== 100
 
   useEffect(() => {
+    // 데이터 로드 전(revTotalPages가 아직 1)에는 클램프하지 않는다 — URL로 복원한 p가
+    // 마운트 레이스로 1페이지에 깎여 소실되던 문제 방지. 로드 후 초과분만 보정한다.
+    if (!pipeline.data) return
     if (revPage > revTotalPages) setRevPage(revTotalPages)
-  }, [revPage, revTotalPages])
+  }, [pipeline.data, revPage, revTotalPages])
 
   const selectedMember = useMemo(() => {
     if (!selectedRow?.manager) return null
@@ -6124,7 +6127,7 @@ export default function SalesLedgerWorkbench() {
                         disabled={matrixMonths.indexOf(selectedMonth) === 0}
                         aria-label="이전 달"
                         title="이전 달 (회계연도 안에서만 이동)"
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-35"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <ChevronLeft className="h-3.5 w-3.5" />
                       </button>
@@ -6137,7 +6140,7 @@ export default function SalesLedgerWorkbench() {
                         disabled={matrixMonths.indexOf(selectedMonth) === matrixMonths.length - 1}
                         aria-label="다음 달"
                         title="다음 달 (회계연도 안에서만 이동)"
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-35"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <ChevronRight className="h-3.5 w-3.5" />
                       </button>
@@ -6331,10 +6334,10 @@ export default function SalesLedgerWorkbench() {
                     <button
                       type="button"
                       onClick={() => selectRailView("queue")}
-                      title="입력 큐 열기 — 체크·적용 대기 초안"
+                      title="체크 큐 열기 — 체크·적용 대기 초안"
                       className="inline-flex h-6 items-center gap-1 rounded-full border border-[#ECD29C] bg-[#FFFCF5] px-2 text-[10px] font-bold tabular-nums text-[#7A520F] transition hover:bg-[#FBF1E0]"
                     >
-                      미적용 초안 {openDrafts.length.toLocaleString("ko-KR")} → 검수
+                      미적용 초안 {openDrafts.length.toLocaleString("ko-KR")} → 체크 큐
                     </button>
                   )}
                   {([
@@ -6691,7 +6694,7 @@ export default function SalesLedgerWorkbench() {
                 {revTotalPages > 1 && (
                   <div className="hidden items-center justify-between gap-2 border-b border-[rgba(0,0,0,0.08)] px-4 py-2 text-[11.5px] text-[#615D59] md:flex">
                     <p className="font-semibold">
-                      {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")} / 행 {filteredRows.length.toLocaleString("ko-KR")}건
+                      {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")} / 고객 {revCustomerGroups.length.toLocaleString("ko-KR")}곳 · 행 {filteredRows.length.toLocaleString("ko-KR")}건
                     </p>
                     <div className="flex items-center gap-1.5">
                       <button
@@ -6806,6 +6809,7 @@ export default function SalesLedgerWorkbench() {
                             <button
                               type="button"
                               onClick={() => selectRailView("queue")}
+                              title="체크 큐 열기 — 신규 초안 검수"
                               className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-left text-[11px] font-semibold text-[#7A520F]"
                             >
                               <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 font-bold">
@@ -6817,7 +6821,7 @@ export default function SalesLedgerWorkbench() {
                                 </span>
                               ))}
                               {pendingNewRowDrafts.length > 3 && <span>외 {pendingNewRowDrafts.length - 3}건</span>}
-                              <span className="ml-auto inline-flex items-center gap-1 font-bold text-[#084734]">
+                              <span className="inline-flex items-center gap-1 font-bold text-[#084734] sm:ml-auto">
                                 체크 큐에서 검수
                                 <ChevronRight className="h-3 w-3" />
                               </span>
