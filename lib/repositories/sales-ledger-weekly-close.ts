@@ -2,6 +2,7 @@ import "server-only"
 
 import { createHash } from "node:crypto"
 
+import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { listBranchRevDeals, type BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { readRevDealsFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -92,13 +93,6 @@ function fiscalYearOf(date: Date): number {
 function toNumber(value: unknown): number {
   const numeric = Number(value ?? 0)
   return Number.isFinite(numeric) ? numeric : 0
-}
-
-function normalizedAccountKey(value: string | null | undefined) {
-  return String(value ?? "")
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[\s()[\]{}._\-|/]+/g, "")
 }
 
 function recordKeyOf(deal: BranchRevDeal): string {

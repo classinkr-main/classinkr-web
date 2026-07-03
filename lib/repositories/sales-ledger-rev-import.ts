@@ -1,7 +1,10 @@
 import "server-only"
 
+import { createHash } from "node:crypto"
+
 import { revalidateTag } from "next/cache"
 
+import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
 import { listBranchRevDeals, type BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { SALES_LEDGER_IMPORTS_CACHE_TAG } from "@/lib/repositories/sales-ledger-imports"
@@ -26,18 +29,15 @@ export interface RevDbImportResult {
   lineCount: number
   entryCount: number
   activated: boolean
+  // 이 run이 캡처된 시각(started_at ISO) — dedupe 시 기존 run의 시각
+  capturedAt: string
+  // 동일 checksum의 기존 succeeded run을 재사용했으면 true (새 run 생성 없음)
+  deduped: boolean
 }
 
 function toNumber(value: unknown): number {
   const numeric = Number(value ?? 0)
   return Number.isFinite(numeric) ? numeric : 0
-}
-
-function normalizedAccountKey(value: string | null | undefined) {
-  return String(value ?? "")
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[\s()[\]{}._\-|/]+/g, "")
 }
 
 function recordKeyOf(deal: BranchRevDeal): string {
@@ -57,6 +57,88 @@ function fiscalYearOf(date: Date): number {
   return month >= 4 ? date.getUTCFullYear() : date.getUTCFullYear() - 1
 }
 
+// 같은 시트 미러 상태를 다시 캡처하면 같은 checksum이 나오도록 결정적으로 직렬화한다.
+// 캡처 산출물에 들어가는 전부(라인 필드·월별 금액/확도/red·raw=주차 폴백 소스)를 포함해
+// 어느 하나라도 바뀌면 새 run, 전부 같으면 dedupe. "rev-native:" 프리픽스로 weekly-close
+// 스냅샷 checksum(같은 fiscal_year·source_kind='manual' 유니크 인덱스 공간 공유)과의
+// 충돌 가능성을 차단한다. raw는 branch_rev_deals jsonb에서 읽혀 키 순서가 결정적이다.
+function revImportChecksum(deals: BranchRevDeal[]): string {
+  const sortedMonths = (map: Record<string, unknown> | null | undefined) =>
+    Object.entries(map ?? {})
+      .filter(([month]) => FISCAL_MONTH_RE.test(month))
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  const canonical = deals
+    .map((deal) => ({
+      key: recordKeyOf(deal),
+      row: deal.sheet_row,
+      account: deal.customer_name || "미지정",
+      contact: deal.branch_contact ?? null,
+      location: deal.region ?? null,
+      importance: deal.importance ?? null,
+      team: deal.team ?? null,
+      manager: deal.manager ?? null,
+      status: deal.status ?? null,
+      dealType: deal.deal_type ?? null,
+      product: deal.product_version ?? null,
+      firstPayment: deal.first_payment ?? null,
+      remark: deal.note ?? null,
+      total: toNumber(deal.contract_target),
+      payments: sortedMonths(deal.monthly_payments).map(([month, value]) => [month, toNumber(value)]),
+      confirmed: sortedMonths(deal.monthly_confirmed).map(([month, value]) => [month, toNumber(value)]),
+      highConf: sortedMonths(deal.monthly_high_conf).map(([month, value]) => [month, toNumber(value)]),
+      red: sortedMonths(deal.monthly_red).map(([month, value]) => [month, value === true]),
+      raw: deal.raw ?? {},
+    }))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.row - b.row))
+  return createHash("sha256").update(`rev-native:${JSON.stringify(canonical)}`).digest("hex")
+}
+
+// 유니크 인덱스: sales_ledger_import_runs_checksum_idx
+//   (fiscal_year, source_kind, source_checksum) WHERE source_checksum IS NOT NULL AND status = 'succeeded'
+// → succeeded 행에만 걸리므로 같은 (fy, manual, checksum) succeeded run은 최대 1개.
+async function findExistingRevImportRun(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  fiscalYear: number,
+  checksum: string,
+): Promise<{ id: string; startedAt: string; rowCounts: Record<string, number> } | null> {
+  const { data, error } = await supabase
+    .from("sales_ledger_import_runs")
+    .select("id,started_at,row_counts")
+    .eq("fiscal_year", fiscalYear)
+    .eq("source_kind", "manual")
+    .eq("status", "succeeded")
+    .eq("source_checksum", checksum)
+    .maybeSingle()
+  if (error) throw new Error(`[rev-import] 기존 run 조회 실패: ${error.message}`)
+  if (!data) return null
+  return {
+    id: data.id as string,
+    startedAt: data.started_at as string,
+    rowCounts: (data.row_counts ?? {}) as Record<string, number>,
+  }
+}
+
+// 인덱스가 succeeded 행에만 걸리므로 경합 시 충돌은 insert가 아니라 succeeded 전환 update에서 드러난다.
+function isChecksumConflictError(error: { code?: string; message?: string }) {
+  return error.code === "23505" || (error.message ?? "").includes("sales_ledger_import_runs_checksum_idx")
+}
+
+function dedupedResult(
+  existing: { id: string; startedAt: string; rowCounts: Record<string, number> },
+  fiscalYear: number,
+  activated: boolean,
+): RevDbImportResult {
+  return {
+    runId: existing.id,
+    fiscalYear,
+    lineCount: toNumber(existing.rowCounts.rev_lines),
+    entryCount: toNumber(existing.rowCounts.rev_period_entries),
+    activated,
+    capturedAt: existing.startedAt,
+    deduped: true,
+  }
+}
+
 export async function activateRevImportRun(runId: string, fiscalYear: number, actor: string | null): Promise<void> {
   const supabase = createSupabaseAdminClient()
   const { error } = await supabase
@@ -68,6 +150,43 @@ export async function activateRevImportRun(runId: string, fiscalYear: number, ac
   if (error) throw new Error(`[rev-import] active source 전환 실패: ${error.message}`)
   // 액티브 소스 조회는 60초 unstable_cache라 즉시 반영 위해 무효화한다.
   revalidateTag(SALES_LEDGER_IMPORTS_CACHE_TAG, "max")
+}
+
+export interface ActiveRevImportStatus {
+  active: boolean
+  fiscalYear: number
+  runId: string | null
+  capturedAt: string | null
+}
+
+// 액티브 REV 소스 상태 조회(GET db-import 용) — 클라이언트가 "지금 DB 임포트 run을 읽는 중인지"를
+// localStorage 추정이 아니라 서버 원장(sales_ledger_active_sources)으로 판별하게 한다.
+// 의도적으로 60초 unstable_cache를 쓰지 않는 fresh 조회: 운영자가 수동으로 시트 모드로 되돌린
+// 직후 stale 'active' 응답이 동기화 재캡처 체인을 켜서 DB-native로 재전환하면 안 된다.
+// (tab_key+fiscal_year 유니크 인덱스 단건 조회라 비용은 미미하다.)
+export async function getActiveRevImportStatus(): Promise<ActiveRevImportStatus> {
+  const fiscalYear = fiscalYearOf(new Date())
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("sales_ledger_active_sources")
+    .select("import_run_id, sales_ledger_import_runs!inner(status, started_at)")
+    .eq("tab_key", "rev")
+    .eq("fiscal_year", fiscalYear)
+    .eq("sales_ledger_import_runs.status", "succeeded")
+    .maybeSingle()
+  if (error) {
+    const haystack = `${error.code ?? ""} ${error.message ?? ""} ${error.details ?? ""}`.toLowerCase()
+    if (haystack.includes("42p01") || haystack.includes("does not exist") || haystack.includes("schema cache")) {
+      // 마이그레이션 미적용 = DB-native 기능 자체가 없음 → 비활성으로 취급.
+      return { active: false, fiscalYear, runId: null, capturedAt: null }
+    }
+    throw new Error(`[rev-import] active source 상태 조회 실패: ${error.message}`)
+  }
+  const runId = (data?.import_run_id as string | undefined) ?? null
+  // M2O inner join은 객체로 오지만, 타입 미탐지 시 배열로 직렬화될 수 있어 양쪽 다 수용한다.
+  const joined = data?.sales_ledger_import_runs as { started_at?: string } | Array<{ started_at?: string }> | null | undefined
+  const startedAt = Array.isArray(joined) ? joined[0]?.started_at : joined?.started_at
+  return { active: Boolean(runId), fiscalYear, runId, capturedAt: startedAt ?? null }
 }
 
 // 시트 미러 → 버전드 DB 임포트 + (기본) 활성화. 실패 시 run을 failed로 남기고 throw.
@@ -82,6 +201,15 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
     throw new Error("임포트할 REV 행이 없습니다. 시트 동기화 후 다시 시도하세요.")
   }
 
+  // dedupe: 동일 미러 상태 재캡처는 새 run을 만들지 않고 기존 run을 돌려준다.
+  // 내용이 같으므로 (요청 시) 기존 run 재활성화가 곧 캡처의 멱등 결과다.
+  const checksum = revImportChecksum(deals)
+  const existing = await findExistingRevImportRun(supabase, fiscalYear, checksum)
+  if (existing) {
+    if (activate) await activateRevImportRun(existing.id, fiscalYear, actor)
+    return dedupedResult(existing, fiscalYear, activate)
+  }
+
   const { data: runRow, error: runError } = await supabase
     .from("sales_ledger_import_runs")
     .insert({
@@ -89,10 +217,11 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
       source_kind: "manual",
       source_name: `rev db-native ${now.toISOString().slice(0, 16).replace("T", " ")}`,
       status: "running",
+      source_checksum: checksum,
       imported_by: actor,
       metadata: { purpose: "rev-native", dataSource: "branch_rev_deals" },
     })
-    .select("id")
+    .select("id,started_at")
     .single()
   if (runError || !runRow) throw new Error(`[rev-import] run 생성 실패: ${runError?.message ?? "empty insert"}`)
   const runId = runRow.id as string
@@ -166,11 +295,33 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
         row_counts: { rev_lines: lineRows.length, rev_period_entries: entryRows.length },
       })
       .eq("id", runId)
-    if (doneError) throw new Error(`[rev-import] run 완료 처리 실패: ${doneError.message}`)
+    if (doneError) {
+      if (isChecksumConflictError(doneError)) {
+        // 동시 캡처 경합 패자: 같은 checksum run이 먼저 succeeded — 이 run은 중복으로 접고 승자를 반환
+        await supabase
+          .from("sales_ledger_import_runs")
+          .update({ status: "failed", error: "deduped: 동일 checksum run이 먼저 완료됨", finished_at: new Date().toISOString() })
+          .eq("id", runId)
+        const winner = await findExistingRevImportRun(supabase, fiscalYear, checksum)
+        if (winner) {
+          if (activate) await activateRevImportRun(winner.id, fiscalYear, actor)
+          return dedupedResult(winner, fiscalYear, activate)
+        }
+      }
+      throw new Error(`[rev-import] run 완료 처리 실패: ${doneError.message}`)
+    }
 
     if (activate) await activateRevImportRun(runId, fiscalYear, actor)
 
-    return { runId, fiscalYear, lineCount: lineRows.length, entryCount: entryRows.length, activated: activate }
+    return {
+      runId,
+      fiscalYear,
+      lineCount: lineRows.length,
+      entryCount: entryRows.length,
+      activated: activate,
+      capturedAt: runRow.started_at as string,
+      deduped: false,
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     await supabase

@@ -227,20 +227,14 @@ export async function readDshFromActiveImport(fiscalYear: number): Promise<DshOu
   return { rows, members, breakdown }
 }
 
-export async function readRevDealsFromActiveImport(
-  fiscalYear: number,
-  filter?: { team?: string },
-): Promise<BranchRevDeal[] | null> {
-  const importRunId = await getActiveImportRunId("rev", fiscalYear)
-  if (!importRunId) return null
-
+async function readRevDealsForImportRun(importRunId: string, team: string): Promise<BranchRevDeal[] | null> {
   const supabase = createSupabaseAdminClient()
   const { rows: lines, error: lineError } = await fetchAllRows<RevLineDbRow>((from, to) => {
     let lineQuery = supabase
       .from("branch_rev_lines")
       .select("id,source_row,source_record_key,account_name,branch_contact,location,scale,importance,team,manager,status,deal_type,product,first_payment,remark,total_amount,raw,created_at")
       .eq("import_run_id", importRunId)
-    if (filter?.team && filter.team !== "ALL") lineQuery = lineQuery.eq("team", filter.team)
+    if (team !== "ALL") lineQuery = lineQuery.eq("team", team)
     return lineQuery.order("source_row").range(from, to)
   })
   if (lineError) {
@@ -325,6 +319,27 @@ export async function readRevDealsFromActiveImport(
       synced_at: line.created_at,
     }
   })
+}
+
+// 워크벤치는 REV 화면에서 summary/heatmap/ledger를 동시에 조회해 같은 액티브 런 전량
+// (라인+월별 엔트리 페이징)을 요청마다 3번씩 다시 읽었다. run 데이터는 succeeded 이후
+// 불변이므로 (importRunId, team)을 키로 캐시한다 — 액티브 전환 시 runId가 바뀌어 키가
+// 자연히 갈리고, 캡처/활성화 경로의 revalidateTag(SALES_LEDGER_IMPORTS_CACHE_TAG)
+// (activateRevImportRun에서 호출)가 태그로도 즉시 무효화한다.
+const readCachedRevDealsForImportRun = unstable_cache(
+  async (importRunId: string, team: string) => readRevDealsForImportRun(importRunId, team),
+  ["sales-ledger-rev-import-run"],
+  { revalidate: 300, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG] },
+)
+
+export async function readRevDealsFromActiveImport(
+  fiscalYear: number,
+  filter?: { team?: string },
+): Promise<BranchRevDeal[] | null> {
+  const importRunId = await getActiveImportRunId("rev", fiscalYear)
+  if (!importRunId) return null
+  const team = filter?.team && filter.team !== "ALL" ? filter.team : "ALL"
+  return readCachedRevDealsForImportRun(importRunId, team)
 }
 
 const KPI_DB_METRIC_BY_APP_METRIC: Record<KpiMetric, string> = {

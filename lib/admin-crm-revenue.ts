@@ -1093,7 +1093,10 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         ownerName: [deal.team, deal.manager].filter(Boolean).join(" · ") || "담당 미지정",
         amount: pastUnconfirmed,
         reason: "시트 과거 예정액 미확정",
-        href: "/admin/branch",
+        // 시트 리스크는 매출 장부 REV 렌즈에서 해당 고객 행으로 바로 검수한다.
+        href: deal.customer_name
+          ? `/admin/branch/ledger?lens=rev&q=${encodeURIComponent(deal.customer_name)}`
+          : "/admin/branch/ledger?lens=rev",
       })
     }
     const baseMatch = {

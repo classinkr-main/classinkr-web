@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation"
 import {
   Activity,
   BarChart3,
+  BookOpenCheck,
   Building2,
   CircleDollarSign,
   ClipboardList,
   LayoutGrid,
   ListChecks,
+  Package,
   PhoneCall,
   Search,
   Target,
@@ -18,7 +20,8 @@ import {
 
 import { adminFetchJsonCached } from "@/lib/admin-client"
 
-// CRM 내비 라우트 인덱스 — ⌘K "이동" 명령. AdminSidebar의 CRM 확장과 동일 라우트.
+// CRM 내비 라우트 인덱스 — ⌘K "이동" 명령. AdminSidebar의 CRM 확장과 동일 라우트
+// + 머니 표면(매출 장부·하드웨어 재고) 점프를 함께 인덱싱한다.
 const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: ReactNode }> = [
   { label: "현황 · 홈", sub: "코크핏·작업대", href: "/admin/crm", icon: <LayoutGrid className="h-4 w-4" /> },
   { label: "통합 고객", sub: "운영 목록", href: "/admin/crm/customers/unified", icon: <Users className="h-4 w-4" /> },
@@ -26,6 +29,8 @@ const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: ReactNod
   { label: "원천 고객", sub: "NEO 어카운트", href: "/admin/crm/customers/accounts", icon: <Building2 className="h-4 w-4" /> },
   { label: "매출 · 견적", sub: "Deals", href: "/admin/crm/deals", icon: <CircleDollarSign className="h-4 w-4" /> },
   { label: "KPI", sub: "목표·달성", href: "/admin/crm/deals/kpi", icon: <Target className="h-4 w-4" /> },
+  { label: "매출 장부", sub: "DSH·REV·KPI 콕핏", href: "/admin/branch/ledger", icon: <BookOpenCheck className="h-4 w-4" /> },
+  { label: "하드웨어 재고", sub: "입출고·위치 맵", href: "/admin/hardware", icon: <Package className="h-4 w-4" /> },
   { label: "기록 · 활동", sub: "타임라인", href: "/admin/crm/activity", icon: <Activity className="h-4 w-4" /> },
   { label: "인사이트", sub: "분석", href: "/admin/crm/insights", icon: <BarChart3 className="h-4 w-4" /> },
   { label: "데이터 점검", sub: "매칭 인박스", href: "/admin/crm/matching", icon: <ListChecks className="h-4 w-4" /> },
@@ -60,7 +65,15 @@ export default function CrmCommandPalette() {
 
   // ⌘K / Ctrl+K 토글. CRM 레이아웃에만 마운트돼 스코프가 CRM으로 한정된다.
   // 리셋은 effect가 아니라 이벤트 핸들러에서(set-state-in-effect 회피).
+  // CRM 라우트에서는 전역 런처(AdminCommandPaletteLauncher)가 언마운트되므로,
+  // 사이드바 검색 버튼이 쏘는 admin:open-command-palette 이벤트도 여기서 받아야 한다.
   useEffect(() => {
+    function openFresh() {
+      setQuery("")
+      setRows([])
+      setActive(0)
+      setOpen(true)
+    }
     function onKey(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && (event.key === "k" || event.key === "K")) {
         event.preventDefault()
@@ -73,7 +86,11 @@ export default function CrmCommandPalette() {
       }
     }
     window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
+    window.addEventListener("admin:open-command-palette", openFresh)
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      window.removeEventListener("admin:open-command-palette", openFresh)
+    }
   }, [])
 
   // 열릴 때 입력 포커스 — DOM 부수효과만(setState 없음).
