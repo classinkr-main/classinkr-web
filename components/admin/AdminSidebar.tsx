@@ -604,11 +604,15 @@ function AdminSidebarContent({ role, name, email }: Props) {
     </nav>
 
     <aside
-      className={`hidden shrink-0 flex-col border-r border-[#e8e8e4] bg-white lg:flex lg:h-[100dvh] lg:min-h-0 ${
+      className={`relative hidden shrink-0 flex-col border-r border-[#e8e8e4] bg-white lg:flex lg:h-[100dvh] lg:min-h-0 ${
         effectiveCollapsed ? "lg:w-16" : "lg:w-60"
       }`}
     >
-      <div className="flex shrink-0 items-center gap-1 border-b border-[#e8e8e4] px-4 py-4 sm:px-5 lg:pt-6 lg:pb-4">
+      <div
+        className={`flex shrink-0 items-center border-b border-[#e8e8e4] py-4 lg:pt-6 lg:pb-4 ${
+          effectiveCollapsed ? "flex-col gap-2 px-2" : "gap-1 px-4 sm:px-5"
+        }`}
+      >
         {!effectiveCollapsed && (
           <div className="flex-1">
             <p className="mb-0.5 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Classin</p>
@@ -618,9 +622,7 @@ function AdminSidebarContent({ role, name, email }: Props) {
         {isDesktop === true ? <AdminNotificationsBell placement="inline" /> : null}
         <button
           onClick={toggle}
-          className={`rounded-md p-1 text-[#1a1a1a]/30 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] ${
-            effectiveCollapsed ? "lg:mx-auto" : ""
-          }`}
+          className="rounded-md p-1 text-[#1a1a1a]/30 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
           title={effectiveCollapsed ? "사이드바 열기" : "사이드바 닫기"}
         >
           {effectiveCollapsed ? <SquareChevronRight className="h-4 w-4" /> : <SquareChevronLeft className="h-4 w-4" />}
@@ -794,6 +796,29 @@ function AdminSidebarContent({ role, name, email }: Props) {
           {!effectiveCollapsed && "로그아웃"}
         </button>
       </div>
+
+      {/* 오른쪽 경계선 클릭 토글 — 헤더 아이콘과 별개로 사이드바 가장자리를 눌러도 접힘/펼침.
+          nav 스크롤바(우측 4px)를 가로채지 않도록 경계선 바로 바깥 6px 스트립만 클릭 대상으로 둔다. */}
+      <button
+        type="button"
+        onClick={toggle}
+        aria-label={effectiveCollapsed ? "사이드바 열기" : "사이드바 닫기"}
+        title={effectiveCollapsed ? "사이드바 열기" : "사이드바 닫기"}
+        className="group absolute inset-y-0 left-full z-30 flex w-1.5 cursor-pointer items-center justify-center focus:outline-none"
+      >
+        {/* 경계선 하이라이트 — hover/focus 시 또렷해진다 */}
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 w-px bg-transparent transition-colors group-hover:bg-[#111110]/20 group-focus-visible:bg-[#111110]/30"
+        />
+        {/* 중앙 손잡이 — hover/focus 시 노출 */}
+        <span
+          aria-hidden
+          className="flex h-9 w-[18px] -translate-x-1/2 items-center justify-center rounded-full border border-[#e8e8e4] bg-white text-[#1a1a1a]/50 opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+        >
+          {effectiveCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+        </span>
+      </button>
     </aside>
     </>
   )

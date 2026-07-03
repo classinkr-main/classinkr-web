@@ -827,6 +827,12 @@ export default function AdminCrmRevenuePage() {
           <div className="flex flex-wrap items-center gap-2">
             <FileSpreadsheet className="h-4 w-4 text-[#1a1a1a]/35" />
             <h2 className="text-[14px] font-semibold text-[#111110]">회사 시트 (REV) 내부 대조</h2>
+            <Link
+              href="/admin/branch/ledger?lens=rev"
+              className="text-[11px] font-medium text-[#084734] underline-offset-2 hover:underline"
+            >
+              매출 장부에서 검수 ↗
+            </Link>
             <span className="text-[11px] text-[#1a1a1a]/35">
               계약 목표 총액 {formatCNY(data.sheet.targetAmount)} · 진행{" "}
               {formatNumber(data.sheet.activeDealCount)}건/전체 {formatNumber(data.sheet.dealCount)}건 ·

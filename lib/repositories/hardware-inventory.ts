@@ -3,7 +3,7 @@ import "server-only"
 import { createHash } from "crypto"
 import { revalidateTag, unstable_cache } from "next/cache"
 
-import { listFreshHwInbound, listFreshHwOutbound, listFreshHwStock } from "@/lib/repositories/branch-hw"
+import { fetchAllSupabaseRows, listFreshHwInbound, listFreshHwOutbound, listFreshHwStock } from "@/lib/repositories/branch-hw"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export const HARDWARE_INVENTORY_CACHE_TAG = "hardware-inventory"
@@ -286,14 +286,22 @@ function defaultCategory(product: string, category: string | null) {
   return null
 }
 
-async function listAll<T>(table: string, order = "created_at", ascending = false): Promise<T[]> {
+// 전량 조회 — PostgREST 1000행 캡을 id 키셋 페이지네이션으로 우회한다(fetchAllSupabaseRows).
+// 키셋은 id 오름차순으로 읽으므로, 기존 반환 순서 계약(order 컬럼 기준)은 JS 재정렬로 유지한다.
+async function listAll<T extends { id: string }>(table: string, order = "created_at", ascending = false): Promise<T[]> {
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb
-    .from(table)
-    .select("*")
-    .order(order, { ascending })
-  if (error) throw error
-  return (data ?? []) as T[]
+  const rows = await fetchAllSupabaseRows<T>((afterId, limit) => {
+    let query = sb.from(table).select("*").order("id", { ascending: true }).limit(limit)
+    if (afterId) query = query.gt("id", afterId)
+    return query
+  })
+  const direction = ascending ? 1 : -1
+  return rows.sort((a, b) => {
+    const left = String((a as Record<string, unknown>)[order] ?? "")
+    const right = String((b as Record<string, unknown>)[order] ?? "")
+    if (left !== right) return left < right ? -direction : direction
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  })
 }
 
 export async function listHardwareItems(): Promise<HardwareItem[]> {
@@ -538,15 +546,21 @@ async function allocateOutboundLots(input: {
   const explicitLotNo = cleanString(input.explicitLotNo)
   const excluded = new Set(input.excludeMovementIds ?? [])
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb
-    .from("hardware_movements")
-    .select("*")
-    .eq("item_id", input.itemId)
-    .is("voided_at", null)
-  if (error) throw error
+  // 품목당 이동이 1000행을 넘으면 lot 잔량이 조용히 틀어진다 — id 키셋으로 전량 읽는다.
+  const data = await fetchAllSupabaseRows<HardwareMovement>((afterId, limit) => {
+    let query = sb
+      .from("hardware_movements")
+      .select("*")
+      .eq("item_id", input.itemId)
+      .is("voided_at", null)
+      .order("id", { ascending: true })
+      .limit(limit)
+    if (afterId) query = query.gt("id", afterId)
+    return query
+  })
 
   const balances = new Map<string, { lotNo: string; quantity: number; firstSeen: number }>()
-  for (const movement of (data ?? []) as HardwareMovement[]) {
+  for (const movement of data) {
     if (excluded.has(movement.id)) continue
     const lotNo = movementLotKey(movement)
     if (!lotNo) continue
@@ -1549,17 +1563,21 @@ export async function getInboundUnitPriceBasis(input: {
   if (!itemId) return { unitPrice: null, currency: "USD", source: null }
 
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb
-    .from("hardware_movements")
-    .select("quantity,lot_no,reference_no,source,unit_price,amount_usd")
-    .eq("item_id", itemId)
-    .eq("movement_type", "inbound")
-    .is("voided_at", null)
-  if (error) throw error
-
-  const inboundRows = (data ?? []) as Array<
-    Pick<HardwareMovement, "quantity" | "lot_no" | "reference_no" | "source" | "unit_price" | "amount_usd">
-  >
+  // 입고 이동이 1000행을 넘으면 평균 단가가 앞쪽 행만으로 계산된다 — id 키셋으로 전량 읽는다.
+  const inboundRows = await fetchAllSupabaseRows<
+    Pick<HardwareMovement, "id" | "quantity" | "lot_no" | "reference_no" | "source" | "unit_price" | "amount_usd">
+  >((afterId, limit) => {
+    let query = sb
+      .from("hardware_movements")
+      .select("id,quantity,lot_no,reference_no,source,unit_price,amount_usd")
+      .eq("item_id", itemId)
+      .eq("movement_type", "inbound")
+      .is("voided_at", null)
+      .order("id", { ascending: true })
+      .limit(limit)
+    if (afterId) query = query.gt("id", afterId)
+    return query
+  })
 
   // Per-row inbound unit price in USD: prefer explicit unit_price, else derive
   // from amount_usd / quantity. Returns null when neither yields a usable number.

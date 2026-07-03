@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
-import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
+import { readRevDealsPreferActive } from "@/lib/branch/read-rev-deals"
 import { computeHeatmap } from "@/lib/branch/computations/heatmap"
-import { resolvePeriodDate } from "@/lib/branch/fiscal"
+import { fyOf, resolvePeriodDate } from "@/lib/branch/fiscal"
 
 type BranchTeam = "ALL" | "BD" | "MKT" | "CSM"
 type BranchPeriod = "M" | "Q" | "Y"
@@ -31,7 +31,8 @@ export async function GET(req: NextRequest) {
   const periodDate = resolvePeriodDate(period, url.searchParams.get("month"), new Date())
   if (!periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
-    const deals = await listBranchRevDeals({ team })
+    // summary와 동일 규약: DB-native 액티브 임포트 우선, 시트 미러 폴백 — 탭 간 데이터 정합
+    const deals = await readRevDealsPreferActive(fyOf(periodDate), { team })
     const rows = computeHeatmap(deals, period, periodDate, team)
     return adminCachedJson({ rows })
   } catch (e) {

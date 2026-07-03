@@ -2,6 +2,7 @@
 
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
   ArrowDownToLine,
@@ -75,6 +76,8 @@ interface HardwareMovement {
   storage_location: string | null
   importer: string | null
   source: "admin_manual" | "sheet_import"
+  // 대시보드 payload에 그대로 실려 오는 원본 레코드 — 구조화 CRM 링크(raw.crmLink)를 여기서 읽는다.
+  raw?: unknown
   created_by: string | null
   created_at: string
   voided_at: string | null
@@ -400,25 +403,49 @@ function shortProductName(name: string): string {
 
 // 출고 도착지를 고객 라벨로 환원한다. 일반 위치(고객/창고/샘플/사무실/수리)는 "고객(미지정)"으로 묶는다.
 const GENERIC_LOCATIONS = new Set<string>(["고객", "창고", "샘플", "사무실", "수리", "외부/고객"])
+const UNSPECIFIED_CUSTOMER = "고객(미지정)"
 
 function customerLabel(value: string | null | undefined): string {
   const text = (value ?? "").trim()
-  if (!text || GENERIC_LOCATIONS.has(text)) return "고객(미지정)"
+  if (!text || GENERIC_LOCATIONS.has(text)) return UNSPECIFIED_CUSTOMER
   return text
 }
 
-// movement에 연결된 CRM 참조를 best-effort로 추출 (reference_no의 deal:/xiaoshouyi: 또는 memo의 "CRM 연동:" 라인).
-function extractCrmLink(movement: HardwareMovement): { label: string; reference: string | null } | null {
+// 매출 장부(REV 렌즈) 딥링크 — 하드웨어 상품 필터 + 고객명 검색으로 진입한다.
+// 금액은 링크에 싣지 않는다(하드웨어 원장은 USD, 장부는 CNY라 직접 비교가 안 됨).
+function ledgerHref(customer: string): string {
+  return `/admin/branch/ledger?lens=rev&prod=hardware&q=${encodeURIComponent(customer)}`
+}
+
+// reference_no "deal:{dealId}(:line:{lineId})" → 딜 오더 딥링크. 그 외 형식은 내부 링크를 만들 수 없다.
+function crmHrefFromReference(reference: string | null): string | null {
+  const match = (reference ?? "").match(/^deal:([^:\s]+)/i)
+  return match ? `/admin/crm/deals/orders?deal=${encodeURIComponent(match[1])}` : null
+}
+
+// movement에 연결된 CRM 참조를 best-effort로 추출. 구조화 raw.crmLink(저장 시점 후보의 href·라벨,
+// app/api/admin/hardware/movements가 raw = { crmLink }로 영속)를 우선하고, 없으면 reference_no의
+// deal:/xiaoshouyi: 또는 memo의 "CRM 연동:" 라인으로 되돌아간다.
+function extractCrmLink(movement: HardwareMovement): { label: string; reference: string | null; href: string | null } | null {
+  const raw = movement.raw
+  const crmLinkRaw = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>).crmLink : null
+  if (crmLinkRaw && typeof crmLinkRaw === "object" && !Array.isArray(crmLinkRaw)) {
+    const record = crmLinkRaw as Record<string, unknown>
+    const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null)
+    const label = [text(record.sourceLabel), text(record.title)].filter(Boolean).join(" · ") || "CRM 연동"
+    const reference = text(record.referenceNo) ?? ((movement.reference_no ?? "").trim() || null)
+    return { label, reference, href: text(record.href) ?? crmHrefFromReference(reference) }
+  }
   const ref = (movement.reference_no ?? "").trim()
   if (/^deal:/i.test(ref) || /^xiaoshouyi:/i.test(ref)) {
-    return { label: /^deal:/i.test(ref) ? "포털 딜" : "외부 CRM", reference: ref }
+    return { label: /^deal:/i.test(ref) ? "포털 딜" : "외부 CRM", reference: ref, href: crmHrefFromReference(ref) }
   }
   const memoLine = (movement.memo ?? "")
     .split("\n")
     .map((line) => line.trim())
     .find((line) => /^CRM 연동:/.test(line))
   if (memoLine) {
-    return { label: memoLine.replace(/^CRM 연동:\s*/, "") || "CRM 연동", reference: ref || null }
+    return { label: memoLine.replace(/^CRM 연동:\s*/, "") || "CRM 연동", reference: ref || null, href: crmHrefFromReference(ref || null) }
   }
   return null
 }
@@ -1067,6 +1094,44 @@ export default function HardwareInventoryClient() {
   const reduceMotion = useReducedMotion()
   const plannedConfirmLocked = busy != null || confirmingId != null || confirmingGroupKey != null
   const quickCartSaving = busy === "movement"
+
+  // URL 상태 동기화(탭·고객만 최소로) — 장부 워크벤치와 같은 window 기반 접근.
+  // useSearchParams는 Suspense 경계를 요구해 피하고, 마운트 시 한 번 읽은 뒤(urlReady 전에는
+  // 쓰지 않음) 변경마다 replaceState로 반영해 링크 공유가 가능하다(히스토리 오염 없음).
+  // 계약: ?tab=home|entry|history (생략=home), &customer=<고객명> → 내역 탭 고객 필터 프리필
+  // + 거래이력 슬라이드오버 오픈(tab 생략 시 history로 간주).
+  // 왕복 충실성: customer는 슬라이드오버가 열린 상태만 기록한다(필터만 건 상태를 customer로
+  // 쓰면 새로고침 시 슬라이드오버가 원치 않게 열린다). customer 기록 시 tab은 home이어도
+  // 항상 명시해, 홈 탭에서 연 슬라이드오버 링크가 내역 탭으로 착지하지 않게 한다.
+  const [urlReady, setUrlReady] = useState(false)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tab = params.get("tab")
+    const customer = (params.get("customer") ?? "").trim()
+    if (tab === "home" || tab === "entry" || tab === "history") setActiveTab(tab)
+    else if (customer) setActiveTab("history")
+    if (customer) {
+      setCustomerFilter(customer)
+      setCustomerDetail(customer)
+    }
+    setUrlReady(true)
+  }, [])
+
+  useEffect(() => {
+    if (!urlReady) return
+    const params = new URLSearchParams()
+    const customer = (customerDetail ?? "").trim()
+    if (customer) {
+      params.set("tab", activeTab)
+      params.set("customer", customer)
+    } else if (activeTab !== "home") {
+      params.set("tab", activeTab)
+    }
+    const search = params.toString()
+    const nextUrl = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    if (nextUrl !== currentUrl) window.history.replaceState(null, "", nextUrl)
+  }, [urlReady, activeTab, customerDetail])
 
   const requestCloseSheet = useCallback(() => {
     if (busy === "movement") return
@@ -3914,30 +3979,47 @@ export default function HardwareInventoryClient() {
                             <div className="px-5 pb-4">
                               <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59]">고객사별 모음</p>
                               <div className="overflow-hidden rounded-lg border border-[rgba(0,0,0,0.06)]">
-                                <div className="grid grid-cols-[minmax(0,1fr)_58px_40px_88px] gap-2.5 bg-[#F6F5F4] px-3.5 py-2 text-[10.5px] font-bold uppercase tracking-[0.04em] text-[#615D59]">
+                                <div className="grid grid-cols-[minmax(0,1fr)_58px_40px_88px_40px] gap-2.5 bg-[#F6F5F4] px-3.5 py-2 text-[10.5px] font-bold uppercase tracking-[0.04em] text-[#615D59]">
                                   <span>고객사</span>
                                   <span>날짜</span>
                                   <span className="text-right">수량</span>
                                   <span className="text-right">매출</span>
+                                  <span aria-hidden />
                                 </div>
                                 {bucket.customers.map((customer) => (
-                                  <button
+                                  <div
                                     key={customer.name}
-                                    type="button"
-                                    onClick={() => setCustomerDetail(customer.name)}
-                                    className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_58px_40px_88px] items-center gap-2.5 border-t border-[rgba(0,0,0,0.05)] px-3.5 py-2 text-left transition hover:bg-[#FAFAF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40"
+                                    className="grid grid-cols-[minmax(0,1fr)_58px_40px_88px_40px] items-center gap-2.5 border-t border-[rgba(0,0,0,0.05)] px-3.5 transition hover:bg-[#FAFAF8]"
                                   >
-                                    <span title={customer.name} className="truncate text-[12.5px] font-semibold text-[#111110]">{customer.name}</span>
-                                    <span className="truncate text-[12px] tabular-nums text-[#615D59]">{customer.dateLabel}</span>
-                                    <span className="text-right text-[13px] font-bold tabular-nums text-[#111110]">{formatNumber(customer.qty)}대</span>
-                                    <span className="text-right text-[12.5px] font-bold tabular-nums text-[#084734]">{customer.hasRevenue ? formatCurrency(customer.revenue, "USD") : "-"}</span>
-                                  </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setCustomerDetail(customer.name)}
+                                      className="col-span-4 grid cursor-pointer grid-cols-subgrid items-center gap-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40"
+                                    >
+                                      <span title={customer.name} className="truncate text-[12.5px] font-semibold text-[#111110]">{customer.name}</span>
+                                      <span className="truncate text-[12px] tabular-nums text-[#615D59]">{customer.dateLabel}</span>
+                                      <span className="text-right text-[13px] font-bold tabular-nums text-[#111110]">{formatNumber(customer.qty)}대</span>
+                                      <span className="text-right text-[12.5px] font-bold tabular-nums text-[#084734]">{customer.hasRevenue ? formatCurrency(customer.revenue, "USD") : "-"}</span>
+                                    </button>
+                                    {customer.name !== UNSPECIFIED_CUSTOMER ? (
+                                      <Link
+                                        href={ledgerHref(customer.name)}
+                                        title={`${customer.name} — 매출 장부(REV)에서 보기`}
+                                        className="justify-self-end whitespace-nowrap py-2 text-[11px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                                      >
+                                        장부 ↗
+                                      </Link>
+                                    ) : (
+                                      <span aria-hidden />
+                                    )}
+                                  </div>
                                 ))}
-                                <div className="grid grid-cols-[minmax(0,1fr)_58px_40px_88px] items-center gap-2.5 border-t border-[rgba(0,0,0,0.1)] bg-[#FAFAF8] px-3.5 py-2.5">
+                                <div className="grid grid-cols-[minmax(0,1fr)_58px_40px_88px_40px] items-center gap-2.5 border-t border-[rgba(0,0,0,0.1)] bg-[#FAFAF8] px-3.5 py-2.5">
                                   <span className="text-[12px] font-bold text-[#111110]">전체 합계</span>
                                   <span aria-hidden />
                                   <span className="text-right text-[13px] font-bold tabular-nums text-[#111110]">{formatNumber(bucket.total)}대</span>
                                   <span className="text-right text-[12.5px] font-bold tabular-nums text-[#084734]">{bucket.hasRevenue ? formatCurrency(bucket.revenue, "USD") : "-"}</span>
+                                  <span aria-hidden />
                                 </div>
                               </div>
                             </div>
@@ -5933,10 +6015,22 @@ export default function HardwareInventoryClient() {
                         <p className="mt-0.5 truncate text-[11px] text-[#065c41]">{detailCrm.label}</p>
                       </div>
                     </div>
-                    {detailCrm.reference ? (
-                      <p className="px-4 py-3 text-[12px] text-[#31302E]">
-                        참조 <span className="font-bold text-[#111110]">{detailCrm.reference}</span>
-                      </p>
+                    {detailCrm.reference || detailCrm.href ? (
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3">
+                        {detailCrm.reference ? (
+                          <p className="min-w-0 truncate text-[12px] text-[#31302E]">
+                            참조 <span className="font-bold text-[#111110]">{detailCrm.reference}</span>
+                          </p>
+                        ) : null}
+                        {detailCrm.href ? (
+                          <Link
+                            href={detailCrm.href}
+                            className="shrink-0 whitespace-nowrap text-[11px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                          >
+                            CRM에서 열기 ↗
+                          </Link>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 ) : (
@@ -6020,6 +6114,14 @@ export default function HardwareInventoryClient() {
                     고객사 거래이력
                   </p>
                   <p className="mt-1 truncate text-[16px] font-bold tracking-[-0.01em] text-[#111110]">{customerHistory.name}</p>
+                  {customerHistory.name !== UNSPECIFIED_CUSTOMER ? (
+                    <Link
+                      href={ledgerHref(customerHistory.name)}
+                      className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                    >
+                      매출 장부 ↗
+                    </Link>
+                  ) : null}
                 </div>
                 <button
                   type="button"
@@ -6257,51 +6359,66 @@ export default function HardwareInventoryClient() {
                   ) : (
                     crmCandidates.map((candidate) => {
                       const selected = selectedCrmCandidateId === candidate.id
+                      const selectCandidate = () => {
+                        setSelectedCrmCandidateId(candidate.id)
+                        setCrmAutoReflect(true)
+                      }
                       return (
-                        <button
+                        <div
                           key={candidate.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedCrmCandidateId(candidate.id)
-                            setCrmAutoReflect(true)
-                          }}
-                          className={`w-full cursor-pointer rounded-lg border px-3 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100 ${
+                          className={`overflow-hidden rounded-lg border transition ${
                             selected
                               ? "border-[#084734] bg-[#ECFDF5]"
                               : "border-[rgba(0,0,0,0.08)] bg-white hover:bg-[#F6F5F4]"
                           }`}
                         >
-                          <span className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                            <span className="min-w-0">
-                              <span className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-[13px] font-bold text-[#111110]">{candidate.title}</span>
-                                <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${confidenceClass(candidate.confidence)}`}>
-                                  매칭 {confidenceCopy(candidate.confidence)}
+                          <button
+                            type="button"
+                            onClick={selectCandidate}
+                            className="w-full cursor-pointer px-3 pt-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100"
+                          >
+                            <span className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <span className="min-w-0">
+                                <span className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-[13px] font-bold text-[#111110]">{candidate.title}</span>
+                                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${confidenceClass(candidate.confidence)}`}>
+                                    매칭 {confidenceCopy(candidate.confidence)}
+                                  </span>
+                                </span>
+                                <span className="mt-1 block text-[11.5px] leading-relaxed text-[#615D59]">
+                                  {candidate.sourceLabel} · {candidate.productName ?? "품목 미상"} · {candidate.quantity != null ? `${formatNumber(candidate.quantity)}대` : "수량 미상"}
+                                </span>
+                                <span className="mt-1 block text-[11.5px] text-[#615D59]">
+                                  {candidate.customerName ?? "고객 미상"} · {candidate.owner ?? "담당자 미상"} · {candidate.status ?? "상태 미상"}
                                 </span>
                               </span>
-                              <span className="mt-1 block text-[11.5px] leading-relaxed text-[#615D59]">
-                                {candidate.sourceLabel} · {candidate.productName ?? "품목 미상"} · {candidate.quantity != null ? `${formatNumber(candidate.quantity)}대` : "수량 미상"}
-                              </span>
-                              <span className="mt-1 block text-[11.5px] text-[#615D59]">
-                                {candidate.customerName ?? "고객 미상"} · {candidate.owner ?? "담당자 미상"} · {candidate.status ?? "상태 미상"}
+                              <span className="shrink-0 text-left sm:text-right">
+                                <span className="block text-[12px] font-bold text-[#111110]">{formatCurrency(candidate.amount)}</span>
+                                <span className="mt-1 block text-[11px] text-[#615D59]">{formatDate(candidate.occurredAt)}</span>
                               </span>
                             </span>
-                            <span className="shrink-0 text-left sm:text-right">
-                              <span className="block text-[12px] font-bold text-[#111110]">{formatCurrency(candidate.amount)}</span>
-                              <span className="mt-1 block text-[11px] text-[#615D59]">{formatDate(candidate.occurredAt)}</span>
-                            </span>
-                          </span>
-                          <span className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-[#084734]">
+                          </button>
+                          {/* 링크는 버튼 밖 푸터에 둔다(버튼 안 anchor는 invalid HTML). 푸터 클릭도 후보 선택으로 동작. */}
+                          <div
+                            onClick={selectCandidate}
+                            className="flex cursor-pointer flex-wrap items-center gap-2 px-3 pb-3 pt-2 text-[11px] font-semibold text-[#084734]"
+                          >
                             <Link2 className="h-3.5 w-3.5" />
                             {candidate.reason}
                             {candidate.href ? (
-                              <span className="inline-flex items-center gap-1 text-[#615D59]">
+                              <Link
+                                href={candidate.href}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(event) => event.stopPropagation()}
+                                className="inline-flex items-center gap-1 text-[#615D59] transition hover:text-[#111110] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                              >
                                 <ExternalLink className="h-3 w-3" />
-                                CRM에서 확인 가능
-                              </span>
+                                CRM에서 확인 ↗
+                              </Link>
                             ) : null}
-                          </span>
-                        </button>
+                          </div>
+                        </div>
                       )
                     })
                   )}

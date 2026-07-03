@@ -1,6 +1,7 @@
 "use client"
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
 import {
   AlertTriangle,
   ArrowDownNarrowWide,
@@ -51,6 +52,7 @@ import {
   YAxis,
 } from "recharts"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
+import { normalizedAccountKey } from "@/lib/branch/account-key"
 import {
   classifySalesLedgerProductCategory,
   classifySalesLedgerSoftwareSubtype,
@@ -305,8 +307,8 @@ interface RevProductSummary {
   rows: number
 }
 
-// 같은 고객(customerGroupKey)의 HW/SW/미분류 행 묶음. REV 테이블은 이 그룹 단위로
-// 페이지네이션·아코디언을 돌리고, 하위 행은 그룹을 펼쳤을 때 노출된다.
+// 같은 고객(normalizedAccountKey — lib/branch/account-key.ts SSOT)의 HW/SW/미분류 행 묶음.
+// REV 테이블은 이 그룹 단위로 페이지네이션·아코디언을 돌리고, 하위 행은 그룹을 펼쳤을 때 노출된다.
 interface RevCustomerGroup {
   key: string
   customer: string
@@ -319,6 +321,9 @@ interface RevCustomerGroup {
   monthOnlyAmount: number
   categoryTotals: Record<Exclude<RevProductCategory, "all">, number>
   categories: Array<Exclude<RevProductCategory, "all">>
+  // 고객 펼침 시 카테고리(HW/SW)별 합산 1행을 그리기 위한 12개월 소계 + 연간 소계(카테고리 존재시만).
+  categoryMonthly: Partial<Record<Exclude<RevProductCategory, "all">, Record<string, RevMonthlyBucket>>>
+  categoryAnnual: Partial<Record<Exclude<RevProductCategory, "all">, RevMonthlyBucket>>
   managers: string[]
   teams: string[]
   regions: string[]
@@ -466,6 +471,66 @@ function canRunAdminOperationsFromSession(): boolean {
   return role === "ADMIN" || role === "SUPER_ADMIN"
 }
 
+// REV DB-native 재동기화(POST /api/admin/branch/ledger/db-import) 응답 — RevDbImportResult 미러.
+interface RevDbImportResponse {
+  runId: string
+  fiscalYear: number
+  lineCount: number
+  entryCount: number
+  activated: boolean
+  capturedAt: string
+  deduped: boolean
+}
+
+interface RevDbImportInfo {
+  runId: string
+  capturedAt: string
+}
+
+// GET db-import 응답 — 서버 원장(sales_ledger_active_sources) 기준 액티브 REV 소스.
+interface ActiveRevImportStatusResponse {
+  active: boolean
+  fiscalYear: number
+  runId: string | null
+  capturedAt: string | null
+}
+
+// 액티브 소스 판별의 1차 근거는 서버(GET db-import)다. localStorage는 서버 확인 전/실패 시의
+// 폴백 캐시일 뿐 — 이 값만 믿고 재캡처를 체인하면 시트 모드로 되돌린 배포를 조용히 DB-native로
+// 재전환할 수 있다. 서버가 비활성이라고 답하면 지운다.
+const REV_DB_IMPORT_STORAGE_KEY = "classin:sales-ledger-rev-db-import:v1"
+
+function loadStoredRevDbImport(): RevDbImportInfo | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(REV_DB_IMPORT_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<RevDbImportInfo> | null
+    if (parsed && typeof parsed.runId === "string" && typeof parsed.capturedAt === "string") {
+      return { runId: parsed.runId, capturedAt: parsed.capturedAt }
+    }
+  } catch {
+    // 손상된 저장값은 무시 — 다음 재동기화가 다시 채운다.
+  }
+  return null
+}
+
+function storeRevDbImport(info: RevDbImportInfo) {
+  try {
+    window.localStorage.setItem(REV_DB_IMPORT_STORAGE_KEY, JSON.stringify(info))
+  } catch {
+    // 저장 실패(사파리 프라이빗 모드 등)해도 세션 내 상태로는 동작한다.
+  }
+}
+
+function clearStoredRevDbImport() {
+  try {
+    window.localStorage.removeItem(REV_DB_IMPORT_STORAGE_KEY)
+  } catch {
+    // 폴백 캐시 정리 실패는 치명적이지 않다 — 다음 서버 확인이 다시 덮어쓴다.
+  }
+}
+
 function ymKeyUtc(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
 }
@@ -526,13 +591,6 @@ function formatDateTime(value: string | null | undefined) {
 
 function compareText(a: string | null | undefined, b: string | null | undefined) {
   return String(a ?? "").localeCompare(String(b ?? ""), "ko", { numeric: true, sensitivity: "base" })
-}
-
-function customerGroupKey(value: string | null | undefined) {
-  return String(value ?? "")
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[\s()[\]{}._\-|/]+/g, "")
 }
 
 function metadataString(metadata: Record<string, unknown> | null | undefined, key: string): string | null {
@@ -1438,19 +1496,41 @@ const WEEK_SERIES: Array<{
   { key: "monthlyOnly", label: "월합계만", color: "#D9D6D0" },
 ]
 
+// 각 스택 세그먼트에 세로 그라디언트(위=살짝 밝게, 아래=베이스)를 입혀 평면 막대에 깊이를 준다.
+// 색상은 DESIGN.md 상태 스케일(확정=그린, 고확도=인포블루, 예정=워닝앰버)의 의미를 유지하고 명도만 미세 조정.
+const WEEK_SERIES_GRADIENT: Record<
+  "confirmed" | "highConfidence" | "open" | "inferred" | "monthlyOnly",
+  { id: string; from: string; to: string }
+> = {
+  confirmed: { id: "rwfGradConfirmed", from: "#0B6249", to: "#084734" },
+  highConfidence: { id: "rwfGradHigh", from: "#2C74C4", to: "#1E5DA8" },
+  open: { id: "rwfGradOpen", from: "#C48A28", to: "#A8741A" },
+  inferred: { id: "rwfGradInferred", from: "#828A96", to: "#6B7280" },
+  monthlyOnly: { id: "rwfGradMonthly", from: "#E7E4DE", to: "#D9D6D0" },
+}
+
+// 진행 바(확정/월목표, 확정+고확도/월목표)용 가로 그라디언트.
+const PROGRESS_GRADIENT = {
+  confirmed: { from: "#0B6249", to: "#084734" },
+  covered: { from: "#2C74C4", to: "#1E5DA8" },
+}
+
 function RevWeekChartTooltip({
   active,
   payload,
   label,
+  weeklyTarget,
 }: {
   active?: boolean
   payload?: Array<{ payload?: RevWeekPoint }>
   label?: string | number
+  weeklyTarget?: number | null
 }) {
   const point = payload?.[0]?.payload
   if (!active || !point || point.total <= 0) return null
+  const paceDelta = weeklyTarget != null && weeklyTarget > 0 ? point.total - weeklyTarget : null
   return (
-    <div className="min-w-[196px] rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5 text-[11px] shadow-[0_12px_32px_rgba(17,17,16,0.14)]">
+    <div className="min-w-[204px] rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5 text-[11px] shadow-[0_16px_40px_rgba(17,17,16,0.16)]">
       <div className="flex items-center justify-between gap-3">
         <span className="font-bold text-[#111110]">{label} 합계</span>
         <span className="font-bold tabular-nums text-[#111110]">{formatMoney(point.total)}</span>
@@ -1459,10 +1539,14 @@ function RevWeekChartTooltip({
         {WEEK_SERIES.map((series) => {
           const value = point[series.key]
           if (value <= 0) return null
+          const gradient = WEEK_SERIES_GRADIENT[series.key]
           return (
             <div key={series.key} className="flex items-center justify-between gap-3">
               <span className="inline-flex items-center gap-1.5 font-semibold text-[#615D59]">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: series.color }} />
+                <span
+                  className="h-2 w-2 rounded-[3px]"
+                  style={{ backgroundImage: `linear-gradient(180deg, ${gradient.from}, ${gradient.to})` }}
+                />
                 {series.label}
               </span>
               <span className="font-bold tabular-nums text-[#111110]">
@@ -1473,21 +1557,56 @@ function RevWeekChartTooltip({
           )
         })}
       </div>
+      {paceDelta != null && (
+        <div className="mt-2 flex items-center justify-between gap-3 border-t border-[#F0F0EC] pt-1.5">
+          <span className="font-semibold text-[#615D59]">주 평균 목표 대비</span>
+          <span className={`font-bold tabular-nums ${paceDelta >= 0 ? "text-[#084734]" : "text-[#B43E3E]"}`}>
+            {paceDelta >= 0 ? "+" : "-"}
+            {formatMoney(Math.abs(paceDelta))}
+          </span>
+        </div>
+      )}
       <p className="mt-2 border-t border-[#F0F0EC] pt-1.5 text-[10px] font-semibold text-[#A39E98]">입력 행 {point.rows}건</p>
     </div>
   )
 }
 
-function renderWeekTotalLabel(props: { x?: unknown; y?: unknown; value?: unknown }) {
-  const value = Number(props.value ?? 0)
-  const x = Number(props.x ?? 0)
-  const y = Number(props.y ?? 0)
-  if (!Number.isFinite(value) || value <= 0 || !Number.isFinite(x) || !Number.isFinite(y)) return <g />
-  return (
-    <text x={x} y={y - 8} textAnchor="middle" fontSize={10.5} fontWeight={700} fill="#111110">
-      {formatMoney(value)}
-    </text>
-  )
+// 총액 라벨: 피크 주차는 그린 필 뱃지(헤더 '피크' 칩과 시각 연결), 나머지는 담백한 다크 텍스트.
+function makeWeekTotalLabel(peakValue: number) {
+  return function WeekTotalLabel(props: { x?: unknown; y?: unknown; value?: unknown }) {
+    const value = Number(props.value ?? 0)
+    const x = Number(props.x ?? 0)
+    const y = Number(props.y ?? 0)
+    if (!Number.isFinite(value) || value <= 0 || !Number.isFinite(x) || !Number.isFinite(y)) return <g />
+    const text = formatMoney(value)
+    const isPeak = peakValue > 0 && value >= peakValue
+    if (isPeak) {
+      const pillW = text.length * 6.4 + 16
+      const pillH = 16
+      const pillY = y - 23
+      return (
+        <g>
+          <rect x={x - pillW / 2} y={pillY} width={pillW} height={pillH} rx={8} fill="#ECFDF5" stroke="#BDEFD8" />
+          <text
+            x={x}
+            y={pillY + pillH / 2}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize={10.5}
+            fontWeight={700}
+            fill="#084734"
+          >
+            {text}
+          </text>
+        </g>
+      )
+    }
+    return (
+      <text x={x} y={y - 8} textAnchor="middle" fontSize={10.5} fontWeight={700} fill="#111110">
+        {text}
+      </text>
+    )
+  }
 }
 
 function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]; monthGoal?: number | null }) {
@@ -1507,20 +1626,51 @@ function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]; month
   const monthTotal = data.reduce((sum, item) => sum + item.total, 0)
   const confirmedTotal = seriesTotals.find((series) => series.key === "confirmed")?.total ?? 0
   const coveredTotal = confirmedTotal + (seriesTotals.find((series) => series.key === "highConfidence")?.total ?? 0)
+  const peakValue = data.reduce((max, item) => Math.max(max, item.total), 0)
+  // 주 평균 목표 = 월 목표 ÷ 표시 주차 수. 각 막대가 페이스를 넘겼는지 가늠하는 기준선.
+  const weeklyTarget = monthGoal != null && monthGoal > 0 && data.length > 0 ? monthGoal / data.length : null
+  const confirmedRemaining = monthGoal != null && monthGoal > 0 ? monthGoal - confirmedTotal : null
 
   return (
     <div>
-      <ResponsiveContainer width="100%" height={252}>
-        <ComposedChart data={data} margin={{ top: 24, right: 14, left: -8, bottom: 0 }}>
-          <CartesianGrid stroke="#E8E8E4" strokeDasharray="3 5" vertical={false} />
-          <XAxis dataKey="week" tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} />
+      <ResponsiveContainer width="100%" height={264}>
+        <ComposedChart data={data} margin={{ top: 30, right: 16, left: -8, bottom: 0 }}>
+          <defs>
+            {WEEK_SERIES.map((series) => {
+              const gradient = WEEK_SERIES_GRADIENT[series.key]
+              return (
+                <linearGradient key={gradient.id} id={gradient.id} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={gradient.from} />
+                  <stop offset="100%" stopColor={gradient.to} />
+                </linearGradient>
+              )
+            })}
+          </defs>
+          <CartesianGrid stroke="#ECEBE7" strokeDasharray="2 6" vertical={false} />
+          <XAxis dataKey="week" tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} dy={2} />
           <YAxis tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(Number(v))} width={58} />
-          <Tooltip content={<RevWeekChartTooltip />} cursor={{ fill: "rgba(0,0,0,0.035)" }} />
-          <Bar dataKey="confirmed" name="확정" stackId="week" fill="#084734" radius={[0, 0, 3, 3]} maxBarSize={44} />
-          <Bar dataKey="highConfidence" name="고확도" stackId="week" fill="#1E5DA8" maxBarSize={44} />
-          <Bar dataKey="open" name="예정" stackId="week" fill="#A8741A" maxBarSize={44} />
-          <Bar dataKey="inferred" name="일자 추정" stackId="week" fill="#6B7280" maxBarSize={44} />
-          <Bar dataKey="monthlyOnly" name="월합계만" stackId="week" fill="#D9D6D0" radius={[3, 3, 0, 0]} maxBarSize={44} />
+          <Tooltip content={<RevWeekChartTooltip weeklyTarget={weeklyTarget} />} cursor={{ fill: "rgba(8,71,52,0.045)" }} />
+          {weeklyTarget != null && (
+            <ReferenceLine
+              y={weeklyTarget}
+              stroke="#111110"
+              strokeOpacity={0.26}
+              strokeDasharray="5 5"
+              ifOverflow="extendDomain"
+              label={{
+                value: `주 평균 목표 ${formatMoney(weeklyTarget)}`,
+                position: "insideTopRight",
+                fill: "#615D59",
+                fontSize: 9.5,
+                fontWeight: 700,
+              }}
+            />
+          )}
+          <Bar dataKey="confirmed" name="확정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.confirmed.id})`} radius={[0, 0, 4, 4]} maxBarSize={48} />
+          <Bar dataKey="highConfidence" name="고확도" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.highConfidence.id})`} maxBarSize={48} />
+          <Bar dataKey="open" name="예정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.open.id})`} maxBarSize={48} />
+          <Bar dataKey="inferred" name="일자 추정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.inferred.id})`} maxBarSize={48} />
+          <Bar dataKey="monthlyOnly" name="월합계만" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.monthlyOnly.id})`} radius={[4, 4, 0, 0]} maxBarSize={48} />
           <Line
             type="monotone"
             dataKey="total"
@@ -1529,37 +1679,68 @@ function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]; month
             dot={false}
             activeDot={false}
             isAnimationActive={false}
-            label={renderWeekTotalLabel}
+            label={makeWeekTotalLabel(peakValue)}
           />
         </ComposedChart>
       </ResponsiveContainer>
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] font-semibold text-[#615D59]">
-        {seriesTotals.filter((series) => series.total > 0).map((series) => (
-          <span key={series.key} className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: series.color }} />
-            {series.label}
-            <span className="font-bold tabular-nums text-[#111110]">{formatMoney(series.total)}</span>
-          </span>
-        ))}
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
+        {seriesTotals
+          .filter((series) => series.total > 0)
+          .map((series) => {
+            const gradient = WEEK_SERIES_GRADIENT[series.key]
+            const share = monthTotal > 0 ? (series.total / monthTotal) * 100 : 0
+            return (
+              <span key={series.key} className="inline-flex items-center gap-1.5">
+                <span
+                  className="h-3 w-3 rounded-[4px] ring-1 ring-inset ring-black/5"
+                  style={{ backgroundImage: `linear-gradient(180deg, ${gradient.from}, ${gradient.to})` }}
+                />
+                <span className="font-semibold text-[#615D59]">{series.label}</span>
+                <span className="font-bold tabular-nums text-[#111110]">{formatMoney(series.total)}</span>
+                <span className="font-semibold tabular-nums text-[#A39E98]">{formatPercent(share)}</span>
+              </span>
+            )
+          })}
       </div>
       {monthGoal != null && monthGoal > 0 && (
-        <div className="mt-3 space-y-2.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
-          <CompactProgress
-            label="확정 / 월 목표"
-            value={confirmedTotal}
-            max={monthGoal}
-            meta={`${formatMoney(confirmedTotal)} · ${formatPercent((confirmedTotal / monthGoal) * 100)}`}
-          />
-          <CompactProgress
-            label="확정+고확도 / 월 목표"
-            value={coveredTotal}
-            max={monthGoal}
-            color="#1E5DA8"
-            meta={`${formatMoney(coveredTotal)} · ${formatPercent((coveredTotal / monthGoal) * 100)}`}
-          />
-          <p className="text-[10.5px] font-semibold text-[#A39E98]">
-            월 목표 {formatMoney(monthGoal)} · 월 합계 {formatMoney(monthTotal)}
-          </p>
+        <div className="mt-3.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-gradient-to-b from-white to-[#FAFAF8] p-3.5">
+          <div className="mb-2.5 flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold text-[#111110]">월 목표 대비 진행</span>
+            <span className="text-[10.5px] font-semibold tabular-nums text-[#615D59]">
+              목표 <span className="font-bold text-[#111110]">{formatMoney(monthGoal)}</span>
+            </span>
+          </div>
+          <div className="space-y-2.5">
+            <CompactProgress
+              label="확정 / 월 목표"
+              value={confirmedTotal}
+              max={monthGoal}
+              gradient={PROGRESS_GRADIENT.confirmed}
+              meta={`${formatMoney(confirmedTotal)} · ${formatPercent((confirmedTotal / monthGoal) * 100)}`}
+            />
+            <CompactProgress
+              label="확정+고확도 / 월 목표"
+              value={coveredTotal}
+              max={monthGoal}
+              gradient={PROGRESS_GRADIENT.covered}
+              meta={`${formatMoney(coveredTotal)} · ${formatPercent((coveredTotal / monthGoal) * 100)}`}
+            />
+          </div>
+          <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-[rgba(0,0,0,0.06)] pt-2 text-[10.5px] font-semibold text-[#A39E98]">
+            <span>
+              월 합계 <span className="font-bold text-[#615D59]">{formatMoney(monthTotal)}</span>
+            </span>
+            {confirmedRemaining != null &&
+              (confirmedRemaining > 0 ? (
+                <span>
+                  확정까지 <span className="font-bold text-[#B43E3E]">{formatMoney(confirmedRemaining)}</span>
+                </span>
+              ) : (
+                <span className="text-[#084734]">
+                  확정 목표 달성 <span className="font-bold">+{formatMoney(Math.abs(confirmedRemaining))}</span>
+                </span>
+              ))}
+          </div>
         </div>
       )}
     </div>
@@ -1570,24 +1751,27 @@ function CompactProgress({
   label,
   value,
   max,
-  color = "#084734",
+  gradient = PROGRESS_GRADIENT.confirmed,
   meta,
 }: {
   label: string
   value: number
   max: number
-  color?: string
+  gradient?: { from: string; to: string }
   meta?: string
 }) {
   const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between gap-2 text-[11px]">
+      <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px]">
         <span className="font-bold text-[#111110]">{label}</span>
-        <span className="font-semibold text-[#615D59]">{meta ?? formatMoney(value)}</span>
+        <span className="font-semibold tabular-nums text-[#615D59]">{meta ?? formatMoney(value)}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-[#F0F0EC]">
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+      <div className="relative h-2.5 overflow-hidden rounded-full bg-[#EDEBE7] shadow-[inset_0_1px_2px_rgba(17,17,16,0.06)]">
+        <div
+          className="h-full rounded-full transition-[width] duration-500 ease-out"
+          style={{ width: `${pct}%`, backgroundImage: `linear-gradient(90deg, ${gradient.from}, ${gradient.to})` }}
+        />
       </div>
     </div>
   )
@@ -2780,7 +2964,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
       ? `합계 ${formatMoney(bucket.total)} · 확정 ${formatMoney(bucket.confirmed)} · 고확도 ${formatMoney(bucket.high)} · 예정 ${formatMoney(bucket.open)}${mismatch ? " · 주차·월 불일치" : ""}`
       : "미입력"
   const title = locked
-    ? `${baseTitle} · ${lockLabel} — 편집 불가`
+    ? `${baseTitle} · 🔒 ${lockLabel} 값이라 잠금(실수 방지) — 수정은 우측 패널에서 정정 초안으로`
     : pending
       ? `${baseTitle} · 미검수 초안 ${formatMoney(pending.amount)} (${confidenceLabel(pending.confidence)})`
       : editable
@@ -2908,7 +3092,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   const confidenceLabel = (v: DraftConfidence) => DRAFT_CONFIDENCE_OPTIONS.find((option) => option.id === v)?.label ?? v
   const baseTitle = display > 0 ? `W${weekIndex + 1} ${formatMoney(display)}${isMonthOnly ? " · 월합계만" : ""}` : `W${weekIndex + 1} 미입력`
   const title = locked
-    ? `${baseTitle} · ${lockLabel} — 편집 불가`
+    ? `${baseTitle} · 🔒 ${lockLabel} 값이라 잠금(실수 방지) — 수정은 우측 패널에서 정정 초안으로`
     : pending
       ? `${baseTitle} · 미검수 초안 ${formatMoney(pending.amount)} (${confidenceLabel(pending.confidence)})`
       : editable
@@ -3207,15 +3391,28 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
       </td>
       <td className="border-l border-[#F2F1EE] px-1.5 text-right" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
         <div className="flex flex-wrap items-center justify-end gap-x-1">
-          {group.categories.map((category) => (
-            <span
-              key={category}
-              title={`${productCategoryMeta(category).label} ${formatMoney(group.categoryTotals[category])}`}
-              className="text-[10px] font-semibold text-[#615D59]"
-            >
-              {productCategoryMeta(category).shortLabel}
-            </span>
-          ))}
+          {group.categories.map((category) =>
+            category === "hardware" ? (
+              // HW 그룹 → 하드웨어 콘솔 역링크. 행 클릭(그룹 선택)과 겹치지 않게 전파를 끊는다.
+              <Link
+                key={category}
+                href={`/admin/hardware?customer=${encodeURIComponent(group.customer)}`}
+                onClick={(event) => event.stopPropagation()}
+                title={`${group.customer} 하드웨어 거래이력 열기 · HW ${formatMoney(group.categoryTotals[category])}`}
+                className="text-[10px] font-semibold text-[#7A520F] underline-offset-2 transition hover:text-[#A8741A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+              >
+                HW ↗
+              </Link>
+            ) : (
+              <span
+                key={category}
+                title={`${productCategoryMeta(category).label} ${formatMoney(group.categoryTotals[category])}`}
+                className="text-[10px] font-semibold text-[#615D59]"
+              >
+                {productCategoryMeta(category).shortLabel}
+              </span>
+            ),
+          )}
         </div>
       </td>
       <RevMatrixMonthStrip
@@ -3248,6 +3445,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
 const RevMatrixDealRow = memo(function RevMatrixDealRow({
   view,
   grouped,
+  nested = false,
   months,
   expandedMonths,
   active,
@@ -3259,6 +3457,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
 }: {
   view: RevRowView
   grouped: boolean
+  nested?: boolean // 카테고리(HW/SW) 합산행 아래 품목 잎 행 — 한 단계 더 들여쓰기
   months: string[]
   expandedMonths: Set<string>
   active: boolean
@@ -3308,7 +3507,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   return (
     <tr className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FBFBFA] hover:bg-[#FAFAF8]" : "hover:bg-[#FAFAF8]"}`}>
       <td
-        className={`sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] pr-2 ${grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2"} ${rowBg}`}
+        className={`sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] pr-2 ${nested ? "border-l-2 border-l-[#CBD9D2] pl-12" : grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2"} ${rowBg}`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
         <div className="flex items-center gap-1.5">
@@ -3328,7 +3527,18 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
               </span>
             )}
           </div>
-          <span className="shrink-0 text-[10px] font-semibold text-[#A39E98]">{productCategoryMeta(productCategory).shortLabel}</span>
+          {productCategory === "hardware" ? (
+            // HW 행 → 하드웨어 콘솔 역링크. ?customer만 넘기면 내역 탭 + 거래이력 슬라이드오버가 열린다.
+            <Link
+              href={`/admin/hardware?customer=${encodeURIComponent(row.customer)}`}
+              title={`${row.customer} 하드웨어 거래이력 열기`}
+              className="shrink-0 text-[10px] font-semibold text-[#7A520F] underline-offset-2 transition hover:text-[#A8741A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+            >
+              HW ↗
+            </Link>
+          ) : (
+            <span className="shrink-0 text-[10px] font-semibold text-[#A39E98]">{productCategoryMeta(productCategory).shortLabel}</span>
+          )}
         </div>
       </td>
       <td className="border-l border-[#F2F1EE] px-1.5 text-right align-middle" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
@@ -3358,37 +3568,105 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   )
 })
 
-// 고객 펼침 시 HW/SW 섹션 구분선. 좌측(고정) 셀에 카테고리 pill·건수, 나머지는 밴드 + 선택 월 소계.
-// 카테고리가 둘 이상인 고객에만 삽입해(HW+SW 혼재) 밀도를 유지한다.
-const RevMatrixCategoryDivider = memo(function RevMatrixCategoryDivider({
+// 고객 펼침 시 카테고리(HW/SW) 합산 1행. 그 카테고리 품목들의 12개월 소계를 한 줄로 보여준다.
+// 개별 품목행 대신 "HW 쭉 하나로, SW 하나로" 구조 — 품목명은 서브라인에, 상세/편집은 우측 rail에서.
+const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
   category,
-  count,
-  monthTotal,
-  monthLabel,
-  colSpan,
+  products,
+  monthlyByMonth,
+  annual,
+  rows,
+  months,
+  expandedMonths,
+  expanded,
+  editable,
+  onToggle,
+  onOpen,
+  density = "regular",
 }: {
   category: Exclude<RevProductCategory, "all">
-  count: number
-  monthTotal: number
-  monthLabel: string
-  colSpan: number
+  products: string[]
+  monthlyByMonth: Record<string, RevMonthlyBucket>
+  annual: RevMonthlyBucket
+  rows: LedgerRevenueRow[]
+  months: string[]
+  expandedMonths: Set<string>
+  expanded: boolean
+  editable: boolean // 이 카테고리에 편집 가능한 품목이 있는지(전부 잠금이면 ▸ 대신 잠금 표시)
+  onToggle: () => void
+  onOpen: () => void
+  density?: MatrixDensity
 }) {
+  const rowBg = category === "hardware" ? "bg-[#FFFCF5] group-hover:bg-[#FBF6EC]" : "bg-[#FBFBFA] group-hover:bg-[#FAFAF8]"
+  const annualTone = matrixBucketTone(annual)
+  const subLine = products.slice(0, 3).join(" · ") + (products.length > 3 ? ` +${products.length - 3}` : "")
+  // 확장월 주차 5칸: 이 카테고리 품목들의 주차 분해를 합산한다.
+  const weeklyByMonth = (month: string) => {
+    const weeks = [0, 0, 0, 0, 0]
+    let hasExplicit = false
+    let hasInferred = false
+    let monthOnlyAmount = 0
+    for (const row of rows) {
+      const split = rowWeeklySplit(row, month)
+      if (split.source === "explicit" || split.source === "inferred") {
+        split.weeks.forEach((value, index) => { weeks[index] += value })
+        if (split.source === "explicit") hasExplicit = true
+        else hasInferred = true
+      } else if (split.source === "month-only") {
+        monthOnlyAmount += split.total
+      }
+    }
+    if (!weeks.some((value) => value > 0) && monthOnlyAmount === 0) return null
+    return { weeks, inferred: !hasExplicit && hasInferred, monthOnlyAmount, mismatch: false }
+  }
   return (
-    <tr className="border-t border-[#EDECE8] bg-[#F3F2EF]">
+    <tr className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${
+      category === "hardware" ? "bg-[#FFFCF5] hover:bg-[#FBF6EC]" : "bg-[#FBFBFA] hover:bg-[#FAFAF8]"
+    }`}>
       <td
-        className="sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] bg-[#F3F2EF] py-1 pl-7 pr-2"
+        className={`sticky left-0 z-10 border-l-2 border-l-[#DDE7E2] border-r border-[rgba(0,0,0,0.08)] pl-5 pr-2 ${rowBg}`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
-        <span className="flex items-center gap-1.5">
-          <ProductCategoryPill category={category} compact />
-          <span className="text-[10px] font-bold text-[#615D59]">{count}건</span>
-        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={expanded}
+            title={expanded ? "품목 접기" : editable ? "품목 펼쳐 엑셀식 편집" : "품목 보기 (전부 확정·잠금)"}
+            aria-label={`${productCategoryMeta(category).label} 품목 ${expanded ? "접기" : "펼치기"}`}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[#615D59] transition hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+          >
+            <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-90" : ""}`} />
+          </button>
+          <button
+            type="button"
+            onClick={onOpen}
+            title={`${productCategoryMeta(category).label} 합산 · ${products.join(", ") || "-"} · 상세 열기`}
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/30"
+          >
+            <ProductCategoryPill category={category} compact />
+            <span className="min-w-0 truncate text-[11px] font-semibold text-[#615D59]">{subLine || productCategoryMeta(category).label}</span>
+          </button>
+        </div>
       </td>
-      <td colSpan={Math.max(1, colSpan - 1)} className="bg-[#F3F2EF] px-2 text-right align-middle">
-        {monthTotal > 0 && (
-          <span className="text-[10px] font-semibold text-[#A39E98]">
-            {monthLabel} 소계 <span className="font-bold text-[#615D59]">{formatMoney(monthTotal)}</span>
-          </span>
+      <td className="border-l border-[#F2F1EE] px-1.5 text-right align-middle" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
+        <span className="text-[10px] font-semibold text-[#A39E98]">합산</span>
+      </td>
+      <RevMatrixMonthStrip
+        monthlyByRowOrGroup={monthlyByMonth}
+        weeklyByMonth={weeklyByMonth}
+        months={months}
+        expandedMonths={expandedMonths}
+        bgClass={rowBg}
+      />
+      <td
+        className={`sticky right-0 z-10 border-l border-[rgba(0,0,0,0.08)] px-2 text-right align-middle tabular-nums ${rowBg}`}
+        style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
+      >
+        {annual.total > 0 ? (
+          <span className={`block text-[11px] leading-tight ${MATRIX_TONE[annualTone]}`}>{formatWeekAmount(annual.total)}</span>
+        ) : (
+          <span className="text-[11px] font-semibold text-[#C9C5BF]">–</span>
         )}
       </td>
     </tr>
@@ -3522,6 +3800,8 @@ export default function SalesLedgerWorkbench() {
   const [revPageSize, setRevPageSize] = useState<RevPageSize>(100)
   const [revPage, setRevPage] = useState(1)
   const [expandedRevGroups, setExpandedRevGroups] = useState<Set<string>>(() => new Set())
+  // 카테고리(HW/SW) 합산행 펼침 상태. 키=`${groupKey}::${category}`. 펼치면 그 카테고리 품목행(편집 가능) 노출.
+  const [expandedRevCategories, setExpandedRevCategories] = useState<Set<string>>(() => new Set())
   // 매트릭스: 월 헤더 클릭 시 그 달만 w1~w5 5칸으로 확장(기본은 전부 요약 1칸).
   const [expandedRevMonths, setExpandedRevMonths] = useState<Set<string>>(() => new Set())
   // 매트릭스 행 밀도(좁게/보통/넓게). SSR 하이드레이션 안전을 위해 기본값으로 시작하고 마운트 후 복원.
@@ -3650,6 +3930,93 @@ export default function SalesLedgerWorkbench() {
       setWcSnapshotting(false)
     }
   }, [loadWeeklyCloseRuns, wcHead])
+
+  // REV DB-native 소스 상태. dbImportInfo가 있으면 액티브 소스가 DB 임포트 run이라는 뜻이고,
+  // 그때는 시트 동기화만으로는 화면이 안 바뀐다(요약/REV/KPI가 고정 run을 읽음) — 재캡처 필요.
+  // SSR 하이드레이션 안전을 위해 null로 시작하고, 마운트 후 localStorage로 선복원한 뒤
+  // 서버(GET db-import)로 확정한다. 서버 응답이 도착하면 그 값이 항상 이긴다.
+  const [dbImportInfo, setDbImportInfo] = useState<RevDbImportInfo | null>(null)
+  const [dbSourceServerState, setDbSourceServerState] = useState<"unknown" | "active" | "inactive">("unknown")
+  const [dbImportBusy, setDbImportBusy] = useState(false)
+  const [dbImportNotice, setDbImportNotice] = useState<string | null>(null)
+  const [dbImportError, setDbImportError] = useState<string | null>(null)
+  // captureDbImport(deps [])에서 직전 액티브 run을 비교하기 위한 미러 — dedupe 응답이
+  // "기존 run 재활성화"(다른 run으로 전환)인지 "완전 동일"인지 구분하는 데 쓴다.
+  const dbImportRunIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    dbImportRunIdRef.current = dbImportInfo?.runId ?? null
+  }, [dbImportInfo])
+  useEffect(() => {
+    setDbImportInfo(loadStoredRevDbImport())
+    let cancelled = false
+    void (async () => {
+      try {
+        const status = await adminFetchJson<ActiveRevImportStatusResponse>("/api/admin/branch/ledger/db-import")
+        if (cancelled) return
+        if (status.active && status.runId) {
+          const info = { runId: status.runId, capturedAt: status.capturedAt ?? "" }
+          setDbImportInfo(info)
+          setDbSourceServerState("active")
+          storeRevDbImport(info)
+        } else {
+          setDbImportInfo(null)
+          setDbSourceServerState("inactive")
+          clearStoredRevDbImport()
+        }
+      } catch {
+        // 서버 확인 실패(권한/네트워크) — localStorage 폴백을 유지하고 unknown으로 둔다.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  // 서버가 확정한 상태가 항상 이긴다. unknown일 때만 로컬 폴백(localStorage 복원값)과
+  // 보조 신호(최신 주간 마감 스냅샷의 dataSource)로 판별한다 — 이 폴백이 시트 모드 배포를
+  // DB-native로 뒤집을 수 있으므로, 서버 GET이 inactive를 확인하면 즉시 꺼진다.
+  const dbNativeActive =
+    dbSourceServerState === "active"
+      ? true
+      : dbSourceServerState === "inactive"
+        ? false
+        : Boolean(dbImportInfo) || wcRuns[0]?.dataSource === "db-import"
+
+  // DB 재동기화: 시트 미러(branch_rev_deals)를 버전드 임포트로 재캡처하고 그 run을 활성화한다.
+  // 서버가 checksum dedupe를 하므로 변경이 없으면 기존 run을 돌려준다(deduped=true) —
+  // 단, dedupe여도 매치된 run이 직전 액티브 run과 다르면 액티브 소스가 전환된 것이므로
+  // runChanged=true로 알려 호출부가 refetch하게 한다(과거 상태로 되돌린 시트 재캡처 케이스).
+  // 에러는 던지지 않고 Source 바 인라인(dbImportError)으로만 표면화한다 — 시트 동기화 성공을
+  // 가리지 않기 위해서다.
+  const captureDbImport = useCallback(async (): Promise<(RevDbImportResponse & { runChanged: boolean }) | null> => {
+    setDbImportBusy(true)
+    setDbImportNotice(null)
+    setDbImportError(null)
+    try {
+      const result = await adminFetchJson<RevDbImportResponse>("/api/admin/branch/ledger/db-import", {
+        method: "POST",
+      })
+      const prevRunId = dbImportRunIdRef.current
+      const runSwitched = prevRunId != null && prevRunId !== result.runId
+      const runChanged = prevRunId == null || runSwitched
+      const info = { runId: result.runId, capturedAt: result.capturedAt }
+      setDbImportInfo(info)
+      setDbSourceServerState("active")
+      storeRevDbImport(info)
+      setDbImportNotice(
+        !result.deduped
+          ? `새 run 캡처됨 · 행 ${result.lineCount.toLocaleString("ko-KR")}건`
+          : runSwitched
+            ? "재동기화 완료 — 기존 run 재활성화(데이터 전환)"
+            : "재동기화 완료 — 변경 없음(run 유지)",
+      )
+      return { ...result, runChanged }
+    } catch (error) {
+      setDbImportError(errorMessage(error))
+      return null
+    } finally {
+      setDbImportBusy(false)
+    }
+  }, [])
 
   // 필터 상태 URL 동기화 — 새로고침/링크 공유 시 렌즈·월·검색·필터·정렬이 유지된다.
   // 마운트 시 한 번 읽고(urlReady 전에는 쓰지 않음), 이후 변경마다 replaceState로 반영(히스토리 오염 없음).
@@ -4235,7 +4602,7 @@ export default function SalesLedgerWorkbench() {
   const revCustomerGroups = useMemo<RevCustomerGroup[]>(() => {
     const groups = new Map<string, RevCustomerGroup>()
     for (const row of filteredRows) {
-      const key = customerGroupKey(row.customer) || row.id
+      const key = normalizedAccountKey(row.customer) || row.id
       let group = groups.get(key)
       if (!group) {
         group = {
@@ -4250,6 +4617,8 @@ export default function SalesLedgerWorkbench() {
           monthOnlyAmount: 0,
           categoryTotals: { software: 0, hardware: 0, unknown: 0 },
           categories: [],
+          categoryMonthly: {},
+          categoryAnnual: {},
           managers: [],
           teams: [],
           regions: [],
@@ -4262,6 +4631,15 @@ export default function SalesLedgerWorkbench() {
         groups.set(key, group)
       }
       group.rows.push(row)
+      const category = rowProductCategory(row)
+      // 카테고리별 12개월/연간 소계 버킷 lazy 초기화(HW/SW 합산 1행용).
+      let categoryMonthly = group.categoryMonthly[category]
+      if (!categoryMonthly) {
+        categoryMonthly = Object.fromEntries(matrixMonths.map((month) => [month, emptyMonthlyBucket()]))
+        group.categoryMonthly[category] = categoryMonthly
+        group.categoryAnnual[category] = emptyMonthlyBucket()
+      }
+      const categoryAnnual = group.categoryAnnual[category]!
       // 다중월 매트릭스: 12개월 각 셀에 이 행의 확도 분해를 누적(그룹 소계 1패스).
       // 같은 패스에서 주차↔월 불일치도 12개월 전체로 검사한다(검수 배지 연도화).
       let rowHasMismatch = false
@@ -4270,6 +4648,8 @@ export default function SalesLedgerWorkbench() {
         if (bucket.total > 0) {
           addMonthlyBucket(group.monthlyTotals[month], bucket)
           addMonthlyBucket(group.annualTotal, bucket)
+          addMonthlyBucket(categoryMonthly[month], bucket)
+          addMonthlyBucket(categoryAnnual, bucket)
         }
         if (rowWeeklyMismatch(row, month)) {
           rowHasMismatch = true
@@ -4289,7 +4669,6 @@ export default function SalesLedgerWorkbench() {
       } else if (split.source === "month-only") {
         group.monthOnlyAmount += monthAmount
       }
-      const category = rowProductCategory(row)
       group.categoryTotals[category] += monthAmount
       if (!group.categories.includes(category)) group.categories.push(category)
       if (row.manager && !group.managers.includes(row.manager)) group.managers.push(row.manager)
@@ -4298,10 +4677,10 @@ export default function SalesLedgerWorkbench() {
       if (row.ledgerOrigin === "draft") group.hasDraft = true
       if (rowHasMismatch) group.mismatchCount += 1
     }
-    // 같은 고객 안에서 HW 품목을 먼저, 그다음 SW 순으로 묶는다(펼침 시 HW/SW 섹션 구분).
-    // 안정 정렬이라 카테고리 내부는 기존 순서(실적/월 금액)를 그대로 유지한다. 이 정렬을
-    // 여기서 하면 렌더·visibleDealRows·editableCells가 동일 순서를 공유해 편집 Tab 순서와도 일치.
+    // 고객 펼침 시 HW 합산행을 먼저, 그다음 SW 합산행 순으로 그린다. categories/rows 둘 다
+    // HW-first로 정렬(안정 정렬이라 카테고리 내부는 기존 실적 순서 유지).
     for (const group of groups.values()) {
+      group.categories.sort((a, b) => categoryRank(a) - categoryRank(b))
       if (group.categories.length > 1) {
         group.rows.sort((a, b) => categoryRank(rowProductCategory(a)) - categoryRank(rowProductCategory(b)))
       }
@@ -4409,15 +4788,23 @@ export default function SalesLedgerWorkbench() {
   // ── Phase 2: 매트릭스 인라인 편집 배선 ─────────────────────────────────────
   // 현재 페이지에서 실제로 보이는 딜행(접힌 그룹 하위행 제외)만 대상. row.id로 좌표 부여.
   const visibleDealRows = useMemo(() => {
+    // 인라인 편집(엑셀식) 대상 = 실제로 렌더되는 "품목 잎 행"만.
+    //  · 단일 품목 고객: 딜행이 바로 렌더 → 편집 대상
+    //  · 다중 품목 고객: 그룹 펼침 + 그 카테고리(HW/SW) 합산행까지 펼쳐야 품목행이 나옴 → 그때만 대상
     const list: LedgerRevenueRow[] = []
     for (const group of visibleGroups) {
-      const grouped = group.rows.length > 1
-      const expanded = expandedRevGroups.has(group.key)
-      if (grouped && !expanded) continue // 접힌 그룹 하위행은 렌더 안 됨 → 편집 대상 아님
-      for (const row of group.rows) list.push(row)
+      if (group.rows.length <= 1) {
+        for (const row of group.rows) list.push(row)
+        continue
+      }
+      if (!expandedRevGroups.has(group.key)) continue
+      for (const row of group.rows) {
+        const category = rowProductCategory(row)
+        if (expandedRevCategories.has(`${group.key}::${category}`)) list.push(row)
+      }
     }
     return list
-  }, [visibleGroups, expandedRevGroups])
+  }, [visibleGroups, expandedRevGroups, expandedRevCategories])
 
   const rowById = useMemo(() => {
     const map = new Map<string, LedgerRevenueRow>()
@@ -4574,6 +4961,16 @@ export default function SalesLedgerWorkbench() {
 
   const toggleRevGroup = useCallback((key: string) => {
     setExpandedRevGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }, [])
+
+  const toggleRevCategory = useCallback((groupKey: string, category: Exclude<RevProductCategory, "all">) => {
+    const key = `${groupKey}::${category}`
+    setExpandedRevCategories((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -4795,6 +5192,12 @@ export default function SalesLedgerWorkbench() {
           method: "POST",
           body: JSON.stringify({ sources: ["rev"] }),
         })
+        // 동기화 함정 해소: 액티브 소스가 DB 임포트 run이면 시트 미러만 갱신해서는 아무것도
+        // 안 바뀐 것처럼 보인다. 시트 동기화 성공 후 재캡처(POST db-import)를 이어 붙인다.
+        // 결과/에러는 Source 바 인라인(dbImportNotice/dbImportError)으로 표면화된다.
+        if (dbNativeActive) {
+          await captureDbImport()
+        }
       }
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : String(error))
@@ -4803,7 +5206,18 @@ export default function SalesLedgerWorkbench() {
       setRefreshKey((value) => value + 1)
       setRefreshing(false)
     }
-  }, [canRunAdminOperations])
+  }, [canRunAdminOperations, captureDbImport, dbNativeActive])
+
+  // Source 바의 명시적 'DB 재동기화' — 시트 동기화 없이 미러 → DB 임포트 재캡처만 수행.
+  // 새 run이 잡혔거나(비 dedupe) 액티브 run이 전환됐을 때(runChanged) 데이터 훅을 다시 읽는다.
+  // 완전 동일(deduped + 같은 run)이면 화면 그대로가 정답이라 refetch를 생략한다.
+  const onDbResync = useCallback(async () => {
+    const result = await captureDbImport()
+    if (result && (!result.deduped || result.runChanged)) {
+      clearBranchRequestCache()
+      setRefreshKey((value) => value + 1)
+    }
+  }, [captureDbImport])
 
   const buildDraftInput = useCallback((kind: DraftKind, base?: LedgerDraft | null): LedgerDraftInput => {
     const sourceSnapshot = kind === "edit-row" && selectedRow ? {
@@ -4975,7 +5389,12 @@ export default function SalesLedgerWorkbench() {
         <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-[11px] font-bold uppercase tracking-[0.08em] text-[#615D59]">
-              <span>KR Team</span>
+              <Link
+                href="/admin/branch"
+                className="underline-offset-2 transition hover:text-[#084734] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+              >
+                KR Team
+              </Link>
               <ChevronRight className="h-3.5 w-3.5" />
               <span>FY26-27</span>
               <ChevronRight className="h-3.5 w-3.5" />
@@ -5087,9 +5506,47 @@ export default function SalesLedgerWorkbench() {
             <span>시트수정 <span className="font-semibold text-[#111110]">{formatDateTime(summary.data?.sheetModifiedAt)}</span></span>
             <span>입력 큐 <span className="font-semibold text-[#111110]">{queueMode === "server" ? "서버" : "로컬"} · {openDrafts.length}건</span></span>
             <span>내부 원장 <span className="font-semibold text-[#111110]">{ledgerHealth?.ok === false ? "준비 필요" : `${ledgerEntries.length}건`}</span></span>
+            <span className="flex items-center gap-1.5">
+              REV 원천{" "}
+              <span
+                className="font-semibold text-[#111110]"
+                title={dbImportInfo ? `액티브 DB 임포트 run ${dbImportInfo.runId}` : undefined}
+              >
+                {dbImportInfo
+                  ? `DB run ${dbImportInfo.runId.slice(0, 8)}${dbImportInfo.capturedAt ? ` · ${formatDateTime(dbImportInfo.capturedAt)}` : ""}`
+                  : dbNativeActive
+                    ? "DB 임포트 · run 미확인"
+                    : dbSourceServerState === "inactive"
+                      ? "시트 미러 (DB 임포트 비활성)"
+                      : "미확인 (시트 폴백 가능)"}
+              </span>
+              {canRunAdminOperations && (
+                <button
+                  type="button"
+                  onClick={() => void onDbResync()}
+                  disabled={dbImportBusy || refreshing}
+                  title="시트 미러를 버전드 DB 임포트로 재캡처하고 그 run을 활성화합니다 (변경 없으면 기존 run 유지)"
+                  className="inline-flex h-6 items-center gap-1 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-2 text-[10.5px] font-bold text-[#084734] transition hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
+                >
+                  {dbImportBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Database className="h-3 w-3" />}
+                  DB 재동기화
+                </button>
+              )}
+            </span>
             {(queueError || ledgerHealth?.ok === false) && (
               <span className="rounded border border-[#ECD29C] bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-semibold text-[#7A520F]">
                 ⚠ {queueError ?? ledgerHealth?.message ?? "내부 원장 준비 필요"}
+              </span>
+            )}
+            {(dbImportError || dbImportNotice) && (
+              <span
+                className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
+                  dbImportError
+                    ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]"
+                    : "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                }`}
+              >
+                {dbImportError ? `⚠ DB 재동기화 실패: ${dbImportError}` : dbImportNotice}
               </span>
             )}
           </div>
@@ -5247,8 +5704,8 @@ export default function SalesLedgerWorkbench() {
 
                   {wcRuns.length < 2 ? (
                     <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-5 text-[12px] leading-relaxed text-[#615D59]">
-                      저장된 스냅샷 {wcRuns.length.toLocaleString("ko-KR")}개 — 스냅샷이 2개 이상 쌓이면 주간 비교가 열립니다. 매주 같은 요일에
-                      &ldquo;지금 스냅샷&rdquo;을 눌러 상태를 기록하세요.
+                      저장된 스냅샷 {wcRuns.length.toLocaleString("ko-KR")}개 — 스냅샷이 2개 이상 쌓이면 주간 비교가 열립니다. 매주 금요일
+                      23:30(KST)에 자동으로 기록되며, 필요할 때만 &ldquo;지금 스냅샷&rdquo;으로 즉시 남기면 됩니다.
                     </div>
                   ) : (
                     <>
@@ -6029,34 +6486,63 @@ export default function SalesLedgerWorkbench() {
                                 density={matrixDensity}
                               />
                             ) : null}
-                            {(!grouped || expanded) &&
-                              (() => {
-                                // HW+SW 혼재 고객만 섹션 구분선을 넣는다(단일 카테고리는 밀도 유지 위해 생략).
-                                const sectioned = grouped && group.categories.length > 1
-                                let lastCategory: Exclude<RevProductCategory, "all"> | null = null
-                                const nodes: React.ReactNode[] = []
-                                for (const row of group.rows) {
+                            {grouped
+                              ? expanded &&
+                                // 고객 펼침: 카테고리(HW/SW)별 합산 1행. ▸로 펼치면 그 카테고리 품목행(엑셀식 편집)이 나온다.
+                                group.categories.map((category) => {
+                                  const catRows = group.rows.filter((row) => rowProductCategory(row) === category)
+                                  const products = Array.from(new Set(catRows.map((row) => row.productVersion).filter((value): value is string => Boolean(value))))
+                                  const catExpanded = expandedRevCategories.has(`${group.key}::${category}`)
+                                  const catEditable = catRows.some((row) => matrixMonths.some((month) => isMatrixCellEditable(row, month)))
+                                  return (
+                                    <Fragment key={`cat-${group.key}-${category}`}>
+                                      <RevMatrixCategoryRow
+                                        category={category}
+                                        products={products}
+                                        monthlyByMonth={group.categoryMonthly[category] ?? {}}
+                                        annual={group.categoryAnnual[category] ?? EMPTY_BUCKET}
+                                        rows={catRows}
+                                        months={matrixMonths}
+                                        expandedMonths={expandedRevMonths}
+                                        expanded={catExpanded}
+                                        editable={catEditable}
+                                        onToggle={() => toggleRevCategory(group.key, category)}
+                                        onOpen={() => selectRevGroup(group.key)}
+                                        density={matrixDensity}
+                                      />
+                                      {catExpanded &&
+                                        catRows.map((row) => {
+                                          const view = revRowViews.get(row.id)
+                                          if (!view) return null
+                                          return (
+                                            <RevMatrixDealRow
+                                              key={row.id}
+                                              view={view}
+                                              grouped
+                                              nested
+                                              months={matrixMonths}
+                                              expandedMonths={expandedRevMonths}
+                                              active={selectedRow?.id === row.id}
+                                              selectedMonth={selectedMonth}
+                                              onOpen={loadDealDetail}
+                                              editor={matrixEditor}
+                                              pendingByCell={pendingByCell}
+                                              density={matrixDensity}
+                                            />
+                                          )
+                                        })}
+                                    </Fragment>
+                                  )
+                                })
+                              : // 단일 품목 고객: 편집 가능한 딜행 그대로.
+                                group.rows.map((row) => {
                                   const view = revRowViews.get(row.id)
-                                  if (!view) continue
-                                  if (sectioned && view.productCategory !== lastCategory) {
-                                    lastCategory = view.productCategory
-                                    const sameCategoryRows = group.rows.filter((r) => rowProductCategory(r) === view.productCategory)
-                                    nodes.push(
-                                      <RevMatrixCategoryDivider
-                                        key={`divider-${group.key}-${view.productCategory}`}
-                                        category={view.productCategory}
-                                        count={sameCategoryRows.length}
-                                        monthTotal={group.categoryTotals[view.productCategory]}
-                                        monthLabel={formatMonthLabel(selectedMonth)}
-                                        colSpan={matrixColSpan}
-                                      />,
-                                    )
-                                  }
-                                  nodes.push(
+                                  if (!view) return null
+                                  return (
                                     <RevMatrixDealRow
                                       key={row.id}
                                       view={view}
-                                      grouped={grouped}
+                                      grouped={false}
                                       months={matrixMonths}
                                       expandedMonths={expandedRevMonths}
                                       active={selectedRow?.id === row.id}
@@ -6065,11 +6551,9 @@ export default function SalesLedgerWorkbench() {
                                       editor={matrixEditor}
                                       pendingByCell={pendingByCell}
                                       density={matrixDensity}
-                                    />,
+                                    />
                                   )
-                                }
-                                return nodes
-                              })()}
+                                })}
                           </Fragment>
                         )
                       })}
@@ -6471,7 +6955,18 @@ export default function SalesLedgerWorkbench() {
                     <div className="space-y-1.5">
                       {selectedGroup.categories.map((category) => (
                         <div key={category} className="flex items-center justify-between gap-2 text-[11px]">
-                          <ProductCategoryPill category={category} compact />
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <ProductCategoryPill category={category} compact />
+                            {category === "hardware" && (
+                              <Link
+                                href={`/admin/hardware?customer=${encodeURIComponent(selectedGroup.customer)}`}
+                                title={`${selectedGroup.customer} 하드웨어 거래이력 열기`}
+                                className="shrink-0 text-[10px] font-bold text-[#7A520F] underline-offset-2 transition hover:text-[#A8741A] hover:underline"
+                              >
+                                하드웨어 ↗
+                              </Link>
+                            )}
+                          </span>
                           <span className="font-bold tabular-nums text-[#111110]">{formatMoney(selectedGroup.categoryTotals[category])}</span>
                         </div>
                       ))}
@@ -6554,7 +7049,18 @@ export default function SalesLedgerWorkbench() {
                     <p className="min-w-0 text-[15px] font-bold tracking-[-0.01em] text-[#111110]">
                       {detail?.customer_name ?? selectedRow.customer}
                     </p>
-                    <ProductCategoryPill category={selectedProductCategory} />
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <ProductCategoryPill category={selectedProductCategory} />
+                      {selectedProductCategory === "hardware" && (
+                        <Link
+                          href={`/admin/hardware?customer=${encodeURIComponent(detail?.customer_name ?? selectedRow.customer)}`}
+                          title={`${detail?.customer_name ?? selectedRow.customer} 하드웨어 거래이력 열기`}
+                          className="text-[10px] font-bold text-[#7A520F] underline-offset-2 transition hover:text-[#A8741A] hover:underline"
+                        >
+                          하드웨어 ↗
+                        </Link>
+                      )}
+                    </span>
                   </div>
                   {selectedRow.ledgerOrigin === "draft" && (
                     <div className="mt-3 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] p-3 text-[11.5px] leading-relaxed text-[#7A520F]">

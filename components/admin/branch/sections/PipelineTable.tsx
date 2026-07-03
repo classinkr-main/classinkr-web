@@ -1,4 +1,5 @@
 "use client"
+import Link from "next/link"
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronDown, ChevronLeft, ChevronRight, RotateCcw, Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useBranchJson } from "../client-api"
@@ -193,7 +194,15 @@ export default function PipelineTable({
   return (
     <section>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-[13px] font-semibold text-[#111110]/70">REV 고객별 매출</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-[13px] font-semibold text-[#111110]/70">REV 고객별 매출</h2>
+          <Link
+            href="/admin/branch/ledger?lens=rev"
+            className="text-[11px] font-medium text-[#084734] underline-offset-2 hover:underline"
+          >
+            장부에서 열기 ↗
+          </Link>
+        </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] text-[#1a1a1a]/40">{filteredRows.length}건 · {pageSize}개씩</span>
           <span className="mx-1 h-3 w-px bg-[#e8e8e4]" aria-hidden="true" />
@@ -278,18 +287,28 @@ export default function PipelineTable({
                 onClick={onRowClick ? () => onRowClick(r) : undefined}
                 className={`border-t border-[#f0f0ec] ${onRowClick ? "cursor-pointer transition hover:bg-[#FAFAF8]" : ""}`}>
                 <td className="px-5 py-1 font-medium">
-                  {onRowClick ? (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); onRowClick(r) }}
-                      className="text-left font-medium text-[#111110] underline-offset-2 hover:underline"
-                      title="세부 내역 로그 보기"
+                  <span className="inline-flex max-w-full items-center gap-1.5">
+                    {onRowClick ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onRowClick(r) }}
+                        className="truncate text-left font-medium text-[#111110] underline-offset-2 hover:underline"
+                        title="세부 내역 로그 보기"
+                      >
+                        {r.customer}
+                      </button>
+                    ) : (
+                      <span className="truncate">{r.customer}</span>
+                    )}
+                    <Link
+                      href={`/admin/branch/ledger?lens=rev&q=${encodeURIComponent(r.customer)}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="shrink-0 text-[11px] font-medium text-[#084734] opacity-50 transition hover:opacity-100"
+                      title="매출 장부에서 열기"
                     >
-                      {r.customer}
-                    </button>
-                  ) : (
-                    r.customer
-                  )}
+                      ↗
+                    </Link>
+                  </span>
                 </td>
                 <td className="px-3 py-1 text-center">{r.manager ?? "-"}</td>
                 <td className="px-3 py-1 text-center">{r.team ?? "-"}</td>

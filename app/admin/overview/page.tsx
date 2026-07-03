@@ -198,7 +198,8 @@ interface LeadActionKpisPayload {
 interface OsSummaryPayload {
   renewal: { expiringSoonCount: number }
   matching: { coveragePct: number; linked: number; total: number; needsReview: number }
-  hw: { boards86: number; target: number }
+  // plannedBoards86: 배송예정(아직 실판매 아님) — 구 캐시 응답에는 없을 수 있어 optional.
+  hw: { boards86: number; plannedBoards86?: number; target: number }
   content: { blogPublished: number; target: number }
   events: { count: number; target: number }
 }
@@ -704,7 +705,8 @@ export default function OverviewPage() {
     (item) => item.tone === "warning" || item.tone === "danger"
   ).length
 
-  const fmt = (value: number) => COMPACT_NUMBER.format(value)
+  // REV 장부 금액은 전부 위안화 — CRM CurrencyChip 아이디엄(기호+통화 병기)대로 ¥를 붙여 합산 오독을 막는다.
+  const fmtCny = (value: number) => `¥${COMPACT_NUMBER.format(value)}`
 
   // KPI 카드 스파크라인 데이터.
   const sparkLeads = Array.from({ length: 14 }, (_, i) => {
@@ -818,12 +820,12 @@ export default function OverviewPage() {
               value={branchSummary ? `${Math.round(branchSummary.revenue.pacing_pct)}%` : "…"}
               sub={
                 branchSummary
-                  ? `확정 ${fmt(branchSummary.revenue.confirmed)} / 목표 ${fmt(branchSummary.revenue.goal)}`
+                  ? `확정 ${fmtCny(branchSummary.revenue.confirmed)} / 목표 ${fmtCny(branchSummary.revenue.goal)} · CNY`
                   : "불러오는 중"
               }
               tone="brand"
               sparkline={sparkRevenue.length ? <Sparkline data={sparkRevenue} /> : undefined}
-              href="/admin/branch"
+              href="/admin/branch/ledger"
             />
           </div>
         )}
@@ -855,7 +857,7 @@ export default function OverviewPage() {
             value={!branchSummary ? "…" : pipelineCoverage != null ? `${pipelineCoverage.toFixed(1)}x` : "—"}
             sub="예상 파이프 ÷ 잔여목표 (≥2.0x 권장)"
             tone={pipelineCoverage != null && pipelineCoverage < 2.0 ? "danger" : "brand"}
-            href="/admin/branch"
+            href="/admin/branch/ledger"
           />
           <StatCard
             icon={<CalendarDays className="h-4 w-4" />}
@@ -883,11 +885,17 @@ export default function OverviewPage() {
             value={osSummary ? `${osSummary.hw.boards86}/${osSummary.hw.target}` : "…"}
             sub={
               osSummary
-                ? `블로그 ${osSummary.content.blogPublished}/${osSummary.content.target} · 행사 ${osSummary.events.count}/${osSummary.events.target}`
+                ? [
+                    // boards86은 실판매만 집계 — 배송예정분은 별도 캡션으로 병기(구 캐시엔 필드 없음).
+                    (osSummary.hw.plannedBoards86 ?? 0) > 0 ? `배송예정 ${osSummary.hw.plannedBoards86}대` : null,
+                    `블로그 ${osSummary.content.blogPublished}/${osSummary.content.target} · 행사 ${osSummary.events.count}/${osSummary.events.target}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
                 : "불러오는 중"
             }
             tone="neutral"
-            href="/admin/branch"
+            href="/admin/hardware"
           />
         </div>
       </section>

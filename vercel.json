@@ -31,6 +31,10 @@
     {
       "path": "/api/cron/channel-talk-sync",
       "schedule": "15 0 * * *"
+    },
+    {
+      "path": "/api/cron/ledger-weekly-close",
+      "schedule": "30 14 * * 5"
     }
   ]
 }

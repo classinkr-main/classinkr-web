@@ -6,9 +6,10 @@ import { readRangeWithFormat, envSheetId, getSheetModifiedTime } from "@/lib/bra
 import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
 import type { DshBreakdownRow } from "@/lib/branch/parsers/dsh"
 import { parseKpi, KPI_RANGE } from "@/lib/branch/parsers/kpi"
-import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
-import { readDshFromActiveImport, readKpiBlocksFromActiveImport, readRevDealsFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
+import { readRevDealsPreferActive } from "@/lib/branch/read-rev-deals"
+import { classifySalesLedgerProductCategory } from "@/lib/branch/product-category"
+import { readDshFromActiveImport, readKpiBlocksFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
 import { fyOf, FISCAL_MONTH_ORDER, fiscalQuarter, resolvePeriodDate, ymKey } from "@/lib/branch/fiscal"
 import { summarizeRevenue, bottleneckKpi, closingDeals } from "@/lib/branch/computations/core-kpi"
 import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
@@ -74,12 +75,12 @@ function classifyStatusType(d: BranchRevDeal): string | null {
   return null
 }
 
+// 원장 REV 탭 HW 필터와 동일한 공용 분류기(classifySalesLedgerProductCategory)를 쓴다 —
+// 사설 정규식 사본을 유지하면 DealMix HW 비중이 원장 수치와 어긋난다. 공용 규약상
+// 명확한 HW 신호가 없는 행은 전부 Software다(DSH breakdown 카테고리 표기에 맞춰 대문자화).
 function classifyCategory(d: BranchRevDeal): string | null {
-  const v = (d.product_version ?? "").trim()
-  if (!v) return null
-  if (/IFP|OPS|S1|T1|카메라|모니터|hardware|HW\b/i.test(v)) return "Hardware"
-  if (/SW\b|software|소프트웨어|구독|subscription|classin|클래스인|annual|license|라이선스/i.test(v)) return "Software"
-  return null
+  const category = classifySalesLedgerProductCategory({ product: d.product_version, account: d.customer_name })
+  return category === "hardware" ? "Hardware" : "Software"
 }
 
 const CLASSIFY: Record<"category" | "status_type" | "channel", (d: BranchRevDeal) => string | null> = {
@@ -197,11 +198,6 @@ const readKpi = unstable_cache(async (fy: number) => {
   return parseKpi(grid)
 }, ["branch-kpi"], { revalidate: 60, tags: ["branch-kpi"] })
 
-async function readRevDeals(fy: number, team: BranchTeam) {
-  const imported = await readRevDealsFromActiveImport(fy, { team })
-  return imported ?? listBranchRevDeals({ team })
-}
-
 // Freshness hint — newest modifiedTime across both source sheets.
 // 60s revalidate keeps Drive API call rate well under any quota concern
 // while still surfacing edits within a minute.
@@ -225,7 +221,7 @@ export async function GET(req: NextRequest) {
   if (!periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
     const [dsh, kpi, deals, campaigns, runs, events, sheetModifiedAt] = await Promise.all([
-      readDsh(fyOf(periodDate)), readKpi(fyOf(periodDate)), readRevDeals(fyOf(periodDate), team), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listPublicEvents(),
+      readDsh(fyOf(periodDate)), readKpi(fyOf(periodDate)), readRevDealsPreferActive(fyOf(periodDate), { team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listPublicEvents(),
       readSheetFreshness(),
     ])
     const teamMembers = new Set(listMembersByTeam(dsh, team))

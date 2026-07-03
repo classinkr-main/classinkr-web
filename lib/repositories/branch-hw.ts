@@ -10,11 +10,39 @@ export interface HwOutbound { id: string; logistics_no: string | null; outbound_
 export interface HwStock { id: string; product: string; category: string | null; quantity: number; raw: unknown; synced_at: string }
 export interface HwSalesMonthly { id: string; fiscal_year: number; fiscal_month: number; product: string; quantity: number; raw: unknown; synced_at: string }
 
-async function listAllUncached<T>(table: string): Promise<T[]> {
+const FETCH_PAGE_SIZE = 1000
+
+// PostgREST(Supabase)는 요청당 반환 행 수를 기본 1000으로 캡한다. 전량 조회가 캡에 걸리면
+// 에러 없이 잘려 재고·원장 집계가 조용히 틀어진다 — 짧은 페이지가 나올 때까지 이어 읽는다.
+// range(offset) 방식은 읽는 도중 동시 insert가 페이지 경계를 밀어 기존 행이 중복/누락될 수 있어
+// id 키셋(afterId 커서) 방식을 쓴다: 기존 행은 커서 기준으로 정확히 1회씩 읽힌다.
+// buildQuery는 매 페이지 새 쿼리를 만들어야 하며(빌더는 1회용), 반드시
+// .order("id", { ascending: true }).limit(limit) + (afterId ? .gt("id", afterId)) 형태여야 한다.
+// 반환 순서는 id 오름차순 — 다른 순서가 필요하면 호출부에서 재정렬한다.
+// (hardware-inventory 등 다른 저장소도 이 헬퍼를 공유한다.)
+export async function fetchAllSupabaseRows<T extends { id: string }>(
+  buildQuery: (afterId: string | null, limit: number) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>,
+): Promise<T[]> {
+  const rows: T[] = []
+  let afterId: string | null = null
+  for (;;) {
+    const { data, error } = await buildQuery(afterId, FETCH_PAGE_SIZE)
+    if (error) throw error
+    const page = (data ?? []) as T[]
+    rows.push(...page)
+    if (page.length < FETCH_PAGE_SIZE) break
+    afterId = page[page.length - 1].id
+  }
+  return rows
+}
+
+async function listAllUncached<T extends { id: string }>(table: string): Promise<T[]> {
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb.from(table).select("*")
-  if (error) throw error
-  return (data ?? []) as T[]
+  return fetchAllSupabaseRows<T>((afterId, limit) => {
+    let query = sb.from(table).select("*").order("id", { ascending: true }).limit(limit)
+    if (afterId) query = query.gt("id", afterId)
+    return query
+  })
 }
 
 const listCachedHwInbound = unstable_cache(
