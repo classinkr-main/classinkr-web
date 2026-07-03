@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button"
 import QuickQuoteComposer, {
   type QuickQuoteCreatedPayload,
+  type QuickQuotePrefill,
 } from "@/components/portal/quotes/QuickQuoteComposer"
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import type { PartnerDocumentListItem } from "@/lib/portal/types"
@@ -69,6 +70,8 @@ type HardwareQuoteQuickActionRequest = {
 type HardwareQuotesPanelProps = {
   quickAction?: HardwareQuoteQuickActionRequest
   onQuickActionConsumed?: () => void
+  /** 딜/고객 컨텍스트에서 진입한 프리필 대상(있으면 작성기가 기존 고객·거래를 자동 선택). */
+  prefill?: QuickQuotePrefill | null
 }
 
 const ACTION_LABEL: Record<QuickQuoteCreatedPayload["action"], string> = {
@@ -302,6 +305,7 @@ function templateIdFromQuickAction(action: HardwareQuoteQuickAction): StandardQu
 export default function HardwareQuotesPanel({
   quickAction = null,
   onQuickActionConsumed,
+  prefill = null,
 }: HardwareQuotesPanelProps) {
   const [composerOpen, setComposerOpen] = useState(false)
   const [composerTemplateId, setComposerTemplateId] = useState<StandardQuoteTemplateId>("board_86")
@@ -789,6 +793,7 @@ export default function HardwareQuotesPanel({
         recentQuotes={recentQuotes}
         apiBase="/api/portal"
         initialTemplateId={composerTemplateId}
+        prefill={prefill}
         onCreated={handleCreated}
       />
     </div>

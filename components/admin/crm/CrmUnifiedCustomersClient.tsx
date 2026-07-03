@@ -13,6 +13,7 @@ import type {
   CrmUnifiedSavedView,
 } from "@/lib/repositories/crm-unified-customers"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
+import Account360Lens from "./Account360Lens"
 import Customer360Drawer from "./Customer360Drawer"
 import LeadRegisterModal from "./LeadRegisterModal"
 import CrmCustomerFlags from "./CrmCustomerFlags"
@@ -625,6 +626,8 @@ export default function CrmUnifiedCustomersClient() {
             </div>
           ) : null}
         </section>
+
+        <Account360Lens />
 
         {error ? (
           <div className="mb-4 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">

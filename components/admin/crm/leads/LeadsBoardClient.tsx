@@ -10,6 +10,7 @@ import {
   PhoneCall, Bell, UserPlus, Link2, ExternalLink,
   Clock, Search, Check,
   Activity, Download, LogIn, MousePointerClick, ShieldCheck,
+  FileText,
 } from "lucide-react"
 import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
 
@@ -68,6 +69,7 @@ type ConvertResultState = {
   reused: boolean
   dealUrl: string | null
   customerUrl: string
+  quoteUrl: string | null
 }
 
 // ─── 활동 인텔리전스 헬퍼 ──────────────────────────────────────
@@ -1047,6 +1049,10 @@ export default function LeadsBoardClient() {
           (deal.id ? `/admin/crm/deals/orders?deal=${encodeURIComponent(deal.id)}` : null),
         customerUrl:
           links?.customer ?? `/admin/crm/customers/unified?q=${encodeURIComponent(customer.name)}`,
+        // 딜 컨텍스트를 견적 작성기로 프리필 — 고객 재입력 없이 견적 생성으로 이어짐.
+        quoteUrl: deal.id
+          ? `/admin/quotes?tab=hardware&action=new&dealId=${encodeURIComponent(deal.id)}`
+          : null,
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : "고객사·거래 등록에 실패했습니다."
@@ -1877,25 +1883,37 @@ export default function LeadsBoardClient() {
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
-          <div className="mt-3 flex gap-2">
-            {convertResult.dealUrl && (
+          <div className="mt-3 flex flex-col gap-2">
+            {convertResult.quoteUrl && (
               <Link
-                href={convertResult.dealUrl}
+                href={convertResult.quoteUrl}
                 onClick={() => setConvertResult(null)}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-3 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#065c41]"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-3 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#065c41]"
               >
-                <ExternalLink className="h-3 w-3" />
-                딜 열기
+                <FileText className="h-3 w-3" />
+                견적 만들기
               </Link>
             )}
-            <Link
-              href={convertResult.customerUrl}
-              onClick={() => setConvertResult(null)}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-[12px] font-semibold text-[#1a1a1a] transition-colors hover:bg-[#f6f5f4]"
-            >
-              <Building2 className="h-3 w-3" />
-              고객 보기
-            </Link>
+            <div className="flex gap-2">
+              {convertResult.dealUrl && (
+                <Link
+                  href={convertResult.dealUrl}
+                  onClick={() => setConvertResult(null)}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-[12px] font-semibold text-[#1a1a1a] transition-colors hover:bg-[#f6f5f4]"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  딜 열기
+                </Link>
+              )}
+              <Link
+                href={convertResult.customerUrl}
+                onClick={() => setConvertResult(null)}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-[12px] font-semibold text-[#1a1a1a] transition-colors hover:bg-[#f6f5f4]"
+              >
+                <Building2 className="h-3 w-3" />
+                고객 보기
+              </Link>
+            </div>
           </div>
         </div>
       )}

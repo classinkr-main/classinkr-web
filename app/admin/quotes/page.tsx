@@ -15,6 +15,7 @@ import HardwareQuotesPanel from "@/components/admin/documents/HardwareQuotesPane
 import SoftwareQuoteCodesPanel from "@/components/admin/documents/SoftwareQuoteCodesPanel"
 import { ContractsPanel } from "@/components/admin/documents/ContractsPanel"
 import { ReceiptsPanel } from "@/components/admin/documents/ReceiptsPanel"
+import type { QuickQuotePrefill } from "@/components/portal/quotes/QuickQuoteComposer"
 import type { StandardQuoteTemplateId } from "@/lib/standard-quote-template"
 
 type DocumentTab = "hardware" | "software" | "contracts" | "receipts" | "links"
@@ -158,6 +159,23 @@ function quickActionFromSearch() {
   return quickActionFromParams(new URLSearchParams(window.location.search))
 }
 
+function prefillFromParams(params: Pick<URLSearchParams, "get">): QuickQuotePrefill | null {
+  const dealId = params.get("dealId") ?? params.get("deal")
+  const customerId = params.get("customerId") ?? params.get("customer")
+  const customerName = params.get("customerName")
+  if (!dealId && !customerId) return null
+  return {
+    dealId: dealId || null,
+    customerId: customerId || null,
+    customerName: customerName || null,
+  }
+}
+
+function prefillFromSearch() {
+  if (typeof window === "undefined") return null
+  return prefillFromParams(new URLSearchParams(window.location.search))
+}
+
 function SalesProgressStrip() {
   return (
     <div className="mt-5 grid gap-3 lg:grid-cols-3">
@@ -211,9 +229,14 @@ function PanelShell({
 export default function QuotesPage() {
   const quickActionSequenceRef = useRef(0)
   const [activeTab, setActiveTab] = useState<DocumentTab>(() => tabFromSearch())
-  const [hardwareQuickAction, setHardwareQuickAction] = useState<HardwareQuoteQuickActionRequest>(() =>
-    quickActionFromSearch()
-  )
+  const [prefill] = useState<QuickQuotePrefill | null>(() => prefillFromSearch())
+  const [hardwareQuickAction, setHardwareQuickAction] = useState<HardwareQuoteQuickActionRequest>(() => {
+    const fromSearch = quickActionFromSearch()
+    if (fromSearch) return fromSearch
+    // 딜/고객 프리필로 진입하면 작성기를 자동으로 연다(action 파라미터가 없어도).
+    if (prefillFromSearch()) return { action: "new", key: "prefill-open" }
+    return null
+  })
 
   const handleTabChange = (tab: DocumentTab) => {
     setActiveTab(tab)
@@ -337,6 +360,7 @@ export default function QuotesPage() {
           <HardwareQuotesPanel
             quickAction={hardwareQuickAction}
             onQuickActionConsumed={() => setHardwareQuickAction(null)}
+            prefill={prefill}
           />
         )}
         {activeTab === "software" && <SoftwareQuoteCodesPanel />}

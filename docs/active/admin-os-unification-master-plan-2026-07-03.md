@@ -92,12 +92,12 @@ hardware_movements(원장) ────────┘                          
 - **A1 (S) [진행]** 매출보유 계정 기준 커버리지 — 기존 [getCrmSourceLinkCoverage](../../lib/repositories/crm-source-links.ts)는 링크 "행 수" 기준이라 후보조차 없는 REV 고객의 매출 누락이 안 보임. 신규 [rev-account-coverage.ts](../../lib/repositories/rev-account-coverage.ts)가 원장 쪽에서 출발해 계정·금액 두 축으로 계산(판정 규칙은 후보 생성기와 공유: `isInactiveSheetStatus`·placeholder 제외·`getBranchRevSourceRecordKey` 정확 일치). `/api/admin/crm/coverage`에 `revAccounts`로 노출, CRM 홈 스트립 + 매칭 인박스 헤더에 표시. (overview 타일은 병행 세션 파일 충돌로 보류)
 - **A2 (M) `[MIG]` [진행]** `normalized_account_key()` SQL immutable 함수 + TS↔SQL 패리티 픽스처(마이그레이션 DO 블록 자기검증 + vitest 쌍) + `branch_rev_deals`·`customers` 표현식 인덱스.
 - **A3 ✅ 기구현 확인** REV→매칭 후보 생성기는 이미 존재·배선됨: `generateBranchRevLinkCandidates`(자동확정 티어 포함) + `/api/admin/crm/source-links/generate`. 추가 작업 불필요.
-- **A4 (L) `[MIG 뷰]`** `account_master` 읽기 뷰 + `GET /api/admin/account/[key]` + 고객DB(unified)에 "통합 렌즈"(생애 CNY·HW 대수·만료일·연결 상태). unmatched='needs link' 배지. *A1 커버리지가 기준선을 만든 뒤 착수.*
+- **A4 ✅ v1 완료** `account_master`를 SQL 뷰 대신 **TS 합성**으로 구현([lib/repositories/account-master.ts](../../lib/repositories/account-master.ts)) — REV 링크 키 재구성에 `normalizeCrmName`의 SQL 쌍둥이가 또 필요해지는 파리티 함정을 피하고, 후보 생성기·커버리지와 같은 함수를 재사용해 판정 일치를 보장. `GET /api/admin/crm/account-master` + 고객DB(unified) "Account 360" 렌즈(요약 3스탯·매출 상위 계정·needs link 리스트, 접힘 기본·lazy fetch). 외부 CRM은 통화 혼재(오더 USD) 때문에 건수만 표기. *잔여: 만료일(external expireAt)·HW 대수 필드는 후속.*
 
 ### Phase B — 핸드오프 (수동 재입력 제거)
-- **B1 (M)** 딜/고객 → "견적 만들기" 프리필(V2 경로), QuickQuote 고객 검색-연결 우선. `quotes` 허브에서 V2 신규 작성이 기본이 되게.
+- **B1 ✅ 완료** 딜→견적 프리필: `/admin/quotes?dealId=`(별칭 `deal`/`customerId`)가 QuickQuoteComposer를 **기존 고객 모드로 자동 선택**해 오픈(1회 적용, 수동 변경 미침범, 암묵 고객 생성 없음). 진입 딥링크 2곳 — 리드 전환 성공 패널 "견적 만들기"(주 액션), 딜 워크스페이스 "견적 대기" 카드 "견적" 링크(adminView 한정). V2 `quote_documents.deal_id` 저장은 기존 API 그대로. *QuickQuote 기본 모드를 '기존 고객 우선'으로 바꾸는 UX 결정은 별도(회귀 위험).*
 - **B2 (M)** 견적 수락 이벤트 → 액션 큐 카드 + 계약 전환 시 딜 stage 원클릭 전이.
-- **B3 (M)** 출고↔REV 리콘실 뷰: accountKey+월 기준 대사, 불일치 인박스(출고↔매출 상호 누락). *주의: 하드웨어·원장 파트 동시 작업 파일과 충돌 관리 필요(§6).*
+- **B3 ✅ v1 완료** 출고↔REV **존재성 대사**([lib/repositories/hw-rev-reconcile.ts](../../lib/repositories/hw-rev-reconcile.ts) + `GET /api/admin/crm/reconcile/hw-rev` + 매칭 워크스페이스 하단 접힘 패널). 출고 revenue는 USD·REV는 CNY라 금액 비교는 하지 않고 hw_only(매출 미기재 의심)/rev_only/both만 판정. 배송예정·물류No 누락은 실출고와 구분 표기, destination 미지정 행은 "대사 불가" 카운트. *금액 대조는 환율 정책 확정 후 v2.*
 - **B4 (S)** 계약 확정 → 원장 입력 큐 초안 제안(확도='예정', 적용은 사람이).
 
 ### Phase C — 표면 통합
@@ -121,3 +121,5 @@ hardware_movements(원장) ────────┘                          
 ## 6. 병행 작업 충돌 관리
 
 원장·하드웨어 파트가 동시 진행 중이므로 아래 파일은 이번 트랙에서 **직접 수정 금지**(읽기·신규 파일 연결만): `components/admin/branch/SalesLedgerWorkbench.tsx`, `lib/repositories/sales-ledger-*.ts`, `lib/repositories/hardware-inventory.ts`, `lib/repositories/branch-hw.ts`, `app/api/admin/branch/*`. 연결이 필요하면 신규 모듈(예: `lib/admin/reconcile/*`)에서 import로 붙인다.
+
+머지 노트(2026-07-03): 이 트랙 분기 후 원장 트랙이 체크포인트 커밋들을 쌓았다(원장 안정화 + `lib/branch/account-key.ts`·`read-rev-deals.ts` 정식 커밋 포함). 이 트랙은 `account-key.ts`를 바이트 동일 복사로 선반영했으므로 머지 시 add/add는 무충돌로 수렴한다. 병합 순서는 원장 트랙 → 이 트랙 권장(REV 데이터셋 규약이 먼저 안착한 뒤 대사·스파인이 그 위에 얹히는 의존 방향).
