@@ -376,7 +376,7 @@ const REV_FORECAST_FILTERS: Array<{ id: RevForecastFilter; label: string }> = [
 const MATRIX_CUSTOMER_W = 200
 const MATRIX_PRODUCT_W = 56
 const MATRIX_MONTH_W = 64
-const MATRIX_WEEK_W = 34 // 월 확장 시 w1~w5 각 칸
+const MATRIX_WEEK_W = 52 // 월 확장(상세시트) 시 w1~w5 각 칸 — 금액 가독성 위해 넓게(가로 스크롤 허용)
 const MATRIX_ANNUAL_W = 96
 // 매트릭스 행 밀도(표시만 — 셀 폭·편집 로직 불변). localStorage에 저장해 재방문 시 복원.
 type MatrixDensity = "condensed" | "regular" | "relaxed"
@@ -614,6 +614,27 @@ function rowProductCategory(row: Pick<LedgerRevenueRow, "customer" | "productVer
     account: row.customer,
     rawText: row.draftMetadata,
   })
+}
+
+// 고객 펼침 정렬·섹션 순서: HW 먼저, 그다음 SW, 마지막 미분류. 같은 고객 안에서
+// HW/SW 품목을 묶어 보여주기 위한 랭크(안정 정렬이라 카테고리 내부 순서는 유지).
+function categoryRank(category: Exclude<RevProductCategory, "all">): number {
+  return category === "hardware" ? 0 : category === "software" ? 1 : 2
+}
+
+// 활성 필터 라벨링-태그. 클릭하면 그 필터만 해제된다(담당자/지역/상품/상태/유형/원천/검색 공통).
+function FilterTag({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClear}
+      title={`${label} 필터 해제`}
+      className="inline-flex items-center gap-1 rounded-full border border-[#D8D5D0] bg-[#F6F5F4] px-2.5 py-1 font-semibold text-[#615D59] transition hover:border-[#B43E3E]/40 hover:bg-[#FCE9E9] hover:text-[#B43E3E] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
+    >
+      <span className="max-w-[220px] truncate">{label}</span>
+      <X className="h-3 w-3 shrink-0 opacity-60" />
+    </button>
+  )
 }
 
 function ProductCategoryPill({ category, compact = false }: { category: RevProductCategory; compact?: boolean }) {
@@ -2912,7 +2933,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
             editor!.cancelEdit()
           }}
           aria-label={`${formatMonthLabel(month!)} W${weekIndex + 1} 금액(원 단위)`}
-          className="h-6 w-full bg-transparent px-0.5 text-right text-[11px] font-bold tabular-nums text-[#111110] outline-none"
+          className="h-6 w-full bg-transparent px-1 text-right text-[11.5px] font-bold tabular-nums text-[#111110] outline-none"
         />
         <RevMatrixEditPopover
           confidence={editor!.editConfidence}
@@ -2923,7 +2944,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
     )
   }
 
-  const cellClassName = `relative border-l border-[#F2F1EE] px-1 text-right align-middle tabular-nums ${bgClass} ${
+  const cellClassName = `relative border-l border-[#F2F1EE] px-1.5 text-right align-middle tabular-nums ${bgClass} ${
     interactive && editable ? "cursor-cell" : ""
   } ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${pending ? "shadow-[inset_0_-2px_0_0_#D4A017]" : ""} focus-visible:outline-none`
 
@@ -2954,7 +2975,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
     >
       {pending && <span aria-hidden className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#D4A017]" />}
       <span
-        className={`inline-flex items-center gap-0.5 text-[10px] leading-none ${
+        className={`inline-flex items-center gap-0.5 text-[11.5px] leading-none tabular-nums ${
           pending
             ? "font-bold text-[#7A520F]"
             : display > 0
@@ -3337,6 +3358,43 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   )
 })
 
+// 고객 펼침 시 HW/SW 섹션 구분선. 좌측(고정) 셀에 카테고리 pill·건수, 나머지는 밴드 + 선택 월 소계.
+// 카테고리가 둘 이상인 고객에만 삽입해(HW+SW 혼재) 밀도를 유지한다.
+const RevMatrixCategoryDivider = memo(function RevMatrixCategoryDivider({
+  category,
+  count,
+  monthTotal,
+  monthLabel,
+  colSpan,
+}: {
+  category: Exclude<RevProductCategory, "all">
+  count: number
+  monthTotal: number
+  monthLabel: string
+  colSpan: number
+}) {
+  return (
+    <tr className="border-t border-[#EDECE8] bg-[#F3F2EF]">
+      <td
+        className="sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] bg-[#F3F2EF] py-1 pl-7 pr-2"
+        style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
+      >
+        <span className="flex items-center gap-1.5">
+          <ProductCategoryPill category={category} compact />
+          <span className="text-[10px] font-bold text-[#615D59]">{count}건</span>
+        </span>
+      </td>
+      <td colSpan={Math.max(1, colSpan - 1)} className="bg-[#F3F2EF] px-2 text-right align-middle">
+        {monthTotal > 0 && (
+          <span className="text-[10px] font-semibold text-[#A39E98]">
+            {monthLabel} 소계 <span className="font-bold text-[#615D59]">{formatMoney(monthTotal)}</span>
+          </span>
+        )}
+      </td>
+    </tr>
+  )
+})
+
 // 하단 sticky 합계행: 월별 확정/고확도/예정 스택 + 월 목표 대비 %.
 const RevMatrixFooter = memo(function RevMatrixFooter({
   columns,
@@ -3481,7 +3539,6 @@ export default function SalesLedgerWorkbench() {
   const [revAuxOpen, setRevAuxOpen] = useState(false)
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(true)
   const [railView, setRailView] = useState<RailView>("detail")
-  const [railSwitcherOpen, setRailSwitcherOpen] = useState(false)
   const [selectedRow, setSelectedRow] = useState<LedgerRevenueRow | null>(null)
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null)
   const [detail, setDetail] = useState<DealDetail | null>(null)
@@ -3694,10 +3751,6 @@ export default function SalesLedgerWorkbench() {
   useEffect(() => {
     setCanRunAdminOperations(canRunAdminOperationsFromSession())
   }, [])
-
-  useEffect(() => {
-    setRailSwitcherOpen(false)
-  }, [lens, railView, sidePanelCollapsed])
 
   useEffect(() => {
     setDraftForm((current) => ({
@@ -4244,6 +4297,14 @@ export default function SalesLedgerWorkbench() {
       if (row.region && !group.regions.includes(row.region)) group.regions.push(row.region)
       if (row.ledgerOrigin === "draft") group.hasDraft = true
       if (rowHasMismatch) group.mismatchCount += 1
+    }
+    // 같은 고객 안에서 HW 품목을 먼저, 그다음 SW 순으로 묶는다(펼침 시 HW/SW 섹션 구분).
+    // 안정 정렬이라 카테고리 내부는 기존 순서(실적/월 금액)를 그대로 유지한다. 이 정렬을
+    // 여기서 하면 렌더·visibleDealRows·editableCells가 동일 순서를 공유해 편집 Tab 순서와도 일치.
+    for (const group of groups.values()) {
+      if (group.categories.length > 1) {
+        group.rows.sort((a, b) => categoryRank(rowProductCategory(a)) - categoryRank(rowProductCategory(b)))
+      }
     }
     // 그룹 정렬은 그룹 대표값(합계·첫 값) 기준으로 다시 계산한다. 첫 등장 순서에 기대면
     // 정렬 키가 합계(월 금액·실적)일 때 그룹 순서가 행 최댓값 기준으로 어긋난다.
@@ -4881,7 +4942,6 @@ export default function SalesLedgerWorkbench() {
   const selectRailView = useCallback((nextView: RailView) => {
     setRailView(nextView)
     setSidePanelCollapsed(false)
-    setRailSwitcherOpen(false)
   }, [])
   const draftTotal = openDrafts.reduce((sum, draft) => sum + draft.amount, 0)
   const appliedDraftTotal = additiveAppliedDraftRows.reduce((sum, row) => sum + row.revenue, 0)
@@ -5541,29 +5601,19 @@ export default function SalesLedgerWorkbench() {
                 <span className="rounded-full bg-[#F6F5F4] px-2.5 py-1">
                   정렬 {REV_SORT_LABELS[revSortKey]} {revSortDirection === "asc" ? "오름차순" : "내림차순"}
                 </span>
-                {query.trim() && (
-                  <span className="inline-block max-w-[260px] truncate rounded-full bg-[#F6F5F4] px-2.5 py-1">검색 {query.trim()}</span>
-                )}
-                {managerFilter !== "ALL" && (
-                  <span className="rounded-full bg-[#F6F5F4] px-2.5 py-1">담당자 {managerFilter}</span>
-                )}
-                {regionFilter !== "ALL" && (
-                  <span className="rounded-full bg-[#F6F5F4] px-2.5 py-1">지역 {regionFilter}</span>
-                )}
+                {query.trim() && <FilterTag label={`검색 ${query.trim()}`} onClear={() => setQuery("")} />}
+                {managerFilter !== "ALL" && <FilterTag label={`담당자 ${managerFilter}`} onClear={() => setManagerFilter("ALL")} />}
+                {regionFilter !== "ALL" && <FilterTag label={`지역 ${regionFilter}`} onClear={() => setRegionFilter("ALL")} />}
                 {productFilter !== "all" && (
-                  <span className="rounded-full bg-[#F6F5F4] px-2.5 py-1">상품 {productCategoryMeta(productFilter).label}</span>
+                  <FilterTag label={`상품 ${productCategoryMeta(productFilter).label}`} onClear={() => setProductFilter("all")} />
                 )}
-                {revStatusFilter !== "ALL" && (
-                  <span className="rounded-full bg-[#F6F5F4] px-2.5 py-1">상태 {revStatusFilter}</span>
-                )}
-                {revDealTypeFilter !== "ALL" && (
-                  <span className="rounded-full bg-[#F6F5F4] px-2.5 py-1">유형 {revDealTypeFilter}</span>
-                )}
+                {revStatusFilter !== "ALL" && <FilterTag label={`상태 ${revStatusFilter}`} onClear={() => setRevStatusFilter("ALL")} />}
+                {revDealTypeFilter !== "ALL" && <FilterTag label={`유형 ${revDealTypeFilter}`} onClear={() => setRevDealTypeFilter("ALL")} />}
                 {revOriginFilter !== "all" && (
-                  <span className="rounded-full bg-[#F6F5F4] px-2.5 py-1">{REV_ORIGIN_FILTERS.find((item) => item.id === revOriginFilter)?.label}</span>
+                  <FilterTag label={REV_ORIGIN_FILTERS.find((item) => item.id === revOriginFilter)?.label ?? "원천"} onClear={() => setRevOriginFilter("all")} />
                 )}
                 {revForecastFilter !== "all" && (
-                  <span className="rounded-full bg-[#F6F5F4] px-2.5 py-1">{REV_FORECAST_FILTERS.find((item) => item.id === revForecastFilter)?.label}</span>
+                  <FilterTag label={REV_FORECAST_FILTERS.find((item) => item.id === revForecastFilter)?.label ?? "검수"} onClear={() => setRevForecastFilter("all")} />
                 )}
                 <span className="ml-auto flex flex-wrap items-center gap-1.5" aria-label="검수 인박스">
                   {([
@@ -5925,7 +5975,7 @@ export default function SalesLedgerWorkbench() {
                                 <ChevronDown className={`h-2.5 w-2.5 shrink-0 text-[#A39E98] transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                               </button>
                               {isExpanded && (
-                                <div className="grid grid-cols-5 gap-0 pb-0.5 text-[8.5px] font-semibold normal-case text-[#A39E98]">
+                                <div className="grid grid-cols-5 gap-0 pb-0.5 text-[10px] font-bold normal-case tracking-normal text-[#615D59]">
                                   {["W1", "W2", "W3", "W4", "W5"].map((week) => (
                                     <span key={week}>{week}</span>
                                   ))}
@@ -5980,25 +6030,46 @@ export default function SalesLedgerWorkbench() {
                               />
                             ) : null}
                             {(!grouped || expanded) &&
-                              group.rows.map((row) => {
-                                const view = revRowViews.get(row.id)
-                                if (!view) return null
-                                return (
-                                  <RevMatrixDealRow
-                                    key={row.id}
-                                    view={view}
-                                    grouped={grouped}
-                                    months={matrixMonths}
-                                    expandedMonths={expandedRevMonths}
-                                    active={selectedRow?.id === row.id}
-                                    selectedMonth={selectedMonth}
-                                    onOpen={loadDealDetail}
-                                    editor={matrixEditor}
-                                    pendingByCell={pendingByCell}
-                                    density={matrixDensity}
-                                  />
-                                )
-                              })}
+                              (() => {
+                                // HW+SW 혼재 고객만 섹션 구분선을 넣는다(단일 카테고리는 밀도 유지 위해 생략).
+                                const sectioned = grouped && group.categories.length > 1
+                                let lastCategory: Exclude<RevProductCategory, "all"> | null = null
+                                const nodes: React.ReactNode[] = []
+                                for (const row of group.rows) {
+                                  const view = revRowViews.get(row.id)
+                                  if (!view) continue
+                                  if (sectioned && view.productCategory !== lastCategory) {
+                                    lastCategory = view.productCategory
+                                    const sameCategoryRows = group.rows.filter((r) => rowProductCategory(r) === view.productCategory)
+                                    nodes.push(
+                                      <RevMatrixCategoryDivider
+                                        key={`divider-${group.key}-${view.productCategory}`}
+                                        category={view.productCategory}
+                                        count={sameCategoryRows.length}
+                                        monthTotal={group.categoryTotals[view.productCategory]}
+                                        monthLabel={formatMonthLabel(selectedMonth)}
+                                        colSpan={matrixColSpan}
+                                      />,
+                                    )
+                                  }
+                                  nodes.push(
+                                    <RevMatrixDealRow
+                                      key={row.id}
+                                      view={view}
+                                      grouped={grouped}
+                                      months={matrixMonths}
+                                      expandedMonths={expandedRevMonths}
+                                      active={selectedRow?.id === row.id}
+                                      selectedMonth={selectedMonth}
+                                      onOpen={loadDealDetail}
+                                      editor={matrixEditor}
+                                      pendingByCell={pendingByCell}
+                                      density={matrixDensity}
+                                    />,
+                                  )
+                                }
+                                return nodes
+                              })()}
                           </Fragment>
                         )
                       })}
@@ -6329,72 +6400,46 @@ export default function SalesLedgerWorkbench() {
         {lens !== "kpi" && !sidePanelCollapsed && (
         <aside className="fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(420px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)]">
           <>
-          <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-2">
-            <div className="grid grid-cols-[minmax(0,1fr)_40px] gap-2">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setRailSwitcherOpen((value) => !value)}
-                  aria-haspopup="menu"
-                  aria-expanded={railSwitcherOpen}
-                  className="flex min-h-10 w-full items-center justify-between gap-3 rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 py-2 text-left transition hover:bg-[#F6F5F4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#ECFDF5] text-[#084734]">
-                      <CurrentRailIcon className="h-3.5 w-3.5" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[10px] font-bold text-[#615D59]">빠른 작업</span>
-                      <span className="block truncate text-[12px] font-bold text-[#111110]">{currentRailView.label}</span>
-                    </span>
-                  </span>
-                  <ChevronRight className={`h-4 w-4 shrink-0 text-[#615D59] transition ${railSwitcherOpen ? "rotate-90" : ""}`} />
-                </button>
-                {railSwitcherOpen && (
-                  <div
-                    role="menu"
-                    className="absolute right-0 top-[calc(100%+8px)] z-30 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-2 shadow-[0_16px_40px_rgba(17,17,16,0.14)]"
-                  >
-                    {railViewItems.map((item) => {
-                      const Icon = item.icon
-                      const active = railView === item.id
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          role="menuitem"
-                          onClick={() => selectRailView(item.id)}
-                          className={`mb-1 flex min-h-12 w-full items-start gap-2 rounded-md px-2.5 py-2 text-left transition last:mb-0 ${
-                            active ? "bg-[#ECFDF5] text-[#084734]" : "text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
-                          }`}
-                        >
-                          <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
-                            active ? "bg-white text-[#084734]" : "bg-[#FAFAF8] text-[#615D59]"
-                          }`}>
-                            <Icon className="h-3.5 w-3.5" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-center justify-between gap-2">
-                              <span className="text-[12px] font-bold">{item.label}</span>
-                              <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-bold">{item.badge}</span>
-                            </span>
-                            <span className="mt-0.5 block text-[10.5px] leading-snug text-[#615D59]">{item.description}</span>
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
+          <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1.5">
+            <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
+              <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#A39E98]">빠른 작업</span>
               <button
                 type="button"
                 onClick={() => setSidePanelCollapsed(true)}
-                className="flex h-9 w-10 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-[#A39E98] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
                 aria-label="빠른 작업 패널 닫기"
                 title="빠른 작업 패널 닫기"
               >
-                <X className="h-4 w-4" />
+                <X className="h-3.5 w-3.5" />
               </button>
+            </div>
+            <div className="flex items-center gap-0.5 rounded-lg bg-[#F6F5F4] p-[3px]" role="tablist" aria-label="빠른 작업 보기 전환">
+              {railViewItems.map((item) => {
+                const Icon = item.icon
+                const active = railView === item.id
+                const showQueueBadge = item.id === "queue" && openDrafts.length > 0
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => selectRailView(item.id)}
+                    title={item.description}
+                    className={`relative flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11.5px] font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734] ${
+                      active ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "text-[#615D59] hover:text-[#111110]"
+                    }`}
+                  >
+                    <Icon className={`h-3.5 w-3.5 shrink-0 ${active ? "text-[#084734]" : ""}`} />
+                    <span className="truncate">{item.shortLabel}</span>
+                    {showQueueBadge && (
+                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FBF1E0] px-1 text-[9px] font-bold text-[#7A520F]">
+                        {openDrafts.length}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
 

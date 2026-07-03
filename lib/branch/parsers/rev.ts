@@ -2,12 +2,59 @@ import type { FormattedCell } from "@/lib/branch/google-sheets"
 import { isBlueText, isRedBg, isRedText } from "@/lib/branch/google-sheets"
 
 export const REV_RANGE = "'2. REV'!A1:CF400"
+// 실제 '2. REV' 시트 좌측 메타 열 위치 — 원본 raw.row(84칸)로 실측 확정(2026-07-03).
+// City/Scale/Porta 열이 왼쪽에 끼면서 예전 매핑이 우측으로 밀려 team=City, manager=Scale,
+// productVersion=Status로 잘못 읽히고 Product(HW/SW 신호) 열은 아예 안 읽히던 버그를 교정.
+// 월/주차 금액은 헤더 텍스트(monthBlocks)로 찾으므로 이 좌측 메타 교정과 독립적이다.
 export const REV_COLS = {
-  customer: 0, branchContact: 1, team: 2, manager: 3,
-  dealType: 4, status: 5, firstPayment: 6, productVersion: 7,
-  region: 8, importance: 10, note: 11, contractTarget: 12,
+  customer: 0, branchContact: 1, region: 2, importance: 3,
+  team: 5, manager: 6, status: 7, dealType: 8,
+  productVersion: 9, firstPayment: 10, note: 11, contractTarget: 12,
   monthlyStart: 13,
 } as const
+
+type RevColKey = keyof typeof REV_COLS
+
+// 헤더 텍스트 → 필드. 회사 시트 열이 또 밀려도(자주 바뀜) 헤더로 재정렬되게 한다.
+// 좌측 메타 영역(월 시작 이전)에서만 정확 일치로 매칭하고, 못 찾으면 REV_COLS 기본 위치로 폴백.
+const REV_HEADER_ALIASES: Partial<Record<RevColKey, string[]>> = {
+  customer: ["account", "customer", "고객", "고객명", "거래처", "거래처명"],
+  branchContact: ["branch", "지점", "브랜치"],
+  region: ["city", "location", "region", "지역", "소재지"],
+  importance: ["scale", "tier", "등급", "중요도"],
+  team: ["team", "팀"],
+  manager: ["manager", "owner", "담당", "담당자"],
+  status: ["status", "상태"],
+  dealType: ["type", "channel", "유형", "구분", "채널"],
+  productVersion: ["product", "product version", "상품", "제품"],
+  firstPayment: ["first payment", "firstpay", "first pay", "첫 결제", "첫결제", "최초결제"],
+  note: ["note", "remark", "비고", "메모", "특이사항"],
+  contractTarget: ["target", "contract target", "객통", "객통금", "목표"],
+}
+
+function normalizeHeaderText(v: unknown): string {
+  return v == null ? "" : String(v).trim().toLowerCase().replace(/\s+/g, " ")
+}
+
+// 헤더 행에서 필드별 실제 열 인덱스를 해석한다. 인식 못 하면 REV_COLS 기본 위치를 유지한다.
+export function resolveRevColumns(headers: FormattedCell[]): Record<RevColKey, number> {
+  const resolved: Record<RevColKey, number> = { ...REV_COLS }
+  const limit = Math.min(headers.length, REV_COLS.monthlyStart) // 월 금액 영역 이전만 매칭
+  const used = new Set<number>()
+  for (const key of Object.keys(REV_HEADER_ALIASES) as RevColKey[]) {
+    const aliases = REV_HEADER_ALIASES[key]!
+    for (let i = 0; i < limit; i++) {
+      if (used.has(i)) continue
+      const header = normalizeHeaderText(headers[i]?.value)
+      if (header && aliases.includes(header)) {
+        resolved[key] = i
+        used.add(i)
+        break
+      }
+    }
+  }
+  return resolved
+}
 
 export interface RevDealParsed {
   sheet_row: number
@@ -93,10 +140,11 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number }): Re
   if (grid.length < 2) return []
   const refFy = opts?.refFy ?? new Date().getUTCFullYear()
   const headers = grid[1] ?? []
+  const cols = resolveRevColumns(headers)
   // 헤더 구조: 월 합계 칸("4".."12","1".."3") 뒤에 그 달의 주차 칸(w1~w5)이 이어진다.
   // 색 표시는 주차 칸에 들어가므로 월 블록 단위로 함께 읽는다. ("5w" 같은 오타 헤더도 허용)
   const monthBlocks: Array<{ ym: string; totalIdx: number; weekIdxs: number[] }> = []
-  for (let i = REV_COLS.monthlyStart; i < headers.length; i++) {
+  for (let i = cols.monthlyStart; i < headers.length; i++) {
     const v = headers[i]?.value
     if (v == null) continue
     const s = String(v).trim()
@@ -112,7 +160,7 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number }): Re
   const out: RevDealParsed[] = []
   for (let r = 2; r < grid.length; r++) {
     const row = grid[r] ?? []
-    const customer = asString(row[REV_COLS.customer]?.value)
+    const customer = asString(row[cols.customer]?.value)
     if (!customer) continue
     const monthly_payments: Record<string, number> = {}
     const monthly_red: Record<string, boolean> = {}
@@ -160,17 +208,17 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number }): Re
     out.push({
       sheet_row: r + 1,
       customer_name: customer,
-      branch_contact: asString(row[REV_COLS.branchContact]?.value),
-      team: normalizeTeam(row[REV_COLS.team]?.value),
-      manager: asString(row[REV_COLS.manager]?.value),
-      deal_type: asString(row[REV_COLS.dealType]?.value),
-      status: asString(row[REV_COLS.status]?.value),
-      first_payment: asDate(row[REV_COLS.firstPayment]?.value),
-      product_version: asString(row[REV_COLS.productVersion]?.value),
-      region: asString(row[REV_COLS.region]?.value),
-      importance: asString(row[REV_COLS.importance]?.value),
-      note: asString(row[REV_COLS.note]?.value),
-      contract_target: asNumber(row[REV_COLS.contractTarget]?.value),
+      branch_contact: asString(row[cols.branchContact]?.value),
+      team: normalizeTeam(row[cols.team]?.value),
+      manager: asString(row[cols.manager]?.value),
+      deal_type: asString(row[cols.dealType]?.value),
+      status: asString(row[cols.status]?.value),
+      first_payment: asDate(row[cols.firstPayment]?.value),
+      product_version: asString(row[cols.productVersion]?.value),
+      region: asString(row[cols.region]?.value),
+      importance: asString(row[cols.importance]?.value),
+      note: asString(row[cols.note]?.value),
+      contract_target: asNumber(row[cols.contractTarget]?.value),
       monthly_payments, monthly_red, monthly_confirmed, monthly_high_conf, weekly_payments,
       // weeklyPayments도 raw에 실어 보낸다 — pipeline.ts의 weeklyPaymentsFromRaw가
       // deal.raw.weeklyPayments를 우선 사용하므로, 고정 오프셋 추정 폴백을 타지 않는다.

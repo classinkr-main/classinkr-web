@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import fixture from "../fixtures/rev-sample.json"
-import { parseRev, normalizeMonthHeader, normalizeTeam } from "@/lib/branch/parsers/rev"
+import { parseRev, normalizeMonthHeader, normalizeTeam, resolveRevColumns } from "@/lib/branch/parsers/rev"
 import type { FormattedCell } from "@/lib/branch/google-sheets"
 
 const grid = fixture as unknown as FormattedCell[][]
@@ -12,15 +12,28 @@ function makeRow(values: Record<number, string | number | null>, len: number): F
 }
 
 describe("parseRev", () => {
-  it("skips header row, parses customer rows", () => {
+  it("skips header row, parses customer rows with real column layout", () => {
     const out = parseRev(grid, { refFy: 2026 })
     expect(out).toHaveLength(2)
     expect(out[0].customer_name).toBe("학원A")
-    expect(out[0].team).toBe("BD")
-    expect(out[0].manager).toBe("Han")
+    expect(out[0].region).toBe("서울")       // City 열(2)
+    expect(out[0].importance).toBe("KA")      // Scale 열(3)
+    expect(out[0].team).toBe("BD")            // Team 열(5)
+    expect(out[0].manager).toBe("Han")        // Manager 열(6)
+    expect(out[0].status).toBe("New")         // Status 열(7)
+    expect(out[0].deal_type).toBe("Direct")   // Type 열(8)
+    expect(out[0].product_version).toBe("Hardware") // Product 열(9) — HW/SW 신호
     expect(out[0].first_payment).toBe("2026-04-15")
-    expect(out[0].importance).toBe("KA")
+    expect(out[0].note).toBe("86인치 1대")
     expect(out[0].contract_target).toBe(12000000)
+  })
+  it("reads the Product column (HW vs SW signal), not Status", () => {
+    const out = parseRev(grid, { refFy: 2026 })
+    expect(out[0].product_version).toBe("Hardware")
+    expect(out[1].product_version).toBe("Plus Subscription")
+    // 회귀 방지: 예전 버그는 Status(New/Renew)를 product_version으로 읽었다.
+    expect(out[0].product_version).not.toBe("New")
+    expect(out[1].product_version).not.toBe("Renew")
   })
   it("captures monthly payments + red flags", () => {
     const out = parseRev(grid, { refFy: 2026 })
@@ -39,6 +52,28 @@ describe("parseRev", () => {
     expect(normalizeMonthHeader("4월", 2026)).toBe("2026-04")
     expect(normalizeMonthHeader("3", 2026)).toBe("2027-03")  // FY 회계연도 기준
     expect(normalizeMonthHeader("invalid", 2026)).toBeNull()
+  })
+  it("resolveRevColumns: relocates metadata columns by header text when the sheet shifts", () => {
+    // 회사 시트에 열이 하나 더 끼어 우측으로 밀린 상황을 헤더로 재정렬하는지 검증.
+    const header = makeRow(
+      { 0: "Account", 1: "Branch", 2: "City", 3: "Scale", 4: "NEW EXTRA", 5: "Porta", 6: "Team", 7: "Manager", 8: "Status", 9: "Type", 10: "Product" },
+      13,
+    )
+    const cols = resolveRevColumns(header)
+    expect(cols.customer).toBe(0)
+    expect(cols.team).toBe(6)
+    expect(cols.manager).toBe(7)
+    expect(cols.status).toBe(8)
+    expect(cols.dealType).toBe(9)
+    expect(cols.productVersion).toBe(10)
+    expect(cols.region).toBe(2)
+    expect(cols.importance).toBe(3)
+  })
+  it("resolveRevColumns: falls back to fixed positions when headers are unrecognized", () => {
+    const cols = resolveRevColumns(makeRow({ 13: "4", 14: "w1" }, 16))
+    expect(cols.team).toBe(5)
+    expect(cols.manager).toBe(6)
+    expect(cols.productVersion).toBe(9)
   })
   it("normalizeTeam aliases", () => {
     expect(normalizeTeam("MK")).toBe("MKT")
