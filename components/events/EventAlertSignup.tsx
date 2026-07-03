@@ -47,7 +47,7 @@ export function EventAlertSignup({ eventSlug }: EventAlertSignupProps) {
 
   if (submitted) {
     return (
-      <div className="flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-[14px] font-medium text-emerald-800">
+      <div className="flex items-center gap-2 rounded-2xl border border-[#BDEFD8] bg-[#ECFDF5] px-5 py-4 text-[14px] font-medium text-[#084734]">
         <CheckCircle2 className="h-4 w-4 shrink-0" />
         다음 행사가 열리면 이메일로 알려드릴게요.
       </div>

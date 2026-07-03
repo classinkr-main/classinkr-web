@@ -33,14 +33,15 @@ function toAbsoluteUrl(path: string) {
   return new URL(path, SITE_URL).toString()
 }
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((route) => ({
-    url: toAbsoluteUrl(route.path),
-    lastModified: new Date(route.lastModified),
-    changeFrequency: route.changeFrequency,
-    priority: route.priority,
-  }))
+function latestDate(candidates: Array<string | null | undefined>): Date | null {
+  const times = candidates
+    .filter((value): value is string => Boolean(value))
+    .map((value) => new Date(value).getTime())
+    .filter((time) => Number.isFinite(time))
+  return times.length > 0 ? new Date(Math.max(...times)) : null
+}
 
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [publishedPosts, docsContent, publicEvents] = await Promise.all([
     getPublishedPostsForStaticSitemap().catch((error) => {
       console.error("[sitemap] failed to load published posts", error)
@@ -55,6 +56,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       return []
     }),
   ])
+
+  // 목록 페이지(lastModified)는 하드코딩 날짜 대신 실제 최신 콘텐츠 날짜를 반영
+  const latestBlogDate = latestDate(
+    publishedPosts.flatMap((post) => [post.updatedAt, post.publishedAt])
+  )
+  const latestEventDate = latestDate(publicEvents.map((event) => event.updatedAt))
+
+  const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((route) => ({
+    url: toAbsoluteUrl(route.path),
+    lastModified:
+      route.path === "/blog"
+        ? latestBlogDate ?? new Date(route.lastModified)
+        : route.path === "/events"
+          ? latestEventDate ?? new Date(route.lastModified)
+          : new Date(route.lastModified),
+    changeFrequency: route.changeFrequency,
+    priority: route.priority,
+  }))
 
   const blogEntries: MetadataRoute.Sitemap = publishedPosts.map((post) => ({
     url: toAbsoluteUrl(`/blog/${post.slug}`),

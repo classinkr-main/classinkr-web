@@ -116,7 +116,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
       : []
   const googleCalendarUrl = buildGoogleCalendarUrl(event, toAbsoluteUrl(eventPath))
   const ctaButtonClassName =
-    "mt-8 inline-flex items-center gap-2 rounded-full bg-[#111110] px-6 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-emerald-700"
+    "mt-8 inline-flex items-center gap-2 rounded-full bg-[#084734] px-6 py-3 text-[14px] font-semibold text-white transition-colors hover:bg-[#065c41]"
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] text-[#111110]">
@@ -156,7 +156,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                   {event.category}
                 </span>
                 {event.tag && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-3 py-1 text-[#084734]">
                     <Tag className="h-3 w-3" />
                     {event.tag}
                   </span>

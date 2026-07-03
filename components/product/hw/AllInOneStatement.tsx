@@ -17,7 +17,7 @@ const opsEnergyModuleImage = "/images/product/hw/ops/ops-glass-energy-module-bla
 export default function AllInOneStatement() {
   return (
     <section className="relative isolate flex min-h-[660px] items-center overflow-hidden bg-[#010302] px-6 py-24 text-white md:py-32">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_76%_42%,rgba(34,163,102,0.16)_0%,rgba(8,42,26,0.18)_30%,transparent_60%),radial-gradient(ellipse_at_42%_76%,rgba(255,255,255,0.035)_0%,transparent_42%),linear-gradient(90deg,#010302_0%,#020504_48%,#030706_100%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_76%_42%,rgba(110,231,183,0.16)_0%,rgba(8,42,26,0.18)_30%,transparent_60%),radial-gradient(ellipse_at_42%_76%,rgba(255,255,255,0.035)_0%,transparent_42%),linear-gradient(90deg,#010302_0%,#020504_48%,#030706_100%)]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-black via-black/70 to-transparent" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-black via-black/70 to-transparent" />
 
@@ -28,7 +28,7 @@ export default function AllInOneStatement() {
           maskImage: "linear-gradient(90deg, transparent 0%, transparent 22%, rgba(0,0,0,0.18) 38%, rgba(0,0,0,0.72) 55%, #000 68%, #000 100%)",
         }}
       >
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_58%_48%,rgba(34,163,102,0.16)_0%,rgba(34,163,102,0.06)_34%,transparent_66%)] blur-2xl" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_58%_48%,rgba(110,231,183,0.16)_0%,rgba(110,231,183,0.06)_34%,transparent_66%)] blur-2xl" />
         <Image
           src={opsEnergyModuleImage}
           alt=""

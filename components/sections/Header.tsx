@@ -90,11 +90,7 @@ export function Header() {
                     id="site-mobile-menu"
                 >
                     {navItems.map((item) => {
-                        const isActive = item.href === "/product"
-                            ? pathname.startsWith("/product")
-                            : item.href === "/docs"
-                                ? pathname.startsWith("/docs")
-                                : pathname === item.href;
+                        const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
                         const isProduct = item.href === "/product"
                         return isProduct ? (
                             <div key={item.name} className="relative group w-full md:w-auto">

@@ -174,7 +174,7 @@ export function SatisfyingClass() {
                                 <div className="mb-6 flex items-center gap-3">
                                     <div className="h-3 w-3 rounded-full bg-[#B85C33]" />
                                     <div className="h-3 w-3 rounded-full bg-amber-400" />
-                                    <div className="h-3 w-3 rounded-full bg-emerald-400" />
+                                    <div className="h-3 w-3 rounded-full bg-[#6EE7B7]" />
                                 </div>
                                 <div className="text-white">
                                     <span className="mb-2.5 block text-[12px] font-bold uppercase tracking-[0.3em] text-[#ECFDF5]/70">Interactive Canvas</span>

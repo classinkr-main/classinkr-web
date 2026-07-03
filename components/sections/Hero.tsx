@@ -39,8 +39,8 @@ export function Hero() {
                             <div className="hero-soft-enter hero-soft-enter-badge">
                                 <span className="inline-flex items-center gap-2.5 py-2 px-5 rounded-full bg-[#ECFDF5]/12 backdrop-blur-md border border-white/18 text-white text-sm md:text-base font-semibold mb-8 shadow-[0_12px_34px_rgba(0,0,0,0.18)]">
                                     <span className="relative flex h-2 w-2">
-                                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#CEF17B]/45" />
-                                        <span className="relative inline-flex h-2 w-2 rounded-full bg-[#CEF17B]" />
+                                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#6EE7B7]/45" />
+                                        <span className="relative inline-flex h-2 w-2 rounded-full bg-[#6EE7B7]" />
                                     </span>
                                     <span className="tracking-[0.02em] drop-shadow-[0_1px_8px_rgba(0,0,0,0.45)]">
                                         {CLASSIN_POSITIONING.heroEyebrow}

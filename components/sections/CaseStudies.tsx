@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react"
 import Image from "next/image"
+import Link from "next/link"
 import { motion } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
-import { ChevronLeft, ChevronRight, Quote } from "lucide-react"
+import { ArrowRight, ChevronLeft, ChevronRight, Quote } from "lucide-react"
 
 type CaseStudy = {
     badge: string
@@ -217,6 +218,17 @@ export function CaseStudies() {
                         >
                             <ChevronRight className="h-7 w-7" />
                         </button>
+                    </div>
+
+                    <div className="mt-8 text-center">
+                        <Link
+                            href="/blog"
+                            prefetch={false}
+                            className="inline-flex items-center gap-1.5 text-[15px] font-semibold text-[#084734] transition-colors hover:underline hover:underline-offset-4"
+                        >
+                            더 많은 도입 이야기와 인사이트 보기
+                            <ArrowRight className="h-4 w-4" />
+                        </Link>
                     </div>
                 </div>
             </div>

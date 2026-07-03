@@ -47,6 +47,8 @@ export function Footer() {
                         <ul className="space-y-2">
                             <li><Link href="/docs" className="hover:text-white transition-colors">가이드와 도움말</Link></li>
                             <li><Link href="/docs/start" className="hover:text-white transition-colors">클래스인 시작하기</Link></li>
+                            <li><Link href="/blog" className="hover:text-white transition-colors">블로그</Link></li>
+                            <li><Link href="/events" className="hover:text-white transition-colors">행사·세미나</Link></li>
                             <li><Link href="/faq" className="hover:text-white transition-colors">자주 묻는 질문</Link></li>
                             <li><Link href="/updates" className="hover:text-white transition-colors">업데이트</Link></li>
                         </ul>

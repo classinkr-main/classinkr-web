@@ -50,13 +50,13 @@ export default function ClassroomStudioSection() {
       <div className="container mx-auto px-4 lg:px-8">
         {/* Header */}
         <motion.div className="text-center mb-8" {...fadeUp}>
-          <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">
+          <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">
             CLASSROOM STUDIO
           </p>
           <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
             보드, 카메라, 소프트웨어.
             <br />
-            <span className="text-[#22A366]">하나의 수업 스튜디오</span>가 됩니다.
+            <span className="text-[#084734]">하나의 수업 스튜디오</span>가 됩니다.
           </h2>
         </motion.div>
 
@@ -80,7 +80,7 @@ export default function ClassroomStudioSection() {
                 initial={{ opacity: 0, y: 40 }}
                 animate={inView ? { opacity: 1, y: 0 } : {}}
                 transition={{ duration: 0.5, delay: i * 0.15 }}
-                className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-8 hover:shadow-lg hover:border-[#22A366]/20 transition-all duration-300 group"
+                className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-8 hover:shadow-lg hover:border-[#084734]/20 transition-all duration-300 group"
               >
                 <div className={`w-12 h-12 rounded-xl ${p.accentLight} flex items-center justify-center mb-5 group-hover:scale-105 transition-transform`}>
                   <Icon className={`w-6 h-6 ${p.accentText}`} />
@@ -105,7 +105,7 @@ export default function ClassroomStudioSection() {
           className="max-w-3xl mx-auto"
         >
           <div className="rounded-2xl bg-[#0d1a12] p-8 md:p-10 text-center relative overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,_rgba(34,163,102,0.12)_0%,_transparent_100%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,_rgba(110,231,183,0.12)_0%,_transparent_100%)]" />
             <div className="relative">
               {/* Flow icons */}
               <div className="flex items-center justify-center gap-3 md:gap-5 mb-6">

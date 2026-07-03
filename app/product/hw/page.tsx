@@ -90,40 +90,40 @@ const lineupCards = [
         size: '110"',
         rec: "대형 강의실 · 강당",
         badge: "FLAGSHIP",
-        cardClass: "border-slate-900 text-slate-900",
-        badgeClass: "border border-slate-900/20 text-slate-900",
-        sizeClass: "text-slate-500",
-        recClass: "text-slate-500",
+        cardClass: "border-[#111110] text-[#111110]",
+        badgeClass: "border border-[#111110]/20 text-[#111110]",
+        sizeClass: "text-[#615D59]",
+        recClass: "text-[#615D59]",
     },
     {
         model: "S86",
         size: '86"',
         rec: "10명 이상 교실",
         badge: "BEST",
-        cardClass: "border-[#22A366] text-slate-900",
-        badgeClass: "border border-[#22A366]/30 text-[#22A366]",
-        sizeClass: "text-slate-500",
-        recClass: "text-slate-500",
+        cardClass: "border-[#084734] text-[#111110]",
+        badgeClass: "border border-[#084734]/30 text-[#084734]",
+        sizeClass: "text-[#615D59]",
+        recClass: "text-[#615D59]",
     },
     {
         model: "S75",
         size: '75"',
         rec: "10명 이하 교실",
         badge: "",
-        cardClass: "border-slate-200 text-slate-900",
+        cardClass: "border-black/[0.08] text-[#111110]",
         badgeClass: "",
-        sizeClass: "text-slate-500",
-        recClass: "text-slate-500",
+        sizeClass: "text-[#615D59]",
+        recClass: "text-[#615D59]",
     },
     {
         model: "S65",
         size: '65"',
         rec: "소규모 공부방, 교습소",
         badge: "",
-        cardClass: "border-slate-200 text-slate-900",
+        cardClass: "border-black/[0.08] text-[#111110]",
         badgeClass: "",
-        sizeClass: "text-slate-500",
-        recClass: "text-slate-500",
+        sizeClass: "text-[#615D59]",
+        recClass: "text-[#615D59]",
     },
 ]
 
@@ -136,23 +136,23 @@ function ComparisonSection() {
         {
             title: "기존 칠판",
             problems: ["분필 날림, 건강 우려", "지우면 영원히 사라짐", "공유 불가능"],
-            bg: "bg-slate-100",
-            border: "border-slate-200",
-            iconColor: "text-slate-400",
+            bg: "bg-[#F6F5F4]",
+            border: "border-black/[0.08]",
+            iconColor: "text-[#A39E98]",
         },
         {
             title: "일반 전자칠판",
             problems: ["필기감 부자연스러움", "소프트웨어 별도 구매", "단순 화면 출력 장치"],
-            bg: "bg-slate-50",
-            border: "border-slate-200",
-            iconColor: "text-slate-400",
+            bg: "bg-[#FAFAF8]",
+            border: "border-black/[0.08]",
+            iconColor: "text-[#A39E98]",
         },
         {
             title: "Classin Board",
             problems: ["분필처럼 자연스럽고, 지워도 남는다", "SW 생태계 완전 통합", "시공간을 넘는 교육 연결"],
-            bg: "bg-[#F0FFF4]",
-            border: "border-[#22A366]/20",
-            iconColor: "text-[#22A366]",
+            bg: "bg-[#ECFDF5]",
+            border: "border-[#084734]/20",
+            iconColor: "text-[#084734]",
             highlight: true,
         },
     ]
@@ -161,11 +161,11 @@ function ComparisonSection() {
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-16" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">Why Classin Board</p>
+                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">Why Classin Board</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         도구를 바꾸는 게 아니라,
                         <br className="hidden sm:block" />{" "}
-                        <span className="text-[#22A366]">교육의 방식</span>을 바꿉니다
+                        <span className="text-[#084734]">교육의 방식</span>을 바꿉니다
                     </h2>
                 </motion.div>
 
@@ -176,9 +176,9 @@ function ComparisonSection() {
                             initial={{ opacity: 0, y: 40 }}
                             animate={inView ? { opacity: 1, y: 0 } : {}}
                             transition={{ duration: 0.5, delay: i * 0.15 }}
-                            className={`rounded-2xl border ${item.border} ${item.bg} p-6 sm:p-8 ${item.highlight ? "ring-2 ring-[#22A366]/20 shadow-lg shadow-[#22A366]/5 md:scale-[1.02]" : ""}`}
+                            className={`rounded-2xl border ${item.border} ${item.bg} p-6 sm:p-8 ${item.highlight ? "ring-2 ring-[#084734]/20 shadow-lg shadow-[#084734]/5 md:scale-[1.02]" : ""}`}
                         >
-                            <h3 className={`text-xl font-bold mb-6 ${item.highlight ? "text-[#22A366]" : "text-slate-900"}`}>
+                            <h3 className={`text-xl font-bold mb-6 ${item.highlight ? "text-[#084734]" : "text-[#111110]"}`}>
                                 {item.title}
                             </h3>
                             <ul className="space-y-4">
@@ -195,7 +195,7 @@ function ComparisonSection() {
                                                 </svg>
                                             )}
                                         </div>
-                                        <span className={`text-sm leading-relaxed ${item.highlight ? "text-slate-700 font-medium" : "text-slate-500"}`}>{p}</span>
+                                        <span className={`text-sm leading-relaxed ${item.highlight ? "text-[#31302E] font-medium" : "text-[#615D59]"}`}>{p}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -209,7 +209,7 @@ function ComparisonSection() {
 
 /* ── Section: Feature Block (reusable) ───────────────────────────── */
 function FeatureSection({
-    tag, title, desc, features, reverse = false, accent = "#22A366", children, visualClassName = "",
+    tag, title, desc, features, reverse = false, accent = "#084734", children, visualClassName = "",
 }: {
     tag: string; title: React.ReactNode; desc: React.ReactNode
     features: { icon: React.ReactNode; label: string; detail: string }[]
@@ -226,7 +226,7 @@ function FeatureSection({
                             <h2 className="text-3xl md:text-4xl lg:text-[2.75rem] text-[#1a1a19] leading-tight mb-6">
                                 {title}
                             </h2>
-                            <p className="text-lg text-slate-500 leading-relaxed mb-10">{desc}</p>
+                            <p className="text-lg text-[#615D59] leading-relaxed mb-10">{desc}</p>
                         </motion.div>
 
                         <div className="space-y-6">
@@ -237,8 +237,8 @@ function FeatureSection({
                                         {f.icon}
                                     </div>
                                     <div>
-                                        <h4 className="font-sans font-bold tabular-nums text-slate-900 mb-1">{f.label}</h4>
-                                        <p className="text-sm text-slate-500 leading-relaxed">{f.detail}</p>
+                                        <h4 className="font-sans font-bold tabular-nums text-[#111110] mb-1">{f.label}</h4>
+                                        <p className="text-sm text-[#615D59] leading-relaxed">{f.detail}</p>
                                     </div>
                                 </motion.div>
                             ))}
@@ -250,9 +250,9 @@ function FeatureSection({
                         {children ?? (
                             <motion.div
                                 {...fadeUp}
-                                className="aspect-[4/3] rounded-3xl bg-gradient-to-br from-slate-100 to-slate-50 border border-slate-200/60 shadow-xl shadow-slate-200/30 flex items-center justify-center"
+                                className="aspect-[4/3] rounded-3xl bg-gradient-to-br from-[#F6F5F4] to-[#FAFAF8] border border-black/[0.08] shadow-xl shadow-black/5 flex items-center justify-center"
                             >
-                                <Monitor className="w-20 h-20 text-slate-300" />
+                                <Monitor className="w-20 h-20 text-[#A39E98]" />
                             </motion.div>
                         )}
                     </div>
@@ -355,11 +355,11 @@ function FeatureTabSection() {
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-12" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">FEATURES</p>
+                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">FEATURES</p>
                     <h2 className="text-3xl md:text-4xl text-[#1a1a19] leading-tight">
-                        하나의 보드, <span className="text-[#22A366]">다섯 가지 경험</span>
+                        하나의 보드, <span className="text-[#084734]">다섯 가지 경험</span>
                     </h2>
-                    <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
+                    <p className="text-lg text-[#615D59] mt-4 max-w-xl mx-auto">
                         탭을 눌러 각 기능을 빠르게 확인하세요.
                     </p>
                 </motion.div>
@@ -372,8 +372,8 @@ function FeatureTabSection() {
                             onClick={() => setActive(i)}
                             className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${
                                 active === i
-                                    ? "bg-[#22A366] text-white shadow-md"
-                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                    ? "bg-[#084734] text-white shadow-md"
+                                    : "bg-[#F6F5F4] text-[#615D59] hover:bg-[#ECFDF5]"
                             }`}
                         >
                             {t.label}
@@ -404,7 +404,7 @@ function FeatureTabSection() {
 
                     {/* Content */}
                     <div>
-                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#22A366]/10 text-[#22A366] text-xs font-bold mb-5 border border-[#22A366]/15">
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#ECFDF5] text-[#084734] text-xs font-bold mb-5 border border-[#084734]/15">
                             {tab.badge}
                         </div>
                         <h3 className="text-2xl md:text-3xl text-[#1a1a19] mb-8 leading-snug">
@@ -413,12 +413,12 @@ function FeatureTabSection() {
                         <ul className="space-y-4">
                             {tab.points.map((p, i) => (
                                 <li key={i} className="flex items-start gap-3">
-                                    <div className="w-5 h-5 rounded-full bg-[#22A366]/10 flex items-center justify-center shrink-0 mt-0.5">
-                                        <svg className="w-3 h-3 text-[#22A366]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <div className="w-5 h-5 rounded-full bg-[#ECFDF5] flex items-center justify-center shrink-0 mt-0.5">
+                                        <svg className="w-3 h-3 text-[#084734]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                         </svg>
                                     </div>
-                                    <span className="text-slate-600 leading-relaxed">{p}</span>
+                                    <span className="text-[#615D59] leading-relaxed">{p}</span>
                                 </li>
                             ))}
                         </ul>
@@ -444,13 +444,13 @@ function ProductAnatomySection() {
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-16" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">PRODUCT DESIGN</p>
+                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">PRODUCT DESIGN</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         디테일에서 완성되는
                         <br />
-                        <span className="text-[#22A366]">수업의 몰입도</span>
+                        <span className="text-[#084734]">수업의 몰입도</span>
                     </h2>
-                    <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
+                    <p className="text-lg text-[#615D59] mt-4 max-w-xl mx-auto">
                         110mm의 초슬림 바디부터 사용자 중심의 제스처바까지.
                         작은 디테일 하나하나가 모여
                         <br />
@@ -460,7 +460,7 @@ function ProductAnatomySection() {
 
                 <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-14 items-center">
                     {/* Side profile image */}
-                    <motion.div {...fadeUp} className="rounded-3xl overflow-hidden shadow-xl bg-slate-50">
+                    <motion.div {...fadeUp} className="rounded-3xl overflow-hidden shadow-xl bg-[#FAFAF8]">
                         <Image
                             src="/images/product/hw/board/board-side-profile.webp"
                             alt="Classin Board 측면 슬림 프로파일 — 110mm"
@@ -477,11 +477,11 @@ function ProductAnatomySection() {
                             <motion.div
                                 key={i}
                                 {...stagger(i)}
-                                className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:border-[#22A366]/20 transition-all"
+                                className="bg-white rounded-2xl border border-black/[0.08] shadow-sm p-5 hover:shadow-md hover:border-[#084734]/20 transition-all"
                             >
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{s.label}</div>
+                                <div className="text-[10px] font-bold text-[#A39E98] uppercase tracking-widest mb-2">{s.label}</div>
                                 <div className="text-base font-sans font-bold tabular-nums tracking-tight text-[#1a1a19] mb-0.5">{s.value}</div>
-                                <div className="text-xs text-slate-400 leading-relaxed">{s.sub}</div>
+                                <div className="text-xs text-[#A39E98] leading-relaxed">{s.sub}</div>
                             </motion.div>
                         ))}
                     </div>
@@ -504,7 +504,7 @@ function ImpactNumbersSection() {
 
     return (
         <section ref={ref} className="bg-[#0d1a12] relative overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,_rgba(34,163,102,0.13)_0%,_transparent_100%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,_rgba(110,231,183,0.13)_0%,_transparent_100%)]" />
             <div className="container mx-auto px-4 lg:px-8 py-20 md:py-28 relative">
                 <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/8">
                     {stats.map((s, i) => (
@@ -518,7 +518,7 @@ function ImpactNumbersSection() {
                             <div className="text-5xl md:text-6xl lg:text-7xl font-sans font-bold tabular-nums tracking-tight text-white leading-none mb-3">
                                 {s.value}
                             </div>
-                            <div className="text-xs font-bold text-[#22A366] uppercase tracking-[0.2em] mb-2">{s.label}</div>
+                            <div className="text-xs font-bold text-[#6EE7B7] uppercase tracking-[0.2em] mb-2">{s.label}</div>
                             <div className="text-sm text-white/35">{s.sub}</div>
                         </motion.div>
                     ))}
@@ -535,7 +535,7 @@ function FullWidthPointSection({
     eyebrow: string; statement: React.ReactNode; sub?: string; dark?: boolean; image?: string; contentClassName?: string
 }) {
     return (
-        <section className={`relative min-h-[65vh] flex items-center justify-center overflow-hidden ${dark ? "bg-[#0d1a12]" : "bg-[#22A366]"}`}>
+        <section className={`relative min-h-[65vh] flex items-center justify-center overflow-hidden ${dark ? "bg-[#0d1a12]" : "bg-[#084734]"}`}>
             {image && (
                 <Image src={image} alt="" fill className="object-cover" sizes="100vw" />
             )}
@@ -594,31 +594,31 @@ function LessonTimelineSection() {
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-16" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">A Day With Classin Board</p>
+                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">A Day With Classin Board</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         교사의 하루가
                         <br />
-                        <span className="text-[#22A366]">이렇게 달라집니다</span>
+                        <span className="text-[#084734]">이렇게 달라집니다</span>
                     </h2>
                 </motion.div>
 
                 <div className="max-w-2xl mx-auto relative">
-                    <div className="absolute left-[5.25rem] top-5 bottom-5 w-px bg-gradient-to-b from-[#22A366]/40 via-[#22A366]/20 to-transparent hidden sm:block" />
+                    <div className="absolute left-[5.25rem] top-5 bottom-5 w-px bg-gradient-to-b from-[#084734]/40 via-[#084734]/20 to-transparent hidden sm:block" />
 
                     <div className="space-y-10">
                         {timelineSteps.map((step, i) => (
                             <motion.div key={i} {...stagger(i)} className="flex items-start gap-5">
                                 <div className="shrink-0 w-16 text-right pt-2.5">
-                                    <span className="text-[11px] font-bold tabular-nums text-slate-400 leading-none">{step.time}</span>
+                                    <span className="text-[11px] font-bold tabular-nums text-[#A39E98] leading-none">{step.time}</span>
                                 </div>
                                 <div className="relative shrink-0 z-10">
-                                    <div className="w-9 h-9 rounded-full bg-[#22A366]/10 border border-[#22A366]/25 flex items-center justify-center text-[#22A366]">
+                                    <div className="w-9 h-9 rounded-full bg-[#ECFDF5] border border-[#084734]/25 flex items-center justify-center text-[#084734]">
                                         {step.icon}
                                     </div>
                                 </div>
                                 <div className="pt-1.5 pb-2">
-                                    <h3 className="font-bold text-slate-900 mb-1.5 text-sm">{step.title}</h3>
-                                    <p className="text-sm text-slate-500 leading-relaxed">{step.desc}</p>
+                                    <h3 className="font-bold text-[#111110] mb-1.5 text-sm">{step.title}</h3>
+                                    <p className="text-sm text-[#615D59] leading-relaxed">{step.desc}</p>
                                 </div>
                             </motion.div>
                         ))}
@@ -659,11 +659,11 @@ function TestimonialSection() {
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-14" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">VOICES FROM CLASSROOMS</p>
+                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">VOICES FROM CLASSROOMS</p>
                     <h2 className="text-3xl md:text-4xl text-[#1a1a19] leading-tight">
                         이미 수업에서 경험한
                         <br />
-                        <span className="text-[#22A366]">선생님들이 말합니다</span>
+                        <span className="text-[#084734]">선생님들이 말합니다</span>
                     </h2>
                 </motion.div>
 
@@ -672,20 +672,20 @@ function TestimonialSection() {
                         <motion.div
                             key={i}
                             {...stagger(i)}
-                            className="bg-[#FDFCF8] rounded-2xl border border-slate-100 shadow-sm p-7 flex flex-col"
+                            className="bg-[#FDFCF8] rounded-2xl border border-black/[0.08] shadow-sm p-7 flex flex-col"
                         >
                             <div className="flex gap-0.5 mb-5">
                                 {Array.from({ length: t.rating }).map((_, j) => (
-                                    <Star key={j} className="w-4 h-4 fill-[#22A366] text-[#22A366]" />
+                                    <Star key={j} className="w-4 h-4 fill-[#084734] text-[#084734]" />
                                 ))}
                             </div>
-                            <p className="text-slate-600 leading-relaxed text-sm flex-1 mb-6">
+                            <p className="text-[#615D59] leading-relaxed text-sm flex-1 mb-6">
                                 &ldquo;{t.quote}&rdquo;
                             </p>
-                            <div className="border-t border-slate-100 pt-5">
-                                <div className="font-bold text-slate-900 text-sm">{t.name}</div>
-                                <div className="text-xs text-slate-400 mt-0.5">{t.school}</div>
-                                <div className="inline-flex mt-2.5 px-2.5 py-1 rounded-full bg-[#22A366]/8 text-[#22A366] text-[10px] font-bold border border-[#22A366]/15">
+                            <div className="border-t border-black/[0.08] pt-5">
+                                <div className="font-bold text-[#111110] text-sm">{t.name}</div>
+                                <div className="text-xs text-[#A39E98] mt-0.5">{t.school}</div>
+                                <div className="inline-flex mt-2.5 px-2.5 py-1 rounded-full bg-[#ECFDF5] text-[#084734] text-[10px] font-bold border border-[#084734]/15">
                                     {t.model}
                                 </div>
                             </div>
@@ -729,13 +729,13 @@ function SpaceScenarioSection() {
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-12" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">LINEUP × SPACE</p>
+                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">LINEUP × SPACE</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         공간에 딱 맞는
                         <br />
-                        <span className="text-[#22A366]">최적의 모델을 만나보세요</span>
+                        <span className="text-[#084734]">최적의 모델을 만나보세요</span>
                     </h2>
-                    <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
+                    <p className="text-lg text-[#615D59] mt-4 max-w-xl mx-auto">
                         설치 공간을 선택하면 최적 모델과 사용 시나리오를 확인할 수 있습니다.
                     </p>
                 </motion.div>
@@ -747,12 +747,12 @@ function SpaceScenarioSection() {
                             onClick={() => setActive(i)}
                             className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${
                                 active === i
-                                    ? "bg-[#22A366] text-white shadow-md"
-                                    : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
+                                    ? "bg-[#084734] text-white shadow-md"
+                                    : "bg-white border border-black/[0.08] text-[#615D59] hover:border-black/20"
                             }`}
                         >
                             {s.model}
-                            <span className={`ml-1.5 font-normal text-xs ${active === i ? "text-white/70" : "text-slate-400"}`}>{s.size}</span>
+                            <span className={`ml-1.5 font-normal text-xs ${active === i ? "text-white/70" : "text-[#A39E98]"}`}>{s.size}</span>
                         </button>
                     ))}
                 </div>
@@ -774,7 +774,7 @@ function SpaceScenarioSection() {
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
                         {scenario.badge && (
-                            <div className="absolute top-4 left-4 text-[10px] font-bold tracking-wider bg-[#22A366] text-white px-3 py-1 rounded-full">
+                            <div className="absolute top-4 left-4 text-[10px] font-bold tracking-wider bg-[#084734] text-white px-3 py-1 rounded-full">
                                 {scenario.badge}
                             </div>
                         )}
@@ -785,15 +785,15 @@ function SpaceScenarioSection() {
                     </div>
 
                     <div>
-                        <div className="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-semibold mb-6">
+                        <div className="inline-flex items-center px-3 py-1 rounded-full bg-[#F6F5F4] text-[#615D59] text-xs font-semibold mb-6">
                             {scenario.tag}
                         </div>
                         <h3 className="text-2xl md:text-3xl text-[#1a1a19] mb-5 leading-snug">
-                            {scenario.model} <span className="text-slate-400 font-normal">{scenario.size}</span>
+                            {scenario.model} <span className="text-[#A39E98] font-normal">{scenario.size}</span>
                             <br />어떤 공간에 어울릴까요?
                         </h3>
-                        <p className="text-slate-600 leading-relaxed mb-8">{scenario.story}</p>
-                        <Button asChild className="h-12 rounded-full bg-[#009060] px-8 text-sm font-bold text-white shadow-md transition-all hover:bg-[#007A52] hover:shadow-lg group">
+                        <p className="text-[#615D59] leading-relaxed mb-8">{scenario.story}</p>
+                        <Button asChild className="h-12 rounded-full bg-[#084734] px-8 text-sm font-bold text-white shadow-md transition-all hover:bg-[#065c41] hover:shadow-lg group">
                             <Link
                                 href="/contact#contact-form"
                                 onClick={() => trackEvent("click_cta", { button: "hw_model_inquiry", page: "/product/hw", model: scenario.model })}
@@ -813,14 +813,14 @@ function SpaceScenarioSection() {
 /* ── Main Page Component ─────────────────────────────────────────── */
 export default function ProductHWPage() {
     return (
-        <div className="bg-[#FDFCF8] min-h-screen text-slate-900 font-sans selection:bg-emerald-200 pt-20">
+        <div className="bg-[#FDFCF8] min-h-screen text-[#111110] font-sans selection:bg-[#D1FAE5] pt-20">
 
             {/* ================================================================
                 ACT 1 — HERO: 익숙함을 넘어서
             ================================================================ */}
             <section className="relative overflow-hidden">
                 {/* Subtle background gradient */}
-                <div className="absolute inset-0 bg-gradient-to-b from-[#FDFCF8] via-[#F0FFF7] to-[#FDFCF8] pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-b from-[#FDFCF8] via-[#ECFDF5] to-[#FDFCF8] pointer-events-none" />
 
                 <div className="container mx-auto px-4 lg:px-8 pt-12 md:pt-24 pb-20 md:pb-32 relative">
                     <div className="max-w-6xl mx-auto text-center">
@@ -829,7 +829,7 @@ export default function ProductHWPage() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7 }}
                         >
-                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#22A366]/5 text-[#22A366] text-sm font-semibold mb-8 border border-[#22A366]/10">
+                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#ECFDF5] text-[#084734] text-sm font-semibold mb-8 border border-[#084734]/10">
                                 <Layers className="w-3.5 h-3.5" />
                                 Classin Board S Series
                             </div>
@@ -862,8 +862,8 @@ export default function ProductHWPage() {
                                 { value: "실시간", label: "판서 즉시 전체 공유" },
                             ].map((m, i) => (
                                 <div key={i} className="text-center">
-                                    <div className="text-2xl md:text-3xl font-sans font-bold tabular-nums tracking-tight text-[#22A366]">{m.value}</div>
-                                    <div className="text-xs md:text-sm text-slate-400 mt-1 font-medium">{m.label}</div>
+                                    <div className="text-2xl md:text-3xl font-sans font-bold tabular-nums tracking-tight text-[#084734]">{m.value}</div>
+                                    <div className="text-xs md:text-sm text-[#A39E98] mt-1 font-medium">{m.label}</div>
                                 </div>
                             ))}
                         </motion.div>
@@ -891,20 +891,20 @@ export default function ProductHWPage() {
 
             <section aria-labelledby="classin-board-summary" className="bg-white py-12 md:py-16">
                 <div className="container mx-auto px-4 lg:px-8">
-                    <div className="mx-auto grid max-w-5xl gap-6 border-y border-slate-200 py-8 md:grid-cols-[0.9fr_1.4fr] md:py-10">
+                    <div className="mx-auto grid max-w-5xl gap-6 border-y border-black/[0.08] py-8 md:grid-cols-[0.9fr_1.4fr] md:py-10">
                         <div>
-                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#22A366]">Classin Board</p>
-                            <h2 id="classin-board-summary" className="mt-3 text-2xl font-bold leading-tight text-slate-950 md:text-3xl">
+                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#084734]">Classin Board</p>
+                            <h2 id="classin-board-summary" className="mt-3 text-2xl font-bold leading-tight text-[#111110] md:text-3xl">
                                 Classin Board는 교실 수업을 기록 가능한 스튜디오로 바꿉니다
                             </h2>
                         </div>
                         <div>
-                            <p className="text-base leading-8 text-slate-600 md:text-lg">
+                            <p className="text-base leading-8 text-[#615D59] md:text-lg">
                                 Classin Board는 판서, 4K AI 카메라 자동 추적, 수업 영상 업로드, 판서 PDF 공유,
                                 Classin 소프트웨어 연동을 제공하는 교육용 전자칠판입니다. 수업 중에 만든 자료가
                                 수업 종료 후 복습 콘텐츠와 학부모 공유 자료로 이어집니다.
                             </p>
-                            <ul className="mt-6 grid gap-3 text-sm font-semibold text-slate-700 sm:grid-cols-3">
+                            <ul className="mt-6 grid gap-3 text-sm font-semibold text-[#31302E] sm:grid-cols-3">
                                 <li className="rounded-[8px] bg-[#ECFDF5] px-4 py-3 text-[#084734]">판서: PDF로 저장</li>
                                 <li className="rounded-[8px] bg-[#ECFDF5] px-4 py-3 text-[#084734]">녹화: AI 카메라 추적</li>
                                 <li className="rounded-[8px] bg-[#ECFDF5] px-4 py-3 text-[#084734]">공유: Classin과 연동</li>
@@ -987,7 +987,7 @@ export default function ProductHWPage() {
             <div className="bg-white">
                 <FeatureSection
                     tag="WRITING EXPERIENCE"
-                    title={<>쓰는 순간,<br />전자칠판이란 걸 <span className="text-[#22A366]">잊게 됩니다</span></>}
+                    title={<>쓰는 순간,<br />전자칠판이란 걸 <span className="text-[#084734]">잊게 됩니다</span></>}
                     desc={<>분필의 마찰감을 재현한 표면 코팅과 0.03초 초저지연이 만나,<br />손끝을 따라오는 가장 자연스러운 디지털 필기를 경험하세요.</>}
                     features={[
                         {
@@ -1028,7 +1028,7 @@ export default function ProductHWPage() {
             ================================================================ */}
             <FeatureSection
                 tag="DISPLAY QUALITY"
-                title={<>맨 뒷자리 학생도,<br /><span className="text-[#22A366]">맨 앞자리</span>와 같은 화면을 봅니다</>}
+                title={<>맨 뒷자리 학생도,<br /><span className="text-[#084734]">맨 앞자리</span>와 같은 화면을 봅니다</>}
                 desc={<>풀 라미네이션 패널과 정밀 코팅 기술이 만들어내는 선명함. 조명 반사 없이,<br />어느 각도에서든 또렷한 화면을 제공합니다.</>}
                 reverse
                 features={[
@@ -1067,9 +1067,9 @@ export default function ProductHWPage() {
                         whileInView={{ opacity: 1, scale: 1 }}
                         viewport={{ once: true }}
                         transition={{ delay: 0.5 }}
-                        className="absolute -bottom-3 -left-3 bg-white rounded-2xl shadow-lg border border-slate-100 px-4 py-2.5"
+                        className="absolute -bottom-3 -left-3 bg-white rounded-2xl shadow-lg border border-black/[0.08] px-4 py-2.5"
                     >
-                        <div className="text-xs text-slate-400 mb-0.5">빛 투과율</div>
+                        <div className="text-xs text-[#A39E98] mb-0.5">빛 투과율</div>
                         <div className="text-lg font-bold text-[#084734] font-mono">90%+</div>
                     </motion.div>
                 </motion.div>
@@ -1081,7 +1081,7 @@ export default function ProductHWPage() {
             <div className="bg-white">
                 <FeatureSection
                     tag="INSTANT SHARING"
-                    title={<>판서가 끝나기도 전에,<br />학생 기기에 <span className="text-[#22A366]">도착합니다</span></>}
+                    title={<>판서가 끝나기도 전에,<br />학생 기기에 <span className="text-[#084734]">도착합니다</span></>}
                     desc={<>실시간 판서 동기화로 모든 학생이 같은 내용을 동시에 봅니다.<br />수업이 끝나면 자동 저장. 결석한 학생도 놓칠 수 없습니다.</>}
                     visualClassName="lg:max-w-[660px] lg:-ml-14"
                     features={[
@@ -1139,10 +1139,10 @@ export default function ProductHWPage() {
             ================================================================ */}
             <FeatureSection
                 tag="BEYOND CLASSROOM"
-                title={<>같은 교실에 없어도,<br /><span className="text-[#22A366]">같은 수업</span>을 합니다</>}
+                title={<>같은 교실에 없어도,<br /><span className="text-[#084734]">같은 수업</span>을 합니다</>}
                 desc="AI 카메라와 고성능 마이크가 물리적 거리를 지웁니다. 교실 학생과 원격 학생이 하나의 캔버스에서 함께 배우는 하이브리드 수업."
                 reverse
-                accent="#22A366"
+                accent="#084734"
                 visualClassName="lg:max-w-[640px]"
                 features={[
                     {
@@ -1164,7 +1164,7 @@ export default function ProductHWPage() {
             >
                 {/* Hybrid classroom visual — looping interactive learning video */}
                 <motion.div {...fadeUp} className="relative">
-                    <div className="absolute -inset-7 rounded-[2rem] bg-[radial-gradient(circle_at_35%_20%,rgba(34,163,102,0.18),transparent_46%),radial-gradient(circle_at_80%_75%,rgba(8,71,52,0.14),transparent_45%)] blur-2xl" />
+                    <div className="absolute -inset-7 rounded-[2rem] bg-[radial-gradient(circle_at_35%_20%,rgba(8,71,52,0.18),transparent_46%),radial-gradient(circle_at_80%_75%,rgba(8,71,52,0.14),transparent_45%)] blur-2xl" />
                     <div className="relative rounded-[1.55rem] bg-gradient-to-br from-white via-[#F2EFE7] to-[#CFC8BA] p-[4px] shadow-[0_32px_90px_rgba(8,71,52,0.18)] ring-1 ring-black/5">
                         <div className="relative aspect-video overflow-hidden rounded-[1.25rem] bg-black shadow-inner">
                             <video
@@ -1188,19 +1188,19 @@ export default function ProductHWPage() {
             {/* ================================================================
                 ACT 4 — SW 완전 통합: 교육 생태계
             ================================================================ */}
-            <section className="py-24 md:py-32 bg-slate-900 text-white relative overflow-hidden">
+            <section className="py-24 md:py-32 bg-[#111110] text-white relative overflow-hidden">
                 {/* Background glow */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#22A366]/5 rounded-full blur-[120px] pointer-events-none" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#6EE7B7]/5 rounded-full blur-[120px] pointer-events-none" />
 
                 <div className="container mx-auto px-4 lg:px-8 relative">
                     <motion.div className="text-center mb-16" {...fadeUp}>
-                        <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">COMPLETE ECOSYSTEM</p>
+                        <p className="text-sm font-semibold text-[#6EE7B7] tracking-wider uppercase mb-3">COMPLETE ECOSYSTEM</p>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl leading-tight">
                             하드웨어 그 이상,
                             <br />
-                            <span className="text-[#22A366]">새로운 수업 생태계</span>
+                            <span className="text-[#6EE7B7]">새로운 수업 생태계</span>
                         </h2>
-                        <p className="text-lg text-slate-400 mt-6 max-w-2xl mx-auto leading-relaxed">
+                        <p className="text-lg text-white/60 mt-6 max-w-2xl mx-auto leading-relaxed">
                             Classin 소프트웨어가 보드에 네이티브 탑재. 출결부터 과제, 성적, 학부모 알림까지 — 끊김 없는 하나의 흐름.
                         </p>
                     </motion.div>
@@ -1245,11 +1245,11 @@ export default function ProductHWPage() {
                                 {...stagger(i)}
                                 className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-colors"
                             >
-                                <div className="text-[#22A366] mb-4">
+                                <div className="text-[#6EE7B7] mb-4">
                                     {item.icon}
                                 </div>
                                 <h3 className="font-bold text-white mb-2">{item.title}</h3>
-                                <p className="text-sm text-slate-400 leading-relaxed">{item.desc}</p>
+                                <p className="text-sm text-white/60 leading-relaxed">{item.desc}</p>
                             </motion.div>
                         ))}
                     </div>
@@ -1272,11 +1272,11 @@ export default function ProductHWPage() {
             <section className="py-24 md:py-32">
                 <div className="container mx-auto px-4 lg:px-8">
                     <motion.div className="text-center mb-16" {...fadeUp}>
-                        <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">LINEUP</p>
+                        <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">LINEUP</p>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
-                            모든 공간에 맞는 <span className="text-[#22A366]">사이즈</span>
+                            모든 공간에 맞는 <span className="text-[#084734]">사이즈</span>
                         </h2>
-                        <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
+                        <p className="text-lg text-[#615D59] mt-4 max-w-xl mx-auto">
                             소규모 스터디룸부터 대형 강당까지, 공간에 최적화된 모델을 선택하세요.
                         </p>
                     </motion.div>
@@ -1287,7 +1287,7 @@ export default function ProductHWPage() {
                             <motion.div
                                 key={card.model}
                                 {...stagger(i)}
-                                className={`rounded-2xl border p-5 min-h-[150px] flex flex-col justify-between transition-colors duration-200 hover:bg-slate-50/60 ${card.cardClass}`}
+                                className={`rounded-2xl border p-5 min-h-[150px] flex flex-col justify-between transition-colors duration-200 hover:bg-[#FAFAF8]/60 ${card.cardClass}`}
                             >
                                 <div className="flex items-start justify-between gap-3">
                                     <div>
@@ -1308,42 +1308,42 @@ export default function ProductHWPage() {
                     {/* Detailed spec table */}
                     <motion.div {...fadeUp} className="max-w-5xl mx-auto">
                         <div className="text-center mb-8">
-                            <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">SPECIFICATIONS</p>
+                            <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">SPECIFICATIONS</p>
                             <h3 className="text-2xl md:text-3xl font-bold text-[#1a1a19] leading-tight mb-3">
                                 클래스인 제품 상세 스펙
                             </h3>
-                            <p className="text-base text-slate-500">
+                            <p className="text-base text-[#615D59]">
                                 클래스인 제품들의 상세한 스펙을 안내해드립니다.
                             </p>
                         </div>
 
-                        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-lg overflow-hidden">
+                        <div className="bg-white rounded-2xl border border-black/[0.08] shadow-lg overflow-hidden">
                             <div className="overflow-x-auto">
                                 <table className="min-w-[760px] w-full text-sm">
                                     <thead>
-                                        <tr className="bg-slate-50 border-b border-slate-100">
-                                            <th className="text-left py-4 px-6 font-semibold text-slate-500 w-44">사양</th>
-                                            <th className="text-center py-4 px-4 font-bold text-slate-900">S110</th>
-                                            <th className="text-center py-4 px-4 font-bold text-[#22A366]">S86</th>
-                                            <th className="text-center py-4 px-4 font-bold text-slate-900">S75</th>
-                                            <th className="text-center py-4 px-4 font-bold text-slate-900">S65</th>
+                                        <tr className="bg-[#FAFAF8] border-b border-black/[0.08]">
+                                            <th className="text-left py-4 px-6 font-semibold text-[#615D59] w-44">사양</th>
+                                            <th className="text-center py-4 px-4 font-bold text-[#111110]">S110</th>
+                                            <th className="text-center py-4 px-4 font-bold text-[#084734]">S86</th>
+                                            <th className="text-center py-4 px-4 font-bold text-[#111110]">S75</th>
+                                            <th className="text-center py-4 px-4 font-bold text-[#111110]">S65</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {specGroups.map((group) => (
                                             <Fragment key={group.category}>
-                                                <tr className="bg-[#22A366]/5 border-y border-[#22A366]/10">
-                                                    <td colSpan={5} className="py-2.5 px-6 text-[11px] font-bold tracking-[0.16em] uppercase text-[#22A366]">
+                                                <tr className="bg-[#ECFDF5] border-y border-[#084734]/10">
+                                                    <td colSpan={5} className="py-2.5 px-6 text-[11px] font-bold tracking-[0.16em] uppercase text-[#084734]">
                                                         {group.category}
                                                     </td>
                                                 </tr>
                                                 {group.rows.map((row, i) => (
-                                                    <tr key={`${group.category}-${row.label}`} className={`border-b border-slate-50 ${i % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
-                                                        <td className="py-3.5 px-6 font-medium text-slate-600">{row.label}</td>
-                                                        <td className="py-3.5 px-4 text-center tabular-nums text-slate-700">{row.s110}</td>
-                                                        <td className="py-3.5 px-4 text-center tabular-nums text-slate-700 font-medium">{row.s86}</td>
-                                                        <td className="py-3.5 px-4 text-center tabular-nums text-slate-700">{row.s75}</td>
-                                                        <td className="py-3.5 px-4 text-center tabular-nums text-slate-700">{row.s65}</td>
+                                                    <tr key={`${group.category}-${row.label}`} className={`border-b border-black/[0.04] ${i % 2 === 0 ? "bg-white" : "bg-[#FAFAF8]/40"}`}>
+                                                        <td className="py-3.5 px-6 font-medium text-[#615D59]">{row.label}</td>
+                                                        <td className="py-3.5 px-4 text-center tabular-nums text-[#31302E]">{row.s110}</td>
+                                                        <td className="py-3.5 px-4 text-center tabular-nums text-[#31302E] font-medium">{row.s86}</td>
+                                                        <td className="py-3.5 px-4 text-center tabular-nums text-[#31302E]">{row.s75}</td>
+                                                        <td className="py-3.5 px-4 text-center tabular-nums text-[#31302E]">{row.s65}</td>
                                                     </tr>
                                                 ))}
                                             </Fragment>
@@ -1364,22 +1364,22 @@ export default function ProductHWPage() {
             {/* ================================================================
                 ACT 5 — CTA: 직접 체험해보세요
             ================================================================ */}
-            <section className="py-24 md:py-32 bg-gradient-to-b from-white to-[#FDFCF8] border-t border-slate-100">
+            <section className="py-24 md:py-32 bg-gradient-to-b from-white to-[#FDFCF8] border-t border-black/[0.08]">
                 <div className="container mx-auto px-4 text-center">
                     <motion.div {...fadeUp}>
-                        <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">EXPERIENCE</p>
+                        <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">EXPERIENCE</p>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] mb-4 leading-tight">
                             압도적인 몰입감,
                             <br />
-                            <span className="text-[#22A366]">직접 써보는 순간 확신이 됩니다</span>
+                            <span className="text-[#084734]">직접 써보는 순간 확신이 됩니다</span>
                         </h2>
-                        <p className="text-lg text-slate-500 mb-10 max-w-xl mx-auto leading-relaxed">
+                        <p className="text-lg text-[#615D59] mb-10 max-w-xl mx-auto leading-relaxed">
                             직접 써보는 것만큼 확실한 비교는 없습니다.
                             우리 학원 환경에 최적화된 클래스인 보드의 성능을 데모 시연으로 먼저 경험해 보세요.
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Button asChild className="h-14 rounded-full bg-[#009060] px-10 text-base font-bold text-white shadow-[0_8px_20px_rgba(0,144,96,0.24)] transition-all hover:scale-105 hover:bg-[#007A52] hover:shadow-[0_12px_25px_rgba(0,144,96,0.32)] group">
+                            <Button asChild className="h-14 rounded-full bg-[#084734] px-10 text-base font-bold text-white shadow-[0_8px_20px_rgba(8,71,52,0.24)] transition-all hover:scale-105 hover:bg-[#065c41] hover:shadow-[0_12px_25px_rgba(8,71,52,0.32)] group">
                                 <Link
                                     href="/contact#contact-form"
                                     onClick={() => trackEvent("click_cta", { button: "hw_final_inquiry", page: "/product/hw" })}
@@ -1388,7 +1388,7 @@ export default function ProductHWPage() {
                                 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                 </Link>
                             </Button>
-                            <Button asChild variant="outline" className="rounded-full px-10 h-14 text-base font-bold border-slate-300 hover:border-slate-400 text-slate-700 hover:bg-slate-50 transition-all">
+                            <Button asChild variant="outline" className="rounded-full px-10 h-14 text-base font-bold border-black/20 hover:border-black/30 text-[#31302E] hover:bg-[#FAFAF8] transition-all">
                                 <a
                                     href={BROCHURE_URL}
                                     target="_blank"

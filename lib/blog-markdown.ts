@@ -83,17 +83,23 @@ function renderInline(text: string) {
     )
     .replace(
       /\[([^\]]+)\]\(([^)]+)\)/g,
-      (_match, label: string, url: string) =>
-        stashInlineToken(
+      (_match, label: string, url: string) => {
+        const trimmed = url.trim()
+        // 사이트 내부 링크(/blog/..., #섹션)는 같은 탭에서 이동, 외부만 새 탭
+        const isInternal =
+          (trimmed.startsWith("/") && !trimmed.startsWith("//")) || trimmed.startsWith("#")
+        const externalAttrs = isInternal ? "" : ' target="_blank" rel="noopener noreferrer"'
+        return stashInlineToken(
           tokens,
-          `<a href="${sanitizePublicUrlForHtmlAttribute(url)}" target="_blank" rel="noopener noreferrer" class="font-medium text-emerald-700 underline underline-offset-4">${escapeHtml(label)}</a>`
+          `<a href="${sanitizePublicUrlForHtmlAttribute(url)}"${externalAttrs} class="font-medium text-[#084734] underline underline-offset-4">${escapeHtml(label)}</a>`
         )
+      }
     )
 
   let html = escapeHtml(source)
 
-  html = html.replace(/\{\{green:(.+?)\}\}/g, '<span class="font-semibold text-emerald-700">$1</span>')
-  html = html.replace(/==(.+?)==/g, '<mark class="rounded bg-[#CEF17B]/60 px-1 text-[#084734]">$1</mark>')
+  html = html.replace(/\{\{green:(.+?)\}\}/g, '<span class="font-semibold text-[#084734]">$1</span>')
+  html = html.replace(/==(.+?)==/g, '<mark class="rounded bg-[#D1FAE5]/80 px-1 text-[#084734]">$1</mark>')
   html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
   html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>")
 
@@ -336,7 +342,7 @@ export function renderMarkdownToHtml(markdown: string) {
         index += 1
       }
       html.push(
-        `<blockquote class="my-8 rounded-3xl border border-emerald-100 bg-emerald-50/70 px-6 py-5 text-lg leading-8 text-[#084734]">${quoteLines
+        `<blockquote class="my-8 rounded-3xl border border-[#BDEFD8] bg-[#ECFDF5]/70 px-6 py-5 text-lg leading-8 text-[#084734]">${quoteLines
           .map((item) => renderInline(item))
           .join("<br />")}</blockquote>`
       )

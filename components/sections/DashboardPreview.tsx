@@ -149,7 +149,7 @@ export function DashboardPreview() {
                                     <span className="text-[10px] font-medium uppercase tracking-wider">{kpi.label}</span>
                                 </div>
                                 <div className="text-2xl font-bold text-white">{kpi.value}</div>
-                                <div className="mt-1 flex items-center gap-0.5 text-emerald-400 text-xs font-medium">
+                                <div className="mt-1 flex items-center gap-0.5 text-[#6EE7B7] text-xs font-medium">
                                     <ArrowUpRight className="w-3 h-3" />
                                     {kpi.delta}
                                 </div>

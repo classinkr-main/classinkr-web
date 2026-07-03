@@ -36,6 +36,7 @@ export async function generateMetadata({ params }: EventVideoPageProps): Promise
     title: `${seminar.title} | 행사 영상`,
     description: seminar.description,
     path: `/events/videos/${seminar.slug}`,
+    image: seminar.posterUrl,
   })
 }
 

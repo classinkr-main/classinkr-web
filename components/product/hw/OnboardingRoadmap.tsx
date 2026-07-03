@@ -56,16 +56,16 @@ export default function OnboardingRoadmap() {
             <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
                 <motion.div className="text-center mb-16" {...fadeUp}>
                     <div className="flex items-center gap-3 mb-4 justify-center">
-                        <div className="h-px w-5 bg-[#22A366]/40 shrink-0" />
-                        <p className="text-[11px] font-bold text-[#22A366] tracking-[0.2em] uppercase whitespace-nowrap">HOW TO START</p>
-                        <div className="h-px w-5 bg-[#22A366]/40 shrink-0" />
+                        <div className="h-px w-5 bg-[#084734]/40 shrink-0" />
+                        <p className="text-[11px] font-bold text-[#084734] tracking-[0.2em] uppercase whitespace-nowrap">HOW TO START</p>
+                        <div className="h-px w-5 bg-[#084734]/40 shrink-0" />
                     </div>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         수업의 격을 높이는 차원이 다른 스펙,
                         <br />
-                        <span className="text-[#22A366]">가장 먼저 우리 학원에서 만나보세요</span>
+                        <span className="text-[#084734]">가장 먼저 우리 학원에서 만나보세요</span>
                     </h2>
-                    <p className="text-lg text-slate-400 mt-4 max-w-xl mx-auto">
+                    <p className="text-lg text-[#A39E98] mt-4 max-w-xl mx-auto">
                         단순한 기기 도입을 넘어 수업의 격을 바꿉니다.
                         <br className="hidden sm:block" />{" "}
                         전문 상담을 통해 학원 규모와 목적에 최적화된 솔루션을 제안해 드립니다.
@@ -75,9 +75,9 @@ export default function OnboardingRoadmap() {
                 <div className="relative">
                     {/* Connecting line — desktop only */}
                     <div className="hidden lg:block absolute top-7 left-[12%] right-[12%] h-px pointer-events-none">
-                        <div className="absolute inset-0 border-t border-dashed border-[#22A366]/15" />
+                        <div className="absolute inset-0 border-t border-dashed border-[#084734]/15" />
                         <motion.div
-                            className="absolute inset-0 border-t border-[#22A366]/50"
+                            className="absolute inset-0 border-t border-[#084734]/50"
                             style={{ transformOrigin: "left" }}
                             initial={{ scaleX: 0 }}
                             whileInView={{ scaleX: 1 }}
@@ -99,21 +99,21 @@ export default function OnboardingRoadmap() {
                                     className="group flex flex-col items-center text-center"
                                 >
                                     <div className="relative mb-5 z-10 shrink-0">
-                                        <div className="w-14 h-14 rounded-full bg-white border border-[#22A366]/30 text-[#22A366] flex items-center justify-center transition-all duration-200 ease-out group-hover:scale-105 group-hover:bg-[#22A366] group-hover:border-[#22A366] group-hover:text-white group-hover:shadow-[0_10px_24px_rgba(34,163,102,0.22)]">
+                                        <div className="w-14 h-14 rounded-full bg-white border border-[#084734]/30 text-[#084734] flex items-center justify-center transition-all duration-200 ease-out group-hover:scale-105 group-hover:bg-[#084734] group-hover:border-[#084734] group-hover:text-white group-hover:shadow-[0_10px_24px_rgba(8,71,52,0.22)]">
                                             <Icon
                                                 className="w-6 h-6 transition-transform duration-200 ease-out group-hover:scale-110"
                                                 strokeWidth={1.75}
                                             />
                                         </div>
-                                        <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-[#22A366] text-white text-[10px] font-bold tabular-nums flex items-center justify-center shadow-sm">
+                                        <span className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-[#084734] text-white text-[10px] font-bold tabular-nums flex items-center justify-center shadow-sm">
                                             {step.num}
                                         </span>
                                     </div>
-                                    <span className="inline-block bg-[#ECFDF5] border border-[rgba(34,163,102,0.2)] text-[#22A366] text-[10px] font-bold px-3 py-1 rounded-full mb-3 tracking-wide">
+                                    <span className="inline-block bg-[#ECFDF5] border border-[rgba(8,71,52,0.2)] text-[#084734] text-[10px] font-bold px-3 py-1 rounded-full mb-3 tracking-wide">
                                         {step.duration}
                                     </span>
-                                    <h3 className="text-base font-bold text-slate-900 mb-2">{step.title}</h3>
-                                    <p className="text-sm text-slate-500 leading-relaxed">{step.desc}</p>
+                                    <h3 className="text-base font-bold text-[#111110] mb-2">{step.title}</h3>
+                                    <p className="text-sm text-[#615D59] leading-relaxed">{step.desc}</p>
                                 </motion.div>
                             )
                         })}

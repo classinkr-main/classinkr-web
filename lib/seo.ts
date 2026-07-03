@@ -12,6 +12,8 @@ interface PublicMetadataOptions {
   path?: string
   keywords?: string[]
   noIndex?: boolean
+  /** 페이지 고유 OG/트위터 이미지 (절대 URL 또는 사이트 상대 경로). 없으면 기본 브랜드 이미지 사용 */
+  image?: string
 }
 
 export const ORGANIZATION_ID = `${SITE_URL}/#organization`
@@ -32,11 +34,12 @@ export function createPublicMetadata({
   path = "/",
   keywords,
   noIndex = false,
+  image,
 }: PublicMetadataOptions): Metadata {
   const canonical = toAbsoluteUrl(path)
   const socialTitle = title ? `${title} | ${SITE_NAME}` : DEFAULT_SITE_TITLE
-  const ogImage = toAbsoluteUrl(DEFAULT_OG_IMAGE_PATH)
-  const twitterImage = toAbsoluteUrl(DEFAULT_TWITTER_IMAGE_PATH)
+  const ogImage = toAbsoluteUrl(image ?? DEFAULT_OG_IMAGE_PATH)
+  const twitterImage = toAbsoluteUrl(image ?? DEFAULT_TWITTER_IMAGE_PATH)
 
   return {
     title,

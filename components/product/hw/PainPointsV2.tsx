@@ -84,12 +84,12 @@ export default function PainPointsV2() {
               className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 md:gap-8 items-stretch"
             >
               {/* Pain card */}
-              <div className="bg-[#FEF3EE] border border-[#F6D5C5] rounded-2xl p-6 flex items-start gap-4">
+              <div className="bg-[#FCE9E9] border border-[#F2B8B8] rounded-2xl p-6 flex items-start gap-4">
                 <X
-                  className="w-6 h-6 text-[#B85C33] shrink-0 mt-0.5"
+                  className="w-6 h-6 text-[#B43E3E] shrink-0 mt-0.5"
                   strokeWidth={2.5}
                 />
-                <p className="text-base text-[#7A3920] leading-relaxed font-medium">
+                <p className="text-base text-[#8F2C2C] leading-relaxed font-medium">
                   {item.pain}
                 </p>
               </div>

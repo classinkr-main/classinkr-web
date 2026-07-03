@@ -1,10 +1,11 @@
 "use client"
 
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { BROCHURE_URL } from "@/lib/marketing-links"
 import { DemoModal } from "./DemoModal"
 import { NewsletterModal } from "./NewsletterModal"
-import { ArrowRight, FileText } from "lucide-react"
+import { ArrowRight, CalendarDays, FileText, Newspaper } from "lucide-react"
 
 export function FinalCTA() {
     return (
@@ -66,6 +67,26 @@ export function FinalCTA() {
                 <p className="mt-10 text-sm text-white/40 font-medium tracking-wide break-keep">
                     카드 등록 불필요 ∙ 전담 매니저 배정 ∙ 무료 로드맵 상담 포함
                 </p>
+
+                {/* 아직 상담이 이르다면 — 콘텐츠 탐색 경로 */}
+                <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-8">
+                    <Link
+                        href="/events"
+                        prefetch={false}
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-white/50 transition-colors hover:text-[#6EE7B7]"
+                    >
+                        <CalendarDays className="h-4 w-4" />
+                        진행 중인 행사·프로모션 보기
+                    </Link>
+                    <Link
+                        href="/blog"
+                        prefetch={false}
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-white/50 transition-colors hover:text-[#6EE7B7]"
+                    >
+                        <Newspaper className="h-4 w-4" />
+                        블로그에서 도입 인사이트 읽기
+                    </Link>
+                </div>
             </div>
         </section>
     )

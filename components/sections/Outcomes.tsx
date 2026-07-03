@@ -84,7 +84,7 @@ export function Outcomes() {
 
                                     {/* After Card */}
                                     <div className="p-6 md:p-8 flex flex-col justify-center relative overflow-hidden bg-gradient-to-br from-[#ECFDF5] to-[#ECFDF5]/30 hover:from-[#ECFDF5] hover:to-[#ECFDF5]/50 transition-colors">
-                                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-emerald-500" />
+                                        <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-[#084734]" />
                                         <div className="md:hidden flex items-center gap-2 mb-4">
                                             <Check className="w-5 h-5 text-[#084734]" />
                                             <span className="font-bold text-lg text-[#084734]">After</span>

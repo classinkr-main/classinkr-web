@@ -59,7 +59,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
     }
 
     return (
-        <div className="min-h-screen bg-[#FAFAF8] text-[#1a1a1a] selection:bg-emerald-100 selection:text-emerald-900">
+        <div className="min-h-screen bg-[#FAFAF8] text-[#1a1a1a] selection:bg-[#D1FAE5] selection:text-[#084734]">
 
             {/* ─── Hero + Gallery ─────────────────────────────── */}
             <section className="relative px-4 pb-6 pt-28 sm:px-6 md:pt-40">
@@ -131,7 +131,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                                     </span>
                                                     <span className={`text-white/55 ${isHero ? "text-[11px]" : "text-[10px]"}`}>{post.category}</span>
                                                 </div>
-                                                <h2 className={`font-bold text-white leading-snug tracking-[-0.02em] line-clamp-2 transition-colors duration-300 group-hover:text-emerald-200 ${isHero ? "text-xl md:text-2xl mb-2" : "text-[14px] md:text-[15px]"}`}>
+                                                <h2 className={`font-bold text-white leading-snug tracking-[-0.02em] line-clamp-2 transition-colors duration-300 group-hover:text-[#D1FAE5] ${isHero ? "text-xl md:text-2xl mb-2" : "text-[14px] md:text-[15px]"}`}>
                                                     {post.title}
                                                 </h2>
                                                 {isHero ? (
@@ -268,14 +268,14 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                             <span className="text-[12px] font-medium text-[#1a1a1a]/40">
                                                 {post.category}
                                             </span>
-                                            <span className="text-[11px] text-emerald-600/70 font-medium">
+                                            <span className="text-[11px] text-[#084734]/70 font-medium">
                                                 {post.tag}
                                             </span>
                                         </div>
 
                                         {/* Center: Content */}
                                         <div className="flex flex-col gap-1.5">
-                                            <h2 className="text-[17px] md:text-[19px] font-semibold leading-snug tracking-[-0.015em] text-[#111110] group-hover:text-emerald-800 transition-colors duration-300">
+                                            <h2 className="text-[17px] md:text-[19px] font-semibold leading-snug tracking-[-0.015em] text-[#111110] group-hover:text-[#084734] transition-colors duration-300">
                                                 {post.title}
                                             </h2>
                                             <p className="text-[13px] text-[#1a1a1a]/38 leading-relaxed line-clamp-2">
@@ -344,7 +344,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                     transition={{ duration: 0.5 }}
                 >
                     <div className="relative overflow-hidden rounded-2xl bg-[#111110] p-6 sm:p-10 md:p-14">
-                        <div className="absolute top-0 right-0 w-72 h-72 bg-emerald-500/[0.06] rounded-full blur-[100px] pointer-events-none" />
+                        <div className="absolute top-0 right-0 w-72 h-72 bg-[#6EE7B7]/[0.08] rounded-full blur-[100px] pointer-events-none" />
 
                         <div className="relative z-10 max-w-xl">
                             <p className="text-[12px] font-medium text-white/25 tracking-wide uppercase mb-5">

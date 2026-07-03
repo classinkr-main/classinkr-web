@@ -91,7 +91,7 @@ export default function EventsClient({
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] text-[#1a1a1a] selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen bg-[#FAFAF8] text-[#1a1a1a] selection:bg-[#D1FAE5] selection:text-[#084734]">
 
       {/* Hero */}
       <section className="relative px-4 pb-6 pt-28 sm:px-6 md:pt-40">
@@ -131,7 +131,7 @@ export default function EventsClient({
                 className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-[#1a1a1a]/30"
               >
                 <span className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-[#6EE7B7] animate-pulse" />
                   진행 중 {activeCount}건
                 </span>
                 <span className="flex items-center gap-2">
@@ -166,7 +166,7 @@ export default function EventsClient({
                           />
                         </>
                       ) : (
-                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-900 to-[#084734]" />
+                        <div className="absolute inset-0 bg-gradient-to-br from-[#08231d] to-[#084734]" />
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/10" />
                       <div className="relative z-10 flex h-full min-h-[300px] flex-col p-6 sm:min-h-[340px] md:min-h-[400px] md:p-10">
@@ -199,7 +199,7 @@ export default function EventsClient({
                           {heroHref && (
                             <Link
                               href={heroHref}
-                              className="inline-flex items-center gap-2 bg-white text-[#111110] text-[13px] font-semibold px-6 py-2.5 rounded-lg hover:bg-emerald-50 transition-colors duration-200 shadow-lg"
+                              className="inline-flex items-center gap-2 bg-white text-[#111110] text-[13px] font-semibold px-6 py-2.5 rounded-lg hover:bg-[#ECFDF5] transition-colors duration-200 shadow-lg"
                             >
                               자세히 보기
                               <ArrowRight className="w-3.5 h-3.5" />
@@ -304,7 +304,7 @@ export default function EventsClient({
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <h2 className="text-[17px] md:text-[19px] font-semibold leading-snug tracking-[-0.015em] text-[#111110] group-hover:text-emerald-800 transition-colors duration-300">
+                    <h2 className="text-[17px] md:text-[19px] font-semibold leading-snug tracking-[-0.015em] text-[#111110] group-hover:text-[#084734] transition-colors duration-300">
                       {event.title}
                     </h2>
                     <p className="text-[13px] text-[#1a1a1a]/50 leading-relaxed line-clamp-2">
@@ -328,7 +328,7 @@ export default function EventsClient({
                       {event.tag && (
                         <>
                           <span className="text-[#1a1a1a]/10">·</span>
-                          <span className="text-[11px] text-emerald-600/70 font-medium flex items-center gap-1">
+                          <span className="text-[11px] text-[#084734]/70 font-medium flex items-center gap-1">
                             <Tag className="w-3 h-3" />
                             {event.tag}
                           </span>
