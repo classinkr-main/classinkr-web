@@ -3922,8 +3922,8 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
           <td className="border-l border-[#E7E5E1] bg-[#FAFAF8]" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }} />
           {months.map((month) => {
             const column = columnByMonth.get(month) ?? null
-            const span = expandedMonths.has(month) ? 5 : 1
-            const width = span === 5 ? MATRIX_WEEK_W * 5 : MATRIX_MONTH_W
+            const span = expandedMonths.has(month) ? 6 : 1
+            const width = span === 6 ? MATRIX_WEEK_W * 5 + MATRIX_MONTH_W : MATRIX_MONTH_W
             const pct = column && column.goal ? (column.confirmed / column.goal) * 100 : null
             const tone = pct === null ? "text-[#C9C5BF]" : pct >= 100 ? "text-[#084734]" : pct >= 60 ? "text-[#A8741A]" : "text-[#B43E3E]"
             return (
@@ -6123,7 +6123,12 @@ export default function SalesLedgerWorkbench() {
                     <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
                       <button
                         type="button"
-                        onClick={() => setSelectedMonth((month) => shiftMonth(month, -1))}
+                        onClick={() =>
+                          setSelectedMonth((month) =>
+                            // 회계연도 밖 값(URL 주입 등)이면 달력 걷기 대신 FY 경계로 스냅한다.
+                            matrixMonths.includes(month) ? shiftMonth(month, -1) : month < matrixMonths[0] ? matrixMonths[0] : matrixMonths[matrixMonths.length - 1],
+                          )
+                        }
                         disabled={matrixMonths.indexOf(selectedMonth) === 0}
                         aria-label="이전 달"
                         title="이전 달 (회계연도 안에서만 이동)"
@@ -6136,7 +6141,11 @@ export default function SalesLedgerWorkbench() {
                       </span>
                       <button
                         type="button"
-                        onClick={() => setSelectedMonth((month) => shiftMonth(month, 1))}
+                        onClick={() =>
+                          setSelectedMonth((month) =>
+                            matrixMonths.includes(month) ? shiftMonth(month, 1) : month > matrixMonths[matrixMonths.length - 1] ? matrixMonths[matrixMonths.length - 1] : matrixMonths[0],
+                          )
+                        }
                         disabled={matrixMonths.indexOf(selectedMonth) === matrixMonths.length - 1}
                         aria-label="다음 달"
                         title="다음 달 (회계연도 안에서만 이동)"
