@@ -12,12 +12,18 @@ describe("branch ledger DB-first route wiring", () => {
 
     expect(route).toContain("readDshFromActiveImport")
     expect(route).toContain("readKpiBlocksFromActiveImport")
-    expect(route).toContain("readRevDealsFromActiveImport")
+    // REV 읽기는 lib/branch/read-rev-deals의 단일 규약 헬퍼를 경유한다 — 라우트가 아니라
+    // 헬퍼가 DB-native 우선 + 시트 미러 폴백을 보장한다(아래 helper 단언).
+    expect(route).toContain("readRevDealsPreferActive")
+    expect(route).toContain('from "@/lib/branch/read-rev-deals"')
     expect(route).toContain("if (imported) return imported")
     expect(route).toContain("if (imported) return imported.fy")
-    expect(route).toContain("return imported ?? listBranchRevDeals")
     expect(route).toContain("readRangeWithFormat(id, DSH_RANGE)")
     expect(route).toContain("readRangeWithFormat(id, KPI_RANGE)")
+
+    const helper = source("lib/branch/read-rev-deals.ts")
+    expect(helper).toContain("readRevDealsFromActiveImport")
+    expect(helper).toContain("return imported ?? listBranchRevDeals")
   })
 
   it("loads DSH, KPI, and REV from active imports before using fallback in KPI route", () => {
