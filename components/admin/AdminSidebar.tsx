@@ -26,6 +26,7 @@ import {
   MoreHorizontal,
   PackageCheck,
   Search,
+  Send,
   Settings,
   SquareChevronLeft,
   SquareChevronRight,
@@ -61,6 +62,7 @@ const NAV: NavItem[] = [
   { href: "/admin/quotes", label: "견적·문서", icon: <FileText className="h-4 w-4" />, roles: STAFF_ADMIN, section: "sales" },
   { href: "/admin/commercial/board", label: "딜 파이프라인", icon: <LayoutDashboard className="h-4 w-4" />, roles: STAFF_ADMIN, section: "sales", badge: "New" },
   { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
+  { href: "/admin/marketing", label: "메시지 발송", icon: <Send className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
   { href: "/admin/materials", label: "자료 퍼널", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing", badge: "New" },
   { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing" },
   { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
@@ -104,6 +106,11 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/events",
     "/api/admin/event-metrics",
     "/api/admin/meta/campaigns?datePreset=last_30d&limit=50",
+  ],
+  "/admin/marketing": [
+    "/api/admin/subscribers",
+    "/api/admin/email",
+    "/api/admin/messaging/status",
   ],
   "/admin/materials": [
     "/api/admin/lead-magnets",

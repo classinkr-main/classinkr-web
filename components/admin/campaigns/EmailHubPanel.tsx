@@ -127,14 +127,14 @@ export default function EmailHubPanel({ stats }: { stats: EmailHubStats | null }
           <div>
             <h2 className="text-[14px] font-semibold text-[#111110]">최근 발송 캠페인</h2>
             <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
-              최근 5건 · 전체 관리는 이메일 마케팅에서
+              최근 5건 · 실제 발송·전체 이력은 메시지 발송 허브에서
             </p>
           </div>
           <Link
             href="/admin/marketing"
             className="inline-flex items-center gap-1 text-[12px] font-medium text-[#084734] hover:underline"
           >
-            전체 이력
+            메시지 발송 허브
             <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
@@ -164,9 +164,9 @@ export default function EmailHubPanel({ stats }: { stats: EmailHubStats | null }
           className="group flex items-center justify-between rounded-2xl border border-[#e8e8e4] bg-white p-4 transition-colors hover:border-[#084734]/20 hover:bg-[#ECFDF5]/30 sm:p-5"
         >
           <div>
-            <p className="text-[13px] font-semibold text-[#111110]">이메일 마케팅 허브</p>
+            <p className="text-[13px] font-semibold text-[#111110]">메시지 발송 허브</p>
             <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
-              구독자 관리 · 이메일 발송 · 이력
+              구독자 관리 · 이메일·문자·카카오 발송 · 이력
             </p>
           </div>
           <ArrowRight className="h-4 w-4 text-[#084734] transition-transform group-hover:translate-x-0.5" />
@@ -176,9 +176,9 @@ export default function EmailHubPanel({ stats }: { stats: EmailHubStats | null }
           className="group flex items-center justify-between rounded-2xl border border-[#084734] bg-[#084734] p-4 transition-colors hover:bg-[#063d2a] sm:p-5"
         >
           <div>
-            <p className="text-[13px] font-semibold text-white">새 이메일 캠페인 작성</p>
+            <p className="text-[13px] font-semibold text-white">발송 허브에서 작성</p>
             <p className="mt-1 text-[11px] text-white/60">
-              활성 {KRW.format(stats.activeSubscribers)}명에게 발송
+              실제 발송은 허브에서 · 활성 {KRW.format(stats.activeSubscribers)}명
             </p>
           </div>
           <Plus className="h-4 w-4 text-white transition-transform group-hover:scale-110" />
