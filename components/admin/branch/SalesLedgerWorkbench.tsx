@@ -2317,6 +2317,35 @@ function DraftQueue({
 interface MatrixCellCoord {
   rowId: string
   month: string
+  week?: number // 0~4 = 확장된 월의 w1~w5 주차 칸. 없으면 월 요약 셀.
+}
+
+// 셀 좌표 → 안정 키. 월 셀은 `rowId::month`(Phase 2와 동일), 주차 셀은 `rowId::month::wN`.
+// 월 셀 키를 그대로 유지해 기존 순회/pending 매칭 회귀를 막는다.
+function matrixCoordKey(coord: MatrixCellCoord): string {
+  return coord.week == null ? `${coord.rowId}::${coord.month}` : `${coord.rowId}::${coord.month}::w${coord.week + 1}`
+}
+
+// 두 좌표가 같은 세로 열(같은 월·같은 주차)인지 — 아래/위 이동·fill-down 소스 판정용.
+function matrixSameColumn(a: MatrixCellCoord, b: MatrixCellCoord): boolean {
+  return a.month === b.month && (a.week ?? -1) === (b.week ?? -1)
+}
+
+// metadata.week 문자열("w1".."w5") → 0~4 인덱스. "month"/그 외/누락이면 null.
+function weekIndexFromToken(token: string | null | undefined): number | null {
+  if (!token) return null
+  const match = /^w([1-5])$/.exec(token)
+  return match ? Number(match[1]) - 1 : null
+}
+
+// 적용된 초안행의 weeklyPayments 구성. draft metadata.week가 wN이면 그 주차에 금액을 얹어
+// { [month]: [.., amount, ..] }를 만든다(주차 합==월합이라 rowWeeklyMismatch 오탐 없음).
+// week가 "month"/누락이면 주차 정보 없음 → {} (기존 동작 유지, month-only로 렌더).
+function weeklyPaymentsFromWeekToken(month: string, amount: number, weekToken: string | null | undefined): Record<string, number[]> {
+  const weekIdx = weekIndexFromToken(weekToken)
+  if (weekIdx == null) return {}
+  const weeks = Array.from({ length: 5 }, (_, index) => (index === weekIdx ? amount : 0))
+  return { [month]: weeks }
 }
 
 // 셀에 걸린 미검수(draft|checked) 초안 요약. 낙관적 앰버 표시·툴팁용.
@@ -2408,41 +2437,42 @@ function useMatrixEditor({
   cellConfidence,
   onCommitCell,
 }: {
-  editableCells: MatrixCellCoord[] // 렌더 순서(행 위→아래, 월 좌→우)로 정렬된 편집가능 셀
+  editableCells: MatrixCellCoord[] // 렌더 순서(행 위→아래, 월 좌→우, 확장월은 w1→w5)로 정렬된 편집가능 셀
   cellValue: (coord: MatrixCellCoord) => number // 커밋 기준값(원 단위) — fill-down 소스
   cellConfidence: (coord: MatrixCellCoord) => DraftConfidence // 셀 우세 확도(팝오버 기본값)
-  onCommitCell: (rowId: string, month: string, amount: number, confidence: DraftConfidence) => void
+  onCommitCell: (rowId: string, month: string, amount: number, confidence: DraftConfidence, week?: number) => void
 }) {
   const [selected, setSelected] = useState<MatrixCellCoord | null>(null)
   const [editing, setEditing] = useState<MatrixCellCoord | null>(null)
   const [buffer, setBuffer] = useState("")
   const [editConfidence, setEditConfidence] = useState<DraftConfidence>("expected")
 
-  // 편집가능 셀 순번 조회 O(1) — 방향키/Tab 이동에 사용.
+  // 편집가능 셀 순번 조회 O(1) — 방향키/Tab 이동에 사용. 주차 셀은 `::wN`까지 포함한 키.
   const indexByKey = useMemo(() => {
     const map = new Map<string, number>()
-    editableCells.forEach((coord, index) => map.set(`${coord.rowId}::${coord.month}`, index))
+    editableCells.forEach((coord, index) => map.set(matrixCoordKey(coord), index))
     return map
   }, [editableCells])
 
-  const coordKey = (coord: MatrixCellCoord) => `${coord.rowId}::${coord.month}`
   const isSelected = useCallback(
-    (rowId: string, month: string) => selected?.rowId === rowId && selected.month === month,
+    (rowId: string, month: string, week?: number) =>
+      selected?.rowId === rowId && selected.month === month && (selected.week ?? -1) === (week ?? -1),
     [selected],
   )
   const isEditing = useCallback(
-    (rowId: string, month: string) => editing?.rowId === rowId && editing.month === month,
+    (rowId: string, month: string, week?: number) =>
+      editing?.rowId === rowId && editing.month === month && (editing.week ?? -1) === (week ?? -1),
     [editing],
   )
 
-  const selectCell = useCallback((rowId: string, month: string) => {
+  const selectCell = useCallback((rowId: string, month: string, week?: number) => {
     setEditing(null)
-    setSelected({ rowId, month })
+    setSelected({ rowId, month, week })
   }, [])
 
   const beginEdit = useCallback(
-    (rowId: string, month: string, seed?: string) => {
-      const coord = { rowId, month }
+    (rowId: string, month: string, seed?: string, week?: number) => {
+      const coord: MatrixCellCoord = { rowId, month, week }
       setSelected(coord)
       setEditConfidence(cellConfidence(coord))
       // seed(타이핑 첫 글자)면 그 값으로, 아니면 기존 커밋값(0은 빈칸)으로 시작.
@@ -2468,10 +2498,10 @@ function useMatrixEditor({
       const amount = parseMatrixAmount(buffer)
       const previous = cellValue(coord)
       const previousConfidence = cellConfidence(coord)
-      // 금액·확도 둘 다 그대로면 저장하지 않는다.
+      // 금액·확도 둘 다 그대로면 저장하지 않는다. (주차 셀도 cellValue/cellConfidence가 주차 기준이라 동일 가드 적용)
       if (amount === previous && confidence === previousConfidence) return false
       if (amount <= 0 && previous <= 0) return false
-      onCommitCell(coord.rowId, coord.month, amount, confidence)
+      onCommitCell(coord.rowId, coord.month, amount, confidence, coord.week)
       return true
     },
     [buffer, cellConfidence, cellValue, onCommitCell],
@@ -2479,7 +2509,7 @@ function useMatrixEditor({
 
   const moveSelection = useCallback(
     (from: MatrixCellCoord, delta: number) => {
-      const index = indexByKey.get(coordKey(from))
+      const index = indexByKey.get(matrixCoordKey(from))
       if (index == null) return
       const nextIndex = index + delta
       if (nextIndex < 0 || nextIndex >= editableCells.length) return
@@ -2492,12 +2522,12 @@ function useMatrixEditor({
   // 같은 행에서 다음 셀(오른쪽 우선). Tab/Shift+Tab·Enter(아래) 커밋 후 이동에 공유.
   const moveWithinRowOrNext = useCallback(
     (from: MatrixCellCoord, direction: "right" | "left" | "down") => {
-      const index = indexByKey.get(coordKey(from))
+      const index = indexByKey.get(matrixCoordKey(from))
       if (index == null) return
       if (direction === "down") {
-        // 아래 = 같은 열(month)에서 index 뒤쪽 첫 번째 같은 month 셀.
+        // 아래 = 같은 세로 열(같은 월·같은 주차)에서 index 뒤쪽 첫 번째 셀.
         for (let i = index + 1; i < editableCells.length; i += 1) {
-          if (editableCells[i].month === from.month) {
+          if (matrixSameColumn(editableCells[i], from)) {
             setSelected(editableCells[i])
             return
           }
@@ -2543,13 +2573,13 @@ function useMatrixEditor({
     (event: React.KeyboardEvent<HTMLTableCellElement>, coord: MatrixCellCoord) => {
       if ((event.ctrlKey || event.metaKey) && (event.key === "d" || event.key === "D")) {
         event.preventDefault()
-        // 위 셀 = 같은 열(month)에서 index 앞쪽 첫 번째 같은 month 셀의 커밋값.
-        const index = indexByKey.get(coordKey(coord))
+        // 위 셀 = 같은 세로 열(같은 월·같은 주차)에서 index 앞쪽 첫 번째 셀의 커밋값.
+        const index = indexByKey.get(matrixCoordKey(coord))
         if (index == null) return
         for (let i = index - 1; i >= 0; i -= 1) {
-          if (editableCells[i].month === coord.month) {
+          if (matrixSameColumn(editableCells[i], coord)) {
             const value = cellValue(editableCells[i])
-            if (value > 0) onCommitCell(coord.rowId, coord.month, value, cellConfidence(coord))
+            if (value > 0) onCommitCell(coord.rowId, coord.month, value, cellConfidence(coord), coord.week)
             return
           }
         }
@@ -2572,10 +2602,10 @@ function useMatrixEditor({
       }
       if (event.key === "ArrowUp") {
         event.preventDefault()
-        const index = indexByKey.get(coordKey(coord))
+        const index = indexByKey.get(matrixCoordKey(coord))
         if (index == null) return
         for (let i = index - 1; i >= 0; i -= 1) {
-          if (editableCells[i].month === coord.month) {
+          if (matrixSameColumn(editableCells[i], coord)) {
             setSelected(editableCells[i])
             return
           }
@@ -2584,12 +2614,12 @@ function useMatrixEditor({
       }
       if (event.key === "Enter" || event.key === "F2") {
         event.preventDefault()
-        beginEdit(coord.rowId, coord.month)
+        beginEdit(coord.rowId, coord.month, undefined, coord.week)
         return
       }
       if (/^[0-9]$/.test(event.key)) {
         event.preventDefault()
-        beginEdit(coord.rowId, coord.month, event.key)
+        beginEdit(coord.rowId, coord.month, event.key, coord.week)
       }
     },
     [beginEdit, cellConfidence, cellValue, editableCells, indexByKey, moveSelection, moveWithinRowOrNext, onCommitCell],
@@ -2744,46 +2774,172 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   )
 })
 
-// 월 헤더 클릭으로 펼친 달의 w1~w5 5칸(읽기전용). WeekNumbersCell empty 규약(점)·inferred 회색을 계승하되
-// 매트릭스 정렬을 위해 개별 <td>로 분해한다. 각 칸 34px.
-function RevMatrixWeekCells({
-  weeks,
+// 확장된 월의 주차(W1~W5) 칸 1개. 34px. editor가 오면(딜행·비잠금) 월 셀과 동일한
+// 잠금/미검수/셀렉트/편집 4상태 + 키보드 순회를 지원한다. 없으면(그룹 소계·잠금) 읽기전용.
+// display 규약은 기존 읽기전용 버전 계승: explicit=진한 숫자, inferred=회색, month-only는 W5에 금액.
+const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
+  display,
+  isMonthOnly,
   inferred,
-  monthOnlyAmount,
+  weekIndex,
   bgClass,
+  month,
+  rowId,
+  editable = false,
+  locked = false,
+  pending = null,
+  editor = null,
 }: {
-  weeks: number[]
+  display: number
+  isMonthOnly: boolean
   inferred: boolean
-  monthOnlyAmount: number
+  weekIndex: number
   bgClass: string
+  month?: string
+  rowId?: string
+  editable?: boolean
+  locked?: boolean
+  pending?: MatrixPendingDraft | null
+  editor?: MatrixEditor | null
 }) {
-  const cells: React.ReactNode[] = []
-  for (let index = 0; index < 5; index += 1) {
-    const value = weeks[index] ?? 0
-    // 월합계만 있는 행은 마지막(W5) 칸에 금액을 얹어 시트 검수 감각을 유지한다.
-    const display = value > 0 ? value : index === 4 && monthOnlyAmount > 0 && !weeks.some((w) => w > 0) ? monthOnlyAmount : 0
-    const isMonthOnly = display > 0 && value === 0
-    cells.push(
+  const interactive = Boolean(editor && month && rowId)
+  const selected = interactive ? editor!.isSelected(rowId!, month!, weekIndex) : false
+  const isEditingCell = interactive ? editor!.isEditing(rowId!, month!, weekIndex) : false
+  const cellRef = useRef<HTMLTableCellElement | null>(null)
+  useEffect(() => {
+    if (interactive && editable && selected && !isEditingCell) cellRef.current?.focus()
+  }, [interactive, editable, selected, isEditingCell])
+
+  const confidenceLabel = (v: DraftConfidence) => DRAFT_CONFIDENCE_OPTIONS.find((option) => option.id === v)?.label ?? v
+  const baseTitle = display > 0 ? `W${weekIndex + 1} ${formatMoney(display)}${isMonthOnly ? " · 월합계만" : ""}` : `W${weekIndex + 1} 미입력`
+  const title = locked
+    ? `${baseTitle} · 시트 확정 — 편집 불가`
+    : pending
+      ? `${baseTitle} · 미검수 초안 ${formatMoney(pending.amount)} (${confidenceLabel(pending.confidence)})`
+      : editable
+        ? `${baseTitle} · 클릭·Enter로 편집`
+        : baseTitle
+
+  // 편집 진입: input + 확도 팝오버. 폭 34px라 px 여백 없이 칸을 꽉 채운다.
+  if (isEditingCell && interactive) {
+    return (
       <td
-        key={index}
-        title={display > 0 ? `W${index + 1} ${formatMoney(display)}${isMonthOnly ? " · 월합계만" : ""}` : `W${index + 1} 미입력`}
-        className={`border-l border-[#F2F1EE] px-1 text-right align-middle tabular-nums ${bgClass}`}
+        className={`relative px-0 text-right align-middle ${bgClass} ring-2 ring-inset ring-[#084734]/40`}
         style={{ width: MATRIX_WEEK_W, minWidth: MATRIX_WEEK_W, maxWidth: MATRIX_WEEK_W }}
       >
-        <span
-          className={`text-[10px] leading-none ${
-            display > 0
+        <input
+          autoFocus
+          inputMode="numeric"
+          value={editor!.buffer}
+          onChange={(event) => editor!.setBuffer(event.target.value)}
+          onKeyDown={(event) => editor!.onEditingKeyDown(event, { rowId: rowId!, month: month!, week: weekIndex })}
+          onBlur={() => {
+            editor!.commitBuffer({ rowId: rowId!, month: month!, week: weekIndex }, editor!.editConfidence)
+            editor!.cancelEdit()
+          }}
+          aria-label={`${formatMonthLabel(month!)} W${weekIndex + 1} 금액(원 단위)`}
+          className="h-6 w-full bg-transparent px-0.5 text-right text-[11px] font-bold tabular-nums text-[#111110] outline-none"
+        />
+        <RevMatrixEditPopover confidence={editor!.editConfidence} onPickConfidence={editor!.setEditConfidence} />
+      </td>
+    )
+  }
+
+  const cellClassName = `relative border-l border-[#F2F1EE] px-1 text-right align-middle tabular-nums ${bgClass} ${
+    interactive && editable ? "cursor-cell" : ""
+  } ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${pending ? "shadow-[inset_0_-2px_0_0_#D4A017]" : ""} focus-visible:outline-none`
+
+  const interactiveHandlers = interactive
+    ? {
+        tabIndex: editable ? 0 : -1,
+        role: "gridcell" as const,
+        onClick: () => {
+          if (editable) editor!.selectCell(rowId!, month!, weekIndex)
+        },
+        onDoubleClick: () => {
+          if (editable) editor!.beginEdit(rowId!, month!, undefined, weekIndex)
+        },
+        onKeyDown: (event: React.KeyboardEvent<HTMLTableCellElement>) => {
+          if (!editable || !selected) return
+          editor!.onSelectedKeyDown(event, { rowId: rowId!, month: month!, week: weekIndex })
+        },
+      }
+    : {}
+
+  return (
+    <td
+      ref={cellRef}
+      title={title}
+      className={cellClassName}
+      style={{ width: MATRIX_WEEK_W, minWidth: MATRIX_WEEK_W, maxWidth: MATRIX_WEEK_W }}
+      {...interactiveHandlers}
+    >
+      {pending && <span aria-hidden className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#D4A017]" />}
+      <span
+        className={`inline-flex items-center gap-0.5 text-[10px] leading-none ${
+          pending
+            ? "font-bold text-[#7A520F]"
+            : display > 0
               ? isMonthOnly
                 ? "font-semibold text-[#7A520F]"
                 : inferred
                   ? "font-semibold text-[#A39E98]"
                   : "font-bold text-[#111110]"
-              : "text-[#DDD9D3]"
-          }`}
-        >
-          {display > 0 ? formatWeekAmount(display) : "·"}
-        </span>
-      </td>,
+              : editable
+                ? "text-[#C9C5BF]"
+                : "text-[#DDD9D3]"
+        }`}
+      >
+        {locked && display > 0 && <Lock className="h-2.5 w-2.5 shrink-0 text-[#A39E98]" aria-label="시트 확정" />}
+        {display > 0 ? formatWeekAmount(display) : "·"}
+      </span>
+    </td>
+  )
+})
+
+// 확장된 월의 w1~w5 5칸. editContext가 오면(딜행·비잠금월) 각 칸이 편집 셀이 된다.
+// month-only 행은 W5에 월합계를 얹어 시트 검수 감각을 유지(기존 읽기전용 규약 계승).
+function RevMatrixWeekCells({
+  weeks,
+  inferred,
+  monthOnlyAmount,
+  bgClass,
+  month,
+  editContext = null,
+}: {
+  weeks: number[]
+  inferred: boolean
+  monthOnlyAmount: number
+  bgClass: string
+  month?: string
+  editContext?: RevMatrixEditContext | null
+}) {
+  const anyExplicit = weeks.some((w) => w > 0)
+  const cells: React.ReactNode[] = []
+  for (let index = 0; index < 5; index += 1) {
+    const value = weeks[index] ?? 0
+    // 월합계만 있는 행은 마지막(W5) 칸에 금액을 얹어 시트 검수 감각을 유지한다.
+    const display = value > 0 ? value : index === 4 && monthOnlyAmount > 0 && !anyExplicit ? monthOnlyAmount : 0
+    const isMonthOnly = display > 0 && value === 0
+    // 편집 가능 여부: 딜행 + 월 편집 허용(editContext.editableOf) + 그 칸이 시트 확정 잠금이 아닐 때.
+    // month-only 파생 표시(W5의 monthOnlyAmount)는 실제 주차 입력이 아니므로 편집 시작값은 value(0)로 둔다.
+    const weekLocked = editContext ? editContext.weekLockedOf(month ?? "", index) : true
+    const weekEditable = Boolean(editContext) && !weekLocked && Boolean(editContext?.editableOf(month ?? ""))
+    cells.push(
+      <RevMatrixWeekCell
+        key={index}
+        display={display}
+        isMonthOnly={isMonthOnly}
+        inferred={inferred}
+        weekIndex={index}
+        bgClass={bgClass}
+        month={editContext ? month : undefined}
+        rowId={editContext?.rowId}
+        editable={weekEditable}
+        locked={editContext ? weekLocked && display > 0 : false}
+        pending={editContext ? editContext.weekPendingOf(month ?? "", index) : null}
+        editor={editContext?.editor ?? null}
+      />,
     )
   }
   return <>{cells}</>
@@ -2796,6 +2952,9 @@ interface RevMatrixEditContext {
   editableOf: (month: string) => boolean
   lockedOf: (month: string) => boolean
   pendingOf: (month: string) => MatrixPendingDraft | null
+  // 주차(확장월) 칸용. 잠금은 월 잠금 규칙을 그대로 승계(시트 확정 월이면 주차 칸도 잠금).
+  weekLockedOf: (month: string, week: number) => boolean
+  weekPendingOf: (month: string, week: number) => MatrixPendingDraft | null
 }
 
 // 12개월(요약/확장 혼재)에 걸친 월 셀 스트립 — 그룹행·딜행이 공유한다.
@@ -2828,6 +2987,8 @@ function RevMatrixMonthStrip({
               inferred={weekly?.inferred ?? false}
               monthOnlyAmount={weekly?.monthOnlyAmount ?? 0}
               bgClass={bgClass}
+              month={month}
+              editContext={editContext}
             />
           )
         }
@@ -3027,6 +3188,9 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
         editableOf: (month) => isMatrixCellEditable(row, month),
         lockedOf: (month) => isMatrixCellLocked(row, month),
         pendingOf: (month) => pendingByCell?.get(`${row.id}::${month}`) ?? null,
+        // 주차 잠금 = 그 달 시트 확정 여부(월 잠금 규칙 승계). 주차 pending = `rowId::month::wN` 키.
+        weekLockedOf: (month) => isMatrixCellLocked(row, month),
+        weekPendingOf: (month, week) => pendingByCell?.get(`${row.id}::${month}::w${week + 1}`) ?? null,
       }
     : null
   return (
@@ -3547,7 +3711,8 @@ export default function SalesLedgerWorkbench() {
         monthlyConfirmed: { [entry.month]: entry.amount },
         monthlyHighConfidence: {},
         monthlyRed: { [entry.month]: true },
-        weeklyPayments: {},
+        // 주차 초안(metadata.week=wN)이면 그 주차에 금액을 얹는다. 주차합==월합이라 불일치 배지 오탐 없음.
+        weeklyPayments: weeklyPaymentsFromWeekToken(entry.month, entry.amount, metadataString(entry.metadata, "week")),
         ledgerOrigin: "draft" as const,
         draftId: entry.draftId,
         draftKind: entry.entryType === "manual-edit" ? "edit-row" : "new-row",
@@ -3580,7 +3745,8 @@ export default function SalesLedgerWorkbench() {
         monthlyConfirmed: { [draft.month]: draft.amount },
         monthlyHighConfidence: {},
         monthlyRed: { [draft.month]: true },
-        weeklyPayments: {},
+        // 주차 초안(metadata.week=wN)이면 그 주차에 금액을 얹는다. 주차합==월합이라 불일치 배지 오탐 없음.
+        weeklyPayments: weeklyPaymentsFromWeekToken(draft.month, draft.amount, metadataString(draft.metadata, "week")),
         ledgerOrigin: "draft" as const,
         draftId: draft.id,
         draftKind: draft.kind,
@@ -4013,15 +4179,19 @@ export default function SalesLedgerWorkbench() {
     return map
   }, [visibleDealRows])
 
-  // 편집가능 셀 좌표(렌더 순서: 행 위→아래, 월 좌→우). 확장(주차)·잠금·확장월은 제외.
+  // 편집가능 셀 좌표(렌더 순서: 행 위→아래, 월 좌→우, 확장월은 w1→w5). 잠금 셀은 제외.
   // 방향키/Tab 순회의 단일 소스. matrixMonths는 4→3 회계연도 순.
+  // 확장된 편집가능 월은 주차 5칸으로 분해(Tab이 w1→…→w5→다음 월로 흐름), 비확장 월은 월 요약 셀 1칸.
   const editableCells = useMemo<MatrixCellCoord[]>(() => {
     const cells: MatrixCellCoord[] = []
     for (const row of visibleDealRows) {
       for (const month of matrixMonths) {
-        if (expandedRevMonths.has(month)) continue // 주차 확장 칸은 Phase 3 전까지 편집 불가
         if (!isMatrixCellEditable(row, month)) continue
-        cells.push({ rowId: row.id, month })
+        if (expandedRevMonths.has(month)) {
+          for (let week = 0; week < 5; week += 1) cells.push({ rowId: row.id, month, week })
+        } else {
+          cells.push({ rowId: row.id, month })
+        }
       }
     }
     return cells
@@ -4029,7 +4199,10 @@ export default function SalesLedgerWorkbench() {
 
   // 미검수(draft|checked) 초안 → 셀 낙관적 표시. drafts에서 파생(별도 버퍼 없음).
   // 매칭: 초안 sourceDealId == 행 sourceDealId(또는 id) && 초안 month == 셀 month.
-  // 같은 셀에 여러 초안이 있으면 가장 최근(drafts 앞쪽) 것을 표시.
+  // 월 키(`rowId::month`)와 주차 키(`rowId::month::wN`)를 각각 채운다:
+  //   - 월 키: 그 달에 걸린 최신 초안(주차 초안 포함) → 접힌 월 셀 앰버 점.
+  //   - 주차 키: metadata.week가 wN인 초안만 → 확장 주차 칸 앰버 점.
+  // 같은 키에 여러 초안이 있으면 가장 최근(drafts 앞쪽) 것을 표시.
   const pendingByCell = useMemo(() => {
     const map = new Map<string, MatrixPendingDraft>()
     const pending = drafts.filter((draft) => draft.status === "draft" || draft.status === "checked")
@@ -4038,27 +4211,38 @@ export default function SalesLedgerWorkbench() {
       for (const draft of pending) {
         const draftDealId = draft.sourceDealId ?? metadataString(draft.metadata, "sourceDealId")
         if (draft.kind === "edit-row" ? draftDealId !== dealKey : draft.customer.trim() !== row.customer.trim()) continue
-        const cellKey = `${row.id}::${draft.month}`
-        if (map.has(cellKey)) continue // 이미 더 최근 초안이 있음
-        map.set(cellKey, { amount: draft.amount, confidence: draftConfidenceFromMetadata(draft.metadata) })
+        const summary: MatrixPendingDraft = { amount: draft.amount, confidence: draftConfidenceFromMetadata(draft.metadata) }
+        const monthKey = `${row.id}::${draft.month}`
+        if (!map.has(monthKey)) map.set(monthKey, summary) // 월 셀: 첫(=최신) 초안
+        const weekIdx = weekIndexFromToken(metadataString(draft.metadata, "week"))
+        if (weekIdx != null) {
+          const weekKey = `${row.id}::${draft.month}::w${weekIdx + 1}`
+          if (!map.has(weekKey)) map.set(weekKey, summary) // 주차 칸: 그 주차 첫(=최신) 초안
+        }
       }
     }
     return map
   }, [drafts, visibleDealRows])
 
-  // 커밋 기준값(원 단위): 그 달 표시 금액. 편집 진입 초기값·fill-down·중복 판정 소스.
+  // 커밋 기준값(원 단위): 편집 진입 초기값·fill-down·중복 판정 소스.
+  // 주차 셀이면 그 주차의 현재 표시값(explicit/inferred 기준), 아니면 그 달 표시 금액.
   const matrixCellValue = useCallback(
     (coord: MatrixCellCoord) => {
       const row = rowById.get(coord.rowId)
-      return row ? rowMonthAmount(row, coord.month) : 0
+      if (!row) return 0
+      if (coord.week != null) return rowWeeklySplit(row, coord.month).weeks[coord.week] ?? 0
+      return rowMonthAmount(row, coord.month)
     },
     [rowById],
   )
 
   // 셀 우세 확도 → 편집 팝오버 기본 선택. 미검수 초안이 있으면 그 확도 우선.
+  // 주차 셀은 그 주차 pending → 없으면 월 pending → 없으면 월 버킷 우세 확도로 폴백.
   const matrixCellConfidence = useCallback(
     (coord: MatrixCellCoord): DraftConfidence => {
-      const pending = pendingByCell.get(`${coord.rowId}::${coord.month}`)
+      const pending =
+        (coord.week != null ? pendingByCell.get(`${coord.rowId}::${coord.month}::w${coord.week + 1}`) : null) ??
+        pendingByCell.get(`${coord.rowId}::${coord.month}`)
       if (pending) return pending.confidence
       const row = rowById.get(coord.rowId)
       return row ? dominantCellConfidence(rowMonthBucket(row, coord.month)) : "expected"
@@ -4068,14 +4252,17 @@ export default function SalesLedgerWorkbench() {
 
   // 셀 커밋 1건 = createDraft 1건. buildDraftInput의 metadata 키·단위 규약을 그대로 따른다.
   // kind: sourceDealId 있으면 edit-row(항상 있음, 시트 딜행), 없으면 new-row.
-  // operation: 그 달에 기존 금액 있으면 amount-change, 없던 달이면 forecast-add.
+  // operation: 기존 금액 있으면 amount-change, 없던 칸이면 forecast-add.
+  //   - 월 셀: 기준 = 그 달 표시 금액. 주차 셀: 기준 = 그 주차 표시 금액(월 기준과 동일 분기 규약).
+  // week: 주차 칸이면 "w1".."w5", 월 셀이면 "month". 저장은 커밋 시 metadata.week만 넣으면 끝(target_week 승격 완료).
   const onCommitCell = useCallback(
-    (rowId: string, month: string, amount: number, confidence: DraftConfidence) => {
+    (rowId: string, month: string, amount: number, confidence: DraftConfidence, week?: number) => {
       const row = rowById.get(rowId)
       if (!row) return
       const sourceDealId = row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)
       const kind: DraftKind = sourceDealId ? "edit-row" : "new-row"
-      const priorAmount = rowMonthAmount(row, month)
+      const weekToken = week != null ? `w${week + 1}` : "month"
+      const priorAmount = week != null ? (rowWeeklySplit(row, month).weeks[week] ?? 0) : rowMonthAmount(row, month)
       const operation: DraftOperation = priorAmount > 0 ? "amount-change" : "forecast-add"
       const productCategory = rowProductCategory(row)
       const input: LedgerDraftInput = {
@@ -4086,6 +4273,7 @@ export default function SalesLedgerWorkbench() {
           capturedAt: new Date().toISOString(),
           origin: "rev-matrix-cell",
           selectedMonth: month,
+          week: weekToken,
           row: {
             id: row.id,
             customer: row.customer,
@@ -4093,7 +4281,7 @@ export default function SalesLedgerWorkbench() {
             team: row.team,
             region: row.region,
             productVersion: row.productVersion,
-            monthAmount: priorAmount,
+            monthAmount: priorAmount, // 주차 커밋이면 그 주차의 직전 값
           },
         },
         customer: row.customer.trim(),
@@ -4111,7 +4299,7 @@ export default function SalesLedgerWorkbench() {
           operation,
           productCategory,
           fromMonth: month,
-          week: "month",
+          week: weekToken,
           confidence,
           quantity: null,
           sourceDealId: sourceDealId ?? null,
