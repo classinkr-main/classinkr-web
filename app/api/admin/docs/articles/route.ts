@@ -12,6 +12,7 @@ import {
 } from "@/lib/repositories/docs-articles"
 import { revalidateDocsArticlePaths } from "./_revalidate"
 import { validateDocsArticlePatchForPublish } from "./_payload"
+import { docsReindexNeeded, reindexDocsArticleServerSide } from "./_reindex"
 
 const ALLOWED_STATUS: DocsArticleStatus[] = ["draft", "review", "published", "archived"]
 const ALLOWED_VISIBILITY: DocsArticleVisibility[] = ["public", "unlisted", "internal"]
@@ -162,7 +163,15 @@ export async function POST(req: NextRequest) {
   try {
     const detail = await createDocsArticle(input)
     revalidateDocsArticlePaths(detail)
-    return NextResponse.json(detail, { status: 201 })
+
+    const reindexWarning = docsReindexNeeded(null, detail.status)
+      ? await reindexDocsArticleServerSide(detail.id, "POST /api/admin/docs/articles")
+      : undefined
+
+    return NextResponse.json(
+      reindexWarning ? { ...detail, reindexWarning } : detail,
+      { status: 201 }
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : "문서 생성에 실패했습니다."
     const isConflict = /duplicate key|unique/i.test(message)

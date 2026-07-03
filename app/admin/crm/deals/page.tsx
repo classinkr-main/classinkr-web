@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import {
   AlertCircle,
@@ -12,7 +12,9 @@ import {
   FileSpreadsheet,
   FileText,
   Handshake,
+  History,
   Loader2,
+  Play,
   ReceiptText,
   RefreshCw,
   RotateCcw,
@@ -21,7 +23,11 @@ import {
   X,
 } from "lucide-react"
 
-import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import {
+  resolveCrmWriteExecuteOutcome,
+  type CrmWriteExecuteResponseBody,
+} from "@/lib/crm/write-request-execute"
 import type {
   CrmRevenueDashboard,
   CrmRevenueDocumentRow,
@@ -68,6 +74,16 @@ const WRITE_OPERATION_LABEL: Record<string, string> = {
 }
 const WRITE_MAX_ATTEMPTS = 3
 
+const WRITE_EVENT_LABEL: Record<string, string> = {
+  created: "생성",
+  approved: "승인",
+  cancelled: "취소",
+  sent: "전송",
+  failed: "실패",
+  succeeded: "성공",
+  retry_requested: "재시도 요청",
+}
+
 interface ExternalCrmSyncResult {
   ok: boolean
   cached?: boolean
@@ -100,6 +116,30 @@ interface WriteMetadataPreflight {
     readOnly: boolean
     error?: string
   }>
+}
+
+// GET /api/admin/crm/write-requests/[id] — crm_write_request_events raw rows (snake_case).
+interface CrmWriteRequestEventRow {
+  id: string
+  event_type: string
+  actor_user_id: string | null
+  from_status: string | null
+  to_status: string | null
+  message: string | null
+  payload: Record<string, unknown> | null
+  created_at: string
+}
+
+interface CrmWriteRequestDetailResponse {
+  request: Record<string, unknown>
+  events: CrmWriteRequestEventRow[]
+  eventsWarning: string | null
+}
+
+interface CrmWriteRequestDetailState {
+  id: string
+  events: CrmWriteRequestEventRow[]
+  warning: string | null
 }
 
 interface CrmReadinessCheck {
@@ -361,6 +401,10 @@ export default function AdminCrmRevenuePage() {
   const [syncingExternal, setSyncingExternal] = useState(false)
   const [generatingLinks, setGeneratingLinks] = useState(false)
   const [updatingWriteRequestId, setUpdatingWriteRequestId] = useState<string | null>(null)
+  const [executingWriteRequestId, setExecutingWriteRequestId] = useState<string | null>(null)
+  const [expandedWriteRequestId, setExpandedWriteRequestId] = useState<string | null>(null)
+  const [writeRequestDetail, setWriteRequestDetail] = useState<CrmWriteRequestDetailState | null>(null)
+  const [loadingWriteRequestDetailId, setLoadingWriteRequestDetailId] = useState<string | null>(null)
   const [validatingWriteMetadata, setValidatingWriteMetadata] = useState(false)
   const [writeMetadataStatus, setWriteMetadataStatus] = useState<WriteMetadataPreflight | null>(null)
   const [checkingReadiness, setCheckingReadiness] = useState(false)
@@ -485,6 +529,73 @@ export default function AdminCrmRevenuePage() {
       }
     },
     [load]
+  )
+
+  const loadWriteRequestDetail = useCallback(async (requestId: string) => {
+    setLoadingWriteRequestDetailId(requestId)
+    try {
+      const detail = await adminFetchJson<CrmWriteRequestDetailResponse>(
+        `/api/admin/crm/write-requests/${requestId}`
+      )
+      setWriteRequestDetail({
+        id: requestId,
+        events: detail.events ?? [],
+        warning: detail.eventsWarning ?? null,
+      })
+    } catch (err) {
+      setWriteRequestDetail({
+        id: requestId,
+        events: [],
+        warning: err instanceof Error ? err.message : "감사 이벤트를 불러오지 못했습니다.",
+      })
+    } finally {
+      setLoadingWriteRequestDetailId(null)
+    }
+  }, [])
+
+  const toggleWriteRequestDetail = useCallback(
+    (requestId: string) => {
+      if (expandedWriteRequestId === requestId) {
+        setExpandedWriteRequestId(null)
+        setWriteRequestDetail(null)
+        return
+      }
+      setExpandedWriteRequestId(requestId)
+      setWriteRequestDetail(null)
+      void loadWriteRequestDetail(requestId)
+    },
+    [expandedWriteRequestId, loadWriteRequestDetail]
+  )
+
+  const executeWriteRequest = useCallback(
+    async (requestId: string) => {
+      setExecutingWriteRequestId(requestId)
+      setError(null)
+      setSyncNotice(null)
+      try {
+        // execute는 실패해도 409 + { ok:false, request }로 결과 row를 돌려주므로
+        // adminFetchJson(throw) 대신 body를 직접 해석한다.
+        const response = await adminFetch(`/api/admin/crm/write-requests/${requestId}/execute`, {
+          method: "POST",
+        })
+        const body = (await response.json().catch(() => null)) as CrmWriteExecuteResponseBody | null
+        const outcome = resolveCrmWriteExecuteOutcome(body, response.status)
+        if (outcome.ok) {
+          setSyncNotice(outcome.message)
+        } else {
+          setError(outcome.message)
+        }
+        await load({ force: true })
+        if (expandedWriteRequestId === requestId) {
+          await loadWriteRequestDetail(requestId)
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "외부 CRM 쓰기 실행에 실패했습니다.")
+      } finally {
+        setExecutingWriteRequestId(null)
+      }
+    },
+    [expandedWriteRequestId, load, loadWriteRequestDetail]
   )
 
   const validateWriteMetadata = useCallback(async () => {
@@ -968,8 +1079,12 @@ export default function AdminCrmRevenuePage() {
                       const approveKey = `${request.id}:approve`
                       const cancelKey = `${request.id}:cancel`
                       const retryKey = `${request.id}:retry`
+                      const executing = executingWriteRequestId === request.id
+                      const expanded = expandedWriteRequestId === request.id
+                      const loadingDetail = loadingWriteRequestDetailId === request.id
                       return (
-                        <tr key={request.id} className="align-top">
+                        <Fragment key={request.id}>
+                        <tr className="align-top">
                           <td className="py-4 pr-4">
                             <StatusBadge
                               label={WRITE_STATUS_LABEL[request.status] ?? request.status}
@@ -1002,8 +1117,9 @@ export default function AdminCrmRevenuePage() {
                             <p className="line-clamp-2">{request.error ?? request.lastAttemptError ?? "-"}</p>
                           </td>
                           <td className="py-4 pl-4 text-right">
+                            <div className="flex flex-wrap items-center justify-end gap-1.5">
                             {request.status === "draft" ? (
-                              <div className="flex justify-end gap-1.5">
+                              <>
                                 <button
                                   type="button"
                                   onClick={() => void updateWriteRequest(request.id, "approve")}
@@ -1026,19 +1142,34 @@ export default function AdminCrmRevenuePage() {
                                   <X className="h-3.5 w-3.5" />
                                   취소
                                 </button>
-                              </div>
+                              </>
                             ) : request.status === "approved" ? (
-                              <button
-                                type="button"
-                                onClick={() => void updateWriteRequest(request.id, "cancel")}
-                                disabled={updatingWriteRequestId === cancelKey}
-                                className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-2 text-[11px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
-                              >
-                                <X className="h-3.5 w-3.5" />
-                                취소
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => void executeWriteRequest(request.id)}
+                                  disabled={executing || updatingWriteRequestId === cancelKey}
+                                  className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
+                                >
+                                  {executing ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Play className="h-3.5 w-3.5" />
+                                  )}
+                                  실행
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void updateWriteRequest(request.id, "cancel")}
+                                  disabled={executing || updatingWriteRequestId === cancelKey}
+                                  className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-2 text-[11px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                  취소
+                                </button>
+                              </>
                             ) : request.status === "failed" ? (
-                              <div className="flex justify-end gap-1.5">
+                              <>
                                 <button
                                   type="button"
                                   onClick={() => void updateWriteRequest(request.id, "retry")}
@@ -1065,12 +1196,97 @@ export default function AdminCrmRevenuePage() {
                                   <X className="h-3.5 w-3.5" />
                                   취소
                                 </button>
-                              </div>
-                            ) : (
-                              <span className="text-[11px] text-[#1a1a1a]/30">-</span>
-                            )}
+                              </>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => toggleWriteRequestDetail(request.id)}
+                              aria-expanded={expanded}
+                              title="감사 이벤트 로그"
+                              className={`inline-flex h-7 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                                expanded
+                                  ? "border-[#111110] bg-[#111110] text-white hover:bg-[#2a2a28]"
+                                  : "border-[#e8e8e4] bg-white text-[#111110] hover:bg-[#f5f5f2]"
+                              }`}
+                            >
+                              {loadingDetail ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <History className="h-3.5 w-3.5" />
+                              )}
+                              로그
+                            </button>
+                            </div>
                           </td>
                         </tr>
+                        {expanded ? (
+                          <tr>
+                            <td colSpan={10} className="bg-[#fafaf8] px-4 py-4">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
+                                감사 이벤트
+                              </p>
+                              {loadingDetail ? (
+                                <p className="mt-2 flex items-center gap-2 text-[12px] text-[#1a1a1a]/45">
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  감사 이벤트를 불러오는 중입니다.
+                                </p>
+                              ) : (
+                                <>
+                                  {writeRequestDetail?.id === request.id && writeRequestDetail.warning ? (
+                                    <p className="mt-2 text-[12px] text-[#B85C33]">{writeRequestDetail.warning}</p>
+                                  ) : null}
+                                  {writeRequestDetail?.id === request.id && writeRequestDetail.events.length > 0 ? (
+                                    <ul className="mt-2 space-y-2">
+                                      {writeRequestDetail.events.map((event) => (
+                                        <li key={event.id} className="border-t border-[#f0f0ec] pt-2">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <StatusBadge
+                                              label={WRITE_EVENT_LABEL[event.event_type] ?? event.event_type}
+                                              tone={
+                                                event.event_type === "failed"
+                                                  ? WRITE_STATUS_TONE.failed
+                                                  : event.event_type === "succeeded"
+                                                    ? WRITE_STATUS_TONE.succeeded
+                                                    : undefined
+                                              }
+                                            />
+                                            <span className="text-[11px] text-[#1a1a1a]/35">
+                                              {formatDate(event.created_at)}
+                                            </span>
+                                            {event.from_status || event.to_status ? (
+                                              <span className="text-[11px] text-[#1a1a1a]/45">
+                                                {(event.from_status
+                                                  ? WRITE_STATUS_LABEL[event.from_status] ?? event.from_status
+                                                  : "-") +
+                                                  " → " +
+                                                  (event.to_status
+                                                    ? WRITE_STATUS_LABEL[event.to_status] ?? event.to_status
+                                                    : "-")}
+                                              </span>
+                                            ) : null}
+                                            {event.actor_user_id ? (
+                                              <span className="text-[11px] text-[#1a1a1a]/35">
+                                                by {event.actor_user_id}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                          {event.message ? (
+                                            <p className="mt-1 text-[12px] text-[#B85C33]">{event.message}</p>
+                                          ) : null}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : writeRequestDetail?.id === request.id ? (
+                                    <p className="mt-2 text-[12px] text-[#1a1a1a]/45">
+                                      기록된 감사 이벤트가 없습니다.
+                                    </p>
+                                  ) : null}
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        ) : null}
+                        </Fragment>
                       )
                     })
                   )}

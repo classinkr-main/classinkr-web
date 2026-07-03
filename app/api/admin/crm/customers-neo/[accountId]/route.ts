@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { verifyAdmin } from "@/lib/admin-auth"
+import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { getNeoCrmCustomerDetail } from "@/lib/admin-crm-customers-neo"
 
 type RouteContext = {
@@ -8,8 +8,8 @@ type RouteContext = {
 }
 
 export async function GET(req: NextRequest, context: RouteContext) {
-  const err = await verifyAdmin(req)
-  if (err) return err
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  if (admin instanceof NextResponse) return admin
 
   const { accountId } = await context.params
   if (!accountId?.trim() || !/^\d+$/.test(accountId.trim())) {

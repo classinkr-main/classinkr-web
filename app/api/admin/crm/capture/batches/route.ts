@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { isCaptureActivityType } from "@/lib/crm/capture/activity-types"
-import { createCaptureBatch } from "@/lib/crm/capture/repository"
+import { createCaptureBatch, listOpenCaptureBatches } from "@/lib/crm/capture/repository"
 import type { CrmCaptureSourceType } from "@/lib/supabase/database.types"
 
 export const dynamic = "force-dynamic"
@@ -11,6 +11,20 @@ const SOURCE_TYPES = new Set<string>(["pasted_table", "pasted_text", "public_eve
 
 function adminActorName(admin: { name?: string; userId?: string; role: string }) {
   return admin.name?.trim() || admin.userId || admin.role
+}
+
+// 미완료(draft/parsed/reviewed/partial_failed) 배치를 최근 생성순으로 반환 — 이어하기·취소 대상.
+export async function GET(req: NextRequest) {
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  if (admin instanceof NextResponse) return admin
+
+  try {
+    const batches = await listOpenCaptureBatches()
+    return NextResponse.json({ batches })
+  } catch (error) {
+    console.error("[GET /api/admin/crm/capture/batches]", error)
+    return NextResponse.json({ error: "Failed to list capture batches" }, { status: 500 })
+  }
 }
 
 export async function POST(req: NextRequest) {

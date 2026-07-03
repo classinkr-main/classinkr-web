@@ -21,6 +21,7 @@ export const STATUS_COLOR: Record<LeadStatus, string> = {
 }
 export const SOURCE_LABEL: Record<string, string> = {
   demo_modal: "데모 신청", contact_page: "문의", newsletter: "뉴스레터", meta_lead_ads: "Meta 리드",
+  channel_talk: "채널톡",
 }
 export const RESPONSE_TARGET_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
 

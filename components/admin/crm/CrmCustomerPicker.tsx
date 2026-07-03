@@ -21,7 +21,8 @@ interface PickerRow {
 }
 
 interface UnifiedResponse {
-  rows: PickerRow[]
+  // 통합 API는 전환 고객(customer)도 반환 — 픽커 대상(리드/NEO 드로어·타깃)만 남기고 거른다.
+  rows: Array<Omit<PickerRow, "source"> & { source: "lead" | "neo_account" | "customer" }>
 }
 
 interface Props {
@@ -65,7 +66,9 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
           ttlMs: 30_000,
           staleWhileRevalidateMs: 60_000,
         })
-        if (current === reqId.current) setRows(data.rows ?? [])
+        if (current === reqId.current) {
+          setRows((data.rows ?? []).filter((row): row is PickerRow => row.source !== "customer"))
+        }
       } catch {
         if (current === reqId.current) setRows([])
       } finally {

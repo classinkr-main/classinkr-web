@@ -160,7 +160,17 @@ export function toErrorResponse(error: unknown, fallbackMessage: string) {
     return NextResponse.json({ error: error.message }, { status: error.status })
   }
 
+  const message = error instanceof Error ? error.message : fallbackMessage
+  const status =
+    /찾을 수 없|찾지 못|not found|does not exist/i.test(message)
+      ? 404
+      : /이미|중복|duplicate|unique|처리된|예정.*아니|not planned|invalid state/i.test(message)
+      ? 409
+      : /부족|재고|수량|lot|LOT/i.test(message)
+        ? 422
+        : 500
+
   return NextResponse.json({
-    error: error instanceof Error ? error.message : fallbackMessage,
-  }, { status: 500 })
+    error: message,
+  }, { status })
 }

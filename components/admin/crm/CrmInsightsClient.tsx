@@ -153,13 +153,13 @@ export default function CrmInsightsClient() {
   // 전환 퍼널 — 리드 status 집계(action-kpis). 별도 백엔드 불필요.
   useEffect(() => {
     let alive = true
-    adminFetchJsonCached<LeadFunnelKpis>("/api/admin/crm/action-kpis", undefined, {
+    adminFetchJsonCached<{ leads: LeadFunnelKpis }>("/api/admin/crm/action-kpis", undefined, {
       cacheKey: "/api/admin/crm/action-kpis",
       ttlMs: 120_000,
       staleWhileRevalidateMs: 300_000,
     })
       .then((d) => {
-        if (alive) setLeadKpis(d)
+        if (alive) setLeadKpis(d?.leads ?? null)
       })
       .catch(() => {})
     return () => {

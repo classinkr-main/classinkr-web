@@ -8,6 +8,7 @@ import {
   upsertDocsRedirect,
 } from "@/lib/repositories/docs-articles"
 import { validateDocsArticlePatchForPublish } from "../../../_payload"
+import { docsReindexNeeded, reindexDocsArticleServerSide } from "../../../_reindex"
 import { revalidateDocsArticlePaths } from "../../../_revalidate"
 
 interface RouteContext {
@@ -50,7 +51,15 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }
 
     revalidateDocsArticlePaths(existing, detail)
-    return NextResponse.json(detail)
+
+    const reindexWarning = docsReindexNeeded(existing.status, detail.status)
+      ? await reindexDocsArticleServerSide(
+          detail.id,
+          "POST /api/admin/docs/articles/[id]/draft/publish"
+        )
+      : undefined
+
+    return NextResponse.json(reindexWarning ? { ...detail, reindexWarning } : detail)
   } catch (error) {
     const message = error instanceof Error ? error.message : "작업 초안을 공개본에 반영하지 못했습니다."
     const isConflict = /duplicate key|unique/i.test(message)

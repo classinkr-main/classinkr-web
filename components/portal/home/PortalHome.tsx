@@ -134,6 +134,8 @@ type PortalHomeProps = {
   allowCreate?: boolean
   adminView?: boolean
   embedded?: boolean
+  /** ?deal={id} 딥링크로 진입 시 초기 선택·스크롤·하이라이트할 딜 id */
+  focusDealId?: string
 }
 
 /* ─── Constants ──────────────────────────────────────────────── */
@@ -681,6 +683,8 @@ export function PortalHome(props: PortalHomeProps = {}) {
   const [contractOpen, setContractOpen]   = useState(true)
   const [inventoryOpen, setInventoryOpen] = useState(true)
   const [sidebarOpen, setSidebarOpen]     = useState(true)
+  // ?deal= 딥링크로 진입 시 하이라이트 대상 딜 (데이터 로드 후 확정)
+  const [focusedDealId, setFocusedDealId] = useState<string | null>(null)
   // Dummy overlay: only ever turns on during local dev. In production this state stays false.
   const [showDummy, setShowDummy] = useState(IS_LOCAL_DEV)
 
@@ -705,6 +709,31 @@ export function PortalHome(props: PortalHomeProps = {}) {
     () => (IS_LOCAL_DEV && showDummy ? mergeWithDummy(realOverview, DEMO) : realOverview),
     [realOverview, showDummy],
   )
+
+  /* ?deal= 딥링크 포커스: 로드 완료 후 해당 딜의 기관 카드를 펼치고 스크롤·하이라이트 */
+  const focusDealId = props.focusDealId
+  useEffect(() => {
+    if (loading || !focusDealId || focusedDealId) return
+    const deal = overview.deals.find(d => d.id === focusDealId)
+    if (!deal) return
+    setFocusedDealId(focusDealId)
+    const owner = overview.customers.find(c => c.customer.name === deal.customer_name)
+    if (owner) {
+      setExpandedCustomers(prev => {
+        if (prev.has(owner.customer.id)) return prev
+        const next = new Set(prev)
+        next.add(owner.customer.id)
+        return next
+      })
+    }
+    // 기관 카드 펼침 렌더 이후 스크롤
+    const timer = window.setTimeout(() => {
+      document
+        .querySelector(`[data-deal-id="${focusDealId}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" })
+    }, 100)
+    return () => window.clearTimeout(timer)
+  }, [loading, focusDealId, focusedDealId, overview.deals, overview.customers])
 
   /* pipeline: group deals by stage */
   const pipeline = useMemo(() => {
@@ -982,7 +1011,8 @@ export function PortalHome(props: PortalHomeProps = {}) {
                               return (
                                 <div
                                   key={deal.id}
-                                  className={`group rounded-xl border border-[#e7e0d6] border-l-4 bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${cfg.borderCls} ${deal._dummy ? DUMMY_CARD_CLS : ""}`}
+                                  data-deal-id={deal.id}
+                                  className={`group rounded-xl border border-[#e7e0d6] border-l-4 bg-white p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ${cfg.borderCls} ${deal._dummy ? DUMMY_CARD_CLS : ""} ${deal.id === focusedDealId ? "ring-2 ring-[#084734] ring-offset-2" : ""}`}
                                 >
                                   <p className="text-xs font-semibold leading-snug text-[#111110]">
                                     {deal._dummy && <DummyBadge />}
@@ -1082,7 +1112,8 @@ export function PortalHome(props: PortalHomeProps = {}) {
                                 return (
                                   <div
                                     key={deal.id}
-                                    className={`flex items-center justify-between gap-3 rounded-xl border border-l-4 border-[#e7e0d6] bg-[#faf6ef] px-4 py-3 ${cfg.borderCls} ${deal._dummy ? DUMMY_CARD_CLS : ""}`}
+                                    data-deal-id={deal.id}
+                                    className={`flex items-center justify-between gap-3 rounded-xl border border-l-4 border-[#e7e0d6] bg-[#faf6ef] px-4 py-3 ${cfg.borderCls} ${deal._dummy ? DUMMY_CARD_CLS : ""} ${deal.id === focusedDealId ? "ring-2 ring-[#084734] ring-offset-2" : ""}`}
                                   >
                                     <div className="min-w-0">
                                       <p className="truncate text-sm font-medium text-[#111110]">

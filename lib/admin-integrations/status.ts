@@ -532,7 +532,7 @@ function buildTossStatus(): AdminIntegrationStatus {
       "NEXT_PUBLIC_TOSS_WIDGET_CLIENT_KEY",
       "TOSS_SECRET_KEY",
     ],
-    adminHref: "/admin/software-quote-codes",
+    adminHref: "/admin/quotes?tab=software",
   }
 }
 
@@ -545,7 +545,7 @@ function buildFxStatus(): AdminIntegrationStatus {
     source: sourceFromEnv(["USD_KRW_FALLBACK_RATE", "CNY_KRW_FALLBACK_RATE"]),
     health: "ok",
     requiredKeys: ["USD_KRW_FALLBACK_RATE", "CNY_KRW_FALLBACK_RATE"],
-    adminHref: "/admin/software-quote-codes",
+    adminHref: "/admin/quotes?tab=software",
   }
 }
 
@@ -709,7 +709,7 @@ function buildPartnerPortalStatus(): AdminIntegrationStatus {
       "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
       "SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY",
     ],
-    adminHref: "/admin/partners",
+    adminHref: "/admin/crm/deals/kpi",
   }
 }
 

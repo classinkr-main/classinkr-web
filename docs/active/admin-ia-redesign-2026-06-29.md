@@ -111,7 +111,7 @@ CRM은 별도 드릴인 하위탭 보유: 현황 / 고객 / 기록 / 돈흐름 /
 클러스터별 서브에이전트가 각 라우트의 `page.tsx`+주 클라이언트 컴포넌트를 직접 읽어 기능·성숙도·중복·API를 확인. 주요 파일:
 [AdminSidebar.tsx](../../components/admin/AdminSidebar.tsx) ·
 [app/admin/quotes/page.tsx](../../app/admin/quotes/page.tsx) ·
-[app/admin/commercial/page.tsx](../../app/admin/commercial/page.tsx) ·
+`app/admin/commercial/page.tsx`(2026-07-02 폐기 삭제) ·
 [app/admin/crm/deals/page.tsx](../../app/admin/crm/deals/page.tsx) ·
 [app/admin/materials/page.tsx](../../app/admin/materials/page.tsx) ·
 [components/admin/LeadMagnetsAdminClient.tsx](../../components/admin/LeadMagnetsAdminClient.tsx) ·

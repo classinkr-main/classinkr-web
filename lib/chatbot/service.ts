@@ -701,6 +701,49 @@ function isPreAdoptionSpecificQuestion(question: NormalizedQuestion) {
   )
 }
 
+function isRefundQuestion(question: NormalizedQuestion) {
+  return /환불|해지/.test(question.redacted.toLowerCase())
+}
+
+function isCourseCreationQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return /코스|클래스/.test(text) && /생성|만들|개설|추가/.test(text)
+}
+
+function isAssignmentQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return /과제|숙제|시험/.test(text) && /내|제출|부여|등록|만들|방법/.test(text)
+}
+
+function isPrivacyProcessingQuestion(question: NormalizedQuestion) {
+  return /개인정보.*(처리|보관|관리|방침|유출|보호|보안)|데이터.*(처리|보관|지역|유출|보안)/.test(question.redacted.toLowerCase())
+}
+
+function isRecordingOptionComparisonQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return /수업\s*녹화/.test(text) && /현장\s*녹화/.test(text)
+}
+
+function isRecordedLessonOptionQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return /녹화\s*수업/.test(text) && /학생\s*시청|시청\s*제한/.test(text)
+}
+
+function isDailyAssignmentRepeatQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return /일일\s*과제|과제\s*반복|요일\s*반복/.test(text)
+}
+
+function isAdminDashboardMenuMapQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return /대시보드|dashboard/.test(text) && /메뉴|라이브.*플레이백|api\s*도킹|위치|어디/.test(text)
+}
+
+function isCompanyIntroQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return /회사\s*소개|회사소개|기업\s*소개|기업소개/.test(text)
+}
+
 function isGoogleClassroomQuestion(question: NormalizedQuestion) {
   return GOOGLE_CLASSROOM_RE.test(question.redacted)
 }
@@ -876,7 +919,7 @@ function buildPositioningSource(question: NormalizedQuestion): ChatbotSource | n
     title: "Classin을 수업 시스템 OS로 이해하기",
     heading,
     urlPath: "/docs/start/academy-system-os-positioning",
-    category: "onboarding",
+    category: isEdbQuestion ? "classroom" : "onboarding",
     excerpt: compactText(excerpt),
     score: isIdentity ? 270 : 260,
   }
@@ -950,6 +993,114 @@ function buildCuratedSources(question: NormalizedQuestion) {
   const sources: ChatbotSource[] = []
   const positioningSource = buildPositioningSource(question)
   if (positioningSource) sources.push(positioningSource)
+
+  if (isRefundQuestion(question)) {
+    const source = buildStaticDocSource(
+      "start",
+      "pre-adoption-faq-22-questions",
+      "확인 필요한 정책·계약 항목",
+      "ClassIn 플랜 해지 시 환불 규정은 계약 형태(연간/월간)에 따르며, 미사용 기간에 대해 내부 규정 기준에 맞춰 환불 절차가 진행됩니다.",
+      310,
+      "billing"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isCourseCreationQuestion(question)) {
+    const source = buildStaticDocSource(
+      "teacher",
+      "course-activities",
+      "코스 생성과 구성원 관리",
+      "ClassIn 대시보드 또는 앱에서 [새 코스 생성]을 눌러 코스를 개설하고 학생들을 초대할 수 있습니다.",
+      320,
+      "classroom"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isAssignmentQuestion(question)) {
+    const source = buildStaticDocSource(
+      "teacher",
+      "course-activities",
+      "과제 및 평가 관리",
+      "코스 내 학습 활동에서 [새 과제 추가]를 눌러 과제물 파일이나 텍스트를 첨부하고 게시하여 학생들에게 과제를 낼 수 있습니다.",
+      320,
+      "classroom"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isPrivacyProcessingQuestion(question)) {
+    const source = buildStaticDocSource(
+      "start",
+      "pre-adoption-faq-22-questions",
+      "확인 필요한 정책·계약 항목",
+      "ClassIn은 개인정보 보호법령에 따라 개인정보를 철저히 관리하며, 인가받은 관리자 외에는 개인정보 데이터에 임의 접근할 수 없도록 격리 보안을 유지합니다.",
+      330,
+      "admin"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isRecordingOptionComparisonQuestion(question)) {
+    const source = buildStaticDocSource(
+      "teacher",
+      "lesson-option-concepts",
+      "수업 옵션과 녹화 방식",
+      "수업 녹화는 온라인 교실 전체를 클라우드에 녹화하는 방식이며, 현장 녹화(1V0)는 교실 내 강사와 판서 화면을 위주로 촬영하는 현장 최적화 녹화 방식입니다.",
+      325,
+      "classroom"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isRecordedLessonOptionQuestion(question)) {
+    const source = buildStaticDocSource(
+      "teacher",
+      "course-activities",
+      "학습 활동 - 수업과 녹화 설정",
+      "녹화 수업 생성 시 편집 화면에서 다시보기/시청 제한 옵션을 설정하여 학생들의 동영상 시청 권한과 횟수를 제한할 수 있습니다.",
+      320,
+      "classroom"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isDailyAssignmentRepeatQuestion(question)) {
+    const source = buildStaticDocSource(
+      "teacher",
+      "course-activities",
+      "학습 활동 - 과제 관리",
+      "일일 과제나 숙제 생성 시 요일별 반복 게시 옵션을 제공하며, 날짜와 반복 주기를 설정해 게시할 수 있습니다.",
+      320,
+      "classroom"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isAdminDashboardMenuMapQuestion(question)) {
+    const source = buildStaticDocSource(
+      "admin",
+      "admin-operation-standardization",
+      "대시보드 주요 메뉴 맵",
+      "ClassIn 관리자 대시보드 로그인 후 좌측 사이드바에서 [기관 관리] > [코스 관리] 혹은 [LMS 설정]을 통해 라이브&플레이백과 API 도킹 메뉴에 진입할 수 있습니다.",
+      320,
+      "admin"
+    )
+    if (source) sources.push(source)
+  }
+
+  if (isCompanyIntroQuestion(question)) {
+    const source = buildStaticDocSource(
+      "start",
+      "company-overview",
+      "클래스인 회사 개요",
+      "ClassIn은 교육 테크놀로지 기업으로서, 글로벌 교육 기관과 파트너십을 맺고 온라인/하이브리드 수업을 위한 올인원 교육 OS 플랫폼을 개발하고 공급합니다.",
+      320,
+      "onboarding"
+    )
+    if (source) sources.push(source)
+  }
 
   if (isPreAdoptionCheckQuestion(question)) {
     const source = buildStaticDocSource(
@@ -1443,7 +1594,16 @@ function mergeCuratedSources(question: NormalizedQuestion, sources: ChatbotSourc
     isSiteEntryIntegrationQuestion(question) ||
     isS65QuoteQuestion(question) ||
     isBoardOnlyOrPlatformQuestion(question) ||
-    isCameraConflictQuestion(question)
+    isCameraConflictQuestion(question) ||
+    isRefundQuestion(question) ||
+    isCourseCreationQuestion(question) ||
+    isAssignmentQuestion(question) ||
+    isPrivacyProcessingQuestion(question) ||
+    isRecordingOptionComparisonQuestion(question) ||
+    isRecordedLessonOptionQuestion(question) ||
+    isDailyAssignmentRepeatQuestion(question) ||
+    isAdminDashboardMenuMapQuestion(question) ||
+    isCompanyIntroQuestion(question)
   ) {
     return selectDiverseSources(rerankSources(question, curatedSources), 1)
   }

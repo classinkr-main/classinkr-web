@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowRight, CornerDownLeft, Search } from "lucide-react"
+import {
+  ADMIN_NAV,
+  ADMIN_NAV_SECTIONS,
+  ADMIN_NAV_SECTION_META,
+  CRM_CHILD_NAV,
+} from "./admin-nav"
 
 interface Command {
   label: string
@@ -16,39 +22,50 @@ interface AdminCommandPaletteProps {
   onClose: () => void
 }
 
-// 어드민 전역 이동·검색 대상. 사이드바 상단 항목 + 자주 가는 하위 라우트 + 빠른 작업.
-const COMMANDS: Command[] = [
-  { group: "운영", label: "Overview", href: "/admin/overview", keywords: "홈 대시보드 overview home" },
-  { group: "운영", label: "CRM 홈", href: "/admin/crm", keywords: "crm 한국팀 매출 korea" },
-  { group: "운영", label: "고객 (Accounts)", href: "/admin/crm/customers/accounts", keywords: "고객 거래처 account customer" },
-  { group: "운영", label: "리드", href: "/admin/crm/customers/leads", keywords: "리드 잠재고객 lead 문의" },
-  { group: "운영", label: "Deals", href: "/admin/crm/deals", keywords: "딜 거래 오더 order deal" },
-  { group: "운영", label: "캘린더", href: "/admin/calendar", keywords: "캘린더 일정 calendar schedule" },
-  { group: "운영", label: "견적·문서", href: "/admin/quotes", keywords: "견적 계약 영수증 quote contract receipt" },
-  { group: "운영", label: "빠른 견적 작성", href: "/admin/quotes/new", keywords: "견적 작성 빠른 견적 quick quote" },
-  { group: "운영", label: "녹화 세트 견적", href: "/admin/quotes/recording-studio", keywords: "녹화 세트 omo1 studio recording 견적" },
-  { group: "운영", label: "AI Suite 견적", href: "/admin/quotes/ai-suite", keywords: "ai suite 구독형 온라인 패키지 견적" },
-  { group: "성장", label: "캠페인", href: "/admin/campaigns", keywords: "캠페인 이메일 campaign email" },
-  { group: "성장", label: "이메일 자동화", href: "/admin/campaigns?tab=email", keywords: "이메일 자동화 automation email logs" },
-  { group: "성장", label: "자료 퍼널", href: "/admin/lead-magnets", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
-  { group: "성장", label: "콘텐츠 (블로그)", href: "/admin/blog", keywords: "블로그 콘텐츠 blog content" },
-  { group: "성장", label: "새 블로그 글 작성", href: "/admin/blog/new", keywords: "새글 작성 write new post 블로그" },
-  { group: "성장", label: "공개 행사", href: "/admin/events", keywords: "행사 이벤트 event 웨비나" },
-  { group: "성장", label: "새 행사 등록", href: "/admin/events/new", keywords: "새 행사 등록 new event" },
-  { group: "지원", label: "챗봇 운영", href: "/admin/chatbot", keywords: "챗봇 질문 추천 문서 chatbot ai faq" },
-  { group: "성장", label: "가이드 문서", href: "/admin/docs", keywords: "가이드 문서 docs guide" },
-  { group: "지원", label: "추천 질문 관리", href: "/admin/docs?tab=recommended", keywords: "추천 질문 starter chatbot recommended" },
-  { group: "지원", label: "문서 보강 큐", href: "/admin/docs?tab=gaps", keywords: "챗봇 질문 보강 큐 gaps faq 문서 검색 초안" },
-  { group: "분석", label: "KR Team", href: "/admin/branch", keywords: "지사 브랜치 branch kr team 매출" },
-  { group: "분석", label: "하드웨어 재고", href: "/admin/hardware", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
-  { group: "분석", label: "Analytics", href: "/admin/analytics", keywords: "analytics 분석 통계" },
-  { group: "분석", label: "방문자·트래픽", href: "/admin/traffic", keywords: "방문자 트래픽 추적 현황 홈페이지 흐름 tracking client events pixel 추적 계측 traffic" },
-  { group: "시스템", label: "Ops Health", href: "/admin/ops", keywords: "ops health 상태 통합 크론 cron automation" },
-  { group: "시스템", label: "통합 설정", href: "/admin/settings?tab=integrations", keywords: "설정 settings integrations webhook api key" },
-  { group: "시스템", label: "Settings", href: "/admin/settings", keywords: "설정 settings 환경" },
-  { group: "시스템", label: "회원 관리", href: "/admin/users", keywords: "회원 사용자 users 권한" },
-  { group: "시스템", label: "Dev Mode", href: "/admin/dev", keywords: "개발 dev 버그 패치노트 roadmap" },
-]
+// 팔레트 전용 딥링크 — nav에는 없는 하위 라우트·빠른 작업. 부모 nav href 바로 뒤에 이어 붙는다.
+const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<Command, "group">>> = {
+  "/admin/crm": [
+    // CRM 드릴인 하위 nav(admin-nav SSOT) 파생 — '현황'(/admin/crm)은 부모 항목과 중복이라 제외.
+    ...CRM_CHILD_NAV.filter((child) => child.href !== "/admin/crm").map((child) => ({
+      label: `CRM ${child.label}`,
+      href: child.href,
+      keywords: child.keywords,
+    })),
+    { label: "고객 (Accounts)", href: "/admin/crm/customers/accounts", keywords: "고객 거래처 account customer" },
+    { label: "리드", href: "/admin/crm/customers/leads", keywords: "리드 잠재고객 lead 문의" },
+    { label: "Deals", href: "/admin/crm/deals", keywords: "딜 거래 오더 order deal" },
+  ],
+  "/admin/quotes": [
+    { label: "빠른 견적 작성", href: "/admin/quotes/new", keywords: "견적 작성 빠른 견적 quick quote" },
+    { label: "녹화 세트 견적", href: "/admin/quotes/recording-studio", keywords: "녹화 세트 omo1 studio recording 견적" },
+    { label: "AI Suite 견적", href: "/admin/quotes/ai-suite", keywords: "ai suite 구독형 온라인 패키지 견적" },
+  ],
+  "/admin/campaigns": [
+    { label: "이메일 자동화", href: "/admin/campaigns?tab=email", keywords: "이메일 자동화 automation email logs" },
+  ],
+  "/admin/blog": [
+    { label: "새 블로그 글 작성", href: "/admin/blog/new", keywords: "새글 작성 write new post 블로그" },
+  ],
+  "/admin/events": [
+    { label: "새 행사 등록", href: "/admin/events/new", keywords: "새 행사 등록 new event" },
+  ],
+  "/admin/docs": [
+    { label: "추천 질문 관리", href: "/admin/docs?tab=recommended", keywords: "추천 질문 starter chatbot recommended" },
+  ],
+  "/admin/settings": [
+    { label: "통합 설정", href: "/admin/settings?tab=integrations", keywords: "설정 settings integrations webhook api key" },
+  ],
+}
+
+// 어드민 전역 이동·검색 대상 — 사이드바 nav(admin-nav SSOT)에서 파생.
+// 그룹은 사이드바 섹션 라벨과 동일해 사이드바와 팔레트의 IA가 항상 일치한다.
+export const ADMIN_COMMANDS: Command[] = ADMIN_NAV_SECTIONS.flatMap((section) => {
+  const group = ADMIN_NAV_SECTION_META[section].label
+  return ADMIN_NAV.filter((item) => item.section === section).flatMap((item) => [
+    { group, label: item.label, href: item.href, keywords: item.keywords },
+    ...(PALETTE_CHILD_COMMANDS[item.href] ?? []).map((child) => ({ group, ...child })),
+  ])
+})
 
 export default function AdminCommandPalette({ open, onClose }: AdminCommandPaletteProps) {
   const router = useRouter()
@@ -58,8 +75,8 @@ export default function AdminCommandPalette({ open, onClose }: AdminCommandPalet
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return COMMANDS
-    return COMMANDS.filter(
+    if (!q) return ADMIN_COMMANDS
+    return ADMIN_COMMANDS.filter(
       (cmd) => cmd.label.toLowerCase().includes(q) || (cmd.keywords ?? "").toLowerCase().includes(q)
     )
   }, [query])

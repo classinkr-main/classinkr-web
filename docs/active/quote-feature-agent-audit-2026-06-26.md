@@ -69,7 +69,7 @@
 
 - 공개 견적은 token bearer 방식이다. 토큰과 `expires_at`만 주로 확인한다.
 - 공개 조회에서 `share.access_mode === "view"`와 문서 상태의 share 가능 여부를 강하게 확인하지 않는다.
-- 관리자 목록은 V2 `quote_documents`를 보지만, legacy `/api/admin/quotes`와 `quotes` 저장소도 남아 있어 경로 의미가 섞여 있다.
+- 관리자 목록은 V2 `quote_documents`를 보지만, legacy `/api/admin/quotes`와 `quotes` 저장소도 남아 있어 경로 의미가 섞여 있다. (2026-07-02: legacy `/api/admin/quotes` V1 라우트 3종 삭제 완료 — `lib/repositories/quotes.ts`는 잔존)
 - 관리자 직접보기는 최초 조회 때 `x-portal-scope: admin`을 강제하지만, 내부 확인 버튼 호출은 admin scope 헤더를 유지하지 않을 수 있다.
 - 파트너용 별도 `/partner` quote UI는 현재 명확히 노출되어 있지 않고, API 권한 스코프만 존재한다.
 

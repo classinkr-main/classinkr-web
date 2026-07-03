@@ -42,6 +42,7 @@ import type { TrendPoint } from "@/components/admin/campaigns/CampaignTrendChart
 import type { ChannelEfficiencyRow } from "@/components/admin/campaigns/ChannelEfficiencyChart"
 import type { MetaPerfRow } from "@/components/admin/campaigns/MetaPerformanceCharts"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { textMatchesEventToken } from "@/lib/events/attribution"
 import { useUrlState } from "@/lib/use-url-state"
 import type { LeadRecord } from "@/lib/db"
 import type { PublicEvent, EventStatus } from "@/lib/types/public-events"
@@ -152,15 +153,13 @@ type EventLeadStats = { attributed: number; during: number }
 type LeadLookupRow = { haystack: string; timestampMs: number }
 
 function countEventLeadStats(leads: LeadLookupRow[], event: PublicEvent): EventLeadStats {
-  const tokenId = `event:${event.id}`.toLowerCase()
-  const tokenSlug = event.slug ? `event:${event.slug}`.toLowerCase() : null
   const startMs = new Date(event.startsAt).getTime()
   const endMs = event.endsAt ? new Date(event.endsAt).getTime() : Date.now()
   let attributed = 0
   let during = 0
 
   for (const lead of leads) {
-    if (lead.haystack.includes(tokenId) || (tokenSlug && lead.haystack.includes(tokenSlug))) {
+    if (textMatchesEventToken(lead.haystack, event)) {
       attributed += 1
     }
     if (lead.timestampMs >= startMs && lead.timestampMs <= endMs) {

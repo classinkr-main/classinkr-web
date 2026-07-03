@@ -151,7 +151,7 @@ const CONNECTOR_FEATURE_ROWS: Array<{
     title: "Billing",
     description: "Toss checkout과 환율 fallback 상태를 운영합니다.",
     statusKeys: ["toss_payments", "fx_rate"],
-    href: "/admin/software-quote-codes",
+    href: "/admin/quotes?tab=software",
     features: ["결제 승인", "견적 코드", "환율"],
   },
   {
@@ -159,7 +159,7 @@ const CONNECTOR_FEATURE_ROWS: Array<{
     title: "Partner Portal",
     description: "파트너/공유 링크 API 상태와 문서 공유 흐름을 확인합니다.",
     statusKeys: ["partner_portal"],
-    href: "/admin/partners",
+    href: "/admin/crm/deals/kpi",
     features: ["포털 API", "견적 공유", "계약 공유"],
   },
 ]

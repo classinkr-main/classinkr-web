@@ -4,6 +4,7 @@ import { useState } from "react"
 import { MessageSquare, Sparkles, CheckCircle, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import TagSelector from "./TagSelector"
+import { adminFetch } from "@/lib/admin-client"
 import type { SendSmsRequest } from "@/lib/marketing-types"
 
 const SMS_MAX = 90
@@ -56,9 +57,8 @@ export default function SmsComposer({ subscriberCount = 0, countMap }: Props) {
         recipientCount,
       }
 
-      const res = await fetch("/api/admin/sms/send", {
+      const res = await adminFetch("/api/admin/sms/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
 

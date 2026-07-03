@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { verifyAdmin } from "@/lib/admin-auth"
+import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext, verifyAdmin } from "@/lib/admin-auth"
 import { runExternalCrmSyncChain } from "@/lib/external-crm/sync-chain"
 import { getXiaoshouyiSyncRuntimePreflight } from "@/lib/external-crm/xiaoshouyi-sync"
 
+// 읽기(GET preflight)는 CRM 스태프 롤 매트릭스, 쓰기(POST sync 트리거)는 기본롤 유지.
 export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req)
-  if (err) return err
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  if (admin instanceof NextResponse) return admin
 
   return NextResponse.json(await getXiaoshouyiSyncRuntimePreflight())
 }

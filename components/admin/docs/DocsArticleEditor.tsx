@@ -71,6 +71,9 @@ interface Props {
   article: DocsArticleDetail | null
 }
 
+/** 문서 쓰기 API는 챗봇 인덱스 갱신 실패 시 reindexWarning을 함께 내려준다. */
+type DocsArticleDetailResponse = DocsArticleDetail & { reindexWarning?: string }
+
 type RelationType = NonNullable<DocsArticleRelationDetail["relationType"]>
 
 interface ArticleOption {
@@ -1757,19 +1760,16 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     setRollingBackVersionId(version.id)
     setError(null)
     try {
-      const detail = await adminFetchJson<DocsArticleDetail>(
+      // 챗봇 인덱스 갱신은 롤백 API가 서버에서 처리한다.
+      const detail = await adminFetchJson<DocsArticleDetailResponse>(
         `/api/admin/docs/articles/${article.id}/versions/${version.id}/rollback`,
         { method: "POST" }
       )
       const rolledBackForm = initialForm(detail, detail.categoryId)
       setForm(rolledBackForm)
       setLastSavedForm(rolledBackForm)
-      await adminFetch("/api/admin/docs/reindex", {
-        method: "POST",
-        body: JSON.stringify({ articleId: detail.id }),
-      }).catch(() => null)
       await loadEditorSupport()
-      setSavedMessage("선택한 버전으로 롤백했습니다.")
+      setSavedMessage(detail.reindexWarning ?? "선택한 버전으로 롤백했습니다.")
       setTimeout(() => setSavedMessage(null), 2500)
     } catch (error) {
       setError(error instanceof Error ? error.message : "롤백하지 못했습니다.")
@@ -1826,15 +1826,6 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       return "slug는 소문자·숫자·하이픈만 허용합니다."
     }
     return null
-  }
-
-  async function reindexIfPublished(status: DocsArticleStatus) {
-    if (status !== "published") return
-
-    await adminFetch("/api/admin/docs/reindex", {
-      method: "POST",
-      body: JSON.stringify(article?.id ? { articleId: article.id } : {}),
-    }).catch(() => null)
   }
 
   async function saveDraft(overrides: Partial<FormState> = {}) {
@@ -1903,18 +1894,19 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
         method: "PUT",
         body: JSON.stringify(buildPayload(overrides)),
       })
-      const detail = await adminFetchJson<DocsArticleDetail>(
+      // 챗봇 인덱스 갱신은 publish API가 서버에서 처리한다.
+      const detail = await adminFetchJson<DocsArticleDetailResponse>(
         `/api/admin/docs/articles/${article.id}/draft/publish`,
         { method: "POST" }
       )
-      await reindexIfPublished(detail.status)
       const savedForm = initialForm(detail, detail.categoryId)
       setForm(savedForm)
       setLastSavedForm(savedForm)
       setSupport((previous) => ({ ...previous, draft: null }))
       draftAppliedRef.current = true
       setSavedMessage(
-        detail.status === "published" ? "공개본 반영 완료 · 검색 인덱스 반영" : "문서 반영 완료"
+        detail.reindexWarning ??
+          (detail.status === "published" ? "공개본 반영 완료 · 검색 인덱스 반영" : "문서 반영 완료")
       )
       setTimeout(() => setSavedMessage(null), 3000)
       router.refresh()
@@ -1962,31 +1954,31 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
 
     setSaving(true)
     try {
+      // 챗봇 인덱스 갱신은 문서 쓰기 API가 서버에서 처리한다.
       if (mode === "create") {
-        const detail = await adminFetchJson<DocsArticleDetail>("/api/admin/docs/articles", {
+        const detail = await adminFetchJson<DocsArticleDetailResponse>("/api/admin/docs/articles", {
           method: "POST",
           body: JSON.stringify(buildPayload(overrides)),
         })
-        await reindexIfPublished(next.status)
         router.replace(`/admin/docs/${detail.id}/edit`)
         router.refresh()
         return
       }
 
       if (!article) return
-      const detail = await adminFetchJson<DocsArticleDetail>(
+      const detail = await adminFetchJson<DocsArticleDetailResponse>(
         `/api/admin/docs/articles/${article.id}`,
         {
           method: "PATCH",
           body: JSON.stringify(buildPayload(overrides)),
         }
       )
-      await reindexIfPublished(next.status)
       const savedForm = initialForm(detail, detail.categoryId)
       setForm(savedForm)
       setLastSavedForm(savedForm)
       setSavedMessage(
-        next.status === "published" ? "저장 완료 · 검색 인덱스 반영" : "저장 완료"
+        detail.reindexWarning ??
+          (next.status === "published" ? "저장 완료 · 검색 인덱스 반영" : "저장 완료")
       )
       setTimeout(() => setSavedMessage(null), 2500)
       router.refresh()

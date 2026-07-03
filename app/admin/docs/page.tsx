@@ -434,19 +434,16 @@ function AdminDocsPageContent() {
       setError(null)
 
       try {
-        await adminFetchJson(`/api/admin/docs/articles/${article.id}`, {
-          method: "PATCH",
-          body: JSON.stringify(patch),
-        })
+        // 챗봇 인덱스 갱신은 PATCH API가 서버에서 처리한다(실패 시 reindexWarning).
+        const result = await adminFetchJson<{ reindexWarning?: string }>(
+          `/api/admin/docs/articles/${article.id}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify(patch),
+          }
+        )
 
-        if (patch.status === "published" || article.status === "published") {
-          await adminFetch("/api/admin/docs/reindex", {
-            method: "POST",
-            body: JSON.stringify({ articleId: article.id }),
-          }).catch(() => null)
-        }
-
-        setArticleNotice("문서 설정을 저장했습니다.")
+        setArticleNotice(result.reindexWarning ?? "문서 설정을 저장했습니다.")
         window.setTimeout(() => setArticleNotice(null), 2500)
         await load()
         return true
@@ -477,17 +474,21 @@ function AdminDocsPageContent() {
     setBulkSaving(true)
     setError(null)
     try {
-      const result = await adminFetchJson<{ updatedCount: number }>("/api/admin/docs/articles/bulk", {
-        method: "PATCH",
-        body: JSON.stringify({ ids: selectedArticleIds, ...patch }),
-      })
-
-      if (patch.status === "published") {
-        await adminFetch("/api/admin/docs/reindex", { method: "POST" }).catch(() => null)
-      }
+      // 챗봇 인덱스 갱신은 bulk API가 서버에서 문서별로 처리한다(실패 시 reindexWarning).
+      const result = await adminFetchJson<{ updatedCount: number; reindexWarning?: string }>(
+        "/api/admin/docs/articles/bulk",
+        {
+          method: "PATCH",
+          body: JSON.stringify({ ids: selectedArticleIds, ...patch }),
+        }
+      )
 
       setSelectedArticleIds([])
-      setArticleNotice(`문서 ${formatNumber(result.updatedCount)}개를 일괄 수정했습니다.`)
+      setArticleNotice(
+        `문서 ${formatNumber(result.updatedCount)}개를 일괄 수정했습니다.${
+          result.reindexWarning ? ` ${result.reindexWarning}` : ""
+        }`
+      )
       window.setTimeout(() => setArticleNotice(null), 2500)
       await load()
     } catch (err) {

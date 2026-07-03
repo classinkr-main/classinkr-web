@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (err) return err
 
   try {
-    // 而ㅻ컠 硫뷀? + numstat(?뚯씪蹂?異붽?/??젣 ?쇱씤 ??
+    // 커밋 메타 + numstat(파일별 추가/삭제 라인 수)
     const { stdout } = await execAsync(
       `git log --pretty=format:"${SEP}|%h|%H|%an|%ai|%s|%D" --numstat -50`,
       { cwd: process.cwd() }
@@ -54,6 +54,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(commits)
   } catch {
-    return NextResponse.json({ error: "git log ?ㅽ뙣" }, { status: 500 })
+    return NextResponse.json({ error: "git log 실패" }, { status: 500 })
   }
 }

@@ -9,10 +9,19 @@ import {
   Sparkles,
   Info,
   ExternalLink,
+  Check,
+  Loader2,
+  UserPlus,
 } from "lucide-react"
 
 import { StatCard } from "@/components/admin/StatCard"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import {
+  buildLeadPayloadFromConversation,
+  buildPromotionPayload,
+  isQuestionAlreadyPromoted,
+  leadBoardDeepLink,
+} from "@/lib/channel-talk-loop"
 
 type ConvState = "opened" | "closed" | "snoozed" | "unknown"
 
@@ -119,13 +128,26 @@ export default function ChannelTalkPage() {
   const [syncing, setSyncing] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // 이미 등록된 추천 질문 prompt들 — 중복 승격 차단용 (DB unique 제약 없음).
+  const [existingPrompts, setExistingPrompts] = useState<string[]>([])
+  const [promotingQuestion, setPromotingQuestion] = useState<string | null>(null)
+  const [promoteErrors, setPromoteErrors] = useState<Record<string, string>>({})
+  // 상담 id → 이번 세션에서 등록한 리드 id. matchedLeadId는 다음 동기화 때 채워진다.
+  const [registeredLeads, setRegisteredLeads] = useState<Record<string, string>>({})
+  const [registeringId, setRegisteringId] = useState<string | null>(null)
+  const [registerErrors, setRegisterErrors] = useState<Record<string, string>>({})
 
   const load = useCallback(async (force = false) => {
     setLoadError(null)
-    const [main, mined] = await Promise.allSettled([
+    const [main, mined, recommended] = await Promise.allSettled([
       adminFetchJson<ChannelData>("/api/admin/channel-talk", { cache: "no-cache" }),
       adminFetchJsonCached<{ suggestions?: FaqSuggestion[] }>(
         "/api/admin/channel-talk/mine",
+        undefined,
+        { ttlMs: 60_000, force }
+      ),
+      adminFetchJsonCached<{ questions?: { prompt?: string }[] }>(
+        "/api/admin/chatbot/recommended-questions?placement=starter&status=all",
         undefined,
         { ttlMs: 60_000, force }
       ),
@@ -133,7 +155,77 @@ export default function ChannelTalkPage() {
     if (main.status === "fulfilled") setData(main.value)
     else setLoadError(main.reason instanceof Error ? main.reason.message : "상담 데이터를 불러오지 못했습니다.")
     if (mined.status === "fulfilled") setSuggestions(mined.value.suggestions ?? [])
+    if (recommended.status === "fulfilled") {
+      setExistingPrompts(
+        (recommended.value.questions ?? [])
+          .map((question) => question.prompt)
+          .filter((prompt): prompt is string => typeof prompt === "string")
+      )
+    }
   }, [])
+
+  // FAQ 후보 → 챗봇 추천 질문(draft) 승격. 발행은 /admin/docs 추천 질문 관리에서.
+  async function promoteSuggestion(suggestion: FaqSuggestion) {
+    const key = suggestion.question
+    setPromotingQuestion(key)
+    setPromoteErrors((prev) => {
+      if (!(key in prev)) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+    try {
+      await adminFetchJson("/api/admin/chatbot/recommended-questions", {
+        method: "POST",
+        body: JSON.stringify(buildPromotionPayload(suggestion)),
+      })
+      setExistingPrompts((prev) => [...prev, suggestion.question])
+    } catch (error) {
+      setPromoteErrors((prev) => ({
+        ...prev,
+        [key]: error instanceof Error ? error.message : "추천 질문 승격에 실패했습니다.",
+      }))
+    } finally {
+      setPromotingQuestion(null)
+    }
+  }
+
+  // 미매칭 상담 → CRM 리드 등록. 성공하면 리드 보드 딥링크 배지로 바뀐다.
+  async function registerConversationAsLead(conversation: Conversation) {
+    const payload = buildLeadPayloadFromConversation(conversation)
+    if (!payload) {
+      setRegisterErrors((prev) => ({
+        ...prev,
+        [conversation.id]: "이름·이메일·전화 중 하나는 있어야 리드로 등록할 수 있습니다.",
+      }))
+      return
+    }
+    setRegisteringId(conversation.id)
+    setRegisterErrors((prev) => {
+      if (!(conversation.id in prev)) return prev
+      const next = { ...prev }
+      delete next[conversation.id]
+      return next
+    })
+    try {
+      const result = await adminFetchJson<{ created: number; firstId: string | null }>(
+        "/api/admin/leads",
+        { method: "POST", body: JSON.stringify(payload) }
+      )
+      const firstId = result.created > 0 ? result.firstId : null
+      if (!firstId) {
+        throw new Error("리드 등록에 실패했습니다.")
+      }
+      setRegisteredLeads((prev) => ({ ...prev, [conversation.id]: firstId }))
+    } catch (error) {
+      setRegisterErrors((prev) => ({
+        ...prev,
+        [conversation.id]: error instanceof Error ? error.message : "리드 등록에 실패했습니다.",
+      }))
+    } finally {
+      setRegisteringId(null)
+    }
+  }
 
   useEffect(() => {
     load().finally(() => setLoading(false))
@@ -288,6 +380,9 @@ export default function ChannelTalkPage() {
                   const extraSamples = (suggestion.sampleQuestions ?? []).filter(
                     (sample) => sample.trim() !== suggestion.question.trim()
                   )
+                  const alreadyPromoted = isQuestionAlreadyPromoted(suggestion.question, existingPrompts)
+                  const promoteBusy = promotingQuestion === suggestion.question
+                  const promoteError = promoteErrors[suggestion.question]
                   return (
                     <li
                       key={suggestion.question}
@@ -305,6 +400,9 @@ export default function ChannelTalkPage() {
                         <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
                           최근 질문 {formatWhen(suggestion.lastAskedAt)}
                         </p>
+                        {promoteError ? (
+                          <p className="mt-1 text-[11px] text-[#B85C33]">{promoteError}</p>
+                        ) : null}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
                         <span className="rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#084734]">
@@ -313,13 +411,35 @@ export default function ChannelTalkPage() {
                         <span className="rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55">
                           {faqCategoryLabel(suggestion.category)}
                         </span>
+                        {alreadyPromoted ? (
+                          <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2 py-1 text-[11px] font-medium text-[#084734]">
+                            <Check className="h-3 w-3" />
+                            추천질문 등록됨
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void promoteSuggestion(suggestion)}
+                            disabled={promoteBusy}
+                            className="mt-1 inline-flex items-center gap-1 rounded-lg border border-[#084734] px-2.5 py-1 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#084734] hover:text-white disabled:opacity-50"
+                          >
+                            {promoteBusy ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Sparkles className="h-3 w-3" />
+                            )}
+                            추천질문으로 승격
+                          </button>
+                        )}
                       </div>
                     </li>
                   )
                 })}
               </ul>
               <p className="border-t border-[#e8e8e4] bg-[#fafaf8] px-5 py-3 text-[11px] text-[#1a1a1a]/45">
-                자주 묻는데 챗봇 골든셋에 없는 질문입니다.{" "}
+                자주 묻는데 챗봇 골든셋에 없는 질문입니다. “추천질문으로 승격”은 챗봇 시작 화면 추천 질문(draft)으로
+                등록하며, <a href="/admin/docs" className="underline hover:text-[#111110]">/admin/docs 추천 질문 관리</a>에서
+                검토 후 발행합니다. 답변 자체는{" "}
                 <code className="rounded bg-white px-1 py-0.5 font-mono">data/chatbot-golden-set.json</code>{" "}
                 또는 가이드 문서에 반영하면 챗봇이 다음부터 자동 응대합니다.
               </p>
@@ -343,48 +463,81 @@ export default function ChannelTalkPage() {
               </p>
             ) : (
               <ul>
-                {conversations.map((conversation) => (
-                  <li
-                    key={conversation.id}
-                    className="flex flex-col gap-2 border-b border-[#e8e8e4] px-5 py-4 last:border-0 sm:flex-row sm:items-start sm:gap-4"
-                  >
-                    <div className="flex min-w-0 flex-1 flex-col gap-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[13px] font-semibold text-[#111110]">
-                          {conversation.name || conversation.email || conversation.phone || "익명 고객"}
-                        </span>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATE_BADGE[conversation.state]}`}
-                        >
-                          {STATE_LABEL[conversation.state]}
-                        </span>
-                        {conversation.matchedLeadId ? (
-                          <a
-                            href="/admin/crm"
-                            className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10px] font-medium text-[#084734] hover:underline"
+                {conversations.map((conversation) => {
+                  const registeredLeadId = registeredLeads[conversation.id]
+                  const canRegister = Boolean(
+                    conversation.name || conversation.email || conversation.phone
+                  )
+                  const registerBusy = registeringId === conversation.id
+                  const registerError = registerErrors[conversation.id]
+                  return (
+                    <li
+                      key={conversation.id}
+                      className="flex flex-col gap-2 border-b border-[#e8e8e4] px-5 py-4 last:border-0 sm:flex-row sm:items-start sm:gap-4"
+                    >
+                      <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[13px] font-semibold text-[#111110]">
+                            {conversation.name || conversation.email || conversation.phone || "익명 고객"}
+                          </span>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATE_BADGE[conversation.state]}`}
                           >
-                            <Link2 className="h-3 w-3" />
-                            {conversation.matchedLeadOrg || "CRM 매칭"}
-                          </a>
+                            {STATE_LABEL[conversation.state]}
+                          </span>
+                          {conversation.matchedLeadId ? (
+                            <a
+                              href={leadBoardDeepLink(conversation.matchedLeadId)}
+                              className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10px] font-medium text-[#084734] hover:underline"
+                            >
+                              <Link2 className="h-3 w-3" />
+                              {conversation.matchedLeadOrg || "CRM 매칭"}
+                            </a>
+                          ) : registeredLeadId ? (
+                            <a
+                              href={leadBoardDeepLink(registeredLeadId)}
+                              className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10px] font-medium text-[#084734] hover:underline"
+                            >
+                              <Check className="h-3 w-3" />
+                              리드 등록됨 · 보드에서 보기
+                            </a>
+                          ) : canRegister ? (
+                            <button
+                              type="button"
+                              onClick={() => void registerConversationAsLead(conversation)}
+                              disabled={registerBusy}
+                              className="inline-flex items-center gap-1 rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55 transition-colors hover:border-[#084734] hover:text-[#084734] disabled:opacity-50"
+                            >
+                              {registerBusy ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <UserPlus className="h-3 w-3" />
+                              )}
+                              리드로 등록
+                            </button>
+                          ) : null}
+                        </div>
+                        {conversation.firstQuestion ? (
+                          <p className="line-clamp-2 text-[12px] text-[#1a1a1a]/60">
+                            “{conversation.firstQuestion}”
+                          </p>
+                        ) : null}
+                        {conversation.lastMessageText ? (
+                          <p className="line-clamp-1 text-[11px] text-[#1a1a1a]/40">
+                            최근: {conversation.lastMessageText}
+                          </p>
+                        ) : null}
+                        {registerError ? (
+                          <p className="text-[11px] text-[#B85C33]">{registerError}</p>
                         ) : null}
                       </div>
-                      {conversation.firstQuestion ? (
-                        <p className="line-clamp-2 text-[12px] text-[#1a1a1a]/60">
-                          “{conversation.firstQuestion}”
-                        </p>
-                      ) : null}
-                      {conversation.lastMessageText ? (
-                        <p className="line-clamp-1 text-[11px] text-[#1a1a1a]/40">
-                          최근: {conversation.lastMessageText}
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-3 text-[11px] text-[#1a1a1a]/40 sm:flex-col sm:items-end sm:gap-1">
-                      <span>{conversation.messageCount}개 메시지</span>
-                      <span>{formatWhen(conversation.lastMessageAt)}</span>
-                    </div>
-                  </li>
-                ))}
+                      <div className="flex shrink-0 items-center gap-3 text-[11px] text-[#1a1a1a]/40 sm:flex-col sm:items-end sm:gap-1">
+                        <span>{conversation.messageCount}개 메시지</span>
+                        <span>{formatWhen(conversation.lastMessageAt)}</span>
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
             )}
             <a

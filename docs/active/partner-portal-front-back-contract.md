@@ -121,7 +121,7 @@
 
 비고:
 
-- 지금의 [page.tsx](../../app/admin/commercial/page.tsx) 는 이 구조의 첫 미리보기다.
+- 지금의 `app/admin/commercial/page.tsx`(2026-07-02 폐기 삭제) 는 이 구조의 첫 미리보기였다.
 
 ### C. 거래건 상세
 
@@ -326,7 +326,7 @@
 
 ### A. 현재
 
-- [page.tsx](../../app/admin/commercial/page.tsx)
+- `app/admin/commercial/page.tsx`(2026-07-02 폐기 삭제)
   - 새 V2 미리보기
   - `customer list -> customer detail -> deal detail` 흐름
   - fallback 포함

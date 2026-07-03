@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { verifyAdmin } from "@/lib/admin-auth"
+import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { getCrmRevenueTarget, setCrmRevenueTarget } from "@/lib/crm/revenue-target"
 
 // 월 매출 목표(CNY) — 코크핏 매출추이 목표선·달성률 배지용. 목표 없으면 { target: null }.
+// 읽기(GET)는 CRM 스태프 롤 매트릭스, 쓰기(POST 목표 설정)는 기본롤 유지.
 export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req)
-  if (err) return err
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  if (admin instanceof NextResponse) return admin
 
   try {
     const month = new URL(req.url).searchParams.get("month") ?? ""

@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { createDeal } from "@/lib/portal/repositories/deals"
 import { createCustomer } from "@/lib/portal/repositories/customers"
 import { logActivity } from "@/lib/portal/repositories/activity"
 import type { Customer, Deal } from "@/lib/portal/types"
 import { getLeadById, updateLead, type LeadRecord } from "@/lib/repositories/leads"
-import { upsertConfirmedLeadCustomerLink } from "@/lib/repositories/crm-source-links"
+import {
+  findConfirmedLeadConversionLink,
+  upsertConfirmedLeadCustomerLink,
+} from "@/lib/repositories/crm-source-links"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { getLeadMagnetTitleFromStore } from "@/lib/repositories/lead-magnets"
 
@@ -113,38 +116,104 @@ async function getOrCreateAdminQuotePartnerAccountId(createdBy?: string | null) 
   return created.id as string
 }
 
-async function findExistingLeadConversion(leadId: string) {
+type ExistingLeadConversion = {
+  customer: Customer | null
+  deal: Deal | null
+  matchedBy: "source_link" | "notes_marker" | null
+}
+
+function buildLeadMarker(leadId: string) {
+  return `%원본 리드 ID: ${leadId}%`
+}
+
+async function findLatestMarkerDealForCustomer(customerId: string, leadId: string) {
   const supabase = createSupabaseAdminClient()
-  const leadMarker = `%원본 리드 ID: ${leadId}%`
+  const { data: dealRows, error: dealError } = await supabase
+    .from("deals")
+    .select("*")
+    .eq("customer_id", customerId)
+    .ilike("notes", buildLeadMarker(leadId))
+    .order("created_at", { ascending: false })
+    .limit(1)
+
+  if (dealError) throw dealError
+  return (dealRows?.[0] as Deal | undefined) ?? null
+}
+
+// ① 정식 링크(crm_source_links confirmed) 기반 멱등 판정 — 노트 편집과 무관한 SSOT.
+async function findLeadConversionBySourceLink(leadId: string): Promise<ExistingLeadConversion | null> {
+  let link: Awaited<ReturnType<typeof findConfirmedLeadConversionLink>> = null
+  try {
+    link = await findConfirmedLeadConversionLink(leadId)
+  } catch (linkError) {
+    // 링크 조회 실패는 레거시 마커 판정으로 폴백 — 전환 자체를 막지 않는다.
+    console.warn("[POST /api/admin/leads/[id]/convert-v2] source link lookup failed", linkError)
+    return null
+  }
+  if (!link) return null
+
+  const supabase = createSupabaseAdminClient()
+  const { data: customerRow, error: customerError } = await supabase
+    .from("customers")
+    .select("*")
+    .eq("id", link.customerId)
+    .maybeSingle()
+
+  if (customerError) throw customerError
+  const customer = (customerRow as Customer | null) ?? null
+  // 링크가 삭제된 고객을 가리키면 레거시/신규 생성 경로로 폴백.
+  if (!customer) return null
+
+  let deal: Deal | null = null
+  if (link.dealId) {
+    const { data: dealRow, error: dealError } = await supabase
+      .from("deals")
+      .select("*")
+      .eq("id", link.dealId)
+      .maybeSingle()
+
+    if (dealError) throw dealError
+    deal = (dealRow as Deal | null) ?? null
+  }
+
+  // 링크 metadata에 딜 계보가 없으면(매칭 인박스 수동 확정 등) 마커 딜로 보강.
+  if (!deal) {
+    deal = await findLatestMarkerDealForCustomer(customer.id, leadId)
+  }
+
+  return { customer, deal, matchedBy: "source_link" }
+}
+
+// ② 레거시 호환 — customers.notes '원본 리드 ID:' 텍스트 마커 판정.
+async function findLeadConversionByNotesMarker(leadId: string): Promise<ExistingLeadConversion> {
+  const supabase = createSupabaseAdminClient()
 
   const { data: customerRows, error: customerError } = await supabase
     .from("customers")
     .select("*")
-    .ilike("notes", leadMarker)
+    .ilike("notes", buildLeadMarker(leadId))
     .order("created_at", { ascending: false })
     .limit(1)
 
   if (customerError) throw customerError
   const customer = customerRows?.[0] as Customer | undefined
-  if (!customer) return { customer: null, deal: null }
+  if (!customer) return { customer: null, deal: null, matchedBy: null }
 
-  const { data: dealRows, error: dealError } = await supabase
-    .from("deals")
-    .select("*")
-    .eq("customer_id", customer.id)
-    .ilike("notes", leadMarker)
-    .order("created_at", { ascending: false })
-    .limit(1)
-
-  if (dealError) throw dealError
   return {
     customer,
-    deal: (dealRows?.[0] as Deal | undefined) ?? null,
+    deal: await findLatestMarkerDealForCustomer(customer.id, leadId),
+    matchedBy: "notes_marker",
   }
 }
 
+async function findExistingLeadConversion(leadId: string): Promise<ExistingLeadConversion> {
+  const byLink = await findLeadConversionBySourceLink(leadId)
+  if (byLink) return byLink
+  return findLeadConversionByNotesMarker(leadId)
+}
+
 export async function POST(req: NextRequest, context: RouteContext) {
-  const admin = await requireVerifiedAdminContext(req)
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   const { id } = await context.params
@@ -267,9 +336,15 @@ export async function POST(req: NextRequest, context: RouteContext) {
       deal,
       lead: updatedLead,
       sourceLinkCreated,
+      matchedBy: existingConversion.matchedBy,
       reusedExisting: {
         customer: Boolean(existingConversion.customer),
         deal: Boolean(existingConversion.deal),
+      },
+      // 전환 직후 동선 — 딜 포커스 딥링크 + 통합 고객 검색 딥링크.
+      links: {
+        deal: `/admin/crm/deals/orders?deal=${encodeURIComponent(deal.id)}`,
+        customer: `/admin/crm/customers/unified?q=${encodeURIComponent(customer.name)}`,
       },
     })
   } catch (error) {

@@ -89,6 +89,31 @@ export interface CreateHardwareMovementInput {
   raw?: Record<string, unknown>
 }
 
+type HardwareMovementInsertRow = {
+  item_id: string
+  product_name: string
+  movement_type: HardwareMovementType
+  quantity: number
+  occurred_at: string | null
+  from_location: string | null
+  to_location: string | null
+  owner: string | null
+  status: string | null
+  reference_no: string | null
+  memo: string | null
+  serials: string[]
+  lot_no: string | null
+  unit_price: number | null
+  amount_usd: number | null
+  amount_cny: number | null
+  storage_location: string | null
+  importer: string | null
+  source: "admin_manual"
+  raw: Record<string, unknown>
+  created_by: string | null
+  converted_from_movement_id?: string
+}
+
 export interface UpdateHardwareItemInput {
   reorderPoint?: number
   leadTimeDays?: number
@@ -294,8 +319,33 @@ export async function listHardwareMovements(limit = 300): Promise<HardwareMoveme
   return (data ?? []) as HardwareMovement[]
 }
 
+// The live sheet-import RPC doesn't persist amount_usd/unit_price/importer (the costing
+// migration is pending on prod), so file-imported movements stash those in `raw`. Recover
+// them here when the dedicated column is null — a no-op once the migration is applied.
+function recoverMoneyFromRaw(rows: HardwareMovement[]): HardwareMovement[] {
+  return rows.map((row) => {
+    const raw = isRecord(row.raw) ? row.raw : {}
+    const rawNum = (key: string): number | null => {
+      const value = raw[key]
+      return typeof value === "number" && Number.isFinite(value) ? value : null
+    }
+    const rawStr = (key: string): string | null => {
+      const value = raw[key]
+      return typeof value === "string" && value.trim() ? value.trim() : null
+    }
+    return {
+      ...row,
+      amount_usd: row.amount_usd ?? rawNum("amount_usd"),
+      amount_cny: row.amount_cny ?? rawNum("amount_cny"),
+      unit_price: row.unit_price ?? rawNum("unit_price"),
+      importer: row.importer ?? rawStr("importer"),
+    }
+  })
+}
+
 async function listAllHardwareMovements(): Promise<HardwareMovement[]> {
-  return listAll<HardwareMovement>("hardware_movements")
+  const rows = await listAll<HardwareMovement>("hardware_movements")
+  return recoverMoneyFromRaw(rows)
 }
 
 async function getLatestImportRun(): Promise<HardwareDashboard["importRun"]> {
@@ -385,7 +435,220 @@ async function ensureNoDuplicateCrmMovement(input: {
   }
 }
 
-export async function createHardwareMovement(input: CreateHardwareMovementInput): Promise<HardwareMovement> {
+function lotFifoRank(lot: string): number | null {
+  if (/^FY/i.test(lot)) return 0
+  const hMatch = /^H(\d+)/i.exec(lot)
+  return hMatch ? Number(hMatch[1]) : null
+}
+
+function splitMoney(value: number | null | undefined, quantity: number, totalQuantity: number) {
+  if (value == null) return null
+  if (!Number.isFinite(value) || totalQuantity <= 0) return null
+  return Math.round((value * quantity / totalQuantity) * 100) / 100
+}
+
+function withAutoLotRaw(
+  raw: Record<string, unknown> | undefined,
+  allocation: { lotNo: string | null; quantity: number; autoAssigned: boolean },
+  totalQuantity: number,
+  splitCount: number
+) {
+  const base = raw ?? {}
+  if (!allocation.autoAssigned) return base
+  return {
+    ...base,
+    autoLot: {
+      strategy: "fifo",
+      lotNo: allocation.lotNo,
+      allocatedQuantity: allocation.quantity,
+      requestedQuantity: totalQuantity,
+      splitCount,
+    },
+  }
+}
+
+function allocationReferenceNo(input: CreateHardwareMovementInput, index: number, allocationCount: number, lotNo: string | null) {
+  const referenceNo = cleanString(input.referenceNo)
+  if (!referenceNo || allocationCount <= 1 || index === 0 || isPlannedStatus(input.status)) return referenceNo
+  const lotSuffix = cleanString(lotNo)?.replace(/[^\p{L}\p{N}_-]+/gu, "-") || `split-${index + 1}`
+  return `${referenceNo}:lot:${lotSuffix}`
+}
+
+function buildMovementInsertRow(
+  input: CreateHardwareMovementInput,
+  options: {
+    itemId: string
+    productName: string
+    quantity: number
+    lotNo: string | null
+    serials: string[]
+    referenceNo?: string | null
+    raw?: Record<string, unknown>
+    convertedFromMovementId?: string
+  }
+): HardwareMovementInsertRow {
+  return {
+    item_id: options.itemId,
+    product_name: options.productName,
+    movement_type: input.movementType,
+    quantity: options.quantity,
+    occurred_at: input.occurredAt || null,
+    from_location: normalizeLocationName(input.fromLocation),
+    to_location: normalizeLocationName(input.toLocation),
+    owner: cleanString(input.owner),
+    status: cleanString(input.status),
+    reference_no: cleanString(options.referenceNo ?? input.referenceNo),
+    memo: cleanString(input.memo),
+    serials: options.serials,
+    lot_no: options.lotNo,
+    unit_price: input.unitPrice ?? null,
+    amount_usd: splitMoney(input.amountUsd, options.quantity, input.quantity),
+    amount_cny: splitMoney(input.amountCny, options.quantity, input.quantity),
+    storage_location: cleanString(input.storageLocation),
+    importer: cleanString(input.importer),
+    source: "admin_manual",
+    raw: options.raw ?? input.raw ?? {},
+    created_by: cleanString(input.createdBy),
+    ...(options.convertedFromMovementId
+      ? { converted_from_movement_id: options.convertedFromMovementId }
+      : {}),
+  }
+}
+
+async function insertHardwareMovementRows(rows: HardwareMovementInsertRow[]): Promise<HardwareMovement[]> {
+  if (rows.length === 0) return []
+
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_movements")
+    .insert(rows)
+    .select("*")
+  if (error) throw error
+
+  return (data ?? []) as HardwareMovement[]
+}
+
+async function allocateOutboundLots(input: {
+  itemId: string
+  productName: string
+  quantity: number
+  explicitLotNo?: string | null
+  excludeMovementIds?: string[]
+}): Promise<Array<{ lotNo: string | null; quantity: number; autoAssigned: boolean }>> {
+  const explicitLotNo = cleanString(input.explicitLotNo)
+  const excluded = new Set(input.excludeMovementIds ?? [])
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("hardware_movements")
+    .select("*")
+    .eq("item_id", input.itemId)
+    .is("voided_at", null)
+  if (error) throw error
+
+  const balances = new Map<string, { lotNo: string; quantity: number; firstSeen: number }>()
+  for (const movement of (data ?? []) as HardwareMovement[]) {
+    if (excluded.has(movement.id)) continue
+    const lotNo = movementLotKey(movement)
+    if (!lotNo) continue
+
+    let delta = 0
+    if (movement.movement_type === "inbound" || movement.movement_type === "return") {
+      delta = movement.quantity
+    } else if (movement.movement_type === "outbound") {
+      delta = -movement.quantity
+    } else if (movement.movement_type === "adjust") {
+      delta = movement.from_location && !movement.to_location ? -movement.quantity : movement.quantity
+    }
+    if (delta === 0) continue
+
+    const current = balances.get(lotNo) ?? { lotNo, quantity: 0, firstSeen: Number.POSITIVE_INFINITY }
+    current.quantity += delta
+    const seenAt = movementDate(movement)
+    if (seenAt > 0 && seenAt < current.firstSeen) current.firstSeen = seenAt
+    balances.set(lotNo, current)
+  }
+
+  const lots = Array.from(balances.values())
+    .filter((row) => row.quantity > 0)
+    .sort((a, b) => {
+      const aRank = lotFifoRank(a.lotNo)
+      const bRank = lotFifoRank(b.lotNo)
+      if (aRank != null && bRank != null && aRank !== bRank) return aRank - bRank
+      if (aRank != null && bRank == null) return -1
+      if (aRank == null && bRank != null) return 1
+      if (a.firstSeen !== b.firstSeen) return a.firstSeen - b.firstSeen
+      return a.lotNo.localeCompare(b.lotNo, "ko")
+    })
+
+  if (explicitLotNo) {
+    const explicit = lots.find((lot) => lot.lotNo === explicitLotNo)
+    const available = explicit?.quantity ?? 0
+    if (available < input.quantity) {
+      throw new Error(
+        `${input.productName} ${explicitLotNo} lot 재고가 부족합니다. 요청 ${input.quantity}대, 가능 ${available}대입니다.`
+      )
+    }
+    return [{ lotNo: explicitLotNo, quantity: input.quantity, autoAssigned: false }]
+  }
+
+  let remaining = input.quantity
+  const allocations: Array<{ lotNo: string; quantity: number; autoAssigned: boolean }> = []
+  for (const lot of lots) {
+    if (remaining <= 0) break
+    const quantity = Math.min(remaining, lot.quantity)
+    allocations.push({ lotNo: lot.lotNo, quantity, autoAssigned: true })
+    remaining -= quantity
+  }
+
+  if (remaining > 0) {
+    const available = input.quantity - remaining
+    throw new Error(
+      `${input.productName} lot 재고가 부족합니다. 요청 ${input.quantity}대, 자동 배정 가능 ${available}대입니다.`
+    )
+  }
+
+  return allocations
+}
+
+async function buildMovementInsertRows(
+  input: CreateHardwareMovementInput,
+  itemId: string,
+  productName: string,
+  options: { excludeMovementIds?: string[]; convertedFromMovementId?: string } = {}
+): Promise<HardwareMovementInsertRow[]> {
+  const serials = input.serials ?? []
+  const allocations =
+    input.movementType === "outbound" && !isPlannedStatus(input.status)
+      ? await allocateOutboundLots({
+          itemId,
+          productName,
+          quantity: input.quantity,
+          explicitLotNo: input.lotNo,
+          excludeMovementIds: options.excludeMovementIds,
+        })
+      : [{ lotNo: cleanString(input.lotNo), quantity: input.quantity, autoAssigned: false }]
+
+  let serialOffset = 0
+  return allocations.map((allocation, allocationIndex) => {
+    const allocationSerials =
+      serials.length === input.quantity
+        ? serials.slice(serialOffset, serialOffset + allocation.quantity)
+        : serials
+    serialOffset += allocation.quantity
+    return buildMovementInsertRow(input, {
+      itemId,
+      productName,
+      quantity: allocation.quantity,
+      lotNo: allocation.lotNo,
+      serials: allocationSerials,
+      referenceNo: allocationReferenceNo(input, allocationIndex, allocations.length, allocation.lotNo),
+      raw: withAutoLotRaw(input.raw, allocation, input.quantity, allocations.length),
+      convertedFromMovementId: options.convertedFromMovementId,
+    })
+  })
+}
+
+async function resolveHardwareMovementTarget(input: CreateHardwareMovementInput) {
   const productName = normalizeProductName(input.productName)
   if (!productName) throw new Error("제품명은 필수입니다.")
   if (!HARDWARE_MOVEMENT_TYPES.includes(input.movementType)) {
@@ -402,44 +665,54 @@ export async function createHardwareMovement(input: CreateHardwareMovementInput)
   }
   if (!itemId) throw new Error("하드웨어 품목을 만들 수 없습니다.")
 
-  await ensureNoDuplicateCrmMovement({
-    productName,
-    referenceNo: input.referenceNo,
-    status: input.status,
-  })
+  return { itemId, productName }
+}
 
-  const sb = createSupabaseAdminClient()
-  const { data, error } = await sb
-    .from("hardware_movements")
-    .insert({
-      item_id: itemId,
-      product_name: productName,
-      movement_type: input.movementType,
-      quantity: input.quantity,
-      occurred_at: input.occurredAt || null,
-      from_location: normalizeLocationName(input.fromLocation),
-      to_location: normalizeLocationName(input.toLocation),
-      owner: cleanString(input.owner),
-      status: cleanString(input.status),
-      reference_no: cleanString(input.referenceNo),
-      memo: cleanString(input.memo),
-      serials: input.serials ?? [],
-      lot_no: cleanString(input.lotNo),
-      unit_price: input.unitPrice ?? null,
-      amount_usd: input.amountUsd ?? null,
-      amount_cny: input.amountCny ?? null,
-      storage_location: cleanString(input.storageLocation),
-      importer: cleanString(input.importer),
-      source: "admin_manual",
-      raw: input.raw ?? {},
-      created_by: cleanString(input.createdBy),
+export async function createHardwareMovements(inputs: CreateHardwareMovementInput[]): Promise<HardwareMovement[]> {
+  if (inputs.length === 0) return []
+  if (inputs.length > 50) throw new Error("한 번에 저장할 수 있는 하드웨어 기록은 최대 50건입니다.")
+
+  const rows: HardwareMovementInsertRow[] = []
+  const batchCrmKeys = new Set<string>()
+
+  for (const input of inputs) {
+    const { itemId, productName } = await resolveHardwareMovementTarget(input)
+    const referenceNo = cleanString(input.referenceNo)
+    if (referenceNo && isCrmReference(referenceNo)) {
+      const key = `${referenceNo}\u0000${productName}\u0000${isPlannedStatus(input.status) ? "planned" : "actual"}`
+      if (batchCrmKeys.has(key)) {
+        throw new Error("같은 CRM 오더와 품목이 장바구니에 중복으로 담겨 있습니다.")
+      }
+      batchCrmKeys.add(key)
+    }
+
+    await ensureNoDuplicateCrmMovement({
+      productName,
+      referenceNo: input.referenceNo,
+      status: input.status,
     })
-    .select("*")
-    .single()
-  if (error) throw error
+
+    rows.push(...await buildMovementInsertRows(input, itemId, productName))
+  }
+
+  const inserted = await insertHardwareMovementRows(rows)
+  if (inserted.length === 0) throw new Error("하드웨어 입출고 기록을 만들 수 없습니다.")
 
   revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
-  return data as HardwareMovement
+  return inserted
+}
+
+export async function createHardwareMovementRows(input: CreateHardwareMovementInput): Promise<HardwareMovement[]> {
+  const inserted = await createHardwareMovements([input])
+  if (inserted.length === 0) throw new Error("하드웨어 입출고 기록을 만들 수 없습니다.")
+  return inserted
+}
+
+export async function createHardwareMovement(input: CreateHardwareMovementInput): Promise<HardwareMovement> {
+  const inserted = await createHardwareMovementRows(input)
+  const movement = inserted[0]
+  if (!movement) throw new Error("하드웨어 입출고 기록을 만들 수 없습니다.")
+  return movement
 }
 
 export async function confirmPlannedHardwareMovement(
@@ -447,16 +720,29 @@ export async function confirmPlannedHardwareMovement(
   input: { occurredAt?: string | null; actor?: string | null; confirmQty?: number | null }
 ): Promise<HardwareMovement> {
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb.rpc("confirm_hardware_planned_movement", {
+  const args = {
     planned_id: id,
-    actor: cleanString(input.actor) ?? "admin",
-    occurred_on: input.occurredAt || null,
+    actor: input.actor ?? null,
+    occurred_on: input.occurredAt ?? null,
     confirm_qty: input.confirmQty ?? null,
-  })
-  if (error) throw error
+  }
+
+  const v2 = await sb.rpc("confirm_hardware_planned_movement_v2", args)
+  if (!v2.error) {
+    revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
+    return v2.data as HardwareMovement
+  }
+
+  const missingRpc =
+    v2.error.code === "PGRST202" ||
+    /confirm_hardware_planned_movement_v2|schema cache|function/i.test(v2.error.message)
+  if (!missingRpc) throw v2.error
+
+  const legacy = await sb.rpc("confirm_hardware_planned_movement", args)
+  if (legacy.error) throw legacy.error
 
   revalidateTag(HARDWARE_INVENTORY_CACHE_TAG, "max")
-  return data as HardwareMovement
+  return legacy.data as HardwareMovement
 }
 
 export async function voidHardwareMovement(
@@ -904,9 +1190,11 @@ export async function importHardwareFromBranchSheets(
         reference_no: cleanString(row.logistics_no),
         memo: [row.type, row.remarks].map(cleanString).filter(Boolean).join(" · ") || null,
         serials: row.serials ?? [],
-        // Outbound revenue lives in branch_hw_outbound; inbound-cost fields stay null here.
+        // Outbound revenue lives in branch_hw_outbound (매출 USD col). unit_price is
+        // an inbound-cost concept, so it stays null; amount_usd carries the sale revenue
+        // (mirrors how inbound sets amount_usd from the 입고 sheet amount).
         unit_price: null,
-        amount_usd: null,
+        amount_usd: row.revenue ?? null,
         source_table: "branch_hw_outbound",
         source_key: "",
         source_digest: "",
@@ -1167,7 +1455,7 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
   const movementRows = activeMovements
     .slice()
     .sort((a, b) => movementDate(b) - movementDate(a))
-    .slice(0, 120)
+    .slice(0, 2000)
   const recentOutbound = movementRows
     .filter((movement) => movement.movement_type === "outbound")
     .slice(0, 30)

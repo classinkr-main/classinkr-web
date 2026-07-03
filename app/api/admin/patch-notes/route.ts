@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   if (err) return err
   const body = await req.json()
   if (!body.version || !body.title || !body.date) {
-    return NextResponse.json({ error: "version, title, date???꾩닔?낅땲??" }, { status: 400 })
+    return NextResponse.json({ error: "version, title, date는 필수입니다." }, { status: 400 })
   }
   const note = await createPatchNote({
     version: body.version,

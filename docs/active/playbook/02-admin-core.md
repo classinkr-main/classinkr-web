@@ -22,8 +22,8 @@
 - `app/admin/layout.tsx` — 클라이언트 셸. 세션 부트스트랩(bypass/legacy `/api/admin/auth`/Supabase `admin_profiles`), 사이드바, 라우트 전환.
 - `app/admin/page.tsx` — `/admin/overview` redirect.
 - `app/admin/{overview,ops,settings,users,dev,analytics,login}/page.tsx` — 코어 대시보드(전부 client, `adminFetchJsonCached` 소비).
-- `app/api/admin/auth/route.ts` — 레거시 로그인(GET 세션확인 / POST 비번+rate-limit / DELETE 로그아웃). **가드 면제 라우트(설계상).**
-- `components/admin/AdminSidebar.tsx`, `AdminCommandPalette*.tsx`, `StatCard.tsx`, `AdminAuthGate.tsx` — 셸 공용 UI.
+- `app/api/admin/auth/route.ts` — 레거시 로그인(GET 세션확인 / POST 비번+rate-limit). 로그아웃은 POST `/api/admin/auth/logout`. **가드 면제 라우트(설계상).**
+- `components/admin/AdminSidebar.tsx`, `AdminCommandPalette*.tsx`, `StatCard.tsx` — 셸 공용 UI.
 
 ## 3. 가장 중요한 업무
 

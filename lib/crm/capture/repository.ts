@@ -146,6 +146,21 @@ export async function createCaptureBatch(input: CreateCaptureBatchInput): Promis
   return toBatchRecord(data as CrmCaptureBatch)
 }
 
+// 미완료(재개·취소 가능) 배치 상태 — applied/canceled 만 종결 상태다.
+export const OPEN_CAPTURE_BATCH_STATUSES: CrmCaptureBatchStatus[] = ["draft", "parsed", "reviewed", "partial_failed"]
+
+export async function listOpenCaptureBatches(limit = 20): Promise<CaptureBatchRecord[]> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("crm_capture_batches")
+    .select("*")
+    .in("status", OPEN_CAPTURE_BATCH_STATUSES)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+  if (error) throw new Error(`[crm-capture] 미완료 배치 목록 조회 실패: ${error.message}`)
+  return ((data ?? []) as CrmCaptureBatch[]).map(toBatchRecord)
+}
+
 export async function getCaptureBatch(id: string): Promise<CaptureBatchRecord | null> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase.from("crm_capture_batches").select("*").eq("id", id).maybeSingle()

@@ -56,7 +56,7 @@ const status: AdminIntegrationStatusResponse = {
       description: "결제 연결입니다.",
       requiredKeys: ["TOSS_SECRET_KEY"],
       lastCheckedAt: generatedAt,
-      adminHref: "/admin/software-quote-codes",
+      adminHref: "/admin/quotes?tab=software",
     },
   ],
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { verifyAdmin } from "@/lib/admin-auth"
+import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import {
   createManualBranchRevLinkCandidate,
   type CrmManualLinkTargetType,
@@ -11,8 +11,8 @@ function isManualTargetType(value: unknown): value is CrmManualLinkTargetType {
 }
 
 export async function POST(req: NextRequest) {
-  const err = await verifyAdmin(req)
-  if (err) return err
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  if (admin instanceof NextResponse) return admin
 
   const body = (await req.json().catch(() => null)) as {
     sourceRecordKey?: unknown

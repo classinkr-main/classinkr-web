@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import {
   AlertCircle,
   ArrowRight,
@@ -8,10 +9,12 @@ import {
   Check,
   CheckCircle2,
   ClipboardPaste,
+  History,
   Loader2,
   RefreshCw,
   Sparkles,
   Users,
+  X,
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
@@ -27,6 +30,12 @@ interface CaptureBatch {
   eventCreatedCount: number
   taskCreatedCount: number
   leadCreatedCount: number
+}
+
+// GET /batches 목록 항목 — 이어하기·취소 대상 미완료 배치
+interface OpenCaptureBatch extends CaptureBatch {
+  sourceLabel: string | null
+  createdAt: string
 }
 
 interface CaptureRow {
@@ -75,6 +84,19 @@ function matchMeta(status: string) {
   return MATCH_LABEL[status] ?? MATCH_LABEL.needs_review
 }
 
+const BATCH_STATUS_LABEL: Record<string, string> = {
+  draft: "입력 전",
+  parsed: "검토 중",
+  reviewed: "검토 완료",
+  partial_failed: "일부 실패",
+}
+
+function batchDateLabel(iso: string) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return "—"
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+}
+
 // 행별 출신 지정 — "" = 자동 도출(apply 시), 그 외 = 수동 override(파트너 고객 등)
 const ORIGIN_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "", label: "자동" },
@@ -113,6 +135,10 @@ export default function CaptureInboxClient() {
   const [error, setError] = useState<string | null>(null)
   const [reviewOnly, setReviewOnly] = useState(false)
 
+  // 이탈/새로고침으로 남은 미완료 배치 — 이어하기·취소 대상
+  const [openBatches, setOpenBatches] = useState<OpenCaptureBatch[]>([])
+  const [openBatchBusyId, setOpenBatchBusyId] = useState<string | null>(null)
+
   useEffect(() => {
     adminFetchJsonCached<PublicEvent[]>("/api/admin/events", undefined, { ttlMs: 60_000 })
       .then((data) => {
@@ -123,6 +149,19 @@ export default function CaptureInboxClient() {
       })
       .catch(() => setError("행사 목록을 불러오지 못했습니다."))
   }, [])
+
+  const loadOpenBatches = useCallback(async () => {
+    try {
+      const data = await adminFetchJson<{ batches: OpenCaptureBatch[] }>("/api/admin/crm/capture/batches")
+      setOpenBatches(data.batches)
+    } catch {
+      // 목록 로드 실패는 치명적이지 않음 — 섹션만 비워둔다.
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadOpenBatches()
+  }, [loadOpenBatches])
 
   const selectedEvent = useMemo(
     () => events.find((e) => e.id === selectedEventId) ?? null,
@@ -141,6 +180,12 @@ export default function CaptureInboxClient() {
   const visibleRows = useMemo(
     () => (reviewOnly ? rows.filter((r) => r.matchStatus !== "confirmed_lead" && r.matchStatus !== "confirmed_customer") : rows),
     [rows, reviewOnly]
+  )
+
+  // 지금 작업 중인 배치는 이어하기 목록에서 제외
+  const resumableBatches = useMemo(
+    () => openBatches.filter((b) => b.id !== batch?.id),
+    [openBatches, batch]
   )
 
   const handleAnalyze = useCallback(async () => {
@@ -177,12 +222,13 @@ export default function CaptureInboxClient() {
       setBatch(parsed.batch)
       setRows(parsed.rows)
       setStep("review")
+      void loadOpenBatches()
     } catch (e) {
       setError(e instanceof Error ? e.message : "분석에 실패했습니다.")
     } finally {
       setBusy(false)
     }
-  }, [selectedEventId, selectedEvent, rawText, mode, batch])
+  }, [selectedEventId, selectedEvent, rawText, mode, batch, loadOpenBatches])
 
   const toggleRow = useCallback(async (row: CaptureRow, next: boolean) => {
     setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, selected: next } : r)))
@@ -246,12 +292,13 @@ export default function CaptureInboxClient() {
       )
       setSummary(result.summary)
       setStep("done")
+      void loadOpenBatches()
     } catch (e) {
       setError(e instanceof Error ? e.message : "확정에 실패했습니다.")
     } finally {
       setApplying(false)
     }
-  }, [batch, counts.selected, selectedEvent])
+  }, [batch, counts.selected, selectedEvent, loadOpenBatches])
 
   const reset = useCallback(() => {
     setBatch(null)
@@ -261,7 +308,52 @@ export default function CaptureInboxClient() {
     setStep("compose")
     setError(null)
     setReviewOnly(false)
+    void loadOpenBatches()
+  }, [loadOpenBatches])
+
+  const resumeBatch = useCallback(async (target: OpenCaptureBatch) => {
+    setOpenBatchBusyId(target.id)
+    setError(null)
+    try {
+      const data = await adminFetchJson<{ batch: OpenCaptureBatch; rows: CaptureRow[] }>(
+        `/api/admin/crm/capture/batches/${target.id}`
+      )
+      setBatch(data.batch)
+      setRows(data.rows)
+      setSummary(null)
+      setRawText("")
+      setReviewOnly(false)
+      if (data.batch.publicEventId) setSelectedEventId(data.batch.publicEventId)
+      // 원문 텍스트는 저장하지 않으므로, 파싱된 행이 있으면 바로 검토 단계로 복원한다.
+      setStep(data.rows.length > 0 ? "review" : "compose")
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "배치를 불러오지 못했습니다.")
+    } finally {
+      setOpenBatchBusyId(null)
+    }
   }, [])
+
+  const cancelBatch = useCallback(
+    async (target: OpenCaptureBatch) => {
+      if (!window.confirm("이 배치를 취소할까요? 저장된 명단 행은 적용되지 않습니다.")) return
+      setOpenBatchBusyId(target.id)
+      setError(null)
+      try {
+        await adminFetchJson(`/api/admin/crm/capture/batches/${target.id}/cancel`, { method: "POST" })
+        setOpenBatches((prev) => prev.filter((b) => b.id !== target.id))
+        if (batch?.id === target.id) {
+          setBatch(null)
+          setRows([])
+          setStep("compose")
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "배치 취소에 실패했습니다.")
+      } finally {
+        setOpenBatchBusyId(null)
+      }
+    },
+    [batch]
+  )
 
   // ─── 렌더 ──────────────────────────────────────────────────────────────────
 
@@ -299,15 +391,80 @@ export default function CaptureInboxClient() {
           {summary.failed > 0 && (
             <p className="mt-3 text-[12px] text-[#B85C33]">{summary.failed}건은 적용에 실패했습니다. 다시 시도해 주세요.</p>
           )}
-          <button
-            onClick={reset}
-            className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-[#111110] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-emerald-700"
-          >
-            <ClipboardPaste className="h-4 w-4" />새 명단 입력
-          </button>
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <button
+              onClick={reset}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#111110] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-emerald-700"
+            >
+              <ClipboardPaste className="h-4 w-4" />새 명단 입력
+            </button>
+            {summary.leadCreated > 0 && (
+              <Link
+                href="/admin/crm/customers/leads?filter=new"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-4 py-2 text-[13px] font-medium text-[#111110] transition-colors hover:bg-[#F6F5F4]"
+              >
+                생성된 리드 보기
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            )}
+            <Link
+              href="/admin/crm/activity"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-4 py-2 text-[13px] font-medium text-[#111110] transition-colors hover:bg-[#F6F5F4]"
+            >
+              활동 기록 보기
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
       ) : (
         <>
+          {/* 진행 중인 배치 — 이탈/새로고침으로 남은 미완료 배치 이어하기·취소 */}
+          {step === "compose" && resumableBatches.length > 0 && (
+            <div className="mb-5 rounded-2xl border border-[#e8e8e4] bg-white">
+              <div className="flex items-center gap-2 border-b border-[#e8e8e4] px-4 py-3 sm:px-5">
+                <History className="h-4 w-4 text-[#1a1a1a]/40" />
+                <h2 className="text-[13px] font-bold text-[#111110]">진행 중인 배치</h2>
+                <span className="text-[11px] text-[#1a1a1a]/40">{resumableBatches.length}건</span>
+              </div>
+              <ul className="divide-y divide-[#f0f0ec]">
+                {resumableBatches.map((item) => {
+                  const itemBusy = openBatchBusyId === item.id
+                  return (
+                    <li key={item.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-semibold text-[#111110]">
+                          {item.sourceLabel ?? "이름 없는 명단"}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">
+                          {batchDateLabel(item.createdAt)} · {BATCH_STATUS_LABEL[item.status] ?? item.status}
+                          {item.rowCount > 0 && ` · ${item.rowCount}행`}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <button
+                          onClick={() => resumeBatch(item)}
+                          disabled={openBatchBusyId != null}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-1.5 text-[12px] font-medium text-[#084734] transition-colors hover:bg-[#F6F5F4] disabled:opacity-50"
+                        >
+                          {itemBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
+                          이어서 하기
+                        </button>
+                        <button
+                          onClick={() => cancelBatch(item)}
+                          disabled={openBatchBusyId != null}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-1.5 text-[12px] font-medium text-[#1a1a1a]/50 transition-colors hover:bg-[#F6F5F4] hover:text-[#B85C33] disabled:opacity-50"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                          취소
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+
           {/* compose */}
           <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">

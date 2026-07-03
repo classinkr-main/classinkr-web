@@ -15,7 +15,7 @@ import {
 } from "@/lib/repositories/crm-unified-customers"
 
 function parseSource(value: string | null): CrmUnifiedCustomerSource | "all" {
-  return value === "lead" || value === "neo_account" ? value : "all"
+  return value === "lead" || value === "neo_account" || value === "customer" ? value : "all"
 }
 
 function parseLifecycle(value: string | null): CrmUnifiedLifecycle | "all" {

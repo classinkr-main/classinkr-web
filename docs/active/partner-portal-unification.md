@@ -136,13 +136,13 @@ Admin ──┐                    Partner ──┐
 
 | 기존 | 신규 | 상태 |
 |------|------|------|
-| `/api/admin/quotes` (V1) | `/api/portal/quotes` (V2) | 병행 — V1은 legacy admin 페이지에서 계속 사용 |
+| `/api/admin/quotes` (V1) | `/api/portal/quotes` (V2) | V1 삭제 완료(2026-07-02) — admin 페이지는 `/api/portal/documents` 사용 |
 | `/api/admin/contracts` (V1) | `/api/portal/contracts` (V2) | 병행 |
 | `/api/admin/receipts` (V1) | `/api/portal/receipts` (V2) | 병행 |
 | `/api/partner/overview` | `/api/portal/overview` | 병행 — 기존 partner 페이지는 아직 `/api/partner/` 사용 |
 
 **전환 완료 후 제거 대상:**
-- `/api/admin/quotes/`, `/api/admin/contracts/`, `/api/admin/receipts/`
+- ~~`/api/admin/quotes/`~~(2026-07-02 삭제 완료), `/api/admin/contracts/`, `/api/admin/receipts/`
 - `/app/admin/quotes/`, `/app/admin/contracts/`, `/app/admin/receipts/`
 - `lib/repositories/quotes.ts`, `contracts.ts`, `receipts.ts` (V1)
 

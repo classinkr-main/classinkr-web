@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { verifyAdmin } from "@/lib/admin-auth"
+import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { getNeoCrmTeamReport, type NeoCrmGranularity } from "@/lib/admin-crm-neo"
 
 const MAX_OFFSET_BACK = 60
@@ -11,8 +11,8 @@ function parseGranularity(value: string | null): NeoCrmGranularity {
 }
 
 export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req)
-  if (err) return err
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  if (admin instanceof NextResponse) return admin
 
   const { searchParams } = new URL(req.url)
   const granularity = parseGranularity(searchParams.get("granularity"))

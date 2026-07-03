@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Users, UserCheck, UserMinus, TrendingUp } from "lucide-react"
+import { adminFetchJson } from "@/lib/admin-client"
 
 // ─── 타입 ──────────────────────────────────────────────────────────────────
 
@@ -182,14 +183,7 @@ export default function MarketingDashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/admin/marketing/stats")
-      .then(async (res) => {
-        if (!res.ok) {
-          const json = await res.json().catch(() => ({}))
-          throw new Error(json.error ?? `HTTP ${res.status}`)
-        }
-        return res.json() as Promise<StatsData>
-      })
+    adminFetchJson<StatsData>("/api/admin/marketing/stats")
       .then((json) => {
         setData(json)
       })

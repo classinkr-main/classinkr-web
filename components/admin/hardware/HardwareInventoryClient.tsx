@@ -180,6 +180,9 @@ interface HardwareMovementDraft {
   storageLocation: string
   importer: string
   serials: string[]
+  // UI 판별 전용 — 출고 라인이 실제(false)/예정(true)인지. 서버 전송 직전 deriveStatus로
+  // status에 반영하고 payload에서는 제외한다(서버 status 규약은 status 문자열만 본다).
+  isPlanned?: boolean
 }
 
 interface HardwareMovementBatchLineResult {
@@ -229,15 +232,27 @@ const ENTRY_PRESETS: Array<{
 }> = [
   // sale/planned의 to는 비워 둔다 — "고객" 리터럴이 그대로 저장되면 고객사 집계가 "고객(미지정)"으로 뭉개진다.
   // 도착 입력은 최근 고객사 datalist + 출고 필수 검증으로 실명 입력을 유도한다.
+  // 샘플 모델(사용자 확정): 샘플 총량 = 사무실(남은 샘플) + 샘플(나간 샘플).
+  //   샘플 배정(창고→사무실)으로 판매 재고를 샘플 재고로 전환 → 샘플 대여(사무실→샘플, 없으면 창고→샘플)로 내보냄 →
+  //   샘플 반환(샘플→사무실)으로 회수. return은 repository에서 from −qty / to +qty라 위치 조합만으로 표현된다.
   { key: "sale", movementType: "outbound", label: "판매 출고", description: "고객 판매 완료", icon: ArrowUpFromLine, from: "창고", to: "", status: "출고" },
   { key: "planned", movementType: "outbound", label: "배송 예정", description: "가용에서 미리 차감", icon: Clock3, from: "창고", to: "", status: "배송 예정" },
-  { key: "sample", movementType: "outbound", label: "샘플 대여", description: "판매 재고 제외", icon: ArrowRightLeft, from: "창고", to: "샘플", status: "샘플/대여" },
+  { key: "sample", movementType: "outbound", label: "샘플 대여", description: "사무실 샘플을 대여·데모로 반출", icon: ArrowUpFromLine, from: "사무실", to: "샘플", status: "샘플/대여" },
+  { key: "sampleReturn", movementType: "return", label: "샘플 반환", description: "대여 샘플을 사무실로 회수", icon: RotateCcw, from: "샘플", to: "사무실", status: "샘플 반환" },
+  { key: "sampleAssign", movementType: "transfer", label: "샘플 배정", description: "창고 재고를 샘플로 전환", icon: ArrowRightLeft, from: "창고", to: "사무실", status: "샘플 배정" },
   { key: "inbound", movementType: "inbound", label: "입고", description: "창고 재고 증가", icon: ArrowDownToLine, from: "", to: "창고", status: "입고" },
-  { key: "return", movementType: "return", label: "반납", description: "외부에서 창고 회수", icon: RotateCcw, from: "고객", to: "창고", status: "반납" },
-  { key: "office", movementType: "transfer", label: "사무실 이동", description: "비가용 위치 이동", icon: ArrowRightLeft, from: "창고", to: "사무실", status: "이동" },
+  { key: "return", movementType: "return", label: "고객 반납", description: "고객·현장에서 창고 회수", icon: RotateCcw, from: "고객", to: "창고", status: "반납" },
   { key: "repair", movementType: "repair", label: "수리", description: "예외 상태 처리", icon: Wrench, from: "창고", to: "수리", status: "수리중" },
   { key: "adjust", movementType: "adjust", label: "실사 조정", description: "창고 수량 보정", icon: Settings2, from: "", to: "창고", status: "재고 조정" },
 ]
+
+// 빠른 기록 2축(입고|출고) 밖의 예외 처리 — 상세 모드(sheetView "detail")에서만 노출하는 5종.
+// 이 키들은 상세 프리셋 그리드로만 진입하고, 큐(배치)는 지원하지 않는다.
+const DETAIL_PRESET_KEYS = new Set(["sampleReturn", "sampleAssign", "return", "repair", "adjust"])
+
+// 샘플 대여 출처 선택지 — 기본은 사무실(남은 샘플). 사무실 재고가 없어 창고에서 바로 내보내는 실무도 있어 창고 허용.
+const SAMPLE_SOURCE_OPTIONS = ["사무실", "창고"] as const
+type SampleSource = (typeof SAMPLE_SOURCE_OPTIONS)[number]
 
 const LOCATION_OPTIONS = ["고객", "창고", "샘플", "사무실", "수리"] as const
 
@@ -426,6 +441,37 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10)
 }
 
+// 어제(로컬 자정 기준) YYYY-MM-DD — 처리일 퀵칩용. UTC 슬라이스가 아니라 로컬 날짜로 계산해 KST 새벽에도 어제가 정확하다.
+function yesterdayKey() {
+  const now = new Date()
+  const local = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+  const month = String(local.getMonth() + 1).padStart(2, "0")
+  const day = String(local.getDate()).padStart(2, "0")
+  return `${local.getFullYear()}-${month}-${day}`
+}
+
+function dateKeyOf(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
+// 내역 탭 기간 퀵칩 — 로컬 자정 기준으로 이번 달/지난 달/최근 30일 범위를 계산한다.
+type HistoryDateRangeKey = "thisMonth" | "lastMonth" | "last30"
+
+function historyDateRange(key: HistoryDateRangeKey): { from: string; to: string } {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  if (key === "thisMonth") {
+    return { from: dateKeyOf(new Date(year, month, 1)), to: dateKeyOf(now) }
+  }
+  if (key === "lastMonth") {
+    return { from: dateKeyOf(new Date(year, month - 1, 1)), to: dateKeyOf(new Date(year, month, 0)) }
+  }
+  return { from: dateKeyOf(new Date(year, month, now.getDate() - 29)), to: dateKeyOf(now) }
+}
+
 // 빠른 기록 반복 입력 기억 — 담당자·"저장 후 시트 유지" 토글을 세션을 넘어 기억한다.
 // SSR 프리렌더 중에는 window가 없으므로 항상 가드하고, storage 접근 불가 환경에선 조용히 비활성화한다.
 const QUICK_RECORD_OWNER_KEY = "hw.quickRecord.owner"
@@ -487,8 +533,61 @@ function movementLot(movement: HardwareMovement): string | null {
 
 // 배송 예정(예약) 출고 판별 — 서버 집계 isPlannedStatus와 같은 규약(예정/예약/대기/planned).
 // 상세 로그에서 실제 출고와 시각적으로 구분하기 위한 표시 전용 헬퍼.
+// 주의: DB에서 온 HardwareMovement에는 isPlanned 필드가 없으므로 status 정규식만 본다.
 function isPlannedMovement(movement: HardwareMovement): boolean {
   return movement.movement_type === "outbound" && /예정|예약|대기|planned/i.test(movement.status ?? "")
+}
+
+// 클라이언트 드래프트의 예정 여부 — 신규 UI(isPlanned 세그먼트/토글)가 우선하고, 값이 없으면
+// (키트·붙여넣기·직전 복제·레거시 드래프트) status 정규식으로 하위호환 폴백한다.
+function isDraftPlanned(draft: HardwareMovementDraft): boolean {
+  return draft.isPlanned ?? /예정|예약|대기/.test(draft.status)
+}
+
+// 샘플 대여 라인 판별 — status 문자열(가변)이 아니라 경로/프리셋 기반 안정 신호로 고정한다.
+// 샘플 프리셋의 도착지는 항상 "샘플"(ENTRY_PRESETS의 to)이라, 실제↔예정 토글이나 status 편집으로
+// 문자열이 바뀌어도 이 판별은 흔들리지 않는다. 샘플은 실제/예정 개념이 없는 사무실→샘플 경로다.
+function isSampleOutbound(draft: HardwareMovementDraft): boolean {
+  return draft.movementType === "outbound" && draft.toLocation.trim() === "샘플"
+}
+
+// 서버 전송 직전 status 파생 — 출고 라인만 실제/예정으로 status를 정규화한다.
+//   샘플(toLocation "샘플")   → "샘플/대여" 보존(실제/예정 파생을 적용하지 않음)
+//   예정(isPlanned=true)      → "배송 예정"
+//   실제(isPlanned=false)     → 수리 등 특수 상태는 보존, 그 밖은 "출고"
+// 입고/반환/이동/수리/조정 등 다른 유형은 프리셋이 정한 status를 그대로 둔다.
+function deriveStatus(draft: HardwareMovementDraft): string {
+  if (draft.movementType !== "outbound") return draft.status
+  // 샘플 대여는 사무실→샘플 경로라 실제/예정 개념이 없다 — 프리셋 status("샘플/대여")를 보존한다.
+  if (isSampleOutbound(draft)) return draft.status
+  if (isDraftPlanned(draft)) return "배송 예정"
+  // 수리 등 실제 출고의 특수 상태는 유지한다.
+  if (/수리|repair/i.test(draft.status)) return draft.status
+  return "출고"
+}
+
+// 서버 전송용 드래프트 정규화 — status를 파생하고 UI 전용 isPlanned 필드를 제거한다.
+function toServerDraft(draft: HardwareMovementDraft): Omit<HardwareMovementDraft, "isPlanned"> {
+  return {
+    itemId: draft.itemId,
+    productName: draft.productName,
+    movementType: draft.movementType,
+    quantity: draft.quantity,
+    occurredAt: draft.occurredAt,
+    fromLocation: draft.fromLocation,
+    toLocation: draft.toLocation,
+    owner: draft.owner,
+    status: deriveStatus(draft),
+    referenceNo: draft.referenceNo,
+    memo: draft.memo,
+    lotNo: draft.lotNo,
+    unitPrice: draft.unitPrice,
+    amountUsd: draft.amountUsd,
+    amountCny: draft.amountCny,
+    storageLocation: draft.storageLocation,
+    importer: draft.importer,
+    serials: draft.serials,
+  }
 }
 
 // "FY24-25"는 H1~H8 물량번호 체계가 생기기 전 시트의 placeholder 값이다.
@@ -669,6 +768,8 @@ function quickCartLineKey(draft: HardwareMovementDraft) {
     draft.toLocation,
     draft.owner,
     draft.status,
+    // 실제/예정은 status가 같아도 별개 라인 — 병합되면 예정 토글이 서로를 덮어쓴다.
+    isDraftPlanned(draft) ? "planned" : "actual",
     draft.referenceNo,
     draft.memo,
     draft.lotNo,
@@ -900,6 +1001,8 @@ export default function HardwareInventoryClient() {
   const [showCustomInput, setShowCustomInput] = useState(false)
   // 키트(세트) 배수 — 단품 수량 스테퍼와 분리된 독립 값.
   const [kitMultiplier, setKitMultiplier] = useState(1)
+  // 샘플 대여 출처 — 기본 사무실(남은 샘플), 사무실 재고가 없으면 창고에서 바로 반출.
+  const [sampleSource, setSampleSource] = useState<SampleSource>("사무실")
   const [openSections, setOpenSections] = useState<Record<HardwareSectionKey, boolean>>(() => ({ ...DEFAULT_OPEN_SECTIONS }))
   const [stockPage, setStockPage] = useState(1)
   const [outboundPage, setOutboundPage] = useState(1)
@@ -920,6 +1023,11 @@ export default function HardwareInventoryClient() {
   // 시트 모드 — "single": 빠른 단건 기록, "batch": 작업건(다품목) 구성. 단건과 대량이
   // 한 폼에 섞여 있던 15섹션 구조를 업무 단위로 가른다. 수정(editingId)은 항상 single.
   const [sheetMode, setSheetMode] = useState<"single" | "batch">("single")
+  // 시트 뷰 — "quick": 입고|출고 2축 빠른 기록(기본), "detail": 상세 5종(반환·샘플 배정·수리·조정)
+  // 을 같은 시트 안에서 처리하는 상세 모드. 상세 모드는 항상 단건(배치 아님).
+  const [sheetView, setSheetView] = useState<"quick" | "detail">("quick")
+  // 출고 실제|예정 2차 세그먼트 — UI 판별 전용. status 파생(deriveStatus)과 드래프트 isPlanned로만 흐른다.
+  const [isPlanned, setIsPlanned] = useState(false)
   const [voidTarget, setVoidTarget] = useState<HardwareMovement | null>(null)
   const [voidReason, setVoidReason] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -932,12 +1040,22 @@ export default function HardwareInventoryClient() {
   const [search, setSearch] = useState("")
   const [customerFilter, setCustomerFilter] = useState("")
   const [lotFilter, setLotFilter] = useState("")
+  // 내역 탭 보조 필터 축 — 상태(완료/배송 예정/취소 포함), 판매유형(출고 전용), 기간(occurred_at 기준).
+  const [historyStatus, setHistoryStatus] = useState<"all" | "done" | "planned">("all")
+  const [includeVoided, setIncludeVoided] = useState(false)
+  const [saleTypeFilter, setSaleTypeFilter] = useState<OutboundSaleType | "">("")
+  const [historyDateFrom, setHistoryDateFrom] = useState("")
+  const [historyDateTo, setHistoryDateTo] = useState("")
+  // 내역 탭 상세 필터 패널 — 상태/판매유형/기간/제품/물류No/고객사는 기본 접힘, 검색·유형만 상시 노출.
+  const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [detailId, setDetailId] = useState<string | null>(null)
   const [customerDetail, setCustomerDetail] = useState<string | null>(null)
   const [locationMapExpanded, setLocationMapExpanded] = useState(false)
   const sheetPanelRef = useRef<HTMLElement>(null)
   const detailPanelRef = useRef<HTMLElement>(null)
   const ledgerFileRef = useRef<HTMLInputElement>(null)
+  // 상세 모드 진입 직전의 출고 세그먼트(sale/planned/sample)를 기억해 빠른 기록 복귀 시 복원한다.
+  const detailReturnPresetRef = useRef<string | null>(null)
   const reduceMotion = useReducedMotion()
   const plannedConfirmLocked = busy != null || confirmingId != null || confirmingGroupKey != null
   const quickCartSaving = busy === "movement"
@@ -1039,23 +1157,44 @@ export default function HardwareInventoryClient() {
     [activePresetKey]
   )
 
+  // 도착지가 고객사인가 — 판매·배송예정 출고만 해당. 샘플 대여(→"샘플" 위치)는 고객 자동완성이 아니라 위치 입력.
+  const isCustomerDestination = movementType === "outbound" && activePresetKey !== "sample"
+
+  // 출고 하위 세그먼트 현재 상태 — 샘플 서브토글이 우선하고, 나머지는 예정/실제로 가른다.
+  const outboundMode: "actual" | "planned" | "sample" =
+    activePresetKey === "sample" ? "sample" : isPlanned ? "planned" : "actual"
+
   const fifoPreview = useMemo(() => {
     const qty = Number(quantity)
     if (movementType !== "outbound" || lotNo.trim() || !selectedStockRow || !Number.isFinite(qty) || qty <= 0) {
       return null
     }
+    // FIFO 자동 배정은 창고 lot에서 나갈 때만 의미가 있다 — 사무실(남은 샘플) 반출에는 창고 lot 미리보기를 띄우지 않는다.
+    const source = fromLocation.trim()
+    if (source && source !== "창고") return null
     return previewFifoLots(selectedStockRow.lotBalances, qty)
-  }, [lotNo, movementType, quantity, selectedStockRow])
+  }, [fromLocation, lotNo, movementType, quantity, selectedStockRow])
 
-  // 가용 초과 상시 경고 — lot 지정 여부와 무관하게 출고 수량이 예상 가용을 넘으면 알린다.
-  // (기존에는 FIFO 미리보기의 부족 표시에만 의존해 lot을 직접 지정하면 경고가 사라졌다.)
+  // 출발 위치 잔량 초과 경고 — lot 지정 여부와 무관하게, 나가는(감소하는) 위치의 잔량을 넘으면 알린다.
+  // 판매/배송예정/창고발 샘플은 가용(창고−예정)을, 사무실발 샘플 대여는 남은 샘플(사무실)을,
+  // 샘플 반환은 나간 샘플(샘플)을 기준으로 본다. return은 from에서 −qty라 from 잔량으로 판단.
+  // 저장은 막지 않는다(오프라인 실측 보정 등 정당한 초과가 있으므로 경고만).
   const availabilityWarning = useMemo(() => {
-    if (movementType !== "outbound") return null
     const qty = Number(quantity)
     if (!selectedStockRow || !Number.isFinite(qty) || qty <= 0) return null
-    if (qty <= selectedStockRow.availableStock) return null
-    return `예상 가용 ${formatNumber(selectedStockRow.availableStock)}대를 ${formatNumber(qty - selectedStockRow.availableStock)}대 초과합니다. 저장은 가능하지만 재고가 음수가 될 수 있어요.`
-  }, [movementType, quantity, selectedStockRow])
+    // 수량이 빠져나가는(잔량이 줄어드는) 이동만 검사: 출고(sale/planned/sample) + 반환(from −qty).
+    if (movementType !== "outbound" && movementType !== "return") return null
+    const source = fromLocation.trim()
+    // 창고발(판매·배송예정·창고 샘플 대여)은 예정 차감까지 반영한 가용을 본다.
+    if (source === "창고" || (!source && movementType === "outbound")) {
+      if (qty <= selectedStockRow.availableStock) return null
+      return `예상 가용 ${formatNumber(selectedStockRow.availableStock)}대를 ${formatNumber(qty - selectedStockRow.availableStock)}대 초과합니다. 저장은 가능하지만 재고가 음수가 될 수 있어요.`
+    }
+    // 그 외 위치(사무실=남은 샘플, 샘플=나간 샘플 등)는 해당 위치 잔량 기준.
+    const sourceQty = locationQuantity(selectedStockRow, source)
+    if (qty <= sourceQty) return null
+    return `${source} 잔량 ${formatNumber(sourceQty)}대를 ${formatNumber(qty - sourceQty)}대 초과합니다. 저장은 가능하지만 재고가 음수가 될 수 있어요.`
+  }, [fromLocation, movementType, quantity, selectedStockRow])
 
   const stockPagination = useMemo(
     () => paginateAdminList(data?.stock ?? [], { currentPage: stockPage, pageSize: STOCK_PAGE_SIZE }),
@@ -1069,15 +1208,30 @@ export default function HardwareInventoryClient() {
 
   const filteredMovements = useMemo(() => {
     let rows = data?.movements ?? []
+    if (!includeVoided) rows = rows.filter((movement) => !movement.voided_at)
     if (historyType === "sample") {
       // 샘플: 출고 중 판매유형이 샘플(대여/데모)로 분류된 건만.
       rows = rows.filter((movement) => outboundSaleType(movement) === "sample")
     } else if (historyType !== "all") {
       rows = rows.filter((movement) => movement.movement_type === historyType)
     }
+    // 상태 축(완료/배송 예정)은 유형 축과 별개 — 배송 예정은 출고 중 status가 예정/예약/대기인 건만.
+    if (historyStatus === "planned") rows = rows.filter((movement) => isPlannedMovement(movement))
+    else if (historyStatus === "done") rows = rows.filter((movement) => !isPlannedMovement(movement))
+    if (saleTypeFilter) rows = rows.filter((movement) => outboundSaleType(movement) === saleTypeFilter)
     if (productFilter) rows = rows.filter((movement) => matchesProductFilter(movement.product_name, productFilter))
     if (lotFilter) rows = rows.filter((movement) => (movementLot(movement) ?? "") === lotFilter)
     if (customerFilter) rows = rows.filter((movement) => customerLabel(movement.to_location) === customerFilter)
+    if (historyDateFrom || historyDateTo) {
+      rows = rows.filter((movement) => {
+        const dateKey = movement.occurred_at ? movement.occurred_at.slice(0, 10) : null
+        // 날짜가 없는 행은 기간 필터가 걸려 있으면(전체가 아니면) 제외한다.
+        if (!dateKey) return false
+        if (historyDateFrom && dateKey < historyDateFrom) return false
+        if (historyDateTo && dateKey > historyDateTo) return false
+        return true
+      })
+    }
     const query = search.trim().toLowerCase()
     if (query) {
       rows = rows.filter((movement) =>
@@ -1106,9 +1260,162 @@ export default function HardwareInventoryClient() {
       return historySort === "asc" ? aTime - bTime : bTime - aTime
     })
     return sorted
-  }, [data?.movements, historyType, productFilter, lotFilter, customerFilter, search, historySort])
+  }, [
+    data?.movements,
+    includeVoided,
+    historyType,
+    historyStatus,
+    saleTypeFilter,
+    productFilter,
+    lotFilter,
+    customerFilter,
+    historyDateFrom,
+    historyDateTo,
+    search,
+    historySort,
+  ])
 
-  const hasHistoryFilter = historyType !== "all" || productFilter !== "" || lotFilter !== "" || customerFilter !== "" || search.trim() !== ""
+  const hasHistoryFilter =
+    historyType !== "all" ||
+    historyStatus !== "all" ||
+    includeVoided ||
+    saleTypeFilter !== "" ||
+    productFilter !== "" ||
+    lotFilter !== "" ||
+    customerFilter !== "" ||
+    historyDateFrom !== "" ||
+    historyDateTo !== "" ||
+    search.trim() !== ""
+
+  // 상세 필터 패널(기본 접힘) 안에 있는 축만 센 카운트 — 접혔을 때도 토글 배지로 존재를 알려준다.
+  const advancedHistoryFilterCount = [
+    historyStatus !== "all",
+    includeVoided,
+    saleTypeFilter !== "",
+    productFilter !== "",
+    lotFilter !== "",
+    customerFilter !== "",
+    historyDateFrom !== "" || historyDateTo !== "",
+  ].filter(Boolean).length
+
+  // 내역 탭 필터 축 전체 초기화 — "전체 초기화" 버튼과 필터 칩 미사용 시 공유.
+  const resetHistoryFilters = useCallback(() => {
+    setHistoryType("all")
+    setHistoryStatus("all")
+    setIncludeVoided(false)
+    setSaleTypeFilter("")
+    setProductFilter("")
+    setLotFilter("")
+    setCustomerFilter("")
+    setHistoryDateFrom("")
+    setHistoryDateTo("")
+    setSearch("")
+    setMovementsPage(1)
+  }, [])
+
+  // 현재 걸린 필터를 칩으로 나열 — 개별 X로 그 축만 해제할 수 있게 onRemove를 함께 들고 있다.
+  const activeHistoryFilterChips = useMemo(() => {
+    const chips: Array<{ key: string; label: string; onRemove: () => void }> = []
+    if (historyType !== "all") {
+      chips.push({
+        key: "type",
+        label: `유형: ${historyType === "sample" ? "샘플" : MOVEMENT_LABEL[historyType]}`,
+        onRemove: () => {
+          setHistoryType("all")
+          setMovementsPage(1)
+        },
+      })
+    }
+    if (historyStatus !== "all") {
+      chips.push({
+        key: "status",
+        label: `상태: ${historyStatus === "planned" ? "배송 예정" : "완료"}`,
+        onRemove: () => {
+          setHistoryStatus("all")
+          setMovementsPage(1)
+        },
+      })
+    }
+    if (includeVoided) {
+      chips.push({
+        key: "voided",
+        label: "취소 포함",
+        onRemove: () => {
+          setIncludeVoided(false)
+          setMovementsPage(1)
+        },
+      })
+    }
+    if (saleTypeFilter) {
+      chips.push({
+        key: "saleType",
+        label: `판매유형: ${SALE_TYPE_META[saleTypeFilter].label}`,
+        onRemove: () => {
+          setSaleTypeFilter("")
+          setMovementsPage(1)
+        },
+      })
+    }
+    if (productFilter) {
+      const option = PRODUCT_FILTER_OPTIONS.find((entry) => entry.key === productFilter)
+      chips.push({
+        key: "product",
+        label: `제품: ${option?.label ?? productFilter}`,
+        onRemove: () => {
+          setProductFilter("")
+          setMovementsPage(1)
+        },
+      })
+    }
+    if (lotFilter) {
+      chips.push({
+        key: "lot",
+        label: `물량번호: ${formatLotLabel(lotFilter) ?? lotFilter}`,
+        onRemove: () => {
+          setLotFilter("")
+          setMovementsPage(1)
+        },
+      })
+    }
+    if (customerFilter) {
+      chips.push({
+        key: "customer",
+        label: `고객사: ${customerFilter}`,
+        onRemove: () => {
+          setCustomerFilter("")
+          setMovementsPage(1)
+        },
+      })
+    }
+    if (historyDateFrom || historyDateTo) {
+      const label =
+        historyDateFrom && historyDateTo
+          ? `기간: ${historyDateFrom} ~ ${historyDateTo}`
+          : historyDateFrom
+            ? `기간: ${historyDateFrom} 이후`
+            : `기간: ${historyDateTo} 이전`
+      chips.push({
+        key: "date",
+        label,
+        onRemove: () => {
+          setHistoryDateFrom("")
+          setHistoryDateTo("")
+          setMovementsPage(1)
+        },
+      })
+    }
+    if (search.trim()) {
+      chips.push({
+        key: "search",
+        label: `검색: ${search.trim()}`,
+        onRemove: () => {
+          setSearch("")
+          setMovementsPage(1)
+        },
+      })
+    }
+    return chips
+  }, [historyType, historyStatus, includeVoided, saleTypeFilter, productFilter, lotFilter, customerFilter, historyDateFrom, historyDateTo, search])
 
   const plannedMovementQuantity = useMemo(
     () => (data?.plannedMovements ?? []).reduce((total, movement) => total + movement.quantity, 0),
@@ -1643,6 +1950,21 @@ export default function HardwareInventoryClient() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, "ko"))
   }, [data?.movements])
 
+  // 직전 기록 복제용 — 손으로 남긴(admin_manual) 최신 유효 기록. 시트 임포트 행은 복제 후보에서 제외한다.
+  const lastManualMovement = useMemo(() => {
+    let latest: HardwareMovement | null = null
+    let latestTime = -Infinity
+    for (const movement of data?.movements ?? []) {
+      if (movement.voided_at || movement.source !== "admin_manual") continue
+      const time = new Date(movement.occurred_at ?? movement.created_at).getTime()
+      if (Number.isFinite(time) && time >= latestTime) {
+        latestTime = time
+        latest = movement
+      }
+    }
+    return latest
+  }, [data?.movements])
+
   const historyLots = useMemo(() => {
     const set = new Set<string>()
     for (const movement of data?.movements ?? []) {
@@ -1926,6 +2248,9 @@ export default function HardwareInventoryClient() {
     const typeChanged = preset.movementType !== movementType
     setActivePresetKey(preset.key)
     setMovementType(preset.movementType)
+    // 샘플 대여로 진입하면 출처를 기본(사무실)로 초기화한다. 창고 반출은 아래 출처 토글로 전환.
+    // (state 클로저의 stale 값을 읽지 않도록 프리셋 진입 시엔 항상 사무실로 리셋)
+    setSampleSource("사무실")
     if (typeChanged) {
       setFromLocation(preset.from)
       setToLocation(preset.to)
@@ -1937,6 +2262,52 @@ export default function HardwareInventoryClient() {
       setToLocation((current) => (presetDefaults.has(current.trim()) ? preset.to : current))
     }
     setStatus(preset.status)
+    // 예정 세그먼트를 프리셋과 동기화 — 배송 예정 프리셋만 예정, 그 밖은 실제.
+    // (편집·복제·상세 프리셋 진입에서도 실제/예정 상태가 status와 어긋나지 않게 유지)
+    setIsPlanned(preset.key === "planned")
+  }
+
+  // 샘플 대여 출처 토글 — 프리셋을 유지한 채 출발 위치만 사무실↔창고로 바꾼다.
+  const applySampleSource = (source: SampleSource) => {
+    setSampleSource(source)
+    setFromLocation(source)
+  }
+
+  // 빠른 기록 2축 IA — 입고|출고 최상위 세그먼트.
+  //   입고 = inbound 프리셋
+  //   출고 = 하위 실제|예정 세그먼트 + 샘플 서브토글(sale/planned/sample 프리셋으로 직결)
+  // 상세 5종(반환·샘플 배정·수리·조정)은 sheetView "detail"에서만 노출한다.
+  const selectMovementAxis = (axis: "inbound" | "outbound") => {
+    if (axis === "inbound") {
+      applyPreset("inbound")
+      return
+    }
+    // 출고로 전환하면 기본은 판매(실제) — 예정/샘플은 하위 세그먼트로 다시 고른다.
+    applyPreset(isPlanned && activePresetKey !== "sample" ? "planned" : "sale")
+  }
+
+  const selectOutboundMode = (mode: "actual" | "planned" | "sample") => {
+    if (mode === "actual") applyPreset("sale")
+    else if (mode === "planned") applyPreset("planned")
+    else applyPreset("sample")
+  }
+
+  // 상세 모드 진입/복귀 — 같은 시트를 상세 프리셋 5종으로 전환한다. 상세는 항상 단건.
+  const enterDetailView = () => {
+    // 빠른 기록 복귀 시 실제/예정/샘플 세그먼트를 되살리도록 현재 출고 프리셋을 기억한다.
+    detailReturnPresetRef.current =
+      movementType === "outbound" ? activePresetKey : movementType === "inbound" ? "inbound" : null
+    setSheetView("detail")
+    setSheetMode("single")
+    applyPreset("return")
+  }
+
+  const exitDetailView = () => {
+    setSheetView("quick")
+    // 진입 전 세그먼트를 복원한다 — 기억된 값이 없으면 기존 기본(입고→inbound, 그 외 sale).
+    const remembered = detailReturnPresetRef.current
+    detailReturnPresetRef.current = null
+    applyPreset(remembered ?? (movementType === "inbound" ? "inbound" : "sale"))
   }
 
   // 시트 열기 공통 초기화 — 진입점(FAB/헤더/행 퀵버튼/예정 등록)이 어디든 같은 클리어 셋을 보장한다.
@@ -1947,6 +2318,9 @@ export default function HardwareInventoryClient() {
     setEditingId(null)
     setFromLocation("")
     setToLocation("")
+    setSampleSource("사무실")
+    // 상세 5종으로 직접 열면 상세 모드로, 빠른 2축(입고/출고/샘플)이면 빠른 모드로 시작한다.
+    setSheetView(DETAIL_PRESET_KEYS.has(presetKey) ? "detail" : "quick")
     applyPreset(presetKey)
     setSelectedItemId(itemId ?? data?.items[0]?.id ?? "")
     setCustomProduct("")
@@ -1972,8 +2346,8 @@ export default function HardwareInventoryClient() {
 
   const openSheet = (presetKey: string, itemId?: string, mode?: "single" | "batch") => {
     resetSheetDraft(presetKey, itemId)
-    // 입고는 lot 단위 다품목이 실무 기본이라 작업건 모드로 연다. 나머지는 단건 우선.
-    setSheetMode(mode ?? (presetKey === "inbound" ? "batch" : "single"))
+    // 상세 5종은 항상 단건. 입고는 lot 단위 다품목이 실무 기본이라 작업건 모드로 연다. 나머지는 단건 우선.
+    setSheetMode(DETAIL_PRESET_KEYS.has(presetKey) ? "single" : mode ?? (presetKey === "inbound" ? "batch" : "single"))
     setSheetOpen(true)
     // 이미 열린 상태에서 다른 행 퀵버튼을 눌렀을 때를 위해 패널 자체를 맨 위로.
     // (scrollIntoView는 sticky 헤더 높이만큼 폼 상단을 가리는 문제가 있어 사용하지 않는다.)
@@ -2003,9 +2377,10 @@ export default function HardwareInventoryClient() {
       case "inbound":
         return "inbound"
       case "return":
-        return "return"
+        // 샘플→사무실 회수는 "샘플 반환", 그 밖(고객·현장→창고)은 "고객 반납"으로 되살린다.
+        return movement.from_location === "샘플" || movement.to_location === "사무실" ? "sampleReturn" : "return"
       case "transfer":
-        return "office"
+        return "sampleAssign"
       case "repair":
         return "repair"
       case "adjust":
@@ -2025,7 +2400,9 @@ export default function HardwareInventoryClient() {
     // 직전 작업의 배너(성공/에러)가 수정 시트에 남아 혼동·자동 스크롤을 유발하지 않도록 클리어.
     setError(null)
     setNotice(null)
-    applyPreset(presetKeyForMovement(movement))
+    const editPresetKey = presetKeyForMovement(movement)
+    setSheetView(DETAIL_PRESET_KEYS.has(editPresetKey) ? "detail" : "quick")
+    applyPreset(editPresetKey)
     setSelectedItemId(hasKnownItem ? movement.item_id : data?.items[0]?.id ?? "")
     setCustomProduct(hasKnownItem ? "" : movement.product_name)
     setShowCustomInput(!hasKnownItem)
@@ -2033,6 +2410,8 @@ export default function HardwareInventoryClient() {
     setOccurredAt(movement.occurred_at?.slice(0, 10) || todayKey())
     setFromLocation(movement.from_location ?? "")
     setToLocation(movement.to_location ?? "")
+    // 샘플 대여 수정 시 출처 토글이 실제 출발지(사무실/창고)와 어긋나지 않도록 동기화.
+    if (movement.from_location === "창고") setSampleSource("창고")
     setOwner(movement.owner ?? "")
     setStatus(movement.status ?? "")
     setReferenceNo(movement.reference_no ?? "")
@@ -2047,6 +2426,40 @@ export default function HardwareInventoryClient() {
     setEditingId(movement.id)
     setSheetMode("single")
     setSheetOpen(true)
+  }
+
+  // 직전 기록 복제 — 편집이 아니라 새 기록으로 채운다(editingId 미설정). 같은 고객·경로·품목의
+  // 연속 입력을 빠르게 하기 위한 것이라 처리일은 오늘로 리셋하고, 건 단위 값(참조·시리얼·금액)은 비운다.
+  const duplicateLastMovement = () => {
+    const movement = lastManualMovement
+    if (!movement || editingId) return
+    const hasKnownItem = Boolean(data?.items.some((item) => item.id === movement.item_id))
+    setEditingId(null)
+    setQuickCartLineErrors({})
+    setQuickCartSaveSummary(null)
+    setError(null)
+    applyPreset(presetKeyForMovement(movement))
+    setSelectedItemId(hasKnownItem ? movement.item_id : data?.items[0]?.id ?? "")
+    setCustomProduct(hasKnownItem ? "" : movement.product_name)
+    setShowCustomInput(!hasKnownItem)
+    setQuantity(String(Math.max(1, movement.quantity)))
+    setOccurredAt(todayKey())
+    setFromLocation(movement.from_location ?? "")
+    setToLocation(movement.to_location ?? "")
+    if (movement.from_location === "창고") setSampleSource("창고")
+    setOwner((current) => current || movement.owner || "")
+    setStatus(movement.status ?? "")
+    // 건 단위 값은 복제하지 않는다 — 참조번호·시리얼·금액·메모·lot이 새 기록에 잘못 상속되면 원장이 오염된다.
+    setReferenceNo("")
+    setMemo("")
+    setLotNo("")
+    setUnitPrice("")
+    setAmountUsd("")
+    setAmountCny("")
+    setStorageLocation("")
+    setImporter("")
+    setSerialsText("")
+    setNotice(`직전 기록(${movement.product_name})을 복제했습니다. 수량·경로를 확인하고 저장하세요.`)
   }
 
   const readPlannedConfirmInput = (
@@ -2294,6 +2707,8 @@ export default function HardwareInventoryClient() {
       storageLocation: storageLocation.trim(),
       importer: importer.trim(),
       serials: serialsText.split(/[\s,]+/).map((value) => value.trim()).filter(Boolean),
+      // 예정 여부는 출고에만 의미가 있다 — 다른 유형은 undefined로 두어 status 폴백만 쓴다.
+      isPlanned: movementType === "outbound" ? isPlanned : undefined,
     }
   }
 
@@ -2372,6 +2787,21 @@ export default function HardwareInventoryClient() {
     setQuickCartLineErrors({})
   }
 
+  // 스테이징 라인별 실제/예정 토글 — draft.isPlanned를 뒤집고 status 파생을 즉시 반영한다.
+  // (출고 라인 전용. 저장 시 toServerDraft가 다시 파생하지만, 큐 표시도 바로 맞춘다.)
+  const toggleQuickCartLinePlanned = (index: number) => {
+    setQuickCart((current) =>
+      current.map((draft, itemIndex) => {
+        // 샘플 대여(사무실→샘플)는 실제/예정 개념이 없다 — status를 덮어쓰지 않고 보존한다.
+        if (itemIndex !== index || draft.movementType !== "outbound" || isSampleOutbound(draft)) return draft
+        const nextPlanned = !isDraftPlanned(draft)
+        const nextDraft: HardwareMovementDraft = { ...draft, isPlanned: nextPlanned }
+        return { ...nextDraft, status: deriveStatus(nextDraft) }
+      })
+    )
+    setQuickCartLineErrors({})
+  }
+
   // 바구니 명시적 비우기 — 진입점들은 바구니를 조용히 파괴하지 않으므로 이것이 유일한 전체 삭제 경로다.
   const clearQuickCart = () => {
     setQuickCart([])
@@ -2388,7 +2818,8 @@ export default function HardwareInventoryClient() {
     try {
       const response = await adminFetch("/api/admin/hardware/movements", {
         method: "POST",
-        body: JSON.stringify({ movements: submittedCart }),
+        // status 파생·isPlanned 제거는 서버 전송 직전에만 적용 — 큐에는 UI 판별용 원본을 남긴다.
+        body: JSON.stringify({ movements: submittedCart.map(toServerDraft) }),
       })
       const result = await response.json().catch(() => null) as HardwareMovementBatchResponse | null
       if (!result?.lineResults || !result.summary) {
@@ -2481,10 +2912,13 @@ export default function HardwareInventoryClient() {
         ? [draft.memo, `CRM 연동: ${crmCandidate.sourceLabel} · ${crmCandidate.title}`].filter(Boolean).join("\n")
         : draft.memo
 
+      // status 파생·isPlanned 제거를 전송 직전에 적용한다.
+      const serverDraft = toServerDraft(draft)
+
       await adminFetchJson("/api/admin/hardware/movements", {
         method: "POST",
         body: JSON.stringify({
-          ...draft,
+          ...serverDraft,
           referenceNo: crmCandidate && !draft.referenceNo ? crmCandidate.referenceNo : draft.referenceNo,
           memo: linkedMemo,
           crmLink: crmCandidate
@@ -2500,8 +2934,10 @@ export default function HardwareInventoryClient() {
             : undefined,
         }),
       })
+      // 성공 노티스에 경로(출발→도착)를 병기해 방금 기록한 이동을 즉시 확인할 수 있게 한다.
+      const routeHint = `${draft.fromLocation || "-"} → ${draft.toLocation || (draft.movementType === "outbound" ? "고객" : "-")}`
       setNotice(
-        `${draft.productName} · ${activePreset.label} ${formatNumber(draft.quantity)}대를 기록했습니다.${
+        `${draft.productName} · ${activePreset.label} ${formatNumber(draft.quantity)}대 (${routeHint})를 기록했습니다.${
           crmCandidate ? " CRM 오더와 연결했습니다." : ""
         }`
       )
@@ -2535,9 +2971,12 @@ export default function HardwareInventoryClient() {
     setNotice(null)
     setError(null)
     try {
+      // 수정은 status 필드를 직접 편집하므로 파생하지 않고, UI 전용 isPlanned만 제거한다.
+      // toServerDraft는 status를 파생하므로, 사용자가 입력한 원본 status로 되돌린다.
+      const editPayload = { ...toServerDraft(draft), status: draft.status }
       await adminFetchJson(`/api/admin/hardware/movements/${editingId}`, {
         method: "PATCH",
-        body: JSON.stringify({ action: "update", ...draft }),
+        body: JSON.stringify({ action: "update", ...editPayload }),
       })
       setNotice(`${draft.productName} 기록을 수정했습니다.`)
       setEditingId(null)
@@ -2570,8 +3009,9 @@ export default function HardwareInventoryClient() {
       await submitEdit(draft)
       return
     }
-    const planned = /예정|예약|대기/.test(draft.status)
-    if (draft.movementType === "outbound" && !planned) {
+    const planned = isDraftPlanned(draft)
+    // CRM 오더 확인은 단건 실제 "판매" 출고에만 뜬다 — 샘플 대여(사무실→샘플)는 CRM 연동 없이 바로 저장한다.
+    if (draft.movementType === "outbound" && !planned && !isSampleOutbound(draft)) {
       await openCrmConfirmation(draft)
       return
     }
@@ -3549,7 +3989,7 @@ export default function HardwareInventoryClient() {
                         <X className="h-4 w-4" />
                       </button>
                     </div>
-                    {!editingId && (
+                    {!editingId && sheetView === "quick" && (
                       <div className="mt-3 inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5" role="tablist" aria-label="기록 모드">
                         {([["single", "단건 기록"], ["batch", "작업건 구성"]] as const).map(([mode, label]) => (
                           <button
@@ -3570,6 +4010,13 @@ export default function HardwareInventoryClient() {
                             ) : null}
                           </button>
                         ))}
+                      </div>
+                    )}
+                    {/* 상세 모드에는 모드 탭이 없어 바구니가 화면에서 사라진다 — 유실 오인을 막기 위해 대기 배지만 노출한다. */}
+                    {sheetView === "detail" && quickCart.length > 0 && (
+                      <div className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2.5 py-1 text-[11px] font-semibold text-[#615D59]">
+                        <ShoppingCart className="h-3.5 w-3.5 text-[#084734]" />
+                        대기 중인 바구니 {formatNumber(quickCartTotals.count)}건 · {formatNumber(quickCartTotals.quantity)}대
                       </div>
                     )}
                   </div>
@@ -3596,7 +4043,7 @@ export default function HardwareInventoryClient() {
                         {notice}
                       </div>
                     )}
-                    {sheetMode === "single" && quickCart.length > 0 && !editingId && (
+                    {sheetView === "quick" && sheetMode === "single" && quickCart.length > 0 && !editingId && (
                       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-3 py-2">
                         <span className="text-[12px] font-semibold text-[#615D59]">
                           저장 대기 바구니 {formatNumber(quickCart.length)}건 · {formatNumber(quickCartTotals.quantity)}대
@@ -3620,37 +4067,139 @@ export default function HardwareInventoryClient() {
                           {activePreset.label} — 유형은 수정할 수 없습니다
                         </span>
                       </div>
-                    ) : (
-                    <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
-                      {ENTRY_PRESETS.map((option) => {
-                        const Icon = option.icon
-                        const active = activePresetKey === option.key
-                        return (
-                          <button
-                            key={option.key}
-                            type="button"
-                            aria-pressed={active}
-                            onClick={() => applyPreset(option.key)}
-                            className={`cursor-pointer rounded-lg border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100 ${
-                              active
-                                ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                : "border-[rgba(0,0,0,0.08)] bg-white text-[#31302E] hover:bg-[#F6F5F4]"
-                            }`}
-                          >
-                            <span className="flex items-center gap-2 text-[12px] font-bold">
-                              <Icon className="h-3.5 w-3.5" />
-                              {option.label}
-                            </span>
-                            <span className="mt-1 block text-[11px] text-[#615D59]">{option.description}</span>
-                          </button>
-                        )
-                      })}
+                    ) : sheetView === "detail" ? (
+                    // 상세 모드 — 빠른 2축 밖의 예외 처리 5종. 항상 단건, 큐 비활성.
+                    <div className="space-y-2.5">
+                      <button
+                        type="button"
+                        onClick={exitDetailView}
+                        className="inline-flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 text-[12px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                      >
+                        ← 빠른 기록으로 돌아가기
+                      </button>
+                      <p className="text-[11px] font-semibold text-[#615D59]">
+                        반환·샘플 배정·수리·조정 — 자주 쓰지 않는 예외 처리입니다. 한 건씩 저장하세요.
+                      </p>
+                      <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-2">
+                        {ENTRY_PRESETS.filter((option) => DETAIL_PRESET_KEYS.has(option.key)).map((option) => {
+                          const Icon = option.icon
+                          const active = activePresetKey === option.key
+                          return (
+                            <button
+                              key={option.key}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => applyPreset(option.key)}
+                              className={`cursor-pointer rounded-lg border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100 ${
+                                active
+                                  ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                                  : "border-[rgba(0,0,0,0.08)] bg-white text-[#31302E] hover:bg-[#F6F5F4]"
+                              }`}
+                            >
+                              <span className="flex items-center gap-2 text-[12px] font-bold">
+                                <Icon className="h-3.5 w-3.5" />
+                                {option.label}
+                              </span>
+                              <span className="mt-1 block text-[11px] text-[#615D59]">{option.description}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
+                    ) : (
+                    // 빠른 기록 2축 — 입고 | 출고. 출고는 하위 실제|예정|샘플 세그먼트.
+                    <div className="space-y-2.5">
+                      <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-1" role="tablist" aria-label="입출고 유형">
+                        {([["inbound", "입고", ArrowDownToLine], ["outbound", "출고", ArrowUpFromLine]] as const).map(([axis, label, Icon]) => {
+                          const active = axis === "inbound" ? movementType === "inbound" : movementType === "outbound"
+                          return (
+                            <button
+                              key={axis}
+                              type="button"
+                              role="tab"
+                              aria-selected={active}
+                              onClick={() => selectMovementAxis(axis)}
+                              className={`inline-flex min-h-[42px] cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 text-[13px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
+                                active ? "bg-white text-[#084734] shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "text-[#615D59] hover:text-[#111110]"
+                              }`}
+                            >
+                              <Icon className="h-4 w-4" />
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {movementType === "outbound" && (
+                        <div className="space-y-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-2.5">
+                          <div className="grid grid-cols-3 gap-1.5" role="tablist" aria-label="출고 방식">
+                            {([
+                              ["actual", "실제", "즉시 재고 반영"],
+                              ["planned", "예정", "가용에서 미리 차감"],
+                              ["sample", "샘플", "사무실·창고 반출"],
+                            ] as const).map(([mode, label, hint]) => {
+                              const active = outboundMode === mode
+                              return (
+                                <button
+                                  key={mode}
+                                  type="button"
+                                  role="tab"
+                                  aria-selected={active}
+                                  onClick={() => selectOutboundMode(mode)}
+                                  className={`flex min-h-[46px] cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md border px-2 py-1.5 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-[0.98] motion-reduce:active:scale-100 ${
+                                    active
+                                      ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                                      : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
+                                  }`}
+                                >
+                                  <span className="text-[12px] font-bold">{label}</span>
+                                  <span className="text-[10px] leading-tight text-[#A39E98]">{hint}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                          {outboundMode === "actual" && (
+                            <p className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1.5 text-[11px] font-semibold text-[#7A520F]">
+                              실제 출고는 즉시 재고에 반영되고, 판매 건이면 저장 시 CRM 오더 확인이 뜹니다.
+                            </p>
+                          )}
+                          {outboundMode === "planned" && (
+                            <p className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1.5 text-[11px] font-semibold text-[#7A520F]">
+                              예정은 가용(창고 − 예정)에서만 미리 차감합니다. 확정은 홈 › 예상 출고에서 하세요.
+                            </p>
+                          )}
+                          {outboundMode === "sample" && (
+                            <p className="rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-semibold text-[#615D59]">
+                              샘플 대여는 사무실·창고에서 반출되며 CRM 연동 없이 저장됩니다.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    )}
+
+                    {sheetView === "quick" && sheetMode === "single" && !editingId && lastManualMovement && (
+                      <button
+                        type="button"
+                        onClick={duplicateLastMovement}
+                        className="flex w-full items-center justify-between gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5 text-left transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <RotateCcw className="h-3.5 w-3.5 shrink-0 text-[#084734]" />
+                          <span className="min-w-0">
+                            <span className="block text-[12px] font-bold text-[#111110]">직전 기록 복제</span>
+                            <span className="mt-0.5 block truncate text-[11px] text-[#615D59]">
+                              {lastManualMovement.product_name} · {MOVEMENT_LABEL[lastManualMovement.movement_type]} {formatNumber(lastManualMovement.quantity)}대
+                              {lastManualMovement.to_location ? ` · ${customerLabel(lastManualMovement.to_location)}` : ""}
+                            </span>
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-[11px] font-bold text-[#084734]">복제 →</span>
+                      </button>
                     )}
 
                     {sheetMode === "batch" && !editingId && !quickCartEnabled && (
                       <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-3 py-2.5 text-[12px] font-semibold text-[#615D59]">
-                        반납·이동·수리·조정은 배치 담기를 지원하지 않습니다 — 단건 기록 모드로 저장하세요.
+                        반납·샘플 반환·샘플 배정·수리·조정은 배치 담기를 지원하지 않습니다 — 단건 기록 모드로 저장하세요.
                       </div>
                     )}
                     {sheetMode === "batch" && quickCartEnabled && (
@@ -3865,16 +4414,62 @@ export default function HardwareInventoryClient() {
                           ))}
                         </div>
                       </div>
-                      <label className="block">
-                        <span className={SHEET_LABEL_CLASS}>처리일</span>
+                      <div>
+                        <span id="hardware-date-label" className={SHEET_LABEL_CLASS}>처리일</span>
                         <input
                           type="date"
+                          aria-labelledby="hardware-date-label"
                           value={occurredAt}
                           onChange={(event) => setOccurredAt(event.target.value)}
                           className={SHEET_INPUT_CLASS}
                         />
-                      </label>
+                        <div className="mt-1.5 grid grid-cols-2 gap-1">
+                          {([
+                            { label: "오늘", value: todayKey() },
+                            { label: "어제", value: yesterdayKey() },
+                          ] as const).map((chip) => (
+                            <button
+                              key={chip.label}
+                              type="button"
+                              aria-pressed={occurredAt === chip.value}
+                              onClick={() => setOccurredAt(chip.value)}
+                              className={`min-h-[36px] cursor-pointer rounded border px-1.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
+                                occurredAt === chip.value
+                                  ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                                  : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
+                              }`}
+                            >
+                              {chip.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
+                    {activePresetKey === "sample" && !editingId && (
+                      <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
+                        <span className={SHEET_LABEL_CLASS}>샘플 출처</span>
+                        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+                          {SAMPLE_SOURCE_OPTIONS.map((source) => (
+                            <button
+                              key={source}
+                              type="button"
+                              aria-pressed={sampleSource === source}
+                              onClick={() => applySampleSource(source)}
+                              className={`min-h-[38px] cursor-pointer rounded-md border px-2 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-[0.98] motion-reduce:active:scale-100 ${
+                                sampleSource === source
+                                  ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                                  : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
+                              }`}
+                            >
+                              {source === "사무실" ? "사무실 (남은 샘플)" : "창고 (판매 재고)"}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="mt-1.5 text-[11px] text-[#A39E98]">
+                          기본은 사무실 보관 샘플. 사무실 재고가 없으면 창고에서 바로 반출합니다.
+                        </p>
+                      </div>
+                    )}
                     {availabilityWarning && (
                       <div className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11px] font-bold text-[#7A520F]">
                         {availabilityWarning}
@@ -3894,17 +4489,30 @@ export default function HardwareInventoryClient() {
                       </label>
                       <label className="block">
                         <span className={SHEET_LABEL_CLASS}>
-                          {movementType === "outbound" ? "도착 (고객사)" : "도착"}
+                          {isCustomerDestination ? "도착 (고객사)" : "도착"}
                         </span>
                         <input
                           value={toLocation}
                           onChange={(event) => setToLocation(event.target.value)}
-                          placeholder={movementType === "outbound" ? "고객사명 — 예: 남명학원" : "창고/샘플/사무실"}
-                          list={movementType === "outbound" ? "hardware-customer-options" : "hardware-location-options"}
+                          placeholder={isCustomerDestination ? "고객사명 — 예: 남명학원" : "창고/샘플/사무실"}
+                          list={isCustomerDestination ? "hardware-customer-options" : "hardware-location-options"}
                           className={SHEET_INPUT_CLASS}
                         />
                       </label>
                     </div>
+
+                    {/* 상세 모드는 상태가 핵심 필드(수리중·재고 조정 등) — 자유 텍스트로 앞면에 노출. */}
+                    {sheetView === "detail" && !editingId && (
+                      <label className="block">
+                        <span className={SHEET_LABEL_CLASS}>상태</span>
+                        <input
+                          value={status}
+                          onChange={(event) => setStatus(event.target.value)}
+                          placeholder="예: 수리중 · 재고 조정 · 반납"
+                          className={SHEET_INPUT_CLASS}
+                        />
+                      </label>
+                    )}
 
                     {movementType === "inbound" && (
                       <label className="block">
@@ -4057,7 +4665,8 @@ export default function HardwareInventoryClient() {
                         </span>
                       </summary>
                       <div className="space-y-3 border-t border-[rgba(0,0,0,0.06)] p-3">
-                        <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
+                        {/* 상세 모드(신규)에서는 상태를 앞면 필드로 이미 노출하므로 여기서는 중복 렌더하지 않는다. */}
+                        <div className={`grid grid-cols-1 gap-3 ${sheetView === "detail" && !editingId ? "" : "min-[400px]:grid-cols-2"}`}>
                           <label className="block">
                             <span className={SHEET_LABEL_CLASS}>담당자</span>
                             <input
@@ -4067,14 +4676,16 @@ export default function HardwareInventoryClient() {
                               className={SHEET_INPUT_CLASS}
                             />
                           </label>
-                          <label className="block">
-                            <span className={SHEET_LABEL_CLASS}>상태</span>
-                            <input
-                              value={status}
-                              onChange={(event) => setStatus(event.target.value)}
-                              className={SHEET_INPUT_CLASS}
-                            />
-                          </label>
+                          {!(sheetView === "detail" && !editingId) && (
+                            <label className="block">
+                              <span className={SHEET_LABEL_CLASS}>상태</span>
+                              <input
+                                value={status}
+                                onChange={(event) => setStatus(event.target.value)}
+                                className={SHEET_INPUT_CLASS}
+                              />
+                            </label>
+                          )}
                         </div>
                         {movementType === "outbound" && (
                           <label className="block">
@@ -4134,7 +4745,7 @@ export default function HardwareInventoryClient() {
                           {customProduct.trim() || selectedItem?.name || "품목 선택"} · {activePreset.label} · {formatNumber(Number(quantity) || 0)}대
                         </p>
                         <p className="mt-1 text-[11px] font-semibold text-[#615D59]">
-                          {fromLocation || "-"} → {toLocation || (movementType === "outbound" ? "고객사 미입력" : "-")} · {status || "상태 미정"}
+                          {fromLocation || "-"} → {toLocation || (isCustomerDestination ? "고객사 미입력" : "-")} · {status || "상태 미정"}
                           {owner.trim() ? ` · ${owner.trim()}` : ""}
                         </p>
                       </div>
@@ -4179,7 +4790,10 @@ export default function HardwareInventoryClient() {
                             {quickCart.map((draft, index) => {
                               const cartFifoPreview = previewFifoForDraft(draft)
                               const lineError = quickCartLineErrors[quickCartLineKey(draft)]
-                              const linePlanned = /예정|예약|대기/.test(draft.status)
+                              const linePlanned = isDraftPlanned(draft)
+                              const lineSample = isSampleOutbound(draft)
+                              // 샘플 대여는 실제/예정 개념이 없다 — 판매·예정 출고 라인에만 토글을 노출한다.
+                              const isOutboundLine = draft.movementType === "outbound" && !lineSample
                               return (
                                 <div key={`${draft.productName}-${index}`} className={`grid grid-cols-[1fr_auto] items-center gap-2 px-3 py-2 ${lineError ? "bg-[#FCE9E9]/50" : ""}`}>
                                   <div className="min-w-0">
@@ -4187,10 +4801,49 @@ export default function HardwareInventoryClient() {
                                     <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-[#615D59]">
                                       <span>{MOVEMENT_LABEL[draft.movementType]} · {formatNumber(draft.quantity)}대 · {draft.toLocation || "-"}</span>
                                       <span className={`inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                                        linePlanned ? "bg-[#FBF1E0] text-[#A8741A]" : "bg-[#F6F5F4] text-[#31302E]"
+                                        lineSample
+                                          ? "bg-[#F6F5F4] text-[#615D59]"
+                                          : linePlanned
+                                            ? "bg-[#FBF1E0] text-[#A8741A]"
+                                            : "bg-[#F6F5F4] text-[#31302E]"
                                       }`}>
                                         {draft.status || MOVEMENT_LABEL[draft.movementType]}
                                       </span>
+                                      {lineSample && (
+                                        // 샘플 대여는 실제/예정이 없으므로 토글 대신 정적 "샘플" pill만 표시한다.
+                                        <span className="inline-flex rounded-full bg-[#F6F5F4] px-1.5 py-0.5 text-[10px] font-bold text-[#615D59]">
+                                          샘플
+                                        </span>
+                                      )}
+                                      {isOutboundLine && (
+                                        // 라인별 실제|예정 토글 — draft.isPlanned를 뒤집어 status를 즉시 파생한다.
+                                        <span className="inline-flex overflow-hidden rounded-full border border-[rgba(0,0,0,0.08)]" role="group" aria-label="출고 방식">
+                                          {([["actual", "실제"], ["planned", "예정"]] as const).map(([mode, label]) => {
+                                            const modeActive = mode === "planned" ? linePlanned : !linePlanned
+                                            return (
+                                              <button
+                                                key={mode}
+                                                type="button"
+                                                aria-pressed={modeActive}
+                                                disabled={quickCartSaving}
+                                                onClick={() => {
+                                                  if (modeActive) return
+                                                  toggleQuickCartLinePlanned(index)
+                                                }}
+                                                className={`flex min-h-[40px] cursor-pointer items-center px-2.5 py-0.5 text-[10px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 disabled:pointer-events-none disabled:opacity-40 sm:min-h-[28px] ${
+                                                  modeActive
+                                                    ? mode === "planned"
+                                                      ? "bg-[#FBF1E0] text-[#A8741A]"
+                                                      : "bg-[#ECFDF5] text-[#084734]"
+                                                    : "bg-white text-[#A39E98] hover:text-[#31302E]"
+                                                }`}
+                                              >
+                                                {label}
+                                              </button>
+                                            )
+                                          })}
+                                        </span>
+                                      )}
                                     </p>
                                     {lineError && (
                                       <p className="mt-1 text-[11px] font-bold text-[#8F2C2C]">{lineError}</p>
@@ -4220,12 +4873,27 @@ export default function HardwareInventoryClient() {
                             })}
                           </div>
                         )}
-                        {quickCart.some((draft) => draft.movementType === "outbound" && !/예정|예약|대기/.test(draft.status)) && (
+                        {quickCart.some((draft) => draft.movementType === "outbound" && !isDraftPlanned(draft) && !isSampleOutbound(draft)) && (
                           <div className="border-t border-[rgba(0,0,0,0.06)] bg-[#FBF1E0] px-3 py-2 text-[11px] font-bold text-[#7A520F]">
                             완료 출고 배치 저장은 CRM 오더 연동·매출 금액 없이 저장됩니다 — 연동이 필요한 판매 건은 단건 기록으로 저장하세요.
                           </div>
                         )}
                       </div>
+                    )}
+
+                    {/* 상세 처리 도달 경로 — 빠른 2축 밖의 반환·샘플 배정·수리·조정을 같은 시트 상세 모드로 연다. */}
+                    {sheetView === "quick" && !editingId && (
+                      <button
+                        type="button"
+                        onClick={enterDetailView}
+                        className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-[12px] font-semibold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#31302E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <Settings2 className="h-3.5 w-3.5 text-[#A39E98]" />
+                          다른 처리 — 반환 · 샘플 배정 · 수리 · 조정
+                        </span>
+                        <span className="shrink-0 font-bold text-[#084734]">→</span>
+                      </button>
                     )}
                     </div>
 
@@ -4303,24 +4971,57 @@ export default function HardwareInventoryClient() {
                         className="h-10 w-full rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                       />
                     </label>
-                    {hasHistoryFilter && (
+                    <div className="flex shrink-0 items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => {
-                          setHistoryType("all")
-                          setProductFilter("")
-                          setLotFilter("")
-                          setCustomerFilter("")
-                          setSearch("")
-                          setMovementsPage(1)
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4]"
+                        onClick={() => setFiltersExpanded((current) => !current)}
+                        aria-expanded={filtersExpanded}
+                        className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-2 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 ${
+                          filtersExpanded
+                            ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                            : "border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:bg-[#F6F5F4]"
+                        }`}
                       >
-                        <X className="h-3.5 w-3.5" />
-                        필터 초기화
+                        <Settings2 className="h-3.5 w-3.5" />
+                        상세 필터
+                        {advancedHistoryFilterCount > 0 && (
+                          <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#084734] px-1 text-[10px] font-bold text-white">
+                            {advancedHistoryFilterCount}
+                          </span>
+                        )}
+                        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${filtersExpanded ? "rotate-180" : ""}`} />
                       </button>
-                    )}
+                      {hasHistoryFilter && (
+                        <button
+                          type="button"
+                          onClick={resetHistoryFilters}
+                          className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4]"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                          전체 초기화
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  {hasHistoryFilter ? (
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-[rgba(0,0,0,0.06)] pt-3">
+                      <span className="text-[11px] font-bold text-[#615D59]">적용된 필터</span>
+                      {activeHistoryFilterChips.map((chip) => (
+                        <button
+                          key={chip.key}
+                          type="button"
+                          onClick={chip.onRemove}
+                          className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#d6f7e7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45"
+                        >
+                          {chip.label}
+                          <X className="h-3 w-3" />
+                        </button>
+                      ))}
+                      <span className="ml-auto text-[11px] font-semibold text-[#615D59]">
+                        필터 후 {formatNumber(filteredMovements.length)}건 / 전체 {formatNumber(data?.movements.length ?? 0)}건
+                      </span>
+                    </div>
+                  ) : null}
                   <div className="mt-3.5 flex flex-wrap items-center gap-2">
                     <span className="inline-flex w-12 shrink-0 items-center gap-1.5 text-[12px] font-bold text-[#111110]">
                       <Filter className="h-3.5 w-3.5 text-[#615D59]" />
@@ -4368,6 +5069,163 @@ export default function HardwareInventoryClient() {
                         )
                       })}
                     </span>
+                  </div>
+                  {filtersExpanded && (
+                  <>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">상태</span>
+                    {(
+                      [
+                        { key: "all", label: "전체" },
+                        { key: "done", label: "완료" },
+                        { key: "planned", label: "배송 예정" },
+                      ] as const
+                    ).map((option) => {
+                      const active = historyStatus === option.key
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          onClick={() => {
+                            setHistoryStatus(option.key)
+                            setMovementsPage(1)
+                          }}
+                          className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
+                            active
+                              ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                              : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIncludeVoided((current) => !current)
+                        setMovementsPage(1)
+                      }}
+                      aria-pressed={includeVoided}
+                      className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
+                        includeVoided
+                          ? "border-[#B43E3E] bg-[#FCE9E9] text-[#B43E3E]"
+                          : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
+                      }`}
+                    >
+                      취소 포함
+                    </button>
+                  </div>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">판매유형</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSaleTypeFilter("")
+                        setMovementsPage(1)
+                      }}
+                      className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
+                        saleTypeFilter === ""
+                          ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                          : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
+                      }`}
+                    >
+                      전체
+                    </button>
+                    {(Object.keys(SALE_TYPE_META) as OutboundSaleType[]).map((type) => {
+                      const active = saleTypeFilter === type
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => {
+                            setSaleTypeFilter(active ? "" : type)
+                            setMovementsPage(1)
+                          }}
+                          className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
+                            active
+                              ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                              : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
+                          }`}
+                        >
+                          {SALE_TYPE_META[type].label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    <span className="w-12 shrink-0 text-[12px] font-bold text-[#111110]">기간</span>
+                    {(
+                      [
+                        { key: "thisMonth", label: "이번 달" },
+                        { key: "lastMonth", label: "지난 달" },
+                        { key: "last30", label: "최근 30일" },
+                      ] as const
+                    ).map((option) => {
+                      const range = historyDateRange(option.key)
+                      const active = historyDateFrom === range.from && historyDateTo === range.to
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          onClick={() => {
+                            setHistoryDateFrom(range.from)
+                            setHistoryDateTo(range.to)
+                            setMovementsPage(1)
+                          }}
+                          className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
+                            active
+                              ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                              : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      )
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHistoryDateFrom("")
+                        setHistoryDateTo("")
+                        setMovementsPage(1)
+                      }}
+                      className={`cursor-pointer rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
+                        historyDateFrom === "" && historyDateTo === ""
+                          ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                          : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
+                      }`}
+                    >
+                      전체
+                    </button>
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-[#615D59]">
+                      시작
+                      <input
+                        type="date"
+                        value={historyDateFrom}
+                        max={historyDateTo || undefined}
+                        onChange={(event) => {
+                          setHistoryDateFrom(event.target.value)
+                          setMovementsPage(1)
+                        }}
+                        aria-label="기간 시작일"
+                        className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-[11px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5 text-[11px] font-semibold text-[#615D59]">
+                      종료
+                      <input
+                        type="date"
+                        value={historyDateTo}
+                        min={historyDateFrom || undefined}
+                        onChange={(event) => {
+                          setHistoryDateTo(event.target.value)
+                          setMovementsPage(1)
+                        }}
+                        aria-label="기간 종료일"
+                        className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-[11px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                      />
+                    </label>
                   </div>
                   {(data?.stock ?? []).length > 0 ? (
                     <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -4496,6 +5354,8 @@ export default function HardwareInventoryClient() {
                       ) : null}
                     </div>
                   ) : null}
+                  </>
+                  )}
                 </section>
 
                 <section className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">

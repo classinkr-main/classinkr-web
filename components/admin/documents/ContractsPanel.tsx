@@ -7,6 +7,10 @@ import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { useUrlState } from "@/lib/use-url-state"
 import type { Contract, ContractStatus, Partner } from "@/lib/supabase/database.types"
 
+// GET /api/admin/partners는 { partners }가 아니라 { workspaces }/{ summaries }를 반환한다.
+// 패널은 파트너명 표시에 id/name만 필요하므로 summary 응답을 최소 형태로 매핑해 쓴다.
+type PartnerOption = Pick<Partner, "id" | "name">
+
 const STATUS_LABEL: Record<ContractStatus, string> = {
   draft: "Draft",
   sent: "Sent",
@@ -113,7 +117,7 @@ function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
 
 export function ContractsPanel() {
   const [contracts, setContracts] = useState<Contract[]>([])
-  const [partners, setPartners] = useState<Partner[]>([])
+  const [partners, setPartners] = useState<PartnerOption[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Contract | null>(null)
   const [showSign, setShowSign] = useState(false)
@@ -127,10 +131,12 @@ export function ContractsPanel() {
     try {
       const [cData, pData] = await Promise.all([
         adminFetchJsonCached<{ contracts?: Contract[] }>("/api/admin/contracts"),
-        adminFetchJsonCached<{ partners?: Partner[] }>("/api/admin/partners"),
+        adminFetchJsonCached<{ summaries?: Array<{ partnerId: string; partnerName: string }> }>(
+          "/api/admin/partners?view=summary"
+        ),
       ])
       setContracts(cData.contracts ?? [])
-      setPartners(pData.partners ?? [])
+      setPartners((pData.summaries ?? []).map((s) => ({ id: s.partnerId, name: s.partnerName })))
     } catch {
       // 기존 데이터 유지 — 일시적 네트워크 오류 시 빈 화면 방지
     } finally {

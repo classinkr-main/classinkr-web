@@ -48,16 +48,13 @@ let pruneScheduled = false
 const BROWSER_CACHE_BYPASS_MS = 60_000
 const GLOBAL_CACHE_SCOPE = "*"
 
-// CRM 홈/오버뷰는 여러 원천(딜·견적·계약·영수증·리드 등)을 합산하므로,
+// CRM 홈/오버뷰는 여러 원천(계약·영수증·리드 등)을 합산하므로,
 // 그 원천이 바뀌면 CRM 집계 캐시도 함께 무효화한다.
 const CRM_AGGREGATE_SCOPE = "/api/admin/crm"
 const CRM_SOURCE_BASES = new Set([
-  "/api/admin/deals",
-  "/api/admin/quotes",
   "/api/admin/contracts",
   "/api/admin/receipts",
   "/api/admin/leads",
-  "/api/admin/customers",
   "/api/admin/teams",
 ])
 

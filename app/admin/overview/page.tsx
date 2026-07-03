@@ -29,7 +29,8 @@ import {
   SOURCE_PALETTE,
   type FunnelStage,
 } from "@/components/admin/viz"
-import type { LeadRecord, SiteSettings } from "@/lib/site-settings-types"
+import type { LeadRecord } from "@/lib/site-settings-types"
+import type { AdminIntegrationStatusResponse } from "@/lib/admin-integrations/types"
 import type { CalendarEvent } from "@/lib/calendar-data"
 import type { BlogPost } from "@/lib/blog-types"
 import type { EmailCampaign } from "@/lib/marketing-types"
@@ -227,7 +228,7 @@ export default function OverviewPage() {
   const [blogPosts, setBlogPosts] = useState<BlogPost[]>([])
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([])
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
-  const [settings, setSettings] = useState<SiteSettings | null>(null)
+  const [integrationStatus, setIntegrationStatus] = useState<AdminIntegrationStatusResponse | null>(null)
   const [bugs, setBugs] = useState<BugReport[]>([])
   const [patchNotes, setPatchNotes] = useState<PatchNote[]>([])
   const [instagramDashboard, setInstagramDashboard] = useState<InstagramOverviewDashboard | null>(null)
@@ -284,7 +285,7 @@ export default function OverviewPage() {
         blogData,
         campaignData,
         calendarData,
-        settingsData,
+        integrationStatusData,
         bugsData,
         patchNotesData,
       ] = await Promise.all([
@@ -303,7 +304,9 @@ export default function OverviewPage() {
           }
           return Array.from(merged.values())
         }),
-        fetchJson<SiteSettings>("/api/admin/settings"),
+        // 연동 여부는 GET /api/admin/settings가 webhook URL을 마스킹하므로
+        // env+DB 합성 health(integrations/status)를 사용한다. (ops/settings와 동일 소스)
+        fetchJson<AdminIntegrationStatusResponse>("/api/admin/settings/integrations/status"),
         fetchJson<BugReport[]>("/api/admin/bugs"),
         fetchJson<PatchNote[]>("/api/admin/patch-notes"),
       ])
@@ -315,7 +318,7 @@ export default function OverviewPage() {
       setBlogPosts(blogData?.posts ?? [])
       setCampaigns(campaignData?.campaigns ?? [])
       setCalendarEvents(calendarData ?? [])
-      setSettings(settingsData ?? null)
+      setIntegrationStatus(integrationStatusData ?? null)
       setBugs(bugsData ?? [])
       setPatchNotes(patchNotesData ?? [])
       setLoading(false)
@@ -552,32 +555,23 @@ export default function OverviewPage() {
     ? visitorStats.today.homeVisitors - (visitorYesterday?.homeVisitors ?? 0)
     : 0
 
-  const connections = [
-    {
-      label: "Google Sheet",
-      description: "리드를 시트로 자동 기록",
-      value: settings?.googleSheetWebhookUrl,
-      href: "/admin/settings",
-    },
-    {
-      label: "리드 Webhook",
-      description: "외부 자동화 플랫폼과 연동",
-      value: settings?.leadWebhookUrl,
-      href: "/admin/settings",
-    },
-    {
-      label: "ChannelTalk",
-      description: "상담 인박스로 전달",
-      value: settings?.channelTalkWebhookUrl,
-      href: "/admin/settings",
-    },
-    {
-      label: "이메일 Webhook",
-      description: "캠페인 발송 연동",
-      value: settings?.emailWebhookUrl,
-      href: "/admin/settings",
-    },
-  ]
+  // 연동 상태 카드 — integrations/status 항목 중 외부 전송 경로 4종만 노출한다.
+  const connections = (
+    [
+      { key: "lead_webhooks", fallbackLabel: "Lead Webhooks", description: "리드를 시트·외부 자동화로 전송" },
+      { key: "channel_talk", fallbackLabel: "Channel Talk", description: "상담 인박스로 전달" },
+      { key: "email_provider", fallbackLabel: "Email", description: "캠페인 발송 연동" },
+      { key: "notifications", fallbackLabel: "Notifications", description: "운영 알림(WeCom·알림톡) 전송" },
+    ] as const
+  ).map(({ key, fallbackLabel, description }) => {
+    const item = integrationStatus?.items.find((entry) => entry.key === key)
+    return {
+      label: item?.label ?? fallbackLabel,
+      description,
+      connected: item?.configured ?? false,
+      href: item?.adminHref ?? "/admin/settings?tab=integrations",
+    }
+  })
 
   // 세일즈 퍼널 시각화용 단계 (MiniFunnel).
   const funnelStages: FunnelStage[] = [
@@ -587,7 +581,10 @@ export default function OverviewPage() {
     { label: STATUS_LABEL.closed, value: closedLeads, tone: "neutral", href: "/admin/crm" },
   ]
 
-  const missingConnections = connections.filter((connection) => !connection.value?.trim())
+  // 상태 응답이 없을 때(로딩/실패)는 미연결로 단정하지 않는다. (상시 오탐 방지)
+  const missingConnections = integrationStatus
+    ? connections.filter((connection) => !connection.connected)
+    : []
   const missingConnectionLabels = missingConnections.map((connection) => connection.label)
   const missingConnectionSummary =
     missingConnectionLabels.length > 2
@@ -629,7 +626,7 @@ export default function OverviewPage() {
           meta: `미연결 ${missingConnections.length}건`,
           tone: "warning" as const,
           action: "설정",
-          href: "/admin/settings",
+          href: "/admin/settings?tab=integrations",
           priority: 90,
         }
       : null,
@@ -1284,7 +1281,7 @@ export default function OverviewPage() {
       <div className="grid grid-cols-1 gap-6 mt-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <SectionCard
           title="연동 상태"
-          description="외부 전송 경로(시트·Webhook·채널톡·이메일)를 점검합니다."
+          description="외부 전송 경로(리드 Webhook·채널톡·이메일·알림)를 점검합니다."
           action={
             <span
               className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusToneClasses(
@@ -1300,7 +1297,7 @@ export default function OverviewPage() {
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {connections.map((connection) => {
-                const connected = Boolean(connection.value?.trim())
+                const connected = connection.connected
                 return (
                   <a
                     key={connection.label}

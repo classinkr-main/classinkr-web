@@ -916,9 +916,9 @@ export default function AdminMarketingPage() {
             <div className="max-w-2xl">
               <div className="mb-2 flex items-center gap-3">
                 <p className="text-[12px] font-medium uppercase tracking-wide text-[#1a1a1a]/30">Admin</p>
-                <a href="/admin/blog" className="inline-flex items-center gap-1 text-[11px] font-medium text-[#084734] hover:underline">
+                <a href="/admin/campaigns" className="inline-flex items-center gap-1 text-[11px] font-medium text-[#084734] hover:underline">
                   <ArrowLeft className="h-3 w-3" />
-                  블로그 관리
+                  캠페인 허브
                 </a>
               </div>
               <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">캠페인</h1>

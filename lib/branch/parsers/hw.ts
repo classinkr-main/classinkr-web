@@ -49,7 +49,15 @@ export function parseInbound(grid: FormattedCell[][]): HwInboundParsed[] {
       unit_price: n(row[4]?.value), amount: n(row[5]?.value),
       serials: arr(row[7]?.value), storage: s(row[8]?.value),
       importer: s(row[9]?.value), remarks: s(row[10]?.value),
-      raw: rawValues(row),
+      // Stash cost/currency in raw so the ledger read-path (recoverMoneyFromRaw) can
+      // surface them even though the sheet-import RPC drops these columns (pending migration).
+      raw: {
+        values: rawValues(row),
+        amount_usd: n(row[5]?.value),
+        amount_cny: n(row[6]?.value),
+        unit_price: n(row[4]?.value),
+        importer: s(row[9]?.value),
+      },
     })
   }
   return out
@@ -83,6 +91,10 @@ export function parseOutbound(grid: FormattedCell[][]): HwOutboundParsed[] {
         destination_filled_from_previous: !explicitDestination && Boolean(destination),
         planned_by_color: plannedByColor,
         progress_cell_bg: row[10]?.bg ?? null,
+        // Revenue USD + CNY (col 7 was previously unread) for recoverMoneyFromRaw.
+        amount_usd: n(row[6]?.value),
+        amount_cny: n(row[7]?.value),
+        unit_price: n(row[5]?.value),
       },
     })
   }

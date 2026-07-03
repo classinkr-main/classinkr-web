@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     if (!name || !triggerType || !triggerConfig || !segmentConfig || !templateId) {
       return NextResponse.json(
-        { error: "name, triggerType, triggerConfig, segmentConfig, templateId ?꾩닔" },
+        { error: "name, triggerType, triggerConfig, segmentConfig, templateId 필수" },
         { status: 400 }
       )
     }

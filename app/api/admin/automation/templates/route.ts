@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const { name, subject, body: htmlBody, variables } = body
 
     if (!name || !subject || !htmlBody) {
-      return NextResponse.json({ error: "name, subject, body ?꾩닔" }, { status: 400 })
+      return NextResponse.json({ error: "name, subject, body 필수" }, { status: 400 })
     }
 
     const template = await createTemplate({ name, subject, body: htmlBody, variables })

@@ -1,11 +1,11 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
-import { verifyAdmin } from "@/lib/admin-auth"
+import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { getLeads, getDashboardLeads, saveLead, type LeadRecord } from "@/lib/repositories/leads"
 
 export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req)
-  if (err) return err
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  if (admin instanceof NextResponse) return admin
 
   try {
     // ?scope=dashboard 는 화면에 쓰는 컬럼만 가져와 페이로드를 줄인다.
@@ -51,8 +51,8 @@ function normalizeLeadInput(raw: unknown): LeadCreateInput | null {
 
 // 리드 등록 — 단건(객체) 또는 벌크({ leads: [...] }). 부분 실패는 전체 실패로 만들지 않는다.
 export async function POST(req: NextRequest) {
-  const err = await verifyAdmin(req)
-  if (err) return err
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  if (admin instanceof NextResponse) return admin
 
   try {
     const body = await req.json().catch(() => null)

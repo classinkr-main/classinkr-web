@@ -14,14 +14,16 @@
 ```
 app/admin/branch/{page,loading}.tsx
 app/api/admin/branch/{summary,heatmap,pipeline,kpi,hw,insights,data-quality,sync}/route.ts
-app/api/admin/branch/insights/history/route.ts
-app/api/admin/branch/insights/manager/route.ts
+app/api/admin/branch/insights/history/route.ts   (2026-07-02 고아 정리로 삭제)
+app/api/admin/branch/insights/manager/route.ts   (2026-07-02 고아 정리로 삭제)
 app/api/cron/sync-branch{,-insights}/route.ts
 
 components/admin/branch/{BranchDashboardClient,SyncStatusBar,types}.tsx
 components/admin/branch/sections/{InsightCard,CoreKpiGrid,FiscalRoadmap,RegionHeatmap,
   TeamPacingSection,ManagerScorecard,KpiActivityMatrix,PipelineTable,
   CampaignsSection,HardwareSection,DataQualityPanel,DealMixSection}.tsx
+  ※ InsightCard/RegionHeatmap/TeamPacingSection/ManagerScorecard/KpiActivityMatrix(+TeamKpiIndexSection)는
+    임포터 0으로 2026-07-02 삭제 — 현행 대시보드는 BranchDashboardClient가 쓰는 Branch* 계열 섹션 사용.
 
 lib/branch/
   fiscal.ts                    FY 4월~3월 헬퍼

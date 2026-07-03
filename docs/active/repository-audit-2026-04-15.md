@@ -65,7 +65,7 @@ npm run build
    - [app/api/admin/subscribers/route.ts](../../app/api/admin/subscribers/route.ts)
    - [app/api/admin/calendar/route.ts](../../app/api/admin/calendar/route.ts)
    - [app/api/admin/patch-notes/route.ts](../../app/api/admin/patch-notes/route.ts)
-   - [app/admin/commercial/page.tsx](../../app/admin/commercial/page.tsx)
+   - `app/admin/commercial/page.tsx`(2026-07-02 폐기 삭제)
 4. 문서 링크와 문서 계층 정리
    - 파트너 포털 문서군의 절대경로 제거
    - 활성 문서와 역사 문서의 경계 재표시

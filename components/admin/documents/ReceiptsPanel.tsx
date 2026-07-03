@@ -7,6 +7,10 @@ import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { useUrlState } from "@/lib/use-url-state"
 import type { Receipt, Partner, PaymentMethod } from "@/lib/supabase/database.types"
 
+// GET /api/admin/partners는 { partners }가 아니라 { workspaces }/{ summaries }를 반환한다.
+// 패널은 파트너명 표시·셀렉트에 id/name만 필요하므로 summary 응답을 최소 형태로 매핑해 쓴다.
+type PartnerOption = Pick<Partner, "id" | "name">
+
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   bank_transfer: "Bank Transfer",
   card: "Card",
@@ -29,7 +33,7 @@ const EMPTY_FORM = {
 
 export function ReceiptsPanel() {
   const [receipts, setReceipts] = useState<Receipt[]>([])
-  const [partners, setPartners] = useState<Partner[]>([])
+  const [partners, setPartners] = useState<PartnerOption[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -42,10 +46,12 @@ export function ReceiptsPanel() {
     try {
       const [rData, pData] = await Promise.all([
         adminFetchJsonCached<{ receipts?: Receipt[] }>("/api/admin/receipts"),
-        adminFetchJsonCached<{ partners?: Partner[] }>("/api/admin/partners"),
+        adminFetchJsonCached<{ summaries?: Array<{ partnerId: string; partnerName: string }> }>(
+          "/api/admin/partners?view=summary"
+        ),
       ])
       setReceipts(rData.receipts ?? [])
-      setPartners(pData.partners ?? [])
+      setPartners((pData.summaries ?? []).map((s) => ({ id: s.partnerId, name: s.partnerName })))
     } catch {
       // 기존 데이터 유지 — 일시적 네트워크 오류 시 빈 화면 방지
     } finally {

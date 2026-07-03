@@ -37,7 +37,8 @@ interface CustomerRow {
   name: string
   contact: string | null
   sourceLabel: string
-  source: "lead" | "neo_account"
+  source: "lead" | "neo_account" | "customer"
+  href: string
 }
 
 interface UnifiedResponse {
@@ -46,7 +47,7 @@ interface UnifiedResponse {
 
 type CmdItem =
   | { kind: "nav"; id: string; label: string; sub: string; icon: ReactNode; href: string }
-  | { kind: "customer"; id: string; label: string; sub: string; icon: ReactNode; key: string }
+  | { kind: "customer"; id: string; label: string; sub: string; icon: ReactNode; key: string; href?: string }
 
 export default function CrmCommandPalette() {
   const router = useRouter()
@@ -117,6 +118,8 @@ export default function CrmCommandPalette() {
           sub: row.contact ? `${row.sourceLabel} · ${row.contact}` : row.sourceLabel,
           icon: row.source === "lead" ? <PhoneCall className="h-4 w-4" /> : <Building2 className="h-4 w-4" />,
           key: row.key,
+          // 전환 고객(customer:)은 360 상세 미지원 — 원천 href(파트너 워크스페이스)로 이동.
+          href: row.source === "customer" ? row.href : undefined,
         }))
       : []
     return [...navItems, ...custItems]
@@ -130,7 +133,7 @@ export default function CrmCommandPalette() {
       if (!item) return
       setOpen(false)
       if (item.kind === "nav") router.push(item.href)
-      else router.push(`/admin/crm/customers/${encodeURIComponent(item.key)}`)
+      else router.push(item.href ?? `/admin/crm/customers/${encodeURIComponent(item.key)}`)
     },
     [router]
   )

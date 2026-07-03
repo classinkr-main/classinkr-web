@@ -3,6 +3,7 @@ import "server-only"
 import { createCrmCustomerEvent } from "@/lib/repositories/crm-events"
 import { createCrmTask, inferTaskTypeFromTitle } from "@/lib/repositories/crm-tasks"
 import { getLeadById, saveLead } from "@/lib/repositories/leads"
+import { getPublicEventById } from "@/lib/repositories/public-events"
 import type { CrmCustomerEventTargetType } from "@/lib/supabase/database.types"
 import { setEventToken } from "@/lib/types/event-metrics"
 import { captureActivityLabel } from "./activity-types"
@@ -47,6 +48,18 @@ export async function applyCaptureBatch(
   let skipped = 0
   let appliedThisRun = 0
 
+  // 리드 notes 토큰은 공개 신청 리드와 같은 규약으로 slug 우선(없으면 id 폴백).
+  // 과거 id 토큰 데이터는 읽기 측(lib/events/attribution.ts)이 정규화한다.
+  let publicEventToken: string | null = batch.publicEventId
+  if (batch.publicEventId) {
+    try {
+      const publicEvent = await getPublicEventById(batch.publicEventId)
+      publicEventToken = publicEvent?.slug ?? batch.publicEventId
+    } catch {
+      // 조회 실패 시 id 토큰으로 폴백 — 적용 자체를 막지 않는다
+    }
+  }
+
   for (const row of rows) {
     // 멱등: 이미 적용되어 이벤트가 만들어진 행은 재생성하지 않는다.
     if (row.applyStatus === "applied" && row.createdEventId) continue
@@ -73,7 +86,7 @@ export async function applyCaptureBatch(
           email: row.email ?? undefined,
           message: row.memo ?? undefined,
           // 행사 명단이면 리드에도 토큰을 달아 리드 쪽 집계와 일관성 유지
-          notes: batch.publicEventId ? setEventToken("", batch.publicEventId) : undefined,
+          notes: publicEventToken ? setEventToken("", publicEventToken) : undefined,
           timestamp: now.toISOString(),
         })
         createdLeadId = lead.id

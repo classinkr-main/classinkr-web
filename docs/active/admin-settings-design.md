@@ -789,7 +789,7 @@ DB override가 꼭 필요한 secret만 저장한다. Supabase Vault나 KMS를 �
 | Settings redaction | [lib/repositories/settings.ts](../../lib/repositories/settings.ts) | public response에서 민감 URL 제거 |
 | Webhook target validation | [lib/server/post-json.ts](../../lib/server/post-json.ts) | HTTPS, credential, private network 차단 |
 | Channel Talk sync | [app/api/admin/channel-talk/sync/route.ts](../../app/api/admin/channel-talk/sync/route.ts) | `configured`, `ok`, `lastSyncedAt`, warning |
-| Meta status | [app/api/admin/meta/status/route.ts](../../app/api/admin/meta/status/route.ts) | account check, configured error |
+| Meta status | [lib/meta/marketing.ts](../../lib/meta/marketing.ts) | account check, configured error (전용 `meta/status` 라우트는 콜러 0으로 2026-07-02 삭제 — lib 직접 사용) |
 | CRM readiness | [app/api/admin/crm/readiness/route.ts](../../app/api/admin/crm/readiness/route.ts) | CRM 운영 readiness |
 | External CRM sync | [app/api/admin/crm/external-sync/route.ts](../../app/api/admin/crm/external-sync/route.ts) | preflight, sync result |
 | Docs AI readiness | [app/api/admin/docs/alpha-readiness/route.ts](../../app/api/admin/docs/alpha-readiness/route.ts) | Supabase/Gemini/doc chunks 상태 |

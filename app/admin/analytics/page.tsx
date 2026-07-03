@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import AdminTabs from "@/components/admin/AdminTabs"
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { textMatchesEventToken } from "@/lib/events/attribution"
 import { useUrlState } from "@/lib/use-url-state"
 import type { LeadRecord } from "@/lib/db"
 import type { BlogPost } from "@/lib/blog-types"
@@ -837,12 +838,9 @@ export default function AnalyticsPage() {
       eventId: event.id,
       updatedAt: "",
     }
-    const tokenId = `event:${event.id}`.toLowerCase()
-    const tokenSlug = event.slug ? `event:${event.slug}`.toLowerCase() : null
-    const attributedCount = leads.filter((l) => {
-      const haystack = `${l.source ?? ""} ${l.notes ?? ""}`.toLowerCase()
-      return haystack.includes(tokenId) || (tokenSlug ? haystack.includes(tokenSlug) : false)
-    }).length
+    const attributedCount = leads.filter((l) =>
+      textMatchesEventToken(`${l.source ?? ""} ${l.notes ?? ""}`.toLowerCase(), event)
+    ).length
     const startMs = new Date(event.startsAt).getTime()
     const endMs = event.endsAt ? new Date(event.endsAt).getTime() : eventTabNowMs
     const duringCount = leads.filter((l) => {

@@ -6,6 +6,7 @@ import {
   type DocsArticleStatus,
   type DocsArticleVisibility,
 } from "@/lib/repositories/docs-articles"
+import { reindexDocsArticlesServerSide } from "../_reindex"
 import { revalidateDocsIndexPaths } from "../_revalidate"
 
 const ALLOWED_STATUS: DocsArticleStatus[] = ["draft", "review", "published", "archived"]
@@ -44,17 +45,30 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "수정할 문서를 선택해 주세요." }, { status: 400 })
   }
 
+  const patch = {
+    categoryId: typeof payload.categoryId === "string" && payload.categoryId ? payload.categoryId : undefined,
+    status: pickEnum(payload.status, ALLOWED_STATUS),
+    visibility: pickEnum(payload.visibility, ALLOWED_VISIBILITY),
+    featured: typeof payload.featured === "boolean" ? payload.featured : undefined,
+    noindex: typeof payload.noindex === "boolean" ? payload.noindex : undefined,
+  }
+
   try {
-    const result = await bulkPatchDocsArticles(ids, {
-      categoryId: typeof payload.categoryId === "string" && payload.categoryId ? payload.categoryId : undefined,
-      status: pickEnum(payload.status, ALLOWED_STATUS),
-      visibility: pickEnum(payload.visibility, ALLOWED_VISIBILITY),
-      featured: typeof payload.featured === "boolean" ? payload.featured : undefined,
-      noindex: typeof payload.noindex === "boolean" ? payload.noindex : undefined,
-      updatedBy,
-    })
+    const result = await bulkPatchDocsArticles(ids, { ...patch, updatedBy })
     revalidateDocsIndexPaths()
-    return NextResponse.json(result)
+
+    // 게시 여부/노출 조건에 닿는 일괄 변경은 문서별로 인덱스를 갱신한다.
+    // (featured만 바뀌는 경우는 chunk 노출 조건과 무관하므로 재색인 생략)
+    const affectsIndex =
+      patch.status !== undefined ||
+      patch.visibility !== undefined ||
+      patch.noindex !== undefined ||
+      patch.categoryId !== undefined
+    const reindexWarning = affectsIndex
+      ? await reindexDocsArticlesServerSide(ids, "PATCH /api/admin/docs/articles/bulk")
+      : undefined
+
+    return NextResponse.json(reindexWarning ? { ...result, reindexWarning } : result)
   } catch (error) {
     const message = error instanceof Error ? error.message : "문서를 일괄 수정하지 못했습니다."
     return NextResponse.json({ error: message }, { status: 500 })

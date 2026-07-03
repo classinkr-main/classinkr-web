@@ -50,12 +50,24 @@ import {
 
 type ConvertLeadResponse = {
   customer: {
+    id?: string
     name: string
   }
   deal: {
+    id?: string
     deal_code?: string | null
   }
   lead: LeadRecord
+  reusedExisting?: { customer: boolean; deal: boolean }
+  links?: { deal?: string; customer?: string }
+}
+
+type ConvertResultState = {
+  customerName: string
+  dealCode: string | null
+  reused: boolean
+  dealUrl: string | null
+  customerUrl: string
 }
 
 // ─── 활동 인텔리전스 헬퍼 ──────────────────────────────────────
@@ -302,8 +314,12 @@ function LeadDrawer({
 
   const handleSaveNotes = async () => {
     setSavingNotes(true)
-    const combined = setEventToken(notes, linkedEventId || null)
+    // 토큰은 공개 신청 리드와 같은 규약으로 slug 우선(없으면 id).
+    // 과거 id 토큰은 읽기 측(lib/events/attribution.ts)이 같은 행사로 정규화한다.
+    const token = linkedEvent ? (linkedEvent.slug ?? linkedEvent.id) : linkedEventId || null
+    const combined = setEventToken(notes, token)
     await onNotesChange(lead.id, combined)
+    setLinkedEventId(token ?? "")
     setSavingNotes(false)
     setNotesSaved(true)
     setTimeout(() => setNotesSaved(false), 2000)
@@ -717,7 +733,7 @@ function LeadDrawer({
               </div>
             ) : null}
             <select
-              value={linkedEventId}
+              value={linkedEvent?.id ?? linkedEventId}
               onChange={(e) => setLinkedEventId(e.target.value)}
               className="w-full text-[13px] text-[#111110] bg-[#fafaf8] border border-[#e8e8e4] rounded-xl px-3 py-2.5 outline-none focus:border-[#c8c8c4] focus:bg-white transition-all"
             >
@@ -729,7 +745,7 @@ function LeadDrawer({
               ))}
             </select>
             <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">
-              선택 시 메모 첫 줄에 <code className="rounded bg-[#f0f0ec] px-1 font-mono text-[10px] text-[#111110]">[event:&lt;id&gt;]</code> 토큰이 자동 저장됩니다.
+              선택 시 메모 첫 줄에 <code className="rounded bg-[#f0f0ec] px-1 font-mono text-[10px] text-[#111110]">[event:&lt;slug&gt;]</code> 토큰이 자동 저장됩니다.
             </p>
           </div>
 
@@ -809,6 +825,8 @@ export default function LeadsBoardClient() {
   const [activity, setActivity] = useState<LeadActivity | null>(null)
   const [activityLoading, setActivityLoading] = useState(false)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
+  // CRM 전환 직후 동선 — 딜/고객 딥링크 패널 (토스트와 달리 닫기 전까지 유지).
+  const [convertResult, setConvertResult] = useState<ConvertResultState | null>(null)
   const [events, setEvents] = useState<PublicEvent[]>([])
   const [activitySummary, setActivitySummary] = useState<Record<string, LeadActivityBadge>>({})
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(() => new Set())
@@ -1014,13 +1032,22 @@ export default function LeadsBoardClient() {
   const handleConvert = async (lead: LeadRecord) => {
     try {
       const res = await adminFetch(`/api/admin/leads/${lead.id}/convert-v2`, { method: "POST" })
-      const { customer, deal, lead: updatedLead } = await readAdminResponse<ConvertLeadResponse>(
+      const { customer, deal, lead: updatedLead, links, reusedExisting } = await readAdminResponse<ConvertLeadResponse>(
         res,
         "V2 고객사·거래 등록에 실패했습니다."
       )
 
       setLeads((prev) => prev.map((l) => l.id === lead.id ? updatedLead : l))
-      showToast(`${customer.name} 고객사와 ${deal.deal_code ?? "초기 거래"}가 등록되었습니다.`)
+      setConvertResult({
+        customerName: customer.name,
+        dealCode: deal.deal_code ?? null,
+        reused: Boolean(reusedExisting?.customer || reusedExisting?.deal),
+        dealUrl:
+          links?.deal ??
+          (deal.id ? `/admin/crm/deals/orders?deal=${encodeURIComponent(deal.id)}` : null),
+        customerUrl:
+          links?.customer ?? `/admin/crm/customers/unified?q=${encodeURIComponent(customer.name)}`,
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : "고객사·거래 등록에 실패했습니다."
       showToast(message, "error")
@@ -1826,6 +1853,52 @@ export default function LeadsBoardClient() {
         onClose={() => setLeadModalOpen(false)}
         onDone={() => void fetchLeads({ force: true })}
       />
+
+      {/* 전환 완료 패널 — 생성/재사용된 딜·고객으로 바로 이동 */}
+      {convertResult && (
+        <div className="fixed bottom-6 right-6 z-[60] w-[320px] rounded-xl border border-black/[0.08] bg-white p-4 shadow-xl">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-[#1a1a1a]">
+                {convertResult.reused ? "이미 전환된 리드 — 기존 기록 재사용" : "CRM 전환 완료"}
+              </p>
+              <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/60">
+                {convertResult.customerName} 고객사
+                {convertResult.dealCode ? ` · ${convertResult.dealCode}` : ""}
+                {convertResult.reused ? "에 연결되었습니다." : "가 등록되었습니다."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setConvertResult(null)}
+              aria-label="전환 결과 닫기"
+              className="shrink-0 rounded-md p-1 text-[#1a1a1a]/40 transition-colors hover:bg-[#f0f0ec] hover:text-[#1a1a1a]"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="mt-3 flex gap-2">
+            {convertResult.dealUrl && (
+              <Link
+                href={convertResult.dealUrl}
+                onClick={() => setConvertResult(null)}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-3 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#065c41]"
+              >
+                <ExternalLink className="h-3 w-3" />
+                딜 열기
+              </Link>
+            )}
+            <Link
+              href={convertResult.customerUrl}
+              onClick={() => setConvertResult(null)}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-3 py-2 text-[12px] font-semibold text-[#1a1a1a] transition-colors hover:bg-[#f6f5f4]"
+            >
+              <Building2 className="h-3 w-3" />
+              고객 보기
+            </Link>
+          </div>
+        </div>
+      )}
 
       {toast && <Toast msg={toast.msg} type={toast.type} />}
     </div>

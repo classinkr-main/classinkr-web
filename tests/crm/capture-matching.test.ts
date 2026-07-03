@@ -81,4 +81,15 @@ describe("matchCaptureRows", () => {
     expect(result[0].matchStatus).not.toBe("duplicate_in_batch")
     expect(result[1].matchStatus).toBe("duplicate_in_batch")
   })
+
+  it("maps portal customer source rows to the customer target type", () => {
+    const withPortalCustomer = [
+      ...customers,
+      customer({ key: "customer:c1", source: "customer", name: "전환된학원", contact: "010-9999-8888" }),
+    ]
+    const [m] = matchCaptureRows([row({ phone: "010-9999-8888" })], withPortalCustomer)
+    expect(m.matchStatus).toBe("confirmed_customer")
+    expect(m.matchedTargetType).toBe("customer")
+    expect(m.matchedTargetId).toBe("c1")
+  })
 })

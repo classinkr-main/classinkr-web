@@ -1,6 +1,6 @@
-import { NextRequest } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 
-import { verifyAdmin } from "@/lib/admin-auth"
+import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { getCrmSourceLinkCoverage } from "@/lib/repositories/crm-source-links"
 
@@ -35,8 +35,8 @@ function buildCoverageHealth(coverage: {
 
 // 현황 홈 키스톤 위젯용 경량 커버리지. os-summary(무거운 합성)와 분리.
 export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req)
-  if (err) return err
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  if (admin instanceof NextResponse) return admin
 
   const coverage = await getCrmSourceLinkCoverage()
   return adminCachedJson({

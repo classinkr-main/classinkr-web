@@ -17,6 +17,11 @@ function adminUpload(url: string, formData: FormData) {
   })
 }
 
+// signup-counts는 정규 키(slug ?? id)로 집계된다 — slug 없는 행사는 id 키로 조회
+function eventSignupCount(counts: Record<string, number>, event: PublicEvent): number {
+  return (event.slug ? counts[event.slug] : undefined) ?? counts[event.id] ?? 0
+}
+
 function formatDate(iso: string): string {
   const d = new Date(iso)
   return `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, "0")}. ${String(d.getDate()).padStart(2, "0")}`
@@ -302,8 +307,8 @@ export default function AdminEventsPage() {
                     {event.endsAt ? ` ~ ${formatDate(event.endsAt)}` : ""}
                   </td>
                   <td className="px-4 py-3">
-                    {event.slug && (signupCounts[event.slug] ?? 0) > 0 ? (
-                      <span className="font-semibold text-[#084734]">{signupCounts[event.slug]}명</span>
+                    {eventSignupCount(signupCounts, event) > 0 ? (
+                      <span className="font-semibold text-[#084734]">{eventSignupCount(signupCounts, event)}명</span>
                     ) : (
                       <span className="text-[#1a1a1a]/25">-</span>
                     )}

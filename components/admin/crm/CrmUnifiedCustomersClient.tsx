@@ -28,9 +28,10 @@ interface CrmUnifiedCustomers {
   sources: {
     leadsOk: boolean
     neoAccountsOk: boolean
+    portalCustomersOk?: boolean
     warnings: string[]
     statuses: Array<{
-      key: "classin_leads" | "external_crm" | "sheets"
+      key: "classin_leads" | "app_customers" | "external_crm" | "sheets"
       label: string
       role: "primary" | "reference"
       ok: boolean
@@ -43,6 +44,7 @@ interface CrmUnifiedCustomers {
     total: number
     leadCount: number
     accountCount: number
+    customerCount?: number
     highPriorityCount: number
     ownerCount: number
     viewCounts?: Record<string, number>
@@ -64,6 +66,7 @@ const SOURCE_FILTERS: Array<{ key: SourceFilter; label: string }> = [
   { key: "all", label: "전체" },
   { key: "lead", label: "리드" },
   { key: "neo_account", label: "고객" },
+  { key: "customer", label: "전환 고객" },
 ]
 
 const LIFECYCLE_FILTERS: Array<{ key: LifecycleFilter; label: string }> = [
@@ -95,7 +98,8 @@ const PAGE_LIMIT = 100
 
 function rowToFlags(row: CrmUnifiedCustomerRow): CustomerFlag[] {
   return deriveCustomerFlags({
-    source: row.source === "neo_account" ? "neo_account" : "lead",
+    // 전환 고객은 계정 계열 신호(잔액·만료 없음)로 취급 — 리드 규칙(new 등) 오적용 방지.
+    source: row.source === "lead" ? "lead" : "neo_account",
     lifecycle: row.lifecycle,
     score: row.score,
     expireAt: row.expireAt,
@@ -169,6 +173,17 @@ function sourceBadge(row: CrmUnifiedCustomerRow) {
       <span className="inline-flex items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#1a1a1a]/60">
         <PhoneCall className="h-3 w-3" />
         리드
+      </span>
+    )
+  }
+  if (row.source === "customer") {
+    return (
+      <span
+        className="inline-flex items-center gap-1 rounded-full border border-[#D7EBDD] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#084734]"
+        title="리드 전환으로 생성된 앱 고객"
+      >
+        <UserRound className="h-3 w-3" />
+        전환 고객
       </span>
     )
   }
@@ -254,6 +269,15 @@ export default function CrmUnifiedCustomersClient() {
     restoredDrawerRef.current = true
     const account = searchParams.get("account")
     if (account) setDrawer({ key: account, name: "" })
+  }, [searchParams])
+
+  // 리드 전환 완료 패널 '고객 보기' 딥링크(?q=) → 검색어 1회 복원.
+  const restoredQueryRef = useRef(false)
+  useEffect(() => {
+    if (restoredQueryRef.current) return
+    restoredQueryRef.current = true
+    const q = searchParams.get("q")?.trim()
+    if (q) setQuery(q)
   }, [searchParams])
 
   // 사이드바 저장된 세그먼트 링크(?view=) → 저장 뷰 동기화 (네비게이션마다).
@@ -537,7 +561,7 @@ export default function CrmUnifiedCustomersClient() {
           ) : null}
 
           {data ? (
-            <div className="mt-4 grid gap-2 sm:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
               <div className="rounded-xl bg-[#fafaf8] p-3">
                 <p className="text-[11px] font-semibold text-[#1a1a1a]/35">검색 결과</p>
                 <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
@@ -553,6 +577,12 @@ export default function CrmUnifiedCustomersClient() {
                 </p>
               </div>
               <div className="rounded-xl bg-[#fafaf8] p-3">
+                <p className="text-[11px] font-semibold text-[#1a1a1a]/35">전환 고객</p>
+                <p className="mt-1 text-xl font-bold text-[#111110]">
+                  {(data.summary.customerCount ?? 0).toLocaleString("ko-KR")}
+                </p>
+              </div>
+              <div className="rounded-xl bg-[#fafaf8] p-3">
                 <p className="text-[11px] font-semibold text-[#1a1a1a]/35">우선 처리</p>
                 <p className="mt-1 text-xl font-bold text-[#B85C33]">
                   {data.summary.highPriorityCount.toLocaleString("ko-KR")}
@@ -562,7 +592,7 @@ export default function CrmUnifiedCustomersClient() {
           ) : null}
 
           {data?.sources.statuses.length ? (
-            <div className="mt-3 grid gap-2 lg:grid-cols-3">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {data.sources.statuses.map((status) => (
                 <div
                   key={status.key}
@@ -635,19 +665,26 @@ export default function CrmUnifiedCustomersClient() {
                     <td className="px-4 py-3">
                       <div className="flex min-w-0 items-center gap-2">
                         <div className="min-w-0 flex-1">
-                          <button
-                            type="button"
-                            onClick={() => openDrawer(row.key, row.name)}
-                            className="group block max-w-full text-left"
-                          >
-                            <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
-                          </button>
+                          {row.source === "customer" ? (
+                            // 전환 고객은 360 드로어 미지원 — 파트너 워크스페이스(딜)로 이동.
+                            <Link href={row.href} className="group block max-w-full text-left">
+                              <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
+                            </Link>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openDrawer(row.key, row.name)}
+                              className="group block max-w-full text-left"
+                            >
+                              <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
+                            </button>
+                          )}
                           <CrmContactValue value={row.contact} className="mt-0.5" />
                           <CrmCustomerFlags flags={rowToFlags(row)} max={4} className="mt-1" />
                           <TagChips tags={row.tags} />
                         </div>
                         <Link
-                          href={`/admin/crm/customers/${encodeURIComponent(row.key)}`}
+                          href={row.source === "customer" ? row.href : `/admin/crm/customers/${encodeURIComponent(row.key)}`}
                           className="shrink-0 text-[#1a1a1a]/25 transition-colors hover:text-[#111110]"
                           aria-label="고객 상세 페이지 열기"
                         >
@@ -682,12 +719,16 @@ export default function CrmUnifiedCustomersClient() {
           <div className="divide-y divide-[#f0f0ec] lg:hidden">
             {data?.rows.map((row) => (
               <div key={row.key} className="relative transition-colors hover:bg-[#fafaf8]">
-                <button
-                  type="button"
-                  onClick={() => openDrawer(row.key, row.name)}
-                  aria-label={`${row.name} 상세 보기`}
-                  className="absolute inset-0 z-0"
-                />
+                {row.source === "customer" ? (
+                  <Link href={row.href} aria-label={`${row.name} 상세 보기`} className="absolute inset-0 z-0" />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => openDrawer(row.key, row.name)}
+                    aria-label={`${row.name} 상세 보기`}
+                    className="absolute inset-0 z-0"
+                  />
+                )}
                 <div className="pointer-events-none relative z-10 p-4">
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <div className="min-w-0">

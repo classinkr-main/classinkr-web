@@ -242,7 +242,7 @@ function createPartnerCalendarEvent(input: {
     partnerName: input.partnerName,
     dealId: input.dealId,
     dealTitle: input.dealTitle,
-    href: `/admin/partners/${input.partnerId}`,
+    href: `/admin/crm/deals/kpi/${input.partnerId}`,
     syncToAdminCalendar: input.syncToAdminCalendar ?? true,
     createdAt: now,
     updatedAt: now,

@@ -1391,6 +1391,51 @@ export async function createManualBranchRevLinkCandidate(input: {
   return data
 }
 
+export interface ConfirmedLeadConversionLink {
+  linkId: string
+  customerId: string
+  dealId: string | null
+  dealCode: string | null
+  metadata: Record<string, unknown> | null
+}
+
+// 리드→고객 전환 멱등 판정용 SSOT 조회. customers.notes 텍스트 마커 대신
+// 확정(confirmed) 링크를 먼저 보고, 딜 계보는 링크 metadata(deal_id/deal_code)에서 읽는다.
+// 부분 유니크 인덱스(crm_source_links_one_confirmed_source_idx)가 소스당 확정 1건을 보장한다.
+export async function findConfirmedLeadConversionLink(
+  leadId: string
+): Promise<ConfirmedLeadConversionLink | null> {
+  const sourceRecordKey = leadId.trim()
+  if (!sourceRecordKey) return null
+
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("crm_source_links")
+    .select("id, target_id, metadata")
+    .eq("source_system", "lead")
+    .eq("source_object", "leads")
+    .eq("source_record_key", sourceRecordKey)
+    .eq("status", "confirmed")
+    .eq("target_type", "customer")
+    .limit(1)
+
+  if (error) throw error
+
+  const link = data?.[0] as
+    | { id: string; target_id: string | null; metadata: Record<string, unknown> | null }
+    | undefined
+  if (!link?.target_id) return null
+
+  const metadata = link.metadata ?? null
+  return {
+    linkId: link.id,
+    customerId: link.target_id,
+    dealId: getMetadataString(metadata, "deal_id"),
+    dealCode: getMetadataString(metadata, "deal_code"),
+    metadata,
+  }
+}
+
 export async function upsertConfirmedLeadCustomerLink(input: {
   leadId: string
   sourceLabel: string
@@ -1486,6 +1531,30 @@ export async function upsertConfirmedLeadCustomerLink(input: {
     input.actorUserId
   )
   return data
+}
+
+// convert-v2 등이 남긴 confirmed lead→customer 링크를 leadId→customerId 맵으로 반환.
+// 통합 고객 목록이 전환된 리드와 portal customer의 이중 등장을 접는 데 사용한다.
+// confirmed_at 오름차순으로 덮어써서 같은 리드에 확정이 여럿이면 최신 확정이 남는다.
+export async function listConfirmedLeadCustomerLinks(): Promise<Map<string, string>> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("crm_source_links")
+    .select("source_record_key, target_id, confirmed_at")
+    .eq("source_system", "lead")
+    .eq("source_object", "leads")
+    .eq("target_type", "customer")
+    .eq("status", "confirmed")
+    .order("confirmed_at", { ascending: true, nullsFirst: true })
+    .limit(5000)
+
+  if (error) throw error
+
+  const map = new Map<string, string>()
+  for (const row of (data ?? []) as Array<{ source_record_key: string; target_id: string }>) {
+    if (row.source_record_key && row.target_id) map.set(row.source_record_key, row.target_id)
+  }
+  return map
 }
 
 export async function updateCrmSourceLinkStatus(

@@ -1,8 +1,9 @@
 import "server-only"
 
+import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
-export type HardwareCrmOrderSource = "portal_deal" | "external_crm"
+export type HardwareCrmOrderSource = "portal_deal" | "portal_quote" | "legacy_quote" | "external_crm"
 export type HardwareCrmOrderConfidence = "high" | "medium" | "low"
 
 export interface HardwareCrmOrderCandidate {
@@ -124,7 +125,9 @@ function candidateRank(candidate: HardwareCrmOrderCandidate) {
   }
   const sourceRank: Record<HardwareCrmOrderSource, number> = {
     portal_deal: 0,
-    external_crm: 1,
+    portal_quote: 1,
+    legacy_quote: 2,
+    external_crm: 3,
   }
   return confidenceRank[candidate.confidence] * 10 + sourceRank[candidate.source]
 }
@@ -243,7 +246,7 @@ async function listExternalCrmCandidates(input: HardwareCrmOrderCandidateInput):
       status: record.status,
       occurredAt: record.occurred_at,
       syncedAt: record.synced_at,
-      href: "/admin/crm/revenue",
+      href: "/admin/crm/deals",
       confidence,
       reason:
         confidence === "medium"
@@ -253,12 +256,206 @@ async function listExternalCrmCandidates(input: HardwareCrmOrderCandidateInput):
   })
 }
 
+async function listLegacyQuoteCandidates(input: HardwareCrmOrderCandidateInput): Promise<HardwareCrmOrderCandidate[]> {
+  const sb = createSupabaseAdminClient()
+  const searchTerm = productSearchTerm(input.productName)
+
+  let itemsQuery = sb
+    .from("quote_items")
+    .select("id,quote_id,product_name,quantity,amount,sort_order")
+    .order("sort_order", { ascending: true })
+    .limit(50)
+
+  if (searchTerm) itemsQuery = itemsQuery.ilike("product_name", `%${searchTerm}%`)
+
+  const { data: items, error: itemsError } = await itemsQuery
+  if (itemsError) throw itemsError
+
+  const itemRows = (items ?? []) as Array<{
+    id: string
+    quote_id: string
+    product_name: string
+    quantity: number | string | null
+    amount: number | string | null
+  }>
+  if (itemRows.length === 0) return []
+
+  const quoteIds = Array.from(new Set(itemRows.map((item) => item.quote_id).filter(Boolean)))
+  const { data: quotes, error: quotesError } = await sb
+    .from("quotes")
+    .select("id,quote_number,title,status,total_amount,accepted_at,sent_at,updated_at")
+    .in("id", quoteIds)
+  if (quotesError) throw quotesError
+
+  const quotesById = new Map((quotes ?? []).map((quote) => [quote.id, quote as {
+    id: string
+    quote_number: string
+    title: string | null
+    status: string | null
+    total_amount: number | string | null
+    accepted_at: string | null
+    sent_at: string | null
+    updated_at: string | null
+  }]))
+
+  return itemRows.map((line): HardwareCrmOrderCandidate => {
+    const quote = quotesById.get(line.quote_id)
+    const quantity = toNumber(line.quantity)
+    const confidence = confidenceFromMatch({
+      candidateText: `${line.product_name} ${quote?.title ?? ""}`,
+      productName: input.productName,
+      candidateQuantity: quantity,
+      requestedQuantity: input.quantity ?? null,
+      localLineItem: true,
+    })
+
+    return {
+      id: `legacy-quote:${line.id}`,
+      source: "legacy_quote",
+      sourceLabel: "관리자 견적 라인",
+      referenceNo: `quote:${line.quote_id}:line:${line.id}`,
+      title: quote?.title ?? quote?.quote_number ?? line.product_name,
+      productName: line.product_name,
+      quantity,
+      amount: toNumber(line.amount),
+      customerName: null,
+      owner: null,
+      status: quote?.status ?? null,
+      occurredAt: quote?.accepted_at ?? quote?.sent_at ?? quote?.updated_at ?? null,
+      syncedAt: null,
+      href: quote ? `/admin/quotes/${quote.id}/view` : null,
+      confidence,
+      reason:
+        confidence === "high"
+          ? "견적 품목과 수량이 일치합니다."
+          : confidence === "medium"
+            ? "견적 품목 또는 수량이 유사합니다."
+            : "최근 관리자 견적 라인입니다.",
+    }
+  })
+}
+
+async function listPortalQuoteCandidates(input: HardwareCrmOrderCandidateInput): Promise<HardwareCrmOrderCandidate[]> {
+  const sb = createSupabaseAdminClient()
+  const { data: documents, error: documentsError } = await sb
+    .from("quote_documents")
+    .select("id,deal_id,quote_number,current_version_id,status,updated_at,created_at")
+    .order("updated_at", { ascending: false })
+    .limit(40)
+  if (documentsError) throw documentsError
+
+  const documentRows = (documents ?? []) as Array<{
+    id: string
+    deal_id: string
+    quote_number: string
+    current_version_id: string | null
+    status: string | null
+    updated_at: string | null
+    created_at: string | null
+  }>
+  const versionIds = Array.from(new Set(documentRows.map((doc) => doc.current_version_id).filter(Boolean))) as string[]
+  if (versionIds.length === 0) return []
+
+  const { data: versions, error: versionsError } = await sb
+    .from("quote_document_versions")
+    .select("id,quote_document_id,version_number,title,structured_json,total_amount,valid_until,created_at")
+    .in("id", versionIds)
+  if (versionsError) throw versionsError
+
+  const versionRows = (versions ?? []) as Array<{
+    id: string
+    quote_document_id: string
+    version_number: number
+    title: string | null
+    structured_json: Record<string, unknown> | null
+    total_amount: number | string | null
+    valid_until: string | null
+    created_at: string | null
+  }>
+  const versionsById = new Map(versionRows.map((version) => [version.id, version]))
+
+  const dealIds = Array.from(new Set(documentRows.map((doc) => doc.deal_id).filter(Boolean)))
+  const { data: deals, error: dealsError } = await sb
+    .from("deals")
+    .select("id,title,status,current_stage,customer_id,updated_at")
+    .in("id", dealIds)
+  if (dealsError) throw dealsError
+
+  const dealRows = (deals ?? []) as DealRow[]
+  const dealsById = new Map(dealRows.map((deal) => [deal.id, deal]))
+  const customerIds = Array.from(new Set(dealRows.map((deal) => deal.customer_id).filter(Boolean))) as string[]
+  const customersById = new Map<string, CustomerRow>()
+  if (customerIds.length > 0) {
+    const { data: customers, error: customersError } = await sb
+      .from("customers")
+      .select("id,name,contact_name,campus_name")
+      .in("id", customerIds)
+    if (customersError) throw customersError
+    for (const customer of (customers ?? []) as CustomerRow[]) {
+      customersById.set(customer.id, customer)
+    }
+  }
+
+  const searchNeedle = normalizeForMatch(input.productName)
+  const candidates: HardwareCrmOrderCandidate[] = []
+  for (const document of documentRows) {
+    const version = document.current_version_id ? versionsById.get(document.current_version_id) : null
+    if (!version) continue
+    const deal = dealsById.get(document.deal_id)
+    const customer = deal?.customer_id ? customersById.get(deal.customer_id) : null
+    const details = normalizeQuoteDetailsFromStructuredJson(version.structured_json, {})
+    const lineItems = details.lineItems ?? []
+
+    lineItems.forEach((line, index) => {
+      if (line.itemType && line.itemType !== "hardware") return
+      if (searchNeedle && !normalizeForMatch(`${line.itemName} ${line.itemDescription ?? ""}`).includes(searchNeedle)) return
+
+      const quantity = toNumber(line.quantity)
+      const confidence = confidenceFromMatch({
+        candidateText: `${line.itemName} ${line.itemDescription ?? ""} ${deal?.title ?? ""}`,
+        productName: input.productName,
+        candidateQuantity: quantity,
+        requestedQuantity: input.quantity ?? null,
+        localLineItem: true,
+      })
+
+      candidates.push({
+        id: `portal-quote:${version.id}:${line.id ?? index}`,
+        source: "portal_quote",
+        sourceLabel: "포털 견적 라인",
+        referenceNo: `portal-quote:${document.id}:line:${line.id ?? index + 1}`,
+        title: version.title ?? document.quote_number,
+        productName: line.itemName,
+        quantity,
+        amount: toNumber(line.lineSupplyAmount),
+        customerName: customer?.name ?? customer?.campus_name ?? customer?.contact_name ?? null,
+        owner: null,
+        status: document.status ?? deal?.status ?? deal?.current_stage ?? null,
+        occurredAt: document.updated_at ?? version.created_at ?? deal?.updated_at ?? null,
+        syncedAt: null,
+        href: null,
+        confidence,
+        reason:
+          confidence === "high"
+            ? "포털 견적 품목과 수량이 일치합니다."
+            : confidence === "medium"
+              ? "포털 견적 품목 또는 수량이 유사합니다."
+              : "최근 포털 견적 라인입니다.",
+      })
+    })
+  }
+
+  return candidates
+}
+
 export async function listHardwareCrmOrderCandidates(
   input: HardwareCrmOrderCandidateInput
 ): Promise<HardwareCrmOrderCandidateResult> {
   const warnings: string[] = []
   const candidateGroups = await Promise.allSettled([
     listPortalDealCandidates(input),
+    listPortalQuoteCandidates(input),
+    listLegacyQuoteCandidates(input),
     listExternalCrmCandidates(input),
   ])
 

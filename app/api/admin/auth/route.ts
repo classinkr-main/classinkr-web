@@ -3,9 +3,7 @@ import {
   authenticateUser,
   decodeSession,
   encodeSession,
-  verifySameOriginRequest,
 } from "@/lib/admin-auth"
-import { signOutAdminSession } from "@/lib/admin-auth-logout"
 import { ADMIN_AUTH_ERROR_CODE } from "@/lib/admin-auth-errors"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 
@@ -65,12 +63,4 @@ export async function POST(req: NextRequest) {
     secure: process.env.NODE_ENV === "production",
   })
   return res
-}
-
-// DELETE — 레거시 로그아웃 호환용. 신규 호출은 POST /api/admin/auth/logout 사용.
-export async function DELETE(req: NextRequest) {
-  const originError = verifySameOriginRequest(req)
-  if (originError) return originError
-
-  return signOutAdminSession("DELETE /api/admin/auth")
 }

@@ -2,7 +2,7 @@ import { normalizeCrmName } from "@/lib/crm-source-linking"
 import type { CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
 import { extractEmail, extractPhone, type ParsedRow } from "./parsers"
 
-// 캡처 행 ↔ 기존 통합 고객(leads + neo accounts) 매칭(capture-layer §11). 순수 함수.
+// 캡처 행 ↔ 기존 통합 고객(leads + neo accounts + 전환 고객) 매칭(capture-layer §11). 순수 함수.
 // 보수적으로: 전화/이메일 정확 단일 매칭만 자동 확정. 그 외는 사람이 확인.
 
 export type CaptureMatchStatus =
@@ -43,7 +43,9 @@ function entityIdFromKey(key: string): string {
 }
 
 function targetTypeForSource(source: CrmUnifiedCustomerRow["source"]): CaptureTargetType {
-  return source === "neo_account" ? "neo_account" : "lead"
+  if (source === "neo_account") return "neo_account"
+  if (source === "customer") return "customer"
+  return "lead"
 }
 
 interface CustomerIndex {

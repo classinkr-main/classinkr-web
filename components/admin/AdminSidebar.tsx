@@ -1,35 +1,17 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import type { ReactNode } from "react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
-  Activity,
-  BarChart2,
-  BookOpen,
-  Bot,
-  Building2,
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Code2,
-  Eye,
-  FileText,
-  Globe,
-  LayoutDashboard,
   LogOut,
-  Magnet,
   Menu,
-  Megaphone,
-  MessageSquare,
   MoreHorizontal,
-  PackageCheck,
   Search,
-  Settings,
   SquareChevronLeft,
   SquareChevronRight,
-  UserCog,
   Users,
   X,
 } from "lucide-react"
@@ -37,68 +19,48 @@ import { adminFetchJsonCached, clearAdminSessionStorage, warmAdminRequestCache }
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
+import {
+  ADMIN_NAV,
+  ADMIN_NAV_SECTIONS,
+  ADMIN_NAV_SECTION_META,
+  CRM_CHILD_NAV,
+  type AdminNavItem,
+  type AdminRole,
+} from "./admin-nav"
 
-type SidebarRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
-type SidebarSection = "home" | "sales" | "marketing" | "cs" | "performance" | "system"
+// NAV(섹션·항목·롤·뱃지)·SECTION_META·CRM 하위 nav는 admin-nav.ts(SSOT)로 추출됨 —
+// 커맨드 팔레트(AdminCommandPalette)와 공유한다. 이 파일은 렌더링·warm-up 등 동작만 담당.
 
-interface NavItem {
-  href: string
-  label: string
-  icon: ReactNode
-  roles: SidebarRole[]
-  section: SidebarSection
-  badge?: string
+// hover warm-up은 페이지가 실제 호출하는 URL과 캐시 키(쿼리스트링 포함)가 완전히 같아야 적중한다.
+// 날짜 파라미터가 붙는 URL은 hover 시점에 페이지와 같은 계산식으로 만들어야 하므로 함수 항목을 허용한다.
+
+// /admin/chatbot 페이지의 dateOnlyOffset(days)와 동일한 계산식 (기본 기간 30일).
+function chatbotStatsFromDate(days = 30) {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 }
 
-const ALL_STAFF: SidebarRole[]    = ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER"]
-const STAFF_ADMIN: SidebarRole[]  = ["SUPER_ADMIN", "ADMIN"]
-const STAFF_EDITOR: SidebarRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
+// /admin/overview 대시보드와 동일한 계산식 — 현재 월 + (7일 뒤가 다른 달에 걸치면) 그 달.
+function overviewCalendarUrls() {
+  const now = new Date()
+  const weekLater = new Date(now)
+  weekLater.setDate(now.getDate() + 7)
+  const months = [{ year: now.getFullYear(), month: now.getMonth() + 1 }]
+  if (weekLater.getMonth() !== now.getMonth() || weekLater.getFullYear() !== now.getFullYear()) {
+    months.push({ year: weekLater.getFullYear(), month: weekLater.getMonth() + 1 })
+  }
+  return months.map(({ year, month }) => `/api/admin/calendar?year=${year}&month=${month}`)
+}
 
-// IA 재편(2026-06-29): 직무 흐름대로 섹션 정렬 + 중복/오배치 정리.
-// - 자료 퍼널(/materials)은 리드마그넷의 읽기 facade라 nav에서 제거하고, /lead-magnets를 "자료 퍼널"로 통일해 marketing으로 이동.
-// - 하드웨어 재고는 분석이 아니라 SCM 운영 콘솔이라 system(운영·시스템)으로 이동.
-// - 고객 지원은 docs → chatbot → channel-talk 파이프라인 순서.
-const NAV: NavItem[] = [
-  { href: "/admin/overview", label: "Overview", icon: <LayoutDashboard className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "home" },
-
-  // 영업
-  { href: "/admin/crm", label: "CRM", icon: <Users className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "sales" },
-  { href: "/admin/calendar", label: "캘린더", icon: <CalendarDays className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "sales" },
-  { href: "/admin/quotes", label: "견적·문서", icon: <FileText className="h-4 w-4" />, roles: STAFF_ADMIN, section: "sales" },
-
-  // 마케팅
-  { href: "/admin/campaigns", label: "캠페인", icon: <Megaphone className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
-  { href: "/admin/blog", label: "콘텐츠", icon: <FileText className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing" },
-  { href: "/admin/lead-magnets", label: "자료 퍼널", icon: <Magnet className="h-4 w-4" />, roles: STAFF_EDITOR, section: "marketing" },
-  { href: "/admin/events", label: "공개 행사", icon: <Globe className="h-4 w-4" />, roles: STAFF_ADMIN, section: "marketing" },
-
-  // 고객 지원 (docs → chatbot → channel-talk)
-  { href: "/admin/docs", label: "가이드 문서", icon: <BookOpen className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs" },
-  { href: "/admin/chatbot", label: "챗봇 운영", icon: <Bot className="h-4 w-4" />, roles: STAFF_EDITOR, section: "cs", badge: "Ops" },
-  { href: "/admin/channel-talk", label: "채널톡 상담", icon: <MessageSquare className="h-4 w-4" />, roles: STAFF_ADMIN, section: "cs", badge: "New" },
-
-  // 분석
-  { href: "/admin/analytics", label: "Analytics", icon: <BarChart2 className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
-  { href: "/admin/traffic", label: "방문자/트래픽", icon: <Eye className="h-4 w-4" />, roles: [...ALL_STAFF, "BRANCH"], section: "performance" },
-  { href: "/admin/branch", label: "KR Team", icon: <Building2 className="h-4 w-4" />, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance" },
-
-  // 운영·시스템
-  { href: "/admin/ops", label: "Ops Health", icon: <Activity className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "New" },
-  { href: "/admin/hardware", label: "하드웨어 재고", icon: <PackageCheck className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "Ops" },
-  { href: "/admin/settings", label: "Settings", icon: <Settings className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
-  { href: "/admin/users", label: "회원 관리", icon: <UserCog className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system" },
-  { href: "/admin/dev", label: "Dev Mode", icon: <Code2 className="h-4 w-4" />, roles: STAFF_ADMIN, section: "system", badge: "Beta" },
-]
-
-const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
-  "/admin/overview": [
+const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
+  "/admin/overview": () => [
     // overview 페이지가 실제 호출하는 URL과 캐시 키를 맞춰야 hover-warm이 적중한다.
     "/api/admin/leads?scope=dashboard",
     "/api/admin/subscribers?count=1",
     "/api/admin/blog",
     "/api/admin/email",
-    "/api/admin/calendar",
-    "/api/admin/settings",
+    ...overviewCalendarUrls(),
+    // overview는 GET /api/admin/settings 대신 env+DB 합성 health를 읽는다 (페이지 주석 참조).
+    "/api/admin/settings/integrations/status",
     "/api/admin/bugs",
     "/api/admin/patch-notes",
   ],
@@ -108,8 +70,12 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/crm/neo?granularity=month&offset=0",
   ],
   "/admin/channel-talk": ["/api/admin/channel-talk", "/api/admin/channel-talk/mine"],
-  "/admin/calendar": ["/api/admin/calendar"],
-  "/admin/quotes": ["/api/admin/quotes"],
+  "/admin/calendar": () => {
+    // 캘린더 페이지 초기 로드는 항상 현재 연/월 쿼리를 붙인다.
+    const now = new Date()
+    return [`/api/admin/calendar?year=${now.getFullYear()}&month=${now.getMonth() + 1}`]
+  },
+  // /admin/quotes 기본 탭은 portalFetch(/api/portal/documents?type=quote)라 admin 캐시를 읽지 않는다 — warm 대상 아님.
   "/admin/campaigns": [
     "/api/admin/email",
     "/api/admin/subscribers",
@@ -123,8 +89,9 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
   ],
   "/admin/blog": ["/api/admin/blog", "/api/admin/blog?trash=1"],
   "/admin/events": ["/api/admin/events"],
-  "/admin/chatbot": [
-    "/api/admin/chatbot/stats",
+  "/admin/chatbot": () => [
+    // 챗봇 페이지 기본 기간(30일)의 from 쿼리와 캐시 키를 맞춘다.
+    `/api/admin/chatbot/stats?from=${chatbotStatsFromDate()}`,
     "/api/admin/chatbot/questions?limit=10",
     "/api/admin/docs/analytics?days=30",
     "/api/admin/docs/alpha-readiness",
@@ -135,6 +102,11 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
     // 보강 큐 탭(문서 센터로 병합됨)을 호버 시 미리 데워둔다.
     "/api/admin/docs/gaps",
     "/api/admin/docs/alpha-readiness",
+  ],
+  // 문서 보강 큐 nav 항목은 탭 딥링크(/admin/docs?tab=gaps)를 직접 가리킨다 — warm 키도 href와 동일해야 적중.
+  "/admin/docs?tab=gaps": [
+    "/api/admin/docs/alpha-readiness",
+    "/api/admin/docs/gaps",
   ],
   "/admin/branch": [
     "/api/admin/branch/summary?team=ALL&period=Q",
@@ -166,43 +138,9 @@ const NAV_WARMUP_REQUESTS: Record<string, string[]> = {
   "/admin/dev": ["/api/admin/roadmap", "/api/admin/bugs", "/api/admin/patch-notes"],
 }
 
-const SECTION_META: Record<SidebarSection, { label: string; description: string }> = {
-  home: { label: "홈", description: "오늘 먼저 볼 운영 허브" },
-  sales: { label: "영업", description: "CRM, 일정, 딜·문서" },
-  marketing: { label: "마케팅", description: "캠페인, 콘텐츠, 자료 퍼널" },
-  cs: { label: "고객 지원", description: "가이드 문서, 챗봇, 채널톡" },
-  performance: { label: "분석", description: "비즈니스·웹·팀 성과" },
-  system: { label: "운영·시스템", description: "상태, 재고, 설정, 권한" },
-}
-
 // 사이드바 nav 전용 초미니멀 스크롤바: 4px 폭 + 투명 트랙 + hover 시에만 또렷한 thumb.
 const MINIMAL_SCROLLBAR =
   "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/10 hover:[&::-webkit-scrollbar-thumb]:bg-black/20"
-
-// CRM 진입 시 사이드바에서 펼치는 하위 섹션(= 기존 상단 탭의 이전). 활성 판별은 경로 prefix.
-// CRM 핵심 3탭 — 현황(후속조치+분석+시각화) · 고객(DB·360·연락입력·라벨링) · 기록(전체 로그).
-// 돈흐름/인사이트/연동은 어드민(딜보드·견적·Analytics)과 겹치거나 백오피스라 최상위에서 내림.
-// 라우트(deals/insights/matching/revenue/partners)는 보존 — 딥링크·북마크는 현황 탭 active로 귀속.
-const CRM_CHILD_NAV: Array<{ href: string; label: string; match: (p: string) => boolean }> = [
-  {
-    href: "/admin/crm",
-    label: "현황",
-    match: (p) =>
-      p === "/admin/crm" ||
-      p.startsWith("/admin/crm/insights") ||
-      p.startsWith("/admin/crm/deals") ||
-      p.startsWith("/admin/crm/revenue") ||
-      p.startsWith("/admin/crm/matching") ||
-      (p.startsWith("/admin/crm/partners") && !p.startsWith("/admin/crm/partners/customers")),
-  },
-  {
-    href: "/admin/crm/customers/unified",
-    label: "고객DB",
-    match: (p) => p.startsWith("/admin/crm/customers") || p.startsWith("/admin/crm/partners/customers"),
-  },
-  { href: "/admin/crm/activity", label: "기록", match: (p) => p.startsWith("/admin/crm/activity") },
-  { href: "/admin/crm/capture", label: "참석자 입력", match: (p) => p.startsWith("/admin/crm/capture") },
-]
 
 // 저장된 세그먼트 — 고객 하위 퀵필터(?view=). 카운트는 통합 API summary.viewCounts.
 const CRM_SEGMENTS: Array<{ view: string; label: string }> = [
@@ -219,7 +157,7 @@ const MOBILE_PRIMARY_HREFS = [
   "/admin/chatbot",
 ] as const
 
-const ROLE_LABEL: Record<SidebarRole, string> = {
+const ROLE_LABEL: Record<AdminRole, string> = {
   SUPER_ADMIN: "최고 관리자",
   ADMIN: "관리자",
   EDITOR: "에디터",
@@ -234,7 +172,7 @@ interface Props {
   email: string
 }
 
-function normalizeRole(role: string): SidebarRole {
+function normalizeRole(role: string): AdminRole {
   const normalized = role.trim()
 
   if (normalized === "admin" || normalized === "ADMIN") return "ADMIN"
@@ -247,8 +185,28 @@ function normalizeRole(role: string): SidebarRole {
   return "ADMIN"
 }
 
-export default function AdminSidebar({ role, name, email }: Props) {
+// nav href의 쿼리 딥링크(예: /admin/docs?tab=gaps)를 path와 query로 분리한다.
+function splitNavHref(href: string): { path: string; query: string | null } {
+  const queryIndex = href.indexOf("?")
+  return queryIndex === -1
+    ? { path: href, query: null }
+    : { path: href.slice(0, queryIndex), query: href.slice(queryIndex + 1) }
+}
+
+export default function AdminSidebar(props: Props) {
+  // useSearchParams(쿼리 인지형 active 매칭)는 프리렌더 시 Suspense 경계를 요구한다.
+  // 사이드바는 클라이언트 컴포넌트지만 정적 프리렌더 대상이 될 수 있어 자체 경계로 감싼다.
+  // admin layout이 세션 확인 전에는 스켈레톤을 그리므로 fallback null로 충분하다.
+  return (
+    <Suspense fallback={null}>
+      <AdminSidebarContent {...props} />
+    </Suspense>
+  )
+}
+
+function AdminSidebarContent({ role, name, email }: Props) {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const router = useRouter()
   const prefetchedHrefs = useRef(new Set<string>())
   const warmedHrefs = useRef(new Set<string>())
@@ -319,16 +277,36 @@ export default function AdminSidebar({ role, name, email }: Props) {
 
   const normalizedRole = normalizeRole(role)
   const visibleNav = useMemo(
-    () => NAV.filter((item) => item.roles.includes(normalizedRole)),
+    () => ADMIN_NAV.filter((item) => item.roles.includes(normalizedRole)),
     [normalizedRole]
   )
-  const isNavActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
+  // 현재 URL 쿼리가 nav href의 쿼리(예: tab=gaps)를 전부 포함하는지 판별.
+  const queryMatches = (query: string) => {
+    const wanted = new URLSearchParams(query)
+    for (const [key, value] of wanted.entries()) {
+      if (searchParams.get(key) !== value) return false
+    }
+    return true
+  }
+  // 쿼리 인지형 active 매칭 — 쿼리 딥링크 항목은 path+query가 모두 맞아야 active,
+  // 쿼리 없는 항목은 같은 경로의 쿼리 딥링크 형제가 매칭되면 하이라이트를 양보한다
+  // (가이드 문서 /admin/docs vs 문서 보강 큐 /admin/docs?tab=gaps).
+  const isNavActive = (href: string) => {
+    const { path, query } = splitNavHref(href)
+    const onPath = pathname === path || pathname.startsWith(`${path}/`)
+    if (!onPath) return false
+    if (query) return queryMatches(query)
+    return !visibleNav.some((item) => {
+      const sibling = splitNavHref(item.href)
+      return sibling.path === path && sibling.query !== null && queryMatches(sibling.query)
+    })
+  }
   const currentNavItem = visibleNav.find((item) => isNavActive(item.href)) ?? visibleNav[0]
   const mobilePrimaryNav = MOBILE_PRIMARY_HREFS
     .map((href) => visibleNav.find((item) => item.href === href))
-    .filter((item): item is NavItem => Boolean(item))
+    .filter((item): item is AdminNavItem => Boolean(item))
   const mobileBottomColumns = Math.min(mobilePrimaryNav.length + 1, 5)
-  const groupedNav = (Object.keys(SECTION_META) as SidebarSection[]).map((section) => ({
+  const groupedNav = ADMIN_NAV_SECTIONS.map((section) => ({
     section,
     items: visibleNav.filter((item) => item.section === section),
   })).filter((group) => group.items.length > 0)
@@ -350,7 +328,9 @@ export default function AdminSidebar({ role, name, email }: Props) {
     if (warmedHrefs.current.has(href)) return
     warmedHrefs.current.add(href)
 
-    for (const url of NAV_WARMUP_REQUESTS[href] ?? []) {
+    const warmupEntry = NAV_WARMUP_REQUESTS[href]
+    const warmupUrls = typeof warmupEntry === "function" ? warmupEntry() : warmupEntry ?? []
+    for (const url of warmupUrls) {
       void warmAdminRequestCache(url, { ttlMs: 60_000 })
     }
   }, [prefetchAdminRoute])
@@ -511,7 +491,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
               <div key={`mobile-${section}`} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
                 <div className="px-3 pb-2">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
-                    {SECTION_META[section].label}
+                    {ADMIN_NAV_SECTION_META[section].label}
                   </p>
                 </div>
                 <div className="space-y-1">
@@ -539,7 +519,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
                         }`}
                       >
                         <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
-                          {item.icon}
+                          <item.icon className="h-4 w-4" />
                         </span>
                         <span className="min-w-0 flex-1 truncate">{item.label}</span>
                         {item.badge ? (
@@ -596,7 +576,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
               }`}
             >
               <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
-                {item.icon}
+                <item.icon className="h-4 w-4" />
               </span>
               <span className="max-w-full truncate">{item.label}</span>
             </Link>
@@ -728,10 +708,10 @@ export default function AdminSidebar({ role, name, email }: Props) {
             {!effectiveCollapsed && (
               <div className="px-3 pb-2">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
-                  {SECTION_META[section].label}
+                  {ADMIN_NAV_SECTION_META[section].label}
                 </p>
                 <p className="mt-1 hidden text-[11px] text-[#1a1a1a]/32 sm:block">
-                  {SECTION_META[section].description}
+                  {ADMIN_NAV_SECTION_META[section].description}
                 </p>
               </div>
             )}
@@ -762,7 +742,7 @@ export default function AdminSidebar({ role, name, email }: Props) {
                     }`}
                   >
                     <span className={isActive ? "text-white" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}>
-                      {item.icon}
+                      <item.icon className="h-4 w-4" />
                     </span>
                     {!effectiveCollapsed && (
                       <>

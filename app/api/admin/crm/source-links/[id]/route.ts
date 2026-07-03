@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import {
   type CrmSourceLinkAction,
   updateCrmSourceLinkStatus,
@@ -15,7 +15,7 @@ function isCrmSourceLinkAction(value: unknown): value is CrmSourceLinkAction {
 }
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
-  const admin = await requireVerifiedAdminContext(req)
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   const { id } = await context.params

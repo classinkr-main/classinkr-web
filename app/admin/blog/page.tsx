@@ -23,18 +23,11 @@ import {
 } from "lucide-react"
 import { CATEGORIES } from "@/lib/blog-types"
 import { Button } from "@/components/ui/button"
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog"
 import BlogPostTable from "@/components/admin/BlogPostTable"
-import BlogPostForm from "@/components/admin/BlogPostForm"
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import TopViewedPosts from "@/components/admin/blog/TopViewedPosts"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
-import type { BlogPost, BlogPostInput } from "@/lib/blog-types"
+import type { BlogPost } from "@/lib/blog-types"
 
 type ContentView = "blog" | "instagram"
 type BlogTab = "all" | "private" | "trash"
@@ -172,8 +165,6 @@ export default function AdminBlogPage() {
     const [searchQuery, setSearchQuery] = useState("")
     const [categoryFilter, setCategoryFilter] = useState<string>("전체")
 
-    const [isFormOpen, setIsFormOpen] = useState(false)
-    const [editingPost, setEditingPost] = useState<BlogPost | undefined>(undefined)
     const [deleteTarget, setDeleteTarget] = useState<BlogPost | null>(null)
     const [permanentTarget, setPermanentTarget] = useState<BlogPost | null>(null)
 
@@ -223,37 +214,11 @@ export default function AdminBlogPage() {
     }
 
     const handleCreate = () => {
-        setEditingPost(undefined)
         router.push("/admin/blog/new")
     }
 
     const handleEdit = (post: BlogPost) => {
         router.push(`/admin/blog/${post._uuid ?? post.id}/edit`)
-    }
-
-    const handleSave = async (data: Partial<BlogPostInput>) => {
-        setFormLoading(true)
-        try {
-            if (editingPost) {
-                const res = await adminFetch(`/api/admin/blog/${editingPost._uuid ?? editingPost.id}`, {
-                    method: "PUT",
-                    body: JSON.stringify(data),
-                })
-                if (res.status === 401) { handleUnauthorized(); return }
-            } else {
-                const res = await adminFetch("/api/admin/blog", {
-                    method: "POST",
-                    body: JSON.stringify(data),
-                })
-                if (res.status === 401) { handleUnauthorized(); return }
-            }
-            setIsFormOpen(false)
-            await fetchPosts()
-        } catch {
-            // silent
-        } finally {
-            setFormLoading(false)
-        }
     }
 
     // Soft delete → trash
@@ -554,21 +519,6 @@ export default function AdminBlogPage() {
                     onRefresh={fetchInstagram}
                 />
             )}
-
-            {/* Edit Dialog */}
-            <Dialog open={isFormOpen} onOpenChange={(v) => !v && setIsFormOpen(false)}>
-                <DialogContent className="sm:max-w-lg bg-white">
-                    <DialogHeader>
-                        <DialogTitle>{editingPost ? "글 수정" : "새 글 작성"}</DialogTitle>
-                    </DialogHeader>
-                    <BlogPostForm
-                        post={editingPost}
-                        onSave={handleSave}
-                        onCancel={() => setIsFormOpen(false)}
-                        loading={formLoading}
-                    />
-                </DialogContent>
-            </Dialog>
 
             {/* Soft-delete confirm */}
             <DeleteConfirmDialog

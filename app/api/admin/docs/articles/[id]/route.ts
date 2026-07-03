@@ -15,6 +15,7 @@ import {
 } from "@/lib/repositories/docs-articles"
 import { revalidateDocsArticlePaths } from "../_revalidate"
 import { validateDocsArticlePatchForPublish } from "../_payload"
+import { docsReindexNeeded, reindexDocsArticleServerSide } from "../_reindex"
 
 const ALLOWED_STATUS: DocsArticleStatus[] = ["draft", "review", "published", "archived"]
 const ALLOWED_VISIBILITY: DocsArticleVisibility[] = ["public", "unlisted", "internal"]
@@ -75,24 +76,6 @@ function pickJson(value: unknown): Record<string, unknown> | undefined {
     return value as Record<string, unknown>
   }
   return undefined
-}
-
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const authError = await verifyAdmin(req)
-  if (authError) return authError
-
-  const { id } = await params
-  try {
-    const detail = await getDocsArticleById(id)
-    if (!detail) return NextResponse.json({ error: "문서를 찾을 수 없습니다." }, { status: 404 })
-    return NextResponse.json(detail)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "문서 조회에 실패했습니다."
-    return NextResponse.json({ error: message }, { status: 500 })
-  }
 }
 
 export async function PATCH(
@@ -185,7 +168,12 @@ export async function PATCH(
     }
 
     revalidateDocsArticlePaths(existing, detail)
-    return NextResponse.json(detail)
+
+    const reindexWarning = docsReindexNeeded(existing.status, detail.status)
+      ? await reindexDocsArticleServerSide(detail.id, "PATCH /api/admin/docs/articles/[id]")
+      : undefined
+
+    return NextResponse.json(reindexWarning ? { ...detail, reindexWarning } : detail)
   } catch (error) {
     const message = error instanceof Error ? error.message : "문서 수정에 실패했습니다."
     const isConflict = /duplicate key|unique/i.test(message)

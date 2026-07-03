@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { verifyAdmin } from "@/lib/admin-auth"
+import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { deleteLead, updateLead, type LeadStatus, type LeadRecord } from "@/lib/repositories/leads"
 
 const LEAD_STATUSES = new Set<LeadStatus>(["new", "contacted", "converted", "closed"])
@@ -57,8 +57,8 @@ function sanitizeLeadPatch(raw: unknown): { patch?: Partial<LeadRecord>; error?:
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const err = await verifyAdmin(req)
-  if (err) return err
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  if (admin instanceof NextResponse) return admin
 
   const { id } = await params
   const body = await req.json().catch(() => null)
@@ -76,8 +76,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const err = await verifyAdmin(req)
-  if (err) return err
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
+  if (admin instanceof NextResponse) return admin
 
   const { id } = await params
 

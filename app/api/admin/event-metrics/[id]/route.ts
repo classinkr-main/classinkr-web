@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
-import {
-  getEventMetrics,
-  saveEventMetrics,
-  deleteEventMetrics,
-} from "@/lib/repositories/event-metrics"
+import { saveEventMetrics } from "@/lib/repositories/event-metrics"
 import type { AdSpendEntry } from "@/lib/types/event-metrics"
 
 const VALID_CHANNELS = new Set([
@@ -51,23 +47,6 @@ function sanitizeAdSpend(value: unknown): AdSpendEntry[] {
     .filter((entry): entry is AdSpendEntry => entry !== null)
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const err = await verifyAdmin(req)
-  if (err) return err
-  const { id } = await params
-  try {
-    return NextResponse.json(getEventMetrics(id))
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "메트릭 조회 실패" },
-      { status: 500 }
-    )
-  }
-}
-
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -98,24 +77,6 @@ export async function PATCH(
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "메트릭 저장 실패" },
-      { status: 500 }
-    )
-  }
-}
-
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const err = await verifyAdmin(req)
-  if (err) return err
-  const { id } = await params
-  try {
-    deleteEventMetrics(id)
-    return NextResponse.json({ ok: true })
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "메트릭 삭제 실패" },
       { status: 500 }
     )
   }

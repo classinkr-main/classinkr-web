@@ -10,11 +10,15 @@ import {
   type CrmPriorityItem,
   type CrmPrioritySource,
 } from "@/lib/crm/priority"
+import { listAllCustomerListItemsLite } from "@/lib/portal/repositories/customers"
+import type { CustomerListItem } from "@/lib/portal/types"
+import { listConfirmedLeadCustomerLinks } from "@/lib/repositories/crm-source-links"
 import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
 import { computeCustomerHealth, type CustomerHealthBand } from "@/lib/crm/customer-health"
 import { getAllCustomerTagsMap } from "./crm-customer-tags"
 
-export type CrmUnifiedCustomerSource = CrmPrioritySource
+// "customer" = 리드 전환(convert-v2)이 만드는 portal customers 테이블의 앱 고객.
+export type CrmUnifiedCustomerSource = CrmPrioritySource | "customer"
 export type CrmUnifiedLifecycle = "new_lead" | "active_lead" | "account_risk" | "active_account" | "closed"
 export type CrmUnifiedSavedView =
   | "all"
@@ -29,7 +33,7 @@ export type CrmUnifiedSavedView =
 
 // 칩 카운트를 보여줄 세그먼트(저장 뷰).
 export const CRM_SEGMENT_VIEWS = ["expiring", "dormant", "hot_lead", "upsell"] as const
-export type CrmUnifiedSourceStatusKey = "classin_leads" | "external_crm" | "sheets"
+export type CrmUnifiedSourceStatusKey = "classin_leads" | "app_customers" | "external_crm" | "sheets"
 
 export interface CrmUnifiedCustomerRow {
   key: string
@@ -78,6 +82,7 @@ export interface CrmUnifiedCustomers {
   sources: {
     leadsOk: boolean
     neoAccountsOk: boolean
+    portalCustomersOk: boolean
     warnings: string[]
     statuses: Array<{
       key: CrmUnifiedSourceStatusKey
@@ -93,6 +98,7 @@ export interface CrmUnifiedCustomers {
     total: number
     leadCount: number
     accountCount: number
+    customerCount: number
     highPriorityCount: number
     ownerCount: number
     viewCounts: Record<string, number>
@@ -130,6 +136,12 @@ function formatCNY(value: number | null | undefined) {
   return `¥${amount.toLocaleString("ko-KR", { maximumFractionDigits: 0 })}`
 }
 
+function formatKRW(value: number | null | undefined) {
+  const amount = Number(value ?? 0)
+  if (!amount) return null
+  return `${Math.round(amount).toLocaleString("ko-KR")}원`
+}
+
 function leadName(lead: LeadRecord) {
   return lead.org || lead.name || lead.email || lead.phone || "이름 없는 리드"
 }
@@ -155,6 +167,48 @@ function defaultLeadAction(lead: LeadRecord) {
 
 function accountLifecycle(priority: CrmPriorityItem | null): CrmUnifiedLifecycle {
   return priority && priority.score >= 42 ? "account_risk" : "active_account"
+}
+
+// 리드 전환 산출물(portal customers) → 통합 행. 거래 요약(customer_deal_summary)이 있으면
+// 미수·진행 딜 신호로 다음 액션과 점수를 보수적으로 잡는다(우선순위 엔진 미적용 소스).
+function buildPortalCustomerRow(item: CustomerListItem): CrmUnifiedCustomerRow {
+  const { customer, summary } = item
+  const outstanding = summary?.outstanding_amount ?? 0
+  const activeDeals = summary?.active_deals ?? 0
+  const contractedLabel = formatKRW(summary?.contracted_amount)
+  const outstandingLabel = formatKRW(outstanding)
+  return {
+    key: `customer:${customer.id}`,
+    tags: [],
+    source: "customer",
+    sourceLabel: "전환 고객",
+    name: [customer.name, customer.campus_name].filter(Boolean).join(" · "),
+    contact: customer.phone ?? customer.email ?? customer.contact_name,
+    ownerName: null,
+    ownerKeys: [],
+    lifecycle: "active_account",
+    statusLabel: activeDeals > 0 ? "거래 진행 중" : "전환 고객",
+    nextActionLabel: outstanding > 0 ? "미수 확인" : activeDeals > 0 ? "딜 진행" : "관계 유지",
+    priorityReason:
+      outstanding > 0
+        ? "미수 잔액 남음"
+        : activeDeals > 0
+          ? `진행 중 거래 ${activeDeals}건`
+          : "리드 전환으로 생성된 앱 고객",
+    score: outstanding > 0 ? 46 : activeDeals > 0 ? 34 : 14,
+    moneyLabel:
+      contractedLabel && outstandingLabel
+        ? `계약 ${contractedLabel} · 미수 ${outstandingLabel}`
+        : contractedLabel
+          ? `계약 ${contractedLabel}`
+          : outstandingLabel
+            ? `미수 ${outstandingLabel}`
+            : null,
+    href: `/admin/crm/deals/kpi/${encodeURIComponent(customer.partner_account_id)}`,
+    updatedAt: summary?.last_deal_updated_at ?? customer.updated_at ?? customer.created_at,
+    expireAt: null,
+    balance: null,
+  }
 }
 
 function normalize(value: string | null | undefined) {
@@ -263,9 +317,15 @@ export async function getCrmUnifiedCustomers(
   const warnings: string[] = []
   let leadsOk = true
   let neoAccountsOk = true
-  const rows: CrmUnifiedCustomerRow[] = []
+  let portalCustomersOk = true
+  let rows: CrmUnifiedCustomerRow[] = []
 
-  const [leadResult, neoResult] = await Promise.allSettled([getLeads(), getNeoCrmCustomers()])
+  const [leadResult, neoResult, portalCustomersResult, convertedLinksResult] = await Promise.allSettled([
+    getLeads(),
+    getNeoCrmCustomers(),
+    listAllCustomerListItemsLite(),
+    listConfirmedLeadCustomerLinks(),
+  ])
 
   if (leadResult.status === "fulfilled") {
     for (const lead of leadResult.value) {
@@ -338,6 +398,42 @@ export async function getCrmUnifiedCustomers(
     warnings.push("외부 CRM 고객 동기화 목록을 불러오지 못했습니다.")
   }
 
+  if (portalCustomersResult.status === "fulfilled") {
+    for (const item of portalCustomersResult.value) {
+      rows.push(buildPortalCustomerRow(item))
+    }
+  } else {
+    portalCustomersOk = false
+    warnings.push("리드 전환 고객(앱 고객 DB) 목록을 불러오지 못했습니다.")
+  }
+
+  // 전환 중복 제거 — confirmed lead→customer 링크가 있고 해당 customer 행이 있으면
+  // lead 행을 접고 customer 행(전환 산출물)만 남긴다. 리드의 담당·연락처는 승계.
+  // 링크 조회 실패 시 접기를 건너뛴다(중복 표시가 행 소실보다 안전).
+  if (convertedLinksResult.status === "rejected") {
+    warnings.push("리드-고객 전환 링크를 불러오지 못해 전환 고객이 리드와 중복 표시될 수 있습니다.")
+  }
+  const convertedCustomerIdByLeadId =
+    convertedLinksResult.status === "fulfilled" ? convertedLinksResult.value : new Map<string, string>()
+  if (convertedCustomerIdByLeadId.size > 0) {
+    const customerRowById = new Map(
+      rows
+        .filter((row) => row.source === "customer")
+        .map((row) => [row.key.slice("customer:".length), row])
+    )
+    rows = rows.filter((row) => {
+      if (row.source !== "lead") return true
+      const customerId = convertedCustomerIdByLeadId.get(row.key.slice("lead:".length))
+      const customerRow = customerId ? customerRowById.get(customerId) : undefined
+      if (!customerRow) return true
+      if (!customerRow.ownerName && row.ownerName) customerRow.ownerName = row.ownerName
+      customerRow.ownerKeys = [...new Set([...customerRow.ownerKeys, ...row.ownerKeys])]
+      if (!customerRow.contact && row.contact) customerRow.contact = row.contact
+      if (customerRow.statusLabel === "전환 고객") customerRow.statusLabel = "리드 전환 완료"
+      return false
+    })
+  }
+
   // 수기 라벨 — 소규모 태그 테이블을 한 번 읽어 행에 부착(없으면 graceful 빈 맵).
   const tagsMap = await getAllCustomerTagsMap().catch(() => ({}) as Record<string, string[]>)
   for (const row of rows) {
@@ -375,7 +471,8 @@ export async function getCrmUnifiedCustomers(
     const bucket = sortBucketForRow(row)
     return {
       id: row.key,
-      source: row.source,
+      // 전환 고객은 우선순위 엔진 소스 타입 밖 — 정렬 목적으로 계정 계열로 취급.
+      source: row.source === "customer" ? "neo_account" : row.source,
       title: row.name,
       subtitle: row.contact,
       ownerName: row.ownerName,
@@ -434,6 +531,17 @@ export async function getCrmUnifiedCustomers(
         : "ClassIn 리드 저장소를 불러오지 못해 리드 행이 제외되었습니다.",
     },
     {
+      key: "app_customers",
+      label: "리드 전환 고객",
+      role: "primary",
+      ok: portalCustomersOk,
+      partial: !portalCustomersOk,
+      latestSyncedAt: null,
+      message: portalCustomersOk
+        ? "리드 전환으로 생성된 앱 고객 DB를 통합 목록에 함께 표시합니다."
+        : "앱 고객 DB를 불러오지 못해 전환 고객 행이 제외되었습니다.",
+    },
+    {
       key: "external_crm",
       label: "외부 CRM 동기화",
       role: "reference",
@@ -459,11 +567,12 @@ export async function getCrmUnifiedCustomers(
 
   return {
     generatedAt: now.toISOString(),
-    sources: { leadsOk, neoAccountsOk, warnings, statuses: sourceStatuses },
+    sources: { leadsOk, neoAccountsOk, portalCustomersOk, warnings, statuses: sourceStatuses },
     summary: {
       total: filtered.length,
       leadCount: filtered.filter((row) => row.source === "lead").length,
       accountCount: filtered.filter((row) => row.source === "neo_account").length,
+      customerCount: filtered.filter((row) => row.source === "customer").length,
       highPriorityCount: filtered.filter((row) => row.score >= 68).length,
       ownerCount: owners.length,
       viewCounts,
