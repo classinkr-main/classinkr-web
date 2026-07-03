@@ -3137,13 +3137,13 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
           </div>
         </div>
       </td>
-      <td className="border-l border-[#F2F1EE] px-1 text-center" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
-        <div className="flex flex-wrap items-center justify-center gap-0.5">
+      <td className="border-l border-[#F2F1EE] px-1.5 text-right" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
+        <div className="flex flex-wrap items-center justify-end gap-x-1">
           {group.categories.map((category) => (
             <span
               key={category}
               title={`${productCategoryMeta(category).label} ${formatMoney(group.categoryTotals[category])}`}
-              className={`inline-flex items-center rounded-full border px-1 text-[9px] font-bold ${productCategoryMeta(category).className}`}
+              className="text-[10px] font-semibold text-[#615D59]"
             >
               {productCategoryMeta(category).shortLabel}
             </span>
@@ -3242,8 +3242,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
         className={`sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] pr-2 ${grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2"} ${rowBg}`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
-        <div className="flex items-center gap-1">
-          <ProductCategoryPill category={productCategory} compact />
+        <div className="flex items-center gap-1.5">
           <div className="min-w-0 flex-1">
             <button
               type="button"
@@ -3260,12 +3259,11 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
               </span>
             )}
           </div>
+          <span className="shrink-0 text-[10px] font-semibold text-[#A39E98]">{productCategoryMeta(productCategory).shortLabel}</span>
         </div>
       </td>
-      <td className="border-l border-[#F2F1EE] px-1 text-center align-middle" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
-        <span
-          className={`rounded-full px-1 text-[9px] font-bold ${draftRow ? "bg-[#FBF1E0] text-[#7A520F]" : "bg-[#F6F5F4] text-[#615D59]"}`}
-        >
+      <td className="border-l border-[#F2F1EE] px-1.5 text-right align-middle" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
+        <span className={`text-[10px] font-semibold ${draftRow ? "text-[#A8741A]" : "text-[#A39E98]"}`}>
           {draftRow ? "장부" : "시트"}
         </span>
       </td>
@@ -3415,7 +3413,7 @@ export default function SalesLedgerWorkbench() {
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false)
   const [revSortKey, setRevSortKey] = useState<RevSortKey>("revenue")
   const [revSortDirection, setRevSortDirection] = useState<RevSortDirection>("desc")
-  const [revPageSize, setRevPageSize] = useState<RevPageSize>(50)
+  const [revPageSize, setRevPageSize] = useState<RevPageSize>(100)
   const [revPage, setRevPage] = useState(1)
   const [expandedRevGroups, setExpandedRevGroups] = useState<Set<string>>(() => new Set())
   // 매트릭스: 월 헤더 클릭 시 그 달만 w1~w5 5칸으로 확장(기본은 전부 요약 1칸).
@@ -3604,7 +3602,7 @@ export default function SalesLedgerWorkbench() {
     if (revForecastFilter !== "all") params.set("fc", revForecastFilter)
     if (revSortKey !== "revenue") params.set("sort", revSortKey)
     if (revSortDirection !== "desc") params.set("dir", revSortDirection)
-    if (revPageSize !== 50) params.set("ps", String(revPageSize))
+    if (revPageSize !== 100) params.set("ps", String(revPageSize))
     const search = params.toString()
     const nextUrl = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`
     const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -3698,7 +3696,7 @@ export default function SalesLedgerWorkbench() {
     setAdvancedFiltersOpen(false)
     setRevSortKey("revenue")
     setRevSortDirection("desc")
-    setRevPageSize(50)
+    setRevPageSize(100)
     setRevPage(1)
   }, [])
 
@@ -4481,7 +4479,7 @@ export default function SalesLedgerWorkbench() {
     revForecastFilter !== "all" ||
     revSortKey !== "revenue" ||
     revSortDirection !== "desc" ||
-    revPageSize !== 50
+    revPageSize !== 100
 
   useEffect(() => {
     if (revPage > revTotalPages) setRevPage(revTotalPages)
@@ -4911,9 +4909,9 @@ export default function SalesLedgerWorkbench() {
         )}
       </header>
 
-      <main className="grid gap-5 px-4 pt-5 sm:px-6 lg:grid-cols-[188px_minmax(0,1fr)] lg:px-9">
-        <aside className="space-y-3 lg:sticky lg:top-4 lg:self-start">
-          <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-2" role="tablist" aria-label="Sales ledger views">
+      <main className="space-y-5 px-4 pt-5 sm:px-6 lg:px-9">
+        <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="Sales ledger views">
             {LENSES.map((item) => (
               <button
                 key={item.id}
@@ -4922,63 +4920,36 @@ export default function SalesLedgerWorkbench() {
                 role="tab"
                 aria-selected={lens === item.id}
                 aria-controls="sales-ledger-lens-panel"
+                title={item.description}
                 onClick={() => selectLens(item.id)}
-                className={`mb-1 flex w-full items-start gap-3 rounded-md px-3 py-3 text-left transition last:mb-0 ${
+                className={`inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-[13px] font-bold transition ${
                   lens === item.id ? "bg-[#111110] text-white" : "text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
                 }`}
               >
-                <span className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-md ${
+                <span className={`flex h-6 w-6 items-center justify-center rounded-md ${
                   lens === item.id ? "bg-white/12" : "bg-[#ECFDF5] text-[#084734]"
                 }`}>
                   {item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : item.id === "rev" ? <Table2 className="h-3.5 w-3.5" /> : <Users className="h-3.5 w-3.5" />}
                 </span>
-                <span>
-                  <span className="block text-[13px] font-bold">{item.label}</span>
-                  <span className={`mt-0.5 block text-[11px] leading-relaxed ${lens === item.id ? "text-white/62" : "text-[#615D59]"}`}>
-                    {item.description}
-                  </span>
-                </span>
+                {item.label}
               </button>
             ))}
           </div>
 
-          <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
-            <p className="flex items-center gap-2 text-[12px] font-bold text-[#111110]">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[11px] text-[#615D59]">
+            <span className="flex items-center gap-1.5 font-bold text-[#111110]">
               <Database className="h-3.5 w-3.5 text-[#084734]" />
-              Source 상태
-            </p>
-            <div className="mt-3 space-y-2 text-[11px] text-[#615D59]">
-              <div className="flex items-center justify-between gap-2">
-                <span>마지막 sync</span>
-                <span className="font-semibold text-[#111110]">{formatDateTime(summary.data?.lastSync)}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span>시트 수정</span>
-                <span className="font-semibold text-[#111110]">{formatDateTime(summary.data?.sheetModifiedAt)}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span>입력 큐</span>
-                <span className="font-semibold text-[#111110]">
-                  {queueMode === "server" ? "서버" : "로컬"} · {openDrafts.length}건
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span>내부 원장</span>
-                <span className="font-semibold text-[#111110]">
-                  {ledgerHealth?.ok === false ? "준비 필요" : `${ledgerEntries.length}건`}
-                </span>
-              </div>
-              {queueError && (
-                <div className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2 py-1.5 text-[10.5px] leading-relaxed text-[#7A520F]">
-                  {queueError}
-                </div>
-              )}
-              {ledgerHealth?.ok === false && (
-                <div className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2 py-1.5 text-[10.5px] leading-relaxed text-[#7A520F]">
-                  {ledgerHealth.message ?? "내부 원장 마이그레이션이 아직 준비되지 않았습니다."}
-                </div>
-              )}
-            </div>
+              Source
+            </span>
+            <span>sync <span className="font-semibold text-[#111110]">{formatDateTime(summary.data?.lastSync)}</span></span>
+            <span>시트수정 <span className="font-semibold text-[#111110]">{formatDateTime(summary.data?.sheetModifiedAt)}</span></span>
+            <span>입력 큐 <span className="font-semibold text-[#111110]">{queueMode === "server" ? "서버" : "로컬"} · {openDrafts.length}건</span></span>
+            <span>내부 원장 <span className="font-semibold text-[#111110]">{ledgerHealth?.ok === false ? "준비 필요" : `${ledgerEntries.length}건`}</span></span>
+            {(queueError || ledgerHealth?.ok === false) && (
+              <span className="rounded border border-[#ECD29C] bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-semibold text-[#7A520F]">
+                ⚠ {queueError ?? ledgerHealth?.message ?? "내부 원장 준비 필요"}
+              </span>
+            )}
           </div>
         </aside>
 
