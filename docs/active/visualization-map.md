@@ -51,24 +51,29 @@ flowchart TB
 
 ```mermaid
 flowchart TD
-    HERO["Hero"] --> PROBLEM["ProblemCost"]
-    PROBLEM --> BRIDGE["BridgeMoment"]
-    BRIDGE --> OUTCOMES["Outcomes"]
-    OUTCOMES --> SOLUTION["SolutionOverview"]
+    HERO["Hero"] --> LOGO["LogoBar"]
+    LOGO --> ENTITY["HomeEntitySummary"]
+    ENTITY --> ERA["EraVision"]
+    ERA --> PROBLEM["ProblemCost"]
+    PROBLEM --> MANIFESTO["Manifesto"]
+    MANIFESTO --> SOLUTION["SolutionOverview"]
     SOLUTION --> USECASES["KeyUseCases"]
     USECASES --> DASHBOARD["DashboardPreview"]
     DASHBOARD --> SCIENCE["ScienceBased"]
     SCIENCE --> SATISFY["SatisfyingClass"]
     SATISFY --> CASES["CaseStudies"]
-    CASES --> COMPARE["Comparison"]
-    COMPARE --> FAQ["FAQ"]
-    FAQ --> FINALCTA["FinalCTA"]
+    CASES --> GLOBAL["GlobalScale"]
+    GLOBAL --> TESTIMONIAL["TestimonialWall"]
+    TESTIMONIAL --> OUTCOMES["Outcomes"]
+    OUTCOMES --> COMPARE["Comparison"]
+    COMPARE --> FINALCTA["FinalCTA"]
 ```
 
 의미:
 
 - 메인 랜딩은 전형적인 B2B 전환형 흐름을 가진다
-- 구조상 “문제 인식 → 해결 방식 → 신뢰 근거 → 비교 → FAQ → 문의” 순서다
+- 구조상 “선언 → 시대 → 공감 → 솔루션 → 증거 → 비교 → 문의” 순서다
+- FAQ는 랜딩에서 분리되어 `/faq` 별도 페이지로 운영된다
 
 ## 5. 제품 섹션 구조
 
