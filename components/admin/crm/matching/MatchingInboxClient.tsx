@@ -160,7 +160,14 @@ function StatusBadge({ label, tone }: { label: string; tone: string }) {
   )
 }
 
-export default function MatchingInboxClient() {
+interface MatchingInboxClientProps {
+  /** 커버리지 밴드 칩 클릭 시 인박스를 이 계정명으로 좁힌다(부분 일치). */
+  nameFilter?: string
+  /** 활성 이름 필터를 지울 때 상위 상태를 초기화한다. */
+  onClearNameFilter?: () => void
+}
+
+export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: MatchingInboxClientProps = {}) {
   const [data, setData] = useState<AdminCrmMatchingInbox | null>(null)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
@@ -350,11 +357,18 @@ export default function MatchingInboxClient() {
     [load]
   )
 
+  // 커버리지 밴드에서 넘어온 이름 필터. 활성일 땐 상태 필터를 우회해 확정 행까지 모두 보여준다.
+  const normalizedNameFilter = (nameFilter ?? "").trim().toLowerCase()
+
   const filteredRows = useMemo(() => {
-    return (data?.rows ?? []).filter(
-      (row) => (sourceFilter === "all" || row.sourceSystem === sourceFilter) && matchesStatusFilter(row, statusFilter)
-    )
-  }, [data, sourceFilter, statusFilter])
+    return (data?.rows ?? []).filter((row) => {
+      if (sourceFilter !== "all" && row.sourceSystem !== sourceFilter) return false
+      if (normalizedNameFilter) {
+        return row.sourceLabel.toLowerCase().includes(normalizedNameFilter)
+      }
+      return matchesStatusFilter(row, statusFilter)
+    })
+  }, [data, sourceFilter, statusFilter, normalizedNameFilter])
 
   const visibleRows = useMemo(() => filteredRows.slice(0, MAX_VISIBLE_ROWS), [filteredRows])
   const hiddenRowCount = Math.max(0, filteredRows.length - visibleRows.length)
@@ -512,6 +526,21 @@ export default function MatchingInboxClient() {
               {filter.label}
             </button>
           ))}
+          {normalizedNameFilter ? (
+            <>
+              <span className="mx-1 h-5 w-px bg-[#e8e8e4]" />
+              <button
+                type="button"
+                onClick={() => onClearNameFilter?.()}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#084734]/25 bg-[#ECFDF5] px-3 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD]"
+                title="이름 필터 해제"
+              >
+                <Search className="h-3.5 w-3.5" />
+                {nameFilter}
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </>
+          ) : null}
         </div>
         <span className="text-[11px] text-[#1a1a1a]/35">
           {formatNumber(visibleRows.length)}건 표시

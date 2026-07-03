@@ -1,7 +1,7 @@
 import { Suspense } from "react"
 
 import CrmDataCheckPanel from "@/components/admin/crm/CrmDataCheckPanel"
-import MatchingInboxClient from "@/components/admin/crm/matching/MatchingInboxClient"
+import CrmMatchingWorkspace from "@/components/admin/crm/matching/CrmMatchingWorkspace"
 import { getAdminCrmOverview } from "@/lib/admin-crm-overview"
 
 export const metadata = {
@@ -29,7 +29,7 @@ export default function AdminCrmMatchingPage() {
       <Suspense fallback={<CrmDataCheckPanel overview={null} loading />}>
         <DataCheckPanelAsync />
       </Suspense>
-      <MatchingInboxClient />
+      <CrmMatchingWorkspace />
     </>
   )
 }

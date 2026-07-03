@@ -1,12 +1,33 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ShieldCheck } from "lucide-react"
+import Link from "next/link"
+import { ArrowRight, ShieldCheck } from "lucide-react"
 
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { coverageTone, COVERAGE_TONE_CLASS } from "@/lib/crm/coverage"
+import { formatCNY } from "@/lib/crm/money-format"
 
 type CoverageHealthState = "ready" | "partial" | "no_data"
+// server-only 모듈(rev-account-coverage)은 import 금지 — shape만 로컬 선언.
+type RevAccountsCoverage = {
+  scannedRows: number
+  accounts: {
+    total: number
+    linked: number
+    partial: number
+    needsReview: number
+    unlinked: number
+    placeholder: number
+  }
+  revenue: {
+    total: number
+    linked: number
+    coveragePct: number
+    placeholder: number
+  }
+  topUnlinked: Array<{ accountKey: string; name: string; rows: number; unlinkedRevenue: number }>
+}
 type Coverage = {
   total: number
   linked: number
@@ -17,6 +38,7 @@ type Coverage = {
     label: string
     detail: string
   }
+  revAccounts?: RevAccountsCoverage | null
 }
 
 type DisplayState = CoverageHealthState | "loading" | "failed"
@@ -80,6 +102,14 @@ export default function CrmCoverageStrip() {
   const pctLabel = valueLabel(data?.coveragePct, state, fmt, "%")
   const showMetrics = state === "ready" || state === "partial"
 
+  // 매출보유 계정 기준 세그먼트 — 실패 격리(null)거나 스캔 행 0이면 조용히 숨긴다.
+  const rev = data?.revAccounts
+  const showRev = !!rev && rev.scannedRows > 0
+  const revTone = coverageTone(rev?.revenue.coveragePct ?? 0)
+  const unlinkedCount = rev?.accounts.unlinked ?? 0
+  // 미연결 매출 = 전체 − 연결(부분 계정의 미연결분 포함) — topUnlinked는 톱8 캡이라 합산에 쓰지 않는다.
+  const unlinkedRevenue = rev ? Math.max(0, rev.revenue.total - rev.revenue.linked) : 0
+
   // 보조 진단 밴드 — 작업대(우선순위 큐) 아래에 한 줄로 최소화한다.
   return (
     <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-2.5">
@@ -105,6 +135,31 @@ export default function CrmCoverageStrip() {
         ) : (
           <span className="text-[12px] text-[#1a1a1a]/42">{copy.detail}</span>
         )}
+
+        {showRev && rev ? (
+          <span className="flex flex-wrap items-center gap-1.5 text-[12px] text-[#1a1a1a]/45">
+            <span className="mx-0.5 h-3.5 w-px bg-[#e8e8e4]" />
+            매출 커버리지{" "}
+            <b className={`font-semibold ${COVERAGE_TONE_CLASS[revTone]}`}>{rev.revenue.coveragePct}%</b>
+            {unlinkedCount > 0 ? (
+              <>
+                <span className="text-[#1a1a1a]/20">·</span>
+                미연결 계정{" "}
+                <b className="font-semibold text-[#1a1a1a]/70">{fmt(unlinkedCount)}곳</b>
+                <span className="text-[#1a1a1a]/20">·</span>
+                미연결 매출{" "}
+                <b className="font-semibold text-[#1a1a1a]/70">{formatCNY(unlinkedRevenue)}</b>
+                <Link
+                  href="/admin/crm/matching"
+                  className="inline-flex items-center gap-0.5 rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-semibold text-[#111110] transition-colors hover:bg-[#e8e8e4]"
+                >
+                  매칭 인박스
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              </>
+            ) : null}
+          </span>
+        ) : null}
       </div>
     </section>
   )

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { getCrmSourceLinkCoverage } from "@/lib/repositories/crm-source-links"
+import { getRevAccountCoverage, type RevAccountCoverage } from "@/lib/repositories/rev-account-coverage"
 
 function buildCoverageHealth(coverage: {
   total: number
@@ -34,13 +35,19 @@ function buildCoverageHealth(coverage: {
 }
 
 // 현황 홈 키스톤 위젯용 경량 커버리지. os-summary(무거운 합성)와 분리.
+// revAccounts = 매출보유 계정 기준 커버리지(스파인 키스톤) — 링크 행 수 기준(기존)과 달리
+// 후보조차 없는 REV 고객의 매출 누락을 드러낸다. 실패해도 기존 지표는 살린다(부분 격리).
 export async function GET(req: NextRequest) {
   const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
-  const coverage = await getCrmSourceLinkCoverage()
+  const [coverage, revAccounts] = await Promise.all([
+    getCrmSourceLinkCoverage(),
+    getRevAccountCoverage().catch((): RevAccountCoverage | null => null),
+  ])
   return adminCachedJson({
     ...coverage,
     health: buildCoverageHealth(coverage),
+    revAccounts,
   })
 }

@@ -60,6 +60,14 @@ export function isPlaceholderCrmName(value: string | null | undefined) {
   return CRM_PLACEHOLDER_NAME_PATTERN.test(value ?? "")
 }
 
+// REV 시트에서 취소·해지된 행 판별 — 후보 생성과 커버리지 집계가 같은 규칙을 써야
+// "매칭 대상" 분모가 화면마다 어긋나지 않는다.
+const SHEET_INACTIVE_STATUS_PATTERN = /취소|해지|드랍|드롭|중단|보류|cancel|drop|lost/i
+
+export function isInactiveSheetStatus(status: string | null | undefined) {
+  return SHEET_INACTIVE_STATUS_PATTERN.test(status ?? "")
+}
+
 export function normalizeCrmName(value: string | null | undefined) {
   return (value ?? "")
     .normalize("NFKC")
