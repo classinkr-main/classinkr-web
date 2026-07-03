@@ -1,6 +1,4 @@
-"use client"
-
-import { motion } from "framer-motion"
+import { Reveal } from "@/components/motion/Reveal"
 
 const shifts = [
     {
@@ -38,7 +36,7 @@ export function EraVision() {
 
             <div className="container mx-auto px-4 relative z-10">
                 {/* Top label */}
-                <motion.div
+                <Reveal
                     initial={{ opacity: 0, y: 16 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
@@ -50,11 +48,11 @@ export function EraVision() {
                         New Era of Education
                     </span>
                     <div className="h-px w-10 bg-gradient-to-l from-transparent to-[#084734]/40" />
-                </motion.div>
+                </Reveal>
 
                 {/* Main statement */}
                 <div className="text-center max-w-5xl mx-auto mb-20">
-                    <motion.h2
+                    <Reveal as="h2"
                         initial={{ opacity: 0, y: 24 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
@@ -64,9 +62,9 @@ export function EraVision() {
                     >
                         기술과 교육이 만나는<br />
                         <span className="text-[#084734]">새로운 시대</span>가 열렸습니다.
-                    </motion.h2>
+                    </Reveal>
 
-                    <motion.p
+                    <Reveal as="p"
                         initial={{ opacity: 0, y: 16 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true }}
@@ -76,13 +74,13 @@ export function EraVision() {
                         AI·클라우드·데이터가 모든 산업을 재편한 것처럼,
                         교육도 예외가 아닙니다.<br className="hidden md:block" />{" "}
                         이제 학원은 기술을 써야만 살아남는 시대입니다.
-                    </motion.p>
+                    </Reveal>
                 </div>
 
                 {/* Three shifts */}
                 <div className="grid md:grid-cols-3 gap-px bg-[rgba(0,0,0,0.06)] rounded-2xl overflow-hidden border border-[rgba(0,0,0,0.06)]">
                     {shifts.map((shift, i) => (
-                        <motion.div
+                        <Reveal
                             key={i}
                             initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
@@ -111,12 +109,12 @@ export function EraVision() {
                                     <p className="text-[#111110] text-base font-bold break-keep">{shift.after}</p>
                                 </div>
                             </div>
-                        </motion.div>
+                        </Reveal>
                     ))}
                 </div>
 
                 {/* Bottom callout */}
-                <motion.p
+                <Reveal as="p"
                     initial={{ opacity: 0 }}
                     whileInView={{ opacity: 1 }}
                     viewport={{ once: true }}
@@ -124,7 +122,7 @@ export function EraVision() {
                     className="text-center text-sm text-[#A39E98] font-medium mt-10 break-keep"
                 >
                     Classin은 글로벌 수업 기술을 한국 학원 현장에 맞게 이식합니다.
-                </motion.p>
+                </Reveal>
             </div>
         </section>
     )

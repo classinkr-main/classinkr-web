@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { m } from "framer-motion"
 import { GraduationCap, MessageCircle, Ruler, Wrench } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -54,7 +54,7 @@ export default function OnboardingRoadmap() {
     return (
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
-                <motion.div className="text-center mb-16" {...fadeUp}>
+                <m.div className="text-center mb-16" {...fadeUp}>
                     <div className="flex items-center gap-3 mb-4 justify-center">
                         <div className="h-px w-5 bg-[#22A366]/40 shrink-0" />
                         <p className="text-[11px] font-bold text-[#22A366] tracking-[0.2em] uppercase whitespace-nowrap">HOW TO START</p>
@@ -70,13 +70,13 @@ export default function OnboardingRoadmap() {
                         <br className="hidden sm:block" />{" "}
                         전문 상담을 통해 학원 규모와 목적에 최적화된 솔루션을 제안해 드립니다.
                     </p>
-                </motion.div>
+                </m.div>
 
                 <div className="relative">
                     {/* Connecting line — desktop only */}
                     <div className="hidden lg:block absolute top-7 left-[12%] right-[12%] h-px pointer-events-none">
                         <div className="absolute inset-0 border-t border-dashed border-[#22A366]/15" />
-                        <motion.div
+                        <m.div
                             className="absolute inset-0 border-t border-[#22A366]/50"
                             style={{ transformOrigin: "left" }}
                             initial={{ scaleX: 0 }}
@@ -90,7 +90,7 @@ export default function OnboardingRoadmap() {
                         {steps.map((step, i) => {
                             const { Icon } = step
                             return (
-                                <motion.div
+                                <m.div
                                     key={step.num}
                                     initial={{ opacity: 0, y: 25 }}
                                     whileInView={{ opacity: 1, y: 0 }}
@@ -114,7 +114,7 @@ export default function OnboardingRoadmap() {
                                     </span>
                                     <h3 className="text-base font-bold text-slate-900 mb-2">{step.title}</h3>
                                     <p className="text-sm text-slate-500 leading-relaxed">{step.desc}</p>
-                                </motion.div>
+                                </m.div>
                             )
                         })}
                     </div>

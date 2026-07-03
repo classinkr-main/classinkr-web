@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRef } from "react";
-import { motion, useInView } from "framer-motion";
+import { m, useInView } from "framer-motion";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -56,7 +56,7 @@ export default function DesignDetails() {
     >
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <motion.p
+        <m.p
           variants={fadeUp}
           initial="hidden"
           animate={inView ? "visible" : "hidden"}
@@ -64,9 +64,9 @@ export default function DesignDetails() {
           className="text-xs tracking-[0.2em] text-[#084734] font-semibold uppercase"
         >
           PHYSICAL DETAILS
-        </motion.p>
+        </m.p>
 
-        <motion.h2
+        <m.h2
           variants={fadeUp}
           initial="hidden"
           animate={inView ? "visible" : "hidden"}
@@ -75,9 +75,9 @@ export default function DesignDetails() {
           style={{ letterSpacing: "-1.5px" }}
         >
           디테일이 만드는 압도적인 몰입감
-        </motion.h2>
+        </m.h2>
 
-        <motion.p
+        <m.p
           variants={fadeUp}
           initial="hidden"
           animate={inView ? "visible" : "hidden"}
@@ -85,12 +85,12 @@ export default function DesignDetails() {
           className="text-lg text-[#615D59] mt-5 max-w-2xl"
         >
           보드의 강함은 스펙시트가 아니라, 손에 닿는 표면에 있습니다.
-        </motion.p>
+        </m.p>
 
         {/* Cards */}
         <div className="mt-16 grid sm:grid-cols-2 md:grid-cols-3 gap-8">
           {CARDS.map(({ imageSrc, imageAlt, imageFit, imagePadding, imageBackground, heading, body }, i) => (
-            <motion.div
+            <m.div
               key={heading}
               variants={fadeUp}
               initial="hidden"
@@ -123,7 +123,7 @@ export default function DesignDetails() {
                   {body}
                 </p>
               </div>
-            </motion.div>
+            </m.div>
           ))}
         </div>
       </div>

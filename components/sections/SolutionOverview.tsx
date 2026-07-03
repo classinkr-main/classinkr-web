@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { motion, AnimatePresence, useInView } from "framer-motion"
+import { m, AnimatePresence, useInView } from "framer-motion"
 import { BookOpen, Zap, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -110,7 +110,7 @@ export function SolutionOverview() {
                     {/* Active step detail */}
                     <div className="flex-1 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#111110] overflow-hidden" style={{ boxShadow: 'rgba(0,0,0,0.04) 0px 4px 18px, rgba(0,0,0,0.027) 0px 2px 7.8px, rgba(0,0,0,0.02) 0px 0.8px 2.9px' }}>
                         <AnimatePresence mode="wait">
-                            <motion.div
+                            <m.div
                                 key={activeStep}
                                 initial={{ opacity: 0, x: 16 }}
                                 animate={{ opacity: 1, x: 0 }}
@@ -130,7 +130,7 @@ export function SolutionOverview() {
                                 </p>
                                 <ul className="space-y-3">
                                     {steps[activeStep].points.map((point, i) => (
-                                        <motion.li
+                                        <m.li
                                             key={i}
                                             initial={{ opacity: 0, x: 10 }}
                                             animate={{ opacity: 1, x: 0 }}
@@ -143,10 +143,10 @@ export function SolutionOverview() {
                                                 </svg>
                                             </span>
                                             {point}
-                                        </motion.li>
+                                        </m.li>
                                     ))}
                                 </ul>
-                            </motion.div>
+                            </m.div>
                         </AnimatePresence>
                     </div>
                 </div>

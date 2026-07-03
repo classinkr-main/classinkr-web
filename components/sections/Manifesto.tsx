@@ -1,6 +1,5 @@
-"use client"
+import { Reveal } from "@/components/motion/Reveal"
 
-import { motion } from "framer-motion"
 
 export function Manifesto() {
     return (
@@ -12,7 +11,7 @@ export function Manifesto() {
             <div className="relative z-10 px-6 md:px-12 text-center">
 
                 {/* Line 1 */}
-                <motion.div
+                <Reveal
                     initial={{ opacity: 0, y: 32 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
@@ -24,10 +23,10 @@ export function Manifesto() {
                     >
                         학원이 강사의 개인기에
                     </span>
-                </motion.div>
+                </Reveal>
 
                 {/* Line 2 — accent */}
-                <motion.div
+                <Reveal
                     initial={{ opacity: 0, y: 32 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
@@ -40,10 +39,10 @@ export function Manifesto() {
                     >
                         의존해서는 안됩니다.
                     </span>
-                </motion.div>
+                </Reveal>
 
                 {/* Bridge sentence */}
-                <motion.p
+                <Reveal as="p"
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
@@ -52,10 +51,10 @@ export function Manifesto() {
                 >
                     에이스 강사의 수업 방식을 시스템으로 만들어,<br className="hidden md:block" />{" "}
                     모든 반, 모든 지점에 그대로 적용합니다.
-                </motion.p>
+                </Reveal>
 
                 {/* Divider dots */}
-                <motion.div
+                <Reveal
                     initial={{ opacity: 0 }}
                     whileInView={{ opacity: 1 }}
                     viewport={{ once: true }}
@@ -69,7 +68,7 @@ export function Manifesto() {
                             style={{ opacity: 1 - i * 0.3 }}
                         />
                     ))}
-                </motion.div>
+                </Reveal>
             </div>
         </section>
     )

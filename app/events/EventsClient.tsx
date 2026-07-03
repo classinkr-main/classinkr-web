@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { m, AnimatePresence } from "framer-motion"
 import { Calendar, MapPin, Tag, ArrowRight, Search, X } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -91,31 +91,31 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
 
             {/* Left */}
             <div>
-              <motion.p
+              <m.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.5 }}
                 className="text-[13px] font-medium text-[#1a1a1a]/35 tracking-wide uppercase mb-5"
               >
                 Events &amp; Promotions
-              </motion.p>
-              <motion.h1
+              </m.p>
+              <m.h1
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.05 }}
                 className="mb-5 text-[2.3rem] font-extrabold leading-[1.05] tracking-[-0.035em] text-[#111110] md:text-[3.5rem] lg:text-[4rem]"
               >
                 행사 &amp;<br />프로모션
-              </motion.h1>
-              <motion.p
+              </m.h1>
+              <m.p
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
                 className="mb-8 max-w-sm text-[15px] leading-relaxed text-[#1a1a1a]/45 md:text-[16px]"
               >
                 클래스인의 최신 이벤트, 웨비나, 특가 프로모션을 한눈에 확인하세요.
-              </motion.p>
-              <motion.div
+              </m.p>
+              <m.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.4, delay: 0.2 }}
@@ -129,12 +129,12 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                   <span className="w-2 h-2 rounded-full bg-[#084734]" />
                   예정 {upcomingCount}건
                 </span>
-              </motion.div>
+              </m.div>
             </div>
 
             {/* Right: Featured */}
             {featuredEvent && (
-              <motion.div
+              <m.div
                 initial={{ opacity: 0, x: 24 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.6, delay: 0.15 }}
@@ -201,7 +201,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                     </div>
                   )
                 })()}
-              </motion.div>
+              </m.div>
             )}
           </div>
         </div>
@@ -209,7 +209,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
 
       {/* Filter Bar */}
       <section className="mx-auto mb-2 mt-6 max-w-[1100px] px-4 sm:px-6">
-        <motion.div
+        <m.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.2 }}
@@ -259,7 +259,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
               </button>
             ) : null}
           </div>
-        </motion.div>
+        </m.div>
         <div className="flex items-center justify-between pt-4 pb-2">
           <span className="text-[12px] text-[#1a1a1a]/30 font-medium">
             {normalizedQuery
@@ -273,7 +273,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
       {/* Event List */}
       <section className="mx-auto max-w-[1100px] px-4 pb-24 sm:px-6 md:pb-28">
         <AnimatePresence mode="wait">
-          <motion.div
+          <m.div
             key={activeCategory + searchQuery}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -345,7 +345,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
               )
 
               return (
-                <motion.div
+                <m.div
                   key={event.id}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -360,14 +360,14 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                   ) : (
                     cardInner
                   )}
-                </motion.div>
+                </m.div>
               )
             })}
-          </motion.div>
+          </m.div>
         </AnimatePresence>
 
         {filtered.length === 0 && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="py-28 text-center"
@@ -402,7 +402,7 @@ export default function EventsClient({ events }: { events: PublicEvent[] }) {
                 </Link>
               ) : null}
             </div>
-          </motion.div>
+          </m.div>
         )}
       </section>
     </div>

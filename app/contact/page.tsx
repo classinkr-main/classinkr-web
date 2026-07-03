@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Mail, MapPin, Phone, ArrowRight, MessageSquare, CheckCircle2, Loader2 } from "lucide-react"
 import Image from "next/image"
-import { motion } from "framer-motion"
+import { m } from "framer-motion"
 import { submitLead } from "@/lib/submitLead"
 import { trackAdsConversion, trackEvent } from "@/lib/analytics"
 import { GOOGLE_ADS_DEMO_CONVERSION_LABEL } from "@/lib/analytics-config"
@@ -181,7 +181,7 @@ export default function ContactPage() {
             <section className="relative overflow-hidden px-4 pb-7 pt-7 md:pb-8 md:pt-12">
                 <div className="container mx-auto max-w-6xl relative z-10">
                     <div className="flex flex-col items-center text-center space-y-4">
-                        <motion.div
+                        <m.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.6 }}
@@ -189,9 +189,9 @@ export default function ContactPage() {
                         >
                             <span className="w-2 h-2 rounded-full bg-[#084734] animate-pulse"></span>
                             상담 및 문의
-                        </motion.div>
+                        </m.div>
 
-                        <motion.h1
+                        <m.h1
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7, delay: 0.1 }}
@@ -199,9 +199,9 @@ export default function ContactPage() {
                         >
                             궁금한 점이 있으신가요? <br />
                             운영 상황부터 함께 확인해드립니다.
-                        </motion.h1>
+                        </m.h1>
 
-                        <motion.p
+                        <m.p
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7, delay: 0.2 }}
@@ -209,14 +209,14 @@ export default function ContactPage() {
                         >
                             도입 문의, 기술 지원, 결제 증빙까지<br />
                             클래스인 전문 매니저가 필요한 다음 단계를 차분히 안내드립니다.
-                        </motion.p>
+                        </m.p>
                     </div>
                 </div>
             </section>
 
             <section className="container relative z-10 mx-auto max-w-6xl pb-12 md:pb-16">
                 {/* Fast Track Banner */}
-                <motion.div
+                <m.div
                     initial={{ opacity: 0, scale: 0.98, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     transition={{ duration: 0.6, delay: 0.3 }}
@@ -276,11 +276,11 @@ export default function ContactPage() {
                             </div>
                         </div>
                     </div>
-                </motion.div>
+                </m.div>
 
                 <div className="grid lg:grid-cols-5 gap-6 lg:gap-8 items-stretch">
                     {/* Contact Form */}
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.6, delay: 0.4 }}
@@ -431,10 +431,10 @@ export default function ContactPage() {
                                 )}
                             </CardContent>
                         </Card>
-                    </motion.div>
+                    </m.div>
 
                     {/* Contact Info */}
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.6, delay: 0.5 }}
@@ -497,7 +497,7 @@ export default function ContactPage() {
                                 </div>
                             </div>
                         </div>
-                    </motion.div>
+                    </m.div>
                 </div>
             </section>
         </div>

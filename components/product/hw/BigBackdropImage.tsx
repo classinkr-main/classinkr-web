@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { useRef } from "react"
-import { motion, useScroll, useTransform } from "framer-motion"
+import { m, useScroll, useTransform } from "framer-motion"
 
 const bezelDetailImage = "/images/product/hw/board/board-bezel-detail.webp?v=20260429-1834"
 
@@ -50,7 +50,7 @@ export default function BigBackdropImage() {
       className="relative h-[90vh] md:h-[100vh] w-full overflow-hidden bg-black"
     >
       {/* 패럴랙스 이미지 */}
-      <motion.div
+      <m.div
         className="absolute inset-0 w-full h-full"
         style={{ scale: imageScale }}
       >
@@ -60,7 +60,7 @@ export default function BigBackdropImage() {
           fill
           className="object-cover"
         />
-      </motion.div>
+      </m.div>
 
       {/* 그라데이션 오버레이 — 모바일에서 더 강하게 */}
       <div
@@ -74,7 +74,7 @@ export default function BigBackdropImage() {
       {/* 카피 영역 — 좌하단 고정 */}
       <div className="absolute bottom-12 left-6 right-6 max-w-2xl md:bottom-20 md:left-16 md:right-auto">
         {/* 라벨 */}
-        <motion.p
+        <m.p
           variants={labelVariants}
           initial="hidden"
           whileInView="visible"
@@ -82,10 +82,10 @@ export default function BigBackdropImage() {
           className="text-xs tracking-[0.2em] text-[#6EE7B7] font-semibold uppercase"
         >
           INDUSTRIAL DESIGN
-        </motion.p>
+        </m.p>
 
         {/* 헤딩 */}
-        <motion.h2
+        <m.h2
           variants={fadeUpVariants}
           initial="hidden"
           whileInView="visible"
@@ -96,10 +96,10 @@ export default function BigBackdropImage() {
           베젤은 얇아지고,
           <br />
           몰입은 깊어집니다.
-        </motion.h2>
+        </m.h2>
 
         {/* 본문 */}
-        <motion.p
+        <m.p
           variants={bodyVariants}
           initial="hidden"
           whileInView="visible"
@@ -107,7 +107,7 @@ export default function BigBackdropImage() {
           className="text-base md:text-lg text-white/80 mt-5 max-w-xl"
         >
           8mm 슬림 베젤과 매트 알루미늄 마감으로 오직 수업에만 집중할 수 있도록 만들었습니다.
-        </motion.p>
+        </m.p>
       </div>
     </section>
   )

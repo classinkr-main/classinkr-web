@@ -1,8 +1,7 @@
-"use client"
-
 import { Clock, Users } from "lucide-react"
-import { motion } from "framer-motion"
 import Image from "next/image"
+
+import { Reveal } from "@/components/motion/Reveal"
 
 export function ScienceBased() {
     return (
@@ -13,7 +12,7 @@ export function ScienceBased() {
             <div className="absolute bottom-1/4 right-0 w-96 h-96 bg-[#084734]/15 blur-[100px] rounded-full pointer-events-none" />
 
             <div className="container mx-auto px-6 max-w-6xl relative z-10">
-                <motion.div
+                <Reveal
                     initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: "-100px" }}
@@ -27,12 +26,12 @@ export function ScienceBased() {
                     <p className="text-xl text-[#A39E98] font-medium break-keep">
                         단순히 편리한 도구가 아닙니다. 학습 효율을 극대화하는 검증된 교육 공학입니다.
                     </p>
-                </motion.div>
+                </Reveal>
 
                 <div className="space-y-20 md:space-y-32">
                     {/* Ebbinghaus Section */}
                     <div className="flex flex-col lg:flex-row items-center gap-8 md:gap-16 lg:gap-24">
-                        <motion.div
+                        <Reveal
                             initial={{ opacity: 0, y: 100 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true, margin: "-50px" }}
@@ -48,7 +47,7 @@ export function ScienceBased() {
                                 />
                                 <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-[#111110] via-[#111110]/60 to-transparent z-0" />
 
-                                <motion.div
+                                <Reveal
                                     initial={{ opacity: 0, y: 20 }}
                                     whileInView={{ opacity: 1, y: 0 }}
                                     viewport={{ once: true, margin: "-50px" }}
@@ -57,11 +56,11 @@ export function ScienceBased() {
                                 >
                                     <div className="font-extrabold text-2xl md:text-3xl text-white drop-shadow-xl">Hermann Ebbinghaus</div>
                                     <div className="text-[12px] font-bold text-[#6EE7B7]/80 tracking-[0.3em] mt-1.5 uppercase drop-shadow-md">Memory & Psychology</div>
-                                </motion.div>
+                                </Reveal>
                             </div>
-                        </motion.div>
+                        </Reveal>
 
-                        <motion.div
+                        <Reveal
                             initial={{ opacity: 0, x: 50 }}
                             whileInView={{ opacity: 1, x: 0 }}
                             viewport={{ once: true, margin: "-100px" }}
@@ -92,12 +91,12 @@ export function ScienceBased() {
                                 <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full backdrop-blur-sm shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#즉시복습</span>
                                 <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full backdrop-blur-sm shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#장기기억</span>
                             </div>
-                        </motion.div>
+                        </Reveal>
                     </div>
 
                     {/* Scott Freeman Section */}
                     <div className="flex flex-col lg:flex-row-reverse items-center gap-8 md:gap-16 lg:gap-24">
-                        <motion.div
+                        <Reveal
                             initial={{ opacity: 0, y: 100 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true, margin: "-50px" }}
@@ -113,7 +112,7 @@ export function ScienceBased() {
                                 />
                                 <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-[#111110] via-[#111110]/60 to-transparent z-0" />
 
-                                <motion.div
+                                <Reveal
                                     initial={{ opacity: 0, y: 20 }}
                                     whileInView={{ opacity: 1, y: 0 }}
                                     viewport={{ once: true, margin: "-50px" }}
@@ -122,11 +121,11 @@ export function ScienceBased() {
                                 >
                                     <div className="font-extrabold text-2xl md:text-3xl text-white drop-shadow-xl">Scott Freeman</div>
                                     <div className="text-[12px] font-bold text-[#6EE7B7]/80 tracking-[0.3em] mt-1.5 uppercase drop-shadow-md">Biology Education</div>
-                                </motion.div>
+                                </Reveal>
                             </div>
-                        </motion.div>
+                        </Reveal>
 
-                        <motion.div
+                        <Reveal
                             initial={{ opacity: 0, x: -50 }}
                             whileInView={{ opacity: 1, x: 0 }}
                             viewport={{ once: true, margin: "-100px" }}
@@ -157,7 +156,7 @@ export function ScienceBased() {
                                 <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full backdrop-blur-sm shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#ActiveLearning</span>
                                 <span className="px-4 py-1.5 bg-gradient-to-r from-[#2a2925] to-[#2a2925]/80 border border-white/[0.06] text-white/60 text-[13px] font-semibold rounded-full backdrop-blur-sm shadow-[0_1px_6px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.04)] tracking-[0.01em]">#참여수업</span>
                             </div>
-                        </motion.div>
+                        </Reveal>
                     </div>
                 </div>
             </div>

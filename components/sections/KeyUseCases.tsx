@@ -1,10 +1,9 @@
-"use client"
-
 import Image from "next/image"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card } from "@/components/ui/card"
 import { Check } from "lucide-react"
-import { motion } from "framer-motion"
+
+import { Reveal } from "@/components/motion/Reveal"
 
 type UseCaseTab = "classes" | "homework" | "admin" | "comms"
 
@@ -155,7 +154,7 @@ function UseCaseCard({
     secondaryOverlayImageFramed?: boolean
 }) {
     return (
-        <motion.div
+        <Reveal
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, type: "spring", bounce: 0.2 }}
@@ -168,7 +167,7 @@ function UseCaseCard({
                         <div className="absolute right-10 bottom-10 h-28 w-28 rounded-full bg-[#CFEFE1]/75 blur-3xl z-0" />
 
                         {imageSrc && (
-                            <motion.div
+                            <Reveal
                                 whileHover={{ y: -4, rotate: -1 }}
                                 transition={{ type: "spring", bounce: 0.3 }}
                                 className="relative z-20 w-[108%] max-w-none"
@@ -183,11 +182,11 @@ function UseCaseCard({
                                         style={{ objectPosition: imageObjectPosition }}
                                     />
                                 </div>
-                            </motion.div>
+                            </Reveal>
                         )}
 
                         {overlayImageSrc && (
-                            <motion.div
+                            <Reveal
                                 whileHover={{ y: -6, rotate: 1 }}
                                 transition={{ type: "spring", bounce: 0.28 }}
                                 className={`absolute z-30 ${overlayImageClassName}`}
@@ -215,11 +214,11 @@ function UseCaseCard({
                                         />
                                     </div>
                                 )}
-                            </motion.div>
+                            </Reveal>
                         )}
 
                         {secondaryOverlayImageSrc && (
-                            <motion.div
+                            <Reveal
                                 whileHover={{ y: -5, rotate: -1 }}
                                 transition={{ type: "spring", bounce: 0.26 }}
                                 className={`absolute z-20 ${secondaryOverlayImageClassName}`}
@@ -247,7 +246,7 @@ function UseCaseCard({
                                         />
                                     </div>
                                 )}
-                            </motion.div>
+                            </Reveal>
                         )}
                     </div>
                     <div className="p-8 md:p-14 flex flex-col justify-center bg-white">
@@ -268,6 +267,6 @@ function UseCaseCard({
                     </div>
                 </div>
             </Card>
-        </motion.div>
+        </Reveal>
     )
 }

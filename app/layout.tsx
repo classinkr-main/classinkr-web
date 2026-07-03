@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/toast";
 import { AppChrome } from "@/components/AppChrome";
+import { MotionProvider } from "@/components/motion/MotionProvider";
 import { JsonLd } from "@/components/seo/JsonLd";
 import Script from "next/script";
 import { CONSENT_POLICY_VERSION } from "@/lib/consent/consent";
@@ -83,11 +84,13 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <ToastProvider>
-          <AppChrome>
-            {children}
-          </AppChrome>
-        </ToastProvider>
+        <MotionProvider>
+          <ToastProvider>
+            <AppChrome>
+              {children}
+            </AppChrome>
+          </ToastProvider>
+        </MotionProvider>
       </body>
     </html>
   );

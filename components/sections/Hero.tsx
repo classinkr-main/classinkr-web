@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { DemoModal } from "./DemoModal"
-import { motion, useScroll, useTransform } from "framer-motion"
+import { m, useScroll, useTransform } from "framer-motion"
 import { trackEvent } from "@/lib/analytics"
 import Image from "next/image"
 import { useRef } from "react"
@@ -33,7 +33,7 @@ export function Hero() {
                 ref={heroRef}
                 className="sticky top-[76px] z-0 isolate h-[calc(100svh-76px)] overflow-hidden bg-[#0A1511] md:top-20 md:h-[calc(100svh-5rem)]"
             >
-                <motion.div
+                <m.div
                     className="absolute inset-0 z-0 hidden h-[calc(100%+120px)] md:block pointer-events-none overflow-hidden"
                     style={{ y: videoY }}
                 >
@@ -47,7 +47,7 @@ export function Hero() {
                         loadStrategy="idle"
                         mediaQuery={HERO_VIDEO_MEDIA_QUERY}
                     />
-                </motion.div>
+                </m.div>
 
                 <div className="absolute inset-0 z-[1] bg-[rgba(3,13,10,0.42)] md:bg-[rgba(3,13,10,0.36)]" />
                 <div className="absolute inset-0 z-[2] bg-[radial-gradient(circle_at_50%_36%,rgba(255,255,255,0.16),transparent_34%),linear-gradient(to_bottom,rgba(3,13,10,0.18),rgba(3,13,10,0.26)_55%,rgba(3,13,10,0.58))]" />
@@ -134,7 +134,7 @@ export function Hero() {
             >
                 <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-16 bg-gradient-to-b from-white/75 to-transparent" />
                 <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-px bg-white/90" />
-                <motion.div
+                <m.div
                     className="pointer-events-none relative z-0 mx-auto mb-16 hidden justify-center px-6 md:flex md:mb-24 lg:mb-28"
                     style={{ y: empoweringY, opacity: empoweringOpacity }}
                     aria-hidden="true"
@@ -143,10 +143,10 @@ export function Hero() {
                         <span className="block">Empower</span>
                         <span className="block">Education Online</span>
                     </h2>
-                </motion.div>
+                </m.div>
 
                 <div className="container relative z-10 mx-auto px-4">
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0, y: 60, rotateX: 10 }}
                         whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
                         viewport={{ once: true, amount: 0.25 }}
@@ -164,7 +164,7 @@ export function Hero() {
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-[#111110] via-transparent to-transparent opacity-60 z-20 pointer-events-none" />
                         </div>
-                    </motion.div>
+                    </m.div>
                 </div>
 
                 <div className="absolute bottom-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[#084734]/30 to-transparent" />

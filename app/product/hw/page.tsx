@@ -1,46 +1,34 @@
-"use client"
-
-import { Button } from "@/components/ui/button"
-import { trackEvent } from "@/lib/analytics"
-import { BROCHURE_URL } from "@/lib/marketing-links"
-import { motion, useInView } from "framer-motion"
 import {
-    ArrowRight, PenTool, Eye, Share2,
+    PenTool, Eye, Share2,
     Monitor, Fingerprint, Users, Layers, Wifi,
     Shield, Maximize, Zap, Hand,
     GraduationCap, Mic, Camera, Star,
 } from "lucide-react"
 import Image from "next/image"
-import Link from "next/link"
-import dynamic from "next/dynamic"
-import { Fragment, useRef, useState } from "react"
+import { Fragment } from "react"
 
-// below-the-fold 섹션은 dynamic import로 메인 번들에서 분리 (SSR은 유지되어 초기 HTML 동일)
-const OpeningStatement = dynamic(() => import("@/components/product/hw/OpeningStatement"))
-const PainPointsV2 = dynamic(() => import("@/components/product/hw/PainPointsV2"))
-const AllInOneStatement = dynamic(() => import("@/components/product/hw/AllInOneStatement"))
-const BigBackdropImage = dynamic(() => import("@/components/product/hw/BigBackdropImage"))
-const DesignDetails = dynamic(() => import("@/components/product/hw/DesignDetails"))
-const LatencyProof = dynamic(() => import("@/components/product/hw/LatencyProof"))
-const AICameraSection = dynamic(() => import("@/components/product/hw/AICameraSection"))
-const SizeChooser = dynamic(() => import("@/components/product/hw/SizeChooser"))
-const ValueAnchor = dynamic(() => import("@/components/product/hw/ValueAnchor"))
-const ClassroomStudioSection = dynamic(() => import("@/components/product/hw/ClassroomStudioSection"))
-const AfterClassSection = dynamic(() => import("@/components/product/hw/AfterClassSection"))
-const OnboardingRoadmap = dynamic(() => import("@/components/product/hw/OnboardingRoadmap"))
+import { Reveal } from "@/components/motion/Reveal"
+import HwFinalCtaButtons from "@/components/product/hw/HwFinalCtaButtons"
+import { fadeUp, stagger } from "@/components/motion/presets"
 
-/* ── Animation helpers ───────────────────────────────────────────── */
-const fadeUp = {
-    initial: { opacity: 0, y: 30 },
-    whileInView: { opacity: 1, y: 0 },
-    viewport: { once: true },
-    transition: { duration: 0.6 },
-}
-
-const stagger = (i: number) => ({
-    ...fadeUp,
-    transition: { duration: 0.5, delay: i * 0.12 },
-})
+import {
+    AICameraSection,
+    AfterClassSection,
+    AllInOneStatement,
+    BigBackdropImage,
+    ClassroomStudioSection,
+    ComparisonSection,
+    DesignDetails,
+    FeatureTabSection,
+    ImpactNumbersSection,
+    LatencyProof,
+    OnboardingRoadmap,
+    OpeningStatement,
+    PainPointsV2,
+    SizeChooser,
+    SpaceScenarioSection,
+    ValueAnchor,
+} from "@/components/product/hw/LazyHwSections"
 
 /* ── Spec data ───────────────────────────────────────────────────── */
 type SpecRow = { label: string; s110: string; s86: string; s75: string; s65: string }
@@ -127,86 +115,6 @@ const lineupCards = [
     },
 ]
 
-/* ── Section: Comparison ─────────────────────────────────────────── */
-function ComparisonSection() {
-    const ref = useRef(null)
-    const inView = useInView(ref, { once: true, margin: "-100px" })
-
-    const items = [
-        {
-            title: "기존 칠판",
-            problems: ["분필 날림, 건강 우려", "지우면 영원히 사라짐", "공유 불가능"],
-            bg: "bg-slate-100",
-            border: "border-slate-200",
-            iconColor: "text-slate-400",
-        },
-        {
-            title: "일반 전자칠판",
-            problems: ["필기감 부자연스러움", "소프트웨어 별도 구매", "단순 화면 출력 장치"],
-            bg: "bg-slate-50",
-            border: "border-slate-200",
-            iconColor: "text-slate-400",
-        },
-        {
-            title: "Classin Board",
-            problems: ["분필처럼 자연스럽고, 지워도 남는다", "SW 생태계 완전 통합", "시공간을 넘는 교육 연결"],
-            bg: "bg-[#F0FFF4]",
-            border: "border-[#22A366]/20",
-            iconColor: "text-[#22A366]",
-            highlight: true,
-        },
-    ]
-
-    return (
-        <section className="py-24 md:py-32 bg-white">
-            <div className="container mx-auto px-4 lg:px-8">
-                <motion.div className="text-center mb-16" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">Why Classin Board</p>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
-                        도구를 바꾸는 게 아니라,
-                        <br className="hidden sm:block" />{" "}
-                        <span className="text-[#22A366]">교육의 방식</span>을 바꿉니다
-                    </h2>
-                </motion.div>
-
-                <div ref={ref} className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                    {items.map((item, i) => (
-                        <motion.div
-                            key={i}
-                            initial={{ opacity: 0, y: 40 }}
-                            animate={inView ? { opacity: 1, y: 0 } : {}}
-                            transition={{ duration: 0.5, delay: i * 0.15 }}
-                            className={`rounded-2xl border ${item.border} ${item.bg} p-6 sm:p-8 ${item.highlight ? "ring-2 ring-[#22A366]/20 shadow-lg shadow-[#22A366]/5 md:scale-[1.02]" : ""}`}
-                        >
-                            <h3 className={`text-xl font-bold mb-6 ${item.highlight ? "text-[#22A366]" : "text-slate-900"}`}>
-                                {item.title}
-                            </h3>
-                            <ul className="space-y-4">
-                                {item.problems.map((p, j) => (
-                                    <li key={j} className="flex items-start gap-3">
-                                        <div className={`mt-0.5 ${item.iconColor}`}>
-                                            {item.highlight ? (
-                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                </svg>
-                                            ) : (
-                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 12H6" />
-                                                </svg>
-                                            )}
-                                        </div>
-                                        <span className={`text-sm leading-relaxed ${item.highlight ? "text-slate-700 font-medium" : "text-slate-500"}`}>{p}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </motion.div>
-                    ))}
-                </div>
-            </div>
-        </section>
-    )
-}
-
 /* ── Section: Feature Block (reusable) ───────────────────────────── */
 function FeatureSection({
     tag, title, desc, features, reverse = false, accent = "#22A366", children, visualClassName = "",
@@ -221,17 +129,17 @@ function FeatureSection({
                 <div className={`flex flex-col ${reverse ? "lg:flex-row-reverse" : "lg:flex-row"} items-center gap-16 lg:gap-20`}>
                     {/* Text side */}
                     <div className="flex-1 max-w-xl">
-                        <motion.div {...fadeUp}>
+                        <Reveal {...fadeUp}>
                             <p className="text-sm font-semibold tracking-wider uppercase mb-3" style={{ color: accent }}>{tag}</p>
                             <h2 className="text-3xl md:text-4xl lg:text-[2.75rem] text-[#1a1a19] leading-tight mb-6">
                                 {title}
                             </h2>
                             <p className="text-lg text-slate-500 leading-relaxed mb-10">{desc}</p>
-                        </motion.div>
+                        </Reveal>
 
                         <div className="space-y-6">
                             {features.map((f, i) => (
-                                <motion.div key={i} {...stagger(i)} className="flex items-start gap-4">
+                                <Reveal key={i} {...stagger(i)} className="flex items-start gap-4">
                                     <div className="flex items-center justify-center shrink-0"
                                         style={{ color: accent }}>
                                         {f.icon}
@@ -240,7 +148,7 @@ function FeatureSection({
                                         <h4 className="font-sans font-bold tabular-nums text-slate-900 mb-1">{f.label}</h4>
                                         <p className="text-sm text-slate-500 leading-relaxed">{f.detail}</p>
                                     </div>
-                                </motion.div>
+                                </Reveal>
                             ))}
                         </div>
                     </div>
@@ -248,182 +156,15 @@ function FeatureSection({
                     {/* Visual side */}
                     <div className={`flex-1 w-full max-w-lg ${visualClassName}`}>
                         {children ?? (
-                            <motion.div
+                            <Reveal
                                 {...fadeUp}
                                 className="aspect-[4/3] rounded-3xl bg-gradient-to-br from-slate-100 to-slate-50 border border-slate-200/60 shadow-xl shadow-slate-200/30 flex items-center justify-center"
                             >
                                 <Monitor className="w-20 h-20 text-slate-300" />
-                            </motion.div>
+                            </Reveal>
                         )}
                     </div>
                 </div>
-            </div>
-        </section>
-    )
-}
-
-/* ── Feature Tab data ────────────────────────────────────────────── */
-type FeatureTab = {
-    label: string
-    badge: string
-    title: string
-    points: string[]
-    image?: string
-    imageAlt?: string
-    imageFit?: "cover" | "contain"
-    imagePanelClassName?: string
-    imageClassName?: string
-}
-
-const featureTabs: FeatureTab[] = [
-    {
-        label: "판서",
-        image: "/images/product/hw/features/feature-writing.webp",
-        imageAlt: "50페이지 판서 기능 시각화",
-        imageFit: "contain",
-        imagePanelClassName: "bg-[#05080C]",
-        imageClassName: "scale-[1.8] -translate-y-[8%]",
-        badge: "50페이지 무한 캔버스",
-        title: "공간 걱정 없이 쓰고, 쓰는 즉시 전달",
-        points: [
-            "50페이지 무한 캔버스 — 지우지 않고 이어가는 수업",
-            "0.03초 초저지연 + 50포인트 멀티터치로 분필처럼 자연스러운 판서",
-            "쓰는 순간 전 학생 기기에 실시간 동기화 → 필기 대신 수업에 집중",
-            "수업 종료 후 자동 PDF 저장·배포로 결석 학생도 그대로 복습",
-        ],
-    },
-    {
-        label: "디스플레이",
-        image: "/images/product/hw/features/feature-display.webp",
-        imageAlt: "클래스인 보드 디스플레이 화질 이미지",
-        badge: "178° 광시야각",
-        title: "어디서 봐도 선명한 화면",
-        points: [
-            "178° 광시야각 — 교실 어느 자리서든 동일 화면",
-            "풀 라미네이션 + AG·AF 코팅으로 조명 반사 차단",
-            "블루라이트 차단 설계로 눈 건강 보호",
-        ],
-    },
-    {
-        label: "인터랙티브 수업",
-        image: "/images/product/hw/features/feature-interactive.webp",
-        imageAlt: "인터랙티브 수업 현장 사진",
-        badge: "30+ 수업 도구",
-        title: "타이머부터 선착순 퀴즈까지, 생동감 있는 인터랙티브 수업",
-        points: [
-            "타이머, 스톱워치, 선착순 퀴즈 등 30+ 수업 도구로 수업 리듬을 살립니다",
-            "학생 참여 권한 기능으로 필요한 순간 학생도 보드 위에서 직접 조작·판서",
-            "교사 혼자 끌고 가는 수업이 아니라, 학생이 함께 움직이는 양방향 수업",
-        ],
-    },
-    {
-        label: "AI 카메라",
-        image: "/images/product/hw/camera/camera-dual-premium-blended.webp",
-        imageAlt: "Classin Board AI 트래킹 카메라 클로즈업",
-        imageFit: "contain",
-        imagePanelClassName: "bg-[#050708]",
-        imageClassName: "scale-[1.08]",
-        badge: "수업 영상 자동 생성",
-        title: "수업이 끝나면, 영상도 완성됩니다",
-        points: [
-            "4K AI 카메라가 교사를 자동 추적하며 수업 전체를 녹화",
-            "수업 종료 즉시 수업 영상 자동 생성 — 별도 편집·업로드 불필요",
-            "8배열 마이크 + AI 노이즈캔슬링으로 선명한 음성 전달",
-            "교실+원격 학생 동시 판서, 진짜 하이브리드 수업",
-        ],
-    },
-    {
-        label: "SW 생태계",
-        image: "/images/product/hw/features/feature-ecosystem.webp",
-        imageAlt: "클래스인 소프트웨어 생태계 학습 장면",
-        badge: "LMS 완전 통합",
-        title: "수업 이후 운영까지 이어지는 Classin 소프트웨어",
-        points: [
-            "NFC 원터치 로그인 — 내 수업 환경 즉시 로드",
-            "출결·과제·성적·알림까지 학원 운영 흐름과 자연스럽게 연결",
-            "수업 기록과 학습 데이터가 Classin 시스템 안에 한 번에 쌓입니다",
-        ],
-    },
-]
-
-/* ── Section: Feature Tab ────────────────────────────────────────── */
-function FeatureTabSection() {
-    const [active, setActive] = useState(0)
-    const tab = featureTabs[active]
-
-    return (
-        <section className="py-24 md:py-32 bg-white">
-            <div className="container mx-auto px-4 lg:px-8">
-                <motion.div className="text-center mb-12" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">FEATURES</p>
-                    <h2 className="text-3xl md:text-4xl text-[#1a1a19] leading-tight">
-                        하나의 보드, <span className="text-[#22A366]">다섯 가지 경험</span>
-                    </h2>
-                    <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
-                        탭을 눌러 각 기능을 빠르게 확인하세요.
-                    </p>
-                </motion.div>
-
-                {/* Tab buttons */}
-                <div className="flex flex-wrap justify-center gap-2 mb-12">
-                    {featureTabs.map((t, i) => (
-                        <button
-                            key={i}
-                            onClick={() => setActive(i)}
-                            className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all ${
-                                active === i
-                                    ? "bg-[#22A366] text-white shadow-md"
-                                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            }`}
-                        >
-                            {t.label}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Tab content */}
-                <motion.div
-                    key={active}
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="max-w-5xl mx-auto grid lg:grid-cols-2 gap-10 items-center"
-                >
-                    {/* Image */}
-                    <div className={`rounded-3xl overflow-hidden shadow-2xl ${tab.imagePanelClassName ?? "bg-white"}`}>
-                        <div className={`relative aspect-[4/3] ${tab.imagePanelClassName ?? ""}`}>
-                            <Image
-                                src={tab.image ?? ""}
-                                alt={tab.imageAlt ?? tab.title}
-                                fill
-                                sizes="(max-width: 768px) 100vw, 50vw"
-                                className={`${tab.imageFit === "contain" ? "object-contain" : "object-cover"} ${tab.imageClassName ?? ""}`}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Content */}
-                    <div>
-                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#22A366]/10 text-[#22A366] text-xs font-bold mb-5 border border-[#22A366]/15">
-                            {tab.badge}
-                        </div>
-                        <h3 className="text-2xl md:text-3xl text-[#1a1a19] mb-8 leading-snug">
-                            {tab.title}
-                        </h3>
-                        <ul className="space-y-4">
-                            {tab.points.map((p, i) => (
-                                <li key={i} className="flex items-start gap-3">
-                                    <div className="w-5 h-5 rounded-full bg-[#22A366]/10 flex items-center justify-center shrink-0 mt-0.5">
-                                        <svg className="w-3 h-3 text-[#22A366]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                    </div>
-                                    <span className="text-slate-600 leading-relaxed">{p}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                </motion.div>
             </div>
         </section>
     )
@@ -443,7 +184,7 @@ function ProductAnatomySection() {
     return (
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8">
-                <motion.div className="text-center mb-16" {...fadeUp}>
+                <Reveal className="text-center mb-16" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">PRODUCT DESIGN</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         디테일에서 완성되는
@@ -456,11 +197,11 @@ function ProductAnatomySection() {
                         <br />
                         선생님과 학생 모두가 수업에만 집중할 수 있는 최적의 하드웨어를 완성합니다.
                     </p>
-                </motion.div>
+                </Reveal>
 
                 <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-14 items-center">
                     {/* Side profile image */}
-                    <motion.div {...fadeUp} className="rounded-3xl overflow-hidden shadow-xl bg-slate-50">
+                    <Reveal {...fadeUp} className="rounded-3xl overflow-hidden shadow-xl bg-slate-50">
                         <Image
                             src="/images/product/hw/board/board-side-profile.webp"
                             alt="Classin Board 측면 슬림 프로파일 — 110mm"
@@ -469,12 +210,12 @@ function ProductAnatomySection() {
                             sizes="(max-width: 768px) 100vw, 50vw"
                             className="w-full h-auto"
                         />
-                    </motion.div>
+                    </Reveal>
 
                     {/* Spec callout grid */}
                     <div className="grid sm:grid-cols-2 gap-4">
                         {physicalSpecs.map((s, i) => (
-                            <motion.div
+                            <Reveal
                                 key={i}
                                 {...stagger(i)}
                                 className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md hover:border-[#22A366]/20 transition-all"
@@ -482,46 +223,9 @@ function ProductAnatomySection() {
                                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{s.label}</div>
                                 <div className="text-base font-sans font-bold tabular-nums tracking-tight text-[#1a1a19] mb-0.5">{s.value}</div>
                                 <div className="text-xs text-slate-400 leading-relaxed">{s.sub}</div>
-                            </motion.div>
+                            </Reveal>
                         ))}
                     </div>
-                </div>
-            </div>
-        </section>
-    )
-}
-
-/* ── Section: Impact Numbers (Full-width dark) ───────────────────── */
-function ImpactNumbersSection() {
-    const ref = useRef(null)
-    const inView = useInView(ref, { once: true, margin: "-50px" })
-
-    const stats = [
-        { value: "1,200+", label: "도입 학교·기관", sub: "국내외 교육 현장" },
-        { value: "35,000+", label: "활성 교사", sub: "매일 수업에 활용 중" },
-        { value: "12개국", label: "글로벌 교육 시장", sub: "아시아·유럽·미주" },
-    ]
-
-    return (
-        <section ref={ref} className="bg-[#0d1a12] relative overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_50%,_rgba(34,163,102,0.13)_0%,_transparent_100%)]" />
-            <div className="container mx-auto px-4 lg:px-8 py-20 md:py-28 relative">
-                <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/8">
-                    {stats.map((s, i) => (
-                        <motion.div
-                            key={i}
-                            initial={{ opacity: 0, y: 24 }}
-                            animate={inView ? { opacity: 1, y: 0 } : {}}
-                            transition={{ duration: 0.6, delay: i * 0.15 }}
-                            className="py-12 md:py-0 md:px-16 text-center"
-                        >
-                            <div className="text-5xl md:text-6xl lg:text-7xl font-sans font-bold tabular-nums tracking-tight text-white leading-none mb-3">
-                                {s.value}
-                            </div>
-                            <div className="text-xs font-bold text-[#22A366] uppercase tracking-[0.2em] mb-2">{s.label}</div>
-                            <div className="text-sm text-white/35">{s.sub}</div>
-                        </motion.div>
-                    ))}
                 </div>
             </div>
         </section>
@@ -541,7 +245,7 @@ function FullWidthPointSection({
             )}
             <div className={`absolute inset-0 ${dark ? "bg-[#0d1a12]/75" : "bg-[#0d1a12]/65"}`} />
             <div className="relative container mx-auto px-4 lg:px-8 py-28 md:py-40 text-center text-white">
-                <motion.div {...fadeUp} className={contentClassName}>
+                <Reveal {...fadeUp} className={contentClassName}>
                     <p className="text-xs font-bold tracking-[0.35em] uppercase mb-7 text-white/50">{eyebrow}</p>
                     <h2 className="text-4xl sm:text-5xl lg:text-6xl xl:text-[5rem] leading-[1.1] tracking-tight mb-8 max-w-4xl mx-auto">
                         {statement}
@@ -549,7 +253,7 @@ function FullWidthPointSection({
                     {sub && (
                         <p className="text-lg md:text-xl text-white/60 max-w-2xl mx-auto leading-relaxed">{sub}</p>
                     )}
-                </motion.div>
+                </Reveal>
             </div>
         </section>
     )
@@ -593,21 +297,21 @@ function LessonTimelineSection() {
     return (
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8">
-                <motion.div className="text-center mb-16" {...fadeUp}>
+                <Reveal className="text-center mb-16" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">A Day With Classin Board</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         교사의 하루가
                         <br />
                         <span className="text-[#22A366]">이렇게 달라집니다</span>
                     </h2>
-                </motion.div>
+                </Reveal>
 
                 <div className="max-w-2xl mx-auto relative">
                     <div className="absolute left-[5.25rem] top-5 bottom-5 w-px bg-gradient-to-b from-[#22A366]/40 via-[#22A366]/20 to-transparent hidden sm:block" />
 
                     <div className="space-y-10">
                         {timelineSteps.map((step, i) => (
-                            <motion.div key={i} {...stagger(i)} className="flex items-start gap-5">
+                            <Reveal key={i} {...stagger(i)} className="flex items-start gap-5">
                                 <div className="shrink-0 w-16 text-right pt-2.5">
                                     <span className="text-[11px] font-bold tabular-nums text-slate-400 leading-none">{step.time}</span>
                                 </div>
@@ -620,7 +324,7 @@ function LessonTimelineSection() {
                                     <h3 className="font-bold text-slate-900 mb-1.5 text-sm">{step.title}</h3>
                                     <p className="text-sm text-slate-500 leading-relaxed">{step.desc}</p>
                                 </div>
-                            </motion.div>
+                            </Reveal>
                         ))}
                     </div>
                 </div>
@@ -658,18 +362,18 @@ function TestimonialSection() {
     return (
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
-                <motion.div className="text-center mb-14" {...fadeUp}>
+                <Reveal className="text-center mb-14" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">VOICES FROM CLASSROOMS</p>
                     <h2 className="text-3xl md:text-4xl text-[#1a1a19] leading-tight">
                         이미 수업에서 경험한
                         <br />
                         <span className="text-[#22A366]">선생님들이 말합니다</span>
                     </h2>
-                </motion.div>
+                </Reveal>
 
                 <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
                     {testimonials.map((t, i) => (
-                        <motion.div
+                        <Reveal
                             key={i}
                             {...stagger(i)}
                             className="bg-[#FDFCF8] rounded-2xl border border-slate-100 shadow-sm p-7 flex flex-col"
@@ -689,121 +393,9 @@ function TestimonialSection() {
                                     {t.model}
                                 </div>
                             </div>
-                        </motion.div>
+                        </Reveal>
                     ))}
                 </div>
-            </div>
-        </section>
-    )
-}
-
-/* ── Section: Space Scenarios ────────────────────────────────────── */
-const spaceImageVersion = "20260429-1604"
-
-const spaceScenarios = [
-    {
-        model: "S110", size: '110"', badge: "FLAGSHIP",
-        tag: "강당 · 대형 강의실",
-        story: "300명이 앉은 강당에서도 맨 뒷자리가 선명합니다. 110인치 화면이 공간을 압도하며, 교사 한 명의 판서가 전석에 전달됩니다. 대규모 강의, 특강, 입시 설명회에 최적.",
-        image: `/images/product/hw/spaces/space-s110-hall.webp?v=${spaceImageVersion}`,
-    },
-    {
-        model: "S86", size: '86"', badge: "BEST",
-        tag: "일반 교실 · 회의실",
-        story: "30명 담임반의 하루 6교시를 완주하는 기준 모델. 가장 많은 교실 환경에 최적화된 사이즈. 8배열 마이크가 교실 소음 속에서도 교사 음성을 또렷이 전달합니다.",
-        image: `/images/product/hw/spaces/space-s86-classroom.webp?v=${spaceImageVersion}`,
-    },
-    {
-        model: "S75", size: '75"', badge: "",
-        tag: "세미나 · 중형 회의실",
-        story: "20명 내외의 세미나실과 중형 회의실에 딱 맞는 사이즈. 임원 PT, 팀 회의, 교사 연수에서 화이트보드를 완전히 대체합니다.",
-        image: `/images/product/hw/spaces/space-s75-seminar.webp?v=${spaceImageVersion}`,
-    },
-]
-
-function SpaceScenarioSection() {
-    const [active, setActive] = useState(0)
-    const scenario = spaceScenarios[active]
-
-    return (
-        <section className="py-24 md:py-32 bg-[#FDFCF8]">
-            <div className="container mx-auto px-4 lg:px-8">
-                <motion.div className="text-center mb-12" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">LINEUP × SPACE</p>
-                    <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
-                        공간에 딱 맞는
-                        <br />
-                        <span className="text-[#22A366]">최적의 모델을 만나보세요</span>
-                    </h2>
-                    <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
-                        설치 공간을 선택하면 최적 모델과 사용 시나리오를 확인할 수 있습니다.
-                    </p>
-                </motion.div>
-
-                <div className="flex flex-wrap justify-center gap-3 mb-12">
-                    {spaceScenarios.map((s, i) => (
-                        <button
-                            key={i}
-                            onClick={() => setActive(i)}
-                            className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${
-                                active === i
-                                    ? "bg-[#22A366] text-white shadow-md"
-                                    : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
-                            }`}
-                        >
-                            {s.model}
-                            <span className={`ml-1.5 font-normal text-xs ${active === i ? "text-white/70" : "text-slate-400"}`}>{s.size}</span>
-                        </button>
-                    ))}
-                </div>
-
-                <motion.div
-                    key={active}
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="max-w-5xl mx-auto grid lg:grid-cols-2 gap-10 items-center"
-                >
-                    <div className="rounded-3xl overflow-hidden shadow-2xl aspect-[4/3] relative">
-                        <Image
-                            src={scenario.image}
-                            alt={scenario.tag}
-                            fill
-                            className="object-cover"
-                            sizes="(max-width: 768px) 100vw, 50vw"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
-                        {scenario.badge && (
-                            <div className="absolute top-4 left-4 text-[10px] font-bold tracking-wider bg-[#22A366] text-white px-3 py-1 rounded-full">
-                                {scenario.badge}
-                            </div>
-                        )}
-                        <div className="absolute bottom-5 left-5 text-white">
-                            <div className="text-4xl font-sans font-bold tabular-nums tracking-tight">{scenario.model}</div>
-                            <div className="text-sm opacity-60 mt-0.5">{scenario.size}</div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <div className="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-semibold mb-6">
-                            {scenario.tag}
-                        </div>
-                        <h3 className="text-2xl md:text-3xl text-[#1a1a19] mb-5 leading-snug">
-                            {scenario.model} <span className="text-slate-400 font-normal">{scenario.size}</span>
-                            <br />어떤 공간에 어울릴까요?
-                        </h3>
-                        <p className="text-slate-600 leading-relaxed mb-8">{scenario.story}</p>
-                        <Button asChild className="h-12 rounded-full bg-[#009060] px-8 text-sm font-bold text-white shadow-md transition-all hover:bg-[#007A52] hover:shadow-lg group">
-                            <Link
-                                href="/contact#contact-form"
-                                onClick={() => trackEvent("click_cta", { button: "hw_model_inquiry", page: "/product/hw", model: scenario.model })}
-                            >
-                            이 모델로 문의하기
-                            <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                            </Link>
-                        </Button>
-                    </div>
-                </motion.div>
             </div>
         </section>
     )
@@ -824,7 +416,7 @@ export default function ProductHWPage() {
 
                 <div className="container mx-auto px-4 lg:px-8 pt-12 md:pt-24 pb-20 md:pb-32 relative">
                     <div className="max-w-6xl mx-auto text-center">
-                        <motion.div
+                        <Reveal
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.7 }}
@@ -846,10 +438,10 @@ export default function ProductHWPage() {
                             <p className="text-lg md:text-xl lg:text-2xl text-[#615D59] leading-relaxed font-medium max-w-3xl mx-auto mb-12">
                                 보드 위에 쓰면 전원에게 공유되고, AI 카메라가 수업을 녹화하고, 끝나면 영상과 노트가 동시에 올라갑니다.
                             </p>
-                        </motion.div>
+                        </Reveal>
 
                         {/* Hero key metrics */}
-                        <motion.div
+                        <Reveal
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.6, delay: 0.3 }}
@@ -866,10 +458,10 @@ export default function ProductHWPage() {
                                     <div className="text-xs md:text-sm text-slate-400 mt-1 font-medium">{m.label}</div>
                                 </div>
                             ))}
-                        </motion.div>
+                        </Reveal>
 
                         {/* Hero board image */}
-                        <motion.div
+                        <Reveal
                             initial={{ opacity: 0, y: 40 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.8, delay: 0.5 }}
@@ -884,7 +476,7 @@ export default function ProductHWPage() {
                                 priority
                                 className="w-full h-auto"
                             />
-                        </motion.div>
+                        </Reveal>
                     </div>
                 </div>
             </section>
@@ -1008,7 +600,7 @@ export default function ProductHWPage() {
                     ]}
                 >
                     {/* Writing visual — teacher writing on board */}
-                    <motion.div {...fadeUp} className="relative">
+                    <Reveal {...fadeUp} className="relative">
                         <div className="rounded-3xl overflow-hidden shadow-2xl">
                             <Image
                                 src="/images/product/hw/writing/writing-experience-classroom.webp"
@@ -1019,7 +611,7 @@ export default function ProductHWPage() {
                                 className="w-full h-auto"
                             />
                         </div>
-                    </motion.div>
+                    </Reveal>
                 </FeatureSection>
             </div>
 
@@ -1050,7 +642,7 @@ export default function ProductHWPage() {
                 ]}
             >
                 {/* Display visual — premium black-hole board scene */}
-                <motion.div {...fadeUp} className="relative">
+                <Reveal {...fadeUp} className="relative">
                     <div className="rounded-3xl overflow-hidden shadow-2xl">
                         <Image
                             src="/images/product/hw/features/feature-display.webp"
@@ -1062,7 +654,7 @@ export default function ProductHWPage() {
                         />
                     </div>
                     {/* Floating coating badge */}
-                    <motion.div
+                    <Reveal
                         initial={{ opacity: 0, scale: 0.8 }}
                         whileInView={{ opacity: 1, scale: 1 }}
                         viewport={{ once: true }}
@@ -1071,8 +663,8 @@ export default function ProductHWPage() {
                     >
                         <div className="text-xs text-slate-400 mb-0.5">빛 투과율</div>
                         <div className="text-lg font-bold text-[#084734] font-mono">90%+</div>
-                    </motion.div>
-                </motion.div>
+                    </Reveal>
+                </Reveal>
             </FeatureSection>
 
             {/* ================================================================
@@ -1103,7 +695,7 @@ export default function ProductHWPage() {
                     ]}
                 >
                     {/* Sharing visual — board camera close-up */}
-                    <motion.div {...fadeUp} className="relative">
+                    <Reveal {...fadeUp} className="relative">
                         <div className="relative aspect-[4/3] overflow-hidden rounded-3xl bg-black shadow-2xl">
                             <Image
                                 src="/images/product/hw/sharing/instant-sharing-camera.webp"
@@ -1113,7 +705,7 @@ export default function ProductHWPage() {
                                 className="object-cover object-[48%_50%] translate-x-[-5%] translate-y-[4%] scale-[1.36]"
                             />
                         </div>
-                    </motion.div>
+                    </Reveal>
                 </FeatureSection>
             </div>
 
@@ -1163,7 +755,7 @@ export default function ProductHWPage() {
                 ]}
             >
                 {/* Hybrid classroom visual — looping interactive learning video */}
-                <motion.div {...fadeUp} className="relative">
+                <Reveal {...fadeUp} className="relative">
                     <div className="absolute -inset-7 rounded-[2rem] bg-[radial-gradient(circle_at_35%_20%,rgba(34,163,102,0.18),transparent_46%),radial-gradient(circle_at_80%_75%,rgba(8,71,52,0.14),transparent_45%)] blur-2xl" />
                     <div className="relative rounded-[1.55rem] bg-gradient-to-br from-white via-[#F2EFE7] to-[#CFC8BA] p-[4px] shadow-[0_32px_90px_rgba(8,71,52,0.18)] ring-1 ring-black/5">
                         <div className="relative aspect-video overflow-hidden rounded-[1.25rem] bg-black shadow-inner">
@@ -1182,7 +774,7 @@ export default function ProductHWPage() {
                             <div className="pointer-events-none absolute inset-x-10 bottom-0 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
                         </div>
                     </div>
-                </motion.div>
+                </Reveal>
             </FeatureSection>
 
             {/* ================================================================
@@ -1193,7 +785,7 @@ export default function ProductHWPage() {
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#22A366]/5 rounded-full blur-[120px] pointer-events-none" />
 
                 <div className="container mx-auto px-4 lg:px-8 relative">
-                    <motion.div className="text-center mb-16" {...fadeUp}>
+                    <Reveal className="text-center mb-16" {...fadeUp}>
                         <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">COMPLETE ECOSYSTEM</p>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl leading-tight">
                             하드웨어 그 이상,
@@ -1203,10 +795,10 @@ export default function ProductHWPage() {
                         <p className="text-lg text-slate-400 mt-6 max-w-2xl mx-auto leading-relaxed">
                             Classin 소프트웨어가 보드에 네이티브 탑재. 출결부터 과제, 성적, 학부모 알림까지 — 끊김 없는 하나의 흐름.
                         </p>
-                    </motion.div>
+                    </Reveal>
 
                     {/* Board bezel detail hero image */}
-                    <motion.div {...fadeUp} className="max-w-3xl mx-auto mb-14 rounded-3xl overflow-hidden shadow-2xl">
+                    <Reveal {...fadeUp} className="max-w-3xl mx-auto mb-14 rounded-3xl overflow-hidden shadow-2xl">
                         <Image
                             src="/images/product/hw/board/board-bezel-detail.webp?v=20260429-1834"
                             alt="Classin Board 프리미엄 브러시드 메탈 베젤 디테일"
@@ -1215,7 +807,7 @@ export default function ProductHWPage() {
                             sizes="(max-width: 768px) 100vw, 900px"
                             className="w-full h-auto"
                         />
-                    </motion.div>
+                    </Reveal>
 
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl mx-auto">
                         {[
@@ -1240,7 +832,7 @@ export default function ProductHWPage() {
                                 desc: "어떤 기기에서든 원클릭으로 화면을 공유합니다. USB, 빔프로젝터, HDMI 없이 Classin만 있다면 어디에서나 가능합니다.",
                             },
                         ].map((item, i) => (
-                            <motion.div
+                            <Reveal
                                 key={i}
                                 {...stagger(i)}
                                 className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-colors"
@@ -1250,7 +842,7 @@ export default function ProductHWPage() {
                                 </div>
                                 <h3 className="font-bold text-white mb-2">{item.title}</h3>
                                 <p className="text-sm text-slate-400 leading-relaxed">{item.desc}</p>
-                            </motion.div>
+                            </Reveal>
                         ))}
                     </div>
                 </div>
@@ -1271,7 +863,7 @@ export default function ProductHWPage() {
             ================================================================ */}
             <section className="py-24 md:py-32">
                 <div className="container mx-auto px-4 lg:px-8">
-                    <motion.div className="text-center mb-16" {...fadeUp}>
+                    <Reveal className="text-center mb-16" {...fadeUp}>
                         <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">LINEUP</p>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                             모든 공간에 맞는 <span className="text-[#22A366]">사이즈</span>
@@ -1279,12 +871,12 @@ export default function ProductHWPage() {
                         <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
                             소규모 스터디룸부터 대형 강당까지, 공간에 최적화된 모델을 선택하세요.
                         </p>
-                    </motion.div>
+                    </Reveal>
 
                     {/* Lineup cards */}
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-5xl mx-auto mb-20">
                         {lineupCards.map((card, i) => (
-                            <motion.div
+                            <Reveal
                                 key={card.model}
                                 {...stagger(i)}
                                 className={`rounded-2xl border p-5 min-h-[150px] flex flex-col justify-between transition-colors duration-200 hover:bg-slate-50/60 ${card.cardClass}`}
@@ -1301,12 +893,12 @@ export default function ProductHWPage() {
                                     ) : null}
                                 </div>
                                 <p className={`text-xs leading-relaxed ${card.recClass}`}>{card.rec}</p>
-                            </motion.div>
+                            </Reveal>
                         ))}
                     </div>
 
                     {/* Detailed spec table */}
-                    <motion.div {...fadeUp} className="max-w-5xl mx-auto">
+                    <Reveal {...fadeUp} className="max-w-5xl mx-auto">
                         <div className="text-center mb-8">
                             <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">SPECIFICATIONS</p>
                             <h3 className="text-2xl md:text-3xl font-bold text-[#1a1a19] leading-tight mb-3">
@@ -1352,7 +944,7 @@ export default function ProductHWPage() {
                                 </table>
                             </div>
                         </div>
-                    </motion.div>
+                    </Reveal>
                 </div>
             </section>
 
@@ -1366,7 +958,7 @@ export default function ProductHWPage() {
             ================================================================ */}
             <section className="py-24 md:py-32 bg-gradient-to-b from-white to-[#FDFCF8] border-t border-slate-100">
                 <div className="container mx-auto px-4 text-center">
-                    <motion.div {...fadeUp}>
+                    <Reveal {...fadeUp}>
                         <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">EXPERIENCE</p>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] mb-4 leading-tight">
                             압도적인 몰입감,
@@ -1378,28 +970,8 @@ export default function ProductHWPage() {
                             우리 학원 환경에 최적화된 클래스인 보드의 성능을 데모 시연으로 먼저 경험해 보세요.
                         </p>
 
-                        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Button asChild className="h-14 rounded-full bg-[#009060] px-10 text-base font-bold text-white shadow-[0_8px_20px_rgba(0,144,96,0.24)] transition-all hover:scale-105 hover:bg-[#007A52] hover:shadow-[0_12px_25px_rgba(0,144,96,0.32)] group">
-                                <Link
-                                    href="/contact#contact-form"
-                                    onClick={() => trackEvent("click_cta", { button: "hw_final_inquiry", page: "/product/hw" })}
-                                >
-                                도입 문의하기
-                                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                                </Link>
-                            </Button>
-                            <Button asChild variant="outline" className="rounded-full px-10 h-14 text-base font-bold border-slate-300 hover:border-slate-400 text-slate-700 hover:bg-slate-50 transition-all">
-                                <a
-                                    href={BROCHURE_URL}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={() => trackEvent("download_materials", { asset_id: "hw_brochure", page: "/product/hw" })}
-                                >
-                                서비스 소개서 보기
-                                </a>
-                            </Button>
-                        </div>
-                    </motion.div>
+                        <HwFinalCtaButtons />
+                    </Reveal>
                 </div>
             </section>
         </div>

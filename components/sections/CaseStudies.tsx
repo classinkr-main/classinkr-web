@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Image from "next/image"
-import { motion } from "framer-motion"
+import { m } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
 import { ChevronLeft, ChevronRight, Quote } from "lucide-react"
 
@@ -137,7 +137,7 @@ export function CaseStudies() {
                             const isActive = offset === 0
 
                             return (
-                                <motion.article
+                                <m.article
                                     key={caseItem.name}
                                     onClick={() => goToSlide(index)}
                                     initial={false}
@@ -194,7 +194,7 @@ export function CaseStudies() {
                                             </div>
                                         </CardContent>
                                     </Card>
-                                </motion.article>
+                                </m.article>
                             )
                         })}
                     </div>
