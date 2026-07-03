@@ -3439,28 +3439,16 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
       </td>
       <td className="border-l border-[#F2F1EE] px-1.5 text-right" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
         <div className="flex flex-wrap items-center justify-end gap-x-1">
-          {group.categories.map((category) =>
-            category === "hardware" ? (
-              // HW 그룹 → 하드웨어 콘솔 역링크. 행 클릭(그룹 선택)과 겹치지 않게 전파를 끊는다.
-              <Link
-                key={category}
-                href={`/admin/hardware?customer=${encodeURIComponent(group.customer)}`}
-                onClick={(event) => event.stopPropagation()}
-                title={`${group.customer} 하드웨어 거래이력 열기 · HW ${formatMoney(group.categoryTotals[category])}`}
-                className="text-[10px] font-semibold text-[#7A520F] underline-offset-2 transition hover:text-[#A8741A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-              >
-                HW ↗
-              </Link>
-            ) : (
-              <span
-                key={category}
-                title={`${productCategoryMeta(category).label} ${formatMoney(group.categoryTotals[category])}`}
-                className="text-[10px] font-semibold text-[#615D59]"
-              >
-                {productCategoryMeta(category).shortLabel}
-              </span>
-            ),
-          )}
+          {/* 접힌 고객 헤더에는 링크를 걸지 않는다 — ▸로 펼친 뒤 카테고리/품목 행에서 하드웨어로 이동. */}
+          {group.categories.map((category) => (
+            <span
+              key={category}
+              title={`${productCategoryMeta(category).label} ${formatMoney(group.categoryTotals[category])}`}
+              className={`text-[10px] font-semibold ${category === "hardware" ? "text-[#7A520F]" : "text-[#615D59]"}`}
+            >
+              {productCategoryMeta(category).shortLabel}
+            </span>
+          ))}
         </div>
       </td>
       <RevMatrixMonthStrip
@@ -3494,6 +3482,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   view,
   grouped,
   nested = false,
+  hardwareLinked = false,
   months,
   expandedMonths,
   active,
@@ -3506,6 +3495,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   view: RevRowView
   grouped: boolean
   nested?: boolean // 카테고리(HW/SW) 합산행 아래 품목 잎 행 — 한 단계 더 들여쓰기
+  hardwareLinked?: boolean // 하드웨어 원장에 출고 이력이 있어 역링크를 걸어도 되는 고객인지
   months: string[]
   expandedMonths: Set<string>
   active: boolean
@@ -3579,8 +3569,8 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
               </span>
             )}
           </div>
-          {productCategory === "hardware" ? (
-            // HW 행 → 하드웨어 콘솔 역링크. ?customer만 넘기면 내역 탭 + 거래이력 슬라이드오버가 열린다.
+          {productCategory === "hardware" && !nested && hardwareLinked ? (
+            // 단일 품목 HW 행 + 하드웨어 원장에 출고 이력 있는 고객만 역링크. 중첩 품목행은 위 카테고리 행이 링크를 가진다.
             <Link
               href={`/admin/hardware?customer=${encodeURIComponent(row.customer)}`}
               title={`${row.customer} 하드웨어 거래이력 열기`}
@@ -3589,7 +3579,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
               HW ↗
             </Link>
           ) : (
-            <span className="shrink-0 text-[10px] font-semibold text-[#A39E98]">{productCategoryMeta(productCategory).shortLabel}</span>
+            <span className={`shrink-0 text-[10px] font-semibold ${productCategory === "hardware" ? "text-[#7A520F]" : "text-[#A39E98]"}`}>{productCategoryMeta(productCategory).shortLabel}</span>
           )}
         </div>
       </td>
@@ -3624,6 +3614,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
 // 개별 품목행 대신 "HW 쭉 하나로, SW 하나로" 구조 — 품목명은 서브라인에, 상세/편집은 우측 rail에서.
 const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
   category,
+  customer,
   products,
   monthlyByMonth,
   annual,
@@ -3632,11 +3623,13 @@ const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
   expandedMonths,
   expanded,
   editable,
+  hardwareLinked,
   onToggle,
   onOpen,
   density = "regular",
 }: {
   category: Exclude<RevProductCategory, "all">
+  customer: string
   products: string[]
   monthlyByMonth: Record<string, RevMonthlyBucket>
   annual: RevMonthlyBucket
@@ -3645,6 +3638,7 @@ const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
   expandedMonths: Set<string>
   expanded: boolean
   editable: boolean // 이 카테고리에 편집 가능한 품목이 있는지(전부 잠금이면 ▸ 대신 잠금 표시)
+  hardwareLinked: boolean // 하드웨어 원장에 출고 이력이 있어 역링크 걸어도 되는 고객인지
   onToggle: () => void
   onOpen: () => void
   density?: MatrixDensity
@@ -3702,7 +3696,18 @@ const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
         </div>
       </td>
       <td className="border-l border-[#F2F1EE] px-1.5 text-right align-middle" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
-        <span className="text-[10px] font-semibold text-[#A39E98]">합산</span>
+        {category === "hardware" && hardwareLinked ? (
+          // 펼친 뒤 나오는 HW 합산행 → 하드웨어 원장 역링크(연결된 고객만).
+          <Link
+            href={`/admin/hardware?customer=${encodeURIComponent(customer)}`}
+            title={`${customer} 하드웨어 거래이력 열기`}
+            className="text-[10px] font-semibold text-[#7A520F] underline-offset-2 transition hover:text-[#A8741A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+          >
+            HW ↗
+          </Link>
+        ) : (
+          <span className="text-[10px] font-semibold text-[#A39E98]">합산</span>
+        )}
       </td>
       <RevMatrixMonthStrip
         monthlyByRowOrGroup={monthlyByMonth}
@@ -4260,6 +4265,27 @@ export default function SalesLedgerWorkbench() {
   const summary = useBranchJson<BranchSummaryResponse>(`/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}`, refreshKey)
   const kpi = useBranchJson<BranchKpiResponse>(`/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`, refreshKey)
   const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey)
+
+  // 하드웨어 콘솔 역링크 게이팅: 하드웨어 원장에 실제 출고 이력이 있는 고객사만 링크로 건다.
+  // 출고 목적지(to_location)가 창고/샘플/고객(generic) 등이 아닌 실제 고객사명인 것만 수집.
+  const hardware = useBranchJson<{ movements?: Array<{ movement_type: string; to_location: string | null }> }>(`/api/admin/hardware`, refreshKey)
+  const hardwareCustomerKeys = useMemo(() => {
+    const set = new Set<string>()
+    const generic = new Set(["창고", "샘플", "고객", "수리", "사무실", "본사", "office", "외부/고객", "외부", "재고"])
+    for (const movement of hardware.data?.movements ?? []) {
+      if (movement.movement_type !== "outbound") continue
+      const location = movement.to_location?.trim()
+      if (!location || generic.has(location)) continue
+      const key = normalizedAccountKey(location)
+      if (key) set.add(key)
+    }
+    return set
+  }, [hardware.data?.movements])
+  // 데이터 로드 전엔 링크 유지(로딩 중 유효 링크가 사라지는 깜빡임 방지), 로드 후엔 연결된 고객만.
+  const isHardwareLinked = useCallback(
+    (customer: string) => !hardware.data || hardwareCustomerKeys.has(normalizedAccountKey(customer)),
+    [hardware.data, hardwareCustomerKeys],
+  )
 
   const sheetRows = useMemo<LedgerRevenueRow[]>(() => {
     return (pipeline.data?.rows ?? []).map((row) => ({
@@ -6611,6 +6637,7 @@ export default function SalesLedgerWorkbench() {
                                     <Fragment key={`cat-${group.key}-${category}`}>
                                       <RevMatrixCategoryRow
                                         category={category}
+                                        customer={group.customer}
                                         products={products}
                                         monthlyByMonth={group.categoryMonthly[category] ?? {}}
                                         annual={group.categoryAnnual[category] ?? EMPTY_BUCKET}
@@ -6619,6 +6646,7 @@ export default function SalesLedgerWorkbench() {
                                         expandedMonths={expandedRevMonths}
                                         expanded={catExpanded}
                                         editable={catEditable}
+                                        hardwareLinked={isHardwareLinked(group.customer)}
                                         onToggle={() => toggleRevCategory(group.key, category)}
                                         onOpen={() => selectRevGroup(group.key)}
                                         density={matrixDensity}
@@ -6656,6 +6684,7 @@ export default function SalesLedgerWorkbench() {
                                       key={row.id}
                                       view={view}
                                       grouped={false}
+                                      hardwareLinked={isHardwareLinked(row.customer)}
                                       months={matrixMonths}
                                       expandedMonths={expandedRevMonths}
                                       active={selectedRow?.id === row.id}
@@ -7083,7 +7112,7 @@ export default function SalesLedgerWorkbench() {
                         <div key={category} className="flex items-center justify-between gap-2 text-[11px]">
                           <span className="flex min-w-0 items-center gap-1.5">
                             <ProductCategoryPill category={category} compact />
-                            {category === "hardware" && (
+                            {category === "hardware" && isHardwareLinked(selectedGroup.customer) && (
                               <Link
                                 href={`/admin/hardware?customer=${encodeURIComponent(selectedGroup.customer)}`}
                                 title={`${selectedGroup.customer} 하드웨어 거래이력 열기`}
@@ -7177,7 +7206,7 @@ export default function SalesLedgerWorkbench() {
                     </p>
                     <span className="flex shrink-0 flex-col items-end gap-1">
                       <ProductCategoryPill category={selectedProductCategory} />
-                      {selectedProductCategory === "hardware" && (
+                      {selectedProductCategory === "hardware" && isHardwareLinked(detail?.customer_name ?? selectedRow.customer) && (
                         <Link
                           href={`/admin/hardware?customer=${encodeURIComponent(detail?.customer_name ?? selectedRow.customer)}`}
                           title={`${detail?.customer_name ?? selectedRow.customer} 하드웨어 거래이력 열기`}
