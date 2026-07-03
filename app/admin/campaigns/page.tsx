@@ -33,6 +33,7 @@ import { GoalProgressPanel } from "@/components/admin/campaigns/GoalProgressPane
 import type { GoalEventRow } from "@/components/admin/campaigns/GoalProgressPanel"
 import { MiniFunnel } from "@/components/admin/viz/MiniFunnel"
 import type { FunnelStage as WaterfallStage } from "@/components/admin/viz/MiniFunnel"
+import { StatTile } from "@/components/admin/viz"
 import { TopPerformersTable } from "@/components/admin/campaigns/TopPerformersTable"
 import type { PerformerRow } from "@/components/admin/campaigns/TopPerformersTable"
 import { CampaignExportButton } from "@/components/admin/campaigns/CampaignExportButton"
@@ -278,6 +279,8 @@ function eventInPeriod(event: PublicEvent, period: Period): boolean {
 
 // ─── UI primitives ────────────────────────────────────────────────────────────
 
+// KPI 카드는 공용 StatTile(compact)로 통합 — 로컬 tone은 색이 픽셀 동일한 viz Tone으로 매핑
+// (success→brand, warn→danger[#FEF3EE/#B85C33 동일], neutral→neutral).
 function KpiCard({
   icon,
   label,
@@ -291,20 +294,8 @@ function KpiCard({
   hint?: string
   tone?: "neutral" | "success" | "warn"
 }) {
-  const accent =
-    tone === "success"
-      ? "bg-[#ECFDF5] text-[#084734]"
-      : tone === "warn"
-        ? "bg-[#FEF3EE] text-[#B85C33]"
-        : "bg-[#f0f0ec] text-[#1a1a1a]/55"
-  return (
-    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-      <span className={`inline-flex rounded-xl p-2 ${accent}`}>{icon}</span>
-      <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">{label}</p>
-      <p className="mt-1.5 text-[22px] font-bold leading-none tracking-[-0.02em] text-[#111110]">{value}</p>
-      {hint && <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">{hint}</p>}
-    </div>
-  )
+  const vizTone = tone === "success" ? "brand" : tone === "warn" ? "danger" : "neutral"
+  return <StatTile icon={icon} label={label} value={value} hint={hint} tone={vizTone} compact />
 }
 
 const META_DATE_OPTIONS: Array<{ value: MetaDatePreset; label: string }> = [

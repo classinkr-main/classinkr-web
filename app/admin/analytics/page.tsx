@@ -19,6 +19,7 @@ import {
   Users,
 } from "lucide-react"
 import AdminTabs from "@/components/admin/AdminTabs"
+import { StatTile } from "@/components/admin/viz"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { textMatchesEventToken } from "@/lib/events/attribution"
 import { useUrlState } from "@/lib/use-url-state"
@@ -275,6 +276,8 @@ function Panel({
   )
 }
 
+// KPI 카드는 공용 StatTile(components/admin/viz)로 통합 — trend(number)는 StatTile이 지원.
+// (로컬 TrendBadge는 Panel action 슬롯에서 별도 사용 중이라 유지)
 function SummaryCard({
   icon,
   label,
@@ -288,17 +291,7 @@ function SummaryCard({
   hint?: string
   trend?: number
 }) {
-  return (
-    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="inline-flex rounded-xl bg-[#f0f0ec] p-2 text-[#1a1a1a]/50">{icon}</div>
-        {typeof trend === "number" && <TrendBadge value={trend} />}
-      </div>
-      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/40">{label}</p>
-      <p className="text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{value}</p>
-      {hint && <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">{hint}</p>}
-    </div>
-  )
+  return <StatTile icon={icon} label={label} value={value} hint={hint} trend={trend} />
 }
 
 function InsightCard({

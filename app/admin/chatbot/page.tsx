@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 
 import AdminTabs from "@/components/admin/AdminTabs"
+import { StatTile } from "@/components/admin/viz"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import type { AdminDocsAnalyticsResponse } from "@/lib/admin-docs"
 
@@ -197,6 +198,7 @@ function formatDateTime(value: string | null | undefined) {
   }).format(date)
 }
 
+// KPI 카드는 공용 StatTile(components/admin/viz)로 통합 — 기존 그린 칩은 tone="brand"로 재현.
 function MetricCard({
   icon,
   label,
@@ -208,14 +210,7 @@ function MetricCard({
   value: string
   hint: string
 }) {
-  return (
-    <section className="rounded-2xl border border-black/[0.08] bg-white p-5">
-      <div className="mb-4 inline-flex rounded-xl bg-[#ECFDF5] p-2 text-[#084734]">{icon}</div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#615D59]">{label}</p>
-      <p className="mt-2 text-3xl font-bold tracking-[-0.02em] text-[#111110]">{value}</p>
-      <p className="mt-2 text-[12px] leading-relaxed text-[#615D59]">{hint}</p>
-    </section>
-  )
+  return <StatTile icon={icon} label={label} value={value} hint={hint} tone="brand" />
 }
 
 function EmptyState({ label }: { label: string }) {

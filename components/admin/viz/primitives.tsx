@@ -100,6 +100,7 @@ export function StatTile({
   sparkline,
   href,
   lift,
+  compact,
 }: {
   icon: ReactNode
   label: string
@@ -119,6 +120,8 @@ export function StatTile({
   // true면 href 유무와 무관하게 hover-lift+shadow 카드 스타일(구 StatCard 시각) 적용.
   // 일반 StatTile 호출부는 생략 시 기존 flat 카드 스타일을 유지한다.
   lift?: boolean
+  // 밀도 높은 대시보드용 컴팩트 변형(p-4 · 값 22px · 라벨 10px) — 구 campaigns KpiCard 시각.
+  compact?: boolean
 }) {
   const resolvedTrend: StatTileTrend | null =
     typeof trend === "number" ? { value: trend } : trend ?? null
@@ -154,17 +157,17 @@ export function StatTile({
           </span>
         )}
       </div>
-      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/40">{label}</p>
-      <p className="text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{value}</p>
+      <p className={compact ? "mb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35" : "mb-1 text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/40"}>{label}</p>
+      <p className={compact ? "text-[22px] font-bold leading-none tracking-[-0.02em] text-[#111110]" : "text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]"}>{value}</p>
       {hint && <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">{hint}</p>}
       {resolvedTrend?.label && <p className="mt-0.5 text-[11px] text-[#1a1a1a]/30">{resolvedTrend.label}</p>}
       {sparkline && <div className="mt-3 -mb-1">{sparkline}</div>}
     </>
   )
 
-  const liftClass =
-    "bg-white rounded-2xl border border-[#e8e8e4] p-5 shadow-[0_1px_0_rgba(17,17,16,0.02)] transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_12px_30px_rgba(17,17,16,0.04)]"
-  const flatClass = "rounded-2xl border border-[#e8e8e4] bg-white p-5"
+  const pad = compact ? "p-4" : "p-5"
+  const liftClass = `bg-white rounded-2xl border border-[#e8e8e4] ${pad} shadow-[0_1px_0_rgba(17,17,16,0.02)] transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_12px_30px_rgba(17,17,16,0.04)]`
+  const flatClass = `rounded-2xl border border-[#e8e8e4] bg-white ${pad}`
   const cardClass = href ? `block ${liftClass}` : lift ? liftClass : flatClass
 
   if (href) {
