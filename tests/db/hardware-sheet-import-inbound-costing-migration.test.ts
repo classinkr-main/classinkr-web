@@ -8,7 +8,7 @@ const migrationPath = join(
 )
 
 function readMigration() {
-  return readFileSync(migrationPath, "utf8")
+  return readFileSync(migrationPath, "utf8").replace(/\r\n/g, "\n")
 }
 
 describe("hardware sheet import inbound costing migration", () => {

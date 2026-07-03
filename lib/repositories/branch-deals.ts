@@ -46,6 +46,7 @@ const BRANCH_REV_DEAL_LIST_COLUMNS = [
   "monthly_red",
   "monthly_confirmed",
   "monthly_high_conf",
+  "raw",
   "synced_at",
 ].join(", ")
 
@@ -53,6 +54,10 @@ function normalizeDealRow(deal: BranchRevDealListRow): BranchRevDeal {
   return {
     ...deal,
     manager: normalizeBranchMemberName(deal.manager),
+    monthly_payments: deal.monthly_payments ?? {},
+    monthly_red: deal.monthly_red ?? {},
+    monthly_confirmed: deal.monthly_confirmed ?? {},
+    monthly_high_conf: deal.monthly_high_conf ?? {},
     raw: deal.raw ?? {},
   }
 }
@@ -80,7 +85,7 @@ export async function getBranchRevDeal(id: string): Promise<BranchRevDeal | null
   if (error) throw error
   if (!data) return null
   const deal = data as BranchRevDeal
-  return { ...deal, manager: normalizeBranchMemberName(deal.manager) }
+  return normalizeDealRow(deal)
 }
 
 export async function replaceBranchRevDeals(rows: unknown[]): Promise<number> {

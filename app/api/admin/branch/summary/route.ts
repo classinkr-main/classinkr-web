@@ -8,6 +8,7 @@ import type { DshBreakdownRow } from "@/lib/branch/parsers/dsh"
 import { parseKpi, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
+import { readDshFromActiveImport, readKpiBlocksFromActiveImport, readRevDealsFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
 import { fyOf, FISCAL_MONTH_ORDER, fiscalQuarter, resolvePeriodDate, ymKey } from "@/lib/branch/fiscal"
 import { summarizeRevenue, bottleneckKpi, closingDeals } from "@/lib/branch/computations/core-kpi"
 import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
@@ -181,16 +182,25 @@ function readPeriodParam(url: URL): BranchPeriod | NextResponse {
 }
 
 const readDsh = unstable_cache(async (fy: number) => {
+  const imported = await readDshFromActiveImport(fy)
+  if (imported) return imported
   const id = envSheetId("dashboard")
   const grid = await readRangeWithFormat(id, DSH_RANGE)
   return parseDsh(grid, fy)
 }, ["branch-dsh"], { revalidate: 60, tags: ["branch-dsh"] })
 
-const readKpi = unstable_cache(async () => {
+const readKpi = unstable_cache(async (fy: number) => {
+  const imported = await readKpiBlocksFromActiveImport(fy)
+  if (imported) return imported.fy
   const id = envSheetId("dashboard")
   const grid = await readRangeWithFormat(id, KPI_RANGE)
   return parseKpi(grid)
 }, ["branch-kpi"], { revalidate: 60, tags: ["branch-kpi"] })
+
+async function readRevDeals(fy: number, team: BranchTeam) {
+  const imported = await readRevDealsFromActiveImport(fy, { team })
+  return imported ?? listBranchRevDeals({ team })
+}
 
 // Freshness hint — newest modifiedTime across both source sheets.
 // 60s revalidate keeps Drive API call rate well under any quota concern
@@ -215,7 +225,7 @@ export async function GET(req: NextRequest) {
   if (!periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
     const [dsh, kpi, deals, campaigns, runs, events, sheetModifiedAt] = await Promise.all([
-      readDsh(fyOf(periodDate)), readKpi(), listBranchRevDeals({ team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listPublicEvents(),
+      readDsh(fyOf(periodDate)), readKpi(fyOf(periodDate)), readRevDeals(fyOf(periodDate), team), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listPublicEvents(),
       readSheetFreshness(),
     ])
     const teamMembers = new Set(listMembersByTeam(dsh, team))

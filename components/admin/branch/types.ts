@@ -56,11 +56,22 @@ export interface BranchSummaryResponse {
 
 export interface BranchPipelineRow {
   id: string
+  sheetRow?: number
   customer: string
   manager: string | null
   team: string | null
   region: string | null
+  status?: string | null
+  dealType?: string | null
+  productVersion?: string | null
+  firstPayment?: string | null
+  contractTarget?: number
   revenue: number
+  monthlyPayments?: Record<string, number>
+  monthlyConfirmed?: Record<string, number>
+  monthlyHighConfidence?: Record<string, number>
+  monthlyRed?: Record<string, boolean>
+  weeklyPayments?: Record<string, number[]>
 }
 
 export interface BranchPipelineResponse {

@@ -40,4 +40,34 @@ describe("pipeline", () => {
 
     expect(rows[0].revenue).toBe(100)
   })
+
+  it("listRevRevenue exposes weekly REV cells for dashboard charts", () => {
+    const rawRow: unknown[] = Array.from({ length: 24 }, () => null)
+    rawRow[14] = 40
+    rawRow[15] = 60
+
+    const rows = listRevRevenue([
+      mk({
+        id: "a",
+        customer_name: "A",
+        monthly_payments: { "2026-04": 100 },
+        raw: { row: rawRow },
+      }),
+    ])
+
+    expect(rows[0].weeklyPayments["2026-04"]).toEqual([40, 60, 0, 0, 0])
+  })
+
+  it("listRevRevenue prefers DB-normalized weekly REV cells when present", () => {
+    const rows = listRevRevenue([
+      mk({
+        id: "a",
+        customer_name: "A",
+        monthly_payments: { "2026-04": 100 },
+        raw: { weeklyPayments: { "2026-04": [10, "20", 0, null, 70] } },
+      }),
+    ])
+
+    expect(rows[0].weeklyPayments["2026-04"]).toEqual([10, 20, 0, 0, 70])
+  })
 })

@@ -28,6 +28,9 @@ export interface RevDealParsed {
   // 주차(w1~w5) 칸 글자색 기반 금액 분해. 빨강 = 확정, 파랑 = 클로징 임박(90%+)
   monthly_confirmed: Record<string, number>
   monthly_high_conf: Record<string, number>
+  // 주차 실수치(w1~w5, 최대 5칸). block.weekIdxs로 찾은 실제 열에서 직접 읽으므로
+  // 다운스트림에서 고정 오프셋으로 열 위치를 재추정할 필요가 없다.
+  weekly_payments: Record<string, number[]>
   raw: Record<string, unknown>
 }
 
@@ -115,16 +118,24 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number }): Re
     const monthly_red: Record<string, boolean> = {}
     const monthly_confirmed: Record<string, number> = {}
     const monthly_high_conf: Record<string, number> = {}
+    const weekly_payments: Record<string, number[]> = {}
     for (const block of monthBlocks) {
       const totalCell = row[block.totalIdx]
       const total = asNumber(totalCell?.value)
+      // block.weekIdxs는 헤더 텍스트로 찾은 이 달의 실제 주차 열 위치다. 값은 이 순서
+      // 그대로 배열에 담아 내려보낸다 — 다운스트림에서 고정 오프셋 공식으로 열 위치를
+      // 재추정하면(예전 weeklyPaymentsFromRaw 폴백) 블록 하나라도 어긋날 때 이후 달의
+      // 주차 값이 전부 밀려 읽힌다.
+      const weekValues: number[] = []
       let weekSum = 0
       let confirmed = 0
       let highConf = 0
       for (const weekIdx of block.weekIdxs) {
-        const cell = row[weekIdx]; if (!cell) continue
-        const n = asNumber(cell.value)
-        if (n == null || n === 0) continue
+        const cell = row[weekIdx]
+        const n = cell ? asNumber(cell.value) : null
+        const amount = n ?? 0
+        weekValues.push(amount)
+        if (!cell || n == null || n === 0) continue
         weekSum += n
         // 운영 규칙: 빨간 글자 = 확정 매출 (과거 배경색 표기 호환), 파란 글자 = 클로징 임박(90%+)
         if (isRedText(cell.fg) || isRedBg(cell.bg)) confirmed += n
@@ -133,6 +144,7 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number }): Re
       const monthTotal = total ?? (weekSum !== 0 ? weekSum : null)
       if (monthTotal == null || monthTotal === 0) continue
       monthly_payments[block.ym] = monthTotal
+      if (weekValues.some((value) => value !== 0)) weekly_payments[block.ym] = weekValues
       // 주차 입력 없이 월 합계 칸에만 적고 색을 칠한 행 호환
       if (totalCell && (isRedText(totalCell.fg) || isRedBg(totalCell.bg))) {
         confirmed = Math.max(confirmed, monthTotal)
@@ -159,8 +171,10 @@ export function parseRev(grid: FormattedCell[][], opts?: { refFy?: number }): Re
       importance: asString(row[REV_COLS.importance]?.value),
       note: asString(row[REV_COLS.note]?.value),
       contract_target: asNumber(row[REV_COLS.contractTarget]?.value),
-      monthly_payments, monthly_red, monthly_confirmed, monthly_high_conf,
-      raw: { row: row.map((c) => c?.value ?? null) },
+      monthly_payments, monthly_red, monthly_confirmed, monthly_high_conf, weekly_payments,
+      // weeklyPayments도 raw에 실어 보낸다 — pipeline.ts의 weeklyPaymentsFromRaw가
+      // deal.raw.weeklyPayments를 우선 사용하므로, 고정 오프셋 추정 폴백을 타지 않는다.
+      raw: { row: row.map((c) => c?.value ?? null), weeklyPayments: weekly_payments },
     })
   }
   return out

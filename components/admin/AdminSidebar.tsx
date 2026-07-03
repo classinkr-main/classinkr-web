@@ -112,6 +112,11 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/branch/summary?team=ALL&period=Q",
     "/api/admin/branch/kpi?team=ALL&period=Q",
   ],
+  "/admin/branch/ledger": [
+    "/api/admin/branch/summary?team=ALL&period=Q",
+    "/api/admin/branch/kpi?team=ALL&period=Q",
+    "/api/admin/branch/pipeline?team=ALL&period=Q",
+  ],
   "/admin/hardware": ["/api/admin/hardware"],
   "/admin/traffic": [
     "/api/admin/visitor-stats?range=30",
@@ -298,7 +303,12 @@ function AdminSidebarContent({ role, name, email }: Props) {
     if (query) return queryMatches(query)
     return !visibleNav.some((item) => {
       const sibling = splitNavHref(item.href)
-      return sibling.path === path && sibling.query !== null && queryMatches(sibling.query)
+      // 쿼리 딥링크 형제(같은 경로, 예: /admin/docs vs /admin/docs?tab=gaps)에 양보.
+      if (sibling.path === path && sibling.query !== null && queryMatches(sibling.query)) return true
+      // 더 깊은 경로 형제(예: /admin/branch vs /admin/branch/ledger)가 현재 경로에 맞으면 상위는 양보 —
+      // KR Team과 매출 장부가 동시에 하이라이트되지 않게 한다.
+      if (sibling.path.startsWith(`${path}/`) && (pathname === sibling.path || pathname.startsWith(`${sibling.path}/`))) return true
+      return false
     })
   }
   const currentNavItem = visibleNav.find((item) => isNavActive(item.href)) ?? visibleNav[0]

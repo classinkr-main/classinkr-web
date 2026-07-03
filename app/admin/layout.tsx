@@ -17,6 +17,19 @@ interface SessionInfo {
   email: string
 }
 
+// dev 바이패스 토큰은 모듈 로드 시점(어떤 컴포넌트 렌더/이펙트보다 먼저)에 기록한다.
+// React 이펙트는 자식이 부모보다 먼저 실행되므로, 레이아웃 이펙트에서만 기록하면
+// 페이지 컴포넌트의 첫 데이터 fetch가 토큰 없이 나가는 마운트 레이스가 생긴다.
+if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH === "true") {
+  if (!sessionStorage.getItem("admin_token")) {
+    sessionStorage.setItem("admin_password", "dev-skip")
+    sessionStorage.setItem("admin_token", "dev-skip")
+    sessionStorage.setItem("admin_role", "admin")
+    sessionStorage.setItem("admin_name", "Dev")
+    sessionStorage.setItem("admin_email", "dev@local")
+  }
+}
+
 function readCachedSession(): SessionInfo | null {
   if (typeof window === "undefined") return null
 

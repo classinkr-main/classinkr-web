@@ -17,6 +17,7 @@ import {
   Megaphone,
   MessageSquare,
   PackageCheck,
+  ReceiptText,
   Search,
   Settings,
   UserCog,
@@ -72,6 +73,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/analytics", label: "Analytics", icon: BarChart2, roles: [...ALL_STAFF, "BRANCH"], section: "performance", keywords: "analytics 분석 통계" },
   { href: "/admin/traffic", label: "방문자/트래픽", icon: Eye, roles: [...ALL_STAFF, "BRANCH"], section: "performance", keywords: "방문자 트래픽 추적 현황 홈페이지 흐름 tracking client events pixel 계측 traffic" },
   { href: "/admin/branch", label: "KR Team", icon: Building2, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance", keywords: "지사 브랜치 branch kr team 매출" },
+  { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance", badge: "MVP", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
 
   // 운영·시스템
   { href: "/admin/ops", label: "Ops Health", icon: Activity, roles: STAFF_ADMIN, section: "system", badge: "New", keywords: "ops health 상태 통합 크론 cron automation" },
