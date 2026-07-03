@@ -362,6 +362,12 @@ function boardInch(product: string): number | null {
   return match ? Number(match[1]) : null
 }
 
+// 빠른 기록 기본 선택 품목 = 86" IFP(비프로모, 최빈 라인업). 없으면 첫 품목으로 폴백.
+function defaultEntryItemId(items: HardwareItem[]): string {
+  const board86 = items.find((item) => isCoreIfpProduct(item.name, "86") && !isPromotedProduct(item.name))
+  return (board86 ?? items[0])?.id ?? ""
+}
+
 type PeriodGranularity = "month" | "quarter" | "year"
 
 // 출고 기간 집계 버킷 키/라벨. occurred_at(YYYY-MM-DD) 문자열 기준.
@@ -738,10 +744,12 @@ const HARDWARE_KIT_PRESETS: HardwareKitPreset[] = [
   {
     key: "camera",
     label: "카메라 추가",
-    description: "S1/카메라 1대",
+    description: "T1/카메라 1대",
     icon: Camera,
     lines: [
-      { label: "카메라", quantity: 1, match: (row) => /\bS1\b|camera|카메라/i.test(row.product) },
+      // T1이 사실상 표준 카메라 — S1은 거의 나가지 않는 구형이라 기본값에서 제외.
+      // S1은 "제품 빠른 선택" 기타 칩(QUICK_PICK_ETC)으로 여전히 개별 선택 가능.
+      { label: "카메라", quantity: 1, match: (row) => /^T1$/i.test(row.product.trim()) },
     ],
   },
   {
@@ -1111,7 +1119,7 @@ export default function HardwareInventoryClient() {
     try {
       const next = await adminFetchJson<HardwareDashboard>("/api/admin/hardware", { cache: "no-cache" })
       setData(next)
-      setSelectedItemId((current) => current || next.items[0]?.id || "")
+      setSelectedItemId((current) => current || defaultEntryItemId(next.items))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -2279,6 +2287,8 @@ export default function HardwareInventoryClient() {
   // 상세 5종(반환·샘플 배정·수리·조정)은 sheetView "detail"에서만 노출한다.
   const selectMovementAxis = (axis: "inbound" | "outbound") => {
     if (axis === "inbound") {
+      // 입고는 lot 단위 다품목이 실무 기본 — 여러 품목을 담아 한 번에 저장하는 장바구니(작업건) 흐름으로 연다.
+      if (!editingId) setSheetMode("batch")
       applyPreset("inbound")
       return
     }
@@ -2322,7 +2332,7 @@ export default function HardwareInventoryClient() {
     // 상세 5종으로 직접 열면 상세 모드로, 빠른 2축(입고/출고/샘플)이면 빠른 모드로 시작한다.
     setSheetView(DETAIL_PRESET_KEYS.has(presetKey) ? "detail" : "quick")
     applyPreset(presetKey)
-    setSelectedItemId(itemId ?? data?.items[0]?.id ?? "")
+    setSelectedItemId(itemId ?? defaultEntryItemId(data?.items ?? []))
     setCustomProduct("")
     setShowCustomInput(false)
     setQuantity("1")
@@ -2346,8 +2356,8 @@ export default function HardwareInventoryClient() {
 
   const openSheet = (presetKey: string, itemId?: string, mode?: "single" | "batch") => {
     resetSheetDraft(presetKey, itemId)
-    // 상세 5종은 항상 단건. 입고는 lot 단위 다품목이 실무 기본이라 작업건 모드로 연다. 나머지는 단건 우선.
-    setSheetMode(DETAIL_PRESET_KEYS.has(presetKey) ? "single" : mode ?? (presetKey === "inbound" ? "batch" : "single"))
+    // 상세 5종은 항상 단건. 그 외(입고·출고)는 다품목 작업건 구성이 실무 기본이라 배치 모드로 연다.
+    setSheetMode(DETAIL_PRESET_KEYS.has(presetKey) ? "single" : mode ?? "batch")
     setSheetOpen(true)
     // 이미 열린 상태에서 다른 행 퀵버튼을 눌렀을 때를 위해 패널 자체를 맨 위로.
     // (scrollIntoView는 sticky 헤더 높이만큼 폼 상단을 가리는 문제가 있어 사용하지 않는다.)
@@ -2730,6 +2740,10 @@ export default function HardwareInventoryClient() {
   // 바구니는 편집 모드만 아니면 입고·출고 전체에서 사용 가능 — 가장 잦은 판매 출고를
   // 배제하던 예전 조건(예정 출고만 허용)이 연속 기록 마찰의 주범이라 철폐.
   const quickCartEnabled = !editingId && (movementType === "inbound" || movementType === "outbound")
+
+  // 입고 재설계 분기 — lot 단위 다품목 입력 루프(공유 헤더 → 품목 담기 → 리스트 → 저장)는 입고+작업건+신규에서만 적용.
+  // 출고 작업건·단건·상세·편집 레이아웃은 이 분기 밖에서 현행 유지한다.
+  const inboundBatchLayout = movementType === "inbound" && sheetMode === "batch" && !editingId && quickCartEnabled
 
   const quickCartTotals = useMemo(
     () => ({
@@ -3991,7 +4005,7 @@ export default function HardwareInventoryClient() {
                     </div>
                     {!editingId && sheetView === "quick" && (
                       <div className="mt-3 inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5" role="tablist" aria-label="기록 모드">
-                        {([["single", "단건 기록"], ["batch", "작업건 구성"]] as const).map(([mode, label]) => (
+                        {([["batch", "작업건 구성"], ["single", "단건 기록"]] as const).map(([mode, label]) => (
                           <button
                             key={mode}
                             type="button"
@@ -4110,7 +4124,7 @@ export default function HardwareInventoryClient() {
                     // 빠른 기록 2축 — 입고 | 출고. 출고는 하위 실제|예정|샘플 세그먼트.
                     <div className="space-y-2.5">
                       <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-1" role="tablist" aria-label="입출고 유형">
-                        {([["inbound", "입고", ArrowDownToLine], ["outbound", "출고", ArrowUpFromLine]] as const).map(([axis, label, Icon]) => {
+                        {([["outbound", "출고", ArrowUpFromLine], ["inbound", "입고", ArrowDownToLine]] as const).map(([axis, label, Icon]) => {
                           const active = axis === "inbound" ? movementType === "inbound" : movementType === "outbound"
                           return (
                             <button
@@ -4177,6 +4191,67 @@ export default function HardwareInventoryClient() {
                     </div>
                     )}
 
+                    {/* 입고 공유 헤더 — 물량번호(lot)·입고일은 한 lot의 모든 품목이 공유한다. 상단 고정 노출. */}
+                    {inboundBatchLayout && (
+                      <div className="sticky top-0 z-[5] -mx-5 border-y border-[#BDEFD8] bg-[#ECFDF5] px-5 py-3">
+                        <p className="flex items-center gap-1.5 text-[12px] font-bold text-[#084734]">
+                          <ArrowDownToLine className="h-3.5 w-3.5" />
+                          입고 lot 공유 정보
+                        </p>
+                        <div className="mt-2 grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
+                          <label className="block">
+                            <span className="text-[12px] font-semibold text-[#31302E]">물량번호 (lot)</span>
+                            <input
+                              value={lotNo}
+                              onChange={(event) => setLotNo(event.target.value)}
+                              placeholder="신규 lot — 예: H9"
+                              list="hardware-lot-options"
+                              className="mt-1 h-10 w-full rounded-md border border-[#BDEFD8] bg-white px-3 text-[13px] font-semibold text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                            />
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setLotNo(nextLotSuggestion)}
+                                className="min-h-[32px] cursor-pointer rounded border border-[#BDEFD8] bg-white px-2 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100"
+                              >
+                                {nextLotSuggestion} 적용
+                              </button>
+                            </div>
+                          </label>
+                          <div>
+                            <span className="text-[12px] font-semibold text-[#31302E]">입고일</span>
+                            <input
+                              type="date"
+                              aria-label="입고일"
+                              value={occurredAt}
+                              onChange={(event) => setOccurredAt(event.target.value)}
+                              className="mt-1 h-10 w-full rounded-md border border-[#BDEFD8] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                            />
+                            <div className="mt-1.5 grid grid-cols-2 gap-1">
+                              {([
+                                { label: "오늘", value: todayKey() },
+                                { label: "어제", value: yesterdayKey() },
+                              ] as const).map((chip) => (
+                                <button
+                                  key={chip.label}
+                                  type="button"
+                                  aria-pressed={occurredAt === chip.value}
+                                  onClick={() => setOccurredAt(chip.value)}
+                                  className={`min-h-[32px] cursor-pointer rounded border px-1.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
+                                    occurredAt === chip.value
+                                      ? "border-[#084734] bg-white text-[#084734]"
+                                      : "border-[#BDEFD8] bg-white/60 text-[#615D59] hover:bg-white"
+                                  }`}
+                                >
+                                  {chip.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {sheetView === "quick" && sheetMode === "single" && !editingId && lastManualMovement && (
                       <button
                         type="button"
@@ -4202,7 +4277,7 @@ export default function HardwareInventoryClient() {
                         반납·샘플 반환·샘플 배정·수리·조정은 배치 담기를 지원하지 않습니다 — 단건 기록 모드로 저장하세요.
                       </div>
                     )}
-                    {sheetMode === "batch" && quickCartEnabled && (
+                    {sheetMode === "batch" && quickCartEnabled && !inboundBatchLayout && (
                       <div className="space-y-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-3">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
@@ -4291,6 +4366,17 @@ export default function HardwareInventoryClient() {
                       </div>
                     )}
 
+                    {inboundBatchLayout && (
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <p className={`inline-flex items-center gap-1.5 ${SHEET_SECTION_TITLE_CLASS}`}>
+                          <Plus className="h-3.5 w-3.5 text-[#084734]" />
+                          품목 추가
+                        </p>
+                        <p className="text-[11px] font-semibold text-[#615D59]">
+                          담으면 lot·입고일은 유지됩니다
+                        </p>
+                      </div>
+                    )}
                     <div className={customProduct.trim() ? "opacity-90" : undefined}>
                       <span className={SHEET_LABEL_CLASS}>품목</span>
                       {(quickPickGroups.featured.length > 0 || quickPickGroups.etc.length > 0) && (
@@ -4366,7 +4452,59 @@ export default function HardwareInventoryClient() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
+                    <div className={`grid grid-cols-1 gap-3 ${inboundBatchLayout ? "" : "min-[400px]:grid-cols-2"}`}>
+                      {inboundBatchLayout ? (
+                      <div>
+                        <span id="hardware-quantity-label" className={SHEET_LABEL_CLASS}>수량</span>
+                        {/* 입고 작업건 — 스테퍼 + 퀵칩을 한 줄로 압축. */}
+                        <div className="mt-1 flex items-center gap-2">
+                          <div className="grid h-9 w-[104px] shrink-0 grid-cols-[30px_minmax(0,1fr)_30px] rounded-md border border-[rgba(0,0,0,0.08)] bg-white">
+                            <button
+                              type="button"
+                              onClick={() => adjustQuantity(-1)}
+                              className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
+                              aria-label="수량 줄이기"
+                            >
+                              <Minus className="h-3.5 w-3.5" />
+                            </button>
+                            <input
+                              type="number"
+                              min={1}
+                              inputMode="numeric"
+                              aria-labelledby="hardware-quantity-label"
+                              value={quantity}
+                              onChange={(event) => setQuantity(event.target.value)}
+                              className="h-full w-full border-x border-[rgba(0,0,0,0.08)] px-1 text-center text-[13px] font-bold text-[#111110] outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => adjustQuantity(1)}
+                              className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
+                              aria-label="수량 늘리기"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <div className="grid flex-1 grid-cols-4 gap-1">
+                            {QUICK_QUANTITIES.map((nextQuantity) => (
+                              <button
+                                key={nextQuantity}
+                                type="button"
+                                aria-pressed={Number(quantity) === nextQuantity}
+                                onClick={() => setQuantity(String(nextQuantity))}
+                                className={`h-9 cursor-pointer rounded border text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-95 motion-reduce:active:scale-100 ${
+                                  Number(quantity) === nextQuantity
+                                    ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                                    : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
+                                }`}
+                              >
+                                {nextQuantity}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      ) : (
                       <div>
                         <span id="hardware-quantity-label" className={SHEET_LABEL_CLASS}>수량</span>
                         <div className="mt-1 grid h-11 grid-cols-[44px_minmax(0,1fr)_44px] rounded-md border border-[rgba(0,0,0,0.08)] bg-white sm:h-10 sm:grid-cols-[38px_minmax(0,1fr)_38px]">
@@ -4414,6 +4552,9 @@ export default function HardwareInventoryClient() {
                           ))}
                         </div>
                       </div>
+                      )}
+                      {/* 입고 작업건에서는 처리일을 상단 공유 헤더로 올렸으므로 여기서는 숨긴다(중복 방지). */}
+                      {!inboundBatchLayout && (
                       <div>
                         <span id="hardware-date-label" className={SHEET_LABEL_CLASS}>처리일</span>
                         <input
@@ -4444,7 +4585,20 @@ export default function HardwareInventoryClient() {
                           ))}
                         </div>
                       </div>
+                      )}
                     </div>
+                    {/* 인라인 담기 — 품목·수량 바로 아래에 눈에 띄게. 저장은 리스트 근처/스티키 바에서. */}
+                    {inboundBatchLayout && (
+                      <button
+                        type="button"
+                        onClick={addDraftToQuickCart}
+                        disabled={!quickCartEnabled || busy != null || (!customProduct.trim() && !selectedItem)}
+                        className="inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-[#084734] bg-white px-3 text-[13px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Plus className="h-4 w-4" />
+                        이 품목 담기
+                      </button>
+                    )}
                     {activePresetKey === "sample" && !editingId && (
                       <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
                         <span className={SHEET_LABEL_CLASS}>샘플 출처</span>
@@ -4476,6 +4630,8 @@ export default function HardwareInventoryClient() {
                       </div>
                     )}
 
+                    {/* 입고 작업건은 출발(공급처)·도착(창고)이 고정이라 항목 자체를 숨긴다 — 프리셋 기본값(→창고)이 그대로 적용된다. */}
+                    {!inboundBatchLayout && (
                     <div className="grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
                       <label className="block">
                         <span className={SHEET_LABEL_CLASS}>출발</span>
@@ -4500,6 +4656,7 @@ export default function HardwareInventoryClient() {
                         />
                       </label>
                     </div>
+                    )}
 
                     {/* 상세 모드는 상태가 핵심 필드(수리중·재고 조정 등) — 자유 텍스트로 앞면에 노출. */}
                     {sheetView === "detail" && !editingId && (
@@ -4514,7 +4671,7 @@ export default function HardwareInventoryClient() {
                       </label>
                     )}
 
-                    {movementType === "inbound" && (
+                    {movementType === "inbound" && !inboundBatchLayout && (
                       <label className="block">
                         <span className={SHEET_LABEL_CLASS}>물량번호 (lot)</span>
                         <input
@@ -4526,7 +4683,7 @@ export default function HardwareInventoryClient() {
                         />
                       </label>
                     )}
-                    {movementType === "inbound" && !editingId && (
+                    {movementType === "inbound" && !editingId && !inboundBatchLayout && (
                       <div className="rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] px-3 py-2">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
@@ -4568,7 +4725,99 @@ export default function HardwareInventoryClient() {
                       </div>
                     )}
 
-                    {movementType === "inbound" && (
+                    {movementType === "inbound" && inboundBatchLayout && (
+                      // 입고 작업건 — 단가·매입액·시리얼·보관·수입자는 접이식으로 내려 기본은 간결하게.
+                      <details className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8]">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[12px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40">
+                          <span>추가 정보 — 단가 · 매입액(USD·CNY) · 시리얼 · 보관 · 수입자</span>
+                          <span className="flex items-center gap-1.5">
+                            {(unitPrice.trim() ? 1 : 0) + (amountUsd.trim() ? 1 : 0) + (amountCny.trim() ? 1 : 0) + (serialsText.trim() ? 1 : 0) + (storageLocation.trim() ? 1 : 0) + (importer.trim() ? 1 : 0) > 0 ? (
+                              <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] font-bold tabular-nums text-[#084734]">
+                                {(unitPrice.trim() ? 1 : 0) + (amountUsd.trim() ? 1 : 0) + (amountCny.trim() ? 1 : 0) + (serialsText.trim() ? 1 : 0) + (storageLocation.trim() ? 1 : 0) + (importer.trim() ? 1 : 0)}
+                              </span>
+                            ) : null}
+                            <ChevronDown className="h-3.5 w-3.5 text-[#A39E98]" />
+                          </span>
+                        </summary>
+                        <div className="space-y-3 border-t border-[rgba(0,0,0,0.06)] p-3">
+                          {inboundDraftWarnings.length > 0 && (
+                            <div className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11px] font-bold text-[#7A520F]">
+                              {inboundDraftWarnings.join(" · ")}
+                            </div>
+                          )}
+                          <div className="grid grid-cols-2 gap-3">
+                            <label className="block">
+                              <span className="text-[11px] font-bold text-[#615D59]">단가 (USD)</span>
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                inputMode="decimal"
+                                value={unitPrice}
+                                onChange={(event) => setUnitPrice(event.target.value)}
+                                className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[11px] font-bold text-[#615D59]">금액 (USD)</span>
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                inputMode="decimal"
+                                value={amountUsd}
+                                onChange={(event) => setAmountUsd(event.target.value)}
+                                className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                              />
+                            </label>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <label className="block">
+                              <span className="text-[11px] font-bold text-[#615D59]">금액 (CNY)</span>
+                              <input
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                inputMode="decimal"
+                                value={amountCny}
+                                onChange={(event) => setAmountCny(event.target.value)}
+                                className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                              />
+                            </label>
+                            <label className="block">
+                              <span className="text-[11px] font-bold text-[#615D59]">보관 장소</span>
+                              <input
+                                value={storageLocation}
+                                onChange={(event) => setStorageLocation(event.target.value)}
+                                list="hardware-location-options"
+                                placeholder="창고"
+                                className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                              />
+                            </label>
+                          </div>
+                          <label className="block">
+                            <span className="text-[11px] font-bold text-[#615D59]">수입자</span>
+                            <input
+                              value={importer}
+                              onChange={(event) => setImporter(event.target.value)}
+                              placeholder="예: Classin"
+                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-[11px] font-bold text-[#615D59]">시리얼 번호 (쉼표·공백 구분)</span>
+                            <input
+                              value={serialsText}
+                              onChange={(event) => setSerialsText(event.target.value)}
+                              placeholder="예: SN001, SN002"
+                              className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                            />
+                          </label>
+                        </div>
+                      </details>
+                    )}
+
+                    {movementType === "inbound" && !inboundBatchLayout && (
                       <div className="space-y-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
                         <p className="text-[11px] font-bold text-[#615D59]">입고 상세 (시트 필드)</p>
                         {inboundDraftWarnings.length > 0 && (
@@ -4756,7 +5005,7 @@ export default function HardwareInventoryClient() {
                         <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.06)] px-3 py-2.5">
                           <span className={`inline-flex items-center gap-1.5 ${SHEET_SECTION_TITLE_CLASS}`}>
                             <ShoppingCart className="h-3.5 w-3.5 text-[#084734]" />
-                            기록 바구니
+                            {inboundBatchLayout ? "담은 품목" : "기록 바구니"}
                           </span>
                           <span className="flex items-center gap-2">
                             <span className="text-[11px] font-semibold tabular-nums text-[#615D59]">
@@ -4778,7 +5027,9 @@ export default function HardwareInventoryClient() {
                           <p className="px-3 py-3 text-[12px] leading-relaxed text-[#615D59]">
                             {quickCartSaveSummary && quickCartSaveSummary.failed === 0
                               ? `저장 완료: ${formatNumber(quickCartSaveSummary.success)}건 · ${formatNumber(quickCartSaveSummary.savedQuantity)}대`
-                              : "키트·견적 라인 또는 하단 '현재 입력 담기'로 품목을 모아 한 번에 저장합니다."}
+                              : inboundBatchLayout
+                                ? "위에서 품목을 담아 한 번에 저장하세요. 담은 품목이 여기 쌓입니다."
+                                : "키트·견적 라인 또는 하단 '현재 입력 담기'로 품목을 모아 한 번에 저장합니다."}
                           </p>
                         ) : (
                           <div className="max-h-56 divide-y divide-[rgba(0,0,0,0.06)] overflow-y-auto">
@@ -4878,7 +5129,125 @@ export default function HardwareInventoryClient() {
                             완료 출고 배치 저장은 CRM 오더 연동·매출 금액 없이 저장됩니다 — 연동이 필요한 판매 건은 단건 기록으로 저장하세요.
                           </div>
                         )}
+                        {/* 리스트 근처 저장 CTA — 담은 품목이 있을 때 리스트 하단에 크게 노출(스티키 바와 별개). */}
+                        {inboundBatchLayout && quickCart.length > 0 && (
+                          <div className="border-t border-[rgba(0,0,0,0.06)] p-3">
+                            <button
+                              type="button"
+                              onClick={() => void submitQuickCart()}
+                              disabled={busy != null}
+                              className="inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-[#084734] px-3 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Save className="h-4 w-4" />
+                              {busy === "movement"
+                                ? "저장 중"
+                                : quickCartSaveSummary?.failed
+                                  ? "실패 항목 재시도"
+                                  : `${formatNumber(quickCartTotals.count)}건 · ${formatNumber(quickCartTotals.quantity)}대 저장`}
+                            </button>
+                          </div>
+                        )}
                       </div>
+                    )}
+
+                    {/* 보조 도구 — 세트 담기·견적 붙여넣기·이전 lot 구성 복사. 기본 접힘, 파워유저만 펼침. */}
+                    {inboundBatchLayout && (
+                      <details className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4]">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[12px] font-bold text-[#31302E] transition hover:bg-[#EDEBEA] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40">
+                          <span className="inline-flex items-center gap-1.5">
+                            <FileSpreadsheet className="h-3.5 w-3.5 text-[#615D59]" />
+                            빠른 담기 — 세트 · 견적 붙여넣기 · 이전 구성 복사
+                          </span>
+                          <ChevronDown className="h-3.5 w-3.5 text-[#A39E98]" />
+                        </summary>
+                        <div className="space-y-3 border-t border-[rgba(0,0,0,0.06)] p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <p className="text-[11px] text-[#615D59]">세트·견적 라인을 담고, 직전 lot 구성을 그대로 복사합니다.</p>
+                            <div className="inline-flex items-center gap-1.5">
+                              <span className="text-[11px] font-semibold text-[#615D59]">세트 배수</span>
+                              <div className="grid h-9 grid-cols-[36px_40px_36px] overflow-hidden rounded-md border border-[rgba(0,0,0,0.08)] bg-white">
+                                <button
+                                  type="button"
+                                  onClick={() => setKitMultiplier((current) => Math.max(1, current - 1))}
+                                  aria-label="세트 배수 줄이기"
+                                  className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
+                                >
+                                  <Minus className="h-3.5 w-3.5" />
+                                </button>
+                                <span className="flex items-center justify-center border-x border-[rgba(0,0,0,0.08)] text-[13px] font-bold tabular-nums text-[#111110]">
+                                  x{formatNumber(cartSetMultiplier)}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setKitMultiplier((current) => Math.min(99, current + 1))}
+                                  aria-label="세트 배수 늘리기"
+                                  className="flex cursor-pointer items-center justify-center text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {kitPresetSummaries.map((preset) => {
+                              const Icon = preset.icon
+                              const unavailable = preset.missing.length > 0
+                              const shortage = preset.lines.reduce((total, line) => total + line.shortage, 0)
+                              return (
+                                <button
+                                  key={preset.key}
+                                  type="button"
+                                  onClick={() => addKitPresetToCart(preset.key)}
+                                  disabled={busy != null || unavailable}
+                                  className="cursor-pointer rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5 text-left transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <span className="flex items-center gap-2 text-[12px] font-bold text-[#111110]">
+                                    <Icon className="h-3.5 w-3.5 text-[#084734]" />
+                                    {preset.label}
+                                  </span>
+                                  <span className="mt-1 block text-[11px] text-[#615D59]">{preset.description}</span>
+                                  <span className={`mt-1 block text-[11px] font-bold ${shortage > 0 ? "text-[#A8741A]" : "text-[#084734]"}`}>
+                                    {unavailable
+                                      ? "품목 미매칭"
+                                      : shortage > 0
+                                        ? `예상 부족 ${formatNumber(shortage)}대`
+                                        : "가용 재고 확인"}
+                                  </span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                          <div className="grid gap-2">
+                            <label className="block">
+                              <span className={SHEET_LABEL_CLASS}>견적/CRM 라인 붙여넣기</span>
+                              <textarea
+                                value={quotePasteText}
+                                onChange={(event) => setQuotePasteText(event.target.value)}
+                                rows={3}
+                                placeholder={'예: 86" IFP x 2\nT1 2대\nSTD1, 2'}
+                                className="mt-1 w-full resize-none rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={importQuoteLinesToCart}
+                              disabled={busy != null || !quotePasteText.trim()}
+                              className="inline-flex h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-[#084734] bg-white px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <FileSpreadsheet className="h-3.5 w-3.5" />
+                              견적 라인 담기
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={copyLatestInboundLotToCart}
+                            className="inline-flex h-9 w-full cursor-pointer items-center justify-center gap-2 rounded-md border border-[#BDEFD8] bg-white px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            이전 구성 복사
+                          </button>
+                        </div>
+                      </details>
                     )}
 
                     {/* 상세 처리 도달 경로 — 빠른 2축 밖의 반환·샘플 배정·수리·조정을 같은 시트 상세 모드로 연다. */}
@@ -4908,7 +5277,7 @@ export default function HardwareInventoryClient() {
                             className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-md bg-[rgba(0,0,0,0.05)] px-3 text-[12px] font-bold text-[#31302E] transition hover:bg-[rgba(0,0,0,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 sm:h-10"
                           >
                             <Plus className="h-4 w-4" />
-                            현재 입력 담기
+                            {inboundBatchLayout ? "이 품목 담기" : "현재 입력 담기"}
                           </button>
                           <button
                             type="button"
