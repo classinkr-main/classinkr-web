@@ -2,6 +2,7 @@
 import { useMemo } from "react"
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts"
 import type { BranchMonthlySeries } from "../types"
+import { CHART, gridProps, axisTick } from "../../viz/theme"
 
 const moneyMFormatter = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 1 })
 
@@ -94,19 +95,19 @@ export default function FiscalRoadmap({ data, loading, error }: { data: BranchMo
       <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={chart}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#eee" />
-            <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-            <YAxis width={72} tick={{ fontSize: 11 }} tickFormatter={formatMoneyM} />
+            <CartesianGrid {...gridProps} />
+            <XAxis dataKey="month" tick={axisTick} />
+            <YAxis width={72} tick={axisTick} tickFormatter={formatMoneyM} />
             <Tooltip content={<RoadmapTooltip />} />
-            <Line type="monotone" dataKey="goal" name="FY 목표" stroke="#888" strokeDasharray="4 4" dot={false} />
-            <Line type="monotone" dataKey="revenue" name="확정 매출" stroke="#B43E3E" strokeWidth={2.5} dot={{ r: 3, fill: "#B43E3E" }} />
-            <Line type="monotone" dataKey="trend" name="가능성 추세" stroke="#1E5DA8" strokeWidth={2.5} strokeDasharray="6 5" dot={false} />
+            <Line type="monotone" dataKey="goal" name="FY 목표" stroke="#8A857E" strokeDasharray="4 4" dot={false} />
+            <Line type="monotone" dataKey="revenue" name="확정 매출" stroke={CHART.brand} strokeWidth={2.5} dot={{ r: 3, fill: CHART.brand }} />
+            <Line type="monotone" dataKey="trend" name="가능성 추세" stroke={CHART.caution} strokeWidth={2.5} strokeDasharray="6 5" dot={false} />
           </LineChart>
         </ResponsiveContainer>
         <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-[#1a1a1a]/50">
-          <span className="inline-flex items-center gap-1.5"><i className="h-0.5 w-5 bg-[#B43E3E]" /><span className="font-semibold text-[#B43E3E]">확정 매출</span> (¥M)</span>
-          <span className="inline-flex items-center gap-1.5"><i className="h-0.5 w-5 border-t border-dashed border-[#1E5DA8]" /><span className="font-semibold text-[#1E5DA8]">가능성 추세</span> (¥M)</span>
-          <span className="inline-flex items-center gap-1.5"><i className="h-0.5 w-5 border-t border-dashed border-[#888]" />FY 목표 (¥M)</span>
+          <span className="inline-flex items-center gap-1.5"><i className="h-0.5 w-5" style={{ backgroundColor: CHART.brand }} /><span className="font-semibold" style={{ color: CHART.brand }}>확정 매출</span> (¥M)</span>
+          <span className="inline-flex items-center gap-1.5"><i className="h-0.5 w-5 border-t border-dashed" style={{ borderColor: CHART.caution }} /><span className="font-semibold" style={{ color: CHART.caution }}>가능성 추세</span> (¥M)</span>
+          <span className="inline-flex items-center gap-1.5"><i className="h-0.5 w-5 border-t border-dashed border-[#8A857E]" />FY 목표 (¥M)</span>
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
           {data.events.slice(0, 8).map((e, i) => (
@@ -120,7 +121,7 @@ export default function FiscalRoadmap({ data, loading, error }: { data: BranchMo
             </span>
           ))}
           {data.campaigns.slice(0, 6).map((c, i) => (
-            <span key={`camp-${i}-${c.date}`} className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-800">
+            <span key={`camp-${i}-${c.date}`} className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[#1a1a1a]/60">
               ▲ {c.date.slice(5)} {c.name}
             </span>
           ))}

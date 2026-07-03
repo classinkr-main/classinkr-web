@@ -10,6 +10,11 @@ import {
   getPublicQuoteByToken,
   updateQuoteDocument,
 } from "@/lib/portal/repositories/quote-documents"
+import {
+  createCrmTask,
+  listActiveTasksForDealByType,
+} from "@/lib/repositories/crm-tasks"
+import type { QuoteDocument } from "@/lib/portal/types"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
 
 async function markDocumentAccepted(documentId: string, currentStatus: string) {
@@ -22,6 +27,38 @@ async function markDocumentAccepted(documentId: string, currentStatus: string) {
   } catch (error) {
     console.warn("[share/quote/[token]/accept] status update skipped", error)
   }
+}
+
+// 고객이 견적을 수락하면 CRM 액션 큐에 "계약 전환" 카드를 남긴다.
+// - 필드는 서버가 조회한 문서/딜/고객 값만 사용한다(공개 라우트이므로 사용자 입력 금지).
+// - 같은 deal + quote task가 이미 살아있으면 새로 만들지 않는다.
+// - 실패해도 수락 응답을 막지 않도록 호출부에서 try/catch 한다.
+async function materializeQuoteAcceptTask(input: {
+  dealId: string
+  document: Pick<QuoteDocument, "quote_number">
+  customerName: string | null
+}) {
+  const existing = await listActiveTasksForDealByType(input.dealId, "quote")
+  if (existing.length > 0) return
+
+  const quoteNumber = input.document.quote_number
+  const customerLabel = input.customerName?.trim() || null
+  const title = customerLabel
+    ? `${customerLabel} · 견적 ${quoteNumber} 수락 → 계약 전환`
+    : `견적 ${quoteNumber} 수락 → 계약 전환`
+
+  await createCrmTask({
+    targetType: "deal",
+    targetId: input.dealId,
+    targetLabel: customerLabel,
+    taskType: "quote",
+    title,
+    detail: "고객이 견적을 수락했습니다. 계약 전환을 진행하세요. (requested_action: convert_to_contract)",
+    priority: "high",
+    status: "open",
+    // 즉시 처리 대상: 마감을 지금으로 두어 큐 상단에 뜨게 한다.
+    dueAt: new Date().toISOString(),
+  })
 }
 
 export async function POST(
@@ -62,7 +99,7 @@ export async function POST(
       return NextResponse.json({ error: "만료된 견적서입니다." }, { status: 410 })
     }
 
-    const { document, version, share, customer_email } = result
+    const { document, version, share, customer_email, customer_name } = result
 
     const expectedEmail = customer_email?.trim().toLowerCase() ?? null
     const providedEmail = recipientEmail?.trim().toLowerCase() ?? null
@@ -90,7 +127,7 @@ export async function POST(
       return NextResponse.json({ acceptedAt: existing.acceptedAt })
     }
 
-    const log = await ensureQuoteInteractionLog({
+    const { log, created } = await ensureQuoteInteractionLog({
       partner_account_id: deal.partner_account_id,
       customer_id: deal.customer_id,
       deal_id: document.deal_id,
@@ -115,6 +152,23 @@ export async function POST(
       dedupeByToken: token,
       dedupeWindowMinutes: 24 * 60,
     })
+
+    // 실제 새 수락 로그가 만들어졌을 때만(24h dedupe 통과) CRM 카드를 1건 남긴다.
+    // task 생성 실패는 수락 응답을 막지 않는다.
+    if (created) {
+      try {
+        await materializeQuoteAcceptTask({
+          dealId: document.deal_id,
+          document,
+          customerName: customer_name,
+        })
+      } catch (taskError) {
+        console.error(
+          "[share/quote/[token]/accept] CRM task materialize skipped",
+          taskError
+        )
+      }
+    }
 
     await markDocumentAccepted(document.id, document.status)
 

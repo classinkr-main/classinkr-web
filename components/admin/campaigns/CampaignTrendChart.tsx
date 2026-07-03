@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+import { CHART, gridProps } from "../viz/theme"
 
 const KRW_CURRENCY = new Intl.NumberFormat("ko-KR", {
   style: "currency",
@@ -69,17 +70,17 @@ export function CampaignTrendChart({ data }: CampaignTrendChartProps) {
               data={data}
               margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
             >
-              <CartesianGrid stroke="#f0f0ec" vertical={false} />
+              <CartesianGrid {...gridProps} />
               <XAxis
                 dataKey="month"
                 fontSize={11}
-                stroke="#84827a"
+                stroke={CHART.warmGray}
                 tickLine={false}
               />
               <YAxis
                 yAxisId="left"
                 fontSize={11}
-                stroke="#84827a"
+                stroke={CHART.warmGray}
                 tickLine={false}
                 width={52}
                 tickFormatter={(value: number) => KRW_COMPACT.format(value)}
@@ -88,7 +89,7 @@ export function CampaignTrendChart({ data }: CampaignTrendChartProps) {
                 yAxisId="right"
                 orientation="right"
                 fontSize={11}
-                stroke="#84827a"
+                stroke={CHART.warmGray}
                 tickLine={false}
                 width={36}
                 tickFormatter={(value: number) => KRW.format(value)}
@@ -104,7 +105,7 @@ export function CampaignTrendChart({ data }: CampaignTrendChartProps) {
                   return [won(numeric), label]
                 }}
                 contentStyle={{
-                  backgroundColor: "#111110",
+                  backgroundColor: CHART.tooltipBg,
                   border: "none",
                   borderRadius: 12,
                   color: "white",
@@ -126,7 +127,7 @@ export function CampaignTrendChart({ data }: CampaignTrendChartProps) {
                 yAxisId="left"
                 dataKey="revenue"
                 name="revenue"
-                fill="#084734"
+                fill={CHART.brand}
                 radius={[4, 4, 0, 0]}
                 maxBarSize={28}
               />
@@ -134,7 +135,7 @@ export function CampaignTrendChart({ data }: CampaignTrendChartProps) {
                 yAxisId="left"
                 dataKey="spend"
                 name="spend"
-                fill="#B85C33"
+                fill={CHART.danger}
                 radius={[4, 4, 0, 0]}
                 maxBarSize={28}
               />
@@ -143,9 +144,9 @@ export function CampaignTrendChart({ data }: CampaignTrendChartProps) {
                 type="monotone"
                 dataKey="leads"
                 name="leads"
-                stroke="#111110"
+                stroke={CHART.neutral}
                 strokeWidth={2}
-                dot={{ r: 3, fill: "#111110", strokeWidth: 0 }}
+                dot={{ r: 3, fill: CHART.neutral, strokeWidth: 0 }}
                 activeDot={{ r: 4 }}
               />
             </ComposedChart>

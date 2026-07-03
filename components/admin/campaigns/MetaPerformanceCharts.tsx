@@ -12,6 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+import { CHART, gridProps } from "../viz/theme"
 
 const COUNT = new Intl.NumberFormat("ko-KR")
 
@@ -57,7 +58,7 @@ export interface MetaPerformanceChartsProps {
 }
 
 const TOOLTIP_STYLE = {
-  backgroundColor: "#111110",
+  backgroundColor: CHART.tooltipBg,
   border: "none",
   borderRadius: 12,
   color: "white",
@@ -131,18 +132,18 @@ export function MetaPerformanceCharts({ rows, currency = "USD" }: MetaPerformanc
           <div className="h-[260px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={spendData} margin={{ top: 8, right: 8, bottom: 4, left: 4 }}>
-                <CartesianGrid stroke="#f0f0ec" vertical={false} />
+                <CartesianGrid {...gridProps} />
                 <XAxis
                   dataKey="label"
                   fontSize={11}
-                  stroke="#84827a"
+                  stroke={CHART.warmGray}
                   tickLine={false}
                   interval={0}
                 />
                 <YAxis
                   yAxisId="spend"
                   fontSize={11}
-                  stroke="#84827a"
+                  stroke={CHART.warmGray}
                   tickLine={false}
                   width={52}
                   tickFormatter={(value: number) =>
@@ -156,7 +157,7 @@ export function MetaPerformanceCharts({ rows, currency = "USD" }: MetaPerformanc
                   yAxisId="leads"
                   orientation="right"
                   fontSize={11}
-                  stroke="#84827a"
+                  stroke={CHART.warmGray}
                   tickLine={false}
                   width={36}
                   allowDecimals={false}
@@ -180,7 +181,7 @@ export function MetaPerformanceCharts({ rows, currency = "USD" }: MetaPerformanc
                   yAxisId="spend"
                   dataKey="spend"
                   name="광고비"
-                  fill="#B85C33"
+                  fill={CHART.danger}
                   radius={[4, 4, 0, 0]}
                   maxBarSize={42}
                 />
@@ -189,9 +190,9 @@ export function MetaPerformanceCharts({ rows, currency = "USD" }: MetaPerformanc
                   type="monotone"
                   dataKey="leads"
                   name="리드"
-                  stroke="#084734"
+                  stroke={CHART.brand}
                   strokeWidth={2}
-                  dot={{ r: 3, fill: "#084734" }}
+                  dot={{ r: 3, fill: CHART.brand }}
                   activeDot={{ r: 4 }}
                 />
               </ComposedChart>
@@ -211,11 +212,11 @@ export function MetaPerformanceCharts({ rows, currency = "USD" }: MetaPerformanc
                 layout="vertical"
                 margin={{ top: 4, right: 12, bottom: 4, left: 4 }}
               >
-                <CartesianGrid stroke="#f0f0ec" horizontal={false} />
+                <CartesianGrid stroke={CHART.grid} horizontal={false} />
                 <XAxis
                   type="number"
                   fontSize={11}
-                  stroke="#84827a"
+                  stroke={CHART.warmGray}
                   tickLine={false}
                   tickFormatter={(value: number) => money(value, currency)}
                 />
@@ -224,7 +225,7 @@ export function MetaPerformanceCharts({ rows, currency = "USD" }: MetaPerformanc
                   dataKey="label"
                   width={92}
                   fontSize={11}
-                  stroke="#84827a"
+                  stroke={CHART.warmGray}
                   tickLine={false}
                   interval={0}
                 />
@@ -242,7 +243,7 @@ export function MetaPerformanceCharts({ rows, currency = "USD" }: MetaPerformanc
                 />
                 <Bar dataKey="cpl" name="CPL" radius={[0, 4, 4, 0]} maxBarSize={22}>
                   {cplData.map((entry) => (
-                    <Cell key={entry.id} fill={entry.over ? "#B85C33" : "#084734"} />
+                    <Cell key={entry.id} fill={entry.over ? CHART.danger : CHART.brand} />
                   ))}
                 </Bar>
               </BarChart>

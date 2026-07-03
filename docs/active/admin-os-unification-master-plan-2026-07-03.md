@@ -96,12 +96,12 @@ hardware_movements(원장) ────────┘                          
 
 ### Phase B — 핸드오프 (수동 재입력 제거)
 - **B1 ✅ 완료** 딜→견적 프리필: `/admin/quotes?dealId=`(별칭 `deal`/`customerId`)가 QuickQuoteComposer를 **기존 고객 모드로 자동 선택**해 오픈(1회 적용, 수동 변경 미침범, 암묵 고객 생성 없음). 진입 딥링크 2곳 — 리드 전환 성공 패널 "견적 만들기"(주 액션), 딜 워크스페이스 "견적 대기" 카드 "견적" 링크(adminView 한정). V2 `quote_documents.deal_id` 저장은 기존 API 그대로. *QuickQuote 기본 모드를 '기존 고객 우선'으로 바꾸는 UX 결정은 별도(회귀 위험).*
-- **B2 (M)** 견적 수락 이벤트 → 액션 큐 카드 + 계약 전환 시 딜 stage 원클릭 전이.
+- **B2 ✅ 완료** 견적 수락(`public_quote_accepted`, dedupe 통과분만) → `crm_tasks` materialize(taskType quote, 새 테이블 없음·중복 방지) → 우선순위 큐 카드 자동 노출(taskHref deal 분기 신설). 계약 전환 성공 시 portal 딜 stage **전진만**(contact/quote→contract, 후퇴·건너뛰기 금지) + 해당 quote task 자동 완료 처리. crm_deals(어드민 계열) 동기화는 portal↔crm_deals 매핑 미확인으로 보류.
 - **B3 ✅ v1 완료** 출고↔REV **존재성 대사**([lib/repositories/hw-rev-reconcile.ts](../../lib/repositories/hw-rev-reconcile.ts) + `GET /api/admin/crm/reconcile/hw-rev` + 매칭 워크스페이스 하단 접힘 패널). 출고 revenue는 USD·REV는 CNY라 금액 비교는 하지 않고 hw_only(매출 미기재 의심)/rev_only/both만 판정. 배송예정·물류No 누락은 실출고와 구분 표기, destination 미지정 행은 "대사 불가" 카운트. *금액 대조는 환율 정책 확정 후 v2.*
-- **B4 (S)** 계약 확정 → 원장 입력 큐 초안 제안(확도='예정', 적용은 사람이).
+- **B4 ✅ 완료** V2 계약 양측 서명 완료(admin_signed) → 원장 forecast 초안 자동 제안([lib/admin/handoff/contract-to-ledger-draft.ts](../../lib/admin/handoff/contract-to-ledger-draft.ts), 신규 모듈 — 원장 repo는 import만). **통화 환산 금지**: V2 계약 계열엔 currency 컬럼이 없어 금액은 0으로 넣고 원금액(₩ 추정)은 note/metadata 참고용만 — CNY 금액은 검수자가 입력. 기존 draft→checked→apply 2단 게이트가 안전장치. dedup: 같은 딜의 열린 forecast 초안 있으면 스킵.
 
 ### Phase C — 표면 통합
-- **C1 (M)** `components/admin/viz/` 공용 차트 6종 추출(기존 13개 구현 중 최고 완성도를 표준으로 채택) + 신규 화면(A4, B3)부터 적용.
+- **C1 ✅ 1차 완료** (a) KPI 카드 단일화 — `viz/primitives.StatTile`을 통합 구현으로 확장(href/sparkline/상세 trend/lift), `StatCard.tsx`는 얇은 델리게이트화(사용처 9곳 무변경·시각 동일). (b) 퍼널 통합 — `MiniFunnel`에 waterfall variant 흡수, `FunnelWaterfall.tsx` 삭제. (c) 게이지 추출 — `viz/GaugeRing`·`viz/ProgressRoadmap`(hero/meter/mini) 신설, BranchHeroGauges·GoalProgressPanel이 공용판 사용. (d) 툴팁·팔레트 표준화 — campaigns 4종·analytics·FiscalRoadmap이 `viz/ChartTheme`/`viz/theme` 토큰 사용, **파랑 하드코딩 제거 완료**(FiscalRoadmap 추세선 amber화, BranchHeroGauges blue는 데드코드였음). 잔여: RankedHorizontalBars/ComparisonBarChart/TrendAreaChart 래퍼 3종(Workbench 분해와 함께), KpiGrid 일괄 치환.
 - **C2 (M)** KPI SSOT(revenue-core) 추출 — overview·branch·crm 순차 전환, 스냅샷 테스트로 수치 동일성 고정.
 - **C3 (M)** nav 잔여: 챗봇→docs 흡수, marketing→campaigns 흡수, 행사·이메일 패널 단일화. redirect 스텁 + ⌘K 자동 반영(nav SSOT 파생이므로).
 - **C4 (L, 별도 착수)** 견적·계약 V1→V2 완전 단일화(서명 루프 포함) + 채번 시퀀스 RPC화. — *가장 무겁고 /share 뷰어 구현이 선행. 본 이니셔티브에서는 설계만.*

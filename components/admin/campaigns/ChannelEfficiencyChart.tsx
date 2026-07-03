@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+import { CHART } from "../viz/theme"
 
 const KRW = new Intl.NumberFormat("ko-KR")
 const KRW_CURRENCY = new Intl.NumberFormat("ko-KR", {
@@ -66,7 +67,7 @@ function EfficiencyTooltip({
   return (
     <div
       style={{
-        backgroundColor: "#111110",
+        backgroundColor: CHART.tooltipBg,
         border: "none",
         borderRadius: 12,
         color: "white",
@@ -156,11 +157,11 @@ export function ChannelEfficiencyChart({ data }: ChannelEfficiencyChartProps) {
                   layout="vertical"
                   margin={{ left: 4, right: 16, top: 4, bottom: 4 }}
                 >
-                  <CartesianGrid stroke="#f0f0ec" horizontal={false} />
+                  <CartesianGrid stroke={CHART.grid} horizontal={false} />
                   <XAxis
                     type="number"
                     dataKey="cpl"
-                    stroke="#84827a"
+                    stroke={CHART.warmGray}
                     fontSize={11}
                     tickLine={false}
                     tickFormatter={(value: number) => wonCompact(value)}
@@ -169,7 +170,7 @@ export function ChannelEfficiencyChart({ data }: ChannelEfficiencyChartProps) {
                     type="category"
                     dataKey="label"
                     width={84}
-                    stroke="#84827a"
+                    stroke={CHART.warmGray}
                     fontSize={11}
                     tickLine={false}
                   />

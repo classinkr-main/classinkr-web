@@ -340,6 +340,27 @@ export async function createCrmTask(input: CrmTaskCreateInput): Promise<CrmTaskR
   return toCrmTaskRecord(data as CrmTask)
 }
 
+// 같은 deal + task_type 조합의 아직 살아있는(open/snoozed) task 목록을 반환한다.
+// 견적 수락 → task materialize 시 중복 생성 방지, 계약 전환 시 카드 자동 소거에 쓴다.
+export async function listActiveTasksForDealByType(
+  dealId: string,
+  taskType: CrmTaskType
+): Promise<CrmTaskRecord[]> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("crm_tasks")
+    .select("*")
+    .eq("target_type", "deal")
+    .eq("target_id", dealId)
+    .eq("task_type", taskType)
+    .in("status", ["open", "snoozed"])
+  if (error) {
+    if (isMissingCrmTasksTableError(error)) throw new Error(NOT_READY_MESSAGE)
+    throw new Error(`[crm-tasks] 조회 실패: ${error.message}`)
+  }
+  return ((data ?? []) as CrmTask[]).map(toCrmTaskRecord)
+}
+
 async function applyTaskUpdate(id: string, patch: CrmTaskUpdate): Promise<CrmTaskRecord | null> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase.from("crm_tasks").update(patch).eq("id", id).select("*").maybeSingle()

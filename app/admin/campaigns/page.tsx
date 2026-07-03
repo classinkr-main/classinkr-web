@@ -31,8 +31,8 @@ import { InsightsBanner } from "@/components/admin/campaigns/InsightsBanner"
 import type { Insight } from "@/components/admin/campaigns/InsightsBanner"
 import { GoalProgressPanel } from "@/components/admin/campaigns/GoalProgressPanel"
 import type { GoalEventRow } from "@/components/admin/campaigns/GoalProgressPanel"
-import { FunnelWaterfall } from "@/components/admin/campaigns/FunnelWaterfall"
-import type { FunnelStage as WaterfallStage } from "@/components/admin/campaigns/FunnelWaterfall"
+import { MiniFunnel } from "@/components/admin/viz/MiniFunnel"
+import type { FunnelStage as WaterfallStage } from "@/components/admin/viz/MiniFunnel"
 import { TopPerformersTable } from "@/components/admin/campaigns/TopPerformersTable"
 import type { PerformerRow } from "@/components/admin/campaigns/TopPerformersTable"
 import { CampaignExportButton } from "@/components/admin/campaigns/CampaignExportButton"
@@ -2274,7 +2274,15 @@ export default function AdminCampaignsPage() {
 
       {/* 집계 퍼널 + 목표 달성 */}
       <div className="mb-5 grid gap-4 lg:grid-cols-2">
-        <FunnelWaterfall stages={summaryFunnelStages} />
+        <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[14px] font-semibold text-[#111110]">전환 퍼널</h2>
+              <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">단계별 전환율과 이탈을 추적합니다</p>
+            </div>
+          </div>
+          <MiniFunnel stages={summaryFunnelStages} variant="waterfall" />
+        </div>
         <GoalProgressPanel
           leads={goalData.leads}
           revenue={goalData.revenue}

@@ -158,12 +158,20 @@ export async function getLatestAcceptedQuoteInteraction(input: {
   };
 }
 
+// dedupe 통과로 실제 새 로그가 만들어졌는지(created=true)와, 기존 로그를
+// 재사용했는지(created=false)를 함께 반환한다. 기존 콜러는 log만 읽으므로
+// 이 확장은 무해하다.
+export type EnsureQuoteInteractionLogResult = {
+  log: ActivityLog;
+  created: boolean;
+};
+
 export async function ensureQuoteInteractionLog(input: InsertActivityLog & {
   dedupeWindowMinutes?: number;
   dedupeByVersion?: string | null;
   dedupeByShare?: string | null;
   dedupeByToken?: string | null;
-}): Promise<ActivityLog> {
+}): Promise<EnsureQuoteInteractionLogResult> {
   const dedupeWindowMinutes = input.dedupeWindowMinutes ?? 0;
 
   if (dedupeWindowMinutes > 0 && input.target_type === "quote_document" && input.target_id) {
@@ -182,7 +190,7 @@ export async function ensureQuoteInteractionLog(input: InsertActivityLog & {
       });
     });
 
-    if (duplicate) return duplicate;
+    if (duplicate) return { log: duplicate, created: false };
   }
 
   const activityInput = { ...input };
@@ -191,5 +199,6 @@ export async function ensureQuoteInteractionLog(input: InsertActivityLog & {
   delete activityInput.dedupeByShare;
   delete activityInput.dedupeByToken;
 
-  return logActivity(activityInput);
+  const log = await logActivity(activityInput);
+  return { log, created: true };
 }

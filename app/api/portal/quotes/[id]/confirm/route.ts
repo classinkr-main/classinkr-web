@@ -55,7 +55,7 @@ export async function POST(
       return NextResponse.json({ confirmedAt: existing.reviewConfirmedAt })
     }
 
-    const log = await ensureQuoteInteractionLog({
+    const { log } = await ensureQuoteInteractionLog({
       partner_account_id: deal.partner_account_id,
       customer_id: deal.customer_id,
       deal_id: deal.id,

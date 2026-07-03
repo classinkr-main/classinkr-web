@@ -1,6 +1,5 @@
-import Link from "next/link"
-import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react"
-import { TONE, type Tone } from "./viz/theme"
+import { StatTile } from "./viz/primitives"
+import type { Tone } from "./viz/theme"
 
 export interface StatCardTrend {
   value: number
@@ -29,15 +28,9 @@ export interface StatCardProps {
   href?: string
 }
 
-function trendBadgeValue(trend: StatCardTrend) {
-  if (trend.format === "percent") {
-    return `${trend.value > 0 ? "+" : ""}${Math.round(trend.value * 100)}%`
-  }
-  return String(Math.abs(trend.value))
-}
-
 // 어드민 공용 KPI 카드 — 아이콘 + 라벨 + 값 + 보조설명 + 증감 배지.
-// Overview의 증감 배지 패턴을 표준화한 것으로 analytics·branch·CRM에서 재사용한다.
+// 실 구현은 viz/primitives.StatTile로 통합됨. 이 컴포넌트는 기존 호출부(overview·channel-talk 등)의
+// props 시그니처를 그대로 유지하기 위한 얇은 델리게이트다.
 export function StatCard({
   icon,
   label,
@@ -50,57 +43,19 @@ export function StatCard({
   sparkline,
   href,
 }: StatCardProps) {
-  const positive = trend ? (trend.invert ? trend.value < 0 : trend.value > 0) : false
-  const neutral = trend ? trend.value === 0 : false
-
-  // tone 우선 → 없으면 레거시 accent/iconColor.
-  const resolvedAccent = tone ? TONE[tone].surfaceClass : accent
-  const resolvedIcon = tone ? TONE[tone].iconClass : iconColor
-
-  const body = (
-    <>
-      <div className="mb-3 flex items-start justify-between">
-        <div className={`inline-flex rounded-xl p-2 ${resolvedAccent}`}>
-          <span className={resolvedIcon}>{icon}</span>
-        </div>
-        {trend && (
-          <span
-            className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium ${
-              neutral
-                ? "bg-[#f0f0ec] text-[#1a1a1a]/40"
-                : positive
-                  ? "bg-green-50 text-green-600"
-                  : "bg-[#FEF3EE] text-[#B85C33]"
-            }`}
-          >
-            {neutral ? (
-              <Minus className="h-3 w-3" />
-            ) : trend.value > 0 ? (
-              <ArrowUpRight className="h-3 w-3" />
-            ) : (
-              <ArrowDownRight className="h-3 w-3" />
-            )}
-            {trendBadgeValue(trend)}
-          </span>
-        )}
-      </div>
-      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/40">{label}</p>
-      <p className="text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{value}</p>
-      {sub && <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">{sub}</p>}
-      {trend && <p className="mt-0.5 text-[11px] text-[#1a1a1a]/30">{trend.label}</p>}
-      {sparkline && <div className="mt-3 -mb-1">{sparkline}</div>}
-    </>
+  return (
+    <StatTile
+      icon={icon}
+      label={label}
+      value={value}
+      hint={sub}
+      trend={trend}
+      tone={tone}
+      accent={accent}
+      iconColor={iconColor}
+      sparkline={sparkline}
+      href={href}
+      lift
+    />
   )
-
-  const cardClass =
-    "block bg-white rounded-2xl border border-[#e8e8e4] p-5 shadow-[0_1px_0_rgba(17,17,16,0.02)] transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_12px_30px_rgba(17,17,16,0.04)]"
-
-  if (href) {
-    return (
-      <Link href={href} className={cardClass}>
-        {body}
-      </Link>
-    )
-  }
-  return <div className={cardClass}>{body}</div>
 }

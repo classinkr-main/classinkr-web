@@ -5,10 +5,14 @@ import {
   isErrorResponse,
 } from "@/lib/portal/portal-context";
 import { authorizeForAccount, getActorInfo } from "@/lib/portal/portal-authorize";
-import { getDeal } from "@/lib/portal/repositories/deals";
+import { getDeal, updateDeal } from "@/lib/portal/repositories/deals";
 import { getQuoteDocument } from "@/lib/portal/repositories/quote-documents";
 import { convertQuoteToContract } from "@/lib/portal/repositories/contract-documents";
 import { logActivity } from "@/lib/portal/repositories/activity";
+import {
+  completeCrmTask,
+  listActiveTasksForDealByType,
+} from "@/lib/repositories/crm-tasks";
 
 export async function POST(
   req: NextRequest,
@@ -67,6 +71,36 @@ export async function POST(
         source_quote: sourceQuote,
       },
     });
+
+    // 딜 stage 전진: 아직 계약 이전 단계(contact/quote)일 때만 contract로 올린다.
+    // 전진만 허용하고 후퇴·건너뛰기는 하지 않는다(이미 contract 이상이면 그대로 둔다).
+    // 실패해도 전환 응답을 막지 않는다.
+    if (deal.current_stage === "contact" || deal.current_stage === "quote") {
+      try {
+        await updateDeal(deal.id, { current_stage: "contract" });
+      } catch (stageError) {
+        console.error(
+          "[portal/quotes/[id]/convert] deal stage advance skipped:",
+          stageError
+        );
+      }
+    }
+
+    // 견적 수락으로 만들어진 "계약 전환" CRM 카드를 자동 소거한다(작업 1의 카드).
+    // 실패해도 전환 응답을 막지 않는다.
+    try {
+      const openQuoteTasks = await listActiveTasksForDealByType(deal.id, "quote");
+      for (const task of openQuoteTasks) {
+        await completeCrmTask(task.id, {
+          outcome: `계약 ${contractDocument.contract_number} 전환 완료`,
+        });
+      }
+    } catch (taskError) {
+      console.error(
+        "[portal/quotes/[id]/convert] CRM task auto-complete skipped:",
+        taskError
+      );
+    }
 
     return NextResponse.json(
       { contract: contractDocument, version },

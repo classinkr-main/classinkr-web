@@ -1,6 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
+import Link from "next/link"
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react"
 import { TONE, type Tone } from "./theme"
 
@@ -68,33 +69,112 @@ export function TrendBadge({
   )
 }
 
-// ── StatTile (= 기존 analytics/traffic SummaryCard) ────────────────────
+// ── StatTile (= 기존 analytics/traffic SummaryCard + components/admin/StatCard 통합) ──
+// trend는 두 형태를 모두 받는다: 단순 number(기존 StatTile 호출부) 또는
+// { value, label, format, invert } 상세 객체(기존 StatCard 호출부).
+export interface StatTileTrend {
+  value: number
+  label?: string
+  // 배지 표기 방식: "count"=절대 증감(기본), "percent"=퍼센트(value는 0.12 같은 비율).
+  format?: "count" | "percent"
+  // 증가가 나쁜 지표(예: 미응대, 이탈)는 invert로 색상을 뒤집는다.
+  invert?: boolean
+}
+
+function trendBadgeText(trend: StatTileTrend) {
+  if (trend.format === "percent") {
+    return `${trend.value > 0 ? "+" : ""}${Math.round(trend.value * 100)}%`
+  }
+  return String(Math.abs(trend.value))
+}
+
 export function StatTile({
   icon,
   label,
   value,
   hint,
   trend,
-  tone = "neutral",
+  tone,
+  accent,
+  iconColor,
+  sparkline,
+  href,
+  lift,
 }: {
   icon: ReactNode
   label: string
   value: string | number
   hint?: string
-  trend?: number
+  trend?: number | StatTileTrend
+  // tone을 주면 4톤(neutral·brand·caution·danger)에서 accent/iconColor를 도출한다.
+  // 레거시 accent/iconColor는 tone 미지정 시 폴백으로 유지(기존 StatCard 호출부 무손상).
   tone?: Tone
+  accent?: string
+  iconColor?: string
+  // KPI 카드 아래 미니 추이. <Sparkline/>을 next/dynamic으로 감싼 노드를 슬롯으로 받는다
+  // (StatTile 자체는 Recharts-free 유지).
+  sparkline?: ReactNode
+  // 주면 카드 전체가 해당 경로로 이동하는 드릴다운 링크가 된다.
+  href?: string
+  // true면 href 유무와 무관하게 hover-lift+shadow 카드 스타일(구 StatCard 시각) 적용.
+  // 일반 StatTile 호출부는 생략 시 기존 flat 카드 스타일을 유지한다.
+  lift?: boolean
 }) {
-  return (
-    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
+  const resolvedTrend: StatTileTrend | null =
+    typeof trend === "number" ? { value: trend } : trend ?? null
+  const positive = resolvedTrend ? (resolvedTrend.invert ? resolvedTrend.value < 0 : resolvedTrend.value > 0) : false
+  const neutral = resolvedTrend ? resolvedTrend.value === 0 : false
+
+  // tone 우선 → 없으면 레거시 accent/iconColor → 없으면 neutral 톤.
+  const resolvedAccent = tone ? TONE[tone].surfaceClass : accent ?? TONE.neutral.surfaceClass
+  const resolvedIcon = tone ? TONE[tone].iconClass : iconColor ?? TONE.neutral.iconClass
+
+  const body = (
+    <>
       <div className="mb-3 flex items-start justify-between gap-3">
-        <div className={`inline-flex rounded-xl p-2 ${TONE[tone].surfaceClass} ${TONE[tone].iconClass}`}>{icon}</div>
-        {typeof trend === "number" && <TrendBadge value={trend} />}
+        <div className={`inline-flex rounded-xl p-2 ${resolvedAccent} ${resolvedIcon}`}>{icon}</div>
+        {resolvedTrend && (
+          <span
+            className={`flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium ${
+              neutral
+                ? "bg-[#f0f0ec] text-[#1a1a1a]/40"
+                : positive
+                  ? "bg-green-50 text-green-600"
+                  : "bg-[#FEF3EE] text-[#B85C33]"
+            }`}
+          >
+            {neutral ? (
+              <Minus className="h-3 w-3" />
+            ) : resolvedTrend.value > 0 ? (
+              <ArrowUpRight className="h-3 w-3" />
+            ) : (
+              <ArrowDownRight className="h-3 w-3" />
+            )}
+            {trendBadgeText(resolvedTrend)}
+          </span>
+        )}
       </div>
       <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/40">{label}</p>
       <p className="text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{value}</p>
       {hint && <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">{hint}</p>}
-    </div>
+      {resolvedTrend?.label && <p className="mt-0.5 text-[11px] text-[#1a1a1a]/30">{resolvedTrend.label}</p>}
+      {sparkline && <div className="mt-3 -mb-1">{sparkline}</div>}
+    </>
   )
+
+  const liftClass =
+    "bg-white rounded-2xl border border-[#e8e8e4] p-5 shadow-[0_1px_0_rgba(17,17,16,0.02)] transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_12px_30px_rgba(17,17,16,0.04)]"
+  const flatClass = "rounded-2xl border border-[#e8e8e4] bg-white p-5"
+  const cardClass = href ? `block ${liftClass}` : lift ? liftClass : flatClass
+
+  if (href) {
+    return (
+      <Link href={href} className={cardClass}>
+        {body}
+      </Link>
+    )
+  }
+  return <div className={cardClass}>{body}</div>
 }
 
 // ── InsightCard ────────────────────────────────────────────────────────
