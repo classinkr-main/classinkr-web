@@ -2506,15 +2506,20 @@ function DraftQueue({
               <p className="mt-1 text-[11px] text-[#615D59]">
                 {formatMonthLabel(draft.month)} · {draft.manager || "-"} · {draft.team || "-"} · {formatMoney(draft.amount)}
               </p>
-              {/* 주차 셀 편집 초안은 적용 시 그 달 전체(edit-row 대체 규약)가 이 값이 된다 — 체크·적용 전에 고지 */}
+              {/* 주차 셀 초안 고지: 병합(metadata.weekly 보존) vs 레거시 단일값(월 전체 대체) 구분 */}
               {draft.kind === "edit-row" &&
                 /^w[1-5]$/.test(metadataString(draft.metadata, "week") ?? "") &&
                 draft.status !== "applied" &&
-                draft.status !== "cancelled" && (
+                draft.status !== "cancelled" &&
+                (mergedWeeklyFromMetadata(draft.metadata) ? (
+                  <p className="mt-1.5 rounded border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-1 text-[10.5px] font-semibold leading-relaxed text-[#615D59]">
+                    주차 병합 초안 — 적용 시 {formatMonthLabel(draft.month)} 금액이 주차 합계 {formatMoney(draft.amount)}로 재기재됩니다 (기존 주차 보존)
+                  </p>
+                ) : (
                   <p className="mt-1.5 rounded border border-[#ECD29C] bg-[#FBF1E0] px-2 py-1 text-[10.5px] font-bold leading-relaxed text-[#7A520F]">
                     주차 셀 초안 — 적용 시 {formatMonthLabel(draft.month)} 금액 전체가 이 값으로 대체됩니다 (다른 주차 값 소멸)
                   </p>
-                )}
+                ))}
               {draft.note && <p className="mt-1.5 line-clamp-2 text-[11.5px] leading-relaxed text-[#615D59]">{draft.note}</p>}
             </div>
             <div className="flex shrink-0 items-center gap-1">
@@ -2609,6 +2614,28 @@ function weeklyPaymentsFromWeekToken(month: string, amount: number, weekToken: s
   if (weekIdx == null) return {}
   const weeks = Array.from({ length: 5 }, (_, index) => (index === weekIdx ? amount : 0))
   return { [month]: weeks }
+}
+
+// 주차 병합 초안의 metadata.weekly(5칸 배열) 검증·정규화. 유효하지 않으면 null.
+function mergedWeeklyFromMetadata(metadata: Record<string, unknown> | null | undefined): number[] | null {
+  const weekly = metadata?.weekly
+  if (!Array.isArray(weekly) || weekly.length !== 5) return null
+  if (!weekly.every((value) => typeof value === "number" && Number.isFinite(value))) return null
+  const weeks = weekly.map((value) => Math.max(value, 0))
+  return weeks.some((value) => value > 0) ? weeks : null
+}
+
+// 적용된 초안행의 weeklyPayments 복원: 주차 병합 초안(metadata.weekly)이 있으면 그 배열을
+// 그대로(단일 주차 토큰보다 우선) 쓴다 — explicit 주차 행의 주차 셀 편집이 나머지 주차를
+// 보존(월 금액=주차 합 재기재)하기 위한 경로. 없으면 기존 단일 주차 토큰 규약으로 폴백.
+function weeklyPaymentsFromDraftMetadata(
+  month: string,
+  amount: number,
+  metadata: Record<string, unknown> | null | undefined,
+): Record<string, number[]> {
+  const merged = mergedWeeklyFromMetadata(metadata)
+  if (merged) return { [month]: merged }
+  return weeklyPaymentsFromWeekToken(month, amount, metadataString(metadata, "week"))
 }
 
 // 셀에 걸린 미검수(draft|checked) 초안 요약. 낙관적 앰버 표시·툴팁용.
@@ -3014,7 +3041,15 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
           if (editable) editor!.beginEdit(rowId!, month!)
         },
         onKeyDown: (event: React.KeyboardEvent<HTMLTableCellElement>) => {
-          if (!editable || !selected) return
+          if (!editable) return
+          if (!selected) {
+            // Tab 포커스만 된 셀도 Enter/F2로 선택 진입 — 마우스 클릭 없이 키보드만으로 편집 가능.
+            if (event.key === "Enter" || event.key === "F2") {
+              event.preventDefault()
+              editor!.selectCell(rowId!, month!)
+            }
+            return
+          }
           editor!.onSelectedKeyDown(event, { rowId: rowId!, month: month! })
         },
       }
@@ -3065,6 +3100,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   editable = false,
   locked = false,
   lockLabel = "시트 확정",
+  editWarning,
   pending = null,
   editor = null,
 }: {
@@ -3078,6 +3114,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   editable?: boolean
   locked?: boolean
   lockLabel?: string
+  editWarning?: string
   pending?: MatrixPendingDraft | null
   editor?: MatrixEditor | null
 }) {
@@ -3122,7 +3159,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
         <RevMatrixEditPopover
           confidence={editor!.editConfidence}
           onPickConfidence={editor!.setEditConfidence}
-          warning={`적용 시 ${formatMonthLabel(month!)} 금액 전체가 이 값으로 대체됩니다 (다른 주차 소멸)`}
+          warning={editWarning}
         />
       </td>
     )
@@ -3143,7 +3180,15 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
           if (editable) editor!.beginEdit(rowId!, month!, undefined, weekIndex)
         },
         onKeyDown: (event: React.KeyboardEvent<HTMLTableCellElement>) => {
-          if (!editable || !selected) return
+          if (!editable) return
+          if (!selected) {
+            // Tab 포커스만 된 칸도 Enter/F2로 선택 진입 — 마우스 클릭 없이 키보드만으로 편집 가능.
+            if (event.key === "Enter" || event.key === "F2") {
+              event.preventDefault()
+              editor!.selectCell(rowId!, month!, weekIndex)
+            }
+            return
+          }
           editor!.onSelectedKeyDown(event, { rowId: rowId!, month: month!, week: weekIndex })
         },
       }
@@ -3221,6 +3266,7 @@ function RevMatrixWeekCells({
         editable={weekEditable}
         locked={editContext ? weekLocked && display > 0 : false}
         lockLabel={editContext?.lockLabel}
+        editWarning={editContext ? editContext.weekEditNotice(month ?? "") : undefined}
         pending={editContext ? editContext.weekPendingOf(month ?? "", index) : null}
         editor={editContext?.editor ?? null}
       />,
@@ -3240,6 +3286,8 @@ interface RevMatrixEditContext {
   // 주차(확장월) 칸용. 잠금은 월 잠금 규칙을 그대로 승계(시트 확정 월이면 주차 칸도 잠금).
   weekLockedOf: (month: string, week: number) => boolean
   weekPendingOf: (month: string, week: number) => MatrixPendingDraft | null
+  // 주차 셀 편집 팝오버 고지문 — explicit 행(주차 병합 보존) vs 그 외(월 전체 대체) 구분.
+  weekEditNotice: (month: string) => string
 }
 
 // 12개월(요약/확장 혼재)에 걸친 월 셀 스트립 — 그룹행·딜행이 공유한다.
@@ -3502,6 +3550,10 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
         // 주차 잠금 = 그 달 시트 확정 여부(월 잠금 규칙 승계). 주차 pending = `rowId::month::wN` 키.
         weekLockedOf: (month) => isMatrixCellLocked(row, month),
         weekPendingOf: (month, week) => pendingByCell?.get(`${row.id}::${month}::w${week + 1}`) ?? null,
+        weekEditNotice: (month) =>
+          rowWeeklySplit(row, month).source === "explicit"
+            ? "커밋 시 이 달 금액이 주차 합계로 재기재됩니다 (기존 주차 병합 보존)"
+            : "적용 시 이 달 전체가 이 값으로 대체됩니다 (주차 분해 없음)",
       }
     : null
   return (
@@ -3817,6 +3869,14 @@ export default function SalesLedgerWorkbench() {
   }, [matrixDensity])
   // 기존 목표대비/주차별/담당자·상품군 패널은 접이식 보조 패널로 강등(기본 접힘). 1차 뷰는 매트릭스.
   const [revAuxOpen, setRevAuxOpen] = useState(false)
+  // 매트릭스 셀 커밋 실패(로컬 폴백) 등 편집 지점 인근 알림 토스트 — 상단 Source 바만으로는
+  // 편집 중 시야 밖이라 침묵 실패가 되던 문제 대응. 7초 뒤 자동 소멸.
+  const [matrixToast, setMatrixToast] = useState<{ kind: "error" | "info"; text: string } | null>(null)
+  useEffect(() => {
+    if (!matrixToast) return
+    const timer = window.setTimeout(() => setMatrixToast(null), 7000)
+    return () => window.clearTimeout(timer)
+  }, [matrixToast])
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(true)
   const [railView, setRailView] = useState<RailView>("detail")
   const [selectedRow, setSelectedRow] = useState<LedgerRevenueRow | null>(null)
@@ -4231,8 +4291,8 @@ export default function SalesLedgerWorkbench() {
         contractTarget: Number(snapshotField(entry.sourceSnapshot, "contractTarget") ?? 0),
         monthlyPayments: { [entry.month]: entry.amount },
         ...appliedDraftConfidenceMaps(entry.month, entry.amount, entry.metadata),
-        // 주차 초안(metadata.week=wN)이면 그 주차에 금액을 얹는다. 주차합==월합이라 불일치 배지 오탐 없음.
-        weeklyPayments: weeklyPaymentsFromWeekToken(entry.month, entry.amount, metadataString(entry.metadata, "week")),
+        // 주차 초안: 병합 배열(metadata.weekly) 우선, 없으면 단일 주차 토큰(metadata.week). 주차합==월합 유지.
+        weeklyPayments: weeklyPaymentsFromDraftMetadata(entry.month, entry.amount, entry.metadata),
         ledgerOrigin: "draft" as const,
         draftId: entry.draftId,
         draftKind: entry.entryType === "manual-edit" ? "edit-row" : "new-row",
@@ -4264,8 +4324,8 @@ export default function SalesLedgerWorkbench() {
         contractTarget: Number(snapshotField(draft.sourceSnapshot, "contractTarget") ?? 0),
         monthlyPayments: { [draft.month]: draft.amount },
         ...appliedDraftConfidenceMaps(draft.month, draft.amount, draft.metadata),
-        // 주차 초안(metadata.week=wN)이면 그 주차에 금액을 얹는다. 주차합==월합이라 불일치 배지 오탐 없음.
-        weeklyPayments: weeklyPaymentsFromWeekToken(draft.month, draft.amount, metadataString(draft.metadata, "week")),
+        // 주차 초안: 병합 배열(metadata.weekly) 우선, 없으면 단일 주차 토큰(metadata.week). 주차합==월합 유지.
+        weeklyPayments: weeklyPaymentsFromDraftMetadata(draft.month, draft.amount, draft.metadata),
         ledgerOrigin: "draft" as const,
         draftId: draft.id,
         draftKind: draft.kind,
@@ -4888,6 +4948,9 @@ export default function SalesLedgerWorkbench() {
   // operation: 기존 금액 있으면 amount-change, 없던 칸이면 forecast-add.
   //   - 월 셀: 기준 = 그 달 표시 금액. 주차 셀: 기준 = 그 주차 표시 금액(월 기준과 동일 분기 규약).
   // week: 주차 칸이면 "w1".."w5", 월 셀이면 "month". 저장은 커밋 시 metadata.week만 넣으면 끝(target_week 승격 완료).
+  // 주차 병합: explicit 주차가 있는 행의 주차 셀 편집은 나머지 주차를 보존해 metadata.weekly(5칸)로
+  // 싣고 amount=주차 합으로 재기재한다 — 단일 주차 값이 그 달 전체를 대체해 다른 주차가 소멸하던 버그 방지.
+  // (inferred/월합계만 행은 보존할 실주차가 없어 기존 단일 주차 대체 규약 유지 — 팝오버/큐에서 경고.)
   const onCommitCell = useCallback(
     (rowId: string, month: string, amount: number, confidence: DraftConfidence, week?: number) => {
       const row = rowById.get(rowId)
@@ -4895,8 +4958,17 @@ export default function SalesLedgerWorkbench() {
       const sourceDealId = row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)
       const kind: DraftKind = sourceDealId ? "edit-row" : "new-row"
       const weekToken = week != null ? `w${week + 1}` : "month"
-      const priorAmount = week != null ? (rowWeeklySplit(row, month).weeks[week] ?? 0) : rowMonthAmount(row, month)
+      const weekSplit = week != null ? rowWeeklySplit(row, month) : null
+      const priorAmount = week != null ? (weekSplit?.weeks[week] ?? 0) : rowMonthAmount(row, month)
       const operation: DraftOperation = priorAmount > 0 ? "amount-change" : "forecast-add"
+      let draftAmount = amount
+      let mergedWeekly: number[] | null = null
+      if (week != null && weekSplit?.source === "explicit") {
+        const weeks = Array.from({ length: 5 }, (_, index) => Math.max(Number(weekSplit.weeks[index] ?? 0), 0))
+        weeks[week] = amount
+        mergedWeekly = weeks
+        draftAmount = weeks.reduce((sum, value) => sum + value, 0)
+      }
       const productCategory = rowProductCategory(row)
       const input: LedgerDraftInput = {
         kind,
@@ -4921,7 +4993,7 @@ export default function SalesLedgerWorkbench() {
         manager: (row.manager ?? "").trim(),
         team: (row.team ?? (team === "ALL" ? "BD" : team)).trim(),
         month,
-        amount,
+        amount: draftAmount,
         note: "",
         metadata: {
           source: "sales-ledger-workbench",
@@ -4933,12 +5005,22 @@ export default function SalesLedgerWorkbench() {
           productCategory,
           fromMonth: month,
           week: weekToken,
+          weekly: mergedWeekly,
           confidence,
           quantity: null,
           sourceDealId: sourceDealId ?? null,
         },
       }
-      void createDraft(input)
+      void createDraft(input).then((draft) => {
+        // createDraft는 실패 시에도 local-* 초안으로 폴백해 resolve된다 — 편집 지점에서 침묵하지 않게
+        // 셀 인근 토스트로 실패(=로컬 임시 저장, 장부 적용 불가)를 알린다. 성공 피드백은 셀 앰버 점.
+        if (draft?.id?.startsWith("local-")) {
+          setMatrixToast({
+            kind: "error",
+            text: "서버 저장 실패 — 로컬 임시 초안으로만 저장됐습니다 (장부 적용 불가). 입력 큐에서 서버 재연결 후 다시 입력하세요.",
+          })
+        }
+      })
     },
     [createDraft, lens, period, rowById, team],
   )
@@ -6097,8 +6179,39 @@ export default function SalesLedgerWorkbench() {
 
             {pipeline.loading && !pipeline.data ? (
               <div className="p-4"><LoadingPanel label="REV 행을 불러오는 중" /></div>
+            ) : pipeline.error && !pipeline.data ? (
+              // API 실패를 "필터 결과 없음" 빈 상태로 위장하지 않는다 — 원인 표기 + 제자리 재시도.
+              <div className="p-6">
+                <div className="mx-auto max-w-md rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-center">
+                  <p className="text-[13px] font-bold text-[#B43E3E]">REV 데이터를 불러오지 못했습니다</p>
+                  <p className="mt-1 break-all text-[11px] leading-relaxed text-[#B43E3E] opacity-80">{pipeline.error}</p>
+                  <button
+                    type="button"
+                    onClick={() => setRefreshKey((value) => value + 1)}
+                    className="mt-3 rounded-md border border-[#B43E3E] bg-white px-3 py-1.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9]"
+                  >
+                    다시 불러오기
+                  </button>
+                </div>
+              </div>
             ) : (
               <>
+                {/* 로컬 큐 모드: 서버 저장 불가 상태를 매트릭스 근처에서 명시 — 입력이 쌓이는 막다른 길 방지 */}
+                {queueMode === "local" && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ECD29C] bg-[#FBF1E0] px-4 py-2.5">
+                    <p className="min-w-0 text-[11.5px] font-bold leading-relaxed text-[#7A520F]">
+                      로컬 큐 모드 — 서버 입력 큐 연결이 끊겨, 지금 만드는 초안은 임시 저장이며 장부에 적용할 수 없습니다.
+                      {queueError ? <span className="ml-1 font-semibold">({queueError})</span> : null}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void reloadDrafts()}
+                      className="shrink-0 rounded-md border border-[#ECD29C] bg-white px-2.5 py-1 text-[11px] font-bold text-[#7A520F] transition hover:bg-[#FBF1E0]"
+                    >
+                      서버 재연결
+                    </button>
+                  </div>
+                )}
                 {/* 보조 분석(강등): 선택 월 목표대비·주차별·담당자/상품군. 기본 접힘 — 1차 뷰는 아래 매트릭스. */}
                 <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8]">
                   <button
@@ -6857,6 +6970,19 @@ export default function SalesLedgerWorkbench() {
             )}
           </div>
         </section>
+
+        {matrixToast && (
+          <div
+            role="alert"
+            className={`fixed bottom-20 left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg border px-4 py-2.5 text-[12px] font-bold shadow-[0_18px_48px_rgba(17,17,16,0.18)] ${
+              matrixToast.kind === "error"
+                ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"
+                : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
+            }`}
+          >
+            {matrixToast.text}
+          </div>
+        )}
 
         {lens !== "kpi" && sidePanelCollapsed && (
           <button
