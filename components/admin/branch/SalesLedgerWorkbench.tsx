@@ -217,6 +217,21 @@ function draftConfidenceFromMetadata(metadata: Record<string, unknown> | null | 
   return isDraftConfidence(raw) ? raw : "expected"
 }
 
+// 적용된 초안(장부 엔트리)의 확도를 행 확도 맵으로 변환. 확도와 무관하게 전액
+// monthlyConfirmed+red로 만들면 '예정' 입력도 적용 즉시 확정으로 집계된다(확정·달성률 인플레).
+function appliedDraftConfidenceMaps(
+  month: string,
+  amount: number,
+  metadata: Record<string, unknown> | null | undefined,
+): Pick<LedgerRevenueRow, "monthlyConfirmed" | "monthlyHighConfidence" | "monthlyRed"> {
+  const confidence = draftConfidenceFromMetadata(metadata)
+  return {
+    monthlyConfirmed: confidence === "confirmed" ? { [month]: amount } : {},
+    monthlyHighConfidence: confidence === "high-confidence" ? { [month]: amount } : {},
+    monthlyRed: confidence === "confirmed" ? { [month]: true } : {},
+  }
+}
+
 interface KpiMetricView {
   metric: string
   goal: number
@@ -420,7 +435,7 @@ function MatrixToneLegend() {
           {item.label}
         </span>
       ))}
-      <span>· 잠금=시트확정</span>
+      <span>· 잠금=시트확정/장부반영</span>
     </span>
   )
 }
@@ -662,7 +677,7 @@ function rowMonthConfirmed(row: LedgerRevenueRow, month: string) {
   const confirmed = mapNumberValue(row.monthlyConfirmed, month)
   if (confirmed > 0) return Math.min(amount, confirmed)
   if (row.monthlyRed?.[month]) return amount
-  if (row.ledgerOrigin === "draft" && row.draftMonth === month) return amount
+  // 적용 초안행은 확도 맵(appliedDraftConfidenceMaps)이 정본 — origin만으로 확정을 강제하지 않는다.
   return 0
 }
 
@@ -2286,6 +2301,15 @@ function DraftQueue({
               <p className="mt-1 text-[11px] text-[#615D59]">
                 {formatMonthLabel(draft.month)} · {draft.manager || "-"} · {draft.team || "-"} · {formatMoney(draft.amount)}
               </p>
+              {/* 주차 셀 편집 초안은 적용 시 그 달 전체(edit-row 대체 규약)가 이 값이 된다 — 체크·적용 전에 고지 */}
+              {draft.kind === "edit-row" &&
+                /^w[1-5]$/.test(metadataString(draft.metadata, "week") ?? "") &&
+                draft.status !== "applied" &&
+                draft.status !== "cancelled" && (
+                  <p className="mt-1.5 rounded border border-[#ECD29C] bg-[#FBF1E0] px-2 py-1 text-[10.5px] font-bold leading-relaxed text-[#7A520F]">
+                    주차 셀 초안 — 적용 시 {formatMonthLabel(draft.month)} 금액 전체가 이 값으로 대체됩니다 (다른 주차 값 소멸)
+                  </p>
+                )}
               {draft.note && <p className="mt-1.5 line-clamp-2 text-[11.5px] leading-relaxed text-[#615D59]">{draft.note}</p>}
             </div>
             <div className="flex shrink-0 items-center gap-1">
@@ -2397,11 +2421,13 @@ function parseMatrixAmount(value: string): number {
   return Number.isFinite(numeric) ? Math.max(Math.round(numeric), 0) : 0
 }
 
-// 딜행 × 월 셀이 시트 확정(편집 불가)인지. monthlyRed 플래그 또는 확정액이 그 달 금액을 덮으면 잠금.
-// 적용된 초안(ledgerOrigin==="draft")도 monthlyRed[month]=true라 잠금으로 취급(이미 장부 반영분).
+// 딜행 × 월 셀이 확정 잠금(편집 불가)인지. monthlyRed 플래그 또는 확정액이 그 달 금액을 덮으면 잠금.
+// 적용된 초안(ledgerOrigin==="draft")은 확도와 무관하게 잠금 — 셀 편집이 만드는 새 초안은 sourceDealId
+// 기준이라 장부 반영분과 겹치면 이중계상이 되므로, 적용분 수정·취소는 입력 큐에서만 한다.
 function isMatrixCellLocked(row: LedgerRevenueRow, month: string): boolean {
   const amount = rowMonthAmount(row, month)
   if (amount <= 0) return false // 미입력 = 편집 가능(예정 추가)
+  if (row.ledgerOrigin === "draft" && row.draftMonth === month) return true
   if (row.monthlyRed?.[month]) return true
   const confirmed = mapNumberValue(row.monthlyConfirmed, month)
   return confirmed > 0 && confirmed >= amount
@@ -2427,38 +2453,48 @@ const MATRIX_CONFIDENCE_COLOR: Record<DraftConfidence, string> = {
 }
 
 // 셀 아래 붙는 3버튼 확도 팝오버 + 커밋/취소. input은 부모 셀이 렌더(포커스 관리), 여기는 확도만.
+// warning: 주차 셀 편집처럼 커밋 결과가 파괴적일 때 팝오버 안에 한 줄 경고를 붙인다.
 const RevMatrixEditPopover = memo(function RevMatrixEditPopover({
   confidence,
   onPickConfidence,
+  warning,
 }: {
   confidence: DraftConfidence
   onPickConfidence: (next: DraftConfidence) => void
+  warning?: string
 }) {
   return (
     <div
-      className="absolute left-0 top-full z-40 mt-0.5 flex items-center gap-0.5 rounded-md border border-[rgba(0,0,0,0.12)] bg-white p-0.5 shadow-lg"
+      className="absolute left-0 top-full z-40 mt-0.5 flex flex-col gap-0.5 rounded-md border border-[rgba(0,0,0,0.12)] bg-white p-0.5 shadow-lg"
       onMouseDown={(event) => event.preventDefault()} // input 포커스 유지(blur 커밋 방지)
     >
-      {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
-        const activeColor = MATRIX_CONFIDENCE_COLOR[option.id]
-        const active = option.id === confidence
-        return (
-          <button
-            key={option.id}
-            type="button"
-            title={`확도: ${option.label}`}
-            onClick={() => onPickConfidence(option.id)}
-            className="rounded px-1.5 py-0.5 text-[10px] font-bold leading-none transition"
-            style={
-              active
-                ? { backgroundColor: activeColor, color: "#FFFFFF" }
-                : { color: activeColor, backgroundColor: "transparent" }
-            }
-          >
-            {option.label}
-          </button>
-        )
-      })}
+      <div className="flex items-center gap-0.5">
+        {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
+          const activeColor = MATRIX_CONFIDENCE_COLOR[option.id]
+          const active = option.id === confidence
+          return (
+            <button
+              key={option.id}
+              type="button"
+              title={`확도: ${option.label}`}
+              onClick={() => onPickConfidence(option.id)}
+              className="rounded px-1.5 py-0.5 text-[10px] font-bold leading-none transition"
+              style={
+                active
+                  ? { backgroundColor: activeColor, color: "#FFFFFF" }
+                  : { color: activeColor, backgroundColor: "transparent" }
+              }
+            >
+              {option.label}
+            </button>
+          )
+        })}
+      </div>
+      {warning && (
+        <p className="max-w-[168px] whitespace-normal rounded bg-[#FBF1E0] px-1.5 py-1 text-left text-[9px] font-bold leading-snug text-[#7A520F]">
+          {warning}
+        </p>
+      )}
     </div>
   )
 })
@@ -2689,6 +2725,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   rowId,
   editable = false,
   locked = false,
+  lockLabel = "시트 확정",
   pending = null,
   editor = null,
 }: {
@@ -2699,6 +2736,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   rowId?: string
   editable?: boolean
   locked?: boolean
+  lockLabel?: string
   pending?: MatrixPendingDraft | null
   editor?: MatrixEditor | null
 }) {
@@ -2721,7 +2759,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
       ? `합계 ${formatMoney(bucket.total)} · 확정 ${formatMoney(bucket.confirmed)} · 고확도 ${formatMoney(bucket.high)} · 예정 ${formatMoney(bucket.open)}${mismatch ? " · 주차·월 불일치" : ""}`
       : "미입력"
   const title = locked
-    ? `${baseTitle} · 시트 확정 — 편집 불가`
+    ? `${baseTitle} · ${lockLabel} — 편집 불가`
     : pending
       ? `${baseTitle} · 미검수 초안 ${formatMoney(pending.amount)} (${confidenceLabel(pending.confidence)})`
       : editable
@@ -2797,7 +2835,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
             pending ? "font-bold text-[#7A520F]" : MATRIX_TONE[tone]
           }`}
         >
-          {locked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#A39E98]" aria-label="시트 확정" />}
+          {locked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#A39E98]" aria-label={lockLabel} />}
           {mismatch && !locked && <AlertTriangle className="h-2.5 w-2.5 shrink-0" />}
           {formatWeekAmount(bucket.total)}
         </span>
@@ -2821,6 +2859,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   rowId,
   editable = false,
   locked = false,
+  lockLabel = "시트 확정",
   pending = null,
   editor = null,
 }: {
@@ -2833,6 +2872,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   rowId?: string
   editable?: boolean
   locked?: boolean
+  lockLabel?: string
   pending?: MatrixPendingDraft | null
   editor?: MatrixEditor | null
 }) {
@@ -2847,7 +2887,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   const confidenceLabel = (v: DraftConfidence) => DRAFT_CONFIDENCE_OPTIONS.find((option) => option.id === v)?.label ?? v
   const baseTitle = display > 0 ? `W${weekIndex + 1} ${formatMoney(display)}${isMonthOnly ? " · 월합계만" : ""}` : `W${weekIndex + 1} 미입력`
   const title = locked
-    ? `${baseTitle} · 시트 확정 — 편집 불가`
+    ? `${baseTitle} · ${lockLabel} — 편집 불가`
     : pending
       ? `${baseTitle} · 미검수 초안 ${formatMoney(pending.amount)} (${confidenceLabel(pending.confidence)})`
       : editable
@@ -2874,7 +2914,11 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
           aria-label={`${formatMonthLabel(month!)} W${weekIndex + 1} 금액(원 단위)`}
           className="h-6 w-full bg-transparent px-0.5 text-right text-[11px] font-bold tabular-nums text-[#111110] outline-none"
         />
-        <RevMatrixEditPopover confidence={editor!.editConfidence} onPickConfidence={editor!.setEditConfidence} />
+        <RevMatrixEditPopover
+          confidence={editor!.editConfidence}
+          onPickConfidence={editor!.setEditConfidence}
+          warning={`적용 시 ${formatMonthLabel(month!)} 금액 전체가 이 값으로 대체됩니다 (다른 주차 소멸)`}
+        />
       </td>
     )
   }
@@ -2924,7 +2968,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
                 : "text-[#DDD9D3]"
         }`}
       >
-        {locked && display > 0 && <Lock className="h-2.5 w-2.5 shrink-0 text-[#A39E98]" aria-label="시트 확정" />}
+        {locked && display > 0 && <Lock className="h-2.5 w-2.5 shrink-0 text-[#A39E98]" aria-label={lockLabel} />}
         {display > 0 ? formatWeekAmount(display) : "·"}
       </span>
     </td>
@@ -2971,6 +3015,7 @@ function RevMatrixWeekCells({
         rowId={editContext?.rowId}
         editable={weekEditable}
         locked={editContext ? weekLocked && display > 0 : false}
+        lockLabel={editContext?.lockLabel}
         pending={editContext ? editContext.weekPendingOf(month ?? "", index) : null}
         editor={editContext?.editor ?? null}
       />,
@@ -2983,6 +3028,7 @@ function RevMatrixWeekCells({
 interface RevMatrixEditContext {
   rowId: string
   editor: MatrixEditor
+  lockLabel: string // 잠금 아이콘·툴팁 라벨 — 시트 원천은 "시트 확정", 적용 초안은 "장부 반영"
   editableOf: (month: string) => boolean
   lockedOf: (month: string) => boolean
   pendingOf: (month: string) => MatrixPendingDraft | null
@@ -3036,6 +3082,7 @@ function RevMatrixMonthStrip({
             rowId={editContext?.rowId}
             editable={editContext ? editContext.editableOf(month) : false}
             locked={editContext ? editContext.lockedOf(month) : false}
+            lockLabel={editContext?.lockLabel}
             pending={editContext ? editContext.pendingOf(month) : null}
             editor={editContext?.editor ?? null}
           />
@@ -3228,6 +3275,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
     ? {
         rowId: row.id,
         editor,
+        lockLabel: row.ledgerOrigin === "draft" ? "장부 반영" : "시트 확정",
         editableOf: (month) => isMatrixCellEditable(row, month),
         lockedOf: (month) => isMatrixCellLocked(row, month),
         pendingOf: (month) => pendingByCell?.get(`${row.id}::${month}`) ?? null,
@@ -3762,9 +3810,7 @@ export default function SalesLedgerWorkbench() {
         firstPayment: snapshotText(entry.sourceSnapshot, "firstPayment"),
         contractTarget: Number(snapshotField(entry.sourceSnapshot, "contractTarget") ?? 0),
         monthlyPayments: { [entry.month]: entry.amount },
-        monthlyConfirmed: { [entry.month]: entry.amount },
-        monthlyHighConfidence: {},
-        monthlyRed: { [entry.month]: true },
+        ...appliedDraftConfidenceMaps(entry.month, entry.amount, entry.metadata),
         // 주차 초안(metadata.week=wN)이면 그 주차에 금액을 얹는다. 주차합==월합이라 불일치 배지 오탐 없음.
         weeklyPayments: weeklyPaymentsFromWeekToken(entry.month, entry.amount, metadataString(entry.metadata, "week")),
         ledgerOrigin: "draft" as const,
@@ -3797,9 +3843,7 @@ export default function SalesLedgerWorkbench() {
         firstPayment: snapshotText(draft.sourceSnapshot, "firstPayment"),
         contractTarget: Number(snapshotField(draft.sourceSnapshot, "contractTarget") ?? 0),
         monthlyPayments: { [draft.month]: draft.amount },
-        monthlyConfirmed: { [draft.month]: draft.amount },
-        monthlyHighConfidence: {},
-        monthlyRed: { [draft.month]: true },
+        ...appliedDraftConfidenceMaps(draft.month, draft.amount, draft.metadata),
         // 주차 초안(metadata.week=wN)이면 그 주차에 금액을 얹는다. 주차합==월합이라 불일치 배지 오탐 없음.
         weeklyPayments: weeklyPaymentsFromWeekToken(draft.month, draft.amount, metadataString(draft.metadata, "week")),
         ledgerOrigin: "draft" as const,
@@ -3941,10 +3985,33 @@ export default function SalesLedgerWorkbench() {
   ])
 
   const revWeekProjection = useMemo(() => buildRevWeekProjection(filteredRows, selectedMonth), [filteredRows, selectedMonth])
-  const revMonthTotal = revWeekProjection.reduce((sum, item) => sum + item.total, 0)
-  const revMonthConfirmed = revWeekProjection.reduce((sum, item) => sum + item.confirmed, 0)
-  const revMonthHighConfidence = revWeekProjection.reduce((sum, item) => sum + item.highConfidence, 0)
-  const revMonthMonthlyOnly = revWeekProjection.reduce((sum, item) => sum + item.monthlyOnly, 0)
+  // 레일 확정/고확도 합계는 매트릭스·footer와 동일한 rowMonth* 헬퍼로 계산해 '확정'의 정의를 통일한다.
+  // (projection은 주차 분해 전용 — month-only/inferred 행의 확정을 버킷에서 제외하므로, projection 합을
+  //  그대로 쓰면 월합계만 입력된 확정 행이 레일에서만 '예정'으로 빠져 footer와 다른 숫자가 됐다.)
+  // monthlyOnly는 '주차 미상이면서 미확정'인 잔여만 집계 — covered(확정+고확도)와 겹치지 않는다.
+  const revMonthScalars = useMemo(() => {
+    let total = 0
+    let confirmed = 0
+    let high = 0
+    let monthlyOnlyOpen = 0
+    for (const row of filteredRows) {
+      const amount = rowMonthAmount(row, selectedMonth)
+      if (amount <= 0) continue
+      const rowConfirmed = rowMonthConfirmed(row, selectedMonth)
+      const rowHigh = rowMonthHighConfidence(row, selectedMonth)
+      total += amount
+      confirmed += rowConfirmed
+      high += rowHigh
+      if (rowWeeklySplit(row, selectedMonth).source === "month-only") {
+        monthlyOnlyOpen += Math.max(amount - rowConfirmed - rowHigh, 0)
+      }
+    }
+    return { total, confirmed, high, monthlyOnlyOpen }
+  }, [filteredRows, selectedMonth])
+  const revMonthTotal = revMonthScalars.total
+  const revMonthConfirmed = revMonthScalars.confirmed
+  const revMonthHighConfidence = revMonthScalars.high
+  const revMonthMonthlyOnly = revMonthScalars.monthlyOnlyOpen
   const revMonthOpen = Math.max(revMonthTotal - revMonthConfirmed - revMonthHighConfidence - revMonthMonthlyOnly, 0)
   const revPeakWeek = revWeekProjection.slice().sort((a, b) => b.total - a.total)[0]
   const revTopManagers = useMemo<RevManagerSummary[]>(() => {
@@ -4000,10 +4067,24 @@ export default function SalesLedgerWorkbench() {
     [monthlySeriesRows, selectedMonth],
   )
   const revMonthGoal = selectedMonthPlan && selectedMonthPlan.goal > 0 ? selectedMonthPlan.goal : null
+  // 월 목표(DSH 시리즈)는 팀/기간 축으로만 내려온다(summary API가 team·period만 받음). 분자(확정 등)는
+  // 검색/필터를 타므로, 팀 외 필터가 하나라도 걸리면 달성률·부족액이 서로 다른 모집단 비교가 된다
+  // → 목표 비교를 생략하고 "필터 중 생략"을 표기한다. 팀·기간·선택월은 목표와 같은 축이라 허용.
+  const revGoalComparable =
+    query.trim() === "" &&
+    managerFilter === "ALL" &&
+    regionFilter === "ALL" &&
+    productFilter === "all" &&
+    revStatusFilter === "ALL" &&
+    revDealTypeFilter === "ALL" &&
+    revOriginFilter === "all" &&
+    revForecastFilter === "all"
+  const revComparableGoal = revGoalComparable ? revMonthGoal : null
+  const revGoalMutedByFilter = !revGoalComparable && revMonthGoal !== null
   const revMonthPlanned = revMonthOpen + revMonthMonthlyOnly
   const revMonthCovered = revMonthConfirmed + revMonthHighConfidence
-  const revMonthRemaining = revMonthGoal !== null ? revMonthGoal - revMonthConfirmed : null
-  const revMonthScale = Math.max(revMonthGoal ?? 0, revMonthTotal, 1)
+  const revMonthRemaining = revComparableGoal !== null ? revComparableGoal - revMonthConfirmed : null
+  const revMonthScale = Math.max(revComparableGoal ?? 0, revMonthTotal, 1)
   const revMonthRowCount = useMemo(
     () => filteredRows.filter((row) => rowMonthAmount(row, selectedMonth) > 0).length,
     [filteredRows, selectedMonth],
@@ -4246,10 +4327,11 @@ export default function SalesLedgerWorkbench() {
         month: option.value,
         label: option.label,
         current: option.current,
-        goal: goal && goal > 0 ? goal : null,
+        // 목표는 팀 스코프 고정이라 팀 외 필터가 걸리면 footer '월 목표 대비 %'가 왜곡 — 비교 가능할 때만 전달.
+        goal: revGoalComparable && goal && goal > 0 ? goal : null,
       }
     })
-  }, [revCustomerGroups, matrixMonths, monthOptions, monthlySeriesRows])
+  }, [revCustomerGroups, matrixMonths, monthOptions, monthlySeriesRows, revGoalComparable])
 
   const revMatrixGrand = useMemo<RevMonthlyBucket>(() => {
     const grand = emptyMonthlyBucket()
@@ -5524,13 +5606,13 @@ export default function SalesLedgerWorkbench() {
                     </span>
                     {!revAuxOpen && (
                       <span className="hidden min-w-0 flex-1 items-center justify-end gap-x-3 overflow-hidden whitespace-nowrap text-[11px] font-semibold tabular-nums text-[#615D59] md:flex">
-                        <span>목표 <span className="font-bold text-[#111110]">{revMonthGoal !== null ? formatMoney(revMonthGoal) : "–"}</span></span>
+                        <span>목표 <span className="font-bold text-[#111110]">{revComparableGoal !== null ? formatMoney(revComparableGoal) : revGoalMutedByFilter ? "필터 중 생략" : "–"}</span></span>
                         <span>확정 <span className="font-bold text-[#084734]">{formatMoney(revMonthConfirmed)}</span></span>
-                        {revMonthGoal !== null && (
+                        {revComparableGoal !== null && (
                           <span>
                             달성률{" "}
-                            <span className={`font-bold ${revMonthConfirmed >= revMonthGoal ? "text-[#084734]" : "text-[#B43E3E]"}`}>
-                              {formatPercent((revMonthConfirmed / revMonthGoal) * 100)}
+                            <span className={`font-bold ${revMonthConfirmed >= revComparableGoal ? "text-[#084734]" : "text-[#B43E3E]"}`}>
+                              {formatPercent((revMonthConfirmed / revComparableGoal) * 100)}
                             </span>
                           </span>
                         )}
@@ -5553,36 +5635,49 @@ export default function SalesLedgerWorkbench() {
                           {formatMonthLabel(selectedMonth)} 목표 대비 수치
                         </p>
                         <p className="mt-1 text-[11px] text-[#615D59]">
-                          현재 검색/필터가 반영된 REV 집계 · 월 목표는 DSH 시리즈 기준
+                          현재 검색/필터가 반영된 REV 집계 · 월 목표는 DSH 시리즈(팀 스코프) 기준
                         </p>
                       </div>
-                      {revMonthGoal === null && (
+                      {revGoalMutedByFilter ? (
+                        <span
+                          className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1 text-[10.5px] font-bold text-[#7A520F]"
+                          title="월 목표는 팀 전체 기준이라 담당자·지역·상품·검색 필터가 걸린 집계와 비교할 수 없습니다. 필터를 초기화하면 달성률이 다시 표시됩니다."
+                        >
+                          필터 중 — 팀 목표 비교 생략
+                        </span>
+                      ) : revComparableGoal === null ? (
                         <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1 text-[10.5px] font-bold text-[#7A520F]">
                           선택 월 목표 없음
                         </span>
-                      )}
+                      ) : null}
                     </div>
                     <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
                       <div className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
                         <p className="text-[10.5px] font-bold text-[#615D59]">월 목표</p>
                         <p className="mt-1 text-[17px] font-bold tabular-nums text-[#111110]">
-                          {revMonthGoal !== null ? formatMoney(revMonthGoal) : "–"}
+                          {revComparableGoal !== null ? formatMoney(revComparableGoal) : "–"}
                         </p>
-                        <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">DSH 월간 목표</p>
+                        <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">
+                          {revGoalMutedByFilter ? "필터 중 — 비교 생략" : "DSH 월간 목표"}
+                        </p>
                       </div>
                       <div className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
                         <p className="text-[10.5px] font-bold text-[#615D59]">확정</p>
                         <p className="mt-1 text-[17px] font-bold tabular-nums text-[#084734]">{formatMoney(revMonthConfirmed)}</p>
                         <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">
-                          {revMonthGoal !== null ? `달성률 ${formatPercent((revMonthConfirmed / revMonthGoal) * 100)}` : "월 목표 미설정"}
+                          {revComparableGoal !== null
+                            ? `달성률 ${formatPercent((revMonthConfirmed / revComparableGoal) * 100)}`
+                            : revGoalMutedByFilter
+                              ? "필터 중 — 달성률 생략"
+                              : "월 목표 미설정"}
                         </p>
                       </div>
                       <div className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
                         <p className="text-[10.5px] font-bold text-[#615D59]">고확도</p>
                         <p className="mt-1 text-[17px] font-bold tabular-nums text-[#1E5DA8]">{formatMoney(revMonthHighConfidence)}</p>
                         <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">
-                          {revMonthGoal !== null
-                            ? `확정+고확도 ${formatPercent((revMonthCovered / revMonthGoal) * 100)}`
+                          {revComparableGoal !== null
+                            ? `확정+고확도 ${formatPercent((revMonthCovered / revComparableGoal) * 100)}`
                             : `확정+고확도 ${formatMoney(revMonthCovered)}`}
                         </p>
                       </div>
@@ -5596,7 +5691,9 @@ export default function SalesLedgerWorkbench() {
                         {revMonthRemaining === null ? (
                           <>
                             <p className="mt-1 text-[17px] font-bold tabular-nums text-[#111110]">–</p>
-                            <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">월 목표 미설정</p>
+                            <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">
+                              {revGoalMutedByFilter ? "필터 중 — 비교 생략" : "월 목표 미설정"}
+                            </p>
                           </>
                         ) : revMonthRemaining > 0 ? (
                           <>
@@ -5611,7 +5708,7 @@ export default function SalesLedgerWorkbench() {
                         )}
                       </div>
                     </div>
-                    {revMonthGoal !== null && (
+                    {revComparableGoal !== null && (
                       <div className="mt-3">
                         <div className="relative h-2.5 overflow-hidden rounded-full bg-[#F0F0EC]">
                           <div className="absolute inset-y-0 left-0 flex w-full">
@@ -5622,8 +5719,8 @@ export default function SalesLedgerWorkbench() {
                           </div>
                           <span
                             className="absolute inset-y-0 w-[2px] bg-[#111110]"
-                            style={{ left: `calc(${Math.min((revMonthGoal / revMonthScale) * 100, 100)}% - 1px)` }}
-                            aria-label={`월 목표 ${formatMoney(revMonthGoal)} 위치`}
+                            style={{ left: `calc(${Math.min((revComparableGoal / revMonthScale) * 100, 100)}% - 1px)` }}
+                            aria-label={`월 목표 ${formatMoney(revComparableGoal)} 위치`}
                           />
                         </div>
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-[#615D59]">
@@ -5631,7 +5728,7 @@ export default function SalesLedgerWorkbench() {
                           <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#1E5DA8]" />고확도</span>
                           <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#A8741A]" />예정</span>
                           <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#D9D6D0]" />월합계만</span>
-                          <span className="inline-flex items-center gap-1"><span className="h-3 w-[2px] bg-[#111110]" />월 목표 {formatMoney(revMonthGoal)}</span>
+                          <span className="inline-flex items-center gap-1"><span className="h-3 w-[2px] bg-[#111110]" />월 목표 {formatMoney(revComparableGoal)}</span>
                         </div>
                       </div>
                     )}
@@ -5652,7 +5749,7 @@ export default function SalesLedgerWorkbench() {
                         피크 {revPeakWeek?.week ?? "-"} · {formatMoney(revPeakWeek?.total)}
                       </span>
                     </div>
-                    <RevWeekNumbersTable data={revWeekProjection} month={selectedMonth} monthGoal={revMonthGoal} monthRowCount={revMonthRowCount} />
+                    <RevWeekNumbersTable data={revWeekProjection} month={selectedMonth} monthGoal={revComparableGoal} monthRowCount={revMonthRowCount} />
                   </section>
 
                   <div className="grid gap-4 xl:grid-cols-2">

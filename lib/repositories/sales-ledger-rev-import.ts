@@ -2,6 +2,7 @@ import "server-only"
 
 import { revalidateTag } from "next/cache"
 
+import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
 import { listBranchRevDeals, type BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { SALES_LEDGER_IMPORTS_CACHE_TAG } from "@/lib/repositories/sales-ledger-imports"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -132,7 +133,10 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
         if (!FISCAL_MONTH_RE.test(month)) continue
         const amount = toNumber(rawAmount)
         if (amount === 0) continue
-        const confirmed = Math.min(Math.max(toNumber(deal.monthly_confirmed?.[month]), 0), Math.max(amount, 0))
+        // 확도 분해는 시트폴백과 동일 규칙(confirmedMonthAmount: 금액맵 → red-불리언 전액 → 무색상 전액)을
+        // 쓴다. 금액맵만 보면 색 금액 도입 전 동기화분(red=true, 맵 비어 있음)·무색상 레거시 행의 확정이
+        // expected로 강등돼, DB-native 전환 직후 확정 합계가 시트폴백 대비 급감한다.
+        const confirmed = Math.min(Math.max(confirmedMonthAmount(deal, month, amount), 0), Math.max(amount, 0))
         const high = Math.min(Math.max(toNumber(deal.monthly_high_conf?.[month]), 0), Math.max(amount - confirmed, 0))
         const expected = amount - confirmed - high
         for (const [confidence, amt] of [["confirmed", confirmed], ["high_confidence", high], ["expected", expected]] as const) {
