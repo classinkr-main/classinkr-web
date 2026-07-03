@@ -308,7 +308,10 @@ interface RevCustomerGroup {
   teams: string[]
   regions: string[]
   hasDraft: boolean
+  // 검수 배지: selectedMonth가 아니라 표시 열(12개월) 전체에서 주차↔월 불일치가 있는
+  // 딜 행 수. mismatchMonths는 불일치가 발견된 달들(회계연도 순 정렬) — 가장 이른 문제월 표시용.
   mismatchCount: number
+  mismatchMonths: string[]
   // 다중월 매트릭스: 회계연도 12개월 각각의 확도 분해 + 연간 합계(그룹 1패스 계산).
   monthlyTotals: Record<string, RevMonthlyBucket>
   annualTotal: RevMonthlyBucket
@@ -641,26 +644,6 @@ function safeAmount(value: string) {
   return Number.isFinite(numeric) ? numeric : 0
 }
 
-function fiscalQuarterOfMonth(month: number) {
-  if (month >= 4 && month <= 6) return 1
-  if (month >= 7 && month <= 9) return 2
-  if (month >= 10 && month <= 12) return 3
-  return 4
-}
-
-function monthMatchesPeriod(monthKey: string, period: Period, selectedMonth: string) {
-  if (!/^\d{4}-\d{2}$/.test(monthKey) || !/^\d{4}-\d{2}$/.test(selectedMonth)) return false
-  if (period === "M") return monthKey === selectedMonth
-
-  const [rawYear, rawMonth] = monthKey.split("-").map(Number)
-  const [selectedRawYear, selectedRawMonth] = selectedMonth.split("-").map(Number)
-  const monthDate = new Date(Date.UTC(rawYear, rawMonth - 1, 1))
-  const selectedDate = new Date(Date.UTC(selectedRawYear, selectedRawMonth - 1, 1))
-  if (fiscalYearOf(monthDate) !== fiscalYearOf(selectedDate)) return false
-  if (period === "Y") return true
-  return fiscalQuarterOfMonth(rawMonth) === fiscalQuarterOfMonth(selectedRawMonth)
-}
-
 function mapNumberValue(map: Record<string, number> | null | undefined, key: string) {
   const value = Number(map?.[key] ?? 0)
   return Number.isFinite(value) ? value : 0
@@ -817,6 +800,13 @@ function rowMatchesForecastFilter(row: LedgerRevenueRow, month: string, filter: 
   if (filter === "open") return rowMonthHighConfidence(row, month) + rowMonthOpen(row, month) > 0
   if (filter === "week-mismatch") return rowWeeklyMismatch(row, month) !== null
   return true
+}
+
+// 인박스/예측 필터를 표시 열(회계연도 12개월) 전체에 적용한다. 어느 한 달이라도 조건에
+// 맞으면 그 행을 통과시킨다 — selectedMonth 1개월만 검사하던 검수 사각(나머지 11개월 누락)을 없앤다.
+function rowMatchesForecastFilterInMonths(row: LedgerRevenueRow, months: string[], filter: RevForecastFilter) {
+  if (filter === "all") return true
+  return months.some((month) => rowMatchesForecastFilter(row, month, filter))
 }
 
 function WeeklySourceBadge({ source }: { source: RevWeeklySource }) {
@@ -3128,7 +3118,12 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
                 <span className="shrink-0 rounded-full bg-[#FBF1E0] px-1 text-[9px] font-bold text-[#7A520F]">장부</span>
               )}
               {group.mismatchCount > 0 && (
-                <AlertTriangle className="h-3 w-3 shrink-0 text-[#B43E3E]" aria-label={`불일치 ${group.mismatchCount}건`} />
+                <span
+                  title={`주차 합계 ≠ 월 금액 ${group.mismatchCount}행${group.mismatchMonths.length ? ` · 가장 이른 ${formatMonthLabel([...group.mismatchMonths].sort()[0])}` : ""}`}
+                  className="inline-flex shrink-0"
+                >
+                  <AlertTriangle className="h-3 w-3 text-[#B43E3E]" aria-label={`불일치 ${group.mismatchCount}건`} />
+                </span>
               )}
             </div>
             {(group.managers.length > 0 || group.regions.length > 0) && (
@@ -3751,7 +3746,9 @@ export default function SalesLedgerWorkbench() {
   const ledgerEntryRows = useMemo<LedgerRevenueRow[]>(() => {
     return ledgerEntries
       .filter((entry) => entry.entryStatus === "active")
-      .filter((entry) => monthMatchesPeriod(entry.month, period, selectedMonth))
+      // REV 매트릭스는 M/Q 토글과 무관하게 회계연도 12개월 전체를 보여준다. 시트행은 period로
+      // 안 거르는데 적용초안만 걸러 분기 밖 입력이 행째 사라지던 버그 → 표시 열(matrixMonths)로 스코프.
+      .filter((entry) => matrixMonths.includes(entry.month))
       .filter((entry) => team === "ALL" || entry.team === team)
       .map((entry) => ({
         id: `ledger-${entry.id}`,
@@ -3780,12 +3777,13 @@ export default function SalesLedgerWorkbench() {
         draftMetadata: entry.metadata,
         sourceDealId: entry.sourceDealId,
       }))
-  }, [ledgerEntries, period, selectedMonth, team])
+  }, [ledgerEntries, matrixMonths, team])
   const appliedDraftFallbackRows = useMemo<LedgerRevenueRow[]>(() => {
     return drafts
       .filter((draft) => draft.status === "applied")
       .filter((draft) => !draft.id.startsWith("local-"))
-      .filter((draft) => monthMatchesPeriod(draft.month, period, selectedMonth))
+      // 버그 #3과 동일: 적용초안은 M/Q가 아니라 표시 열(matrixMonths) 스코프. 분기 밖 적용분 증발 방지.
+      .filter((draft) => matrixMonths.includes(draft.month))
       .filter((draft) => team === "ALL" || draft.team === team)
       .map((draft) => ({
         id: `draft-${draft.id}`,
@@ -3814,7 +3812,7 @@ export default function SalesLedgerWorkbench() {
         draftMetadata: draft.metadata,
         sourceDealId: draft.sourceDealId,
       }))
-  }, [drafts, period, selectedMonth, team])
+  }, [drafts, matrixMonths, team])
   const appliedDraftRows = useMemo<LedgerRevenueRow[]>(() => {
     if (ledgerEntryRows.length === 0) return appliedDraftFallbackRows
 
@@ -3830,7 +3828,44 @@ export default function SalesLedgerWorkbench() {
   const replacementAppliedDraftRows = useMemo(() => {
     return appliedDraftRows.filter((row) => row.draftKind === "edit-row")
   }, [appliedDraftRows])
-  const rows = useMemo(() => [...appliedDraftRows, ...sheetRows], [appliedDraftRows, sheetRows])
+  // 적용된 수정(edit-row) 초안은 원본 시트행의 "그 달"을 대체한다(신규 추가가 아니라 정정).
+  // sourceDealId===시트행 id, draftMonth===대상 월. (dealId→월집합)으로 모아둔다.
+  const editRowOverrideMonths = useMemo(() => {
+    const map = new Map<string, Set<string>>()
+    for (const row of replacementAppliedDraftRows) {
+      const dealId = row.sourceDealId
+      const month = row.draftMonth
+      if (!dealId || !month) continue
+      const months = map.get(dealId) ?? new Set<string>()
+      months.add(month)
+      map.set(dealId, months)
+    }
+    return map
+  }, [replacementAppliedDraftRows])
+  // 원본 시트행 + 적용초안행을 합치되, 수정초안이 가리키는 (딜, 월) 셀은 원본에서 제거한다.
+  // 안 그러면 원본 금액 + 정정 금액이 그 달의 월·연간·그룹·합계행에 이중 계상된다
+  // (amount-change=대체, forecast-add=원본 0이라 무영향 — 둘 다 안전).
+  const rows = useMemo(() => {
+    if (editRowOverrideMonths.size === 0) return [...appliedDraftRows, ...sheetRows]
+    const adjustedSheetRows = sheetRows.map((row) => {
+      const overrides = editRowOverrideMonths.get(row.id)
+      if (!overrides || overrides.size === 0) return row
+      const monthlyPayments = { ...(row.monthlyPayments ?? {}) }
+      const monthlyConfirmed = { ...(row.monthlyConfirmed ?? {}) }
+      const monthlyHighConfidence = { ...(row.monthlyHighConfidence ?? {}) }
+      const monthlyRed = { ...(row.monthlyRed ?? {}) }
+      const weeklyPayments = { ...(row.weeklyPayments ?? {}) }
+      for (const month of overrides) {
+        delete monthlyPayments[month]
+        delete monthlyConfirmed[month]
+        delete monthlyHighConfidence[month]
+        delete monthlyRed[month]
+        delete weeklyPayments[month]
+      }
+      return { ...row, monthlyPayments, monthlyConfirmed, monthlyHighConfidence, monthlyRed, weeklyPayments }
+    })
+    return [...appliedDraftRows, ...adjustedSheetRows]
+  }, [appliedDraftRows, sheetRows, editRowOverrideMonths])
 
   const managerOptions = useMemo(() => {
     return Array.from(new Set(rows.map((row) => row.manager).filter((value): value is string => Boolean(value))))
@@ -3861,7 +3896,7 @@ export default function SalesLedgerWorkbench() {
       .filter((row) => revStatusFilter === "ALL" || row.status === revStatusFilter)
       .filter((row) => revDealTypeFilter === "ALL" || row.dealType === revDealTypeFilter)
       .filter((row) => revOriginFilter === "all" || row.ledgerOrigin === revOriginFilter)
-      .filter((row) => rowMatchesForecastFilter(row, selectedMonth, revForecastFilter))
+      .filter((row) => rowMatchesForecastFilterInMonths(row, matrixMonths, revForecastFilter))
       .filter((row) => {
         if (!needle) return true
         const originLabel = row.ledgerOrigin === "draft" ? "장부 입력 applied draft 신규 수정" : "시트 원본 sheet"
@@ -3903,6 +3938,7 @@ export default function SalesLedgerWorkbench() {
     revSortKey,
     revStatusFilter,
     rows,
+    matrixMonths,
     selectedMonth,
   ])
 
@@ -3975,18 +4011,20 @@ export default function SalesLedgerWorkbench() {
     [filteredRows, selectedMonth],
   )
   // 검수 인박스: 필터와 무관하게 전체 행 기준으로 세고, 칩 클릭으로 해당 필터에 점프.
+  // 검수 인박스 카운트는 표시 열(회계연도 12개월) 전체를 검사한다. 어느 한 달이라도 조건에
+  // 걸리는 행을 1건으로 센다 — 필터(rowMatchesForecastFilterInMonths)와 같은 기준이라 칩 숫자와
+  // 필터 결과 건수가 일치한다. selectedMonth 1개월만 세던 검수 사각을 없앰.
   const revInboxCounts = useMemo(() => {
     let weekMismatch = 0
     let monthOnly = 0
     let open = 0
     for (const row of rows) {
-      if (rowWeeklyMismatch(row, selectedMonth)) weekMismatch += 1
-      const amount = rowMonthAmount(row, selectedMonth)
-      if (amount > 0 && rowWeeklySplit(row, selectedMonth).source === "month-only") monthOnly += 1
-      if (rowMonthHighConfidence(row, selectedMonth) + rowMonthOpen(row, selectedMonth) > 0) open += 1
+      if (matrixMonths.some((month) => rowWeeklyMismatch(row, month))) weekMismatch += 1
+      if (matrixMonths.some((month) => rowMonthAmount(row, month) > 0 && rowWeeklySplit(row, month).source === "month-only")) monthOnly += 1
+      if (matrixMonths.some((month) => rowMonthHighConfidence(row, month) + rowMonthOpen(row, month) > 0)) open += 1
     }
     return { weekMismatch, monthOnly, open }
-  }, [rows, selectedMonth])
+  }, [rows, matrixMonths])
   const dshWeekProjection = useMemo(() => buildRevWeekProjection(rows, selectedMonth), [rows, selectedMonth])
   const dshPeakWeek = useMemo(
     () => dshWeekProjection.slice().sort((a, b) => b.total - a.total)[0],
@@ -4085,6 +4123,7 @@ export default function SalesLedgerWorkbench() {
           regions: [],
           hasDraft: false,
           mismatchCount: 0,
+          mismatchMonths: [],
           monthlyTotals: Object.fromEntries(matrixMonths.map((month) => [month, emptyMonthlyBucket()])),
           annualTotal: emptyMonthlyBucket(),
         }
@@ -4092,11 +4131,18 @@ export default function SalesLedgerWorkbench() {
       }
       group.rows.push(row)
       // 다중월 매트릭스: 12개월 각 셀에 이 행의 확도 분해를 누적(그룹 소계 1패스).
+      // 같은 패스에서 주차↔월 불일치도 12개월 전체로 검사한다(검수 배지 연도화).
+      let rowHasMismatch = false
       for (const month of matrixMonths) {
         const bucket = rowMonthBucket(row, month)
-        if (bucket.total <= 0) continue
-        addMonthlyBucket(group.monthlyTotals[month], bucket)
-        addMonthlyBucket(group.annualTotal, bucket)
+        if (bucket.total > 0) {
+          addMonthlyBucket(group.monthlyTotals[month], bucket)
+          addMonthlyBucket(group.annualTotal, bucket)
+        }
+        if (rowWeeklyMismatch(row, month)) {
+          rowHasMismatch = true
+          if (!group.mismatchMonths.includes(month)) group.mismatchMonths.push(month)
+        }
       }
       const monthAmount = rowMonthAmount(row, selectedMonth)
       group.monthTotal += monthAmount
@@ -4118,7 +4164,7 @@ export default function SalesLedgerWorkbench() {
       if (row.team && !group.teams.includes(row.team)) group.teams.push(row.team)
       if (row.region && !group.regions.includes(row.region)) group.regions.push(row.region)
       if (row.ledgerOrigin === "draft") group.hasDraft = true
-      if (rowWeeklyMismatch(row, selectedMonth)) group.mismatchCount += 1
+      if (rowHasMismatch) group.mismatchCount += 1
     }
     // 그룹 정렬은 그룹 대표값(합계·첫 값) 기준으로 다시 계산한다. 첫 등장 순서에 기대면
     // 정렬 키가 합계(월 금액·실적)일 때 그룹 순서가 행 최댓값 기준으로 어긋난다.
