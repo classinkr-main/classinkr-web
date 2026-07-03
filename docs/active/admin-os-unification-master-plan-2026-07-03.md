@@ -122,4 +122,6 @@ hardware_movements(원장) ────────┘                          
 
 원장·하드웨어 파트가 동시 진행 중이므로 아래 파일은 이번 트랙에서 **직접 수정 금지**(읽기·신규 파일 연결만): `components/admin/branch/SalesLedgerWorkbench.tsx`, `lib/repositories/sales-ledger-*.ts`, `lib/repositories/hardware-inventory.ts`, `lib/repositories/branch-hw.ts`, `app/api/admin/branch/*`. 연결이 필요하면 신규 모듈(예: `lib/admin/reconcile/*`)에서 import로 붙인다.
 
+교차 참조(2026-07-04): 원장 트랙의 [admin-money-mesh-2026-07-03.md](admin-money-mesh-2026-07-03.md)가 같은 문제로 수렴 — §2.1 HW↔REV 스키마 대사(GENERATED account_key·`v_hardware_rev_matches` 뷰·`rev_record_key`)는 이 트랙 B3 존재성 대사의 본질 버전이고, 그 Phase A 선행조건(SQL account_key 트윈)은 이 트랙 A2 마이그레이션이 이미 충족한다. B3 v1 패널은 §2.1 인박스가 서면 그 소비처로 수렴시키면 된다. §2.3 '확정 매출' 단일 정의 = 이 트랙 C2(KPI SSOT)와 동일 항목 — **운영자 캐논 결정(장부 confirmedMonthAmount 권장) 후 진행**으로 정렬. §2.2(수동 출고 매출 캡처)·§2.4(재고 SSOT)도 결정 대기 목록에 병합.
+
 머지 노트(2026-07-03): 이 트랙 분기 후 원장 트랙이 체크포인트 커밋들을 쌓았다(원장 안정화 + `lib/branch/account-key.ts`·`read-rev-deals.ts` 정식 커밋 포함). 이 트랙은 `account-key.ts`를 바이트 동일 복사로 선반영했으므로 머지 시 add/add는 무충돌로 수렴한다. 병합 순서는 원장 트랙 → 이 트랙 권장(REV 데이터셋 규약이 먼저 안착한 뒤 대사·스파인이 그 위에 얹히는 의존 방향).

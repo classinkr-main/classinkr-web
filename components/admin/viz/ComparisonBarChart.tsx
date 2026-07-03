@@ -3,16 +3,19 @@
 import {
   Bar,
   CartesianGrid,
+  Cell,
   ComposedChart,
   Legend,
   Line,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts"
 
-import { CHART, gridProps } from "./theme"
+import { ChartTooltip } from "./ChartTheme"
+import { CHART, axisTick, cursorLine, gridProps } from "./theme"
 
 // 이중축 Bar(≤2, 좌축) + Line(우축) 콤보 — campaigns 월별 추이/광고비 vs 리드처럼
 // "금액 막대 + 건수 선" 비교에 쓰는 공용 래퍼. 다크 툴팁·그리드·축 스타일은 viz 토큰 고정.
@@ -42,6 +45,21 @@ export interface ComparisonBarChartProps<Row extends object = Record<string, unk
   showLegend?: boolean
   /** 커서 하이라이트 색 (기본: 잉크 4%) */
   cursorFill?: string
+  /** 단일 막대 시리즈(bars[0])에 행별 색 적용 — 이번 달 강조 등. bars가 2개 이상이면 무시. */
+  cellColor?: (row: Row, index: number) => string
+  /** 목표선(점선) y값 — 없으면 미표시 */
+  goalValue?: number
+  formatGoalLabel?: (value: number) => string
+  /**
+   * 툴팁 스타일 — "dark"(기본, campaigns 등): 잉크 배경 커스텀 툴팁 + stroke 축.
+   * "light": 기존 CRM 매출 추이 차트와 동일한 흰 배경 ChartTooltip + axisTick(무테두리) 스타일.
+   * light에서는 line/showLegend 미지원(단일 막대 시리즈 전용 시각 보존 목적).
+   */
+  tooltipVariant?: "dark" | "light"
+  /** ComposedChart 좌측 여백 — light variant 기존 시각(-8) 보존용 */
+  leftMargin?: number
+  /** 좌축(bars) domain — 목표선이 항상 보이도록 상한 확보 등 */
+  leftDomain?: [number, number]
 }
 
 const DARK_TOOLTIP_STYLE = {
@@ -66,7 +84,14 @@ export function ComparisonBarChart<Row extends object>({
   labelFormatter,
   showLegend = false,
   cursorFill = "rgba(17,17,16,0.04)",
+  cellColor,
+  goalValue,
+  formatGoalLabel,
+  tooltipVariant = "dark",
+  leftMargin = 0,
+  leftDomain,
 }: ComparisonBarChartProps<Row>) {
+  const isLight = tooltipVariant === "light"
   const seriesByName = new Map<string, ComparisonBarSeries>([
     ...bars.map((series) => [series.label, series] as const),
     ...(line ? [[line.label, line] as const] : []),
@@ -75,16 +100,21 @@ export function ComparisonBarChart<Row extends object>({
   return (
     <div className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <ComposedChart data={data} margin={{ top: 8, right: 8, left: leftMargin, bottom: 0 }}>
           <CartesianGrid {...gridProps} />
-          <XAxis dataKey={xKey} fontSize={11} stroke={CHART.warmGray} tickLine={false} interval={0} />
+          <XAxis
+            dataKey={xKey}
+            tickLine={false}
+            interval={0}
+            {...(isLight ? { tick: axisTick, axisLine: false } : { fontSize: 11, stroke: CHART.warmGray })}
+          />
           <YAxis
             yAxisId="left"
-            fontSize={11}
-            stroke={CHART.warmGray}
             tickLine={false}
             width={52}
             tickFormatter={formatLeftTick}
+            domain={leftDomain}
+            {...(isLight ? { tick: axisTick, axisLine: false } : { fontSize: 11, stroke: CHART.warmGray })}
           />
           {line ? (
             <YAxis
@@ -98,16 +128,20 @@ export function ComparisonBarChart<Row extends object>({
               tickFormatter={formatRightTick}
             />
           ) : null}
-          <Tooltip
-            cursor={{ fill: cursorFill }}
-            contentStyle={DARK_TOOLTIP_STYLE}
-            labelFormatter={labelFormatter}
-            formatter={(value, name) => {
-              const numeric = typeof value === "number" ? value : Number(value ?? 0)
-              const series = seriesByName.get(String(name))
-              return [series?.formatValue ? series.formatValue(numeric) : COUNT.format(numeric), String(name)]
-            }}
-          />
+          {isLight ? (
+            <Tooltip content={<ChartTooltip suffix="" />} cursor={cursorLine} />
+          ) : (
+            <Tooltip
+              cursor={{ fill: cursorFill }}
+              contentStyle={DARK_TOOLTIP_STYLE}
+              labelFormatter={labelFormatter}
+              formatter={(value, name) => {
+                const numeric = typeof value === "number" ? value : Number(value ?? 0)
+                const series = seriesByName.get(String(name))
+                return [series?.formatValue ? series.formatValue(numeric) : COUNT.format(numeric), String(name)]
+              }}
+            />
+          )}
           {showLegend ? (
             <Legend
               iconType="circle"
@@ -116,7 +150,7 @@ export function ComparisonBarChart<Row extends object>({
               wrapperStyle={{ paddingTop: 8 }}
             />
           ) : null}
-          {bars.map((series) => (
+          {bars.map((series, seriesIndex) => (
             <Bar
               key={series.key}
               yAxisId="left"
@@ -125,8 +159,27 @@ export function ComparisonBarChart<Row extends object>({
               fill={series.color}
               radius={[4, 4, 0, 0]}
               maxBarSize={maxBarSize}
-            />
+            >
+              {cellColor && seriesIndex === 0
+                ? data.map((row, index) => <Cell key={index} fill={cellColor(row, index)} />)
+                : null}
+            </Bar>
           ))}
+          {goalValue != null ? (
+            <ReferenceLine
+              yAxisId="left"
+              y={goalValue}
+              stroke={CHART.danger}
+              strokeDasharray="4 4"
+              strokeWidth={1.5}
+              label={{
+                value: formatGoalLabel ? formatGoalLabel(goalValue) : `목표 ${goalValue}`,
+                position: "insideTopRight",
+                fontSize: 10,
+                fill: CHART.danger,
+              }}
+            />
+          ) : null}
           {line ? (
             <Line
               yAxisId="right"

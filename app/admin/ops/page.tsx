@@ -427,7 +427,7 @@ export default function AdminOpsPage() {
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
-              href="/admin/chatbot"
+              href="/admin/docs?tab=gaps"
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-black/[0.08] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4]"
             >
               챗봇 운영

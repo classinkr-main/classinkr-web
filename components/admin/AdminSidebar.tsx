@@ -34,11 +34,6 @@ import {
 // hover warm-up은 페이지가 실제 호출하는 URL과 캐시 키(쿼리스트링 포함)가 완전히 같아야 적중한다.
 // 날짜 파라미터가 붙는 URL은 hover 시점에 페이지와 같은 계산식으로 만들어야 하므로 함수 항목을 허용한다.
 
-// /admin/chatbot 페이지의 dateOnlyOffset(days)와 동일한 계산식 (기본 기간 30일).
-function chatbotStatsFromDate(days = 30) {
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-}
-
 // /admin/overview 대시보드와 동일한 계산식 — 현재 월 + (7일 뒤가 다른 달에 걸치면) 그 달.
 function overviewCalendarUrls() {
   const now = new Date()
@@ -89,13 +84,6 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
   ],
   "/admin/blog": ["/api/admin/blog", "/api/admin/blog?trash=1"],
   "/admin/events": ["/api/admin/events"],
-  "/admin/chatbot": () => [
-    // 챗봇 페이지 기본 기간(30일)의 from 쿼리와 캐시 키를 맞춘다.
-    `/api/admin/chatbot/stats?from=${chatbotStatsFromDate()}`,
-    "/api/admin/chatbot/questions?limit=10",
-    "/api/admin/docs/analytics?days=30",
-    "/api/admin/docs/alpha-readiness",
-  ],
   "/admin/docs": [
     "/api/admin/docs",
     "/api/admin/docs/analytics?days=30",
@@ -104,9 +92,11 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/docs/alpha-readiness",
   ],
   // 문서 보강 큐 nav 항목은 탭 딥링크(/admin/docs?tab=gaps)를 직접 가리킨다 — warm 키도 href와 동일해야 적중.
+  // 챗봇 운영 대시보드 흡수 후 DocsGapsPanel이 /api/admin/chatbot/stats(질문 패턴)도 읽으므로 함께 데운다.
   "/admin/docs?tab=gaps": [
     "/api/admin/docs/alpha-readiness",
     "/api/admin/docs/gaps",
+    "/api/admin/chatbot/stats",
   ],
   "/admin/branch": [
     "/api/admin/branch/summary?team=ALL&period=Q",
@@ -159,7 +149,7 @@ const MOBILE_PRIMARY_HREFS = [
   "/admin/overview",
   "/admin/crm",
   "/admin/quotes",
-  "/admin/chatbot",
+  "/admin/docs?tab=gaps",
 ] as const
 
 const ROLE_LABEL: Record<AdminRole, string> = {

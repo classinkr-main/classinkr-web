@@ -24,7 +24,7 @@
 - `components/ui/FloatingChatbot.tsx` — 공개 위젯: NDJSON 스트림 소비, teaser 렌더, 퍼널 계측, 핸드오프 CTA.
 - `components/ui/useChatbotTeaser.ts` / `ChatbotTeaser.tsx` — 체류 적립 훅(sessionStorage·visible 탭만) + 미니멀 칩 UI.
 - `app/api/chatbot/{query,query/stream,feedback,recommended-questions}/route.ts` — 4개 공개 라우트(rate-limit 12/분, stream은 NDJSON).
-- `app/admin/chatbot/page.tsx` — 어드민 "챗봇 운영" 콘솔.
+- `app/admin/chatbot/page.tsx` — `/admin/docs?tab=gaps` redirect 스텁(북마크 호환용). 챗봇 운영 콘솔은 문서 센터 "보강 큐" 탭(`components/admin/docs/DocsGapsPanel.tsx`)이 상위집합으로 흡수 — 질문 패턴·알파 준비도·골든셋 평가.
 - `lib/classin-positioning.ts` — `chatbot.answerPrinciples`/`brandVoice`/스타터의 SSOT(프롬프트가 여기서 주입).
 
 ## 3. 가장 중요한 업무
