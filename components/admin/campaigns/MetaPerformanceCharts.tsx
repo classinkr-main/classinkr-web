@@ -1,18 +1,8 @@
 "use client"
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
-import { CHART, gridProps } from "../viz/theme"
+import { CHART } from "../viz/theme"
+import { ComparisonBarChart } from "../viz/ComparisonBarChart"
+import { RankedHorizontalBars } from "../viz/RankedHorizontalBars"
 
 const COUNT = new Intl.NumberFormat("ko-KR")
 
@@ -57,14 +47,6 @@ export interface MetaPerformanceChartsProps {
   currency?: string
 }
 
-const TOOLTIP_STYLE = {
-  backgroundColor: CHART.tooltipBg,
-  border: "none",
-  borderRadius: 12,
-  color: "white",
-  fontSize: 12,
-} as const
-
 function CardShell({
   title,
   caption,
@@ -95,6 +77,14 @@ function EmptyState({ message }: { message: string }) {
   )
 }
 
+// 툴팁 라벨: 잘린 캠페인명 → 전체명 복원 (두 차트 공통 패턴).
+function fullNameLabel(label: unknown, payload: ReadonlyArray<{ payload?: unknown }>) {
+  const item = payload?.[0]?.payload as { fullName?: string } | undefined
+  return item?.fullName ?? String(label)
+}
+
+// 차트 본체는 공용 래퍼(viz/ComparisonBarChart·RankedHorizontalBars) 사용 —
+// 데이터 정렬/중앙값 판정과 통화 포맷만 이 파일의 책임.
 export function MetaPerformanceCharts({ rows, currency = "USD" }: MetaPerformanceChartsProps) {
   const safeRows = Array.isArray(rows) ? rows : []
 
@@ -123,81 +113,29 @@ export function MetaPerformanceCharts({ rows, currency = "USD" }: MetaPerformanc
       over: cplMedian != null && row.cpl > cplMedian,
     }))
 
+  const compactTick = (value: number) =>
+    new Intl.NumberFormat(currency === "KRW" ? "ko-KR" : "en-US", {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(value)
+
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <CardShell title="캠페인별 광고비 vs 리드" caption="상위 6개 캠페인">
         {spendData.length === 0 ? (
           <EmptyState message="표시할 데이터가 없습니다." />
         ) : (
-          <div className="h-[260px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={spendData} margin={{ top: 8, right: 8, bottom: 4, left: 4 }}>
-                <CartesianGrid {...gridProps} />
-                <XAxis
-                  dataKey="label"
-                  fontSize={11}
-                  stroke={CHART.warmGray}
-                  tickLine={false}
-                  interval={0}
-                />
-                <YAxis
-                  yAxisId="spend"
-                  fontSize={11}
-                  stroke={CHART.warmGray}
-                  tickLine={false}
-                  width={52}
-                  tickFormatter={(value: number) =>
-                    new Intl.NumberFormat(currency === "KRW" ? "ko-KR" : "en-US", {
-                      notation: "compact",
-                      maximumFractionDigits: 1,
-                    }).format(value)
-                  }
-                />
-                <YAxis
-                  yAxisId="leads"
-                  orientation="right"
-                  fontSize={11}
-                  stroke={CHART.warmGray}
-                  tickLine={false}
-                  width={36}
-                  allowDecimals={false}
-                />
-                <Tooltip
-                  cursor={{ fill: "rgba(8,71,52,0.04)" }}
-                  contentStyle={TOOLTIP_STYLE}
-                  labelFormatter={(_label, payload) => {
-                    const item = payload?.[0]?.payload as { fullName?: string } | undefined
-                    return item?.fullName ?? String(_label)
-                  }}
-                  formatter={(value, name) => {
-                    const numeric = typeof value === "number" ? value : Number(value)
-                    if (name === "광고비") {
-                      return [money(numeric, currency), name]
-                    }
-                    return [COUNT.format(numeric), name]
-                  }}
-                />
-                <Bar
-                  yAxisId="spend"
-                  dataKey="spend"
-                  name="광고비"
-                  fill={CHART.danger}
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={42}
-                />
-                <Line
-                  yAxisId="leads"
-                  type="monotone"
-                  dataKey="leads"
-                  name="리드"
-                  stroke={CHART.brand}
-                  strokeWidth={2}
-                  dot={{ r: 3, fill: CHART.brand }}
-                  activeDot={{ r: 4 }}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
+          <ComparisonBarChart
+            data={spendData}
+            xKey="label"
+            bars={[{ key: "spend", label: "광고비", color: CHART.danger, formatValue: (v) => money(v, currency) }]}
+            line={{ key: "leads", label: "리드", color: CHART.brand, formatValue: (v) => COUNT.format(v) }}
+            height={260}
+            maxBarSize={42}
+            formatLeftTick={compactTick}
+            labelFormatter={fullNameLabel}
+            cursorFill="rgba(8,71,52,0.04)"
+          />
         )}
       </CardShell>
 
@@ -205,50 +143,16 @@ export function MetaPerformanceCharts({ rows, currency = "USD" }: MetaPerformanc
         {cplData.length === 0 ? (
           <EmptyState message="CPL 데이터가 없습니다." />
         ) : (
-          <div className="h-[260px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={cplData}
-                layout="vertical"
-                margin={{ top: 4, right: 12, bottom: 4, left: 4 }}
-              >
-                <CartesianGrid stroke={CHART.grid} horizontal={false} />
-                <XAxis
-                  type="number"
-                  fontSize={11}
-                  stroke={CHART.warmGray}
-                  tickLine={false}
-                  tickFormatter={(value: number) => money(value, currency)}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  width={92}
-                  fontSize={11}
-                  stroke={CHART.warmGray}
-                  tickLine={false}
-                  interval={0}
-                />
-                <Tooltip
-                  cursor={{ fill: "rgba(8,71,52,0.04)" }}
-                  contentStyle={TOOLTIP_STYLE}
-                  labelFormatter={(_label, payload) => {
-                    const item = payload?.[0]?.payload as { fullName?: string } | undefined
-                    return item?.fullName ?? String(_label)
-                  }}
-                  formatter={(value, name) => [
-                    money(typeof value === "number" ? value : Number(value), currency),
-                    name,
-                  ]}
-                />
-                <Bar dataKey="cpl" name="CPL" radius={[0, 4, 4, 0]} maxBarSize={22}>
-                  {cplData.map((entry) => (
-                    <Cell key={entry.id} fill={entry.over ? CHART.danger : CHART.brand} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <RankedHorizontalBars
+            rows={cplData}
+            labelKey="label"
+            valueKey="cpl"
+            name="CPL"
+            formatValue={(value) => money(value, currency)}
+            cellColor={(row) => (row.over ? CHART.danger : CHART.brand)}
+            height={260}
+            labelFormatter={fullNameLabel}
+          />
         )}
         {cplMedian != null ? (
           <p className="mt-3 text-[11px] text-[#1a1a1a]/40 tabular-nums">
