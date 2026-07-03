@@ -9,6 +9,7 @@ import {
   ArrowUpRight,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Database,
@@ -359,6 +360,28 @@ const MATRIX_PRODUCT_W = 56
 const MATRIX_MONTH_W = 64
 const MATRIX_WEEK_W = 34 // 월 확장 시 w1~w5 각 칸
 const MATRIX_ANNUAL_W = 96
+// 매트릭스 행 밀도(표시만 — 셀 폭·편집 로직 불변). localStorage에 저장해 재방문 시 복원.
+type MatrixDensity = "condensed" | "regular" | "relaxed"
+const MATRIX_DENSITY_STORAGE_KEY = "classin:rev-matrix-density"
+const MATRIX_DENSITY_OPTIONS: Array<{ id: MatrixDensity; label: string; title: string }> = [
+  { id: "condensed", label: "좁게", title: "행 높이를 좁혀 더 많은 행을 한 화면에 봅니다" },
+  { id: "regular", label: "보통", title: "기본 행 높이" },
+  { id: "relaxed", label: "넓게", title: "행 높이를 넓혀 여유 있게 봅니다" },
+]
+// 그룹 소계행(기본 h-8)·딜행(기본 h-7) 높이 클래스. 셀 내부 폰트 크기·패딩·sticky 배경은 그대로 둔다.
+const MATRIX_GROUP_ROW_HEIGHT: Record<MatrixDensity, string> = {
+  condensed: "h-6",
+  regular: "h-8",
+  relaxed: "h-9",
+}
+const MATRIX_DEAL_ROW_HEIGHT: Record<MatrixDensity, string> = {
+  condensed: "h-6",
+  regular: "h-7",
+  relaxed: "h-9",
+}
+function isMatrixDensity(value: unknown): value is MatrixDensity {
+  return value === "condensed" || value === "regular" || value === "relaxed"
+}
 // 확도 = 글자색(배경 아님). 셀 배경은 흰색 고정, 확정/고확도/불일치는 bold.
 const MATRIX_TONE = {
   confirmed: "font-bold text-[#084734]",
@@ -376,6 +399,27 @@ function matrixBucketTone(bucket: RevMonthlyBucket): keyof typeof MATRIX_TONE {
   if (bucket.confirmed === 0 && bucket.high === bucket.total) return "high"
   if (bucket.confirmed === 0 && bucket.high === 0) return "open"
   return "mixed"
+}
+
+// 매트릭스 확도 색 레전드. 셀 글자색(MATRIX_TONE)과 1:1 대응 — 값 자체는 바꾸지 않는다.
+const MATRIX_TONE_LEGEND_ITEMS: Array<{ label: string; color: string }> = [
+  { label: "확정", color: "#084734" },
+  { label: "고확도", color: "#1E5DA8" },
+  { label: "예정", color: "#A8741A" },
+  { label: "불일치", color: "#B43E3E" },
+]
+function MatrixToneLegend() {
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-[#615D59]">
+      {MATRIX_TONE_LEGEND_ITEMS.map((item) => (
+        <span key={item.label} className="inline-flex items-center gap-1">
+          <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+          {item.label}
+        </span>
+      ))}
+      <span>· 잠금=시트확정</span>
+    </span>
+  )
 }
 
 const DRAFT_OPERATIONS: Array<{ id: DraftOperation; label: string; description: string }> = [
@@ -3022,6 +3066,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   selected,
   onSelect,
   onToggle,
+  density = "regular",
 }: {
   group: RevCustomerGroup
   months: string[]
@@ -3030,6 +3075,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   selected: boolean
   onSelect: (key: string) => void
   onToggle: (key: string) => void
+  density?: MatrixDensity
 }) {
   const rowBg = selected ? "bg-[#ECFDF5]" : "bg-white group-hover:bg-[#FAFAF8]"
   const annual = group.annualTotal
@@ -3053,7 +3099,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
       tabIndex={0}
       title="클릭: 우측 요약 · ▸ 펼치기: 하위 딜행"
       aria-label={`${group.customer} ${group.rows.length}건 — 우측 요약 열기`}
-      className={`group h-8 cursor-pointer border-t border-[#EDECE8] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 ${
+      className={`group ${MATRIX_GROUP_ROW_HEIGHT[density]} cursor-pointer border-t border-[#EDECE8] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 ${
         selected ? "bg-[#ECFDF5]" : "hover:bg-[#FAFAF8]"
       }`}
     >
@@ -3146,6 +3192,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   onOpen,
   editor = null,
   pendingByCell = null,
+  density = "regular",
 }: {
   view: RevRowView
   grouped: boolean
@@ -3156,6 +3203,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   onOpen: (row: LedgerRevenueRow) => void
   editor?: MatrixEditor | null
   pendingByCell?: Map<string, MatrixPendingDraft> | null
+  density?: MatrixDensity
 }) {
   const { row, draftRow, productCategory, monthlyByMonth } = view
   const rowBg = active
@@ -3194,7 +3242,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
       }
     : null
   return (
-    <tr className={`group h-7 border-t border-[#F2F1EE] transition ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FBFBFA] hover:bg-[#FAFAF8]" : "hover:bg-[#FAFAF8]"}`}>
+    <tr className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FBFBFA] hover:bg-[#FAFAF8]" : "hover:bg-[#FAFAF8]"}`}>
       <td
         className={`sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] pr-2 ${grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2"} ${rowBg}`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
@@ -3377,6 +3425,17 @@ export default function SalesLedgerWorkbench() {
   const [expandedRevGroups, setExpandedRevGroups] = useState<Set<string>>(() => new Set())
   // 매트릭스: 월 헤더 클릭 시 그 달만 w1~w5 5칸으로 확장(기본은 전부 요약 1칸).
   const [expandedRevMonths, setExpandedRevMonths] = useState<Set<string>>(() => new Set())
+  // 매트릭스 행 밀도(좁게/보통/넓게). SSR 하이드레이션 안전을 위해 기본값으로 시작하고 마운트 후 복원.
+  const [matrixDensity, setMatrixDensity] = useState<MatrixDensity>("regular")
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const saved = window.localStorage.getItem(MATRIX_DENSITY_STORAGE_KEY)
+    if (isMatrixDensity(saved)) setMatrixDensity(saved)
+  }, [])
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    window.localStorage.setItem(MATRIX_DENSITY_STORAGE_KEY, matrixDensity)
+  }, [matrixDensity])
   // 기존 목표대비/주차별/담당자·상품군 패널은 접이식 보조 패널로 강등(기본 접힘). 1차 뷰는 매트릭스.
   const [revAuxOpen, setRevAuxOpen] = useState(false)
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(true)
@@ -5224,9 +5283,12 @@ export default function SalesLedgerWorkbench() {
                       </button>
                     )}
                   </div>
-                  <p className="mt-1 text-[11px] text-[#615D59]">
-                    검색 결과 {filteredRows.length.toLocaleString("ko-KR")}행 · 고객 {revCustomerGroups.length.toLocaleString("ko-KR")}곳 · {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")}곳 표시 · DB 신규 반영 {additiveAppliedDraftRows.length.toLocaleString("ko-KR")}건 포함
-                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <p className="text-[11px] text-[#615D59]">
+                      검색 결과 {filteredRows.length.toLocaleString("ko-KR")}행 · 고객 {revCustomerGroups.length.toLocaleString("ko-KR")}곳 · {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")}곳 표시 · DB 신규 반영 {additiveAppliedDraftRows.length.toLocaleString("ko-KR")}건 포함
+                    </p>
+                    <MatrixToneLegend />
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" aria-label="상품군 필터">
@@ -5312,6 +5374,22 @@ export default function SalesLedgerWorkbench() {
                     <ChevronRight className={`h-3.5 w-3.5 transition-transform ${allRevGroupsExpanded ? "rotate-90" : ""}`} />
                     {allRevGroupsExpanded ? "모두 접기" : "모두 펼치기"}
                   </button>
+                  <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" aria-label="매트릭스 행 밀도">
+                    {MATRIX_DENSITY_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setMatrixDensity(option.id)}
+                        title={option.title}
+                        aria-pressed={matrixDensity === option.id}
+                        className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold transition ${
+                          matrixDensity === option.id ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59] hover:text-[#111110]"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
               {advancedFiltersOpen && (
@@ -5585,7 +5663,17 @@ export default function SalesLedgerWorkbench() {
                 <div className="space-y-2 p-3 md:hidden">
                   {filteredRows.length === 0 && (
                     <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-6 text-center text-[12px] text-[#615D59]">
-                      조건에 맞는 REV 행이 없습니다.
+                      <p>조건에 맞는 REV 행이 없습니다 · 필터/검색을 초기화해 보세요</p>
+                      {revControlsDirty && (
+                        <button
+                          type="button"
+                          onClick={resetRevFilters}
+                          className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          초기화
+                        </button>
+                      )}
                     </div>
                   )}
                   {visibleGroups.map((group) => {
@@ -5707,18 +5795,20 @@ export default function SalesLedgerWorkbench() {
                             <th
                               key={column.month}
                               colSpan={isExpanded ? 5 : 1}
-                              className={`border-l border-[#E7E5E1] px-0.5 text-center align-middle ${column.current ? "bg-[#ECFDF5]" : "bg-[#FAFAF8]"}`}
+                              className={`border-l border-[#E7E5E1] px-0.5 text-center align-middle ${column.current ? "bg-[#ECFDF5]" : isExpanded ? "bg-[#F6F5F4]" : "bg-[#FAFAF8]"}`}
                               style={{ width, minWidth: width }}
                             >
                               <button
                                 type="button"
                                 onClick={() => toggleRevMonth(column.month)}
                                 aria-expanded={isExpanded}
-                                title={`${formatMonthLabel(column.month)} ${isExpanded ? "주차 접기" : "주차(W1~W5) 펼치기"} · 합계 ${formatMoney(column.total)}`}
-                                className={`inline-flex w-full items-center justify-center gap-0.5 py-1 font-bold transition hover:text-[#084734] ${column.current ? "text-[#084734]" : "text-[#615D59]"}`}
+                                title={`클릭: 주차(w1~w5) 펼치기/접기 · ${formatMonthLabel(column.month)} 합계 ${formatMoney(column.total)}`}
+                                className={`inline-flex w-full items-center justify-center gap-0.5 rounded py-1 font-bold transition hover:bg-[#F0F0EC] hover:text-[#084734] ${
+                                  column.current ? "text-[#084734]" : "text-[#615D59]"
+                                }`}
                               >
                                 {column.label}
-                                <ChevronRight className={`h-2.5 w-2.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                                <ChevronDown className={`h-2.5 w-2.5 shrink-0 text-[#A39E98] transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                               </button>
                               {isExpanded && (
                                 <div className="grid grid-cols-5 gap-0 pb-0.5 text-[8.5px] font-semibold normal-case text-[#A39E98]">
@@ -5741,8 +5831,20 @@ export default function SalesLedgerWorkbench() {
                     <tbody>
                       {filteredRows.length === 0 && (
                         <tr>
-                          <td colSpan={matrixColSpan} className="px-4 py-12 text-center text-[#615D59]">
-                            조건에 맞는 REV 행이 없습니다.
+                          <td colSpan={matrixColSpan} className="p-4">
+                            <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-6 text-center text-[12px] text-[#615D59]">
+                              <p>조건에 맞는 REV 행이 없습니다 · 필터/검색을 초기화해 보세요</p>
+                              {revControlsDirty && (
+                                <button
+                                  type="button"
+                                  onClick={resetRevFilters}
+                                  className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5" />
+                                  초기화
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )}
@@ -5760,6 +5862,7 @@ export default function SalesLedgerWorkbench() {
                                 selected={selectedGroup?.key === group.key}
                                 onSelect={selectRevGroup}
                                 onToggle={toggleRevGroup}
+                                density={matrixDensity}
                               />
                             ) : null}
                             {(!grouped || expanded) &&
@@ -5778,6 +5881,7 @@ export default function SalesLedgerWorkbench() {
                                     onOpen={loadDealDetail}
                                     editor={matrixEditor}
                                     pendingByCell={pendingByCell}
+                                    density={matrixDensity}
                                   />
                                 )
                               })}
