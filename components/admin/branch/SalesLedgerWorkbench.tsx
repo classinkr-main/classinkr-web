@@ -76,7 +76,7 @@ type DraftKind = "new-row" | "edit-row"
 type DraftStatus = "draft" | "checked" | "applied" | "cancelled"
 type DraftStatusFilter = DraftStatus | "open" | "all"
 type DraftQueueMode = "server" | "local"
-type RevSortKey = "customer" | "product" | "manager" | "team" | "region" | "month" | "revenue" | "origin"
+type RevSortKey = "customer" | "product" | "manager" | "team" | "region" | "month" | "revenue" | "annual" | "origin"
 type RevSortDirection = "asc" | "desc"
 type RevProductCategory = "all" | "software" | "hardware" | "unknown"
 type RevOriginFilter = "all" | "sheet" | "draft"
@@ -357,6 +357,7 @@ const REV_SORT_LABELS: Record<RevSortKey, string> = {
   region: "지역",
   month: "선택월",
   revenue: "실적",
+  annual: "연간합계",
   origin: "상태",
 }
 const REV_PRODUCT_FILTERS: Array<{ id: RevProductCategory; label: string }> = [
@@ -441,6 +442,8 @@ function MatrixToneLegend() {
         </span>
       ))}
       <span>· 잠금=시트확정/장부반영</span>
+      <span className="hidden 2xl:inline">· 합산 셀 주황=확도 혼합 포함</span>
+      <span className="hidden text-[#A39E98] 2xl:inline">· Enter 편집 · Tab 이동 · Ctrl+D 아래 복사 · Esc 취소</span>
     </span>
   )
 }
@@ -1496,23 +1499,92 @@ const WEEK_SERIES: Array<{
   { key: "monthlyOnly", label: "월합계만", color: "#D9D6D0" },
 ]
 
-// 각 스택 세그먼트에 세로 그라디언트(위=살짝 밝게, 아래=베이스)를 입혀 평면 막대에 깊이를 준다.
-// 색상은 DESIGN.md 상태 스케일(확정=그린, 고확도=인포블루, 예정=워닝앰버)의 의미를 유지하고 명도만 미세 조정.
+// 각 스택 세그먼트에 세로 그라디언트(위=선명한 신호색, 아래=베이스)를 입혀 평면 막대에 깊이를 준다.
+// 색상은 DESIGN.md 상태 스케일(확정=그린, 고확도=인포블루, 예정=워닝앰버)의 의미를 유지하되,
+// 확정↔고확도 경계가 흐려 보이지 않도록 sheen 톤의 채도를 올려 두 색의 색상거리를 벌렸다.
+// (실제 경계 가독성은 아래 makeStackSegmentShape의 흰색 세퍼레이터 스트로크가 1차로 보장한다.)
 const WEEK_SERIES_GRADIENT: Record<
   "confirmed" | "highConfidence" | "open" | "inferred" | "monthlyOnly",
   { id: string; from: string; to: string }
 > = {
-  confirmed: { id: "rwfGradConfirmed", from: "#0B6249", to: "#084734" },
-  highConfidence: { id: "rwfGradHigh", from: "#2C74C4", to: "#1E5DA8" },
-  open: { id: "rwfGradOpen", from: "#C48A28", to: "#A8741A" },
-  inferred: { id: "rwfGradInferred", from: "#828A96", to: "#6B7280" },
-  monthlyOnly: { id: "rwfGradMonthly", from: "#E7E4DE", to: "#D9D6D0" },
+  confirmed: { id: "rwfGradConfirmed", from: "#12A574", to: "#084734" },
+  highConfidence: { id: "rwfGradHigh", from: "#4C86D6", to: "#1E5DA8" },
+  open: { id: "rwfGradOpen", from: "#DDA23C", to: "#A8741A" },
+  inferred: { id: "rwfGradInferred", from: "#98A1AC", to: "#6B7280" },
+  monthlyOnly: { id: "rwfGradMonthly", from: "#EDEAE4", to: "#D9D6D0" },
 }
 
-// 진행 바(확정/월목표, 확정+고확도/월목표)용 가로 그라디언트.
+// 진행 바(확정/월목표, 확정+고확도/월목표)는 막대 차트와 같은 톤을 그대로 재사용 — 색 두 벌 관리 방지.
 const PROGRESS_GRADIENT = {
-  confirmed: { from: "#0B6249", to: "#084734" },
-  covered: { from: "#2C74C4", to: "#1E5DA8" },
+  confirmed: WEEK_SERIES_GRADIENT.confirmed,
+  covered: WEEK_SERIES_GRADIENT.highConfidence,
+}
+
+// SVG 텍스트는 DOM 측정 없이 폭을 알 수 없어 근사치를 쓴다 — 한글/CJK 글리프는 라틴 문자보다 넓으므로 가중치를 분리.
+function estimateTextWidth(text: string, fontSize: number) {
+  let width = 0
+  for (const ch of text) {
+    const isWide = /[ㄱ-힝一-鿿]/.test(ch)
+    width += isWide ? fontSize * 1.05 : fontSize * 0.62
+  }
+  return width
+}
+
+// 스택 순서(아래→위) 단일 소스 — WEEK_SERIES와 동일 순서라 Bar JSX 나열 순서와도 일치해야 한다.
+const STACK_KEYS_BOTTOM_TO_TOP: Array<"confirmed" | "highConfidence" | "open" | "inferred" | "monthlyOnly"> = [
+  "confirmed",
+  "highConfidence",
+  "open",
+  "inferred",
+  "monthlyOnly",
+]
+
+function roundedRectPath(x: number, y: number, width: number, height: number, corner: { tl: number; tr: number; bl: number; br: number }) {
+  const w = Math.max(width, 0.01)
+  const h = Math.max(height, 0.01)
+  const cap = Math.min(w / 2, h / 2)
+  const tl = Math.max(0, Math.min(corner.tl, cap))
+  const tr = Math.max(0, Math.min(corner.tr, cap))
+  const bl = Math.max(0, Math.min(corner.bl, cap))
+  const br = Math.max(0, Math.min(corner.br, cap))
+  return [
+    `M${x + tl},${y}`,
+    `H${x + w - tr}`,
+    tr ? `A${tr},${tr} 0 0 1 ${x + w},${y + tr}` : "",
+    `V${y + h - br}`,
+    br ? `A${br},${br} 0 0 1 ${x + w - br},${y + h}` : "",
+    `H${x + bl}`,
+    bl ? `A${bl},${bl} 0 0 1 ${x},${y + h - bl}` : "",
+    `V${y + tl}`,
+    tl ? `A${tl},${tl} 0 0 1 ${x + tl},${y}` : "",
+    "Z",
+  ]
+    .filter(Boolean)
+    .join(" ")
+}
+
+// 주차별로 실제 값이 있는 세그먼트만 놓고 맨 아래/맨 위를 판정해 그때그때 둥근 모서리를 준다.
+// (예: 확정 없이 고확도만 있는 주는 고확도 세그먼트가 아래쪽 둥근 모서리를 대신 받는다 — 항상 알약 모양 유지.)
+// 세그먼트 사이 흰 스트로크는 그라디언트 경계가 흐려 보이는 것을 막는 1차 가독성 장치.
+function makeStackSegmentShape(seriesKey: (typeof STACK_KEYS_BOTTOM_TO_TOP)[number]) {
+  const RADIUS = 6
+  return function StackSegmentShape(props: { x?: unknown; y?: unknown; width?: unknown; height?: unknown; payload?: RevWeekPoint; fill?: string }) {
+    const x = Number(props.x ?? 0)
+    const y = Number(props.y ?? 0)
+    const width = Number(props.width ?? 0)
+    const height = Number(props.height ?? 0)
+    if (!Number.isFinite(height) || height <= 0.5 || !Number.isFinite(width) || width <= 0) return <g />
+    const presentKeys = STACK_KEYS_BOTTOM_TO_TOP.filter((key) => Number(props.payload?.[key] ?? 0) > 0)
+    const isBottom = presentKeys[0] === seriesKey
+    const isTop = presentKeys[presentKeys.length - 1] === seriesKey
+    const d = roundedRectPath(x, y, width, height, {
+      tl: isTop ? RADIUS : 0,
+      tr: isTop ? RADIUS : 0,
+      bl: isBottom ? RADIUS : 0,
+      br: isBottom ? RADIUS : 0,
+    })
+    return <path d={d} fill={props.fill} stroke="#FFFFFF" strokeWidth={1.25} strokeLinejoin="round" />
+  }
 }
 
 function RevWeekChartTooltip({
@@ -1581,7 +1653,7 @@ function makeWeekTotalLabel(peakValue: number) {
     const text = formatMoney(value)
     const isPeak = peakValue > 0 && value >= peakValue
     if (isPeak) {
-      const pillW = text.length * 6.4 + 16
+      const pillW = estimateTextWidth(text, 10.5) + 16
       const pillH = 16
       const pillY = y - 23
       return (
@@ -1605,6 +1677,38 @@ function makeWeekTotalLabel(peakValue: number) {
       <text x={x} y={y - 8} textAnchor="middle" fontSize={10.5} fontWeight={700} fill="#111110">
         {text}
       </text>
+    )
+  }
+}
+
+// 주 평균 목표선 라벨: 플롯 우측 끝에 고정된 다크 칩 — 어떤 세그먼트색 위에 걸쳐도 대비가 유지된다.
+function makeWeeklyTargetLabel(value: number) {
+  return function WeeklyTargetLabel(props: { viewBox?: { x?: unknown; y?: unknown; width?: unknown; height?: unknown } }) {
+    const viewBox = props.viewBox ?? {}
+    const x = Number(viewBox.x ?? NaN)
+    const y = Number(viewBox.y ?? NaN)
+    const width = Number(viewBox.width ?? NaN)
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width)) return <g />
+    const text = `주 평균 ${formatMoney(value)}`
+    const pillW = estimateTextWidth(text, 9.5) + 14
+    const pillH = 18
+    const pillRight = x + width
+    const pillX = pillRight - pillW
+    return (
+      <g>
+        <rect x={pillX} y={y - pillH / 2} width={pillW} height={pillH} rx={9} fill="#31302E" />
+        <text
+          x={pillX + pillW / 2}
+          y={y}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize={9.5}
+          fontWeight={700}
+          fill="#FFFFFF"
+        >
+          {text}
+        </text>
+      </g>
     )
   }
 }
@@ -1653,24 +1757,29 @@ function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]; month
           {weeklyTarget != null && (
             <ReferenceLine
               y={weeklyTarget}
-              stroke="#111110"
-              strokeOpacity={0.26}
-              strokeDasharray="5 5"
+              stroke="#FFFFFF"
+              strokeWidth={4.5}
+              strokeOpacity={0.7}
               ifOverflow="extendDomain"
-              label={{
-                value: `주 평균 목표 ${formatMoney(weeklyTarget)}`,
-                position: "insideTopRight",
-                fill: "#615D59",
-                fontSize: 9.5,
-                fontWeight: 700,
-              }}
             />
           )}
-          <Bar dataKey="confirmed" name="확정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.confirmed.id})`} radius={[0, 0, 4, 4]} maxBarSize={48} />
-          <Bar dataKey="highConfidence" name="고확도" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.highConfidence.id})`} maxBarSize={48} />
-          <Bar dataKey="open" name="예정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.open.id})`} maxBarSize={48} />
-          <Bar dataKey="inferred" name="일자 추정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.inferred.id})`} maxBarSize={48} />
-          <Bar dataKey="monthlyOnly" name="월합계만" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.monthlyOnly.id})`} radius={[4, 4, 0, 0]} maxBarSize={48} />
+          {weeklyTarget != null && (
+            <ReferenceLine
+              y={weeklyTarget}
+              stroke="#31302E"
+              strokeWidth={1.75}
+              strokeOpacity={0.85}
+              strokeDasharray="5 4"
+              strokeLinecap="round"
+              ifOverflow="extendDomain"
+              label={makeWeeklyTargetLabel(weeklyTarget)}
+            />
+          )}
+          <Bar dataKey="confirmed" name="확정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.confirmed.id})`} shape={makeStackSegmentShape("confirmed")} maxBarSize={48} />
+          <Bar dataKey="highConfidence" name="고확도" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.highConfidence.id})`} shape={makeStackSegmentShape("highConfidence")} maxBarSize={48} />
+          <Bar dataKey="open" name="예정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.open.id})`} shape={makeStackSegmentShape("open")} maxBarSize={48} />
+          <Bar dataKey="inferred" name="일자 추정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.inferred.id})`} shape={makeStackSegmentShape("inferred")} maxBarSize={48} />
+          <Bar dataKey="monthlyOnly" name="월합계만" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.monthlyOnly.id})`} shape={makeStackSegmentShape("monthlyOnly")} maxBarSize={48} />
           <Line
             type="monotone"
             dataKey="total"
@@ -1701,6 +1810,13 @@ function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]; month
               </span>
             )
           })}
+        {weeklyTarget != null && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-0 w-3.5 border-t-2 border-dashed border-[#31302E]/70" />
+            <span className="font-semibold text-[#615D59]">주 평균 목표</span>
+            <span className="font-bold tabular-nums text-[#111110]">{formatMoney(weeklyTarget)}</span>
+          </span>
+        )}
       </div>
       {monthGoal != null && monthGoal > 0 && (
         <div className="mt-3.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-gradient-to-b from-white to-[#FAFAF8] p-3.5">
@@ -2988,7 +3104,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
     DRAFT_CONFIDENCE_OPTIONS.find((option) => option.id === value)?.label ?? value
   const baseTitle =
     bucket.total > 0
-      ? `합계 ${formatMoney(bucket.total)} · 확정 ${formatMoney(bucket.confirmed)} · 고확도 ${formatMoney(bucket.high)} · 예정 ${formatMoney(bucket.open)}${mismatch ? " · 주차·월 불일치" : ""}`
+      ? `합계 ${formatMoney(bucket.total)} · 확정 ${formatMoney(bucket.confirmed)} · 고확도 ${formatMoney(bucket.high)} · 예정 ${formatMoney(bucket.open)}${mismatch ? " · 주차·월 불일치(허용오차 ±¥1)" : ""}`
       : "미입력"
   const title = locked
     ? `${baseTitle} · 🔒 ${lockLabel} 값이라 잠금(실수 방지) — 수정은 우측 패널에서 정정 초안으로`
@@ -3071,9 +3187,9 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
       )}
       {bucket.total > 0 ? (
         <span
-          className={`inline-flex items-center justify-end gap-0.5 text-[11px] leading-none ${
-            pending ? "font-bold text-[#7A520F]" : MATRIX_TONE[tone]
-          }`}
+          className={`inline-flex items-center justify-end gap-0.5 leading-none ${
+            bucket.total < 10000 ? "text-[10px] opacity-75" : "text-[11px]"
+          } ${pending ? "font-bold text-[#7A520F]" : MATRIX_TONE[tone]}`}
         >
           {locked && <Lock className="h-2.5 w-2.5 shrink-0 text-[#A39E98]" aria-label={lockLabel} />}
           {mismatch && !locked && <AlertTriangle className="h-2.5 w-2.5 shrink-0" />}
@@ -3314,15 +3430,18 @@ function RevMatrixMonthStrip({
         if (expandedMonths.has(month)) {
           const weekly = weeklyByMonth(month)
           return (
-            <RevMatrixWeekCells
-              key={month}
-              weeks={weekly?.weeks ?? [0, 0, 0, 0, 0]}
-              inferred={weekly?.inferred ?? false}
-              monthOnlyAmount={weekly?.monthOnlyAmount ?? 0}
-              bgClass={bgClass}
-              month={month}
-              editContext={editContext}
-            />
+            <Fragment key={month}>
+              <RevMatrixWeekCells
+                weeks={weekly?.weeks ?? [0, 0, 0, 0, 0]}
+                inferred={weekly?.inferred ?? false}
+                monthOnlyAmount={weekly?.monthOnlyAmount ?? 0}
+                bgClass={bgClass}
+                month={month}
+                editContext={editContext}
+              />
+              {/* 확장 중에도 그 달 총액을 잃지 않도록 주차 5칸 뒤에 읽기전용 월계 셀을 유지한다 */}
+              <RevMatrixMonthCell bucket={bucket} mismatch={weekly?.mismatch ?? false} bgClass={bgClass} />
+            </Fragment>
           )
         }
         return (
@@ -3758,8 +3877,8 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
         {months.map((month) => {
           const column = columnByMonth.get(month) ?? null
           const bucket = column ?? EMPTY_BUCKET
-          const span = expandedMonths.has(month) ? 5 : 1
-          const width = span === 5 ? MATRIX_WEEK_W * 5 : MATRIX_MONTH_W
+          const span = expandedMonths.has(month) ? 6 : 1
+          const width = span === 6 ? MATRIX_WEEK_W * 5 + MATRIX_MONTH_W : MATRIX_MONTH_W
           return (
             <td
               key={month}
@@ -3825,9 +3944,18 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
           >
             {(() => {
               const goalSum = columns.reduce((sum, column) => sum + (column.goal ?? 0), 0)
+              const goalMonths = columns.filter((column) => column.goal !== null).length
               const pct = goalSum > 0 ? (grand.confirmed / goalSum) * 100 : null
               const tone = pct === null ? "text-[#C9C5BF]" : pct >= 100 ? "text-[#084734]" : pct >= 60 ? "text-[#A8741A]" : "text-[#B43E3E]"
-              return <span className={`text-[10.5px] font-bold ${tone}`}>{pct === null ? "·" : `${Math.round(pct)}%`}</span>
+              // 분모는 '목표가 설정된 달'만 — 부분 목표일 때 연간 순항으로 오독하지 않게 표기한다.
+              return (
+                <span
+                  title={pct === null ? undefined : `목표 설정 ${goalMonths}/${columns.length}개월 합계 대비 확정${goalMonths < columns.length ? " — 부분 목표 기준" : ""}`}
+                  className={`text-[10.5px] font-bold ${tone}`}
+                >
+                  {pct === null ? "·" : `${Math.round(pct)}%${goalMonths < columns.length ? "*" : ""}`}
+                </span>
+              )
             })()}
           </td>
         </tr>
@@ -4119,6 +4247,8 @@ export default function SalesLedgerWorkbench() {
     if (dir === "asc" || dir === "desc") setRevSortDirection(dir)
     const ps = Number(params.get("ps"))
     if ((REV_PAGE_SIZES as readonly number[]).includes(ps)) setRevPageSize(ps as RevPageSize)
+    const pageParam = Number(params.get("p"))
+    if (Number.isInteger(pageParam) && pageParam > 1) setRevPage(pageParam)
     setUrlReady(true)
   }, [])
 
@@ -4140,6 +4270,8 @@ export default function SalesLedgerWorkbench() {
     if (revSortKey !== "revenue") params.set("sort", revSortKey)
     if (revSortDirection !== "desc") params.set("dir", revSortDirection)
     if (revPageSize !== 100) params.set("ps", String(revPageSize))
+    // 페이지 번호도 보존 — 3페이지 검수 중 새로고침하면 1페이지로 튕기던 맥락 소실 방지.
+    if (revPage > 1) params.set("p", String(revPage))
     const search = params.toString()
     const nextUrl = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`
     const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
@@ -4161,6 +4293,7 @@ export default function SalesLedgerWorkbench() {
     revSortKey,
     revSortDirection,
     revPageSize,
+    revPage,
   ])
 
   const defaultDraftForm = useMemo<DraftForm>(() => ({
@@ -4435,7 +4568,10 @@ export default function SalesLedgerWorkbench() {
       .sort((a, b) => a.localeCompare(b, "ko"))
   }, [rows])
 
-  const filteredRows = useMemo(() => {
+  // 검수(forecast) 필터만 제외한 베이스 — 검수 인박스 칩의 모집단. 칩 카운트와 "칩 클릭 결과
+  // 건수"가 일치하려면 다른 필터(담당자/상품/검색 등)는 이미 반영된 상태에서 세야 한다.
+  // (기존엔 무필터 rows 기준이라 담당자 필터 중 "불일치 7" 클릭 → 2행만 나오는 불일치가 있었다.)
+  const revBaseFilteredRows = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return rows
       .filter((row) => managerFilter === "ALL" || row.manager === managerFilter)
@@ -4444,7 +4580,6 @@ export default function SalesLedgerWorkbench() {
       .filter((row) => revStatusFilter === "ALL" || row.status === revStatusFilter)
       .filter((row) => revDealTypeFilter === "ALL" || row.dealType === revDealTypeFilter)
       .filter((row) => revOriginFilter === "all" || row.ledgerOrigin === revOriginFilter)
-      .filter((row) => rowMatchesForecastFilterInMonths(row, matrixMonths, revForecastFilter))
       .filter((row) => {
         if (!needle) return true
         const originLabel = row.ledgerOrigin === "draft" ? "장부 입력 applied draft 신규 수정" : "시트 원본 sheet"
@@ -4453,11 +4588,20 @@ export default function SalesLedgerWorkbench() {
           String(value ?? "").toLowerCase().includes(needle),
         )
       })
+  }, [managerFilter, productFilter, query, regionFilter, revDealTypeFilter, revOriginFilter, revStatusFilter, rows])
+
+  const filteredRows = useMemo(() => {
+    // "연간합계" 헤더 정렬은 표시값과 같은 12개월 전체(모든 확도) 합으로 — period 스코프
+    // 확정 전용인 revenue로 정렬하면 눈에 보이는 연간 숫자와 순서가 모순된다.
+    const annualOf = (row: LedgerRevenueRow) => matrixMonths.reduce((sum, month) => sum + rowMonthAmount(row, month), 0)
+    return revBaseFilteredRows
+      .filter((row) => rowMatchesForecastFilterInMonths(row, matrixMonths, revForecastFilter))
       .sort((a, b) => {
         const direction = revSortDirection === "asc" ? 1 : -1
         let result = 0
 
         if (revSortKey === "revenue") result = a.revenue - b.revenue
+        if (revSortKey === "annual") result = annualOf(a) - annualOf(b)
         if (revSortKey === "month") result = rowMonthAmount(a, selectedMonth) - rowMonthAmount(b, selectedMonth)
         if (revSortKey === "customer") result = compareText(a.customer, b.customer)
         if (revSortKey === "product") result = compareText(productCategoryMeta(rowProductCategory(a)).label, productCategoryMeta(rowProductCategory(b)).label)
@@ -4474,21 +4618,7 @@ export default function SalesLedgerWorkbench() {
         if (primary !== 0) return primary
         return compareText(a.customer, b.customer) || compareText(a.manager, b.manager)
       })
-  }, [
-    managerFilter,
-    productFilter,
-    query,
-    regionFilter,
-    revDealTypeFilter,
-    revForecastFilter,
-    revOriginFilter,
-    revSortDirection,
-    revSortKey,
-    revStatusFilter,
-    rows,
-    matrixMonths,
-    selectedMonth,
-  ])
+  }, [revBaseFilteredRows, matrixMonths, revForecastFilter, revSortDirection, revSortKey, selectedMonth])
 
   const revWeekProjection = useMemo(() => buildRevWeekProjection(filteredRows, selectedMonth), [filteredRows, selectedMonth])
   // 레일 확정/고확도 합계는 매트릭스·footer와 동일한 rowMonth* 헬퍼로 계산해 '확정'의 정의를 통일한다.
@@ -4595,21 +4725,20 @@ export default function SalesLedgerWorkbench() {
     () => filteredRows.filter((row) => rowMonthAmount(row, selectedMonth) > 0).length,
     [filteredRows, selectedMonth],
   )
-  // 검수 인박스: 필터와 무관하게 전체 행 기준으로 세고, 칩 클릭으로 해당 필터에 점프.
-  // 검수 인박스 카운트는 표시 열(회계연도 12개월) 전체를 검사한다. 어느 한 달이라도 조건에
-  // 걸리는 행을 1건으로 센다 — 필터(rowMatchesForecastFilterInMonths)와 같은 기준이라 칩 숫자와
-  // 필터 결과 건수가 일치한다. selectedMonth 1개월만 세던 검수 사각을 없앰.
+  // 검수 인박스 카운트: 표시 열(회계연도 12개월) 전체를 검사하되, 모집단은 forecast 제외
+  // 필터가 반영된 revBaseFilteredRows — 칩 숫자와 "칩 클릭 후 결과 건수"가 항상 일치한다.
+  // (무필터 rows 기준이던 시절엔 담당자/상품 필터 활성 시 칩 숫자 > 결과 건수 불일치가 났다.)
   const revInboxCounts = useMemo(() => {
     let weekMismatch = 0
     let monthOnly = 0
     let open = 0
-    for (const row of rows) {
+    for (const row of revBaseFilteredRows) {
       if (matrixMonths.some((month) => rowWeeklyMismatch(row, month))) weekMismatch += 1
       if (matrixMonths.some((month) => rowMonthAmount(row, month) > 0 && rowWeeklySplit(row, month).source === "month-only")) monthOnly += 1
       if (matrixMonths.some((month) => rowMonthHighConfidence(row, month) + rowMonthOpen(row, month) > 0)) open += 1
     }
     return { weekMismatch, monthOnly, open }
-  }, [rows, matrixMonths])
+  }, [revBaseFilteredRows, matrixMonths])
   const dshWeekProjection = useMemo(() => buildRevWeekProjection(rows, selectedMonth), [rows, selectedMonth])
   const dshPeakWeek = useMemo(
     () => dshWeekProjection.slice().sort((a, b) => b.total - a.total)[0],
@@ -4780,8 +4909,11 @@ export default function SalesLedgerWorkbench() {
       return productCategoryMeta(entries[0][0]).label
     }
     return Array.from(groups.values()).sort((a, b) => {
+      const groupAnnualOf = (group: RevCustomerGroup) =>
+        matrixMonths.reduce((sum, month) => sum + (group.monthlyTotals[month]?.total ?? 0), 0)
       let result = 0
       if (revSortKey === "revenue") result = a.revenueTotal - b.revenueTotal
+      if (revSortKey === "annual") result = groupAnnualOf(a) - groupAnnualOf(b)
       if (revSortKey === "month") result = a.monthTotal - b.monthTotal
       if (revSortKey === "customer") result = compareText(a.customer, b.customer)
       if (revSortKey === "product") result = compareText(dominantCategory(a), dominantCategory(b))
@@ -4865,10 +4997,17 @@ export default function SalesLedgerWorkbench() {
     return grand
   }, [revMatrixColumns])
 
-  // 빈 상태 안내 셀 colSpan: 고객+상품+연간(3) + 월(요약 1칸 / 확장 5칸).
+  // 빈 상태 안내 셀 colSpan: 고객+상품+연간(3) + 월(요약 1칸 / 확장 5칸+월계 1칸).
   const matrixColSpan = useMemo(
-    () => 3 + matrixMonths.reduce((sum, month) => sum + (expandedRevMonths.has(month) ? 5 : 1), 0),
+    () => 3 + matrixMonths.reduce((sum, month) => sum + (expandedRevMonths.has(month) ? 6 : 1), 0),
     [matrixMonths, expandedRevMonths],
+  )
+
+  // 적용 전(new-row) 초안은 매트릭스에 행 자체가 없어 "초안 넣었는데 표에 없음"이 되던 사각 —
+  // 표 상단 요약 스트립으로 노출한다(집계에는 미반영, 적용 후 정식 행으로 합류).
+  const pendingNewRowDrafts = useMemo(
+    () => drafts.filter((draft) => draft.kind === "new-row" && (draft.status === "draft" || draft.status === "checked")),
+    [drafts],
   )
 
   // ── Phase 2: 매트릭스 인라인 편집 배선 ─────────────────────────────────────
@@ -5468,7 +5607,7 @@ export default function SalesLedgerWorkbench() {
   const draftTotal = openDrafts.reduce((sum, draft) => sum + draft.amount, 0)
   const appliedDraftTotal = additiveAppliedDraftRows.reduce((sum, row) => sum + row.revenue, 0)
   const ledgerConfirmed = (revenue?.confirmed ?? 0) + appliedDraftTotal
-  const ledgerGap = ledgerConfirmed - (revenue?.goal ?? 0)
+  const ledgerDelta = ledgerConfirmed - (revenue?.confirmed ?? 0)
   const periodLabel = period === "M" ? formatMonthLabel(selectedMonth) : period === "Q" ? "현재 분기" : "FY26-27"
   const canCreateEditDraft = Boolean(selectedRow && (selectedRow.ledgerOrigin === "sheet" || selectedRow.sourceDealId))
   const draftAmountValue = safeAmount(draftForm.amount)
@@ -5671,15 +5810,19 @@ export default function SalesLedgerWorkbench() {
             <MetricTile
               label="실적"
               value={summaryPending ? "–" : formatMoney(revenue?.confirmed)}
-              hint={summaryPending ? "불러오는 중" : `시트 원천 · 달성률 ${formatPercent(revenue?.pacing_pct)}`}
+              hint={summaryPending ? "불러오는 중" : `시트 원천 · ${periodLabel} 달성률 ${formatPercent(revenue?.pacing_pct)}`}
               tone="text-[#084734]"
               icon={<CheckCircle2 className="h-3.5 w-3.5" />}
             />
             <MetricTile
-              label="장부 반영"
-              value={summaryPending ? "–" : formatMoney(ledgerConfirmed)}
-              hint={summaryPending ? "불러오는 중" : `DB 신규 ${additiveAppliedDraftRows.length}건 · 수정 ${replacementAppliedDraftRows.length}건 별도 · Gap ${formatMoney(ledgerGap)}`}
-              tone={ledgerGap >= 0 ? "text-[#084734]" : "text-[#A8741A]"}
+              label="장부 가감"
+              value={summaryPending ? "–" : `${ledgerDelta >= 0 ? "+" : ""}${formatMoney(ledgerDelta)}`}
+              hint={
+                summaryPending
+                  ? "불러오는 중"
+                  : `DB 신규 ${additiveAppliedDraftRows.length}건 · 수정 ${replacementAppliedDraftRows.length}건 · 장부 합계 ${formatMoney(ledgerConfirmed)}`
+              }
+              tone={ledgerDelta >= 0 ? "text-[#084734]" : "text-[#A8741A]"}
               icon={<Send className="h-3.5 w-3.5" />}
             />
             <MetricTile
@@ -5978,9 +6121,10 @@ export default function SalesLedgerWorkbench() {
                       <button
                         type="button"
                         onClick={() => setSelectedMonth((month) => shiftMonth(month, -1))}
+                        disabled={matrixMonths.indexOf(selectedMonth) === 0}
                         aria-label="이전 달"
-                        title="이전 달"
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                        title="이전 달 (회계연도 안에서만 이동)"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-35"
                       >
                         <ChevronLeft className="h-3.5 w-3.5" />
                       </button>
@@ -5990,9 +6134,10 @@ export default function SalesLedgerWorkbench() {
                       <button
                         type="button"
                         onClick={() => setSelectedMonth((month) => shiftMonth(month, 1))}
+                        disabled={matrixMonths.indexOf(selectedMonth) === matrixMonths.length - 1}
                         aria-label="다음 달"
-                        title="다음 달"
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                        title="다음 달 (회계연도 안에서만 이동)"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-35"
                       >
                         <ChevronRight className="h-3.5 w-3.5" />
                       </button>
@@ -6181,6 +6326,17 @@ export default function SalesLedgerWorkbench() {
                   <FilterTag label={REV_FORECAST_FILTERS.find((item) => item.id === revForecastFilter)?.label ?? "검수"} onClear={() => setRevForecastFilter("all")} />
                 )}
                 <span className="ml-auto flex flex-wrap items-center gap-1.5" aria-label="검수 인박스">
+                  {/* 편집→검수 큐 연결 고리: 셀 편집으로 쌓인 미적용 초안이 있으면 여기서 바로 큐를 연다 */}
+                  {openDrafts.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => selectRailView("queue")}
+                      title="입력 큐 열기 — 체크·적용 대기 초안"
+                      className="inline-flex h-6 items-center gap-1 rounded-full border border-[#ECD29C] bg-[#FFFCF5] px-2 text-[10px] font-bold tabular-nums text-[#7A520F] transition hover:bg-[#FBF1E0]"
+                    >
+                      미적용 초안 {openDrafts.length.toLocaleString("ko-KR")} → 검수
+                    </button>
+                  )}
                   {([
                     ["week-mismatch", "불일치", revInboxCounts.weekMismatch, "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"],
                     ["month-only", "월합계만", revInboxCounts.monthOnly, "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"],
@@ -6532,30 +6688,62 @@ export default function SalesLedgerWorkbench() {
                   })}
                 </div>
 
-                <div className="hidden overflow-x-auto md:block">
+                {revTotalPages > 1 && (
+                  <div className="hidden items-center justify-between gap-2 border-b border-[rgba(0,0,0,0.08)] px-4 py-2 text-[11.5px] text-[#615D59] md:flex">
+                    <p className="font-semibold">
+                      {revRangeStart.toLocaleString("ko-KR")}-{revRangeEnd.toLocaleString("ko-KR")} / 행 {filteredRows.length.toLocaleString("ko-KR")}건
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setRevPage((page) => Math.max(1, page - 1))}
+                        disabled={clampedRevPage <= 1}
+                        className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 font-bold transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <ChevronLeft className="h-3 w-3" />
+                        이전
+                      </button>
+                      <span className="min-w-[56px] text-center font-bold text-[#111110]">
+                        {clampedRevPage} / {revTotalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setRevPage((page) => Math.min(revTotalPages, page + 1))}
+                        disabled={clampedRevPage >= revTotalPages}
+                        className="inline-flex h-7 items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 font-bold transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        다음
+                        <ChevronRight className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {/* 세로 스크롤을 이 컨테이너 안으로 한정해야 thead sticky top / tfoot sticky bottom이
+                    실제로 붙는다 — 페이지 스크롤 + overflow-x-auto 조합에서는 세로 sticky가 무효였음. */}
+                <div className="relative hidden max-h-[calc(100vh-13rem)] min-h-[320px] overflow-auto md:block">
                   <table className="w-max min-w-full border-collapse text-left text-[12px]">
                     <thead className="text-[10px] uppercase tracking-[0.06em] text-[#615D59]">
                       <tr className="h-8 bg-[#FAFAF8]">
                         <th
-                          className="sticky left-0 z-30 border-r border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-left align-middle"
+                          className="sticky left-0 top-0 z-40 border-r border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-left align-middle"
                           style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
                         >
                           <RevSortHeader label="고객/계정" sortKey="customer" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} />
                         </th>
                         <th
-                          className="border-l border-[#E7E5E1] bg-[#FAFAF8] px-1 text-center align-middle"
+                          className="sticky top-0 z-20 border-l border-[#E7E5E1] bg-[#FAFAF8] px-1 text-center align-middle"
                           style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}
                         >
                           상품
                         </th>
                         {revMatrixColumns.map((column) => {
                           const isExpanded = expandedRevMonths.has(column.month)
-                          const width = isExpanded ? MATRIX_WEEK_W * 5 : MATRIX_MONTH_W
+                          const width = isExpanded ? MATRIX_WEEK_W * 5 + MATRIX_MONTH_W : MATRIX_MONTH_W
                           return (
                             <th
                               key={column.month}
-                              colSpan={isExpanded ? 5 : 1}
-                              className={`border-l border-[#E7E5E1] px-0.5 text-center align-middle ${column.current ? "bg-[#ECFDF5]" : isExpanded ? "bg-[#F6F5F4]" : "bg-[#FAFAF8]"}`}
+                              colSpan={isExpanded ? 6 : 1}
+                              className={`sticky top-0 z-20 border-l border-[#E7E5E1] px-0.5 text-center align-middle ${column.current ? "bg-[#ECFDF5]" : isExpanded ? "bg-[#F6F5F4]" : "bg-[#FAFAF8]"}`}
                               style={{ width, minWidth: width }}
                             >
                               <button
@@ -6571,20 +6759,24 @@ export default function SalesLedgerWorkbench() {
                                 <ChevronDown className={`h-2.5 w-2.5 shrink-0 text-[#A39E98] transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                               </button>
                               {isExpanded && (
-                                <div className="grid grid-cols-5 gap-0 pb-0.5 text-[10px] font-bold normal-case tracking-normal text-[#615D59]">
+                                <div
+                                  className="grid gap-0 pb-0.5 text-[10px] font-bold normal-case tracking-normal text-[#615D59]"
+                                  style={{ gridTemplateColumns: `repeat(5, ${MATRIX_WEEK_W}px) ${MATRIX_MONTH_W}px` }}
+                                >
                                   {["W1", "W2", "W3", "W4", "W5"].map((week) => (
                                     <span key={week}>{week}</span>
                                   ))}
+                                  <span className="text-[#084734]">월계</span>
                                 </div>
                               )}
                             </th>
                           )
                         })}
                         <th
-                          className="sticky right-0 z-30 border-l border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-right align-middle"
+                          className="sticky right-0 top-0 z-40 border-l border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-right align-middle"
                           style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
                         >
-                          <RevSortHeader label="연간합계" sortKey="revenue" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} align="right" />
+                          <RevSortHeader label="연간합계" sortKey="annual" activeKey={revSortKey} direction={revSortDirection} onSort={onRevSort} align="right" />
                         </th>
                       </tr>
                     </thead>
@@ -6605,6 +6797,31 @@ export default function SalesLedgerWorkbench() {
                                 </button>
                               )}
                             </div>
+                          </td>
+                        </tr>
+                      )}
+                      {pendingNewRowDrafts.length > 0 && (
+                        <tr className="border-t border-dashed border-[#ECD29C] bg-[#FFFCF5]">
+                          <td colSpan={matrixColSpan} className="px-3 py-2">
+                            <button
+                              type="button"
+                              onClick={() => selectRailView("queue")}
+                              className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-left text-[11px] font-semibold text-[#7A520F]"
+                            >
+                              <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 font-bold">
+                                미적용 신규 초안 {pendingNewRowDrafts.length}건
+                              </span>
+                              {pendingNewRowDrafts.slice(0, 3).map((draft) => (
+                                <span key={draft.id} className="max-w-[220px] truncate">
+                                  {draft.customer || "고객명 미입력"} · {formatMonthLabel(draft.month)} · {formatMoney(draft.amount)}
+                                </span>
+                              ))}
+                              {pendingNewRowDrafts.length > 3 && <span>외 {pendingNewRowDrafts.length - 3}건</span>}
+                              <span className="ml-auto inline-flex items-center gap-1 font-bold text-[#084734]">
+                                체크 큐에서 검수
+                                <ChevronRight className="h-3 w-3" />
+                              </span>
+                            </button>
                           </td>
                         </tr>
                       )}
@@ -7145,7 +7362,7 @@ export default function SalesLedgerWorkbench() {
                       {selectedGroup.mismatchCount > 0 && (
                         <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FCE9E9] px-1.5 py-0.5 text-[10px] font-bold text-[#B43E3E]">
                           <AlertTriangle className="h-2.5 w-2.5" />
-                          불일치 {selectedGroup.mismatchCount}행
+                          불일치 {selectedGroup.mismatchCount}행 <span className="font-semibold text-[#A39E98]">(12개월 기준)</span>
                         </span>
                       )}
                     </div>
