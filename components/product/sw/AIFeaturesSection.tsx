@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { m } from "framer-motion"
 import { ArrowRight } from "lucide-react"
 import Link from "next/link"
 
@@ -23,7 +23,7 @@ export default function AIFeaturesSection() {
     return (
         <section className="py-24 md:py-32 bg-[#F6F5F4]">
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
-                <motion.div className="text-center mb-14" {...fadeUp}>
+                <m.div className="text-center mb-14" {...fadeUp}>
                     <span className="inline-flex items-center gap-1.5 bg-[#084734] text-[#6EE7B7] text-xs font-bold px-3 py-1.5 rounded-full mb-5">
                         ✦ AI-Powered
                     </span>
@@ -34,11 +34,11 @@ export default function AIFeaturesSection() {
                         채점, 교안 작성, 자료 정리 — 반복적인 작업은 AI에게 맡기고
                         교사는 가르치는 일에만 집중할 수 있습니다.
                     </p>
-                </motion.div>
+                </m.div>
 
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {AI_FEATURES.map((f, i) => (
-                        <motion.div
+                        <m.div
                             key={f.title}
                             initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
@@ -50,11 +50,11 @@ export default function AIFeaturesSection() {
                             <div className="w-9 h-9 rounded-lg bg-[#ECFDF5] border border-[rgba(34,163,102,0.15)] flex items-center justify-center mb-4 text-lg">{f.icon}</div>
                             <h3 className="text-sm font-bold text-[#111110] mb-1.5 tracking-tight">{f.title}</h3>
                             <p className="text-xs text-[#615D59] leading-relaxed">{f.desc}</p>
-                        </motion.div>
+                        </m.div>
                     ))}
                 </div>
 
-                <motion.div
+                <m.div
                     initial={{ opacity: 0 }}
                     whileInView={{ opacity: 1 }}
                     viewport={{ once: true }}
@@ -72,7 +72,7 @@ export default function AIFeaturesSection() {
                     >
                         무료 체험 시작 <ArrowRight className="w-4 h-4" />
                     </Link>
-                </motion.div>
+                </m.div>
             </div>
         </section>
     )

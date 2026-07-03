@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { m } from "framer-motion"
 import { ArrowRight } from "lucide-react"
 import Link from "next/link"
 
@@ -28,7 +28,7 @@ export default function PricingValueSection() {
     return (
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8 max-w-5xl">
-                <motion.div className="text-center mb-14" {...fadeUp}>
+                <m.div className="text-center mb-14" {...fadeUp}>
                     <EyebrowTag>PRICING VALUE</EyebrowTag>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans text-[#1a1a19] leading-tight mb-4">
                         이 가격에,{" "}
@@ -38,11 +38,11 @@ export default function PricingValueSection() {
                         LMS 따로, 화상 도구 따로, 녹화 툴 따로 — 세 가지를 각각 쓰면
                         월 수십만 원이 넘습니다. Classin은 하나로 전부 해결합니다.
                     </p>
-                </motion.div>
+                </m.div>
 
                 <div className="grid lg:grid-cols-[2fr_3fr] gap-10">
                     {/* Included list */}
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0, x: -20 }}
                         whileInView={{ opacity: 1, x: 0 }}
                         viewport={{ once: true }}
@@ -52,7 +52,7 @@ export default function PricingValueSection() {
                         <p className="text-xs font-bold text-slate-400 tracking-wider uppercase mb-5">구독 하나로 포함되는 것들</p>
                         <ul className="space-y-3">
                             {INCLUDED.map((item, i) => (
-                                <motion.li
+                                <m.li
                                     key={item}
                                     initial={{ opacity: 0, x: -10 }}
                                     whileInView={{ opacity: 1, x: 0 }}
@@ -64,13 +64,13 @@ export default function PricingValueSection() {
                                         <div className="w-1.5 h-1.5 rounded-full bg-[#22A366]" />
                                     </div>
                                     {item}
-                                </motion.li>
+                                </m.li>
                             ))}
                         </ul>
-                    </motion.div>
+                    </m.div>
 
                     {/* Value framing */}
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0, x: 20 }}
                         whileInView={{ opacity: 1, x: 0 }}
                         viewport={{ once: true }}
@@ -92,11 +92,11 @@ export default function PricingValueSection() {
                                 <p className={`font-bold ${row.highlight ? "text-lg text-[#22A366]" : "text-xs text-slate-500"}`}>{row.scope}</p>
                             </div>
                         ))}
-                    </motion.div>
+                    </m.div>
                 </div>
 
                 {/* Full-width pricing callout */}
-                <motion.div
+                <m.div
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
@@ -156,7 +156,7 @@ export default function PricingValueSection() {
                             </Link>
                         </div>
                     </div>
-                </motion.div>
+                </m.div>
             </div>
         </section>
     )

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { m, AnimatePresence } from "framer-motion"
 import { ArrowRight, Clock, Search, X } from "lucide-react"
 import Link from "next/link"
 import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
@@ -65,16 +65,16 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
             <section className="relative px-4 pb-6 pt-28 sm:px-6 md:pt-40">
                 <div className="max-w-[1100px] mx-auto">
                     {/* Title */}
-                    <motion.p
+                    <m.p
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ duration: 0.5 }}
                         className="text-[13px] font-medium text-[#1a1a1a]/35 tracking-wide uppercase mb-5"
                     >
                         Blog
-                    </motion.p>
+                    </m.p>
 
-                    <motion.h1
+                    <m.h1
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.6, delay: 0.05 }}
@@ -83,11 +83,11 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                         교육의 미래를
                         <br />
                         함께 만들어갑니다
-                    </motion.h1>
+                    </m.h1>
 
                     {/* Hero: 1 main left + 2 stacked right */}
                     {galleryFinal.length > 0 && (
-                        <motion.div
+                        <m.div
                             initial={{ opacity: 0, y: 16 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.5, delay: 0.1 }}
@@ -159,14 +159,14 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                     </Link>
                                 )
                             })}
-                        </motion.div>
+                        </m.div>
                     )}
                 </div>
             </section>
 
             {/* ─── Filter Bar ─────────────────────────────────── */}
             <section className="mx-auto mb-2 mt-8 max-w-[1100px] px-4 sm:px-6">
-                <motion.div
+                <m.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.4, delay: 0.15 }}
@@ -219,7 +219,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                             </button>
                         ) : null}
                     </div>
-                </motion.div>
+                </m.div>
 
                 {/* Count */}
                 <div className="flex items-center justify-between pt-4 pb-2">
@@ -237,7 +237,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
             {/* ─── Post List ──────────────────────────────────── */}
             <section className="mx-auto max-w-[1100px] px-4 pb-16 sm:px-6 md:pb-20">
                 <AnimatePresence mode="wait">
-                    <motion.div
+                    <m.div
                         key={activeCategory + searchQuery}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
@@ -245,7 +245,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                         transition={{ duration: 0.25 }}
                     >
                         {listPosts.map((post, index) => (
-                            <motion.div
+                            <m.div
                                 key={post.id}
                                 initial={{ opacity: 0, y: 12 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -305,14 +305,14 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                         </div>
                                     </article>
                                 </Link>
-                            </motion.div>
+                            </m.div>
                         ))}
-                    </motion.div>
+                    </m.div>
                 </AnimatePresence>
 
                 {/* Empty State */}
                 {filteredPosts.length === 0 && (
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         className="py-28 text-center"
@@ -331,13 +331,13 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                                 전체 글 보기
                             </button>
                         ) : null}
-                    </motion.div>
+                    </m.div>
                 )}
             </section>
 
             {/* ─── Newsletter ─────────────────────────────────── */}
             <section className="mx-auto max-w-[1100px] px-4 pb-24 sm:px-6 md:pb-28">
-                <motion.div
+                <m.div
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: "-60px" }}
@@ -362,7 +362,7 @@ export default function BlogPageClient({ posts }: BlogPageClientProps) {
                             <NewsletterSubscribe variant="dark" />
                         </div>
                     </div>
-                </motion.div>
+                </m.div>
             </section>
         </div>
     )

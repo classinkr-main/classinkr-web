@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { m } from "framer-motion"
 import { ArrowRight } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
@@ -42,7 +42,7 @@ export default function SpaceScenarioSection() {
     return (
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-4 lg:px-8">
-                <motion.div className="text-center mb-12" {...fadeUp}>
+                <m.div className="text-center mb-12" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">LINEUP × SPACE</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         공간에 딱 맞는
@@ -52,7 +52,7 @@ export default function SpaceScenarioSection() {
                     <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
                         설치 공간을 선택하면 최적 모델과 사용 시나리오를 확인할 수 있습니다.
                     </p>
-                </motion.div>
+                </m.div>
 
                 <div className="flex flex-wrap justify-center gap-3 mb-12">
                     {spaceScenarios.map((s, i) => (
@@ -71,7 +71,7 @@ export default function SpaceScenarioSection() {
                     ))}
                 </div>
 
-                <motion.div
+                <m.div
                     key={active}
                     initial={{ opacity: 0, y: 14 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -117,7 +117,7 @@ export default function SpaceScenarioSection() {
                             </Link>
                         </Button>
                     </div>
-                </motion.div>
+                </m.div>
             </div>
         </section>
     )

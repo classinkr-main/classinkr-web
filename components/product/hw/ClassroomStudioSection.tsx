@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useInView } from "framer-motion";
+import { m, useInView } from "framer-motion";
 import { Monitor, Camera, Layers, ArrowRight } from "lucide-react";
 import { useRef } from "react";
 
@@ -49,7 +49,7 @@ export default function ClassroomStudioSection() {
     <section className="py-24 md:py-32 bg-white" ref={ref}>
       <div className="container mx-auto px-4 lg:px-8">
         {/* Header */}
-        <motion.div className="text-center mb-8" {...fadeUp}>
+        <m.div className="text-center mb-8" {...fadeUp}>
           <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">
             CLASSROOM STUDIO
           </p>
@@ -58,24 +58,24 @@ export default function ClassroomStudioSection() {
             <br />
             <span className="text-[#22A366]">하나의 수업 스튜디오</span>가 됩니다.
           </h2>
-        </motion.div>
+        </m.div>
 
         {/* Subline */}
-        <motion.p
+        <m.p
           {...fadeUp}
           className="text-center text-lg md:text-xl text-[#615D59] max-w-2xl mx-auto mb-16 leading-relaxed"
         >
           수업이 끝나는 순간, 판서 노트와 수업 영상이 동시에 올라갑니다.
           <br className="hidden sm:block" />{" "}
           필기 대신 수업에 집중하세요 — 기록은 시스템이 합니다.
-        </motion.p>
+        </m.p>
 
         {/* Three pillars */}
         <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto mb-16">
           {pillars.map((p, i) => {
             const Icon = p.icon;
             return (
-              <motion.div
+              <m.div
                 key={i}
                 initial={{ opacity: 0, y: 40 }}
                 animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -94,13 +94,13 @@ export default function ClassroomStudioSection() {
                 <p className="text-sm text-[#615D59] leading-relaxed">
                   {p.desc}
                 </p>
-              </motion.div>
+              </m.div>
             );
           })}
         </div>
 
         {/* Synergy flow — horizontal connector */}
-        <motion.div
+        <m.div
           {...fadeUp}
           className="max-w-3xl mx-auto"
         >
@@ -137,7 +137,7 @@ export default function ClassroomStudioSection() {
               </p>
             </div>
           </div>
-        </motion.div>
+        </m.div>
       </div>
     </section>
   );

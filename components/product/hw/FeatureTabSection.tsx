@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { m } from "framer-motion"
 import Image from "next/image"
 import { useState } from "react"
 
@@ -98,7 +98,7 @@ export default function FeatureTabSection() {
     return (
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
-                <motion.div className="text-center mb-12" {...fadeUp}>
+                <m.div className="text-center mb-12" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">FEATURES</p>
                     <h2 className="text-3xl md:text-4xl text-[#1a1a19] leading-tight">
                         하나의 보드, <span className="text-[#22A366]">다섯 가지 경험</span>
@@ -106,7 +106,7 @@ export default function FeatureTabSection() {
                     <p className="text-lg text-slate-500 mt-4 max-w-xl mx-auto">
                         탭을 눌러 각 기능을 빠르게 확인하세요.
                     </p>
-                </motion.div>
+                </m.div>
 
                 {/* Tab buttons */}
                 <div className="flex flex-wrap justify-center gap-2 mb-12">
@@ -126,7 +126,7 @@ export default function FeatureTabSection() {
                 </div>
 
                 {/* Tab content */}
-                <motion.div
+                <m.div
                     key={active}
                     initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -167,7 +167,7 @@ export default function FeatureTabSection() {
                             ))}
                         </ul>
                     </div>
-                </motion.div>
+                </m.div>
             </div>
         </section>
     )

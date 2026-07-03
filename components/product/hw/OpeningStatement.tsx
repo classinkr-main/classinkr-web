@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { motion, useInView } from "framer-motion";
+import { m, useInView } from "framer-motion";
 
 const LABELS = [
   "OPS 내장",
@@ -34,7 +34,7 @@ export default function OpeningStatement() {
         {/* Heading block */}
         <div className="flex flex-col gap-3 sm:gap-4">
           {/* Line 1 */}
-          <motion.p
+          <m.p
             variants={fadeUp}
             initial="hidden"
             animate={inView ? "visible" : "hidden"}
@@ -43,10 +43,10 @@ export default function OpeningStatement() {
             style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
             선생님은 수업만 하세요.
-          </motion.p>
+          </m.p>
 
           {/* Line 2 */}
-          <motion.p
+          <m.p
             variants={fadeUp}
             initial="hidden"
             animate={inView ? "visible" : "hidden"}
@@ -55,11 +55,11 @@ export default function OpeningStatement() {
             style={{ lineHeight: 1.1, letterSpacing: "-0.045em" }}
           >
             나머지는 <span className="text-[#084734]">Classin</span>이 알아서 합니다.
-          </motion.p>
+          </m.p>
         </div>
 
         {/* Labels row */}
-        <motion.div
+        <m.div
           variants={fadeUp}
           initial="hidden"
           animate={inView ? "visible" : "hidden"}
@@ -79,7 +79,7 @@ export default function OpeningStatement() {
               )}
             </span>
           ))}
-        </motion.div>
+        </m.div>
       </div>
     </section>
   );

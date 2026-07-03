@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import { AnimatePresence, m, useReducedMotion } from "framer-motion"
 import {
     ArrowRight,
     Bot,
@@ -584,7 +584,7 @@ function ThinkingIndicator({
     shouldReduceMotion: boolean | null
 }) {
     return (
-        <motion.div
+        <m.div
             initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
             animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={{ duration: shouldReduceMotion ? 0.01 : 0.18, ease: "easeOut" }}
@@ -597,7 +597,7 @@ function ThinkingIndicator({
             >
                 <div className="flex items-center gap-1" aria-hidden>
                     {[0, 1, 2].map((index) => (
-                        <motion.span
+                        <m.span
                             key={index}
                             className="h-1.5 w-1.5 rounded-full bg-[#084734]"
                             animate={
@@ -615,7 +615,7 @@ function ThinkingIndicator({
                 </div>
                 <span className="text-sm text-[#615D59]">답변 작성 중</span>
             </div>
-        </motion.div>
+        </m.div>
     )
 }
 
@@ -972,7 +972,7 @@ export function FloatingChatbot() {
         <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col items-end px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:inset-x-auto md:bottom-6 md:right-6 md:px-0 md:pb-0">
             <AnimatePresence>
                 {isOpen && (
-                    <motion.div
+                    <m.div
                         id="classin-chatbot-dialog"
                         role="dialog"
                         aria-modal="false"
@@ -1028,7 +1028,7 @@ export function FloatingChatbot() {
                                     <div className="min-w-0">
                                         <div className="flex items-center gap-1.5">
                                             <h2 id="classin-chatbot-title" className="truncate text-[15px] font-bold text-[#111110]">Classin 상담 가이드</h2>
-                                            <motion.span
+                                            <m.span
                                                 aria-hidden
                                                 className="h-2 w-2 shrink-0 rounded-full bg-[#084734] shadow-[0_0_0_3px_rgba(8,71,52,0.12),0_0_14px_rgba(8,71,52,0.32)]"
                                                 animate={shouldReduceMotion ? undefined : { opacity: [1, 0.45, 1], scale: [1, 0.82, 1] }}
@@ -1057,7 +1057,7 @@ export function FloatingChatbot() {
                             >
                                 <div className="space-y-4">
                                     {messages.map((message) => (
-                                        <motion.div
+                                        <m.div
                                             key={message.id}
                                             data-chat-message-id={message.id}
                                             initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.98 }}
@@ -1124,7 +1124,7 @@ export function FloatingChatbot() {
                                                     </>
                                                 ) : null}
                                             </div>
-                                        </motion.div>
+                                        </m.div>
                                     ))}
 
                                     {isSending && !isStreaming ? (
@@ -1169,13 +1169,13 @@ export function FloatingChatbot() {
                                 </div>
                             </form>
                         </div>
-                    </motion.div>
+                    </m.div>
                 )}
             </AnimatePresence>
 
             <div className="relative flex h-14 w-14 items-center justify-center md:h-16 md:w-16">
                 {!isOpen && !shouldReduceMotion ? (
-                    <motion.span
+                    <m.span
                         aria-hidden
                         className="pointer-events-none absolute -inset-2 rounded-full border border-[#084734]/25"
                         initial={{ scale: 0.85, opacity: 0.55 }}
@@ -1183,7 +1183,7 @@ export function FloatingChatbot() {
                         transition={{ duration: 3.8, repeat: Infinity, repeatDelay: 1.2, ease: "easeOut" }}
                     />
                 ) : null}
-                <motion.button
+                <m.button
                     ref={triggerRef}
                     type="button"
                     whileHover={shouldReduceMotion ? undefined : { scale: 1.04 }}
@@ -1211,7 +1211,7 @@ export function FloatingChatbot() {
                     ) : (
                         <MessageCircle className="h-6 w-6" />
                     )}
-                </motion.button>
+                </m.button>
             </div>
         </div>
     )

@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { m } from "framer-motion"
 import { BookOpen, Users, Star } from "lucide-react"
 
 const ease = [0.22, 1, 0.36, 1] as const
@@ -55,7 +55,7 @@ export default function AfterClassSection() {
         <section className="py-24 md:py-32 bg-[#F6F5F4]">
             <div className="container mx-auto px-4 lg:px-8">
                 {/* Header */}
-                <motion.div {...fadeUp} className="text-center mb-16">
+                <m.div {...fadeUp} className="text-center mb-16">
                     <span className="inline-flex items-center px-3 py-1 rounded-full bg-[#ECFDF5] border border-[#084734]/15 text-xs font-semibold tracking-widest text-[#084734] uppercase mb-5">
                         After Class
                     </span>
@@ -72,14 +72,14 @@ export default function AfterClassSection() {
                         <br />
                         학생도, 학부모도, 교사도 — 각자의 방식으로 수업을 이어갑니다.
                     </p>
-                </motion.div>
+                </m.div>
 
                 {/* Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-5xl mx-auto">
                     {cards.map((card, i) => {
                         const Icon = card.icon
                         return (
-                            <motion.div
+                            <m.div
                                 key={card.perspective}
                                 {...stagger(i)}
                                 className="rounded-2xl p-8 flex flex-col gap-5"
@@ -118,7 +118,7 @@ export default function AfterClassSection() {
                                 <p className="text-sm text-[#615D59] leading-relaxed flex-1">
                                     {card.detail}
                                 </p>
-                            </motion.div>
+                            </m.div>
                         )
                     })}
                 </div>

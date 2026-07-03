@@ -1,6 +1,6 @@
 "use client"
 
-import { motion, useInView } from "framer-motion"
+import { m, useInView } from "framer-motion"
 import { useRef } from "react"
 
 /* ── Section: Impact Numbers (Full-width dark) ───────────────────── */
@@ -20,7 +20,7 @@ export default function ImpactNumbersSection() {
             <div className="container mx-auto px-4 lg:px-8 py-20 md:py-28 relative">
                 <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/8">
                     {stats.map((s, i) => (
-                        <motion.div
+                        <m.div
                             key={i}
                             initial={{ opacity: 0, y: 24 }}
                             animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -32,7 +32,7 @@ export default function ImpactNumbersSection() {
                             </div>
                             <div className="text-xs font-bold text-[#22A366] uppercase tracking-[0.2em] mb-2">{s.label}</div>
                             <div className="text-sm text-white/35">{s.sub}</div>
-                        </motion.div>
+                        </m.div>
                     ))}
                 </div>
             </div>

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRef } from "react";
-import { motion, useInView } from "framer-motion";
+import { m, useInView } from "framer-motion";
 
 const COMPARISON_ROWS = [
   { label: "일반 IFP", value: "80~120ms", highlight: false },
@@ -35,7 +35,7 @@ export default function LatencyProof() {
       <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
 
         {/* Left — visualization */}
-        <motion.div
+        <m.div
           ref={vizRef}
           variants={fadeIn}
           initial="hidden"
@@ -66,13 +66,13 @@ export default function LatencyProof() {
               </span>
             </div>
           </div>
-        </motion.div>
+        </m.div>
 
         {/* Right — copy */}
         <div ref={copyRef} className="flex flex-col">
 
           {/* Eyebrow */}
-          <motion.p
+          <m.p
             variants={fadeUp}
             initial="hidden"
             animate={copyInView ? "visible" : "hidden"}
@@ -80,10 +80,10 @@ export default function LatencyProof() {
             className="text-xs tracking-[0.2em] text-[#084734] font-semibold uppercase"
           >
             RESPONSE LATENCY
-          </motion.p>
+          </m.p>
 
           {/* Heading */}
-          <motion.h2
+          <m.h2
             variants={fadeUp}
             initial="hidden"
             animate={copyInView ? "visible" : "hidden"}
@@ -94,10 +94,10 @@ export default function LatencyProof() {
             판서는 언제나
             <br />
             생생하게 전달되어야 하기에
-          </motion.h2>
+          </m.h2>
 
           {/* Body */}
-          <motion.p
+          <m.p
             variants={fadeUp}
             initial="hidden"
             animate={copyInView ? "visible" : "hidden"}
@@ -106,9 +106,9 @@ export default function LatencyProof() {
           >
             미세한 터치 입력까지 놓치지 않고 즉시 화면에 반영해, 선생님의
             판서 리듬과 수업의 흐름을 끊김 없이 이어갑니다.
-          </motion.p>
+          </m.p>
 
-          <motion.div
+          <m.div
             variants={fadeUp}
             initial="hidden"
             animate={copyInView ? "visible" : "hidden"}
@@ -121,10 +121,10 @@ export default function LatencyProof() {
             <p className="mt-2 text-base font-bold text-[#084734]">
               클래스인 보드는 그 한계를 넘어선 0.03초
             </p>
-          </motion.div>
+          </m.div>
 
           {/* Comparison table */}
-          <motion.div
+          <m.div
             variants={fadeUp}
             initial="hidden"
             animate={copyInView ? "visible" : "hidden"}
@@ -160,7 +160,7 @@ export default function LatencyProof() {
                 </span>
               </div>
             ))}
-          </motion.div>
+          </m.div>
         </div>
 
       </div>

@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { motion, useInView } from "framer-motion"
+import { m, useInView } from "framer-motion"
 import { TrackedLink } from "@/components/TrackedLink"
 import {
   ArrowRight,
@@ -185,7 +185,7 @@ function FadeUp({
   const ref = React.useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: "-60px" })
   return (
-    <motion.div
+    <m.div
       ref={ref}
       initial={{ opacity: 0, y: 24 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -193,7 +193,7 @@ function FadeUp({
       className={className}
     >
       {children}
-    </motion.div>
+    </m.div>
   )
 }
 
@@ -228,7 +228,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
 
         <div className="relative max-w-[940px] mx-auto text-center">
           <FadeUp>
-            <motion.span
+            <m.span
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
@@ -240,7 +240,7 @@ export default function AboutPageClient({ offices, press, recentPosts }: Props) 
             >
               <Sparkles className="w-3 h-3" strokeWidth={2.5} />
               글로벌 EdTech 유니콘 · 160개국
-            </motion.span>
+            </m.span>
           </FadeUp>
 
           <FadeUp delay={0.08}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, type Variants } from "framer-motion";
+import { m, type Variants } from "framer-motion";
 import { Check } from "lucide-react";
 import { TrackedLink } from "@/components/TrackedLink";
 
@@ -68,7 +68,7 @@ export default function ValueAnchor() {
 
       <div className="w-full max-w-5xl mx-auto text-center relative z-10">
         {/* Eyebrow */}
-        <motion.p
+        <m.p
           custom={0}
           variants={fadeUp}
           initial="hidden"
@@ -77,10 +77,10 @@ export default function ValueAnchor() {
           className="text-xs tracking-[0.2em] text-[#6EE7B7] font-semibold uppercase"
         >
           ALL-IN-ONE PROMISE
-        </motion.p>
+        </m.p>
 
         {/* Heading */}
-        <motion.h2
+        <m.h2
           custom={1}
           variants={fadeUp}
           initial="hidden"
@@ -92,10 +92,10 @@ export default function ValueAnchor() {
           클래스인 보드 하나에
           <br />
           수업을 위한 모든 기능을 담았습니다.
-        </motion.h2>
+        </m.h2>
 
         {/* Sub-copy */}
-        <motion.p
+        <m.p
           custom={2}
           variants={fadeUp}
           initial="hidden"
@@ -106,10 +106,10 @@ export default function ValueAnchor() {
           클래스인 보드는 하드웨어부터 소프트웨어까지 단 한 대에 모두 구축된
           완성형 솔루션입니다. 도입하는 순간, 복잡한 연결 과정 없이 바로 수업을
           시작할 수 있습니다.
-        </motion.p>
+        </m.p>
 
         {/* Value card */}
-        <motion.div
+        <m.div
           custom={3}
           variants={fadeUp}
           initial="hidden"
@@ -126,7 +126,7 @@ export default function ValueAnchor() {
 
           <ul className="space-y-2.5">
             {items.map((item, i) => (
-              <motion.li
+              <m.li
                 key={item.label}
                 custom={i}
                 variants={itemFadeUp}
@@ -145,13 +145,13 @@ export default function ValueAnchor() {
                 <span className="hidden sm:block text-xs text-white/35 leading-snug truncate">
                   — {item.desc}
                 </span>
-              </motion.li>
+              </m.li>
             ))}
           </ul>
-        </motion.div>
+        </m.div>
 
         {/* CTA */}
-        <motion.div
+        <m.div
           custom={4}
           variants={fadeUp}
           initial="hidden"
@@ -169,7 +169,7 @@ export default function ValueAnchor() {
           <p className="text-sm text-white/50">
             30일 만족 보장 — 사용해보고 결정하세요.
           </p>
-        </motion.div>
+        </m.div>
       </div>
     </section>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { Crosshair, ZoomIn, PenLine, Users } from "lucide-react";
 import Image from "next/image";
 
@@ -50,7 +50,7 @@ export default function AICameraSection() {
         </div>
 
         {/* Right visualization */}
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 28, scale: 0.98 }}
           whileInView={{ opacity: 1, y: 0, scale: 1 }}
           viewport={{ once: true, margin: "-80px" }}
@@ -65,7 +65,7 @@ export default function AICameraSection() {
             sizes="(max-width: 1024px) 100vw, 58vw"
             className="w-full h-auto object-contain"
           />
-        </motion.div>
+        </m.div>
       </div>
     </section>
   );

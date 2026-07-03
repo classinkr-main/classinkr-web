@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { motion, type Variants } from "framer-motion"
+import { m, type Variants } from "framer-motion"
 import { TrackedLink } from "@/components/TrackedLink"
 
 const sizes = [
@@ -66,7 +66,7 @@ export default function SizeChooser() {
         {/* Cards */}
         <div className="mt-14 mx-auto grid max-w-5xl md:grid-cols-2 gap-6 lg:gap-8">
           {sizes.map((size, i) => (
-            <motion.div
+            <m.div
               key={size.inches}
               custom={i}
               initial="hidden"
@@ -127,7 +127,7 @@ export default function SizeChooser() {
                   이 사이즈로 데모 신청 →
                 </TrackedLink>
               </div>
-            </motion.div>
+            </m.div>
           ))}
         </div>
 

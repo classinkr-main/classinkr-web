@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { motion, useInView } from "framer-motion"
+import { m, useInView } from "framer-motion"
 import { AlertTriangle, Clock, TrendingDown } from "lucide-react"
 
 function CountUp({ target, suffix = "", prefix = "" }: { target: number; suffix?: string; prefix?: string }) {
@@ -75,7 +75,7 @@ export function ProblemCost() {
 
             <div className="container mx-auto relative z-10">
                 {/* Title */}
-                <motion.div
+                <m.div
                     initial={{ opacity: 0, y: 40 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
@@ -96,12 +96,12 @@ export function ProblemCost() {
                     <p className="text-lg text-[#A39E98] break-keep">
                         시스템 없이 사람에만 의존하면, 잘 될 때도 있지만 한 명이 빠지면 학원 전체가 흔들립니다.
                     </p>
-                </motion.div>
+                </m.div>
 
                 {/* Cards */}
                 <div className="grid md:grid-cols-3 gap-6 md:gap-8">
                     {pains.map((pain, index) => (
-                        <motion.div
+                        <m.div
                             key={index}
                             initial={{ opacity: 0, y: 50, scale: 0.95 }}
                             whileInView={{ opacity: 1, y: 0, scale: 1 }}
@@ -139,12 +139,12 @@ export function ProblemCost() {
                                     </div>
                                 </div>
                             </div>
-                        </motion.div>
+                        </m.div>
                     ))}
                 </div>
 
                 {/* Risk Dashboard */}
-                <motion.div
+                <m.div
                     initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
@@ -174,7 +174,7 @@ export function ProblemCost() {
                                 { label: "강사 이탈률", value: 42, color: "orange", desc: "연간 평균 퇴사율" },
                                 { label: "학부모 불만", value: 67, color: "yellow", desc: "소통 부재 관련" },
                             ].map((metric, i) => (
-                                <motion.div
+                                <m.div
                                     key={i}
                                     initial={{ opacity: 0, scale: 0.9 }}
                                     whileInView={{ opacity: 1, scale: 1 }}
@@ -204,7 +204,7 @@ export function ProblemCost() {
                                     </div>
                                     {/* Mini bar */}
                                     <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                        <motion.div
+                                        <m.div
                                             initial={{ width: "0%" }}
                                             whileInView={{ width: `${metric.value}%` }}
                                             viewport={{ once: true }}
@@ -217,7 +217,7 @@ export function ProblemCost() {
                                         />
                                     </div>
                                     <p className="text-white/40 text-xs mt-2">{metric.desc}</p>
-                                </motion.div>
+                                </m.div>
                             ))}
                         </div>
 
@@ -228,7 +228,7 @@ export function ProblemCost() {
                                 <span className="text-[#F6D5C5] font-black text-lg"><CountUp target={85} suffix="%" /></span>
                             </div>
                             <div className="relative h-3 bg-white/10 rounded-full overflow-hidden">
-                                <motion.div
+                                <m.div
                                     initial={{ width: "0%" }}
                                     whileInView={{ width: "85%" }}
                                     transition={{ duration: 2, ease: [0.16, 1, 0.3, 1] }}
@@ -236,14 +236,14 @@ export function ProblemCost() {
                                     className="h-full bg-gradient-to-r from-yellow-500 via-orange-500 to-[#B85C33] rounded-full relative"
                                 >
                                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer bg-[length:200%_100%]" />
-                                </motion.div>
+                                </m.div>
                             </div>
                             <p className="text-xs text-white/40 mt-3 text-center">
                                 멀티 지점 학원의 85%가 표준화 시스템 부재로 운영 비효율을 겪고 있습니다
                             </p>
                         </div>
                     </div>
-                </motion.div>
+                </m.div>
             </div>
 
             {/* Bottom edge line */}

@@ -1,6 +1,6 @@
 "use client"
 
-import { motion, useReducedMotion } from "framer-motion"
+import { m, useReducedMotion } from "framer-motion"
 import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
 import { useState } from "react"
@@ -42,7 +42,7 @@ export function RouteTransition({
   // 인위적 지연을 만들므로 enter 애니메이션만 사용한다.
   // 전체 페이지 blur 필터는 repaint 비용이 커서 제외한다.
   return (
-    <motion.div
+    <m.div
       key={pathname}
       className={className}
       initial={animateIn ? { opacity: 0, y: tone === "admin" ? 8 : 12 } : false}
@@ -51,6 +51,6 @@ export function RouteTransition({
       style={{ minWidth: 0, transformOrigin: "50% 0%" }}
     >
       {children}
-    </motion.div>
+    </m.div>
   )
 }

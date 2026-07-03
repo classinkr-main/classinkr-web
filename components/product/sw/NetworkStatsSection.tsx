@@ -1,6 +1,6 @@
 "use client"
 
-import { motion, useInView } from "framer-motion"
+import { m, useInView } from "framer-motion"
 import { Globe, Shield, Zap } from "lucide-react"
 import { useRef } from "react"
 
@@ -39,11 +39,11 @@ export default function NetworkStatsSection() {
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#22A366]/5 rounded-full blur-[120px] pointer-events-none" />
 
                 <div className="container mx-auto px-4 lg:px-8 relative" ref={networkRef}>
-                    <motion.div className="text-center mb-16" {...fadeUp}>
+                    <m.div className="text-center mb-16" {...fadeUp}>
                         <EyebrowTag>GLOBAL NETWORK</EyebrowTag>
                         <h2 className="text-3xl md:text-4xl lg:text-5xl font-sans leading-tight">전 세계 어디서든,<br /><span className="text-[#22A366]">끊김 없이</span></h2>
                         <p className="text-lg text-slate-400 mt-6 max-w-2xl mx-auto">자체 네트워크 기술로 낮은 지연 시간과 고화질 수업을 보장합니다.</p>
-                    </motion.div>
+                    </m.div>
 
                     <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
                         {[
@@ -51,14 +51,14 @@ export default function NetworkStatsSection() {
                             { icon: <Zap className="w-7 h-7" />, value: "< 100ms", label: "지연 시간", desc: "실시간 상호작용이 가능한 속도" },
                             { icon: <Shield className="w-7 h-7" />, value: `${net99}.9%`, label: "가동률", desc: "중단 없는 안정적인 수업 환경" },
                         ].map((item, i) => (
-                            <motion.div key={i} {...stagger(i)} className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 text-center hover:bg-white/10 transition-colors relative overflow-hidden group">
+                            <m.div key={i} {...stagger(i)} className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 text-center hover:bg-white/10 transition-colors relative overflow-hidden group">
                                 {/* Pulse line between cards */}
                                 {i < 2 && <div className="absolute right-0 top-1/2 -translate-y-1/2 w-px h-1/2 bg-gradient-to-b from-transparent via-[#22A366]/20 to-transparent hidden sm:block" />}
                                 <div className="w-14 h-14 rounded-xl bg-white/10 border border-white/15 text-[#6EE7B7] flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]">{item.icon}</div>
                                 <div className="text-3xl font-sans font-bold tabular-nums text-white mb-1">{item.value}</div>
                                 <div className="text-sm font-bold text-[#22A366] mb-2">{item.label}</div>
                                 <p className="text-sm text-slate-400">{item.desc}</p>
-                            </motion.div>
+                            </m.div>
                         ))}
                     </div>
                 </div>

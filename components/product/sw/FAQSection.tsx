@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { m } from "framer-motion"
 import { useState } from "react"
 
 import { fadeUp } from "@/components/motion/presets"
@@ -40,16 +40,16 @@ export default function FAQSection() {
     return (
         <section className="py-24 md:py-32 bg-[#FDFCF8]">
             <div className="container mx-auto px-6 md:px-10 lg:px-16 max-w-5xl">
-                <motion.div className="text-center mb-14" {...fadeUp}>
+                <m.div className="text-center mb-14" {...fadeUp}>
                     <EyebrowTag>FAQ</EyebrowTag>
                     <h2 className="text-3xl md:text-4xl font-sans text-[#1a1a19] leading-tight">
                         자주 묻는 질문
                     </h2>
-                </motion.div>
+                </m.div>
 
                 <div className="space-y-3">
                     {FAQS.map((faq, i) => (
-                        <motion.div
+                        <m.div
                             key={i}
                             initial={{ opacity: 0, y: 15 }}
                             whileInView={{ opacity: 1, y: 0 }}
@@ -62,15 +62,15 @@ export default function FAQSection() {
                                 className="w-full flex items-center justify-between gap-5 px-8 py-6 text-left md:px-10 lg:px-12"
                             >
                                 <span className="text-base font-semibold text-slate-800 leading-snug md:text-lg">{faq.q}</span>
-                                <motion.span
+                                <m.span
                                     animate={{ rotate: openItems.includes(i) ? 45 : 0 }}
                                     transition={{ duration: 0.2 }}
                                     className="w-7 h-7 rounded-full border border-[rgba(34,163,102,0.2)] text-[#22A366] text-base font-bold shrink-0 leading-none flex items-center justify-center bg-[#ECFDF5]/50"
                                 >
                                     +
-                                </motion.span>
+                                </m.span>
                             </button>
-                            <motion.div
+                            <m.div
                                 initial={false}
                                 animate={{ height: openItems.includes(i) ? "auto" : 0, opacity: openItems.includes(i) ? 1 : 0 }}
                                 transition={{ duration: 0.25 }}
@@ -79,8 +79,8 @@ export default function FAQSection() {
                                 <p className="px-8 pb-6 text-base text-slate-500 leading-relaxed border-t border-slate-50 pt-5 md:px-10 lg:px-12">
                                     {faq.a}
                                 </p>
-                            </motion.div>
-                        </motion.div>
+                            </m.div>
+                        </m.div>
                     ))}
                 </div>
             </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { motion, useInView } from "framer-motion"
+import { m, useInView } from "framer-motion"
 import { useRef } from "react"
 
 import { EyebrowTag } from "./sw-shared"
@@ -19,7 +19,7 @@ export default function FutureVision2Section() {
             <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
 
                 {/* 헤드라인 */}
-                <motion.div
+                <m.div
                     className="text-center mb-20 md:mb-28"
                     initial={{ opacity: 0, y: 40 }}
                     whileInView={{ opacity: 1, y: 0 }}
@@ -36,11 +36,11 @@ export default function FutureVision2Section() {
                         <br className="hidden md:block" />{" "}
                         그것이 Classin이 교사에게 드리는 약속입니다.
                     </p>
-                </motion.div>
+                </m.div>
 
                 {/* 핵심 수치 */}
                 <div ref={metricsRef} className="grid md:grid-cols-2 gap-6 mb-20 max-w-3xl mx-auto">
-                    <motion.div
+                    <m.div
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={inView ? { opacity: 1, scale: 1 } : {}}
                         transition={{ duration: 0.7, type: "spring", stiffness: 150 }}
@@ -51,8 +51,8 @@ export default function FutureVision2Section() {
                         </div>
                         <div className="text-white/80 text-lg font-semibold mb-1">수업 퀄리티</div>
                         <div className="text-white/30 text-sm">쌍방향 참여 · AI 지원 · 학습 데이터 기반</div>
-                    </motion.div>
-                    <motion.div
+                    </m.div>
+                    <m.div
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={inView ? { opacity: 1, scale: 1 } : {}}
                         transition={{ duration: 0.7, delay: 0.15, type: "spring", stiffness: 150 }}
@@ -63,11 +63,11 @@ export default function FutureVision2Section() {
                         </div>
                         <div className="text-white/90 text-lg font-semibold mb-1">반복 업무 리소스</div>
                         <div className="text-white/60 text-sm">채점 · 출결 · 자료 준비 · 보고서 자동화</div>
-                    </motion.div>
+                    </m.div>
                 </div>
 
                 {/* 진정성 텍스트 */}
-                <motion.div
+                <m.div
                     className="max-w-3xl mx-auto text-center"
                     initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
@@ -92,7 +92,7 @@ export default function FutureVision2Section() {
                         Classin은 도구가 아닙니다.<br />
                         <span className="text-[#1a1a19] font-bold">교육이 다시 교육다워지는 환경</span>입니다.
                     </p>
-                </motion.div>
+                </m.div>
             </div>
         </section>
     )

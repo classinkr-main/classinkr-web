@@ -1,6 +1,6 @@
 "use client"
 
-import { motion, useInView } from "framer-motion"
+import { m, useInView } from "framer-motion"
 import { useRef } from "react"
 
 import { fadeUp } from "@/components/motion/presets"
@@ -38,18 +38,18 @@ export default function ComparisonSection() {
     return (
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
-                <motion.div className="text-center mb-16" {...fadeUp}>
+                <m.div className="text-center mb-16" {...fadeUp}>
                     <p className="text-sm font-semibold text-[#22A366] tracking-wider uppercase mb-3">Why Classin Board</p>
                     <h2 className="text-3xl md:text-4xl lg:text-5xl text-[#1a1a19] leading-tight">
                         도구를 바꾸는 게 아니라,
                         <br className="hidden sm:block" />{" "}
                         <span className="text-[#22A366]">교육의 방식</span>을 바꿉니다
                     </h2>
-                </motion.div>
+                </m.div>
 
                 <div ref={ref} className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
                     {items.map((item, i) => (
-                        <motion.div
+                        <m.div
                             key={i}
                             initial={{ opacity: 0, y: 40 }}
                             animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -77,7 +77,7 @@ export default function ComparisonSection() {
                                     </li>
                                 ))}
                             </ul>
-                        </motion.div>
+                        </m.div>
                     ))}
                 </div>
             </div>

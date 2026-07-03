@@ -1,6 +1,6 @@
 "use client"
 
-import { motion, useInView } from "framer-motion"
+import { m, useInView } from "framer-motion"
 import { ArrowRight, Play } from "lucide-react"
 import Link from "next/link"
 import { useRef } from "react"
@@ -40,7 +40,7 @@ export default function SwHeroSection() {
 
                 <div className="container relative z-10 mx-auto flex min-h-[720px] items-center px-4 py-14 sm:min-h-[700px] lg:px-8 md:h-full md:min-h-0 md:py-20">
                     <div className="max-w-4xl mx-auto text-center">
-                        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
+                        <m.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7 }}>
                             <div className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-white/12 border border-white/18 shadow-[0_2px_18px_rgba(0,0,0,0.18)] text-[#6EE7B7] text-xs font-bold mb-8 tracking-widest uppercase backdrop-blur-sm">
                                 <span className="w-1.5 h-1.5 rounded-full bg-[#22A366] animate-pulse"></span>
                                 교육 전용 플랫폼
@@ -64,13 +64,13 @@ export default function SwHeroSection() {
                                     { value: metric10, suffix: "+", label: "수업 활동" },
                                     { value: metric150, suffix: "+", label: "지원 국가" },
                                     { value: metric2400.toLocaleString(), suffix: "+", label: "도입 학원", raw: true },
-                                ].map((m, i) => (
-                                    <motion.div key={i} initial={{ opacity: 0, y: 15 }} animate={heroMetricInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: i * 0.1 + 0.3 }} className="min-w-[84px] text-center">
+                                ].map((metric, i) => (
+                                    <m.div key={i} initial={{ opacity: 0, y: 15 }} animate={heroMetricInView ? { opacity: 1, y: 0 } : {}} transition={{ delay: i * 0.1 + 0.3 }} className="min-w-[84px] text-center">
                                         <div className="text-2xl md:text-3xl font-sans font-bold tabular-nums text-[#6EE7B7] drop-shadow-[0_2px_12px_rgba(0,0,0,0.35)]">
-                                            {m.raw ? m.value : m.value}{m.suffix}
+                                            {metric.raw ? metric.value : metric.value}{metric.suffix}
                                         </div>
-                                        <div className="text-[11px] md:text-xs text-white/62 mt-0.5 font-semibold">{m.label}</div>
-                                    </motion.div>
+                                        <div className="text-[11px] md:text-xs text-white/62 mt-0.5 font-semibold">{metric.label}</div>
+                                    </m.div>
                                 ))}
                             </div>
 
@@ -96,7 +96,7 @@ export default function SwHeroSection() {
                                     </a>
                                 </Button>
                             </div>
-                        </motion.div>
+                        </m.div>
                     </div>
                 </div>
             </section>

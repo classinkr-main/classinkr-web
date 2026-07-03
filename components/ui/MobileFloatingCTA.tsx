@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion"
+import { m, AnimatePresence, useReducedMotion } from "framer-motion"
 import { MessageSquare, X } from "lucide-react"
 import { TrackedLink } from "@/components/TrackedLink"
 
@@ -49,7 +49,7 @@ export function MobileFloatingCTA() {
         <div className="md:hidden">
             <AnimatePresence>
                 {visible && !dismissed && (
-                    <motion.div
+                    <m.div
                         initial={{ y: 80, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 80, opacity: 0 }}
@@ -61,7 +61,7 @@ export function MobileFloatingCTA() {
                                 <span className="absolute inset-0 animate-ping rounded-full bg-primary opacity-20" />
                             ) : null}
 
-                            <motion.div
+                            <m.div
                                 animate={shouldReduceMotion ? undefined : { y: [0, -4, 0] }}
                                 transition={
                                     shouldReduceMotion
@@ -82,7 +82,7 @@ export function MobileFloatingCTA() {
                                     <MessageSquare className="h-4 w-4 shrink-0" />
                                     도입 문의하기
                                 </TrackedLink>
-                            </motion.div>
+                            </m.div>
 
                             <button
                                 onClick={() => setDismissed(true)}
@@ -92,7 +92,7 @@ export function MobileFloatingCTA() {
                                 <X className="h-4 w-4 text-white" />
                             </button>
                         </div>
-                    </motion.div>
+                    </m.div>
                 )}
             </AnimatePresence>
         </div>

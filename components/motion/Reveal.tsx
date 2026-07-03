@@ -1,18 +1,18 @@
 "use client"
 
-import { motion, type MotionProps, type MotionStyle } from "framer-motion"
+import { m, type MotionProps, type MotionStyle } from "framer-motion"
 import type { ReactNode } from "react"
 
 const MOTION_TAGS = {
-    div: motion.div,
-    p: motion.p,
-    h2: motion.h2,
-    h3: motion.h3,
-    span: motion.span,
-    figure: motion.figure,
-    section: motion.section,
-    a: motion.a,
-    tr: motion.tr,
+    div: m.div,
+    p: m.p,
+    h2: m.h2,
+    h3: m.h3,
+    span: m.span,
+    figure: m.figure,
+    section: m.section,
+    a: m.a,
+    tr: m.tr,
 } as const
 
 type RevealTag = keyof typeof MOTION_TAGS

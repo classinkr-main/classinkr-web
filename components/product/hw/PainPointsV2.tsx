@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { X, ArrowRight, Check } from "lucide-react";
 
 const items = [
@@ -70,7 +70,7 @@ export default function PainPointsV2() {
         </div>
 
         {/* Rows */}
-        <motion.div
+        <m.div
           className="mt-16 space-y-4"
           variants={containerVariants}
           initial="hidden"
@@ -78,7 +78,7 @@ export default function PainPointsV2() {
           viewport={{ once: true, margin: "-80px" }}
         >
           {items.map((item, i) => (
-            <motion.div
+            <m.div
               key={i}
               variants={rowVariants}
               className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-4 md:gap-8 items-stretch"
@@ -114,9 +114,9 @@ export default function PainPointsV2() {
                   </p>
                 </div>
               </div>
-            </motion.div>
+            </m.div>
           ))}
-        </motion.div>
+        </m.div>
       </div>
     </section>
   );

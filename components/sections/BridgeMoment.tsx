@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { motion, useInView } from "framer-motion"
+import { m, useInView } from "framer-motion"
 import { ArrowRight } from "lucide-react"
 
 function CountUp({ target, suffix = "", prefix = "", decimals = 0 }: { target: number; suffix?: string; prefix?: string; decimals?: number }) {
@@ -52,7 +52,7 @@ export function BridgeMoment() {
                 style={{ backgroundImage: 'radial-gradient(#064e3b 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
 
             <div className="container mx-auto px-4 md:px-6 relative z-10">
-                <motion.div
+                <m.div
                     initial={{ opacity: 0, y: 40, scale: 0.97 }}
                     whileInView={{ opacity: 1, y: 0, scale: 1 }}
                     transition={{ duration: 0.8, ease: [0.21, 0.47, 0.32, 0.98] }}
@@ -71,7 +71,7 @@ export function BridgeMoment() {
                             <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
                                 {/* Left: Question */}
                                 <div className="flex-1 text-center md:text-left min-w-0">
-                                    <motion.p
+                                    <m.p
                                         initial={{ opacity: 0, y: 10 }}
                                         whileInView={{ opacity: 1, y: 0 }}
                                         viewport={{ once: true }}
@@ -79,9 +79,9 @@ export function BridgeMoment() {
                                         className="text-[#084734]/70 text-sm font-semibold uppercase tracking-[0.25em] mb-4"
                                     >
                                         상상해 보세요
-                                    </motion.p>
+                                    </m.p>
 
-                                    <motion.h2
+                                    <m.h2
                                         initial={{ opacity: 0, y: 15 }}
                                         whileInView={{ opacity: 1, y: 0 }}
                                         viewport={{ once: true }}
@@ -91,22 +91,22 @@ export function BridgeMoment() {
                                     >
                                         <span className="text-[#084734]">10개 지점</span> 관리가<br />
                                         <span className="text-[#084734]">1개 지점</span>처럼 느껴진다면?
-                                    </motion.h2>
+                                    </m.h2>
                                 </div>
 
                                 {/* Divider - animated arrow */}
                                 <div className="hidden md:flex items-center shrink-0">
-                                    <motion.div
+                                    <m.div
                                         animate={{ x: [0, 8, 0] }}
                                         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                                     >
                                         <ArrowRight className="w-10 h-10 text-[#084734]/40" />
-                                    </motion.div>
+                                    </m.div>
                                 </div>
 
                                 {/* Right: Answer */}
                                 <div className="flex-1 text-center md:text-left min-w-0">
-                                    <motion.p
+                                    <m.p
                                         initial={{ opacity: 0, y: 15 }}
                                         whileInView={{ opacity: 1, y: 0 }}
                                         viewport={{ once: true }}
@@ -115,7 +115,7 @@ export function BridgeMoment() {
                                     >
                                         하나의 플랫폼, 하나의 기준으로 <br className="hidden md:block" />
                                         모든 지점이 최고 효율로 운영됩니다.
-                                    </motion.p>
+                                    </m.p>
                                 </div>
                             </div>
 
@@ -123,7 +123,7 @@ export function BridgeMoment() {
                             <div className="my-8 md:my-10 h-px bg-gradient-to-r from-transparent via-emerald-200 to-transparent" />
 
                             {/* Bottom: Stats */}
-                            <motion.div
+                            <m.div
                                 initial={{ opacity: 0, y: 20 }}
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true }}
@@ -131,7 +131,7 @@ export function BridgeMoment() {
                                 className="grid grid-cols-3 gap-4 md:gap-6"
                             >
                                 {stats.map((stat, i) => (
-                                    <motion.div
+                                    <m.div
                                         key={i}
                                         initial={{ opacity: 0, y: 20 }}
                                         whileInView={{ opacity: 1, y: 0 }}
@@ -143,12 +143,12 @@ export function BridgeMoment() {
                                             <CountUp target={stat.value} prefix={stat.prefix} suffix={stat.suffix} decimals={stat.decimals} />
                                         </div>
                                         <div className="text-[#A39E98] text-[11px] sm:text-xs md:text-sm font-medium tracking-wider break-keep">{stat.label}</div>
-                                    </motion.div>
+                                    </m.div>
                                 ))}
-                            </motion.div>
+                            </m.div>
                         </div>
                     </div>
-                </motion.div>
+                </m.div>
             </div>
 
             {/* Bottom edge line */}
