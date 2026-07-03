@@ -1,5 +1,3 @@
-"use client"
-
 import { Button } from "@/components/ui/button"
 import { BROCHURE_URL } from "@/lib/marketing-links"
 import { DemoModal } from "./DemoModal"

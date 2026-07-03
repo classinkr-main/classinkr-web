@@ -1,7 +1,6 @@
-"use client"
-
-import { motion } from "framer-motion"
 import { Check, X } from "lucide-react"
+
+import { Reveal } from "@/components/motion/Reveal"
 
 const comparisons = [
     {
@@ -63,7 +62,7 @@ export function Outcomes() {
 
                         <div className="grid grid-cols-1 gap-5">
                             {comparisons.map((item, index) => (
-                                <motion.div
+                                <Reveal
                                     key={index}
                                     initial={{ opacity: 0, y: 20 }}
                                     whileInView={{ opacity: 1, y: 0 }}
@@ -92,7 +91,7 @@ export function Outcomes() {
                                         <span className="text-[#084734] font-bold text-sm mb-3 uppercase tracking-wider">{item.role}</span>
                                         <p className="text-[#111110] text-lg font-medium leading-relaxed break-keep">{item.after}</p>
                                     </div>
-                                </motion.div>
+                                </Reveal>
                             ))}
                         </div>
                     </div>

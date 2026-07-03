@@ -1,8 +1,7 @@
-"use client"
-
-import { motion } from "framer-motion"
 import { Quote, Star } from "lucide-react"
 import { TESTIMONIALS } from "@/lib/testimonials"
+
+import { Reveal } from "@/components/motion/Reveal"
 
 const featuredTestimonials = TESTIMONIALS.filter((item) => item.highlight)
 const supportingTestimonials = TESTIMONIALS.filter((item) => !item.highlight)
@@ -28,7 +27,7 @@ export function TestimonialWall() {
         <section className="overflow-hidden bg-[#F7F8F5] py-20 md:py-28">
             <div className="container mx-auto px-4">
                 <div className="mx-auto max-w-6xl">
-                    <motion.div
+                    <Reveal
                         initial={{ opacity: 0, y: 18 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true, margin: "-80px" }}
@@ -48,10 +47,10 @@ export function TestimonialWall() {
                                 원문 표현은 유지하고, 어떤 경험에서 나온 말인지 함께 볼 수 있게 정리했습니다.
                             </p>
                         </div>
-                    </motion.div>
+                    </Reveal>
 
                     {leadTestimonial && (
-                        <motion.figure
+                        <Reveal as="figure"
                             initial={{ opacity: 0, y: 22 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true, margin: "-80px" }}
@@ -109,12 +108,12 @@ export function TestimonialWall() {
                                     </div>
                                 ))}
                             </div>
-                        </motion.figure>
+                        </Reveal>
                     )}
 
                     <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         {supportingTestimonials.map((item, index) => (
-                            <motion.figure
+                            <Reveal as="figure"
                                 key={item.id}
                                 initial={{ opacity: 0, y: 18 }}
                                 whileInView={{ opacity: 1, y: 0 }}
@@ -140,7 +139,7 @@ export function TestimonialWall() {
                                     <span className="font-semibold text-[#615D59]">{item.role}</span>
                                     <span className="text-[#A39E98]">Classin</span>
                                 </figcaption>
-                            </motion.figure>
+                            </Reveal>
                         ))}
                     </div>
                 </div>
