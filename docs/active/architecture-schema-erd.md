@@ -101,21 +101,26 @@ public/
 
 `app/page.tsx`
 
-- 초기 3개 섹션은 정적 import
+- 정적 import 섹션
   - `Hero`
+  - `LogoBar`
+  - `HomeEntitySummary`
+  - `EraVision`
   - `ProblemCost`
-  - `BridgeMoment`
+  - `Manifesto`
+  - `GlobalScale`
 - 이후 섹션은 `next/dynamic`으로 지연 로드
-  - `Outcomes`
   - `SolutionOverview`
   - `KeyUseCases`
   - `DashboardPreview`
   - `ScienceBased`
   - `SatisfyingClass`
   - `CaseStudies`
+  - `TestimonialWall`
+  - `Outcomes`
   - `Comparison`
-  - `FAQ`
   - `FinalCTA`
+- FAQ는 랜딩에서 분리되어 `/faq` 별도 페이지로 운영
 
 ### 5-3. 제품 섹션
 
