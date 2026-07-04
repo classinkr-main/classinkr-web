@@ -489,11 +489,14 @@ function AdminSidebarContent({ role, name, email }: Props) {
             ) : (
               groupedNav.map(({ section, items }, groupIndex) => (
               <div key={`mobile-${section}`} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
-                <div className="px-3 pb-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
-                    {ADMIN_NAV_SECTION_META[section].label}
-                  </p>
-                </div>
+                {/* home(Overview 단독)은 헤더 없이 최상위에 렌더. */}
+                {section !== "home" && (
+                  <div className="px-3 pb-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
+                      {ADMIN_NAV_SECTION_META[section].label}
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-1">
                   {items.map((item) => {
                     const isActive = isNavActive(item.href)
@@ -707,13 +710,11 @@ function AdminSidebarContent({ role, name, email }: Props) {
         ) : (
           groupedNav.map(({ section, items }, groupIndex) => (
           <div key={section} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
-            {!effectiveCollapsed && (
+            {/* home(Overview 단독)은 헤더 없이 최상위에 렌더. 나머지 섹션은 라벨만(부제 미표시). */}
+            {!effectiveCollapsed && section !== "home" && (
               <div className="px-3 pb-2">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
                   {ADMIN_NAV_SECTION_META[section].label}
-                </p>
-                <p className="mt-1 hidden text-[11px] text-[#1a1a1a]/32 sm:block">
-                  {ADMIN_NAV_SECTION_META[section].description}
                 </p>
               </div>
             )}
