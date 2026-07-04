@@ -25,8 +25,6 @@ import {
 } from "lucide-react"
 import AdminTabs from "@/components/admin/AdminTabs"
 import { ChannelHubCards } from "@/components/admin/campaigns/ChannelHubCards"
-import EmailHubPanel from "@/components/admin/campaigns/EmailHubPanel"
-import type { EmailHubStats } from "@/components/admin/campaigns/EmailHubPanel"
 import { InsightsBanner } from "@/components/admin/campaigns/InsightsBanner"
 import type { Insight } from "@/components/admin/campaigns/InsightsBanner"
 import { GoalProgressPanel } from "@/components/admin/campaigns/GoalProgressPanel"
@@ -93,6 +91,12 @@ const ChannelEfficiencyChart = dynamic(
 const MetaPerformanceCharts = dynamic(
   () => import("@/components/admin/campaigns/MetaPerformanceCharts").then((m) => m.MetaPerformanceCharts),
   { ssr: false, loading: () => <ChartSkeleton className="h-[260px]" /> }
+)
+
+// 이메일·SMS 허브(구 /admin/marketing)를 이메일 탭에 흡수 — 무거우므로 동적 로딩.
+const MarketingHub = dynamic(
+  () => import("@/components/admin/marketing/MarketingHub"),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[420px]" /> }
 )
 
 const KRW = new Intl.NumberFormat("ko-KR")
@@ -1455,7 +1459,8 @@ export default function AdminCampaignsPage() {
   }, [activeTab, loadMeta])
 
   useEffect(() => {
-    if (activeTab === "summary" || activeTab === "email") {
+    // 이메일 탭은 MarketingHub가 자체 데이터를 불러온다. 요약 탭 채널 카드용만 여기서 조회.
+    if (activeTab === "summary") {
       void loadEmailStats()
     }
   }, [activeTab, loadEmailStats])
@@ -1654,18 +1659,6 @@ export default function AdminCampaignsPage() {
         activeSubscribers: emailStats.subscribers.active,
         sentCampaigns: emailStats.campaigns.recentCampaigns.filter((c) => c.status === "sent").length,
         newThisMonth: emailStats.subscribers.newThisMonth,
-      }
-    : null
-
-  const hubEmailStats: EmailHubStats | null = emailStats
-    ? {
-        totalSubscribers: emailStats.subscribers.total,
-        activeSubscribers: emailStats.subscribers.active,
-        unsubscribed: emailStats.subscribers.unsubscribed,
-        sentCampaigns: emailStats.campaigns.recentCampaigns.filter((c) => c.status === "sent").length,
-        totalCampaigns: emailStats.campaigns.total,
-        newThisMonth: emailStats.subscribers.newThisMonth,
-        recentCampaigns: emailStats.campaigns.recentCampaigns,
       }
     : null
 
@@ -2134,7 +2127,7 @@ export default function AdminCampaignsPage() {
       {/* Tab content */}
       {activeTab === "email" ? (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
-          <EmailHubPanel stats={hubEmailStats} />
+          <MarketingHub />
         </div>
       ) : activeTab === "meta" ? (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
