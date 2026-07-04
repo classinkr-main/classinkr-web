@@ -170,13 +170,6 @@ export function MetricRankList<T>({
   )
 }
 
-// ── ToneBadge ──────────────────────────────────────────────────────────
-export function ToneBadge({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
-  return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${TONE[tone].badge}`}>{children}</span>
-  )
-}
-
 // ── EmptyState ─────────────────────────────────────────────────────────
 export function EmptyState({
   title,

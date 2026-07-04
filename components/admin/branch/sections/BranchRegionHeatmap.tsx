@@ -8,6 +8,7 @@ import {
   KOREA_PROVINCE_WIDTH,
 } from "@/lib/branch/korea-province-map"
 import { useBranchJson } from "../client-api"
+import { cny } from "@/lib/branch/money-format"
 import type { Period, Team } from "../types"
 
 interface TopCustomer {
@@ -56,12 +57,6 @@ const REGION_ALIASES: Array<[string, string]> = [
 ]
 
 function fmt(n: number) { return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(n) }
-function cny(n: number) {
-  if (!Number.isFinite(n)) return "-"
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`
-  if (n >= 10_000) return `${(n / 10_000).toFixed(1)}만`
-  return n.toLocaleString()
-}
 
 // Heat ramp — premium business palette, 4-stop gradient from terracotta to
 // deep forest. Every stop is desaturated and mid-dark so it reads as a

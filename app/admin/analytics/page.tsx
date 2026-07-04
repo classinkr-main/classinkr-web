@@ -4,8 +4,6 @@ import dynamic from "next/dynamic"
 import { useEffect, useState } from "react"
 import {
   AlertCircle,
-  ArrowDownRight,
-  ArrowUpRight,
   BarChart2,
   CheckCircle2,
   ChevronRight,
@@ -14,12 +12,12 @@ import {
   FileText,
   Link2,
   Mail,
-  Minus,
   Send,
   Users,
 } from "lucide-react"
 import AdminTabs from "@/components/admin/AdminTabs"
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { MetricRankList, Panel, StatTile, TrendBadge } from "@/components/admin/viz"
 import { textMatchesEventToken } from "@/lib/events/attribution"
 import { useUrlState } from "@/lib/use-url-state"
 import type { LeadRecord } from "@/lib/db"
@@ -235,72 +233,6 @@ function getTrend(current: number, previous: number) {
   return current - previous
 }
 
-function trendTone(value: number) {
-  if (value > 0) return "text-green-600 bg-green-50"
-  if (value < 0) return "text-[#B85C33] bg-[#FEF3EE]"
-  return "text-[#1a1a1a]/40 bg-[#f0f0ec]"
-}
-
-function TrendBadge({ value }: { value: number }) {
-  return (
-    <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium ${trendTone(value)}`}>
-      {value === 0 ? <Minus className="w-3 h-3" /> : value > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-      {Math.abs(value)}
-    </span>
-  )
-}
-
-function Panel({
-  title,
-  description,
-  action,
-  children,
-}: {
-  title: string
-  description?: string
-  action?: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-      <div className="flex flex-col gap-3 border-b border-[#e8e8e4] px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-        <div>
-          <h2 className="text-[14px] font-semibold text-[#111110]">{title}</h2>
-          {description && <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">{description}</p>}
-        </div>
-        {action}
-      </div>
-      <div className="p-4 sm:p-6">{children}</div>
-    </section>
-  )
-}
-
-function SummaryCard({
-  icon,
-  label,
-  value,
-  hint,
-  trend,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string | number
-  hint?: string
-  trend?: number
-}) {
-  return (
-    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="inline-flex rounded-xl bg-[#f0f0ec] p-2 text-[#1a1a1a]/50">{icon}</div>
-        {typeof trend === "number" && <TrendBadge value={trend} />}
-      </div>
-      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/40">{label}</p>
-      <p className="text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{value}</p>
-      {hint && <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">{hint}</p>}
-    </div>
-  )
-}
-
 function InsightCard({
   eyebrow,
   title,
@@ -325,54 +257,6 @@ function InsightCard({
       <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">{eyebrow}</p>
       <p className="mt-2 text-[14px] font-semibold tracking-[-0.01em] text-[#111110]">{title}</p>
       <p className="mt-1.5 text-[12px] leading-relaxed text-[#1a1a1a]/45">{description}</p>
-    </div>
-  )
-}
-
-function MetricRankList({
-  rows,
-  empty,
-  getLabel,
-  getValue,
-  getMeta,
-  getMagnitude,
-}: {
-  rows: HomepageFlowPageRow[]
-  empty: string
-  getLabel: (row: HomepageFlowPageRow) => string
-  getValue: (row: HomepageFlowPageRow) => string
-  getMeta: (row: HomepageFlowPageRow) => string
-  getMagnitude: (row: HomepageFlowPageRow) => number
-}) {
-  const max = Math.max(
-    1,
-    ...rows.map((row) => getMagnitude(row))
-  )
-
-  if (rows.length === 0) {
-    return <p className="py-8 text-[12px] text-[#1a1a1a]/45">{empty}</p>
-  }
-
-  return (
-    <div className="space-y-3">
-      {rows.map((row) => {
-        const value = getMagnitude(row)
-        const width = Math.max(8, Math.round((value / max) * 100))
-        return (
-          <div key={`${row.path}-${getValue(row)}`} className="space-y-1.5">
-            <div className="flex items-start justify-between gap-3 text-[12px]">
-              <div className="min-w-0">
-                <p className="truncate font-mono text-[#111110]">{getLabel(row)}</p>
-                <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">{getMeta(row)}</p>
-              </div>
-              <span className="shrink-0 font-semibold text-[#111110]">{getValue(row)}</span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-[#f0f0ec]">
-              <div className="h-full rounded-full bg-[#084734]" style={{ width: `${width}%` }} />
-            </div>
-          </div>
-        )
-      })}
     </div>
   )
 }
@@ -938,7 +822,7 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        <SummaryCard
+        <StatTile
           icon={<BarChart2 className="w-4 h-4" />}
           label="오늘 홈 방문자"
           value={visitorStats ? visitorStats.today.homeVisitors : "..."}
@@ -949,33 +833,33 @@ export default function AnalyticsPage() {
           }
           trend={homeVisitorTrend}
         />
-        <SummaryCard
+        <StatTile
           icon={<Users className="w-4 h-4" />}
           label="최근 리드"
           value={loading ? "..." : currentLeadCount}
           hint={`${range}일 기준`}
           trend={loading ? undefined : leadTrend}
         />
-        <SummaryCard
+        <StatTile
           icon={<CheckCircle2 className="w-4 h-4" />}
           label="전환율"
           value={loading ? "..." : `${conversionRate}%`}
           hint={`전환 ${convertedLeads.length}건`}
         />
-        <SummaryCard
+        <StatTile
           icon={<Mail className="w-4 h-4" />}
           label="활성 구독자"
           value={loading ? "..." : activeSubscribers.length}
           hint={`최근 ${range}일 +${currentSubscriberCount}`}
           trend={loading ? undefined : subscriberTrend}
         />
-        <SummaryCard
+        <StatTile
           icon={<FileText className="w-4 h-4" />}
           label="공개 콘텐츠"
           value={loading ? "..." : publishedPosts.length}
           hint={`초안 ${draftPosts.length}건`}
         />
-        <SummaryCard
+        <StatTile
           icon={<Send className="w-4 h-4" />}
           label="발송 캠페인"
           value={loading ? "..." : sentCampaigns.length}
@@ -1245,10 +1129,10 @@ export default function AnalyticsPage() {
       {activeTab === "content" && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <SummaryCard icon={<FileText className="w-4 h-4" />} label="공개 글" value={publishedPosts.length} />
-            <SummaryCard icon={<FileText className="w-4 h-4" />} label="초안" value={draftPosts.length} />
-            <SummaryCard icon={<CheckCircle2 className="w-4 h-4" />} label="추천 글" value={featuredPosts.length} />
-            <SummaryCard icon={<Link2 className="w-4 h-4" />} label="CTA 포함 글" value={posts.filter((post) => post.cta?.buttonHref).length} />
+            <StatTile icon={<FileText className="w-4 h-4" />} label="공개 글" value={publishedPosts.length} />
+            <StatTile icon={<FileText className="w-4 h-4" />} label="초안" value={draftPosts.length} />
+            <StatTile icon={<CheckCircle2 className="w-4 h-4" />} label="추천 글" value={featuredPosts.length} />
+            <StatTile icon={<Link2 className="w-4 h-4" />} label="CTA 포함 글" value={posts.filter((post) => post.cta?.buttonHref).length} />
           </div>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_1.2fr]">
@@ -1347,10 +1231,10 @@ export default function AnalyticsPage() {
       {activeTab === "campaigns" && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <SummaryCard icon={<Send className="w-4 h-4" />} label="총 캠페인" value={campaigns.length} />
-            <SummaryCard icon={<CheckCircle2 className="w-4 h-4" />} label="발송됨" value={sentCampaigns.length} />
-            <SummaryCard icon={<AlertCircle className="w-4 h-4" />} label="실패" value={failedCampaigns.length} />
-            <SummaryCard icon={<Mail className="w-4 h-4" />} label="초안" value={draftCampaigns.length} />
+            <StatTile icon={<Send className="w-4 h-4" />} label="총 캠페인" value={campaigns.length} />
+            <StatTile icon={<CheckCircle2 className="w-4 h-4" />} label="발송됨" value={sentCampaigns.length} />
+            <StatTile icon={<AlertCircle className="w-4 h-4" />} label="실패" value={failedCampaigns.length} />
+            <StatTile icon={<Mail className="w-4 h-4" />} label="초안" value={draftCampaigns.length} />
           </div>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1.2fr]">
@@ -1455,19 +1339,19 @@ export default function AnalyticsPage() {
         <div className="space-y-6">
           {/* KPI 4종 */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <SummaryCard
+            <StatTile
               icon={<Send className="w-4 h-4" />}
               label="총 행사"
               value={publicEvents.length}
               hint={`총 광고비 ${won(eventTotals.spend)}`}
             />
-            <SummaryCard
+            <StatTile
               icon={<Users className="w-4 h-4" />}
               label="누적 리드 → 딜"
               value={`${eventTotals.leads} → ${eventTotals.deals}`}
               hint={`참석 ${eventTotals.attendees}명 · 성사 고객 ${eventTotals.closedCustomers}곳`}
             />
-            <SummaryCard
+            <StatTile
               icon={<BarChart2 className="w-4 h-4" />}
               label="평균 CPL · CPD"
               value={
@@ -1481,7 +1365,7 @@ export default function AnalyticsPage() {
                   : "딜 데이터 부족"
               }
             />
-            <SummaryCard
+            <StatTile
               icon={<CheckCircle2 className="w-4 h-4" />}
               label="누적 ROI"
               value={overallEventRoi != null ? `${overallEventRoi}%` : "—"}
@@ -1627,25 +1511,25 @@ export default function AnalyticsPage() {
       {activeTab === "flow" && (
         <div className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard
+            <StatTile
               icon={<Users className="w-4 h-4" />}
               label="홈 방문자"
               value={homepageFlow ? homepageFlow.totals.homeVisitors.toLocaleString() : "..."}
               hint={`최근 ${range}일 · 홈 PV ${homepageFlow?.totals.homePageViews.toLocaleString() ?? 0}`}
             />
-            <SummaryCard
+            <StatTile
               icon={<BarChart2 className="w-4 h-4" />}
               label="전체 페이지뷰"
               value={homepageFlow ? homepageFlow.totals.pageViews.toLocaleString() : "..."}
               hint={`방문자 ${homepageFlow?.totals.visitors.toLocaleString() ?? 0}명`}
             />
-            <SummaryCard
+            <StatTile
               icon={<Download className="w-4 h-4" />}
               label="자료 다운로드"
               value={homepageFlow ? homepageFlow.totals.downloads.toLocaleString() : "..."}
               hint="download_materials 이벤트 기준"
             />
-            <SummaryCard
+            <StatTile
               icon={<Clock3 className="w-4 h-4" />}
               label="평균 체류"
               value={homepageFlow ? formatDuration(homepageFlow.totals.avgDwellSeconds) : "..."}

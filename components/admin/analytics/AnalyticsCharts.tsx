@@ -16,30 +16,7 @@ import {
   YAxis,
 } from "recharts"
 
-type TooltipPayload = Array<{ value?: number }>
-
-function ChartTooltip({
-  active,
-  payload,
-  label,
-  suffix = "건",
-}: {
-  active?: boolean
-  payload?: TooltipPayload
-  label?: string
-  suffix?: string
-}) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="rounded-xl bg-[#111110] px-3 py-2 text-[12px] text-white shadow-xl">
-      <p className="mb-0.5 text-white/50">{label}</p>
-      <p className="font-bold">
-        {payload[0]?.value ?? 0}
-        {suffix}
-      </p>
-    </div>
-  )
-}
+import { ChartTooltip, chartTooltipContentStyle } from "../viz/ChartTheme"
 
 export function LeadTrendChart({
   data,
@@ -131,13 +108,7 @@ export function EventCompareChart({
         <CartesianGrid stroke="#f0f0ec" vertical={false} />
         <XAxis dataKey="name" fontSize={11} stroke="#84827a" />
         <YAxis fontSize={11} stroke="#84827a" />
-        <Tooltip
-          contentStyle={{
-            border: "1px solid #e8e8e4",
-            borderRadius: 12,
-            boxShadow: "0 10px 24px rgba(0,0,0,0.08)",
-          }}
-        />
+        <Tooltip contentStyle={chartTooltipContentStyle} />
         <Bar dataKey="리드" fill="#84827a" radius={[4, 4, 0, 0]} />
         <Bar dataKey="신청" fill="#D97706" radius={[4, 4, 0, 0]} />
         <Bar dataKey="참석" fill="#084734" radius={[4, 4, 0, 0]} />
@@ -159,13 +130,7 @@ export function EventEconomicsChart({
         <XAxis dataKey="name" fontSize={11} stroke="#84827a" />
         <YAxis yAxisId="left" fontSize={11} stroke="#84827a" />
         <YAxis yAxisId="right" orientation="right" fontSize={11} stroke="#84827a" />
-        <Tooltip
-          contentStyle={{
-            border: "1px solid #e8e8e4",
-            borderRadius: 12,
-            boxShadow: "0 10px 24px rgba(0,0,0,0.08)",
-          }}
-        />
+        <Tooltip contentStyle={chartTooltipContentStyle} />
         <Bar yAxisId="left" dataKey="광고비(천원)" fill="#B85C33" radius={[4, 4, 0, 0]} />
         <Bar yAxisId="left" dataKey="매출(천원)" fill="#084734" radius={[4, 4, 0, 0]} />
         <Line yAxisId="right" type="monotone" dataKey="ROI" stroke="#111110" strokeWidth={2} dot={{ r: 3 }} />

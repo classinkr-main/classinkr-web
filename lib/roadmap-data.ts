@@ -1,8 +1,5 @@
-import fs from "fs"
-import path from "path"
-import { atomicWriteJsonSync } from "@/lib/atomic-write"
-
-const ROADMAP_PATH = path.join(process.cwd(), "data", "roadmap.json")
+// roadmap-data.ts — 로드맵 도메인 타입.
+// CRUD는 lib/repositories/roadmap.ts(Supabase)로 이관됨. 이 파일은 타입만 제공한다.
 
 export type RoadmapStatus = "planned" | "in-progress" | "done"
 
@@ -21,35 +18,4 @@ export interface RoadmapItem {
   startDate?: string
   targetDate?: string
   features: RoadmapFeature[]
-}
-
-function readRoadmap(): RoadmapItem[] {
-  if (!fs.existsSync(ROADMAP_PATH)) return []
-  return JSON.parse(fs.readFileSync(ROADMAP_PATH, "utf-8")) as RoadmapItem[]
-}
-
-function writeRoadmap(items: RoadmapItem[]) {
-  atomicWriteJsonSync(ROADMAP_PATH, items)
-}
-
-export function getRoadmapItems() {
-  return readRoadmap()
-}
-
-export function createRoadmapItem(item: RoadmapItem) {
-  const roadmap = readRoadmap()
-  roadmap.push(item)
-  writeRoadmap(roadmap)
-  return item
-}
-
-export function updateRoadmapItem(id: string, patch: Partial<RoadmapItem>) {
-  const roadmap = readRoadmap()
-  const index = roadmap.findIndex((item) => item.id === id)
-  if (index === -1) return null
-
-  roadmap[index] = { ...roadmap[index], ...patch, id }
-  writeRoadmap(roadmap)
-
-  return roadmap[index]
 }
