@@ -1499,27 +1499,6 @@ const WEEK_SERIES: Array<{
   { key: "monthlyOnly", label: "월합계만", color: "#D9D6D0" },
 ]
 
-// 각 스택 세그먼트에 세로 그라디언트(위=선명한 신호색, 아래=베이스)를 입혀 평면 막대에 깊이를 준다.
-// 색상은 DESIGN.md 상태 스케일(확정=그린, 고확도=인포블루, 예정=워닝앰버)의 의미를 유지하되,
-// 확정↔고확도 경계가 흐려 보이지 않도록 sheen 톤의 채도를 올려 두 색의 색상거리를 벌렸다.
-// (실제 경계 가독성은 아래 makeStackSegmentShape의 흰색 세퍼레이터 스트로크가 1차로 보장한다.)
-const WEEK_SERIES_GRADIENT: Record<
-  "confirmed" | "highConfidence" | "open" | "inferred" | "monthlyOnly",
-  { id: string; from: string; to: string }
-> = {
-  confirmed: { id: "rwfGradConfirmed", from: "#12A574", to: "#084734" },
-  highConfidence: { id: "rwfGradHigh", from: "#4C86D6", to: "#1E5DA8" },
-  open: { id: "rwfGradOpen", from: "#DDA23C", to: "#A8741A" },
-  inferred: { id: "rwfGradInferred", from: "#98A1AC", to: "#6B7280" },
-  monthlyOnly: { id: "rwfGradMonthly", from: "#EDEAE4", to: "#D9D6D0" },
-}
-
-// 진행 바(확정/월목표, 확정+고확도/월목표)는 막대 차트와 같은 톤을 그대로 재사용 — 색 두 벌 관리 방지.
-const PROGRESS_GRADIENT = {
-  confirmed: WEEK_SERIES_GRADIENT.confirmed,
-  covered: WEEK_SERIES_GRADIENT.highConfidence,
-}
-
 // SVG 텍스트는 DOM 측정 없이 폭을 알 수 없어 근사치를 쓴다 — 한글/CJK 글리프는 라틴 문자보다 넓으므로 가중치를 분리.
 function estimateTextWidth(text: string, fontSize: number) {
   let width = 0
@@ -1565,7 +1544,7 @@ function roundedRectPath(x: number, y: number, width: number, height: number, co
 
 // 주차별로 실제 값이 있는 세그먼트만 놓고 맨 아래/맨 위를 판정해 그때그때 둥근 모서리를 준다.
 // (예: 확정 없이 고확도만 있는 주는 고확도 세그먼트가 아래쪽 둥근 모서리를 대신 받는다 — 항상 알약 모양 유지.)
-// 세그먼트 사이 흰 스트로크는 그라디언트 경계가 흐려 보이는 것을 막는 1차 가독성 장치.
+// 세그먼트 사이 흰 스트로크는 확정(그린)·고확도(블루)처럼 인접한 색이 맞닿아 흐려 보이는 것을 막는 가독성 장치.
 function makeStackSegmentShape(seriesKey: (typeof STACK_KEYS_BOTTOM_TO_TOP)[number]) {
   const RADIUS = 6
   return function StackSegmentShape(props: { x?: unknown; y?: unknown; width?: unknown; height?: unknown; payload?: RevWeekPoint; fill?: string }) {
@@ -1583,7 +1562,7 @@ function makeStackSegmentShape(seriesKey: (typeof STACK_KEYS_BOTTOM_TO_TOP)[numb
       bl: isBottom ? RADIUS : 0,
       br: isBottom ? RADIUS : 0,
     })
-    return <path d={d} fill={props.fill} stroke="#FFFFFF" strokeWidth={1.25} strokeLinejoin="round" />
+    return <path d={d} fill={props.fill} stroke="#FFFFFF" strokeWidth={1.5} strokeLinejoin="round" />
   }
 }
 
@@ -1611,14 +1590,10 @@ function RevWeekChartTooltip({
         {WEEK_SERIES.map((series) => {
           const value = point[series.key]
           if (value <= 0) return null
-          const gradient = WEEK_SERIES_GRADIENT[series.key]
           return (
             <div key={series.key} className="flex items-center justify-between gap-3">
               <span className="inline-flex items-center gap-1.5 font-semibold text-[#615D59]">
-                <span
-                  className="h-2 w-2 rounded-[3px]"
-                  style={{ backgroundImage: `linear-gradient(180deg, ${gradient.from}, ${gradient.to})` }}
-                />
+                <span className="h-2 w-2 rounded-[3px]" style={{ backgroundColor: series.color }} />
                 {series.label}
               </span>
               <span className="font-bold tabular-nums text-[#111110]">
@@ -1739,17 +1714,6 @@ function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]; month
     <div>
       <ResponsiveContainer width="100%" height={264}>
         <ComposedChart data={data} margin={{ top: 30, right: 16, left: -8, bottom: 0 }}>
-          <defs>
-            {WEEK_SERIES.map((series) => {
-              const gradient = WEEK_SERIES_GRADIENT[series.key]
-              return (
-                <linearGradient key={gradient.id} id={gradient.id} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={gradient.from} />
-                  <stop offset="100%" stopColor={gradient.to} />
-                </linearGradient>
-              )
-            })}
-          </defs>
           <CartesianGrid stroke="#ECEBE7" strokeDasharray="2 6" vertical={false} />
           <XAxis dataKey="week" tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} dy={2} />
           <YAxis tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(Number(v))} width={58} />
@@ -1775,11 +1739,11 @@ function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]; month
               label={makeWeeklyTargetLabel(weeklyTarget)}
             />
           )}
-          <Bar dataKey="confirmed" name="확정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.confirmed.id})`} shape={makeStackSegmentShape("confirmed")} maxBarSize={48} />
-          <Bar dataKey="highConfidence" name="고확도" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.highConfidence.id})`} shape={makeStackSegmentShape("highConfidence")} maxBarSize={48} />
-          <Bar dataKey="open" name="예정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.open.id})`} shape={makeStackSegmentShape("open")} maxBarSize={48} />
-          <Bar dataKey="inferred" name="일자 추정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.inferred.id})`} shape={makeStackSegmentShape("inferred")} maxBarSize={48} />
-          <Bar dataKey="monthlyOnly" name="월합계만" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.monthlyOnly.id})`} shape={makeStackSegmentShape("monthlyOnly")} maxBarSize={48} />
+          <Bar dataKey="confirmed" name="확정" stackId="week" fill="#084734" shape={makeStackSegmentShape("confirmed")} maxBarSize={48} />
+          <Bar dataKey="highConfidence" name="고확도" stackId="week" fill="#1E5DA8" shape={makeStackSegmentShape("highConfidence")} maxBarSize={48} />
+          <Bar dataKey="open" name="예정" stackId="week" fill="#A8741A" shape={makeStackSegmentShape("open")} maxBarSize={48} />
+          <Bar dataKey="inferred" name="일자 추정" stackId="week" fill="#6B7280" shape={makeStackSegmentShape("inferred")} maxBarSize={48} />
+          <Bar dataKey="monthlyOnly" name="월합계만" stackId="week" fill="#D9D6D0" shape={makeStackSegmentShape("monthlyOnly")} maxBarSize={48} />
           <Line
             type="monotone"
             dataKey="total"
@@ -1796,13 +1760,12 @@ function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]; month
         {seriesTotals
           .filter((series) => series.total > 0)
           .map((series) => {
-            const gradient = WEEK_SERIES_GRADIENT[series.key]
             const share = monthTotal > 0 ? (series.total / monthTotal) * 100 : 0
             return (
               <span key={series.key} className="inline-flex items-center gap-1.5">
                 <span
                   className="h-3 w-3 rounded-[4px] ring-1 ring-inset ring-black/5"
-                  style={{ backgroundImage: `linear-gradient(180deg, ${gradient.from}, ${gradient.to})` }}
+                  style={{ backgroundColor: series.color }}
                 />
                 <span className="font-semibold text-[#615D59]">{series.label}</span>
                 <span className="font-bold tabular-nums text-[#111110]">{formatMoney(series.total)}</span>
@@ -1831,14 +1794,14 @@ function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]; month
               label="확정 / 월 목표"
               value={confirmedTotal}
               max={monthGoal}
-              gradient={PROGRESS_GRADIENT.confirmed}
+              color="#084734"
               meta={`${formatMoney(confirmedTotal)} · ${formatPercent((confirmedTotal / monthGoal) * 100)}`}
             />
             <CompactProgress
               label="확정+고확도 / 월 목표"
               value={coveredTotal}
               max={monthGoal}
-              gradient={PROGRESS_GRADIENT.covered}
+              color="#1E5DA8"
               meta={`${formatMoney(coveredTotal)} · ${formatPercent((coveredTotal / monthGoal) * 100)}`}
             />
           </div>
@@ -1867,13 +1830,13 @@ function CompactProgress({
   label,
   value,
   max,
-  gradient = PROGRESS_GRADIENT.confirmed,
+  color = "#084734",
   meta,
 }: {
   label: string
   value: number
   max: number
-  gradient?: { from: string; to: string }
+  color?: string
   meta?: string
 }) {
   const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0
@@ -1886,7 +1849,7 @@ function CompactProgress({
       <div className="relative h-2.5 overflow-hidden rounded-full bg-[#EDEBE7] shadow-[inset_0_1px_2px_rgba(17,17,16,0.06)]">
         <div
           className="h-full rounded-full transition-[width] duration-500 ease-out"
-          style={{ width: `${pct}%`, backgroundImage: `linear-gradient(90deg, ${gradient.from}, ${gradient.to})` }}
+          style={{ width: `${pct}%`, backgroundColor: color }}
         />
       </div>
     </div>

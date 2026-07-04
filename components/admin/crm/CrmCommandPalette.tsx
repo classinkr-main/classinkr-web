@@ -28,7 +28,7 @@ const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: ReactNod
   { label: "리드 보드", sub: "리드 관리", href: "/admin/crm/customers/leads", icon: <PhoneCall className="h-4 w-4" /> },
   { label: "원천 고객", sub: "NEO 어카운트", href: "/admin/crm/customers/accounts", icon: <Building2 className="h-4 w-4" /> },
   { label: "매출 · 견적", sub: "Deals", href: "/admin/crm/deals", icon: <CircleDollarSign className="h-4 w-4" /> },
-  { label: "KPI", sub: "목표·달성", href: "/admin/crm/deals/kpi", icon: <Target className="h-4 w-4" /> },
+  { label: "워크스페이스", sub: "계약·설치·정산 큐", href: "/admin/crm/deals/kpi", icon: <Target className="h-4 w-4" /> },
   { label: "매출 장부", sub: "DSH·REV·KPI 콕핏", href: "/admin/branch/ledger", icon: <BookOpenCheck className="h-4 w-4" /> },
   { label: "하드웨어 재고", sub: "입출고·위치 맵", href: "/admin/hardware", icon: <Package className="h-4 w-4" /> },
   { label: "기록 · 활동", sub: "타임라인", href: "/admin/crm/activity", icon: <Activity className="h-4 w-4" /> },

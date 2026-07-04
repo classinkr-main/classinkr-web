@@ -139,6 +139,10 @@ function emptyDealsResult(limit: number, offset: number, message: string | null)
   }
 }
 
+// listCrmDeals가 select에 나열할 컬럼 목록. toCrmDealRecord가 매핑하는 컬럼과 1:1로 유지한다.
+const CRM_DEAL_COLUMNS =
+  "id, target_type, target_id, target_label, owner_key, owner_name_snapshot, title, stage, status, expected_amount, expected_close_at, next_task_id, quote_ref, order_ref, risk_note, created_by, closed_at, closed_by, created_at, updated_at"
+
 export function toCrmDealRecord(row: CrmDeal): CrmDealRecord {
   return {
     id: row.id,
@@ -208,7 +212,7 @@ export async function listCrmDeals(options: ListCrmDealsOptions = {}): Promise<L
 
   let query = supabase
     .from("crm_deals")
-    .select("*", { count: "exact" })
+    .select(CRM_DEAL_COLUMNS, { count: "exact" })
     .order("expected_close_at", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1)

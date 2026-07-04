@@ -1,5 +1,7 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
+
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type { VerifiedAdminContext } from "@/lib/admin-auth"
 import type { AdminCrmTeamRole, AdminProfile, AdminRole, AdminStatus } from "@/lib/supabase/database.types"
@@ -267,6 +269,23 @@ export async function listAdminUserDirectory(): Promise<AdminUserDirectory> {
     users: fallbackUsers,
     crmOwners: fallbackUsers.filter((user) => user.assignable),
   }
+}
+
+export const ADMIN_USER_DIRECTORY_CACHE_TAG = "admin-user-directory"
+const ADMIN_USER_DIRECTORY_REVALIDATE_SECONDS = 120
+
+// 관리자 로스터는 사실상 정적이라 owner-lookup 경로(예: deals-lite "assignToMe")에서
+// 매 요청마다 admin_profiles를 조회할 필요가 없다. branch-deals.ts의 unstable_cache
+// 패턴을 그대로 따르는 opt-in 캐시 래퍼. 기존 listAdminUserDirectory 시그니처와
+// 실시간 사용처(users/owners route)는 그대로 두고, 짧은 TTL 캐시가 필요한 곳에서만 쓴다.
+const listCachedAdminUserDirectory = unstable_cache(
+  async (): Promise<AdminUserDirectory> => listAdminUserDirectory(),
+  [ADMIN_USER_DIRECTORY_CACHE_TAG],
+  { revalidate: ADMIN_USER_DIRECTORY_REVALIDATE_SECONDS, tags: [ADMIN_USER_DIRECTORY_CACHE_TAG] },
+)
+
+export async function listAdminUserDirectoryCached(): Promise<AdminUserDirectory> {
+  return listCachedAdminUserDirectory()
 }
 
 export function ownerLookupKeys(owner: AdminCrmOwnerOption | null | undefined) {

@@ -1,6 +1,6 @@
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { normalizeBranchMemberName } from "@/lib/branch/member-names"
-import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
+import { confirmedMonthAmountWithColor, dealHasColorData } from "@/lib/branch/computations/rev-confirmed"
 import { fiscalQuarter, fyOf, ymKey } from "@/lib/branch/fiscal"
 
 type RevenuePeriod = "M" | "Q" | "Y"
@@ -104,26 +104,27 @@ function inScope(ym: string, scope: RevenuePeriod, now: Date): boolean {
 }
 
 function revenueFromRev(d: BranchRevDeal, period?: RevenuePeriod, now = new Date()): number {
+  const hasColor = dealHasColorData(d)
   return Object.entries(d.monthly_payments).reduce((sum, [ym, value]) => {
     if (period && !inScope(ym, period, now)) return sum
-    return sum + confirmedMonthAmount(d, ym, Number(value))
+    return sum + confirmedMonthAmountWithColor(d, ym, Number(value), hasColor)
   }, 0)
 }
 
 export function listPipeline(deals: BranchRevDeal[], filter?: { team?: string; manager?: string; region?: string; importance?: string; stage?: PipelineStage }): PipelineRow[] {
   const managerFilter = normalizeBranchMemberName(filter?.manager)
   return deals.filter((d) => {
-    const manager = normalizeBranchMemberName(d.manager)
     if (filter?.team && filter.team !== "ALL" && d.team !== filter.team) return false
-    if (managerFilter && manager !== managerFilter) return false
+    if (managerFilter && normalizeBranchMemberName(d.manager) !== managerFilter) return false
     if (filter?.region && d.region !== filter.region) return false
     if (filter?.importance && d.importance !== filter.importance) return false
     if (filter?.stage && stageOf(d) !== filter.stage) return false
     return true
   }).map((d) => {
     const manager = normalizeBranchMemberName(d.manager)
+    const hasColor = dealHasColorData(d)
     const confirmed = Object.entries(d.monthly_payments).reduce(
-      (s, [ym, v]) => s + confirmedMonthAmount(d, ym, Number(v)),
+      (s, [ym, v]) => s + confirmedMonthAmountWithColor(d, ym, Number(v), hasColor),
       0,
     )
     return {
@@ -144,9 +145,8 @@ export function listRevRevenue(
   const managerFilter = normalizeBranchMemberName(filter?.manager)
   return deals
     .filter((d) => {
-      const manager = normalizeBranchMemberName(d.manager)
       if (filter?.team && filter.team !== "ALL" && d.team !== filter.team) return false
-      if (managerFilter && manager !== managerFilter) return false
+      if (managerFilter && normalizeBranchMemberName(d.manager) !== managerFilter) return false
       if (filter?.region && d.region !== filter.region) return false
       return true
     })

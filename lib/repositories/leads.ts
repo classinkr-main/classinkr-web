@@ -93,6 +93,9 @@ export interface LeadRecord {
   landing_page?: string;
   current_page?: string;
   referrer?: string;
+  // 공개 채널 리드는 검토 전 null(미확인) — "확인" 액션 또는 상태 변경(new 이탈)으로 채워짐.
+  // admin_manual(어드민 수기 등록)은 생성 시점에 즉시 채워진다.
+  confirmed_at?: string;
 }
 
 export interface LeadActionStats {
@@ -103,6 +106,8 @@ export interface LeadActionStats {
   unresponded48hCount: number;
   todayFollowUpCount: number;
   overdueFollowUpCount: number;
+  // 미확인(confirmed_at null) — 공개 채널에서 들어와 아직 검토되지 않은 리드.
+  unconfirmedCount: number;
 }
 
 function toLocalDateKey(value: string | Date) {
@@ -197,6 +202,7 @@ function supabaseToLegacy(row: Lead): LeadRecord {
     landing_page: row.landing_page ?? undefined,
     current_page: row.current_page ?? undefined,
     referrer: row.referrer ?? undefined,
+    confirmed_at: row.confirmed_at ?? undefined,
   };
 }
 
@@ -232,7 +238,7 @@ export async function getDashboardLeads(): Promise<LeadRecord[]> {
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase
     .from("leads")
-    .select("id, source, name, org, email, status, branch, created_at")
+    .select("id, source, name, org, email, status, branch, created_at, confirmed_at")
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(`[leads] 대시보드 조회 실패: ${error.message}`);
@@ -299,6 +305,9 @@ export async function saveLead(
     landing_page: lead.landing_page ?? null,
     current_page: lead.current_page ?? null,
     referrer: lead.referrer ?? null,
+    // 호출자가 명시하지 않으면 미확인(null) — 공개 채널 리드의 기본값.
+    // 어드민 수기 등록(app/api/admin/leads)만 생성 시점에 confirmed_at을 명시적으로 채운다.
+    confirmed_at: lead.confirmed_at ?? null,
   };
 
   const { data, error } = await supabase
@@ -370,6 +379,7 @@ export async function updateLead(
   if (patch.landing_page !== undefined) update.landing_page = patch.landing_page;
   if (patch.current_page !== undefined) update.current_page = patch.current_page;
   if (patch.referrer !== undefined) update.referrer = patch.referrer;
+  if (patch.confirmed_at !== undefined) update.confirmed_at = patch.confirmed_at;
 
   const { data, error } = await supabase
     .from("leads")
@@ -452,10 +462,12 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
       unresponded48hCount: 0,
       todayFollowUpCount: 0,
       overdueFollowUpCount: 0,
+      unconfirmedCount: 0,
     };
 
     for (const lead of leads) {
       stats.byStatus[lead.status] += 1;
+      if (!lead.confirmed_at) stats.unconfirmedCount += 1;
       if (isUnrespondedLeadRecord(lead)) {
         stats.unrespondedCount += 1;
         const leadTime = new Date(lead.timestamp).getTime();
@@ -492,6 +504,7 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
     unresponded48hRes,
     todayFollowUpRes,
     overdueFollowUpRes,
+    unconfirmedRes,
   ] = await Promise.all([
     supabase.from("leads").select("id", { count: "exact", head: true }),
     supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "new"),
@@ -526,6 +539,7 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
       .select("id", { count: "exact", head: true })
       .in("status", [...ACTIVE_LEAD_STATUSES])
       .lt("follow_up_at", start.toISOString()),
+    supabase.from("leads").select("id", { count: "exact", head: true }).is("confirmed_at", null),
   ]);
 
   const error = getSupabaseCountError([
@@ -539,6 +553,7 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
     unresponded48hRes,
     todayFollowUpRes,
     overdueFollowUpRes,
+    unconfirmedRes,
   ]);
   if (error) throw new Error(`[leads] KPI 조회 실패: ${error.message ?? "unknown database error"}`);
 
@@ -555,6 +570,7 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
     unresponded48hCount: unresponded48hRes.count ?? 0,
     todayFollowUpCount: todayFollowUpRes.count ?? 0,
     overdueFollowUpCount: overdueFollowUpRes.count ?? 0,
+    unconfirmedCount: unconfirmedRes.count ?? 0,
   };
 }
 

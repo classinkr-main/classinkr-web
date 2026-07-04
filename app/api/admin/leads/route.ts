@@ -46,6 +46,8 @@ function normalizeLeadInput(raw: unknown): LeadCreateInput | null {
     branch: leadStr(r.branch) ?? leadStr(r.region),
     notes: leadStr(r.notes),
     source_detail: leadStr(r.source_detail) ?? "어드민 수기 등록",
+    // 어드민이 직접 입력한 리드는 이미 검토된 것 — 공개 폼 확인 게이트 대상이 아니다.
+    confirmed_at: new Date().toISOString(),
   }
 }
 

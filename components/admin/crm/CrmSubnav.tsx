@@ -23,7 +23,7 @@ type CustomersSub = "unified" | "leads" | "accounts"
 const DEALS_SUBTABS = [
   { key: "revenue", href: "/admin/crm/deals", label: "매출", icon: <CircleDollarSign className="h-3.5 w-3.5" /> },
   { key: "orders", href: "/admin/crm/deals/orders", label: "오더·설치", icon: <Truck className="h-3.5 w-3.5" /> },
-  { key: "kpi", href: "/admin/crm/deals/kpi", label: "KPI", icon: <Target className="h-3.5 w-3.5" /> },
+  { key: "kpi", href: "/admin/crm/deals/kpi", label: "워크스페이스", icon: <Target className="h-3.5 w-3.5" /> },
 ] satisfies Array<{ key: DealsSub; href: string; label: string; icon: ReactNode }>
 
 // 고객 섹션 보조 탭: 통합 운영 목록 + 원천별 상세 화면.

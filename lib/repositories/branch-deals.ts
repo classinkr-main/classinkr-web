@@ -27,7 +27,7 @@ type BranchRevDealListRow = Omit<BranchRevDeal, "raw"> & {
   raw?: Record<string, unknown> | null
 }
 
-const BRANCH_REV_DEAL_LIST_COLUMNS = [
+const BRANCH_REV_DEAL_COLUMN_LIST = [
   "id",
   "sheet_row",
   "customer_name",
@@ -48,7 +48,15 @@ const BRANCH_REV_DEAL_LIST_COLUMNS = [
   "monthly_high_conf",
   "raw",
   "synced_at",
-].join(", ")
+]
+
+const BRANCH_REV_DEAL_LIST_COLUMNS = BRANCH_REV_DEAL_COLUMN_LIST.join(", ")
+
+// getBranchRevDeal 콜러(딜 슬라이드오버·초안 프리필)는 raw JSON을 읽지 않으므로
+// 상세 조회에서는 대용량 raw 컬럼을 생략해 페이로드를 줄인다.
+const BRANCH_REV_DEAL_DETAIL_COLUMNS = BRANCH_REV_DEAL_COLUMN_LIST.filter(
+  (column) => column !== "raw",
+).join(", ")
 
 function normalizeDealRow(deal: BranchRevDealListRow): BranchRevDeal {
   return {
@@ -81,10 +89,14 @@ export async function listBranchRevDeals(filter?: { team?: string }): Promise<Br
 
 export async function getBranchRevDeal(id: string): Promise<BranchRevDeal | null> {
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb.from("branch_rev_deals").select("*").eq("id", id).maybeSingle()
+  const { data, error } = await sb
+    .from("branch_rev_deals")
+    .select(BRANCH_REV_DEAL_DETAIL_COLUMNS)
+    .eq("id", id)
+    .maybeSingle()
   if (error) throw error
   if (!data) return null
-  const deal = data as BranchRevDeal
+  const deal = data as unknown as BranchRevDealListRow
   return normalizeDealRow(deal)
 }
 

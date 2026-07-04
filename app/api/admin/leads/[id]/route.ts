@@ -52,6 +52,18 @@ function sanitizeLeadPatch(raw: unknown): { patch?: Partial<LeadRecord>; error?:
     patch[field] = value
   }
 
+  // "확인" 액션 — 공개 채널 리드를 CRM 리드 기본 화면으로 승격한다. 임의 타임스탬프는
+  // 받지 않고 서버 시각만 사용(confirmed_at은 STRING_OR_NULL_FIELDS에 없음 — 클라이언트가
+  // 직접 값을 지정할 수 없다).
+  if (raw.confirmed === true) {
+    patch.confirmed_at = new Date().toISOString()
+  }
+
+  // 상태가 "신규"에서 벗어나면(연락중/전환/종료) 이미 사람이 손댄 것이므로 자동 확인 처리.
+  if (patch.status && patch.status !== "new" && patch.confirmed_at === undefined) {
+    patch.confirmed_at = new Date().toISOString()
+  }
+
   if (Object.keys(patch).length === 0) return { error: "No supported fields to update" }
   return { patch: patch as Partial<LeadRecord> }
 }

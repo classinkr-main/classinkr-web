@@ -12,12 +12,12 @@ import type { Contract, ContractStatus, Partner } from "@/lib/supabase/database.
 type PartnerOption = Pick<Partner, "id" | "name">
 
 const STATUS_LABEL: Record<ContractStatus, string> = {
-  draft: "Draft",
-  sent: "Sent",
-  partner_signed: "Partner Signed",
-  admin_signed: "Admin Signed",
-  completed: "Completed",
-  cancelled: "Cancelled",
+  draft: "작성 중",
+  sent: "발송됨",
+  partner_signed: "파트너 서명",
+  admin_signed: "어드민 서명",
+  completed: "완료",
+  cancelled: "취소",
 }
 
 const STATUS_COLOR: Record<ContractStatus, string> = {
@@ -102,13 +102,13 @@ function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
           onTouchEnd={stop}
         />
       </div>
-      <p className="text-xs text-[#1a1a1a]/40 text-center">Draw your signature in the box above.</p>
+      <p className="text-xs text-[#1a1a1a]/40 text-center">위 상자 안에 서명을 그려 주세요.</p>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" size="sm" onClick={clear}>
-          Clear
+          지우기
         </Button>
         <Button type="button" size="sm" onClick={save}>
-          Apply
+          적용
         </Button>
       </div>
     </div>
@@ -200,33 +200,19 @@ export function ContractsPanel() {
       load()
     } else {
       const err = await res.json()
-      alert(err.error ?? "Signature failed")
+      alert(err.error ?? "서명에 실패했습니다.")
     }
     setSigning(false)
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this contract?")) return
+    if (!confirm("이 계약을 삭제할까요?")) return
     await adminFetch(`/api/admin/contracts/${id}`, { method: "DELETE" })
     load()
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-[#1a1a1a]">Contracts</h1>
-          <p className="text-sm text-[#1a1a1a]/50 mt-0.5">
-            {filtered.length === contracts.length
-              ? `${contracts.length} items`
-              : `${filtered.length} / ${contracts.length} items`}
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-        </Button>
-      </div>
-
+    <div className="mx-auto max-w-6xl space-y-4 p-4 sm:px-6 sm:py-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative w-full sm:max-w-xs">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/30" />
@@ -254,18 +240,26 @@ export function ContractsPanel() {
                     : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:bg-[#f7f7f5]"
                 }`}
               >
-                {s === "all" ? "All" : STATUS_LABEL[s]} {count}
+                {s === "all" ? "전체" : STATUS_LABEL[s]} {count}
               </button>
             )
           })}
+        </div>
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#615D59] ring-1 ring-[#e8e8e4]">
+            {loading ? "불러오는 중" : `${filtered.length}/${contracts.length}`}
+          </span>
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
         </div>
       </div>
 
       <div className="border border-[#e8e8e4] rounded-xl overflow-hidden bg-white">
         {loading ? (
-          <div className="py-16 text-center text-sm text-[#1a1a1a]/40">Loading...</div>
+          <div className="py-16 text-center text-sm text-[#1a1a1a]/40">불러오는 중...</div>
         ) : contracts.length === 0 ? (
-          <div className="py-16 text-center text-sm text-[#1a1a1a]/40">No contracts yet.</div>
+          <div className="py-16 text-center text-sm text-[#1a1a1a]/40">등록된 계약이 없습니다.</div>
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center text-sm text-[#1a1a1a]/40">
             <p>조건에 맞는 계약이 없습니다.</p>
@@ -295,23 +289,23 @@ export function ContractsPanel() {
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                     <div>
-                      <p className="text-[#1a1a1a]/32">Total</p>
-                      <p className="mt-0.5 font-semibold text-[#111110]">{c.total_amount.toLocaleString()} KRW</p>
+                      <p className="text-[#1a1a1a]/32">금액</p>
+                      <p className="mt-0.5 font-semibold text-[#111110]">{c.total_amount.toLocaleString()}원</p>
                     </div>
                     <div>
-                      <p className="text-[#1a1a1a]/32">Partner Sign</p>
+                      <p className="text-[#1a1a1a]/32">파트너 서명</p>
                       {c.partner_signed_at ? (
-                        <p className="mt-0.5 font-medium text-green-600">Done {new Date(c.partner_signed_at).toLocaleDateString("ko")}</p>
+                        <p className="mt-0.5 font-medium text-green-600">완료 {new Date(c.partner_signed_at).toLocaleDateString("ko")}</p>
                       ) : (
-                        <p className="mt-0.5 text-[#1a1a1a]/35">Pending</p>
+                        <p className="mt-0.5 text-[#1a1a1a]/35">대기</p>
                       )}
                     </div>
                     <div>
-                      <p className="text-[#1a1a1a]/32">Admin Sign</p>
+                      <p className="text-[#1a1a1a]/32">어드민 서명</p>
                       {c.admin_signed_at ? (
-                        <p className="mt-0.5 font-medium text-green-600">Done {new Date(c.admin_signed_at).toLocaleDateString("ko")}</p>
+                        <p className="mt-0.5 font-medium text-green-600">완료 {new Date(c.admin_signed_at).toLocaleDateString("ko")}</p>
                       ) : (
-                        <p className="mt-0.5 text-[#1a1a1a]/35">Pending</p>
+                        <p className="mt-0.5 text-[#1a1a1a]/35">대기</p>
                       )}
                     </div>
                   </div>
@@ -319,13 +313,13 @@ export function ContractsPanel() {
                     {c.status === "draft" && (
                       <Button variant="outline" size="sm" className="w-full text-[#084734]" onClick={() => handleSend(c)}>
                         <Send className="mr-1 h-3.5 w-3.5" />
-                        Send
+                        발송
                       </Button>
                     )}
                     {["sent", "draft"].includes(c.status) && c.sign_token && (
                       <Button variant="outline" size="sm" className="w-full" onClick={() => copySignLink(c)}>
                         {copied === c.id ? <Check className="mr-1 h-3.5 w-3.5 text-green-500" /> : <Copy className="mr-1 h-3.5 w-3.5" />}
-                        Copy Link
+                        링크 복사
                       </Button>
                     )}
                     {c.status === "partner_signed" && (
@@ -339,12 +333,12 @@ export function ContractsPanel() {
                         }}
                       >
                         <PenLine className="mr-1 h-3.5 w-3.5" />
-                        Sign
+                        서명
                       </Button>
                     )}
                     <Button variant="outline" size="sm" className="w-full text-[#B85C33]" onClick={() => handleDelete(c.id)}>
                       <Trash2 className="mr-1 h-3.5 w-3.5" />
-                      Delete
+                      삭제
                     </Button>
                   </div>
                 </div>
@@ -355,7 +349,7 @@ export function ContractsPanel() {
               <table className="w-full text-sm">
                 <thead className="bg-[#f7f7f5] border-b border-[#e8e8e4]">
                   <tr>
-                    {["No.", "Partner", "Title", "Total", "Status", "Partner Sign", "Admin Sign", ""].map((h) => (
+                    {["번호", "파트너", "제목", "금액", "상태", "파트너 서명", "어드민 서명", ""].map((h) => (
                       <th key={h} className="px-4 py-3 text-left font-medium text-[#1a1a1a]/60 text-xs">
                         {h}
                       </th>
@@ -368,22 +362,22 @@ export function ContractsPanel() {
                       <td className="px-4 py-3 font-mono text-xs text-[#1a1a1a]/60">{c.contract_number}</td>
                       <td className="px-4 py-3 text-[#1a1a1a]/70">{partnerName(c.partner_id)}</td>
                       <td className="px-4 py-3 font-medium text-[#1a1a1a]">{c.title}</td>
-                      <td className="px-4 py-3 font-medium">{c.total_amount.toLocaleString()} KRW</td>
+                      <td className="px-4 py-3 font-medium">{c.total_amount.toLocaleString()}원</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLOR[c.status]}`}>{STATUS_LABEL[c.status]}</span>
                       </td>
                       <td className="px-4 py-3 text-xs">
                         {c.partner_signed_at ? (
-                          <span className="text-green-600">Done {new Date(c.partner_signed_at).toLocaleDateString("ko")}</span>
+                          <span className="text-green-600">완료 {new Date(c.partner_signed_at).toLocaleDateString("ko")}</span>
                         ) : (
-                          <span className="text-[#1a1a1a]/30">Pending</span>
+                          <span className="text-[#1a1a1a]/30">대기</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs">
                         {c.admin_signed_at ? (
-                          <span className="text-green-600">Done {new Date(c.admin_signed_at).toLocaleDateString("ko")}</span>
+                          <span className="text-green-600">완료 {new Date(c.admin_signed_at).toLocaleDateString("ko")}</span>
                         ) : (
-                          <span className="text-[#1a1a1a]/30">Pending</span>
+                          <span className="text-[#1a1a1a]/30">대기</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -391,7 +385,7 @@ export function ContractsPanel() {
                           {c.status === "draft" && (
                             <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#084734]" onClick={() => handleSend(c)}>
                               <Send className="w-3.5 h-3.5 mr-1" />
-                              Send
+                              발송
                             </Button>
                           )}
                           {["sent", "draft"].includes(c.status) && c.sign_token && (
@@ -410,7 +404,7 @@ export function ContractsPanel() {
                               }}
                             >
                               <PenLine className="w-3.5 h-3.5 mr-1" />
-                              Sign
+                              서명
                             </Button>
                           )}
                           <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-[#B85C33]" onClick={() => handleDelete(c.id)}>
@@ -432,7 +426,7 @@ export function ContractsPanel() {
           <div className="max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
             <div className="flex items-center justify-between border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
               <div>
-                <h2 className="text-base font-semibold">Admin Sign</h2>
+                <h2 className="text-base font-semibold">어드민 서명</h2>
                 <p className="text-xs text-[#1a1a1a]/50 mt-0.5">
                   {selected.contract_number} - {selected.title}
                 </p>
@@ -442,7 +436,7 @@ export function ContractsPanel() {
               </button>
             </div>
             <div className="max-h-[calc(100dvh-8rem)] overflow-y-auto p-4 sm:p-6">
-              {signing ? <div className="py-8 text-center text-sm text-[#1a1a1a]/50">Processing...</div> : <SignatureCanvas onSave={handleAdminSign} />}
+              {signing ? <div className="py-8 text-center text-sm text-[#1a1a1a]/50">처리 중...</div> : <SignatureCanvas onSave={handleAdminSign} />}
             </div>
           </div>
         </div>

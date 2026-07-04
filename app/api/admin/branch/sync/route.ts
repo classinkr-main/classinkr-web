@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
 import { runAll } from "@/lib/branch/sync/run-all"
 import { BRANCH_HW_CACHE_TAG } from "@/lib/repositories/branch-hw"
 import { BRANCH_REV_DEALS_CACHE_TAG } from "@/lib/repositories/branch-deals"
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
   const result = await runAll({ trigger: "manual", sources: sources.length ? sources : undefined })
   if (result.ok) {
     const cacheTags = ["branch-dsh", "branch-seg", "branch-kpi"]
-    if (effectiveSources.includes("rev")) cacheTags.push(BRANCH_REV_DEALS_CACHE_TAG)
+    if (effectiveSources.includes("rev")) cacheTags.push(BRANCH_REV_DEALS_CACHE_TAG, ADMIN_CRM_REVENUE_CACHE_TAG)
     if (effectiveSources.includes("hw")) cacheTags.push(BRANCH_HW_CACHE_TAG)
     for (const tag of cacheTags) {
       revalidateTag(tag, "max")

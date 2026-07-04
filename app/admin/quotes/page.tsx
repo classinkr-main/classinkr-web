@@ -1,12 +1,13 @@
 "use client"
 
-import { useRef, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import {
-  ChevronRight,
+  ChevronDown,
   ClipboardList,
   FileSignature,
   FileText,
   Link2,
+  Plus,
   Ticket,
   Users,
 } from "lucide-react"
@@ -90,27 +91,6 @@ const QUICK_QUOTE_ACTIONS: Array<{
   },
 ]
 
-const SALES_PROGRESS = [
-  {
-    label: "견적 생성",
-    value: "제안 준비",
-    detail: "하드웨어 견적과 SW 결제 코드를 고객별 제안으로 정리",
-    icon: <FileText className="h-4 w-4" />,
-  },
-  {
-    label: "계약 진행",
-    value: "서명 추적",
-    detail: "파트너 서명, 어드민 서명, 공유 링크 상태를 분리해서 확인",
-    icon: <FileSignature className="h-4 w-4" />,
-  },
-  {
-    label: "매출 확정",
-    value: "수납 기록",
-    detail: "결제 완료, 영수증 발행, 후속 전달 이력을 매출 진행 현황으로 연결",
-    icon: <ClipboardList className="h-4 w-4" />,
-  },
-]
-
 function normalizeDocumentTab(raw: string | null): DocumentTab {
   if (raw === "software" || raw === "software-code" || raw === "sw") return "software"
   if (raw === "contract" || raw === "contracts") return "contracts"
@@ -158,29 +138,86 @@ function quickActionFromSearch() {
   return quickActionFromParams(new URLSearchParams(window.location.search))
 }
 
-function SalesProgressStrip() {
+function QuoteCreateButton({
+  onSelect,
+}: {
+  onSelect: (action: HardwareQuoteQuickAction) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false)
+    }
+
+    document.addEventListener("mousedown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [open])
+
   return (
-    <div className="mt-5 grid gap-3 lg:grid-cols-3">
-      {SALES_PROGRESS.map((item) => (
-        <div key={item.label} className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-          <div className="flex items-start gap-3">
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-[#1a1a1a]/55">
-              {item.icon}
-            </span>
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
-                {item.label}
-              </p>
-              <p className="mt-1 text-[15px] font-bold tracking-[-0.01em] text-[#111110]">
-                {item.value}
-              </p>
-              <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/50">
-                {item.detail}
-              </p>
-            </div>
-          </div>
+    <div ref={containerRef} className="relative">
+      <div className="flex items-stretch">
+        <button
+          type="button"
+          onClick={() => onSelect("new")}
+          className="inline-flex h-9 items-center gap-1.5 rounded-l-md bg-[#084734] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1"
+        >
+          <Plus className="h-4 w-4" />
+          견적서 작성
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label="견적 템플릿 선택"
+          className="inline-flex h-9 items-center rounded-r-md border-l border-white/20 bg-[#084734] px-2 text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1"
+        >
+          <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 z-30 mt-1.5 w-64 overflow-hidden rounded-xl border border-[#e8e8e4] bg-white p-1 shadow-[rgba(0,0,0,0.04)_0px_4px_18px,rgba(0,0,0,0.05)_0px_8px_28px]"
+        >
+          {QUICK_QUOTE_ACTIONS.map((item) => (
+            <button
+              key={item.action}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onSelect(item.action)
+                setOpen(false)
+              }}
+              className="flex w-full items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-[#ECFDF5]"
+            >
+              <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#ECFDF5] text-[#084734]">
+                <FileText className="h-3.5 w-3.5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[13px] font-semibold text-[#111110]">{item.label}</span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-[#1a1a1a]/50">
+                  {item.description}
+                </span>
+              </span>
+            </button>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   )
 }
@@ -246,57 +283,29 @@ export default function QuotesPage() {
 
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
-      <div className="border-b border-[#e8e8e4] bg-white px-4 py-5 sm:px-6 sm:py-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">
-              Admin
-            </p>
-            <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">
+      <div className="border-b border-[#e8e8e4] bg-white px-4 pt-4 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-baseline gap-2.5">
+            <h1 className="text-lg font-bold tracking-[-0.02em] text-[#111110] sm:text-xl">
               견적·문서
             </h1>
-            <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[#1a1a1a]/50">
-              견적 생성, 계약 서명, 수납 확인을 한 흐름으로 정리합니다.
-              CRM은 고객별 접점과 로그를 보여주고, 이 허브는 매출 진행 현황과 실제 문서 작업을 처리합니다.
-            </p>
+            <span className="hidden truncate text-[12px] text-[#1a1a1a]/45 sm:inline">
+              견적 · 계약 · 수납을 한 흐름으로
+            </span>
           </div>
-          <a
-            href="/admin/crm"
-            className="inline-flex min-h-10 items-center justify-center gap-1.5 self-start rounded-md border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] lg:self-auto"
-          >
-            <Users className="h-4 w-4" />
-            CRM에서 고객 보기
-            <ChevronRight className="h-3.5 w-3.5" />
-          </a>
-        </div>
-
-        <SalesProgressStrip />
-
-        <div className="mt-5 grid gap-2 lg:grid-cols-3">
-          {QUICK_QUOTE_ACTIONS.map((item) => (
+          <div className="flex items-center gap-2">
             <a
-              key={item.action}
-              href={item.href}
-              onClick={(event) => {
-                event.preventDefault()
-                openHardwareQuickAction(item.action)
-              }}
-              className="group flex min-h-[92px] items-start justify-between gap-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-4 text-left transition-colors hover:border-[#D1FAE5] hover:bg-[#ECFDF5]"
+              href="/admin/crm"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-[12px] font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
             >
-              <span className="min-w-0">
-                <span className="text-[13px] font-bold text-[#111110]">{item.label}</span>
-                <span className="mt-1 block text-[12px] leading-relaxed text-[#1a1a1a]/50">
-                  {item.description}
-                </span>
-              </span>
-              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#084734] ring-1 ring-[#D1FAE5] transition-colors group-hover:bg-[#084734] group-hover:text-white">
-                <ChevronRight className="h-4 w-4" />
-              </span>
+              <Users className="h-4 w-4" />
+              <span className="hidden sm:inline">CRM 고객</span>
             </a>
-          ))}
+            <QuoteCreateButton onSelect={openHardwareQuickAction} />
+          </div>
         </div>
 
-        <div className="admin-scroll-snap-x no-scrollbar -mx-4 mt-6 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-5">
+        <div className="admin-scroll-snap-x no-scrollbar -mb-px mt-3 flex gap-0.5 overflow-x-auto">
           {DOCUMENT_TABS.map((tab) => {
             const active = activeTab === tab.key
 
@@ -305,27 +314,16 @@ export default function QuotesPage() {
                 key={tab.key}
                 type="button"
                 onClick={() => handleTabChange(tab.key)}
-                className={`min-h-[74px] w-[158px] shrink-0 rounded-xl border px-3 py-3 text-left transition-colors sm:min-h-[96px] sm:w-auto ${
+                title={tab.description}
+                aria-current={active ? "page" : undefined}
+                className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-[13px] font-semibold transition-colors ${
                   active
-                    ? "border-[#111110] bg-[#111110] text-white"
-                    : "border-[#e8e8e4] bg-[#fafaf8] text-[#111110] hover:border-[#c8c8c4]"
+                    ? "border-[#084734] text-[#111110]"
+                    : "border-transparent text-[#1a1a1a]/45 hover:text-[#111110]"
                 }`}
               >
-                <span
-                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${
-                    active ? "bg-white/12 text-white" : "bg-white text-[#1a1a1a]/45"
-                  }`}
-                >
-                  {tab.icon}
-                </span>
-                <span className="mt-2 block text-[13px] font-semibold sm:mt-3">{tab.label}</span>
-                <span
-                  className={`mt-1 hidden text-[11px] leading-snug sm:block ${
-                    active ? "text-white/58" : "text-[#1a1a1a]/42"
-                  }`}
-                >
-                  {tab.description}
-                </span>
+                <span className={active ? "text-[#084734]" : "text-[#1a1a1a]/40"}>{tab.icon}</span>
+                {tab.label}
               </button>
             )
           })}

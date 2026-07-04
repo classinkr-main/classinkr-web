@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
 import {
   CRM_DEAL_STAGES,
-  deleteCrmDeal,
   isCrmDealsNotReadyError,
   setCrmDealStage,
   updateCrmDeal,
@@ -67,24 +68,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     if (!deal) return NextResponse.json({ error: "Deal not found" }, { status: 404 })
+    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
     return NextResponse.json({ deal })
   } catch (error) {
     console.error(`[PATCH /api/admin/crm/deals-lite/${id}]`, error)
     return notReadyResponse(error) ?? NextResponse.json({ error: "Failed to update CRM deal" }, { status: 500 })
-  }
-}
-
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
-  if (admin instanceof NextResponse) return admin
-  const { id } = await params
-
-  try {
-    const deleted = await deleteCrmDeal(id)
-    if (!deleted) return NextResponse.json({ error: "Deal not found" }, { status: 404 })
-    return NextResponse.json({ ok: true })
-  } catch (error) {
-    console.error(`[DELETE /api/admin/crm/deals-lite/${id}]`, error)
-    return notReadyResponse(error) ?? NextResponse.json({ error: "Failed to delete CRM deal" }, { status: 500 })
   }
 }
