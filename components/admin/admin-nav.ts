@@ -19,7 +19,6 @@ import {
   ReceiptText,
   Search,
   Settings,
-  UserCog,
   Users,
 } from "lucide-react"
 
@@ -76,8 +75,9 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // 운영·시스템
   { href: "/admin/ops", label: "Ops Health", icon: Activity, roles: STAFF_ADMIN, section: "system", badge: "New", keywords: "ops health 상태 통합 크론 cron automation" },
   { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, roles: STAFF_ADMIN, section: "system", badge: "Ops", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
-  { href: "/admin/settings", label: "Settings", icon: Settings, roles: STAFF_ADMIN, section: "system", keywords: "설정 settings 환경" },
-  { href: "/admin/users", label: "회원 관리", icon: UserCog, roles: STAFF_ADMIN, section: "system", keywords: "회원 사용자 users 권한" },
+  // 회원 관리는 Settings "회원" 탭(?tab=members)으로 흡수됨 — /admin/users는 그 탭으로 redirect 스텁.
+  // ⌘K 검색어(회원·사용자·권한)를 Settings 항목 keywords에 병합해 검색성 보존.
+  { href: "/admin/settings", label: "Settings", icon: Settings, roles: STAFF_ADMIN, section: "system", keywords: "설정 settings 환경 회원 사용자 users 권한 계정" },
   { href: "/admin/dev", label: "Dev Mode", icon: Code2, roles: STAFF_ADMIN, section: "system", badge: "Beta", keywords: "개발 dev 버그 패치노트 roadmap" },
 ]
 

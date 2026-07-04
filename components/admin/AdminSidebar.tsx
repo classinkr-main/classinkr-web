@@ -128,8 +128,8 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/automation/rules",
     "/api/admin/automation/logs",
   ],
-  "/admin/settings": ["/api/admin/settings"],
-  "/admin/users": ["/api/admin/users"],
+  // 회원 관리는 Settings "회원" 탭으로 흡수됨 — Settings warm-up에 회원 디렉터리도 함께 데운다.
+  "/admin/settings": ["/api/admin/settings", "/api/admin/users"],
   "/admin/dev": ["/api/admin/roadmap", "/api/admin/bugs", "/api/admin/patch-notes"],
 }
 

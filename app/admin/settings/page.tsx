@@ -21,8 +21,10 @@ import {
   Copy,
   Code2,
   Globe,
+  UserCog,
 } from "lucide-react"
 
+import { MembersPanel } from "@/components/admin/settings/MembersPanel"
 import { NotificationIcon } from "@/components/notifications/NotificationIcon"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import {
@@ -462,7 +464,7 @@ function WebhookRow({
   )
 }
 
-type SettingsTab = "general" | "lead" | "cta" | "links" | "integrations" | "notifications" | "history"
+type SettingsTab = "general" | "lead" | "cta" | "links" | "integrations" | "notifications" | "members" | "history"
 
 type SettingsKey = keyof SiteSettings
 
@@ -520,6 +522,13 @@ const NAV_ITEMS: Array<{
     label: "알림",
     desc: "알림 외관 및 수신자 설정",
     icon: <Sparkles className="w-4 h-4" />,
+  },
+  {
+    // 구 /admin/users(회원 관리)를 Settings 탭으로 흡수(2026-07-04) — 읽기 전용 계정 디렉터리.
+    key: "members",
+    label: "회원",
+    desc: "지사장·매니저 계정",
+    icon: <UserCog className="w-4 h-4" />,
   },
   // "변경 이력"(history) 탭은 리비전 모델 미연결 placeholder라 노출에서 제외.
   // 타입/SECTION_FIELDS/렌더 블록은 ?tab=history 직접 진입 및 추후 연결을 위해 유지.
@@ -731,6 +740,7 @@ const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
     "emailWebhookUrl",
   ],
   notifications: ["notificationDigestEmailList", "notificationAppearance"],
+  members: [], // 읽기 전용 계정 디렉터리 — 편집 필드 없음(dirty 계산 제외)
   history: [],
 }
 
@@ -1886,6 +1896,8 @@ export default function SettingsPage() {
               </PanelCard>
             </>
           )}
+
+          {activeTab === "members" && <MembersPanel />}
 
           {activeTab === "history" && (
             <>
