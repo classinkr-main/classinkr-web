@@ -110,6 +110,15 @@ hardware_movements(원장) ────────┘                          
 - **C3c ✅ 회원 관리 → Settings 탭 흡수**(2026-07-04): 탭 강등 4후보 정찰 결과 3건은 부적합 판정(매출 장부=BRANCH 일일 워크벤치라 매몰 금지 / 방문자·트래픽=analytics/page.tsx:47 주석대로 tracking 탭을 의도적으로 분리한 결정 / 보강 큐=command-palette·sidebar 테스트가 최상위 진입점으로 고정한 활성 Alpha). 유일하게 타당한 회원(194줄 읽기전용, 6-29 감사 권장)만 강등: `components/admin/settings/MembersPanel.tsx` 추출 → Settings "회원" 탭(?tab=members), `/admin/users`는 redirect 스텁. nav 항목 -1(운영·시스템 5→4), keywords·warmup Settings로 병합. 라이브 검증(리다이렉트·탭 렌더·nav 제거) 완료. *나머지 3건은 각 이유로 최상위 유지 확정.*
 - **C4 (L, 별도 착수)** 견적·계약 V1→V2 완전 단일화(서명 루프 포함) + 채번 시퀀스 RPC화. — *가장 무겁고 /share 뷰어 구현이 선행. 본 이니셔티브에서는 설계만.*
 
+### 머지 전 하드닝 — 적대적 코드 리뷰 (2026-07-04)
+신규 자동화 코드(스파인·대사·핸드오프)를 Opus 2기로 적대적 정밀 검증. **회귀 clean**(핸드오프 반환타입 변경 4곳 정상 언랩, crm_tasks 필터 정확). 확증 버그 4건 수정:
+- **[fix, critical]** `account-master.ts`: REV 행이 **deal 타깃으로 확정**되면 confirmed인데 unmatched('needs link')로 뒤집혀 커버리지와 불일치 → 확정 branch_rev_sheet 링크는 target 종류 무관하게 linked 표식(드리프트는 제외 유지).
+- **[fix, critical]** `contract-to-ledger-draft.ts`: sign 라우트가 admin 서명마다(선서명·재서명) 재발화 + dedup이 draft/checked만 봐서 applied/cancelled 후 재서명 시 초안 양산 → dedup을 **딜당 1회**(상태 무관)로 강화.
+- **[fix, high]** `hw-rev-reconcile.ts`: 배송예정만+매출0 계정이 `both`(정상)로 오분류 → 실출고/매출 존재로만 판정, planned-only-무매출은 스킵.
+- **[fix, medium]** `hw-rev-reconcile.ts`: 정렬 tiebreaker가 USD+CNY 합산(파일 철칙 위반) → 통화 미혼합 렉시코그래픽 정렬(revCNY→USD→수량).
+
+검증-후-보류(설계 속성/기존 코드): 커버리지 계정 축이 `normalizedAccountKey`(REV 그룹핑 SSOT) 기준이라 매칭의 `normalizeCrmName`(학원 등 제거)과 계정 *수*가 다를 수 있음 — 두 정규화는 용도가 다르고 account-key는 바이트 고정 SSOT라 수정 안 함(금액 축은 영향 없음). `"active"` status는 enum 부재 dead value지만 기존 `getCrmSourceLinkCoverage` 패턴과 일치라 유지. convert 라우트 멱등성 부재(재호출 시 계약서 중복)·취소 딜 convert는 **기존 코드**(내 변경 아님, canon상 버전업 의도 가능)라 별도 판단. 다토큰 재수락 중복 태스크는 재공유+전환후재수락의 비오염 엣지라 공개 라우트에 딜 stage 결합 추가 대신 보류.
+
 ### 비범위 (하지 않음)
 - REV 워크벤치 자체 개선(P0 4건 등) — [rev-tab-audit-2026-07-03.md](rev-tab-audit-2026-07-03.md) 트랙에서 별도 진행 중.
 - 귀속(attribution split)·목표 DB 이관 — CEO 거버넌스 결정 대기(ERP 블루프린트 §5).

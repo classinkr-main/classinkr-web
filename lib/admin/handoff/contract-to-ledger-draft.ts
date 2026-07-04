@@ -43,17 +43,19 @@ function currentLedgerMonthKst(): string {
 }
 
 /**
- * 같은 source_deal_id + metadata.operation='forecast-add' + status in ('draft','checked')
- * 초안이 이미 있으면 true. repo 파일을 수정하지 않고 admin client로 직접 조회한다.
+ * 같은 source_deal_id에 이 핸드오프가 만든 forecast-add 초안이 **상태 무관** 하나라도 있으면 true.
+ * status를 draft/checked로 좁히지 않는 이유: sign 라우트가 admin 서명마다(선서명·재서명 포함)
+ * 재발화하는데, 초안이 이미 applied/cancelled 처리된 뒤 재서명하면 status 필터가 dedup을 무력화해
+ * 딜당 초안이 누적된다(양산). 자동 제안은 딜당 최대 1회로 고정하고, 계약 변경(증분 납품 등)에 따른
+ * 추가 초안은 검수자가 수동 생성한다. repo 파일을 수정하지 않고 admin client로 직접 조회한다.
  */
-async function hasOpenForecastDraftForDeal(dealId: string): Promise<boolean> {
+async function hasForecastDraftForDeal(dealId: string): Promise<boolean> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("branch_sales_ledger_drafts")
     .select("id")
     .eq("source_deal_id", dealId)
     .eq("metadata->>operation", FORECAST_OPERATION)
-    .in("status", ["draft", "checked"])
     .limit(1)
 
   if (error) {
@@ -78,10 +80,11 @@ export async function proposeLedgerDraftForSignedContract(
       return { status: "skipped", reason: "deal-not-found" }
     }
 
-    // dedup: 같은 딜의 열린 forecast 초안이 있으면 중복 제안하지 않는다.
+    // dedup: 같은 딜에 이 핸드오프의 forecast 초안이 (상태 무관) 이미 있으면 재제안하지 않는다 —
+    // 딜당 최대 1회. admin 재서명·선서명으로 트리거가 재발화해도 초안이 양산되지 않게 한다.
     try {
-      if (await hasOpenForecastDraftForDeal(deal.id)) {
-        return { status: "skipped", reason: "duplicate-open-forecast-draft" }
+      if (await hasForecastDraftForDeal(deal.id)) {
+        return { status: "skipped", reason: "forecast-draft-already-exists-for-deal" }
       }
     } catch (dedupError) {
       // 원장 테이블 미적용 등: 조용히 스킵(자동 제안은 부가 기능이므로 서명 흐름을 막지 않는다).

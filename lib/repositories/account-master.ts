@@ -152,6 +152,16 @@ export async function getAccountMaster(): Promise<AccountMasterResult> {
       candidateRevRecordKeys.add(link.source_record_key)
     }
     if (link.status !== "confirmed") continue
+
+    // 확정된 branch_rev_sheet 링크는 target 종류(customer/partner/deal)와 무관하게 "연결됨"으로
+    // 표식한다 — deal 타깃으로 확정된 REV 행이 unmatched('needs link')로 뒤집히지 않게 한다(BUG 방지).
+    // 단 시트 재동기화 드리프트(링크 키가 현재 행과 불일치)는 매칭이 안 되므로 제외(unmatched 유지) —
+    // 커버리지(rev-account-coverage)와 동일 규칙.
+    if (link.source_system === "branch_rev_sheet" && revByRecordKey.has(link.source_record_key)) {
+      linkedRevRecordKeys.add(link.source_record_key)
+    }
+
+    // 금액의 계정 귀속은 customer/partner target에만(accounts 목록은 고객 DB 계정 단위).
     if (link.target_type !== "customer" && link.target_type !== "partner_account") continue
 
     const key = targetKey(link.target_type, link.target_id)
@@ -165,12 +175,10 @@ export async function getAccountMaster(): Promise<AccountMasterResult> {
 
     if (link.source_system === "branch_rev_sheet") {
       const rev = revByRecordKey.get(link.source_record_key)
-      // 링크 키가 현재 행과 어긋나면(시트 재동기화 드리프트) 매출 없이 연결 표식만 남는다 —
-      // 커버리지(rev-account-coverage)도 같은 행을 미연결로 집계하므로 두 화면이 일치한다.
+      // 드리프트가 아니면(rev 존재) 매출을 계정에 귀속. linked 표식은 위에서 이미 처리됨.
       if (rev) {
         agg.revenueCNY += rev.revenue
         agg.revRows += 1
-        linkedRevRecordKeys.add(link.source_record_key)
       }
     } else if (link.source_system === "lead") {
       agg.leadCount += 1

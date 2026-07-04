@@ -167,10 +167,14 @@ export async function getHwRevReconcile(): Promise<HwRevReconcileResult> {
     const shipped = hw?.shippedQty ?? 0
     const revCNY = rev?.revCNY ?? 0
 
+    // 판정은 실출고(shipped)와 REV 매출 존재로만 — planned(배송예정)은 실출고가 아니므로 제외.
+    // 실출고도 매출도 없는 계정(예: 배송예정만 있고 매출 0)은 대사 대상이 아니라 스킵한다.
+    if (shipped === 0 && revCNY === 0) continue
+
     let status: HwRevReconcileStatus
-    if (shipped > 0 && revCNY === 0) status = "hw_only"
-    else if (revCNY > 0 && !hw) status = "rev_only"
-    else status = "both"
+    if (shipped > 0 && revCNY > 0) status = "both"
+    else if (shipped > 0) status = "hw_only" // revCNY === 0 — 출고했는데 매출 미기재 의심
+    else status = "rev_only" // revCNY > 0 && shipped === 0 — 매출은 있는데 실출고 없음
 
     rows.push({
       accountKey: key,
@@ -188,12 +192,15 @@ export async function getHwRevReconcile(): Promise<HwRevReconcileResult> {
     })
   }
 
-  // 불일치가 위로: hw_only(매출 미기재 의심) → rev_only → both, 각 그룹 안에서 규모 내림차순
+  // 불일치가 위로: hw_only(매출 미기재 의심) → rev_only → both. 각 그룹 안에서는 통화를 섞지 않고
+  // (USD·CNY 합산 금지 — 파일 철칙) revCNY → hwRevenueUSD → 실출고수량 순 렉시코그래픽 정렬.
   const statusRank: Record<HwRevReconcileStatus, number> = { hw_only: 0, rev_only: 1, both: 2 }
   rows.sort(
     (a, b) =>
       statusRank[a.status] - statusRank[b.status] ||
-      (b.hwRevenueUSD + b.revCNY) - (a.hwRevenueUSD + a.revCNY) ||
+      b.revCNY - a.revCNY ||
+      b.hwRevenueUSD - a.hwRevenueUSD ||
+      b.hwShippedQty - a.hwShippedQty ||
       a.name.localeCompare(b.name, "ko")
   )
 
