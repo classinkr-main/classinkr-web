@@ -3,7 +3,7 @@
 import React, { useRef, useState } from "react"
 import { CheckCircle2, Loader2 } from "lucide-react"
 
-import { trackEvent } from "@/lib/analytics"
+import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
 import { submitLead } from "@/lib/submitLead"
 import { useToast } from "@/components/ui/toast"
 import { Button } from "@/components/ui/button"
@@ -91,6 +91,11 @@ export function EventSignupModal({
                 stored: data.stored,
                 event_slug: eventSlug,
                 event_id: data.conversionEventId,
+            })
+            trackDemoRequestAdsConversion({
+                leadId: data.leadId,
+                eventId: data.conversionEventId,
+                eventSlug,
             })
             toast.success("행사 신청이 접수되었어요")
             setSubmitted(true)

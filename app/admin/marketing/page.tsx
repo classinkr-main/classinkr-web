@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   ChevronRight,
   History,
+  MessageCircle,
   MessageSquare,
   Plus,
   RefreshCw,
@@ -19,6 +20,7 @@ import {
   Sparkles,
   Users,
   XCircle,
+  Zap,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,13 +36,16 @@ import { adminFetch } from "@/lib/admin-client"
 import SubscriberTable from "@/components/admin/marketing/SubscriberTable"
 import SubscriberForm from "@/components/admin/marketing/SubscriberForm"
 import EmailComposer from "@/components/admin/marketing/EmailComposer"
-import SmsComposer from "@/components/admin/marketing/SmsComposer"
 import CampaignHistory from "@/components/admin/marketing/CampaignHistory"
 import MarketingDashboard from "@/components/admin/marketing/MarketingDashboard"
+import ChannelStatusStrip from "@/components/admin/marketing/ChannelStatusStrip"
+import KakaoComposer from "@/components/admin/marketing/KakaoComposer"
+import MessageLogTable from "@/components/admin/marketing/MessageLogTable"
+import { unwrapMessagingData, type MessagingStatus } from "@/lib/messaging-client-types"
 import type { EmailCampaign, EmailDraft, SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
 
-type Tab = "subscribers" | "compose" | "history" | "dashboard"
-type Channel = "email" | "sms"
+type Tab = "subscribers" | "compose" | "history" | "automation" | "dashboard"
+type Channel = "email" | "sms" | "kakao"
 type SubscriberStatusFilter = "all" | Subscriber["status"]
 type SubscriberSourceFilter = "all" | Subscriber["source"]
 type PreSendCheckStatus = "ok" | "warning" | "error" | "info"
@@ -313,6 +318,8 @@ export default function AdminMarketingPage() {
   const [channel, setChannel] = useState<Channel>("email")
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([])
+  const [messagingStatus, setMessagingStatus] = useState<MessagingStatus | null>(null)
+  const [messagingStatusLoaded, setMessagingStatusLoaded] = useState(false)
   const [composerDraft, setComposerDraft] = useState<EmailDraft>(EMPTY_DRAFT)
   const [savedSegments, setSavedSegments] = useState<SavedEmailSegment[]>(() => readSavedSegmentsStorage())
   const [loading, setLoading] = useState(false)
@@ -389,10 +396,32 @@ export default function AdminMarketingPage() {
     }
   }, [handleUnauthorized])
 
+  const fetchMessagingStatus = useCallback(async () => {
+    try {
+      const res = await adminFetch("/api/admin/messaging/status")
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      if (res.ok) {
+        const json = await res.json().catch(() => null)
+        const status = unwrapMessagingData<MessagingStatus>(json)
+        if (status && status.provider === "solapi") {
+          setMessagingStatus(status)
+        }
+      }
+    } catch {
+      // 백엔드 트랙 미배포 — 채널 작성기는 status 없이도 안전하게 강등된다.
+    } finally {
+      setMessagingStatusLoaded(true)
+    }
+  }, [handleUnauthorized])
+
   useEffect(() => {
     void fetchSubscribers()
     void fetchCampaigns()
-  }, [fetchSubscribers, fetchCampaigns])
+    void fetchMessagingStatus()
+  }, [fetchSubscribers, fetchCampaigns, fetchMessagingStatus])
 
   const activeCount = subscribers.filter((s) => s.status === "active").length
   const unsubscribedCount = subscribers.length - activeCount
@@ -612,6 +641,86 @@ export default function AdminMarketingPage() {
   )
 
   const composerReview = useMemo(() => evaluateDraft(composerDraft), [composerDraft, evaluateDraft])
+
+  // 채널별 발송 전 체크 — SMS/카카오는 작성기가 본문 state를 내부 소유하므로
+  // 여기서는 채널 준비 상태(발신번호·템플릿·발송 대상 규모) 중심의 체크를 만든다.
+  const channelChecks = useMemo<PreSendCheck[]>(() => {
+    if (channel === "email") return composerReview.checks
+
+    if (channel === "sms") {
+      const senderReady = !!messagingStatus?.senderNumber
+      return [
+        {
+          key: "sms-hold",
+          label: "발송 채널",
+          status: "info",
+          detail: "문자(SMS/LMS)는 현재 보류 중입니다. 지금은 이메일·카카오를 먼저 오픈합니다.",
+        },
+        {
+          key: "sms-sender",
+          label: "발신번호",
+          status: !messagingStatusLoaded ? "info" : senderReady ? "ok" : "warning",
+          detail: !messagingStatusLoaded
+            ? "발신번호 등록 상태를 확인 중입니다."
+            : senderReady
+              ? `발신번호는 이미 등록되어 있습니다. (${messagingStatus?.senderNumber}) 우선순위가 오르면 바로 활성화됩니다.`
+              : "발신번호 등록 상태를 확인해주세요.",
+        },
+      ]
+    }
+
+    // kakao
+    const templates = messagingStatus?.templates ?? []
+    const approved = templates.filter((t) => t.status?.toUpperCase() === "APPROVED").length
+    const channelReady = (messagingStatus?.kakaoChannels?.length ?? 0) > 0
+    return [
+      {
+        key: "kakao-channel",
+        label: "카카오 채널",
+        status: !messagingStatusLoaded ? "info" : channelReady ? "ok" : "error",
+        detail: !messagingStatusLoaded
+          ? "카카오 채널 연동 상태를 확인 중입니다."
+          : channelReady
+            ? "카카오 비즈니스 채널이 연동되어 있습니다."
+            : "카카오 채널이 연동되지 않았습니다. solapi 콘솔에서 연동하세요.",
+      },
+      {
+        key: "kakao-template",
+        label: "승인 템플릿",
+        status: !messagingStatusLoaded ? "info" : approved > 0 ? "ok" : "error",
+        detail: !messagingStatusLoaded
+          ? "템플릿 승인 상태를 확인 중입니다."
+          : approved > 0
+            ? `승인된 템플릿 ${approved}개로 발송할 수 있습니다.`
+            : "승인된 알림톡 템플릿이 없습니다. 템플릿을 등록·승인해야 발송할 수 있습니다.",
+      },
+      {
+        key: "kakao-test",
+        label: "테스트 발송",
+        status: "info",
+        detail: "지정 번호로 테스트 발송해 변수 치환과 도달을 확인하세요.",
+      },
+      {
+        key: "kakao-bulk",
+        label: "대량 발송",
+        status: "info",
+        detail: "대량 발송은 백엔드 준비 중입니다. 현재는 테스트 발송까지 사용할 수 있습니다.",
+      },
+    ]
+  }, [channel, composerReview.checks, messagingStatus, messagingStatusLoaded])
+
+  const channelReadiness = useMemo(() => {
+    if (channel === "email") return composerReview.readiness
+    const errorCount = channelChecks.filter((c) => c.status === "error").length
+    const warningCount = channelChecks.filter((c) => c.status === "warning").length
+    if (errorCount > 0) {
+      return { status: "error" as const, label: "발송 불가", detail: "필수 항목을 먼저 채워주세요." }
+    }
+    if (warningCount > 0) {
+      return { status: "warning" as const, label: "검토 필요", detail: "경고 항목을 확인 후 발송하세요." }
+    }
+    return { status: "ok" as const, label: "발송 가능", detail: "채널 준비 상태를 통과했습니다." }
+  }, [channel, composerReview.readiness, channelChecks])
 
   useEffect(() => {
     if (!toast) return
@@ -891,7 +1000,7 @@ export default function AdminMarketingPage() {
 
   const topActions: Array<{ key: Tab; label: string; icon: ReactNode }> = [
     { key: "subscribers", label: "구독자 추가", icon: <Plus className="h-4 w-4" /> },
-    { key: "compose", label: "이메일 작성", icon: <Send className="h-4 w-4" /> },
+    { key: "compose", label: "발송 작성", icon: <Send className="h-4 w-4" /> },
     { key: "history", label: "이력 확인", icon: <History className="h-4 w-4" /> },
   ]
 
@@ -921,9 +1030,9 @@ export default function AdminMarketingPage() {
                   캠페인 허브
                 </a>
               </div>
-              <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">캠페인</h1>
+              <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">메시지 발송</h1>
               <p className="mt-2 text-[13px] leading-relaxed text-[#1a1a1a]/45">
-                구독자 관리, 이메일 발송, 발송 이력을 한 흐름으로 묶어 운영합니다. 지금 상태를 빠르게 보고, 다음 액션까지 바로 이어지도록 정리했습니다.
+                이메일·문자·카카오 알림톡을 한 곳에서 작성·발송하고, 구독자와 발송 이력, 자동화 규칙까지 함께 운영합니다. 채널 상태를 먼저 확인하고 바로 다음 액션으로 이어집니다.
               </p>
             </div>
 
@@ -948,6 +1057,8 @@ export default function AdminMarketingPage() {
                 ))}
             </div>
           </div>
+
+          <ChannelStatusStrip />
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <StatCard icon={<Users className="h-4 w-4" />} label="전체 구독자" value={subscribers.length} hint="수동 추가 포함" />
@@ -1036,8 +1147,8 @@ export default function AdminMarketingPage() {
                 <TabButton
                   active={activeTab === "compose"}
                   icon={<Send className="h-4 w-4" />}
-                  label="이메일 발송"
-                  desc="캠페인 작성과 대상 선택"
+                  label="발송 작성"
+                  desc="이메일·문자·카카오 작성"
                   count={draftCount}
                   onClick={() => setActiveTab("compose")}
                 />
@@ -1045,9 +1156,16 @@ export default function AdminMarketingPage() {
                   active={activeTab === "history"}
                   icon={<History className="h-4 w-4" />}
                   label="발송 이력"
-                  desc="최근 발송 결과와 대상 확인"
+                  desc="이메일 캠페인·문자·카카오 로그"
                   count={campaigns.length}
                   onClick={() => setActiveTab("history")}
+                />
+                <TabButton
+                  active={activeTab === "automation"}
+                  icon={<Zap className="h-4 w-4" />}
+                  label="자동화"
+                  desc="세그먼트 기반 자동 발송 규칙"
+                  onClick={() => setActiveTab("automation")}
                 />
                 <TabButton
                   active={activeTab === "dashboard"}
@@ -1247,30 +1365,41 @@ export default function AdminMarketingPage() {
         {activeTab === "compose" && (
           <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
             <div className="space-y-4">
-              {/* 채널 토글 */}
-              <div className="flex items-center gap-2 rounded-xl border border-[#e8e8e4] bg-white p-1.5">
-                <button
-                  onClick={() => setChannel("email")}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-medium transition-all ${
-                    channel === "email"
-                      ? "bg-[#111110] text-white shadow-sm"
-                      : "text-[#1a1a1a]/55 hover:text-[#111110]"
-                  }`}
-                >
-                  <Send className="h-3.5 w-3.5" />
-                  이메일
-                </button>
-                <button
-                  onClick={() => setChannel("sms")}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px] font-medium transition-all ${
-                    channel === "sms"
-                      ? "bg-[#111110] text-white shadow-sm"
-                      : "text-[#1a1a1a]/55 hover:text-[#111110]"
-                  }`}
-                >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  문자 (SMS/LMS)
-                </button>
+              {/* 채널 세그먼트 (이메일 / 카카오 / 문자) — 지금은 이메일·카톡 우선 */}
+              <div
+                role="tablist"
+                aria-label="발송 채널 선택"
+                className="grid grid-cols-3 gap-1 rounded-xl border border-[#e8e8e4] bg-white p-1.5"
+              >
+                {([
+                  { key: "email", label: "이메일", icon: <Send className="h-3.5 w-3.5" />, held: false },
+                  { key: "kakao", label: "카카오 알림톡", icon: <MessageCircle className="h-3.5 w-3.5" />, held: false },
+                  { key: "sms", label: "문자 (SMS/LMS)", icon: <MessageSquare className="h-3.5 w-3.5" />, held: true },
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.key}
+                    role="tab"
+                    aria-selected={channel === tab.key}
+                    onClick={() => setChannel(tab.key)}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-[12.5px] font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1 sm:gap-2 sm:text-[13px] ${
+                      channel === tab.key
+                        ? "bg-[#111110] text-white shadow-sm"
+                        : "text-[#1a1a1a]/55 hover:text-[#111110]"
+                    }`}
+                  >
+                    {tab.icon}
+                    <span className="truncate">{tab.label}</span>
+                    {tab.held && (
+                      <span
+                        className={`hidden shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold sm:inline ${
+                          channel === tab.key ? "bg-white/15 text-white/80" : "bg-[#FBF1E0] text-[#A8741A]"
+                        }`}
+                      >
+                        보류
+                      </span>
+                    )}
+                  </button>
+                ))}
               </div>
 
               {/* 초안 상태 배너 (이메일 채널 + 초안 있을 때만) */}
@@ -1308,28 +1437,58 @@ export default function AdminMarketingPage() {
                   selectedAudience={composerReview.selectedAudience}
                   subscribers={subscribers}
                 />
-              ) : (
-                <SmsComposer
-                  subscriberCount={activeCount}
-                  countMap={tagCountMap}
+              ) : channel === "kakao" ? (
+                <KakaoComposer
+                  templates={messagingStatus?.templates ?? []}
+                  channelRegistered={(messagingStatus?.kakaoChannels?.length ?? 0) > 0}
+                  statusUnavailable={!messagingStatusLoaded || messagingStatus === null}
                 />
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+                  <div className="border-b border-[#e8e8e4] bg-[#fafaf8] px-6 py-8 text-center">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f0f0ec] text-[#1a1a1a]/45">
+                      <MessageSquare className="h-6 w-6" />
+                    </div>
+                    <p className="mt-4 text-[15px] font-semibold text-[#111110]">문자(SMS/LMS) 발송은 잠시 보류 중입니다</p>
+                    <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                      지금은 이메일과 카카오 알림톡을 먼저 오픈합니다. 발신번호(solapi)는 이미 정상 등록되어 있어,
+                      문자 발송이 우선순위에 올라오면 바로 활성화할 수 있습니다.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 px-6 py-4 sm:flex-row sm:justify-center">
+                    <Button variant="outline" size="sm" onClick={() => setChannel("kakao")}>
+                      <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
+                      카카오 알림톡으로 작성
+                    </Button>
+                    <Button size="sm" onClick={() => setChannel("email")} className="bg-[#084734] hover:bg-[#065c41]">
+                      <Send className="mr-1.5 h-3.5 w-3.5" />
+                      이메일로 작성
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
 
             <div className="space-y-6">
               <Panel
                 title="발송 전 체크"
-                description="실제 발송 전에 꼭 봐야 하는 항목들입니다."
+                description={
+                  channel === "email"
+                    ? "실제 발송 전에 꼭 봐야 하는 항목들입니다."
+                    : channel === "sms"
+                      ? "문자 발송 전 채널 준비 상태를 확인합니다."
+                      : "알림톡 발송 전 채널·템플릿 상태를 확인합니다."
+                }
                 action={
                   <MiniBadge
-                    tone={composerReview.readiness.status === "ok" ? "success" : composerReview.readiness.status === "warning" ? "warning" : "danger"}
+                    tone={channelReadiness.status === "ok" ? "success" : channelReadiness.status === "warning" ? "warning" : "danger"}
                   >
-                    {composerReview.readiness.label}
+                    {channelReadiness.label}
                   </MiniBadge>
                 }
               >
                 <div className="space-y-1">
-                  {composerReview.checks.map((check) => (
+                  {channelChecks.map((check) => (
                     <div key={check.key} className={`rounded-lg border px-3 py-2 ${checkToneClass(check.status)}`}>
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[11px] font-semibold leading-tight">{check.label}</p>
@@ -1343,6 +1502,30 @@ export default function AdminMarketingPage() {
                 </div>
               </Panel>
 
+              {channel !== "email" && (
+                <Panel
+                  title={channel === "sms" ? "문자 발송 안내" : "알림톡 발송 안내"}
+                  description="이 채널의 발송 방식과 현재 상태를 정리했습니다."
+                >
+                  <div className="space-y-2 text-[12px] leading-relaxed text-[#1a1a1a]/55">
+                    {channel === "sms" ? (
+                      <>
+                        <p>· 문자(SMS/LMS)는 지금 보류 중입니다. 이메일·카카오를 먼저 오픈합니다.</p>
+                        <p>· 발신번호(solapi)는 이미 정상 등록되어 있습니다.</p>
+                        <p>· 우선순위가 오르면 별도 작업 없이 바로 활성화할 수 있습니다.</p>
+                      </>
+                    ) : (
+                      <>
+                        <p>· 알림톡은 카카오에 사전 승인된 템플릿으로만 발송됩니다.</p>
+                        <p>· 변수는 승인된 템플릿의 #{"{변수}"} 자리에 치환됩니다.</p>
+                        <p>· 대량 발송은 백엔드 준비 중 — 현재는 테스트 발송까지 사용할 수 있습니다.</p>
+                      </>
+                    )}
+                  </div>
+                </Panel>
+              )}
+
+              {channel === "email" && (
               <Panel
                 title="저장 세그먼트"
                 description="자주 쓰는 발송 대상을 이름으로 저장해 다음 캠페인에서 바로 불러옵니다."
@@ -1407,6 +1590,7 @@ export default function AdminMarketingPage() {
                   )}
                 </div>
               </Panel>
+              )}
 
             </div>
           </div>
@@ -1491,6 +1675,13 @@ export default function AdminMarketingPage() {
                     />
                   </div>
                 )}
+              </Panel>
+
+              <Panel
+                title="문자·카카오 발송 로그"
+                description="SMS·알림톡 발송 결과를 채널·상태별로 확인합니다. 마스킹된 수신자와 실패 원인을 함께 봅니다."
+              >
+                <MessageLogTable />
               </Panel>
             </div>
 
@@ -1603,6 +1794,55 @@ export default function AdminMarketingPage() {
                 </div>
               </Panel>
             </div>
+          </div>
+        )}
+
+        {activeTab === "automation" && (
+          <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+            <Panel
+              title="세그먼트 자동 발송"
+              description="폼 제출·스케줄·지연 조건으로 이메일을 자동 발송하는 규칙 영역입니다."
+            >
+              <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-5 py-12 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#084734] shadow-[0_1px_0_rgba(17,17,16,0.03)]">
+                  <Zap className="h-5 w-5" />
+                </div>
+                <p className="mt-4 text-[14px] font-semibold text-[#111110]">자동화는 설계 확정 후 연결됩니다</p>
+                <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                  세그먼트 기반 자동 발송(트리거·조건·템플릿)은 현재 별도 설계가 진행 중입니다.
+                  설계가 확정되면 규칙 생성·즉시 실행·실행 이력을 이 탭에서 다룰 수 있게 연결합니다.
+                </p>
+                <div className="mx-auto mt-5 grid max-w-md gap-2 text-left sm:grid-cols-3">
+                  {[
+                    { label: "트리거", desc: "폼 제출·스케줄·지연" },
+                    { label: "세그먼트", desc: "리드·구독자·태그·기간" },
+                    { label: "템플릿", desc: "변수 치환 이메일" },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-xl border border-[#e8e8e4] bg-white px-3 py-2.5">
+                      <p className="text-[12px] font-semibold text-[#111110]">{item.label}</p>
+                      <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">{item.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Panel>
+
+            <Panel title="현재 상태" description="자동화 준비 현황을 요약합니다.">
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-[#ECD29C] bg-[#FBF1E0] p-4">
+                  <p className="text-[12px] font-semibold text-[#7A520F]">설계 진행 중</p>
+                  <p className="mt-1 text-[12px] leading-relaxed text-[#7A520F]/85">
+                    규칙 로직·데이터 흐름을 확정하는 단계입니다. 확정 전까지는 실제 자동 발송을 연결하지 않습니다.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+                  <p className="text-[12px] font-semibold text-[#111110]">지금 할 수 있는 것</p>
+                  <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                    수동 발송(이메일·카카오)은 발송 작성 탭에서 바로 진행할 수 있습니다.
+                  </p>
+                </div>
+              </div>
+            </Panel>
           </div>
         )}
 

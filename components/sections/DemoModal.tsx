@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react"
 import { CheckCircle2, Loader2, Sparkles } from "lucide-react"
 
-import { trackEvent } from "@/lib/analytics"
+import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
 import { submitLead } from "@/lib/submitLead"
 import { useToast } from "@/components/ui/toast"
 import { Button } from "@/components/ui/button"
@@ -105,6 +105,10 @@ export function DemoModal({ children, trackingButton }: { children: React.ReactN
                 lead_id: data.leadId,
                 stored: data.stored,
                 event_id: data.conversionEventId,
+            })
+            trackDemoRequestAdsConversion({
+                leadId: data.leadId,
+                eventId: data.conversionEventId,
             })
             toast.success("상담 요청이 접수되었어요")
             setSubmitted(true)

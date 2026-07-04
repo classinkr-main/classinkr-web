@@ -41,6 +41,8 @@
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - 자체 CRM 백엔드/운영 기준. 시트·OCRM·HQ CRM은 참고/동기화 원천으로 두고, Admin CRM의 고객 스파인·회의록·녹음·다음 액션 구조를 정의
+- [active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md](./active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md)
+  - REV/매출 시트를 Admin CRM 안의 별도 매출시트 탭으로 승격하고, 이후 자체 매출 원장으로 옮기는 실행안
 
 ## 2. Product
 
@@ -52,6 +54,8 @@
   - 파트너 포털 도메인 모델과 거래건 중심 UX 상세 근거
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - 내부 동료가 매일 쓰는 자체 CRM의 기록 입력, 회의록/녹음 모으기, 고객 360, 다음 액션 운영 기준
+- [active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md](./active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md)
+  - 매출시트 별도 탭, REV 동기화본 운영화, 매칭 커버리지, app-owned revenue ledger 전환 기준
 - [active/partner-portal-implementation-roadmap.md](./active/partner-portal-implementation-roadmap.md)
   - 파트너 포털 구현 순서. 현재 경로명은 `repository-status-2026-06-08.md`와 실제 코드로 재확인
 - [active/quote-lifecycle-execution-plan.md](./active/quote-lifecycle-execution-plan.md)

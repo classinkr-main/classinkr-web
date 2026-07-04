@@ -19,6 +19,7 @@ import {
   PackageCheck,
   ReceiptText,
   Search,
+  Send,
   Settings,
   UserCog,
   Users,
@@ -57,6 +58,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
 
   // 마케팅
   { href: "/admin/campaigns", label: "캠페인", icon: Megaphone, roles: STAFF_ADMIN, section: "marketing", keywords: "캠페인 이메일 campaign email" },
+  { href: "/admin/marketing", label: "메시지 발송", icon: Send, roles: STAFF_ADMIN, section: "marketing", keywords: "메시지 발송 문자 sms 카카오 kakao 알림톡 이메일 email 솔라피 solapi" },
   { href: "/admin/blog", label: "콘텐츠", icon: FileText, roles: STAFF_EDITOR, section: "marketing", keywords: "블로그 콘텐츠 blog content" },
   { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, roles: STAFF_EDITOR, section: "marketing", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
   { href: "/admin/events", label: "공개 행사", icon: Globe, roles: STAFF_ADMIN, section: "marketing", keywords: "행사 이벤트 event 웨비나" },

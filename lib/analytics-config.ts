@@ -14,6 +14,11 @@ function getConfiguredAnalyticsId(value: string | undefined) {
 export const GTM_ID =
   getConfiguredAnalyticsId(process.env.NEXT_PUBLIC_GTM_ID)
 
+export const GA4_MEASUREMENT_ID = getConfiguredAnalyticsId(
+  process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID ??
+    process.env.NEXT_PUBLIC_GA_ID
+)
+
 // Google Ads 글로벌 태그 ID (gtag.js). 전 페이지 공통 로드.
 export const GOOGLE_ADS_ID = "AW-18252550128"
 

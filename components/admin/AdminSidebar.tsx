@@ -83,6 +83,11 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/event-metrics",
     "/api/admin/meta/campaigns?datePreset=last_30d&limit=50",
   ],
+  "/admin/marketing": [
+    "/api/admin/subscribers",
+    "/api/admin/email",
+    "/api/admin/messaging/status",
+  ],
   "/admin/lead-magnets": [
     "/api/admin/lead-magnets",
     "/api/admin/lead-magnets/metrics?days=30",
