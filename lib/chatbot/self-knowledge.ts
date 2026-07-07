@@ -121,5 +121,10 @@ export const CHATBOT_SELF_KNOWLEDGE_ENTRIES: ChatbotSelfKnowledgeEntry[] = [
 ]
 
 export function findChatbotSelfKnowledgeEntry(question: string) {
+  const normalized = question.toLowerCase()
+  // 소프트웨어 기능/결제 질문은 챗봇 자체 정체성(self-knowledge)보다 기능/요금 RAG로 보낸다.
+  if (/채점|출제|평가|분석|스피킹|회원\s*가입|결제|요금/.test(normalized)) {
+    return null
+  }
   return CHATBOT_SELF_KNOWLEDGE_ENTRIES.find((entry) => entry.match.test(question)) ?? null
 }
