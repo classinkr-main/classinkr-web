@@ -88,6 +88,13 @@ export interface ChatbotSource {
 
 export type HandoffIntent = "demo" | "support"
 
+export interface SuggestedContent {
+  type: "blog" | "resource" | "case"
+  slug: string
+  title: string
+  url: string
+}
+
 export interface ChatbotQueryResponse {
   answer: string
   answerMode: AnswerMode
@@ -100,6 +107,7 @@ export interface ChatbotQueryResponse {
   suggestedQuestions: string[]
   unresolved: boolean
   warning?: string
+  suggestedContent?: SuggestedContent[]
 }
 
 interface NormalizedQuestion {
@@ -3257,6 +3265,34 @@ function finalizeAnswer(
       // 사용자 답변 텍스트에서 토큰 삭제
       response.answer = response.answer.replace(submitRegex, "").trim()
     }
+  }
+
+  // 콘텐츠 추천 토큰 처리 ([CONTENT_SUGGEST:type=...,slug=...,title=...])
+  if (response.answer && response.answer.includes("[CONTENT_SUGGEST:")) {
+    const suggestRegex = /\[CONTENT_SUGGEST:type=(blog|resource|case),slug=([^,\n\]]+),title=([^,\n\]]+)\]/gi
+    let match;
+    const suggested: SuggestedContent[] = []
+    
+    while ((match = suggestRegex.exec(response.answer)) !== null) {
+      const [, type, slug, title] = match
+      const cleanType = type.trim() as "blog" | "resource" | "case"
+      const cleanSlug = slug.trim()
+      const cleanTitle = title.trim()
+      const url = cleanType === "blog" ? `/blog/${cleanSlug}` : cleanType === "resource" ? `/resources/${cleanSlug}` : `/events/${cleanSlug}`
+      suggested.push({
+        type: cleanType,
+        slug: cleanSlug,
+        title: cleanTitle,
+        url,
+      })
+    }
+    
+    if (suggested.length > 0) {
+      response.suggestedContent = suggested
+    }
+    
+    // 사용자 답변 텍스트에서 토큰 삭제
+    response.answer = response.answer.replace(suggestRegex, "").trim()
   }
 }
 
