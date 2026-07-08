@@ -18,6 +18,10 @@ export type ChatbotIntent =
   | "sales_consulting"
   | "self_knowledge"
   | "docs_lookup"
+  | "emotional_consulting"
+  | "event_inquiry"
+  | "event_apply_assist"
+  | "tutor_pricing_recommend"
 
 export type HandoffIntent = "demo" | "support"
 
@@ -141,7 +145,17 @@ export function detectChatbotHandoffIntent(
   return "demo"
 }
 
-export function detectChatbotIntent(category: ChatbotCategory | string): ChatbotIntent {
+export function detectChatbotIntent(category: ChatbotCategory | string, question: string = ""): ChatbotIntent {
+  const text = question.toLowerCase()
+  if (category === "event" && /신청이\s*안|모르겠|헤매|도와줘|대신\s*신청|대리\s*신청|신청해\s*주|직접\s*해\s*주|신청해줘|접수해줘|대신\s*접수/.test(text)) {
+    return "event_apply_assist"
+  }
+  if (
+    /개인\s*강사|과외|공부방|소규모\s*수업|1:1|프리랜서|개인\s*과외/i.test(text) &&
+    /요금|가격|구독|플랜|비용|비싸|얼마|추천/i.test(text)
+  ) {
+    return "tutor_pricing_recommend"
+  }
   switch (category) {
     case "billing":
       return "billing_support"
@@ -157,6 +171,10 @@ export function detectChatbotIntent(category: ChatbotCategory | string): Chatbot
       return "classroom_consulting"
     case "consultation":
       return "sales_consulting"
+    case "concern":
+      return "emotional_consulting"
+    case "event":
+      return "event_inquiry"
     default:
       return "docs_lookup"
   }
@@ -167,7 +185,7 @@ export function classifyChatbotQuestion(question: string, sourceCategories: stri
 
   return {
     category,
-    intent: detectChatbotIntent(category),
+    intent: detectChatbotIntent(category, question),
     handoffIntent: detectChatbotHandoffIntent(question, category),
   }
 }
