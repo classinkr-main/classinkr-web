@@ -1,6 +1,6 @@
 # 파트 가이드 — 마케팅 / 그로스 / CRM (Growth)
 
-> 담당 에이전트(계획·미구현): `.claude/agents/growth-crm.md` — 현재는 이 가이드가 파트 SSOT, 직접 정독 · 기준 시점: 2026-06-23
+> 담당 에이전트: `.claude/agents/growth-crm.md`(이 가이드를 SSOT로 참조) · 기준 시점: 2026-06-23
 > 변경 검증: `npx eslint app components lib --max-warnings=0` + `npm run build`
 
 ## 1. 파트 한 줄 정의

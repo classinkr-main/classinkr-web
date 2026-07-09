@@ -220,7 +220,7 @@ npm run build
 
 **실물이 없는 것(캐논·플레이북이 개념으로만 서술 — 레포 실측 2026-07-03 기준):**
 
-- `.claude/agents/`의 6개 전담 에이전트(home-front/admin-core/content-pub/growth-crm/chatbot/platform-data)는 **정의 파일이 존재하지 않는다**. `.claude/skills/`도 없다. 파트 판별·가이드 정독은 현재 사람이 플레이북을 직접 읽는 수동 절차다.
+- `.claude/agents/`의 6개 전담 에이전트(home-front/admin-core/content-pub/growth-crm/chatbot/platform-data)는 **정의 파일이 존재하지 않는다**. `.claude/skills/`도 없다. 파트 판별·가이드 정독은 현재 사람이 플레이북을 직접 읽는 수동 절차다. *(갱신 2026-07-09: 6개 에이전트 정의 파일 생성 완료 — `.claude/agents/*.md`, 각각 파트 가이드 + `work-flow-patterns.md`를 SSOT로 참조하는 얇은 정의. `.claude/skills/`는 여전히 없음.)*
 - 캐논 §9 콘텐츠 자동화 표의 "금지 표현 lint", "회사 수치 차단+캡션 자동 삽입", "금지 명칭 자동 치환", "DocArticle 저장 훅 한자 스캔"은 **실행 코드가 없다**. 규칙 문서(`brand-canon/voice-charter.md`, `classin-software-feature-inventory.md` 등)로만 존재하며, 지금은 5.2절 수동 게이트가 대체 절차다.
 - `chatbot_recommended_questions` 초안 자동생성 파이프라인 미착수(캐논 §7에 미착수로 명시).
 
@@ -275,7 +275,7 @@ npm run build
 3. 판단형/기계형 경계의 스킬 설계 반영 — "제안까지만" 원칙의 구현 방식.
 4. 그룹 B 인프라 코드화 순서 — 캐논이 "존재한다"고 서술하지만 실물이 없는 항목(금지 표현 lint 등)을 누가 어떤 스크립트로 채울지.
 5. CEO 거버넌스 3결정 시점 확인 — 결정 전에는 매출 커버리지 측정기의 대상 시스템을 확정할 수 없음.
-6. 6파트 전담 에이전트(`.claude/agents/`)를 실제로 만들지, 플레이북 수동 정독 방식을 유지할지.
+6. 6파트 전담 에이전트(`.claude/agents/`)를 실제로 만들지, 플레이북 수동 정독 방식을 유지할지. *(2026-07-09 결정: 실제 생성 — 가이드를 참조하는 얇은 에이전트로 구현, 위임/수동 정독 병행 가능.)*
 
 ---
 

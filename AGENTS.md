@@ -11,24 +11,25 @@
 ## 먼저 볼 문서
 
 - [docs/active/playbook/README.md](docs/active/playbook/README.md) — 파트별 운영 플레이북: 작업이 어느 파트인지 판별 → 해당 파트 가이드·공통 철칙 적용
+- [docs/active/playbook/work-flow-patterns.md](docs/active/playbook/work-flow-patterns.md) — 반복 함정·에러 카탈로그 + 기계형 표준 작업 체크리스트(파생 인덱스)
 - [docs/README.md](docs/README.md)
 - [docs/active/repository-audit-2026-04-15.md](docs/active/repository-audit-2026-04-15.md)
 - [DESIGN.md](DESIGN.md)
 
 ## 파트 분담 (작업 위임)
 
-저장소는 6개 파트로 나뉜다. 작업이 들어오면 [플레이북 §2 소유권 매트릭스](docs/active/playbook/README.md)로 파트를 판별하고, **해당 파트 가이드를 정독한 뒤** [공통 철칙 §3](docs/active/playbook/README.md)을 적용한다.
+저장소는 6개 파트로 나뉜다. 작업이 들어오면 [플레이북 §2 소유권 매트릭스](docs/active/playbook/README.md)로 파트를 판별하고, 해당 전담 에이전트에 위임하거나(예: 챗봇 작업 → `Agent(subagent_type: "chatbot")`) **해당 파트 가이드를 정독한 뒤** [공통 철칙 §3](docs/active/playbook/README.md)을 적용한다.
 
-> 전담 서브에이전트(`.claude/agents/`)는 아직 구현되지 않았다(2026-07-09 기준). 현재 파트 판별·가이드 정독은 **수동 절차**이며, 각 파트 가이드가 곧 그 파트의 SSOT다. 에이전트 실제 구축 여부는 팀 미결 항목이다.
+> 전담 서브에이전트가 `.claude/agents/`에 구현되어 있다(2026-07-09). 각 에이전트는 자기 파트 가이드 + `docs/active/playbook/work-flow-patterns.md`(공통 함정·체크리스트)를 SSOT로 가리키는 **얇은 정의**다 — 가이드가 여전히 사실의 원천이므로, 파트 구조·철칙이 바뀌면 가이드와 에이전트 정의를 함께 갱신한다.
 
-| 파트 | 가이드 |
-|------|--------|
-| 홈 및 랜딩 | [01](docs/active/playbook/01-home-front.md) |
-| 어드민 코어 | [02](docs/active/playbook/02-admin-core.md) |
-| 컨텐츠 발행 | [03](docs/active/playbook/03-content-pub.md) |
-| 마케팅/그로스/CRM | [04](docs/active/playbook/04-growth-crm.md) |
-| 챗봇 | [05](docs/active/playbook/05-chatbot.md) |
-| 플랫폼 & 데이터 | [06](docs/active/playbook/06-platform-data.md) |
+| 파트 | 에이전트 | 가이드 |
+|------|----------|--------|
+| 홈 및 랜딩 | `home-front` | [01](docs/active/playbook/01-home-front.md) |
+| 어드민 코어 | `admin-core` | [02](docs/active/playbook/02-admin-core.md) |
+| 컨텐츠 발행 | `content-pub` | [03](docs/active/playbook/03-content-pub.md) |
+| 마케팅/그로스/CRM | `growth-crm` | [04](docs/active/playbook/04-growth-crm.md) |
+| 챗봇 | `chatbot` | [05](docs/active/playbook/05-chatbot.md) |
+| 플랫폼 & 데이터 | `platform-data` | [06](docs/active/playbook/06-platform-data.md) |
 
 ## 코드 규칙
 
