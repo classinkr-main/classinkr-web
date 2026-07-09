@@ -18,7 +18,6 @@ import {
   ShieldAlert,
   CircleDollarSign,
   PhoneCall,
-  Handshake,
   MapPin,
   BarChart3,
 } from "lucide-react"
@@ -196,12 +195,12 @@ const CRM_ROUTE_GROUPS: Array<{
     title: "매출 · 딜",
     caption: "견적 · 오더 · 시트",
     icon: <CircleDollarSign className="h-4 w-4" />,
+    // revenue·partners*는 이미 이 라우트들로 튕기는 legacy redirect 스텁이라 노출하지 않는다(중복 방지).
     links: [
       { href: "/admin/crm/deals", label: "견적·매출" },
       { href: "/admin/crm/deals/orders", label: "오더·설치" },
       { href: "/admin/crm/deals/rev-sheet", label: "매출시트" },
       { href: "/admin/crm/deals/kpi", label: "워크스페이스" },
-      { href: "/admin/crm/revenue", label: "매출 원장" },
     ],
   },
   {
@@ -214,17 +213,6 @@ const CRM_ROUTE_GROUPS: Array<{
       { href: "/admin/crm/matching", label: "데이터 매칭·커버리지" },
       { href: "/admin/branch", label: "KR Team 지사" },
       { href: "/admin/branch/ledger", label: "매출 장부" },
-    ],
-  },
-  {
-    key: "partners",
-    title: "파트너",
-    caption: "파트너 · 포털",
-    icon: <Handshake className="h-4 w-4" />,
-    links: [
-      { href: "/admin/crm/partners", label: "파트너" },
-      { href: "/admin/crm/partners/customers", label: "파트너 고객" },
-      { href: "/admin/crm/partners/portal", label: "파트너 포털" },
     ],
   },
 ]
@@ -1054,7 +1042,7 @@ export default function OverviewPage() {
             </a>
           }
         >
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {CRM_ROUTE_GROUPS.map((group) => (
               <div key={group.key} className="rounded-xl border border-[#e8e8e4] bg-white p-3.5">
                 <div className="mb-2.5 flex items-center gap-2">
