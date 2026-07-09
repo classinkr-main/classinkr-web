@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import dynamic from "next/dynamic"
 import {
   Users,
@@ -16,9 +16,16 @@ import {
   Link2,
   Send,
   ShieldAlert,
+  CircleDollarSign,
+  PhoneCall,
+  Handshake,
+  MapPin,
+  BarChart3,
 } from "lucide-react"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { StatCard } from "@/components/admin/StatCard"
+import CrmHealthDonut from "@/components/admin/crm/CrmHealthDonut"
+import type { Period, Team } from "@/components/admin/branch/types"
 import {
   EmptyState,
   KpiSkeleton,
@@ -114,6 +121,12 @@ const Sparkline = dynamic(
   () => import("@/components/admin/viz/Sparkline").then((m) => m.Sparkline),
   { ssr: false, loading: () => <div className="h-[30px]" /> }
 )
+// 지사 지역 히트맵 — 기존 라이브 컴포넌트를 홈(Command 링) 요약으로 재사용(재빌드 아님).
+// 자체적으로 /api/admin/branch/heatmap을 지연 로드하므로 핵심 KPI 렌더를 막지 않는다.
+const BranchRegionHeatmap = dynamic(
+  () => import("@/components/admin/branch/sections/BranchRegionHeatmap"),
+  { ssr: false, loading: () => <Skeleton className="h-[420px]" /> }
+)
 const SOURCE_LABEL: Record<string, string> = {
   demo_modal: "데모 신청",
   contact_page: "문의",
@@ -155,6 +168,70 @@ const PUBLISH_STATUS_COLOR: Record<BlogPost["status"], string> = {
   archived: "bg-[#f0f0ec] text-[#1a1a1a]/40",
 }
 const COMPACT_NUMBER = new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 })
+
+// CRM 운영 라우트 런처 — 근간 라우트를 4개 링(작업대·매출·분석·파트너)으로 묶어 홈에서 직접 진입.
+// 지금까지 홈에서 진입 가능한 CRM 라우트는 3개뿐 → 고아 라우트(revenue·partners*)까지 노출한다.
+const CRM_ROUTE_GROUPS: Array<{
+  key: string
+  title: string
+  caption: string
+  icon: ReactNode
+  links: Array<{ href: string; label: string }>
+}> = [
+  {
+    key: "operate",
+    title: "작업대",
+    caption: "리드 · 고객 · 기록",
+    icon: <PhoneCall className="h-4 w-4" />,
+    links: [
+      { href: "/admin/crm/customers/leads", label: "리드" },
+      { href: "/admin/crm/customers/unified", label: "고객 DB" },
+      { href: "/admin/crm/customers/accounts", label: "원천 고객" },
+      { href: "/admin/crm/activity", label: "활동 기록" },
+      { href: "/admin/crm/capture", label: "참석자 입력" },
+    ],
+  },
+  {
+    key: "deals",
+    title: "매출 · 딜",
+    caption: "견적 · 오더 · 시트",
+    icon: <CircleDollarSign className="h-4 w-4" />,
+    links: [
+      { href: "/admin/crm/deals", label: "견적·매출" },
+      { href: "/admin/crm/deals/orders", label: "오더·설치" },
+      { href: "/admin/crm/deals/rev-sheet", label: "매출시트" },
+      { href: "/admin/crm/deals/kpi", label: "워크스페이스" },
+      { href: "/admin/crm/revenue", label: "매출 원장" },
+    ],
+  },
+  {
+    key: "analyze",
+    title: "분석",
+    caption: "인사이트 · 매칭 · 지사",
+    icon: <BarChart3 className="h-4 w-4" />,
+    links: [
+      { href: "/admin/crm/insights", label: "인사이트 분석" },
+      { href: "/admin/crm/matching", label: "데이터 매칭·커버리지" },
+      { href: "/admin/branch", label: "KR Team 지사" },
+      { href: "/admin/branch/ledger", label: "매출 장부" },
+    ],
+  },
+  {
+    key: "partners",
+    title: "파트너",
+    caption: "파트너 · 포털",
+    icon: <Handshake className="h-4 w-4" />,
+    links: [
+      { href: "/admin/crm/partners", label: "파트너" },
+      { href: "/admin/crm/partners/customers", label: "파트너 고객" },
+      { href: "/admin/crm/partners/portal", label: "파트너 포털" },
+    ],
+  },
+]
+
+// 홈 히트맵 요약은 KR 전체·연간 누적 기준(월 선택은 period=Y에서 무시됨).
+const OVERVIEW_BRANCH_TEAM: Team = "ALL"
+const OVERVIEW_BRANCH_PERIOD: Period = "Y"
 
 type OverviewOperationalAlert = {
   id: string
@@ -455,6 +532,12 @@ export default function OverviewPage() {
     [leadAgg, chartRange]
   )
   const chartTotal = useMemo(() => chartData.reduce((sum, point) => sum + point.count, 0), [chartData])
+
+  // 지사 히트맵 요약용 월 키(period=Y에선 무시되지만 프롭 계약상 유효한 값 전달).
+  const overviewMonthKey = useMemo(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+  }, [])
 
   const {
     publishedBlogPosts,
@@ -960,6 +1043,47 @@ export default function OverviewPage() {
 
       {/* 핵심 KPI는 상단 커맨드 바로, 신규 리드 배너·시그널칩은 주의 신호 피드로 통합됨 */}
 
+      {/* CRM · 운영 라우트 런처 — 근간 라우트를 링별(작업대·매출·분석·파트너)로 홈에서 직접 진입 */}
+      <div className="mb-6">
+        <SectionCard
+          title="CRM · 운영 라우트"
+          description="리드부터 매출·분석·파트너까지 CRM 근간 라우트를 한곳에서 진입합니다."
+          action={
+            <a href="/admin/crm" className="flex items-center gap-1 text-[12px] text-[#1a1a1a]/40 transition-colors hover:text-[#111110]">
+              CRM 홈 <ArrowUpRight className="h-3 w-3" />
+            </a>
+          }
+        >
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {CRM_ROUTE_GROUPS.map((group) => (
+              <div key={group.key} className="rounded-xl border border-[#e8e8e4] bg-white p-3.5">
+                <div className="mb-2.5 flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#f0f0ec] text-[#1a1a1a]/55">
+                    {group.icon}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-[#111110]">{group.title}</p>
+                    <p className="truncate text-[11px] text-[#1a1a1a]/40">{group.caption}</p>
+                  </div>
+                </div>
+                <div className="flex flex-col">
+                  {group.links.map((link) => (
+                    <a
+                      key={link.href}
+                      href={link.href}
+                      className="group flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[12.5px] text-[#1a1a1a]/70 transition-colors hover:bg-[#fafaf8] hover:text-[#111110]"
+                    >
+                      {link.label}
+                      <ChevronRight className="h-3.5 w-3.5 text-[#1a1a1a]/25 group-hover:text-[#111110]" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      </div>
+
       <div className="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 shadow-[0_1px_0_rgba(17,17,16,0.02)] sm:p-6">
           <div className="mb-5 flex items-start justify-between gap-4">
@@ -1106,6 +1230,36 @@ export default function OverviewPage() {
               </ul>
             </>
         )}
+      </div>
+
+      {/* 지사 · 지역 히트맵 + 고객 건강도 — 지사 탭에 갇힌 시각화를 홈 요약(Command 링)으로 복원 */}
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white shadow-[0_1px_0_rgba(17,17,16,0.02)]">
+          <div className="flex items-center justify-between gap-3 border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-[#084734]" />
+              <div>
+                <h2 className="text-[14px] font-semibold text-[#111110]">지사 · 지역별 매출 히트맵</h2>
+                <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">KR 지역별 매출·달성률 분포 · 연간 누적</p>
+              </div>
+            </div>
+            <a href="/admin/branch" className="flex items-center gap-1 text-[12px] text-[#1a1a1a]/40 transition-colors hover:text-[#111110]">
+              지사 대시보드 <ArrowUpRight className="h-3 w-3" />
+            </a>
+          </div>
+          <div className="p-3 sm:p-4">
+            <BranchRegionHeatmap
+              team={OVERVIEW_BRANCH_TEAM}
+              period={OVERVIEW_BRANCH_PERIOD}
+              selectedMonth={overviewMonthKey}
+              refreshKey={0}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-4">
+          {/* 고객 건강도 도넛 — 데이터 없으면 컴포넌트가 자동 숨김(가짜 분포 금지) */}
+          <CrmHealthDonut variant="summary" />
+        </div>
       </div>
 
       {/* (e) 드릴다운 그리드 — 일정 / 콘텐츠 / 캠페인 */}
