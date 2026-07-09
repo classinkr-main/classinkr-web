@@ -4,7 +4,7 @@
 
 - Next.js 16 (App Router) + React 19 + TypeScript
 - Tailwind CSS 4, Supabase, Recharts, Lucide
-- 공개 사이트(`/`), 관리자(`/admin`), 파트너 포털(`/partner`), 포털 API(`/app/api/portal`)
+- 공개 사이트(`/`), 관리자(`/admin`), 공유 링크(`/share/{quote,contract}/[token]`), 포털 API(`/app/api/portal`)
 
 ## 먼저 볼 문서
 
@@ -16,8 +16,8 @@
 
 - 공용 컴포넌트는 `components/`에 둔다.
 - 관리자 API는 `app/api/admin/`에서 `verifyAdmin()` 또는 동등한 관리자 인증 가드를 사용한다.
-- 파트너 포털 V2 API는 `app/api/portal/`과 `lib/partner-portal/portal-authorize.ts` 기준으로 맞춘다.
-- 데이터 접근은 `lib/repositories/` 또는 `lib/partner-portal/repositories/`로 모은다.
+- 포털 V2 API는 `app/api/portal/`과 `lib/portal/portal-authorize.ts` 기준으로 맞춘다.
+- 데이터 접근은 `lib/repositories/` 또는 `lib/portal/repositories/`로 모은다.
 - 일부 기능은 여전히 `data/*.json` 또는 듀얼 모드 저장소를 통해 폴백한다.
 
 ## 챗봇 API 운영 규칙
