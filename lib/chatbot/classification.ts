@@ -22,6 +22,7 @@ export type ChatbotIntent =
   | "event_inquiry"
   | "event_apply_assist"
   | "tutor_pricing_recommend"
+  | "feature_limit_consulting"
 
 export type HandoffIntent = "demo" | "support"
 
@@ -149,6 +150,12 @@ export function detectChatbotIntent(category: ChatbotCategory | string, question
   const text = question.toLowerCase()
   if (category === "event" && /신청이\s*안|모르겠|헤매|도와줘|대신\s*신청|대리\s*신청|신청해\s*주|직접\s*해\s*주|신청해줘|접수해줘|대신\s*접수/.test(text)) {
     return "event_apply_assist"
+  }
+  if (
+    /(?:결제|수납|정산|출석|출결|등원|성적표|리포트).*(?:안\s*돼|안됨|불가능|없나요|지원이\s*안|지원하지|한계|단점|자체|기능|방법)/i.test(text) ||
+    /지문\s*인식|출석\s*체크\s*기|오프라인\s*출석|등원\s*카드/i.test(text)
+  ) {
+    return "feature_limit_consulting"
   }
   if (
     /개인\s*강사|과외|공부방|소규모\s*수업|1:1|프리랜서|개인\s*과외/i.test(text) &&

@@ -12,6 +12,7 @@ export interface ChatbotSelfKnowledgeEntry {
     | "event_inquiry"
     | "event_apply_assist"
     | "tutor_pricing_recommend"
+    | "feature_limit_consulting"
   match: RegExp
   answer: string[]
   suggestedQuestions: string[]
@@ -182,14 +183,31 @@ export const CHATBOT_SELF_KNOWLEDGE_ENTRIES: ChatbotSelfKnowledgeEntry[] = [
       "1인 강사용 Standard 요금과 혜택이 궁금해요",
     ],
   },
+  {
+    key: "feature_limit_consulting",
+    match:
+      /(?:결제\s*기능|수납\s*기능|출석\s*장비|출석\s*카드|지문\s*인식|오프라인\s*출석|등원\s*카드|성적표\s*인쇄|리포트\s*인쇄|출결\s*연동|수납\s*연동|결제\s*연동)/i,
+    answer: [
+      "클래스인은 온라인 수업룸의 상호작용(EDB 판서, 에드온)과 학습 리포트, 복습 플레이백 등의 수업 본질에 집중된 플랫폼입니다. 따라서 자체적인 '원비 수납/결제 시스템' 및 '오프라인 지문인식 등원 장비'는 직접 제공하지 않고 있습니다.",
+      "학원의 오프라인 출결 기기와 결제 수납 시스템을 하나로 묶어 이중 작업 없이 관리하고자 하시는 원장님의 니즈에 깊이 공감합니다.",
+      "이를 해결하기 위해 클래스인은 '강력한 데이터 API'를 전면 개방해 두고 있습니다. 기존에 학원에서 사용 중이신 원비 결제 시스템(ERP/CRM)이나 오프라인 등원 장비가 있다면, API 연동을 통해 수납 여부에 따른 수업방 입장 제한, 온·오프라인 출석 자동 동기화 등을 하이브리드 형태로 통합 구축하여 해결하실 수 있습니다. 현재 학원에서 메인으로 활용 중이신 수납 시스템이나 ERP가 있으신가요?",
+    ],
+    suggestedQuestions: [
+      "기존 수납 프로그램과 API 연동이 가능한가요?",
+      "출결 연동을 위해 개방되는 API 명세가 궁금해요",
+      "자체적인 오프라인 출결 장비나 카드가 제공되나요?",
+    ],
+  },
 ]
 
 export function findChatbotSelfKnowledgeEntry(question: string) {
   const normalized = question.toLowerCase()
   // 소프트웨어 기능/결제 질문은 챗봇 자체 정체성(self-knowledge)보다 기능/요금 RAG로 보낸다.
-  // 단, 개인 강사나 과외 관련 키워드가 섞인 경우는 예외적으로 self-knowledge 가로채기(tutor_pricing_recommend)를 허용한다.
+  // 단, 개인 강사/과외 혹은 미지원 기능/오프라인 출석 키워드가 섞인 경우는 예외적으로 self-knowledge 가로채기(feature_limit_consulting)를 허용한다.
   if (/채점|출제|평가|분석|스피킹|회원\s*가입|결제|요금/.test(normalized)) {
-    if (!/개인\s*강사|과외|공부방|소규모\s*수업|1:1|프리랜서|개인\s*과외/i.test(normalized)) {
+    const isTutor = /개인\s*강사|과외|공부방|소규모\s*수업|1:1|프리랜서|개인\s*과외/i.test(normalized)
+    const isLimit = /(?:결제|수납|정산|출석|출결|등원|성적표|리포트).*(?:안\s*돼|안됨|불가능|없나요|지원이\s*안|지원하지|한계|단점|자체|기능|방법)/i.test(normalized) || /지문\s*인식|출석\s*체크\s*기|오프라인\s*출석|등원\s*카드/i.test(normalized)
+    if (!isTutor && !isLimit) {
       return null
     }
   }

@@ -525,6 +525,7 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
     const isEvent = selfKnowledgeEntry.key === "event_inquiry" || selfKnowledgeEntry.key === "event_apply_assist"
     const isApplyAssist = selfKnowledgeEntry.key === "event_apply_assist"
     const isTutorPricing = selfKnowledgeEntry.key === "tutor_pricing_recommend"
+    const isFeatureLimit = selfKnowledgeEntry.key === "feature_limit_consulting"
     return {
       response: {
         answer: selfKnowledgeEntry.answer.join("\n\n"),
@@ -535,7 +536,7 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
         suggestedQuestions: selfKnowledgeEntry.suggestedQuestions,
         unresolved: false,
       },
-      category: isConcern ? "concern" : isEvent ? "event" : isTutorPricing ? "billing" : "general",
+      category: isConcern ? "concern" : isEvent ? "event" : isTutorPricing ? "billing" : isFeatureLimit ? "admin" : "general",
       intent: isConcern
         ? "emotional_consulting"
         : isApplyAssist
@@ -544,6 +545,8 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
         ? "event_inquiry"
         : isTutorPricing
         ? "tutor_pricing_recommend"
+        : isFeatureLimit
+        ? "feature_limit_consulting"
         : "self_knowledge",
       handoffIntent: "demo",
     }
