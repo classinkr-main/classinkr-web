@@ -152,24 +152,47 @@ function formatRange(startsAt: string, endsAt: string | null) {
 type EventLeadStats = { attributed: number; during: number }
 type LeadLookupRow = { haystack: string; timestampMs: number }
 
-function countEventLeadStats(leads: LeadLookupRow[], event: PublicEvent): EventLeadStats {
-  const startMs = new Date(event.startsAt).getTime()
-  // endsAt이 없으면 시작 +1일로 캡한다. Date.now()로 열어두면 과거 단일일 행사가
-  // 이후 발생한 무관한 리드를 계속 fallback 집계로 흡수해 매 지표를 부풀린다.
-  const endMs = event.endsAt ? new Date(event.endsAt).getTime() : startMs + 24 * 3600 * 1000
-  let attributed = 0
-  let during = 0
+// 각 리드를 최대 한 행사에만 귀속시킨다. 기간 창이 겹치는 여러 행사가 같은
+// 리드를 각각 세면(구 방식) 집계 리드·CPL·퍼널이 이중계상되므로, 리드 1건은
+//   1) 명시 토큰이 있으면 그 행사(attributed)
+//   2) 없으면 리드를 포함하는 행사 중 "가장 최근 시작(동률이면 기간이 짧은)" 한 곳(during)
+// 에만 배정한다. 반환 맵은 배정 결과의 행사별 집계다.
+function assignEventLeads(
+  leads: LeadLookupRow[],
+  events: PublicEvent[]
+): Map<string, EventLeadStats> {
+  const stats = new Map<string, EventLeadStats>()
+  const windows = events.map((event) => {
+    const startMs = new Date(event.startsAt).getTime()
+    // endsAt이 없으면 시작 +1일로 캡한다. Date.now()로 열어두면 과거 단일일 행사가
+    // 이후 발생한 무관한 리드를 계속 fallback 집계로 흡수해 매 지표를 부풀린다.
+    const endMs = event.endsAt ? new Date(event.endsAt).getTime() : startMs + 24 * 3600 * 1000
+    stats.set(event.id, { attributed: 0, during: 0 })
+    return { event, startMs, endMs }
+  })
 
   for (const lead of leads) {
-    if (textMatchesEventToken(lead.haystack, event)) {
-      attributed += 1
+    const tokenHit = windows.find((w) => textMatchesEventToken(lead.haystack, w.event))
+    if (tokenHit) {
+      stats.get(tokenHit.event.id)!.attributed += 1
+      continue
     }
-    if (lead.timestampMs >= startMs && lead.timestampMs <= endMs) {
-      during += 1
+    let best: (typeof windows)[number] | null = null
+    for (const w of windows) {
+      // 양수 포함 검사 — start/end가 NaN(잘못된 날짜)이면 비교가 false가 되어 자동 제외된다.
+      if (!(lead.timestampMs >= w.startMs && lead.timestampMs <= w.endMs)) continue
+      if (
+        best === null ||
+        w.startMs > best.startMs ||
+        (w.startMs === best.startMs && w.endMs - w.startMs < best.endMs - best.startMs)
+      ) {
+        best = w
+      }
     }
+    if (best) stats.get(best.event.id)!.during += 1
   }
 
-  return { attributed, during }
+  return stats
 }
 
 function buildFunnel(
@@ -178,8 +201,8 @@ function buildFunnel(
   attributedCount: number,
   duringCount: number
 ): EventFunnel {
-  // 명시적 매칭이 있으면 그것을, 없으면 기간 내 리드를 fallback
-  const leads = attributedCount > 0 ? attributedCount : duringCount
+  // 배타적 귀속이므로 명시 매칭 + 기간 배정은 서로소 — 두 값을 합해 이 행사의 리드로 본다.
+  const leads = attributedCount + duringCount
   return {
     impressions: metrics.impressionsCount ?? 0,
     leads,
@@ -859,11 +882,13 @@ function EventFunnelCard({
   const retrospectivePreview = previewText(metrics.retrospective, 180)
   const shareMemoPreview = previewText(metrics.shareMemo, 180)
   const leadSourceLabel =
-    attributedLeadCount > 0
-      ? `명시 매칭 ${KRW.format(attributedLeadCount)}건`
-      : duringLeadCount > 0
-        ? `기간 fallback ${KRW.format(duringLeadCount)}건`
-        : "집계 리드 없음"
+    attributedLeadCount > 0 && duringLeadCount > 0
+      ? `명시 ${KRW.format(attributedLeadCount)} · 기간 ${KRW.format(duringLeadCount)}건`
+      : attributedLeadCount > 0
+        ? `명시 매칭 ${KRW.format(attributedLeadCount)}건`
+        : duringLeadCount > 0
+          ? `기간 fallback ${KRW.format(duringLeadCount)}건`
+          : "집계 리드 없음"
 
   return (
     <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
@@ -1030,8 +1055,8 @@ function EventFunnelCard({
         <FunnelStage label="리드" value={funnel.leads} prevValue={funnel.impressions || null} tone="primary" />
         <FunnelStage label="신청" value={funnel.applications} prevValue={funnel.leads || null} />
         <FunnelStage label="유효 리드" value={funnel.qualifiedLeads} prevValue={funnel.applications || null} />
-        <FunnelStage label="참석" value={funnel.attendees} prevValue={funnel.applications || null} />
-        <FunnelStage label="딜" value={funnel.deals} prevValue={funnel.qualifiedLeads || null} tone="primary" />
+        <FunnelStage label="참석" value={funnel.attendees} prevValue={funnel.qualifiedLeads || null} />
+        <FunnelStage label="딜" value={funnel.deals} prevValue={funnel.attendees || null} tone="primary" />
       </div>
 
       {/* sub metrics */}
@@ -1509,13 +1534,10 @@ export default function AdminCampaignsPage() {
     [leads]
   )
 
-  const eventLeadStats = useMemo(() => {
-    const stats = new Map<string, EventLeadStats>()
-    for (const event of filtered) {
-      stats.set(event.id, countEventLeadStats(leadLookupRows, event))
-    }
-    return stats
-  }, [filtered, leadLookupRows])
+  const eventLeadStats = useMemo(
+    () => assignEventLeads(leadLookupRows, filtered),
+    [filtered, leadLookupRows]
+  )
 
   // 집계 (전체 KPI)
   const aggregate = useMemo(() => {
@@ -1596,7 +1618,7 @@ export default function AdminCampaignsPage() {
       return [...filtered].sort((a, b) => {
         const aS = eventLeadStats.get(a.id) ?? { attributed: 0, during: 0 }
         const bS = eventLeadStats.get(b.id) ?? { attributed: 0, during: 0 }
-        return (bS.attributed > 0 ? bS.attributed : bS.during) - (aS.attributed > 0 ? aS.attributed : aS.during)
+        return (bS.attributed + bS.during) - (aS.attributed + aS.during)
       })
     }
     if (eventSort === "deals") {
