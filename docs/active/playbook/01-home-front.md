@@ -1,6 +1,6 @@
 # 파트 가이드 — 홈 및 랜딩 (Public Front)
 
-> 담당 에이전트: `.claude/agents/home-front.md` · 기준 시점: 2026-06-23
+> 담당 에이전트(계획·미구현): `.claude/agents/home-front.md` — 현재는 이 가이드가 파트 SSOT, 직접 정독 · 기준 시점: 2026-06-23
 > 변경 검증: `npx eslint app components lib --max-warnings=0` + `npm run build`
 
 ## 1. 파트 한 줄 정의

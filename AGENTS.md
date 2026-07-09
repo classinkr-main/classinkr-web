@@ -1,5 +1,7 @@
 # Classin Home — Repository Notes
 
+> **이 파일이 저장소 지침의 단일 소스(SSOT)다.** Claude Code는 `AGENTS.md`를 자동 로드하지 않으므로 루트 `CLAUDE.md`가 `@AGENTS.md`로 이 파일을 import한다. Codex 등 다른 에이전트는 이 파일을 직접 읽는다. 지침은 항상 여기서만 고치고, 다른 파일에 중복하지 않는다.
+
 ## 프로젝트 개요
 
 - Next.js 16 (App Router) + React 19 + TypeScript
@@ -8,9 +10,25 @@
 
 ## 먼저 볼 문서
 
+- [docs/active/playbook/README.md](docs/active/playbook/README.md) — 파트별 운영 플레이북: 작업이 어느 파트인지 판별 → 해당 파트 가이드·공통 철칙 적용
 - [docs/README.md](docs/README.md)
 - [docs/active/repository-audit-2026-04-15.md](docs/active/repository-audit-2026-04-15.md)
 - [DESIGN.md](DESIGN.md)
+
+## 파트 분담 (작업 위임)
+
+저장소는 6개 파트로 나뉜다. 작업이 들어오면 [플레이북 §2 소유권 매트릭스](docs/active/playbook/README.md)로 파트를 판별하고, **해당 파트 가이드를 정독한 뒤** [공통 철칙 §3](docs/active/playbook/README.md)을 적용한다.
+
+> 전담 서브에이전트(`.claude/agents/`)는 아직 구현되지 않았다(2026-07-09 기준). 현재 파트 판별·가이드 정독은 **수동 절차**이며, 각 파트 가이드가 곧 그 파트의 SSOT다. 에이전트 실제 구축 여부는 팀 미결 항목이다.
+
+| 파트 | 가이드 |
+|------|--------|
+| 홈 및 랜딩 | [01](docs/active/playbook/01-home-front.md) |
+| 어드민 코어 | [02](docs/active/playbook/02-admin-core.md) |
+| 컨텐츠 발행 | [03](docs/active/playbook/03-content-pub.md) |
+| 마케팅/그로스/CRM | [04](docs/active/playbook/04-growth-crm.md) |
+| 챗봇 | [05](docs/active/playbook/05-chatbot.md) |
+| 플랫폼 & 데이터 | [06](docs/active/playbook/06-platform-data.md) |
 
 ## 코드 규칙
 

@@ -6,7 +6,7 @@
 ## 1. Start Here
 
 - [active/playbook/README.md](./active/playbook/README.md)
-  - **파트별 운영 플레이북.** 작업이 어느 파트(홈/어드민/콘텐츠/그로스/챗봇/플랫폼)인지 판별 → 담당 에이전트(`.claude/agents/`)·가이드·공통 철칙 적용. 업무 분담의 진입점.
+  - **파트별 운영 플레이북.** 작업이 어느 파트(홈/어드민/콘텐츠/그로스/챗봇/플랫폼)인지 판별 → 해당 파트 가이드·공통 철칙 적용. 업무 분담의 진입점. (전담 에이전트 `.claude/agents/`는 미구현·계획 — 현재는 가이드 수동 정독.)
 - [active/repository-status-2026-06-08.md](./active/repository-status-2026-06-08.md)
   - 현재 검증 상태, 활성 개발 요소, 문서 신뢰도, 다음 우선순위
 - [active/repository-audit-2026-04-15.md](./active/repository-audit-2026-04-15.md)
