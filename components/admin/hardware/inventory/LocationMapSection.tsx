@@ -3,7 +3,7 @@
 import type { Dispatch, SetStateAction } from "react"
 import { ChevronDown } from "lucide-react"
 
-import { formatNumber, QuickMoveButton } from "@/components/admin/hardware/HardwareInventoryClient"
+import { formatNumber, QuickMoveButton } from "./shared"
 
 interface LocationMapRow {
   itemId: string

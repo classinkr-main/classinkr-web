@@ -16,7 +16,7 @@ import {
   kpiStatusTone,
   type KpiMemberView,
   type KpiMetricView,
-} from "../SalesLedgerWorkbench"
+} from "./shared"
 import type { BranchKpiMemberRow, BranchKpiResponse } from "../types"
 import type { BranchJsonState } from "./types"
 

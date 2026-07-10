@@ -16,7 +16,7 @@ import {
   type DraftQueueMode,
   type LedgerDraft,
   type RevProductCategory,
-} from "../SalesLedgerWorkbench"
+} from "./shared"
 import { TEAMS } from "../types"
 
 interface InputRailSectionProps {

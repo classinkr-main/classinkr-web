@@ -6,7 +6,7 @@ import {
   formatNumber,
   MOVEMENT_LABEL,
   type HardwareMovement,
-} from "@/components/admin/hardware/HardwareInventoryClient"
+} from "./shared"
 
 interface VoidConfirmModalProps {
   voidTarget: HardwareMovement

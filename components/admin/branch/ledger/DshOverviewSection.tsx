@@ -12,7 +12,7 @@ import {
   formatPercent,
   type MonthlyPlanRow,
   type RevWeekPoint,
-} from "../SalesLedgerWorkbench"
+} from "./shared"
 import type {
   BranchKpiMemberRow,
   BranchKpiResponse,

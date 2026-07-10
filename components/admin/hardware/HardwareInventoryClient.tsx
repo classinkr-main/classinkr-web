@@ -1,6 +1,6 @@
 "use client"
 
-import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react"
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
@@ -9,7 +9,6 @@ import {
   ArrowUpFromLine,
   Camera,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Clock3,
   FileSpreadsheet,
@@ -35,7 +34,7 @@ import {
 } from "lucide-react"
 
 import { adminFetch, adminFetchJson, clearAdminRequestCache } from "@/lib/admin-client"
-import { paginateAdminList, type AdminListPaginationResult } from "@/lib/admin-list-pagination"
+import { paginateAdminList } from "@/lib/admin-list-pagination"
 import { fiscalQuarter } from "@/lib/branch/fiscal"
 import CategoryCardsSection from "@/components/admin/hardware/inventory/CategoryCardsSection"
 import HardwareSearchPanel from "@/components/admin/hardware/inventory/HardwareSearchPanel"
@@ -50,151 +49,77 @@ import MovementDetailSheet from "@/components/admin/hardware/inventory/MovementD
 import CustomerHistorySheet from "@/components/admin/hardware/inventory/CustomerHistorySheet"
 import CrmConfirmModal from "@/components/admin/hardware/inventory/CrmConfirmModal"
 import VoidConfirmModal from "@/components/admin/hardware/inventory/VoidConfirmModal"
+import {
+  formatCurrency,
+  formatDate,
+  formatLotLabel,
+  formatNumber,
+  isPlannedMovement,
+  lotFifoRank,
+  MOVEMENT_LABEL,
+  MOVEMENT_TONE,
+  outboundSaleType,
+  previewFifoLots,
+  SALE_TYPE_META,
+  todayKey,
+  UNSPECIFIED_CUSTOMER,
+  type HardwareCrmOrderCandidate,
+  type HardwareDashboard,
+  type HardwareItem,
+  type HardwareMovement,
+  type HardwareMovementDraft,
+  type HardwareMovementType,
+  type HardwareSectionKey,
+  type HardwareStockRow,
+  type HardwareTab,
+  type OutboundSaleType,
+  type PeriodGranularity,
+  type ProductFilterKey,
+} from "./inventory/shared"
 
-export type HardwareMovementType = "inbound" | "outbound" | "return" | "transfer" | "repair" | "adjust"
-
-interface HardwareItem {
-  id: string
-  name: string
-  sku: string | null
-  category: string | null
-  reorder_point: number
-  lead_time_days: number
-  active: boolean
-  source_aliases: string[]
-}
-
-export interface HardwareMovement {
-  id: string
-  item_id: string
-  product_name: string
-  movement_type: HardwareMovementType
-  quantity: number
-  occurred_at: string | null
-  from_location: string | null
-  to_location: string | null
-  owner: string | null
-  status: string | null
-  reference_no: string | null
-  memo: string | null
-  serials: string[]
-  lot_no: string | null
-  unit_price: number | null
-  amount_usd: number | null
-  amount_cny: number | null
-  storage_location: string | null
-  importer: string | null
-  source: "admin_manual" | "sheet_import"
-  // 대시보드 payload에 그대로 실려 오는 원본 레코드 — 구조화 CRM 링크(raw.crmLink)를 여기서 읽는다.
-  raw?: unknown
-  created_by: string | null
-  created_at: string
-  voided_at: string | null
-  voided_by: string | null
-  void_reason: string | null
-  converted_from_movement_id: string | null
-  converted_to_movement_id: string | null
-}
-
-export interface HardwareStockRow {
-  itemId: string
-  product: string
-  category: string | null
-  reorderPoint: number
-  leadTimeDays: number
-  warehouseStock: number
-  plannedOut: number
-  availableStock: number
-  outbound30d: number
-  weeklyOutboundAvg: number
-  trendOrderPoint: number
-  daysUntilStockout: number | null
-  low: boolean
-  orderRecommended: boolean
-  locationBalances: Array<{ location: string; quantity: number }>
-  lotBalances: Array<{ lot: string; quantity: number }>
-}
-
-export interface HardwareAlert {
-  id: string
-  severity: "critical" | "warning" | "info"
-  product: string
-  title: string
-  detail: string
-}
-
-export interface HardwareDashboard {
-  items: HardwareItem[]
-  stock: HardwareStockRow[]
-  movements: HardwareMovement[]
-  recentOutbound: HardwareMovement[]
-  plannedMovements: HardwareMovement[]
-  alerts: HardwareAlert[]
-  totals: {
-    warehouseStock: number
-    availableStock: number
-    plannedOut: number
-    outbound30d: number
-    lowItems: number
-    orderRecommended: number
-  }
-  importRun: {
-    id: string
-    status: string
-    started_at: string
-    finished_at: string | null
-    rows_imported: number | null
-    rows_skipped: number | null
-    error: string | null
-  } | null
-}
-
-export interface HardwareCrmOrderCandidate {
-  id: string
-  source: "portal_deal" | "portal_quote" | "legacy_quote" | "external_crm"
-  sourceLabel: string
-  referenceNo: string
-  title: string
-  productName: string | null
-  quantity: number | null
-  amount: number | null
-  customerName: string | null
-  owner: string | null
-  status: string | null
-  occurredAt: string | null
-  syncedAt: string | null
-  href: string | null
-  confidence: "high" | "medium" | "low"
-  reason: string
-}
+// 공유 심볼 재수출 — 기존 외부 소비자의 import 표면 유지용. 정의는 ./inventory/shared로 물리 이동했다.
+export {
+  ALERT_TONE,
+  confidenceClass,
+  confidenceCopy,
+  formatAvg,
+  formatCurrency,
+  formatDate,
+  formatLotLabel,
+  formatNumber,
+  isPlannedMovement,
+  ledgerHref,
+  MOVEMENT_LABEL,
+  MOVEMENT_TONE,
+  outboundSaleType,
+  PaginationControls,
+  previewFifoLots,
+  QuickMoveButton,
+  SALE_TYPE_META,
+  SectionHeader,
+  statusClass,
+  statusCopy,
+  todayKey,
+  UNSPECIFIED_CUSTOMER,
+} from "./inventory/shared"
+export type {
+  HardwareAlert,
+  HardwareCrmOrderCandidate,
+  HardwareDashboard,
+  HardwareMovement,
+  HardwareMovementDraft,
+  HardwareMovementType,
+  HardwareSectionKey,
+  HardwareStockRow,
+  HardwareTab,
+  OutboundSaleType,
+  PeriodGranularity,
+  ProductFilterKey,
+} from "./inventory/shared"
 
 interface HardwareCrmOrderCandidatesResponse {
   candidates: HardwareCrmOrderCandidate[]
   warnings: string[]
-}
-
-export interface HardwareMovementDraft {
-  itemId?: string
-  productName: string
-  movementType: HardwareMovementType
-  quantity: number
-  occurredAt: string
-  fromLocation: string
-  toLocation: string
-  owner: string
-  status: string
-  referenceNo: string
-  memo: string
-  lotNo: string
-  unitPrice: number | null
-  amountUsd: number | null
-  amountCny: number | null
-  storageLocation: string
-  importer: string
-  serials: string[]
-  // UI 판별 전용 — 출고 라인이 실제(false)/예정(true)인지. 서버 전송 직전 deriveStatus로
-  // status에 반영하고 payload에서는 제외한다(서버 status 규약은 status 문자열만 본다).
-  isPlanned?: boolean
 }
 
 interface HardwareMovementBatchLineResult {
@@ -276,44 +201,16 @@ const ALERT_PAGE_SIZE = 5
 const LOG_GROUP_PAGE_SIZE = 8
 const PLANNED_PAGE_SIZE = 5
 
-export type HardwareTab = "home" | "entry" | "history"
-
 const HARDWARE_TABS: Array<{ id: HardwareTab; label: string; icon: LucideIcon; description: string }> = [
   { id: "home", label: "홈", icon: LayoutDashboard, description: "현황 · 예상 출고" },
   { id: "entry", label: "입출고", icon: ArrowRightLeft, description: "입고 · 출고 기록" },
   { id: "history", label: "내역", icon: ListChecks, description: "전체 원장" },
 ]
 
-export type HardwareSectionKey = "stock" | "outbound" | "alerts"
-
 const DEFAULT_OPEN_SECTIONS: Record<HardwareSectionKey, boolean> = {
   stock: true,
   outbound: true,
   alerts: true,
-}
-
-export const MOVEMENT_LABEL: Record<HardwareMovementType, string> = {
-  inbound: "입고",
-  outbound: "출고",
-  return: "반납",
-  transfer: "이동",
-  repair: "수리",
-  adjust: "조정",
-}
-
-export const MOVEMENT_TONE: Record<HardwareMovementType, string> = {
-  inbound: "bg-[#ECFDF5] text-[#084734]",
-  outbound: "bg-[#FCE9E9] text-[#B43E3E]",
-  return: "bg-[#ECFDF5] text-[#084734]",
-  transfer: "bg-[#F6F5F4] text-[#31302E]",
-  repair: "bg-[#FBF1E0] text-[#A8741A]",
-  adjust: "bg-[#F6F5F4] text-[#31302E]",
-}
-
-export const ALERT_TONE: Record<HardwareAlert["severity"], string> = {
-  critical: "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]",
-  warning: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
-  info: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
 }
 
 // 재고 위치 맵 — 칠판(장비) 기준 핵심 상태만 노출한다. 표시 요소(사용자 지정):
@@ -380,8 +277,6 @@ function defaultEntryItemId(items: HardwareItem[]): string {
   return (board86 ?? items[0])?.id ?? ""
 }
 
-export type PeriodGranularity = "month" | "quarter" | "year"
-
 // 출고 기간 집계 버킷 키/라벨. occurred_at(YYYY-MM-DD) 문자열 기준.
 function periodKey(date: string, granularity: PeriodGranularity): { key: string; label: string } {
   const year = date.slice(0, 4)
@@ -412,18 +307,11 @@ function shortProductName(name: string): string {
 
 // 출고 도착지를 고객 라벨로 환원한다. 일반 위치(고객/창고/샘플/사무실/수리)는 "고객(미지정)"으로 묶는다.
 const GENERIC_LOCATIONS = new Set<string>(["고객", "창고", "샘플", "사무실", "수리", "외부/고객"])
-export const UNSPECIFIED_CUSTOMER = "고객(미지정)"
 
 export function customerLabel(value: string | null | undefined): string {
   const text = (value ?? "").trim()
   if (!text || GENERIC_LOCATIONS.has(text)) return UNSPECIFIED_CUSTOMER
   return text
-}
-
-// 매출 장부(REV 렌즈) 딥링크 — 하드웨어 상품 필터 + 고객명 검색으로 진입한다.
-// 금액은 링크에 싣지 않는다(하드웨어 원장은 USD, 장부는 CNY라 직접 비교가 안 됨).
-export function ledgerHref(customer: string): string {
-  return `/admin/branch/ledger?lens=rev&prod=hardware&q=${encodeURIComponent(customer)}`
 }
 
 // reference_no "deal:{dealId}(:line:{lineId})" → 딜 오더 딥링크. 그 외 형식은 내부 링크를 만들 수 없다.
@@ -457,30 +345,6 @@ export function extractCrmLink(movement: HardwareMovement): { label: string; ref
     return { label: memoLine.replace(/^CRM 연동:\s*/, "") || "CRM 연동", reference: ref || null, href: crmHrefFromReference(ref || null) }
   }
   return null
-}
-
-// 출고 판매유형 — 시트 "유형"(Sales/Sample/Promotion/A/S)에서 파생. import는 memo를
-// `{유형} · {remarks}` 형태로 남기므로 앞 토큰을 읽는다. 매출 집계는 판매(sales)만 잡는다.
-export type OutboundSaleType = "sales" | "sample" | "promotion" | "as"
-
-export const SALE_TYPE_META: Record<OutboundSaleType, { label: string; tone: string }> = {
-  sales: { label: "판매", tone: "bg-[#ECFDF5] text-[#084734]" },
-  sample: { label: "샘플", tone: "bg-[#F6F5F4] text-[#615D59]" },
-  promotion: { label: "프로모션", tone: "bg-[#FBF1E0] text-[#7A520F]" },
-  as: { label: "A/S", tone: "bg-[#FCE9E9] text-[#B43E3E]" },
-}
-
-export function outboundSaleType(movement: HardwareMovement): OutboundSaleType | null {
-  if (movement.movement_type !== "outbound") return null
-  const token = (movement.memo ?? "").split("·")[0].trim().toLowerCase()
-  if (token === "a/s" || token === "as") return "as"
-  if (token === "promotion") return "promotion"
-  if (token === "sample" || movement.to_location === "샘플") return "sample"
-  return "sales"
-}
-
-export function todayKey() {
-  return new Date().toISOString().slice(0, 10)
 }
 
 // 어제(로컬 자정 기준) YYYY-MM-DD — 처리일 퀵칩용. UTC 슬라이스가 아니라 로컬 날짜로 계산해 KST 새벽에도 어제가 정확하다.
@@ -544,11 +408,6 @@ function writeLocalString(key: string, value: string) {
   }
 }
 
-export function formatDate(value: string | null) {
-  if (!value) return "-"
-  return value.slice(0, 10)
-}
-
 // 기간 버킷 안에서 고객사 출고일을 짧게 표기. YYYY-MM-DD → "M.D" (연도는 버킷 헤더가 이미 표시).
 function formatShortDate(date: string): string {
   const month = Number(date.slice(5, 7))
@@ -571,13 +430,6 @@ export function movementLot(movement: HardwareMovement): string | null {
     return movement.reference_no.trim()
   }
   return null
-}
-
-// 배송 예정(예약) 출고 판별 — 서버 집계 isPlannedStatus와 같은 규약(예정/예약/대기/planned).
-// 상세 로그에서 실제 출고와 시각적으로 구분하기 위한 표시 전용 헬퍼.
-// 주의: DB에서 온 HardwareMovement에는 isPlanned 필드가 없으므로 status 정규식만 본다.
-export function isPlannedMovement(movement: HardwareMovement): boolean {
-  return movement.movement_type === "outbound" && /예정|예약|대기|planned/i.test(movement.status ?? "")
 }
 
 // 클라이언트 드래프트의 예정 여부 — 신규 UI(isPlanned 세그먼트/토글)가 우선하고, 값이 없으면
@@ -632,90 +484,11 @@ function toServerDraft(draft: HardwareMovementDraft): Omit<HardwareMovementDraft
   }
 }
 
-// "FY24-25"는 H1~H8 물량번호 체계가 생기기 전 시트의 placeholder 값이다.
-// 그룹핑·검색은 원본 값을 그대로 쓰고, 배지 표시만 H-넘버링과 나란히 보이도록 "H0"으로 맞춘다.
-export function formatLotLabel(lot: string | null | undefined): string | null {
-  if (!lot) return null
-  const trimmed = lot.trim()
-  if (!trimmed) return null
-  if (/^FY24-25$/i.test(trimmed)) return "H0"
-  return trimmed
-}
-
-function lotFifoRank(lot: string): number | null {
-  const label = formatLotLabel(lot) ?? lot
-  if (/^H0$/i.test(label)) return 0
-  const match = /^H(\d+)/i.exec(label)
-  return match ? Number(match[1]) : null
-}
-
-function sortLotBalancesFifo(lots: HardwareStockRow["lotBalances"]) {
-  return lots.slice().sort((a, b) => {
-    const aRank = lotFifoRank(a.lot)
-    const bRank = lotFifoRank(b.lot)
-    if (aRank != null && bRank != null && aRank !== bRank) return aRank - bRank
-    if (aRank != null && bRank == null) return -1
-    if (aRank == null && bRank != null) return 1
-    return (formatLotLabel(a.lot) ?? a.lot).localeCompare(formatLotLabel(b.lot) ?? b.lot, "ko")
-  })
-}
-
-export function previewFifoLots(lots: HardwareStockRow["lotBalances"], quantity: number) {
-  let remaining = Math.max(0, Math.floor(quantity))
-  const plan: Array<{ lot: string; quantity: number }> = []
-  for (const lot of sortLotBalancesFifo(lots)) {
-    if (remaining <= 0) break
-    const next = Math.min(remaining, lot.quantity)
-    if (next > 0) plan.push({ lot: lot.lot, quantity: next })
-    remaining -= next
-  }
-  return { plan, shortage: remaining }
-}
-
 function parseOptionalNumber(value: string): number | null {
   const trimmed = value.trim()
   if (!trimmed) return null
   const parsed = Number(trimmed)
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
-}
-
-export function formatNumber(value: number) {
-  return new Intl.NumberFormat("ko-KR").format(value)
-}
-
-const CURRENCY_FORMAT: Record<"KRW" | "USD" | "CNY", { locale: string; symbol: string; fractionDigits: number }> = {
-  KRW: { locale: "ko-KR", symbol: "₩", fractionDigits: 0 },
-  USD: { locale: "en-US", symbol: "$", fractionDigits: 2 },
-  CNY: { locale: "zh-CN", symbol: "¥", fractionDigits: 2 },
-}
-
-export function formatCurrency(value: number | null, currency: "KRW" | "USD" | "CNY" = "KRW") {
-  if (value == null) return "-"
-  const { locale, symbol, fractionDigits } = CURRENCY_FORMAT[currency]
-  const amount = new Intl.NumberFormat(locale, {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(value)
-  // KRW keeps the original trailing-원 form; USD/CNY use a leading symbol.
-  return currency === "KRW" ? `${amount}원` : `${symbol}${amount}`
-}
-
-export function formatAvg(value: number) {
-  if (value === 0) return "0"
-  if (value < 1) return value.toFixed(1)
-  return String(Math.round(value * 10) / 10)
-}
-
-export function statusCopy(row: HardwareStockRow) {
-  if (row.low) return "부족"
-  if (row.orderRecommended) return "주문 검토"
-  return "정상"
-}
-
-export function statusClass(row: HardwareStockRow) {
-  if (row.low) return "bg-[#FCE9E9] text-[#B43E3E]"
-  if (row.orderRecommended) return "bg-[#FBF1E0] text-[#A8741A]"
-  return "bg-[#ECFDF5] text-[#084734]"
 }
 
 function isCoreIfpProduct(product: string, size: "75" | "86") {
@@ -725,8 +498,6 @@ function isCoreIfpProduct(product: string, size: "75" | "86") {
 // 상세내역 "제품" 필터 — 실데이터에 액세서리(OPS/POE/케이블/터치펜 등)까지 섞여 칩이 20개 가까이
 // 늘어났다. 자주 찾는 핵심 라인업만 고정 5종으로 좁히고, 나머지는 검색으로 찾도록 한다.
 // (110"/65"/S1/액세서리 등은 후순위 — 칩에서 제외.)
-export type ProductFilterKey = "" | "ifp86" | "ifp75" | "t1" | "std1" | "promotion"
-
 const PRODUCT_FILTER_OPTIONS: Array<{ key: Exclude<ProductFilterKey, "">; label: string; test: (product: string) => boolean }> = [
   { key: "ifp86", label: '86" IFP', test: (product) => isCoreIfpProduct(product, "86") },
   { key: "ifp75", label: '75" IFP', test: (product) => isCoreIfpProduct(product, "75") },
@@ -864,141 +635,6 @@ function parseHardwareLineText(line: string) {
     .replace(/[-–—:|]+$/g, "")
     .trim()
   return productText ? { productText, quantity } : null
-}
-
-export function confidenceCopy(value: HardwareCrmOrderCandidate["confidence"]) {
-  if (value === "high") return "높음"
-  if (value === "medium") return "보통"
-  return "검토"
-}
-
-export function confidenceClass(value: HardwareCrmOrderCandidate["confidence"]) {
-  if (value === "high") return "bg-[#ECFDF5] text-[#084734]"
-  if (value === "medium") return "bg-[#FBF1E0] text-[#A8741A]"
-  return "bg-[#F6F5F4] text-[#615D59]"
-}
-
-export function SectionHeader({
-  title,
-  description,
-  open,
-  onToggle,
-  actions,
-  meta,
-}: {
-  title: string
-  description?: string
-  open: boolean
-  onToggle: () => void
-  actions?: ReactNode
-  meta?: ReactNode
-}) {
-  const ToggleIcon = open ? ChevronDown : ChevronRight
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="group flex min-w-0 flex-1 cursor-pointer items-start gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-      >
-        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F6F5F4] text-[#615D59] transition group-hover:bg-[#ECFDF5] group-hover:text-[#084734]">
-          <ToggleIcon className="h-4 w-4" />
-        </span>
-        <span className="min-w-0">
-          <span className="block text-[15px] font-bold tracking-[-0.01em] text-[#111110]">{title}</span>
-          {description ? <span className="mt-1 block text-[12px] text-[#615D59]">{description}</span> : null}
-        </span>
-      </button>
-      {actions || meta ? (
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {meta}
-          {actions}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-export function PaginationControls<T>({
-  pagination,
-  label,
-  onPageChange,
-}: {
-  pagination: AdminListPaginationResult<T>
-  label: string
-  onPageChange: (page: number) => void
-}) {
-  if (pagination.totalItems === 0) return null
-
-  const pageText = pagination.totalPages > 0 ? `${pagination.currentPage} / ${pagination.totalPages}` : "0 / 0"
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[rgba(0,0,0,0.08)] px-5 py-3">
-      <p className="text-[11px] font-semibold text-[#615D59]">
-        {formatNumber(pagination.startDisplayNumber)}-{formatNumber(pagination.endDisplayNumber)} / {formatNumber(pagination.totalItems)} {label}
-      </p>
-      <div className="inline-flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onPageChange(pagination.currentPage - 1)}
-          disabled={pagination.currentPage <= 1}
-          aria-label="이전 페이지"
-          title="이전 페이지"
-          className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] cursor-pointer bg-white text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <span className="min-w-[52px] text-center text-[12px] font-bold text-[#31302E]">{pageText}</span>
-        <button
-          type="button"
-          onClick={() => onPageChange(pagination.currentPage + 1)}
-          disabled={pagination.currentPage >= pagination.totalPages}
-          aria-label="다음 페이지"
-          title="다음 페이지"
-          className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] cursor-pointer bg-white text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// 재고행·위치맵·검색결과 3곳에서 같은 문법으로 쓰는 퀵액션 버튼.
-// DESIGN.md 규칙: 약한 행 액션은 중립 배경, 의도색(빨강/주황/그린)은 hover에서만.
-const QUICK_MOVE_META: Record<"sale" | "planned" | "inbound", { label: string; hover: string }> = {
-  sale: { label: "출고", hover: "hover:bg-[#FCE9E9] hover:text-[#B43E3E]" },
-  planned: { label: "예정", hover: "hover:bg-[#FBF1E0] hover:text-[#A8741A]" },
-  inbound: { label: "입고", hover: "hover:bg-[#ECFDF5] hover:text-[#084734]" },
-}
-
-export function QuickMoveButton({
-  kind,
-  product,
-  bare = false,
-  onClick,
-}: {
-  kind: keyof typeof QUICK_MOVE_META
-  product: string
-  /** true면 배경 없이 렌더 — 세그먼트 컨테이너(재고 표) 안에서 사용 */
-  bare?: boolean
-  onClick: () => void
-}) {
-  const meta = QUICK_MOVE_META[kind]
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={`${product} ${meta.label} 기록`}
-      className={`cursor-pointer rounded-md px-2.5 py-1.5 text-[11px] font-bold text-[#31302E] transition ${
-        bare ? "" : "bg-[#F6F5F4]"
-      } ${meta.hover} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100`}
-    >
-      {meta.label}
-    </button>
-  )
 }
 
 export default function HardwareInventoryClient() {

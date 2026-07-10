@@ -20,7 +20,7 @@ import {
 } from "recharts"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import type { BranchKpiMemberRow, BranchSummaryResponse } from "./types"
-import type { KpiMemberView, KpiMetricView, RevWeekPoint } from "./SalesLedgerWorkbench"
+import type { KpiMemberView, KpiMetricView, RevWeekPoint } from "./ledger/shared"
 
 // SalesLedgerWorkbench.tsx의 compareText와 동일한 로직의 로컬 사본 — KpiGapChart 정렬 전용.
 // (값 import를 피해 SalesLedgerWorkbench와의 실제 순환 의존을 만들지 않기 위한 의도적 중복.)

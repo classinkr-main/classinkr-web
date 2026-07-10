@@ -16,7 +16,7 @@ import {
   SALE_TYPE_META,
   UNSPECIFIED_CUSTOMER,
   type HardwareMovement,
-} from "@/components/admin/hardware/HardwareInventoryClient"
+} from "./shared"
 
 interface CustomerHistoryData {
   name: string

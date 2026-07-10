@@ -12,7 +12,7 @@ import {
   UNSPECIFIED_CUSTOMER,
   type OutboundSaleType,
   type PeriodGranularity,
-} from "@/components/admin/hardware/HardwareInventoryClient"
+} from "./shared"
 
 interface OutboundBucket {
   key: string

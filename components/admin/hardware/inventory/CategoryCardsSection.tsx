@@ -2,7 +2,7 @@
 
 import type { LucideIcon } from "lucide-react"
 
-import { formatNumber } from "@/components/admin/hardware/HardwareInventoryClient"
+import { formatNumber } from "./shared"
 
 interface CategoryCard {
   key: string

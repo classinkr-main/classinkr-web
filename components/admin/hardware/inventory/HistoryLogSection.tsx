@@ -12,7 +12,7 @@ import {
   PaginationControls,
   type HardwareMovement,
   type HardwareMovementType,
-} from "@/components/admin/hardware/HardwareInventoryClient"
+} from "./shared"
 
 interface HistoryLogGroup {
   key: string

@@ -16,7 +16,7 @@ import {
   type HardwareDashboard,
   type HardwareSectionKey,
   type HardwareStockRow,
-} from "@/components/admin/hardware/HardwareInventoryClient"
+} from "./shared"
 
 interface StockLevelsSectionProps {
   openSections: Record<HardwareSectionKey, boolean>

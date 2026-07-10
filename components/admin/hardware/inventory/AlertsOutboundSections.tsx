@@ -12,7 +12,7 @@ import {
   type HardwareAlert,
   type HardwareMovement,
   type HardwareSectionKey,
-} from "@/components/admin/hardware/HardwareInventoryClient"
+} from "./shared"
 
 interface AlertsOutboundSectionsProps {
   openSections: Record<HardwareSectionKey, boolean>

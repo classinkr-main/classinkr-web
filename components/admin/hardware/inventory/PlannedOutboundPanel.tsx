@@ -13,7 +13,7 @@ import {
   todayKey,
   type HardwareDashboard,
   type HardwareMovement,
-} from "@/components/admin/hardware/HardwareInventoryClient"
+} from "./shared"
 
 interface PlannedGroup {
   key: string

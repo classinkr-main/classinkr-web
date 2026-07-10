@@ -10,7 +10,7 @@ import {
   numberCell,
   type WeeklyCloseDiffView,
   type WeeklyCloseRunView,
-} from "../SalesLedgerWorkbench"
+} from "./shared"
 
 interface WeeklyCloseSectionProps {
   selectedMonth: string

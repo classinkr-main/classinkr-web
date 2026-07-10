@@ -10,7 +10,7 @@ import {
   formatPercent,
   type BreakdownNumbersRow,
   type RevWeekPoint,
-} from "../SalesLedgerWorkbench"
+} from "./shared"
 
 interface RevAuxAnalysisSectionProps {
   revAuxOpen: boolean

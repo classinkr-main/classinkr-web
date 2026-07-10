@@ -13,7 +13,7 @@ import {
   MOVEMENT_LABEL,
   type HardwareCrmOrderCandidate,
   type HardwareMovementDraft,
-} from "@/components/admin/hardware/HardwareInventoryClient"
+} from "./shared"
 
 interface CrmConfirmModalProps {
   pendingMovement: HardwareMovementDraft

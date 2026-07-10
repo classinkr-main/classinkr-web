@@ -12,7 +12,7 @@ import {
   MOVEMENT_LABEL,
   MOVEMENT_TONE,
   type HardwareMovement,
-} from "@/components/admin/hardware/HardwareInventoryClient"
+} from "./shared"
 
 interface MovementDetailSheetProps {
   detailMovement: HardwareMovement | null

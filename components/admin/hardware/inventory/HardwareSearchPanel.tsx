@@ -14,7 +14,7 @@ import {
   type HardwareStockRow,
   type HardwareTab,
   type ProductFilterKey,
-} from "@/components/admin/hardware/HardwareInventoryClient"
+} from "./shared"
 
 interface HardwareSearchResults {
   products: HardwareStockRow[]

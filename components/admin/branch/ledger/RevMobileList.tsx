@@ -10,7 +10,7 @@ import {
   type LedgerRevenueRow,
   type RevCustomerGroup,
   type RevRowView,
-} from "../SalesLedgerWorkbench"
+} from "./shared"
 
 interface RevMobileListProps {
   filteredRows: LedgerRevenueRow[]

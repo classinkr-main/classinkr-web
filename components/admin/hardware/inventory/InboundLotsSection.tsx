@@ -7,7 +7,7 @@ import {
   formatCurrency,
   formatNumber,
   type HardwareMovement,
-} from "@/components/admin/hardware/HardwareInventoryClient"
+} from "./shared"
 
 interface InboundLot {
   lot: string
