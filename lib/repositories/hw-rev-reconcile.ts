@@ -39,6 +39,11 @@ interface RevSheetRow {
 
 export type HwRevReconcileStatus = "both" | "hw_only" | "rev_only"
 
+// 대사 그레인: 계정×월 존재성(2026-07-10 운영 결정). v_hardware_rev_matches 뷰
+// (20260710_hw_rev_reconcile_matches.sql)가 있으면 월 단위 신호를 오버레이하고,
+// 마이그레이션 미적용 환경에서는 계정 단위(account)로 자동 폴백한다.
+export type HwRevReconcileGrain = "account_month" | "account"
+
 export interface HwRevReconcileRow {
   accountKey: string
   name: string
@@ -57,6 +62,10 @@ export interface HwRevReconcileRow {
   revCNY: number
   revRows: number
   revDealTypes: string[]
+  /** (월 그레인) 실출고는 있는데 그 달 REV HW 매출이 없는 월들 — 매출 미기재 의심의 정밀 신호 */
+  hwOnlyMonths?: string[]
+  /** (월 그레인) REV HW 매출은 있는데 그 달 실출고가 없는 월들 */
+  revOnlyMonths?: string[]
 }
 
 export interface HwRevReconcileResult {
@@ -67,6 +76,9 @@ export interface HwRevReconcileResult {
     revOnly: number
     /** destination이 비어 계정 매칭이 불가능한 출고 행 수 — 대사 사각지대 */
     hwUnattributableRows: number
+    grain: HwRevReconcileGrain
+    /** (월 그레인) 전체 hw_only 계정×월 셀 수 */
+    hwOnlyMonthCells?: number
   }
 }
 
@@ -77,10 +89,47 @@ function isPlannedOutbound(row: HwOutboundRow): boolean {
   return !row.outbound_date
 }
 
+interface MonthMatchOverlay {
+  hwOnlyMonths: string[]
+  revOnlyMonths: string[]
+}
+
+// v_hardware_rev_matches(계정×월 존재성 뷰)에서 월 그레인 신호를 읽는다.
+// 뷰가 없으면(마이그레이션 미적용) null — 호출자는 계정 그레인으로 폴백.
+async function fetchMonthMatchOverlay(
+  sb: ReturnType<typeof createSupabaseAdminClient>,
+): Promise<Map<string, MonthMatchOverlay> | null> {
+  const res = await sb
+    .from("v_hardware_rev_matches")
+    .select("account_key, period_month, match_status")
+    .limit(10000)
+  if (res.error) return null
+
+  const byAccount = new Map<string, MonthMatchOverlay>()
+  for (const row of (res.data ?? []) as Array<{
+    account_key: string | null
+    period_month: string | null
+    match_status: string | null
+  }>) {
+    const key = row.account_key ?? ""
+    const month = row.period_month ?? ""
+    if (!key || !month) continue
+    const overlay = byAccount.get(key) ?? { hwOnlyMonths: [], revOnlyMonths: [] }
+    if (row.match_status === "hw_only") overlay.hwOnlyMonths.push(month)
+    else if (row.match_status === "rev_only") overlay.revOnlyMonths.push(month)
+    byAccount.set(key, overlay)
+  }
+  for (const overlay of byAccount.values()) {
+    overlay.hwOnlyMonths.sort()
+    overlay.revOnlyMonths.sort()
+  }
+  return byAccount
+}
+
 export async function getHwRevReconcile(): Promise<HwRevReconcileResult> {
   const sb = createSupabaseAdminClient()
 
-  const [hwRes, revRes] = await Promise.all([
+  const [hwRes, revRes, monthOverlay] = await Promise.all([
     sb
       .from("branch_hw_outbound")
       .select("logistics_no, outbound_date, product, quantity, revenue, destination, progress, type")
@@ -89,6 +138,7 @@ export async function getHwRevReconcile(): Promise<HwRevReconcileResult> {
       .from("branch_rev_deals")
       .select("customer_name, status, deal_type, monthly_payments")
       .limit(1000),
+    fetchMonthMatchOverlay(sb),
   ])
 
   if (hwRes.error) throw hwRes.error
@@ -176,6 +226,9 @@ export async function getHwRevReconcile(): Promise<HwRevReconcileResult> {
     else if (shipped > 0) status = "hw_only" // revCNY === 0 — 출고했는데 매출 미기재 의심
     else status = "rev_only" // revCNY > 0 && shipped === 0 — 매출은 있는데 실출고 없음
 
+    // 월 그레인 오버레이(뷰 존재 시): 이 계정의 hw_only/rev_only 월 목록.
+    const overlay = monthOverlay?.get(key)
+
     rows.push({
       accountKey: key,
       name: hw?.name ?? rev?.name ?? key,
@@ -189,6 +242,8 @@ export async function getHwRevReconcile(): Promise<HwRevReconcileResult> {
       revCNY,
       revRows: rev?.rows ?? 0,
       revDealTypes: rev ? Array.from(rev.dealTypes).sort() : [],
+      ...(overlay && overlay.hwOnlyMonths.length > 0 ? { hwOnlyMonths: overlay.hwOnlyMonths } : {}),
+      ...(overlay && overlay.revOnlyMonths.length > 0 ? { revOnlyMonths: overlay.revOnlyMonths } : {}),
     })
   }
 
@@ -211,6 +266,10 @@ export async function getHwRevReconcile(): Promise<HwRevReconcileResult> {
       hwOnly: rows.filter((r) => r.status === "hw_only").length,
       revOnly: rows.filter((r) => r.status === "rev_only").length,
       hwUnattributableRows,
+      grain: monthOverlay ? "account_month" : "account",
+      ...(monthOverlay
+        ? { hwOnlyMonthCells: rows.reduce((sum, r) => sum + (r.hwOnlyMonths?.length ?? 0), 0) }
+        : {}),
     },
   }
 }

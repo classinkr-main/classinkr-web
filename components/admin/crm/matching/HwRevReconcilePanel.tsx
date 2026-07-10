@@ -21,10 +21,19 @@ type ReconcileRow = {
   revCNY: number
   revRows: number
   revDealTypes: string[]
+  hwOnlyMonths?: string[]
+  revOnlyMonths?: string[]
 }
 type ReconcileResponse = {
   rows: ReconcileRow[]
-  summary: { both: number; hwOnly: number; revOnly: number; hwUnattributableRows: number }
+  summary: {
+    both: number
+    hwOnly: number
+    revOnly: number
+    hwUnattributableRows: number
+    grain?: "account_month" | "account"
+    hwOnlyMonthCells?: number
+  }
 }
 
 const STATUS_META: Record<ReconcileStatus, { label: string; className: string }> = {
@@ -120,6 +129,15 @@ export default function HwRevReconcilePanel() {
                   통화가 달라(출고 $, 원장 ¥) 금액 비교 없이 <b className="text-[#1a1a1a]/65">존재성만</b> 대조합니다.
                   배송예정·물류번호 누락은 실출고와 구분 표기.
                 </span>
+                {data.summary.grain === "account_month" ? (
+                  <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 font-medium text-[#084734]" title="v_hardware_rev_matches 뷰 기반 — 계정×월 단위로 출고월에 매출이 없는 달까지 짚습니다">
+                    계정×월 그레인{typeof data.summary.hwOnlyMonthCells === "number" ? ` · 매출 미기재 의심 ${data.summary.hwOnlyMonthCells}개월` : ""}
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 font-medium text-[#1a1a1a]/45" title="계정×월 뷰 마이그레이션(20260710) 적용 전 — 계정 단위로만 대조 중">
+                    계정 그레인(뷰 적용 대기)
+                  </span>
+                )}
                 {data.summary.hwUnattributableRows > 0 ? (
                   <span className="text-[#A8741A]">
                     설치처(고객명) 미지정 출고 {data.summary.hwUnattributableRows}행은 대사 불가
@@ -158,11 +176,18 @@ export default function HwRevReconcilePanel() {
                         const meta = STATUS_META[row.status]
                         return (
                           <tr key={row.accountKey} className="border-b border-[rgba(0,0,0,0.05)]">
-                            <td className="max-w-[220px] truncate py-2 pr-3 font-medium text-[#111110]" title={row.hwProducts.join(", ")}>
-                              {row.name}
-                              {row.hwNoLogisticsRows > 0 ? (
-                                <span className="ml-1.5 text-[10px] text-[#A8741A]" title="물류번호 누락 행 포함">
-                                  물류No 누락 {row.hwNoLogisticsRows}
+                            <td className="max-w-[260px] py-2 pr-3 font-medium text-[#111110]">
+                              <span className="block truncate" title={row.hwProducts.join(", ")}>
+                                {row.name}
+                                {row.hwNoLogisticsRows > 0 ? (
+                                  <span className="ml-1.5 text-[10px] text-[#A8741A]" title="물류번호 누락 행 포함">
+                                    물류No 누락 {row.hwNoLogisticsRows}
+                                  </span>
+                                ) : null}
+                              </span>
+                              {row.hwOnlyMonths?.length ? (
+                                <span className="mt-0.5 block truncate text-[10px] tabular-nums text-[#B43E3E]" title={`출고는 있는데 그 달 REV HW 매출이 없는 월: ${row.hwOnlyMonths.join(", ")}`}>
+                                  매출 미기재 의심 월 {row.hwOnlyMonths.join(" · ")}
                                 </span>
                               ) : null}
                             </td>
