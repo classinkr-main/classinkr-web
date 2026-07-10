@@ -3,6 +3,7 @@ import "server-only"
 import { createHash } from "node:crypto"
 
 import { normalizedAccountKey } from "@/lib/branch/account-key"
+import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { listBranchRevDeals, type BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { readRevDealsFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -103,16 +104,14 @@ function recordKeyOf(deal: BranchRevDeal): string {
 
 function snapshotLineOf(deal: BranchRevDeal): SnapshotLine {
   const months: Record<string, SnapshotMonthAmounts> = {}
+  // 확도 3분해는 캐논 splitter(rev-confirmed.ts) — 이전 구현은 monthly_confirmed 맵만 봐서
+  // red-불리언·무색상 행의 확정이 스냅샷에서 expected로 강등되던 과소집계가 있었다.
+  const hasColor = dealHasColorData(deal)
   for (const [month, rawAmount] of Object.entries(deal.monthly_payments ?? {})) {
     if (!MONTH_RE.test(month)) continue
     const amount = toNumber(rawAmount)
     if (amount === 0) continue
-    const confirmed = Math.min(Math.max(toNumber(deal.monthly_confirmed?.[month]), 0), Math.max(amount, 0))
-    const highConfidence = Math.min(
-      Math.max(toNumber(deal.monthly_high_conf?.[month]), 0),
-      Math.max(amount - confirmed, 0),
-    )
-    const expected = amount - confirmed - highConfidence
+    const { confirmed, highConfidence, expected } = splitMonthConfidence(deal, month, amount, hasColor)
     months[month] = { amount, confirmed, highConfidence, expected }
   }
 

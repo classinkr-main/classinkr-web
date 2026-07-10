@@ -4,6 +4,9 @@ import { unstable_cache } from "next/cache"
 
 import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { readRevDealsFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
+import { fyOf } from "@/lib/branch/fiscal"
+import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import type {
   CrmRevenueDashboard,
   CrmRevenueDocumentRow,
@@ -998,7 +1001,13 @@ async function assembleAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenueD
   const accounts = accountsResult.rows
   const customers = customersResult.rows
   const deals = dealsResult.rows
-  const sheetDeals = sheetResult.rows
+  // 시트 미러 fetch(runQuery)는 소스 카드 텔레메트리용으로 유지하되, 집계는 장부와
+  // 동일한 REV 데이터셋 규약(DB-native 액티브 임포트 우선)을 따른다 — 미러에는 색(확도)
+  // 데이터가 없는 행이 많아(2026-07 실측 310/398) 그대로 집계하면 장부 확정과 어긋난다.
+  // record key(getBranchRevSourceRecordKey)는 sheet_row·고객명·first_payment·계약목표로
+  // 유도되는 계산 필드라 두 데이터셋에서 동일하게 나온다(링크 매칭 무손실).
+  const activeImportDeals = await readRevDealsFromActiveImport(fyOf(new Date())).catch(() => null)
+  const sheetDeals = activeImportDeals ?? sheetResult.rows
   const sourceLinks = sourceLinksResult.rows
   const externalSourceLinks = externalSourceLinksResult.rows
   const externalRecordRows: CrmRevenueExternalRecordRow[] = externalSnapshotResult.rows.map((record) => ({
@@ -1115,22 +1124,17 @@ async function assembleAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenueD
         sheetUnlinkedAmount += sheetDealAmount
       }
     }
-    const redMap = deal.monthly_red ?? {}
-    const confirmedMap = deal.monthly_confirmed ?? {}
-    const highConfMap = deal.monthly_high_conf ?? {}
-    const hasColorData =
-      Object.keys(redMap).length > 0 ||
-      Object.keys(confirmedMap).length > 0 ||
-      Object.keys(highConfMap).length > 0
+    // 확도 3분해는 캐논 splitter(rev-confirmed.ts)로 일원화 — 무색상 행의 "과거~당월만
+    // 전액 확정" 월 가드를 포함해 장부·주간마감과 동일한 규칙을 쓴다.
+    const hasColorData = dealHasColorData(deal)
     let pastUnconfirmed = 0
     for (const [month, rawAmount] of Object.entries(deal.monthly_payments ?? {})) {
       const total = Number(rawAmount) || 0
-      let confirmed = Math.min(total, Number(confirmedMap[month]) || 0)
-      // 금액 분해 컬럼 도입 전 동기화분 호환: monthly_red=true면 그 달 전액 확정으로 간주
-      if (confirmed === 0 && redMap[month]) confirmed = total
-      if (!hasColorData && month <= currentMonthKey) confirmed = total
-      const highConf = Math.min(Math.max(0, total - confirmed), Number(highConfMap[month]) || 0)
-      const remaining = Math.max(0, total - confirmed - highConf)
+      const {
+        confirmed,
+        highConfidence: highConf,
+        expected: remaining,
+      } = splitMonthConfidence(deal, month, total, hasColorData, currentMonthKey)
 
       if (confirmed > 0) {
         sheetConfirmedAmount += confirmed
