@@ -136,7 +136,10 @@ export function getMarketingRequestMeta(
 export function getMarketingConversionStatus() {
   const metaDatasetOrPixelId = readEnv("META_DATASET_ID") ?? readEnv("NEXT_PUBLIC_META_PIXEL_ID")
   const metaAccessToken = readEnv("META_CAPI_ACCESS_TOKEN") ?? readEnv("META_ACCESS_TOKEN")
-  const ga4MeasurementId = readEnv("GA4_MEASUREMENT_ID")
+  const ga4MeasurementProtocolId = readEnv("GA4_MEASUREMENT_ID")
+  const ga4BrowserMeasurementId =
+    readEnv("NEXT_PUBLIC_GA4_MEASUREMENT_ID") ?? readEnv("NEXT_PUBLIC_GA_ID")
+  const ga4MeasurementId = ga4MeasurementProtocolId ?? ga4BrowserMeasurementId
   const ga4ApiSecret = readEnv("GA4_API_SECRET")
 
   return {
@@ -150,7 +153,7 @@ export function getMarketingConversionStatus() {
       adsId: "AW-18252550128",
       demoConversionLabelConfigured: Boolean(readEnv("NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL")),
       ga4MeasurementId,
-      measurementProtocolConfigured: Boolean(ga4MeasurementId && ga4ApiSecret),
+      measurementProtocolConfigured: Boolean(ga4MeasurementProtocolId && ga4ApiSecret),
     },
     internal: {
       trackingEnabled: process.env.NEXT_PUBLIC_INTERNAL_TRACKING_ENABLED !== "false",

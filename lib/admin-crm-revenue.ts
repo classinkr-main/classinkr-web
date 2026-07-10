@@ -1,5 +1,7 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
+
 import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import type {
@@ -193,6 +195,11 @@ interface QueryResult<T> {
   limit: number | null
 }
 
+// 대시보드 조립은 14개 테이블을 병렬 스캔하는 무거운 경로다. months별로 짧은 TTL 캐시를 씌워
+// 연속 요청(폴링·새로고침)의 Supabase 왕복을 없앤다. 앱 밖(임포트/동기화) 변경은 최대 45초 지연 허용.
+export const ADMIN_CRM_REVENUE_CACHE_TAG = "admin-crm-revenue"
+const ADMIN_CRM_REVENUE_REVALIDATE_SECONDS = 45
+
 // 시트 status는 자유 입력이라 enum이 없다. 취소·중단 계열 키워드만 예상 매출에서 제외한다.
 const SHEET_INACTIVE_PATTERN = /취소|해지|드랍|드롭|중단|보류|cancel|drop|lost/i
 const CRM_WRITE_REQUEST_BASE_SELECT =
@@ -230,6 +237,11 @@ const EXTERNAL_CRM_OBJECTS = [
 const EXTERNAL_CRM_PREVIEW_PER_OBJECT = 5
 const EXTERNAL_CRM_RECORD_SELECT =
   "id, source_system, object_api_key, external_id, normalized_name, display_name, owner_name, status, amount, occurred_at, synced_at, updated_at"
+// 집계(getAdminCrmRevenueDashboard)가 실제로 참조하는 REV 시트 컬럼만 읽는다.
+// monthly_confirmed/monthly_high_conf/monthly_red는 색 금액 분해용(optional, ?? {}로 방어),
+// 대형 raw JSON blob은 집계에서 쓰지 않으므로 제외해 전송량을 줄인다.
+const BRANCH_REV_DEAL_AGGREGATION_SELECT =
+  "id, sheet_row, customer_name, team, manager, status, first_payment, contract_target, monthly_payments, monthly_red, monthly_confirmed, monthly_high_conf, synced_at"
 
 function hasValue(value: string | undefined) {
   return Boolean(value?.trim())
@@ -466,48 +478,41 @@ async function getExternalCrmSnapshotQuery(
   const startedAt = Date.now()
 
   try {
-    const [objectResults, staleResult] = await Promise.all([
+    // 팬아웃 축소: object별 COUNT head 쿼리 + 전체 stale count를 단일 집계 뷰로 대체하고,
+    // 렌더 rows를 채우는 per-object 미리보기 쿼리만 개별 실행한다. 뷰가 아직 배포되지 않은
+    // DB에서는 뷰 쿼리가 relation/permission 오류로 실패하므로, 그때는 기존 per-object count
+    // 팬아웃으로 폴백한다(마이그레이션 적용 전/후 모두 동작).
+    const [snapshotResult, previewResults] = await Promise.all([
+      supabase
+        .from("external_crm_object_snapshot")
+        .select("object_api_key, active_count, latest_synced_at, stale_count")
+        .eq("source_system", "xiaoshouyi"),
       Promise.all(
         EXTERNAL_CRM_OBJECTS.map(async (objectApiKey) => {
-          const [countResult, rowsResult] = await Promise.all([
-            supabase
-              .from("external_crm_records")
-              .select("id", { count: "exact", head: true })
-              .eq("source_system", "xiaoshouyi")
-              .eq("object_api_key", objectApiKey)
-              .eq("is_stale", false),
-            supabase
-              .from("external_crm_records")
-              .select(EXTERNAL_CRM_RECORD_SELECT)
-              .eq("source_system", "xiaoshouyi")
-              .eq("object_api_key", objectApiKey)
-              .eq("is_stale", false)
-              .order("synced_at", { ascending: false })
-              .limit(EXTERNAL_CRM_PREVIEW_PER_OBJECT),
-          ])
+          const rowsResult = await supabase
+            .from("external_crm_records")
+            .select(EXTERNAL_CRM_RECORD_SELECT)
+            .eq("source_system", "xiaoshouyi")
+            .eq("object_api_key", objectApiKey)
+            .eq("is_stale", false)
+            .order("synced_at", { ascending: false })
+            .limit(EXTERNAL_CRM_PREVIEW_PER_OBJECT)
 
           return {
             objectApiKey,
-            countResult,
             rowsResult,
           }
         })
       ),
-      supabase
-        .from("external_crm_records")
-        .select("id", { count: "exact", head: true })
-        .eq("source_system", "xiaoshouyi")
-        .eq("is_stale", true),
     ])
 
-    const failedObject = objectResults.find((result) => result.countResult.error || result.rowsResult.error)
-    const error = failedObject?.countResult.error ?? failedObject?.rowsResult.error ?? staleResult.error
     const latencyMs = Date.now() - startedAt
 
-    if (error) {
+    const previewError = previewResults.find((result) => result.rowsResult.error)?.rowsResult.error
+    if (previewError) {
       return {
         rows: [],
-        warning: `External CRM Snapshot: ${error.message}`,
+        warning: `External CRM Snapshot: ${previewError.message}`,
         limit: null,
         summary: null,
         source: {
@@ -523,15 +528,86 @@ async function getExternalCrmSnapshotQuery(
       }
     }
 
-    const objectCounts: CrmRevenueExternalSnapshotObjectRow[] = objectResults.map((result) => {
-      const rows = (result.rowsResult.data ?? []) as ExternalCrmRecordRow[]
+    // 뷰 집계 경로: object_api_key로 인덱싱해 EXTERNAL_CRM_OBJECTS 순서로 재구성한다.
+    // 뷰 쿼리가 실패하면 per-object count 팬아웃으로 폴백해 동일한 집계를 얻는다.
+    let objectCountMap: Map<string, { activeCount: number; latestSyncedAt: string | null }>
+    let staleRecordCount: number
+
+    if (snapshotResult.error) {
+      const countFanout = await Promise.all([
+        Promise.all(
+          EXTERNAL_CRM_OBJECTS.map(async (objectApiKey) => {
+            const countResult = await supabase
+              .from("external_crm_records")
+              .select("id", { count: "exact", head: true })
+              .eq("source_system", "xiaoshouyi")
+              .eq("object_api_key", objectApiKey)
+              .eq("is_stale", false)
+            return { objectApiKey, countResult }
+          })
+        ),
+        supabase
+          .from("external_crm_records")
+          .select("id", { count: "exact", head: true })
+          .eq("source_system", "xiaoshouyi")
+          .eq("is_stale", true),
+      ])
+      const [fanoutObjects, fanoutStale] = countFanout
+
+      const fanoutError = fanoutObjects.find((result) => result.countResult.error)?.countResult.error ?? fanoutStale.error
+      if (fanoutError) {
+        return {
+          rows: [],
+          warning: `External CRM Snapshot: ${fanoutError.message}`,
+          limit: null,
+          summary: null,
+          source: {
+            key: "external_crm_records",
+            label: "External CRM Snapshot",
+            status: "error",
+            mode: "read",
+            recordCount: 0,
+            latencyMs: Date.now() - startedAt,
+            lastSyncedAt: null,
+            description: "Neo CRM snapshot read failed.",
+          },
+        }
+      }
+
+      objectCountMap = new Map(
+        fanoutObjects.map((result) => [
+          result.objectApiKey,
+          { activeCount: result.countResult.count ?? 0, latestSyncedAt: null as string | null },
+        ])
+      )
+      staleRecordCount = fanoutStale.count ?? 0
+    } else {
+      const snapshotRows = (snapshotResult.data ?? []) as Array<{
+        object_api_key: string
+        active_count: number | null
+        latest_synced_at: string | null
+        stale_count: number | null
+      }>
+      objectCountMap = new Map(
+        snapshotRows.map((row) => [
+          row.object_api_key,
+          { activeCount: Number(row.active_count ?? 0), latestSyncedAt: row.latest_synced_at ?? null },
+        ])
+      )
+      staleRecordCount = snapshotRows.reduce((sum, row) => sum + Number(row.stale_count ?? 0), 0)
+    }
+
+    const objectCounts: CrmRevenueExternalSnapshotObjectRow[] = EXTERNAL_CRM_OBJECTS.map((objectApiKey) => {
+      const previewRows = ((previewResults.find((result) => result.objectApiKey === objectApiKey)?.rowsResult.data ??
+        []) as ExternalCrmRecordRow[])
+      const aggregate = objectCountMap.get(objectApiKey)
       return {
-        objectApiKey: result.objectApiKey,
-        recordCount: result.countResult.count ?? 0,
-        latestSyncedAt: maxDate(rows.map((row) => row.synced_at)),
+        objectApiKey,
+        recordCount: aggregate?.activeCount ?? 0,
+        latestSyncedAt: aggregate?.latestSyncedAt ?? maxDate(previewRows.map((row) => row.synced_at)),
       }
     })
-    const rows = objectResults
+    const rows = previewResults
       .flatMap((result) => (result.rowsResult.data ?? []) as ExternalCrmRecordRow[])
       .slice(0, DISPLAY_LIMITS.externalRecords)
     const totalRecordCount = objectCounts.reduce((sum, object) => sum + object.recordCount, 0)
@@ -541,7 +617,7 @@ async function getExternalCrmSnapshotQuery(
     ])
     const summary: CrmRevenueExternalSnapshotSummary = {
       totalRecordCount,
-      staleRecordCount: staleResult.count ?? 0,
+      staleRecordCount,
       latestSyncedAt,
       objectCounts,
     }
@@ -703,7 +779,7 @@ function getPartnerAccumulator(
   return next
 }
 
-export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenueDashboard> {
+async function assembleAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenueDashboard> {
   const safeMonths = Math.min(12, Math.max(3, Math.floor(months)))
   const monthKeys = getMonthKeys(safeMonths)
   const monthly = new Map<string, CrmRevenueMonthlyPoint>(
@@ -741,7 +817,6 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
     sheetResult,
     sourceLinksResult,
     externalSourceLinksResult,
-    externalRecordsResult,
     externalSnapshotResult,
     externalSyncRunsResult,
     writeRequestsResult,
@@ -820,10 +895,10 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
       runQuery<SheetRevDealRow>(
         "crm_sheet",
         "회사 시트 (REV)",
-        // 색 금액(rev_color_amounts) 마이그레이션 적용 전 DB에서도 깨지지 않도록 컬럼을 명시하지 않는다
+        // 집계가 실제로 읽는 컬럼만 명시한다. 대형 raw JSON blob은 제외.
         supabase
           .from("branch_rev_deals")
-          .select("*")
+          .select(BRANCH_REV_DEAL_AGGREGATION_SELECT)
           .limit(QUERY_LIMITS.defaultRows),
         QUERY_LIMITS.defaultRows
       ),
@@ -848,17 +923,6 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
           .order("updated_at", { ascending: false })
           .limit(QUERY_LIMITS.sourceLinks),
         QUERY_LIMITS.sourceLinks
-      ),
-      runQuery<ExternalCrmRecordRow>(
-        "external_crm_records",
-        "외부 CRM Snapshot",
-        supabase
-          .from("external_crm_records")
-          .select("id, source_system, object_api_key, external_id, normalized_name, display_name, owner_name, status, amount, occurred_at, synced_at, updated_at")
-          .eq("source_system", "xiaoshouyi")
-          .order("synced_at", { ascending: false })
-          .limit(QUERY_LIMITS.externalRecords),
-        QUERY_LIMITS.externalRecords
       ),
       getExternalCrmSnapshotQuery(supabase),
       runQuery<ExternalCrmSyncRunRow>(
@@ -909,7 +973,6 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
     sheetResult.warning,
     sourceLinksResult.warning,
     externalSourceLinksResult.warning,
-    externalRecordsResult.warning,
     externalSnapshotResult.warning,
     externalSyncRunsResult.warning,
     writeRequestsResult.warning,
@@ -923,7 +986,6 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
     getQueryLimitWarning(sheetResult),
     getQueryLimitWarning(sourceLinksResult),
     getQueryLimitWarning(externalSourceLinksResult),
-    getQueryLimitWarning(externalRecordsResult),
     getQueryLimitWarning(externalSnapshotResult),
     getQueryLimitWarning(externalSyncRunsResult),
     getQueryLimitWarning(writeRequestsResult),
@@ -939,7 +1001,6 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
   const sheetDeals = sheetResult.rows
   const sourceLinks = sourceLinksResult.rows
   const externalSourceLinks = externalSourceLinksResult.rows
-  const externalRecords = externalRecordsResult.rows
   const externalRecordRows: CrmRevenueExternalRecordRow[] = externalSnapshotResult.rows.map((record) => ({
     objectApiKey: record.object_api_key,
     externalId: record.external_id,
@@ -1391,7 +1452,8 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
   }
 
   return {
-    generatedAt: new Date().toISOString(),
+    // 캐시 본문은 순수하게 유지한다 — generatedAt은 캐시된 값을 감싼 뒤 wrapper에서 찍는다.
+    generatedAt: "",
     range: {
       months: safeMonths,
       startMonth: monthKeys[0],
@@ -1422,7 +1484,7 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
         sheetDeals.length +
         sourceLinks.length +
         externalSourceLinks.length +
-        (externalSnapshotResult.summary?.totalRecordCount ?? externalRecords.length) +
+        (externalSnapshotResult.summary?.totalRecordCount ?? externalSnapshotResult.rows.length) +
         writeRequestsResult.rows.length,
     },
     sheet: sheetSummary,
@@ -1463,4 +1525,20 @@ export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenu
     ],
     warnings,
   }
+}
+
+// months별로 무거운 조립 결과를 45초 캐시한다. Supabase admin 클라이언트는 모듈 레벨에서
+// 서비스 롤 secret key로 생성되는 요청 무관(non-cookie) 클라이언트라 unstable_cache가 안전하다.
+// generatedAt은 캐시 본문에서 뺐으므로 캐시 body는 순수하게 유지된다.
+const getCachedAdminCrmRevenueDashboard = unstable_cache(
+  async (safeMonths: number) => assembleAdminCrmRevenueDashboard(safeMonths),
+  [ADMIN_CRM_REVENUE_CACHE_TAG],
+  { revalidate: ADMIN_CRM_REVENUE_REVALIDATE_SECONDS, tags: [ADMIN_CRM_REVENUE_CACHE_TAG] },
+)
+
+export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenueDashboard> {
+  const safeMonths = Math.min(12, Math.max(3, Math.floor(months)))
+  const dashboard = await getCachedAdminCrmRevenueDashboard(safeMonths)
+  // 캐시된 순수 body에 요청 시각을 찍는다(캐시 히트여도 최신 timestamp 반환).
+  return { ...dashboard, generatedAt: new Date().toISOString() }
 }

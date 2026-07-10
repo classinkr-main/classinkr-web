@@ -9,7 +9,6 @@ import {
   ArrowRightLeft,
   ArrowUpFromLine,
   Camera,
-  CheckCheck,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -48,12 +47,6 @@ import PlannedOutboundPanel from "@/components/admin/hardware/inventory/PlannedO
 import StockLevelsSection from "@/components/admin/hardware/inventory/StockLevelsSection"
 import AlertsOutboundSections from "@/components/admin/hardware/inventory/AlertsOutboundSections"
 import InboundLotsSection from "@/components/admin/hardware/inventory/InboundLotsSection"
-import OutboundPeriodSection from "@/components/admin/hardware/inventory/OutboundPeriodSection"
-import HistoryLogSection from "@/components/admin/hardware/inventory/HistoryLogSection"
-import MovementDetailSheet from "@/components/admin/hardware/inventory/MovementDetailSheet"
-import CustomerHistorySheet from "@/components/admin/hardware/inventory/CustomerHistorySheet"
-import CrmConfirmModal from "@/components/admin/hardware/inventory/CrmConfirmModal"
-import VoidConfirmModal from "@/components/admin/hardware/inventory/VoidConfirmModal"
 
 export type HardwareMovementType = "inbound" | "outbound" | "return" | "transfer" | "repair" | "adjust"
 

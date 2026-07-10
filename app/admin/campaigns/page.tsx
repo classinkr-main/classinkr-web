@@ -201,7 +201,8 @@ const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string; sub: string }> = [
   { id: "summary", label: "요약", sub: "성과 · 전환 · 채널 분포" },
   { id: "events", label: "행사", sub: "행사별 퍼널 · 딜 전환" },
   { id: "meta", label: "Meta 광고", sub: "캠페인 현황 · 성과 · 상태 관리" },
-  { id: "email", label: "이메일", sub: "구독자 · 이메일 발송 · 이력" },
+  // id는 기존 딥링크(?tab=email) 호환을 위해 "email" 유지 — 내용은 이메일·문자·카카오 발송 허브.
+  { id: "email", label: "메시지", sub: "구독자 · 이메일·문자·카카오 발송 · 이력" },
 ]
 
 type MetaDatePreset = "last_7d" | "last_30d" | "last_90d" | "this_month"

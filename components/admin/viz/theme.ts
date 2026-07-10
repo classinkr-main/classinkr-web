@@ -74,20 +74,3 @@ export const GRADIENT = {
 export const gridProps = { strokeDasharray: "3 3", stroke: CHART.grid, vertical: false } as const
 export const axisTick = { fontSize: 11, fill: CHART.axis, opacity: 0.4 } as const
 export const cursorLine = { stroke: CHART.cursor, strokeWidth: 1 } as const
-
-// 기존 산재 톤 리터럴(info/success/warning/danger/neutral)을 4톤으로 흡수.
-// 마이그레이션 중 전역 rename 없이 컴파일을 유지하기 위한 어댑터.
-export function legacyTone(t?: string): Tone {
-  switch (t) {
-    case "warning":
-      return "caution"
-    case "danger":
-      return "danger"
-    case "info":
-    case "success":
-    case "brand":
-      return "brand"
-    default:
-      return "neutral"
-  }
-}

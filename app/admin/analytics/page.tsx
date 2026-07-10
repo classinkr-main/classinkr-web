@@ -473,27 +473,27 @@ export default function AnalyticsPage() {
           }
           trend={homeVisitorTrend}
         />
-        <SummaryCard
+        <StatTile
           icon={<Users className="w-4 h-4" />}
           label="최근 리드"
           value={loading ? "..." : currentLeadCount}
           hint={`${range}일 기준`}
           trend={loading ? undefined : leadTrend}
         />
-        <SummaryCard
+        <StatTile
           icon={<CheckCircle2 className="w-4 h-4" />}
           label="전환율"
           value={loading ? "..." : `${conversionRate}%`}
           hint={`전환 ${convertedLeads.length}건`}
         />
-        <SummaryCard
+        <StatTile
           icon={<Mail className="w-4 h-4" />}
           label="활성 구독자"
           value={loading ? "..." : activeSubscribers.length}
           hint={`최근 ${range}일 +${currentSubscriberCount}`}
           trend={loading ? undefined : subscriberTrend}
         />
-        <SummaryCard
+        <StatTile
           icon={<FileText className="w-4 h-4" />}
           label="공개 콘텐츠"
           value={loading ? "..." : publishedPosts.length}
@@ -783,10 +783,10 @@ export default function AnalyticsPage() {
       {activeTab === "content" && (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <SummaryCard icon={<FileText className="w-4 h-4" />} label="공개 글" value={publishedPosts.length} />
-            <SummaryCard icon={<FileText className="w-4 h-4" />} label="초안" value={draftPosts.length} />
-            <SummaryCard icon={<CheckCircle2 className="w-4 h-4" />} label="추천 글" value={featuredPosts.length} />
-            <SummaryCard icon={<Link2 className="w-4 h-4" />} label="CTA 포함 글" value={posts.filter((post) => post.cta?.buttonHref).length} />
+            <StatTile icon={<FileText className="w-4 h-4" />} label="공개 글" value={publishedPosts.length} />
+            <StatTile icon={<FileText className="w-4 h-4" />} label="초안" value={draftPosts.length} />
+            <StatTile icon={<CheckCircle2 className="w-4 h-4" />} label="추천 글" value={featuredPosts.length} />
+            <StatTile icon={<Link2 className="w-4 h-4" />} label="CTA 포함 글" value={posts.filter((post) => post.cta?.buttonHref).length} />
           </div>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_1.2fr]">

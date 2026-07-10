@@ -2,14 +2,7 @@
 import Link from "next/link"
 import { TrendingUp, Users, Send, Calendar, Sparkles } from "lucide-react"
 import type { BranchSummaryResponse } from "../types"
-
-const numberFormatter = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 })
-function fmt(n: number) { return numberFormatter.format(n) }
-function cny(n: number) {
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`
-  if (n >= 10_000) return `${(n / 10_000).toFixed(1)}만`
-  return n.toLocaleString()
-}
+import { cny } from "@/lib/branch/money-format"
 
 function metricLabel(metric: string | null | undefined): string {
   if (!metric) return "-"
@@ -79,5 +72,3 @@ export default function CoreKpiGrid({ data, loading, error }: { data: BranchSumm
     </section>
   )
 }
-
-export { cny, fmt }

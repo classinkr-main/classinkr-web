@@ -455,6 +455,8 @@ function buildMetaStatus(): AdminIntegrationStatus {
 function buildAnalyticsPixelsStatus(): AdminIntegrationStatus {
   const browserConfigured =
     hasConfiguredAnalyticsId("NEXT_PUBLIC_GTM_ID") ||
+    hasConfiguredAnalyticsId("NEXT_PUBLIC_GA4_MEASUREMENT_ID") ||
+    hasConfiguredAnalyticsId("NEXT_PUBLIC_GA_ID") ||
     hasConfiguredAnalyticsId("NEXT_PUBLIC_META_PIXEL_ID") ||
     hasConfiguredAnalyticsId("NEXT_PUBLIC_KAKAO_PIXEL_ID") ||
     hasEnv("NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL") ||
@@ -482,6 +484,8 @@ function buildAnalyticsPixelsStatus(): AdminIntegrationStatus {
     configured,
     source: sourceFromEnv([
       "NEXT_PUBLIC_GTM_ID",
+      "NEXT_PUBLIC_GA4_MEASUREMENT_ID",
+      "NEXT_PUBLIC_GA_ID",
       "NEXT_PUBLIC_META_PIXEL_ID",
       "NEXT_PUBLIC_KAKAO_PIXEL_ID",
       "NEXT_PUBLIC_GOOGLE_ADS_DEMO_CONVERSION_LABEL",
@@ -494,6 +498,7 @@ function buildAnalyticsPixelsStatus(): AdminIntegrationStatus {
     health: healthForPresence(configured, hasPartialServerConfig),
     requiredKeys: [
       "NEXT_PUBLIC_GTM_ID",
+      "NEXT_PUBLIC_GA4_MEASUREMENT_ID",
       "NEXT_PUBLIC_META_PIXEL_ID",
       "NEXT_PUBLIC_KAKAO_PIXEL_ID",
       "NEXT_PUBLIC_INTERNAL_TRACKING_ENABLED",

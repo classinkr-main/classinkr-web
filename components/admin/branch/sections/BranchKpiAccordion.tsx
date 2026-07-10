@@ -2,15 +2,10 @@
 import { useMemo, useState } from "react"
 import { ChevronRight } from "lucide-react"
 import type { BranchKpiResponse, BranchKpiTeamRow, BranchKpiMemberRow } from "../types"
+import { cny } from "@/lib/branch/money-format"
 
 const numberFmt = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 })
 const fmt = (n: number) => numberFmt.format(n)
-function cny(n: number) {
-  if (!Number.isFinite(n)) return "-"
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`
-  if (n >= 10_000) return `${(n / 10_000).toFixed(1)}만`
-  return n.toLocaleString()
-}
 
 const KPI_LABELS: Record<string, string> = {
   lead: "리드",

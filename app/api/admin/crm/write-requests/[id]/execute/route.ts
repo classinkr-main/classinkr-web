@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 
 import { requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
 import { executeCrmWriteRequest } from "@/lib/external-crm/xiaoshouyi-write"
 
 type RouteContext = {
@@ -16,6 +18,7 @@ export async function POST(req: NextRequest, context: RouteContext) {
   try {
     const request = await executeCrmWriteRequest(id, admin.userId)
     const ok = request.status === "succeeded"
+    if (ok) revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
     return NextResponse.json({ ok, request }, { status: ok ? 200 : 409 })
   } catch (error) {
     console.error("[POST /api/admin/crm/write-requests/[id]/execute]", error)

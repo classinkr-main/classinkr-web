@@ -2,13 +2,7 @@
 import Link from "next/link"
 import { Calendar, ExternalLink } from "lucide-react"
 import type { BranchMonthlySeries } from "../types"
-
-function cny(n: number) {
-  if (!Number.isFinite(n)) return "-"
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`
-  if (n >= 10_000) return `${(n / 10_000).toFixed(1)}만`
-  return n.toLocaleString()
-}
+import { cny } from "@/lib/branch/money-format"
 
 function isFutureOrToday(dateStr: string) {
   const d = new Date(dateStr)

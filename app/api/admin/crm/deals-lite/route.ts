@@ -1,33 +1,20 @@
 import { NextRequest, NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 
-import { adminCachedJson } from "@/lib/admin-api-response"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
-import {
-  CURRENT_ADMIN_OWNER_TOKEN,
-  findAdminCrmOwner,
-  listAdminUserDirectory,
-} from "@/lib/repositories/admin-users"
+import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
+import { findAdminCrmOwner, listAdminUserDirectoryCached } from "@/lib/repositories/admin-users"
 import {
   CRM_DEAL_STAGES,
-  CRM_DEAL_STATUSES,
   CRM_DEAL_TARGET_TYPES,
   createCrmDeal,
   isCrmDealsNotReadyError,
-  listCrmDeals,
   type CrmDealStage,
-  type CrmDealStatus,
 } from "@/lib/repositories/crm-deals"
 import type { CrmTaskTargetType } from "@/lib/supabase/database.types"
 
 const STAGES = new Set<string>(CRM_DEAL_STAGES)
-const STATUSES = new Set<string>(CRM_DEAL_STATUSES)
 const TARGET_TYPES = new Set<string>(CRM_DEAL_TARGET_TYPES)
-
-function parseBoundedInt(value: string | null, fallback: number, min: number, max: number) {
-  const parsed = Number(value ?? fallback)
-  if (!Number.isFinite(parsed)) return fallback
-  return Math.max(min, Math.min(Math.floor(parsed), max))
-}
 
 function adminActorName(admin: { name?: string; userId?: string; role: string }) {
   return admin.name?.trim() || admin.userId || admin.role
@@ -42,43 +29,6 @@ function optionalNumber(value: unknown) {
   if (value == null || value === "") return undefined
   const numeric = Number(value)
   return Number.isFinite(numeric) ? numeric : null
-}
-
-export async function GET(req: NextRequest) {
-  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
-  if (admin instanceof NextResponse) return admin
-
-  try {
-    const url = new URL(req.url)
-    const ownerParam = url.searchParams.get("owner") ?? undefined
-    const isMine = ownerParam === CURRENT_ADMIN_OWNER_TOKEN
-    const currentOwner = isMine ? findAdminCrmOwner(await listAdminUserDirectory(), admin) : null
-    const ownerKeys = isMine
-      ? currentOwner?.ownerKeys.length
-        ? currentOwner.ownerKeys
-        : ["__no_current_admin_owner__"]
-      : ownerParam
-        ? [ownerParam]
-        : undefined
-
-    const status = url.searchParams.get("status")
-    const stage = url.searchParams.get("stage")
-    const targetType = url.searchParams.get("targetType")
-
-    const deals = await listCrmDeals({
-      status: status && STATUSES.has(status) ? (status as CrmDealStatus) : "all",
-      stage: stage && STAGES.has(stage) ? (stage as CrmDealStage) : "all",
-      ownerKeys,
-      targetType: targetType && TARGET_TYPES.has(targetType) ? (targetType as CrmTaskTargetType) : "all",
-      targetId: url.searchParams.get("targetId") ?? undefined,
-      limit: parseBoundedInt(url.searchParams.get("limit"), 50, 1, 200),
-      offset: parseBoundedInt(url.searchParams.get("offset"), 0, 0, 100_000),
-    })
-    return adminCachedJson(deals)
-  } catch (error) {
-    console.error("[GET /api/admin/crm/deals-lite]", error)
-    return NextResponse.json({ error: "Failed to load CRM deals" }, { status: 500 })
-  }
 }
 
 export async function POST(req: NextRequest) {
@@ -98,7 +48,7 @@ export async function POST(req: NextRequest) {
     let ownerKey = optionalString(raw.ownerKey)
     let ownerNameSnapshot = optionalString(raw.ownerNameSnapshot)
     if (raw.assignToMe === true) {
-      const currentOwner = findAdminCrmOwner(await listAdminUserDirectory(), admin)
+      const currentOwner = findAdminCrmOwner(await listAdminUserDirectoryCached(), admin)
       ownerKey = currentOwner.owner?.ownerKey ?? currentOwner.ownerKeys[0] ?? ownerKey ?? null
       ownerNameSnapshot = currentOwner.owner?.displayName ?? ownerNameSnapshot ?? admin.name ?? null
     }
@@ -122,6 +72,7 @@ export async function POST(req: NextRequest) {
       createdBy: actor,
     })
 
+    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
     return NextResponse.json({ deal }, { status: 201 })
   } catch (error) {
     console.error("[POST /api/admin/crm/deals-lite]", error)

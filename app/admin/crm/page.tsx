@@ -54,6 +54,7 @@ interface LeadActionKpis {
   unresponded48hCount: number
   todayFollowUpCount: number
   overdueFollowUpCount: number
+  unconfirmedCount: number
 }
 
 interface BranchKpiMemberRow {
@@ -1339,7 +1340,25 @@ export default function CrmPage() {
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <Link
+            href="/admin/crm/customers/leads?filter=unconfirmed"
+            className="group rounded-xl border border-[#F3E6B8] bg-[#FFFBF0] p-3 text-left transition-colors hover:border-[#E0C875] hover:bg-white"
+          >
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[#8D6C1F] group-hover:text-[#6b5316]">
+                <UserPlus className="h-4 w-4" />
+              </span>
+              <span className="text-[12px] font-medium text-[#1a1a1a]/55">미확인 유입</span>
+            </div>
+            <p className={`mt-2 text-[26px] font-bold leading-none ${(leadKpis?.unconfirmedCount ?? 0) > 0 ? "text-[#8D6C1F]" : "text-[#111110]"}`}>
+              {leadKpisLoading && !leadKpis ? "..." : formatNumber(leadKpis?.unconfirmedCount)}
+            </p>
+            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">
+              공개 폼(문의·데모·뉴스레터) · 확인 전
+            </p>
+          </Link>
+
           <Link
             href="/admin/crm/customers/leads?filter=unresponded"
             className="group rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3 text-left transition-colors hover:border-[#c8c8c4] hover:bg-white"

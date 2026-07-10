@@ -3,13 +3,7 @@ import { useEffect, useState } from "react"
 import { Sparkles, FileDown, RefreshCw, AlertTriangle } from "lucide-react"
 import type { BranchSummaryResponse, Team } from "../types"
 import { adminFetchJson } from "../client-api"
-
-function cny(n: number) {
-  if (!Number.isFinite(n)) return "-"
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`
-  if (n >= 10_000) return `${(n / 10_000).toFixed(1)}만`
-  return n.toLocaleString()
-}
+import { cny } from "@/lib/branch/money-format"
 
 interface NextAction { title: string; why: string; owner: string; due?: string }
 

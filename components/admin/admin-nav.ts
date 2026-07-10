@@ -56,7 +56,8 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", badge: "MVP", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
 
   // 마케팅·분석 — 캠페인·콘텐츠·리드 + 웹/비즈니스 분석
-  { href: "/admin/campaigns", label: "캠페인", icon: Megaphone, roles: STAFF_ADMIN, section: "marketing", keywords: "캠페인 이메일 campaign email" },
+  // 메시지 발송 허브(이메일·문자·카카오, /admin/marketing)는 캠페인의 "메시지" 탭으로 흡수 — 라우트는 redirect 유지.
+  { href: "/admin/campaigns", label: "캠페인", icon: Megaphone, roles: STAFF_ADMIN, section: "marketing", keywords: "캠페인 이메일 campaign email 메시지 발송 문자 sms 카카오 kakao 알림톡 솔라피 solapi" },
   { href: "/admin/blog", label: "콘텐츠", icon: FileText, roles: STAFF_EDITOR, section: "marketing", keywords: "블로그 콘텐츠 blog content" },
   { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, roles: STAFF_EDITOR, section: "marketing", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
   { href: "/admin/events", label: "공개 행사", icon: Globe, roles: STAFF_ADMIN, section: "marketing", keywords: "행사 이벤트 event 웨비나" },

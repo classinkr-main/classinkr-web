@@ -1,4 +1,5 @@
 import {
+  GOOGLE_ADS_DEMO_CONVERSION_LABEL,
   GOOGLE_ADS_ID,
   KAKAO_PIXEL_ID,
 } from "@/lib/analytics-config"
@@ -273,5 +274,17 @@ export const trackAdsConversion = (
   window.gtag("event", "conversion", {
     send_to: `${GOOGLE_ADS_ID}/${label}`,
     ...(params ?? {}),
+  })
+}
+
+export const trackDemoRequestAdsConversion = (params: {
+  leadId?: string | null
+  eventId?: string | null
+  eventSlug?: string | null
+}) => {
+  trackAdsConversion(GOOGLE_ADS_DEMO_CONVERSION_LABEL, {
+    transaction_id: params.leadId ?? undefined,
+    event_id: params.eventId ?? undefined,
+    event_slug: params.eventSlug ?? undefined,
   })
 }

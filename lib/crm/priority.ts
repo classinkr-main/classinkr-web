@@ -95,6 +95,9 @@ function isResponseTargetLead(lead: LeadRecord) {
 
 export function buildLeadPriorityItem(lead: LeadRecord, now = new Date()): CrmPriorityItem | null {
   if (lead.status === "converted" || lead.status === "closed") return null
+  // 공개 채널에서 막 들어와 아직 검토(확인)되지 않은 저의도 리드(뉴스레터 등)는 작업대 노이즈라 제외.
+  // 응대 SLA가 걸린 소스(문의/데모/Meta 리드애즈)는 미확인이어도 "첫 응답" 큐로 즉시 노출한다.
+  if (!lead.confirmed_at && !isResponseTargetLead(lead)) return null
 
   const nowMs = now.getTime()
   const ageHours = hoursSince(lead.timestamp, nowMs) ?? 0

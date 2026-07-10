@@ -2,6 +2,7 @@
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import {
   AlertTriangle,
   ArrowDownNarrowWide,
@@ -31,25 +32,11 @@ import {
   Users,
   X,
 } from "lucide-react"
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Line,
-  ReferenceLine,
-  ResponsiveContainer,
-  Scatter,
-  ScatterChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
+import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
+// ledger/ 섹션 파일들이 워크벤치를 단일 진입점으로 import — 포매터 SSOT는 lib/branch/ledger-format
+export { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import {
   classifySalesLedgerProductCategory,
   classifySalesLedgerSoftwareSubtype,
@@ -567,20 +554,6 @@ function shiftMonth(ym: string, delta: number): string {
   const [year, month] = ym.split("-").map(Number)
   const date = new Date(Date.UTC(year, month - 1 + delta, 1))
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
-}
-
-export function formatMoney(value: number | null | undefined) {
-  const numeric = Number(value ?? 0)
-  if (Math.abs(numeric) >= 10_000) {
-    return `¥${(numeric / 10_000).toLocaleString("ko-KR", {
-      maximumFractionDigits: 1,
-    })}만`
-  }
-  return `¥${numeric.toLocaleString("ko-KR")}`
-}
-
-export function formatPercent(value: number | null | undefined) {
-  return `${Number(value ?? 0).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`
 }
 
 export function formatDateTime(value: string | null | undefined) {
@@ -1359,6 +1332,43 @@ function ErrorPanel({ message }: { message: string }) {
   )
 }
 
+// recharts 사용 차트 7종은 별도 모듈로 분리해 기본 렌즈(REV)의 초기 번들에서 recharts를 제거한다.
+// DSH/KPI 렌즈에서만 실제로 렌더되므로 지연 로드해도 체감 지연이 없다.
+export const PacingChart = dynamic(() => import("./SalesLedgerCharts").then((m) => m.PacingChart), {
+  ssr: false,
+  loading: () => <LoadingPanel label="차트를 불러오는 중" />,
+})
+
+export const MemberBarChart = dynamic(() => import("./SalesLedgerCharts").then((m) => m.MemberBarChart), {
+  ssr: false,
+  loading: () => <LoadingPanel label="차트를 불러오는 중" />,
+})
+
+export const RevWeekForecastChart = dynamic(() => import("./SalesLedgerCharts").then((m) => m.RevWeekForecastChart), {
+  ssr: false,
+  loading: () => <LoadingPanel label="주차별 차트를 불러오는 중" />,
+})
+
+export const KpiTeamChart = dynamic(() => import("./SalesLedgerCharts").then((m) => m.KpiTeamChart), {
+  ssr: false,
+  loading: () => <LoadingPanel label="팀 차트를 불러오는 중" />,
+})
+
+export const KpiActivityChart = dynamic(() => import("./SalesLedgerCharts").then((m) => m.KpiActivityChart), {
+  ssr: false,
+  loading: () => <LoadingPanel label="활동 차트를 불러오는 중" />,
+})
+
+export const KpiGapChart = dynamic(() => import("./SalesLedgerCharts").then((m) => m.KpiGapChart), {
+  ssr: false,
+  loading: () => <LoadingPanel label="갭 차트를 불러오는 중" />,
+})
+
+export const KpiRevenueActivityScatter = dynamic(() => import("./SalesLedgerCharts").then((m) => m.KpiRevenueActivityScatter), {
+  ssr: false,
+  loading: () => <LoadingPanel label="산점도를 불러오는 중" />,
+})
+
 function RevSortHeader({
   label,
   sortKey,
@@ -1394,86 +1404,6 @@ function RevSortHeader({
   )
 }
 
-export function PacingChart({ summary }: { summary: BranchSummaryResponse | null }) {
-  const data = useMemo(() => {
-    const months = summary?.monthly_series?.months ?? []
-    const goals = summary?.monthly_series?.goal_cum ?? []
-    const actuals = summary?.monthly_series?.revenue_cum ?? []
-    const trends = summary?.monthly_series?.revenue_trend_cum ?? []
-    return months.map((month, index) => ({
-      month: `${Number(month.slice(5, 7))}월`,
-      goal: goals[index] ?? 0,
-      actual: actuals[index] ?? 0,
-      trend: trends[index] ?? 0,
-    }))
-  }, [summary])
-
-  if (data.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-6 text-center text-[12px] text-[#615D59]">
-        월별 누적 데이터가 아직 없습니다.
-      </div>
-    )
-  }
-
-  return (
-    <ResponsiveContainer width="100%" height={238}>
-      <AreaChart data={data} margin={{ top: 10, right: 18, left: -8, bottom: 0 }}>
-        <defs>
-          <linearGradient id="ledgerActual" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="5%" stopColor="#084734" stopOpacity={0.22} />
-            <stop offset="95%" stopColor="#084734" stopOpacity={0.02} />
-          </linearGradient>
-          <linearGradient id="ledgerTrend" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="5%" stopColor="#A8741A" stopOpacity={0.2} />
-            <stop offset="95%" stopColor="#A8741A" stopOpacity={0.02} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid stroke="#E8E8E4" strokeDasharray="3 5" vertical={false} />
-        <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(Number(v))} width={58} />
-        <Tooltip
-          formatter={(value) => formatMoney(Number(value))}
-          contentStyle={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, fontSize: 12 }}
-        />
-        <Area type="monotone" dataKey="goal" name="목표" stroke="#A39E98" strokeWidth={2} fill="transparent" strokeDasharray="4 4" />
-        <Area type="monotone" dataKey="trend" name="예상 포함" stroke="#A8741A" strokeWidth={2} fill="url(#ledgerTrend)" />
-        <Area type="monotone" dataKey="actual" name="실적" stroke="#084734" strokeWidth={2.4} fill="url(#ledgerActual)" />
-      </AreaChart>
-    </ResponsiveContainer>
-  )
-}
-
-export function MemberBarChart({ rows }: { rows: BranchKpiMemberRow[] }) {
-  const data = rows
-    .slice()
-    .sort((a, b) => b.goal - a.goal)
-    .slice(0, 8)
-    .map((row) => ({
-      name: row.member,
-      목표: row.goal,
-      실적: row.status,
-    }))
-
-  if (data.length === 0) return null
-
-  return (
-    <ResponsiveContainer width="100%" height={Math.max(180, data.length * 31)}>
-      <BarChart data={data} layout="vertical" margin={{ top: 6, right: 18, bottom: 0, left: 0 }}>
-        <CartesianGrid stroke="#E8E8E4" strokeDasharray="3 5" horizontal={false} />
-        <XAxis type="number" hide />
-        <YAxis dataKey="name" type="category" width={72} tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} />
-        <Tooltip
-          formatter={(value) => formatMoney(Number(value))}
-          contentStyle={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, fontSize: 12 }}
-        />
-        <Bar dataKey="목표" fill="#D9D6D0" radius={[0, 4, 4, 0]} barSize={8} />
-        <Bar dataKey="실적" fill="#084734" radius={[0, 4, 4, 0]} barSize={8} />
-      </BarChart>
-    </ResponsiveContainer>
-  )
-}
-
 export function ChartLegend({ items }: { items: Array<{ label: string; color: string; dashed?: boolean }> }) {
   return (
     <div className="mt-3 flex flex-wrap gap-3 text-[11px] font-semibold text-[#615D59]">
@@ -1486,412 +1416,6 @@ export function ChartLegend({ items }: { items: Array<{ label: string; color: st
           {item.label}
         </span>
       ))}
-    </div>
-  )
-}
-
-const WEEK_SERIES: Array<{
-  key: "confirmed" | "highConfidence" | "open" | "inferred" | "monthlyOnly"
-  label: string
-  color: string
-}> = [
-  { key: "confirmed", label: "확정", color: "#084734" },
-  { key: "highConfidence", label: "고확도", color: "#1E5DA8" },
-  { key: "open", label: "예정", color: "#A8741A" },
-  { key: "inferred", label: "일자 추정", color: "#6B7280" },
-  { key: "monthlyOnly", label: "월합계만", color: "#D9D6D0" },
-]
-
-// 각 스택 세그먼트에 세로 그라디언트(위=선명한 신호색, 아래=베이스)를 입혀 평면 막대에 깊이를 준다.
-// 색상은 DESIGN.md 상태 스케일(확정=그린, 고확도=인포블루, 예정=워닝앰버)의 의미를 유지하되,
-// 확정↔고확도 경계가 흐려 보이지 않도록 sheen 톤의 채도를 올려 두 색의 색상거리를 벌렸다.
-// (실제 경계 가독성은 아래 makeStackSegmentShape의 흰색 세퍼레이터 스트로크가 1차로 보장한다.)
-const WEEK_SERIES_GRADIENT: Record<
-  "confirmed" | "highConfidence" | "open" | "inferred" | "monthlyOnly",
-  { id: string; from: string; to: string }
-> = {
-  confirmed: { id: "rwfGradConfirmed", from: "#12A574", to: "#084734" },
-  highConfidence: { id: "rwfGradHigh", from: "#4C86D6", to: "#1E5DA8" },
-  open: { id: "rwfGradOpen", from: "#DDA23C", to: "#A8741A" },
-  inferred: { id: "rwfGradInferred", from: "#98A1AC", to: "#6B7280" },
-  monthlyOnly: { id: "rwfGradMonthly", from: "#EDEAE4", to: "#D9D6D0" },
-}
-
-// 진행 바(확정/월목표, 확정+고확도/월목표)는 막대 차트와 같은 톤을 그대로 재사용 — 색 두 벌 관리 방지.
-const PROGRESS_GRADIENT = {
-  confirmed: WEEK_SERIES_GRADIENT.confirmed,
-  covered: WEEK_SERIES_GRADIENT.highConfidence,
-}
-
-// SVG 텍스트는 DOM 측정 없이 폭을 알 수 없어 근사치를 쓴다 — 한글/CJK 글리프는 라틴 문자보다 넓으므로 가중치를 분리.
-function estimateTextWidth(text: string, fontSize: number) {
-  let width = 0
-  for (const ch of text) {
-    const isWide = /[ㄱ-힝一-鿿]/.test(ch)
-    width += isWide ? fontSize * 1.05 : fontSize * 0.62
-  }
-  return width
-}
-
-// 스택 순서(아래→위) 단일 소스 — WEEK_SERIES와 동일 순서라 Bar JSX 나열 순서와도 일치해야 한다.
-const STACK_KEYS_BOTTOM_TO_TOP: Array<"confirmed" | "highConfidence" | "open" | "inferred" | "monthlyOnly"> = [
-  "confirmed",
-  "highConfidence",
-  "open",
-  "inferred",
-  "monthlyOnly",
-]
-
-function roundedRectPath(x: number, y: number, width: number, height: number, corner: { tl: number; tr: number; bl: number; br: number }) {
-  const w = Math.max(width, 0.01)
-  const h = Math.max(height, 0.01)
-  const cap = Math.min(w / 2, h / 2)
-  const tl = Math.max(0, Math.min(corner.tl, cap))
-  const tr = Math.max(0, Math.min(corner.tr, cap))
-  const bl = Math.max(0, Math.min(corner.bl, cap))
-  const br = Math.max(0, Math.min(corner.br, cap))
-  return [
-    `M${x + tl},${y}`,
-    `H${x + w - tr}`,
-    tr ? `A${tr},${tr} 0 0 1 ${x + w},${y + tr}` : "",
-    `V${y + h - br}`,
-    br ? `A${br},${br} 0 0 1 ${x + w - br},${y + h}` : "",
-    `H${x + bl}`,
-    bl ? `A${bl},${bl} 0 0 1 ${x},${y + h - bl}` : "",
-    `V${y + tl}`,
-    tl ? `A${tl},${tl} 0 0 1 ${x + tl},${y}` : "",
-    "Z",
-  ]
-    .filter(Boolean)
-    .join(" ")
-}
-
-// 주차별로 실제 값이 있는 세그먼트만 놓고 맨 아래/맨 위를 판정해 그때그때 둥근 모서리를 준다.
-// (예: 확정 없이 고확도만 있는 주는 고확도 세그먼트가 아래쪽 둥근 모서리를 대신 받는다 — 항상 알약 모양 유지.)
-// 세그먼트 사이 흰 스트로크는 그라디언트 경계가 흐려 보이는 것을 막는 1차 가독성 장치.
-function makeStackSegmentShape(seriesKey: (typeof STACK_KEYS_BOTTOM_TO_TOP)[number]) {
-  const RADIUS = 6
-  return function StackSegmentShape(props: { x?: unknown; y?: unknown; width?: unknown; height?: unknown; payload?: RevWeekPoint; fill?: string }) {
-    const x = Number(props.x ?? 0)
-    const y = Number(props.y ?? 0)
-    const width = Number(props.width ?? 0)
-    const height = Number(props.height ?? 0)
-    if (!Number.isFinite(height) || height <= 0.5 || !Number.isFinite(width) || width <= 0) return <g />
-    const presentKeys = STACK_KEYS_BOTTOM_TO_TOP.filter((key) => Number(props.payload?.[key] ?? 0) > 0)
-    const isBottom = presentKeys[0] === seriesKey
-    const isTop = presentKeys[presentKeys.length - 1] === seriesKey
-    const d = roundedRectPath(x, y, width, height, {
-      tl: isTop ? RADIUS : 0,
-      tr: isTop ? RADIUS : 0,
-      bl: isBottom ? RADIUS : 0,
-      br: isBottom ? RADIUS : 0,
-    })
-    return <path d={d} fill={props.fill} stroke="#FFFFFF" strokeWidth={1.25} strokeLinejoin="round" />
-  }
-}
-
-function RevWeekChartTooltip({
-  active,
-  payload,
-  label,
-  weeklyTarget,
-}: {
-  active?: boolean
-  payload?: Array<{ payload?: RevWeekPoint }>
-  label?: string | number
-  weeklyTarget?: number | null
-}) {
-  const point = payload?.[0]?.payload
-  if (!active || !point || point.total <= 0) return null
-  const paceDelta = weeklyTarget != null && weeklyTarget > 0 ? point.total - weeklyTarget : null
-  return (
-    <div className="min-w-[204px] rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5 text-[11px] shadow-[0_16px_40px_rgba(17,17,16,0.16)]">
-      <div className="flex items-center justify-between gap-3">
-        <span className="font-bold text-[#111110]">{label} 합계</span>
-        <span className="font-bold tabular-nums text-[#111110]">{formatMoney(point.total)}</span>
-      </div>
-      <div className="mt-2 space-y-1">
-        {WEEK_SERIES.map((series) => {
-          const value = point[series.key]
-          if (value <= 0) return null
-          const gradient = WEEK_SERIES_GRADIENT[series.key]
-          return (
-            <div key={series.key} className="flex items-center justify-between gap-3">
-              <span className="inline-flex items-center gap-1.5 font-semibold text-[#615D59]">
-                <span
-                  className="h-2 w-2 rounded-[3px]"
-                  style={{ backgroundImage: `linear-gradient(180deg, ${gradient.from}, ${gradient.to})` }}
-                />
-                {series.label}
-              </span>
-              <span className="font-bold tabular-nums text-[#111110]">
-                {formatMoney(value)}
-                <span className="ml-1 font-semibold text-[#A39E98]">{formatPercent((value / point.total) * 100)}</span>
-              </span>
-            </div>
-          )
-        })}
-      </div>
-      {paceDelta != null && (
-        <div className="mt-2 flex items-center justify-between gap-3 border-t border-[#F0F0EC] pt-1.5">
-          <span className="font-semibold text-[#615D59]">주 평균 목표 대비</span>
-          <span className={`font-bold tabular-nums ${paceDelta >= 0 ? "text-[#084734]" : "text-[#B43E3E]"}`}>
-            {paceDelta >= 0 ? "+" : "-"}
-            {formatMoney(Math.abs(paceDelta))}
-          </span>
-        </div>
-      )}
-      <p className="mt-2 border-t border-[#F0F0EC] pt-1.5 text-[10px] font-semibold text-[#A39E98]">입력 행 {point.rows}건</p>
-    </div>
-  )
-}
-
-// 총액 라벨: 피크 주차는 그린 필 뱃지(헤더 '피크' 칩과 시각 연결), 나머지는 담백한 다크 텍스트.
-function makeWeekTotalLabel(peakValue: number) {
-  return function WeekTotalLabel(props: { x?: unknown; y?: unknown; value?: unknown }) {
-    const value = Number(props.value ?? 0)
-    const x = Number(props.x ?? 0)
-    const y = Number(props.y ?? 0)
-    if (!Number.isFinite(value) || value <= 0 || !Number.isFinite(x) || !Number.isFinite(y)) return <g />
-    const text = formatMoney(value)
-    const isPeak = peakValue > 0 && value >= peakValue
-    if (isPeak) {
-      const pillW = estimateTextWidth(text, 10.5) + 16
-      const pillH = 16
-      const pillY = y - 23
-      return (
-        <g>
-          <rect x={x - pillW / 2} y={pillY} width={pillW} height={pillH} rx={8} fill="#ECFDF5" stroke="#BDEFD8" />
-          <text
-            x={x}
-            y={pillY + pillH / 2}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fontSize={10.5}
-            fontWeight={700}
-            fill="#084734"
-          >
-            {text}
-          </text>
-        </g>
-      )
-    }
-    return (
-      <text x={x} y={y - 8} textAnchor="middle" fontSize={10.5} fontWeight={700} fill="#111110">
-        {text}
-      </text>
-    )
-  }
-}
-
-// 주 평균 목표선 라벨: 플롯 우측 끝에 고정된 다크 칩 — 어떤 세그먼트색 위에 걸쳐도 대비가 유지된다.
-function makeWeeklyTargetLabel(value: number) {
-  return function WeeklyTargetLabel(props: { viewBox?: { x?: unknown; y?: unknown; width?: unknown; height?: unknown } }) {
-    const viewBox = props.viewBox ?? {}
-    const x = Number(viewBox.x ?? NaN)
-    const y = Number(viewBox.y ?? NaN)
-    const width = Number(viewBox.width ?? NaN)
-    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width)) return <g />
-    const text = `주 평균 ${formatMoney(value)}`
-    const pillW = estimateTextWidth(text, 9.5) + 14
-    const pillH = 18
-    const pillRight = x + width
-    const pillX = pillRight - pillW
-    return (
-      <g>
-        <rect x={pillX} y={y - pillH / 2} width={pillW} height={pillH} rx={9} fill="#31302E" />
-        <text
-          x={pillX + pillW / 2}
-          y={y}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontSize={9.5}
-          fontWeight={700}
-          fill="#FFFFFF"
-        >
-          {text}
-        </text>
-      </g>
-    )
-  }
-}
-
-export function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]; monthGoal?: number | null }) {
-  const hasData = data.some((item) => item.total > 0)
-  if (!hasData) {
-    return (
-      <div className="flex min-h-[238px] items-center justify-center rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-6 text-center text-[12px] leading-relaxed text-[#615D59]">
-        선택 월에 표시할 주차별 REV 금액이 없습니다.
-      </div>
-    )
-  }
-
-  const seriesTotals = WEEK_SERIES.map((series) => ({
-    ...series,
-    total: data.reduce((sum, item) => sum + item[series.key], 0),
-  }))
-  const monthTotal = data.reduce((sum, item) => sum + item.total, 0)
-  const confirmedTotal = seriesTotals.find((series) => series.key === "confirmed")?.total ?? 0
-  const coveredTotal = confirmedTotal + (seriesTotals.find((series) => series.key === "highConfidence")?.total ?? 0)
-  const peakValue = data.reduce((max, item) => Math.max(max, item.total), 0)
-  // 주 평균 목표 = 월 목표 ÷ 표시 주차 수. 각 막대가 페이스를 넘겼는지 가늠하는 기준선.
-  const weeklyTarget = monthGoal != null && monthGoal > 0 && data.length > 0 ? monthGoal / data.length : null
-  const confirmedRemaining = monthGoal != null && monthGoal > 0 ? monthGoal - confirmedTotal : null
-
-  return (
-    <div>
-      <ResponsiveContainer width="100%" height={264}>
-        <ComposedChart data={data} margin={{ top: 30, right: 16, left: -8, bottom: 0 }}>
-          <defs>
-            {WEEK_SERIES.map((series) => {
-              const gradient = WEEK_SERIES_GRADIENT[series.key]
-              return (
-                <linearGradient key={gradient.id} id={gradient.id} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={gradient.from} />
-                  <stop offset="100%" stopColor={gradient.to} />
-                </linearGradient>
-              )
-            })}
-          </defs>
-          <CartesianGrid stroke="#ECEBE7" strokeDasharray="2 6" vertical={false} />
-          <XAxis dataKey="week" tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} dy={2} />
-          <YAxis tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(Number(v))} width={58} />
-          <Tooltip content={<RevWeekChartTooltip weeklyTarget={weeklyTarget} />} cursor={{ fill: "rgba(8,71,52,0.045)" }} />
-          {weeklyTarget != null && (
-            <ReferenceLine
-              y={weeklyTarget}
-              stroke="#FFFFFF"
-              strokeWidth={4.5}
-              strokeOpacity={0.7}
-              ifOverflow="extendDomain"
-            />
-          )}
-          {weeklyTarget != null && (
-            <ReferenceLine
-              y={weeklyTarget}
-              stroke="#31302E"
-              strokeWidth={1.75}
-              strokeOpacity={0.85}
-              strokeDasharray="5 4"
-              strokeLinecap="round"
-              ifOverflow="extendDomain"
-              label={makeWeeklyTargetLabel(weeklyTarget)}
-            />
-          )}
-          <Bar dataKey="confirmed" name="확정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.confirmed.id})`} shape={makeStackSegmentShape("confirmed")} maxBarSize={48} />
-          <Bar dataKey="highConfidence" name="고확도" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.highConfidence.id})`} shape={makeStackSegmentShape("highConfidence")} maxBarSize={48} />
-          <Bar dataKey="open" name="예정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.open.id})`} shape={makeStackSegmentShape("open")} maxBarSize={48} />
-          <Bar dataKey="inferred" name="일자 추정" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.inferred.id})`} shape={makeStackSegmentShape("inferred")} maxBarSize={48} />
-          <Bar dataKey="monthlyOnly" name="월합계만" stackId="week" fill={`url(#${WEEK_SERIES_GRADIENT.monthlyOnly.id})`} shape={makeStackSegmentShape("monthlyOnly")} maxBarSize={48} />
-          <Line
-            type="monotone"
-            dataKey="total"
-            stroke="transparent"
-            strokeWidth={0}
-            dot={false}
-            activeDot={false}
-            isAnimationActive={false}
-            label={makeWeekTotalLabel(peakValue)}
-          />
-        </ComposedChart>
-      </ResponsiveContainer>
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]">
-        {seriesTotals
-          .filter((series) => series.total > 0)
-          .map((series) => {
-            const gradient = WEEK_SERIES_GRADIENT[series.key]
-            const share = monthTotal > 0 ? (series.total / monthTotal) * 100 : 0
-            return (
-              <span key={series.key} className="inline-flex items-center gap-1.5">
-                <span
-                  className="h-3 w-3 rounded-[4px] ring-1 ring-inset ring-black/5"
-                  style={{ backgroundImage: `linear-gradient(180deg, ${gradient.from}, ${gradient.to})` }}
-                />
-                <span className="font-semibold text-[#615D59]">{series.label}</span>
-                <span className="font-bold tabular-nums text-[#111110]">{formatMoney(series.total)}</span>
-                <span className="font-semibold tabular-nums text-[#A39E98]">{formatPercent(share)}</span>
-              </span>
-            )
-          })}
-        {weeklyTarget != null && (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-0 w-3.5 border-t-2 border-dashed border-[#31302E]/70" />
-            <span className="font-semibold text-[#615D59]">주 평균 목표</span>
-            <span className="font-bold tabular-nums text-[#111110]">{formatMoney(weeklyTarget)}</span>
-          </span>
-        )}
-      </div>
-      {monthGoal != null && monthGoal > 0 && (
-        <div className="mt-3.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-gradient-to-b from-white to-[#FAFAF8] p-3.5">
-          <div className="mb-2.5 flex items-center justify-between gap-2">
-            <span className="text-[11px] font-bold text-[#111110]">월 목표 대비 진행</span>
-            <span className="text-[10.5px] font-semibold tabular-nums text-[#615D59]">
-              목표 <span className="font-bold text-[#111110]">{formatMoney(monthGoal)}</span>
-            </span>
-          </div>
-          <div className="space-y-2.5">
-            <CompactProgress
-              label="확정 / 월 목표"
-              value={confirmedTotal}
-              max={monthGoal}
-              gradient={PROGRESS_GRADIENT.confirmed}
-              meta={`${formatMoney(confirmedTotal)} · ${formatPercent((confirmedTotal / monthGoal) * 100)}`}
-            />
-            <CompactProgress
-              label="확정+고확도 / 월 목표"
-              value={coveredTotal}
-              max={monthGoal}
-              gradient={PROGRESS_GRADIENT.covered}
-              meta={`${formatMoney(coveredTotal)} · ${formatPercent((coveredTotal / monthGoal) * 100)}`}
-            />
-          </div>
-          <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-[rgba(0,0,0,0.06)] pt-2 text-[10.5px] font-semibold text-[#A39E98]">
-            <span>
-              월 합계 <span className="font-bold text-[#615D59]">{formatMoney(monthTotal)}</span>
-            </span>
-            {confirmedRemaining != null &&
-              (confirmedRemaining > 0 ? (
-                <span>
-                  확정까지 <span className="font-bold text-[#B43E3E]">{formatMoney(confirmedRemaining)}</span>
-                </span>
-              ) : (
-                <span className="text-[#084734]">
-                  확정 목표 달성 <span className="font-bold">+{formatMoney(Math.abs(confirmedRemaining))}</span>
-                </span>
-              ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CompactProgress({
-  label,
-  value,
-  max,
-  gradient = PROGRESS_GRADIENT.confirmed,
-  meta,
-}: {
-  label: string
-  value: number
-  max: number
-  gradient?: { from: string; to: string }
-  meta?: string
-}) {
-  const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px]">
-        <span className="font-bold text-[#111110]">{label}</span>
-        <span className="font-semibold tabular-nums text-[#615D59]">{meta ?? formatMoney(value)}</span>
-      </div>
-      <div className="relative h-2.5 overflow-hidden rounded-full bg-[#EDEBE7] shadow-[inset_0_1px_2px_rgba(17,17,16,0.06)]">
-        <div
-          className="h-full rounded-full transition-[width] duration-500 ease-out"
-          style={{ width: `${pct}%`, backgroundImage: `linear-gradient(90deg, ${gradient.from}, ${gradient.to})` }}
-        />
-      </div>
     </div>
   )
 }
@@ -2229,141 +1753,6 @@ export function DshMonthlyNumbersTable({ rows, selectedMonth }: { rows: MonthlyP
         </tfoot>
       </table>
     </div>
-  )
-}
-
-export function KpiTeamChart({ rows }: { rows: Array<{ team: string; goal: number; status: number; pacing_pct: number }> }) {
-  const data = rows.map((row) => ({
-    team: row.team,
-    목표: row.goal,
-    실적: row.status,
-    달성률: row.pacing_pct,
-  }))
-  if (data.length === 0) return null
-  return (
-    <ResponsiveContainer width="100%" height={Math.max(160, data.length * 44)}>
-      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 18, bottom: 0, left: 0 }}>
-        <CartesianGrid stroke="#E8E8E4" strokeDasharray="3 5" horizontal={false} />
-        <XAxis type="number" hide />
-        <YAxis dataKey="team" type="category" width={48} tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} />
-        <Tooltip
-          formatter={(value, name) => name === "달성률" ? formatPercent(Number(value)) : formatMoney(Number(value))}
-          contentStyle={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, fontSize: 12 }}
-        />
-        <Bar dataKey="목표" fill="#D9D6D0" radius={[0, 4, 4, 0]} barSize={9} />
-        <Bar dataKey="실적" fill="#084734" radius={[0, 4, 4, 0]} barSize={9} />
-      </BarChart>
-    </ResponsiveContainer>
-  )
-}
-
-export function KpiActivityChart({ rows }: { rows: KpiMetricView[] }) {
-  const data = rows.map((row) => ({
-    metric: row.metric,
-    목표: row.goal,
-    실적: row.actual,
-    달성률: row.pct,
-  }))
-  if (data.length === 0) return null
-  return (
-    <ResponsiveContainer width="100%" height={Math.max(190, data.length * 34)}>
-      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 18, bottom: 0, left: 0 }}>
-        <CartesianGrid stroke="#E8E8E4" strokeDasharray="3 5" horizontal={false} />
-        <XAxis type="number" hide />
-        <YAxis dataKey="metric" type="category" width={58} tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} />
-        <Tooltip
-          formatter={(value, name) => name === "달성률" ? formatPercent(Number(value)) : Number(value).toLocaleString("ko-KR")}
-          contentStyle={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, fontSize: 12 }}
-        />
-        <Bar dataKey="목표" fill="#D9D6D0" radius={[0, 4, 4, 0]} barSize={8} />
-        <Bar dataKey="실적" fill="#1E5DA8" radius={[0, 4, 4, 0]} barSize={8} />
-      </BarChart>
-    </ResponsiveContainer>
-  )
-}
-
-export function KpiGapChart({ rows }: { rows: KpiMemberView[] }) {
-  const data = rows
-    .map((item) => ({
-      member: item.row.member,
-      gap: item.row.status - item.row.goal,
-      status: item.row.status,
-      goal: item.row.goal,
-    }))
-    .sort((a, b) => a.gap - b.gap || compareText(a.member, b.member))
-    .slice(0, 8)
-
-  if (data.length === 0) return null
-
-  return (
-    <ResponsiveContainer width="100%" height={Math.max(190, data.length * 32)}>
-      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 18, bottom: 0, left: 0 }}>
-        <CartesianGrid stroke="#E8E8E4" strokeDasharray="3 5" horizontal={false} />
-        <XAxis type="number" tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} tickFormatter={(v) => formatMoney(Number(v))} />
-        <YAxis dataKey="member" type="category" width={72} tick={{ fontSize: 11, fill: "#615D59" }} axisLine={false} tickLine={false} />
-        <ReferenceLine x={0} stroke="#A39E98" />
-        <Tooltip
-          formatter={(value, name) => name === "gap" ? formatMoney(Number(value)) : formatMoney(Number(value))}
-          contentStyle={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, fontSize: 12 }}
-        />
-        <Bar dataKey="gap" name="Gap" radius={[0, 4, 4, 0]} barSize={10}>
-          {data.map((item) => (
-            <Cell key={item.member} fill={item.gap >= 0 ? "#084734" : "#B43E3E"} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  )
-}
-
-export function KpiRevenueActivityScatter({ rows }: { rows: KpiMemberView[] }) {
-  const data = rows.map((item) => ({
-    member: item.row.member,
-    activityPct: item.activityPct,
-    revenuePct: item.row.achievement_pct,
-    revenue: item.row.status,
-    deals: item.row.deals_total,
-  }))
-
-  if (data.length === 0) return null
-
-  return (
-    <ResponsiveContainer width="100%" height={252}>
-      <ScatterChart margin={{ top: 10, right: 18, bottom: 10, left: -6 }}>
-        <CartesianGrid stroke="#E8E8E4" strokeDasharray="3 5" />
-        <XAxis
-          dataKey="activityPct"
-          name="활동 달성률"
-          unit="%"
-          type="number"
-          tick={{ fontSize: 11, fill: "#615D59" }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          dataKey="revenuePct"
-          name="매출 달성률"
-          unit="%"
-          type="number"
-          tick={{ fontSize: 11, fill: "#615D59" }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <ReferenceLine x={75} stroke="#ECD29C" strokeDasharray="4 4" />
-        <ReferenceLine y={75} stroke="#ECD29C" strokeDasharray="4 4" />
-        <Tooltip
-          formatter={(value, name) => {
-            if (name === "activityPct") return [formatPercent(Number(value)), "활동 달성률"]
-            if (name === "revenuePct") return [formatPercent(Number(value)), "매출 달성률"]
-            if (name === "revenue") return [formatMoney(Number(value)), "매출"]
-            return [Number(value).toLocaleString("ko-KR"), String(name)]
-          }}
-          labelFormatter={(_, payload) => payload?.[0]?.payload?.member ?? "담당자"}
-          contentStyle={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, fontSize: 12 }}
-        />
-        <Scatter name="담당자" data={data} fill="#084734" />
-      </ScatterChart>
-    </ResponsiveContainer>
   )
 }
 
@@ -2868,23 +2257,24 @@ function useMatrixEditor({
   const [buffer, setBuffer] = useState("")
   const [editConfidence, setEditConfidence] = useState<DraftConfidence>("expected")
 
+  // 편집 버퍼·확도의 최신값 미러(latest-ref). commitBuffer/onEditingKeyDown가 이 값을 클로저 대신
+  // 여기서 읽어 콜백 identity를 buffer/editConfidence 변화와 무관하게 고정한다 — actions 객체가
+  // 매 키입력마다 새로 만들어져 수백 셀 memo를 깨는 문제를 없애기 위함(편집 셀만 리렌더).
+  // 두 ref는 커밋 후 effect에서 갱신한다(렌더 중 ref 쓰기 금지 규칙). 읽는 쪽(commitBuffer/
+  // onEditingKeyDown)은 전부 사용자 이벤트 핸들러라, 직전 렌더의 effect가 이미 반영된 뒤 실행돼 stale 없음.
+  const bufferRef = useRef(buffer)
+  const editConfidenceRef = useRef(editConfidence)
+  useEffect(() => {
+    bufferRef.current = buffer
+    editConfidenceRef.current = editConfidence
+  }, [buffer, editConfidence])
+
   // 편집가능 셀 순번 조회 O(1) — 방향키/Tab 이동에 사용. 주차 셀은 `::wN`까지 포함한 키.
   const indexByKey = useMemo(() => {
     const map = new Map<string, number>()
     editableCells.forEach((coord, index) => map.set(matrixCoordKey(coord), index))
     return map
   }, [editableCells])
-
-  const isSelected = useCallback(
-    (rowId: string, month: string, week?: number) =>
-      selected?.rowId === rowId && selected.month === month && (selected.week ?? -1) === (week ?? -1),
-    [selected],
-  )
-  const isEditing = useCallback(
-    (rowId: string, month: string, week?: number) =>
-      editing?.rowId === rowId && editing.month === month && (editing.week ?? -1) === (week ?? -1),
-    [editing],
-  )
 
   const selectCell = useCallback((rowId: string, month: string, week?: number) => {
     setEditing(null)
@@ -2914,9 +2304,10 @@ function useMatrixEditor({
   }, [])
 
   // 현재 편집 버퍼를 커밋(부모 onCommitCell). 값이 이전과 같으면 스킵(중복 draft 방지).
+  // buffer는 latest-ref(bufferRef)로 읽어 콜백 identity를 고정한다(actions 안정화).
   const commitBuffer = useCallback(
     (coord: MatrixCellCoord, confidence: DraftConfidence): boolean => {
-      const amount = parseMatrixAmount(buffer)
+      const amount = parseMatrixAmount(bufferRef.current)
       const previous = cellValue(coord)
       const previousConfidence = cellConfidence(coord)
       // 금액·확도 둘 다 그대로면 저장하지 않는다. (주차 셀도 cellValue/cellConfidence가 주차 기준이라 동일 가드 적용)
@@ -2925,7 +2316,7 @@ function useMatrixEditor({
       onCommitCell(coord.rowId, coord.month, amount, confidence, coord.week)
       return true
     },
-    [buffer, cellConfidence, cellValue, onCommitCell],
+    [cellConfidence, cellValue, onCommitCell],
   )
 
   const moveSelection = useCallback(
@@ -2969,14 +2360,14 @@ function useMatrixEditor({
     (event: React.KeyboardEvent<HTMLInputElement>, coord: MatrixCellCoord) => {
       if (event.key === "Enter") {
         event.preventDefault()
-        commitBuffer(coord, editConfidence)
+        commitBuffer(coord, editConfidenceRef.current)
         setEditing(null)
         moveWithinRowOrNext(coord, "down")
         return
       }
       if (event.key === "Tab") {
         event.preventDefault()
-        commitBuffer(coord, editConfidence)
+        commitBuffer(coord, editConfidenceRef.current)
         setEditing(null)
         moveWithinRowOrNext(coord, event.shiftKey ? "left" : "right")
         return
@@ -2986,7 +2377,7 @@ function useMatrixEditor({
         cancelEdit()
       }
     },
-    [cancelEdit, commitBuffer, editConfidence, moveWithinRowOrNext],
+    [cancelEdit, commitBuffer, moveWithinRowOrNext],
   )
 
   // 셀렉트(비편집) keydown. 방향키=이동, Enter/F2/숫자=편집 진입, Ctrl/Cmd+D=위 값 채우기.
@@ -3046,25 +2437,34 @@ function useMatrixEditor({
     [beginEdit, cellConfidence, cellValue, editableCells, indexByKey, moveSelection, moveWithinRowOrNext, onCommitCell],
   )
 
+  // 셀 핸들러가 호출하는 액션들 — 전부 identity 안정(콜백 deps가 데이터/펼침에만 반응).
+  // selected/editing/buffer/editConfidence 같은 잦은 상태는 여기 넣지 않고 별도 경로로 내려,
+  // 이 객체를 prop으로 받는 memo 셀들이 선택·타이핑마다 얕은비교가 깨지지 않게 한다.
+  const actions = useMemo(
+    () => ({
+      setBuffer,
+      setEditConfidence,
+      selectCell,
+      beginEdit,
+      cancelEdit,
+      commitBuffer,
+      onEditingKeyDown,
+      onSelectedKeyDown,
+    }),
+    [setBuffer, setEditConfidence, selectCell, beginEdit, cancelEdit, commitBuffer, onEditingKeyDown, onSelectedKeyDown],
+  )
+
   return {
     selected,
     editing,
     buffer,
-    setBuffer,
     editConfidence,
-    setEditConfidence,
-    isSelected,
-    isEditing,
-    selectCell,
-    beginEdit,
-    cancelEdit,
-    commitBuffer,
-    onEditingKeyDown,
-    onSelectedKeyDown,
+    actions,
   }
 }
 
 type MatrixEditor = ReturnType<typeof useMatrixEditor>
+type MatrixEditorActions = MatrixEditor["actions"]
 
 // 매트릭스 셀 본문 숫자. ¥ 없이 축약(formatWeekAmount) — 밀도 우선, 툴팁에 정확 금액.
 // Phase 2: edit* props가 오면 딜행 편집 셀(잠금/미검수/셀렉트/편집 4상태). 없으면(그룹 소계) 읽기전용.
@@ -3078,7 +2478,13 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   locked = false,
   lockLabel = "시트 확정",
   pending = null,
-  editor = null,
+  actions = null,
+  // 선택/편집/버퍼는 부모(스트립)가 이 셀 기준으로 계산해 원시값으로 내린다 — memo가 셀 단위로
+  // 얕은비교되도록. 비편집·비선택 셀은 아래 값들이 상수라 선택·타이핑 리렌더에서 스킵된다.
+  selected = false,
+  isEditingCell = false,
+  editBuffer = "",
+  editConfidence = "expected",
 }: {
   bucket: RevMonthlyBucket
   mismatch?: boolean
@@ -3089,12 +2495,14 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   locked?: boolean
   lockLabel?: string
   pending?: MatrixPendingDraft | null
-  editor?: MatrixEditor | null
+  actions?: MatrixEditorActions | null
+  selected?: boolean
+  isEditingCell?: boolean
+  editBuffer?: string
+  editConfidence?: DraftConfidence
 }) {
   const tone = mismatch ? "mismatch" : matrixBucketTone(bucket)
-  const interactive = Boolean(editor && month && rowId)
-  const selected = interactive ? editor!.isSelected(rowId!, month!) : false
-  const isEditingCell = interactive ? editor!.isEditing(rowId!, month!) : false
+  const interactive = Boolean(actions && month && rowId)
   // 방향키 이동은 selected 상태만 바꾸므로 DOM 포커스를 직접 옮겨야 다음 keydown이 새 셀에서 잡힌다.
   // (클릭은 native focus가 되지만 키보드 이동은 안 됨.) 편집 중이 아닐 때만 셀 자체에 포커스.
   const cellRef = useRef<HTMLTableCellElement | null>(null)
@@ -3127,17 +2535,17 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
         <input
           autoFocus
           inputMode="numeric"
-          value={editor!.buffer}
-          onChange={(event) => editor!.setBuffer(event.target.value)}
-          onKeyDown={(event) => editor!.onEditingKeyDown(event, { rowId: rowId!, month: month! })}
+          value={editBuffer}
+          onChange={(event) => actions!.setBuffer(event.target.value)}
+          onKeyDown={(event) => actions!.onEditingKeyDown(event, { rowId: rowId!, month: month! })}
           onBlur={() => {
-            editor!.commitBuffer({ rowId: rowId!, month: month! }, editor!.editConfidence)
-            editor!.cancelEdit()
+            actions!.commitBuffer({ rowId: rowId!, month: month! }, editConfidence)
+            actions!.cancelEdit()
           }}
           aria-label={`${formatMonthLabel(month!)} 금액(원 단위)`}
           className="h-6 w-full bg-transparent px-1 text-right text-[11px] font-bold tabular-nums text-[#111110] outline-none"
         />
-        <RevMatrixEditPopover confidence={editor!.editConfidence} onPickConfidence={editor!.setEditConfidence} />
+        <RevMatrixEditPopover confidence={editConfidence} onPickConfidence={actions!.setEditConfidence} />
       </td>
     )
   }
@@ -3154,10 +2562,10 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
         tabIndex: editable ? 0 : -1,
         role: "gridcell" as const,
         onClick: () => {
-          if (editable) editor!.selectCell(rowId!, month!)
+          if (editable) actions!.selectCell(rowId!, month!)
         },
         onDoubleClick: () => {
-          if (editable) editor!.beginEdit(rowId!, month!)
+          if (editable) actions!.beginEdit(rowId!, month!)
         },
         onKeyDown: (event: React.KeyboardEvent<HTMLTableCellElement>) => {
           if (!editable) return
@@ -3165,11 +2573,11 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
             // Tab 포커스만 된 셀도 Enter/F2로 선택 진입 — 마우스 클릭 없이 키보드만으로 편집 가능.
             if (event.key === "Enter" || event.key === "F2") {
               event.preventDefault()
-              editor!.selectCell(rowId!, month!)
+              actions!.selectCell(rowId!, month!)
             }
             return
           }
-          editor!.onSelectedKeyDown(event, { rowId: rowId!, month: month! })
+          actions!.onSelectedKeyDown(event, { rowId: rowId!, month: month! })
         },
       }
     : {}
@@ -3221,7 +2629,12 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   lockLabel = "시트 확정",
   editWarning,
   pending = null,
-  editor = null,
+  actions = null,
+  // 월 셀과 동일: 선택/편집/버퍼는 부모(스트립)가 이 칸 기준으로 계산해 원시값으로 내린다.
+  selected = false,
+  isEditingCell = false,
+  editBuffer = "",
+  editConfidence = "expected",
 }: {
   display: number
   isMonthOnly: boolean
@@ -3235,11 +2648,13 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   lockLabel?: string
   editWarning?: string
   pending?: MatrixPendingDraft | null
-  editor?: MatrixEditor | null
+  actions?: MatrixEditorActions | null
+  selected?: boolean
+  isEditingCell?: boolean
+  editBuffer?: string
+  editConfidence?: DraftConfidence
 }) {
-  const interactive = Boolean(editor && month && rowId)
-  const selected = interactive ? editor!.isSelected(rowId!, month!, weekIndex) : false
-  const isEditingCell = interactive ? editor!.isEditing(rowId!, month!, weekIndex) : false
+  const interactive = Boolean(actions && month && rowId)
   const cellRef = useRef<HTMLTableCellElement | null>(null)
   useEffect(() => {
     if (interactive && editable && selected && !isEditingCell) cellRef.current?.focus()
@@ -3265,19 +2680,19 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
         <input
           autoFocus
           inputMode="numeric"
-          value={editor!.buffer}
-          onChange={(event) => editor!.setBuffer(event.target.value)}
-          onKeyDown={(event) => editor!.onEditingKeyDown(event, { rowId: rowId!, month: month!, week: weekIndex })}
+          value={editBuffer}
+          onChange={(event) => actions!.setBuffer(event.target.value)}
+          onKeyDown={(event) => actions!.onEditingKeyDown(event, { rowId: rowId!, month: month!, week: weekIndex })}
           onBlur={() => {
-            editor!.commitBuffer({ rowId: rowId!, month: month!, week: weekIndex }, editor!.editConfidence)
-            editor!.cancelEdit()
+            actions!.commitBuffer({ rowId: rowId!, month: month!, week: weekIndex }, editConfidence)
+            actions!.cancelEdit()
           }}
           aria-label={`${formatMonthLabel(month!)} W${weekIndex + 1} 금액(원 단위)`}
           className="h-6 w-full bg-transparent px-1 text-right text-[11.5px] font-bold tabular-nums text-[#111110] outline-none"
         />
         <RevMatrixEditPopover
-          confidence={editor!.editConfidence}
-          onPickConfidence={editor!.setEditConfidence}
+          confidence={editConfidence}
+          onPickConfidence={actions!.setEditConfidence}
           warning={editWarning}
         />
       </td>
@@ -3293,10 +2708,10 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
         tabIndex: editable ? 0 : -1,
         role: "gridcell" as const,
         onClick: () => {
-          if (editable) editor!.selectCell(rowId!, month!, weekIndex)
+          if (editable) actions!.selectCell(rowId!, month!, weekIndex)
         },
         onDoubleClick: () => {
-          if (editable) editor!.beginEdit(rowId!, month!, undefined, weekIndex)
+          if (editable) actions!.beginEdit(rowId!, month!, undefined, weekIndex)
         },
         onKeyDown: (event: React.KeyboardEvent<HTMLTableCellElement>) => {
           if (!editable) return
@@ -3304,11 +2719,11 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
             // Tab 포커스만 된 칸도 Enter/F2로 선택 진입 — 마우스 클릭 없이 키보드만으로 편집 가능.
             if (event.key === "Enter" || event.key === "F2") {
               event.preventDefault()
-              editor!.selectCell(rowId!, month!, weekIndex)
+              actions!.selectCell(rowId!, month!, weekIndex)
             }
             return
           }
-          editor!.onSelectedKeyDown(event, { rowId: rowId!, month: month!, week: weekIndex })
+          actions!.onSelectedKeyDown(event, { rowId: rowId!, month: month!, week: weekIndex })
         },
       }
     : {}
@@ -3372,6 +2787,9 @@ function RevMatrixWeekCells({
     // month-only 파생 표시(W5의 monthOnlyAmount)는 실제 주차 입력이 아니므로 편집 시작값은 value(0)로 둔다.
     const weekLocked = editContext ? editContext.weekLockedOf(month ?? "", index) : true
     const weekEditable = Boolean(editContext) && !weekLocked && Boolean(editContext?.editableOf(month ?? ""))
+    // 선택/편집은 이 칸 기준으로 계산해 원시값으로 내린다 — 비선택·비편집 칸은 memo 스킵.
+    const weekSelected = Boolean(editContext) && editContext!.isSelectedCell(month ?? "", index)
+    const weekEditing = Boolean(editContext) && editContext!.isEditingCell(month ?? "", index)
     cells.push(
       <RevMatrixWeekCell
         key={index}
@@ -3387,7 +2805,11 @@ function RevMatrixWeekCells({
         lockLabel={editContext?.lockLabel}
         editWarning={editContext ? editContext.weekEditNotice(month ?? "") : undefined}
         pending={editContext ? editContext.weekPendingOf(month ?? "", index) : null}
-        editor={editContext?.editor ?? null}
+        actions={editContext?.actions ?? null}
+        selected={weekSelected}
+        isEditingCell={weekEditing}
+        editBuffer={weekEditing ? editContext!.editBuffer : ""}
+        editConfidence={weekEditing ? editContext!.editConfidence : "expected"}
       />,
     )
   }
@@ -3395,9 +2817,15 @@ function RevMatrixWeekCells({
 }
 
 // 딜행 스트립에만 주입되는 편집 컨텍스트. 그룹 소계행은 이 값을 넘기지 않아 읽기전용 유지.
+// 선택/편집 상태는 이 행 스코프로 좁혀(selected/editing 좌표가 이 행일 때만 non-null) 내려온다 —
+// 각 셀의 선택·편집 여부는 스트립이 여기서 계산해 memo 셀에 원시 boolean으로 전달한다.
 interface RevMatrixEditContext {
   rowId: string
-  editor: MatrixEditor
+  actions: MatrixEditorActions // identity 안정 — 셀 핸들러(선택/편집 시작/커밋/버퍼)용
+  isSelectedCell: (month: string, week?: number) => boolean // 이 행 기준 셀 선택 판정
+  isEditingCell: (month: string, week?: number) => boolean // 이 행 기준 셀 편집 판정
+  editBuffer: string // 편집 중 버퍼 값(편집 셀에만 의미)
+  editConfidence: DraftConfidence // 편집 중 확도(편집 셀에만 의미)
   lockLabel: string // 잠금 아이콘·툴팁 라벨 — 시트 원천은 "시트 확정", 적용 초안은 "장부 반영"
   editableOf: (month: string) => boolean
   lockedOf: (month: string) => boolean
@@ -3447,6 +2875,8 @@ function RevMatrixMonthStrip({
             </Fragment>
           )
         }
+        const monthSelected = Boolean(editContext) && editContext!.isSelectedCell(month)
+        const monthEditing = Boolean(editContext) && editContext!.isEditingCell(month)
         return (
           <RevMatrixMonthCell
             key={month}
@@ -3459,7 +2889,11 @@ function RevMatrixMonthStrip({
             locked={editContext ? editContext.lockedOf(month) : false}
             lockLabel={editContext?.lockLabel}
             pending={editContext ? editContext.pendingOf(month) : null}
-            editor={editContext?.editor ?? null}
+            actions={editContext?.actions ?? null}
+            selected={monthSelected}
+            isEditingCell={monthEditing}
+            editBuffer={monthEditing ? editContext!.editBuffer : ""}
+            editConfidence={monthEditing ? editContext!.editConfidence : "expected"}
           />
         )
       })}
@@ -3610,7 +3044,13 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   active,
   selectedMonth,
   onOpen,
-  editor = null,
+  actions = null,
+  // 선택/편집 좌표는 이 행 스코프로 좁혀서 온다(다른 행 선택이면 null) — 부모가 행별로 계산.
+  // 덕분에 memo가 이 행이 선택/편집에 관여할 때만 리렌더되고, 나머지 행은 스킵된다.
+  selectedCoord = null,
+  editingCoord = null,
+  editBuffer = "",
+  editConfidence = "expected",
   pendingByCell = null,
   density = "regular",
 }: {
@@ -3623,7 +3063,11 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   active: boolean
   selectedMonth: string
   onOpen: (row: LedgerRevenueRow) => void
-  editor?: MatrixEditor | null
+  actions?: MatrixEditorActions | null
+  selectedCoord?: MatrixCellCoord | null
+  editingCoord?: MatrixCellCoord | null
+  editBuffer?: string
+  editConfidence?: DraftConfidence
   pendingByCell?: Map<string, MatrixPendingDraft> | null
   density?: MatrixDensity
 }) {
@@ -3650,11 +3094,19 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
       mismatch: rowWeeklyMismatch(row, month) !== null,
     }
   }
-  // 편집 컨텍스트는 editor가 주입될 때만(딜행) — 그룹 소계행에는 이 컴포넌트를 쓰지 않으므로 항상 딜행.
-  const editContext: RevMatrixEditContext | null = editor
+  // 편집 컨텍스트는 actions가 주입될 때만(딜행) — 그룹 소계행에는 이 컴포넌트를 쓰지 않으므로 항상 딜행.
+  // isSelectedCell/isEditingCell는 행 스코프 좌표(selectedCoord/editingCoord)와 month·week를 비교한다 —
+  // 원 isSelected/isEditing 규약과 동일(행 rowId 일치는 좌표가 이미 이 행일 때만 non-null이라 내포).
+  const editContext: RevMatrixEditContext | null = actions
     ? {
         rowId: row.id,
-        editor,
+        actions,
+        isSelectedCell: (month, week) =>
+          selectedCoord != null && selectedCoord.month === month && (selectedCoord.week ?? -1) === (week ?? -1),
+        isEditingCell: (month, week) =>
+          editingCoord != null && editingCoord.month === month && (editingCoord.week ?? -1) === (week ?? -1),
+        editBuffer,
+        editConfidence,
         lockLabel: row.ledgerOrigin === "draft" ? "장부 반영" : "시트 확정",
         editableOf: (month) => isMatrixCellEditable(row, month),
         lockedOf: (month) => isMatrixCellLocked(row, month),
@@ -3925,8 +3377,8 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
           <td className="border-l border-[#E7E5E1] bg-[#FAFAF8]" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }} />
           {months.map((month) => {
             const column = columnByMonth.get(month) ?? null
-            const span = expandedMonths.has(month) ? 5 : 1
-            const width = span === 5 ? MATRIX_WEEK_W * 5 : MATRIX_MONTH_W
+            const span = expandedMonths.has(month) ? 6 : 1
+            const width = span === 6 ? MATRIX_WEEK_W * 5 + MATRIX_MONTH_W : MATRIX_MONTH_W
             const pct = column && column.goal ? (column.confirmed / column.goal) * 100 : null
             const tone = pct === null ? "text-[#C9C5BF]" : pct >= 100 ? "text-[#084734]" : pct >= 60 ? "text-[#A8741A]" : "text-[#B43E3E]"
             return (
@@ -5200,6 +4652,21 @@ export default function SalesLedgerWorkbench() {
     onCommitCell,
   })
 
+  // 딜행별 편집 prop — selected/editing 좌표를 이 행 스코프로 좁힌다. actions·selected·editing은
+  // 안정 참조라, 이 행이 선택/편집 중이 아니면 매 렌더 같은 값(null/""/"expected")이 되어 RevMatrixDealRow
+  // memo가 스킵된다. 선택·타이핑이 관여하는 행만 리렌더 → 수백 셀 재렌더 없앰. (반환 객체는 매 렌더
+  // 새로 만들어지지만 memo 셀에 직접 넘어가지 않고 개별 prop으로 펼쳐지므로 문제 없음.)
+  const matrixRowEditorProps = (rowId: string) => {
+    const isEditingRow = matrixEditor.editing?.rowId === rowId
+    return {
+      actions: matrixEditor.actions,
+      selectedCoord: matrixEditor.selected?.rowId === rowId ? matrixEditor.selected : null,
+      editingCoord: isEditingRow ? matrixEditor.editing : null,
+      editBuffer: isEditingRow ? matrixEditor.buffer : "",
+      editConfidence: isEditingRow ? matrixEditor.editConfidence : "expected",
+    }
+  }
+
   const toggleRevMonth = useCallback((month: string) => {
     setExpandedRevMonths((prev) => {
       const next = new Set(prev)
@@ -5901,7 +5368,12 @@ export default function SalesLedgerWorkbench() {
                     <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
                       <button
                         type="button"
-                        onClick={() => setSelectedMonth((month) => shiftMonth(month, -1))}
+                        onClick={() =>
+                          setSelectedMonth((month) =>
+                            // 회계연도 밖 값(URL 주입 등)이면 달력 걷기 대신 FY 경계로 스냅한다.
+                            matrixMonths.includes(month) ? shiftMonth(month, -1) : month < matrixMonths[0] ? matrixMonths[0] : matrixMonths[matrixMonths.length - 1],
+                          )
+                        }
                         disabled={matrixMonths.indexOf(selectedMonth) === 0}
                         aria-label="이전 달"
                         title="이전 달 (회계연도 안에서만 이동)"
@@ -5914,7 +5386,11 @@ export default function SalesLedgerWorkbench() {
                       </span>
                       <button
                         type="button"
-                        onClick={() => setSelectedMonth((month) => shiftMonth(month, 1))}
+                        onClick={() =>
+                          setSelectedMonth((month) =>
+                            matrixMonths.includes(month) ? shiftMonth(month, 1) : month > matrixMonths[matrixMonths.length - 1] ? matrixMonths[matrixMonths.length - 1] : matrixMonths[0],
+                          )
+                        }
                         disabled={matrixMonths.indexOf(selectedMonth) === matrixMonths.length - 1}
                         aria-label="다음 달"
                         title="다음 달 (회계연도 안에서만 이동)"
@@ -6404,7 +5880,7 @@ export default function SalesLedgerWorkbench() {
                                               active={selectedRow?.id === row.id}
                                               selectedMonth={selectedMonth}
                                               onOpen={loadDealDetail}
-                                              editor={matrixEditor}
+                                              {...matrixRowEditorProps(row.id)}
                                               pendingByCell={pendingByCell}
                                               density={matrixDensity}
                                             />
@@ -6428,7 +5904,7 @@ export default function SalesLedgerWorkbench() {
                                       active={selectedRow?.id === row.id}
                                       selectedMonth={selectedMonth}
                                       onOpen={loadDealDetail}
-                                      editor={matrixEditor}
+                                      {...matrixRowEditorProps(row.id)}
                                       pendingByCell={pendingByCell}
                                       density={matrixDensity}
                                     />

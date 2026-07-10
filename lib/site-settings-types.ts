@@ -30,6 +30,7 @@ export interface LeadRecord {
   landing_page?: string
   current_page?: string
   referrer?: string
+  confirmed_at?: string
 }
 
 export interface SiteSettings {

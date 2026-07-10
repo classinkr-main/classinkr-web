@@ -32,6 +32,7 @@ import {
   createDelayQueueItem,
 } from "@/lib/repositories/automation-delay"
 import { sendBatchEmail, wrapCampaignHtml } from "@/lib/email"
+import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import { createUnsubscribeUrl } from "@/lib/server/security-tokens"
 import type {
   AutomationRule,
@@ -325,24 +326,39 @@ export async function executeDelayQueueItem(
     throw new Error(`[automation] delay 큐 실행 오류: 규칙 또는 템플릿 없음 (ruleId=${ruleId})`)
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
-  const unsubscribeUrl = baseUrl ? createUnsubscribeUrl(baseUrl, recipient.email) : undefined
-  const sendDate = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
-  const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
+  // executeRule 과 동일한 automation_logs 기록 패턴 — delay 발송도 감사 로그를 남긴다.
+  const log = await createLog({ ruleId, status: "pending" })
 
-  const expandedBody    = await expandAiBlocks(rule.template.body, recipient)
-  const expandedSubject = await expandAiBlocks(rule.template.subject, recipient)
-  const personalizedBody    = personalizeBody(expandedBody, recipient, opts)
-  const personalizedSubject = personalizeBody(expandedSubject, recipient, opts)
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
+    const unsubscribeUrl = baseUrl ? createUnsubscribeUrl(baseUrl, recipient.email) : undefined
+    const sendDate = new Date().toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" })
+    const opts: PersonalizeOpts = { sendDate, unsubscribeUrl }
 
-  const result = await sendBatchEmail([{
-    to: recipient.email,
-    subject: personalizedSubject,
-    html: wrapCampaignHtml(personalizedBody, unsubscribeUrl),
-  }])
+    const expandedBody    = await expandAiBlocks(rule.template.body, recipient)
+    const expandedSubject = await expandAiBlocks(rule.template.subject, recipient)
+    const personalizedBody    = personalizeBody(expandedBody, recipient, opts)
+    const personalizedSubject = personalizeBody(expandedSubject, recipient, opts)
 
-  if (result.failed > 0) {
-    throw new Error(`[automation] delay 큐 이메일 발송 실패 (${result.provider})`)
+    const result = await sendBatchEmail([{
+      to: recipient.email,
+      subject: personalizedSubject,
+      html: wrapCampaignHtml(personalizedBody, unsubscribeUrl),
+    }])
+
+    if (result.failed > 0) {
+      throw new Error(`[automation] delay 큐 이메일 발송 실패 (${result.provider})`)
+    }
+
+    await updateLogStatus(log.id, "sent", {
+      recipientCount: 1,
+      recipientEmails: [recipient.email],
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    await updateLogStatus(log.id, "failed", { errorMessage: message })
+    // cron 핸들러가 큐 상태를 관리하므로 실패는 그대로 전파한다.
+    throw err
   }
 }
 
@@ -444,15 +460,44 @@ export async function triggerOnSubmitRules(payload: OnSubmitPayload): Promise<vo
               `email=${recipient.email}, scheduledAt=${scheduledAt.toISOString()}`
             )
           } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
             console.error(
               `[triggerOnSubmitRules] delay 큐 삽입 실패 (rule=${rule.id}):`,
               err
             )
+            // 무음 실패 방지: 예약 발송이 큐에 들어가지 못하면 자동화가 조용히 누락된다.
+            await emitNotificationEvent({
+              eventType: "automation.delay_enqueue_failed",
+              notificationType: "incident",
+              categoryTag: "marketing",
+              severity: "warning",
+              title: "자동화 예약 발송 큐 삽입 실패",
+              message: `규칙 '${rule.name}'의 예약 발송을 큐에 넣지 못했습니다: ${message}`,
+              source: "automation",
+              sourceId: rule.id,
+              payload: { ruleId: rule.id, recipientEmail: recipient.email, error: message },
+            }).catch((notifyErr) => {
+              console.error("[triggerOnSubmitRules] 알림 발행 실패:", notifyErr)
+            })
           }
         })
       )
     }
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
     console.error("[triggerOnSubmitRules] 오류:", err)
+    // 무음 실패 방지: on_submit 자동화 경로 전체가 죽으면 리드 후속 발송이 통째로 누락된다.
+    await emitNotificationEvent({
+      eventType: "automation.on_submit_failed",
+      notificationType: "incident",
+      categoryTag: "marketing",
+      severity: "critical",
+      title: "on_submit 자동화 실행 실패",
+      message: `리드 제출 자동화 트리거가 실패했습니다 (source=${payload.source}): ${message}`,
+      source: "automation",
+      payload: { source: payload.source, email: payload.email, error: message },
+    }).catch((notifyErr) => {
+      console.error("[triggerOnSubmitRules] 알림 발행 실패:", notifyErr)
+    })
   }
 }

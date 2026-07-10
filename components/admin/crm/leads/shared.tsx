@@ -25,11 +25,24 @@ export const SOURCE_LABEL: Record<string, string> = {
 }
 export const RESPONSE_TARGET_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
 
-export type LeadFilter = LeadStatus | "all" | "unresponded" | "unresponded_24h" | "unresponded_48h" | "unassigned"
+export type LeadFilter =
+  | LeadStatus
+  | "all"
+  | "unresponded"
+  | "unresponded_24h"
+  | "unresponded_48h"
+  | "unassigned"
+  | "unconfirmed"
 export const LEAD_FILTER_KEYS: LeadFilter[] = [
   "all", "new", "contacted", "converted", "closed",
-  "unresponded", "unresponded_24h", "unresponded_48h", "unassigned",
+  "unresponded", "unresponded_24h", "unresponded_48h", "unassigned", "unconfirmed",
 ]
+
+// 이 필터들은 "응대·확인이 필요하다"는 게 관점 자체라 미확인 리드를 그대로 보여준다.
+// 그 외 필터(전체/신규/연락중/...)는 검토 전 리드를 숨겨 기본 화면을 깨끗하게 유지한다.
+export const CONFIRMATION_GATE_EXEMPT_FILTERS = new Set<LeadFilter>([
+  "unconfirmed", "unresponded", "unresponded_24h", "unresponded_48h",
+])
 
 export const LOG_TYPE_LABEL: Record<ContactLogType, string> = {
   call: "전화", sms: "문자", kakao: "카카오", email: "이메일",
@@ -112,6 +125,12 @@ export function isResponseTargetLead(lead: LeadRecord) {
 
 export function isUnrespondedLead(lead: LeadRecord) {
   return lead.status === "new" && isResponseTargetLead(lead)
+}
+
+// 공개 채널(문의·데모·뉴스레터·Meta 리드애즈 등)에서 들어와 아직 검토되지 않은 리드.
+// 어드민 수기 등록은 생성 시점에 confirmed_at이 채워져 항상 false.
+export function isUnconfirmedLead(lead: LeadRecord) {
+  return !lead.confirmed_at
 }
 
 export function hoursBetween(from: string | Date, to: string | Date = new Date()) {

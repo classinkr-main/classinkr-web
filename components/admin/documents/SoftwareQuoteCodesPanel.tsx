@@ -249,14 +249,11 @@ export default function SoftwareQuoteCodesPanel() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-[#1a1a1a]">소프트웨어 견적 코드</h1>
-          <p className="mt-0.5 text-sm text-[#1a1a1a]/50">
-            {sorted.length}건 · 충전형/구독형 결제 코드 발급 및 관리
-          </p>
-        </div>
+    <div className="mx-auto max-w-6xl space-y-4 p-4 sm:px-6 sm:py-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#615D59] ring-1 ring-[#e8e8e4]">
+          {loading ? "불러오는 중" : `${sorted.length}건`}
+        </span>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className={`mr-1 h-4 w-4 ${loading ? "animate-spin" : ""}`} />

@@ -6,6 +6,7 @@ import type { ReactNode } from "react"
 import {
   Building2,
   CircleDollarSign,
+  FileSpreadsheet,
   PhoneCall,
   Target,
   Truck,
@@ -13,7 +14,7 @@ import {
 } from "lucide-react"
 
 type CrmSection = "home" | "customers" | "activity" | "deals" | "insights" | "sync"
-type DealsSub = "revenue" | "orders" | "kpi"
+type DealsSub = "revenue" | "revSheet" | "orders" | "kpi"
 type CustomersSub = "unified" | "leads" | "accounts"
 
 // 상단 primary 탭은 글로벌 사이드바(AdminSidebar)의 CRM 확장으로 이전됨.
@@ -22,8 +23,9 @@ type CustomersSub = "unified" | "leads" | "accounts"
 // Deals 섹션 안에서만 보이는 단계별 보조 탭 (매출→오더·설치→KPI).
 const DEALS_SUBTABS = [
   { key: "revenue", href: "/admin/crm/deals", label: "매출", icon: <CircleDollarSign className="h-3.5 w-3.5" /> },
+  { key: "revSheet", href: "/admin/crm/deals/rev-sheet", label: "매출시트", icon: <FileSpreadsheet className="h-3.5 w-3.5" /> },
   { key: "orders", href: "/admin/crm/deals/orders", label: "오더·설치", icon: <Truck className="h-3.5 w-3.5" /> },
-  { key: "kpi", href: "/admin/crm/deals/kpi", label: "KPI", icon: <Target className="h-3.5 w-3.5" /> },
+  { key: "kpi", href: "/admin/crm/deals/kpi", label: "워크스페이스", icon: <Target className="h-3.5 w-3.5" /> },
 ] satisfies Array<{ key: DealsSub; href: string; label: string; icon: ReactNode }>
 
 // 고객 섹션 보조 탭: 통합 운영 목록 + 원천별 상세 화면.
@@ -71,6 +73,7 @@ function resolveCustomersSub(pathname: string | null): CustomersSub | null {
 
 function resolveDealsSub(pathname: string | null): DealsSub | null {
   if (!pathname) return null
+  if (pathname.startsWith("/admin/crm/deals/rev-sheet")) return "revSheet"
   if (pathname.startsWith("/admin/crm/deals/orders")) return "orders"
   if (pathname.startsWith("/admin/crm/deals/kpi") || pathname.startsWith("/admin/crm/partners")) return "kpi"
   if (

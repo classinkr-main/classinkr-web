@@ -14,8 +14,17 @@ function getConfiguredAnalyticsId(value: string | undefined) {
 export const GTM_ID =
   getConfiguredAnalyticsId(process.env.NEXT_PUBLIC_GTM_ID)
 
+export const GA4_MEASUREMENT_ID = getConfiguredAnalyticsId(
+  process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID ??
+    process.env.NEXT_PUBLIC_GA_ID
+)
+
 // Google Ads 글로벌 태그 ID (gtag.js). 전 페이지 공통 로드.
 export const GOOGLE_ADS_ID = "AW-18252550128"
+
+// GA4 측정 ID. gtag.js는 Google Ads용으로 이미 로드되므로 config만 추가하면 된다.
+// 발화 여부는 Consent Mode v2(analytics_storage) 상태가 결정한다.
+export const GA4_ID = getConfiguredAnalyticsId(process.env.NEXT_PUBLIC_GA_ID)
 
 // "도입문의 제출" 전환 액션 라벨. Google Ads에서 전환 액션 생성 시 발급되는 값
 // (send_to = `${GOOGLE_ADS_ID}/${LABEL}`). 미설정 시 전환 이벤트는 발송되지 않음.

@@ -77,6 +77,8 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/events",
     "/api/admin/event-metrics",
     "/api/admin/meta/campaigns?datePreset=last_30d&limit=50",
+    // 메시지 발송 허브(구 /admin/marketing)가 캠페인 탭으로 흡수되며 채널 상태도 함께 데운다.
+    "/api/admin/messaging/status",
   ],
   "/admin/lead-magnets": [
     "/api/admin/lead-magnets",

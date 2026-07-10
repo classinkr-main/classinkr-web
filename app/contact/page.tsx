@@ -9,8 +9,7 @@ import { Mail, MapPin, Phone, ArrowRight, MessageSquare, CheckCircle2, Loader2 }
 import Image from "next/image"
 import { motion } from "framer-motion"
 import { submitLead } from "@/lib/submitLead"
-import { trackAdsConversion, trackEvent } from "@/lib/analytics"
-import { GOOGLE_ADS_DEMO_CONVERSION_LABEL } from "@/lib/analytics-config"
+import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
 import { useToast } from "@/components/ui/toast"
 import type { PublicEvent } from "@/lib/types/public-events"
 
@@ -266,9 +265,10 @@ export default function ContactPage() {
                 event_id: data.conversionEventId,
             })
             // Google Ads 전환: 도입문의 제출 (전환 라벨이 설정된 경우에만 발화)
-            trackAdsConversion(GOOGLE_ADS_DEMO_CONVERSION_LABEL, {
-                transaction_id: data.leadId,
-                event_id: data.conversionEventId,
+            trackDemoRequestAdsConversion({
+                leadId: data.leadId,
+                eventId: data.conversionEventId,
+                eventSlug: selectedEvent?.slug,
             })
             toast.success("상담 요청이 접수되었어요")
             setSubmitted(true)

@@ -3,20 +3,18 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertCircle,
+  ArrowRight,
   Check,
   Copy,
   ExternalLink,
-  Filter,
   FileText,
   Link2,
   Loader2,
-  Plus,
   RefreshCw,
   Search,
   Send,
 } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import QuickQuoteComposer, {
   type QuickQuoteCreatedPayload,
   type QuickQuotePrefill,
@@ -255,37 +253,22 @@ function needsQuoteFollowUp(quote: HardwareQuoteRow) {
 
 function getNextActionMeta(quote: HardwareQuoteRow) {
   if (quote.status === "accepted" || quote.acceptedAt) {
-    return {
-      label: "계약 전환",
-      className: "bg-[#ECFDF5] text-[#084734] ring-[#D1FAE5]",
-    }
+    return { label: "계약 전환", textClassName: "text-[#084734]" }
   }
 
   if (quote.status === "draft" || quote.status === "pending_approval") {
-    return {
-      label: "검토 후 발송",
-      className: "bg-[#FFF7ED] text-[#B85C33] ring-[#FED7AA]",
-    }
+    return { label: "검토 후 발송", textClassName: "text-[#A8741A]" }
   }
 
   if (isQuoteShared(quote) && !quote.lastViewedAt) {
-    return {
-      label: "열람 리마인드",
-      className: "bg-[#FEF3EE] text-[#B85C33] ring-[#F6D5C5]",
-    }
+    return { label: "열람 리마인드", textClassName: "text-[#A8741A]" }
   }
 
   if (quote.lastViewedAt && !quote.reviewConfirmedAt) {
-    return {
-      label: "조건 확인",
-      className: "bg-[#F0F9FF] text-[#075985] ring-[#BAE6FD]",
-    }
+    return { label: "조건 확인", textClassName: "text-[#615D59]" }
   }
 
-  return {
-    label: "기록 확인",
-    className: "bg-white text-[#1a1a1a]/50 ring-[#e8e8e4]",
-  }
+  return { label: "기록 확인", textClassName: "text-[#1a1a1a]/45" }
 }
 
 function getResponseTime(quote: HardwareQuoteRow) {
@@ -328,6 +311,14 @@ export default function HardwareQuotesPanel({
       needsAction: quotes.filter((quote) => needsQuoteFollowUp(quote)).length,
     }
   }, [quotes])
+
+  const filterCounts: Record<QuoteFilter, number> = {
+    all: summary.total,
+    needs_action: summary.needsAction,
+    draft: summary.draft,
+    shared: summary.shared,
+    accepted: summary.accepted,
+  }
 
   const visibleQuotes = useMemo(() => {
     const normalizedQuery = searchTerm.trim().toLowerCase()
@@ -507,61 +498,7 @@ export default function HardwareQuotesPanel({
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-4 rounded-lg border border-[#e8e8e4] bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <div>
-          <p className="text-[11px] font-semibold uppercase text-[#1a1a1a]/35">
-            Hardware Quote
-          </p>
-          <h2 className="mt-2 text-xl font-semibold text-[#111110]">
-            하드웨어 견적서
-          </h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#1a1a1a]/55">
-            작성한 견적서의 저장, 발송 링크, 고객 응답 상태를 한 화면에서 확인합니다.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              void loadQuotes()
-            }}
-            disabled={loading}
-            className="w-full sm:w-auto"
-          >
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-            새로고침
-          </Button>
-          <Button
-            type="button"
-            onClick={() => {
-              setComposerTemplateId("board_86")
-              setComposerOpen(true)
-            }}
-            className="w-full bg-[#084734] text-white hover:bg-[#065c41] sm:w-auto"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            견적서 작성
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        {[
-          ["전체", summary.total],
-          ["후속 필요", summary.needsAction],
-          ["작성 중", summary.draft],
-          ["발송됨", summary.shared],
-          ["동의 완료", summary.accepted],
-        ].map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-[#e8e8e4] bg-white px-4 py-3">
-            <p className="text-[11px] font-medium text-[#1a1a1a]/40">{label}</p>
-            <p className="mt-1 text-lg font-semibold text-[#111110]">{value}</p>
-          </div>
-        ))}
-      </div>
-
+    <div className="mx-auto max-w-6xl space-y-4 p-4 sm:px-6 sm:py-5">
       {notice && (
         <div
           className={`flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${
@@ -576,48 +513,54 @@ export default function HardwareQuotesPanel({
       )}
 
       <div className="overflow-hidden rounded-lg border border-[#e8e8e4] bg-white">
-        <div className="flex flex-col gap-3 border-b border-[#ecebe6] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <div>
-            <h3 className="text-sm font-semibold text-[#111110]">견적서 발송 상태</h3>
-            <p className="mt-1 text-xs text-[#1a1a1a]/45">
-              저장된 견적서와 공유 링크 상태를 최신순으로 봅니다.
-            </p>
-          </div>
-          <span className="rounded-full bg-[#f6f5f2] px-2.5 py-1 text-xs font-medium text-[#615D59]">
-            {loading ? "불러오는 중" : `${visibleQuotes.length}/${quotes.length}건`}
-          </span>
+        <div className="admin-scroll-snap-x no-scrollbar flex items-center gap-1.5 overflow-x-auto border-b border-[#f0f0ec] px-4 py-3 sm:px-5">
+          {FILTER_OPTIONS.map((option) => {
+            const count = filterCounts[option.key]
+            const active = activeFilter === option.key
+            const emphasize = option.key === "needs_action" && count > 0 && !active
+
+            return (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setActiveFilter(option.key)}
+                aria-pressed={active}
+                className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium ring-1 transition-colors ${
+                  active
+                    ? "bg-[#111110] text-white ring-[#111110]"
+                    : emphasize
+                      ? "bg-[#FBF1E0] text-[#A8741A] ring-[#ECD29C] hover:text-[#7A520F]"
+                      : "bg-white text-[#615D59] ring-[#e8e8e4] hover:text-[#111110]"
+                }`}
+              >
+                {option.key === "needs_action" && count > 0 && (
+                  <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-white" : "bg-[#A8741A]"}`} />
+                )}
+                <span>{option.label}</span>
+                <span
+                  className={`tabular-nums ${
+                    active ? "text-white/65" : emphasize ? "text-[#A8741A]/70" : "text-[#1a1a1a]/40"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
         </div>
 
-        <div className="grid gap-3 border-b border-[#f0f0ec] bg-[#fafaf8] px-4 py-4 sm:px-5 lg:grid-cols-[minmax(240px,1fr)_auto_auto] lg:items-center">
-          <label className="relative block">
+        <div className="flex flex-col gap-2 border-b border-[#f0f0ec] bg-[#fafaf8] px-4 py-3 sm:flex-row sm:items-center sm:px-5">
+          <label className="relative block flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/35" />
             <input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="견적번호, 고객사, 거래명 검색"
-              className="h-10 w-full rounded-md border border-[#e8e8e4] bg-white pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-[#1a1a1a]/30 focus:border-[#084734]"
+              className="h-9 w-full rounded-md border border-[#e8e8e4] bg-white pl-9 pr-3 text-sm outline-none transition-colors placeholder:text-[#1a1a1a]/30 focus:border-[#084734]"
             />
           </label>
 
-          <div className="admin-scroll-snap-x no-scrollbar flex gap-1.5 overflow-x-auto">
-            {FILTER_OPTIONS.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => setActiveFilter(option.key)}
-                className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-xs font-medium ring-1 transition-colors ${
-                  activeFilter === option.key
-                    ? "bg-[#111110] text-white ring-[#111110]"
-                    : "bg-white text-[#615D59] ring-[#e8e8e4] hover:text-[#111110]"
-                }`}
-              >
-                {option.key === "needs_action" && <Filter className="h-3.5 w-3.5" />}
-                {option.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <select
               value={sortKey}
               onChange={(event) => setSortKey(event.target.value as QuoteSortKey)}
@@ -637,11 +580,27 @@ export default function HardwareQuotesPanel({
                   setActiveFilter("all")
                   setSortKey("recent")
                 }}
-                className="h-9 rounded-md border border-[#e8e8e4] bg-white px-3 text-xs font-medium text-[#615D59] transition-colors hover:text-[#111110]"
+                className="h-9 shrink-0 rounded-md border border-[#e8e8e4] bg-white px-3 text-xs font-medium text-[#615D59] transition-colors hover:text-[#111110]"
               >
                 초기화
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                void loadQuotes()
+              }}
+              disabled={loading}
+              title="새로고침"
+              aria-label="새로고침"
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-xs font-medium text-[#615D59] transition-colors hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">새로고침</span>
+            </button>
+            <span className="ml-auto shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-[#615D59] ring-1 ring-[#e8e8e4] sm:ml-1">
+              {loading ? "불러오는 중" : `${visibleQuotes.length}/${quotes.length}`}
+            </span>
           </div>
         </div>
 
@@ -699,7 +658,7 @@ export default function HardwareQuotesPanel({
               return (
                 <div
                   key={quote.id}
-                  className="grid gap-3 px-4 py-4 transition-colors hover:bg-[#fafaf8] sm:px-5 lg:grid-cols-[minmax(0,1fr)_210px_220px]"
+                  className="grid gap-3 px-4 py-4 transition-colors hover:bg-[#fafaf8] sm:px-5 lg:grid-cols-[minmax(0,1fr)_190px_184px]"
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -707,7 +666,8 @@ export default function HardwareQuotesPanel({
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${statusMeta.className}`}>
                         {statusMeta.label}
                       </span>
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${nextAction.className}`}>
+                      <span className={`inline-flex items-center gap-0.5 text-[11px] font-medium ${nextAction.textClassName}`}>
+                        <ArrowRight className="h-3 w-3" />
                         {nextAction.label}
                       </span>
                       {quote.createdAction && (
@@ -716,7 +676,15 @@ export default function HardwareQuotesPanel({
                         </span>
                       )}
                     </div>
-                    <p className="mt-1 truncate text-sm font-semibold text-[#111110]">{quote.title}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        openAdminQuoteView(quote.id)
+                      }}
+                      className="mt-1 block max-w-full truncate text-left text-sm font-semibold text-[#111110] transition-colors hover:text-[#084734] hover:underline underline-offset-2 focus-visible:text-[#084734] focus-visible:outline-none"
+                    >
+                      {quote.title}
+                    </button>
                     <p className="mt-1 truncate text-xs text-[#1a1a1a]/45">
                       {quote.customerName} · {quote.dealTitle} · {formatDateTime(quote.updatedAt)}
                     </p>
@@ -740,11 +708,14 @@ export default function HardwareQuotesPanel({
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
+                  <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
                     {quote.shareCount > 0 && (
-                      <span className="inline-flex min-h-9 items-center justify-center gap-1 rounded-md bg-[#ECFDF5] px-2.5 py-2 text-xs font-medium text-[#084734]">
+                      <span
+                        title={`공유 ${quote.shareCount}회`}
+                        className="inline-flex h-9 items-center gap-1 rounded-md bg-[#ECFDF5] px-2 text-xs font-medium text-[#084734]"
+                      >
                         <Send className="h-3.5 w-3.5" />
-                        공유 {quote.shareCount}회
+                        <span className="tabular-nums">{quote.shareCount}</span>
                       </span>
                     )}
                     <button
@@ -752,7 +723,7 @@ export default function HardwareQuotesPanel({
                       onClick={() => {
                         openAdminQuoteView(quote.id)
                       }}
-                      className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 py-2 text-xs font-medium text-[#1a1a1a]/65 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] sm:w-auto"
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-xs font-medium text-[#1a1a1a]/70 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
                     >
                       <FileText className="h-3.5 w-3.5" />
                       직접 보기
@@ -763,10 +734,11 @@ export default function HardwareQuotesPanel({
                       onClick={() => {
                         void handleCopyShareLink(quote)
                       }}
-                      className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] px-3 py-2 text-xs font-medium text-[#1a1a1a]/65 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                      title="공유 링크 복사"
+                      aria-label="공유 링크 복사"
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#e8e8e4] bg-white text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : quote.shareUrl ? <Copy className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
-                      링크 복사
                     </button>
                     <button
                       type="button"
@@ -774,10 +746,11 @@ export default function HardwareQuotesPanel({
                       onClick={() => {
                         void handleOpenShareLink(quote)
                       }}
-                      className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2 text-xs font-medium text-[#1a1a1a]/65 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                      title="공유 링크 열기"
+                      aria-label="공유 링크 열기"
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
-                      열기
                     </button>
                   </div>
                 </div>

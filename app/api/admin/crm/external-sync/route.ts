@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext, verifyAdmin } from "@/lib/admin-auth"
+import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
 import { runExternalCrmSyncChain } from "@/lib/external-crm/sync-chain"
 import { getXiaoshouyiSyncRuntimePreflight } from "@/lib/external-crm/xiaoshouyi-sync"
 
@@ -40,6 +42,7 @@ export async function POST(req: NextRequest) {
       candidates: chain.candidates ?? null,
       candidatesError: chain.candidatesError ?? null,
     }
+    if (chain.sync.ok) revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
     return NextResponse.json(result, { status: chain.sync.ok ? 200 : chain.sync.skipped ? 409 : 500 })
   } catch (error) {
     console.error("[POST /api/admin/crm/external-sync]", error)

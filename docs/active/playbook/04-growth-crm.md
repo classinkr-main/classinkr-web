@@ -44,6 +44,7 @@
 - **Consent/Lead**: 옵트인 기본(미결정=전부 거부). `marketingConsent===true`일 때만 구독DB 동기화. 쿠키 13개월(391일, KR PIPA), 정책버전 명시. IP 원본 미저장(sha256만).
 - **Notion = SoR, 복제 금지**: ERP blueprint §4·§6 명시 — 노션 캘린더를 Supabase로 복제 ❌. `NOTION_API_TOKEN`은 서버전용(`NEXT_PUBLIC_` 금지).
 - **추적 컨벤션**: 이벤트는 `lib/analytics.ts` `EventNames` 유니온 + `/api/track/event` `ALLOWED_EVENTS`·`ALLOWED_PARAM_KEYS` 양쪽에 등록(누락 시 무음 드랍). 파라미터는 화이트리스트만 + PII redaction.
+- **리드 확인 게이트(2026-07-04)**: 공개 채널(문의/데모/뉴스레터/Meta 리드애즈 등)로 들어온 리드는 `leads.confirmed_at`이 null인 채로 생성돼 리드 보드 기본 화면·우선순위 작업대에서 숨는다. 어드민 수기 등록(`app/api/admin/leads` POST)만 생성 시점에 즉시 채워 게이트 대상에서 빠진다. 승격 트리거는 (1) 드로어/수신함의 "확인" 버튼(`PATCH {confirmed:true}`) 또는 (2) 상태가 `new`에서 벗어남(연락중/전환/종료) — 둘 다 `app/api/admin/leads/[id]/route.ts`에서 자동 처리. **응대 SLA(미응답/24h/48h)는 확인 여부와 무관하게 계속 노출** — `components/admin/crm/leads/shared.tsx`의 `CONFIRMATION_GATE_EXEMPT_FILTERS`가 그 예외 목록. 새 리드 관련 화면/집계를 추가할 때 이 게이트를 빠뜨리면 미확인 저의도 리드가 다시 클러터로 샌다.
 
 ## 5. 절대 깨면 안 되는 것 / 주의점
 

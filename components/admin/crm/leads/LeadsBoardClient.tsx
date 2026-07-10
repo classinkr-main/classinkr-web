@@ -29,6 +29,7 @@ import {
   LOG_RESULT_LABEL,
   LOG_RESULT_COLOR,
   LEAD_FILTER_KEYS,
+  CONFIRMATION_GATE_EXEMPT_FILTERS,
   type LeadFilter,
   calcScore,
   ScoreBadge,
@@ -39,6 +40,7 @@ import {
   isActiveLead,
   isResponseTargetLead,
   isUnrespondedLead,
+  isUnconfirmedLead,
   hoursBetween,
   formatResponseAge,
   getLeadOwner,
@@ -238,6 +240,7 @@ function LeadDrawer({
   onAddLog,
   onDeleteLog,
   onConvert,
+  onConfirm,
 }: {
   lead: LeadRecord
   logs: ContactLogRecord[]
@@ -254,6 +257,7 @@ function LeadDrawer({
   onAddLog: (entry: { type: ContactLogType; result?: ContactLogResult; notes?: string; contacted_by?: string }) => Promise<void>
   onDeleteLog: (logId: string) => Promise<void>
   onConvert: (lead: LeadRecord) => Promise<void>
+  onConfirm: (lead: LeadRecord) => Promise<void>
 }) {
   const initial = parseEventToken(lead.notes)
   const [notes, setNotes] = useState(initial.body)
@@ -268,7 +272,9 @@ function LeadDrawer({
   const [followUp, setFollowUp] = useState(lead.follow_up_at ? lead.follow_up_at.slice(0, 10) : "")
   const [showLogForm, setShowLogForm] = useState(false)
   const [converting, setConverting] = useState(false)
+  const [confirming, setConfirming] = useState(false)
   const score = calcScore(lead)
+  const unconfirmed = isUnconfirmedLead(lead)
   const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp) : null
   const attributionItems = [
     { label: "Source Detail", value: lead.source_detail },
@@ -357,6 +363,11 @@ function LeadDrawer({
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#1a1a1a]/50 font-medium">
                 {SOURCE_LABEL[lead.source] ?? lead.source}
               </span>
+              {unconfirmed && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF9EB] px-2 py-0.5 text-[11px] font-medium text-[#8D6C1F]">
+                  미확인
+                </span>
+              )}
               {unrespondedHours !== null && (
                 <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
                   unrespondedHours >= 48
@@ -781,20 +792,37 @@ function LeadDrawer({
             <Trash2 className="w-3.5 h-3.5" />이 리드 삭제
           </button>
 
-          {lead.status !== "converted" && (
-            <button
-              onClick={async () => {
-                setConverting(true)
-                await onConvert(lead)
-                setConverting(false)
-              }}
-              disabled={converting}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#084734] text-[#084734] hover:bg-[#084734] hover:text-white disabled:opacity-40 transition-all"
-            >
-              {converting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
-              고객·거래 등록
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {unconfirmed && (
+              <button
+                onClick={async () => {
+                  setConfirming(true)
+                  await onConfirm(lead)
+                  setConfirming(false)
+                }}
+                disabled={confirming}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#084734] text-white hover:opacity-90 disabled:opacity-40 transition-all"
+              >
+                {confirming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                확인
+              </button>
+            )}
+
+            {lead.status !== "converted" && (
+              <button
+                onClick={async () => {
+                  setConverting(true)
+                  await onConvert(lead)
+                  setConverting(false)
+                }}
+                disabled={converting}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#084734] text-[#084734] hover:bg-[#084734] hover:text-white disabled:opacity-40 transition-all"
+              >
+                {converting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+                고객·거래 등록
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </>
@@ -833,6 +861,7 @@ export default function LeadsBoardClient() {
   const [activitySummary, setActivitySummary] = useState<Record<string, LeadActivityBadge>>({})
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(() => new Set())
   const [deletingIds, setDeletingIds] = useState<Set<string>>(() => new Set())
+  const [confirmingIds, setConfirmingIds] = useState<Set<string>>(() => new Set())
   const [dismissedDeepLinkedLeadId, setDismissedDeepLinkedLeadId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -1060,6 +1089,58 @@ export default function LeadsBoardClient() {
     }
   }
 
+  // "확인" — 공개 채널 리드를 기본 리드 화면으로 승격한다. 단건(드로어) · 다건(수신함 배너) 공용.
+  const handleConfirmMany = async (ids: string[]) => {
+    const uniqueIds = Array.from(new Set(ids)).filter(Boolean)
+    if (uniqueIds.length === 0) return
+
+    setConfirmingIds((prev) => {
+      const next = new Set(prev)
+      uniqueIds.forEach((id) => next.add(id))
+      return next
+    })
+
+    try {
+      const results = await Promise.allSettled(
+        uniqueIds.map(async (id) => {
+          const res = await adminFetch(`/api/admin/leads/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ confirmed: true }),
+          })
+          const data = await readAdminResponse<{ lead: LeadRecord }>(res, "리드를 확인 처리하지 못했습니다.")
+          return data.lead
+        })
+      )
+      const confirmedLeadsResult = results
+        .filter((result): result is PromiseFulfilledResult<LeadRecord> => result.status === "fulfilled")
+        .map((result) => result.value)
+      const failedCount = uniqueIds.length - confirmedLeadsResult.length
+
+      if (confirmedLeadsResult.length > 0) {
+        const confirmedMap = new Map(confirmedLeadsResult.map((lead) => [lead.id, lead]))
+        setLeads((prev) => prev.map((lead) => confirmedMap.get(lead.id) ?? lead))
+      }
+
+      if (failedCount > 0) {
+        showToast(
+          confirmedLeadsResult.length > 0
+            ? `${confirmedLeadsResult.length}건 확인, ${failedCount}건 실패`
+            : "리드를 확인 처리하지 못했습니다.",
+          "error"
+        )
+        return
+      }
+
+      showToast(`${confirmedLeadsResult.length}건 확인 처리했습니다.`)
+    } finally {
+      setConfirmingIds((prev) => {
+        const next = new Set(prev)
+        uniqueIds.forEach((id) => next.delete(id))
+        return next
+      })
+    }
+  }
+
   const handleDeleteMany = async (
     ids: string[],
     options?: { confirmMessage?: string; successMessage?: string }
@@ -1133,8 +1214,12 @@ export default function LeadsBoardClient() {
 
   const now = new Date()
   const today = toLocalDateKey(now)
-  const counts = leads.reduce((acc, l) => { acc[l.status] = (acc[l.status] ??  0) + 1; return acc }, {} as Record<string, number>)
-  const activeLeads = leads.filter((l) => isActiveLead(l.status))
+  // 미확인(공개 채널, 검토 전) 리드는 별도 수신함으로 취급 — "활성/단계별" 집계에서 제외해
+  // 실제로 다루고 있는 리드 수만 반영한다. 응대 SLA(미응답 큐)는 확인 여부와 무관하게 잡는다.
+  const unconfirmedLeads = leads.filter(isUnconfirmedLead)
+  const confirmedLeads = leads.filter((l) => !isUnconfirmedLead(l))
+  const counts = confirmedLeads.reduce((acc, l) => { acc[l.status] = (acc[l.status] ??  0) + 1; return acc }, {} as Record<string, number>)
+  const activeLeads = confirmedLeads.filter((l) => isActiveLead(l.status))
   const unrespondedLeads = leads.filter(isUnrespondedLead)
   const unresponded24h = unrespondedLeads.filter((lead) => hoursBetween(lead.timestamp, now) >= 24)
   const unresponded48h = unrespondedLeads.filter((lead) => hoursBetween(lead.timestamp, now) >= 48)
@@ -1147,7 +1232,10 @@ export default function LeadsBoardClient() {
   ).sort((a, b) => a.localeCompare(b, "ko"))
   const normalizedSearch = searchQuery.trim().toLowerCase()
   const filtered = leads.filter((lead) => {
+    // 응대 SLA 큐·미확인 큐가 아니면 검토 전 리드는 기본 화면에서 숨긴다.
+    if (!CONFIRMATION_GATE_EXEMPT_FILTERS.has(filter) && isUnconfirmedLead(lead)) return false
     if (filter === "all") return true
+    if (filter === "unconfirmed") return isUnconfirmedLead(lead)
     if (filter === "unresponded") return isUnrespondedLead(lead)
     if (filter === "unresponded_24h") return isUnrespondedLead(lead) && hoursBetween(lead.timestamp, now) >= 24
     if (filter === "unresponded_48h") return isUnrespondedLead(lead) && hoursBetween(lead.timestamp, now) >= 48
@@ -1200,7 +1288,7 @@ export default function LeadsBoardClient() {
     })
     .slice(0, 5)
   const stageSummaries = (Object.keys(STATUS_LABEL) as LeadStatus[]).map((status) => {
-    const stageLeads = leads.filter((lead) => lead.status === status)
+    const stageLeads = confirmedLeads.filter((lead) => lead.status === status)
     const stageOverdue = stageLeads.filter((lead) => lead.follow_up_at && toLocalDateKey(lead.follow_up_at) < today && isActiveLead(lead.status)).length
     const highScore = stageLeads.filter((lead) => calcScore(lead) >= 70).length
     return { status, count: stageLeads.length, stageOverdue, highScore }
@@ -1221,7 +1309,8 @@ export default function LeadsBoardClient() {
       .values()
   ).sort((a, b) => b.total - a.total || b.overdueCount - a.overdueCount)
   const filterCards: Array<{ key: LeadFilter; label: string; count: number }> = [
-    { key: "all", label: "전체", count: leads.length },
+    { key: "all", label: "전체", count: confirmedLeads.length },
+    { key: "unconfirmed", label: "미확인", count: unconfirmedLeads.length },
     { key: "new", label: "신규", count: counts.new ?? 0 },
     { key: "unresponded", label: "응대 전", count: unrespondedLeads.length },
     { key: "unresponded_24h", label: "24h+", count: unresponded24h.length },
@@ -1232,6 +1321,7 @@ export default function LeadsBoardClient() {
     { key: "closed", label: "종료", count: counts.closed ?? 0 },
   ]
   const pipelineCards: Array<{ label: string; value: number; tone: string; filterKey?: LeadFilter }> = [
+    { label: "미확인 유입", value: unconfirmedLeads.length, tone: "text-[#8D6C1F]", filterKey: "unconfirmed" },
     { label: "신규 유입", value: counts.new ?? 0, tone: "text-[#111110]", filterKey: "new" },
     { label: "응대 전", value: unrespondedLeads.length, tone: "text-[#B85C33]", filterKey: "unresponded" },
     { label: "24h+", value: unresponded24h.length, tone: "text-yellow-700", filterKey: "unresponded_24h" },
@@ -1306,7 +1396,7 @@ export default function LeadsBoardClient() {
               활성 {activeLeads.length}건
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7">
             {pipelineCards.map((item) => (
               <button
                 key={item.label}
@@ -1376,6 +1466,70 @@ export default function LeadsBoardClient() {
         </div>
       </div>
 
+      {/* 미확인 수신함 — 공개 폼(문의·데모·뉴스레터 등) 원본 유입. 확인해야 아래 리드 목록에 반영된다. */}
+      {unconfirmedLeads.length > 0 && (
+        <div id="unconfirmed-inbox" className="mb-6 scroll-mt-24 rounded-2xl border border-[#F3E6B8] bg-[#FFFBF0] p-4">
+          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8D6C1F]/80">Unconfirmed Inbox</p>
+              <h2 className="text-[16px] font-bold text-[#111110]">새 유입 · 미확인 {unconfirmedLeads.length}건</h2>
+              <p className="mt-0.5 text-[12px] text-[#1a1a1a]/45">
+                공개 폼(문의·데모·뉴스레터 등)으로 들어온 리드 — 확인하면 아래 리드 목록·집계에 반영됩니다.
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setFilter("unconfirmed")}
+                className="text-[12px] font-medium text-[#8D6C1F] hover:text-[#6b5316]"
+              >
+                전체 보기
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmMany(unconfirmedLeads.map((lead) => lead.id))}
+                disabled={confirmingIds.size > 0}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#8D6C1F] px-3 py-1.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              >
+                {confirmingIds.size > 0 ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                전체 확인
+              </button>
+            </div>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+            {unconfirmedLeads.slice(0, 5).map((lead) => (
+              <div key={lead.id} className="rounded-xl border border-[#F3E6B8] bg-white px-3 py-3">
+                <button type="button" onClick={() => setSelected(lead)} className="block w-full text-left">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-[13px] font-semibold text-[#111110]">{lead.name ?? lead.org ?? "이름 없음"}</p>
+                    <ScoreBadge score={calcScore(lead)} />
+                  </div>
+                  <p className="mt-1 truncate text-[12px] text-[#1a1a1a]/45">{SOURCE_LABEL[lead.source] ?? lead.source}</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmMany([lead.id])}
+                  disabled={confirmingIds.has(lead.id)}
+                  className="mt-2 inline-flex items-center gap-1 rounded-md bg-[#FFF9EB] px-2 py-1 text-[11px] font-semibold text-[#8D6C1F] transition-colors hover:bg-[#F3E6B8] disabled:opacity-40"
+                >
+                  {confirmingIds.has(lead.id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                  확인
+                </button>
+              </div>
+            ))}
+          </div>
+          {unconfirmedLeads.length > 5 && (
+            <button
+              type="button"
+              onClick={() => setFilter("unconfirmed")}
+              className="mt-3 text-[12px] font-medium text-[#8D6C1F] hover:text-[#6b5316]"
+            >
+              +{unconfirmedLeads.length - 5}건 더 보기
+            </button>
+          )}
+        </div>
+      )}
+
       {pipelineRiskLeads.length > 0 && (
         <div id="pipeline-risk" className="mb-6 scroll-mt-24 rounded-2xl border border-[#F6D5C5] bg-[#FEF8F5] p-4">
           <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -1421,7 +1575,7 @@ export default function LeadsBoardClient() {
       )}
 
       {/* 필터 카운트 카드 */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-9">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5 xl:grid-cols-10">
         {filterCards.map((item) => (
           <button
             key={item.key}
@@ -1586,6 +1740,11 @@ export default function LeadsBoardClient() {
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
+                      {isUnconfirmedLead(lead) && (
+                        <span className="rounded-full bg-[#FFF9EB] px-2 py-0.5 text-[11px] font-medium text-[#8D6C1F]">
+                          미확인
+                        </span>
+                      )}
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_COLOR[lead.status]}`}>
                         {STATUS_LABEL[lead.status]}
                       </span>
@@ -1795,6 +1954,11 @@ export default function LeadsBoardClient() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2 flex-wrap">
+                        {isUnconfirmedLead(lead) && (
+                          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#FFF9EB] text-[#8D6C1F]">
+                            미확인
+                          </span>
+                        )}
                         <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[lead.status]}`}>
                           {STATUS_LABEL[lead.status]}
                         </span>
@@ -1851,6 +2015,7 @@ export default function LeadsBoardClient() {
           onAddLog={handleAddLog}
           onDeleteLog={handleDeleteLog}
           onConvert={handleConvert}
+          onConfirm={(lead) => handleConfirmMany([lead.id])}
         />
       )}
 

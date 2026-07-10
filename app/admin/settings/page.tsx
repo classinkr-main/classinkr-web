@@ -1728,9 +1728,9 @@ export default function SettingsPage() {
                   webhookType="wecom"
                 />
                 <WebhookRow
-                  label="카카오 알림톡 Webhook"
-                  description="확인서, 리마인더 등 외부 트랜잭션 알림에 사용됩니다."
-                  placeholder="https://provider.example.com/kakao/..."
+                  label="트랜잭션 알림 Webhook (범용)"
+                  description="확인서·리마인더 등을 외부 알림 제공자로 보내는 범용 웹훅입니다. 카카오 발송 API가 아닙니다 — 실제 카카오 알림톡 발송은 메시지 발송 허브(/admin/marketing, solapi)를 사용하세요."
+                  placeholder="https://provider.example.com/notify/..."
                   value={settings.kakaoAlimtalkWebhookUrl ?? ""}
                   onChange={(v) => set({ kakaoAlimtalkWebhookUrl: v })}
                   webhookType="kakaoAlimtalk"

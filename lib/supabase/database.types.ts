@@ -109,6 +109,10 @@ export interface Lead {
   current_page: string | null;
   referrer: string | null;
   user_id: string | null;
+  // 공개 채널(문의/데모/뉴스레터/Meta 리드애즈 등) 리드는 null로 생성되며,
+  // 관리자 확인(확인 버튼) 또는 상태가 new에서 벗어날 때 채워진다.
+  // admin_manual(어드민 수기 등록) 소스는 즉시 채워져 게이트 대상에서 제외된다.
+  confirmed_at: string | null;
   created_at: string;
   updated_at: string;
 }

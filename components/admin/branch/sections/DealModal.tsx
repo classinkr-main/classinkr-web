@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useRef } from "react"
 import { X } from "lucide-react"
+import { cny } from "@/lib/branch/money-format"
 
 export interface DealModalDeal {
   id: string
@@ -41,12 +42,6 @@ function summarizeProductMix(productVersion: string | null | undefined) {
   return { hw, sw }
 }
 
-function cny(n: number | undefined | null) {
-  if (n == null || !Number.isFinite(n)) return "-"
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}억`
-  if (n >= 10_000) return `${(n / 10_000).toFixed(1)}만`
-  return n.toLocaleString()
-}
 
 const TEAM_COLOR: Record<string, string> = {
   BD: "#084734", MKT: "#7B8B36", CSM: "#A8741A",

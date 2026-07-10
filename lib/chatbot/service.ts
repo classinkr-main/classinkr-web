@@ -88,6 +88,13 @@ export interface ChatbotSource {
 
 export type HandoffIntent = "demo" | "support"
 
+export interface SuggestedContent {
+  type: "blog" | "resource" | "case"
+  slug: string
+  title: string
+  url: string
+}
+
 export interface ChatbotQueryResponse {
   answer: string
   answerMode: AnswerMode
@@ -100,6 +107,7 @@ export interface ChatbotQueryResponse {
   suggestedQuestions: string[]
   unresolved: boolean
   warning?: string
+  suggestedContent?: SuggestedContent[]
 }
 
 interface NormalizedQuestion {
@@ -513,6 +521,11 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
 
   const selfKnowledgeEntry = findChatbotSelfKnowledgeEntry(question.redacted)
   if (selfKnowledgeEntry) {
+    const isConcern = selfKnowledgeEntry.key === "emotional_concern"
+    const isEvent = selfKnowledgeEntry.key === "event_inquiry" || selfKnowledgeEntry.key === "event_apply_assist"
+    const isApplyAssist = selfKnowledgeEntry.key === "event_apply_assist"
+    const isTutorPricing = selfKnowledgeEntry.key === "tutor_pricing_recommend"
+    const isFeatureLimit = selfKnowledgeEntry.key === "feature_limit_consulting"
     return {
       response: {
         answer: selfKnowledgeEntry.answer.join("\n\n"),
@@ -523,8 +536,18 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
         suggestedQuestions: selfKnowledgeEntry.suggestedQuestions,
         unresolved: false,
       },
-      category: "general",
-      intent: "self_knowledge",
+      category: isConcern ? "concern" : isEvent ? "event" : isTutorPricing ? "billing" : isFeatureLimit ? "admin" : "general",
+      intent: isConcern
+        ? "emotional_consulting"
+        : isApplyAssist
+        ? "event_apply_assist"
+        : isEvent
+        ? "event_inquiry"
+        : isTutorPricing
+        ? "tutor_pricing_recommend"
+        : isFeatureLimit
+        ? "feature_limit_consulting"
+        : "self_knowledge",
       handoffIntent: "demo",
     }
   }
@@ -2064,7 +2087,7 @@ function isDomainRelatedQuestion(question: NormalizedQuestion, category: string)
   if (category !== "general") return true
 
   const text = question.redacted.toLowerCase()
-  return /classin|클래스인|학원|수업|교실|학생|교사|강사|원장|전자칠판|칠판|하드웨어|보드|board|모델|사이즈|크기|인치|라인업|ops|카메라|마이크|미러링|edb|이\s*디\s*비|lms|녹화|복습|과제|운영|도입|관리자|온라인|화상|교안|토론|플립러닝|하이브리드|소프트웨어|프로그램|앱|플랜|구독형|충전형|체험|파일럿|학부모|리포트|보고서|문자|알림/.test(text)
+  return /classin|클래스인|학원|수업|교실|학생|교사|강사|원장|전자칠판|칠판|하드웨어|보드|board|모델|사이즈|크기|인치|라인업|ops|카메라|마이크|미러링|edb|이\s*디\s*비|lms|녹화|복습|과제|운영|도입|관리자|온라인|화상|교안|토론|플립러닝|하이브리드|소프트웨어|프로그램|앱|플랜|구독형|충전형|체험|파일럿|학부모|리포트|보고서|문자|알림|개인정보|보안|데이터|계정|로그인|비밀번호/.test(text)
 }
 
 function isSensitiveOrAccountSpecificQuestion(question: NormalizedQuestion, category: string) {
@@ -3214,6 +3237,66 @@ function finalizeAnswer(
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
 ) {
   response.answer = sanitizePublicAnswerText(response.answer)
+
+  // 대리 신청 토큰 처리 ([LEAD_SUBMIT:name=...,phone=...,org=...,event=...])
+  if (response.answer && response.answer.includes("[LEAD_SUBMIT:")) {
+    const submitRegex = /\[LEAD_SUBMIT:name=([^,\n\]]+),phone=([^,\n\]]+),org=([^,\n\]]+),event=([^,\n\]]+)\]/i
+    const match = response.answer.match(submitRegex)
+    if (match) {
+      const [, name, phone, org, eventName] = match
+      
+      // leads 리포지토리를 불러와 DB에 삽입 (비동기 즉시실행식)
+      import("@/lib/repositories/leads").then(({ saveLead }) => {
+        saveLead({
+          source: "contact_page",
+          name: name.trim(),
+          phone: phone.trim(),
+          org: org.trim(),
+          message: `챗봇 대리 신청: ${eventName.trim()}`,
+          notes: `[event:${eventName.trim()}] 챗봇을 통한 자동 세미나 대리 신청 리드`,
+          source_detail: "chatbot_assist_registration",
+          timestamp: new Date().toISOString(),
+        }).then((lead) => {
+          console.log(`[chatbot-registration] Successfully registered lead ${lead.id}: ${name} (${org}) for ${eventName}`)
+        }).catch((err) => {
+          console.error("[chatbot-registration] Failed to auto register lead:", err)
+        })
+      }).catch((err) => {
+        console.error("[chatbot-registration] Failed to import leads repository:", err)
+      })
+
+      // 사용자 답변 텍스트에서 토큰 삭제
+      response.answer = response.answer.replace(submitRegex, "").trim()
+    }
+  }
+
+  // 콘텐츠 추천 토큰 처리 ([CONTENT_SUGGEST:type=...,slug=...,title=...])
+  if (response.answer && response.answer.includes("[CONTENT_SUGGEST:")) {
+    const suggestRegex = /\[CONTENT_SUGGEST:type=(blog|resource|case),slug=([^,\n\]]+),title=([^,\n\]]+)\]/gi
+    let match;
+    const suggested: SuggestedContent[] = []
+    
+    while ((match = suggestRegex.exec(response.answer)) !== null) {
+      const [, type, slug, title] = match
+      const cleanType = type.trim() as "blog" | "resource" | "case"
+      const cleanSlug = slug.trim()
+      const cleanTitle = title.trim()
+      const url = cleanType === "blog" ? `/blog/${cleanSlug}` : cleanType === "resource" ? `/resources/${cleanSlug}` : `/events/${cleanSlug}`
+      suggested.push({
+        type: cleanType,
+        slug: cleanSlug,
+        title: cleanTitle,
+        url,
+      })
+    }
+    
+    if (suggested.length > 0) {
+      response.suggestedContent = suggested
+    }
+    
+    // 사용자 답변 텍스트에서 토큰 삭제
+    response.answer = response.answer.replace(suggestRegex, "").trim()
+  }
 }
 
 function shouldExposeSources(input: ChatbotQueryRequest) {
@@ -3429,6 +3512,7 @@ async function buildChatbotCore(
         generateGeminiFinalAnswer({
           question: question.redacted,
           category,
+          intent,
           answerMode: response.answerMode,
           draftAnswer: response.answer,
           sources: response.sources,
@@ -3553,12 +3637,14 @@ export function lastSafeBoundary(text: string): number {
 async function streamAndApplyFinalAnswer({
   question,
   category,
+  intent,
   response,
   historyPromise,
   emit,
 }: {
   question: NormalizedQuestion
   category: string
+  intent: string
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
   historyPromise: Promise<{ role: "user" | "model"; parts: { text: string }[] }[]>
   emit: (event: ChatbotStreamEvent) => void
@@ -3582,6 +3668,7 @@ async function streamAndApplyFinalAnswer({
       for await (const chunk of streamGeminiFinalAnswer({
         question: question.redacted,
         category,
+        intent,
         answerMode: response.answerMode,
         draftAnswer: response.answer,
         sources: response.sources,
@@ -3683,7 +3770,7 @@ export async function streamChatbotQuery(
   // 이 경우 AI 재작성을 적용하면 안 된다 — handleChatbotQuery 의 조기 반환 의미와 동일하게 맞춘다.
   const isShortCircuited = isGreetingOnly(question) || Boolean(buildPolicyGuardResponse(question))
   if (!isShortCircuited && shouldUseAiFinalAnswer(response, question, category)) {
-    await streamAndApplyFinalAnswer({ question, category, response, historyPromise, emit })
+    await streamAndApplyFinalAnswer({ question, category, intent, response, historyPromise, emit })
   }
 
   finalizeAnswer(response)
