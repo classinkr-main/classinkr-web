@@ -20,16 +20,13 @@ import {
   Loader2,
   Lock,
   Pencil,
-  Plus,
   RefreshCw,
   RotateCcw,
-  Save,
   Search,
   Send,
   SlidersHorizontal,
   Table2,
   Target,
-  TrendingUp,
   Trash2,
   Users,
   X,
@@ -69,19 +66,25 @@ import {
   type Period,
   type Team,
 } from "./types"
+import { DshOverviewSection } from "./ledger/DshOverviewSection"
+import { WeeklyCloseSection } from "./ledger/WeeklyCloseSection"
+import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
+import { RevMobileList } from "./ledger/RevMobileList"
+import { KpiLensSection } from "./ledger/KpiLensSection"
+import { InputRailSection } from "./ledger/InputRailSection"
 
 type LedgerLens = "dsh" | "rev" | "kpi"
 type RailView = "detail" | "input" | "queue"
-type DraftKind = "new-row" | "edit-row"
+export type DraftKind = "new-row" | "edit-row"
 type DraftStatus = "draft" | "checked" | "applied" | "cancelled"
 type DraftStatusFilter = DraftStatus | "open" | "all"
-type DraftQueueMode = "server" | "local"
+export type DraftQueueMode = "server" | "local"
 type RevSortKey = "customer" | "product" | "manager" | "team" | "region" | "month" | "revenue" | "annual" | "origin"
 type RevSortDirection = "asc" | "desc"
-type RevProductCategory = "all" | "software" | "hardware" | "unknown"
+export type RevProductCategory = "all" | "software" | "hardware" | "unknown"
 type RevOriginFilter = "all" | "sheet" | "draft"
 type RevForecastFilter = "all" | "has-week" | "month-only" | "confirmed" | "open" | "week-mismatch"
-type DraftOperation = "forecast-add" | "period-shift" | "quantity-change" | "amount-change"
+export type DraftOperation = "forecast-add" | "period-shift" | "quantity-change" | "amount-change"
 type RevWeeklySource = "explicit" | "inferred" | "month-only" | "empty"
 
 interface DealDetail {
@@ -109,7 +112,7 @@ interface DealDetailResponse {
   error?: string
 }
 
-interface LedgerDraft {
+export interface LedgerDraft {
   id: string
   kind: DraftKind
   status: DraftStatus
@@ -164,7 +167,7 @@ interface LedgerDraftInput {
   metadata?: Record<string, unknown>
 }
 
-type LedgerRevenueRow = BranchPipelineRow & {
+export type LedgerRevenueRow = BranchPipelineRow & {
   ledgerOrigin: "sheet" | "draft"
   draftId?: string
   draftKind?: DraftKind
@@ -189,7 +192,7 @@ interface LedgerDraftResponse {
 
 type DraftConfidence = "expected" | "high-confidence" | "confirmed"
 
-interface DraftForm {
+export interface DraftForm {
   operation: DraftOperation
   customer: string
   manager: string
@@ -204,7 +207,7 @@ interface DraftForm {
   note: string
 }
 
-const DRAFT_CONFIDENCE_OPTIONS: Array<{ id: DraftConfidence; label: string }> = [
+export const DRAFT_CONFIDENCE_OPTIONS: Array<{ id: DraftConfidence; label: string }> = [
   { id: "expected", label: "예정" },
   { id: "high-confidence", label: "고확도" },
   { id: "confirmed", label: "확정" },
@@ -234,14 +237,14 @@ function appliedDraftConfidenceMaps(
   }
 }
 
-interface KpiMetricView {
+export interface KpiMetricView {
   metric: string
   goal: number
   actual: number
   pct: number
 }
 
-interface RevWeekPoint {
+export interface RevWeekPoint {
   week: string
   confirmed: number
   highConfidence: number
@@ -276,7 +279,7 @@ interface RevMatrixColumn extends RevMonthlyBucket {
 
 // 모바일 카드·데스크톱 테이블이 공유하는 행 단위 파생값. 두 렌더가 각자 계산하던
 // draftRow/productCategory/weeklySplit/monthAmount/mismatch를 한 번만 계산해 재사용한다.
-interface RevRowView {
+export interface RevRowView {
   row: LedgerRevenueRow
   draftRow: boolean
   productCategory: Exclude<RevProductCategory, "all">
@@ -309,7 +312,7 @@ interface RevProductSummary {
 
 // 같은 고객(normalizedAccountKey — lib/branch/account-key.ts SSOT)의 HW/SW/미분류 행 묶음.
 // REV 테이블은 이 그룹 단위로 페이지네이션·아코디언을 돌리고, 하위 행은 그룹을 펼쳤을 때 노출된다.
-interface RevCustomerGroup {
+export interface RevCustomerGroup {
   key: string
   customer: string
   rows: LedgerRevenueRow[]
@@ -337,7 +340,7 @@ interface RevCustomerGroup {
   annualTotal: RevMonthlyBucket
 }
 
-interface KpiMemberView {
+export interface KpiMemberView {
   row: BranchKpiMemberRow
   metrics: KpiMetricView[]
   activityGoal: number
@@ -360,7 +363,7 @@ const REV_SORT_LABELS: Record<RevSortKey, string> = {
   annual: "연간합계",
   origin: "상태",
 }
-const REV_PRODUCT_FILTERS: Array<{ id: RevProductCategory; label: string }> = [
+export const REV_PRODUCT_FILTERS: Array<{ id: RevProductCategory; label: string }> = [
   { id: "all", label: "상품 전체" },
   { id: "software", label: "SW" },
   { id: "hardware", label: "HW" },
@@ -448,7 +451,7 @@ function MatrixToneLegend() {
   )
 }
 
-const DRAFT_OPERATIONS: Array<{ id: DraftOperation; label: string; description: string }> = [
+export const DRAFT_OPERATIONS: Array<{ id: DraftOperation; label: string; description: string }> = [
   { id: "forecast-add", label: "예상 매출 추가", description: "새 고객 또는 기존 고객의 예상 금액을 큐에 올립니다." },
   { id: "period-shift", label: "기간 이동", description: "예상 매출이 다른 월/주차로 밀릴 때 사용합니다." },
   { id: "quantity-change", label: "예상 수량 변경", description: "라이선스/장비 수량 변화와 금액 변경을 함께 남깁니다." },
@@ -543,7 +546,7 @@ function fiscalYearOf(date: Date): number {
   return month >= 4 ? date.getUTCFullYear() : date.getUTCFullYear() - 1
 }
 
-function formatMonthLabel(ym: string): string {
+export function formatMonthLabel(ym: string): string {
   const [year, month] = ym.split("-")
   return `${year}.${Number(month)}`
 }
@@ -566,7 +569,7 @@ function shiftMonth(ym: string, delta: number): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
 }
 
-function formatMoney(value: number | null | undefined) {
+export function formatMoney(value: number | null | undefined) {
   const numeric = Number(value ?? 0)
   if (Math.abs(numeric) >= 10_000) {
     return `¥${(numeric / 10_000).toLocaleString("ko-KR", {
@@ -576,11 +579,11 @@ function formatMoney(value: number | null | undefined) {
   return `¥${numeric.toLocaleString("ko-KR")}`
 }
 
-function formatPercent(value: number | null | undefined) {
+export function formatPercent(value: number | null | undefined) {
   return `${Number(value ?? 0).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}%`
 }
 
-function formatDateTime(value: string | null | undefined) {
+export function formatDateTime(value: string | null | undefined) {
   if (!value) return "미확인"
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -618,7 +621,7 @@ function isStoredProductCategory(value: unknown): value is Exclude<RevProductCat
   return value === "software" || value === "hardware" || value === "unknown"
 }
 
-function productCategoryMeta(category: RevProductCategory) {
+export function productCategoryMeta(category: RevProductCategory) {
   if (category === "software") {
     return {
       label: "SW",
@@ -698,7 +701,7 @@ function FilterTag({ label, onClear }: { label: string; onClear: () => void }) {
   )
 }
 
-function ProductCategoryPill({ category, compact = false }: { category: RevProductCategory; compact?: boolean }) {
+export function ProductCategoryPill({ category, compact = false }: { category: RevProductCategory; compact?: boolean }) {
   const meta = productCategoryMeta(category)
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${meta.className}`}>
@@ -729,13 +732,13 @@ function orderedKpiMetrics(kpi: BranchKpiMemberRow["kpi"]): KpiMetricView[] {
     .sort(kpiMetricCompare)
 }
 
-function kpiStatusTone(pct: number) {
+export function kpiStatusTone(pct: number) {
   if (pct >= 100) return { label: "초과", className: "bg-[#ECFDF5] text-[#084734]" }
   if (pct >= 75) return { label: "순항", className: "bg-[#F6F5F4] text-[#615D59]" }
   return { label: "주의", className: "bg-[#FBF1E0] text-[#7A520F]" }
 }
 
-function safeAmount(value: string) {
+export function safeAmount(value: string) {
   const normalized = value.replace(/[^\d.-]/g, "")
   const numeric = Number(normalized)
   return Number.isFinite(numeric) ? numeric : 0
@@ -906,7 +909,7 @@ function rowMatchesForecastFilterInMonths(row: LedgerRevenueRow, months: string[
   return months.some((month) => rowMatchesForecastFilter(row, month, filter))
 }
 
-function WeeklySourceBadge({ source }: { source: RevWeeklySource }) {
+export function WeeklySourceBadge({ source }: { source: RevWeeklySource }) {
   const meta: Record<RevWeeklySource, { label: string; className: string }> = {
     explicit: { label: "주차 입력", className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" },
     inferred: { label: "일자 추정", className: "border-[#D9D6D0] bg-[#F6F5F4] text-[#615D59]" },
@@ -922,7 +925,7 @@ function WeeklySourceBadge({ source }: { source: RevWeeklySource }) {
 
 // 주차 셀용 축약 숫자 — 시트처럼 원시 수치를 그대로 읽을 수 있게 ¥ 기호 없이 표기.
 // 1만 미만은 콤마 정수, 이상은 "N.N만"(10만 이상은 소수 생략)으로 칸 폭을 지킨다.
-function formatWeekAmount(value: number) {
+export function formatWeekAmount(value: number) {
   if (value >= 100_000) return `${(value / 10_000).toLocaleString("ko-KR", { maximumFractionDigits: 0 })}만`
   if (value >= 10_000) return `${(value / 10_000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}만`
   return value.toLocaleString("ko-KR", { maximumFractionDigits: 0 })
@@ -930,7 +933,7 @@ function formatWeekAmount(value: number) {
 
 // W1~W5 실수치 5칸. explicit=진한 숫자, inferred(일자 추정)=회색 숫자,
 // month-only=월합계만 배지+금액, empty=점 5개. 시트 검수용이라 막대 대신 숫자를 그대로 노출한다.
-function WeekNumbersCell({
+export function WeekNumbersCell({
   weeks,
   inferred = false,
   monthOnlyAmount = 0,
@@ -1278,7 +1281,7 @@ function MetricTile({
   )
 }
 
-function DonutGauge({
+export function DonutGauge({
   label,
   pct,
   value,
@@ -1339,7 +1342,7 @@ function DonutGauge({
   )
 }
 
-function LoadingPanel({ label }: { label: string }) {
+export function LoadingPanel({ label }: { label: string }) {
   return (
     <div className="flex min-h-[180px] items-center justify-center rounded-lg border border-[rgba(0,0,0,0.08)] bg-white text-[13px] font-semibold text-[#615D59]">
       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1391,7 +1394,7 @@ function RevSortHeader({
   )
 }
 
-function PacingChart({ summary }: { summary: BranchSummaryResponse | null }) {
+export function PacingChart({ summary }: { summary: BranchSummaryResponse | null }) {
   const data = useMemo(() => {
     const months = summary?.monthly_series?.months ?? []
     const goals = summary?.monthly_series?.goal_cum ?? []
@@ -1441,7 +1444,7 @@ function PacingChart({ summary }: { summary: BranchSummaryResponse | null }) {
   )
 }
 
-function MemberBarChart({ rows }: { rows: BranchKpiMemberRow[] }) {
+export function MemberBarChart({ rows }: { rows: BranchKpiMemberRow[] }) {
   const data = rows
     .slice()
     .sort((a, b) => b.goal - a.goal)
@@ -1471,7 +1474,7 @@ function MemberBarChart({ rows }: { rows: BranchKpiMemberRow[] }) {
   )
 }
 
-function ChartLegend({ items }: { items: Array<{ label: string; color: string; dashed?: boolean }> }) {
+export function ChartLegend({ items }: { items: Array<{ label: string; color: string; dashed?: boolean }> }) {
   return (
     <div className="mt-3 flex flex-wrap gap-3 text-[11px] font-semibold text-[#615D59]">
       {items.map((item) => (
@@ -1713,7 +1716,7 @@ function makeWeeklyTargetLabel(value: number) {
   }
 }
 
-function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]; monthGoal?: number | null }) {
+export function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]; monthGoal?: number | null }) {
   const hasData = data.some((item) => item.total > 0)
   if (!hasData) {
     return (
@@ -1893,7 +1896,7 @@ function CompactProgress({
   )
 }
 
-interface BreakdownNumbersRow {
+export interface BreakdownNumbersRow {
   id: string
   label: React.ReactNode
   confirmed: number
@@ -1905,12 +1908,12 @@ interface BreakdownNumbersRow {
   excludeFromTotals?: boolean
 }
 
-function numberCell(value: number, tone = "text-[#111110]") {
+export function numberCell(value: number, tone = "text-[#111110]") {
   if (value <= 0) return <span className="font-semibold text-[#C9C5BF]">–</span>
   return <span className={`font-bold ${tone}`}>{formatMoney(value)}</span>
 }
 
-function BreakdownNumbersTable({ rows, emptyLabel }: { rows: BreakdownNumbersRow[]; emptyLabel: string }) {
+export function BreakdownNumbersTable({ rows, emptyLabel }: { rows: BreakdownNumbersRow[]; emptyLabel: string }) {
   if (rows.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-3 text-[11px] leading-relaxed text-[#615D59]">
@@ -1968,7 +1971,7 @@ function BreakdownNumbersTable({ rows, emptyLabel }: { rows: BreakdownNumbersRow
   )
 }
 
-function RevWeekNumbersTable({
+export function RevWeekNumbersTable({
   data,
   month,
   monthGoal,
@@ -2099,7 +2102,7 @@ function RevWeekNumbersTable({
   )
 }
 
-interface MonthlyPlanRow {
+export interface MonthlyPlanRow {
   month: string
   goal: number
   actual: number
@@ -2110,7 +2113,7 @@ interface MonthlyPlanRow {
   confirmed: boolean
 }
 
-interface WeeklyCloseRunView {
+export interface WeeklyCloseRunView {
   id: string
   startedAt: string
   sourceName: string
@@ -2127,7 +2130,7 @@ interface WeeklyCloseBucketView {
   delta: number
 }
 
-interface WeeklyCloseDiffView {
+export interface WeeklyCloseDiffView {
   month: string
   baseTotal: number
   headTotal: number
@@ -2147,7 +2150,7 @@ interface WeeklyCloseDiffView {
   }>
 }
 
-const WEEKLY_CLOSE_BUCKET_META: Array<{ id: WeeklyCloseBucketId; label: string; tone: string }> = [
+export const WEEKLY_CLOSE_BUCKET_META: Array<{ id: WeeklyCloseBucketId; label: string; tone: string }> = [
   { id: "new", label: "신규", tone: "text-[#084734]" },
   { id: "increased", label: "증액", tone: "text-[#1E5DA8]" },
   { id: "decreased", label: "감액", tone: "text-[#A8741A]" },
@@ -2155,13 +2158,13 @@ const WEEKLY_CLOSE_BUCKET_META: Array<{ id: WeeklyCloseBucketId; label: string; 
   { id: "unchanged", label: "유지", tone: "text-[#615D59]" },
 ]
 
-function formatSignedMoney(value: number) {
+export function formatSignedMoney(value: number) {
   if (value === 0) return "±0"
   const sign = value > 0 ? "+" : "-"
   return `${sign}${formatMoney(Math.abs(value))}`
 }
 
-function DshMonthlyNumbersTable({ rows, selectedMonth }: { rows: MonthlyPlanRow[]; selectedMonth: string }) {
+export function DshMonthlyNumbersTable({ rows, selectedMonth }: { rows: MonthlyPlanRow[]; selectedMonth: string }) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-6 text-center text-[12px] text-[#615D59]">
@@ -2229,7 +2232,7 @@ function DshMonthlyNumbersTable({ rows, selectedMonth }: { rows: MonthlyPlanRow[
   )
 }
 
-function KpiTeamChart({ rows }: { rows: Array<{ team: string; goal: number; status: number; pacing_pct: number }> }) {
+export function KpiTeamChart({ rows }: { rows: Array<{ team: string; goal: number; status: number; pacing_pct: number }> }) {
   const data = rows.map((row) => ({
     team: row.team,
     목표: row.goal,
@@ -2254,7 +2257,7 @@ function KpiTeamChart({ rows }: { rows: Array<{ team: string; goal: number; stat
   )
 }
 
-function KpiActivityChart({ rows }: { rows: KpiMetricView[] }) {
+export function KpiActivityChart({ rows }: { rows: KpiMetricView[] }) {
   const data = rows.map((row) => ({
     metric: row.metric,
     목표: row.goal,
@@ -2279,7 +2282,7 @@ function KpiActivityChart({ rows }: { rows: KpiMetricView[] }) {
   )
 }
 
-function KpiGapChart({ rows }: { rows: KpiMemberView[] }) {
+export function KpiGapChart({ rows }: { rows: KpiMemberView[] }) {
   const data = rows
     .map((item) => ({
       member: item.row.member,
@@ -2313,7 +2316,7 @@ function KpiGapChart({ rows }: { rows: KpiMemberView[] }) {
   )
 }
 
-function KpiRevenueActivityScatter({ rows }: { rows: KpiMemberView[] }) {
+export function KpiRevenueActivityScatter({ rows }: { rows: KpiMemberView[] }) {
   const data = rows.map((item) => ({
     member: item.row.member,
     activityPct: item.activityPct,
@@ -2364,7 +2367,7 @@ function KpiRevenueActivityScatter({ rows }: { rows: KpiMemberView[] }) {
   )
 }
 
-function KpiBottleneckMatrix({
+export function KpiBottleneckMatrix({
   rows,
   onMemberClick,
 }: {
@@ -5854,259 +5857,34 @@ export default function SalesLedgerWorkbench() {
           >
             {lens === "dsh" && (
               <div className="space-y-5">
-                <div className="grid gap-5 xl:grid-cols-2">
-                  <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-[13px] font-bold text-[#111110]">DSH 누적 흐름</p>
-                        <p className="mt-0.5 text-[11px] text-[#615D59]">
-                          목표 <span className="font-bold text-[#111110]">{formatMoney(revenue?.goal)}</span>
-                          {" · "}실적 <span className="font-bold text-[#084734]">{formatMoney(revenue?.confirmed)}</span>
-                          {" · "}달성률 <span className="font-bold text-[#111110]">{formatPercent(revenue?.pacing_pct)}</span>
-                        </p>
-                      </div>
-                      <span className="rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-bold text-[#084734]">
-                        {periodLabel}
-                      </span>
-                    </div>
-                    {summary.loading && !summary.data ? <LoadingPanel label="DSH 데이터를 불러오는 중" /> : <PacingChart summary={summary.data} />}
-                  </section>
+                <DshOverviewSection
+                  summary={summary}
+                  revenue={revenue}
+                  periodLabel={periodLabel}
+                  selectedMonth={selectedMonth}
+                  dshPeakWeek={dshPeakWeek}
+                  pipeline={pipeline}
+                  dshWeekProjection={dshWeekProjection}
+                  revMonthGoal={revMonthGoal}
+                  monthlySeriesRows={monthlySeriesRows}
+                  kpi={kpi}
+                  members={members}
+                />
 
-                  <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
-                    <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
-                          <CalendarDays className="h-4 w-4 text-[#084734]" />
-                          {formatMonthLabel(selectedMonth)} 주차별 확정·고확도·예정
-                        </p>
-                        <p className="mt-0.5 text-[11px] leading-relaxed text-[#615D59]">
-                          REV w1-w5 입력 기준 · 검색/필터와 무관한 전체 행 집계
-                        </p>
-                      </div>
-                      <span className="rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-bold text-[#084734]">
-                        피크 {dshPeakWeek?.week ?? "-"} · {formatMoney(dshPeakWeek?.total)}
-                      </span>
-                    </div>
-                    {pipeline.loading && !pipeline.data ? (
-                      <LoadingPanel label="REV 주차 데이터를 불러오는 중" />
-                    ) : (
-                      <RevWeekForecastChart data={dshWeekProjection} monthGoal={revMonthGoal} />
-                    )}
-                  </section>
-                </div>
-
-                <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-                  <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
-                          <TrendingUp className="h-4 w-4 text-[#A8741A]" />
-                          월별 목표·실적 수치
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-[#615D59]">누적 시리즈를 월별 수치로 분해 · 선택 월 강조</p>
-                      </div>
-                      <span className="text-[11px] font-bold text-[#615D59]">{monthlySeriesRows.length}개월</span>
-                    </div>
-                    {summary.loading && !summary.data ? (
-                      <LoadingPanel label="월별 수치를 불러오는 중" />
-                    ) : (
-                      <DshMonthlyNumbersTable rows={monthlySeriesRows} selectedMonth={selectedMonth} />
-                    )}
-                  </section>
-
-                  <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
-                    <div className="mb-3 flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[13px] font-bold text-[#111110]">담당자 목표/실적</p>
-                        <p className="mt-0.5 text-[11px] text-[#615D59]">KPI 행과 REV 매출을 함께 보는 요약</p>
-                      </div>
-                      <span className="text-[11px] font-bold text-[#615D59]">{members.length}명</span>
-                    </div>
-                    {kpi.loading && !kpi.data ? <LoadingPanel label="KPI 데이터를 불러오는 중" /> : <MemberBarChart rows={members} />}
-                  </section>
-                </div>
-
-                <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
-                  <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
-                        <CalendarDays className="h-4 w-4 text-[#084734]" />
-                        주간 마감 (Weekly Close)
-                      </p>
-                      <p className="mt-0.5 text-[11px] leading-relaxed text-[#615D59]">
-                        스냅샷 두 개를 {formatMonthLabel(selectedMonth)} 기준으로 비교 — 신규/증액/감액/소멸과 확도 전환을 수치로 봅니다.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void captureWeeklySnapshot()}
-                      disabled={wcSnapshotting}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11.5px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60"
-                    >
-                      {wcSnapshotting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                      지금 스냅샷
-                    </button>
-                  </div>
-
-                  {(wcNotice || wcError) && (
-                    <div className={`mb-3 rounded-md border px-3 py-2 text-[11.5px] font-semibold ${
-                      wcError ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]" : "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
-                    }`}>
-                      {wcError ?? wcNotice}
-                    </div>
-                  )}
-
-                  {wcRuns.length < 2 ? (
-                    <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-5 text-[12px] leading-relaxed text-[#615D59]">
-                      저장된 스냅샷 {wcRuns.length.toLocaleString("ko-KR")}개 — 스냅샷이 2개 이상 쌓이면 주간 비교가 열립니다. 매주 금요일
-                      23:30(KST)에 자동으로 기록되며, 필요할 때만 &ldquo;지금 스냅샷&rdquo;으로 즉시 남기면 됩니다.
-                    </div>
-                  ) : (
-                    <>
-                      <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] font-bold text-[#615D59]">
-                        <label className="inline-flex items-center gap-1.5">
-                          기준
-                          <select
-                            value={wcBase}
-                            onChange={(event) => setWcBase(event.target.value)}
-                            className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11.5px] font-semibold text-[#111110] outline-none"
-                          >
-                            {wcRuns.map((run) => (
-                              <option key={run.id} value={run.id} disabled={run.id === wcHead}>
-                                {formatDateTime(run.startedAt)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <ChevronRight className="h-3.5 w-3.5 text-[#A39E98]" />
-                        <label className="inline-flex items-center gap-1.5">
-                          현재
-                          <select
-                            value={wcHead}
-                            onChange={(event) => setWcHead(event.target.value)}
-                            className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11.5px] font-semibold text-[#111110] outline-none"
-                          >
-                            {wcRuns.map((run) => (
-                              <option key={run.id} value={run.id} disabled={run.id === wcBase}>
-                                {formatDateTime(run.startedAt)}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        {wcLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#615D59]" />}
-                        {wcDiff && (
-                          <span className="ml-auto tabular-nums">
-                            합계 {formatMoney(wcDiff.baseTotal)} → {formatMoney(wcDiff.headTotal)}
-                            <span className={`ml-1.5 font-bold ${wcDiff.delta >= 0 ? "text-[#084734]" : "text-[#B43E3E]"}`}>
-                              {formatSignedMoney(wcDiff.delta)}
-                            </span>
-                          </span>
-                        )}
-                      </div>
-
-                      {wcDiff ? (
-                        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-                          <div>
-                            <div className="overflow-x-auto">
-                              <table className="w-full min-w-[380px] text-right text-[11.5px] tabular-nums">
-                                <thead>
-                                  <tr className="text-[10px] uppercase tracking-[0.08em] text-[#615D59]">
-                                    <th className="py-1.5 pr-2 text-left font-bold">구분</th>
-                                    <th className="px-2 py-1.5 font-bold">건수</th>
-                                    <th className="px-2 py-1.5 font-bold">기준</th>
-                                    <th className="px-2 py-1.5 font-bold">현재</th>
-                                    <th className="py-1.5 pl-2 font-bold">Δ</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {WEEKLY_CLOSE_BUCKET_META.map((meta) => {
-                                    const bucket = wcDiff.buckets[meta.id]
-                                    return (
-                                      <tr key={meta.id} className="border-t border-[#F0F0EC]">
-                                        <td className={`py-2 pr-2 text-left font-bold ${meta.tone}`}>{meta.label}</td>
-                                        <td className="px-2 py-2 font-semibold text-[#615D59]">{bucket.count.toLocaleString("ko-KR")}</td>
-                                        <td className="px-2 py-2">{numberCell(bucket.baseAmount)}</td>
-                                        <td className="px-2 py-2">{numberCell(bucket.headAmount)}</td>
-                                        <td className={`py-2 pl-2 font-bold ${bucket.delta > 0 ? "text-[#084734]" : bucket.delta < 0 ? "text-[#B43E3E]" : "text-[#A39E98]"}`}>
-                                          {formatSignedMoney(bucket.delta)}
-                                        </td>
-                                      </tr>
-                                    )
-                                  })}
-                                  <tr className="border-t-2 border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] text-[12px]">
-                                    <td className="py-2 pr-2 text-left font-bold text-[#111110]">합계</td>
-                                    <td className="px-2 py-2 font-semibold text-[#615D59]">
-                                      {Object.values(wcDiff.buckets).reduce((sum, bucket) => sum + bucket.count, 0).toLocaleString("ko-KR")}
-                                    </td>
-                                    <td className="px-2 py-2">{numberCell(wcDiff.baseTotal)}</td>
-                                    <td className="px-2 py-2">{numberCell(wcDiff.headTotal)}</td>
-                                    <td className={`py-2 pl-2 font-bold ${wcDiff.delta >= 0 ? "text-[#084734]" : "text-[#B43E3E]"}`}>
-                                      {formatSignedMoney(wcDiff.delta)}
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-[#615D59]">
-                              <span>
-                                확정 전환 <span className={`font-bold tabular-nums ${wcDiff.confirmedDelta >= 0 ? "text-[#084734]" : "text-[#B43E3E]"}`}>{formatSignedMoney(wcDiff.confirmedDelta)}</span>
-                              </span>
-                              <span>
-                                고확도 전환 <span className={`font-bold tabular-nums ${wcDiff.highConfidenceDelta >= 0 ? "text-[#1E5DA8]" : "text-[#B43E3E]"}`}>{formatSignedMoney(wcDiff.highConfidenceDelta)}</span>
-                              </span>
-                            </div>
-                          </div>
-
-                          <div>
-                            <p className="mb-1.5 text-[11px] font-bold text-[#615D59]">변동 상위 {wcDiff.movers.length}건</p>
-                            {wcDiff.movers.length === 0 ? (
-                              <div className="rounded-md border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-3 text-[11px] text-[#615D59]">
-                                {formatMonthLabel(selectedMonth)}에 두 스냅샷 간 변동이 없습니다.
-                              </div>
-                            ) : (
-                              <div className="overflow-x-auto">
-                                <table className="w-full min-w-[420px] text-right text-[11.5px] tabular-nums">
-                                  <thead>
-                                    <tr className="text-[10px] uppercase tracking-[0.08em] text-[#615D59]">
-                                      <th className="py-1.5 pr-2 text-left font-bold">고객</th>
-                                      <th className="px-2 py-1.5 text-left font-bold">담당</th>
-                                      <th className="px-2 py-1.5 font-bold">기준 → 현재</th>
-                                      <th className="py-1.5 pl-2 font-bold">Δ</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {wcDiff.movers.map((mover) => {
-                                      const meta = WEEKLY_CLOSE_BUCKET_META.find((item) => item.id === mover.bucket)
-                                      return (
-                                        <tr key={mover.key} className="border-t border-[#F0F0EC]">
-                                          <td className="max-w-[150px] truncate py-2 pr-2 text-left font-bold text-[#111110]">
-                                            {mover.account}
-                                            {meta && <span className={`ml-1.5 text-[9.5px] font-bold ${meta.tone}`}>{meta.label}</span>}
-                                          </td>
-                                          <td className="px-2 py-2 text-left text-[11px] text-[#615D59]">{mover.manager ?? "-"}</td>
-                                          <td className="px-2 py-2 font-semibold text-[#615D59]">
-                                            {formatMoney(mover.baseAmount)} → {formatMoney(mover.headAmount)}
-                                          </td>
-                                          <td className={`py-2 pl-2 font-bold ${mover.delta > 0 ? "text-[#084734]" : "text-[#B43E3E]"}`}>
-                                            {formatSignedMoney(mover.delta)}
-                                          </td>
-                                        </tr>
-                                      )
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-4 text-[12px] text-[#615D59]">
-                          기준과 현재 스냅샷을 서로 다르게 선택하면 {formatMonthLabel(selectedMonth)} 비교 수치가 나옵니다.
-                        </div>
-                      )}
-                    </>
-                  )}
-                </section>
+                <WeeklyCloseSection
+                  selectedMonth={selectedMonth}
+                  captureWeeklySnapshot={captureWeeklySnapshot}
+                  wcSnapshotting={wcSnapshotting}
+                  wcNotice={wcNotice}
+                  wcError={wcError}
+                  wcRuns={wcRuns}
+                  wcBase={wcBase}
+                  setWcBase={setWcBase}
+                  wcHead={wcHead}
+                  setWcHead={setWcHead}
+                  wcLoading={wcLoading}
+                  wcDiff={wcDiff}
+                />
               </div>
             )}
 
@@ -6397,299 +6175,38 @@ export default function SalesLedgerWorkbench() {
                     </button>
                   </div>
                 )}
-                {/* 보조 분석(강등): 선택 월 목표대비·주차별·담당자/상품군. 기본 접힘 — 1차 뷰는 아래 매트릭스. */}
-                <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8]">
-                  <button
-                    type="button"
-                    onClick={() => setRevAuxOpen((value) => !value)}
-                    aria-expanded={revAuxOpen}
-                    className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left transition hover:bg-[#F0F0EC] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/30"
-                  >
-                    <span className="flex shrink-0 items-center gap-2 text-[12px] font-bold text-[#111110]">
-                      <Target className="h-3.5 w-3.5 text-[#084734]" />
-                      {formatMonthLabel(selectedMonth)} 보조 분석 · 목표 대비 · 주차별 · 담당자/상품군
-                    </span>
-                    {!revAuxOpen && (
-                      <span className="hidden min-w-0 flex-1 items-center justify-end gap-x-3 overflow-hidden whitespace-nowrap text-[11px] font-semibold tabular-nums text-[#615D59] md:flex">
-                        <span>목표 <span className="font-bold text-[#111110]">{revComparableGoal !== null ? formatMoney(revComparableGoal) : revGoalMutedByFilter ? "필터 중 생략" : "–"}</span></span>
-                        <span>확정 <span className="font-bold text-[#084734]">{formatMoney(revMonthConfirmed)}</span></span>
-                        {revComparableGoal !== null && (
-                          <span>
-                            달성률{" "}
-                            <span className={`font-bold ${revMonthConfirmed >= revComparableGoal ? "text-[#084734]" : "text-[#B43E3E]"}`}>
-                              {formatPercent((revMonthConfirmed / revComparableGoal) * 100)}
-                            </span>
-                          </span>
-                        )}
-                        <span>예정 <span className="font-bold text-[#7A520F]">{formatMoney(revMonthPlanned)}</span></span>
-                      </span>
-                    )}
-                    <span className="flex shrink-0 items-center gap-1.5 text-[11px] font-semibold text-[#615D59]">
-                      {revAuxOpen ? "접기" : "펼치기"}
-                      <ChevronRight className={`h-3.5 w-3.5 transition-transform ${revAuxOpen ? "rotate-90" : ""}`} />
-                    </span>
-                  </button>
-                </div>
-                {revAuxOpen && (
-                <div className="space-y-4 border-b border-[rgba(0,0,0,0.08)] p-4">
-                  <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-4">
-                    <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
-                          <Target className="h-4 w-4 text-[#084734]" />
-                          {formatMonthLabel(selectedMonth)} 목표 대비 수치
-                        </p>
-                        <p className="mt-1 text-[11px] text-[#615D59]">
-                          현재 검색/필터가 반영된 REV 집계 · 월 목표는 DSH 시리즈(팀 스코프) 기준
-                        </p>
-                      </div>
-                      {revGoalMutedByFilter ? (
-                        <span
-                          className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1 text-[10.5px] font-bold text-[#7A520F]"
-                          title="월 목표는 팀 전체 기준이라 담당자·지역·상품·검색 필터가 걸린 집계와 비교할 수 없습니다. 필터를 초기화하면 달성률이 다시 표시됩니다."
-                        >
-                          필터 중 — 팀 목표 비교 생략
-                        </span>
-                      ) : revComparableGoal === null ? (
-                        <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1 text-[10.5px] font-bold text-[#7A520F]">
-                          선택 월 목표 없음
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
-                      <div className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
-                        <p className="text-[10.5px] font-bold text-[#615D59]">월 목표</p>
-                        <p className="mt-1 text-[17px] font-bold tabular-nums text-[#111110]">
-                          {revComparableGoal !== null ? formatMoney(revComparableGoal) : "–"}
-                        </p>
-                        <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">
-                          {revGoalMutedByFilter ? "필터 중 — 비교 생략" : "DSH 월간 목표"}
-                        </p>
-                      </div>
-                      <div className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
-                        <p className="text-[10.5px] font-bold text-[#615D59]">확정</p>
-                        <p className="mt-1 text-[17px] font-bold tabular-nums text-[#084734]">{formatMoney(revMonthConfirmed)}</p>
-                        <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">
-                          {revComparableGoal !== null
-                            ? `달성률 ${formatPercent((revMonthConfirmed / revComparableGoal) * 100)}`
-                            : revGoalMutedByFilter
-                              ? "필터 중 — 달성률 생략"
-                              : "월 목표 미설정"}
-                        </p>
-                      </div>
-                      <div className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
-                        <p className="text-[10.5px] font-bold text-[#615D59]">고확도</p>
-                        <p className="mt-1 text-[17px] font-bold tabular-nums text-[#1E5DA8]">{formatMoney(revMonthHighConfidence)}</p>
-                        <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">
-                          {revComparableGoal !== null
-                            ? `확정+고확도 ${formatPercent((revMonthCovered / revComparableGoal) * 100)}`
-                            : `확정+고확도 ${formatMoney(revMonthCovered)}`}
-                        </p>
-                      </div>
-                      <div className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
-                        <p className="text-[10.5px] font-bold text-[#615D59]">예정·월합계만</p>
-                        <p className="mt-1 text-[17px] font-bold tabular-nums text-[#A8741A]">{formatMoney(revMonthPlanned)}</p>
-                        <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">월합계만 {formatMoney(revMonthMonthlyOnly)}</p>
-                      </div>
-                      <div className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
-                        <p className="text-[10.5px] font-bold text-[#615D59]">목표까지</p>
-                        {revMonthRemaining === null ? (
-                          <>
-                            <p className="mt-1 text-[17px] font-bold tabular-nums text-[#111110]">–</p>
-                            <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">
-                              {revGoalMutedByFilter ? "필터 중 — 비교 생략" : "월 목표 미설정"}
-                            </p>
-                          </>
-                        ) : revMonthRemaining > 0 ? (
-                          <>
-                            <p className="mt-1 text-[17px] font-bold tabular-nums text-[#B43E3E]">{formatMoney(revMonthRemaining)}</p>
-                            <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">확정 기준 부족</p>
-                          </>
-                        ) : (
-                          <>
-                            <p className="mt-1 text-[17px] font-bold tabular-nums text-[#084734]">+{formatMoney(Math.abs(revMonthRemaining))}</p>
-                            <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">목표 초과 달성</p>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    {revComparableGoal !== null && (
-                      <div className="mt-3">
-                        <div className="relative h-2.5 overflow-hidden rounded-full bg-[#F0F0EC]">
-                          <div className="absolute inset-y-0 left-0 flex w-full">
-                            <span className="h-full bg-[#084734]" style={{ width: `${(revMonthConfirmed / revMonthScale) * 100}%` }} />
-                            <span className="h-full bg-[#1E5DA8]" style={{ width: `${(revMonthHighConfidence / revMonthScale) * 100}%` }} />
-                            <span className="h-full bg-[#A8741A]" style={{ width: `${(revMonthOpen / revMonthScale) * 100}%` }} />
-                            <span className="h-full bg-[#D9D6D0]" style={{ width: `${(revMonthMonthlyOnly / revMonthScale) * 100}%` }} />
-                          </div>
-                          <span
-                            className="absolute inset-y-0 w-[2px] bg-[#111110]"
-                            style={{ left: `calc(${Math.min((revComparableGoal / revMonthScale) * 100, 100)}% - 1px)` }}
-                            aria-label={`월 목표 ${formatMoney(revComparableGoal)} 위치`}
-                          />
-                        </div>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-[#615D59]">
-                          <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#084734]" />확정</span>
-                          <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#1E5DA8]" />고확도</span>
-                          <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#A8741A]" />예정</span>
-                          <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#D9D6D0]" />월합계만</span>
-                          <span className="inline-flex items-center gap-1"><span className="h-3 w-[2px] bg-[#111110]" />월 목표 {formatMoney(revComparableGoal)}</span>
-                        </div>
-                      </div>
-                    )}
-                  </section>
+                <RevAuxAnalysisSection
+                  revAuxOpen={revAuxOpen}
+                  setRevAuxOpen={setRevAuxOpen}
+                  selectedMonth={selectedMonth}
+                  revComparableGoal={revComparableGoal}
+                  revGoalMutedByFilter={revGoalMutedByFilter}
+                  revMonthConfirmed={revMonthConfirmed}
+                  revMonthPlanned={revMonthPlanned}
+                  revMonthHighConfidence={revMonthHighConfidence}
+                  revMonthCovered={revMonthCovered}
+                  revMonthMonthlyOnly={revMonthMonthlyOnly}
+                  revMonthRemaining={revMonthRemaining}
+                  revMonthScale={revMonthScale}
+                  revMonthOpen={revMonthOpen}
+                  revPeakWeek={revPeakWeek}
+                  revWeekProjection={revWeekProjection}
+                  revMonthRowCount={revMonthRowCount}
+                  revManagerTableRows={revManagerTableRows}
+                  revProductTableRows={revProductTableRows}
+                />
 
-                  <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
-                    <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="flex items-center gap-2 text-[13px] font-bold text-[#111110]">
-                          <CalendarDays className="h-4 w-4 text-[#084734]" />
-                          {formatMonthLabel(selectedMonth)} 주차별 수치 (W1–W5)
-                        </p>
-                        <p className="mt-1 text-[11px] leading-relaxed text-[#615D59]">
-                          REV w1-w5 입력 기준 · 월합계만 입력된 행은 W5 열에 합산 · 주차 흐름 차트는 DSH 탭
-                        </p>
-                      </div>
-                      <span className="rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-bold text-[#084734]">
-                        피크 {revPeakWeek?.week ?? "-"} · {formatMoney(revPeakWeek?.total)}
-                      </span>
-                    </div>
-                    <RevWeekNumbersTable data={revWeekProjection} month={selectedMonth} monthGoal={revComparableGoal} monthRowCount={revMonthRowCount} />
-                  </section>
-
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="flex items-center gap-2 text-[12px] font-bold text-[#111110]">
-                          <TrendingUp className="h-3.5 w-3.5 text-[#A8741A]" />
-                          담당자별 월 수치
-                        </p>
-                        <span className="text-[10.5px] font-bold text-[#615D59]">상위 {revManagerTableRows.length}명</span>
-                      </div>
-                      <BreakdownNumbersTable rows={revManagerTableRows} emptyLabel="선택 월에 담당자별 REV 금액이 없습니다." />
-                    </section>
-                    <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-[12px] font-bold text-[#111110]">상품군 수치</p>
-                        <span className="text-[10.5px] font-bold text-[#615D59]">HW 판정 외 전부 SW</span>
-                      </div>
-                      <BreakdownNumbersTable rows={revProductTableRows} emptyLabel="선택 월에 상품군을 추정할 수 있는 REV 금액이 없습니다." />
-                    </section>
-                  </div>
-                </div>
-                )}
-
-                <div className="space-y-2 p-3 md:hidden">
-                  {filteredRows.length === 0 && (
-                    <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-6 text-center text-[12px] text-[#615D59]">
-                      <p>조건에 맞는 REV 행이 없습니다 · 필터/검색을 초기화해 보세요</p>
-                      {revControlsDirty && (
-                        <button
-                          type="button"
-                          onClick={resetRevFilters}
-                          className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" />
-                          초기화
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {visibleGroups.map((group) => {
-                    const grouped = group.rows.length > 1
-                    const expanded = !grouped || expandedRevGroups.has(group.key)
-                    return (
-                      <article key={group.key} className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
-                        {grouped && (
-                          <button
-                            type="button"
-                            onClick={() => toggleRevGroup(group.key)}
-                            aria-expanded={expanded}
-                            className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
-                          >
-                            <span className="min-w-0">
-                              <span className="block truncate text-[13px] font-bold text-[#111110]">{group.customer}</span>
-                              <span className="mt-0.5 block text-[10.5px] font-semibold text-[#615D59]">
-                                {group.rows.length}건 · SW {formatMoney(group.categoryTotals.software)} · HW {formatMoney(group.categoryTotals.hardware)}
-                              </span>
-                            </span>
-                            <span className="flex shrink-0 items-center gap-2">
-                              <span className="text-[14px] font-bold tabular-nums text-[#111110]">{formatMoney(group.monthTotal || group.revenueTotal)}</span>
-                              <ChevronRight className={`h-4 w-4 text-[#615D59] transition-transform ${expanded ? "rotate-90" : ""}`} />
-                            </span>
-                          </button>
-                        )}
-                        {expanded &&
-                          group.rows.map((row) => {
-                            const view = revRowViews.get(row.id)
-                            if (!view) return null
-                            const { draftRow, productCategory, weeklySplit, monthAmount, mismatch } = view
-                            const active = selectedRow?.id === row.id
-                            return (
-                              <div
-                                key={row.id}
-                                className={`px-3 py-2.5 ${grouped ? "border-t border-[#F0F0EC]" : ""} ${
-                                  active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5]" : ""
-                                }`}
-                              >
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    {!grouped && (
-                                      <button
-                                        type="button"
-                                        onClick={() => void loadDealDetail(row)}
-                                        className="max-w-full truncate text-left text-[13px] font-bold text-[#111110] underline-offset-2 hover:text-[#084734] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-                                        aria-label={`${row.customer} 상세 열기`}
-                                      >
-                                        {row.customer}
-                                      </button>
-                                    )}
-                                    <div className={`flex flex-wrap items-center gap-1.5 ${grouped ? "" : "mt-1"}`}>
-                                      <ProductCategoryPill category={productCategory} compact />
-                                      <WeeklySourceBadge source={weeklySplit.source} />
-                                      {draftRow && (
-                                        <span className="rounded-full bg-[#FBF1E0] px-2 py-0.5 text-[10px] font-bold text-[#7A520F]">장부 입력</span>
-                                      )}
-                                    </div>
-                                    <p className="mt-1 truncate text-[10.5px] font-semibold text-[#615D59]">
-                                      {[row.manager, row.team, row.region, row.status, row.dealType, row.productVersion].filter(Boolean).join(" · ") || "-"}
-                                    </p>
-                                  </div>
-                                  <div className="shrink-0 text-right">
-                                    <p className="text-[13px] font-bold tabular-nums text-[#111110]">
-                                      {formatMoney(monthAmount || row.revenue)}
-                                    </p>
-                                    <button
-                                      type="button"
-                                      onClick={() => void loadDealDetail(row)}
-                                      className="mt-1 inline-flex items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-                                      aria-label={`${row.customer} 상세 열기`}
-                                    >
-                                      상세
-                                      <ChevronRight className="h-3 w-3" />
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="mt-1.5">
-                                  <WeekNumbersCell
-                                    weeks={weeklySplit.source === "explicit" || weeklySplit.source === "inferred" ? weeklySplit.weeks : [0, 0, 0, 0, 0]}
-                                    inferred={weeklySplit.source === "inferred"}
-                                    monthOnlyAmount={weeklySplit.source === "month-only" ? weeklySplit.total : 0}
-                                  />
-                                  {mismatch && (
-                                    <p className="mt-0.5 flex items-center justify-end gap-0.5 text-[9.5px] font-bold text-[#B43E3E]">
-                                      <AlertTriangle className="h-2.5 w-2.5" />
-                                      주차합 {formatWeekAmount(mismatch.weekly)} ≠ 월 {formatWeekAmount(mismatch.monthly)}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })}
-                      </article>
-                    )
-                  })}
-                </div>
+                <RevMobileList
+                  filteredRows={filteredRows}
+                  revControlsDirty={revControlsDirty}
+                  resetRevFilters={resetRevFilters}
+                  visibleGroups={visibleGroups}
+                  expandedRevGroups={expandedRevGroups}
+                  toggleRevGroup={toggleRevGroup}
+                  revRowViews={revRowViews}
+                  selectedRow={selectedRow}
+                  loadDealDetail={loadDealDetail}
+                />
 
                 {revTotalPages > 1 && (
                   <div className="hidden items-center justify-between gap-2 border-b border-[rgba(0,0,0,0.08)] px-4 py-2 text-[11.5px] text-[#615D59] md:flex">
@@ -6965,258 +6482,23 @@ export default function SalesLedgerWorkbench() {
             )}
 
             {lens === "kpi" && (
-              <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
-              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <SlidersHorizontal className="h-4 w-4 text-[#084734]" />
-                    <h2 className="text-[13px] font-bold text-[#111110]">KPI 병목과 담당자 상세</h2>
-                  </div>
-                  <p className="mt-1 text-[11px] leading-relaxed text-[#615D59]">
-                    활동 목표/실적, 매출 달성, 딜 수를 담당자별로 비교하고 REV 매출 행으로 바로 좁혀봅니다.
-                  </p>
-                </div>
-                <span className="rounded-full bg-[#F6F5F4] px-2.5 py-1 text-[11px] font-bold text-[#615D59]">
-                  {kpiMemberRows.length}명
-                </span>
-              </div>
-
-              {kpi.loading && !kpi.data ? (
-                <LoadingPanel label="KPI 데이터를 불러오는 중" />
-              ) : (
-                <>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["팀", `${kpiTeamRows.length}개`, "목표/실적 집계", "text-[#111110]"],
-                      ["활동 KPI", formatPercent(kpiActivityPct), `${kpiActivityActual}/${kpiActivityGoal}`, "text-[#1E5DA8]"],
-                    ].map(([label, value, hint, tone]) => (
-                      <div key={String(label)} className="rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 py-3">
-                        <p className="text-[10.5px] font-bold uppercase text-[#615D59]">{label}</p>
-                        <p className={`mt-1 text-[18px] font-bold leading-none ${tone}`}>{value}</p>
-                        <p className="mt-1.5 text-[11px] font-semibold text-[#615D59]">{hint}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)_minmax(0,1.25fr)]">
-                    <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3">
-                      <div className="mb-3 flex items-center justify-between gap-2">
-                        <p className="text-[12px] font-bold text-[#111110]">KPI 달성률</p>
-                        <span className="text-[10.5px] font-bold text-[#615D59]">LD 우선</span>
-                      </div>
-                      <DonutGauge
-                        label="활동 KPI"
-                        pct={kpiActivityPct}
-                        value={`${kpiActivityActual}/${kpiActivityGoal}`}
-                        goal="LD · ACC · OPP · SOL · VST"
-                        color="#1E5DA8"
-                        size={112}
-                      />
-                    </section>
-
-                    <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3">
-                      <div className="mb-3 flex items-center justify-between gap-2">
-                        <p className="text-[12px] font-bold text-[#111110]">팀별 달성률</p>
-                        <span className="text-[10.5px] font-bold text-[#615D59]">{kpiTeamGaugeRows.length}팀</span>
-                      </div>
-                      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                        {kpiTeamGaugeRows.map((row) => (
-                          <DonutGauge
-                            key={row.id}
-                            label={row.label}
-                            pct={row.pct}
-                            value={row.value}
-                            goal={row.goal}
-                            color="#084734"
-                            size={82}
-                          />
-                        ))}
-                      </div>
-                    </section>
-
-                    <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3">
-                      <div className="mb-3 flex items-center justify-between gap-2">
-                        <p className="text-[12px] font-bold text-[#111110]">개인별 KPI 달성률</p>
-                        <span className="text-[10.5px] font-bold text-[#615D59]">{kpiMemberGaugeRows.length}명</span>
-                      </div>
-                      <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
-                        {kpiMemberGaugeRows.map((row) => (
-                          <DonutGauge
-                            key={row.id}
-                            label={row.label}
-                            pct={row.pct}
-                            value={row.value}
-                            goal={row.goal}
-                            color="#084734"
-                            size={76}
-                          />
-                        ))}
-                      </div>
-                    </section>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                    <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-[12px] font-bold text-[#111110]">팀별 목표/실적</p>
-                        <span className="text-[10.5px] font-bold text-[#615D59]">overview 연동</span>
-                      </div>
-                      <KpiTeamChart rows={kpiTeamRows} />
-                      <ChartLegend items={[{ label: "목표", color: "#D9D6D0" }, { label: "실적", color: "#084734" }]} />
-                    </div>
-
-                    <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-[12px] font-bold text-[#111110]">활동 KPI 합산</p>
-                        <span className="text-[10.5px] font-bold text-[#615D59]">{formatPercent(kpiActivityPct)}</span>
-                      </div>
-                      <KpiActivityChart rows={kpiActivityRows} />
-                      <ChartLegend items={[{ label: "목표", color: "#D9D6D0" }, { label: "실적", color: "#1E5DA8" }]} />
-                    </div>
-
-                    <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-[12px] font-bold text-[#111110]">개인별 매출 Gap</p>
-                        <span className="text-[10.5px] font-bold text-[#615D59]">부족 큰 순</span>
-                      </div>
-                      <KpiGapChart rows={kpiMemberRows} />
-                      <ChartLegend items={[{ label: "초과", color: "#084734" }, { label: "부족", color: "#B43E3E" }]} />
-                    </div>
-
-                    <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-[12px] font-bold text-[#111110]">활동 × 매출 사분면</p>
-                        <span className="text-[10.5px] font-bold text-[#615D59]">75% 기준선</span>
-                      </div>
-                      <KpiRevenueActivityScatter rows={kpiMemberRows} />
-                    </div>
-
-                    <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-[12px] font-bold text-[#111110]">개인별 목표/실적</p>
-                        <span className="text-[10.5px] font-bold text-[#615D59]">KR Team</span>
-                      </div>
-                      <MemberBarChart rows={members} />
-                    </div>
-
-                    <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-[12px] font-bold text-[#111110]">개인별 활동 병목</p>
-                        <span className="text-[10.5px] font-bold text-[#615D59]">낮은 순</span>
-                      </div>
-                      <KpiBottleneckMatrix
-                        rows={kpiMemberRows}
-                        onMemberClick={(member) => {
-                          setQuery("")
-                          setManagerFilter(member)
-                          setRegionFilter("ALL")
-                          setRevPage(1)
-                          selectLens("rev")
-                        }}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-[940px] w-full text-left text-[12px]">
-                  <thead className="bg-[#FAFAF8] text-[11px] uppercase tracking-[0.08em] text-[#615D59]">
-                    <tr>
-                      <th className="px-3 py-3 font-bold">담당자</th>
-                      <th className="px-3 py-3 font-bold">팀</th>
-                      <th className="px-3 py-3 text-right font-bold">매출</th>
-                      <th className="px-3 py-3 text-right font-bold">딜</th>
-                      <th className="px-3 py-3 font-bold">활동 KPI</th>
-                      <th className="px-3 py-3 text-right font-bold">연동</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {kpiMemberRows.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="px-4 py-10 text-center text-[#615D59]">
-                          KPI 담당자 데이터가 없습니다.
-                        </td>
-                      </tr>
-                    ) : kpiMemberRows.map(({ row, metrics, activityActual, activityGoal, activityPct }) => {
-                      const activityTone = kpiStatusTone(activityPct)
-                      const revenueTone = kpiStatusTone(row.achievement_pct)
-                      return (
-                        <tr key={row.member} className="border-t border-[#F0F0EC] transition hover:bg-[#FAFAF8]">
-                          <td className="px-3 py-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setQuery("")
-                                setManagerFilter(row.member)
-                                setRegionFilter("ALL")
-                                setRevPage(1)
-                                selectLens("rev")
-                              }}
-                              className="cursor-pointer font-bold text-[#111110] underline-offset-2 hover:text-[#084734] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
-                              aria-label={`${row.member} REV 행 보기`}
-                            >
-                              {row.member}
-                            </button>
-                          </td>
-                          <td className="px-3 py-3">
-                            <span className="rounded-full bg-[#F6F5F4] px-2 py-1 text-[11px] font-bold text-[#615D59]">
-                              {row.team ?? "-"}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 text-right">
-                            <p className="font-bold text-[#111110]">{formatMoney(row.status)}</p>
-                            <p className="mt-0.5 text-[10.5px] text-[#615D59]">목표 {formatMoney(row.goal)}</p>
-                            <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${revenueTone.className}`}>
-                              {formatPercent(row.achievement_pct)} {revenueTone.label}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 text-right">
-                            <p className="font-bold text-[#111110]">{row.deals_confirmed}/{row.deals_total}</p>
-                            <p className="mt-0.5 text-[10.5px] text-[#615D59]">신규 {row.new_renew.new} · 갱신 {row.new_renew.renew}</p>
-                          </td>
-                          <td className="px-3 py-3">
-                            <div className="flex flex-wrap gap-1.5">
-                              {metrics.map((metric) => (
-                                <span
-                                  key={`${row.member}-${metric.metric}`}
-                                  className={`rounded-full px-2 py-1 text-[10px] font-bold ${kpiStatusTone(metric.pct).className}`}
-                                  title={`${metric.metric} ${metric.actual}/${metric.goal}`}
-                                >
-                                  {metric.metric} {metric.actual}/{metric.goal}
-                                </span>
-                              ))}
-                            </div>
-                            <p className="mt-1.5 text-[10.5px] font-semibold text-[#615D59]">
-                              활동 합계 {activityActual}/{activityGoal} · {formatPercent(activityPct)}
-                            </p>
-                            <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${activityTone.className}`}>
-                              활동 {activityTone.label}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setQuery("")
-                                setManagerFilter(row.member)
-                                setRegionFilter("ALL")
-                                setRevPage(1)
-                                selectLens("rev")
-                              }}
-                              className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-[#BDEFD8] px-2.5 py-1.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
-                            >
-                              REV 보기
-                              <ChevronRight className="h-3.5 w-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              </section>
+              <KpiLensSection
+                kpi={kpi}
+                kpiMemberRows={kpiMemberRows}
+                kpiTeamRows={kpiTeamRows}
+                kpiActivityRows={kpiActivityRows}
+                kpiActivityPct={kpiActivityPct}
+                kpiActivityActual={kpiActivityActual}
+                kpiActivityGoal={kpiActivityGoal}
+                kpiTeamGaugeRows={kpiTeamGaugeRows}
+                kpiMemberGaugeRows={kpiMemberGaugeRows}
+                members={members}
+                setQuery={setQuery}
+                setManagerFilter={setManagerFilter}
+                setRegionFilter={setRegionFilter}
+                setRevPage={setRevPage}
+                selectLens={selectLens}
+              />
             )}
           </div>
         </section>
@@ -7608,245 +6890,23 @@ export default function SalesLedgerWorkbench() {
           )}
 
           {railView === "input" && (
-          <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
-            <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[13px] font-bold text-[#111110]">입력 / 수정</p>
-                  <p className="mt-1 text-[11px] text-[#615D59]">
-                    {editingDraft
-                      ? `${editingDraft.customer || "초안"} 항목을 다시 수정하는 중입니다.`
-                      : `${queueMode === "server" ? "서버 큐" : "로컬 fallback"}에 검토 초안으로 저장됩니다.`}
-                  </p>
-                </div>
-                {editingDraft && (
-                  <span className="shrink-0 rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10px] font-bold text-[#7A520F]">
-                    편집 중
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="space-y-3 p-4">
-              <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
-                <p className="mb-2 text-[11px] font-bold text-[#615D59]">작업 유형</p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {DRAFT_OPERATIONS.map((operation) => (
-                    <button
-                      key={operation.id}
-                      type="button"
-                      onClick={() => setDraftForm((current) => ({ ...current, operation: operation.id }))}
-                      className={`min-h-9 rounded-md px-2 py-1.5 text-left text-[11px] font-bold transition ${
-                        draftForm.operation === operation.id
-                          ? "bg-[#111110] text-white"
-                          : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
-                      }`}
-                    >
-                      {operation.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-2 text-[10.5px] leading-relaxed text-[#615D59]">{selectedDraftOperation.description}</p>
-              </div>
-              <label className="block text-[11px] font-bold text-[#615D59]">
-                고객/계정
-                <input
-                  value={draftForm.customer}
-                  onChange={(event) => setDraftForm((current) => ({ ...current, customer: event.target.value }))}
-                  className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
-                />
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="block text-[11px] font-bold text-[#615D59]">
-                  담당자
-                  <input
-                    value={draftForm.manager}
-                    onChange={(event) => setDraftForm((current) => ({ ...current, manager: event.target.value }))}
-                    className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
-                  />
-                </label>
-                <label className="block text-[11px] font-bold text-[#615D59]">
-                  팀
-                  <select
-                    value={draftForm.team}
-                    onChange={(event) => setDraftForm((current) => ({ ...current, team: event.target.value }))}
-                    className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                  >
-                    {TEAMS.filter((value) => value !== "ALL").map((value) => <option key={value} value={value}>{value}</option>)}
-                  </select>
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="block text-[11px] font-bold text-[#615D59]">
-                  상품군
-                  <select
-                    value={draftForm.productCategory}
-                    onChange={(event) => setDraftForm((current) => ({
-                      ...current,
-                      productCategory: event.target.value as Exclude<RevProductCategory, "all">,
-                    }))}
-                    className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                  >
-                    {REV_PRODUCT_FILTERS.filter((item) => item.id !== "all").map((item) => (
-                      <option key={item.id} value={item.id}>{productCategoryMeta(item.id).label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block text-[11px] font-bold text-[#615D59]">
-                  주차
-                  <select
-                    value={draftForm.week}
-                    onChange={(event) => setDraftForm((current) => ({ ...current, week: event.target.value }))}
-                    className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                  >
-                    <option value="month">월합계</option>
-                    {[1, 2, 3, 4, 5].map((week) => <option key={week} value={`w${week}`}>W{week}</option>)}
-                  </select>
-                </label>
-              </div>
-              <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
-                <p className="mb-1.5 text-[11px] font-bold text-[#615D59]">확도</p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {DRAFT_CONFIDENCE_OPTIONS.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => setDraftForm((current) => ({ ...current, confidence: option.id }))}
-                      aria-pressed={draftForm.confidence === option.id}
-                      className={`min-h-8 rounded-md px-2 py-1 text-[11px] font-bold transition ${
-                        draftForm.confidence === option.id
-                          ? option.id === "confirmed"
-                            ? "bg-[#084734] text-white"
-                            : option.id === "high-confidence"
-                              ? "bg-[#1E5DA8] text-white"
-                              : "bg-[#A8741A] text-white"
-                          : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-1.5 text-[10.5px] leading-relaxed text-[#615D59]">
-                  초안 적용 시 확도가 함께 기록됩니다. 예정 → 고확도 → 확정 전환도 이 폼으로 남깁니다.
-                </p>
-              </div>
-              {draftForm.operation === "period-shift" && (
-                <label className="block text-[11px] font-bold text-[#615D59]">
-                  기존 월
-                  <select
-                    value={draftForm.fromMonth}
-                    onChange={(event) => setDraftForm((current) => ({ ...current, fromMonth: event.target.value }))}
-                    className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                  >
-                    {monthOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
-                </label>
-              )}
-              <div className="grid grid-cols-2 gap-2">
-                <label className="block text-[11px] font-bold text-[#615D59]">
-                  {draftForm.operation === "period-shift" ? "이동 월" : "월"}
-                  <select
-                    value={draftForm.month}
-                    onChange={(event) => setDraftForm((current) => ({ ...current, month: event.target.value }))}
-                    className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                  >
-                    {monthOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
-                </label>
-                <label className="block text-[11px] font-bold text-[#615D59]">
-                  금액
-                  <input
-                    value={draftForm.amount}
-                    onChange={(event) => setDraftForm((current) => ({ ...current, amount: event.target.value }))}
-                    inputMode="numeric"
-                    aria-invalid={draftAmountInvalid}
-                    className={`mt-1 h-9 w-full rounded-md border bg-[#FAFAF8] px-3 text-right text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734] ${
-                      draftAmountInvalid ? "border-[#DC2626]" : "border-[rgba(0,0,0,0.08)]"
-                    }`}
-                  />
-                </label>
-              </div>
-              {draftForm.operation === "quantity-change" && (
-                <label className="block text-[11px] font-bold text-[#615D59]">
-                  예상 수량
-                  <input
-                    value={draftForm.quantity}
-                    onChange={(event) => setDraftForm((current) => ({ ...current, quantity: event.target.value }))}
-                    inputMode="numeric"
-                    aria-invalid={draftQuantityInvalid}
-                    className={`mt-1 h-9 w-full rounded-md border bg-[#FAFAF8] px-3 text-right text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734] ${
-                      draftQuantityInvalid ? "border-[#DC2626]" : "border-[rgba(0,0,0,0.08)]"
-                    }`}
-                  />
-                </label>
-              )}
-              {(draftForm.operation === "period-shift" || draftForm.operation === "quantity-change") && (
-                <div className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] p-3 text-[11.5px] leading-relaxed text-[#7A520F]">
-                  {draftForm.operation === "period-shift"
-                    ? `${formatMonthLabel(draftForm.fromMonth || selectedMonth)} -${formatMoney(safeAmount(draftForm.amount))} → ${formatMonthLabel(draftForm.month || selectedMonth)} +${formatMoney(safeAmount(draftForm.amount))}`
-                    : `${productCategoryMeta(draftForm.productCategory).label} · 수량 ${draftForm.quantity || "-"} · 금액 ${formatMoney(safeAmount(draftForm.amount))}`}
-                </div>
-              )}
-              <label className="block text-[11px] font-bold text-[#615D59]">
-                메모 / 체크
-                <textarea
-                  value={draftForm.note}
-                  onChange={(event) => setDraftForm((current) => ({ ...current, note: event.target.value }))}
-                  rows={3}
-                  className="mt-1 w-full resize-none rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 py-2 text-[12px] leading-relaxed text-[#111110] outline-none focus:border-[#084734]"
-                />
-              </label>
-              {draftFormInvalid && (
-                <p className="rounded-md border border-[#F5C2C2] bg-[#FFF5F5] px-3 py-2 text-[11px] font-semibold text-[#B42318]" role="alert">
-                  고객명과 0보다 큰 금액을 입력해야 저장할 수 있습니다.
-                </p>
-              )}
-              {editingDraft ? (
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void saveEditedDraft()}
-                    disabled={draftSaving || draftFormInvalid}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    {draftSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                    초안 업데이트
-                  </button>
-                  <button
-                    type="button"
-                    onClick={cancelDraftEdit}
-                    disabled={draftSaving}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
-                    aria-label="초안 편집 취소"
-                    title="초안 편집 취소"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void saveDraft("edit-row")}
-                    disabled={draftSaving || !canCreateEditDraft || draftFormInvalid}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    {draftSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                    수정 초안
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void saveDraft("new-row")}
-                    disabled={draftSaving || draftFormInvalid}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    {draftSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                    신규 입력
-                  </button>
-                </div>
-              )}
-            </div>
-          </section>
+          <InputRailSection
+            editingDraft={editingDraft}
+            queueMode={queueMode}
+            draftForm={draftForm}
+            setDraftForm={setDraftForm}
+            selectedDraftOperation={selectedDraftOperation}
+            monthOptions={monthOptions}
+            selectedMonth={selectedMonth}
+            draftAmountInvalid={draftAmountInvalid}
+            draftQuantityInvalid={draftQuantityInvalid}
+            draftFormInvalid={draftFormInvalid}
+            draftSaving={draftSaving}
+            canCreateEditDraft={canCreateEditDraft}
+            saveEditedDraft={saveEditedDraft}
+            cancelDraftEdit={cancelDraftEdit}
+            saveDraft={saveDraft}
+          />
           )}
 
           {railView === "queue" && (
