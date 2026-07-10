@@ -1,6 +1,9 @@
 // 매출시트(브랜치 대시보드) 접근·구조 검증 — 시트 이관 시 1회 실행하는 운영 도구.
 //
-// 사용: node --env-file=.env.local scripts/verify-branch-sheet-access.mjs
+// 사용: node scripts/verify-branch-sheet-access.mjs   (프로젝트 루트에서)
+//
+// env 로딩: .env.local을 자체 관대 파서로 읽는다 — node --env-file은 이 파일의
+// 서비스계정 JSON 붙여넣기 잔재("client_id": ... 줄)에서 이후 변수를 못 읽는다(실측).
 //
 // 검증 항목:
 //  1) GOOGLE_SERVICE_ACCOUNT_EMAIL 자격으로 GOOGLE_BRANCH_DASHBOARD_SHEET_ID 접근(403이면
@@ -12,6 +15,19 @@
 // (또는 /api/admin/branch/sync) + 장부 Source 바의 "DB 재동기화"로.
 
 import { google } from "googleapis"
+import { existsSync, readFileSync } from "node:fs"
+
+function loadDotenvLoose(path) {
+  if (!existsSync(path)) return
+  for (const rawLine of readFileSync(path, "utf8").split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith("#")) continue
+    const m = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line)
+    if (!m) continue // JSON 잔재 등 비정형 줄은 무시
+    if (!(m[1] in process.env)) process.env[m[1]] = m[2]
+  }
+}
+loadDotenvLoose(".env.local")
 
 const SHEET_ID = process.env.GOOGLE_BRANCH_DASHBOARD_SHEET_ID
 const EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL
