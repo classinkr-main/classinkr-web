@@ -2,23 +2,19 @@
 
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import Link from "next/link"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
   ArrowDownToLine,
   ArrowRightLeft,
   ArrowUpFromLine,
   Camera,
-  CheckCheck,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
-  ExternalLink,
   FileSpreadsheet,
   Filter,
   LayoutDashboard,
-  Link2,
   ListChecks,
   Minus,
   Monitor,
@@ -3328,126 +3324,14 @@ export default function HardwareInventoryClient() {
               )}
 
               {entrySub === "outbound" && (
-                <section className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
-                    <div>
-                      <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">기간별 출고 집계</p>
-                      <p className="mt-1 text-[12px] text-[#615D59]">확정 출고(샘플·수리 제외) 기준 기간 집계. 행을 열면 고객사별 출고·매출이 펼쳐지고, 고객사를 누르면 거래이력이 열립니다. 매출은 실판매(Sales) 기준이며 시트 재가져오기 후 반영됩니다. 분기는 회계연도(4월 시작~3월 종료) 기준입니다.</p>
-                    </div>
-                    <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
-                      {([["month", "월"], ["quarter", "분기"], ["year", "연"]] as const).map(([key, label]) => (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setOutPeriod(key)}
-                          className={`cursor-pointer rounded-md px-3.5 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
-                            outPeriod === key ? "bg-white text-[#084734] shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "text-[#615D59] hover:text-[#111110]"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    {outboundBuckets.map((bucket) => {
-                      const open = Boolean(openPeriods[bucket.key])
-                      return (
-                        <div key={bucket.key} className="border-t border-[rgba(0,0,0,0.06)] first:border-t-0">
-                          <button
-                            type="button"
-                            onClick={() => setOpenPeriods((current) => ({ ...current, [bucket.key]: !current[bucket.key] }))}
-                            className="block w-full cursor-pointer px-5 py-4 text-left transition hover:bg-[#FAFAF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40"
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-[#A39E98] transition-transform ${open ? "rotate-90" : ""}`} />
-                                <p className="text-[13px] font-bold text-[#111110]">{bucket.label}</p>
-                              </div>
-                              <div className="flex shrink-0 items-center gap-3">
-                                <span className="text-[12px] font-semibold tabular-nums text-[#615D59]">{formatNumber(bucket.total)}대</span>
-                                <span className="min-w-[64px] text-right text-[13px] font-bold tabular-nums text-[#084734]">{bucket.hasRevenue ? formatCurrency(bucket.revenue, "USD") : "-"}</span>
-                              </div>
-                            </div>
-                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#F6F5F4]">
-                              <div className="h-full rounded-full bg-[#B43E3E]" style={{ width: bucket.pct }} />
-                            </div>
-                            <div className="mt-2.5 flex flex-wrap gap-1.5">
-                              {bucket.chips.map((chip) => (
-                                <span key={chip.product} className="inline-flex items-center gap-1.5 rounded-full bg-[#F6F5F4] px-2.5 py-1 text-[11px] font-semibold text-[#31302E]">
-                                  {chip.product}
-                                  <span className="font-bold tabular-nums text-[#111110]">{formatNumber(chip.qty)}</span>
-                                </span>
-                              ))}
-                            </div>
-                            {bucket.typeChips.length > 1 || (bucket.typeChips[0] && bucket.typeChips[0].type !== "sales") ? (
-                              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                                {bucket.typeChips.map((entry) => (
-                                  <span key={entry.type} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold ${SALE_TYPE_META[entry.type].tone}`}>
-                                    {entry.label}
-                                    <span className="tabular-nums">{formatNumber(entry.qty)}</span>
-                                  </span>
-                                ))}
-                              </div>
-                            ) : null}
-                          </button>
-                          {open && (
-                            <div className="px-5 pb-4">
-                              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59]">고객사별 모음</p>
-                              <div className="overflow-hidden rounded-lg border border-[rgba(0,0,0,0.06)]">
-                                <div className="grid grid-cols-[minmax(0,1fr)_58px_40px_88px_40px] gap-2.5 bg-[#F6F5F4] px-3.5 py-2 text-[10.5px] font-bold uppercase tracking-[0.04em] text-[#615D59]">
-                                  <span>고객사</span>
-                                  <span>날짜</span>
-                                  <span className="text-right">수량</span>
-                                  <span className="text-right">매출</span>
-                                  <span aria-hidden />
-                                </div>
-                                {bucket.customers.map((customer) => (
-                                  <div
-                                    key={customer.name}
-                                    className="grid grid-cols-[minmax(0,1fr)_58px_40px_88px_40px] items-center gap-2.5 border-t border-[rgba(0,0,0,0.05)] px-3.5 transition hover:bg-[#FAFAF8]"
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={() => setCustomerDetail(customer.name)}
-                                      className="col-span-4 grid cursor-pointer grid-cols-subgrid items-center gap-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40"
-                                    >
-                                      <span title={customer.name} className="truncate text-[12.5px] font-semibold text-[#111110]">{customer.name}</span>
-                                      <span className="truncate text-[12px] tabular-nums text-[#615D59]">{customer.dateLabel}</span>
-                                      <span className="text-right text-[13px] font-bold tabular-nums text-[#111110]">{formatNumber(customer.qty)}대</span>
-                                      <span className="text-right text-[12.5px] font-bold tabular-nums text-[#084734]">{customer.hasRevenue ? formatCurrency(customer.revenue, "USD") : "-"}</span>
-                                    </button>
-                                    {customer.name !== UNSPECIFIED_CUSTOMER ? (
-                                      <Link
-                                        href={ledgerHref(customer.name)}
-                                        title={`${customer.name} — 매출 장부(REV)에서 보기`}
-                                        className="justify-self-end whitespace-nowrap py-2 text-[11px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-                                      >
-                                        장부 ↗
-                                      </Link>
-                                    ) : (
-                                      <span aria-hidden />
-                                    )}
-                                  </div>
-                                ))}
-                                <div className="grid grid-cols-[minmax(0,1fr)_58px_40px_88px_40px] items-center gap-2.5 border-t border-[rgba(0,0,0,0.1)] bg-[#FAFAF8] px-3.5 py-2.5">
-                                  <span className="text-[12px] font-bold text-[#111110]">전체 합계</span>
-                                  <span aria-hidden />
-                                  <span className="text-right text-[13px] font-bold tabular-nums text-[#111110]">{formatNumber(bucket.total)}대</span>
-                                  <span className="text-right text-[12.5px] font-bold tabular-nums text-[#084734]">{bucket.hasRevenue ? formatCurrency(bucket.revenue, "USD") : "-"}</span>
-                                  <span aria-hidden />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                    {outboundBuckets.length === 0 && (
-                      <p className="px-5 py-10 text-center text-[13px] text-[#615D59]">해당 기간 확정 출고 집계가 없습니다.</p>
-                    )}
-                  </div>
-                </section>
+                <OutboundPeriodSection
+                  outboundBuckets={outboundBuckets}
+                  outPeriod={outPeriod}
+                  setOutPeriod={setOutPeriod}
+                  openPeriods={openPeriods}
+                  setOpenPeriods={setOpenPeriods}
+                  setCustomerDetail={setCustomerDetail}
+                />
               )}
 
               <div className="flex justify-end">
@@ -5225,394 +5109,44 @@ export default function HardwareInventoryClient() {
                   )}
                 </section>
 
-                <section className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                  <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
-                    <div className="min-w-0">
-                      <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">상세 내역 (로그)</p>
-                      <p className="mt-1 text-[12px] text-[#615D59]">고객사·날짜(배송 건)로 묶었습니다. 여러 건은 헤더를 클릭하면 하위 품목이 펼쳐지고, 단일 건·하위 행은 클릭하면 상세와 CRM 연계가 열립니다.</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="text-[11px] font-semibold text-[#615D59]">{formatNumber(filteredMovements.length)}건 · {formatNumber(logGroups.length)}묶음</span>
-                      {pageLogGroupKeys.length > 0 ? (
-                        <button
-                          type="button"
-                          onClick={toggleAllPageLogGroups}
-                          className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100"
-                        >
-                          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${allPageGroupsExpanded ? "rotate-180" : ""}`} />
-                          {allPageGroupsExpanded ? "모두 접기" : "모두 펼치기"}
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <div className="min-w-[940px]">
-                      <div className="grid grid-cols-[84px_1.5fr_1.2fr_96px_84px_1.4fr_92px_22px] items-center gap-3 bg-[#F6F5F4] px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59]">
-                        <span>물량번호</span>
-                        <span>고객사</span>
-                        <span>품목 · 수량</span>
-                        <span>날짜</span>
-                        <span>담당자</span>
-                        <span>특이사항</span>
-                        <span className="text-right">유형</span>
-                        <span />
-                      </div>
-                      {logGroupsPagination.pageItems.map((group) => {
-                        const isSingle = group.movements.length === 1
-                        const expanded = !isSingle && expandedLogGroups.has(group.key)
-                        const typeList = Array.from(group.types)
-                        // 물량번호 배지: 모든 건이 같은 단일 lot이면 그 lot(예: H8), 섞였거나 미지정 포함이면 "N건".
-                        const soleLot = !group.hasMissingLot && group.lots.size === 1 ? Array.from(group.lots)[0] : null
-                        const singleMovement = group.movements[0]
-                        return (
-                          <div key={group.key} className="border-t border-[rgba(0,0,0,0.06)]">
-                            <div
-                              role="button"
-                              tabIndex={0}
-                              aria-expanded={isSingle ? undefined : expanded}
-                              onClick={() => (isSingle ? setDetailId(singleMovement.id) : toggleLogGroup(group.key))}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault()
-                                  if (isSingle) setDetailId(singleMovement.id)
-                                  else toggleLogGroup(group.key)
-                                }
-                              }}
-                              className={`grid cursor-pointer grid-cols-[84px_1.5fr_1.2fr_96px_84px_1.4fr_92px_22px] items-center gap-3 px-5 py-3 transition hover:bg-[#F1F0EE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 ${
-                                expanded ? "bg-[#F6F5F4]" : "bg-white"
-                              }`}
-                            >
-                              <span>
-                                {soleLot ? (
-                                  <span className="inline-flex items-center rounded bg-[#ECFDF5] px-1.5 py-0.5 text-[11px] font-bold text-[#084734]">{soleLot}</span>
-                                ) : (
-                                  <span className="inline-flex items-center rounded bg-[#EDECEA] px-1.5 py-0.5 text-[11px] font-bold text-[#615D59]">{formatNumber(group.movements.length)}건</span>
-                                )}
-                              </span>
-                              <span className="min-w-0">
-                                <span title={group.customer} className="block truncate text-[12.5px] font-bold text-[#111110]">{group.customer}</span>
-                                <span title={group.products.join(" · ")} className="mt-0.5 block truncate text-[11px] text-[#615D59]">{group.products.join(" · ")}</span>
-                              </span>
-                              <span className="min-w-0 text-[11px] tabular-nums text-[#615D59]">
-                                {formatNumber(group.products.length)}품목 · 총 {formatNumber(group.totalQty)}대
-                              </span>
-                              <span className="text-[11.5px] text-[#31302E]">{formatDate(group.date)}</span>
-                              <span title={group.owners.join(", ")} className="truncate text-[11.5px] text-[#31302E]">{group.owners.join(", ") || "-"}</span>
-                              <span className="flex flex-wrap items-center gap-1">
-                                {group.plannedQty > 0 ? (
-                                  <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-bold text-[#A8741A]">
-                                    <Clock3 className="h-2.5 w-2.5" />
-                                    예정 {formatNumber(group.plannedQty)}
-                                  </span>
-                                ) : null}
-                                {group.hasMissingLot ? (
-                                  <span className="inline-flex rounded-full border border-dashed border-[rgba(0,0,0,0.12)] bg-[#F6F5F4] px-1.5 py-0.5 text-[10px] font-bold text-[#A39E98]">
-                                    {isSingle ? "물량번호 미지정" : "미지정 포함"}
-                                  </span>
-                                ) : null}
-                              </span>
-                              <span className="flex flex-wrap items-center justify-end gap-1">
-                                {typeList.map((type) => (
-                                  <span key={type} className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-bold ${MOVEMENT_TONE[type]}`}>
-                                    {MOVEMENT_LABEL[type]}
-                                  </span>
-                                ))}
-                              </span>
-                              <span className="text-[#615D59]">
-                                {isSingle ? (
-                                  <ChevronRight className="h-3.5 w-3.5 text-[#A39E98]" />
-                                ) : (
-                                  <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
-                                )}
-                              </span>
-                            </div>
-                            {expanded ? group.movements.map((movement) => renderMovementRow(movement, true)) : null}
-                          </div>
-                        )
-                      })}
-                      {logGroupsPagination.totalItems === 0 && (
-                        <p className="px-5 py-10 text-center text-[13px] text-[#615D59]">입출고 기록이 없습니다.</p>
-                      )}
-                    </div>
-                  </div>
-                  <PaginationControls pagination={logGroupsPagination} label="묶음" onPageChange={setMovementsPage} />
-                </section>
+                <HistoryLogSection
+                  filteredMovements={filteredMovements}
+                  logGroups={logGroups}
+                  pageLogGroupKeys={pageLogGroupKeys}
+                  toggleAllPageLogGroups={toggleAllPageLogGroups}
+                  allPageGroupsExpanded={allPageGroupsExpanded}
+                  logGroupsPagination={logGroupsPagination}
+                  expandedLogGroups={expandedLogGroups}
+                  setDetailId={setDetailId}
+                  toggleLogGroup={toggleLogGroup}
+                  renderMovementRow={renderMovementRow}
+                  setMovementsPage={setMovementsPage}
+                />
             </div>
             )}
           </>
         )}
       </main>
 
-      <AnimatePresence>
-        {detailMovement && (
-          <motion.div
-            key="detail-sheet"
-            className="fixed inset-0 z-[45] flex justify-end bg-black/35 backdrop-blur-[2px]"
-            onClick={() => setDetailId(null)}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: reduceMotion ? 0 : 0.16 }}
-          >
-            <motion.aside
-              ref={detailPanelRef}
-              role="dialog"
-              aria-modal="true"
-              aria-label="기록 상세"
-              onClick={(event) => event.stopPropagation()}
-              className="flex h-full w-full flex-col overflow-y-auto border-l border-[rgba(0,0,0,0.08)] bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.06)] sm:max-w-[460px]"
-              initial={reduceMotion ? { opacity: 0 } : { x: "100%" }}
-              animate={reduceMotion ? { opacity: 1 } : { x: 0 }}
-              exit={reduceMotion ? { opacity: 0 } : { x: "100%" }}
-              transition={{ duration: reduceMotion ? 0 : 0.22, ease: [0.2, 0, 0, 1] }}
-            >
-              <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] bg-white px-5 py-4">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-bold ${MOVEMENT_TONE[detailMovement.movement_type]}`}>
-                      {MOVEMENT_LABEL[detailMovement.movement_type]} {formatNumber(detailMovement.quantity)}
-                    </span>
-                    {detailLotLabel ? (
-                      <span className="inline-flex rounded-md bg-[#ECFDF5] px-2 py-0.5 text-[12px] font-bold text-[#084734]">{detailLotLabel}</span>
-                    ) : (
-                      <span className="inline-flex rounded-md border border-dashed border-[rgba(0,0,0,0.14)] bg-[#F6F5F4] px-2 py-0.5 text-[12px] font-bold text-[#A39E98]">물량번호 미지정</span>
-                    )}
-                    {isPlannedMovement(detailMovement) ? (
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#FBF1E0] px-2 py-0.5 text-[11px] font-bold text-[#A8741A]">
-                        <Clock3 className="h-3 w-3" />
-                        배송 예정
-                      </span>
-                    ) : null}
-                    {detailMovement.voided_at ? (
-                      <span className="inline-flex rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[11px] font-bold text-[#615D59]">취소됨</span>
-                    ) : null}
-                  </div>
-                  <p className="mt-2 text-[16px] font-bold tracking-[-0.01em] text-[#111110]">{detailMovement.product_name}</p>
-                  <p className="mt-0.5 text-[12px] text-[#615D59]">
-                    {detailMovement.to_location ? `${detailMovement.to_location} · ` : ""}
-                    {formatLotLabel(detailMovement.reference_no) ?? detailMovement.status ?? MOVEMENT_LABEL[detailMovement.movement_type]}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDetailId(null)}
-                  aria-label="닫기"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center cursor-pointer rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+      <MovementDetailSheet
+        detailMovement={detailMovement}
+        setDetailId={setDetailId}
+        reduceMotion={reduceMotion}
+        detailPanelRef={detailPanelRef}
+        detailLotLabel={detailLotLabel}
+        detailFacts={detailFacts}
+        detailCrm={detailCrm}
+        detailCanEdit={detailCanEdit}
+        editMovement={editMovement}
+        voidMovement={voidMovement}
+      />
 
-              <div className="flex flex-col gap-4 p-5">
-                <div className="grid grid-cols-2 gap-2.5">
-                  {detailFacts.map((fact) => (
-                    <div key={fact.label} className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 py-2.5">
-                      <p className="text-[11px] font-semibold text-[#615D59]">{fact.label}</p>
-                      <p className="mt-0.5 text-[13px] font-bold text-[#111110]">{fact.value}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {detailMovement.memo?.trim() ? (
-                  <div className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2.5">
-                    <p className="text-[11px] font-bold text-[#7A520F]">특이사항</p>
-                    <p className="mt-1 whitespace-pre-line text-[12.5px] leading-relaxed text-[#7A520F]">{detailMovement.memo.trim()}</p>
-                  </div>
-                ) : null}
-
-                {detailCrm ? (
-                  <div className="overflow-hidden rounded-xl border border-[#BDEFD8] bg-white">
-                    <div className="flex items-center gap-2.5 bg-[#ECFDF5] px-4 py-3">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#084734] text-white">
-                        <Users className="h-4 w-4" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-bold text-[#084734]">CRM 연계</p>
-                        <p className="mt-0.5 truncate text-[11px] text-[#065c41]">{detailCrm.label}</p>
-                      </div>
-                    </div>
-                    {detailCrm.reference || detailCrm.href ? (
-                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3">
-                        {detailCrm.reference ? (
-                          <p className="min-w-0 truncate text-[12px] text-[#31302E]">
-                            참조 <span className="font-bold text-[#111110]">{detailCrm.reference}</span>
-                          </p>
-                        ) : null}
-                        {detailCrm.href ? (
-                          <Link
-                            href={detailCrm.href}
-                            className="shrink-0 whitespace-nowrap text-[11px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-                          >
-                            CRM에서 열기 ↗
-                          </Link>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-[rgba(0,0,0,0.14)] bg-[#FAFAF8] p-4 text-center">
-                    <p className="text-[13px] font-bold text-[#111110]">
-                      {detailMovement.movement_type === "inbound" ? "매입 입고 — 연결된 고객 없음" : "연결된 고객사 없음"}
-                    </p>
-                    <p className="mt-1 text-[11.5px] text-[#615D59]">
-                      {detailMovement.movement_type === "inbound"
-                        ? `${detailMovement.importer ?? "공급사"} · 물량번호 ${detailLotLabel ?? "-"} 입고 건입니다.`
-                        : "출고 기록 시 CRM 실제 오더와 연동하면 여기에 표시됩니다."}
-                    </p>
-                  </div>
-                )}
-
-                {detailCanEdit ? (
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!detailMovement) return
-                        const target = detailMovement
-                        setDetailId(null)
-                        editMovement(target)
-                      }}
-                      className="inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
-                    >
-                      <Settings2 className="h-4 w-4" />
-                      수정
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!detailMovement) return
-                        const target = detailMovement
-                        setDetailId(null)
-                        voidMovement(target)
-                      }}
-                      className="inline-flex h-10 flex-1 cursor-pointer items-center justify-center rounded-md border border-[#F2B8B8] bg-white text-[13px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43E3E]/40 active:scale-[0.98] motion-reduce:active:scale-100"
-                    >
-                      기록 취소
-                    </button>
-                  </div>
-                ) : detailMovement.source === "sheet_import" && !detailMovement.voided_at ? (
-                  <p className="rounded-lg bg-[#F6F5F4] px-3 py-2.5 text-center text-[11.5px] font-semibold text-[#615D59]">
-                    시트 이관 기록은 여기서 수정·취소할 수 없습니다.
-                  </p>
-                ) : null}
-              </div>
-            </motion.aside>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {customerHistory && (
-          <motion.div
-            key="customer-sheet"
-            className="fixed inset-0 z-[46] flex justify-end bg-black/35 backdrop-blur-[2px]"
-            onClick={() => setCustomerDetail(null)}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: reduceMotion ? 0 : 0.16 }}
-          >
-            <motion.aside
-              role="dialog"
-              aria-modal="true"
-              aria-label="고객사 거래이력"
-              onClick={(event) => event.stopPropagation()}
-              className="flex h-full w-full flex-col overflow-y-auto border-l border-[rgba(0,0,0,0.08)] bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.06)] sm:max-w-[480px]"
-              initial={reduceMotion ? { opacity: 0 } : { x: "100%" }}
-              animate={reduceMotion ? { opacity: 1 } : { x: 0 }}
-              exit={reduceMotion ? { opacity: 0 } : { x: "100%" }}
-              transition={{ duration: reduceMotion ? 0 : 0.22, ease: [0.2, 0, 0, 1] }}
-            >
-              <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] bg-white px-5 py-4">
-                <div className="min-w-0">
-                  <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-[#615D59]">
-                    <Users className="h-3.5 w-3.5" />
-                    고객사 거래이력
-                  </p>
-                  <p className="mt-1 truncate text-[16px] font-bold tracking-[-0.01em] text-[#111110]">{customerHistory.name}</p>
-                  {customerHistory.name !== UNSPECIFIED_CUSTOMER ? (
-                    <Link
-                      href={ledgerHref(customerHistory.name)}
-                      className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-                    >
-                      매출 장부 ↗
-                    </Link>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCustomerDetail(null)}
-                  aria-label="닫기"
-                  className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-
-              <div className="flex flex-col gap-4 p-5">
-                <div className="grid grid-cols-3 gap-2.5">
-                  <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 py-2.5">
-                    <p className="text-[11px] font-semibold text-[#615D59]">거래 건수</p>
-                    <p className="mt-0.5 text-[16px] font-bold tabular-nums text-[#111110]">{formatNumber(customerHistory.count)}</p>
-                  </div>
-                  <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3 py-2.5">
-                    <p className="text-[11px] font-semibold text-[#615D59]">총 수량</p>
-                    <p className="mt-0.5 text-[16px] font-bold tabular-nums text-[#111110]">{formatNumber(customerHistory.totalQty)}대</p>
-                  </div>
-                  <div className="rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] px-3 py-2.5">
-                    <p className="text-[11px] font-semibold text-[#065c41]">총 매출</p>
-                    <p className="mt-0.5 text-[15px] font-bold tabular-nums text-[#084734]">{customerHistory.hasRevenue ? formatCurrency(customerHistory.totalRevenue, "USD") : "-"}</p>
-                  </div>
-                </div>
-
-                {!customerHistory.hasRevenue ? (
-                  <p className="rounded-lg bg-[#F6F5F4] px-3 py-2 text-[11px] font-semibold text-[#615D59]">매출은 실판매 기준이며, 시트 재가져오기 후 반영됩니다.</p>
-                ) : null}
-
-                <div>
-                  <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-[#615D59]">거래 타임라인</p>
-                  <div className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)]">
-                    {customerHistory.rows.map((movement) => {
-                      const saleType = outboundSaleType(movement)
-                      return (
-                        <button
-                          key={movement.id}
-                          type="button"
-                          onClick={() => {
-                            setCustomerDetail(null)
-                            setDetailId(movement.id)
-                          }}
-                          className="grid w-full cursor-pointer grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-[rgba(0,0,0,0.06)] px-3.5 py-2.5 text-left transition first:border-t-0 hover:bg-[#FAFAF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40"
-                        >
-                          <span className="text-[11px] font-semibold tabular-nums text-[#615D59]">{formatDate(movement.occurred_at)}</span>
-                          <span className="min-w-0">
-                            <span className="flex items-center gap-1.5">
-                              <span className="truncate text-[12.5px] font-bold text-[#111110]">{movement.product_name}</span>
-                              <span className={`inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${MOVEMENT_TONE[movement.movement_type]}`}>{MOVEMENT_LABEL[movement.movement_type]}</span>
-                              {saleType && saleType !== "sales" ? (
-                                <span className={`inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${SALE_TYPE_META[saleType].tone}`}>{SALE_TYPE_META[saleType].label}</span>
-                              ) : null}
-                            </span>
-                            <span className="mt-0.5 block text-[11px] tabular-nums text-[#615D59]">
-                              {formatNumber(movement.quantity)}대{movement.status ? ` · ${movement.status}` : ""}
-                            </span>
-                          </span>
-                          <span className="text-right text-[12px] font-bold tabular-nums text-[#084734]">
-                            {movement.movement_type === "outbound" && movement.amount_usd != null ? formatCurrency(movement.amount_usd, "USD") : ""}
-                          </span>
-                        </button>
-                      )
-                    })}
-                    {customerHistory.rows.length === 0 ? (
-                      <p className="px-3.5 py-8 text-center text-[12px] text-[#615D59]">거래 기록이 없습니다.</p>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </motion.aside>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <CustomerHistorySheet
+        customerHistory={customerHistory}
+        setCustomerDetail={setCustomerDetail}
+        setDetailId={setDetailId}
+        reduceMotion={reduceMotion}
+      />
 
       {!sheetOpen && !pendingMovement && !voidTarget && !detailId && !customerDetail && (
         <button
@@ -5628,241 +5162,32 @@ export default function HardwareInventoryClient() {
       )}
 
       {voidTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-3 py-4 backdrop-blur-[2px] sm:items-center"
-          onClick={() => voidingId == null && setVoidTarget(null)}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label="기록 취소"
-            onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-md overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.12)]"
-          >
-            <div className="border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
-              <h2 className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">기록 취소</h2>
-              <p className="mt-1 text-[12px] leading-relaxed text-[#615D59]">
-                {voidTarget.product_name} · {MOVEMENT_LABEL[voidTarget.movement_type]} {formatNumber(voidTarget.quantity)}대를 취소합니다. 되돌릴 수 없습니다.
-              </p>
-            </div>
-            <div className="px-5 py-4">
-              <label className="block">
-                <span className="text-[11px] font-bold text-[#615D59]">취소 사유 (선택)</span>
-                <input
-                  value={voidReason}
-                  onChange={(event) => setVoidReason(event.target.value)}
-                  autoFocus
-                  placeholder="예: 중복 입력"
-                  className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
-                />
-              </label>
-            </div>
-            <div className="flex flex-col-reverse gap-2 border-t border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-5 py-4 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setVoidTarget(null)}
-                disabled={voidingId != null}
-                className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                닫기
-              </button>
-              <button
-                type="button"
-                onClick={() => void confirmVoid()}
-                disabled={voidingId != null}
-                className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md bg-[#B43E3E] px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#9A3434] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43E3E]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {voidingId != null ? "취소 중" : "기록 취소"}
-              </button>
-            </div>
-          </section>
-        </div>
+        <VoidConfirmModal
+          voidTarget={voidTarget}
+          voidingId={voidingId}
+          setVoidTarget={setVoidTarget}
+          voidReason={voidReason}
+          setVoidReason={setVoidReason}
+          confirmVoid={confirmVoid}
+        />
       )}
 
       {pendingMovement && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-3 py-4 backdrop-blur-[2px] sm:items-center"
-          onClick={closeCrmConfirmation}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label="CRM 실제 오더 확인"
-            onClick={(event) => event.stopPropagation()}
-            className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.12)]"
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
-              <div>
-                <h2 className="text-[16px] font-bold tracking-[-0.01em] text-[#111110]">CRM 실제 오더 확인</h2>
-                <p className="mt-1 text-[12px] leading-relaxed text-[#615D59]">
-                  출고 기록을 저장하기 전에 CRM 오더와 자동 반영할지 확인합니다.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeCrmConfirmation}
-                className="flex h-8 w-8 shrink-0 items-center justify-center cursor-pointer rounded-md text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-                aria-label="닫기"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="max-h-[calc(92vh-150px)] overflow-y-auto px-5 py-4">
-              <div className="grid gap-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-3 sm:grid-cols-3">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#615D59]">기록 예정</p>
-                  <p className="mt-1 text-[13px] font-bold text-[#111110]">{pendingMovement.productName}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#615D59]">수량/상태</p>
-                  <p className="mt-1 text-[13px] font-bold text-[#111110]">
-                    {formatNumber(pendingMovement.quantity)}대 · {pendingMovement.status || MOVEMENT_LABEL[pendingMovement.movementType]}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#615D59]">위치</p>
-                  <p className="mt-1 text-[13px] font-bold text-[#111110]">
-                    {pendingMovement.fromLocation || "-"} → {pendingMovement.toLocation || "-"}
-                  </p>
-                </div>
-              </div>
-
-              <label className="mt-4 flex items-start gap-3 rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] px-3 py-3">
-                <input
-                  type="checkbox"
-                  checked={crmAutoReflect}
-                  onChange={(event) => setCrmAutoReflect(event.target.checked)}
-                  disabled={crmCandidates.length === 0}
-                  className="mt-0.5 h-4 w-4 cursor-pointer rounded-[3px] accent-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 focus-visible:ring-offset-1"
-                />
-                <span>
-                  <span className="block text-[13px] font-bold text-[#084734]">CRM 실제 오더와 연동해서 기록</span>
-                  <span className="mt-0.5 block text-[11.5px] leading-relaxed text-[#084734]/75">
-                    선택한 CRM 후보의 참조번호와 링크가 하드웨어 원장에 같이 저장됩니다.
-                  </span>
-                </span>
-              </label>
-
-              <div className="mt-4">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-[13px] font-bold text-[#111110]">매칭 후보</h3>
-                  {crmLoading ? <span className="text-[11px] font-semibold text-[#615D59]">CRM 확인 중...</span> : null}
-                </div>
-
-                {crmError && (
-                  <div className="mt-2 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[12px] font-semibold text-[#8F2C2C]">
-                    {crmError}
-                  </div>
-                )}
-
-                {crmWarnings.length > 0 && (
-                  <div className="mt-2 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[12px] font-semibold text-[#7A520F]">
-                    {crmWarnings.slice(0, 2).join(" / ")}
-                  </div>
-                )}
-
-                <div className="mt-2 space-y-2">
-                  {crmLoading ? (
-                    Array.from({ length: 3 }).map((_, index) => (
-                      <div key={index} className="h-20 animate-pulse rounded-lg bg-[#F6F5F4]" />
-                    ))
-                  ) : crmCandidates.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] px-4 py-8 text-center">
-                      <p className="text-[13px] font-bold text-[#111110]">매칭되는 CRM 오더가 없습니다.</p>
-                      <p className="mt-1 text-[12px] text-[#615D59]">연동 없이 하드웨어 원장에만 기록할 수 있습니다.</p>
-                    </div>
-                  ) : (
-                    crmCandidates.map((candidate) => {
-                      const selected = selectedCrmCandidateId === candidate.id
-                      const selectCandidate = () => {
-                        setSelectedCrmCandidateId(candidate.id)
-                        setCrmAutoReflect(true)
-                      }
-                      return (
-                        <div
-                          key={candidate.id}
-                          className={`overflow-hidden rounded-lg border transition ${
-                            selected
-                              ? "border-[#084734] bg-[#ECFDF5]"
-                              : "border-[rgba(0,0,0,0.08)] bg-white hover:bg-[#F6F5F4]"
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={selectCandidate}
-                            className="w-full cursor-pointer px-3 pt-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 active:scale-[0.99] motion-reduce:active:scale-100"
-                          >
-                            <span className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <span className="min-w-0">
-                                <span className="flex flex-wrap items-center gap-1.5">
-                                  <span className="text-[13px] font-bold text-[#111110]">{candidate.title}</span>
-                                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${confidenceClass(candidate.confidence)}`}>
-                                    매칭 {confidenceCopy(candidate.confidence)}
-                                  </span>
-                                </span>
-                                <span className="mt-1 block text-[11.5px] leading-relaxed text-[#615D59]">
-                                  {candidate.sourceLabel} · {candidate.productName ?? "품목 미상"} · {candidate.quantity != null ? `${formatNumber(candidate.quantity)}대` : "수량 미상"}
-                                </span>
-                                <span className="mt-1 block text-[11.5px] text-[#615D59]">
-                                  {candidate.customerName ?? "고객 미상"} · {candidate.owner ?? "담당자 미상"} · {candidate.status ?? "상태 미상"}
-                                </span>
-                              </span>
-                              <span className="shrink-0 text-left sm:text-right">
-                                <span className="block text-[12px] font-bold text-[#111110]">{formatCurrency(candidate.amount)}</span>
-                                <span className="mt-1 block text-[11px] text-[#615D59]">{formatDate(candidate.occurredAt)}</span>
-                              </span>
-                            </span>
-                          </button>
-                          {/* 링크는 버튼 밖 푸터에 둔다(버튼 안 anchor는 invalid HTML). 푸터 클릭도 후보 선택으로 동작. */}
-                          <div
-                            onClick={selectCandidate}
-                            className="flex cursor-pointer flex-wrap items-center gap-2 px-3 pb-3 pt-2 text-[11px] font-semibold text-[#084734]"
-                          >
-                            <Link2 className="h-3.5 w-3.5" />
-                            {candidate.reason}
-                            {candidate.href ? (
-                              <Link
-                                href={candidate.href}
-                                target="_blank"
-                                rel="noreferrer"
-                                onClick={(event) => event.stopPropagation()}
-                                className="inline-flex items-center gap-1 text-[#615D59] transition hover:text-[#111110] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                                CRM에서 확인 ↗
-                              </Link>
-                            ) : null}
-                          </div>
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col-reverse gap-2 border-t border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-5 py-4 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => void createMovementFromDraft(pendingMovement, null)}
-                disabled={busy === "movement"}
-                className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#31302E] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                연동 없이 기록
-              </button>
-              <button
-                type="button"
-                onClick={() => void createMovementFromDraft(pendingMovement, crmAutoReflect ? selectedCrmCandidate : null)}
-                disabled={busy === "movement" || crmLoading || (crmAutoReflect && !selectedCrmCandidate)}
-                className="inline-flex h-10 items-center justify-center gap-2 cursor-pointer rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Save className="h-4 w-4" />
-                {crmAutoReflect ? "CRM 연동 후 기록" : "기록 저장"}
-              </button>
-            </div>
-          </section>
-        </div>
+        <CrmConfirmModal
+          pendingMovement={pendingMovement}
+          closeCrmConfirmation={closeCrmConfirmation}
+          crmAutoReflect={crmAutoReflect}
+          setCrmAutoReflect={setCrmAutoReflect}
+          crmCandidates={crmCandidates}
+          crmLoading={crmLoading}
+          crmError={crmError}
+          crmWarnings={crmWarnings}
+          selectedCrmCandidateId={selectedCrmCandidateId}
+          setSelectedCrmCandidateId={setSelectedCrmCandidateId}
+          selectedCrmCandidate={selectedCrmCandidate}
+          busy={busy}
+          createMovementFromDraft={createMovementFromDraft}
+        />
       )}
     </div>
   )
