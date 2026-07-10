@@ -138,3 +138,34 @@ hardware_movements(원장) ────────┘                          
 교차 참조(2026-07-04): 원장 트랙의 [admin-money-mesh-2026-07-03.md](admin-money-mesh-2026-07-03.md)가 같은 문제로 수렴 — §2.1 HW↔REV 스키마 대사(GENERATED account_key·`v_hardware_rev_matches` 뷰·`rev_record_key`)는 이 트랙 B3 존재성 대사의 본질 버전이고, 그 Phase A 선행조건(SQL account_key 트윈)은 이 트랙 A2 마이그레이션이 이미 충족한다. B3 v1 패널은 §2.1 인박스가 서면 그 소비처로 수렴시키면 된다. §2.3 '확정 매출' 단일 정의 = 이 트랙 C2(KPI SSOT)와 동일 항목 — **운영자 캐논 결정(장부 confirmedMonthAmount 권장) 후 진행**으로 정렬. §2.2(수동 출고 매출 캡처)·§2.4(재고 SSOT)도 결정 대기 목록에 병합.
 
 머지 노트(2026-07-03): 이 트랙 분기 후 원장 트랙이 체크포인트 커밋들을 쌓았다(원장 안정화 + `lib/branch/account-key.ts`·`read-rev-deals.ts` 정식 커밋 포함). 이 트랙은 `account-key.ts`를 바이트 동일 복사로 선반영했으므로 머지 시 add/add는 무충돌로 수렴한다. 병합 순서는 원장 트랙 → 이 트랙 권장(REV 데이터셋 규약이 먼저 안착한 뒤 대사·스파인이 그 위에 얹히는 의존 방향).
+
+## 7. 파편 브랜치 통합 완료 (2026-07-10, ALL_NEW1)
+
+이 트랙 브랜치가 `ALL_NEW1`로 개명되어 **팀 통합 트렁크**가 됐다. 2.6_MOONI(구 2.292 후속 트렁크) 17커밋을 병합해 admin-3.0(SOLAPI 발송·REV 시트 워크스페이스)과 main(GA4)까지 전부 흡수 — 흩어져 있던 트랙이 이 브랜치 하나로 수렴됐다.
+
+### 병합 해소 원칙과 결과
+**IA는 이 트랙(흡수·최소화), 기능은 2.6_MOONI(최신)** 를 기준으로 해소:
+- SOLAPI 메시지 발송 허브(구 /admin/marketing 1,914줄) → `MarketingHub` 컴포넌트로 변환해 캠페인 "메시지" 탭으로 무손실 흡수. 라우트는 redirect 유지, nav 항목·warm 키는 캠페인으로 이관. 탭 id는 딥링크 호환 위해 `email` 유지.
+- quotes: 2.6의 QuoteCreateButton(템플릿 스플릿 버튼) 채택 + B1 딜→견적 프리필 보존.
+- analytics: 3탭 IA 유지(행사·이메일 중복 탭 재유입 차단), viz 토큰 유지.
+- 워크벤치: 2.6 차트 추출(`SalesLedgerCharts`+dynamic)과 병행 세션의 `ledger/` 6섹션 분해가 **상호보완으로 수렴** — 섹션은 워크벤치를 단일 진입점으로 import하고, 워크벤치가 dynamic 차트를 재수출해 코드 분할이 섹션에도 그대로 적용된다. 포매터 SSOT는 `lib/branch/ledger-format`.
+- HW 인벤토리 클라이언트: `inventory/` 13컴포넌트 분해·배선 완결(-738줄). §6의 "직접 수정 금지" 제약은 병합 완료로 **해제** — 이제 이 트렁크가 유일한 작업 라인.
+
+### 게이트
+tsc·eslint(--max-warnings=0)·`npm run build` PASS, vitest 774/776 (실패 2건은 병합 전 2.6_MOONI 베이스라인 동일 재현 — `tests/chatbot/answer-policy-regression`·`rag-relevance`, 챗봇 파트 별도 수리 대상).
+
+### 현재 IA (5섹션 19항목)
+- **홈**: Overview(운영 OS 스트립 = 커버리지·골든타임·리뉴얼 신호)
+- **영업·매출**: CRM(하위탭: 현황·고객DB·기록·참석자입력·매칭·**매출시트**) · 견적·문서 · 캘린더 · KR Team · 매출 장부
+- **마케팅·분석**: 캠페인(요약·행사·Meta·**메시지**=발송허브) · 콘텐츠 · 자료 퍼널 · 공개 행사 · Analytics(3탭) · 트래픽
+- **고객 지원**: 가이드 문서(+보강 큐=구 챗봇 운영) · 채널톡
+- **운영·시스템**: Ops Health · 하드웨어 재고 · Settings(+회원 탭) · Dev Mode
+- 흡수된 라우트(/admin/marketing·chatbot·users)는 전부 redirect 스텁으로 북마크 호환.
+
+### 다음 페이즈 — 자동화 연동 심화 (결정 필요 항목)
+money-mesh §2와 수렴된 결정 대기 4건이 선행 조건 (권장안 병기):
+1. **확정 매출 캐논** — 장부 `confirmedMonthAmount` 단일 정의 권장 (C2/KPI SSOT와 동일 항목)
+2. **HW↔REV 대사 그레인** — GENERATED account_key + 매칭 뷰 + 인박스 (B3 v1 패널이 소비처)
+3. **수동 출고 매출 캡처** — 이중 계상 방지 위해 대사 모델 확정 후
+4. **HW 재고 SSOT** — 원장 vs branch_hw 스테이징
+추가 검토: CRM 매출시트(딜↔REV 링크 검수)와 CRM 매칭 인박스의 관계 정리(둘 다 대사 표면 — 통합 or 역할 분담 명문화), REV 워크벤치 P0 잔여(rev-tab-audit), 견적·계약 V1→V2 단일화(C4).
