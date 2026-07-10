@@ -120,17 +120,24 @@ export function computeEconomics(funnel: EventFunnel, metrics: EventMetrics): Ev
   const cpl = funnel.leads > 0 ? Math.round(adSpendTotal / funnel.leads) : null
   const cpa = funnel.attendees > 0 ? Math.round(adSpendTotal / funnel.attendees) : null
   const cpd = funnel.deals > 0 ? Math.round(adSpendTotal / funnel.deals) : null
-  const roi = adSpendTotal > 0 ? Math.round(((revenue - adSpendTotal) / adSpendTotal) * 100) : null
+  // 매출 미입력(dealsRevenue=null)이면 손익을 판단할 수 없으므로 null.
+  // dealsRevenue=0으로 명시 입력한 경우에만 실제 손실(-100%)로 계산해 거짓 적자 알람을 막는다.
+  const roi =
+    adSpendTotal > 0 && metrics.dealsRevenue != null
+      ? Math.round(((revenue - adSpendTotal) / adSpendTotal) * 100)
+      : null
+  // 전환율: 분모(상위 단계)>0 이고 하위 단계가 "측정된" 경우에만 계산.
+  //   측정값이 0이면 실제 0% 전환으로 표시(퍼널 붕괴 신호), 미측정(null)이면 "—".
   const leadConversionRate =
-    funnel.leads > 0 && funnel.qualifiedLeads > 0
+    funnel.leads > 0 && metrics.qualifiedLeadsCount != null
       ? Math.round((funnel.qualifiedLeads / funnel.leads) * 100)
       : null
   const attendanceRate =
-    funnel.applications > 0 && funnel.attendees > 0
+    funnel.applications > 0 && metrics.attendeesCount != null
       ? Math.round((funnel.attendees / funnel.applications) * 100)
       : null
   const dealConversionRate =
-    funnel.qualifiedLeads > 0 && funnel.deals > 0
+    funnel.qualifiedLeads > 0 && metrics.dealsCount != null
       ? Math.round((funnel.deals / funnel.qualifiedLeads) * 100)
       : null
   return {

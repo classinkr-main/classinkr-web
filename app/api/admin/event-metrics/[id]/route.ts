@@ -56,15 +56,17 @@ export async function PATCH(
   const { id } = await params
   try {
     const body = (await req.json()) as Record<string, unknown>
+    // 카운트/금액은 모두 음수·소수를 허용하지 않는다(0 이상 정수). 이 값들이
+    // ROI·전환율·퍼널 폭·CSV로 그대로 흘러가므로 -5명 / 3.5딜 같은 입력을 원천 차단.
     const patch = {
-      targetLeads: sanitizeNumber(body.targetLeads),
-      targetRevenue: sanitizeNumber(body.targetRevenue),
-      impressionsCount: sanitizeNumber(body.impressionsCount),
-      applicationsCount: sanitizeNumber(body.applicationsCount),
-      qualifiedLeadsCount: sanitizeNumber(body.qualifiedLeadsCount),
-      attendeesCount: sanitizeNumber(body.attendeesCount),
-      dealsCount: sanitizeNumber(body.dealsCount),
-      dealsRevenue: sanitizeNumber(body.dealsRevenue),
+      targetLeads: sanitizeCount(body.targetLeads),
+      targetRevenue: sanitizeCount(body.targetRevenue),
+      impressionsCount: sanitizeCount(body.impressionsCount),
+      applicationsCount: sanitizeCount(body.applicationsCount),
+      qualifiedLeadsCount: sanitizeCount(body.qualifiedLeadsCount),
+      attendeesCount: sanitizeCount(body.attendeesCount),
+      dealsCount: sanitizeCount(body.dealsCount),
+      dealsRevenue: sanitizeCount(body.dealsRevenue),
       closedCustomerCount: sanitizeCount(body.closedCustomerCount),
       dealCustomers: sanitizeText(body.dealCustomers),
       adSpendEntries: sanitizeAdSpend(body.adSpendEntries),
