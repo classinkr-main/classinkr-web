@@ -162,10 +162,29 @@ tsc·eslint(--max-warnings=0)·`npm run build` PASS, vitest 774/776 (실패 2건
 - **운영·시스템**: Ops Health · 하드웨어 재고 · Settings(+회원 탭) · Dev Mode
 - 흡수된 라우트(/admin/marketing·chatbot·users)는 전부 redirect 스텁으로 북마크 호환.
 
-### 다음 페이즈 — 자동화 연동 심화 (결정 필요 항목)
-money-mesh §2와 수렴된 결정 대기 4건이 선행 조건 (권장안 병기):
-1. **확정 매출 캐논** — 장부 `confirmedMonthAmount` 단일 정의 권장 (C2/KPI SSOT와 동일 항목)
-2. **HW↔REV 대사 그레인** — GENERATED account_key + 매칭 뷰 + 인박스 (B3 v1 패널이 소비처)
-3. **수동 출고 매출 캡처** — 이중 계상 방지 위해 대사 모델 확정 후
-4. **HW 재고 SSOT** — 원장 vs branch_hw 스테이징
-추가 검토: CRM 매출시트(딜↔REV 링크 검수)와 CRM 매칭 인박스의 관계 정리(둘 다 대사 표면 — 통합 or 역할 분담 명문화), REV 워크벤치 P0 잔여(rev-tab-audit), 견적·계약 V1→V2 단일화(C4).
+### 다음 페이즈 — 자동화 연동 심화 (2026-07-10 운영자 결정 → 당일 구현 완료)
+money-mesh §2와 수렴된 결정 4건 중 3건이 확정·구현됐다:
+1. **확정 매출 캐논 = 장부 `confirmedMonthAmount`** ✅ 구현 — rev-confirmed.ts가 유일 SSOT
+   (구조적 입력 타입 + 무색상 폴백 월 가드 + `splitMonthConfidence` 3분해 공용).
+   CRM 성과·CRM 매출 개요·rev-sheet 워크스페이스·주간마감 스냅샷 전부 캐논 소비로 전환,
+   CRM 집계 데이터셋도 장부와 동일 규약(DB-native 액티브 임포트 우선)으로 정렬.
+   월 가드 근거 실측: 미러 398행 중 무색상 310행, 그중 201행에 미래 월 ¥492.9만이
+   확정으로 부풀고 있었다. 회귀 고정: tests/branch/computations/rev-confirmed.test.ts.
+2. **HW↔REV 대사 = 계정×월 존재성** ✅ 구현 — 마이그레이션 `20260710_hw_rev_reconcile_matches.sql`
+   (GENERATED account_key ×2 + `v_hardware_rev_matches` 뷰, **운영 적용 대기** —
+   20260703_normalized_account_key.sql 선행 필수). 리포는 뷰 존재 시 월 신호 오버레이
+   (hwOnlyMonths 등), 미적용 환경은 계정 그레인 자동 폴백. 매칭 인박스 패널에 그레인 배지.
+3. **HW 재고 SSOT = 입출고 원장(hardware_movements)** ✅ 구현 — 브랜치 위젯 API가
+   콘솔과 동일 소스(getHardwareDashboard)를 읽고, 시트 스테이징은 참고 표기·폴백으로 강등.
+   응답 `source` 필드 + 위젯 '원장 기준/시트 폴백' 배지.
+4. **수동 출고 매출 캡처** — 대사 모델이 확정됐으므로 이제 착수 가능(money-mesh §2.2 스케치:
+   outbound 폼 amountUsd 블록, 스키마 기수용). 입력 통화(USD vs CNY)만 확정하면 저렴.
+
+남은 검토: CRM 매출시트(딜↔REV 링크 검수) vs CRM 매칭 인박스 역할 명문화, REV 워크벤치
+P1~P3 백로그(rev-tab-audit), 견적·계약 V1→V2 단일화(C4), money-mesh §2.5 planned/no-lot
+타입화, §2.6 서버측 집계 RPC 이전.
+
+**운영 DB 마이그레이션 적용 대기 목록(적용은 운영자 몫)**: 20260703_normalized_account_key,
+crm_tasks(B2), 20260703 SOLAPI 3건(message_logs·sms_campaigns_honesty·email_campaigns_backfill),
+20260703_external_crm_object_snapshot_view, 20260704_leads_confirmation_gate,
+**20260710_hw_rev_reconcile_matches(신규)**.
