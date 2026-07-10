@@ -203,12 +203,14 @@ function StatCard({
   value,
   hint,
   tone = "neutral",
+  loading = false,
 }: {
   icon: ReactNode
   label: string
   value: string | number
   hint?: string
   tone?: "neutral" | "success" | "warning" | "danger"
+  loading?: boolean
 }) {
   const toneClass =
     tone === "success"
@@ -225,7 +227,11 @@ function StatCard({
         <div className={`inline-flex rounded-xl p-2 ${toneClass}`}>{icon}</div>
       </div>
       <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/40">{label}</p>
-      <p className="text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{value}</p>
+      {loading ? (
+        <div className="h-[24px] w-1/2 animate-pulse rounded bg-[#f0f0ec]" aria-hidden="true" />
+      ) : (
+        <p className="text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{value}</p>
+      )}
       {hint && <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">{hint}</p>}
     </div>
   )
@@ -247,7 +253,8 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`group flex min-w-[164px] flex-1 items-center gap-2 rounded-xl border px-3 py-3 text-left transition-all sm:min-w-0 sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-4 ${
+      aria-pressed={active}
+      className={`group flex min-w-[164px] flex-1 items-center gap-2 rounded-xl border px-3 py-3 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1 sm:min-w-0 sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-4 ${
         active
           ? "border-[#111110] bg-[#111110] text-white shadow-sm"
           : "border-[#e8e8e4] bg-white text-[#1a1a1a]/65 hover:border-[#c8c8c4] hover:bg-[#fafaf8] hover:text-[#111110]"
@@ -1058,11 +1065,11 @@ export default function AdminMarketingPage() {
           <ChannelStatusStrip />
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <StatCard icon={<Users className="h-4 w-4" />} label="전체 구독자" value={subscribers.length} />
-            <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="활성 구독자" value={activeCount} tone="success" />
-            <StatCard icon={<XCircle className="h-4 w-4" />} label="수신거부" value={unsubscribedCount} tone="warning" />
-            <StatCard icon={<Send className="h-4 w-4" />} label="발송 캠페인" value={campaigns.length} hint={`발송 ${sentCount} · 초안 ${draftCount}`} />
-            <StatCard icon={<AlertCircle className="h-4 w-4" />} label="실패 캠페인" value={failedCount} tone="danger" />
+            <StatCard icon={<Users className="h-4 w-4" />} label="전체 구독자" value={subscribers.length} loading={loading && subscribers.length === 0} />
+            <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="활성 구독자" value={activeCount} tone="success" loading={loading && subscribers.length === 0} />
+            <StatCard icon={<XCircle className="h-4 w-4" />} label="수신거부" value={unsubscribedCount} tone="warning" loading={loading && subscribers.length === 0} />
+            <StatCard icon={<Send className="h-4 w-4" />} label="발송 캠페인" value={campaigns.length} hint={`발송 ${sentCount} · 초안 ${draftCount}`} loading={loading && campaigns.length === 0} />
+            <StatCard icon={<AlertCircle className="h-4 w-4" />} label="실패 캠페인" value={failedCount} tone="danger" loading={loading && campaigns.length === 0} />
           </div>
 
           <Panel
@@ -1197,7 +1204,7 @@ export default function AdminMarketingPage() {
                       <button
                         key={value}
                         onClick={() => setStatusFilter(value)}
-                        className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap ${
+                        className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1 ${
                           statusFilter === value
                             ? "border-[#111110] bg-[#111110] text-white"
                             : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#c8c8c4] hover:text-[#111110]"
@@ -1212,7 +1219,7 @@ export default function AdminMarketingPage() {
                       <button
                         key={value}
                         onClick={() => setSourceFilter(value)}
-                        className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap ${
+                        className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1 ${
                           sourceFilter === value
                             ? "border-[#084734] bg-[#084734]/10 text-[#084734]"
                             : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#c8c8c4] hover:text-[#111110]"
@@ -1579,7 +1586,8 @@ export default function AdminMarketingPage() {
                     <button
                       key={value}
                       onClick={() => setCampaignStatusFilter(value)}
-                      className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                      aria-pressed={campaignStatusFilter === value}
+                      className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1 ${
                         campaignStatusFilter === value
                           ? "border-[#111110] bg-[#111110] text-white"
                           : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#c8c8c4] hover:text-[#111110]"

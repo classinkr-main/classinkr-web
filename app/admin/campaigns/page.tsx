@@ -309,12 +309,14 @@ function KpiCard({
   value,
   hint,
   tone = "neutral",
+  loading = false,
 }: {
   icon: React.ReactNode
   label: string
   value: string
   hint?: string
   tone?: "neutral" | "success" | "warn"
+  loading?: boolean
 }) {
   const accent =
     tone === "success"
@@ -326,8 +328,16 @@ function KpiCard({
     <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
       <span className={`inline-flex rounded-xl p-2 ${accent}`}>{icon}</span>
       <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">{label}</p>
-      <p className="mt-1.5 text-[22px] font-bold leading-none tracking-[-0.02em] text-[#111110]">{value}</p>
-      {hint && <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">{hint}</p>}
+      {loading ? (
+        <div className="mt-2 h-[18px] w-2/3 animate-pulse rounded bg-[#f0f0ec]" aria-hidden="true" />
+      ) : (
+        <p className="mt-1.5 text-[22px] font-bold leading-none tracking-[-0.02em] text-[#111110]">{value}</p>
+      )}
+      {loading && hint ? (
+        <div className="mt-2.5 h-[10px] w-1/2 animate-pulse rounded bg-[#f4f4f0]" aria-hidden="true" />
+      ) : (
+        hint && <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">{hint}</p>
+      )}
     </div>
   )
 }
@@ -418,7 +428,8 @@ function MetaCampaignPanel({
                   key={option.value}
                   type="button"
                   onClick={() => onDatePresetChange(option.value)}
-                  className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${
+                  aria-pressed={datePreset === option.value}
+                  className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1 ${
                     datePreset === option.value ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                   }`}
                 >
@@ -700,11 +711,13 @@ function ConversionFocusCard({
   value,
   hint,
   tone = "neutral",
+  loading = false,
 }: {
   label: string
   value: string
   hint: string
   tone?: "neutral" | "success" | "warn"
+  loading?: boolean
 }) {
   const valueTone =
     tone === "success" ? "text-[#084734]" : tone === "warn" ? "text-[#B85C33]" : "text-[#111110]"
@@ -714,9 +727,13 @@ function ConversionFocusCard({
       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
         {label}
       </p>
-      <p className={`mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] ${valueTone}`}>
-        {value}
-      </p>
+      {loading ? (
+        <div className="mt-1.5 h-[16px] w-1/2 animate-pulse rounded bg-[#f0f0ec]" aria-hidden="true" />
+      ) : (
+        <p className={`mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] ${valueTone}`}>
+          {value}
+        </p>
+      )}
       <p className="mt-1.5 text-[11px] leading-relaxed text-[#1a1a1a]/45">{hint}</p>
     </div>
   )
@@ -2133,7 +2150,7 @@ export default function AdminCampaignsPage() {
                   type="button"
                   onClick={() => setPeriod(p)}
                   aria-pressed={period === p}
-                  className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${
+                  className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1 ${
                     period === p ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                   }`}
                 >
@@ -2229,38 +2246,44 @@ export default function AdminCampaignsPage() {
       {/* KPI strip */}
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard
+          loading={loading}
           icon={<CalendarIcon className="w-3.5 h-3.5" />}
           label="대상 행사"
-          value={loading ? "..." : KRW.format(filtered.length)}
+          value={KRW.format(filtered.length)}
           hint={`전체 ${events.length}건 중`}
         />
         <KpiCard
+          loading={loading}
           icon={<Wallet className="w-3.5 h-3.5" />}
           label="총 광고비"
-          value={loading ? "..." : won(aggregate.totalSpend)}
+          value={won(aggregate.totalSpend)}
         />
         <KpiCard
+          loading={loading}
           icon={<TrendingUp className="w-3.5 h-3.5" />}
           label="총 매출"
-          value={loading ? "..." : won(aggregate.totalRevenue)}
+          value={won(aggregate.totalRevenue)}
           tone="success"
         />
         <KpiCard
+          loading={loading}
           icon={<Target className="w-3.5 h-3.5" />}
           label="평균 CPL"
-          value={loading ? "..." : aggregate.avgCpl != null ? won(aggregate.avgCpl) : "—"}
+          value={aggregate.avgCpl != null ? won(aggregate.avgCpl) : "—"}
           hint={`총 리드 ${KRW.format(aggregate.totalLeads)}`}
         />
         <KpiCard
+          loading={loading}
           icon={<Users className="w-3.5 h-3.5" />}
           label="총 참석자"
-          value={loading ? "..." : KRW.format(aggregate.totalAttendees)}
+          value={KRW.format(aggregate.totalAttendees)}
           hint={`딜 ${KRW.format(aggregate.totalDeals)}건`}
         />
         <KpiCard
+          loading={loading}
           icon={<TrendingUp className="w-3.5 h-3.5" />}
           label="누적 ROI"
-          value={loading ? "..." : aggregate.overallRoi != null ? pct(aggregate.overallRoi) : "—"}
+          value={aggregate.overallRoi != null ? pct(aggregate.overallRoi) : "—"}
           tone={aggregate.overallRoi != null && aggregate.overallRoi >= 0 ? "success" : "warn"}
         />
       </div>
@@ -2274,20 +2297,23 @@ export default function AdminCampaignsPage() {
 
       <div className="mb-5 grid gap-3 lg:grid-cols-3">
         <ConversionFocusCard
+          loading={loading}
           label="전환 초점"
-          value={loading ? "..." : aggregate.dealConversionRate != null ? pct(aggregate.dealConversionRate) : "—"}
+          value={aggregate.dealConversionRate != null ? pct(aggregate.dealConversionRate) : "—"}
           hint={`리드 ${KRW.format(aggregate.totalLeads)}건 중 딜 ${KRW.format(aggregate.totalDeals)}건`}
           tone={aggregate.dealConversionRate != null && aggregate.dealConversionRate > 0 ? "success" : "neutral"}
         />
         <ConversionFocusCard
+          loading={loading}
           label="참석 후 딜"
-          value={loading ? "..." : aggregate.attendanceToDealRate != null ? pct(aggregate.attendanceToDealRate) : "—"}
+          value={aggregate.attendanceToDealRate != null ? pct(aggregate.attendanceToDealRate) : "—"}
           hint={`참석자 ${KRW.format(aggregate.totalAttendees)}명 기준 후속 영업 전환`}
           tone={aggregate.attendanceToDealRate != null && aggregate.attendanceToDealRate > 0 ? "success" : "neutral"}
         />
         <ConversionFocusCard
+          loading={loading}
           label="운영 판단"
-          value={loading ? "..." : aggregate.overallRoi != null ? (aggregate.overallRoi >= 0 ? "확대 검토" : "비용 점검") : "집계 대기"}
+          value={aggregate.overallRoi != null ? (aggregate.overallRoi >= 0 ? "확대 검토" : "비용 점검") : "집계 대기"}
           hint={aggregate.avgCpl != null ? `누적 ROI ${pct(aggregate.overallRoi)} · 평균 CPL ${won(aggregate.avgCpl)}` : "ROI·CPL 집계 대기"}
           tone={aggregate.overallRoi == null ? "neutral" : aggregate.overallRoi >= 0 ? "success" : "warn"}
         />
@@ -2425,7 +2451,7 @@ export default function AdminCampaignsPage() {
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <h2 className="flex-1 text-[15px] font-semibold text-[#111110]">행사별 퍼널 상세</h2>
             {/* sort control */}
-            <div className="flex items-center gap-1 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
+            <div className="flex items-center gap-1 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-0.5" role="group" aria-label="행사 정렬">
               {(["date", "leads", "deals", "roi"] as const).map((s) => {
                 const label = { date: "날짜", leads: "리드", deals: "딜", roi: "ROI" }[s]
                 return (
@@ -2433,7 +2459,8 @@ export default function AdminCampaignsPage() {
                     key={s}
                     type="button"
                     onClick={() => setEventSort(s)}
-                    className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                    aria-pressed={eventSort === s}
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1 ${
                       eventSort === s
                         ? "bg-white text-[#111110] shadow-sm"
                         : "text-[#1a1a1a]/45 hover:text-[#111110]"
