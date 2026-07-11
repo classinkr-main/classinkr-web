@@ -287,10 +287,23 @@ export default function CrmUnifiedCustomersClient() {
     if (q) setQuery(q)
   }, [searchParams])
 
-  // 사이드바 저장된 세그먼트 링크(?view=) → 저장 뷰 동기화 (네비게이션마다).
+  // 사이드바 저장된 세그먼트 링크(?view=) → 저장 뷰 동기화.
+  // 사이드바 칩 카운트는 전역(검색·담당·라벨 무필터) 기준이므로, 딥링크 착지 시 남아 있는
+  // 로컬 필터를 함께 초기화해 목록 건수가 칩 숫자와 일치하게 한다(착지 정합).
+  // view 값이 실제로 바뀔 때만 실행 — 드로어(?account=) push 등 다른 쿼리 변경에는 불변.
+  const lastViewParamRef = useRef<string | null>(null)
   useEffect(() => {
     const view = searchParams.get("view")
-    if (view) setSavedView(view as SavedViewFilter)
+    if (view === lastViewParamRef.current) return
+    lastViewParamRef.current = view
+    if (!view) return
+    const known = SAVED_VIEW_FILTERS.some((filter) => filter.key === view)
+    setSavedView(known ? (view as SavedViewFilter) : "all")
+    setSource("all")
+    setLifecycle("all")
+    setTagFilter("")
+    setQuery("")
+    setOwner(view === "my_owner" ? CURRENT_OWNER_VALUE : "")
   }, [searchParams])
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
@@ -347,28 +360,31 @@ export default function CrmUnifiedCustomersClient() {
 
   useEffect(() => {
     if (typeof window === "undefined") return
+    // 세그먼트 딥링크(?view=) 착지 시에는 저장된 담당자 필터를 복원하지 않는다 — 칩 카운트(전역 기준) 정합.
+    if (new URLSearchParams(window.location.search).get("view")) return
     const storedOwner = window.localStorage.getItem(OWNER_STORAGE_KEY)
     if (storedOwner) setOwner(storedOwner)
   }, [])
 
-  useEffect(() => {
+  // 담당자 필터 영속화 — 사용자가 직접 바꿀 때만 기록한다.
+  // (딥링크 착지가 프로그램적으로 owner를 비울 때 저장된 선호가 지워지지 않도록 effect 영속화 대신 액션 시점에 호출.)
+  const persistOwner = useCallback((next: string) => {
     if (typeof window === "undefined") return
-    if (owner) {
-      window.localStorage.setItem(OWNER_STORAGE_KEY, owner)
-    } else {
-      window.localStorage.removeItem(OWNER_STORAGE_KEY)
-    }
-  }, [owner])
+    if (next) window.localStorage.setItem(OWNER_STORAGE_KEY, next)
+    else window.localStorage.removeItem(OWNER_STORAGE_KEY)
+  }, [])
 
   const selectSavedView = (view: SavedViewFilter) => {
     if (view === "my_owner") {
       if (!currentOwner) return
       if (savedView === "my_owner") {
         setOwner("")
+        persistOwner("")
         setSavedView("all")
         return
       }
       setOwner(CURRENT_OWNER_VALUE)
+      persistOwner(CURRENT_OWNER_VALUE)
       setSavedView(view)
       setSource("all")
       setLifecycle("all")
@@ -389,6 +405,25 @@ export default function CrmUnifiedCustomersClient() {
       setLifecycle("all")
     }
   }
+
+  // 빈 상태 다음 행동 안내 — 필터가 걸려 있으면 초기화를, 아니면 리드 등록/매칭 연결을 권한다.
+  const hasActiveFilters =
+    Boolean(query.trim()) ||
+    source !== "all" ||
+    lifecycle !== "all" ||
+    Boolean(owner) ||
+    savedView !== "all" ||
+    Boolean(tagFilter)
+
+  const resetFilters = useCallback(() => {
+    setQuery("")
+    setSource("all")
+    setLifecycle("all")
+    setOwner("")
+    persistOwner("")
+    setSavedView("all")
+    setTagFilter("")
+  }, [persistOwner])
 
   return (
     <div className="min-h-screen bg-[#F6F5F4] px-4 py-6 sm:px-6 lg:px-8">
@@ -473,6 +508,7 @@ export default function CrmUnifiedCustomersClient() {
                 onChange={(event) => {
                   const nextOwner = event.target.value
                   setOwner(nextOwner)
+                  persistOwner(nextOwner)
                   if (!nextOwner && savedView === "my_owner") setSavedView("all")
                 }}
                 className="h-full min-w-[128px] bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
@@ -596,6 +632,16 @@ export default function CrmUnifiedCustomersClient() {
                 </p>
               </div>
             </div>
+          ) : loading ? (
+            // 콜드로드 스켈레톤 — 실제 요약 타일 5칸 그리드와 동일 골격(0 플래시·점프 방지).
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div key={index} className="rounded-xl bg-[#fafaf8] p-3">
+                  <div className="h-3 w-14 animate-pulse rounded bg-[#f0f0ec]" />
+                  <div className="mt-2 h-6 w-16 animate-pulse rounded bg-[#f0f0ec]" />
+                </div>
+              ))}
+            </div>
           ) : null}
 
           {data?.sources.statuses.length ? (
@@ -669,6 +715,32 @@ export default function CrmUnifiedCustomersClient() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f0f0ec]">
+                {loading && !data
+                  ? // 콜드로드 스켈레톤 — 컬럼(고객/상태/다음 액션/돈흐름/담당/점수) 골격 일치.
+                    Array.from({ length: 8 }).map((_, index) => (
+                      <tr key={`sk-${index}`}>
+                        <td className="px-4 py-3">
+                          <div className="h-4 w-40 animate-pulse rounded bg-[#f0f0ec]" />
+                          <div className="mt-1.5 h-3 w-24 animate-pulse rounded bg-[#f5f5f2]" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="h-5 w-16 animate-pulse rounded-full bg-[#f0f0ec]" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="h-4 w-28 animate-pulse rounded bg-[#f0f0ec]" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="h-4 w-20 animate-pulse rounded bg-[#f0f0ec]" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="h-4 w-16 animate-pulse rounded bg-[#f0f0ec]" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="ml-auto h-5 w-8 animate-pulse rounded bg-[#f0f0ec]" />
+                        </td>
+                      </tr>
+                    ))
+                  : null}
                 {data?.rows.map((row) => (
                   <tr key={row.key} className="transition-colors hover:bg-[#fafaf8]">
                     <td className="px-4 py-3">
@@ -726,6 +798,20 @@ export default function CrmUnifiedCustomersClient() {
           </div>
 
           <div className="divide-y divide-[#f0f0ec] lg:hidden">
+            {loading && !data
+              ? // 모바일 카드 스켈레톤 — 카드 폴백과 동일 골격.
+                Array.from({ length: 5 }).map((_, index) => (
+                  <div key={`msk-${index}`} className="p-4">
+                    <div className="h-5 w-16 animate-pulse rounded-full bg-[#f0f0ec]" />
+                    <div className="mt-2 h-4 w-40 animate-pulse rounded bg-[#f0f0ec]" />
+                    <div className="mt-1.5 h-3 w-24 animate-pulse rounded bg-[#f5f5f2]" />
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="h-8 animate-pulse rounded-lg bg-[#f5f5f2]" />
+                      <div className="h-8 animate-pulse rounded-lg bg-[#f5f5f2]" />
+                    </div>
+                  </div>
+                ))
+              : null}
             {data?.rows.map((row) => (
               <div key={row.key} className="relative transition-colors hover:bg-[#fafaf8]">
                 {row.source === "customer" ? (
@@ -798,10 +884,41 @@ export default function CrmUnifiedCustomersClient() {
             </div>
           ) : null}
 
-          {loading && !data ? (
-            <div className="p-8 text-center text-[13px] text-[#1a1a1a]/40">통합 고객 목록을 불러오는 중입니다...</div>
-          ) : data && data.rows.length === 0 ? (
-            <div className="p-8 text-center text-[13px] text-[#1a1a1a]/40">조건에 맞는 고객이 없습니다.</div>
+          {!loading && data && data.rows.length === 0 ? (
+            <div className="px-6 py-12 text-center">
+              <p className="text-[13px] font-semibold text-[#111110]">조건에 맞는 고객이 없습니다.</p>
+              <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
+                {hasActiveFilters
+                  ? "필터를 초기화하거나 새 리드를 등록해 시작하세요."
+                  : "새 리드를 등록하거나 REV/HW 원장 매칭을 연결해 시작하세요."}
+              </p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                {hasActiveFilters ? (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+                  >
+                    필터 초기화
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setLeadModalOpen(true)}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  리드 등록
+                </button>
+                <Link
+                  href="/admin/crm/matching"
+                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+                >
+                  매칭 연결
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              </div>
+            </div>
           ) : null}
         </section>
       </div>

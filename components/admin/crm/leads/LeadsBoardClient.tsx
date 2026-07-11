@@ -373,7 +373,7 @@ function LeadDrawer({
                   unrespondedHours >= 48
                     ? "bg-[#FEF3EE] text-[#B85C33]"
                     : unrespondedHours >= 24
-                      ? "bg-yellow-50 text-yellow-700"
+                      ? "bg-[#FBF1E0] text-[#7A520F]"
                       : "bg-[#f0f0ec] text-[#1a1a1a]/50"
                 }`}>
                   <Clock className="h-3 w-3" />
@@ -629,7 +629,7 @@ function LeadDrawer({
                 className="w-full text-[13px] bg-[#fafaf8] border border-[#e8e8e4] rounded-xl px-3 py-2 outline-none focus:border-[#c8c8c4] focus:bg-white transition-all"
               />
               {followUp && new Date(followUp) <= new Date() && (
-                <p className="text-[11px] text-yellow-600 mt-1">⚠ 팔로업 날짜가 지났습니다</p>
+                <p className="text-[11px] text-[#7A520F] mt-1">⚠ 팔로업 날짜가 지났습니다</p>
               )}
             </div>
           </div>
@@ -741,7 +741,7 @@ function LeadDrawer({
                 </button>
               </div>
             ) : linkedEventId ? (
-              <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2 text-[12px] text-amber-700">
+              <div className="mb-2 rounded-xl border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[12px] text-[#7A520F]">
                 토큰 <code className="rounded bg-white px-1 font-mono text-[11px]">event:{linkedEventId}</code>에 해당하는 행사가 없습니다.
               </div>
             ) : null}
@@ -1324,9 +1324,9 @@ export default function LeadsBoardClient() {
     { label: "미확인 유입", value: unconfirmedLeads.length, tone: "text-[#8D6C1F]", filterKey: "unconfirmed" },
     { label: "신규 유입", value: counts.new ?? 0, tone: "text-[#111110]", filterKey: "new" },
     { label: "응대 전", value: unrespondedLeads.length, tone: "text-[#B85C33]", filterKey: "unresponded" },
-    { label: "24h+", value: unresponded24h.length, tone: "text-yellow-700", filterKey: "unresponded_24h" },
+    { label: "24h+", value: unresponded24h.length, tone: "text-[#7A520F]", filterKey: "unresponded_24h" },
     { label: "48h+", value: unresponded48h.length, tone: "text-[#B85C33]", filterKey: "unresponded_48h" },
-    { label: "연락 진행", value: counts.contacted ?? 0, tone: "text-yellow-700", filterKey: "contacted" },
+    { label: "연락 진행", value: counts.contacted ?? 0, tone: "text-[#7A520F]", filterKey: "contacted" },
     { label: "오늘 예정", value: todayFollowUps.length, tone: "text-[#084734]" },
   ]
   const filteredIds = filtered.map((lead) => lead.id)
@@ -1684,9 +1684,57 @@ export default function LeadsBoardClient() {
 
       {/* 테이블 */}
       <div className="bg-white rounded-2xl border border-[#e8e8e4] overflow-hidden">
-        {filtered.length === 0 ? (
-          <div className="text-center py-16 text-[13px] text-[#1a1a1a]/30">
-            {loading ? "불러오는 중..." : "리드가 없습니다."}
+        {loading && leads.length === 0 ? (
+          // 콜드로드 스켈레톤 — 리스트 행 골격과 일치(텍스트 로더 대신).
+          <div className="divide-y divide-[#f0f0ec] px-5">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={`sk-${index}`} className="flex items-center gap-4 py-4">
+                <div className="h-4 w-4 shrink-0 animate-pulse rounded bg-[#f0f0ec]" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="h-4 w-1/3 animate-pulse rounded bg-[#f0f0ec]" />
+                  <div className="h-3 w-1/2 animate-pulse rounded bg-[#f5f5f2]" />
+                </div>
+                <div className="hidden h-5 w-16 shrink-0 animate-pulse rounded-full bg-[#f0f0ec] sm:block" />
+                <div className="hidden h-5 w-14 shrink-0 animate-pulse rounded-full bg-[#f5f5f2] sm:block" />
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          // 빈 상태 — 다음 행동 안내(리드 등록 / 조건 초기화).
+          <div className="px-6 py-14 text-center">
+            <p className="text-[13px] font-semibold text-[#111110]">
+              {leads.length === 0 ? "등록된 리드가 없습니다." : "조건에 맞는 리드가 없습니다."}
+            </p>
+            <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
+              {leads.length === 0
+                ? "리드를 등록하면 응대 큐와 파이프라인 집계가 시작됩니다."
+                : "필터를 조정하거나 전체 리드에서 다시 확인하세요."}
+            </p>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              {leads.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilter("all")
+                    setSearchQuery("")
+                    setSourceDetailFilter("all")
+                    setLeadMagnetFilter("all")
+                    setChannelSource("")
+                  }}
+                  className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+                >
+                  전체 리드 보기
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setLeadModalOpen(true)}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                리드 등록
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -1783,7 +1831,7 @@ export default function LeadsBoardClient() {
                         unrespondedHours >= 48
                           ? "bg-[#FEF3EE] text-[#B85C33]"
                           : unrespondedHours >= 24
-                            ? "bg-yellow-50 text-yellow-700"
+                            ? "bg-[#FBF1E0] text-[#7A520F]"
                             : "bg-[#f0f0ec] text-[#1a1a1a]/45"
                       }`}>
                         <Clock className="h-3 w-3" />
@@ -1885,7 +1933,7 @@ export default function LeadsBoardClient() {
                           unrespondedHours >= 48
                             ? "bg-[#FEF3EE] text-[#B85C33]"
                             : unrespondedHours >= 24
-                              ? "bg-yellow-50 text-yellow-700"
+                              ? "bg-[#FBF1E0] text-[#7A520F]"
                               : "bg-[#f0f0ec] text-[#1a1a1a]/45"
                         }`}>
                           <Clock className="h-3 w-3" />
@@ -1963,7 +2011,7 @@ export default function LeadsBoardClient() {
                           {STATUS_LABEL[lead.status]}
                         </span>
                         {lead.status === "converted" && (
-                          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-green-50 text-green-700 border border-green-200">
+                          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#ECFDF5] text-[#084734] border border-[#D7EBDD]">
                             CRM 전환
                           </span>
                         )}

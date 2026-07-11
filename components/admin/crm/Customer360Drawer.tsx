@@ -19,7 +19,6 @@ import {
   FileAudio,
   FileText,
   ListChecks,
-  Loader2,
   MessageSquare,
   Phone,
   PhoneCall,
@@ -371,16 +370,21 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     setNoteKind("manual_note")
     setDealFormOpen(false)
     setTaskFormOpen(false)
+    // 고객 전환 시 이전 고객의 스크롤 위치·활성 섹션 탭이 남지 않게 최상단으로 리셋.
+    setActiveSection("c360-summary")
+    bodyRef.current?.scrollTo({ top: 0 })
     if (customerKey) void load()
   }, [customerKey, load])
 
+  // ESC 닫기 — 드로어가 열려 있을 때만 바인딩(닫힌 상태에서 페이지 전역 ESC가 onClose를 부르지 않게).
   useEffect(() => {
+    if (!customerKey) return
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") onClose()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [onClose])
+  }, [customerKey, onClose])
 
   // 스크롤 스파이 — 본문 스크롤 위치로 현재 섹션 탭을 활성화한다(DOM 순서로 '마지막 통과' 판정).
   useEffect(() => {
@@ -1044,10 +1048,41 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
           ) : null}
 
           {loading && !data ? (
-            <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-[#1a1a1a]/40">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              고객 정보를 불러오는 중입니다...
-            </div>
+            // 콜드로드 스켈레톤 — 실제 섹션(연락처 → 머니 3타일 → 딜 → 할일) 골격과 일치.
+            <>
+              <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4" aria-hidden>
+                <div className="h-3.5 w-24 animate-pulse rounded bg-[#f0f0ec]" />
+                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+                  <div className="h-4 w-3/4 animate-pulse rounded bg-[#f5f5f2]" />
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-[#f5f5f2]" />
+                  <div className="h-4 w-1/2 animate-pulse rounded bg-[#f5f5f2]" />
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-[#f5f5f2]" />
+                </div>
+              </section>
+              <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4" aria-hidden>
+                <div className="h-3.5 w-28 animate-pulse rounded bg-[#f0f0ec]" />
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {["¥", "¥", "대"].map((chip, index) => (
+                    <div key={index} className="rounded-xl bg-[#fafaf8] px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="h-3 w-14 animate-pulse rounded bg-[#f0f0ec]" />
+                        <span className="rounded-full bg-white px-1 py-0.5 text-[9px] font-bold text-[#1a1a1a]/40">
+                          {chip}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-5 w-16 animate-pulse rounded bg-[#f0f0ec]" />
+                    </div>
+                  ))}
+                </div>
+              </section>
+              {[0, 1].map((index) => (
+                <section key={index} className="rounded-2xl border border-[#e8e8e4] bg-white p-4" aria-hidden>
+                  <div className="h-3.5 w-20 animate-pulse rounded bg-[#f0f0ec]" />
+                  <div className="mt-3 h-9 animate-pulse rounded-xl bg-[#fafaf8]" />
+                  <div className="mt-1.5 h-9 animate-pulse rounded-xl bg-[#fafaf8]" />
+                </section>
+              ))}
+            </>
           ) : null}
 
           {/* 다가오는 일정 — 기한 있는 열린 할 일 */}
