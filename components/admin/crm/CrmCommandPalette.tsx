@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import {
   Activity,
@@ -171,9 +172,12 @@ export default function CrmCommandPalette() {
     [items, activeIndex, run]
   )
 
-  if (!open) return null
+  if (!open || typeof document === "undefined") return null
 
-  return (
+  // document.body로 포털 — RouteTransition 래퍼 등 조상에 transform이 걸리면 fixed가
+  // 그 조상 기준으로 배치돼(containing block) 팔레트가 뷰포트 밖으로 밀리는 문제를 차단한다.
+  // (AdminNotificationsBell 패널과 동일한 회피 패턴)
+  return createPortal(
     <div
       className="fixed inset-0 z-[90] flex items-start justify-center bg-[#111110]/40 pt-[12vh]"
       onClick={() => setOpen(false)}
@@ -229,6 +233,7 @@ export default function CrmCommandPalette() {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
