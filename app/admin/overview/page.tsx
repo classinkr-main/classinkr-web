@@ -13,7 +13,9 @@ import {
   AlertCircle,
   ArrowUpRight,
   CalendarDays,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Link2,
   Send,
   ShieldAlert,
@@ -31,7 +33,24 @@ import {
   type FunnelStage,
 } from "@/components/admin/viz"
 import type { LeadRecord } from "@/lib/site-settings-types"
-import { isUnconfirmedLead } from "@/components/admin/crm/leads/shared"
+// 파생 로직(신호 판정·집계·우선순위)은 전부 insights 순수 모듈 소유 — 이 컴포넌트는 주입+렌더만.
+import {
+  aggregateLeads,
+  buildOperationalAlerts,
+  computePipelineCoverage,
+  deriveBlogInsights,
+  deriveBugInsights,
+  deriveCampaignInsights,
+  deriveConnections,
+  deriveEventInsights,
+  deriveLatestPatchNote,
+  formatDateShort,
+  formatDateTime,
+  resolveUnrespondedSignal,
+  SOURCE_LABEL,
+  type BranchMonthlySeries,
+  type OverviewSignalTone,
+} from "@/lib/admin/overview/insights"
 import type { AdminIntegrationStatusResponse } from "@/lib/admin-integrations/types"
 import type { CalendarEvent } from "@/lib/calendar-data"
 import type { BlogPost } from "@/lib/blog-types"
@@ -51,41 +70,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   }
 }
 
-function isValidDate(value?: string) {
-  if (!value) return false
-  return !Number.isNaN(new Date(value).getTime())
-}
-
-function scoreDate(value?: string) {
-  if (!value || !isValidDate(value)) return 0
-  return new Date(value).getTime()
-}
-
-function formatDateShort(value?: string) {
-  if (!value || !isValidDate(value)) return "날짜 없음"
-  return new Intl.DateTimeFormat("ko-KR", { month: "2-digit", day: "2-digit" }).format(new Date(value))
-}
-
-function formatDateTime(value?: string) {
-  if (!value || !isValidDate(value)) return "시간 정보 없음"
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value))
-}
-
-function isWithinNextDays(dateStr: string, days: number) {
-  const start = new Date()
-  start.setHours(0, 0, 0, 0)
-  const end = new Date(start)
-  end.setDate(end.getDate() + days)
-  const target = new Date(`${dateStr}T00:00:00`)
-  return target >= start && target <= end
-}
-
-function statusToneClasses(tone: "neutral" | "info" | "warning" | "danger" | "success") {
+function statusToneClasses(tone: OverviewSignalTone) {
   switch (tone) {
     case "info":
       return "bg-[#ECFDF5] text-[#084734] border-[#D1FAE5]"
@@ -116,12 +101,7 @@ const Sparkline = dynamic(
   () => import("@/components/admin/viz/Sparkline").then((m) => m.Sparkline),
   { ssr: false, loading: () => <div className="h-[30px]" /> }
 )
-const SOURCE_LABEL: Record<string, string> = {
-  demo_modal: "데모 신청",
-  contact_page: "문의",
-  newsletter: "뉴스레터",
-  meta_lead_ads: "Meta 리드",
-}
+// SOURCE_LABEL은 insights 모듈로 이관(pieData 집계와 렌더가 같은 라벨을 공유).
 const STATUS_LABEL: Record<string, string> = {
   new: "신규",
   contacted: "연락중",
@@ -166,18 +146,6 @@ const KPI_STRIP_CLASS =
 const KPI_TILE_CLASS =
   "w-[76vw] min-w-[220px] max-w-[280px] shrink-0 snap-start md:w-auto md:min-w-0 md:max-w-none [&>*]:h-full"
 
-type OverviewOperationalAlert = {
-  id: string
-  scope: string
-  title: string
-  description: string
-  meta: string
-  tone: "neutral" | "info" | "warning" | "danger" | "success"
-  action: string
-  href: string
-  priority: number
-}
-
 interface InstagramOverviewDashboard {
   account: {
     username?: string
@@ -194,14 +162,12 @@ interface InstagramOverviewDashboard {
 // 운영 OS 요약 스트립 전용 (읽기 전용 합성 데이터)
 interface BranchSummaryPayload {
   revenue: { confirmed: number; goal: number; pacing_pct: number }
-  monthly_series: {
-    goal_cum: number[]
-    revenue_cum: number[]
-    revenue_trend_cum: number[]
-  }
+  monthly_series: BranchMonthlySeries
 }
 
+// 미응답 정의의 캐논 원천(action-kpis → getLeadActionStats). 타일·주의신호가 같은 수를 쓴다.
 interface LeadActionKpisPayload {
+  unrespondedCount: number
   unresponded24hCount: number
 }
 
@@ -249,6 +215,7 @@ export default function OverviewPage() {
   const [visitorStats, setVisitorStats] = useState<VisitorStatsPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [chartRange, setChartRange] = useState<7 | 30>(7)
+  const [alertsExpanded, setAlertsExpanded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -344,99 +311,8 @@ export default function OverviewPage() {
     }
   }, [])
 
-  // 리드 파생값을 단일 패스로 집계하고 useMemo로 캐싱한다.
-  // (기존엔 렌더마다 status별 filter + 날짜 파싱을 15회+ 반복)
-  const leadAgg = useMemo(() => {
-    const now = new Date()
-    const todayStr = now.toDateString()
-    const weekAgo = new Date(now)
-    weekAgo.setDate(now.getDate() - 7)
-    const twoWeeksAgo = new Date(now)
-    twoWeeksAgo.setDate(now.getDate() - 14)
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const weekAgoT = weekAgo.getTime()
-    const twoWeeksAgoT = twoWeeksAgo.getTime()
-    const monthStartT = monthStart.getTime()
-    const lastMonthStartT = lastMonthStart.getTime()
-
-    let newLeads = 0
-    let contactedLeads = 0
-    let converted = 0
-    let closedLeads = 0
-    let todayLeads = 0
-    let thisWeekLeads = 0
-    let lastWeekLeads = 0
-    let thisMonthLeads = 0
-    let lastMonthLeads = 0
-    let convertedThisMonth = 0
-    let convertedLastMonth = 0
-    const sourceMap: Record<string, number> = {}
-    const branchMap: Record<string, number> = {}
-    const dayCount: Record<string, number> = {}
-
-    for (const l of leads) {
-      // 퍼널 단계 카운트는 착지 보드(filter=new 등)의 리드 확인 게이트와 동일 기준으로 센다 —
-      // 미확인 리드까지 세면 타일 수치가 보드 표시 건수보다 커져 신호가 깨진다(unresponded만 게이트 면제).
-      if (!isUnconfirmedLead(l)) {
-        if (l.status === "new") newLeads++
-        else if (l.status === "contacted") contactedLeads++
-        else if (l.status === "converted") converted++
-        else if (l.status === "closed") closedLeads++
-      }
-
-      const t = new Date(l.timestamp).getTime()
-      if (!Number.isNaN(t)) {
-        const key = new Date(t).toDateString()
-        dayCount[key] = (dayCount[key] ?? 0) + 1
-        if (key === todayStr) todayLeads++
-        if (t >= weekAgoT) thisWeekLeads++
-        else if (t >= twoWeeksAgoT) lastWeekLeads++
-        if (t >= monthStartT) {
-          thisMonthLeads++
-          if (l.status === "converted") convertedThisMonth++
-        } else if (t >= lastMonthStartT) {
-          lastMonthLeads++
-          if (l.status === "converted") convertedLastMonth++
-        }
-      }
-
-      sourceMap[l.source] = (sourceMap[l.source] ?? 0) + 1
-      const branch = l.branch?.trim()
-      if (branch) branchMap[branch] = (branchMap[branch] ?? 0) + 1
-    }
-
-    const total = leads.length
-    const pieData = Object.entries(sourceMap).map(([key, value]) => ({
-      name: SOURCE_LABEL[key] ?? key,
-      value,
-    }))
-    const recentLeads = [...leads]
-      .sort((a, b) => scoreDate(b.timestamp) - scoreDate(a.timestamp))
-      .slice(0, 6)
-    const topBranch = Object.entries(branchMap).sort((a, b) => b[1] - a[1])[0]
-
-    return {
-      total,
-      newLeads,
-      contactedLeads,
-      converted,
-      closedLeads,
-      activePipelineLeads: newLeads + contactedLeads,
-      convRate: total > 0 ? Math.round((converted / total) * 100) : 0,
-      todayLeads,
-      thisWeekLeads,
-      weekTrend: thisWeekLeads - lastWeekLeads,
-      thisMonthLeads,
-      monthTrend: thisMonthLeads - lastMonthLeads,
-      convertedThisMonth,
-      convertedTrend: convertedThisMonth - convertedLastMonth,
-      pieData,
-      recentLeads,
-      dayCount,
-      topBranch,
-    }
-  }, [leads])
+  // 리드 파생값(확인 게이트 포함)은 insights.aggregateLeads가 단일 패스로 집계한다.
+  const leadAgg = useMemo(() => aggregateLeads(leads), [leads])
 
   const {
     total,
@@ -470,94 +346,24 @@ export default function OverviewPage() {
   )
   const chartTotal = useMemo(() => chartData.reduce((sum, point) => sum + point.count, 0), [chartData])
 
-  const {
-    publishedBlogPosts,
-    ctaCoverage,
-    recentPosts,
-    publishedPostsWithoutCta,
-  } = useMemo(() => {
-    const draftBlogPosts = blogPosts.filter((post) => post.status === "draft").length
-    const publishedBlogPosts = blogPosts.filter((post) => post.status === "published")
-    const publishedPostsWithCta = publishedBlogPosts.filter((post) => {
-      const cta = post.cta
-      return Boolean(cta?.title?.trim() && cta?.buttonLabel?.trim() && cta?.buttonHref?.trim())
-    }).length
-    const ctaCoverage =
-      publishedBlogPosts.length > 0 ? Math.round((publishedPostsWithCta / publishedBlogPosts.length) * 100) : 0
-    const recentPosts = [...blogPosts]
-      .sort((a, b) => scoreDate(b.updatedAt ?? b.publishedAt) - scoreDate(a.updatedAt ?? a.publishedAt))
-      .slice(0, 4)
-    return {
-      draftBlogPosts,
-      publishedBlogPosts,
-      ctaCoverage,
-      recentPosts,
-      publishedPostsWithoutCta: Math.max(0, publishedBlogPosts.length - publishedPostsWithCta),
-    }
-  }, [blogPosts])
-
-  const { recentCampaigns, draftCampaigns, sentCampaigns, latestFailedCampaign } = useMemo(() => {
-    const recentCampaigns = [...campaigns]
-      .sort((a, b) => scoreDate(b.sentAt ?? b.createdAt) - scoreDate(a.sentAt ?? a.createdAt))
-      .slice(0, 4)
-    const failedCampaigns = [...campaigns]
-      .filter((campaign) => campaign.status === "failed")
-      .sort((a, b) => scoreDate(b.sentAt ?? b.createdAt) - scoreDate(a.sentAt ?? a.createdAt))
-    return {
-      recentCampaigns,
-      failedCampaigns,
-      draftCampaigns: campaigns.filter((campaign) => campaign.status === "draft"),
-      sentCampaigns: campaigns.filter((campaign) => campaign.status === "sent"),
-      latestFailedCampaign: failedCampaigns[0],
-    }
-  }, [campaigns])
-
-  const { upcomingEvents, nextUpcomingEvent } = useMemo(() => {
-    const upcomingEvents = [...calendarEvents]
-      .filter((event) => isWithinNextDays(event.date, 7))
-      .sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? ""))
-      .slice(0, 5)
-    const assigneeMap = upcomingEvents.reduce<Record<string, number>>((acc, event) => {
-      event.assignees?.forEach((assignee) => {
-        acc[assignee] = (acc[assignee] ?? 0) + 1
-      })
-      return acc
-    }, {})
-    return {
-      upcomingEvents,
-      activeAssigneeCount: Object.keys(assigneeMap).length,
-      unassignedEventCount: upcomingEvents.filter((event) => !event.assignees?.length).length,
-      busiestAssignee: Object.entries(assigneeMap).sort((a, b) => b[1] - a[1])[0],
-      nextUpcomingEvent: upcomingEvents[0],
-    }
-  }, [calendarEvents])
-
-  const { openBugs, criticalOpenBugs } = useMemo(() => {
-    const openBugs = [...bugs]
-      .filter((bug) => bug.status === "open" || bug.status === "in-progress")
-      .sort((a, b) => {
-        const severityOrder: Record<BugReport["severity"], number> = {
-          critical: 4,
-          high: 3,
-          medium: 2,
-          low: 1,
-        }
-        return (
-          severityOrder[b.severity] - severityOrder[a.severity] ||
-          scoreDate(b.updatedAt) - scoreDate(a.updatedAt)
-        )
-      })
-      .slice(0, 4)
-    return {
-      openBugs,
-      criticalOpenBugs: openBugs.filter((bug) => bug.severity === "critical" || bug.severity === "high"),
-    }
-  }, [bugs])
-
-  const latestPatchNote = useMemo(
-    () => [...patchNotes].sort((a, b) => scoreDate(b.date) - scoreDate(a.date))[0],
-    [patchNotes]
+  const { publishedBlogPosts, ctaCoverage, recentPosts, publishedPostsWithoutCta } = useMemo(
+    () => deriveBlogInsights(blogPosts),
+    [blogPosts]
   )
+
+  const { recentCampaigns, draftCampaigns, sentCampaigns, latestFailedCampaign } = useMemo(
+    () => deriveCampaignInsights(campaigns),
+    [campaigns]
+  )
+
+  const { upcomingEvents, nextUpcomingEvent } = useMemo(
+    () => deriveEventInsights(calendarEvents),
+    [calendarEvents]
+  )
+
+  const { openBugs, criticalOpenBugs } = useMemo(() => deriveBugInsights(bugs), [bugs])
+
+  const latestPatchNote = useMemo(() => deriveLatestPatchNote(patchNotes), [patchNotes])
 
   const instagramViews = instagramDashboard?.summary.totalViews ?? 0
   const instagramMediaCount = instagramDashboard?.summary.mediaCount ?? 0
@@ -570,23 +376,8 @@ export default function OverviewPage() {
     ? visitorStats.today.homeVisitors - (visitorYesterday?.homeVisitors ?? 0)
     : 0
 
-  // 연동 상태 카드 — integrations/status 항목 중 외부 전송 경로 4종만 노출한다.
-  const connections = (
-    [
-      { key: "lead_webhooks", fallbackLabel: "Lead Webhooks", description: "리드를 시트·외부 자동화로 전송" },
-      { key: "channel_talk", fallbackLabel: "Channel Talk", description: "상담 인박스로 전달" },
-      { key: "email_provider", fallbackLabel: "Email", description: "캠페인 발송 연동" },
-      { key: "notifications", fallbackLabel: "Notifications", description: "운영 알림(WeCom·알림톡) 전송" },
-    ] as const
-  ).map(({ key, fallbackLabel, description }) => {
-    const item = integrationStatus?.items.find((entry) => entry.key === key)
-    return {
-      label: item?.label ?? fallbackLabel,
-      description,
-      connected: item?.configured ?? false,
-      href: item?.adminHref ?? "/admin/settings?tab=integrations",
-    }
-  })
+  // 연동 상태 카드 — 외부 전송 경로 4종. 미연결 판정은 insights.deriveConnections 소유(오탐 방지 규칙 포함).
+  const { connections, missingConnections } = deriveConnections(integrationStatus)
 
   // 세일즈 퍼널 시각화용 단계 (MiniFunnel) — 각 단계는 해당 필터가 켜진 리드 보드로 착지한다.
   const funnelStages: FunnelStage[] = [
@@ -596,129 +387,32 @@ export default function OverviewPage() {
     { label: STATUS_LABEL.closed, value: closedLeads, tone: "neutral", href: "/admin/crm/customers/leads?filter=closed" },
   ]
 
-  // 상태 응답이 없을 때(로딩/실패)는 미연결로 단정하지 않는다. (상시 오탐 방지)
-  const missingConnections = integrationStatus
-    ? connections.filter((connection) => !connection.connected)
-    : []
-  const missingConnectionLabels = missingConnections.map((connection) => connection.label)
-  const missingConnectionSummary =
-    missingConnectionLabels.length > 2
-      ? `${missingConnectionLabels.slice(0, 2).join(", ")} 외 ${missingConnectionLabels.length - 2}개`
-      : missingConnectionLabels.join(", ")
-  const operationalAlertItems: Array<OverviewOperationalAlert | null> = [
-    newLeads > 0
-      ? {
-          id: "lead-followup",
-          scope: "CRM",
-          title: "신규 문의 후속 리스크",
-          description: `미처리 ${newLeads}건 · 오늘 유입 ${todayLeads}건 · 세일즈 후속 상태를 우선 점검하세요.`,
-          meta: todayLeads > 0 ? `오늘 ${todayLeads}건` : `이번 주 ${thisWeekLeads}건`,
-          tone: "warning" as const,
-          action: "CRM 확인",
-          // 리스크 렌즈가 켜진 미응답 보드로 직결 — bare /admin/crm 착지 금지(신호→행동 무손실).
-          href: "/admin/crm/customers/leads?filter=unresponded&focus=risk",
-          priority: 100,
-        }
-      : null,
-    latestFailedCampaign
-      ? {
-          id: `campaign-failed-${latestFailedCampaign.id}`,
-          scope: "캠페인",
-          title: "실패 캠페인 재점검",
-          description: `${latestFailedCampaign.subject} · ${formatDateTime(latestFailedCampaign.sentAt ?? latestFailedCampaign.createdAt)} · 발송 실패 상태입니다.`,
-          meta: "즉시 확인",
-          tone: "danger" as const,
-          action: "캠페인",
-          href: "/admin/campaigns",
-          priority: 95,
-        }
-      : null,
-    missingConnections.length > 0
-      ? {
-          id: "connection-missing",
-          scope: "연동",
-          title: "외부 연동 설정 필요",
-          description: `미연결 ${missingConnections.length}건 · ${missingConnectionSummary} · 전송 경로를 먼저 복구하세요.`,
-          meta: `미연결 ${missingConnections.length}건`,
-          tone: "warning" as const,
-          action: "설정",
-          href: "/admin/settings?tab=integrations",
-          priority: 90,
-        }
-      : null,
-    openBugs.length > 0
-      ? {
-          id: "open-bugs",
-          scope: "Dev",
-          title: "오픈 이슈 모니터링",
-          description: `진행중 ${openBugs.length}건 · Critical/High ${criticalOpenBugs.length}건 · 최근 업데이트 ${formatDateTime(openBugs[0]?.updatedAt)}.`,
-          meta: criticalOpenBugs.length > 0 ? `긴급 ${criticalOpenBugs.length}건` : `오픈 ${openBugs.length}건`,
-          tone: criticalOpenBugs.length > 0 ? ("danger" as const) : ("warning" as const),
-          action: "Dev 열기",
-          href: "/admin/dev",
-          priority: criticalOpenBugs.length > 0 ? 85 : 75,
-        }
-      : null,
-    publishedPostsWithoutCta > 0
-      ? {
-          id: "cta-coverage",
-          scope: "콘텐츠",
-          title: "콘텐츠 CTA 보강 필요",
-          description: `공개 글 ${publishedBlogPosts.length}건 중 CTA 미완성 ${publishedPostsWithoutCta}건 · 현재 커버리지 ${ctaCoverage}%.`,
-          meta: `CTA ${ctaCoverage}%`,
-          tone: ctaCoverage < 50 ? ("warning" as const) : ("info" as const),
-          action: "콘텐츠",
-          href: "/admin/blog",
-          priority: 70,
-        }
-      : null,
-    draftCampaigns.length > 0
-      ? {
-          id: "campaign-drafts",
-          scope: "캠페인",
-          title: "발송 대기 초안 확인",
-          description: `초안 ${draftCampaigns.length}건 · 발송 완료 ${sentCampaigns.length}건 · 발송 검토 대상을 정리하세요.`,
-          meta: `초안 ${draftCampaigns.length}건`,
-          tone: "info" as const,
-          action: "초안 열기",
-          href: "/admin/campaigns",
-          priority: 60,
-        }
-      : null,
-    nextUpcomingEvent
-      ? {
-          id: `calendar-${nextUpcomingEvent.id}`,
-          scope: "일정",
-          title: "다가오는 일정 점검",
-          description: `${nextUpcomingEvent.title} · ${formatDateTime(`${nextUpcomingEvent.date}T${nextUpcomingEvent.time ?? "09:00"}`)} · 준비 상태를 미리 확인하세요.`,
-          meta: nextUpcomingEvent.assignees?.join(", ") || "캘린더",
-          tone: "info" as const,
-          action: "캘린더",
-          href: "/admin/calendar",
-          priority: 50,
-        }
-      : null,
-    latestPatchNote
-      ? {
-          id: latestPatchNote.id,
-          scope: "배포",
-          title: `최근 패치노트 v${latestPatchNote.version}`,
-          description: `${latestPatchNote.title} · ${formatDateShort(latestPatchNote.date)} · 최근 변경 범위를 빠르게 확인합니다.`,
-          meta: latestPatchNote.status === "published" ? "배포 완료" : "초안",
-          tone: latestPatchNote.status === "published" ? ("success" as const) : ("info" as const),
-          action: "패치노트",
-          href: "/admin/dev",
-          priority: 40,
-        }
-      : null,
-  ]
-  const operationalAlerts = operationalAlertItems
-    .filter((item): item is OverviewOperationalAlert => Boolean(item))
-    .sort((a, b) => b.priority - a.priority)
-    .slice(0, 6)
-  const actionableOperationalAlertCount = operationalAlerts.filter(
-    (item) => item.tone === "warning" || item.tone === "danger"
-  ).length
+  // '미응답' 수치는 이 화면 전체에서 resolveUnrespondedSignal 하나로만 산출한다(단일 정의·단일 수치).
+  // 캐논 원천은 action-kpis 라우트 — 도착 전이나 실패 시에만 같은 정의로 리드 목록에서 파생한다.
+  const unrespondedSignal = useMemo(
+    () => resolveUnrespondedSignal(leadActionKpis, loading ? null : leads),
+    [leadActionKpis, loading, leads]
+  )
+
+  // 오늘 할 일 / 주의 신호 — 우선순위·tone·임계값 판정은 insights.buildOperationalAlerts 소유.
+  const { alerts: operationalAlerts, actionableAlertCount: actionableOperationalAlertCount } =
+    buildOperationalAlerts({
+      unrespondedCount: unrespondedSignal?.unrespondedCount ?? 0,
+      unresponded24hCount: unrespondedSignal?.unresponded24hCount ?? 0,
+      todayLeads,
+      thisWeekLeads,
+      latestFailedCampaign,
+      missingConnectionLabels: missingConnections.map((connection) => connection.label),
+      openBugs,
+      criticalOpenBugs,
+      publishedBlogPostCount: publishedBlogPosts.length,
+      publishedPostsWithoutCta,
+      ctaCoverage,
+      draftCampaignCount: draftCampaigns.length,
+      sentCampaignCount: sentCampaigns.length,
+      nextUpcomingEvent,
+      latestPatchNote,
+    })
 
   // REV 장부 금액은 전부 위안화 — CRM CurrencyChip 아이디엄(기호+통화 병기)대로 ¥를 붙여 합산 오독을 막는다.
   const fmtCny = (value: number) => `¥${COMPACT_NUMBER.format(value)}`
@@ -732,17 +426,7 @@ export default function OverviewPage() {
   const sparkRevenue = branchSummary?.monthly_series.revenue_cum ?? []
   const sparkVisitors = visitorStats?.daily.map((day) => day.homeVisitors) ?? []
 
-  const pipelineCoverage = (() => {
-    const series = branchSummary?.monthly_series
-    if (!series) return null
-    const last = (arr: number[] | undefined) => (arr && arr.length > 0 ? arr[arr.length - 1] : 0)
-    const confirmed = last(series.revenue_cum)
-    const pipelineTotal = last(series.revenue_trend_cum) - confirmed
-    const remaining = last(series.goal_cum) - confirmed
-    return remaining > 0 ? pipelineTotal / remaining : null
-  })()
-
-  const osLeadUnresponded24h = leadActionKpis?.unresponded24hCount ?? null
+  const pipelineCoverage = computePipelineCoverage(branchSummary?.monthly_series)
 
   return (
     <div className="relative overflow-hidden px-4 pt-6 pb-16 sm:px-6 sm:pt-8 lg:px-8 lg:pb-20">
@@ -782,13 +466,14 @@ export default function OverviewPage() {
         </div>
         <div className={`${KPI_STRIP_CLASS} -mx-4 px-4 sm:-mx-5 sm:px-5 md:mx-0 md:px-0`}>
           <div className={KPI_TILE_CLASS}>
-            {osLeadUnresponded24h != null ? (
+            {unrespondedSignal ? (
               <StatCard
                 icon={<AlertCircle className="h-4 w-4" />}
                 label="골든타임 24h"
-                value={`${osLeadUnresponded24h}건`}
-                sub="24h 미응답 인바운드"
-                tone={osLeadUnresponded24h > 0 ? "danger" : "neutral"}
+                value={`${unrespondedSignal.unresponded24hCount}건`}
+                // 산정 기준 캡션 — 주의신호 카드와 동일 어휘·동일 기준(미응답 리드=데모·문의·Meta 신규).
+                sub="24h+ 미응답 리드 · 데모·문의·Meta 신규"
+                tone={unrespondedSignal.unresponded24hCount > 0 ? "danger" : "neutral"}
                 href="/admin/crm/customers/leads?filter=unresponded&focus=risk"
               />
             ) : (
@@ -907,33 +592,45 @@ export default function OverviewPage() {
               description="문의, 캠페인, 연동, 일정, 배포 변경이 안정 상태면 이 영역은 비어 있습니다."
             />
           ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {operationalAlerts.map((item) => (
-                <a
-                  key={item.id}
-                  href={item.href}
-                  className="group flex items-start gap-3 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_10px_24px_rgba(17,17,16,0.04)]"
-                >
-                  <div className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border ${statusToneClasses(item.tone)}`}>
-                    <ShieldAlert className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${statusToneClasses(item.tone)}`}>
-                        {item.scope}
-                      </span>
-                      <span className="text-[11px] text-[#1a1a1a]/35">{item.meta}</span>
+            <>
+              <div className="grid gap-3 md:grid-cols-2">
+                {(alertsExpanded ? operationalAlerts : operationalAlerts.slice(0, 6)).map((item) => (
+                  <a
+                    key={item.id}
+                    href={item.href}
+                    className="group flex items-start gap-3 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_10px_24px_rgba(17,17,16,0.04)]"
+                  >
+                    <div className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border ${statusToneClasses(item.tone)}`}>
+                      <ShieldAlert className="h-4 w-4" />
                     </div>
-                    <p className="mt-1 truncate text-[13px] font-semibold text-[#111110]">{item.title}</p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/40">{item.description}</p>
-                  </div>
-                  <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#1a1a1a]/35 group-hover:text-[#111110]">
-                    {item.action}
-                    <ChevronRight className="h-3 w-3" />
-                  </span>
-                </a>
-              ))}
-            </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${statusToneClasses(item.tone)}`}>
+                          {item.scope}
+                        </span>
+                        <span className="text-[11px] text-[#1a1a1a]/35">{item.meta}</span>
+                      </div>
+                      <p className="mt-1 truncate text-[13px] font-semibold text-[#111110]">{item.title}</p>
+                      <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/40">{item.description}</p>
+                    </div>
+                    <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#1a1a1a]/35 group-hover:text-[#111110]">
+                      {item.action}
+                      <ChevronRight className="h-3 w-3" />
+                    </span>
+                  </a>
+                ))}
+              </div>
+              {operationalAlerts.length > 6 ? (
+                <button
+                  type="button"
+                  onClick={() => setAlertsExpanded((prev) => !prev)}
+                  className="mt-3 flex w-full items-center justify-center gap-1 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
+                >
+                  {alertsExpanded ? "접기" : `더보기 (${operationalAlerts.length - 6})`}
+                  {alertsExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                </button>
+              ) : null}
+            </>
           )}
         </SectionCard>
       </div>

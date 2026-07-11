@@ -721,7 +721,9 @@ const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
     "noticeBannerEnabled",
     "noticeBannerText",
   ],
-  lead: ["demoFormEnabled", "blogSectionEnabled"],
+  // lead 탭은 안내·크로스링크 전용 — demoFormEnabled·blogSectionEnabled의 편집 정본은 general 하나다.
+  // 여기 키를 중복 등록하면 같은 변경이 dirtyCount에 두 번 잡힌다(AS-2 dirty 이중 계산 해소).
+  lead: [],
   cta: [],
   links: [],
   integrations: [
@@ -1426,23 +1428,58 @@ export default function SettingsPage() {
                 </div>
               </PanelCard>
 
+              {/* 편집 토글은 일반 탭 '사이트 기능'이 유일 정본(AS-2) — 여기서는 현재 상태만 읽기 전용으로
+                  보여주고 편집은 크로스링크로 보낸다. 이중 편집 UI 제거로 dirty 이중 계산도 함께 해소. */}
               <PanelCard
                 title="현재 활성 설정"
-                description="실제 저장 가능한 값만 편집합니다."
-                badge="편집 가능"
+                description="리드 유입에 영향을 주는 사이트 기능 상태입니다. 편집은 일반 탭 한 곳에서 관리합니다."
+                badge="읽기 전용"
               >
-                <ToggleRow
-                  label="데모 신청 폼"
-                  description="홈페이지 데모 신청 버튼 및 모달 활성화"
-                  checked={settings.demoFormEnabled}
-                  onChange={(v) => set({ demoFormEnabled: v })}
-                />
-                <ToggleRow
-                  label="블로그 섹션"
-                  description="홈페이지 블로그 섹션 표시"
-                  checked={settings.blogSectionEnabled}
-                  onChange={(v) => set({ blogSectionEnabled: v })}
-                />
+                {[
+                  {
+                    key: "demoFormEnabled" as const,
+                    label: "데모 신청 폼",
+                    description: "홈페이지 데모 신청 버튼 및 모달 활성화",
+                    enabled: settings.demoFormEnabled,
+                  },
+                  {
+                    key: "blogSectionEnabled" as const,
+                    label: "블로그 섹션",
+                    description: "홈페이지 블로그 섹션 표시",
+                    enabled: settings.blogSectionEnabled,
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.key}
+                    className="flex items-center justify-between gap-4 border-b border-[#e8e8e4] py-4 last:border-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-medium text-[#111110]">{item.label}</p>
+                      <p className="mt-0.5 text-[12px] text-[#1a1a1a]/45">{item.description}</p>
+                    </div>
+                    <span
+                      className={cn(
+                        "inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                        item.enabled ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#f0f0ec] text-[#1a1a1a]/45"
+                      )}
+                    >
+                      {item.enabled ? "켜짐" : "꺼짐"}
+                    </span>
+                  </div>
+                ))}
+                <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
+                  <p className="text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                    두 기능의 켜기/끄기는 일반 탭의 &lsquo;사이트 기능&rsquo;에서 저장합니다.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("general")}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/60 transition-all hover:border-[#c8c8c4] hover:text-[#111110]"
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
+                    일반 탭에서 편집
+                  </button>
+                </div>
               </PanelCard>
             </>
           )}
