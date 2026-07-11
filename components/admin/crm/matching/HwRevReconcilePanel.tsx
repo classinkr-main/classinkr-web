@@ -82,7 +82,8 @@ export default function HwRevReconcilePanel() {
     .slice(0, MAX_VISIBLE)
 
   return (
-    <section className="mt-6 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white">
+    // 참조 표면(존재성 대사 검수) — 행동 표면(매칭 인박스)과의 톤차 위계(W2-6): 베이지로 가라앉힌다.
+    <section className="mt-6 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#fafaf8]">
       <button
         type="button"
         onClick={toggle}

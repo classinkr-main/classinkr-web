@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
+import { StatTile } from "@/components/admin/viz"
 import NeoCrmTeamPanel from "@/components/admin/crm/NeoCrmTeamPanel"
 import CrmCoverageStrip from "@/components/admin/crm/CrmCoverageStrip"
 import CrmPriorityQueuePanel from "@/components/admin/crm/CrmPriorityQueuePanel"
@@ -28,11 +29,12 @@ import { formatCNY, formatKRWAbbrev, CRM_CURRENCY_BADGE, type CrmCurrency } from
 // Recharts 번들을 현황 초기 로드에서 분리 — 차트는 지연 로드.
 const CrmHomeCharts = dynamic(() => import("@/components/admin/crm/CrmHomeCharts"), {
   ssr: false,
-  loading: () => <div className="h-40 animate-pulse rounded-xl bg-[#fafaf8]" />,
+  // 참조 섹션이 베이지(#fafaf8)로 가라앉아(W2-6) 스켈레톤은 한 단 진한 뉴트럴로 유지.
+  loading: () => <div className="h-40 animate-pulse rounded-xl bg-[#f0f0ec]" />,
 })
 const CrmPerformanceCharts = dynamic(() => import("@/components/admin/crm/CrmPerformanceCharts"), {
   ssr: false,
-  loading: () => <div className="h-44 animate-pulse rounded-xl bg-[#fafaf8]" />,
+  loading: () => <div className="h-44 animate-pulse rounded-xl bg-[#f0f0ec]" />,
 })
 
 const CRM_ACTION_KPIS_URL = "/api/admin/crm/action-kpis"
@@ -287,6 +289,8 @@ function ValueSkeleton({ className = "h-6 w-20" }: { className?: string }) {
   )
 }
 
+// KPI 타일 로컬 재구현 금지(W2-2b) — 마크업은 viz StatTile(bare 변형)에 위임하는 어댑터.
+// tone은 값 색만 바꾸는 기존 계약을 유지한다(값·라벨·캡션 불변).
 function CrmMetricTile({
   icon,
   label,
@@ -301,17 +305,19 @@ function CrmMetricTile({
   tone?: string
 }) {
   return (
-    <div className="border-t border-[#f0f0ec] pt-4">
-      <div className="flex items-center gap-2 text-[#1a1a1a]/35">
-        {icon}
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em]">{label}</p>
-      </div>
-      <p className={`mt-2 text-2xl font-bold tracking-[-0.035em] ${tone}`}>{value}</p>
-      <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
-    </div>
+    <StatTile
+      icon={icon}
+      iconLayout="inline"
+      variant="bare"
+      compact
+      label={label}
+      value={tone === "text-[#111110]" ? value : <span className={tone}>{value}</span>}
+      hint={hint}
+    />
   )
 }
 
+// KPI 타일 로컬 재구현 금지(W2-2b) — 마크업은 viz StatTile(soft 변형)에 위임하는 어댑터.
 function CrmMeasurementTile({
   icon,
   label,
@@ -326,14 +332,15 @@ function CrmMeasurementTile({
   tone?: string
 }) {
   return (
-    <div className="rounded-xl bg-[#fafaf8] px-3 py-3">
-      <div className="flex items-center gap-1.5 text-[#1a1a1a]/40">
-        {icon}
-        <p className="text-[11px] font-semibold uppercase tracking-[0.1em]">{label}</p>
-      </div>
-      <p className={`mt-2 text-[22px] font-bold leading-none tracking-[-0.03em] ${tone}`}>{value}</p>
-      <p className="mt-1.5 text-[11px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
-    </div>
+    <StatTile
+      icon={icon}
+      iconLayout="inline"
+      variant="soft"
+      compact
+      label={label}
+      value={tone === "text-[#111110]" ? value : <span className={tone}>{value}</span>}
+      hint={hint}
+    />
   )
 }
 
@@ -929,13 +936,14 @@ function CrmOperationsDashboard({
     <>
       {showRevenue ? (
       <div className="mb-4">
-        <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+        {/* 참조 표면(분석·분해) — 행동 표면과의 톤차 위계(W2-6): 베이지로 한 단 가라앉힌다 */}
+        <section className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Customer Revenue Scope</p>
               <h2 className="mt-1 text-[18px] font-bold text-[#111110]">고객 돈흐름 우선순위</h2>
             </div>
-            <span className="inline-flex h-9 items-center rounded-lg bg-[#fafaf8] px-3 text-[12px] font-semibold text-[#1a1a1a]/50">
+            <span className="inline-flex h-9 items-center rounded-lg bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/50">
               Sync {formatOverviewDate(neoCrm?.latestSyncedAt ?? overview?.externalSnapshots.latestSyncedAt)}
             </span>
             <Link
@@ -1379,101 +1387,114 @@ export default function CrmPage() {
           </span>
         </div>
 
+        {/* KPI 로컬 재구현 금지(W2-2b) — viz StatTile(soft) 위임. 값·라벨·캡션·딥링크·스켈레톤 불변,
+            breach 색은 신호 예산제대로 값에만(정상=중립, 컨테이너 상시 채색 제거). */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <Link
+          <StatTile
+            icon={<UserPlus className="h-4 w-4" />}
+            iconLayout="inline"
+            variant="soft"
+            compact
             href="/admin/crm/customers/leads?filter=unconfirmed"
-            className="group rounded-xl border border-[#F3E6B8] bg-[#FFFBF0] p-3 text-left transition-colors hover:border-[#E0C875] hover:bg-white"
-          >
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[#8D6C1F] group-hover:text-[#6b5316]">
-                <UserPlus className="h-4 w-4" />
-              </span>
-              <span className="text-[12px] font-medium text-[#1a1a1a]/55">미확인 유입</span>
-            </div>
-            <p className={`mt-2 text-[26px] font-bold leading-none ${(leadKpis?.unconfirmedCount ?? 0) > 0 ? "text-[#8D6C1F]" : "text-[#111110]"}`}>
-              {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-6 w-12" /> : formatNumber(leadKpis?.unconfirmedCount)}
-            </p>
-            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">
-              공개 폼(문의·데모·뉴스레터) · 확인 전
-            </p>
-          </Link>
-
-          <Link
-            href="/admin/crm/customers/leads?filter=unresponded"
-            className="group rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3 text-left transition-colors hover:border-[#c8c8c4] hover:bg-white"
-          >
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[#1a1a1a]/45 group-hover:text-[#111110]">
-                <PhoneCall className="h-4 w-4" />
-              </span>
-              <span className="text-[12px] font-medium text-[#1a1a1a]/55">미응답 리드</span>
-            </div>
-            <p className={`mt-2 text-[26px] font-bold leading-none ${(leadKpis?.unrespondedCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
-              {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-6 w-12" /> : formatNumber(leadKpis?.unrespondedCount)}
-            </p>
-            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">
-              48h 이상 {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(leadKpis?.unresponded48hCount)}건
-            </p>
-          </Link>
-
-          <Link
-            href="/admin/crm/customers/leads?focus=risk"
-            className="group rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3 text-left transition-colors hover:border-[#c8c8c4] hover:bg-white"
-          >
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[#1a1a1a]/45 group-hover:text-[#111110]">
-                <AlertCircle className="h-4 w-4" />
-              </span>
-              <span className="text-[12px] font-medium text-[#1a1a1a]/55">오버듀 팔로업</span>
-            </div>
-            <p className={`mt-2 text-[26px] font-bold leading-none ${(leadKpis?.overdueFollowUpCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
-              {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-6 w-12" /> : formatNumber(leadKpis?.overdueFollowUpCount)}
-            </p>
-            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">
-              오늘 예정 {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(leadKpis?.todayFollowUpCount)}건
-            </p>
-          </Link>
-
-          <Link
-            href="/admin/calendar"
-            className="group rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3 text-left transition-colors hover:border-[#c8c8c4] hover:bg-white"
-          >
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[#1a1a1a]/45 group-hover:text-[#111110]">
-                <Calendar className="h-4 w-4" />
-              </span>
-              <span className="text-[12px] font-medium text-[#1a1a1a]/55">이번 주 설치·방문</span>
-            </div>
-            <p className="mt-2 text-[26px] font-bold leading-none text-[#084734]">
-              {/* 0 플래시 금지(CRM-5) — overview 도착 전엔 스켈레톤 */}
-              {crmOverviewLoading && !crmOverview ? (
+            label="미확인 유입"
+            value={
+              leadKpisLoading && !leadKpis ? (
                 <ValueSkeleton className="h-6 w-12" />
               ) : (
-                crmOverview?.business.upcomingThisWeek.count ?? 0
-              )}
-            </p>
-            <p className="mt-1.5 truncate text-[11px] text-[#1a1a1a]/40">
-              {crmOverview?.business.upcomingThisWeek.items[0]?.customerName
-                ? `다음 · ${crmOverview.business.upcomingThisWeek.items[0]?.customerName}`
-                : "예정 일정"}
-            </p>
-          </Link>
+                <span className={(leadKpis?.unconfirmedCount ?? 0) > 0 ? "text-[#8D6C1F]" : undefined}>
+                  {formatNumber(leadKpis?.unconfirmedCount)}
+                </span>
+              )
+            }
+            hint="공개 폼(문의·데모·뉴스레터) · 확인 전"
+          />
 
-          <Link
-            href="/admin/crm/customers/leads?filter=converted"
-            className="group rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3 text-left transition-colors hover:border-[#c8c8c4] hover:bg-white"
-          >
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-[#1a1a1a]/45 group-hover:text-[#111110]">
-                <Target className="h-4 w-4" />
+          <StatTile
+            icon={<PhoneCall className="h-4 w-4" />}
+            iconLayout="inline"
+            variant="soft"
+            compact
+            href="/admin/crm/customers/leads?filter=unresponded"
+            label="미응답 리드"
+            value={
+              leadKpisLoading && !leadKpis ? (
+                <ValueSkeleton className="h-6 w-12" />
+              ) : (
+                <span className={(leadKpis?.unrespondedCount ?? 0) > 0 ? "text-[#B85C33]" : undefined}>
+                  {formatNumber(leadKpis?.unrespondedCount)}
+                </span>
+              )
+            }
+            hint={
+              <>
+                48h 이상 {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(leadKpis?.unresponded48hCount)}건
+              </>
+            }
+          />
+
+          <StatTile
+            icon={<AlertCircle className="h-4 w-4" />}
+            iconLayout="inline"
+            variant="soft"
+            compact
+            href="/admin/crm/customers/leads?focus=risk"
+            label="오버듀 팔로업"
+            value={
+              leadKpisLoading && !leadKpis ? (
+                <ValueSkeleton className="h-6 w-12" />
+              ) : (
+                <span className={(leadKpis?.overdueFollowUpCount ?? 0) > 0 ? "text-[#B85C33]" : undefined}>
+                  {formatNumber(leadKpis?.overdueFollowUpCount)}
+                </span>
+              )
+            }
+            hint={
+              <>
+                오늘 예정 {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(leadKpis?.todayFollowUpCount)}건
+              </>
+            }
+          />
+
+          <StatTile
+            icon={<Calendar className="h-4 w-4" />}
+            iconLayout="inline"
+            variant="soft"
+            compact
+            href="/admin/calendar"
+            label="이번 주 설치·방문"
+            value={
+              // 0 플래시 금지(CRM-5) — overview 도착 전엔 스켈레톤
+              crmOverviewLoading && !crmOverview ? (
+                <ValueSkeleton className="h-6 w-12" />
+              ) : (
+                <span className="text-[#084734]">{crmOverview?.business.upcomingThisWeek.count ?? 0}</span>
+              )
+            }
+            hint={
+              <span className="block truncate">
+                {crmOverview?.business.upcomingThisWeek.items[0]?.customerName
+                  ? `다음 · ${crmOverview.business.upcomingThisWeek.items[0]?.customerName}`
+                  : "예정 일정"}
               </span>
-              <span className="text-[12px] font-medium text-[#1a1a1a]/55">전환 고객</span>
-            </div>
-            <p className="mt-2 text-[26px] font-bold leading-none text-[#084734]">
-              {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-6 w-12" /> : formatNumber(leadKpis?.byStatus.converted)}
-            </p>
-            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">누적 어카운트 전환</p>
-          </Link>
+            }
+          />
+
+          <StatTile
+            icon={<Target className="h-4 w-4" />}
+            iconLayout="inline"
+            variant="soft"
+            compact
+            href="/admin/crm/customers/leads?filter=converted"
+            label="전환 고객"
+            value={
+              leadKpisLoading && !leadKpis ? (
+                <ValueSkeleton className="h-6 w-12" />
+              ) : (
+                <span className="text-[#084734]">{formatNumber(leadKpis?.byStatus.converted)}</span>
+              )
+            }
+            hint="누적 어카운트 전환"
+          />
         </div>
 
         {(crmOverview?.business.frequentCustomers.length ?? 0) > 0 ? (
@@ -1503,7 +1524,8 @@ export default function CrmPage() {
         <button
           type="button"
           onClick={() => setRevenueDetailOpen((value) => !value)}
-          className="flex w-full items-center justify-between gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3 transition-colors hover:bg-[#fafaf8]"
+          // 참조(보고) 블록 — 행동 표면과의 톤차 위계(W2-6): 베이지로 가라앉힌다
+          className="flex w-full items-center justify-between gap-2 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3 transition-colors hover:bg-white"
           aria-expanded={revenueDetailOpen}
         >
           <span className="flex items-center gap-2">
@@ -1583,8 +1605,9 @@ export default function CrmPage() {
         </aside>
       </div>
 
-      {/* 성과 분석 — CRM 매출 데이터 기준 팀/개인/월 (지연 로드, 로딩/빈/에러 내부 처리) */}
-      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      {/* 성과 분석 — CRM 매출 데이터 기준 팀/개인/월 (지연 로드, 로딩/빈/에러 내부 처리)
+          참조 표면 — 톤차 위계(W2-6): 베이지 */}
+      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h2 className="text-[15px] font-bold text-[#111110]">성과 분석 · 팀/개인</h2>
@@ -1595,9 +1618,9 @@ export default function CrmPage() {
         <CrmPerformanceCharts />
       </section>
 
-      {/* 분석 · 시각화 — 리드 KPI 기반 차트(지연 로드) */}
+      {/* 분석 · 시각화 — 리드 KPI 기반 차트(지연 로드) · 참조 표면 — 톤차 위계(W2-6): 베이지 */}
       {leadKpis && leadKpis.total > 0 ? (
-        <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+        <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="text-[15px] font-bold text-[#111110]">분석 · 시각화</h2>
             <span className="text-[11px] text-[#1a1a1a]/35">리드 KPI 기준</span>
@@ -1606,12 +1629,12 @@ export default function CrmPage() {
         </section>
       ) : null}
 
-      {/* 팀 성과 · KPI 보고 — 보고성 블록, 기본 접힘(작업대 집중) */}
-      <section className="mb-4 overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+      {/* 팀 성과 · KPI 보고 — 보고성 블록, 기본 접힘(작업대 집중) · 참조 표면 — 톤차 위계(W2-6): 베이지 */}
+      <section className="mb-4 overflow-hidden rounded-2xl border border-[#e8e8e4] bg-[#fafaf8]">
         <button
           type="button"
           onClick={() => setTeamReportOpen((value) => !value)}
-          className="flex w-full items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[#fafaf8]"
+          className="flex w-full items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-white"
           aria-expanded={teamReportOpen}
         >
           <span className="flex items-center gap-2">

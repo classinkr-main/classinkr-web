@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { StatTile } from "@/components/admin/viz"
 import type {
   AdminCrmMatchingInbox,
   CrmMatchingRow,
@@ -142,14 +143,10 @@ function matchesStatusFilter(row: CrmMatchingRow, filter: StatusFilter) {
   return row.linkStatus === "rejected"
 }
 
+// KPI 타일 로컬 재구현 금지(W2-2b) — 마크업은 viz StatTile(bare 변형)에 위임하는 어댑터.
+// deals/rev-sheet/matching 3중복이던 MetricCard의 단일 시각 원천은 이제 viz/primitives다.
 function MetricCard({ label, value, hint }: { label: string; value: ReactNode; hint: string }) {
-  return (
-    <div className="border-t border-[#f0f0ec] pt-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">{label}</p>
-      <p className="mt-2 text-2xl font-bold tracking-[-0.04em] text-[#111110]">{value}</p>
-      <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
-    </div>
-  )
+  return <StatTile icon={null} iconLayout="inline" variant="bare" compact label={label} value={value} hint={hint} />
 }
 
 // 콜드 로드 '...' 금지 — 값 자리 크기의 저대비 펄스 스켈레톤(레이아웃 일치, CRM-5).
@@ -422,6 +419,121 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
 
   const totals = data?.totals
 
+  // 행 액션(확정/제외/되돌리기) — 데스크톱 표 셀과 <sm 카드 폴백이 같은 핸들러·마크업을 공유한다(W2-6).
+  const renderRowActions = (row: CrmMatchingRow) => {
+    if (row.linkId && (row.linkStatus === "candidate" || row.linkStatus === "stale")) {
+      return (
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => void updateSourceLink(row.linkId as string, "confirm")}
+            disabled={pendingLinkId === row.linkId}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
+            title="확정"
+            aria-label="확정"
+          >
+            {pendingLinkId === row.linkId ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => void updateSourceLink(row.linkId as string, "reject")}
+            disabled={pendingLinkId === row.linkId}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
+            title="제외"
+            aria-label="제외"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )
+    }
+    if (row.linkId && row.linkStatus === "confirmed") {
+      return (
+        <button
+          type="button"
+          onClick={() => void updateSourceLink(row.linkId as string, "stale")}
+          disabled={pendingLinkId === row.linkId}
+          className="inline-flex h-7 items-center gap-1 rounded-lg border border-amber-100 bg-amber-50 px-2 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+          title="확정을 되돌리고 재검수로 보냅니다"
+        >
+          {pendingLinkId === row.linkId ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RotateCcw className="h-3.5 w-3.5" />
+          )}
+          되돌리기
+        </button>
+      )
+    }
+    return <span className="text-[11px] text-[#1a1a1a]/30">-</span>
+  }
+
+  // 수동 연결 검색·후보 추가 블록 — 표 셀(w-[250px])과 카드 폴백(w-full)이 마크업을 공유한다.
+  const renderManualLink = (row: CrmMatchingRow, className: string) => (
+    <div className={`space-y-2 ${className}`}>
+      <div className="flex gap-1.5">
+        <input
+          type="search"
+          value={manualQueries[row.sourceRecordKey] ?? row.sourceLabel}
+          onChange={(event) =>
+            setManualQueries((current) => ({
+              ...current,
+              [row.sourceRecordKey]: event.target.value,
+            }))
+          }
+          className="h-8 min-w-0 flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none transition-colors focus:border-[#111110]"
+        />
+        <button
+          type="button"
+          onClick={() => void searchManualTargets(row.sourceRecordKey, row.sourceLabel)}
+          disabled={searchingSourceKey === row.sourceRecordKey}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+          title="검색"
+          aria-label="검색"
+        >
+          {searchingSourceKey === row.sourceRecordKey ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Search className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </div>
+      {(manualTargets[row.sourceRecordKey] ?? []).map((target) => {
+        const createKey = `${row.sourceRecordKey}:${target.targetType}:${target.targetId}`
+        return (
+          <button
+            key={createKey}
+            type="button"
+            onClick={() => void createManualCandidate(row.sourceRecordKey, target)}
+            disabled={creatingManualKey === createKey}
+            className="flex w-full items-center justify-between gap-2 rounded-lg border border-[#e8e8e4] px-2 py-1.5 text-left text-[11px] text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+          >
+            <span className="min-w-0 truncate">
+              {target.targetType === "partner_account"
+                ? "파트너"
+                : target.targetType === "customer"
+                  ? "고객"
+                  : "거래"}{" "}
+              · {target.label}
+            </span>
+            <span className="flex shrink-0 items-center gap-1 text-[#1a1a1a]/35">
+              {formatPercent(target.confidence)}
+              {creatingManualKey === createKey ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Plus className="h-3 w-3" />
+              )}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
+
   return (
     <div>
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -587,7 +699,67 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         </button>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* <sm 카드 폴백(W2-6·CRM-9) — 동일 visibleRows·핸들러(선택/확정/제외/되돌리기/수동연결)를
+          카드 행으로 공유해 기능 손실 0. 넓은 표는 데스크톱 전용. */}
+      <div className="space-y-2 sm:hidden">
+        {loading && !data ? (
+          <p className="rounded-xl bg-[#fafaf8] px-3 py-10 text-center text-[13px] text-[#1a1a1a]/35">
+            <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+            매칭 데이터를 불러오는 중입니다.
+          </p>
+        ) : visibleRows.length === 0 ? (
+          <p className="rounded-xl bg-[#fafaf8] px-3 py-10 text-center text-[13px] text-[#1a1a1a]/35">
+            {statusFilter === "review"
+              ? "검토할 매칭이 없습니다. 모두 처리됐어요."
+              : "표시할 매칭 데이터가 없습니다."}
+          </p>
+        ) : (
+          visibleRows.map((row) => {
+            const selectable = row.linkId !== null && (row.linkStatus === "candidate" || row.linkStatus === "stale")
+            const isManualOpen = row.sourceSystem === "branch_rev_sheet" && row.linkStatus !== "confirmed"
+            return (
+              <div key={row.key} className="rounded-xl border border-[#e8e8e4] bg-white p-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {selectable ? (
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(row.linkId as string)}
+                      onChange={() => toggleSelect(row.linkId as string)}
+                      aria-label="선택"
+                      className="h-3.5 w-3.5 accent-[#111110]"
+                    />
+                  ) : null}
+                  <StatusBadge label={SOURCE_LABEL[row.sourceSystem]} tone={SOURCE_TONE[row.sourceSystem]} />
+                  <StatusBadge label={getStatusLabel(row)} tone={getStatusTone(row)} />
+                  {row.placeholder ? (
+                    <StatusBadge label="임시" tone="border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/40" />
+                  ) : null}
+                  <span className="ml-auto text-[12px] font-semibold tabular-nums text-[#111110]">
+                    {row.amount == null ? "-" : formatCurrency(row.amount)}
+                  </span>
+                </div>
+                <p className="mt-2 line-clamp-2 text-[13px] font-semibold text-[#111110]">{row.sourceLabel}</p>
+                <p className="mt-0.5 text-[11px] text-[#1a1a1a]/35">{row.sourceDetail}</p>
+                <p className="mt-1.5 text-[11px] text-[#1a1a1a]/45">
+                  {row.sourceOwner ?? "담당 미지정"} · {row.sourceStatus ?? "-"}
+                </p>
+                <p className="mt-1 text-[11px] text-[#1a1a1a]/45">
+                  {getTargetLabel(row)} · 신뢰도 {formatPercent(row.confidence)}
+                </p>
+                {row.linkStatus === "confirmed" && row.confirmedAt ? (
+                  <p className="mt-1 text-[11px] text-[#1a1a1a]/30">{formatDate(row.confirmedAt)}</p>
+                ) : null}
+                {isManualOpen ? (
+                  <div className="mt-2 border-t border-[#f0f0ec] pt-2">{renderManualLink(row, "w-full")}</div>
+                ) : null}
+                <div className="mt-2 flex justify-end border-t border-[#f0f0ec] pt-2">{renderRowActions(row)}</div>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      <div className="hidden overflow-x-auto sm:block">
         <table className="min-w-[1240px] w-full text-left">
           <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
             <tr>
@@ -675,114 +847,13 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
                     </td>
                     <td className="py-4 pl-4">
                       {isManualOpen ? (
-                        <div className="w-[250px] space-y-2">
-                          <div className="flex gap-1.5">
-                            <input
-                              type="search"
-                              value={manualQueries[row.sourceRecordKey] ?? row.sourceLabel}
-                              onChange={(event) =>
-                                setManualQueries((current) => ({
-                                  ...current,
-                                  [row.sourceRecordKey]: event.target.value,
-                                }))
-                              }
-                              className="h-8 min-w-0 flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none transition-colors focus:border-[#111110]"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => void searchManualTargets(row.sourceRecordKey, row.sourceLabel)}
-                              disabled={searchingSourceKey === row.sourceRecordKey}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
-                              title="검색"
-                              aria-label="검색"
-                            >
-                              {searchingSourceKey === row.sourceRecordKey ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <Search className="h-3.5 w-3.5" />
-                              )}
-                            </button>
-                          </div>
-                          {(manualTargets[row.sourceRecordKey] ?? []).map((target) => {
-                            const createKey = `${row.sourceRecordKey}:${target.targetType}:${target.targetId}`
-                            return (
-                              <button
-                                key={createKey}
-                                type="button"
-                                onClick={() => void createManualCandidate(row.sourceRecordKey, target)}
-                                disabled={creatingManualKey === createKey}
-                                className="flex w-full items-center justify-between gap-2 rounded-lg border border-[#e8e8e4] px-2 py-1.5 text-left text-[11px] text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
-                              >
-                                <span className="min-w-0 truncate">
-                                  {target.targetType === "partner_account"
-                                    ? "파트너"
-                                    : target.targetType === "customer"
-                                      ? "고객"
-                                      : "거래"}{" "}
-                                  · {target.label}
-                                </span>
-                                <span className="flex shrink-0 items-center gap-1 text-[#1a1a1a]/35">
-                                  {formatPercent(target.confidence)}
-                                  {creatingManualKey === createKey ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  ) : (
-                                    <Plus className="h-3 w-3" />
-                                  )}
-                                </span>
-                              </button>
-                            )
-                          })}
-                        </div>
+                        renderManualLink(row, "w-[250px]")
                       ) : (
                         <span className="text-[11px] text-[#1a1a1a]/30">-</span>
                       )}
                     </td>
                     <td className="py-4 pl-4 text-right">
-                      {row.linkId && (row.linkStatus === "candidate" || row.linkStatus === "stale") ? (
-                        <div className="flex justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => void updateSourceLink(row.linkId as string, "confirm")}
-                            disabled={pendingLinkId === row.linkId}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
-                            title="확정"
-                            aria-label="확정"
-                          >
-                            {pendingLinkId === row.linkId ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Check className="h-3.5 w-3.5" />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void updateSourceLink(row.linkId as string, "reject")}
-                            disabled={pendingLinkId === row.linkId}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
-                            title="제외"
-                            aria-label="제외"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ) : row.linkId && row.linkStatus === "confirmed" ? (
-                        <button
-                          type="button"
-                          onClick={() => void updateSourceLink(row.linkId as string, "stale")}
-                          disabled={pendingLinkId === row.linkId}
-                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-amber-100 bg-amber-50 px-2 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
-                          title="확정을 되돌리고 재검수로 보냅니다"
-                        >
-                          {pendingLinkId === row.linkId ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <RotateCcw className="h-3.5 w-3.5" />
-                          )}
-                          되돌리기
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-[#1a1a1a]/30">-</span>
-                      )}
+                      <div className="flex justify-end">{renderRowActions(row)}</div>
                     </td>
                   </tr>
                 )

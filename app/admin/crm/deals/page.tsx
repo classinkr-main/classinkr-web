@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { StatTile } from "@/components/admin/viz"
 import {
   resolveCrmWriteExecuteOutcome,
   type CrmWriteExecuteResponseBody,
@@ -252,6 +253,8 @@ function ValueSkeleton({ className = "h-5 w-20" }: { className?: string }) {
   )
 }
 
+// KPI 타일 로컬 재구현 금지(W2-2b) — 마크업은 viz StatTile(bare 변형)에 위임하는 어댑터.
+// deals/rev-sheet/matching 3중복이던 MetricCard의 단일 시각 원천은 이제 viz/primitives다.
 function MetricCard({
   label,
   value,
@@ -261,18 +264,11 @@ function MetricCard({
   value: ReactNode
   hint: string
 }) {
-  return (
-    <div className="border-t border-[#f0f0ec] pt-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-bold tracking-[-0.04em] text-[#111110]">{value}</p>
-      <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
-    </div>
-  )
+  return <StatTile icon={null} iconLayout="inline" variant="bare" compact label={label} value={value} hint={hint} />
 }
 
-// KR Team 보드(현황) 측정 타일 차용 — 소프트박스 + 대문자 라벨 + 큰 값.
+// KR Team 보드(현황) 측정 타일 차용 — 마크업은 viz StatTile(soft 변형)에 위임(W2-2b).
+// tone은 값 색만 바꾸는 기존 계약 유지(값·라벨·캡션 불변).
 function MeasureTile({
   icon,
   label,
@@ -287,14 +283,15 @@ function MeasureTile({
   tone?: string
 }) {
   return (
-    <div className="rounded-xl bg-[#fafaf8] px-3 py-3">
-      <div className="flex items-center gap-1.5 text-[#1a1a1a]/40">
-        {icon}
-        <p className="text-[11px] font-semibold uppercase tracking-[0.1em]">{label}</p>
-      </div>
-      <p className={`mt-2 text-[22px] font-bold leading-none tracking-[-0.03em] ${tone}`}>{value}</p>
-      <p className="mt-1.5 text-[11px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
-    </div>
+    <StatTile
+      icon={icon}
+      iconLayout="inline"
+      variant="soft"
+      compact
+      label={label}
+      value={tone === "text-[#111110]" ? value : <span className={tone}>{value}</span>}
+      hint={hint}
+    />
   )
 }
 
@@ -898,7 +895,45 @@ export default function AdminCrmRevenuePage() {
             ))}
           </div>
 
-          <div className="mt-4 overflow-x-auto">
+          {/* <sm 카드 폴백(W2-6·CRM-9) — 넓은 표는 데스크톱 전용, 모바일은 상위 필드 카드 행.
+              동일 rows·포매터 소비라 정보 손실 0(가로 스크롤 표 대체). */}
+          <div className="mt-4 space-y-2 sm:hidden">
+            {data.externalRecords.length === 0 ? (
+              <p className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#1a1a1a]/35">
+                외부 CRM 원천 레코드가 아직 로드되지 않았습니다.
+              </p>
+            ) : (
+              data.externalRecords.map((record) => (
+                <div key={`${record.objectApiKey}:${record.externalId}`} className="rounded-xl border border-[#e8e8e4] bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-[13px] font-semibold text-[#111110]">
+                        {record.displayName ?? record.externalId}
+                      </p>
+                      <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/35">
+                        {record.objectApiKey} · {record.externalId}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-[12px] font-semibold tabular-nums text-[#111110]">
+                      {record.amount == null
+                        ? "-"
+                        : record.objectApiKey === "opportunity"
+                          ? `$${record.amount.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+                          : formatCNY(record.amount)}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-[#1a1a1a]/45">
+                    {record.ownerName ?? "-"} · {record.status ?? "-"}
+                  </p>
+                  <p className="mt-0.5 text-[10.5px] text-[#1a1a1a]/35">
+                    발생 {formatDate(record.occurredAt)} · sync {formatDate(record.syncedAt)}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="mt-4 hidden overflow-x-auto sm:block">
             <table className="min-w-[980px] w-full text-left">
               <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
                 <tr>

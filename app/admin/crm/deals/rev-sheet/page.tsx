@@ -15,6 +15,9 @@ import {
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { StatTile } from "@/components/admin/viz"
+// 고확도(임박) 금액 색은 확도 신호 토큰 SSOT — 원시 sky 리터럴 재정의 금지(DESIGN.md 확도 신호 토큰 절).
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import type {
   AdminCrmRevenueSheetBreakdownRow,
   AdminCrmRevenueSheetRow,
@@ -115,14 +118,10 @@ function StatusBadge({ status }: { status: RevenueSheetLinkStatus }) {
   )
 }
 
+// KPI 타일 로컬 재구현 금지(W2-2b) — 마크업은 viz StatTile(bare 변형)에 위임하는 어댑터.
+// deals/rev-sheet/matching 3중복이던 MetricCard의 단일 시각 원천은 이제 viz/primitives다.
 function MetricCard({ label, value, hint }: { label: string; value: ReactNode; hint: string }) {
-  return (
-    <div className="border-t border-[#f0f0ec] pt-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">{label}</p>
-      <p className="mt-2 text-2xl font-bold tracking-[-0.04em] text-[#111110]">{value}</p>
-      <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
-    </div>
-  )
+  return <StatTile icon={null} iconLayout="inline" variant="bare" compact label={label} value={value} hint={hint} />
 }
 
 // 콜드 로드 '...' 금지 — 값 자리 크기의 저대비 펄스 스켈레톤(레이아웃 일치, CRM-5).
@@ -159,7 +158,7 @@ function BreakdownTable({ title, rows }: { title: string; rows: AdminCrmRevenueS
                 </td>
                 <td className="py-2.5 pr-3 text-right text-[12px] text-[#1a1a1a]/50">{formatNumber(row.rowCount)}</td>
                 <td className="py-2.5 pr-3 text-right text-[12px] font-semibold text-[#084734]">{formatCny(row.confirmedAmount)}</td>
-                <td className="py-2.5 pr-3 text-right text-[12px] text-sky-700">{formatCny(row.highConfidenceAmount)}</td>
+                <td className={`py-2.5 pr-3 text-right text-[12px] ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatCny(row.highConfidenceAmount)}</td>
                 <td className="py-2.5 text-right text-[12px] text-[#1a1a1a]/60">{formatCny(row.expectedAmount)}</td>
               </tr>
             ))}
@@ -489,7 +488,85 @@ export default function AdminCrmRevenueSheetPage() {
           </Link>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* <sm 카드 폴백(W2-6·CRM-9) — risk 정렬 그대로 상위 필드(고객/상태/금액/링크상태)를 카드 행으로.
+            동일 visibleRows·포매터·딥링크 소비라 기능 손실 0, 넓은 표는 데스크톱 전용. */}
+        <div className="space-y-2 sm:hidden">
+          {loading && !data ? (
+            <p className="rounded-xl bg-[#fafaf8] px-3 py-10 text-center text-[13px] text-[#1a1a1a]/35">
+              <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+              매출시트를 불러오는 중입니다.
+            </p>
+          ) : visibleRows.length === 0 ? (
+            <p className="rounded-xl bg-[#fafaf8] px-3 py-10 text-center text-[13px] text-[#1a1a1a]/35">
+              표시할 REV 행이 없습니다.
+            </p>
+          ) : (
+            visibleRows.slice(0, MAX_VISIBLE_ROWS).map((row) => (
+              <div key={row.id} className="rounded-xl border border-[#e8e8e4] bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="line-clamp-2 text-[13px] font-semibold text-[#111110]">{row.customerName}</p>
+                    <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+                      #{row.sheetRow}
+                      {row.placeholder ? <span className="ml-1 font-semibold text-[#B85C33]">임시명</span> : null}
+                      {" · "}
+                      {[row.team, row.manager, row.region].filter(Boolean).join(" · ") || "-"}
+                    </p>
+                  </div>
+                  <StatusBadge status={row.linkStatus} />
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-[#f0f0ec] pt-2 text-[11px] tabular-nums">
+                  <p className="flex items-baseline justify-between gap-2">
+                    <span className="text-[#1a1a1a]/40">확정</span>
+                    <span className="font-semibold text-[#084734]">{formatCny(row.confirmedAmount)}</span>
+                  </p>
+                  <p className="flex items-baseline justify-between gap-2">
+                    <span className="text-[#1a1a1a]/40">임박</span>
+                    <span className={CONFIDENCE_TOKENS["high-confidence"].textClass}>{formatCny(row.highConfidenceAmount)}</span>
+                  </p>
+                  <p className="flex items-baseline justify-between gap-2">
+                    <span className="text-[#1a1a1a]/40">예정</span>
+                    <span className="text-[#1a1a1a]/60">{formatCny(row.expectedAmount)}</span>
+                  </p>
+                  <p className="flex items-baseline justify-between gap-2">
+                    <span className="text-[#1a1a1a]/40">대기</span>
+                    <span className="font-semibold text-[#B85C33]">{formatCny(row.pastUnconfirmedAmount)}</span>
+                  </p>
+                </div>
+                <p className="mt-2 text-[11px] text-[#1a1a1a]/45">
+                  상태 {row.status ?? "-"} · 초입금 {row.firstPayment ?? "-"} · {row.branchContact ?? row.dealType ?? "-"}
+                </p>
+                <p className="mt-1 text-[11px] text-[#1a1a1a]/45">
+                  {getTargetLabel(row)} · 신뢰도 {formatPercent(row.confidence)}
+                </p>
+                {(row.note ?? row.productVersion) ? (
+                  <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-[#1a1a1a]/40">
+                    {row.note ?? row.productVersion}
+                  </p>
+                ) : null}
+                <div className="mt-2 flex items-center justify-between gap-2 border-t border-[#f0f0ec] pt-2">
+                  {row.linkStatus === "confirmed" ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#084734]">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      연결 확정
+                    </span>
+                  ) : (
+                    <Link
+                      // 행 고객명을 인박스 이름 필터로 프리필 — 이탈+재검색 없는 핸드오프(CRM-1).
+                      href={`/admin/crm/matching?name=${encodeURIComponent(row.customerName)}`}
+                      className="text-[11px] font-semibold text-[#084734] hover:underline"
+                    >
+                      연결하기
+                    </Link>
+                  )}
+                  <span className="text-[10.5px] text-[#1a1a1a]/30">{formatDate(row.syncedAt)}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto sm:block">
           <table className="min-w-[1320px] w-full text-left">
             <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
               <tr>
@@ -538,7 +615,7 @@ export default function AdminCrmRevenueSheetPage() {
                       <p className="mt-1 text-[11px] text-[#1a1a1a]/35">초입금 {row.firstPayment ?? "-"}</p>
                     </td>
                     <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#084734]">{formatCny(row.confirmedAmount)}</td>
-                    <td className="py-4 pr-4 text-right text-[12px] text-sky-700">{formatCny(row.highConfidenceAmount)}</td>
+                    <td className={`py-4 pr-4 text-right text-[12px] ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatCny(row.highConfidenceAmount)}</td>
                     <td className="py-4 pr-4 text-right text-[12px] text-[#1a1a1a]/60">{formatCny(row.expectedAmount)}</td>
                     <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#B85C33]">{formatCny(row.pastUnconfirmedAmount)}</td>
                     <td className="py-4 pr-4">
