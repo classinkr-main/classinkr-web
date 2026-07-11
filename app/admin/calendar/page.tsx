@@ -33,13 +33,13 @@ const EVENT_TYPES: { value: EventType; label: string; color: string; bg: string;
   { value: "other",    label: "기타",     color: "text-[#615D59]",  bg: "bg-[#f0f0ec] border-[#e8e8e4]",   dot: "bg-[#A39E98]" },
 ]
 
-const SOURCE_OPTIONS: { value: EventSource; label: string }[] = [
-  { value: "calendar", label: "팀 일정" },
-  { value: "partner", label: "파트너 일정" },
-  { value: "event", label: "공개 행사" },
-  { value: "notion", label: "마케팅(노션)" },
-  { value: "showroom", label: "쇼룸 예약" },
-  { value: "team_event", label: "팀원 행사" },
+const SOURCE_OPTIONS: { value: EventSource; label: string; dot: string }[] = [
+  { value: "calendar", label: "팀 일정", dot: "#084734" },
+  { value: "partner", label: "파트너 일정", dot: "#B85C33" },
+  { value: "event", label: "공개 행사", dot: "#A8741A" },
+  { value: "notion", label: "마케팅(노션)", dot: "#0E766E" },
+  { value: "showroom", label: "쇼룸 예약", dot: "#5B6470" },
+  { value: "team_event", label: "팀원 행사", dot: "#6D4AA8" },
 ]
 
 function getTypeStyle(type: EventType) {
@@ -238,13 +238,17 @@ function CheckChip({
   label,
   count,
   onToggle,
+  dot,
   avatar,
+  dim,
 }: {
   checked: boolean
   label: string
   count?: number
   onToggle: () => void
+  dot?: string
   avatar?: boolean
+  dim?: boolean
 }) {
   return (
     <button
@@ -253,21 +257,24 @@ function CheckChip({
       aria-checked={checked}
       aria-label={label}
       onClick={onToggle}
-      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
+        dim ? "opacity-45" : ""
+      } ${
         checked
           ? "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
           : "border-[#e8e8e4] bg-white text-[#1a1a1a]/45 hover:border-[#1a1a1a]/20 hover:text-[#111110]"
       }`}
     >
       <span
-        className={`flex h-3.5 w-3.5 items-center justify-center rounded-[4px] border transition-colors ${
+        className={`flex h-3 w-3 items-center justify-center rounded-[3px] border transition-colors ${
           checked ? "border-[#084734] bg-[#084734] text-white" : "border-[#c9c7c2] bg-white"
         }`}
       >
-        {checked && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+        {checked && <Check className="h-2 w-2" strokeWidth={3.5} />}
       </span>
+      {dot && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: dot }} />}
       {avatar && (
-        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#f0f0ec] text-[9px] font-semibold text-[#615D59]">
+        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#f0f0ec] text-[9px] font-semibold text-[#615D59]">
           {label.charAt(0)}
         </span>
       )}
@@ -374,7 +381,7 @@ export default function AdminCalendarPage() {
     setHiddenAssignees(visible ? new Set() : new Set(teamMembers.map((member) => member.name)))
 
   const teamEventSourceVisible = !hiddenSources.has("team_event")
-  const showAssigneeFilter = teamEventSourceVisible && teamMembers.length > 0
+  const showAssigneeRow = teamMembers.length > 0
   const allSourcesVisible = hiddenSources.size === 0
   const allAssigneesVisible = teamMembers.every((member) => !hiddenAssignees.has(member.name))
 
@@ -522,7 +529,7 @@ export default function AdminCalendarPage() {
       {/* Filter bar */}
       <div className="mb-6 overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
         {/* 소스 필터 */}
-        <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-1.5 px-4 py-2.5">
           <span className="mr-1 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
             소스
           </span>
@@ -533,23 +540,31 @@ export default function AdminCalendarPage() {
               label={option.label}
               count={sourceCounts[option.value] ?? 0}
               onToggle={() => toggleSource(option.value)}
+              dot={option.dot}
             />
           ))}
           <button
             type="button"
             onClick={() => setAllSources(!allSourcesVisible)}
-            className="ml-auto shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+            className="ml-auto shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
           >
             {allSourcesVisible ? "모두 해제" : "모두 선택"}
           </button>
         </div>
 
-        {/* 담당자(팀원) 필터 — 팀원 행사 소스가 켜져 있고 담당자가 있을 때만 */}
-        {showAssigneeFilter && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-[#f0f0ec] px-4 py-3">
+        {/* 담당자 필터 — 팀(공용) + 팀원 개인. 팀 칩은 팀 일정 소스와 연동 */}
+        {showAssigneeRow && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] px-4 py-2.5">
             <span className="mr-1 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
               담당자
             </span>
+            <CheckChip
+              checked={!hiddenSources.has("calendar")}
+              label="팀"
+              count={sourceCounts.calendar ?? 0}
+              onToggle={() => toggleSource("calendar")}
+              dot="#084734"
+            />
             {teamMembers.map((member) => (
               <CheckChip
                 key={member.name}
@@ -558,12 +573,13 @@ export default function AdminCalendarPage() {
                 count={member.count}
                 onToggle={() => toggleAssignee(member.name)}
                 avatar
+                dim={!teamEventSourceVisible}
               />
             ))}
             <button
               type="button"
               onClick={() => setAllAssignees(!allAssigneesVisible)}
-              className="ml-auto shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+              className="ml-auto shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
             >
               {allAssigneesVisible ? "모두 해제" : "모두 선택"}
             </button>
