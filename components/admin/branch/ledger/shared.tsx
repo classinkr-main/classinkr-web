@@ -6,6 +6,7 @@
 
 import dynamic from "next/dynamic"
 import { Loader2 } from "lucide-react"
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import type { BranchKpiMemberRow, BranchPipelineRow } from "../types"
 
@@ -49,6 +50,9 @@ export type LedgerRevenueRow = BranchPipelineRow & {
   draftNote?: string
   draftMetadata?: Record<string, unknown>
   sourceDealId?: string
+  /** 수정초안 오버라이드로 색 맵을 로컬 삭제한 파생 행이 원본의 색 보유 여부를 보존하는 힌트
+      (lib/branch/computations/revenue-core.ts 캐논 무색상 폴백 판정용). */
+  confidenceColorHint?: boolean
 }
 
 export type DraftConfidence = "expected" | "high-confidence" | "confirmed"
@@ -487,9 +491,9 @@ export function BreakdownNumbersTable({ rows, emptyLabel }: { rows: BreakdownNum
           {rows.map((row) => (
             <tr key={row.id} className="border-t border-[#F0F0EC]">
               <td className="max-w-[160px] truncate py-2 pr-2 text-left font-bold text-[#111110]">{row.label}</td>
-              <td className="px-2 py-2">{numberCell(row.confirmed, "text-[#084734]")}</td>
-              <td className="px-2 py-2">{numberCell(row.highConfidence, "text-[#1E5DA8]")}</td>
-              <td className="px-2 py-2">{numberCell(row.open, "text-[#7A520F]")}</td>
+              <td className="px-2 py-2">{numberCell(row.confirmed, CONFIDENCE_TOKENS.confirmed.textClass)}</td>
+              <td className="px-2 py-2">{numberCell(row.highConfidence, CONFIDENCE_TOKENS["high-confidence"].textClass)}</td>
+              <td className="px-2 py-2">{numberCell(row.open, CONFIDENCE_TOKENS.expected.textStrongClass)}</td>
               <td className="px-2 py-2">{numberCell(row.total)}</td>
               <td className="py-2 pl-2 font-semibold text-[#615D59]">{row.count}</td>
             </tr>
@@ -498,9 +502,9 @@ export function BreakdownNumbersTable({ rows, emptyLabel }: { rows: BreakdownNum
         <tfoot>
           <tr className="border-t-2 border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] text-[12px]">
             <td className="py-2 pr-2 text-left font-bold text-[#111110]">합계</td>
-            <td className="px-2 py-2">{numberCell(totals.confirmed, "text-[#084734]")}</td>
-            <td className="px-2 py-2">{numberCell(totals.highConfidence, "text-[#1E5DA8]")}</td>
-            <td className="px-2 py-2">{numberCell(totals.open, "text-[#7A520F]")}</td>
+            <td className="px-2 py-2">{numberCell(totals.confirmed, CONFIDENCE_TOKENS.confirmed.textClass)}</td>
+            <td className="px-2 py-2">{numberCell(totals.highConfidence, CONFIDENCE_TOKENS["high-confidence"].textClass)}</td>
+            <td className="px-2 py-2">{numberCell(totals.open, CONFIDENCE_TOKENS.expected.textStrongClass)}</td>
             <td className="px-2 py-2">{numberCell(totals.total)}</td>
             <td className="py-2 pl-2 font-bold text-[#111110]">{totals.count}</td>
           </tr>
@@ -542,9 +546,10 @@ export function RevWeekNumbersTable({
   const paceRatios = data.map((_, index) => Math.min((index + 1) * 7, daysInMonth) / daysInMonth)
   const paceAmounts = monthGoal != null && monthGoal > 0 ? paceRatios.map((ratio) => monthGoal * ratio) : null
   const seriesRows = [
-    { key: "confirmed" as const, label: "확정", tone: "text-[#084734]" },
-    { key: "highConfidence" as const, label: "고확도", tone: "text-[#1E5DA8]" },
-    { key: "open" as const, label: "예정", tone: "text-[#7A520F]" },
+    // 확도 3단은 CONFIDENCE_TOKENS SSOT 소비(밀도 표라 예정은 강조 변형) — 일자 추정·월합계만은 확도가 아니라 중립 유지.
+    { key: "confirmed" as const, label: CONFIDENCE_TOKENS.confirmed.label, tone: CONFIDENCE_TOKENS.confirmed.textClass },
+    { key: "highConfidence" as const, label: CONFIDENCE_TOKENS["high-confidence"].label, tone: CONFIDENCE_TOKENS["high-confidence"].textClass },
+    { key: "open" as const, label: CONFIDENCE_TOKENS.expected.label, tone: CONFIDENCE_TOKENS.expected.textStrongClass },
     { key: "inferred" as const, label: "일자 추정", tone: "text-[#615D59]" },
     { key: "monthlyOnly" as const, label: "월합계만", tone: "text-[#615D59]" },
   ]

@@ -33,6 +33,9 @@ import {
 } from "lucide-react"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+import { ledgerMonthConfirmed, ledgerMonthSplit, ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
+import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 // ledger/ 섹션 파일들이 워크벤치를 단일 진입점으로 import — 포매터 SSOT는 lib/branch/ledger-format
 export { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
@@ -329,11 +332,12 @@ function isMatrixDensity(value: unknown): value is MatrixDensity {
   return value === "condensed" || value === "regular" || value === "relaxed"
 }
 // 확도 = 글자색(배경 아님). 셀 배경은 흰색 고정, 확정/고확도/불일치는 bold.
+// 확도 3색은 CONFIDENCE_TOKENS SSOT 소비 — 리터럴 재정의 금지(불일치·빈 셀은 확도 아님).
 const MATRIX_TONE = {
-  confirmed: "font-bold text-[#084734]",
-  high: "font-bold text-[#1E5DA8]",
-  open: "font-semibold text-[#A8741A]",
-  mixed: "font-semibold text-[#A8741A]",
+  confirmed: `font-bold ${CONFIDENCE_TOKENS.confirmed.textClass}`,
+  high: `font-bold ${CONFIDENCE_TOKENS["high-confidence"].textClass}`,
+  open: `font-semibold ${CONFIDENCE_TOKENS.expected.textClass}`,
+  mixed: `font-semibold ${CONFIDENCE_TOKENS.expected.textClass}`,
   mismatch: "font-bold text-[#B43E3E]",
   empty: "text-[#DDD9D3]",
 } as const
@@ -349,9 +353,9 @@ function matrixBucketTone(bucket: RevMonthlyBucket): keyof typeof MATRIX_TONE {
 
 // 매트릭스 확도 색 레전드. 셀 글자색(MATRIX_TONE)과 1:1 대응 — 값 자체는 바꾸지 않는다.
 const MATRIX_TONE_LEGEND_ITEMS: Array<{ label: string; color: string }> = [
-  { label: "확정", color: "#084734" },
-  { label: "고확도", color: "#1E5DA8" },
-  { label: "예정", color: "#A8741A" },
+  { label: CONFIDENCE_TOKENS.confirmed.label, color: CONFIDENCE_TOKENS.confirmed.color },
+  { label: CONFIDENCE_TOKENS["high-confidence"].label, color: CONFIDENCE_TOKENS["high-confidence"].color },
+  { label: CONFIDENCE_TOKENS.expected.label, color: CONFIDENCE_TOKENS.expected.color },
   { label: "불일치", color: "#B43E3E" },
 ]
 function MatrixToneLegend() {
@@ -584,36 +588,30 @@ function rowMonthAmount(row: LedgerRevenueRow, month: string) {
   return 0
 }
 
+// '확정'의 산식은 rev-confirmed.ts 캐논 단일 정의를 revenue-core 경유로 소비한다(마스터플랜 C2).
+// 시트행은 캐논 전체 규칙(확정맵→red→무색상 과거월 폴백 — 직접 맵 합산의 과소집계 방지),
+// 적용 초안행(ledgerOrigin==="draft")은 확도 맵(appliedDraftConfidenceMaps)이 정본이라
+// 무색상 폴백이 꺼진다 — 예정 입력이 적용 즉시 확정으로 인플레되지 않는다.
 function rowMonthConfirmed(row: LedgerRevenueRow, month: string) {
-  const amount = rowMonthAmount(row, month)
-  if (amount <= 0) return 0
-  const confirmed = mapNumberValue(row.monthlyConfirmed, month)
-  if (confirmed > 0) return Math.min(amount, confirmed)
-  if (row.monthlyRed?.[month]) return amount
-  // 적용 초안행은 확도 맵(appliedDraftConfidenceMaps)이 정본 — origin만으로 확정을 강제하지 않는다.
-  return 0
+  return ledgerMonthConfirmed(row, month, rowMonthAmount(row, month))
 }
 
 function rowMonthHighConfidence(row: LedgerRevenueRow, month: string) {
-  const amount = rowMonthAmount(row, month)
-  if (amount <= 0) return 0
-  const confirmed = rowMonthConfirmed(row, month)
-  const highConfidence = mapNumberValue(row.monthlyHighConfidence, month)
-  return Math.min(Math.max(amount - confirmed, 0), highConfidence)
+  return ledgerMonthSplit(row, month, rowMonthAmount(row, month)).highConfidence
 }
 
 function rowMonthOpen(row: LedgerRevenueRow, month: string) {
-  return Math.max(rowMonthAmount(row, month) - rowMonthConfirmed(row, month) - rowMonthHighConfidence(row, month), 0)
+  return ledgerMonthSplit(row, month, rowMonthAmount(row, month)).expected
 }
 
 // 매트릭스 1행×1월 파생값을 한 번에. rowMonthAmount를 4번 부르던 것을 1번으로 줄여
-// 12개월×수백행 반복(그룹 소계·그랜드토탈)에서 재계산을 억제한다. total=confirmed+high+open 불변식.
+// 12개월×수백행 반복(그룹 소계·그랜드토탈)에서 재계산을 억제한다. total=confirmed+high+open 불변식
+// (캐논 splitMonthConfidence가 클램프로 보장).
 function rowMonthBucket(row: LedgerRevenueRow, month: string): RevMonthlyBucket {
   const total = rowMonthAmount(row, month)
   if (total <= 0) return { total: 0, confirmed: 0, high: 0, open: 0 }
-  const confirmed = rowMonthConfirmed(row, month)
-  const high = rowMonthHighConfidence(row, month)
-  return { total, confirmed, high, open: Math.max(total - confirmed - high, 0) }
+  const split = ledgerMonthSplit(row, month, total)
+  return { total, confirmed: split.confirmed, high: split.highConfidence, open: split.expected }
 }
 
 function emptyMonthlyBucket(): RevMonthlyBucket {
@@ -1556,12 +1554,6 @@ function dominantCellConfidence(bucket: RevMonthlyBucket): DraftConfidence {
   return "expected"
 }
 
-const MATRIX_CONFIDENCE_COLOR: Record<DraftConfidence, string> = {
-  expected: "#A8741A",
-  "high-confidence": "#1E5DA8",
-  confirmed: "#084734",
-}
-
 // SL-6: 마지막으로 "명시 선택"한 확도 기억(localStorage). 빈 셀 편집 진입의 기본값으로만 쓰여
 // 확정 수납액이 기본 '예정' 버킷으로 새는 과소집계를 막는다. 값이 있는 셀은 기존 우세 확도 유지,
 // 커밋·집계(A1 확도 분배) 경로는 문자 단위 불변 — 기본 선택값만 바뀐다(팝오버에 항상 노출됨).
@@ -1603,7 +1595,7 @@ const RevMatrixEditPopover = memo(function RevMatrixEditPopover({
     >
       <div className="flex items-center gap-0.5">
         {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
-          const activeColor = MATRIX_CONFIDENCE_COLOR[option.id]
+          const activeColor = CONFIDENCE_TOKENS[option.id].color
           const active = option.id === confidence
           return (
             <button
@@ -2408,7 +2400,7 @@ function RevMatrixPasteDialog({
             <span className="text-[11px] font-bold text-[#615D59]">확도(전체 적용)</span>
             <div className="flex items-center gap-1">
               {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
-                const activeColor = MATRIX_CONFIDENCE_COLOR[option.id]
+                const activeColor = CONFIDENCE_TOKENS[option.id].color
                 const active = option.id === confidence
                 return (
                   <button
@@ -2939,9 +2931,9 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
             >
               {bucket.total > 0 ? (
                 <span className="flex flex-col items-end leading-none">
-                  <span className="text-[10.5px] font-bold text-[#084734]">{formatWeekAmount(bucket.confirmed)}</span>
-                  <span className="text-[9px] font-semibold text-[#1E5DA8]">{formatWeekAmount(bucket.high)}</span>
-                  <span className="text-[9px] font-semibold text-[#A8741A]">{formatWeekAmount(bucket.open)}</span>
+                  <span className={`text-[10.5px] font-bold ${CONFIDENCE_TOKENS.confirmed.textClass}`}>{formatWeekAmount(bucket.confirmed)}</span>
+                  <span className={`text-[9px] font-semibold ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatWeekAmount(bucket.high)}</span>
+                  <span className={`text-[9px] font-semibold ${CONFIDENCE_TOKENS.expected.textClass}`}>{formatWeekAmount(bucket.open)}</span>
                 </span>
               ) : (
                 <span className="text-[11px] text-[#DDD9D3]">·</span>
@@ -2954,9 +2946,9 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
           style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
         >
           <span className="flex flex-col items-end leading-none">
-            <span className="text-[11px] font-bold text-[#084734]">{formatWeekAmount(grand.confirmed)}</span>
-            <span className="text-[9px] font-semibold text-[#1E5DA8]">{formatWeekAmount(grand.high)}</span>
-            <span className="text-[9px] font-semibold text-[#A8741A]">{formatWeekAmount(grand.open)}</span>
+            <span className={`text-[11px] font-bold ${CONFIDENCE_TOKENS.confirmed.textClass}`}>{formatWeekAmount(grand.confirmed)}</span>
+            <span className={`text-[9px] font-semibold ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatWeekAmount(grand.high)}</span>
+            <span className={`text-[9px] font-semibold ${CONFIDENCE_TOKENS.expected.textClass}`}>{formatWeekAmount(grand.open)}</span>
           </span>
         </td>
       </tr>
@@ -3613,7 +3605,17 @@ export default function SalesLedgerWorkbench() {
         delete monthlyRed[month]
         delete weeklyPayments[month]
       }
-      return { ...row, monthlyPayments, monthlyConfirmed, monthlyHighConfidence, monthlyRed, weeklyPayments }
+      return {
+        ...row,
+        monthlyPayments,
+        monthlyConfirmed,
+        monthlyHighConfidence,
+        monthlyRed,
+        weeklyPayments,
+        // 색 보유 여부는 오버라이드 삭제 '전' 원본 기준으로 보존 — 색이 그 달에만 있던 행을
+        // 지운 뒤 맵으로 재판정하면 남은 과거 월이 무색상 폴백으로 확정 오집계된다.
+        confidenceColorHint: ledgerRowHasColor(row),
+      }
     })
     return [...appliedDraftRows, ...adjustedSheetRows]
   }, [appliedDraftRows, sheetRows, editRowOverrideMonths])
@@ -4484,17 +4486,21 @@ export default function SalesLedgerWorkbench() {
       }))
     }
     if (!detail) return []
+    // 상세 응답(REV 원천 snake_case)도 같은 캐논 산식으로 분해한다 — 상세 로딩 전
+    // (rowMonth* 경유)과 후(detail)의 확도 스택이 같은 정의(클램프·red 전액·무색상
+    // 폴백)를 공유해야 같은 행이 로딩 시점에 따라 다른 분해를 보여주지 않는다.
+    const detailHasColor = dealHasColorData(detail)
     return monthOptions.map((month) => {
       const amount = Number(detail.monthly_payments?.[month.value] ?? 0)
-      const confirmed = Number(detail.monthly_confirmed?.[month.value] ?? 0)
-      const highConfidence = Number(detail.monthly_high_conf?.[month.value] ?? 0)
-      const red = Boolean(detail.monthly_red?.[month.value])
+      const split = amount > 0
+        ? splitMonthConfidence(detail, month.value, amount, detailHasColor)
+        : { confirmed: 0, highConfidence: 0, expected: 0 }
       return {
         ...month,
         amount,
-        confirmed,
-        highConfidence,
-        red,
+        confirmed: split.confirmed,
+        highConfidence: split.highConfidence,
+        red: Boolean(detail.monthly_red?.[month.value]),
       }
     })
   }, [detail, monthOptions, selectedRow])
@@ -5266,7 +5272,8 @@ export default function SalesLedgerWorkbench() {
                   {([
                     ["week-mismatch", "불일치", revInboxCounts.weekMismatch, "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"],
                     ["month-only", "월합계만", revInboxCounts.monthOnly, "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"],
-                    ["open", "예정 남음", revInboxCounts.open, "border-[#BFDBFE] bg-[#EFF6FF] text-[#1E5DA8]"],
+                    // 확도 잔여(예정/고확도 미전환) 칩 — 고확도 예외 토큰의 틴트 칩을 소비한다.
+                    ["open", "예정 남음", revInboxCounts.open, CONFIDENCE_TOKENS["high-confidence"].chipClass],
                   ] as Array<[RevForecastFilter, string, number, string]>).map(([id, label, count, tone]) => (
                     <button
                       key={id}
@@ -5920,9 +5927,9 @@ export default function SalesLedgerWorkbench() {
                     <div className="grid grid-cols-2 gap-2">
                       {[
                         ["합계", selectedRowMonthTotal, "text-[#111110]"],
-                        ["확정", selectedRowMonthConfirmed, "text-[#084734]"],
-                        ["고확도", selectedRowMonthHighConfidence, "text-[#1E5DA8]"],
-                        ["예정", selectedRowMonthOpen, "text-[#A8741A]"],
+                        [CONFIDENCE_TOKENS.confirmed.label, selectedRowMonthConfirmed, CONFIDENCE_TOKENS.confirmed.textClass],
+                        [CONFIDENCE_TOKENS["high-confidence"].label, selectedRowMonthHighConfidence, CONFIDENCE_TOKENS["high-confidence"].textClass],
+                        [CONFIDENCE_TOKENS.expected.label, selectedRowMonthOpen, CONFIDENCE_TOKENS.expected.textClass],
                       ].map(([label, value, tone]) => (
                         <div key={String(label)} className="rounded-md bg-white px-2.5 py-2">
                           <p className="text-[10px] font-bold text-[#A39E98]">{label}</p>
@@ -6030,14 +6037,14 @@ export default function SalesLedgerWorkbench() {
                           {month.amount > 0 && (
                             <span className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-[#F0F0EC]" aria-label={`${month.label} 금액 분해`}>
                               <span
-                                className="bg-[#084734]"
+                                className={CONFIDENCE_TOKENS.confirmed.bgClass}
                                 style={{ width: `${Math.min(100, (month.confirmed / month.amount) * 100)}%` }}
                               />
                               <span
-                                className="bg-[#1E5DA8]"
+                                className={CONFIDENCE_TOKENS["high-confidence"].bgClass}
                                 style={{ width: `${Math.min(100, (month.highConfidence / month.amount) * 100)}%` }}
                               />
-                              <span className="flex-1 bg-[#A8741A]" />
+                              <span className={`flex-1 ${CONFIDENCE_TOKENS.expected.bgClass}`} />
                             </span>
                           )}
                           {(month.confirmed > 0 || month.highConfidence > 0 || month.red) && (

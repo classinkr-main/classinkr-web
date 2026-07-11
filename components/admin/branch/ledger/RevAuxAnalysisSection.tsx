@@ -2,6 +2,7 @@
 
 import type { Dispatch, SetStateAction } from "react"
 import { CalendarDays, ChevronRight, Target, TrendingUp } from "lucide-react"
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   BreakdownNumbersTable,
   RevWeekNumbersTable,
@@ -126,7 +127,7 @@ export function RevAuxAnalysisSection({
                       </div>
                       <div className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
                         <p className="text-[10.5px] font-bold text-[#615D59]">확정</p>
-                        <p className="mt-1 text-[17px] font-bold tabular-nums text-[#084734]">{formatMoney(revMonthConfirmed)}</p>
+                        <p className={`mt-1 text-[17px] font-bold tabular-nums ${CONFIDENCE_TOKENS.confirmed.textClass}`}>{formatMoney(revMonthConfirmed)}</p>
                         <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">
                           {revComparableGoal !== null
                             ? `달성률 ${formatPercent((revMonthConfirmed / revComparableGoal) * 100)}`
@@ -137,7 +138,7 @@ export function RevAuxAnalysisSection({
                       </div>
                       <div className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
                         <p className="text-[10.5px] font-bold text-[#615D59]">고확도</p>
-                        <p className="mt-1 text-[17px] font-bold tabular-nums text-[#1E5DA8]">{formatMoney(revMonthHighConfidence)}</p>
+                        <p className={`mt-1 text-[17px] font-bold tabular-nums ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatMoney(revMonthHighConfidence)}</p>
                         <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">
                           {revComparableGoal !== null
                             ? `확정+고확도 ${formatPercent((revMonthCovered / revComparableGoal) * 100)}`
@@ -146,7 +147,7 @@ export function RevAuxAnalysisSection({
                       </div>
                       <div className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
                         <p className="text-[10.5px] font-bold text-[#615D59]">예정·월합계만</p>
-                        <p className="mt-1 text-[17px] font-bold tabular-nums text-[#A8741A]">{formatMoney(revMonthPlanned)}</p>
+                        <p className={`mt-1 text-[17px] font-bold tabular-nums ${CONFIDENCE_TOKENS.expected.textClass}`}>{formatMoney(revMonthPlanned)}</p>
                         <p className="mt-0.5 text-[10px] font-semibold text-[#A39E98]">월합계만 {formatMoney(revMonthMonthlyOnly)}</p>
                       </div>
                       <div className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
@@ -175,9 +176,9 @@ export function RevAuxAnalysisSection({
                       <div className="mt-3">
                         <div className="relative h-2.5 overflow-hidden rounded-full bg-[#F0F0EC]">
                           <div className="absolute inset-y-0 left-0 flex w-full">
-                            <span className="h-full bg-[#084734]" style={{ width: `${(revMonthConfirmed / revMonthScale) * 100}%` }} />
-                            <span className="h-full bg-[#1E5DA8]" style={{ width: `${(revMonthHighConfidence / revMonthScale) * 100}%` }} />
-                            <span className="h-full bg-[#A8741A]" style={{ width: `${(revMonthOpen / revMonthScale) * 100}%` }} />
+                            <span className={`h-full ${CONFIDENCE_TOKENS.confirmed.bgClass}`} style={{ width: `${(revMonthConfirmed / revMonthScale) * 100}%` }} />
+                            <span className={`h-full ${CONFIDENCE_TOKENS["high-confidence"].bgClass}`} style={{ width: `${(revMonthHighConfidence / revMonthScale) * 100}%` }} />
+                            <span className={`h-full ${CONFIDENCE_TOKENS.expected.bgClass}`} style={{ width: `${(revMonthOpen / revMonthScale) * 100}%` }} />
                             <span className="h-full bg-[#D9D6D0]" style={{ width: `${(revMonthMonthlyOnly / revMonthScale) * 100}%` }} />
                           </div>
                           <span
@@ -187,9 +188,9 @@ export function RevAuxAnalysisSection({
                           />
                         </div>
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-[#615D59]">
-                          <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#084734]" />확정</span>
-                          <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#1E5DA8]" />고확도</span>
-                          <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#A8741A]" />예정</span>
+                          <span className="inline-flex items-center gap-1"><span className={`h-2 w-2 rounded-full ${CONFIDENCE_TOKENS.confirmed.bgClass}`} />{CONFIDENCE_TOKENS.confirmed.label}</span>
+                          <span className="inline-flex items-center gap-1"><span className={`h-2 w-2 rounded-full ${CONFIDENCE_TOKENS["high-confidence"].bgClass}`} />{CONFIDENCE_TOKENS["high-confidence"].label}</span>
+                          <span className="inline-flex items-center gap-1"><span className={`h-2 w-2 rounded-full ${CONFIDENCE_TOKENS.expected.bgClass}`} />{CONFIDENCE_TOKENS.expected.label}</span>
                           <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#D9D6D0]" />월합계만</span>
                           <span className="inline-flex items-center gap-1"><span className="h-3 w-[2px] bg-[#111110]" />월 목표 {formatMoney(revComparableGoal)}</span>
                         </div>

@@ -2,6 +2,7 @@
 
 import type { Dispatch, SetStateAction } from "react"
 import { Loader2, Plus, Save, X } from "lucide-react"
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   DRAFT_CONFIDENCE_OPTIONS,
   DRAFT_OPERATIONS,
@@ -161,11 +162,7 @@ export function InputRailSection({
                       aria-pressed={draftForm.confidence === option.id}
                       className={`min-h-8 rounded-md px-2 py-1 text-[11px] font-bold transition ${
                         draftForm.confidence === option.id
-                          ? option.id === "confirmed"
-                            ? "bg-[#084734] text-white"
-                            : option.id === "high-confidence"
-                              ? "bg-[#1E5DA8] text-white"
-                              : "bg-[#A8741A] text-white"
+                          ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
                           : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
                       }`}
                     >

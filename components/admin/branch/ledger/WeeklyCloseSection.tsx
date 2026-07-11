@@ -1,6 +1,7 @@
 "use client"
 
 import { CalendarDays, ChevronRight, Loader2, Save } from "lucide-react"
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   WEEKLY_CLOSE_BUCKET_META,
   formatDateTime,
@@ -165,10 +166,10 @@ export function WeeklyCloseSection({
                             </div>
                             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-[#615D59]">
                               <span>
-                                확정 전환 <span className={`font-bold tabular-nums ${wcDiff.confirmedDelta >= 0 ? "text-[#084734]" : "text-[#B43E3E]"}`}>{formatSignedMoney(wcDiff.confirmedDelta)}</span>
+                                확정 전환 <span className={`font-bold tabular-nums ${wcDiff.confirmedDelta >= 0 ? CONFIDENCE_TOKENS.confirmed.textClass : "text-[#B43E3E]"}`}>{formatSignedMoney(wcDiff.confirmedDelta)}</span>
                               </span>
                               <span>
-                                고확도 전환 <span className={`font-bold tabular-nums ${wcDiff.highConfidenceDelta >= 0 ? "text-[#1E5DA8]" : "text-[#B43E3E]"}`}>{formatSignedMoney(wcDiff.highConfidenceDelta)}</span>
+                                고확도 전환 <span className={`font-bold tabular-nums ${wcDiff.highConfidenceDelta >= 0 ? CONFIDENCE_TOKENS["high-confidence"].textClass : "text-[#B43E3E]"}`}>{formatSignedMoney(wcDiff.highConfidenceDelta)}</span>
                               </span>
                             </div>
                           </div>
