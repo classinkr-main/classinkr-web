@@ -364,8 +364,9 @@ function MatrixToneLegend() {
         </span>
       ))}
       <span>· 잠금=시트확정/장부반영</span>
-      <span className="hidden xl:inline">· 합산 셀 주황=확도 혼합 포함</span>
-      <span className="hidden text-[#A39E98] xl:inline">· Enter 편집 · Tab 이동 · Ctrl+D 아래 복사 · Esc 취소</span>
+      <span className="hidden lg:inline">· 합산 셀 주황=확도 혼합 포함</span>
+      {/* 13인치(lg~xl) 랩탑에서도 단축키 힌트가 보이도록 xl→lg 하향. 편집 진입 시엔 팝오버가 셀 인근 힌트를 재노출한다. */}
+      <span className="hidden text-[#A39E98] lg:inline">· Enter 편집 · Tab 이동 · Ctrl+D 아래 복사 · Ctrl+V 엑셀 붙여넣기 · Esc 취소</span>
     </span>
   )
 }
@@ -1444,6 +1445,109 @@ function isMatrixCellEditable(row: LedgerRevenueRow, month: string): boolean {
   return !isMatrixCellLocked(row, month)
 }
 
+// ── SL-2: 엑셀 클립보드 TSV 붙여넣기 → 초안 큐 벌크 라우팅 ──────────────────────
+// 선택된 월 셀을 앵커로 TSV 그리드를 (행: 보이는 딜행 순서 아래로, 열: 회계월 순서 오른쪽으로)
+// 투영해 "무엇이 어떤 셀로 가는지" 프리뷰 계획을 만든다. 커밋은 셀 편집과 완전히 같은
+// onCommitCell → createDraft(초안 2단 게이트: draft → checked → apply) 경로만 사용한다 —
+// 새 저장 경로 없음. 잠금 셀(시트확정/장부반영)은 계획 단계에서 제외되고, 주차 칸은 대상이
+// 아니므로 B1 주차 병합 규약과 셀 상태기계는 문자 단위로 불변이다.
+
+interface MatrixPasteCellPlan {
+  rowId: string
+  customer: string
+  productCategory: Exclude<RevProductCategory, "all">
+  month: string
+  current: number
+  next: number
+  status: "apply" | "locked" | "unchanged"
+}
+
+interface MatrixPastePlan {
+  anchorCustomer: string
+  cells: MatrixPasteCellPlan[]
+  applyCount: number
+  lockedCount: number
+  unchangedCount: number
+  nonNumericCount: number
+  outOfRangeCount: number
+}
+
+// 오조작(전체 시트 복사 등) 방어 상한 — 12개월 × 50행. 넘치는 칸은 범위 밖으로 집계만 한다.
+const MATRIX_PASTE_MAX_CELLS = 600
+
+function parseTsvGrid(text: string): string[][] {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n")
+  while (lines.length > 0 && lines[lines.length - 1].trim() === "") lines.pop()
+  return lines.map((line) => line.split("\t"))
+}
+
+function buildMatrixPastePlan(
+  text: string,
+  anchor: MatrixCellCoord,
+  dealRows: LedgerRevenueRow[],
+  months: string[],
+): MatrixPastePlan | null {
+  const grid = parseTsvGrid(text)
+  if (grid.length === 0) return null
+  const rowStart = dealRows.findIndex((row) => row.id === anchor.rowId)
+  const colStart = months.indexOf(anchor.month)
+  if (rowStart < 0 || colStart < 0) return null
+
+  const plan: MatrixPastePlan = {
+    anchorCustomer: dealRows[rowStart].customer,
+    cells: [],
+    applyCount: 0,
+    lockedCount: 0,
+    unchangedCount: 0,
+    nonNumericCount: 0,
+    outOfRangeCount: 0,
+  }
+  let cellBudget = MATRIX_PASTE_MAX_CELLS
+  for (let r = 0; r < grid.length; r += 1) {
+    const row = dealRows[rowStart + r]
+    for (let c = 0; c < grid[r].length; c += 1) {
+      const raw = grid[r][c].trim()
+      if (raw === "") continue // 빈 칸은 건드리지 않는다(엑셀 부분 범위 복사 관용)
+      // 전체가 숫자형(통화기호·콤마·공백·부호 허용)일 때만 금액으로 인정 —
+      // "Q4 2026"·"2026-04" 같은 숫자 섞인 라벨을 금액으로 오독(42026·0 덮어쓰기)하지 않는다.
+      if (!/^[\s¥₩$,.\-+]*\d[\d\s¥₩$,.\-+]*$/.test(raw) || !Number.isFinite(Number(raw.replace(/[^\d.-]/g, "")))) {
+        plan.nonNumericCount += 1 // 헤더/라벨 텍스트 등 — 값으로 오독하지 않고 집계만
+        continue
+      }
+      const month = months[colStart + c]
+      if (!row || !month) {
+        plan.outOfRangeCount += 1
+        continue
+      }
+      if (cellBudget <= 0) {
+        plan.outOfRangeCount += 1
+        continue
+      }
+      cellBudget -= 1
+      const next = parseMatrixAmount(raw)
+      const current = rowMonthAmount(row, month)
+      const locked = isMatrixCellLocked(row, month)
+      // 동일 금액은 초안을 만들지 않는다(commitBuffer의 중복 커밋 가드와 같은 취지).
+      const status: MatrixPasteCellPlan["status"] =
+        locked ? "locked" : next === current || (next <= 0 && current <= 0) ? "unchanged" : "apply"
+      plan.cells.push({
+        rowId: row.id,
+        customer: row.customer,
+        productCategory: rowProductCategory(row),
+        month,
+        current,
+        next,
+        status,
+      })
+      if (status === "apply") plan.applyCount += 1
+      else if (status === "locked") plan.lockedCount += 1
+      else plan.unchangedCount += 1
+    }
+  }
+  if (plan.cells.length === 0 && plan.nonNumericCount === 0 && plan.outOfRangeCount === 0) return null
+  return plan
+}
+
 // 셀의 우세 확도 → 편집 팝오버 기본 선택값. 확정>고확도>예정 순, 없으면 예정.
 function dominantCellConfidence(bucket: RevMonthlyBucket): DraftConfidence {
   if (bucket.total <= 0) return "expected"
@@ -1456,6 +1560,29 @@ const MATRIX_CONFIDENCE_COLOR: Record<DraftConfidence, string> = {
   expected: "#A8741A",
   "high-confidence": "#1E5DA8",
   confirmed: "#084734",
+}
+
+// SL-6: 마지막으로 "명시 선택"한 확도 기억(localStorage). 빈 셀 편집 진입의 기본값으로만 쓰여
+// 확정 수납액이 기본 '예정' 버킷으로 새는 과소집계를 막는다. 값이 있는 셀은 기존 우세 확도 유지,
+// 커밋·집계(A1 확도 분배) 경로는 문자 단위 불변 — 기본 선택값만 바뀐다(팝오버에 항상 노출됨).
+const MATRIX_LAST_CONFIDENCE_STORAGE_KEY = "classin:rev-matrix-last-confidence:v1"
+
+function loadStoredMatrixConfidence(): DraftConfidence | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(MATRIX_LAST_CONFIDENCE_STORAGE_KEY)
+    return isDraftConfidence(raw) ? raw : null
+  } catch {
+    return null
+  }
+}
+
+function storeMatrixConfidence(value: DraftConfidence) {
+  try {
+    window.localStorage.setItem(MATRIX_LAST_CONFIDENCE_STORAGE_KEY, value)
+  } catch {
+    // 저장 실패(프라이빗 모드 등)는 무해 — 다음 명시 선택이 다시 시도한다.
+  }
 }
 
 // 셀 아래 붙는 3버튼 확도 팝오버 + 커밋/취소. input은 부모 셀이 렌더(포커스 관리), 여기는 확도만.
@@ -1496,6 +1623,10 @@ const RevMatrixEditPopover = memo(function RevMatrixEditPopover({
           )
         })}
       </div>
+      {/* 편집 진입 시 셀 인근 단축키 힌트 — 치트시트가 안 보이는 좁은 화면에서도 조작법이 손끝에 남게. */}
+      <p className="px-1 pb-0.5 text-left text-[9px] font-semibold leading-none text-[#A39E98]">
+        Enter 저장 · Tab 다음 칸 · Esc 취소
+      </p>
       {warning && (
         <p className="max-w-[168px] whitespace-normal rounded bg-[#FBF1E0] px-1.5 py-1 text-left text-[9px] font-bold leading-snug text-[#7A520F]">
           {warning}
@@ -1551,12 +1682,15 @@ function useMatrixEditor({
     (rowId: string, month: string, seed?: string, week?: number) => {
       const coord: MatrixCellCoord = { rowId, month, week }
       setSelected(coord)
-      setEditConfidence(cellConfidence(coord))
+      // 기본 확도: 값이 있거나(우세 확도) 미검수 초안이 확도를 남긴 셀은 그대로, 완전 빈 셀만
+      // 마지막 명시 선택 확도(localStorage)로 시작한다 — SL-6, A1 확도-분배 로직 회귀 없음.
+      const current = cellValue(coord)
+      const base = cellConfidence(coord)
+      setEditConfidence(current <= 0 && base === "expected" ? (loadStoredMatrixConfidence() ?? base) : base)
       // seed(타이핑 첫 글자)면 그 값으로, 아니면 기존 커밋값(0은 빈칸)으로 시작.
       if (seed != null) {
         setBuffer(seed.replace(/[^\d]/g, ""))
       } else {
-        const current = cellValue(coord)
         setBuffer(current > 0 ? String(current) : "")
       }
       setEditing(coord)
@@ -1567,6 +1701,13 @@ function useMatrixEditor({
   const cancelEdit = useCallback(() => {
     setEditing(null)
     setBuffer("")
+  }, [])
+
+  // 확도 팝오버의 "명시 선택"만 기억한다 — 기본값으로 흘러간 확도는 기록하지 않아
+  // 한 번의 확정 선택이 이후 빈 셀 입력의 기본값이 된다(SL-6 세션 기억).
+  const pickEditConfidence = useCallback((next: DraftConfidence) => {
+    storeMatrixConfidence(next)
+    setEditConfidence(next)
   }, [])
 
   // 현재 편집 버퍼를 커밋(부모 onCommitCell). 값이 이전과 같으면 스킵(중복 draft 방지).
@@ -1709,7 +1850,9 @@ function useMatrixEditor({
   const actions = useMemo(
     () => ({
       setBuffer,
-      setEditConfidence,
+      // 팝오버 선택 = 명시 선택 → localStorage 기억까지 수행(pickEditConfidence). 액션 키 이름은
+      // 기존 셀 콜사이트 호환을 위해 유지한다.
+      setEditConfidence: pickEditConfidence,
       selectCell,
       beginEdit,
       cancelEdit,
@@ -1717,7 +1860,7 @@ function useMatrixEditor({
       onEditingKeyDown,
       onSelectedKeyDown,
     }),
-    [setBuffer, setEditConfidence, selectCell, beginEdit, cancelEdit, commitBuffer, onEditingKeyDown, onSelectedKeyDown],
+    [setBuffer, pickEditConfidence, selectCell, beginEdit, cancelEdit, commitBuffer, onEditingKeyDown, onSelectedKeyDown],
   )
 
   return {
@@ -2003,8 +2146,11 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
       {...interactiveHandlers}
     >
       {pending && <span aria-hidden className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#D4A017]" />}
+      {/* 1만 미만(원시 위안) 값은 저대비·소형으로 강등 — 월 셀(RevMatrixMonthCell)과 동일 규약(SL-7). */}
       <span
-        className={`inline-flex items-center gap-0.5 text-[11.5px] leading-none tabular-nums ${
+        className={`inline-flex items-center gap-0.5 leading-none tabular-nums ${
+          display > 0 && display < 10000 ? "text-[10px] opacity-75" : "text-[11.5px]"
+        } ${
           pending
             ? "font-bold text-[#7A520F]"
             : display > 0
@@ -2169,6 +2315,182 @@ function RevMatrixMonthStrip({
 
 const EMPTY_BUCKET: RevMonthlyBucket = { total: 0, confirmed: 0, high: 0, open: 0 }
 
+// SL-4: 미연결(needs link) 행 전용 매칭 인박스 딥링크 — /admin/crm/matching?name= 프리필로 착지.
+// 링크 확정은 매칭 인박스에서만 한다(장부=분석·검수, 매칭=링크 확정 역할 분리). account-master의
+// unmatched 판정과 1:1이라 연결됨/드리프트 행에는 렌더되지 않는다(확정 링크 오표기 회귀 방지).
+function NeedsLinkBadge({ customer, long = false }: { customer: string; long?: boolean }) {
+  return (
+    <Link
+      href={`/admin/crm/matching?name=${encodeURIComponent(customer)}`}
+      onClick={(event) => event.stopPropagation()}
+      title={`${customer} — CRM 미연결(needs link) · 매칭 인박스에서 연결`}
+      className="inline-flex shrink-0 items-center rounded-full border border-[#ECD29C] bg-[#FFFCF5] px-1.5 text-[9px] font-bold leading-4 text-[#7A520F] underline-offset-2 transition hover:bg-[#FBF1E0] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+    >
+      {long ? "매칭에서 연결 ↗" : "연결 ↗"}
+    </Link>
+  )
+}
+
+// SL-2: 붙여넣기 프리뷰 다이얼로그 — 셀 매핑(고객·상품군·월·현재→새 값)과 일괄 확도를 확인한 뒤에만
+// 초안을 만든다. 여기서 만드는 것은 어디까지나 "검토 초안"이며 장부 반영은 체크 큐(2단 게이트)에서만.
+const MATRIX_PASTE_PREVIEW_LIMIT = 40
+
+function RevMatrixPasteDialog({
+  plan,
+  confidence,
+  onPickConfidence,
+  onCancel,
+  onConfirm,
+}: {
+  plan: MatrixPastePlan
+  confidence: DraftConfidence
+  onPickConfidence: (next: DraftConfidence) => void
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const shown = plan.cells.slice(0, MATRIX_PASTE_PREVIEW_LIMIT)
+  const hidden = plan.cells.length - shown.length
+  const statusMeta: Record<MatrixPasteCellPlan["status"], { label: string; className: string }> = {
+    apply: { label: "초안 생성", className: "text-[#084734]" },
+    locked: { label: "잠금 제외", className: "text-[#A39E98]" },
+    unchanged: { label: "동일 값", className: "text-[#A39E98]" },
+  }
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="엑셀 붙여넣기 미리보기"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-[#111110]/40 p-4 sm:items-center"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation()
+          onCancel()
+        }
+      }}
+    >
+      <div className="flex max-h-[85dvh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_24px_70px_rgba(17,17,16,0.22)]">
+        <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
+          <p className="text-[13px] font-bold text-[#111110]">엑셀 붙여넣기 미리보기</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-[#615D59]">
+            {plan.anchorCustomer} 선택 셀 기준 아래·오른쪽으로 매핑됩니다. 확인 시{" "}
+            <span className="font-bold text-[#7A520F]">검토 초안 {plan.applyCount.toLocaleString("ko-KR")}건</span>이 생성되고,
+            장부 반영은 체크 큐에서 체크 → 적용을 거쳐야만 이뤄집니다.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+            <span className="rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2 py-0.5 text-[#084734]">
+              생성 {plan.applyCount.toLocaleString("ko-KR")}
+            </span>
+            {plan.lockedCount > 0 && (
+              <span className="rounded-full border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 py-0.5 text-[#615D59]">
+                잠금 제외 {plan.lockedCount.toLocaleString("ko-KR")}
+              </span>
+            )}
+            {plan.unchangedCount > 0 && (
+              <span className="rounded-full border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 py-0.5 text-[#615D59]">
+                동일 값 {plan.unchangedCount.toLocaleString("ko-KR")}
+              </span>
+            )}
+            {plan.outOfRangeCount > 0 && (
+              <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[#7A520F]">
+                범위 밖 {plan.outOfRangeCount.toLocaleString("ko-KR")}
+              </span>
+            )}
+            {plan.nonNumericCount > 0 && (
+              <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[#7A520F]">
+                비숫자 제외 {plan.nonNumericCount.toLocaleString("ko-KR")}
+              </span>
+            )}
+          </div>
+        </div>
+        {/* 일괄 확도 — 커밋 전 3버튼 필수 노출(SL-6과 같은 규약). 붙여넣기 전체에 하나의 확도가 기록된다. */}
+        <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold text-[#615D59]">확도(전체 적용)</span>
+            <div className="flex items-center gap-1">
+              {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
+                const activeColor = MATRIX_CONFIDENCE_COLOR[option.id]
+                const active = option.id === confidence
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => onPickConfidence(option.id)}
+                    className="rounded-md px-2.5 py-1 text-[11px] font-bold transition"
+                    style={
+                      active
+                        ? { backgroundColor: activeColor, color: "#FFFFFF" }
+                        : { color: activeColor, backgroundColor: "#FFFFFF", border: "1px solid rgba(0,0,0,0.08)" }
+                    }
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+            <span className="text-[10px] font-semibold text-[#A39E98]">확도별로 나눠 넣으려면 범위를 나눠 붙여넣으세요</span>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
+          <table className="w-full border-collapse text-left text-[11px]">
+            <thead className="text-[9.5px] uppercase tracking-[0.06em] text-[#A39E98]">
+              <tr className="border-b border-[rgba(0,0,0,0.08)]">
+                <th className="py-1.5 pr-2 font-bold">고객</th>
+                <th className="py-1.5 pr-2 font-bold">상품군</th>
+                <th className="py-1.5 pr-2 font-bold">월</th>
+                <th className="py-1.5 pr-2 text-right font-bold">현재 → 새 값</th>
+                <th className="py-1.5 text-right font-bold">처리</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#F2F1EE]">
+              {shown.map((cell, index) => (
+                <tr key={`${cell.rowId}-${cell.month}-${index}`} className={cell.status === "apply" ? "" : "opacity-60"}>
+                  <td className="max-w-[180px] truncate py-1.5 pr-2 font-semibold text-[#111110]">{cell.customer}</td>
+                  <td className="py-1.5 pr-2 text-[#615D59]">{productCategoryMeta(cell.productCategory).shortLabel}</td>
+                  <td className="py-1.5 pr-2 font-semibold text-[#615D59]">{formatMonthLabel(cell.month)}</td>
+                  <td className="py-1.5 pr-2 text-right tabular-nums">
+                    <span className="text-[#A39E98]">{cell.current > 0 ? formatMoney(cell.current) : "·"}</span>
+                    <span className="mx-1 text-[#A39E98]">→</span>
+                    <span className="font-bold text-[#111110]">{formatMoney(cell.next)}</span>
+                  </td>
+                  <td className={`py-1.5 text-right text-[10px] font-bold ${statusMeta[cell.status].className}`}>
+                    {cell.status === "locked" && <Lock className="mr-0.5 inline h-2.5 w-2.5 align-[-1px]" aria-hidden />}
+                    {statusMeta[cell.status].label}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {hidden > 0 && (
+            <p className="py-2 text-center text-[10.5px] font-semibold text-[#A39E98]">외 {hidden.toLocaleString("ko-KR")}칸 — 전체가 동일 규칙으로 처리됩니다</p>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            // applyCount=0이면 확인 버튼이 disabled라 autoFocus가 무시되고 포커스가 모달 뒤
+            // 그리드 셀에 남아 숫자 키가 편집을 시작한다 — 그 경우 취소 버튼이 포커스를 받는다.
+            autoFocus={plan.applyCount === 0}
+            className="inline-flex h-9 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={plan.applyCount === 0}
+            autoFocus={plan.applyCount > 0}
+            className="inline-flex h-9 items-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            검토 초안 {plan.applyCount.toLocaleString("ko-KR")}건 생성
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // 고객 그룹 소계행(접힘 기본). ▸ 토글은 기존 UX 계승(ChevronRight rotate-90).
 const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   group,
@@ -2176,6 +2498,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   expandedMonths,
   expanded,
   selected,
+  needsLink = false,
   onSelect,
   onToggle,
   density = "regular",
@@ -2185,6 +2508,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   expandedMonths: Set<string>
   expanded: boolean
   selected: boolean
+  needsLink?: boolean // account-master unmatched 판정 — 미연결 고객만 '연결 ↗' 딥링크(SL-4)
   onSelect: (key: string) => void
   onToggle: (key: string) => void
   density?: MatrixDensity
@@ -2247,6 +2571,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
                   <AlertTriangle className="h-3 w-3 text-[#B43E3E]" aria-label={`불일치 ${group.mismatchCount}건`} />
                 </span>
               )}
+              {needsLink && <NeedsLinkBadge customer={group.customer} />}
             </div>
             {(group.managers.length > 0 || group.regions.length > 0) && (
               <span
@@ -2305,6 +2630,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   grouped,
   nested = false,
   hardwareLinked = false,
+  needsLink = false,
   months,
   expandedMonths,
   active,
@@ -2324,6 +2650,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   grouped: boolean
   nested?: boolean // 카테고리(HW/SW) 합산행 아래 품목 잎 행 — 한 단계 더 들여쓰기
   hardwareLinked?: boolean // 하드웨어 원장에 출고 이력이 있어 역링크를 걸어도 되는 고객인지
+  needsLink?: boolean // account-master unmatched 판정 — 단독 딜행(비그룹)에만 '연결 ↗' 딥링크(SL-4)
   months: string[]
   expandedMonths: Set<string>
   active: boolean
@@ -2409,6 +2736,8 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
               </span>
             )}
           </div>
+          {/* 그룹 고객은 그룹 소계행이 배지를 가진다 — 단독 딜행에만 미연결 딥링크(중복 노출 방지). */}
+          {!grouped && needsLink && <NeedsLinkBadge customer={row.customer} />}
           {productCategory === "hardware" && !nested && hardwareLinked ? (
             // 단일 품목 HW 행 + 하드웨어 원장에 출고 이력 있는 고객만 역링크. 중첩 품목행은 위 카테고리 행이 링크를 가진다.
             <Link
@@ -3138,6 +3467,27 @@ export default function SalesLedgerWorkbench() {
   const isHardwareLinked = useCallback(
     (customer: string) => !hardware.data || hardwareCustomerKeys.has(normalizedAccountKey(customer)),
     [hardware.data, hardwareCustomerKeys],
+  )
+
+  // SL-4: account-master의 'needs link'(미연결 REV 계정) 판정을 행에 매핑한다. 판정은 서버
+  // (lib/repositories/account-master.ts getAccountMaster)의 unmatched 산출을 그대로 소비 —
+  // "확정 branch_rev_sheet 링크는 target 종류(딜 포함) 무관 연결됨" 규칙이 리포지토리에 봉인돼
+  // 있으므로 클라이언트에서 재판정하지 않는다(확정 링크를 미연결로 오표기하는 회귀 차단).
+  // hardwareLinked와 반대로 로딩/실패 중엔 링크를 아예 걸지 않는다(기본 false = 오표기 없음).
+  const accountMaster = useBranchJson<{ unmatched?: Array<{ accountKey: string; name: string }> }>(
+    "/api/admin/crm/account-master",
+    refreshKey,
+  )
+  const needsLinkKeys = useMemo(() => {
+    const set = new Set<string>()
+    for (const entry of accountMaster.data?.unmatched ?? []) {
+      if (entry.accountKey) set.add(entry.accountKey)
+    }
+    return set
+  }, [accountMaster.data?.unmatched])
+  const isNeedsLink = useCallback(
+    (customer: string) => needsLinkKeys.size > 0 && needsLinkKeys.has(normalizedAccountKey(customer)),
+    [needsLinkKeys],
   )
 
   const sheetRows = useMemo<LedgerRevenueRow[]>(() => {
@@ -3932,6 +4282,54 @@ export default function SalesLedgerWorkbench() {
     }
   }
 
+  // ── SL-2: 클립보드 붙여넣기 상태 — 프리뷰 확인 전에는 아무 초안도 만들지 않는다. ─────────
+  const [pastePlan, setPastePlan] = useState<MatrixPastePlan | null>(null)
+  const [pasteConfidence, setPasteConfidence] = useState<DraftConfidence>("expected")
+
+  const handleMatrixPaste = useCallback(
+    (event: React.ClipboardEvent<HTMLDivElement>) => {
+      // 편집 중(input 포커스)이면 input의 기본 붙여넣기를 존중한다. 선택 셀이 없으면 대상 불명 → 무시.
+      if (matrixEditor.editing) return
+      const anchor = matrixEditor.selected
+      if (!anchor) return
+      const text = event.clipboardData?.getData("text/plain") ?? ""
+      if (!text.trim()) return
+      event.preventDefault()
+      if (anchor.week != null) {
+        // 주차 칸 붙여넣기는 B1 주차 병합 규약과 얽혀 파괴 위험 — 월 셀만 지원(잠금과 같은 안전 규약).
+        setMatrixToast({ kind: "info", text: "주차 칸에는 붙여넣기를 지원하지 않습니다 — 월 셀을 선택한 뒤 붙여넣으세요." })
+        return
+      }
+      const plan = buildMatrixPastePlan(text, anchor, visibleDealRows, matrixMonths)
+      if (!plan) {
+        setMatrixToast({ kind: "info", text: "붙여넣을 숫자 값을 찾지 못했습니다 — 엑셀에서 금액 셀 범위를 복사해 주세요." })
+        return
+      }
+      setPasteConfidence(loadStoredMatrixConfidence() ?? "expected")
+      setPastePlan(plan)
+    },
+    [matrixEditor.editing, matrixEditor.selected, matrixMonths, visibleDealRows],
+  )
+
+  // 프리뷰 확인 → 셀 편집과 동일한 onCommitCell 경로로만 커밋(셀당 검토 초안 1건, 2단 게이트 유지).
+  const confirmMatrixPaste = useCallback(() => {
+    if (!pastePlan) return
+    storeMatrixConfidence(pasteConfidence)
+    let committed = 0
+    for (const cell of pastePlan.cells) {
+      if (cell.status !== "apply") continue
+      onCommitCell(cell.rowId, cell.month, cell.next, pasteConfidence)
+      committed += 1
+    }
+    setPastePlan(null)
+    if (committed > 0) {
+      setMatrixToast({
+        kind: "info",
+        text: `검토 초안 ${committed.toLocaleString("ko-KR")}건 생성 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.`,
+      })
+    }
+  }, [onCommitCell, pasteConfidence, pastePlan])
+
   const toggleRevMonth = useCallback((month: string) => {
     setExpandedRevMonths((prev) => {
       const next = new Set(prev)
@@ -4457,6 +4855,7 @@ export default function SalesLedgerWorkbench() {
 
       <main className="space-y-5 px-4 pt-5 sm:px-6 lg:px-9">
         <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-1 self-start">
           <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="Sales ledger views">
             {LENSES.map((item) => (
               <button
@@ -4480,6 +4879,11 @@ export default function SalesLedgerWorkbench() {
                 {item.label}
               </button>
             ))}
+          </div>
+          {/* 활성 lens 부제 상시 렌더 — hover title에만 있던 설명을 터치·랩탑에서도 읽히게(SL-7). */}
+          <p className="px-1 text-[10.5px] font-semibold text-[#A39E98]">
+            {LENSES.find((item) => item.id === lens)?.description}
+          </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[11px] text-[#615D59]">
@@ -4980,8 +5384,12 @@ export default function SalesLedgerWorkbench() {
                   </div>
                 )}
                 {/* 세로 스크롤을 이 컨테이너 안으로 한정해야 thead sticky top / tfoot sticky bottom이
-                    실제로 붙는다 — 페이지 스크롤 + overflow-x-auto 조합에서는 세로 sticky가 무효였음. */}
-                <div className="relative hidden max-h-[calc(100vh-13rem)] min-h-[320px] overflow-auto md:block">
+                    실제로 붙는다 — 페이지 스크롤 + overflow-x-auto 조합에서는 세로 sticky가 무효였음.
+                    onPaste: 선택 셀(포커스된 td)에서 버블된 Ctrl+V를 받아 TSV 벌크 프리뷰를 연다(SL-2). */}
+                <div
+                  className="relative hidden max-h-[calc(100vh-13rem)] min-h-[320px] overflow-auto md:block"
+                  onPaste={handleMatrixPaste}
+                >
                   <table className="w-max min-w-full border-collapse text-left text-[12px]">
                     <thead className="text-[10px] uppercase tracking-[0.06em] text-[#615D59]">
                       <tr className="h-8 bg-[#FAFAF8]">
@@ -5099,6 +5507,7 @@ export default function SalesLedgerWorkbench() {
                                 expandedMonths={expandedRevMonths}
                                 expanded={expanded}
                                 selected={selectedGroup?.key === group.key}
+                                needsLink={isNeedsLink(group.customer)}
                                 onSelect={selectRevGroup}
                                 onToggle={toggleRevGroup}
                                 density={matrixDensity}
@@ -5164,6 +5573,7 @@ export default function SalesLedgerWorkbench() {
                                       view={view}
                                       grouped={false}
                                       hardwareLinked={isHardwareLinked(row.customer)}
+                                      needsLink={isNeedsLink(row.customer)}
                                       months={matrixMonths}
                                       expandedMonths={expandedRevMonths}
                                       active={selectedRow?.id === row.id}
@@ -5243,6 +5653,16 @@ export default function SalesLedgerWorkbench() {
             )}
           </div>
         </section>
+
+        {pastePlan && (
+          <RevMatrixPasteDialog
+            plan={pastePlan}
+            confidence={pasteConfidence}
+            onPickConfidence={setPasteConfidence}
+            onCancel={() => setPastePlan(null)}
+            onConfirm={confirmMatrixPaste}
+          />
+        )}
 
         {matrixToast && (
           <div
@@ -5346,6 +5766,11 @@ export default function SalesLedgerWorkbench() {
                       .filter(Boolean)
                       .join(" · ") || "-"}
                   </p>
+                  {isNeedsLink(selectedGroup.customer) && (
+                    <p className="mt-1.5">
+                      <NeedsLinkBadge customer={selectedGroup.customer} long />
+                    </p>
+                  )}
                   <div className="mt-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <p className="text-[11.5px] font-bold text-[#111110]">HW+SW 합산 · {formatMonthLabel(selectedMonth)}</p>
