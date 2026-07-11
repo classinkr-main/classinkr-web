@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import {
   AlertCircle,
@@ -115,13 +115,20 @@ function StatusBadge({ status }: { status: RevenueSheetLinkStatus }) {
   )
 }
 
-function MetricCard({ label, value, hint }: { label: string; value: string; hint: string }) {
+function MetricCard({ label, value, hint }: { label: string; value: ReactNode; hint: string }) {
   return (
     <div className="border-t border-[#f0f0ec] pt-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">{label}</p>
       <p className="mt-2 text-2xl font-bold tracking-[-0.04em] text-[#111110]">{value}</p>
       <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
     </div>
+  )
+}
+
+// 콜드 로드 '...' 금지 — 값 자리 크기의 저대비 펄스 스켈레톤(레이아웃 일치, CRM-5).
+function ValueSkeleton({ className = "h-6 w-24" }: { className?: string }) {
+  return (
+    <span aria-hidden className={`inline-block animate-pulse rounded-md bg-[#f0f0ec] align-middle ${className}`} />
   )
 }
 
@@ -278,6 +285,15 @@ export default function AdminCrmRevenueSheetPage() {
 
   return (
     <div>
+      {/* 역할 배너 — 매출시트 = REV 분석·검수 READ 표면, 링크 확정 액션은 매칭 인박스(CRM-1 역할 확정) */}
+      <p className="mb-4 border-b border-[#f0f0ec] pb-3 text-[12px] text-[#1a1a1a]/45">
+        <span className="font-semibold text-[#111110]">여기선 분석·검수</span> — REV 행을 읽고 대조하는 표면입니다.
+        CRM 연결(링크) 확정은{" "}
+        <Link href="/admin/crm/matching" className="font-semibold text-[#084734] underline-offset-2 hover:underline">
+          매칭 인박스 ↗
+        </Link>
+        에서 합니다.
+      </p>
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin 3.0 Revenue Sheet</p>
@@ -331,34 +347,37 @@ export default function AdminCrmRevenueSheetPage() {
       ) : null}
 
       <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-2 xl:grid-cols-5">
+        {/* '확정' 두 의미 구분(CRM-6): 여기 '확정'=시트 확정 표시(¥) — 코크핏 '인식 매출'(딜리버리 인식 ₩)과 다른 기준 */}
         <MetricCard
           label="확정 표시"
-          value={loading && !data ? "..." : formatCny(data?.summary.confirmedAmount)}
-          hint="주차 칸 빨간 글자 금액 합계"
+          value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.confirmedAmount)}
+          hint="주차 칸 빨간 글자 합계 · 시트 확정 표시 ¥ — 딜리버리 '인식 매출'(₩)과 다른 기준"
         />
         <MetricCard
           label="확정 임박"
-          value={loading && !data ? "..." : formatCny(data?.summary.highConfidenceAmount)}
-          hint="주차 칸 파란 글자 금액 합계"
+          value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.highConfidenceAmount)}
+          hint="주차 칸 파란 글자 합계 · 시트 기준 ¥"
         />
         <MetricCard
           label="예정"
-          value={loading && !data ? "..." : formatCny(data?.summary.expectedAmount)}
-          hint="당월 이후 무색 예정 금액"
+          value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.expectedAmount)}
+          hint="당월 이후 무색 예정 금액 · 시트 기준 ¥"
         />
         <MetricCard
           label="전환 대기"
-          value={loading && !data ? "..." : formatCny(data?.summary.pastUnconfirmedAmount)}
-          hint="지난달 이전 무색 예정 금액"
+          value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.pastUnconfirmedAmount)}
+          hint="지난달 이전 무색 예정 금액 · 시트 기준 ¥"
         />
         <MetricCard
           label="매칭 커버리지"
           value={
-            loading && !data
-              ? "..."
-              : `${formatNumber(data?.summary.linkedRowCount)} / ${formatNumber(data?.summary.activeRowCount)}`
+            loading && !data ? (
+              <ValueSkeleton />
+            ) : (
+              `${formatNumber(data?.summary.linkedRowCount)} / ${formatNumber(data?.summary.activeRowCount)}`
+            )
           }
-          hint={`미연결 ${formatCny(data?.summary.unmatchedAmount)} · 후보 ${formatNumber(data?.summary.candidateRowCount)}`}
+          hint={`확정 link 행 / 활성 행 · 미연결 ${formatCny(data?.summary.unmatchedAmount)} · 후보 ${formatNumber(data?.summary.candidateRowCount)}`}
         />
       </section>
 
@@ -457,7 +476,12 @@ export default function AdminCrmRevenueSheetPage() {
             </button>
           ))}
           <Link
-            href="/admin/crm/matching"
+            // 검색 중이면 그 컨텍스트를 들고 인박스로 — 재검색 없이 이어서 링크 확정(CRM-1).
+            href={
+              query.trim()
+                ? `/admin/crm/matching?name=${encodeURIComponent(query.trim())}`
+                : "/admin/crm/matching"
+            }
             className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
           >
             매칭 인박스
@@ -533,7 +557,11 @@ export default function AdminCrmRevenueSheetPage() {
                       {row.linkStatus === "confirmed" ? (
                         <CheckCircle2 className="ml-auto h-4 w-4 text-[#084734]" />
                       ) : (
-                        <Link href="/admin/crm/matching" className="text-[11px] font-semibold text-[#084734] hover:underline">
+                        <Link
+                          // 행 고객명을 인박스 이름 필터로 프리필 — 이탈+재검색 없는 핸드오프(CRM-1).
+                          href={`/admin/crm/matching?name=${encodeURIComponent(row.customerName)}`}
+                          className="text-[11px] font-semibold text-[#084734] hover:underline"
+                        >
                           연결하기
                         </Link>
                       )}

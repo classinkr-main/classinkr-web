@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import {
   ArrowRight,
@@ -142,13 +142,20 @@ function matchesStatusFilter(row: CrmMatchingRow, filter: StatusFilter) {
   return row.linkStatus === "rejected"
 }
 
-function MetricCard({ label, value, hint }: { label: string; value: string; hint: string }) {
+function MetricCard({ label, value, hint }: { label: string; value: ReactNode; hint: string }) {
   return (
     <div className="border-t border-[#f0f0ec] pt-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">{label}</p>
       <p className="mt-2 text-2xl font-bold tracking-[-0.04em] text-[#111110]">{value}</p>
       <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
     </div>
+  )
+}
+
+// 콜드 로드 '...' 금지 — 값 자리 크기의 저대비 펄스 스켈레톤(레이아웃 일치, CRM-5).
+function ValueSkeleton({ className = "h-6 w-20" }: { className?: string }) {
+  return (
+    <span aria-hidden className={`inline-block animate-pulse rounded-md bg-[#f0f0ec] align-middle ${className}`} />
   )
 }
 
@@ -469,27 +476,29 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
       <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="검토 대기"
-          value={loading && !data ? "..." : formatNumber(totals?.reviewCount ?? 0)}
+          value={loading && !data ? <ValueSkeleton /> : formatNumber(totals?.reviewCount ?? 0)}
           hint="후보·재검수 상태로 admin 확인이 필요한 연결"
         />
         <MetricCard
           label="미매칭 REV"
-          value={loading && !data ? "..." : formatNumber(data?.summary.branch_rev_sheet.unmatchedCount ?? 0)}
+          value={loading && !data ? <ValueSkeleton /> : formatNumber(data?.summary.branch_rev_sheet.unmatchedCount ?? 0)}
           hint={`따로 노는 시트 금액 ${formatCurrency(data?.summary.branch_rev_sheet.unmatchedAmount ?? 0)}`}
         />
         <MetricCard
           label="자동 확정"
-          value={loading && !data ? "..." : formatNumber(totals?.autoConfirmedCount ?? 0)}
+          value={loading && !data ? <ValueSkeleton /> : formatNumber(totals?.autoConfirmedCount ?? 0)}
           hint="고확신 자동 확정 — 잘못된 건은 행에서 되돌리기"
         />
         <MetricCard
           label="시트 매칭률"
           value={
-            loading && !data
-              ? "..."
-              : totals?.sheetMatchedRatio == null
-                ? "-"
-                : formatPercent(totals.sheetMatchedRatio)
+            loading && !data ? (
+              <ValueSkeleton />
+            ) : totals?.sheetMatchedRatio == null ? (
+              "-"
+            ) : (
+              formatPercent(totals.sheetMatchedRatio)
+            )
           }
           hint={`확정 ${formatNumber(totals?.confirmedCount ?? 0)}건 · 전체 소스 기준`}
         />

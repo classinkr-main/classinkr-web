@@ -245,13 +245,20 @@ function StatusBadge({ label, tone }: { label: string; tone?: string }) {
   )
 }
 
+// 콜드 로드 '...' 금지 — 값 자리 크기의 저대비 펄스 스켈레톤(레이아웃 일치, CRM-5).
+function ValueSkeleton({ className = "h-5 w-20" }: { className?: string }) {
+  return (
+    <span aria-hidden className={`inline-block animate-pulse rounded-md bg-[#f0f0ec] align-middle ${className}`} />
+  )
+}
+
 function MetricCard({
   label,
   value,
   hint,
 }: {
   label: string
-  value: string
+  value: ReactNode
   hint: string
 }) {
   return (
@@ -275,7 +282,7 @@ function MeasureTile({
 }: {
   icon: ReactNode
   label: string
-  value: string
+  value: ReactNode
   hint: string
   tone?: string
 }) {
@@ -759,10 +766,10 @@ export default function AdminCrmRevenuePage() {
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em]">딜리버리 총매출</p>
             </div>
             <p className="mt-2 text-4xl font-bold tracking-[-0.045em] text-[#084734] sm:text-[40px]">
-              {loading && !data ? "..." : formatCurrency(data?.summary.deliveryTotalAmount ?? 0)}
+              {loading && !data ? <ValueSkeleton className="h-9 w-36" /> : formatCurrency(data?.summary.deliveryTotalAmount ?? 0)}
             </p>
             <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-              본사 CRM 원천의 인식 매출 합산 · 보조 지표는 우측 타일에서 확인
+              본사 CRM 원천의 인식 매출 합산(자체 집계 ₩) — 시트 &lsquo;확정 표시&rsquo;(¥)와 다른 기준
             </p>
           </div>
 
@@ -771,27 +778,27 @@ export default function AdminCrmRevenuePage() {
             <MeasureTile
               icon={<Handshake className="h-4 w-4" />}
               label="계약 기준"
-              value={loading && !data ? "..." : formatCurrency(data?.summary.contractedAmount ?? 0)}
+              value={loading && !data ? <ValueSkeleton /> : formatCurrency(data?.summary.contractedAmount ?? 0)}
               hint="보조 확인용 계약 합계"
             />
             <MeasureTile
               icon={<ReceiptText className="h-4 w-4" />}
               label="입금 완료"
-              value={loading && !data ? "..." : formatCurrency(data?.summary.paidAmount ?? 0)}
+              value={loading && !data ? <ValueSkeleton /> : formatCurrency(data?.summary.paidAmount ?? 0)}
               hint="영수증 수납 · V2 paid"
               tone="text-[#084734]"
             />
             <MeasureTile
               icon={<AlertCircle className="h-4 w-4" />}
               label="미수/대기"
-              value={loading && !data ? "..." : formatCurrency(data?.summary.outstandingAmount ?? 0)}
+              value={loading && !data ? <ValueSkeleton /> : formatCurrency(data?.summary.outstandingAmount ?? 0)}
               hint="확정 대비 미수 리스크"
               tone={(data?.summary.outstandingAmount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}
             />
             <MeasureTile
               icon={<TrendingUp className="h-4 w-4" />}
               label="예상 파이프라인"
-              value={loading && !data ? "..." : formatCurrency(data?.summary.expectedPipelineAmount ?? 0)}
+              value={loading && !data ? <ValueSkeleton /> : formatCurrency(data?.summary.expectedPipelineAmount ?? 0)}
               hint={`active ${formatNumber(data?.summary.activeDealCount ?? 0)}건`}
             />
             <MeasureTile
@@ -822,49 +829,41 @@ export default function AdminCrmRevenuePage() {
         </div>
       </section>
 
+      {/* REV 내부 대조 — 딜 표면에서는 요약 1줄만. 확정/임박/예정 분해는 매출시트(rev-sheet)가 집(CRM-2 슬림). */}
       {data?.sheet ? (
         <section className="mb-8 border-b border-[#f0f0ec] pb-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <FileSpreadsheet className="h-4 w-4 text-[#1a1a1a]/35" />
-            <h2 className="text-[14px] font-semibold text-[#111110]">회사 시트 (REV) 내부 대조</h2>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <div className="flex items-center gap-2">
+              <FileSpreadsheet className="h-4 w-4 text-[#1a1a1a]/35" />
+              <h2 className="text-[14px] font-semibold text-[#111110]">회사 시트 (REV) 내부 대조</h2>
+            </div>
+            <span className="text-[12px] text-[#1a1a1a]/45">
+              매칭 완료{" "}
+              <b className="font-semibold text-[#111110]">{formatCNY(data.sheet.linkedAmount)}</b>{" "}
+              ({formatNumber(data.sheet.linkedDealCount)}건) · 미연결{" "}
+              <b
+                className={`font-semibold ${
+                  data.sheet.unlinkedAmount > 0 ? "text-[#B85C33]" : "text-[#111110]"
+                }`}
+              >
+                {formatCNY(data.sheet.unlinkedAmount)}
+              </b>
+            </span>
+            <Link
+              href="/admin/crm/deals/rev-sheet"
+              className="text-[11px] font-medium text-[#084734] underline-offset-2 hover:underline"
+            >
+              매출시트에서 검수 ↗
+            </Link>
             <Link
               href="/admin/branch/ledger?lens=rev"
               className="text-[11px] font-medium text-[#084734] underline-offset-2 hover:underline"
             >
-              매출 장부에서 검수 ↗
+              매출 장부 ↗
             </Link>
             <span className="text-[11px] text-[#1a1a1a]/35">
-              계약 목표 총액 {formatCNY(data.sheet.targetAmount)} · 진행{" "}
-              {formatNumber(data.sheet.activeDealCount)}건/전체 {formatNumber(data.sheet.dealCount)}건 ·
-              오류 체크용 병기 지표 (본사 CRM 매출과 합산하지 않음)
+              시트 기준 ¥ · 확정·임박·예정 분해는 매출시트에서 · 본사 CRM 매출과 합산하지 않음
             </span>
-          </div>
-          <div className="mt-2 grid gap-8 md:grid-cols-2 xl:grid-cols-5">
-            <MetricCard
-              label="매칭 완료 금액"
-              value={formatCNY(data.sheet.linkedAmount)}
-              hint={`확정 link ${formatNumber(data.sheet.linkedDealCount)}건 · 미연결 ${formatCNY(data.sheet.unlinkedAmount)}`}
-            />
-            <MetricCard
-              label="시트 확정 표시"
-              value={formatCNY(data.sheet.confirmedAmount)}
-              hint="주차 칸 빨간 글자(확정) 금액 누적 합계"
-            />
-            <MetricCard
-              label="확정 임박 표시"
-              value={formatCNY(data.sheet.highConfidenceAmount)}
-              hint="주차 칸 파란 글자 — 높은 확률로 클로징 예정"
-            />
-            <MetricCard
-              label="시트 예정 표시"
-              value={formatCNY(data.sheet.expectedAmount)}
-              hint="당월~미래의 색 표시 없는 납부 스케줄 합계"
-            />
-            <MetricCard
-              label="확정 전환 대기"
-              value={formatCNY(data.sheet.unconfirmedPastAmount)}
-              hint="지난달 이전 예정이었지만 아직 확정 표시가 없는 금액"
-            />
           </div>
         </section>
       ) : null}

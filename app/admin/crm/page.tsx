@@ -280,6 +280,13 @@ function CustomerLogIcon({ kind }: { kind: AdminCrmCustomerLogKind }) {
   return <Activity className="h-3.5 w-3.5" />
 }
 
+// 콜드 로드 '...' 금지 — 값 자리 크기의 저대비 펄스 스켈레톤(레이아웃 일치, CRM-5).
+function ValueSkeleton({ className = "h-6 w-20" }: { className?: string }) {
+  return (
+    <span aria-hidden className={`inline-block animate-pulse rounded-md bg-[#f0f0ec] align-middle ${className}`} />
+  )
+}
+
 function CrmMetricTile({
   icon,
   label,
@@ -289,7 +296,7 @@ function CrmMetricTile({
 }: {
   icon: ReactNode
   label: string
-  value: string
+  value: ReactNode
   hint: string
   tone?: string
 }) {
@@ -314,7 +321,7 @@ function CrmMeasurementTile({
 }: {
   icon: ReactNode
   label: string
-  value: string
+  value: ReactNode
   hint: string
   tone?: string
 }) {
@@ -439,7 +446,8 @@ function CrmTeamKpiBoard({
   loading: boolean
   branchError: string | null
 }) {
-  const loadingValue = loading && !overview ? "..." : null
+  // 콜드 로드 — '...' 텍스트 대신 타일 값 크기 스켈레톤(CRM-5).
+  const loadingValue = loading && !overview ? <ValueSkeleton className="h-5 w-16" /> : null
   const neoCrm = overview?.neoCrm ?? null
   const neoKpis = neoCrm?.kpis
   const members = useMemo(() => branchKpis?.members ?? [], [branchKpis])
@@ -532,7 +540,7 @@ function CrmTeamKpiBoard({
                 key={item.key}
                 icon={item.icon}
                 label={item.label}
-                value={branchError ? "-" : loading && !branchKpis ? "..." : formatKpiActual(totals.actual)}
+                value={branchError ? "-" : loading && !branchKpis ? <ValueSkeleton className="h-5 w-12" /> : formatKpiActual(totals.actual)}
                 hint={
                   branchError ??
                   `${item.hintLabel} · 기준 ${formatKpiActual(totals.goal)} · 달성률 ${formatPercent(rate)}`
@@ -582,7 +590,8 @@ function CrmCockpitHero({ overview, loading }: { overview: AdminCrmOverview | nu
   const revenue = overview?.business.revenue
   const kpis = overview?.business.kpis
   const neoKpis = overview?.neoCrm?.kpis
-  const loadingValue = loading && !overview ? "..." : null
+  // 콜드 로드 — '...' 텍스트 대신 값 자리 크기의 스켈레톤(CRM-5).
+  const pending = loading && !overview
   const riskCount = kpis?.paymentRiskCount ?? 0
   const hasRisk = riskCount > 0 || (revenue?.outstandingAmount ?? 0) > 0
 
@@ -598,11 +607,15 @@ function CrmCockpitHero({ overview, loading }: { overview: AdminCrmOverview | nu
           <CurrencyChip currency="KRW" tone="dark" />
         </div>
         <p className="mt-2 text-[28px] font-bold leading-none tracking-[-0.03em]">
-          {loadingValue ?? formatKRWAbbrev(revenue?.deliveryTotalAmount)}
+          {pending ? <ValueSkeleton className="h-7 w-32 bg-white/15" /> : formatKRWAbbrev(revenue?.deliveryTotalAmount)}
         </p>
         <p className="mt-1.5 text-[11.5px] opacity-75">
-          견적 {loadingValue ?? formatKRWAbbrev(revenue?.acceptedQuoteAmount)} · 계약{" "}
-          {loadingValue ?? formatKRWAbbrev(revenue?.contractedAmount)}
+          견적 {pending ? <ValueSkeleton className="h-3 w-10 bg-white/15" /> : formatKRWAbbrev(revenue?.acceptedQuoteAmount)} · 계약{" "}
+          {pending ? <ValueSkeleton className="h-3 w-10 bg-white/15" /> : formatKRWAbbrev(revenue?.contractedAmount)}
+        </p>
+        {/* 산정 기준 캡션(CRM-6) — 여기 '확정'은 V2 딜리버리 인식, 시트 '확정 표시'(¥)와 다른 기준 */}
+        <p className="mt-1 text-[10px] leading-relaxed text-white/55">
+          V2 딜리버리(출고) 인식 합계 · 시트 &lsquo;확정 표시&rsquo;(¥)와 다른 기준
         </p>
       </div>
 
@@ -616,10 +629,13 @@ function CrmCockpitHero({ overview, loading }: { overview: AdminCrmOverview | nu
           <CurrencyChip currency="USD" />
         </div>
         <p className="mt-2 text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]">
-          {loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
+          {pending ? <ValueSkeleton className="h-7 w-28" /> : formatUSD(neoKpis?.opportunityAmount)}
         </p>
         <p className="mt-1.5 text-[11.5px] text-[#1a1a1a]/45">
-          이번 달 {loadingValue ?? formatNumber(neoKpis?.opportunityCountMonth)}건 · USD 원천
+          이번 달 {pending ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(neoKpis?.opportunityCountMonth)}건
+        </p>
+        <p className="mt-1 text-[10px] leading-relaxed text-[#1a1a1a]/35">
+          Neo CRM 오더(Opportunity) 합계 · 시트 &lsquo;확정 임박&rsquo;(¥)과 다른 기준
         </p>
       </div>
 
@@ -633,10 +649,13 @@ function CrmCockpitHero({ overview, loading }: { overview: AdminCrmOverview | nu
           <CurrencyChip currency="CNY" />
         </div>
         <p className="mt-2 text-[28px] font-bold leading-none tracking-[-0.03em] text-[#084734]">
-          {loadingValue ?? formatCNY(neoKpis?.salesAmountMonth)}
+          {pending ? <ValueSkeleton className="h-7 w-28" /> : formatCNY(neoKpis?.salesAmountMonth)}
         </p>
         <p className="mt-1.5 text-[11.5px] text-[#1a1a1a]/45">
-          수금 {loadingValue ?? formatCNY(neoKpis?.collectionAmountMonth)} · NEO 원천
+          수금 {pending ? <ValueSkeleton className="h-3 w-10" /> : formatCNY(neoKpis?.collectionAmountMonth)}
+        </p>
+        <p className="mt-1 text-[10px] leading-relaxed text-[#1a1a1a]/35">
+          Neo CRM 동기화 완료분 합계 · 이번 달 기준
         </p>
       </div>
 
@@ -655,12 +674,19 @@ function CrmCockpitHero({ overview, loading }: { overview: AdminCrmOverview | nu
           <CurrencyChip currency="KRW" />
         </div>
         <p className={`mt-2 text-[28px] font-bold leading-none tracking-[-0.03em] ${hasRisk ? "text-[#B85C33]" : "text-[#111110]"}`}>
-          {loadingValue ?? formatNumber(riskCount)}
-          <span className="ml-1 text-[15px] font-bold">곳</span>
+          {pending ? (
+            <ValueSkeleton className="h-7 w-14" />
+          ) : (
+            <>
+              {formatNumber(riskCount)}
+              <span className="ml-1 text-[15px] font-bold">곳</span>
+            </>
+          )}
         </p>
         <p className="mt-1.5 text-[11.5px] text-[#1a1a1a]/45">
-          미수 합계 {loadingValue ?? formatKRWAbbrev(revenue?.outstandingAmount)} · Deals에서 처리
+          미수 합계 {pending ? <ValueSkeleton className="h-3 w-10" /> : formatKRWAbbrev(revenue?.outstandingAmount)} · Deals에서 처리
         </p>
+        <p className="mt-1 text-[10px] leading-relaxed text-[#1a1a1a]/35">V2 계약·수납 대비 미수 거래 수 · 자체 집계 ₩</p>
       </Link>
     </div>
   )
@@ -893,7 +919,11 @@ function CrmOperationsDashboard({
   const logs = overview?.business.customerLogs.recent ?? []
   const businessWarning = error ?? overview?.business.error ?? overview?.business.warning ?? null
   const neoSyncWarning = neoCrm?.error ?? overview?.externalSnapshots.error ?? null
-  const loadingValue = loading && !overview ? "..." : null
+  // 콜드 로드 — '...' 텍스트 대신 자리 크기별 스켈레톤(CRM-5). loadingText는 문자열 보간(hint) 전용.
+  const pending = loading && !overview
+  const loadingValue = pending ? <ValueSkeleton /> : null
+  const loadingInline = pending ? <ValueSkeleton className="h-3 w-12" /> : null
+  const loadingText = pending ? "—" : null
 
   return (
     <>
@@ -924,7 +954,7 @@ function CrmOperationsDashboard({
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em]">인식 매출</p>
               </div>
               <p className="mt-2 text-4xl font-bold tracking-[-0.045em] text-[#084734] sm:text-[42px]">
-                {loadingValue ?? formatKRWAbbrev(revenue?.deliveryTotalAmount)}
+                {pending ? <ValueSkeleton className="h-9 w-36" /> : formatKRWAbbrev(revenue?.deliveryTotalAmount)}
               </p>
               {/* 오더는 거의 확정 매출 — Delivery와 같은 급의 서브 히어로 (USD 네이티브) */}
               <div className="mt-4 border-t border-[#084734]/10 pt-3">
@@ -934,24 +964,24 @@ function CrmOperationsDashboard({
                 </div>
                 <p className="mt-1.5 flex flex-wrap items-end gap-x-2 gap-y-1">
                   <span className="text-3xl font-bold tracking-[-0.04em] text-[#111110]">
-                    {loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
+                    {pending ? <ValueSkeleton className="h-8 w-28" /> : formatUSD(neoKpis?.opportunityAmount)}
                   </span>
                   <span className="text-[12px] text-[#1a1a1a]/45">
-                    이번 달 {loadingValue ?? formatNumber(neoKpis?.opportunityCountMonth)}건
+                    이번 달 {loadingInline ?? formatNumber(neoKpis?.opportunityCountMonth)}건
                   </span>
                 </p>
               </div>
               <div className="mt-3 grid gap-2 text-[12px] text-[#1a1a1a]/45 sm:grid-cols-2">
-                <span>견적 {loadingValue ?? formatKRWAbbrev(revenue?.acceptedQuoteAmount)}</span>
-                <span>동기화 매출 {loadingValue ?? formatCNY(neoKpis?.salesAmountMonth)}</span>
-                <span>확정 임박 {loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}</span>
-                <span>계약 {loadingValue ?? formatKRWAbbrev(revenue?.contractedAmount)}</span>
-                <span>인식 매출 {loadingValue ?? formatKRWAbbrev(revenue?.deliveryTotalAmount)}</span>
-                <span>동기화 수금 {loadingValue ?? formatCNY(neoKpis?.collectionAmountMonth)}</span>
+                <span>견적 {loadingInline ?? formatKRWAbbrev(revenue?.acceptedQuoteAmount)}</span>
+                <span>동기화 매출 {loadingInline ?? formatCNY(neoKpis?.salesAmountMonth)}</span>
+                <span>확정 임박 {loadingInline ?? formatUSD(neoKpis?.opportunityAmount)}</span>
+                <span>계약 {loadingInline ?? formatKRWAbbrev(revenue?.contractedAmount)}</span>
+                <span>인식 매출 {loadingInline ?? formatKRWAbbrev(revenue?.deliveryTotalAmount)}</span>
+                <span>동기화 수금 {loadingInline ?? formatCNY(neoKpis?.collectionAmountMonth)}</span>
                 <span className={(revenue?.outstandingAmount ?? 0) > 0 ? "font-semibold text-[#B85C33]" : ""}>
-                  미수 {loadingValue ?? formatKRWAbbrev(revenue?.outstandingAmount)}
+                  미수 {loadingInline ?? formatKRWAbbrev(revenue?.outstandingAmount)}
                 </span>
-                <span>수납 {loadingValue ?? formatKRWAbbrev(revenue?.paidAmount)}</span>
+                <span>수납 {loadingInline ?? formatKRWAbbrev(revenue?.paidAmount)}</span>
               </div>
             </div>
 
@@ -960,39 +990,39 @@ function CrmOperationsDashboard({
                 icon={<FileText className="h-4 w-4" />}
                 label="견적"
                 value={loadingValue ?? formatKRWAbbrev(revenue?.acceptedQuoteAmount)}
-                hint={`견적서 ${loadingValue ?? formatNumber(kpis?.quoteDocumentCount)}건`}
+                hint={`견적서 ${loadingText ?? formatNumber(kpis?.quoteDocumentCount)}건`}
               />
               <CrmMetricTile
                 icon={<BarChart3 className="h-4 w-4" />}
                 label="오더 (확정 임박)"
                 value={loadingValue ?? formatUSD(neoKpis?.opportunityAmount)}
-                hint={`외부 CRM ${loadingValue ?? formatNumber(neoKpis?.opportunityCountMonth)}건 · USD`}
+                hint={`외부 CRM ${loadingText ?? formatNumber(neoKpis?.opportunityCountMonth)}건 · USD`}
                 tone="text-[#084734]"
               />
               <CrmMetricTile
                 icon={<TrendingUp className="h-4 w-4" />}
                 label="동기화 매출"
                 value={loadingValue ?? formatCNY(neoKpis?.salesAmountMonth)}
-                hint={`본사 CRM ${loadingValue ?? formatNumber(neoKpis?.salesCountMonth)}건 · actual`}
+                hint={`본사 CRM ${loadingText ?? formatNumber(neoKpis?.salesCountMonth)}건 · actual`}
                 tone="text-[#084734]"
               />
               <CrmMetricTile
                 icon={<ReceiptText className="h-4 w-4" />}
                 label="동기화 수금"
                 value={loadingValue ?? formatCNY(neoKpis?.collectionAmountMonth)}
-                hint={`외부 CRM ${loadingValue ?? formatNumber(neoKpis?.collectionCountMonth)}건 · current month`}
+                hint={`외부 CRM ${loadingText ?? formatNumber(neoKpis?.collectionCountMonth)}건 · current month`}
               />
               <CrmMetricTile
                 icon={<Building2 className="h-4 w-4" />}
                 label="동기화 고객"
                 value={loadingValue ?? formatNumber(neoKpis?.accountCount)}
-                hint={`이번 달 활성 ${loadingValue ?? formatNumber(neoKpis?.activeAccountCountMonth)} · 외부 CRM 원천`}
+                hint={`이번 달 활성 ${loadingText ?? formatNumber(neoKpis?.activeAccountCountMonth)} · 외부 CRM 원천`}
               />
               <CrmMetricTile
                 icon={<Handshake className="h-4 w-4" />}
                 label="계약"
                 value={loadingValue ?? formatKRWAbbrev(revenue?.contractedAmount)}
-                hint={`활성 거래 ${loadingValue ?? formatNumber(kpis?.activeDealCount)}건`}
+                hint={`활성 거래 ${loadingText ?? formatNumber(kpis?.activeDealCount)}건`}
               />
               <CrmMetricTile
                 icon={<Building2 className="h-4 w-4" />}
@@ -1030,13 +1060,13 @@ function CrmOperationsDashboard({
               <span className="text-[12px] text-[#1a1a1a]/45">
                 미수 거래{" "}
                 <b className={`text-[15px] font-bold ${(kpis?.paymentRiskCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
-                  {loadingValue ?? formatNumber(kpis?.paymentRiskCount)}
+                  {loadingInline ?? formatNumber(kpis?.paymentRiskCount)}
                 </b>
               </span>
               <span className="text-[12px] text-[#1a1a1a]/45">
                 미수 합계{" "}
                 <b className={`text-[15px] font-bold ${(revenue?.outstandingAmount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
-                  {loadingValue ?? formatKRWAbbrev(revenue?.outstandingAmount)}
+                  {loadingInline ?? formatKRWAbbrev(revenue?.outstandingAmount)}
                 </b>
               </span>
             </div>
@@ -1063,9 +1093,18 @@ function CrmOperationsDashboard({
             </Link>
           </div>
           {logs.length === 0 ? (
-            <p className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#1a1a1a]/30">
-              {loading && !overview ? "불러오는 중..." : "최근 고객 로그가 없습니다."}
-            </p>
+            pending ? (
+              // 콜드 로드 — 로그 행 레이아웃과 일치하는 스켈레톤(CRM-5)
+              <div className="space-y-2">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="h-9 animate-pulse rounded-xl bg-[#fafaf8]" />
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#1a1a1a]/30">
+                최근 고객 로그가 없습니다.
+              </p>
+            )
           ) : (
             <div className="divide-y divide-[#f0f0ec]">
               {logs.slice(0, 6).map((log) => (
@@ -1352,7 +1391,7 @@ export default function CrmPage() {
               <span className="text-[12px] font-medium text-[#1a1a1a]/55">미확인 유입</span>
             </div>
             <p className={`mt-2 text-[26px] font-bold leading-none ${(leadKpis?.unconfirmedCount ?? 0) > 0 ? "text-[#8D6C1F]" : "text-[#111110]"}`}>
-              {leadKpisLoading && !leadKpis ? "..." : formatNumber(leadKpis?.unconfirmedCount)}
+              {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-6 w-12" /> : formatNumber(leadKpis?.unconfirmedCount)}
             </p>
             <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">
               공개 폼(문의·데모·뉴스레터) · 확인 전
@@ -1370,10 +1409,10 @@ export default function CrmPage() {
               <span className="text-[12px] font-medium text-[#1a1a1a]/55">미응답 리드</span>
             </div>
             <p className={`mt-2 text-[26px] font-bold leading-none ${(leadKpis?.unrespondedCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
-              {leadKpisLoading && !leadKpis ? "..." : formatNumber(leadKpis?.unrespondedCount)}
+              {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-6 w-12" /> : formatNumber(leadKpis?.unrespondedCount)}
             </p>
             <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">
-              48h 이상 {leadKpisLoading && !leadKpis ? "..." : formatNumber(leadKpis?.unresponded48hCount)}건
+              48h 이상 {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(leadKpis?.unresponded48hCount)}건
             </p>
           </Link>
 
@@ -1388,10 +1427,10 @@ export default function CrmPage() {
               <span className="text-[12px] font-medium text-[#1a1a1a]/55">오버듀 팔로업</span>
             </div>
             <p className={`mt-2 text-[26px] font-bold leading-none ${(leadKpis?.overdueFollowUpCount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}`}>
-              {leadKpisLoading && !leadKpis ? "..." : formatNumber(leadKpis?.overdueFollowUpCount)}
+              {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-6 w-12" /> : formatNumber(leadKpis?.overdueFollowUpCount)}
             </p>
             <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">
-              오늘 예정 {leadKpisLoading && !leadKpis ? "..." : formatNumber(leadKpis?.todayFollowUpCount)}건
+              오늘 예정 {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(leadKpis?.todayFollowUpCount)}건
             </p>
           </Link>
 
@@ -1406,7 +1445,12 @@ export default function CrmPage() {
               <span className="text-[12px] font-medium text-[#1a1a1a]/55">이번 주 설치·방문</span>
             </div>
             <p className="mt-2 text-[26px] font-bold leading-none text-[#084734]">
-              {crmOverview?.business.upcomingThisWeek.count ?? 0}
+              {/* 0 플래시 금지(CRM-5) — overview 도착 전엔 스켈레톤 */}
+              {crmOverviewLoading && !crmOverview ? (
+                <ValueSkeleton className="h-6 w-12" />
+              ) : (
+                crmOverview?.business.upcomingThisWeek.count ?? 0
+              )}
             </p>
             <p className="mt-1.5 truncate text-[11px] text-[#1a1a1a]/40">
               {crmOverview?.business.upcomingThisWeek.items[0]?.customerName
@@ -1426,7 +1470,7 @@ export default function CrmPage() {
               <span className="text-[12px] font-medium text-[#1a1a1a]/55">전환 고객</span>
             </div>
             <p className="mt-2 text-[26px] font-bold leading-none text-[#084734]">
-              {leadKpisLoading && !leadKpis ? "..." : formatNumber(leadKpis?.byStatus.converted)}
+              {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-6 w-12" /> : formatNumber(leadKpis?.byStatus.converted)}
             </p>
             <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">누적 어카운트 전환</p>
           </Link>
@@ -1496,9 +1540,18 @@ export default function CrmPage() {
               <p className="text-[11px] font-bold uppercase tracking-[0.08em]">설치·방문 일정</p>
             </div>
             {(crmOverview?.business.upcomingThisWeek.items.length ?? 0) === 0 ? (
-              <p className="rounded-xl bg-[#fafaf8] px-3 py-4 text-center text-[12px] text-[#1a1a1a]/35">
-                {crmOverviewLoading && !crmOverview ? "불러오는 중..." : "예정된 설치·방문이 없습니다."}
-              </p>
+              crmOverviewLoading && !crmOverview ? (
+                // 콜드 로드 — 일정 칩 레이아웃과 일치하는 스켈레톤(CRM-5)
+                <div className="space-y-2">
+                  {[0, 1].map((i) => (
+                    <div key={i} className="h-9 animate-pulse rounded-xl bg-[#fafaf8]" />
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-xl bg-[#fafaf8] px-3 py-4 text-center text-[12px] text-[#1a1a1a]/35">
+                  예정된 설치·방문이 없습니다.
+                </p>
+              )
             ) : (
               <ul className="space-y-2">
                 {crmOverview?.business.upcomingThisWeek.items.slice(0, 3).map((item) => {
@@ -1592,13 +1645,14 @@ export default function CrmPage() {
         error={crmOverviewError}
       />
 
-      {/* 심화 — 최상위 탭에서 내린 분석/백오피스 화면으로의 경량 진입(딥링크 보존) */}
+      {/* 심화 — 최상위 탭에서 내린 분석/백오피스 화면으로의 경량 진입(딥링크 보존, 사이드바 '검수' 탭과 병행) */}
       <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px]">
         <span className="text-[#1a1a1a]/35">심화 보기</span>
         {[
+          { href: "/admin/crm/matching", label: "데이터 매칭 인박스" },
+          { href: "/admin/crm/deals/rev-sheet", label: "매출시트" },
           { href: "/admin/crm/insights", label: "인사이트 분석" },
           { href: "/admin/crm/deals", label: "돈흐름 상세" },
-          { href: "/admin/crm/matching", label: "데이터 점검" },
         ].map((link) => (
           <Link
             key={link.href}

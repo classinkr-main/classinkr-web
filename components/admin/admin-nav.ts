@@ -104,9 +104,9 @@ export interface CrmChildNavItem {
 }
 
 // CRM 진입 시 사이드바에서 펼치는 하위 섹션(= 기존 상단 탭의 이전). 활성 판별은 경로 prefix.
-// CRM 핵심 3탭 — 현황(후속조치+분석+시각화) · 고객(DB·360·연락입력·라벨링) · 기록(전체 로그).
-// 돈흐름/인사이트/연동은 어드민(딜보드·견적·Analytics)과 겹치거나 백오피스라 최상위에서 내림.
-// 라우트(deals/insights/matching/revenue/partners)는 보존 — 딥링크·북마크는 현황 탭 active로 귀속.
+// CRM 핵심 탭 — 현황(후속조치+분석+시각화) · 고객(DB·360·연락입력·라벨링) · 기록(전체 로그) · 참석자 입력
+// · 검수(매칭 인박스·인사이트·매출시트 = 백오피스 표면의 상설 진입점, top-nav 재팽창 없이 하위탭으로만).
+// 돈흐름(deals)은 어드민(딜보드·견적)과 겹쳐 최상위에서 내림 — 라우트는 보존, active는 현황 탭 귀속.
 export const CRM_CHILD_NAV: CrmChildNavItem[] = [
   {
     href: "/admin/crm",
@@ -114,10 +114,8 @@ export const CRM_CHILD_NAV: CrmChildNavItem[] = [
     keywords: "crm 현황 후속조치 인사이트 딜 매출",
     match: (p) =>
       p === "/admin/crm" ||
-      p.startsWith("/admin/crm/insights") ||
-      p.startsWith("/admin/crm/deals") ||
+      (p.startsWith("/admin/crm/deals") && !p.startsWith("/admin/crm/deals/rev-sheet")) ||
       p.startsWith("/admin/crm/revenue") ||
-      p.startsWith("/admin/crm/matching") ||
       (p.startsWith("/admin/crm/partners") && !p.startsWith("/admin/crm/partners/customers")),
   },
   {
@@ -137,5 +135,15 @@ export const CRM_CHILD_NAV: CrmChildNavItem[] = [
     label: "참석자 입력",
     keywords: "참석자 입력 캡처 capture 행사 명함",
     match: (p) => p.startsWith("/admin/crm/capture"),
+  },
+  // 검수·백오피스 — 매칭 인박스가 홈. 강등 표면(매칭/인사이트/매출시트)의 상설 도달 경로(CRM-4).
+  {
+    href: "/admin/crm/matching",
+    label: "검수",
+    keywords: "검수 매칭 인박스 데이터 점검 matching 인사이트 insights 매출시트 rev sheet 백오피스",
+    match: (p) =>
+      p.startsWith("/admin/crm/matching") ||
+      p.startsWith("/admin/crm/insights") ||
+      p.startsWith("/admin/crm/deals/rev-sheet"),
   },
 ]
