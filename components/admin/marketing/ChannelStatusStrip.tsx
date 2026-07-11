@@ -7,10 +7,14 @@
  * 이메일 프로바이더를 컴팩트 카드 행으로 보여준다. 60초 stale 허용.
  * 백엔드 트랙이 아직 배포 전이면 조용히 "확인 불가" 상태로 강등한다.
  *
+ * 캐시: adminFetchJsonCached(동일 URL·TTL 60s)로 조회한다. MarketingHub도 같은
+ * 엔드포인트를 같은 캐시 키로 조회하므로 초기 동시 마운트 시 in-flight dedupe로
+ * 왕복 1회에 수렴한다(CMP-2). 로컬 TTL 가드는 admin-client 캐시가 대신하므로 제거.
+ *
  * DESIGN.md: 넓은 면은 뉴트럴, 그린은 액센트로만, 상태색은 뱃지/텍스트 톤.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -21,7 +25,7 @@ import {
   Phone,
   RefreshCw,
 } from "lucide-react"
-import { adminFetch } from "@/lib/admin-client"
+import { adminFetchJsonCached } from "@/lib/admin-client"
 import {
   unwrapMessagingData,
   type MessagingStatus,
@@ -56,33 +60,28 @@ function emailProviderLabel(provider: MessagingStatus["emailProvider"]): {
 export default function ChannelStatusStrip() {
   const [state, setState] = useState<LoadState>({ kind: "loading" })
   const [refreshing, setRefreshing] = useState(false)
-  const lastFetchedAt = useRef(0)
 
   const load = useCallback(async (force = false) => {
-    if (!force && Date.now() - lastFetchedAt.current < STATUS_TTL_MS) return
     setRefreshing(true)
     try {
-      const res = await adminFetch("/api/admin/messaging/status")
-      if (!res.ok) {
-        setState({
-          kind: "unavailable",
-          message:
-            res.status === 404
-              ? "발송 상태 API가 아직 준비되지 않았습니다."
-              : `상태를 불러오지 못했습니다. (${res.status})`,
-        })
-        return
-      }
-      const json = await res.json().catch(() => null)
+      const json = await adminFetchJsonCached<unknown>("/api/admin/messaging/status", undefined, {
+        ttlMs: STATUS_TTL_MS,
+        force,
+      })
       const status = unwrapMessagingData<MessagingStatus>(json)
       if (!status || status.provider !== "solapi") {
         setState({ kind: "unavailable", message: "발송 상태 응답 형식을 확인해주세요." })
         return
       }
-      lastFetchedAt.current = Date.now()
       setState({ kind: "ready", status })
-    } catch {
-      setState({ kind: "unavailable", message: "발송 상태를 불러오지 못했습니다." })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : ""
+      setState({
+        kind: "unavailable",
+        message: message.includes("404")
+          ? "발송 상태 API가 아직 준비되지 않았습니다."
+          : "발송 상태를 불러오지 못했습니다.",
+      })
     } finally {
       setRefreshing(false)
     }

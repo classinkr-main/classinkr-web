@@ -2200,15 +2200,16 @@ export default function AdminCampaignsPage() {
         />
         <KpiCard
           icon={<TrendingUp className="w-3.5 h-3.5" />}
-          label="총 매출"
+          label="행사 귀속 매출(입력 기준)"
           value={loading ? "..." : won(aggregate.totalRevenue)}
+          hint="수기 입력 추정 · 장부 확정매출 아님 · KRW"
           tone="success"
         />
         <KpiCard
           icon={<Target className="w-3.5 h-3.5" />}
           label="평균 CPL"
           value={loading ? "..." : aggregate.avgCpl != null ? won(aggregate.avgCpl) : "—"}
-          hint={`총 리드 ${KRW.format(aggregate.totalLeads)}`}
+          hint={`총 리드 ${KRW.format(aggregate.totalLeads)}건 · 선택 기간 행사 기준`}
         />
         <KpiCard
           icon={<Users className="w-3.5 h-3.5" />}
@@ -2220,6 +2221,7 @@ export default function AdminCampaignsPage() {
           icon={<TrendingUp className="w-3.5 h-3.5" />}
           label="누적 ROI"
           value={loading ? "..." : aggregate.overallRoi != null ? pct(aggregate.overallRoi) : "—"}
+          hint="선택 기간 행사 매출·광고비 기준"
           tone={aggregate.overallRoi != null && aggregate.overallRoi >= 0 ? "success" : "warn"}
         />
       </div>

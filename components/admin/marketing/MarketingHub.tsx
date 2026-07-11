@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation"
 import {
   AlertCircle,
   ArrowRight,
-  BarChart2,
   CheckCircle2,
   ChevronRight,
   History,
@@ -31,20 +30,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { adminFetch } from "@/lib/admin-client"
+import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { StatTile } from "@/components/admin/viz"
 import SubscriberTable from "@/components/admin/marketing/SubscriberTable"
 import SubscriberForm from "@/components/admin/marketing/SubscriberForm"
 import EmailComposer from "@/components/admin/marketing/EmailComposer"
 import CampaignHistory from "@/components/admin/marketing/CampaignHistory"
-import MarketingDashboard from "@/components/admin/marketing/MarketingDashboard"
 import ChannelStatusStrip from "@/components/admin/marketing/ChannelStatusStrip"
 import KakaoComposer from "@/components/admin/marketing/KakaoComposer"
 import MessageLogTable from "@/components/admin/marketing/MessageLogTable"
 import { unwrapMessagingData, type MessagingStatus } from "@/lib/messaging-client-types"
 import type { EmailCampaign, EmailDraft, SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
 
-type Tab = "subscribers" | "compose" | "history" | "automation" | "dashboard"
+// 발송 상태 캐시 TTL — ChannelStatusStrip과 동일 엔드포인트(같은 URL 캐시 키)를 공유해
+// 초기 마운트 시 두 컴포넌트의 fetch가 왕복 1회로 수렴한다(CMP-2).
+const MESSAGING_STATUS_CACHE_TTL_MS = 60_000
+
+type Tab = "subscribers" | "compose" | "history" | "automation"
 type Channel = "email" | "sms" | "kakao"
 type SubscriberStatusFilter = "all" | Subscriber["status"]
 type SubscriberSourceFilter = "all" | Subscriber["source"]
@@ -382,24 +384,21 @@ export default function MarketingHub() {
 
   const fetchMessagingStatus = useCallback(async () => {
     try {
-      const res = await adminFetch("/api/admin/messaging/status")
-      if (res.status === 401) {
-        handleUnauthorized()
-        return
-      }
-      if (res.ok) {
-        const json = await res.json().catch(() => null)
-        const status = unwrapMessagingData<MessagingStatus>(json)
-        if (status && status.provider === "solapi") {
-          setMessagingStatus(status)
-        }
+      // ChannelStatusStrip도 같은 URL을 adminFetchJsonCached로 조회한다 — 캐시 키가
+      // 같아 동시 마운트 시 in-flight dedupe로 왕복 1회에 수렴한다(CMP-2).
+      const json = await adminFetchJsonCached<unknown>("/api/admin/messaging/status", undefined, {
+        ttlMs: MESSAGING_STATUS_CACHE_TTL_MS,
+      })
+      const status = unwrapMessagingData<MessagingStatus>(json)
+      if (status && status.provider === "solapi") {
+        setMessagingStatus(status)
       }
     } catch {
-      // 백엔드 트랙 미배포 — 채널 작성기는 status 없이도 안전하게 강등된다.
+      // 백엔드 트랙 미배포/401 등 — 채널 작성기는 status 없이도 안전하게 강등된다(401은 adminFetch가 전역 리다이렉트 처리).
     } finally {
       setMessagingStatusLoaded(true)
     }
-  }, [handleUnauthorized])
+  }, [])
 
   useEffect(() => {
     void fetchSubscribers()
@@ -412,6 +411,15 @@ export default function MarketingHub() {
   const sentCount = campaigns.filter((c) => c.status === "sent").length
   const draftCount = campaigns.filter((c) => c.status === "draft").length
   const failedCount = campaigns.filter((c) => c.status === "failed").length
+
+  // 이번달 신규 구독자 — 옛 '현황 대시보드' 서브탭(/api/admin/marketing/stats)의 유일 고유
+  // 수치였던 항목을 이미 로드된 subscribers에서 동일 기준(월초 이후 createdAt)으로 파생해
+  // 이관한다(추가 fetch 없이 CMP-1 소비). 서버 산식(app/api/admin/marketing/stats/route.ts)과 동일.
+  const newSubscribersThisMonth = useMemo(() => {
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    return subscribers.filter((s) => s.createdAt && s.createdAt >= startOfMonth).length
+  }, [subscribers])
 
   const latestCampaign = useMemo(
     () => [...campaigns].sort((a, b) => safeTime(b.sentAt ?? b.createdAt) - safeTime(a.sentAt ?? a.createdAt))[0],
@@ -1039,7 +1047,7 @@ export default function MarketingHub() {
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <StatCard icon={<Users className="h-4 w-4" />} label="전체 구독자" value={subscribers.length} hint="수동 추가 포함" />
-            <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="활성 구독자" value={activeCount} hint="발송 대상" tone="success" />
+            <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="활성 구독자" value={activeCount} hint={`발송 대상 · 이번달 신규 ${newSubscribersThisMonth}명`} tone="success" />
             <StatCard icon={<XCircle className="h-4 w-4" />} label="수신거부" value={unsubscribedCount} hint="보존 중인 상태" tone="warning" />
             <StatCard icon={<Send className="h-4 w-4" />} label="발송 캠페인" value={campaigns.length} hint={`발송 ${sentCount} · 초안 ${draftCount}`} />
             <StatCard icon={<AlertCircle className="h-4 w-4" />} label="실패 캠페인" value={failedCount} hint="즉시 확인 필요" tone="danger" />
@@ -1143,13 +1151,6 @@ export default function MarketingHub() {
                   label="자동화"
                   desc="세그먼트 기반 자동 발송 규칙"
                   onClick={() => setActiveTab("automation")}
-                />
-                <TabButton
-                  active={activeTab === "dashboard"}
-                  icon={<BarChart2 className="h-4 w-4" />}
-                  label="현황 대시보드"
-                  desc="구독자·캠페인·자동화 한눈에"
-                  onClick={() => setActiveTab("dashboard")}
                 />
               </div>
             </div>
@@ -1823,9 +1824,6 @@ export default function MarketingHub() {
           </div>
         )}
 
-        {activeTab === "dashboard" && (
-          <MarketingDashboard />
-        )}
         </div>
       </div>
 
