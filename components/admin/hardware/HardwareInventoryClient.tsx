@@ -2428,7 +2428,13 @@ export default function HardwareInventoryClient() {
       memo,
       lotNo: lotNo.trim(),
       unitPrice: parseOptionalNumber(unitPrice),
-      amountUsd: parseOptionalNumber(amountUsd),
+      // 출고의 판매 금액(USD) 필드는 단건·비샘플에서만 노출된다 — 숨겨진 상태(샘플 전환·배치)에
+      // 남은 입력값이 조용히 저장되지 않도록 비노출 케이스는 null 강제(보이는 값=저장 값).
+      // 입고 원가 경로(amountUsd 공유 상태)는 기존 그대로.
+      amountUsd:
+        movementType === "outbound" && (outboundMode === "sample" || sheetMode !== "single")
+          ? null
+          : parseOptionalNumber(amountUsd),
       amountCny: parseOptionalNumber(amountCny),
       storageLocation: storageLocation.trim(),
       importer: importer.trim(),
@@ -3941,6 +3947,32 @@ export default function HardwareInventoryClient() {
                             className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#615D59] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
                           />
                         </label>
+                      </div>
+                    )}
+
+                    {/* 출고 매출(USD) 수동 캡처 — money-mesh §2.2(운영 결정: 입력 통화 USD).
+                        inbound 상세 블록과 동형. 대사 뷰(v_hardware_rev_matches)가 SUM(amount_usd)를
+                        병기 집계하므로 입력만 열면 자동 반영된다. 샘플 대여는 매출이 아니라 제외,
+                        작업건(배치) 경로는 범위 밖 — 단건 기록·수정에서만 노출. */}
+                    {movementType === "outbound" && outboundMode !== "sample" && sheetMode === "single" && (
+                      <div className="space-y-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
+                        <p className="text-[11px] font-bold text-[#615D59]">판매 금액 (시트 필드)</p>
+                        <label className="block">
+                          <span className="text-[11px] font-bold text-[#615D59]">금액 (USD)</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            inputMode="decimal"
+                            value={amountUsd}
+                            onChange={(event) => setAmountUsd(event.target.value)}
+                            placeholder="예: 12000"
+                            className="mt-1 h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[13px] text-[#111110] outline-none placeholder:text-[#A39E98] focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15"
+                          />
+                        </label>
+                        <p className="text-[11px] leading-relaxed text-[#A39E98]">
+                          달러(USD) 금액만 입력 — ¥(CNY)와 혼동 금지. 참고 병기 전용이며 REV 장부 매출(¥ SSOT)에는 합산되지 않습니다.
+                        </p>
                       </div>
                     )}
 
