@@ -631,13 +631,15 @@ function KpiTile({ icon, label, value, hint, tone = "text-[#111110]" }: { icon: 
 export default function NeoCrmCustomersClient() {
   const searchParams = useSearchParams()
   const deepLinkedAccountId = searchParams.get("account")?.trim() ?? ""
+  // ?expiring=1 딥링크 — Overview 리뉴얼 타일에서 '만료 임박만' 필터가 켜진 채 착지한다.
+  const deepLinkedExpiring = searchParams.get("expiring") === "1"
   const [data, setData] = useState<NeoCrmCustomerList | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState("")
   const [ownerFilter, setOwnerFilter] = useState<string>("all")
   const [sortKey, setSortKey] = useState<SortKey>("balance")
-  const [expiringOnly, setExpiringOnly] = useState(false)
+  const [expiringOnly, setExpiringOnly] = useState(deepLinkedExpiring)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
   const [dismissedDeepLinkedAccountId, setDismissedDeepLinkedAccountId] = useState<string | null>(null)
