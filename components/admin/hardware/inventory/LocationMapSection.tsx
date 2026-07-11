@@ -55,11 +55,13 @@ export default function LocationMapSection({
           </div>
         </div>
         <div className="overflow-x-auto">
-          <div className="min-w-[700px]">
+          {/* 모바일(<sm)은 카드형 랩(가로 스크롤 강제 해제), sm 이상은 기존 밀도 매트릭스(min-w 유지).
+              minmax(0,1fr)+min-w-0로 우측 삐져나옴(feedback_css_grid_overflow)을 차단한다. */}
+          <div className="min-w-0 sm:min-w-[700px]">
             {[...locationMap.featuredRows, ...(locationMapExpanded ? locationMap.restRows : [])].map((row) => (
               <div
                 key={row.itemId}
-                className="grid grid-cols-[200px_minmax(0,1fr)_150px] items-center gap-4 border-t border-[rgba(0,0,0,0.06)] px-5 py-3.5 first:border-t-0"
+                className="grid grid-cols-1 gap-3 border-t border-[rgba(0,0,0,0.06)] px-5 py-3.5 first:border-t-0 sm:grid-cols-[200px_minmax(0,1fr)_150px] sm:items-center sm:gap-4"
               >
                 <div className="min-w-0">
                   <p title={row.product} className="truncate text-[13px] font-bold text-[#111110]">{row.product}</p>
@@ -67,7 +69,7 @@ export default function LocationMapSection({
                     <p className="mt-1 text-[11px] tabular-nums text-[#615D59]">샘플 총 {formatNumber(row.sampleTotal)}대</p>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-5">
+                <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-5">
                   {row.cells.map((cell) => (
                     <div key={cell.label} className="min-w-0">
                       <div className="flex items-center justify-between gap-1 text-[11px]">
@@ -80,7 +82,7 @@ export default function LocationMapSection({
                     </div>
                   ))}
                 </div>
-                <div className="flex justify-end gap-1.5">
+                <div className="flex min-w-0 justify-start gap-1.5 sm:justify-end">
                   <QuickMoveButton kind="sale" product={row.product} onClick={() => prepareQuickEntry(row.itemId, "sale")} />
                   <QuickMoveButton kind="planned" product={row.product} onClick={() => prepareQuickEntry(row.itemId, "planned")} />
                   <QuickMoveButton kind="inbound" product={row.product} onClick={() => prepareQuickEntry(row.itemId, "inbound")} />

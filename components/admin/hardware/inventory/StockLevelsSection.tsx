@@ -8,6 +8,7 @@ import {
   formatDate,
   formatLotLabel,
   formatNumber,
+  MONO_META_CLASS,
   PaginationControls,
   QuickMoveButton,
   SectionHeader,
@@ -39,12 +40,19 @@ export default function StockLevelsSection({
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <SectionHeader
         title="현재 재고"
-        description="최소재고와 최근 출고량을 같이 보고 주문 시점을 판단합니다."
+        description="창고 = 실물 재고 · 가용 = 창고 − 예정. 최소재고와 최근 출고량을 같이 보고 주문 시점을 판단합니다."
         open={openSections.stock}
         onToggle={() => toggleSection("stock")}
         meta={
           <div className="text-right text-[11px] text-[#615D59]">
-            <p>마지막 이관 {data?.importRun?.finished_at ? formatDate(data.importRun.finished_at) : "없음"}</p>
+            <p>
+              마지막 이관{" "}
+              {data?.importRun?.finished_at ? (
+                <span className={MONO_META_CLASS}>{formatDate(data.importRun.finished_at)}</span>
+              ) : (
+                "없음"
+              )}
+            </p>
             <p className="mt-0.5 font-semibold">{formatNumber(stockPagination.totalItems)}개 품목</p>
           </div>
         }
@@ -55,10 +63,11 @@ export default function StockLevelsSection({
             <table className="min-w-[860px] w-full border-collapse text-left">
               <thead className="bg-[#F6F5F4] text-[11px] font-bold uppercase tracking-[0.05em] text-[#615D59]">
                 <tr>
+                  {/* 지표 1개=라벨 1개 — 카테고리 카드·위치 맵과 같은 어휘(창고/예정/가용)로 고정한다. 값 소스 불변. */}
                   <th scope="col" className="px-5 py-3">품목</th>
-                  <th scope="col" className="px-4 py-3 text-right">실제</th>
-                  <th scope="col" className="px-4 py-3 text-right">배송 예정</th>
-                  <th scope="col" className="px-4 py-3 text-right">예상</th>
+                  <th scope="col" className="px-4 py-3 text-right">창고</th>
+                  <th scope="col" className="px-4 py-3 text-right">예정</th>
+                  <th scope="col" className="px-4 py-3 text-right">가용</th>
                   <th scope="col" className="px-4 py-3 text-right">30일</th>
                   <th scope="col" className="px-4 py-3 text-right">빠른 처리</th>
                   <th scope="col" className="px-5 py-3 text-right">상태</th>
@@ -82,7 +91,7 @@ export default function StockLevelsSection({
                         {row.lotBalances.length > 0 && (
                           <div className="mt-1.5 flex flex-wrap gap-1">
                             {row.lotBalances.slice(0, 5).map((lot) => (
-                              <span key={lot.lot} className="rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[11px] font-semibold text-[#31302E]">
+                              <span key={lot.lot} className={`rounded bg-[#F6F5F4] px-1.5 py-0.5 text-[11px] font-semibold text-[#31302E] ${MONO_META_CLASS}`}>
                                 {formatLotLabel(lot.lot) ?? lot.lot} {formatNumber(lot.quantity)}
                               </span>
                             ))}
@@ -119,7 +128,7 @@ export default function StockLevelsSection({
                           {statusCopy(row)}
                         </span>
                         {row.daysUntilStockout != null && (
-                          <p className="mt-1.5 text-[11px] text-[#615D59]">예상 {row.daysUntilStockout}일</p>
+                          <p className="mt-1.5 text-[11px] text-[#615D59]">소진 예상 {row.daysUntilStockout}일</p>
                         )}
                       </td>
                     </tr>

@@ -7,6 +7,7 @@ import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
 import {
   formatDate,
   formatNumber,
+  MONO_META_CLASS,
   MOVEMENT_LABEL,
   MOVEMENT_TONE,
   PaginationControls,
@@ -116,7 +117,7 @@ export default function HistoryLogSection({
                 >
                   <span>
                     {soleLot ? (
-                      <span className="inline-flex items-center rounded bg-[#ECFDF5] px-1.5 py-0.5 text-[11px] font-bold text-[#084734]">{soleLot}</span>
+                      <span className={`inline-flex items-center rounded bg-[#ECFDF5] px-1.5 py-0.5 text-[11px] font-bold text-[#084734] ${MONO_META_CLASS}`}>{soleLot}</span>
                     ) : (
                       <span className="inline-flex items-center rounded bg-[#EDECEA] px-1.5 py-0.5 text-[11px] font-bold text-[#615D59]">{formatNumber(group.movements.length)}건</span>
                     )}
@@ -128,7 +129,7 @@ export default function HistoryLogSection({
                   <span className="min-w-0 text-[11px] tabular-nums text-[#615D59]">
                     {formatNumber(group.products.length)}품목 · 총 {formatNumber(group.totalQty)}대
                   </span>
-                  <span className="text-[11.5px] text-[#31302E]">{formatDate(group.date)}</span>
+                  <span className={`text-[11.5px] text-[#31302E] ${MONO_META_CLASS}`}>{formatDate(group.date)}</span>
                   <span title={group.owners.join(", ")} className="truncate text-[11.5px] text-[#31302E]">{group.owners.join(", ") || "-"}</span>
                   <span className="flex flex-wrap items-center gap-1">
                     {group.plannedQty > 0 ? (

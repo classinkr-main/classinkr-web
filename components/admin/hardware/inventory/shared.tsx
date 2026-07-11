@@ -224,6 +224,10 @@ export function isPlannedMovement(movement: HardwareMovement): boolean {
   return movement.movement_type === "outbound" && /예정|예약|대기|planned/i.test(movement.status ?? "")
 }
 
+// 기술 메타 전용 mono/tabular 유틸 토큰 — lot 코드·YYYY-MM-DD 날짜·'마지막 이관'·스냅샷 해시 같은
+// 원장 메타데이터에만 쓴다(본문은 sans 유지). 값·포맷은 불변, 시각 위계만 부여한다.
+export const MONO_META_CLASS = "font-mono tabular-nums tracking-[-0.01em]"
+
 // "FY24-25"는 H1~H8 물량번호 체계가 생기기 전 시트의 placeholder 값이다.
 // 그룹핑·검색은 원본 값을 그대로 쓰고, 배지 표시만 H-넘버링과 나란히 보이도록 "H0"으로 맞춘다.
 export function formatLotLabel(lot: string | null | undefined): string | null {

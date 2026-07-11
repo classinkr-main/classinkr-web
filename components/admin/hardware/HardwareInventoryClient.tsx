@@ -906,7 +906,7 @@ export default function HardwareInventoryClient() {
     // 창고발(판매·배송예정·창고 샘플 대여)은 예정 차감까지 반영한 가용을 본다.
     if (source === "창고" || (!source && movementType === "outbound")) {
       if (qty <= selectedStockRow.availableStock) return null
-      return `예상 가용 ${formatNumber(selectedStockRow.availableStock)}대를 ${formatNumber(qty - selectedStockRow.availableStock)}대 초과합니다. 저장은 가능하지만 재고가 음수가 될 수 있어요.`
+      return `가용 ${formatNumber(selectedStockRow.availableStock)}대를 ${formatNumber(qty - selectedStockRow.availableStock)}대 초과합니다. 저장은 가능하지만 재고가 음수가 될 수 있어요.`
     }
     // 그 외 위치(사무실=남은 샘플, 샘플=나간 샘플 등)는 해당 위치 잔량 기준.
     const sourceQty = locationQuantity(selectedStockRow, source)
@@ -2003,6 +2003,10 @@ export default function HardwareInventoryClient() {
       return
     }
     // 출고로 전환하면 기본은 판매(실제) — 예정/샘플은 하위 세그먼트로 다시 고른다.
+    // 출고 진입은 단건이 기본 — 단건 저장만 CRM 오더 확인 게이트를 타므로, 입고 batch에서 넘어온
+    // 판매가 게이트를 우회하지 않게 단건으로 복귀시킨다. 이미 출고 축에서 헤더 토글로 batch를
+    // 켠 세션은 존중하고(재클릭 무해), 다품목은 언제든 헤더 토글로 다시 승격한다.
+    if (!editingId && movementType !== "outbound") setSheetMode("single")
     applyPreset(isPlanned && activePresetKey !== "sample" ? "planned" : "sale")
   }
 
@@ -2066,8 +2070,10 @@ export default function HardwareInventoryClient() {
 
   const openSheet = (presetKey: string, itemId?: string, mode?: "single" | "batch") => {
     resetSheetDraft(presetKey, itemId)
-    // 상세 5종은 항상 단건. 그 외(입고·출고)는 다품목 작업건 구성이 실무 기본이라 배치 모드로 연다.
-    setSheetMode(DETAIL_PRESET_KEYS.has(presetKey) ? "single" : mode ?? "batch")
+    // 상세 5종은 항상 단건. 입고만 lot 다품목이 실무 기본이라 배치로 열고,
+    // 출고(판매·예정·샘플)는 단건이 기본 — CRM 오더 확인 게이트는 단건 저장(submitMovement)에만
+    // 있어 batch로 열면 판매가 crmLink 없이 저장(출고↔딜 대사 누락)되기 때문. 다품목은 헤더 토글로 승격.
+    setSheetMode(DETAIL_PRESET_KEYS.has(presetKey) ? "single" : mode ?? (presetKey === "inbound" ? "batch" : "single"))
     setSheetOpen(true)
     // 이미 열린 상태에서 다른 행 퀵버튼을 눌렀을 때를 위해 패널 자체를 맨 위로.
     // (scrollIntoView는 sticky 헤더 높이만큼 폼 상단을 가리는 문제가 있어 사용하지 않는다.)
@@ -2846,11 +2852,40 @@ export default function HardwareInventoryClient() {
         )}
 
         {loading && !data ? (
-          <div className="grid gap-4 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="h-32 animate-pulse rounded-xl bg-[#F6F5F4]" />
-            ))}
-          </div>
+          // 콜드로드 스켈레톤 — 딥링크(?tab=…) 직행 시 레이아웃 점프가 없도록 활성 탭 레이아웃과 일치시킨다(HW-8).
+          activeTab === "history" ? (
+            <div className="space-y-4" aria-hidden>
+              <div className="h-[72px] animate-pulse rounded-xl bg-[#F6F5F4]" />
+              <div className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white">
+                <div className="h-10 animate-pulse bg-[#F6F5F4]" />
+                {Array.from({ length: 7 }).map((_, index) => (
+                  <div key={index} className="border-t border-[rgba(0,0,0,0.06)] px-5 py-3.5">
+                    <div className="h-4 w-2/3 animate-pulse rounded bg-[#F6F5F4]" />
+                    <div className="mt-2 h-3 w-1/3 animate-pulse rounded bg-[#F6F5F4]" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : activeTab === "entry" ? (
+            <div className="space-y-5" aria-hidden>
+              <div className="h-[68px] animate-pulse rounded-xl bg-[#F6F5F4]" />
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="h-20 animate-pulse rounded-xl bg-[#F6F5F4]" />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4" aria-hidden>
+              <div className="grid gap-4 lg:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="h-32 animate-pulse rounded-xl bg-[#F6F5F4]" />
+                ))}
+              </div>
+              <div className="h-14 animate-pulse rounded-xl bg-[#F6F5F4]" />
+              <div className="h-72 animate-pulse rounded-xl bg-[#F6F5F4]" />
+            </div>
+          )
         ) : (
           <>
             {activeTab === "home" && (
@@ -3075,15 +3110,16 @@ export default function HardwareInventoryClient() {
                         {notice}
                       </div>
                     )}
+                    {/* 저장 대기 바구니 배너 — 경쟁 박스 대신 border-bottom 구분 한 줄(HW-5). */}
                     {sheetView === "quick" && sheetMode === "single" && quickCart.length > 0 && !editingId && (
-                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-3 py-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgba(0,0,0,0.08)] pb-3">
                         <span className="text-[12px] font-semibold text-[#615D59]">
                           저장 대기 바구니 {formatNumber(quickCart.length)}건 · {formatNumber(quickCartTotals.quantity)}대
                         </span>
                         <button
                           type="button"
                           onClick={() => setSheetMode("batch")}
-                          className="cursor-pointer rounded-md px-2 py-1 text-[12px] font-bold text-[#084734] transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                          className="cursor-pointer rounded-md px-2 py-1 text-[12px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
                         >
                           작업건 모드에서 보기 →
                         </button>
@@ -3162,7 +3198,8 @@ export default function HardwareInventoryClient() {
                         })}
                       </div>
                       {movementType === "outbound" && (
-                        <div className="space-y-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-2.5">
+                        // 경쟁 박스 대신 세그먼트+저대비 캡션 한 줄 — 앰버 틴트는 실제 경고에만 남긴다(HW-5).
+                        <div className="space-y-2">
                           <div className="grid grid-cols-3 gap-1.5" role="tablist" aria-label="출고 방식">
                             {([
                               ["actual", "실제", "즉시 재고 반영"],
@@ -3189,21 +3226,13 @@ export default function HardwareInventoryClient() {
                               )
                             })}
                           </div>
-                          {outboundMode === "actual" && (
-                            <p className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1.5 text-[11px] font-semibold text-[#7A520F]">
-                              실제 출고는 즉시 재고에 반영되고, 판매 건이면 저장 시 CRM 오더 확인이 뜹니다.
-                            </p>
-                          )}
-                          {outboundMode === "planned" && (
-                            <p className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2.5 py-1.5 text-[11px] font-semibold text-[#7A520F]">
-                              예정은 가용(창고 − 예정)에서만 미리 차감합니다. 확정은 홈 › 예상 출고에서 하세요.
-                            </p>
-                          )}
-                          {outboundMode === "sample" && (
-                            <p className="rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-semibold text-[#615D59]">
-                              샘플 대여는 사무실·창고에서 반출되며 CRM 연동 없이 저장됩니다.
-                            </p>
-                          )}
+                          <p className="px-0.5 text-[11px] font-semibold text-[#615D59]">
+                            {outboundMode === "actual"
+                              ? "실제 출고는 즉시 재고에 반영되고, 판매 건이면 저장 시 CRM 오더 확인이 뜹니다."
+                              : outboundMode === "planned"
+                                ? "예정은 가용(창고 − 예정)에서만 미리 차감합니다. 확정은 홈 › 예상 출고에서 하세요."
+                                : "샘플 대여는 사무실·창고에서 반출되며 CRM 연동 없이 저장됩니다."}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -3291,9 +3320,9 @@ export default function HardwareInventoryClient() {
                     )}
 
                     {sheetMode === "batch" && !editingId && !quickCartEnabled && (
-                      <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-3 py-2.5 text-[12px] font-semibold text-[#615D59]">
+                      <p className="border-b border-[rgba(0,0,0,0.08)] pb-3 text-[12px] font-semibold text-[#615D59]">
                         반납·샘플 반환·샘플 배정·수리·조정은 배치 담기를 지원하지 않습니다 — 단건 기록 모드로 저장하세요.
-                      </div>
+                      </p>
                     )}
                     {sheetMode === "batch" && quickCartEnabled && !inboundBatchLayout && (
                       <div className="space-y-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-3">
@@ -3416,7 +3445,7 @@ export default function HardwareInventoryClient() {
                                     : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#31302E] hover:bg-white"
                                 }`}
                               >
-                                {row.product} · 예상 {formatNumber(row.availableStock)}
+                                {row.product} · 가용 {formatNumber(row.availableStock)}
                               </button>
                             )
                           })}
@@ -3618,7 +3647,8 @@ export default function HardwareInventoryClient() {
                       </button>
                     )}
                     {activePresetKey === "sample" && !editingId && (
-                      <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2.5">
+                      // 다른 폼 필드와 같은 평면(무박스) — 필드 그룹에 경쟁 보더를 두지 않는다(HW-5).
+                      <div>
                         <span className={SHEET_LABEL_CLASS}>샘플 출처</span>
                         <div className="mt-1.5 grid grid-cols-2 gap-1.5">
                           {SAMPLE_SOURCE_OPTIONS.map((source) => (
@@ -3701,33 +3731,33 @@ export default function HardwareInventoryClient() {
                         />
                       </label>
                     )}
+                    {/* 입고 lot 도우미 — 그린 틴트 박스 대신 접이식+border-bottom 구분(HW-5). 틴트는 상태 의미에만. */}
                     {movementType === "inbound" && !editingId && !inboundBatchLayout && (
-                      <div className="rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] px-3 py-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <p className="text-[12px] font-bold text-[#084734]">입고 lot 도우미</p>
-                            <p className="mt-0.5 text-[11px] font-semibold text-[#615D59]">
-                              lot·입고일·수입자·보관 장소를 공유해 여러 품목을 담습니다.
-                            </p>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setLotNo(nextLotSuggestion)}
-                              className="inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-[#BDEFD8] bg-white px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
-                            >
-                              {nextLotSuggestion} 적용
-                            </button>
-                            <button
-                              type="button"
-                              onClick={copyLatestInboundLotToCart}
-                              className="inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-[#BDEFD8] bg-white px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
-                            >
-                              이전 구성 복사
-                            </button>
-                          </div>
+                      <details className="border-b border-[rgba(0,0,0,0.08)] pb-3">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 rounded-md py-1 text-[12px] font-bold text-[#31302E] transition hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40">
+                          <span>입고 lot 도우미 — 다음 lot 적용 · 이전 구성 복사</span>
+                          <ChevronDown className="h-3.5 w-3.5 text-[#A39E98]" />
+                        </summary>
+                        <p className="mt-1 text-[11px] font-semibold text-[#615D59]">
+                          lot·입고일·수입자·보관 장소를 공유해 여러 품목을 담습니다.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setLotNo(nextLotSuggestion)}
+                            className="inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
+                          >
+                            {nextLotSuggestion} 적용
+                          </button>
+                          <button
+                            type="button"
+                            onClick={copyLatestInboundLotToCart}
+                            className="inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
+                          >
+                            이전 구성 복사
+                          </button>
                         </div>
-                      </div>
+                      </details>
                     )}
                     {fifoPreview && (
                       <div className={`rounded-lg border px-3 py-2 text-[11px] font-semibold ${
@@ -4005,8 +4035,9 @@ export default function HardwareInventoryClient() {
                       ))}
                     </datalist>
 
+                    {/* 입력 미리보기 — 박스 대신 border-top 구분으로 위→아래 단일 스캔 흐름 유지(HW-5). */}
                     {(sheetMode === "single" || Boolean(editingId)) && (
-                      <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-3 py-2.5">
+                      <div className="border-t border-[rgba(0,0,0,0.08)] pt-3">
                         <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-[#615D59]">입력 미리보기</p>
                         <p className="mt-1 text-[13px] font-bold text-[#111110]">
                           {customProduct.trim() || selectedItem?.name || "품목 선택"} · {activePreset.label} · {formatNumber(Number(quantity) || 0)}대
