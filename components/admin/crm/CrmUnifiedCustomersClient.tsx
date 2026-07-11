@@ -239,37 +239,43 @@ export default function CrmUnifiedCustomersClient() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const restoredDrawerRef = useRef(false)
 
-  const syncDrawerUrl = useCallback(
-    (key: string | null) => {
+  const setDrawerUrl = useCallback(
+    (key: string | null, mode: "push" | "replace") => {
       const params = new URLSearchParams(Array.from(searchParams.entries()))
       if (key) params.set("account", key)
       else params.delete("account")
       const qs = params.toString()
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+      const href = qs ? `${pathname}?${qs}` : pathname
+      if (mode === "push") router.push(href, { scroll: false })
+      else router.replace(href, { scroll: false })
     },
     [router, pathname, searchParams]
   )
 
+  // 열 때 push로 히스토리 항목을 남겨 브라우저 '뒤로가기'가 드로어를 닫게 한다.
   const openDrawer = useCallback(
     (key: string, name: string) => {
       setDrawer({ key, name })
-      syncDrawerUrl(key)
+      setDrawerUrl(key, "push")
     },
-    [syncDrawerUrl]
+    [setDrawerUrl]
   )
 
+  // 닫을 때는 replace로 account만 제거(불필요한 히스토리 항목을 남기지 않음).
   const closeDrawer = useCallback(() => {
     setDrawer(null)
-    syncDrawerUrl(null)
-  }, [syncDrawerUrl])
+    setDrawerUrl(null, "replace")
+  }, [setDrawerUrl])
 
+  // URL ↔ 드로어 상태 양방향 동기화 — 딥링크 복원 + 뒤로/앞으로가기(popstate) 대응.
   useEffect(() => {
-    if (restoredDrawerRef.current) return
-    restoredDrawerRef.current = true
     const account = searchParams.get("account")
-    if (account) setDrawer({ key: account, name: "" })
+    setDrawer((current) => {
+      if (!account) return current ? null : current
+      if (current?.key === account) return current
+      return { key: account, name: current?.name ?? "" }
+    })
   }, [searchParams])
 
   // 리드 전환 완료 패널 '고객 보기' 딥링크(?q=) → 검색어 1회 복원.

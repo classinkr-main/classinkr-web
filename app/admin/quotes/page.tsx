@@ -134,7 +134,8 @@ function prefillFromParams(params: Pick<URLSearchParams, "get">): QuickQuotePref
   const dealId = params.get("dealId") ?? params.get("deal")
   const customerId = params.get("customerId") ?? params.get("customer")
   const customerName = params.get("customerName")
-  if (!dealId && !customerId) return null
+  // customerName만 있어도(리드/NEO 딥링크: 고객명 프리필) 신규 고객 이름을 채우도록 통과시킨다.
+  if (!dealId && !customerId && !customerName) return null
   return {
     dealId: dealId || null,
     customerId: customerId || null,

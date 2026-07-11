@@ -776,7 +776,9 @@ export default function QuickQuoteComposer({
     prefillAppliedRef.current = false
     setCustomerMode(hasPrefillTarget ? "existing" : "new")
     setSelectedCustomerId(prefill?.customerId ?? "")
-    setNewCustomerName("")
+    // 신규 고객 모드(딜/고객 타깃 없음)로 진입하면 customerName 프리필을 이름 필드에 1회 채운다.
+    // 사용자가 이후 수정하면 이 open 세션 동안 덮어쓰지 않는다.
+    setNewCustomerName(hasPrefillTarget ? "" : prefill?.customerName?.trim() ?? "")
     setNewCustomerContactName("")
     setNewCustomerPhone("")
     setCustomerQuery("")
@@ -804,7 +806,7 @@ export default function QuickQuoteComposer({
     setErrorToast(null)
     setMobilePreviewOpen(false)
     setError(null)
-  }, [hasPrefillTarget, initialTemplateId, open, prefill?.customerId, prefill?.dealId, today])
+  }, [hasPrefillTarget, initialTemplateId, open, prefill?.customerId, prefill?.customerName, prefill?.dealId, today])
 
   useEffect(() => {
     return () => {

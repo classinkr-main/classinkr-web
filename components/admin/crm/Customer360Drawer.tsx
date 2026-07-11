@@ -1,10 +1,12 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   AlertTriangle,
   ArrowRight,
+  ArrowUpRight,
   Briefcase,
   Building2,
   CalendarClock,
@@ -31,7 +33,7 @@ import {
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
-import { formatCNY, formatUSD, CRM_CURRENCY_BADGE, type CrmCurrency } from "@/lib/crm/money-format"
+import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import CrmCustomerFlags from "./CrmCustomerFlags"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
@@ -66,6 +68,10 @@ interface Props {
   name?: string | null
   onClose: () => void
 }
+
+// 섹션 점프 탭 — 스크롤 스파이는 DOM 등장 순서(요약→머니→딜→할일→활동)로 평가하고,
+// 탭 표시 순서는 스펙(요약·딜·머니·활동·할일)을 따른다.
+const C360_SECTION_DOM_ORDER = ["c360-summary", "c360-money", "c360-deal", "c360-tasks", "c360-activity"] as const
 
 const SERVICE_RISK_LABEL: Record<string, string> = {
   urgent: "긴급",
@@ -149,38 +155,28 @@ function focusSection(id: string) {
   if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) el.focus()
 }
 
-// 출처별 통화로 금액을 표기 — 견적=KRW(₩, 내부 Classin), 오더=USD($), 수납·잔액=CNY(¥, 만단위).
-function formatFunnelMoney(amount: number | null, currency: "KRW" | "USD" | "CNY") {
-  if (currency === "USD") return formatUSD(amount)
-  if (currency === "CNY") return formatCNY(amount)
-  return formatMoney(amount, "KRW")
-}
-
-// 견적/오더/수납/미수 4타일 — 단계별 통화가 달라(₩/$/¥) 타일마다 통화 칩을 강제해 합산 오독을 막는다.
-function MoneyTile({
+// 제품 매출 타일 — SW/HW 결제 누적(¥ CNY)·칠판 대수(대). REV/HW 원장을 계정키로 조인한 값.
+// matched=false면 "—"로 흐리게 표기(연결 없음). 통화 칩(¥/대)으로 SW·HW·대수 오독을 막는다.
+function ProductTile({
   label,
-  currency,
-  amount,
-  meta,
-  warn = false,
+  chip,
+  display,
+  matched,
 }: {
   label: string
-  currency: CrmCurrency
-  amount: number | null
-  meta?: string
-  warn?: boolean
+  chip: string
+  display: string
+  matched: boolean
 }) {
-  const badge = CRM_CURRENCY_BADGE[currency]
   return (
-    <div className={`rounded-xl px-3 py-2.5 ${warn ? "bg-[#FEF3EE]" : "bg-[#fafaf8]"}`}>
+    <div className="rounded-xl bg-[#fafaf8] px-3 py-2.5">
       <div className="flex items-center justify-between gap-1">
-        <span className={`text-[11px] font-semibold ${warn ? "text-[#B85C33]" : "text-[#1a1a1a]/45"}`}>{label}</span>
-        <span className="rounded-full bg-white px-1 py-0.5 text-[9px] font-bold text-[#1a1a1a]/40">{badge.symbol}</span>
+        <span className="text-[11px] font-semibold text-[#1a1a1a]/45">{label}</span>
+        <span className="rounded-full bg-white px-1 py-0.5 text-[9px] font-bold text-[#1a1a1a]/40">{chip}</span>
       </div>
-      <p className={`mt-1 text-[15px] font-bold ${warn ? "text-[#B85C33]" : "text-[#111110]"}`}>
-        {formatFunnelMoney(amount, currency)}
+      <p className={`mt-1 text-[15px] font-bold ${matched ? "text-[#111110]" : "text-[#1a1a1a]/30"}`}>
+        {matched ? display : "—"}
       </p>
-      {meta ? <p className="mt-0.5 text-[10px] text-[#1a1a1a]/35">{meta}</p> : null}
     </div>
   )
 }
@@ -202,13 +198,6 @@ function formatDay(value: string | null | undefined) {
 function formatAmount(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return "-"
   return new Intl.NumberFormat("ko-KR").format(value)
-}
-
-// NEO 오더/수납은 USD 네이티브($), 견적(Deal Lite)은 KRW(₩) — 출처별 통화를 맞춘다.
-function formatMoney(value: number | null | undefined, currency: "KRW" | "USD" = "KRW") {
-  if (value == null || !Number.isFinite(value)) return "-"
-  if (currency === "USD") return `$${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`
-  return `₩${value.toLocaleString("ko-KR")}`
 }
 
 // 다가오는 일정 — 예정 콜/미팅 날짜 상대 표기.
@@ -298,8 +287,46 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [noteKind, setNoteKind] = useState<"manual_note" | "meeting_minutes" | "call" | "sms">("manual_note")
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
+  const [activeSection, setActiveSection] = useState<string>("c360-summary")
+  const router = useRouter()
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null)
 
   const url = customerKey ? `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/360` : null
+
+  // 섹션으로 점프 — 요약은 최상단으로, 나머지는 sticky 탭 높이만큼 여백을 두고 정렬.
+  const scrollToSection = useCallback((id: string) => {
+    const root = bodyRef.current
+    if (!root) return
+    setActiveSection(id)
+    if (id === "c360-summary") {
+      root.scrollTo({ top: 0, behavior: "smooth" })
+      return
+    }
+    const el = document.getElementById(id)
+    if (!el) return
+    const top = el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop - 8
+    root.scrollTo({ top: Math.max(0, top), behavior: "smooth" })
+  }, [])
+
+  // 모바일 스와이프-닫기 — 오른쪽으로 충분히 밀면 닫는다(수평 제스처만).
+  const onTouchStart = useCallback((event: React.TouchEvent) => {
+    const touch = event.touches[0]
+    touchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null
+  }, [])
+  const onTouchEnd = useCallback(
+    (event: React.TouchEvent) => {
+      const start = touchStartRef.current
+      touchStartRef.current = null
+      if (!start) return
+      const touch = event.changedTouches[0]
+      if (!touch) return
+      const dx = touch.clientX - start.x
+      const dy = touch.clientY - start.y
+      if (dx > 80 && Math.abs(dx) > Math.abs(dy) * 1.5) onClose()
+    },
+    [onClose]
+  )
 
   const load = useCallback(
     async (options?: { force?: boolean; expanded?: boolean }) => {
@@ -354,6 +381,25 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [onClose])
+
+  // 스크롤 스파이 — 본문 스크롤 위치로 현재 섹션 탭을 활성화한다(DOM 순서로 '마지막 통과' 판정).
+  useEffect(() => {
+    const root = bodyRef.current
+    if (!root || !data) return
+    const compute = () => {
+      const rootTop = root.getBoundingClientRect().top
+      let current: string = C360_SECTION_DOM_ORDER[0]
+      for (const id of C360_SECTION_DOM_ORDER) {
+        const el = document.getElementById(id)
+        if (!el) continue
+        if (el.getBoundingClientRect().top - rootTop <= 80) current = id
+      }
+      setActiveSection(current)
+    }
+    compute()
+    root.addEventListener("scroll", compute, { passive: true })
+    return () => root.removeEventListener("scroll", compute)
+  }, [data])
 
   useEffect(() => {
     if (data?.found && data.header && customerKey) {
@@ -549,6 +595,9 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
 
   const money = data?.money
   const moneyVisible = useMemo(() => money?.available ?? false, [money])
+  // 제품 매출 요약(REV/HW 원장 계정키 조인) — SW·HW 결제 누적(¥), 칠판 대수, 매칭 여부.
+  const productSummary = data?.productSummary
+  const productMatched = productSummary?.matched ?? false
 
   // 견적 → 오더 → 수납 파생. 견적=Deal Lite(작업 캐시), 오더·수납=NEO(공식 원천).
   const quoteTotal = useMemo(() => sumAmounts((data?.deals.rows ?? []).map((d) => d.expectedAmount)), [data])
@@ -748,7 +797,18 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} aria-hidden />
-      <div className="relative z-10 flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl">
+      <div
+        className="relative z-10 flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl"
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
+        {/* 모바일 스와이프-닫기 힌트 — 왼쪽 그랩바(전체 화면 덮는 패널의 탭-투-클로즈 대체) */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="닫기"
+          className="absolute left-1 top-1/2 z-20 h-10 w-1.5 -translate-y-1/2 rounded-full bg-[#1a1a1a]/12 sm:hidden"
+        />
         {/* header */}
         <div className="sticky top-0 z-10 border-b border-[#e8e8e4] bg-white px-5 py-4">
           <div className="flex items-start justify-between gap-3">
@@ -817,11 +877,13 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             ) : null}
             <button
               type="button"
-              onClick={() => {
-                setDealFormOpen(true)
-                focusSection("c360-deal")
-              }}
+              onClick={() =>
+                router.push(
+                  `/admin/quotes?tab=hardware&action=new&customerName=${encodeURIComponent(displayName)}`
+                )
+              }
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+              title="이 고객명으로 하드웨어 견적서를 새로 작성합니다"
             >
               <CircleDollarSign className="h-3.5 w-3.5" />견적
             </button>
@@ -835,6 +897,36 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
           </div>
         </div>
 
+        {/* 섹션 점프 탭 — sticky 헤더 아래 고정, 스크롤에 따라 활성 탭 표시 */}
+        {data ? (
+          <div className="no-scrollbar flex shrink-0 gap-0.5 overflow-x-auto border-b border-[#e8e8e4] bg-white px-3">
+            {[
+              { id: "c360-summary", label: "요약" },
+              { id: "c360-deal", label: `딜${data.deals.summary.total ? ` ${data.deals.summary.total}` : ""}` },
+              { id: "c360-money", label: "머니" },
+              { id: "c360-activity", label: `활동${data.activity.summary.total ? ` ${data.activity.summary.total}` : ""}` },
+              { id: "c360-tasks", label: `할일${data.tasks.summary.total ? ` ${data.tasks.summary.total}` : ""}` },
+            ].map((tab) => {
+              const active = activeSection === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => scrollToSection(tab.id)}
+                  aria-current={active ? "true" : undefined}
+                  className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-[12px] font-semibold transition-colors ${
+                    active
+                      ? "border-[#084734] text-[#111110]"
+                      : "border-transparent text-[#1a1a1a]/45 hover:text-[#111110]"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
+
         {savedMsg ? (
           <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
             <div className="flex items-center gap-1.5 rounded-full bg-[#084734] px-3.5 py-2 text-[12px] font-semibold text-white shadow-lg">
@@ -845,7 +937,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
         ) : null}
 
         {/* body */}
-        <div className="flex-1 space-y-3 overflow-y-auto bg-[#f5f5f2] p-4">
+        <div ref={bodyRef} className="flex-1 space-y-3 overflow-y-auto bg-[#f5f5f2] p-4">
           {error ? (
             <div className="flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -871,8 +963,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </section>
           ) : null}
 
-          {/* 라벨 — 수기 분류(시스템 파생 플래그와 별개) */}
-          <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+          {/* 라벨 — 수기 분류(시스템 파생 플래그와 별개) · '요약' 탭 앵커 */}
+          <section id="c360-summary" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
             <SectionTitle icon={<Tag className="h-3.5 w-3.5" />}>라벨</SectionTitle>
             <div className="flex flex-wrap items-center gap-1.5">
               {tags.map((tag) => (
@@ -1050,32 +1142,51 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </section>
           ) : null}
 
-          {/* 수금 · 성과 — 견적 → 오더 → 수납 흐름 + 성과/수금 합계 + 핵심 정보 통합 */}
+          {/* 머니 — 제품 매출(REV/HW 원장 계정키 조인) + NEO 수금·성과 상세 */}
           {data ? (
-            <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-              <SectionTitle icon={<Coins className="h-3.5 w-3.5" />}>수금 · 성과</SectionTitle>
-              {targetType === "lead" ? (
-                <p className="text-[12px] text-[#1a1a1a]/40">리드 단계 · 연결된 딜 없음</p>
-              ) : moneyVisible || quoteTotal != null ? (
-                <div className="space-y-3">
-                  {/* 견적(₩)→오더($)→수납(¥)→미수·잔액(¥) 4타일. 통화가 단계별로 달라 타일마다 통화 칩 강제. */}
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <MoneyTile
-                      label="견적"
-                      currency="KRW"
-                      amount={quoteTotal}
-                      meta={quoteTotal != null ? `Deal Lite ${data.deals.summary.total}건` : "연결 없음"}
-                    />
-                    <MoneyTile label="오더" currency="USD" amount={orderTotal} meta={orderTotal != null ? "NEO 공식" : "오더 없음"} />
-                    <MoneyTile label="수납" currency="CNY" amount={collectionTotal} meta={collectionTotal != null ? "NEO 공식" : "기록 없음"} />
-                    <MoneyTile
-                      label="미수 · 잔액"
-                      currency="CNY"
-                      amount={money?.totalBalance ?? null}
-                      meta="NEO 잔액"
-                      warn={(money?.totalBalance ?? 0) > 0}
-                    />
-                  </div>
+            <section id="c360-money" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+              <SectionTitle icon={<Coins className="h-3.5 w-3.5" />}>머니 · 제품 매출</SectionTitle>
+              {/* SW 결제 누적 · HW 결제 누적(¥ CNY) · HW 대수(칠판, 대) */}
+              <div className="grid grid-cols-3 gap-2">
+                <ProductTile
+                  label="SW 결제 누적"
+                  chip="¥"
+                  display={formatCNY(productSummary?.swCumulativeCNY ?? null)}
+                  matched={productMatched}
+                />
+                <ProductTile
+                  label="HW 결제 누적"
+                  chip="¥"
+                  display={formatCNY(productSummary?.hwCumulativeCNY ?? null)}
+                  matched={productMatched}
+                />
+                <ProductTile
+                  label="HW 대수 · 칠판"
+                  chip="대"
+                  display={`${(productSummary?.hwBoardCount ?? 0).toLocaleString("ko-KR")}대`}
+                  matched={productMatched}
+                />
+              </div>
+              {productMatched ? (
+                <p className="mt-1.5 text-[10px] text-[#1a1a1a]/35">
+                  REV 원장 결제 누적(¥ CNY) · 칠판 대수는 HW 출고(배송예정 제외) · 계정키 조인
+                </p>
+              ) : (
+                <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-[#fafaf8] px-2.5 py-1.5">
+                  <span className="text-[11px] text-[#1a1a1a]/45">REV/HW 원장과 매칭된 기록이 없습니다.</span>
+                  <Link
+                    href={`/admin/crm/matching?name=${encodeURIComponent(displayName)}`}
+                    className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-[#084734] hover:underline"
+                  >
+                    매칭 연결
+                    <ArrowUpRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              )}
+
+              {/* NEO 수금·성과 상세(공식 원천, ¥ CNY) — 데이터 있을 때만 유지 */}
+              {moneyVisible ? (
+                <div className="mt-3 space-y-3 border-t border-[#f0f0ec] pt-3">
                   {(data.serviceRisk?.level === "urgent" || data.serviceRisk?.level === "soon") &&
                   orderTotal != null &&
                   orderTotal > 0 ? (
@@ -1085,8 +1196,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                     </div>
                   ) : null}
 
-                  {/* 수금 · 성과 합계 — 둘 다 CNY(¥). 수금은 위 funnel 합계와 동일. */}
-                  <div className="grid grid-cols-2 gap-2 border-t border-[#f0f0ec] pt-3">
+                  {/* 수금 · 성과 합계 — 둘 다 CNY(¥). */}
+                  <div className="grid grid-cols-2 gap-2">
                     <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
                       <p className="text-[11px] font-semibold text-[#1a1a1a]/35">수금 합계</p>
                       <p className="text-[15px] font-bold text-[#111110]">{formatCNY(collectionTotal)}</p>
@@ -1123,9 +1234,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                     </div>
                   ) : null}
                 </div>
-              ) : (
-                <p className="text-[12px] text-[#1a1a1a]/40">표시할 수금·성과 데이터가 없습니다.</p>
-              )}
+              ) : null}
             </section>
           ) : null}
 
@@ -1282,7 +1391,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
 
           {/* open tasks + quick add */}
           {data ? (
-            <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+            <section id="c360-tasks" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
               <SectionTitle icon={<ListChecks className="h-3.5 w-3.5" />}>
                 열린 할 일 {data.tasks.summary.total > 0 ? `(${data.tasks.summary.total})` : ""}
               </SectionTitle>
@@ -1392,7 +1501,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
 
           {/* activity timeline + 특이사항 피드 + quick note/회의록 */}
           {data ? (
-            <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+            <section id="c360-activity" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
               <div className="mb-3 inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
                 {(
                   [
@@ -1536,6 +1645,14 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   전체 활동 보기 (최대 50)
                 </button>
               ) : null}
+              {/* 활동 페이지 딥링크 — 이 고객으로 필터된 전체 활동(드로어 밖 상세 동선) */}
+              <Link
+                href={`/admin/crm/activity?targetType=${encodeURIComponent(targetType)}&targetId=${encodeURIComponent(entityId)}`}
+                className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734] transition-colors hover:underline"
+              >
+                이 고객 활동 전체보기
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
             </section>
           ) : null}
 

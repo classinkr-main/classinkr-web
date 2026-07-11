@@ -7,6 +7,11 @@ import {
   type NeoCrmCustomerMoneyItem,
 } from "@/lib/admin-crm-customers-neo"
 import { buildLeadPriorityItem } from "@/lib/crm/priority"
+import {
+  EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY,
+  getCrmAccountProductSummary,
+  type CrmAccountProductSummary,
+} from "@/lib/repositories/crm-account-money"
 import { deriveServiceRisk, type ServiceRisk } from "@/lib/crm/service-risk"
 import { listCrmCustomerEvents, type ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
 import { listCrmDeals, type ListCrmDealsResult } from "@/lib/repositories/crm-deals"
@@ -94,6 +99,8 @@ export interface Customer360 {
   header: Customer360Header | null
   contacts: Customer360Contacts | null
   money: Customer360Money
+  /** REV/HW 원장을 계정키로 조인한 제품 매출 요약(SW·HW 결제 누적, 칠판 대수, 매칭 여부) */
+  productSummary: CrmAccountProductSummary
   risk: Customer360Risk
   serviceRisk: ServiceRisk | null
   activity: ListCrmCustomerEventsResult
@@ -413,6 +420,17 @@ export async function getCrmCustomer360(
     now,
   })
 
+  // 제품 매출 요약 — 고객명(header.name)을 계정키로 REV/HW 원장에 조인. 비핵심이라 실패해도
+  // 드로어 전체를 막지 않게 unmatched 폴백으로 흡수하고 경고만 남긴다.
+  let productSummary: CrmAccountProductSummary = EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY
+  if (found && header?.name) {
+    try {
+      productSummary = await getCrmAccountProductSummary(header.name)
+    } catch {
+      warnings.push("제품 매출 요약을 불러오지 못했습니다.")
+    }
+  }
+
   return {
     generatedAt: now.toISOString(),
     key,
@@ -423,6 +441,7 @@ export async function getCrmCustomer360(
     header,
     contacts,
     money,
+    productSummary,
     risk,
     serviceRisk,
     activity,

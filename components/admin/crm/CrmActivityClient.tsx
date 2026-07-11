@@ -1,11 +1,15 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
+  ArrowLeft,
   Calendar,
   CheckCircle2,
   Clock,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   FileAudio,
@@ -39,6 +43,17 @@ type SourceType =
   | "sms"
 type Sentiment = "all" | "positive" | "neutral" | "risk"
 type FormMode = "manual_note" | "meeting_minutes" | "recording"
+type OptionalFieldKey =
+  | "body"
+  | "attendees"
+  | "meetingPurpose"
+  | "decisions"
+  | "blockers"
+  | "nextAction"
+  | "sentiment"
+  | "stageSignal"
+  | "tags"
+  | "recording"
 
 interface CrmEventNextAction {
   title: string
@@ -116,6 +131,32 @@ const MODE_OPTIONS: Array<{
   { key: "meeting_minutes", label: "회의록", description: "요약·합의·리스크", icon: FileText },
   { key: "recording", label: "녹음", description: "음성 파일 + 요약", icon: Mic },
 ]
+
+// 모드별 노출 필드: primary = 항상 노출, advanced = "상세 입력" 토글 안, 그 외 = 값이 있을 때만 노출
+const MODE_FIELDS: Record<FormMode, { primary: OptionalFieldKey[]; advanced: OptionalFieldKey[] }> = {
+  manual_note: {
+    primary: ["body"],
+    advanced: ["nextAction", "sentiment", "tags"],
+  },
+  meeting_minutes: {
+    primary: [
+      "body",
+      "attendees",
+      "meetingPurpose",
+      "decisions",
+      "blockers",
+      "nextAction",
+      "sentiment",
+      "stageSignal",
+      "tags",
+    ],
+    advanced: [],
+  },
+  recording: {
+    primary: ["recording"],
+    advanced: ["decisions", "nextAction"],
+  },
+}
 
 const TARGET_OPTIONS: Array<{ key: TargetType; label: string }> = [
   { key: "all", label: "대상 전체" },
@@ -216,12 +257,14 @@ function listUrl(input: {
   sourceType: SourceType
   sentiment: Sentiment
   offset: number
+  targetId?: string
 }) {
   const params = new URLSearchParams({ limit: String(PAGE_LIMIT), offset: String(input.offset) })
   if (input.query.trim()) params.set("q", input.query.trim())
   if (input.targetType !== "all") params.set("targetType", input.targetType)
   if (input.sourceType !== "all") params.set("sourceType", input.sourceType)
   if (input.sentiment !== "all") params.set("sentiment", input.sentiment)
+  if (input.targetId?.trim()) params.set("targetId", input.targetId.trim())
   return `${EVENTS_URL}?${params.toString()}`
 }
 
@@ -270,7 +313,7 @@ function RecordingPlayer({ event }: { event: CrmEventRecord }) {
   )
 }
 
-export default function CrmActivityClient() {
+function CrmActivityClientInner() {
   const [mode, setMode] = useState<FormMode>("manual_note")
   const [targetType, setTargetType] = useState<TargetType>("unknown")
   const [targetLabel, setTargetLabel] = useState("")
@@ -305,10 +348,37 @@ export default function CrmActivityClient() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const { owners: crmOwners, health: ownerHealth } = useCrmOwners()
 
+  const searchParams = useSearchParams()
+  const focusTargetId = (searchParams.get("targetId") ?? "").trim()
+  const focusTargetTypeParam = (searchParams.get("targetType") ?? "").trim()
+  const focusLabelFromQuery = (searchParams.get("targetLabel") ?? "").trim()
+  const backParam = (searchParams.get("back") ?? "").trim()
+
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [recordingName, setRecordingName] = useState<string | null>(null)
+  const focusPresetRef = useRef<string | null>(null)
+
+  const focusLabel = useMemo(() => {
+    if (focusLabelFromQuery) return focusLabelFromQuery
+    if (!focusTargetId) return ""
+    const match = data?.rows.find((row) => row.targetId === focusTargetId)
+    return match?.targetLabel ?? ""
+  }, [focusLabelFromQuery, focusTargetId, data])
+
+  const focusName = focusLabel || "선택한 고객"
+  const backHref = backParam || `/admin/crm/customers/unified?account=${encodeURIComponent(focusTargetId)}`
+
   const loadEvents = useCallback(
     async (offset: number, options?: { force?: boolean; append?: boolean }) => {
       const append = Boolean(options?.append)
-      const url = listUrl({ query, targetType: filterTarget, sourceType: filterSource, sentiment: filterSentiment, offset })
+      const url = listUrl({
+        query,
+        targetType: filterTarget,
+        sourceType: filterSource,
+        sentiment: filterSentiment,
+        offset,
+        targetId: focusTargetId,
+      })
       const cached = !append && !options?.force ? getCachedAdminJson<CrmEventsResponse>(url, { cacheKey: url }) : null
       const requestId = ++requestSeq.current
 
@@ -342,7 +412,7 @@ export default function CrmActivityClient() {
         }
       }
     },
-    [filterSentiment, filterSource, filterTarget, query]
+    [filterSentiment, filterSource, filterTarget, query, focusTargetId]
   )
 
   useEffect(() => {
@@ -354,6 +424,22 @@ export default function CrmActivityClient() {
     const timer = window.setTimeout(() => setToast(null), 2200)
     return () => window.clearTimeout(timer)
   }, [toast])
+
+  // 딥링크로 특정 고객이 지정되면 빠른 입력 폼의 대상을 1회 프리셋한다.
+  useEffect(() => {
+    if (!focusTargetId) return
+    if (focusPresetRef.current === focusTargetId) return
+    focusPresetRef.current = focusTargetId
+    setTargetId(focusTargetId)
+    if (
+      focusTargetTypeParam &&
+      focusTargetTypeParam !== "all" &&
+      TARGET_OPTIONS.some((option) => option.key === focusTargetTypeParam)
+    ) {
+      setTargetType(focusTargetTypeParam as TargetType)
+    }
+    if (focusLabelFromQuery) setTargetLabel(focusLabelFromQuery)
+  }, [focusTargetId, focusTargetTypeParam, focusLabelFromQuery])
 
   const resetForm = () => {
     setMode("manual_note")
@@ -375,6 +461,8 @@ export default function CrmActivityClient() {
     setSentiment("neutral")
     setStageSignal("")
     setTags("")
+    setShowAdvanced(false)
+    setRecordingName(null)
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
@@ -426,6 +514,38 @@ export default function CrmActivityClient() {
     }
   }
 
+  const fieldHasValue = (key: OptionalFieldKey): boolean => {
+    switch (key) {
+      case "body":
+        return body.trim().length > 0
+      case "attendees":
+        return attendees.trim().length > 0
+      case "meetingPurpose":
+        return meetingPurpose.trim().length > 0
+      case "decisions":
+        return decisions.trim().length > 0
+      case "blockers":
+        return blockers.trim().length > 0
+      case "nextAction":
+        return Boolean(nextActionTitle.trim() || nextActionOwner.trim() || nextActionDueAt.trim())
+      case "sentiment":
+        return sentiment !== "neutral"
+      case "stageSignal":
+        return stageSignal.trim().length > 0
+      case "tags":
+        return tags.trim().length > 0
+      case "recording":
+        return Boolean(recordingName)
+      default:
+        return false
+    }
+  }
+
+  const showField = (key: OptionalFieldKey) => {
+    const config = MODE_FIELDS[mode]
+    return config.primary.includes(key) || fieldHasValue(key) || (config.advanced.includes(key) && showAdvanced)
+  }
+
   return (
     <div className="space-y-5">
       {toast ? <Toast msg={toast.msg} type={toast.type} /> : null}
@@ -451,6 +571,30 @@ export default function CrmActivityClient() {
         </button>
       </div>
 
+      {focusTargetId ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#D7EBDD] bg-[#ECFDF5] px-3 py-2">
+          <div className="flex min-w-0 items-center gap-2 text-[12px] font-semibold text-[#084734]">
+            <UserRound className="h-4 w-4 shrink-0" />
+            <span className="truncate">{focusName} 고객의 활동 기록만 보고 있습니다.</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Link
+              href={backHref}
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#084734]/25 bg-white px-2.5 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              {focusName} 상세로
+            </Link>
+            <Link
+              href="/admin/crm/activity"
+              className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#fafaf8]"
+            >
+              전체 보기
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       <section className="grid gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -469,7 +613,10 @@ export default function CrmActivityClient() {
                 <button
                   key={option.key}
                   type="button"
-                  onClick={() => setMode(option.key)}
+                  onClick={() => {
+                    setMode(option.key)
+                    setShowAdvanced(false)
+                  }}
                   className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
                     active
                       ? "border-[#084734] bg-[#ECFDF5]"
@@ -556,6 +703,20 @@ export default function CrmActivityClient() {
               </p>
             )}
 
+            {showField("recording") ? (
+              <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
+                녹음파일
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="audio/*,video/mp4,video/quicktime"
+                  onChange={(event) => setRecordingName(event.target.files?.[0]?.name ?? null)}
+                  className="mt-1 block w-full rounded-lg border border-dashed border-[#d8d8d2] bg-[#fafaf8] px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/60 file:mr-3 file:rounded-md file:border-0 file:bg-[#111110] file:px-3 file:py-1.5 file:text-[12px] file:font-semibold file:text-white"
+                />
+                <span className="mt-1 block text-[11px] font-medium text-[#1a1a1a]/35">mp3, m4a, wav, webm, ogg, mp4 · 최대 50MB</span>
+              </label>
+            ) : null}
+
             <div className="grid gap-2 sm:grid-cols-2">
               <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
                 기록 시각
@@ -598,63 +759,89 @@ export default function CrmActivityClient() {
               />
             </label>
 
-            <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
-              원문 메모 / 회의록
-              <textarea
-                value={body}
-                onChange={(event) => setBody(event.target.value)}
-                rows={5}
-                placeholder="회의록, 카톡 요약, 통화 메모를 그대로 붙여넣기"
-                className="mt-1 w-full resize-none rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] font-medium leading-5 text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
-              />
-            </label>
-
-            <div className="grid gap-2 sm:grid-cols-2">
+            {showField("body") ? (
               <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
-                참석자
-                <input
-                  value={attendees}
-                  onChange={(event) => setAttendees(event.target.value)}
-                  placeholder="쉼표 또는 줄바꿈"
-                  className="mt-1 h-10 w-full rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
-                />
-              </label>
-              <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
-                미팅 목적
-                <input
-                  value={meetingPurpose}
-                  onChange={(event) => setMeetingPurpose(event.target.value)}
-                  placeholder="상담, 데모, 견적, 갱신"
-                  className="mt-1 h-10 w-full rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
-                />
-              </label>
-            </div>
-
-            <div className="grid gap-2 sm:grid-cols-2">
-              <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
-                결정/합의
+                원문 메모 / 회의록
                 <textarea
-                  value={decisions}
-                  onChange={(event) => setDecisions(event.target.value)}
-                  rows={2}
-                  placeholder="줄바꿈으로 입력"
+                  value={body}
+                  onChange={(event) => setBody(event.target.value)}
+                  rows={5}
+                  placeholder="회의록, 카톡 요약, 통화 메모를 그대로 붙여넣기"
                   className="mt-1 w-full resize-none rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] font-medium leading-5 text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
                 />
               </label>
-              <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
-                리스크/이견
-                <textarea
-                  value={blockers}
-                  onChange={(event) => setBlockers(event.target.value)}
-                  rows={2}
-                  placeholder="가격, 일정, 의사결정자 등"
-                  className="mt-1 w-full resize-none rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] font-medium leading-5 text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
-                />
-              </label>
-            </div>
+            ) : null}
 
-            <div className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3">
-              <p className="mb-2 text-[12px] font-bold text-[#111110]">다음 액션</p>
+            {MODE_FIELDS[mode].advanced.length ? (
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((value) => !value)}
+                className="inline-flex h-9 items-center justify-center gap-1.5 self-start rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 text-[12px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#f0f0ec]"
+              >
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+                {showAdvanced ? "상세 입력 접기" : "상세 입력 펼치기"}
+              </button>
+            ) : null}
+
+            {showField("attendees") || showField("meetingPurpose") ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {showField("attendees") ? (
+                  <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
+                    참석자
+                    <input
+                      value={attendees}
+                      onChange={(event) => setAttendees(event.target.value)}
+                      placeholder="쉼표 또는 줄바꿈"
+                      className="mt-1 h-10 w-full rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
+                    />
+                  </label>
+                ) : null}
+                {showField("meetingPurpose") ? (
+                  <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
+                    미팅 목적
+                    <input
+                      value={meetingPurpose}
+                      onChange={(event) => setMeetingPurpose(event.target.value)}
+                      placeholder="상담, 데모, 견적, 갱신"
+                      className="mt-1 h-10 w-full rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
+                    />
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
+
+            {showField("decisions") || showField("blockers") ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {showField("decisions") ? (
+                  <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
+                    결정/합의
+                    <textarea
+                      value={decisions}
+                      onChange={(event) => setDecisions(event.target.value)}
+                      rows={2}
+                      placeholder="줄바꿈으로 입력"
+                      className="mt-1 w-full resize-none rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] font-medium leading-5 text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
+                    />
+                  </label>
+                ) : null}
+                {showField("blockers") ? (
+                  <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
+                    리스크/이견
+                    <textarea
+                      value={blockers}
+                      onChange={(event) => setBlockers(event.target.value)}
+                      rows={2}
+                      placeholder="가격, 일정, 의사결정자 등"
+                      className="mt-1 w-full resize-none rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] font-medium leading-5 text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
+                    />
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
+
+            {showField("nextAction") ? (
+              <div className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3">
+                <p className="mb-2 text-[12px] font-bold text-[#111110]">다음 액션</p>
               <div className="grid gap-2">
                 <input
                   value={nextActionTitle}
@@ -679,56 +866,54 @@ export default function CrmActivityClient() {
                 </div>
               </div>
             </div>
+            ) : null}
 
-            <div className="grid gap-2 sm:grid-cols-2">
+            {showField("sentiment") || showField("stageSignal") ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {showField("sentiment") ? (
+                  <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
+                    분위기
+                    <select
+                      value={sentiment}
+                      onChange={(event) => setSentiment(event.target.value as Exclude<Sentiment, "all">)}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
+                    >
+                      <option value="neutral">중립</option>
+                      <option value="positive">긍정</option>
+                      <option value="risk">리스크</option>
+                    </select>
+                  </label>
+                ) : null}
+                {showField("stageSignal") ? (
+                  <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
+                    단계 신호
+                    <select
+                      value={stageSignal}
+                      onChange={(event) => setStageSignal(event.target.value)}
+                      className="mt-1 h-10 w-full rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
+                    >
+                      {STAGE_SIGNALS.map((signal) => (
+                        <option key={signal.value || "none"} value={signal.value}>
+                          {signal.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
+            ) : null}
+
+            {showField("tags") ? (
               <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
-                분위기
-                <select
-                  value={sentiment}
-                  onChange={(event) => setSentiment(event.target.value as Exclude<Sentiment, "all">)}
-                  className="mt-1 h-10 w-full rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
-                >
-                  <option value="neutral">중립</option>
-                  <option value="positive">긍정</option>
-                  <option value="risk">리스크</option>
-                </select>
+                태그
+                <input
+                  value={tags}
+                  onChange={(event) => setTags(event.target.value)}
+                  placeholder="견적, 갱신, 하드웨어"
+                  className="mt-1 h-10 w-full rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
+                />
               </label>
-              <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
-                단계 신호
-                <select
-                  value={stageSignal}
-                  onChange={(event) => setStageSignal(event.target.value)}
-                  className="mt-1 h-10 w-full rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
-                >
-                  {STAGE_SIGNALS.map((signal) => (
-                    <option key={signal.value || "none"} value={signal.value}>
-                      {signal.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
-              태그
-              <input
-                value={tags}
-                onChange={(event) => setTags(event.target.value)}
-                placeholder="견적, 갱신, 하드웨어"
-                className="mt-1 h-10 w-full rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/25 focus:border-[#084734]"
-              />
-            </label>
-
-            <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
-              녹음파일
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="audio/*,video/mp4,video/quicktime"
-                className="mt-1 block w-full rounded-lg border border-dashed border-[#d8d8d2] bg-[#fafaf8] px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/60 file:mr-3 file:rounded-md file:border-0 file:bg-[#111110] file:px-3 file:py-1.5 file:text-[12px] file:font-semibold file:text-white"
-              />
-              <span className="mt-1 block text-[11px] font-medium text-[#1a1a1a]/35">mp3, m4a, wav, webm, ogg, mp4 · 최대 50MB</span>
-            </label>
+            ) : null}
 
             <div className="flex gap-2 pt-1">
               <button
@@ -1001,5 +1186,19 @@ export default function CrmActivityClient() {
         </div>
       </section>
     </div>
+  )
+}
+
+export default function CrmActivityClient() {
+  return (
+    <Suspense
+      fallback={
+        <div className="rounded-2xl border border-[#e8e8e4] bg-white p-8 text-center text-[13px] text-[#1a1a1a]/40">
+          CRM 기록을 불러오는 중입니다...
+        </div>
+      }
+    >
+      <CrmActivityClientInner />
+    </Suspense>
   )
 }
