@@ -42,6 +42,12 @@ const SOURCE_OPTIONS: { value: EventSource; label: string; dot: string }[] = [
   { value: "team_event", label: "팀원 행사", dot: "#6D4AA8" },
 ]
 
+const FILTER_STORAGE_KEY = "admin.calendar.filters.v1"
+
+function getSourceColor(source: EventSource): string {
+  return SOURCE_OPTIONS.find((option) => option.value === source)?.dot ?? "#A39E98"
+}
+
 function getTypeStyle(type: EventType) {
   return EVENT_TYPES.find((t) => t.value === type) ?? EVENT_TYPES[EVENT_TYPES.length - 1]
 }
@@ -295,6 +301,7 @@ export default function AdminCalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [hiddenSources, setHiddenSources] = useState<Set<EventSource>>(new Set())
   const [hiddenAssignees, setHiddenAssignees] = useState<Set<string>>(new Set())
+  const [filtersHydrated, setFiltersHydrated] = useState(false)
   const [loading, setLoading] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -321,6 +328,41 @@ export default function AdminCalendarPage() {
   }, [year, month])
 
   useEffect(() => { fetchEvents() }, [fetchEvents])
+
+  // 필터 상태 복원 (새로고침/탭 이동 후 유지) — 초기 렌더는 전체 표시로 SSR 일치, 이후 저장값 적용
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(FILTER_STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as { hiddenSources?: unknown; hiddenAssignees?: unknown }
+        if (Array.isArray(parsed.hiddenSources)) {
+          setHiddenSources(new Set(parsed.hiddenSources as EventSource[]))
+        }
+        if (Array.isArray(parsed.hiddenAssignees)) {
+          setHiddenAssignees(new Set(parsed.hiddenAssignees as string[]))
+        }
+      }
+    } catch {
+      /* localStorage 불가/파싱 실패 시 기본(전체 표시) 유지 */
+    }
+    setFiltersHydrated(true)
+  }, [])
+
+  // 필터 변경 시 저장 (복원 완료 전에는 초기 빈값으로 덮어쓰지 않도록 가드)
+  useEffect(() => {
+    if (!filtersHydrated) return
+    try {
+      localStorage.setItem(
+        FILTER_STORAGE_KEY,
+        JSON.stringify({
+          hiddenSources: Array.from(hiddenSources),
+          hiddenAssignees: Array.from(hiddenAssignees),
+        })
+      )
+    } catch {
+      /* 저장 실패는 무시 */
+    }
+  }, [filtersHydrated, hiddenSources, hiddenAssignees])
 
   // ─── Calendar Math ─────────────────────────────────────────────
   const firstDay = new Date(year, month - 1, 1).getDay()
@@ -702,13 +744,14 @@ export default function AdminCalendarPage() {
                     </button>
                   </div>
 
-                  {/* 모바일: 일정 존재 신호 — 타입색 도트 최대 3개 + 초과 개수 (칩은 sm+ 전용) */}
+                  {/* 모바일: 일정 존재 신호 — 소스색 도트 최대 3개 + 초과 개수 (칩은 sm+ 전용) */}
                   {dayEvents.length > 0 && (
                     <div className="flex items-center gap-0.5 px-0.5 sm:hidden" aria-hidden="true">
                       {dayEvents.slice(0, 3).map((ev) => (
                         <span
                           key={`dot-${ev.id}`}
-                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${getTypeStyle(ev.type).dot}`}
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: getSourceColor(getEventSource(ev)) }}
                         />
                       ))}
                       {dayEvents.length > 3 && (
@@ -728,7 +771,8 @@ export default function AdminCalendarPage() {
                       return (
                         <div
                           key={ev.id}
-                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium truncate border ${style.bg} ${style.color}`}
+                          style={{ boxShadow: `inset 2px 0 0 0 ${getSourceColor(evSource)}` }}
+                          className={`flex items-center gap-1 rounded border py-0.5 pl-2 pr-1.5 text-[10px] font-medium truncate ${style.bg} ${style.color}`}
                         >
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${style.dot}`} />
                           {sourceBadge && (
