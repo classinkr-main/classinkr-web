@@ -6,20 +6,21 @@ import {
   ClipboardList,
   FileSignature,
   FileText,
-  Link2,
   Plus,
   Ticket,
   Users,
 } from "lucide-react"
 
-import HardwareQuotesPanel from "@/components/admin/documents/HardwareQuotesPanel"
+import HardwareQuotesPanel, {
+  type QuoteContractConversion,
+} from "@/components/admin/documents/HardwareQuotesPanel"
 import SoftwareQuoteCodesPanel from "@/components/admin/documents/SoftwareQuoteCodesPanel"
-import { ContractsPanel } from "@/components/admin/documents/ContractsPanel"
+import { ContractsPanel, type ContractCreateRequest } from "@/components/admin/documents/ContractsPanel"
 import { ReceiptsPanel } from "@/components/admin/documents/ReceiptsPanel"
 import type { QuickQuotePrefill } from "@/components/portal/quotes/QuickQuoteComposer"
 import type { StandardQuoteTemplateId } from "@/lib/standard-quote-template"
 
-type DocumentTab = "hardware" | "software" | "contracts" | "receipts" | "links"
+type DocumentTab = "hardware" | "software" | "contracts" | "receipts"
 type HardwareQuoteQuickAction = "new" | StandardQuoteTemplateId
 type HardwareQuoteQuickActionRequest = {
   key: string
@@ -58,37 +59,30 @@ const DOCUMENT_TABS: DocumentTabItem[] = [
     description: "수납 확인, 현금영수증, PDF 발행 기록",
     icon: <ClipboardList className="h-4 w-4" />,
   },
-  {
-    key: "links",
-    label: "공유 링크",
-    description: "열람 로그와 발송 상태를 모을 다음 단계",
-    icon: <Link2 className="h-4 w-4" />,
-  },
+  // "공유 링크"(links) coming-soon 탭은 제거 — 열람수·발송 상태는 하드웨어 견적 행 단위로 이미 제공된다.
+  // 구 딥링크(tab=links|shares)는 normalizeDocumentTab의 hardware 폴백이 흡수한다.
 ]
 
+// href는 렌더에서 소비되지 않는 미사용 필드라 제거 — 북마크 호환은 stub 라우트(redirect)가 담당한다.
 const QUICK_QUOTE_ACTIONS: Array<{
   action: HardwareQuoteQuickAction
   label: string
   description: string
-  href: string
 }> = [
   {
     action: "new",
     label: "빠른 견적 작성",
     description: "리드 없이 고객명만 입력해 견적을 바로 만듭니다.",
-    href: "/admin/quotes/new",
   },
   {
     action: "recording_studio",
     label: "녹화 세트 견적",
     description: "86형 보드, T1, 벽걸이, 자동 녹화 1년 패키지",
-    href: "/admin/quotes/recording-studio",
   },
   {
     action: "online_suite",
     label: "AI Suite 견적",
     description: "월 구독형 통합 학원 패키지 견적",
-    href: "/admin/quotes/ai-suite",
   },
 ]
 
@@ -96,7 +90,6 @@ function normalizeDocumentTab(raw: string | null): DocumentTab {
   if (raw === "software" || raw === "software-code" || raw === "sw") return "software"
   if (raw === "contract" || raw === "contracts") return "contracts"
   if (raw === "receipt" || raw === "receipts") return "receipts"
-  if (raw === "links" || raw === "shares") return "links"
 
   return "hardware"
 }
@@ -240,33 +233,12 @@ function QuoteCreateButton({
   )
 }
 
-function PanelShell({
-  title,
-  description,
-  children,
-}: {
-  title: string
-  description: string
-  children: ReactNode
-}) {
-  return (
-    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-6">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1a1a1a]/35">
-        Next
-      </p>
-      <h2 className="mt-2 text-[17px] font-semibold text-[#111110]">{title}</h2>
-      <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/55">
-        {description}
-      </p>
-      {children}
-    </div>
-  )
-}
-
 export default function QuotesPage() {
   const quickActionSequenceRef = useRef(0)
+  const contractRequestSequenceRef = useRef(0)
   const [activeTab, setActiveTab] = useState<DocumentTab>(() => tabFromSearch())
   const [prefill] = useState<QuickQuotePrefill | null>(() => prefillFromSearch())
+  const [contractCreateRequest, setContractCreateRequest] = useState<ContractCreateRequest | null>(null)
   const [hardwareQuickAction, setHardwareQuickAction] = useState<HardwareQuoteQuickActionRequest>(() => {
     const fromSearch = quickActionFromSearch()
     if (fromSearch) return fromSearch
@@ -300,6 +272,29 @@ export default function QuotesPage() {
       const url = new URL(window.location.href)
       url.searchParams.set("tab", "hardware")
       url.searchParams.set("action", action)
+      window.history.replaceState(null, "", url.toString())
+    }
+  }
+
+  // 견적 행 "계약 전환" → 계약 탭 이동 + 계약서 작성 폼 프리필.
+  // V1 partner ↔ V2 customer/deal 자동 매핑은 금지(C4 이원화 부채) — 수동 생성 진입점만 연다.
+  const handleConvertQuoteToContract = (quote: QuoteContractConversion) => {
+    contractRequestSequenceRef.current += 1
+    setContractCreateRequest({
+      key: `quote-${quote.quoteId}-${contractRequestSequenceRef.current}`,
+      title: quote.title,
+      totalAmount: quote.totalAmount,
+      sourceQuoteNumber: quote.quoteNumber,
+      sourceCustomerName: quote.customerName,
+    })
+    setActiveTab("contracts")
+    setHardwareQuickAction(null)
+
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href)
+      url.searchParams.set("tab", "contracts")
+      url.searchParams.delete("action")
+      url.searchParams.delete("quick")
       window.history.replaceState(null, "", url.toString())
     }
   }
@@ -359,34 +354,17 @@ export default function QuotesPage() {
             quickAction={hardwareQuickAction}
             onQuickActionConsumed={() => setHardwareQuickAction(null)}
             prefill={prefill}
+            onConvertToContract={handleConvertQuoteToContract}
           />
         )}
         {activeTab === "software" && <SoftwareQuoteCodesPanel />}
-        {activeTab === "contracts" && <ContractsPanel />}
-        {activeTab === "receipts" && <ReceiptsPanel />}
-        {activeTab === "links" && (
-          <div className="p-6">
-            <PanelShell
-              title="공유 링크와 열람 로그는 다음 단계에서 연결합니다."
-              description="문서 상태와 발송 상태를 분리한 뒤, 견적 링크 열람, 계약 서명 링크, PDF 발송 기록을 같은 row 모델로 모을 예정입니다."
-            >
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
-                {[
-                  ["견적 공개 링크", "quote_documents 버전 고정 링크와 고객 열람 시각"],
-                  ["계약 서명 링크", "partner_signed, admin_signed 상태와 서명 URL"],
-                  ["영수증 전달", "PDF, 이메일 발송, 현금영수증 발행 기록"],
-                ].map(([title, detail]) => (
-                  <div key={title} className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                    <p className="text-[13px] font-semibold text-[#111110]">{title}</p>
-                    <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/50">
-                      {detail}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </PanelShell>
-          </div>
+        {activeTab === "contracts" && (
+          <ContractsPanel
+            createRequest={contractCreateRequest}
+            onCreateRequestConsumed={() => setContractCreateRequest(null)}
+          />
         )}
+        {activeTab === "receipts" && <ReceiptsPanel />}
       </div>
     </div>
   )

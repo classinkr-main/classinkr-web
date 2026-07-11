@@ -65,11 +65,22 @@ type HardwareQuoteQuickActionRequest = {
   action: HardwareQuoteQuickAction
 } | null
 
+/** 동의 완료 견적을 계약 탭으로 넘길 때 전달하는 최소 컨텍스트(수동 전환 — 파트너 자동 매핑 없음). */
+export type QuoteContractConversion = {
+  quoteId: string
+  quoteNumber: string
+  title: string
+  customerName: string
+  totalAmount: number
+}
+
 type HardwareQuotesPanelProps = {
   quickAction?: HardwareQuoteQuickActionRequest
   onQuickActionConsumed?: () => void
   /** 딜/고객 컨텍스트에서 진입한 프리필 대상(있으면 작성기가 기존 고객·거래를 자동 선택). */
   prefill?: QuickQuotePrefill | null
+  /** 동의 완료 행의 "계약 전환"을 실제 액션으로 배선(계약 탭 이동 + 작성 폼 프리필). */
+  onConvertToContract?: (quote: QuoteContractConversion) => void
 }
 
 const ACTION_LABEL: Record<QuickQuoteCreatedPayload["action"], string> = {
@@ -289,6 +300,7 @@ export default function HardwareQuotesPanel({
   quickAction = null,
   onQuickActionConsumed,
   prefill = null,
+  onConvertToContract,
 }: HardwareQuotesPanelProps) {
   const [composerOpen, setComposerOpen] = useState(false)
   const [composerTemplateId, setComposerTemplateId] = useState<StandardQuoteTemplateId>("board_86")
@@ -654,6 +666,8 @@ export default function HardwareQuotesPanel({
               const statusMeta = getStatusMeta(quote.status)
               const sharing = sharingQuoteId === quote.id
               const nextAction = getNextActionMeta(quote)
+              const canConvertToContract =
+                Boolean(onConvertToContract) && (quote.status === "accepted" || Boolean(quote.acceptedAt))
 
               return (
                 <div
@@ -666,10 +680,30 @@ export default function HardwareQuotesPanel({
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${statusMeta.className}`}>
                         {statusMeta.label}
                       </span>
-                      <span className={`inline-flex items-center gap-0.5 text-[11px] font-medium ${nextAction.textClassName}`}>
-                        <ArrowRight className="h-3 w-3" />
-                        {nextAction.label}
-                      </span>
+                      {canConvertToContract ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onConvertToContract?.({
+                              quoteId: quote.id,
+                              quoteNumber: quote.quoteNumber,
+                              title: quote.title,
+                              customerName: quote.customerName,
+                              totalAmount: quote.totalAmount,
+                            })
+                          }
+                          title="계약 탭으로 이동해 이 견적 내용으로 계약서 작성을 시작합니다."
+                          className={`inline-flex items-center gap-0.5 text-[11px] font-medium underline-offset-2 transition-colors hover:underline focus-visible:underline focus-visible:outline-none ${nextAction.textClassName}`}
+                        >
+                          <ArrowRight className="h-3 w-3" />
+                          {nextAction.label}
+                        </button>
+                      ) : (
+                        <span className={`inline-flex items-center gap-0.5 text-[11px] font-medium ${nextAction.textClassName}`}>
+                          <ArrowRight className="h-3 w-3" />
+                          {nextAction.label}
+                        </span>
+                      )}
                       {quote.createdAction && (
                         <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/45 ring-1 ring-[#e8e8e4]">
                           {ACTION_LABEL[quote.createdAction]}
@@ -693,7 +727,7 @@ export default function HardwareQuotesPanel({
                   <div className="grid grid-cols-3 gap-2 text-xs lg:grid-cols-1">
                     <div>
                       <p className="text-[#1a1a1a]/35">금액</p>
-                      <p className="mt-0.5 font-semibold text-[#111110]">{formatMoney(quote.totalAmount)}</p>
+                      <p className="mt-0.5 font-semibold tabular-nums text-[#111110]">{formatMoney(quote.totalAmount)}</p>
                     </div>
                     <div>
                       <p className="text-[#1a1a1a]/35">버전</p>

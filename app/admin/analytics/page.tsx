@@ -33,27 +33,6 @@ const ANALYTICS_TABS: Array<{ key: AnalyticsTab; label: string }> = [
   { key: "content", label: "콘텐츠" },
 ]
 
-interface VisitorStatsDay {
-  date: string
-  visitors: number
-  pageViews: number
-  homeVisitors: number
-  homePageViews: number
-}
-
-interface VisitorStats {
-  rangeDays: number
-  timezone: "Asia/Seoul"
-  today: VisitorStatsDay
-  totals: {
-    visitors: number
-    pageViews: number
-    homeVisitors: number
-    homePageViews: number
-  }
-  daily: VisitorStatsDay[]
-}
-
 async function fetchJson<T>(url: string): Promise<T | null> {
   try {
     return await adminFetchJsonCached<T>(url, undefined, { ttlMs: 60_000 })
@@ -160,24 +139,6 @@ function Panel({
       <div className="p-4 sm:p-6">{children}</div>
     </section>
   )
-}
-
-// KPI 카드는 공용 StatTile(components/admin/viz)로 통합 — trend(number)는 StatTile이 지원.
-// (로컬 TrendBadge는 Panel action 슬롯에서 별도 사용 중이라 유지)
-function SummaryCard({
-  icon,
-  label,
-  value,
-  hint,
-  trend,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string | number
-  hint?: string
-  trend?: number
-}) {
-  return <StatTile icon={icon} label={label} value={value} hint={hint} trend={trend} />
 }
 
 function InsightCard({
@@ -287,7 +248,6 @@ export default function AnalyticsPage() {
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [posts, setPosts] = useState<BlogPost[]>([])
-  const [visitorStats, setVisitorStats] = useState<VisitorStats | null>(null)
   const activeTab: AnalyticsTab = ANALYTICS_TABS.some((tab) => tab.key === tabParam)
     ? (tabParam as AnalyticsTab)
     : "leads"
@@ -320,19 +280,6 @@ export default function AnalyticsPage() {
       cancelled = true
     }
   }, [])
-
-  useEffect(() => {
-    let cancelled = false
-
-    void fetchJson<VisitorStats>(`/api/admin/visitor-stats?range=${range}`).then((stats) => {
-      if (cancelled) return
-      setVisitorStats(stats ?? null)
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [range])
 
   const { today, start, previousStart } = getDayWindow(range)
   const nextDay = shiftDays(today, 1)
@@ -420,15 +367,6 @@ export default function AnalyticsPage() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 6)
 
-  // 상단 KPI "오늘 홈 방문자" 카드가 쓰는 방문자 추세만 파생한다.
-  const visitorTodayIndex =
-    visitorStats?.daily.findIndex((day) => day.date === visitorStats.today.date) ?? -1
-  const visitorYesterday =
-    visitorStats && visitorTodayIndex > 0 ? visitorStats.daily[visitorTodayIndex - 1] : null
-  const homeVisitorTrend = visitorStats
-    ? visitorStats.today.homeVisitors - (visitorYesterday?.homeVisitors ?? 0)
-    : undefined
-
   const leadInsight =
     leads.length === 0
       ? "아직 리드 데이터가 없어 CRM과 Analytics가 모두 가벼운 상태입니다."
@@ -461,18 +399,8 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard
-          icon={<BarChart2 className="w-4 h-4" />}
-          label="오늘 홈 방문자"
-          value={visitorStats ? visitorStats.today.homeVisitors : "..."}
-          hint={
-            visitorStats
-              ? `${range}일 홈 ${visitorStats.totals.homeVisitors.toLocaleString()}명 · PV ${visitorStats.totals.homePageViews.toLocaleString()}`
-              : "동의 기반 집계"
-          }
-          trend={homeVisitorTrend}
-        />
+      {/* "오늘 홈 방문자" 카드는 traffic으로 일원화(C3e) — 전용 visitor-stats fetch 제거, 아래 트래픽 크로스링크로 대체. */}
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           icon={<Users className="w-4 h-4" />}
           label="최근 리드"
@@ -501,34 +429,7 @@ export default function AnalyticsPage() {
         />
       </div>
 
-      <div className="mb-6 grid gap-3 md:grid-cols-3">
-        <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-4">
-          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">INSIGHT</p>
-          <p className="mt-2 text-[14px] font-semibold text-[#111110]">
-            {dominantSource?.label ?? "유입원 없음"}가 가장 강합니다.
-          </p>
-          <p className="mt-1.5 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-            리드 {dominantSource?.leadCount ?? 0}건 · 전환율 {dominantSource?.conversionRate ?? 0}%
-          </p>
-        </div>
-        <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-4">
-          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">ACTION</p>
-          <p className="mt-2 text-[14px] font-semibold text-[#111110]">
-            {newLeads > 0 ? "CRM 후속이 우선입니다." : "즉시 처리할 신규 리드는 없습니다."}
-          </p>
-          <p className="mt-1.5 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-            {newLeads > 0 ? `${newLeads}건의 신규 리드가 CRM에서 대기 중입니다.` : "운영 알림과 일정만 확인하면 되는 안정 구간입니다."}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-4">
-          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">CONVERSION</p>
-          <p className="mt-2 text-[14px] font-semibold text-[#111110]">{conversionRate}% 전환율</p>
-          <p className="mt-1.5 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-            전환 리드 {convertedLeads.length}건 · 이번 기간 흐름을 바로 비교할 수 있습니다.
-          </p>
-        </div>
-      </div>
-
+      {/* Top source/Action/Conversion 인사이트 트리오는 리드 탭 "이번 기간 해석" 패널 1곳으로 통합(중복 렌더 제거). */}
       <AdminTabs
         className="mb-6"
         label="Analytics 보기"
@@ -537,26 +438,48 @@ export default function AnalyticsPage() {
         onValueChange={setTabParam}
       />
 
-      <a
-        href="/admin/campaigns"
-        className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-[#D1FAE5] bg-[#ECFDF5] px-4 py-3.5 transition-colors hover:bg-[#DCFCE9] sm:px-5"
-      >
-        <div className="flex items-center gap-3">
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#084734]">
-            <Mail className="h-4 w-4" />
-          </span>
-          <div>
-            <p className="text-[13px] font-semibold text-[#084734]">행사 퍼널·이메일 캠페인 성과는 캠페인에서 봅니다</p>
-            <p className="mt-0.5 text-[12px] text-[#084734]/70">
-              행사 리드 → 딜 퍼널과 이메일 발송 성과를 한 화면에 모았습니다.
-            </p>
+      <div className="mb-6 grid gap-3 lg:grid-cols-2">
+        <a
+          href="/admin/campaigns"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-[#D1FAE5] bg-[#ECFDF5] px-4 py-3.5 transition-colors hover:bg-[#DCFCE9] sm:px-5"
+        >
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#084734]">
+              <Mail className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-[13px] font-semibold text-[#084734]">행사 퍼널·이메일 캠페인 성과는 캠페인에서 봅니다</p>
+              <p className="mt-0.5 text-[12px] text-[#084734]/70">
+                행사 리드 → 딜 퍼널과 이메일 발송 성과를 한 화면에 모았습니다.
+              </p>
+            </div>
           </div>
-        </div>
-        <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#084734]">
-          캠페인 열기
-          <ChevronRight className="h-3.5 w-3.5" />
-        </span>
-      </a>
+          <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#084734]">
+            캠페인 열기
+            <ChevronRight className="h-3.5 w-3.5" />
+          </span>
+        </a>
+        <a
+          href="/admin/traffic"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3.5 transition-colors hover:bg-[#f0f0ec] sm:px-5"
+        >
+          <div className="flex items-center gap-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#1a1a1a]/55">
+              <BarChart2 className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-[13px] font-semibold text-[#111110]">방문자·홈 흐름·전환 픽셀은 트래픽에서 봅니다</p>
+              <p className="mt-0.5 text-[12px] text-[#1a1a1a]/45">
+                오늘 방문자, 페이지 흐름, CTA 클릭 계측을 트래픽 화면에 단일화했습니다.
+              </p>
+            </div>
+          </div>
+          <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#1a1a1a]/55">
+            트래픽 열기
+            <ChevronRight className="h-3.5 w-3.5" />
+          </span>
+        </a>
+      </div>
 
       {activeTab === "leads" && (
         <div className="space-y-6">
@@ -857,28 +780,28 @@ export default function AnalyticsPage() {
             </Panel>
           </div>
 
-          <Panel title="콘텐츠 전환 준비 상태" description="실제 CTA 성과 계측 전, 운영자가 먼저 확인해야 할 준비 항목입니다.">
-            <div className="grid gap-4 md:grid-cols-3">
-              <InsightCard
-                eyebrow="CTA 목적지"
-                title="글별 연결 점검"
-                description="블로그 글의 CTA가 `#demo` 또는 `/contact`에 집중되어 있는지 확인하세요."
-                tone="info"
-              />
-              <InsightCard
-                eyebrow="다운로드"
-                title="자료별 식별자 확인"
-                description="자료실·블로그 다운로드는 download_materials에 lead_magnet과 gate가 함께 기록됩니다."
-                tone="info"
-              />
-              <InsightCard
-                eyebrow="콘텐츠 기여"
-                title="content_id 파라미터 권장"
-                description="글 단위 전환 기여를 보려면 CTA 클릭 이벤트에 content_id를 함께 보내는 것이 좋습니다."
-                tone="neutral"
-              />
+          {/* 정적 조언 패널("콘텐츠 전환 준비 상태")은 제거 — CTA 클릭 실측치는 traffic event-counts(click_cta)에 있으므로
+              크로스링크로 대체한다. 콘텐츠 단위 실데이터 위젯화(event-counts 소비)는 후속 범위. */}
+          <a
+            href="/admin/traffic"
+            className="flex items-center justify-between gap-3 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3.5 transition-colors hover:bg-[#f0f0ec] sm:px-5"
+          >
+            <div className="flex items-center gap-3">
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#1a1a1a]/55">
+                <BarChart2 className="h-4 w-4" />
+              </span>
+              <div>
+                <p className="text-[13px] font-semibold text-[#111110]">블로그 CTA 클릭 실측은 트래픽에서 봅니다</p>
+                <p className="mt-0.5 text-[12px] text-[#1a1a1a]/45">
+                  CTA 클릭(click_cta)·다운로드 이벤트 집계가 트래픽 화면에 있습니다. 글 단위 기여 분석은 후속으로 연결합니다.
+                </p>
+              </div>
             </div>
-          </Panel>
+            <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#1a1a1a]/55">
+              트래픽 열기
+              <ChevronRight className="h-3.5 w-3.5" />
+            </span>
+          </a>
         </div>
       )}
     </div>

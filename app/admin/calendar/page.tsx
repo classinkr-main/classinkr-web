@@ -389,11 +389,15 @@ export default function AdminCalendarPage() {
 
   const monthLabel = `${year}년 ${month}월`
   const totalThisMonth = visibleEvents.length
+  // 소스별 카운트는 의도적으로 전체(events) 기준 — 필터를 걸어도 소스 분포는 유지해 보여준다.
+  // 대신 필터 활성 시 스트립에 기준 캡션을 붙여 '이번달(필터 반영)'과 base가 다름을 명시한다.
   const totalPartnerEvents = events.filter((event) => getEventSource(event) === "partner").length
   const totalTeamEvents = events.filter((event) => getEventSource(event) === "calendar").length
   const totalPublicEvents = events.filter((event) => getEventSource(event) === "event").length
   const totalNotionEvents = events.filter((event) => getEventSource(event) === "notion").length
   const totalShowroomEvents = events.filter((event) => getEventSource(event) === "showroom").length
+  const activeSourceLabel =
+    sourceFilter === "all" ? null : SOURCE_FILTERS.find((filter) => filter.value === sourceFilter)?.label ?? null
 
   return (
     <div className="px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
@@ -422,7 +426,8 @@ export default function AdminCalendarPage() {
       {/* Stats strip */}
       <div className="mb-6 flex flex-wrap items-center gap-3 text-[13px]">
         <span className="text-[#1a1a1a]/40">
-          이번달 <span className="font-semibold text-[#111110]">{totalThisMonth}개</span>
+          이번달{activeSourceLabel ? `(${activeSourceLabel})` : ""}{" "}
+          <span className="font-semibold text-[#111110]">{totalThisMonth}개</span>
         </span>
         <span className="text-[#1a1a1a]/40">
           팀 일정 <span className="font-semibold text-[#111110]">{totalTeamEvents}개</span>
@@ -439,6 +444,9 @@ export default function AdminCalendarPage() {
         <span className="text-[#1a1a1a]/40">
           쇼룸 예약 <span className="font-semibold text-[#111110]">{totalShowroomEvents}개</span>
         </span>
+        {activeSourceLabel && (
+          <span className="text-[11px] text-[#1a1a1a]/35">소스별 개수는 전체 기준</span>
+        )}
         {EVENT_TYPES.slice(0, 4).map((t) => {
           const cnt = visibleEvents.filter(e => e.type === t.value).length
           if (cnt === 0) return null
@@ -563,6 +571,23 @@ export default function AdminCalendarPage() {
                       <Plus className="w-3 h-3" />
                     </button>
                   </div>
+
+                  {/* 모바일: 일정 존재 신호 — 타입색 도트 최대 3개 + 초과 개수 (칩은 sm+ 전용) */}
+                  {dayEvents.length > 0 && (
+                    <div className="flex items-center gap-0.5 px-0.5 sm:hidden" aria-hidden="true">
+                      {dayEvents.slice(0, 3).map((ev) => (
+                        <span
+                          key={`dot-${ev.id}`}
+                          className={`h-1.5 w-1.5 shrink-0 rounded-full ${getTypeStyle(ev.type).dot}`}
+                        />
+                      ))}
+                      {dayEvents.length > 3 && (
+                        <span className="text-[9px] font-medium leading-none text-[#1a1a1a]/40">
+                          +{dayEvents.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Event dots/chips */}
                   <div className="hidden space-y-0.5 overflow-hidden sm:block">

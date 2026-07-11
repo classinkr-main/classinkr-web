@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
-import { RefreshCw, Trash2, X, PenLine, Copy, Check, Send, Search } from "lucide-react"
+import { Plus, RefreshCw, Trash2, X, PenLine, Copy, Check, Send, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { useUrlState } from "@/lib/use-url-state"
@@ -10,6 +10,31 @@ import type { Contract, ContractStatus, Partner } from "@/lib/supabase/database.
 // GET /api/admin/partners는 { partners }가 아니라 { workspaces }/{ summaries }를 반환한다.
 // 패널은 파트너명 표시에 id/name만 필요하므로 summary 응답을 최소 형태로 매핑해 쓴다.
 type PartnerOption = Pick<Partner, "id" | "name">
+
+/**
+ * 견적 행 "계약 전환" 등 외부 진입점이 계약서 작성 폼을 프리필로 열 때 쓰는 요청.
+ * 주의: V1 계약은 legacy partner_id, V2 견적은 portal customer/deal이라 자동 매핑은 금지(C4 부채).
+ * 견적 컨텍스트는 제목·금액·메모 텍스트로만 옮기고, 파트너는 사용자가 직접 선택한다.
+ */
+export type ContractCreateRequest = {
+  key: string
+  title?: string
+  totalAmount?: number
+  sourceQuoteNumber?: string
+  sourceCustomerName?: string
+}
+
+type ContractsPanelProps = {
+  createRequest?: ContractCreateRequest | null
+  onCreateRequestConsumed?: () => void
+}
+
+const EMPTY_CREATE_FORM = {
+  partner_id: "",
+  title: "",
+  total_amount: 0,
+  notes: "",
+}
 
 const STATUS_LABEL: Record<ContractStatus, string> = {
   draft: "작성 중",
@@ -115,7 +140,7 @@ function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
   )
 }
 
-export function ContractsPanel() {
+export function ContractsPanel({ createRequest = null, onCreateRequestConsumed }: ContractsPanelProps = {}) {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [partners, setPartners] = useState<PartnerOption[]>([])
   const [loading, setLoading] = useState(true)
@@ -123,6 +148,12 @@ export function ContractsPanel() {
   const [showSign, setShowSign] = useState(false)
   const [signing, setSigning] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM)
+  const [createSourceQuote, setCreateSourceQuote] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const handledCreateRequestKeyRef = useRef<string | null>(null)
   const [query, setQuery] = useUrlState("contract_q", "")
   const [statusFilter, setStatusFilter] = useUrlState("contract_status", "all")
 
@@ -147,6 +178,64 @@ export function ContractsPanel() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // 견적 "계약 전환" 진입 — 폼을 프리필로 연다(1회 소비).
+  useEffect(() => {
+    if (!createRequest) return
+    if (handledCreateRequestKeyRef.current === createRequest.key) return
+
+    handledCreateRequestKeyRef.current = createRequest.key
+    setCreateForm({
+      ...EMPTY_CREATE_FORM,
+      title: createRequest.title ?? "",
+      total_amount: createRequest.totalAmount ?? 0,
+      notes: createRequest.sourceQuoteNumber
+        ? `견적 ${createRequest.sourceQuoteNumber}${createRequest.sourceCustomerName ? ` (${createRequest.sourceCustomerName})` : ""} 기반 수동 전환`
+        : "",
+    })
+    setCreateSourceQuote(createRequest.sourceQuoteNumber ?? null)
+    setCreateError(null)
+    setShowCreate(true)
+    onCreateRequestConsumed?.()
+  }, [createRequest, onCreateRequestConsumed])
+
+  const openCreateForm = () => {
+    setCreateForm(EMPTY_CREATE_FORM)
+    setCreateSourceQuote(null)
+    setCreateError(null)
+    setShowCreate(true)
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault()
+    setCreating(true)
+    setCreateError(null)
+    try {
+      // contract_number는 API가 자동 생성, status/sign_token은 DB 기본값(draft) 사용.
+      // quote_id는 V1 quotes FK라 V2 견적 문서를 연결하지 않는다(자동 매핑 금지).
+      const res = await adminFetch("/api/admin/contracts", {
+        method: "POST",
+        body: JSON.stringify({
+          partner_id: createForm.partner_id,
+          title: createForm.title.trim(),
+          total_amount: createForm.total_amount,
+          notes: createForm.notes.trim() || null,
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.error ?? "계약서 생성에 실패했습니다.")
+      }
+      setShowCreate(false)
+      setCreateForm(EMPTY_CREATE_FORM)
+      setCreateSourceQuote(null)
+      void load()
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : "계약서 생성에 실패했습니다.")
+    } finally {
+      setCreating(false)
+    }
+  }
 
   const partnerName = useCallback(
     (id: string) => partners.find((p) => p.id === id)?.name ?? id,
@@ -252,6 +341,10 @@ export function ContractsPanel() {
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
+          <Button size="sm" onClick={openCreateForm}>
+            <Plus className="mr-1 h-4 w-4" />
+            계약서 작성
+          </Button>
         </div>
       </div>
 
@@ -259,7 +352,16 @@ export function ContractsPanel() {
         {loading ? (
           <div className="py-16 text-center text-sm text-[#1a1a1a]/40">불러오는 중...</div>
         ) : contracts.length === 0 ? (
-          <div className="py-16 text-center text-sm text-[#1a1a1a]/40">등록된 계약이 없습니다.</div>
+          <div className="py-16 text-center text-sm text-[#1a1a1a]/40">
+            <p>등록된 계약이 없습니다.</p>
+            <button
+              type="button"
+              onClick={openCreateForm}
+              className="mt-2 text-xs font-medium text-[#084734] underline underline-offset-2"
+            >
+              첫 계약서 작성
+            </button>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center text-sm text-[#1a1a1a]/40">
             <p>조건에 맞는 계약이 없습니다.</p>
@@ -290,7 +392,7 @@ export function ContractsPanel() {
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                     <div>
                       <p className="text-[#1a1a1a]/32">금액</p>
-                      <p className="mt-0.5 font-semibold text-[#111110]">{c.total_amount.toLocaleString()}원</p>
+                      <p className="mt-0.5 font-semibold tabular-nums text-[#111110]">{c.total_amount.toLocaleString("ko-KR")}원</p>
                     </div>
                     <div>
                       <p className="text-[#1a1a1a]/32">파트너 서명</p>
@@ -362,7 +464,7 @@ export function ContractsPanel() {
                       <td className="px-4 py-3 font-mono text-xs text-[#1a1a1a]/60">{c.contract_number}</td>
                       <td className="px-4 py-3 text-[#1a1a1a]/70">{partnerName(c.partner_id)}</td>
                       <td className="px-4 py-3 font-medium text-[#1a1a1a]">{c.title}</td>
-                      <td className="px-4 py-3 font-medium">{c.total_amount.toLocaleString()}원</td>
+                      <td className="px-4 py-3 font-medium tabular-nums">{c.total_amount.toLocaleString("ko-KR")}원</td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLOR[c.status]}`}>{STATUS_LABEL[c.status]}</span>
                       </td>
@@ -420,6 +522,98 @@ export function ContractsPanel() {
           </>
         )}
       </div>
+
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-4">
+          <div className="max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
+              <div>
+                <h2 className="text-base font-semibold">계약서 작성</h2>
+                <p className="mt-0.5 text-xs text-[#1a1a1a]/50">
+                  저장하면 작성 중 상태로 만들어지고, 발송 후 서명 링크를 공유할 수 있습니다.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowCreate(false)}
+                aria-label="계약서 작성 닫기"
+                className="text-[#1a1a1a]/40 hover:text-[#1a1a1a]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreate} className="max-h-[calc(100dvh-5.5rem)] space-y-4 overflow-y-auto p-4 sm:p-6">
+              {createSourceQuote && (
+                <div className="rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2.5 text-xs leading-relaxed text-[#1a1a1a]/55">
+                  견적 <span className="font-mono text-[#111110]">{createSourceQuote}</span> 내용을 옮겨 왔습니다.
+                  견적 고객과 계약 파트너는 자동으로 연결되지 않으니 파트너를 직접 선택해 주세요.
+                </div>
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">파트너 *</label>
+                  <select
+                    required
+                    value={createForm.partner_id}
+                    onChange={(e) => setCreateForm({ ...createForm, partner_id: e.target.value })}
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]"
+                  >
+                    <option value="">선택</option>
+                    {partners.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">계약 제목 *</label>
+                  <input
+                    required
+                    value={createForm.title}
+                    onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
+                    placeholder="예: 86형 전자칠판 공급 계약"
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a]"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">계약 금액 (원) *</label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    value={createForm.total_amount || ""}
+                    onChange={(e) => setCreateForm({ ...createForm, total_amount: Math.max(0, Math.round(+e.target.value || 0)) })}
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm tabular-nums focus:outline-none focus:border-[#1a1a1a]"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">메모</label>
+                  <textarea
+                    value={createForm.notes}
+                    onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })}
+                    rows={2}
+                    placeholder="근거 견적 번호, 특이 조건 등"
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#1a1a1a] resize-none"
+                  />
+                </div>
+              </div>
+              {createError && (
+                <p className="rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-xs text-[#B85C33]">
+                  {createError}
+                </p>
+              )}
+              <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+                <Button type="button" variant="outline" onClick={() => setShowCreate(false)} disabled={creating}>
+                  취소
+                </Button>
+                <Button type="submit" disabled={creating}>
+                  {creating ? "저장 중..." : "계약서 만들기"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {showSign && selected && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-4">
