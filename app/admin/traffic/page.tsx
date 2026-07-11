@@ -411,12 +411,14 @@ export default function TrafficPage() {
 
       <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-4">
         {conversionCards.map((card) => (
-          <div key={card.event} className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
-            <div className="mb-3 inline-flex rounded-xl bg-[#f0f0ec] p-2 text-[#1a1a1a]/50">{card.icon}</div>
-            <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/40">{card.title}</p>
-            <p className="text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]">{fmtCount(card.count)}</p>
-            <p className="mt-1.5 font-mono text-[11px] text-[#1a1a1a]/40">{card.event}</p>
-          </div>
+          <StatTile
+            key={card.event}
+            icon={card.icon}
+            label={card.title}
+            value={fmtCount(card.count)}
+            hint={card.event}
+            hintMono
+          />
         ))}
       </div>
 
