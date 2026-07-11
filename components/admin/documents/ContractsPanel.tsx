@@ -11,23 +11,8 @@ import type { Contract, ContractStatus, Partner } from "@/lib/supabase/database.
 // 패널은 파트너명 표시에 id/name만 필요하므로 summary 응답을 최소 형태로 매핑해 쓴다.
 type PartnerOption = Pick<Partner, "id" | "name">
 
-/**
- * 견적 행 "계약 전환" 등 외부 진입점이 계약서 작성 폼을 프리필로 열 때 쓰는 요청.
- * 주의: V1 계약은 legacy partner_id, V2 견적은 portal customer/deal이라 자동 매핑은 금지(C4 부채).
- * 견적 컨텍스트는 제목·금액·메모 텍스트로만 옮기고, 파트너는 사용자가 직접 선택한다.
- */
-export type ContractCreateRequest = {
-  key: string
-  title?: string
-  totalAmount?: number
-  sourceQuoteNumber?: string
-  sourceCustomerName?: string
-}
-
-type ContractsPanelProps = {
-  createRequest?: ContractCreateRequest | null
-  onCreateRequestConsumed?: () => void
-}
+// V2 견적 전환은 HardwareQuotesPanel이 /api/portal/quotes/[id]/convert로 직접 처리(딜·고객 FK 연결) —
+// 이 폼은 V1 legacy 계약의 수동 신설 전용이라 외부 프리필 요청 프롭을 받지 않는다.
 
 const EMPTY_CREATE_FORM = {
   partner_id: "",
@@ -140,7 +125,7 @@ function SignatureCanvas({ onSave }: { onSave: (dataUrl: string) => void }) {
   )
 }
 
-export function ContractsPanel({ createRequest = null, onCreateRequestConsumed }: ContractsPanelProps = {}) {
+export function ContractsPanel() {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [partners, setPartners] = useState<PartnerOption[]>([])
   const [loading, setLoading] = useState(true)
@@ -150,10 +135,8 @@ export function ContractsPanel({ createRequest = null, onCreateRequestConsumed }
   const [copied, setCopied] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState(EMPTY_CREATE_FORM)
-  const [createSourceQuote, setCreateSourceQuote] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
-  const handledCreateRequestKeyRef = useRef<string | null>(null)
   const [query, setQuery] = useUrlState("contract_q", "")
   const [statusFilter, setStatusFilter] = useUrlState("contract_status", "all")
 
@@ -179,29 +162,8 @@ export function ContractsPanel({ createRequest = null, onCreateRequestConsumed }
     void load()
   }, [load])
 
-  // 견적 "계약 전환" 진입 — 폼을 프리필로 연다(1회 소비).
-  useEffect(() => {
-    if (!createRequest) return
-    if (handledCreateRequestKeyRef.current === createRequest.key) return
-
-    handledCreateRequestKeyRef.current = createRequest.key
-    setCreateForm({
-      ...EMPTY_CREATE_FORM,
-      title: createRequest.title ?? "",
-      total_amount: createRequest.totalAmount ?? 0,
-      notes: createRequest.sourceQuoteNumber
-        ? `견적 ${createRequest.sourceQuoteNumber}${createRequest.sourceCustomerName ? ` (${createRequest.sourceCustomerName})` : ""} 기반 수동 전환`
-        : "",
-    })
-    setCreateSourceQuote(createRequest.sourceQuoteNumber ?? null)
-    setCreateError(null)
-    setShowCreate(true)
-    onCreateRequestConsumed?.()
-  }, [createRequest, onCreateRequestConsumed])
-
   const openCreateForm = () => {
     setCreateForm(EMPTY_CREATE_FORM)
-    setCreateSourceQuote(null)
     setCreateError(null)
     setShowCreate(true)
   }
@@ -228,7 +190,6 @@ export function ContractsPanel({ createRequest = null, onCreateRequestConsumed }
       }
       setShowCreate(false)
       setCreateForm(EMPTY_CREATE_FORM)
-      setCreateSourceQuote(null)
       void load()
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : "계약서 생성에 실패했습니다.")
@@ -542,12 +503,6 @@ export function ContractsPanel({ createRequest = null, onCreateRequestConsumed }
               </button>
             </div>
             <form onSubmit={handleCreate} className="max-h-[calc(100dvh-5.5rem)] space-y-4 overflow-y-auto p-4 sm:p-6">
-              {createSourceQuote && (
-                <div className="rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2.5 text-xs leading-relaxed text-[#1a1a1a]/55">
-                  견적 <span className="font-mono text-[#111110]">{createSourceQuote}</span> 내용을 옮겨 왔습니다.
-                  견적 고객과 계약 파트너는 자동으로 연결되지 않으니 파트너를 직접 선택해 주세요.
-                </div>
-              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">파트너 *</label>

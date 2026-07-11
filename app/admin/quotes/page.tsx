@@ -11,11 +11,9 @@ import {
   Users,
 } from "lucide-react"
 
-import HardwareQuotesPanel, {
-  type QuoteContractConversion,
-} from "@/components/admin/documents/HardwareQuotesPanel"
+import HardwareQuotesPanel from "@/components/admin/documents/HardwareQuotesPanel"
 import SoftwareQuoteCodesPanel from "@/components/admin/documents/SoftwareQuoteCodesPanel"
-import { ContractsPanel, type ContractCreateRequest } from "@/components/admin/documents/ContractsPanel"
+import { ContractsPanel } from "@/components/admin/documents/ContractsPanel"
 import { ReceiptsPanel } from "@/components/admin/documents/ReceiptsPanel"
 import type { QuickQuotePrefill } from "@/components/portal/quotes/QuickQuoteComposer"
 import type { StandardQuoteTemplateId } from "@/lib/standard-quote-template"
@@ -235,10 +233,8 @@ function QuoteCreateButton({
 
 export default function QuotesPage() {
   const quickActionSequenceRef = useRef(0)
-  const contractRequestSequenceRef = useRef(0)
   const [activeTab, setActiveTab] = useState<DocumentTab>(() => tabFromSearch())
   const [prefill] = useState<QuickQuotePrefill | null>(() => prefillFromSearch())
-  const [contractCreateRequest, setContractCreateRequest] = useState<ContractCreateRequest | null>(null)
   const [hardwareQuickAction, setHardwareQuickAction] = useState<HardwareQuoteQuickActionRequest>(() => {
     const fromSearch = quickActionFromSearch()
     if (fromSearch) return fromSearch
@@ -276,28 +272,8 @@ export default function QuotesPage() {
     }
   }
 
-  // 견적 행 "계약 전환" → 계약 탭 이동 + 계약서 작성 폼 프리필.
-  // V1 partner ↔ V2 customer/deal 자동 매핑은 금지(C4 이원화 부채) — 수동 생성 진입점만 연다.
-  const handleConvertQuoteToContract = (quote: QuoteContractConversion) => {
-    contractRequestSequenceRef.current += 1
-    setContractCreateRequest({
-      key: `quote-${quote.quoteId}-${contractRequestSequenceRef.current}`,
-      title: quote.title,
-      totalAmount: quote.totalAmount,
-      sourceQuoteNumber: quote.quoteNumber,
-      sourceCustomerName: quote.customerName,
-    })
-    setActiveTab("contracts")
-    setHardwareQuickAction(null)
-
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href)
-      url.searchParams.set("tab", "contracts")
-      url.searchParams.delete("action")
-      url.searchParams.delete("quick")
-      window.history.replaceState(null, "", url.toString())
-    }
-  }
+  // 견적 행 "계약 전환"은 HardwareQuotesPanel이 V2 convert 라우트로 직접 처리한다
+  // (딜·고객 FK 연결 + stage 전진 + 태스크 완료) — 레거시 계약 폼 프리필 브리지는 폐기됨.
 
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
@@ -354,16 +330,10 @@ export default function QuotesPage() {
             quickAction={hardwareQuickAction}
             onQuickActionConsumed={() => setHardwareQuickAction(null)}
             prefill={prefill}
-            onConvertToContract={handleConvertQuoteToContract}
           />
         )}
         {activeTab === "software" && <SoftwareQuoteCodesPanel />}
-        {activeTab === "contracts" && (
-          <ContractsPanel
-            createRequest={contractCreateRequest}
-            onCreateRequestConsumed={() => setContractCreateRequest(null)}
-          />
-        )}
+        {activeTab === "contracts" && <ContractsPanel />}
         {activeTab === "receipts" && <ReceiptsPanel />}
       </div>
     </div>
