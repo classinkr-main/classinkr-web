@@ -1,10 +1,10 @@
 "use client"
 
 import Link from "next/link"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import {
   ChevronLeft, ChevronRight, Plus, Clock, Users,
-  AlignLeft, Trash2, Pencil, CalendarDays,
+  AlignLeft, Trash2, Pencil, CalendarDays, Check,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -33,8 +33,7 @@ const EVENT_TYPES: { value: EventType; label: string; color: string; bg: string;
   { value: "other",    label: "기타",     color: "text-[#615D59]",  bg: "bg-[#f0f0ec] border-[#e8e8e4]",   dot: "bg-[#A39E98]" },
 ]
 
-const SOURCE_FILTERS: { value: "all" | EventSource; label: string }[] = [
-  { value: "all", label: "전체" },
+const SOURCE_OPTIONS: { value: EventSource; label: string }[] = [
   { value: "calendar", label: "팀 일정" },
   { value: "partner", label: "파트너 일정" },
   { value: "event", label: "공개 행사" },
@@ -232,6 +231,54 @@ function EventForm({ initial, onSave, onCancel, loading, isEdit }: EventFormProp
   )
 }
 
+// ─── 체크박스 필터 칩 ─────────────────────────────────────────────────────────
+
+function CheckChip({
+  checked,
+  label,
+  count,
+  onToggle,
+  avatar,
+}: {
+  checked: boolean
+  label: string
+  count?: number
+  onToggle: () => void
+  avatar?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onToggle}
+      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+        checked
+          ? "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
+          : "border-[#e8e8e4] bg-white text-[#1a1a1a]/45 hover:border-[#1a1a1a]/20 hover:text-[#111110]"
+      }`}
+    >
+      <span
+        className={`flex h-3.5 w-3.5 items-center justify-center rounded-[4px] border transition-colors ${
+          checked ? "border-[#084734] bg-[#084734] text-white" : "border-[#c9c7c2] bg-white"
+        }`}
+      >
+        {checked && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+      </span>
+      {avatar && (
+        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#f0f0ec] text-[9px] font-semibold text-[#615D59]">
+          {label.charAt(0)}
+        </span>
+      )}
+      <span>{label}</span>
+      {typeof count === "number" && (
+        <span className={checked ? "text-[#084734]/55" : "text-[#1a1a1a]/30"}>{count}</span>
+      )}
+    </button>
+  )
+}
+
 // ─── 메인 페이지 ──────────────────────────────────────────────────────────────
 
 export default function AdminCalendarPage() {
@@ -239,7 +286,8 @@ export default function AdminCalendarPage() {
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth() + 1)
   const [events, setEvents] = useState<CalendarEvent[]>([])
-  const [sourceFilter, setSourceFilter] = useState<"all" | EventSource>("all")
+  const [hiddenSources, setHiddenSources] = useState<Set<EventSource>>(new Set())
+  const [hiddenAssignees, setHiddenAssignees] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -271,7 +319,64 @@ export default function AdminCalendarPage() {
   const firstDay = new Date(year, month - 1, 1).getDay()
   const daysInMonth = new Date(year, month, 0).getDate()
   const todayStr = toDateStr(today.getFullYear(), today.getMonth() + 1, today.getDate())
-  const visibleEvents = events.filter((event) => sourceFilter === "all" || getEventSource(event) === sourceFilter)
+  const sourceCounts = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const option of SOURCE_OPTIONS) map[option.value] = 0
+    for (const event of events) {
+      const src = getEventSource(event)
+      map[src] = (map[src] ?? 0) + 1
+    }
+    return map
+  }, [events])
+
+  const teamMembers = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const event of events) {
+      if (getEventSource(event) !== "team_event") continue
+      for (const name of event.assignees ?? []) counts.set(name, (counts.get(name) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name, "ko"))
+  }, [events])
+
+  const visibleEvents = events.filter((event) => {
+    const src = getEventSource(event)
+    if (hiddenSources.has(src)) return false
+    if (src === "team_event") {
+      const assignees = event.assignees ?? []
+      // 담당자가 있는 팀원 행사는 담당자 필터를 적용 — 표시 담당자가 하나도 없으면 숨김
+      if (assignees.length > 0 && !assignees.some((name) => !hiddenAssignees.has(name))) return false
+    }
+    return true
+  })
+
+  const toggleSource = (src: EventSource) =>
+    setHiddenSources((prev) => {
+      const next = new Set(prev)
+      if (next.has(src)) next.delete(src)
+      else next.add(src)
+      return next
+    })
+
+  const toggleAssignee = (name: string) =>
+    setHiddenAssignees((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+
+  const setAllSources = (visible: boolean) =>
+    setHiddenSources(visible ? new Set() : new Set(SOURCE_OPTIONS.map((option) => option.value)))
+
+  const setAllAssignees = (visible: boolean) =>
+    setHiddenAssignees(visible ? new Set() : new Set(teamMembers.map((member) => member.name)))
+
+  const teamEventSourceVisible = !hiddenSources.has("team_event")
+  const showAssigneeFilter = teamEventSourceVisible && teamMembers.length > 0
+  const allSourcesVisible = hiddenSources.size === 0
+  const allAssigneesVisible = teamMembers.every((member) => !hiddenAssignees.has(member.name))
 
   // map date → events
   const eventsByDate = visibleEvents.reduce<Record<string, CalendarEvent[]>>((acc, ev) => {
@@ -389,17 +494,6 @@ export default function AdminCalendarPage() {
     .slice(0, 8)
 
   const monthLabel = `${year}년 ${month}월`
-  const totalThisMonth = visibleEvents.length
-  // 소스별 카운트는 의도적으로 전체(events) 기준 — 필터를 걸어도 소스 분포는 유지해 보여준다.
-  // 대신 필터 활성 시 스트립에 기준 캡션을 붙여 '이번달(필터 반영)'과 base가 다름을 명시한다.
-  const totalPartnerEvents = events.filter((event) => getEventSource(event) === "partner").length
-  const totalTeamEvents = events.filter((event) => getEventSource(event) === "calendar").length
-  const totalPublicEvents = events.filter((event) => getEventSource(event) === "event").length
-  const totalNotionEvents = events.filter((event) => getEventSource(event) === "notion").length
-  const totalShowroomEvents = events.filter((event) => getEventSource(event) === "showroom").length
-  const totalTeamEventEvents = events.filter((event) => getEventSource(event) === "team_event").length
-  const activeSourceLabel =
-    sourceFilter === "all" ? null : SOURCE_FILTERS.find((filter) => filter.value === sourceFilter)?.label ?? null
 
   return (
     <div className="px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
@@ -425,58 +519,73 @@ export default function AdminCalendarPage() {
         </div>
       )}
 
-      {/* Stats strip */}
-      <div className="mb-6 flex flex-wrap items-center gap-3 text-[13px]">
-        <span className="text-[#1a1a1a]/40">
-          이번달{activeSourceLabel ? `(${activeSourceLabel})` : ""}{" "}
-          <span className="font-semibold text-[#111110]">{totalThisMonth}개</span>
-        </span>
-        <span className="text-[#1a1a1a]/40">
-          팀 일정 <span className="font-semibold text-[#111110]">{totalTeamEvents}개</span>
-        </span>
-        <span className="text-[#1a1a1a]/40">
-          파트너 일정 <span className="font-semibold text-[#111110]">{totalPartnerEvents}개</span>
-        </span>
-        <span className="text-[#1a1a1a]/40">
-          공개 행사 <span className="font-semibold text-[#111110]">{totalPublicEvents}개</span>
-        </span>
-        <span className="text-[#1a1a1a]/40">
-          마케팅(노션) <span className="font-semibold text-[#111110]">{totalNotionEvents}개</span>
-        </span>
-        <span className="text-[#1a1a1a]/40">
-          쇼룸 예약 <span className="font-semibold text-[#111110]">{totalShowroomEvents}개</span>
-        </span>
-        <span className="text-[#1a1a1a]/40">
-          팀원 행사 <span className="font-semibold text-[#111110]">{totalTeamEventEvents}개</span>
-        </span>
-        {activeSourceLabel && (
-          <span className="text-[11px] text-[#1a1a1a]/35">소스별 개수는 전체 기준</span>
-        )}
-        {EVENT_TYPES.slice(0, 4).map((t) => {
-          const cnt = visibleEvents.filter(e => e.type === t.value).length
-          if (cnt === 0) return null
-          return (
-            <span key={t.value} className="flex items-center gap-1.5 text-[#1a1a1a]/50">
-              <span className={`w-2 h-2 rounded-full ${t.dot}`} />
-              {t.label} {cnt}
-            </span>
-          )
-        })}
-        <div className="inline-flex w-full overflow-x-auto rounded-xl border border-[#e8e8e4] bg-white p-1 sm:ml-auto sm:w-auto">
-          {SOURCE_FILTERS.map((filter) => (
-            <button
-              key={filter.value}
-              type="button"
-              onClick={() => setSourceFilter(filter.value)}
-              className={`rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                sourceFilter === filter.value
-                  ? "bg-[#111110] text-white"
-                  : "text-[#1a1a1a]/45 hover:bg-[#f5f5f2] hover:text-[#111110]"
-              }`}
-            >
-              {filter.label}
-            </button>
+      {/* Filter bar */}
+      <div className="mb-6 overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+        {/* 소스 필터 */}
+        <div className="flex flex-wrap items-center gap-2 px-4 py-3">
+          <span className="mr-1 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
+            소스
+          </span>
+          {SOURCE_OPTIONS.map((option) => (
+            <CheckChip
+              key={option.value}
+              checked={!hiddenSources.has(option.value)}
+              label={option.label}
+              count={sourceCounts[option.value] ?? 0}
+              onToggle={() => toggleSource(option.value)}
+            />
           ))}
+          <button
+            type="button"
+            onClick={() => setAllSources(!allSourcesVisible)}
+            className="ml-auto shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+          >
+            {allSourcesVisible ? "모두 해제" : "모두 선택"}
+          </button>
+        </div>
+
+        {/* 담당자(팀원) 필터 — 팀원 행사 소스가 켜져 있고 담당자가 있을 때만 */}
+        {showAssigneeFilter && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-[#f0f0ec] px-4 py-3">
+            <span className="mr-1 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
+              담당자
+            </span>
+            {teamMembers.map((member) => (
+              <CheckChip
+                key={member.name}
+                checked={!hiddenAssignees.has(member.name)}
+                label={member.name}
+                count={member.count}
+                onToggle={() => toggleAssignee(member.name)}
+                avatar
+              />
+            ))}
+            <button
+              type="button"
+              onClick={() => setAllAssignees(!allAssigneesVisible)}
+              className="ml-auto shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+            >
+              {allAssigneesVisible ? "모두 해제" : "모두 선택"}
+            </button>
+          </div>
+        )}
+
+        {/* 요약 + 유형 범례 */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-[#f0f0ec] bg-[#fafaf8] px-4 py-2.5 text-[12px] text-[#1a1a1a]/45">
+          <span>
+            표시중 <span className="font-semibold text-[#111110]">{visibleEvents.length}개</span>
+            <span className="text-[#1a1a1a]/30"> / 이번달 {events.length}개</span>
+          </span>
+          {EVENT_TYPES.slice(0, 4).map((t) => {
+            const cnt = visibleEvents.filter((e) => e.type === t.value).length
+            if (cnt === 0) return null
+            return (
+              <span key={t.value} className="flex items-center gap-1.5">
+                <span className={`h-2 w-2 rounded-full ${t.dot}`} />
+                {t.label} {cnt}
+              </span>
+            )
+          })}
         </div>
       </div>
 
