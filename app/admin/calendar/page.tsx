@@ -256,6 +256,10 @@ function CheckChip({
   avatar?: boolean
   dim?: boolean
 }) {
+  // 소스/그룹 색(dot) — 체크 시 배경·테두리·체크박스를 해당 색 틴트로. 색 없으면 기본 그린.
+  const accent = dot
+  const tinted = checked && Boolean(accent)
+
   return (
     <button
       type="button"
@@ -263,22 +267,32 @@ function CheckChip({
       aria-checked={checked}
       aria-label={label}
       onClick={onToggle}
+      style={tinted ? { backgroundColor: `${accent}14`, borderColor: `${accent}59`, color: accent } : undefined}
       className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
         dim ? "opacity-45" : ""
       } ${
         checked
-          ? "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
+          ? tinted
+            ? ""
+            : "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
           : "border-[#e8e8e4] bg-white text-[#1a1a1a]/45 hover:border-[#1a1a1a]/20 hover:text-[#111110]"
       }`}
     >
       <span
+        style={tinted ? { backgroundColor: accent, borderColor: accent, color: "#fff" } : undefined}
         className={`flex h-3 w-3 items-center justify-center rounded-[3px] border transition-colors ${
-          checked ? "border-[#084734] bg-[#084734] text-white" : "border-[#c9c7c2] bg-white"
+          checked
+            ? tinted
+              ? ""
+              : "border-[#084734] bg-[#084734] text-white"
+            : "border-[#c9c7c2] bg-white"
         }`}
       >
         {checked && <Check className="h-2 w-2" strokeWidth={3.5} />}
       </span>
-      {dot && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: dot }} />}
+      {dot && !checked && (
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: dot }} />
+      )}
       {avatar && (
         <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#f0f0ec] text-[9px] font-semibold text-[#615D59]">
           {label.charAt(0)}
@@ -286,7 +300,12 @@ function CheckChip({
       )}
       <span>{label}</span>
       {typeof count === "number" && (
-        <span className={checked ? "text-[#084734]/55" : "text-[#1a1a1a]/30"}>{count}</span>
+        <span
+          style={tinted ? { color: accent, opacity: 0.6 } : undefined}
+          className={tinted ? "" : checked ? "text-[#084734]/55" : "text-[#1a1a1a]/30"}
+        >
+          {count}
+        </span>
       )}
     </button>
   )
