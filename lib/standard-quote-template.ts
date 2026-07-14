@@ -84,6 +84,63 @@ export const STANDARD_QUOTE_SUPPLIER = {
   contactEmail: "",
 } as const
 
+// 소프트웨어 견적 공급자(클래스인). 담당자/연락처는 건마다 매니저 정보로 채운다.
+export const CLASSIN_QUOTE_SUPPLIER = {
+  businessName: "이이오클래스인코리아 유한회사",
+  businessRegistrationNumber: "724-88-02403",
+  representativeName: "GU YAN(구엔)",
+  address: "서울특별시 양천구 목동동로 233-1, 8층 806호(목동, 드림타워)",
+  contactEmail: "",
+} as const
+
+// 소프트웨어(구독형) 템플릿 목록. SW 견적은 공급자가 클래스인.
+const SOFTWARE_QUOTE_TEMPLATE_IDS: StandardQuoteTemplateId[] = ["online_suite"]
+
+export function isSoftwareQuoteTemplate(templateId?: string | null): boolean {
+  return SOFTWARE_QUOTE_TEMPLATE_IDS.includes(templateId as StandardQuoteTemplateId)
+}
+
+/**
+ * 템플릿 제품군에 따른 공급자 스냅샷을 반환한다.
+ * - SW(예: online_suite) → 클래스인 + 담당 매니저 연락처
+ * - HW → 표준 공급자(퀴드러닝)
+ * 반환값을 견적 details에 스프레드하면 finalize/렌더러가 그대로 사용한다.
+ */
+export function resolveQuoteSupplier(
+  templateId?: string | null,
+  managerContact?: { name?: string | null; phone?: string | null }
+): Pick<
+  PartnerQuoteDetailsInput,
+  | "supplierBusinessName"
+  | "supplierBusinessRegistrationNumber"
+  | "supplierRepresentativeName"
+  | "supplierAddress"
+  | "supplierContactName"
+  | "supplierContactPhone"
+  | "supplierContactEmail"
+> {
+  if (isSoftwareQuoteTemplate(templateId)) {
+    return {
+      supplierBusinessName: CLASSIN_QUOTE_SUPPLIER.businessName,
+      supplierBusinessRegistrationNumber: CLASSIN_QUOTE_SUPPLIER.businessRegistrationNumber,
+      supplierRepresentativeName: CLASSIN_QUOTE_SUPPLIER.representativeName,
+      supplierAddress: CLASSIN_QUOTE_SUPPLIER.address,
+      supplierContactName: managerContact?.name?.trim() || "",
+      supplierContactPhone: managerContact?.phone?.trim() || "",
+      supplierContactEmail: CLASSIN_QUOTE_SUPPLIER.contactEmail,
+    }
+  }
+  return {
+    supplierBusinessName: STANDARD_QUOTE_SUPPLIER.businessName,
+    supplierBusinessRegistrationNumber: STANDARD_QUOTE_SUPPLIER.businessRegistrationNumber,
+    supplierRepresentativeName: STANDARD_QUOTE_SUPPLIER.representativeName,
+    supplierAddress: STANDARD_QUOTE_SUPPLIER.address,
+    supplierContactName: STANDARD_QUOTE_SUPPLIER.contactName,
+    supplierContactPhone: STANDARD_QUOTE_SUPPLIER.contactPhone,
+    supplierContactEmail: STANDARD_QUOTE_SUPPLIER.contactEmail,
+  }
+}
+
 export const STANDARD_QUOTE_DEFAULT_BODY = "아래와 같이 견적서를 제출합니다."
 export const STANDARD_QUOTE_DEFAULT_UNIT_LABEL = "원"
 export const STANDARD_QUOTE_DEFAULT_VAT_LABEL = "(단위:원, VAT포함)"
@@ -731,18 +788,20 @@ export function finalizeStandardQuoteDetails(
   const totals = calculateStandardQuoteTotals(lineItems, vatIncluded)
   const deliveryLocationNote = input?.deliveryLocationNote?.trim() || STANDARD_QUOTE_DEFAULT_DELIVERY_NOTE
 
-  // 공급자 스냅샷: structured_json 등에 명시된 값이 있으면 그대로 쓰고,
-  // 없을 때만 표준 공급자(퀴드러닝)로 폴백한다. (SW 등 다른 사업자 명의 견적 지원)
-  const supplier = {
-    businessName: input?.supplierBusinessName?.trim() || STANDARD_QUOTE_SUPPLIER.businessName,
-    businessRegistrationNumber:
-      input?.supplierBusinessRegistrationNumber?.trim() || STANDARD_QUOTE_SUPPLIER.businessRegistrationNumber,
-    representativeName: input?.supplierRepresentativeName?.trim() || STANDARD_QUOTE_SUPPLIER.representativeName,
-    address: input?.supplierAddress?.trim() || STANDARD_QUOTE_SUPPLIER.address,
-    contactName: input?.supplierContactName?.trim() || STANDARD_QUOTE_SUPPLIER.contactName,
-    contactPhone: input?.supplierContactPhone?.trim() || STANDARD_QUOTE_SUPPLIER.contactPhone,
-    contactEmail: input?.supplierContactEmail?.trim() || STANDARD_QUOTE_SUPPLIER.contactEmail,
-  }
+  // 공급자 스냅샷: 커스텀 공급자(상호명)가 지정되면 그 블록을 통째로 사용하고(빈 필드는 빈 채로),
+  // 지정이 없을 때만 표준 공급자(퀴드러닝)로 폴백한다. 필드별 폴백을 쓰면 SW(클래스인)인데
+  // 담당자 미입력 시 퀴드러닝 담당자가 섞이므로 블록 단위로 처리한다.
+  const supplier = input?.supplierBusinessName?.trim()
+    ? {
+        businessName: input.supplierBusinessName.trim(),
+        businessRegistrationNumber: input?.supplierBusinessRegistrationNumber?.trim() || "",
+        representativeName: input?.supplierRepresentativeName?.trim() || "",
+        address: input?.supplierAddress?.trim() || "",
+        contactName: input?.supplierContactName?.trim() || "",
+        contactPhone: input?.supplierContactPhone?.trim() || "",
+        contactEmail: input?.supplierContactEmail?.trim() || "",
+      }
+    : { ...STANDARD_QUOTE_SUPPLIER }
 
   return {
     templateId: resolvedTemplateId,
