@@ -17,6 +17,11 @@ type QuoteViewerActionsProps = {
   requireRecipientEmail?: boolean
   initialConfirmedAt?: string | null
   initialAcceptedAt?: string | null
+  /**
+   * false면 검토 확인·진행 요청 액션을 숨기고 출력(PDF)만 노출한다.
+   * 열람 전용(access_mode "view") 공유 링크에서 사용한다.
+   */
+  showReviewActions?: boolean
 }
 
 function formatActionAt(value: string | null) {
@@ -39,6 +44,7 @@ export default function QuoteViewerActions({
   requireRecipientEmail = false,
   initialConfirmedAt = null,
   initialAcceptedAt = null,
+  showReviewActions = true,
 }: QuoteViewerActionsProps) {
   const [confirmedAt, setConfirmedAt] = useState<string | null>(initialConfirmedAt)
   const [acceptedAt, setAcceptedAt] = useState<string | null>(initialAcceptedAt)
@@ -132,7 +138,7 @@ export default function QuoteViewerActions({
 
   return (
     <div className="print:hidden">
-      {requireRecipientEmail && !(confirmedAt && acceptedAt) ? (
+      {showReviewActions && requireRecipientEmail && !(confirmedAt && acceptedAt) ? (
         <div className="mb-3 flex flex-col gap-1 sm:items-end">
           <label htmlFor="recipient-email" className="text-xs text-[#1a1a1a]/55">
             확인을 위해 견적서를 받으신 이메일을 입력해 주세요
@@ -150,16 +156,18 @@ export default function QuoteViewerActions({
         </div>
       ) : null}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-        <button
-          type="button"
-          onClick={handleConfirm}
-          disabled={actionsDisabled || Boolean(confirmedAt)}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-[#084734] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:bg-[#D1FAE5] disabled:text-[#084734]"
-        >
-          {submittingAction === "review" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-          {confirmedAt ? "확인 완료" : "확인"}
-        </button>
-        {acceptEndpoint ? (
+        {showReviewActions ? (
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={actionsDisabled || Boolean(confirmedAt)}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-[#084734] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] disabled:cursor-not-allowed disabled:bg-[#D1FAE5] disabled:text-[#084734]"
+          >
+            {submittingAction === "review" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {confirmedAt ? "확인 완료" : "확인"}
+          </button>
+        ) : null}
+        {showReviewActions && acceptEndpoint ? (
           <button
             type="button"
             onClick={handleAccept}
@@ -179,13 +187,13 @@ export default function QuoteViewerActions({
           출력(PDF)
         </button>
       </div>
-      {confirmedLabel ? (
+      {showReviewActions && confirmedLabel ? (
         <p className="mt-2 text-right text-xs text-[#084734]">{confirmedLabel} 확인됨</p>
       ) : null}
-      {acceptedLabel ? (
+      {showReviewActions && acceptedLabel ? (
         <p className="mt-1 text-right text-xs text-[#084734]">{acceptedLabel} 진행 요청됨</p>
       ) : null}
-      {error ? <p className="mt-2 text-right text-xs text-[#B85C33]">{error}</p> : null}
+      {showReviewActions && error ? <p className="mt-2 text-right text-xs text-[#B85C33]">{error}</p> : null}
     </div>
   )
 }

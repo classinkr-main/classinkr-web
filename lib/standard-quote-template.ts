@@ -629,6 +629,8 @@ export function formatStandardQuoteCurrency(value?: number | null) {
 }
 
 export function isPendingQuoteLine(item: Pick<PartnerQuoteLineItemInput, "lineStatus" | "billingMode" | "unitPrice">) {
+  // 정보성(무상 포함) 라인은 가격 미정(별도청구/협의)이 아니라 무상 항목이므로 pending에서 제외한다.
+  if (item.lineStatus === "informational") return false
   return (
     item.lineStatus === "pending_price" ||
     item.lineStatus === "separate_billing" ||
@@ -638,6 +640,8 @@ export function isPendingQuoteLine(item: Pick<PartnerQuoteLineItemInput, "lineSt
 }
 
 function computeLineSupplyAmount(item: Pick<PartnerQuoteLineItemInput, "quantity" | "unitPrice" | "lineStatus" | "billingMode">) {
+  // 단가 없는 정보성(무상 포함) 라인은 공급가액을 계산하지 않고 '-'로 비운다.
+  if (item.lineStatus === "informational" && item.unitPrice == null) return undefined
   if (isPendingQuoteLine(item)) return undefined
   const quantity = Number(item.quantity ?? 0)
   const unitPrice = Number(item.unitPrice ?? 0)
@@ -727,6 +731,19 @@ export function finalizeStandardQuoteDetails(
   const totals = calculateStandardQuoteTotals(lineItems, vatIncluded)
   const deliveryLocationNote = input?.deliveryLocationNote?.trim() || STANDARD_QUOTE_DEFAULT_DELIVERY_NOTE
 
+  // 공급자 스냅샷: structured_json 등에 명시된 값이 있으면 그대로 쓰고,
+  // 없을 때만 표준 공급자(퀴드러닝)로 폴백한다. (SW 등 다른 사업자 명의 견적 지원)
+  const supplier = {
+    businessName: input?.supplierBusinessName?.trim() || STANDARD_QUOTE_SUPPLIER.businessName,
+    businessRegistrationNumber:
+      input?.supplierBusinessRegistrationNumber?.trim() || STANDARD_QUOTE_SUPPLIER.businessRegistrationNumber,
+    representativeName: input?.supplierRepresentativeName?.trim() || STANDARD_QUOTE_SUPPLIER.representativeName,
+    address: input?.supplierAddress?.trim() || STANDARD_QUOTE_SUPPLIER.address,
+    contactName: input?.supplierContactName?.trim() || STANDARD_QUOTE_SUPPLIER.contactName,
+    contactPhone: input?.supplierContactPhone?.trim() || STANDARD_QUOTE_SUPPLIER.contactPhone,
+    contactEmail: input?.supplierContactEmail?.trim() || STANDARD_QUOTE_SUPPLIER.contactEmail,
+  }
+
   return {
     templateId: resolvedTemplateId,
     presetId: input?.presetId?.trim() || undefined,
@@ -740,13 +757,13 @@ export function finalizeStandardQuoteDetails(
     recipientPhone: input?.recipientPhone?.trim() || undefined,
     recipientEmail: input?.recipientEmail?.trim() || undefined,
     referenceName: input?.referenceName?.trim() || undefined,
-    supplierBusinessName: STANDARD_QUOTE_SUPPLIER.businessName,
-    supplierBusinessRegistrationNumber: STANDARD_QUOTE_SUPPLIER.businessRegistrationNumber,
-    supplierRepresentativeName: STANDARD_QUOTE_SUPPLIER.representativeName,
-    supplierAddress: STANDARD_QUOTE_SUPPLIER.address,
-    supplierContactName: STANDARD_QUOTE_SUPPLIER.contactName,
-    supplierContactPhone: STANDARD_QUOTE_SUPPLIER.contactPhone,
-    supplierContactEmail: STANDARD_QUOTE_SUPPLIER.contactEmail,
+    supplierBusinessName: supplier.businessName,
+    supplierBusinessRegistrationNumber: supplier.businessRegistrationNumber,
+    supplierRepresentativeName: supplier.representativeName,
+    supplierAddress: supplier.address,
+    supplierContactName: supplier.contactName,
+    supplierContactPhone: supplier.contactPhone,
+    supplierContactEmail: supplier.contactEmail,
     currencyUnitLabel: input?.currencyUnitLabel?.trim() || STANDARD_QUOTE_DEFAULT_UNIT_LABEL,
     vatIncluded,
     vatPolicyLabel:
@@ -758,7 +775,7 @@ export function finalizeStandardQuoteDetails(
     warrantyNote: input?.warrantyNote?.trim() || undefined,
     generalNotes: input?.generalNotes?.trim() || `납품장소: ${deliveryLocationNote}`,
     specialTerms: input?.specialTerms?.trim() || undefined,
-    footerContactText: input?.footerContactText?.trim() || `${STANDARD_QUOTE_SUPPLIER.contactName}/${STANDARD_QUOTE_SUPPLIER.contactPhone}`,
+    footerContactText: input?.footerContactText?.trim() || `${supplier.contactName}/${supplier.contactPhone}`,
     internalMemo: input?.internalMemo?.trim() || undefined,
     optionSelections: input?.optionSelections,
     pricingSource: input?.pricingSource?.trim() || undefined,

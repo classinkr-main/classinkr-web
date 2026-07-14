@@ -110,6 +110,7 @@ export default async function SharedQuotePage({ params }: PageProps) {
               reviewEndpoint={`/api/share/quote/${token}/confirm`}
               acceptEndpoint={`/api/share/quote/${token}/accept`}
               requireRecipientEmail
+              showReviewActions={share.access_mode === "sign"}
               initialConfirmedAt={interaction?.reviewConfirmedAt ?? null}
               initialAcceptedAt={interaction?.acceptedAt ?? null}
             />
