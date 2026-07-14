@@ -26,6 +26,9 @@ describe("chatbot new-docs RAG source relevance", () => {
       "우리 같은 국어학원 도입 사례 있어요?",
       "다른 학원 도입 후기 궁금해요",
       "비슷한 학원 도입 사례 보여주세요",
+      "다른 사용하는 곳은 어디 있나요?",
+      "레퍼런스 및 사용하는 학원들을 알려주세요",
+      "사용 중인 학원 레퍼런스가 있나요?",
     ]
 
     for (const question of questions) {
