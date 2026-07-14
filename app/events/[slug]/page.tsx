@@ -16,6 +16,7 @@ import { JsonLd } from "@/components/seo/JsonLd"
 import { createBreadcrumbJsonLd, createEventJsonLd, toAbsoluteUrl } from "@/lib/seo"
 import { EventAlertSignup } from "@/components/events/EventAlertSignup"
 import { EventSignupModal } from "@/components/events/EventSignupModal"
+import { ResourcesRecommendation } from "@/components/sections/ResourcesRecommendation"
 import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
 import { CalendarPlus } from "lucide-react"
 import {
@@ -347,6 +348,8 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
               </div>
             </div>
           )}
+
+          <ResourcesRecommendation surface="event" />
         </div>
       </section>
     </div>
