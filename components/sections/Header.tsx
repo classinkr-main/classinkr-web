@@ -177,13 +177,13 @@ export function Header() {
                     {isMobileMenuOpen ? (
                         <div className="mt-3 grid gap-2 border-t border-black/[0.08] pt-4 md:hidden">
                             <TrackedLink
-                                href="/resources"
+                                href="/download"
                                 prefetch={false}
-                                ctaId="gnb_mobile_resources"
+                                ctaId="gnb_mobile_download"
                                 onClick={() => setIsMobileMenuOpen(false)}
                                 className="flex min-h-11 w-full items-center justify-center rounded-[8px] border border-black/[0.08] bg-white px-4 text-[15px] font-semibold text-[#615D59] transition-colors hover:bg-[#F6F5F4]"
                             >
-                                자료 받아보기
+                                다운로드
                             </TrackedLink>
                             <TrackedLink
                                 href="/contact"
@@ -201,12 +201,12 @@ export function Header() {
                 <div className="hidden md:flex items-center gap-4">
                     <SessionNavEntry />
                     <TrackedLink
-                        href="/resources"
+                        href="/download"
                         prefetch={false}
-                        ctaId="gnb_resources"
+                        ctaId="gnb_download"
                         className="hidden font-semibold text-[15px] text-[#615D59] transition-colors hover:text-[#084734] md:flex"
                     >
-                        자료 받아보기
+                        다운로드
                     </TrackedLink>
                     <TrackedLink
                         href="/contact"
