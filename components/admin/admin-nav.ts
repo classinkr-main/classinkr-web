@@ -12,6 +12,7 @@ import {
   Eye,
   FileText,
   Globe,
+  Headset,
   LayoutDashboard,
   Magnet,
   Megaphone,
@@ -47,7 +48,7 @@ const STAFF_EDITOR: AdminRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
 // - 자료 퍼널(/materials)은 리드마그넷의 읽기 facade라 nav에서 제거하고, /lead-magnets를 "자료 퍼널"로 통일해 marketing으로 이동.
 //   (/admin/materials 라우트 자체도 /admin/lead-magnets redirect 스텁으로 정리됨, 2026-07-02)
 // - 하드웨어 재고는 분석이 아니라 SCM 운영 콘솔이라 system(운영·시스템)으로 이동.
-// - 고객 지원은 docs → chatbot → channel-talk 파이프라인 순서.
+// - 고객 지원은 docs → 내부 CS 챗봇 → chatbot ops → channel-talk 파이프라인 순서.
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, roles: [...ALL_STAFF, "BRANCH"], section: "home", keywords: "홈 대시보드 overview home" },
 
@@ -63,11 +64,12 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, roles: STAFF_EDITOR, section: "marketing", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
   { href: "/admin/events", label: "공개 행사", icon: Globe, roles: STAFF_ADMIN, section: "marketing", keywords: "행사 이벤트 event 웨비나" },
 
-  // 고객 지원 (docs → docs?tab=gaps → chatbot → channel-talk)
+  // 고객 지원 (docs → docs?tab=gaps → internal cs chatbot → chatbot ops → channel-talk)
   { href: "/admin/docs", label: "가이드 문서", icon: BookOpen, roles: STAFF_EDITOR, section: "cs", keywords: "가이드 문서 docs guide" },
   // 보강 큐는 문서 센터(/admin/docs)의 "보강 큐" 탭으로 병합됨 — nav는 탭 딥링크를 직접 가리켜
   // active 하이라이트가 동작하게 한다. /admin/docs/gaps는 북마크 호환용 redirect 스텁으로만 유지.
   { href: "/admin/docs?tab=gaps", label: "문서 보강 큐", icon: Search, roles: STAFF_EDITOR, section: "cs", badge: "Alpha", keywords: "챗봇 질문 보강 큐 gaps faq 문서 검색 초안" },
+  { href: "/admin/cs-chatbot", label: "내부 CS 챗봇", icon: Headset, roles: STAFF_EDITOR, section: "cs", badge: "Internal", keywords: "내부 cs 챗봇 상담 도우미 소통 가이드 템플릿 큐 아카이브 internal support assistant" },
   { href: "/admin/chatbot", label: "챗봇 운영", icon: Bot, roles: STAFF_EDITOR, section: "cs", badge: "Ops", keywords: "챗봇 질문 추천 문서 chatbot ai faq" },
   { href: "/admin/channel-talk", label: "채널톡 상담", icon: MessageSquare, roles: STAFF_ADMIN, section: "cs", badge: "New", keywords: "채널톡 상담 문의 채팅 channel talk chat inbox" },
 
