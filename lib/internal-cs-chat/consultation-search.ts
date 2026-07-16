@@ -1,5 +1,6 @@
 import "server-only"
 
+import { redactPii } from "@/lib/chatbot/service"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 /**
@@ -60,7 +61,9 @@ function hasSupabaseServerEnv() {
 
 async function embedConsultationQuery(question: string): Promise<number[] | null> {
   const apiKey = process.env.GEMINI_API_KEY?.trim()
-  if (!apiKey || !question.trim()) return null
+  // 임베딩 전 PII 마스킹 — 고객 전화/이메일이 외부 임베딩 API로 유출되는 것을 막고, redactPii 통과본으로 저장된 상담 청크와 같은 토큰 공간에서 매칭 정합을 맞춘다.
+  const redactedQuestion = redactPii(question)
+  if (!apiKey || !redactedQuestion.trim()) return null
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS)
@@ -74,7 +77,7 @@ async function embedConsultationQuery(question: string): Promise<number[] | null
         signal: controller.signal,
         body: JSON.stringify({
           model: `models/${EMBED_MODEL}`,
-          content: { parts: [{ text: question }] },
+          content: { parts: [{ text: redactedQuestion }] },
           taskType: "RETRIEVAL_QUERY",
           outputDimensionality: EMBED_DIM,
         }),

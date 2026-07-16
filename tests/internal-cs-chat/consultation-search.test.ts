@@ -94,6 +94,19 @@ describe("searchConsultationEvidence", () => {
     })
   })
 
+  it("redacts PII from the question before it reaches the embedding API", async () => {
+    enableEnv()
+    const fetchMock = stubEmbeddingFetch()
+    rpcClient({ data: [], error: null })
+
+    await searchConsultationEvidence("고객 010-1234-5678 번호로 환불 문의 주셨어요")
+
+    const rawBody = String(fetchMock.mock.calls[0]?.[1]?.body)
+    const embedBody = JSON.parse(rawBody)
+    expect(embedBody.content.parts[0].text).toBe("고객 [phone] 번호로 환불 문의 주셨어요")
+    expect(rawBody).not.toContain("010-1234-5678")
+  })
+
   it("passes the clamped limit as match_count", async () => {
     enableEnv()
     stubEmbeddingFetch()
