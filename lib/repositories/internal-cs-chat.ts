@@ -906,6 +906,199 @@ export async function updateInternalCsRegressionOutcome(input: {
   return currentOutcome === "promoted" ? { status: "promoted_conflict" } : { status: "not_found" }
 }
 
+// ─── 운영 계기판 집계 (계약 1) ──────────────────────────────
+// DB 안에서 단일 RPC(internal_cs_metrics)로 집계한다. 대량 행을 앱으로 끌어와 접지 않는다.
+export interface InternalCsMetricsAggregate {
+  days: number
+  questions: number
+  conversations: number
+  assistantTotal: number
+  assistantDeterministic: number
+  evidenceKnowledge: number
+  evidenceDocs: number
+  evidenceChannel: number
+  evidenceNone: number
+  reviewApproved: number
+  reviewChangesRequested: number
+  reviewPending: number
+  regressionNotEvaluated: number
+  regressionPass: number
+  regressionNeedsFix: number
+  regressionPromoted: number
+  regressionExcluded: number
+  leadTimeMedianHours: number | null
+  leadTimeP90Hours: number | null
+}
+
+export function emptyInternalCsMetricsAggregate(days: number): InternalCsMetricsAggregate {
+  return {
+    days,
+    questions: 0,
+    conversations: 0,
+    assistantTotal: 0,
+    assistantDeterministic: 0,
+    evidenceKnowledge: 0,
+    evidenceDocs: 0,
+    evidenceChannel: 0,
+    evidenceNone: 0,
+    reviewApproved: 0,
+    reviewChangesRequested: 0,
+    reviewPending: 0,
+    regressionNotEvaluated: 0,
+    regressionPass: 0,
+    regressionNeedsFix: 0,
+    regressionPromoted: 0,
+    regressionExcluded: 0,
+    leadTimeMedianHours: null,
+    leadTimeP90Hours: null,
+  }
+}
+
+function toFiniteCount(value: unknown) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function toNullableNumber(value: unknown) {
+  if (value === null || value === undefined) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+// 마이그레이션 미적용(라이브) 시 internal_cs_metrics 함수 자체가 없다 — not-ready 로 잡아 빈 집계로 안전 렌더.
+function isInternalCsFunctionMissing(error: { code?: string; message?: string; details?: string; hint?: string }) {
+  const text = [error.code, error.message, error.details, error.hint].filter(Boolean).join(" ").toLowerCase()
+  return (
+    text.includes("pgrst202") ||
+    text.includes("42883") ||
+    (text.includes("internal_cs_metrics") &&
+      (text.includes("does not exist") ||
+        text.includes("could not find") ||
+        text.includes("schema cache") ||
+        text.includes("function")))
+  )
+}
+
+/**
+ * 운영 계기판 집계(계약 1). 서버측 단일 RPC. 테이블/함수가 없으면(라이브 미적용) 빈 집계를 반환한다.
+ */
+export async function getInternalCsMetricsAggregate(days: number): Promise<InternalCsMetricsAggregate> {
+  const safeDays = clampInteger(days, 7, 1, 366)
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase.rpc("internal_cs_metrics", { range_days: safeDays })
+  if (error) {
+    if (isMissingTableError(error) || isInternalCsFunctionMissing(error)) {
+      return emptyInternalCsMetricsAggregate(safeDays)
+    }
+    throw databaseError("failed to aggregate metrics", error)
+  }
+
+  const row = (data ?? {}) as Record<string, unknown>
+  return {
+    days: toFiniteCount(row.days) || safeDays,
+    questions: toFiniteCount(row.questions),
+    conversations: toFiniteCount(row.conversations),
+    assistantTotal: toFiniteCount(row.assistantTotal),
+    assistantDeterministic: toFiniteCount(row.assistantDeterministic),
+    evidenceKnowledge: toFiniteCount(row.evidenceKnowledge),
+    evidenceDocs: toFiniteCount(row.evidenceDocs),
+    evidenceChannel: toFiniteCount(row.evidenceChannel),
+    evidenceNone: toFiniteCount(row.evidenceNone),
+    reviewApproved: toFiniteCount(row.reviewApproved),
+    reviewChangesRequested: toFiniteCount(row.reviewChangesRequested),
+    reviewPending: toFiniteCount(row.reviewPending),
+    regressionNotEvaluated: toFiniteCount(row.regressionNotEvaluated),
+    regressionPass: toFiniteCount(row.regressionPass),
+    regressionNeedsFix: toFiniteCount(row.regressionNeedsFix),
+    regressionPromoted: toFiniteCount(row.regressionPromoted),
+    regressionExcluded: toFiniteCount(row.regressionExcluded),
+    leadTimeMedianHours: toNullableNumber(row.leadTimeMedianHours),
+    leadTimeP90Hours: toNullableNumber(row.leadTimeP90Hours),
+  }
+}
+
+// ─── 회귀 자동 평가 후보 (계약 2) ───────────────────────────
+// 러너가 각 후보를 재생성·심판하려면 full content + corrected_content + 원 질문 링크(metadata)가 필요하다.
+// listInternalCsRegressionCandidates(계약 5, 240자 발췌)와 달리 원문을 그대로 실어 나른다.
+export interface InternalCsRegressionEvalCandidate {
+  messageId: string
+  conversationId: string
+  content: string
+  correctedContent: string | null
+  reviewState: InternalCsReviewState
+  metadata: Record<string, unknown>
+}
+
+const REGRESSION_EVAL_CANDIDATE_SELECT =
+  "id, conversation_id, content, corrected_content, review_state, metadata"
+
+interface RegressionEvalCandidateRow {
+  id: string
+  conversation_id: string
+  content: string
+  corrected_content: string | null
+  review_state: InternalCsReviewState
+  metadata: Record<string, unknown> | null
+}
+
+function toRegressionEvalCandidate(row: RegressionEvalCandidateRow): InternalCsRegressionEvalCandidate {
+  return {
+    messageId: row.id,
+    conversationId: row.conversation_id,
+    content: row.content,
+    correctedContent: trimOrNull(row.corrected_content),
+    reviewState: row.review_state,
+    metadata: row.metadata ?? {},
+  }
+}
+
+/**
+ * 자동 평가 후보 조회(계약 2). messageIds 명시 시 그 assistant 메시지들을, 아니면 미판정(not_evaluated)
+ * 회귀 후보 최신순으로 반환한다. 어느 경로든 최대 REGRESSION_EVAL_MAX(=10)으로 캡한다.
+ */
+export async function listInternalCsRegressionEvalCandidates(input: {
+  messageIds?: string[]
+  limit: number
+}): Promise<InternalCsRegressionEvalCandidate[]> {
+  const capped = clampInteger(input.limit, 5, 1, 10)
+  const explicitIds = [...new Set((input.messageIds ?? []).map((id) => id.trim()).filter(Boolean))].slice(0, 10)
+  const supabase = createSupabaseAdminClient()
+
+  if (explicitIds.length > 0) {
+    const { data, error } = await supabase
+      .from("internal_cs_messages")
+      .select(REGRESSION_EVAL_CANDIDATE_SELECT)
+      .eq("role", "assistant")
+      .in("id", explicitIds)
+      .order("updated_at", { ascending: false })
+    if (error) throw databaseError("failed to list regression eval candidates", error)
+    return ((data ?? []) as RegressionEvalCandidateRow[]).map(toRegressionEvalCandidate)
+  }
+
+  const { data, error } = await supabase
+    .from("internal_cs_messages")
+    .select(REGRESSION_EVAL_CANDIDATE_SELECT)
+    .eq("role", "assistant")
+    .eq("regression_candidate", true)
+    .eq("regression_outcome", "not_evaluated")
+    .order("updated_at", { ascending: false })
+    .limit(capped)
+  if (error) throw databaseError("failed to list regression eval candidates", error)
+  return ((data ?? []) as RegressionEvalCandidateRow[]).map(toRegressionEvalCandidate)
+}
+
+/** 단건 메시지 조회 — 지식 승격 라우트가 자격(approved+corrected_content)을 검증할 때 쓴다. */
+export async function getInternalCsMessageById(messageId: string): Promise<InternalCsMessageRow | null> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("internal_cs_messages")
+    .select("*")
+    .eq("id", messageId)
+    .maybeSingle()
+  if (error) throw databaseError("failed to load message", error)
+  return (data as InternalCsMessageRow | null) ?? null
+}
+
 export function cleanInternalCsTags(values: string[] | undefined) {
   return cleanStringList(values)
 }
