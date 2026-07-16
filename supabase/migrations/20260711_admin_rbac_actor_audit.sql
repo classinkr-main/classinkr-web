@@ -43,7 +43,8 @@ WHERE status = 'ACTIVE'
   AND NOT capabilities @> ARRAY['hardware.finalize']::TEXT[]
   AND (
     neo_owner_id = '3637154579422025'
-    OR regexp_replace(lower(display_name), '\\s+', '', 'g') IN (
+    -- 주의: 표준 문자열에서 '\\s+'는 리터럴 백슬래시가 되어 공백이 제거되지 않는다(라이브에서 실측한 버그).
+    OR regexp_replace(lower(display_name), '\s+', '', 'g') IN (
       '이왕찬',
       '왕찬',
       'leewangchan',
