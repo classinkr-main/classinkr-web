@@ -10,10 +10,10 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
  * - 3.5초 타임아웃 시 []를 돌린다(코파일럿 응답 흐름을 막지 않는다).
  *
  * 임베딩 차원 주의:
- * - channel_conversation_chunks.embedding 은 vector(768) 이다. 공개 docs(현재 vector(1536))와
- *   다른 공간이므로 lib/chatbot/llm.ts 의 embedText(운영 기본 1536)를 그대로 재사용하면 차원이
- *   어긋난다. 여기서는 청크 임베딩과 동일 모델(gemini-embedding-001)로 768차원 질문 임베딩을
- *   직접 생성한다(RETRIEVAL_QUERY, 비대칭 검색).
+ * - channel_conversation_chunks.embedding 은 vector(768) 고정이다. 공개 docs 청크는 별개 공간이며
+ *   차원이 운영 env(GEMINI_EMBED_DIM)를 따르므로, lib/chatbot/llm.ts 의 embedText 를 그대로
+ *   재사용하면 차원이 어긋날 수 있다. 여기서는 상담 청크 백필(embed-channel-chunks.ts)과 동일한
+ *   모델(gemini-embedding-001)·768차원으로 질문 임베딩을 직접 생성한다(RETRIEVAL_QUERY, 비대칭 검색).
  */
 export interface ConsultationEvidence {
   conversationId: string

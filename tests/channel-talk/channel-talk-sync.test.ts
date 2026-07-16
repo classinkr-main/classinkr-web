@@ -124,9 +124,10 @@ describe("syncChannelConversations — 상담 청크 재생성", () => {
       { seq: number; content: string; category: string | null }[],
     ]
     expect(conversationId).toBe("chatA")
+    // chatA 태그 ["결제"] → topic-crosswalk 로 billing 정규화되어 청크에 스탬프된다(통합 배선).
     expect(chunks).toEqual([
-      { seq: 0, content: "고객: 제 번호는 [phone]", category: null },
-      { seq: 1, content: "상담원: 확인했습니다", category: null },
+      { seq: 0, content: "고객: 제 번호는 [phone]", category: "billing" },
+      { seq: 1, content: "상담원: 확인했습니다", category: "billing" },
     ])
     expect(mocks.redactPii).toHaveBeenCalled()
     expect(result.chunksRewritten).toBe(2)

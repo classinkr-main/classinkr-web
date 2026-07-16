@@ -278,7 +278,9 @@ const CHUNK_ROLE_LABEL: Record<"customer" | "agent", string> = {
  */
 export function buildConversationChunkInputs(
   transcript: ChannelConversationMessage[],
-  redact: (value: string) => string
+  redact: (value: string) => string,
+  // 대화 태그를 topic-crosswalk 로 정규화한 결과(대화 단위 단일 값). 호출부(sync)가 계산해 주입한다.
+  category: string | null = null
 ): ChannelConversationChunkInput[] {
   const chunks: ChannelConversationChunkInput[] = []
   let seq = 0
@@ -305,9 +307,7 @@ export function buildConversationChunkInputs(
     chunks.push({
       seq: seq++,
       content: `${CHUNK_ROLE_LABEL[author]}: ${redacted}`,
-      // TODO(통합): T2 topic-crosswalk(normalizeTopicTags) 랜딩 후 conversation.tags → ChatbotCategory 로
-      //   category 를 스탬프한다. 현재는 crosswalk(T2 소유)를 import 하지 않으므로 null 로 둔다.
-      category: null,
+      category,
     })
   }
 

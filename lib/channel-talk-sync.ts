@@ -17,6 +17,7 @@ import {
   type ChannelUserChat,
 } from "@/lib/channel-talk-api"
 import { redactPii } from "@/lib/chatbot/service"
+import { normalizeTopicTags } from "@/lib/chatbot/topic-crosswalk"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
   buildConversationChunkInputs,
@@ -215,7 +216,7 @@ async function runChannelConversationSync(
   const syncedAt = new Date().toISOString()
   const records: ChannelConversationRecord[] = []
   // frontMessageId 가 바뀐(=트랜스크립트를 새로 받은) 대화만 청크를 재생성한다(계약 4).
-  const chunkRegenTargets: { id: string; transcript: ChannelConversationMessage[] }[] = []
+  const chunkRegenTargets: { id: string; transcript: ChannelConversationMessage[]; tags: string[] }[] = []
   let matchedLeads = 0
   let messageFetches = 0
   let reusedTranscripts = 0
@@ -260,7 +261,7 @@ async function runChannelConversationSync(
     }
 
     if (transcriptRefreshed && transcript.length > 0) {
-      chunkRegenTargets.push({ id: chat.id, transcript })
+      chunkRegenTargets.push({ id: chat.id, transcript, tags: Array.isArray(chat.tags) ? chat.tags : [] })
     }
 
     const user = chat.userId ? userById.get(chat.userId) : undefined
@@ -324,7 +325,8 @@ async function runChannelConversationSync(
   const chunkWarnings: string[] = []
   for (const target of chunkRegenTargets) {
     try {
-      const chunks = buildConversationChunkInputs(target.transcript, redactPii)
+      // 대화 태그 → ChatbotCategory 정규화(topic-crosswalk). 검색 시 주제 필터/배지 근거가 된다.
+      const chunks = buildConversationChunkInputs(target.transcript, redactPii, normalizeTopicTags(target.tags))
       try {
         await replaceConversationChunks(target.id, chunks)
       } catch {
