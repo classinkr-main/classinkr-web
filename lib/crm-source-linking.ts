@@ -51,10 +51,14 @@ const CRM_NAME_TOKEN_TRANSLATIONS: Array<[RegExp, string]> = [
   [/\bsw\b/gi, "소프트웨어"],
 ]
 
-// 시트에 임시로 넣어둔 placeholder 고객(HW/SW/MKT 접두) 판별.
-// "SW어학원"처럼 실제 상호가 hw/sw/mkt로 시작하는 경우는 제외해야 하므로
-// 접두 토큰 뒤에 구분자(공백·기호) 또는 문자열 끝을 요구한다.
-const CRM_PLACEHOLDER_NAME_PATTERN = /^\s*(hw|sw|mkt)(?=$|[\s\-_~·/(),.:])/i
+// 시트에 임시로 넣어둔 placeholder 고객 판별 — (1) HW/SW/MKT 접두, (2) "New Software N" /
+// "New Hardware N" 같은 계획 자리표시자(하단에 미래 계약 자리로 몇 줄 미리 만들어 둔 행).
+// "SW어학원"처럼 실제 상호가 hw/sw/mkt로 시작하는 경우는 제외해야 하므로 접두 토큰 뒤에
+// 구분자(공백·기호) 또는 문자열 끝을 요구한다. "New Software"/"New Hardware"는 뒤에 자리표시자
+// 번호(숫자)가 붙어 있을 때만 placeholder로 본다 — 숫자가 없는 "New Software"만으로는 실제
+// 상호일 가능성을 배제할 수 없어(오탐 방지) placeholder로 취급하지 않는다.
+const CRM_PLACEHOLDER_NAME_PATTERN =
+  /^\s*(?:(?:hw|sw|mkt)(?=$|[\s\-_~·/(),.:])|new\s+(?:software|hardware)\s*\d+(?=$|[\s\-_~·/(),.:]))/i
 
 export function isPlaceholderCrmName(value: string | null | undefined) {
   return CRM_PLACEHOLDER_NAME_PATTERN.test(value ?? "")
