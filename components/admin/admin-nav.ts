@@ -107,27 +107,41 @@ export interface CrmChildNavItem {
 }
 
 // CRM 진입 시 사이드바에서 펼치는 하위 섹션(= 기존 상단 탭의 이전). 활성 판별은 경로 prefix.
-// CRM 핵심 3탭 — 현황(후속조치+분석+시각화) · 고객(DB·360·연락입력·라벨링) · 기록(전체 로그).
-// 돈흐름/인사이트/연동은 어드민(딜보드·견적·Analytics)과 겹치거나 백오피스라 최상위에서 내림.
-// 라우트(deals/insights/matching/revenue/partners)는 보존 — 딥링크·북마크는 현황 탭 active로 귀속.
+// 딥링크 화면도 실제 업무 맥락에 맞는 탭으로 귀속해야 한다. 돈흐름/매칭/인사이트를
+// 현황으로 뭉개면 사용자가 현재 위치를 잘못 인지한다.
 export const CRM_CHILD_NAV: CrmChildNavItem[] = [
   {
     href: "/admin/crm",
     label: "현황",
     keywords: "crm 현황 후속조치 인사이트 딜 매출",
-    match: (p) =>
-      p === "/admin/crm" ||
-      p.startsWith("/admin/crm/insights") ||
-      p.startsWith("/admin/crm/deals") ||
-      p.startsWith("/admin/crm/revenue") ||
-      p.startsWith("/admin/crm/matching") ||
-      (p.startsWith("/admin/crm/partners") && !p.startsWith("/admin/crm/partners/customers")),
+    match: (p) => p === "/admin/crm",
   },
   {
     href: "/admin/crm/customers/unified",
     label: "고객DB",
     keywords: "고객 통합 거래처 unified customers db 360",
     match: (p) => p.startsWith("/admin/crm/customers") || p.startsWith("/admin/crm/partners/customers"),
+  },
+  {
+    href: "/admin/crm/deals",
+    label: "돈흐름",
+    keywords: "돈흐름 매출 딜 rev revenue snapshot sheet order install kpi",
+    match: (p) =>
+      p.startsWith("/admin/crm/deals") ||
+      p.startsWith("/admin/crm/revenue") ||
+      (p.startsWith("/admin/crm/partners") && !p.startsWith("/admin/crm/partners/customers")),
+  },
+  {
+    href: "/admin/crm/matching",
+    label: "매칭 검수",
+    keywords: "매칭 검수 source link sync 연동 rev snapshot",
+    match: (p) => p.startsWith("/admin/crm/matching"),
+  },
+  {
+    href: "/admin/crm/insights",
+    label: "인사이트",
+    keywords: "인사이트 분석 insight action kpi",
+    match: (p) => p.startsWith("/admin/crm/insights"),
   },
   {
     href: "/admin/crm/activity",
