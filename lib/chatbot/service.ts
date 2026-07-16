@@ -192,7 +192,8 @@ function normalizeString(value: unknown) {
   return trimmed || undefined
 }
 
-function redactPii(value: string) {
+// 내부 CS 유입(lib/internal-cs-chat/gap-ingest.ts)도 같은 redaction 을 거쳐야 하므로 export 한다.
+export function redactPii(value: string) {
   return value
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
     .replace(/\b\d{3}[-\s]?\d{2}[-\s]?\d{5}\b/g, "[business_number]")
@@ -3046,25 +3047,66 @@ async function persistExchange(
   }
 }
 
-async function upsertQuestionCluster(
+// question_clusters.metadata.internalCs 참조는 최신 우선 최대 10개만 유지한다 (계약 2).
+const QUESTION_CLUSTER_INTERNAL_CS_REF_CAP = 10
+
+interface QuestionClusterInternalCsRef {
+  conversationId: string
+  messageId: string
+}
+
+function mergeInternalCsRefs(existing: unknown, ref: QuestionClusterInternalCsRef) {
+  const prior = Array.isArray(existing)
+    ? existing.filter((entry): entry is QuestionClusterInternalCsRef => {
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false
+        const candidate = entry as Record<string, unknown>
+        return (
+          typeof candidate.conversationId === "string" && typeof candidate.messageId === "string"
+        )
+      })
+    : []
+
+  return [ref, ...prior.filter((entry) => entry.messageId !== ref.messageId)].slice(
+    0,
+    QUESTION_CLUSTER_INTERNAL_CS_REF_CAP
+  )
+}
+
+/**
+ * 질문을 보강 큐(question_clusters)에 upsert 한다. 공개 챗봇 응답 저장 경로가 기본 호출자이며,
+ * 내부 CS 유입(gap-ingest)은 answerEventId/response/category 없이 options 로 출처와 참조만 싣는다.
+ * - 기존 행이 ignored/published 상태여도 status 를 되돌리지 않는다 (의도적 억제 존중 — update 는 status 미포함).
+ * - metadata.source 는 최초 유입 경로를 보존한다 (기존 값이 있으면 덮어쓰지 않음).
+ */
+export async function upsertQuestionCluster(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
-  answerEventId: string,
-  question: NormalizedQuestion,
-  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "handoffIntent">,
-  category: string
+  answerEventId: string | null,
+  question: Pick<NormalizedQuestion, "redacted">,
+  response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "handoffIntent"> | null,
+  category: string | null,
+  options?: {
+    source?: string
+    internalCsRef?: QuestionClusterInternalCsRef
+  }
 ) {
-  const topSource = response.sources[0]
+  const topSource = response?.sources[0]
+  const source = options?.source ?? "chatbot_mvp_exact_match"
+  const internalCsRef = options?.internalCsRef
 
   try {
     const { data: existing, error: existingError } = await supabase
       .from("question_clusters")
-      .select("id, sample_questions")
+      .select("id, sample_questions, metadata")
       .eq("canonical_question", question.redacted)
       .maybeSingle()
 
     if (existingError) throw existingError
 
-    const existingCluster = existing as { id: string; sample_questions: string[] | null } | null
+    const existingCluster = existing as {
+      id: string
+      sample_questions: string[] | null
+      metadata: Record<string, unknown> | null
+    } | null
     let clusterId = existingCluster?.id
 
     if (existingCluster && clusterId) {
@@ -3072,13 +3114,21 @@ async function upsertQuestionCluster(
         new Set([question.redacted, ...(existingCluster.sample_questions ?? [])])
       ).slice(0, 5)
 
+      const patch: Record<string, unknown> = {
+        last_seen_at: new Date().toISOString(),
+        sample_questions: sampleQuestions,
+      }
+      if (category) patch.category = category
+      if (internalCsRef) {
+        const metadata = getContextObject(existingCluster.metadata)
+        metadata.internalCs = mergeInternalCsRefs(metadata.internalCs, internalCsRef)
+        if (!normalizeString(metadata.source)) metadata.source = source
+        patch.metadata = metadata
+      }
+
       const { error } = await supabase
         .from("question_clusters")
-        .update({
-          category,
-          last_seen_at: new Date().toISOString(),
-          sample_questions: sampleQuestions,
-        })
+        .update(patch)
         .eq("id", clusterId)
 
       if (error) throw error
@@ -3094,8 +3144,9 @@ async function upsertQuestionCluster(
           sample_questions: [question.redacted],
           status: "candidate",
           metadata: {
-            source: "chatbot_mvp_exact_match",
-            answerMode: response.answerMode,
+            source,
+            ...(response ? { answerMode: response.answerMode } : {}),
+            ...(internalCsRef ? { internalCs: [internalCsRef] } : {}),
           },
         })
         .select("id")
@@ -3104,6 +3155,9 @@ async function upsertQuestionCluster(
       if (error) throw error
       clusterId = inserted.id as string
     }
+
+    // 내부 CS 유입에는 공개 챗봇 answer event 가 없다 — 링크는 있을 때만 남긴다.
+    if (!answerEventId) return
 
     const { error: linkError } = await supabase
       .from("question_cluster_events")

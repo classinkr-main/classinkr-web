@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { buildInternalCsCopilotContext } from "@/lib/internal-cs-chat/context"
+import { ingestInternalCsGap } from "@/lib/internal-cs-chat/gap-ingest"
 import {
   generateInternalCsAnswer,
   type InternalCsChatTurn,
@@ -203,6 +204,18 @@ export async function POST(req: NextRequest, context: Context) {
       },
       actor,
     })
+
+    // 모델이 전부 실패해 deterministic 폴백이 저장됐다 = 지식 공백 신호.
+    // 공개 챗봇과 같은 보강 큐로 유입한다. ingestInternalCsGap 은 절대 throw 하지 않으므로
+    // 본 응답 흐름을 막지 않는다.
+    if (generation.origin === "deterministic") {
+      await ingestInternalCsGap({
+        question,
+        conversationId: id,
+        messageId: message.id,
+        source: "internal_cs_fallback",
+      })
+    }
 
     return NextResponse.json(
       {
