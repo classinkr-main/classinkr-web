@@ -14,7 +14,8 @@ interface GapClusterInternalCsRef {
 }
 
 interface GapClusterMetadata {
-  source?: "chatbot_mvp_exact_match" | "internal_cs_fallback" | "internal_cs_review" | string
+  // (string & {})로 계약된 리터럴 힌트를 유지하면서 알 수 없는 값도 허용한다.
+  source?: "chatbot_mvp_exact_match" | "internal_cs_fallback" | "internal_cs_review" | (string & {})
   internalCs?: GapClusterInternalCsRef[]
 }
 
@@ -208,7 +209,8 @@ function markStatsRegressionCandidate(stats: ChatbotStats | null, clusterId: str
   }
 }
 
-type GapSourceFilter = "all" | "chatbot" | "internal_cs"
+type GapSource = "chatbot" | "internal_cs"
+type GapSourceFilter = GapSource | "all"
 
 const GAP_SOURCE_FILTERS: { value: GapSourceFilter; label: string }[] = [
   { value: "all", label: "전체" },
@@ -217,7 +219,7 @@ const GAP_SOURCE_FILTERS: { value: GapSourceFilter; label: string }[] = [
 ]
 
 // metadata.source가 없거나 알 수 없는 값이면 기존과 동일하게 "챗봇" 출처로 취급한다.
-const GAP_SOURCE_BADGES: Record<string, { label: string; group: GapSourceFilter; className: string }> = {
+const GAP_SOURCE_BADGES: Record<string, { label: string; group: GapSource; className: string }> = {
   internal_cs_fallback: {
     label: "내부CS 폴백",
     group: "internal_cs",
@@ -232,7 +234,7 @@ const GAP_SOURCE_BADGES: Record<string, { label: string; group: GapSourceFilter;
 
 const DEFAULT_GAP_SOURCE_BADGE = {
   label: "챗봇",
-  group: "chatbot" as GapSourceFilter,
+  group: "chatbot" as GapSource,
   className: "bg-[#F6F5F4] text-[#615D59]",
 }
 
@@ -321,6 +323,8 @@ export default function DocsGapsPanel() {
     setDraft(null)
     setDraftSource(null)
     setCopied(false)
+    // 이전 초안의 큐 갱신 실패 경고가 남아 새 초안 저장까지 막지 않도록 함께 리셋한다.
+    setClusterUpdateWarning(null)
     try {
       const data = await adminFetchJson<DocDraft>("/api/admin/docs/gaps/draft", {
         method: "POST",
@@ -659,6 +663,7 @@ export default function DocsGapsPanel() {
                     key={filter.value}
                     type="button"
                     onClick={() => setSourceFilter(filter.value)}
+                    aria-pressed={sourceFilter === filter.value}
                     className={cn(
                       "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
                       sourceFilter === filter.value
