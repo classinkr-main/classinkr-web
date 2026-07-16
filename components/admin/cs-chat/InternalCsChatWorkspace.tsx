@@ -839,10 +839,11 @@ function InternalCsChatWorkspaceInner() {
   }, [demoMode])
 
   // 회귀 검수 미니 패널 — 미판정 우선 목록. 실패 시 섹션 자체에 재시도 폴백을 보여준다.
+  // demoMode는 "다시 시도" 루프 대신 깨끗한 빈 상태로 처리한다.
   const loadRegressionCandidates = useCallback(async () => {
     if (demoMode) {
       setRegressionCandidates([])
-      setRegressionLoadState("failed")
+      setRegressionLoadState("loaded")
       return
     }
     setRegressionLoadState("loading")
@@ -1377,7 +1378,7 @@ function InternalCsChatWorkspaceInner() {
   }
 
   // 회귀 판정 버튼 — 기존 메시지 PATCH(regressionOutcome)를 재사용한다. 옵티미스틱 제거 후
-  // 실패하면 원래 자리로 복원하고 에러를 보여준다.
+  // 실패하면 목록 맨 앞에 복원하고 에러를 보여준다.
   async function judgeRegressionCandidate(
     item: RegressionCandidateItem,
     outcome: Exclude<RegressionOutcome, "not_evaluated">
@@ -2207,6 +2208,7 @@ function InternalCsChatWorkspaceInner() {
                             type="button"
                             onClick={() => void judgeRegressionCandidate(item, action.value)}
                             className="inline-flex h-7 items-center rounded-md border border-black/[0.08] px-2.5 text-[10px] font-semibold text-[#31302E] hover:bg-[#F6F5F4]"
+                            aria-label={`${action.label}: ${item.excerpt}`}
                           >
                             {action.label}
                           </button>
