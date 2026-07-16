@@ -1,9 +1,11 @@
 /**
- * 채널톡 상담 대화 저장소 — data/channel-conversations.json 폴백 저장소.
+ * 채널톡 상담 대화 저장소 — 듀얼모드(Supabase 우선 ↔ JSON 폴백).
  *
- * Supabase 테이블을 새로 만들지 않고 lib/db.ts 와 동일한 JSON 폴백 패턴을 따른다.
- * 주의: Vercel 서버리스 FS는 배포/인스턴스 간 영속되지 않으므로, 운영 영속이 필요하면
- * Supabase 테이블로 승격할 것. 인터페이스는 그 전환을 쉽게 하도록 좁게 유지한다.
+ * 기존 동기(sync) export 시그니처(getConversations/getConversationStats 등)는 외부 소비자
+ * (admin channel-talk API, lead-digest-alerts, channel-talk-mining) 호환을 위해 JSON 기반으로 그대로 둔다.
+ * 영속(Supabase) 경로는 신규 async 함수(*Durable*, replaceConversationChunks)로 제공하며,
+ * Supabase 미설정/실패 시 기존 JSON 폴백으로 떨어진다(계약 4).
+ * 운영 FS(Vercel)는 인스턴스 간 JSON을 영속하지 못하므로 실제 영속은 Supabase 경로가 담당한다.
  */
 
 import "server-only"
@@ -12,6 +14,7 @@ import fs from "fs"
 import path from "path"
 
 import { atomicWriteJsonSync } from "@/lib/atomic-write"
+import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { assertLocalJsonWriteAllowed } from "@/lib/server/runtime-persistence"
 
 const DATA_DIR = path.join(process.cwd(), "data")
@@ -167,4 +170,300 @@ export function getLastConversationSyncAt(): string | null {
   }
 
   return latestMs > 0 ? new Date(latestMs).toISOString() : null
+}
+
+/* ─────────────────────────────────────────────────────────────
+ * Supabase 듀얼모드 (계약 1·2·3·4) — 영속 경로
+ * ───────────────────────────────────────────────────────────── */
+
+/**
+ * 채널톡 상담을 Supabase 로 읽고/쓸 수 있는지 여부.
+ * lib/chatbot/service.ts hasSupabaseServerEnv 와 동일 기준(어드민 클라이언트 생성 요건과 일치)이라
+ * true 이면 createSupabaseAdminClient() 가 던지지 않는다.
+ */
+export function channelConversationsSupabaseEnabled(
+  env: Record<string, string | undefined> = process.env
+): boolean {
+  return Boolean(
+    env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
+      env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() &&
+      (env.SUPABASE_SECRET_KEY?.trim() || env.SUPABASE_SERVICE_ROLE_KEY?.trim())
+  )
+}
+
+interface SupabaseChannelConversationRow {
+  id: string
+  name: string | null
+  email: string | null
+  phone: string | null
+  state: string | null
+  tags: string[] | null
+  first_question: string | null
+  matched_lead_id: string | null
+  matched_org: string | null
+  last_message_at: string | null
+  transcript: unknown
+  synced_at: string | null
+}
+
+function toRecordState(value: string | null | undefined): ChannelConversationState {
+  if (value === "opened" || value === "closed" || value === "snoozed") return value
+  return "unknown"
+}
+
+function toTranscript(value: unknown): ChannelConversationMessage[] {
+  return Array.isArray(value) ? (value as ChannelConversationMessage[]) : []
+}
+
+function supabaseRowToRecord(row: SupabaseChannelConversationRow): ChannelConversationRecord {
+  const transcript = toTranscript(row.transcript)
+  const firstCustomer = transcript.find((message) => message.author === "customer")
+  const last = transcript[transcript.length - 1]
+
+  return {
+    id: row.id,
+    userChatId: row.id,
+    // channelUserId 는 계약 1 스키마에 없어 재구성 불가(소비자 미사용).
+    name: row.name ?? undefined,
+    email: row.email ?? undefined,
+    phone: row.phone ?? undefined,
+    state: toRecordState(row.state),
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    messageCount: transcript.length,
+    firstQuestion: row.first_question ?? undefined,
+    firstAskedAt: firstCustomer?.at,
+    lastMessageText: last?.text,
+    lastMessageAt: row.last_message_at ?? undefined,
+    matchedLeadId: row.matched_lead_id ?? undefined,
+    matchedLeadOrg: row.matched_org ?? undefined,
+    syncedAt: row.synced_at ?? new Date(0).toISOString(),
+    transcript,
+  }
+}
+
+function recordToSupabaseRow(record: ChannelConversationRecord) {
+  return {
+    id: record.id,
+    name: record.name ?? null,
+    email: record.email ?? null,
+    phone: record.phone ?? null,
+    state: record.state,
+    tags: record.tags ?? [],
+    first_question: record.firstQuestion ?? null,
+    matched_lead_id: record.matchedLeadId ?? null,
+    matched_org: record.matchedLeadOrg ?? null,
+    last_message_at: record.lastMessageAt ?? null,
+    transcript: record.transcript ?? [],
+    synced_at: record.syncedAt,
+  }
+}
+
+export interface ChannelConversationChunkInput {
+  seq: number
+  content: string
+  category: string | null
+}
+
+const CHUNK_ROLE_LABEL: Record<"customer" | "agent", string> = {
+  customer: "고객",
+  agent: "상담원",
+}
+
+/**
+ * 트랜스크립트를 고객/상담원 턴 단위로 청킹한다(계약 2·4).
+ * - 연속된 동일 화자 메시지는 하나의 턴으로 묶는다.
+ * - 봇(메뉴/라우팅) 턴은 제외한다.
+ * - content 는 redact(주입) 통과본만 담는다 — 원문 PII 저장 금지.
+ * redact 를 주입받아 순수 함수로 유지한다(테스트에서 stub 주입).
+ */
+export function buildConversationChunkInputs(
+  transcript: ChannelConversationMessage[],
+  redact: (value: string) => string
+): ChannelConversationChunkInput[] {
+  const chunks: ChannelConversationChunkInput[] = []
+  let seq = 0
+  let index = 0
+
+  while (index < transcript.length) {
+    const author = transcript[index].author
+    if (author !== "customer" && author !== "agent") {
+      index += 1
+      continue
+    }
+
+    const parts: string[] = []
+    while (index < transcript.length && transcript[index].author === author) {
+      const text = transcript[index].text?.trim()
+      if (text) parts.push(text)
+      index += 1
+    }
+
+    if (parts.length === 0) continue
+    const redacted = redact(parts.join(" ")).replace(/\s+/g, " ").trim()
+    if (!redacted) continue
+
+    chunks.push({
+      seq: seq++,
+      content: `${CHUNK_ROLE_LABEL[author]}: ${redacted}`,
+      // TODO(통합): T2 topic-crosswalk(normalizeTopicTags) 랜딩 후 conversation.tags → ChatbotCategory 로
+      //   category 를 스탬프한다. 현재는 crosswalk(T2 소유)를 import 하지 않으므로 null 로 둔다.
+      category: null,
+    })
+  }
+
+  return chunks
+}
+
+/**
+ * 주어진 id 들의 기존 상담 레코드를 조회한다(Supabase 우선, 미설정/실패 시 JSON 폴백).
+ * sync 의 트랜스크립트 재사용 판단 + 신규 대화 판별에 쓴다.
+ */
+export async function getDurableConversationsByIds(
+  ids: string[]
+): Promise<Map<string, ChannelConversationRecord>> {
+  const result = new Map<string, ChannelConversationRecord>()
+  if (ids.length === 0) return result
+
+  if (channelConversationsSupabaseEnabled()) {
+    try {
+      const supabase = createSupabaseAdminClient()
+      const { data, error } = await supabase
+        .from("channel_conversations")
+        .select("*")
+        .in("id", ids)
+      if (error) throw new Error(error.message)
+      for (const row of (data ?? []) as SupabaseChannelConversationRow[]) {
+        result.set(row.id, supabaseRowToRecord(row))
+      }
+      return result
+    } catch (error) {
+      console.warn(
+        "[channel-conversations] Supabase 조회 실패, JSON 폴백:",
+        error instanceof Error ? error.message : error
+      )
+    }
+  }
+
+  const idSet = new Set(ids)
+  for (const record of getConversations()) {
+    if (idSet.has(record.id)) result.set(record.id, record)
+  }
+  return result
+}
+
+export interface ChannelConversationSyncMeta {
+  lastSyncedAt: string | null
+  matchedLeads: number
+  total: number
+}
+
+/**
+ * TTL 판단 + locked/cached 조기 반환에 쓰는 경량 메타(Supabase 우선, 미설정/실패 시 JSON 폴백).
+ * transcript(무거운 jsonb)는 제외하고 synced_at/matched_lead_id 만 스캔한다.
+ */
+export async function getDurableConversationSyncMeta(): Promise<ChannelConversationSyncMeta> {
+  if (channelConversationsSupabaseEnabled()) {
+    try {
+      const supabase = createSupabaseAdminClient()
+      const { data, error } = await supabase
+        .from("channel_conversations")
+        .select("synced_at, matched_lead_id")
+      if (error) throw new Error(error.message)
+
+      const rows = (data ?? []) as { synced_at: string | null; matched_lead_id: string | null }[]
+      let latestMs = 0
+      let matchedLeads = 0
+      for (const row of rows) {
+        const ms = row.synced_at ? new Date(row.synced_at).getTime() : 0
+        if (Number.isFinite(ms) && ms > latestMs) latestMs = ms
+        if (row.matched_lead_id) matchedLeads += 1
+      }
+      return {
+        lastSyncedAt: latestMs > 0 ? new Date(latestMs).toISOString() : null,
+        matchedLeads,
+        total: rows.length,
+      }
+    } catch (error) {
+      console.warn(
+        "[channel-conversations] Supabase 메타 조회 실패, JSON 폴백:",
+        error instanceof Error ? error.message : error
+      )
+    }
+  }
+
+  const stats = getConversationStats()
+  return {
+    lastSyncedAt: getLastConversationSyncAt(),
+    matchedLeads: stats.matchedLeads,
+    total: stats.total,
+  }
+}
+
+/**
+ * 상담 레코드를 영속 저장한다(Supabase 우선, 미설정/실패 시 JSON 폴백).
+ * 신규/기존 판별(created)은 호출자가 사전 조회한 기존 맵으로 계산하므로 여기서는 upserted 수만 반환한다.
+ * 주의: JSON 폴백은 운영 FS(Vercel)에서 assertLocalJsonWriteAllowed 로 던진다(무음 데이터 유실 방지). 호출자가 감싼다.
+ */
+export async function upsertDurableConversations(
+  records: ChannelConversationRecord[]
+): Promise<{ upserted: number }> {
+  if (records.length === 0) return { upserted: 0 }
+
+  if (channelConversationsSupabaseEnabled()) {
+    try {
+      const supabase = createSupabaseAdminClient()
+      const { error } = await supabase
+        .from("channel_conversations")
+        .upsert(records.map(recordToSupabaseRow), { onConflict: "id" })
+      if (error) throw new Error(error.message)
+      return { upserted: records.length }
+    } catch (error) {
+      console.warn(
+        "[channel-conversations] Supabase upsert 실패, JSON 폴백:",
+        error instanceof Error ? error.message : error
+      )
+    }
+  }
+
+  const { upserted } = upsertConversations(records)
+  return { upserted }
+}
+
+/**
+ * 한 상담의 청크를 통째로 교체한다(delete-then-insert). Supabase 전용 — 미설정이면 no-op(written 0).
+ * embedding 은 null 로 두고 scripts/embed-channel-chunks.ts 백필이 채운다(계약 5).
+ * 실패 시 던진다 — 호출자(sync)가 대화 단위로 감싸 한 건 실패가 전체 동기화를 막지 않게 한다.
+ */
+export async function replaceConversationChunks(
+  conversationId: string,
+  chunks: ChannelConversationChunkInput[]
+): Promise<{ written: number }> {
+  if (!channelConversationsSupabaseEnabled()) return { written: 0 }
+
+  const supabase = createSupabaseAdminClient()
+
+  const { error: deleteError } = await supabase
+    .from("channel_conversation_chunks")
+    .delete()
+    .eq("conversation_id", conversationId)
+  if (deleteError) {
+    throw new Error(`[channel-conversations] 청크 삭제 실패(${conversationId}): ${deleteError.message}`)
+  }
+
+  if (chunks.length === 0) return { written: 0 }
+
+  const { error: insertError } = await supabase.from("channel_conversation_chunks").insert(
+    chunks.map((chunk) => ({
+      conversation_id: conversationId,
+      seq: chunk.seq,
+      content: chunk.content,
+      category: chunk.category,
+      embedding: null,
+    }))
+  )
+  if (insertError) {
+    throw new Error(`[channel-conversations] 청크 저장 실패(${conversationId}): ${insertError.message}`)
+  }
+
+  return { written: chunks.length }
 }
