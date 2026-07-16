@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
+import { updateQuestionCluster } from "@/lib/chatbot/service"
 import {
   createRecommendedQuestionsClient,
   hasSupabaseServerEnv,
@@ -103,27 +104,89 @@ export async function POST(req: NextRequest) {
     : "starter"
   const status = isRecommendedQuestionStatus(payload.status) ? payload.status : "draft"
 
+  // 계약 4: clusterId 가 오면 등록 + 클러스터 published 를 이 핸들러가 함께 처리한다.
+  const clusterId = payload.clusterId === undefined ? undefined : normalizeUuid(payload.clusterId)
+  if (payload.clusterId !== undefined && !clusterId) {
+    return NextResponse.json({ error: "clusterId가 올바르지 않습니다." }, { status: 400 })
+  }
+
+  const selectColumns =
+    "id, label, prompt, placement, status, order_index, category, mapped_article_id, metadata, created_at, updated_at"
+
   try {
     const supabase = createRecommendedQuestionsClient()
-    const { data, error } = await supabase
-      .from("chatbot_recommended_questions")
-      .insert({
-        label,
-        prompt,
-        placement,
-        status,
-        order_index: normalizeOrderIndex(payload.orderIndex) ?? 100,
-        category: normalizeNullableString(payload.category),
-        mapped_article_id: normalizeUuid(payload.mappedArticleId) ?? null,
-        metadata: normalizeJsonObject(payload.metadata) ?? {},
-      })
-      .select(
-        "id, label, prompt, placement, status, order_index, category, mapped_article_id, metadata, created_at, updated_at"
-      )
-      .single()
 
-    if (error) throw error
-    return NextResponse.json(rowToRecommendedQuestion(data as RecommendedQuestionRow), { status: 201 })
+    // 재시도 멱등성: clusterUpdated:false 경고 후 재클릭 시 같은 클러스터의 추천 질문이
+    // 중복 생성되지 않도록, metadata.clusterId 링크로 기존 행을 먼저 찾는다.
+    let row: RecommendedQuestionRow | null = null
+    let reused = false
+    if (clusterId) {
+      const { data: existingRows, error: existingError } = await supabase
+        .from("chatbot_recommended_questions")
+        .select(selectColumns)
+        .eq("metadata->>clusterId", clusterId)
+        .limit(1)
+
+      if (existingError) throw existingError
+      const existingRow = ((existingRows ?? []) as RecommendedQuestionRow[])[0]
+      if (existingRow) {
+        row = existingRow
+        reused = true
+      }
+    }
+
+    if (!row) {
+      const { data, error } = await supabase
+        .from("chatbot_recommended_questions")
+        .insert({
+          label,
+          prompt,
+          placement,
+          status,
+          order_index: normalizeOrderIndex(payload.orderIndex) ?? 100,
+          category: normalizeNullableString(payload.category),
+          mapped_article_id: normalizeUuid(payload.mappedArticleId) ?? null,
+          metadata: {
+            ...(normalizeJsonObject(payload.metadata) ?? {}),
+            ...(clusterId ? { clusterId } : {}),
+          },
+        })
+        .select(selectColumns)
+        .single()
+
+      if (error) throw error
+      row = data as RecommendedQuestionRow
+    }
+
+    if (!clusterId) {
+      return NextResponse.json(rowToRecommendedQuestion(row), { status: 201 })
+    }
+
+    try {
+      await updateQuestionCluster(clusterId, { status: "published" })
+    } catch (clusterError) {
+      // 부분 성공: 추천 질문은 있고 클러스터 갱신만 실패 — 상태를 body 에 명시해 재시도를 유도한다.
+      const message =
+        clusterError instanceof Error ? clusterError.message : "클러스터를 갱신하지 못했습니다."
+      console.error(
+        "[POST /api/admin/chatbot/recommended-questions] cluster publish failed:",
+        message
+      )
+      return NextResponse.json(
+        {
+          error: `추천 질문은 등록됐지만 클러스터 상태 갱신에 실패했습니다: ${message}`,
+          recommended: true,
+          clusterUpdated: false,
+          question: rowToRecommendedQuestion(row),
+        },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json(
+      { ...rowToRecommendedQuestion(row), recommended: true, clusterUpdated: true },
+      { status: reused ? 200 : 201 }
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : "추천 질문을 생성하지 못했습니다."
     return NextResponse.json({ error: message }, { status: 500 })
