@@ -778,6 +778,8 @@ export interface InternalCsRegressionCandidateItem {
   capturedAt: string
   outcome: InternalCsRegressionOutcome
   reviewState: InternalCsReviewState
+  // 지식 승격 자격의 정확한 판단용(계약 5 additive). UI 가 reviewState=approved 휴리스틱 대신 쓴다.
+  hasCorrectedContent: boolean
 }
 
 const REGRESSION_CANDIDATE_SELECT =
@@ -796,7 +798,8 @@ interface RegressionCandidateRow {
 }
 
 function toRegressionCandidateItem(row: RegressionCandidateRow): InternalCsRegressionCandidateItem {
-  const excerptSource = (trimOrNull(row.corrected_content) ?? row.content).replace(/\s+/g, " ").trim()
+  const corrected = trimOrNull(row.corrected_content)
+  const excerptSource = (corrected ?? row.content).replace(/\s+/g, " ").trim()
   return {
     id: row.id,
     conversationId: row.conversation_id,
@@ -805,6 +808,8 @@ function toRegressionCandidateItem(row: RegressionCandidateRow): InternalCsRegre
     capturedAt: row.reviewed_at ?? row.updated_at,
     outcome: row.regression_outcome,
     reviewState: row.review_state,
+    // corrected_content IS NOT NULL AND != '' — 승격 자격 판단용(빈/공백 문자열은 없는 것으로 본다).
+    hasCorrectedContent: Boolean(corrected),
   }
 }
 
