@@ -2,6 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
   Archive,
@@ -38,6 +39,7 @@ import {
   X,
 } from "lucide-react"
 import {
+  Suspense,
   type ChangeEvent,
   type FormEvent,
   type ReactNode,
@@ -149,6 +151,40 @@ interface ConversationListResponse {
   pagination: { total: number }
 }
 
+// GET /api/admin/docs/gaps — 클러스터별 metadata.source로 챗봇/내부CS 유입을 구분한다.
+// 이 컴포넌트는 카운트 집계에만 쓰므로 필요한 필드만 취한다.
+interface DocGapClusterSummaryItem {
+  metadata?: { source?: string } | null
+}
+
+interface DocGapsSummaryResponse {
+  gapClusters: DocGapClusterSummaryItem[]
+}
+
+interface DocsGapsWidgetSummary {
+  chatbot: number
+  internalCs: number
+  capped: boolean
+}
+
+// GET /api/admin/cs-chat/regression-candidates — 회귀 후보(미판정 우선) 메시지 목록.
+type RegressionOutcome = "not_evaluated" | "pass" | "needs_fix" | "promoted" | "excluded"
+
+interface RegressionCandidateItem {
+  id: string
+  conversationId: string
+  excerpt: string
+  capturedAt: string
+  outcome: RegressionOutcome
+  reviewState: string
+}
+
+interface RegressionCandidatesResponse {
+  items: RegressionCandidateItem[]
+}
+
+type RegressionLoadState = "idle" | "loading" | "loaded" | "failed"
+
 interface ConversationDetailResponse {
   conversation: InternalCsConversation
   messages: InternalCsMessage[]
@@ -200,6 +236,10 @@ const MAX_PENDING_ASSETS = 3
 const MAX_ASSET_BYTES = 8 * 1024 * 1024
 const ACCEPTED_ASSET_TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
 
+// 딥링크 ?conversation= 값은 URL을 통해 들어오는 유일한 미신뢰 id다.
+// fetch 경로에 그대로 꽂히므로 UUID 형태가 아니면 요청조차 만들지 않는다.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 const WORKSPACE_TABS: Array<{ value: WorkspaceTab; label: string }> = [
   { value: "chat", label: "대화" },
   { value: "queue", label: "대기열" },
@@ -207,14 +247,16 @@ const WORKSPACE_TABS: Array<{ value: WorkspaceTab; label: string }> = [
   { value: "tools", label: "운영 도구" },
 ]
 
+// "문서 보강 · 회귀 검수"는 라이브 위젯(DOCS_GAPS_FALLBACK_TOOL)으로 별도 렌더링한다 — 정적 카드 제거.
+const DOCS_GAPS_FALLBACK_TOOL = {
+  href: "/admin/docs?tab=gaps",
+  title: "문서 보강 · 회귀 검수",
+  description: "반복·미해결 질문을 문서 초안과 회귀 평가로 연결합니다.",
+  icon: Search,
+  priority: "먼저 확인",
+} as const
+
 const OPERATING_TOOLS = [
-  {
-    href: "/admin/docs?tab=gaps",
-    title: "문서 보강 · 회귀 검수",
-    description: "반복·미해결 질문을 문서 초안과 회귀 평가로 연결합니다.",
-    icon: Search,
-    priority: "먼저 확인",
-  },
   {
     href: "/admin/docs?tab=recommended",
     title: "추천 질문 승인",
@@ -251,6 +293,13 @@ const OPERATING_TOOLS = [
     priority: "설정",
   },
 ] as const
+
+const REGRESSION_OUTCOME_ACTIONS: Array<{ value: Exclude<RegressionOutcome, "not_evaluated">; label: string }> = [
+  { value: "pass", label: "통과" },
+  { value: "needs_fix", label: "수정 필요" },
+  { value: "promoted", label: "반영됨" },
+  { value: "excluded", label: "제외" },
+]
 
 const STATUS_META: Record<ConversationStatus, { label: string; className: string }> = {
   queue: { label: "대기", className: "border-black/10 bg-[#F6F5F4] text-[#615D59]" },
@@ -676,7 +725,8 @@ function ConversationTable({
   )
 }
 
-export default function InternalCsChatWorkspace() {
+function InternalCsChatWorkspaceInner() {
+  const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("chat")
   const [conversations, setConversations] = useState<InternalCsConversation[]>([])
   const [detail, setDetail] = useState<ConversationDetailResponse | null>(null)
@@ -688,6 +738,7 @@ export default function InternalCsChatWorkspace() {
   const [finalDraft, setFinalDraft] = useState("")
   const [reviewNote, setReviewNote] = useState("")
   const [regressionCandidate, setRegressionCandidate] = useState(false)
+  const [excludeFromGapQueue, setExcludeFromGapQueue] = useState(false)
   const [expanded, setExpanded] = useState<"sources" | "hq" | "regression" | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -705,6 +756,12 @@ export default function InternalCsChatWorkspace() {
   const [integrationError, setIntegrationError] = useState<string | null>(null)
   const [includeOriginal, setIncludeOriginal] = useState(false)
   const [dispatching, setDispatching] = useState(false)
+  const [docsGapsSummary, setDocsGapsSummary] = useState<DocsGapsWidgetSummary | null>(null)
+  const [docsGapsAttempted, setDocsGapsAttempted] = useState(false)
+  const [regressionCandidates, setRegressionCandidates] = useState<RegressionCandidateItem[]>([])
+  const [regressionLoadState, setRegressionLoadState] = useState<RegressionLoadState>("idle")
+  const [regressionError, setRegressionError] = useState<string | null>(null)
+  const [deepLinkChecked, setDeepLinkChecked] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -715,6 +772,7 @@ export default function InternalCsChatWorkspace() {
       setFinalDraft(DEMO_MESSAGES[1].content)
       setReviewChecks(INITIAL_CHECKS)
       setReviewNote("")
+      setExcludeFromGapQueue(false)
       return DEMO_DETAIL
     }
     const loaded = await adminFetchJson<ConversationDetailResponse>(`/api/admin/cs-chat/conversations/${id}`)
@@ -727,6 +785,7 @@ export default function InternalCsChatWorkspace() {
     setReviewChecks(INITIAL_CHECKS)
     setReviewNote("")
     setRegressionCandidate(pending?.regression_candidate ?? false)
+    setExcludeFromGapQueue(false)
     return loaded
   }, [demoMode])
 
@@ -751,6 +810,49 @@ export default function InternalCsChatWorkspace() {
       setIntegrationError(statusError instanceof Error ? statusError.message : "AI 브리지 상태를 불러오지 못했습니다.")
     } finally {
       setIntegrationLoading(false)
+    }
+  }, [demoMode])
+
+  // tools 탭 라이브 위젯 — 기존 GET /api/admin/docs/gaps 응답을 소스별로 집계한다(신규 API 없음).
+  // 실패 시 null을 유지해 정적 카드(DOCS_GAPS_FALLBACK_TOOL) 형태로 폴백한다.
+  const loadDocsGapsSummary = useCallback(async () => {
+    setDocsGapsAttempted(true)
+    if (demoMode) {
+      setDocsGapsSummary(null)
+      return
+    }
+    try {
+      const response = await adminFetchJson<DocGapsSummaryResponse>("/api/admin/docs/gaps")
+      const clusters = Array.isArray(response.gapClusters) ? response.gapClusters : []
+      const internalCs = clusters.filter((cluster) => {
+        const source = cluster.metadata?.source
+        return source === "internal_cs_fallback" || source === "internal_cs_review"
+      }).length
+      setDocsGapsSummary({
+        chatbot: clusters.length - internalCs,
+        internalCs,
+        capped: clusters.length >= 30,
+      })
+    } catch {
+      setDocsGapsSummary(null)
+    }
+  }, [demoMode])
+
+  // 회귀 검수 미니 패널 — 미판정 우선 목록. 실패 시 섹션 자체에 재시도 폴백을 보여준다.
+  const loadRegressionCandidates = useCallback(async () => {
+    if (demoMode) {
+      setRegressionCandidates([])
+      setRegressionLoadState("failed")
+      return
+    }
+    setRegressionLoadState("loading")
+    try {
+      const response = await adminFetchJson<RegressionCandidatesResponse>("/api/admin/cs-chat/regression-candidates")
+      setRegressionCandidates(Array.isArray(response.items) ? response.items : [])
+      setRegressionLoadState("loaded")
+    } catch {
+      setRegressionCandidates([])
+      setRegressionLoadState("failed")
     }
   }, [demoMode])
 
@@ -787,11 +889,39 @@ export default function InternalCsChatWorkspace() {
     }
   }, [conversations.length, detail, error, loadConversations, loading])
 
+  // 딥링크 수신 — ?conversation=<uuid>. 최초 목록 부트스트랩(loading→false)이 끝난 뒤
+  // 한 번만 시도해 기본 선택과의 경합을 피한다. 없는/접근 불가한 id는 조용히 무시하고
+  // 부트스트랩이 이미 고른 기본 화면을 그대로 둔다.
+  useEffect(() => {
+    if (deepLinkChecked || loading) return
+    setDeepLinkChecked(true)
+    const deepLinkId = searchParams.get("conversation")
+    // UUID 형태가 아니면(오타·조작된 값) fetch 경로에 꽂지 않고 조용히 무시한다.
+    if (!deepLinkId || !UUID_PATTERN.test(deepLinkId)) return
+    loadConversation(deepLinkId)
+      .then(() => setActiveTab("chat"))
+      .catch(() => {
+        // 존재하지 않거나 조회 실패한 대화 id — 기본 화면 유지
+      })
+  }, [deepLinkChecked, loading, loadConversation, searchParams])
+
   useEffect(() => {
     if (activeTab === "tools" && !integrationAttempted && !integrationLoading) {
       void loadIntegrationStatus()
     }
   }, [activeTab, integrationAttempted, integrationLoading, loadIntegrationStatus])
+
+  useEffect(() => {
+    if (activeTab === "tools" && !docsGapsAttempted) {
+      void loadDocsGapsSummary()
+    }
+  }, [activeTab, docsGapsAttempted, loadDocsGapsSummary])
+
+  useEffect(() => {
+    if (activeTab === "tools" && regressionLoadState === "idle") {
+      void loadRegressionCandidates()
+    }
+  }, [activeTab, regressionLoadState, loadRegressionCandidates])
 
   const assets = useMemo(() => detail?.assets ?? [], [detail?.assets])
   const integrationEvents = useMemo(() => detail?.integrationEvents ?? [], [detail?.integrationEvents])
@@ -1221,6 +1351,7 @@ export default function InternalCsChatWorkspace() {
               regressionCandidate: decision === "changes_requested" || regressionCandidate,
               regressionOutcome: decision === "changes_requested" ? "needs_fix" : "not_evaluated",
               conversationAction: decision === "approved" ? "resolve" : "keep_open",
+              excludeFromGapQueue: decision === "changes_requested" && excludeFromGapQueue ? true : undefined,
             }),
           }
         )
@@ -1235,6 +1366,33 @@ export default function InternalCsChatWorkspace() {
         setError(reviewError instanceof Error ? reviewError.message : "검토 결과를 저장하지 못했습니다.")
       }
     })
+  }
+
+  // 회귀 패널의 "대화 보기" — 대화 탭으로 전환하고 해당 대화를 직접 로드한다(사이드바 목록 의존 없음).
+  function openConversationById(conversationId: string) {
+    setActiveTab("chat")
+    loadConversation(conversationId).catch((openError) => {
+      setError(openError instanceof Error ? openError.message : "대화를 불러오지 못했습니다.")
+    })
+  }
+
+  // 회귀 판정 버튼 — 기존 메시지 PATCH(regressionOutcome)를 재사용한다. 옵티미스틱 제거 후
+  // 실패하면 원래 자리로 복원하고 에러를 보여준다.
+  async function judgeRegressionCandidate(
+    item: RegressionCandidateItem,
+    outcome: Exclude<RegressionOutcome, "not_evaluated">
+  ) {
+    setRegressionError(null)
+    setRegressionCandidates((current) => current.filter((candidate) => candidate.id !== item.id))
+    try {
+      await adminFetchJson(`/api/admin/cs-chat/conversations/${item.conversationId}/messages/${item.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ regressionOutcome: outcome }),
+      })
+    } catch (judgeError) {
+      setRegressionCandidates((current) => [item, ...current])
+      setRegressionError(judgeError instanceof Error ? judgeError.message : "회귀 판정을 저장하지 못했습니다.")
+    }
   }
 
   function archiveConversation() {
@@ -1951,6 +2109,26 @@ export default function InternalCsChatWorkspace() {
 
             <h3 className="mt-8 text-[12px] font-semibold text-[#31302E]">운영 화면 바로가기</h3>
             <div className="mt-3 overflow-hidden rounded-lg border border-black/[0.08] bg-white">
+              <Link
+                href={DOCS_GAPS_FALLBACK_TOOL.href}
+                className="group flex items-center gap-4 border-b border-black/[0.08] px-5 py-4 last:border-b-0 hover:bg-[#FAFAF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#F6F5F4] text-[#31302E] group-hover:bg-[#ECFDF5] group-hover:text-[#084734]">
+                  <DOCS_GAPS_FALLBACK_TOOL.icon className="h-4.5 w-4.5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="text-[14px] font-semibold text-[#31302E]">{DOCS_GAPS_FALLBACK_TOOL.title}</span>
+                    <span className="text-[10px] font-medium text-[#A39E98]">{DOCS_GAPS_FALLBACK_TOOL.priority}</span>
+                  </span>
+                  <span className="mt-1 block text-[12px] leading-5 text-[#615D59]">
+                    {docsGapsSummary
+                      ? `챗봇 ${docsGapsSummary.chatbot} · 내부CS ${docsGapsSummary.internalCs}${docsGapsSummary.capped ? "+" : ""}`
+                      : DOCS_GAPS_FALLBACK_TOOL.description}
+                  </span>
+                </span>
+                <ExternalLink className="h-4 w-4 shrink-0 text-[#A39E98] group-hover:text-[#084734]" />
+              </Link>
               {OPERATING_TOOLS.map((tool) => {
                 const Icon = tool.icon
                 return (
@@ -1974,6 +2152,77 @@ export default function InternalCsChatWorkspace() {
                 )
               })}
             </div>
+
+            <h3 className="mt-8 flex items-center justify-between gap-3 text-[12px] font-semibold text-[#31302E]">
+              <span>회귀 검수 대기</span>
+              {regressionLoadState === "loaded" ? (
+                <span className="text-[10px] font-medium text-[#A39E98]">{regressionCandidates.length}건</span>
+              ) : null}
+            </h3>
+            <div className="mt-3 overflow-hidden rounded-lg border border-black/[0.08] bg-white">
+              {regressionLoadState === "idle" || regressionLoadState === "loading" ? (
+                <div className="flex items-center justify-center gap-2 px-5 py-8 text-[12px] text-[#615D59]">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  회귀 후보를 불러오는 중입니다.
+                </div>
+              ) : regressionLoadState === "failed" ? (
+                <div className="flex flex-col items-center gap-3 px-5 py-8 text-center">
+                  <p className="text-[12px] text-[#615D59]">회귀 후보 목록을 불러오지 못했습니다.</p>
+                  <button
+                    type="button"
+                    onClick={() => void loadRegressionCandidates()}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] px-3 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
+                  >
+                    <RefreshCcw className="h-3.5 w-3.5" />
+                    다시 시도
+                  </button>
+                </div>
+              ) : regressionCandidates.length === 0 ? (
+                <p className="px-5 py-8 text-center text-[12px] text-[#615D59]">판정이 필요한 회귀 후보가 없습니다.</p>
+              ) : (
+                <ul>
+                  {regressionCandidates.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex flex-col gap-3 border-b border-black/[0.08] px-5 py-4 last:border-b-0 sm:flex-row sm:items-start sm:justify-between"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-[12px] leading-5 text-[#31302E]">{item.excerpt}</p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[10px] text-[#A39E98]">
+                          <span>{formatDay(item.capturedAt)} {formatTime(item.capturedAt)}</span>
+                          <button
+                            type="button"
+                            onClick={() => openConversationById(item.conversationId)}
+                            className="inline-flex items-center gap-1 font-semibold text-[#084734] hover:underline"
+                          >
+                            대화 보기
+                            <ExternalLink className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-1.5">
+                        {REGRESSION_OUTCOME_ACTIONS.map((action) => (
+                          <button
+                            key={action.value}
+                            type="button"
+                            onClick={() => void judgeRegressionCandidate(item, action.value)}
+                            className="inline-flex h-7 items-center rounded-md border border-black/[0.08] px-2.5 text-[10px] font-semibold text-[#31302E] hover:bg-[#F6F5F4]"
+                          >
+                            {action.label}
+                          </button>
+                        ))}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {regressionError ? (
+              <p className="mt-2 flex items-start gap-2 text-[11px] text-[#8F2C2C]" role="alert">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {regressionError}
+              </p>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -2060,6 +2309,18 @@ export default function InternalCsChatWorkspace() {
                   />
                   수정 결과를 회귀 개선 후보에 포함합니다.
                 </label>
+                <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] leading-4 text-[#615D59]">
+                  <input
+                    type="checkbox"
+                    checked={excludeFromGapQueue}
+                    onChange={(event) => setExcludeFromGapQueue(event.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-[#084734]"
+                  />
+                  <span>
+                    보강 큐 제외
+                    <span className="mt-1 block text-[#A39E98]">체크하면 수정 요청 시 이 질문을 문서 보강 큐로 자동 유입하지 않습니다.</span>
+                  </span>
+                </label>
               </div>
             </div>
 
@@ -2115,5 +2376,23 @@ export default function InternalCsChatWorkspace() {
         </div>
       ) : null}
     </div>
+  )
+}
+
+// useSearchParams()는 정적 렌더링 시 Suspense 경계를 요구한다. 페이지(app/admin/cs-chatbot/page.tsx)를
+// 바꾸지 않고 이 컴포넌트 내부에서 해결한다.
+function WorkspaceLoadingShell() {
+  return (
+    <div className="fixed inset-0 z-[80] flex h-[100dvh] items-center justify-center bg-white">
+      <Loader2 className="h-5 w-5 animate-spin text-[#084734]" />
+    </div>
+  )
+}
+
+export default function InternalCsChatWorkspace() {
+  return (
+    <Suspense fallback={<WorkspaceLoadingShell />}>
+      <InternalCsChatWorkspaceInner />
+    </Suspense>
   )
 }
