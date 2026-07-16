@@ -2384,7 +2384,8 @@ function InternalCsChatWorkspaceInner() {
                 const Icon = tool.icon
                 return (
                   <Link
-                    key={tool.href}
+                    // href 는 중복될 수 있다 (챗봇 운영 현황이 보강 큐 탭에 흡수됨) — title 이 키.
+                    key={tool.title}
                     href={tool.href}
                     className="group flex items-center gap-3 rounded-[9px] border border-black/[0.08] bg-white px-3.5 py-3 transition-colors hover:border-[#084734]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
                   >
