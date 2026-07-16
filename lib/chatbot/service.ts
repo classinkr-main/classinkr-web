@@ -3094,67 +3094,97 @@ export async function upsertQuestionCluster(
   const internalCsRef = options?.internalCsRef
 
   try {
-    const { data: existing, error: existingError } = await supabase
-      .from("question_clusters")
-      .select("id, sample_questions, metadata")
-      .eq("canonical_question", question.redacted)
-      .maybeSingle()
+    // 동시성 하드닝: (1) 신규 insert 가 canonical_question unique 경합에서 지면 승자 행에
+    // 재병합하고, (2) metadata.internalCs 병합(read-modify-write)은 읽은 스냅샷을 낙관적
+    // 가드로 걸어 끼어든 쓰기를 감지한다. 두 경우 모두 재조회→재병합 재시도 1회로 흡수하며,
+    // 최종 시도는 가드 없이 커밋해 종료를 보장한다.
+    const maxAttempts = 2
+    let clusterId: string | undefined
 
-    if (existingError) throw existingError
+    for (let attempt = 0; attempt < maxAttempts && !clusterId; attempt++) {
+      const finalAttempt = attempt === maxAttempts - 1
 
-    const existingCluster = existing as {
-      id: string
-      sample_questions: string[] | null
-      metadata: Record<string, unknown> | null
-    } | null
-    let clusterId = existingCluster?.id
-
-    if (existingCluster && clusterId) {
-      const sampleQuestions = Array.from(
-        new Set([question.redacted, ...(existingCluster.sample_questions ?? [])])
-      ).slice(0, 5)
-
-      const patch: Record<string, unknown> = {
-        last_seen_at: new Date().toISOString(),
-        sample_questions: sampleQuestions,
-      }
-      if (category) patch.category = category
-      if (internalCsRef) {
-        const metadata = getContextObject(existingCluster.metadata)
-        metadata.internalCs = mergeInternalCsRefs(metadata.internalCs, internalCsRef)
-        if (!normalizeString(metadata.source)) metadata.source = source
-        patch.metadata = metadata
-      }
-
-      const { error } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from("question_clusters")
-        .update(patch)
-        .eq("id", clusterId)
+        .select("id, sample_questions, metadata")
+        .eq("canonical_question", question.redacted)
+        .maybeSingle()
 
-      if (error) throw error
-    } else {
-      const { data: inserted, error } = await supabase
-        .from("question_clusters")
-        .insert({
-          label: question.redacted.slice(0, 120),
-          canonical_question: question.redacted,
-          category,
-          mapped_article_id: topSource?.articleId ?? null,
-          mapped_chunk_id: topSource?.chunkId ?? null,
-          sample_questions: [question.redacted],
-          status: "candidate",
-          metadata: {
-            source,
-            ...(response ? { answerMode: response.answerMode } : {}),
-            ...(internalCsRef ? { internalCs: [internalCsRef] } : {}),
-          },
-        })
-        .select("id")
-        .single()
+      if (existingError) throw existingError
 
-      if (error) throw error
-      clusterId = inserted.id as string
+      const existingCluster = existing as {
+        id: string
+        sample_questions: string[] | null
+        metadata: Record<string, unknown> | null
+      } | null
+
+      if (existingCluster?.id) {
+        const sampleQuestions = Array.from(
+          new Set([question.redacted, ...(existingCluster.sample_questions ?? [])])
+        ).slice(0, 5)
+
+        const patch: Record<string, unknown> = {
+          last_seen_at: new Date().toISOString(),
+          sample_questions: sampleQuestions,
+        }
+        if (category) patch.category = category
+
+        const originalMetadata = getContextObject(existingCluster.metadata)
+        if (internalCsRef) {
+          // 원본 스냅샷은 낙관적 가드 값으로 써야 하므로 병합은 복사본에만 한다.
+          const mergedMetadata: Record<string, unknown> = { ...originalMetadata }
+          mergedMetadata.internalCs = mergeInternalCsRefs(originalMetadata.internalCs, internalCsRef)
+          if (!normalizeString(mergedMetadata.source)) mergedMetadata.source = source
+          patch.metadata = mergedMetadata
+        }
+
+        let updateQuery = supabase
+          .from("question_clusters")
+          .update(patch)
+          .eq("id", existingCluster.id)
+        if (internalCsRef && !finalAttempt) {
+          // jsonb 동등 필터 — postgrest 는 객체를 문자열로 직렬화하지 않으므로 직접 stringify 한다.
+          updateQuery = updateQuery.eq("metadata", JSON.stringify(originalMetadata))
+        }
+
+        const { data: updatedRows, error } = await updateQuery.select("id")
+        if (error) throw error
+        if (!updatedRows || (updatedRows as unknown[]).length === 0) {
+          // 가드 불일치(다른 병합이 먼저 커밋) 또는 행 소실 — 재조회해 최신 상태에 재병합한다.
+          if (finalAttempt) throw new Error("question cluster update matched no rows")
+          continue
+        }
+        clusterId = existingCluster.id
+      } else {
+        const { data: inserted, error } = await supabase
+          .from("question_clusters")
+          .insert({
+            label: question.redacted.slice(0, 120),
+            canonical_question: question.redacted,
+            category,
+            mapped_article_id: topSource?.articleId ?? null,
+            mapped_chunk_id: topSource?.chunkId ?? null,
+            sample_questions: [question.redacted],
+            status: "candidate",
+            metadata: {
+              source,
+              ...(response ? { answerMode: response.answerMode } : {}),
+              ...(internalCsRef ? { internalCs: [internalCsRef] } : {}),
+            },
+          })
+          .select("id")
+          .single()
+
+        if (error) {
+          // 동시 insert 가 canonical_question unique 를 먼저 차지한 경우 — 승자 행에 재병합한다.
+          if ((error as { code?: string }).code === "23505" && !finalAttempt) continue
+          throw error
+        }
+        clusterId = inserted.id as string
+      }
     }
+
+    if (!clusterId) return
 
     // 내부 CS 유입에는 공개 챗봇 answer event 가 없다 — 링크는 있을 때만 남긴다.
     if (!answerEventId) return

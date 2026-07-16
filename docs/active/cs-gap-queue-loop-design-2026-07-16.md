@@ -65,6 +65,11 @@
 - vitest: gap-ingest(폴백/검토 훅, 중복, 제외 플래그, redaction), promoted 전파, 통합 추천 질문 엔드포인트, regression-candidates 라우트. 기존 `tests/internal-cs-chat/` 패턴 준수.
 - 게이트: `npx eslint app components lib --max-warnings=0` + `npm run build`.
 
+## 동시성 하드닝 (2026-07-16, Codex 독립 리뷰 P1 반영)
+
+- 추천 질문 발행 멱등: `chatbot_recommended_questions.cluster_id` 전용 컬럼 + unique 인덱스로 SELECT-then-INSERT 레이스 제거 ([supabase/migrations/20260716_chatbot_recommended_questions_cluster_id.sql](../../supabase/migrations/20260716_chatbot_recommended_questions_cluster_id.sql) — 백필·기존 중복 정리 포함, 적용 필요). POST 는 ON CONFLICT DO NOTHING upsert 로 전환, 충돌 시 승자 행을 재조회해 선착 우선으로 재사용한다. 마이그레이션 미적용 환경에서는 기존 비원자 경로로 폴백하며 `console.error` 로 관측된다. `metadata.clusterId` 는 API/표시 계약으로 유지하고 `cluster_id` 는 중복 방지 키로만 쓴다.
+- `upsertQuestionCluster` 병합 레이스: 신규 insert 가 `canonical_question` unique 경합에서 지면 승자 행에 재조회→재병합하고, `metadata.internalCs` 병합(read-modify-write)은 읽은 스냅샷을 jsonb 동등 필터(낙관적 가드)로 걸어 끼어든 쓰기를 감지한다. 두 경우 모두 재시도 1회, 최종 시도는 가드 없이 커밋해 종료를 보장한다. unique 인덱스 전제는 [supabase/migrations/20260716_question_clusters_canonical_unique_guard.sql](../../supabase/migrations/20260716_question_clusters_canonical_unique_guard.sql)로 방어적 재선언(기적용 환경 no-op).
+
 ## 비범위 (이번에 안 함)
 
 - 큐레이션 지식(knowledge.ts) DB화 및 corrected_content 지식 승격.
