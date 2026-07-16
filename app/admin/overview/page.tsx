@@ -833,30 +833,33 @@ export default function OverviewPage() {
               </div>
               <ul>
                 {recentLeads.map((lead) => (
-                  <li
-                    key={lead.id}
-                    className="flex flex-col gap-3 border-b border-[#e8e8e4] px-4 py-3.5 transition-colors last:border-0 hover:bg-[#fafaf8] sm:flex-row sm:items-center sm:gap-4 sm:px-6"
-                  >
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[#f0f0ec] flex items-center justify-center text-[12px] font-semibold text-[#1a1a1a]/50 shrink-0">
-                        {(lead.name ?? lead.email ?? "?")[0]?.toUpperCase()}
+                  <li key={lead.id} className="border-b border-[#e8e8e4] last:border-0">
+                    <Link
+                      href={`/admin/crm/customers/leads?lead=${lead.id}`}
+                      className="group flex flex-col gap-3 px-4 py-3.5 transition-colors hover:bg-[#fafaf8] sm:flex-row sm:items-center sm:gap-4 sm:px-6"
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-[#f0f0ec] flex items-center justify-center text-[12px] font-semibold text-[#1a1a1a]/50 shrink-0">
+                          {(lead.name ?? lead.email ?? "?")[0]?.toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-medium text-[#111110] truncate">
+                            {lead.name ?? lead.email ?? "이름 없음"}
+                            {lead.org && <span className="font-normal text-[#1a1a1a]/40"> · {lead.org}</span>}
+                          </p>
+                          <p className="text-[11px] text-[#1a1a1a]/40">{SOURCE_LABEL[lead.source] ?? lead.source}</p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-medium text-[#111110] truncate">
-                          {lead.name ?? lead.email ?? "이름 없음"}
-                          {lead.org && <span className="font-normal text-[#1a1a1a]/40"> · {lead.org}</span>}
+                      <div className="flex items-center gap-2 sm:ml-auto">
+                        <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium shrink-0 ${STATUS_COLOR[lead.status]}`}>
+                          {STATUS_LABEL[lead.status]}
+                        </span>
+                        <p className="text-[11px] text-[#1a1a1a]/30 shrink-0 w-14 text-right">
+                          {formatDateShort(lead.timestamp)}
                         </p>
-                        <p className="text-[11px] text-[#1a1a1a]/40">{SOURCE_LABEL[lead.source] ?? lead.source}</p>
+                        <ChevronRight className="hidden h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/25 transition-transform group-hover:translate-x-0.5 sm:block" />
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 sm:ml-auto">
-                      <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium shrink-0 ${STATUS_COLOR[lead.status]}`}>
-                        {STATUS_LABEL[lead.status]}
-                      </span>
-                      <p className="text-[11px] text-[#1a1a1a]/30 shrink-0 w-14 text-right">
-                        {formatDateShort(lead.timestamp)}
-                      </p>
-                    </div>
+                    </Link>
                   </li>
                 ))}
               </ul>

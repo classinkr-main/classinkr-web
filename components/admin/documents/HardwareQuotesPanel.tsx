@@ -222,13 +222,58 @@ function getStatusMeta(status: string) {
   }
 }
 
-function getResponseLabel(quote: HardwareQuoteRow) {
-  if (quote.acceptedAt || quote.status === "accepted") return "동의 확인"
-  if (quote.reviewConfirmedAt) return "검토 확인"
-  if (quote.status === "expired") return "만료됨"
-  if (quote.lastViewedAt) return `열람 ${quote.viewCount}회`
-  if (quote.status === "shared" || quote.shareCount > 0 || quote.shareUrl) return "열람 대기"
-  return "미발송"
+function getResponseMeta(quote: HardwareQuoteRow) {
+  if (quote.acceptedAt || quote.status === "accepted") {
+    return { label: "동의 확인", dotClassName: "bg-[#084734]", textClassName: "text-[#084734]" }
+  }
+  if (quote.reviewConfirmedAt) {
+    return { label: "검토 확인", dotClassName: "bg-[#084734]", textClassName: "text-[#084734]" }
+  }
+  if (quote.status === "expired") {
+    return { label: "만료됨", dotClassName: "bg-[#B85C33]", textClassName: "text-[#B85C33]" }
+  }
+  if (quote.lastViewedAt) {
+    return { label: `열람 ${quote.viewCount}회`, dotClassName: "bg-[#084734]", textClassName: "text-[#111110]" }
+  }
+  if (quote.status === "shared" || quote.shareCount > 0 || quote.shareUrl) {
+    return { label: "열람 대기", dotClassName: "bg-[#A8741A]", textClassName: "text-[#A8741A]" }
+  }
+  return { label: "미발송", dotClassName: "bg-[#c9c7c2]", textClassName: "text-[#1a1a1a]/45" }
+}
+
+/** 마지막 고객 반응(동의 > 검토 > 열람 > 발송) 시점 — 로그 라인의 상대시간 표기에 사용. */
+function getLatestInteractionAt(quote: HardwareQuoteRow) {
+  return quote.acceptedAt ?? quote.reviewConfirmedAt ?? quote.lastViewedAt ?? quote.latestShareCreatedAt
+}
+
+const UNRESPONSIVE_WARN_DAYS = 3
+
+/** 발송 후 미열람 상태로 경과한 일수. 경고 기준 미만이거나 반응이 있으면 null. */
+function getUnresponsiveDays(quote: HardwareQuoteRow) {
+  if (quote.acceptedAt || quote.reviewConfirmedAt || quote.lastViewedAt) return null
+  if (!isQuoteShared(quote) || !quote.latestShareCreatedAt) return null
+
+  const sharedAt = Date.parse(quote.latestShareCreatedAt)
+  if (Number.isNaN(sharedAt)) return null
+
+  const days = Math.floor((Date.now() - sharedAt) / 86_400_000)
+  return days >= UNRESPONSIVE_WARN_DAYS ? days : null
+}
+
+function formatRelativeTime(value: string | null) {
+  if (!value) return null
+  const time = Date.parse(value)
+  if (Number.isNaN(time)) return null
+
+  const diffMinutes = Math.floor((Date.now() - time) / 60_000)
+  if (diffMinutes < 1) return "방금"
+  if (diffMinutes < 60) return `${diffMinutes}분 전`
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) return `${diffHours}시간 전`
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffDays < 7) return `${diffDays}일 전`
+
+  return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric" }).format(new Date(time))
 }
 
 function getInteractionHint(quote: HardwareQuoteRow) {
@@ -699,11 +744,14 @@ export default function HardwareQuotesPanel({
               const statusMeta = getStatusMeta(quote.status)
               const sharing = sharingQuoteId === quote.id
               const nextAction = getNextActionMeta(quote)
+              const responseMeta = getResponseMeta(quote)
+              const responseRelativeTime = formatRelativeTime(getLatestInteractionAt(quote))
+              const unresponsiveDays = getUnresponsiveDays(quote)
 
               return (
                 <div
                   key={quote.id}
-                  className="grid gap-3 px-4 py-4 transition-colors hover:bg-[#fafaf8] sm:px-5 lg:grid-cols-[minmax(0,1fr)_300px_260px] lg:items-center"
+                  className="group grid gap-3 px-4 py-4 transition-colors hover:bg-[#fafaf8] sm:px-5 lg:grid-cols-[minmax(0,1fr)_320px_250px] lg:items-center"
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -754,22 +802,34 @@ export default function HardwareQuotesPanel({
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-xs lg:flex lg:flex-nowrap lg:items-baseline lg:justify-end lg:gap-2">
-                    <div className="lg:whitespace-nowrap">
-                      <p className="text-[#1a1a1a]/35 lg:inline">금액</p>
-                      <p className="mt-0.5 font-semibold tabular-nums text-[#111110] lg:ml-1 lg:inline lg:mt-0">{formatMoney(quote.totalAmount)}</p>
+                  <div className="grid grid-cols-3 gap-2 text-xs lg:grid-cols-[minmax(0,1fr)_36px_150px] lg:items-baseline lg:gap-3">
+                    <div>
+                      <p className="text-[#1a1a1a]/35 lg:hidden">금액</p>
+                      <p className="mt-0.5 text-[13px] font-semibold tabular-nums text-[#111110] lg:mt-0 lg:text-right">
+                        {formatMoney(quote.totalAmount)}
+                      </p>
                     </div>
-                    <span className="hidden text-[#1a1a1a]/20 lg:inline">·</span>
-                    <div className="lg:whitespace-nowrap">
-                      <p className="text-[#1a1a1a]/35 lg:inline">버전</p>
-                      <p className="mt-0.5 font-semibold text-[#111110] lg:ml-1 lg:mt-0 lg:inline">
+                    <div>
+                      <p className="text-[#1a1a1a]/35 lg:hidden">버전</p>
+                      <p className="mt-0.5 font-medium text-[#1a1a1a]/50 lg:mt-0">
                         {quote.latestVersionNumber ? `v${quote.latestVersionNumber}` : `${quote.versionCount}개`}
                       </p>
                     </div>
-                    <span className="hidden text-[#1a1a1a]/20 lg:inline">·</span>
-                    <div className="lg:whitespace-nowrap" title={getInteractionHint(quote)}>
-                      <p className="text-[#1a1a1a]/35 lg:inline">응답</p>
-                      <p className="mt-0.5 font-semibold text-[#111110] lg:ml-1 lg:mt-0 lg:inline">{getResponseLabel(quote)}</p>
+                    <div className="min-w-0" title={getInteractionHint(quote)}>
+                      <p className="text-[#1a1a1a]/35 lg:hidden">응답</p>
+                      <p className="mt-0.5 flex items-center gap-1.5 whitespace-nowrap lg:mt-0">
+                        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${responseMeta.dotClassName}`} />
+                        <span className={`font-semibold ${responseMeta.textClassName}`}>{responseMeta.label}</span>
+                        {unresponsiveDays !== null ? (
+                          <span className="truncate text-[11px] font-medium text-[#A8741A]" title={`발송 후 ${unresponsiveDays}일째 무반응`}>
+                            · 발송 {unresponsiveDays}일째
+                          </span>
+                        ) : responseRelativeTime ? (
+                          <span className="truncate text-[11px] font-normal text-[#1a1a1a]/40">
+                            · {responseRelativeTime}
+                          </span>
+                        ) : null}
+                      </p>
                       <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/35 lg:hidden">{getInteractionHint(quote)}</p>
                     </div>
                   </div>
@@ -784,40 +844,48 @@ export default function HardwareQuotesPanel({
                         <span className="tabular-nums">{quote.shareCount}</span>
                       </span>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        openAdminQuoteView(quote.id)
-                      }}
-                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-xs font-medium text-[#1a1a1a]/70 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+                    {/* 데스크톱에서는 hover/focus 시에만 노출해 기본 목록을 조용하게.
+                        공유 진행 중(sharing)에는 마우스가 벗어나도 스피너가 보이도록 유지. */}
+                    <div
+                      className={`flex items-center gap-1.5 lg:transition-opacity lg:group-focus-within:opacity-100 lg:group-hover:opacity-100 ${
+                        sharing ? "" : "lg:opacity-0"
+                      }`}
                     >
-                      <FileText className="h-3.5 w-3.5" />
-                      직접 보기
-                    </button>
-                    <button
-                      type="button"
-                      disabled={sharing}
-                      onClick={() => {
-                        void handleCopyShareLink(quote)
-                      }}
-                      title="공유 링크 복사"
-                      aria-label="공유 링크 복사"
-                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#e8e8e4] bg-white text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : quote.shareUrl ? <Copy className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={sharing}
-                      onClick={() => {
-                        void handleOpenShareLink(quote)
-                      }}
-                      title="공유 링크 열기"
-                      aria-label="공유 링크 열기"
-                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          openAdminQuoteView(quote.id)
+                        }}
+                        className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-xs font-medium text-[#1a1a1a]/70 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        직접 보기
+                      </button>
+                      <button
+                        type="button"
+                        disabled={sharing}
+                        onClick={() => {
+                          void handleCopyShareLink(quote)
+                        }}
+                        title="공유 링크 복사"
+                        aria-label="공유 링크 복사"
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#e8e8e4] bg-white text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {sharing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : quote.shareUrl ? <Copy className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={sharing}
+                        onClick={() => {
+                          void handleOpenShareLink(quote)
+                        }}
+                        title="공유 링크 열기"
+                        aria-label="공유 링크 열기"
+                        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )
