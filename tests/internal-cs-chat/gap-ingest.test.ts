@@ -132,46 +132,92 @@ describe("ingestInternalCsGap", () => {
   })
 })
 
-// 재유입 시 참조 누적/중복 제거/10개 캡 — 이 병합 규칙은 upsertQuestionCluster 안에 있으므로
-// 스파이가 아닌 실제 함수를 가짜 supabase 로 구동해 확인한다.
-describe("upsertQuestionCluster internal CS reference merge", () => {
-  function makeSupabase(existingRow: unknown) {
-    const calls: {
-      updatePatch: Record<string, unknown> | null
-      insertRow: Record<string, unknown> | null
-      eventInserted: boolean
-    } = { updatePatch: null, insertRow: null, eventInserted: false }
+// upsertQuestionCluster 검증용 가짜 supabase — 읽기/insert/update 결과를 시퀀스로 주입해
+// 병합 규칙과 동시성 재시도 경로를 실제 함수로 구동한다.
+interface FakeResult {
+  data: unknown
+  error: unknown
+}
 
-    const supabase = {
-      from(table: string) {
-        if (table === "question_cluster_events") {
-          return {
-            insert: () => {
-              calls.eventInserted = true
-              return Promise.resolve({ error: null })
-            },
-          }
-        }
+function makeSupabase(
+  reads: unknown[],
+  {
+    insertResults = [{ data: { id: "cluster-new" }, error: null }],
+    updateResults = null,
+  }: {
+    insertResults?: FakeResult[]
+    updateResults?: FakeResult[] | null
+  } = {}
+) {
+  const calls: {
+    updates: { patch: Record<string, unknown>; filters: [string, unknown][] }[]
+    insertRows: Record<string, unknown>[]
+    events: Record<string, unknown>[]
+  } = { updates: [], insertRows: [], events: [] }
+
+  const readQueue = [...reads]
+  const insertQueue = [...insertResults]
+  const updateQueue = updateResults ? [...updateResults] : null
+
+  const supabase = {
+    from(table: string) {
+      if (table === "question_cluster_events") {
         return {
-          select: () => ({
-            eq: () => ({ maybeSingle: async () => ({ data: existingRow, error: null }) }),
-          }),
-          update: (patch: Record<string, unknown>) => {
-            calls.updatePatch = patch
-            return { eq: () => Promise.resolve({ error: null }) }
-          },
           insert: (row: Record<string, unknown>) => {
-            calls.insertRow = row
-            return {
-              select: () => ({ single: async () => ({ data: { id: "cluster-new" }, error: null }) }),
-            }
+            calls.events.push(row)
+            return Promise.resolve({ error: null })
           },
         }
-      },
-    }
-    return { supabase, calls }
+      }
+      return {
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: readQueue.length ? readQueue.shift() : null,
+              error: null,
+            }),
+          }),
+        }),
+        update: (patch: Record<string, unknown>) => {
+          const entry = { patch, filters: [] as [string, unknown][] }
+          calls.updates.push(entry)
+          const builder = {
+            eq(column: string, value: unknown) {
+              entry.filters.push([column, value])
+              return builder
+            },
+            select: async () =>
+              updateQueue
+                ? (updateQueue.shift() ?? { data: [{ id: "updated" }], error: null })
+                : { data: [{ id: "updated" }], error: null },
+          }
+          return builder
+        },
+        insert: (row: Record<string, unknown>) => {
+          calls.insertRows.push(row)
+          const result = insertQueue.shift() ?? { data: { id: "cluster-new" }, error: null }
+          return {
+            select: () => ({ single: async () => result }),
+          }
+        },
+      }
+    },
   }
+  return { supabase, calls }
+}
 
+const uniqueViolation = {
+  data: null,
+  error: {
+    code: "23505",
+    message: 'duplicate key value violates unique constraint "question_clusters_canonical_question_idx"',
+  },
+}
+
+// 재유입 시 참조 누적/중복 제거/10개 캡 — 이 병합 규칙은 upsertQuestionCluster 안에 있으므로
+// 스파이가 아닌 실제 함수를 가짜 supabase 로 구동해 확인한다. 동시성 하드닝(레이스 시
+// 재조회→재병합 재시도 1회)도 같은 방식으로 읽기/쓰기 시퀀스를 주입해 검증한다.
+describe("upsertQuestionCluster internal CS reference merge", () => {
   function refs(count: number) {
     return Array.from({ length: count }, (_, index) => ({
       conversationId: `conversation-${index}`,
@@ -181,11 +227,13 @@ describe("upsertQuestionCluster internal CS reference merge", () => {
 
   it("prepends the newest reference and caps the accumulated list at 10", async () => {
     const service = await importRealService()
-    const { supabase, calls } = makeSupabase({
-      id: "cluster-1",
-      sample_questions: ["기존 질문"],
-      metadata: { source: "internal_cs_review", internalCs: refs(10) },
-    })
+    const { supabase, calls } = makeSupabase([
+      {
+        id: "cluster-1",
+        sample_questions: ["기존 질문"],
+        metadata: { source: "internal_cs_review", internalCs: refs(10) },
+      },
+    ])
 
     await service.upsertQuestionCluster(
       supabase as never,
@@ -199,7 +247,8 @@ describe("upsertQuestionCluster internal CS reference merge", () => {
       }
     )
 
-    const metadata = calls.updatePatch?.metadata as {
+    expect(calls.updates).toHaveLength(1)
+    const metadata = calls.updates[0]?.patch.metadata as {
       source: string
       internalCs: { conversationId: string; messageId: string }[]
     }
@@ -213,16 +262,21 @@ describe("upsertQuestionCluster internal CS reference merge", () => {
     // 기존 source 는 보존된다 (최초 유입 경로 표시 유지).
     expect(metadata.source).toBe("internal_cs_review")
     // 기존 status(ignored/published 포함)는 되돌리지 않는다 — 업데이트 패치에 status 없음.
-    expect(calls.updatePatch).not.toHaveProperty("status")
+    expect(calls.updates[0]?.patch).not.toHaveProperty("status")
+    // metadata 병합(read-modify-write)은 낙관적 가드를 건다 — 읽은 스냅샷 그대로일 때만 커밋.
+    const filterColumns = calls.updates[0]?.filters.map(([column]) => column)
+    expect(filterColumns).toEqual(["id", "metadata"])
   })
 
   it("removes a duplicate messageId instead of growing the list", async () => {
     const service = await importRealService()
-    const { supabase, calls } = makeSupabase({
-      id: "cluster-1",
-      sample_questions: [],
-      metadata: { internalCs: refs(3) },
-    })
+    const { supabase, calls } = makeSupabase([
+      {
+        id: "cluster-1",
+        sample_questions: [],
+        metadata: { internalCs: refs(3) },
+      },
+    ])
 
     await service.upsertQuestionCluster(
       supabase as never,
@@ -236,7 +290,7 @@ describe("upsertQuestionCluster internal CS reference merge", () => {
       }
     )
 
-    const metadata = calls.updatePatch?.metadata as {
+    const metadata = calls.updates[0]?.patch.metadata as {
       internalCs: { conversationId: string; messageId: string }[]
     }
     expect(metadata.internalCs).toHaveLength(3)
@@ -246,7 +300,7 @@ describe("upsertQuestionCluster internal CS reference merge", () => {
 
   it("inserts a new cluster with the internal source and skips the answer-event link when there is no answer event", async () => {
     const service = await importRealService()
-    const { supabase, calls } = makeSupabase(null)
+    const { supabase, calls } = makeSupabase([null])
 
     await service.upsertQuestionCluster(
       supabase as never,
@@ -260,12 +314,161 @@ describe("upsertQuestionCluster internal CS reference merge", () => {
       }
     )
 
-    expect(calls.insertRow?.status).toBe("candidate")
-    expect(calls.insertRow?.metadata).toEqual({
+    expect(calls.insertRows).toHaveLength(1)
+    expect(calls.insertRows[0]?.status).toBe("candidate")
+    expect(calls.insertRows[0]?.metadata).toEqual({
       source: "internal_cs_fallback",
       internalCs: [{ conversationId: "conversation-9", messageId: "message-9" }],
     })
-    expect(calls.eventInserted).toBe(false)
+    expect(calls.events).toHaveLength(0)
+  })
+
+  it("keeps the public-chatbot update path single-shot without a metadata guard", async () => {
+    const service = await importRealService()
+    const { supabase, calls } = makeSupabase([
+      { id: "cluster-1", sample_questions: [], metadata: {} },
+    ])
+
+    await service.upsertQuestionCluster(
+      supabase as never,
+      "answer-1",
+      { redacted: "공개 챗봇 질문" },
+      null,
+      "faq"
+    )
+
+    // metadata 를 만지지 않는 공개 경로는 가드/재시도 없이 1회 갱신으로 끝난다 (핫패스 유지).
+    expect(calls.updates).toHaveLength(1)
+    expect(calls.updates[0]?.filters.map(([column]) => column)).toEqual(["id"])
+    expect(calls.updates[0]?.patch).not.toHaveProperty("metadata")
+    expect(calls.events).toEqual([
+      expect.objectContaining({ cluster_id: "cluster-1", answer_event_id: "answer-1" }),
+    ])
+  })
+})
+
+// 동시성 하드닝 (Codex 리뷰 P1-2): 신규 insert 가 canonical_question unique 에 지면 승자 행에
+// 재병합하고, metadata 병합의 read-modify-write 가 끼어들기로 무효화되면 재조회 후 1회 재시도한다.
+describe("upsertQuestionCluster concurrency hardening", () => {
+  const ourRef = { conversationId: "conversation-b", messageId: "message-b" }
+
+  it("re-reads and merges into the winner when a concurrent insert wins the canonical_question race", async () => {
+    const service = await importRealService()
+    const winner = {
+      id: "cluster-winner",
+      sample_questions: ["동시 질문"],
+      metadata: {
+        source: "chatbot_mvp_exact_match",
+        internalCs: [{ conversationId: "conversation-a", messageId: "message-a" }],
+      },
+    }
+    const { supabase, calls } = makeSupabase([null, winner], {
+      insertResults: [uniqueViolation],
+    })
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+
+    await service.upsertQuestionCluster(
+      supabase as never,
+      "answer-1",
+      { redacted: "동시 질문" },
+      null,
+      null,
+      { source: "internal_cs_fallback", internalCsRef: ourRef }
+    )
+
+    // insert 는 한 번 지고, 승자 행으로 병합 업데이트가 이어진다 — 신호가 유실되지 않는다.
+    expect(calls.insertRows).toHaveLength(1)
+    expect(calls.updates).toHaveLength(1)
+    const metadata = calls.updates[0]?.patch.metadata as {
+      source: string
+      internalCs: { messageId: string }[]
+    }
+    expect(metadata.internalCs.map((ref) => ref.messageId)).toEqual(["message-b", "message-a"])
+    expect(metadata.source).toBe("chatbot_mvp_exact_match")
+    // answer event 링크도 승자 클러스터로 이어진다.
+    expect(calls.events).toEqual([
+      expect.objectContaining({ cluster_id: "cluster-winner", answer_event_id: "answer-1" }),
+    ])
+    expect(warnSpy).not.toHaveBeenCalled()
+  })
+
+  it("re-merges against the freshest row when a concurrent metadata write invalidates the guarded update", async () => {
+    const service = await importRealService()
+    const v1 = {
+      id: "cluster-1",
+      sample_questions: [],
+      metadata: {
+        source: "internal_cs_review",
+        internalCs: [{ conversationId: "conversation-old", messageId: "message-old" }],
+      },
+    }
+    const v2 = {
+      id: "cluster-1",
+      sample_questions: [],
+      metadata: {
+        source: "internal_cs_review",
+        internalCs: [{ conversationId: "conversation-race", messageId: "message-race" }],
+      },
+    }
+    const { supabase, calls } = makeSupabase([v1, v2], {
+      updateResults: [
+        { data: [], error: null },
+        { data: [{ id: "cluster-1" }], error: null },
+      ],
+    })
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+
+    await service.upsertQuestionCluster(
+      supabase as never,
+      null,
+      { redacted: "경합 질문" },
+      null,
+      null,
+      {
+        source: "internal_cs_fallback",
+        internalCsRef: { conversationId: "conversation-new", messageId: "message-new" },
+      }
+    )
+
+    expect(calls.updates).toHaveLength(2)
+    // 1차 시도의 가드는 병합 이전에 읽은 원본 metadata 스냅샷이어야 한다 (병합 결과가 아니라).
+    const guard = calls.updates[0]?.filters.find(([column]) => column === "metadata")
+    expect(guard).toBeDefined()
+    expect(JSON.parse(String(guard?.[1]))).toEqual({
+      source: "internal_cs_review",
+      internalCs: [{ conversationId: "conversation-old", messageId: "message-old" }],
+    })
+    // 2차(최종) 시도는 재조회한 v2 를 기준으로 재병합하고 가드 없이 커밋한다.
+    expect(calls.updates[1]?.filters.map(([column]) => column)).toEqual(["id"])
+    const merged = calls.updates[1]?.patch.metadata as {
+      internalCs: { messageId: string }[]
+    }
+    expect(merged.internalCs.map((ref) => ref.messageId)).toEqual(["message-new", "message-race"])
+    expect(warnSpy).not.toHaveBeenCalled()
+  })
+
+  it("stops after one retry and logs a warning when the insert race persists", async () => {
+    const service = await importRealService()
+    const { supabase, calls } = makeSupabase([null, null], {
+      insertResults: [uniqueViolation, uniqueViolation],
+    })
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+
+    await expect(
+      service.upsertQuestionCluster(
+        supabase as never,
+        "answer-1",
+        { redacted: "끝나지 않는 경합" },
+        null,
+        null,
+        { source: "internal_cs_fallback", internalCsRef: ourRef }
+      )
+    ).resolves.toBeUndefined()
+
+    // 재시도는 1회로 끝난다 — 무한 루프 없이 관측 가능한 경고를 남긴다.
+    expect(calls.insertRows).toHaveLength(2)
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    expect(calls.events).toHaveLength(0)
   })
 })
 
