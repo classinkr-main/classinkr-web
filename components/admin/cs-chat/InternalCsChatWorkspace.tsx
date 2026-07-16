@@ -272,7 +272,7 @@ const OPERATING_TOOLS = [
     priority: "상담 원문",
   },
   {
-    href: "/admin/chatbot",
+    href: "/admin/docs?tab=gaps",
     title: "챗봇 운영 현황",
     description: "질문량, 미해결률, 상담 이관과 응답 속도를 확인합니다.",
     icon: Bot,
