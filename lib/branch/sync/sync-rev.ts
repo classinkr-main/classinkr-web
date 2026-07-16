@@ -6,11 +6,12 @@ import { parseKpiBlocks, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import { replaceBranchRevDeals } from "@/lib/repositories/branch-deals"
 import { replaceBranchDshMirror, replaceBranchKpiMirror } from "@/lib/repositories/branch-dsh-kpi-mirror"
 import { fyOf } from "@/lib/branch/fiscal"
+import { isRangeLikelyTruncated } from "./range-truncation"
 
 // "rev" 소스 = 매출 대시보드 스프레드시트 전체. REV(계약)뿐 아니라 DSH/KPI 탭도
 // 같은 시트라 함께 스냅샷한다 — 요청 경로(read-dsh-kpi.ts)가 라이브 시트 대신
 // 이 미러를 읽으므로, 여기서 채우지 않으면 DB-우선 사다리가 성립하지 않는다.
-export async function syncRev(): Promise<{ rows: number }> {
+export async function syncRev(): Promise<{ rows: number; warning?: string }> {
   const sheetId = envSheetId("dashboard")
   const refFy = fyOf(new Date())
   const [revGrid, dshGrid, kpiGrid] = await Promise.all([
@@ -31,5 +32,10 @@ export async function syncRev(): Promise<{ rows: number }> {
   const n = await replaceBranchRevDeals(rows)
   await replaceBranchDshMirror(refFy, parseDsh(dshGrid, refFy))
   await replaceBranchKpiMirror(refFy, parseKpiBlocks(kpiGrid))
-  return { rows: n }
+  // 범위 상한 도달 = 시트가 범위보다 커져 뒷부분 행이 잘렸을 수 있다는 신호.
+  // 동기화 자체는 여전히 성공이므로 에러로 취급하지 않고 경고만 실어 보낸다.
+  const warning = isRangeLikelyTruncated(revGrid.length, REV_RANGE)
+    ? `REV 범위(${REV_RANGE})가 상한에 도달했습니다 — 시트가 더 커졌다면 일부 행이 잘렸을 수 있습니다 (읽은 행 수: ${revGrid.length}).`
+    : undefined
+  return { rows: n, warning }
 }
