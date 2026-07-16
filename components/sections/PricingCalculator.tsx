@@ -18,14 +18,25 @@ import { Slider } from "@/components/ui/slider"
 type Quality = "SD" | "HD" | "FHD"
 type RecordingMode = "none" | "single" | "dual"
 type SubscriptionTier = "Standard" | "Plus" | "Enterprise"
+type PricingDisplayMode = "native" | "krw"
 
-const CNY_TO_KRW = 190
-const USD_TO_KRW = 1440
+const DEFAULT_EXCHANGE_RATES = {
+  cnyToKrw: 190,
+  usdToKrw: 1440,
+} as const
 const MIN_INITIAL_RECHARGE_CNY = 10_000
 const RECHARGE_STEP_CNY = 2_000
 const BUSINESS_FREE_STORAGE_GB = 30
 const BUSINESS_STORAGE_CNY_PER_GB = 3
 const BUSINESS_WEBLIVE_CNY_PER_GB = 3
+
+interface PricingCalculatorProps {
+  displayMode?: PricingDisplayMode
+  exchangeRates?: {
+    cnyToKrw: number
+    usdToKrw: number
+  }
+}
 
 const QUALITY_LABEL: Record<Quality, string> = {
   SD: "SD",
@@ -106,6 +117,10 @@ function roundUpToStep(value: number, step: number) {
 
 function formatNumber(value: number) {
   return Math.round(value).toLocaleString("ko-KR")
+}
+
+function formatKrw(value: number) {
+  return `${formatNumber(value)}원`
 }
 
 function formatDecimal(value: number, digits = 1) {
@@ -354,7 +369,10 @@ function SummaryCard({
   )
 }
 
-export function PricingCalculator() {
+export function PricingCalculator({
+  displayMode = "native",
+  exchangeRates = DEFAULT_EXCHANGE_RATES,
+}: PricingCalculatorProps) {
   const [onStageStudents, setOnStageStudents] = React.useState([6])
   const [connectedStudents, setConnectedStudents] = React.useState(80)
   const [teachers, setTeachers] = React.useState([5])
@@ -372,6 +390,9 @@ export function PricingCalculator() {
   const onStageStudentsNum = onStageStudents[0]
   const effectiveOnStageStudentsNum = Math.min(onStageStudentsNum, connectedStudents)
   const teachersNum = teachers[0]
+  const isKrwMode = displayMode === "krw"
+  const cnyToKrw = exchangeRates.cnyToKrw
+  const usdToKrw = exchangeRates.usdToKrw
 
   const pricing = React.useMemo(() => {
     const billableMinutesPerClass = resolveBillableMinutes(classDurationMinutes)
@@ -411,8 +432,8 @@ export function PricingCalculator() {
     const subscriptionIncludedStorageGb =
       subscription.config.baseStorageGb + subscription.config.storagePerTeacherGb * teachersNum
     const subscriptionStorageOverageGb = Math.max(storageGb - subscriptionIncludedStorageGb, 0)
-    const businessKrw = totalBusinessCny * CNY_TO_KRW
-    const subscriptionKrw = subscriptionUsd * USD_TO_KRW
+    const businessKrw = totalBusinessCny * cnyToKrw
+    const subscriptionKrw = subscriptionUsd * usdToKrw
     const recommendation = subscription.outOfRange
       ? "consult"
       : businessKrw <= subscriptionKrw
@@ -451,17 +472,27 @@ export function PricingCalculator() {
     classDurationMinutes,
     connectedStudents,
     courseStudents,
+    cnyToKrw,
     effectiveOnStageStudentsNum,
     hasDualCamera,
     quality,
     recordingMode,
     storageGb,
     teachersNum,
+    usdToKrw,
     webLiveTrafficGb,
   ])
 
   const businessRecommended = pricing.recommendation === "business"
   const subscriptionRecommended = pricing.recommendation === "subscription"
+  const formatBusinessAmount = React.useCallback(
+    (cny: number) => (isKrwMode ? formatKrw(cny * cnyToKrw) : `${formatNumber(cny)} CNY`),
+    [cnyToKrw, isKrwMode]
+  )
+  const formatSubscriptionAmount = React.useCallback(
+    (usd: number) => (isKrwMode ? formatKrw(usd * usdToKrw) : `$${formatNumber(usd)}`),
+    [isKrwMode, usdToKrw]
+  )
 
   return (
     <div className="mx-auto w-full max-w-6xl overflow-hidden rounded-xl border border-black/[0.08] bg-white shadow-[0_18px_52px_rgba(0,0,0,0.05)]">
@@ -469,7 +500,7 @@ export function PricingCalculator() {
         <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr] lg:items-end">
           <div>
             <h2 className="text-[28px] font-semibold leading-tight tracking-tight text-[#111110] sm:text-[34px]">
-              월 예상 요금 시뮬레이터
+              {isKrwMode ? "월 예상 요금 시뮬레이터 (KRW)" : "월 예상 요금 시뮬레이터"}
             </h2>
             <p className="mt-3 max-w-2xl text-[15px] leading-7 text-[#615D59]">
               온스테이지 인원은 수업 단가를 정하고, 수업 접속 학생 수는 과금 인원을 정합니다. 수업
@@ -480,9 +511,9 @@ export function PricingCalculator() {
             <div className="flex gap-2">
               <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <p>
-                환율 가정: 1 CNY = {formatNumber(CNY_TO_KRW)}원, 1 USD ={" "}
-                {formatNumber(USD_TO_KRW)}원. 실제 결제 금액은 계약 및 결제일 환율에 따라 달라질 수
-                있습니다.
+                {isKrwMode
+                  ? `원화 환산 기준: 1 CNY = ${formatNumber(cnyToKrw)}원, 1 USD = ${formatNumber(usdToKrw)}원. 실제 결제와 충전은 계약 및 결제일 조건에 따라 달라질 수 있습니다.`
+                  : `환율 가정: 1 CNY = ${formatNumber(cnyToKrw)}원, 1 USD = ${formatNumber(usdToKrw)}원. 실제 결제 금액은 계약 및 결제일 환율에 따라 달라질 수 있습니다.`}
               </p>
             </div>
           </div>
@@ -719,16 +750,24 @@ export function PricingCalculator() {
             <div className="grid gap-3">
               <SummaryCard
                 icon={<WalletCards className="h-4 w-4" aria-hidden="true" />}
-                label="Business 월 소모량"
-                value={`${formatNumber(pricing.totalBusinessCny)} CNY`}
-                helper={`약 ${formatNumber(pricing.businessKrw)}원`}
+                label={isKrwMode ? "Business 월 환산액" : "Business 월 소모량"}
+                value={isKrwMode ? formatKrw(pricing.businessKrw) : `${formatNumber(pricing.totalBusinessCny)} CNY`}
+                helper={
+                  isKrwMode
+                    ? `${formatNumber(pricing.totalBusinessCny)} CNY 환산`
+                    : `약 ${formatKrw(pricing.businessKrw)}`
+                }
                 active={businessRecommended}
               />
               <SummaryCard
                 icon={<Users className="h-4 w-4" aria-hidden="true" />}
-                label="Learning Space 월 구독료"
-                value={`$${formatNumber(pricing.subscriptionUsd)}`}
-                helper={`${pricing.subscription.tier} · 약 ${formatNumber(pricing.subscriptionKrw)}원`}
+                label={isKrwMode ? "Learning Space 월 환산액" : "Learning Space 월 구독료"}
+                value={isKrwMode ? formatKrw(pricing.subscriptionKrw) : `$${formatNumber(pricing.subscriptionUsd)}`}
+                helper={
+                  isKrwMode
+                    ? `${pricing.subscription.tier} · $${formatNumber(pricing.subscriptionUsd)} 환산`
+                    : `${pricing.subscription.tier} · 약 ${formatKrw(pricing.subscriptionKrw)}`
+                }
                 active={subscriptionRecommended}
               />
             </div>
@@ -768,7 +807,7 @@ export function PricingCalculator() {
                 <BreakdownRow
                   label="수업 진행"
                   detail={`${pricing.classRate.label} · ${pricing.classRate.rate} CNY x ${formatNumber(pricing.billedPeople)}명(접속 학생 ${formatNumber(pricing.billedStudents)}명 + 강사 1명) x ${formatDecimal(pricing.totalBillableHours)}시간`}
-                  amount={`${formatNumber(pricing.classCny)} CNY`}
+                  amount={formatBusinessAmount(pricing.classCny)}
                 />
                 <BreakdownRow
                   label="조교 동석"
@@ -777,7 +816,7 @@ export function PricingCalculator() {
                       ? `${formatNumber(assistantCount)}명 x ${pricing.assistantRate} CNY x ${formatDecimal(pricing.totalBillableHours)}시간`
                       : "선택 안 함"
                   }
-                  amount={`${formatNumber(pricing.assistantCny)} CNY`}
+                  amount={formatBusinessAmount(pricing.assistantCny)}
                 />
                 <BreakdownRow
                   label="수업 녹화"
@@ -786,26 +825,30 @@ export function PricingCalculator() {
                       ? "선택 안 함"
                       : `${RECORDING_LABEL[recordingMode]} · ${pricing.recordingRate} CNY x ${formatDecimal(pricing.totalBillableHours)}시간`
                   }
-                  amount={`${formatNumber(pricing.recordingCny)} CNY`}
+                  amount={formatBusinessAmount(pricing.recordingCny)}
                 />
                 <BreakdownRow
                   label="스토리지 초과"
                   detail={`${BUSINESS_FREE_STORAGE_GB}GB 무료 · 초과 ${formatNumber(pricing.storageOverageGb)}GB`}
-                  amount={`${formatNumber(pricing.storageCny)} CNY`}
+                  amount={formatBusinessAmount(pricing.storageCny)}
                 />
                 <BreakdownRow
                   label="웹라이브 트래픽"
                   detail={`${formatNumber(webLiveTrafficGb)}GB x ${BUSINESS_WEBLIVE_CNY_PER_GB} CNY`}
-                  amount={`${formatNumber(pricing.webLiveCny)} CNY`}
+                  amount={formatBusinessAmount(pricing.webLiveCny)}
                 />
               </div>
               <div className="mt-4 rounded-lg bg-[#F6F5F4] p-4">
                 <p className="text-[12px] font-semibold text-[#615D59]">초기 충전 권장액</p>
                 <p className="mt-1 text-[22px] font-semibold tracking-tight text-[#111110]">
-                  {formatNumber(pricing.initialRechargeCny)} CNY
+                  {isKrwMode
+                    ? formatKrw(pricing.initialRechargeCny * cnyToKrw)
+                    : `${formatNumber(pricing.initialRechargeCny)} CNY`}
                 </p>
                 <p className="mt-1 text-[12px] leading-5 text-[#615D59]">
-                  최소 충전 10,000 CNY, 이후 2,000 CNY 단위 충전 기준입니다.
+                  {isKrwMode
+                    ? `최소 충전 ${formatNumber(MIN_INITIAL_RECHARGE_CNY)} CNY (${formatKrw(MIN_INITIAL_RECHARGE_CNY * cnyToKrw)}), 이후 ${formatNumber(RECHARGE_STEP_CNY)} CNY 단위 충전 기준입니다.`
+                    : "최소 충전 10,000 CNY, 이후 2,000 CNY 단위 충전 기준입니다."}
                 </p>
               </div>
             </div>
@@ -820,6 +863,9 @@ export function PricingCalculator() {
                   추천 플랜:{" "}
                   <span className="font-semibold text-[#111110]">{pricing.subscription.tier}</span>
                   {" · "}계정당 ${pricing.subscription.config.priceUsd}/월
+                  {isKrwMode
+                    ? ` (${formatSubscriptionAmount(pricing.subscription.config.priceUsd)} 환산)`
+                    : ""}
                 </p>
                 <p>
                   포함 스토리지:{" "}
