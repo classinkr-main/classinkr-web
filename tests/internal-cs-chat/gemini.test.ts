@@ -114,6 +114,26 @@ describe("generateInternalCsAnswer", () => {
     })
   })
 
+  it("enforces fact-first internal tone: conclusion-first, emotion-free, customer tone only in draft blocks", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key")
+    const fetchMock = vi.fn().mockResolvedValue(geminiResponse("S86 3.0 OPS: i5-13420H (확정)"))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await generateInternalCsAnswer({ question: "S86 보드 OPS 사양 알려줘" })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(String(init.body)) as {
+      systemInstruction: { parts: { text: string }[] }
+      contents: { parts: { text: string }[] }[]
+    }
+    const system = body.systemInstruction.parts[0].text
+    expect(system).toContain("결론부터")
+    expect(system).toContain("감정 표현")
+    expect(system).toContain("고객 전달 문안")
+    const prompt = body.contents.at(-1)?.parts[0]?.text ?? ""
+    expect(prompt).toContain("결론부터 사실 위주로")
+  })
+
   it("routes deep review to latest Pro and falls back to 3.5 Flash", async () => {
     vi.stubEnv("GEMINI_API_KEY", "test-key")
     const fetchMock = vi

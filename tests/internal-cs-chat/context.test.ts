@@ -40,6 +40,7 @@ describe("buildInternalCsCopilotContext", () => {
     })
     expect(result.internalContext).toContain("공개 고객 응대 안전 초안")
     expect(result.internalContext).toContain("최종 판단, 고객 전달, 본사 전달, 승인 권한은 CS 담당자")
+    expect(result.internalContext).toContain("결론·사실 우선")
     expect(result.internalContext).toContain("[KR-CS][우선순위][제품 영역][케이스 ID]")
     expect(result.sourceRefs).toContainEqual({
       id: "article-recording",
