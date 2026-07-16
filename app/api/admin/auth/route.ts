@@ -3,11 +3,19 @@ import {
   authenticateUser,
   decodeSession,
   encodeSession,
+  isLegacyAdminAuthEnabled,
 } from "@/lib/admin-auth"
 import { ADMIN_AUTH_ERROR_CODE } from "@/lib/admin-auth-errors"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 
 export async function GET(req: NextRequest) {
+  if (!isLegacyAdminAuthEnabled()) {
+    return NextResponse.json(
+      { error: "Legacy admin authentication is disabled" },
+      { status: 410 }
+    )
+  }
+
   const cookie = req.cookies.get("admin_session")?.value
   const session = cookie ? decodeSession(cookie) : null
 
@@ -41,7 +49,11 @@ export async function POST(req: NextRequest) {
 
   if (!session) {
     const status =
-      code === ADMIN_AUTH_ERROR_CODE.INVALID_CREDENTIALS ? 401 : 500
+      code === ADMIN_AUTH_ERROR_CODE.INVALID_CREDENTIALS
+        ? 401
+        : code === ADMIN_AUTH_ERROR_CODE.LEGACY_DISABLED
+          ? 410
+          : 500
 
     return NextResponse.json(
       { error: "Unauthorized", code },

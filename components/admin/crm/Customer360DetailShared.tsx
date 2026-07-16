@@ -174,7 +174,7 @@ export const TASK_PRIORITY_CLASS: Record<string, string> = {
 export const TASK_STATUS_LABEL: Record<string, string> = {
   open: "열림",
   done: "완료",
-  snoozed: "미룸",
+  snoozed: "미루기",
   canceled: "취소",
 }
 

@@ -50,36 +50,36 @@ export const ADMIN_NAV: AdminNavItem[] = [
 
   // 영업·매출 — 파이프라인(CRM)·산출물(견적)·성과(KR Team)·검수(매출 장부)·일정
   { href: "/admin/crm", label: "CRM", icon: Users, roles: [...ALL_STAFF, "BRANCH"], section: "sales", keywords: "crm 한국팀 매출 korea" },
-  { href: "/admin/quotes", label: "견적·문서", icon: FileText, roles: STAFF_ADMIN, section: "sales", keywords: "견적 계약 영수증 quote contract receipt" },
+  { href: "/admin/quotes", label: "견적·문서", icon: FileText, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", keywords: "견적 계약 영수증 quote contract receipt" },
   { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, roles: [...ALL_STAFF, "BRANCH"], section: "sales", keywords: "캘린더 일정 calendar schedule" },
   { href: "/admin/branch", label: "KR Team", icon: Building2, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", keywords: "지사 브랜치 branch kr team 매출 성과" },
   { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", badge: "MVP", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
 
   // 마케팅·분석 — 캠페인·콘텐츠·리드 + 웹/비즈니스 분석
   // 메시지 발송 허브(이메일·문자·카카오, /admin/marketing)는 캠페인의 "메시지" 탭으로 흡수 — 라우트는 redirect 유지.
-  { href: "/admin/campaigns", label: "캠페인", icon: Megaphone, roles: STAFF_ADMIN, section: "marketing", keywords: "캠페인 이메일 campaign email 메시지 발송 문자 sms 카카오 kakao 알림톡 솔라피 solapi" },
-  { href: "/admin/blog", label: "콘텐츠", icon: FileText, roles: STAFF_EDITOR, section: "marketing", keywords: "블로그 콘텐츠 blog content" },
-  { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, roles: STAFF_EDITOR, section: "marketing", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
-  { href: "/admin/events", label: "공개 행사", icon: Globe, roles: STAFF_ADMIN, section: "marketing", keywords: "행사 이벤트 event 웨비나" },
+  { href: "/admin/campaigns", label: "캠페인", icon: Megaphone, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", keywords: "캠페인 이메일 campaign email 메시지 발송 문자 sms 카카오 kakao 알림톡 솔라피 solapi" },
+  { href: "/admin/blog", label: "콘텐츠", icon: FileText, roles: [...STAFF_EDITOR, "BRANCH"], section: "marketing", keywords: "블로그 콘텐츠 blog content" },
+  { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, roles: [...STAFF_EDITOR, "BRANCH"], section: "marketing", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
+  { href: "/admin/events", label: "공개 행사", icon: Globe, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", keywords: "행사 이벤트 event 웨비나" },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart2, roles: [...ALL_STAFF, "BRANCH"], section: "marketing", keywords: "analytics 분석 통계" },
   { href: "/admin/traffic", label: "방문자/트래픽", icon: Eye, roles: [...ALL_STAFF, "BRANCH"], section: "marketing", keywords: "방문자 트래픽 추적 현황 홈페이지 흐름 tracking client events pixel 계측 traffic" },
 
   // 고객 지원 (docs → docs?tab=gaps → channel-talk)
-  { href: "/admin/docs", label: "가이드 문서", icon: BookOpen, roles: STAFF_EDITOR, section: "cs", keywords: "가이드 문서 docs guide 챗봇 chatbot faq 추천질문" },
+  { href: "/admin/docs", label: "가이드 문서", icon: BookOpen, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "가이드 문서 docs guide 챗봇 chatbot faq 추천질문" },
   // 보강 큐는 문서 센터(/admin/docs)의 "보강 큐" 탭으로 병합됨 — nav는 탭 딥링크를 직접 가리켜
   // active 하이라이트가 동작하게 한다. /admin/docs/gaps는 북마크 호환용 redirect 스텁으로만 유지.
   // 챗봇 운영 대시보드도 이 탭(DocsGapsPanel)에 흡수됨 — /admin/chatbot은 여기로 redirect,
   // ⌘K 검색어(챗봇 운영·질문 패턴·품질 평가)를 이 항목 keywords에 병합해 검색성 보존.
-  { href: "/admin/docs?tab=gaps", label: "문서 보강 큐", icon: Search, roles: STAFF_EDITOR, section: "cs", badge: "Alpha", keywords: "챗봇 운영 질문 패턴 추천 보강 큐 gaps faq 문서 검색 초안 품질 평가 골든셋 chatbot ai ops 알파 준비도" },
-  { href: "/admin/channel-talk", label: "채널톡 상담", icon: MessageSquare, roles: STAFF_ADMIN, section: "cs", badge: "New", keywords: "채널톡 상담 문의 채팅 channel talk chat inbox" },
+  { href: "/admin/docs?tab=gaps", label: "문서 보강 큐", icon: Search, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "챗봇 운영 질문 패턴 추천 보강 큐 gaps faq 문서 검색 초안 품질 평가 골든셋 chatbot ai ops 알파 준비도" },
+  { href: "/admin/channel-talk", label: "채널톡 상담", icon: MessageSquare, roles: [...STAFF_ADMIN, "BRANCH"], section: "cs", keywords: "채널톡 상담 문의 채팅 channel talk chat inbox" },
 
   // 운영·시스템
-  { href: "/admin/ops", label: "Ops Health", icon: Activity, roles: STAFF_ADMIN, section: "system", badge: "New", keywords: "ops health 상태 통합 크론 cron automation" },
-  { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, roles: STAFF_ADMIN, section: "system", badge: "Ops", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
+  { href: "/admin/ops", label: "운영 상태", icon: Activity, roles: [...STAFF_ADMIN, "BRANCH"], section: "system", keywords: "ops health 상태 통합 크론 cron automation" },
+  { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, roles: [...STAFF_ADMIN, "BRANCH"], section: "system", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
   // 회원 관리는 Settings "회원" 탭(?tab=members)으로 흡수됨 — /admin/users는 그 탭으로 redirect 스텁.
   // ⌘K 검색어(회원·사용자·권한)를 Settings 항목 keywords에 병합해 검색성 보존.
-  { href: "/admin/settings", label: "Settings", icon: Settings, roles: STAFF_ADMIN, section: "system", keywords: "설정 settings 환경 회원 사용자 users 권한 계정" },
-  { href: "/admin/dev", label: "Dev Mode", icon: Code2, roles: STAFF_ADMIN, section: "system", badge: "Beta", keywords: "개발 dev 버그 패치노트 roadmap" },
+  { href: "/admin/settings", label: "설정", icon: Settings, roles: STAFF_ADMIN, section: "system", keywords: "설정 settings 환경 회원 사용자 users 권한 계정" },
+  { href: "/admin/dev", label: "개발 도구", icon: Code2, roles: STAFF_ADMIN, section: "system", keywords: "개발 dev 버그 패치노트 roadmap" },
 ]
 
 // 섹션 부제(description)는 사이드바에서 미렌더 — 팔레트 그룹 라벨과 코드 문서용으로만 유지.
@@ -132,8 +132,8 @@ export const CRM_CHILD_NAV: CrmChildNavItem[] = [
   },
   {
     href: "/admin/crm/capture",
-    label: "참석자 입력",
-    keywords: "참석자 입력 캡처 capture 행사 명함",
+    label: "입력함",
+    keywords: "입력함 참석자 입력 캡처 capture 행사 명함 붙여넣기",
     match: (p) => p.startsWith("/admin/crm/capture"),
   },
   // 검수·백오피스 — 매칭 인박스가 홈. 강등 표면(매칭/인사이트/매출시트)의 상설 도달 경로(CRM-4).

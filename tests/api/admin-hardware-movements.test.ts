@@ -5,6 +5,7 @@ const requireVerifiedAdminContext = vi.fn()
 const createHardwareMovementRows = vi.fn()
 
 vi.mock("@/lib/admin-auth", () => ({
+  HARDWARE_EDITOR_ADMIN_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH", "EDITOR"],
   requireVerifiedAdminContext,
 }))
 

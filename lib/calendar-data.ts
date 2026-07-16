@@ -13,6 +13,7 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import { atomicWriteJsonSync } from "@/lib/atomic-write"
+import { assertLocalJsonWriteAllowed } from "@/lib/server/runtime-persistence"
 import {
   getEffectivePublicEventEndIso,
   getPublicEventDatePart,
@@ -118,6 +119,7 @@ function read(): CalendarEvent[] {
 }
 
 function write(data: CalendarEvent[]) {
+  assertLocalJsonWriteAllowed("admin-calendar")
   atomicWriteJsonSync(FILE, data)
 }
 
@@ -521,6 +523,7 @@ async function syncStoredEventWithGoogle(event: CalendarEvent): Promise<Calendar
 export async function createEvent(
   data: StoredCalendarEventInput
 ): Promise<CalendarEvent> {
+  assertLocalJsonWriteAllowed("admin-calendar")
   const events = read()
   const now = new Date().toISOString()
   const event: CalendarEvent = {
@@ -539,6 +542,7 @@ export async function updateEvent(
   id: string,
   patch: Partial<StoredCalendarEventInput>
 ): Promise<CalendarEvent | null> {
+  assertLocalJsonWriteAllowed("admin-calendar")
   const events = read()
   const idx = events.findIndex((e) => e.id === id)
   if (idx === -1) return null
@@ -554,6 +558,7 @@ export async function updateEvent(
 }
 
 export async function deleteEvent(id: string): Promise<boolean> {
+  assertLocalJsonWriteAllowed("admin-calendar")
   const events = read()
   const current = events.find((event) => event.id === id)
   if (!current) return false

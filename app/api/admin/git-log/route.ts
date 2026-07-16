@@ -1,5 +1,5 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
-import { verifyAdmin } from "@/lib/admin-auth"
+import { STAFF_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { exec } from "child_process"
 import { promisify } from "util"
 
@@ -8,7 +8,7 @@ const execAsync = promisify(exec)
 const SEP = "XCOMMITX"
 
 export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req)
+  const err = await verifyAdmin(req, STAFF_ADMIN_API_ROLES)
   if (err) return err
 
   try {

@@ -5,8 +5,8 @@ import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
 async function verifyStatusRequest(req: NextRequest) {
   if (isAdminAuthBypassEnabled()) return null
 
-  const { verifyAdmin } = await import("@/lib/admin-auth")
-  return verifyAdmin(req)
+  const { STAFF_ADMIN_API_ROLES, verifyAdmin } = await import("@/lib/admin-auth")
+  return verifyAdmin(req, STAFF_ADMIN_API_ROLES)
 }
 
 export async function GET(req: NextRequest) {

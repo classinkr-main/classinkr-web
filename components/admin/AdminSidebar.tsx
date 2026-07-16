@@ -4,8 +4,11 @@ import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
+  ClipboardPaste,
+  LayoutDashboard,
   LogOut,
   Menu,
   MoreHorizontal,
@@ -63,6 +66,10 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/crm/action-kpis",
     "/api/admin/crm/overview",
     "/api/admin/crm/neo?granularity=month&offset=0",
+  ],
+  "/admin/crm/capture": [
+    "/api/admin/events",
+    "/api/admin/crm/capture/batches",
   ],
   "/admin/channel-talk": ["/api/admin/channel-talk", "/api/admin/channel-talk/mine"],
   "/admin/calendar": () => {
@@ -147,12 +154,38 @@ const CRM_SEGMENTS: Array<{ view: string; label: string }> = [
   { view: "upsell", label: "업셀 후보" },
 ]
 
-const MOBILE_PRIMARY_HREFS = [
-  "/admin/overview",
-  "/admin/crm",
-  "/admin/quotes",
-  "/admin/docs?tab=gaps",
-] as const
+// 현장 사용 빈도를 기준으로 모바일은 오늘 현황·CRM·일정·입력에 집중한다.
+// 견적과 나머지 운영 화면은 More의 전체 메뉴에서 그대로 접근할 수 있다.
+const MOBILE_PRIMARY_NAV: AdminNavItem[] = [
+  {
+    href: "/admin/overview",
+    label: "Overview",
+    icon: LayoutDashboard,
+    roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"],
+    section: "home",
+  },
+  {
+    href: "/admin/crm",
+    label: "CRM",
+    icon: Users,
+    roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"],
+    section: "sales",
+  },
+  {
+    href: "/admin/calendar",
+    label: "캘린더",
+    icon: CalendarDays,
+    roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"],
+    section: "sales",
+  },
+  {
+    href: "/admin/crm/capture",
+    label: "입력함",
+    icon: ClipboardPaste,
+    roles: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
+    section: "sales",
+  },
+]
 
 const ROLE_LABEL: Record<AdminRole, string> = {
   SUPER_ADMIN: "최고 관리자",
@@ -304,9 +337,18 @@ function AdminSidebarContent({ role, name, email }: Props) {
     })
   }
   const currentNavItem = visibleNav.find((item) => isNavActive(item.href)) ?? visibleNav[0]
-  const mobilePrimaryNav = MOBILE_PRIMARY_HREFS
-    .map((href) => visibleNav.find((item) => item.href === href))
-    .filter((item): item is AdminNavItem => Boolean(item))
+  const currentCrmChild = inCrm ? CRM_CHILD_NAV.find((item) => item.match(pathname ?? "")) : undefined
+  const mobilePrimaryNav = MOBILE_PRIMARY_NAV.filter((item) => item.roles.includes(normalizedRole))
+  const mobilePrimaryActiveHref = mobilePrimaryNav.reduce<string | null>((bestHref, item) => {
+    const { path, query } = splitNavHref(item.href)
+    const matchesPath = pathname === path || pathname.startsWith(`${path}/`)
+    const matches = matchesPath && (query === null || queryMatches(query))
+    if (!matches) return bestHref
+    if (!bestHref) return item.href
+
+    const bestPath = splitNavHref(bestHref).path
+    return path.length > bestPath.length ? item.href : bestHref
+  }, null)
   const mobileBottomColumns = Math.min(mobilePrimaryNav.length + 1, 5)
   const groupedNav = ADMIN_NAV_SECTIONS.map((section) => ({
     section,
@@ -392,7 +434,7 @@ function AdminSidebarContent({ role, name, email }: Props) {
           Classin Admin
         </p>
         <h1 className="truncate text-[15px] font-semibold text-[#111110]">
-          {currentNavItem?.label ?? "Admin"}
+          {currentCrmChild?.label ?? currentNavItem?.label ?? "Admin"}
         </h1>
       </div>
       {isDesktop === false ? <AdminNotificationsBell placement="inline" /> : null}
@@ -562,7 +604,7 @@ function AdminSidebarContent({ role, name, email }: Props) {
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[#e8e8e4] bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] backdrop-blur lg:hidden">
       <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${mobileBottomColumns}, minmax(0, 1fr))` }}>
         {mobilePrimaryNav.map((item) => {
-          const isActive = isNavActive(item.href)
+          const isActive = mobilePrimaryActiveHref === item.href
 
           return (
             <Link

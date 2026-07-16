@@ -1,5 +1,8 @@
 # Partner Portal Customer/Contact/Schedule UI Rollout Plan
 
+> [!WARNING]
+> 이 외부 파트너 포털 UI 구축 계획은 2026-07-11 운영 결정으로 중단·폐기됐다. V2 도메인 조사 근거만 참고하며, 기능은 내부 Admin OS 통합을 우선한다. 현재 기준은 [Admin OS 운영 결정](admin-os-operating-decisions-2026-07-11.md)이다.
+
 기준일: 2026-04-06
 
 ## 목적

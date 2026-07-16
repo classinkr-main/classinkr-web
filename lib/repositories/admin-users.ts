@@ -23,6 +23,7 @@ export interface AdminCrmOwnerOption {
   ownerAliases: string[]
   neoOwnerId: string | null
   sortOrder: number
+  capabilities?: string[]
 }
 
 export interface AdminUserDirectory {
@@ -62,6 +63,7 @@ type ExtendedAdminProfile = BaseAdminProfile &
     | "crm_owner_aliases"
     | "neo_owner_id"
     | "crm_sort_order"
+    | "capabilities"
   >
 
 const CRM_ASSIGNABLE_ROLES = new Set<AdminRole>(["SUPER_ADMIN", "ADMIN", "BRANCH"])
@@ -113,6 +115,7 @@ function toCrmOwnerOption(profile: ExtendedAdminProfile | BaseAdminProfile): Adm
     ownerAliases: aliases,
     neoOwnerId: extended.neo_owner_id ?? null,
     sortOrder: extended.crm_sort_order ?? 100,
+    capabilities: extended.capabilities ?? [],
   }
 }
 
@@ -138,6 +141,7 @@ function toLegacyOwnerOption(user: LegacyAdminUser, index: number, source: Admin
     ownerAliases: uniqueStrings([ownerKey, user.name]),
     neoOwnerId: null,
     sortOrder: index + 1,
+    capabilities: [],
   }
 }
 
@@ -198,7 +202,7 @@ function isMissingCrmProfileColumns(error: { code?: string; message?: string; de
 async function listSupabaseAdminProfiles(): Promise<{ users: AdminCrmOwnerOption[]; warning: string | null }> {
   const supabase = createSupabaseAdminClient()
   const extendedSelect =
-    "user_id, display_name, role, status, last_login_at, created_at, updated_at, branch_name, crm_team_role, crm_assignable, crm_owner_key, crm_owner_aliases, neo_owner_id, crm_sort_order"
+    "user_id, display_name, role, status, last_login_at, created_at, updated_at, branch_name, crm_team_role, crm_assignable, crm_owner_key, crm_owner_aliases, neo_owner_id, crm_sort_order, capabilities"
 
   const extended = await supabase
     .from("admin_profiles")
@@ -230,7 +234,7 @@ async function listSupabaseAdminProfiles(): Promise<{ users: AdminCrmOwnerOption
 }
 
 export async function listAdminUserDirectory(): Promise<AdminUserDirectory> {
-  const envUsers = parseEnvUsers()
+  const envUsers = process.env.NODE_ENV === "production" ? [] : parseEnvUsers()
 
   try {
     const { users, warning } = await listSupabaseAdminProfiles()
@@ -255,6 +259,10 @@ export async function listAdminUserDirectory(): Promise<AdminUserDirectory> {
       users: envUsers,
       crmOwners: envUsers.filter((user) => user.assignable),
     }
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("[admin-users] Supabase admin_profiles is required in production")
   }
 
   const fallbackUsers = envUsers.length > 0 ? envUsers : [toLegacyOwnerOption({ name: "Admin", role: "admin" }, 0, "fallback")]

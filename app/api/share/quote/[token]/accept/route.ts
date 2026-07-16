@@ -55,7 +55,6 @@ async function materializeQuoteAcceptTask(input: {
     title,
     detail: "고객이 견적을 수락했습니다. 계약 전환을 진행하세요. (requested_action: convert_to_contract)",
     priority: "high",
-    status: "open",
     // 즉시 처리 대상: 마감을 지금으로 두어 큐 상단에 뜨게 한다.
     dueAt: new Date().toISOString(),
   })

@@ -9,6 +9,7 @@ import {
   type EventMetrics,
 } from "@/lib/types/event-metrics"
 import { atomicWriteJsonSync } from "@/lib/atomic-write"
+import { assertLocalJsonWriteAllowed } from "@/lib/server/runtime-persistence"
 
 const DATA_DIR = path.join(process.cwd(), "data")
 const FILE = "event-metrics.json"
@@ -26,6 +27,7 @@ function readStore(): Store {
 }
 
 function writeStore(store: Store) {
+  assertLocalJsonWriteAllowed("event-metrics")
   atomicWriteJsonSync(path.join(DATA_DIR, FILE), store)
 }
 

@@ -12,7 +12,13 @@ import {
   readStringArray,
   toErrorResponse,
 } from "@/app/api/admin/hardware/_validation"
-import { requireVerifiedAdminContext } from "@/lib/admin-auth"
+import {
+  HARDWARE_EDITOR_ADMIN_API_ROLES,
+  HARDWARE_FINALIZE_CAPABILITY,
+  requireAdminCapability,
+  requireVerifiedAdminContext,
+} from "@/lib/admin-auth"
+import { logAdminAudit } from "@/lib/auth/audit"
 import {
   confirmPlannedHardwareMovement,
   HARDWARE_MOVEMENT_TYPES,
@@ -26,7 +32,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const admin = await requireVerifiedAdminContext(req)
+  const admin = await requireVerifiedAdminContext(req, HARDWARE_EDITOR_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   try {
@@ -35,10 +41,22 @@ export async function PATCH(
     const action = readRequiredEnum(body, "action", "원장 액션", HARDWARE_MOVEMENT_ACTIONS)
 
     if (action === "confirm-planned") {
+      const capabilityError = requireAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY)
+      if (capabilityError) return capabilityError
+
       const movement = await confirmPlannedHardwareMovement(id, {
         occurredAt: readOptionalDate(body, "occurredAt", "출고일"),
         confirmQty: readOptionalNonNegativeInt(body, "confirmQty", "확정 수량"),
         actor: admin.name ?? admin.userId ?? admin.role,
+      })
+      await logAdminAudit({
+        admin,
+        action: "hardware.movement.finalize",
+        targetType: "hardware_movement",
+        targetId: id,
+        payload: {
+          confirmQty: typeof body.confirmQty === "number" ? body.confirmQty : null,
+        },
       })
       return NextResponse.json({ movement })
     }
@@ -68,9 +86,18 @@ export async function PATCH(
       return NextResponse.json({ movement })
     }
 
+    const capabilityError = requireAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY)
+    if (capabilityError) return capabilityError
+
     const movement = await voidHardwareMovement(id, {
       reason: readOptionalString(body, "reason", "취소 사유"),
       actor: admin.name ?? admin.userId ?? admin.role,
+    })
+    await logAdminAudit({
+      admin,
+      action: "hardware.movement.void",
+      targetType: "hardware_movement",
+      targetId: id,
     })
     return NextResponse.json({ movement })
   } catch (error) {

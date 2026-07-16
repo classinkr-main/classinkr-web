@@ -14,10 +14,13 @@
 import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { toAdminActorSnapshot, type VerifiedAdminContext } from "@/lib/admin-auth";
 import type { AuditLogInsert } from "@/lib/supabase/database.types";
 
 interface LogAuditParams {
   actorUserId: string | null;
+  actorDisplayName?: string | null;
+  actorRole?: string | null;
   action: string;
   targetType: string;
   targetId?: string;
@@ -31,6 +34,8 @@ export async function logAudit(params: LogAuditParams) {
 
     const row: AuditLogInsert = {
       actor_user_id: params.actorUserId,
+      actor_display_name: params.actorDisplayName ?? null,
+      actor_role: params.actorRole ?? null,
       action: params.action,
       target_type: params.targetType,
       target_id: params.targetId ?? null,
@@ -47,4 +52,18 @@ export async function logAudit(params: LogAuditParams) {
   } catch (e) {
     console.error("[audit] Unexpected error:", e);
   }
+}
+
+type LogAdminAuditParams = Omit<LogAuditParams, "actorUserId" | "actorDisplayName" | "actorRole"> & {
+  admin: Pick<VerifiedAdminContext, "userId" | "name" | "role">
+}
+
+export async function logAdminAudit({ admin, ...params }: LogAdminAuditParams) {
+  const actor = toAdminActorSnapshot(admin)
+  return logAudit({
+    ...params,
+    actorUserId: actor.actor_user_id,
+    actorDisplayName: actor.actor_display_name,
+    actorRole: actor.actor_role,
+  })
 }

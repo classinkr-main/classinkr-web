@@ -12,6 +12,7 @@ import fs from "fs"
 import path from "path"
 
 import { atomicWriteJsonSync } from "@/lib/atomic-write"
+import { assertLocalJsonWriteAllowed } from "@/lib/server/runtime-persistence"
 
 const DATA_DIR = path.join(process.cwd(), "data")
 const TRACKED_FILE = "channel-conversations.json"
@@ -71,6 +72,7 @@ function readAll(): ChannelConversationRecord[] {
 }
 
 function writeAll(records: ChannelConversationRecord[]) {
+  assertLocalJsonWriteAllowed("channel-conversations")
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
   atomicWriteJsonSync(getDataPath(), records)
 }

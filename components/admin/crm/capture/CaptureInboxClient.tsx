@@ -119,9 +119,9 @@ const PLACEHOLDER = `엑셀/구글시트에서 복사한 표를 그대로 붙여
 
 // ─── 컴포넌트 ────────────────────────────────────────────────────────────────────
 
-export default function CaptureInboxClient() {
+export default function CaptureInboxClient({ initialEventId = "" }: { initialEventId?: string }) {
   const [events, setEvents] = useState<PublicEvent[]>([])
-  const [selectedEventId, setSelectedEventId] = useState<string>("")
+  const [selectedEventId, setSelectedEventId] = useState<string>(initialEventId)
   const [mode, setMode] = useState<Mode>("table")
   const [rawText, setRawText] = useState("")
 
@@ -360,9 +360,9 @@ export default function CaptureInboxClient() {
   return (
     <div className="mx-auto max-w-5xl px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-[#111110]">행사 참석자 입력</h1>
+        <h1 className="text-xl font-bold text-[#111110]">CRM 입력함</h1>
         <p className="mt-0.5 text-[13px] text-[#1a1a1a]/45">
-          참석/신청 명단을 붙여넣어 리드·고객과 매칭하고, 체크로 확정하면 행사 참석으로 기록됩니다.
+          행사 참석·신청 명단을 붙여넣어 리드·고객과 매칭합니다. 확정한 행은 CRM 기록과 후속 태스크로 연결됩니다.
         </p>
       </div>
 

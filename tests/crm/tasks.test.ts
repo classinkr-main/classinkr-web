@@ -94,6 +94,13 @@ describe("CRM tasks", () => {
     expect(defaultSnoozeUntil(new Date("2026-06-27T23:30:00.000Z"))).toBe("2026-06-29T00:00:00.000Z")
   })
 
+  it("always creates tasks as open so later states require an explicit action", () => {
+    const insert = buildCrmTaskInsert({ title: "후속 전화", status: "done" } as never)
+
+    expect(insert.status).toBe("open")
+    expect(insert.completed_at).toBeNull()
+  })
+
   it("only patches fields explicitly provided in an edit", () => {
     expect(buildCrmTaskEditPatch({ title: "수정된 제목" })).toEqual({ title: "수정된 제목" })
     expect(buildCrmTaskEditPatch({ detail: "  ", dueAt: null })).toEqual({ detail: null, due_at: null })

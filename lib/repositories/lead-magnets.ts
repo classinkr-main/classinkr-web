@@ -3,6 +3,8 @@ import "server-only"
 import { readFile, writeFile } from "fs/promises"
 import path from "path"
 
+import { assertLocalJsonWriteAllowed } from "@/lib/server/runtime-persistence"
+
 import type {
   LeadMagnet,
   LeadMagnetActionStep,
@@ -315,6 +317,7 @@ export async function getLeadMagnetTitleFromStore(slug: string | null | undefine
 }
 
 async function writeLeadMagnets(magnets: LeadMagnet[]) {
+  assertLocalJsonWriteAllowed("lead-magnets")
   await writeFile(DATA_PATH, `${JSON.stringify(magnets, null, 2)}\n`, "utf8")
 }
 

@@ -1,5 +1,5 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
-import { verifyAdmin } from "@/lib/admin-auth"
+import { STAFF_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { getPublicResolvedSettings, updateSettings } from "@/lib/repositories/settings"
 import { validateWebhookTarget } from "@/lib/server/post-json"
 
@@ -30,13 +30,13 @@ async function validateWebhookSettings(patch: Record<string, unknown>) {
 }
 
 export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req)
+  const err = await verifyAdmin(req, STAFF_ADMIN_API_ROLES)
   if (err) return err
   return NextResponse.json(await getPublicResolvedSettings())
 }
 
 export async function PATCH(req: NextRequest) {
-  const err = await verifyAdmin(req)
+  const err = await verifyAdmin(req, STAFF_ADMIN_API_ROLES)
   if (err) return err
   const patch = (await req.json()) as Record<string, unknown>
   const validationError = await validateWebhookSettings(patch)

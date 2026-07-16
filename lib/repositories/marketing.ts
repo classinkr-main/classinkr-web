@@ -12,7 +12,12 @@ import type { Subscriber, EmailCampaign } from "@/lib/marketing-types";
 
 export type { Subscriber, EmailCampaign } from "@/lib/marketing-types";
 
-const USE_SUPABASE = process.env.USE_SUPABASE_MARKETING === "true";
+// 운영에서는 JSON 폴백을 절대 선택하지 않는다. DB 미구성은 저장 성공으로
+// 위장하지 않고 Supabase 오류로 노출한다. JSON 모드는 로컬 개발/테스트 전용이다.
+const USE_SUPABASE =
+  process.env.NODE_ENV === "production" ||
+  process.env.VERCEL === "1" ||
+  process.env.USE_SUPABASE_MARKETING === "true";
 
 // Supabase row는 id가 UUID string이므로 number id 타입과 분리
 type SubRow = Omit<Subscriber, "id"> & { id: string | number };

@@ -144,6 +144,7 @@ function DevToast({ msg, type }: { msg: string; type: ToastKind }) {
 const TABS = [
   { id: "roadmap", label: "로드맵", description: "버전별 개발 계획과 기능 진행률을 관리합니다." },
   { id: "bugs", label: "버그 리포트", description: "오픈 이슈, 심각도, 담당자와 처리 상태를 추적합니다." },
+  { id: "releaseCriteria", label: "공개 기준", description: "기능을 공개하기 전에 책임자, 검증, 데이터와 복구 기준을 확인합니다." },
   { id: "dataQuality", label: "데이터 품질", description: "KR Team 데이터 동기화와 품질 규칙 결과를 점검합니다." },
   { id: "patchnotes", label: "패치노트", description: "공개/초안 릴리스 노트와 변경사항을 관리합니다." },
   { id: "architecture", label: "시스템 구조", description: "프론트엔드, 데이터 레이어, 외부 연동 구조를 확인합니다." },
@@ -1275,8 +1276,9 @@ function ArchitectureTab({ token }: { token: string }) {
       headerColor: "bg-amber-100",
       items: [
         { name: "Cookie Auth", desc: "httpOnly cookie (admin_session) — 미들웨어에서 검증" },
-        { name: "Multi-role", desc: "admin (전체 접근) / branch (지사장 본인 데이터만)" },
-        { name: "ADMIN_USERS", desc: "환경변수 JSON 배열로 계정 관리" },
+        { name: "admin_profiles", desc: "Supabase 관리자 프로필을 계정 정본으로 사용" },
+        { name: "역할 + 기능 권한", desc: "슈퍼 어드민 / 지사장 / 어드민 역할 위에 슈퍼 어드민이 기능별 권한을 부여" },
+        { name: "데이터 범위", desc: "관리자는 전체 데이터를 조회하고, 내 리드·내 할 일은 담당자 매핑으로 별도 모아보기" },
       ],
     },
     {
@@ -1557,6 +1559,79 @@ function GitLogTab({ token }: { token: string }) {
   )
 }
 
+// ─── Release Criteria Tab ─────────────────────────────────
+const RELEASE_GATES = [
+  {
+    title: "범위와 책임",
+    items: ["책임자와 목표일이 지정됨", "완료 조건이 사용자 행동으로 적혀 있음", "비범위와 후속 작업이 분리됨"],
+    tab: "roadmap" as const,
+  },
+  {
+    title: "품질과 복구",
+    items: ["차단급 버그가 없음", "eslint·build·관련 테스트를 통과함", "삭제·상태 변경을 취소하거나 되돌릴 수 있음"],
+    tab: "bugs" as const,
+  },
+  {
+    title: "데이터와 권한",
+    items: ["표시 숫자의 원천과 갱신 시점을 설명할 수 있음", "역할·기능 권한을 서버에서 검사함", "모바일 핵심 흐름을 확인함"],
+    tab: "dataQuality" as const,
+  },
+  {
+    title: "공개와 운영",
+    items: ["한국어 UI와 합의된 고유 용어를 사용함", "공개 변경사항과 운영 영향이 기록됨", "롤백 또는 기능 비활성화 방법이 있음"],
+    tab: "patchnotes" as const,
+  },
+] as const
+
+function ReleaseCriteriaTab({
+  openBugCount,
+  onNavigate,
+}: {
+  openBugCount: number
+  onNavigate: (tab: Tab) => void
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-[#e8e8e4] bg-[#ECFDF5] p-5">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]/60">Release gate</p>
+        <h2 className="mt-1 text-lg font-bold text-[#084734]">공개는 체크리스트가 아니라 증거로 승인합니다.</h2>
+        <p className="mt-2 text-[13px] leading-6 text-[#084734]/75">
+          아래 네 영역의 근거가 모두 있고 차단급 버그가 없을 때만 공개합니다. 현재 오픈 버그는 {openBugCount}건입니다.
+        </p>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {RELEASE_GATES.map((gate, index) => (
+          <article key={gate.title} className="rounded-xl border border-[#e8e8e4] bg-white p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-[14px] font-semibold text-[#111110]">{index + 1}. {gate.title}</h3>
+              <button
+                type="button"
+                onClick={() => onNavigate(gate.tab)}
+                className="rounded-lg border border-[#e8e8e4] bg-[#F6F5F4] px-2.5 py-1.5 text-[11px] font-medium text-[#615D59] hover:bg-white"
+              >
+                근거 확인
+              </button>
+            </div>
+            <ul className="mt-4 space-y-2">
+              {gate.items.map((item) => (
+                <li key={item} className="flex gap-2 text-[12px] leading-5 text-[#615D59]">
+                  <span aria-hidden="true" className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#084734]" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-[12px] leading-5 text-[#B85C33]">
+        차단 기준: 데이터 유실 가능성, 권한 우회, 핵심 저장 실패, 잘못된 매출·재고 확정값, 되돌릴 수 없는 연쇄 삭제.
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Dev Page ────────────────────────────────────────
 export default function DevPage() {
   const router = useRouter()
@@ -1625,16 +1700,13 @@ export default function DevPage() {
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
           <h1 className="text-2xl font-bold text-gray-900">Dev Mode</h1>
-          <span className="text-xs font-medium bg-[#f0f0ec] text-[#615D59] px-2.5 py-1 rounded-full border border-[#e8e8e4]">
-            Beta
-          </span>
         </div>
-        <p className="text-sm text-gray-500">개발 현황 · 버그 추적 · 시스템 구조 · 배포 이력</p>
+        <p className="text-sm text-gray-500">프로젝트 현황 · 공개 기준 · 버그 추적 · 데이터 품질 · 배포 이력</p>
       </div>
 
       {/* Tabs */}
       <div
-        className="mb-4 grid gap-1 rounded-2xl border border-[#e8e8e4] bg-[#f0f0ec] p-1 sm:grid-cols-2 lg:grid-cols-6"
+        className="mb-4 grid gap-1 rounded-2xl border border-[#e8e8e4] bg-[#f0f0ec] p-1 sm:grid-cols-2 lg:grid-cols-7"
         role="tablist"
         aria-label="Dev Mode sections"
       >
@@ -1673,6 +1745,7 @@ export default function DevPage() {
       <section id={`dev-panel-${tab}`} role="tabpanel" aria-labelledby={`dev-tab-${tab}`}>
         {tab === "roadmap" && <RoadmapTab token={token} notify={notify} />}
         {tab === "bugs" && <BugsTab token={token} userName={userName} notify={notify} onCountChange={setOpenBugCount} />}
+        {tab === "releaseCriteria" && <ReleaseCriteriaTab openBugCount={openBugCount} onNavigate={selectTab} />}
         {tab === "dataQuality" && <DataQualityPanel mode="dev" />}
         {tab === "patchnotes" && <PatchNotesTab token={token} notify={notify} />}
         {tab === "architecture" && <ArchitectureTab token={token} />}

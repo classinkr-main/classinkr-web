@@ -68,7 +68,6 @@ export interface CrmTaskCreateInput {
   detail?: string | null
   dueAt?: string | null
   priority?: CrmTaskPriority
-  status?: CrmTaskStatus
   sourceEventId?: string | null
   createdBy?: string | null
   assignedBy?: string | null
@@ -225,7 +224,9 @@ export function buildCrmTaskInsert(input: CrmTaskCreateInput): CrmTaskInsert {
     due_at: nullableIso(input.dueAt),
     snoozed_until: null,
     priority: oneOf(input.priority, CRM_TASK_PRIORITIES, "normal"),
-    status: oneOf(input.status, CRM_TASK_STATUSES, "open"),
+    // New tasks always enter through the open state. Every later state change
+    // must use an explicit command (complete/snooze/cancel/reopen).
+    status: "open",
     source_event_id: trimOrNull(input.sourceEventId),
     created_by: trimOrNull(input.createdBy),
     assigned_by: trimOrNull(input.assignedBy),
@@ -455,16 +456,6 @@ export function reopenCrmTask(id: string) {
     completed_at: null,
     completed_by: null,
   })
-}
-
-export async function deleteCrmTask(id: string): Promise<boolean> {
-  const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase.from("crm_tasks").delete().eq("id", id).select("id").maybeSingle()
-  if (error) {
-    if (isMissingCrmTasksTableError(error)) throw new Error(NOT_READY_MESSAGE)
-    throw new Error(`[crm-tasks] 삭제 실패: ${error.message}`)
-  }
-  return Boolean(data)
 }
 
 // 다음 액션 자유 입력 텍스트에서 task 유형을 추정한다(가장 구체적인 것부터).
