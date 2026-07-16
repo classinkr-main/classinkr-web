@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { normalizeTopicTags } from "@/lib/chatbot/topic-crosswalk"
 import { buildInternalCsCopilotContext } from "@/lib/internal-cs-chat/context"
 import { ingestInternalCsGap } from "@/lib/internal-cs-chat/gap-ingest"
 import {
@@ -144,19 +145,23 @@ export async function POST(req: NextRequest, context: Context) {
 
     const copilotContext = await buildInternalCsCopilotContext(question, {
       queueTags: loaded.conversation.tags,
+      // 내부 CS 경로만 internal 가시성 문서(brand-canon 원문 등)를 검색에 포함한다(계약 6).
+      includeInternalDocs: true,
     })
     const assetEvidence = buildInternalCsAssetEvidence(loaded.assets ?? [])
     const curatedEvidence = copilotContext.curatedEvidence
     const effectiveRequiresEvidenceReview =
       raw.requiresEvidenceReview === true || curatedEvidence?.reviewRequired === true
+    const normalizedTopic = normalizeTopicTags([...loaded.conversation.tags])
     const queueContext = [
       "[현재 상담 큐]",
       `우선순위: ${loaded.conversation.priority}`,
       `태그: ${loaded.conversation.tags.join(", ") || "없음"}`,
+      normalizedTopic ? `정규화 주제: ${normalizedTopic}` : "",
       curatedEvidence?.recommendedTags.length
         ? `권장 분류 태그(담당자 확인 전 미적용): ${curatedEvidence.recommendedTags.join(", ")}`
         : "",
-    ].join("\n")
+    ].filter(Boolean).join("\n")
     const generation = await generateInternalCsAnswer({
       question,
       requestedMode: requestedMode as InternalCsRequestedMode,

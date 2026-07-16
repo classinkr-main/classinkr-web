@@ -4,6 +4,10 @@ import {
   evaluateChatbotQuery,
   type ChatbotSource,
 } from "@/lib/chatbot/service"
+import {
+  searchConsultationEvidence,
+  type ConsultationEvidence,
+} from "@/lib/internal-cs-chat/consultation-search"
 import type { InternalCsSourceRef } from "@/lib/internal-cs-chat/gemini"
 import {
   selectInternalCsKnowledge,
@@ -36,6 +40,11 @@ export interface InternalCsCopilotContext {
 
 export interface BuildInternalCsCopilotContextOptions {
   queueTags?: readonly string[]
+  /**
+   * 공개 리트리버가 internal 가시성 문서(brand-canon 원문 등)까지 포함하도록 스레딩한다.
+   * 내부 CS 경로에서만 true. 공개 챗봇 경로는 절대 넘기지 않는다(계약 6).
+   */
+  includeInternalDocs?: boolean
 }
 
 const DEFAULT_PUBLIC_CONTEXT_TIMEOUT_MS = 3_500
@@ -91,6 +100,19 @@ function compact(value: string, limit: number) {
   return value.replace(/\s+/g, " ").trim().slice(0, limit)
 }
 
+function statusLabel(status: InternalCsKnowledgeStatus) {
+  switch (status) {
+    case "confirmed":
+      return "확정"
+    case "conditional":
+      return "조건부"
+    case "conflicting_sources":
+      return "자료 충돌"
+    default:
+      return "본사 확인 필요"
+  }
+}
+
 function sourceRef(source: ChatbotSource): InternalCsSourceRef {
   const anchor = source.heading ? `#${compact(source.heading, 100)}` : ""
   return {
@@ -109,6 +131,36 @@ function dedupeSourceRefs(sourceRefs: InternalCsSourceRef[]) {
   })
 }
 
+function consultationSourceRefs(evidence: ConsultationEvidence[]): InternalCsSourceRef[] {
+  // href 는 InternalCsSourceRef 필드가 아니다. UI 가 "channel:" 접두어로 href=null(잠금 아이콘)을 유도한다(계약 8).
+  return evidence.map((entry) => ({
+    id: `channel:${entry.conversationId}`,
+    label: compact(`[상담] ${entry.excerpt}`, 200),
+  }))
+}
+
+function formatConsultationEvidence(evidence: ConsultationEvidence[]) {
+  if (evidence.length === 0) return ""
+
+  const lines = evidence.slice(0, 4).map((entry, index) => {
+    const meta = [
+      entry.tags.length ? `태그 ${entry.tags.slice(0, 6).join(", ")}` : "",
+      entry.matchedOrg ? `기관 ${compact(entry.matchedOrg, 60)}` : "",
+      `유사도 ${entry.similarity.toFixed(2)}`,
+    ].filter(Boolean).join(" / ")
+    return [
+      `${index + 1}. ${compact(entry.excerpt, 700)}`,
+      `   맥락: ${meta}`,
+    ].join("\n")
+  })
+
+  return [
+    "[과거 상담 사례]",
+    "담당자 확인용 참고이며, 최신 정책·계약·사양과 다를 수 있어 그대로 인용하지 않는다.",
+    ...lines,
+  ].join("\n")
+}
+
 function formatPublicEvidence(answer: string | null, sources: ChatbotSource[], warning?: string) {
   const sections = sources.slice(0, 4).map((source, index) => [
     `${index + 1}. ${compact(source.title, 160)}${source.heading ? ` / ${compact(source.heading, 120)}` : ""}`,
@@ -124,7 +176,10 @@ function formatPublicEvidence(answer: string | null, sources: ChatbotSource[], w
   ].filter(Boolean).join("\n")
 }
 
-async function getPublicEvidence(question: string): Promise<InternalCsCopilotContext["publicEvidence"]> {
+async function getPublicEvidence(
+  question: string,
+  options: { includeInternalDocs?: boolean } = {}
+): Promise<InternalCsCopilotContext["publicEvidence"]> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined
   const fallback: InternalCsCopilotContext["publicEvidence"] = {
     answer: null,
@@ -132,12 +187,18 @@ async function getPublicEvidence(question: string): Promise<InternalCsCopilotCon
     warning: "공개 문서 검색이 지연되어 내부 운영 원칙만 사용합니다.",
   }
 
+  // includeInternalDocs 가 꺼져 있으면 기존과 동일하게 { generateAnswer: false } 만 넘긴다(공개 경로 무회귀).
+  const queryOptions: { generateAnswer: boolean; includeInternalDocs?: boolean } = {
+    generateAnswer: false,
+    ...(options.includeInternalDocs ? { includeInternalDocs: true } : {}),
+  }
+
   try {
     const timeout = new Promise<InternalCsCopilotContext["publicEvidence"]>((resolve) => {
       timeoutId = setTimeout(() => resolve(fallback), boundedTimeoutMs())
     })
     return await Promise.race([
-      evaluateChatbotQuery(question, { generateAnswer: false }).then((result) => ({
+      evaluateChatbotQuery(question, queryOptions).then((result) => ({
         answer: result.answer?.trim() || null,
         sources: result.sources.slice(0, 4),
         ...(result.warning ? { warning: result.warning } : {}),
@@ -159,12 +220,18 @@ export async function buildInternalCsCopilotContext(
   options: BuildInternalCsCopilotContextOptions = {}
 ): Promise<InternalCsCopilotContext> {
   const curated = selectInternalCsKnowledge(question, options.queueTags)
-  const publicEvidence = await getPublicEvidence(question)
+  // 공개 근거와 과거 상담 사례를 병렬 조회한다. 둘 다 never-throw 지만 방어적으로 빈 배열 폴백을 둔다.
+  const [publicEvidence, consultationEvidence] = await Promise.all([
+    getPublicEvidence(question, { includeInternalDocs: options.includeInternalDocs }),
+    searchConsultationEvidence(question).catch(() => [] as ConsultationEvidence[]),
+  ])
   const publicSourceRefs = publicEvidence.sources.map(sourceRef)
+  const consultationBlock = formatConsultationEvidence(consultationEvidence)
   const sourceRefs = dedupeSourceRefs([
     ...INTERNAL_GUIDE_REFS,
     ...curated.sourceRefs,
     ...publicSourceRefs,
+    ...consultationSourceRefs(consultationEvidence),
   ])
   const selectedFacts = curated.entries.filter((entry) => !entry.alwaysInclude)
   const reviewReasons = selectedFacts
@@ -172,7 +239,7 @@ export async function buildInternalCsCopilotContext(
       entry.status === "conflicting_sources" ||
       entry.status === "hq_confirmation_required"
     )
-    .map((entry) => `${entry.title}: ${entry.status === "conflicting_sources" ? "자료 충돌" : "본사 확인 필요"}`)
+    .map((entry) => `${entry.title}: ${statusLabel(entry.status)}`)
 
   const deterministicFallback = [
     "검토 전 내부 초안",
@@ -182,11 +249,12 @@ export async function buildInternalCsCopilotContext(
     selectedFacts.length > 0
       ? [
           "정리된 내부 기준:",
-          ...selectedFacts.slice(0, 3).map((entry) =>
-            `- [${entry.status === "confirmed" ? "확정" : entry.status === "conditional" ? "조건부" : entry.status === "conflicting_sources" ? "자료 충돌" : "본사 확인 필요"}] ${entry.summary}`
-          ),
+          ...selectedFacts.slice(0, 3).map((entry) => `- [${statusLabel(entry.status)}] ${entry.summary}`),
         ].join("\n")
       : "정리된 내부 기준과 직접 일치하는 항목이 없어 담당자 확인이 필요합니다.",
+    consultationEvidence.length > 0
+      ? `과거 유사 상담 사례 ${consultationEvidence.length}건이 검색되었습니다. 최신 정책·계약·사양과 다를 수 있어 인용 전 담당자 확인이 필요합니다.`
+      : "과거 유사 상담 사례는 찾지 못했습니다.",
     "내부 정보 또는 본사 회신과 충돌하는 항목은 적용 모델·세대·버전과 출처일을 확인한 뒤 답변해야 합니다.",
     "외부 전달 전 CS 담당자의 검토와 승인이 필요합니다.",
   ].join("\n\n")
@@ -195,9 +263,10 @@ export async function buildInternalCsCopilotContext(
     internalContext: [
       formatPublicEvidence(publicEvidence.answer, publicEvidence.sources, publicEvidence.warning),
       curated.internalContext,
+      consultationBlock,
       INTERNAL_OPERATING_GUIDE,
       HQ_COMMUNICATION_GUIDE,
-    ].join("\n\n"),
+    ].filter(Boolean).join("\n\n"),
     sourceRefs,
     deterministicFallback,
     publicEvidence,
