@@ -84,6 +84,60 @@ function monthLabel(ym: string) {
   return `${Number(ym.slice(5))}월`
 }
 
+// breakdown 집계 — 컴포넌트 밖 순수 함수로 두어 단위 테스트가 가능하다.
+// breakdown에는 같은 (kind, category, status_type, channel) 콤보가 스코프별로 반복된다
+// (전사 + 팀/멤버 섹션 — 파서가 시트의 모든 섹션을 훑고, 액티브 임포트 소스는 순서까지 뒤섞임).
+// 전사 행은 부분 행들의 합이라 annual이 항상 최대이므로, 합산 대신 최대 annual 행 하나를
+// 채택한다 — 합산하면 전사+팀+멤버가 3중 계상돼 수치가 부풀려진다.
+export function aggregateDshBreakdown(breakdown: BranchDshBreakdownRow[], view: DshGridView) {
+  const keys = new Set<string>()
+  for (const row of breakdown) for (const ym of Object.keys(row.months)) keys.add(ym)
+  // 회계월 키는 breakdown이 실제로 담고 있는 달의 합집합 — ym 문자열 정렬이
+  // FY 경계(4월 시작 → 이듬해 3월)를 그대로 보존한다.
+  const months = [...keys].sort()
+
+  const byKind: Record<"goal" | "status", Map<string, BranchDshBreakdownRow>> = { goal: new Map(), status: new Map() }
+  for (const row of breakdown) {
+    const bucket = byKind[row.kind]
+    if (!bucket) continue
+    const key = `${row.category}|${row.status_type}|${row.channel}`
+    const existing = bucket.get(key)
+    if (!existing || row.annual > existing.annual) bucket.set(key, row)
+  }
+  const toGridRow = (row: BranchDshBreakdownRow): GridRow => {
+    const entry: GridRow = { category: row.category, status_type: row.status_type, channel: row.channel, ...emptyNumbers() }
+    addNumbers(entry, row)
+    return entry
+  }
+
+  let viewRows: GridRow[]
+  if (view === "gap") {
+    // Gap = Status − Goal. 행 매칭 키는 category+status_type+channel — 한쪽에만
+    // 있는 키도 0으로 간주해 누락 없이 전개한다.
+    const unionKeys = new Set([...byKind.goal.keys(), ...byKind.status.keys()])
+    viewRows = [...unionKeys].map((key) => {
+      const goalSource = byKind.goal.get(key)
+      const statusSource = byKind.status.get(key)
+      const goal = goalSource ? toGridRow(goalSource) : undefined
+      const status = statusSource ? toGridRow(statusSource) : undefined
+      const base = (status ?? goal)!
+      return {
+        category: base.category,
+        status_type: base.status_type,
+        channel: base.channel,
+        ...subtractNumbers(status ?? { ...base, ...emptyNumbers() }, goal ?? { ...base, ...emptyNumbers() }, months),
+      }
+    })
+  } else {
+    viewRows = [...byKind[view].values()].map(toGridRow)
+  }
+  viewRows.sort(rowSortCompare)
+
+  const totalNumbers = emptyNumbers()
+  for (const row of viewRows) addNumbers(totalNumbers, row)
+  return { monthKeys: months, rows: viewRows, total: totalNumbers }
+}
+
 const CELL = "whitespace-nowrap border-b border-r border-[rgba(0,0,0,0.08)] px-2.5 py-1.5 text-right"
 
 function numericCells(numbers: GridNumbers, monthKeys: string[], extra = "") {
@@ -116,52 +170,7 @@ interface DshNumericGridProps {
 }
 
 export function DshNumericGrid({ breakdown, view, onViewChange, loading = false }: DshNumericGridProps) {
-  const { monthKeys, rows, total } = useMemo(() => {
-    // 회계월 키는 breakdown이 실제로 담고 있는 달의 합집합 — ym 문자열 정렬이
-    // FY 경계(4월 시작 → 이듬해 3월)를 그대로 보존한다.
-    const keys = new Set<string>()
-    for (const row of breakdown) for (const ym of Object.keys(row.months)) keys.add(ym)
-    const months = [...keys].sort()
-
-    // kind별로 category+status_type+channel 키 합산(시트가 같은 키를 반복해도 안전).
-    const byKind: Record<"goal" | "status", Map<string, GridRow>> = { goal: new Map(), status: new Map() }
-    for (const row of breakdown) {
-      const bucket = byKind[row.kind]
-      if (!bucket) continue
-      const key = `${row.category}|${row.status_type}|${row.channel}`
-      let entry = bucket.get(key)
-      if (!entry) {
-        entry = { category: row.category, status_type: row.status_type, channel: row.channel, ...emptyNumbers() }
-        bucket.set(key, entry)
-      }
-      addNumbers(entry, row)
-    }
-
-    let viewRows: GridRow[]
-    if (view === "gap") {
-      // Gap = Status − Goal. 행 매칭 키는 category+status_type+channel — 한쪽에만
-      // 있는 키도 0으로 간주해 누락 없이 전개한다.
-      const unionKeys = new Set([...byKind.goal.keys(), ...byKind.status.keys()])
-      viewRows = [...unionKeys].map((key) => {
-        const goal = byKind.goal.get(key)
-        const status = byKind.status.get(key)
-        const base = (status ?? goal)!
-        return {
-          category: base.category,
-          status_type: base.status_type,
-          channel: base.channel,
-          ...subtractNumbers(status ?? { ...base, ...emptyNumbers() }, goal ?? { ...base, ...emptyNumbers() }, months),
-        }
-      })
-    } else {
-      viewRows = [...byKind[view].values()]
-    }
-    viewRows.sort(rowSortCompare)
-
-    const totalNumbers = emptyNumbers()
-    for (const row of viewRows) addNumbers(totalNumbers, row)
-    return { monthKeys: months, rows: viewRows, total: totalNumbers }
-  }, [breakdown, view])
+  const { monthKeys, rows, total } = useMemo(() => aggregateDshBreakdown(breakdown, view), [breakdown, view])
 
   const columnCount = 2 + 4 + monthKeys.length + 1
 
