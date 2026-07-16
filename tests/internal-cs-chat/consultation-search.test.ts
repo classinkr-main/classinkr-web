@@ -48,8 +48,13 @@ function row(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function spyWarn() {
+  return vi.spyOn(console, "warn").mockImplementation(() => undefined)
+}
+
 afterEach(() => {
   vi.clearAllMocks()
+  vi.restoreAllMocks()
   vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   vi.useRealTimers()
@@ -151,32 +156,72 @@ describe("searchConsultationEvidence", () => {
     expect(rpc).not.toHaveBeenCalled()
   })
 
-  it("returns [] and skips the RPC when embedding fails", async () => {
+  it("returns [] and logs when the embedding response is not OK", async () => {
     enableEnv()
-    const fetchMock = vi.fn(async () => ({ ok: false, json: async () => ({}) }) as unknown as Response)
+    const fetchMock = vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) }) as unknown as Response)
     vi.stubGlobal("fetch", fetchMock)
     const rpc = rpcClient({ data: [row()], error: null })
+    const warn = spyWarn()
 
     expect(await searchConsultationEvidence("질문")).toEqual([])
     expect(rpc).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("[internal-cs] consultation search embed failed")
+    )
+  })
+
+  it("returns [] and logs when the embedding fetch throws", async () => {
+    enableEnv()
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("network fail")
+    }))
+    const rpc = rpcClient({ data: [row()], error: null })
+    const warn = spyWarn()
+
+    expect(await searchConsultationEvidence("질문")).toEqual([])
+    expect(rpc).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith(
+      "[internal-cs] consultation search embed error:",
+      "network fail"
+    )
   })
 
   it("returns [] when the RPC reports an error (never throws)", async () => {
     enableEnv()
     stubEmbeddingFetch()
     rpcClient({ data: null, error: { message: "relation does not exist" } })
-    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const warn = spyWarn()
 
     expect(await searchConsultationEvidence("질문")).toEqual([])
+    expect(warn).toHaveBeenCalledWith(
+      "[internal-cs] consultation search failed:",
+      "relation does not exist"
+    )
   })
 
-  it("returns [] when the RPC throws (never throws)", async () => {
+  it("returns [] and logs when the RPC throws (never throws)", async () => {
     enableEnv()
     stubEmbeddingFetch()
     const rpc = vi.fn().mockRejectedValue(new Error("network down"))
     mocks.createSupabaseAdminClient.mockReturnValue({ rpc })
+    const warn = spyWarn()
 
     expect(await searchConsultationEvidence("질문")).toEqual([])
+    expect(warn).toHaveBeenCalledWith(
+      "[internal-cs] consultation search error:",
+      "network down"
+    )
+  })
+
+  it("stays silent when Supabase/Gemini env is absent (config state, not failure)", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "")
+    vi.stubEnv("SUPABASE_SECRET_KEY", "")
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "")
+    vi.stubEnv("GEMINI_API_KEY", "")
+    const warn = spyWarn()
+
+    expect(await searchConsultationEvidence("질문")).toEqual([])
+    expect(warn).not.toHaveBeenCalled()
   })
 
   describe("timeout", () => {
@@ -184,16 +229,20 @@ describe("searchConsultationEvidence", () => {
       vi.useFakeTimers()
     })
 
-    it("resolves to [] after the 3.5s budget when the RPC hangs", async () => {
+    it("resolves to [] and logs after the 3.5s budget when the RPC hangs", async () => {
       enableEnv()
       stubEmbeddingFetch()
       const rpc = vi.fn(() => new Promise(() => {}))
       mocks.createSupabaseAdminClient.mockReturnValue({ rpc })
+      const warn = spyWarn()
 
       const pending = searchConsultationEvidence("질문")
       await vi.advanceTimersByTimeAsync(3_500)
 
       await expect(pending).resolves.toEqual([])
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("consultation search timed out after 3500ms")
+      )
     })
   })
 })

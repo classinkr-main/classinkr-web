@@ -81,11 +81,19 @@ async function embedConsultationQuery(question: string): Promise<number[] | null
       }
     )
 
-    if (!res.ok) return null
+    if (!res.ok) {
+      console.warn(`[internal-cs] consultation search embed failed: HTTP ${res.status}`)
+      return null
+    }
     const data = (await res.json()) as { embedding?: { values?: number[] } }
     const values = data.embedding?.values
     return Array.isArray(values) && values.length > 0 ? values : null
-  } catch {
+  } catch (error) {
+    // 네트워크 예외와 2초 abort 모두 여기로 온다. 키/입력 부재(위 조기 return)는 조용히 둔다.
+    console.warn(
+      "[internal-cs] consultation search embed error:",
+      error instanceof Error ? error.message : error
+    )
     return null
   } finally {
     clearTimeout(timeout)
@@ -151,10 +159,22 @@ export async function searchConsultationEvidence(
 
   try {
     const timeout = new Promise<ConsultationEvidence[]>((resolve) => {
-      timeoutId = setTimeout(() => resolve([]), SEARCH_TIMEOUT_MS)
+      timeoutId = setTimeout(() => {
+        console.warn(
+          `[internal-cs] consultation search timed out after ${SEARCH_TIMEOUT_MS}ms; returning no evidence`
+        )
+        resolve([])
+      }, SEARCH_TIMEOUT_MS)
     })
     return await Promise.race([
-      runSearch(question, limit).catch(() => []),
+      runSearch(question, limit).catch((error) => {
+        // 삼키기 전에 남긴다(never-throw 계약은 유지).
+        console.warn(
+          "[internal-cs] consultation search error:",
+          error instanceof Error ? error.message : error
+        )
+        return [] as ConsultationEvidence[]
+      }),
       timeout,
     ])
   } catch {

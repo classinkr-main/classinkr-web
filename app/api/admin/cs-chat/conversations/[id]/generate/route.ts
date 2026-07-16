@@ -161,7 +161,7 @@ export async function POST(req: NextRequest, context: Context) {
       curatedEvidence?.recommendedTags.length
         ? `권장 분류 태그(담당자 확인 전 미적용): ${curatedEvidence.recommendedTags.join(", ")}`
         : "",
-    ].join("\n")
+    ].filter(Boolean).join("\n")
     const generation = await generateInternalCsAnswer({
       question,
       requestedMode: requestedMode as InternalCsRequestedMode,

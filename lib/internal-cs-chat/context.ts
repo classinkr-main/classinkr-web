@@ -99,6 +99,19 @@ function compact(value: string, limit: number) {
   return value.replace(/\s+/g, " ").trim().slice(0, limit)
 }
 
+function statusLabel(status: InternalCsKnowledgeStatus) {
+  switch (status) {
+    case "confirmed":
+      return "확정"
+    case "conditional":
+      return "조건부"
+    case "conflicting_sources":
+      return "자료 충돌"
+    default:
+      return "본사 확인 필요"
+  }
+}
+
 function sourceRef(source: ChatbotSource): InternalCsSourceRef {
   const anchor = source.heading ? `#${compact(source.heading, 100)}` : ""
   return {
@@ -225,7 +238,7 @@ export async function buildInternalCsCopilotContext(
       entry.status === "conflicting_sources" ||
       entry.status === "hq_confirmation_required"
     )
-    .map((entry) => `${entry.title}: ${entry.status === "conflicting_sources" ? "자료 충돌" : "본사 확인 필요"}`)
+    .map((entry) => `${entry.title}: ${statusLabel(entry.status)}`)
 
   const deterministicFallback = [
     "검토 전 내부 초안",
@@ -235,9 +248,7 @@ export async function buildInternalCsCopilotContext(
     selectedFacts.length > 0
       ? [
           "정리된 내부 기준:",
-          ...selectedFacts.slice(0, 3).map((entry) =>
-            `- [${entry.status === "confirmed" ? "확정" : entry.status === "conditional" ? "조건부" : entry.status === "conflicting_sources" ? "자료 충돌" : "본사 확인 필요"}] ${entry.summary}`
-          ),
+          ...selectedFacts.slice(0, 3).map((entry) => `- [${statusLabel(entry.status)}] ${entry.summary}`),
         ].join("\n")
       : "정리된 내부 기준과 직접 일치하는 항목이 없어 담당자 확인이 필요합니다.",
     consultationEvidence.length > 0
