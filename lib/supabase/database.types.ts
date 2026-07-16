@@ -214,6 +214,7 @@ export type CrmNeoServiceRiskConfidence = "high" | "medium" | "low";
 export type AttendeeOrigin =
   | "ad_lead"
   | "site_lead"
+  | "kr_team_lead"
   | "new_lead"
   | "existing_customer"
   | "partner_customer"

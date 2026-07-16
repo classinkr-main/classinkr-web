@@ -101,7 +101,8 @@ function batchDateLabel(iso: string) {
 const ORIGIN_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "", label: "자동" },
   { value: "ad_lead", label: "광고 리드" },
-  { value: "site_lead", label: "홈피 리드" },
+  { value: "site_lead", label: "홈페이지 리드" },
+  { value: "kr_team_lead", label: "KR 팀 리드" },
   { value: "new_lead", label: "행사 신규" },
   { value: "existing_customer", label: "기존 고객" },
   { value: "partner_customer", label: "파트너 고객" },

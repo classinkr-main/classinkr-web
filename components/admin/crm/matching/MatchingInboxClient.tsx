@@ -1,7 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import {
   ArrowRight,
   Check,
@@ -35,7 +36,7 @@ interface ManualLinkTargetOption {
 }
 
 const SOURCE_LABEL: Record<CrmMatchingSourceSystem, string> = {
-  branch_rev_sheet: "REV 시트",
+  branch_rev_sheet: "REV 스냅샷",
   xiaoshouyi: "Neo CRM",
   lead: "리드",
 }
@@ -63,7 +64,7 @@ const STATUS_TONE: Record<CrmSourceLinkStatus, string> = {
 const SOURCE_FILTERS: Array<{ key: SourceFilter; label: string }> = [
   { key: "all", label: "전체 소스" },
   { key: "xiaoshouyi", label: "Neo CRM" },
-  { key: "branch_rev_sheet", label: "REV 시트" },
+  { key: "branch_rev_sheet", label: "REV 스냅샷" },
   { key: "lead", label: "리드" },
 ]
 
@@ -142,6 +143,35 @@ function matchesStatusFilter(row: CrmMatchingRow, filter: StatusFilter) {
   return row.linkStatus === "rejected"
 }
 
+function parseSourceFilter(value: string | null): SourceFilter {
+  if (value === "branch_rev_sheet" || value === "xiaoshouyi" || value === "lead") return value
+  return "all"
+}
+
+function parseStatusFilter(value: string | null): StatusFilter {
+  if (value === "review" || value === "auto" || value === "confirmed" || value === "rejected" || value === "all") {
+    return value
+  }
+  return "review"
+}
+
+function matchesQuery(row: CrmMatchingRow, query: string) {
+  const needle = query.trim().toLowerCase()
+  if (!needle) return true
+  return [
+    row.sourceLabel,
+    row.sourceDetail,
+    row.sourceOwner,
+    row.sourceStatus,
+    row.targetLabel,
+    row.sourceRecordKey,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .includes(needle)
+}
+
 function MetricCard({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <div className="border-t border-[#f0f0ec] pt-4">
@@ -161,13 +191,16 @@ function StatusBadge({ label, tone }: { label: string; tone: string }) {
 }
 
 export default function MatchingInboxClient() {
+  const searchParams = useSearchParams()
   const [data, setData] = useState<AdminCrmMatchingInbox | null>(null)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("review")
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(() => parseSourceFilter(searchParams.get("source")))
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => parseStatusFilter(searchParams.get("status")))
+  const [query, setQuery] = useState(() => searchParams.get("q")?.trim() ?? "")
+  const deferredQuery = useDeferredValue(query)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [pendingLinkId, setPendingLinkId] = useState<string | null>(null)
   const [bulkPending, setBulkPending] = useState(false)
@@ -175,6 +208,12 @@ export default function MatchingInboxClient() {
   const [manualTargets, setManualTargets] = useState<Record<string, ManualLinkTargetOption[]>>({})
   const [searchingSourceKey, setSearchingSourceKey] = useState<string | null>(null)
   const [creatingManualKey, setCreatingManualKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    setSourceFilter(parseSourceFilter(searchParams.get("source")))
+    setStatusFilter(parseStatusFilter(searchParams.get("status")))
+    setQuery(searchParams.get("q")?.trim() ?? "")
+  }, [searchParams])
 
   const load = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
@@ -352,9 +391,12 @@ export default function MatchingInboxClient() {
 
   const filteredRows = useMemo(() => {
     return (data?.rows ?? []).filter(
-      (row) => (sourceFilter === "all" || row.sourceSystem === sourceFilter) && matchesStatusFilter(row, statusFilter)
+      (row) =>
+        (sourceFilter === "all" || row.sourceSystem === sourceFilter) &&
+        matchesStatusFilter(row, statusFilter) &&
+        matchesQuery(row, deferredQuery)
     )
-  }, [data, sourceFilter, statusFilter])
+  }, [data, deferredQuery, sourceFilter, statusFilter])
 
   const visibleRows = useMemo(() => filteredRows.slice(0, MAX_VISIBLE_ROWS), [filteredRows])
   const hiddenRowCount = Math.max(0, filteredRows.length - visibleRows.length)
@@ -408,7 +450,7 @@ export default function MatchingInboxClient() {
           <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">CRM Matching</p>
           <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">데이터 매칭 인박스</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            외부 CRM 스냅샷, REV 시트, 리드를 ClassIn 고객 DB에 연결합니다. 고확신 매칭은 자동 확정되고, 여기서는
+            외부 CRM 스냅샷, REV DB 스냅샷, 리드를 ClassIn 고객 DB에 연결합니다. 고확신 매칭은 자동 확정되고, 여기서는
             검토가 필요한 항목만 처리하면 됩니다.
           </p>
         </div>
@@ -483,6 +525,15 @@ export default function MatchingInboxClient() {
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
+          <div className="flex h-8 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3">
+            <Search className="h-3.5 w-3.5 text-[#1a1a1a]/35" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="소스·고객 검색"
+              className="h-full w-40 bg-transparent text-[12px] font-semibold text-[#111110] outline-none placeholder:font-medium placeholder:text-[#1a1a1a]/30"
+            />
+          </div>
           {SOURCE_FILTERS.map((filter) => (
             <button
               key={filter.key}

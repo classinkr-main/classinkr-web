@@ -10,6 +10,7 @@ function lead(overrides: {
   assigned_to?: string
   timestamp?: string
   source?: string
+  confirmed_at?: string | null
 }) {
   return {
     id: overrides.id,
@@ -21,6 +22,7 @@ function lead(overrides: {
     timestamp: overrides.timestamp ?? "2026-06-23T08:00:00.000Z",
     status: overrides.status ?? "new",
     assigned_to: overrides.assigned_to,
+    confirmed_at: overrides.confirmed_at === null ? undefined : overrides.confirmed_at ?? "2026-06-23T09:00:00.000Z",
   }
 }
 
@@ -198,6 +200,26 @@ describe("getCrmUnifiedCustomers", () => {
     expect(newLeads.rows.map((row) => row.key)).toEqual(["lead:new"])
     expect(needsCare.rows.map((row) => row.key)).toEqual(["neo:risk"])
     expect(mine.rows.every((row) => row.ownerName === "김담당")).toBe(true)
+  })
+
+  it("keeps unconfirmed public leads in the lead inbox until they are confirmed or handled", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [
+        lead({ id: "unconfirmed-demo", source: "demo_modal", confirmed_at: null }),
+        lead({ id: "confirmed-demo", source: "demo_modal" }),
+        lead({ id: "confirmed-contact", source: "contact_page" }),
+        lead({ id: "handled-meta", source: "meta_lead_ads", status: "contacted", confirmed_at: null }),
+      ],
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    const rowsByKey = new Map(result.rows.map((row) => [row.key, row]))
+
+    expect(rowsByKey.has("lead:unconfirmed-demo")).toBe(false)
+    expect(rowsByKey.get("lead:confirmed-demo")?.sourceLabel).toBe("데모 신청")
+    expect(rowsByKey.get("lead:confirmed-contact")?.sourceLabel).toBe("문의")
+    expect(rowsByKey.get("lead:handled-meta")?.sourceLabel).toBe("Meta 리드")
+    expect(result.summary.leadCount).toBe(3)
   })
 
   it("collects my leads and customers through admin owner aliases", async () => {

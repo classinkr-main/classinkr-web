@@ -24,7 +24,8 @@ interface EventAttendanceMatrix {
 // 표 컬럼으로 보여줄 출신(unknown 제외, 참석계엔 모두 포함)
 const ORIGIN_COLUMNS: Array<{ key: string; label: string }> = [
   { key: "ad_lead", label: "광고 리드" },
-  { key: "site_lead", label: "홈피 리드" },
+  { key: "site_lead", label: "홈페이지 리드" },
+  { key: "kr_team_lead", label: "KR 팀 리드" },
   { key: "new_lead", label: "행사 신규" },
   { key: "existing_customer", label: "기존 고객" },
   { key: "partner_customer", label: "파트너 고객" },
@@ -120,7 +121,7 @@ export function EventOriginMatrix({ className = "" }: { className?: string }) {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-[680px] w-full text-left text-[12px]">
+          <table className="min-w-[760px] w-full text-left text-[12px]">
             <thead className="bg-[#fafaf8] text-[#1a1a1a]/45">
               <tr>
                 <th className="px-3 py-2.5 font-semibold">행사</th>
@@ -159,7 +160,7 @@ export function EventOriginMatrix({ className = "" }: { className?: string }) {
             </tbody>
           </table>
           <p className="px-4 py-2.5 text-[11px] text-[#1a1a1a]/40">
-            전환율 = 리드 출신(광고·홈피·행사신규) 참석자 중 전환 완료 비율. 기존/파트너 고객은 분모에서 제외.
+            전환율 = 리드 출신(광고·홈페이지·KR 팀·행사신규) 참석자 중 전환 완료 비율. 기존/파트너 고객은 분모에서 제외.
           </p>
         </div>
       )}

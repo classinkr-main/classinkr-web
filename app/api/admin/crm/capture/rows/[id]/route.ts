@@ -19,6 +19,7 @@ const TARGET_TYPES = new Set<string>(["lead", "neo_account", "customer", "deal"]
 const ATTENDEE_ORIGINS = new Set<string>([
   "ad_lead",
   "site_lead",
+  "kr_team_lead",
   "new_lead",
   "existing_customer",
   "partner_customer",
