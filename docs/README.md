@@ -5,6 +5,8 @@
 
 ## 1. Start Here
 
+- [active/admin-os-operating-decisions-2026-07-11.md](./active/admin-os-operating-decisions-2026-07-11.md)
+  - **Admin OS 현재 운영 결정.** 관리자 역할·기능 권한, V2 정본, CRM 5작업면, 상태·삭제·공개 기준의 최우선 문서.
 - [active/playbook/README.md](./active/playbook/README.md)
   - **파트별 운영 플레이북.** 작업이 어느 파트(홈/어드민/콘텐츠/그로스/챗봇/플랫폼)인지 판별 → 담당 에이전트(`.claude/agents/`)·가이드·공통 철칙 적용. 업무 분담의 진입점.
 - [active/repository-status-2026-06-08.md](./active/repository-status-2026-06-08.md)

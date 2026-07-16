@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { verifyAdmin } from "@/lib/admin-auth"
+import { STAFF_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 interface RouteContext {
@@ -8,7 +8,7 @@ interface RouteContext {
 }
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
-  const authError = await verifyAdmin(req)
+  const authError = await verifyAdmin(req, STAFF_ADMIN_API_ROLES)
   if (authError) return authError
 
   try {
@@ -49,7 +49,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 }
 
 export async function DELETE(req: NextRequest, context: RouteContext) {
-  const authError = await verifyAdmin(req)
+  const authError = await verifyAdmin(req, STAFF_ADMIN_API_ROLES)
   if (authError) return authError
 
   try {

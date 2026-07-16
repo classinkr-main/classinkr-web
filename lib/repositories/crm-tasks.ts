@@ -68,7 +68,6 @@ export interface CrmTaskCreateInput {
   detail?: string | null
   dueAt?: string | null
   priority?: CrmTaskPriority
-  status?: CrmTaskStatus
   sourceEventId?: string | null
   createdBy?: string | null
   assignedBy?: string | null
@@ -225,7 +224,9 @@ export function buildCrmTaskInsert(input: CrmTaskCreateInput): CrmTaskInsert {
     due_at: nullableIso(input.dueAt),
     snoozed_until: null,
     priority: oneOf(input.priority, CRM_TASK_PRIORITIES, "normal"),
-    status: oneOf(input.status, CRM_TASK_STATUSES, "open"),
+    // New tasks always enter through the open state. Every later state change
+    // must use an explicit command (complete/snooze/cancel/reopen).
+    status: "open",
     source_event_id: trimOrNull(input.sourceEventId),
     created_by: trimOrNull(input.createdBy),
     assigned_by: trimOrNull(input.assignedBy),
@@ -340,6 +341,27 @@ export async function createCrmTask(input: CrmTaskCreateInput): Promise<CrmTaskR
   return toCrmTaskRecord(data as CrmTask)
 }
 
+// 같은 deal + task_type 조합의 아직 살아있는(open/snoozed) task 목록을 반환한다.
+// 견적 수락 → task materialize 시 중복 생성 방지, 계약 전환 시 카드 자동 소거에 쓴다.
+export async function listActiveTasksForDealByType(
+  dealId: string,
+  taskType: CrmTaskType
+): Promise<CrmTaskRecord[]> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("crm_tasks")
+    .select("*")
+    .eq("target_type", "deal")
+    .eq("target_id", dealId)
+    .eq("task_type", taskType)
+    .in("status", ["open", "snoozed"])
+  if (error) {
+    if (isMissingCrmTasksTableError(error)) throw new Error(NOT_READY_MESSAGE)
+    throw new Error(`[crm-tasks] 조회 실패: ${error.message}`)
+  }
+  return ((data ?? []) as CrmTask[]).map(toCrmTaskRecord)
+}
+
 async function applyTaskUpdate(id: string, patch: CrmTaskUpdate): Promise<CrmTaskRecord | null> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase.from("crm_tasks").update(patch).eq("id", id).select("*").maybeSingle()
@@ -434,16 +456,6 @@ export function reopenCrmTask(id: string) {
     completed_at: null,
     completed_by: null,
   })
-}
-
-export async function deleteCrmTask(id: string): Promise<boolean> {
-  const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase.from("crm_tasks").delete().eq("id", id).select("id").maybeSingle()
-  if (error) {
-    if (isMissingCrmTasksTableError(error)) throw new Error(NOT_READY_MESSAGE)
-    throw new Error(`[crm-tasks] 삭제 실패: ${error.message}`)
-  }
-  return Boolean(data)
 }
 
 // 다음 액션 자유 입력 텍스트에서 task 유형을 추정한다(가장 구체적인 것부터).

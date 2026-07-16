@@ -112,6 +112,18 @@ type QuickQuoteComposerProps = {
   apiBase?: QuickQuoteApiBase
   portalPartnerAccountId?: string | null
   initialTemplateId?: StandardQuoteTemplateId
+  /**
+   * 딜/고객 컨텍스트에서 진입할 때 프리필할 대상. 값이 있으면 고객·거래 목록이 로드된 뒤
+   * "기존 고객" 모드로 해당 고객·거래를 자동 선택한다. (새 고객 암묵 생성 없음)
+   */
+  prefill?: QuickQuotePrefill | null
+}
+
+export type QuickQuotePrefill = {
+  dealId?: string | null
+  customerId?: string | null
+  /** 목록 로드 전에도 미리보기에 채워둘 수신처 이름(선택). */
+  customerName?: string | null
 }
 
 type QuoteFetchPayload = {
@@ -582,6 +594,7 @@ export default function QuickQuoteComposer({
   apiBase = "/api/portal",
   portalPartnerAccountId = null,
   initialTemplateId = "board_86",
+  prefill = null,
 }: QuickQuoteComposerProps) {
   const today = getTodayDateValue()
   const isPortalApi = apiBase === "/api/portal"
@@ -636,6 +649,9 @@ export default function QuickQuoteComposer({
   )
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false)
   const errorToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 프리필은 이번 open 세션에서 한 번만 적용한다(사용자가 이후 수동 변경하면 덮어쓰지 않음).
+  const prefillAppliedRef = useRef(false)
+  const hasPrefillTarget = Boolean(prefill?.dealId || prefill?.customerId)
 
   useEffect(() => {
     setPortalMounted(true)
@@ -778,13 +794,17 @@ export default function QuickQuoteComposer({
 
   useEffect(() => {
     if (!open) return
-    setCustomerMode("new")
-    setSelectedCustomerId("")
-    setNewCustomerName("")
+    // 딜/고객 컨텍스트에서 진입하면 "기존 고객" 모드로 시작해 프리필 적용 후 목록에서 선택한다.
+    prefillAppliedRef.current = false
+    setCustomerMode(hasPrefillTarget ? "existing" : "new")
+    setSelectedCustomerId(prefill?.customerId ?? "")
+    // 신규 고객 모드(딜/고객 타깃 없음)로 진입하면 customerName 프리필을 이름 필드에 1회 채운다.
+    // 사용자가 이후 수정하면 이 open 세션 동안 덮어쓰지 않는다.
+    setNewCustomerName(hasPrefillTarget ? "" : prefill?.customerName?.trim() ?? "")
     setNewCustomerContactName("")
     setNewCustomerPhone("")
     setCustomerQuery("")
-    setSelectedDealId("")
+    setSelectedDealId(prefill?.dealId ?? "")
     setNewDealTitle("")
     setTemplateId(initialTemplateId)
     const defaultSelections = getStandardQuoteDefaultSelections(initialTemplateId)
@@ -808,7 +828,7 @@ export default function QuickQuoteComposer({
     setErrorToast(null)
     setMobilePreviewOpen(false)
     setError(null)
-  }, [initialTemplateId, open, today])
+  }, [hasPrefillTarget, initialTemplateId, open, prefill?.customerId, prefill?.customerName, prefill?.dealId, today])
 
   useEffect(() => {
     return () => {
@@ -818,12 +838,43 @@ export default function QuickQuoteComposer({
     }
   }, [])
 
+  // 딜/고객 프리필 — 목록 로드가 끝난 뒤 한 번만 고객·거래를 선택한다.
+  // 자동은 '선택 제안'까지이며, 새 고객을 암묵 생성하지 않는다.
+  useEffect(() => {
+    if (!open || loadingOptions) return
+    if (!hasPrefillTarget || prefillAppliedRef.current) return
+
+    if (prefill?.dealId) {
+      const deal = deals.find((item) => item.id === prefill.dealId)
+      if (deal) {
+        prefillAppliedRef.current = true
+        setCustomerMode("existing")
+        setSelectedCustomerId(deal.customer_id)
+        setSelectedDealId(deal.id)
+        return
+      }
+      // 딜이 아직 안 보이면 다음 로드까지 대기(적용 마킹하지 않음).
+      return
+    }
+
+    if (prefill?.customerId) {
+      const customer = customers.find((item) => item.customer.id === prefill.customerId)
+      if (customer) {
+        prefillAppliedRef.current = true
+        setCustomerMode("existing")
+        setSelectedCustomerId(customer.customer.id)
+        setSelectedDealId("")
+      }
+    }
+  }, [customers, deals, hasPrefillTarget, loadingOptions, open, prefill?.customerId, prefill?.dealId])
+
   useEffect(() => {
     if (!open || customerMode !== "existing") return
+    if (hasPrefillTarget && !prefillAppliedRef.current) return
     if (!selectedCustomerId && sortedCustomers[0]?.customer.id) {
       setSelectedCustomerId(sortedCustomers[0].customer.id)
     }
-  }, [customerMode, open, selectedCustomerId, sortedCustomers])
+  }, [customerMode, hasPrefillTarget, open, selectedCustomerId, sortedCustomers])
 
   useEffect(() => {
     if (!open) return
@@ -854,10 +905,12 @@ export default function QuickQuoteComposer({
 
   useEffect(() => {
     if (!open || customerMode !== "existing") return
+    // 프리필이 아직 목록에서 딜/고객을 확정하기 전에는 시드된 selectedDealId를 지우지 않는다.
+    if (hasPrefillTarget && !prefillAppliedRef.current) return
     if (selectedDealId && !availableDeals.some((deal) => deal.id === selectedDealId)) {
       setSelectedDealId("")
     }
-  }, [availableDeals, customerMode, open, selectedDealId])
+  }, [availableDeals, customerMode, hasPrefillTarget, open, selectedDealId])
 
   function rebuildQuote(next: {
     templateId?: StandardQuoteTemplateId

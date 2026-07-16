@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { createPortal } from "react-dom"
 import Link from "next/link"
 import { CheckCircle2, ClipboardList, Loader2, Plus, UserPlus, X } from "lucide-react"
 
@@ -79,7 +80,7 @@ export default function LeadRegisterModal({
 
   const bulkRows = useMemo(() => parseBulk(bulkText), [bulkText])
 
-  if (!open) return null
+  if (!open || typeof document === "undefined") return null
 
   // 작성 중(단건 입력 or 벌크 붙여넣기) 닫기 시 실수로 내용이 날아가지 않게 확인한다.
   const isDirty =
@@ -151,7 +152,9 @@ export default function LeadRegisterModal({
     </div>
   )
 
-  return (
+  // document.body로 포털 — RouteTransition 래퍼 등 조상 transform이 fixed의 containing block이
+  // 되면 모달이 콘텐츠 박스 중앙(뷰포트 밖)에 떠서 "안 열리는" 증상이 되는 문제를 차단한다.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/20" onClick={close} aria-hidden />
       <div className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
@@ -298,6 +301,7 @@ export default function LeadRegisterModal({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

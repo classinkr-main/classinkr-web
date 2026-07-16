@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import Link from "next/link"
 import {
   AlertCircle,
@@ -15,6 +15,9 @@ import {
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { StatTile } from "@/components/admin/viz"
+// 고확도(임박) 금액 색은 확도 신호 토큰 SSOT — 원시 sky 리터럴 재정의 금지(DESIGN.md 확도 신호 토큰 절).
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import type {
   AdminCrmRevenueSheetBreakdownRow,
   AdminCrmRevenueSheetRow,
@@ -115,24 +118,27 @@ function StatusBadge({ status }: { status: RevenueSheetLinkStatus }) {
   )
 }
 
-function MetricCard({ label, value, hint }: { label: string; value: string; hint: string }) {
+// KPI 타일 로컬 재구현 금지(W2-2b) — 마크업은 viz StatTile(bare 변형)에 위임하는 어댑터.
+// deals/rev-sheet/matching 3중복이던 MetricCard의 단일 시각 원천은 이제 viz/primitives다.
+function MetricCard({ label, value, hint }: { label: string; value: ReactNode; hint: string }) {
+  return <StatTile icon={null} iconLayout="inline" variant="bare" compact label={label} value={value} hint={hint} />
+}
+
+// 콜드 로드 '...' 금지 — 값 자리 크기의 저대비 펄스 스켈레톤(레이아웃 일치, CRM-5).
+function ValueSkeleton({ className = "h-6 w-24" }: { className?: string }) {
   return (
-    <div data-panel="metric-card" className="flex h-full min-h-[132px] flex-col rounded-2xl border border-[#e8e8e4] bg-white p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">{label}</p>
-      <p className="mt-2 text-2xl font-bold tracking-[-0.04em] text-[#111110]">{value}</p>
-      <p className="mt-auto pt-2 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
-    </div>
+    <span aria-hidden className={`inline-block animate-pulse rounded-md bg-[#f0f0ec] align-middle ${className}`} />
   )
 }
 
 function BreakdownTable({ title, rows }: { title: string; rows: AdminCrmRevenueSheetBreakdownRow[] }) {
   return (
-    <section data-panel="breakdown-table" className="flex min-w-0 flex-col rounded-2xl border border-[#e8e8e4] bg-white p-4 lg:min-h-[188px]">
+    <section className="min-w-0 border-t border-[#f0f0ec] pt-4">
       <div className="mb-2 flex items-center justify-between gap-3">
         <h2 className="text-[14px] font-semibold text-[#111110]">{title}</h2>
         <span className="text-[11px] text-[#1a1a1a]/35">{formatNumber(rows.length)} groups</span>
       </div>
-      <div className="min-h-0 flex-1 overflow-x-auto">
+      <div className="overflow-x-auto">
         <table className="min-w-[520px] w-full text-left">
           <thead className="text-[10.5px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
             <tr>
@@ -152,7 +158,7 @@ function BreakdownTable({ title, rows }: { title: string; rows: AdminCrmRevenueS
                 </td>
                 <td className="py-2.5 pr-3 text-right text-[12px] text-[#1a1a1a]/50">{formatNumber(row.rowCount)}</td>
                 <td className="py-2.5 pr-3 text-right text-[12px] font-semibold text-[#084734]">{formatCny(row.confirmedAmount)}</td>
-                <td className="py-2.5 pr-3 text-right text-[12px] text-sky-700">{formatCny(row.highConfidenceAmount)}</td>
+                <td className={`py-2.5 pr-3 text-right text-[12px] ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatCny(row.highConfidenceAmount)}</td>
                 <td className="py-2.5 text-right text-[12px] text-[#1a1a1a]/60">{formatCny(row.expectedAmount)}</td>
               </tr>
             ))}
@@ -171,10 +177,8 @@ export default function AdminCrmRevenueSheetPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("review")
   const [teamFilter, setTeamFilter] = useState("all")
   const [query, setQuery] = useState("")
-  const deferredQuery = useDeferredValue(query)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const filtering = query !== deferredQuery
 
   const load = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
@@ -239,7 +243,7 @@ export default function AdminCrmRevenueSheetPage() {
   }, [data])
 
   const visibleRows = useMemo(() => {
-    const needle = deferredQuery.trim().toLowerCase()
+    const needle = query.trim().toLowerCase()
     return (data?.rows ?? [])
       .filter((row) => matchesStatusFilter(row, statusFilter))
       .filter((row) => teamFilter === "all" || row.team === teamFilter)
@@ -266,7 +270,7 @@ export default function AdminCrmRevenueSheetPage() {
         if (linkDelta !== 0) return linkDelta
         return b.scheduledAmount - a.scheduledAmount
       })
-  }, [data?.rows, deferredQuery, statusFilter, teamFilter])
+  }, [data?.rows, query, statusFilter, teamFilter])
 
   const maxMonthlyAmount = useMemo(() => {
     const values = (data?.monthly ?? []).flatMap((point) => [
@@ -280,17 +284,25 @@ export default function AdminCrmRevenueSheetPage() {
 
   return (
     <div>
+      {/* 역할 배너 — 매출시트 = REV 분석·검수 READ 표면, 링크 확정 액션은 매칭 인박스(CRM-1 역할 확정) */}
+      <p className="mb-4 border-b border-[#f0f0ec] pb-3 text-[12px] text-[#1a1a1a]/45">
+        <span className="font-semibold text-[#111110]">여기선 분석·검수</span> — REV 행을 읽고 대조하는 표면입니다.
+        CRM 연결(링크) 확정은{" "}
+        <Link href="/admin/crm/matching" className="font-semibold text-[#084734] underline-offset-2 hover:underline">
+          매칭 인박스 ↗
+        </Link>
+        에서 합니다.
+      </p>
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin 3.0 Revenue Snapshot</p>
-          <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">REV 스냅샷</h1>
+          <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin 3.0 Revenue Sheet</p>
+          <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">매출시트</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            어드민 DB에 저장된 마지막 REV 동기화본을 기준으로 운영합니다. 원본 Google Sheet는 가져오기 원천일 뿐이고,
-            매칭·통계·CRM 연결 판단은 자체 DB 스냅샷에서 먼저 처리합니다.
+            기존 REV 시트 행을 어드민 안에서 운영합니다. 지금은 동기화본을 기준으로 읽고, 매칭·통계·CRM 연결을 먼저 안정화한 뒤 자체 매출 원장으로 승격합니다.
           </p>
         </div>
 
-        <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:max-w-[620px] lg:justify-end">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => void load({ force: true })}
@@ -313,18 +325,11 @@ export default function AdminCrmRevenueSheetPage() {
             type="button"
             onClick={() => void syncSheet()}
             disabled={syncing || loading}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#084734] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] disabled:opacity-50"
           >
             {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-            원본 REV 가져오기
+            REV 동기화
           </button>
-          <Link
-            href="/admin/crm/matching?source=branch_rev_sheet&status=review"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41]"
-          >
-            매칭 검수
-            <ArrowRight className="h-4 w-4" />
-          </Link>
         </div>
       </div>
 
@@ -340,48 +345,51 @@ export default function AdminCrmRevenueSheetPage() {
         </div>
       ) : null}
 
-      <section className="mb-8 grid items-stretch gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-2 xl:grid-cols-5">
+        {/* '확정' 두 의미 구분(CRM-6): 여기 '확정'=시트 확정 표시(¥) — 코크핏 '인식 매출'(딜리버리 인식 ₩)과 다른 기준 */}
         <MetricCard
           label="확정 표시"
-          value={loading && !data ? "..." : formatCny(data?.summary.confirmedAmount)}
-          hint="주차 칸 빨간 글자 금액 합계"
+          value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.confirmedAmount)}
+          hint="주차 칸 빨간 글자 합계 · 시트 확정 표시 ¥ — 딜리버리 '인식 매출'(₩)과 다른 기준"
         />
         <MetricCard
           label="확정 임박"
-          value={loading && !data ? "..." : formatCny(data?.summary.highConfidenceAmount)}
-          hint="주차 칸 파란 글자 금액 합계"
+          value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.highConfidenceAmount)}
+          hint="주차 칸 파란 글자 합계 · 시트 기준 ¥"
         />
         <MetricCard
           label="예정"
-          value={loading && !data ? "..." : formatCny(data?.summary.expectedAmount)}
-          hint="당월 이후 무색 예정 금액"
+          value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.expectedAmount)}
+          hint="당월 이후 무색 예정 금액 · 시트 기준 ¥"
         />
         <MetricCard
           label="전환 대기"
-          value={loading && !data ? "..." : formatCny(data?.summary.pastUnconfirmedAmount)}
-          hint="지난달 이전 무색 예정 금액"
+          value={loading && !data ? <ValueSkeleton /> : formatCny(data?.summary.pastUnconfirmedAmount)}
+          hint="지난달 이전 무색 예정 금액 · 시트 기준 ¥"
         />
         <MetricCard
           label="매칭 커버리지"
           value={
-            loading && !data
-              ? "..."
-              : `${formatNumber(data?.summary.linkedRowCount)} / ${formatNumber(data?.summary.activeRowCount)}`
+            loading && !data ? (
+              <ValueSkeleton />
+            ) : (
+              `${formatNumber(data?.summary.linkedRowCount)} / ${formatNumber(data?.summary.activeRowCount)}`
+            )
           }
-          hint={`미연결 ${formatCny(data?.summary.unmatchedAmount)} · 후보 ${formatNumber(data?.summary.candidateRowCount)}`}
+          hint={`확정 link 행 / 활성 행 · 미연결 ${formatCny(data?.summary.unmatchedAmount)} · 후보 ${formatNumber(data?.summary.candidateRowCount)}`}
         />
       </section>
 
-      <section className="mb-8 grid min-w-0 items-stretch gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-        <div data-panel="monthly-flow" className="flex min-w-0 flex-col rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
+      <section className="mb-8 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="border-t border-[#f0f0ec] pt-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-[14px] font-semibold text-[#111110]">월별 DB 스냅샷 흐름</h2>
-              <p className="mt-1 text-[12px] text-[#1a1a1a]/42">저장된 REV 스냅샷의 확정·임박·예정·전환 대기를 한 달 단위로 분리해서 봅니다.</p>
+              <h2 className="text-[14px] font-semibold text-[#111110]">월별 매출시트 흐름</h2>
+              <p className="mt-1 text-[12px] text-[#1a1a1a]/42">확정·임박·예정·전환 대기를 한 달 단위로 분리해서 봅니다.</p>
             </div>
             <span className="text-[11px] text-[#1a1a1a]/35">current {data?.currentMonth ?? "-"}</span>
           </div>
-          <div className="mt-2 flex min-h-[260px] flex-1 items-end gap-2 overflow-x-auto border-b border-[#f0f0ec] pb-4">
+          <div className="flex h-64 items-end gap-2 overflow-x-auto border-b border-[#f0f0ec] pb-4">
             {(data?.monthly ?? []).map((point) => (
               <div key={point.month} className="flex min-w-[46px] flex-1 flex-col items-stretch justify-end gap-1">
                 {[
@@ -413,18 +421,18 @@ export default function AdminCrmRevenueSheetPage() {
           </div>
         </div>
 
-        <div data-panel="breakdown-stack" className="grid min-w-0 content-start gap-6 md:grid-cols-2 lg:grid-cols-1">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1">
           <BreakdownTable title="팀별" rows={data?.teams ?? []} />
           <BreakdownTable title="담당자별" rows={data?.managers ?? []} />
         </div>
       </section>
 
-      <section data-panel="rev-rows" className="mb-8 min-w-0 rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
+      <section className="mb-8 border-t border-[#f0f0ec] pt-4">
         <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
-            <h2 className="text-[14px] font-semibold text-[#111110]">REV 스냅샷 행</h2>
+            <h2 className="text-[14px] font-semibold text-[#111110]">REV 행 운영 테이블</h2>
             <p className="mt-1 text-[12px] text-[#1a1a1a]/42">
-              원본 시트 주소가 바뀌어도 마지막 DB 저장본으로 검수하고, 고객명 불일치는 매칭 인박스에서 CRM/통계와 연결합니다.
+              행 이동·고객명 불일치가 있는 동안은 매칭 인박스에서 확정 후 CRM/통계와 연결합니다.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -433,7 +441,7 @@ export default function AdminCrmRevenueSheetPage() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="스냅샷 고객, 담당, 메모 검색"
+                placeholder="고객, 담당, 메모 검색"
                 className="h-full w-44 bg-transparent text-[13px] text-[#111110] outline-none placeholder:text-[#1a1a1a]/30"
               />
             </div>
@@ -467,15 +475,98 @@ export default function AdminCrmRevenueSheetPage() {
             </button>
           ))}
           <Link
-            href="/admin/crm/matching?source=branch_rev_sheet&status=review"
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] sm:ml-auto"
+            // 검색 중이면 그 컨텍스트를 들고 인박스로 — 재검색 없이 이어서 링크 확정(CRM-1).
+            href={
+              query.trim()
+                ? `/admin/crm/matching?name=${encodeURIComponent(query.trim())}`
+                : "/admin/crm/matching"
+            }
+            className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
           >
             매칭 인박스
             <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
 
-        <div className={`min-w-0 overflow-x-auto transition-opacity ${filtering ? "opacity-70" : ""}`}>
+        {/* <sm 카드 폴백(W2-6·CRM-9) — risk 정렬 그대로 상위 필드(고객/상태/금액/링크상태)를 카드 행으로.
+            동일 visibleRows·포매터·딥링크 소비라 기능 손실 0, 넓은 표는 데스크톱 전용. */}
+        <div className="space-y-2 sm:hidden">
+          {loading && !data ? (
+            <p className="rounded-xl bg-[#fafaf8] px-3 py-10 text-center text-[13px] text-[#1a1a1a]/35">
+              <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+              매출시트를 불러오는 중입니다.
+            </p>
+          ) : visibleRows.length === 0 ? (
+            <p className="rounded-xl bg-[#fafaf8] px-3 py-10 text-center text-[13px] text-[#1a1a1a]/35">
+              표시할 REV 행이 없습니다.
+            </p>
+          ) : (
+            visibleRows.slice(0, MAX_VISIBLE_ROWS).map((row) => (
+              <div key={row.id} className="rounded-xl border border-[#e8e8e4] bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="line-clamp-2 text-[13px] font-semibold text-[#111110]">{row.customerName}</p>
+                    <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+                      #{row.sheetRow}
+                      {row.placeholder ? <span className="ml-1 font-semibold text-[#B85C33]">임시명</span> : null}
+                      {" · "}
+                      {[row.team, row.manager, row.region].filter(Boolean).join(" · ") || "-"}
+                    </p>
+                  </div>
+                  <StatusBadge status={row.linkStatus} />
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 border-t border-[#f0f0ec] pt-2 text-[11px] tabular-nums">
+                  <p className="flex items-baseline justify-between gap-2">
+                    <span className="text-[#1a1a1a]/40">확정</span>
+                    <span className="font-semibold text-[#084734]">{formatCny(row.confirmedAmount)}</span>
+                  </p>
+                  <p className="flex items-baseline justify-between gap-2">
+                    <span className="text-[#1a1a1a]/40">임박</span>
+                    <span className={CONFIDENCE_TOKENS["high-confidence"].textClass}>{formatCny(row.highConfidenceAmount)}</span>
+                  </p>
+                  <p className="flex items-baseline justify-between gap-2">
+                    <span className="text-[#1a1a1a]/40">예정</span>
+                    <span className="text-[#1a1a1a]/60">{formatCny(row.expectedAmount)}</span>
+                  </p>
+                  <p className="flex items-baseline justify-between gap-2">
+                    <span className="text-[#1a1a1a]/40">대기</span>
+                    <span className="font-semibold text-[#B85C33]">{formatCny(row.pastUnconfirmedAmount)}</span>
+                  </p>
+                </div>
+                <p className="mt-2 text-[11px] text-[#1a1a1a]/45">
+                  상태 {row.status ?? "-"} · 초입금 {row.firstPayment ?? "-"} · {row.branchContact ?? row.dealType ?? "-"}
+                </p>
+                <p className="mt-1 text-[11px] text-[#1a1a1a]/45">
+                  {getTargetLabel(row)} · 신뢰도 {formatPercent(row.confidence)}
+                </p>
+                {(row.note ?? row.productVersion) ? (
+                  <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-[#1a1a1a]/40">
+                    {row.note ?? row.productVersion}
+                  </p>
+                ) : null}
+                <div className="mt-2 flex items-center justify-between gap-2 border-t border-[#f0f0ec] pt-2">
+                  {row.linkStatus === "confirmed" ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#084734]">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      연결 확정
+                    </span>
+                  ) : (
+                    <Link
+                      // 행 고객명을 인박스 이름 필터로 프리필 — 이탈+재검색 없는 핸드오프(CRM-1).
+                      href={`/admin/crm/matching?name=${encodeURIComponent(row.customerName)}`}
+                      className="text-[11px] font-semibold text-[#084734] hover:underline"
+                    >
+                      연결하기
+                    </Link>
+                  )}
+                  <span className="text-[10.5px] text-[#1a1a1a]/30">{formatDate(row.syncedAt)}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="hidden overflow-x-auto sm:block">
           <table className="min-w-[1320px] w-full text-left">
             <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
               <tr>
@@ -524,7 +615,7 @@ export default function AdminCrmRevenueSheetPage() {
                       <p className="mt-1 text-[11px] text-[#1a1a1a]/35">초입금 {row.firstPayment ?? "-"}</p>
                     </td>
                     <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#084734]">{formatCny(row.confirmedAmount)}</td>
-                    <td className="py-4 pr-4 text-right text-[12px] text-sky-700">{formatCny(row.highConfidenceAmount)}</td>
+                    <td className={`py-4 pr-4 text-right text-[12px] ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatCny(row.highConfidenceAmount)}</td>
                     <td className="py-4 pr-4 text-right text-[12px] text-[#1a1a1a]/60">{formatCny(row.expectedAmount)}</td>
                     <td className="py-4 pr-4 text-right text-[12px] font-semibold text-[#B85C33]">{formatCny(row.pastUnconfirmedAmount)}</td>
                     <td className="py-4 pr-4">
@@ -544,7 +635,8 @@ export default function AdminCrmRevenueSheetPage() {
                         <CheckCircle2 className="ml-auto h-4 w-4 text-[#084734]" />
                       ) : (
                         <Link
-                          href={`/admin/crm/matching?source=branch_rev_sheet&status=review&q=${encodeURIComponent(row.customerName)}`}
+                          // 행 고객명을 인박스 이름 필터로 프리필 — 이탈+재검색 없는 핸드오프(CRM-1).
+                          href={`/admin/crm/matching?name=${encodeURIComponent(row.customerName)}`}
                           className="text-[11px] font-semibold text-[#084734] hover:underline"
                         >
                           연결하기

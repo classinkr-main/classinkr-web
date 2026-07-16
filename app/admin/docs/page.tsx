@@ -28,6 +28,7 @@ import {
 } from "lucide-react"
 
 import DocsCategoryManager from "@/components/admin/docs/DocsCategoryManager"
+import { StatTile } from "@/components/admin/viz"
 import DocsGapsPanel from "@/components/admin/docs/DocsGapsPanel"
 import DocsRecommendedQuestionsManager from "@/components/admin/docs/DocsRecommendedQuestionsManager"
 import DocsRedirectManager from "@/components/admin/docs/DocsRedirectManager"
@@ -191,6 +192,7 @@ function StatusBadge({ label, tone }: { label: string; tone?: string }) {
   )
 }
 
+// KPI 카드는 공용 StatTile(components/admin/viz)로 통합 — 기존 회색 칩은 기본 neutral 톤 그대로.
 function MetricCard({
   icon,
   label,
@@ -202,18 +204,7 @@ function MetricCard({
   value: string
   hint: string
 }) {
-  return (
-    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-5">
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <div className="inline-flex rounded-xl bg-[#f0f0ec] p-2 text-[#1a1a1a]/55">{icon}</div>
-      </div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
-        {label}
-      </p>
-      <p className="mt-2 text-3xl font-bold tracking-[-0.03em] text-[#111110]">{value}</p>
-      <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
-    </div>
-  )
+  return <StatTile icon={icon} label={label} value={value} hint={hint} />
 }
 
 function EmptyState({ title, description }: { title: string; description: string }) {

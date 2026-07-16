@@ -15,6 +15,8 @@ interface RecentInstall { customer: string; quantity: number; date: string | nul
 interface HardwareResponse {
   stock: StockRow[]
   recent_installs?: RecentInstall[]
+  /** 재고 수치 원천 — ledger(입출고 원장 SSOT) 또는 sheet_staging(원장 미구축 폴백) */
+  source?: "ledger" | "sheet_staging"
 }
 
 const COLORS = {
@@ -134,7 +136,18 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
-        <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">HW 재고</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">HW 재고</h2>
+          {data.source === "ledger" ? (
+            <span className="rounded-full bg-[#ECFDF5] px-2 py-px text-[10px] font-semibold text-[#084734]" title="입출고 원장(hardware_movements) 기준 — 하드웨어 콘솔과 동일 수치 (재고 SSOT, 2026-07-10 결정)">
+              원장 기준
+            </span>
+          ) : data.source === "sheet_staging" ? (
+            <span className="rounded-full bg-[#FBF1E0] px-2 py-px text-[10px] font-semibold text-[#7A520F]" title="원장 미구축 환경 — 시트 스테이징 계산 폴백. 원장 임포트 후 자동 전환됩니다">
+              시트 폴백
+            </span>
+          ) : null}
+        </div>
         <div className="flex items-center gap-2">
           <Link href="/admin/hardware" className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5]">
             운영 열기

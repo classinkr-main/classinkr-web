@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { verifyAdmin } from "@/lib/admin-auth"
+import { STAFF_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { validateRechargeAmount } from "@/lib/billing/recharge"
 import {
   createQuoteCode,
@@ -24,7 +24,7 @@ function parseAmount(value: unknown): number | null {
 }
 
 export async function GET(req: NextRequest) {
-  const authError = await verifyAdmin(req)
+  const authError = await verifyAdmin(req, STAFF_ADMIN_API_ROLES)
   if (authError) return authError
 
   try {
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const authError = await verifyAdmin(req)
+  const authError = await verifyAdmin(req, STAFF_ADMIN_API_ROLES)
   if (authError) return authError
 
   try {

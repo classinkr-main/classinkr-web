@@ -1,7 +1,10 @@
 # CRM 통합 마스터 설계 (정합화)
 
+> [!WARNING]
+> 2026-07-11부터 이 문서의 “정확히 6탭” IA와 최종 운영 선언은 폐기됐다. 현재 기준은 [Admin OS 운영 결정](../../active/admin-os-operating-decisions-2026-07-11.md)의 CRM 5작업면이다. 데이터 모델과 과거 구현 근거만 참고한다.
+
 기준 시점: 2026-06-27
-상태: 설계 정합화 캐논 (single source of truth for CRM design)
+상태: 역사적 설계 근거 (현재 캐논 아님)
 범위: ClassIn Home Admin CRM의 모든 기존 설계 문서를 하나의 정합된 캐논으로 통합한다. "Next Action First" 작업대 문화 적합 지침에 정렬하고, 실제 빌드 상태(built / partial / designed)에 정직하게 근거를 둔다. 데이터 모델, 정보구조, Task 모델, Capture Layer, 서비스 위험·NEO 싱크, 데이터 신뢰 규칙, 단계 로드맵, 비기능 제약을 다룬다.
 
 이 문서가 정합화/대체하는 문서:

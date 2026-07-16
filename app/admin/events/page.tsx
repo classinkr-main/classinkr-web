@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, Pencil, Trash2, X, Upload, ImageIcon, ArrowRight } from "lucide-react"
+import { Plus, Pencil, Trash2, X, Upload, ImageIcon, ArrowRight, ClipboardPaste } from "lucide-react"
 import { adminFetch, adminFetchJsonCached, getAdminToken } from "@/lib/admin-client"
 import type { PublicEvent, EventCategory, EventPublicationStatus, EventStatus } from "@/lib/types/public-events"
 import { EVENT_CATEGORIES } from "@/lib/types/public-events"
@@ -228,6 +228,13 @@ export default function AdminEventsPage() {
           <p className="text-[13px] text-[#1a1a1a]/40 mt-0.5">/events 페이지에 표시되는 행사를 등록·수정합니다.</p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Link
+            href="/admin/crm/capture"
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-4 py-2 text-[13px] font-medium text-[#111110] transition-colors hover:bg-[#F6F5F4]"
+          >
+            <ClipboardPaste className="h-4 w-4" />
+            참석자 입력
+          </Link>
           <button
             onClick={openCreate}
             className="inline-flex min-h-10 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-4 py-2 text-[13px] font-medium text-[#111110] transition-colors hover:bg-[#F6F5F4]"
@@ -334,6 +341,14 @@ export default function AdminEventsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 justify-end">
+                      <Link
+                        href={`/admin/crm/capture?event=${encodeURIComponent(event.id)}`}
+                        className="p-1.5 text-[#1a1a1a]/40 hover:text-[#084734] transition-colors"
+                        title="이 행사 참석자 입력"
+                        aria-label={`${event.title} 참석자 입력`}
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5" />
+                      </Link>
                       <Link
                         href={`/admin/events/${event.id}/edit`}
                         className="p-1.5 text-[#1a1a1a]/40 hover:text-[#111110] transition-colors"

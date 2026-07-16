@@ -25,14 +25,13 @@ import {
 } from "lucide-react"
 import AdminTabs from "@/components/admin/AdminTabs"
 import { ChannelHubCards } from "@/components/admin/campaigns/ChannelHubCards"
-import EmailHubPanel from "@/components/admin/campaigns/EmailHubPanel"
-import type { EmailHubStats } from "@/components/admin/campaigns/EmailHubPanel"
 import { InsightsBanner } from "@/components/admin/campaigns/InsightsBanner"
 import type { Insight } from "@/components/admin/campaigns/InsightsBanner"
 import { GoalProgressPanel } from "@/components/admin/campaigns/GoalProgressPanel"
 import type { GoalEventRow } from "@/components/admin/campaigns/GoalProgressPanel"
-import { FunnelWaterfall } from "@/components/admin/campaigns/FunnelWaterfall"
-import type { FunnelStage as WaterfallStage } from "@/components/admin/campaigns/FunnelWaterfall"
+import { MiniFunnel } from "@/components/admin/viz/MiniFunnel"
+import type { FunnelStage as WaterfallStage } from "@/components/admin/viz/MiniFunnel"
+import { StatTile, ChartSkeleton, Skeleton } from "@/components/admin/viz"
 import { TopPerformersTable } from "@/components/admin/campaigns/TopPerformersTable"
 import type { PerformerRow } from "@/components/admin/campaigns/TopPerformersTable"
 import { CampaignExportButton } from "@/components/admin/campaigns/CampaignExportButton"
@@ -60,13 +59,11 @@ import {
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 
-function ChartSkeleton({ className = "h-[260px]" }: { className?: string }) {
-  return <div className={`${className} rounded-xl bg-[#f0f0ec]`} />
-}
+// ChartSkeleton/Skeleton은 components/admin/viz(primitives)의 SSOT를 그대로 위임한다(로컬 재구현 금지).
 
 const EventFunnelCompareChart = dynamic(
   () => import("@/components/admin/campaigns/CampaignCharts").then((m) => m.EventFunnelCompareChart),
-  { ssr: false, loading: () => <ChartSkeleton /> }
+  { ssr: false, loading: () => <ChartSkeleton className="h-[260px]" /> }
 )
 
 const ChannelSpendPieChart = dynamic(
@@ -92,6 +89,12 @@ const ChannelEfficiencyChart = dynamic(
 const MetaPerformanceCharts = dynamic(
   () => import("@/components/admin/campaigns/MetaPerformanceCharts").then((m) => m.MetaPerformanceCharts),
   { ssr: false, loading: () => <ChartSkeleton className="h-[260px]" /> }
+)
+
+// 이메일·SMS 허브(구 /admin/marketing)를 이메일 탭에 흡수 — 무거우므로 동적 로딩.
+const MarketingHub = dynamic(
+  () => import("@/components/admin/marketing/MarketingHub"),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[420px]" /> }
 )
 
 const KRW = new Intl.NumberFormat("ko-KR")
@@ -217,11 +220,12 @@ function buildFunnel(
 
 type CampaignTab = "summary" | "events" | "meta" | "email"
 
-const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string }> = [
-  { id: "summary", label: "요약" },
-  { id: "events", label: "행사" },
-  { id: "meta", label: "Meta 광고" },
-  { id: "email", label: "이메일" },
+const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string; sub: string }> = [
+  { id: "summary", label: "요약", sub: "성과 · 전환 · 채널 분포" },
+  { id: "events", label: "행사", sub: "행사별 퍼널 · 딜 전환" },
+  { id: "meta", label: "Meta 광고", sub: "캠페인 현황 · 성과 · 상태 관리" },
+  // id는 기존 딥링크(?tab=email) 호환을 위해 "email" 유지 — 내용은 이메일·문자·카카오 발송 허브.
+  { id: "email", label: "메시지", sub: "구독자 · 이메일·문자·카카오 발송 · 이력" },
 ]
 
 type MetaDatePreset = "last_7d" | "last_30d" | "last_90d" | "this_month"
@@ -303,6 +307,8 @@ function eventInPeriod(event: PublicEvent, period: Period): boolean {
 
 // ─── UI primitives ────────────────────────────────────────────────────────────
 
+// KPI 카드는 공용 StatTile(compact)로 통합 — 로컬 tone은 색이 픽셀 동일한 viz Tone으로 매핑
+// (success→brand, warn→danger[#FEF3EE/#B85C33 동일], neutral→neutral).
 function KpiCard({
   icon,
   label,
@@ -316,18 +322,19 @@ function KpiCard({
   hint?: string
   tone?: "neutral" | "success" | "warn"
 }) {
-  const accent =
-    tone === "success"
-      ? "bg-[#ECFDF5] text-[#084734]"
-      : tone === "warn"
-        ? "bg-[#FEF3EE] text-[#B85C33]"
-        : "bg-[#f0f0ec] text-[#1a1a1a]/55"
+  const vizTone = tone === "success" ? "brand" : tone === "warn" ? "danger" : "neutral"
+  return <StatTile icon={icon} label={label} value={value} hint={hint} tone={vizTone} compact />
+}
+
+// KpiCard(compact StatTile)와 정확히 같은 셸(rounded-2xl border p-4)로 맞춘 콜드로드 스켈레톤.
+// viz의 KpiSkeleton은 non-compact(p-5) 전용이라 여기선 원자 Skeleton을 compact 치수로 합성한다.
+function KpiTileSkeleton() {
   return (
     <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-      <span className={`inline-flex rounded-xl p-2 ${accent}`}>{icon}</span>
-      <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">{label}</p>
-      <p className="mt-1.5 text-[22px] font-bold leading-none tracking-[-0.02em] text-[#111110]">{value}</p>
-      {hint && <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">{hint}</p>}
+      <Skeleton className="mb-3 h-8 w-8 rounded-xl" />
+      <Skeleton className="mb-1.5 h-2.5 w-16" />
+      <Skeleton className="h-5 w-20" />
+      <Skeleton className="mt-2 h-2.5 w-24" />
     </div>
   )
 }
@@ -620,34 +627,34 @@ function MetaLiveSummary({
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">광고비</p>
-            <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] text-[#111110]">
+            <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] tabular-nums text-[#111110]">
               {money(summary?.spend, currency)}
             </p>
           </div>
           <div>
             <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">노출 / 전체 클릭</p>
-            <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] text-[#111110]">
+            <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] tabular-nums text-[#111110]">
               {compact.format(summary?.impressions ?? 0)} / {compact.format(summary?.clicks ?? 0)}
             </p>
-            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
+            <p className="mt-1 text-[11px] tabular-nums text-[#1a1a1a]/40">
               CTR {summary?.ctr != null ? `${summary.ctr.toFixed(2)}%` : "—"}
             </p>
           </div>
           <div>
             <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">리드</p>
-            <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] text-[#084734]">
+            <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] tabular-nums text-[#084734]">
               {KRW.format(summary?.leads ?? 0)}
             </p>
-            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
+            <p className="mt-1 text-[11px] tabular-nums text-[#1a1a1a]/40">
               CPL {summary && summary.leads > 0 ? money(summary.spend / summary.leads, currency) : "—"}
             </p>
           </div>
           <div>
             <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#1a1a1a]/35">상태</p>
-            <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] text-[#111110]">
+            <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] tabular-nums text-[#111110]">
               {summary?.activeCount ?? 0} 활성
             </p>
-            <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
+            <p className="mt-1 text-[11px] tabular-nums text-[#1a1a1a]/40">
               일시중지 {summary?.pausedCount ?? 0} · 전체 {summary?.campaignCount ?? 0}
             </p>
           </div>
@@ -695,28 +702,36 @@ function FunnelStage({
   )
 }
 
-function ConversionFocusCard({
+// 전환 초점 3칸은 개별 카드가 아니라 하나의 카드 안에서 divide-x/divide-y로만 구분한다
+// (design-taste Rule4: elevation이 불필요한 저정보 셀은 카드 중첩 대신 divide-y/border-t로 위계화).
+function ConversionFocusCell({
   label,
   value,
   hint,
   tone = "neutral",
+  loading = false,
 }: {
   label: string
   value: string
   hint: string
   tone?: "neutral" | "success" | "warn"
+  loading?: boolean
 }) {
   const valueTone =
     tone === "success" ? "text-[#084734]" : tone === "warn" ? "text-[#B85C33]" : "text-[#111110]"
 
   return (
-    <div className="rounded-xl border border-[#e8e8e4] bg-white px-4 py-3">
+    <div className="px-4 py-3">
       <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
         {label}
       </p>
-      <p className={`mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] ${valueTone}`}>
-        {value}
-      </p>
+      {loading ? (
+        <Skeleton className="mt-1.5 h-5 w-16" />
+      ) : (
+        <p className={`mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] tabular-nums ${valueTone}`}>
+          {value}
+        </p>
+      )}
       <p className="mt-1.5 text-[11px] leading-relaxed text-[#1a1a1a]/45">{hint}</p>
     </div>
   )
@@ -1489,7 +1504,8 @@ export default function AdminCampaignsPage() {
   }, [activeTab, loadMeta])
 
   useEffect(() => {
-    if (activeTab === "summary" || activeTab === "email") {
+    // 이메일 탭은 MarketingHub가 자체 데이터를 불러온다. 요약 탭 채널 카드용만 여기서 조회.
+    if (activeTab === "summary") {
       void loadEmailStats()
     }
   }, [activeTab, loadEmailStats])
@@ -1693,18 +1709,6 @@ export default function AdminCampaignsPage() {
         activeSubscribers: emailStats.subscribers.active,
         sentCampaigns: emailStats.campaigns.recentCampaigns.filter((c) => c.status === "sent").length,
         newThisMonth: emailStats.subscribers.newThisMonth,
-      }
-    : null
-
-  const hubEmailStats: EmailHubStats | null = emailStats
-    ? {
-        totalSubscribers: emailStats.subscribers.total,
-        activeSubscribers: emailStats.subscribers.active,
-        unsubscribed: emailStats.subscribers.unsubscribed,
-        sentCampaigns: emailStats.campaigns.recentCampaigns.filter((c) => c.status === "sent").length,
-        totalCampaigns: emailStats.campaigns.total,
-        newThisMonth: emailStats.subscribers.newThisMonth,
-        recentCampaigns: emailStats.campaigns.recentCampaigns,
       }
     : null
 
@@ -2169,7 +2173,7 @@ export default function AdminCampaignsPage() {
       {/* Tab content */}
       {activeTab === "email" ? (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
-          <EmailHubPanel stats={hubEmailStats} />
+          <MarketingHub />
         </div>
       ) : activeTab === "meta" ? (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
@@ -2227,42 +2231,57 @@ export default function AdminCampaignsPage() {
       />
 
       {/* KPI strip */}
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <KpiCard
-          icon={<CalendarIcon className="w-3.5 h-3.5" />}
-          label="대상 행사"
-          value={loading ? "..." : KRW.format(filtered.length)}
-          hint={`전체 ${events.length}건 중`}
-        />
-        <KpiCard
-          icon={<Wallet className="w-3.5 h-3.5" />}
-          label="총 광고비"
-          value={loading ? "..." : won(aggregate.totalSpend)}
-        />
-        <KpiCard
-          icon={<TrendingUp className="w-3.5 h-3.5" />}
-          label="총 매출"
-          value={loading ? "..." : won(aggregate.totalRevenue)}
-          tone="success"
-        />
-        <KpiCard
-          icon={<Target className="w-3.5 h-3.5" />}
-          label="평균 CPL"
-          value={loading ? "..." : aggregate.avgCpl != null ? won(aggregate.avgCpl) : "—"}
-          hint={`총 리드 ${KRW.format(aggregate.totalLeads)}`}
-        />
-        <KpiCard
-          icon={<Users className="w-3.5 h-3.5" />}
-          label="총 참석자"
-          value={loading ? "..." : KRW.format(aggregate.totalAttendees)}
-          hint={`딜 ${KRW.format(aggregate.totalDeals)}건`}
-        />
-        <KpiCard
-          icon={<TrendingUp className="w-3.5 h-3.5" />}
-          label="누적 ROI"
-          value={loading ? "..." : aggregate.overallRoi != null ? pct(aggregate.overallRoi) : "—"}
-          tone={aggregate.overallRoi != null && aggregate.overallRoi >= 0 ? "success" : "warn"}
-        />
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {loading ? (
+          <>
+            <KpiTileSkeleton />
+            <KpiTileSkeleton />
+            <KpiTileSkeleton />
+            <KpiTileSkeleton />
+            <KpiTileSkeleton />
+            <KpiTileSkeleton />
+          </>
+        ) : (
+          <>
+            <KpiCard
+              icon={<CalendarIcon className="w-3.5 h-3.5" />}
+              label="대상 행사"
+              value={KRW.format(filtered.length)}
+              hint={`전체 ${events.length}건 중`}
+            />
+            <KpiCard
+              icon={<Wallet className="w-3.5 h-3.5" />}
+              label="총 광고비"
+              value={won(aggregate.totalSpend)}
+            />
+            <KpiCard
+              icon={<TrendingUp className="w-3.5 h-3.5" />}
+              label="행사 귀속 매출(입력 기준)"
+              value={won(aggregate.totalRevenue)}
+              hint="수기 입력 추정 · 장부 확정매출 아님 · KRW"
+              tone="success"
+            />
+            <KpiCard
+              icon={<Target className="w-3.5 h-3.5" />}
+              label="평균 CPL"
+              value={aggregate.avgCpl != null ? won(aggregate.avgCpl) : "—"}
+              hint={`총 리드 ${KRW.format(aggregate.totalLeads)}건 · 선택 기간 행사 기준`}
+            />
+            <KpiCard
+              icon={<Users className="w-3.5 h-3.5" />}
+              label="총 참석자"
+              value={KRW.format(aggregate.totalAttendees)}
+              hint={`딜 ${KRW.format(aggregate.totalDeals)}건`}
+            />
+            <KpiCard
+              icon={<TrendingUp className="w-3.5 h-3.5" />}
+              label="누적 ROI"
+              value={aggregate.overallRoi != null ? pct(aggregate.overallRoi) : "—"}
+              hint="선택 기간 행사 매출·광고비 기준"
+              tone={aggregate.overallRoi != null && aggregate.overallRoi >= 0 ? "success" : "warn"}
+            />
+          </>
+        )}
       </div>
 
       {/* 자동 인사이트 */}
@@ -2272,24 +2291,28 @@ export default function AdminCampaignsPage() {
         </div>
       )}
 
-      <div className="mb-5 grid gap-3 lg:grid-cols-3">
-        <ConversionFocusCard
+      {/* 전환 초점 3칸 — 개별 카드 대신 하나의 카드 안에서 divide로만 구분(카드 과중첩 완화) */}
+      <div className="mb-5 grid divide-y divide-[#f0f0ec] rounded-2xl border border-[#e8e8e4] bg-white lg:grid-cols-3 lg:divide-x lg:divide-y-0">
+        <ConversionFocusCell
           label="전환 초점"
-          value={loading ? "..." : aggregate.dealConversionRate != null ? pct(aggregate.dealConversionRate) : "—"}
+          value={aggregate.dealConversionRate != null ? pct(aggregate.dealConversionRate) : "—"}
           hint={`리드 ${KRW.format(aggregate.totalLeads)}건 중 딜 ${KRW.format(aggregate.totalDeals)}건`}
           tone={aggregate.dealConversionRate != null && aggregate.dealConversionRate > 0 ? "success" : "neutral"}
+          loading={loading}
         />
-        <ConversionFocusCard
+        <ConversionFocusCell
           label="참석 후 딜"
-          value={loading ? "..." : aggregate.attendanceToDealRate != null ? pct(aggregate.attendanceToDealRate) : "—"}
+          value={aggregate.attendanceToDealRate != null ? pct(aggregate.attendanceToDealRate) : "—"}
           hint={`참석자 ${KRW.format(aggregate.totalAttendees)}명 기준 후속 영업 전환`}
           tone={aggregate.attendanceToDealRate != null && aggregate.attendanceToDealRate > 0 ? "success" : "neutral"}
+          loading={loading}
         />
-        <ConversionFocusCard
+        <ConversionFocusCell
           label="운영 판단"
-          value={loading ? "..." : aggregate.overallRoi != null ? (aggregate.overallRoi >= 0 ? "확대 검토" : "비용 점검") : "집계 대기"}
+          value={aggregate.overallRoi != null ? (aggregate.overallRoi >= 0 ? "확대 검토" : "비용 점검") : "집계 대기"}
           hint={aggregate.avgCpl != null ? `누적 ROI ${pct(aggregate.overallRoi)} · 평균 CPL ${won(aggregate.avgCpl)}` : "ROI·CPL 집계 대기"}
           tone={aggregate.overallRoi == null ? "neutral" : aggregate.overallRoi >= 0 ? "success" : "warn"}
+          loading={loading}
         />
       </div>
 
@@ -2300,7 +2323,15 @@ export default function AdminCampaignsPage() {
 
       {/* 집계 퍼널 + 목표 달성 */}
       <div className="mb-5 grid gap-4 lg:grid-cols-2">
-        <FunnelWaterfall stages={summaryFunnelStages} />
+        <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[14px] font-semibold text-[#111110]">전환 퍼널</h2>
+              <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">단계별 전환율과 이탈을 추적합니다</p>
+            </div>
+          </div>
+          <MiniFunnel stages={summaryFunnelStages} variant="waterfall" />
+        </div>
         <GoalProgressPanel
           leads={goalData.leads}
           revenue={goalData.revenue}
@@ -2329,14 +2360,14 @@ export default function AdminCampaignsPage() {
               <div className="h-[180px] w-full">
                 <ChannelSpendPieChart data={channelChartData} />
               </div>
-              <div className="mt-2 space-y-1">
+              <div className="mt-2 divide-y divide-[#f0f0ec]">
                 {channelChartData.map((entry) => (
-                  <div key={entry.channel} className="flex items-center justify-between text-[11px]">
+                  <div key={entry.channel} className="flex items-center justify-between py-1.5 text-[11px]">
                     <span className="flex items-center gap-1.5 text-[#1a1a1a]/55">
                       <span className="inline-block w-2 h-2 rounded-full" style={{ background: entry.color }} />
                       {entry.name}
                     </span>
-                    <span className="font-semibold text-[#111110]">{won(entry.value)}</span>
+                    <span className="font-semibold tabular-nums text-[#111110]">{won(entry.value)}</span>
                   </div>
                 ))}
               </div>

@@ -39,6 +39,7 @@ export interface AdminProfile {
   crm_owner_aliases: string[];
   neo_owner_id: string | null;
   crm_sort_order: number;
+  capabilities: string[];
   created_at: string;
   updated_at: string;
 }
@@ -518,6 +519,8 @@ export interface AutomationLog {
 export interface AuditLog {
   id: string;
   actor_user_id: string | null;
+  actor_display_name: string | null;
+  actor_role: string | null;
   action: string;
   target_type: string;
   target_id: string | null;
@@ -727,6 +730,7 @@ export type AdminProfileInsert = Omit<
   | "crm_owner_aliases"
   | "neo_owner_id"
   | "crm_sort_order"
+  | "capabilities"
 > & {
   branch_name?: string | null;
   crm_team_role?: AdminCrmTeamRole;
@@ -735,6 +739,7 @@ export type AdminProfileInsert = Omit<
   crm_owner_aliases?: string[];
   neo_owner_id?: string | null;
   crm_sort_order?: number;
+  capabilities?: string[];
   created_at?: string;
   updated_at?: string;
 };

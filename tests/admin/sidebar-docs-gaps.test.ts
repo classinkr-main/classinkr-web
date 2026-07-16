@@ -30,10 +30,24 @@ describe("admin sidebar docs gap discoverability", () => {
     expect(sidebarSource).toContain("Suspense")
   })
 
-  it("warms alpha readiness data when the gap queue nav item is hovered", () => {
+  it("warms alpha readiness and chatbot pattern data when the gap queue nav item is hovered", () => {
     // warm-up 키는 nav href(쿼리 포함)와 완전히 같아야 적중한다.
     expect(sidebarSource).toContain('"/admin/docs?tab=gaps"')
     expect(sidebarSource).toContain("/api/admin/docs/alpha-readiness")
     expect(sidebarSource).toContain("/api/admin/docs/gaps")
+    // 챗봇 운영 대시보드 흡수 후 DocsGapsPanel이 질문 패턴(stats)도 읽으므로 warm 대상에 포함.
+    expect(sidebarSource).toContain("/api/admin/chatbot/stats")
+  })
+
+  it("absorbs the chatbot ops dashboard into the gap queue tab (no standalone nav item)", () => {
+    // IA 재편(admin-ia-redesign-2026-06-29 §2-🟠3): chatbot 고유 데이터 없음 —
+    // 보강 큐 탭(DocsGapsPanel)이 챗봇 대시보드 상위집합이라 /admin/chatbot은 흡수됨.
+    const chatbotItem = ADMIN_NAV.find((item) => item.href === "/admin/chatbot")
+    expect(chatbotItem).toBeUndefined()
+
+    // ⌘K 검색성 보존 — 챗봇 검색어는 보강 큐 항목 keywords로 병합된다.
+    const gapItem = ADMIN_NAV.find((item) => item.href === "/admin/docs?tab=gaps")
+    expect(gapItem?.keywords).toContain("챗봇")
+    expect(gapItem?.keywords).toContain("chatbot")
   })
 })

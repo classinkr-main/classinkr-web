@@ -1,0 +1,11 @@
+[
+  { "name": "박한", "email": "han.park@classin.com" },
+  { "name": "신희성", "email": "heesung.shin@classin.com" },
+  { "name": "정규성", "email": "gyusung.jung@classin.com" },
+  { "name": "김정무", "email": "jungmoo.kim@classin.com", "role": "지사장" },
+  { "name": "김민재", "email": "minjae.kim@classin.com" },
+  { "name": "진소망", "email": "somang.jin@classin.com" },
+  { "name": "이왕찬", "email": "wangchan.lee@classin.com" },
+  { "name": "문준혁", "email": "junhyuk.mun@classin.com" },
+  { "name": "황찬우", "email": "chanwoo.hwang@classin.com", "team": "mkt" }
+]

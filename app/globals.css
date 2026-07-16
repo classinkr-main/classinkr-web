@@ -156,7 +156,11 @@
 }
 
 .route-transition {
-  animation: route-soft-enter var(--route-enter-duration, 220ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* fill-mode 'both'는 종료 후에도 to 키프레임(transform: translate3d(0,0,0))을 영구 유지해
+     래퍼가 fixed 자손의 containing block이 된다(⌘K 팔레트·모달이 뷰포트 밖으로 밀림).
+     'backwards'는 애니메이션 종료 시 transform이 none으로 돌아와 fixed 오버레이가 살아난다.
+     종료 상태(opacity 1 · 이동 0)는 자연 상태와 동일하므로 시각 변화 없음. */
+  animation: route-soft-enter var(--route-enter-duration, 220ms) cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .route-transition-admin {

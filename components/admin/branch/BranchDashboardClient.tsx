@@ -104,6 +104,7 @@ export default function BranchDashboardClient() {
         deal_type: string | null; product_version: string | null;
         contract_target: number | null; first_payment: string | null;
         monthly_payments: Record<string, number>; monthly_red: Record<string, boolean>;
+        monthly_confirmed?: Record<string, number> | null; monthly_high_conf?: Record<string, number> | null;
       } }>(`/api/admin/branch/deals/${encodeURIComponent(row.id)}`)
       const d = data?.deal
       if (!d) { setSelectedDeal((cur) => cur && cur.id === row.id ? { ...cur, loadingDetail: false } : cur); return }
@@ -117,6 +118,10 @@ export default function BranchDashboardClient() {
         firstPayment: d.first_payment,
         monthlyPayments: d.monthly_payments,
         monthlyRed: d.monthly_red,
+        // 확도 금액 맵 — DealModal의 '확정' 표시가 rev-confirmed 캐논(revenue-core)으로
+        // 계산되도록 red 불리언과 함께 내려준다(부분 확정·무색상 폴백 반영).
+        monthlyConfirmed: d.monthly_confirmed ?? undefined,
+        monthlyHighConfidence: d.monthly_high_conf ?? undefined,
         loadingDetail: false,
       } : cur)
     } catch {

@@ -1,9 +1,9 @@
 "use client"
 
-import { Bar, BarChart, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts"
 
 import { ChartTooltip } from "../viz/ChartTheme"
-import { CHART, axisTick, cursorLine } from "../viz/theme"
+import { RankedHorizontalBars } from "../viz/RankedHorizontalBars"
 
 // 현황 분석·시각화 — 리드 KPI(byStatus) 기반. Recharts를 별도 모듈로 분리해 next/dynamic 지연 로드.
 interface LeadKpisLike {
@@ -59,14 +59,16 @@ export default function CrmHomeCharts({ leadKpis }: { leadKpis: LeadKpisLike | n
       </div>
       <div>
         <p className="mb-1 text-[12px] font-semibold text-[#1a1a1a]/45">리드 전환 퍼널 · 건수</p>
-        <ResponsiveContainer width="100%" height={160}>
-          <BarChart data={funnelData} layout="vertical" margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
-            <XAxis type="number" hide />
-            <YAxis type="category" dataKey="name" width={58} tick={axisTick} axisLine={false} tickLine={false} />
-            <Tooltip content={<ChartTooltip />} cursor={cursorLine} />
-            <Bar dataKey="value" fill={CHART.brand} radius={[0, 4, 4, 0]} barSize={22} />
-          </BarChart>
-        </ResponsiveContainer>
+        <RankedHorizontalBars
+          rows={funnelData}
+          labelKey="name"
+          valueKey="value"
+          height={160}
+          barSize={22}
+          labelWidth={58}
+          tooltipVariant="light"
+          showValueAxis={false}
+        />
       </div>
     </div>
   )

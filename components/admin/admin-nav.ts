@@ -5,7 +5,6 @@ import {
   Activity,
   BarChart2,
   BookOpen,
-  Bot,
   Building2,
   CalendarDays,
   Code2,
@@ -20,14 +19,12 @@ import {
   PackageCheck,
   ReceiptText,
   Search,
-  Send,
   Settings,
-  UserCog,
   Users,
 } from "lucide-react"
 
 export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
-export type AdminNavSection = "home" | "sales" | "marketing" | "cs" | "performance" | "system"
+export type AdminNavSection = "home" | "sales" | "marketing" | "cs" | "system"
 
 export interface AdminNavItem {
   href: string
@@ -44,56 +41,57 @@ const ALL_STAFF: AdminRole[]    = ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER"]
 const STAFF_ADMIN: AdminRole[]  = ["SUPER_ADMIN", "ADMIN"]
 const STAFF_EDITOR: AdminRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
 
-// IA 재편(2026-06-29): 직무 흐름대로 섹션 정렬 + 중복/오배치 정리.
-// - 자료 퍼널(/materials)은 리드마그넷의 읽기 facade라 nav에서 제거하고, /lead-magnets를 "자료 퍼널"로 통일해 marketing으로 이동.
-//   (/admin/materials 라우트 자체도 /admin/lead-magnets redirect 스텁으로 정리됨, 2026-07-02)
-// - 하드웨어 재고는 분석이 아니라 SCM 운영 콘솔이라 system(운영·시스템)으로 이동.
-// - 고객 지원은 docs → 내부 CS 챗봇 → chatbot ops → channel-talk 파이프라인 순서.
+// IA 재편(2026-07-04): 6섹션 → 4섹션 병합. "너무 세분화" 해소 — 웹 분석(Analytics·트래픽)은
+// marketing으로, 매출 성과(KR Team·매출 장부)는 sales로 흡수해 잡탕이던 "분석" 섹션을 해체.
+// Overview는 헤더 없는 최상위 단독 항목으로 렌더(AdminSidebar가 home 섹션 헤더를 생략).
+// 섹션 부제(설명 줄)는 사이드바에서 미렌더 — 시각 밀도만 낮춘다(팔레트 그룹은 label만 사용).
+// (이전 재편) 자료 퍼널=/lead-magnets 통일, 하드웨어=SCM 운영 콘솔이라 system, 챗봇→docs?tab=gaps 흡수.
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, roles: [...ALL_STAFF, "BRANCH"], section: "home", keywords: "홈 대시보드 overview home" },
 
-  // 영업
+  // 영업·매출 — 파이프라인(CRM)·산출물(견적)·성과(KR Team)·검수(매출 장부)·일정
   { href: "/admin/crm", label: "CRM", icon: Users, roles: [...ALL_STAFF, "BRANCH"], section: "sales", keywords: "crm 한국팀 매출 korea" },
+  { href: "/admin/quotes", label: "견적·문서", icon: FileText, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", keywords: "견적 계약 영수증 quote contract receipt" },
   { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, roles: [...ALL_STAFF, "BRANCH"], section: "sales", keywords: "캘린더 일정 calendar schedule" },
-  { href: "/admin/quotes", label: "견적·문서", icon: FileText, roles: STAFF_ADMIN, section: "sales", keywords: "견적 계약 영수증 quote contract receipt" },
+  { href: "/admin/branch", label: "KR Team", icon: Building2, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", keywords: "지사 브랜치 branch kr team 매출 성과" },
+  { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", badge: "MVP", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
 
-  // 마케팅
-  { href: "/admin/campaigns", label: "캠페인", icon: Megaphone, roles: STAFF_ADMIN, section: "marketing", keywords: "캠페인 이메일 campaign email" },
-  { href: "/admin/marketing", label: "메시지 발송", icon: Send, roles: STAFF_ADMIN, section: "marketing", keywords: "메시지 발송 문자 sms 카카오 kakao 알림톡 이메일 email 솔라피 solapi" },
-  { href: "/admin/blog", label: "콘텐츠", icon: FileText, roles: STAFF_EDITOR, section: "marketing", keywords: "블로그 콘텐츠 blog content" },
-  { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, roles: STAFF_EDITOR, section: "marketing", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
-  { href: "/admin/events", label: "공개 행사", icon: Globe, roles: STAFF_ADMIN, section: "marketing", keywords: "행사 이벤트 event 웨비나" },
+  // 마케팅·분석 — 캠페인·콘텐츠·리드 + 웹/비즈니스 분석
+  // 메시지 발송 허브(이메일·문자·카카오, /admin/marketing)는 캠페인의 "메시지" 탭으로 흡수 — 라우트는 redirect 유지.
+  { href: "/admin/campaigns", label: "캠페인", icon: Megaphone, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", keywords: "캠페인 이메일 campaign email 메시지 발송 문자 sms 카카오 kakao 알림톡 솔라피 solapi" },
+  { href: "/admin/blog", label: "콘텐츠", icon: FileText, roles: [...STAFF_EDITOR, "BRANCH"], section: "marketing", keywords: "블로그 콘텐츠 blog content" },
+  { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, roles: [...STAFF_EDITOR, "BRANCH"], section: "marketing", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
+  { href: "/admin/events", label: "공개 행사", icon: Globe, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", keywords: "행사 이벤트 event 웨비나" },
+  { href: "/admin/analytics", label: "Analytics", icon: BarChart2, roles: [...ALL_STAFF, "BRANCH"], section: "marketing", keywords: "analytics 분석 통계" },
+  { href: "/admin/traffic", label: "방문자/트래픽", icon: Eye, roles: [...ALL_STAFF, "BRANCH"], section: "marketing", keywords: "방문자 트래픽 추적 현황 홈페이지 흐름 tracking client events pixel 계측 traffic" },
 
-  // 고객 지원 (docs → docs?tab=gaps → internal cs chatbot → chatbot ops → channel-talk)
-  { href: "/admin/docs", label: "가이드 문서", icon: BookOpen, roles: STAFF_EDITOR, section: "cs", keywords: "가이드 문서 docs guide" },
+  // 고객 지원 (docs → docs?tab=gaps → 내부 CS 챗봇 → channel-talk)
+  { href: "/admin/docs", label: "가이드 문서", icon: BookOpen, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "가이드 문서 docs guide 챗봇 chatbot faq 추천질문" },
   // 보강 큐는 문서 센터(/admin/docs)의 "보강 큐" 탭으로 병합됨 — nav는 탭 딥링크를 직접 가리켜
   // active 하이라이트가 동작하게 한다. /admin/docs/gaps는 북마크 호환용 redirect 스텁으로만 유지.
-  { href: "/admin/docs?tab=gaps", label: "문서 보강 큐", icon: Search, roles: STAFF_EDITOR, section: "cs", badge: "Alpha", keywords: "챗봇 질문 보강 큐 gaps faq 문서 검색 초안" },
-  { href: "/admin/cs-chatbot", label: "내부 CS 챗봇", icon: Headset, roles: STAFF_EDITOR, section: "cs", badge: "Internal", keywords: "내부 cs 챗봇 상담 도우미 소통 가이드 템플릿 큐 아카이브 internal support assistant" },
-  { href: "/admin/chatbot", label: "챗봇 운영", icon: Bot, roles: STAFF_EDITOR, section: "cs", badge: "Ops", keywords: "챗봇 질문 추천 문서 chatbot ai faq" },
-  { href: "/admin/channel-talk", label: "채널톡 상담", icon: MessageSquare, roles: STAFF_ADMIN, section: "cs", badge: "New", keywords: "채널톡 상담 문의 채팅 channel talk chat inbox" },
-
-  // 분석
-  { href: "/admin/analytics", label: "Analytics", icon: BarChart2, roles: [...ALL_STAFF, "BRANCH"], section: "performance", keywords: "analytics 분석 통계" },
-  { href: "/admin/traffic", label: "방문자/트래픽", icon: Eye, roles: [...ALL_STAFF, "BRANCH"], section: "performance", keywords: "방문자 트래픽 추적 현황 홈페이지 흐름 tracking client events pixel 계측 traffic" },
-  { href: "/admin/branch", label: "KR Team", icon: Building2, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance", keywords: "지사 브랜치 branch kr team 매출" },
-  { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, roles: [...STAFF_ADMIN, "BRANCH"], section: "performance", badge: "MVP", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
+  // 챗봇 운영 대시보드도 이 탭(DocsGapsPanel)에 흡수됨 — /admin/chatbot은 여기로 redirect,
+  // ⌘K 검색어(챗봇 운영·질문 패턴·품질 평가)를 이 항목 keywords에 병합해 검색성 보존.
+  { href: "/admin/docs?tab=gaps", label: "문서 보강 큐", icon: Search, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "챗봇 운영 질문 패턴 추천 보강 큐 gaps faq 문서 검색 초안 품질 평가 골든셋 chatbot ai ops 알파 준비도" },
+  // 내부 CS 챗봇 — 상담원용 워크스페이스(내부 지식·대화 큐·아카이브). 공개 챗봇 운영(docs?tab=gaps)과 별개 표면.
+  { href: "/admin/cs-chatbot", label: "내부 CS 챗봇", icon: Headset, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "내부 cs 챗봇 상담 도우미 소통 가이드 템플릿 큐 아카이브 internal support assistant" },
+  { href: "/admin/channel-talk", label: "채널톡 상담", icon: MessageSquare, roles: [...STAFF_ADMIN, "BRANCH"], section: "cs", keywords: "채널톡 상담 문의 채팅 channel talk chat inbox" },
 
   // 운영·시스템
-  { href: "/admin/ops", label: "Ops Health", icon: Activity, roles: STAFF_ADMIN, section: "system", badge: "New", keywords: "ops health 상태 통합 크론 cron automation" },
-  { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, roles: STAFF_ADMIN, section: "system", badge: "Ops", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
-  { href: "/admin/settings", label: "Settings", icon: Settings, roles: STAFF_ADMIN, section: "system", keywords: "설정 settings 환경" },
-  { href: "/admin/users", label: "회원 관리", icon: UserCog, roles: STAFF_ADMIN, section: "system", keywords: "회원 사용자 users 권한" },
-  { href: "/admin/dev", label: "Dev Mode", icon: Code2, roles: STAFF_ADMIN, section: "system", badge: "Beta", keywords: "개발 dev 버그 패치노트 roadmap" },
+  { href: "/admin/ops", label: "운영 상태", icon: Activity, roles: [...STAFF_ADMIN, "BRANCH"], section: "system", keywords: "ops health 상태 통합 크론 cron automation" },
+  { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, roles: [...STAFF_ADMIN, "BRANCH"], section: "system", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
+  // 회원 관리는 Settings "회원" 탭(?tab=members)으로 흡수됨 — /admin/users는 그 탭으로 redirect 스텁.
+  // ⌘K 검색어(회원·사용자·권한)를 Settings 항목 keywords에 병합해 검색성 보존.
+  { href: "/admin/settings", label: "설정", icon: Settings, roles: STAFF_ADMIN, section: "system", keywords: "설정 settings 환경 회원 사용자 users 권한 계정" },
+  { href: "/admin/dev", label: "개발 도구", icon: Code2, roles: STAFF_ADMIN, section: "system", keywords: "개발 dev 버그 패치노트 roadmap" },
 ]
 
+// 섹션 부제(description)는 사이드바에서 미렌더 — 팔레트 그룹 라벨과 코드 문서용으로만 유지.
 export const ADMIN_NAV_SECTION_META: Record<AdminNavSection, { label: string; description: string }> = {
   home: { label: "홈", description: "오늘 먼저 볼 운영 허브" },
-  sales: { label: "영업", description: "CRM, 일정, 딜·문서" },
-  marketing: { label: "마케팅", description: "캠페인, 콘텐츠, 자료 퍼널" },
-  cs: { label: "고객 지원", description: "가이드 문서, 챗봇, 채널톡" },
-  performance: { label: "분석", description: "비즈니스·웹·팀 성과" },
-  system: { label: "운영·시스템", description: "상태, 재고, 설정, 권한" },
+  sales: { label: "영업·매출", description: "CRM·견적·매출 성과·장부" },
+  marketing: { label: "마케팅·분석", description: "캠페인·콘텐츠·리드·웹 분석" },
+  cs: { label: "고객 지원", description: "가이드 문서·챗봇·채널톡" },
+  system: { label: "운영·시스템", description: "상태·재고·설정·권한" },
 }
 
 /** 섹션 렌더 순서 — ADMIN_NAV_SECTION_META 선언 순서를 따른다. */
@@ -109,41 +107,25 @@ export interface CrmChildNavItem {
 }
 
 // CRM 진입 시 사이드바에서 펼치는 하위 섹션(= 기존 상단 탭의 이전). 활성 판별은 경로 prefix.
-// 딥링크 화면도 실제 업무 맥락에 맞는 탭으로 귀속해야 한다. 돈흐름/매칭/인사이트를
-// 현황으로 뭉개면 사용자가 현재 위치를 잘못 인지한다.
+// CRM 핵심 탭 — 현황(후속조치+분석+시각화) · 고객(DB·360·연락입력·라벨링) · 기록(전체 로그) · 참석자 입력
+// · 검수(매칭 인박스·인사이트·매출시트 = 백오피스 표면의 상설 진입점, top-nav 재팽창 없이 하위탭으로만).
+// 돈흐름(deals)은 어드민(딜보드·견적)과 겹쳐 최상위에서 내림 — 라우트는 보존, active는 현황 탭 귀속.
 export const CRM_CHILD_NAV: CrmChildNavItem[] = [
   {
     href: "/admin/crm",
     label: "현황",
     keywords: "crm 현황 후속조치 인사이트 딜 매출",
-    match: (p) => p === "/admin/crm",
+    match: (p) =>
+      p === "/admin/crm" ||
+      (p.startsWith("/admin/crm/deals") && !p.startsWith("/admin/crm/deals/rev-sheet")) ||
+      p.startsWith("/admin/crm/revenue") ||
+      (p.startsWith("/admin/crm/partners") && !p.startsWith("/admin/crm/partners/customers")),
   },
   {
     href: "/admin/crm/customers/unified",
     label: "고객DB",
     keywords: "고객 통합 거래처 unified customers db 360",
     match: (p) => p.startsWith("/admin/crm/customers") || p.startsWith("/admin/crm/partners/customers"),
-  },
-  {
-    href: "/admin/crm/deals",
-    label: "돈흐름",
-    keywords: "돈흐름 매출 딜 rev revenue snapshot sheet order install kpi",
-    match: (p) =>
-      p.startsWith("/admin/crm/deals") ||
-      p.startsWith("/admin/crm/revenue") ||
-      (p.startsWith("/admin/crm/partners") && !p.startsWith("/admin/crm/partners/customers")),
-  },
-  {
-    href: "/admin/crm/matching",
-    label: "매칭 검수",
-    keywords: "매칭 검수 source link sync 연동 rev snapshot",
-    match: (p) => p.startsWith("/admin/crm/matching"),
-  },
-  {
-    href: "/admin/crm/insights",
-    label: "인사이트",
-    keywords: "인사이트 분석 insight action kpi",
-    match: (p) => p.startsWith("/admin/crm/insights"),
   },
   {
     href: "/admin/crm/activity",
@@ -153,8 +135,18 @@ export const CRM_CHILD_NAV: CrmChildNavItem[] = [
   },
   {
     href: "/admin/crm/capture",
-    label: "참석자 입력",
-    keywords: "참석자 입력 캡처 capture 행사 명함",
+    label: "입력함",
+    keywords: "입력함 참석자 입력 캡처 capture 행사 명함 붙여넣기",
     match: (p) => p.startsWith("/admin/crm/capture"),
+  },
+  // 검수·백오피스 — 매칭 인박스가 홈. 강등 표면(매칭/인사이트/매출시트)의 상설 도달 경로(CRM-4).
+  {
+    href: "/admin/crm/matching",
+    label: "검수",
+    keywords: "검수 매칭 인박스 데이터 점검 matching 인사이트 insights 매출시트 rev sheet 백오피스",
+    match: (p) =>
+      p.startsWith("/admin/crm/matching") ||
+      p.startsWith("/admin/crm/insights") ||
+      p.startsWith("/admin/crm/deals/rev-sheet"),
   },
 ]

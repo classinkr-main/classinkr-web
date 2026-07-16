@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react"
 import { X } from "lucide-react"
 import { cny } from "@/lib/branch/money-format"
+import { ledgerMonthConfirmed } from "@/lib/branch/computations/revenue-core"
 
 export interface DealModalDeal {
   id: string
@@ -23,6 +24,8 @@ export interface DealModalDeal {
   firstPayment?: string | null
   monthlyPayments?: Record<string, number>
   monthlyRed?: Record<string, boolean>
+  monthlyConfirmed?: Record<string, number>
+  monthlyHighConfidence?: Record<string, number>
   loadingDetail?: boolean
 }
 
@@ -78,10 +81,14 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
         .filter(([, v]) => Number(v) !== 0)
         .sort(([a], [b]) => a.localeCompare(b))
     : []
-  const confirmedSum = monthlyEntries.reduce((s, [ym, v]) => {
-    const isRed = deal.monthlyRed?.[ym]
-    return s + (isRed === false ? 0 : Number(v))
-  }, 0)
+  // 월별 확정 금액은 rev-confirmed 캐논 단일 산식(revenue-core) — 이전의 'red 미표시=확정'
+  // 휴리스틱은 무색상 미래 월까지 확정으로 부풀리고 부분 확정 금액을 무시해
+  // summary·장부(같은 캐논 소비)와 숫자가 어긋났다.
+  const monthlyConfidence = monthlyEntries.map(([ym, v]) => {
+    const amount = Number(v)
+    return { ym, amount, confirmedAmount: ledgerMonthConfirmed(deal, ym, amount) }
+  })
+  const confirmedSum = monthlyConfidence.reduce((s, m) => s + m.confirmedAmount, 0)
   const targetVal = deal.contractTarget ?? null
 
   return (
@@ -223,9 +230,9 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
               </div>
             ) : (
               <ul className="max-h-[260px] overflow-y-auto px-1.5 py-1.5">
-                {monthlyEntries.map(([ym, v]) => {
-                  const isRed = deal.monthlyRed?.[ym]
-                  const confirmed = isRed === false ? false : true
+                {monthlyConfidence.map(({ ym, amount, confirmedAmount }) => {
+                  // 헤더 확정 합계와 같은 캐논 값에서 파생 — 확정분이 1원이라도 있으면 확정 도트.
+                  const confirmed = confirmedAmount > 0
                   return (
                     <li key={ym}
                       className="flex items-center justify-between rounded px-1.5 py-1 text-[12px] hover:bg-[#FAFAF8]">
@@ -233,9 +240,12 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
                         <span className={`h-1.5 w-1.5 rounded-full ${confirmed ? "bg-[#B43E3E]" : "bg-[#A8741A]"}`} aria-hidden="true" />
                         <span className="font-mono text-[11.5px] text-[#615D59]">{ym}</span>
                         {!confirmed && <span className="text-[10px] font-semibold text-[#A8741A]">미확정</span>}
+                        {confirmed && confirmedAmount < amount && (
+                          <span className="text-[10px] font-semibold text-[#A8741A]">부분 ¥{cny(confirmedAmount)}</span>
+                        )}
                       </span>
                       <span className={`font-bold ${confirmed ? "text-[#111110]" : "text-[#615D59]"}`}>
-                        ¥{cny(Number(v))}
+                        ¥{cny(amount)}
                       </span>
                     </li>
                   )

@@ -1,6 +1,7 @@
 "use client"
 
 import { Target } from "lucide-react"
+import { ProgressRoadmap } from "../viz/ProgressRoadmap"
 
 const KRW = new Intl.NumberFormat("ko-KR")
 const KRW_CURRENCY = new Intl.NumberFormat("ko-KR", {
@@ -9,25 +10,6 @@ const KRW_CURRENCY = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 0,
 })
 const won = (n: number | null | undefined) => (n == null ? "—" : KRW_CURRENCY.format(Math.round(n)))
-
-/** Achieved percentage of `actual` against `target`. Returns null when no usable target. */
-function achievedPct(actual: number, target: number | null | undefined): number | null {
-  if (target == null || target <= 0) return null
-  return (actual / target) * 100
-}
-
-/** Color for an achievement %: green >=100, terracotta <50, neutral otherwise. */
-function pctColor(pct: number | null): string {
-  if (pct == null) return "#84827a"
-  if (pct >= 100) return "#084734"
-  if (pct < 50) return "#B85C33"
-  return "#1a1a1a"
-}
-
-function pctLabel(pct: number | null): string {
-  if (pct == null) return "—"
-  return `${Math.round(pct)}%`
-}
 
 export interface GoalEventRow {
   id: string
@@ -46,78 +28,11 @@ export interface GoalProgressPanelProps {
   perEvent: GoalEventRow[]
 }
 
-function Meter({
-  label,
-  actualText,
-  targetText,
-  pct,
-}: {
-  label: string
-  actualText: string
-  targetText: string
-  pct: number | null
-}) {
-  const color = pctColor(pct)
-  const fillWidth = pct == null ? 0 : Math.min(pct, 100)
-
-  return (
-    <div className="rounded-xl bg-[#fafaf8] p-4">
-      <div className="flex items-start justify-between">
-        <p className="text-[10px] uppercase tracking-[0.18em] text-[#1a1a1a]/35">{label}</p>
-        <span className="text-[12px] font-bold tabular-nums" style={{ color }}>
-          {pctLabel(pct)}
-        </span>
-      </div>
-      <p className="mt-1 text-[22px] font-bold tracking-[-0.02em] tabular-nums text-[#111110]">
-        {actualText}
-      </p>
-      <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40 tabular-nums">목표 {targetText}</p>
-      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#f0f0ec]">
-        <div
-          className="h-full rounded-full transition-all"
-          style={{ width: `${fillWidth}%`, backgroundColor: color }}
-        />
-      </div>
-    </div>
-  )
-}
-
-function MiniBar({
-  label,
-  pct,
-}: {
-  label: string
-  pct: number | null
-}) {
-  const color = pctColor(pct)
-  const fillWidth = pct == null ? 0 : Math.min(pct, 100)
-
-  return (
-    <div className="flex items-center gap-2">
-      <span className="w-7 shrink-0 text-[10px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
-        {label}
-      </span>
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#f0f0ec]">
-        <div
-          className="h-full rounded-full"
-          style={{ width: `${fillWidth}%`, backgroundColor: color }}
-        />
-      </div>
-      <span className="w-9 shrink-0 text-right text-[11px] font-semibold tabular-nums" style={{ color }}>
-        {pctLabel(pct)}
-      </span>
-    </div>
-  )
-}
-
 export function GoalProgressPanel({ leads, revenue, perEvent }: GoalProgressPanelProps) {
   const rows = perEvent.filter(
     (e) => e.targetLeads != null || e.targetRevenue != null,
   )
   const hasAnyTarget = leads.target > 0 || revenue.target > 0 || rows.length > 0
-
-  const leadsPct = achievedPct(leads.actual, leads.target)
-  const revenuePct = achievedPct(revenue.actual, revenue.target)
 
   return (
     <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
@@ -141,17 +56,21 @@ export function GoalProgressPanel({ leads, revenue, perEvent }: GoalProgressPane
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Meter
+            <ProgressRoadmap
+              variant="meter"
               label="리드 목표"
-              actualText={KRW.format(Math.round(leads.actual))}
-              targetText={leads.target > 0 ? KRW.format(Math.round(leads.target)) : "—"}
-              pct={leadsPct}
+              actual={leads.actual}
+              goal={leads.target}
+              formatValue={(n) => KRW.format(Math.round(n))}
+              prefix=""
             />
-            <Meter
+            <ProgressRoadmap
+              variant="meter"
               label="매출 목표"
-              actualText={won(revenue.actual)}
-              targetText={revenue.target > 0 ? won(revenue.target) : "—"}
-              pct={revenuePct}
+              actual={revenue.actual}
+              goal={revenue.target}
+              formatValue={won}
+              prefix=""
             />
           </div>
 
@@ -162,8 +81,6 @@ export function GoalProgressPanel({ leads, revenue, perEvent }: GoalProgressPane
               </p>
               <ul className="divide-y divide-[#f0f0ec]">
                 {rows.slice(0, 6).map((event) => {
-                  const ep = achievedPct(event.actualLeads, event.targetLeads)
-                  const rp = achievedPct(event.actualRevenue, event.targetRevenue)
                   return (
                     <li
                       key={event.id}
@@ -173,8 +90,18 @@ export function GoalProgressPanel({ leads, revenue, perEvent }: GoalProgressPane
                         {event.title}
                       </p>
                       <div className="flex flex-col gap-1.5">
-                        <MiniBar label="리드" pct={ep} />
-                        <MiniBar label="매출" pct={rp} />
+                        <ProgressRoadmap
+                          variant="mini"
+                          label="리드"
+                          actual={event.actualLeads}
+                          goal={event.targetLeads ?? 0}
+                        />
+                        <ProgressRoadmap
+                          variant="mini"
+                          label="매출"
+                          actual={event.actualRevenue}
+                          goal={event.targetRevenue ?? 0}
+                        />
                       </div>
                     </li>
                   )

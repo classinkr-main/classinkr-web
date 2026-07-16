@@ -243,7 +243,7 @@ export default function CrmPriorityQueuePanel({
                 key={filter.key}
                 type="button"
                 onClick={() => setSource(filter.key)}
-                className={`h-7 rounded-md px-3 text-[12px] font-semibold transition-colors ${
+                className={`h-7 whitespace-nowrap rounded-md px-3 text-[12px] font-semibold transition-colors ${
                   source === filter.key
                     ? "bg-[#111110] text-white"
                     : "text-[#1a1a1a]/55 hover:bg-white hover:text-[#111110]"

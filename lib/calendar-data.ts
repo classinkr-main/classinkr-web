@@ -13,17 +13,19 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import { atomicWriteJsonSync } from "@/lib/atomic-write"
+import { assertLocalJsonWriteAllowed } from "@/lib/server/runtime-persistence"
 import {
   getEffectivePublicEventEndIso,
   getPublicEventDatePart,
 } from "@/lib/public-event-dates"
 import { getNotionMarketingCalendarEvents } from "@/lib/notion-marketing-calendar"
 import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
+import { getTeamEventsCalendarEvents } from "@/lib/team-member-calendars"
 
 const FILE = path.join(process.cwd(), "data", "calendar-events.json")
 
 export type EventType = "team" | "deadline" | "meeting" | "launch" | "holiday" | "other"
-export type EventSource = "calendar" | "partner" | "event" | "notion" | "showroom"
+export type EventSource = "calendar" | "partner" | "event" | "notion" | "showroom" | "team_event"
 
 export interface CalendarEvent {
   id: string
@@ -117,6 +119,7 @@ function read(): CalendarEvent[] {
 }
 
 function write(data: CalendarEvent[]) {
+  assertLocalJsonWriteAllowed("admin-calendar")
   atomicWriteJsonSync(FILE, data)
 }
 
@@ -410,24 +413,26 @@ async function getPublicEventsAsCalendarEvents(): Promise<CalendarEvent[]> {
 }
 
 export async function getAllEvents(): Promise<CalendarEvent[]> {
-  const [partnerEvents, publicEvents, notionEvents, showroomEvents] = await Promise.all([
+  const [partnerEvents, publicEvents, notionEvents, showroomEvents, teamEventEvents] = await Promise.all([
     getPartnerCalendarEvents(),
     getPublicEventsAsCalendarEvents(),
     getNotionMarketingCalendarEvents(),
     getShowroomCalendarEvents(),
+    getTeamEventsCalendarEvents(),
   ])
-  return [...getStoredEvents(), ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents].sort(compareEvents)
+  return [...getStoredEvents(), ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents, ...teamEventEvents].sort(compareEvents)
 }
 
 export async function getEventsByMonth(year: number, month: number): Promise<CalendarEvent[]> {
-  const [partnerEvents, publicEvents, notionEvents, showroomEvents] = await Promise.all([
+  const [partnerEvents, publicEvents, notionEvents, showroomEvents, teamEventEvents] = await Promise.all([
     getPartnerCalendarEvents({ year, month }),
     getPublicEventsAsCalendarEvents(),
     getNotionMarketingCalendarEvents({ year, month }),
     getShowroomCalendarEvents({ year, month }),
+    getTeamEventsCalendarEvents({ year, month }),
   ])
   const prefix = `${year}-${String(month).padStart(2, "0")}`
-  return [...getStoredEvents(), ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents]
+  return [...getStoredEvents(), ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents, ...teamEventEvents]
     .filter((event) => isEventVisibleInMonth(event, year, month) || event.date.startsWith(prefix))
     .sort(compareEvents)
 }
@@ -518,6 +523,7 @@ async function syncStoredEventWithGoogle(event: CalendarEvent): Promise<Calendar
 export async function createEvent(
   data: StoredCalendarEventInput
 ): Promise<CalendarEvent> {
+  assertLocalJsonWriteAllowed("admin-calendar")
   const events = read()
   const now = new Date().toISOString()
   const event: CalendarEvent = {
@@ -536,6 +542,7 @@ export async function updateEvent(
   id: string,
   patch: Partial<StoredCalendarEventInput>
 ): Promise<CalendarEvent | null> {
+  assertLocalJsonWriteAllowed("admin-calendar")
   const events = read()
   const idx = events.findIndex((e) => e.id === id)
   if (idx === -1) return null
@@ -551,6 +558,7 @@ export async function updateEvent(
 }
 
 export async function deleteEvent(id: string): Promise<boolean> {
+  assertLocalJsonWriteAllowed("admin-calendar")
   const events = read()
   const current = events.find((event) => event.id === id)
   if (!current) return false

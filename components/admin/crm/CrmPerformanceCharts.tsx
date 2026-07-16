@@ -1,13 +1,13 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Bar, BarChart, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { formatCNY } from "@/lib/crm/money-format"
 import { projectMonthEnd, kstMonthProgressRatio } from "@/lib/crm/forecast"
-import { ChartTooltip } from "../viz/ChartTheme"
-import { CHART, axisTick, cursorLine } from "../viz/theme"
+import { ComparisonBarChart } from "../viz/ComparisonBarChart"
+import { RankedHorizontalBars } from "../viz/RankedHorizontalBars"
+import { CHART } from "../viz/theme"
 
 // 현황 성과 분석 — CRM 매출 데이터(팀/개인/월)를 KR팀탭 수준 차트로. Recharts 별도 모듈(지연 로드).
 interface PerfGroup {
@@ -41,14 +41,16 @@ function PerfBars({ title, rows }: { title: string; rows: { name: string; total:
   return (
     <div>
       <p className="mb-1 text-[12px] font-semibold text-[#1a1a1a]/45">{title}</p>
-      <ResponsiveContainer width="100%" height={Math.max(120, rows.length * 30)}>
-        <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 36, bottom: 0, left: 8 }}>
-          <XAxis type="number" hide />
-          <YAxis type="category" dataKey="name" width={64} tick={axisTick} axisLine={false} tickLine={false} />
-          <Tooltip content={<ChartTooltip />} cursor={cursorLine} />
-          <Bar dataKey="total" fill={CHART.brand} radius={[0, 4, 4, 0]} barSize={16} />
-        </BarChart>
-      </ResponsiveContainer>
+      <RankedHorizontalBars
+        rows={rows}
+        labelKey="name"
+        valueKey="total"
+        height={Math.max(120, rows.length * 30)}
+        barSize={16}
+        labelWidth={64}
+        tooltipVariant="light"
+        showValueAxis={false}
+      />
     </div>
   )
 }
@@ -231,36 +233,21 @@ export default function CrmPerformanceCharts() {
             {targetError ? <p className="text-[10px] font-medium text-[#B85C33]">{targetError}</p> : null}
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={170}>
-          <BarChart data={trend} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
-            <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-            <YAxis
-              tick={axisTick}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(value) => `¥${fmtMan(Number(value))}`}
-              width={48}
-              domain={yTop != null ? [0, yTop] : undefined}
-            />
-            <Tooltip content={<ChartTooltip />} cursor={cursorLine} />
-            {/* 당월(마지막 막대)만 진한 브랜드색으로 강조, 이전 달은 옅은 그린 */}
-            <Bar dataKey="revenue" radius={[5, 5, 0, 0]} maxBarSize={36}>
-              {trend.map((entry, index) => (
-                <Cell key={entry.label} fill={index === trend.length - 1 ? CHART.brand : "#cfe3d8"} />
-              ))}
-            </Bar>
-            {/* 월 매출 목표선 — 목표가 설정된 경우에만(crm_revenue_target). 통화 CNY. */}
-            {target != null ? (
-              <ReferenceLine
-                y={target}
-                stroke="#B85C33"
-                strokeDasharray="4 4"
-                strokeWidth={1.5}
-                label={{ value: `목표 ¥${fmtMan(target)}`, position: "insideTopRight", fontSize: 10, fill: "#B85C33" }}
-              />
-            ) : null}
-          </BarChart>
-        </ResponsiveContainer>
+        <ComparisonBarChart
+          data={trend}
+          xKey="label"
+          bars={[{ key: "revenue", label: "매출", color: CHART.brand }]}
+          height={170}
+          maxBarSize={36}
+          tooltipVariant="light"
+          leftMargin={-8}
+          leftDomain={yTop != null ? [0, yTop] : undefined}
+          formatLeftTick={(value) => `¥${fmtMan(value)}`}
+          // 당월(마지막 막대)만 진한 브랜드색으로 강조, 이전 달은 옅은 그린
+          cellColor={(_row, index) => (index === trend.length - 1 ? CHART.brand : "#cfe3d8")}
+          goalValue={target ?? undefined}
+          formatGoalLabel={(value) => `목표 ¥${fmtMan(value)}`}
+        />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <PerfBars title="팀별 매출 (¥)" rows={teams} />

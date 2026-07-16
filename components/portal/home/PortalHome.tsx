@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  FileText,
   Loader2,
 } from "lucide-react"
 import { CustomerDialog } from "@/components/portal/crud/CustomerDialog"
@@ -674,6 +675,15 @@ export function PortalHome(props: PortalHomeProps = {}) {
     () => ({ ...DEFAULT_LINK_TARGETS, ...(props.linkTargets ?? {}) }),
     [props.linkTargets],
   )
+  const adminView = props.adminView ?? false
+  // 어드민 딜 카드 → 견적 작성기 프리필 딥링크. 파트너 포털에서는 /admin 경로가 없으므로 null.
+  const buildQuoteFromDealHref = useCallback(
+    (dealId: string) =>
+      adminView
+        ? `/admin/quotes?tab=hardware&action=new&dealId=${encodeURIComponent(dealId)}`
+        : null,
+    [adminView],
+  )
   const [realOverview, setRealOverview] = useState<PortalOverviewPayload>(EMPTY_OVERVIEW)
   const [loading, setLoading]   = useState(true)
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set(["c1"]))
@@ -1232,7 +1242,9 @@ export function PortalHome(props: PortalHomeProps = {}) {
                               {fmt(pipeline["quote"].reduce((s, d) => s + (d.contracted_amount || d.expected_amount), 0))}
                             </p>
                           </div>
-                          {pipeline["quote"].map(deal => (
+                          {pipeline["quote"].map(deal => {
+                            const quoteHref = deal._dummy ? null : buildQuoteFromDealHref(deal.id)
+                            return (
                             <div
                               key={deal.id}
                               className={`flex items-center justify-between gap-2 rounded-xl border border-[#ece4d8] bg-[#faf6ef] px-3 py-2.5 ${deal._dummy ? DUMMY_CARD_CLS : ""}`}
@@ -1244,11 +1256,25 @@ export function PortalHome(props: PortalHomeProps = {}) {
                                 </p>
                                 <p className="mt-0.5 truncate text-xs text-[#1a1a1a]/45">{deal.customer_name}</p>
                               </div>
-                              <span className="shrink-0 text-sm font-semibold text-[#111110]">
-                                {fmt(deal.contracted_amount || deal.expected_amount)}
-                              </span>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <span className="text-sm font-semibold text-[#111110]">
+                                  {fmt(deal.contracted_amount || deal.expected_amount)}
+                                </span>
+                                {quoteHref && (
+                                  <Link
+                                    href={quoteHref}
+                                    onClick={e => e.stopPropagation()}
+                                    className="inline-flex items-center gap-1 rounded-lg border border-[#084734]/20 bg-white px-2 py-1 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
+                                    title="이 딜로 견적 만들기"
+                                  >
+                                    <FileText className="h-3 w-3" />
+                                    견적
+                                  </Link>
+                                )}
+                              </div>
                             </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       )}
                     </div>

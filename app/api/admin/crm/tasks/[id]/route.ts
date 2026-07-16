@@ -5,7 +5,6 @@ import { findAdminCrmOwner, listAdminUserDirectory } from "@/lib/repositories/ad
 import {
   cancelCrmTask,
   completeCrmTask,
-  deleteCrmTask,
   getCrmTaskById,
   isCrmTasksNotReadyError,
   reassignCrmTask,
@@ -110,11 +109,17 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
   const { id } = await params
+  const actor = adminActorName(admin)
 
   try {
-    const deleted = await deleteCrmTask(id)
-    if (!deleted) return NextResponse.json({ error: "Task not found" }, { status: 404 })
-    return NextResponse.json({ ok: true })
+    // Keep DELETE for existing clients, but make it reversible. A canceled
+    // task can be restored through PATCH { action: "reopen" }.
+    const task = await cancelCrmTask(id, {
+      outcome: "사용자 삭제 요청으로 보관됨",
+      completedBy: actor,
+    })
+    if (!task) return NextResponse.json({ error: "Task not found" }, { status: 404 })
+    return NextResponse.json({ ok: true, recoverable: true, task })
   } catch (error) {
     console.error(`[DELETE /api/admin/crm/tasks/${id}]`, error)
     return notReadyResponse(error) ?? NextResponse.json({ error: "Failed to delete CRM task" }, { status: 500 })

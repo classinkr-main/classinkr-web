@@ -21,6 +21,7 @@
     "import:cs-figma-assets": "node scripts/import-cs-figma-assets.mjs",
     "check:cs-figma-assets": "node scripts/check-cs-figma-assets.mjs",
     "check:alpha-db": "npx tsx scripts/check-alpha-db.ts",
+    "check:admin-rbac": "npx tsx scripts/check-admin-rbac-readiness.ts",
     "sync:channel-docs": "npx tsx scripts/sync-channel-documents.ts"
   },
   "dependencies": {

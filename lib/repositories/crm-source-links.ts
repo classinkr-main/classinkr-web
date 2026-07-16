@@ -2,6 +2,7 @@ import "server-only"
 
 import {
   getBranchRevSourceRecordKey,
+  isInactiveSheetStatus,
   isPlaceholderCrmName,
   normalizeCrmName,
   normalizeCrmOwnerName,
@@ -176,7 +177,6 @@ interface AutoConfirmDecision {
   evidence: string[]
 }
 
-const SHEET_INACTIVE_PATTERN = /취소|해지|드랍|드롭|중단|보류|cancel|drop|lost/i
 const MIN_CONFIDENCE = 0.72
 const MIN_EVIDENCE_REVIEW_CONFIDENCE = 0.45
 const MAX_CANDIDATES_PER_SOURCE = 5
@@ -598,7 +598,7 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
 
   const sheetDeals = ((sheetResult.data ?? []) as BranchRevCandidateSource[]).filter(
     (deal) =>
-      !SHEET_INACTIVE_PATTERN.test(deal.status ?? "") &&
+      !isInactiveSheetStatus(deal.status) &&
       // HW/SW/MKT 접두 임시 고객은 후순위 — 후보 생성/자동 확정 대상에서 제외
       !isPlaceholderCrmName(deal.customer_name)
   )
@@ -1167,7 +1167,9 @@ export async function getCrmSourceLinkCoverage(): Promise<{
       sb
         .from("crm_source_links")
         .select("id", { count: "exact", head: true })
-        .in("status", ["active", "confirmed"]),
+        // crm_source_link_status enum에는 'active'가 없다 — 'active'를 넣으면 enum 캐스팅
+        // 에러로 쿼리 전체가 죽고, 아래 에러 가드가 삼켜 커버리지가 상시 0%로 보인다.
+        .eq("status", "confirmed"),
       sb
         .from("crm_source_links")
         .select("id", { count: "exact", head: true })

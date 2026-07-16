@@ -6,6 +6,7 @@ import {
   ADMIN_AUTH_ERROR_CODE,
   type AdminAuthErrorCode,
 } from "@/lib/admin-auth-errors"
+import type { AdminCapability } from "@/lib/admin-capabilities"
 import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
 import type { AdminProfile, Database } from "@/lib/supabase/database.types"
 import {
@@ -46,6 +47,13 @@ export interface VerifiedAdminContext {
   name?: string
   branch?: string
   userId?: string
+  capabilities: readonly string[]
+}
+
+export interface AdminActorSnapshot {
+  actor_user_id: string | null
+  actor_display_name: string
+  actor_role: string
 }
 
 export type AdminApiRole =
@@ -56,17 +64,36 @@ export type AdminApiRole =
   | "PARTNER"
   | "BRANCH"
 
-const DEFAULT_ADMIN_API_ROLES: readonly AdminApiRole[] = ["SUPER_ADMIN", "ADMIN"]
+export const STAFF_ADMIN_API_ROLES: readonly AdminApiRole[] = ["SUPER_ADMIN", "ADMIN"]
 export const BRANCH_READ_ADMIN_API_ROLES: readonly AdminApiRole[] = [
   "SUPER_ADMIN",
   "ADMIN",
   "BRANCH",
+  "EDITOR",
+  "VIEWER",
 ]
 export const CRM_STAFF_ADMIN_API_ROLES: readonly AdminApiRole[] = [
   "SUPER_ADMIN",
   "ADMIN",
   "BRANCH",
+  // 운영 DB의 기존 팀원 8명이 EDITOR인 전환기 호환. RBAC 마이그레이션 후 ADMIN으로 수렴한다.
+  "EDITOR",
 ]
+
+// 하드웨어 일반 편집은 모든 내부 운영 계정에 허용한다. 출고 확정·원장 취소처럼
+// 되돌리기 비용이 큰 동작만 hardware.finalize capability로 한 단계 더 제한한다.
+export const HARDWARE_EDITOR_ADMIN_API_ROLES: readonly AdminApiRole[] = [
+  "SUPER_ADMIN",
+  "ADMIN",
+  "BRANCH",
+  "EDITOR",
+]
+
+export const HARDWARE_FINALIZE_CAPABILITY: AdminCapability = "hardware.finalize"
+
+export function isLegacyAdminAuthEnabled() {
+  return process.env.NODE_ENV !== "production"
+}
 
 interface UserRecord {
   name: string
@@ -135,6 +162,10 @@ function getAllUsers(): AdminUsersResult {
 }
 
 export function authenticateUser(password: string): AuthResult {
+  if (!isLegacyAdminAuthEnabled()) {
+    return { session: null, code: ADMIN_AUTH_ERROR_CODE.LEGACY_DISABLED }
+  }
+
   const { users, code } = getAllUsers()
   if (code) return { session: null, code }
 
@@ -172,7 +203,7 @@ export function normalizeAdminApiRole(role: string): AdminApiRole | null {
 
 export function hasAdminApiRole(
   role: string,
-  allowedRoles: readonly AdminApiRole[] = DEFAULT_ADMIN_API_ROLES
+  allowedRoles: readonly AdminApiRole[] = STAFF_ADMIN_API_ROLES
 ) {
   const normalized = normalizeAdminApiRole(role)
   return normalized != null && allowedRoles.includes(normalized)
@@ -180,6 +211,10 @@ export function hasAdminApiRole(
 
 function isUnsafeMethod(method: string) {
   return !["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase())
+}
+
+export function defaultAdminApiRolesForMethod(method: string) {
+  return isUnsafeMethod(method) ? STAFF_ADMIN_API_ROLES : BRANCH_READ_ADMIN_API_ROLES
 }
 
 function sameOrigin(value: string | null, expectedOrigin: string) {
@@ -254,6 +289,8 @@ export function decodeSession(cookie: string): AdminSession | null {
 }
 
 function getLegacyAdminContext(req: NextRequest): VerifiedAdminContext | null {
+  if (!isLegacyAdminAuthEnabled()) return null
+
   const cookie = req.cookies.get("admin_session")?.value
   if (!cookie) return null
 
@@ -265,6 +302,7 @@ function getLegacyAdminContext(req: NextRequest): VerifiedAdminContext | null {
     role: session.role,
     name: session.name,
     branch: session.branch,
+    capabilities: [],
   }
 }
 
@@ -339,7 +377,7 @@ async function fetchSupabaseAdminContext(
 
   const { data: profile, error: profileError } = await supabase
     .from("admin_profiles")
-    .select("user_id, display_name, role, status")
+    .select("user_id, display_name, role, status, capabilities")
     .eq("user_id", user.id)
     .single()
 
@@ -347,7 +385,7 @@ async function fetchSupabaseAdminContext(
 
   const adminProfile = profile as Pick<
     AdminProfile,
-    "user_id" | "display_name" | "role" | "status"
+    "user_id" | "display_name" | "role" | "status" | "capabilities"
   >
   if (adminProfile.status !== "ACTIVE") return null
 
@@ -356,6 +394,7 @@ async function fetchSupabaseAdminContext(
     role: adminProfile.role,
     name: adminProfile.display_name,
     userId: adminProfile.user_id,
+    capabilities: adminProfile.capabilities,
   }
 }
 
@@ -363,18 +402,46 @@ export async function getVerifiedAdminContext(
   req: NextRequest
 ): Promise<VerifiedAdminContext | null> {
   if (isAdminAuthBypassEnabled()) {
-    return { source: "bypass", role: "SUPER_ADMIN", name: "Dev" }
+    return { source: "bypass", role: "SUPER_ADMIN", name: "Dev", capabilities: [] }
   }
 
-  const legacy = getLegacyAdminContext(req)
-  if (legacy) return legacy
+  const supabase = await getSupabaseAdminContext(req)
+  if (supabase) return supabase
 
-  return getSupabaseAdminContext(req)
+  return getLegacyAdminContext(req)
+}
+
+export function hasAdminCapability(
+  admin: Pick<VerifiedAdminContext, "role" | "capabilities">,
+  capability: string
+) {
+  return normalizeAdminApiRole(admin.role) === "SUPER_ADMIN" || admin.capabilities?.includes(capability) === true
+}
+
+export function requireAdminCapability(
+  admin: Pick<VerifiedAdminContext, "role" | "capabilities">,
+  capability: string
+): NextResponse | undefined {
+  if (hasAdminCapability(admin, capability)) return undefined
+  return NextResponse.json(
+    { error: "Forbidden", requiredCapability: capability },
+    { status: 403 }
+  )
+}
+
+export function toAdminActorSnapshot(
+  admin: Pick<VerifiedAdminContext, "userId" | "name" | "role">
+): AdminActorSnapshot {
+  return {
+    actor_user_id: admin.userId ?? null,
+    actor_display_name: admin.name?.trim() || "Unknown admin",
+    actor_role: normalizeAdminApiRole(admin.role) ?? admin.role.trim().toUpperCase(),
+  }
 }
 
 export async function verifyAdmin(
   req: NextRequest,
-  allowedRoles: readonly AdminApiRole[] = DEFAULT_ADMIN_API_ROLES
+  allowedRoles?: readonly AdminApiRole[]
 ): Promise<NextResponse | undefined> {
   const originError = verifySameOriginRequest(req)
   if (originError) return originError
@@ -384,7 +451,8 @@ export async function verifyAdmin(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  if (!hasAdminApiRole(admin.role, allowedRoles)) {
+  const effectiveRoles = allowedRoles ?? defaultAdminApiRolesForMethod(req.method)
+  if (!hasAdminApiRole(admin.role, effectiveRoles)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
@@ -393,7 +461,7 @@ export async function verifyAdmin(
 
 export async function requireVerifiedAdminContext(
   req: NextRequest,
-  allowedRoles: readonly AdminApiRole[] = DEFAULT_ADMIN_API_ROLES
+  allowedRoles?: readonly AdminApiRole[]
 ): Promise<VerifiedAdminContext | NextResponse> {
   const originError = verifySameOriginRequest(req)
   if (originError) return originError
@@ -403,7 +471,8 @@ export async function requireVerifiedAdminContext(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  if (!hasAdminApiRole(admin.role, allowedRoles)) {
+  const effectiveRoles = allowedRoles ?? defaultAdminApiRolesForMethod(req.method)
+  if (!hasAdminApiRole(admin.role, effectiveRoles)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 

@@ -4,8 +4,11 @@ import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
+  ClipboardPaste,
+  LayoutDashboard,
   LogOut,
   Menu,
   MoreHorizontal,
@@ -33,11 +36,6 @@ import {
 
 // hover warm-up은 페이지가 실제 호출하는 URL과 캐시 키(쿼리스트링 포함)가 완전히 같아야 적중한다.
 // 날짜 파라미터가 붙는 URL은 hover 시점에 페이지와 같은 계산식으로 만들어야 하므로 함수 항목을 허용한다.
-
-// /admin/chatbot 페이지의 dateOnlyOffset(days)와 동일한 계산식 (기본 기간 30일).
-function chatbotStatsFromDate(days = 30) {
-  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-}
 
 // /admin/overview 대시보드와 동일한 계산식 — 현재 월 + (7일 뒤가 다른 달에 걸치면) 그 달.
 function overviewCalendarUrls() {
@@ -80,28 +78,10 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/events",
     "/api/admin/crm/capture/batches",
   ],
-  "/admin/crm/deals": [
-    "/api/admin/crm/revenue?months=6",
-    "/api/admin/crm/readiness",
-  ],
-  "/admin/crm/deals/rev-sheet": [
-    "/api/admin/crm/revenue-sheet",
-  ],
-  "/admin/crm/deals/orders": [
-    "/api/portal/overview?shape=partner",
-  ],
-  "/admin/crm/deals/kpi": [
-    "/api/admin/crm/revenue?months=6",
-    "/api/portal/overview?shape=partner",
-  ],
+  // 검수 탭(href=/admin/crm/matching)만 warm — deals·insights는 nav에서 내려가 죽은 키라 제거.
   "/admin/crm/matching": [
     "/api/admin/crm/matching",
     "/api/admin/crm/overview",
-  ],
-  "/admin/crm/insights": [
-    "/api/admin/crm/insights",
-    "/api/admin/crm/action-kpis",
-    "/api/admin/crm/lead-channels",
   ],
   "/admin/channel-talk": ["/api/admin/channel-talk", "/api/admin/channel-talk/mine"],
   "/admin/calendar": () => {
@@ -116,10 +96,7 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/events",
     "/api/admin/event-metrics",
     "/api/admin/meta/campaigns?datePreset=last_30d&limit=50",
-  ],
-  "/admin/marketing": [
-    "/api/admin/subscribers",
-    "/api/admin/email",
+    // 메시지 발송 허브(구 /admin/marketing)가 캠페인 탭으로 흡수되며 채널 상태도 함께 데운다.
     "/api/admin/messaging/status",
   ],
   "/admin/lead-magnets": [
@@ -128,13 +105,6 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
   ],
   "/admin/blog": ["/api/admin/blog", "/api/admin/blog?trash=1"],
   "/admin/events": ["/api/admin/events"],
-  "/admin/chatbot": () => [
-    // 챗봇 페이지 기본 기간(30일)의 from 쿼리와 캐시 키를 맞춘다.
-    `/api/admin/chatbot/stats?from=${chatbotStatsFromDate()}`,
-    "/api/admin/chatbot/questions?limit=10",
-    "/api/admin/docs/analytics?days=30",
-    "/api/admin/docs/alpha-readiness",
-  ],
   "/admin/docs": [
     "/api/admin/docs",
     "/api/admin/docs/analytics?days=30",
@@ -143,9 +113,11 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/docs/alpha-readiness",
   ],
   // 문서 보강 큐 nav 항목은 탭 딥링크(/admin/docs?tab=gaps)를 직접 가리킨다 — warm 키도 href와 동일해야 적중.
+  // 챗봇 운영 대시보드 흡수 후 DocsGapsPanel이 /api/admin/chatbot/stats(질문 패턴)도 읽으므로 함께 데운다.
   "/admin/docs?tab=gaps": [
     "/api/admin/docs/alpha-readiness",
     "/api/admin/docs/gaps",
+    "/api/admin/chatbot/stats",
   ],
   "/admin/branch": [
     "/api/admin/branch/summary?team=ALL&period=Q",
@@ -177,8 +149,8 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/automation/rules",
     "/api/admin/automation/logs",
   ],
-  "/admin/settings": ["/api/admin/settings"],
-  "/admin/users": ["/api/admin/users"],
+  // 회원 관리는 Settings "회원" 탭으로 흡수됨 — Settings warm-up에 회원 디렉터리도 함께 데운다.
+  "/admin/settings": ["/api/admin/settings", "/api/admin/users"],
   "/admin/dev": ["/api/admin/roadmap", "/api/admin/bugs", "/api/admin/patch-notes"],
 }
 
@@ -194,12 +166,38 @@ const CRM_SEGMENTS: Array<{ view: string; label: string }> = [
   { view: "upsell", label: "업셀 후보" },
 ]
 
-const MOBILE_PRIMARY_HREFS = [
-  "/admin/overview",
-  "/admin/crm",
-  "/admin/quotes",
-  "/admin/chatbot",
-] as const
+// 현장 사용 빈도를 기준으로 모바일은 오늘 현황·CRM·일정·입력에 집중한다.
+// 견적과 나머지 운영 화면은 More의 전체 메뉴에서 그대로 접근할 수 있다.
+const MOBILE_PRIMARY_NAV: AdminNavItem[] = [
+  {
+    href: "/admin/overview",
+    label: "Overview",
+    icon: LayoutDashboard,
+    roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"],
+    section: "home",
+  },
+  {
+    href: "/admin/crm",
+    label: "CRM",
+    icon: Users,
+    roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"],
+    section: "sales",
+  },
+  {
+    href: "/admin/calendar",
+    label: "캘린더",
+    icon: CalendarDays,
+    roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"],
+    section: "sales",
+  },
+  {
+    href: "/admin/crm/capture",
+    label: "입력함",
+    icon: ClipboardPaste,
+    roles: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
+    section: "sales",
+  },
+]
 
 const ROLE_LABEL: Record<AdminRole, string> = {
   SUPER_ADMIN: "최고 관리자",
@@ -351,9 +349,18 @@ function AdminSidebarContent({ role, name, email }: Props) {
     })
   }
   const currentNavItem = visibleNav.find((item) => isNavActive(item.href)) ?? visibleNav[0]
-  const mobilePrimaryNav = MOBILE_PRIMARY_HREFS
-    .map((href) => visibleNav.find((item) => item.href === href))
-    .filter((item): item is AdminNavItem => Boolean(item))
+  const currentCrmChild = inCrm ? CRM_CHILD_NAV.find((item) => item.match(pathname ?? "")) : undefined
+  const mobilePrimaryNav = MOBILE_PRIMARY_NAV.filter((item) => item.roles.includes(normalizedRole))
+  const mobilePrimaryActiveHref = mobilePrimaryNav.reduce<string | null>((bestHref, item) => {
+    const { path, query } = splitNavHref(item.href)
+    const matchesPath = pathname === path || pathname.startsWith(`${path}/`)
+    const matches = matchesPath && (query === null || queryMatches(query))
+    if (!matches) return bestHref
+    if (!bestHref) return item.href
+
+    const bestPath = splitNavHref(bestHref).path
+    return path.length > bestPath.length ? item.href : bestHref
+  }, null)
   const mobileBottomColumns = Math.min(mobilePrimaryNav.length + 1, 5)
   const groupedNav = ADMIN_NAV_SECTIONS.map((section) => ({
     section,
@@ -439,7 +446,7 @@ function AdminSidebarContent({ role, name, email }: Props) {
           Classin Admin
         </p>
         <h1 className="truncate text-[15px] font-semibold text-[#111110]">
-          {currentNavItem?.label ?? "Admin"}
+          {currentCrmChild?.label ?? currentNavItem?.label ?? "Admin"}
         </h1>
       </div>
       {isDesktop === false ? <AdminNotificationsBell placement="inline" /> : null}
@@ -543,11 +550,14 @@ function AdminSidebarContent({ role, name, email }: Props) {
             ) : (
               groupedNav.map(({ section, items }, groupIndex) => (
               <div key={`mobile-${section}`} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
-                <div className="px-3 pb-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
-                    {ADMIN_NAV_SECTION_META[section].label}
-                  </p>
-                </div>
+                {/* home(Overview 단독)은 헤더 없이 최상위에 렌더. */}
+                {section !== "home" && (
+                  <div className="px-3 pb-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
+                      {ADMIN_NAV_SECTION_META[section].label}
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-1">
                   {items.map((item) => {
                     const isActive = isNavActive(item.href)
@@ -611,7 +621,7 @@ function AdminSidebarContent({ role, name, email }: Props) {
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-[#e8e8e4] bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 shadow-[0_-8px_24px_rgba(0,0,0,0.06)] backdrop-blur lg:hidden">
       <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${mobileBottomColumns}, minmax(0, 1fr))` }}>
         {mobilePrimaryNav.map((item) => {
-          const isActive = isNavActive(item.href)
+          const isActive = mobilePrimaryActiveHref === item.href
 
           return (
             <Link
@@ -765,13 +775,11 @@ function AdminSidebarContent({ role, name, email }: Props) {
         ) : (
           groupedNav.map(({ section, items }, groupIndex) => (
           <div key={section} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
-            {!effectiveCollapsed && (
+            {/* home(Overview 단독)은 헤더 없이 최상위에 렌더. 나머지 섹션은 라벨만(부제 미표시). */}
+            {!effectiveCollapsed && section !== "home" && (
               <div className="px-3 pb-2">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
                   {ADMIN_NAV_SECTION_META[section].label}
-                </p>
-                <p className="mt-1 hidden text-[11px] text-[#1a1a1a]/32 sm:block">
-                  {ADMIN_NAV_SECTION_META[section].description}
                 </p>
               </div>
             )}

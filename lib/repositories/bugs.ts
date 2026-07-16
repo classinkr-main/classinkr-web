@@ -18,8 +18,22 @@ type SupabaseLikeError = {
   message?: string;
 };
 
+export function canUseLocalBugJsonFallback(
+  env: Record<string, string | undefined> = process.env
+) {
+  const isHostedRuntime =
+    env.NODE_ENV === "production" ||
+    env.VERCEL === "1" ||
+    Boolean(env.VERCEL_ENV) ||
+    Boolean(env.VERCEL_URL) ||
+    Boolean(env.NEXT_PUBLIC_VERCEL_URL);
+
+  return !isHostedRuntime;
+}
+
 function canUseJsonFallback(error: SupabaseLikeError | null) {
   if (!error) return false;
+  if (!canUseLocalBugJsonFallback()) return false;
   if (error.code && BUG_REPORTS_TABLE_MISSING_CODES.has(error.code)) return true;
   return /bug_reports|schema cache|relation .* does not exist/i.test(error.message ?? "");
 }

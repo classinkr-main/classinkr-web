@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import dynamic from "next/dynamic"
+import Link from "next/link"
 import {
   Users,
   TrendingUp,
@@ -12,7 +13,9 @@ import {
   AlertCircle,
   ArrowUpRight,
   CalendarDays,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Link2,
   Send,
   ShieldAlert,
@@ -30,6 +33,24 @@ import {
   type FunnelStage,
 } from "@/components/admin/viz"
 import type { LeadRecord } from "@/lib/site-settings-types"
+// 파생 로직(신호 판정·집계·우선순위)은 전부 insights 순수 모듈 소유 — 이 컴포넌트는 주입+렌더만.
+import {
+  aggregateLeads,
+  buildOperationalAlerts,
+  computePipelineCoverage,
+  deriveBlogInsights,
+  deriveBugInsights,
+  deriveCampaignInsights,
+  deriveConnections,
+  deriveEventInsights,
+  deriveLatestPatchNote,
+  formatDateShort,
+  formatDateTime,
+  resolveUnrespondedSignal,
+  SOURCE_LABEL,
+  type BranchMonthlySeries,
+  type OverviewSignalTone,
+} from "@/lib/admin/overview/insights"
 import type { AdminIntegrationStatusResponse } from "@/lib/admin-integrations/types"
 import type { CalendarEvent } from "@/lib/calendar-data"
 import type { BlogPost } from "@/lib/blog-types"
@@ -49,41 +70,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
   }
 }
 
-function isValidDate(value?: string) {
-  if (!value) return false
-  return !Number.isNaN(new Date(value).getTime())
-}
-
-function scoreDate(value?: string) {
-  if (!value || !isValidDate(value)) return 0
-  return new Date(value).getTime()
-}
-
-function formatDateShort(value?: string) {
-  if (!value || !isValidDate(value)) return "날짜 없음"
-  return new Intl.DateTimeFormat("ko-KR", { month: "2-digit", day: "2-digit" }).format(new Date(value))
-}
-
-function formatDateTime(value?: string) {
-  if (!value || !isValidDate(value)) return "시간 정보 없음"
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value))
-}
-
-function isWithinNextDays(dateStr: string, days: number) {
-  const start = new Date()
-  start.setHours(0, 0, 0, 0)
-  const end = new Date(start)
-  end.setDate(end.getDate() + days)
-  const target = new Date(`${dateStr}T00:00:00`)
-  return target >= start && target <= end
-}
-
-function statusToneClasses(tone: "neutral" | "info" | "warning" | "danger" | "success") {
+function statusToneClasses(tone: OverviewSignalTone) {
   switch (tone) {
     case "info":
       return "bg-[#ECFDF5] text-[#084734] border-[#D1FAE5]"
@@ -114,12 +101,7 @@ const Sparkline = dynamic(
   () => import("@/components/admin/viz/Sparkline").then((m) => m.Sparkline),
   { ssr: false, loading: () => <div className="h-[30px]" /> }
 )
-const SOURCE_LABEL: Record<string, string> = {
-  demo_modal: "데모 신청",
-  contact_page: "문의",
-  newsletter: "뉴스레터",
-  meta_lead_ads: "Meta 리드",
-}
+// SOURCE_LABEL은 insights 모듈로 이관(pieData 집계와 렌더가 같은 라벨을 공유).
 const STATUS_LABEL: Record<string, string> = {
   new: "신규",
   contacted: "연락중",
@@ -156,17 +138,13 @@ const PUBLISH_STATUS_COLOR: Record<BlogPost["status"], string> = {
 }
 const COMPACT_NUMBER = new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 })
 
-type OverviewOperationalAlert = {
-  id: string
-  scope: string
-  title: string
-  description: string
-  meta: string
-  tone: "neutral" | "info" | "warning" | "danger" | "success"
-  action: string
-  href: string
-  priority: number
-}
+// KPI 스트립 공통 레이아웃 — 모바일은 가로 스냅 스크롤(2+2+1 고아 행 제거), md+는 그리드.
+// Tailwind grid-cols-*는 minmax(0,1fr)라 min-w-0 규약을 만족한다(우측 삐져나옴 방지).
+const KPI_STRIP_CLASS =
+  "flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 md:grid md:snap-none md:grid-cols-3 md:overflow-visible md:pb-0 xl:grid-cols-5"
+// 타일 래퍼 — 모바일은 스냅 카드 폭 고정, md+는 그리드 아이템. 내부 카드/스켈레톤은 높이를 채운다.
+const KPI_TILE_CLASS =
+  "w-[76vw] min-w-[220px] max-w-[280px] shrink-0 snap-start md:w-auto md:min-w-0 md:max-w-none [&>*]:h-full"
 
 interface InstagramOverviewDashboard {
   account: {
@@ -184,14 +162,12 @@ interface InstagramOverviewDashboard {
 // 운영 OS 요약 스트립 전용 (읽기 전용 합성 데이터)
 interface BranchSummaryPayload {
   revenue: { confirmed: number; goal: number; pacing_pct: number }
-  monthly_series: {
-    goal_cum: number[]
-    revenue_cum: number[]
-    revenue_trend_cum: number[]
-  }
+  monthly_series: BranchMonthlySeries
 }
 
+// 미응답 정의의 캐논 원천(action-kpis → getLeadActionStats). 타일·주의신호가 같은 수를 쓴다.
 interface LeadActionKpisPayload {
+  unrespondedCount: number
   unresponded24hCount: number
 }
 
@@ -239,6 +215,7 @@ export default function OverviewPage() {
   const [visitorStats, setVisitorStats] = useState<VisitorStatsPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [chartRange, setChartRange] = useState<7 | 30>(7)
+  const [alertsExpanded, setAlertsExpanded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -334,95 +311,8 @@ export default function OverviewPage() {
     }
   }, [])
 
-  // 리드 파생값을 단일 패스로 집계하고 useMemo로 캐싱한다.
-  // (기존엔 렌더마다 status별 filter + 날짜 파싱을 15회+ 반복)
-  const leadAgg = useMemo(() => {
-    const now = new Date()
-    const todayStr = now.toDateString()
-    const weekAgo = new Date(now)
-    weekAgo.setDate(now.getDate() - 7)
-    const twoWeeksAgo = new Date(now)
-    twoWeeksAgo.setDate(now.getDate() - 14)
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const weekAgoT = weekAgo.getTime()
-    const twoWeeksAgoT = twoWeeksAgo.getTime()
-    const monthStartT = monthStart.getTime()
-    const lastMonthStartT = lastMonthStart.getTime()
-
-    let newLeads = 0
-    let contactedLeads = 0
-    let converted = 0
-    let closedLeads = 0
-    let todayLeads = 0
-    let thisWeekLeads = 0
-    let lastWeekLeads = 0
-    let thisMonthLeads = 0
-    let lastMonthLeads = 0
-    let convertedThisMonth = 0
-    let convertedLastMonth = 0
-    const sourceMap: Record<string, number> = {}
-    const branchMap: Record<string, number> = {}
-    const dayCount: Record<string, number> = {}
-
-    for (const l of leads) {
-      if (l.status === "new") newLeads++
-      else if (l.status === "contacted") contactedLeads++
-      else if (l.status === "converted") converted++
-      else if (l.status === "closed") closedLeads++
-
-      const t = new Date(l.timestamp).getTime()
-      if (!Number.isNaN(t)) {
-        const key = new Date(t).toDateString()
-        dayCount[key] = (dayCount[key] ?? 0) + 1
-        if (key === todayStr) todayLeads++
-        if (t >= weekAgoT) thisWeekLeads++
-        else if (t >= twoWeeksAgoT) lastWeekLeads++
-        if (t >= monthStartT) {
-          thisMonthLeads++
-          if (l.status === "converted") convertedThisMonth++
-        } else if (t >= lastMonthStartT) {
-          lastMonthLeads++
-          if (l.status === "converted") convertedLastMonth++
-        }
-      }
-
-      sourceMap[l.source] = (sourceMap[l.source] ?? 0) + 1
-      const branch = l.branch?.trim()
-      if (branch) branchMap[branch] = (branchMap[branch] ?? 0) + 1
-    }
-
-    const total = leads.length
-    const pieData = Object.entries(sourceMap).map(([key, value]) => ({
-      name: SOURCE_LABEL[key] ?? key,
-      value,
-    }))
-    const recentLeads = [...leads]
-      .sort((a, b) => scoreDate(b.timestamp) - scoreDate(a.timestamp))
-      .slice(0, 6)
-    const topBranch = Object.entries(branchMap).sort((a, b) => b[1] - a[1])[0]
-
-    return {
-      total,
-      newLeads,
-      contactedLeads,
-      converted,
-      closedLeads,
-      activePipelineLeads: newLeads + contactedLeads,
-      convRate: total > 0 ? Math.round((converted / total) * 100) : 0,
-      todayLeads,
-      thisWeekLeads,
-      weekTrend: thisWeekLeads - lastWeekLeads,
-      thisMonthLeads,
-      monthTrend: thisMonthLeads - lastMonthLeads,
-      convertedThisMonth,
-      convertedTrend: convertedThisMonth - convertedLastMonth,
-      pieData,
-      recentLeads,
-      dayCount,
-      topBranch,
-    }
-  }, [leads])
+  // 리드 파생값(확인 게이트 포함)은 insights.aggregateLeads가 단일 패스로 집계한다.
+  const leadAgg = useMemo(() => aggregateLeads(leads), [leads])
 
   const {
     total,
@@ -456,94 +346,24 @@ export default function OverviewPage() {
   )
   const chartTotal = useMemo(() => chartData.reduce((sum, point) => sum + point.count, 0), [chartData])
 
-  const {
-    publishedBlogPosts,
-    ctaCoverage,
-    recentPosts,
-    publishedPostsWithoutCta,
-  } = useMemo(() => {
-    const draftBlogPosts = blogPosts.filter((post) => post.status === "draft").length
-    const publishedBlogPosts = blogPosts.filter((post) => post.status === "published")
-    const publishedPostsWithCta = publishedBlogPosts.filter((post) => {
-      const cta = post.cta
-      return Boolean(cta?.title?.trim() && cta?.buttonLabel?.trim() && cta?.buttonHref?.trim())
-    }).length
-    const ctaCoverage =
-      publishedBlogPosts.length > 0 ? Math.round((publishedPostsWithCta / publishedBlogPosts.length) * 100) : 0
-    const recentPosts = [...blogPosts]
-      .sort((a, b) => scoreDate(b.updatedAt ?? b.publishedAt) - scoreDate(a.updatedAt ?? a.publishedAt))
-      .slice(0, 4)
-    return {
-      draftBlogPosts,
-      publishedBlogPosts,
-      ctaCoverage,
-      recentPosts,
-      publishedPostsWithoutCta: Math.max(0, publishedBlogPosts.length - publishedPostsWithCta),
-    }
-  }, [blogPosts])
-
-  const { recentCampaigns, draftCampaigns, sentCampaigns, latestFailedCampaign } = useMemo(() => {
-    const recentCampaigns = [...campaigns]
-      .sort((a, b) => scoreDate(b.sentAt ?? b.createdAt) - scoreDate(a.sentAt ?? a.createdAt))
-      .slice(0, 4)
-    const failedCampaigns = [...campaigns]
-      .filter((campaign) => campaign.status === "failed")
-      .sort((a, b) => scoreDate(b.sentAt ?? b.createdAt) - scoreDate(a.sentAt ?? a.createdAt))
-    return {
-      recentCampaigns,
-      failedCampaigns,
-      draftCampaigns: campaigns.filter((campaign) => campaign.status === "draft"),
-      sentCampaigns: campaigns.filter((campaign) => campaign.status === "sent"),
-      latestFailedCampaign: failedCampaigns[0],
-    }
-  }, [campaigns])
-
-  const { upcomingEvents, nextUpcomingEvent } = useMemo(() => {
-    const upcomingEvents = [...calendarEvents]
-      .filter((event) => isWithinNextDays(event.date, 7))
-      .sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? "").localeCompare(b.time ?? ""))
-      .slice(0, 5)
-    const assigneeMap = upcomingEvents.reduce<Record<string, number>>((acc, event) => {
-      event.assignees?.forEach((assignee) => {
-        acc[assignee] = (acc[assignee] ?? 0) + 1
-      })
-      return acc
-    }, {})
-    return {
-      upcomingEvents,
-      activeAssigneeCount: Object.keys(assigneeMap).length,
-      unassignedEventCount: upcomingEvents.filter((event) => !event.assignees?.length).length,
-      busiestAssignee: Object.entries(assigneeMap).sort((a, b) => b[1] - a[1])[0],
-      nextUpcomingEvent: upcomingEvents[0],
-    }
-  }, [calendarEvents])
-
-  const { openBugs, criticalOpenBugs } = useMemo(() => {
-    const openBugs = [...bugs]
-      .filter((bug) => bug.status === "open" || bug.status === "in-progress")
-      .sort((a, b) => {
-        const severityOrder: Record<BugReport["severity"], number> = {
-          critical: 4,
-          high: 3,
-          medium: 2,
-          low: 1,
-        }
-        return (
-          severityOrder[b.severity] - severityOrder[a.severity] ||
-          scoreDate(b.updatedAt) - scoreDate(a.updatedAt)
-        )
-      })
-      .slice(0, 4)
-    return {
-      openBugs,
-      criticalOpenBugs: openBugs.filter((bug) => bug.severity === "critical" || bug.severity === "high"),
-    }
-  }, [bugs])
-
-  const latestPatchNote = useMemo(
-    () => [...patchNotes].sort((a, b) => scoreDate(b.date) - scoreDate(a.date))[0],
-    [patchNotes]
+  const { publishedBlogPosts, ctaCoverage, recentPosts, publishedPostsWithoutCta } = useMemo(
+    () => deriveBlogInsights(blogPosts),
+    [blogPosts]
   )
+
+  const { recentCampaigns, draftCampaigns, sentCampaigns, latestFailedCampaign } = useMemo(
+    () => deriveCampaignInsights(campaigns),
+    [campaigns]
+  )
+
+  const { upcomingEvents, nextUpcomingEvent } = useMemo(
+    () => deriveEventInsights(calendarEvents),
+    [calendarEvents]
+  )
+
+  const { openBugs, criticalOpenBugs } = useMemo(() => deriveBugInsights(bugs), [bugs])
+
+  const latestPatchNote = useMemo(() => deriveLatestPatchNote(patchNotes), [patchNotes])
 
   const instagramViews = instagramDashboard?.summary.totalViews ?? 0
   const instagramMediaCount = instagramDashboard?.summary.mediaCount ?? 0
@@ -556,154 +376,43 @@ export default function OverviewPage() {
     ? visitorStats.today.homeVisitors - (visitorYesterday?.homeVisitors ?? 0)
     : 0
 
-  // 연동 상태 카드 — integrations/status 항목 중 외부 전송 경로 4종만 노출한다.
-  const connections = (
-    [
-      { key: "lead_webhooks", fallbackLabel: "Lead Webhooks", description: "리드를 시트·외부 자동화로 전송" },
-      { key: "channel_talk", fallbackLabel: "Channel Talk", description: "상담 인박스로 전달" },
-      { key: "email_provider", fallbackLabel: "Email", description: "캠페인 발송 연동" },
-      { key: "notifications", fallbackLabel: "Notifications", description: "운영 알림(WeCom·알림톡) 전송" },
-    ] as const
-  ).map(({ key, fallbackLabel, description }) => {
-    const item = integrationStatus?.items.find((entry) => entry.key === key)
-    return {
-      label: item?.label ?? fallbackLabel,
-      description,
-      connected: item?.configured ?? false,
-      href: item?.adminHref ?? "/admin/settings?tab=integrations",
-    }
-  })
+  // 연동 상태 카드 — 외부 전송 경로 4종. 미연결 판정은 insights.deriveConnections 소유(오탐 방지 규칙 포함).
+  const { connections, missingConnections } = deriveConnections(integrationStatus)
 
-  // 세일즈 퍼널 시각화용 단계 (MiniFunnel).
+  // 세일즈 퍼널 시각화용 단계 (MiniFunnel) — 각 단계는 해당 필터가 켜진 리드 보드로 착지한다.
   const funnelStages: FunnelStage[] = [
-    { label: STATUS_LABEL.new, value: newLeads, tone: newLeads > 0 ? "caution" : "brand", href: "/admin/crm" },
-    { label: STATUS_LABEL.contacted, value: contactedLeads, href: "/admin/crm" },
-    { label: STATUS_LABEL.converted, value: converted, href: "/admin/crm" },
-    { label: STATUS_LABEL.closed, value: closedLeads, tone: "neutral", href: "/admin/crm" },
+    { label: STATUS_LABEL.new, value: newLeads, tone: newLeads > 0 ? "caution" : "brand", href: "/admin/crm/customers/leads?filter=new" },
+    { label: STATUS_LABEL.contacted, value: contactedLeads, href: "/admin/crm/customers/leads?filter=contacted" },
+    { label: STATUS_LABEL.converted, value: converted, href: "/admin/crm/customers/leads?filter=converted" },
+    { label: STATUS_LABEL.closed, value: closedLeads, tone: "neutral", href: "/admin/crm/customers/leads?filter=closed" },
   ]
 
-  // 상태 응답이 없을 때(로딩/실패)는 미연결로 단정하지 않는다. (상시 오탐 방지)
-  const missingConnections = integrationStatus
-    ? connections.filter((connection) => !connection.connected)
-    : []
-  const missingConnectionLabels = missingConnections.map((connection) => connection.label)
-  const missingConnectionSummary =
-    missingConnectionLabels.length > 2
-      ? `${missingConnectionLabels.slice(0, 2).join(", ")} 외 ${missingConnectionLabels.length - 2}개`
-      : missingConnectionLabels.join(", ")
-  const operationalAlertItems: Array<OverviewOperationalAlert | null> = [
-    newLeads > 0
-      ? {
-          id: "lead-followup",
-          scope: "CRM",
-          title: "신규 문의 후속 리스크",
-          description: `미처리 ${newLeads}건 · 오늘 유입 ${todayLeads}건 · 세일즈 후속 상태를 우선 점검하세요.`,
-          meta: todayLeads > 0 ? `오늘 ${todayLeads}건` : `이번 주 ${thisWeekLeads}건`,
-          tone: "warning" as const,
-          action: "CRM 확인",
-          href: "/admin/crm",
-          priority: 100,
-        }
-      : null,
-    latestFailedCampaign
-      ? {
-          id: `campaign-failed-${latestFailedCampaign.id}`,
-          scope: "캠페인",
-          title: "실패 캠페인 재점검",
-          description: `${latestFailedCampaign.subject} · ${formatDateTime(latestFailedCampaign.sentAt ?? latestFailedCampaign.createdAt)} · 발송 실패 상태입니다.`,
-          meta: "즉시 확인",
-          tone: "danger" as const,
-          action: "캠페인",
-          href: "/admin/campaigns",
-          priority: 95,
-        }
-      : null,
-    missingConnections.length > 0
-      ? {
-          id: "connection-missing",
-          scope: "연동",
-          title: "외부 연동 설정 필요",
-          description: `미연결 ${missingConnections.length}건 · ${missingConnectionSummary} · 전송 경로를 먼저 복구하세요.`,
-          meta: `미연결 ${missingConnections.length}건`,
-          tone: "warning" as const,
-          action: "설정",
-          href: "/admin/settings?tab=integrations",
-          priority: 90,
-        }
-      : null,
-    openBugs.length > 0
-      ? {
-          id: "open-bugs",
-          scope: "Dev",
-          title: "오픈 이슈 모니터링",
-          description: `진행중 ${openBugs.length}건 · Critical/High ${criticalOpenBugs.length}건 · 최근 업데이트 ${formatDateTime(openBugs[0]?.updatedAt)}.`,
-          meta: criticalOpenBugs.length > 0 ? `긴급 ${criticalOpenBugs.length}건` : `오픈 ${openBugs.length}건`,
-          tone: criticalOpenBugs.length > 0 ? ("danger" as const) : ("warning" as const),
-          action: "Dev 열기",
-          href: "/admin/dev",
-          priority: criticalOpenBugs.length > 0 ? 85 : 75,
-        }
-      : null,
-    publishedPostsWithoutCta > 0
-      ? {
-          id: "cta-coverage",
-          scope: "콘텐츠",
-          title: "콘텐츠 CTA 보강 필요",
-          description: `공개 글 ${publishedBlogPosts.length}건 중 CTA 미완성 ${publishedPostsWithoutCta}건 · 현재 커버리지 ${ctaCoverage}%.`,
-          meta: `CTA ${ctaCoverage}%`,
-          tone: ctaCoverage < 50 ? ("warning" as const) : ("info" as const),
-          action: "콘텐츠",
-          href: "/admin/blog",
-          priority: 70,
-        }
-      : null,
-    draftCampaigns.length > 0
-      ? {
-          id: "campaign-drafts",
-          scope: "캠페인",
-          title: "발송 대기 초안 확인",
-          description: `초안 ${draftCampaigns.length}건 · 발송 완료 ${sentCampaigns.length}건 · 발송 검토 대상을 정리하세요.`,
-          meta: `초안 ${draftCampaigns.length}건`,
-          tone: "info" as const,
-          action: "초안 열기",
-          href: "/admin/campaigns",
-          priority: 60,
-        }
-      : null,
-    nextUpcomingEvent
-      ? {
-          id: `calendar-${nextUpcomingEvent.id}`,
-          scope: "일정",
-          title: "다가오는 일정 점검",
-          description: `${nextUpcomingEvent.title} · ${formatDateTime(`${nextUpcomingEvent.date}T${nextUpcomingEvent.time ?? "09:00"}`)} · 준비 상태를 미리 확인하세요.`,
-          meta: nextUpcomingEvent.assignees?.join(", ") || "캘린더",
-          tone: "info" as const,
-          action: "캘린더",
-          href: "/admin/calendar",
-          priority: 50,
-        }
-      : null,
-    latestPatchNote
-      ? {
-          id: latestPatchNote.id,
-          scope: "배포",
-          title: `최근 패치노트 v${latestPatchNote.version}`,
-          description: `${latestPatchNote.title} · ${formatDateShort(latestPatchNote.date)} · 최근 변경 범위를 빠르게 확인합니다.`,
-          meta: latestPatchNote.status === "published" ? "배포 완료" : "초안",
-          tone: latestPatchNote.status === "published" ? ("success" as const) : ("info" as const),
-          action: "패치노트",
-          href: "/admin/dev",
-          priority: 40,
-        }
-      : null,
-  ]
-  const operationalAlerts = operationalAlertItems
-    .filter((item): item is OverviewOperationalAlert => Boolean(item))
-    .sort((a, b) => b.priority - a.priority)
-    .slice(0, 6)
-  const actionableOperationalAlertCount = operationalAlerts.filter(
-    (item) => item.tone === "warning" || item.tone === "danger"
-  ).length
+  // '미응답' 수치는 이 화면 전체에서 resolveUnrespondedSignal 하나로만 산출한다(단일 정의·단일 수치).
+  // 캐논 원천은 action-kpis 라우트 — 도착 전이나 실패 시에만 같은 정의로 리드 목록에서 파생한다.
+  const unrespondedSignal = useMemo(
+    () => resolveUnrespondedSignal(leadActionKpis, loading ? null : leads),
+    [leadActionKpis, loading, leads]
+  )
+
+  // 오늘 할 일 / 주의 신호 — 우선순위·tone·임계값 판정은 insights.buildOperationalAlerts 소유.
+  const { alerts: operationalAlerts, actionableAlertCount: actionableOperationalAlertCount } =
+    buildOperationalAlerts({
+      unrespondedCount: unrespondedSignal?.unrespondedCount ?? 0,
+      unresponded24hCount: unrespondedSignal?.unresponded24hCount ?? 0,
+      todayLeads,
+      thisWeekLeads,
+      latestFailedCampaign,
+      missingConnectionLabels: missingConnections.map((connection) => connection.label),
+      openBugs,
+      criticalOpenBugs,
+      publishedBlogPostCount: publishedBlogPosts.length,
+      publishedPostsWithoutCta,
+      ctaCoverage,
+      draftCampaignCount: draftCampaigns.length,
+      sentCampaignCount: sentCampaigns.length,
+      nextUpcomingEvent,
+      latestPatchNote,
+    })
 
   // REV 장부 금액은 전부 위안화 — CRM CurrencyChip 아이디엄(기호+통화 병기)대로 ¥를 붙여 합산 오독을 막는다.
   const fmtCny = (value: number) => `¥${COMPACT_NUMBER.format(value)}`
@@ -717,18 +426,7 @@ export default function OverviewPage() {
   const sparkRevenue = branchSummary?.monthly_series.revenue_cum ?? []
   const sparkVisitors = visitorStats?.daily.map((day) => day.homeVisitors) ?? []
 
-  const pipelineCoverage = (() => {
-    const series = branchSummary?.monthly_series
-    if (!series) return null
-    const last = (arr: number[] | undefined) => (arr && arr.length > 0 ? arr[arr.length - 1] : 0)
-    const confirmed = last(series.revenue_cum)
-    const pipelineTotal = last(series.revenue_trend_cum) - confirmed
-    const remaining = last(series.goal_cum) - confirmed
-    return remaining > 0 ? pipelineTotal / remaining : null
-  })()
-
-  const osLeadUnresponded24h = leadActionKpis?.unresponded24hCount ?? null
-  const osMatchingCoverage = osSummary?.matching.coveragePct ?? null
+  const pipelineCoverage = computePipelineCoverage(branchSummary?.monthly_series)
 
   return (
     <div className="relative overflow-hidden px-4 pt-6 pb-16 sm:px-6 sm:pt-8 lg:px-8 lg:pb-20">
@@ -738,7 +436,7 @@ export default function OverviewPage() {
           <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin</p>
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Overview</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            세일즈 파이프라인, 오늘의 주의 신호, 트래픽과 매출 흐름을 한 화면에서 점검하는 운영 허브입니다.
+            골든타임·커버리지·리뉴얼 신호와 오늘의 주의 신호, 트래픽·매출 흐름을 한 화면에서 점검하는 운영 허브입니다.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -759,145 +457,112 @@ export default function OverviewPage() {
         </div>
       </div>
 
-      {/* (a) 커맨드 바 — 핵심 KPI + 스파크라인 */}
+      {/* (a) 운영 OS 커맨드 바 — 이 표면의 존재 이유. 신호는 필터드 딥링크로 행동에 직결한다.
+          콜드로드: 각 타일은 자기 원천(fetch)이 null이면 '…' 대신 레이아웃 일치 KpiSkeleton을 렌더한다. */}
       <section className="relative mb-6 rounded-2xl border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-4 sm:p-5">
         <div className="mb-4 flex items-center gap-2">
-          <h2 className="text-[14px] font-semibold text-[#111110]">핵심 지표</h2>
-          <span className="text-[11px] text-[#1a1a1a]/45">오늘 운영 상태를 한눈에</span>
+          <h2 className="text-[14px] font-semibold text-[#111110]">운영 OS</h2>
+          <span className="text-[11px] text-[#1a1a1a]/45">지금 잡아야 할 신호 · 읽기 전용</span>
         </div>
-        {loading ? (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <KpiSkeleton key={i} />
-            ))}
+        <div className={`${KPI_STRIP_CLASS} -mx-4 px-4 sm:-mx-5 sm:px-5 md:mx-0 md:px-0`}>
+          <div className={KPI_TILE_CLASS}>
+            {unrespondedSignal ? (
+              <StatCard
+                icon={<AlertCircle className="h-4 w-4" />}
+                label="골든타임 24h"
+                value={`${unrespondedSignal.unresponded24hCount}건`}
+                // 산정 기준 캡션 — 주의신호 카드와 동일 어휘·동일 기준(미응답 리드=데모·문의·Meta 신규).
+                sub="24h+ 미응답 리드 · 데모·문의·Meta 신규"
+                tone={unrespondedSignal.unresponded24hCount > 0 ? "danger" : "neutral"}
+                href="/admin/crm/customers/leads?filter=unresponded&focus=risk"
+              />
+            ) : (
+              <KpiSkeleton />
+            )}
           </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-            <StatCard
-              icon={<Users className="h-4 w-4" />}
-              label="세일즈 파이프라인"
-              value={activePipelineLeads}
-              sub={`신규 ${newLeads} · 연락중 ${contactedLeads}`}
-              tone={newLeads > 0 ? "caution" : "brand"}
-              sparkline={<Sparkline data={sparkLeads} tone={newLeads > 0 ? "caution" : "brand"} />}
-              href="/admin/crm"
-            />
-            <StatCard
-              icon={<TrendingUp className="h-4 w-4" />}
-              label="이번 주 유입"
-              value={thisWeekLeads}
-              sub={`오늘 +${todayLeads} · 이번 달 ${thisMonthLeads}`}
-              trend={{ value: weekTrend, label: "지난주 대비" }}
-              sparkline={<Sparkline data={sparkLeads.slice(7)} />}
-              href="/admin/crm"
-            />
-            <StatCard
-              icon={<CheckCircle2 className="h-4 w-4" />}
-              label="전환율"
-              value={`${convRate}%`}
-              sub={`전환 ${converted}건 · 이번 달 ${convertedThisMonth}건`}
-              trend={{ value: convertedTrend, label: "지난달 대비" }}
-              tone="brand"
-              href="/admin/crm"
-            />
-            <StatCard
-              icon={<Eye className="h-4 w-4" />}
-              label="오늘 홈 방문자"
-              value={visitorStats ? visitorStats.today.homeVisitors : "…"}
-              sub={
-                visitorStats
-                  ? `7일 ${visitorStats.totals.homeVisitors}명 · PV ${visitorStats.today.homePageViews}`
-                  : "동의 기반 집계"
-              }
-              trend={visitorStats ? { value: homeVisitorTrend, label: "전일 대비" } : undefined}
-              tone="brand"
-              sparkline={sparkVisitors.length ? <Sparkline data={sparkVisitors} /> : undefined}
-              href="/admin/traffic"
-            />
-            <StatCard
-              icon={<TrendingUp className="h-4 w-4" />}
-              label="매출 페이싱(연)"
-              value={branchSummary ? `${Math.round(branchSummary.revenue.pacing_pct)}%` : "…"}
-              sub={
-                branchSummary
-                  ? `확정 ${fmtCny(branchSummary.revenue.confirmed)} / 목표 ${fmtCny(branchSummary.revenue.goal)} · CNY`
-                  : "불러오는 중"
-              }
-              tone="brand"
-              sparkline={sparkRevenue.length ? <Sparkline data={sparkRevenue} /> : undefined}
-              href="/admin/branch/ledger"
-            />
+          <div className={KPI_TILE_CLASS}>
+            {branchSummary ? (
+              <StatCard
+                icon={<TrendingUp className="h-4 w-4" />}
+                label="파이프 커버리지"
+                value={pipelineCoverage != null ? `${pipelineCoverage.toFixed(1)}x` : "—"}
+                sub="예상 파이프 ÷ 잔여목표 (≥2.0x 권장)"
+                tone={pipelineCoverage != null && pipelineCoverage < 2.0 ? "danger" : "neutral"}
+                href="/admin/branch/ledger"
+              />
+            ) : (
+              <KpiSkeleton />
+            )}
           </div>
-        )}
-      </section>
-
-      {/* (a') 운영 OS — 보조 지표 (demote) */}
-      <section className="mb-6">
-        <div className="mb-3 flex items-center gap-2">
-          <h2 className="text-[13px] font-semibold text-[#1a1a1a]/70">운영 OS</h2>
-          <span className="rounded-full border border-[#D1FAE5] bg-[#ECFDF5] px-2 py-0.5 text-[10px] font-medium text-[#084734]">
-            베타
-          </span>
-          <span className="rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/40">
-            읽기 전용
-          </span>
+          <div className={KPI_TILE_CLASS}>
+            {osSummary ? (
+              <StatCard
+                icon={<CalendarDays className="h-4 w-4" />}
+                // 원천 임계값이 60일(crm-neo-customer-snapshots)이므로 라벨도 D-60로 고정한다.
+                label="리뉴얼 D-60"
+                value={`${osSummary.renewal.expiringSoonCount}건`}
+                sub="60일 이내 만료 · 선제 대응"
+                tone={osSummary.renewal.expiringSoonCount > 0 ? "caution" : "neutral"}
+                href="/admin/crm/customers/accounts?expiring=1"
+              />
+            ) : (
+              <KpiSkeleton />
+            )}
+          </div>
+          <div className={KPI_TILE_CLASS}>
+            {osSummary ? (
+              <StatCard
+                icon={<Link2 className="h-4 w-4" />}
+                label="매칭 커버리지"
+                value={`${osSummary.matching.coveragePct}%`}
+                sub={`연결 ${osSummary.matching.linked}/${osSummary.matching.total} · 검토 ${osSummary.matching.needsReview}`}
+                tone={osSummary.matching.coveragePct < 80 ? "caution" : "neutral"}
+                href="/admin/crm/matching"
+              />
+            ) : (
+              <KpiSkeleton />
+            )}
+          </div>
+          <div className={KPI_TILE_CLASS}>
+            {osSummary ? (
+              <StatCard
+                icon={<CheckCircle2 className="h-4 w-4" />}
+                label="진척 · HW"
+                value={`${osSummary.hw.boards86}/${osSummary.hw.target}`}
+                sub={
+                  // boards86은 실판매만 집계 — 배송예정분은 별도 캡션으로 병기(구 캐시엔 필드 없음).
+                  (osSummary.hw.plannedBoards86 ?? 0) > 0
+                    ? `86보드 실판매 기준 · 배송예정 ${osSummary.hw.plannedBoards86}대`
+                    : "86보드 실판매 기준"
+                }
+                tone="neutral"
+                href="/admin/hardware"
+              />
+            ) : (
+              <KpiSkeleton />
+            )}
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          <StatCard
-            icon={<AlertCircle className="h-4 w-4" />}
-            label="골든타임 24h"
-            value={osLeadUnresponded24h != null ? `${osLeadUnresponded24h}건` : "…"}
-            sub="24h 미응답 인바운드"
-            tone={osLeadUnresponded24h && osLeadUnresponded24h > 0 ? "danger" : "brand"}
-            href="/admin/crm"
-          />
-          <StatCard
-            icon={<TrendingUp className="h-4 w-4" />}
-            label="파이프 커버리지"
-            value={!branchSummary ? "…" : pipelineCoverage != null ? `${pipelineCoverage.toFixed(1)}x` : "—"}
-            sub="예상 파이프 ÷ 잔여목표 (≥2.0x 권장)"
-            tone={pipelineCoverage != null && pipelineCoverage < 2.0 ? "danger" : "brand"}
-            href="/admin/branch/ledger"
-          />
-          <StatCard
-            icon={<CalendarDays className="h-4 w-4" />}
-            label="리뉴얼 D-90"
-            value={osSummary ? `${osSummary.renewal.expiringSoonCount}건` : "…"}
-            sub="만료 임박 (선제 대응)"
-            tone="brand"
-            href="/admin/crm/customers/accounts"
-          />
-          <StatCard
-            icon={<Link2 className="h-4 w-4" />}
-            label="매칭 커버리지"
-            value={osMatchingCoverage != null ? `${osMatchingCoverage}%` : "…"}
-            sub={
-              osSummary
-                ? `연결 ${osSummary.matching.linked}/${osSummary.matching.total} · 검토 ${osSummary.matching.needsReview}`
-                : "불러오는 중"
-            }
-            tone={osMatchingCoverage != null && osMatchingCoverage < 80 ? "caution" : "brand"}
-            href="/admin/crm/matching"
-          />
-          <StatCard
-            icon={<CheckCircle2 className="h-4 w-4" />}
-            label="진척(HW/콘텐츠/행사)"
-            value={osSummary ? `${osSummary.hw.boards86}/${osSummary.hw.target}` : "…"}
-            sub={
-              osSummary
-                ? [
-                    // boards86은 실판매만 집계 — 배송예정분은 별도 캡션으로 병기(구 캐시엔 필드 없음).
-                    (osSummary.hw.plannedBoards86 ?? 0) > 0 ? `배송예정 ${osSummary.hw.plannedBoards86}대` : null,
-                    `블로그 ${osSummary.content.blogPublished}/${osSummary.content.target} · 행사 ${osSummary.events.count}/${osSummary.events.target}`,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")
-                : "불러오는 중"
-            }
-            tone="neutral"
-            href="/admin/hardware"
-          />
-        </div>
+        {/* 진척 세부(콘텐츠·행사)는 타일에서 분리해 도메인별 딥링크로 제공한다. */}
+        {osSummary ? (
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-[rgba(0,0,0,0.08)] pt-3 text-[11px] text-[#1a1a1a]/45">
+            <span className="text-[#1a1a1a]/35">진척 상세</span>
+            <Link
+              href="/admin/blog"
+              className="inline-flex items-center gap-1 font-medium transition-colors hover:text-[#111110]"
+            >
+              블로그 {osSummary.content.blogPublished}/{osSummary.content.target}
+              <ArrowUpRight className="h-3 w-3" />
+            </Link>
+            <Link
+              href="/admin/events"
+              className="inline-flex items-center gap-1 font-medium transition-colors hover:text-[#111110]"
+            >
+              행사 {osSummary.events.count}/{osSummary.events.target}
+              <ArrowUpRight className="h-3 w-3" />
+            </Link>
+          </div>
+        ) : null}
       </section>
 
       {/* (b) 오늘 할 일 / 주의 신호 — 배너·시그널칩·리스크 통합 */}
@@ -927,38 +592,129 @@ export default function OverviewPage() {
               description="문의, 캠페인, 연동, 일정, 배포 변경이 안정 상태면 이 영역은 비어 있습니다."
             />
           ) : (
-            <div className="grid gap-3 md:grid-cols-2">
-              {operationalAlerts.map((item) => (
-                <a
-                  key={item.id}
-                  href={item.href}
-                  className="group flex items-start gap-3 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_10px_24px_rgba(17,17,16,0.04)]"
-                >
-                  <div className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border ${statusToneClasses(item.tone)}`}>
-                    <ShieldAlert className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${statusToneClasses(item.tone)}`}>
-                        {item.scope}
-                      </span>
-                      <span className="text-[11px] text-[#1a1a1a]/35">{item.meta}</span>
+            <>
+              <div className="grid gap-3 md:grid-cols-2">
+                {(alertsExpanded ? operationalAlerts : operationalAlerts.slice(0, 6)).map((item) => (
+                  <a
+                    key={item.id}
+                    href={item.href}
+                    className="group flex items-start gap-3 rounded-xl border border-[#e8e8e4] bg-white px-4 py-3 transition-all hover:-translate-y-0.5 hover:border-[#c8c8c4] hover:shadow-[0_10px_24px_rgba(17,17,16,0.04)]"
+                  >
+                    <div className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl border ${statusToneClasses(item.tone)}`}>
+                      <ShieldAlert className="h-4 w-4" />
                     </div>
-                    <p className="mt-1 truncate text-[13px] font-semibold text-[#111110]">{item.title}</p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/40">{item.description}</p>
-                  </div>
-                  <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#1a1a1a]/35 group-hover:text-[#111110]">
-                    {item.action}
-                    <ChevronRight className="h-3 w-3" />
-                  </span>
-                </a>
-              ))}
-            </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${statusToneClasses(item.tone)}`}>
+                          {item.scope}
+                        </span>
+                        <span className="text-[11px] text-[#1a1a1a]/35">{item.meta}</span>
+                      </div>
+                      <p className="mt-1 truncate text-[13px] font-semibold text-[#111110]">{item.title}</p>
+                      <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/40">{item.description}</p>
+                    </div>
+                    <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#1a1a1a]/35 group-hover:text-[#111110]">
+                      {item.action}
+                      <ChevronRight className="h-3 w-3" />
+                    </span>
+                  </a>
+                ))}
+              </div>
+              {operationalAlerts.length > 6 ? (
+                <button
+                  type="button"
+                  onClick={() => setAlertsExpanded((prev) => !prev)}
+                  className="mt-3 flex w-full items-center justify-center gap-1 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
+                >
+                  {alertsExpanded ? "접기" : `더보기 (${operationalAlerts.length - 6})`}
+                  {alertsExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                </button>
+              ) : null}
+            </>
           )}
         </SectionCard>
       </div>
 
-      {/* 핵심 KPI는 상단 커맨드 바로, 신규 리드 배너·시그널칩은 주의 신호 피드로 통합됨 */}
+      {/* (c) 흐름 지표 — 관망 지표는 신호 아래로 하강 배치. 정상 상태는 중립 톤(신호색 예산제). */}
+      <section className="mb-6">
+        <div className="mb-3 flex items-center gap-2">
+          <h2 className="text-[13px] font-semibold text-[#1a1a1a]/70">흐름 지표</h2>
+          <span className="text-[11px] text-[#1a1a1a]/40">리드 유입 · 전환 · 방문자 · 매출 페이싱</span>
+        </div>
+        {loading ? (
+          <div className={KPI_STRIP_CLASS}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className={KPI_TILE_CLASS}>
+                <KpiSkeleton />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className={KPI_STRIP_CLASS}>
+            <div className={KPI_TILE_CLASS}>
+              <StatCard
+                icon={<Users className="h-4 w-4" />}
+                label="세일즈 파이프라인"
+                value={activePipelineLeads}
+                sub={`신규 ${newLeads} · 연락중 ${contactedLeads}`}
+                tone={newLeads > 0 ? "caution" : "neutral"}
+                sparkline={<Sparkline data={sparkLeads} tone={newLeads > 0 ? "caution" : "brand"} />}
+                href="/admin/crm/customers/leads"
+              />
+            </div>
+            <div className={KPI_TILE_CLASS}>
+              <StatCard
+                icon={<TrendingUp className="h-4 w-4" />}
+                label="이번 주 유입"
+                value={thisWeekLeads}
+                sub={`오늘 +${todayLeads} · 이번 달 ${thisMonthLeads}`}
+                trend={{ value: weekTrend, label: "지난주 대비" }}
+                sparkline={<Sparkline data={sparkLeads.slice(7)} />}
+                href="/admin/crm/customers/leads"
+              />
+            </div>
+            <div className={KPI_TILE_CLASS}>
+              <StatCard
+                icon={<CheckCircle2 className="h-4 w-4" />}
+                label="전환율"
+                value={`${convRate}%`}
+                sub={`전환 ${converted}건 · 이번 달 ${convertedThisMonth}건`}
+                trend={{ value: convertedTrend, label: "지난달 대비" }}
+                href="/admin/crm/customers/leads?filter=converted"
+              />
+            </div>
+            <div className={KPI_TILE_CLASS}>
+              {visitorStats ? (
+                <StatCard
+                  icon={<Eye className="h-4 w-4" />}
+                  label="오늘 홈 방문자"
+                  value={visitorStats.today.homeVisitors}
+                  sub={`7일 ${visitorStats.totals.homeVisitors}명 · PV ${visitorStats.today.homePageViews} · 동의 기반`}
+                  trend={{ value: homeVisitorTrend, label: "전일 대비" }}
+                  sparkline={sparkVisitors.length ? <Sparkline data={sparkVisitors} /> : undefined}
+                  href="/admin/traffic"
+                />
+              ) : (
+                <KpiSkeleton />
+              )}
+            </div>
+            <div className={KPI_TILE_CLASS}>
+              {branchSummary ? (
+                <StatCard
+                  icon={<TrendingUp className="h-4 w-4" />}
+                  label="매출 페이싱(연)"
+                  value={`${Math.round(branchSummary.revenue.pacing_pct)}%`}
+                  sub={`확정 ${fmtCny(branchSummary.revenue.confirmed)} / 목표 ${fmtCny(branchSummary.revenue.goal)} · CNY`}
+                  sparkline={sparkRevenue.length ? <Sparkline data={sparkRevenue} /> : undefined}
+                  href="/admin/branch/ledger"
+                />
+              ) : (
+                <KpiSkeleton />
+              )}
+            </div>
+          </div>
+        )}
+      </section>
 
       <div className="grid grid-cols-1 gap-6 mb-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 shadow-[0_1px_0_rgba(17,17,16,0.02)] sm:p-6">
@@ -1037,9 +793,9 @@ export default function OverviewPage() {
             <h2 className="text-[14px] font-semibold text-[#111110]">세일즈 퍼널 / 최근 유입</h2>
             <p className="text-[11px] text-[#1a1a1a]/40 mt-0.5">상태별 누적과 최근 접수 흐름을 함께 봅니다.</p>
           </div>
-          <a href="/admin/crm" className="text-[12px] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors flex items-center gap-1">
+          <Link href="/admin/crm/customers/leads" className="text-[12px] text-[#1a1a1a]/40 hover:text-[#111110] transition-colors flex items-center gap-1">
             전체 보기 <ArrowUpRight className="w-3 h-3" />
-          </a>
+          </Link>
         </div>
         {loading ? (
           <div className="p-4 space-y-3">
@@ -1349,7 +1105,7 @@ export default function OverviewPage() {
                 label="구독자"
                 value={subscriberCount}
                 sub="활성 구독자"
-                tone="brand"
+                tone="neutral"
                 href="/admin/campaigns"
               />
               <StatCard
@@ -1361,7 +1117,7 @@ export default function OverviewPage() {
                     ? `최근 ${instagramMediaCount}개 · 평균 ${COMPACT_NUMBER.format(instagramAverageViews)}`
                     : "콘텐츠 탭에서 확인"
                 }
-                tone={instagramDashboard ? "danger" : "neutral"}
+                tone="neutral"
               />
               <StatCard
                 icon={<FileText className="h-4 w-4" />}

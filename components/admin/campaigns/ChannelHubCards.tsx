@@ -1,6 +1,7 @@
 "use client"
 
 import { Activity, CalendarDays, ChevronRight, Mail } from "lucide-react"
+import { Skeleton } from "@/components/admin/viz"
 
 const KRW = new Intl.NumberFormat("ko-KR")
 const KRW_CURRENCY = new Intl.NumberFormat("ko-KR", {
@@ -56,21 +57,34 @@ interface StatCell {
   label: string
   value: string
   accent?: boolean
+  loading?: boolean
 }
 
+// 4칸을 각각 rounded 박스로 중첩하지 않고, 2x2를 divide-x/divide-y로만 구분한다
+// (design-taste Rule4: elevation이 불필요한 미니 통계 셀은 카드-속-카드 대신 구분선으로 위계화).
 function MiniStatGrid({ cells }: { cells: StatCell[] }) {
+  const rows: StatCell[][] = []
+  for (let i = 0; i < cells.length; i += 2) rows.push(cells.slice(i, i + 2))
   return (
-    <div className="grid grid-cols-2 gap-2">
-      {cells.map((cell) => (
-        <div key={cell.label} className="rounded-xl bg-[#fafaf8] px-3 py-2">
-          <p className="text-[10px] uppercase tracking-[0.15em] text-[#1a1a1a]/35">{cell.label}</p>
-          <p
-            className={`mt-0.5 text-[15px] font-bold leading-tight ${
-              cell.accent ? "text-[#084734]" : "text-[#111110]"
-            }`}
-          >
-            {cell.value}
-          </p>
+    <div className="divide-y divide-[#f0f0ec] border-t border-[#f0f0ec]">
+      {rows.map((row, ri) => (
+        <div key={ri} className="grid grid-cols-2 divide-x divide-[#f0f0ec]">
+          {row.map((cell) => (
+            <div key={cell.label} className="px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.15em] text-[#1a1a1a]/35">{cell.label}</p>
+              {cell.loading ? (
+                <Skeleton className="mt-1 h-4 w-14" />
+              ) : (
+                <p
+                  className={`mt-0.5 text-[15px] font-bold leading-tight tabular-nums ${
+                    cell.accent ? "text-[#084734]" : "text-[#111110]"
+                  }`}
+                >
+                  {cell.value}
+                </p>
+              )}
+            </div>
+          ))}
         </div>
       ))}
     </div>
@@ -140,13 +154,14 @@ export function ChannelHubCards({
   const currency = metaDashboard?.account.currency ?? "USD"
 
   const eventCells: StatCell[] = [
-    { label: "리드", value: loading ? "…" : KRW.format(aggregate.totalLeads), accent: true },
-    { label: "딜", value: loading ? "…" : KRW.format(aggregate.totalDeals) },
-    { label: "광고비", value: loading ? "…" : won(aggregate.totalSpend) },
+    { label: "리드", value: KRW.format(aggregate.totalLeads), accent: true, loading },
+    { label: "딜", value: KRW.format(aggregate.totalDeals), loading },
+    { label: "광고비", value: won(aggregate.totalSpend), loading },
     {
       label: "ROI",
-      value: loading ? "…" : pct(aggregate.overallRoi),
+      value: pct(aggregate.overallRoi),
       accent: aggregate.overallRoi != null && aggregate.overallRoi >= 0,
+      loading,
     },
   ]
 

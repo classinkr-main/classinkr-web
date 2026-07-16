@@ -12,7 +12,6 @@ import {
   ExternalLink,
   Zap,
   ShieldCheck,
-  Link2,
   History,
   LayoutGrid,
   Settings2,
@@ -21,8 +20,10 @@ import {
   Copy,
   Code2,
   Globe,
+  UserCog,
 } from "lucide-react"
 
+import { MembersPanel } from "@/components/admin/settings/MembersPanel"
 import { NotificationIcon } from "@/components/notifications/NotificationIcon"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import {
@@ -462,7 +463,7 @@ function WebhookRow({
   )
 }
 
-type SettingsTab = "general" | "lead" | "cta" | "links" | "integrations" | "notifications" | "history"
+type SettingsTab = "general" | "lead" | "cta" | "links" | "integrations" | "notifications" | "members" | "history"
 
 type SettingsKey = keyof SiteSettings
 
@@ -497,12 +498,8 @@ const NAV_ITEMS: Array<{
     desc: "데모 신청, 문의, 구독 경로",
     icon: <ShieldCheck className="w-4 h-4" />,
   },
-  {
-    key: "cta",
-    label: "CTA",
-    desc: "버튼, 링크, 다운로드 연결",
-    icon: <Link2 className="w-4 h-4" />,
-  },
+  // "CTA"(cta) 탭은 전 블록이 준비중 플레이스홀더(편집 필드 0)라 노출에서 제외 — history와 동일 처리.
+  // 타입/SECTION_FIELDS/렌더 블록은 ?tab=cta 직접 진입 및 추후 데이터 모델 연결을 위해 유지.
   {
     key: "links",
     label: "주소",
@@ -520,6 +517,13 @@ const NAV_ITEMS: Array<{
     label: "알림",
     desc: "알림 외관 및 수신자 설정",
     icon: <Sparkles className="w-4 h-4" />,
+  },
+  {
+    // 구 /admin/users(회원 관리)를 Settings 탭으로 흡수(2026-07-04) — 읽기 전용 계정 디렉터리.
+    key: "members",
+    label: "회원",
+    desc: "지사장·매니저 계정",
+    icon: <UserCog className="w-4 h-4" />,
   },
   // "변경 이력"(history) 탭은 리비전 모델 미연결 placeholder라 노출에서 제외.
   // 타입/SECTION_FIELDS/렌더 블록은 ?tab=history 직접 진입 및 추후 연결을 위해 유지.
@@ -723,7 +727,9 @@ const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
     "noticeBannerEnabled",
     "noticeBannerText",
   ],
-  lead: ["demoFormEnabled", "blogSectionEnabled"],
+  // lead 탭은 안내·크로스링크 전용 — demoFormEnabled·blogSectionEnabled의 편집 정본은 general 하나다.
+  // 여기 키를 중복 등록하면 같은 변경이 dirtyCount에 두 번 잡힌다(AS-2 dirty 이중 계산 해소).
+  lead: [],
   cta: [],
   links: [],
   integrations: [
@@ -737,6 +743,7 @@ const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
     "emailWebhookUrl",
   ],
   notifications: ["notificationDigestEmailList", "notificationAppearance"],
+  members: [], // 읽기 전용 계정 디렉터리 — 편집 필드 없음(dirty 계산 제외)
   history: [],
 }
 
@@ -883,7 +890,8 @@ export default function SettingsPage() {
   const [integrationStatusError, setIntegrationStatusError] = useState<string | null>(null)
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [currentOrigin, setCurrentOrigin] = useState("")
-  const activeTab = NAV_ITEMS.some((item) => item.key === tabParam)
+  // nav에서 숨긴 탭(cta/history)도 ?tab= 직접 진입은 보존한다 — 유효 탭 판정은 SECTION_FIELDS 키 기준.
+  const activeTab = Object.prototype.hasOwnProperty.call(SECTION_FIELDS, tabParam)
     ? (tabParam as SettingsTab)
     : "general"
   const activeIntegrationSection = isIntegrationSection(integrationSectionParam)
@@ -1231,7 +1239,7 @@ export default function SettingsPage() {
           <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">Settings</h1>
           <p className="text-[13px] text-[#1a1a1a]/45 mt-2 max-w-2xl">
-            배포 없이 바꾸는 운영 제어판입니다. 일반 설정은 즉시 반영하고, CTA와 변경 이력은 준비중 상태로 구조만 먼저 잡아둡니다.
+            배포 없이 바꾸는 운영 제어판입니다. 일반·리드·연동·알림 설정은 저장 즉시 반영됩니다.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:min-w-[280px]">
@@ -1259,9 +1267,15 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button size="sm" variant="outline" className="w-full gap-1.5 bg-white sm:w-auto">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => window.open("/", "_blank", "noopener,noreferrer")}
+              title="공개 홈을 새 탭에서 열어 배너·기능 반영 상태를 확인합니다."
+              className="w-full gap-1.5 bg-white sm:w-auto"
+            >
               <Sparkles className="w-4 h-4" />
-              미리보기
+              공개 홈 미리보기
             </Button>
             <Button
               size="sm"
@@ -1280,38 +1294,12 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className={`mb-6 rounded-2xl border px-4 py-4 sm:px-5 ${hasDirtyChanges ? "border-amber-200 bg-amber-50/60" : "border-[#e8e8e4] bg-white"}`}>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-[13px] font-medium text-[#111110]">
-              {hasDirtyChanges ? "저장 전 변경사항이 남아 있습니다." : "설정이 현재 저장본과 일치합니다."}
-            </p>
-            <p className="text-[12px] text-[#1a1a1a]/45 mt-1">
-              {hasDirtyChanges
-                ? "섹션별 변경 수를 확인하고, 필요하면 되돌린 뒤 저장하세요."
-                : lastSavedAt
-                  ? `최근 저장 시각 · ${formatTime(lastSavedAt)}`
-                  : "새로 불러온 상태입니다. 저장하면 기준점이 만들어집니다."}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-3 py-1 text-[11px] font-medium ${hasDirtyChanges ? "bg-amber-100 text-amber-800" : "bg-[#f0f0ec] text-[#1a1a1a]/55"}`}>
-              {hasDirtyChanges ? `미저장 ${dirtyCount}` : "미변경"}
-            </span>
-            {lastSavedAt && (
-              <span className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[11px] font-medium text-[#1a1a1a]/55">
-                저장 · {formatTime(lastSavedAt)}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
+      {/* 미저장 상태 표시는 우측 상단 상태 카드 한 곳으로 통합 — 동일 정보의 풀폭 배너 중복 제거(AS-1). */}
       <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)] items-start">
         <aside className="space-y-3 xl:sticky xl:top-6">
           <div className="hidden rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4 xl:block">
             <p className="text-[12px] font-semibold text-[#111110]">설정 카테고리</p>
-            <p className="text-[12px] text-[#1a1a1a]/40 mt-1">현재는 7개 핵심 영역만 열어둡니다.</p>
+            <p className="text-[12px] text-[#1a1a1a]/40 mt-1">현재는 {NAV_ITEMS.length}개 핵심 영역만 열어둡니다.</p>
           </div>
           <nav className="admin-scroll-snap-x no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0 xl:block xl:space-y-1 xl:overflow-visible xl:pb-0">
             {NAV_ITEMS.map((item) => {
@@ -1342,14 +1330,6 @@ export default function SettingsPage() {
                     >
                       {sectionDirty}
                     </span>
-                  ) : item.key === "cta" || item.key === "history" ? (
-                    <span
-                      className={`inline-flex shrink-0 items-center rounded-full px-2 py-1 text-[11px] font-medium ${
-                        active ? "bg-white/15 text-white" : "bg-[#f0f0ec] text-[#1a1a1a]/45"
-                      }`}
-                    >
-                      {item.key === "cta" ? "연결 예정" : "준비중"}
-                    </span>
                   ) : null}
                 </button>
               )
@@ -1359,7 +1339,7 @@ export default function SettingsPage() {
           <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-4">
             <p className="text-[12px] font-medium text-[#111110]">운영 메모</p>
             <p className="text-[12px] text-[#1a1a1a]/45 mt-1 leading-relaxed">
-              주소 탭은 복사 전용이고, 리드/폼과 외부 연동은 즉시 저장 가능합니다. CTA와 변경 이력은 다음 단계에서 데이터 모델을 연결합니다.
+              주소 탭은 복사 전용이고, 리드/폼과 외부 연동은 즉시 저장 가능합니다. CTA·변경 이력은 데이터 모델 연결 전까지 카테고리에서 숨겨둡니다.
             </p>
           </div>
         </aside>
@@ -1454,23 +1434,58 @@ export default function SettingsPage() {
                 </div>
               </PanelCard>
 
+              {/* 편집 토글은 일반 탭 '사이트 기능'이 유일 정본(AS-2) — 여기서는 현재 상태만 읽기 전용으로
+                  보여주고 편집은 크로스링크로 보낸다. 이중 편집 UI 제거로 dirty 이중 계산도 함께 해소. */}
               <PanelCard
                 title="현재 활성 설정"
-                description="실제 저장 가능한 값만 편집합니다."
-                badge="편집 가능"
+                description="리드 유입에 영향을 주는 사이트 기능 상태입니다. 편집은 일반 탭 한 곳에서 관리합니다."
+                badge="읽기 전용"
               >
-                <ToggleRow
-                  label="데모 신청 폼"
-                  description="홈페이지 데모 신청 버튼 및 모달 활성화"
-                  checked={settings.demoFormEnabled}
-                  onChange={(v) => set({ demoFormEnabled: v })}
-                />
-                <ToggleRow
-                  label="블로그 섹션"
-                  description="홈페이지 블로그 섹션 표시"
-                  checked={settings.blogSectionEnabled}
-                  onChange={(v) => set({ blogSectionEnabled: v })}
-                />
+                {[
+                  {
+                    key: "demoFormEnabled" as const,
+                    label: "데모 신청 폼",
+                    description: "홈페이지 데모 신청 버튼 및 모달 활성화",
+                    enabled: settings.demoFormEnabled,
+                  },
+                  {
+                    key: "blogSectionEnabled" as const,
+                    label: "블로그 섹션",
+                    description: "홈페이지 블로그 섹션 표시",
+                    enabled: settings.blogSectionEnabled,
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.key}
+                    className="flex items-center justify-between gap-4 border-b border-[#e8e8e4] py-4 last:border-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-medium text-[#111110]">{item.label}</p>
+                      <p className="mt-0.5 text-[12px] text-[#1a1a1a]/45">{item.description}</p>
+                    </div>
+                    <span
+                      className={cn(
+                        "inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                        item.enabled ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#f0f0ec] text-[#1a1a1a]/45"
+                      )}
+                    >
+                      {item.enabled ? "켜짐" : "꺼짐"}
+                    </span>
+                  </div>
+                ))}
+                <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
+                  <p className="text-[12px] leading-relaxed text-[#1a1a1a]/45">
+                    두 기능의 켜기/끄기는 일반 탭의 &lsquo;사이트 기능&rsquo;에서 저장합니다.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("general")}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/60 transition-all hover:border-[#c8c8c4] hover:text-[#111110]"
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
+                    일반 탭에서 편집
+                  </button>
+                </div>
               </PanelCard>
             </>
           )}
@@ -1892,6 +1907,8 @@ export default function SettingsPage() {
               </PanelCard>
             </>
           )}
+
+          {activeTab === "members" && <MembersPanel />}
 
           {activeTab === "history" && (
             <>

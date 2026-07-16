@@ -1,0 +1,145 @@
+{
+ "designPrinciples": [
+  "신호→행동 무손실 연결: 모든 KPI·신호 타일은 필터드 딥링크로 착지시킨다(bare /admin/crm 금지). 통합·강등은 반드시 하위탭/딥링크로 기능을 보존해 '기능 손실 0'. 골든타임·리뉴얼·needs-link·계약전환처럼 지금 존재하는 액션 경로의 단절이 최우선 결함.",
+  "로컬 재구현 금지(SSOT 위임): KPI=components/admin/viz StatTile, 색=DESIGN.md 문서화 상태 토큰, 포매터=ledger-format, 확정매출=confirmedMonthAmount. 재구현 발견 시 신규가 아니라 위임으로 처리한다.",
+  "색은 희소한 신호 자원: 정상=중립, breach(골든타임>0·커버리지<임계·부족·미연결)만 채색. brand-green 남발을 신호색 예산제로 전환. 냉색 원시 Tailwind(sky/blue/emerald-*)·raw amber는 팔레트 이탈이므로 금지 — 웜뉴트럴+그린 단일 액센트 유지.",
+  "한 지표=한 라벨=한 기준: 표면 간 동일 원천 숫자는 동일 어휘·동일 산정(창고/가용/예정, 확정의 두 의미)으로 고정하고, 각 KPI에 산정 기준 1줄 캡션(number-details식 저대비)을 붙인다. keep=실데이터 소비·액션 견인 위젯 / change=라벨 드리프트·기준 혼동·이중계상 오해.",
+  "콜드로드는 레이아웃 일치 스켈레톤: '...' 텍스트·0 플래시·홈전용 스켈레톤 점프를 금지하고, 가능하면 서버 시드로 첫 페인트를 채운다(next/dynamic은 클라 경계에서만).",
+  "밀도는 데스크톱, 모바일은 존재신호+퀵에딧: 넓은 표(min-w 700~1320)는 overflow-x 컨테이너+상위필드 카드 폴백, CSS Grid는 minmax(0,1fr)+min-w-0, body overflow-x sticky 트랩 회피. 밀도 매트릭스 자체는 데스크톱 전용으로 유지.",
+  "장식보다 위계: container-line 가이드·코너 스퀘어·01–05 번호 레일 같은 순수 장식은 기각. 구조 긴장은 여백·border-t·divide-y·베이지 톤차·상태 틴트로만 만든다(design-taste Rule4 카드 과중첩 해소).",
+  "안전장치·캐논 불가침: 초안 2단 게이트·확도 분배(A1)·주차 병합(B1)·CRM 오더 게이트·B1 딜→견적 prefill·재고 원장 SSOT는 리팩터/컴포넌트 추출/벌크입력에도 문자 단위로 보존한다."
+ ],
+ "wave1": [
+  {
+   "pkg": "A. Overview 운영 허브 — 신호 위계·딥링크·콜드로드",
+   "model": "opus",
+   "files": [
+    "app/admin/overview/page.tsx",
+    "components/admin/crm/NeoCrmCustomersClient.tsx"
+   ],
+   "items": [
+    "OV1 골든타임·후속리스크 카드 href → /admin/crm/customers/leads?filter=unresponded&focus=risk 직결 + 리뉴얼 타일 ?expiring=1 부여(NeoCrmCustomersClient가 searchParams로 expiringOnly 초기 true) + 'D-90'→실제 60일 임계값 'D-60' 라벨 정정",
+    "OV2 운영 OS 5타일·비동기 핵심타일(방문자/매출 페이싱) null 시 '...'→viz KpiSkeleton",
+    "OV3 운영 OS 스트립을 커맨드바급 위계로 승격('보조 지표' 강등 프레이밍 제거), 관망 지표 하강 배치, tone='brand' 남발→정상=neutral/breach=신호색 예산제",
+    "OV5 운영 OS grid-cols-2 모바일 가로 스냅/3열 압축(2+2+1 고아행 제거) + '진척' 타일 sub 대표수치 1개 축약·도메인별 딥링크 분리"
+   ],
+   "rationale": "이 표면의 존재이유(운영 OS 스트립)가 vanity 5타일 아래 눌려 있고, valued 신호가 bare /admin/crm으로 떨어져 액션 단절 + 콜드로드에서 가장 늦게 가장 약한 어포던스로 뜬다. 신호→행동 원칙의 최대 레버. NeoCrmCustomersClient는 다른 wave1 패키지가 건드리지 않아 A 전용."
+  },
+  {
+   "pkg": "B. CRM 스파인 — 핸드오프·도달성·첫페인트·기준캡션",
+   "model": "opus",
+   "files": [
+    "app/admin/crm/page.tsx",
+    "app/admin/crm/matching/page.tsx",
+    "components/admin/crm/matching/CrmMatchingWorkspace.tsx",
+    "components/admin/crm/matching/MatchingInboxClient.tsx",
+    "app/admin/crm/deals/rev-sheet/page.tsx",
+    "app/admin/crm/deals/page.tsx",
+    "components/admin/admin-nav.ts"
+   ],
+   "items": [
+    "CRM-1 매칭↔매출시트 역할 확정 + 컨텍스트 딥링크: rev-sheet '연결하기'·'매칭 인박스'에 ?name= 부착, matching page가 searchParams.name→initialNameFilter 시드, 두 표면 상단 역할 배너 1줄(여기서 링크확정 / 여기선 분석·검수)",
+    "CRM-2 deals 'REV 내부대조' 5카드 블록을 요약 1줄 + rev-sheet·ledger 딥링크로 슬림(캐논 소비 유지, 숫자 재노출만 제거)",
+    "CRM-4 강등 표면(matching/insights/rev-sheet) 도달성 상설화 — CRM 홈 '검수·백오피스' 블록 또는 CRM_CHILD_NAV '검수' 항목(top-nav 재팽창 없이). IA 판단",
+    "CRM-5 overview db_snapshot 서버 시드로 cockpit/quick-stats 첫페인트 채움(matching Suspense+force-dynamic 패턴 이식), 잔여 클라 표면 '...'→스켈레톤",
+    "CRM-6 인식매출/확정/임박/예정/대기 각 KPI 산정기준 1줄 캡션 + '확정' 두 의미(delivery 인식 vs 시트 확정표시) 구분 명시"
+   ],
+   "rationale": "master §7 잔여 '역할 명문화'를 딥링크로 실제 해소하고, ⌘K를 모르면 매칭 인박스(스파인 심장)를 못 찾는 도달성 결함 + 첫페인트 '...' 마찰 + 같은 단어 다른 기준 혼동을 한 번에. 색 토큰(CRM-3)·StatTile(CRM-7)·셸 프레이밍(CRM-8)·모바일(CRM-9)은 shared-file/장식이라 wave2로 분리해 파일 배타성 확보."
+  },
+  {
+   "pkg": "C. 매출 장부 — 벌크 입력·확도 무결성·needs-link 딥링크",
+   "model": "opus",
+   "files": [
+    "components/admin/branch/SalesLedgerWorkbench.tsx",
+    "components/admin/branch/ledger/InputRailSection.tsx",
+    "lib/repositories/account-master.ts"
+   ],
+   "items": [
+    "SL-2 (wave1 유일 L) 매트릭스 선택셀 기준 엑셀 클립보드 TSV 붙여넣기→초안 큐 2단 게이트로 안전 라우팅 + 초안 CSV 임포트 + 붙여넣기 프리뷰(월·확도·상품군 매핑 확인). B1 병합 규약·셀 상태기계·useLedgerDraftQueue 정합 필수",
+    "SL-4 account-master needs-link 판정을 REV 행에 매핑, 미연결 행에만 '매칭에서 연결 ↗'(normalizedAccountKey로 /admin/crm/matching 프리필). 확정 링크 오표기 회귀 주의",
+    "SL-6 셀 편집 확도 기본 '예정'→마지막 선택 확도 세션 기억 또는 커밋 전 3버튼 필수 노출(확정 입력이 예정 버킷으로 새는 과소집계 해소, A1 로직 회귀 없이)",
+    "SL-7 단축키 치트시트 xl→lg 하향·편집 진입 시 셀 인근 힌트, lens 부제 상시 렌더, 1만 미만 셀 저대비 소형 강등"
+   ],
+   "rationale": "입력속도 철칙의 최대 레버(벌크 붙여넣기)와 확정매출 과소집계를 유발하는 확도 기본값 함정을 함께 봉합. 안전장치(초안 게이트·확도 분배) 불가침이라 codex-review 게이트 권장. MetricTile→StatTile(SL-5)·모바일 시트(SL-3)·확도색 토큰(SL-1)은 shared-file이라 wave2. 유일 L을 여기 배정(user-facing 가치 최상)."
+  },
+  {
+   "pkg": "D. 하드웨어 콘솔 — 라벨 통일·기본 모드·모바일·스켈레톤",
+   "model": "opus",
+   "files": [
+    "components/admin/hardware/HardwareInventoryClient.tsx",
+    "components/admin/hardware/inventory/StockLevelsSection.tsx",
+    "components/admin/hardware/inventory/LocationMapSection.tsx",
+    "components/admin/hardware/inventory/HistoryLogSection.tsx",
+    "components/admin/hardware/inventory/shared.tsx"
+   ],
+   "items": [
+    "HW-1 재고표 헤더 '실제'→'창고', '예상'→'가용'으로 카드·위치맵 어휘와 통일(값 소스 불변)",
+    "HW-2 출고/판매 기본 모드=단건(CRM 자동매칭 게이트 유지), 입고만 batch 유지. openSheet/openFreshSheet/prepareQuickEntry('sale')/selectMovementAxis('outbound') 단건 진입 보장, 다품목은 헤더 토글 승격 — 동작 변경 회귀 확인",
+    "HW-5 시트 경쟁 bordered 박스(미리보기/바구니/도우미)를 border-bottom·접이식으로 정리, 배경 틴트는 상태 의미(경고 앰버·정상 그린)로 한정(로직 불변)",
+    "HW-6 lot·YYYY-MM-DD·'마지막 이관'·스냅샷 해시에 mono/tabular 유틸 토큰(shared에 신설) 적용",
+    "HW-7 위치맵 min-w-[700px] 품목행을 모바일 카드형 랩, 5셀 매트릭스 모바일 2열, minmax(0,1fr)+min-w-0 삐져나옴 차단",
+    "HW-8 loading 스켈레톤을 activeTab 인지형(홈=카드/입출고=세그먼트/내역=표)으로 분기해 딥링크 직행 레이아웃 점프 완화"
+   ],
+   "rationale": "단건 판매가 batch 기본이라 CRM 오더 게이트를 우회해 출고↔딜 대사가 누락되는 실무 결함(HW-2)이 핵심 + 3면 라벨 드리프트·모바일 열화. QuickRecordSheet 추출(HW-3 L)·중복 공용화(HW-4)는 wave2 리팩터로 분리(유일 L 슬롯 회피). HW-5는 wave1에선 아직 존재하는 인라인 시트 대상."
+  },
+  {
+   "pkg": "E. 캠페인 허브 — 중복 서브탭·이중 fetch·KPI 라벨",
+   "model": "sonnet",
+   "files": [
+    "components/admin/marketing/MarketingHub.tsx",
+    "components/admin/marketing/MarketingDashboard.tsx",
+    "components/admin/marketing/ChannelStatusStrip.tsx",
+    "app/admin/campaigns/page.tsx"
+   ],
+   "items": [
+    "CMP-1 메시지 탭 5번째 '현황 대시보드' 서브탭 제거(5→4), 유일 고유 수치 newThisMonth만 상단 상시 StatCard hint로 이관, /api/admin/marketing/stats 3중 fetch 중 1건 소거, MarketingDashboard.tsx 참조 소멸 시 삭제",
+    "CMP-2 /api/admin/messaging/status 이중 fetch를 adminFetchJsonCached(60s) 또는 부모 prop 주입으로 왕복 1회 수렴(강등 분기·refresh 보존)",
+    "CMP-4 요약 '총 매출'→'행사 귀속 매출(입력 기준)' 라벨 + 툴팁('수기 event-metrics 추정·장부 확정매출 아님·KRW'), 평균 CPL·누적 ROI 기준 1줄"
+   ],
+   "rationale": "어제 흡수된 메시지 탭의 이음새(중복 서브탭·이중 fetch)와 확정매출 캐논과의 라벨 혼동(이중계상 오해)을 기계적으로 정리 — 전부 sonnet급 정책/카피/dedupe. 대형 클라 분해(CMP-3 L)·디자인 하드닝(CMP-5 opus)은 wave2로 분리해 이 패키지를 sonnet·저위험으로 유지."
+  },
+  {
+   "pkg": "F. 견적·문서·캘린더·시스템 — 데드엔드 제거 + 계약 경로 연결",
+   "model": "opus",
+   "files": [
+    "app/admin/quotes/page.tsx",
+    "app/admin/calendar/page.tsx",
+    "components/admin/documents/ContractsPanel.tsx",
+    "components/admin/documents/HardwareQuotesPanel.tsx",
+    "components/admin/documents/ReceiptsPanel.tsx",
+    "app/admin/settings/page.tsx",
+    "app/admin/analytics/page.tsx"
+   ],
+   "items": [
+    "q1 견적→계약 단절 해소: ContractsPanel에 ReceiptsPanel식 '계약서 작성' 폼(partner_id+title+total, 선택 quote_id, POST /api/admin/contracts 기존) + 견적 행 '계약 전환' 라벨을 계약탭 이동·프리필로 배선. V1 partner ↔ V2 customer/deal 자동매핑은 금지(C4 부채)—수동 진입점만, 데이터모델 경계 방어",
+    "q2 캘린더 day cell 이벤트칩 hidden sm:block → 모바일 타입색 도트(최대3+개수)로 일정 존재 신호",
+    "q3 캘린더 통계 스트립 base 통일(소스별 카운트도 visibleEvents 기준 또는 '전체 기준' 라벨)",
+    "q4 '공유 링크'(links) coming-soon 탭 제거 + QUICK_QUOTE_ACTIONS 미사용 href 필드 정리(딥링크 hardware fallback 흡수)",
+    "q6 ContractsPanel/ReceiptsPanel 금액 toLocaleString('ko-KR') + 금액셀 tabular-nums 정렬 통일",
+    "AS-1 settings CTA 탭 NAV 제외(?tab=cta 직접진입 보존) + '미리보기' no-op 버튼 핸들러 연결/제거 + 이중 dirty 배너 통합",
+    "AS-3 analytics 방문자 KPI·중복 인사이트 3종 정리 + '콘텐츠 전환 준비' 정적 조언 패널을 traffic 크로스링크로 대체(실데이터 배선은 후속)"
+   ],
+   "rationale": "이 표면에서 계약서를 만들 UI 진입점이 0(POST는 존재)인 기능 구멍이 가장 크고, links 탭·미리보기 버튼·정적 조언 패널 등 데드엔드가 신뢰를 깎는다. q1만 opus급 경계 판단(V1/V2 데이터모델), 나머지는 정책/카피지만 파일 배타성 위해 한 패키지로 묶음. q5 팔레트 치환·AS-2 dirty-count는 shared-file/토큰이라 wave2."
+  }
+ ],
+ "wave2": [
+  "W2-1 [opus·선행 필수] 상태 색 토큰 SSOT — MERGE(SL-1+CRM-3+q5+AS 색정리). DESIGN.md에 3번째 '중간 확도/임박' 비냉색 신호 토큰을 정식 문서화(팔레트 내 그린-뮤티드 vs 웜뉴트럴 강조 = 설계 판단), lib/branch CONFIDENCE_TOKENS 단일 export 신설, 이후 SalesLedgerWorkbench/SalesLedgerCharts/InputRailSection/BranchPipelineKanban의 #1E5DA8 33곳 + CRM matching/rev-sheet/deals의 sky/emerald/amber + calendar/ContractsPanel/SoftwareQuoteCodesPanel 원시색을 일괄 라우팅. DESIGN.md를 건드리므로 최우선·단독 실행. 의존: 없음(단 wave1 surface 정착 후).",
+  "W2-2 [sonnet] KPI StatTile 수렴 — MERGE(CRM-7+SL-5+traffic conversionCards). components/admin/viz/primitives.tsx 소유 하에 quick-stats 5카드·MetricCard·MeasureTile·MetricTile·traffic 28px 커스텀카드를 StatTile(compact/hero variant) 위임. 다크 인식매출 히어로는 bespoke 유지. 의존: W2-1 이후(토큰 정착), 시각 동일 회귀 확인.",
+  "W2-3 [opus] Overview insights.ts 추출 + vitest — OV4. operationalAlertItems·leadAgg·파생·pipelineCoverage를 lib/admin/overview/insights.ts 순수함수로, 렌더 바이트 동일. C2 revenue-core 전환의 선행 정지작업. 의존: 패키지 A 이후(overview/page.tsx 정착).",
+  "W2-4 [opus] revenue-core SSOT 수렴 — master C2. SalesLedgerWorkbench 실적타일 ↔ CoreKpiGrid ↔ BranchHeroGauges 매출 계산식을 confirmedMonthAmount 기반 단일 import로(역할 분리 유지, 동일수치 보장). 의존: W2-3 패턴 + W2-1 토큰 정착 후.",
+  "W2-5 [opus] 대형 클라 컴포넌트 추출(리팩터) — HW-3 QuickRecordSheet 추출 + HW-4 중복 공용화(InboundDetailFields·KitAndPasteComposer), CMP-3 campaigns/page.tsx 서브컴포넌트 추출+MetricsEditor dynamic 모달, SL-3 모바일 단일행 퀵에딧 시트. 기능·마크업 문자 보존, eslint/tsc/build 게이트. 각각 surface별 독립 실행 가능. 의존: 해당 wave1 surface 이후.",
+  "W2-6 [opus] CRM 밀도·톤 위계 마감 — CRM-9 넓은 표(min-w 1320/980) <sm 카드 폴백 + CRM-8 행동/참조 표면 베이지 톤차·틴트 인셋 위계(단 container-lines 코너스퀘어·01–05 레일 장식은 기각). 의존: 패키지 B 이후.",
+  "W2-7 [sonnet] 캠페인 요약 디자인 하드닝 — CMP-5 카드 de-nesting(divide-y/border-t), tabular-nums, 스켈레톤, 6열 그리드 모바일 2열·EventOriginMatrix overflow 컨테이너. 시안 합의 후. 의존: W2-5 CMP-3 추출과 순서 조율(같은 campaigns/page.tsx).",
+  "W2-8 [opus] settings lead 탭 중복 토글 → general 단일 정본(AS-2) + Overview 미응답 정의 단일화(action-kpis/route.ts). dirty 이중계산·sectionDirtyCount 영향 검증. 의존: 패키지 F·A 이후(같은 파일)."
+ ],
+ "dropped": [
+  "CRM-8 컨테이너 가이드라인 1px + 코너 스퀘어 + 리드→딜→매출→설치→정산 01–05 mono 핸드오프 레일(container-lines/number-details 차용): 순수 시각 텐션·장식으로 기능 이득 0, prompt '있으면 좋은 장식 제안 금지'에 정면 위배. 톤차 기반 행동/참조 위계 분리만 W2-6에 최소 수용, 레일·코너 지오메트리는 기각.",
+  "AS designChange 전량(analytics/traffic/ops KPI 그리드에 1px 좌우 가이드+6px 코너 스퀘어, inset 브라켓, 01/02/03 mono 스텝 마커, paper-technical mono 확장): 계측 성격 강조용 미적 레이어일 뿐 데드엔드 정리(AS-1~3)와 무관, 본질 미달로 기각. mono 유틸은 HW-6처럼 정말 기술 메타(타임스탬프)에 한정할 때만 국소 허용.",
+  "HW designChange #4 '위치맵/재고표에 측정된 얇은 구분선·공유 컨테이너 폭 정합'의 코너 지오메트리 부분: 스스로 '코너 스퀘어 도입 안 함'이라 실질은 min-w-0 정렬뿐 → HW-7에 흡수, 독립 디자인 항목으로는 기각.",
+  "analytics '콘텐츠 전환 준비' 패널을 traffic click_cta 실데이터로 대체(AS-3 fix option A): event-counts 소비 배선은 범위 확장(M+)이라 wave1 부적합. wave1은 크로스링크 대체(cheap)만, 실데이터 위젯화는 후속으로 강등(기각이 아니라 스코프 방어).",
+  "q1에서 quote_id ↔ contract 자동 매핑(V1 partner_id ↔ V2 customer/deal): C4 이원화 부채 범위. 자동매핑 시도는 데이터모델 경계를 넘어 회귀 위험이 크므로 명시적 기각 — 수동 생성 진입점만 연다.",
+  "SL designChange의 '고확도 블루 #1E5DA8 제거' 단순 해석: 3단 확도는 본질 기능이라 색 3개가 필요 → '블루 삭제'가 아니라 'DESIGN.md 팔레트 갭 문서화 + 팔레트 내 중간톤 지정'으로 재정의해 W2-1로 이관. 기능 축소로서의 제거는 기각.",
+  "CMP topActions(구독자/작성/이력) 대폭 축소를 별도 항목으로 두는 것: CMP-1 서브탭 5→4 정리에 흡수되므로 독립 구현 항목 불필요(중복 제거)."
+ ],
+ "notes": "파일 배타성 검증: wave1 6패키지의 파일 영토는 상호 배타(A=overview+NeoCrmCustomersClient, B=crm/**+matching+admin-nav, C=branch+account-master, D=hardware/**, E=marketing+campaigns/page, F=quotes+calendar+documents+settings+analytics). 교차 소유 0 — 6팀 병렬 착수 가능. 유일 L=SL-2(벌크 붙여넣기, user-facing 가치 최상)로 'L은 1개' 규칙 준수. HW-3/CMP-3/SL-3(전부 L 리팩터)와 shared-file 항목(viz/primitives, DESIGN.md, revenue-core)은 wave2로 밀어 wave1 배타성·저위험을 확보.\n\n크로스서페이스 병합 처리: 스켈레톤(OV2/CRM-5/HW-8)과 딥링크(OV1/CRM-1/SL-4)와 기준캡션(OV3라벨/CRM-6/CMP-4/HW-1)은 파일이 표면별로 달라 각 wave1 패키지에 분산 배치하되 designPrinciples로 공통 규약화. StatTile(CRM-7+SL-5+traffic)·색토큰(SL-1+CRM-3+q5+AS)은 viz/primitives·DESIGN.md 단일 파일을 공유하므로 반드시 wave2 단일 패키지로 합쳐 충돌 방지.\n\n검증 게이트 권장(codex-review): 안전 불변식을 건드리는 C(SL-2 초안 2단 게이트·B1 병합·확도 분배)와 D(HW-2 CRM 오더 게이트 우회 수정)와 B(CRM-5 서버 시드·next/dynamic eager-preload 트랩)는 머지 전 codex-review 패스를 붙일 것. wave2에서는 W2-1(DESIGN.md 토큰)→W2-2(StatTile)→W2-4(revenue-core) 순서 의존이 있으니 반드시 직렬. 품질 게이트는 전 패키지 공통: npx eslint app components lib --max-warnings=0 && npm run build. 캐논(confirmedMonthAmount SSOT·재고 원장 SSOT·nav SSOT·통화 병기·¥ 만단위)은 어느 패키지도 변경 금지.\""
+}

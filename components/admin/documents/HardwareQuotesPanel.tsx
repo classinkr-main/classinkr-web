@@ -17,6 +17,7 @@ import {
 
 import QuickQuoteComposer, {
   type QuickQuoteCreatedPayload,
+  type QuickQuotePrefill,
 } from "@/components/portal/quotes/QuickQuoteComposer"
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import type { PartnerDocumentListItem } from "@/lib/portal/types"
@@ -67,6 +68,8 @@ type HardwareQuoteQuickActionRequest = {
 type HardwareQuotesPanelProps = {
   quickAction?: HardwareQuoteQuickActionRequest
   onQuickActionConsumed?: () => void
+  /** 딜/고객 컨텍스트에서 진입한 프리필 대상(있으면 작성기가 기존 고객·거래를 자동 선택). */
+  prefill?: QuickQuotePrefill | null
 }
 
 const ACTION_LABEL: Record<QuickQuoteCreatedPayload["action"], string> = {
@@ -285,6 +288,7 @@ function templateIdFromQuickAction(action: HardwareQuoteQuickAction): StandardQu
 export default function HardwareQuotesPanel({
   quickAction = null,
   onQuickActionConsumed,
+  prefill = null,
 }: HardwareQuotesPanelProps) {
   const [composerOpen, setComposerOpen] = useState(false)
   const [composerTemplateId, setComposerTemplateId] = useState<StandardQuoteTemplateId>("board_86")
@@ -292,6 +296,7 @@ export default function HardwareQuotesPanel({
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [sharingQuoteId, setSharingQuoteId] = useState<string | null>(null)
+  const [convertingQuoteId, setConvertingQuoteId] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [activeFilter, setActiveFilter] = useState<QuoteFilter>("all")
@@ -381,6 +386,50 @@ export default function HardwareQuotesPanel({
       setLoadError(error instanceof Error ? error.message : "견적서 목록을 불러오지 못했습니다.")
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleConvertToContract(quote: HardwareQuoteRow) {
+    if (convertingQuoteId) return
+
+    const confirmed = window.confirm(
+      `견적 ${quote.quoteNumber}을(를) 계약으로 전환합니다.\n\n` +
+        `· 이 견적 내용으로 연결된 계약서가 생성됩니다\n` +
+        `· 딜 단계가 '계약'으로 전진합니다(이미 그 이후면 그대로)\n` +
+        `· 관련 견적 할 일이 완료 처리됩니다\n\n계속할까요?`
+    )
+    if (!confirmed) return
+
+    setConvertingQuoteId(quote.id)
+    setNotice(null)
+
+    try {
+      const response = await portalFetch(`/api/portal/quotes/${quote.id}/convert`, {
+        method: "POST",
+      })
+      const payload = (await response.json().catch(() => null)) as
+        | { contract?: { contract_number?: string }; error?: string }
+        | null
+
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "계약 전환에 실패했습니다.")
+      }
+
+      const contractNumber = payload?.contract?.contract_number
+      setNotice({
+        tone: "success",
+        message: contractNumber
+          ? `계약 ${contractNumber} 생성 · 딜 단계가 '계약'으로 전진했습니다.`
+          : "견적을 계약으로 전환했습니다.",
+      })
+      await loadQuotes()
+    } catch (error) {
+      setNotice({
+        tone: "error",
+        message: error instanceof Error ? error.message : "계약 전환에 실패했습니다.",
+      })
+    } finally {
+      setConvertingQuoteId(null)
     }
   }
 
@@ -662,10 +711,29 @@ export default function HardwareQuotesPanel({
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${statusMeta.className}`}>
                         {statusMeta.label}
                       </span>
-                      <span className={`inline-flex items-center gap-0.5 text-[11px] font-medium ${nextAction.textClassName}`}>
-                        <ArrowRight className="h-3 w-3" />
-                        {nextAction.label}
-                      </span>
+                      {/* V2 정본 전환: /api/portal/quotes/[id]/convert — 딜·고객 FK 연결 + stage 전진 + 태스크 완료.
+                          레거시 V1 수동 폼 프리필 브리지(onConvertToContract)는 이 경로로 대체·폐기됨. */}
+                      {quote.status === "accepted" || quote.acceptedAt ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleConvertToContract(quote)}
+                          disabled={convertingQuoteId === quote.id}
+                          title="이 견적으로 연결된 계약서를 생성하고 딜 단계를 '계약'으로 전진시킵니다."
+                          className="inline-flex items-center gap-1 rounded-full border border-[#084734]/25 bg-[#ECFDF5] px-2.5 py-0.5 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#d8f3e8] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+                        >
+                          {convertingQuoteId === quote.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <ArrowRight className="h-3 w-3" />
+                          )}
+                          {convertingQuoteId === quote.id ? "전환 중…" : nextAction.label}
+                        </button>
+                      ) : (
+                        <span className={`inline-flex items-center gap-0.5 text-[11px] font-medium ${nextAction.textClassName}`}>
+                          <ArrowRight className="h-3 w-3" />
+                          {nextAction.label}
+                        </span>
+                      )}
                       {quote.createdAction && (
                         <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/45 ring-1 ring-[#e8e8e4]">
                           {ACTION_LABEL[quote.createdAction]}
@@ -689,7 +757,7 @@ export default function HardwareQuotesPanel({
                   <div className="grid grid-cols-3 gap-2 text-xs lg:flex lg:flex-nowrap lg:items-baseline lg:justify-end lg:gap-2">
                     <div className="lg:whitespace-nowrap">
                       <p className="text-[#1a1a1a]/35 lg:inline">금액</p>
-                      <p className="mt-0.5 font-semibold text-[#111110] lg:ml-1 lg:inline lg:mt-0">{formatMoney(quote.totalAmount)}</p>
+                      <p className="mt-0.5 font-semibold tabular-nums text-[#111110] lg:ml-1 lg:inline lg:mt-0">{formatMoney(quote.totalAmount)}</p>
                     </div>
                     <span className="hidden text-[#1a1a1a]/20 lg:inline">·</span>
                     <div className="lg:whitespace-nowrap">
@@ -764,6 +832,7 @@ export default function HardwareQuotesPanel({
         recentQuotes={recentQuotes}
         apiBase="/api/portal"
         initialTemplateId={composerTemplateId}
+        prefill={prefill}
         onCreated={handleCreated}
       />
     </div>

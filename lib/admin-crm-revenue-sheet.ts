@@ -2,6 +2,7 @@ import "server-only"
 
 import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import type {
   AdminCrmRevenueSheetBreakdownRow,
   AdminCrmRevenueSheetMonthPoint,
@@ -211,16 +212,23 @@ export async function getAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenu
     })
     const link = chooseBestLink(linksByKey.get(sourceRecordKey) ?? [])
     const scheduledAmount = sumRecord(deal.monthly_payments)
-    const confirmedAmount = sumRecord(deal.monthly_confirmed)
-    const highConfidenceAmount = sumRecord(deal.monthly_high_conf)
+    // 확도 분해는 캐논 splitter(rev-confirmed.ts)로 일원화 — raw monthly_confirmed 합산은
+    // red-불리언·무색상 폴백이 빠져 장부 확정보다 과소집계된다(구 임포터 ¥103만 vs ¥680만 사건과 동류).
+    const hasColorData = dealHasColorData(deal)
+    let confirmedAmount = 0
+    let highConfidenceAmount = 0
     let expectedAmount = 0
     let pastUnconfirmedAmount = 0
 
     for (const [month, rawAmount] of Object.entries(deal.monthly_payments ?? {})) {
       const amount = numberValue(rawAmount)
-      const confirmed = numberValue(deal.monthly_confirmed?.[month])
-      const highConfidence = numberValue(deal.monthly_high_conf?.[month])
-      const uncolored = Math.max(0, amount - confirmed - highConfidence)
+      const {
+        confirmed,
+        highConfidence,
+        expected: uncolored,
+      } = splitMonthConfidence(deal, month, amount, hasColorData, currentMonth)
+      confirmedAmount += confirmed
+      highConfidenceAmount += highConfidence
 
       addMonth(monthMap, month, "scheduledAmount", amount)
       addMonth(monthMap, month, "confirmedAmount", confirmed)

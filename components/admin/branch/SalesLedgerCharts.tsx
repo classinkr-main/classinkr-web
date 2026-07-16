@@ -18,9 +18,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import type { BranchKpiMemberRow, BranchSummaryResponse } from "./types"
-import type { KpiMemberView, KpiMetricView, RevWeekPoint } from "./SalesLedgerWorkbench"
+import type { KpiMemberView, KpiMetricView, RevWeekPoint } from "./ledger/shared"
 
 // SalesLedgerWorkbench.tsx의 compareText와 동일한 로직의 로컬 사본 — KpiGapChart 정렬 전용.
 // (값 import를 피해 SalesLedgerWorkbench와의 실제 순환 의존을 만들지 않기 위한 의도적 중복.)
@@ -117,9 +118,10 @@ const WEEK_SERIES: Array<{
   label: string
   color: string
 }> = [
-  { key: "confirmed", label: "확정", color: "#084734" },
-  { key: "highConfidence", label: "고확도", color: "#1E5DA8" },
-  { key: "open", label: "예정", color: "#A8741A" },
+  // 확도 3단은 CONFIDENCE_TOKENS SSOT 소비 — 일자 추정·월합계만은 확도가 아니라 중립 유지.
+  { key: "confirmed", label: CONFIDENCE_TOKENS.confirmed.label, color: CONFIDENCE_TOKENS.confirmed.color },
+  { key: "highConfidence", label: CONFIDENCE_TOKENS["high-confidence"].label, color: CONFIDENCE_TOKENS["high-confidence"].color },
+  { key: "open", label: CONFIDENCE_TOKENS.expected.label, color: CONFIDENCE_TOKENS.expected.color },
   { key: "inferred", label: "일자 추정", color: "#6B7280" },
   { key: "monthlyOnly", label: "월합계만", color: "#D9D6D0" },
 ]
@@ -364,9 +366,9 @@ export function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]
               label={makeWeeklyTargetLabel(weeklyTarget)}
             />
           )}
-          <Bar dataKey="confirmed" name="확정" stackId="week" fill="#084734" shape={makeStackSegmentShape("confirmed")} maxBarSize={48} />
-          <Bar dataKey="highConfidence" name="고확도" stackId="week" fill="#1E5DA8" shape={makeStackSegmentShape("highConfidence")} maxBarSize={48} />
-          <Bar dataKey="open" name="예정" stackId="week" fill="#A8741A" shape={makeStackSegmentShape("open")} maxBarSize={48} />
+          <Bar dataKey="confirmed" name={CONFIDENCE_TOKENS.confirmed.label} stackId="week" fill={CONFIDENCE_TOKENS.confirmed.color} shape={makeStackSegmentShape("confirmed")} maxBarSize={48} />
+          <Bar dataKey="highConfidence" name={CONFIDENCE_TOKENS["high-confidence"].label} stackId="week" fill={CONFIDENCE_TOKENS["high-confidence"].color} shape={makeStackSegmentShape("highConfidence")} maxBarSize={48} />
+          <Bar dataKey="open" name={CONFIDENCE_TOKENS.expected.label} stackId="week" fill={CONFIDENCE_TOKENS.expected.color} shape={makeStackSegmentShape("open")} maxBarSize={48} />
           <Bar dataKey="inferred" name="일자 추정" stackId="week" fill="#6B7280" shape={makeStackSegmentShape("inferred")} maxBarSize={48} />
           <Bar dataKey="monthlyOnly" name="월합계만" stackId="week" fill="#D9D6D0" shape={makeStackSegmentShape("monthlyOnly")} maxBarSize={48} />
           <Line
@@ -419,14 +421,14 @@ export function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]
               label="확정 / 월 목표"
               value={confirmedTotal}
               max={monthGoal}
-              color="#084734"
+              color={CONFIDENCE_TOKENS.confirmed.color}
               meta={`${formatMoney(confirmedTotal)} · ${formatPercent((confirmedTotal / monthGoal) * 100)}`}
             />
             <CompactProgress
               label="확정+고확도 / 월 목표"
               value={coveredTotal}
               max={monthGoal}
-              color="#1E5DA8"
+              color={CONFIDENCE_TOKENS["high-confidence"].color}
               meta={`${formatMoney(coveredTotal)} · ${formatPercent((coveredTotal / monthGoal) * 100)}`}
             />
           </div>

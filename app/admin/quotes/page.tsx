@@ -6,7 +6,6 @@ import {
   ClipboardList,
   FileSignature,
   FileText,
-  Link2,
   Plus,
   Ticket,
   Users,
@@ -16,9 +15,10 @@ import HardwareQuotesPanel from "@/components/admin/documents/HardwareQuotesPane
 import SoftwareQuoteCodesPanel from "@/components/admin/documents/SoftwareQuoteCodesPanel"
 import { ContractsPanel } from "@/components/admin/documents/ContractsPanel"
 import { ReceiptsPanel } from "@/components/admin/documents/ReceiptsPanel"
+import type { QuickQuotePrefill } from "@/components/portal/quotes/QuickQuoteComposer"
 import type { StandardQuoteTemplateId } from "@/lib/standard-quote-template"
 
-type DocumentTab = "hardware" | "software" | "contracts" | "receipts" | "links"
+type DocumentTab = "hardware" | "software" | "contracts" | "receipts"
 type HardwareQuoteQuickAction = "new" | StandardQuoteTemplateId
 type HardwareQuoteQuickActionRequest = {
   key: string
@@ -57,37 +57,30 @@ const DOCUMENT_TABS: DocumentTabItem[] = [
     description: "수납 확인, 현금영수증, PDF 발행 기록",
     icon: <ClipboardList className="h-4 w-4" />,
   },
-  {
-    key: "links",
-    label: "공유 링크",
-    description: "열람 로그와 발송 상태를 모을 다음 단계",
-    icon: <Link2 className="h-4 w-4" />,
-  },
+  // "공유 링크"(links) coming-soon 탭은 제거 — 열람수·발송 상태는 하드웨어 견적 행 단위로 이미 제공된다.
+  // 구 딥링크(tab=links|shares)는 normalizeDocumentTab의 hardware 폴백이 흡수한다.
 ]
 
+// href는 렌더에서 소비되지 않는 미사용 필드라 제거 — 북마크 호환은 stub 라우트(redirect)가 담당한다.
 const QUICK_QUOTE_ACTIONS: Array<{
   action: HardwareQuoteQuickAction
   label: string
   description: string
-  href: string
 }> = [
   {
     action: "new",
     label: "빠른 견적 작성",
     description: "리드 없이 고객명만 입력해 견적을 바로 만듭니다.",
-    href: "/admin/quotes/new",
   },
   {
     action: "recording_studio",
     label: "녹화 세트 견적",
     description: "86형 보드, T1, 벽걸이, 자동 녹화 1년 패키지",
-    href: "/admin/quotes/recording-studio",
   },
   {
     action: "online_suite",
     label: "AI Suite 견적",
     description: "월 구독형 통합 학원 패키지 견적",
-    href: "/admin/quotes/ai-suite",
   },
 ]
 
@@ -95,7 +88,6 @@ function normalizeDocumentTab(raw: string | null): DocumentTab {
   if (raw === "software" || raw === "software-code" || raw === "sw") return "software"
   if (raw === "contract" || raw === "contracts") return "contracts"
   if (raw === "receipt" || raw === "receipts") return "receipts"
-  if (raw === "links" || raw === "shares") return "links"
 
   return "hardware"
 }
@@ -136,6 +128,24 @@ function quickActionFromParams(params: Pick<URLSearchParams, "get" | "toString">
 function quickActionFromSearch() {
   if (typeof window === "undefined") return null
   return quickActionFromParams(new URLSearchParams(window.location.search))
+}
+
+function prefillFromParams(params: Pick<URLSearchParams, "get">): QuickQuotePrefill | null {
+  const dealId = params.get("dealId") ?? params.get("deal")
+  const customerId = params.get("customerId") ?? params.get("customer")
+  const customerName = params.get("customerName")
+  // customerName만 있어도(리드/NEO 딥링크: 고객명 프리필) 신규 고객 이름을 채우도록 통과시킨다.
+  if (!dealId && !customerId && !customerName) return null
+  return {
+    dealId: dealId || null,
+    customerId: customerId || null,
+    customerName: customerName || null,
+  }
+}
+
+function prefillFromSearch() {
+  if (typeof window === "undefined") return null
+  return prefillFromParams(new URLSearchParams(window.location.search))
 }
 
 function QuoteCreateButton({
@@ -222,35 +232,17 @@ function QuoteCreateButton({
   )
 }
 
-function PanelShell({
-  title,
-  description,
-  children,
-}: {
-  title: string
-  description: string
-  children: ReactNode
-}) {
-  return (
-    <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-6">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#1a1a1a]/35">
-        Next
-      </p>
-      <h2 className="mt-2 text-[17px] font-semibold text-[#111110]">{title}</h2>
-      <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/55">
-        {description}
-      </p>
-      {children}
-    </div>
-  )
-}
-
 export default function QuotesPage() {
   const quickActionSequenceRef = useRef(0)
   const [activeTab, setActiveTab] = useState<DocumentTab>(() => tabFromSearch())
-  const [hardwareQuickAction, setHardwareQuickAction] = useState<HardwareQuoteQuickActionRequest>(() =>
-    quickActionFromSearch()
-  )
+  const [prefill] = useState<QuickQuotePrefill | null>(() => prefillFromSearch())
+  const [hardwareQuickAction, setHardwareQuickAction] = useState<HardwareQuoteQuickActionRequest>(() => {
+    const fromSearch = quickActionFromSearch()
+    if (fromSearch) return fromSearch
+    // 딜/고객 프리필로 진입하면 작성기를 자동으로 연다(action 파라미터가 없어도).
+    if (prefillFromSearch()) return { action: "new", key: "prefill-open" }
+    return null
+  })
 
   const handleTabChange = (tab: DocumentTab) => {
     setActiveTab(tab)
@@ -280,6 +272,9 @@ export default function QuotesPage() {
       window.history.replaceState(null, "", url.toString())
     }
   }
+
+  // 견적 행 "계약 전환"은 HardwareQuotesPanel이 V2 convert 라우트로 직접 처리한다
+  // (딜·고객 FK 연결 + stage 전진 + 태스크 완료) — 레거시 계약 폼 프리필 브리지는 폐기됨.
 
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
@@ -335,34 +330,12 @@ export default function QuotesPage() {
           <HardwareQuotesPanel
             quickAction={hardwareQuickAction}
             onQuickActionConsumed={() => setHardwareQuickAction(null)}
+            prefill={prefill}
           />
         )}
         {activeTab === "software" && <SoftwareQuoteCodesPanel />}
         {activeTab === "contracts" && <ContractsPanel />}
         {activeTab === "receipts" && <ReceiptsPanel />}
-        {activeTab === "links" && (
-          <div className="p-6">
-            <PanelShell
-              title="공유 링크와 열람 로그는 다음 단계에서 연결합니다."
-              description="문서 상태와 발송 상태를 분리한 뒤, 견적 링크 열람, 계약 서명 링크, PDF 발송 기록을 같은 row 모델로 모을 예정입니다."
-            >
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
-                {[
-                  ["견적 공개 링크", "quote_documents 버전 고정 링크와 고객 열람 시각"],
-                  ["계약 서명 링크", "partner_signed, admin_signed 상태와 서명 URL"],
-                  ["영수증 전달", "PDF, 이메일 발송, 현금영수증 발행 기록"],
-                ].map(([title, detail]) => (
-                  <div key={title} className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                    <p className="text-[13px] font-semibold text-[#111110]">{title}</p>
-                    <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/50">
-                      {detail}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </PanelShell>
-          </div>
-        )}
       </div>
     </div>
   )

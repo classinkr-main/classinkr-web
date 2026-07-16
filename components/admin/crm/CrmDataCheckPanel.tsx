@@ -70,7 +70,9 @@ export default function CrmDataCheckPanel({
     null
 
   return (
-    <div className="mb-6 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+    // 참조 표면(정합성 점검) — 행동 표면(매칭 인박스)과의 톤차 위계(W2-6): 베이지로 가라앉히고
+    // 내부 상태 칩만 흰색으로 띄운다(레이어드 베이지, 장식 없음).
+    <div className="mb-6 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -103,7 +105,7 @@ export default function CrmDataCheckPanel({
           },
           { label: "Write queue", value: writeQueueDetail, tone: overview?.writeQueue.failed ? "text-[#B85C33]" : "text-[#111110]" },
         ].map((item) => (
-          <div key={item.label} className="rounded-xl bg-[#fafaf8] px-3 py-3">
+          <div key={item.label} className="rounded-xl bg-white px-3 py-3">
             <p className="text-[11px] font-medium text-[#1a1a1a]/40">{item.label}</p>
             <p className={`mt-1 truncate text-[12px] font-semibold ${item.tone}`}>{item.value}</p>
           </div>

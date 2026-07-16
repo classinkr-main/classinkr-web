@@ -1,15 +1,15 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
-import { verifyAdmin } from "@/lib/admin-auth"
+import { STAFF_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { getAllPatchNotes, createPatchNote } from "@/lib/repositories/patch-notes"
 
 export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req)
+  const err = await verifyAdmin(req, STAFF_ADMIN_API_ROLES)
   if (err) return err
   return NextResponse.json(await getAllPatchNotes())
 }
 
 export async function POST(req: NextRequest) {
-  const err = await verifyAdmin(req)
+  const err = await verifyAdmin(req, STAFF_ADMIN_API_ROLES)
   if (err) return err
   const body = await req.json()
   if (!body.version || !body.title || !body.date) {

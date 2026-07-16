@@ -283,6 +283,9 @@ function taskHref(task: CrmTaskRecord) {
   if (task.targetType === "neo_account" && task.targetId) {
     return `/admin/crm/customers/accounts?account=${encodeURIComponent(task.targetId)}`
   }
+  if (task.targetType === "deal" && task.targetId) {
+    return `/admin/crm/deals/orders?deal=${encodeURIComponent(task.targetId)}`
+  }
   return "/admin/crm/activity"
 }
 

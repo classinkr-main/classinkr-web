@@ -8,14 +8,17 @@ import {
   readRequestBody,
   toErrorResponse,
 } from "@/app/api/admin/hardware/_validation"
-import { requireVerifiedAdminContext } from "@/lib/admin-auth"
+import {
+  HARDWARE_EDITOR_ADMIN_API_ROLES,
+  requireVerifiedAdminContext,
+} from "@/lib/admin-auth"
 import { updateHardwareItem } from "@/lib/repositories/hardware-inventory"
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const admin = await requireVerifiedAdminContext(req)
+  const admin = await requireVerifiedAdminContext(req, HARDWARE_EDITOR_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   try {

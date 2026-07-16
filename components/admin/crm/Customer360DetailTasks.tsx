@@ -57,7 +57,7 @@ function TaskRow({ task }: { task: CrmTaskRecord }) {
         {task.snoozedUntil ? (
           <span className="inline-flex items-center gap-1">
             <MoonStar className="h-3 w-3" />
-            미룸 {formatDateTime(task.snoozedUntil)}
+            재개 {formatDateTime(task.snoozedUntil)}
           </span>
         ) : null}
         {task.ownerNameSnapshot ? <span>· {task.ownerNameSnapshot}</span> : null}

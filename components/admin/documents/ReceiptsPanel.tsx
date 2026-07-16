@@ -160,7 +160,7 @@ export function ReceiptsPanel() {
                       <p className="font-mono text-xs text-[#1a1a1a]/45">{r.receipt_number}</p>
                       <p className="mt-1 truncate text-sm font-semibold text-[#111110]">{partnerName(r.partner_id)}</p>
                     </div>
-                    <p className="shrink-0 text-sm font-semibold text-[#111110]">{r.total_amount.toLocaleString()}원</p>
+                    <p className="shrink-0 text-sm font-semibold tabular-nums text-[#111110]">{r.total_amount.toLocaleString("ko-KR")}원</p>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-[#1a1a1a]/55">
                     <div>
@@ -214,7 +214,7 @@ export function ReceiptsPanel() {
                     <tr key={r.id} className="border-b border-[#f0f0ec] hover:bg-[#fafafa] transition-colors">
                       <td className="px-4 py-3 font-mono text-xs text-[#1a1a1a]/60">{r.receipt_number}</td>
                       <td className="px-4 py-3 text-[#1a1a1a]/70">{partnerName(r.partner_id)}</td>
-                      <td className="px-4 py-3 font-medium">{r.total_amount.toLocaleString()}원</td>
+                      <td className="px-4 py-3 font-medium tabular-nums">{r.total_amount.toLocaleString("ko-KR")}원</td>
                       <td className="px-4 py-3 text-xs text-[#1a1a1a]/70">{METHOD_LABEL[r.payment_method]}</td>
                       <td className="px-4 py-3 text-xs">
                         {r.cash_receipt_requested ? (
@@ -302,8 +302,8 @@ export function ReceiptsPanel() {
                   <label className="text-xs font-medium text-[#1a1a1a]/60 mb-1 block">합계 (VAT 포함)</label>
                   <input
                     readOnly
-                    value={`${form.total_amount.toLocaleString()}원`}
-                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm bg-[#f7f7f5] text-[#1a1a1a]/60"
+                    value={`${form.total_amount.toLocaleString("ko-KR")}원`}
+                    className="w-full border border-[#e8e8e4] rounded-lg px-3 py-2 text-sm tabular-nums bg-[#f7f7f5] text-[#1a1a1a]/60"
                   />
                 </div>
                 <div>

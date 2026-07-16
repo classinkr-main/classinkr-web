@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { StatTile } from "@/components/admin/viz"
 import {
   resolveCrmWriteExecuteOutcome,
   type CrmWriteExecuteResponseBody,
@@ -245,27 +246,29 @@ function StatusBadge({ label, tone }: { label: string; tone?: string }) {
   )
 }
 
+// 콜드 로드 '...' 금지 — 값 자리 크기의 저대비 펄스 스켈레톤(레이아웃 일치, CRM-5).
+function ValueSkeleton({ className = "h-5 w-20" }: { className?: string }) {
+  return (
+    <span aria-hidden className={`inline-block animate-pulse rounded-md bg-[#f0f0ec] align-middle ${className}`} />
+  )
+}
+
+// KPI 타일 로컬 재구현 금지(W2-2b) — 마크업은 viz StatTile(bare 변형)에 위임하는 어댑터.
+// deals/rev-sheet/matching 3중복이던 MetricCard의 단일 시각 원천은 이제 viz/primitives다.
 function MetricCard({
   label,
   value,
   hint,
 }: {
   label: string
-  value: string
+  value: ReactNode
   hint: string
 }) {
-  return (
-    <div className="border-t border-[#f0f0ec] pt-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
-        {label}
-      </p>
-      <p className="mt-2 text-2xl font-bold tracking-[-0.04em] text-[#111110]">{value}</p>
-      <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
-    </div>
-  )
+  return <StatTile icon={null} iconLayout="inline" variant="bare" compact label={label} value={value} hint={hint} />
 }
 
-// KR Team 보드(현황) 측정 타일 차용 — 소프트박스 + 대문자 라벨 + 큰 값.
+// KR Team 보드(현황) 측정 타일 차용 — 마크업은 viz StatTile(soft 변형)에 위임(W2-2b).
+// tone은 값 색만 바꾸는 기존 계약 유지(값·라벨·캡션 불변).
 function MeasureTile({
   icon,
   label,
@@ -275,19 +278,20 @@ function MeasureTile({
 }: {
   icon: ReactNode
   label: string
-  value: string
+  value: ReactNode
   hint: string
   tone?: string
 }) {
   return (
-    <div className="rounded-xl bg-[#fafaf8] px-3 py-3">
-      <div className="flex items-center gap-1.5 text-[#1a1a1a]/40">
-        {icon}
-        <p className="text-[11px] font-semibold uppercase tracking-[0.1em]">{label}</p>
-      </div>
-      <p className={`mt-2 text-[22px] font-bold leading-none tracking-[-0.03em] ${tone}`}>{value}</p>
-      <p className="mt-1.5 text-[11px] leading-relaxed text-[#1a1a1a]/42">{hint}</p>
-    </div>
+    <StatTile
+      icon={icon}
+      iconLayout="inline"
+      variant="soft"
+      compact
+      label={label}
+      value={tone === "text-[#111110]" ? value : <span className={tone}>{value}</span>}
+      hint={hint}
+    />
   )
 }
 
@@ -759,10 +763,10 @@ export default function AdminCrmRevenuePage() {
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em]">딜리버리 총매출</p>
             </div>
             <p className="mt-2 text-4xl font-bold tracking-[-0.045em] text-[#084734] sm:text-[40px]">
-              {loading && !data ? "..." : formatCurrency(data?.summary.deliveryTotalAmount ?? 0)}
+              {loading && !data ? <ValueSkeleton className="h-9 w-36" /> : formatCurrency(data?.summary.deliveryTotalAmount ?? 0)}
             </p>
             <p className="mt-2 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-              본사 CRM 원천의 인식 매출 합산 · 보조 지표는 우측 타일에서 확인
+              본사 CRM 원천의 인식 매출 합산(자체 집계 ₩) — 시트 &lsquo;확정 표시&rsquo;(¥)와 다른 기준
             </p>
           </div>
 
@@ -771,27 +775,27 @@ export default function AdminCrmRevenuePage() {
             <MeasureTile
               icon={<Handshake className="h-4 w-4" />}
               label="계약 기준"
-              value={loading && !data ? "..." : formatCurrency(data?.summary.contractedAmount ?? 0)}
+              value={loading && !data ? <ValueSkeleton /> : formatCurrency(data?.summary.contractedAmount ?? 0)}
               hint="보조 확인용 계약 합계"
             />
             <MeasureTile
               icon={<ReceiptText className="h-4 w-4" />}
               label="입금 완료"
-              value={loading && !data ? "..." : formatCurrency(data?.summary.paidAmount ?? 0)}
+              value={loading && !data ? <ValueSkeleton /> : formatCurrency(data?.summary.paidAmount ?? 0)}
               hint="영수증 수납 · V2 paid"
               tone="text-[#084734]"
             />
             <MeasureTile
               icon={<AlertCircle className="h-4 w-4" />}
               label="미수/대기"
-              value={loading && !data ? "..." : formatCurrency(data?.summary.outstandingAmount ?? 0)}
+              value={loading && !data ? <ValueSkeleton /> : formatCurrency(data?.summary.outstandingAmount ?? 0)}
               hint="확정 대비 미수 리스크"
               tone={(data?.summary.outstandingAmount ?? 0) > 0 ? "text-[#B85C33]" : "text-[#111110]"}
             />
             <MeasureTile
               icon={<TrendingUp className="h-4 w-4" />}
               label="예상 파이프라인"
-              value={loading && !data ? "..." : formatCurrency(data?.summary.expectedPipelineAmount ?? 0)}
+              value={loading && !data ? <ValueSkeleton /> : formatCurrency(data?.summary.expectedPipelineAmount ?? 0)}
               hint={`active ${formatNumber(data?.summary.activeDealCount ?? 0)}건`}
             />
             <MeasureTile
@@ -822,49 +826,41 @@ export default function AdminCrmRevenuePage() {
         </div>
       </section>
 
+      {/* REV 내부 대조 — 딜 표면에서는 요약 1줄만. 확정/임박/예정 분해는 매출시트(rev-sheet)가 집(CRM-2 슬림). */}
       {data?.sheet ? (
         <section className="mb-8 border-b border-[#f0f0ec] pb-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <FileSpreadsheet className="h-4 w-4 text-[#1a1a1a]/35" />
-            <h2 className="text-[14px] font-semibold text-[#111110]">회사 시트 (REV) 내부 대조</h2>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <div className="flex items-center gap-2">
+              <FileSpreadsheet className="h-4 w-4 text-[#1a1a1a]/35" />
+              <h2 className="text-[14px] font-semibold text-[#111110]">회사 시트 (REV) 내부 대조</h2>
+            </div>
+            <span className="text-[12px] text-[#1a1a1a]/45">
+              매칭 완료{" "}
+              <b className="font-semibold text-[#111110]">{formatCNY(data.sheet.linkedAmount)}</b>{" "}
+              ({formatNumber(data.sheet.linkedDealCount)}건) · 미연결{" "}
+              <b
+                className={`font-semibold ${
+                  data.sheet.unlinkedAmount > 0 ? "text-[#B85C33]" : "text-[#111110]"
+                }`}
+              >
+                {formatCNY(data.sheet.unlinkedAmount)}
+              </b>
+            </span>
+            <Link
+              href="/admin/crm/deals/rev-sheet"
+              className="text-[11px] font-medium text-[#084734] underline-offset-2 hover:underline"
+            >
+              매출시트에서 검수 ↗
+            </Link>
             <Link
               href="/admin/branch/ledger?lens=rev"
               className="text-[11px] font-medium text-[#084734] underline-offset-2 hover:underline"
             >
-              매출 장부에서 검수 ↗
+              매출 장부 ↗
             </Link>
             <span className="text-[11px] text-[#1a1a1a]/35">
-              계약 목표 총액 {formatCNY(data.sheet.targetAmount)} · 진행{" "}
-              {formatNumber(data.sheet.activeDealCount)}건/전체 {formatNumber(data.sheet.dealCount)}건 ·
-              오류 체크용 병기 지표 (본사 CRM 매출과 합산하지 않음)
+              시트 기준 ¥ · 확정·임박·예정 분해는 매출시트에서 · 본사 CRM 매출과 합산하지 않음
             </span>
-          </div>
-          <div className="mt-2 grid gap-8 md:grid-cols-2 xl:grid-cols-5">
-            <MetricCard
-              label="매칭 완료 금액"
-              value={formatCNY(data.sheet.linkedAmount)}
-              hint={`확정 link ${formatNumber(data.sheet.linkedDealCount)}건 · 미연결 ${formatCNY(data.sheet.unlinkedAmount)}`}
-            />
-            <MetricCard
-              label="시트 확정 표시"
-              value={formatCNY(data.sheet.confirmedAmount)}
-              hint="주차 칸 빨간 글자(확정) 금액 누적 합계"
-            />
-            <MetricCard
-              label="확정 임박 표시"
-              value={formatCNY(data.sheet.highConfidenceAmount)}
-              hint="주차 칸 파란 글자 — 높은 확률로 클로징 예정"
-            />
-            <MetricCard
-              label="시트 예정 표시"
-              value={formatCNY(data.sheet.expectedAmount)}
-              hint="당월~미래의 색 표시 없는 납부 스케줄 합계"
-            />
-            <MetricCard
-              label="확정 전환 대기"
-              value={formatCNY(data.sheet.unconfirmedPastAmount)}
-              hint="지난달 이전 예정이었지만 아직 확정 표시가 없는 금액"
-            />
           </div>
         </section>
       ) : null}
@@ -899,7 +895,45 @@ export default function AdminCrmRevenuePage() {
             ))}
           </div>
 
-          <div className="mt-4 overflow-x-auto">
+          {/* <sm 카드 폴백(W2-6·CRM-9) — 넓은 표는 데스크톱 전용, 모바일은 상위 필드 카드 행.
+              동일 rows·포매터 소비라 정보 손실 0(가로 스크롤 표 대체). */}
+          <div className="mt-4 space-y-2 sm:hidden">
+            {data.externalRecords.length === 0 ? (
+              <p className="rounded-xl bg-[#fafaf8] px-3 py-6 text-center text-[13px] text-[#1a1a1a]/35">
+                외부 CRM 원천 레코드가 아직 로드되지 않았습니다.
+              </p>
+            ) : (
+              data.externalRecords.map((record) => (
+                <div key={`${record.objectApiKey}:${record.externalId}`} className="rounded-xl border border-[#e8e8e4] bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-[13px] font-semibold text-[#111110]">
+                        {record.displayName ?? record.externalId}
+                      </p>
+                      <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/35">
+                        {record.objectApiKey} · {record.externalId}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-[12px] font-semibold tabular-nums text-[#111110]">
+                      {record.amount == null
+                        ? "-"
+                        : record.objectApiKey === "opportunity"
+                          ? `$${record.amount.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+                          : formatCNY(record.amount)}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-[#1a1a1a]/45">
+                    {record.ownerName ?? "-"} · {record.status ?? "-"}
+                  </p>
+                  <p className="mt-0.5 text-[10.5px] text-[#1a1a1a]/35">
+                    발생 {formatDate(record.occurredAt)} · sync {formatDate(record.syncedAt)}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="mt-4 hidden overflow-x-auto sm:block">
             <table className="min-w-[980px] w-full text-left">
               <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
                 <tr>

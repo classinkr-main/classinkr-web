@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
+import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
 import {
@@ -28,6 +29,7 @@ import {
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import type {
   NeoCrmCustomerDetail,
   NeoCrmCustomerList,
@@ -49,19 +51,7 @@ const SORT_OPTIONS: Array<{ key: SortKey; label: string }> = [
 const PAGE_SIZE = 50
 const DAY_MS = 24 * 60 * 60 * 1000
 
-// 매출·수금·잔액은 위안화(CNY).
-function formatCNY(value: number | null | undefined) {
-  const num = Number(value ?? 0)
-  if (Math.abs(num) >= 10_000) {
-    return `¥${(num / 10_000).toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}만`
-  }
-  return `¥${num.toLocaleString("ko-KR")}`
-}
-
-// 오더(Opportunity)는 달러($)로 기재된다.
-function formatUSD(value: number | null | undefined) {
-  return `$${Number(value ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`
-}
+// 금액 표기는 lib/crm/money-format SSOT에 위임 — 잔액·수금·성과=위안화(¥), 오더=달러($).
 
 function formatNumber(value: number | null | undefined) {
   return new Intl.NumberFormat("ko-KR").format(Number(value ?? 0))
@@ -115,7 +105,7 @@ function ExpiryBadge({ expireAt }: { expireAt: string | null }) {
     )
   if (days <= 60)
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-amber-100 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+      <span className="inline-flex items-center gap-1 rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[11px] font-semibold text-[#7A520F]">
         D-{days} · {formatDay(expireAt)}
       </span>
     )
@@ -615,6 +605,39 @@ function CustomerDetailPanel({
   )
 }
 
+// 빈 상태 — 다음 행동 안내(필터 초기화 / 통합 고객 DB 딥링크). 데스크톱 표·모바일 카드 공용.
+function EmptyCustomers({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) {
+  return (
+    <div className="py-14 text-center">
+      <Building2 className="mx-auto mb-2 h-5 w-5 text-[#1a1a1a]/20" />
+      <p className="text-[13px] font-medium text-[#111110]">조건에 맞는 고객이 없습니다.</p>
+      <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
+        {hasFilters
+          ? "검색어·필터를 초기화하고 다시 확인해 보세요."
+          : "동기화된 고객이 아직 없습니다. 통합 고객 DB에서 리드·고객을 확인하세요."}
+      </p>
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+        {hasFilters ? (
+          <button
+            type="button"
+            onClick={onReset}
+            className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+          >
+            필터 초기화
+          </button>
+        ) : null}
+        <Link
+          href="/admin/crm/customers/unified"
+          className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+        >
+          통합 고객 DB 열기
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 function KpiTile({ icon, label, value, hint, tone = "text-[#111110]" }: { icon: React.ReactNode; label: string; value: string; hint: string; tone?: string }) {
   return (
     <div className="rounded-xl bg-[#fafaf8] px-3 py-3">
@@ -631,13 +654,15 @@ function KpiTile({ icon, label, value, hint, tone = "text-[#111110]" }: { icon: 
 export default function NeoCrmCustomersClient() {
   const searchParams = useSearchParams()
   const deepLinkedAccountId = searchParams.get("account")?.trim() ?? ""
+  // ?expiring=1 딥링크 — Overview 리뉴얼 타일에서 '만료 임박만' 필터가 켜진 채 착지한다.
+  const deepLinkedExpiring = searchParams.get("expiring") === "1"
   const [data, setData] = useState<NeoCrmCustomerList | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState("")
   const [ownerFilter, setOwnerFilter] = useState<string>("all")
   const [sortKey, setSortKey] = useState<SortKey>("balance")
-  const [expiringOnly, setExpiringOnly] = useState(false)
+  const [expiringOnly, setExpiringOnly] = useState(deepLinkedExpiring)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
   const [dismissedDeepLinkedAccountId, setDismissedDeepLinkedAccountId] = useState<string | null>(null)
@@ -727,6 +752,12 @@ export default function NeoCrmCustomersClient() {
   }, [data, query, ownerFilter, sortKey, expiringOnly])
 
   const visibleRows = filtered.slice(0, visibleCount)
+  const hasActiveFilters = Boolean(query.trim()) || ownerFilter !== "all" || expiringOnly
+  const resetFilters = useCallback(() => {
+    setQuery("")
+    setOwnerFilter("all")
+    setExpiringOnly(false)
+  }, [])
   const selectedRow = useMemo(
     () => (selectedAccountId ? data?.rows.find((row) => row.accountId === selectedAccountId) ?? null : null),
     [data, selectedAccountId]
@@ -761,7 +792,7 @@ export default function NeoCrmCustomersClient() {
 
       {error ? <div className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">{error}</div> : null}
       {syncHealth?.isShroffAccountStale ? (
-        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-800">
+        <div className="mb-6 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[12px] leading-relaxed text-[#7A520F]">
           잔액·만료 원천 데이터가 {formatAgeHours(syncHealth.shroffAccountAgeHours)} 데이터입니다. 만료일·잔액이 외부 CRM과
           다를 수 있으니 외부 CRM 동기화 후 확인하세요.
         </div>
@@ -835,7 +866,7 @@ export default function NeoCrmCustomersClient() {
           onClick={() => setExpiringOnly((prev) => !prev)}
           className={`inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-[12px] font-semibold transition-colors ${
             expiringOnly
-              ? "border-amber-200 bg-amber-50 text-amber-700"
+              ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
               : "border-[#e8e8e4] bg-white text-[#111110] hover:bg-[#f5f5f2]"
           }`}
         >
@@ -845,7 +876,59 @@ export default function NeoCrmCustomersClient() {
         <span className="ml-auto text-[11px] text-[#1a1a1a]/35">{formatNumber(filtered.length)}곳 표시</span>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* 모바일 카드 폴백 — 넓은 표(min-w 920)는 sm 미만에서 존재신호 중심 카드로 대체 */}
+      <div className="sm:hidden">
+        {loading && !data ? (
+          <div className="divide-y divide-[#f0f0ec]">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={`msk-${i}`} className="py-4">
+                <div className="h-4 w-40 animate-pulse rounded bg-[#f0f0ec]" />
+                <div className="mt-1.5 h-3 w-24 animate-pulse rounded bg-[#f5f5f2]" />
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="h-8 animate-pulse rounded-lg bg-[#f5f5f2]" />
+                  <div className="h-8 animate-pulse rounded-lg bg-[#f5f5f2]" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : visibleRows.length === 0 ? (
+          <EmptyCustomers hasFilters={hasActiveFilters} onReset={resetFilters} />
+        ) : (
+          <div className="divide-y divide-[#f0f0ec]">
+            {visibleRows.map((row: NeoCrmCustomerRow) => (
+              <button
+                key={`m-${row.accountId}`}
+                type="button"
+                onClick={() => setSelectedAccountId(row.accountId)}
+                className="block w-full py-4 text-left transition-colors hover:bg-[#fafaf8]"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold text-[#111110]">{row.name}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/35">
+                      {row.uid ? `UID ${row.uid}` : "EEO 미연결"}
+                      {row.phone ? ` · ${row.phone}` : ""}
+                    </p>
+                  </div>
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-[#1a1a1a]/25" />
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
+                  <span className="font-semibold text-[#084734]">
+                    잔액 {row.balance == null ? "-" : formatCNY(row.balance)}
+                  </span>
+                  <span className="text-[#1a1a1a]/45">오더 {formatUSD(row.orderAmount)}</span>
+                  <span className="text-[#1a1a1a]/45">{row.ownerName}</span>
+                </div>
+                <div className="mt-1.5">
+                  <ExpiryBadge expireAt={row.expireAt} />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="hidden overflow-x-auto sm:block">
         <table className="min-w-[920px] w-full text-left">
           <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
             <tr>
@@ -870,9 +953,8 @@ export default function NeoCrmCustomersClient() {
               ))
             ) : visibleRows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
-                  <Building2 className="mx-auto mb-2 h-5 w-5 text-[#1a1a1a]/20" />
-                  조건에 맞는 고객이 없습니다.
+                <td colSpan={6}>
+                  <EmptyCustomers hasFilters={hasActiveFilters} onReset={resetFilters} />
                 </td>
               </tr>
             ) : (

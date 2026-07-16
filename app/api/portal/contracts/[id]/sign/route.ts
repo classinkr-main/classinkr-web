@@ -77,6 +77,31 @@ export async function POST(
     );
     await updateContractDocument(id, { status: newStatus });
 
+    // 양측 서명 완료(admin_signed = 사실상 계약 확정) 시점에만 매출 원장 입력 큐에
+    // forecast 초안을 자동 제안한다. draft까지만 넣으므로 안전(검수→적용은 사람이 함).
+    // 서명 응답을 막지 않도록 try/catch로 감싸고 실패는 로그만 남긴다.
+    if (newStatus === "admin_signed") {
+      try {
+        const { proposeLedgerDraftForSignedContract } = await import(
+          "@/lib/admin/handoff/contract-to-ledger-draft"
+        );
+        const proposal = await proposeLedgerDraftForSignedContract({
+          contractDocumentId: id,
+        });
+        if (proposal.status === "error") {
+          console.error(
+            "[portal/contracts/[id]/sign] ledger draft proposal error:",
+            proposal.error
+          );
+        }
+      } catch (handoffError) {
+        console.error(
+          "[portal/contracts/[id]/sign] ledger draft handoff failed:",
+          handoffError
+        );
+      }
+    }
+
     const actor = getActorInfo(ctx);
     await logActivity({
       partner_account_id: deal.partner_account_id,
