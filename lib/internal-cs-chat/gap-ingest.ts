@@ -43,7 +43,7 @@ export async function ingestInternalCsGap(input: {
     })
   } catch (error) {
     console.error(
-      "[internal-cs] failed to ingest gap into question_clusters:",
+      `[internal-cs] failed to ingest gap into question_clusters (conversation ${input.conversationId}, message ${input.messageId}):`,
       error instanceof Error ? error.message : error
     )
   }
