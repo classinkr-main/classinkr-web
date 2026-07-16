@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Archive,
   ArrowLeft,
+  ArrowUpRight,
   BookOpen,
   Bot,
   CheckCircle2,
@@ -25,6 +26,7 @@ import {
   MessageSquare,
   Paperclip,
   PanelRightOpen,
+  Plus,
   RefreshCcw,
   RotateCcw,
   Search,
@@ -53,6 +55,13 @@ import {
 
 import { adminFetchJson } from "@/lib/admin-client"
 import { cn } from "@/lib/utils"
+
+import {
+  REGRESSION_JUDGE_ACTIONS,
+  regressionOutcomeChip,
+  summarizeDocsGaps,
+  type DocsGapsDeskSummary,
+} from "./ops-desk"
 
 type WorkspaceTab = "chat" | "queue" | "archive" | "tools"
 type ModelMode = "auto" | "fast" | "deep"
@@ -152,19 +161,10 @@ interface ConversationListResponse {
 }
 
 // GET /api/admin/docs/gaps — 클러스터별 metadata.source로 챗봇/내부CS 유입을 구분한다.
-// 이 컴포넌트는 카운트 집계에만 쓰므로 필요한 필드만 취한다.
-interface DocGapClusterSummaryItem {
-  metadata?: { source?: string } | null
-}
-
+// 스탯 스트립 집계(summarizeDocsGaps)에 필요한 필드만 취한다.
 interface DocGapsSummaryResponse {
-  gapClusters: DocGapClusterSummaryItem[]
-}
-
-interface DocsGapsWidgetSummary {
-  chatbot: number
-  internalCs: number
-  capped: boolean
+  gapClusters?: Array<{ metadata?: { source?: string } | null }> | null
+  zeroResultSearches?: unknown[] | null
 }
 
 // GET /api/admin/cs-chat/regression-candidates — 회귀 후보(미판정 우선) 메시지 목록.
@@ -247,59 +247,52 @@ const WORKSPACE_TABS: Array<{ value: WorkspaceTab; label: string }> = [
   { value: "tools", label: "운영 도구" },
 ]
 
-// "문서 보강 · 회귀 검수"는 라이브 위젯(DOCS_GAPS_FALLBACK_TOOL)으로 별도 렌더링한다 — 정적 카드 제거.
-const DOCS_GAPS_FALLBACK_TOOL = {
-  href: "/admin/docs?tab=gaps",
-  title: "문서 보강 · 회귀 검수",
-  description: "반복·미해결 질문을 문서 초안과 회귀 평가로 연결합니다.",
-  icon: Search,
-  priority: "먼저 확인",
-} as const
+// 모델 모드 세그먼트 — 네이티브 select 대신 현재 모드가 항상 보이는 3분할 컨트롤.
+const MODEL_MODE_SEGMENTS: Array<{ value: ModelMode; label: string }> = [
+  { value: "auto", label: "자동" },
+  { value: "fast", label: "Flash" },
+  { value: "deep", label: "Pro" },
+]
 
+// 운영 화면 바로가기 — 라이브 지표(스탯 스트립·회귀 검수) 아래에 2열 그리드로 붙는 보조 유틸리티.
 const OPERATING_TOOLS = [
+  {
+    href: "/admin/docs?tab=gaps",
+    title: "문서 보강 · 회귀 검수",
+    description: "반복·미해결 질문을 문서 초안으로 연결",
+    icon: Search,
+  },
   {
     href: "/admin/docs?tab=recommended",
     title: "추천 질문 승인",
-    description: "초안 질문을 검토하고 공개 여부와 노출 순서를 결정합니다.",
+    description: "초안 질문 공개 여부·노출 순서 결정",
     icon: ClipboardCheck,
-    priority: "담당자 승인",
   },
   {
     href: "/admin/channel-talk",
     title: "상담 동기화 · FAQ 후보",
-    description: "채널톡 상담을 동기화하고 자주 묻는 미커버 질문을 확인합니다.",
+    description: "채널톡 상담 원문과 미커버 질문 확인",
     icon: Headphones,
-    priority: "상담 원문",
   },
   {
     href: "/admin/chatbot",
     title: "챗봇 운영 현황",
-    description: "질문량, 미해결률, 상담 이관과 응답 속도를 확인합니다.",
+    description: "질문량 · 미해결률 · 응답 속도",
     icon: Bot,
-    priority: "운영 지표",
   },
   {
     href: "/admin/docs",
     title: "가이드 정본 관리",
-    description: "본사 확인이 끝난 정보를 정본 문서에 반영하고 게시합니다.",
+    description: "본사 확인 정보의 정본 반영과 게시",
     icon: BookOpen,
-    priority: "SSOT",
   },
   {
     href: "/admin/settings?tab=integrations",
     title: "연동 상태 확인",
-    description: "Gemini, Channel Talk, WeCom 등 운영 연동 상태를 점검합니다.",
+    description: "Gemini · Channel Talk · WeCom 점검",
     icon: Settings2,
-    priority: "설정",
   },
 ] as const
-
-const REGRESSION_OUTCOME_ACTIONS: Array<{ value: Exclude<RegressionOutcome, "not_evaluated">; label: string }> = [
-  { value: "pass", label: "통과" },
-  { value: "needs_fix", label: "수정 필요" },
-  { value: "promoted", label: "반영됨" },
-  { value: "excluded", label: "제외" },
-]
 
 const STATUS_META: Record<ConversationStatus, { label: string; className: string }> = {
   queue: { label: "대기", className: "border-black/10 bg-[#F6F5F4] text-[#615D59]" },
@@ -599,10 +592,16 @@ function TabButton({
   active,
   children,
   onClick,
+  count,
+  dot,
 }: {
   active: boolean
   children: ReactNode
   onClick: () => void
+  /** 탭 라벨 옆 위첨자 작업량 — 0이면 표시하지 않는다. */
+  count?: number
+  /** "판정 대기 있음" 앰버 점 — 숫자보다 약한 신호가 맞을 때 쓴다. */
+  dot?: boolean
 }) {
   return (
     <button
@@ -614,6 +613,10 @@ function TabButton({
       )}
     >
       {children}
+      {count ? (
+        <sup className="ml-1 text-[10px] font-bold tabular-nums text-[#084734]">{count}</sup>
+      ) : null}
+      {dot ? <span className="ml-1.5 inline-block h-[5px] w-[5px] -translate-y-1.5 rounded-full bg-[#A8741A]" /> : null}
       {active ? <span className="absolute inset-x-3 bottom-0 h-0.5 bg-[#111110]" /> : null}
     </button>
   )
@@ -628,33 +631,105 @@ function StatusBadge({ status }: { status: ConversationStatus }) {
   )
 }
 
-function Disclosure({
+// AI 답변 카드 하단의 가로 푸터 칩 — Disclosure(세로 아코디언 3단)를 대체한다.
+// 기본은 중립, 활성(펼침) 상태만 옅은 서피스로 표시한다.
+function AnswerFooterChip({
+  active,
+  onClick,
   icon,
-  label,
-  open,
-  onToggle,
   children,
 }: {
+  active: boolean
+  onClick: () => void
   icon: ReactNode
-  label: string
-  open: boolean
-  onToggle: () => void
   children: ReactNode
 }) {
   return (
-    <div className="border-b border-black/[0.08] last:border-b-0">
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]",
+        active ? "bg-[#F6F5F4] text-[#111110]" : "text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
+      )}
+    >
+      {icon}
+      {children}
+    </button>
+  )
+}
+
+// 대화 스위처 — 네이티브 select 대신 제목 + 셰브론 트리거와 드롭 목록.
+// 목록에는 상태 라벨을 함께 보여줘 전환 전에 검토 필요 여부를 알 수 있다.
+function ConversationSwitcher({
+  label,
+  conversations,
+  selectedId,
+  onSelect,
+}: {
+  label: string
+  conversations: InternalCsConversation[]
+  selectedId: string | null
+  onSelect: (conversation: InternalCsConversation) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handlePointerDown(event: MouseEvent | TouchEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handlePointerDown)
+    document.addEventListener("touchstart", handlePointerDown)
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown)
+      document.removeEventListener("touchstart", handlePointerDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={containerRef} className="relative min-w-0">
       <button
         type="button"
-        onClick={onToggle}
-        className="flex min-h-14 w-full items-center gap-3 px-4 text-left text-[14px] font-medium text-[#31302E] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]"
+        onClick={() => setOpen((current) => !current)}
+        disabled={conversations.length === 0}
+        className="flex h-9 max-w-[300px] items-center gap-2 rounded-md px-2.5 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:cursor-default disabled:hover:bg-transparent"
+        aria-haspopup="listbox"
+        aria-expanded={open}
       >
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ECFDF5] text-[#084734]">
-          {icon}
-        </span>
-        <span className="min-w-0 flex-1">{label}</span>
-        <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
+        <span className="min-w-0 truncate">{label}</span>
+        {conversations.length > 0 ? (
+          <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-[#A39E98] transition-transform", open && "rotate-180")} />
+        ) : null}
       </button>
-      {open ? <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-4 py-4">{children}</div> : null}
+      {open ? (
+        <ul
+          role="listbox"
+          className="absolute left-0 top-10 z-50 max-h-72 w-72 overflow-y-auto rounded-lg border border-black/[0.08] bg-white py-1 shadow-[0_14px_36px_rgba(0,0,0,0.10)]"
+        >
+          {conversations.map((conversation) => (
+            <li key={conversation.id}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={conversation.id === selectedId}
+                onClick={() => {
+                  setOpen(false)
+                  onSelect(conversation)
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition-colors hover:bg-[#F6F5F4]",
+                  conversation.id === selectedId ? "font-semibold text-[#084734]" : "text-[#31302E]"
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate">{conversation.title}</span>
+                <span className="shrink-0 text-[10px] text-[#A39E98]">{STATUS_META[conversation.status].label}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   )
 }
@@ -756,11 +831,14 @@ function InternalCsChatWorkspaceInner() {
   const [integrationError, setIntegrationError] = useState<string | null>(null)
   const [includeOriginal, setIncludeOriginal] = useState(false)
   const [dispatching, setDispatching] = useState(false)
-  const [docsGapsSummary, setDocsGapsSummary] = useState<DocsGapsWidgetSummary | null>(null)
+  const [docsGapsSummary, setDocsGapsSummary] = useState<DocsGapsDeskSummary | null>(null)
   const [docsGapsAttempted, setDocsGapsAttempted] = useState(false)
   const [regressionCandidates, setRegressionCandidates] = useState<RegressionCandidateItem[]>([])
   const [regressionLoadState, setRegressionLoadState] = useState<RegressionLoadState>("idle")
   const [regressionError, setRegressionError] = useState<string | null>(null)
+  // 운영 데스크 — 브리지 전송 옵션/최근 기록 펼침과 스탯 스트립 → 회귀 섹션 스크롤 타깃.
+  const [bridgeDetailOpen, setBridgeDetailOpen] = useState(false)
+  const regressionSectionRef = useRef<HTMLDivElement | null>(null)
   const [deepLinkChecked, setDeepLinkChecked] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isPending, startTransition] = useTransition()
@@ -813,8 +891,8 @@ function InternalCsChatWorkspaceInner() {
     }
   }, [demoMode])
 
-  // tools 탭 라이브 위젯 — 기존 GET /api/admin/docs/gaps 응답을 소스별로 집계한다(신규 API 없음).
-  // 실패 시 null을 유지해 정적 카드(DOCS_GAPS_FALLBACK_TOOL) 형태로 폴백한다.
+  // 스탯 스트립 — 기존 GET /api/admin/docs/gaps 응답을 소스별로 집계한다(신규 API 없음).
+  // 실패 시 null을 유지해 숫자 대신 "—" 플레이스홀더로 폴백한다.
   const loadDocsGapsSummary = useCallback(async () => {
     setDocsGapsAttempted(true)
     if (demoMode) {
@@ -823,16 +901,7 @@ function InternalCsChatWorkspaceInner() {
     }
     try {
       const response = await adminFetchJson<DocGapsSummaryResponse>("/api/admin/docs/gaps")
-      const clusters = Array.isArray(response.gapClusters) ? response.gapClusters : []
-      const internalCs = clusters.filter((cluster) => {
-        const source = cluster.metadata?.source
-        return source === "internal_cs_fallback" || source === "internal_cs_review"
-      }).length
-      setDocsGapsSummary({
-        chatbot: clusters.length - internalCs,
-        internalCs,
-        capped: clusters.length >= 30,
-      })
+      setDocsGapsSummary(summarizeDocsGaps(response))
     } catch {
       setDocsGapsSummary(null)
     }
@@ -918,11 +987,13 @@ function InternalCsChatWorkspaceInner() {
     }
   }, [activeTab, docsGapsAttempted, loadDocsGapsSummary])
 
+  // 회귀 후보는 탭 진입 전에 로드한다 — "운영 도구" 탭의 판정 대기 점(dot)이 이 데이터로 켜진다.
+  // 초기 부트스트랩(loading)이 끝난 뒤 시작해 demoMode 판별과의 경합을 피한다.
   useEffect(() => {
-    if (activeTab === "tools" && regressionLoadState === "idle") {
+    if (!loading && regressionLoadState === "idle") {
       void loadRegressionCandidates()
     }
-  }, [activeTab, regressionLoadState, loadRegressionCandidates])
+  }, [loading, regressionLoadState, loadRegressionCandidates])
 
   const assets = useMemo(() => detail?.assets ?? [], [detail?.assets])
   const integrationEvents = useMemo(() => detail?.integrationEvents ?? [], [detail?.integrationEvents])
@@ -955,6 +1026,11 @@ function InternalCsChatWorkspaceInner() {
   const selectedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? assets.at(-1) ?? null
   const bridgeState = integrationState(integrationStatus)
   const hasDispatchContext = Boolean(detail && (detail.messages.length > 0 || assets.length > 0))
+  // 탭 신호 — 대기열은 위첨자 숫자, 운영 도구는 미판정 회귀 후보가 있을 때 앰버 점.
+  const regressionPendingCount = useMemo(
+    () => regressionCandidates.filter((item) => item.outcome === "not_evaluated").length,
+    [regressionCandidates]
+  )
   const communicationTemplates = useMemo(() => [
     {
       id: "customer",
@@ -1384,14 +1460,20 @@ function InternalCsChatWorkspaceInner() {
     outcome: Exclude<RegressionOutcome, "not_evaluated">
   ) {
     setRegressionError(null)
-    setRegressionCandidates((current) => current.filter((candidate) => candidate.id !== item.id))
+    // 행을 지우지 않고 판정 결과로 바꿔 그린다 — 실수한 판정을 바로 알아챌 수 있고,
+    // 목록 재조회 시 서버 정렬(미판정 우선)에 따라 자연스럽게 뒤로 밀린다.
+    setRegressionCandidates((current) =>
+      current.map((candidate) => (candidate.id === item.id ? { ...candidate, outcome } : candidate))
+    )
     try {
       await adminFetchJson(`/api/admin/cs-chat/conversations/${item.conversationId}/messages/${item.id}`, {
         method: "PATCH",
         body: JSON.stringify({ regressionOutcome: outcome }),
       })
     } catch (judgeError) {
-      setRegressionCandidates((current) => [item, ...current])
+      setRegressionCandidates((current) =>
+        current.map((candidate) => (candidate.id === item.id ? { ...candidate, outcome: item.outcome } : candidate))
+      )
       setRegressionError(judgeError instanceof Error ? judgeError.message : "회귀 판정을 저장하지 못했습니다.")
     }
   }
@@ -1481,7 +1563,13 @@ function InternalCsChatWorkspaceInner() {
       <nav className="flex h-16 shrink-0 items-center justify-between border-b border-black/[0.08] bg-white px-3 sm:px-5">
         <div className="flex min-w-0 items-center overflow-x-auto">
           {WORKSPACE_TABS.map((tab) => (
-            <TabButton key={tab.value} active={activeTab === tab.value} onClick={() => setActiveTab(tab.value)}>
+            <TabButton
+              key={tab.value}
+              active={activeTab === tab.value}
+              onClick={() => setActiveTab(tab.value)}
+              count={tab.value === "queue" ? queueConversations.length : undefined}
+              dot={tab.value === "tools" && regressionPendingCount > 0}
+            >
               {tab.label}
             </TabButton>
           ))}
@@ -1515,56 +1603,55 @@ function InternalCsChatWorkspaceInner() {
               <button
                 type="button"
                 onClick={startNewConversation}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-black/[0.08] bg-white transition-colors hover:bg-[#F6F5F4]"
-                aria-label="새 대화"
-                title="새 대화"
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-3 text-[12px] font-semibold transition-colors hover:bg-[#F6F5F4]"
               >
-                <ArrowLeft className="h-4 w-4" />
+                <Plus className="h-3.5 w-3.5" />
+                새 대화
               </button>
-              <select
-                value={selectedId ?? ""}
-                onChange={(event) => {
-                  const conversation = conversations.find((item) => item.id === event.target.value)
-                  if (conversation) void handleSelect(conversation)
-                }}
-                className="h-9 max-w-[260px] rounded-md border border-black/[0.08] bg-white px-3 text-[13px] font-semibold outline-none focus:ring-2 focus:ring-[#084734]/30"
-              >
-                <option value="">새 내부 CS 상담</option>
-                {queueConversations.map((conversation) => (
-                  <option key={conversation.id} value={conversation.id}>{conversation.title}</option>
-                ))}
-              </select>
+              <ConversationSwitcher
+                label={detail?.conversation.title ?? "새 내부 CS 상담"}
+                conversations={queueConversations}
+                selectedId={selectedId}
+                onSelect={(conversation) => void handleSelect(conversation)}
+              />
               {detail ? <StatusBadge status={detail.conversation.status} /> : null}
             </div>
 
             <div className="flex items-center gap-2">
-              <select
-                value={modelMode}
-                onChange={(event) => setModelMode(event.target.value as ModelMode)}
-                className="h-9 rounded-md border border-black/[0.08] bg-white px-3 text-[12px] outline-none focus:ring-2 focus:ring-[#084734]/30"
+              <div
+                className="flex h-9 shrink-0 overflow-hidden rounded-md border border-black/[0.12] bg-white"
+                role="group"
                 aria-label="Gemini 모델 모드"
               >
-                <option value="auto">Flash · 자동</option>
-                <option value="fast">Flash · 빠르게</option>
-                <option value="deep">Pro · 심층</option>
-              </select>
-              <button
-                type="button"
-                onClick={rerunWithPro}
-                disabled={!detail || isPending}
-                className="hidden h-9 items-center gap-2 rounded-md px-3 text-[12px] font-medium text-[#31302E] transition-colors hover:bg-[#F6F5F4] disabled:opacity-40 sm:inline-flex"
-              >
-                <FileCheck2 className="h-4 w-4" />
-                Pro로 심층 검토
-              </button>
+                {MODEL_MODE_SEGMENTS.map((segment, index) => (
+                  <button
+                    key={segment.value}
+                    type="button"
+                    onClick={() => setModelMode(segment.value)}
+                    aria-pressed={modelMode === segment.value}
+                    className={cn(
+                      "px-3 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]",
+                      index > 0 && "border-l border-black/[0.10]",
+                      modelMode === segment.value
+                        ? "bg-[#31302E] text-white"
+                        : "bg-white text-[#615D59] hover:text-[#111110]"
+                    )}
+                  >
+                    {segment.label}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 onClick={() => setReviewOpen(true)}
                 disabled={!pendingMessage}
-                className="inline-flex h-9 items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-[12px] font-semibold transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-40"
+                className="relative inline-flex h-9 items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-[12px] font-semibold transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <PanelRightOpen className="h-4 w-4" />
                 검토 열기
+                {pendingMessage ? (
+                  <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[#A8741A] ring-2 ring-white" aria-hidden />
+                ) : null}
               </button>
             </div>
           </div>
@@ -1611,7 +1698,15 @@ function InternalCsChatWorkspaceInner() {
                             {message.content}
                           </div>
                         ) : (
-                          <div className="overflow-hidden rounded-lg border border-black/[0.08] bg-white">
+                          <div
+                            className={cn(
+                              "overflow-hidden rounded-lg border border-black/[0.08] bg-white",
+                              // 검토 상태 레일 — 스크롤 중에도 초안/승인 상태가 읽히는 1차 신호.
+                              message.review_state === "pending" && "border-l-[3px] border-l-[#ECD29C]",
+                              message.review_state === "approved" && "border-l-[3px] border-l-[#BDEFD8]",
+                              message.review_state === "changes_requested" && "border-l-[3px] border-l-[#F2B8B8]"
+                            )}
+                          >
                             <div className="whitespace-pre-wrap px-5 py-4 text-[14px] leading-7 text-[#31302E]">
                               {visibleContent}
                               <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-[#A39E98]">
@@ -1622,12 +1717,41 @@ function InternalCsChatWorkspaceInner() {
 
                             {isLatestAssistant ? (
                               <div className="border-t border-black/[0.08]">
-                                <Disclosure
-                                  icon={<BookOpen className="h-4 w-4" />}
-                                  label={`근거 ${sources.length}건`}
-                                  open={expanded === "sources"}
-                                  onToggle={() => setExpanded(expanded === "sources" ? null : "sources")}
-                                >
+                                <div className="flex flex-wrap items-center gap-1 px-3 py-2">
+                                  <AnswerFooterChip
+                                    active={expanded === "sources"}
+                                    onClick={() => setExpanded(expanded === "sources" ? null : "sources")}
+                                    icon={<BookOpen className="h-3.5 w-3.5" />}
+                                  >
+                                    근거 <em className="not-italic font-bold tabular-nums text-[#084734]">{sources.length}</em>
+                                  </AnswerFooterChip>
+                                  <AnswerFooterChip
+                                    active={expanded === "hq"}
+                                    onClick={() => setExpanded(expanded === "hq" ? null : "hq")}
+                                    icon={<MessageSquare className="h-3.5 w-3.5" />}
+                                  >
+                                    소통 초안 3종
+                                  </AnswerFooterChip>
+                                  <AnswerFooterChip
+                                    active={expanded === "regression"}
+                                    onClick={() => setExpanded(expanded === "regression" ? null : "regression")}
+                                    icon={<History className="h-3.5 w-3.5" />}
+                                  >
+                                    회귀 개선
+                                  </AnswerFooterChip>
+                                  <button
+                                    type="button"
+                                    onClick={rerunWithPro}
+                                    disabled={isPending}
+                                    className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734] disabled:opacity-40"
+                                  >
+                                    <FileCheck2 className="h-3.5 w-3.5" />
+                                    Pro로 재검토
+                                  </button>
+                                </div>
+
+                                {expanded === "sources" ? (
+                                  <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-4 py-4">
                                   {sources.length > 0 ? (
                                     <div className="space-y-2">
                                       {sources.map((source) => {
@@ -1671,13 +1795,11 @@ function InternalCsChatWorkspaceInner() {
                                   ) : (
                                     <p className="text-[12px] leading-5 text-[#615D59]">직접 일치하는 문서 근거가 없습니다. 담당자 확인이 필요합니다.</p>
                                   )}
-                                </Disclosure>
-                                <Disclosure
-                                  icon={<MessageSquare className="h-4 w-4" />}
-                                  label="소통 초안 3종"
-                                  open={expanded === "hq"}
-                                  onToggle={() => setExpanded(expanded === "hq" ? null : "hq")}
-                                >
+                                  </div>
+                                ) : null}
+
+                                {expanded === "hq" ? (
+                                  <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-4 py-4">
                                   <div className="space-y-3">
                                     {communicationTemplates.map((template) => (
                                       <section key={template.id} className="rounded-md border border-black/[0.08] bg-white p-3">
@@ -1698,13 +1820,11 @@ function InternalCsChatWorkspaceInner() {
                                       </section>
                                     ))}
                                   </div>
-                                </Disclosure>
-                                <Disclosure
-                                  icon={<History className="h-4 w-4" />}
-                                  label="회귀 개선에 추가"
-                                  open={expanded === "regression"}
-                                  onToggle={() => setExpanded(expanded === "regression" ? null : "regression")}
-                                >
+                                  </div>
+                                ) : null}
+
+                                {expanded === "regression" ? (
+                                  <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-4 py-4">
                                   <label className="flex cursor-pointer items-start gap-3 text-[12px] leading-5 text-[#31302E]">
                                     <input
                                       type="checkbox"
@@ -1717,7 +1837,8 @@ function InternalCsChatWorkspaceInner() {
                                       <span className="mt-1 block text-[#615D59]">승인 또는 수정 요청 시 담당자 판단과 함께 저장됩니다.</span>
                                     </span>
                                   </label>
-                                </Disclosure>
+                                  </div>
+                                ) : null}
                               </div>
                             ) : null}
                           </div>
@@ -1993,174 +2114,74 @@ function InternalCsChatWorkspaceInner() {
 
       {activeTab === "tools" ? (
         <section className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAF8] px-5 py-7 sm:px-8">
-          <div className="mx-auto max-w-[900px]">
-            <h2 className="text-[20px] font-semibold tracking-[-0.02em]">기존 챗봇 운영 도구</h2>
-            <p className="mt-2 max-w-2xl text-[13px] leading-6 text-[#615D59]">
-              게시·동기화·재색인 같은 변경 작업은 기존 관리자 화면에서 CS 담당자가 최종 실행합니다.
-              코파일럿은 운영 화면을 복제하지 않고 정확한 경로로 연결합니다.
-            </p>
-            <div className="mt-7 overflow-hidden rounded-lg border border-black/[0.08] bg-white">
-              <div className="flex flex-wrap items-start gap-3 border-b border-black/[0.08] px-5 py-4">
-                <span className={cn(
-                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-md",
-                  bridgeState.ready ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#F6F5F4] text-[#615D59]"
-                )}>
-                  {integrationLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : bridgeState.ready ? (
-                    <Wifi className="h-4 w-4" />
-                  ) : (
-                    <WifiOff className="h-4 w-4" />
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-[14px] font-semibold text-[#31302E]">{bridgeState.label}</h3>
-                    <span className={cn(
-                      "rounded-md px-2 py-1 text-[10px] font-semibold",
-                      bridgeState.ready ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#FBF1E0] text-[#7A520F]"
-                    )}>
-                      {integrationLoading ? "확인 중" : bridgeState.ready ? "연결됨" : bridgeState.configured ? bridgeState.status : "설정 필요"}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[11px] leading-5 text-[#615D59]">{bridgeState.message}</p>
-                  {bridgeState.lastCheckedAt ? (
-                    <p className="mt-1 text-[10px] text-[#A39E98]">마지막 확인 {formatDay(bridgeState.lastCheckedAt)} {formatTime(bridgeState.lastCheckedAt)}</p>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void loadIntegrationStatus()}
-                  disabled={integrationLoading}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E] disabled:opacity-40"
-                >
-                  <RefreshCcw className={cn("h-3.5 w-3.5", integrationLoading && "animate-spin")} />
-                  상태 확인
-                </button>
-              </div>
+          <div className="mx-auto max-w-[920px]">
+            <h2 className="text-[20px] font-semibold tracking-[-0.02em]">운영 데스크</h2>
+            <p className="mt-1 text-[12px] text-[#615D59]">오늘 처리할 검수와 큐 상태를 한 화면에서 확인합니다.</p>
 
-              <div className="px-5 py-4">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="max-w-xl">
-                    <p className="text-[12px] font-semibold text-[#31302E]">현재 대화를 내부 AI/MCP 분석으로 보내기</p>
-                    <p className="mt-1 text-[11px] leading-5 text-[#615D59]">
-                      기본 전송은 메시지 맥락과 이미지 분석 텍스트만 포함합니다. 분석 결과는 검토 전 초안으로 돌아옵니다.
-                    </p>
-                    <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] leading-5 text-[#615D59]">
-                      <input
-                        type="checkbox"
-                        checked={includeOriginal}
-                        onChange={(event) => setIncludeOriginal(event.target.checked)}
-                        className="mt-0.5 h-4 w-4 accent-[#084734]"
-                      />
-                      <span>
-                        원본 이미지도 포함
-                        <span className="block text-[10px] text-[#A39E98]">민감정보 포함 가능성을 확인했으며 내부 분석 범위로 전송합니다.</span>
-                      </span>
-                    </label>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void dispatchCurrentConversation()}
-                    disabled={!hasDispatchContext || !bridgeState.ready || integrationLoading || dispatching}
-                    className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[12px] font-semibold text-white hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
-                  >
-                    {dispatching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    {dispatching ? "전송 중" : "현재 대화 보내기"}
-                  </button>
-                </div>
-                {integrationError ? (
-                  <p className="mt-3 flex items-start gap-2 rounded-md bg-[#FCE9E9] px-3 py-2 text-[11px] text-[#8F2C2C]" role="alert">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    {integrationError}
-                  </p>
-                ) : null}
-              </div>
-
-              {integrationEvents.length > 0 ? (
-                <div className="border-t border-black/[0.08] bg-[#FAFAF8] px-5 py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-[11px] font-semibold text-[#31302E]">최근 연동 기록</p>
-                    <span className="text-[10px] text-[#A39E98]">{integrationEvents.length}건</span>
-                  </div>
-                  <ul className="mt-3 space-y-2">
-                    {integrationEvents.slice(0, 5).map((event) => {
-                      const successful = ["sent", "success", "completed", "ok"].includes((event.status ?? "").toLowerCase())
-                      return (
-                        <li key={event.id} className="flex items-start gap-3 rounded-md border border-black/[0.08] bg-white px-3 py-2.5">
-                          {successful ? (
-                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" />
-                          ) : (
-                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#A8741A]" />
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[11px] font-semibold text-[#31302E]">
-                              {event.transport ?? event.integration ?? event.source_system ?? "AI 브리지"} · {event.status ?? "처리 중"}
-                            </p>
-                            <p className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[#615D59]">{integrationEventSummary(event)}</p>
-                          </div>
-                          <span className="shrink-0 text-[10px] text-[#A39E98]">{formatTime(integrationEventWhen(event))}</span>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </div>
-              ) : null}
-            </div>
-
-            <h3 className="mt-8 text-[12px] font-semibold text-[#31302E]">운영 화면 바로가기</h3>
-            <div className="mt-3 overflow-hidden rounded-lg border border-black/[0.08] bg-white">
+            {/* 스탯 스트립 — 라이브 지표가 먼저. 파스텔 채움 없이 흰 카드 + 헤어라인 분할(에디토리얼). */}
+            <div className="mt-5 grid grid-cols-2 overflow-hidden rounded-[10px] border border-black/[0.08] bg-white sm:grid-cols-4">
               <Link
-                href={DOCS_GAPS_FALLBACK_TOOL.href}
-                className="group flex items-center gap-4 border-b border-black/[0.08] px-5 py-4 last:border-b-0 hover:bg-[#FAFAF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]"
+                href="/admin/docs?tab=gaps"
+                className="group relative border-b border-black/[0.08] px-5 py-4 transition-colors hover:bg-[#FAFAF8] sm:border-b-0"
               >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#F6F5F4] text-[#31302E] group-hover:bg-[#ECFDF5] group-hover:text-[#084734]">
-                  <DOCS_GAPS_FALLBACK_TOOL.icon className="h-4.5 w-4.5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-[14px] font-semibold text-[#31302E]">{DOCS_GAPS_FALLBACK_TOOL.title}</span>
-                    <span className="text-[10px] font-medium text-[#A39E98]">{DOCS_GAPS_FALLBACK_TOOL.priority}</span>
-                  </span>
-                  <span className="mt-1 block text-[12px] leading-5 text-[#615D59]">
-                    {docsGapsSummary
-                      ? `챗봇 ${docsGapsSummary.chatbot} · 내부CS ${docsGapsSummary.internalCs}${docsGapsSummary.capped ? "+" : ""}`
-                      : DOCS_GAPS_FALLBACK_TOOL.description}
-                  </span>
-                </span>
-                <ExternalLink className="h-4 w-4 shrink-0 text-[#A39E98] group-hover:text-[#084734]" />
+                <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">보강 큐 · 챗봇</p>
+                <p className="mt-2 text-[27px] font-bold leading-none tracking-[-0.02em] text-[#111110] tabular-nums">
+                  {docsGapsSummary ? `${docsGapsSummary.chatbot}${docsGapsSummary.capped ? "+" : ""}` : "—"}
+                </p>
+                <p className="mt-1.5 truncate text-[10.5px] text-[#A39E98]">
+                  {docsGapsSummary ? `무결과 검색 ${docsGapsSummary.zeroResult} 별도` : "집계 대기"}
+                </p>
+                <ArrowUpRight className="absolute right-4 top-4 h-3.5 w-3.5 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
               </Link>
-              {OPERATING_TOOLS.map((tool) => {
-                const Icon = tool.icon
-                return (
-                  <Link
-                    key={tool.href}
-                    href={tool.href}
-                    className="group flex items-center gap-4 border-b border-black/[0.08] px-5 py-4 last:border-b-0 hover:bg-[#FAFAF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]"
-                  >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#F6F5F4] text-[#31302E] group-hover:bg-[#ECFDF5] group-hover:text-[#084734]">
-                      <Icon className="h-4.5 w-4.5" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="text-[14px] font-semibold text-[#31302E]">{tool.title}</span>
-                        <span className="text-[10px] font-medium text-[#A39E98]">{tool.priority}</span>
-                      </span>
-                      <span className="mt-1 block text-[12px] leading-5 text-[#615D59]">{tool.description}</span>
-                    </span>
-                    <ExternalLink className="h-4 w-4 shrink-0 text-[#A39E98] group-hover:text-[#084734]" />
-                  </Link>
-                )
-              })}
+              <Link
+                href="/admin/docs?tab=gaps"
+                className="group relative border-b border-l border-black/[0.08] px-5 py-4 transition-colors hover:bg-[#FAFAF8] sm:border-b-0"
+              >
+                <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">보강 큐 · 내부 CS</p>
+                <p className="mt-2 text-[27px] font-bold leading-none tracking-[-0.02em] text-[#111110] tabular-nums">
+                  {docsGapsSummary ? docsGapsSummary.internalCs : "—"}
+                </p>
+                <p className="mt-1.5 truncate text-[10.5px] text-[#A39E98]">
+                  {docsGapsSummary
+                    ? `폴백 ${docsGapsSummary.internalCsFallback} · 수정 요청 ${docsGapsSummary.internalCsReview}`
+                    : "집계 대기"}
+                </p>
+                <ArrowUpRight className="absolute right-4 top-4 h-3.5 w-3.5 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
+              </Link>
+              <button
+                type="button"
+                onClick={() => regressionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                className="group relative border-black/[0.08] px-5 py-4 text-left transition-colors hover:bg-[#FAFAF8] sm:border-l"
+              >
+                <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">회귀 검수 대기</p>
+                <p className="mt-2 text-[27px] font-bold leading-none tracking-[-0.02em] text-[#111110] tabular-nums">
+                  {regressionLoadState === "loaded" ? regressionPendingCount : "—"}
+                </p>
+                <p className="mt-1.5 truncate text-[10.5px] text-[#A39E98]">아래에서 바로 판정</p>
+                <ChevronDown className="absolute right-4 top-4 h-3.5 w-3.5 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
+              </button>
+              <div className="relative border-l border-black/[0.08] px-5 py-4">
+                <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">AI 브리지</p>
+                <p className="mt-3.5 flex items-center gap-2 text-[14px] font-bold leading-none text-[#111110]">
+                  <span className={cn("h-[7px] w-[7px] rounded-full", bridgeState.ready ? "bg-[#084734]" : "bg-[#A8741A]")} />
+                  {integrationLoading ? "확인 중" : bridgeState.ready ? "연결됨" : bridgeState.configured ? bridgeState.status : "설정 필요"}
+                </p>
+                <p className="mt-2 truncate text-[10.5px] text-[#A39E98] tabular-nums">
+                  {bridgeState.lastCheckedAt ? `마지막 확인 ${formatTime(bridgeState.lastCheckedAt)}` : "상태 미확인"}
+                </p>
+              </div>
             </div>
 
-            <h3 className="mt-8 flex items-center justify-between gap-3 text-[12px] font-semibold text-[#31302E]">
-              <span>회귀 검수 대기</span>
+            {/* 회귀 검수 대기 — 링크 목록보다 위, 데스크의 첫 번째 일감. */}
+            <div ref={regressionSectionRef} className="mt-8 flex scroll-mt-4 items-baseline justify-between gap-3">
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">회귀 검수 대기</h3>
               {regressionLoadState === "loaded" ? (
-                <span className="text-[10px] font-medium text-[#A39E98]">{regressionCandidates.length}건</span>
+                <span className="text-[10.5px] text-[#A39E98] tabular-nums">
+                  미판정 {regressionPendingCount}건 · 전체 {regressionCandidates.length}건
+                </span>
               ) : null}
-            </h3>
-            <div className="mt-3 overflow-hidden rounded-lg border border-black/[0.08] bg-white">
+            </div>
+            <div className="mt-2.5 overflow-hidden rounded-[10px] border border-black/[0.08] bg-white">
               {regressionLoadState === "idle" || regressionLoadState === "loading" ? (
                 <div className="flex items-center justify-center gap-2 px-5 py-8 text-[12px] text-[#615D59]">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -2182,40 +2203,64 @@ function InternalCsChatWorkspaceInner() {
                 <p className="px-5 py-8 text-center text-[12px] text-[#615D59]">판정이 필요한 회귀 후보가 없습니다.</p>
               ) : (
                 <ul>
-                  {regressionCandidates.map((item) => (
-                    <li
-                      key={item.id}
-                      className="flex flex-col gap-3 border-b border-black/[0.08] px-5 py-4 last:border-b-0 sm:flex-row sm:items-start sm:justify-between"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="line-clamp-2 text-[12px] leading-5 text-[#31302E]">{item.excerpt}</p>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[10px] text-[#A39E98]">
-                          <span>{formatDay(item.capturedAt)} {formatTime(item.capturedAt)}</span>
-                          <button
-                            type="button"
-                            onClick={() => openConversationById(item.conversationId)}
-                            className="inline-flex items-center gap-1 font-semibold text-[#084734] hover:underline"
-                          >
-                            대화 보기
-                            <ExternalLink className="h-3 w-3" />
-                          </button>
+                  {regressionCandidates.map((item) => {
+                    const judgedChip = regressionOutcomeChip(item.outcome)
+                    const reviewLabel = REVIEW_META[item.reviewState as ReviewState]?.label
+                    return (
+                      <li
+                        key={item.id}
+                        className={cn(
+                          "flex flex-col gap-3 border-b border-black/[0.08] px-5 py-4 last:border-b-0 sm:flex-row sm:items-start sm:justify-between",
+                          judgedChip && "bg-[#FAFAF8]"
+                        )}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className={cn("line-clamp-2 text-[12.5px] leading-5", judgedChip ? "text-[#A39E98]" : "text-[#31302E]")}>
+                            {item.excerpt}
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-[#A39E98]">
+                            {reviewLabel ? (
+                              <span className="inline-flex h-[17px] items-center rounded-full border border-black/[0.10] bg-white px-2 text-[9px] font-semibold text-[#615D59]">
+                                내부CS · {reviewLabel}
+                              </span>
+                            ) : null}
+                            <span className="tabular-nums">{formatDay(item.capturedAt)} {formatTime(item.capturedAt)}</span>
+                            <button
+                              type="button"
+                              onClick={() => openConversationById(item.conversationId)}
+                              className="inline-flex items-center gap-1 font-semibold text-[#084734] hover:underline"
+                            >
+                              대화 보기
+                              <ExternalLink className="h-3 w-3" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex shrink-0 flex-wrap gap-1.5">
-                        {REGRESSION_OUTCOME_ACTIONS.map((action) => (
-                          <button
-                            key={action.value}
-                            type="button"
-                            onClick={() => void judgeRegressionCandidate(item, action.value)}
-                            className="inline-flex h-7 items-center rounded-md border border-black/[0.08] px-2.5 text-[10px] font-semibold text-[#31302E] hover:bg-[#F6F5F4]"
-                            aria-label={`${action.label}: ${item.excerpt}`}
-                          >
-                            {action.label}
-                          </button>
-                        ))}
-                      </div>
-                    </li>
-                  ))}
+                        {judgedChip ? (
+                          <span className={cn("inline-flex h-7 shrink-0 items-center gap-1.5 self-start rounded-md px-2.5 text-[10.5px] font-bold", judgedChip.className)}>
+                            <CheckCircle2 className="h-3 w-3" />
+                            {judgedChip.label}
+                          </span>
+                        ) : (
+                          <div className="flex shrink-0 self-start overflow-hidden rounded-[7px] border border-black/[0.12]" role="group" aria-label={`회귀 판정: ${item.excerpt}`}>
+                            {REGRESSION_JUDGE_ACTIONS.map((action, index) => (
+                              <button
+                                key={action.value}
+                                type="button"
+                                onClick={() => void judgeRegressionCandidate(item, action.value)}
+                                className={cn(
+                                  "h-7 bg-white px-2.5 text-[10.5px] font-semibold text-[#31302E] transition-colors",
+                                  index > 0 && "border-l border-black/[0.10]",
+                                  action.hoverClassName
+                                )}
+                              >
+                                {action.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               )}
             </div>
@@ -2225,6 +2270,136 @@ function InternalCsChatWorkspaceInner() {
                 {regressionError}
               </p>
             ) : null}
+
+            {/* AI 브리지 — 한 줄 요약 행 + 전송 옵션/최근 기록 펼침. */}
+            <h3 className="mt-8 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">내부 AI/MCP 분석</h3>
+            <div className="mt-2.5 overflow-hidden rounded-[10px] border border-black/[0.08] bg-white">
+              <div className="flex flex-wrap items-center gap-3 px-5 py-3.5">
+                <span className={cn(
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
+                  bridgeState.ready ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#F6F5F4] text-[#615D59]"
+                )}>
+                  {integrationLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : bridgeState.ready ? (
+                    <Wifi className="h-4 w-4" />
+                  ) : (
+                    <WifiOff className="h-4 w-4" />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12.5px] font-semibold text-[#31302E]">{bridgeState.label}</p>
+                  <p className="mt-0.5 truncate text-[10.5px] text-[#A39E98]">{bridgeState.message}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void loadIntegrationStatus()}
+                  disabled={integrationLoading}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E] disabled:opacity-40"
+                >
+                  <RefreshCcw className={cn("h-3.5 w-3.5", integrationLoading && "animate-spin")} />
+                  상태 확인
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBridgeDetailOpen((current) => !current)}
+                  className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
+                  aria-expanded={bridgeDetailOpen}
+                >
+                  전송 옵션
+                  <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", bridgeDetailOpen && "rotate-180")} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void dispatchCurrentConversation()}
+                  disabled={!hasDispatchContext || !bridgeState.ready || integrationLoading || dispatching}
+                  className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
+                >
+                  {dispatching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                  {dispatching ? "전송 중" : "현재 대화 보내기"}
+                </button>
+              </div>
+
+              {bridgeDetailOpen ? (
+                <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-5 py-4">
+                  <p className="text-[11px] leading-5 text-[#615D59]">
+                    기본 전송은 메시지 맥락과 이미지 분석 텍스트만 포함합니다. 분석 결과는 검토 전 초안으로 돌아옵니다.
+                  </p>
+                  <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] leading-5 text-[#615D59]">
+                    <input
+                      type="checkbox"
+                      checked={includeOriginal}
+                      onChange={(event) => setIncludeOriginal(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-[#084734]"
+                    />
+                    <span>
+                      원본 이미지도 포함
+                      <span className="block text-[10px] text-[#A39E98]">민감정보 포함 가능성을 확인했으며 내부 분석 범위로 전송합니다.</span>
+                    </span>
+                  </label>
+                  {integrationEvents.length > 0 ? (
+                    <>
+                      <div className="mt-4 flex items-center justify-between gap-3">
+                        <p className="text-[11px] font-semibold text-[#31302E]">최근 연동 기록</p>
+                        <span className="text-[10px] text-[#A39E98] tabular-nums">{integrationEvents.length}건</span>
+                      </div>
+                      <ul className="mt-2 space-y-2">
+                        {integrationEvents.slice(0, 5).map((event) => {
+                          const successful = ["sent", "success", "completed", "ok"].includes((event.status ?? "").toLowerCase())
+                          return (
+                            <li key={event.id} className="flex items-start gap-3 rounded-md border border-black/[0.08] bg-white px-3 py-2.5">
+                              {successful ? (
+                                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" />
+                              ) : (
+                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#A8741A]" />
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-[11px] font-semibold text-[#31302E]">
+                                  {event.transport ?? event.integration ?? event.source_system ?? "AI 브리지"} · {event.status ?? "처리 중"}
+                                </p>
+                                <p className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[#615D59]">{integrationEventSummary(event)}</p>
+                              </div>
+                              <span className="shrink-0 text-[10px] text-[#A39E98]">{formatTime(integrationEventWhen(event))}</span>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {integrationError ? (
+                <p className="mx-5 mb-4 mt-1 flex items-start gap-2 rounded-md bg-[#FCE9E9] px-3 py-2 text-[11px] text-[#8F2C2C]" role="alert">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  {integrationError}
+                </p>
+              ) : null}
+            </div>
+
+            {/* 운영 화면 바로가기 — 보조 유틸리티, 2열 컴팩트 그리드로 시각적 무게를 낮춘다. */}
+            <h3 className="mt-8 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">운영 화면 바로가기</h3>
+            <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {OPERATING_TOOLS.map((tool) => {
+                const Icon = tool.icon
+                return (
+                  <Link
+                    key={tool.href}
+                    href={tool.href}
+                    className="group flex items-center gap-3 rounded-[9px] border border-black/[0.08] bg-white px-3.5 py-3 transition-colors hover:border-[#084734]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[#F6F5F4] text-[#31302E] transition-colors group-hover:bg-[#ECFDF5] group-hover:text-[#084734]">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12.5px] font-semibold text-[#31302E]">{tool.title}</span>
+                      <span className="mt-0.5 block truncate text-[10.5px] text-[#A39E98]">{tool.description}</span>
+                    </span>
+                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
+                  </Link>
+                )
+              })}
+            </div>
           </div>
         </section>
       ) : null}
@@ -2302,27 +2477,37 @@ function InternalCsChatWorkspaceInner() {
                     placeholder="수정 이유나 본사 확인 항목을 남기세요."
                   />
                 </div>
-                <label className="mt-4 flex cursor-pointer items-start gap-2 text-[11px] leading-4 text-[#615D59]">
-                  <input
-                    type="checkbox"
-                    checked={regressionCandidate}
-                    onChange={(event) => setRegressionCandidate(event.target.checked)}
-                    className="mt-0.5 h-4 w-4 accent-[#084734]"
-                  />
-                  수정 결과를 회귀 개선 후보에 포함합니다.
-                </label>
-                <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] leading-4 text-[#615D59]">
-                  <input
-                    type="checkbox"
-                    checked={excludeFromGapQueue}
-                    onChange={(event) => setExcludeFromGapQueue(event.target.checked)}
-                    className="mt-0.5 h-4 w-4 accent-[#084734]"
-                  />
-                  <span>
-                    보강 큐 제외
-                    <span className="mt-1 block text-[#A39E98]">체크하면 수정 요청 시 이 질문을 문서 보강 큐로 자동 유입하지 않습니다.</span>
-                  </span>
-                </label>
+                {/* 판정 후 자동 처리 — 이 판정이 어떤 후속 파이프라인을 만드는지 묶어서 보여준다. */}
+                <div className="mt-5 overflow-hidden rounded-[9px] border border-black/[0.10]">
+                  <div className="flex items-center justify-between border-b border-black/[0.08] bg-[#FAFAF8] px-3.5 py-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">판정 후 자동 처리</span>
+                    <span className="text-[9.5px] text-[#A39E98]">수정 요청 시</span>
+                  </div>
+                  <label className="flex cursor-pointer items-start gap-2.5 border-b border-black/[0.06] px-3.5 py-3">
+                    <input
+                      type="checkbox"
+                      checked={regressionCandidate}
+                      onChange={(event) => setRegressionCandidate(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734]"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-[12px] font-semibold text-[#31302E]">회귀 개선 후보로 저장</span>
+                      <span className="mt-0.5 block text-[10.5px] leading-4 text-[#A39E98]">이 답변을 운영 데스크의 회귀 검수 대기에 올립니다.</span>
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2.5 px-3.5 py-3">
+                    <input
+                      type="checkbox"
+                      checked={!excludeFromGapQueue}
+                      onChange={(event) => setExcludeFromGapQueue(!event.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734]"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-[12px] font-semibold text-[#31302E]">문서 보강 큐로 유입</span>
+                      <span className="mt-0.5 block text-[10.5px] leading-4 text-[#A39E98]">질문을 보강 큐에 자동 등록합니다. 해제하면 이 질문은 유입되지 않습니다.</span>
+                    </span>
+                  </label>
+                </div>
               </div>
             </div>
 
