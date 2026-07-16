@@ -2,10 +2,21 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Sparkles, RefreshCw, ClipboardCopy, Check, Plus } from "lucide-react"
+import Link from "next/link"
+import { Loader2, Sparkles, RefreshCw, ClipboardCopy, Check, Plus, MessageSquare } from "lucide-react"
 import { adminFetchJson } from "@/lib/admin-client"
 import { buildDocDraftArticlePayload } from "@/lib/chatbot/doc-draft-article"
 import { cn } from "@/lib/utils"
+
+interface GapClusterInternalCsRef {
+  conversationId: string
+  messageId: string
+}
+
+interface GapClusterMetadata {
+  source?: "chatbot_mvp_exact_match" | "internal_cs_fallback" | "internal_cs_review" | string
+  internalCs?: GapClusterInternalCsRef[]
+}
 
 interface GapCluster {
   id: string
@@ -15,6 +26,7 @@ interface GapCluster {
   sampleCount: number
   lastSeenAt: string
   status: string
+  metadata?: GapClusterMetadata | null
 }
 
 interface ZeroResultSearch {
@@ -45,6 +57,16 @@ interface DraftSource {
 interface CreatedArticle {
   id: string
   publicPath: string
+}
+
+interface ClusterUpdateWarning {
+  clusterId: string
+  articleId: string
+}
+
+interface PublishRecommendedResult {
+  recommended?: boolean
+  clusterUpdated?: boolean
 }
 
 interface EvalReport {
@@ -186,6 +208,42 @@ function markStatsRegressionCandidate(stats: ChatbotStats | null, clusterId: str
   }
 }
 
+type GapSourceFilter = "all" | "chatbot" | "internal_cs"
+
+const GAP_SOURCE_FILTERS: { value: GapSourceFilter; label: string }[] = [
+  { value: "all", label: "전체" },
+  { value: "chatbot", label: "챗봇" },
+  { value: "internal_cs", label: "내부CS" },
+]
+
+// metadata.source가 없거나 알 수 없는 값이면 기존과 동일하게 "챗봇" 출처로 취급한다.
+const GAP_SOURCE_BADGES: Record<string, { label: string; group: GapSourceFilter; className: string }> = {
+  internal_cs_fallback: {
+    label: "내부CS 폴백",
+    group: "internal_cs",
+    className: "bg-[#FFF7ED] text-[#B85C33]",
+  },
+  internal_cs_review: {
+    label: "내부CS 검토",
+    group: "internal_cs",
+    className: "bg-[#ECFDF5] text-[#084734]",
+  },
+}
+
+const DEFAULT_GAP_SOURCE_BADGE = {
+  label: "챗봇",
+  group: "chatbot" as GapSourceFilter,
+  className: "bg-[#F6F5F4] text-[#615D59]",
+}
+
+function getGapClusterSourceBadge(cluster: GapCluster) {
+  const source = cluster.metadata?.source
+  if (source && source in GAP_SOURCE_BADGES) {
+    return GAP_SOURCE_BADGES[source]
+  }
+  return DEFAULT_GAP_SOURCE_BADGE
+}
+
 export default function DocsGapsPanel() {
   const router = useRouter()
   const [backlog, setBacklog] = useState<Backlog | null>(null)
@@ -193,12 +251,15 @@ export default function DocsGapsPanel() {
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [clusterActionId, setClusterActionId] = useState<string | null>(null)
+  const [sourceFilter, setSourceFilter] = useState<GapSourceFilter>("all")
 
   const [draftingKey, setDraftingKey] = useState<string | null>(null)
   const [draft, setDraft] = useState<DocDraft | null>(null)
   const [draftSource, setDraftSource] = useState<DraftSource | null>(null)
   const [savingDraftArticle, setSavingDraftArticle] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [clusterUpdateWarning, setClusterUpdateWarning] = useState<ClusterUpdateWarning | null>(null)
+  const [retryingClusterUpdate, setRetryingClusterUpdate] = useState(false)
 
   const [evalRunningMode, setEvalRunningMode] = useState<"fast" | "judge" | null>(null)
   const [evalReport, setEvalReport] = useState<EvalReport | null>(null)
@@ -283,21 +344,26 @@ export default function DocsGapsPanel() {
     setError("")
     setNotice("")
     try {
-      await adminFetchJson("/api/admin/chatbot/recommended-questions", {
-        method: "POST",
-        body: JSON.stringify({
-          label: cluster.label,
-          prompt: cluster.question,
-          status: "published",
-          category: cluster.category,
-          orderIndex: 100,
-        }),
-      })
-      await adminFetchJson(`/api/admin/chatbot/questions/${cluster.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "published" }),
-      })
-      setNotice("추천 질문으로 게시했습니다.")
+      // clusterId를 실어 등록+클러스터 published 처리를 서버에서 한 번에 끝낸다(별도 PATCH 없음).
+      const result = await adminFetchJson<PublishRecommendedResult>(
+        "/api/admin/chatbot/recommended-questions",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            label: cluster.label,
+            prompt: cluster.question,
+            status: "published",
+            category: cluster.category,
+            orderIndex: 100,
+            clusterId: cluster.id,
+          }),
+        }
+      )
+      if (result?.clusterUpdated === false) {
+        setError("추천 질문은 등록됐지만 보강 큐 상태 갱신에는 실패했습니다.")
+      } else {
+        setNotice("추천 질문으로 게시했습니다.")
+      }
       await loadBacklog()
     } catch (e) {
       setError(e instanceof Error ? e.message : "추천 질문으로 게시하지 못했습니다.")
@@ -390,6 +456,7 @@ export default function DocsGapsPanel() {
 
     setSavingDraftArticle(true)
     setError("")
+    setClusterUpdateWarning(null)
     try {
       const article = await adminFetchJson<CreatedArticle>("/api/admin/docs/articles", {
         method: "POST",
@@ -402,10 +469,16 @@ export default function DocsGapsPanel() {
       })
 
       if (draftSource.clusterId) {
-        await adminFetchJson(`/api/admin/chatbot/questions/${draftSource.clusterId}`, {
-          method: "PATCH",
-          body: JSON.stringify({ status: "approved", mappedArticleId: article.id }),
-        }).catch(() => null)
+        try {
+          await adminFetchJson(`/api/admin/chatbot/questions/${draftSource.clusterId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ status: "approved", mappedArticleId: article.id }),
+          })
+        } catch {
+          // 문서 저장 자체는 성공했으니 무음 처리하지 않고 화면에 남겨 재시도할 수 있게 한다.
+          setClusterUpdateWarning({ clusterId: draftSource.clusterId, articleId: article.id })
+          return
+        }
       }
 
       router.push(`/admin/docs/${article.id}/edit`)
@@ -416,6 +489,31 @@ export default function DocsGapsPanel() {
       setSavingDraftArticle(false)
     }
   }
+
+  const retryClusterStatusUpdate = async () => {
+    if (!clusterUpdateWarning) return
+
+    setRetryingClusterUpdate(true)
+    setError("")
+    try {
+      await adminFetchJson(`/api/admin/chatbot/questions/${clusterUpdateWarning.clusterId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "approved", mappedArticleId: clusterUpdateWarning.articleId }),
+      })
+      const { articleId } = clusterUpdateWarning
+      setClusterUpdateWarning(null)
+      router.push(`/admin/docs/${articleId}/edit`)
+      router.refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "큐 상태 갱신 재시도에 실패했습니다.")
+    } finally {
+      setRetryingClusterUpdate(false)
+    }
+  }
+
+  const filteredGapClusters = (backlog?.gapClusters ?? []).filter(
+    (cluster) => sourceFilter === "all" || getGapClusterSourceBadge(cluster).group === sourceFilter
+  )
 
   return (
     <div className="text-[#111110]">
@@ -551,50 +649,89 @@ export default function DocsGapsPanel() {
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           {/* 무매핑 클러스터 */}
           <section>
-            <h2 className="mb-3 text-base font-semibold">
-              문서 없는 질문 <span className="text-[#615D59]">({backlog?.gapClusters.length ?? 0})</span>
-            </h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-semibold">
+                문서 없는 질문 <span className="text-[#615D59]">({filteredGapClusters.length})</span>
+              </h2>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {GAP_SOURCE_FILTERS.map((filter) => (
+                  <button
+                    key={filter.value}
+                    type="button"
+                    onClick={() => setSourceFilter(filter.value)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                      sourceFilter === filter.value
+                        ? "border-[#084734]/15 bg-[#ECFDF5] text-[#084734]"
+                        : "border-black/[0.08] bg-white text-[#615D59] hover:border-[#084734]/25 hover:bg-[#ECFDF5] hover:text-[#084734]"
+                    )}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <ul className="space-y-2.5">
-              {(backlog?.gapClusters ?? []).map((cluster) => (
-                <li key={cluster.id} className="rounded-[16px] border border-black/[0.08] bg-white p-4">
-                  <p className="text-sm font-medium text-[#111110]">{cluster.question}</p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] text-[#615D59]">
-                    {cluster.category && <span>{cluster.category}</span>}
-                    <span>샘플 {cluster.sampleCount}건</span>
-                    <span>·</span>
-                    <span>{cluster.status}</span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <DraftButton
-                      busy={draftingKey === `c:${cluster.id}`}
-                      onClick={() => generateDraft(`c:${cluster.id}`, cluster.question)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => void publishClusterAsRecommended(cluster)}
-                      disabled={clusterActionId === cluster.id}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-[#084734] px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#065c41] disabled:opacity-60"
-                    >
-                      {clusterActionId === cluster.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Plus className="h-3.5 w-3.5" />
+              {filteredGapClusters.map((cluster) => {
+                const sourceBadge = getGapClusterSourceBadge(cluster)
+                const conversationId = cluster.metadata?.internalCs?.[0]?.conversationId
+                return (
+                  <li key={cluster.id} className="rounded-[16px] border border-black/[0.08] bg-white p-4">
+                    <p className="text-sm font-medium text-[#111110]">{cluster.question}</p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] text-[#615D59]">
+                      <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", sourceBadge.className)}>
+                        {sourceBadge.label}
+                      </span>
+                      {cluster.category && <span>{cluster.category}</span>}
+                      <span>샘플 {cluster.sampleCount}건</span>
+                      <span>·</span>
+                      <span>{cluster.status}</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <DraftButton
+                        busy={draftingKey === `c:${cluster.id}`}
+                        onClick={() => generateDraft(`c:${cluster.id}`, cluster.question)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void publishClusterAsRecommended(cluster)}
+                        disabled={clusterActionId === cluster.id}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-[#084734] px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#065c41] disabled:opacity-60"
+                      >
+                        {clusterActionId === cluster.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Plus className="h-3.5 w-3.5" />
+                        )}
+                        추천 질문
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void dismissCluster(cluster)}
+                        disabled={clusterActionId === cluster.id}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-[12px] font-medium text-[#615D59] transition-colors hover:text-[#111110] disabled:opacity-60"
+                      >
+                        무시
+                      </button>
+                      {conversationId && (
+                        <Link
+                          href={`/admin/cs-chatbot?conversation=${conversationId}`}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-[12px] font-medium text-[#615D59] transition-colors hover:border-[#084734]/25 hover:text-[#084734]"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          대화 열기
+                        </Link>
                       )}
-                      추천 질문
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void dismissCluster(cluster)}
-                      disabled={clusterActionId === cluster.id}
-                      className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-[12px] font-medium text-[#615D59] transition-colors hover:text-[#111110] disabled:opacity-60"
-                    >
-                      무시
-                    </button>
-                  </div>
+                    </div>
+                  </li>
+                )
+              })}
+              {filteredGapClusters.length === 0 && (
+                <li className="text-sm text-[#615D59]">
+                  {(backlog?.gapClusters.length ?? 0) === 0
+                    ? "문서 없는 질문 클러스터가 없습니다."
+                    : "선택한 소스에 해당하는 질문이 없습니다."}
                 </li>
-              ))}
-              {(backlog?.gapClusters.length ?? 0) === 0 && (
-                <li className="text-sm text-[#615D59]">문서 없는 질문 클러스터가 없습니다.</li>
               )}
             </ul>
           </section>
@@ -637,7 +774,7 @@ export default function DocsGapsPanel() {
               <button
                 type="button"
                 onClick={saveDraftAsArticle}
-                disabled={savingDraftArticle}
+                disabled={savingDraftArticle || clusterUpdateWarning != null}
                 className="inline-flex items-center gap-1.5 rounded-full bg-[#084734] px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#065c41] disabled:opacity-60"
               >
                 {savingDraftArticle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
@@ -653,6 +790,39 @@ export default function DocsGapsPanel() {
               </button>
             </div>
           </div>
+          {clusterUpdateWarning && (
+            <div className="mt-3 rounded-[14px] border border-[#B85C33]/20 bg-[#FBEAE2] p-3">
+              <p className="text-sm font-semibold text-[#B85C33]">문서는 저장됐지만 큐 상태 갱신 실패</p>
+              <p className="mt-1 text-[12px] leading-5 text-[#615D59]">
+                문서 자체는 정상 저장됐습니다. 보강 큐의 클러스터 상태만 다시 갱신해 주세요.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void retryClusterStatusUpdate()}
+                  disabled={retryingClusterUpdate}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-[#084734] px-3 py-1.5 text-[12px] font-semibold text-white transition-colors hover:bg-[#065c41] disabled:opacity-60"
+                >
+                  {retryingClusterUpdate ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  상태 갱신 재시도
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    router.push(`/admin/docs/${clusterUpdateWarning.articleId}/edit`)
+                    router.refresh()
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-[12px] font-medium text-[#615D59] transition-colors hover:text-[#111110]"
+                >
+                  문서 편집으로 이동
+                </button>
+              </div>
+            </div>
+          )}
           <p className="mt-3 text-lg font-bold text-[#111110]">{draft.title}</p>
           <p className="mt-1 text-[12px] text-[#615D59]">추천 카테고리: {draft.suggestedCategory}</p>
           {draft.grounding.length > 0 && (
