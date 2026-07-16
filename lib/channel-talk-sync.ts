@@ -16,12 +16,14 @@ import {
   type ChannelUser,
   type ChannelUserChat,
 } from "@/lib/channel-talk-api"
+import { redactPii } from "@/lib/chatbot/service"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
-  getConversation,
-  getConversationStats,
-  getLastConversationSyncAt,
-  upsertConversations,
+  buildConversationChunkInputs,
+  getDurableConversationsByIds,
+  getDurableConversationSyncMeta,
+  replaceConversationChunks,
+  upsertDurableConversations,
   type ChannelConversationAuthor,
   type ChannelConversationMessage,
   type ChannelConversationRecord,
@@ -100,6 +102,7 @@ export interface ChannelSyncResult {
   lastSyncedAt?: string | null
   messageFetches?: number
   reusedTranscripts?: number
+  chunksRewritten?: number
   warning?: string
 }
 
@@ -107,6 +110,7 @@ export async function syncChannelConversations(
   options: { force?: boolean; limit?: number; recentSyncTtlMs?: number; state?: string } = {}
 ): Promise<ChannelSyncResult> {
   if (activeSync && Date.now() - activeSync.startedAt < ACTIVE_SYNC_STALE_MS) {
+    const meta = await getDurableConversationSyncMeta()
     return {
       ok: true,
       configured: true,
@@ -115,8 +119,8 @@ export async function syncChannelConversations(
       fetchedChats: 0,
       upserted: 0,
       newConversations: 0,
-      matchedLeads: getConversationStats().matchedLeads,
-      lastSyncedAt: getLastConversationSyncAt(),
+      matchedLeads: meta.matchedLeads,
+      lastSyncedAt: meta.lastSyncedAt,
       messageFetches: 0,
       reusedTranscripts: 0,
       warning: "이미 채널톡 동기화가 진행 중입니다. 완료 후 최신 상담 목록을 다시 확인하세요.",
@@ -149,12 +153,12 @@ async function runChannelConversationSync(
     }
   }
 
-  const lastSyncedAt = getLastConversationSyncAt()
+  const meta = await getDurableConversationSyncMeta()
+  const lastSyncedAt = meta.lastSyncedAt
   const recentSyncTtlMs = options.recentSyncTtlMs ?? DEFAULT_RECENT_SYNC_TTL_MS
   if (!options.force && lastSyncedAt && recentSyncTtlMs > 0) {
     const lastSyncedMs = new Date(lastSyncedAt).getTime()
     if (Number.isFinite(lastSyncedMs) && Date.now() - lastSyncedMs < recentSyncTtlMs) {
-      const stats = getConversationStats()
       return {
         ok: true,
         configured: true,
@@ -162,7 +166,7 @@ async function runChannelConversationSync(
         fetchedChats: 0,
         upserted: 0,
         newConversations: 0,
-        matchedLeads: stats.matchedLeads,
+        matchedLeads: meta.matchedLeads,
         lastSyncedAt,
         messageFetches: 0,
         reusedTranscripts: 0,
@@ -201,14 +205,19 @@ async function runChannelConversationSync(
     // 리드 조회 실패 시 매칭 없이 진행
   }
 
+  // 기존 상담을 한 번에 조회(Supabase 우선, JSON 폴백) — 트랜스크립트 재사용 + 신규 판별에 쓴다.
+  const existingById = await getDurableConversationsByIds(chats.map((chat) => chat.id))
+
   const syncedAt = new Date().toISOString()
   const records: ChannelConversationRecord[] = []
+  // frontMessageId 가 바뀐(=트랜스크립트를 새로 받은) 대화만 청크를 재생성한다(계약 4).
+  const chunkRegenTargets: { id: string; transcript: ChannelConversationMessage[] }[] = []
   let matchedLeads = 0
   let messageFetches = 0
   let reusedTranscripts = 0
 
   for (const chat of chats) {
-    const existing = getConversation(chat.id)
+    const existing = existingById.get(chat.id)
     const lastTranscriptMessageId = existing?.transcript.at(-1)?.id
     const canReuseTranscript =
       Boolean(existing?.transcript.length) &&
@@ -216,6 +225,7 @@ async function runChannelConversationSync(
       chat.frontMessageId === lastTranscriptMessageId
 
     let transcript: ChannelConversationMessage[] = []
+    let transcriptRefreshed = false
     if (canReuseTranscript && existing) {
       transcript = existing.transcript
       reusedTranscripts += 1
@@ -241,7 +251,12 @@ async function runChannelConversationSync(
             text: (message.plainText ?? "").trim(),
             at: toIso(message.createdAt) ?? syncedAt,
           }))
+        transcriptRefreshed = true
       }
+    }
+
+    if (transcriptRefreshed && transcript.length > 0) {
+      chunkRegenTargets.push({ id: chat.id, transcript })
     }
 
     const user = chat.userId ? userById.get(chat.userId) : undefined
@@ -273,7 +288,41 @@ async function runChannelConversationSync(
     })
   }
 
-  const { upserted, created } = upsertConversations(records)
+  // 신규 대화는 사전 조회한 기존 맵에 없던 id — Supabase/JSON 모드 무관하게 동일하게 판별한다.
+  const created = records.filter((record) => !existingById.has(record.id)).map((record) => record.id)
+
+  let upserted = 0
+  try {
+    const result = await upsertDurableConversations(records)
+    upserted = result.upserted
+  } catch (error) {
+    // Supabase 실패 후 JSON 폴백이 운영 FS(Vercel)에서 던지는 경우 등 — 무음 유실 대신 경고로 표면화한다.
+    return {
+      ok: false,
+      configured: true,
+      fetchedChats: chats.length,
+      upserted: 0,
+      newConversations: 0,
+      matchedLeads,
+      lastSyncedAt: meta.lastSyncedAt,
+      messageFetches,
+      reusedTranscripts,
+      warning: error instanceof Error ? error.message : "상담 저장 실패",
+    }
+  }
+
+  // 트랜스크립트가 바뀐 대화만 청크를 재생성한다. 부모(conversations) upsert 이후에 수행해야 FK 가 성립한다.
+  // 대화 단위 best-effort — 한 건 실패가 전체 동기화를 막지 않는다. embedding 은 null → 백필 스크립트가 채운다.
+  let chunksRewritten = 0
+  for (const target of chunkRegenTargets) {
+    try {
+      const chunks = buildConversationChunkInputs(target.transcript, redactPii)
+      await replaceConversationChunks(target.id, chunks)
+      chunksRewritten += chunks.length
+    } catch (error) {
+      console.error("[channel-talk-sync] 상담 청크 재생성 실패:", target.id, error)
+    }
+  }
 
   if (created.length > 0) {
     void emitNotificationEvent({
@@ -303,5 +352,6 @@ async function runChannelConversationSync(
     lastSyncedAt: syncedAt,
     messageFetches,
     reusedTranscripts,
+    chunksRewritten,
   }
 }
