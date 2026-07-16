@@ -39,5 +39,6 @@ export async function readRevDealsPreferActiveWithSource(
   }
   // 미러 폴백 — 동기화 완료 시각은 summary 라우트가 이미 lastSync로 계산해 두므로 여기서는
   // null로 남기고 라우트가 그 값을 대입한다(같은 값을 다시 조회하는 왕복을 만들지 않는다).
-  return { deals: listBranchRevDeals(filter), source: { kind: "mirror", asOf: null } }
+  const mirrorDeals = await listBranchRevDeals(filter)
+  return { deals: mirrorDeals, source: { kind: "mirror", asOf: null } }
 }
