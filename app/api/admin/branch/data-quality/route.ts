@@ -22,8 +22,17 @@ const readDsh = unstable_cache(
   async () => parseDsh(await readRangeWithFormat(envSheetId("dashboard"), DSH_RANGE), fyOf(new Date())),
   ["branch-dsh-sheet-qc"], { revalidate: 60, tags: ["branch-dsh"] },
 )
+// v2 시트(FY26-27 Sales Ledger)에는 '4. 지역 매출' 탭이 없다('4. 채널 정산'으로 대체).
+// SEG 탭이 없어도 나머지 QC 규칙은 살아 있어야 하므로 실패 시 빈 배열로 강등한다 —
+// sourceCounts.segRows=0으로 소비자가 상태를 알 수 있다.
 const readSeg = unstable_cache(
-  async () => parseSeg(await readRangeWithFormat(envSheetId("dashboard"), SEG_RANGE)),
+  async () => {
+    try {
+      return parseSeg(await readRangeWithFormat(envSheetId("dashboard"), SEG_RANGE))
+    } catch {
+      return []
+    }
+  },
   ["branch-seg-sheet-qc"], { revalidate: 60, tags: ["branch-seg"] },
 )
 const readKpi = unstable_cache(

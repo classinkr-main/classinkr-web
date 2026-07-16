@@ -69,6 +69,37 @@ describe("parseRev", () => {
     expect(cols.region).toBe(2)
     expect(cols.importance).toBe(3)
   })
+  // v2 시트(FY26-27 Sales Ledger) 헤더: Scale·Importance가 둘 다 있고, [12]는 Target이
+  // 아니라 행 총합(Sum)이다. importance는 실제 Importance 열을 읽고, Sum은 contract_target으로
+  // 오염되지 않아야 한다(CRM 매칭이 contract_target을 딜 금액으로 쓴다).
+  it("resolveRevColumns: v2 layout — prefers Importance over Scale, refuses Sum as contract target", () => {
+    const header = makeRow(
+      {
+        0: "Account", 1: "Branch", 2: "Location", 3: "Scale", 4: "Importance",
+        5: "Team", 6: "Manager", 7: "Status", 8: "Type", 9: "Product",
+        10: "First Payment", 11: "Remark", 12: "Sum", 13: "4", 14: "w1",
+      },
+      19,
+    )
+    const cols = resolveRevColumns(header)
+    expect(cols.importance).toBe(4)
+    expect(cols.region).toBe(2)       // Location
+    expect(cols.note).toBe(11)        // Remark
+    expect(cols.contractTarget).toBe(-1) // Sum은 계약 목표가 아님 — 열 없음 처리
+
+    const dataRow = makeRow(
+      {
+        0: "학원C", 2: "서울", 3: "L", 4: "KA", 5: "BD", 6: "Han",
+        12: 9313109, 13: 500000, 14: 500000,
+      },
+      19,
+    )
+    const out = parseRev([makeRow({ 0: "title" }, 19), header, dataRow], { refFy: 2026 })
+    expect(out).toHaveLength(1)
+    expect(out[0].importance).toBe("KA")          // Importance 열(4), Scale(3) 아님
+    expect(out[0].contract_target).toBeNull()     // Sum(12)을 읽지 않음
+    expect(out[0].monthly_payments["2026-04"]).toBe(500000)
+  })
   it("resolveRevColumns: falls back to fixed positions when headers are unrecognized", () => {
     const cols = resolveRevColumns(makeRow({ 13: "4", 14: "w1" }, 16))
     expect(cols.team).toBe(5)

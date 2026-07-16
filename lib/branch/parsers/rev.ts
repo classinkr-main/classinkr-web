@@ -17,11 +17,13 @@ type RevColKey = keyof typeof REV_COLS
 
 // 헤더 텍스트 → 필드. 회사 시트 열이 또 밀려도(자주 바뀜) 헤더로 재정렬되게 한다.
 // 좌측 메타 영역(월 시작 이전)에서만 정확 일치로 매칭하고, 못 찾으면 REV_COLS 기본 위치로 폴백.
+// 별칭 배열 순서가 우선순위다 — v2 시트(FY26-27 Sales Ledger)처럼 Scale과 Importance가
+// 둘 다 있으면 앞선 별칭(importance)이 이긴다.
 const REV_HEADER_ALIASES: Partial<Record<RevColKey, string[]>> = {
   customer: ["account", "customer", "고객", "고객명", "거래처", "거래처명"],
   branchContact: ["branch", "지점", "브랜치"],
   region: ["city", "location", "region", "지역", "소재지"],
-  importance: ["scale", "tier", "등급", "중요도"],
+  importance: ["importance", "중요도", "tier", "등급", "scale"],
   team: ["team", "팀"],
   manager: ["manager", "owner", "담당", "담당자"],
   status: ["status", "상태"],
@@ -37,20 +39,32 @@ function normalizeHeaderText(v: unknown): string {
 }
 
 // 헤더 행에서 필드별 실제 열 인덱스를 해석한다. 인식 못 하면 REV_COLS 기본 위치를 유지한다.
+// 단, 헤더 행이 인식된 상태(별칭 매칭 1개 이상)에서 별칭에 안 걸린 키의 기본 위치에
+// "다른 이름의 헤더"가 붙어 있으면 그 열을 읽지 않는다(-1 → 값 null). v2 시트의 [12] "Sum"
+// (행 총합)이 contractTarget 기본 위치로 흘러들어 CRM 매칭 금액을 오염시키는 것을 막는다.
 export function resolveRevColumns(headers: FormattedCell[]): Record<RevColKey, number> {
   const resolved: Record<RevColKey, number> = { ...REV_COLS }
   const limit = Math.min(headers.length, REV_COLS.monthlyStart) // 월 금액 영역 이전만 매칭
   const used = new Set<number>()
+  const matched = new Set<RevColKey>()
   for (const key of Object.keys(REV_HEADER_ALIASES) as RevColKey[]) {
     const aliases = REV_HEADER_ALIASES[key]!
-    for (let i = 0; i < limit; i++) {
-      if (used.has(i)) continue
-      const header = normalizeHeaderText(headers[i]?.value)
-      if (header && aliases.includes(header)) {
-        resolved[key] = i
-        used.add(i)
-        break
+    outer: for (const alias of aliases) {
+      for (let i = 0; i < limit; i++) {
+        if (used.has(i)) continue
+        if (normalizeHeaderText(headers[i]?.value) === alias) {
+          resolved[key] = i
+          used.add(i)
+          matched.add(key)
+          break outer
+        }
       }
+    }
+  }
+  if (matched.size > 0) {
+    for (const key of Object.keys(REV_HEADER_ALIASES) as RevColKey[]) {
+      if (matched.has(key)) continue
+      if (normalizeHeaderText(headers[resolved[key]]?.value)) resolved[key] = -1
     }
   }
   return resolved

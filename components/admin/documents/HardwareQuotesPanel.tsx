@@ -494,7 +494,7 @@ export default function HardwareQuotesPanel({
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-4 sm:px-6 sm:py-5">
+    <div className="mx-auto max-w-7xl space-y-4 p-4 sm:px-6 sm:py-5">
       {notice && (
         <div
           className={`flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${
@@ -654,7 +654,7 @@ export default function HardwareQuotesPanel({
               return (
                 <div
                   key={quote.id}
-                  className="grid gap-3 px-4 py-4 transition-colors hover:bg-[#fafaf8] sm:px-5 lg:grid-cols-[minmax(0,1fr)_190px_184px]"
+                  className="grid gap-3 px-4 py-4 transition-colors hover:bg-[#fafaf8] sm:px-5 lg:grid-cols-[minmax(0,1fr)_300px_260px] lg:items-center"
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -686,25 +686,27 @@ export default function HardwareQuotesPanel({
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-xs lg:grid-cols-1">
-                    <div>
-                      <p className="text-[#1a1a1a]/35">금액</p>
-                      <p className="mt-0.5 font-semibold text-[#111110]">{formatMoney(quote.totalAmount)}</p>
+                  <div className="grid grid-cols-3 gap-2 text-xs lg:flex lg:flex-nowrap lg:items-baseline lg:justify-end lg:gap-2">
+                    <div className="lg:whitespace-nowrap">
+                      <p className="text-[#1a1a1a]/35 lg:inline">금액</p>
+                      <p className="mt-0.5 font-semibold text-[#111110] lg:ml-1 lg:inline lg:mt-0">{formatMoney(quote.totalAmount)}</p>
                     </div>
-                    <div>
-                      <p className="text-[#1a1a1a]/35">버전</p>
-                      <p className="mt-0.5 font-semibold text-[#111110]">
+                    <span className="hidden text-[#1a1a1a]/20 lg:inline">·</span>
+                    <div className="lg:whitespace-nowrap">
+                      <p className="text-[#1a1a1a]/35 lg:inline">버전</p>
+                      <p className="mt-0.5 font-semibold text-[#111110] lg:ml-1 lg:mt-0 lg:inline">
                         {quote.latestVersionNumber ? `v${quote.latestVersionNumber}` : `${quote.versionCount}개`}
                       </p>
                     </div>
-                    <div>
-                      <p className="text-[#1a1a1a]/35">응답</p>
-                      <p className="mt-0.5 font-semibold text-[#111110]">{getResponseLabel(quote)}</p>
-                      <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/35">{getInteractionHint(quote)}</p>
+                    <span className="hidden text-[#1a1a1a]/20 lg:inline">·</span>
+                    <div className="lg:whitespace-nowrap" title={getInteractionHint(quote)}>
+                      <p className="text-[#1a1a1a]/35 lg:inline">응답</p>
+                      <p className="mt-0.5 font-semibold text-[#111110] lg:ml-1 lg:mt-0 lg:inline">{getResponseLabel(quote)}</p>
+                      <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/35 lg:hidden">{getInteractionHint(quote)}</p>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
+                  <div className="flex flex-wrap items-center gap-1.5 lg:flex-nowrap lg:justify-end">
                     {quote.shareCount > 0 && (
                       <span
                         title={`공유 ${quote.shareCount}회`}
