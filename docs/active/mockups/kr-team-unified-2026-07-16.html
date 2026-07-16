@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KR Team × 매출 장부 역할 재배분 목업 v2 — 2026-07-16</title>
+<style>
+  :root{
+    --bg:#FAFAF8; --panel:#FFFFFF; --strip:#EBE8E2; --neutral:#F6F5F4;
+    --ink:#111110; --sub:#615D59; --line:rgba(0,0,0,0.08);
+    --green:#084734; --mint:#ECFDF5; --mint-line:#BDEFD8;
+    --conf:#084734; --conf-tint:#ECFDF5;
+    --high:#1E5DA8; --high-tint:#EFF6FF;
+    --exp:#A8741A; --exp-tint:#FBF1E0; --exp-line:#ECD29C;
+    --danger:#B43E3E;
+    --font: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:#E8E6E0;color:var(--ink);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .frame{display:flex;max-width:1440px;margin:24px auto;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg);box-shadow:0 10px 40px rgba(0,0,0,0.08)}
+
+  /* ── 사이드바 ── */
+  aside{width:216px;flex-shrink:0;background:#141412;color:#B9B5AF;padding:18px 10px;display:flex;flex-direction:column;gap:2px}
+  aside .brand{color:#fff;font-weight:800;font-size:14px;letter-spacing:-0.01em;padding:6px 10px 14px}
+  aside .sec{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#6E6A64;padding:12px 10px 5px}
+  aside .item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer}
+  aside .item svg{width:14px;height:14px;flex-shrink:0;opacity:.75}
+  aside .item.active{background:#fff;color:#111110}
+  aside .note{margin-top:4px;padding:7px 10px;font-size:10.5px;color:#8f8a83;border:1px dashed #3a3833;border-radius:8px}
+  .chip{display:inline-flex;align-items:center;border-radius:999px;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:0.02em}
+  .chip.new{background:var(--mint);color:var(--green);border:1px solid var(--mint-line)}
+  .chip.moved{background:var(--neutral);color:var(--sub);border:1px solid var(--line)}
+  .chip.gone{background:#fdf0f0;color:var(--danger);border:1px solid #f0caca}
+  .chip.mvp{background:#111110;color:#fff;border:1px solid #333}
+
+  main{flex:1;min-width:0;display:none;flex-direction:column}
+  main.on{display:flex}
+
+  header{border-bottom:1px solid var(--line);background:var(--bg);padding:22px 28px 18px}
+  .crumb{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--sub)}
+  header h1{font-size:26px;font-weight:800;letter-spacing:-0.02em;margin-top:6px;display:flex;align-items:center;gap:10px}
+  header p.desc{margin-top:6px;max-width:680px;color:var(--sub);font-size:12.5px}
+  .header-row{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+  .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:var(--ink);cursor:pointer;font-family:var(--font);text-decoration:none}
+  .btn:hover{background:var(--neutral)}
+  .btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .btn.link{border-style:dashed;color:var(--green)}
+
+  .filters{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .pillgroup{display:flex;gap:2px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:3px}
+  .pillgroup button{border:0;background:transparent;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;font-family:var(--font)}
+  .pillgroup button.on{background:var(--ink);color:#fff}
+  .seggroup{display:inline-flex;border:1px solid var(--line);background:var(--neutral);border-radius:9px;padding:3px}
+  .seggroup button{border:0;background:transparent;border-radius:6px;padding:5px 11px;font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;font-family:var(--font)}
+  .seggroup button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,0.06)}
+
+  .tabstrip{background:var(--strip);border-bottom:1px solid var(--line);padding:0 16px;display:flex;overflow-x:auto}
+  .tabstrip button{position:relative;border:0;background:transparent;margin-top:4px;padding:10px 18px 11px;text-align:left;cursor:pointer;border-radius:10px 10px 0 0;color:var(--sub);font-family:var(--font);flex-shrink:0}
+  .tabstrip button .t{display:block;font-size:13px;font-weight:800;letter-spacing:-0.01em;white-space:nowrap}
+  .tabstrip button .s{display:block;font-size:10.5px;font-weight:500;white-space:nowrap;margin-top:1px}
+  .tabstrip button.on{background:var(--bg);color:var(--ink)}
+  .tabstrip button.on::after{content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:2.5px;border-radius:2px;background:var(--green)}
+
+  .content{padding:22px 28px 60px;display:none}
+  .content.on{display:block}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,0.02)}
+  .card .hd{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .card .hd h2{font-size:13.5px;font-weight:800;letter-spacing:-0.01em;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .card .bd{padding:16px}
+  .grid{display:grid;gap:14px}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .g2{grid-template-columns:1.3fr .7fr}
+  .g2e{grid-template-columns:1fr 1fr}
+  @media(max-width:1100px){.g4{grid-template-columns:repeat(2,1fr)}.g2,.g2e{grid-template-columns:1fr}}
+
+  .kpi{padding:14px 16px}
+  .kpi .lbl{font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.05em}
+  .kpi .val{font-size:22px;font-weight:800;letter-spacing:-0.02em;margin-top:4px}
+  .kpi .delta{font-size:11px;font-weight:700;margin-top:2px}
+  .up{color:var(--green)} .down{color:var(--danger)} .flat{color:var(--sub)}
+
+  .gauge{height:8px;border-radius:99px;background:var(--neutral);overflow:hidden;margin-top:8px}
+  .gauge i{display:block;height:100%;border-radius:99px;background:var(--green)}
+
+  .flow{display:flex;align-items:flex-end;gap:6px;height:150px;padding:6px 2px 0;margin-bottom:26px}
+  .flow .col{flex:1;display:flex;flex-direction:column-reverse;gap:2px;align-items:stretch;position:relative}
+  .flow .col .seg{border-radius:3px 3px 0 0}
+  .flow .col .m{position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:10px;color:var(--sub);font-weight:600}
+  .legend{display:flex;gap:14px;font-size:11px;color:var(--sub);font-weight:600}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  tr:last-child td{border-bottom:0}
+  tr.click:hover{background:var(--neutral);cursor:pointer}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .badge{display:inline-flex;align-items:center;border-radius:6px;padding:2px 8px;font-size:10.5px;font-weight:700}
+  .b-conf{background:var(--conf-tint);color:var(--conf);border:1px solid var(--mint-line)}
+  .b-high{background:var(--high-tint);color:var(--high);border:1px solid #cfe0f5}
+  .b-exp{background:var(--exp-tint);color:var(--exp);border:1px solid var(--exp-line)}
+  .b-neutral{background:var(--neutral);color:var(--sub);border:1px solid var(--line)}
+
+  .kpibars .row{display:grid;grid-template-columns:64px 1fr 110px;gap:10px;align-items:center;padding:7px 0}
+  .kpibars .met{font-size:11.5px;font-weight:800;color:var(--sub)}
+  .bar{height:9px;border-radius:99px;background:var(--neutral);position:relative;overflow:hidden}
+  .bar i{position:absolute;inset:0 auto 0 0;border-radius:99px;background:var(--green)}
+  .bar em{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);opacity:.35}
+  .kpibars .nums{font-size:11px;color:var(--sub);text-align:right;font-variant-numeric:tabular-nums}
+
+  /* 수치형 DSH 그리드 */
+  .dshgrid-wrap{overflow-x:auto}
+  .dshgrid{border-collapse:collapse;min-width:1080px;font-size:11.5px}
+  .dshgrid th,.dshgrid td{border:1px solid var(--line);padding:5px 9px;white-space:nowrap}
+  .dshgrid thead th{background:var(--neutral);font-size:10.5px;position:sticky;top:0}
+  .dshgrid td{text-align:right;font-variant-numeric:tabular-nums}
+  .dshgrid td.h{text-align:left;font-weight:600}
+  .dshgrid .lv0{position:sticky;left:0;background:#fff;font-weight:800}
+  .dshgrid tr.block td{background:var(--neutral);font-weight:800}
+  .dshgrid tr.total td{background:var(--mint);font-weight:800;color:var(--green)}
+  .dshgrid td.dim{color:var(--sub)}
+  .dshgrid td.neg{color:var(--danger)}
+  .dshgrid td.q{background:#FBFAF7}
+
+  /* 매트릭스 (REV — 변경 없음) */
+  .matrix-wrap{overflow-x:auto}
+  .matrix{border-collapse:collapse;min-width:920px}
+  .matrix th,.matrix td{border:1px solid var(--line);padding:6px 8px;font-size:11.5px}
+  .matrix thead th{background:var(--neutral)}
+  .matrix .rowhead{background:#fff;font-weight:700;white-space:nowrap;min-width:150px}
+  .matrix td.cell{min-width:72px;text-align:right;font-variant-numeric:tabular-nums}
+  .matrix td.conf{color:var(--conf);font-weight:700;background:var(--conf-tint)}
+  .matrix td.high{color:var(--high);font-weight:700;background:var(--high-tint)}
+  .matrix td.exp{color:var(--exp);background:var(--exp-tint)}
+  .matrix td.mismatch{outline:2px solid var(--danger);outline-offset:-2px}
+
+  .revgrid{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:14px;align-items:start}
+  @media(max-width:1100px){.revgrid{grid-template-columns:1fr}}
+  .rail .row{display:flex;justify-content:space-between;align-items:center;padding:9px 4px;border-bottom:1px solid var(--line);font-size:12px}
+  .rail .row:last-child{border-bottom:0}
+  .count{font-weight:800;font-variant-numeric:tabular-nums}
+
+  .placeholder{border:1.5px dashed var(--line);border-radius:12px;padding:36px;text-align:center;color:var(--sub)}
+  .placeholder b{color:var(--ink)}
+  .annot{font-size:11px;color:var(--sub);margin-top:6px}
+  .sync{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--sub);border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 12px;margin-bottom:16px;flex-wrap:wrap}
+  .dot{width:7px;height:7px;border-radius:99px;background:var(--green)}
+  .linkcard{border:1.5px dashed var(--mint-line);background:var(--mint);border-radius:12px;padding:28px;text-align:center}
+  .linkcard b{color:var(--green)}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <!-- ══ 사이드바: 두 항목 유지 ══ -->
+  <aside>
+    <div class="brand">Classin Admin</div>
+    <div class="sec">영업 · 매출</div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a4 4 0 0 1 4-4h6"/></svg>CRM</div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16l4-3 4 3V4"/></svg>견적</div>
+    <div class="item active" data-surface="kr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V7l9-4 9 4v14"/><path d="M9 21v-6h6v6"/></svg>KR Team</div>
+    <div class="item" data-surface="ledger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 2h16v20l-3-2-3 2-3-2-3 2-3-2z"/><path d="M8 7h8M8 11h8"/></svg>매출 장부 <span class="chip mvp" style="margin-left:auto">MVP</span></div>
+    <div class="note">두 항목 모두 유지.<br><b style="color:#ddd">시각화 → KR Team</b>으로,<br><b style="color:#ddd">수치 검수 → 매출 장부</b>로 역할 재배분.<br>▲ 클릭해서 두 화면을 오가며 보세요.</div>
+    <div class="sec">기타</div>
+    <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>일정</div>
+  </aside>
+
+  <!-- ══════════ 화면 1: KR Team ══════════ -->
+  <main id="surface-kr" class="on">
+    <header>
+      <div class="header-row">
+        <div>
+          <div class="crumb">ADMIN <span style="opacity:.5">›</span> 영업·매출 <span style="opacity:.5">›</span> <b>KR TEAM</b></div>
+          <h1>KR Team</h1>
+          <p class="desc">보는 화면. 매출 흐름·팀 실적·활동 병목을 시각화로 확인하고, 수치를 만질 일이 생기면 매출 장부로 건너갑니다.</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn link" data-jump="ledger">장부에서 검수 →</button>
+          <button class="btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></svg>새로고침</button>
+        </div>
+      </div>
+      <div class="filters">
+        <div class="pillgroup"><button class="on">KR 전체</button><button>BD</button><button>MKT</button><button>CSM</button></div>
+        <div class="seggroup"><button>M</button><button class="on">Q</button><button>Y</button></div>
+      </div>
+    </header>
+
+    <div class="tabstrip" data-tabs="kr">
+      <button class="on" data-tab="kr-over"><span class="t">개요</span><span class="s">실적 · 매출 흐름 · 재고 · 캠페인</span></button>
+      <button data-tab="kr-pipe"><span class="t">파이프라인</span><span class="s">딜 보드 · 팀 KPI · 활동 병목</span></button>
+      <button data-tab="kr-heat"><span class="t">지역별 히트맵</span><span class="s">KR 지역별 매출 · 딜 분포</span></button>
+      <button data-tab="kr-ai"><span class="t">AI 인사이트</span><span class="s">내부 인사이트 · 본사 보고서</span></button>
+    </div>
+
+    <!-- 개요 -->
+    <section class="content on" id="tab-kr-over">
+      <div class="sync"><span class="dot"></span>마지막 동기화 오늘 17:00 · 시트 수정 16:42</div>
+      <div class="grid g4">
+        <div class="card kpi"><div class="lbl">분기 확정 매출</div><div class="val">₩ 2.41억</div><div class="delta up">▲ 12.4% vs 전분기</div></div>
+        <div class="card kpi"><div class="lbl">고확도 (클로징 임박)</div><div class="val">₩ 0.68억</div><div class="delta flat">— 파이프라인 9건</div></div>
+        <div class="card kpi"><div class="lbl">분기 목표 달성률</div><div class="val">64%</div><div class="gauge"><i style="width:64%"></i></div></div>
+        <div class="card kpi"><div class="lbl">HW 출고 (분기)</div><div class="val">37대</div><div class="delta up">▲ 재고 118대</div></div>
+      </div>
+
+      <div class="grid g2" style="margin-top:14px">
+        <div class="card">
+          <div class="hd">
+            <h2>매출 누적 흐름 <span class="chip new">NEW · 장부 DSH 시각화 이동</span></h2>
+            <div style="display:flex;gap:10px;align-items:center">
+              <div class="legend"><span><i style="background:var(--conf)"></i>확정</span><span><i style="background:var(--high)"></i>고확도</span><span><i style="background:#D9D6CF"></i>예정</span></div>
+              <button class="btn link" data-jump="ledger" style="padding:4px 10px;font-size:11px">수치 검수 →</button>
+            </div>
+          </div>
+          <div class="bd" style="padding-bottom:34px">
+            <div class="flow">
+              <div class="col"><span class="seg" style="height:34px;background:var(--conf)"></span><span class="seg" style="height:10px;background:var(--high)"></span><span class="seg" style="height:8px;background:#D9D6CF"></span><span class="m">4월</span></div>
+              <div class="col"><span class="seg" style="height:52px;background:var(--conf)"></span><span class="seg" style="height:12px;background:var(--high)"></span><span class="seg" style="height:10px;background:#D9D6CF"></span><span class="m">5월</span></div>
+              <div class="col"><span class="seg" style="height:66px;background:var(--conf)"></span><span class="seg" style="height:16px;background:var(--high)"></span><span class="seg" style="height:14px;background:#D9D6CF"></span><span class="m">6월</span></div>
+              <div class="col"><span class="seg" style="height:78px;background:var(--conf)"></span><span class="seg" style="height:22px;background:var(--high)"></span><span class="seg" style="height:18px;background:#D9D6CF"></span><span class="m">7월</span></div>
+              <div class="col" style="opacity:.45"><span class="seg" style="height:84px;background:var(--conf)"></span><span class="seg" style="height:26px;background:var(--high)"></span><span class="seg" style="height:26px;background:#D9D6CF"></span><span class="m">8월</span></div>
+              <div class="col" style="opacity:.45"><span class="seg" style="height:90px;background:var(--conf)"></span><span class="seg" style="height:28px;background:var(--high)"></span><span class="seg" style="height:34px;background:#D9D6CF"></span><span class="m">9월</span></div>
+            </div>
+            <p class="annot">기존 "회계 로드맵"과 장부 DSH 누적 차트를 이 한 섹션으로 통합 — 시각화는 이제 여기가 유일한 자리</p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="hd"><h2>다가오는 딜 <span class="chip moved">유지</span></h2></div>
+          <div class="bd" style="padding:6px 0">
+            <table>
+              <tr class="click"><td><b>메가스터디 러셀</b><br><span class="annot">BD · Han</span></td><td class="num">₩ 2,400만<br><span class="badge b-high">고확도</span></td></tr>
+              <tr class="click"><td><b>청담 프라임학원</b><br><span class="annot">MKT · Gyusung</span></td><td class="num">₩ 860만<br><span class="badge b-exp">예정</span></td></tr>
+              <tr class="click"><td><b>대치 이강학원</b><br><span class="annot">BD · Wangchan</span></td><td class="num">₩ 1,120만<br><span class="badge b-high">고확도</span></td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid g2e" style="margin-top:14px">
+        <div class="card"><div class="hd"><h2>캠페인 <span class="chip moved">유지</span></h2></div><div class="bd placeholder" style="border:0">기존 캠페인 섹션 그대로</div></div>
+        <div class="card"><div class="hd"><h2>하드웨어 <span class="chip moved">유지</span></h2></div><div class="bd placeholder" style="border:0">기존 HW 재고·출고 섹션 그대로</div></div>
+      </div>
+    </section>
+
+    <!-- 파이프라인 -->
+    <section class="content" id="tab-kr-pipe">
+      <div class="sync"><span class="dot"></span>KPI 시트 기준 · FY26-27<span style="margin-left:auto"><button class="btn link" data-jump="ledger" style="padding:4px 10px;font-size:11px">딜 수치 편집 → 장부 REV</button></span></div>
+
+      <div class="grid g2e">
+        <div class="card">
+          <div class="hd"><h2>팀 목표 대비 활동 <span class="chip moved">기존 KPI 아코디언 유지</span></h2><span class="badge b-neutral">BD · Han</span></div>
+          <div class="bd kpibars">
+            <div class="row"><span class="met">LD 리드</span><div class="bar"><i style="width:26%"></i><em style="left:75%"></em></div><span class="nums">47 / 180</span></div>
+            <div class="row"><span class="met">ACC 계정</span><div class="bar"><i style="width:28%"></i><em style="left:75%"></em></div><span class="nums">20 / 72</span></div>
+            <div class="row"><span class="met">OPP 기회</span><div class="bar"><i style="width:33%"></i><em style="left:75%"></em></div><span class="nums">24 / 72</span></div>
+            <div class="row"><span class="met">SOL 제안</span><div class="bar"><i style="width:33%"></i><em style="left:75%"></em></div><span class="nums">63 / 192</span></div>
+            <div class="row"><span class="met">VST 방문</span><div class="bar"><i style="width:28%"></i><em style="left:75%"></em></div><span class="nums">81 / 288</span></div>
+            <p class="annot">세로선 = 회계연도 경과 페이스(75%)</p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="hd"><h2>활동 병목 · 담당자 <span class="chip new">NEW · 장부 KPI 렌즈 흡수</span></h2></div>
+          <div class="bd" style="padding:6px 0">
+            <table>
+              <thead><tr><th>담당</th><th>병목 지표</th><th class="num">달성</th><th></th></tr></thead>
+              <tr><td><b>Chanwoo</b></td><td>LD 리드 유입</td><td class="num" style="color:var(--danger);font-weight:700">8.7%</td><td><span class="badge b-exp">페이스 미달</span></td></tr>
+              <tr><td><b>Heesung</b></td><td>ACC 전환</td><td class="num" style="color:var(--exp);font-weight:700">25%</td><td><span class="badge b-exp">주의</span></td></tr>
+              <tr><td><b>Gyusung</b></td><td>OPP 발굴</td><td class="num" style="color:var(--exp);font-weight:700">29%</td><td><span class="badge b-exp">주의</span></td></tr>
+              <tr><td><b>Junhyuk</b></td><td>Renewal</td><td class="num" style="color:var(--green);font-weight:700">달성</td><td><span class="badge b-conf">양호</span></td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <div class="hd"><h2>파이프라인 <span class="chip moved">유지 · 테이블/칸반 토글 동일</span></h2></div>
+        <table>
+          <thead><tr><th>고객</th><th>팀</th><th>담당</th><th>확도</th><th class="num">이번 분기</th><th class="num">연간</th></tr></thead>
+          <tr class="click"><td><b>메가스터디 러셀</b></td><td>BD</td><td>Han</td><td><span class="badge b-conf">확정</span></td><td class="num">₩ 3,600만</td><td class="num">₩ 9,800만</td></tr>
+          <tr class="click"><td><b>대치 이강학원</b></td><td>BD</td><td>Wangchan</td><td><span class="badge b-high">고확도</span></td><td class="num">₩ 1,120만</td><td class="num">₩ 4,220만</td></tr>
+          <tr class="click"><td><b>청담 프라임학원</b></td><td>MKT</td><td>Gyusung</td><td><span class="badge b-exp">예정</span></td><td class="num">₩ 860만</td><td class="num">₩ 2,580만</td></tr>
+          <tr class="click"><td><b>목동 씨앤씨</b></td><td>CSM</td><td>Minjae</td><td><span class="badge b-conf">확정</span></td><td class="num">₩ 640만</td><td class="num">₩ 1,920만</td></tr>
+        </table>
+      </div>
+    </section>
+
+    <section class="content" id="tab-kr-heat">
+      <div class="placeholder"><b>지역별 히트맵 — 변경 없음</b><br>기존 화면 그대로</div>
+    </section>
+    <section class="content" id="tab-kr-ai">
+      <div class="placeholder"><b>AI 인사이트 — 변경 없음</b><br>내부 인사이트 · 본사 보고서 · 데이터 품질 · CRM 대사 그대로</div>
+    </section>
+  </main>
+
+  <!-- ══════════ 화면 2: 매출 장부 ══════════ -->
+  <main id="surface-ledger">
+    <header>
+      <div class="header-row">
+        <div>
+          <div class="crumb">ADMIN <span style="opacity:.5">›</span> 영업·매출 <span style="opacity:.5">›</span> <b>매출 장부</b></div>
+          <h1>매출 장부 <span class="chip mvp">MVP</span></h1>
+          <p class="desc">만지는 화면. 시트 수치 검수·장부 입력·주간 마감. 차트·시각화는 KR Team으로 옮겨졌고, 여기는 수치가 정본입니다.</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn link" data-jump="kr">대시보드 보기 →</button>
+          <button class="btn primary">+ 장부 입력</button>
+        </div>
+      </div>
+      <div class="filters">
+        <div class="pillgroup"><button class="on">KR 전체</button><button>BD</button><button>MKT</button><button>CSM</button></div>
+        <div class="seggroup"><button class="on">7월</button><button>분기</button><button>연간</button></div>
+      </div>
+    </header>
+
+    <div class="tabstrip" data-tabs="ledger">
+      <button class="on" data-tab="lg-dsh"><span class="t">DSH</span><span class="s">수치 상세 · 목표/실적 그리드</span></button>
+      <button data-tab="lg-rev"><span class="t">REV</span><span class="s">주차·목표 수치 검수 · 초안 큐</span></button>
+      <button data-tab="lg-kpi"><span class="t">KPI</span><span class="s">→ KR Team으로 이동</span></button>
+    </div>
+
+    <!-- DSH 재구성: 수치 상세 그리드 -->
+    <section class="content on" id="tab-lg-dsh">
+      <div class="sync"><span class="dot"></span>시트 '1. DSH' 미러 · FY26-27 <span class="chip new" style="margin-left:8px">NEW · 수치 상세 그리드로 재구성</span><span style="margin-left:auto"><button class="btn link" data-jump="kr" style="padding:4px 10px;font-size:11px">차트로 보기 → KR Team 개요</button></span></div>
+
+      <div class="card">
+        <div class="hd">
+          <h2>목표 · 실적 상세 (단위: 천)</h2>
+          <div class="seggroup"><button class="on">Goal</button><button>Status</button><button>Gap</button></div>
+        </div>
+        <div class="bd dshgrid-wrap" style="padding:0">
+          <table class="dshgrid">
+            <thead>
+              <tr>
+                <th class="lv0">구분</th><th>연간</th>
+                <th class="q">Q1</th><th class="q">Q2</th><th class="q">Q3</th><th class="q">Q4</th>
+                <th>4월</th><th>5월</th><th>6월</th><th>7월</th><th>8월</th><th>9월</th><th>비율</th>
+              </tr>
+            </thead>
+            <tr class="total">
+              <td class="h lv0">Team KR · Total</td><td>10,000,000</td>
+              <td class="q">1,964,193</td><td class="q">3,010,439</td><td class="q">2,645,880</td><td class="q">2,379,488</td>
+              <td>350,759</td><td>811,774</td><td>801,660</td><td>1,029,205</td><td>972,777</td><td>1,008,457</td><td>100.0%</td>
+            </tr>
+            <tr class="block"><td class="h lv0" colspan="13">Software</td></tr>
+            <tr>
+              <td class="h lv0">New · Direct</td><td>2,265,352</td>
+              <td class="q">314,930</td><td class="q">607,792</td><td class="q">637,890</td><td class="q">704,740</td>
+              <td>47,880</td><td>160,770</td><td>106,280</td><td>123,980</td><td>253,232</td><td>230,580</td><td class="dim">22.7%</td>
+            </tr>
+            <tr>
+              <td class="h lv0">New · Channel</td><td>328,980</td>
+              <td class="q">80,410</td><td class="q">122,160</td><td class="q">82,160</td><td class="q">44,250</td>
+              <td>18,970</td><td>20,720</td><td>40,720</td><td>40,720</td><td>50,720</td><td>30,720</td><td class="dim">3.3%</td>
+            </tr>
+            <tr>
+              <td class="h lv0">Renew · Direct</td><td>754,930</td>
+              <td class="q">194,320</td><td class="q">149,240</td><td class="q">168,840</td><td class="q">242,530</td>
+              <td>48,470</td><td>45,770</td><td>100,080</td><td>54,080</td><td>49,080</td><td>46,080</td><td class="dim">7.5%</td>
+            </tr>
+            <tr>
+              <td class="h lv0">Renew · Channel</td><td>667,403</td>
+              <td class="q">163,370</td><td class="q">198,480</td><td class="q">150,773</td><td class="q">154,780</td>
+              <td>28,290</td><td>62,540</td><td>72,540</td><td>73,360</td><td>41,860</td><td>83,260</td><td class="dim">6.7%</td>
+            </tr>
+            <tr class="block"><td class="h lv0" colspan="13">Hardware</td></tr>
+            <tr>
+              <td class="h lv0">New · Channel</td><td>4,625,179</td>
+              <td class="q">888,289</td><td class="q">1,514,782</td><td class="q">1,304,920</td><td class="q">917,188</td>
+              <td>207,149</td><td>305,100</td><td>376,040</td><td>576,065</td><td>481,900</td><td>456,817</td><td class="dim">46.3%</td>
+            </tr>
+            <tr>
+              <td class="h lv0">Renew</td><td>1,358,156</td>
+              <td class="q">322,874</td><td class="q">417,985</td><td class="q">301,297</td><td class="q">316,000</td>
+              <td>0</td><td>216,874</td><td>106,000</td><td>161,000</td><td>95,985</td><td>161,000</td><td class="dim">13.6%</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+      <p class="annot" style="margin-top:10px">시트 1.DSH 구조 충실 — Goal/Status/Gap 전환, 팀별(BD·MKT·CSM)·멤버별 블록은 실제 구현에서 아코디언 확장. 시각화 없음: 이 탭은 숫자가 정본.</p>
+    </section>
+
+    <!-- REV: 변경 없음 -->
+    <section class="content" id="tab-lg-rev">
+      <div class="sync"><span class="dot"></span>시트 원본 56행 · 장부 입력 초안 7건 <span class="chip moved" style="margin-left:8px">변경 없음 — 기존 검수 워크벤치 그대로</span></div>
+      <div class="revgrid">
+        <div class="card">
+          <div class="hd"><h2>REV 검수 매트릭스</h2>
+            <div class="legend"><span><i style="background:var(--conf)"></i>확정</span><span><i style="background:var(--high)"></i>고확도</span><span><i style="background:var(--exp)"></i>예정</span><span><i style="background:var(--danger)"></i>불일치</span></div>
+          </div>
+          <div class="bd matrix-wrap" style="padding:0">
+            <table class="matrix">
+              <thead><tr><th class="rowhead">고객 / 7월</th><th>월 합계</th><th>w1</th><th>w2</th><th>w3</th><th>w4</th><th>w5</th><th>상태</th></tr></thead>
+              <tr><td class="rowhead">메가스터디 러셀<br><span class="annot">BD · Han · 시트</span></td><td class="cell conf">12,000,000</td><td class="cell conf">6,000,000</td><td class="cell conf">6,000,000</td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td><span class="badge b-conf">확정</span></td></tr>
+              <tr><td class="rowhead">대치 이강학원<br><span class="annot">BD · Wangchan · 시트</span></td><td class="cell high">11,200,000</td><td class="cell"></td><td class="cell high">5,600,000</td><td class="cell high">5,600,000</td><td class="cell"></td><td class="cell"></td><td><span class="badge b-high">고확도</span></td></tr>
+              <tr><td class="rowhead">청담 프라임학원<br><span class="annot">MKT · Gyusung · 장부 입력</span></td><td class="cell exp">8,600,000</td><td class="cell exp">4,300,000</td><td class="cell exp">4,300,000</td><td class="cell"></td><td class="cell"></td><td class="cell"></td><td><span class="badge b-neutral">검토</span></td></tr>
+              <tr><td class="rowhead">목동 씨앤씨<br><span class="annot">CSM · Minjae · 시트</span></td><td class="cell mismatch">6,400,000</td><td class="cell conf">3,200,000</td><td class="cell conf">3,200,000</td><td class="cell exp">800,000</td><td class="cell"></td><td class="cell"></td><td><span class="badge" style="background:#fdf0f0;color:var(--danger);border:1px solid #f0caca">합계 불일치</span></td></tr>
+            </table>
+          </div>
+        </div>
+        <div class="rail">
+          <div class="card">
+            <div class="hd"><h2>초안 큐</h2></div>
+            <div class="bd" style="padding:4px 16px">
+              <div class="row"><span>대기</span><span class="count" style="color:var(--exp)">3</span></div>
+              <div class="row"><span>검토</span><span class="count">2</span></div>
+              <div class="row"><span>체크</span><span class="count" style="color:var(--green)">1</span></div>
+              <div class="row"><span>적용</span><span class="count" style="color:var(--green)">1</span></div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:12px">
+            <div class="hd"><h2>주간 마감</h2></div>
+            <div class="bd">
+              <p style="font-size:12px;color:var(--sub)">7월 3주차 — 검수 12/14행 완료</p>
+              <div class="gauge" style="margin-top:8px"><i style="width:86%"></i></div>
+              <button class="btn primary" style="width:100%;margin-top:12px;justify-content:center">이번 주 마감</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPI: 링크형 이동 -->
+    <section class="content" id="tab-lg-kpi">
+      <div class="linkcard">
+        <p style="font-size:15px;font-weight:800;color:var(--green)">활동 KPI는 KR Team으로 이동했습니다</p>
+        <p style="margin-top:8px;color:var(--sub)">목표 대비 활동 바 + 병목·담당자 렌즈는 이제 <b>KR Team › 파이프라인 탭</b>에서 봅니다.<br>이 탭은 전환기 동안 안내만 남기고, 이후 제거합니다.</p>
+        <button class="btn link" data-jump="kr" style="margin-top:16px">KR Team 파이프라인으로 가기 →</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  // 사이드바: 화면 전환
+  function showSurface(key){
+    document.querySelectorAll('main').forEach(m => m.classList.remove('on'));
+    document.getElementById('surface-' + key).classList.add('on');
+    document.querySelectorAll('aside .item[data-surface]').forEach(i =>
+      i.classList.toggle('active', i.dataset.surface === key));
+  }
+  document.querySelectorAll('aside .item[data-surface]').forEach(i =>
+    i.addEventListener('click', () => showSurface(i.dataset.surface)));
+  // 크로스 링크 점프
+  document.querySelectorAll('[data-jump]').forEach(b =>
+    b.addEventListener('click', () => showSurface(b.dataset.jump)));
+  // 탭 전환 (화면별 독립)
+  document.querySelectorAll('.tabstrip').forEach(strip => {
+    const btns = strip.querySelectorAll('button');
+    btns.forEach(b => b.addEventListener('click', () => {
+      btns.forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      strip.parentElement.querySelectorAll('.content').forEach(s => s.classList.remove('on'));
+      document.getElementById('tab-' + b.dataset.tab).classList.add('on');
+    }));
+  });
+  // 목업용 필터 토글
+  document.querySelectorAll('.pillgroup, .seggroup').forEach(g => {
+    g.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+      g.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+    }));
+  });
+</script>
+</body>
+</html>
