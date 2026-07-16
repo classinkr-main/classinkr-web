@@ -770,6 +770,121 @@ export async function reviewInternalCsMessage(input: ReviewInternalCsMessageInpu
   return data as InternalCsMessageRow
 }
 
+// 회귀 후보 목록(계약 5) 한 항목. excerpt 는 검토자가 고친 최종본(corrected_content)을 우선한다.
+export interface InternalCsRegressionCandidateItem {
+  id: string
+  conversationId: string
+  excerpt: string
+  capturedAt: string
+  outcome: InternalCsRegressionOutcome
+  reviewState: InternalCsReviewState
+}
+
+const REGRESSION_CANDIDATE_SELECT =
+  "id, conversation_id, content, corrected_content, review_state, regression_outcome, reviewed_at, updated_at"
+const REGRESSION_EXCERPT_LENGTH = 240
+
+interface RegressionCandidateRow {
+  id: string
+  conversation_id: string
+  content: string
+  corrected_content: string | null
+  review_state: InternalCsReviewState
+  regression_outcome: InternalCsRegressionOutcome
+  reviewed_at: string | null
+  updated_at: string
+}
+
+function toRegressionCandidateItem(row: RegressionCandidateRow): InternalCsRegressionCandidateItem {
+  const excerptSource = (trimOrNull(row.corrected_content) ?? row.content).replace(/\s+/g, " ").trim()
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    excerpt: excerptSource.slice(0, REGRESSION_EXCERPT_LENGTH),
+    // 후보 캡처 시점 = 검토 시점(regression_candidate 는 검토에서만 켜진다). 방어적으로 updated_at 폴백.
+    capturedAt: row.reviewed_at ?? row.updated_at,
+    outcome: row.regression_outcome,
+    reviewState: row.review_state,
+  }
+}
+
+/**
+ * 회귀 검수 후보 목록 — 미판정(not_evaluated) 우선, 남은 자리만 판정 완료분으로 채운다.
+ * regression_candidate=true 부분 인덱스(internal_cs_messages_regression_idx)를 그대로 탄다.
+ */
+export async function listInternalCsRegressionCandidates(limit = 50) {
+  const capped = clampInteger(limit, 50, 1, 50)
+  const supabase = createSupabaseAdminClient()
+
+  const { data: pending, error: pendingError } = await supabase
+    .from("internal_cs_messages")
+    .select(REGRESSION_CANDIDATE_SELECT)
+    .eq("regression_candidate", true)
+    .eq("regression_outcome", "not_evaluated")
+    .order("updated_at", { ascending: false })
+    .limit(capped)
+  if (pendingError) throw databaseError("failed to list regression candidates", pendingError)
+
+  const rows = [...((pending ?? []) as RegressionCandidateRow[])]
+  const remaining = capped - rows.length
+  if (remaining > 0) {
+    const { data: judged, error: judgedError } = await supabase
+      .from("internal_cs_messages")
+      .select(REGRESSION_CANDIDATE_SELECT)
+      .eq("regression_candidate", true)
+      .neq("regression_outcome", "not_evaluated")
+      .order("updated_at", { ascending: false })
+      .limit(remaining)
+    if (judgedError) throw databaseError("failed to list regression candidates", judgedError)
+    rows.push(...((judged ?? []) as RegressionCandidateRow[]))
+  }
+
+  return rows.map(toRegressionCandidateItem)
+}
+
+/**
+ * 문서 매핑(계약 7) 시 참조 메시지의 회귀 판정을 promoted 로 전파한다.
+ * not_evaluated/needs_fix 만 갱신한다 — pass/excluded 는 담당자 판정이므로 불변.
+ * 갱신된 행 수를 반환한다.
+ */
+export async function promoteRegressionOutcomes(refs: { messageId: string }[]) {
+  const messageIds = [...new Set(refs.map((ref) => ref.messageId?.trim()).filter(Boolean))]
+  if (messageIds.length === 0) return 0
+
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("internal_cs_messages")
+    .update({ regression_outcome: "promoted" })
+    .in("id", messageIds)
+    .in("regression_outcome", ["not_evaluated", "needs_fix"])
+    .select("id")
+  if (error) throw databaseError("failed to promote regression outcomes", error)
+  return (data ?? []).length
+}
+
+/**
+ * 회귀 판정 전용 경량 갱신 — regression_outcome 만 바꾼다.
+ * 검토 필드(review_state, reviewed_by, reviewed_at, review_note, corrected_content,
+ * feedback_labels)와 대화 상태는 절대 건드리지 않는다 (buildInternalCsReviewPatch 재사용 금지 이유).
+ */
+export async function updateInternalCsRegressionOutcome(input: {
+  conversationId: string
+  messageId: string
+  outcome: InternalCsRegressionOutcome
+}) {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("internal_cs_messages")
+    .update({ regression_outcome: input.outcome })
+    .eq("id", input.messageId)
+    .eq("conversation_id", input.conversationId)
+    .eq("role", "assistant")
+    .select("*")
+    .maybeSingle()
+  if (error) throw databaseError("failed to update regression outcome", error)
+  return (data as InternalCsMessageRow | null) ?? null
+}
+
 export function cleanInternalCsTags(values: string[] | undefined) {
   return cleanStringList(values)
 }

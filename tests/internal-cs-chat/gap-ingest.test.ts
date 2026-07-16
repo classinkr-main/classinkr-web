@@ -37,6 +37,7 @@ vi.mock("@/lib/repositories/internal-cs-chat", () => ({
   reviewInternalCsMessage: mocks.reviewInternalCsMessage,
   getInternalCsConversation: mocks.getInternalCsConversation,
   createInternalCsMessage: mocks.createInternalCsMessage,
+  updateInternalCsRegressionOutcome: vi.fn(),
 }))
 
 vi.mock("@/lib/internal-cs-chat/context", () => ({

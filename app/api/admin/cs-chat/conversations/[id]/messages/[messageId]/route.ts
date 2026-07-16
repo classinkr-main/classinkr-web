@@ -7,6 +7,7 @@ import {
   INTERNAL_CS_REGRESSION_OUTCOMES,
   isInternalCsChatNotReadyError,
   reviewInternalCsMessage,
+  updateInternalCsRegressionOutcome,
   type InternalCsMessageRow,
   type InternalCsRegressionOutcome,
 } from "@/lib/repositories/internal-cs-chat"
@@ -75,7 +76,9 @@ export async function PATCH(req: NextRequest, context: Context) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
   const raw = body as Record<string, unknown>
-  if (typeof raw.decision !== "string" || !DECISIONS.has(raw.decision)) {
+  // 회귀 판정 전용 경량 경로: decision 없이 regressionOutcome 만 온 경우 (판정 패널).
+  const isRegressionOnly = raw.decision === undefined && raw.regressionOutcome !== undefined
+  if (!isRegressionOnly && (typeof raw.decision !== "string" || !DECISIONS.has(raw.decision))) {
     return NextResponse.json({ error: "Invalid human review decision" }, { status: 400 })
   }
   if (raw.feedbackLabels !== undefined && (!Array.isArray(raw.feedbackLabels) || raw.feedbackLabels.some((value) => typeof value !== "string"))) {
@@ -92,6 +95,18 @@ export async function PATCH(req: NextRequest, context: Context) {
   }
 
   try {
+    // 경량 경로는 regression_outcome 만 갱신한다 — 검토 필드(review_state/reviewed_*/
+    // review_note/corrected_content/feedback_labels)와 대화 상태는 불변.
+    if (isRegressionOnly) {
+      const message = await updateInternalCsRegressionOutcome({
+        conversationId: id,
+        messageId,
+        outcome: raw.regressionOutcome as InternalCsRegressionOutcome,
+      })
+      if (!message) return NextResponse.json({ error: "Assistant message not found" }, { status: 404 })
+      return NextResponse.json({ message })
+    }
+
     const message = await reviewInternalCsMessage({
       conversationId: id,
       messageId,

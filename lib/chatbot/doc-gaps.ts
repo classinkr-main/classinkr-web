@@ -26,6 +26,14 @@ export interface DocGapCluster {
   sampleCount: number
   lastSeenAt: string
   status: string
+  /**
+   * 유입 출처(계약 1·2) — UI 의 소스 배지/필터와 내부 CS 대화 딥링크가 소비한다.
+   * 기존 데이터에는 없을 수 있어 옵셔널이다.
+   */
+  metadata?: {
+    source?: string
+    internalCs?: Array<{ conversationId: string; messageId: string }>
+  }
 }
 
 export interface ZeroResultSearch {
@@ -48,6 +56,7 @@ interface ClusterRow {
   status: string
   last_seen_at: string
   sample_questions: string[] | null
+  metadata: Record<string, unknown> | null
 }
 
 interface SearchEventRow {
@@ -62,6 +71,33 @@ interface MappedClusterRow {
 
 function normalizeGapQuery(value: string) {
   return value.replace(/\s+/g, " ").trim().toLowerCase()
+}
+
+// metadata 는 jsonb 자유형이므로 UI 계약(source/internalCs)에 맞는 값만 통과시킨다.
+function normalizeGapClusterMetadata(value: unknown): DocGapCluster["metadata"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+
+  const source =
+    typeof record.source === "string" && record.source.trim() ? record.source : undefined
+  const internalCs = Array.isArray(record.internalCs)
+    ? record.internalCs.filter(
+        (entry): entry is { conversationId: string; messageId: string } => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false
+          const candidate = entry as Record<string, unknown>
+          return (
+            typeof candidate.conversationId === "string" &&
+            typeof candidate.messageId === "string"
+          )
+        }
+      )
+    : undefined
+
+  if (!source && (!internalCs || internalCs.length === 0)) return undefined
+  return {
+    ...(source ? { source } : {}),
+    ...(internalCs && internalCs.length > 0 ? { internalCs } : {}),
+  }
 }
 
 export function filterMappedZeroResultSearches(
@@ -87,7 +123,9 @@ export async function listDocGapBacklog(options: { limit?: number } = {}): Promi
     // 매핑 문서가 없는 클러스터 = 문서가 없는 질문
     const { data: clusterRows, error: clusterError } = await supabase
       .from("question_clusters")
-      .select("id, label, canonical_question, category, status, last_seen_at, sample_questions")
+      .select(
+        "id, label, canonical_question, category, status, last_seen_at, sample_questions, metadata"
+      )
       .is("mapped_article_id", null)
       .in("status", ["candidate", "approved"])
       .order("last_seen_at", { ascending: false })
@@ -95,15 +133,19 @@ export async function listDocGapBacklog(options: { limit?: number } = {}): Promi
 
     if (clusterError) throw new Error(clusterError.message)
 
-    const gapClusters: DocGapCluster[] = ((clusterRows ?? []) as ClusterRow[]).map((row) => ({
-      id: row.id,
-      label: row.label,
-      question: row.canonical_question,
-      category: row.category,
-      sampleCount: Array.isArray(row.sample_questions) ? row.sample_questions.length : 0,
-      lastSeenAt: row.last_seen_at,
-      status: row.status,
-    }))
+    const gapClusters: DocGapCluster[] = ((clusterRows ?? []) as ClusterRow[]).map((row) => {
+      const metadata = normalizeGapClusterMetadata(row.metadata)
+      return {
+        id: row.id,
+        label: row.label,
+        question: row.canonical_question,
+        category: row.category,
+        sampleCount: Array.isArray(row.sample_questions) ? row.sample_questions.length : 0,
+        lastSeenAt: row.last_seen_at,
+        status: row.status,
+        ...(metadata ? { metadata } : {}),
+      }
+    })
 
     // zero-result 검색어 — 최근 이벤트를 JS에서 집계
     const { data: eventRows, error: eventError } = await supabase
