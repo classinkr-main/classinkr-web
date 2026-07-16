@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import type { InternalCsAssetRow } from "@/lib/repositories/internal-cs-chat"
+
 const mocks = vi.hoisted(() => ({
   requireVerifiedAdminContext: vi.fn(),
   getInternalCsConversation: vi.fn(),
@@ -29,7 +31,10 @@ vi.mock("@/lib/internal-cs-chat/gemini", () => ({
   generateInternalCsAnswer: mocks.generateInternalCsAnswer,
 }))
 
-import { POST } from "@/app/api/admin/cs-chat/conversations/[id]/generate/route"
+import {
+  buildInternalCsAssetEvidence,
+  POST,
+} from "@/app/api/admin/cs-chat/conversations/[id]/generate/route"
 
 const conversation = {
   id: "conversation-1",
@@ -149,6 +154,20 @@ function setSuccessfulDefaults() {
     sourceRefs,
     deterministicFallback: "담당자 검토 필요",
     publicEvidence: { answer: "공개 안전 초안", sources: [{ id: "source" }] },
+    curatedEvidence: {
+      entries: [
+        {
+          id: "software-current-scope",
+          title: "소프트웨어 기능의 현행 범위",
+          status: "conditional",
+          externalUse: "reviewed_summary_allowed",
+          summary: "현재 정본 기준",
+        },
+      ],
+      recommendedTags: ["area:software"],
+      reviewRequired: false,
+      reviewReasons: [],
+    },
   })
   mocks.generateInternalCsAnswer.mockResolvedValue(generation)
   mocks.createInternalCsMessage
@@ -159,6 +178,35 @@ function setSuccessfulDefaults() {
 afterEach(() => {
   vi.clearAllMocks()
   vi.restoreAllMocks()
+})
+
+describe("internal CS attachment evidence", () => {
+  it("labels pending image analysis as unverified context", () => {
+    const evidence = buildInternalCsAssetEvidence([
+      {
+        id: "asset-1",
+        original_file_name: "refund-screen.png",
+        analysis_summary: "The screen shows a refund request.",
+        analysis_payload: {
+          extractedText: ["REFUND REQUESTED"],
+          sensitiveDataWarnings: ["Account identifier is visible"],
+        },
+        review_state: "pending",
+        corrected_analysis: null,
+      } as unknown as InternalCsAssetRow,
+    ])
+
+    expect(evidence.count).toBe(1)
+    expect(evidence.text).toContain("treat as unverified unless approved")
+    expect(evidence.text).toContain("REFUND REQUESTED")
+    expect(evidence.sourceRefs).toEqual([
+      expect.objectContaining({
+        id: "internal-cs-asset:asset-1",
+        kind: "internal_asset",
+        reviewState: "pending",
+      }),
+    ])
+  })
 })
 
 describe("POST /api/admin/cs-chat/conversations/[id]/generate", () => {
@@ -260,6 +308,56 @@ describe("POST /api/admin/cs-chat/conversations/[id]/generate", () => {
           userMessageId: "user-message-1",
           guardrails: generation.guardrails,
           citations: sourceRefs,
+          curatedKnowledgeIds: ["software-current-scope"],
+          recommendedTags: ["area:software"],
+        }),
+      })
+    )
+  })
+
+  it("forces evidence review when curated knowledge contains conflicts", async () => {
+    setSuccessfulDefaults()
+    mocks.buildInternalCsCopilotContext.mockResolvedValue({
+      internalContext: "보드 세대 충돌",
+      sourceRefs,
+      deterministicFallback: "모델·세대 확인 필요",
+      publicEvidence: { answer: null, sources: [] },
+      curatedEvidence: {
+        entries: [
+          {
+            id: "board-generations",
+            title: "보드 라인업·세대·사양 충돌",
+            status: "conflicting_sources",
+            externalUse: "confirmation_required",
+            summary: "세대 확인 필요",
+          },
+        ],
+        recommendedTags: ["area:board", "evidence:conflict"],
+        reviewRequired: true,
+        reviewReasons: ["보드 라인업·세대·사양 충돌: 자료 충돌"],
+      },
+    })
+
+    const response = await POST(
+      request({ question: "S86 사양을 알려줘", requestedMode: "auto" }),
+      routeContext()
+    )
+
+    expect(response.status).toBe(201)
+    expect(mocks.buildInternalCsCopilotContext).toHaveBeenCalledWith(
+      "S86 사양을 알려줘",
+      { queueTags: conversation.tags }
+    )
+    expect(mocks.generateInternalCsAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({ requiresEvidenceReview: true })
+    )
+    expect(mocks.createInternalCsMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          requestedEvidenceReview: false,
+          requiresEvidenceReview: true,
+          curatedEvidenceReviewReasons: ["보드 라인업·세대·사양 충돌: 자료 충돌"],
         }),
       })
     )

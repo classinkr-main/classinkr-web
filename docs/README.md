@@ -41,6 +41,10 @@
   - 어드민 → 지사 운영 OS(ERP) 청사진 & 실행 로드맵(Account 360 스파인·귀속·노션 캘린더 라이브 연동·거버넌스 결정)
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
   - 자체 CRM 백엔드/운영 기준. 시트·OCRM·HQ CRM은 참고/동기화 원천으로 두고, Admin CRM의 고객 스파인·회의록·녹음·다음 액션 구조를 정의
+- [active/internal-cs-ai-bridge.md](./active/internal-cs-ai-bridge.md)
+  - 내부 CS 캡처·사진 분석, 담당자 검토, 서명된 AI/MCP 수신·송신 계약과 운영 경계
+- [active/internal-cs-content-arrangement-2026-07-15.md](./active/internal-cs-content-arrangement-2026-07-15.md)
+  - 기존 정본과 전달 자료의 중복·충돌을 정리한 내부 CS 지식 등급, 소통 템플릿, 태그·자산 적용 기준
 - [active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md](./active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md)
   - REV/매출 시트를 Admin CRM 안의 별도 매출시트 탭으로 승격하고, 이후 자체 매출 원장으로 옮기는 실행안
 

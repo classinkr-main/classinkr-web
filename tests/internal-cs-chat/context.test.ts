@@ -44,8 +44,14 @@ describe("buildInternalCsCopilotContext", () => {
     expect(result.sourceRefs).toContainEqual({
       id: "article-recording",
       label: "녹화 관리 · 관리자 확인",
+      kind: "public_doc",
     })
+    expect(result.curatedEvidence.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "software-current-scope", status: "conditional" }),
+    ]))
+    expect(result.curatedEvidence.recommendedTags).toContain("area:software")
     expect(result.deterministicFallback).toContain("관리자 녹화 메뉴")
+    expect(result.deterministicFallback).toContain("정리된 내부 기준")
     expect(result.deterministicFallback).toContain("CS 담당자의 검토와 승인")
   })
 
@@ -57,7 +63,23 @@ describe("buildInternalCsCopilotContext", () => {
     expect(result.publicEvidence.sources).toEqual([])
     expect(result.publicEvidence.warning).toContain("검색에 실패")
     expect(result.internalContext).toContain("본사 확인·소통 기준")
+    expect(result.internalContext).toContain("정리된 내부 CS 지식")
     expect(result.deterministicFallback).toContain("직접 일치하는 공개 가이드 근거를 찾지 못했습니다")
   })
-})
 
+  it("uses queue tags to surface conflict evidence and require deeper review", async () => {
+    mocks.evaluateChatbotQuery.mockResolvedValue({ answer: null, sources: [] })
+
+    const result = await buildInternalCsCopilotContext("현재 건 확인", {
+      queueTags: ["area:board", "topic:warranty"],
+    })
+
+    expect(result.curatedEvidence.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "board-generations", status: "conflicting_sources" }),
+      expect.objectContaining({ id: "pricing-contract-refund", status: "hq_confirmation_required" }),
+    ]))
+    expect(result.curatedEvidence.reviewRequired).toBe(true)
+    expect(result.curatedEvidence.reviewReasons.join(" ")).toContain("자료 충돌")
+    expect(result.curatedEvidence.reviewReasons.join(" ")).toContain("본사 확인 필요")
+  })
+})

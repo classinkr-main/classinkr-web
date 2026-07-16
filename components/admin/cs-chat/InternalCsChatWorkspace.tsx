@@ -1,11 +1,14 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import {
+  AlertTriangle,
   Archive,
   ArrowLeft,
   BookOpen,
   Bot,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
@@ -15,25 +18,33 @@ import {
   Headphones,
   HelpCircle,
   History,
+  ImageIcon,
   Loader2,
   LockKeyhole,
   MessageSquare,
+  Paperclip,
   PanelRightOpen,
   RefreshCcw,
   RotateCcw,
   Search,
   Send,
   Settings2,
+  ShieldCheck,
   Sparkles,
+  Trash2,
   UserRound,
+  Wifi,
+  WifiOff,
   X,
 } from "lucide-react"
 import {
+  type ChangeEvent,
   type FormEvent,
   type ReactNode,
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react"
@@ -64,6 +75,10 @@ interface InternalCsConversation {
 interface InternalCsSourceRef {
   id: string
   label?: string
+  kind?: "public_doc" | "internal_guide" | "curated_knowledge" | "internal_asset"
+  verificationStatus?: "confirmed" | "conditional" | "conflicting_sources" | "hq_confirmation_required"
+  externalUse?: "reviewed_summary_allowed" | "internal_only" | "confirmation_required"
+  reviewState?: "pending" | "approved" | "changes_requested" | "rejected"
 }
 
 interface InternalCsMessage {
@@ -86,6 +101,49 @@ interface InternalCsMessage {
   created_at: string
 }
 
+interface InternalCsAsset {
+  id: string
+  file_name?: string | null
+  original_file_name?: string | null
+  name?: string | null
+  mime_type?: string | null
+  thumbnail_url?: string | null
+  preview_url?: string | null
+  signed_url?: string | null
+  url?: string | null
+  instruction?: string | null
+  analysis_summary?: string | null
+  analysis_payload?: unknown
+  analysis?: string | null
+  analysis_text?: string | null
+  analysis_json?: unknown
+  analysis_status?: string | null
+  status?: string | null
+  review_state?: string | null
+  analysis_review_state?: string | null
+  human_review_required?: boolean | null
+  created_at?: string | null
+}
+
+interface InternalCsIntegrationEvent {
+  id: string
+  direction?: string | null
+  transport?: string | null
+  event_type?: string | null
+  source_system?: string | null
+  destination?: string | null
+  integration?: string | null
+  status?: string | null
+  result?: unknown
+  include_original?: boolean | null
+  includeOriginal?: boolean | null
+  summary?: string | null
+  error_message?: string | null
+  errorMessage?: string | null
+  created_at?: string | null
+  createdAt?: string | null
+}
+
 interface ConversationListResponse {
   conversations: InternalCsConversation[]
   pagination: { total: number }
@@ -94,6 +152,25 @@ interface ConversationListResponse {
 interface ConversationDetailResponse {
   conversation: InternalCsConversation
   messages: InternalCsMessage[]
+  assets?: InternalCsAsset[]
+  integrationEvents?: InternalCsIntegrationEvent[]
+}
+
+interface IntegrationStatusResponse {
+  configured?: boolean
+  status?: string
+  provider?: string
+  label?: string
+  message?: string
+  lastCheckedAt?: string | null
+  bridge?: {
+    configured?: boolean
+    status?: string
+    provider?: string
+    label?: string
+    message?: string
+    lastCheckedAt?: string | null
+  }
 }
 
 interface GenerateResponse {
@@ -118,6 +195,10 @@ const INITIAL_CHECKS: ReviewChecks = {
   evidence: false,
   externalScope: false,
 }
+
+const MAX_PENDING_ASSETS = 3
+const MAX_ASSET_BYTES = 8 * 1024 * 1024
+const ACCEPTED_ASSET_TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
 
 const WORKSPACE_TABS: Array<{ value: WorkspaceTab; label: string }> = [
   { value: "chat", label: "대화" },
@@ -201,7 +282,7 @@ const DEMO_CONVERSATION: InternalCsConversation = {
   priority: "high",
   assignee_user_id: null,
   assignee_name: "CS 담당자",
-  tags: ["billing", "hq_confirmation"],
+  tags: ["area:billing", "intent:hq_confirmation", "evidence:hq_pending"],
   customer_context: {},
   last_message_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
@@ -233,12 +314,18 @@ const DEMO_MESSAGES: InternalCsMessage[] = [
     conversation_id: DEMO_CONVERSATION.id,
     role: "assistant",
     content: "검토 전 내부 초안\n\n환불 조건은 결제·계약 방식에 따라 달라질 수 있어 현재 정보만으로 확정할 수 없습니다. 고객의 계약서 또는 주문 조건을 먼저 확인하고, 프로모션 코드가 적용된 건이라면 본사 확인 후 안내하는 것이 안전합니다.\n\n고객에게는 ‘계약 조건과 결제 내역을 확인한 뒤 담당자가 환불 가능 여부와 처리 일정을 안내하겠다’고 우선 답변해 주세요.",
-    model_name: "gemini-3.5-flash",
-    model_mode: "fast",
+    model_name: "gemini-3.1-pro-preview",
+    model_mode: "deep",
     source_refs: [
-      { id: "/docs/getting-started/pre-adoption-checklist", label: "도입 전 확인 기준" },
-      { id: "docs/active/classin-operating-canon-2026-07-02.md", label: "Classin 운영 정본" },
-      { id: "docs/active/classin-pre-adoption-question-matrix-2026-06-18.md", label: "도입 전 질문·확인 단계" },
+      { id: "/docs/getting-started/pre-adoption-checklist", label: "도입 전 확인 기준", kind: "public_doc" },
+      { id: "docs/active/classin-operating-canon-2026-07-02.md", label: "Classin 운영 정본", kind: "internal_guide" },
+      {
+        id: "docs/active/internal-cs-content-arrangement-2026-07-15.md#가격계약환불보증",
+        label: "가격·계약·환불의 한국 적용 범위",
+        kind: "curated_knowledge",
+        verificationStatus: "hq_confirmation_required",
+        externalUse: "confirmation_required",
+      },
     ],
     metadata: { origin: "model", fallbackUsed: false },
     review_state: "pending",
@@ -256,6 +343,68 @@ const DEMO_MESSAGES: InternalCsMessage[] = [
 const DEMO_DETAIL: ConversationDetailResponse = {
   conversation: DEMO_CONVERSATION,
   messages: DEMO_MESSAGES,
+  assets: [],
+  integrationEvents: [],
+}
+
+function assetFileName(asset: InternalCsAsset) {
+  return asset.original_file_name ?? asset.file_name ?? asset.name ?? "첨부 이미지"
+}
+
+function assetPreviewUrl(asset: InternalCsAsset) {
+  return asset.signed_url ?? asset.thumbnail_url ?? asset.preview_url ?? asset.url ?? null
+}
+
+function assetAnalysis(asset: InternalCsAsset) {
+  if (asset.analysis_summary) return asset.analysis_summary
+  if (asset.analysis_text) return asset.analysis_text
+  if (asset.analysis) return asset.analysis
+  if (asset.analysis_payload && typeof asset.analysis_payload === "object") {
+    return JSON.stringify(asset.analysis_payload, null, 2)
+  }
+  if (asset.analysis_json && typeof asset.analysis_json === "object") {
+    return JSON.stringify(asset.analysis_json, null, 2)
+  }
+  return "분석 결과가 아직 준비되지 않았습니다."
+}
+
+function assetAnalysisStatus(asset: InternalCsAsset) {
+  return asset.analysis_status ?? asset.status ?? "completed"
+}
+
+function assetNeedsHumanReview(asset: InternalCsAsset) {
+  if (asset.human_review_required != null) return asset.human_review_required
+  return (asset.analysis_review_state ?? asset.review_state) !== "approved"
+}
+
+function integrationState(response: IntegrationStatusResponse | null) {
+  const bridge = response?.bridge ?? response
+  const configured = bridge?.configured ?? response?.configured ?? false
+  const status = bridge?.status ?? response?.status ?? (configured ? "ready" : "unconfigured")
+  const ready = configured && ["ready", "connected", "ok", "healthy", "active"].includes(status.toLowerCase())
+  return {
+    configured,
+    ready,
+    status,
+    label: bridge?.label ?? bridge?.provider ?? response?.label ?? response?.provider ?? "AI 브리지",
+    message: bridge?.message ?? response?.message ?? (ready ? "현재 대화를 안전하게 전달할 수 있습니다." : "연동 설정과 상태를 확인해 주세요."),
+    lastCheckedAt: bridge?.lastCheckedAt ?? response?.lastCheckedAt ?? null,
+  }
+}
+
+function integrationEventWhen(event: InternalCsIntegrationEvent) {
+  return event.created_at ?? event.createdAt ?? null
+}
+
+function integrationEventSummary(event: InternalCsIntegrationEvent) {
+  if (event.summary) return event.summary
+  if (typeof event.result === "string") return event.result
+  if (event.error_message ?? event.errorMessage) return event.error_message ?? event.errorMessage ?? ""
+  return event.event_type ?? "내부 분석 요청"
+}
+
+function fileKey(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}`
 }
 
 function formatTime(value: string | null) {
@@ -284,8 +433,41 @@ function normalizeSourceRefs(values: unknown[]): InternalCsSourceRef[] {
     if (!value || typeof value !== "object" || Array.isArray(value)) return []
     const source = value as Record<string, unknown>
     if (typeof source.id !== "string" || !source.id.trim()) return []
-    return [{ id: source.id, label: typeof source.label === "string" ? source.label : undefined }]
+    const kind = typeof source.kind === "string" ? source.kind : undefined
+    const verificationStatus = typeof source.verificationStatus === "string"
+      ? source.verificationStatus
+      : undefined
+    const externalUse = typeof source.externalUse === "string" ? source.externalUse : undefined
+    const reviewState = typeof source.reviewState === "string" ? source.reviewState : undefined
+    return [{
+      id: source.id,
+      label: typeof source.label === "string" ? source.label : undefined,
+      kind: kind as InternalCsSourceRef["kind"],
+      verificationStatus: verificationStatus as InternalCsSourceRef["verificationStatus"],
+      externalUse: externalUse as InternalCsSourceRef["externalUse"],
+      reviewState: reviewState as InternalCsSourceRef["reviewState"],
+    }]
   })
+}
+
+function sourceStatus(source: InternalCsSourceRef) {
+  if (source.kind === "internal_asset") {
+    if (source.reviewState === "approved") return { label: "담당자 확인", tone: "confirmed" as const }
+    return { label: "이미지 미검토", tone: "pending" as const }
+  }
+  if (source.verificationStatus === "confirmed") {
+    return { label: "확정", tone: "confirmed" as const }
+  }
+  if (source.verificationStatus === "conditional") {
+    return { label: "조건부", tone: "conditional" as const }
+  }
+  if (source.verificationStatus === "conflicting_sources") {
+    return { label: "자료 충돌", tone: "pending" as const }
+  }
+  if (source.verificationStatus === "hq_confirmation_required") {
+    return { label: "본사 확인", tone: "pending" as const }
+  }
+  return null
 }
 
 function sourceHref(source: InternalCsSourceRef) {
@@ -294,14 +476,52 @@ function sourceHref(source: InternalCsSourceRef) {
   return null
 }
 
+function getLastQuestion(detail: ConversationDetailResponse) {
+  return [...detail.messages].reverse().find((message) => message.role === "user")?.content
+}
+
+function buildCustomerHoldingTemplate(detail: ConversationDetailResponse | null) {
+  if (!detail) return ""
+  return [
+    "안녕하세요.",
+    "현재 확인된 범위: [확인된 내용 입력]",
+    "추가 확인 중인 항목: [모델·세대·버전·계약 등 입력]",
+    "확정 전 안내하지 않는 항목: [가격·환불·보증·원인 등 해당 시 입력]",
+    `다음 안내: ${detail.conversation.assignee_name ?? "담당자 지정 필요"} · [회신 예정 시각]`,
+  ].join("\n")
+}
+
+function buildInternalHandoffTemplate(detail: ConversationDetailResponse | null) {
+  if (!detail) return ""
+  return [
+    `[CS-${detail.conversation.id}] ${detail.conversation.title}`,
+    `우선순위 / 상태: ${detail.conversation.priority} / ${detail.conversation.status}`,
+    `담당자: ${detail.conversation.assignee_name ?? "지정 필요"}`,
+    `분류 태그: ${detail.conversation.tags.join(", ") || "분류 필요"}`,
+    "제품·모델·세대·앱 버전: 확인 필요",
+    `문의 / 현상: ${getLastQuestion(detail) ?? "입력 필요"}`,
+    "영향·긴급도: 입력 필요",
+    "확인한 내용 / 시도 결과: 입력 필요",
+    "고객에게 안내한 내용: 입력 필요",
+    "미확정·충돌·리스크: 입력 필요",
+    "다음 액션 / 담당자 / 기한: 입력 필요",
+    `관련 근거·첨부: 이미지 ${detail.assets?.length ?? 0}건 / 근거 링크 입력 필요`,
+  ].join("\n")
+}
+
 function buildHqTemplate(detail: ConversationDetailResponse | null) {
   if (!detail) return ""
-  const lastQuestion = [...detail.messages].reverse().find((message) => message.role === "user")?.content
+  const area = detail.conversation.tags
+    .find((tag) => tag.startsWith("area:"))
+    ?.slice("area:".length) || "AREA"
+  const lastQuestion = getLastQuestion(detail)
   return [
-    `[KR-CS][${detail.conversation.priority.toUpperCase()}] ${detail.conversation.title}`,
+    `[KR-CS][${detail.conversation.priority.toUpperCase()}][${area}][${detail.conversation.id}] ${detail.conversation.title}`,
     "",
     "1. Case",
     `- 내부 케이스 ID: ${detail.conversation.id}`,
+    `- 한국 담당자: ${detail.conversation.assignee_name ?? "지정 필요"}`,
+    "- 발생 시각(KST) / 기관·계정 식별자: 입력 필요 (개인정보 최소화)",
     "- 제품·모델·세대·앱 버전: 확인 필요",
     "",
     "2. Impact",
@@ -309,13 +529,20 @@ function buildHqTemplate(detail: ConversationDetailResponse | null) {
     "- 수업 차단 여부 / 고객 요구 시한: 확인 필요",
     "",
     "3. Question / Reproduction",
-    `- ${lastQuestion ?? "질문과 재현 절차를 입력해 주세요."}`,
+    `- 현상: ${lastQuestion ?? "질문과 현상을 입력해 주세요."}`,
+    "- 재현 절차 / Expected / Actual / Frequency: 입력 필요",
     "",
     "4. Korea checks",
-    "- 이미 확인한 항목과 시도한 조치: 입력 필요",
+    "- 이미 확인한 항목 / 시도한 조치 / 임시 우회 결과: 입력 필요",
     "",
-    "5. Request to HQ",
-    "- 적용 모델·시장·효력 발생일·근거 문서 버전을 포함해 확인 부탁드립니다.",
+    "5. Evidence",
+    `- 개인정보 제거 첨부 ${detail.assets?.length ?? 0}건 / 내부 근거 링크: 입력 필요`,
+    "",
+    "6. Request to HQ",
+    "- 답변이 필요한 질문 1~3개: 입력 필요",
+    "- 원인 / 조치 / 버그 여부 / ETA 중 필요한 항목: 입력 필요",
+    "- Reply needed by (KST): 입력 필요",
+    "- Please include applicable market/models, generation, effective date, and source document/version.",
   ].join("\n")
 }
 
@@ -466,6 +693,19 @@ export default function InternalCsChatWorkspace() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [demoMode, setDemoMode] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [assetError, setAssetError] = useState<string | null>(null)
+  const [uploadingAssets, setUploadingAssets] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 })
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null)
+  const [assetReviewingId, setAssetReviewingId] = useState<string | null>(null)
+  const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatusResponse | null>(null)
+  const [integrationLoading, setIntegrationLoading] = useState(false)
+  const [integrationAttempted, setIntegrationAttempted] = useState(false)
+  const [integrationError, setIntegrationError] = useState<string | null>(null)
+  const [includeOriginal, setIncludeOriginal] = useState(false)
+  const [dispatching, setDispatching] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [isPending, startTransition] = useTransition()
 
   const loadConversation = useCallback(async (id: string) => {
@@ -488,6 +728,30 @@ export default function InternalCsChatWorkspace() {
     setReviewNote("")
     setRegressionCandidate(pending?.regression_candidate ?? false)
     return loaded
+  }, [demoMode])
+
+  const loadIntegrationStatus = useCallback(async () => {
+    setIntegrationAttempted(true)
+    if (demoMode) {
+      setIntegrationStatus({
+        configured: true,
+        status: "ready",
+        label: "AI 브리지 미리보기",
+        message: "현재 대화와 이미지 분석을 내부 AI 협업 채널로 전달할 수 있습니다.",
+      })
+      setIntegrationError(null)
+      return
+    }
+    setIntegrationLoading(true)
+    setIntegrationError(null)
+    try {
+      const response = await adminFetchJson<IntegrationStatusResponse>("/api/admin/cs-chat/integrations/status")
+      setIntegrationStatus(response)
+    } catch (statusError) {
+      setIntegrationError(statusError instanceof Error ? statusError.message : "AI 브리지 상태를 불러오지 못했습니다.")
+    } finally {
+      setIntegrationLoading(false)
+    }
   }, [demoMode])
 
   const loadConversations = useCallback(async (preferredId?: string | null) => {
@@ -523,6 +787,22 @@ export default function InternalCsChatWorkspace() {
     }
   }, [conversations.length, detail, error, loadConversations, loading])
 
+  useEffect(() => {
+    if (activeTab === "tools" && !integrationAttempted && !integrationLoading) {
+      void loadIntegrationStatus()
+    }
+  }, [activeTab, integrationAttempted, integrationLoading, loadIntegrationStatus])
+
+  const assets = useMemo(() => detail?.assets ?? [], [detail?.assets])
+  const integrationEvents = useMemo(() => detail?.integrationEvents ?? [], [detail?.integrationEvents])
+
+  useEffect(() => {
+    setSelectedAssetId((current) => {
+      if (current && assets.some((asset) => asset.id === current)) return current
+      return assets.at(-1)?.id ?? null
+    })
+  }, [assets])
+
   const queueConversations = useMemo(
     () => conversations.filter((conversation) => conversation.status !== "archived"),
     [conversations]
@@ -541,7 +821,26 @@ export default function InternalCsChatWorkspace() {
     () => [...(detail?.messages ?? [])].reverse().find((message) => message.role === "assistant") ?? null,
     [detail?.messages]
   )
-  const hqTemplate = useMemo(() => buildHqTemplate(detail), [detail])
+  const selectedAsset = assets.find((asset) => asset.id === selectedAssetId) ?? assets.at(-1) ?? null
+  const bridgeState = integrationState(integrationStatus)
+  const hasDispatchContext = Boolean(detail && (detail.messages.length > 0 || assets.length > 0))
+  const communicationTemplates = useMemo(() => [
+    {
+      id: "customer",
+      label: "고객 임시 안내",
+      content: buildCustomerHoldingTemplate(detail),
+    },
+    {
+      id: "handoff",
+      label: "내부 인수인계",
+      content: buildInternalHandoffTemplate(detail),
+    },
+    {
+      id: "hq",
+      label: "본사 확인",
+      content: buildHqTemplate(detail),
+    },
+  ], [detail])
   const canApprove = Object.values(reviewChecks).every(Boolean) && Boolean(pendingMessage) && finalDraft.trim().length > 0
 
   async function handleSelect(conversation: InternalCsConversation) {
@@ -567,22 +866,183 @@ export default function InternalCsChatWorkspace() {
     setDetail(null)
     setSelectedId(null)
     setComposer("")
+    setPendingFiles([])
+    setAssetError(null)
+    setSelectedAssetId(null)
     setReviewOpen(false)
     setExpanded(null)
     setNotice(null)
     setActiveTab("chat")
   }
 
+  function handleAssetFiles(event: ChangeEvent<HTMLInputElement>) {
+    const incoming = Array.from(event.target.files ?? [])
+    event.target.value = ""
+    const validTypes = incoming.filter((file) => ACCEPTED_ASSET_TYPES.has(file.type))
+    const valid = validTypes.filter((file) => file.size > 0 && file.size <= MAX_ASSET_BYTES)
+    if (validTypes.length !== incoming.length) {
+      setAssetError("JPG, PNG, WebP 이미지만 첨부할 수 있습니다.")
+    } else if (valid.length !== validTypes.length) {
+      setAssetError("이미지는 장당 8MB 이하여야 합니다.")
+    }
+
+    setPendingFiles((current) => {
+      const existingKeys = new Set(current.map(fileKey))
+      const unique = valid.filter((file) => !existingKeys.has(fileKey(file)))
+      const next = [...current, ...unique]
+      if (next.length > MAX_PENDING_ASSETS) {
+        setAssetError(`한 번에 최대 ${MAX_PENDING_ASSETS}장까지 첨부할 수 있습니다.`)
+      } else if (valid.length === incoming.length) {
+        setAssetError(null)
+      }
+      return next.slice(0, MAX_PENDING_ASSETS)
+    })
+  }
+
+  function removePendingFile(file: File) {
+    const key = fileKey(file)
+    setPendingFiles((current) => current.filter((item) => fileKey(item) !== key))
+    setAssetError(null)
+  }
+
+  async function uploadFiles(conversationId: string, files: File[], instruction: string) {
+    if (files.length === 0) return 0
+    setUploadingAssets(true)
+    setUploadProgress({ current: 0, total: files.length })
+    const failed: string[] = []
+    let uploaded = 0
+
+    try {
+      for (const [index, file] of files.entries()) {
+        setUploadProgress({ current: index + 1, total: files.length })
+        const formData = new FormData()
+        formData.append("file", file)
+        formData.append("instruction", instruction)
+        formData.append("requestedMode", modelMode)
+        try {
+          await adminFetchJson<unknown>(`/api/admin/cs-chat/conversations/${conversationId}/assets`, {
+            method: "POST",
+            body: formData,
+          })
+          uploaded += 1
+        } catch {
+          failed.push(file.name)
+        }
+      }
+    } finally {
+      setUploadingAssets(false)
+      setUploadProgress({ current: 0, total: 0 })
+    }
+
+    if (failed.length > 0) {
+      setAssetError(`분석하지 못한 이미지: ${failed.join(", ")}`)
+    } else {
+      setAssetError(null)
+    }
+    return uploaded
+  }
+
+  async function dispatchCurrentConversation() {
+    if (!detail || !hasDispatchContext || dispatching) {
+      setIntegrationError("전송할 현재 대화 또는 이미지 분석이 없습니다.")
+      return
+    }
+    if (!bridgeState.ready && !demoMode) {
+      setIntegrationError("AI 브리지가 준비되지 않았습니다. 연동 상태를 먼저 확인해 주세요.")
+      return
+    }
+
+    setDispatching(true)
+    setIntegrationError(null)
+    try {
+      if (demoMode) {
+        const event: InternalCsIntegrationEvent = {
+          id: `preview-dispatch-${Date.now()}`,
+          integration: bridgeState.label,
+          status: "sent",
+          include_original: includeOriginal,
+          summary: "현재 대화와 분석 맥락을 내부 AI 브리지로 전송했습니다.",
+          created_at: new Date().toISOString(),
+        }
+        setDetail((current) => current
+          ? { ...current, integrationEvents: [event, ...(current.integrationEvents ?? [])] }
+          : current)
+      } else {
+        await adminFetchJson<unknown>(`/api/admin/cs-chat/conversations/${detail.conversation.id}/dispatch`, {
+          method: "POST",
+          body: JSON.stringify({
+            includeOriginalAssets: includeOriginal,
+            acknowledgeSensitiveData: includeOriginal,
+          }),
+        })
+        await loadConversation(detail.conversation.id)
+      }
+      setNotice(includeOriginal
+        ? "현재 대화·분석과 확인한 원본 이미지를 내부 AI 브리지로 전송했습니다."
+        : "현재 대화와 분석 맥락을 내부 AI 브리지로 전송했습니다.")
+    } catch (dispatchError) {
+      setIntegrationError(dispatchError instanceof Error ? dispatchError.message : "현재 대화를 전송하지 못했습니다.")
+    } finally {
+      setDispatching(false)
+    }
+  }
+
+  async function approveSelectedAsset() {
+    if (!detail || !selectedAsset || assetReviewingId) return
+    setAssetReviewingId(selectedAsset.id)
+    setAssetError(null)
+    try {
+      if (demoMode) {
+        setDetail((current) => current
+          ? {
+              ...current,
+              assets: (current.assets ?? []).map((asset) => asset.id === selectedAsset.id
+                ? { ...asset, review_state: "approved", human_review_required: false }
+                : asset),
+            }
+          : current)
+      } else {
+        await adminFetchJson<unknown>(
+          `/api/admin/cs-chat/conversations/${detail.conversation.id}/assets/${selectedAsset.id}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({ decision: "approved" }),
+          }
+        )
+        await loadConversation(detail.conversation.id)
+      }
+      setNotice("이미지 분석을 CS 담당자 확인 완료로 기록했습니다.")
+    } catch (reviewError) {
+      setAssetError(reviewError instanceof Error ? reviewError.message : "이미지 분석 확인을 저장하지 못했습니다.")
+    } finally {
+      setAssetReviewingId(null)
+    }
+  }
+
   async function submitQuestion(event: FormEvent) {
     event.preventDefault()
-    const question = composer.trim()
-    if (!question || isPending) return
+    const filesToUpload = [...pendingFiles]
+    const question = composer.trim() || (filesToUpload.length > 0
+      ? "첨부 이미지의 내용과 CS 대응에 필요한 사항을 분석해 주세요."
+      : "")
+    if (!question || isPending || uploadingAssets) return
 
     setError(null)
     setNotice(null)
     setComposer("")
     if (demoMode) {
       const now = new Date().toISOString()
+      const previewAssets: InternalCsAsset[] = filesToUpload.map((file, index) => ({
+        id: `preview-asset-${Date.now()}-${index}`,
+        file_name: file.name,
+        mime_type: file.type,
+        preview_url: URL.createObjectURL(file),
+        instruction: question,
+        analysis: "화면 또는 사진의 핵심 요소를 추출한 미리보기 분석입니다. 실제 환경에서는 모델 분석 결과와 추가 확인 항목이 누적됩니다.",
+        analysis_status: "completed",
+        human_review_required: true,
+        created_at: now,
+      }))
       const nextUser: InternalCsMessage = {
         ...DEMO_MESSAGES[0],
         id: `preview-user-${Date.now()}`,
@@ -600,8 +1060,12 @@ export default function InternalCsChatWorkspace() {
       const nextDetail = {
         conversation: { ...DEMO_CONVERSATION, status: "waiting_review" as const, last_message_at: now },
         messages: [...(detail?.messages ?? DEMO_MESSAGES), nextUser, nextAssistant],
+        assets: [...(detail?.assets ?? []), ...previewAssets],
+        integrationEvents: detail?.integrationEvents ?? [],
       }
       setDetail(nextDetail)
+      setPendingFiles([])
+      setSelectedAssetId(previewAssets.at(-1)?.id ?? selectedAssetId)
       setFinalDraft(nextAssistant.content)
       setReviewChecks(INITIAL_CHECKS)
       setNotice("미리보기 초안을 생성했습니다. 실제 환경에서는 Gemini와 내부 근거 검색을 사용합니다.")
@@ -626,6 +1090,8 @@ export default function InternalCsChatWorkspace() {
           setSelectedId(conversationId)
         }
 
+        await uploadFiles(conversationId, filesToUpload, question)
+
         await adminFetchJson<GenerateResponse>(
           `/api/admin/cs-chat/conversations/${conversationId}/generate`,
           {
@@ -637,6 +1103,7 @@ export default function InternalCsChatWorkspace() {
             }),
           }
         )
+        setPendingFiles([])
         await loadConversations(conversationId)
         setNotice("AI 초안이 생성되었습니다. 외부 전달 전 담당자 검토가 필요합니다.")
       } catch (submitError) {
@@ -832,6 +1299,14 @@ export default function InternalCsChatWorkspace() {
           </p>
         </div>
         <div className="flex items-center gap-1">
+          <Link
+            href="/admin/overview"
+            className="mr-1 inline-flex h-9 items-center gap-1.5 rounded-md border border-white/15 px-2.5 text-[11px] font-semibold text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 sm:px-3 sm:text-[12px]"
+            aria-label="어드민으로 돌아가기"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            어드민
+          </Link>
           <button
             type="button"
             onClick={() => setActiveTab("tools")}
@@ -998,9 +1473,24 @@ export default function InternalCsChatWorkspace() {
                                     <div className="space-y-2">
                                       {sources.map((source) => {
                                         const href = sourceHref(source)
+                                        const status = sourceStatus(source)
                                         const content = (
                                           <>
                                             <span className="min-w-0 flex-1 truncate">{source.label ?? source.id}</span>
+                                            {status ? (
+                                              <span
+                                                className={cn(
+                                                  "shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold",
+                                                  status.tone === "confirmed"
+                                                    ? "bg-[#ECFDF5] text-[#084734]"
+                                                    : status.tone === "conditional"
+                                                      ? "bg-[#F6F5F4] text-[#615D59]"
+                                                      : "bg-[#FBF1E0] text-[#7A520F]"
+                                                )}
+                                              >
+                                                {status.label}
+                                              </span>
+                                            ) : null}
                                             {href ? <ExternalLink className="h-3.5 w-3.5 shrink-0" /> : <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-[#A39E98]" />}
                                           </>
                                         )
@@ -1025,21 +1515,30 @@ export default function InternalCsChatWorkspace() {
                                 </Disclosure>
                                 <Disclosure
                                   icon={<MessageSquare className="h-4 w-4" />}
-                                  label="본사 확인 템플릿"
+                                  label="소통 초안 3종"
                                   open={expanded === "hq"}
                                   onToggle={() => setExpanded(expanded === "hq" ? null : "hq")}
                                 >
-                                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-black/[0.08] bg-white p-3 font-sans text-[12px] leading-5 text-[#31302E]">
-                                    {hqTemplate}
-                                  </pre>
-                                  <button
-                                    type="button"
-                                    onClick={() => void copyText(hqTemplate, "본사 확인 템플릿을 복사했습니다.")}
-                                    className="mt-3 inline-flex h-8 items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-[11px] font-semibold hover:bg-[#F6F5F4]"
-                                  >
-                                    <Copy className="h-3.5 w-3.5" />
-                                    템플릿 복사
-                                  </button>
+                                  <div className="space-y-3">
+                                    {communicationTemplates.map((template) => (
+                                      <section key={template.id} className="rounded-md border border-black/[0.08] bg-white p-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                          <h4 className="text-[11px] font-semibold text-[#31302E]">{template.label}</h4>
+                                          <button
+                                            type="button"
+                                            onClick={() => void copyText(template.content, `${template.label} 초안을 복사했습니다.`)}
+                                            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[10px] font-semibold hover:bg-[#F6F5F4]"
+                                          >
+                                            <Copy className="h-3 w-3" />
+                                            복사
+                                          </button>
+                                        </div>
+                                        <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap font-sans text-[11px] leading-5 text-[#615D59]">
+                                          {template.content}
+                                        </pre>
+                                      </section>
+                                    ))}
+                                  </div>
                                 </Disclosure>
                                 <Disclosure
                                   icon={<History className="h-4 w-4" />}
@@ -1079,14 +1578,200 @@ export default function InternalCsChatWorkspace() {
                   </p>
                 </div>
               )}
+
+              {assets.length > 0 ? (
+                <section className="border-t border-black/[0.08] pt-6" aria-label="누적 이미지 분석">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h2 className="text-[13px] font-semibold text-[#31302E]">누적 이미지 분석</h2>
+                      <p className="mt-1 text-[11px] text-[#615D59]">같은 대화의 사진과 분석 결과를 순서대로 보관합니다.</p>
+                    </div>
+                    <span className="text-[10px] font-medium text-[#A39E98]">{assets.length}개</span>
+                  </div>
+
+                  <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
+                    {assets.map((asset) => {
+                      const preview = assetPreviewUrl(asset)
+                      const status = assetAnalysisStatus(asset).toLowerCase()
+                      const analyzing = ["pending", "processing", "analyzing", "queued"].includes(status)
+                      return (
+                        <button
+                          key={asset.id}
+                          type="button"
+                          onClick={() => setSelectedAssetId(asset.id)}
+                          className={cn(
+                            "group relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-md border bg-[#F6F5F4] text-[#615D59] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
+                            selectedAsset?.id === asset.id ? "border-[#084734]" : "border-black/[0.08] hover:border-black/20"
+                          )}
+                          aria-label={`${assetFileName(asset)} 분석 보기`}
+                        >
+                          {preview ? (
+                            <Image
+                              src={preview}
+                              alt=""
+                              fill
+                              unoptimized
+                              sizes="72px"
+                              className="object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center">
+                              <ImageIcon className="h-5 w-5" />
+                            </span>
+                          )}
+                          {analyzing ? (
+                            <span className="absolute inset-0 flex items-center justify-center bg-white/80">
+                              <Loader2 className="h-4 w-4 animate-spin text-[#084734]" />
+                            </span>
+                          ) : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {selectedAsset ? (
+                    <div className="mt-2 overflow-hidden rounded-lg border border-black/[0.08] bg-[#FAFAF8]">
+                      <div className="flex flex-wrap items-center gap-2 border-b border-black/[0.08] bg-white px-4 py-3">
+                        <ImageIcon className="h-4 w-4 text-[#084734]" />
+                        <p className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#31302E]">
+                          {assetFileName(selectedAsset)}
+                        </p>
+                        {["pending", "processing", "analyzing", "queued"].includes(assetAnalysisStatus(selectedAsset).toLowerCase()) ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-[#F6F5F4] px-2 py-1 text-[10px] font-semibold text-[#615D59]">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            분석 중
+                          </span>
+                        ) : ["failed", "error"].includes(assetAnalysisStatus(selectedAsset).toLowerCase()) ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-[#FCE9E9] px-2 py-1 text-[10px] font-semibold text-[#8F2C2C]">
+                            <AlertTriangle className="h-3 w-3" />
+                            분석 실패
+                          </span>
+                        ) : assetNeedsHumanReview(selectedAsset) ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-[#FBF1E0] px-2 py-1 text-[10px] font-semibold text-[#7A520F]">
+                            <ShieldCheck className="h-3 w-3" />
+                            담당자 확인 필요
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-[#ECFDF5] px-2 py-1 text-[10px] font-semibold text-[#084734]">
+                            <CheckCircle2 className="h-3 w-3" />
+                            확인 완료
+                          </span>
+                        )}
+                      </div>
+                      <div className="grid gap-4 p-4 sm:grid-cols-[120px_minmax(0,1fr)]">
+                        <div className="relative aspect-square overflow-hidden rounded-md border border-black/[0.08] bg-white">
+                          {assetPreviewUrl(selectedAsset) ? (
+                            <Image
+                              src={assetPreviewUrl(selectedAsset) ?? ""}
+                              alt={assetFileName(selectedAsset)}
+                              fill
+                              unoptimized
+                              sizes="120px"
+                              className="object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-full items-center justify-center text-[#A39E98]">
+                              <ImageIcon className="h-6 w-6" />
+                            </span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#A39E98]">AI 분석</p>
+                          <p className="mt-2 whitespace-pre-wrap text-[12px] leading-5 text-[#31302E]">
+                            {assetAnalysis(selectedAsset)}
+                          </p>
+                          {selectedAsset.instruction ? (
+                            <p className="mt-3 border-t border-black/[0.08] pt-3 text-[10px] leading-4 text-[#615D59]">
+                              분석 요청 · {selectedAsset.instruction}
+                            </p>
+                          ) : null}
+                          {assetNeedsHumanReview(selectedAsset)
+                            && ["ready", "completed"].includes(assetAnalysisStatus(selectedAsset).toLowerCase()) ? (
+                            <button
+                              type="button"
+                              onClick={() => void approveSelectedAsset()}
+                              disabled={assetReviewingId === selectedAsset.id}
+                              className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white hover:bg-[#065C41] disabled:opacity-50"
+                            >
+                              {assetReviewingId === selectedAsset.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              )}
+                              분석 확인
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
             </div>
           </div>
 
           <form onSubmit={submitQuestion} className="shrink-0 border-t border-black/[0.08] bg-white px-5 py-4 sm:px-7">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              multiple
+              className="sr-only"
+              onChange={handleAssetFiles}
+              aria-label="CS 분석 이미지 첨부"
+            />
+            {pendingFiles.length > 0 || uploadingAssets || assetError ? (
+              <div className={cn("mb-3", reviewOpen ? "max-w-none" : "mx-auto max-w-[980px]")}>
+                {pendingFiles.length > 0 ? (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {pendingFiles.map((file) => (
+                      <div
+                        key={fileKey(file)}
+                        className="flex h-10 max-w-[220px] shrink-0 items-center gap-2 rounded-md border border-black/[0.08] bg-[#FAFAF8] px-2.5"
+                      >
+                        <ImageIcon className="h-3.5 w-3.5 shrink-0 text-[#084734]" />
+                        <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-[#31302E]">{file.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => removePendingFile(file)}
+                          disabled={uploadingAssets || isPending}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#A39E98] hover:bg-[#FCE9E9] hover:text-[#8F2C2C] disabled:opacity-40"
+                          aria-label={`${file.name} 첨부 제거`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {uploadingAssets ? (
+                  <p className="mt-2 flex items-center gap-2 text-[11px] text-[#084734]">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    사진 분석 중 · {uploadProgress.current}/{uploadProgress.total}
+                  </p>
+                ) : null}
+                {assetError ? (
+                  <p className="mt-2 flex items-start gap-2 text-[11px] text-[#8F2C2C]" role="alert">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {assetError}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <div className={cn(
               "flex items-end gap-3 rounded-lg border border-black/[0.16] bg-white px-4 py-3 focus-within:border-[#084734]/50 focus-within:ring-2 focus-within:ring-[#084734]/10",
               reviewOpen ? "max-w-none" : "mx-auto max-w-[980px]"
             )}>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={pendingFiles.length >= MAX_PENDING_ASSETS || uploadingAssets || isPending}
+                className="mb-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734] disabled:cursor-not-allowed disabled:opacity-35"
+                aria-label="사진 첨부 또는 촬영"
+                title={`JPG, PNG, WebP · 최대 ${MAX_PENDING_ASSETS}장`}
+              >
+                <Paperclip className="h-4 w-4" />
+              </button>
               <textarea
                 value={composer}
                 onChange={(event) => setComposer(event.target.value)}
@@ -1103,15 +1788,15 @@ export default function InternalCsChatWorkspace() {
               />
               <button
                 type="submit"
-                disabled={!composer.trim() || isPending}
+                disabled={(!composer.trim() && pendingFiles.length === 0) || isPending || uploadingAssets}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#31302E] text-white transition-colors hover:bg-[#111110] disabled:cursor-not-allowed disabled:bg-[#D8D5D1]"
                 aria-label="질문 보내기"
               >
-                {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {isPending || uploadingAssets ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </button>
             </div>
             <p className={cn("mt-2 text-[10px] text-[#A39E98]", reviewOpen ? "max-w-none" : "mx-auto max-w-[980px]")}>
-              AI 답변은 내부 검토용 초안이며 CS 담당자 승인 전에는 외부로 전달되지 않습니다.
+              사진은 JPG·PNG·WebP 최대 3장 · AI 답변과 이미지 분석은 CS 담당자 승인 전 외부로 전달되지 않습니다.
             </p>
           </form>
         </div>
@@ -1156,6 +1841,116 @@ export default function InternalCsChatWorkspace() {
               코파일럿은 운영 화면을 복제하지 않고 정확한 경로로 연결합니다.
             </p>
             <div className="mt-7 overflow-hidden rounded-lg border border-black/[0.08] bg-white">
+              <div className="flex flex-wrap items-start gap-3 border-b border-black/[0.08] px-5 py-4">
+                <span className={cn(
+                  "flex h-10 w-10 shrink-0 items-center justify-center rounded-md",
+                  bridgeState.ready ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#F6F5F4] text-[#615D59]"
+                )}>
+                  {integrationLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : bridgeState.ready ? (
+                    <Wifi className="h-4 w-4" />
+                  ) : (
+                    <WifiOff className="h-4 w-4" />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-[14px] font-semibold text-[#31302E]">{bridgeState.label}</h3>
+                    <span className={cn(
+                      "rounded-md px-2 py-1 text-[10px] font-semibold",
+                      bridgeState.ready ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#FBF1E0] text-[#7A520F]"
+                    )}>
+                      {integrationLoading ? "확인 중" : bridgeState.ready ? "연결됨" : bridgeState.configured ? bridgeState.status : "설정 필요"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-5 text-[#615D59]">{bridgeState.message}</p>
+                  {bridgeState.lastCheckedAt ? (
+                    <p className="mt-1 text-[10px] text-[#A39E98]">마지막 확인 {formatDay(bridgeState.lastCheckedAt)} {formatTime(bridgeState.lastCheckedAt)}</p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void loadIntegrationStatus()}
+                  disabled={integrationLoading}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E] disabled:opacity-40"
+                >
+                  <RefreshCcw className={cn("h-3.5 w-3.5", integrationLoading && "animate-spin")} />
+                  상태 확인
+                </button>
+              </div>
+
+              <div className="px-5 py-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="max-w-xl">
+                    <p className="text-[12px] font-semibold text-[#31302E]">현재 대화를 내부 AI/MCP 분석으로 보내기</p>
+                    <p className="mt-1 text-[11px] leading-5 text-[#615D59]">
+                      기본 전송은 메시지 맥락과 이미지 분석 텍스트만 포함합니다. 분석 결과는 검토 전 초안으로 돌아옵니다.
+                    </p>
+                    <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] leading-5 text-[#615D59]">
+                      <input
+                        type="checkbox"
+                        checked={includeOriginal}
+                        onChange={(event) => setIncludeOriginal(event.target.checked)}
+                        className="mt-0.5 h-4 w-4 accent-[#084734]"
+                      />
+                      <span>
+                        원본 이미지도 포함
+                        <span className="block text-[10px] text-[#A39E98]">민감정보 포함 가능성을 확인했으며 내부 분석 범위로 전송합니다.</span>
+                      </span>
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void dispatchCurrentConversation()}
+                    disabled={!hasDispatchContext || !bridgeState.ready || integrationLoading || dispatching}
+                    className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[12px] font-semibold text-white hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
+                  >
+                    {dispatching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    {dispatching ? "전송 중" : "현재 대화 보내기"}
+                  </button>
+                </div>
+                {integrationError ? (
+                  <p className="mt-3 flex items-start gap-2 rounded-md bg-[#FCE9E9] px-3 py-2 text-[11px] text-[#8F2C2C]" role="alert">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {integrationError}
+                  </p>
+                ) : null}
+              </div>
+
+              {integrationEvents.length > 0 ? (
+                <div className="border-t border-black/[0.08] bg-[#FAFAF8] px-5 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[11px] font-semibold text-[#31302E]">최근 연동 기록</p>
+                    <span className="text-[10px] text-[#A39E98]">{integrationEvents.length}건</span>
+                  </div>
+                  <ul className="mt-3 space-y-2">
+                    {integrationEvents.slice(0, 5).map((event) => {
+                      const successful = ["sent", "success", "completed", "ok"].includes((event.status ?? "").toLowerCase())
+                      return (
+                        <li key={event.id} className="flex items-start gap-3 rounded-md border border-black/[0.08] bg-white px-3 py-2.5">
+                          {successful ? (
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" />
+                          ) : (
+                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#A8741A]" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[11px] font-semibold text-[#31302E]">
+                              {event.transport ?? event.integration ?? event.source_system ?? "AI 브리지"} · {event.status ?? "처리 중"}
+                            </p>
+                            <p className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[#615D59]">{integrationEventSummary(event)}</p>
+                          </div>
+                          <span className="shrink-0 text-[10px] text-[#A39E98]">{formatTime(integrationEventWhen(event))}</span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+
+            <h3 className="mt-8 text-[12px] font-semibold text-[#31302E]">운영 화면 바로가기</h3>
+            <div className="mt-3 overflow-hidden rounded-lg border border-black/[0.08] bg-white">
               {OPERATING_TOOLS.map((tool) => {
                 const Icon = tool.icon
                 return (
@@ -1284,7 +2079,7 @@ export default function InternalCsChatWorkspace() {
                   disabled={!canApprove || isPending}
                   className="h-10 rounded-md bg-[#084734] text-[12px] font-semibold text-white hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
                 >
-                  승인 후 전달
+                  승인하고 복사
                 </button>
               </div>
               <p className="mt-3 flex items-start gap-2 text-[10px] leading-4 text-[#615D59]">

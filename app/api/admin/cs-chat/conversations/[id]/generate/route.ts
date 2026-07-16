@@ -11,6 +11,7 @@ import {
   createInternalCsMessage,
   getInternalCsConversation,
   isInternalCsChatNotReadyError,
+  type InternalCsAssetRow,
   type InternalCsMessageRow,
 } from "@/lib/repositories/internal-cs-chat"
 
@@ -36,6 +37,43 @@ function buildApprovedHistory(messages: InternalCsMessageRow[]): InternalCsChatT
         ? message.corrected_content
         : message.content,
     }))
+}
+
+function compactAssetList(value: unknown, limit = 12) {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+    .map((item) => item.trim().slice(0, 500))
+    .slice(0, limit)
+}
+
+export function buildInternalCsAssetEvidence(assets: InternalCsAssetRow[]) {
+  const usable = assets
+    .filter((asset) => Boolean(asset.analysis_summary?.trim()))
+    .slice(-5)
+
+  return {
+    text: usable.map((asset, index) => {
+      const extractedText = compactAssetList(asset.analysis_payload?.extractedText)
+      const observations = compactAssetList(asset.analysis_payload?.observations)
+      const sensitiveWarnings = compactAssetList(asset.analysis_payload?.sensitiveDataWarnings, 6)
+      return [
+        `[Attached image ${index + 1}: ${asset.original_file_name}]`,
+        `Review state: ${asset.review_state} (treat as unverified unless approved)`,
+        `Analysis summary: ${asset.corrected_analysis || asset.analysis_summary}`,
+        extractedText.length ? `Visible text: ${extractedText.join(" | ")}` : "",
+        observations.length ? `Visible observations: ${observations.join(" | ")}` : "",
+        sensitiveWarnings.length ? `Sensitive-data warnings: ${sensitiveWarnings.join(" | ")}` : "",
+      ].filter(Boolean).join("\n")
+    }).join("\n\n"),
+    sourceRefs: usable.map((asset) => ({
+      id: `internal-cs-asset:${asset.id}`,
+      label: `Attached image: ${asset.original_file_name}`,
+      kind: "internal_asset" as const,
+      reviewState: asset.review_state,
+    })),
+    count: usable.length,
+  }
 }
 
 function errorStatus(error: unknown) {
@@ -103,11 +141,20 @@ export async function POST(req: NextRequest, context: Context) {
       actor,
     })
 
-    const copilotContext = await buildInternalCsCopilotContext(question)
+    const copilotContext = await buildInternalCsCopilotContext(question, {
+      queueTags: loaded.conversation.tags,
+    })
+    const assetEvidence = buildInternalCsAssetEvidence(loaded.assets ?? [])
+    const curatedEvidence = copilotContext.curatedEvidence
+    const effectiveRequiresEvidenceReview =
+      raw.requiresEvidenceReview === true || curatedEvidence?.reviewRequired === true
     const queueContext = [
       "[현재 상담 큐]",
       `우선순위: ${loaded.conversation.priority}`,
       `태그: ${loaded.conversation.tags.join(", ") || "없음"}`,
+      curatedEvidence?.recommendedTags.length
+        ? `권장 분류 태그(담당자 확인 전 미적용): ${curatedEvidence.recommendedTags.join(", ")}`
+        : "",
     ].join("\n")
     const generation = await generateInternalCsAnswer({
       question,
@@ -116,9 +163,11 @@ export async function POST(req: NextRequest, context: Context) {
         loaded.conversation.priority === "urgent" || loaded.conversation.priority === "high"
           ? "high"
           : "low",
-      requiresEvidenceReview: raw.requiresEvidenceReview === true,
-      internalContext: `${copilotContext.internalContext}\n\n${queueContext}`,
-      sourceRefs: copilotContext.sourceRefs,
+      requiresEvidenceReview: effectiveRequiresEvidenceReview,
+      internalContext: [copilotContext.internalContext, queueContext, assetEvidence.text]
+        .filter(Boolean)
+        .join("\n\n"),
+      sourceRefs: [...copilotContext.sourceRefs, ...assetEvidence.sourceRefs],
       history: buildApprovedHistory(loaded.messages),
       deterministicFallback: copilotContext.deterministicFallback,
     })
@@ -138,8 +187,18 @@ export async function POST(req: NextRequest, context: Context) {
         citations: generation.citations,
         guardrails: generation.guardrails,
         requestedMode,
-        requiresEvidenceReview: raw.requiresEvidenceReview === true,
+        requiresEvidenceReview: effectiveRequiresEvidenceReview,
+        requestedEvidenceReview: raw.requiresEvidenceReview === true,
+        curatedKnowledgeIds: curatedEvidence?.entries.map((entry) => entry.id) ?? [],
+        curatedKnowledgeStatuses: curatedEvidence?.entries.map((entry) => ({
+          id: entry.id,
+          status: entry.status,
+          externalUse: entry.externalUse,
+        })) ?? [],
+        curatedEvidenceReviewReasons: curatedEvidence?.reviewReasons ?? [],
+        recommendedTags: curatedEvidence?.recommendedTags ?? [],
         publicEvidenceSourceCount: copilotContext.publicEvidence.sources.length,
+        internalAssetEvidenceCount: assetEvidence.count,
         userMessageId: userMessage.id,
       },
       actor,

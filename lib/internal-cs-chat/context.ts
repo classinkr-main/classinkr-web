@@ -5,6 +5,11 @@ import {
   type ChatbotSource,
 } from "@/lib/chatbot/service"
 import type { InternalCsSourceRef } from "@/lib/internal-cs-chat/gemini"
+import {
+  selectInternalCsKnowledge,
+  type InternalCsExternalUse,
+  type InternalCsKnowledgeStatus,
+} from "@/lib/internal-cs-chat/knowledge"
 
 export interface InternalCsCopilotContext {
   internalContext: string
@@ -15,6 +20,22 @@ export interface InternalCsCopilotContext {
     sources: ChatbotSource[]
     warning?: string
   }
+  curatedEvidence: {
+    entries: Array<{
+      id: string
+      title: string
+      status: InternalCsKnowledgeStatus
+      externalUse: InternalCsExternalUse
+      summary: string
+    }>
+    recommendedTags: string[]
+    reviewRequired: boolean
+    reviewReasons: string[]
+  }
+}
+
+export interface BuildInternalCsCopilotContextOptions {
+  queueTags?: readonly string[]
 }
 
 const DEFAULT_PUBLIC_CONTEXT_TIMEOUT_MS = 3_500
@@ -45,14 +66,17 @@ const INTERNAL_GUIDE_REFS: InternalCsSourceRef[] = [
   {
     id: "docs/active/classin-operating-canon-2026-07-02.md",
     label: "Classin 운영 정본",
+    kind: "internal_guide",
   },
   {
     id: "docs/active/internal-crm-backend-operating-plan-2026-06-26.md",
     label: "내부 CRM 운영 계획",
+    kind: "internal_guide",
   },
   {
     id: "docs/active/classin-pre-adoption-question-matrix-2026-06-18.md",
     label: "도입 전 질문·확인 단계",
+    kind: "internal_guide",
   },
 ]
 
@@ -71,7 +95,17 @@ function sourceRef(source: ChatbotSource): InternalCsSourceRef {
   return {
     id: source.articleId || `${source.urlPath}${anchor}`,
     label: compact([source.title, source.heading].filter(Boolean).join(" · "), 200),
+    kind: "public_doc",
   }
+}
+
+function dedupeSourceRefs(sourceRefs: InternalCsSourceRef[]) {
+  const seen = new Set<string>()
+  return sourceRefs.filter((source) => {
+    if (seen.has(source.id)) return false
+    seen.add(source.id)
+    return true
+  })
 }
 
 function formatPublicEvidence(answer: string | null, sources: ChatbotSource[], warning?: string) {
@@ -120,17 +154,38 @@ async function getPublicEvidence(question: string): Promise<InternalCsCopilotCon
 }
 
 export async function buildInternalCsCopilotContext(
-  question: string
+  question: string,
+  options: BuildInternalCsCopilotContextOptions = {}
 ): Promise<InternalCsCopilotContext> {
+  const curated = selectInternalCsKnowledge(question, options.queueTags)
   const publicEvidence = await getPublicEvidence(question)
   const publicSourceRefs = publicEvidence.sources.map(sourceRef)
-  const sourceRefs = [...INTERNAL_GUIDE_REFS, ...publicSourceRefs]
+  const sourceRefs = dedupeSourceRefs([
+    ...INTERNAL_GUIDE_REFS,
+    ...curated.sourceRefs,
+    ...publicSourceRefs,
+  ])
+  const selectedFacts = curated.entries.filter((entry) => !entry.alwaysInclude)
+  const reviewReasons = selectedFacts
+    .filter((entry) =>
+      entry.status === "conflicting_sources" ||
+      entry.status === "hq_confirmation_required"
+    )
+    .map((entry) => `${entry.title}: ${entry.status === "conflicting_sources" ? "자료 충돌" : "본사 확인 필요"}`)
 
   const deterministicFallback = [
     "검토 전 내부 초안",
     publicEvidence.answer
       ? `확인된 공개 가이드 기준으로는 다음과 같이 안내할 수 있습니다.\n${compact(publicEvidence.answer, 1_500)}`
       : "현재 질문과 직접 일치하는 공개 가이드 근거를 찾지 못했습니다.",
+    selectedFacts.length > 0
+      ? [
+          "정리된 내부 기준:",
+          ...selectedFacts.slice(0, 3).map((entry) =>
+            `- [${entry.status === "confirmed" ? "확정" : entry.status === "conditional" ? "조건부" : entry.status === "conflicting_sources" ? "자료 충돌" : "본사 확인 필요"}] ${entry.summary}`
+          ),
+        ].join("\n")
+      : "정리된 내부 기준과 직접 일치하는 항목이 없어 담당자 확인이 필요합니다.",
     "내부 정보 또는 본사 회신과 충돌하는 항목은 적용 모델·세대·버전과 출처일을 확인한 뒤 답변해야 합니다.",
     "외부 전달 전 CS 담당자의 검토와 승인이 필요합니다.",
   ].join("\n\n")
@@ -138,12 +193,24 @@ export async function buildInternalCsCopilotContext(
   return {
     internalContext: [
       formatPublicEvidence(publicEvidence.answer, publicEvidence.sources, publicEvidence.warning),
+      curated.internalContext,
       INTERNAL_OPERATING_GUIDE,
       HQ_COMMUNICATION_GUIDE,
     ].join("\n\n"),
     sourceRefs,
     deterministicFallback,
     publicEvidence,
+    curatedEvidence: {
+      entries: curated.entries.map((entry) => ({
+        id: entry.id,
+        title: entry.title,
+        status: entry.status,
+        externalUse: entry.externalUse,
+        summary: entry.summary,
+      })),
+      recommendedTags: curated.recommendedTags,
+      reviewRequired: reviewReasons.length > 0,
+      reviewReasons,
+    },
   }
 }
-

@@ -177,4 +177,41 @@ describe("generateInternalCsAnswer", () => {
     expect(result.model).toBeNull()
     expect(result.answer).toContain("CS 담당자의 검토와 승인")
   })
+
+  it("preserves reviewed source status fields and drops unrecognized values", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "")
+
+    const result = await generateInternalCsAnswer({
+      question: "S86 근거 상태 확인",
+      sourceRefs: [
+        {
+          id: "board-generation",
+          label: "보드 세대 기준",
+          kind: "curated_knowledge",
+          verificationStatus: "conflicting_sources",
+          externalUse: "confirmation_required",
+        },
+        {
+          id: "asset-1",
+          kind: "internal_asset",
+          reviewState: "approved",
+        },
+      ],
+    })
+
+    expect(result.citations).toEqual([
+      {
+        id: "board-generation",
+        label: "보드 세대 기준",
+        kind: "curated_knowledge",
+        verificationStatus: "conflicting_sources",
+        externalUse: "confirmation_required",
+      },
+      {
+        id: "asset-1",
+        kind: "internal_asset",
+        reviewState: "approved",
+      },
+    ])
+  })
 })

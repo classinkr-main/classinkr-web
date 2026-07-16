@@ -21,6 +21,10 @@ export type InternalCsRiskLevel = "low" | "medium" | "high"
 export interface InternalCsSourceRef {
   id: string
   label?: string
+  kind?: "public_doc" | "internal_guide" | "curated_knowledge" | "internal_asset"
+  verificationStatus?: "confirmed" | "conditional" | "conflicting_sources" | "hq_confirmation_required"
+  externalUse?: "reviewed_summary_allowed" | "internal_only" | "confirmation_required"
+  reviewState?: "pending" | "approved" | "changes_requested" | "rejected"
 }
 
 export interface InternalCsChatTurn {
@@ -124,6 +128,7 @@ const SYSTEM_INSTRUCTION = [
   "사용자는 고객이 아니라 CS 담당자다. 내부 자료와 외부 공개 자료를 함께 사용할 수 있지만 둘의 공개 가능 범위를 구분한다.",
   "답변의 사실 상태를 확인됨 / 조건부 / 본사 확인 필요 / 자료 충돌로 구분한다.",
   "서로 다른 자료가 충돌하면 임의로 하나를 정답으로 고르지 말고 충돌 지점, 필요한 확인 질문, 권장 임시 응대를 정리한다.",
+  "정리된 내부 지식의 외부 사용 경계를 지킨다. ‘담당자 검토 후 고객 안내 가능’만 고객 초안의 사실 근거로 쓰고, ‘내부 전용’은 노출하지 않으며, ‘확인 전 외부 단정 금지’는 확인 질문과 임시 안내에만 쓴다.",
   "고객 답변이나 본사 소통문을 요청받으면 반드시 ‘검토 전 초안’으로 작성하고, 전송·확정·승인을 했다고 말하지 않는다.",
   "가격, 환불, 계약, 개인정보, 보안, 장애 원인, 설치 가능 여부, 제품 사양은 제공된 근거 없이 단정하지 않는다.",
   "개인정보·API 키·내부 비밀번호·불필요한 고객 식별정보를 답변에 복제하지 않는다.",
@@ -200,7 +205,22 @@ function normalizeSourceRefs(sourceRefs: InternalCsSourceRef[] | undefined) {
     const id = trimTo(source.id, 200)
     if (!id || seen.has(id)) continue
     seen.add(id)
-    normalized.push({ id, ...(source.label ? { label: trimTo(source.label, 200) } : {}) })
+    normalized.push({
+      id,
+      ...(source.label ? { label: trimTo(source.label, 200) } : {}),
+      ...(["public_doc", "internal_guide", "curated_knowledge", "internal_asset"].includes(source.kind ?? "")
+        ? { kind: source.kind }
+        : {}),
+      ...(["confirmed", "conditional", "conflicting_sources", "hq_confirmation_required"].includes(source.verificationStatus ?? "")
+        ? { verificationStatus: source.verificationStatus }
+        : {}),
+      ...(["reviewed_summary_allowed", "internal_only", "confirmation_required"].includes(source.externalUse ?? "")
+        ? { externalUse: source.externalUse }
+        : {}),
+      ...(["pending", "approved", "changes_requested", "rejected"].includes(source.reviewState ?? "")
+        ? { reviewState: source.reviewState }
+        : {}),
+    })
   }
   return normalized
 }
