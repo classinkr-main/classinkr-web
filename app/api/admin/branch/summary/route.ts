@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { unstable_cache } from "next/cache"
-import { readRangeWithFormat, envSheetId, getSheetModifiedTime } from "@/lib/branch/google-sheets"
-import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
+import { envSheetId, getSheetModifiedTime } from "@/lib/branch/google-sheets"
 import type { DshBreakdownRow } from "@/lib/branch/parsers/dsh"
-import { parseKpi, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { readRevDealsPreferActive } from "@/lib/branch/read-rev-deals"
+import { readDshPreferDb, readKpiBlocksPreferDb } from "@/lib/branch/read-dsh-kpi"
 import { classifySalesLedgerProductCategory } from "@/lib/branch/product-category"
-import { readDshFromActiveImport, readKpiBlocksFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
 import { fyOf, FISCAL_MONTH_ORDER, fiscalQuarter, resolvePeriodDate, ymKey } from "@/lib/branch/fiscal"
 import { summarizeRevenue, bottleneckKpi, closingDeals } from "@/lib/branch/computations/core-kpi"
 import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
@@ -182,21 +180,10 @@ function readPeriodParam(url: URL): BranchPeriod | NextResponse {
   return NextResponse.json({ error: "Invalid period query" }, { status: 400 })
 }
 
-const readDsh = unstable_cache(async (fy: number) => {
-  const imported = await readDshFromActiveImport(fy)
-  if (imported) return imported
-  const id = envSheetId("dashboard")
-  const grid = await readRangeWithFormat(id, DSH_RANGE)
-  return parseDsh(grid, fy)
-}, ["branch-dsh"], { revalidate: 60, tags: ["branch-dsh"] })
-
-const readKpi = unstable_cache(async (fy: number) => {
-  const imported = await readKpiBlocksFromActiveImport(fy)
-  if (imported) return imported.fy
-  const id = envSheetId("dashboard")
-  const grid = await readRangeWithFormat(id, KPI_RANGE)
-  return parseKpi(grid)
-}, ["branch-kpi"], { revalidate: 60, tags: ["branch-kpi"] })
+// DSH/KPI는 DB-우선 사다리(액티브 임포트 → 시트 미러 → 라이브 시트 초기 폴백)를 탄다.
+// 계층별 캐시는 read-dsh-kpi.ts / branch-dsh-kpi-mirror.ts 안에 있다.
+const readDsh = (fy: number) => readDshPreferDb(fy)
+const readKpi = async (fy: number) => (await readKpiBlocksPreferDb(fy)).fy
 
 // Freshness hint — newest modifiedTime across both source sheets.
 // 60s revalidate keeps Drive API call rate well under any quota concern
