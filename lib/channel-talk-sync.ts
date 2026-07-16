@@ -103,7 +103,11 @@ export interface ChannelSyncResult {
   messageFetches?: number
   reusedTranscripts?: number
   chunksRewritten?: number
+  // 재시도까지 실패한 청크 재생성 대화 수 — best-effort 계약이라 ok 는 유지되고, 운영자는 이 값으로 감지한다.
+  chunkFailures?: number
   warning?: string
+  // 대화 단위 부분 실패 경고(해당 대화 id 포함). warning(전역 상태 안내)과 별개로 집계형 경고를 담는다.
+  warnings?: string[]
 }
 
 export async function syncChannelConversations(
@@ -313,14 +317,24 @@ async function runChannelConversationSync(
 
   // 트랜스크립트가 바뀐 대화만 청크를 재생성한다. 부모(conversations) upsert 이후에 수행해야 FK 가 성립한다.
   // 대화 단위 best-effort — 한 건 실패가 전체 동기화를 막지 않는다. embedding 은 null → 백필 스크립트가 채운다.
+  // replaceConversationChunks 는 delete→insert 비원자라 transient 실패 시 청크가 빈 채 남을 수 있어
+  // 즉시 1회 재시도하고, 재시도도 실패하면 chunkFailures/warnings 로 표면화한다(콘솔 로그만으로는 운영자가 못 본다).
   let chunksRewritten = 0
+  let chunkFailures = 0
+  const chunkWarnings: string[] = []
   for (const target of chunkRegenTargets) {
     try {
       const chunks = buildConversationChunkInputs(target.transcript, redactPii)
-      await replaceConversationChunks(target.id, chunks)
+      try {
+        await replaceConversationChunks(target.id, chunks)
+      } catch {
+        await replaceConversationChunks(target.id, chunks)
+      }
       chunksRewritten += chunks.length
     } catch (error) {
-      console.error("[channel-talk-sync] 상담 청크 재생성 실패:", target.id, error)
+      chunkFailures += 1
+      chunkWarnings.push(`상담 청크 재생성 실패(재시도 포함): ${target.id}`)
+      console.error("[channel-talk-sync] 상담 청크 재생성 실패(재시도 포함):", target.id, error)
     }
   }
 
@@ -353,5 +367,7 @@ async function runChannelConversationSync(
     messageFetches,
     reusedTranscripts,
     chunksRewritten,
+    chunkFailures,
+    ...(chunkWarnings.length > 0 ? { warnings: chunkWarnings } : {}),
   }
 }

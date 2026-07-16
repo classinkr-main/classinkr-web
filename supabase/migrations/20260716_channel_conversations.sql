@@ -61,12 +61,11 @@ create table if not exists public.channel_conversation_chunks (
 );
 
 comment on table public.channel_conversation_chunks is
-  '상담 트랜스크립트의 턴 단위 청크. content 는 redactPii 통과본만 저장. embedding 은 text-embedding-004(768d).';
+  '상담 트랜스크립트의 턴 단위 청크. content 는 redactPii 통과본만 저장. embedding 은 gemini-embedding-001(768d).';
 comment on column public.channel_conversation_chunks.content is
   'redactPii 통과본만 저장한다. 원문 PII 를 직접 넣지 말 것.';
 
-create index if not exists channel_conversation_chunks_conversation_idx
-  on public.channel_conversation_chunks (conversation_id, seq);
+-- (conversation_id, seq) 조회는 UNIQUE 제약이 만드는 인덱스가 커버한다 — 중복 인덱스는 두지 않는다.
 create index if not exists channel_conversation_chunks_embedding_hnsw_idx
   on public.channel_conversation_chunks using hnsw (embedding extensions.vector_cosine_ops)
   where embedding is not null;

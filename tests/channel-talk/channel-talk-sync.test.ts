@@ -152,6 +152,52 @@ describe("syncChannelConversations — 상담 청크 재생성", () => {
     expect(result.ok).toBe(true)
   })
 
+  it("청크 재생성 1차 실패는 즉시 1회 재시도하고, 성공하면 실패로 집계하지 않는다", async () => {
+    mocks.listUserChats.mockResolvedValue({
+      userChats: [{ id: "chatA", userId: "uA", frontMessageId: "a1", state: "opened", tags: [] }],
+      users: [{ id: "uA", name: "김원장" }],
+    })
+    mocks.getDurableConversationsByIds.mockResolvedValue(new Map())
+    mocks.getUserChatMessages.mockResolvedValue([
+      { id: "a1", personType: "user", plainText: "질문", createdAt: 1_700_000_000_000 },
+    ])
+    // 1차 호출만 transient 실패 → 재시도(2차)는 기본 구현으로 성공.
+    mocks.replaceConversationChunks.mockRejectedValueOnce(new Error("transient"))
+
+    const result = await syncChannelConversations({ force: true })
+
+    expect(mocks.replaceConversationChunks).toHaveBeenCalledTimes(2)
+    expect(result.ok).toBe(true)
+    expect(result.chunkFailures).toBe(0)
+    expect(result.warnings).toBeUndefined()
+    expect(result.chunksRewritten).toBe(1)
+  })
+
+  it("재시도도 실패하면 chunkFailures + warnings(대화 id)로 표면화하되 ok 는 유지한다", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.listUserChats.mockResolvedValue({
+      userChats: [{ id: "chatA", userId: "uA", frontMessageId: "a1", state: "opened", tags: [] }],
+      users: [{ id: "uA", name: "김원장" }],
+    })
+    mocks.getDurableConversationsByIds.mockResolvedValue(new Map())
+    mocks.getUserChatMessages.mockResolvedValue([
+      { id: "a1", personType: "user", plainText: "질문", createdAt: 1_700_000_000_000 },
+    ])
+    mocks.replaceConversationChunks.mockRejectedValue(new Error("db down"))
+
+    const result = await syncChannelConversations({ force: true })
+
+    // 원 호출 + 재시도 = 2회.
+    expect(mocks.replaceConversationChunks).toHaveBeenCalledTimes(2)
+    // best-effort 계약: 동기화 자체는 성공으로 유지.
+    expect(result.ok).toBe(true)
+    expect(result.chunkFailures).toBe(1)
+    expect(result.warnings).toHaveLength(1)
+    expect(result.warnings?.[0]).toContain("chatA")
+    expect(result.chunksRewritten).toBe(0)
+    expect(errorSpy).toHaveBeenCalled()
+  })
+
   it("durable upsert 실패는 무음 유실 대신 경고 결과로 표면화한다", async () => {
     mocks.listUserChats.mockResolvedValue({
       userChats: [{ id: "chatA", userId: "uA", frontMessageId: "a1", state: "opened", tags: [] }],
