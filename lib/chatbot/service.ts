@@ -232,13 +232,26 @@ function buildRetrievalQueryText(question: NormalizedQuestion) {
     : question.redacted
 }
 
-function getRetrievalCacheKey(question: NormalizedQuestion) {
-  const backend = hasSupabaseServerEnv() ? "supabase" : "static"
-  return `${RETRIEVAL_CACHE_VERSION}:${backend}:${buildRetrievalQueryText(question).toLowerCase()}`
+// 검색 옵션. includeInternalDocs 는 내부 CS 코파일럿 전용(계약 6) — 공개 챗봇 경로는 항상 기본(false).
+// 캐시 키에 scope 로 반영해 internal 결과가 공개 캐시로 절대 새지 않게 격리한다.
+export interface RetrievalOptions {
+  includeInternalDocs?: boolean
 }
 
-function getCachedRetrieval(question: NormalizedQuestion): KnowledgeSearchResult | null {
-  const key = getRetrievalCacheKey(question)
+function retrievalScope(options: RetrievalOptions | undefined) {
+  return options?.includeInternalDocs ? "internal" : "public"
+}
+
+function getRetrievalCacheKey(question: NormalizedQuestion, options?: RetrievalOptions) {
+  const backend = hasSupabaseServerEnv() ? "supabase" : "static"
+  return `${RETRIEVAL_CACHE_VERSION}:${backend}:${retrievalScope(options)}:${buildRetrievalQueryText(question).toLowerCase()}`
+}
+
+function getCachedRetrieval(
+  question: NormalizedQuestion,
+  options?: RetrievalOptions
+): KnowledgeSearchResult | null {
+  const key = getRetrievalCacheKey(question, options)
   const cached = retrievalCache.get(key)
   if (!cached) return null
   if (cached.expiresAt <= Date.now()) {
@@ -253,8 +266,12 @@ function getCachedRetrieval(question: NormalizedQuestion): KnowledgeSearchResult
   }
 }
 
-function setCachedRetrieval(question: NormalizedQuestion, value: KnowledgeSearchResult) {
-  const key = getRetrievalCacheKey(question)
+function setCachedRetrieval(
+  question: NormalizedQuestion,
+  value: KnowledgeSearchResult,
+  options?: RetrievalOptions
+) {
+  const key = getRetrievalCacheKey(question, options)
   if (retrievalCache.size >= RETRIEVAL_CACHE_MAX) {
     const firstKey = retrievalCache.keys().next().value
     if (firstKey) retrievalCache.delete(firstKey)
@@ -283,9 +300,9 @@ const ANSWER_CACHE_TTL_MS = 5 * 60 * 1000
 const ANSWER_CACHE_MAX = 200
 const answerCache = new Map<string, { expiresAt: number; value: CachedAnswerEntry }>()
 
-function getAnswerCacheKey(question: NormalizedQuestion) {
+function getAnswerCacheKey(question: NormalizedQuestion, options?: RetrievalOptions) {
   const backend = hasSupabaseServerEnv() ? "supabase" : "static"
-  return `${ANSWER_CACHE_VERSION}:${backend}:${buildRetrievalQueryText(question).toLowerCase()}`
+  return `${ANSWER_CACHE_VERSION}:${backend}:${retrievalScope(options)}:${buildRetrievalQueryText(question).toLowerCase()}`
 }
 
 function cloneCachedAnswer(value: CachedAnswerEntry): CachedAnswerEntry {
@@ -299,8 +316,11 @@ function cloneCachedAnswer(value: CachedAnswerEntry): CachedAnswerEntry {
   }
 }
 
-function getCachedAnswer(question: NormalizedQuestion): CachedAnswerEntry | null {
-  const key = getAnswerCacheKey(question)
+function getCachedAnswer(
+  question: NormalizedQuestion,
+  options?: RetrievalOptions
+): CachedAnswerEntry | null {
+  const key = getAnswerCacheKey(question, options)
   const cached = answerCache.get(key)
   if (!cached) return null
   if (cached.expiresAt <= Date.now()) {
@@ -310,12 +330,16 @@ function getCachedAnswer(question: NormalizedQuestion): CachedAnswerEntry | null
   return cloneCachedAnswer(cached.value)
 }
 
-function setCachedAnswer(question: NormalizedQuestion, value: CachedAnswerEntry) {
+function setCachedAnswer(
+  question: NormalizedQuestion,
+  value: CachedAnswerEntry,
+  options?: RetrievalOptions
+) {
   if (answerCache.size >= ANSWER_CACHE_MAX) {
     const firstKey = answerCache.keys().next().value
     if (firstKey) answerCache.delete(firstKey)
   }
-  answerCache.set(getAnswerCacheKey(question), {
+  answerCache.set(getAnswerCacheKey(question, options), {
     expiresAt: Date.now() + ANSWER_CACHE_TTL_MS,
     value: cloneCachedAnswer(value),
   })
@@ -1806,7 +1830,8 @@ interface MatchChunkRow {
 // Gemini 임베딩 기반 시맨틱 검색. 키·임베딩이 없거나 결과가 없으면 [] → 키워드 검색으로 폴백.
 async function vectorSearchSupabaseSources(
   question: NormalizedQuestion,
-  embedding: number[]
+  embedding: number[],
+  options?: RetrievalOptions
 ): Promise<ChatbotSource[]> {
   if (!hasSupabaseServerEnv()) return []
 
@@ -1816,6 +1841,8 @@ async function vectorSearchSupabaseSources(
       // pgvector 컬럼/인자는 "[..]" 문자열로 넘긴다 (배열 직접 전달 시 Postgres 배열로 직렬화돼 거부됨).
       query_embedding: JSON.stringify(embedding),
       match_count: VECTOR_MATCH_COUNT,
+      // 공개 경로는 include_internal 을 아예 넘기지 않는다(RPC 기본 false = 기존과 동일). 내부 코파일럿만 true.
+      ...(options?.includeInternalDocs ? { include_internal: true } : {}),
     })
 
     if (error) {
@@ -1890,10 +1917,16 @@ async function clientVectorSearchSupabaseSources(embedding: number[]): Promise<C
 }
 
 // 벡터·키워드 후보를 함께 수집해 재랭킹한다. 벡터는 recall, 키워드는 정확 match를 보완한다.
-async function searchSupabaseSources(question: NormalizedQuestion): Promise<ChatbotSource[]> {
+// internal 문서(계약 6)는 벡터 RPC(match_docs_ai_chunks include_internal) 경로로만 유입된다.
+async function searchSupabaseSources(
+  question: NormalizedQuestion,
+  options?: RetrievalOptions
+): Promise<ChatbotSource[]> {
   const keywordPromise = keywordSearchSupabaseSources(question)
   const embedding = await embedText(buildRetrievalQueryText(question), "RETRIEVAL_QUERY")
-  const vectorSources = embedding ? await vectorSearchSupabaseSources(question, embedding) : []
+  const vectorSources = embedding
+    ? await vectorSearchSupabaseSources(question, embedding, options)
+    : []
   const keywordSources = await keywordPromise
   const combined = selectDiverseSources(
     rerankSources(question, mergeScoredSources([...vectorSources, ...keywordSources]))
@@ -1909,15 +1942,16 @@ async function searchSupabaseSources(question: NormalizedQuestion): Promise<Chat
 }
 
 async function searchKnowledgeSources(
-  question: NormalizedQuestion
+  question: NormalizedQuestion,
+  options?: RetrievalOptions
 ): Promise<KnowledgeSearchResult> {
-  const cached = getCachedRetrieval(question)
+  const cached = getCachedRetrieval(question, options)
   if (cached) return cached
 
   const initialCategory = classifyChatbotQuestion(question.redacted).category
   if (initialCategory === "general" && !isDomainRelatedQuestion(question, "general")) {
     const result = { sources: [], warning: undefined }
-    setCachedRetrieval(question, result)
+    setCachedRetrieval(question, result, options)
     return result
   }
 
@@ -1949,15 +1983,15 @@ async function searchKnowledgeSources(
         sources: selectDiverseSources(rerankSources(question, curatedSources), 1),
         warning: undefined,
       }
-      setCachedRetrieval(question, result)
+      setCachedRetrieval(question, result, options)
       return result
     }
   }
 
-  const supabaseSources = await searchSupabaseSources(question)
+  const supabaseSources = await searchSupabaseSources(question, options)
   if (supabaseSources.length > 0) {
     const result = { sources: mergeCuratedSources(question, supabaseSources), warning: undefined }
-    setCachedRetrieval(question, result)
+    setCachedRetrieval(question, result, options)
     return result
   }
 
@@ -1970,25 +2004,31 @@ async function searchKnowledgeSources(
       ? "Supabase 문서 chunk 검색 결과가 없어 문서 원문 fallback을 사용했습니다."
       : "Supabase 환경변수가 없어 정적 문서 fallback을 사용했습니다.",
   }
-  setCachedRetrieval(question, result)
+  setCachedRetrieval(question, result, options)
   return result
 }
 
-function getTimedOutKnowledgeFallback(question: NormalizedQuestion): KnowledgeSearchResult {
+function getTimedOutKnowledgeFallback(
+  question: NormalizedQuestion,
+  options?: RetrievalOptions
+): KnowledgeSearchResult {
   const staticSources = buildStaticSources(question, getFallbackDocsFromStatic())
   const result = {
     sources: mergeCuratedSources(question, staticSources),
     warning: "문서 검색 응답이 지연되어 정적 문서 fallback을 사용했습니다.",
   }
-  setCachedRetrieval(question, result)
+  setCachedRetrieval(question, result, options)
   return result
 }
 
-function searchKnowledgeSourcesWithinBudget(question: NormalizedQuestion) {
+function searchKnowledgeSourcesWithinBudget(
+  question: NormalizedQuestion,
+  options?: RetrievalOptions
+) {
   return withTimeoutFallback({
-    promise: searchKnowledgeSources(question),
+    promise: searchKnowledgeSources(question, options),
     timeoutMs: getKnowledgeSearchTimeoutMs(),
-    fallback: () => getTimedOutKnowledgeFallback(question),
+    fallback: () => getTimedOutKnowledgeFallback(question, options),
     onTimeout: () => {
       console.warn("[chatbot] knowledge search timed out; using static fallback.")
     },
@@ -3222,6 +3262,8 @@ interface BuildChatbotCoreOptions {
   // 세션 소유권 검증용 — 이력 로드 시 세션 owner 와 대조한다.
   anonymousId?: string | null
   generateAnswer?: boolean
+  // 내부 CS 코파일럿 전용(계약 6). 공개 경로는 절대 true 를 넘기지 않는다 — 검색/답변 캐시가 scope 로 격리된다.
+  includeInternalDocs?: boolean
 }
 
 function determineModelTier(): ChatbotModelTier {
@@ -3560,7 +3602,7 @@ async function buildChatbotCore(
 
   // 세션(대화 이력)이 없는 동일 질문은 캐시된 답변으로 즉시 응답 — 검색·Gemini를 통째로 건너뛴다.
   if (shouldGenerateAnswer && !options.sessionId) {
-    const cached = getCachedAnswer(question)
+    const cached = getCachedAnswer(question, options)
     if (cached) {
       return {
         question,
@@ -3581,7 +3623,7 @@ async function buildChatbotCore(
       ? loadSessionHistory(options.sessionId, options.anonymousId)
       : Promise.resolve([])
 
-  const { sources, warning, cacheHit } = await searchKnowledgeSourcesWithinBudget(question)
+  const { sources, warning, cacheHit } = await searchKnowledgeSourcesWithinBudget(question, options)
   const classificationSources = sources.filter((source) => source.score >= MIN_DIRECT_SOURCE_SCORE)
   const { category, intent, handoffIntent } = classifyChatbotQuestion(
     question.redacted,
@@ -3619,7 +3661,7 @@ async function buildChatbotCore(
 
   // 세션(이력)이 없는 질문만 캐시 — 이력에 의존한 답이 캐시에 섞이지 않게.
   if (shouldGenerateAnswer && !options.sessionId) {
-    setCachedAnswer(question, { response, category, intent, handoffIntent, warning })
+    setCachedAnswer(question, { response, category, intent, handoffIntent, warning }, options)
   }
 
   return {
@@ -3675,9 +3717,13 @@ export async function handleChatbotQuery(
  */
 export async function evaluateChatbotQuery(
   message: string,
-  options: { generateAnswer?: boolean } = {}
+  options: { generateAnswer?: boolean; includeInternalDocs?: boolean } = {}
 ): Promise<ChatbotQueryResponse & { detectedCategory: string; detectedIntent: ChatbotIntent }> {
-  const core = await buildChatbotCore(message, { generateAnswer: options.generateAnswer })
+  const core = await buildChatbotCore(message, {
+    generateAnswer: options.generateAnswer,
+    // 내부 CS 코파일럿(context.ts, T2)만 true 를 넘긴다 — 공개 챗봇 경로는 이 옵션을 쓰지 않는다(계약 6).
+    includeInternalDocs: options.includeInternalDocs,
+  })
   return {
     ...core.response,
     handoffIntent: core.handoffIntent,
