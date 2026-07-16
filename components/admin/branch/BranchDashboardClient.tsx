@@ -70,7 +70,7 @@ function buildMonthOptions(now: Date) {
   }))
 }
 
-const FiscalRoadmap = dynamic(() => import("./sections/FiscalRoadmap"), {
+const RevenueFlowSection = dynamic(() => import("./sections/RevenueFlowSection"), {
   loading: () => <div className="h-72 animate-pulse rounded-2xl bg-[#f0f0ec]" />,
 })
 
@@ -328,7 +328,7 @@ export default function BranchDashboardClient() {
           {activeTab === "overview" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
               <CoreKpiGrid data={summary.data} loading={summary.loading} error={summary.error} />
-              {/* D-1: 매출 목표(HeroGauges) 위, FiscalRoadmap 아래 */}
+              {/* D-1: 매출 목표(HeroGauges) 위, 매출 누적 흐름(RevenueFlowSection) 아래 */}
               <BranchHeroGauges
                 summary={summary.data}
                 kpi={kpi.data}
@@ -336,7 +336,14 @@ export default function BranchDashboardClient() {
               />
               <DealMixSection summary={summary.data} loading={summary.loading} />
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
-                <FiscalRoadmap data={summary.data?.monthly_series ?? null} loading={summary.loading} error={summary.error} />
+                <RevenueFlowSection
+                  summary={summary.data}
+                  loading={summary.loading}
+                  team={team}
+                  period={period}
+                  selectedMonth={selectedMonth}
+                  refreshKey={refreshKey}
+                />
                 <BranchUpcomingDeals
                   data={summary.data?.monthly_series ?? null}
                   loading={summary.loading}
