@@ -98,13 +98,19 @@ export async function PATCH(req: NextRequest, context: Context) {
     // 경량 경로는 regression_outcome 만 갱신한다 — 검토 필드(review_state/reviewed_*/
     // review_note/corrected_content/feedback_labels)와 대화 상태는 불변.
     if (isRegressionOnly) {
-      const message = await updateInternalCsRegressionOutcome({
+      const result = await updateInternalCsRegressionOutcome({
         conversationId: id,
         messageId,
         outcome: raw.regressionOutcome as InternalCsRegressionOutcome,
       })
-      if (!message) return NextResponse.json({ error: "Assistant message not found" }, { status: 404 })
-      return NextResponse.json({ message })
+      // stale 패널 가드: 문서 매핑이 이미 promoted 로 전파한 항목은 수동 판정으로 덮지 않는다.
+      if (result.status === "promoted_conflict") {
+        return NextResponse.json({ error: "이미 문서 반영(promoted)된 항목입니다" }, { status: 409 })
+      }
+      if (result.status === "not_found") {
+        return NextResponse.json({ error: "Assistant message not found" }, { status: 404 })
+      }
+      return NextResponse.json({ message: result.message })
     }
 
     const message = await reviewInternalCsMessage({

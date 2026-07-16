@@ -862,16 +862,23 @@ export async function promoteRegressionOutcomes(refs: { messageId: string }[]) {
   return (data ?? []).length
 }
 
+export type InternalCsRegressionOutcomeUpdateResult =
+  | { status: "updated"; message: InternalCsMessageRow }
+  | { status: "promoted_conflict" }
+  | { status: "not_found" }
+
 /**
  * 회귀 판정 전용 경량 갱신 — regression_outcome 만 바꾼다.
  * 검토 필드(review_state, reviewed_by, reviewed_at, review_note, corrected_content,
  * feedback_labels)와 대화 상태는 절대 건드리지 않는다 (buildInternalCsReviewPatch 재사용 금지 이유).
+ * 문서 매핑이 전파한 promoted 는 수동 판정으로 덮을 수 없다 (stale 패널 가드) —
+ * 그 외 상태(not_evaluated/pass/needs_fix/excluded) 간 재판정은 허용한다.
  */
 export async function updateInternalCsRegressionOutcome(input: {
   conversationId: string
   messageId: string
   outcome: InternalCsRegressionOutcome
-}) {
+}): Promise<InternalCsRegressionOutcomeUpdateResult> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("internal_cs_messages")
@@ -879,10 +886,24 @@ export async function updateInternalCsRegressionOutcome(input: {
     .eq("id", input.messageId)
     .eq("conversation_id", input.conversationId)
     .eq("role", "assistant")
+    .neq("regression_outcome", "promoted")
     .select("*")
     .maybeSingle()
   if (error) throw databaseError("failed to update regression outcome", error)
-  return (data as InternalCsMessageRow | null) ?? null
+  if (data) return { status: "updated", message: data as InternalCsMessageRow }
+
+  // 갱신 0건 = 메시지 없음 또는 promoted 가드에 걸림 — 라우트가 404/409 를 구분하도록 조회한다.
+  const { data: current, error: currentError } = await supabase
+    .from("internal_cs_messages")
+    .select("id, regression_outcome")
+    .eq("id", input.messageId)
+    .eq("conversation_id", input.conversationId)
+    .eq("role", "assistant")
+    .maybeSingle()
+  if (currentError) throw databaseError("failed to update regression outcome", currentError)
+
+  const currentOutcome = (current as { regression_outcome?: string } | null)?.regression_outcome
+  return currentOutcome === "promoted" ? { status: "promoted_conflict" } : { status: "not_found" }
 }
 
 export function cleanInternalCsTags(values: string[] | undefined) {

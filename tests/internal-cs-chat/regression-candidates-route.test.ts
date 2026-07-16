@@ -180,28 +180,76 @@ describe("promoteRegressionOutcomes", () => {
 })
 
 describe("updateInternalCsRegressionOutcome", () => {
-  it("patches only regression_outcome, leaving review fields untouched", async () => {
-    const repo = await importRealRepo()
-    const row = { id: "message-1", regression_outcome: "pass", review_state: "changes_requested" }
+  function updateChain(result: { data: unknown; error: unknown }) {
     const chain: Record<string, ReturnType<typeof vi.fn>> = {}
     chain.update = vi.fn(() => chain)
     chain.eq = vi.fn(() => chain)
+    chain.neq = vi.fn(() => chain)
     chain.select = vi.fn(() => chain)
-    chain.maybeSingle = vi.fn(() => Promise.resolve({ data: row, error: null }))
+    chain.maybeSingle = vi.fn(() => Promise.resolve(result))
+    return chain
+  }
+
+  it("re-judges a non-promoted candidate (needs_fix→pass) and patches only regression_outcome", async () => {
+    const repo = await importRealRepo()
+    const row = { id: "message-1", regression_outcome: "pass", review_state: "changes_requested" }
+    const chain = updateChain({ data: row, error: null })
     mocks.createSupabaseAdminClient.mockReturnValue({ from: vi.fn(() => chain) })
 
-    const message = await repo.updateInternalCsRegressionOutcome({
+    const result = await repo.updateInternalCsRegressionOutcome({
       conversationId: "conversation-1",
       messageId: "message-1",
       outcome: "pass",
     })
 
-    expect(message).toEqual(row)
+    expect(result).toEqual({ status: "updated", message: row })
     // 검토 필드(review_state/reviewed_*/corrected_content/feedback_labels)를 덮지 않는다.
     expect(chain.update).toHaveBeenCalledWith({ regression_outcome: "pass" })
     expect(chain.eq).toHaveBeenCalledWith("id", "message-1")
     expect(chain.eq).toHaveBeenCalledWith("conversation_id", "conversation-1")
     expect(chain.eq).toHaveBeenCalledWith("role", "assistant")
+    // stale 패널 가드: promoted 행은 update 문 자체가 건드리지 않는다 (DB 불변).
+    expect(chain.neq).toHaveBeenCalledWith("regression_outcome", "promoted")
+  })
+
+  it("reports a promoted conflict instead of overwriting a promoted judgement", async () => {
+    const repo = await importRealRepo()
+    const guardedUpdate = updateChain({ data: null, error: null })
+    const existsCheck = updateChain({
+      data: { id: "message-1", regression_outcome: "promoted" },
+      error: null,
+    })
+    mocks.createSupabaseAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValueOnce(guardedUpdate).mockReturnValueOnce(existsCheck),
+    })
+
+    const result = await repo.updateInternalCsRegressionOutcome({
+      conversationId: "conversation-1",
+      messageId: "message-1",
+      outcome: "pass",
+    })
+
+    expect(result).toEqual({ status: "promoted_conflict" })
+    expect(guardedUpdate.neq).toHaveBeenCalledWith("regression_outcome", "promoted")
+    // 후속 조회는 갱신이 아니라 존재/상태 확인이다.
+    expect(existsCheck.update).not.toHaveBeenCalled()
+  })
+
+  it("distinguishes a missing message from a promoted guard", async () => {
+    const repo = await importRealRepo()
+    const guardedUpdate = updateChain({ data: null, error: null })
+    const existsCheck = updateChain({ data: null, error: null })
+    mocks.createSupabaseAdminClient.mockReturnValue({
+      from: vi.fn().mockReturnValueOnce(guardedUpdate).mockReturnValueOnce(existsCheck),
+    })
+
+    const result = await repo.updateInternalCsRegressionOutcome({
+      conversationId: "conversation-1",
+      messageId: "missing-message",
+      outcome: "pass",
+    })
+
+    expect(result).toEqual({ status: "not_found" })
   })
 })
 
@@ -375,9 +423,12 @@ describe("PATCH messages/[messageId] regression-outcome-only path", () => {
   it("updates only the regression outcome without touching review fields or the conversation", async () => {
     mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", name: "CS" })
     mocks.updateInternalCsRegressionOutcome.mockResolvedValue({
-      id: messageId,
-      regression_outcome: "excluded",
-      review_state: "changes_requested",
+      status: "updated",
+      message: {
+        id: messageId,
+        regression_outcome: "excluded",
+        review_state: "changes_requested",
+      },
     })
 
     const response = await messagesPatch(patchRequest({ regressionOutcome: "excluded" }), routeContext())
@@ -394,9 +445,21 @@ describe("PATCH messages/[messageId] regression-outcome-only path", () => {
     expect(mocks.reviewInternalCsMessage).not.toHaveBeenCalled()
   })
 
+  it("returns 409 when judging a message the doc-mapping loop already promoted", async () => {
+    mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", name: "CS" })
+    mocks.updateInternalCsRegressionOutcome.mockResolvedValue({ status: "promoted_conflict" })
+
+    const response = await messagesPatch(patchRequest({ regressionOutcome: "pass" }), routeContext())
+    const json = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(json.error).toBe("이미 문서 반영(promoted)된 항목입니다")
+    expect(mocks.reviewInternalCsMessage).not.toHaveBeenCalled()
+  })
+
   it("returns 404 when the assistant message does not exist", async () => {
     mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", name: "CS" })
-    mocks.updateInternalCsRegressionOutcome.mockResolvedValue(null)
+    mocks.updateInternalCsRegressionOutcome.mockResolvedValue({ status: "not_found" })
 
     const response = await messagesPatch(patchRequest({ regressionOutcome: "pass" }), routeContext())
 
