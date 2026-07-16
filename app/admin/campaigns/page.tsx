@@ -152,22 +152,47 @@ function formatRange(startsAt: string, endsAt: string | null) {
 type EventLeadStats = { attributed: number; during: number }
 type LeadLookupRow = { haystack: string; timestampMs: number }
 
-function countEventLeadStats(leads: LeadLookupRow[], event: PublicEvent): EventLeadStats {
-  const startMs = new Date(event.startsAt).getTime()
-  const endMs = event.endsAt ? new Date(event.endsAt).getTime() : Date.now()
-  let attributed = 0
-  let during = 0
+// 각 리드를 최대 한 행사에만 귀속시킨다. 기간 창이 겹치는 여러 행사가 같은
+// 리드를 각각 세면(구 방식) 집계 리드·CPL·퍼널이 이중계상되므로, 리드 1건은
+//   1) 명시 토큰이 있으면 그 행사(attributed)
+//   2) 없으면 리드를 포함하는 행사 중 "가장 최근 시작(동률이면 기간이 짧은)" 한 곳(during)
+// 에만 배정한다. 반환 맵은 배정 결과의 행사별 집계다.
+function assignEventLeads(
+  leads: LeadLookupRow[],
+  events: PublicEvent[]
+): Map<string, EventLeadStats> {
+  const stats = new Map<string, EventLeadStats>()
+  const windows = events.map((event) => {
+    const startMs = new Date(event.startsAt).getTime()
+    // endsAt이 없으면 시작 +1일로 캡한다. Date.now()로 열어두면 과거 단일일 행사가
+    // 이후 발생한 무관한 리드를 계속 fallback 집계로 흡수해 매 지표를 부풀린다.
+    const endMs = event.endsAt ? new Date(event.endsAt).getTime() : startMs + 24 * 3600 * 1000
+    stats.set(event.id, { attributed: 0, during: 0 })
+    return { event, startMs, endMs }
+  })
 
   for (const lead of leads) {
-    if (textMatchesEventToken(lead.haystack, event)) {
-      attributed += 1
+    const tokenHit = windows.find((w) => textMatchesEventToken(lead.haystack, w.event))
+    if (tokenHit) {
+      stats.get(tokenHit.event.id)!.attributed += 1
+      continue
     }
-    if (lead.timestampMs >= startMs && lead.timestampMs <= endMs) {
-      during += 1
+    let best: (typeof windows)[number] | null = null
+    for (const w of windows) {
+      // 양수 포함 검사 — start/end가 NaN(잘못된 날짜)이면 비교가 false가 되어 자동 제외된다.
+      if (!(lead.timestampMs >= w.startMs && lead.timestampMs <= w.endMs)) continue
+      if (
+        best === null ||
+        w.startMs > best.startMs ||
+        (w.startMs === best.startMs && w.endMs - w.startMs < best.endMs - best.startMs)
+      ) {
+        best = w
+      }
     }
+    if (best) stats.get(best.event.id)!.during += 1
   }
 
-  return { attributed, during }
+  return stats
 }
 
 function buildFunnel(
@@ -176,8 +201,8 @@ function buildFunnel(
   attributedCount: number,
   duringCount: number
 ): EventFunnel {
-  // 명시적 매칭이 있으면 그것을, 없으면 기간 내 리드를 fallback
-  const leads = attributedCount > 0 ? attributedCount : duringCount
+  // 배타적 귀속이므로 명시 매칭 + 기간 배정은 서로소 — 두 값을 합해 이 행사의 리드로 본다.
+  const leads = attributedCount + duringCount
   return {
     impressions: metrics.impressionsCount ?? 0,
     leads,
@@ -192,11 +217,11 @@ function buildFunnel(
 
 type CampaignTab = "summary" | "events" | "meta" | "email"
 
-const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string; sub: string }> = [
-  { id: "summary", label: "요약", sub: "성과 · 전환 · 채널 분포" },
-  { id: "events", label: "행사", sub: "행사별 퍼널 · 딜 전환" },
-  { id: "meta", label: "Meta 광고", sub: "캠페인 현황 · 성과 · 상태 관리" },
-  { id: "email", label: "이메일", sub: "구독자 · 이메일 발송 · 이력" },
+const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string }> = [
+  { id: "summary", label: "요약" },
+  { id: "events", label: "행사" },
+  { id: "meta", label: "Meta 광고" },
+  { id: "email", label: "이메일" },
 ]
 
 type MetaDatePreset = "last_7d" | "last_30d" | "last_90d" | "this_month"
@@ -430,10 +455,7 @@ function MetaCampaignPanel({
 
       <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
         <div className="flex items-center justify-between border-b border-[#e8e8e4] px-4 py-3 sm:px-5">
-          <div>
-            <h2 className="text-[14px] font-semibold text-[#111110]">Meta 캠페인</h2>
-            <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">상태 전환은 ACTIVE/PAUSED만 허용합니다.</p>
-          </div>
+          <h2 className="text-[14px] font-semibold text-[#111110]">Meta 캠페인</h2>
           <a
             href="https://adsmanager.facebook.com"
             target="_blank"
@@ -817,10 +839,7 @@ function TimelineRow({ events }: { events: PublicEvent[] }) {
   return (
     <div className="rounded-2xl border border-[#e8e8e4] bg-white">
       <div className="flex items-center justify-between border-b border-[#e8e8e4] px-4 py-3 sm:px-6">
-        <div>
-          <h2 className="text-[14px] font-semibold text-[#111110]">캘린더 타임라인</h2>
-          <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">현재 월 ±2개월의 행사 진척 현황입니다.</p>
-        </div>
+        <h2 className="text-[14px] font-semibold text-[#111110]">캘린더 타임라인</h2>
         <Link
           href="/admin/calendar"
           className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[#1a1a1a]/60 hover:text-[#111110]"
@@ -863,11 +882,13 @@ function EventFunnelCard({
   const retrospectivePreview = previewText(metrics.retrospective, 180)
   const shareMemoPreview = previewText(metrics.shareMemo, 180)
   const leadSourceLabel =
-    attributedLeadCount > 0
-      ? `명시 매칭 ${KRW.format(attributedLeadCount)}건`
-      : duringLeadCount > 0
-        ? `기간 fallback ${KRW.format(duringLeadCount)}건`
-        : "집계 리드 없음"
+    attributedLeadCount > 0 && duringLeadCount > 0
+      ? `명시 ${KRW.format(attributedLeadCount)} · 기간 ${KRW.format(duringLeadCount)}건`
+      : attributedLeadCount > 0
+        ? `명시 매칭 ${KRW.format(attributedLeadCount)}건`
+        : duringLeadCount > 0
+          ? `기간 fallback ${KRW.format(duringLeadCount)}건`
+          : "집계 리드 없음"
 
   return (
     <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
@@ -991,7 +1012,7 @@ function EventFunnelCard({
         </div>
         <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#1a1a1a]/35">매출</p>
-          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{won(economics.revenue)}</p>
+          <p className="mt-0.5 text-[14px] font-bold text-[#111110]">{metrics.dealsRevenue != null ? won(economics.revenue) : "—"}</p>
         </div>
         <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-[#1a1a1a]/35">CPL</p>
@@ -1034,8 +1055,8 @@ function EventFunnelCard({
         <FunnelStage label="리드" value={funnel.leads} prevValue={funnel.impressions || null} tone="primary" />
         <FunnelStage label="신청" value={funnel.applications} prevValue={funnel.leads || null} />
         <FunnelStage label="유효 리드" value={funnel.qualifiedLeads} prevValue={funnel.applications || null} />
-        <FunnelStage label="참석" value={funnel.attendees} prevValue={funnel.applications || null} />
-        <FunnelStage label="딜" value={funnel.deals} prevValue={funnel.qualifiedLeads || null} tone="primary" />
+        <FunnelStage label="참석" value={funnel.attendees} prevValue={funnel.qualifiedLeads || null} />
+        <FunnelStage label="딜" value={funnel.deals} prevValue={funnel.attendees || null} tone="primary" />
       </div>
 
       {/* sub metrics */}
@@ -1157,7 +1178,7 @@ function MetricsEditor({
             <h2 className="mt-0.5 truncate text-base font-semibold text-[#111110]">{event.title}</h2>
             <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">{formatRange(event.startsAt, event.endsAt)}</p>
           </div>
-          <button onClick={onClose} className="text-[#1a1a1a]/40 hover:text-[#111110]">
+          <button onClick={onClose} aria-label="닫기" className="text-[#1a1a1a]/40 hover:text-[#111110]">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1262,7 +1283,9 @@ function MetricsEditor({
                     </select>
                     <input
                       type="number"
+                      min={0}
                       placeholder="금액 (원)"
+                      aria-label="광고비 금액(원)"
                       value={entry.amount === 0 ? "" : entry.amount}
                       onChange={(e) =>
                         updateAdEntry(idx, { amount: e.target.value === "" ? 0 : Number(e.target.value) })
@@ -1272,12 +1295,14 @@ function MetricsEditor({
                     <input
                       type="text"
                       placeholder="메모 (선택)"
+                      aria-label="광고비 메모"
                       value={entry.note ?? ""}
                       onChange={(e) => updateAdEntry(idx, { note: e.target.value })}
                       className="hidden rounded-md border border-[#e8e8e4] bg-white px-2 py-1.5 text-[12px] sm:block"
                     />
                     <button
                       onClick={() => removeAdEntry(idx)}
+                      aria-label="채널 삭제"
                       className="rounded-md p-1.5 text-[#1a1a1a]/40 hover:bg-red-50 hover:text-red-600"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -1509,13 +1534,10 @@ export default function AdminCampaignsPage() {
     [leads]
   )
 
-  const eventLeadStats = useMemo(() => {
-    const stats = new Map<string, EventLeadStats>()
-    for (const event of filtered) {
-      stats.set(event.id, countEventLeadStats(leadLookupRows, event))
-    }
-    return stats
-  }, [filtered, leadLookupRows])
+  const eventLeadStats = useMemo(
+    () => assignEventLeads(leadLookupRows, filtered),
+    [filtered, leadLookupRows]
+  )
 
   // 집계 (전체 KPI)
   const aggregate = useMemo(() => {
@@ -1524,6 +1546,10 @@ export default function AdminCampaignsPage() {
     let totalLeads = 0
     let totalDeals = 0
     let totalAttendees = 0
+    // ROI 분모는 "매출을 입력한" 행사의 광고비만 합산한다. 매출 미입력 행사의
+    // 광고비까지 넣으면 매출 0으로 잡혀 누적 ROI가 거짓 적자로 끌려간다.
+    let roiSpend = 0
+    let roiRevenue = 0
     const channelTotals: Record<AdChannel, number> = {
       google: 0,
       meta: 0,
@@ -1549,10 +1575,14 @@ export default function AdminCampaignsPage() {
       totalLeads += funnel.leads
       totalDeals += funnel.deals
       totalAttendees += funnel.attendees
+      if (metrics.dealsRevenue != null) {
+        roiSpend += econ.adSpendTotal
+        roiRevenue += econ.revenue
+      }
       for (const e of metrics.adSpendEntries) channelTotals[e.channel] += e.amount
     }
     const avgCpl = totalLeads > 0 ? Math.round(totalSpend / totalLeads) : null
-    const overallRoi = totalSpend > 0 ? Math.round(((totalRevenue - totalSpend) / totalSpend) * 100) : null
+    const overallRoi = roiSpend > 0 ? Math.round(((roiRevenue - roiSpend) / roiSpend) * 100) : null
     const dealConversionRate = totalLeads > 0 ? Math.round((totalDeals / totalLeads) * 100) : null
     const attendanceToDealRate =
       totalAttendees > 0 ? Math.round((totalDeals / totalAttendees) * 100) : null
@@ -1588,7 +1618,7 @@ export default function AdminCampaignsPage() {
       return [...filtered].sort((a, b) => {
         const aS = eventLeadStats.get(a.id) ?? { attributed: 0, during: 0 }
         const bS = eventLeadStats.get(b.id) ?? { attributed: 0, during: 0 }
-        return (bS.attributed > 0 ? bS.attributed : bS.during) - (aS.attributed > 0 ? aS.attributed : aS.during)
+        return (bS.attributed + bS.during) - (aS.attributed + aS.during)
       })
     }
     if (eventSort === "deals") {
@@ -1979,8 +2009,8 @@ export default function AdminCampaignsPage() {
       actions.push({
         id: "no-leads",
         tone: "info",
-        title: "아직 집계된 리드가 없습니다",
-        detail: "행사에 성과를 입력하거나 Meta 광고를 연결하면 리드 집계가 시작됩니다.",
+        title: "집계된 리드 없음",
+        detail: "성과 입력 또는 Meta 연결 필요",
         tabTarget: "events",
       })
     }
@@ -1989,8 +2019,8 @@ export default function AdminCampaignsPage() {
       actions.push({
         id: "negative-roi",
         tone: "warn",
-        title: `누적 ROI ${aggregate.overallRoi}% — 광고비 점검 필요`,
-        detail: "매출보다 광고비가 높습니다. 채널별 효율을 확인하고 전환율이 낮은 채널을 조정하세요.",
+        title: `누적 ROI ${aggregate.overallRoi}% — 광고비 점검`,
+        detail: "매출 < 광고비 · 채널별 효율 확인",
         tabTarget: "meta",
       })
     }
@@ -2004,8 +2034,8 @@ export default function AdminCampaignsPage() {
       actions.push({
         id: `upcoming-${upcomingEvent.id}`,
         tone: "info",
-        title: `"${upcomingEvent.title}" — 14일 이내 시작 예정`,
-        detail: "행사 퍼널을 준비하고 이메일 사전 안내 발송을 계획하세요.",
+        title: `"${upcomingEvent.title}" — 14일 내 시작`,
+        detail: "퍼널·사전 안내 준비",
         tabTarget: "events",
       })
     }
@@ -2019,7 +2049,7 @@ export default function AdminCampaignsPage() {
         id: "email-gap",
         tone: "info",
         title: `이메일 구독자 ${emailStats.subscribers.active}명 — 발송 이력 없음`,
-        detail: "구독자가 있지만 캠페인이 발송되지 않았습니다. 이메일 탭에서 첫 발송을 시작하세요.",
+        detail: "이메일 탭에서 첫 발송",
         tabTarget: "email",
       })
     }
@@ -2033,8 +2063,8 @@ export default function AdminCampaignsPage() {
       actions.push({
         id: "all-good",
         tone: "success",
-        title: "전반적인 마케팅 성과가 양호합니다",
-        detail: `ROI ${aggregate.overallRoi}% · 총 리드 ${KRW.format(aggregate.totalLeads)}건 · 딜 ${KRW.format(aggregate.totalDeals)}건`,
+        title: "성과 양호",
+        detail: `ROI ${aggregate.overallRoi}% · 리드 ${KRW.format(aggregate.totalLeads)} · 딜 ${KRW.format(aggregate.totalDeals)}`,
       })
     }
 
@@ -2072,9 +2102,6 @@ export default function AdminCampaignsPage() {
             <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[30px]">
               캠페인
             </h1>
-            <p className="mt-2 max-w-[720px] text-[13px] leading-relaxed text-[#615D59]">
-              행사·광고·이메일을 성과 단위로 운영합니다. 리드 확보부터 참석, 딜 전환, 매출 회수까지 한 화면에서 추적합니다.
-            </p>
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
@@ -2127,7 +2154,6 @@ export default function AdminCampaignsPage() {
           items={CAMPAIGN_TABS.map((tab) => ({
             value: tab.id,
             label: tab.label,
-            description: tab.sub,
             icon:
               tab.id === "meta" ? (
                 <Activity className="h-3.5 w-3.5" />
@@ -2262,7 +2288,7 @@ export default function AdminCampaignsPage() {
         <ConversionFocusCard
           label="운영 판단"
           value={loading ? "..." : aggregate.overallRoi != null ? (aggregate.overallRoi >= 0 ? "확대 검토" : "비용 점검") : "집계 대기"}
-          hint="ROI와 CPL을 함께 보고 예산 증액, 문구 수정, 후속 연락을 결정합니다."
+          hint={aggregate.avgCpl != null ? `누적 ROI ${pct(aggregate.overallRoi)} · 평균 CPL ${won(aggregate.avgCpl)}` : "ROI·CPL 집계 대기"}
           tone={aggregate.overallRoi == null ? "neutral" : aggregate.overallRoi >= 0 ? "success" : "warn"}
         />
       </div>
@@ -2332,14 +2358,7 @@ export default function AdminCampaignsPage() {
       {/* 행사별 ROI 비교 */}
       {roiChartData.length > 0 && (
         <div className="mb-5 rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h2 className="text-[14px] font-semibold text-[#111110]">행사별 ROI 비교</h2>
-              <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
-                수익 ÷ 총광고비 · 녹색=흑자 · 주황=적자
-              </p>
-            </div>
-          </div>
+          <h2 className="mb-3 text-[14px] font-semibold text-[#111110]">행사별 ROI 비교</h2>
           <div className="h-[200px] w-full">
             <EventRoiChart data={roiChartData} />
           </div>

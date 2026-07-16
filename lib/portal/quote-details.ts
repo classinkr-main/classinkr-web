@@ -149,7 +149,21 @@ export function normalizeQuoteDetailsFromStructuredJson(
         pickString(details, "recipientCompanyName", "customerName", "customer_name") ??
         fallback.customerName ??
         undefined,
+      recipientContactName: pickString(details, "recipientContactName"),
+      recipientPhone: pickString(details, "recipientPhone"),
+      recipientEmail: pickString(details, "recipientEmail"),
       referenceName: pickString(details, "referenceName"),
+      estimateNumber: pickString(details, "estimateNumber", "estimate_number"),
+      // 공급자 스냅샷을 그대로 전달한다. 없으면 finalize가 표준 공급자로 폴백한다.
+      supplierBusinessName: pickString(details, "supplierBusinessName"),
+      supplierBusinessRegistrationNumber: pickString(details, "supplierBusinessRegistrationNumber"),
+      supplierRepresentativeName: pickString(details, "supplierRepresentativeName"),
+      supplierAddress: pickString(details, "supplierAddress"),
+      supplierContactName: pickString(details, "supplierContactName"),
+      supplierContactPhone: pickString(details, "supplierContactPhone"),
+      supplierContactEmail: pickString(details, "supplierContactEmail"),
+      currencyUnitLabel: pickString(details, "currencyUnitLabel"),
+      footerContactText: pickString(details, "footerContactText"),
       subjectText: pickString(details, "subjectText", "subject"),
       generalNotes: pickString(details, "generalNotes"),
       specialTerms: pickString(details, "specialTerms"),

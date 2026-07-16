@@ -9,6 +9,7 @@ import { ShareActions } from "@/components/blog/ShareActions"
 import { TrackedLink } from "@/components/TrackedLink"
 import { LeadMagnetGate } from "@/components/blog/LeadMagnetGate"
 import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
+import { ResourcesRecommendation } from "@/components/sections/ResourcesRecommendation"
 import {
   getPublishedPostBySlug,
   getRelatedPosts,
@@ -433,6 +434,8 @@ export default async function BlogDetailPage({
               </div>
             </div>
             )}
+
+            <ResourcesRecommendation surface="blog" />
           </div>
         </div>
       </section>

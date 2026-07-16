@@ -570,6 +570,12 @@ const SITE_LINK_GROUPS: SiteLinkGroup[] = [
         badge: "계산기",
       },
       {
+        label: "가격 시뮬레이션(KRW)",
+        path: "/pricing/simulator/krw",
+        description: "1 CNY=200원, 1 USD=1,500원 기준 원화 환산",
+        badge: "KRW",
+      },
+      {
         label: "체크아웃",
         path: "/checkout",
         description: "소프트웨어 플랜 결제 페이지",

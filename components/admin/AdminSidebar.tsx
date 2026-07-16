@@ -69,6 +69,40 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/crm/overview",
     "/api/admin/crm/neo?granularity=month&offset=0",
   ],
+  "/admin/crm/customers/unified": [
+    "/api/admin/crm/customers/unified?limit=100&offset=0",
+    "/api/admin/crm/owners",
+  ],
+  "/admin/crm/activity": [
+    "/api/admin/crm/events?limit=50&offset=0",
+  ],
+  "/admin/crm/capture": [
+    "/api/admin/events",
+    "/api/admin/crm/capture/batches",
+  ],
+  "/admin/crm/deals": [
+    "/api/admin/crm/revenue?months=6",
+    "/api/admin/crm/readiness",
+  ],
+  "/admin/crm/deals/rev-sheet": [
+    "/api/admin/crm/revenue-sheet",
+  ],
+  "/admin/crm/deals/orders": [
+    "/api/portal/overview?shape=partner",
+  ],
+  "/admin/crm/deals/kpi": [
+    "/api/admin/crm/revenue?months=6",
+    "/api/portal/overview?shape=partner",
+  ],
+  "/admin/crm/matching": [
+    "/api/admin/crm/matching",
+    "/api/admin/crm/overview",
+  ],
+  "/admin/crm/insights": [
+    "/api/admin/crm/insights",
+    "/api/admin/crm/action-kpis",
+    "/api/admin/crm/lead-channels",
+  ],
   "/admin/channel-talk": ["/api/admin/channel-talk", "/api/admin/channel-talk/mine"],
   "/admin/calendar": () => {
     // 캘린더 페이지 초기 로드는 항상 현재 연/월 쿼리를 붙인다.
@@ -463,6 +497,11 @@ function AdminSidebarContent({ role, name, email }: Props) {
                     <div key={`mobile-${child.href}`}>
                       <Link
                         href={child.href}
+                        onFocus={() => warmAdminTab(child.href)}
+                        onMouseEnter={() => scheduleWarmAdminTab(child.href)}
+                        onMouseLeave={cancelWarmAdminTab}
+                        onPointerDown={() => warmAdminTab(child.href)}
+                        onTouchStart={() => warmAdminTab(child.href)}
                         onClick={() => {
                           warmAdminTab(child.href)
                           setMobileMenuOpen(false)
@@ -684,7 +723,11 @@ function AdminSidebarContent({ role, name, email }: Props) {
                 <div key={child.href}>
                   <Link
                     href={child.href}
+                    onFocus={() => warmAdminTab(child.href)}
                     onMouseEnter={() => scheduleWarmAdminTab(child.href)}
+                    onMouseLeave={cancelWarmAdminTab}
+                    onPointerDown={() => warmAdminTab(child.href)}
+                    onTouchStart={() => warmAdminTab(child.href)}
                     onClick={() => warmAdminTab(child.href)}
                     className={`flex items-center rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
                       childActive

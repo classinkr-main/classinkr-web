@@ -190,7 +190,7 @@ export function ChannelHubCards({
         icon={<Activity className="h-4 w-4" />}
         iconBg="bg-[#EEF2FF] text-[#3730a3]"
         title="Meta 광고"
-        subtitle="Facebook · Instagram"
+        subtitle="Facebook · Instagram · 라이브"
         cells={metaLoading && !metaDashboard ? undefined : metaCells}
         placeholder={metaLoading ? "불러오는 중…" : "Meta 연동 정보 없음"}
         onDetail={() => onGoTo("meta")}
@@ -204,6 +204,11 @@ export function ChannelHubCards({
         placeholder="이메일 통계 불러오는 중…"
         onDetail={() => onGoTo("email")}
       />
+      {metaDashboard && (
+        <p className="lg:col-span-3 px-1 text-[10.5px] leading-relaxed text-[#1a1a1a]/35">
+          * 행사 광고비(₩ 직접 입력)와 Meta 라이브 광고비({currency})는 별개 소스입니다. 통화가 달라 단순 합산하지 마세요.
+        </p>
+      )}
     </div>
   )
 }

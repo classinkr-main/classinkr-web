@@ -235,14 +235,12 @@ function TabButton({
   active,
   icon,
   label,
-  desc,
   count,
   onClick,
 }: {
   active: boolean
   icon: ReactNode
   label: string
-  desc: string
   count?: number
   onClick: () => void
 }) {
@@ -258,16 +256,13 @@ function TabButton({
       <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10 sm:rounded-xl ${active ? "bg-white/10" : "bg-[#f0f0ec]"}`}>
         <span className={active ? "text-white" : "text-[#1a1a1a]/45"}>{icon}</span>
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="text-[13px] font-semibold">{label}</p>
-          {typeof count === "number" && (
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${active ? "bg-white/10 text-white" : "bg-[#e8e8e4] text-[#1a1a1a]/50"}`}>
-              {count}
-            </span>
-          )}
-        </div>
-        <p className={`mt-0.5 hidden text-[11px] sm:block ${active ? "text-white/70" : "text-[#1a1a1a]/40"}`}>{desc}</p>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <p className="text-[13px] font-semibold">{label}</p>
+        {typeof count === "number" && (
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${active ? "bg-white/10 text-white" : "bg-[#e8e8e4] text-[#1a1a1a]/50"}`}>
+            {count}
+          </span>
+        )}
       </div>
       <ChevronRight className={`h-3 w-3 shrink-0 transition-transform ${active ? "opacity-70" : "opacity-40 group-hover:translate-x-0.5"}`} />
     </button>
@@ -571,8 +566,8 @@ export default function AdminMarketingPage() {
           status: selectedAudience > 0 ? "ok" : "error",
           detail:
             draft.targetTags.length === 0
-              ? `전체 active 구독자 ${activeCount}명에게 발송됩니다.`
-              : `선택 태그 기준 예상 발송 인원 ${selectedAudience}명`,
+              ? `전체 active 구독자 ${activeCount}명`
+              : `태그 중 하나라도 일치 · 예상 ${selectedAudience}명`,
         },
         {
           key: "unsubscribe",
@@ -624,7 +619,12 @@ export default function AdminMarketingPage() {
                 detail: "필수 체크를 모두 통과했습니다.",
               }
 
-      const readinessScore = Math.round(((okCount + warningCount * 0.45) / checks.length) * 100)
+      // info 체크(수신거부 안내 등)는 준비도 분모에서 제외 — 포함하면 정상 초안도 100%에 못 미친다.
+      const scored = checks.filter((check) => check.status !== "info")
+      const readinessScore =
+        scored.length > 0
+          ? Math.round(((okCount + warningCount * 0.45) / scored.length) * 100)
+          : 100
 
       return {
         checks,
@@ -1031,9 +1031,6 @@ export default function AdminMarketingPage() {
                 </a>
               </div>
               <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">메시지 발송</h1>
-              <p className="mt-2 text-[13px] leading-relaxed text-[#1a1a1a]/45">
-                이메일·문자·카카오 알림톡을 한 곳에서 작성·발송하고, 구독자와 발송 이력, 자동화 규칙까지 함께 운영합니다. 채널 상태를 먼저 확인하고 바로 다음 액션으로 이어집니다.
-              </p>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -1061,16 +1058,15 @@ export default function AdminMarketingPage() {
           <ChannelStatusStrip />
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <StatCard icon={<Users className="h-4 w-4" />} label="전체 구독자" value={subscribers.length} hint="수동 추가 포함" />
-            <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="활성 구독자" value={activeCount} hint="발송 대상" tone="success" />
-            <StatCard icon={<XCircle className="h-4 w-4" />} label="수신거부" value={unsubscribedCount} hint="보존 중인 상태" tone="warning" />
+            <StatCard icon={<Users className="h-4 w-4" />} label="전체 구독자" value={subscribers.length} />
+            <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="활성 구독자" value={activeCount} tone="success" />
+            <StatCard icon={<XCircle className="h-4 w-4" />} label="수신거부" value={unsubscribedCount} tone="warning" />
             <StatCard icon={<Send className="h-4 w-4" />} label="발송 캠페인" value={campaigns.length} hint={`발송 ${sentCount} · 초안 ${draftCount}`} />
-            <StatCard icon={<AlertCircle className="h-4 w-4" />} label="실패 캠페인" value={failedCount} hint="즉시 확인 필요" tone="danger" />
+            <StatCard icon={<AlertCircle className="h-4 w-4" />} label="실패 캠페인" value={failedCount} tone="danger" />
           </div>
 
           <Panel
             title="운영 요약"
-            description="최근 30일 발송 결과와 현재 초안 상태를 한 번에 봅니다."
             action={
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={() => setActiveTab("compose")}>
@@ -1100,9 +1096,7 @@ export default function AdminMarketingPage() {
                   {recentSuccessRate === null ? "—" : `${recentSuccessRate}%`}
                 </p>
                 <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                  {recentSuccessRate === null
-                    ? "발송과 실패가 쌓이면 자동으로 보입니다."
-                    : "최근 발송 기준으로 성공/실패를 단순화해 봅니다."}
+                  발송 {recentSentCampaigns.length} · 실패 {recentFailedCampaigns.length}
                 </p>
               </div>
               <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
@@ -1110,17 +1104,12 @@ export default function AdminMarketingPage() {
                 <p className="mt-2 text-[28px] font-bold tracking-[-0.03em] text-[#111110]">
                   {recentSentCampaigns.length > 0 ? `${recentAudienceAverage}명` : "대기"}
                 </p>
-                <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                  {recentSentCampaigns.length > 0
-                    ? "최근 발송의 예상 도달 규모입니다."
-                    : "세그먼트가 잡히면 평균 대상이 표시됩니다."}
-                </p>
               </div>
               <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
                 <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">현재 초안</p>
                 <p className="mt-2 text-[28px] font-bold tracking-[-0.03em] text-[#111110]">{composerReview.readiness.label}</p>
                 <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                  {composerReview.selectedAudience}명 대상 · {composerReview.readiness.detail}
+                  {composerReview.selectedAudience}명 대상 · 준비도 {composerReview.readinessScore}%
                 </p>
               </div>
             </div>
@@ -1140,7 +1129,6 @@ export default function AdminMarketingPage() {
                   active={activeTab === "subscribers"}
                   icon={<Users className="h-4 w-4" />}
                   label="구독자 관리"
-                  desc="목록 조회, 필터, 수동 추가"
                   count={subscribers.length}
                   onClick={() => setActiveTab("subscribers")}
                 />
@@ -1148,7 +1136,6 @@ export default function AdminMarketingPage() {
                   active={activeTab === "compose"}
                   icon={<Send className="h-4 w-4" />}
                   label="발송 작성"
-                  desc="이메일·문자·카카오 작성"
                   count={draftCount}
                   onClick={() => setActiveTab("compose")}
                 />
@@ -1156,7 +1143,6 @@ export default function AdminMarketingPage() {
                   active={activeTab === "history"}
                   icon={<History className="h-4 w-4" />}
                   label="발송 이력"
-                  desc="이메일 캠페인·문자·카카오 로그"
                   count={campaigns.length}
                   onClick={() => setActiveTab("history")}
                 />
@@ -1164,14 +1150,12 @@ export default function AdminMarketingPage() {
                   active={activeTab === "automation"}
                   icon={<Zap className="h-4 w-4" />}
                   label="자동화"
-                  desc="세그먼트 기반 자동 발송 규칙"
                   onClick={() => setActiveTab("automation")}
                 />
                 <TabButton
                   active={activeTab === "dashboard"}
                   icon={<BarChart2 className="h-4 w-4" />}
                   label="현황 대시보드"
-                  desc="구독자·캠페인·자동화 한눈에"
                   onClick={() => setActiveTab("dashboard")}
                 />
               </div>
@@ -1185,7 +1169,6 @@ export default function AdminMarketingPage() {
             <div className="space-y-6">
               <Panel
                 title="구독자 관리"
-                description="검색, 상태, 유입 경로를 빠르게 좁혀서 후속 작업으로 이어갑니다."
                 action={
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={() => setActiveTab("compose")}>
@@ -1303,7 +1286,7 @@ export default function AdminMarketingPage() {
             </div>
 
             <div className="space-y-6">
-              <Panel title="채널 믹스" description="어느 유입 경로가 실제로 쌓이고 있는지 확인합니다.">
+              <Panel title="채널 믹스">
                 {sourceRows.length === 0 ? (
                   <EmptyInline message="아직 유입 경로 데이터가 없습니다." />
                 ) : (
@@ -1336,27 +1319,19 @@ export default function AdminMarketingPage() {
                 )}
               </Panel>
 
-              <Panel title="운영 메모" description="지금 이 탭에서 바로 할 수 있는 일만 보여줍니다.">
-                <div className="space-y-3">
-                  <div className="rounded-2xl bg-[#fafaf8] border border-[#e8e8e4] p-4">
-                    <p className="text-[12px] font-medium text-[#111110]">발송 대상</p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                      활성 구독자 {activeCount}명 기준으로 이메일 발송이 진행됩니다.
-                    </p>
+              <Panel title="운영 메모">
+                <dl className="space-y-2 text-[12px]">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-[#1a1a1a]/45">발송 대상</dt>
+                    <dd className="font-semibold text-[#111110]">활성 {activeCount}명</dd>
                   </div>
-                  <div className="rounded-2xl bg-[#fafaf8] border border-[#e8e8e4] p-4">
-                    <p className="text-[12px] font-medium text-[#111110]">최근 등록</p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                      {latestSubscriber ? `${latestSubscriber.name} · ${formatDateTime(latestSubscriber.createdAt)}` : "아직 등록된 구독자가 없습니다."}
-                    </p>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt className="text-[#1a1a1a]/45">최근 등록</dt>
+                    <dd className="min-w-0 truncate text-right font-semibold text-[#111110]">
+                      {latestSubscriber ? `${latestSubscriber.name} · ${formatDateTime(latestSubscriber.createdAt)}` : "—"}
+                    </dd>
                   </div>
-                  <div className="rounded-2xl bg-[#fafaf8] border border-[#e8e8e4] p-4">
-                    <p className="text-[12px] font-medium text-[#111110]">추천 다음 액션</p>
-                    <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                      태그별 대상이 잡히면 곧바로 이메일 작성 탭으로 넘어가 발송 초안을 만들어보세요.
-                    </p>
-                  </div>
-                </div>
+                </dl>
               </Panel>
             </div>
           </div>
@@ -1472,13 +1447,6 @@ export default function AdminMarketingPage() {
             <div className="space-y-6">
               <Panel
                 title="발송 전 체크"
-                description={
-                  channel === "email"
-                    ? "실제 발송 전에 꼭 봐야 하는 항목들입니다."
-                    : channel === "sms"
-                      ? "문자 발송 전 채널 준비 상태를 확인합니다."
-                      : "알림톡 발송 전 채널·템플릿 상태를 확인합니다."
-                }
                 action={
                   <MiniBadge
                     tone={channelReadiness.status === "ok" ? "success" : channelReadiness.status === "warning" ? "warning" : "danger"}
@@ -1503,10 +1471,7 @@ export default function AdminMarketingPage() {
               </Panel>
 
               {channel !== "email" && (
-                <Panel
-                  title={channel === "sms" ? "문자 발송 안내" : "알림톡 발송 안내"}
-                  description="이 채널의 발송 방식과 현재 상태를 정리했습니다."
-                >
+                <Panel title={channel === "sms" ? "문자 발송 안내" : "알림톡 발송 안내"}>
                   <div className="space-y-2 text-[12px] leading-relaxed text-[#1a1a1a]/55">
                     {channel === "sms" ? (
                       <>
@@ -1528,7 +1493,6 @@ export default function AdminMarketingPage() {
               {channel === "email" && (
               <Panel
                 title="저장 세그먼트"
-                description="자주 쓰는 발송 대상을 이름으로 저장해 다음 캠페인에서 바로 불러옵니다."
                 action={activeSegment ? <MiniBadge tone="success">적용 중</MiniBadge> : undefined}
               >
                 <div className="space-y-4">
@@ -1547,9 +1511,6 @@ export default function AdminMarketingPage() {
                       세그먼트 저장
                     </Button>
                   </div>
-                  <p className="text-[11px] leading-relaxed text-[#1a1a1a]/40">
-                    현재는 태그 조합만 저장합니다. 전체 발송은 저장하지 않고 바로 사용하도록 두었습니다.
-                  </p>
 
                   {savedSegmentViews.length === 0 ? (
                     <EmptyInline message="저장된 세그먼트가 없습니다. 태그를 고른 뒤 이름을 붙여 저장해보세요." />
@@ -1601,7 +1562,6 @@ export default function AdminMarketingPage() {
             <div className="space-y-6">
               <Panel
                 title="발송 이력"
-                description="최근 캠페인 결과를 상태 중심으로 확인하고, 바로 복제해서 새 초안으로 이어갑니다."
                 action={
                   <div className="flex items-center gap-2">
                     <Button variant="outline" size="sm" onClick={() => setCampaignStatusFilter("all")}>
@@ -1677,16 +1637,13 @@ export default function AdminMarketingPage() {
                 )}
               </Panel>
 
-              <Panel
-                title="문자·카카오 발송 로그"
-                description="SMS·알림톡 발송 결과를 채널·상태별로 확인합니다. 마스킹된 수신자와 실패 원인을 함께 봅니다."
-              >
+              <Panel title="문자·카카오 발송 로그">
                 <MessageLogTable />
               </Panel>
             </div>
 
             <div className="space-y-6">
-              <Panel title="상태 요약" description="최근 발송의 운영 맥락을 바로 보여줍니다.">
+              <Panel title="상태 요약">
                 {recentCampaigns.length === 0 ? (
                   <EmptyInline message="최근 캠페인 정보가 없습니다." />
                 ) : (
@@ -1732,7 +1689,7 @@ export default function AdminMarketingPage() {
                 )}
               </Panel>
 
-              <Panel title="추천 다음 액션" description="이력 데이터 기반으로 바로 할 수 있는 것을 제안합니다.">
+              <Panel title="추천 다음 액션">
                 <div className="space-y-2">
                   {recentDraftCampaigns.length > 0 && (
                     <button
@@ -1741,9 +1698,6 @@ export default function AdminMarketingPage() {
                     >
                       <p className="text-[12px] font-semibold text-amber-700">
                         미완성 초안 {recentDraftCampaigns.length}개
-                      </p>
-                      <p className="mt-0.5 text-[11px] leading-relaxed text-amber-600/80">
-                        작성 탭에서 제목과 대상 태그를 확정하고 발송을 완료하세요.
                       </p>
                     </button>
                   )}
@@ -1755,9 +1709,6 @@ export default function AdminMarketingPage() {
                       <p className="text-[12px] font-semibold text-red-700">
                         실패 캠페인 {recentFailedCampaigns.length}개 점검 필요
                       </p>
-                      <p className="mt-0.5 text-[11px] leading-relaxed text-red-600/80">
-                        발송 설정 또는 웹훅 상태를 확인하세요.
-                      </p>
                     </button>
                   )}
                   {recentSuccessRate !== null && recentSuccessRate > 0 && recentSuccessRate < 80 && (
@@ -1768,9 +1719,6 @@ export default function AdminMarketingPage() {
                       <p className="text-[12px] font-semibold text-[#111110]">
                         최근 성공률 {recentSuccessRate}% — 구독자 점검
                       </p>
-                      <p className="mt-0.5 text-[11px] leading-relaxed text-[#1a1a1a]/45">
-                        거부 상태 구독자나 잘못된 이메일을 정리하면 개선됩니다.
-                      </p>
                     </button>
                   )}
                   {latestCampaign && (
@@ -1778,18 +1726,13 @@ export default function AdminMarketingPage() {
                       onClick={() => handleDuplicateCampaign(latestCampaign)}
                       className="w-full rounded-xl border border-[#084734]/15 bg-[#ECFDF5] p-3 text-left transition-colors hover:bg-[#D1FAE5]"
                     >
-                      <p className="text-[12px] font-semibold text-[#084734]">
-                        최근 캠페인 복제해서 재활용
-                      </p>
-                      <p className="mt-0.5 text-[11px] leading-relaxed text-[#084734]/60 truncate">
-                        &ldquo;{latestCampaign.subject}&rdquo; 기반으로 새 발송 시작
+                      <p className="truncate text-[12px] font-semibold text-[#084734]">
+                        최근 캠페인 복제 · &ldquo;{latestCampaign.subject}&rdquo;
                       </p>
                     </button>
                   )}
                   {recentDraftCampaigns.length === 0 && recentFailedCampaigns.length === 0 && !latestCampaign && (
-                    <div className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3">
-                      <p className="text-[12px] text-[#1a1a1a]/40">발송 이력이 쌓이면 맞춤 제안이 나타납니다.</p>
-                    </div>
+                    <EmptyInline message="발송 이력이 쌓이면 제안이 나타납니다." />
                   )}
                 </div>
               </Panel>
@@ -1799,19 +1742,12 @@ export default function AdminMarketingPage() {
 
         {activeTab === "automation" && (
           <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-            <Panel
-              title="세그먼트 자동 발송"
-              description="폼 제출·스케줄·지연 조건으로 이메일을 자동 발송하는 규칙 영역입니다."
-            >
+            <Panel title="세그먼트 자동 발송">
               <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-5 py-12 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#084734] shadow-[0_1px_0_rgba(17,17,16,0.03)]">
                   <Zap className="h-5 w-5" />
                 </div>
-                <p className="mt-4 text-[14px] font-semibold text-[#111110]">자동화는 설계 확정 후 연결됩니다</p>
-                <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                  세그먼트 기반 자동 발송(트리거·조건·템플릿)은 현재 별도 설계가 진행 중입니다.
-                  설계가 확정되면 규칙 생성·즉시 실행·실행 이력을 이 탭에서 다룰 수 있게 연결합니다.
-                </p>
+                <p className="mt-4 text-[14px] font-semibold text-[#111110]">자동화 — 설계 확정 후 연결</p>
                 <div className="mx-auto mt-5 grid max-w-md gap-2 text-left sm:grid-cols-3">
                   {[
                     { label: "트리거", desc: "폼 제출·스케줄·지연" },
@@ -1827,19 +1763,13 @@ export default function AdminMarketingPage() {
               </div>
             </Panel>
 
-            <Panel title="현재 상태" description="자동화 준비 현황을 요약합니다.">
+            <Panel title="현재 상태">
               <div className="space-y-3">
                 <div className="rounded-2xl border border-[#ECD29C] bg-[#FBF1E0] p-4">
-                  <p className="text-[12px] font-semibold text-[#7A520F]">설계 진행 중</p>
-                  <p className="mt-1 text-[12px] leading-relaxed text-[#7A520F]/85">
-                    규칙 로직·데이터 흐름을 확정하는 단계입니다. 확정 전까지는 실제 자동 발송을 연결하지 않습니다.
-                  </p>
+                  <p className="text-[12px] font-semibold text-[#7A520F]">설계 진행 중 — 자동 발송 미연결</p>
                 </div>
                 <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                  <p className="text-[12px] font-semibold text-[#111110]">지금 할 수 있는 것</p>
-                  <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                    수동 발송(이메일·카카오)은 발송 작성 탭에서 바로 진행할 수 있습니다.
-                  </p>
+                  <p className="text-[12px] font-semibold text-[#111110]">수동 발송은 발송 작성 탭</p>
                 </div>
               </div>
             </Panel>

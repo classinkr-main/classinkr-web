@@ -192,7 +192,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </aside>
       )}
       <main className="min-w-0 flex-1 overflow-x-hidden pt-16 pb-24 lg:overflow-y-auto lg:overscroll-contain lg:pt-0 lg:pb-0">
-        <div className="mx-auto w-full max-w-[1320px]">
+        <div className="mx-auto w-full max-w-[1680px]">
           <RouteTransition tone="admin">{children}</RouteTransition>
         </div>
       </main>

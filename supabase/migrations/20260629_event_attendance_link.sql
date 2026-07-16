@@ -16,6 +16,7 @@ ALTER TABLE public.crm_customer_events
     CHECK (attendee_origin IS NULL OR attendee_origin IN (
       'ad_lead',           -- 마케팅 광고 리드
       'site_lead',         -- 홈페이지 리드
+      'kr_team_lead',      -- KR팀 내부 DB/수기/상담 리드
       'new_lead',          -- 명단에만 있던 신규(행사로 새로 생성된 리드)
       'existing_customer', -- 기존 고객(직판)
       'partner_customer',  -- 파트너 고객 / Neo CRM 계정
@@ -35,5 +36,5 @@ ALTER TABLE public.crm_capture_batches
 ALTER TABLE public.crm_capture_rows
   ADD COLUMN IF NOT EXISTS attendee_origin TEXT
     CHECK (attendee_origin IS NULL OR attendee_origin IN (
-      'ad_lead', 'site_lead', 'new_lead', 'existing_customer', 'partner_customer', 'unknown'
+      'ad_lead', 'site_lead', 'kr_team_lead', 'new_lead', 'existing_customer', 'partner_customer', 'unknown'
     ));

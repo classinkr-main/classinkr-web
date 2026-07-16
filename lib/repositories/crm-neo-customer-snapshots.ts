@@ -709,40 +709,62 @@ function emptyListResult(message: string | null): ListCrmNeoCustomerSnapshotsRes
   }
 }
 
-export async function listCrmNeoCustomerSnapshots(
-  options: ListCrmNeoCustomerSnapshotsOptions = {}
-): Promise<ListCrmNeoCustomerSnapshotsResult> {
-  const sb = createSupabaseAdminClient()
-  const sourceSystem = options.sourceSystem ?? SOURCE_SYSTEM
-  const limit = clampInteger(options.limit, LIST_LIMIT, 1, LIST_LIMIT)
-  const offset = clampInteger(options.offset, 0, 0, 100_000)
-
-  let query = sb
-    .from("crm_neo_customer_snapshots")
-    .select("*", { count: "exact" })
-    .eq("source_system", sourceSystem)
-    .order("risk_level", { ascending: true })
-    .order("expire_at", { ascending: true, nullsFirst: false })
-    .order("source_synced_at", { ascending: false, nullsFirst: false })
-    .range(offset, offset + limit - 1)
-
-  if (!options.includeStale) query = query.eq("is_stale", false)
-  if (options.ownerKeys && options.ownerKeys.length > 0) query = query.in("owner_id", options.ownerKeys)
-  const search = safeSearch(options.q)
-  if (search) {
-    query = query.or(
-      `account_name.ilike.%${search}%,phone.ilike.%${search}%,uid.ilike.%${search}%,owner_name.ilike.%${search}%,region_label.ilike.%${search}%`
-    )
+function snapshotInsertToRecord(
+  row: CrmNeoCustomerSnapshotInsert,
+  fallbackIso: string
+): CrmNeoCustomerSnapshotRecord {
+  return {
+    sourceSystem: row.source_system,
+    accountId: row.account_id,
+    accountName: row.account_name,
+    ownerId: row.owner_id,
+    ownerName: row.owner_name,
+    phone: row.phone,
+    uid: row.uid,
+    regionLabel: row.region_label,
+    balance: row.balance,
+    expireAt: row.expire_at,
+    lastClassAt: row.last_class_at,
+    orderAmount: row.order_amount,
+    orderCount: row.order_count,
+    hasEeo: row.has_eeo,
+    riskLevel: row.risk_level,
+    riskReasons: row.risk_reasons as Array<{ code?: string; label?: string }>,
+    expireInDays: row.expire_in_days,
+    riskConfidence: row.risk_confidence,
+    freshnessLabel: row.freshness_label,
+    accountSyncedAt: row.account_synced_at,
+    shroffSyncedAt: row.shroff_synced_at,
+    opportunitySyncedAt: row.opportunity_synced_at,
+    sourceSyncedAt: row.source_synced_at,
+    isPartial: row.is_partial,
+    partialReason: row.partial_reason,
+    isStale: row.is_stale,
+    staleAt: row.stale_at,
+    calculatedAt: row.calculated_at,
+    createdAt: row.created_at ?? fallbackIso,
+    updatedAt: row.updated_at ?? fallbackIso,
   }
+}
 
-  const { data, error, count } = await query
-  if (error) {
-    if (isMissingSnapshotsTableError(error)) return emptyListResult(CRM_NEO_CUSTOMER_SNAPSHOTS_NOT_READY_MESSAGE)
-    throw new Error(`[crm-neo-customer-snapshots] 조회 실패: ${error.message}`)
-  }
+function snapshotMatchesSearch(row: CrmNeoCustomerSnapshotRecord, search: string) {
+  if (!search) return true
+  const normalized = search.toLowerCase()
+  return [
+    row.accountName,
+    row.phone,
+    row.uid,
+    row.ownerName,
+    row.regionLabel,
+  ]
+    .filter(Boolean)
+    .some((value) => value!.toLowerCase().includes(normalized))
+}
 
-  const rows = ((data ?? []) as CrmNeoCustomerSnapshot[]).map(toCrmNeoCustomerSnapshotRecord)
-  const totalCount = count ?? rows.length
+function buildSnapshotListResult(
+  rows: CrmNeoCustomerSnapshotRecord[],
+  totalCount: number
+): ListCrmNeoCustomerSnapshotsResult {
   const nowMs = Date.now()
   const expiringThresholdMs = nowMs + 60 * 24 * 60 * 60 * 1000
   const ownerCounts = new Map<string, { ownerName: string; count: number }>()
@@ -786,4 +808,115 @@ export async function listCrmNeoCustomerSnapshots(
       .sort((a, b) => b.count - a.count || a.ownerName.localeCompare(b.ownerName, "ko")),
     rows,
   }
+}
+
+async function listCrmNeoCustomerSnapshotsFromExternalRecords(
+  options: ListCrmNeoCustomerSnapshotsOptions = {}
+): Promise<ListCrmNeoCustomerSnapshotsResult> {
+  const sb = createSupabaseAdminClient()
+  const now = new Date()
+  const sourceSystem = options.sourceSystem ?? SOURCE_SYSTEM
+  const limit = clampInteger(options.limit, LIST_LIMIT, 1, LIST_LIMIT)
+  const offset = clampInteger(options.offset, 0, 0, 100_000)
+
+  const [accountResult, shroffResult, opportunityResult, ownerNames, excludedOwnerIds, regionHints] = await Promise.all([
+    fetchExternalRows<AccountSnapshotRow>(
+      sb,
+      ACCOUNT_OBJECT_API_KEY,
+      "external_id, display_name, owner_name, occurred_at, synced_at, last_seen_run_id, payload",
+      sourceSystem
+    ),
+    fetchExternalRows<ShroffSnapshotRow>(
+      sb,
+      SHROFF_OBJECT_API_KEY,
+      "external_id, synced_at, last_seen_run_id, payload",
+      sourceSystem
+    ),
+    fetchExternalRows<OpportunitySnapshotRow>(
+      sb,
+      OPPORTUNITY_OBJECT_API_KEY,
+      "external_id, amount, synced_at, last_seen_run_id, payload",
+      sourceSystem
+    ),
+    getXiaoshouyiOwnerNameMap(sb),
+    getExcludedXiaoshouyiOwnerIds(sb),
+    loadBranchRevRegionHints(sb),
+  ])
+
+  if (accountResult.error) {
+    return emptyListResult(`external_crm_records(account): ${accountResult.error.message}`)
+  }
+
+  const partialParts: string[] = ["crm_neo_customer_snapshots 미적용"]
+  if (accountResult.truncated) partialParts.push("account")
+  if (shroffResult.error || shroffResult.truncated) partialParts.push(SHROFF_OBJECT_API_KEY)
+  if (opportunityResult.error || opportunityResult.truncated) partialParts.push(OPPORTUNITY_OBJECT_API_KEY)
+  const partialReason = partialReasonFor(partialParts)
+
+  const fallbackIso = now.toISOString()
+  const ownerFilter = new Set(options.ownerKeys ?? [])
+  const search = safeSearch(options.q)
+  const rows = buildCrmNeoCustomerSnapshotInserts({
+    accounts: accountResult.data,
+    shroffAccounts: shroffResult.error ? [] : shroffResult.data,
+    opportunities: opportunityResult.error ? [] : opportunityResult.data,
+    ownerNames,
+    excludedOwnerIds,
+    regionHints,
+    now,
+    sourceSystem,
+    partialReason,
+  })
+    .map((row) => snapshotInsertToRecord(row, fallbackIso))
+    .filter((row) => options.includeStale || !row.isStale)
+    .filter((row) => ownerFilter.size === 0 || (row.ownerId != null && ownerFilter.has(row.ownerId)))
+    .filter((row) => snapshotMatchesSearch(row, search))
+    .sort((a, b) => {
+      const riskOrder: Record<ServiceRiskLevel, number> = { urgent: 0, soon: 1, watch: 2, normal: 3 }
+      const riskDelta = riskOrder[a.riskLevel] - riskOrder[b.riskLevel]
+      if (riskDelta !== 0) return riskDelta
+      const aExpire = a.expireAt ? new Date(a.expireAt).getTime() : Number.MAX_SAFE_INTEGER
+      const bExpire = b.expireAt ? new Date(b.expireAt).getTime() : Number.MAX_SAFE_INTEGER
+      if (aExpire !== bExpire) return aExpire - bExpire
+      return (b.sourceSyncedAt ?? "").localeCompare(a.sourceSyncedAt ?? "")
+    })
+
+  return buildSnapshotListResult(rows.slice(offset, offset + limit), rows.length)
+}
+
+export async function listCrmNeoCustomerSnapshots(
+  options: ListCrmNeoCustomerSnapshotsOptions = {}
+): Promise<ListCrmNeoCustomerSnapshotsResult> {
+  const sb = createSupabaseAdminClient()
+  const sourceSystem = options.sourceSystem ?? SOURCE_SYSTEM
+  const limit = clampInteger(options.limit, LIST_LIMIT, 1, LIST_LIMIT)
+  const offset = clampInteger(options.offset, 0, 0, 100_000)
+
+  let query = sb
+    .from("crm_neo_customer_snapshots")
+    .select("*", { count: "exact" })
+    .eq("source_system", sourceSystem)
+    .order("risk_level", { ascending: true })
+    .order("expire_at", { ascending: true, nullsFirst: false })
+    .order("source_synced_at", { ascending: false, nullsFirst: false })
+    .range(offset, offset + limit - 1)
+
+  if (!options.includeStale) query = query.eq("is_stale", false)
+  if (options.ownerKeys && options.ownerKeys.length > 0) query = query.in("owner_id", options.ownerKeys)
+  const search = safeSearch(options.q)
+  if (search) {
+    query = query.or(
+      `account_name.ilike.%${search}%,phone.ilike.%${search}%,uid.ilike.%${search}%,owner_name.ilike.%${search}%,region_label.ilike.%${search}%`
+    )
+  }
+
+  const { data, error, count } = await query
+  if (error) {
+    if (isMissingSnapshotsTableError(error)) return listCrmNeoCustomerSnapshotsFromExternalRecords(options)
+    throw new Error(`[crm-neo-customer-snapshots] 조회 실패: ${error.message}`)
+  }
+
+  const rows = ((data ?? []) as CrmNeoCustomerSnapshot[]).map(toCrmNeoCustomerSnapshotRecord)
+  const totalCount = count ?? rows.length
+  return buildSnapshotListResult(rows, totalCount)
 }

@@ -19,6 +19,12 @@ describe("deriveAttendeeOrigin", () => {
     ).toBe("ad_lead")
   })
 
+  it("KR팀 내부 source 리드는 kr_team_lead", () => {
+    expect(deriveAttendeeOrigin({ matchedTargetType: "lead", createdNewLead: false, leadSource: "admin_manual" })).toBe("kr_team_lead")
+    expect(deriveAttendeeOrigin({ matchedTargetType: "lead", createdNewLead: false, leadSource: "crm_capture" })).toBe("kr_team_lead")
+    expect(deriveAttendeeOrigin({ matchedTargetType: "lead", createdNewLead: false, leadSource: "channel_talk" })).toBe("kr_team_lead")
+  })
+
   it("사이트/기타/미상 source 리드는 site_lead", () => {
     expect(deriveAttendeeOrigin({ matchedTargetType: "lead", createdNewLead: false, leadSource: "contact_page" })).toBe("site_lead")
     expect(deriveAttendeeOrigin({ matchedTargetType: "lead", createdNewLead: false, leadSource: null })).toBe("site_lead")

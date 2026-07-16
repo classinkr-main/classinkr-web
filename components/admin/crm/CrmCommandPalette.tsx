@@ -15,6 +15,7 @@ import {
   PhoneCall,
   Search,
   Target,
+  Truck,
   Users,
 } from "lucide-react"
 
@@ -27,13 +28,15 @@ const NAV_CMDS: Array<{ label: string; sub: string; href: string; icon: ReactNod
   { label: "통합 고객", sub: "운영 목록", href: "/admin/crm/customers/unified", icon: <Users className="h-4 w-4" /> },
   { label: "리드 보드", sub: "리드 관리", href: "/admin/crm/customers/leads", icon: <PhoneCall className="h-4 w-4" /> },
   { label: "원천 고객", sub: "NEO 어카운트", href: "/admin/crm/customers/accounts", icon: <Building2 className="h-4 w-4" /> },
-  { label: "매출 · 견적", sub: "Deals", href: "/admin/crm/deals", icon: <CircleDollarSign className="h-4 w-4" /> },
-  { label: "워크스페이스", sub: "계약·설치·정산 큐", href: "/admin/crm/deals/kpi", icon: <Target className="h-4 w-4" /> },
+  { label: "매출 대시보드", sub: "자체 원장·견적·정합성", href: "/admin/crm/deals", icon: <CircleDollarSign className="h-4 w-4" /> },
+  { label: "REV 스냅샷", sub: "DB 저장본·매칭 검수", href: "/admin/crm/deals/rev-sheet", icon: <BookOpenCheck className="h-4 w-4" /> },
+  { label: "오더·설치", sub: "파트너 포털·설치 일정", href: "/admin/crm/deals/orders", icon: <Truck className="h-4 w-4" /> },
+  { label: "워크스페이스", sub: "계약·정산 큐", href: "/admin/crm/deals/kpi", icon: <Target className="h-4 w-4" /> },
   { label: "매출 장부", sub: "DSH·REV·KPI 콕핏", href: "/admin/branch/ledger", icon: <BookOpenCheck className="h-4 w-4" /> },
   { label: "하드웨어 재고", sub: "입출고·위치 맵", href: "/admin/hardware", icon: <Package className="h-4 w-4" /> },
   { label: "기록 · 활동", sub: "타임라인", href: "/admin/crm/activity", icon: <Activity className="h-4 w-4" /> },
   { label: "인사이트", sub: "분석", href: "/admin/crm/insights", icon: <BarChart3 className="h-4 w-4" /> },
-  { label: "데이터 점검", sub: "매칭 인박스", href: "/admin/crm/matching", icon: <ListChecks className="h-4 w-4" /> },
+  { label: "매칭 검수", sub: "매칭 인박스", href: "/admin/crm/matching", icon: <ListChecks className="h-4 w-4" /> },
   { label: "참석자 입력", sub: "Capture", href: "/admin/crm/capture", icon: <ClipboardList className="h-4 w-4" /> },
 ]
 

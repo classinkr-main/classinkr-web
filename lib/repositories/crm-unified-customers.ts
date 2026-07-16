@@ -159,6 +159,24 @@ function leadStatusLabel(lead: LeadRecord) {
   return "종료"
 }
 
+const LEAD_SOURCE_LABELS: Record<string, string> = {
+  demo_modal: "데모 신청",
+  contact_page: "문의",
+  newsletter: "뉴스레터",
+  meta_lead_ads: "Meta 리드",
+  channel_talk: "채널톡",
+  manual: "수기 리드",
+  admin_manual: "수기 리드",
+}
+
+function leadSourceLabel(lead: LeadRecord) {
+  return (LEAD_SOURCE_LABELS[lead.source] ?? lead.source.trim()) || "리드"
+}
+
+function shouldIncludeLeadInUnifiedCustomers(lead: LeadRecord) {
+  return Boolean(lead.confirmed_at) || lead.status !== "new"
+}
+
 function defaultLeadAction(lead: LeadRecord) {
   if (lead.status === "new") return "첫 응답"
   if (lead.status === "contacted") return "팔로업"
@@ -329,12 +347,13 @@ export async function getCrmUnifiedCustomers(
 
   if (leadResult.status === "fulfilled") {
     for (const lead of leadResult.value) {
+      if (!shouldIncludeLeadInUnifiedCustomers(lead)) continue
       const priority = buildLeadPriorityItem(lead, now)
       rows.push({
         key: `lead:${lead.id}`,
         tags: [],
         source: "lead",
-        sourceLabel: "리드",
+        sourceLabel: leadSourceLabel(lead),
         name: leadName(lead),
         contact: lead.phone ?? lead.email ?? lead.source,
         ownerName: lead.assigned_to ?? null,

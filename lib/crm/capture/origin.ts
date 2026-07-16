@@ -3,6 +3,15 @@ import type { CaptureTargetType } from "./matching"
 
 // 광고 유입으로 분류할 리드 source (lib/server/lead-capture.ts · Meta 리드 등).
 const AD_LEAD_SOURCES = new Set(["meta_lead_ads", "meta", "google_ads", "google"])
+// KR팀이 직접 만들거나 내부 캡처/상담 흐름에서 만든 리드 source.
+// 공개 홈페이지 폼과 구분해 행사 성과에서 "KR 팀 리드"로 본다.
+const KR_TEAM_LEAD_SOURCES = new Set([
+  "admin_manual",
+  "manual",
+  "manual_import",
+  "crm_capture",
+  "channel_talk",
+])
 
 export interface DeriveAttendeeOriginInput {
   /** 매칭된 대상 종류 (매칭 없으면 null) */
@@ -26,6 +35,7 @@ export function deriveAttendeeOrigin(input: DeriveAttendeeOriginInput): Attendee
     case "lead": {
       const source = (input.leadSource ?? "").trim().toLowerCase()
       if (input.leadHasAdClickId || AD_LEAD_SOURCES.has(source)) return "ad_lead"
+      if (KR_TEAM_LEAD_SOURCES.has(source)) return "kr_team_lead"
       return "site_lead" // 사이트 유입(또는 출처 미상) 리드
     }
     case "neo_account":

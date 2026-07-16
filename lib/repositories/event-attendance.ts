@@ -26,13 +26,14 @@ export interface EventAttendanceMatrix {
 export const ATTENDEE_ORIGINS: AttendeeOrigin[] = [
   "ad_lead",
   "site_lead",
+  "kr_team_lead",
   "new_lead",
   "existing_customer",
   "partner_customer",
   "unknown",
 ]
 
-const LEAD_ORIGINS = new Set<AttendeeOrigin>(["ad_lead", "site_lead", "new_lead"])
+const LEAD_ORIGINS = new Set<AttendeeOrigin>(["ad_lead", "site_lead", "kr_team_lead", "new_lead"])
 
 export async function getAllEventAttendanceMatrices(): Promise<Record<string, EventAttendanceMatrix>> {
   const supabase = createSupabaseAdminClient()

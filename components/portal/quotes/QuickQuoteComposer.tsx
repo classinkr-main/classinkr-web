@@ -52,7 +52,8 @@ import {
   getStandardQuoteQuickPresets,
   getStandardQuoteTemplate,
   inferStandardQuoteTemplateId,
-  STANDARD_QUOTE_SUPPLIER,
+  isSoftwareQuoteTemplate,
+  resolveQuoteSupplier,
   type StandardQuoteOptionSelections,
   type StandardQuoteTemplateId,
 } from "@/lib/standard-quote-template"
@@ -444,7 +445,13 @@ function PreviewField({
   )
 }
 
-function QuotePreviewPanel({ quote }: { quote: PartnerQuoteDetailsInput }) {
+function QuotePreviewPanel({
+  quote,
+  supplier,
+}: {
+  quote: PartnerQuoteDetailsInput
+  supplier: ReturnType<typeof resolveQuoteSupplier>
+}) {
   const lineItems = quote.lineItems ?? []
   const fillerRowCount = Math.max(0, 4 - lineItems.length)
   const [zoom, setZoom] = useState(0.72)
@@ -482,13 +489,13 @@ function QuotePreviewPanel({ quote }: { quote: PartnerQuoteDetailsInput }) {
             <PreviewField label="참조" value={quote.referenceName} />
           </div>
           <div className="space-y-3">
-            <PreviewField label="상호명" value={STANDARD_QUOTE_SUPPLIER.businessName} align="right" />
-            <PreviewField label="사업자등록번호" value={STANDARD_QUOTE_SUPPLIER.businessRegistrationNumber} align="right" />
-            <PreviewField label="대표이사" value={STANDARD_QUOTE_SUPPLIER.representativeName} align="right" />
-            <PreviewField label="주소" value={STANDARD_QUOTE_SUPPLIER.address} align="right" />
+            <PreviewField label="상호명" value={supplier.supplierBusinessName} align="right" />
+            <PreviewField label="사업자등록번호" value={supplier.supplierBusinessRegistrationNumber} align="right" />
+            <PreviewField label="대표이사" value={supplier.supplierRepresentativeName} align="right" />
+            <PreviewField label="주소" value={supplier.supplierAddress} align="right" />
             <PreviewField
               label="담당자/연락처"
-              value={`${STANDARD_QUOTE_SUPPLIER.contactName}/${STANDARD_QUOTE_SUPPLIER.contactPhone}`}
+              value={`${supplier.supplierContactName ?? ""}/${supplier.supplierContactPhone ?? ""}`}
               align="right"
             />
           </div>
@@ -612,6 +619,21 @@ export default function QuickQuoteComposer({
   const [linkCopied, setLinkCopied] = useState(false)
   const [saveToast, setSaveToast] = useState(false)
   const [errorToast, setErrorToast] = useState<ErrorToastState | null>(null)
+  // SW 견적 공급자 담당자(클래스인 명의). 이름은 로그인 관리자에서 자동 채우고 수정 가능.
+  const [managerContactName, setManagerContactName] = useState("")
+  const [managerContactPhone, setManagerContactPhone] = useState("")
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const adminName = window.sessionStorage.getItem("admin_name")
+    if (adminName) setManagerContactName((prev) => prev || adminName)
+  }, [])
+
+  const isSoftwareQuote = isSoftwareQuoteTemplate(templateId)
+  const resolvedSupplier = useMemo(
+    () => resolveQuoteSupplier(templateId, { name: managerContactName, phone: managerContactPhone }),
+    [templateId, managerContactName, managerContactPhone],
+  )
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false)
   const errorToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -1270,6 +1292,7 @@ export default function QuickQuoteComposer({
       const preparedQuote = finalizeStandardQuoteDetails(
         {
           ...quote,
+          ...resolvedSupplier,
           templateId,
           optionSelections,
           recipientCompanyName: customer.name,
@@ -1635,6 +1658,27 @@ export default function QuickQuoteComposer({
                     />
                   )}
                 </div>
+
+                {isSoftwareQuote && (
+                  <div className="md:col-span-2 grid gap-2 rounded-xl border border-[#cfe9dd] bg-[#f2fbf7] px-3 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Label className="text-xs font-semibold text-[#0b5a41]">공급자 담당자 (클래스인 명의)</Label>
+                      <span className="text-[11px] text-[#4f7a68]">SW 견적 · 로그인 관리자 자동 채움 · 수정 가능</span>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Input
+                        value={managerContactName}
+                        onChange={(event) => setManagerContactName(event.target.value)}
+                        placeholder="담당자명"
+                      />
+                      <Input
+                        value={managerContactPhone}
+                        onChange={(event) => setManagerContactPhone(event.target.value)}
+                        placeholder="연락처 (예: 010-0000-0000)"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <details className="md:col-span-2 rounded-xl border border-[#ecebe6] bg-[#fafaf8] px-3 py-2">
                   <summary className="cursor-pointer list-none text-xs font-semibold text-[#111110]">
@@ -2102,7 +2146,7 @@ export default function QuickQuoteComposer({
           </div>
 
           <div className="hidden min-h-0 overflow-auto border-l border-[#ecebe6] bg-[#fcfbf8] px-6 py-6 xl:block">
-            <QuotePreviewPanel quote={quote} />
+            <QuotePreviewPanel quote={quote} supplier={resolvedSupplier} />
           </div>
         </div>
 
@@ -2123,7 +2167,7 @@ export default function QuickQuoteComposer({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-auto bg-[#fcfbf8] p-4">
-              <QuotePreviewPanel quote={quote} />
+              <QuotePreviewPanel quote={quote} supplier={resolvedSupplier} />
             </div>
           </div>
         )}

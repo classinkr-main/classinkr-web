@@ -34,7 +34,8 @@
 | origin | 도출 규칙 |
 |---|---|
 | `ad_lead` (광고 리드) | `target_type=lead` & `lead.source` ∈ 광고(`meta_lead_ads`, 향후 google ads) 또는 `gclid/fbclid` 존재 |
-| `site_lead` (홈피 리드) | `target_type=lead` & `lead.source` ∈ 사이트(`demo_modal`, `contact_page`, `newsletter` 등) |
+| `site_lead` (홈페이지 리드) | `target_type=lead` & `lead.source` ∈ 사이트(`demo_modal`, `contact_page`, `newsletter` 등) |
+| `kr_team_lead` (KR 팀 리드) | `target_type=lead` & `lead.source` ∈ KR팀 내부 DB/수기/상담(`admin_manual`, `crm_capture`, `channel_talk` 등) |
 | `new_lead` (행사 신규) | 매칭 안 됨(`new_lead_candidate`) → 캡처가 새로 만든 리드(`source=crm_capture`) |
 | `existing_customer` (기존 고객) | `target_type=customer` & partner_account = 직판("Classin Direct Sales") |
 | `partner_customer` (파트너 고객) | `target_type=neo_account` 또는 `customer` & partner_account = 실제 파트너 |
@@ -68,7 +69,8 @@
 | 출신 | 참석 | 신규 전환(딜) | 기존/파트너 확장 |
 |---|---|---|---|
 | 광고 리드 | n | 리드 `status=converted` 비율 | — |
-| 홈피 리드 | n | 리드 `status=converted` 비율 | — |
+| 홈페이지 리드 | n | 리드 `status=converted` 비율 | — |
+| KR 팀 리드 | n | 리드 `status=converted` 비율 | — |
 | 행사 신규 | n | 리드 `status=converted` 비율 | — |
 | 기존 고객 | n | — | 후속 딜 |
 | 파트너 고객 | n | — | 파트너 경유 딜 |

@@ -51,6 +51,7 @@ const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "landing_page",
   "current_page",
   "referrer",
+  "confirmed_at",
 ] as const satisfies readonly (keyof LeadInsert)[];
 
 interface SupabaseColumnError {
@@ -161,6 +162,15 @@ function isMissingOptionalLeadColumn(error: SupabaseColumnError) {
   );
 }
 
+function isMissingLeadColumn(error: SupabaseColumnError, column: keyof LeadInsert) {
+  const haystack = [error.code, error.message, error.details, error.hint]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return Boolean(haystack) && haystack.includes(String(column).toLowerCase());
+}
+
 function stripOptionalLeadColumns(insert: LeadInsert) {
   const fallbackInsert: Partial<LeadInsert> = { ...insert };
 
@@ -240,6 +250,16 @@ export async function getDashboardLeads(): Promise<LeadRecord[]> {
     .from("leads")
     .select("id, source, name, org, email, status, branch, created_at, confirmed_at")
     .order("created_at", { ascending: false });
+
+  if (error && isMissingLeadColumn(error, "confirmed_at")) {
+    const fallback = await supabase
+      .from("leads")
+      .select("id, source, name, org, email, status, branch, created_at")
+      .order("created_at", { ascending: false });
+
+    if (fallback.error) throw new Error(`[leads] 대시보드 조회 실패: ${fallback.error.message}`);
+    return (fallback.data as Lead[]).map(supabaseToLegacy);
+  }
 
   if (error) throw new Error(`[leads] 대시보드 조회 실패: ${error.message}`);
   return (data as Lead[]).map(supabaseToLegacy);
@@ -387,6 +407,29 @@ export async function updateLead(
     .eq("id", id)
     .select()
     .single();
+
+  if (error && isMissingLeadColumn(error, "confirmed_at") && update.confirmed_at !== undefined) {
+    const fallbackUpdate = { ...update };
+    delete fallbackUpdate.confirmed_at;
+
+    if (Object.keys(fallbackUpdate).length === 0) {
+      const existing = await getLeadById(id);
+      return existing ? { ...existing, confirmed_at: patch.confirmed_at ?? undefined } : null;
+    }
+
+    const fallback = await supabase
+      .from("leads")
+      .update(fallbackUpdate)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (fallback.error || !fallback.data) return null;
+    return {
+      ...supabaseToLegacy(fallback.data as Lead),
+      confirmed_at: patch.confirmed_at ?? undefined,
+    };
+  }
 
   if (error || !data) return null;
   return supabaseToLegacy(data as Lead);
@@ -542,7 +585,7 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
     supabase.from("leads").select("id", { count: "exact", head: true }).is("confirmed_at", null),
   ]);
 
-  const error = getSupabaseCountError([
+  const countResults = [
     totalRes,
     newRes,
     contactedRes,
@@ -553,9 +596,21 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
     unresponded48hRes,
     todayFollowUpRes,
     overdueFollowUpRes,
-    unconfirmedRes,
-  ]);
+  ];
+  const error = getSupabaseCountError(countResults);
   if (error) throw new Error(`[leads] KPI 조회 실패: ${error.message ?? "unknown database error"}`);
+
+  let unconfirmedCount = unconfirmedRes.count ?? 0;
+  if (unconfirmedRes.error) {
+    // Some PostgREST head-count errors for a missing filter column come back
+    // with an empty message. This branch only covers the confirmed_at probe, so
+    // falling back to row-based counting is safer than failing the whole board.
+    if (unconfirmedRes.error.message && !isMissingLeadColumn(unconfirmedRes.error, "confirmed_at")) {
+      throw new Error(`[leads] KPI 조회 실패: ${unconfirmedRes.error.message ?? "unknown database error"}`);
+    }
+    const leads = await getLeads();
+    unconfirmedCount = leads.filter((lead) => !lead.confirmed_at).length;
+  }
 
   return {
     total: totalRes.count ?? 0,
@@ -570,7 +625,7 @@ export async function getLeadActionStats(now = new Date()): Promise<LeadActionSt
     unresponded48hCount: unresponded48hRes.count ?? 0,
     todayFollowUpCount: todayFollowUpRes.count ?? 0,
     overdueFollowUpCount: overdueFollowUpRes.count ?? 0,
-    unconfirmedCount: unconfirmedRes.count ?? 0,
+    unconfirmedCount,
   };
 }
 
