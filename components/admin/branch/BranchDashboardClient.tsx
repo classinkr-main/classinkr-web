@@ -91,7 +91,11 @@ export default function BranchDashboardClient() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedDeal, setSelectedDeal] = useState<DealModalDeal | null>(null)
-  const [canRunAdminOperations, setCanRunAdminOperations] = useState(canRunAdminOperationsFromSession)
+  // SSR은 sessionStorage에 접근할 수 없어 항상 false를 렌더한다 — 초기화 함수로 즉시 세션값을
+  // 읽으면 클라 첫 렌더(마운트 전 hydrate 패스)가 서버 렌더와 어긋나 하이드레이션 에러가 난다
+  // (RefreshCw 버튼 라벨이 "다시 불러오기" → "지금 동기화"로 갈리는 실측 케이스). false로 고정하고
+  // 아래 useEffect가 마운트 후 실제 세션 값으로 갱신한다(라벨이 잠깐 바뀌는 건 허용).
+  const [canRunAdminOperations, setCanRunAdminOperations] = useState(false)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   useEffect(() => {
@@ -173,6 +177,7 @@ export default function BranchDashboardClient() {
   const lastSync = summary.data?.lastSync ?? null
   const lastError = syncError ?? summary.error ?? summary.data?.lastError ?? null
   const sheetModifiedAt = summary.data?.sheetModifiedAt ?? null
+  const dataSources = summary.data?.data_sources ?? null
 
   // Filter visibility per design
   const showPeriodFilter = activeTab === "overview" || activeTab === "pipeline" || activeTab === "heatmap"
@@ -321,6 +326,7 @@ export default function BranchDashboardClient() {
           lastSync={lastSync}
           lastError={lastError}
           sheetModifiedAt={sheetModifiedAt}
+          dataSources={dataSources}
           onRefresh={onRefresh}
           syncEnabled={canRunAdminOperations}
         />

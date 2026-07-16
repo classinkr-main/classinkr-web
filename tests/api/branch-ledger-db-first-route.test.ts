@@ -62,11 +62,12 @@ describe("branch ledger DB-first route wiring", () => {
     expect(repository).toContain("branch_kpi_rows")
     expect(repository).toContain("branch_rev_lines")
     expect(repository).toContain("branch_rev_period_entries")
-    // 액티브 포인터 조회: run 상태를 inner join으로 함께 확인(왕복 1회)하고,
-    // 요청 핫패스라 unstable_cache(60s)로 감싼다.
-    expect(repository).toContain("sales_ledger_import_runs!inner(status)")
+    // 액티브 포인터 조회: run 상태+캡처 시각을 inner join으로 함께 확인(왕복 1회)하고,
+    // 요청 핫패스라 unstable_cache(60s)로 감싼다. started_at도 같이 실어 data_sources
+    // 노출(WithSource 변형)이 별도 왕복을 만들지 않게 한다.
+    expect(repository).toContain("sales_ledger_import_runs!inner(status, started_at)")
     expect(repository).toContain('.eq("sales_ledger_import_runs.status", "succeeded")')
-    expect(repository).toContain("getCachedActiveImportRunId")
+    expect(repository).toContain("getCachedActiveImportRunInfo")
     expect(repository).toContain("KPI_DB_METRIC_BY_APP_METRIC")
     expect(repository).toContain("return { rows, members, breakdown }")
     expect(repository).toContain("monthly_high_conf")

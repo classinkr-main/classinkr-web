@@ -6,9 +6,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 const verifyAdmin = vi.fn()
-const readDshPreferDb = vi.fn()
+const readDshPreferDbWithSource = vi.fn()
 const readKpiBlocksPreferDb = vi.fn()
-const readRevDealsPreferActive = vi.fn()
+const readRevDealsPreferActiveWithSource = vi.fn()
 const summarizeCampaigns = vi.fn()
 const getRecentSyncRuns = vi.fn()
 const listPublicEvents = vi.fn()
@@ -31,12 +31,12 @@ vi.mock("@/lib/branch/google-sheets", () => ({
 }))
 
 vi.mock("@/lib/branch/read-dsh-kpi", () => ({
-  readDshPreferDb,
+  readDshPreferDbWithSource,
   readKpiBlocksPreferDb,
 }))
 
 vi.mock("@/lib/branch/read-rev-deals", () => ({
-  readRevDealsPreferActive,
+  readRevDealsPreferActiveWithSource,
 }))
 
 vi.mock("@/lib/branch/computations/campaigns", () => ({
@@ -74,9 +74,15 @@ const BREAKDOWN = [
 
 function mockHappyPath() {
   verifyAdmin.mockResolvedValue(null)
-  readDshPreferDb.mockResolvedValue({ rows: [], members: {}, breakdown: BREAKDOWN })
+  readDshPreferDbWithSource.mockResolvedValue({
+    dsh: { rows: [], members: {}, breakdown: BREAKDOWN },
+    source: { kind: "mirror", asOf: null },
+  })
   readKpiBlocksPreferDb.mockResolvedValue({ fy: [] })
-  readRevDealsPreferActive.mockResolvedValue([])
+  readRevDealsPreferActiveWithSource.mockResolvedValue({
+    deals: [],
+    source: { kind: "mirror", asOf: null },
+  })
   summarizeCampaigns.mockResolvedValue({ count_30d: 0, avg_open_pct: 0, recent: [] })
   getRecentSyncRuns.mockResolvedValue([])
   listPublicEvents.mockResolvedValue([])
@@ -132,6 +138,44 @@ describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
     const response = await GET(summaryRequest())
 
     expect(response.status).toBe(401)
-    expect(readDshPreferDb).not.toHaveBeenCalled()
+    expect(readDshPreferDbWithSource).not.toHaveBeenCalled()
+  })
+
+  it("exposes data_sources with the import run's captured time and runId", async () => {
+    mockHappyPath()
+    readRevDealsPreferActiveWithSource.mockResolvedValue({
+      deals: [],
+      source: { kind: "import", asOf: "2026-07-03T01:00:00Z", runId: "run-abc123" },
+    })
+    getRecentSyncRuns.mockResolvedValue([
+      { finished_at: "2026-07-16T09:00:00Z", started_at: "2026-07-16T08:55:00Z", status: "success" },
+    ])
+
+    const { GET } = await import("@/app/api/admin/branch/summary/route")
+    const response = await GET(summaryRequest())
+    const json = await response.json()
+
+    expect(json.data_sources.rev).toEqual({
+      kind: "import",
+      asOf: "2026-07-03T01:00:00Z",
+      runId: "run-abc123",
+    })
+    // DSH stayed on the mirror mock — its asOf falls back to lastSync (no extra query).
+    expect(json.data_sources.dsh).toEqual({ kind: "mirror", asOf: "2026-07-16T09:00:00Z" })
+    expect(json.lastSync).toBe("2026-07-16T09:00:00Z")
+  })
+
+  it("falls back to lastSync for a mirror-sourced REV read (no runId)", async () => {
+    mockHappyPath()
+    getRecentSyncRuns.mockResolvedValue([
+      { finished_at: "2026-07-16T09:00:00Z", started_at: "2026-07-16T08:55:00Z", status: "success" },
+    ])
+
+    const { GET } = await import("@/app/api/admin/branch/summary/route")
+    const response = await GET(summaryRequest())
+    const json = await response.json()
+
+    expect(json.data_sources.rev).toEqual({ kind: "mirror", asOf: "2026-07-16T09:00:00Z" })
+    expect(json.data_sources.rev.runId).toBeUndefined()
   })
 })

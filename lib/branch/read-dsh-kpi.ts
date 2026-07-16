@@ -4,7 +4,7 @@ import { unstable_cache } from "next/cache"
 import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
 import { parseDsh, DSH_RANGE, type DshOutput } from "@/lib/branch/parsers/dsh"
 import { parseKpiBlocks, KPI_RANGE, type KpiBlocks } from "@/lib/branch/parsers/kpi"
-import { readDshFromActiveImport, readKpiBlocksFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
+import { getActiveImportRunInfo, readDshFromActiveImport, readKpiBlocksFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
 import {
   BRANCH_DSH_CACHE_TAG,
   BRANCH_KPI_CACHE_TAG,
@@ -37,6 +37,29 @@ export async function readDshPreferDb(fiscalYear: number): Promise<DshOutput> {
   const mirror = await readBranchDshMirror(fiscalYear)
   if (mirror) return mirror
   return readLiveDsh(fiscalYear)
+}
+
+export interface DshSource {
+  kind: "import" | "mirror" | "live"
+  asOf: string | null
+  runId?: string
+}
+
+// readDshPreferDb와 같은 사다리를 타되 서빙 소스 메타를 함께 반환한다 — KR Team 등 화면이
+// "지금 보는 DSH가 장부 임포트/시트 미러/라이브 시트 중 어디서, 언제 왔는지"를 표면화할 때
+// 쓴다(data_sources). mirror/live 폴백의 asOf는 호출부(summary 라우트)가 이미 계산해 둔
+// lastSync/sheetModifiedAt으로 채우도록 null로 남긴다(중복 조회 방지).
+export async function readDshPreferDbWithSource(fiscalYear: number): Promise<{ dsh: DshOutput; source: DshSource }> {
+  const runInfo = await getActiveImportRunInfo("dsh", fiscalYear)
+  if (runInfo) {
+    const imported = await readDshFromActiveImport(fiscalYear)
+    if (imported) {
+      return { dsh: imported, source: { kind: "import", asOf: runInfo.startedAt, runId: runInfo.runId } }
+    }
+  }
+  const mirror = await readBranchDshMirror(fiscalYear)
+  if (mirror) return { dsh: mirror, source: { kind: "mirror", asOf: null } }
+  return { dsh: await readLiveDsh(fiscalYear), source: { kind: "live", asOf: null } }
 }
 
 export async function readKpiBlocksPreferDb(fiscalYear: number): Promise<KpiBlocks> {
