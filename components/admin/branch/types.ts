@@ -38,6 +38,18 @@ export interface BranchDealMix {
   by_segment?: BranchDealMixSlice[]
 }
 
+// summary API의 dsh_breakdown 행 — lib/branch/parsers/dsh.ts DshBreakdownRow 미러.
+// 팀 필터와 무관한 Team KR 전사 수치라 어느 team 쿼리에서도 동일하게 실린다.
+export interface BranchDshBreakdownRow {
+  kind: "goal" | "status"
+  category: string // "Software" | "Hardware"
+  status_type: string // "New" | "Renew"
+  channel: string // "Direct" | "Channel"
+  annual: number
+  quarters: [number, number, number, number]
+  months: Record<string, number>
+}
+
 export interface BranchSummaryResponse {
   team: Team
   period: Period
@@ -48,6 +60,7 @@ export interface BranchSummaryResponse {
   campaigns_30d: { count: number; avg_open_pct: number }
   campaigns_recent: BranchCampaignRow[]
   deal_mix: BranchDealMix | null
+  dsh_breakdown?: BranchDshBreakdownRow[]
   monthly_series: BranchMonthlySeries
   lastSync: string | null
   lastError: string | null

@@ -395,6 +395,10 @@ export async function GET(req: NextRequest) {
         campaigns: campaignsTimeline,
       },
       deal_mix: dealMix,
+      // 장부 DSH 수치 그리드 원천 — 파서 breakdown(DshBreakdownRow[])을 그대로 노출한다.
+      // 팀 필터와 무관한 Team KR 전사 수치(시트 '1. DSH'의 Goal/Status × Software/Hardware
+      // × New/Renew × Direct/Channel 블록). 필드 추가는 unstable_cache 하위호환.
+      dsh_breakdown: breakdown,
     })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

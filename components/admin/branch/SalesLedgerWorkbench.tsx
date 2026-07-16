@@ -34,7 +34,7 @@ import {
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
-import { ledgerMonthConfirmed, ledgerMonthSplit, ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
+import { ledgerMonthSplit, ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 // ledger/ 섹션 파일들이 워크벤치를 단일 진입점으로 import — 포매터 SSOT는 lib/branch/ledger-format
@@ -54,22 +54,28 @@ import {
   type Period,
   type Team,
 } from "./types"
-import { DshOverviewSection } from "./ledger/DshOverviewSection"
+import { DshNumericGrid, type DshGridView } from "./ledger/DshNumericGrid"
 import { WeeklyCloseSection } from "./ledger/WeeklyCloseSection"
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
 import { KpiLensSection } from "./ledger/KpiLensSection"
 import { InputRailSection } from "./ledger/InputRailSection"
 import {
+  buildRevWeekProjection,
   DRAFT_CONFIDENCE_OPTIONS,
   DRAFT_OPERATIONS,
   formatDateTime,
   formatMonthLabel,
   formatWeekAmount,
   LoadingPanel,
+  mapNumberValue,
   productCategoryMeta,
   ProductCategoryPill,
   REV_PRODUCT_FILTERS,
+  rowMonthAmount,
+  rowMonthConfirmed,
+  rowMonthHighConfidence,
+  rowWeeklySplit,
   safeAmount,
   WeekNumbersCell,
   type BreakdownNumbersRow,
@@ -87,7 +93,6 @@ import {
   type RevMonthlyBucket,
   type RevProductCategory,
   type RevRowView,
-  type RevWeeklySplit,
   type RevWeekPoint,
   type WeeklyCloseDiffView,
   type WeeklyCloseRunView,
@@ -377,7 +382,7 @@ function MatrixToneLegend() {
 
 const KPI_METRIC_ORDER = ["LD", "Lead", "ACC", "Acc.", "Acc", "OPP", "opp.", "Opp", "SOL", "Sol.", "Sol", "VST", "Visit"]
 const LENSES: Array<{ id: LedgerLens; label: string; description: string }> = [
-  { id: "dsh", label: "DSH", description: "누적 흐름·주차 차트·월별 수치" },
+  { id: "dsh", label: "DSH", description: "수치 상세 · 목표/실적 그리드" },
   { id: "rev", label: "REV", description: "주차·목표 수치 검수와 행 상세" },
   { id: "kpi", label: "KPI", description: "활동 병목과 담당자" },
 ]
@@ -576,30 +581,6 @@ function orderedKpiMetrics(kpi: BranchKpiMemberRow["kpi"]): KpiMetricView[] {
     .sort(kpiMetricCompare)
 }
 
-function mapNumberValue(map: Record<string, number> | null | undefined, key: string) {
-  const value = Number(map?.[key] ?? 0)
-  return Number.isFinite(value) ? value : 0
-}
-
-function rowMonthAmount(row: LedgerRevenueRow, month: string) {
-  const mapped = mapNumberValue(row.monthlyPayments, month)
-  if (mapped > 0) return mapped
-  if (row.ledgerOrigin === "draft" && row.draftMonth === month) return row.revenue
-  return 0
-}
-
-// '확정'의 산식은 rev-confirmed.ts 캐논 단일 정의를 revenue-core 경유로 소비한다(마스터플랜 C2).
-// 시트행은 캐논 전체 규칙(확정맵→red→무색상 과거월 폴백 — 직접 맵 합산의 과소집계 방지),
-// 적용 초안행(ledgerOrigin==="draft")은 확도 맵(appliedDraftConfidenceMaps)이 정본이라
-// 무색상 폴백이 꺼진다 — 예정 입력이 적용 즉시 확정으로 인플레되지 않는다.
-function rowMonthConfirmed(row: LedgerRevenueRow, month: string) {
-  return ledgerMonthConfirmed(row, month, rowMonthAmount(row, month))
-}
-
-function rowMonthHighConfidence(row: LedgerRevenueRow, month: string) {
-  return ledgerMonthSplit(row, month, rowMonthAmount(row, month)).highConfidence
-}
-
 function rowMonthOpen(row: LedgerRevenueRow, month: string) {
   return ledgerMonthSplit(row, month, rowMonthAmount(row, month)).expected
 }
@@ -623,83 +604,6 @@ function addMonthlyBucket(target: RevMonthlyBucket, source: RevMonthlyBucket) {
   target.confirmed += source.confirmed
   target.high += source.high
   target.open += source.open
-}
-
-function firstPaymentWeekIndex(firstPayment: string | null | undefined, month: string) {
-  if (!firstPayment?.startsWith(month)) return null
-  const day = Number(firstPayment.slice(8, 10))
-  if (!Number.isFinite(day) || day <= 0) return null
-  return Math.min(4, Math.max(0, Math.ceil(day / 7) - 1))
-}
-
-function rowWeeklySplit(row: LedgerRevenueRow, month: string): RevWeeklySplit {
-  const raw = row.weeklyPayments?.[month]
-  if (Array.isArray(raw) && raw.some((value) => Number(value) > 0)) {
-    const weeks = raw.slice(0, 5).map((value) => Number(value) || 0)
-    return { source: "explicit", weeks, total: weeks.reduce((sum, value) => sum + value, 0) }
-  }
-  const amount = rowMonthAmount(row, month)
-  const firstPaymentIndex = firstPaymentWeekIndex(row.firstPayment, month)
-  if (amount > 0 && firstPaymentIndex != null) {
-    const weeks = Array.from({ length: 5 }, (_, index) => (index === firstPaymentIndex ? amount : 0))
-    return { source: "inferred", weeks, total: amount }
-  }
-  return {
-    source: amount > 0 ? "month-only" : "empty",
-    weeks: Array.from({ length: 5 }, () => 0),
-    total: amount,
-  }
-}
-
-function buildRevWeekProjection(rows: LedgerRevenueRow[], month: string): RevWeekPoint[] {
-  const weeks = Array.from({ length: 5 }, (_, index) => ({
-    week: `W${index + 1}`,
-    confirmed: 0,
-    highConfidence: 0,
-    open: 0,
-    inferred: 0,
-    monthlyOnly: 0,
-    total: 0,
-    rows: 0,
-  }))
-
-  for (const row of rows) {
-    const amount = rowMonthAmount(row, month)
-    if (amount <= 0) continue
-    const weeklySplit = rowWeeklySplit(row, month)
-    if (weeklySplit.source === "month-only" || weeklySplit.source === "empty") {
-      weeks[4].monthlyOnly += amount
-      weeks[4].total += amount
-      weeks[4].rows += 1
-      continue
-    }
-
-    if (weeklySplit.source === "inferred") {
-      weeklySplit.weeks.forEach((value, index) => {
-        if (value <= 0) return
-        weeks[index].inferred += value
-        weeks[index].total += value
-        weeks[index].rows += 1
-      })
-      continue
-    }
-
-    const confirmedRatio = Math.min(rowMonthConfirmed(row, month) / amount, 1)
-    const highRatio = Math.min(rowMonthHighConfidence(row, month) / amount, Math.max(1 - confirmedRatio, 0))
-    weeklySplit.weeks.forEach((value, index) => {
-      if (value <= 0) return
-      const confirmed = value * confirmedRatio
-      const highConfidence = value * highRatio
-      const open = Math.max(value - confirmed - highConfidence, 0)
-      weeks[index].confirmed += confirmed
-      weeks[index].highConfidence += highConfidence
-      weeks[index].open += open
-      weeks[index].total += value
-      weeks[index].rows += 1
-    })
-  }
-
-  return weeks
 }
 
 function rowHasWeeklyInput(row: LedgerRevenueRow, month: string) {
@@ -3011,6 +2915,8 @@ export default function SalesLedgerWorkbench() {
   const [period, setPeriod] = useState<Period>("Q")
   const [selectedMonth, setSelectedMonth] = useState(() => ymKeyUtc(new Date()))
   const [lens, setLens] = useState<LedgerLens>("rev")
+  // DSH 수치 그리드의 Goal/Status/Gap 토글 — 렌즈 로컬 상태.
+  const [dshGridView, setDshGridView] = useState<DshGridView>("goal")
   const lensPanelRef = useRef<HTMLDivElement | null>(null)
   const [query, setQuery] = useState("")
   const [managerFilter, setManagerFilter] = useState("ALL")
@@ -3811,11 +3717,6 @@ export default function SalesLedgerWorkbench() {
     }
     return { weekMismatch, monthOnly, open }
   }, [revBaseFilteredRows, matrixMonths])
-  const dshWeekProjection = useMemo(() => buildRevWeekProjection(rows, selectedMonth), [rows, selectedMonth])
-  const dshPeakWeek = useMemo(
-    () => dshWeekProjection.slice().sort((a, b) => b.total - a.total)[0],
-    [dshWeekProjection],
-  )
   const revManagerTableRows = useMemo<BreakdownNumbersRow[]>(() => {
     return revTopManagers.map((row) => ({
       id: row.manager,
@@ -4999,18 +4900,11 @@ export default function SalesLedgerWorkbench() {
           >
             {lens === "dsh" && (
               <div className="space-y-5">
-                <DshOverviewSection
-                  summary={summary}
-                  revenue={revenue}
-                  periodLabel={periodLabel}
-                  selectedMonth={selectedMonth}
-                  dshPeakWeek={dshPeakWeek}
-                  pipeline={pipeline}
-                  dshWeekProjection={dshWeekProjection}
-                  revMonthGoal={revMonthGoal}
-                  monthlySeriesRows={monthlySeriesRows}
-                  kpi={kpi}
-                  members={members}
+                <DshNumericGrid
+                  breakdown={summary.data?.dsh_breakdown ?? []}
+                  view={dshGridView}
+                  onViewChange={setDshGridView}
+                  loading={summary.loading && !summary.data}
                 />
 
                 <WeeklyCloseSection

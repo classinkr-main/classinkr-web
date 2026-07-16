@@ -7,6 +7,7 @@
 import dynamic from "next/dynamic"
 import { Loader2 } from "lucide-react"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+import { ledgerMonthConfirmed, ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import type { BranchKpiMemberRow, BranchPipelineRow } from "../types"
 
@@ -246,6 +247,111 @@ export function safeAmount(value: string) {
   const normalized = value.replace(/[^\d.-]/g, "")
   const numeric = Number(normalized)
   return Number.isFinite(numeric) ? numeric : 0
+}
+
+// ── REV 행 단위 파생 헬퍼 (워크벤치에서 물리 이동, 2026-07-16 역할 재배분) ──
+// buildRevWeekProjection을 KR Team 개요(sections/RevenueFlowSection)가 함께 소비하게 되면서
+// 부모(SalesLedgerWorkbench) 역import 없이 공유하도록 의존 클로저째로 이 파일에 둔다.
+
+export function mapNumberValue(map: Record<string, number> | null | undefined, key: string) {
+  const value = Number(map?.[key] ?? 0)
+  return Number.isFinite(value) ? value : 0
+}
+
+export function rowMonthAmount(row: LedgerRevenueRow, month: string) {
+  const mapped = mapNumberValue(row.monthlyPayments, month)
+  if (mapped > 0) return mapped
+  if (row.ledgerOrigin === "draft" && row.draftMonth === month) return row.revenue
+  return 0
+}
+
+// '확정'의 산식은 rev-confirmed.ts 캐논 단일 정의를 revenue-core 경유로 소비한다(마스터플랜 C2).
+// 시트행은 캐논 전체 규칙(확정맵→red→무색상 과거월 폴백 — 직접 맵 합산의 과소집계 방지),
+// 적용 초안행(ledgerOrigin==="draft")은 확도 맵(appliedDraftConfidenceMaps)이 정본이라
+// 무색상 폴백이 꺼진다 — 예정 입력이 적용 즉시 확정으로 인플레되지 않는다.
+export function rowMonthConfirmed(row: LedgerRevenueRow, month: string) {
+  return ledgerMonthConfirmed(row, month, rowMonthAmount(row, month))
+}
+
+export function rowMonthHighConfidence(row: LedgerRevenueRow, month: string) {
+  return ledgerMonthSplit(row, month, rowMonthAmount(row, month)).highConfidence
+}
+
+function firstPaymentWeekIndex(firstPayment: string | null | undefined, month: string) {
+  if (!firstPayment?.startsWith(month)) return null
+  const day = Number(firstPayment.slice(8, 10))
+  if (!Number.isFinite(day) || day <= 0) return null
+  return Math.min(4, Math.max(0, Math.ceil(day / 7) - 1))
+}
+
+export function rowWeeklySplit(row: LedgerRevenueRow, month: string): RevWeeklySplit {
+  const raw = row.weeklyPayments?.[month]
+  if (Array.isArray(raw) && raw.some((value) => Number(value) > 0)) {
+    const weeks = raw.slice(0, 5).map((value) => Number(value) || 0)
+    return { source: "explicit", weeks, total: weeks.reduce((sum, value) => sum + value, 0) }
+  }
+  const amount = rowMonthAmount(row, month)
+  const firstPaymentIndex = firstPaymentWeekIndex(row.firstPayment, month)
+  if (amount > 0 && firstPaymentIndex != null) {
+    const weeks = Array.from({ length: 5 }, (_, index) => (index === firstPaymentIndex ? amount : 0))
+    return { source: "inferred", weeks, total: amount }
+  }
+  return {
+    source: amount > 0 ? "month-only" : "empty",
+    weeks: Array.from({ length: 5 }, () => 0),
+    total: amount,
+  }
+}
+
+export function buildRevWeekProjection(rows: LedgerRevenueRow[], month: string): RevWeekPoint[] {
+  const weeks = Array.from({ length: 5 }, (_, index) => ({
+    week: `W${index + 1}`,
+    confirmed: 0,
+    highConfidence: 0,
+    open: 0,
+    inferred: 0,
+    monthlyOnly: 0,
+    total: 0,
+    rows: 0,
+  }))
+
+  for (const row of rows) {
+    const amount = rowMonthAmount(row, month)
+    if (amount <= 0) continue
+    const weeklySplit = rowWeeklySplit(row, month)
+    if (weeklySplit.source === "month-only" || weeklySplit.source === "empty") {
+      weeks[4].monthlyOnly += amount
+      weeks[4].total += amount
+      weeks[4].rows += 1
+      continue
+    }
+
+    if (weeklySplit.source === "inferred") {
+      weeklySplit.weeks.forEach((value, index) => {
+        if (value <= 0) return
+        weeks[index].inferred += value
+        weeks[index].total += value
+        weeks[index].rows += 1
+      })
+      continue
+    }
+
+    const confirmedRatio = Math.min(rowMonthConfirmed(row, month) / amount, 1)
+    const highRatio = Math.min(rowMonthHighConfidence(row, month) / amount, Math.max(1 - confirmedRatio, 0))
+    weeklySplit.weeks.forEach((value, index) => {
+      if (value <= 0) return
+      const confirmed = value * confirmedRatio
+      const highConfidence = value * highRatio
+      const open = Math.max(value - confirmed - highConfidence, 0)
+      weeks[index].confirmed += confirmed
+      weeks[index].highConfidence += highConfidence
+      weeks[index].open += open
+      weeks[index].total += value
+      weeks[index].rows += 1
+    })
+  }
+
+  return weeks
 }
 
 export function WeeklySourceBadge({ source }: { source: RevWeeklySource }) {
