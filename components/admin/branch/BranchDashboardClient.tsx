@@ -1,10 +1,12 @@
 "use client"
 import dynamic from "next/dynamic"
+import { useSearchParams } from "next/navigation"
 import type { KeyboardEvent } from "react"
 import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
 import SyncStatusBar from "./SyncStatusBar"
 import CoreKpiGrid from "./sections/CoreKpiGrid"
+import ActivityBottleneckSection from "./sections/ActivityBottleneckSection"
 import BranchHeroGauges from "./sections/BranchHeroGauges"
 import BranchKpiAccordion from "./sections/BranchKpiAccordion"
 import BranchPipelineKanban from "./sections/BranchPipelineKanban"
@@ -69,7 +71,7 @@ function buildMonthOptions(now: Date) {
   }))
 }
 
-const FiscalRoadmap = dynamic(() => import("./sections/FiscalRoadmap"), {
+const RevenueFlowSection = dynamic(() => import("./sections/RevenueFlowSection"), {
   loading: () => <div className="h-72 animate-pulse rounded-2xl bg-[#f0f0ec]" />,
 })
 
@@ -77,17 +79,36 @@ export default function BranchDashboardClient() {
   const [team, setTeam] = useState<Team>("ALL")
   const [period, setPeriod] = useState<Period>("Q")
   const [selectedMonth, setSelectedMonth] = useState(() => ymKeyUtc(new Date()))
-  const [activeTab, setActiveTab] = useState<BranchTab>("overview")
+  // 장부 등 외부에서 `?tab=pipeline` 딥링크로 진입할 수 있게 초기 탭을 URL에서 결정한다.
+  const searchParams = useSearchParams()
+  const initialTab = ((): BranchTab => {
+    const t = searchParams.get("tab")
+    return BRANCH_TABS.some((x) => x.id === t) ? (t as BranchTab) : "overview"
+  })()
+  const [activeTab, setActiveTab] = useState<BranchTab>(initialTab)
   const [pipelineView, setPipelineView] = useState<"table" | "kanban">("table")
   const [syncError, setSyncError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedDeal, setSelectedDeal] = useState<DealModalDeal | null>(null)
-  const [canRunAdminOperations, setCanRunAdminOperations] = useState(canRunAdminOperationsFromSession)
+  // SSR은 sessionStorage에 접근할 수 없어 항상 false를 렌더한다 — 초기화 함수로 즉시 세션값을
+  // 읽으면 클라 첫 렌더(마운트 전 hydrate 패스)가 서버 렌더와 어긋나 하이드레이션 에러가 난다
+  // (RefreshCw 버튼 라벨이 "다시 불러오기" → "지금 동기화"로 갈리는 실측 케이스). false로 고정하고
+  // 아래 useEffect가 마운트 후 실제 세션 값으로 갱신한다(라벨이 잠깐 바뀌는 건 허용).
+  const [canRunAdminOperations, setCanRunAdminOperations] = useState(false)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   useEffect(() => {
     setCanRunAdminOperations(canRunAdminOperationsFromSession())
+  }, [])
+
+  // 탭 전환 시 URL도 동기화 — 뒤로가기 히스토리를 오염시키지 않게 replaceState 사용.
+  const selectTab = useCallback((tab: BranchTab) => {
+    setActiveTab(tab)
+    const url = new URL(window.location.href)
+    if (tab === "overview") url.searchParams.delete("tab")
+    else url.searchParams.set("tab", tab)
+    window.history.replaceState(null, "", url.toString())
   }, [])
 
   const openDealLog = useCallback(async (row: { id: string; customer: string; manager: string | null; team: string | null; region: string | null; revenue: number; stageLabel?: string; stageColor?: string; probability?: number }) => {
@@ -156,6 +177,7 @@ export default function BranchDashboardClient() {
   const lastSync = summary.data?.lastSync ?? null
   const lastError = syncError ?? summary.error ?? summary.data?.lastError ?? null
   const sheetModifiedAt = summary.data?.sheetModifiedAt ?? null
+  const dataSources = summary.data?.data_sources ?? null
 
   // Filter visibility per design
   const showPeriodFilter = activeTab === "overview" || activeTab === "pipeline" || activeTab === "heatmap"
@@ -175,9 +197,9 @@ export default function BranchDashboardClient() {
     if (nextIndex == null) return
     event.preventDefault()
     const nextTab = BRANCH_TABS[nextIndex]
-    setActiveTab(nextTab.id)
+    selectTab(nextTab.id)
     tabRefs.current[nextIndex]?.focus()
-  }, [])
+  }, [selectTab])
 
   return (
     <div className="pb-24">
@@ -279,7 +301,7 @@ export default function BranchDashboardClient() {
                 aria-controls={`branch-tabpanel-${tab.id}`}
                 tabIndex={active ? 0 : -1}
                 ref={(node) => { tabRefs.current[index] = node }}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => selectTab(tab.id)}
                 onKeyDown={(event) => onTabKeyDown(event, index)}
                 className={`relative mt-1 flex shrink-0 flex-col items-start gap-0.5 rounded-t-lg px-4 py-2.5 text-left transition sm:px-5 sm:py-3 ${
                   active
@@ -304,6 +326,7 @@ export default function BranchDashboardClient() {
           lastSync={lastSync}
           lastError={lastError}
           sheetModifiedAt={sheetModifiedAt}
+          dataSources={dataSources}
           onRefresh={onRefresh}
           syncEnabled={canRunAdminOperations}
         />
@@ -312,7 +335,7 @@ export default function BranchDashboardClient() {
           {activeTab === "overview" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
               <CoreKpiGrid data={summary.data} loading={summary.loading} error={summary.error} />
-              {/* D-1: 매출 목표(HeroGauges) 위, FiscalRoadmap 아래 */}
+              {/* D-1: 매출 목표(HeroGauges) 위, 매출 누적 흐름(RevenueFlowSection) 아래 */}
               <BranchHeroGauges
                 summary={summary.data}
                 kpi={kpi.data}
@@ -320,7 +343,14 @@ export default function BranchDashboardClient() {
               />
               <DealMixSection summary={summary.data} loading={summary.loading} />
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
-                <FiscalRoadmap data={summary.data?.monthly_series ?? null} loading={summary.loading} error={summary.error} />
+                <RevenueFlowSection
+                  summary={summary.data}
+                  loading={summary.loading}
+                  team={team}
+                  period={period}
+                  selectedMonth={selectedMonth}
+                  refreshKey={refreshKey}
+                />
                 <BranchUpcomingDeals
                   data={summary.data?.monthly_series ?? null}
                   loading={summary.loading}
@@ -338,7 +368,11 @@ export default function BranchDashboardClient() {
 
           {activeTab === "pipeline" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-4">
-              <BranchKpiAccordion data={kpi.data} loading={kpi.loading} error={kpi.error} />
+              {/* 좌: 기존 KPI 아코디언 유지 / 우: 활동 병목·담당자(장부 KPI 렌즈 이식) — 목업 g2e 동일 */}
+              <div className="grid gap-6 xl:grid-cols-2">
+                <BranchKpiAccordion data={kpi.data} loading={kpi.loading} error={kpi.error} />
+                <ActivityBottleneckSection kpi={kpi.data} loading={kpi.loading} />
+              </div>
               <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                 <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
                   <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">파이프라인</h2>

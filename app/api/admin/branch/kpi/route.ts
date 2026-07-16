@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
-import { unstable_cache } from "next/cache"
-import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
-import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
-import { parseKpiBlocks, selectKpiRows, KPI_METRICS, KPI_RANGE } from "@/lib/branch/parsers/kpi"
-import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
-import { readDshFromActiveImport, readKpiBlocksFromActiveImport, readRevDealsFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
+import { selectKpiRows, KPI_METRICS } from "@/lib/branch/parsers/kpi"
+import { readRevDealsPreferActive } from "@/lib/branch/read-rev-deals"
+import { readDshPreferDb, readKpiBlocksPreferDb } from "@/lib/branch/read-dsh-kpi"
 import { listMembersByTeam, memberPacing, teamPacing } from "@/lib/branch/computations/pacing"
 import { fyOf, resolvePeriodDate } from "@/lib/branch/fiscal"
 
@@ -28,27 +25,13 @@ function readPeriodParam(url: URL): BranchPeriod | NextResponse {
   return NextResponse.json({ error: "Invalid period query" }, { status: 400 })
 }
 
-const readDsh = unstable_cache(
-  async (fy: number) => {
-    const imported = await readDshFromActiveImport(fy)
-    if (imported) return imported
-    return parseDsh(await readRangeWithFormat(envSheetId("dashboard"), DSH_RANGE), fy)
-  },
-  ["branch-dsh"], { revalidate: 60, tags: ["branch-dsh"] },
-)
-
-const readKpiBlocks = unstable_cache(
-  async (fy: number) => {
-    const imported = await readKpiBlocksFromActiveImport(fy)
-    if (imported) return imported
-    return parseKpiBlocks(await readRangeWithFormat(envSheetId("dashboard"), KPI_RANGE))
-  },
-  ["branch-kpi"], { revalidate: 60, tags: ["branch-kpi"] },
-)
+// DSH/KPI/REV 모두 DB-우선 사다리(액티브 임포트 → 시트 미러 → 라이브 시트 초기 폴백).
+// 계층별 캐시는 read-dsh-kpi.ts / branch-dsh-kpi-mirror.ts / read-rev-deals.ts 안에 있다.
+const readDsh = (fy: number) => readDshPreferDb(fy)
+const readKpiBlocks = (fy: number) => readKpiBlocksPreferDb(fy)
 
 async function readRevDeals(fy: number, team: BranchTeam) {
-  const imported = await readRevDealsFromActiveImport(fy, { team })
-  return imported ?? listBranchRevDeals({ team })
+  return readRevDealsPreferActive(fy, { team })
 }
 
 export async function GET(req: NextRequest) {

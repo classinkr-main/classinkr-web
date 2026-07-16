@@ -1,7 +1,7 @@
 import type { FormattedCell } from "@/lib/branch/google-sheets"
 import { isBlueText, isRedBg, isRedText } from "@/lib/branch/google-sheets"
 
-export const REV_RANGE = "'2. REV'!A1:CF400"
+export const REV_RANGE = "'2. REV'!A1:CF1000"
 // 실제 '2. REV' 시트 좌측 메타 열 위치 — 원본 raw.row(84칸)로 실측 확정(2026-07-03).
 // City/Scale/Porta 열이 왼쪽에 끼면서 예전 매핑이 우측으로 밀려 team=City, manager=Scale,
 // productVersion=Status로 잘못 읽히고 Product(HW/SW 신호) 열은 아예 안 읽히던 버그를 교정.

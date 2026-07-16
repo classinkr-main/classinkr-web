@@ -5,6 +5,7 @@ import {
   Activity,
   BarChart2,
   BookOpen,
+  Bot,
   Building2,
   CalendarDays,
   Code2,
@@ -18,7 +19,6 @@ import {
   MessageSquare,
   PackageCheck,
   ReceiptText,
-  Search,
   Settings,
   Users,
 } from "lucide-react"
@@ -69,9 +69,10 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/docs", label: "가이드 문서", icon: BookOpen, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "가이드 문서 docs guide 챗봇 chatbot faq 추천질문" },
   // 보강 큐는 문서 센터(/admin/docs)의 "보강 큐" 탭으로 병합됨 — nav는 탭 딥링크를 직접 가리켜
   // active 하이라이트가 동작하게 한다. /admin/docs/gaps는 북마크 호환용 redirect 스텁으로만 유지.
-  // 챗봇 운영 대시보드도 이 탭(DocsGapsPanel)에 흡수됨 — /admin/chatbot은 여기로 redirect,
-  // ⌘K 검색어(챗봇 운영·질문 패턴·품질 평가)를 이 항목 keywords에 병합해 검색성 보존.
-  { href: "/admin/docs?tab=gaps", label: "문서 보강 큐", icon: Search, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "챗봇 운영 질문 패턴 추천 보강 큐 gaps faq 문서 검색 초안 품질 평가 골든셋 chatbot ai ops 알파 준비도" },
+  // 챗봇 운영 대시보드도 이 탭(DocsGapsPanel)에 흡수됨 — /admin/chatbot은 여기로 redirect.
+  // 라벨·아이콘(Bot)을 "챗봇 운영·보강 큐"로 명시해 IA 재편으로 가려졌던 챗봇 운영 가시성을
+  // 복원(2026-07-16) — ⌘K 검색어(챗봇 운영·질문 패턴·품질 평가)는 이미 keywords에 있어 그대로 유지.
+  { href: "/admin/docs?tab=gaps", label: "챗봇 운영·보강 큐", icon: Bot, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "챗봇 운영 질문 패턴 추천 보강 큐 gaps faq 문서 검색 초안 품질 평가 골든셋 chatbot ai ops 알파 준비도" },
   // 내부 CS 챗봇 — 상담원용 워크스페이스(내부 지식·대화 큐·아카이브). 공개 챗봇 운영(docs?tab=gaps)과 별개 표면.
   { href: "/admin/cs-chatbot", label: "내부 CS 챗봇", icon: Headset, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "내부 cs 챗봇 상담 도우미 소통 가이드 템플릿 큐 아카이브 internal support assistant" },
   { href: "/admin/channel-talk", label: "채널톡 상담", icon: MessageSquare, roles: [...STAFF_ADMIN, "BRANCH"], section: "cs", keywords: "채널톡 상담 문의 채팅 channel talk chat inbox" },

@@ -38,6 +38,36 @@ export interface BranchDealMix {
   by_segment?: BranchDealMixSlice[]
 }
 
+// summary API의 dsh_breakdown 행 — lib/branch/parsers/dsh.ts DshBreakdownRow 미러.
+// 팀 필터와 무관한 Team KR 전사 수치라 어느 team 쿼리에서도 동일하게 실린다.
+export interface BranchDshBreakdownRow {
+  kind: "goal" | "status"
+  category: string // "Software" | "Hardware"
+  status_type: string // "New" | "Renew"
+  channel: string // "Direct" | "Channel"
+  annual: number
+  quarters: [number, number, number, number]
+  months: Record<string, number>
+}
+
+// 서빙 소스 메타 — REV/DSH 각각 "지금 보는 수치가 어느 단계(장부 액티브 임포트/시트
+// 미러/라이브 시트)에서, 언제 온 것인지"를 알린다. 2026-07-16 사고(7/3 스테일 임포트가
+// 13일간 최신 시트 반영분을 가렸으나 화면은 "마지막 동기화: 방금"만 보여줬다) 재발 시
+// KR Team 화면에서 즉시 드러나게 하려는 용도. REV는 kind가 "import" | "mirror"만
+// 나올 수 있고(라이브 시트 폴백 없음), DSH는 "live"까지 셋 다 나올 수 있다.
+export type BranchDataSourceKind = "import" | "mirror" | "live"
+
+export interface BranchDataSourceInfo {
+  kind: BranchDataSourceKind
+  asOf: string | null
+  runId?: string
+}
+
+export interface BranchDataSources {
+  rev: BranchDataSourceInfo
+  dsh: BranchDataSourceInfo
+}
+
 export interface BranchSummaryResponse {
   team: Team
   period: Period
@@ -48,10 +78,12 @@ export interface BranchSummaryResponse {
   campaigns_30d: { count: number; avg_open_pct: number }
   campaigns_recent: BranchCampaignRow[]
   deal_mix: BranchDealMix | null
+  dsh_breakdown?: BranchDshBreakdownRow[]
   monthly_series: BranchMonthlySeries
   lastSync: string | null
   lastError: string | null
   sheetModifiedAt: string | null
+  data_sources?: BranchDataSources
 }
 
 export interface BranchPipelineRow {

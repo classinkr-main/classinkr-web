@@ -92,4 +92,52 @@ describe("parseDsh", () => {
       annual: 12,
     })
   })
+
+  // 실측: '1. DSH'의 Hardware Renew 행은 채널 열(E)이 공란이다. 예전 로직은
+  // `!chan`이면 통째로 버려서 breakdown에서 이 조합이 아예 누락됐다(연간 1,358,156 =
+  // 전사 목표의 13.6%). 채널 공란이어도 cat/stat이 유효하면 "(미구분)"으로 채택해야 한다.
+  describe("breakdown: blank channel column", () => {
+    const empty: FormattedCell = { value: "", bg: null }
+    const row = (values: Record<number, string | number>): FormattedCell[] => {
+      const cells: FormattedCell[] = Array(13).fill(empty).map(() => ({ value: "", bg: null }))
+      for (const [idx, value] of Object.entries(values)) cells[Number(idx)] = { value, bg: null }
+      return cells
+    }
+
+    it("accepts a Hardware/Renew row with a blank channel as \"(미구분)\"", () => {
+      const grid: FormattedCell[][] = [
+        row({ 10: 4, 11: 5, 12: 6 }), // header: month cols 4,5,6 at DSH_COLS.monthStart(10)..
+        row({ 1: "Goal", 2: "Hardware", 3: "Renew", 5: 10000000, 6: 2500000, 9: 2500000, 10: 1000000 }), // col4(channel) blank
+        row({ 1: "Status", 2: "Hardware", 3: "Renew", 5: 5000000, 6: 5000000, 9: 0, 10: 2000000 }), // col4(channel) blank
+      ]
+      const { breakdown } = parseDsh(grid, 2026)
+      expect(breakdown).toBeDefined()
+      const goalRow = breakdown!.find((b) => b.kind === "goal" && b.category === "Hardware" && b.status_type === "Renew")
+      const statusRow = breakdown!.find((b) => b.kind === "status" && b.category === "Hardware" && b.status_type === "Renew")
+      expect(goalRow?.channel).toBe("(미구분)")
+      expect(goalRow?.annual).toBe(10000000)
+      expect(statusRow?.channel).toBe("(미구분)")
+      expect(statusRow?.annual).toBe(5000000)
+    })
+
+    it("still drops a row whose channel is a non-blank, unrecognized value", () => {
+      const grid: FormattedCell[][] = [
+        row({ 10: 4 }),
+        row({ 1: "Goal", 2: "Software", 3: "New", 4: "TBD", 5: 999 }),
+      ]
+      const { breakdown } = parseDsh(grid, 2026)
+      expect(breakdown!.some((b) => b.category === "Software" && b.status_type === "New")).toBe(false)
+    })
+
+    it("still parses ordinary Direct/Channel rows unchanged", () => {
+      const grid: FormattedCell[][] = [
+        row({ 10: 4 }),
+        row({ 1: "Goal", 2: "Software", 3: "New", 4: "Direct", 5: 1000 }),
+        row({ 1: "Goal", 2: "Software", 3: "New", 4: "Channel", 5: 2000 }),
+      ]
+      const { breakdown } = parseDsh(grid, 2026)
+      expect(breakdown!.find((b) => b.channel === "Direct")?.annual).toBe(1000)
+      expect(breakdown!.find((b) => b.channel === "Channel")?.annual).toBe(2000)
+    })
+  })
 })

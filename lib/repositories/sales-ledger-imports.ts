@@ -12,8 +12,14 @@ export const SALES_LEDGER_IMPORTS_CACHE_TAG = "sales-ledger-imports"
 
 type SalesLedgerTabKey = "dsh" | "rev" | "kpi"
 
+export interface ActiveImportRunInfo {
+  runId: string
+  startedAt: string | null
+}
+
 interface ActiveSourceRow {
   import_run_id: string
+  sales_ledger_import_runs: { started_at?: string } | Array<{ started_at?: string }> | null
 }
 
 interface DshDbRow {
@@ -141,11 +147,13 @@ function addWeeklyPayment(target: Record<string, number[]>, month: string, weekL
 // ①run 상태 확인을 inner join으로 합쳐 왕복 1회로, ②60초 unstable_cache로 감싸
 // "임포트 없음(null)"이 대부분인 현재 상태에서 요청당 Supabase 왕복을 없앤다.
 // 액티브 소스 전환(임포트 스크립트)은 앱 밖에서 일어나므로 최대 60초 지연 허용.
-async function lookupActiveImportRunId(tabKey: SalesLedgerTabKey, fiscalYear: number): Promise<string | null> {
+// started_at도 함께 실어 "서빙 소스가 언제 캡처된 런인지"(data_sources 노출용)를
+// 별도 왕복 없이 답할 수 있게 한다 — 2026-07-16 스테일 임포트 사고 이후 요구사항.
+async function lookupActiveImportRunInfo(tabKey: SalesLedgerTabKey, fiscalYear: number): Promise<ActiveImportRunInfo | null> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("sales_ledger_active_sources")
-    .select("import_run_id, sales_ledger_import_runs!inner(status)")
+    .select("import_run_id, sales_ledger_import_runs!inner(status, started_at)")
     .eq("tab_key", tabKey)
     .eq("fiscal_year", fiscalYear)
     .eq("sales_ledger_import_runs.status", "succeeded")
@@ -155,18 +163,30 @@ async function lookupActiveImportRunId(tabKey: SalesLedgerTabKey, fiscalYear: nu
     if (isMissingSalesLedgerImportTableError(error)) return null
     throw new Error(`[sales-ledger-imports] active source lookup failed: ${error.message}`)
   }
+  if (!data) return null
 
-  return (data as ActiveSourceRow | null)?.import_run_id ?? null
+  const row = data as ActiveSourceRow
+  // M2O inner join은 보통 객체로 오지만, 타입 미탐지 시 배열로 직렬화될 수 있어 양쪽 다 수용한다.
+  const joined = row.sales_ledger_import_runs
+  const startedAt = Array.isArray(joined) ? joined[0]?.started_at : joined?.started_at
+  return { runId: row.import_run_id, startedAt: startedAt ?? null }
 }
 
-const getCachedActiveImportRunId = unstable_cache(
-  async (tabKey: SalesLedgerTabKey, fiscalYear: number) => lookupActiveImportRunId(tabKey, fiscalYear),
+const getCachedActiveImportRunInfo = unstable_cache(
+  async (tabKey: SalesLedgerTabKey, fiscalYear: number) => lookupActiveImportRunInfo(tabKey, fiscalYear),
   ["sales-ledger-active-import-run"],
   { revalidate: 60, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG] },
 )
 
 async function getActiveImportRunId(tabKey: SalesLedgerTabKey, fiscalYear: number): Promise<string | null> {
-  return getCachedActiveImportRunId(tabKey, fiscalYear)
+  const info = await getCachedActiveImportRunInfo(tabKey, fiscalYear)
+  return info?.runId ?? null
+}
+
+// summary 라우트 등이 "지금 서빙 중인 소스가 임포트 런인지, 언제 캡처됐는지"를 표면화할 때
+// 쓴다(data_sources). 기존 unstable_cache 키를 그대로 재사용해 별도 캐시 엔트리를 늘리지 않는다.
+export async function getActiveImportRunInfo(tabKey: SalesLedgerTabKey, fiscalYear: number): Promise<ActiveImportRunInfo | null> {
+  return getCachedActiveImportRunInfo(tabKey, fiscalYear)
 }
 
 export async function readDshFromActiveImport(fiscalYear: number): Promise<DshOutput | null> {

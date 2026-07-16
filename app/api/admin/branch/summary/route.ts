@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { unstable_cache } from "next/cache"
-import { readRangeWithFormat, envSheetId, getSheetModifiedTime } from "@/lib/branch/google-sheets"
-import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
+import { envSheetId, getSheetModifiedTime } from "@/lib/branch/google-sheets"
 import type { DshBreakdownRow } from "@/lib/branch/parsers/dsh"
-import { parseKpi, KPI_RANGE } from "@/lib/branch/parsers/kpi"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
-import { readRevDealsPreferActive } from "@/lib/branch/read-rev-deals"
+import { readRevDealsPreferActiveWithSource } from "@/lib/branch/read-rev-deals"
+import { readDshPreferDbWithSource, readKpiBlocksPreferDb } from "@/lib/branch/read-dsh-kpi"
 import { classifySalesLedgerProductCategory } from "@/lib/branch/product-category"
-import { readDshFromActiveImport, readKpiBlocksFromActiveImport } from "@/lib/repositories/sales-ledger-imports"
 import { fyOf, FISCAL_MONTH_ORDER, fiscalQuarter, resolvePeriodDate, ymKey } from "@/lib/branch/fiscal"
 import { summarizeRevenue, bottleneckKpi, closingDeals } from "@/lib/branch/computations/core-kpi"
 import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
@@ -182,21 +180,11 @@ function readPeriodParam(url: URL): BranchPeriod | NextResponse {
   return NextResponse.json({ error: "Invalid period query" }, { status: 400 })
 }
 
-const readDsh = unstable_cache(async (fy: number) => {
-  const imported = await readDshFromActiveImport(fy)
-  if (imported) return imported
-  const id = envSheetId("dashboard")
-  const grid = await readRangeWithFormat(id, DSH_RANGE)
-  return parseDsh(grid, fy)
-}, ["branch-dsh"], { revalidate: 60, tags: ["branch-dsh"] })
-
-const readKpi = unstable_cache(async (fy: number) => {
-  const imported = await readKpiBlocksFromActiveImport(fy)
-  if (imported) return imported.fy
-  const id = envSheetId("dashboard")
-  const grid = await readRangeWithFormat(id, KPI_RANGE)
-  return parseKpi(grid)
-}, ["branch-kpi"], { revalidate: 60, tags: ["branch-kpi"] })
+// DSH/KPI는 DB-우선 사다리(액티브 임포트 → 시트 미러 → 라이브 시트 초기 폴백)를 탄다.
+// 계층별 캐시는 read-dsh-kpi.ts / branch-dsh-kpi-mirror.ts 안에 있다. WithSource 변형은
+// "지금 보는 수치가 어느 단계에서, 언제 왔는지"(data_sources)도 함께 반환한다.
+const readDshWithSource = (fy: number) => readDshPreferDbWithSource(fy)
+const readKpi = async (fy: number) => (await readKpiBlocksPreferDb(fy)).fy
 
 // Freshness hint — newest modifiedTime across both source sheets.
 // 60s revalidate keeps Drive API call rate well under any quota concern
@@ -220,10 +208,12 @@ export async function GET(req: NextRequest) {
   const periodDate = resolvePeriodDate(period, url.searchParams.get("month"), currentDate)
   if (!periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
-    const [dsh, kpi, deals, campaigns, runs, events, sheetModifiedAt] = await Promise.all([
-      readDsh(fyOf(periodDate)), readKpi(fyOf(periodDate)), readRevDealsPreferActive(fyOf(periodDate), { team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listPublicEvents(),
+    const [dshResult, kpi, revResult, campaigns, runs, events, sheetModifiedAt] = await Promise.all([
+      readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate)), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listPublicEvents(),
       readSheetFreshness(),
     ])
+    const dsh = dshResult.dsh
+    const deals = revResult.deals
     const teamMembers = new Set(listMembersByTeam(dsh, team))
     const revenue = summarizeRevenue(dsh, deals, team, period, periodDate)
     const bottle = bottleneckKpi(kpi, teamMembers)
@@ -233,6 +223,26 @@ export async function GET(req: NextRequest) {
       return t >= currentDate.getTime() && t <= currentDate.getTime() + 30*86400_000
     })
     const lastRun = runs[0]
+    // 임포트 폴백만 활성 런의 캡처 시각(source.asOf)을 쓴다. 미러/라이브 폴백의 asOf는
+    // 이미 계산된 lastSync/sheetModifiedAt을 재사용한다(같은 값을 다시 조회하는 왕복 없음).
+    const lastSync = lastRun?.finished_at ?? lastRun?.started_at ?? null
+    const data_sources = {
+      rev: {
+        kind: revResult.source.kind,
+        asOf: revResult.source.kind === "import" ? revResult.source.asOf : lastSync,
+        ...(revResult.source.runId ? { runId: revResult.source.runId } : {}),
+      },
+      dsh: {
+        kind: dshResult.source.kind,
+        asOf:
+          dshResult.source.kind === "import"
+            ? dshResult.source.asOf
+            : dshResult.source.kind === "mirror"
+              ? lastSync
+              : sheetModifiedAt,
+        ...(dshResult.source.runId ? { runId: dshResult.source.runId } : {}),
+      },
+    }
 
     const fy = fyOf(periodDate)
     const months: string[] = FISCAL_MONTH_ORDER.map((m) => `${m >= 4 ? fy : fy + 1}-${String(m).padStart(2, "0")}`)
@@ -394,9 +404,10 @@ export async function GET(req: NextRequest) {
       events_30d: { count: events30.length, regions: new Set(events30.map((e) => e.location ?? "")).size },
       campaigns_30d: { count: campaigns.count_30d, avg_open_pct: campaigns.avg_open_pct },
       campaigns_recent: campaigns.recent.slice(0, 8),
-      lastSync: lastRun?.finished_at ?? lastRun?.started_at ?? null,
+      lastSync,
       lastError: lastRun?.status === "failed" ? lastRun.error ?? "동기화 실패" : null,
       sheetModifiedAt,
+      data_sources,
       monthly_series: {
         months,
         goal_cum,
@@ -408,6 +419,10 @@ export async function GET(req: NextRequest) {
         campaigns: campaignsTimeline,
       },
       deal_mix: dealMix,
+      // 장부 DSH 수치 그리드 원천 — 파서 breakdown(DshBreakdownRow[])을 그대로 노출한다.
+      // 팀 필터와 무관한 Team KR 전사 수치(시트 '1. DSH'의 Goal/Status × Software/Hardware
+      // × New/Renew × Direct/Channel 블록). 필드 추가는 unstable_cache 하위호환.
+      dsh_breakdown: breakdown,
     })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

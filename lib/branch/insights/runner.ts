@@ -1,8 +1,5 @@
 import "server-only"
-import { unstable_cache } from "next/cache"
-import { readRangeWithFormat, envSheetId } from "@/lib/branch/google-sheets"
-import { parseDsh, DSH_RANGE } from "@/lib/branch/parsers/dsh"
-import { parseKpi, KPI_RANGE } from "@/lib/branch/parsers/kpi"
+import { readDshPreferDb, readKpiBlocksPreferDb } from "@/lib/branch/read-dsh-kpi"
 import { listBranchRevDeals } from "@/lib/repositories/branch-deals"
 import { listPublicEvents } from "@/lib/repositories/public-events"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
@@ -12,14 +9,10 @@ import { checkNumericalSanity, type NumericalWarning } from "./sanity-check"
 import { findInsightByDigest, getLatestInsight, insertInsight, type BranchInsight } from "@/lib/repositories/branch-insights"
 import { fyOf } from "@/lib/branch/fiscal"
 
-const readDsh = unstable_cache(
-  async () => parseDsh(await readRangeWithFormat(envSheetId("dashboard"), DSH_RANGE), fyOf(new Date())),
-  ["branch-dsh"], { revalidate: 60, tags: ["branch-dsh"] },
-)
-const readKpi = unstable_cache(
-  async () => parseKpi(await readRangeWithFormat(envSheetId("dashboard"), KPI_RANGE)),
-  ["branch-kpi"], { revalidate: 60, tags: ["branch-kpi"] },
-)
+// DB-우선 사다리(액티브 임포트 → 시트 미러 → 라이브 시트 초기 폴백) — summary/kpi와 동일 규약.
+// 시트 장애 시에도 마지막 스냅샷으로 인사이트 입력을 만들 수 있다(기존엔 stale 인사이트로만 강등).
+const readDsh = () => readDshPreferDb(fyOf(new Date()))
+const readKpi = async () => (await readKpiBlocksPreferDb(fyOf(new Date()))).fy
 
 export interface RunInsightsResult {
   from: "cache" | "fresh" | "stale" | "error"

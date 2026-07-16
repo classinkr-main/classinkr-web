@@ -315,6 +315,26 @@ describe("POST /api/admin/cs-chat/conversations/[id]/generate", () => {
     )
   })
 
+  it("adds a normalized topic line to the queue context when conversation tags resolve", async () => {
+    setSuccessfulDefaults()
+    mocks.getInternalCsConversation.mockResolvedValue({
+      conversation: { ...conversation, tags: ["area:board", "topic:warranty"] },
+      messages: previousMessages,
+    })
+
+    const response = await POST(
+      request({ question: "보드 세대 확인" }),
+      routeContext()
+    )
+
+    expect(response.status).toBe(201)
+    expect(mocks.generateInternalCsAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        internalContext: expect.stringContaining("정규화 주제: hardware"),
+      })
+    )
+  })
+
   it("forces evidence review when curated knowledge contains conflicts", async () => {
     setSuccessfulDefaults()
     mocks.buildInternalCsCopilotContext.mockResolvedValue({
@@ -346,7 +366,7 @@ describe("POST /api/admin/cs-chat/conversations/[id]/generate", () => {
     expect(response.status).toBe(201)
     expect(mocks.buildInternalCsCopilotContext).toHaveBeenCalledWith(
       "S86 사양을 알려줘",
-      { queueTags: conversation.tags }
+      { queueTags: conversation.tags, includeInternalDocs: true }
     )
     expect(mocks.generateInternalCsAnswer).toHaveBeenCalledWith(
       expect.objectContaining({ requiresEvidenceReview: true })

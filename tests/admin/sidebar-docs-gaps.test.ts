@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
+import { Bot } from "lucide-react"
 import { describe, expect, it } from "vitest"
 
 import { ADMIN_NAV } from "@/components/admin/admin-nav"
@@ -14,12 +15,16 @@ describe("admin sidebar docs gap discoverability", () => {
   )
 
   it("exposes the docs gap queue as a first-class cs nav item deep-linking to the docs tab", () => {
-    const gapItem = ADMIN_NAV.find((item) => item.label === "문서 보강 큐")
+    // 라벨 "챗봇 운영·보강 큐"(2026-07-16) — ALL_NEW1 IA 재편에서 흡수된 "챗봇 운영" nav의
+    // 가시성을 이 항목의 라벨·아이콘으로 복원했다(탭 흡수 자체는 유지, 표면화만 복원).
+    const gapItem = ADMIN_NAV.find((item) => item.label === "챗봇 운영·보강 큐")
     expect(gapItem).toBeDefined()
     // redirect 스텁(/admin/docs/gaps) 대신 탭 딥링크를 직접 가리켜 active 하이라이트가 동작한다.
     // 스텁 라우트는 북마크 호환용으로만 유지(app/admin/docs/gaps/page.tsx).
     expect(gapItem?.href).toBe("/admin/docs?tab=gaps")
     expect(gapItem?.section).toBe("cs")
+    // 아이콘도 Bot으로 교체돼 챗봇 운영 항목임을 시각적으로 드러낸다.
+    expect(gapItem?.icon).toBe(Bot)
   })
 
   it("keeps guide docs and gap queue distinguishable via query-aware active matching", () => {

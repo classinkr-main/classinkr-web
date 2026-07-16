@@ -275,7 +275,7 @@ const OPERATING_TOOLS = [
     icon: Headphones,
   },
   {
-    href: "/admin/chatbot",
+    href: "/admin/docs?tab=gaps",
     title: "챗봇 운영 현황",
     description: "질문량 · 미해결률 · 응답 속도",
     icon: Bot,
