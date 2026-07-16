@@ -715,7 +715,7 @@ export default function DocsGapsPanel() {
                       </button>
                       {conversationId && (
                         <Link
-                          href={`/admin/cs-chatbot?conversation=${conversationId}`}
+                          href={`/admin/cs-chatbot?conversation=${encodeURIComponent(conversationId)}`}
                           className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] bg-white px-3 py-1.5 text-[12px] font-medium text-[#615D59] transition-colors hover:border-[#084734]/25 hover:text-[#084734]"
                         >
                           <MessageSquare className="h-3.5 w-3.5" />
