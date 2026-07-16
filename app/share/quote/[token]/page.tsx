@@ -49,7 +49,7 @@ export default async function SharedQuotePage({ params }: PageProps) {
     return <ShareUnavailable variant="expired" documentLabel="견적서" expiresAt={result.expires_at} />
   }
 
-  const { share, document, version, customer_name } = result
+  const { share, document, version, customer_name, customer_email } = result
   const validUntil = formatDate(version.valid_until)
   const quoteDetails = getQuoteDetailsFromStructuredJson(version.structured_json, {
     customerName: customer_name,
@@ -109,7 +109,9 @@ export default async function SharedQuotePage({ params }: PageProps) {
             <QuoteViewerActions
               reviewEndpoint={`/api/share/quote/${token}/confirm`}
               acceptEndpoint={`/api/share/quote/${token}/accept`}
-              requireRecipientEmail
+              /* 등록된 고객 이메일이 있을 때만 입력을 요구한다 — 없으면 서버도
+                 대조를 건너뛰므로(링크 소지 = 1차 인증) 입력란은 혼란만 준다. */
+              requireRecipientEmail={Boolean(customer_email?.trim())}
               showReviewActions={share.access_mode === "sign"}
               initialConfirmedAt={interaction?.reviewConfirmedAt ?? null}
               initialAcceptedAt={interaction?.acceptedAt ?? null}

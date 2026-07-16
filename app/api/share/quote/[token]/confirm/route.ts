@@ -48,14 +48,18 @@ export async function POST(
 
     const { document, version, share, customer_email } = result
 
-    const expectedEmail = customer_email?.trim().toLowerCase() ?? null
-    const providedEmail = recipientEmail?.trim().toLowerCase() ?? null
-    if (!expectedEmail || !providedEmail || expectedEmail !== providedEmail) {
+    // 등록된 고객 이메일이 있을 때만 대조한다. CRM에 이메일이 없는 고객이 많아
+    // 무조건 대조하면 응답 버튼이 영구히 403으로 죽는다. 이메일이 없으면
+    // 링크 소지 자체를 1차 인증으로 보고, 검증 여부를 로그에 남긴다.
+    const expectedEmail = customer_email?.trim().toLowerCase() || null
+    const providedEmail = recipientEmail?.trim().toLowerCase() || null
+    if (expectedEmail && expectedEmail !== providedEmail) {
       return NextResponse.json(
-        { error: "수신자 확인에 실패했습니다." },
+        { error: "견적서를 받으신 이메일과 등록된 고객 이메일이 일치하지 않습니다. 담당자에게 확인해 주세요." },
         { status: 403 }
       )
     }
+    const recipientVerified = Boolean(expectedEmail && expectedEmail === providedEmail)
 
     const deal = await getDeal(document.deal_id)
     if (!deal) {
@@ -89,6 +93,8 @@ export async function POST(
         version_id: version.id,
         share_id: share.id,
         token,
+        recipient_email: providedEmail,
+        recipient_verified: recipientVerified,
       },
       dedupeByVersion: version.id,
       dedupeByShare: share.id,

@@ -133,8 +133,9 @@ export default function QuoteViewerActions({
     window.print()
   }
 
-  const actionsDisabled =
-    Boolean(submittingAction) || (requireRecipientEmail && !recipientEmail.trim())
+  // 이메일 미입력 상태에서도 버튼을 disabled로 죽이지 않는다 — 클릭 시
+  // ensureRecipientEmail()이 인라인 안내를 띄워야 "왜 안 되는지"가 보인다.
+  const actionsDisabled = Boolean(submittingAction)
 
   return (
     <div className="print:hidden">
