@@ -1,5 +1,6 @@
 "use client"
 import dynamic from "next/dynamic"
+import { useSearchParams } from "next/navigation"
 import type { KeyboardEvent } from "react"
 import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
@@ -77,7 +78,13 @@ export default function BranchDashboardClient() {
   const [team, setTeam] = useState<Team>("ALL")
   const [period, setPeriod] = useState<Period>("Q")
   const [selectedMonth, setSelectedMonth] = useState(() => ymKeyUtc(new Date()))
-  const [activeTab, setActiveTab] = useState<BranchTab>("overview")
+  // 장부 등 외부에서 `?tab=pipeline` 딥링크로 진입할 수 있게 초기 탭을 URL에서 결정한다.
+  const searchParams = useSearchParams()
+  const initialTab = ((): BranchTab => {
+    const t = searchParams.get("tab")
+    return BRANCH_TABS.some((x) => x.id === t) ? (t as BranchTab) : "overview"
+  })()
+  const [activeTab, setActiveTab] = useState<BranchTab>(initialTab)
   const [pipelineView, setPipelineView] = useState<"table" | "kanban">("table")
   const [syncError, setSyncError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -88,6 +95,15 @@ export default function BranchDashboardClient() {
 
   useEffect(() => {
     setCanRunAdminOperations(canRunAdminOperationsFromSession())
+  }, [])
+
+  // 탭 전환 시 URL도 동기화 — 뒤로가기 히스토리를 오염시키지 않게 replaceState 사용.
+  const selectTab = useCallback((tab: BranchTab) => {
+    setActiveTab(tab)
+    const url = new URL(window.location.href)
+    if (tab === "overview") url.searchParams.delete("tab")
+    else url.searchParams.set("tab", tab)
+    window.history.replaceState(null, "", url.toString())
   }, [])
 
   const openDealLog = useCallback(async (row: { id: string; customer: string; manager: string | null; team: string | null; region: string | null; revenue: number; stageLabel?: string; stageColor?: string; probability?: number }) => {
@@ -175,9 +191,9 @@ export default function BranchDashboardClient() {
     if (nextIndex == null) return
     event.preventDefault()
     const nextTab = BRANCH_TABS[nextIndex]
-    setActiveTab(nextTab.id)
+    selectTab(nextTab.id)
     tabRefs.current[nextIndex]?.focus()
-  }, [])
+  }, [selectTab])
 
   return (
     <div className="pb-24">
@@ -279,7 +295,7 @@ export default function BranchDashboardClient() {
                 aria-controls={`branch-tabpanel-${tab.id}`}
                 tabIndex={active ? 0 : -1}
                 ref={(node) => { tabRefs.current[index] = node }}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => selectTab(tab.id)}
                 onKeyDown={(event) => onTabKeyDown(event, index)}
                 className={`relative mt-1 flex shrink-0 flex-col items-start gap-0.5 rounded-t-lg px-4 py-2.5 text-left transition sm:px-5 sm:py-3 ${
                   active
