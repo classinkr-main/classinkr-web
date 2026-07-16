@@ -184,13 +184,18 @@ export function parseDsh(grid: FormattedCell[][], refFy: number): DshOutput {
     if (!bKind) continue
     const cat: string = String(row[2]?.value ?? "").trim() || prevCategory || ""
     const stat: string = String(row[3]?.value ?? "").trim() || prevStatus || ""
-    const chan = String(row[4]?.value ?? "").trim()
+    const chanRaw = String(row[4]?.value ?? "").trim()
     if (cat) prevCategory = cat
     if (stat) prevStatus = stat
-    if (!cat || !stat || !chan) continue
+    if (!cat || !stat) continue
     if (!["Software", "Hardware"].includes(cat)) continue
     if (!["New", "Renew"].includes(stat)) continue
-    if (!["Direct", "Channel"].includes(chan)) continue
+    // 채널 열이 공란인 행(예: Hardware Renew — 시트에서 채널 구분을 안 매긴 행)은 버리지 않고
+    // "(미구분)"으로 채택한다. 값이 있는데 Direct/Channel이 아니면 여전히 무효 행으로 skip —
+    // 공란만 구제 대상이다. 이 문자열은 components/admin/branch/ledger/DshNumericGrid.tsx의
+    // CHANNEL_ORDER와 짝을 맞춰야 한다.
+    if (chanRaw && chanRaw !== "Direct" && chanRaw !== "Channel") continue
+    const chan = chanRaw || "(미구분)"
     const bMonths: Record<string, number> = {}
     for (const { idx, ym } of monthMap) bMonths[ym] = asNum(row[idx]?.value)
     breakdown.push({

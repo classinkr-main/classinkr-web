@@ -21,7 +21,9 @@ const VIEW_OPTIONS: Array<{ id: DshGridView; label: string }> = [
 
 const CATEGORY_ORDER = ["Software", "Hardware"]
 const STATUS_ORDER = ["New", "Renew"]
-const CHANNEL_ORDER = ["Direct", "Channel"]
+// "(미구분)" = 시트에서 채널 열이 공란인 행(예: Hardware Renew) — lib/branch/parsers/dsh.ts
+// breakdown 2차 패스가 버리지 않고 채택한 값. 항상 맨 뒤에 둔다.
+const CHANNEL_ORDER = ["Direct", "Channel", "(미구분)"]
 
 interface GridNumbers {
   annual: number
