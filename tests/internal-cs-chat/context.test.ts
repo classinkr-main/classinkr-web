@@ -1,14 +1,23 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   evaluateChatbotQuery: vi.fn(),
+  searchConsultationEvidence: vi.fn(),
 }))
 
 vi.mock("@/lib/chatbot/service", () => ({
   evaluateChatbotQuery: mocks.evaluateChatbotQuery,
 }))
 
+vi.mock("@/lib/internal-cs-chat/consultation-search", () => ({
+  searchConsultationEvidence: mocks.searchConsultationEvidence,
+}))
+
 import { buildInternalCsCopilotContext } from "@/lib/internal-cs-chat/context"
+
+beforeEach(() => {
+  mocks.searchConsultationEvidence.mockResolvedValue([])
+})
 
 afterEach(() => {
   vi.clearAllMocks()
