@@ -10,7 +10,7 @@ describe("admin command palette (admin-nav 파생)", () => {
     // IA 재설계(admin-ia-redesign-2026-06-29 §3·§6): 보강 큐는 독립 라우트에서
     // 문서 센터(/admin/docs)의 "보강 큐" 탭으로 병합됨. nav·팔레트 모두 탭 딥링크로 이동.
     const [gaps] = byHref("/admin/docs?tab=gaps")
-    expect(gaps?.label).toBe("문서 보강 큐")
+    expect(gaps?.label).toBe("챗봇 운영·보강 큐")
     expect(gaps?.group).toBe("고객 지원")
   })
 
