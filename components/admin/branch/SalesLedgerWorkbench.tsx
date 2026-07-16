@@ -47,7 +47,6 @@ import {
 import {
   PERIODS,
   TEAMS,
-  type BranchKpiMemberRow,
   type BranchKpiResponse,
   type BranchPipelineResponse,
   type BranchSummaryResponse,
@@ -58,7 +57,6 @@ import { DshNumericGrid, type DshGridView } from "./ledger/DshNumericGrid"
 import { WeeklyCloseSection } from "./ledger/WeeklyCloseSection"
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
-import { KpiLensSection } from "./ledger/KpiLensSection"
 import { InputRailSection } from "./ledger/InputRailSection"
 import {
   buildRevWeekProjection,
@@ -85,7 +83,6 @@ import {
   type DraftOperation,
   type DraftQueueMode,
   type DraftStatus,
-  type KpiMetricView,
   type LedgerDraft,
   type LedgerRevenueRow,
   type MonthlyPlanRow,
@@ -380,11 +377,10 @@ function MatrixToneLegend() {
   )
 }
 
-const KPI_METRIC_ORDER = ["LD", "Lead", "ACC", "Acc.", "Acc", "OPP", "opp.", "Opp", "SOL", "Sol.", "Sol", "VST", "Visit"]
 const LENSES: Array<{ id: LedgerLens; label: string; description: string }> = [
   { id: "dsh", label: "DSH", description: "수치 상세 · 목표/실적 그리드" },
   { id: "rev", label: "REV", description: "주차·목표 수치 검수와 행 상세" },
-  { id: "kpi", label: "KPI", description: "활동 병목과 담당자" },
+  { id: "kpi", label: "KPI", description: "→ KR Team으로 이동" },
 ]
 const DRAFT_STATUS_FILTERS: Array<{ id: DraftStatusFilter; label: string }> = [
   { id: "open", label: "대기" },
@@ -557,28 +553,6 @@ function FilterTag({ label, onClear }: { label: string; onClear: () => void }) {
       <X className="h-3 w-3 shrink-0 opacity-60" />
     </button>
   )
-}
-
-// KPI_METRIC_ORDER 상 우선순위. 시트 표기 편차("LD"/"Lead"/"ld")에 흔들리지 않게 대소문자 무시.
-function kpiMetricRank(metric: string) {
-  const needle = metric.trim().toLowerCase()
-  const index = KPI_METRIC_ORDER.findIndex((name) => name.toLowerCase() === needle)
-  return index === -1 ? KPI_METRIC_ORDER.length : index
-}
-
-function kpiMetricCompare(a: { metric: string }, b: { metric: string }) {
-  return kpiMetricRank(a.metric) - kpiMetricRank(b.metric) || compareText(a.metric, b.metric)
-}
-
-function orderedKpiMetrics(kpi: BranchKpiMemberRow["kpi"]): KpiMetricView[] {
-  return Object.entries(kpi)
-    .map(([metric, pair]) => ({
-      metric,
-      goal: pair.goal,
-      actual: pair.actual,
-      pct: pair.goal > 0 ? (pair.actual / pair.goal) * 100 : 0,
-    }))
-    .sort(kpiMetricCompare)
 }
 
 function rowMonthOpen(row: LedgerRevenueRow, month: string) {
@@ -3395,7 +3369,6 @@ export default function SalesLedgerWorkbench() {
     }))
   }, [pipeline.data?.rows])
   const members = useMemo(() => kpi.data?.members ?? [], [kpi.data?.members])
-  const kpiTeamRows = useMemo(() => kpi.data?.teams ?? [], [kpi.data?.teams])
   const ledgerEntryRows = useMemo<LedgerRevenueRow[]>(() => {
     return ledgerEntries
       .filter((entry) => entry.entryStatus === "active")
@@ -4316,66 +4289,6 @@ export default function SalesLedgerWorkbench() {
     return members.find((row) => row.member === selectedRow.manager) ?? null
   }, [members, selectedRow])
 
-  const kpiMemberRows = useMemo(() => {
-    return members
-      .map((row) => {
-        const metrics = orderedKpiMetrics(row.kpi)
-        const activityGoal = metrics.reduce((sum, item) => sum + item.goal, 0)
-        const activityActual = metrics.reduce((sum, item) => sum + item.actual, 0)
-        const activityPct = activityGoal > 0 ? (activityActual / activityGoal) * 100 : 0
-        return {
-          row,
-          metrics,
-          activityGoal,
-          activityActual,
-          activityPct,
-        }
-      })
-      .sort((a, b) => a.activityPct - b.activityPct || a.row.achievement_pct - b.row.achievement_pct || compareText(a.row.member, b.row.member))
-  }, [members])
-
-  const kpiActivityRows = useMemo<KpiMetricView[]>(() => {
-    const metricMap = new Map<string, { goal: number; actual: number }>()
-    for (const member of members) {
-      for (const metric of orderedKpiMetrics(member.kpi)) {
-        const current = metricMap.get(metric.metric) ?? { goal: 0, actual: 0 }
-        current.goal += metric.goal
-        current.actual += metric.actual
-        metricMap.set(metric.metric, current)
-      }
-    }
-    return Array.from(metricMap.entries())
-      .map(([metric, value]) => ({
-        metric,
-        goal: value.goal,
-        actual: value.actual,
-        pct: value.goal > 0 ? (value.actual / value.goal) * 100 : 0,
-      }))
-      .sort(kpiMetricCompare)
-  }, [members])
-
-  const kpiActivityGoal = kpiActivityRows.reduce((sum, metric) => sum + metric.goal, 0)
-  const kpiActivityActual = kpiActivityRows.reduce((sum, metric) => sum + metric.actual, 0)
-  const kpiActivityPct = kpiActivityGoal > 0 ? (kpiActivityActual / kpiActivityGoal) * 100 : 0
-  const kpiTeamGaugeRows = useMemo(() => {
-    return kpiTeamRows.map((row) => ({
-      id: row.team,
-      label: row.team,
-      pct: row.goal > 0 ? (row.status / row.goal) * 100 : row.pacing_pct,
-      value: formatMoney(row.status),
-      goal: `목표 ${formatMoney(row.goal)}`,
-    }))
-  }, [kpiTeamRows])
-  const kpiMemberGaugeRows = useMemo(() => {
-    return kpiMemberRows.map((item) => ({
-      id: item.row.member,
-      label: item.row.member,
-      pct: item.activityPct,
-      value: `${item.activityActual}/${item.activityGoal}`,
-      goal: item.row.team ?? "KR",
-    }))
-  }, [kpiMemberRows])
-
   const selectedMonthAmounts = useMemo(() => {
     if (!detail && selectedRow) {
       return monthOptions.map((month) => ({
@@ -4694,11 +4607,17 @@ export default function SalesLedgerWorkbench() {
               매출 장부
             </h1>
             <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[#615D59]">
-              1. DSH 흐름 시각화, 2. REV 주차·목표 수치 검수, 3. KPI 활동 지표를 하나의 운영 화면으로 묶어 같은 필터와 선택 상태로 확인합니다.
+              만지는 화면. 시트 수치 검수·장부 입력·주간 마감을 담당합니다. 차트·시각화는 KR Team으로 옮겨졌고, 여기는 수치가 정본입니다.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/admin/branch"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+            >
+              대시보드 보기 →
+            </Link>
             <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">
               {TEAMS.map((value) => (
                 <button
@@ -5534,23 +5453,20 @@ export default function SalesLedgerWorkbench() {
             )}
 
             {lens === "kpi" && (
-              <KpiLensSection
-                kpi={kpi}
-                kpiMemberRows={kpiMemberRows}
-                kpiTeamRows={kpiTeamRows}
-                kpiActivityRows={kpiActivityRows}
-                kpiActivityPct={kpiActivityPct}
-                kpiActivityActual={kpiActivityActual}
-                kpiActivityGoal={kpiActivityGoal}
-                kpiTeamGaugeRows={kpiTeamGaugeRows}
-                kpiMemberGaugeRows={kpiMemberGaugeRows}
-                members={members}
-                setQuery={setQuery}
-                setManagerFilter={setManagerFilter}
-                setRegionFilter={setRegionFilter}
-                setRevPage={setRevPage}
-                selectLens={selectLens}
-              />
+              // KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다(2026-07-16 역할 재배분).
+              // 전환기 안내용 링크 카드만 남긴다 — 목업 "KPI 링크 카드" 마크업 그대로.
+              <section className="rounded-xl border-[1.5px] border-dashed border-[#BDEFD8] bg-[#ECFDF5] p-10 text-center">
+                <p className="text-[15px] font-extrabold text-[#084734]">활동 KPI는 KR Team으로 이동했습니다</p>
+                <p className="mt-2 text-[12.5px] leading-relaxed text-[#615D59]">
+                  목표 대비 활동과 병목·담당자 렌즈는 이제 <b>KR Team › 파이프라인 탭</b>에서 봅니다.
+                </p>
+                <Link
+                  href="/admin/branch?tab=pipeline"
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+                >
+                  KR Team 파이프라인으로 가기 →
+                </Link>
+              </section>
             )}
           </div>
         </section>
