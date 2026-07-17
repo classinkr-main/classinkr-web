@@ -1,9 +1,10 @@
 "use client"
 import Link from "next/link"
-import { ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronDown, ChevronLeft, ChevronRight, RotateCcw, Search } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronLeft, ChevronRight, RotateCcw, Search } from "lucide-react"
+import { useMemo, useState } from "react"
 import { useBranchJson } from "../client-api"
 import { matchesTokens, tokenize } from "../search-tokens"
+import MultiSelect from "../MultiSelect"
 import { TEAMS, type BranchPipelineResponse, type BranchPipelineRow, type Team, type Period } from "../types"
 
 const SELECTABLE_TEAMS = TEAMS.filter((t) => t !== "ALL") as Exclude<Team, "ALL">[]
@@ -63,102 +64,6 @@ function SortableTh({
         )}
       </button>
     </th>
-  )
-}
-
-function MultiSelect({
-  label,
-  options,
-  selected,
-  onChange,
-  placeholder = "전체",
-  align = "left",
-  width = "w-44",
-}: {
-  label: string
-  options: string[]
-  selected: Set<string>
-  onChange: (next: Set<string>) => void
-  placeholder?: string
-  align?: "left" | "right"
-  width?: string
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    if (open) document.addEventListener("mousedown", onClick)
-    return () => document.removeEventListener("mousedown", onClick)
-  }, [open])
-
-  const summary = options.length === 0 || selected.size === 0
-    ? placeholder
-    : selected.size === 1
-    ? Array.from(selected)[0]
-    : `${Array.from(selected)[0]} 외 ${selected.size - 1}`
-
-  function toggle(option: string) {
-    const next = new Set(selected)
-    if (next.has(option)) next.delete(option)
-    else next.add(option)
-    onChange(next)
-  }
-
-  return (
-    <div ref={ref} className="relative flex items-center gap-1.5">
-      <span className="text-[11px] font-medium text-[#111110]/50">{label}</span>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        disabled={options.length === 0}
-        className="inline-flex h-8 min-w-[7rem] items-center justify-between gap-2 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] outline-none transition hover:border-[#111110]/25 focus:border-[#111110]/30 disabled:cursor-not-allowed disabled:opacity-50"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-      >
-        <span className={selected.size === 0 ? "text-[#111110]/55" : "text-[#111110]"}>{summary}</span>
-        <ChevronDown className={`h-3.5 w-3.5 text-[#111110]/40 transition ${open ? "rotate-180" : ""}`} aria-hidden="true" />
-      </button>
-      {open && (
-        <div
-          role="listbox"
-          className={`absolute top-9 z-30 max-h-64 ${width} overflow-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-1 shadow-[0_10px_30px_rgba(0,0,0,0.08)] ${align === "right" ? "right-0" : "left-0"}`}
-        >
-          <button
-            type="button"
-            onClick={() => onChange(new Set())}
-            className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
-              selected.size === 0 ? "bg-[#ECFDF5] text-[#084734]" : "text-[#111110]/65 hover:bg-[#FAFAF8]"
-            }`}
-          >
-            <span>전체 보기</span>
-          </button>
-          <div className="my-1 h-px bg-[#F6F5F4]" />
-          {options.map((opt) => {
-            const checked = selected.has(opt)
-            return (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => toggle(opt)}
-                className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
-                  checked ? "bg-[#ECFDF5] text-[#084734]" : "text-[#111110]/75 hover:bg-[#FAFAF8]"
-                }`}
-              >
-                <span className="truncate">{opt}</span>
-                <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                  checked ? "border-[#084734] bg-[#084734] text-white" : "border-[#d8d8d4] bg-white"
-                }`}>
-                  {checked && <span className="text-[10px] font-bold leading-none">✓</span>}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
   )
 }
 
