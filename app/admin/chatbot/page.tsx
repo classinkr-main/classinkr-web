@@ -1,9 +1,15 @@
-import { redirect } from "next/navigation"
+import type { Metadata } from "next"
 
-// 챗봇 운영 대시보드는 문서 센터(/admin/docs)의 "보강 큐" 탭(DocsGapsPanel)으로 흡수되었습니다.
-// 보강 큐 탭은 기존 챗봇 대시보드의 상위집합입니다 — 챗봇 질문 패턴 분석(질문·미해결·상담 연결·
-// 응답 속도·피드백), 알파 준비도, 골든셋 품질 평가, 문서 없는 질문/결과 없는 검색어를 모두 포함합니다.
-// 기존 북마크/링크 호환을 위해 해당 탭으로 리다이렉트합니다(2026-06-29 admin-ia-redesign §2-🟠3).
+import ExternalChatbotOpsDashboard from "@/components/admin/chatbot/ExternalChatbotOpsDashboard"
+
+// 외부(공개) 챗봇 운영 대시보드 — 얇은 서버 페이지. 상세 분석·초안 생성·문서 없는 질문 목록 등은
+// 여전히 문서 보강 큐(/admin/docs?tab=gaps)에 남아 있고, 이 화면은 요약 지표 + 알파 준비도 +
+// 품질 평가 실행 + 그 상세 화면들로의 경로만 제공한다(docs/active/cs-tab-split-plan-2026-07-17.md Task X).
+export const metadata: Metadata = {
+  title: "챗봇 운영 | Classin Admin",
+  robots: { index: false, follow: false },
+}
+
 export default function AdminChatbotPage() {
-  redirect("/admin/docs?tab=gaps")
+  return <ExternalChatbotOpsDashboard />
 }
