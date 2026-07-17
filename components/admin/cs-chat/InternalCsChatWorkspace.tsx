@@ -731,10 +731,15 @@ function PromoteKnowledgeControl({
   pending,
   result,
   onPromote,
+  compact = false,
 }: {
   pending: boolean
   result: PromotionResult | undefined
   onPromote: () => void
+  // compact — 밀도 높은 리스트 행(회귀 후보) 안에서 쓰는 변형. 기본 중립 톤, hover에서만
+  // 강조색을 드러내 옆의 판정 버튼군(1차 액션)보다 시각 무게를 낮춘다. 대화 상세의 답변 카드
+  // (기본값)는 카드 하단 여유 공간에 단독으로 놓이므로 기존 강조 스타일을 유지한다.
+  compact?: boolean
 }) {
   if (result?.status === "success") {
     // searchable === false — 문서는 저장됐지만 임베딩 실패로 아직 검색에 잡히지 않는 상태(앰버).
@@ -744,7 +749,8 @@ function PromoteKnowledgeControl({
       <div className="flex flex-wrap items-center gap-2">
         <span
           className={cn(
-            "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold",
+            "inline-flex items-center gap-1 rounded-md font-semibold",
+            compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-1 text-[10px]",
             indexingPending ? "bg-[#FBF1E0] text-[#7A520F]" : "bg-[#ECFDF5] text-[#084734]"
           )}
         >
@@ -769,7 +775,12 @@ function PromoteKnowledgeControl({
         type="button"
         onClick={onPromote}
         disabled={pending}
-        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[10px] font-semibold text-[#084734] hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-40"
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-md border font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+          compact
+            ? "h-6 border-black/[0.08] px-2 text-[10px] text-[#615D59] hover:border-[#084734]/20 hover:bg-[#ECFDF5] hover:text-[#084734]"
+            : "h-7 border-black/[0.08] px-2.5 text-[10px] text-[#084734] hover:bg-[#ECFDF5]"
+        )}
       >
         {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <BookOpen className="h-3 w-3" />}
         {pending ? "승격 중" : "지식으로 승격"}
@@ -2624,7 +2635,7 @@ function InternalCsChatWorkspaceInner() {
                       <li
                         key={item.id}
                         className={cn(
-                          "flex flex-col gap-3 border-b border-black/[0.08] px-5 py-4 last:border-b-0 sm:flex-row sm:items-start sm:justify-between",
+                          "flex flex-col gap-2 border-b border-black/[0.08] px-4 py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between",
                           judgedChip && "bg-[#FAFAF8]"
                         )}
                       >
@@ -2632,13 +2643,27 @@ function InternalCsChatWorkspaceInner() {
                           <p className={cn("line-clamp-2 text-[12.5px] leading-5", judgedChip ? "text-[#A39E98]" : "text-[#31302E]")}>
                             {item.excerpt}
                           </p>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-[#A39E98]">
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-[#A39E98]">
                             {reviewLabel ? (
                               <span className="inline-flex h-[17px] items-center rounded-full border border-black/[0.10] bg-white px-2 text-[9px] font-semibold text-[#615D59]">
                                 내부CS · {reviewLabel}
                               </span>
                             ) : null}
                             <span className="tabular-nums">{formatDay(item.capturedAt)} {formatTime(item.capturedAt)}</span>
+                            {/* 자동 평가 제안(계약 2) — 판정 전 참고용, 메타 행에 인라인 배지로. 판정이 끝난 행에는 숨긴다. */}
+                            {suggestion && !judgedChip ? (
+                              <span
+                                className={cn(
+                                  "inline-flex h-[17px] items-center gap-1 rounded-full px-2 text-[9px] font-semibold",
+                                  suggestion.suggestedOutcome === "pass"
+                                    ? "bg-[#ECFDF5] text-[#084734]"
+                                    : "bg-[#FBF1E0] text-[#7A520F]"
+                                )}
+                              >
+                                <Sparkles className="h-2.5 w-2.5" />
+                                제안 · {suggestion.suggestedOutcome === "pass" ? "통과" : "수정 필요"}
+                              </span>
+                            ) : null}
                             <button
                               type="button"
                               onClick={() => openConversationById(item.conversationId)}
@@ -2648,34 +2673,21 @@ function InternalCsChatWorkspaceInner() {
                               <ExternalLink className="h-3 w-3" />
                             </button>
                           </div>
-                          {/* 자동 평가 제안(계약 2) — 판정 전 참고용. 판정이 끝난 행에는 숨긴다. */}
                           {suggestion && !judgedChip ? (
-                            <div className="mt-2">
-                              <span
-                                className={cn(
-                                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                                  suggestion.suggestedOutcome === "pass"
-                                    ? "bg-[#ECFDF5] text-[#084734]"
-                                    : "bg-[#FBF1E0] text-[#7A520F]"
-                                )}
-                              >
-                                {suggestion.suggestedOutcome === "pass" ? "제안: 통과" : "제안: 수정 필요"}
-                              </span>
-                              <details className="mt-1">
-                                <summary className="cursor-pointer text-[10px] font-medium text-[#084734] hover:underline">
-                                  AI 판단 근거
-                                </summary>
-                                <p className="mt-1 max-w-[420px] text-[10px] leading-4 text-[#615D59]">
-                                  {suggestion.rationale}
-                                </p>
-                                <p className="mt-1 text-[10px] text-[#A39E98]">판정 모델: {suggestion.judgeModel}</p>
-                              </details>
-                            </div>
+                            <details className="mt-1">
+                              <summary className="cursor-pointer text-[10px] font-medium text-[#084734] hover:underline">
+                                AI 판단 근거
+                              </summary>
+                              <p className="mt-1 max-w-[420px] text-[10px] leading-4 text-[#615D59]">
+                                {suggestion.rationale}
+                              </p>
+                              <p className="mt-1 text-[10px] text-[#A39E98]">판정 모델: {suggestion.judgeModel}</p>
+                            </details>
                           ) : null}
                         </div>
-                        <div className="flex shrink-0 flex-col items-start gap-2 self-start sm:items-end">
+                        <div className="flex shrink-0 items-center gap-1.5 self-start sm:self-center">
                           {judgedChip ? (
-                            <span className={cn("inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[10.5px] font-bold", judgedChip.className)}>
+                            <span className={cn("inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-[10px] font-bold", judgedChip.className)}>
                               <CheckCircle2 className="h-3 w-3" />
                               {judgedChip.label}
                             </span>
@@ -2687,7 +2699,7 @@ function InternalCsChatWorkspaceInner() {
                                   type="button"
                                   onClick={() => void judgeRegressionCandidate(item, action.value)}
                                   className={cn(
-                                    "h-7 bg-white px-2.5 text-[10.5px] font-semibold text-[#31302E] transition-colors",
+                                    "h-6 bg-white px-2 text-[10px] font-semibold text-[#31302E] transition-colors",
                                     index > 0 && "border-l border-black/[0.10]",
                                     action.hoverClassName
                                   )}
@@ -2697,9 +2709,11 @@ function InternalCsChatWorkspaceInner() {
                               ))}
                             </div>
                           )}
-                          {/* 지식 승격(계약 3) — hasCorrectedContent 부재(구응답)면 approved 휴리스틱만으로 노출. */}
+                          {/* 지식 승격(계약 3) — hasCorrectedContent 부재(구응답)면 approved 휴리스틱만으로 노출.
+                              compact — 판정 버튼(1차 액션) 옆 보조 액션이라 기본 중립, hover에서만 강조색. */}
                           {item.reviewState === "approved" && (item.hasCorrectedContent ?? true) ? (
                             <PromoteKnowledgeControl
+                              compact
                               pending={promotingMessageId === item.id}
                               result={promotionResults[item.id]}
                               onPromote={() => void promoteMessageToKnowledge(item.id)}

@@ -7,6 +7,9 @@ import { Loader2, Sparkles, RefreshCw, ClipboardCopy, Check, Plus, MessageSquare
 import { adminFetchJson } from "@/lib/admin-client"
 import { buildDocDraftArticlePayload } from "@/lib/chatbot/doc-draft-article"
 import { cn } from "@/lib/utils"
+import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
+
+const GAP_LIST_PAGE_SIZE = 12
 
 interface GapClusterInternalCsRef {
   conversationId: string
@@ -550,6 +553,11 @@ export default function DocsGapsPanel() {
   const filteredGapClusters = (backlog?.gapClusters ?? []).filter(
     (cluster) => sourceFilter === "all" || getGapClusterSourceBadge(cluster).group === sourceFilter
   )
+  const zeroResultSearches = backlog?.zeroResultSearches ?? []
+
+  // 첫 화면 밀도 상한 — 12개 표시 후 더보기. 필터로 total이 줄어도 훅이 자체 클램프한다.
+  const gapVisible = useVisibleCount(filteredGapClusters.length, GAP_LIST_PAGE_SIZE)
+  const searchVisible = useVisibleCount(zeroResultSearches.length, GAP_LIST_PAGE_SIZE)
 
   return (
     <div className="text-[#111110]">
@@ -708,14 +716,19 @@ export default function DocsGapsPanel() {
                 ))}
               </div>
             </div>
-            <ul className="space-y-2.5">
-              {filteredGapClusters.map((cluster) => {
+            <ul className="space-y-2">
+              {/* 액션 3버튼은 기본 화면 노이즈를 줄이려 hover/focus에만 드러난다(md 이상).
+                  모바일·태블릿(hover 불가)은 상시 노출 — group-focus-within으로 키보드 접근도 보장. */}
+              {filteredGapClusters.slice(0, gapVisible.visible).map((cluster) => {
                 const sourceBadge = getGapClusterSourceBadge(cluster)
                 const conversationId = cluster.metadata?.internalCs?.[0]?.conversationId
                 return (
-                  <li key={cluster.id} className="rounded-[16px] border border-black/[0.08] bg-white p-4">
+                  <li
+                    key={cluster.id}
+                    className="group rounded-[14px] border border-black/[0.08] bg-white p-3.5 transition-colors hover:border-black/[0.16]"
+                  >
                     <p className="text-sm font-medium text-[#111110]">{cluster.question}</p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[12px] text-[#615D59]">
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-[#615D59]">
                       <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", sourceBadge.className)}>
                         {sourceBadge.label}
                       </span>
@@ -724,7 +737,7 @@ export default function DocsGapsPanel() {
                       <span>·</span>
                       <span>{cluster.status}</span>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-2 transition-opacity duration-150 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                       <DraftButton
                         busy={draftingKey === `c:${cluster.id}`}
                         onClick={() => generateDraft(`c:${cluster.id}`, cluster.question)}
@@ -771,19 +784,35 @@ export default function DocsGapsPanel() {
                 </li>
               )}
             </ul>
+            {gapVisible.canMore || gapVisible.canCollapse ? (
+              <div className="mt-3 flex justify-center">
+                <ShowMore
+                  visible={gapVisible.visible}
+                  total={filteredGapClusters.length}
+                  step={GAP_LIST_PAGE_SIZE}
+                  onMore={gapVisible.showMore}
+                  onCollapse={gapVisible.canCollapse ? gapVisible.collapse : undefined}
+                />
+              </div>
+            ) : null}
           </section>
 
           {/* zero-result 검색 */}
           <section>
             <h2 className="mb-3 text-base font-semibold">
-              결과 없는 검색어 <span className="text-[#615D59]">({backlog?.zeroResultSearches.length ?? 0})</span>
+              결과 없는 검색어 <span className="text-[#615D59]">({zeroResultSearches.length})</span>
             </h2>
-            <ul className="space-y-2.5">
-              {(backlog?.zeroResultSearches ?? []).map((search) => (
-                <li key={search.query} className="rounded-[16px] border border-black/[0.08] bg-white p-4">
-                  <p className="text-sm font-medium text-[#111110]">{search.query}</p>
-                  <p className="mt-1.5 text-[12px] text-[#615D59]">검색 {search.count}회</p>
-                  <div className="mt-3">
+            <ul className="space-y-2">
+              {zeroResultSearches.slice(0, searchVisible.visible).map((search) => (
+                <li
+                  key={search.query}
+                  className="group flex items-center gap-3 rounded-[14px] border border-black/[0.08] bg-white px-3.5 py-2.5 transition-colors hover:border-black/[0.16]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-[#111110]">{search.query}</p>
+                    <p className="mt-0.5 text-[11px] text-[#615D59]">검색 {search.count}회</p>
+                  </div>
+                  <div className="shrink-0 transition-opacity duration-150 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
                     <DraftButton
                       busy={draftingKey === `s:${search.query}`}
                       onClick={() => generateDraft(`s:${search.query}`, search.query)}
@@ -791,10 +820,21 @@ export default function DocsGapsPanel() {
                   </div>
                 </li>
               ))}
-              {(backlog?.zeroResultSearches.length ?? 0) === 0 && (
+              {zeroResultSearches.length === 0 && (
                 <li className="text-sm text-[#615D59]">결과 없는 검색어가 없습니다.</li>
               )}
             </ul>
+            {searchVisible.canMore || searchVisible.canCollapse ? (
+              <div className="mt-3 flex justify-center">
+                <ShowMore
+                  visible={searchVisible.visible}
+                  total={zeroResultSearches.length}
+                  step={GAP_LIST_PAGE_SIZE}
+                  onMore={searchVisible.showMore}
+                  onCollapse={searchVisible.canCollapse ? searchVisible.collapse : undefined}
+                />
+              </div>
+            ) : null}
           </section>
         </div>
       )}
