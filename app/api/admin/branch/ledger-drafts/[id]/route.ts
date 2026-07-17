@@ -8,6 +8,7 @@ import {
   deleteBranchSalesLedgerDraft,
   isBranchSalesLedgerDraftsNotReadyError,
   isBranchSalesLedgerDuplicateActiveCorrectionError,
+  isBranchSalesLedgerNonPositiveAmountError,
   reverseBranchSalesLedgerEntryByDraftId,
   updateBranchSalesLedgerDraft,
   type BranchSalesLedgerDraftKind,
@@ -62,6 +63,13 @@ function duplicateActiveCorrectionResponse(error: unknown) {
   return null
 }
 
+function nonPositiveAmountResponse(error: unknown) {
+  if (isBranchSalesLedgerNonPositiveAmountError(error)) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 400 })
+  }
+  return null
+}
+
 function parseUpdate(raw: Record<string, unknown>): BranchSalesLedgerDraftUpdateInput | NextResponse {
   const update: BranchSalesLedgerDraftUpdateInput = {}
 
@@ -100,6 +108,14 @@ function parseUpdate(raw: Record<string, unknown>): BranchSalesLedgerDraftUpdate
   if (raw.amount !== undefined) {
     const amount = optionalAmount(raw.amount)
     if (amount == null) return NextResponse.json({ error: "금액은 숫자여야 합니다." }, { status: 400 })
+    // 웨이브7(I5): POST와 동일하게 admin API를 통한 amount 수정은 항상 양수만 받는다 — 감액은
+    // 장부 가감(반전 후 재적용)으로 표현한다.
+    if (amount <= 0) {
+      return NextResponse.json(
+        { error: "감액은 장부 가감으로 처리하세요. 금액은 0보다 커야 합니다." },
+        { status: 400 },
+      )
+    }
     update.amount = amount
   }
   if (raw.currency !== undefined) update.currency = optionalString(raw.currency)
@@ -159,6 +175,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return (
       notReadyResponse(error) ??
       duplicateActiveCorrectionResponse(error) ??
+      nonPositiveAmountResponse(error) ??
       NextResponse.json({ error: "Failed to update sales ledger draft" }, { status: 500 })
     )
   }

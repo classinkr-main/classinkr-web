@@ -228,12 +228,29 @@ function isDuplicateActiveCorrectionIndexError(error: { code?: string; message?:
   return error.code === "23505" && haystack.includes(DUPLICATE_ACTIVE_CORRECTION_INDEX)
 }
 
+// 웨이브7(I5) — checked/applied 전이 시 amount>0 CHECK(20260718) 위반. POST/PATCH가 amount<=0을
+// 이미 400으로 막지만, "amount는 그대로 두고 status만 checked로 바꾸는" PATCH(체크 완료 액션)는
+// amount 필드를 건드리지 않아 이 검증을 안 거친다 — 그 경로에서 DB가 막을 때 500 대신 400으로
+// 번역해준다(예: 계약 서명 자동 제안 0원 플레이스홀더를 검수자가 금액 채우기 전에 체크 완료 시도).
+const NON_POSITIVE_AMOUNT_CHECK = "branch_sales_ledger_drafts_amount_positive_check"
+const NON_POSITIVE_AMOUNT_MESSAGE =
+  "금액이 0 이하인 초안은 체크 완료할 수 없습니다. 금액을 입력한 뒤 다시 시도하세요."
+
+function isNonPositiveAmountCheckError(error: { code?: string; message?: string; details?: string }) {
+  const haystack = [error.code, error.message, error.details].filter(Boolean).join(" ").toLowerCase()
+  return error.code === "23514" && haystack.includes(NON_POSITIVE_AMOUNT_CHECK)
+}
+
 export function isBranchSalesLedgerDraftsNotReadyError(error: unknown): error is Error {
   return error instanceof Error && error.message.includes("매출 장부")
 }
 
 export function isBranchSalesLedgerDuplicateActiveCorrectionError(error: unknown): error is Error {
   return error instanceof Error && error.message === DUPLICATE_ACTIVE_CORRECTION_MESSAGE
+}
+
+export function isBranchSalesLedgerNonPositiveAmountError(error: unknown): error is Error {
+  return error instanceof Error && error.message === NON_POSITIVE_AMOUNT_MESSAGE
 }
 
 function notReadyResult(): ListBranchSalesLedgerDraftsResult {
@@ -452,6 +469,7 @@ export async function updateBranchSalesLedgerDraft(
 
   if (error) {
     if (isMissingDraftsTableError(error)) throw new Error(NOT_READY_MESSAGE)
+    if (isNonPositiveAmountCheckError(error)) throw new Error(NON_POSITIVE_AMOUNT_MESSAGE)
     throw new Error(`[branch-sales-ledger-drafts] 수정 실패: ${error.message}`)
   }
 

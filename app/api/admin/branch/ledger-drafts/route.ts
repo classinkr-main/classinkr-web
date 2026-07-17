@@ -122,6 +122,15 @@ export async function POST(req: NextRequest) {
     if (!customer) return NextResponse.json({ error: "고객/계정명은 필수입니다." }, { status: 400 })
     if (!month) return NextResponse.json({ error: "월은 YYYY-MM 형식이어야 합니다." }, { status: 400 })
     if (amount == null) return NextResponse.json({ error: "금액은 숫자여야 합니다." }, { status: 400 })
+    // 웨이브7(I5): 감액은 amount를 음수/0으로 넣는 게 아니라 장부 가감(반전 후 재적용)으로
+    // 표현한다 — admin API를 통한 인간 입력은 항상 양수만 받는다(시스템 자동 제안의 0원
+    // 플레이스홀더는 repository를 직접 호출해 이 경로를 거치지 않는다).
+    if (amount <= 0) {
+      return NextResponse.json(
+        { error: "감액은 장부 가감으로 처리하세요. 금액은 0보다 커야 합니다." },
+        { status: 400 },
+      )
+    }
     if (metadata === null) return NextResponse.json({ error: "metadata must be an object" }, { status: 400 })
     if (sourceSheetRow === null) return NextResponse.json({ error: "sourceSheetRow must be a number" }, { status: 400 })
     if (sourceSnapshot === null) return NextResponse.json({ error: "sourceSnapshot must be an object" }, { status: 400 })
