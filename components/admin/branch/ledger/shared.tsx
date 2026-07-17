@@ -412,7 +412,7 @@ export function WeekNumbersCell({
           key={index}
           title={`W${index + 1} ${formatMoney(value)}`}
           className={`text-[10.5px] leading-tight ${
-            value > 0 ? (inferred ? "font-semibold text-[#A39E98]" : "font-bold text-[#111110]") : "text-[#DDD9D3]"
+            value > 0 ? (inferred ? "font-semibold text-[#615D59]" : "font-bold text-[#111110]") : "text-[#DDD9D3]"
           }`}
         >
           {value > 0 ? formatWeekAmount(value) : "·"}
@@ -477,7 +477,7 @@ export function DonutGauge({
       <div className="min-w-0">
         <p className="truncate text-[12px] font-bold text-[#111110]">{label}</p>
         {value && <p className="mt-1 text-[11px] font-semibold text-[#615D59]">{value}</p>}
-        {goal && <p className="mt-0.5 text-[10.5px] text-[#A39E98]">{goal}</p>}
+        {goal && <p className="mt-0.5 text-[10.5px] text-[#615D59]">{goal}</p>}
       </div>
     </div>
   )
@@ -707,7 +707,7 @@ export function RevWeekNumbersTable({
               {data.map((week, index) => (
                 <td key={`pace-${week.week}`} className="px-2 py-2">
                   <p className="font-semibold text-[#615D59]">{formatMoney(paceAmounts[index])}</p>
-                  <p className="mt-0.5 text-[9.5px] font-semibold text-[#A39E98]">{formatPercent(paceRatios[index] * 100)}</p>
+                  <p className="mt-0.5 text-[9.5px] font-semibold text-[#615D59]">{formatPercent(paceRatios[index] * 100)}</p>
                 </td>
               ))}
               <td className="py-2 pl-2 font-semibold text-[#615D59]">{formatMoney(monthGoal ?? 0)}</td>
@@ -843,7 +843,7 @@ export function DshMonthlyNumbersTable({ rows, selectedMonth }: { rows: MonthlyP
             const pct = row.goal > 0 ? (row.actual / row.goal) * 100 : 0
             const cumPct = row.goalCum > 0 ? (row.actualCum / row.goalCum) * 100 : 0
             const pctTone = !row.confirmed
-              ? "text-[#A39E98]"
+              ? "text-[#615D59]"
               : pct >= 100
                 ? "text-[#084734]"
                 : pct >= 75
@@ -854,7 +854,7 @@ export function DshMonthlyNumbersTable({ rows, selectedMonth }: { rows: MonthlyP
                 <td className="py-2 pr-2 text-left">
                   <span className="font-bold text-[#111110]">{formatMonthLabel(row.month)}</span>
                   {selected && <span className="ml-1.5 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold text-[#084734]">선택</span>}
-                  {!row.confirmed && <span className="ml-1.5 text-[9.5px] font-semibold text-[#A39E98]">예상 구간</span>}
+                  {!row.confirmed && <span className="ml-1.5 text-[9.5px] font-semibold text-[#615D59]">예상 구간</span>}
                 </td>
                 <td className="px-2 py-2">{numberCell(row.goal)}</td>
                 <td className="px-2 py-2">
@@ -927,7 +927,7 @@ export function KpiBottleneckMatrix({
                       <span className={`inline-flex min-w-[54px] justify-center rounded-md px-2 py-1 font-bold ${tone.className}`}>
                         {formatPercent(pct)}
                       </span>
-                      <span className="mt-0.5 block text-[10px] text-[#A39E98]">
+                      <span className="mt-0.5 block text-[10px] text-[#615D59]">
                         {metric ? `${metric.actual}/${metric.goal}` : "0/0"}
                       </span>
                     </td>

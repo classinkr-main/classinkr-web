@@ -2144,7 +2144,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
               ? isMonthOnly
                 ? "font-semibold text-[#7A520F]"
                 : inferred
-                  ? "font-semibold text-[#A39E98]"
+                  ? "font-semibold text-[#615D59]"
                   : "font-bold text-[#111110]"
               : editable
                 ? "text-[#C9C5BF]"
@@ -2436,7 +2436,7 @@ function RevMatrixPasteDialog({
                   <td className="py-1.5 pr-2 text-[#615D59]">{productCategoryMeta(cell.productCategory).shortLabel}</td>
                   <td className="py-1.5 pr-2 font-semibold text-[#615D59]">{formatMonthLabel(cell.month)}</td>
                   <td className="py-1.5 pr-2 text-right tabular-nums">
-                    <span className="text-[#A39E98]">{cell.current > 0 ? formatMoney(cell.current) : "·"}</span>
+                    <span className="text-[#615D59]">{cell.current > 0 ? formatMoney(cell.current) : "·"}</span>
                     <span className="mx-1 text-[#A39E98]">→</span>
                     <span className="font-bold text-[#111110]">{formatMoney(cell.next)}</span>
                   </td>
