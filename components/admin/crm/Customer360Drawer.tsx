@@ -8,7 +8,6 @@ import {
   ArrowRight,
   ArrowUpRight,
   Briefcase,
-  Building2,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
@@ -16,13 +15,9 @@ import {
   ClipboardList,
   Coins,
   ExternalLink,
-  FileAudio,
-  FileText,
-  Globe,
   ListChecks,
   MessageSquare,
   Phone,
-  PhoneCall,
   Plus,
   RefreshCw,
   Sparkles,
@@ -37,6 +32,7 @@ import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import CrmCustomerFlags from "./CrmCustomerFlags"
 import CrmCustomerPicker from "./CrmCustomerPicker"
+import { eventSourceIcon, eventSourceLabel } from "./event-source-meta"
 import ActivityQuickForm from "./rail/ActivityQuickForm"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
 import { LEAD_BADGE_TONE_CLASSES } from "@/lib/crm/lead-badges"
@@ -108,32 +104,7 @@ const TASK_TYPE_OPTIONS: Array<{ value: CrmTaskType; label: string }> = [
   { value: "other", label: "기타" },
 ]
 
-const EVENT_SOURCE_LABEL: Record<string, string> = {
-  manual_note: "메모",
-  meeting_minutes: "회의록",
-  call: "콜",
-  sms: "문자",
-  recording: "녹음",
-  calendar_event: "캘린더",
-  lead_contact_log: "리드 연락",
-  external_crm: "외부 CRM",
-  sheet: "시트",
-  site_inflow: "홈페이지 유입",
-}
-
-// 활동 출처별 아이콘 — 타임라인을 유형으로 빠르게 스캔.
-const EVENT_SOURCE_ICON: Record<string, React.ReactNode> = {
-  manual_note: <StickyNote className="h-3.5 w-3.5" />,
-  meeting_minutes: <FileText className="h-3.5 w-3.5" />,
-  call: <PhoneCall className="h-3.5 w-3.5" />,
-  sms: <MessageSquare className="h-3.5 w-3.5" />,
-  recording: <FileAudio className="h-3.5 w-3.5" />,
-  calendar_event: <CalendarClock className="h-3.5 w-3.5" />,
-  lead_contact_log: <PhoneCall className="h-3.5 w-3.5" />,
-  external_crm: <Building2 className="h-3.5 w-3.5" />,
-  sheet: <ClipboardList className="h-3.5 w-3.5" />,
-  site_inflow: <Globe className="h-3.5 w-3.5" />,
-}
+// 활동 출처 라벨·아이콘 — event-source-meta.tsx SSOT(타임라인을 유형으로 빠르게 스캔).
 
 // 고정 컴포저 본문 textarea id — 헤더 '활동 기록'·추천 '메모 남기기' CTA의 포커스 대상.
 // 콜/문자/메모/회의록 입력은 전부 고정 컴포저(ActivityQuickForm)가 담당한다(구 인라인 폼 제거).
@@ -1380,12 +1351,12 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                             event.sentiment === "risk" ? "bg-[#FEF3EE] text-[#B85C33]" : "bg-[#fafaf8] text-[#1a1a1a]/45"
                           }`}
                         >
-                          {EVENT_SOURCE_ICON[event.sourceType] ?? <ClipboardList className="h-3.5 w-3.5" />}
+                          {eventSourceIcon(event.sourceType)}
                         </span>
                         <div className="min-w-0 flex-1 border-b border-[#f5f5f2] pb-2.5">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-[11px] font-semibold text-[#1a1a1a]/45">
-                              {EVENT_SOURCE_LABEL[event.sourceType] ?? event.sourceType}
+                              {eventSourceLabel(event.sourceType)}
                             </span>
                             <span className="text-[11px] text-[#1a1a1a]/35">{formatDate(event.occurredAt)}</span>
                             {author ? <span className="text-[11px] text-[#1a1a1a]/35">· {author}</span> : null}

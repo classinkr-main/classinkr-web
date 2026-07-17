@@ -125,19 +125,7 @@ export const DEAL_STATUS_LABEL: Record<string, string> = {
   lost: "실패",
 }
 
-// ── 활동(이벤트) 출처 라벨 ──────────────────────────────────────────────
-export const EVENT_SOURCE_LABEL: Record<string, string> = {
-  manual_note: "메모",
-  meeting_minutes: "회의록",
-  call: "콜",
-  sms: "문자",
-  recording: "녹음",
-  calendar_event: "캘린더",
-  lead_contact_log: "리드 연락",
-  external_crm: "외부 CRM",
-  sheet: "시트",
-  site_inflow: "홈페이지 유입",
-}
+// 활동(이벤트) 출처 라벨·아이콘은 event-source-meta.tsx SSOT 사용(재선언 금지).
 
 export const SENTIMENT_LABEL: Record<string, string> = {
   positive: "긍정",

@@ -1,29 +1,17 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import {
-  Building2,
-  CalendarClock,
-  CheckCircle2,
-  Circle,
-  ClipboardList,
-  FileAudio,
-  FileText,
-  Globe,
-  MessageSquare,
-  PhoneCall,
-  StickyNote,
-} from "lucide-react"
+import { CheckCircle2, Circle } from "lucide-react"
 
 import { Panel, TableEmpty } from "@/components/admin/viz"
 import type { CrmCustomerEventRecord, ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
 
 import {
   Chip,
-  EVENT_SOURCE_LABEL,
   formatDateTime,
   SENTIMENT_LABEL,
 } from "./Customer360DetailShared"
+import { eventSourceIcon, eventSourceLabel } from "./event-source-meta"
 
 type ActivityFilter = "all" | "memo" | "meeting" | "calls_etc"
 
@@ -33,19 +21,6 @@ const FILTERS: Array<{ key: ActivityFilter; label: string }> = [
   { key: "meeting", label: "회의록" },
   { key: "calls_etc", label: "통화·기타" },
 ]
-
-const SOURCE_ICON: Record<string, React.ReactNode> = {
-  manual_note: <StickyNote className="h-3.5 w-3.5" />,
-  meeting_minutes: <FileText className="h-3.5 w-3.5" />,
-  recording: <FileAudio className="h-3.5 w-3.5" />,
-  calendar_event: <CalendarClock className="h-3.5 w-3.5" />,
-  lead_contact_log: <PhoneCall className="h-3.5 w-3.5" />,
-  external_crm: <Building2 className="h-3.5 w-3.5" />,
-  sheet: <ClipboardList className="h-3.5 w-3.5" />,
-  call: <PhoneCall className="h-3.5 w-3.5" />,
-  sms: <MessageSquare className="h-3.5 w-3.5" />,
-  site_inflow: <Globe className="h-3.5 w-3.5" />,
-}
 
 function matchesFilter(event: CrmCustomerEventRecord, filter: ActivityFilter): boolean {
   if (filter === "all") return true
@@ -94,12 +69,12 @@ function ActivityCard({ event }: { event: CrmCustomerEventRecord }) {
           event.sentiment === "risk" ? "bg-[#FEF3EE] text-[#B85C33]" : "bg-[#fafaf8] text-[#1a1a1a]/45"
         }`}
       >
-        {SOURCE_ICON[event.sourceType] ?? <ClipboardList className="h-3.5 w-3.5" />}
+        {eventSourceIcon(event.sourceType)}
       </span>
       <div className="min-w-0 flex-1 rounded-2xl border border-[#f0f0ec] bg-white p-3.5">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] font-semibold text-[#1a1a1a]/45">
-            {EVENT_SOURCE_LABEL[event.sourceType] ?? event.sourceType}
+            {eventSourceLabel(event.sourceType)}
           </span>
           <span className="text-[11px] text-[#1a1a1a]/35">{formatDateTime(event.occurredAt)}</span>
           {event.ownerName ? <span className="text-[11px] text-[#1a1a1a]/35">· {event.ownerName}</span> : null}

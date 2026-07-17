@@ -15,23 +15,18 @@ import {
   ChevronUp,
   ClipboardList,
   Coins,
-  FileAudio,
-  FileText,
-  Globe,
   Loader2,
-  MessageSquare,
-  PhoneCall,
   Plus,
   Receipt,
   RefreshCw,
   Search,
-  StickyNote,
   Wallet,
   X,
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { formatCNY, formatUSD } from "@/lib/crm/money-format"
+import { CRM_EVENT_SOURCE_TYPES, eventSourceIcon, eventSourceLabel } from "./event-source-meta"
 import type {
   NeoCrmCustomerDetail,
   NeoCrmCustomerList,
@@ -184,18 +179,12 @@ function SummaryChip({ label, value, tone = "text-[#111110]" }: { label: string;
   )
 }
 
-// 타임라인 한 줄을 만드는 메타(출처 라벨·아이콘). NEO 파생(오더/수금/성과)은 tone=neo로 표기.
+// 타임라인 한 줄을 만드는 메타(출처 라벨·아이콘). crm 이벤트 출처는 event-source-meta SSOT에서
+// 파생하고, NEO 파생(오더/수금/성과)만 여기서 tone=neo로 추가 표기한다.
 const TIMELINE_META: Record<string, { label: string; icon: ReactNode; tone?: "neo" }> = {
-  manual_note: { label: "메모", icon: <StickyNote className="h-3.5 w-3.5" /> },
-  meeting_minutes: { label: "회의록", icon: <FileText className="h-3.5 w-3.5" /> },
-  call: { label: "콜", icon: <PhoneCall className="h-3.5 w-3.5" /> },
-  sms: { label: "문자", icon: <MessageSquare className="h-3.5 w-3.5" /> },
-  recording: { label: "녹음", icon: <FileAudio className="h-3.5 w-3.5" /> },
-  calendar_event: { label: "캘린더", icon: <CalendarClock className="h-3.5 w-3.5" /> },
-  lead_contact_log: { label: "리드 연락", icon: <PhoneCall className="h-3.5 w-3.5" /> },
-  external_crm: { label: "외부 CRM", icon: <Building2 className="h-3.5 w-3.5" /> },
-  sheet: { label: "기록", icon: <ClipboardList className="h-3.5 w-3.5" /> },
-  site_inflow: { label: "홈페이지 유입", icon: <Globe className="h-3.5 w-3.5" /> },
+  ...Object.fromEntries(
+    CRM_EVENT_SOURCE_TYPES.map((type) => [type, { label: eventSourceLabel(type), icon: eventSourceIcon(type) }])
+  ),
   order: { label: "오더 · NEO", icon: <Receipt className="h-3.5 w-3.5" />, tone: "neo" },
   collection: { label: "수금 · NEO", icon: <Coins className="h-3.5 w-3.5" />, tone: "neo" },
   performance: { label: "성과 · NEO", icon: <Award className="h-3.5 w-3.5" />, tone: "neo" },
