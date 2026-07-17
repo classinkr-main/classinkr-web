@@ -2017,6 +2017,37 @@ export function isMatrixCellEditable(row: LedgerRevenueRow, month: string, corre
   return !isMatrixCellLocked(row, month, correctedMonths)
 }
 
+// 품질 웨이브 7 — 항목 1: 레일 폼(InputRailSection) 저장이 실제로 targeting할 (행, 월)을 찾는다.
+// new-row(신규 고객)는 대응 매트릭스 행이 없어 항상 undefined — 잠금 사전검사 대상이 아니다.
+// editingDraft가 있으면(레일에서 초안을 편집 중) 그 초안의 딜 정체성(sourceDealId 우선,
+// metadata.sourceDealId 폴백 — saveEditedDraft의 dedupRow 판정과 동일 규약)으로 대응 행을 찾고,
+// 없으면(방금 선택한 행 기준 새 edit-row 초안을 만드는 중) selectedRow를 그대로 쓴다.
+export function resolveDraftEditTargetRow(
+  editingDraft: LedgerDraft | null,
+  selectedRow: LedgerRevenueRow | null,
+  rowByDealKey: Map<string, LedgerRevenueRow>,
+): LedgerRevenueRow | undefined {
+  if (!editingDraft) return selectedRow ?? undefined
+  if (editingDraft.kind !== "edit-row") return undefined
+  const dealKey = editingDraft.sourceDealId ?? metadataString(editingDraft.metadata, "sourceDealId")
+  return dealKey ? rowByDealKey.get(dealKey) : undefined
+}
+
+// 품질 웨이브 7 — 항목 1: 레일 폼이 지금 저장하면 그 (행, 월) 셀이 이미 확정/장부반영 등으로
+// 잠긴 상태인지 판정한다. isEditRowTarget이 false면(new-row 저장, 또는 아직 edit-row를 만들 수
+// 없는 상태) 애초에 잠길 대상이 없으므로 항상 false — saveDraft(new-row)/신규 입력 버튼은
+// 이 사전검사로 절대 막히지 않는다. isMatrixCellLocked(매트릭스 셀 잠금)와 동일 판정을 재사용해
+// 제출 전에 서버 PATCH가 409로 튕기는 헛수고를 없앤다.
+export function isDraftFormTargetLocked(
+  isEditRowTarget: boolean,
+  targetRow: LedgerRevenueRow | null | undefined,
+  month: string,
+  correctedMonths?: Set<string> | null,
+): boolean {
+  if (!isEditRowTarget || !targetRow) return false
+  return isMatrixCellLocked(targetRow, month, correctedMonths)
+}
+
 // ── SL-2: 엑셀 클립보드 TSV 붙여넣기 → 초안 큐 벌크 라우팅 ──────────────────────
 // 선택된 월 셀을 앵커로 TSV 그리드를 (행: 보이는 딜행 순서 아래로, 열: 회계월 순서 오른쪽으로)
 // 투영해 "무엇이 어떤 셀로 가는지" 프리뷰 계획을 만든다. 커밋은 셀 편집과 완전히 같은
@@ -5536,6 +5567,21 @@ export default function SalesLedgerWorkbench() {
     return `/admin/branch?${params.toString()}`
   }, [team, period, selectedMonth, query, managerFilter])
   const canCreateEditDraft = Boolean(selectedRow && (selectedRow.ledgerOrigin === "sheet" || selectedRow.sourceDealId))
+  // 품질 웨이브 7 — 항목 1: 레일 폼 잠금 사전검사. 지금 저장하면 targeting할 (행, 월)이 이미
+  // isMatrixCellLocked(correctedMonths 포함)면 InputRailSection이 서버로 보내기 전에 인라인
+  // 경고로 막는다 — 적용된 정정과 겹쳐 409를 부르는 헛수고 제거(집계·저장 로직은 무변경, 제출
+  // 직전 판정만 추가).
+  const draftEditTargetRow = resolveDraftEditTargetRow(editingDraft, selectedRow, rowByDealKey)
+  const isEditRowSaveTarget = editingDraft ? editingDraft.kind === "edit-row" : canCreateEditDraft
+  const targetCellLocked = useMemo(
+    () => isDraftFormTargetLocked(
+      isEditRowSaveTarget,
+      draftEditTargetRow,
+      draftForm.month,
+      draftEditTargetRow ? editRowOverrideMonths.get(draftEditTargetRow.id) : null,
+    ),
+    [isEditRowSaveTarget, draftEditTargetRow, draftForm.month, editRowOverrideMonths],
+  )
   const draftAmountValue = safeAmount(draftForm.amount)
   const draftAmountInvalid = !draftForm.amount.trim() || draftAmountValue <= 0
   const draftQuantityInvalid = draftForm.operation === "quantity-change" && draftForm.quantity.trim() !== "" && safeAmount(draftForm.quantity) <= 0
@@ -7014,6 +7060,7 @@ export default function SalesLedgerWorkbench() {
             draftFormInvalid={draftFormInvalid}
             draftSaving={draftSaving}
             canCreateEditDraft={canCreateEditDraft}
+            targetCellLocked={targetCellLocked}
             saveEditedDraft={saveEditedDraft}
             cancelDraftEdit={cancelDraftEdit}
             saveDraft={saveDraft}

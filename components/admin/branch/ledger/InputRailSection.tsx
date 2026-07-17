@@ -34,6 +34,10 @@ interface InputRailSectionProps {
   draftFormInvalid: boolean
   draftSaving: boolean
   canCreateEditDraft: boolean
+  // 품질 웨이브 7 — 항목 1: 지금 저장하면 targeting할 (행, 월) 셀이 이미 확정/장부반영으로 잠긴
+  // 상태인지(SalesLedgerWorkbench의 isMatrixCellLocked 사전검사, correctedMonths 포함). true면
+  // 제출 자체를 막고 인라인 경고만 보여준다 — 서버가 어차피 409로 튕길 걸 미리 걸러 헛수고를 없앤다.
+  targetCellLocked: boolean
   // DraftSaveResult.persisted: 서버에 실제로 저장됐으면 true, 로컬 폴백(장부 적용 불가)이면 false.
   // DraftSaveResult.deduped: 이중계상 가드(품질 웨이브 3, 항목 3)가 새 초안 대신 이미 열린 초안을
   // 갱신했으면 true. DraftSaveResult.duplicateWarning(품질 웨이브 4, 항목 2): new-row 저장인데 같은
@@ -57,6 +61,7 @@ export function InputRailSection({
   draftFormInvalid,
   draftSaving,
   canCreateEditDraft,
+  targetCellLocked,
   saveEditedDraft,
   cancelDraftEdit,
   saveDraft,
@@ -95,11 +100,23 @@ export function InputRailSection({
   // Enter를 아예 무시한다 — 실측 확인됨). 나머지 버튼은 type="button"으로 자기 kind를 직접 저장한다.
   const primaryDraftKind: DraftKind = canCreateEditDraft ? "edit-row" : "new-row"
 
+  // 품질 웨이브 7 — 항목 1: targetCellLocked는 부모가 이미 "지금 제출이 edit-row 경로로 가는지"
+  // (editingDraft.kind==="edit-row" 또는 canCreateEditDraft)까지 반영해 계산해준다 — new-row
+  // 저장·new-row 초안 편집은 대응 매트릭스 행이 없어 부모 쪽에서 항상 false로 내려온다. 여기서는
+  // 그대로 소비만 한다(중복 판정 없음).
+  const blockedByLock = targetCellLocked
+  const LOCK_WARNING_TEXT =
+    "이 딜의 해당 월 셀은 이미 잠겨 있습니다(시트 확정·장부 반영 등) — 수정 초안을 저장할 수 없습니다. 다른 월을 선택하거나 체크 큐에서 확인하세요."
+
   // form 래핑으로 Enter 제출 — 편집 중이면 그 초안 갱신, 아니면 primaryDraftKind로 저장.
   // 실제 버튼 클릭도 동일 코드 경로를 타 두 번 저장되지 않는다(submit 버튼은 onClick 없음).
   const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (draftSaving || draftFormInvalid) return
+    if (blockedByLock) {
+      setFeedback({ kind: "warning", text: LOCK_WARNING_TEXT })
+      return
+    }
     if (editingDraft) {
       void runSave(saveEditedDraft)
     } else {
@@ -297,6 +314,13 @@ export function InputRailSection({
                   고객명과 0보다 큰 금액을 입력해야 저장할 수 있습니다.
                 </p>
               )}
+              {/* 품질 웨이브 7 — 항목 1: 제출을 시도하기 전에도 잠금 사실을 미리 보여준다(사전검사가
+                  버튼 disabled로만 조용히 막으면 왜 막혔는지 알기 어렵다) — 인라인 경고 + 차단. */}
+              {blockedByLock && (
+                <p className="rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#7A520F]" role="alert">
+                  {LOCK_WARNING_TEXT}
+                </p>
+              )}
               {feedback && (
                 <p
                   role="status"
@@ -317,7 +341,7 @@ export function InputRailSection({
                       이 버튼과 같은 저장을 수행한다. onClick을 따로 달면 클릭 시 두 번 저장된다. */}
                   <button
                     type="submit"
-                    disabled={draftSaving || draftFormInvalid}
+                    disabled={draftSaving || draftFormInvalid || blockedByLock}
                     className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     {draftSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
@@ -344,8 +368,11 @@ export function InputRailSection({
                       onClick으로 자기 kind를 직접 저장(클릭 시 이중 저장 방지). */}
                   <button
                     type={primaryDraftKind === "edit-row" ? "submit" : "button"}
-                    onClick={primaryDraftKind === "edit-row" ? undefined : () => void runSave(() => saveDraft("edit-row"))}
-                    disabled={draftSaving || !canCreateEditDraft || draftFormInvalid}
+                    onClick={primaryDraftKind === "edit-row" ? undefined : () => {
+                      if (blockedByLock) { setFeedback({ kind: "warning", text: LOCK_WARNING_TEXT }); return }
+                      void runSave(() => saveDraft("edit-row"))
+                    }}
+                    disabled={draftSaving || !canCreateEditDraft || draftFormInvalid || blockedByLock}
                     className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     {draftSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
