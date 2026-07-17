@@ -17,9 +17,16 @@ import { draftStatusMeta } from "@/components/admin/branch/SalesLedgerWorkbench"
 // 소스 스캔 방식은 tests/branch/ledger-entry-reversal-exclusion.test.ts와 동일 관례를 따른다
 // (ledgerEntryRows/appliedDraftFallbackRows는 훅 상태에 묶인 비export useMemo라 직접 호출 불가).
 const workbenchPath = join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx")
+// 웨이브 7 2단(F5): 서버 입력 큐 훅(useLedgerDraftQueue: reverseEntry·loadDrafts 포함)은
+// ledger/useLedgerDraftQueue.ts로 물리 이동됐다(로직 무변경) — 훅 내부를 보는 스캔은 이 파일을 읽는다.
+const hookPath = join(process.cwd(), "components/admin/branch/ledger/useLedgerDraftQueue.ts")
 
 function workbenchSource() {
   return readFileSync(workbenchPath, "utf8")
+}
+
+function hookSource() {
+  return readFileSync(hookPath, "utf8")
 }
 
 describe("draftStatusMeta — 적용완료(상쇄) 배지 분기(웨이브 5 로직 + 웨이브 7 라벨 SSOT)", () => {
@@ -50,7 +57,7 @@ describe("draftStatusMeta — 적용완료(상쇄) 배지 분기(웨이브 5 로
 
 describe("reverseEntry 훅 — 서버 응답을 그대로 신뢰(웨이브 5)", () => {
   it("PATCH body에 action:'reverse'를 싣고, reason이 있을 때만 실어 보낸다", () => {
-    const source = workbenchSource()
+    const source = hookSource()
     const fnStart = source.indexOf("const reverseEntry = useCallback")
     expect(fnStart).toBeGreaterThan(-1)
     const fnEnd = source.indexOf("}, [queueMode])", fnStart)
@@ -63,7 +70,7 @@ describe("reverseEntry 훅 — 서버 응답을 그대로 신뢰(웨이브 5)", 
   })
 
   it("로컬(local-*) 초안은 서버에 적용된 적이 없으니 되돌리기 대상에서 막는다", () => {
-    const source = workbenchSource()
+    const source = hookSource()
     const fnStart = source.indexOf("const reverseEntry = useCallback")
     const fnEnd = source.indexOf("}, [queueMode])", fnStart)
     const fnBody = source.slice(fnStart, fnEnd)
@@ -71,7 +78,7 @@ describe("reverseEntry 훅 — 서버 응답을 그대로 신뢰(웨이브 5)", 
   })
 
   it("성공 시 서버가 돌려준 entry로 ledgerEntries를 교체한다(로컬에서 entryStatus를 직접 뒤집지 않음)", () => {
-    const source = workbenchSource()
+    const source = hookSource()
     const fnStart = source.indexOf("const reverseEntry = useCallback")
     const fnEnd = source.indexOf("}, [queueMode])", fnStart)
     const fnBody = source.slice(fnStart, fnEnd)
@@ -163,7 +170,7 @@ describe("handleReverseEntry — 성공/실패 토스트(웨이브 5, 에러 우
 
 describe("draft.status 불변 가드 (웨이브 5 — 백엔드와 동일 계약을 프런트도 건드리지 않는지)", () => {
   it("reverseEntry는 draft.status를 update하지 않는다 — action:'reverse'만 보내고 status 필드를 싣지 않는다", () => {
-    const source = workbenchSource()
+    const source = hookSource()
     const fnStart = source.indexOf("const reverseEntry = useCallback")
     const fnEnd = source.indexOf("}, [queueMode])", fnStart)
     const fnBody = source.slice(fnStart, fnEnd)
@@ -182,7 +189,7 @@ describe("draft.status 불변 가드 (웨이브 5 — 백엔드와 동일 계약
 // loadDrafts가 마운트마다(최초 마운트 포함) 이 서버 진실로 reversedDraftIds를 시드한다.
 describe("loadDrafts — reversedDraftIds 서버 시드 (P0, 재마운트 시나리오)", () => {
   it("data.reversedDraftIds가 있으면 setReversedDraftIds로 로컬 Set과 합집합한다", () => {
-    const source = workbenchSource()
+    const source = hookSource()
     const fnStart = source.indexOf("const loadDrafts = useCallback")
     expect(fnStart).toBeGreaterThan(-1)
     const fnEnd = source.indexOf("}, [])", fnStart)
@@ -198,7 +205,7 @@ describe("loadDrafts — reversedDraftIds 서버 시드 (P0, 재마운트 시나
   })
 
   it("시드 코드가 health.ok===false 조기 반환보다 먼저 실행된다 — 어느 분기로 가든 항상 시드된다", () => {
-    const source = workbenchSource()
+    const source = hookSource()
     const fnStart = source.indexOf("const loadDrafts = useCallback")
     const fnEnd = source.indexOf("}, [])", fnStart)
     const fnBody = source.slice(fnStart, fnEnd)
@@ -211,12 +218,12 @@ describe("loadDrafts — reversedDraftIds 서버 시드 (P0, 재마운트 시나
   })
 
   it("최초 마운트 effect가 loadDrafts를 무조건 호출한다 — 재마운트마다 시드가 재실행됨을 보장", () => {
-    const source = workbenchSource()
+    const source = hookSource()
     expect(source).toContain("useEffect(() => {\n    void loadDrafts()\n  }, [loadDrafts])")
   })
 
   it("LedgerDraftsResponse 타입이 reversedDraftIds?: string[]를 선언한다(서버 계약 문서화)", () => {
-    const source = workbenchSource()
+    const source = hookSource()
     const ifaceStart = source.indexOf("interface LedgerDraftsResponse")
     expect(ifaceStart).toBeGreaterThan(-1)
     // 닫는 중괄호가 줄 맨 앞에 오는 지점(top-level close)을 찾는다 — 필드 중 하나가

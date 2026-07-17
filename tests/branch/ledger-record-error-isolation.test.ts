@@ -15,9 +15,17 @@ import { isDraftRecordError } from "@/components/admin/branch/SalesLedgerWorkben
 // 소스 스캔 방식은 tests/branch/ledger-entry-reverse-action.test.ts와 동일 관례를 따른다
 // (useLedgerDraftQueue는 훅 내부 클로저라 직접 렌더하지 않고는 호출할 수 없다).
 const workbenchPath = join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx")
+// 웨이브 7 2단(F5): useLedgerDraftQueue(updateDraft/toggleDraft/deleteDraft/loadDrafts 포함)는
+// ledger/useLedgerDraftQueue.ts로 물리 이동됐다(로직 무변경) — 훅 내부 스캔은 이 파일을 읽는다.
+// isDraftRecordError는 워크벤치가 재수출하므로 import 표면은 그대로다.
+const hookPath = join(process.cwd(), "components/admin/branch/ledger/useLedgerDraftQueue.ts")
 
 function workbenchSource() {
   return readFileSync(workbenchPath, "utf8")
+}
+
+function hookSource() {
+  return readFileSync(hookPath, "utf8")
 }
 
 function sliceFn(source: string, startMarker: string, endMarker: string) {
@@ -48,7 +56,7 @@ describe("isDraftRecordError — 4xx 레코드 오류 판정(품질 웨이브 7,
 
 describe("updateDraft — 레코드 오류는 전역 강등 없이 그 행에만(품질 웨이브 7, 항목 2)", () => {
   const fnBody = () => sliceFn(
-    workbenchSource(),
+    hookSource(),
     "const updateDraft = useCallback",
     "}, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])",
   )
@@ -98,7 +106,7 @@ describe("updateDraft — 레코드 오류는 전역 강등 없이 그 행에만
 
 describe("toggleDraft — 레코드 오류는 전역 강등 없이 그 행에만(품질 웨이브 7, 항목 2)", () => {
   const fnBody = () => sliceFn(
-    workbenchSource(),
+    hookSource(),
     "const toggleDraft = useCallback",
     "}, [clearRecordError, drafts, queueMode, setRecordError, updateLocalDrafts])",
   )
@@ -135,7 +143,7 @@ describe("toggleDraft — 레코드 오류는 전역 강등 없이 그 행에만
 
 describe("deleteDraft — 레코드 오류는 전역 강등 없이 그 행에만(품질 웨이브 7, 항목 2)", () => {
   const fnBody = () => sliceFn(
-    workbenchSource(),
+    hookSource(),
     "const deleteDraft = useCallback",
     "}, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])",
   )
@@ -160,7 +168,7 @@ describe("deleteDraft — 레코드 오류는 전역 강등 없이 그 행에만
 
 describe("recordErrors — 훅 반환값과 재조회 시 초기화(품질 웨이브 7, 항목 2)", () => {
   it("useLedgerDraftQueue가 recordErrors를 반환 객체에 포함한다", () => {
-    const source = workbenchSource()
+    const source = hookSource()
     const returnStart = source.indexOf("return {", source.indexOf("function useLedgerDraftQueue"))
     const returnEnd = source.indexOf("reloadDrafts: loadDrafts,", returnStart)
     expect(returnEnd).toBeGreaterThan(returnStart)
@@ -168,7 +176,7 @@ describe("recordErrors — 훅 반환값과 재조회 시 초기화(품질 웨�
   })
 
   it("loadDrafts가 서버 응답을 받으면(health 분기 이전) recordErrors를 비운다 — 재조회가 실제 상태를 다시 맞추므로", () => {
-    const source = workbenchSource()
+    const source = hookSource()
     const fnStart = source.indexOf("const loadDrafts = useCallback")
     const fnEnd = source.indexOf("}, [])", fnStart)
     const fnBody = source.slice(fnStart, fnEnd)
@@ -180,7 +188,7 @@ describe("recordErrors — 훅 반환값과 재조회 시 초기화(품질 웨�
   })
 
   it("loadDrafts 자체가 실패해 로컬 큐로 전환할 때도 recordErrors를 비운다", () => {
-    const source = workbenchSource()
+    const source = hookSource()
     const fnStart = source.indexOf("const loadDrafts = useCallback")
     const fnEnd = source.indexOf("}, [])", fnStart)
     const fnBody = source.slice(fnStart, fnEnd)

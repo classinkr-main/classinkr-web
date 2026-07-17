@@ -20,10 +20,17 @@ import {
 // 소스 스캔 방식은 tests/branch/ledger-record-error-isolation.test.ts와 동일 관례를 따른다
 // (useLedgerDraftQueue는 훅 내부 클로저라 직접 렌더하지 않고는 호출할 수 없다).
 const workbenchPath = join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx")
+// 웨이브 7 2단(F5): useLedgerDraftQueue(createDraft/updateDraft/toggleDraft/applyDraft/reverseEntry)는
+// ledger/useLedgerDraftQueue.ts로 물리 이동됐다(로직 무변경) — 훅 내부 스캔은 이 파일을 읽는다.
+const hookPath = join(process.cwd(), "components/admin/branch/ledger/useLedgerDraftQueue.ts")
 const railPath = join(process.cwd(), "components/admin/branch/ledger/InputRailSection.tsx")
 
 function workbenchSource() {
   return readFileSync(workbenchPath, "utf8")
+}
+
+function hookSource() {
+  return readFileSync(hookPath, "utf8")
 }
 
 function railSource() {
@@ -39,13 +46,13 @@ function sliceFn(source: string, startMarker: string, endMarker: string) {
 }
 
 const updateDraftBody = () => sliceFn(
-  workbenchSource(),
+  hookSource(),
   "const updateDraft = useCallback",
   "}, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])",
 )
 
 const createDraftBody = () => sliceFn(
-  workbenchSource(),
+  hookSource(),
   "const createDraft = useCallback",
   "}, [queueMode, updateLocalDrafts])",
 )
@@ -119,7 +126,7 @@ describe("updateDraft — expectedUpdatedAt 동봉(웨이브 7 2단, I4)", () =>
 describe("status 전이·apply·reverse 경로는 expectedUpdatedAt을 보내지 않는다(서버 미지원)", () => {
   it("toggleDraft(체크 토글)는 { status }만 보낸다", () => {
     const body = sliceFn(
-      workbenchSource(),
+      hookSource(),
       "const toggleDraft = useCallback",
       "}, [clearRecordError, drafts, queueMode, setRecordError, updateLocalDrafts])",
     )
@@ -128,7 +135,7 @@ describe("status 전이·apply·reverse 경로는 expectedUpdatedAt을 보내지
   })
 
   it("applyDraft/reverseEntry는 action 바디만 보낸다", () => {
-    const source = workbenchSource()
+    const source = hookSource()
     const applyBody = sliceFn(source, "const applyDraft = useCallback", "}, [drafts, loadDrafts, queueMode])")
     expect(applyBody).toContain('JSON.stringify({ action: "apply" })')
     expect(applyBody).not.toContain("expectedUpdatedAt")
