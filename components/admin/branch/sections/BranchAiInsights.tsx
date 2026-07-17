@@ -5,6 +5,7 @@ import type { BranchSummaryResponse, Team } from "../types"
 import { adminFetchJson } from "../client-api"
 import { cny } from "@/lib/branch/money-format"
 import { TEAM_COLORS } from "@/lib/branch/team-colors"
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 
 interface NextAction { title: string; why: string; owner: string; due?: string }
 
@@ -141,7 +142,9 @@ function ExternalReport({ summary, lang }: { summary: BranchSummaryResponse | nu
         <div className="mt-3 grid grid-cols-3 gap-3">
           <div className="rounded-lg bg-[#F6F5F4] p-3">
             <p className="text-[10.5px] text-[#615D59]">{t.revenueLabel}</p>
-            <p className="mt-1 text-[18px] font-bold leading-none tracking-[-0.01em]" style={{ color: "#B43E3E" }}>
+            {/* 확정 매출 = 캐논 그린(CONFIDENCE_TOKENS.confirmed) — 이 카드는 본사 발송
+                인쇄 리포트라 위험(Danger) 빨강과 절대 혼동돼선 안 된다(품질 웨이브 5 — 항목 1). */}
+            <p className="mt-1 text-[18px] font-bold leading-none tracking-[-0.01em]" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>
               ¥{cny(rev.confirmed)}
             </p>
           </div>
