@@ -222,7 +222,9 @@ export default function DealModal({
               <p className="text-[11px] font-bold text-[#111110]">월별 매출 로그</p>
               {!deal.detailError && monthlyEntries.length > 0 && (
                 <p className="text-[10.5px] text-[#615D59]">
-                  확정 <span className="font-bold text-[#B43E3E]"><MoneyValue value={confirmedSum} /></span>
+                  {/* 품질 웨이브 4 — 항목 1. 확정 합계는 캐논 그린(CONFIDENCE_TOKENS.confirmed) —
+                      빨강 하드코딩 잔존을 :158과 동일 캐논으로 맞춘다(같은 파일 내 모순 해소). */}
+                  확정 <span className={`font-bold ${CONFIDENCE_TOKENS.confirmed.textClass}`}><MoneyValue value={confirmedSum} /></span>
                   {targetVal ? <> / 목표 <MoneyValue value={targetVal} /></> : ""}
                 </p>
               )}
@@ -254,7 +256,7 @@ export default function DealModal({
                     <li key={ym}
                       className="flex items-center justify-between rounded px-1.5 py-1 text-[12px] hover:bg-[#FAFAF8]">
                       <span className="flex items-center gap-2">
-                        <span className={`h-1.5 w-1.5 rounded-full ${confirmed ? "bg-[#B43E3E]" : "bg-[#A8741A]"}`} aria-hidden="true" />
+                        <span className={`h-1.5 w-1.5 rounded-full ${confirmed ? CONFIDENCE_TOKENS.confirmed.bgClass : CONFIDENCE_TOKENS.expected.bgClass}`} aria-hidden="true" />
                         <span className="font-mono text-[11.5px] text-[#615D59]">{ym}</span>
                         {!confirmed && <span className="text-[10px] font-semibold text-[#A8741A]">미확정</span>}
                         {confirmed && confirmedAmount < amount && (
