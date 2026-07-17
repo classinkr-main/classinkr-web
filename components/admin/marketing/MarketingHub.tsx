@@ -1310,7 +1310,9 @@ export default function MarketingHub({
                 ) : (
                   <>
                     <SubscriberTable
-                      subscribers={filteredSubscribers.slice(0, visibleSubscriberCount)}
+                      subscribers={filteredSubscribers}
+                      visibleCount={visibleSubscriberCount}
+                      filterSignature={`${query}|${statusFilter}|${sourceFilter}`}
                       onDelete={setDeleteTarget}
                       onCompose={handleComposeFromSubscriber}
                       onAddSubscriber={() => setIsFormOpen(true)}
