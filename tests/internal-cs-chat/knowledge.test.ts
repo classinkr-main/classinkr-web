@@ -34,6 +34,19 @@ describe("internal CS curated knowledge", () => {
     expect(result.recommendedTags).toContain("intent:hq_confirmation")
   })
 
+  it("surfaces SMS cost as a confirm-before-external conditional fact", () => {
+    const result = selectInternalCsKnowledge("엔터프라이즈 구독에 회원가입 문자 몇 건 포함돼?")
+    const sms = result.entries.find((entry) => entry.id === "messaging-sms-cost")
+
+    expect(sms).toMatchObject({
+      status: "conditional",
+      externalUse: "confirmation_required",
+    })
+    expect(sms?.summary).toContain("0.4위안")
+    expect(sms?.summary).toContain("2,000건")
+    expect(result.internalContext).toContain("문자")
+  })
+
   it("always injects source precedence and support tone", () => {
     const result = selectInternalCsKnowledge("일반 문의")
 

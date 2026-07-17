@@ -295,6 +295,31 @@ const KNOWLEDGE_ENTRIES: readonly InternalCsCuratedKnowledgeEntry[] = [
     ],
   },
   {
+    id: "messaging-sms-cost",
+    title: "문자(SMS) 발송 단가와 구독 포함량",
+    status: "conditional",
+    externalUse: "confirmation_required",
+    summary:
+      "회원가입 등 문자(SMS) 발송은 한국 기준 건당 약 0.4위안(약 80원) 원가가 든다. 엔터프라이즈 구독에는 유료 문자 2,000건이 포함된다. 환율·플랜·초과 단가는 계약 시점 기준으로 확인한다.",
+    handling: [
+      "0.4위안은 위안 원가 기준이라 환율·부가세·재판매 마진에 따라 최종 청구액이 달라진다. 고객에게 원 단가를 확정 금액처럼 말하지 않는다.",
+      "2,000건 포함은 엔터프라이즈 기준이다. 다른 플랜의 포함량·초과분 단가·잔여 건수는 계약 플랜과 최신 단가를 확인한 뒤 안내한다.",
+      "문자 요금·잔여 건수를 단정하지 말고, 필요하면 계약·본사 확인 경로를 함께 안내한다.",
+    ],
+    keywords: ["문자", "sms", "문자 발송", "회원가입 문자", "알림 문자", "문자 요금", "문자 비용", "문자 단가", "엔터프라이즈", "구독 문자", "2000", "2,000", "문자 포인트"],
+    recommendedTags: ["area:billing", "intent:policy", "evidence:conditional"],
+    sourceRefs: [
+      {
+        id: "docs/active/internal-cs-content-arrangement-2026-07-15.md#가격계약환불보증",
+        label: "문자 단가·구독 포함량 확인 경계",
+      },
+      {
+        id: "docs/active/classin-operating-canon-2026-07-02.md",
+        label: "Classin 운영 정본",
+      },
+    ],
+  },
+  {
     id: "asset-evidence-governance",
     title: "캡처·사진·본사 원문 증거 관리",
     status: "confirmed",
