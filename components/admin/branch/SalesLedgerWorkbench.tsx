@@ -5501,16 +5501,19 @@ export default function SalesLedgerWorkbench() {
   const ledgerConfirmed = (revenue?.confirmed ?? 0) + appliedDraftTotal
   const ledgerDelta = ledgerConfirmed - (revenue?.confirmed ?? 0)
   const periodLabel = period === "M" ? formatMonthLabel(selectedMonth) : period === "Q" ? "현재 분기" : fyLabel
-  // 파이프라인 탭 딥링크(품질 웨이브 3, 항목 9) — 지금 보고 있는 team/period 컨텍스트를 동봉해
-  // "KPI 보기" 클릭 후에도 같은 팀/기간을 유지한다. BranchDashboardClient가 읽는 파라미터(tab/team/
-  // period/month)만 넣는다 — mgr(담당자 필터)은 파이프라인 탭이 소비하지 않아 제외(있으나 마나 무시됨).
-  // 기본값(ALL/Q)은 그 페이지도 기본값이라 생략(URL 동기화 규약과 동일하게 diff만 반영).
+  // 파이프라인 탭 딥링크(품질 웨이브 3, 항목 9 → 웨이브 6, 항목 4) — 지금 보고 있는 team/period
+  // 컨텍스트를 동봉해 "KPI 보기" 클릭 후에도 같은 팀/기간을 유지한다. q(검색어)·mgr(담당자 필터)도
+  // 함께 동봉 — BranchDashboardClient가 이번 웨이브에서 q/mgr 파싱을 추가할 예정이라 파라미터 이름은
+  // 이 파일의 자체 URL 동기화(setUrl, 위 q/mgr set 참조)와 동일하게 맞춘다. 기본값(ALL/Q/빈 검색어)은
+  // 그 페이지도 기본값이라 생략(URL 동기화 규약과 동일하게 diff만 반영).
   const pipelineHref = useMemo(() => {
     const params = new URLSearchParams({ tab: "pipeline" })
     if (team !== "ALL") params.set("team", team)
     if (period !== "Q") params.set("period", period)
+    if (query.trim()) params.set("q", query.trim())
+    if (managerFilter !== "ALL") params.set("mgr", managerFilter)
     return `/admin/branch?${params.toString()}`
-  }, [team, period])
+  }, [team, period, query, managerFilter])
   const canCreateEditDraft = Boolean(selectedRow && (selectedRow.ledgerOrigin === "sheet" || selectedRow.sourceDealId))
   const draftAmountValue = safeAmount(draftForm.amount)
   const draftAmountInvalid = !draftForm.amount.trim() || draftAmountValue <= 0
