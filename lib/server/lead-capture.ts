@@ -1,12 +1,14 @@
 import "server-only"
 
 import { triggerOnSubmitRules } from "@/lib/automation-engine"
+import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
 import type { LeadPayload, LeadSource } from "@/lib/lead-types"
 import {
   type MarketingRequestMeta,
   sendServerConversion,
 } from "@/lib/marketing/server-conversions"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
+import { createCrmCustomerEvent } from "@/lib/repositories/crm-events"
 import { saveLead } from "@/lib/repositories/leads"
 import { upsertSubscriber } from "@/lib/repositories/marketing"
 import { getResolvedSettings } from "@/lib/repositories/settings"
@@ -24,6 +26,13 @@ const WECOM_LEAD_SOURCES = new Set<LeadSource>([
   "contact_page",
   "meta_lead_ads",
 ])
+
+// site_inflow 타임라인 이벤트 summary에 쓰는 유입 경로 한글 라벨.
+const SITE_INFLOW_SOURCE_LABELS = {
+  demo_modal: "데모 신청",
+  contact_page: "문의",
+  newsletter: "뉴스레터",
+} as Record<string, string>
 
 // TLD 2자 이상 강제 — "a@b.c" 류 가짜 이메일 차단
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/
@@ -430,6 +439,24 @@ export async function submitLeadCapture(
       }).catch((error) => {
         console.error("[lead-capture] notification emit failed:", error)
       })
+
+      // 홈페이지 유입 자동 타임라인 이벤트 — 실패해도 리드 저장에 영향 없음(스펙 §D).
+      const hasAdClickId = Boolean(body.gclid || body.fbclid || body.msclkid || body.ttclid)
+      if (savedLeadId && classifyLeadOrigin(body.source, hasAdClickId) === "site") {
+        void createCrmCustomerEvent({
+          targetType: "lead",
+          targetId: savedLeadId,
+          targetLabel: body.org || body.name || body.email || "홈페이지 리드",
+          sourceType: "site_inflow",
+          title: "홈페이지 상담 신청",
+          summary: [SITE_INFLOW_SOURCE_LABELS[body.source] ?? body.source, body.currentPage ?? body.landingPage]
+            .filter(Boolean)
+            .join(" · "),
+          occurredAt: new Date().toISOString(),
+        }).catch((error) => {
+          console.error("[lead-capture] site_inflow event insert failed:", error)
+        })
+      }
     }
 
     if (storageError || errors.length > 0) {

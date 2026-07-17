@@ -18,6 +18,7 @@ import {
   ExternalLink,
   FileAudio,
   FileText,
+  Globe,
   ListChecks,
   MessageSquare,
   Phone,
@@ -112,6 +113,7 @@ const EVENT_SOURCE_LABEL: Record<string, string> = {
   lead_contact_log: "리드 연락",
   external_crm: "외부 CRM",
   sheet: "시트",
+  site_inflow: "홈페이지 유입",
 }
 
 // 활동 출처별 아이콘 — 타임라인을 유형으로 빠르게 스캔.
@@ -125,6 +127,7 @@ const EVENT_SOURCE_ICON: Record<string, React.ReactNode> = {
   lead_contact_log: <PhoneCall className="h-3.5 w-3.5" />,
   external_crm: <Building2 className="h-3.5 w-3.5" />,
   sheet: <ClipboardList className="h-3.5 w-3.5" />,
+  site_inflow: <Globe className="h-3.5 w-3.5" />,
 }
 
 // 연락 입력 — 콜/문자/메모/회의록을 한 컴포저에서. sourceType로 그대로 저장돼 타임라인에 유형 표시.

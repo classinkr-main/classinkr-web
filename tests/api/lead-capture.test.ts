@@ -18,6 +18,7 @@ async function loadLeadCapture(options?: {
   vi.resetModules()
 
   const saveLead = vi.fn()
+  const createCrmCustomerEvent = vi.fn().mockResolvedValue(undefined)
   const emitNotificationEvent = vi.fn().mockResolvedValue(undefined)
   const postJson = vi.fn().mockResolvedValue({ ok: true, status: 200 })
   const sendServerConversion = vi.fn().mockResolvedValue({
@@ -37,6 +38,9 @@ async function loadLeadCapture(options?: {
   vi.doMock("@/lib/notifications/emit-event", () => ({
     emitNotificationEvent,
   }))
+  vi.doMock("@/lib/repositories/crm-events", () => ({
+    createCrmCustomerEvent,
+  }))
   vi.doMock("@/lib/repositories/leads", () => ({
     saveLead,
   }))
@@ -54,7 +58,14 @@ async function loadLeadCapture(options?: {
   }))
 
   const leadCapture = await import("@/lib/server/lead-capture")
-  return { ...leadCapture, saveLead, emitNotificationEvent, postJson, sendServerConversion }
+  return {
+    ...leadCapture,
+    saveLead,
+    createCrmCustomerEvent,
+    emitNotificationEvent,
+    postJson,
+    sendServerConversion,
+  }
 }
 
 describe("submitLeadCapture duplicate handling", () => {
@@ -169,5 +180,72 @@ describe("submitLeadCapture duplicate handling", () => {
 
     expect(first.status).toBe(502)
     expect(saveLead).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("submitLeadCapture site_inflow auto event", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("records a site_inflow timeline event when a site-origin lead is stored", async () => {
+    const { submitLeadCapture, saveLead, createCrmCustomerEvent } = await loadLeadCapture()
+    saveLead.mockResolvedValue({ id: "lead-site-1" })
+
+    const result = await submitLeadCapture({
+      ...baseLead,
+      currentPage: "https://classin.co.kr/contact",
+    })
+
+    expect(result.status).toBe(200)
+    expect(createCrmCustomerEvent).toHaveBeenCalledTimes(1)
+    expect(createCrmCustomerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetType: "lead",
+        targetId: "lead-site-1",
+        targetLabel: "Codex Test Academy",
+        sourceType: "site_inflow",
+        title: "홈페이지 상담 신청",
+        summary: "문의 · https://classin.co.kr/contact",
+      })
+    )
+  })
+
+  it("does not record site_inflow for ad-click leads (gclid)", async () => {
+    const { submitLeadCapture, saveLead, createCrmCustomerEvent } = await loadLeadCapture()
+    saveLead.mockResolvedValue({ id: "lead-ad-1" })
+
+    const result = await submitLeadCapture({
+      ...baseLead,
+      gclid: "test-click-id",
+    })
+
+    expect(result.status).toBe(200)
+    expect(createCrmCustomerEvent).not.toHaveBeenCalled()
+  })
+
+  it("does not record site_inflow for meta_lead_ads leads", async () => {
+    const { submitLeadCapture, saveLead, createCrmCustomerEvent } = await loadLeadCapture()
+    saveLead.mockResolvedValue({ id: "lead-meta-1" })
+
+    const result = await submitLeadCapture({
+      source: "meta_lead_ads",
+      email: "meta-lead@example.com",
+      name: "메타 리드",
+    })
+
+    expect(result.status).toBe(200)
+    expect(createCrmCustomerEvent).not.toHaveBeenCalled()
+  })
+
+  it("does not record site_inflow when the lead was not stored", async () => {
+    const { submitLeadCapture, saveLead, createCrmCustomerEvent } = await loadLeadCapture()
+    saveLead.mockRejectedValue(new Error("database unavailable"))
+
+    const result = await submitLeadCapture(baseLead)
+
+    expect(result.status).toBe(502)
+    expect(createCrmCustomerEvent).not.toHaveBeenCalled()
   })
 })
