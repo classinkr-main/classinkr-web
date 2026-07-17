@@ -260,6 +260,9 @@ export default function BranchDashboardClient() {
   const lastError = syncError ?? summary.error ?? summary.data?.lastError ?? null
   const sheetModifiedAt = summary.data?.sheetModifiedAt ?? null
   const dataSources = summary.data?.data_sources ?? null
+  // 품질 웨이브 3 — 항목 1. summary GET이 실패해 오래된 캐시로 조용히 대체됐을 때만 세팅 —
+  // lastError(완전 실패, 데이터 자체 없음)가 있으면 그쪽이 더 시급하므로 staleSince는 무시.
+  const summaryStaleSince = !lastError && summary.stale ? summary.staleSince : null
 
   // Filter visibility per design
   const showPeriodFilter = activeTab === "overview" || activeTab === "pipeline" || activeTab === "heatmap"
@@ -414,6 +417,7 @@ export default function BranchDashboardClient() {
           dataSources={dataSources}
           onRefresh={onRefresh}
           syncEnabled={canRunAdminOperations}
+          staleSince={summaryStaleSince}
         />
 
         <div className="mt-6">

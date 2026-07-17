@@ -39,21 +39,10 @@ const PATTERNS = {
 // (품질 웨이브 2 / 2026-07-17 시점 실측. 각 파일이 정리되면 여기서 제거할 것.)
 const ALLOWLIST = new Set([
   // (a) 확도 예외 파랑 — 확도 맥락 밖 사용
-  "SalesLedgerCharts.tsx:1E5DA8",
-  "ledger/shared.tsx:1E5DA8",
-  "sections/BranchKpiAccordion.tsx:1E5DA8",
-  "sections/BranchRegionHeatmap.tsx:1E5DA8",
-  "sections/BranchUpcomingDeals.tsx:1E5DA8",
-  "sections/DealMixSection.tsx:1E5DA8",
   // (b) Tailwind 기본 팔레트 유출
-  "SyncStatusBar.tsx:rose-emerald-sky",
-  "sections/BranchKpiAccordion.tsx:rose-emerald-sky",
   "sections/BranchRegionHeatmap.tsx:rose-emerald-sky",
-  "sections/CampaignsSection.tsx:rose-emerald-sky",
   // (c) 팀 아이덴티티 올리브
-  "sections/BranchKpiAccordion.tsx:7B8B36",
   "sections/BranchPipelineKanban.tsx:7B8B36",
-  "sections/DealMixSection.tsx:7B8B36",
 ]);
 
 function listSourceFiles(dir) {
