@@ -205,7 +205,7 @@ export function InputRailSection({
                     inputMode="numeric"
                     aria-invalid={draftAmountInvalid}
                     className={`mt-1 h-9 w-full rounded-md border bg-[#FAFAF8] px-3 text-right text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734] ${
-                      draftAmountInvalid ? "border-[#DC2626]" : "border-[rgba(0,0,0,0.08)]"
+                      draftAmountInvalid ? "border-[#B43E3E]" : "border-[rgba(0,0,0,0.08)]"
                     }`}
                   />
                 </label>
@@ -219,7 +219,7 @@ export function InputRailSection({
                     inputMode="numeric"
                     aria-invalid={draftQuantityInvalid}
                     className={`mt-1 h-9 w-full rounded-md border bg-[#FAFAF8] px-3 text-right text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734] ${
-                      draftQuantityInvalid ? "border-[#DC2626]" : "border-[rgba(0,0,0,0.08)]"
+                      draftQuantityInvalid ? "border-[#B43E3E]" : "border-[rgba(0,0,0,0.08)]"
                     }`}
                   />
                 </label>
@@ -241,7 +241,7 @@ export function InputRailSection({
                 />
               </label>
               {draftFormInvalid && (
-                <p className="rounded-md border border-[#F5C2C2] bg-[#FFF5F5] px-3 py-2 text-[11px] font-semibold text-[#B42318]" role="alert">
+                <p className="rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[11px] font-semibold text-[#8F2C2C]" role="alert">
                   고객명과 0보다 큰 금액을 입력해야 저장할 수 있습니다.
                 </p>
               )}
