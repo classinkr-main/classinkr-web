@@ -11,8 +11,6 @@ import {
   ArrowLeft,
   Calendar,
   Clock,
-  ChevronLeft,
-  ChevronRight,
   FileAudio,
   Filter,
   RefreshCw,
@@ -21,6 +19,7 @@ import {
 } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
+import Pager from "@/components/admin/ui/Pager"
 import CrmActionRail from "./rail/CrmActionRail"
 import ActivityQuickForm from "./rail/ActivityQuickForm"
 import CrmEventRow from "./CrmEventRow"
@@ -453,35 +452,16 @@ function CrmActivityClientInner() {
             ) : null}
 
             {data && data.pagination.total > 0 ? (
-              <div className="flex flex-col gap-3 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-[12px] font-medium text-[#1a1a1a]/45 tabular-nums">
-                  {(data.pagination.offset + 1).toLocaleString("ko-KR")}–
-                  {(data.pagination.offset + data.rows.length).toLocaleString("ko-KR")} / {data.pagination.total.toLocaleString("ko-KR")}개
-                </p>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => void loadEvents(Math.max(0, data.pagination.offset - PAGE_LIMIT))}
-                    disabled={data.pagination.offset === 0 || loading || loadingMore || refreshing}
-                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-40"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                    이전
-                  </button>
-                  <span className="px-1.5 text-[12px] font-semibold tabular-nums text-[#1a1a1a]/55">
-                    {Math.floor(data.pagination.offset / PAGE_LIMIT) + 1} /{" "}
-                    {Math.max(1, Math.ceil(data.pagination.total / PAGE_LIMIT))}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void loadEvents(data.pagination.nextOffset ?? data.pagination.offset + PAGE_LIMIT)}
-                    disabled={!data.pagination.hasMore || loading || loadingMore || refreshing}
-                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-40"
-                  >
-                    다음
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+              <div className="rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
+                <Pager
+                  offset={data.pagination.offset}
+                  total={data.pagination.total}
+                  pageSize={PAGE_LIMIT}
+                  onPrev={() => void loadEvents(Math.max(0, data.pagination.offset - PAGE_LIMIT))}
+                  onNext={() => void loadEvents(data.pagination.nextOffset ?? data.pagination.offset + PAGE_LIMIT)}
+                  disabled={loading || loadingMore || refreshing}
+                  unit="개"
+                />
               </div>
             ) : null}
           </section>
