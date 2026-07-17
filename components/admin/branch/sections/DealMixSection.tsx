@@ -1,5 +1,6 @@
 "use client"
 import type { BranchDealMixMeta, BranchDealMixSlice, BranchSummaryResponse } from "../types"
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import MoneyValue from "../MoneyValue"
 
 const LABELS: Record<string, string> = {
@@ -13,11 +14,12 @@ const LABELS: Record<string, string> = {
   SME: "SME",
 }
 
+// 팀 아이덴티티 올리브(#7B8B36, lib/branch/team-colors.ts SSOT)는 여기 쓰지 않는다 —
+// 이 카드들의 A/B는 팀이 아니라 제품/신규갱신/채널/규모 "카테고리" 비교라 팀 색과
+// 무관해야 한다. 대신 이미 있는 캐논 그린/Warning앰버/뉴트럴 3색을 재조합해 쓴다.
 const COLORS = {
   green: "#084734",
-  olive: "#7B8B36",
   amber: "#A8741A",
-  red: "#B43E3E",
   // KA/SME는 확도 신호가 아닌 순수 카테고리 구분이라 확도 전용 예외 파랑(#1E5DA8)을
   // 쓰지 않는다(DESIGN.md §확도 신호 토큰 오용 금지 규칙) — 웜 뉴트럴로 대체.
   neutral: "#615D59",
@@ -104,7 +106,9 @@ function CompareCard({ title, desc, a, b, aTone, bTone, prevMeta }: {
             <span className="truncate text-[11.5px] font-semibold text-[#111110]">{LABELS[row.side.name] ?? row.side.name}</span>
           </div>
           <div className="text-right">
-            <p className="text-[13px] font-bold leading-none tracking-[-0.01em]" style={{ color: COLORS.red }}>
+            {/* 확정 매출 = 캐논 그린(CONFIDENCE_TOKENS.confirmed) — 빨강이 아니다.
+                시트 상 "빨간 글자=확정"은 입력 관례일 뿐 앱 표시 캐논은 그린. */}
+            <p className="text-[13px] font-bold leading-none tracking-[-0.01em]" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>
               <MoneyValue value={row.side.actual} />
             </p>
             <p className="mt-0.5 text-[9.5px] text-[#615D59]">목표 <MoneyValue value={row.side.goal} /></p>
@@ -139,7 +143,7 @@ export default function DealMixSection({ summary, loading }: { summary: BranchSu
       <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
         <div>
           <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">매출 분해 · 전체팀</h2>
-          <p className="mt-0.5 text-[11px] font-medium text-[#615D59]">제품 · 신규/갱신 · 채널 · 고객규모 — <span className="font-semibold text-[#B43E3E]">빨강 = 확정 매출</span></p>
+          <p className="mt-0.5 text-[11px] font-medium text-[#615D59]">제품 · 신규/갱신 · 채널 · 고객규모 — <span className={`font-semibold ${CONFIDENCE_TOKENS.confirmed.textClass}`}>그린 = 확정 매출</span></p>
         </div>
         <div className="text-right">
           <p className="text-[18px] font-bold leading-none tracking-[-0.01em] text-[#111110]"><MoneyValue value={totalActual} /></p>
@@ -147,10 +151,10 @@ export default function DealMixSection({ summary, loading }: { summary: BranchSu
         </div>
       </div>
       <div className={`grid gap-[18px] p-5 md:grid-cols-2 ${cardCount >= 4 ? "xl:grid-cols-4" : "lg:grid-cols-3"}`}>
-        {hwSw && <CompareCard title="HW / SW" desc="제품 라인 구분" a={hwSw.a} b={hwSw.b} aTone={COLORS.green} bTone={COLORS.olive} prevMeta={data.meta?.by_category} />}
-        {newRenew && <CompareCard title="New / Renew" desc="신규 계약 vs 갱신" a={newRenew.a} b={newRenew.b} aTone={COLORS.green} bTone={COLORS.olive} prevMeta={data.meta?.by_status_type} />}
+        {hwSw && <CompareCard title="HW / SW" desc="제품 라인 구분" a={hwSw.a} b={hwSw.b} aTone={COLORS.green} bTone={COLORS.amber} prevMeta={data.meta?.by_category} />}
+        {newRenew && <CompareCard title="New / Renew" desc="신규 계약 vs 갱신" a={newRenew.a} b={newRenew.b} aTone={COLORS.green} bTone={COLORS.neutral} prevMeta={data.meta?.by_status_type} />}
         {channel && <CompareCard title="Direct / Channel" desc="직판 vs 파트너 경유" a={channel.a} b={channel.b} aTone={COLORS.green} bTone={COLORS.amber} prevMeta={data.meta?.by_channel} />}
-        {kaSme && <CompareCard title="KA / SME" desc="고객 규모별 매출" a={kaSme.a} b={kaSme.b} aTone={COLORS.neutral} bTone={COLORS.olive} prevMeta={data.meta?.by_segment} />}
+        {kaSme && <CompareCard title="KA / SME" desc="고객 규모별 매출" a={kaSme.a} b={kaSme.b} aTone={COLORS.neutral} bTone={COLORS.amber} prevMeta={data.meta?.by_segment} />}
       </div>
     </section>
   )
