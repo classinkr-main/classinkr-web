@@ -122,6 +122,7 @@ describe("promoteMessageToInternalArticle", () => {
       articleId: "article-x",
       slug: "cs-3f2a1b2c-4d5e-6f70-8192-a3b4c5d6e7f8",
       reused: false,
+      embeddingFailures: 0,
     })
 
     const articleUpsert = upsertPayload(supabase.chainsByTable.docs_articles[1])
@@ -161,8 +162,26 @@ describe("promoteMessageToInternalArticle", () => {
 
     expect(result.reused).toBe(true)
     expect(result.slug).toBe("cs-msg")
+    expect(result.embeddingFailures).toBe(0)
     // 승격 자격/멱등 확인용 백링크 조회가 실제로 일어난다.
     expect(supabase.fromCalls).toContain("docs_articles")
+  })
+
+  it("keeps the article but reports embedding failures for searchability surfacing", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined)
+    const supabase = fakeSupabase(resolvers(null))
+    const result = await promoteMessageToInternalArticle(asSupabase(supabase), {
+      messageId: "msg-embed-fail",
+      conversationId: "conv-3",
+      correctedContent: "임베딩이 실패해도 문서는 저장됩니다.",
+      embed: vi.fn(async () => null),
+      throttleMs: 0,
+    })
+
+    // 문서/청크 저장은 유지(embedding=null), 실패 수만 표면화한다.
+    expect(result.embeddingFailures).toBe(1)
+    const chunkUpsert = upsertPayload(supabase.chainsByTable.docs_ai_chunks[1])
+    expect(chunkUpsert).toMatchObject({ embedding: null, embedding_model: null })
   })
 })
 

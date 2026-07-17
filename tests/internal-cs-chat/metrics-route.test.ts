@@ -93,7 +93,7 @@ describe("getInternalCsMetricsAggregate", () => {
     expect(warnSpy).not.toHaveBeenCalled()
   })
 
-  it("warns when a text-fallback match absorbs a non-missing-function error (무음 마스킹 방지)", async () => {
+  it("surfaces a permission error (42501) instead of masking it as an empty dashboard", async () => {
     const repo = await importRealRepo()
     const rpc = vi.fn().mockResolvedValue({
       data: null,
@@ -103,14 +103,28 @@ describe("getInternalCsMetricsAggregate", () => {
       },
     })
     mocks.createSupabaseAdminClient.mockReturnValue({ rpc })
+
+    // 텍스트 휴리스틱("internal_cs_metrics"+"function")에 걸리더라도 42501 은 무조건 throw 다.
+    await expect(repo.getInternalCsMetricsAggregate(7)).rejects.toThrow(/aggregate metrics/)
+  })
+
+  it("warns when a text-fallback match absorbs an error without an exact missing-function code", async () => {
+    const repo = await importRealRepo()
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        message: "function public.internal_cs_metrics(range_days) does not exist",
+      },
+    })
+    mocks.createSupabaseAdminClient.mockReturnValue({ rpc })
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined)
 
     const aggregate = await repo.getInternalCsMetricsAggregate(7)
 
-    // 판정 로직은 불변: 여전히 빈 집계로 흡수하되, 원문이 로그로 남는다.
+    // 흡수는 유지하되 원문이 로그로 남는다(M2).
     expect(aggregate).toEqual(repo.emptyInternalCsMetricsAggregate(7))
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("not-ready로 흡수"))
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("permission denied"))
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("does not exist"))
   })
 
   it("throws on an unexpected database error", async () => {
@@ -160,5 +174,20 @@ describe("GET /api/admin/cs-chat/metrics", () => {
     await metricsGet(new NextRequest("https://classin.kr/api/admin/cs-chat/metrics?days=999"))
 
     expect(mocks.getInternalCsMetrics).toHaveBeenCalledWith(7)
+  })
+
+  it("returns 500 when the aggregate throws (권한 오류 등 비 not-ready 오류 표면화)", async () => {
+    mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", name: "CS" })
+    mocks.getInternalCsMetrics.mockRejectedValue(
+      new Error("[internal-cs-chat] failed to aggregate metrics: permission denied for function internal_cs_metrics")
+    )
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined)
+
+    const response = await metricsGet(
+      new NextRequest("https://classin.kr/api/admin/cs-chat/metrics?days=7")
+    )
+
+    expect(response.status).toBe(500)
+    expect(errorSpy).toHaveBeenCalled()
   })
 })

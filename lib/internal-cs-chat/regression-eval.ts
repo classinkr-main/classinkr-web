@@ -85,6 +85,9 @@ const JUDGE_MODEL =
   process.env.GEMINI_FAST_MODEL?.trim() ||
   "gemini-3.5-flash"
 
+// 심판 1회 호출 상한. 초과 시 fetch 가 abort 로 throw → catch 의 console.warn 경로 → 항목은 skipped.
+const JUDGE_TIMEOUT_MS = 8_000
+
 const JUDGE_SYSTEM_INSTRUCTION = [
   "너는 Classin 한국팀 내부 CS 답변의 회귀 평가자다.",
   "'기준 답변'은 CS 담당자가 검토·확정한 정답이고, '재생성 답변'은 같은 질문에 대해 현재 모델이 새로 만든 초안이다.",
@@ -329,6 +332,7 @@ export async function judgeRegression(input: {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(JUDGE_TIMEOUT_MS),
       }
     )
     if (!response.ok) {

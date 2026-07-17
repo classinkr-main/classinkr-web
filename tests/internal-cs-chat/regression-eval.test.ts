@@ -256,7 +256,10 @@ describe("judgeRegression", () => {
 
   it("parses a pass/needs_fix verdict and embeds both answers in the prompt", async () => {
     process.env.GEMINI_API_KEY = "test-key"
-    const fetchSpy = vi.fn(async (_url: string, _init: { body: string; headers: Record<string, string> }) => ({
+    const fetchSpy = vi.fn(async (
+      _url: string,
+      _init: { body: string; headers: Record<string, string>; signal?: AbortSignal }
+    ) => ({
       ok: true,
       json: async () => ({
         candidates: [{ content: { parts: [{ text: JSON.stringify({ outcome: "needs_fix", rationale: "가격 단정" }) }] } }],
@@ -275,6 +278,8 @@ describe("judgeRegression", () => {
     // 키는 URL 이 아니라 헤더로 전달한다.
     expect(fetchSpy.mock.calls[0][0]).not.toContain("test-key")
     expect(fetchSpy.mock.calls[0][1].headers["x-goog-api-key"]).toBe("test-key")
+    // 심판 호출에는 8초 타임아웃 AbortSignal 이 걸린다 — abort 시 catch 경로로 skipped 처리.
+    expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal)
   })
 
   it("returns null on a non-ok response or unparseable body, warning with the failure detail", async () => {

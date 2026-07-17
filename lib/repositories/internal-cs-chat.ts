@@ -972,6 +972,10 @@ function toNullableNumber(value: unknown) {
 
 // 마이그레이션 미적용(라이브) 시 internal_cs_metrics 함수 자체가 없다 — not-ready 로 잡아 빈 집계로 안전 렌더.
 function isInternalCsFunctionMissing(error: { code?: string; message?: string; details?: string; hint?: string }) {
+  // 권한 오류(42501)는 함수-부재가 아니다 — 빈 계기판으로 마스킹하지 않고 라우트가 500으로 표면화한다.
+  // 텍스트 휴리스틱보다 우선한다("permission denied for function internal_cs_metrics" 류가 여기에 걸린다).
+  if (error.code === "42501") return false
+
   const text = [error.code, error.message, error.details, error.hint].filter(Boolean).join(" ").toLowerCase()
   const matched =
     text.includes("pgrst202") ||
@@ -982,7 +986,7 @@ function isInternalCsFunctionMissing(error: { code?: string; message?: string; d
         text.includes("schema cache") ||
         text.includes("function")))
 
-  // 정확한 함수-부재 코드(PGRST202/42883) 없이 텍스트 휴리스틱으로만 잡힌 경우는 permission denied 류가
+  // 정확한 함수-부재 코드(PGRST202/42883) 없이 텍스트 휴리스틱으로만 잡힌 경우는 다른 오류가
   // 빈 계기판으로 무음 마스킹될 수 있어 원문을 남긴다. 판정 결과 자체는 바꾸지 않는다.
   const exactCode = /^(pgrst202|42883)$/i.test(error.code ?? "")
   if (matched && !exactCode) {
