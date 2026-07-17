@@ -426,12 +426,16 @@ export function WeekNumbersCell({
   return (
     <div className="grid grid-cols-5 items-center gap-1 text-right tabular-nums">
       {weeks.map((value, index) => (
+        // 품질 웨이브 4 — 항목 10: title은 마우스 hover에만 닿는다 — 값이 있는 칸은 키보드 포커스와
+        // aria-label로도 같은 정보(주차·금액)에 닿게 한다. 빈 칸("·")은 시각적으로도 정보가 없어 제외.
         <span
           key={index}
+          tabIndex={value > 0 ? 0 : undefined}
           title={`W${index + 1} ${formatMoney(value)}`}
+          aria-label={value > 0 ? `W${index + 1} ${formatMoney(value)}` : undefined}
           className={`text-[10.5px] leading-tight ${
             value > 0 ? (inferred ? "font-semibold text-[#615D59]" : "font-bold text-[#111110]") : "text-[#DDD9D3]"
-          }`}
+          } ${value > 0 ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 focus-visible:rounded" : ""}`}
         >
           {value > 0 ? formatWeekAmount(value) : "·"}
         </span>
