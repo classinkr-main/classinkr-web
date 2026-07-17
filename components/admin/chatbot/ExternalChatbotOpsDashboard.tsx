@@ -17,7 +17,7 @@ import {
   Sparkles,
 } from "lucide-react"
 
-import { adminFetchJson } from "@/lib/admin-client"
+import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { cn } from "@/lib/utils"
 
 // 공개 챗봇 운영 대시보드 — 얇은 소비 레이어.
@@ -145,10 +145,17 @@ export default function ExternalChatbotOpsDashboard() {
   const [evalReport, setEvalReport] = useState<EvalReport | null>(null)
   const [evalError, setEvalError] = useState("")
 
-  const loadStats = useCallback(async () => {
+  // 캐시 소비 — 사이드바 hover-warmup(warmAdminRequestCache, ttlMs 60초)이 같은 URL 키로 데운
+  // 캐시를 그대로 소비한다(URL 문자열이 캐시 키이므로 warmup 목록과 byte-동일해야 적중).
+  // "다시 시도"는 force로 캐시를 우회해 신선 조회한다.
+  const loadStats = useCallback(async (options?: { force?: boolean }) => {
     setStatsState("loading")
     try {
-      const data = await adminFetchJson<ChatbotStatsSummary>("/api/admin/chatbot/stats")
+      const data = await adminFetchJsonCached<ChatbotStatsSummary>(
+        "/api/admin/chatbot/stats",
+        undefined,
+        { ttlMs: 60_000, force: options?.force }
+      )
       setStats(data)
       setStatsState("loaded")
     } catch {
@@ -157,10 +164,14 @@ export default function ExternalChatbotOpsDashboard() {
     }
   }, [])
 
-  const loadReadiness = useCallback(async () => {
+  const loadReadiness = useCallback(async (options?: { force?: boolean }) => {
     setReadinessState("loading")
     try {
-      const data = await adminFetchJson<AlphaReadinessReport>("/api/admin/docs/alpha-readiness")
+      const data = await adminFetchJsonCached<AlphaReadinessReport>(
+        "/api/admin/docs/alpha-readiness",
+        undefined,
+        { ttlMs: 60_000, force: options?.force }
+      )
       setReadiness(data)
       setReadinessState("loaded")
     } catch {
@@ -180,6 +191,8 @@ export default function ExternalChatbotOpsDashboard() {
   const runEval = async (judge: boolean) => {
     if (evalRunningMode != null) return
     setEvalRunningMode(judge ? "judge" : "fast")
+    // 이전 실행 잔상 제거 — 재실행 중·실패 후에 직전 성공 결과가 현재 결과처럼 남지 않게 한다.
+    setEvalReport(null)
     setEvalError("")
     try {
       const data = await adminFetchJson<EvalReport>("/api/admin/chatbot/eval", {
@@ -242,7 +255,7 @@ export default function ExternalChatbotOpsDashboard() {
             {statsState === "failed" ? (
               <button
                 type="button"
-                onClick={() => void loadStats()}
+                onClick={() => void loadStats({ force: true })}
                 className="inline-flex items-center gap-1.5 rounded-full border border-black/[0.08] px-3 py-1.5 text-[12px] font-semibold text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#31302E]"
               >
                 <RefreshCcw className="h-3.5 w-3.5" />
@@ -291,7 +304,7 @@ export default function ExternalChatbotOpsDashboard() {
               {readinessState === "failed" ? (
                 <button
                   type="button"
-                  onClick={() => void loadReadiness()}
+                  onClick={() => void loadReadiness({ force: true })}
                   className="inline-flex items-center gap-1.5 rounded-full border border-[#084734]/15 bg-white px-3 py-1.5 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-white/70"
                 >
                   <RefreshCcw className="h-3.5 w-3.5" />
