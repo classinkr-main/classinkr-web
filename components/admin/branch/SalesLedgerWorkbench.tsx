@@ -1077,6 +1077,26 @@ function DraftQueue({
       setConfirmApplyDraft(null)
     }
   }
+  // 체크토글·삭제 in-flight 표시 — InputRailSection의 draftSaving+Loader2 패턴 재사용.
+  // 한 초안에 동시에 한 동작만(토글 중 삭제 클릭 등 이중 요청 방지) 진행되게 버튼도 함께 잠근다.
+  const [rowActionBusy, setRowActionBusy] = useState<{ id: string; action: "toggle" | "delete" } | null>(null)
+  const isRowBusy = (id: string) => rowActionBusy?.id === id || applyingId === id
+  const runToggle = async (id: string) => {
+    setRowActionBusy({ id, action: "toggle" })
+    try {
+      await onToggle(id)
+    } finally {
+      setRowActionBusy(null)
+    }
+  }
+  const runDelete = async (id: string) => {
+    setRowActionBusy({ id, action: "delete" })
+    try {
+      await onDelete(id)
+    } finally {
+      setRowActionBusy(null)
+    }
+  }
 
   if (loading && drafts.length === 0) {
     return (
@@ -1224,33 +1244,41 @@ function DraftQueue({
               </button>
               <button
                 type="button"
-                onClick={() => void onToggle(draft.id)}
-                disabled={draft.status === "applied" || draft.status === "cancelled"}
+                onClick={() => void runToggle(draft.id)}
+                disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label="초안 체크 상태 변경"
                 title="초안 체크 상태 변경"
               >
-                <CheckCircle2 className="h-4 w-4" />
+                {rowActionBusy?.id === draft.id && rowActionBusy.action === "toggle" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmApplyDraft(draft)}
-                disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-")}
+                disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-") || isRowBusy(draft.id)}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[#BDEFD8] text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label={`${draft.customer || "초안"} 적용`}
                 title="체크 완료 초안 적용"
               >
-                <Send className="h-3.5 w-3.5" />
+                {applyingId === draft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
               </button>
               <button
                 type="button"
-                onClick={() => void onDelete(draft.id)}
-                disabled={draft.status === "checked" || draft.status === "applied" || draft.status === "cancelled"}
+                onClick={() => void runDelete(draft.id)}
+                disabled={draft.status === "checked" || draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label="초안 삭제"
                 title="초안 삭제"
               >
-                <Trash2 className="h-4 w-4" />
+                {rowActionBusy?.id === draft.id && rowActionBusy.action === "delete" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
               </button>
             </div>
           </div>
@@ -3031,6 +3059,11 @@ export default function SalesLedgerWorkbench() {
   // 매트릭스 셀 커밋 실패(로컬 폴백) 등 편집 지점 인근 알림 토스트 — 상단 Source 바만으로는
   // 편집 중 시야 밖이라 침묵 실패가 되던 문제 대응. 7초 뒤 자동 소멸.
   const [matrixToast, setMatrixToast] = useState<{ kind: "error" | "info"; text: string } | null>(null)
+  // 단일 슬롯이라 에러 표시 도중 뒤이은 info 토스트가 그걸 덮어써 실패 알림을 놓칠 수 있었다
+  // — 에러가 떠 있는 동안은 info로 덮어쓰지 않는다(에러 자체는 항상 최신 것으로 갱신).
+  const pushMatrixToast = useCallback((next: { kind: "error" | "info"; text: string }) => {
+    setMatrixToast((current) => (current?.kind === "error" && next.kind !== "error" ? current : next))
+  }, [])
   useEffect(() => {
     if (!matrixToast) return
     const timer = window.setTimeout(() => setMatrixToast(null), 7000)
@@ -4244,14 +4277,14 @@ export default function SalesLedgerWorkbench() {
         // createDraft는 실패 시에도 local-* 초안으로 폴백해 resolve된다 — 편집 지점에서 침묵하지 않게
         // 셀 인근 토스트로 실패(=로컬 임시 저장, 장부 적용 불가)를 알린다. 성공 피드백은 셀 앰버 점.
         if (draft?.id?.startsWith("local-")) {
-          setMatrixToast({
+          pushMatrixToast({
             kind: "error",
             text: "서버 저장 실패 — 로컬 임시 초안으로만 저장됐습니다 (장부 적용 불가). 입력 큐에서 서버 재연결 후 다시 입력하세요.",
           })
         }
       })
     },
-    [createDraft, lens, period, rowById, team],
+    [createDraft, lens, period, pushMatrixToast, rowById, team],
   )
 
   const matrixEditor = useMatrixEditor({
@@ -4291,18 +4324,18 @@ export default function SalesLedgerWorkbench() {
       event.preventDefault()
       if (anchor.week != null) {
         // 주차 칸 붙여넣기는 B1 주차 병합 규약과 얽혀 파괴 위험 — 월 셀만 지원(잠금과 같은 안전 규약).
-        setMatrixToast({ kind: "info", text: "주차 칸에는 붙여넣기를 지원하지 않습니다 — 월 셀을 선택한 뒤 붙여넣으세요." })
+        pushMatrixToast({ kind: "info", text: "주차 칸에는 붙여넣기를 지원하지 않습니다 — 월 셀을 선택한 뒤 붙여넣으세요." })
         return
       }
       const plan = buildMatrixPastePlan(text, anchor, visibleDealRows, matrixMonths)
       if (!plan) {
-        setMatrixToast({ kind: "info", text: "붙여넣을 숫자 값을 찾지 못했습니다 — 엑셀에서 금액 셀 범위를 복사해 주세요." })
+        pushMatrixToast({ kind: "info", text: "붙여넣을 숫자 값을 찾지 못했습니다 — 엑셀에서 금액 셀 범위를 복사해 주세요." })
         return
       }
       setPasteConfidence(loadStoredMatrixConfidence() ?? "expected")
       setPastePlan(plan)
     },
-    [matrixEditor.editing, matrixEditor.selected, matrixMonths, visibleDealRows],
+    [matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows],
   )
 
   // 프리뷰 확인 → 셀 편집과 동일한 onCommitCell 경로로만 커밋(셀당 검토 초안 1건, 2단 게이트 유지).
@@ -4317,12 +4350,12 @@ export default function SalesLedgerWorkbench() {
     }
     setPastePlan(null)
     if (committed > 0) {
-      setMatrixToast({
+      pushMatrixToast({
         kind: "info",
         text: `검토 초안 ${committed.toLocaleString("ko-KR")}건 생성 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.`,
       })
     }
-  }, [onCommitCell, pasteConfidence, pastePlan])
+  }, [onCommitCell, pasteConfidence, pastePlan, pushMatrixToast])
 
   const toggleRevMonth = useCallback((month: string) => {
     setExpandedRevMonths((prev) => {
