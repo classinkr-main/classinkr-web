@@ -2515,6 +2515,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   editConfidence = "expected",
   pendingByCell = null,
   density = "regular",
+  sourceLabel,
 }: {
   view: RevRowView
   grouped: boolean
@@ -2533,6 +2534,10 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   editConfidence?: DraftConfidence
   pendingByCell?: Map<string, MatrixPendingDraft> | null
   density?: MatrixDensity
+  // 셀 계보 툴팁(2026-07-17 사용성 디벨롭 항목 2) — "시트 미러 vs 장부 임포트"는 부모가
+  // 이미 가진 Source 스트립 신호(dbImportInfo/dbSourceServerState)에서 계산해 내려준다.
+  // 이 행은 신규 fetch 없이 문자열만 소비한다.
+  sourceLabel?: string
 }) {
   const { row, draftRow, productCategory, monthlyByMonth } = view
   const rowBg = active
@@ -2606,6 +2611,16 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
               </span>
             )}
           </div>
+          {row.sheetRow != null && (
+            <span
+              tabIndex={0}
+              title={`시트 '2. REV' ${row.sheetRow}행 · 원천 ${sourceLabel ?? "미확인"}`}
+              className="shrink-0 cursor-help text-[10px] font-semibold text-[#A39E98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+              aria-label={`계보: 시트 '2. REV' ${row.sheetRow}행, 원천 ${sourceLabel ?? "미확인"}`}
+            >
+              ⓘ
+            </span>
+          )}
           {/* 그룹 고객은 그룹 소계행이 배지를 가진다 — 단독 딜행에만 미연결 딥링크(중복 노출 방지). */}
           {!grouped && needsLink && <NeedsLinkBadge customer={row.customer} />}
           {productCategory === "hardware" && !nested && hardwareLinked ? (
@@ -3094,6 +3109,14 @@ export default function SalesLedgerWorkbench() {
       : dbSourceServerState === "inactive"
         ? false
         : Boolean(dbImportInfo) || wcRuns[0]?.dataSource === "db-import"
+
+  // REV 매트릭스 행의 계보 툴팁(항목 2)에서 재사용할 원천 라벨 — Source 스트립(위 4725행대)과
+  // 동일한 신호를 그대로 문구화한다. 신규 fetch 없음.
+  const revRowSourceLabel = dbImportInfo
+    ? `장부 임포트 · ${formatDateTime(dbImportInfo.capturedAt)}`
+    : dbSourceServerState === "inactive"
+      ? "시트 미러"
+      : "미확인"
 
   // DB 재동기화: 시트 미러(branch_rev_deals)를 버전드 임포트로 재캡처하고 그 run을 활성화한다.
   // 서버가 checksum dedupe를 하므로 변경이 없으면 기존 run을 돌려준다(deduped=true) —
@@ -4825,6 +4848,7 @@ export default function SalesLedgerWorkbench() {
                   view={dshGridView}
                   onViewChange={setDshGridView}
                   loading={summary.loading && !summary.data}
+                  dataSource={summary.data?.data_sources?.dsh ?? null}
                 />
 
                 <WeeklyCloseSection
@@ -5378,6 +5402,7 @@ export default function SalesLedgerWorkbench() {
                                               {...matrixRowEditorProps(row.id)}
                                               pendingByCell={pendingByCell}
                                               density={matrixDensity}
+                                              sourceLabel={revRowSourceLabel}
                                             />
                                           )
                                         })}
@@ -5403,6 +5428,7 @@ export default function SalesLedgerWorkbench() {
                                       {...matrixRowEditorProps(row.id)}
                                       pendingByCell={pendingByCell}
                                       density={matrixDensity}
+                                      sourceLabel={revRowSourceLabel}
                                     />
                                   )
                                 })}

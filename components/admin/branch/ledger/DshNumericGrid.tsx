@@ -8,9 +8,9 @@
 
 import Link from "next/link"
 import { useMemo } from "react"
-import type { BranchDshBreakdownRow } from "../types"
+import type { BranchDataSourceInfo, BranchDshBreakdownRow } from "../types"
 import { cnyExact } from "@/lib/branch/money-format"
-import { LoadingPanel } from "./shared"
+import { formatDateTime, LoadingPanel } from "./shared"
 
 export type DshGridView = "goal" | "status" | "gap"
 
@@ -85,6 +85,15 @@ function formatRatio(value: number, total: number) {
 
 function monthLabel(ym: string) {
   return `${Number(ym.slice(5))}월`
+}
+
+// 카드 헤더 레벨 계보(2026-07-17 사용성 디벨롭 항목 2) — 파서가 DSH breakdown에
+// 행 좌표(sheet_row)를 방출하지 않아 셀 단위 계보는 스코프 밖(YAGNI). SyncStatusBar의
+// sourceLabel과 동일한 kind→라벨 매핑을 그리드 헤더 캡션용으로 재현한다.
+function dshSourceLabel(source: BranchDataSourceInfo): string {
+  if (source.kind === "import") return `장부 임포트${source.asOf ? ` · ${formatDateTime(source.asOf)}` : ""}`
+  if (source.kind === "mirror") return `시트 미러${source.asOf ? ` · ${formatDateTime(source.asOf)}` : ""}`
+  return `라이브 시트${source.asOf ? ` · ${formatDateTime(source.asOf)}` : ""}`
 }
 
 // breakdown 집계 — 컴포넌트 밖 순수 함수로 두어 단위 테스트가 가능하다.
@@ -176,9 +185,12 @@ interface DshNumericGridProps {
   view: DshGridView
   onViewChange: (view: DshGridView) => void
   loading?: boolean
+  // 카드 헤더 레벨 계보(항목 2) — summary.data_sources.dsh를 옵션으로 전달받아
+  // 헤더 캡션에 원천 kind·asOf를 짧게 표기한다. 신규 fetch 없음, additive.
+  dataSource?: BranchDataSourceInfo | null
 }
 
-export function DshNumericGrid({ breakdown, view, onViewChange, loading = false }: DshNumericGridProps) {
+export function DshNumericGrid({ breakdown, view, onViewChange, loading = false, dataSource = null }: DshNumericGridProps) {
   const { monthKeys, rows, total } = useMemo(() => aggregateDshBreakdown(breakdown, view), [breakdown, view])
 
   const columnCount = 2 + 4 + monthKeys.length + 1
@@ -192,6 +204,7 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false 
           </p>
           <p className="mt-0.5 text-[11px] text-[#615D59]">
             시트 &lsquo;1. DSH&rsquo; 미러 · Team KR 전사 — 팀 필터와 무관 · 숫자가 정본
+            {dataSource && <> · 원천 {dshSourceLabel(dataSource)}</>}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

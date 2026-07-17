@@ -287,7 +287,10 @@ export default function PipelineTable({
                 onClick={onRowClick ? () => onRowClick(r) : undefined}
                 className={`border-t border-[#f0f0ec] ${onRowClick ? "cursor-pointer transition hover:bg-[#FAFAF8]" : ""}`}>
                 <td className="px-5 py-1 font-medium">
-                  <span className="inline-flex max-w-full items-center gap-1.5">
+                  <span
+                    className="inline-flex max-w-full items-center gap-1.5"
+                    title={r.sheetRow != null ? `시트 '2. REV' ${r.sheetRow}행` : undefined}
+                  >
                     {onRowClick ? (
                       <button
                         type="button"
