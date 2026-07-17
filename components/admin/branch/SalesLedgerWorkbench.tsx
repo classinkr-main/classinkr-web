@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from "react"
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -66,15 +67,32 @@ import {
   type Period,
   type Team,
 } from "./types"
-import { DshNumericGrid, type DshGridView } from "./ledger/DshNumericGrid"
-import { WeeklyCloseSection } from "./ledger/WeeklyCloseSection"
+import type { DshGridView } from "./ledger/DshNumericGrid"
+// 웨이브 7 2단(S4): DSH 렌즈 서브트리(수치 그리드·주간 마감)는 초기 렌더(기본 렌즈 REV)에 필요
+// 없다 — shared.tsx 차트 dynamic과 동일 관례(ssr:false + LoadingPanel 스켈레톤)로 지연 로드해
+// 첫 로드 번들에서 청크를 제외한다. lens 전환(URL ?lens=dsh 포함)은 마운트 후 상태 변경이라
+// 서버 렌더 산출물은 원래도 REV 렌즈 — 동작 무변경.
+const DshNumericGrid = dynamic(() => import("./ledger/DshNumericGrid").then((m) => m.DshNumericGrid), {
+  ssr: false,
+  loading: () => <LoadingPanel label="DSH 수치 그리드를 불러오는 중" />,
+})
+const WeeklyCloseSection = dynamic(() => import("./ledger/WeeklyCloseSection").then((m) => m.WeeklyCloseSection), {
+  ssr: false,
+  loading: () => <LoadingPanel label="주간 마감 데이터를 불러오는 중" />,
+})
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
 import IntegrityStrip from "./IntegrityStrip"
 import MultiSelect from "./MultiSelect"
 import { InputRailSection } from "./ledger/InputRailSection"
 // 검토 초안 체크 큐는 ledger/DraftQueue로 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
-import { DraftQueue } from "./ledger/DraftQueue"
+// S4: 큐는 railView === "queue"에서만 렌더된다(기본 "detail") — 지연 로드로 첫 로드 번들에서
+// 제외한다. 정적 재수출을 함께 두면 청크 분리가 무효화되므로 draftStatusMeta 재수출은 두지
+// 않는다(테스트는 ledger/DraftQueue에서 직접 import).
+const DraftQueue = dynamic(() => import("./ledger/DraftQueue").then((m) => m.DraftQueue), {
+  ssr: false,
+  loading: () => <LoadingPanel label="체크 큐를 불러오는 중" />,
+})
 // REV 다중월 매트릭스 클러스터(순수 로직 + 인라인 편집 인프라 + 행/셀/푸터)는 ledger/RevMatrix로
 // 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
 import {
@@ -129,9 +147,6 @@ export {
   resolveDraftEditTargetRow,
 } from "./ledger/RevMatrix"
 export type { MatrixCellCoord, MatrixPendingDraft } from "./ledger/RevMatrix"
-// 회귀 테스트(tests/branch/ledger-entry-reverse-action)가 이 모듈 경로에서 import하는 기존
-// 표면 유지용 재수출.
-export { draftStatusMeta } from "./ledger/DraftQueue"
 import {
   buildRevWeekProjection,
   DRAFT_CONFLICT_MESSAGE,

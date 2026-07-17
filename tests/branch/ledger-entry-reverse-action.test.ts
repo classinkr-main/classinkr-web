@@ -1,7 +1,9 @@
 import { readFileSync } from "fs"
 import { join } from "path"
 import { describe, expect, it } from "vitest"
-import { draftStatusMeta } from "@/components/admin/branch/SalesLedgerWorkbench"
+// 웨이브 7 2단(S4): DraftQueue는 워크벤치에서 next/dynamic으로 지연 로드된다 — 정적 재수출을
+// 남기면 청크 분리가 무효화되므로 draftStatusMeta는 소유 모듈에서 직접 import한다.
+import { draftStatusMeta } from "@/components/admin/branch/ledger/DraftQueue"
 
 // 웨이브 5 — 장부 "되돌리기" 버튼 UI 배선 회귀 가드.
 // 백엔드(PATCH .../ledger-drafts/{id} action=reverse)는 이미 라이브 — 이 스위트는 프런트 배선만 본다:
@@ -22,7 +24,7 @@ const workbenchPath = join(process.cwd(), "components/admin/branch/SalesLedgerWo
 const hookPath = join(process.cwd(), "components/admin/branch/ledger/useLedgerDraftQueue.ts")
 // 웨이브 7 2단(F5): DraftQueue 컴포넌트(되돌리기 버튼·확인 다이얼로그·confirmAndReverse)는
 // ledger/DraftQueue.tsx로 물리 이동됐다(로직 무변경) — 그 UI 배선 스캔은 이 파일을 읽는다.
-// draftStatusMeta는 워크벤치가 재수출하므로 import 표면은 그대로다.
+// draftStatusMeta는 소유 모듈(ledger/DraftQueue)에서 직접 import한다(S4 지연 로드 — 위 주석 참조).
 const queuePath = join(process.cwd(), "components/admin/branch/ledger/DraftQueue.tsx")
 
 function workbenchSource() {
