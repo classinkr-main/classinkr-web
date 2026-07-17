@@ -122,6 +122,13 @@ export default function BranchDashboardClient() {
     return valid ? m : ymKeyUtc(new Date())
   })()
   const [selectedMonth, setSelectedMonth] = useState(initialMonth)
+  // 품질 웨이브 5 — 항목 6. tab/team/period/month와 동일한 "마운트 시 1회 파싱" 규약 확장 —
+  // 장부(SalesLedgerWorkbench)의 pipelineHref가 q/mgr을 동봉해 보내오면(향후 확장) 파이프라인
+  // 탭의 테이블/칸반 검색어·담당 필터로 그대로 주입한다.
+  const initialPipelineQuery = searchParams.get("q") ?? ""
+  const initialPipelineManager = searchParams.get("mgr") ?? ""
+  const [pipelineQuery, setPipelineQuery] = useState(initialPipelineQuery)
+  const [pipelineManager, setPipelineManager] = useState(initialPipelineManager)
   const [pipelineView, setPipelineView] = useState<"table" | "kanban">("table")
   const [syncError, setSyncError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -176,6 +183,20 @@ export default function BranchDashboardClient() {
     const url = new URL(window.location.href)
     if (next === ymKeyUtc(new Date())) url.searchParams.delete("month")
     else url.searchParams.set("month", next)
+    window.history.replaceState(null, "", url.toString())
+  }, [])
+
+  // 파이프라인 테이블/칸반의 검색어·담당 필터 변경을 URL(q/mgr)에 동기화 — tab/team/
+  // period/month와 동일한 replaceState 규약(품질 웨이브 5 — 항목 6). 테이블↔칸반 뷰
+  // 전환 시 상대편 컴포넌트가 이 값을 초기값으로 재사용해 필터가 이어진다.
+  const onPipelineFilterChange = useCallback((next: { query: string; manager: string }) => {
+    setPipelineQuery(next.query)
+    setPipelineManager(next.manager)
+    const url = new URL(window.location.href)
+    if (next.query.trim()) url.searchParams.set("q", next.query)
+    else url.searchParams.delete("q")
+    if (next.manager) url.searchParams.set("mgr", next.manager)
+    else url.searchParams.delete("mgr")
     window.history.replaceState(null, "", url.toString())
   }, [])
 
@@ -433,8 +454,9 @@ export default function BranchDashboardClient() {
                 summary={summary.data}
                 kpi={kpi.data}
                 periodLabel={activePeriodLabel}
+                error={summary.error}
               />
-              <DealMixSection summary={summary.data} loading={summary.loading} />
+              <DealMixSection summary={summary.data} loading={summary.loading} error={summary.error} />
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
                 <RevenueFlowSection
                   summary={summary.data}
@@ -447,6 +469,7 @@ export default function BranchDashboardClient() {
                 <BranchUpcomingDeals
                   data={summary.data?.monthly_series ?? null}
                   loading={summary.loading}
+                  error={summary.error}
                   onDealClick={(d) => setSelectedDeal({
                     id: d.id, customer: d.customer, date: d.date, amount: d.amount,
                   })}
@@ -463,8 +486,8 @@ export default function BranchDashboardClient() {
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-4">
               {/* 좌: 기존 KPI 아코디언 유지 / 우: 활동 병목·담당자(장부 KPI 렌즈 이식) — 목업 g2e 동일 */}
               <div className="grid gap-6 xl:grid-cols-2">
-                <BranchKpiAccordion data={kpi.data} loading={kpi.loading} error={kpi.error} />
-                <ActivityBottleneckSection kpi={kpi.data} loading={kpi.loading} />
+                <BranchKpiAccordion data={kpi.data} loading={kpi.loading} error={kpi.error} team={team} period={period} selectedMonth={selectedMonth} />
+                <ActivityBottleneckSection kpi={kpi.data} loading={kpi.loading} error={kpi.error} />
               </div>
               <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                 <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
@@ -485,13 +508,17 @@ export default function BranchDashboardClient() {
                     // 품질 웨이브 4 — 항목 4. 이 카드가 이미 "파이프라인" 제목을 렌더하므로
                     // PipelineTable 자체의 "REV 고객별 매출" <h2>는 hideHeader로 숨겨 이중화를 없앤다
                     // (장부 링크·필터·표는 그대로 유지). 헤더가 필요한 히트맵 탭 사용처는 기본값 유지.
-                    <PipelineTable key={`pipeline-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog} hideHeader />
+                    <PipelineTable key={`pipeline-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog} hideHeader
+                      initialQuery={pipelineQuery} initialManager={pipelineManager} onFilterChange={onPipelineFilterChange} />
                   ) : (
                     <BranchPipelineKanban
                       team={team}
                       period={period}
                       selectedMonth={selectedMonth}
                       refreshKey={refreshKey}
+                      initialQuery={pipelineQuery}
+                      initialManager={pipelineManager}
+                      onFilterChange={onPipelineFilterChange}
                       onDealClick={(d) => {
                         void openDealLog({
                           id: d.id, customer: d.customer, manager: d.manager,
