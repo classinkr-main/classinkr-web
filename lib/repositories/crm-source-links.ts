@@ -1559,19 +1559,40 @@ export async function listConfirmedLeadCustomerLinks(): Promise<Map<string, stri
   return map
 }
 
+const LEAD_NEO_LINK_PAGE_SIZE = 1000
+const LEAD_NEO_LINK_MAX_PAGES = 20
+
 /** NEO 등록 확정된 리드 id 집합 — source_object='leads' → target_type='external_account' confirmed. */
 export async function listConfirmedLeadNeoLinkLeadIds(): Promise<Set<string>> {
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb
-    .from("crm_source_links")
-    .select("source_record_key")
-    .eq("source_object", "leads")
-    .eq("target_type", "external_account")
-    .eq("status", "confirmed")
-    .limit(5000)
+  const ids = new Set<string>()
 
-  if (error) throw new Error(`crm_source_links lead→neo 조회 실패: ${error.message}`)
-  return new Set((data ?? []).map((row) => String(row.source_record_key)))
+  // PostgREST는 요청당 기본 1000행에서 조용히 절단한다 — 절단되면 등록된 리드가
+  // '등록 대기'로 오판된다. 결정적 정렬(id) + range로 짧은 페이지가 나올 때까지
+  // 이어 읽고, 상한 초과는 무음 대신 에러로 드러낸다.
+  for (let page = 0; ; page += 1) {
+    if (page >= LEAD_NEO_LINK_MAX_PAGES) {
+      throw new Error(
+        `crm_source_links lead→neo 조회가 ${LEAD_NEO_LINK_MAX_PAGES}페이지(${LEAD_NEO_LINK_MAX_PAGES * LEAD_NEO_LINK_PAGE_SIZE}행)를 초과했습니다 — 페이지 상한을 재검토하세요.`
+      )
+    }
+    const from = page * LEAD_NEO_LINK_PAGE_SIZE
+    const { data, error } = await sb
+      .from("crm_source_links")
+      .select("source_record_key")
+      .eq("source_object", "leads")
+      .eq("target_type", "external_account")
+      .eq("status", "confirmed")
+      .order("id", { ascending: true })
+      .range(from, from + LEAD_NEO_LINK_PAGE_SIZE - 1)
+
+    if (error) throw new Error(`crm_source_links lead→neo 조회 실패: ${error.message}`)
+
+    const rows = data ?? []
+    for (const row of rows) ids.add(String(row.source_record_key))
+    if (rows.length < LEAD_NEO_LINK_PAGE_SIZE) break
+  }
+  return ids
 }
 
 export async function updateCrmSourceLinkStatus(

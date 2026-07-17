@@ -437,25 +437,42 @@ export async function listCrmCustomerEvents(
 
 // 팀 응답으로 치는 기록 종류 allowlist — 사람이 남긴 기록만.
 const RESPONSE_SOURCE_TYPES = ["manual_note", "call", "sms", "meeting_minutes", "recording", "lead_contact_log"] as const
+const FIRST_RESPONSE_PAGE_SIZE = 1000
+const FIRST_RESPONSE_MAX_PAGES = 20
 
 /** 리드별 팀 최초 기록 시각. 자동 유입(site_inflow)·동기화 소스는 응답으로 치지 않는다. */
 export async function getLeadFirstResponseMap(): Promise<Map<string, string>> {
   const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase
-    .from("crm_customer_events")
-    .select("target_id, occurred_at")
-    .eq("target_type", "lead")
-    .not("target_id", "is", null)
-    .in("source_type", [...RESPONSE_SOURCE_TYPES])
-    .order("occurred_at", { ascending: true })
-    .limit(5000)
-
-  if (error) throw new Error(`리드 첫 응답 조회 실패: ${error.message}`)
-
   const map = new Map<string, string>()
-  for (const row of data ?? []) {
-    const id = String(row.target_id)
-    if (!map.has(id)) map.set(id, String(row.occurred_at))
+
+  // PostgREST는 요청당 기본 1000행에서 조용히 절단한다 — 오름차순 정렬에서 절단되면
+  // 최신 첫 응답이 빠져 해당 리드가 미응답으로 오판된다. 결정적 정렬(occurred_at, id) +
+  // range로 짧은 페이지가 나올 때까지 이어 읽고, 상한 초과는 무음 대신 에러로 드러낸다.
+  for (let page = 0; ; page += 1) {
+    if (page >= FIRST_RESPONSE_MAX_PAGES) {
+      throw new Error(
+        `리드 첫 응답 조회가 ${FIRST_RESPONSE_MAX_PAGES}페이지(${FIRST_RESPONSE_MAX_PAGES * FIRST_RESPONSE_PAGE_SIZE}행)를 초과했습니다 — 페이지 상한을 재검토하세요.`
+      )
+    }
+    const from = page * FIRST_RESPONSE_PAGE_SIZE
+    const { data, error } = await supabase
+      .from("crm_customer_events")
+      .select("target_id, occurred_at")
+      .eq("target_type", "lead")
+      .not("target_id", "is", null)
+      .in("source_type", [...RESPONSE_SOURCE_TYPES])
+      .order("occurred_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + FIRST_RESPONSE_PAGE_SIZE - 1)
+
+    if (error) throw new Error(`리드 첫 응답 조회 실패: ${error.message}`)
+
+    const rows = data ?? []
+    for (const row of rows) {
+      const id = String(row.target_id)
+      if (!map.has(id)) map.set(id, String(row.occurred_at))
+    }
+    if (rows.length < FIRST_RESPONSE_PAGE_SIZE) break
   }
   return map
 }

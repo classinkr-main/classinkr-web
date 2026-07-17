@@ -12,7 +12,6 @@ import {
 import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
 import {
   daysUntil,
-  matchesSavedView,
   rowMatchesOwner,
   rowVisibleInView,
   type CrmUnifiedCustomerRow,
@@ -31,11 +30,10 @@ import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
 import { computeCustomerHealth, type CustomerHealthBand } from "@/lib/crm/customer-health"
 import { getAllCustomerTagsMap } from "./crm-customer-tags"
 
-// 뷰 규칙(타입+순수 매칭 함수)의 SSOT는 lib/crm/unified-view-rules.ts. matchesSavedView는
-// 뷰 규칙 소비처·테스트가 repo 타입과 함께 쓰도록 여기서도 수출한다(내부 필터는 provisional
-// 게이트가 포함된 rowVisibleInView를 사용).
+// 뷰 규칙(타입+순수 매칭 함수)의 SSOT는 lib/crm/unified-view-rules.ts — 매칭 함수는 그 모듈에서
+// 직접 import한다(여기서는 재수출하지 않음: provisional 게이트 없는 matchesSavedView를 repo 경유로
+// 쓰는 함정 방지). 내부 필터는 rowVisibleInView만 사용하고, 타입은 기존 임포터 호환으로 재수출.
 export type { CrmUnifiedCustomerRow, CrmUnifiedCustomerSource, CrmUnifiedLifecycle, CrmUnifiedSavedView }
-export { matchesSavedView }
 
 // 칩 카운트를 보여줄 세그먼트(저장 뷰).
 export const CRM_SEGMENT_VIEWS = ["expiring", "dormant", "hot_lead", "upsell", "site_leads", "unanswered"] as const
@@ -345,7 +343,7 @@ export async function getCrmUnifiedCustomers(
         provisional: !shouldIncludeLeadInUnifiedCustomers(lead),
         slaTarget: lead.status === "new" && SLA_TARGET_LEAD_SOURCES.has(lead.source),
         firstResponseAt: firstResponseMap.get(lead.id) ?? null,
-        createdAt: lead.timestamp,
+        createdAt: lead.timestamp, // timestamp는 leads.created_at 매핑 (lib/repositories/leads.ts 참고)
       })
     }
   } else {
@@ -508,7 +506,8 @@ export async function getCrmUnifiedCustomers(
 
   const limit = clampInteger(options.limit, 100, 1, 200)
   const offset = clampInteger(options.offset, 0, 0, 100_000)
-  const owners = buildOwnerOptions(rows)
+  // provisional 리드는 기본 뷰에 안 보이므로 담당자 카운트에서도 제외 — 배지·목록 정합.
+  const owners = buildOwnerOptions(rows.filter((row) => !row.provisional))
   const pageRows = sorted.slice(offset, offset + limit)
   const nextOffset = offset + pageRows.length
   const neoLatestSyncedAt =

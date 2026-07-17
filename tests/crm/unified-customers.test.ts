@@ -373,8 +373,8 @@ describe("getCrmUnifiedCustomers", () => {
   it("wires lead-derived fields (origin·NEO등록·SLA·첫응답) and the provisional queue views", async () => {
     const { getCrmUnifiedCustomers } = await loadRepository({
       leads: [
-        lead({ id: "site-unconfirmed", source: "demo_modal", confirmed_at: null }),
-        lead({ id: "site-confirmed", source: "contact_page" }),
+        lead({ id: "site-unconfirmed", source: "demo_modal", confirmed_at: null, assigned_to: "미확인담당" }),
+        lead({ id: "site-confirmed", source: "contact_page", assigned_to: "김담당" }),
         lead({ id: "team-manual", source: "admin_manual" }),
       ],
       neoLinkedLeadIds: ["site-confirmed"],
@@ -397,6 +397,11 @@ describe("getCrmUnifiedCustomers", () => {
     })
     expect(all.summary.viewCounts.site_leads).toBe(1)
     expect(all.summary.viewCounts.unanswered).toBe(1)
+
+    // provisional 리드의 담당자는 담당자 카운트에 새지 않는다(기본 뷰 배지·목록 정합).
+    const ownerNames = all.owners.map((owner) => owner.ownerName)
+    expect(ownerNames).toContain("김담당")
+    expect(ownerNames).not.toContain("미확인담당")
 
     // 처리 큐 뷰 — 미확인 site 리드만 노출(NEO 등록·응답 완료 리드는 제외).
     const siteLeads = await getCrmUnifiedCustomers({ view: "site_leads", now: NOW })
