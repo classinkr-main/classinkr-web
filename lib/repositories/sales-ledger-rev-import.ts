@@ -196,7 +196,8 @@ export async function captureRevDbImport(actor: string, options?: { activate?: b
   const now = new Date()
   const fiscalYear = fiscalYearOf(now)
 
-  const deals = await listBranchRevDeals()
+  // raw(원본 84칸 row) 보존이 이 마이그레이션의 충실도 핵심(파일 상단 주석 참조) — opt-in 필수.
+  const deals = await listBranchRevDeals(undefined, { withRaw: true })
   if (deals.length === 0) {
     throw new Error("임포트할 REV 행이 없습니다. 시트 동기화 후 다시 시도하세요.")
   }

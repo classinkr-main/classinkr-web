@@ -154,7 +154,8 @@ function chunked<T>(items: T[], size: number): T[][] {
 
 async function loadCurrentSnapshotLines(fiscalYear: number): Promise<{ lines: SnapshotLine[]; dataSource: string }> {
   const imported = await readRevDealsFromActiveImport(fiscalYear)
-  const deals = imported ?? (await listBranchRevDeals())
+  // recordKeyOf가 deal.raw?.source_record_key를 읽으므로(branch-deals.ts 기본값은 raw 제외) opt-in.
+  const deals = imported ?? (await listBranchRevDeals(undefined, { withRaw: true }))
   // 같은 record key가 중복되면(시트 행 밀림 등) 마지막 행이 이긴다 —
   // 스냅샷은 상태 기록이므로 합산보다 결정적 대표값이 안전하다.
   const byKey = new Map<string, SnapshotLine>()

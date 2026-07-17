@@ -48,7 +48,7 @@ describe("branch ledger DB-first route wiring", () => {
     const route = source("app/api/admin/branch/pipeline/route.ts")
 
     expect(route).toContain("readRevDealsFromActiveImport")
-    expect(route).toContain("await readRevDealsFromActiveImport(fy, { team }) ?? await listBranchRevDeals({ team })")
+    expect(route).toContain("await readRevDealsFromActiveImport(fy, { team }) ?? await listBranchRevDeals({ team }, { withRaw: true })")
     expect(route).toContain("listRevRevenue(deals")
   })
 

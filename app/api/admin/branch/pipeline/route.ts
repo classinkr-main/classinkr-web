@@ -35,7 +35,9 @@ export async function GET(req: NextRequest) {
   if (period && !periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
     const fy = fyOf(periodDate ?? new Date())
-    const deals = await readRevDealsFromActiveImport(fy, { team }) ?? await listBranchRevDeals({ team })
+    // listRevRevenue가 deal.raw(weeklyPayments/row)로 주차 프로젝션을 계산하므로
+    // 미러 폴백에서는 raw를 명시적으로 opt-in한다(branch-deals.ts 기본값은 raw 제외).
+    const deals = await readRevDealsFromActiveImport(fy, { team }) ?? await listBranchRevDeals({ team }, { withRaw: true })
     const rows = listRevRevenue(deals, {
       team,
       manager: url.searchParams.get("manager") ?? undefined,

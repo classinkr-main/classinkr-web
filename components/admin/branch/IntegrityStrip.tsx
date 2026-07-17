@@ -1,9 +1,11 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { ChevronDown } from "lucide-react"
 import { useBranchJson } from "./client-api"
+
+const IDLE_FETCH_TIMEOUT_MS = 300
 
 // data-quality.ts(server 전용 REV_RANGE/parseRangeLastRow 임포트 보유)는 import 금지 —
 // CrmCoverageStrip과 동일하게 응답 shape만 로컬 선언한다.
@@ -37,8 +39,58 @@ function ledgerHref(sheetRow: number): string {
  * 현재는 BRANCH 롤도 이 라우트를 통과한다. 그래도 401/403을 포함한 모든 실패는
  * "이슈 없음"으로 위장하지 않고 스트립 자체를 렌더하지 않는다(null) — 라우트가 나중에
  * allowedRoles를 좁혀 BRANCH를 막더라도 이 컴포넌트는 조용히 사라지는 것이 맞는 동작이다.
+ *
+ * 페치 지연: /api/admin/branch/data-quality는 구글 시트 3콜(DSH/SEG/KPI)을 직접 읽는
+ * 무거운 라우트라 개요 마운트 즉시 fetch하면 크리티컬 패스에 얹힌다. 그래서 마운트 직후
+ * 바로 쏘지 않고 (1) 뷰포트에 들어오고 (2) requestIdleCallback(최대 300ms 타임아웃, 미지원
+ * 브라우저는 300ms setTimeout)이 지나야 실제 useBranchJson을 마운트해 fetch를 트리거한다.
+ * 지연 중에는 자리 유지용 스켈레톤만 그린다(레이아웃 시프트 방지).
  */
 export default function IntegrityStrip({ refreshKey = 0 }: { refreshKey?: number }) {
+  const [ready, setReady] = useState(false)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (ready) return
+    let idleHandle: number | null = null
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+    let observer: IntersectionObserver | null = null
+
+    const scheduleIdleFetch = () => {
+      if (typeof window.requestIdleCallback === "function") {
+        idleHandle = window.requestIdleCallback(() => setReady(true), { timeout: IDLE_FETCH_TIMEOUT_MS })
+      } else {
+        timeoutHandle = setTimeout(() => setReady(true), IDLE_FETCH_TIMEOUT_MS)
+      }
+    }
+
+    if (typeof IntersectionObserver === "function" && sentinelRef.current) {
+      observer = new IntersectionObserver((entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return
+        observer?.disconnect()
+        scheduleIdleFetch()
+      })
+      observer.observe(sentinelRef.current)
+    } else {
+      // IntersectionObserver 미지원 환경(구형 브라우저 등)은 뷰포트 판정 없이 idle 지연만 적용.
+      scheduleIdleFetch()
+    }
+
+    return () => {
+      observer?.disconnect()
+      if (idleHandle != null) window.cancelIdleCallback?.(idleHandle)
+      if (timeoutHandle != null) clearTimeout(timeoutHandle)
+    }
+  }, [ready])
+
+  if (!ready) {
+    return <div ref={sentinelRef} className="h-9 animate-pulse rounded-xl bg-[#f0f0ec]" />
+  }
+
+  return <IntegrityStripPanel refreshKey={refreshKey} />
+}
+
+function IntegrityStripPanel({ refreshKey }: { refreshKey: number }) {
   const [expanded, setExpanded] = useState(false)
   const { data, error, loading } = useBranchJson<DataQualityResponse>(
     "/api/admin/branch/data-quality",
