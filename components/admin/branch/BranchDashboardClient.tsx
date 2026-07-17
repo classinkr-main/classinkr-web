@@ -5,6 +5,7 @@ import type { KeyboardEvent } from "react"
 import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
 import SyncStatusBar from "./SyncStatusBar"
+import IntegrityStrip from "./IntegrityStrip"
 import CoreKpiGrid from "./sections/CoreKpiGrid"
 import ActivityBottleneckSection from "./sections/ActivityBottleneckSection"
 import BranchHeroGauges from "./sections/BranchHeroGauges"
@@ -284,6 +285,9 @@ export default function BranchDashboardClient() {
             )}
           </div>
         )}
+
+        {/* 단위 표기 규칙 명시(항목 1) — 화면 전체의 ¥ 축약 표기가 어느 통화 기준인지 1회 고지. */}
+        <p className="mt-2 text-[10.5px] font-medium text-[#615D59]/80">통화 ¥ — 본사 보고 기준</p>
       </header>
 
       {/* Sub-tabs */}
@@ -334,6 +338,8 @@ export default function BranchDashboardClient() {
         <div className="mt-6">
           {activeTab === "overview" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
+              {/* 정합성 배지 승격(항목 3) — SyncStatusBar 바로 아래, 개요 탭에만. */}
+              <IntegrityStrip refreshKey={refreshKey} />
               <CoreKpiGrid data={summary.data} loading={summary.loading} error={summary.error} />
               {/* D-1: 매출 목표(HeroGauges) 위, 매출 누적 흐름(RevenueFlowSection) 아래 */}
               <BranchHeroGauges
