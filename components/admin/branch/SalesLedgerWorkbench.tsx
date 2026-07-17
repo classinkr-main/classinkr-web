@@ -34,6 +34,7 @@ import {
   X,
 } from "lucide-react"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
+import { matchesTokens, tokenize } from "./search-tokens"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { ledgerMonthSplit, ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
@@ -1101,10 +1102,11 @@ function draftMatchesFilter(draft: LedgerDraft, filter: DraftStatusFilter) {
   return draft.status === filter
 }
 
+// 다중 토큰 AND 매칭(품질 웨이브 3, 항목 1) — search-tokens.ts SSOT 소비. "김민 BD"처럼
+// 서로 다른 필드에 걸친 복합 검색을 지원한다(기존엔 공백 포함 쿼리를 단일 문자열로만 비교해
+// 실패했다).
 function draftMatchesQuery(draft: LedgerDraft, query: string) {
-  const needle = query.trim().toLowerCase()
-  if (!needle) return true
-  return [
+  return matchesTokens(tokenize(query), [
     draft.customer,
     draft.manager,
     draft.team,
@@ -1112,7 +1114,7 @@ function draftMatchesQuery(draft: LedgerDraft, query: string) {
     draft.note,
     draft.sourceDealId,
     draft.sourceSheetRow ? String(draft.sourceSheetRow) : "",
-  ].some((value) => String(value ?? "").toLowerCase().includes(needle))
+  ])
 }
 
 function DraftQueue({
@@ -3858,7 +3860,11 @@ export default function SalesLedgerWorkbench() {
   // 건수"가 일치하려면 다른 필터(담당자/상품/검색 등)는 이미 반영된 상태에서 세야 한다.
   // (기존엔 무필터 rows 기준이라 담당자 필터 중 "불일치 7" 클릭 → 2행만 나오는 불일치가 있었다.)
   const revBaseFilteredRows = useMemo(() => {
-    const needle = query.trim().toLowerCase()
+    // 다중 토큰 AND 매칭(품질 웨이브 3, 항목 1) — "김민 BD"처럼 서로 다른 필드에 걸친 복합
+    // 검색을 지원한다. sheetRow를 필드에 포함(항목 2) — IntegrityStrip의 "장부에서 열기 →"
+    // 딥링크(`?lens=rev&q=<sheetRow>`)가 실제로 그 행을 찾아 매칭되게 한다(기존엔 sheetRow가
+    // 검색 대상에 없어 링크를 눌러도 검색 결과가 비었다).
+    const tokens = tokenize(query)
     return rows
       .filter((row) => managerFilter === "ALL" || row.manager === managerFilter)
       .filter((row) => regionFilter === "ALL" || row.region === regionFilter)
@@ -3867,12 +3873,26 @@ export default function SalesLedgerWorkbench() {
       .filter((row) => revDealTypeFilter === "ALL" || row.dealType === revDealTypeFilter)
       .filter((row) => revOriginFilter === "all" || row.ledgerOrigin === revOriginFilter)
       .filter((row) => {
-        if (!needle) return true
+        if (tokens.length === 0) return true
         const originLabel = row.ledgerOrigin === "draft" ? "장부 입력 applied draft 신규 수정" : "시트 원본 sheet"
         const productMeta = productCategoryMeta(rowProductCategory(row))
-        return [row.customer, row.manager, row.team, row.region, row.status, row.dealType, row.productVersion, productMeta.label, productMeta.shortLabel, originLabel, row.draftKind, row.draftNote, row.draftMonth, row.sourceDealId].some((value) =>
-          String(value ?? "").toLowerCase().includes(needle),
-        )
+        return matchesTokens(tokens, [
+          row.customer,
+          row.manager,
+          row.team,
+          row.region,
+          row.status,
+          row.dealType,
+          row.productVersion,
+          productMeta.label,
+          productMeta.shortLabel,
+          originLabel,
+          row.draftKind,
+          row.draftNote,
+          row.draftMonth,
+          row.sourceDealId,
+          row.sheetRow != null ? String(row.sheetRow) : "",
+        ])
       })
   }, [managerFilter, productFilter, query, regionFilter, revDealTypeFilter, revOriginFilter, revStatusFilter, rows])
 
