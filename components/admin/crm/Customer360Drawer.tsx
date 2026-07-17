@@ -133,13 +133,9 @@ const EVENT_SOURCE_ICON: Record<string, React.ReactNode> = {
   site_inflow: <Globe className="h-3.5 w-3.5" />,
 }
 
-// 연락 입력 — 콜/문자/메모/회의록을 한 컴포저에서. sourceType로 그대로 저장돼 타임라인에 유형 표시.
-const NOTE_KIND_OPTIONS = [
-  { key: "manual_note", label: "메모", icon: <StickyNote className="h-3 w-3" />, placeholder: "빠른 메모 입력 후 저장", rows: 2 },
-  { key: "call", label: "콜", icon: <PhoneCall className="h-3 w-3" />, placeholder: "통화 내용·결과 입력 후 저장", rows: 2 },
-  { key: "sms", label: "문자", icon: <MessageSquare className="h-3 w-3" />, placeholder: "문자 내용 입력 후 저장", rows: 2 },
-  { key: "meeting_minutes", label: "회의록", icon: <FileText className="h-3 w-3" />, placeholder: "회의록 붙여넣기/입력 후 저장", rows: 4 },
-] as const
+// 고정 컴포저 본문 textarea id — 헤더 '활동 기록'·추천 '메모 남기기' CTA의 포커스 대상.
+// 콜/문자/메모/회의록 입력은 전부 고정 컴포저(ActivityQuickForm)가 담당한다(구 인라인 폼 제거).
+const COMPOSER_BODY_ID = "c360-composer-body"
 
 function sumAmounts(values: Array<number | null | undefined>): number | null {
   let total = 0
@@ -150,14 +146,6 @@ function sumAmounts(values: Array<number | null | undefined>): number | null {
     seen = true
   }
   return seen ? total : null
-}
-
-function focusSection(id: string) {
-  if (typeof document === "undefined") return
-  const el = document.getElementById(id)
-  if (!el) return
-  el.scrollIntoView({ behavior: "smooth", block: "center" })
-  if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) el.focus()
 }
 
 // 제품 매출 타일 — SW/HW 결제 누적(¥ CNY)·칠판 대수(대). REV/HW 원장을 계정키로 조인한 값.
@@ -275,7 +263,6 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [actingId, setActingId] = useState<string | null>(null)
-  const [note, setNote] = useState("")
   const [taskTitle, setTaskTitle] = useState("")
   const [taskType, setTaskType] = useState<CrmTaskType>("call")
   const [taskDue, setTaskDue] = useState("")
@@ -289,7 +276,6 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")
   const [tagBusy, setTagBusy] = useState(false)
-  const [noteKind, setNoteKind] = useState<"manual_note" | "meeting_minutes" | "call" | "sms">("manual_note")
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [activeSection, setActiveSection] = useState<string>("c360-summary")
@@ -378,7 +364,6 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     // 고객이 바뀌면 이전 고객의 데이터/폼 입력이 새 드로어에 잔존하지 않게 초기화한다.
     setData(null)
     setError(null)
-    setNote("")
     setTaskTitle("")
     setTaskType("call")
     setTaskDue("")
@@ -388,7 +373,6 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     setActivityTab("timeline")
     setActivitySource("all")
     setEventsExpanded(false)
-    setNoteKind("manual_note")
     setDealFormOpen(false)
     setTaskFormOpen(false)
     // 고객 전환 시 컴포저는 새 대상으로 리마운트되므로 dirty 가드도 초기화.
@@ -509,25 +493,12 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     [targetType, entityId, refetch]
   )
 
-  const handleAddNote = useCallback(async () => {
-    const body = note.trim()
-    if (!body || !customerKey) return
-    setActingId("note")
-    setError(null)
-    try {
-      await adminFetchJson("/api/admin/crm/events", {
-        method: "POST",
-        body: JSON.stringify({ targetType, targetId: entityId, targetLabel: displayName, sourceType: noteKind, body }),
-      })
-      setNote("")
-      setSavedMsg("기록을 저장했어요")
-      await refetch()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "메모 저장에 실패했습니다.")
-    } finally {
-      setActingId(null)
-    }
-  }, [note, noteKind, customerKey, targetType, entityId, displayName, refetch])
+  // 컴포저로 포커스 — 구 인라인 메모 폼을 대체한 CTA(헤더 '활동 기록'·추천 '메모 남기기').
+  // 컴포저는 스크롤 본문 밖에 고정돼 있어, 본문 스크롤만 최상단으로 되돌리고 입력에 포커스를 준다.
+  const focusComposer = useCallback(() => {
+    bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+    document.getElementById(COMPOSER_BODY_ID)?.focus()
+  }, [])
 
   const handleAddTask = useCallback(async () => {
     const title = taskTitle.trim()
@@ -842,8 +813,6 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     [customerKey]
   )
 
-  const noteMeta = NOTE_KIND_OPTIONS.find((option) => option.key === noteKind) ?? NOTE_KIND_OPTIONS[0]
-
   // 다가오는 일정 — 기한 있는 열린 할 일 중 오늘 이후만, 가까운 순. (전체 할 일은 아래 목록.)
   const upcomingTasks = useMemo(() => {
     const rows = data?.tasks?.rows ?? []
@@ -971,7 +940,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </button>
             <button
               type="button"
-              onClick={() => focusSection("c360-note")}
+              onClick={focusComposer}
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
             >
               <ClipboardList className="h-3.5 w-3.5" />활동 기록
@@ -1070,6 +1039,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
               defaultTargetType={targetType}
               defaultTargetId={entityId}
               defaultTargetLabel={displayName}
+              bodyFieldId={COMPOSER_BODY_ID}
               onSaved={() => void refetch()}
               onDirtyChange={setComposerDirty}
             />
@@ -1182,7 +1152,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                 </button>
                 <button
                   type="button"
-                  onClick={() => focusSection("c360-note")}
+                  onClick={focusComposer}
                   className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-white px-3 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD]"
                 >
                   <StickyNote className="h-3.5 w-3.5" />
@@ -1370,41 +1340,6 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   ))}
                 </div>
               ) : null}
-
-              <div className="mb-3 flex flex-col gap-2 border-b border-[#f0f0ec] pb-3">
-                <div className="inline-flex w-fit rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
-                  {NOTE_KIND_OPTIONS.map((kind) => (
-                    <button
-                      key={kind.key}
-                      type="button"
-                      onClick={() => setNoteKind(kind.key)}
-                      className={`inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] font-semibold transition-colors ${
-                        noteKind === kind.key ? "bg-white text-[#111110] shadow-sm" : "text-[#1a1a1a]/50 hover:text-[#111110]"
-                      }`}
-                    >
-                      {kind.icon}
-                      {kind.label}
-                    </button>
-                  ))}
-                </div>
-                <textarea
-                  id="c360-note"
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder={noteMeta.placeholder}
-                  rows={noteMeta.rows}
-                  className="rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleAddNote()}
-                  disabled={!note.trim() || actingId === "note"}
-                  className="inline-flex h-9 items-center justify-center gap-1 self-end rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-40"
-                >
-                  {noteMeta.icon}
-                  {noteMeta.label} 저장
-                </button>
-              </div>
 
               {visibleActivity.length === 0 ? (
                 <p className="text-[12px] text-[#1a1a1a]/40">

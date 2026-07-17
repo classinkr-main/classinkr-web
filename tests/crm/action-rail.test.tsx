@@ -116,9 +116,20 @@ describe("rail-utils · activityDeepLink", () => {
 })
 
 describe("activity-contract", () => {
-  it("keeps the mode-field SSOT contract for the three creation modes", () => {
-    expect(MODE_OPTIONS.map((option) => option.key)).toEqual(["manual_note", "meeting_minutes", "recording"])
+  it("keeps the mode-field SSOT contract for the five creation modes", () => {
+    expect(MODE_OPTIONS.map((option) => option.key)).toEqual([
+      "manual_note",
+      "call",
+      "sms",
+      "meeting_minutes",
+      "recording",
+    ])
     expect(MODE_FIELDS.manual_note.primary).toEqual(["body"])
+    // 콜/문자 — 간단 메모와 같은 컴팩트 계약(본문만 필수, 나머지는 상세 토글).
+    expect(MODE_FIELDS.call.primary).toEqual(["body"])
+    expect(MODE_FIELDS.sms.primary).toEqual(["body"])
+    expect(MODE_FIELDS.call.advanced).toEqual(MODE_FIELDS.manual_note.advanced)
+    expect(MODE_FIELDS.sms.advanced).toEqual(MODE_FIELDS.manual_note.advanced)
     expect(MODE_FIELDS.recording.primary).toEqual(["recording"])
     expect(MODE_FIELDS.meeting_minutes.advanced).toEqual([])
     // 회의록 모드는 다음 액션·단계 신호를 항상 노출한다(액션 누락 방지).
@@ -169,6 +180,8 @@ describe("ActivityQuickForm (static render)", () => {
   it("keeps the API-contract fields visible in compact mode", () => {
     const html = renderToStaticMarkup(<ActivityQuickForm compact />)
     expect(html).toContain("간단 메모")
+    expect(html).toContain("콜")
+    expect(html).toContain("문자")
     expect(html).toContain("회의록")
     expect(html).toContain("녹음")
     expect(html).toContain("기록 시각")

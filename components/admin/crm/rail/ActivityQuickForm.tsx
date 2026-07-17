@@ -42,6 +42,8 @@ export interface ActivityQuickFormProps {
   defaultTargetId?: string
   /** 고객 프리셀렉트 — 표시 이름 */
   defaultTargetLabel?: string
+  /** 본문 textarea에 부여할 DOM id — 부모 CTA가 getElementById(...).focus()로 포커스를 옮길 때 사용 */
+  bodyFieldId?: string
   /** 저장 성공 후 콜백(타임라인 refresh 등). tasksCreated = 함께 생성된 할 일 수 */
   onSaved?: (result: { tasksCreated: number }) => void
   /** 본문/제목이 비어있지 않게 되거나 다시 비면 통지(드로어 닫기 dirty 가드용) */
@@ -55,6 +57,7 @@ export default function ActivityQuickForm({
   defaultTargetType,
   defaultTargetId,
   defaultTargetLabel,
+  bodyFieldId,
   onSaved,
   onDirtyChange,
 }: ActivityQuickFormProps) {
@@ -507,6 +510,7 @@ export default function ActivityQuickForm({
               </label>
             ) : null}
             <textarea
+              id={bodyFieldId}
               value={body}
               onChange={(event) => setBody(event.target.value)}
               rows={2}
@@ -673,6 +677,7 @@ export default function ActivityQuickForm({
           <label className="text-[11px] font-semibold text-[#1a1a1a]/45">
             원문 메모 / 회의록
             <textarea
+              id={bodyFieldId}
               value={body}
               onChange={(event) => setBody(event.target.value)}
               rows={isCompact ? 3 : 5}
