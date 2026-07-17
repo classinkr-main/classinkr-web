@@ -1039,6 +1039,13 @@ function ErrorPanel({ message }: { message: string }) {
   )
 }
 
+// th의 aria-sort 값 계산(품질 웨이브 3, 항목 8) — RevSortHeader를 감싸는 <th>가 실제
+// aria-sort 소유자(ARIA 표준상 columnheader 상태). 비활성 컬럼은 "none".
+function revSortAriaValue(active: boolean, direction: RevSortDirection): "ascending" | "descending" | "none" {
+  if (!active) return "none"
+  return direction === "asc" ? "ascending" : "descending"
+}
+
 function RevSortHeader({
   label,
   sortKey,
@@ -1069,7 +1076,8 @@ function RevSortHeader({
       } ${active ? "text-[#084734]" : "text-[#615D59]"}`}
     >
       <span>{label}</span>
-      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      {/* 비활성(정렬 안 됨) 화살표는 흐림 처리로 활성 상태와 구분(항목 8). */}
+      <Icon className={`h-3.5 w-3.5 ${active ? "" : "opacity-35"}`} aria-hidden="true" />
     </button>
   )
 }
@@ -5772,6 +5780,7 @@ export default function SalesLedgerWorkbench() {
                     <thead className="text-[10px] uppercase tracking-[0.06em] text-[#615D59]">
                       <tr role="row" className="h-8 bg-[#FAFAF8]">
                         <th
+                          aria-sort={revSortAriaValue(revSortKey === "customer", revSortDirection)}
                           className="sticky left-0 top-0 z-40 border-r border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-left align-middle"
                           style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
                         >
@@ -5820,6 +5829,7 @@ export default function SalesLedgerWorkbench() {
                           )
                         })}
                         <th
+                          aria-sort={revSortAriaValue(revSortKey === "annual", revSortDirection)}
                           className="sticky right-0 top-0 z-40 border-l border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-right align-middle"
                           style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
                         >
