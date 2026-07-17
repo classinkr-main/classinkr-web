@@ -52,9 +52,11 @@ const STAFF_EDITOR: AdminRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, roles: [...ALL_STAFF, "BRANCH"], section: "home", keywords: "홈 대시보드 overview home" },
 
-  // 영업·매출 — 파이프라인(CRM)·산출물(견적)·성과(KR Team)·검수(매출 장부)·일정
+  // 영업·매출 — 파이프라인(CRM)·산출물(견적)·재고(하드웨어)·성과(KR Team)·검수(매출 장부)·일정
   { href: "/admin/crm", label: "CRM", icon: Users, roles: [...ALL_STAFF, "BRANCH"], section: "sales", keywords: "crm 한국팀 매출 korea" },
   { href: "/admin/quotes", label: "견적·문서", icon: FileText, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", keywords: "견적 계약 영수증 quote contract receipt" },
+  // 하드웨어 재고는 견적서 산출물과 바로 이어지는 재고 검증 표면이라 견적·문서 바로 아래에 둔다(2026-07-18 재배치, 이전엔 system 섹션).
+  { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
   { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, roles: [...ALL_STAFF, "BRANCH"], section: "sales", keywords: "캘린더 일정 calendar schedule" },
   { href: "/admin/branch", label: "KR Team", icon: Building2, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", keywords: "지사 브랜치 branch kr team 매출 성과" },
   { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", badge: "MVP", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
@@ -83,7 +85,6 @@ export const ADMIN_NAV: AdminNavItem[] = [
 
   // 운영·시스템
   { href: "/admin/ops", label: "운영 상태", icon: Activity, roles: [...STAFF_ADMIN, "BRANCH"], section: "system", keywords: "ops health 상태 통합 크론 cron automation" },
-  { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, roles: [...STAFF_ADMIN, "BRANCH"], section: "system", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
   // 회원 관리는 Settings "회원" 탭(?tab=members)으로 흡수됨 — /admin/users는 그 탭으로 redirect 스텁.
   // ⌘K 검색어(회원·사용자·권한)를 Settings 항목 keywords에 병합해 검색성 보존.
   { href: "/admin/settings", label: "설정", icon: Settings, roles: STAFF_ADMIN, section: "system", keywords: "설정 settings 환경 회원 사용자 users 권한 계정" },
@@ -93,10 +94,10 @@ export const ADMIN_NAV: AdminNavItem[] = [
 // 섹션 부제(description)는 사이드바에서 미렌더 — 팔레트 그룹 라벨과 코드 문서용으로만 유지.
 export const ADMIN_NAV_SECTION_META: Record<AdminNavSection, { label: string; description: string }> = {
   home: { label: "홈", description: "오늘 먼저 볼 운영 허브" },
-  sales: { label: "영업·매출", description: "CRM·견적·매출 성과·장부" },
+  sales: { label: "영업·매출", description: "CRM·견적·하드웨어 재고·매출 성과·장부" },
   marketing: { label: "마케팅·분석", description: "캠페인·콘텐츠·리드·웹 분석" },
   cs: { label: "고객 지원", description: "가이드 문서·챗봇·채널톡" },
-  system: { label: "운영·시스템", description: "상태·재고·설정·권한" },
+  system: { label: "운영·시스템", description: "상태·설정·권한" },
 }
 
 /** 섹션 렌더 순서 — ADMIN_NAV_SECTION_META 선언 순서를 따른다. */
