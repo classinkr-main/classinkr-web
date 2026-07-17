@@ -33,6 +33,7 @@ Classin 브랜드 그린(`#084734`)을 액센트로 오버라이드한 시스템
 - **Warm Gray 500** (`#615D59`): 보조 텍스트, 설명
 - **Warm Gray 300** (`#A39E98`): 플레이스홀더, 비활성, 캡션
 - **Pure White** (`#FFFFFF`): 카드 표면, 모달
+- **Skeleton Neutral** (`#F0F0EC`): 로딩 스켈레톤(`animate-pulse`) 전용 배경 — 실사용 다수(어드민 전반)를 공식 토큰으로 편입
 
 ### 운영 상태 스케일 (Status scale) — 어드민 전용
 
