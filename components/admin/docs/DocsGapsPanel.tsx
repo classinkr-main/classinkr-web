@@ -559,6 +559,15 @@ export default function DocsGapsPanel() {
   const gapVisible = useVisibleCount(filteredGapClusters.length, GAP_LIST_PAGE_SIZE)
   const searchVisible = useVisibleCount(zeroResultSearches.length, GAP_LIST_PAGE_SIZE)
 
+  // 소스필터(전체/챗봇/내부CS) 변경 시 gap 리스트의 더보기 상한을 초기값(12)으로 되돌린다.
+  // deriveVisibleState는 rawVisible을 total로 클램프만 하고 줄이지는 않아, 24개까지 펼친 뒤
+  // 필터를 바꾸면 새 필터 결과가 12개가 아니라 24개까지 즉시 노출된다. 검색어 리스트는
+  // sourceFilter의 영향을 받지 않으므로(백로그 원본 그대로) 리셋 대상이 아니다.
+  const resetGapVisible = gapVisible.collapse
+  useEffect(() => {
+    resetGapVisible()
+  }, [sourceFilter, resetGapVisible])
+
   return (
     <div className="text-[#111110]">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -717,8 +726,10 @@ export default function DocsGapsPanel() {
               </div>
             </div>
             <ul className="space-y-2">
-              {/* 액션 3버튼은 기본 화면 노이즈를 줄이려 hover/focus에만 드러난다(md 이상).
-                  모바일·태블릿(hover 불가)은 상시 노출 — group-focus-within으로 키보드 접근도 보장. */}
+              {/* 액션 버튼은 화면 노이즈를 줄이려 마우스 기기(hover:hover + pointer:fine)에서만
+                  hover/focus에 드러난다. 화면폭이 아니라 입력장치 기준이라, 가로 태블릿처럼
+                  넓지만 hover 없는 기기에서는 상시 노출된다(터치 접근성) — group-focus-within으로
+                  키보드 접근도 보장. */}
               {filteredGapClusters.slice(0, gapVisible.visible).map((cluster) => {
                 const sourceBadge = getGapClusterSourceBadge(cluster)
                 const conversationId = cluster.metadata?.internalCs?.[0]?.conversationId
@@ -737,7 +748,7 @@ export default function DocsGapsPanel() {
                       <span>·</span>
                       <span>{cluster.status}</span>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 transition-opacity duration-150 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                    <div className="mt-2 flex flex-wrap items-center gap-2 transition-opacity duration-150 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:opacity-100">
                       <DraftButton
                         busy={draftingKey === `c:${cluster.id}`}
                         onClick={() => generateDraft(`c:${cluster.id}`, cluster.question)}
@@ -812,7 +823,7 @@ export default function DocsGapsPanel() {
                     <p className="truncate text-sm font-medium text-[#111110]">{search.query}</p>
                     <p className="mt-0.5 text-[11px] text-[#615D59]">검색 {search.count}회</p>
                   </div>
-                  <div className="shrink-0 transition-opacity duration-150 md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+                  <div className="shrink-0 transition-opacity duration-150 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-focus-within:opacity-100">
                     <DraftButton
                       busy={draftingKey === `s:${search.query}`}
                       onClick={() => generateDraft(`s:${search.query}`, search.query)}
