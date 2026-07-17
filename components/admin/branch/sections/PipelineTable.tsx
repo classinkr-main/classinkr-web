@@ -78,6 +78,8 @@ export default function PipelineTable({
   initialQuery,
   initialManager,
   onFilterChange,
+  summaryMode = false,
+  onViewFullPipeline,
 }: {
   team: Team
   period: Period
@@ -96,6 +98,16 @@ export default function PipelineTable({
   initialQuery?: string
   initialManager?: string
   onFilterChange?: (next: { query: string; manager: string }) => void
+  /** 웨이브 7 — F3(히트맵 탭 이중 렌더 해소). true면 검색/필터 툴바(검색창 + 팀·담당·
+   *  지역 MultiSelect + 건수·초기화)와 페이지네이션 푸터를 모두 숨기고, 현재 정렬 기준
+   *  상위 10행만 보여주는 요약 모드로 축소한다. 행 클릭(onRowClick)과 행별 "매출
+   *  장부에서 열기" 딥링크는 그대로 유지 — "요약"일 뿐 기능이 빠진 표는 아니다.
+   *  pageSize prop은 summaryMode에서 쓰이지 않는다(항상 정확히 10건). */
+  summaryMode?: boolean
+  /** summaryMode일 때 푸터에 렌더되는 "전체 파이프라인에서 보기 →" 버튼의 클릭 핸들러.
+   *  같은 페이지 내 다른 탭(파이프라인)으로 전환하는 것이라 <Link href>가 아니라
+   *  콜백으로 받는다(BranchDashboardClient.selectTab을 그대로 넘겨받는 용도). */
+  onViewFullPipeline?: () => void
 }) {
   const initialTeams: Set<string> = team === "ALL" ? new Set() : new Set([team])
   const [query, setQuery] = useState(initialQuery ?? "")
@@ -210,13 +222,21 @@ export default function PipelineTable({
     setPage(1)
   }
 
+  // 웨이브 7 — F3. 요약 모드에선 제목을 "REV 상위 10 매출"로 바꿔 표가 전체 목록이
+  // 아니라 요약이라는 걸 명시한다(hideHeader가 true면 어느 쪽이든 렌더되지 않음).
+  const headerLabel = summaryMode ? "REV 상위 10 매출" : "REV 고객별 매출"
+  // summaryMode에선 페이지네이션을 쓰지 않고 현재 정렬 기준 상위 10건을 고정으로 보여준다
+  // (기본 정렬이 매출 desc라 제목의 "상위 10 매출"과 맞음 — 다만 헤더 정렬 버튼 자체는
+  // summaryMode에서도 숨기지 않으므로 사용자가 다른 축으로 정렬을 바꾸면 그 축 상위 10건이 된다).
+  const displayRows = summaryMode ? filteredRows.slice(0, 10) : pageRows
+
   if (!rows) return <div className="h-64 animate-pulse rounded-2xl bg-[#F6F5F4]" />
   // 에러를 빈 상태로 위장하지 않는다 — pipeline.error가 있으면(로딩 실패) "딜 없음"이
   // 아니라 에러 배너 + 재시도를 보여준다. loading이 끝나고 error가 있으면 data는
   // null이라 rows는 [](빈 배열)로 계산되므로 이 분기를 rows.length===0보다 먼저 둬야 한다.
   if (pipeline.error) return (
     <section>
-      {!hideHeader && <h2 className="mb-3 text-[14px] font-bold tracking-[-0.01em] text-[#111110]">REV 고객별 매출</h2>}
+      {!hideHeader && <h2 className="mb-3 text-[14px] font-bold tracking-[-0.01em] text-[#111110]">{headerLabel}</h2>}
       <div
         role="alert"
         className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[12px] font-semibold text-[#8F2C2C]"
@@ -235,7 +255,7 @@ export default function PipelineTable({
   )
   if (rows.length === 0) return (
     <section>
-      {!hideHeader && <h2 className="mb-3 text-[14px] font-bold tracking-[-0.01em] text-[#111110]">REV 고객별 매출</h2>}
+      {!hideHeader && <h2 className="mb-3 text-[14px] font-bold tracking-[-0.01em] text-[#111110]">{headerLabel}</h2>}
       <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6 text-[12px] text-[#615D59]">표시할 매출 데이터가 없습니다.</div>
     </section>
   )
@@ -244,7 +264,7 @@ export default function PipelineTable({
     <section>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          {!hideHeader && <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">REV 고객별 매출</h2>}
+          {!hideHeader && <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">{headerLabel}</h2>}
           <Link
             href={ledgerHref()}
             title={crossLinkNotice}
@@ -253,58 +273,64 @@ export default function PipelineTable({
             장부에서 열기 ↗
           </Link>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] text-[#615D59]">{filteredRows.length}건 · {pageSize}개씩</span>
-          <span className="mx-1 h-3 w-px bg-[rgba(0,0,0,0.08)]" aria-hidden="true" />
-          <button
-            type="button"
-            onClick={resetFilters}
-            disabled={!filtersActive}
-            className="inline-flex h-7 items-center gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-medium text-[#111110]/65 transition hover:border-[#111110]/25 hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
-            title="필터 초기화"
-          >
-            <RotateCcw className="h-3 w-3" aria-hidden="true" />
-            <span>초기화</span>
-          </button>
-        </div>
+        {/* 웨이브 7 — F3. summaryMode에선 건수·초기화(필터 UI에 종속된 컨트롤)도 툴바의
+            일부로 함께 숨긴다 — 필터가 없으니 초기화할 것도, 셀 수를 알릴 이유도 없다. */}
+        {!summaryMode && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-[#615D59]">{filteredRows.length}건 · {pageSize}개씩</span>
+            <span className="mx-1 h-3 w-px bg-[rgba(0,0,0,0.08)]" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={resetFilters}
+              disabled={!filtersActive}
+              className="inline-flex h-7 items-center gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-medium text-[#111110]/65 transition hover:border-[#111110]/25 hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+              title="필터 초기화"
+            >
+              <RotateCcw className="h-3 w-3" aria-hidden="true" />
+              <span>초기화</span>
+            </button>
+          </div>
+        )}
       </div>
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <label className="relative min-w-0 flex-1 sm:max-w-md">
-          <span className="sr-only">REV 고객별 매출 검색</span>
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#615D59]" aria-hidden="true" />
-          <input
-            value={query}
-            onChange={(e) => { setQuery(e.target.value); setPage(1) }}
-            placeholder="고객사, 매니저, 지역 검색"
-            className="h-8 w-full rounded-full border border-[rgba(0,0,0,0.08)] bg-white pl-9 pr-3 text-[12px] outline-none transition focus:border-[#111110]/30"
+      {!summaryMode && (
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <label className="relative min-w-0 flex-1 sm:max-w-md">
+            <span className="sr-only">REV 고객별 매출 검색</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#615D59]" aria-hidden="true" />
+            <input
+              value={query}
+              onChange={(e) => { setQuery(e.target.value); setPage(1) }}
+              placeholder="고객사, 매니저, 지역 검색"
+              className="h-8 w-full rounded-full border border-[rgba(0,0,0,0.08)] bg-white pl-9 pr-3 text-[12px] outline-none transition focus:border-[#111110]/30"
+            />
+          </label>
+          <MultiSelect
+            label="팀"
+            options={teamOptions}
+            selected={selectedTeams}
+            onChange={(next) => { setSelectedTeams(next); setPage(1) }}
+            placeholder="전체"
+            width="w-32"
           />
-        </label>
-        <MultiSelect
-          label="팀"
-          options={teamOptions}
-          selected={selectedTeams}
-          onChange={(next) => { setSelectedTeams(next); setPage(1) }}
-          placeholder="전체"
-          width="w-32"
-        />
-        <MultiSelect
-          label="담당"
-          options={managerOptions}
-          selected={selectedManagers}
-          onChange={(next) => { setSelectedManagers(next); setPage(1) }}
-          placeholder="전체"
-          width="w-44"
-        />
-        <MultiSelect
-          label="지역"
-          options={regionOptions}
-          selected={selectedRegions}
-          onChange={(next) => { setSelectedRegions(next); setPage(1) }}
-          placeholder="전체 지역"
-          align="right"
-          width="w-44"
-        />
-      </div>
+          <MultiSelect
+            label="담당"
+            options={managerOptions}
+            selected={selectedManagers}
+            onChange={(next) => { setSelectedManagers(next); setPage(1) }}
+            placeholder="전체"
+            width="w-44"
+          />
+          <MultiSelect
+            label="지역"
+            options={regionOptions}
+            selected={selectedRegions}
+            onChange={(next) => { setSelectedRegions(next); setPage(1) }}
+            placeholder="전체 지역"
+            align="right"
+            width="w-44"
+          />
+        </div>
+      )}
       <div className="overflow-x-auto rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white">
         <table className="w-full text-[12px]">
           <colgroup>
@@ -324,12 +350,12 @@ export default function PipelineTable({
             </tr>
           </thead>
           <tbody>
-            {pageRows.length === 0 && (
+            {displayRows.length === 0 && (
               <tr>
                 <td className="px-5 py-10 text-center text-[#615D59]" colSpan={5}>검색 결과가 없습니다.</td>
               </tr>
             )}
-            {pageRows.map((r) => (
+            {displayRows.map((r) => (
               <tr key={r.id}
                 onClick={onRowClick ? () => onRowClick(r) : undefined}
                 className={`border-t border-[#F6F5F4] ${onRowClick ? "cursor-pointer transition hover:bg-[#FAFAF8]" : ""}`}>
@@ -368,35 +394,50 @@ export default function PipelineTable({
             ))}
           </tbody>
         </table>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#F6F5F4] px-5 py-1">
-          <p className="text-[11px] text-[#615D59]">
-            {pageStart}-{pageEnd} / {filteredRows.length}건
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={safePage === 1}
-              // 웨이브 7 — U5(터치 타깃). 모바일 h-10/w-10(40px) → 데스크톱 md:h-7/md:w-7 원복.
-              className="inline-flex h-10 min-h-10 w-10 min-w-10 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35 md:h-7 md:min-h-0 md:w-7 md:min-w-0"
-              aria-label="이전 페이지"
-              title="이전 페이지"
-            >
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-            </button>
-            <span className="min-w-14 text-center text-[12px] text-[#111110]/60">{safePage} / {totalPages}</span>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={safePage === totalPages}
-              className="inline-flex h-10 min-h-10 w-10 min-w-10 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35 md:h-7 md:min-h-0 md:w-7 md:min-w-0"
-              aria-label="다음 페이지"
-              title="다음 페이지"
-            >
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </button>
+        {summaryMode ? (
+          // 웨이브 7 — F3. 페이지네이션 대신 파이프라인 탭으로 이어지는 단일 링크만 둔다.
+          onViewFullPipeline && (
+            <div className="flex items-center justify-end border-t border-[#F6F5F4] px-5 py-2">
+              <button
+                type="button"
+                onClick={onViewFullPipeline}
+                className="text-[11px] font-semibold text-[#084734] underline-offset-2 hover:underline"
+              >
+                전체 파이프라인에서 보기 →
+              </button>
+            </div>
+          )
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#F6F5F4] px-5 py-1">
+            <p className="text-[11px] text-[#615D59]">
+              {pageStart}-{pageEnd} / {filteredRows.length}건
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                // 웨이브 7 — U5(터치 타깃). 모바일 h-10/w-10(40px) → 데스크톱 md:h-7/md:w-7 원복.
+                className="inline-flex h-10 min-h-10 w-10 min-w-10 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35 md:h-7 md:min-h-0 md:w-7 md:min-w-0"
+                aria-label="이전 페이지"
+                title="이전 페이지"
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <span className="min-w-14 text-center text-[12px] text-[#111110]/60">{safePage} / {totalPages}</span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="inline-flex h-10 min-h-10 w-10 min-w-10 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35 md:h-7 md:min-h-0 md:w-7 md:min-w-0"
+                aria-label="다음 페이지"
+                title="다음 페이지"
+              >
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </section>
   )

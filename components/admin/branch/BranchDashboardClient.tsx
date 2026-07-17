@@ -543,7 +543,11 @@ export default function BranchDashboardClient() {
           {activeTab === "heatmap" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
               <BranchRegionHeatmap team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} />
-              <PipelineTable key={`heatmap-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} pageSize={10} onRowClick={openDealLog} />
+              {/* 웨이브 7 — F3(히트맵 탭 이중 렌더 해소). 파이프라인 탭에 이미 전체 기능
+                  테이블이 있으므로 여기서는 검색/필터 없는 요약(summaryMode)만 보여주고,
+                  "전체 파이프라인에서 보기"는 같은 페이지의 파이프라인 탭으로 전환한다. */}
+              <PipelineTable key={`heatmap-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog}
+                summaryMode onViewFullPipeline={() => selectTab("pipeline")} />
             </div>
           )}
 
