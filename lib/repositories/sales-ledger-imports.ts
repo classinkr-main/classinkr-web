@@ -150,10 +150,16 @@ function addWeeklyPayment(target: Record<string, number[]>, month: string, weekL
 // ①run 상태 확인을 inner join으로 합쳐 왕복 1회로, ②fiscal_year 단위로 dsh/rev/kpi 3개
 // tabKey를 한 쿼리에 담아(개별 tab_key 필터 제거) summary 라우트 같은 소비처가 Promise.all로
 // 세 tabKey를 동시에 조회할 때도 왕복이 늘지 않게 한다(품질 웨이브3 — 이전엔 tabKey별로
-// 별도 캐시 엔트리라 콜드일 때 3왕복이었다), ③60초 unstable_cache로 감싸 "임포트 없음(null)이
-// 대부분"인 현재 상태에서 요청당 Supabase 왕복을 없앤다. 액티브 소스 전환(임포트 스크립트)은
-// 앱 밖에서 일어나므로 최대 60초 지연 허용. started_at도 함께 실어 "서빙 소스가 언제 캡처된
-// 런인지"(data_sources 노출용)를 별도 왕복 없이 답할 수 있게 한다 — 2026-07-16 스테일 임포트
+// 별도 캐시 엔트리라 콜드일 때 3왕복이었다), ③300초 unstable_cache로 감싸(R5 항목 4:
+// 60초→300초, 실측 캐시 미스 0.5~1.3s 스파이크 빈도를 5~6배 줄인다) "임포트 없음(null)이
+// 대부분"인 현재 상태에서 요청당 Supabase 왕복을 없앤다. 인앱 전환(REV DB-native
+// 재캡처/활성화)은 activateRevImportRun(lib/repositories/sales-ledger-rev-import.ts)이
+// 성공 직후 같은 SALES_LEDGER_IMPORTS_CACHE_TAG를 revalidateTag("max")로 무효화하므로
+// TTL과 무관하게 즉시 반영된다 — 이 300초가 실제로 지연시키는 건 앱 밖(운영 스크립트)이
+// sales_ledger_active_sources를 직접 upsert하는 경로뿐이며, 그 stale 창도 60초에서
+// 300초로 함께 늘어난다(외부 스크립트 전환은 애초에 분 단위 운영 작업이라 감내 가능한
+// 트레이드오프로 판단). started_at도 함께 실어 "서빙 소스가 언제 캡처된 런인지"
+// (data_sources 노출용)를 별도 왕복 없이 답할 수 있게 한다 — 2026-07-16 스테일 임포트
 // 사고 이후 요구사항.
 async function lookupActiveImportRunInfoForYear(fiscalYear: number): Promise<Record<SalesLedgerTabKey, ActiveImportRunInfo | null>> {
   const empty: Record<SalesLedgerTabKey, ActiveImportRunInfo | null> = { dsh: null, rev: null, kpi: null }
@@ -184,7 +190,7 @@ async function lookupActiveImportRunInfoForYear(fiscalYear: number): Promise<Rec
 const getCachedActiveImportRunInfoForYear = unstable_cache(
   async (fiscalYear: number) => lookupActiveImportRunInfoForYear(fiscalYear),
   ["sales-ledger-active-import-run-year"],
-  { revalidate: 60, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG] },
+  { revalidate: 300, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG] },
 )
 
 // React cache()로 같은 요청 안에서의 중복 실행을 접는다: summary 라우트는 dsh(readDshWithSource)·

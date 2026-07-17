@@ -183,17 +183,22 @@ async function lookupActiveRevImportStatus(fiscalYear: number): Promise<ActiveRe
   return { active: Boolean(runId), fiscalYear, runId, capturedAt: startedAt ?? null }
 }
 
-// GET db-import 캐시(10초 TTL, SALES_LEDGER_IMPORTS_CACHE_TAG). activateRevImportRun(인앱
+// GET db-import 캐시(60초 TTL, SALES_LEDGER_IMPORTS_CACHE_TAG — R5 항목 4: 10초→60초,
+// 실측 캐시 미스 0.5~1.3s 스파이크 빈도를 5~6배 줄인다). activateRevImportRun(인앱
 // 재캡처/활성화)이 성공 직후 이 태그를 revalidateTag("max")로 즉시 무효화하므로(위 함수 끝)
-// 워크벤치에서 "재동기화 → 활성화"로 전환한 케이스는 지연 없이 반영된다. 이 캐시가 실제로
-// 지연시키는 유일한 경로는 앱 밖(운영 스크립트)이 sales_ledger_active_sources를 직접
-// upsert하는 경우 — 최대 10초 stale은 감내 가능한 트레이드오프로 판단(기존 60초 unstable_cache
-// 미적용 fresh 조회 대비 훨씬 짧다). "수동으로 시트 모드로 되돌린 직후" 시나리오도 이 10초
-// 창 안에서만 이전 상태가 보일 수 있다 — 완전한 fresh 보장이 필요해지면 이 캐시를 다시 벗긴다.
+// 워크벤치에서 "재동기화 → 활성화"로 전환한 케이스는 TTL과 무관하게 지연 없이 반영된다 —
+// sales-ledger-imports.ts의 getCachedActiveImportRunInfoForYear도 동일한
+// SALES_LEDGER_IMPORTS_CACHE_TAG를 태그로 쓰므로 이 한 번의 revalidateTag 호출이 두 캐시를
+// 모두 무효화한다(코드 확인: 두 unstable_cache 모두 tags: [SALES_LEDGER_IMPORTS_CACHE_TAG]).
+// 이 캐시가 실제로 지연시키는 유일한 경로는 앱 밖(운영 스크립트)이
+// sales_ledger_active_sources를 직접 upsert하는 경우다 — TTL을 10초에서 60초로 올리면서
+// 그 stale 창도 최대 10초에서 60초로 함께 늘어난다는 뜻이다. 인앱 전환은 즉시 반영되므로
+// 이 확장은 "수동으로 시트 모드로 되돌린 직후" 같은 외부 스크립트 경로에만 영향을 준다 —
+// 감내 가능한 트레이드오프로 판단(외부 스크립트 전환은 애초에 분 단위 운영 작업).
 const getCachedActiveRevImportStatus = unstable_cache(
   async (fiscalYear: number) => lookupActiveRevImportStatus(fiscalYear),
   ["sales-ledger-active-rev-import-status"],
-  { revalidate: 10, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG] },
+  { revalidate: 60, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG] },
 )
 
 // 액티브 REV 소스 상태 조회(GET db-import 용) — 클라이언트가 "지금 DB 임포트 run을 읽는 중인지"를
