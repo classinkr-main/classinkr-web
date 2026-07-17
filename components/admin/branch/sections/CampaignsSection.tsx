@@ -2,7 +2,11 @@
 import type { BranchCampaignRow } from "../types"
 
 export default function CampaignsSection({ rows, loading, error }: { rows: BranchCampaignRow[] | null; loading: boolean; error: string | null }) {
-  if (error) return <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
+  if (error) return (
+    <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]">
+      {error}
+    </div>
+  )
   if (loading || !rows) return <div className="h-32 animate-pulse rounded-xl bg-[#f0f0ec]" />
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
