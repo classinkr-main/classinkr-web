@@ -169,3 +169,60 @@ describe("draft.status 불변 가드 (웨이브 5 — 백엔드와 동일 계약
     expect(fnBody).not.toContain("setDrafts(")
   })
 })
+
+// 되돌리기 부활 버그(P0) 최종 수리 — 재마운트/새로고침 시나리오 회귀 가드.
+// 문제: reversedDraftIds는 useState(new Set())로 세션 로컬 상태다. 재마운트되면 빈 Set으로
+// 초기화되고, GET 목록의 entries는 entry_status=active만 담아오므로(기존 웨이브 5 필터) 방금
+// 상쇄된 항목은 어느 신호에서도 보이지 않는다 — appliedDraftFallbackRows(entries 누락 시 applied
+// draft를 대체 표시하는 안전망)가 이를 "아직 동기화 안 된 신규 적용"으로 오인해 되살린다.
+// 수정: GET 응답에 reversedDraftIds(문자열 배열)를 추가(app/api/admin/branch/ledger-drafts/route.ts —
+// 이 라우트의 회귀는 tests/api/branch-ledger-drafts-route.test.ts가 실제 호출로 검증)하고,
+// loadDrafts가 마운트마다(최초 마운트 포함) 이 서버 진실로 reversedDraftIds를 시드한다.
+describe("loadDrafts — reversedDraftIds 서버 시드 (P0, 재마운트 시나리오)", () => {
+  it("data.reversedDraftIds가 있으면 setReversedDraftIds로 로컬 Set과 합집합한다", () => {
+    const source = workbenchSource()
+    const fnStart = source.indexOf("const loadDrafts = useCallback")
+    expect(fnStart).toBeGreaterThan(-1)
+    const fnEnd = source.indexOf("}, [])", fnStart)
+    expect(fnEnd).toBeGreaterThan(fnStart)
+    const fnBody = source.slice(fnStart, fnEnd)
+
+    expect(fnBody).toContain("data.reversedDraftIds")
+    expect(fnBody).toContain("setReversedDraftIds((current) => {")
+    // 덮어쓰기가 아니라 합집합이어야 한다 — 되돌리기는 단방향이라 안전하고, 같은 세션에서
+    // 방금 반전한 항목(로컬에서 이미 add된 것)이 시드 과정에서 유실되면 안 된다.
+    expect(fnBody).toContain("const next = new Set(current)")
+    expect(fnBody).toContain("next.add(draftId)")
+  })
+
+  it("시드 코드가 health.ok===false 조기 반환보다 먼저 실행된다 — 어느 분기로 가든 항상 시드된다", () => {
+    const source = workbenchSource()
+    const fnStart = source.indexOf("const loadDrafts = useCallback")
+    const fnEnd = source.indexOf("}, [])", fnStart)
+    const fnBody = source.slice(fnStart, fnEnd)
+
+    const seedIndex = fnBody.indexOf("setReversedDraftIds((current) => {")
+    const healthGateIndex = fnBody.indexOf("if (data.health?.ok === false) {")
+    expect(seedIndex).toBeGreaterThan(-1)
+    expect(healthGateIndex).toBeGreaterThan(-1)
+    expect(seedIndex).toBeLessThan(healthGateIndex)
+  })
+
+  it("최초 마운트 effect가 loadDrafts를 무조건 호출한다 — 재마운트마다 시드가 재실행됨을 보장", () => {
+    const source = workbenchSource()
+    expect(source).toContain("useEffect(() => {\n    void loadDrafts()\n  }, [loadDrafts])")
+  })
+
+  it("LedgerDraftsResponse 타입이 reversedDraftIds?: string[]를 선언한다(서버 계약 문서화)", () => {
+    const source = workbenchSource()
+    const ifaceStart = source.indexOf("interface LedgerDraftsResponse")
+    expect(ifaceStart).toBeGreaterThan(-1)
+    // 닫는 중괄호가 줄 맨 앞에 오는 지점(top-level close)을 찾는다 — 필드 중 하나가
+    // `{ ok: boolean; message: string | null }` 같은 인라인 객체 타입이라 첫 "}"만
+    // 찾으면 인터페이스가 끝나기 전에 잘린다.
+    const ifaceEnd = source.indexOf("\n}", ifaceStart)
+    expect(ifaceEnd).toBeGreaterThan(ifaceStart)
+    const ifaceBody = source.slice(ifaceStart, ifaceEnd)
+    expect(ifaceBody).toContain("reversedDraftIds?: string[]")
+  })
+})

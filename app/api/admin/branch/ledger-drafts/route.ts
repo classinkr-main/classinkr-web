@@ -66,15 +66,31 @@ export async function GET(req: NextRequest) {
     const status: BranchSalesLedgerDraftStatus | "all" =
       statusParam && STATUSES.has(statusParam) ? (statusParam as BranchSalesLedgerDraftStatus) : "all"
     const limit = parseBoundedInt(url.searchParams.get("limit"), 50, 1, 200)
-    const [draftResult, entryResult] = await Promise.all([
+    // 되돌리기 부활 버그(P0) 수정: 이 GET은 entries에 active만 담아 내려주므로(레포지토리 기본
+    // 필터), 상쇄(reversed)된 draft_id를 클라가 알 방법이 없었다 — reversedDraftIds는 클라
+    // useState(new Set())라 새로고침/재마운트마다 비워지고, entries 목록에서도 사라진 항목은
+    // "아직 동기화 안 된 신규 적용"으로 오인돼 되살아났다. reversed 항목을 별도(status:"reversed")로
+    // 200 한도까지 조회해 draft_id 목록을 함께 내려준다 — active 조회와 합쳐서 하나의 200 한도로
+    // 자르면 reversed가 밀려날 수 있어 반드시 별도 조회+별도 한도를 쓴다.
+    const [draftResult, entryResult, reversedEntryResult] = await Promise.all([
       listBranchSalesLedgerDrafts({ status, limit }),
       listBranchSalesLedgerEntries({ limit: 200 }),
+      listBranchSalesLedgerEntries({ status: "reversed", limit: 200 }),
     ])
+
+    const reversedDraftIds = Array.from(
+      new Set(
+        reversedEntryResult.entries
+          .map((entry) => entry.draftId)
+          .filter((draftId): draftId is string => Boolean(draftId)),
+      ),
+    )
 
     return adminCachedJson({
       ...draftResult,
       entries: entryResult.entries,
       ledgerHealth: entryResult.health,
+      reversedDraftIds,
     })
   } catch (error) {
     console.error("[GET /api/admin/branch/ledger-drafts]", error)

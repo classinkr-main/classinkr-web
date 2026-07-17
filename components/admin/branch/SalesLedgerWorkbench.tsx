@@ -235,6 +235,10 @@ interface LedgerDraftsResponse {
   ledgerHealth?: { ok: boolean; message: string | null }
   drafts?: LedgerDraft[]
   entries?: LedgerEntry[]
+  // 되돌리기 부활 버그(P0) 수정 — entries는 active만 담기므로, 상쇄된 draft_id는 이 필드로
+  // 별도 전달된다(app/api/admin/branch/ledger-drafts/route.ts GET). loadDrafts가 이를
+  // reversedDraftIds 클라 상태의 서버 진실 소스로 시드한다.
+  reversedDraftIds?: string[]
   error?: string
 }
 
@@ -938,6 +942,18 @@ function useLedgerDraftQueue() {
       const data = await adminFetchJson<LedgerDraftsResponse>("/api/admin/branch/ledger-drafts?status=all&limit=50", {
         cache: "no-cache",
       })
+      // 되돌리기 부활 버그(P0) 수정 — reversedDraftIds는 세션 로컬 Set이라 마운트마다 비워진다.
+      // 매 loadDrafts 호출(최초 마운트 포함, 위 useEffect 참조)마다 서버가 돌려준 reversedDraftIds로
+      // 시드해 로컬 Set과 합집합한다 — 상쇄는 단방향(되돌린 걸 다시 무르는 기능 없음)이라 합집합이
+      // 안전하고, 이걸로 appliedDraftFallbackRows가 재마운트 후에도 방금 상쇄된 draft를 계속 걸러낸다.
+      if (data.reversedDraftIds && data.reversedDraftIds.length > 0) {
+        const serverReversedDraftIds = data.reversedDraftIds
+        setReversedDraftIds((current) => {
+          const next = new Set(current)
+          for (const draftId of serverReversedDraftIds) next.add(draftId)
+          return next
+        })
+      }
       if (data.health?.ok === false) {
         setDrafts(readLocalDrafts())
         setLedgerEntries([])
