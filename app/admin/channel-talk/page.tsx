@@ -25,6 +25,10 @@ import {
   leadBoardDeepLink,
 } from "@/lib/channel-talk-loop"
 import { cn } from "@/lib/utils"
+import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
+
+// 상담 목록 무한스크롤 대체 — 초기 50건, "더보기"로 50건씩 확장(계획 문서 Phase W1).
+const CONVERSATION_LIST_STEP = 50
 
 type ConvState = "opened" | "closed" | "snoozed" | "unknown"
 
@@ -298,6 +302,13 @@ export default function ChannelTalkPage() {
 
   const stats = data?.stats
   const conversations = useMemo(() => data?.conversations ?? [], [data?.conversations])
+  const {
+    visible: visibleConversations,
+    showMore: showMoreConversations,
+    collapse: collapseConversations,
+    canMore: canMoreConversations,
+    canCollapse: canCollapseConversations,
+  } = useVisibleCount(conversations.length, CONVERSATION_LIST_STEP)
 
   // 통계 패널 — 유형(태그) 분포와 최근 14일 응답 추이. 서버 왕복 없이 목록에서 집계한다.
   const tagDistribution = useMemo(() => aggregateConversationTags(conversations, 6), [conversations])
@@ -582,7 +593,7 @@ export default function ChannelTalkPage() {
               </p>
             ) : (
               <ul>
-                {conversations.map((conversation) => {
+                {conversations.slice(0, visibleConversations).map((conversation) => {
                   const registeredLeadId = registeredLeads[conversation.id]
                   const canRegister = Boolean(
                     conversation.name || conversation.email || conversation.phone
@@ -666,6 +677,21 @@ export default function ChannelTalkPage() {
                   )
                 })}
               </ul>
+            )}
+            {(canMoreConversations || canCollapseConversations) && (
+              <div className="flex flex-col items-center gap-2 border-t border-black/[0.08] px-5 py-4">
+                <p role="status" className="text-[11px] font-medium tabular-nums text-[#A39E98]">
+                  {visibleConversations.toLocaleString("ko-KR")} / 총{" "}
+                  {conversations.length.toLocaleString("ko-KR")}건 표시
+                </p>
+                <ShowMore
+                  visible={visibleConversations}
+                  total={conversations.length}
+                  step={CONVERSATION_LIST_STEP}
+                  onMore={showMoreConversations}
+                  onCollapse={canCollapseConversations ? collapseConversations : undefined}
+                />
+              </div>
             )}
             <a
               href="https://desk.channel.io"

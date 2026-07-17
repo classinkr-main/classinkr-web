@@ -14,7 +14,19 @@ import type { Subscriber } from "@/lib/marketing-types"
 import { PRESET_TAGS } from "@/lib/marketing-types"
 
 interface Props {
+  /** 필터셋 전체 — 벌크 선택("전체선택")과 벌크 액션의 대상 유니버스. */
   subscribers: Subscriber[]
+  /**
+   * 렌더할 행 수 상한("더보기"용). 선택 유니버스는 subscribers 전체를 그대로 두고
+   * 화면에 그리는 행만 제한한다. 미지정 시 전체 렌더.
+   */
+  visibleCount?: number
+  /**
+   * 필터 시그니처(예: `query|status|source`). 값이 바뀌면 벌크 선택을 리셋한다.
+   * subscribers 배열 레퍼런스나 visibleCount("더보기")로는 리셋하지 않아, 목록을
+   * 펼쳐도 선택이 보존된다.
+   */
+  filterSignature?: string
   onDelete: (subscriber: Subscriber) => void
   onCompose?: (subscriber: Subscriber) => void
   onAddSubscriber?: () => void
@@ -37,6 +49,8 @@ function sourceLabel(source: string) {
 
 export default function SubscriberTable({
   subscribers,
+  visibleCount,
+  filterSignature,
   onDelete,
   onCompose,
   onAddSubscriber,
@@ -63,10 +77,12 @@ export default function SubscriberTable({
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [tagDropdownOpen])
 
-  // Reset selection when subscribers list changes
+  // 필터가 바뀔 때만(=filterSignature 변경) 벌크 선택을 리셋한다. 부모가 매 렌더
+  // 새 배열 레퍼런스로 넘기는 subscribers나 "더보기"(visibleCount)로는 리셋하지 않아,
+  // 목록을 펼쳐도 선택이 유지된다. 벌크 액션 성공 후 리셋은 각 핸들러가 직접 처리한다.
   useEffect(() => {
     setSelectedIds(new Set())
-  }, [subscribers])
+  }, [filterSignature])
 
   if (subscribers.length === 0) {
     return (
@@ -276,7 +292,7 @@ export default function SubscriberTable({
             </tr>
           </thead>
           <tbody>
-            {subscribers.map((s) => {
+            {subscribers.slice(0, visibleCount ?? subscribers.length).map((s) => {
               const sid = String(s.id)
               const isSelected = selectedIds.has(sid)
               return (

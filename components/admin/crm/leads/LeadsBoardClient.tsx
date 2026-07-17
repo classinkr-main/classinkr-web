@@ -13,6 +13,7 @@ import {
   FileText,
 } from "lucide-react"
 import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
+import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
@@ -50,6 +51,10 @@ import {
   CopyButton,
   Toast,
 } from "@/components/admin/crm/leads/shared"
+
+// 리드 보드 목록 무한스크롤 대체 — 초기 50건, "더보기"로 50건씩 확장(계획 문서 Phase W1).
+// 모바일 카드·데스크톱 테이블이 같은 filtered를 그리므로 visible 상한을 공유한다.
+const LEAD_BOARD_LIST_STEP = 50
 
 type ConvertLeadResponse = {
   customer: {
@@ -1266,6 +1271,21 @@ export default function LeadsBoardClient() {
       .some((value) => String(value).toLowerCase().includes(normalizedSearch))
   })
 
+  // 더보기(클라 배열 슬라이싱) — 모바일 카드·데스크톱 테이블이 공유한다.
+  const {
+    visible: visibleLeadCount,
+    showMore: showMoreLeads,
+    collapse: collapseLeads,
+    canMore: canMoreLeads,
+    canCollapse: canCollapseLeads,
+  } = useVisibleCount(filtered.length, LEAD_BOARD_LIST_STEP)
+
+  // 필터(응대 큐/소스/채널/리드마그넷/검색어)가 바뀌면 새 결과셋의 맨 위(초기 50건)부터
+  // 다시 보여준다 — 이전 필터에서 펼친 범위가 무관한 결과에 남지 않도록.
+  useEffect(() => {
+    collapseLeads()
+  }, [filter, sourceDetailFilter, channelSource, leadMagnetFilter, searchQuery, collapseLeads])
+
   const todayFollowUps = leads.filter((l) =>
     l.follow_up_at && toLocalDateKey(l.follow_up_at) === today && isActiveLead(l.status)
   )
@@ -1739,7 +1759,7 @@ export default function LeadsBoardClient() {
         ) : (
           <>
           <div className="divide-y divide-[#f0f0ec] sm:hidden">
-            {filtered.map((lead) => {
+            {filtered.slice(0, visibleLeadCount).map((lead) => {
               const followUpDateKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
               const isOverdue = Boolean(followUpDateKey && followUpDateKey < today && lead.status !== "converted" && lead.status !== "closed")
               const isTodayFollowUp = followUpDateKey === today
@@ -1900,7 +1920,7 @@ export default function LeadsBoardClient() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((lead) => {
+              {filtered.slice(0, visibleLeadCount).map((lead) => {
                 const followUpDateKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
                 const isOverdue = Boolean(followUpDateKey && followUpDateKey < today && lead.status !== "converted" && lead.status !== "closed")
                 const isTodayFollowUp = followUpDateKey === today
@@ -2041,6 +2061,21 @@ export default function LeadsBoardClient() {
             </tbody>
           </table>
           </div>
+          {(canMoreLeads || canCollapseLeads) && (
+            <div className="flex flex-col items-center gap-2 border-t border-[#e8e8e4] bg-[#fafaf8] px-5 py-4">
+              <p role="status" className="text-[11px] font-medium tabular-nums text-[#1a1a1a]/45">
+                {visibleLeadCount.toLocaleString("ko-KR")} / 총{" "}
+                {filtered.length.toLocaleString("ko-KR")}건 표시
+              </p>
+              <ShowMore
+                visible={visibleLeadCount}
+                total={filtered.length}
+                step={LEAD_BOARD_LIST_STEP}
+                onMore={showMoreLeads}
+                onCollapse={canCollapseLeads ? collapseLeads : undefined}
+              />
+            </div>
+          )}
           </>
         )}
       </div>
