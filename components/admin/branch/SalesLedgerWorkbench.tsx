@@ -1065,6 +1065,18 @@ function DraftQueue({
   const visibleDrafts = useMemo(() => {
     return drafts.filter((draft) => draftMatchesFilter(draft, statusFilter)).filter((draft) => draftMatchesQuery(draft, query))
   }, [drafts, query, statusFilter])
+  // "적용"은 큐에서 유일하게 비가역인 동작(DB 장부에 실제로 기록) — 확인 다이얼로그를 거친다.
+  const [confirmApplyDraft, setConfirmApplyDraft] = useState<LedgerDraft | null>(null)
+  const [applyingId, setApplyingId] = useState<string | null>(null)
+  const confirmAndApply = async (id: string) => {
+    setApplyingId(id)
+    try {
+      await onApply(id)
+    } finally {
+      setApplyingId(null)
+      setConfirmApplyDraft(null)
+    }
+  }
 
   if (loading && drafts.length === 0) {
     return (
@@ -1104,6 +1116,7 @@ function DraftQueue({
   }
 
   return (
+    <>
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
@@ -1221,7 +1234,7 @@ function DraftQueue({
               </button>
               <button
                 type="button"
-                onClick={() => void onApply(draft.id)}
+                onClick={() => setConfirmApplyDraft(draft)}
                 disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-")}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[#BDEFD8] text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label={`${draft.customer || "초안"} 적용`}
@@ -1244,6 +1257,54 @@ function DraftQueue({
         </div>
       ))}
     </div>
+    {/* 적용 확인 다이얼로그 — TSV 붙여넣기 미리보기(RevMatrixPasteDialog)와 동일 셸 스타일 재사용. */}
+    {confirmApplyDraft && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="초안 적용 확인"
+        className="fixed inset-0 z-[60] flex items-end justify-center bg-[#111110]/40 p-4 sm:items-center"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && applyingId !== confirmApplyDraft.id) {
+            event.stopPropagation()
+            setConfirmApplyDraft(null)
+          }
+        }}
+      >
+        <div className="flex w-full max-w-sm flex-col overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_24px_70px_rgba(17,17,16,0.22)]">
+          <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
+            <p className="text-[13px] font-bold text-[#111110]">초안 적용 확인</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#615D59]">
+              {confirmApplyDraft.customer || "초안"} · {formatMonthLabel(confirmApplyDraft.month)} · {formatMoney(confirmApplyDraft.amount)}
+            </p>
+          </div>
+          <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FBF1E0] px-4 py-3 text-[11.5px] font-semibold leading-relaxed text-[#7A520F]">
+            적용하면 장부 원장에 기록됩니다 — 초안 1건. 이 작업은 되돌릴 수 없습니다.
+          </div>
+          <div className="flex items-center justify-end gap-2 bg-[#FAFAF8] px-4 py-3">
+            <button
+              type="button"
+              onClick={() => setConfirmApplyDraft(null)}
+              disabled={applyingId === confirmApplyDraft.id}
+              className="inline-flex h-9 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmAndApply(confirmApplyDraft.id)}
+              disabled={applyingId === confirmApplyDraft.id}
+              autoFocus
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {applyingId === confirmApplyDraft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              적용
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 
