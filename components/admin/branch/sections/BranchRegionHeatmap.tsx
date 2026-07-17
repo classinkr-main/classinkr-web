@@ -9,6 +9,7 @@ import {
 } from "@/lib/branch/korea-province-map"
 import { useBranchJson } from "../client-api"
 import { cny } from "@/lib/branch/money-format"
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import type { Period, Team } from "../types"
 
 interface TopCustomer {
@@ -382,7 +383,8 @@ function HeatMap({ rows, selectedLabel, onSelect, metric }: {
             )}
           </div>
           <p className="mt-1 text-[10.5px] text-[#615D59]">
-            <span className="font-semibold" style={{ color: "#B43E3E" }}>확정 ¥{cny(hoveredRow.revenue)}</span>
+            {/* :508 DetailPanel과 동일 캐논 — 확정=그린. */}
+            <span className="font-semibold" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>확정 ¥{cny(hoveredRow.revenue)}</span>
             {hoveredRow.projected > 0 && (
               <span className="ml-1 text-[#615D59]">+ 추정 ¥{cny(hoveredRow.projected)}</span>
             )}
@@ -505,7 +507,8 @@ function DetailPanel({ row, metric }: { row: MapRow | null; metric: Metric }) {
       <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[11.5px]">
         <div>
           <p className="text-[10px] text-[#A39E98]">확정 (당월·이전)</p>
-          <p className="mt-0.5 text-[13px] font-bold tracking-[-0.01em]" style={{ color: "#B43E3E" }}>
+          {/* 확정 매출 = 캐논 그린 — 빨강 아님(시트 "빨간 글자=확정"은 입력 관례일 뿐). */}
+          <p className="mt-0.5 text-[13px] font-bold tracking-[-0.01em]" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>
             ¥{cny(row.revenue)}
           </p>
         </div>
@@ -531,7 +534,10 @@ function DetailPanel({ row, metric }: { row: MapRow | null; metric: Metric }) {
         </div>
         <div>
           <p className="text-[10px] text-[#A39E98]">미시작 잔량</p>
-          <p className="mt-0.5 text-[13px] font-bold" style={{ color: "#1E5DA8" }}>
+          {/* 확도 예외 파랑(#1E5DA8)은 REV 3단 확도 맥락 전용 — 여기 open_target은
+              "첫 납부가 아직 없는 딜의 목표 합"이라 확도 신호가 아니다. 아직 손도
+              안 댄 목표라는 뜻이라 Warning 축(캐논 #A8741A)으로 표시한다. */}
+          <p className="mt-0.5 text-[13px] font-bold" style={{ color: "#A8741A" }}>
             ¥{cny(row.open_target)}
           </p>
         </div>
@@ -544,7 +550,7 @@ function DetailPanel({ row, metric }: { row: MapRow | null; metric: Metric }) {
               <li key={`${c.customer}-${c.manager ?? ""}`}
                 className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-3 py-0.5">
                 <span className="truncate text-[11.5px] text-[#111110]">{c.customer}</span>
-                <span className="whitespace-nowrap text-[11px] font-semibold tabular-nums" style={{ color: "#B43E3E" }}>¥{cny(c.revenue)}</span>
+                <span className="whitespace-nowrap text-[11px] font-semibold tabular-nums" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}>¥{cny(c.revenue)}</span>
               </li>
             ))}
           </ul>
