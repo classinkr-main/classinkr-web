@@ -65,6 +65,7 @@ import { WeeklyCloseSection } from "./ledger/WeeklyCloseSection"
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
 import IntegrityStrip from "./IntegrityStrip"
+import MultiSelect from "./MultiSelect"
 import { InputRailSection } from "./ledger/InputRailSection"
 import {
   buildRevWeekProjection,
@@ -561,6 +562,22 @@ function shiftMonth(ym: string, delta: number): string {
 
 function compareText(a: string | null | undefined, b: string | null | undefined) {
   return String(a ?? "").localeCompare(String(b ?? ""), "ko", { numeric: true, sensitivity: "base" })
+}
+
+// 품질 웨이브 7 — 항목 3: 담당/지역 URL 파라미터(mgr/region) 파싱. 콤마 구분 다중값을 지원하되,
+// 단일값(기존 링크·PipelineTable/BranchPipelineKanban/ActivityBottleneckSection 등 다른 화면이
+// 보내는 크로스링크는 항상 단일 값 하나만 싣는다 — "첫 값 규약")도 그대로 Set 1개짜리로 동작한다.
+export function parseMultiFilterParam(value: string | null): Set<string> {
+  if (!value) return new Set()
+  return new Set(
+    value.split(",").map((token) => token.trim()).filter((token) => token.length > 0),
+  )
+}
+
+// 역방향(상태 → URL). 정렬은 결정적 직렬화를 위해서만(집합 자체의 필터 의미에는 영향 없음).
+export function serializeMultiFilterParam(values: Set<string>): string | null {
+  if (values.size === 0) return null
+  return Array.from(values).sort((a, b) => a.localeCompare(b, "ko")).join(",")
 }
 
 function metadataString(metadata: Record<string, unknown> | null | undefined, key: string): string | null {
@@ -3809,8 +3826,10 @@ export default function SalesLedgerWorkbench() {
     return () => window.clearInterval(id)
   }, [])
   const [query, setQuery] = useState("")
-  const [managerFilter, setManagerFilter] = useState("ALL")
-  const [regionFilter, setRegionFilter] = useState("ALL")
+  // 품질 웨이브 7 — 항목 3: 단일 select → MultiSelect(Set) 전환. 빈 Set === "전체"(기존 "ALL"과
+  // 동일 의미) — 필터 로직·URL 직렬화·크로스링크 모두 Set 기준으로 다시 쓴다.
+  const [managerFilter, setManagerFilter] = useState<Set<string>>(() => new Set())
+  const [regionFilter, setRegionFilter] = useState<Set<string>>(() => new Set())
   const [productFilter, setProductFilter] = useState<RevProductCategory>("all")
   const [revStatusFilter, setRevStatusFilter] = useState("ALL")
   const [revDealTypeFilter, setRevDealTypeFilter] = useState("ALL")
@@ -4127,9 +4146,9 @@ export default function SalesLedgerWorkbench() {
     const q = params.get("q")
     if (q) setQuery(q)
     const mgr = params.get("mgr")
-    if (mgr) setManagerFilter(mgr)
+    if (mgr) setManagerFilter(parseMultiFilterParam(mgr))
     const region = params.get("region")
-    if (region) setRegionFilter(region)
+    if (region) setRegionFilter(parseMultiFilterParam(region))
     const prod = params.get("prod")
     if (prod === "software" || prod === "hardware" || prod === "unknown") setProductFilter(prod)
     const status = params.get("status")
@@ -4159,8 +4178,10 @@ export default function SalesLedgerWorkbench() {
     if (period !== "Q") params.set("period", period)
     if (team !== "ALL") params.set("team", team)
     if (query.trim()) params.set("q", query.trim())
-    if (managerFilter !== "ALL") params.set("mgr", managerFilter)
-    if (regionFilter !== "ALL") params.set("region", regionFilter)
+    const mgrParam = serializeMultiFilterParam(managerFilter)
+    if (mgrParam) params.set("mgr", mgrParam)
+    const regionParam = serializeMultiFilterParam(regionFilter)
+    if (regionParam) params.set("region", regionParam)
     if (productFilter !== "all") params.set("prod", productFilter)
     if (revStatusFilter !== "ALL") params.set("status", revStatusFilter)
     if (revDealTypeFilter !== "ALL") params.set("type", revDealTypeFilter)
@@ -4251,8 +4272,8 @@ export default function SalesLedgerWorkbench() {
 
   const resetRevFilters = useCallback(() => {
     setQuery("")
-    setManagerFilter("ALL")
-    setRegionFilter("ALL")
+    setManagerFilter(new Set())
+    setRegionFilter(new Set())
     setProductFilter("all")
     setRevStatusFilter("ALL")
     setRevDealTypeFilter("ALL")
@@ -4512,8 +4533,8 @@ export default function SalesLedgerWorkbench() {
     // 검색 대상에 없어 링크를 눌러도 검색 결과가 비었다).
     const tokens = tokenize(query)
     return rows
-      .filter((row) => managerFilter === "ALL" || row.manager === managerFilter)
-      .filter((row) => regionFilter === "ALL" || row.region === regionFilter)
+      .filter((row) => managerFilter.size === 0 || (row.manager != null && managerFilter.has(row.manager)))
+      .filter((row) => regionFilter.size === 0 || (row.region != null && regionFilter.has(row.region)))
       .filter((row) => productFilter === "all" || rowProductCategory(row) === productFilter)
       .filter((row) => revStatusFilter === "ALL" || row.status === revStatusFilter)
       .filter((row) => revDealTypeFilter === "ALL" || row.dealType === revDealTypeFilter)
@@ -4649,8 +4670,8 @@ export default function SalesLedgerWorkbench() {
   // → 목표 비교를 생략하고 "필터 중 생략"을 표기한다. 팀·기간·선택월은 목표와 같은 축이라 허용.
   const revGoalComparable =
     query.trim() === "" &&
-    managerFilter === "ALL" &&
-    regionFilter === "ALL" &&
+    managerFilter.size === 0 &&
+    regionFilter.size === 0 &&
     productFilter === "all" &&
     revStatusFilter === "ALL" &&
     revDealTypeFilter === "ALL" &&
@@ -5305,8 +5326,8 @@ export default function SalesLedgerWorkbench() {
     [revCustomerGroups, selectedGroupKey],
   )
   const revControlsDirty = Boolean(query.trim()) ||
-    managerFilter !== "ALL" ||
-    regionFilter !== "ALL" ||
+    managerFilter.size > 0 ||
+    regionFilter.size > 0 ||
     productFilter !== "all" ||
     revStatusFilter !== "ALL" ||
     revDealTypeFilter !== "ALL" ||
@@ -5662,7 +5683,11 @@ export default function SalesLedgerWorkbench() {
     // ledgerHref(sections/PipelineTable.tsx)와 동일 규약.
     if (period === "M") params.set("month", selectedMonth)
     if (query.trim()) params.set("q", query.trim())
-    if (managerFilter !== "ALL") params.set("mgr", managerFilter)
+    // BranchDashboardClient의 mgr는 단일 select(pipelineManager) 기준이다(그 파일은 이 웨이브에서
+    // 수정 금지) — 장부가 여러 담당자를 골랐어도 PipelineTable.ledgerHref와 동일한 "첫 값 규약"으로
+    // 하나만 동봉한다.
+    const [firstManager] = managerFilter
+    if (firstManager) params.set("mgr", firstManager)
     return `/admin/branch?${params.toString()}`
   }, [team, period, selectedMonth, query, managerFilter])
   const canCreateEditDraft = Boolean(selectedRow && (selectedRow.ledgerOrigin === "sheet" || selectedRow.sourceDealId))
@@ -6114,24 +6139,22 @@ export default function SalesLedgerWorkbench() {
                         className="h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[12px] font-medium outline-none transition focus:border-[#084734]"
                       />
                     </label>
-                    <select
-                      value={managerFilter}
-                      onChange={(event) => setManagerFilter(event.target.value)}
-                      className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
-                      aria-label="담당자 필터"
-                    >
-                      <option value="ALL">담당자 전체</option>
-                      {managerOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-                    </select>
-                    <select
-                      value={regionFilter}
-                      onChange={(event) => setRegionFilter(event.target.value)}
-                      className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
-                      aria-label="지역 필터"
-                    >
-                      <option value="ALL">지역 전체</option>
-                      {regionOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-                    </select>
+                    <MultiSelect
+                      label="담당자"
+                      options={managerOptions}
+                      selected={managerFilter}
+                      onChange={setManagerFilter}
+                      placeholder="전체"
+                      width="w-48"
+                    />
+                    <MultiSelect
+                      label="지역"
+                      options={regionOptions}
+                      selected={regionFilter}
+                      onChange={setRegionFilter}
+                      placeholder="전체"
+                      width="w-48"
+                    />
                     <button
                       type="button"
                       onClick={() => setAdvancedFiltersOpen((value) => !value)}
@@ -6283,8 +6306,31 @@ export default function SalesLedgerWorkbench() {
                   현재 정렬: {REV_SORT_LABELS[revSortKey]} {revSortDirection === "asc" ? "오름차순" : "내림차순"}
                 </span>
                 {query.trim() && <FilterTag label={`검색 ${query.trim()}`} onClear={() => setQuery("")} />}
-                {managerFilter !== "ALL" && <FilterTag label={`담당자 ${managerFilter}`} onClear={() => setManagerFilter("ALL")} />}
-                {regionFilter !== "ALL" && <FilterTag label={`지역 ${regionFilter}`} onClear={() => setRegionFilter("ALL")} />}
+                {/* 품질 웨이브 7 — 항목 3: 멀티셀렉트 전환 — 선택값마다 칩 1개, 개별 해제(Set에서 그
+                    값만 delete) 가능. MultiSelect 버튼 자체의 "A 외 N" 요약과는 별개로, 툴바 아래
+                    활성 필터 칩 줄은 기존 관례(다른 필터도 전부 여기서 개별 해제)를 그대로 따른다. */}
+                {Array.from(managerFilter).map((name) => (
+                  <FilterTag
+                    key={`mgr-${name}`}
+                    label={`담당자 ${name}`}
+                    onClear={() => setManagerFilter((current) => {
+                      const next = new Set(current)
+                      next.delete(name)
+                      return next
+                    })}
+                  />
+                ))}
+                {Array.from(regionFilter).map((name) => (
+                  <FilterTag
+                    key={`region-${name}`}
+                    label={`지역 ${name}`}
+                    onClear={() => setRegionFilter((current) => {
+                      const next = new Set(current)
+                      next.delete(name)
+                      return next
+                    })}
+                  />
+                ))}
                 {productFilter !== "all" && (
                   <FilterTag label={`상품 ${productCategoryMeta(productFilter).label}`} onClear={() => setProductFilter("all")} />
                 )}
@@ -6403,7 +6449,7 @@ export default function SalesLedgerWorkbench() {
                   revManagerTotalCount={revManagersSorted.length}
                   revManagerSummaryExpanded={revManagerSummaryExpanded}
                   onToggleManagerSummaryExpanded={() => setRevManagerSummaryExpanded((value) => !value)}
-                  onManagerRowClick={setManagerFilter}
+                  onManagerRowClick={(manager) => setManagerFilter(new Set([manager]))}
                   revProductTableRows={revProductTableRows}
                   revManagerPeriodLabel={periodLabelShort}
                 />
@@ -7042,8 +7088,8 @@ export default function SalesLedgerWorkbench() {
                       type="button"
                       onClick={() => {
                         setQuery("")
-                        setManagerFilter(selectedRow.manager ?? "ALL")
-                        setRegionFilter("ALL")
+                        setManagerFilter(selectedRow.manager ? new Set([selectedRow.manager]) : new Set())
+                        setRegionFilter(new Set())
                         setRevPage(1)
                       }}
                       disabled={!selectedRow.manager}
