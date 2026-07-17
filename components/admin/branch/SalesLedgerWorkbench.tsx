@@ -1191,6 +1191,19 @@ function DraftQueue({
       setConfirmApplyDraft(null)
     }
   }
+  // "삭제"도 초안 자체가 사라져 되돌릴 수 없다 — 적용 확인과 같은 다이얼로그 셸(포커스 관리 포함)을
+  // 재사용해 확인을 거친다(품질 웨이브 4 — 항목 3). 오조작 방지가 목적이라 초기 포커스도 "취소".
+  const [confirmDeleteDraft, setConfirmDeleteDraft] = useState<LedgerDraft | null>(null)
+  const confirmDeleteCancelRef = useRef<HTMLButtonElement | null>(null)
+  const confirmDeleteDraftId = confirmDeleteDraft?.id ?? null
+  useEffect(() => {
+    if (!confirmDeleteDraftId) return
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    confirmDeleteCancelRef.current?.focus()
+    return () => {
+      previouslyFocused?.focus()
+    }
+  }, [confirmDeleteDraftId])
   // 체크토글·삭제 in-flight 표시 — InputRailSection의 draftSaving+Loader2 패턴 재사용.
   // 한 초안에 동시에 한 동작만(토글 중 삭제 클릭 등 이중 요청 방지) 진행되게 버튼도 함께 잠근다.
   const [rowActionBusy, setRowActionBusy] = useState<{ id: string; action: "toggle" | "delete" } | null>(null)
@@ -1211,6 +1224,12 @@ function DraftQueue({
       setRowActionBusy(null)
     }
   }
+  // 확인 다이얼로그의 "삭제" 클릭 → 기존 runDelete(rowActionBusy 추적) 그대로 실행 후 다이얼로그를 닫는다.
+  const confirmAndDelete = async (id: string) => {
+    await runDelete(id)
+    setConfirmDeleteDraft(null)
+  }
+  const deletingConfirmed = confirmDeleteDraft != null && rowActionBusy?.id === confirmDeleteDraft.id && rowActionBusy.action === "delete"
 
   if (loading && drafts.length === 0) {
     return (
@@ -1382,7 +1401,7 @@ function DraftQueue({
               </button>
               <button
                 type="button"
-                onClick={() => void runDelete(draft.id)}
+                onClick={() => setConfirmDeleteDraft(draft)}
                 disabled={draft.status === "checked" || draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label="초안 삭제"
@@ -1441,6 +1460,54 @@ function DraftQueue({
             >
               {applyingId === confirmApplyDraft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
               적용
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    {/* 삭제 확인 다이얼로그(품질 웨이브 4 — 항목 3) — 적용 확인 다이얼로그와 동일 셸 재사용,
+        danger 톤(삭제 버튼과 동일 캐논 #B43E3E/#FCE9E9)만 다르다. */}
+    {confirmDeleteDraft && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="초안 삭제 확인"
+        className="fixed inset-0 z-[60] flex items-end justify-center bg-[#111110]/40 p-4 sm:items-center"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && !deletingConfirmed) {
+            event.stopPropagation()
+            setConfirmDeleteDraft(null)
+          }
+        }}
+      >
+        <div className="flex w-full max-w-sm flex-col overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_24px_70px_rgba(17,17,16,0.22)]">
+          <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
+            <p className="text-[13px] font-bold text-[#111110]">초안 삭제 확인</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#615D59]">
+              {confirmDeleteDraft.customer || "초안"} · {formatMonthLabel(confirmDeleteDraft.month)} · {formatMoney(confirmDeleteDraft.amount)}
+            </p>
+          </div>
+          <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FCE9E9] px-4 py-3 text-[11.5px] font-semibold leading-relaxed text-[#8F2C2C]">
+            삭제하면 이 초안이 완전히 사라집니다. 이 작업은 되돌릴 수 없습니다.
+          </div>
+          <div className="flex items-center justify-end gap-2 bg-[#FAFAF8] px-4 py-3">
+            <button
+              ref={confirmDeleteCancelRef}
+              type="button"
+              onClick={() => setConfirmDeleteDraft(null)}
+              disabled={deletingConfirmed}
+              className="inline-flex h-9 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmAndDelete(confirmDeleteDraft.id)}
+              disabled={deletingConfirmed}
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-[#B43E3E] bg-white px-3 text-[12px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {deletingConfirmed ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              삭제
             </button>
           </div>
         </div>
