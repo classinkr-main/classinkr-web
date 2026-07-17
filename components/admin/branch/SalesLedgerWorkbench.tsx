@@ -2539,7 +2539,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
             }}
             aria-expanded={expanded}
             aria-label={`${group.customer} 하위 ${group.rows.length}건 ${expanded ? "접기" : "펼치기"}`}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[#615D59] transition hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#615D59] transition hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
           >
             <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-90" : ""}`} />
           </button>
@@ -2851,7 +2851,7 @@ const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
             aria-expanded={expanded}
             title={expanded ? "품목 접기" : editable ? "품목 펼쳐 엑셀식 편집" : "품목 보기 (전부 확정·잠금)"}
             aria-label={`${productCategoryMeta(category).label} 품목 ${expanded ? "접기" : "펼치기"}`}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[#615D59] transition hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#615D59] transition hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
           >
             <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-90" : ""}`} />
           </button>
