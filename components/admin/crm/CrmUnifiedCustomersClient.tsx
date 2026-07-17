@@ -424,6 +424,10 @@ export default function CrmUnifiedCustomersClient() {
     }
   }
 
+  // 빠른 보기 모드 — 칩(저장 뷰) 진입 시 검색 UI를 접고 결과 스트립만 보여준다.
+  // 숨김이지 리셋이 아님: query/owner 등 로컬 상태는 메모리에 유지된다.
+  const quickMode = savedView !== "all"
+
   // 빈 상태 다음 행동 안내 — 필터가 걸려 있으면 초기화를, 아니면 리드 등록/매칭 연결을 권한다.
   const hasActiveFilters =
     Boolean(query.trim()) ||
@@ -515,6 +519,24 @@ export default function CrmUnifiedCustomersClient() {
           })}
         </div>
 
+        {quickMode ? (
+          // 빠른 보기 스트립 — 활성 뷰 이름 + 결과 건수 + 전체 보기(토글 해제) 복귀 버튼.
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
+            <p className="text-[13px] font-semibold text-[#111110]">
+              {SAVED_VIEW_FILTERS.find((f) => f.key === savedView)?.label}
+              <span className="ml-2 text-[12px] font-medium text-[#1a1a1a]/45 tabular-nums">
+                {data ? `${data.summary.total.toLocaleString("ko-KR")}건` : "불러오는 중"}
+              </span>
+            </p>
+            <button
+              type="button"
+              onClick={() => selectSavedView(savedView)}
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/60 hover:bg-[#fafaf8]"
+            >
+              전체 보기 (검색·필터)
+            </button>
+          </div>
+        ) : (
         <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
           <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto] lg:items-center">
             <label className="flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3">
@@ -562,13 +584,11 @@ export default function CrmUnifiedCustomersClient() {
               <select
                 value={owner}
                 onChange={(event) => {
+                  // 이 select는 quickMode(savedView !== "all")에서 렌더되지 않으므로
+                  // 여기 도달 시 savedView는 항상 "all" — my_owner 해제 가드 불필요.
                   const nextOwner = event.target.value
                   setOwner(nextOwner)
                   persistOwner(nextOwner)
-                  if (!nextOwner && savedView === "my_owner") {
-                    setSavedView("all")
-                    syncViewParam("all")
-                  }
                 }}
                 className="h-full min-w-[128px] bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
                 aria-label="담당자 필터"
@@ -701,6 +721,7 @@ export default function CrmUnifiedCustomersClient() {
             </div>
           ) : null}
         </section>
+        )}
 
         <Account360Lens />
 
