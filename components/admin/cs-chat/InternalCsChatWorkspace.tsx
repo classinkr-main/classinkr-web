@@ -988,19 +988,35 @@ function InternalCsChatWorkspaceInner() {
 
   // 회귀 검수 미니 패널 — 미판정 우선 목록. 실패 시 섹션 자체에 재시도 폴백을 보여준다.
   // demoMode는 "다시 시도" 루프 대신 깨끗한 빈 상태로 처리한다.
+  // 재조회 진입 시 직전 자동 평가의 잔상(실행 상태·에러·건너뜀 경고)을 리셋하고,
+  // 성공 시 새 목록에 없는 메시지의 제안·승격 결과를 prune해 stale 배지를 막는다.
   const loadRegressionCandidates = useCallback(async () => {
+    setRegressionEvalRunState("idle")
+    setRegressionEvalError(null)
+    setRegressionEvalSkipped([])
     if (demoMode) {
       setRegressionCandidates([])
+      setRegressionSuggestions({})
       setRegressionLoadState("loaded")
       return
     }
     setRegressionLoadState("loading")
     try {
       const response = await adminFetchJson<RegressionCandidatesResponse>("/api/admin/cs-chat/regression-candidates")
-      setRegressionCandidates(Array.isArray(response.items) ? response.items : [])
+      const items = Array.isArray(response.items) ? response.items : []
+      setRegressionCandidates(items)
+      const liveIds = new Set(items.map((item) => item.id))
+      setRegressionSuggestions((current) =>
+        Object.fromEntries(Object.entries(current).filter(([id]) => liveIds.has(id)))
+      )
+      // 승격 결과도 현재 목록 기준으로 정리한다(승격은 멱등이라 재클릭에 안전).
+      setPromotionResults((current) =>
+        Object.fromEntries(Object.entries(current).filter(([id]) => liveIds.has(id)))
+      )
       setRegressionLoadState("loaded")
     } catch {
       setRegressionCandidates([])
+      setRegressionSuggestions({})
       setRegressionLoadState("failed")
     }
   }, [demoMode])
@@ -1637,6 +1653,8 @@ function InternalCsChatWorkspaceInner() {
   // 확정은 위 judgeRegressionCandidate(기존 판정 버튼)로만 이뤄진다.
   async function runRegressionAutoEval() {
     if (regressionEvalRunState === "running") return // 이중 클릭 방지
+    // demoMode에서는 후보 목록이 항상 비어 실행 버튼이 비활성이라 여기 도달하지 않지만,
+    // 버튼 활성 조건이 바뀌어도 데모에서 네트워크 호출이 새지 않도록 의도적으로 방어한다.
     if (demoMode) {
       setRegressionEvalRunState("done")
       setRegressionEvalSkipped([])
@@ -1650,15 +1668,21 @@ function InternalCsChatWorkspaceInner() {
         method: "POST",
         body: JSON.stringify({}),
       })
+      const items = Array.isArray(response.items) ? response.items : []
+      const skipped = Array.isArray(response.skipped) ? response.skipped : []
       setRegressionSuggestions((current) => {
         const next = { ...current }
-        for (const item of response.items ?? []) {
+        for (const item of items) {
           next[item.messageId] = item
         }
         return next
       })
-      setRegressionEvalSkipped(Array.isArray(response.skipped) ? response.skipped : [])
+      setRegressionEvalSkipped(skipped)
       setRegressionEvalRunState("done")
+      // 제안도 건너뜀도 없는 성공은 화면 변화가 전혀 없어 무반응처럼 보인다 — notice로 완료를 알린다.
+      if (items.length === 0 && skipped.length === 0) {
+        setNotice("자동 평가 완료 — 새 제안 없음")
+      }
     } catch (evalError) {
       setRegressionEvalRunState("failed")
       setRegressionEvalError(evalError instanceof Error ? evalError.message : "자동 평가를 실행하지 못했습니다.")
@@ -2590,6 +2614,7 @@ function InternalCsChatWorkspaceInner() {
                                 <p className="mt-1 max-w-[420px] text-[10px] leading-4 text-[#615D59]">
                                   {suggestion.rationale}
                                 </p>
+                                <p className="mt-1 text-[10px] text-[#A39E98]">판정 모델: {suggestion.judgeModel}</p>
                               </details>
                             </div>
                           ) : null}
@@ -2622,7 +2647,8 @@ function InternalCsChatWorkspaceInner() {
                 </ul>
               )}
             </div>
-            {regressionEvalSkippedSummary ? (
+            {/* 목록이 비면 "판정이 필요한 회귀 후보가 없습니다" 빈 상태 문구와 모순되므로 skipped 경고를 숨긴다. */}
+            {regressionCandidates.length > 0 && regressionEvalSkippedSummary ? (
               <p className="mt-2 flex items-start gap-2 text-[11px] text-[#7A520F]" role="status">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 {regressionEvalSkippedSummary}
