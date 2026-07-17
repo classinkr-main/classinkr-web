@@ -399,6 +399,8 @@ export interface PromoteMessageToInternalArticleResult {
   articleId: string
   slug: string
   reused: boolean
+  /** 이번 승격에서 임베딩에 실패한 청크 수. 0 이면 모든 청크가 벡터 검색 가능 상태다. */
+  embeddingFailures: number
 }
 
 /** content_json 백링크(sourceMessageId)로 기존 승격 문서를 찾는다. docs_articles 에 metadata 컬럼이 없어 content_json 을 쓴다. */
@@ -452,11 +454,13 @@ export async function promoteMessageToInternalArticle(
   })
 
   const chunks = chunkMarkdown(markdown)
-  await syncArticleChunks(supabase, articleId, chunks, {
+  const sync = await syncArticleChunks(supabase, articleId, chunks, {
     source: CS_KNOWLEDGE_UPDATED_BY,
     embed: input.embed,
     throttleMs: input.throttleMs,
   })
 
-  return { articleId, slug, reused }
+  // 문서 저장 자체는 임베딩 실패와 무관하게 유지한다(청크는 embedding=null 로 남음).
+  // 실패 수는 라우트가 searchable 로 표면화해 담당자가 검색 가능 여부를 알 수 있게 한다.
+  return { articleId, slug, reused, embeddingFailures: sync.failed }
 }

@@ -137,13 +137,20 @@ describe("POST /api/admin/cs-chat/messages/[messageId]/promote-knowledge", () =>
       articleId: "article-x",
       slug: "cs-assistant-1",
       reused: false,
+      embeddingFailures: 0,
     })
 
     const response = await promotePost(promoteRequest("assistant-1"), routeContext("assistant-1"))
     const json = await response.json()
 
     expect(response.status).toBe(200)
-    expect(json).toEqual({ articleId: "article-x", slug: "cs-assistant-1", reused: false })
+    // 모든 청크 임베딩 성공 → searchable: true
+    expect(json).toEqual({
+      articleId: "article-x",
+      slug: "cs-assistant-1",
+      reused: false,
+      searchable: true,
+    })
     expect(mocks.promoteMessageToInternalArticle).toHaveBeenCalledWith(
       { client: true },
       {
@@ -161,11 +168,31 @@ describe("POST /api/admin/cs-chat/messages/[messageId]/promote-knowledge", () =>
       articleId: "article-x",
       slug: "cs-assistant-1",
       reused: true,
+      embeddingFailures: 0,
     })
 
     const response = await promotePost(promoteRequest("assistant-1"), routeContext("assistant-1"))
     const json = await response.json()
 
     expect(json.reused).toBe(true)
+    expect(json.searchable).toBe(true)
+  })
+
+  it("marks the response searchable=false when some chunks failed to embed", async () => {
+    mocks.requireVerifiedAdminContext.mockResolvedValue({ role: "ADMIN", name: "CS" })
+    mocks.getInternalCsMessageById.mockResolvedValue(approvedMessage)
+    mocks.promoteMessageToInternalArticle.mockResolvedValue({
+      articleId: "article-x",
+      slug: "cs-assistant-1",
+      reused: false,
+      embeddingFailures: 2,
+    })
+
+    const response = await promotePost(promoteRequest("assistant-1"), routeContext("assistant-1"))
+    const json = await response.json()
+
+    // 문서는 저장됐지만(200) 일부 청크가 벡터 검색되지 않는다 — UI 배지 분기용.
+    expect(response.status).toBe(200)
+    expect(json.searchable).toBe(false)
   })
 })

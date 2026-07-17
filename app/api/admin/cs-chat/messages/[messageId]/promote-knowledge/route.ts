@@ -42,7 +42,14 @@ export async function POST(req: NextRequest, context: Context) {
       correctedContent,
     })
 
-    return NextResponse.json(result)
+    // searchable: 모든 청크 임베딩 성공 = 벡터 검색으로 즉시 노출. 실패분이 있으면 문서는
+    // 저장됐지만 일부 청크가 검색되지 않는다 — UI 가 배지로 분기한다.
+    return NextResponse.json({
+      articleId: result.articleId,
+      slug: result.slug,
+      reused: result.reused,
+      searchable: result.embeddingFailures === 0,
+    })
   } catch (error) {
     console.error(`[POST /api/admin/cs-chat/messages/${messageId}/promote-knowledge]`, error)
     if (isInternalCsChatNotReadyError(error)) {
