@@ -18,8 +18,7 @@ import CrmCoverageStrip from "@/components/admin/crm/CrmCoverageStrip"
 import CrmPriorityQueuePanel from "@/components/admin/crm/CrmPriorityQueuePanel"
 import CrmWeekAheadPanel from "@/components/admin/crm/CrmWeekAheadPanel"
 import CrmCustomerPicker from "@/components/admin/crm/CrmCustomerPicker"
-import Customer360Drawer from "@/components/admin/crm/Customer360Drawer"
-import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
+import Customer360DrawerSkeleton from "@/components/admin/crm/Customer360DrawerSkeleton"
 import CrmActionRail from "@/components/admin/crm/rail/CrmActionRail"
 import { getRecentCustomers, type RecentCustomer } from "@/lib/crm/recent-customers"
 import { Toast } from "@/components/admin/crm/leads/shared"
@@ -37,6 +36,15 @@ const CrmHomeCharts = dynamic(() => import("@/components/admin/crm/CrmHomeCharts
 const CrmPerformanceCharts = dynamic(() => import("@/components/admin/crm/CrmPerformanceCharts"), {
   ssr: false,
   loading: () => <div className="h-44 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+// 360 드로어·리드 등록 모달 코드 스플리팅(41af51a4 패턴) — 현황 첫 로드에서 청크를 제외하고
+// 고객 클릭/리드 등록 클릭 시점에만 내려받는다. 열림 상태에서만 렌더하므로 로딩 폴백이
+// 닫힌 화면에 노출될 일은 없다. 폴백은 unified와 동일한 드로어 골격 스켈레톤을 공유한다.
+const Customer360Drawer = dynamic(() => import("@/components/admin/crm/Customer360Drawer"), {
+  loading: () => <Customer360DrawerSkeleton />,
+})
+const LeadRegisterModal = dynamic(() => import("@/components/admin/crm/LeadRegisterModal"), {
+  loading: () => <div className="fixed inset-0 z-50 bg-black/20" aria-hidden />,
 })
 
 const CRM_ACTION_KPIS_URL = "/api/admin/crm/action-kpis"
@@ -1742,17 +1750,23 @@ export default function CrmPage() {
         ))}
       </div>
 
-      <Customer360Drawer
-        customerKey={drawerTarget?.key ?? null}
-        name={drawerTarget?.name}
-        onClose={() => setDrawerTarget(null)}
-      />
+      {/* 열림 상태에서만 렌더 — 닫힘=null 렌더였던 기존과 동일 화면이면서, dynamic 청크를
+          열 때만 내려받고 닫힌 첫 로드에 로딩 폴백이 새어 나오지 않는다. */}
+      {drawerTarget ? (
+        <Customer360Drawer
+          customerKey={drawerTarget.key}
+          name={drawerTarget.name}
+          onClose={() => setDrawerTarget(null)}
+        />
+      ) : null}
 
-      <LeadRegisterModal
-        open={leadModalOpen}
-        onClose={() => setLeadModalOpen(false)}
-        onDone={() => void fetchLeadKpis({ force: true })}
-      />
+      {leadModalOpen ? (
+        <LeadRegisterModal
+          open
+          onClose={() => setLeadModalOpen(false)}
+          onDone={() => void fetchLeadKpis({ force: true })}
+        />
+      ) : null}
 
       {toast && <Toast msg={toast.msg} type={toast.type} />}
     </div>

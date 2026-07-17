@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { AlertTriangle, Building2, ChevronLeft, ChevronRight, ExternalLink, Filter, PhoneCall, RefreshCw, Search, Tag, UserPlus, UserRound } from "lucide-react"
@@ -14,12 +15,24 @@ import type {
 } from "@/lib/repositories/crm-unified-customers"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 import Account360Lens from "./Account360Lens"
-import Customer360Drawer from "./Customer360Drawer"
-import LeadRegisterModal from "./LeadRegisterModal"
+import Customer360DrawerSkeleton from "./Customer360DrawerSkeleton"
 import CrmCustomerFlags from "./CrmCustomerFlags"
 import CrmContactValue from "./CrmContactValue"
 import { deriveCustomerFlags, type CustomerFlag } from "@/lib/crm/customer-flags"
 import { LEAD_BADGE_TONE_CLASSES, leadBadges } from "@/lib/crm/lead-badges"
+
+// 드로어·리드 등록 모달 코드 스플리팅(41af51a4 패턴) — 목록 첫 로드에서 청크를 제외하고
+// 행 클릭/딥링크(?account=)·리드 등록 클릭 시점에만 내려받는다. 열림 상태에서만 렌더하므로
+// 로딩 폴백이 닫힌 화면에 노출될 일은 없다. 드로어 폴백은 실제 드로어와 같은 골격의
+// 스켈레톤(딥링크 첫 페인트가 빈 화면으로 깜빡이지 않게), props 계약은 그대로다.
+const Customer360Drawer = dynamic(() => import("./Customer360Drawer"), {
+  loading: () => <Customer360DrawerSkeleton />,
+})
+const LeadRegisterModal = dynamic(() => import("./LeadRegisterModal"), {
+  // 모달 본체는 document.body 포털(조상 transform 대비)이라 폴백도 뷰포트 기준이 안전하지만,
+  // 한 프레임짜리 전환이라 골격 없이 딤 배경만 먼저 깔아 클릭 무반응처럼 보이는 것만 막는다.
+  loading: () => <div className="fixed inset-0 z-50 bg-black/20" aria-hidden />,
+})
 
 type SourceFilter = "all" | CrmUnifiedCustomerSource
 type LifecycleFilter = "all" | CrmUnifiedLifecycle
@@ -506,7 +519,10 @@ export default function CrmUnifiedCustomersClient() {
   )
 
   // 닫을 때는 replace로 account만 제거(불필요한 히스토리 항목을 남기지 않음).
+  // dirty 리셋: 드로어가 dynamic 전환으로 닫힘=언마운트가 되면서, 마운트 유지 시절
+  // 드로어 내부 리셋 효과가 하던 onDirtyChange(false) 통지가 사라졌다 — 부모가 직접 리셋한다.
   const closeDrawer = useCallback(() => {
+    drawerDirtyRef.current = false
     setDrawer(null)
     setDrawerUrl(null, "replace")
   }, [setDrawerUrl])
@@ -532,6 +548,8 @@ export default function CrmUnifiedCustomersClient() {
         setDrawerUrl(current.key, "push")
         return
       }
+      // 언마운트 닫기라 드로어 내부 리셋 효과의 dirty=false 통지가 없다 — 여기서 직접 리셋.
+      drawerDirtyRef.current = false
       setDrawer(null)
       return
     }
@@ -1136,20 +1154,26 @@ export default function CrmUnifiedCustomersClient() {
         </section>
       </div>
 
-      <Customer360Drawer
-        customerKey={drawer?.key ?? null}
-        name={drawer?.name}
-        onClose={closeDrawer}
-        onDirtyChange={(dirty) => {
-          drawerDirtyRef.current = dirty
-        }}
-      />
+      {/* 열림 상태에서만 렌더 — 닫힘=null 렌더였던 기존과 동일 화면이면서, dynamic 청크를
+          열 때만 내려받고 닫힌 첫 로드에 로딩 폴백이 새어 나오지 않는다. */}
+      {drawer ? (
+        <Customer360Drawer
+          customerKey={drawer.key}
+          name={drawer.name}
+          onClose={closeDrawer}
+          onDirtyChange={(dirty) => {
+            drawerDirtyRef.current = dirty
+          }}
+        />
+      ) : null}
 
-      <LeadRegisterModal
-        open={leadModalOpen}
-        onClose={() => setLeadModalOpen(false)}
-        onDone={() => void loadPage(0, { force: true })}
-      />
+      {leadModalOpen ? (
+        <LeadRegisterModal
+          open
+          onClose={() => setLeadModalOpen(false)}
+          onDone={() => void loadPage(0, { force: true })}
+        />
+      ) : null}
     </div>
   )
 }
