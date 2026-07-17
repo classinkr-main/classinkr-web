@@ -784,7 +784,7 @@ export default function DocsGapsPanel() {
                 </li>
               )}
             </ul>
-            {filteredGapClusters.length > 0 ? (
+            {gapVisible.canMore || gapVisible.canCollapse ? (
               <div className="mt-3 flex justify-center">
                 <ShowMore
                   visible={gapVisible.visible}
@@ -824,7 +824,7 @@ export default function DocsGapsPanel() {
                 <li className="text-sm text-[#615D59]">결과 없는 검색어가 없습니다.</li>
               )}
             </ul>
-            {zeroResultSearches.length > 0 ? (
+            {searchVisible.canMore || searchVisible.canCollapse ? (
               <div className="mt-3 flex justify-center">
                 <ShowMore
                   visible={searchVisible.visible}
