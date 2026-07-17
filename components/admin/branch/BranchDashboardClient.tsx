@@ -347,7 +347,9 @@ export default function BranchDashboardClient() {
                 {TEAMS.map((t) => (
                   <button key={t} type="button" onClick={() => selectTeam(t)}
                     aria-pressed={team === t}
-                    className={`rounded-full px-3 py-1.5 text-[12px] font-semibold transition ${
+                    // 웨이브 7 — U5(터치 타깃). 좁은 뷰포트(<md)에서만 min-h-10(40px)로
+                    // 확대 — 데스크톱 밀도는 md:min-h-0으로 원복.
+                    className={`inline-flex min-h-10 items-center justify-center rounded-full px-3 py-1.5 text-[12px] font-semibold transition md:min-h-0 ${
                       team === t ? "bg-[#111110] text-white" : "text-[#615D59] hover:text-[#111110]"
                     }`}>
                     {t === "ALL" ? "KR 전체" : t}
@@ -361,7 +363,8 @@ export default function BranchDashboardClient() {
                   {PERIODS.map((p) => (
                     <button key={p} type="button" onClick={() => selectPeriod(p)}
                       aria-pressed={period === p}
-                      className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${
+                      // 웨이브 7 — U5. 팀 필터 칩과 동일 규약(min-h-10 → md:min-h-0).
+                      className={`inline-flex min-h-10 items-center justify-center rounded-md px-3 py-1.5 text-[12px] font-semibold transition md:min-h-0 ${
                         period === p ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                       }`}>
                       {p}

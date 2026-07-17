@@ -377,7 +377,8 @@ export default function PipelineTable({
               type="button"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={safePage === 1}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35"
+              // 웨이브 7 — U5(터치 타깃). 모바일 h-10/w-10(40px) → 데스크톱 md:h-7/md:w-7 원복.
+              className="inline-flex h-10 min-h-10 w-10 min-w-10 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35 md:h-7 md:min-h-0 md:w-7 md:min-w-0"
               aria-label="이전 페이지"
               title="이전 페이지"
             >
@@ -388,7 +389,7 @@ export default function PipelineTable({
               type="button"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={safePage === totalPages}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35"
+              className="inline-flex h-10 min-h-10 w-10 min-w-10 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35 md:h-7 md:min-h-0 md:w-7 md:min-w-0"
               aria-label="다음 페이지"
               title="다음 페이지"
             >

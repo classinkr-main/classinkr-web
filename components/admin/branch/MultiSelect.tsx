@@ -70,7 +70,9 @@ export default function MultiSelect({
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={options.length === 0}
-        className="inline-flex h-8 min-w-[7rem] items-center justify-between gap-2 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] outline-none transition hover:border-[#111110]/25 focus:border-[#111110]/30 disabled:cursor-not-allowed disabled:opacity-50"
+        // 웨이브 7 — U5(터치 타깃). 좁은 뷰포트(<md)에서 min-h-10(40px)로 확대,
+        // 데스크톱은 md:h-8 md:min-h-0으로 기존 밀도 유지.
+        className="inline-flex h-10 min-h-10 min-w-[7rem] items-center justify-between gap-2 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] outline-none transition hover:border-[#111110]/25 focus:border-[#111110]/30 disabled:cursor-not-allowed disabled:opacity-50 md:h-8 md:min-h-0"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -80,7 +82,9 @@ export default function MultiSelect({
       {open && (
         <div
           role="listbox"
-          className={`absolute top-9 z-30 max-h-64 ${width} overflow-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-1 shadow-[0_10px_30px_rgba(0,0,0,0.08)] ${align === "right" ? "right-0" : "left-0"}`}
+          // top-11(44px)/md:top-9(36px) — 트리거가 모바일 h-10(40px)/데스크톱 h-8(32px)로
+          // 반응형이라(U5) 드롭다운 오프셋도 같은 브레이크포인트에서 맞춰 겹치지 않게 한다.
+          className={`absolute top-11 z-30 max-h-64 ${width} overflow-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-1 shadow-[0_10px_30px_rgba(0,0,0,0.08)] md:top-9 ${align === "right" ? "right-0" : "left-0"}`}
         >
           <button
             type="button"
