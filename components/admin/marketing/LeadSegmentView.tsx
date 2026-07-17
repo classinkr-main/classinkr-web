@@ -1,9 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { RefreshCw, Phone, Mail, Building2, Send, X, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
+
+// 리드 목록 무한스크롤 대체 — 초기 50건, "더보기"로 50건씩 확장. 백엔드 limit 도입은 비범위.
+const LEAD_LIST_STEP = 50
 
 // ─── 상수 ────────────────────────────────────────────────────
 const STATUS_LABEL: Record<LeadStatus, string> = {
@@ -195,6 +199,20 @@ export default function LeadSegmentView({ leads, loading, onRefresh, onSendToSeg
     return true
   })
 
+  // ─── 더보기(클라 배열 슬라이싱) ─────────────────────────────
+  const {
+    visible: visibleLeadCount,
+    showMore: showMoreLeads,
+    collapse: collapseLeads,
+    canMore: canMoreLeads,
+    canCollapse: canCollapseLeads,
+  } = useVisibleCount(filtered.length, LEAD_LIST_STEP)
+
+  // 필터가 바뀌면 새 결과셋의 맨 위(초기 50건)부터 다시 보여준다.
+  useEffect(() => {
+    collapseLeads()
+  }, [sourceFilter, statusFilter, sizeFilter, branchFilter, collapseLeads])
+
   // ─── 세그먼트 → 태그 변환 ─────────────────────────────────
   const hasFilter = !!(sourceFilter || statusFilter || sizeFilter || branchFilter)
 
@@ -275,8 +293,13 @@ export default function LeadSegmentView({ leads, loading, onRefresh, onSendToSeg
       {/* ── 결과 헤더 + 액션 ── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
-          <p className="text-[13px] text-[#1a1a1a]/60">
-            <span className="font-semibold text-[#111110]">{filtered.length}건</span> 표시 중
+          <p className="text-[13px] text-[#1a1a1a]/60 tabular-nums">
+            <span className="font-semibold text-[#111110]">
+              {canMoreLeads || canCollapseLeads
+                ? `${visibleLeadCount.toLocaleString("ko-KR")} / ${filtered.length.toLocaleString("ko-KR")}건`
+                : `${filtered.length.toLocaleString("ko-KR")}건`}
+            </span>{" "}
+            표시 중
             {activeFiltersCount > 0 && (
               <span className="ml-1.5 text-[11px] text-[#084734]">({activeFiltersCount}개 필터 적용)</span>
             )}
@@ -322,7 +345,7 @@ export default function LeadSegmentView({ leads, loading, onRefresh, onSendToSeg
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((lead) => (
+                {filtered.slice(0, visibleLeadCount).map((lead) => (
                   <tr
                     key={lead.id}
                     className="border-b border-[#f0f0ec] hover:bg-[#FAFAF8] cursor-pointer transition-colors"
@@ -359,6 +382,17 @@ export default function LeadSegmentView({ leads, loading, onRefresh, onSendToSeg
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {(canMoreLeads || canCollapseLeads) && (
+          <div className="flex justify-center border-t border-[#e8e8e4] bg-[#FAFAF8] px-4 py-3.5">
+            <ShowMore
+              visible={visibleLeadCount}
+              total={filtered.length}
+              step={LEAD_LIST_STEP}
+              onMore={showMoreLeads}
+              onCollapse={canCollapseLeads ? collapseLeads : undefined}
+            />
           </div>
         )}
       </div>
