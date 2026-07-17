@@ -1541,13 +1541,20 @@ export function buildMatrixPendingByCell(
   return map
 }
 
-// 편집 input이 받는 문자열 → 원 단위 정수. rail의 safeAmount와 동일 규칙(¥·콤마·공백 제거).
-// 만 단위 입력은 지원하지 않는다(rail이 원 단위 String을 쓰므로 저장 정합을 위해 원 단위 고정).
-function parseMatrixAmount(value: string): number {
+// 편집 input이 받는 문자열 → 원 단위 정수 + 음수 클램프 여부. rail의 safeAmount와 동일 규칙
+// (¥·콤마·공백 제거). 만 단위 입력은 지원하지 않는다(rail이 원 단위 String을 쓰므로 단위 고정).
+// clamped=true면 파싱값이 음수라 0으로 잘렸다는 뜻 — 호출부가 무경고로 삼키지 않도록 신호를 남긴다.
+function parseMatrixAmountResult(value: string): { amount: number; clamped: boolean } {
   const normalized = value.replace(/[^\d.-]/g, "")
-  if (!normalized) return 0
+  if (!normalized) return { amount: 0, clamped: false }
   const numeric = Number(normalized)
-  return Number.isFinite(numeric) ? Math.max(Math.round(numeric), 0) : 0
+  if (!Number.isFinite(numeric)) return { amount: 0, clamped: false }
+  const rounded = Math.round(numeric)
+  return { amount: Math.max(rounded, 0), clamped: rounded < 0 }
+}
+
+function parseMatrixAmount(value: string): number {
+  return parseMatrixAmountResult(value).amount
 }
 
 // 딜행 × 월 셀이 확정 잠금(편집 불가)인지. monthlyRed 플래그 또는 확정액이 그 달 금액을 덮으면 잠금.
@@ -1759,11 +1766,14 @@ function useMatrixEditor({
   cellValue,
   cellConfidence,
   onCommitCell,
+  onAmountClamped,
 }: {
   editableCells: MatrixCellCoord[] // 렌더 순서(행 위→아래, 월 좌→우, 확장월은 w1→w5)로 정렬된 편집가능 셀
   cellValue: (coord: MatrixCellCoord) => number // 커밋 기준값(원 단위) — fill-down 소스
   cellConfidence: (coord: MatrixCellCoord) => DraftConfidence // 셀 우세 확도(팝오버 기본값)
   onCommitCell: (rowId: string, month: string, amount: number, confidence: DraftConfidence, week?: number) => void
+  // 음수 입력이 0으로 클램프될 때 호출(커밋 결과와 무관 — 무입력 취급되는 경우도 포함). 항목 3.
+  onAmountClamped?: () => void
 }) {
   const [selected, setSelected] = useState<MatrixCellCoord | null>(null)
   const [editing, setEditing] = useState<MatrixCellCoord | null>(null)
@@ -1830,7 +1840,11 @@ function useMatrixEditor({
   // buffer는 latest-ref(bufferRef)로 읽어 콜백 identity를 고정한다(actions 안정화).
   const commitBuffer = useCallback(
     (coord: MatrixCellCoord, confidence: DraftConfidence): boolean => {
-      const amount = parseMatrixAmount(bufferRef.current)
+      const parsed = parseMatrixAmountResult(bufferRef.current)
+      // 클램프 여부는 커밋이 실제로 값을 바꾸는지와 무관하게 신호를 보낸다 — 그래야 "음수를 쳤는데
+      // 아무 일도 안 일어났다"는 무경고 0 클램프가 (아래 dup-guard로 조기 return 되더라도) 항상 뜬다.
+      if (parsed.clamped) onAmountClamped?.()
+      const amount = parsed.amount
       const previous = cellValue(coord)
       const previousConfidence = cellConfidence(coord)
       // 금액·확도 둘 다 그대로면 저장하지 않는다. (주차 셀도 cellValue/cellConfidence가 주차 기준이라 동일 가드 적용)
@@ -1839,7 +1853,7 @@ function useMatrixEditor({
       onCommitCell(coord.rowId, coord.month, amount, confidence, coord.week)
       return true
     },
-    [cellConfidence, cellValue, onCommitCell],
+    [cellConfidence, cellValue, onAmountClamped, onCommitCell],
   )
 
   const moveSelection = useCallback(
@@ -4452,11 +4466,16 @@ export default function SalesLedgerWorkbench() {
     [createDraft, lens, pendingByCell, period, pushMatrixToast, rowById, team, updateDraft],
   )
 
+  const onMatrixAmountClamped = useCallback(() => {
+    pushMatrixToast({ kind: "info", text: "음수는 0으로 처리됩니다 — 감액은 장부 가감 입력 사용" })
+  }, [pushMatrixToast])
+
   const matrixEditor = useMatrixEditor({
     editableCells,
     cellValue: matrixCellValue,
     cellConfidence: matrixCellConfidence,
     onCommitCell,
+    onAmountClamped: onMatrixAmountClamped,
   })
 
   // 딜행별 편집 prop — selected/editing 좌표를 이 행 스코프로 좁힌다. actions·selected·editing은
@@ -5851,13 +5870,21 @@ export default function SalesLedgerWorkbench() {
         {matrixToast && (
           <div
             role="alert"
-            className={`fixed bottom-20 left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg border px-4 py-2.5 text-[12px] font-bold shadow-[0_18px_48px_rgba(17,17,16,0.18)] ${
+            className={`fixed bottom-20 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] items-start gap-2 -translate-x-1/2 rounded-lg border px-4 py-2.5 text-[12px] font-bold shadow-[0_18px_48px_rgba(17,17,16,0.18)] ${
               matrixToast.kind === "error"
                 ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"
                 : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
             }`}
           >
-            {matrixToast.text}
+            <span className="pt-0.5">{matrixToast.text}</span>
+            <button
+              type="button"
+              onClick={() => setMatrixToast(null)}
+              aria-label="알림 닫기"
+              className="shrink-0 rounded p-0.5 opacity-70 transition hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
 
