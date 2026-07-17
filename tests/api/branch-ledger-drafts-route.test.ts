@@ -64,4 +64,44 @@ describe("branch ledger draft route", () => {
     expect(repository).toContain('.neq("status", "applied")')
     expect(repository).toContain('.neq("status", "checked")')
   })
+
+  // 웨이브 5 — 되돌리기(reverse). id 파라미터는 apply와 동일 계약(draft id)이고, repository가
+  // draft_id -> entry_id 매핑을 내부에서 해결한다. draft.status는 절대 건드리지 않는다.
+  it("wires action=reverse through the same draft-id-keyed PATCH contract as apply", () => {
+    const route = routeSource()
+
+    expect(route).toContain('action === "reverse"')
+    expect(route).toContain("reverseBranchSalesLedgerEntryByDraftId(id, actor, reason)")
+    expect(route).toContain("해당 초안에 연결된 적용 항목을 찾을 수 없습니다.")
+    expect(route).toContain("NextResponse.json({ entry })")
+  })
+
+  it("maps the duplicate-active-correction conflict to 409, not 500", () => {
+    const route = routeSource()
+
+    expect(route).toContain("duplicateActiveCorrectionResponse")
+    expect(route).toContain("isBranchSalesLedgerDuplicateActiveCorrectionError")
+    expect(route).toContain("status: 409")
+  })
+
+  it("resolves draft_id -> entry_id and calls the idempotent reversal RPC without mutating draft status", () => {
+    const repository = repositorySource()
+
+    expect(repository).toContain("export async function reverseBranchSalesLedgerEntryByDraftId")
+    expect(repository).toContain('.eq("draft_id", draftId)')
+    expect(repository).toContain('rpc("reverse_branch_sales_ledger_entry"')
+    expect(repository).toContain("p_entry_id: entryRow.id")
+    // The audit-trail invariant: this function must never touch branch_sales_ledger_drafts.
+    const fnStart = repository.indexOf("export async function reverseBranchSalesLedgerEntryByDraftId")
+    const fnBody = repository.slice(fnStart, repository.indexOf("\n}\n", fnStart))
+    expect(fnBody).not.toContain('from("branch_sales_ledger_drafts")')
+  })
+
+  it("surfaces the active-manual-edit unique-index violation as a friendly, recognizable error", () => {
+    const repository = repositorySource()
+
+    expect(repository).toContain("branch_sales_ledger_entries_active_manual_edit_unique")
+    expect(repository).toContain("isBranchSalesLedgerDuplicateActiveCorrectionError")
+    expect(repository).toContain("이미 이 딜·월에 적용된 정정 항목이 있습니다")
+  })
 })

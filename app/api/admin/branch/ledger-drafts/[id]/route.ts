@@ -7,6 +7,8 @@ import {
   BRANCH_SALES_LEDGER_DRAFT_STATUSES,
   deleteBranchSalesLedgerDraft,
   isBranchSalesLedgerDraftsNotReadyError,
+  isBranchSalesLedgerDuplicateActiveCorrectionError,
+  reverseBranchSalesLedgerEntryByDraftId,
   updateBranchSalesLedgerDraft,
   type BranchSalesLedgerDraftKind,
   type BranchSalesLedgerDraftStatus,
@@ -49,6 +51,13 @@ function optionalRecord(value: unknown) {
 function notReadyResponse(error: unknown) {
   if (isBranchSalesLedgerDraftsNotReadyError(error)) {
     return NextResponse.json({ error: (error as Error).message }, { status: 503 })
+  }
+  return null
+}
+
+function duplicateActiveCorrectionResponse(error: unknown) {
+  if (isBranchSalesLedgerDuplicateActiveCorrectionError(error)) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 409 })
   }
   return null
 }
@@ -125,6 +134,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
       return NextResponse.json({ draft })
     }
+    if (action === "reverse") {
+      // id는 draft id다(기존 apply와 동일 계약) — draft_id로 연결된 내부 원장 entry를 찾아
+      // active->reversed로 상쇄한다. draft.status 자체는 건드리지 않는다(감사 추적 보존).
+      const reason = optionalString(raw.reason)
+      if (reason === null) return NextResponse.json({ error: "reason must be a string" }, { status: 400 })
+
+      const entry = await reverseBranchSalesLedgerEntryByDraftId(id, actor, reason)
+      if (!entry) {
+        return NextResponse.json({ error: "해당 초안에 연결된 적용 항목을 찾을 수 없습니다." }, { status: 404 })
+      }
+      return NextResponse.json({ entry })
+    }
     if (action !== "update") return NextResponse.json({ error: `Unsupported action: ${action}` }, { status: 400 })
 
     const update = parseUpdate(raw)
@@ -135,7 +156,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ draft })
   } catch (error) {
     console.error(`[PATCH /api/admin/branch/ledger-drafts/${id}]`, error)
-    return notReadyResponse(error) ?? NextResponse.json({ error: "Failed to update sales ledger draft" }, { status: 500 })
+    return (
+      notReadyResponse(error) ??
+      duplicateActiveCorrectionResponse(error) ??
+      NextResponse.json({ error: "Failed to update sales ledger draft" }, { status: 500 })
+    )
   }
 }
 
