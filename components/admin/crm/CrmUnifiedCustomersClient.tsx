@@ -201,6 +201,56 @@ function sourceBadge(row: CrmUnifiedCustomerRow) {
   )
 }
 
+type LeadBadgeTone = "neutral" | "green" | "risk"
+
+const LEAD_BADGE_TONE_CLASSES: Record<LeadBadgeTone, string> = {
+  neutral: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
+  green: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
+  risk: "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]",
+}
+
+// 리드 행 배지 — 홈페이지 유입/정식 리드(NEO 등록)/미응답 SLA 경과를 행 단위로 노출.
+function leadBadges(
+  row: CrmUnifiedCustomerRow,
+  nowMs: number
+): Array<{ label: string; tone: LeadBadgeTone }> | null {
+  if (row.source !== "lead") return null
+  const badges: Array<{ label: string; tone: LeadBadgeTone }> = []
+  if (row.origin === "site") {
+    badges.push(
+      row.crmRegistered
+        ? { label: "정식 리드 · NEO", tone: "green" }
+        : { label: "홈페이지", tone: "neutral" }
+    )
+  }
+  if (row.slaTarget && !row.firstResponseAt && row.createdAt) {
+    const createdMs = new Date(row.createdAt).getTime()
+    if (Number.isFinite(createdMs)) {
+      // 시계 스큐로 createdAt이 미래면 0h로 클램프.
+      const hours = Math.max(0, Math.floor((nowMs - createdMs) / 3_600_000))
+      badges.push({ label: `미응답 ${hours}h`, tone: hours >= 24 ? "risk" : "neutral" })
+    }
+  }
+  return badges.length ? badges : null
+}
+
+function LeadRowBadges({ row, nowMs }: { row: CrmUnifiedCustomerRow; nowMs: number }) {
+  const badges = leadBadges(row, nowMs)
+  if (!badges) return null
+  return (
+    <>
+      {badges.map((badge) => (
+        <span
+          key={badge.label}
+          className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${LEAD_BADGE_TONE_CLASSES[badge.tone]}`}
+        >
+          {badge.label}
+        </span>
+      ))}
+    </>
+  )
+}
+
 function mergePage(
   current: CrmUnifiedCustomers | null,
   next: CrmUnifiedCustomers,
@@ -321,6 +371,11 @@ export default function CrmUnifiedCustomersClient() {
   }, [])
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
+
+  // 배지 SLA 경과 계산 기준 시각 — 행마다 Date.now() 호출 방지. 데이터가 갱신될 때만
+  // 재계산되도록 data를 의도적 의존성으로 둔다(콜백 내 미참조라 규칙 예외 처리).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const nowMs = useMemo(() => Date.now(), [data])
 
   const currentOwnerCount = useMemo(() => {
     const selected = normalizeText(owner === CURRENT_OWNER_VALUE ? currentOwner?.ownerKey : owner)
@@ -805,7 +860,10 @@ export default function CrmUnifiedCustomersClient() {
                             </button>
                           )}
                           <CrmContactValue value={row.contact} className="mt-0.5" />
-                          <CrmCustomerFlags flags={rowToFlags(row)} max={4} className="mt-1" />
+                          <div className="mt-1 flex flex-wrap items-center gap-1 empty:hidden">
+                            <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
+                            <LeadRowBadges row={row} nowMs={nowMs} />
+                          </div>
                           <TagChips tags={row.tags} />
                         </div>
                         <Link
@@ -874,7 +932,10 @@ export default function CrmUnifiedCustomersClient() {
                       <div className="mb-1">{sourceBadge(row)}</div>
                       <p className="truncate text-[14px] font-bold text-[#111110]">{row.name}</p>
                       <CrmContactValue value={row.contact} className="pointer-events-auto mt-0.5" />
-                      <CrmCustomerFlags flags={rowToFlags(row)} max={4} className="mt-1.5" />
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1 empty:hidden">
+                        <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
+                        <LeadRowBadges row={row} nowMs={nowMs} />
+                      </div>
                       <TagChips tags={row.tags} />
                     </div>
                     <span className={`text-[20px] font-bold tabular-nums ${scoreTone(row.score)}`}>{row.score}</span>
