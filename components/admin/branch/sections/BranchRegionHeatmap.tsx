@@ -492,14 +492,16 @@ function DetailPanel({ row, metric }: { row: MapRow | null; metric: Metric }) {
               <span className="text-[18px] font-bold tabular-nums" style={{ color: progressColor }}>
                 ¥{cny(row.expected)}
               </span>
-              <p className="mt-0.5 text-[10px] tabular-nums text-[#A39E98]">{row.progress.toFixed(0)}%</p>
+              {/* 저대비 수정(품질 웨이브 5 — 항목 3) — 이 보조 숫자는 순수 장식이 아니라
+                  실데이터(달성률)라 :444-447과 동일 처방으로 #615D59 승격. */}
+              <p className="mt-0.5 text-[10px] tabular-nums text-[#615D59]">{row.progress.toFixed(0)}%</p>
             </div>
           ) : (
             <div className="text-right">
               <span className="text-[18px] font-bold tabular-nums" style={{ color: progressColor }}>
                 {row.progress.toFixed(0)}%
               </span>
-              <p className="mt-0.5 text-[10px] tabular-nums text-[#A39E98]">¥{cny(row.expected)}</p>
+              <p className="mt-0.5 text-[10px] tabular-nums text-[#615D59]">¥{cny(row.expected)}</p>
             </div>
           )
         })()}
