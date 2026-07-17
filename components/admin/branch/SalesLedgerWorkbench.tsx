@@ -1364,7 +1364,7 @@ function DraftQueue({
 // 커밋 1건 = createDraft 1건(새 저장경로 없음). 낙관적 표시는 drafts 배열에서 파생.
 
 // 셀 좌표 = 행 id + 회계월. 편집가능 셀 순회(방향키/Tab)의 단위.
-interface MatrixCellCoord {
+export interface MatrixCellCoord {
   rowId: string
   month: string
   week?: number // 0~4 = 확장된 월의 w1~w5 주차 칸. 없으면 월 요약 셀.
@@ -1372,13 +1372,21 @@ interface MatrixCellCoord {
 
 // 셀 좌표 → 안정 키. 월 셀은 `rowId::month`(Phase 2와 동일), 주차 셀은 `rowId::month::wN`.
 // 월 셀 키를 그대로 유지해 기존 순회/pending 매칭 회귀를 막는다.
-function matrixCoordKey(coord: MatrixCellCoord): string {
+export function matrixCoordKey(coord: MatrixCellCoord): string {
   return coord.week == null ? `${coord.rowId}::${coord.month}` : `${coord.rowId}::${coord.month}::w${coord.week + 1}`
 }
 
 // 두 좌표가 같은 세로 열(같은 월·같은 주차)인지 — 아래/위 이동·fill-down 소스 판정용.
 function matrixSameColumn(a: MatrixCellCoord, b: MatrixCellCoord): boolean {
   return a.month === b.month && (a.week ?? -1) === (b.week ?? -1)
+}
+
+// 좌표 → 그 셀에 걸린 미검수 초안(있으면). 주차 좌표면 주차 키 우선, 없으면 월 키로 폴백
+// (월 단위로만 걸린 초안도 주차 칸 재편집 시 "이미 이 달에 초안이 있다"는 신호로 쓴다).
+// matrixCellValue(재편집 시작값)·matrixCellConfidence·onCommitCell(PATCH-vs-POST 타겟)이 공유.
+export function lookupMatrixPending(pendingByCell: Map<string, MatrixPendingDraft>, coord: MatrixCellCoord): MatrixPendingDraft | null {
+  const weekKey = coord.week != null ? matrixCoordKey(coord) : null
+  return (weekKey ? pendingByCell.get(weekKey) : null) ?? pendingByCell.get(matrixCoordKey({ rowId: coord.rowId, month: coord.month })) ?? null
 }
 
 // metadata.week 문자열("w1".."w5") → 0~4 인덱스. "month"/그 외/누락이면 null.
@@ -1420,10 +1428,57 @@ function weeklyPaymentsFromDraftMetadata(
   return weeklyPaymentsFromWeekToken(month, amount, metadataString(metadata, "week"))
 }
 
-// 셀에 걸린 미검수(draft|checked) 초안 요약. 낙관적 앰버 표시·툴팁용.
-interface MatrixPendingDraft {
+// 셀에 걸린 미검수(draft|checked) 초안 요약. 낙관적 앰버 표시·툴팁용 + 재편집/커밋 타겟 판정용.
+// id: PATCH 타겟(같은 셀 재편집 시 새 초안 대신 이 초안을 갱신). weekly: 주차 병합 배열(metadata.weekly) —
+// 있으면 주차별 금액 조회에 쓴다(없으면 amount가 곧 그 셀 금액, 주차 단일대체 규약과 동일).
+export interface MatrixPendingDraft {
+  id: string
   amount: number
   confidence: DraftConfidence
+  weekly: number[] | null
+}
+
+// pending 요약에서 좌표(coord) 기준 실제 셀 금액을 뽑는다. 주차 좌표 + weekly 병합 배열이 있으면
+// 그 주차 값, 아니면(월 좌표거나 병합 배열이 없는 단일대체 케이스) summary.amount 그대로.
+export function pendingCellAmount(pending: MatrixPendingDraft, week?: number): number {
+  if (week != null && pending.weekly) return pending.weekly[week] ?? 0
+  return pending.amount
+}
+
+// 미검수(draft|checked) 초안 → 셀 낙관적 표시 + 재편집/커밋 타겟 판정 맵. drafts에서 파생(별도 버퍼 없음).
+// 매칭: 초안 sourceDealId == 행 sourceDealId(또는 id) && 초안 month == 셀 month.
+// 월 키(`rowId::month`)와 주차 키(`rowId::month::wN`)를 각각 채운다:
+//   - 월 키: 그 달에 걸린 최신 초안(주차 초안 포함) → 접힌 월 셀 앰버 점 + 월 단위 재편집 타겟.
+//   - 주차 키: metadata.week가 wN인 초안만 → 확장 주차 칸 앰버 점 + 그 주차 재편집 타겟.
+// 같은 키에 여러 초안이 있으면 가장 최근(drafts 배열 앞쪽) 것을 표시 — 컴포넌트는 항상 최신순으로 prepend한다.
+// 순수 함수로 분리(useMemo 밖) — 컴포넌트 렌더 없이 회귀 테스트(같은 셀 재편집 시 초안 1건 유지) 가능.
+export function buildMatrixPendingByCell(
+  drafts: LedgerDraft[],
+  visibleDealRows: LedgerRevenueRow[],
+): Map<string, MatrixPendingDraft> {
+  const map = new Map<string, MatrixPendingDraft>()
+  const pending = drafts.filter((draft) => draft.status === "draft" || draft.status === "checked")
+  for (const row of visibleDealRows) {
+    const dealKey = row.sourceDealId ?? row.id
+    for (const draft of pending) {
+      const draftDealId = draft.sourceDealId ?? metadataString(draft.metadata, "sourceDealId")
+      if (draft.kind === "edit-row" ? draftDealId !== dealKey : draft.customer.trim() !== row.customer.trim()) continue
+      const summary: MatrixPendingDraft = {
+        id: draft.id,
+        amount: draft.amount,
+        confidence: draftConfidenceFromMetadata(draft.metadata),
+        weekly: mergedWeeklyFromMetadata(draft.metadata),
+      }
+      const monthKey = matrixCoordKey({ rowId: row.id, month: draft.month })
+      if (!map.has(monthKey)) map.set(monthKey, summary) // 월 셀: 첫(=최신) 초안
+      const weekIdx = weekIndexFromToken(metadataString(draft.metadata, "week"))
+      if (weekIdx != null) {
+        const weekKey = matrixCoordKey({ rowId: row.id, month: draft.month, week: weekIdx })
+        if (!map.has(weekKey)) map.set(weekKey, summary) // 주차 칸: 그 주차 첫(=최신) 초안
+      }
+    }
+  }
+  return map
 }
 
 // 편집 input이 받는 문자열 → 원 단위 정수. rail의 safeAmount와 동일 규칙(¥·콤마·공백 제거).
@@ -4189,7 +4244,12 @@ export default function SalesLedgerWorkbench() {
       for (const draft of pending) {
         const draftDealId = draft.sourceDealId ?? metadataString(draft.metadata, "sourceDealId")
         if (draft.kind === "edit-row" ? draftDealId !== dealKey : draft.customer.trim() !== row.customer.trim()) continue
-        const summary: MatrixPendingDraft = { amount: draft.amount, confidence: draftConfidenceFromMetadata(draft.metadata) }
+        const summary: MatrixPendingDraft = {
+          id: draft.id,
+          amount: draft.amount,
+          confidence: draftConfidenceFromMetadata(draft.metadata),
+          weekly: mergedWeeklyFromMetadata(draft.metadata),
+        }
         const monthKey = `${row.id}::${draft.month}`
         if (!map.has(monthKey)) map.set(monthKey, summary) // 월 셀: 첫(=최신) 초안
         const weekIdx = weekIndexFromToken(metadataString(draft.metadata, "week"))
@@ -4203,24 +4263,27 @@ export default function SalesLedgerWorkbench() {
   }, [drafts, visibleDealRows])
 
   // 커밋 기준값(원 단위): 편집 진입 초기값·fill-down·중복 판정 소스.
-  // 주차 셀이면 그 주차의 현재 표시값(explicit/inferred 기준), 아니면 그 달 표시 금액.
+  // 그 셀에 미검수(draft|checked) 초안이 있으면 시트 원값 대신 그 초안 금액을 우선한다 — 그래야
+  // 재편집 시작값이 "이미 대기 중인 값"이 되어 (a) 같은 값 재입력이 중복 초안을 만들지 않고
+  // (b) 값을 바꿔도 onCommitCell이 새 초안 대신 이 초안을 PATCH한다(이중계상 방지, P0).
+  // pending이 없으면 기존 규약: 주차 셀은 그 주차의 현재 표시값, 아니면 그 달 표시 금액.
   const matrixCellValue = useCallback(
     (coord: MatrixCellCoord) => {
+      const pending = lookupMatrixPending(pendingByCell, coord)
+      if (pending) return pendingCellAmount(pending, coord.week)
       const row = rowById.get(coord.rowId)
       if (!row) return 0
       if (coord.week != null) return rowWeeklySplit(row, coord.month).weeks[coord.week] ?? 0
       return rowMonthAmount(row, coord.month)
     },
-    [rowById],
+    [pendingByCell, rowById],
   )
 
   // 셀 우세 확도 → 편집 팝오버 기본 선택. 미검수 초안이 있으면 그 확도 우선.
   // 주차 셀은 그 주차 pending → 없으면 월 pending → 없으면 월 버킷 우세 확도로 폴백.
   const matrixCellConfidence = useCallback(
     (coord: MatrixCellCoord): DraftConfidence => {
-      const pending =
-        (coord.week != null ? pendingByCell.get(`${coord.rowId}::${coord.month}::w${coord.week + 1}`) : null) ??
-        pendingByCell.get(`${coord.rowId}::${coord.month}`)
+      const pending = lookupMatrixPending(pendingByCell, coord)
       if (pending) return pending.confidence
       const row = rowById.get(coord.rowId)
       return row ? dominantCellConfidence(rowMonthBucket(row, coord.month)) : "expected"
@@ -4236,10 +4299,20 @@ export default function SalesLedgerWorkbench() {
   // 주차 병합: explicit 주차가 있는 행의 주차 셀 편집은 나머지 주차를 보존해 metadata.weekly(5칸)로
   // 싣고 amount=주차 합으로 재기재한다 — 단일 주차 값이 그 달 전체를 대체해 다른 주차가 소멸하던 버그 방지.
   // (inferred/월합계만 행은 보존할 실주차가 없어 기존 단일 주차 대체 규약 유지 — 팝오버/큐에서 경고.)
+  // 반환값: 서버에 실제로 반영됐으면 true, 로컬 폴백(장부 적용 불가)이면 false — 붙여넣기 루프가
+  // 이 값을 모아 "N건 생성 · M건 실패" 요약 토스트를 만든다(SL-2 실패 집계, 항목 4).
+  // options.silent=true면 개별 실패 토스트를 억제한다(붙여넣기 루프처럼 상위에서 집계 토스트를 낼 때).
   const onCommitCell = useCallback(
-    (rowId: string, month: string, amount: number, confidence: DraftConfidence, week?: number) => {
+    (
+      rowId: string,
+      month: string,
+      amount: number,
+      confidence: DraftConfidence,
+      week?: number,
+      options?: { silent?: boolean },
+    ): Promise<boolean> => {
       const row = rowById.get(rowId)
-      if (!row) return
+      if (!row) return Promise.resolve(false)
       const sourceDealId = row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)
       const kind: DraftKind = sourceDealId ? "edit-row" : "new-row"
       const weekToken = week != null ? `w${week + 1}` : "month"
@@ -4296,18 +4369,26 @@ export default function SalesLedgerWorkbench() {
           sourceDealId: sourceDealId ?? null,
         },
       }
-      void createDraft(input).then((draft) => {
-        // createDraft는 실패 시에도 local-* 초안으로 폴백해 resolve된다 — 편집 지점에서 침묵하지 않게
-        // 셀 인근 토스트로 실패(=로컬 임시 저장, 장부 적용 불가)를 알린다. 성공 피드백은 셀 앰버 점.
-        if (draft?.id?.startsWith("local-")) {
+      // 같은 셀(월/주차)에 이미 대기 중(draft|checked)인 초안이 있으면 새 초안을 POST하지 않고
+      // 그 초안을 PATCH한다 — sourceDealId+month에 DB 유일성이 없어, 재편집 때마다 새 초안을 만들면
+      // 둘 다 적용됐을 때 같은 셀 매출이 이중 계상된다(P0). 상태 전이(draft/checked/applied)는 건드리지
+      // 않는다 — 이 input에는 status 필드가 없어 PATCH가 금액/메타데이터만 갱신한다.
+      const existingId = lookupMatrixPending(pendingByCell, { rowId, month, week })?.id ?? null
+      const persist = existingId ? updateDraft(existingId, input) : createDraft(input)
+      return persist.then((draft) => {
+        // createDraft는 실패 시에도 local-* 초안으로 폴백해 resolve된다. updateDraft의 로컬 폴백은
+        // 기존 서버 id를 유지하므로 이 접두어 판정만으론 못 잡지만, 그 경우는 queueError 전역 배너가 알린다.
+        const usedLocalFallback = !draft || draft.id.startsWith("local-")
+        if (usedLocalFallback && !options?.silent) {
           pushMatrixToast({
             kind: "error",
             text: "서버 저장 실패 — 로컬 임시 초안으로만 저장됐습니다 (장부 적용 불가). 입력 큐에서 서버 재연결 후 다시 입력하세요.",
           })
         }
+        return !usedLocalFallback
       })
     },
-    [createDraft, lens, period, pushMatrixToast, rowById, team],
+    [createDraft, lens, pendingByCell, period, pushMatrixToast, rowById, team, updateDraft],
   )
 
   const matrixEditor = useMatrixEditor({
@@ -4362,22 +4443,27 @@ export default function SalesLedgerWorkbench() {
   )
 
   // 프리뷰 확인 → 셀 편집과 동일한 onCommitCell 경로로만 커밋(셀당 검토 초안 1건, 2단 게이트 유지).
-  const confirmMatrixPaste = useCallback(() => {
+  // 붙여넣기 커밋 루프: 셀당 onCommitCell(silent) → 결과를 모아 성공/실패 건수를 한 번에 요약한다.
+  // 이전엔 셀마다 개별 실패 토스트가 fire-and-forget으로 날아와 단일 슬롯 토스트를 서로 덮어썼다
+  // (항목 4) — 이제 개별 토스트는 억제하고 전체 완료 후 "N건 생성 · M건 실패" 하나만 띄운다.
+  const confirmMatrixPaste = useCallback(async () => {
     if (!pastePlan) return
     storeMatrixConfidence(pasteConfidence)
-    let committed = 0
-    for (const cell of pastePlan.cells) {
-      if (cell.status !== "apply") continue
-      onCommitCell(cell.rowId, cell.month, cell.next, pasteConfidence)
-      committed += 1
-    }
+    const applyCells = pastePlan.cells.filter((cell) => cell.status === "apply")
     setPastePlan(null)
-    if (committed > 0) {
-      pushMatrixToast({
-        kind: "info",
-        text: `검토 초안 ${committed.toLocaleString("ko-KR")}건 생성 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.`,
-      })
-    }
+    if (applyCells.length === 0) return
+    const results = await Promise.all(
+      applyCells.map((cell) => onCommitCell(cell.rowId, cell.month, cell.next, pasteConfidence, undefined, { silent: true })),
+    )
+    const committed = results.filter(Boolean).length
+    const failed = results.length - committed
+    pushMatrixToast({
+      kind: failed > 0 ? "error" : "info",
+      text:
+        failed > 0
+          ? `${committed.toLocaleString("ko-KR")}건 생성 · ${failed.toLocaleString("ko-KR")}건 실패 — 실패분은 로컬 임시 저장(장부 적용 불가), 서버 재연결 후 다시 붙여넣으세요.`
+          : `검토 초안 ${committed.toLocaleString("ko-KR")}건 생성 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.`,
+    })
   }, [onCommitCell, pasteConfidence, pastePlan, pushMatrixToast])
 
   const toggleRevMonth = useCallback((month: string) => {
