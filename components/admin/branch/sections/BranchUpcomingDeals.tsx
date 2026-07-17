@@ -64,10 +64,11 @@ export default function BranchUpcomingDeals({
               const d = new Date(it.date)
               const m = d.getMonth() + 1
               const day = d.getDate()
+              // 캠페인 태그는 확도 신호가 아니므로 확도 예외 파랑(#1E5DA8) 대신 뉴트럴로.
               const tone =
                 it.kind === "deal" ? { bg: "#ECFDF5", fg: "#084734", label: "딜" }
                 : it.kind === "event" ? { bg: "#FBF1E0", fg: "#A8741A", label: "행사" }
-                : { bg: "#E8EFF8", fg: "#1E5DA8", label: "캠페인" }
+                : { bg: "#F6F5F4", fg: "#615D59", label: "캠페인" }
               const clickable = it.kind === "deal" && typeof it.amount === "number" && onDealClick
               const handleClick = clickable
                 ? () => onDealClick({ id: `upcoming-${i}`, customer: it.title, date: it.date, amount: it.amount as number })
