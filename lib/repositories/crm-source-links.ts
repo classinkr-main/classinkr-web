@@ -1596,6 +1596,32 @@ export async function listConfirmedLeadNeoLinkLeadIds(): Promise<Set<string>> {
 }
 
 /**
+ * 이 리드가 NEO 계정으로 등록 확정됐는지 단건 조회 (360 드로어용 — 벌크 Set 스캔 금지).
+ * 조회 모양은 listConfirmedLeadNeoLinkLeadIds와 동일(source_object='leads',
+ * target_type='external_account', status='confirmed')하되 리드 1건으로 좁힌다.
+ */
+export async function findConfirmedLeadNeoLink(leadId: string): Promise<{ targetId: string } | null> {
+  const sourceRecordKey = leadId.trim()
+  if (!sourceRecordKey) return null
+
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("crm_source_links")
+    .select("target_id")
+    .eq("source_object", "leads")
+    .eq("source_record_key", sourceRecordKey)
+    .eq("target_type", "external_account")
+    .eq("status", "confirmed")
+    .limit(1)
+
+  if (error) throw new Error(`crm_source_links lead→neo 단건 조회 실패: ${error.message}`)
+
+  const link = (data ?? [])[0] as { target_id: string | null } | undefined
+  if (!link?.target_id) return null
+  return { targetId: link.target_id }
+}
+
+/**
  * '리드 → NEO 계정' 수동 등록 확정(360 드로어 'NEO 등록됨' 액션). 멱등:
  * 이미 같은 페어가 confirmed면 그대로 { created: false }를 돌려준다. 같은 페어의
  * 비확정 후보가 있으면 확정으로 갱신하고, 없으면 확정 행을 새로 만든다 —

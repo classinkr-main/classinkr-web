@@ -6,6 +6,7 @@ import {
   type NeoCrmCustomerEeoAccount,
   type NeoCrmCustomerMoneyItem,
 } from "@/lib/admin-crm-customers-neo"
+import { classifyLeadOrigin, type LeadOriginClass } from "@/lib/crm/capture/origin"
 import { buildLeadPriorityItem } from "@/lib/crm/priority"
 import {
   EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY,
@@ -14,6 +15,7 @@ import {
 } from "@/lib/repositories/crm-account-money"
 import { deriveServiceRisk, type ServiceRisk } from "@/lib/crm/service-risk"
 import { listCrmCustomerEvents, type ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
+import { findConfirmedLeadNeoLink } from "@/lib/repositories/crm-source-links"
 import { listCrmDeals, type ListCrmDealsResult } from "@/lib/repositories/crm-deals"
 import { listCrmTasks, type ListCrmTasksResult } from "@/lib/repositories/crm-tasks"
 import { getLeadById, type LeadRecord } from "@/lib/repositories/leads"
@@ -101,6 +103,12 @@ export interface Customer360 {
   money: Customer360Money
   /** REV/HW 원장을 계정키로 조인한 제품 매출 요약(SW·HW 결제 누적, 칠판 대수, 매칭 여부) */
   productSummary: CrmAccountProductSummary
+  /** 리드 유입 출신(site/ad/team) — lead 전용, 그 외 null */
+  origin: LeadOriginClass | null
+  /** 리드가 NEO(회사 CRM) 계정으로 등록 확정됐는지 — crm_source_links lead→external_account confirmed */
+  crmRegistered: boolean
+  /** 확정된 NEO 계정 id (crmRegistered=true일 때만, 그 외 null) */
+  neoAccountId: string | null
   risk: Customer360Risk
   serviceRisk: ServiceRisk | null
   activity: ListCrmCustomerEventsResult
@@ -353,13 +361,15 @@ export async function getCrmCustomer360(
   const key = `${parsed.source}:${parsed.entityId}`
   const warnings: string[] = []
 
-  const [headerResult, eventsResult, tasksResult, dealsResult] = await Promise.allSettled([
+  const [headerResult, eventsResult, tasksResult, dealsResult, neoLinkResult] = await Promise.allSettled([
     parsed.source === "lead"
       ? getLeadById(parsed.entityId)
       : getNeoCrmCustomerDetail(parsed.entityId),
     listCrmCustomerEvents({ targetType: parsed.targetType, targetId: parsed.entityId, limit: eventsLimit }),
     listCrmTasks({ targetType: parsed.targetType, targetId: parsed.entityId, status: "active", limit: tasksLimit, now }),
     listCrmDeals({ targetType: parsed.targetType, targetId: parsed.entityId, limit: 20 }),
+    // 리드 → NEO 등록 확정 여부(드로어 'NEO 등록됨' 액션용). NEO 계정 드로어는 해당 없음.
+    parsed.source === "lead" ? findConfirmedLeadNeoLink(parsed.entityId) : Promise.resolve(null),
   ])
 
   let header: Customer360Header | null = null
@@ -367,6 +377,7 @@ export async function getCrmCustomer360(
   let money: Customer360Money = EMPTY_MONEY
   let serviceRisk: ServiceRisk | null = null
   let found = false
+  let origin: LeadOriginClass | null = null
 
   if (headerResult.status === "fulfilled") {
     if (parsed.source === "lead") {
@@ -374,6 +385,10 @@ export async function getCrmCustomer360(
       if (lead) {
         header = buildLeadHeader(key, lead, now)
         contacts = buildLeadContacts(lead)
+        origin = classifyLeadOrigin(
+          lead.source,
+          Boolean(lead.gclid || lead.fbclid || lead.msclkid || lead.ttclid)
+        )
         found = true
       }
     } else {
@@ -412,6 +427,10 @@ export async function getCrmCustomer360(
   const deals = dealsResult.status === "fulfilled" ? dealsResult.value : emptyDealsResult()
   if (dealsResult.status === "rejected") warnings.push("딜을 불러오지 못했습니다.")
 
+  // NEO 등록 확정 링크 — 실패해도 드로어 전체를 막지 않고 미등록으로 폴백(경고만).
+  const neoLink = neoLinkResult.status === "fulfilled" ? neoLinkResult.value : null
+  if (neoLinkResult.status === "rejected") warnings.push("NEO 등록 여부를 확인하지 못했습니다.")
+
   const risk = computeCustomer360Risk({
     overdueTaskCount: tasks.summary.overdue,
     riskEventCount: activity.summary.risks,
@@ -442,6 +461,9 @@ export async function getCrmCustomer360(
     contacts,
     money,
     productSummary,
+    origin,
+    crmRegistered: Boolean(neoLink),
+    neoAccountId: neoLink?.targetId ?? null,
     risk,
     serviceRisk,
     activity,

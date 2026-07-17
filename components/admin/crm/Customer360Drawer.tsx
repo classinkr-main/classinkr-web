@@ -36,8 +36,10 @@ import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/
 import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import CrmCustomerFlags from "./CrmCustomerFlags"
+import CrmCustomerPicker from "./CrmCustomerPicker"
 import ActivityQuickForm from "./rail/ActivityQuickForm"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
+import { LEAD_BADGE_TONE_CLASSES } from "@/lib/crm/lead-badges"
 import { computeCustomerHealth, HEALTH_BAND_STYLE } from "@/lib/crm/customer-health"
 import { CS_MOTIONS, type CsMotion } from "@/lib/crm/cs-motions"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
@@ -293,6 +295,12 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [activeSection, setActiveSection] = useState<string>("c360-summary")
   // 고정 컴포저 작성 중 여부 — 닫기 가드용(ActivityQuickForm onDirtyChange가 플립 시점에만 통지).
   const [composerDirty, setComposerDirty] = useState(false)
+  // 'NEO 등록됨' 수동 연결 패널 — 홈페이지 유입(site) 리드 전용.
+  const [neoLinkOpen, setNeoLinkOpen] = useState(false)
+  const [neoLinkBusy, setNeoLinkBusy] = useState(false)
+  const [neoLinkError, setNeoLinkError] = useState<string | null>(null)
+  const [neoPickerLabel, setNeoPickerLabel] = useState("")
+  const [neoPickerId, setNeoPickerId] = useState("")
   const router = useRouter()
   const bodyRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
@@ -385,6 +393,12 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     setTaskFormOpen(false)
     // 고객 전환 시 컴포저는 새 대상으로 리마운트되므로 dirty 가드도 초기화.
     setComposerDirty(false)
+    // NEO 연결 패널도 이전 고객의 입력·에러가 남지 않게 닫는다.
+    setNeoLinkOpen(false)
+    setNeoLinkBusy(false)
+    setNeoLinkError(null)
+    setNeoPickerLabel("")
+    setNeoPickerId("")
     // 고객 전환 시 이전 고객의 스크롤 위치·활성 섹션 탭이 남지 않게 최상단으로 리셋.
     setActiveSection("c360-summary")
     bodyRef.current?.scrollTo({ top: 0 })
@@ -463,6 +477,37 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     if (url) clearAdminRequestCache()
     await load({ force: true, expanded: eventsExpanded })
   }, [load, url, eventsExpanded])
+
+  // NEO 등록 액션·발송허브 딥링크용 파생값 — 등록 액션은 홈페이지 유입(site) 리드에만 노출.
+  const contactPhone = data?.contacts?.phone ?? null
+  const isSiteLead = Boolean(data?.found) && targetType === "lead" && data?.origin === "site"
+  const crmRegistered = data?.crmRegistered ?? false
+
+  // 리드 → NEO 계정 수동 등록 확정. 성공 시 360 재조회로 pill('정식 리드')로 전환된다.
+  const submitNeoLink = useCallback(
+    async (pick: { targetId: string; targetLabel: string }) => {
+      if (targetType !== "lead" || !entityId) return
+      setNeoLinkBusy(true)
+      setNeoLinkError(null)
+      try {
+        await adminFetchJson("/api/admin/crm/leads/neo-link", {
+          method: "POST",
+          body: JSON.stringify({ leadId: entityId, neoAccountId: pick.targetId, name: pick.targetLabel }),
+        })
+        setSavedMsg("정식 리드로 전환되었습니다")
+        setNeoLinkOpen(false)
+        setNeoPickerLabel("")
+        setNeoPickerId("")
+        await refetch()
+      } catch (err) {
+        // 409(이미 다른 타깃으로 확정)는 API가 원인 메시지를 담아 돌려준다 — 그대로 노출.
+        setNeoLinkError(err instanceof Error ? err.message : "NEO 등록 연결에 실패했습니다.")
+      } finally {
+        setNeoLinkBusy(false)
+      }
+    },
+    [targetType, entityId, refetch]
+  )
 
   const handleAddNote = useCallback(async () => {
     const body = note.trim()
@@ -894,6 +939,24 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                 <Phone className="h-3.5 w-3.5" />콜
               </a>
             ) : null}
+            {/* 발송허브 딥링크 — 수신자 프리필 파라미터. 연락처 없으면 비활성 표기만. */}
+            {contactPhone ? (
+              <Link
+                href={`/admin/campaigns?message_to=${encodeURIComponent(contactPhone)}&message_name=${encodeURIComponent(displayName)}`}
+                title="알림톡/문자 발송허브로 이동"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />알림톡/문자
+              </Link>
+            ) : (
+              <span
+                aria-disabled="true"
+                title="연락처가 없어 발송할 수 없습니다"
+                className="pointer-events-none inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] opacity-40"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />알림톡/문자
+              </span>
+            )}
             <button
               type="button"
               onClick={() =>
@@ -913,7 +976,58 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             >
               <ClipboardList className="h-3.5 w-3.5" />활동 기록
             </button>
+            {/* NEO 등록 상태 — 홈페이지 유입 리드만: 등록 확정이면 pill, 아니면 수동 연결 액션. */}
+            {isSiteLead ? (
+              crmRegistered ? (
+                <span
+                  className={`inline-flex h-8 items-center rounded-lg border px-2.5 text-[12px] font-bold ${LEAD_BADGE_TONE_CLASSES.green}`}
+                >
+                  정식 리드 · NEO 등록
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNeoLinkOpen((value) => !value)
+                    setNeoLinkError(null)
+                  }}
+                  aria-expanded={neoLinkOpen}
+                  className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#fafaf8]"
+                >
+                  NEO 등록됨…
+                </button>
+              )
+            ) : null}
           </div>
+
+          {/* NEO 연결 패널 — NEO 계정만 검색해 선택 즉시 확정 링크를 만든다. */}
+          {isSiteLead && !crmRegistered && neoLinkOpen ? (
+            <div className="mt-2 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3">
+              <p className="mb-1.5 text-[12px] font-semibold text-[#111110]">NEO 고객 계정과 연결</p>
+              <CrmCustomerPicker
+                sources="neo_account"
+                label={neoPickerLabel}
+                linkedId={neoPickerId}
+                onPick={(pick) => {
+                  setNeoPickerLabel(pick.targetLabel)
+                  setNeoPickerId(pick.targetId)
+                  void submitNeoLink(pick)
+                }}
+                onFreeText={(text) => {
+                  setNeoPickerLabel(text)
+                  setNeoPickerId("")
+                }}
+                onClear={() => {
+                  setNeoPickerLabel("")
+                  setNeoPickerId("")
+                }}
+              />
+              {neoLinkBusy ? <p className="mt-1.5 text-[11px] text-[#1a1a1a]/45">연결 중...</p> : null}
+              {neoLinkError ? (
+                <p className="mt-1.5 text-[11px] font-medium text-[#B85C33]">{neoLinkError}</p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {/* 섹션 점프 탭 — sticky 헤더 아래 고정, 스크롤에 따라 활성 탭 표시 */}
