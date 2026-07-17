@@ -415,6 +415,20 @@ function handleRovingTabKeyDown<T>(
   refs.current[nextIndex]?.focus()
 }
 
+// Source 스트립 시간 표기 — KR Team SyncStatusBar.tsx의 relativeTime과 같은 규칙("방금"/"N분 전"/
+// "N시간 전"/"N일 전")으로 통일한 워크벤치 로컬 사본. SyncStatusBar는 내부 미노출 함수라 import할
+// 수 없고, 소유 범위상 SyncStatusBar.tsx는 수정하지 않는다(읽기만) — 그래서 로직만 그대로 복제.
+function relativeTimeFromNow(iso: string | null | undefined, now: number): string {
+  if (!iso) return "미확인"
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return iso
+  const diff = Math.max(0, now - t)
+  if (diff < 60_000) return "방금"
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}분 전`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}시간 전`
+  return `${Math.floor(diff / 86_400_000)}일 전`
+}
+
 function canRunAdminOperationsFromSession(): boolean {
   if (typeof window === "undefined") return false
   const role = sessionStorage.getItem("admin_role")?.trim().toUpperCase()
@@ -3028,6 +3042,12 @@ export default function SalesLedgerWorkbench() {
   // 두 tablist(렌즈 전환, 빠른 작업 보기 전환)의 롤빙 tabIndex 포커스 대상.
   const lensTabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const railTabRefs = useRef<Array<HTMLButtonElement | null>>([])
+  // Source(원천) 스트립 상대 시간 표기용 tick — SyncStatusBar와 동일하게 1분마다 갱신.
+  const [sourceStripNow, setSourceStripNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setSourceStripNow(Date.now()), 60_000)
+    return () => window.clearInterval(id)
+  }, [])
   const [query, setQuery] = useState("")
   const [managerFilter, setManagerFilter] = useState("ALL")
   const [regionFilter, setRegionFilter] = useState("ALL")
@@ -4875,20 +4895,30 @@ export default function SalesLedgerWorkbench() {
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[11px] text-[#615D59]">
             <span className="flex items-center gap-1.5 font-bold text-[#111110]">
               <Database className="h-3.5 w-3.5 text-[#084734]" />
-              Source
+              원천
             </span>
-            <span>sync <span className="font-semibold text-[#111110]">{formatDateTime(summary.data?.lastSync)}</span></span>
-            <span>시트수정 <span className="font-semibold text-[#111110]">{formatDateTime(summary.data?.sheetModifiedAt)}</span></span>
+            <span>
+              sync{" "}
+              <span className="font-semibold text-[#111110]" title={formatDateTime(summary.data?.lastSync)}>
+                {relativeTimeFromNow(summary.data?.lastSync, sourceStripNow)}
+              </span>
+            </span>
+            <span>
+              시트수정{" "}
+              <span className="font-semibold text-[#111110]" title={formatDateTime(summary.data?.sheetModifiedAt)}>
+                {relativeTimeFromNow(summary.data?.sheetModifiedAt, sourceStripNow)}
+              </span>
+            </span>
             <span>입력 큐 <span className="font-semibold text-[#111110]">{queueMode === "server" ? "서버" : "로컬"} · {openDrafts.length}건</span></span>
             <span>내부 원장 <span className="font-semibold text-[#111110]">{ledgerHealth?.ok === false ? "준비 필요" : `${ledgerEntries.length}건`}</span></span>
             <span className="flex items-center gap-1.5">
               REV 원천{" "}
               <span
                 className="font-semibold text-[#111110]"
-                title={dbImportInfo ? `액티브 DB 임포트 run ${dbImportInfo.runId}` : undefined}
+                title={dbImportInfo ? `액티브 DB 임포트 run ${dbImportInfo.runId} · ${formatDateTime(dbImportInfo.capturedAt)}` : undefined}
               >
                 {dbImportInfo
-                  ? `DB run ${dbImportInfo.runId.slice(0, 8)}${dbImportInfo.capturedAt ? ` · ${formatDateTime(dbImportInfo.capturedAt)}` : ""}`
+                  ? `DB run ${dbImportInfo.runId.slice(0, 8)}${dbImportInfo.capturedAt ? ` · ${relativeTimeFromNow(dbImportInfo.capturedAt, sourceStripNow)}` : ""}`
                   : dbNativeActive
                     ? "DB 임포트 · run 미확인"
                     : dbSourceServerState === "inactive"
