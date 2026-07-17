@@ -305,3 +305,407 @@ describe("applyBranchSalesLedgerDraft — 활성 정정 유일성 위반 번역 
     )
   })
 })
+
+// ── 웨이브7 — 초안 API 서버 강건성(I1 new-row 멱등 방어, I4 낙관적 잠금, I5 관련 에러 번역) ──
+// 아래는 branch_sales_ledger_drafts 테이블을 대상으로 하는 별도의 경량 쿼리빌더 목이다(위
+// makeClient는 branch_sales_ledger_entries 전용으로 스코프돼 있어 재사용하지 않는다).
+
+interface DraftFixtureRow {
+  id: string
+  kind: "new-row" | "edit-row"
+  status: "draft" | "checked" | "applied" | "cancelled"
+  source_deal_id: string | null
+  source_sheet_row: number | null
+  source_snapshot: Record<string, unknown> | null
+  customer_name: string
+  manager: string | null
+  team: string | null
+  ledger_month: string
+  amount: number
+  currency: string
+  note: string | null
+  created_by: string | null
+  updated_by: string | null
+  checked_by: string | null
+  checked_at: string | null
+  applied_by: string | null
+  applied_at: string | null
+  metadata: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+function draftRow(overrides: Partial<DraftFixtureRow> = {}): DraftFixtureRow {
+  return {
+    id: "draft-1",
+    kind: "new-row",
+    status: "draft",
+    source_deal_id: null,
+    source_sheet_row: null,
+    source_snapshot: {},
+    customer_name: "테스트 학원",
+    manager: null,
+    team: null,
+    ledger_month: "2026-08",
+    amount: 1_000_000,
+    currency: "CNY",
+    note: null,
+    created_by: "tester",
+    updated_by: "tester",
+    checked_by: null,
+    checked_at: null,
+    applied_by: null,
+    applied_at: null,
+    metadata: {},
+    created_at: "2026-07-18T00:00:00.000Z",
+    updated_at: "2026-07-18T00:00:00.000Z",
+    ...overrides,
+  }
+}
+
+interface DraftsFixture {
+  rows?: DraftFixtureRow[]
+  insert?: (payload: Record<string, unknown>) => { data: unknown; error: { code?: string; message: string } | null }
+  update?: (
+    payload: Record<string, unknown>,
+    filters: { id?: string; updated_at?: string },
+  ) => { data: unknown; error: { code?: string; message: string } | null }
+}
+
+function makeDraftsClient(fixture: DraftsFixture) {
+  const selectCalls: Array<Record<string, unknown>> = []
+  const insertCalls: Array<Record<string, unknown>> = []
+  const updateCalls: Array<{ payload: Record<string, unknown>; filters: Record<string, unknown> }> = []
+
+  const from = vi.fn((table: string) => {
+    if (table !== "branch_sales_ledger_drafts") {
+      throw new Error(`[test] unexpected table: ${table}`)
+    }
+
+    let mode: "select" | "insert" | "update" = "select"
+    let payload: Record<string, unknown> = {}
+    const eqFilters: Record<string, unknown> = {}
+    const inFilters: Record<string, unknown[]> = {}
+    const gteFilters: Record<string, unknown> = {}
+
+    const builder: Record<string, unknown> = {
+      select: () => builder,
+      insert: (p: Record<string, unknown>) => {
+        mode = "insert"
+        payload = p
+        return builder
+      },
+      update: (p: Record<string, unknown>) => {
+        mode = "update"
+        payload = p
+        return builder
+      },
+      eq: (col: string, val: unknown) => {
+        eqFilters[col] = val
+        return builder
+      },
+      neq: () => builder,
+      in: (col: string, vals: unknown[]) => {
+        inFilters[col] = vals
+        return builder
+      },
+      gte: (col: string, val: unknown) => {
+        gteFilters[col] = val
+        return builder
+      },
+      order: () => builder,
+      limit: () => builder,
+      single: async () => {
+        insertCalls.push(payload)
+        return fixture.insert ? fixture.insert(payload) : { data: null, error: { message: "no insert handler" } }
+      },
+      maybeSingle: async () => {
+        if (mode === "insert") {
+          insertCalls.push(payload)
+          return fixture.insert ? fixture.insert(payload) : { data: null, error: { message: "no insert handler" } }
+        }
+        if (mode === "update") {
+          const filters = { id: eqFilters.id as string | undefined, updated_at: eqFilters.updated_at as string | undefined }
+          updateCalls.push({ payload, filters })
+          return fixture.update ? fixture.update(payload, filters) : { data: null, error: null }
+        }
+        selectCalls.push({ eq: { ...eqFilters }, in: { ...inFilters }, gte: { ...gteFilters } })
+        const rows = fixture.rows ?? []
+        const matched = rows.filter((row) => {
+          for (const [col, val] of Object.entries(eqFilters)) {
+            if ((row as unknown as Record<string, unknown>)[col] !== val) return false
+          }
+          for (const [col, vals] of Object.entries(inFilters)) {
+            if (!vals.includes((row as unknown as Record<string, unknown>)[col])) return false
+          }
+          for (const [col, val] of Object.entries(gteFilters)) {
+            const rowVal = (row as unknown as Record<string, unknown>)[col] as string
+            if (!(rowVal >= (val as string))) return false
+          }
+          return true
+        })
+        const sorted = [...matched].sort((a, b) => (b.created_at > a.created_at ? 1 : a.created_at < b.created_at ? -1 : 0))
+        return { data: sorted[0] ?? null, error: null }
+      },
+    }
+    return builder
+  })
+
+  return { from, selectCalls, insertCalls, updateCalls }
+}
+
+async function loadDraftsRepository(fixture: DraftsFixture) {
+  vi.resetModules()
+  const client = makeDraftsClient(fixture)
+
+  vi.doMock("@/lib/supabase/admin", () => ({
+    createSupabaseAdminClient: vi.fn(() => client),
+  }))
+  vi.doMock("next/cache", () => ({
+    revalidateTag: vi.fn(),
+  }))
+
+  const repository = await import("@/lib/repositories/branch-sales-ledger-drafts")
+  return { repository, client }
+}
+
+describe("createBranchSalesLedgerDraft — new-row 이중 제출 방어(I1)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("직전 60초 내 동일 (kind=new-row, customer, month, amount) 열린 초안이 있으면 새로 만들지 않고 그대로 반환한다", async () => {
+    const recent = draftRow({
+      id: "existing-draft",
+      status: "draft",
+      customer_name: "테스트 학원",
+      ledger_month: "2026-08",
+      amount: 1_000_000,
+      created_at: new Date(Date.now() - 5_000).toISOString(),
+    })
+    const { repository, client } = await loadDraftsRepository({ rows: [recent] })
+
+    const result = await repository.createBranchSalesLedgerDraft(
+      { kind: "new-row", customer: "테스트 학원", month: "2026-08", amount: 1_000_000 },
+      "tester",
+    )
+
+    expect(result.dedupedRecent).toBe(true)
+    expect(result.draft.id).toBe("existing-draft")
+    expect(client.insertCalls).toEqual([]) // INSERT를 아예 시도하지 않았다
+  })
+
+  it("일치하는 열린 초안이 없으면 정상적으로 INSERT하고 dedupedRecent:false를 반환한다", async () => {
+    const inserted = draftRow({ id: "new-draft", customer_name: "새 학원", ledger_month: "2026-09", amount: 500_000 })
+    const { repository, client } = await loadDraftsRepository({
+      rows: [],
+      insert: () => ({ data: inserted, error: null }),
+    })
+
+    const result = await repository.createBranchSalesLedgerDraft(
+      { kind: "new-row", customer: "새 학원", month: "2026-09", amount: 500_000 },
+      "tester",
+    )
+
+    expect(result.dedupedRecent).toBe(false)
+    expect(result.draft.id).toBe("new-draft")
+    expect(client.insertCalls).toHaveLength(1)
+  })
+
+  it("checked 상태의 열린 초안도 매칭 대상이다(draft만이 아니라 draft|checked 전체)", async () => {
+    const recentChecked = draftRow({
+      id: "checked-draft",
+      status: "checked",
+      customer_name: "테스트 학원",
+      ledger_month: "2026-08",
+      amount: 1_000_000,
+      created_at: new Date(Date.now() - 1_000).toISOString(),
+    })
+    const { repository, client } = await loadDraftsRepository({ rows: [recentChecked] })
+
+    const result = await repository.createBranchSalesLedgerDraft(
+      { kind: "new-row", customer: "테스트 학원", month: "2026-08", amount: 1_000_000 },
+      "tester",
+    )
+
+    expect(result.dedupedRecent).toBe(true)
+    expect(result.draft.id).toBe("checked-draft")
+    expect(client.insertCalls).toEqual([])
+  })
+
+  it("60초보다 오래된 동일 입력은 매칭하지 않고 새로 INSERT한다(시간창 경계)", async () => {
+    const stale = draftRow({
+      id: "stale-draft",
+      customer_name: "테스트 학원",
+      ledger_month: "2026-08",
+      amount: 1_000_000,
+      created_at: new Date(Date.now() - 120_000).toISOString(),
+    })
+    const inserted = draftRow({ id: "new-draft-2" })
+    const { repository, client } = await loadDraftsRepository({
+      rows: [stale],
+      insert: () => ({ data: inserted, error: null }),
+    })
+
+    const result = await repository.createBranchSalesLedgerDraft(
+      { kind: "new-row", customer: "테스트 학원", month: "2026-08", amount: 1_000_000 },
+      "tester",
+    )
+
+    expect(result.dedupedRecent).toBe(false)
+    expect(client.insertCalls).toHaveLength(1)
+  })
+
+  it("kind=edit-row는 중복 확인 조회 없이 바로 INSERT한다(정정은 다른 방어선 — 적용 시 유일성 인덱스)", async () => {
+    const inserted = draftRow({ id: "edit-draft", kind: "edit-row" })
+    const { repository, client } = await loadDraftsRepository({
+      rows: [draftRow({ kind: "new-row" })], // 있어도 edit-row 경로는 조회 자체를 안 한다
+      insert: () => ({ data: inserted, error: null }),
+    })
+
+    const result = await repository.createBranchSalesLedgerDraft(
+      { kind: "edit-row", customer: "테스트 학원", month: "2026-08", amount: 1_000_000 },
+      "tester",
+    )
+
+    expect(result.dedupedRecent).toBe(false)
+    expect(client.selectCalls).toEqual([]) // 조회 자체가 없었다
+    expect(client.insertCalls).toHaveLength(1)
+  })
+})
+
+describe("updateBranchSalesLedgerDraft — 낙관적 잠금(I4)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("expectedUpdatedAt을 생략하면 기존과 동일하게 무조건 반영한다(하위호환)", async () => {
+    const updated = draftRow({ id: "draft-1", note: "수정됨" })
+    const { repository } = await loadDraftsRepository({
+      update: (_payload, filters) => {
+        expect(filters.id).toBe("draft-1")
+        expect(filters.updated_at).toBeUndefined()
+        return { data: updated, error: null }
+      },
+    })
+
+    const result = await repository.updateBranchSalesLedgerDraft("draft-1", { note: "수정됨" }, "tester")
+
+    expect(result.outcome).toBe("updated")
+    if (result.outcome === "updated") expect(result.draft.note).toBe("수정됨")
+  })
+
+  it("expectedUpdatedAt이 DB의 실제 updated_at과 일치하면 반영하고 updated를 반환한다", async () => {
+    const updated = draftRow({ id: "draft-1", note: "반영됨" })
+    const { repository } = await loadDraftsRepository({
+      update: (_payload, filters) => {
+        expect(filters.updated_at).toBe("2026-07-18T00:00:00.000Z")
+        return { data: updated, error: null }
+      },
+    })
+
+    const result = await repository.updateBranchSalesLedgerDraft(
+      "draft-1",
+      { note: "반영됨" },
+      "tester",
+      { expectedUpdatedAt: "2026-07-18T00:00:00.000Z" },
+    )
+
+    expect(result.outcome).toBe("updated")
+  })
+
+  it("expectedUpdatedAt이 어긋나면(다른 곳에서 먼저 수정) conflict + 현재 행을 반환한다", async () => {
+    const current = draftRow({ id: "draft-1", note: "다른 사람이 이미 바꿈", updated_at: "2026-07-18T01:00:00.000Z" })
+    const { repository, client } = await loadDraftsRepository({
+      rows: [current],
+      update: () => ({ data: null, error: null }), // CAS 필터에 안 걸려 0행
+    })
+
+    const result = await repository.updateBranchSalesLedgerDraft(
+      "draft-1",
+      { note: "내가 바꾸려던 값" },
+      "tester",
+      { expectedUpdatedAt: "2026-07-18T00:00:00.000Z" }, // 이미 stale
+    )
+
+    expect(result.outcome).toBe("conflict")
+    if (result.outcome === "conflict") {
+      expect(result.draft.id).toBe("draft-1")
+      expect(result.draft.note).toBe("다른 사람이 이미 바꿈")
+    }
+    // 재조회는 select 경로(.eq("id",...).maybeSingle())를 한 번 더 태운다.
+    expect(client.selectCalls.some((c) => (c.eq as Record<string, unknown>)?.id === "draft-1")).toBe(true)
+  })
+
+  it("id 자체가 없으면 expectedUpdatedAt이 있어도 conflict가 아니라 not-found다", async () => {
+    const { repository } = await loadDraftsRepository({
+      rows: [],
+      update: () => ({ data: null, error: null }),
+    })
+
+    const result = await repository.updateBranchSalesLedgerDraft(
+      "missing-draft",
+      { note: "x" },
+      "tester",
+      { expectedUpdatedAt: "2026-07-18T00:00:00.000Z" },
+    )
+
+    expect(result.outcome).toBe("not-found")
+  })
+
+  it("applied로 잠긴 초안은 expectedUpdatedAt이 있어도 conflict가 아니라 not-found다(기존 404 계약 보존)", async () => {
+    const appliedRow = draftRow({ id: "draft-1", status: "applied" })
+    const { repository } = await loadDraftsRepository({
+      rows: [appliedRow],
+      update: () => ({ data: null, error: null }), // neq("status","applied")에 안 걸려 0행
+    })
+
+    const result = await repository.updateBranchSalesLedgerDraft(
+      "draft-1",
+      { note: "x" },
+      "tester",
+      { expectedUpdatedAt: "2026-07-18T00:00:00.000Z" },
+    )
+
+    expect(result.outcome).toBe("not-found")
+  })
+
+  it("checked/applied 전이 시 amount>0 CHECK(23514) 위반을 400 대상 친화적 메시지로 번역한다", async () => {
+    const { repository } = await loadDraftsRepository({
+      update: () => ({
+        data: null,
+        error: {
+          code: "23514",
+          message:
+            'new row for relation "branch_sales_ledger_drafts" violates check constraint "branch_sales_ledger_drafts_amount_positive_check"',
+        },
+      }),
+    })
+
+    await expect(
+      repository.updateBranchSalesLedgerDraft("draft-1", { status: "checked" }, "tester"),
+    ).rejects.toThrow("금액이 0 이하인 초안은 체크 완료할 수 없습니다. 금액을 입력한 뒤 다시 시도하세요.")
+
+    try {
+      await repository.updateBranchSalesLedgerDraft("draft-1", { status: "checked" }, "tester")
+      expect.unreachable()
+    } catch (error) {
+      expect(repository.isBranchSalesLedgerNonPositiveAmountError(error)).toBe(true)
+    }
+  })
+
+  it("무관한 23514(다른 제약)는 일반 실패 메시지로 던진다 — 오탐 방지", async () => {
+    const { repository } = await loadDraftsRepository({
+      update: () => ({
+        data: null,
+        error: { code: "23514", message: 'violates check constraint "some_other_check"' },
+      }),
+    })
+
+    await expect(
+      repository.updateBranchSalesLedgerDraft("draft-1", { status: "checked" }, "tester"),
+    ).rejects.toThrow(/수정 실패/)
+  })
+})
