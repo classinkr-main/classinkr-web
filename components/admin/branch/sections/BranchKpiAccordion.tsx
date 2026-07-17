@@ -2,7 +2,7 @@
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronRight, Search } from "lucide-react"
-import type { BranchKpiResponse, BranchKpiTeamRow, BranchKpiMemberRow } from "../types"
+import type { BranchKpiResponse, BranchKpiTeamRow, BranchKpiMemberRow, Team, Period } from "../types"
 import { cny, cnyExact } from "@/lib/branch/money-format"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { matchesTokens, tokenize } from "../search-tokens"
@@ -55,15 +55,20 @@ function pickKpiColor(pct: number) {
   return COLORS.amberStrong
 }
 
-function MemberRow({ member, viewMode }: { member: BranchKpiMemberRow; viewMode: "list" | "matrix" }) {
+function MemberRow({ member, viewMode, ledgerHref }: {
+  member: BranchKpiMemberRow
+  viewMode: "list" | "matrix"
+  /** 품질 웨이브 5 — 항목 4. PipelineTable(sections/PipelineTable.tsx)의 ledgerHref와
+   *  동일 컨텍스트 보존 규약(lens=rev&team=&period=&month=&mgr=) — 이전엔 mgr만 실려
+   *  현재 보고 있는 팀/기간/월 컨텍스트가 장부로 넘어가면서 끊겼다. */
+  ledgerHref: (extra?: Record<string, string>) => string
+}) {
   const teamHasKpi = member.team ? KPI_ACTIVE_TEAMS.has(member.team) : false
   const memberPct = member.goal ? Math.round((member.confirmed / member.goal) * 100) : 0
   const kpiKeys = teamHasKpi ? Object.keys(member.kpi) : []
-  // 매출 장부 크로스링크 — PipelineTable(sections/PipelineTable.tsx)의 ledgerHref와
-  // 동일 파라미터 규약(lens=rev&mgr=). 장부의 담당 필터는 단일 select라 그대로 전달.
-  const ledgerHref = `/admin/branch/ledger?lens=rev&mgr=${encodeURIComponent(member.member)}`
+  const href = ledgerHref({ mgr: member.member })
   return (
-    <Link href={ledgerHref}
+    <Link href={href}
       title={`매출 장부에서 ${member.member} 보기`}
       className="-mx-1.5 grid items-center gap-4 rounded-lg border-t border-[rgba(0,0,0,0.05)] px-1.5 py-2.5 transition hover:bg-white"
       style={{ gridTemplateColumns: "minmax(160px,180px) 1fr 1.3fr" }}>
@@ -143,7 +148,12 @@ function MemberRow({ member, viewMode }: { member: BranchKpiMemberRow; viewMode:
   )
 }
 
-function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; members: BranchKpiMemberRow[]; defaultOpen?: boolean }) {
+function TeamRow({ team, members, defaultOpen, ledgerHref }: {
+  team: BranchKpiTeamRow
+  members: BranchKpiMemberRow[]
+  defaultOpen?: boolean
+  ledgerHref: (extra?: Record<string, string>) => string
+}) {
   const [open, setOpen] = useState(!!defaultOpen)
   const [viewMode, setViewMode] = useState<"list" | "matrix">("list")
   // 달성률(확정/목표) 정렬 토글 — 기본은 원본 순서(default), 클릭할 때마다
@@ -291,7 +301,7 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
                   </div>
                 )}
               </div>
-              {sortedMembers.map((m) => <MemberRow key={m.member} member={m} viewMode={viewMode} />)}
+              {sortedMembers.map((m) => <MemberRow key={m.member} member={m} viewMode={viewMode} ledgerHref={ledgerHref} />)}
             </div>
           </div>
         </div>
@@ -301,11 +311,16 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
 }
 
 export default function BranchKpiAccordion({
-  data, loading, error,
+  data, loading, error, team, period, selectedMonth,
 }: {
   data: BranchKpiResponse | null
   loading: boolean
   error: string | null
+  /** 품질 웨이브 5 — 항목 4. ledgerHref에 현재 보고 있는 컨텍스트를 동봉하기 위한
+   *  값 — PipelineTable(sections/PipelineTable.tsx)이 받는 것과 동일한 세 값. */
+  team: Team
+  period: Period
+  selectedMonth: string
 }) {
   const [query, setQuery] = useState("")
 
@@ -316,6 +331,22 @@ export default function BranchKpiAccordion({
       members: data.members.filter((m) => m.team === t.team),
     }))
   }, [data])
+
+  // 매출 장부 크로스링크 — PipelineTable.ledgerHref와 동일 컨텍스트 보존 규약
+  // (lens=rev&team=&period=&month=&mgr=). 이 아코디언엔 고객 검색/지역 필터가
+  // 없어 그 파라미터만 생략한다.
+  const ledgerHref = useMemo(() => {
+    const base = new URLSearchParams()
+    base.set("lens", "rev")
+    if (team !== "ALL") base.set("team", team)
+    if (period !== "Q") base.set("period", period)
+    if (period === "M") base.set("month", selectedMonth)
+    return (extra?: Record<string, string>) => {
+      const params = new URLSearchParams(base)
+      if (extra) for (const [k, v] of Object.entries(extra)) params.set(k, v)
+      return `/admin/branch/ledger?${params.toString()}`
+    }
+  }, [team, period, selectedMonth])
 
   // 담당자 검색 — 팀 행 자체는 유지하되 팀 내 팀원만 이름 부분일치로 좁힌다.
   // 매치가 하나도 없는 팀은 통째로 숨긴다(빈 "팀 단위 집계" placeholder 오표시 방지).
@@ -387,6 +418,7 @@ export default function BranchKpiAccordion({
               team={t.team}
               members={t.members}
               defaultOpen={isSearching}
+              ledgerHref={ledgerHref}
             />
           ))
         )}
