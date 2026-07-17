@@ -435,6 +435,31 @@ export async function listCrmCustomerEvents(
   }
 }
 
+// 팀 응답으로 치는 기록 종류 allowlist — 사람이 남긴 기록만.
+const RESPONSE_SOURCE_TYPES = ["manual_note", "call", "sms", "meeting_minutes", "recording", "lead_contact_log"] as const
+
+/** 리드별 팀 최초 기록 시각. 자동 유입(site_inflow)·동기화 소스는 응답으로 치지 않는다. */
+export async function getLeadFirstResponseMap(): Promise<Map<string, string>> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("crm_customer_events")
+    .select("target_id, occurred_at")
+    .eq("target_type", "lead")
+    .not("target_id", "is", null)
+    .in("source_type", [...RESPONSE_SOURCE_TYPES])
+    .order("occurred_at", { ascending: true })
+    .limit(5000)
+
+  if (error) throw new Error(`리드 첫 응답 조회 실패: ${error.message}`)
+
+  const map = new Map<string, string>()
+  for (const row of data ?? []) {
+    const id = String(row.target_id)
+    if (!map.has(id)) map.set(id, String(row.occurred_at))
+  }
+  return map
+}
+
 export async function createCrmCustomerEvent(input: CrmCustomerEventCreateInput) {
   const supabase = createSupabaseAdminClient()
   const insert = buildCrmCustomerEventInsert(input)

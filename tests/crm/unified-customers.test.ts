@@ -103,9 +103,13 @@ async function loadRepository(options?: {
   accounts?: ReturnType<typeof neoCustomer>[]
   portalCustomers?: ReturnType<typeof portalCustomer>[]
   convertedLinks?: Record<string, string>
+  neoLinkedLeadIds?: string[]
+  firstResponses?: Record<string, string>
   staleExternalCrm?: boolean
   portalCustomersFail?: boolean
   convertedLinksFail?: boolean
+  neoLinksFail?: boolean
+  firstResponsesFail?: boolean
 }) {
   vi.resetModules()
 
@@ -121,6 +125,14 @@ async function loadRepository(options?: {
     listConfirmedLeadCustomerLinks: options?.convertedLinksFail
       ? vi.fn().mockRejectedValue(new Error("source links unavailable"))
       : vi.fn().mockResolvedValue(new Map(Object.entries(options?.convertedLinks ?? {}))),
+    listConfirmedLeadNeoLinkLeadIds: options?.neoLinksFail
+      ? vi.fn().mockRejectedValue(new Error("neo links unavailable"))
+      : vi.fn().mockResolvedValue(new Set(options?.neoLinkedLeadIds ?? [])),
+  }))
+  vi.doMock("@/lib/repositories/crm-events", () => ({
+    getLeadFirstResponseMap: options?.firstResponsesFail
+      ? vi.fn().mockRejectedValue(new Error("first responses unavailable"))
+      : vi.fn().mockResolvedValue(new Map(Object.entries(options?.firstResponses ?? {}))),
   }))
   vi.doMock("@/lib/admin-crm-customers-neo", () => ({
     getNeoCrmCustomers: vi.fn().mockResolvedValue({
@@ -356,5 +368,54 @@ describe("getCrmUnifiedCustomers", () => {
       new Set(["lead:converted-lead", "customer:cust-1"])
     )
     expect(result.sources.warnings.join(" ")).toContain("전환 링크")
+  })
+
+  it("wires lead-derived fields (origin·NEO등록·SLA·첫응답) and the provisional queue views", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [
+        lead({ id: "site-unconfirmed", source: "demo_modal", confirmed_at: null }),
+        lead({ id: "site-confirmed", source: "contact_page" }),
+        lead({ id: "team-manual", source: "admin_manual" }),
+      ],
+      neoLinkedLeadIds: ["site-confirmed"],
+      firstResponses: { "site-confirmed": "2026-06-24T00:00:00.000Z" },
+    })
+
+    // 기본(all) 뷰 — 미확인 리드는 여전히 숨고, 파생 필드는 채워진다.
+    const all = await getCrmUnifiedCustomers({ now: NOW })
+    expect(all.rows.map((row) => row.key)).not.toContain("lead:site-unconfirmed")
+    expect(all.rows.find((row) => row.key === "lead:site-confirmed")).toMatchObject({
+      origin: "site",
+      crmRegistered: true,
+      provisional: false,
+      slaTarget: true,
+      firstResponseAt: "2026-06-24T00:00:00.000Z",
+    })
+    expect(all.rows.find((row) => row.key === "lead:team-manual")).toMatchObject({
+      origin: "team",
+      slaTarget: false,
+    })
+    expect(all.summary.viewCounts.site_leads).toBe(1)
+    expect(all.summary.viewCounts.unanswered).toBe(1)
+
+    // 처리 큐 뷰 — 미확인 site 리드만 노출(NEO 등록·응답 완료 리드는 제외).
+    const siteLeads = await getCrmUnifiedCustomers({ view: "site_leads", now: NOW })
+    expect(siteLeads.rows.map((row) => row.key)).toEqual(["lead:site-unconfirmed"])
+    const unanswered = await getCrmUnifiedCustomers({ view: "unanswered", now: NOW })
+    expect(unanswered.rows.map((row) => row.key)).toEqual(["lead:site-unconfirmed"])
+  })
+
+  it("degrades to empty derived inputs when neo-link/first-response lookups fail", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [lead({ id: "1", source: "demo_modal" })],
+      neoLinksFail: true,
+      firstResponsesFail: true,
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    expect(result.rows.map((row) => row.key)).toEqual(["lead:1"])
+    expect(result.rows[0]).toMatchObject({ crmRegistered: false, firstResponseAt: null })
+    expect(result.sources.warnings.join(" ")).toContain("등록 대기")
+    expect(result.sources.warnings.join(" ")).toContain("미응답")
   })
 })

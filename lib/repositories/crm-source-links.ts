@@ -1559,6 +1559,21 @@ export async function listConfirmedLeadCustomerLinks(): Promise<Map<string, stri
   return map
 }
 
+/** NEO 등록 확정된 리드 id 집합 — source_object='leads' → target_type='external_account' confirmed. */
+export async function listConfirmedLeadNeoLinkLeadIds(): Promise<Set<string>> {
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("crm_source_links")
+    .select("source_record_key")
+    .eq("source_object", "leads")
+    .eq("target_type", "external_account")
+    .eq("status", "confirmed")
+    .limit(5000)
+
+  if (error) throw new Error(`crm_source_links lead→neo 조회 실패: ${error.message}`)
+  return new Set((data ?? []).map((row) => String(row.source_record_key)))
+}
+
 export async function updateCrmSourceLinkStatus(
   id: string,
   action: CrmSourceLinkAction,
