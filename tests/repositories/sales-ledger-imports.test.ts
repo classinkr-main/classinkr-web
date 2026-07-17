@@ -6,15 +6,20 @@
 // (2) 서로 다른 활성 런(연도별 active_sources 전환)이 서로의 캐시를 오염시키지 않는지,
 // (3) REV와 같은 태그(SALES_LEDGER_IMPORTS_CACHE_TAG)로 걸려 있는지를 검증한다 — ③이 깨지면
 // 이 캐시만 무효화 경로 없이 남아 "방금 재캡처한 장부가 300초간 안 보이는" 회귀가 생긴다.
+//
+// 품질 웨이브3: 액티브 포인터 조회가 tabKey별 개별 쿼리에서 fiscal_year 단위 배치 쿼리로
+// 바뀌어(lookupActiveImportRunInfoForYear) sales_ledger_active_sources 픽스처도 tab_key별
+// 다건 응답(더는 .eq("tab_key", ...) 필터도, .maybeSingle() 단건 종결도 없음)을 흉내내야 한다.
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 interface ActiveSourceEntry {
+  tabKey: "dsh" | "rev" | "kpi"
   runId: string
   startedAt: string
 }
 
 interface SupabaseFixture {
-  activeSourceByFiscalYear: Record<number, ActiveSourceEntry | null>
+  activeSourcesByFiscalYear: Record<number, ActiveSourceEntry[] | undefined>
   dshRowsByRunId?: Record<string, unknown[]>
   kpiRowsByRunId?: Record<string, unknown[]>
 }
@@ -22,32 +27,32 @@ interface SupabaseFixture {
 function supabaseClient(fixture: SupabaseFixture) {
   const dshQueryCount: Record<string, number> = {}
   const kpiQueryCount: Record<string, number> = {}
+  let activeSourceQueryCount = 0
 
-  // Supabase-js PostgrestFilterBuilder처럼 select/eq/order/range/maybeSingle이 모두 같은
-  // 빌더를 반환하는 체이너블 객체. range()/maybeSingle()에서 프라미스로 굳는다.
+  // Supabase-js PostgrestFilterBuilder처럼 select/eq가 체이너블 빌더를 반환하고, 그 빌더
+  // 자체가 thenable(진짜 supabase-js 빌더처럼 명시적 종결 메서드 없이 await 가능)이다.
   const from = vi.fn((table: string) => {
     if (table === "sales_ledger_active_sources") {
       let fiscalYear: number | undefined
       const builder: {
         select: () => typeof builder
         eq: (column: string, value: unknown) => typeof builder
-        maybeSingle: () => Promise<{ data: unknown; error: null }>
+        then: (resolve: (v: { data: unknown; error: null }) => void) => void
       } = {
         select: () => builder,
         eq: (column, value) => {
           if (column === "fiscal_year") fiscalYear = value as number
           return builder
         },
-        maybeSingle: () => {
-          const entry = fiscalYear != null ? fixture.activeSourceByFiscalYear[fiscalYear] : undefined
-          if (!entry) return Promise.resolve({ data: null, error: null })
-          return Promise.resolve({
-            data: {
-              import_run_id: entry.runId,
-              sales_ledger_import_runs: { started_at: entry.startedAt },
-            },
-            error: null,
-          })
+        then: (resolve) => {
+          activeSourceQueryCount += 1
+          const entries = (fiscalYear != null ? fixture.activeSourcesByFiscalYear[fiscalYear] : undefined) ?? []
+          const data = entries.map((entry) => ({
+            tab_key: entry.tabKey,
+            import_run_id: entry.runId,
+            sales_ledger_import_runs: { started_at: entry.startedAt },
+          }))
+          resolve({ data, error: null })
         },
       }
       return builder
@@ -82,7 +87,14 @@ function supabaseClient(fixture: SupabaseFixture) {
     throw new Error(`[test] unexpected table: ${table}`)
   })
 
-  return { from, dshQueryCount, kpiQueryCount }
+  return {
+    from,
+    dshQueryCount,
+    kpiQueryCount,
+    get activeSourceQueryCount() {
+      return activeSourceQueryCount
+    },
+  }
 }
 
 const DSH_TEAM_ROW = {
@@ -159,7 +171,7 @@ describe("DSH/KPI active-import content caching", () => {
 
   it("tags the DSH and KPI content caches with SALES_LEDGER_IMPORTS_CACHE_TAG (same tag REV's activation path already revalidates)", async () => {
     const { repository } = await loadRepository({
-      activeSourceByFiscalYear: { 2026: { runId: "run-1", startedAt: "2026-07-01T00:00:00Z" } },
+      activeSourcesByFiscalYear: { 2026: [{ tabKey: "dsh", runId: "run-1", startedAt: "2026-07-01T00:00:00Z" }, { tabKey: "kpi", runId: "run-1", startedAt: "2026-07-01T00:00:00Z" }] },
       dshRowsByRunId: { "run-1": [DSH_TEAM_ROW] },
       kpiRowsByRunId: { "run-1": [KPI_ROW] },
     })
@@ -173,7 +185,7 @@ describe("DSH/KPI active-import content caching", () => {
 
   it("reuses cached DSH content for the same active import run instead of re-querying Supabase", async () => {
     const { repository, client } = await loadRepository({
-      activeSourceByFiscalYear: { 2026: { runId: "run-1", startedAt: "2026-07-01T00:00:00Z" } },
+      activeSourcesByFiscalYear: { 2026: [{ tabKey: "dsh", runId: "run-1", startedAt: "2026-07-01T00:00:00Z" }] },
       dshRowsByRunId: { "run-1": [DSH_TEAM_ROW] },
     })
 
@@ -185,7 +197,7 @@ describe("DSH/KPI active-import content caching", () => {
 
   it("reuses cached KPI content for the same active import run instead of re-querying Supabase", async () => {
     const { repository, client } = await loadRepository({
-      activeSourceByFiscalYear: { 2026: { runId: "run-1", startedAt: "2026-07-01T00:00:00Z" } },
+      activeSourcesByFiscalYear: { 2026: [{ tabKey: "kpi", runId: "run-1", startedAt: "2026-07-01T00:00:00Z" }] },
       kpiRowsByRunId: { "run-1": [KPI_ROW] },
     })
 
@@ -197,9 +209,9 @@ describe("DSH/KPI active-import content caching", () => {
 
   it("does not leak DSH content across two different active import runs (active-source switch still refreshes)", async () => {
     const { repository, client } = await loadRepository({
-      activeSourceByFiscalYear: {
-        2025: { runId: "run-old", startedAt: "2025-07-01T00:00:00Z" },
-        2026: { runId: "run-new", startedAt: "2026-07-01T00:00:00Z" },
+      activeSourcesByFiscalYear: {
+        2025: [{ tabKey: "dsh", runId: "run-old", startedAt: "2025-07-01T00:00:00Z" }],
+        2026: [{ tabKey: "dsh", runId: "run-new", startedAt: "2026-07-01T00:00:00Z" }],
       },
       dshRowsByRunId: {
         "run-old": [{ ...DSH_TEAM_ROW, annual: 999 }],
@@ -218,7 +230,7 @@ describe("DSH/KPI active-import content caching", () => {
 
   it("returns null without querying content tables when there is no active import run", async () => {
     const { repository, client } = await loadRepository({
-      activeSourceByFiscalYear: { 2026: null },
+      activeSourcesByFiscalYear: { 2026: [] },
     })
 
     const dsh = await repository.readDshFromActiveImport(2026)
@@ -228,5 +240,25 @@ describe("DSH/KPI active-import content caching", () => {
     expect(kpi).toBeNull()
     expect(client.dshQueryCount).toEqual({})
     expect(client.kpiQueryCount).toEqual({})
+  })
+
+  it("batches dsh/rev/kpi active-source lookups for the same fiscal year into a single Supabase query", async () => {
+    const { repository, client } = await loadRepository({
+      activeSourcesByFiscalYear: {
+        2026: [
+          { tabKey: "dsh", runId: "run-1", startedAt: "2026-07-01T00:00:00Z" },
+          { tabKey: "kpi", runId: "run-1", startedAt: "2026-07-01T00:00:00Z" },
+        ],
+      },
+      dshRowsByRunId: { "run-1": [DSH_TEAM_ROW] },
+      kpiRowsByRunId: { "run-1": [KPI_ROW] },
+    })
+
+    // 순차 호출(같은 unstable_cache 스텁 스토어를 공유)이므로 두 번째 호출은 배치 쿼리
+    // 캐시를 재사용해야 한다 — tabKey별로 따로 쿼리하던 이전 동작이면 2회가 됐을 것.
+    await repository.readDshFromActiveImport(2026)
+    await repository.readKpiBlocksFromActiveImport(2026)
+
+    expect(client.activeSourceQueryCount).toBe(1)
   })
 })
