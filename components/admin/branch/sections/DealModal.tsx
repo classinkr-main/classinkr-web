@@ -4,6 +4,7 @@ import { X } from "lucide-react"
 import { cny, cnyExact } from "@/lib/branch/money-format"
 import { ledgerMonthConfirmed } from "@/lib/branch/computations/revenue-core"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+import { teamColorOf } from "@/lib/branch/team-colors"
 import MoneyValue from "../MoneyValue"
 
 export interface DealModalDeal {
@@ -48,10 +49,6 @@ function summarizeProductMix(productVersion: string | null | undefined) {
 }
 
 
-const TEAM_COLOR: Record<string, string> = {
-  BD: "#084734", MKT: "#7B8B36", CSM: "#A8741A",
-}
-
 export default function DealModal({ deal, onClose }: { deal: DealModalDeal | null; onClose: () => void }) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
   const dealId = deal?.id ?? null
@@ -75,7 +72,7 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
 
   if (!deal) return null
 
-  const teamColor = (deal.team && TEAM_COLOR[deal.team]) || "#615D59"
+  const teamColor = teamColorOf(deal.team)
   const isConfirmed = (deal.status ?? "").toLowerCase().includes("confirm") || deal.probability === 100
 
   const monthlyEntries = deal.monthlyPayments
@@ -176,7 +173,10 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
           {deal.probability != null && (
             <div>
               <p className="text-[10.5px] font-semibold text-[#615D59]">확률</p>
-              <p className="mt-1 text-[13.5px] font-bold" style={{ color: deal.probability >= 70 ? "#084734" : deal.probability >= 40 ? "#7B8B36" : "#A8741A" }}>
+              {/* Status 3단(Success/Warning/Danger) 재사용 — 이전엔 중간 구간에
+                  팀 아이덴티티 올리브(#7B8B36)를 확률 신호로 오용해 저구간(<40%)과
+                  중간 구간이 같은 앰버로 보이는 문제도 있었다(2026-07-17 정리). */}
+              <p className="mt-1 text-[13.5px] font-bold" style={{ color: deal.probability >= 70 ? "#084734" : deal.probability >= 40 ? "#A8741A" : "#B43E3E" }}>
                 {deal.probability}%
               </p>
             </div>

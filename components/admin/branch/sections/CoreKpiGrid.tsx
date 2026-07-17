@@ -9,11 +9,13 @@ function metricLabel(metric: string | null | undefined): string {
   return metric.toUpperCase()
 }
 
-type Tone = "green" | "olive" | "amber" | "red" | "neutral"
+type Tone = "green" | "amber" | "red" | "neutral"
 
+// 팀 아이덴티티 올리브(#7B8B36)는 여기서 쓰지 않는다 — "가까운 딜" 카드는 팀도
+// 상태 등급도 아닌 순수 장식 구분이라 웜 뉴트럴로 정리했다(2026-07-17,
+// lib/branch/team-colors.ts SSOT 도입과 함께 오용 제거).
 const TONE: Record<Tone, { bg: string; fg: string }> = {
   green:   { bg: "#ECFDF5", fg: "#084734" },
-  olive:   { bg: "#F1F4DE", fg: "#7B8B36" },
   amber:   { bg: "#FBF1E0", fg: "#A8741A" },
   red:     { bg: "#FCE9E9", fg: "#B43E3E" },
   neutral: { bg: "#F6F5F4", fg: "#111110" },
@@ -61,7 +63,7 @@ export default function CoreKpiGrid({ data, loading, error }: { data: BranchSumm
         <StatCard tone="amber" icon={<Sparkles className="h-[18px] w-[18px]" />}
           label="활동 KPI 병목" value={metricLabel(data.bottleneck.metric)}
           sub={`${data.bottleneck.pct.toFixed(0)}% · ${data.bottleneck.worst_member ?? "-"}`} />
-        <StatCard tone="olive" icon={<Users className="h-[18px] w-[18px]" />}
+        <StatCard tone="neutral" icon={<Users className="h-[18px] w-[18px]" />}
           label="가까운 딜" value={`${data.closing.count}건`}
           sub={<>목표 합 <MoneyValue value={data.closing.total_target} /></>} />
         <StatCard tone="red" icon={<Calendar className="h-[18px] w-[18px]" />}
