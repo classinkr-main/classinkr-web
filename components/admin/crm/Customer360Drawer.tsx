@@ -36,6 +36,7 @@ import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/
 import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import CrmCustomerFlags from "./CrmCustomerFlags"
+import ActivityQuickForm from "./rail/ActivityQuickForm"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
 import { computeCustomerHealth, HEALTH_BAND_STYLE } from "@/lib/crm/customer-health"
 import { CS_MOTIONS, type CsMotion } from "@/lib/crm/cs-motions"
@@ -290,6 +291,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [activeSection, setActiveSection] = useState<string>("c360-summary")
+  // 고정 컴포저 작성 중 여부 — 닫기 가드용(ActivityQuickForm onDirtyChange가 플립 시점에만 통지).
+  const [composerDirty, setComposerDirty] = useState(false)
   const router = useRouter()
   const bodyRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
@@ -311,6 +314,13 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     root.scrollTo({ top: Math.max(0, top), behavior: "smooth" })
   }, [])
 
+  // 닫기 게이트 — 컴포저에 작성 중인 기록이 있으면 확인 후 닫는다.
+  // 배경 클릭·ESC·스와이프·닫기 버튼 등 모든 닫기 경로가 이 게이트를 지난다.
+  const requestClose = useCallback(() => {
+    if (composerDirty && !window.confirm("작성 중인 기록이 있습니다. 닫을까요?")) return
+    onClose()
+  }, [composerDirty, onClose])
+
   // 모바일 스와이프-닫기 — 오른쪽으로 충분히 밀면 닫는다(수평 제스처만).
   const onTouchStart = useCallback((event: React.TouchEvent) => {
     const touch = event.touches[0]
@@ -325,9 +335,9 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
       if (!touch) return
       const dx = touch.clientX - start.x
       const dy = touch.clientY - start.y
-      if (dx > 80 && Math.abs(dx) > Math.abs(dy) * 1.5) onClose()
+      if (dx > 80 && Math.abs(dx) > Math.abs(dy) * 1.5) requestClose()
     },
-    [onClose]
+    [requestClose]
   )
 
   const load = useCallback(
@@ -373,6 +383,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     setNoteKind("manual_note")
     setDealFormOpen(false)
     setTaskFormOpen(false)
+    // 고객 전환 시 컴포저는 새 대상으로 리마운트되므로 dirty 가드도 초기화.
+    setComposerDirty(false)
     // 고객 전환 시 이전 고객의 스크롤 위치·활성 섹션 탭이 남지 않게 최상단으로 리셋.
     setActiveSection("c360-summary")
     bodyRef.current?.scrollTo({ top: 0 })
@@ -383,11 +395,11 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   useEffect(() => {
     if (!customerKey) return
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose()
+      if (event.key === "Escape") requestClose()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [customerKey, onClose])
+  }, [customerKey, requestClose])
 
   // 스크롤 스파이 — 본문 스크롤 위치로 현재 섹션 탭을 활성화한다(DOM 순서로 '마지막 통과' 판정).
   useEffect(() => {
@@ -803,7 +815,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/20" onClick={onClose} aria-hidden />
+      <div className="absolute inset-0 bg-black/20" onClick={requestClose} aria-hidden />
       <div
         className="relative z-10 flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl"
         onTouchStart={onTouchStart}
@@ -812,7 +824,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
         {/* 모바일 스와이프-닫기 힌트 — 왼쪽 그랩바(전체 화면 덮는 패널의 탭-투-클로즈 대체) */}
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           aria-label="닫기"
           className="absolute left-1 top-1/2 z-20 h-10 w-1.5 -translate-y-1/2 rounded-full bg-[#1a1a1a]/12 sm:hidden"
         />
@@ -864,7 +876,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
               aria-label="닫기"
             >
@@ -931,6 +943,22 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                 </button>
               )
             })}
+          </div>
+        ) : null}
+
+        {/* 고정 컴포저 — 한 줄 기록을 스크롤 없이 바로 남긴다. 스크롤 본문(body) 밖 형제라
+            레이아웃으로 항상 고정된다(sticky 불필요). 대상은 이 고객으로 잠금(lockTarget). */}
+        {data?.found ? (
+          <div className="shrink-0 border-b border-[#f0f0ec] bg-white px-4 py-2.5">
+            <ActivityQuickForm
+              variant="composer"
+              lockTarget
+              defaultTargetType={targetType}
+              defaultTargetId={entityId}
+              defaultTargetLabel={displayName}
+              onSaved={() => void refetch()}
+              onDirtyChange={setComposerDirty}
+            />
           </div>
         ) : null}
 
