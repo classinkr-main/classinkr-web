@@ -41,6 +41,8 @@ import { ledgerMonthSplit, ledgerRowHasColor } from "@/lib/branch/computations/r
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
+// 기간(M/Q/Y) 인지 확장(웨이브 5) — 분기 경계 계산은 fiscal.ts 단일 정의를 그대로 쓴다(새 산식 금지).
+import { fiscalQuarter } from "@/lib/branch/fiscal"
 // ledger/ 섹션 파일들이 워크벤치를 단일 진입점으로 import — 포매터 SSOT는 lib/branch/ledger-format
 export { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import {
@@ -320,6 +322,9 @@ const MATRIX_WEEK_W = 52 // 월 확장(상세시트) 시 w1~w5 각 칸 — 금�
 const MATRIX_ANNUAL_W = 96
 // 매트릭스 토스트 최대 스택 개수(품질 웨이브 3, 항목 6) — 이 이상 쌓이면 가장 오래된 info부터 밀어낸다.
 const MATRIX_TOAST_MAX = 3
+// 기간 하이라이트 없음(period === "Y") 시 안정 참조로 넘기는 빈 Set — 매 렌더 새 Set을 만들면
+// 하이라이트를 소비하는 매트릭스 행 메모(RevMatrixGroupRow 등)가 불필요하게 리렌더된다(웨이브 5, 항목 1).
+const EMPTY_MONTH_SET: Set<string> = new Set()
 // 매트릭스 행 밀도(표시만 — 셀 폭·편집 로직 불변). localStorage에 저장해 재방문 시 복원.
 type MatrixDensity = "condensed" | "regular" | "relaxed"
 const MATRIX_DENSITY_STORAGE_KEY = "classin:rev-matrix-density"
@@ -611,6 +616,34 @@ function FilterTag({ label, onClear }: { label: string; onClear: () => void }) {
 
 function rowMonthOpen(row: LedgerRevenueRow, month: string) {
   return ledgerMonthSplit(row, month, rowMonthAmount(row, month)).expected
+}
+
+// ── 웨이브 5: 장부 기간(M/Q/Y) UX 확장 — 순수 함수만 (tests/branch가 렌더 없이 직접 구동) ──
+
+// 기간 토글이 가리키는 회계월 목록. Q는 "선택월의 분기"가 아니라 "오늘(now) 기준 회계분기"다 —
+// periodLabel("현재 분기")·서버 summary API(period=Q가 selectedMonth를 무시하고 fiscalQuarter(now)만
+// 쓰는 관례)와 동일하게 맞춘다. M은 항상 [selectedMonth] 단일 원소 — 기존 selectedMonth 단일월
+// 집계와 정확히 같은 모집단이 되어 회귀가 없다. now는 테스트에서 실제 시계에 기대지 않도록 주입 가능.
+export function buildPeriodMonths(period: Period, selectedMonth: string, matrixMonths: string[], now: Date = new Date()): string[] {
+  if (period === "Y") return matrixMonths
+  if (period === "Q") {
+    const quarter = fiscalQuarter(now.getUTCMonth() + 1)
+    return matrixMonths.filter((month) => fiscalQuarter(Number(month.split("-")[1])) === quarter)
+  }
+  return [selectedMonth]
+}
+
+// 기간 헤더 라벨: M="7월", Q="Q2(7-9월)", Y=fyLabel("FY26-27") 그대로. periodMonths는 이미
+// buildPeriodMonths로 계산된 결과를 받아 분기 번호를 그 첫 달에서 역산한다(날짜 재계산 이중화 방지).
+export function periodShortLabel(period: Period, selectedMonth: string, periodMonths: string[], fyLabel: string): string {
+  if (period === "Y") return fyLabel
+  if (period === "Q") {
+    if (periodMonths.length === 0) return "분기"
+    const calendarMonths = periodMonths.map((month) => Number(month.split("-")[1]))
+    const quarter = fiscalQuarter(calendarMonths[0])
+    return `Q${quarter}(${calendarMonths[0]}-${calendarMonths[calendarMonths.length - 1]}월)`
+  }
+  return `${Number(selectedMonth.split("-")[1])}월`
 }
 
 // 매트릭스 1행×1월 파생값을 한 번에. rowMonthAmount를 4번 부르던 것을 1번으로 줄여
@@ -2182,6 +2215,10 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   isEditingCell = false,
   editBuffer = "",
   editConfidence = "expected",
+  // 웨이브 5 — 항목 1(b): 이 셀의 달이 현재 M/Q 선택 기간에 속하는지. 행 배경(bgClass)은 그대로
+  // 두고 좌측 보더만 옅은 그린 accent로 바꿔 세로로 훑었을 때 "이 열들이 선택 기간"임이 읽히게
+  // 한다 — bgClass를 덮어쓰지 않아 selected/draft/hover 등 기존 행 상태 표시와 충돌하지 않는다.
+  periodHighlighted = false,
 }: {
   bucket: RevMonthlyBucket
   mismatch?: boolean
@@ -2197,6 +2234,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   isEditingCell?: boolean
   editBuffer?: string
   editConfidence?: DraftConfidence
+  periodHighlighted?: boolean
 }) {
   const tone = mismatch ? "mismatch" : matrixBucketTone(bucket)
   const interactive = Boolean(actions && month && rowId)
@@ -2249,7 +2287,11 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
 
   const bg = mismatch ? "bg-[#FCE9E9]" : bgClass
   const cellClassName = `relative px-1.5 text-right align-middle tabular-nums ${
-    mismatch ? "border-l-2 border-l-[#B43E3E]" : "border-l border-[#F2F1EE]"
+    mismatch
+      ? "border-l-2 border-l-[#B43E3E]"
+      : periodHighlighted
+        ? "border-l-2 border-l-[#084734]/25"
+        : "border-l border-[#F2F1EE]"
   } ${bg} ${interactive && editable ? "cursor-cell" : ""} ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${
     pending ? "shadow-[inset_0_-2px_0_0_#A8741A]" : ""
   } focus-visible:outline-none`
@@ -2333,6 +2375,8 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   isEditingCell = false,
   editBuffer = "",
   editConfidence = "expected",
+  // 웨이브 5 — 항목 1(b): 이 칸이 속한 달이 현재 M/Q 선택 기간이면 월 셀과 동일한 좌측 accent.
+  periodHighlighted = false,
 }: {
   display: number
   isMonthOnly: boolean
@@ -2351,6 +2395,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   isEditingCell?: boolean
   editBuffer?: string
   editConfidence?: DraftConfidence
+  periodHighlighted?: boolean
 }) {
   const interactive = Boolean(actions && month && rowId)
   const cellRef = useRef<HTMLTableCellElement | null>(null)
@@ -2397,7 +2442,9 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
     )
   }
 
-  const cellClassName = `relative border-l border-[#F2F1EE] px-1.5 text-right align-middle tabular-nums ${bgClass} ${
+  const cellClassName = `relative px-1.5 text-right align-middle tabular-nums ${
+    periodHighlighted ? "border-l-2 border-l-[#084734]/25" : "border-l border-[#F2F1EE]"
+  } ${bgClass} ${
     interactive && editable ? "cursor-cell" : ""
   } ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${pending ? "shadow-[inset_0_-2px_0_0_#A8741A]" : ""} focus-visible:outline-none`
 
@@ -2470,6 +2517,7 @@ function RevMatrixWeekCells({
   bgClass,
   month,
   editContext = null,
+  periodHighlighted = false,
 }: {
   weeks: number[]
   inferred: boolean
@@ -2477,6 +2525,7 @@ function RevMatrixWeekCells({
   bgClass: string
   month?: string
   editContext?: RevMatrixEditContext | null
+  periodHighlighted?: boolean
 }) {
   const anyExplicit = weeks.some((w) => w > 0)
   const cells: React.ReactNode[] = []
@@ -2512,6 +2561,7 @@ function RevMatrixWeekCells({
         isEditingCell={weekEditing}
         editBuffer={weekEditing ? editContext!.editBuffer : ""}
         editConfidence={weekEditing ? editContext!.editConfidence : "expected"}
+        periodHighlighted={periodHighlighted}
       />,
     )
   }
@@ -2551,6 +2601,9 @@ function RevMatrixMonthStrip({
   expandedMonths,
   bgClass,
   editContext = null,
+  // 웨이브 5 — 항목 1(b): "선택 기간"(M/Q) 달 집합. undefined/빈 Set이면 아무 셀도 강조하지 않는다
+  // (period === "Y"거나 아직 계산 전인 초기 렌더 등) — 부모(그룹/딜/카테고리 행)가 안정 참조로 내려준다.
+  periodMonths,
 }: {
   monthlyByRowOrGroup: Record<string, RevMonthlyBucket>
   weeklyByMonth: (month: string) => { weeks: number[]; inferred: boolean; monthOnlyAmount: number; mismatch: boolean } | null
@@ -2558,11 +2611,13 @@ function RevMatrixMonthStrip({
   expandedMonths: Set<string>
   bgClass: string
   editContext?: RevMatrixEditContext | null
+  periodMonths?: Set<string>
 }) {
   return (
     <>
       {months.map((month) => {
         const bucket = monthlyByRowOrGroup[month] ?? EMPTY_BUCKET
+        const periodHighlighted = periodMonths?.has(month) ?? false
         if (expandedMonths.has(month)) {
           const weekly = weeklyByMonth(month)
           return (
@@ -2574,9 +2629,10 @@ function RevMatrixMonthStrip({
                 bgClass={bgClass}
                 month={month}
                 editContext={editContext}
+                periodHighlighted={periodHighlighted}
               />
               {/* 확장 중에도 그 달 총액을 잃지 않도록 주차 5칸 뒤에 읽기전용 월계 셀을 유지한다 */}
-              <RevMatrixMonthCell bucket={bucket} mismatch={weekly?.mismatch ?? false} bgClass={bgClass} />
+              <RevMatrixMonthCell bucket={bucket} mismatch={weekly?.mismatch ?? false} bgClass={bgClass} periodHighlighted={periodHighlighted} />
             </Fragment>
           )
         }
@@ -2599,6 +2655,7 @@ function RevMatrixMonthStrip({
             isEditingCell={monthEditing}
             editBuffer={monthEditing ? editContext!.editBuffer : ""}
             editConfidence={monthEditing ? editContext!.editConfidence : "expected"}
+            periodHighlighted={periodHighlighted}
           />
         )
       })}
@@ -2810,6 +2867,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   onSelect,
   onToggle,
   density = "regular",
+  periodMonths,
 }: {
   group: RevCustomerGroup
   months: string[]
@@ -2820,6 +2878,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   onSelect: (key: string) => void
   onToggle: (key: string) => void
   density?: MatrixDensity
+  periodMonths?: Set<string> // 웨이브 5 — 항목 1(b): 선택 기간 열 accent
 }) {
   const rowBg = selected ? "bg-[#ECFDF5]" : "bg-white group-hover:bg-[#FAFAF8]"
   const annual = group.annualTotal
@@ -2913,6 +2972,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
         months={months}
         expandedMonths={expandedMonths}
         bgClass={rowBg}
+        periodMonths={periodMonths}
       />
       <td
         className={`sticky right-0 z-10 border-l border-[rgba(0,0,0,0.08)] px-2 text-right align-middle tabular-nums ${rowBg}`}
@@ -2955,6 +3015,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   pendingByCell = null,
   density = "regular",
   sourceLabel,
+  periodMonths,
 }: {
   view: RevRowView
   grouped: boolean
@@ -2977,6 +3038,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
   // 이미 가진 Source 스트립 신호(dbImportInfo/dbSourceServerState)에서 계산해 내려준다.
   // 이 행은 신규 fetch 없이 문자열만 소비한다.
   sourceLabel?: string
+  periodMonths?: Set<string> // 웨이브 5 — 항목 1(b): 선택 기간 열 accent
 }) {
   const { row, draftRow, productCategory, monthlyByMonth } = view
   const rowBg = active
@@ -3093,6 +3155,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
         expandedMonths={expandedMonths}
         bgClass={rowBg}
         editContext={editContext}
+        periodMonths={periodMonths}
       />
       <td
         className={`sticky right-0 z-10 border-l border-[rgba(0,0,0,0.08)] px-2 text-right align-middle tabular-nums ${rowBg}`}
@@ -3125,6 +3188,7 @@ const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
   onToggle,
   onOpen,
   density = "regular",
+  periodMonths,
 }: {
   category: Exclude<RevProductCategory, "all">
   customer: string
@@ -3140,6 +3204,7 @@ const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
   onToggle: () => void
   onOpen: () => void
   density?: MatrixDensity
+  periodMonths?: Set<string> // 웨이브 5 — 항목 1(b): 선택 기간 열 accent
 }) {
   const rowBg = category === "hardware" ? "bg-[#FFFCF5] group-hover:bg-[#FBF6EC]" : "bg-[#FBFBFA] group-hover:bg-[#FAFAF8]"
   const annualTone = matrixBucketTone(annual)
@@ -3214,6 +3279,7 @@ const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
         months={months}
         expandedMonths={expandedMonths}
         bgClass={rowBg}
+        periodMonths={periodMonths}
       />
       <td
         className={`sticky right-0 z-10 border-l border-[rgba(0,0,0,0.08)] px-2 text-right align-middle tabular-nums ${rowBg}`}
@@ -3235,11 +3301,13 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
   grand,
   months,
   expandedMonths,
+  periodMonths,
 }: {
   columns: RevMatrixColumn[]
   grand: RevMonthlyBucket
   months: string[]
   expandedMonths: Set<string>
+  periodMonths?: Set<string> // 웨이브 5 — 항목 1(b): 선택 기간 열 accent(본문·헤더와 동일한 시각 언어)
 }) {
   const columnByMonth = new Map(columns.map((column) => [column.month, column]))
   const hasAnyGoal = columns.some((column) => column.goal !== null)
@@ -3259,12 +3327,15 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
           const bucket = column ?? EMPTY_BUCKET
           const span = expandedMonths.has(month) ? 6 : 1
           const width = span === 6 ? MATRIX_WEEK_W * 5 + MATRIX_MONTH_W : MATRIX_MONTH_W
+          const periodHighlighted = periodMonths?.has(month) ?? false
           return (
             <td
               key={month}
               colSpan={span}
               title={column ? `${formatMonthLabel(month)} 합계 ${formatMoney(bucket.total)} · 확정 ${formatMoney(bucket.confirmed)} · 고확도 ${formatMoney(bucket.high)} · 예정 ${formatMoney(bucket.open)}` : undefined}
-              className="border-l border-[#E7E5E1] bg-[#F6F5F4] px-1.5 py-1 text-right align-middle tabular-nums"
+              className={`px-1.5 py-1 text-right align-middle tabular-nums bg-[#F6F5F4] ${
+                periodHighlighted ? "border-l-2 border-l-[#084734]/25" : "border-l border-[#E7E5E1]"
+              }`}
               style={{ width, minWidth: width }}
             >
               {bucket.total > 0 ? (
@@ -3306,12 +3377,15 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
             const width = span === 6 ? MATRIX_WEEK_W * 5 + MATRIX_MONTH_W : MATRIX_MONTH_W
             const pct = column && column.goal ? (column.confirmed / column.goal) * 100 : null
             const tone = pct === null ? "text-[#C9C5BF]" : pct >= 100 ? "text-[#084734]" : pct >= 60 ? "text-[#A8741A]" : "text-[#B43E3E]"
+            const periodHighlighted = periodMonths?.has(month) ?? false
             return (
               <td
                 key={month}
                 colSpan={span}
                 title={column && column.goal ? `${formatMonthLabel(month)} 목표 ${formatMoney(column.goal)} · 확정 ${formatMoney(column.confirmed)}` : "월 목표 미설정"}
-                className="border-l border-[#E7E5E1] bg-[#FAFAF8] px-1.5 text-right align-middle tabular-nums"
+                className={`px-1.5 text-right align-middle tabular-nums bg-[#FAFAF8] ${
+                  periodHighlighted ? "border-l-2 border-l-[#084734]/25" : "border-l border-[#E7E5E1]"
+                }`}
                 style={{ width, minWidth: width }}
               >
                 <span className={`text-[10px] font-bold ${tone}`}>{pct === null ? "·" : `${Math.round(pct)}%`}</span>
@@ -3450,6 +3524,20 @@ export default function SalesLedgerWorkbench() {
   // 매트릭스 12개 열의 회계월 값(4→3 순서). monthOptions와 동일 순서·동일 배열이나 값만 뽑아
   // 그룹/행 파생값 루프와 컬럼 memo가 공유한다.
   const matrixMonths = useMemo(() => monthOptions.map((option) => option.value), [monthOptions])
+  // 웨이브 5 — 항목 2·3: M/Q/Y 토글이 가리키는 회계월 목록(순수 함수는 파일 상단에 export).
+  // REV 매트릭스 자체(그리드 열 구성)는 이 값과 무관하게 항상 matrixMonths(FY 12개월) 그대로다 —
+  // periodMonths는 보조 분석(담당자별 수치)·전기 대비 칩처럼 "선택 기간"을 반영해야 하는
+  // 하위 UI에만 흘려보낸다.
+  const periodMonths = useMemo(() => buildPeriodMonths(period, selectedMonth, matrixMonths), [period, selectedMonth, matrixMonths])
+  // 매트릭스 헤더·열 하이라이트(항목 1)용 Set — Y는 FY 전체가 곧 매트릭스라 강조할 대상이 없다(빈 Set).
+  const periodHighlightMonths = useMemo(
+    () => (period === "Y" ? EMPTY_MONTH_SET : new Set(periodMonths)),
+    [period, periodMonths],
+  )
+  const periodLabelShort = useMemo(
+    () => periodShortLabel(period, selectedMonth, periodMonths, fyLabel),
+    [period, selectedMonth, periodMonths, fyLabel],
+  )
 
   // 주간 마감(Weekly Close): 스냅샷 run 목록 + 두 run의 선택 월 diff.
   const [wcRuns, setWcRuns] = useState<WeeklyCloseRunView[]>([])
@@ -5511,6 +5599,15 @@ export default function SalesLedgerWorkbench() {
                       <FileSpreadsheet className="h-4 w-4 text-[#084734]" />
                       REV 매출 행
                     </p>
+                    {/* 웨이브 5 — 항목 1(a): M/Q 토글이 아래 본표(12개월 매트릭스)를 좁힌다는 오인
+                        방지 — 본표 열 구성은 항상 FY 12개월 고정이고, M/Q/Y는 이 카드의 보조
+                        분석(목표대비·담당자별 등)과 아래 요약 타일에만 반영된다는 것을 명시한다. */}
+                    <span
+                      title="M/Q/Y 토글은 아래 요약 타일·보조 분석 기간만 바꿉니다. 이 표는 항상 회계연도 12개월 전체를 보여줍니다."
+                      className="inline-flex shrink-0 items-center rounded-full border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10px] font-bold text-[#615D59]"
+                    >
+                      본표는 FY 전체 12개월 고정
+                    </span>
                     <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
                       <button
                         type="button"
@@ -5948,20 +6045,35 @@ export default function SalesLedgerWorkbench() {
                         {revMatrixColumns.map((column) => {
                           const isExpanded = expandedRevMonths.has(column.month)
                           const width = isExpanded ? MATRIX_WEEK_W * 5 + MATRIX_MONTH_W : MATRIX_MONTH_W
+                          // 웨이브 5 — 항목 1(b): "선택 기간"(M=선택월, Q=현재 분기) 컬럼을 오늘
+                          // (column.current)과는 구분되는 옅은 톤으로 표시 — 기존 column.current
+                          // 강조 패턴(같은 그린 계열)을 확장한다. 컬럼 자체(폭·순서·개수)는 불변 —
+                          // 톤만 얹어 "지금 보조 분석/전기 대비 칩의 기준 컬럼"임을 알린다.
+                          const isPeriodColumn = periodHighlightMonths.has(column.month)
                           return (
                             <th
                               key={column.month}
                               colSpan={isExpanded ? 6 : 1}
-                              className={`sticky top-0 z-20 border-l border-[#E7E5E1] px-0.5 text-center align-middle ${column.current ? "bg-[#ECFDF5]" : isExpanded ? "bg-[#F6F5F4]" : "bg-[#FAFAF8]"}`}
+                              className={`sticky top-0 z-20 border-l px-0.5 text-center align-middle ${
+                                column.current
+                                  ? "border-[#E7E5E1] bg-[#ECFDF5]"
+                                  : isPeriodColumn
+                                    ? "border-[#BDEFD8] bg-[#ECFDF5]/45"
+                                    : isExpanded
+                                      ? "border-[#E7E5E1] bg-[#F6F5F4]"
+                                      : "border-[#E7E5E1] bg-[#FAFAF8]"
+                              }`}
                               style={{ width, minWidth: width }}
                             >
                               <button
                                 type="button"
                                 onClick={() => toggleRevMonth(column.month)}
                                 aria-expanded={isExpanded}
-                                title={`클릭: 주차(w1~w5) 펼치기/접기 · ${formatMonthLabel(column.month)} 합계 ${formatMoney(column.total)}`}
+                                title={`클릭: 주차(w1~w5) 펼치기/접기 · ${formatMonthLabel(column.month)} 합계 ${formatMoney(column.total)}${
+                                  isPeriodColumn ? ` · 현재 선택 기간(${periodLabelShort})` : ""
+                                }`}
                                 className={`inline-flex w-full items-center justify-center gap-0.5 rounded py-1 font-bold transition hover:bg-[#F0F0EC] hover:text-[#084734] ${
-                                  column.current ? "text-[#084734]" : "text-[#615D59]"
+                                  column.current || isPeriodColumn ? "text-[#084734]" : "text-[#615D59]"
                                 }`}
                               >
                                 {column.label}
@@ -6052,6 +6164,7 @@ export default function SalesLedgerWorkbench() {
                                 onSelect={selectRevGroup}
                                 onToggle={toggleRevGroup}
                                 density={matrixDensity}
+                                periodMonths={periodHighlightMonths}
                               />
                             ) : null}
                             {grouped
@@ -6079,6 +6192,7 @@ export default function SalesLedgerWorkbench() {
                                         onToggle={() => toggleRevCategory(group.key, category)}
                                         onOpen={() => selectRevGroup(group.key)}
                                         density={matrixDensity}
+                                        periodMonths={periodHighlightMonths}
                                       />
                                       {catExpanded &&
                                         catRows.map((row) => {
@@ -6099,6 +6213,7 @@ export default function SalesLedgerWorkbench() {
                                               pendingByCell={pendingByCell}
                                               density={matrixDensity}
                                               sourceLabel={revRowSourceLabel}
+                                              periodMonths={periodHighlightMonths}
                                             />
                                           )
                                         })}
@@ -6125,6 +6240,7 @@ export default function SalesLedgerWorkbench() {
                                       pendingByCell={pendingByCell}
                                       density={matrixDensity}
                                       sourceLabel={revRowSourceLabel}
+                                      periodMonths={periodHighlightMonths}
                                     />
                                   )
                                 })}
@@ -6138,6 +6254,7 @@ export default function SalesLedgerWorkbench() {
                         grand={revMatrixGrand}
                         months={matrixMonths}
                         expandedMonths={expandedRevMonths}
+                        periodMonths={periodHighlightMonths}
                       />
                     )}
                   </table>
