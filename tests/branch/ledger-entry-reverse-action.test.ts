@@ -20,9 +20,17 @@ const workbenchPath = join(process.cwd(), "components/admin/branch/SalesLedgerWo
 // 웨이브 7 2단(F5): 서버 입력 큐 훅(useLedgerDraftQueue: reverseEntry·loadDrafts 포함)은
 // ledger/useLedgerDraftQueue.ts로 물리 이동됐다(로직 무변경) — 훅 내부를 보는 스캔은 이 파일을 읽는다.
 const hookPath = join(process.cwd(), "components/admin/branch/ledger/useLedgerDraftQueue.ts")
+// 웨이브 7 2단(F5): DraftQueue 컴포넌트(되돌리기 버튼·확인 다이얼로그·confirmAndReverse)는
+// ledger/DraftQueue.tsx로 물리 이동됐다(로직 무변경) — 그 UI 배선 스캔은 이 파일을 읽는다.
+// draftStatusMeta는 워크벤치가 재수출하므로 import 표면은 그대로다.
+const queuePath = join(process.cwd(), "components/admin/branch/ledger/DraftQueue.tsx")
 
 function workbenchSource() {
   return readFileSync(workbenchPath, "utf8")
+}
+
+function queueSource() {
+  return readFileSync(queuePath, "utf8")
 }
 
 function hookSource() {
@@ -115,7 +123,7 @@ describe("appliedDraftFallbackRows — 상쇄된 draft를 대체 표시 안전�
 
 describe("DraftQueue UI 배선 — 되돌리기 버튼/다이얼로그(웨이브 5)", () => {
   it("적용(applied) 행에서만 활성화되고, 이미 상쇄된 draft·로컬 draft·서버 큐가 아닐 때는 비활성화된다", () => {
-    const source = workbenchSource()
+    const source = queueSource()
     const btnStart = source.indexOf("onClick={() => setConfirmReverseDraft(draft)}")
     expect(btnStart).toBeGreaterThan(-1)
     const btnBlock = source.slice(btnStart, btnStart + 900)
@@ -127,18 +135,18 @@ describe("DraftQueue UI 배선 — 되돌리기 버튼/다이얼로그(웨이브
   })
 
   it("확인 다이얼로그는 danger가 아닌 warning 톤 문구('상쇄' + 감사 보존 안내)를 쓴다", () => {
-    const source = workbenchSource()
+    const source = queueSource()
     expect(source).toContain("적용을 상쇄합니다. 초안 기록은 감사용으로 유지됩니다.")
   })
 
   it("확인 다이얼로그에 선택적 사유 입력(1줄 텍스트)이 있고 되돌리기 클릭 시 trim된 값을 넘긴다", () => {
-    const source = workbenchSource()
+    const source = queueSource()
     expect(source).toContain("사유(선택)")
     expect(source).toContain("await onReverse(id, reverseReason.trim() || undefined)")
   })
 
   it("성공/실패 모두 다이얼로그를 닫고 in-flight 상태(reversingId)를 정리한다(finally)", () => {
-    const source = workbenchSource()
+    const source = queueSource()
     const fnStart = source.indexOf("const confirmAndReverse = async (id: string) => {")
     expect(fnStart).toBeGreaterThan(-1)
     const fnEnd = source.indexOf("}\n", fnStart + 400)

@@ -19,6 +19,9 @@ const workbenchPath = join(process.cwd(), "components/admin/branch/SalesLedgerWo
 // ledger/useLedgerDraftQueue.ts로 물리 이동됐다(로직 무변경) — 훅 내부 스캔은 이 파일을 읽는다.
 // isDraftRecordError는 워크벤치가 재수출하므로 import 표면은 그대로다.
 const hookPath = join(process.cwd(), "components/admin/branch/ledger/useLedgerDraftQueue.ts")
+// 웨이브 7 2단(F5): DraftQueue 컴포넌트는 ledger/DraftQueue.tsx로 물리 이동(렌더 배선 스캔은
+// 여전히 워크벤치를 읽는다 — 훅 반환값을 그대로 prop으로 넘기는 지점이 거기이므로).
+const queuePath = join(process.cwd(), "components/admin/branch/ledger/DraftQueue.tsx")
 
 function workbenchSource() {
   return readFileSync(workbenchPath, "utf8")
@@ -26,6 +29,10 @@ function workbenchSource() {
 
 function hookSource() {
   return readFileSync(hookPath, "utf8")
+}
+
+function queueSource() {
+  return readFileSync(queuePath, "utf8")
 }
 
 function sliceFn(source: string, startMarker: string, endMarker: string) {
@@ -200,12 +207,12 @@ describe("recordErrors — 훅 반환값과 재조회 시 초기화(품질 웨�
 
 describe("DraftQueue — 행별 에러 배지 배선(품질 웨이브 7, 항목 2)", () => {
   it("recordErrors prop을 받아 그 행에만 배지 + 새로고침 버튼을 렌더한다", () => {
-    const source = workbenchSource()
-    const compStart = source.indexOf("function DraftQueue({")
+    // 웨이브 7 2단(F5): DraftQueue는 ledger/DraftQueue.tsx로 물리 이동됐다(로직 무변경) —
+    // 그 파일은 체크 큐 전용이라 컴포넌트 시작부터 파일 끝까지가 곧 컴포넌트 본문이다.
+    const source = queueSource()
+    const compStart = source.indexOf("export function DraftQueue({")
     expect(compStart).toBeGreaterThan(-1)
-    const compEnd = source.indexOf("\nfunction matrixSameColumn(", compStart)
-    expect(compEnd).toBeGreaterThan(compStart)
-    const compBody = source.slice(compStart, compEnd)
+    const compBody = source.slice(compStart)
 
     expect(compBody).toContain("recordErrors: Map<string, string>")
     expect(compBody).toContain("recordErrors.get(draft.id)")

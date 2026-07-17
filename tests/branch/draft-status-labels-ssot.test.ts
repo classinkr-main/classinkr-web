@@ -8,10 +8,12 @@ import { DRAFT_STATUS_LABELS, draftStatusLabel } from "@/components/admin/branch
 // 그대로 두고 표기만 ledger/shared.tsx의 DRAFT_STATUS_LABELS SSOT로 통일한다
 // (검토중/체크완료/적용완료 + 상쇄 표기).
 
-const workbenchPath = join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx")
+// 웨이브 7 2단(F5): 소비처(DRAFT_STATUS_FILTERS 탭·draftStatusMeta 배지)는 체크 큐와 함께
+// ledger/DraftQueue.tsx로 물리 이동됐다(로직 무변경) — 소스 스캔도 그 파일을 읽는다.
+const queuePath = join(process.cwd(), "components/admin/branch/ledger/DraftQueue.tsx")
 
-function workbenchSource() {
-  return readFileSync(workbenchPath, "utf8")
+function queueSource() {
+  return readFileSync(queuePath, "utf8")
 }
 
 describe("DRAFT_STATUS_LABELS / draftStatusLabel — SSOT (ledger/shared.tsx)", () => {
@@ -41,7 +43,7 @@ describe("DRAFT_STATUS_LABELS / draftStatusLabel — SSOT (ledger/shared.tsx)", 
 
 describe("필터 탭·배지 소비처가 SSOT를 참조한다(소스 스캔, 품질 웨이브 7 항목 4)", () => {
   it("DRAFT_STATUS_FILTERS의 draft/checked/applied 라벨이 DRAFT_STATUS_LABELS를 참조한다(리터럴 재복제 아님)", () => {
-    const source = workbenchSource()
+    const source = queueSource()
     const start = source.indexOf("const DRAFT_STATUS_FILTERS: Array")
     expect(start).toBeGreaterThan(-1)
     const end = source.indexOf("]", start)
@@ -55,7 +57,7 @@ describe("필터 탭·배지 소비처가 SSOT를 참조한다(소스 스캔, �
   })
 
   it("draftStatusMeta가 하드코딩 문자열 대신 draftStatusLabel을 호출한다", () => {
-    const source = workbenchSource()
+    const source = queueSource()
     const start = source.indexOf("export function draftStatusMeta")
     expect(start).toBeGreaterThan(-1)
     const end = source.indexOf("\nfunction draftMatchesFilter(", start)

@@ -78,6 +78,26 @@ export type LedgerRevenueRow = BranchPipelineRow & {
 
 export type DraftConfidence = "expected" | "high-confidence" | "confirmed"
 
+// SalesLedgerWorkbench에서 물리 이동(웨이브 7 2단 F5): 초안 metadata 문자열 필드 안전 판독 —
+// 워크벤치 본체와 ledger/DraftQueue가 함께 쓴다.
+export function metadataString(metadata: Record<string, unknown> | null | undefined, key: string): string | null {
+  const value = metadata?.[key]
+  if (typeof value !== "string") return null
+  const trimmed = value.trim()
+  return trimmed ? trimmed : null
+}
+
+// SalesLedgerWorkbench에서 물리 이동(웨이브 7 2단 F5): 주차 병합 초안(metadata.weekly 5칸)
+// 판독 — 워크벤치 본체(주차 복원)와 ledger/DraftQueue(주차 표기)가 함께 쓴다.
+// 주차 병합 초안의 metadata.weekly(5칸 배열) 검증·정규화. 유효하지 않으면 null.
+export function mergedWeeklyFromMetadata(metadata: Record<string, unknown> | null | undefined): number[] | null {
+  const weekly = metadata?.weekly
+  if (!Array.isArray(weekly) || weekly.length !== 5) return null
+  if (!weekly.every((value) => typeof value === "number" && Number.isFinite(value))) return null
+  const weeks = weekly.map((value) => Math.max(value, 0))
+  return weeks.some((value) => value > 0) ? weeks : null
+}
+
 // 웨이브 7 2단(I4) — 낙관적 잠금 충돌(409 {error, draft})의 사용자 안내 문구 SSOT. 큐 행 배지
 // (recordErrors)·매트릭스 토스트·입력 레일 인라인 피드백이 같은 문장을 공유한다(표현 분화 금지).
 // InputRailSection이 부모(SalesLedgerWorkbench)를 역import할 수 없어(순환 금지) 여기에 둔다.
