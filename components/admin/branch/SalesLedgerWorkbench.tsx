@@ -5087,9 +5087,35 @@ export default function SalesLedgerWorkbench() {
                 </div>
               )}
               <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-[#615D59]">
-                <span className="rounded-full bg-[#F6F5F4] px-2.5 py-1">
-                  정렬 {REV_SORT_LABELS[revSortKey]} {revSortDirection === "asc" ? "오름차순" : "내림차순"}
-                </span>
+                {/* 정렬 드롭다운 — 매트릭스 열 구조상 헤더 클릭 정렬(고객/연간합계)이 없는 5개 키까지
+                    포함해 9개 정렬 키 전부를 여기서 노출한다. onRevSort 재사용: 다른 키 선택은 그
+                    키 기본 방향으로, 같은 키(방향 버튼)는 토글로 — RevSortHeader와 동일 로직. */}
+                <div className="inline-flex items-center gap-0.5 rounded-full bg-[#F6F5F4] pl-2.5 pr-1 py-0.5">
+                  <label htmlFor="rev-sort-key" className="sr-only">정렬 기준</label>
+                  <select
+                    id="rev-sort-key"
+                    value={revSortKey}
+                    onChange={(event) => onRevSort(event.target.value as RevSortKey)}
+                    className="h-6 rounded-full border-0 bg-transparent pr-1 text-[11px] font-bold text-[#615D59] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
+                  >
+                    {(Object.keys(REV_SORT_LABELS) as RevSortKey[]).map((key) => (
+                      <option key={key} value={key}>{REV_SORT_LABELS[key]}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => onRevSort(revSortKey)}
+                    aria-label={`정렬 방향 전환 (현재 ${revSortDirection === "asc" ? "오름차순" : "내림차순"})`}
+                    title="정렬 방향 전환"
+                    className="flex h-6 w-6 items-center justify-center rounded-full text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
+                  >
+                    {revSortDirection === "asc" ? (
+                      <ArrowUpNarrowWide className="h-3.5 w-3.5" aria-hidden="true" />
+                    ) : (
+                      <ArrowDownNarrowWide className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
                 {query.trim() && <FilterTag label={`검색 ${query.trim()}`} onClear={() => setQuery("")} />}
                 {managerFilter !== "ALL" && <FilterTag label={`담당자 ${managerFilter}`} onClear={() => setManagerFilter("ALL")} />}
                 {regionFilter !== "ALL" && <FilterTag label={`지역 ${regionFilter}`} onClear={() => setRegionFilter("ALL")} />}
