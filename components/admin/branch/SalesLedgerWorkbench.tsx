@@ -3208,6 +3208,8 @@ export default function SalesLedgerWorkbench() {
   }, [matrixDensity])
   // 기존 목표대비/주차별/담당자·상품군 패널은 접이식 보조 패널로 강등(기본 접힘). 1차 뷰는 매트릭스.
   const [revAuxOpen, setRevAuxOpen] = useState(false)
+  // 담당자별 월 수치 테이블 top6 캡 해제 토글(항목 6) — 기본은 캡, "전체 보기"로 전체 목록.
+  const [revManagerSummaryExpanded, setRevManagerSummaryExpanded] = useState(false)
   // 매트릭스 셀 커밋 실패(로컬 폴백) 등 편집 지점 인근 알림 토스트 — 상단 Source 바만으로는
   // 편집 중 시야 밖이라 침묵 실패가 되던 문제 대응. 7초 뒤 자동 소멸.
   const [matrixToast, setMatrixToast] = useState<{ kind: "error" | "info"; text: string } | null>(null)
@@ -3905,7 +3907,9 @@ export default function SalesLedgerWorkbench() {
   const revMonthMonthlyOnly = revMonthScalars.monthlyOnlyOpen
   const revMonthOpen = Math.max(revMonthTotal - revMonthConfirmed - revMonthHighConfidence - revMonthMonthlyOnly, 0)
   const revPeakWeek = revWeekProjection.slice().sort((a, b) => b.total - a.total)[0]
-  const revTopManagers = useMemo<RevManagerSummary[]>(() => {
+  // 담당자 전체(캡 없음) — top6 캡은 표시 단계(revTopManagers)에서만 건다. "전체 보기" 토글이
+  // 캡을 해제할 수 있도록 집계 자체는 항상 전체 담당자를 계산해 둔다(항목 6).
+  const revManagersSorted = useMemo<RevManagerSummary[]>(() => {
     const managers = new Map<string, RevManagerSummary>()
     for (const row of filteredRows) {
       const total = rowMonthAmount(row, selectedMonth)
@@ -3926,8 +3930,12 @@ export default function SalesLedgerWorkbench() {
       current.rows += 1
       managers.set(manager, current)
     }
-    return Array.from(managers.values()).sort((a, b) => b.total - a.total).slice(0, 6)
+    return Array.from(managers.values()).sort((a, b) => b.total - a.total)
   }, [filteredRows, selectedMonth])
+  const revTopManagers = useMemo(
+    () => (revManagerSummaryExpanded ? revManagersSorted : revManagersSorted.slice(0, 6)),
+    [revManagersSorted, revManagerSummaryExpanded],
+  )
   const revProductSummary = useMemo(() => buildRevProductSummary(filteredRows, selectedMonth), [filteredRows, selectedMonth])
   const monthlySeriesRows = useMemo<MonthlyPlanRow[]>(() => {
     const series = summary.data?.monthly_series
@@ -5561,6 +5569,10 @@ export default function SalesLedgerWorkbench() {
                   revWeekProjection={revWeekProjection}
                   revMonthRowCount={revMonthRowCount}
                   revManagerTableRows={revManagerTableRows}
+                  revManagerTotalCount={revManagersSorted.length}
+                  revManagerSummaryExpanded={revManagerSummaryExpanded}
+                  onToggleManagerSummaryExpanded={() => setRevManagerSummaryExpanded((value) => !value)}
+                  onManagerRowClick={setManagerFilter}
                   revProductTableRows={revProductTableRows}
                 />
 

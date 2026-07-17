@@ -5,6 +5,7 @@
 // 주의: 이 파일은 ../SalesLedgerWorkbench를 import하지 않는다 — 사이클 금지.
 
 import dynamic from "next/dynamic"
+import type { KeyboardEvent as ReactKeyboardEvent } from "react"
 import { Loader2 } from "lucide-react"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { ledgerMonthConfirmed, ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
@@ -562,7 +563,18 @@ export function numberCell(value: number, tone = "text-[#111110]") {
   return <span className={`font-bold ${tone}`}>{formatMoney(value)}</span>
 }
 
-export function BreakdownNumbersTable({ rows, emptyLabel }: { rows: BreakdownNumbersRow[]; emptyLabel: string }) {
+export function BreakdownNumbersTable({
+  rows,
+  emptyLabel,
+  onRowClick,
+  activeId = null,
+}: {
+  rows: BreakdownNumbersRow[]
+  emptyLabel: string
+  // 있으면 행이 클릭·키보드(Enter/Space) 가능해진다(예: 담당자별 수치 → 담당자 필터, 항목 6).
+  onRowClick?: (id: string) => void
+  activeId?: string | null
+}) {
   if (rows.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-3 text-[11px] leading-relaxed text-[#615D59]">
@@ -594,16 +606,39 @@ export function BreakdownNumbersTable({ rows, emptyLabel }: { rows: BreakdownNum
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="border-t border-[#F0F0EC]">
-              <td className="max-w-[160px] truncate py-2 pr-2 text-left font-bold text-[#111110]">{row.label}</td>
-              <td className="px-2 py-2">{numberCell(row.confirmed, CONFIDENCE_TOKENS.confirmed.textClass)}</td>
-              <td className="px-2 py-2">{numberCell(row.highConfidence, CONFIDENCE_TOKENS["high-confidence"].textClass)}</td>
-              <td className="px-2 py-2">{numberCell(row.open, CONFIDENCE_TOKENS.expected.textStrongClass)}</td>
-              <td className="px-2 py-2">{numberCell(row.total)}</td>
-              <td className="py-2 pl-2 font-semibold text-[#615D59]">{row.count}</td>
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const clickable = Boolean(onRowClick)
+            const active = activeId != null && activeId === row.id
+            return (
+              <tr
+                key={row.id}
+                className={`border-t border-[#F0F0EC] ${clickable ? "cursor-pointer hover:bg-[#FAFAF8]" : ""} ${
+                  active ? "bg-[#ECFDF5]" : ""
+                } ${clickable ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40" : ""}`}
+                {...(clickable
+                  ? {
+                      role: "button" as const,
+                      tabIndex: 0,
+                      "aria-pressed": active,
+                      onClick: () => onRowClick!(row.id),
+                      onKeyDown: (event: ReactKeyboardEvent<HTMLTableRowElement>) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault()
+                          onRowClick!(row.id)
+                        }
+                      },
+                    }
+                  : {})}
+              >
+                <td className="max-w-[160px] truncate py-2 pr-2 text-left font-bold text-[#111110]">{row.label}</td>
+                <td className="px-2 py-2">{numberCell(row.confirmed, CONFIDENCE_TOKENS.confirmed.textClass)}</td>
+                <td className="px-2 py-2">{numberCell(row.highConfidence, CONFIDENCE_TOKENS["high-confidence"].textClass)}</td>
+                <td className="px-2 py-2">{numberCell(row.open, CONFIDENCE_TOKENS.expected.textStrongClass)}</td>
+                <td className="px-2 py-2">{numberCell(row.total)}</td>
+                <td className="py-2 pl-2 font-semibold text-[#615D59]">{row.count}</td>
+              </tr>
+            )
+          })}
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] text-[12px]">

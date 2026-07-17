@@ -31,6 +31,10 @@ interface RevAuxAnalysisSectionProps {
   revWeekProjection: RevWeekPoint[]
   revMonthRowCount: number
   revManagerTableRows: BreakdownNumbersRow[]
+  revManagerTotalCount: number
+  revManagerSummaryExpanded: boolean
+  onToggleManagerSummaryExpanded: () => void
+  onManagerRowClick: (manager: string) => void
   revProductTableRows: BreakdownNumbersRow[]
 }
 
@@ -52,6 +56,10 @@ export function RevAuxAnalysisSection({
   revWeekProjection,
   revMonthRowCount,
   revManagerTableRows,
+  revManagerTotalCount,
+  revManagerSummaryExpanded,
+  onToggleManagerSummaryExpanded,
+  onManagerRowClick,
   revProductTableRows,
 }: RevAuxAnalysisSectionProps) {
   return (
@@ -223,9 +231,22 @@ export function RevAuxAnalysisSection({
                           <TrendingUp className="h-3.5 w-3.5 text-[#A8741A]" />
                           담당자별 월 수치
                         </p>
-                        <span className="text-[10.5px] font-bold text-[#615D59]">상위 {revManagerTableRows.length}명</span>
+                        <button
+                          type="button"
+                          onClick={onToggleManagerSummaryExpanded}
+                          className="text-[10.5px] font-bold text-[#615D59] underline decoration-dotted underline-offset-2 transition hover:text-[#084734]"
+                        >
+                          {revManagerSummaryExpanded
+                            ? `전체 ${revManagerTotalCount}명 · 접기`
+                            : `상위 ${revManagerTableRows.length}명 · 전체 보기(${revManagerTotalCount})`}
+                        </button>
                       </div>
-                      <BreakdownNumbersTable rows={revManagerTableRows} emptyLabel="선택 월에 담당자별 REV 금액이 없습니다." />
+                      <BreakdownNumbersTable
+                        rows={revManagerTableRows}
+                        emptyLabel="선택 월에 담당자별 REV 금액이 없습니다."
+                        onRowClick={onManagerRowClick}
+                      />
+                      <p className="mt-1.5 text-[10px] text-[#615D59]">행 클릭 시 해당 담당자로 필터링됩니다.</p>
                     </section>
                     <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
                       <div className="mb-2 flex items-center justify-between gap-2">
