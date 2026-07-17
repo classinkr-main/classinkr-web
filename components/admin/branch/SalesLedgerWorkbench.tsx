@@ -681,6 +681,52 @@ export function aggregatePeriodManagerSummaries(rows: LedgerRevenueRow[], months
     .sort((a, b) => b.total - a.total)
 }
 
+export interface PeriodComparisonChip {
+  label: string
+  deltaPct: number
+}
+
+// 전기 대비 칩(웨이브 5, 항목 3) — 이전 기간 확정 합계를 REV rows에서 직접 구한다(matrixMonths가
+// 회계연도 12개월을 이미 다 갖고 있어 서버 재조회가 필요 없다). 확정 합산도 위와 동일하게
+// rowMonthConfirmed를 월 단위로만 호출한다. FY 경계를 벗어나는 이전 기간(4월의 전월, Q1의
+// 전분기)이거나 이전 기간 합이 0이면 null을 반환해 렌더 자체를 생략시킨다 — 거짓 0%를 보여주지
+// 않는다(DealMixSection의 prev_period_available 가드와 동일한 원칙, 그 파일은 참고만 하고 손대지 않음).
+// Y는 비교 대상(전년 FY)이 로드돼 있지 않아 항상 미지원.
+export function buildPrevPeriodComparison(
+  period: Period,
+  currentActual: number | null | undefined,
+  rows: LedgerRevenueRow[],
+  matrixMonths: string[],
+  periodMonths: string[],
+): PeriodComparisonChip | null {
+  if (period === "Y") return null
+  if (currentActual == null) return null
+
+  let prevMonths: string[]
+  let label: string
+  if (period === "M") {
+    const idx = matrixMonths.indexOf(periodMonths[0] ?? "")
+    if (idx <= 0) return null // FY 첫 달(4월)의 "전월"은 회계연도 밖 — 데이터 없음
+    prevMonths = [matrixMonths[idx - 1]]
+    label = `${formatMonthLabel(prevMonths[0])} 대비`
+  } else {
+    const calendarMonths = periodMonths.map((month) => Number(month.split("-")[1]))
+    const quarter = calendarMonths.length > 0 ? fiscalQuarter(calendarMonths[0]) : null
+    if (quarter == null || quarter <= 1) return null // Q1의 "전분기"는 회계연도 밖 — 데이터 없음
+    prevMonths = matrixMonths.filter((month) => fiscalQuarter(Number(month.split("-")[1])) === quarter - 1)
+    if (prevMonths.length === 0) return null
+    label = `Q${quarter - 1} 대비`
+  }
+
+  let prevConfirmed = 0
+  for (const month of prevMonths) {
+    for (const row of rows) prevConfirmed += rowMonthConfirmed(row, month)
+  }
+  if (prevConfirmed <= 0) return null
+
+  return { label, deltaPct: ((currentActual - prevConfirmed) / prevConfirmed) * 100 }
+}
+
 // 매트릭스 1행×1월 파생값을 한 번에. rowMonthAmount를 4번 부르던 것을 1번으로 줄여
 // 12개월×수백행 반복(그룹 소계·그랜드토탈)에서 재계산을 억제한다. total=confirmed+high+open 불변식
 // (캐논 splitMonthConfidence가 클램프로 보장).
@@ -1078,12 +1124,16 @@ function MetricTile({
   hint,
   tone,
   icon,
+  chip,
 }: {
   label: string
   value: string
   hint: string
   tone?: string
   icon: React.ReactNode
+  // 웨이브 5 — 항목 3: 전기 대비 등 짧은 보조 신호. 가드에 걸려 데이터가 없으면 호출부가 null을
+  // 넘겨 렌더 자체를 생략한다(거짓 0% 금지).
+  chip?: React.ReactNode
 }) {
   return (
     <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-4 py-3">
@@ -1095,6 +1145,7 @@ function MetricTile({
         {value}
       </p>
       <p className="mt-1.5 text-[11.5px] leading-relaxed text-[#615D59]">{hint}</p>
+      {chip && <p className="mt-1">{chip}</p>}
     </div>
   )
 }
@@ -5240,6 +5291,14 @@ export default function SalesLedgerWorkbench() {
   // 첫 로드 중 타일이 가짜 ¥0을 보여주지 않도록 — 값이 오기 전에는 대시로 정직하게.
   const summaryPending = summary.loading && !summary.data
   const gap = (revenue?.confirmed ?? 0) - (revenue?.goal ?? 0)
+  // 웨이브 5 — 항목 3: "실적" 타일(revenue.confirmed, 이미 서버가 period=M/Q/Y로 스코프해 내려줌)
+  // 바로 옆에 붙는 전기 대비 칩. 이전 기간 합계는 서버 재조회 없이 REV rows(matrixMonths가 FY
+  // 12개월을 이미 다 들고 있다)에서 클라이언트가 직접 낸다 — rows는 팀 스코프·검색필터 미반영이라
+  // revenue.confirmed(서버, 팀 스코프)와 같은 모집단이다.
+  const revPrevPeriodComparison = useMemo(
+    () => buildPrevPeriodComparison(period, summaryPending ? null : revenue?.confirmed ?? null, rows, matrixMonths, periodMonths),
+    [period, summaryPending, revenue?.confirmed, rows, matrixMonths, periodMonths],
+  )
   const openDrafts = drafts.filter((draft) => draft.status === "draft" || draft.status === "checked")
   const railViewItems = useMemo(() => [
     {
@@ -5544,6 +5603,23 @@ export default function SalesLedgerWorkbench() {
               hint={summaryPending ? "불러오는 중" : `시트 원천 · ${periodLabel} 달성률 ${formatPercent(revenue?.pacing_pct)}`}
               tone="text-[#084734]"
               icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+              chip={
+                revPrevPeriodComparison && (
+                  <span
+                    className={`inline-flex items-center gap-1 text-[10.5px] font-bold ${
+                      revPrevPeriodComparison.deltaPct >= 0 ? "text-[#084734]" : "text-[#B43E3E]"
+                    }`}
+                  >
+                    {revPrevPeriodComparison.deltaPct >= 0 ? (
+                      <ArrowUpRight className="h-3 w-3" />
+                    ) : (
+                      <ArrowDownRight className="h-3 w-3" />
+                    )}
+                    {revPrevPeriodComparison.label} {revPrevPeriodComparison.deltaPct >= 0 ? "+" : ""}
+                    {revPrevPeriodComparison.deltaPct.toFixed(0)}%
+                  </span>
+                )
+              }
             />
             <MetricTile
               label="장부 가감"
