@@ -8,8 +8,16 @@ import {
   sortPriorityItems,
   type CrmPriorityBucket,
   type CrmPriorityItem,
-  type CrmPrioritySource,
 } from "@/lib/crm/priority"
+import {
+  daysUntil,
+  matchesSavedView,
+  rowMatchesOwner,
+  type CrmUnifiedCustomerRow,
+  type CrmUnifiedCustomerSource,
+  type CrmUnifiedLifecycle,
+  type CrmUnifiedSavedView,
+} from "@/lib/crm/unified-view-rules"
 import { listAllCustomerListItemsLite } from "@/lib/portal/repositories/customers"
 import type { CustomerListItem } from "@/lib/portal/types"
 import { listConfirmedLeadCustomerLinks } from "@/lib/repositories/crm-source-links"
@@ -17,44 +25,13 @@ import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
 import { computeCustomerHealth, type CustomerHealthBand } from "@/lib/crm/customer-health"
 import { getAllCustomerTagsMap } from "./crm-customer-tags"
 
-// "customer" = 리드 전환(convert-v2)이 만드는 portal customers 테이블의 앱 고객.
-export type CrmUnifiedCustomerSource = CrmPrioritySource | "customer"
-export type CrmUnifiedLifecycle = "new_lead" | "active_lead" | "account_risk" | "active_account" | "closed"
-export type CrmUnifiedSavedView =
-  | "all"
-  | "priority"
-  | "new_leads"
-  | "needs_care"
-  | "my_owner"
-  | "expiring"
-  | "dormant"
-  | "hot_lead"
-  | "upsell"
+// 뷰 규칙(타입+순수 매칭 함수)은 lib/crm/unified-view-rules.ts로 분리 — 기존 임포터 호환 재수출.
+export type { CrmUnifiedCustomerRow, CrmUnifiedCustomerSource, CrmUnifiedLifecycle, CrmUnifiedSavedView }
+export { matchesSavedView }
 
 // 칩 카운트를 보여줄 세그먼트(저장 뷰).
 export const CRM_SEGMENT_VIEWS = ["expiring", "dormant", "hot_lead", "upsell"] as const
 export type CrmUnifiedSourceStatusKey = "classin_leads" | "app_customers" | "external_crm" | "sheets"
-
-export interface CrmUnifiedCustomerRow {
-  key: string
-  source: CrmUnifiedCustomerSource
-  sourceLabel: string
-  name: string
-  contact: string | null
-  ownerName: string | null
-  ownerKeys: string[]
-  lifecycle: CrmUnifiedLifecycle
-  statusLabel: string
-  nextActionLabel: string
-  priorityReason: string
-  score: number
-  moneyLabel: string | null
-  href: string
-  updatedAt: string | null
-  expireAt: string | null
-  balance: number | null
-  tags: string[]
-}
 
 // 활성 고객(neo_account) 건강도 분포 — computeCustomerHealth(SSOT)로 매핑한 실집계.
 export interface CrmHealthDistribution {
@@ -226,6 +203,13 @@ function buildPortalCustomerRow(item: CustomerListItem): CrmUnifiedCustomerRow {
     updatedAt: summary?.last_deal_updated_at ?? customer.updated_at ?? customer.created_at,
     expireAt: null,
     balance: null,
+    // 신규 뷰 필드 — 실제 파생은 Task 4에서 배선(현재는 기본값).
+    origin: null,
+    crmRegistered: false,
+    provisional: false,
+    slaTarget: false,
+    firstResponseAt: null,
+    createdAt: null,
   }
 }
 
@@ -270,18 +254,6 @@ function clampInteger(value: number | undefined, fallback: number, min: number, 
   return Math.max(min, Math.min(Math.floor(numeric), max))
 }
 
-function rowMatchesOwner(row: CrmUnifiedCustomerRow, ownerKeys: Set<string>) {
-  if (ownerKeys.size === 0) return true
-  return row.ownerKeys.some((key) => ownerKeys.has(key))
-}
-
-function daysUntil(iso: string | null, nowMs: number): number | null {
-  if (!iso) return null
-  const time = new Date(iso).getTime()
-  if (Number.isNaN(time)) return null
-  return (time - nowMs) / 86_400_000
-}
-
 // 우선순위 점수 → 리스크 등급(목록 severity와 동일 임계). 건강도 입력으로 사용.
 function severityFromScore(score: number): "critical" | "high" | "medium" | "low" {
   return score >= 85 ? "critical" : score >= 68 ? "high" : score >= 42 ? "medium" : "low"
@@ -296,36 +268,6 @@ function rowHealthBand(row: CrmUnifiedCustomerRow, nowMs: number): CustomerHealt
     daysToExpire: daysUntil(row.expireAt, nowMs),
     lastContactDays: null,
   }).band
-}
-
-function matchesSavedView(
-  row: CrmUnifiedCustomerRow,
-  view: CrmUnifiedSavedView,
-  ownerKeys: Set<string>,
-  nowMs: number
-) {
-  if (view === "all") return true
-  if (view === "priority") return row.score >= 68
-  if (view === "new_leads") return row.lifecycle === "new_lead"
-  if (view === "needs_care") return row.source === "neo_account" && row.lifecycle === "account_risk"
-  if (view === "my_owner") return ownerKeys.size > 0 && rowMatchesOwner(row, ownerKeys)
-  // 만료 임박: NEO 만료일이 14일 이내(지난 것 포함).
-  if (view === "expiring") {
-    const d = daysUntil(row.expireAt, nowMs)
-    return d != null && d <= 14
-  }
-  // 30일+ 미접촉: 마지막 활동(updatedAt)이 30일보다 오래됨.
-  if (view === "dormant") {
-    const d = daysUntil(row.updatedAt, nowMs)
-    return d != null && d <= -30
-  }
-  // 고전환 리드: 우선순위 점수 상위 리드.
-  if (view === "hot_lead") return row.source === "lead" && row.score >= 68
-  // 업셀 후보: 위험 아닌 활성 고객 + 잔액 보유.
-  if (view === "upsell") {
-    return row.source === "neo_account" && row.lifecycle !== "account_risk" && (row.balance ?? 0) > 0
-  }
-  return true
 }
 
 export async function getCrmUnifiedCustomers(
@@ -368,6 +310,13 @@ export async function getCrmUnifiedCustomers(
         updatedAt: lead.follow_up_at ?? lead.timestamp,
         expireAt: null,
         balance: null,
+        // 신규 뷰 필드 — 실제 파생은 Task 4에서 배선(현재는 기본값).
+        origin: null,
+        crmRegistered: false,
+        provisional: false,
+        slaTarget: false,
+        firstResponseAt: null,
+        createdAt: null,
       })
     }
   } else {
@@ -406,6 +355,13 @@ export async function getCrmUnifiedCustomers(
         updatedAt: account.updatedAt ?? account.lastClassAt ?? account.expireAt,
         expireAt: account.expireAt ?? null,
         balance: account.balance ?? null,
+        // 신규 뷰 필드 — 실제 파생은 Task 4에서 배선(현재는 기본값).
+        origin: null,
+        crmRegistered: false,
+        provisional: false,
+        slaTarget: false,
+        firstResponseAt: null,
+        createdAt: null,
       })
     }
 
