@@ -179,6 +179,9 @@ interface RegressionCandidateItem {
   capturedAt: string
   outcome: RegressionOutcome
   reviewState: string
+  // additive 필드 — 승격 자격(corrected_content 존재). 구응답에는 없을 수 있어 optional,
+  // 부재 시(?? true) approved 휴리스틱만으로 승격 버튼을 노출해 하위호환한다.
+  hasCorrectedContent?: boolean
 }
 
 interface RegressionCandidatesResponse {
@@ -229,11 +232,13 @@ interface PromoteKnowledgeResponse {
   articleId: string
   slug: string
   reused: boolean
+  // additive — false면 문서는 저장됐지만 임베딩 실패로 검색 색인 대기 상태. true/부재는 정상.
+  searchable?: boolean
 }
 
 // 회귀 패널 항목과 대화 스레드의 승인된 메시지, 두 노출 지점이 messageId로 결과를 공유한다.
 type PromotionResult =
-  | { status: "success"; articleId: string; slug: string; reused: boolean }
+  | { status: "success"; articleId: string; slug: string; reused: boolean; searchable?: boolean }
   | { status: "error"; error: string }
 
 interface ConversationDetailResponse {
@@ -728,11 +733,21 @@ function PromoteKnowledgeControl({
   onPromote: () => void
 }) {
   if (result?.status === "success") {
+    // searchable === false — 문서는 저장됐지만 임베딩 실패로 아직 검색에 잡히지 않는 상태(앰버).
+    // true/부재(구응답)는 기존 그린 배지 그대로. edit 링크는 양쪽 모두 유지한다.
+    const indexingPending = result.searchable === false
     return (
       <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1 rounded-md bg-[#ECFDF5] px-2 py-1 text-[10px] font-semibold text-[#084734]">
-          <CheckCircle2 className="h-3 w-3" />
-          {result.reused ? "기존 문서 갱신됨" : "지식으로 승격됨"}
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold",
+            indexingPending ? "bg-[#FBF1E0] text-[#7A520F]" : "bg-[#ECFDF5] text-[#084734]"
+          )}
+        >
+          {indexingPending ? <AlertTriangle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+          {indexingPending
+            ? "승격됨 — 검색 색인 대기(임베딩 실패)"
+            : result.reused ? "기존 문서 갱신됨" : "지식으로 승격됨"}
         </span>
         <Link
           href={`/admin/docs/${result.articleId}/edit`}
@@ -989,7 +1004,9 @@ function InternalCsChatWorkspaceInner() {
   // 회귀 검수 미니 패널 — 미판정 우선 목록. 실패 시 섹션 자체에 재시도 폴백을 보여준다.
   // demoMode는 "다시 시도" 루프 대신 깨끗한 빈 상태로 처리한다.
   // 재조회 진입 시 직전 자동 평가의 잔상(실행 상태·에러·건너뜀 경고)을 리셋하고,
-  // 성공 시 새 목록에 없는 메시지의 제안·승격 결과를 prune해 stale 배지를 막는다.
+  // 성공 시 새 목록에 없는 메시지의 제안을 prune해 stale 배지를 막는다.
+  // promotionResults는 대화 스레드와 공유하는 맵이라 여기서 prune하지 않는다 —
+  // 스레드 메시지가 회귀 목록에 없으면 승격 성공 배지가 사라지는 부작용이 있고, 세션 한정 누적은 무해.
   const loadRegressionCandidates = useCallback(async () => {
     setRegressionEvalRunState("idle")
     setRegressionEvalError(null)
@@ -1007,10 +1024,6 @@ function InternalCsChatWorkspaceInner() {
       setRegressionCandidates(items)
       const liveIds = new Set(items.map((item) => item.id))
       setRegressionSuggestions((current) =>
-        Object.fromEntries(Object.entries(current).filter(([id]) => liveIds.has(id)))
-      )
-      // 승격 결과도 현재 목록 기준으로 정리한다(승격은 멱등이라 재클릭에 안전).
-      setPromotionResults((current) =>
         Object.fromEntries(Object.entries(current).filter(([id]) => liveIds.has(id)))
       )
       setRegressionLoadState("loaded")
@@ -1717,7 +1730,13 @@ function InternalCsChatWorkspaceInner() {
       )
       setPromotionResults((current) => ({
         ...current,
-        [messageId]: { status: "success", articleId: response.articleId, slug: response.slug, reused: response.reused },
+        [messageId]: {
+          status: "success",
+          articleId: response.articleId,
+          slug: response.slug,
+          reused: response.reused,
+          searchable: response.searchable,
+        },
       }))
     } catch (promoteError) {
       setPromotionResults((current) => ({
@@ -2633,7 +2652,8 @@ function InternalCsChatWorkspaceInner() {
                               </button>
                             ))}
                           </div>
-                          {item.reviewState === "approved" ? (
+                          {/* hasCorrectedContent 부재(구응답)면 approved 휴리스틱만으로 노출 — 하위호환. */}
+                          {item.reviewState === "approved" && (item.hasCorrectedContent ?? true) ? (
                             <PromoteKnowledgeControl
                               pending={promotingMessageId === item.id}
                               result={promotionResults[item.id]}
