@@ -472,6 +472,9 @@ export default function CrmUnifiedCustomersClient() {
   const [drawer, setDrawer] = useState<{ key: string; name: string } | null>(null)
   const [leadModalOpen, setLeadModalOpen] = useState(false)
   const requestSeq = useRef(0)
+  // 드로어 컴포저 dirty — 뒤로가기(?account= 소실) 닫기 경로가 드로어 내부 닫기 가드와
+  // 같은 확인을 거치게 한다(가드 없이는 뒤로가기가 작성 중 기록을 무음 폐기).
+  const drawerDirtyRef = useRef(false)
 
   // 드로어를 ?account= 에 동기화 — 딥링크/뒤로가기 (C9)
   const router = useRouter()
@@ -507,14 +510,32 @@ export default function CrmUnifiedCustomersClient() {
   }, [setDrawerUrl])
 
   // URL ↔ 드로어 상태 양방향 동기화 — 딥링크 복원 + 뒤로/앞으로가기(popstate) 대응.
+  // drawerRef: 이 효과는 searchParams 변화에만 반응해야 한다 — 드로어 상태를 deps에 넣으면
+  // closeDrawer의 replace가 착지하기 전 중간 렌더(드로어 null·URL은 아직 account 보유)에서
+  // 드로어를 되살린다.
+  const drawerRef = useRef(drawer)
+  useEffect(() => {
+    drawerRef.current = drawer
+  }, [drawer])
+
   useEffect(() => {
     const account = searchParams.get("account")
-    setDrawer((current) => {
-      if (!account) return current ? null : current
-      if (current?.key === account) return current
-      return { key: account, name: current?.name ?? "" }
-    })
-  }, [searchParams])
+    const current = drawerRef.current
+    if (!account) {
+      if (!current) return
+      // 뒤로가기로 ?account=가 사라질 때: 컴포저에 작성 중 기록이 있으면 확인 후에만 닫는다.
+      // 거부 시 라우터 push로 account를 복원(히스토리 한 단계 재적재) — raw history API는
+      // useSearchParams와 desync되므로 금지.
+      if (drawerDirtyRef.current && !window.confirm("작성 중인 기록이 있습니다. 닫을까요?")) {
+        setDrawerUrl(current.key, "push")
+        return
+      }
+      setDrawer(null)
+      return
+    }
+    if (current?.key === account) return
+    setDrawer({ key: account, name: current?.name ?? "" })
+  }, [searchParams, setDrawerUrl])
 
   // 리드 전환 완료 패널 '고객 보기' 딥링크(?q=) → 검색어 1회 복원.
   const restoredQueryRef = useRef(false)
@@ -1074,6 +1095,9 @@ export default function CrmUnifiedCustomersClient() {
         customerKey={drawer?.key ?? null}
         name={drawer?.name}
         onClose={closeDrawer}
+        onDirtyChange={(dirty) => {
+          drawerDirtyRef.current = dirty
+        }}
       />
 
       <LeadRegisterModal

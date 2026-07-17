@@ -142,15 +142,16 @@ describe("confirmLeadNeoLink", () => {
         id: "l1",
         status: "confirmed",
         target_type: "customer",
-        target_id: "cust-1",
+        target_id: "customer-uuid-1234",
         normalized_name: null,
         metadata: null,
       },
     ])
 
+    // 어드민 토스트에 그대로 노출되는 문구 — raw enum(customer:...) 대신 한국어 라벨 + 뒤 8자리.
     await expect(
       confirmLeadNeoLink({ leadId: "lead-1", neoAccountId: "neo-1" })
-    ).rejects.toThrow(/이미 다른 타깃/)
+    ).rejects.toThrow(/이미 다른 타깃\(전환 고객 …uid-1234\)/)
     expect(upsertCalls).toHaveLength(0)
   })
 })

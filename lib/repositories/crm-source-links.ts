@@ -1621,8 +1621,16 @@ export async function findConfirmedLeadNeoLink(leadId: string): Promise<{ target
   return { targetId: link.target_id }
 }
 
+// 확정 충돌 에러 문구용 타깃 종류 한국어 라벨 — 어드민 화면 노출 카피.
+const CRM_LINK_TARGET_TYPE_KO: Record<string, string> = {
+  customer: "전환 고객",
+  partner_account: "파트너 계정",
+  deal: "딜",
+  external_account: "NEO 계정",
+}
+
 /**
- * '리드 → NEO 계정' 수동 등록 확정(360 드로어 'NEO 등록됨' 액션). 멱등:
+ * '리드 → NEO 계정' 수동 등록 확정(360 드로어 'NEO 등록 연결' 액션). 멱등:
  * 이미 같은 페어가 confirmed면 그대로 { created: false }를 돌려준다. 같은 페어의
  * 비확정 후보가 있으면 확정으로 갱신하고, 없으면 확정 행을 새로 만든다 —
  * unique 제약(source_system,source_object,source_record_key,target_type,target_id)이
@@ -1668,10 +1676,14 @@ export async function confirmLeadNeoLink(input: {
   // 부분 유니크 인덱스(crm_source_links_one_confirmed_source_idx)는 소스당 확정 1건만
   // 허용한다. 이미 다른 타깃(예: convert-v2 lead→customer)으로 확정된 리드면 DB가
   // 어차피 거부하므로, 불투명한 23505 대신 원인이 보이는 에러로 먼저 알린다.
+  // 메시지는 어드민 토스트에 그대로 노출된다 — raw enum/전체 id 대신 한국어 라벨 + 뒤 8자리.
   const otherConfirmed = links.find((link) => link.status === "confirmed" && link !== existing)
   if (otherConfirmed) {
+    const typeLabel = CRM_LINK_TARGET_TYPE_KO[otherConfirmed.target_type] ?? otherConfirmed.target_type
+    const shortId =
+      otherConfirmed.target_id.length > 8 ? `…${otherConfirmed.target_id.slice(-8)}` : otherConfirmed.target_id
     throw new Error(
-      `이미 다른 타깃(${otherConfirmed.target_type}:${otherConfirmed.target_id})으로 확정된 리드입니다 — 기존 확정 링크를 해제한 뒤 다시 시도하세요.`
+      `이미 다른 타깃(${typeLabel} ${shortId})으로 확정된 리드입니다 — 기존 확정 링크를 해제한 뒤 다시 시도하세요.`
     )
   }
 

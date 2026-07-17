@@ -70,6 +70,8 @@ interface Props {
   customerKey: string | null
   name?: string | null
   onClose: () => void
+  /** 컴포저 작성 중 여부 통지 — 부모의 URL 기반 닫기 경로(뒤로가기)가 같은 dirty 가드를 공유하게 한다. */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 // 섹션 점프 탭 — 활동 승격 스펙: 탭 표시·DOM 등장 순서 모두 요약→활동→할일→딜→머니.
@@ -258,7 +260,7 @@ function SectionTitle({ icon, children }: { icon: React.ReactNode; children: Rea
   )
 }
 
-export default function Customer360Drawer({ customerKey, name, onClose }: Props) {
+export default function Customer360Drawer({ customerKey, name, onClose, onDirtyChange }: Props) {
   const [data, setData] = useState<Customer360 | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -290,6 +292,16 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const router = useRouter()
   const bodyRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+
+  // dirty 통지는 ref 경유 — 부모가 인라인 함수를 넘겨도 콜백 재생성/재구독 루프가 없게.
+  const onDirtyChangeRef = useRef(onDirtyChange)
+  useEffect(() => {
+    onDirtyChangeRef.current = onDirtyChange
+  })
+  const handleComposerDirtyChange = useCallback((dirty: boolean) => {
+    setComposerDirty(dirty)
+    onDirtyChangeRef.current?.(dirty)
+  }, [])
 
   const url = customerKey ? `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/360` : null
 
@@ -375,8 +387,8 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     setEventsExpanded(false)
     setDealFormOpen(false)
     setTaskFormOpen(false)
-    // 고객 전환 시 컴포저는 새 대상으로 리마운트되므로 dirty 가드도 초기화.
-    setComposerDirty(false)
+    // 고객 전환 시 컴포저는 새 대상으로 리마운트되므로 dirty 가드도 초기화(부모에도 통지).
+    handleComposerDirtyChange(false)
     // NEO 연결 패널도 이전 고객의 입력·에러가 남지 않게 닫는다.
     setNeoLinkOpen(false)
     setNeoLinkBusy(false)
@@ -387,7 +399,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     setActiveSection("c360-summary")
     bodyRef.current?.scrollTo({ top: 0 })
     if (customerKey) void load()
-  }, [customerKey, load])
+  }, [customerKey, load, handleComposerDirtyChange])
 
   // ESC 닫기 — 드로어가 열려 있을 때만 바인딩(닫힌 상태에서 페이지 전역 ESC가 onClose를 부르지 않게).
   useEffect(() => {
@@ -484,6 +496,9 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
         setNeoPickerId("")
         await refetch()
       } catch (err) {
+        // 실패 시 피커 선택을 되돌린다 — '연결됨' 표시가 에러 문구와 모순되지 않게.
+        setNeoPickerLabel("")
+        setNeoPickerId("")
         // 409(이미 다른 타깃으로 확정)는 API가 원인 메시지를 담아 돌려준다 — 그대로 노출.
         setNeoLinkError(err instanceof Error ? err.message : "NEO 등록 연결에 실패했습니다.")
       } finally {
@@ -963,7 +978,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                   aria-expanded={neoLinkOpen}
                   className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#fafaf8]"
                 >
-                  NEO 등록됨…
+                  NEO 등록 연결…
                 </button>
               )
             ) : null}
@@ -1041,7 +1056,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
               defaultTargetLabel={displayName}
               bodyFieldId={COMPOSER_BODY_ID}
               onSaved={() => void refetch()}
-              onDirtyChange={setComposerDirty}
+              onDirtyChange={handleComposerDirtyChange}
             />
           </div>
         ) : null}
