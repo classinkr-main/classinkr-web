@@ -1,7 +1,8 @@
 "use client"
-import { Search } from "lucide-react"
+import { RotateCcw, Search } from "lucide-react"
 import { useMemo, useState } from "react"
 import { useBranchJson } from "../client-api"
+import { matchesTokens, tokenize } from "../search-tokens"
 import type { BranchPipelineResponse, BranchPipelineRow, Period, Team } from "../types"
 import { cny, cnyExact } from "@/lib/branch/money-format"
 import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
@@ -9,18 +10,6 @@ import { ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
 import MoneyValue from "../MoneyValue"
 
 type Row = BranchPipelineRow
-
-// 공백으로 나뉜 다중 토큰 AND 매칭 — PipelineTable(sections/PipelineTable.tsx)의
-// tokenize/matchesTokens와 동일한 규약. 파일 간 공유 유틸로 빼지 않고 각자 소유
-// 범위 안에서 인라인 유지(두 파일 모두 이 세션의 소유 스코프).
-function tokenize(query: string): string[] {
-  return query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-}
-
-function matchesTokens(tokens: string[], fields: Array<string | null | undefined>): boolean {
-  if (tokens.length === 0) return true
-  return tokens.every((token) => fields.some((f) => String(f ?? "").toLowerCase().includes(token)))
-}
 
 interface MergedRow extends Row {
   count: number  // number of deals merged under this customer
@@ -187,8 +176,11 @@ export default function BranchPipelineKanban({ team, period, selectedMonth, refr
 }) {
   const [selectedManager, setSelectedManager] = useState("")
   const [query, setQuery] = useState("")
+  // 로컬 재시도 넛지 — BranchRegionHeatmap/PipelineTable과 동일 패턴(refreshKey에
+  // 더해 로컬 카운터를 얹어 useBranchJson의 캐시키를 바꿔 재요청을 트리거).
+  const [localRetry, setLocalRetry] = useState(0)
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
-  const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey)
+  const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey + localRetry)
   const pipelineRows = pipeline.data?.rows
   const rows = useMemo(() => pipeline.loading ? null : (pipelineRows ?? []), [pipeline.loading, pipelineRows])
 
@@ -200,9 +192,11 @@ export default function BranchPipelineKanban({ team, period, selectedMonth, refr
   const filteredRows = useMemo(() => {
     if (!rows) return null
     const tokens = tokenize(query)
+    // PipelineTable(sections/PipelineTable.tsx)과 동일 4필드(고객/담당/팀/지역) AND
+    // 매칭 — 두 화면(테이블·칸반)의 검색 결과가 어긋나지 않도록 필드 세트를 통일한다.
     return rows
       .filter((r) => !selectedManager || r.manager === selectedManager)
-      .filter((r) => matchesTokens(tokens, [r.customer, r.manager]))
+      .filter((r) => matchesTokens(tokens, [r.customer, r.manager, r.team, r.region]))
   }, [rows, selectedManager, query])
 
   const grouped = useMemo(() => {
@@ -231,6 +225,24 @@ export default function BranchPipelineKanban({ team, period, selectedMonth, refr
   }, [filteredRows])
 
   if (!rows) return <div className="h-72 animate-pulse rounded-xl bg-[#f0f0ec]" />
+  // 에러를 빈 상태("딜 없음" 4컬럼)로 위장하지 않는다 — pipeline.error가 있으면
+  // 에러 배너 + 재시도로 명시한다(PipelineTable/BranchRegionHeatmap과 동일 원칙).
+  if (pipeline.error) return (
+    <div
+      role="alert"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]"
+    >
+      <span>{pipeline.error}</span>
+      <button
+        type="button"
+        onClick={() => setLocalRetry((v) => v + 1)}
+        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-[#B43E3E] bg-white px-2.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9]"
+      >
+        <RotateCcw className="h-3 w-3" aria-hidden="true" />
+        다시 시도
+      </button>
+    </div>
+  )
 
   const totalAll = (filteredRows ?? []).reduce((s, r) => s + r.revenue, 0)
   const confirmedTotal = grouped.confirmed.reduce((s, d) => s + d.revenue, 0)
@@ -268,7 +280,7 @@ export default function BranchPipelineKanban({ team, period, selectedMonth, refr
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="고객, 담당 검색"
+              placeholder="고객, 담당, 팀, 지역 검색"
               className="h-7 w-40 rounded-full border border-[rgba(0,0,0,0.08)] bg-white pl-8 pr-3 text-[11px] outline-none transition focus:border-[#111110]/30"
             />
           </label>

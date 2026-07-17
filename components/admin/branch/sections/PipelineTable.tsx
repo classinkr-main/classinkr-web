@@ -3,6 +3,7 @@ import Link from "next/link"
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronDown, ChevronLeft, ChevronRight, RotateCcw, Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useBranchJson } from "../client-api"
+import { matchesTokens, tokenize } from "../search-tokens"
 import { TEAMS, type BranchPipelineResponse, type BranchPipelineRow, type Team, type Period } from "../types"
 
 const SELECTABLE_TEAMS = TEAMS.filter((t) => t !== "ALL") as Exclude<Team, "ALL">[]
@@ -29,17 +30,6 @@ function compareRows(a: Row, b: Row, key: SortKey, dir: SortDir): number {
   const diff = key === "revenue" ? a.revenue - b.revenue : String(a[key] ?? "").localeCompare(String(b[key] ?? ""), "ko")
   if (diff !== 0) return diff * mul
   return a.customer.localeCompare(b.customer, "ko")
-}
-
-// 공백으로 나뉜 다중 토큰 AND 매칭 — "김민 BD"처럼 담당자/팀 등 서로 다른 필드에
-// 걸쳐 있어도 매치되게 한다(토큰별로 어느 필드에서든 부분일치하면 통과).
-function tokenize(query: string): string[] {
-  return query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-}
-
-function matchesTokens(tokens: string[], fields: Array<string | null | undefined>): boolean {
-  if (tokens.length === 0) return true
-  return tokens.every((token) => fields.some((f) => String(f ?? "").toLowerCase().includes(token)))
 }
 
 function SortableTh({
@@ -140,7 +130,7 @@ function MultiSelect({
             type="button"
             onClick={() => onChange(new Set())}
             className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
-              selected.size === 0 ? "bg-[#ECFDF5] text-[#0f5132]" : "text-[#111110]/65 hover:bg-[#FAFAF8]"
+              selected.size === 0 ? "bg-[#ECFDF5] text-[#084734]" : "text-[#111110]/65 hover:bg-[#FAFAF8]"
             }`}
           >
             <span>전체 보기</span>
@@ -154,7 +144,7 @@ function MultiSelect({
                 type="button"
                 onClick={() => toggle(opt)}
                 className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
-                  checked ? "bg-[#ECFDF5] text-[#0f5132]" : "text-[#111110]/75 hover:bg-[#FAFAF8]"
+                  checked ? "bg-[#ECFDF5] text-[#084734]" : "text-[#111110]/75 hover:bg-[#FAFAF8]"
                 }`}
               >
                 <span className="truncate">{opt}</span>
@@ -201,8 +191,12 @@ export default function PipelineTable({
     else { setSortKey(key); setSortDir(SORT_DEFAULT_DIR[key]) }
     setPage(1)
   }
+  // 로컬 재시도 넛지 — 상위 refreshKey(전역 새로고침)에 기대지 않고 이 섹션만
+  // useBranchJson의 기존 캐시키 재계산 경로(refreshKey:url)를 재사용해 다시 요청한다.
+  // (BranchRegionHeatmap의 동일 패턴 참조.)
+  const [localRetry, setLocalRetry] = useState(0)
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
-  const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey)
+  const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey + localRetry)
   const pipelineRows = pipeline.data?.rows
   const rows = useMemo(() => pipeline.loading ? null : (pipelineRows ?? []), [pipeline.loading, pipelineRows])
   const teamOptions = team === "ALL" ? SELECTABLE_TEAMS : [team]
@@ -290,10 +284,32 @@ export default function PipelineTable({
   }
 
   if (!rows) return <div className="h-64 animate-pulse rounded-2xl bg-[#F6F5F4]" />
+  // 에러를 빈 상태로 위장하지 않는다 — pipeline.error가 있으면(로딩 실패) "딜 없음"이
+  // 아니라 에러 배너 + 재시도를 보여준다. loading이 끝나고 error가 있으면 data는
+  // null이라 rows는 [](빈 배열)로 계산되므로 이 분기를 rows.length===0보다 먼저 둬야 한다.
+  if (pipeline.error) return (
+    <section>
+      <h2 className="mb-3 text-[13px] font-semibold text-[#111110]/70">REV 고객별 매출</h2>
+      <div
+        role="alert"
+        className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[12px] font-semibold text-[#8F2C2C]"
+      >
+        <span>{pipeline.error}</span>
+        <button
+          type="button"
+          onClick={() => setLocalRetry((v) => v + 1)}
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-[#B43E3E] bg-white px-2.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9]"
+        >
+          <RotateCcw className="h-3 w-3" aria-hidden="true" />
+          다시 시도
+        </button>
+      </div>
+    </section>
+  )
   if (rows.length === 0) return (
     <section>
       <h2 className="mb-3 text-[13px] font-semibold text-[#111110]/70">REV 고객별 매출</h2>
-      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6 text-[12px] text-[#111110]/40">표시할 매출 데이터가 없습니다.</div>
+      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6 text-[12px] text-[#615D59]">표시할 매출 데이터가 없습니다.</div>
     </section>
   )
 
@@ -311,7 +327,7 @@ export default function PipelineTable({
           </Link>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] text-[#111110]/40">{filteredRows.length}건 · {pageSize}개씩</span>
+          <span className="text-[11px] text-[#615D59]">{filteredRows.length}건 · {pageSize}개씩</span>
           <span className="mx-1 h-3 w-px bg-[rgba(0,0,0,0.08)]" aria-hidden="true" />
           <button
             type="button"
@@ -328,7 +344,7 @@ export default function PipelineTable({
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <label className="relative min-w-0 flex-1 sm:max-w-md">
           <span className="sr-only">REV 고객별 매출 검색</span>
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#111110]/35" aria-hidden="true" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#615D59]" aria-hidden="true" />
           <input
             value={query}
             onChange={(e) => { setQuery(e.target.value); setPage(1) }}
@@ -383,7 +399,7 @@ export default function PipelineTable({
           <tbody>
             {pageRows.length === 0 && (
               <tr>
-                <td className="px-5 py-10 text-center text-[#111110]/40" colSpan={5}>검색 결과가 없습니다.</td>
+                <td className="px-5 py-10 text-center text-[#615D59]" colSpan={5}>검색 결과가 없습니다.</td>
               </tr>
             )}
             {pageRows.map((r) => (
@@ -426,7 +442,7 @@ export default function PipelineTable({
           </tbody>
         </table>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#F6F5F4] px-5 py-1">
-          <p className="text-[11px] text-[#111110]/45">
+          <p className="text-[11px] text-[#615D59]">
             {pageStart}-{pageEnd} / {filteredRows.length}건
           </p>
           <div className="flex items-center gap-2">
