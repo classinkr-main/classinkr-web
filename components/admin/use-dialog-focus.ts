@@ -15,7 +15,25 @@ import type { RefObject } from "react"
  * - onClose: Escape 키를 누르면 호출된다.
  * - focusRef: 열릴 때 포커스를 이동시킬 대상(보통 닫기 버튼). 생략하면 포커스 이동은
  *   하지 않고 Escape 닫기 + 이전 포커스 복귀만 수행한다.
+ *
+ * 품질 웨이브 4 — 항목 1. Tab 캡처(포커스 트랩)를 추가한다. 컨테이너를 별도 인자로 받지
+ * 않고 focusRef가 가리키는 요소에서 `closest('[role="dialog"]')`로 다이얼로그 루트를
+ * 찾는다 — 현재 세 소비처(DealModal·AdminSidebar 모바일 드로어·AdminCommandPalette) 모두
+ * focusRef 대상이 role="dialog" 컨테이너 내부에 있으므로, 그 파일들을 전혀 건드리지 않고도
+ * 자동으로 Tab 순환 트랩을 얻는다. focusRef가 없거나 role="dialog" 조상을 못 찾으면
+ * 기존과 동일하게 Escape+복귀만 수행(트랩 없음).
  */
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function isVisible(el: HTMLElement) {
+  return el.offsetParent !== null || el === document.activeElement
+}
+
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(isVisible)
+}
+
 export function useDialogFocus<T extends HTMLElement>(
   openKey: string | number | boolean | null | undefined,
   onClose: () => void,
@@ -25,12 +43,43 @@ export function useDialogFocus<T extends HTMLElement>(
 
   useEffect(() => {
     if (!isOpen) return
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose()
+      if (e.key === "Escape") {
+        onClose()
+        return
+      }
+      if (e.key !== "Tab") return
+
+      // 매 Tab 입력마다 다시 조회 — DealModal 월별 로그처럼 다이얼로그가 열린 채로
+      // 콘텐츠가 비동기 로드돼 포커서블 요소 목록이 바뀔 수 있다.
+      const container = focusRef?.current?.closest<HTMLElement>('[role="dialog"]') ?? null
+      if (!container) return
+
+      const focusable = getFocusableElements(container)
+      if (focusable.length === 0) {
+        e.preventDefault()
+        return
+      }
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const active = document.activeElement
+
+      if (e.shiftKey) {
+        if (active === first || !(active instanceof HTMLElement) || !container.contains(active)) {
+          e.preventDefault()
+          last.focus()
+        }
+      } else if (active === last || !(active instanceof HTMLElement) || !container.contains(active)) {
+        e.preventDefault()
+        first.focus()
+      }
     }
+
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
-  }, [isOpen, onClose])
+  }, [isOpen, onClose, focusRef])
 
   useEffect(() => {
     if (!isOpen) return
