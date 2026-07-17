@@ -75,10 +75,20 @@ describe("updateDraft — 레코드 오류는 전역 강등 없이 그 행에만
   it("서버-id 초안(id가 local- 아님)의 두 실패 분기(레코드 오류·5xx) 모두 return하고, 그 아래 updateLocalDrafts로 떨어지지 않는다", () => {
     const body = fnBody()
     // if (queueMode === "server" && !id.startsWith("local-")) { ... } 블록 안에서
-    // catch의 두 분기가 각각 return null로 끝나는지 — 정규식으로 "return null}" 패턴이 2회(레코드
-    // 오류 분기, 5xx 분기) 나타나야 한다(성공 경로의 return data.draft는 별개 문자열).
-    const returnNullCount = (body.match(/return null/g) ?? []).length
-    expect(returnNullCount).toBe(2)
+    // catch의 두 분기가 각각 값 반환으로 끝나는지 — 웨이브 7 2단(I4)에서 반환형이
+    // DraftMutationResult로 바뀌어 "return null" 대신 "return { draft: null }" 리터럴이 정확히
+    // 2회(레코드 오류 분기, 5xx 분기)여야 한다. 409 충돌·400 검증 분기는 판별 플래그가 붙은
+    // "return { draft: null, ... }"라 이 리터럴에 매칭되지 않는다(성공 경로의
+    // return { draft: nextDraft }도 별개 문자열).
+    const failureReturnCount = (body.match(/return \{ draft: null \}/g) ?? []).length
+    expect(failureReturnCount).toBe(2)
+    // 서버-id 블록 어디에서도 로컬 낙관 편집(updateLocalDrafts)으로 떨어지지 않는다 — 로컬 폴백은
+    // 블록 밖(local-*/로컬 큐 전용) 경로에만 존재한다.
+    const serverBlockStart = body.indexOf('if (queueMode === "server" && !id.startsWith("local-")) {')
+    const localFallbackIndex = body.indexOf("updateLocalDrafts((items) =>")
+    expect(serverBlockStart).toBeGreaterThan(-1)
+    const catchEnd = body.lastIndexOf('setQueueMode("local")')
+    expect(localFallbackIndex).toBeGreaterThan(catchEnd)
   })
 
   it("5xx/네트워크 분기 메시지는 '로컬 폴백'이 아니라 재시도를 안내한다(더 이상 로컬에 낙관 반영하지 않으므로)", () => {

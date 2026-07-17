@@ -5,6 +5,8 @@ import { Loader2, Plus, Save, X } from "lucide-react"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   DRAFT_CONFIDENCE_OPTIONS,
+  DRAFT_CONFLICT_MESSAGE,
+  DRAFT_DEDUPED_RECENT_NOTICE,
   DRAFT_OPERATIONS,
   REV_PRODUCT_FILTERS,
   formatMonthLabel,
@@ -81,20 +83,32 @@ export function InputRailSection({
     setFeedback(null)
     const result = await action()
     setFeedback(
-      !result.persisted
-        // 품질 웨이브 7 — 항목 2: updateDraft(기존 서버 초안 수정/편집 저장)는 이제 실패 시
-        // 서버-id 레코드를 로컬로 낙관 편집하지 않는다(재전송 판별 누락으로 무음 소실되던
-        // 경로 제거) — "로컬 임시 저장으로 대체됐습니다"는 createDraft(완전 신규 초안)에서만
-        // 여전히 참이라 두 경로 모두에 맞는 문구로 일반화한다.
-        ? { kind: "error", text: "서버 저장에 실패했습니다(장부 적용 불가) — 잠시 후 다시 시도하거나 재연결 후 저장하세요." }
-        : result.deduped
-          // 이중계상 가드(항목 3) — 같은 딜·같은 셀에 이미 열린 초안이 있어 새로 만들지 않고 그 초안을 갱신했다.
-          ? { kind: "success", text: "이미 대기 초안 있음 — 수정으로 반영됩니다. 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." }
-          : result.duplicateWarning
-            // 품질 웨이브 4, 항목 2 — new-row는 매트릭스 대응 행이 없어 자동 재지정할 수 없다.
-            // 저장은 그대로 진행하고, 같은 고객·월에 이미 열린 신규 초안이 있다는 사실만 경고한다.
-            ? { kind: "warning", text: "저장 완료 — 같은 고객·월에 이미 열린 신규 초안이 있습니다. 체크 큐에서 중복 여부를 확인하세요." }
-            : { kind: "success", text: "저장 완료 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." },
+      result.conflict
+        // 웨이브 7 2단(I4) — 낙관적 잠금 충돌(409): 이번 수정은 반영되지 않았고 큐의 해당 초안은
+        // 서버 현재본으로 새로고침됐다. 편집 상태는 부모가 유지해주므로(saveEditedDraft) 값을
+        // 확인하고 그대로 다시 저장하면 된다.
+        ? { kind: "error" as const, text: DRAFT_CONFLICT_MESSAGE }
+        : result.validationMessage
+          // 웨이브 7 2단(I4) — 서버 검증 거부(400, 감액 양수 검증 등): 서버 문구를 그대로 보여준다.
+          ? { kind: "error" as const, text: result.validationMessage }
+          : !result.persisted
+            // 품질 웨이브 7 — 항목 2: updateDraft(기존 서버 초안 수정/편집 저장)는 이제 실패 시
+            // 서버-id 레코드를 로컬로 낙관 편집하지 않는다(재전송 판별 누락으로 무음 소실되던
+            // 경로 제거) — "로컬 임시 저장으로 대체됐습니다"는 createDraft(완전 신규 초안)에서만
+            // 여전히 참이라 두 경로 모두에 맞는 문구로 일반화한다.
+            ? { kind: "error" as const, text: "서버 저장에 실패했습니다(장부 적용 불가) — 잠시 후 다시 시도하거나 재연결 후 저장하세요." }
+            : result.dedupedRecent
+              // 웨이브 7 2단(I4) — POST 200 재사용: 저장은 유효하지만 새 초안이 생긴 게 아니다
+              // (60초 내 동일 입력 더블클릭/더블탭 방어). 중복 생성으로 오인하지 않게 명시한다.
+              ? { kind: "success" as const, text: `${DRAFT_DEDUPED_RECENT_NOTICE} 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.` }
+              : result.deduped
+                // 이중계상 가드(항목 3) — 같은 딜·같은 셀에 이미 열린 초안이 있어 새로 만들지 않고 그 초안을 갱신했다.
+                ? { kind: "success" as const, text: "이미 대기 초안 있음 — 수정으로 반영됩니다. 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." }
+                : result.duplicateWarning
+                  // 품질 웨이브 4, 항목 2 — new-row는 매트릭스 대응 행이 없어 자동 재지정할 수 없다.
+                  // 저장은 그대로 진행하고, 같은 고객·월에 이미 열린 신규 초안이 있다는 사실만 경고한다.
+                  ? { kind: "warning" as const, text: "저장 완료 — 같은 고객·월에 이미 열린 신규 초안이 있습니다. 체크 큐에서 중복 여부를 확인하세요." }
+                  : { kind: "success" as const, text: "저장 완료 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." },
     )
   }
 

@@ -33,7 +33,7 @@ import {
   Users,
   X,
 } from "lucide-react"
-import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
+import { adminFetch, adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
 import { matchesTokens, tokenize } from "./search-tokens"
 import { useDialogFocus } from "../use-dialog-focus"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
@@ -70,6 +70,8 @@ import { InputRailSection } from "./ledger/InputRailSection"
 import {
   buildRevWeekProjection,
   DRAFT_CONFIDENCE_OPTIONS,
+  DRAFT_CONFLICT_MESSAGE,
+  DRAFT_DEDUPED_RECENT_NOTICE,
   DRAFT_OPERATIONS,
   DRAFT_STATUS_LABELS,
   draftStatusLabel,
@@ -247,7 +249,22 @@ interface LedgerDraftsResponse {
 
 interface LedgerDraftResponse {
   draft?: LedgerDraft
+  // POST 전용(웨이브 7 I1→I4 배선): 60초 내 동일 입력의 열린 초안을 재사용(200)했으면 true —
+  // 새 리소스가 만들어진 게 아니므로 클라가 "직전 동일 초안 재사용됨"을 안내한다.
+  dedupedRecent?: boolean
   error?: string
+}
+
+// 웨이브 7 2단(I4): createDraft/updateDraft 공통 반환 — draft만으로는 409 낙관적 잠금 충돌
+// (레코드는 서버 현재본으로 새로고침됨)과 일반 실패를 구분할 수 없어 판별 플래그를 함께 싣는다.
+interface DraftMutationResult {
+  draft: LedgerDraft | null
+  /** updateDraft 전용: 409 충돌 — 이번 수정은 반영되지 않았고 해당 레코드는 서버 현재본으로 교체됨. */
+  conflict?: boolean
+  /** createDraft 전용: 서버가 60초 내 동일 입력의 열린 초안을 재사용(200)했음 — 새 초안 아님. */
+  dedupedRecent?: boolean
+  /** 서버 검증 거부(400) 문구 그대로 — 큐 강등·로컬 폴백 없이 호출부가 이 문구만 노출한다. */
+  validationMessage?: string
 }
 
 interface LedgerEntryResponse {
@@ -970,10 +987,12 @@ function useLedgerDraftQueue() {
   // 새로고침(loadDrafts)을 유도한다. loadDrafts가 서버 목록을 다시 받아오면 통째로 비운다 —
   // 재조회로 실제 상태가 다시 맞춰지므로 오래된 행별 에러를 계속 들고 있을 이유가 없다.
   const [recordErrors, setRecordErrors] = useState<Map<string, string>>(() => new Map())
-  const setRecordError = useCallback((id: string) => {
+  // 웨이브 7 2단(I4): 409 충돌 배지가 다른 문구(DRAFT_CONFLICT_MESSAGE)를 쓰므로 메시지를 옵션으로
+  // 받는다 — 생략하면 기존 레코드 소실 문구 그대로(하위호환, 기존 호출부 무변경).
+  const setRecordError = useCallback((id: string, message: string = DRAFT_RECORD_ERROR_MESSAGE) => {
     setRecordErrors((current) => {
       const next = new Map(current)
-      next.set(id, DRAFT_RECORD_ERROR_MESSAGE)
+      next.set(id, message)
       return next
     })
   }, [])
@@ -988,8 +1007,13 @@ function useLedgerDraftQueue() {
   // loadDrafts가 drafts state를 deps로 갖지 않아도(안정 identity 유지) 최신 local-* 초안을
   // 읽을 수 있게 미러링한다 — drafts가 바뀔 때마다 렌더 후 effect에서 갱신(렌더 중 ref 쓰기 금지).
   const localDraftsRef = useRef<LedgerDraft[]>([])
+  // 웨이브 7 2단(I4): updateDraft가 deps에 drafts를 넣지 않고도(안정 identity 유지 — 매트릭스 셀
+  // 커밋 경로에 물려 있어 identity 변동 비용이 큼) 호출 시점 레코드의 updatedAt(낙관적 잠금
+  // expectedUpdatedAt 원천)을 읽을 수 있게 전체 목록도 함께 미러링한다.
+  const draftsRef = useRef<LedgerDraft[]>([])
   useEffect(() => {
     localDraftsRef.current = drafts.filter((draft) => draft.id.startsWith("local-"))
+    draftsRef.current = drafts
   }, [drafts])
 
   const updateLocalDrafts = useCallback((updater: (current: LedgerDraft[]) => LedgerDraft[]) => {
@@ -1083,29 +1107,43 @@ function useLedgerDraftQueue() {
     void loadDrafts()
   }, [loadDrafts])
 
-  const createDraft = useCallback(async (input: LedgerDraftInput) => {
+  const createDraft = useCallback(async (input: LedgerDraftInput): Promise<DraftMutationResult> => {
     if (queueMode === "server") {
       try {
-        const data = await adminFetchJson<LedgerDraftResponse>("/api/admin/branch/ledger-drafts", {
+        // 웨이브 7 2단(I4): adminFetchJson 대신 원 Response를 직접 읽는다 — 400(서버 검증 거부)을
+        // 상태코드로 구분해 서버 문구를 그대로 노출하고, 성공 바디의 dedupedRecent(60초 내 동일
+        // 입력 재사용, 201 아닌 200)도 함께 꺼내기 위해서다.
+        const response = await adminFetch("/api/admin/branch/ledger-drafts", {
           method: "POST",
           body: JSON.stringify(input),
         })
-        if (!data.draft) throw new Error(data.error ?? "초안 저장 응답이 비어 있습니다.")
-        setDrafts((current) => [data.draft!, ...current.filter((draft) => draft.id !== data.draft!.id)].slice(0, 50))
+        const data = (await response.json().catch(() => null)) as LedgerDraftResponse | null
+        if (response.status === 400) {
+          // 검증 거부(감액 양수 검증 등) — 서버 문구 그대로 호출부에 넘긴다. 유효하지 않은 입력을
+          // 로컬 폴백 초안으로 만들어 두면 재전송 루프가 같은 400을 영원히 반복하므로 폴백하지
+          // 않고, 큐 강등도 하지 않는다(서버는 정상 응답했다).
+          return { draft: null, validationMessage: data?.error ?? "저장 요청이 거부되었습니다." }
+        }
+        if (!response.ok) {
+          throw new Error(data?.error ?? (`${response.status} ${response.statusText}`.trim() || "요청에 실패했습니다."))
+        }
+        if (!data?.draft) throw new Error(data?.error ?? "초안 저장 응답이 비어 있습니다.")
+        const nextDraft = data.draft
+        setDrafts((current) => [nextDraft, ...current.filter((draft) => draft.id !== nextDraft.id)].slice(0, 50))
         setQueueError(null)
-        return data.draft
+        return { draft: nextDraft, dedupedRecent: data.dedupedRecent === true }
       } catch (error) {
         const localDraft = makeLocalDraft(input)
         setQueueMode("local")
         setQueueError(`서버 저장에 실패해 로컬 큐에 임시 저장했습니다. ${errorMessage(error)}`)
         updateLocalDrafts((current) => [localDraft, ...current])
-        return localDraft
+        return { draft: localDraft }
       }
     }
 
     const localDraft = makeLocalDraft(input)
     updateLocalDrafts((current) => [localDraft, ...current])
-    return localDraft
+    return { draft: localDraft }
   }, [queueMode, updateLocalDrafts])
 
   // 품질 웨이브 7 — 항목 2: 이전에는 이 catch가 에러 종류와 무관하게 무조건 setQueueMode("local")
@@ -1118,26 +1156,53 @@ function useLedgerDraftQueue() {
   //     레코드 오류는 전역 강등 없이 그 행에만 에러를 붙이고(recordErrors), 5xx/네트워크만
   //     기존처럼 큐를 로컬로 내리되 — 두 경우 모두 서버-id 레코드를 로컬에서 낙관 편집하지
   //     않는다(그 편집은 그냥 실패로 끝난다 — 성공한 척 로컬에만 남기지 않음).
-  const updateDraft = useCallback(async (id: string, input: LedgerDraftInput) => {
+  const updateDraft = useCallback(async (id: string, input: LedgerDraftInput): Promise<DraftMutationResult> => {
     if (queueMode === "server" && !id.startsWith("local-")) {
       try {
-        const data = await adminFetchJson<LedgerDraftResponse>(`/api/admin/branch/ledger-drafts/${encodeURIComponent(id)}`, {
+        // 낙관적 잠금(웨이브 7 2단, I4): 클라가 들고 있는 이 초안의 updatedAt을 expectedUpdatedAt으로
+        // 동봉한다 — 서버(action=update)가 DB의 실제 updated_at과 CAS 비교해, 다른 곳에서 먼저
+        // 수정됐으면 409 {error, draft(서버 현재본)}로 알려준다. drafts state는 항상 서버 응답
+        // 원본을 보관하므로(updatedAt은 레포지토리가 내려준 문자열 그대로) 그대로 되돌려 보내면
+        // 문자열이 정확히 일치한다. 레코드가 아직 목록에 없으면(이론상) 잠금 없이 기존 무조건
+        // 덮어쓰기로 동작한다(서버 계약상 expectedUpdatedAt 생략 = 하위호환).
+        const expectedUpdatedAt = draftsRef.current.find((draft) => draft.id === id)?.updatedAt
+        const response = await adminFetch(`/api/admin/branch/ledger-drafts/${encodeURIComponent(id)}`, {
           method: "PATCH",
-          body: JSON.stringify(input),
+          body: JSON.stringify(expectedUpdatedAt ? { ...input, expectedUpdatedAt } : input),
         })
-        if (!data.draft) throw new Error(data.error ?? "초안 수정 응답이 비어 있습니다.")
-        setDrafts((items) => items.map((draft) => (draft.id === id ? data.draft! : draft)))
+        const data = (await response.json().catch(() => null)) as LedgerDraftResponse | null
+        if (response.status === 409 && data?.draft) {
+          // 충돌 — 이번 수정은 반영되지 않았다. 로컬 낙관 반영 없이, 응답에 실려 온 서버 현재본으로
+          // 해당 레코드만 새로고침하고 그 행에 충돌 배지를 붙인다(레코드 소실과 동일하게 전역 강등
+          // 없음 — 큐의 다른 초안 작업은 계속 서버 모드로 진행된다).
+          const serverDraft = data.draft
+          setDrafts((items) => items.map((draft) => (draft.id === id ? serverDraft : draft)))
+          setRecordError(id, DRAFT_CONFLICT_MESSAGE)
+          return { draft: null, conflict: true }
+        }
+        if (response.status === 400) {
+          // 검증 거부(감액 양수 검증 등) — 서버 문구 그대로 호출부에 넘긴다. 큐 강등·로컬 폴백 없음.
+          return { draft: null, validationMessage: data?.error ?? "저장 요청이 거부되었습니다." }
+        }
+        if (!response.ok) {
+          // 404 등은 서버가 내려준 리터럴(예: "Draft not found")을 그대로 던져 아래 catch의
+          // isDraftRecordError 판정(기존 계약)이 동작하게 한다.
+          throw new Error(data?.error ?? (`${response.status} ${response.statusText}`.trim() || "요청에 실패했습니다."))
+        }
+        if (!data?.draft) throw new Error(data?.error ?? "초안 수정 응답이 비어 있습니다.")
+        const nextDraft = data.draft
+        setDrafts((items) => items.map((draft) => (draft.id === id ? nextDraft : draft)))
         setQueueError(null)
         clearRecordError(id)
-        return data.draft
+        return { draft: nextDraft }
       } catch (error) {
         if (isDraftRecordError(error)) {
           setRecordError(id)
-          return null
+          return { draft: null }
         }
         setQueueMode("local")
         setQueueError(`서버 초안 수정에 실패했습니다(네트워크/서버 오류) — 재연결 후 다시 시도하세요. ${errorMessage(error)}`)
-        return null
+        return { draft: null }
       }
     }
 
@@ -1147,7 +1212,7 @@ function useLedgerDraftQueue() {
       updated = applyDraftInput(draft, input)
       return updated
     }))
-    return updated
+    return { draft: updated }
   }, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])
 
   const toggleDraft = useCallback(async (id: string) => {
@@ -5178,7 +5243,20 @@ export default function SalesLedgerWorkbench() {
       // 않는다 — 이 input에는 status 필드가 없어 PATCH가 금액/메타데이터만 갱신한다.
       const existingId = lookupMatrixPending(pendingByCell, { rowId, month, week })?.id ?? null
       const persist = existingId ? updateDraft(existingId, input) : createDraft(input)
-      return persist.then((draft) => {
+      return persist.then((result) => {
+        // 낙관적 잠금 충돌(웨이브 7 2단, I4): 이번 수정은 반영되지 않았고, 해당 초안은 훅이 서버
+        // 현재본으로 이미 새로고침했다(로컬 낙관 반영 없음) — 로컬 폴백과는 다른 문구로 정확히 알린다.
+        if (result.conflict) {
+          if (!options?.silent) pushMatrixToast({ kind: "error", text: DRAFT_CONFLICT_MESSAGE })
+          return false
+        }
+        // 서버 검증 거부(400, 감액 양수 검증 등) — 서버 문구를 그대로 노출한다. 로컬 임시 저장도
+        // 되지 않았다(유효하지 않은 입력을 로컬 큐에 남기지 않는 훅 계약).
+        if (result.validationMessage) {
+          if (!options?.silent) pushMatrixToast({ kind: "error", text: result.validationMessage })
+          return false
+        }
+        const draft = result.draft
         // createDraft는 실패 시에도 local-* 초안으로 폴백해 resolve된다. updateDraft의 로컬 폴백은
         // 기존 서버 id를 유지하므로 이 접두어 판정만으론 못 잡지만, 그 경우는 queueError 전역 배너가 알린다.
         const usedLocalFallback = !draft || draft.id.startsWith("local-")
@@ -5187,6 +5265,11 @@ export default function SalesLedgerWorkbench() {
             kind: "error",
             text: "서버 저장 실패 — 로컬 임시 초안으로만 저장됐습니다 (장부 적용 불가). 입력 큐에서 서버 재연결 후 다시 입력하세요.",
           })
+        }
+        // 직전 60초 내 동일 입력 재사용(POST 200, 더블클릭/더블탭 방어) — 저장은 유효하지만 새
+        // 초안이 생긴 게 아니라는 사실을 알려 중복 생성 오인을 막는다(웨이브 7 2단, I4 항목 3).
+        if (result.dedupedRecent && !usedLocalFallback && !options?.silent) {
+          pushMatrixToast({ kind: "info", text: DRAFT_DEDUPED_RECENT_NOTICE })
         }
         return !usedLocalFallback
       })
@@ -5558,16 +5641,23 @@ export default function SalesLedgerWorkbench() {
       // 저장 전에 판정해둔다 — new-row 저장 성공 시 draftForm이 defaultDraftForm으로 리셋되므로
       // 저장 후에는 이 시점의 customer/month를 다시 읽을 수 없다.
       const duplicate = kind === "new-row" ? findOpenNewRowDuplicate(drafts, draftForm.customer, draftForm.month) : null
-      const draft = dedupTarget
+      const result = dedupTarget
         ? await updateDraft(dedupTarget.id, buildDraftInput(kind))
         : await createDraft(buildDraftInput(kind))
-      if (kind === "new-row") {
+      const draft = result.draft
+      // 웨이브 7 2단(I4): 검증 거부(400)·충돌(409)이면 폼을 리셋하지 않는다 — 사용자가 입력값을
+      // 보존한 채 고쳐서 재시도해야 한다. (기존 경로는 실패해도 로컬 폴백 draft가 non-null이라
+      // 이 가드로 동작이 바뀌지 않는다.)
+      if (kind === "new-row" && draft) {
         setDraftForm(defaultDraftForm)
       }
       return {
         persisted: Boolean(draft && !draft.id.startsWith("local-")),
         deduped: Boolean(dedupTarget),
         duplicateWarning: Boolean(duplicate),
+        conflict: result.conflict,
+        dedupedRecent: result.dedupedRecent,
+        validationMessage: result.validationMessage,
       }
     } finally {
       setDraftSaving(false)
@@ -5614,10 +5704,21 @@ export default function SalesLedgerWorkbench() {
       const dedupTarget = dedupRow
         ? railDedupTarget(pendingByCell, dedupRow.id, draftForm.month, draftForm.week, editingDraft.id)
         : null
-      const draft = await updateDraft(editingDraft.id, buildDraftInput(editingDraft.kind, editingDraft))
-      setEditingDraftId(null)
-      setDraftForm(defaultDraftForm)
-      return { persisted: Boolean(draft && !draft.id.startsWith("local-")), deduped: Boolean(dedupTarget) }
+      const result = await updateDraft(editingDraft.id, buildDraftInput(editingDraft.kind, editingDraft))
+      const draft = result.draft
+      // 웨이브 7 2단(I4): 충돌(409)·검증 거부(400)면 편집 상태를 유지한다 — 폼의 입력값을 보존한 채
+      // (충돌이면 큐 카드가 서버 현재본으로 새로고침된 걸 확인하고) 바로 재시도할 수 있게 한다.
+      // 편집 상태를 여기서 닫으면 editingDraft 전환 시 인라인 피드백도 함께 초기화돼 안내가 사라진다.
+      if (!result.conflict && !result.validationMessage) {
+        setEditingDraftId(null)
+        setDraftForm(defaultDraftForm)
+      }
+      return {
+        persisted: Boolean(draft && !draft.id.startsWith("local-")),
+        deduped: Boolean(dedupTarget),
+        conflict: result.conflict,
+        validationMessage: result.validationMessage,
+      }
     } finally {
       setDraftSaving(false)
     }

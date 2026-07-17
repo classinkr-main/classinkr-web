@@ -78,6 +78,17 @@ export type LedgerRevenueRow = BranchPipelineRow & {
 
 export type DraftConfidence = "expected" | "high-confidence" | "confirmed"
 
+// 웨이브 7 2단(I4) — 낙관적 잠금 충돌(409 {error, draft})의 사용자 안내 문구 SSOT. 큐 행 배지
+// (recordErrors)·매트릭스 토스트·입력 레일 인라인 피드백이 같은 문장을 공유한다(표현 분화 금지).
+// InputRailSection이 부모(SalesLedgerWorkbench)를 역import할 수 없어(순환 금지) 여기에 둔다.
+export const DRAFT_CONFLICT_MESSAGE =
+  "다른 곳에서 먼저 수정됨 — 서버 값으로 새로고침했습니다. 확인 후 다시 시도하세요."
+
+// 웨이브 7 2단(I4) — POST 200 dedupedRecent(60초 내 동일 입력의 열린 초안 재사용, 더블클릭/더블탭
+// 방어) 안내 문구 SSOT. "저장은 됐지만 새 초안이 생긴 건 아니다"를 알려 중복 생성 오인을 막는다.
+export const DRAFT_DEDUPED_RECENT_NOTICE =
+  "직전 동일 초안 재사용됨 — 60초 내 같은 내용의 초안이 이미 있어 새로 만들지 않았습니다."
+
 // 입력 레일 저장 결과(품질 웨이브 3, 항목 3) — persisted: 서버에 실제로 저장됐으면 true,
 // 로컬 폴백(장부 적용 불가)이면 false. deduped: 새 초안을 만드는 대신 같은 딜·같은 셀(월/주차)에
 // 이미 열린 초안을 갱신했으면 true(이중계상 가드 발동) — InputRailSection이 "이미 대기 초안
@@ -89,6 +100,14 @@ export interface DraftSaveResult {
       이미 있으면 true — edit-row의 deduped(자동 PATCH 재지정)와 달리 저장은 그대로 진행(POST)하고
       경고만 얹는다. new-row는 아직 매트릭스 행이 없어 "같은 딜"인지 확정할 수 없기 때문. */
   duplicateWarning?: boolean
+  /** 웨이브 7 2단(I4): 낙관적 잠금 충돌(409) — 이번 수정은 반영되지 않았고, 큐의 해당 초안은
+      응답에 실려 온 서버 현재본으로 새로고침됐다. 편집 상태는 유지된다(확인 후 재시도). */
+  conflict?: boolean
+  /** 웨이브 7 2단(I4): POST가 60초 내 동일 입력의 열린 초안을 재사용(200)했음 — 새 초안 아님. */
+  dedupedRecent?: boolean
+  /** 웨이브 7 2단(I4): 서버 검증 거부(400) 문구 그대로(예: "감액은 장부 가감으로 처리하세요…") —
+      큐 강등·로컬 폴백 없이 이 문구만 노출한다. */
+  validationMessage?: string
 }
 
 export interface DraftForm {

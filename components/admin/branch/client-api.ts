@@ -8,6 +8,12 @@ import {
   type AdminFetchInit,
 } from "@/lib/admin-client"
 
+// 웨이브 7 2단(I4): 낙관적 잠금 409 응답 바디({error, draft})는 상태코드와 바디를 함께 읽어야
+// 구분할 수 있다 — adminFetchJson은 실패 시 Error(message)만 던지고 status를 버리므로, 원
+// Response를 그대로 노출하는 통로를 별도로 연다(401 처리·mutation 캐시 무효화 등 공통 동작은
+// lib/admin-client의 adminFetch가 동일하게 수행한다).
+export { adminFetch } from "@/lib/admin-client"
+
 interface BranchJsonState<T> {
   key: string
   data: T | null
