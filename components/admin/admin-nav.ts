@@ -19,6 +19,7 @@ import {
   MessageSquare,
   PackageCheck,
   ReceiptText,
+  Search,
   Settings,
   Users,
 } from "lucide-react"
@@ -46,6 +47,8 @@ const STAFF_EDITOR: AdminRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
 // Overview는 헤더 없는 최상위 단독 항목으로 렌더(AdminSidebar가 home 섹션 헤더를 생략).
 // 섹션 부제(설명 줄)는 사이드바에서 미렌더 — 시각 밀도만 낮춘다(팔레트 그룹은 label만 사용).
 // (이전 재편) 자료 퍼널=/lead-magnets 통일, 하드웨어=SCM 운영 콘솔이라 system, 챗봇→docs?tab=gaps 흡수.
+// (2026-07-17) CS 탭 외부/내부 이원화 — "챗봇 운영·보강 큐" 겸직 항목을 "챗봇 운영"(/admin/chatbot,
+// 외부 공개 운영 대시보드)과 "문서 보강 큐"(/admin/docs?tab=gaps, 챗봇+내부CS 공유 큐)로 재분리.
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, roles: [...ALL_STAFF, "BRANCH"], section: "home", keywords: "홈 대시보드 overview home" },
 
@@ -65,15 +68,16 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/analytics", label: "Analytics", icon: BarChart2, roles: [...ALL_STAFF, "BRANCH"], section: "marketing", keywords: "analytics 분석 통계" },
   { href: "/admin/traffic", label: "방문자/트래픽", icon: Eye, roles: [...ALL_STAFF, "BRANCH"], section: "marketing", keywords: "방문자 트래픽 추적 현황 홈페이지 흐름 tracking client events pixel 계측 traffic" },
 
-  // 고객 지원 (docs → docs?tab=gaps → 내부 CS 챗봇 → channel-talk)
+  // 고객 지원 (가이드 문서 → 챗봇 운영 → 문서 보강 큐 → 내부 CS 챗봇 → channel-talk)
   { href: "/admin/docs", label: "가이드 문서", icon: BookOpen, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "가이드 문서 docs guide 챗봇 chatbot faq 추천질문" },
-  // 보강 큐는 문서 센터(/admin/docs)의 "보강 큐" 탭으로 병합됨 — nav는 탭 딥링크를 직접 가리켜
+  // 챗봇 운영 — 외부(공개) 챗봇 운영 대시보드. 과거 docs?tab=gaps로 흡수돼 redirect 스텁이었으나
+  // Task X가 /admin/chatbot을 얇은 서버 페이지로 재건하며 독립 표면을 복원했다(2026-07-17).
+  { href: "/admin/chatbot", label: "챗봇 운영", icon: Bot, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops" },
+  // 문서 보강 큐는 문서 센터(/admin/docs)의 "보강 큐" 탭으로 병합됨 — nav는 탭 딥링크를 직접 가리켜
   // active 하이라이트가 동작하게 한다. /admin/docs/gaps는 북마크 호환용 redirect 스텁으로만 유지.
-  // 챗봇 운영 대시보드도 이 탭(DocsGapsPanel)에 흡수됨 — /admin/chatbot은 여기로 redirect.
-  // 라벨·아이콘(Bot)을 "챗봇 운영·보강 큐"로 명시해 IA 재편으로 가려졌던 챗봇 운영 가시성을
-  // 복원(2026-07-16) — ⌘K 검색어(챗봇 운영·질문 패턴·품질 평가)는 이미 keywords에 있어 그대로 유지.
-  { href: "/admin/docs?tab=gaps", label: "챗봇 운영·보강 큐", icon: Bot, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "챗봇 운영 질문 패턴 추천 보강 큐 gaps faq 문서 검색 초안 품질 평가 골든셋 chatbot ai ops 알파 준비도" },
-  // 내부 CS 챗봇 — 상담원용 워크스페이스(내부 지식·대화 큐·아카이브). 공개 챗봇 운영(docs?tab=gaps)과 별개 표면.
+  // 챗봇 발/내부CS 발 질문이 함께 모이는 공유 큐라 "챗봇 운영"과는 별개 표면으로 유지한다.
+  { href: "/admin/docs?tab=gaps", label: "문서 보강 큐", icon: Search, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "보강 큐 gaps faq 문서 검색 초안 질문 패턴" },
+  // 내부 CS 챗봇 — 상담원용 워크스페이스(내부 지식·대화 큐·아카이브). 공개 챗봇 운영과 별개 표면.
   { href: "/admin/cs-chatbot", label: "내부 CS 챗봇", icon: Headset, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "내부 cs 챗봇 상담 도우미 소통 가이드 템플릿 큐 아카이브 internal support assistant" },
   { href: "/admin/channel-talk", label: "채널톡 상담", icon: MessageSquare, roles: [...STAFF_ADMIN, "BRANCH"], section: "cs", keywords: "채널톡 상담 문의 채팅 channel talk chat inbox" },
 

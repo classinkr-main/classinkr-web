@@ -328,7 +328,8 @@ const OPERATING_TOOLS = [
     priority: "상담 원문",
   },
   {
-    href: "/admin/docs?tab=gaps",
+    // nav 재분리(2026-07-17): 외부 챗봇 운영 대시보드가 /admin/chatbot으로 독립 표면을 되찾았다.
+    href: "/admin/chatbot",
     title: "챗봇 운영 현황",
     description: "질문량, 미해결률, 상담 이관과 응답 속도를 확인합니다.",
     icon: Bot,
