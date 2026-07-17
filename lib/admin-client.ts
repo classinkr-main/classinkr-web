@@ -343,13 +343,33 @@ export function getCachedAdminJson<T>(
   return readAdminCache<T>(cacheKey, options.allowExpired ?? true)?.data ?? null
 }
 
-export async function adminFetchJsonCached<T>(
+// 품질 웨이브 3 — 항목 1. staleIfError 폴백은 갱신 실패를 조용히 오래된 캐시로 대체해왔다
+// (재시도 없이, 실패했다는 신호도 없이). adminFetchJsonCachedWithMeta는 그 대체가 실제로
+// 일어났는지(staleReason: "error")를 옵트인으로 노출한다 — stale-while-revalidate 고속
+// 경로(:아래 staleWindowMs 블록, 정상적인 캐시 정책이지 실패가 아님)는 별도로
+// staleReason: "revalidate"로 구분해 "갱신 실패" 문구가 오탐하지 않게 한다.
+// 기존 adminFetchJsonCached<T>()는 이 결과에서 data만 꺼내 반환 — 시그니처·동작 불변,
+// 다른 어드민 화면은 이 변경을 전혀 감지하지 못한다(하위호환).
+export interface AdminCachedFetchResult<T> {
+  data: T
+  /** true면 이번 호출이 네트워크로 새로 받아온 데이터가 아니다. */
+  stale: boolean
+  /** stale이 true일 때, 반환된 캐시 항목이 저장된 시각(ms epoch). */
+  staleSince: number | null
+  /** stale이 true인 이유. "error"=실시간 요청이 실패해 캐시로 대체(진짜 문제).
+   *  "revalidate"=TTL은 지났지만 stale-while-revalidate 창 안이라 의도적으로 즉시 서빙
+   *  (백그라운드 갱신 진행 중 — 정상 동작, 실패 아님). */
+  staleReason?: "error" | "revalidate"
+}
+
+async function adminFetchJsonCachedInternal<T>(
   input: string,
-  init?: RequestInit,
-  options: AdminFetchCacheOptions = {}
-) {
+  init: RequestInit | undefined,
+  options: AdminFetchCacheOptions
+): Promise<AdminCachedFetchResult<T>> {
   if (!isGetRequest(init)) {
-    return adminFetchJson<T>(input, init)
+    const data = await adminFetchJson<T>(input, init)
+    return { data, stale: false, staleSince: null }
   }
 
   const ttlMs = options.ttlMs ?? DEFAULT_ADMIN_CACHE_TTL_MS
@@ -357,20 +377,21 @@ export async function adminFetchJsonCached<T>(
   const staleIfError = options.staleIfError ?? true
 
   if (ttlMs <= 0) {
-    return adminFetchJson<T>(input, init)
+    const data = await adminFetchJson<T>(input, init)
+    return { data, stale: false, staleSince: null }
   }
 
   const cacheKey = getAdminRequestCacheKey(input, init, options.cacheKey)
 
-  const startRequest = (): Promise<T> => {
+  const startRequest = (): Promise<AdminCachedFetchResult<T>> => {
     const inflight = inflightRequests.get(cacheKey)
-    if (inflight) return inflight as Promise<T>
+    if (inflight) return inflight as Promise<AdminCachedFetchResult<T>>
 
     const requestInit: RequestInit | undefined = options.force
       ? { ...init, cache: "no-cache" }
       : init
     const request = adminFetchJson<T>(input, requestInit)
-      .then((data) => {
+      .then((data): AdminCachedFetchResult<T> => {
         const entry: AdminCacheEntry<T> = {
           data,
           expiresAt: Date.now() + ttlMs,
@@ -379,11 +400,11 @@ export async function adminFetchJsonCached<T>(
         memoryCache.set(cacheKey, entry)
         pruneMemoryCache()
         if (persist) writeSessionCache(cacheKey, entry)
-        return data
+        return { data, stale: false, staleSince: null }
       })
-      .catch((error) => {
+      .catch((error): AdminCachedFetchResult<T> => {
         const stale = staleIfError ? readAdminCache<T>(cacheKey, true) : null
-        if (stale) return stale.data
+        if (stale) return { data: stale.data, stale: true, staleSince: stale.savedAt, staleReason: "error" }
         throw error
       })
       .finally(() => {
@@ -396,10 +417,10 @@ export async function adminFetchJsonCached<T>(
 
   if (!options.force) {
     const cached = readAdminCache<T>(cacheKey)
-    if (cached) return cached.data
+    if (cached) return { data: cached.data, stale: false, staleSince: null }
 
     const inflight = inflightRequests.get(cacheKey)
-    if (inflight) return inflight as Promise<T>
+    if (inflight) return inflight as Promise<AdminCachedFetchResult<T>>
 
     const staleWindowMs =
       options.staleWhileRevalidateMs ?? DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS
@@ -407,12 +428,31 @@ export async function adminFetchJsonCached<T>(
       const stale = readAdminCache<T>(cacheKey, true)
       if (stale && Date.now() - stale.savedAt <= staleWindowMs) {
         void startRequest().catch(() => undefined)
-        return stale.data
+        return { data: stale.data, stale: true, staleSince: stale.savedAt, staleReason: "revalidate" }
       }
     }
   }
 
   return startRequest()
+}
+
+export async function adminFetchJsonCached<T>(
+  input: string,
+  init?: RequestInit,
+  options: AdminFetchCacheOptions = {}
+) {
+  const result = await adminFetchJsonCachedInternal<T>(input, init, options)
+  return result.data
+}
+
+/** adminFetchJsonCached의 옵트인 확장 — 반환값에 stale 메타를 함께 실어준다.
+ *  기존 adminFetchJsonCached 소비처는 전혀 변경할 필요가 없다. */
+export async function adminFetchJsonCachedWithMeta<T>(
+  input: string,
+  init?: RequestInit,
+  options: AdminFetchCacheOptions = {}
+): Promise<AdminCachedFetchResult<T>> {
+  return adminFetchJsonCachedInternal<T>(input, init, options)
 }
 
 export function warmAdminRequestCache(input: string, options: AdminFetchCacheOptions = {}) {
