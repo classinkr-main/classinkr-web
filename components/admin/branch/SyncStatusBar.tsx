@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react"
 import { RefreshCw, AlertTriangle, CheckCircle2, Clock, Database } from "lucide-react"
 import { isImportStale } from "@/lib/branch/data-source-freshness"
+import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
 import type { BranchDataSourceInfo, BranchDataSources } from "./types"
 
 interface SyncStatusBarProps {
@@ -15,11 +16,6 @@ interface SyncStatusBarProps {
    *  그 캐시가 저장된 시각(ms epoch). null/undefined면 정상(최신 데이터 또는 실패 없음). */
   staleSince?: number | null
 }
-
-// Threshold above which a sheet edit that postdates the last sync is loud
-// enough to warn the user — short edits (cell renames, typo fixes) within a
-// minute or two of the last sync don't warrant a banner.
-const SHEET_AHEAD_WARN_MS = 2 * 60_000
 
 function relativeTime(iso: string, now: number): string {
   const t = Date.parse(iso)
@@ -49,11 +45,9 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
     return () => window.clearInterval(id)
   }, [])
 
-  const sheetAhead =
-    !lastError &&
-    lastSync &&
-    sheetModifiedAt &&
-    Date.parse(sheetModifiedAt) - Date.parse(lastSync) > SHEET_AHEAD_WARN_MS
+  // 판정 로직은 lib/branch/sheet-freshness.ts로 추출(품질 웨이브 4 — 항목 4) — 장부 화면의
+  // "장부 원천 스트립"도 같은 함수로 동일 경고를 낸다.
+  const sheetAhead = !lastError && isSheetAheadOfSync(sheetModifiedAt, lastSync)
 
   // 임포트 원천이 시트 동기화보다 오래됐는지 — 2026-07-16 사고(7/3 스테일 임포트가 13일간
   // 최신 시트를 가림) 재발 시 이 배너로 드러난다. sheetAhead(시트가 미러보다 앞섬)와는

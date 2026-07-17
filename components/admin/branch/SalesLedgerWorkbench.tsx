@@ -40,6 +40,7 @@ import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { ledgerMonthSplit, ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
+import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
 // ledger/ 섹션 파일들이 워크벤치를 단일 진입점으로 import — 포매터 SSOT는 lib/branch/ledger-format
 export { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import {
@@ -421,8 +422,7 @@ function handleRovingTabKeyDown<T>(
 }
 
 // Source 스트립 시간 표기 — KR Team SyncStatusBar.tsx의 relativeTime과 같은 규칙("방금"/"N분 전"/
-// "N시간 전"/"N일 전")으로 통일한 워크벤치 로컬 사본. SyncStatusBar는 내부 미노출 함수라 import할
-// 수 없고, 소유 범위상 SyncStatusBar.tsx는 수정하지 않는다(읽기만) — 그래서 로직만 그대로 복제.
+// "N시간 전"/"N일 전")으로 통일한 워크벤치 로컬 사본(SyncStatusBar는 이 포매터를 내보내지 않는다).
 function relativeTimeFromNow(iso: string | null | undefined, now: number): string {
   if (!iso) return "미확인"
   const t = Date.parse(iso)
@@ -5364,6 +5364,14 @@ export default function SalesLedgerWorkbench() {
                 {relativeTimeFromNow(summary.data?.sheetModifiedAt, sourceStripNow)}
               </span>
             </span>
+            {/* 스테일 경고 공유화(품질 웨이브 4 — 항목 4) — SyncStatusBar와 같은 순수 판정
+                (lib/branch/sheet-freshness.ts)을 여기서도 써서 "시트수정"이 "sync"보다 눈에 띄게
+                앞서 있으면 동일 경고를 낸다(2026-07-16 사고 재발 감지력이 이 화면에도 있어야 한다). */}
+            {!summary.error && isSheetAheadOfSync(summary.data?.sheetModifiedAt, summary.data?.lastSync) && (
+              <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F]">
+                시트가 더 새로움 — 동기화 필요
+              </span>
+            )}
             <span>입력 큐 <span className="font-semibold text-[#111110]">{queueMode === "server" ? "서버" : "로컬"} · {openDrafts.length}건</span></span>
             <span>내부 원장 <span className="font-semibold text-[#111110]">{ledgerHealth?.ok === false ? "준비 필요" : `${ledgerEntries.length}건`}</span></span>
             <span className="flex items-center gap-1.5">
