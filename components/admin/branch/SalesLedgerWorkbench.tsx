@@ -5526,10 +5526,15 @@ export default function SalesLedgerWorkbench() {
     const params = new URLSearchParams({ tab: "pipeline" })
     if (team !== "ALL") params.set("team", team)
     if (period !== "Q") params.set("period", period)
+    // 항목 3 수정 — period==="M"일 때 month를 동봉하지 않으면 BranchDashboardClient가 URL의
+    // month를 못 읽어(그 파일 line 119 searchParams.get("month")) selectedMonth가 기본값(이번
+    // 달)으로 되돌아간다 — 다른 달을 보다가 링크를 눌러도 이번 달로 튕기는 버그. PipelineTable의
+    // ledgerHref(sections/PipelineTable.tsx)와 동일 규약.
+    if (period === "M") params.set("month", selectedMonth)
     if (query.trim()) params.set("q", query.trim())
     if (managerFilter !== "ALL") params.set("mgr", managerFilter)
     return `/admin/branch?${params.toString()}`
-  }, [team, period, query, managerFilter])
+  }, [team, period, selectedMonth, query, managerFilter])
   const canCreateEditDraft = Boolean(selectedRow && (selectedRow.ledgerOrigin === "sheet" || selectedRow.sourceDealId))
   const draftAmountValue = safeAmount(draftForm.amount)
   const draftAmountInvalid = !draftForm.amount.trim() || draftAmountValue <= 0
