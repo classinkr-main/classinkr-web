@@ -1,12 +1,20 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { ChevronDown } from "lucide-react"
 import { useBranchJson } from "./client-api"
-import DataQualityPanel from "./sections/DataQualityPanel"
 
 const IDLE_FETCH_TIMEOUT_MS = 300
+
+// 통합된 정합 상세(구 AI 탭 DataQualityPanel, 품질 웨이브 2 — 항목 6) — "전체 규칙 상세"
+// 토글을 실제로 열 때만 청크를 내려받는다. 이미 개요 진입 시 IntegrityStrip 자체가
+// idle-지연 마운트되므로(위 스켈레톤 참조) 여기선 별도 로딩 스켈레톤 없이 showDetail
+// 트리거 직후 짧게 비어 있다가 채워지는 정도로 충분하다 — 자체 스켈레톤(h-44)을 그대로 재사용.
+const DataQualityPanel = dynamic(() => import("./sections/DataQualityPanel"), {
+  loading: () => <div className="h-44 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
 
 // data-quality.ts(server 전용 REV_RANGE/parseRangeLastRow 임포트 보유)는 import 금지 —
 // CrmCoverageStrip과 동일하게 응답 shape만 로컬 선언한다. DataQualityPanel(클라이언트

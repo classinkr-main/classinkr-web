@@ -7,15 +7,9 @@ import { CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
 import SyncStatusBar from "./SyncStatusBar"
 import IntegrityStrip from "./IntegrityStrip"
 import CoreKpiGrid from "./sections/CoreKpiGrid"
-import ActivityBottleneckSection from "./sections/ActivityBottleneckSection"
 import BranchHeroGauges from "./sections/BranchHeroGauges"
-import BranchKpiAccordion from "./sections/BranchKpiAccordion"
-import BranchPipelineKanban from "./sections/BranchPipelineKanban"
 import BranchUpcomingDeals from "./sections/BranchUpcomingDeals"
-import BranchRegionHeatmap from "./sections/BranchRegionHeatmap"
-import BranchAiInsights from "./sections/BranchAiInsights"
 import DealModal, { type DealModalDeal } from "./sections/DealModal"
-import PipelineTable from "./sections/PipelineTable"
 import CampaignsSection from "./sections/CampaignsSection"
 import HardwareSection from "./sections/HardwareSection"
 import DealMixSection from "./sections/DealMixSection"
@@ -78,6 +72,28 @@ function buildMonthOptions(now: Date) {
 
 const RevenueFlowSection = dynamic(() => import("./sections/RevenueFlowSection"), {
   loading: () => <div className="h-72 animate-pulse rounded-2xl bg-[#f0f0ec]" />,
+})
+
+// 탭 전용 컴포넌트 코드 스플리팅(품질 웨이브 2 — 항목 6) — 개요 탭은 즉시 보여야 하므로
+// 정적 유지, 파이프라인/히트맵/AI 탭 컴포넌트는 그 탭을 열 때만 청크를 내려받는다.
+// 로딩 스켈레톤은 각 컴포넌트 내부의 자체 로딩 상태(데이터 미도착 시)와 동일 톤으로 맞춘다.
+const BranchKpiAccordion = dynamic(() => import("./sections/BranchKpiAccordion"), {
+  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const ActivityBottleneckSection = dynamic(() => import("./sections/ActivityBottleneckSection"), {
+  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const BranchPipelineKanban = dynamic(() => import("./sections/BranchPipelineKanban"), {
+  loading: () => <div className="h-72 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const PipelineTable = dynamic(() => import("./sections/PipelineTable"), {
+  loading: () => <div className="h-64 animate-pulse rounded-2xl bg-[#F6F5F4]" />,
+})
+const BranchRegionHeatmap = dynamic(() => import("./sections/BranchRegionHeatmap"), {
+  loading: () => <div className="h-96 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const BranchAiInsights = dynamic(() => import("./sections/BranchAiInsights"), {
+  loading: () => <div className="h-96 animate-pulse rounded-xl bg-[#f0f0ec]" />,
 })
 
 export default function BranchDashboardClient() {
