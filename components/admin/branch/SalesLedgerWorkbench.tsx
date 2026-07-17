@@ -1145,6 +1145,19 @@ function DraftQueue({
   // "적용"은 큐에서 유일하게 비가역인 동작(DB 장부에 실제로 기록) — 확인 다이얼로그를 거친다.
   const [confirmApplyDraft, setConfirmApplyDraft] = useState<LedgerDraft | null>(null)
   const [applyingId, setApplyingId] = useState<string | null>(null)
+  // 다이얼로그 포커스 관리(DealModal.tsx 패턴 인라인 이식): 열릴 때 안전한 기본 컨트롤(취소)로
+  // 포커스를 옮기고, 닫힐 때 다이얼로그를 연 트리거로 복귀한다. "적용"은 비가역 동작이라
+  // autoFocus 기본값을 파괴적 버튼에 두지 않는다 — 초기 포커스는 "취소".
+  const confirmApplyCancelRef = useRef<HTMLButtonElement | null>(null)
+  const confirmApplyDraftId = confirmApplyDraft?.id ?? null
+  useEffect(() => {
+    if (!confirmApplyDraftId) return
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    confirmApplyCancelRef.current?.focus()
+    return () => {
+      previouslyFocused?.focus()
+    }
+  }, [confirmApplyDraftId])
   const confirmAndApply = async (id: string) => {
     setApplyingId(id)
     try {
@@ -1388,6 +1401,7 @@ function DraftQueue({
           </div>
           <div className="flex items-center justify-end gap-2 bg-[#FAFAF8] px-4 py-3">
             <button
+              ref={confirmApplyCancelRef}
               type="button"
               onClick={() => setConfirmApplyDraft(null)}
               disabled={applyingId === confirmApplyDraft.id}
@@ -1399,7 +1413,6 @@ function DraftQueue({
               type="button"
               onClick={() => void confirmAndApply(confirmApplyDraft.id)}
               disabled={applyingId === confirmApplyDraft.id}
-              autoFocus
               className="inline-flex h-9 items-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
             >
               {applyingId === confirmApplyDraft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
@@ -2480,6 +2493,21 @@ function RevMatrixPasteDialog({
 }) {
   const shown = plan.cells.slice(0, MATRIX_PASTE_PREVIEW_LIMIT)
   const hidden = plan.cells.length - shown.length
+  // 다이얼로그 포커스 관리(DealModal.tsx 패턴 인라인 이식): 이 컴포넌트는 부모가 plan이 있을 때만
+  // 마운트하므로(조건부 렌더) 마운트 = 열림, 언마운트 = 닫힘이다. 마운트 시 트리거(붙여넣기 직전
+  // 포커스가 있던 매트릭스 셀 등)를 기억해 언마운트 때 되돌린다. 어느 버튼이 기본 포커스를
+  // 받는지는 기존 autoFocus 분기(취소 vs 확인, applyCount 유무)를 그대로 유지한다.
+  const cancelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const confirmButtonRef = useRef<HTMLButtonElement | null>(null)
+  const hasApplyCells = plan.applyCount > 0
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const target = hasApplyCells ? confirmButtonRef.current : cancelButtonRef.current
+    target?.focus()
+    return () => {
+      previouslyFocused?.focus()
+    }
+  }, [hasApplyCells])
   const statusMeta: Record<MatrixPasteCellPlan["status"], { label: string; className: string }> = {
     apply: { label: "초안 생성", className: "text-[#084734]" },
     locked: { label: "잠금 제외", className: "text-[#A39E98]" },
@@ -2597,20 +2625,20 @@ function RevMatrixPasteDialog({
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-3">
           <button
+            ref={cancelButtonRef}
             type="button"
             onClick={onCancel}
-            // applyCount=0이면 확인 버튼이 disabled라 autoFocus가 무시되고 포커스가 모달 뒤
-            // 그리드 셀에 남아 숫자 키가 편집을 시작한다 — 그 경우 취소 버튼이 포커스를 받는다.
-            autoFocus={plan.applyCount === 0}
+            // applyCount=0이면 확인 버튼이 disabled라 취소 버튼이 초기 포커스를 받는다(위 useEffect) —
+            // 그러지 않으면 포커스가 모달 뒤 그리드 셀에 남아 숫자 키가 편집을 시작해버린다.
             className="inline-flex h-9 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
           >
             취소
           </button>
           <button
+            ref={confirmButtonRef}
             type="button"
             onClick={onConfirm}
             disabled={plan.applyCount === 0}
-            autoFocus={plan.applyCount > 0}
             className="inline-flex h-9 items-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
           >
             검토 초안 {plan.applyCount.toLocaleString("ko-KR")}건 생성
@@ -2663,6 +2691,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
         }
       }}
       tabIndex={0}
+      role="row"
       title="클릭: 우측 요약 · ▸ 펼치기: 하위 딜행"
       aria-label={`${group.customer} ${group.rows.length}건 — 우측 요약 열기`}
       className={`group ${MATRIX_GROUP_ROW_HEIGHT[density]} cursor-pointer border-t border-[#EDECE8] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 ${
@@ -2849,7 +2878,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
       }
     : null
   return (
-    <tr className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FBFBFA] hover:bg-[#FAFAF8]" : "hover:bg-[#FAFAF8]"}`}>
+    <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FBFBFA] hover:bg-[#FAFAF8]" : "hover:bg-[#FAFAF8]"}`}>
       <td
         className={`sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] pr-2 ${nested ? "border-l-2 border-l-[#CBD9D2] pl-12" : grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2"} ${rowBg}`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
@@ -2980,7 +3009,7 @@ const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
     return { weeks, inferred: !hasExplicit && hasInferred, monthOnlyAmount, mismatch: false }
   }
   return (
-    <tr className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${
+    <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${
       category === "hardware" ? "bg-[#FFFCF5] hover:bg-[#FBF6EC]" : "bg-[#FBFBFA] hover:bg-[#FAFAF8]"
     }`}>
       <td
@@ -3061,7 +3090,7 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
   return (
     <tfoot className="sticky bottom-0 z-20">
       {/* 월별 확정/고확도/예정 스택 */}
-      <tr className="h-9 border-t-2 border-[#111110]/15 bg-[#F6F5F4]">
+      <tr role="row" className="h-9 border-t-2 border-[#111110]/15 bg-[#F6F5F4]">
         <td
           className="sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-[#615D59]"
           style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
@@ -3107,7 +3136,7 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
       </tr>
       {/* 월 목표 대비 % (DSH 월 목표 시리즈가 있을 때만) */}
       {hasAnyGoal && (
-        <tr className="h-7 border-t border-[#E7E5E1] bg-[#FAFAF8]">
+        <tr role="row" className="h-7 border-t border-[#E7E5E1] bg-[#FAFAF8]">
           <td
             className="sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-[#615D59]"
             style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
@@ -5026,8 +5055,20 @@ export default function SalesLedgerWorkbench() {
         </div>
 
         {(syncError || summary.error || kpi.error || pipeline.error) && (
-          <div className="mt-4 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[12px] font-semibold text-[#8F2C2C]">
-            {syncError ?? summary.error ?? kpi.error ?? pipeline.error}
+          <div
+            role="alert"
+            className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[12px] font-semibold text-[#8F2C2C]"
+          >
+            <span>{syncError ?? summary.error ?? kpi.error ?? pipeline.error}</span>
+            <button
+              type="button"
+              onClick={() => void onRefresh()}
+              disabled={refreshing}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-[#B43E3E] bg-white px-2.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              다시 시도
+            </button>
           </div>
         )}
       </header>
@@ -5625,9 +5666,9 @@ export default function SalesLedgerWorkbench() {
                   className="relative hidden max-h-[calc(100vh-13rem)] min-h-[320px] overflow-auto md:block"
                   onPaste={handleMatrixPaste}
                 >
-                  <table className="w-max min-w-full border-collapse text-left text-[12px]">
+                  <table role="grid" aria-label="REV 매출 매트릭스" className="w-max min-w-full border-collapse text-left text-[12px]">
                     <thead className="text-[10px] uppercase tracking-[0.06em] text-[#615D59]">
-                      <tr className="h-8 bg-[#FAFAF8]">
+                      <tr role="row" className="h-8 bg-[#FAFAF8]">
                         <th
                           className="sticky left-0 top-0 z-40 border-r border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-left align-middle"
                           style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
@@ -5686,7 +5727,7 @@ export default function SalesLedgerWorkbench() {
                     </thead>
                     <tbody>
                       {filteredRows.length === 0 && (
-                        <tr>
+                        <tr role="row">
                           <td colSpan={matrixColSpan} className="p-4">
                             <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-6 text-center text-[12px] text-[#615D59]">
                               <p>조건에 맞는 REV 행이 없습니다 · 필터/검색을 초기화해 보세요</p>
@@ -5705,7 +5746,7 @@ export default function SalesLedgerWorkbench() {
                         </tr>
                       )}
                       {pendingNewRowDrafts.length > 0 && (
-                        <tr className="border-t border-dashed border-[#ECD29C] bg-[#FFFCF5]">
+                        <tr role="row" className="border-t border-dashed border-[#ECD29C] bg-[#FFFCF5]">
                           <td colSpan={matrixColSpan} className="px-3 py-2">
                             <button
                               type="button"
