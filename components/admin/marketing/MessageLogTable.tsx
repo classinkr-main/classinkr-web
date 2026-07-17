@@ -19,7 +19,7 @@ import {
   RefreshCw,
   XCircle,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import Pager from "@/components/admin/ui/Pager"
 import { adminFetch } from "@/lib/admin-client"
 import {
   unwrapMessagingData,
@@ -275,30 +275,16 @@ export default function MessageLogTable() {
           </div>
 
           {/* 페이지네이션 */}
-          <div className="flex items-center justify-between border-t border-[#f0f0ec] px-4 py-2.5">
-            <p className="text-[11px] text-[#1a1a1a]/40">
-              {offset + 1}–{offset + state.logs.length} / 총 {state.total}건
-            </p>
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
-                disabled={offset === 0 || refreshing}
-                className="h-7 px-2.5 text-[11px]"
-              >
-                이전
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setOffset((o) => o + PAGE_SIZE)}
-                disabled={offset + state.logs.length >= state.total || refreshing}
-                className="h-7 px-2.5 text-[11px]"
-              >
-                다음
-              </Button>
-            </div>
+          <div className="border-t border-[#f0f0ec] px-4 py-2.5">
+            <Pager
+              offset={offset}
+              total={state.total}
+              pageSize={PAGE_SIZE}
+              onPrev={() => setOffset((o) => Math.max(0, o - PAGE_SIZE))}
+              onNext={() => setOffset((o) => o + PAGE_SIZE)}
+              disabled={refreshing}
+              unit="건"
+            />
           </div>
         </div>
       )}
