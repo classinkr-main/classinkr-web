@@ -37,12 +37,10 @@ const PATTERNS = {
 
 // 파일:패턴 단위 허용 목록 — 다른 파트 소유라 이번 웨이브에서 못 고친 기존 위반.
 // (품질 웨이브 2 / 2026-07-17 시점 실측. 각 파일이 정리되면 여기서 제거할 것.)
-// 품질 웨이브 4 — 항목 7에서 (b) 정리 완료 — BranchRegionHeatmap.tsx의 rose-* 유출을
-// 캐논 Danger hex로 치환.
-const ALLOWLIST = new Set([
-  // (c) 팀 아이덴티티 올리브
-  "sections/BranchPipelineKanban.tsx:7B8B36",
-]);
+// 품질 웨이브 4에서 두 항목 모두 정리 완료 — BranchRegionHeatmap.tsx의 rose-* 유출은
+// 캐논 Danger hex로(항목 7), BranchPipelineKanban.tsx의 로컬 #7B8B36 재정의는
+// lib/branch/team-colors.ts(teamColorOf) 소비로(항목 2) 전환됐다.
+const ALLOWLIST = new Set([]);
 
 function listSourceFiles(dir) {
   const out = [];
