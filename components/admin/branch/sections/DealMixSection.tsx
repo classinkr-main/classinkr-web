@@ -1,5 +1,5 @@
 "use client"
-import type { BranchDealMixSlice, BranchSummaryResponse } from "../types"
+import type { BranchDealMixMeta, BranchDealMixSlice, BranchSummaryResponse } from "../types"
 import MoneyValue from "../MoneyValue"
 
 const LABELS: Record<string, string> = {
@@ -18,7 +18,9 @@ const COLORS = {
   olive: "#7B8B36",
   amber: "#A8741A",
   red: "#B43E3E",
-  blue: "#1E5DA8",
+  // KA/SME는 확도 신호가 아닌 순수 카테고리 구분이라 확도 전용 예외 파랑(#1E5DA8)을
+  // 쓰지 않는다(DESIGN.md §확도 신호 토큰 오용 금지 규칙) — 웜 뉴트럴로 대체.
+  neutral: "#615D59",
 }
 
 function pickPair(rows: BranchDealMixSlice[], aKey: string, bKey: string): { a: BranchDealMixSlice; b: BranchDealMixSlice } | null {
@@ -28,8 +30,16 @@ function pickPair(rows: BranchDealMixSlice[], aKey: string, bKey: string): { a: 
   return { a, b }
 }
 
-function CompareCard({ title, desc, a, b, aTone, bTone }: {
+// 전기 대비 증감률 — prev_actual이 null/undefined(전기 데이터 미가용)이거나 0(분모
+// 0 나눗셈 방지)이면 계산하지 않고 렌더 생략을 신호하는 null을 반환한다.
+function prevDeltaPct(actual: number, prevActual: number | null | undefined): number | null {
+  if (prevActual == null || prevActual === 0) return null
+  return ((actual - prevActual) / prevActual) * 100
+}
+
+function CompareCard({ title, desc, a, b, aTone, bTone, prevMeta }: {
   title: string; desc: string; a: BranchDealMixSlice; b: BranchDealMixSlice; aTone: string; bTone: string
+  prevMeta?: BranchDealMixMeta
 }) {
   const sum = a.actual + b.actual
   const aPct = sum ? (a.actual / sum) * 100 : 0
@@ -40,6 +50,12 @@ function CompareCard({ title, desc, a, b, aTone, bTone }: {
   const aGoalPct = goalSum ? (a.goal / goalSum) * 100 : 0
   const mixShift = aPct - aGoalPct // %p vs goal mix
 
+  // 전기 대비 칩 — 서버가 prev_period_available=false(예: 연간 스코프는 전년 데이터
+  // 미로딩)를 보내거나 두 슬라이스 중 하나라도 prev_actual이 없으면 렌더 자체를
+  // 생략한다(초기 상태에서 "0%"로 오표시하지 않기 위한 가드).
+  const prevAvailable = prevMeta?.prev_period_available === true && a.prev_actual != null && b.prev_actual != null
+  const prevDelta = prevAvailable ? prevDeltaPct(a.actual + b.actual, (a.prev_actual ?? 0) + (b.prev_actual ?? 0)) : null
+
   return (
     <div className="rounded-[10px] border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[14px]">
       <div className="mb-2 flex items-start justify-between">
@@ -47,9 +63,16 @@ function CompareCard({ title, desc, a, b, aTone, bTone }: {
           <p className="text-[12.5px] font-bold tracking-[-0.005em] text-[#111110]">{title}</p>
           <p className="mt-0.5 text-[10.5px] text-[#615D59]">{desc}</p>
         </div>
-        <p className="whitespace-nowrap text-[10px] font-bold tracking-[0.04em] text-[#615D59]">
-          믹스 {mixShift >= 0 ? "+" : ""}{mixShift.toFixed(1)}%p
-        </p>
+        <div className="text-right">
+          <p className="whitespace-nowrap text-[10px] font-bold tracking-[0.04em] text-[#615D59]">
+            믹스 {mixShift >= 0 ? "+" : ""}{mixShift.toFixed(1)}%p
+          </p>
+          {prevDelta != null && (
+            <p className="mt-0.5 whitespace-nowrap text-[10px] font-bold tracking-[0.04em] text-[#615D59]">
+              {prevMeta?.prev_period_label} 대비 {prevDelta >= 0 ? "+" : ""}{prevDelta.toFixed(0)}%
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Stacked compare bar with goal-mix marker */}
@@ -124,10 +147,10 @@ export default function DealMixSection({ summary, loading }: { summary: BranchSu
         </div>
       </div>
       <div className={`grid gap-[18px] p-5 md:grid-cols-2 ${cardCount >= 4 ? "xl:grid-cols-4" : "lg:grid-cols-3"}`}>
-        {hwSw && <CompareCard title="HW / SW" desc="제품 라인 구분" a={hwSw.a} b={hwSw.b} aTone={COLORS.green} bTone={COLORS.olive} />}
-        {newRenew && <CompareCard title="New / Renew" desc="신규 계약 vs 갱신" a={newRenew.a} b={newRenew.b} aTone={COLORS.green} bTone={COLORS.olive} />}
-        {channel && <CompareCard title="Direct / Channel" desc="직판 vs 파트너 경유" a={channel.a} b={channel.b} aTone={COLORS.green} bTone={COLORS.amber} />}
-        {kaSme && <CompareCard title="KA / SME" desc="고객 규모별 매출" a={kaSme.a} b={kaSme.b} aTone={COLORS.blue} bTone={COLORS.olive} />}
+        {hwSw && <CompareCard title="HW / SW" desc="제품 라인 구분" a={hwSw.a} b={hwSw.b} aTone={COLORS.green} bTone={COLORS.olive} prevMeta={data.meta?.by_category} />}
+        {newRenew && <CompareCard title="New / Renew" desc="신규 계약 vs 갱신" a={newRenew.a} b={newRenew.b} aTone={COLORS.green} bTone={COLORS.olive} prevMeta={data.meta?.by_status_type} />}
+        {channel && <CompareCard title="Direct / Channel" desc="직판 vs 파트너 경유" a={channel.a} b={channel.b} aTone={COLORS.green} bTone={COLORS.amber} prevMeta={data.meta?.by_channel} />}
+        {kaSme && <CompareCard title="KA / SME" desc="고객 규모별 매출" a={kaSme.a} b={kaSme.b} aTone={COLORS.neutral} bTone={COLORS.olive} prevMeta={data.meta?.by_segment} />}
       </div>
     </section>
   )
