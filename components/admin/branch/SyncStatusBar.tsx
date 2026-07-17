@@ -70,7 +70,8 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
       : importStale
         ? { border: "border-[#ECD29C]", bg: "bg-[#FBF1E0]" }
         : sheetAhead
-          ? { border: "border-amber-200", bg: "bg-amber-50" }
+          // 품질 웨이브 4 — 항목 5: Tailwind 기본 amber-* → 캐논 Warning hex(DESIGN.md §2) 통일.
+          ? { border: "border-[#ECD29C]", bg: "bg-[#FBF1E0]" }
           : { border: "border-[#e8e8e4]", bg: "bg-white" }
 
   return (
@@ -85,7 +86,7 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
                 : importStale
                   ? <AlertTriangle className="h-4 w-4 text-[#A8741A]" />
                   : sheetAhead
-                    ? <Clock className="h-4 w-4 text-amber-600" />
+                    ? <Clock className="h-4 w-4 text-[#A8741A]" />
                     : <CheckCircle2 className="h-4 w-4 text-[#084734]" />}
             <span className="text-[#1a1a1a]/75">
               {lastError
@@ -107,7 +108,7 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
               </a>
             )}
             {!importStale && sheetAhead && (
-              <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10.5px] font-semibold text-amber-800">
+              <span className="ml-2 rounded-full bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F]">
                 시트가 더 새로움
               </span>
             )}
