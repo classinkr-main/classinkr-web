@@ -5762,7 +5762,7 @@ export default function SalesLedgerWorkbench() {
               icon={<Target className="h-3.5 w-3.5" />}
             />
             <MetricTile
-              label="실적"
+              label="확정 매출"
               value={summaryPending ? "–" : formatMoney(revenue?.confirmed)}
               hint={summaryPending ? "불러오는 중" : `시트 원천 · ${periodLabel} 달성률 ${formatPercent(revenue?.pacing_pct)}`}
               tone="text-[#084734]"
