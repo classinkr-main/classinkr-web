@@ -466,12 +466,15 @@ export function DonutGauge({
             stroke="rgba(0,0,0,0.055)"
             strokeWidth={stroke}
           />
+          {/* overGoal 스트로크는 캐논 Warning(#A8741A)로 통일(품질 웨이브 3, 항목 7) — 아래
+              라벨(text-[#A8741A])과 동일 색으로, 목표 초과 신호가 도넛 링·숫자 라벨 전체에서
+              일관되게 읽힌다. */}
           <circle
             cx={size / 2}
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke={overGoal ? "#F59E0B" : color}
+            stroke={overGoal ? "#A8741A" : color}
             strokeWidth={stroke}
             strokeDasharray={circumference}
             strokeDashoffset={dashOffset}
@@ -844,9 +847,12 @@ export interface WeeklyCloseDiffView {
   }>
 }
 
+// "증액"은 확도 신호(#1E5DA8, 확정/고확도/예정 3단 전용)가 아니라 캐논 Warning(#A8741A)로
+// 정정(품질 웨이브 3, 항목 7) — 증액은 검수자가 주의 깊게 봐야 할 변동이라 Warning 계열이
+// 의미상 더 맞고, #1E5DA8은 확도 맥락 밖 사용이 팔레트 위반이었다.
 export const WEEKLY_CLOSE_BUCKET_META: Array<{ id: WeeklyCloseBucketId; label: string; tone: string }> = [
   { id: "new", label: "신규", tone: "text-[#084734]" },
-  { id: "increased", label: "증액", tone: "text-[#1E5DA8]" },
+  { id: "increased", label: "증액", tone: "text-[#A8741A]" },
   { id: "decreased", label: "감액", tone: "text-[#A8741A]" },
   { id: "dropped", label: "소멸", tone: "text-[#B43E3E]" },
   { id: "unchanged", label: "유지", tone: "text-[#615D59]" },

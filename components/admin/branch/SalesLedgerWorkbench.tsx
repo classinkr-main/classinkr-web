@@ -2144,7 +2144,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   const cellClassName = `relative px-1.5 text-right align-middle tabular-nums ${
     mismatch ? "border-l-2 border-l-[#B43E3E]" : "border-l border-[#F2F1EE]"
   } ${bg} ${interactive && editable ? "cursor-cell" : ""} ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${
-    pending ? "shadow-[inset_0_-2px_0_0_#D4A017]" : ""
+    pending ? "shadow-[inset_0_-2px_0_0_#A8741A]" : ""
   } focus-visible:outline-none`
 
   const interactiveHandlers = interactive
@@ -2184,7 +2184,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
       {pending && (
         <span
           aria-hidden
-          className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#D4A017]"
+          className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#A8741A]"
         />
       )}
       {bucket.total > 0 ? (
@@ -2292,7 +2292,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
 
   const cellClassName = `relative border-l border-[#F2F1EE] px-1.5 text-right align-middle tabular-nums ${bgClass} ${
     interactive && editable ? "cursor-cell" : ""
-  } ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${pending ? "shadow-[inset_0_-2px_0_0_#D4A017]" : ""} focus-visible:outline-none`
+  } ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${pending ? "shadow-[inset_0_-2px_0_0_#A8741A]" : ""} focus-visible:outline-none`
 
   const interactiveHandlers = interactive
     ? {
@@ -2328,7 +2328,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
       style={{ width: MATRIX_WEEK_W, minWidth: MATRIX_WEEK_W, maxWidth: MATRIX_WEEK_W }}
       {...interactiveHandlers}
     >
-      {pending && <span aria-hidden className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#D4A017]" />}
+      {pending && <span aria-hidden className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#A8741A]" />}
       {/* 1만 미만(원시 위안) 값은 저대비·소형으로 강등 — 월 셀(RevMatrixMonthCell)과 동일 규약(SL-7). */}
       <span
         className={`inline-flex items-center gap-0.5 leading-none tabular-nums ${
