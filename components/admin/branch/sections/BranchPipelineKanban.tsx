@@ -1,4 +1,5 @@
 "use client"
+import { Search } from "lucide-react"
 import { useMemo, useState } from "react"
 import { useBranchJson } from "../client-api"
 import type { BranchPipelineResponse, BranchPipelineRow, Period, Team } from "../types"
@@ -8,6 +9,18 @@ import { ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
 import MoneyValue from "../MoneyValue"
 
 type Row = BranchPipelineRow
+
+// 공백으로 나뉜 다중 토큰 AND 매칭 — PipelineTable(sections/PipelineTable.tsx)의
+// tokenize/matchesTokens와 동일한 규약. 파일 간 공유 유틸로 빼지 않고 각자 소유
+// 범위 안에서 인라인 유지(두 파일 모두 이 세션의 소유 스코프).
+function tokenize(query: string): string[] {
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+}
+
+function matchesTokens(tokens: string[], fields: Array<string | null | undefined>): boolean {
+  if (tokens.length === 0) return true
+  return tokens.every((token) => fields.some((f) => String(f ?? "").toLowerCase().includes(token)))
+}
 
 interface MergedRow extends Row {
   count: number  // number of deals merged under this customer
@@ -173,6 +186,7 @@ export default function BranchPipelineKanban({ team, period, selectedMonth, refr
   onDealClick?: (d: Row & { stageLabel: string; stageColor: string; probability?: number }) => void
 }) {
   const [selectedManager, setSelectedManager] = useState("")
+  const [query, setQuery] = useState("")
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey)
   const pipelineRows = pipeline.data?.rows
@@ -185,8 +199,11 @@ export default function BranchPipelineKanban({ team, period, selectedMonth, refr
 
   const filteredRows = useMemo(() => {
     if (!rows) return null
-    return selectedManager ? rows.filter((r) => r.manager === selectedManager) : rows
-  }, [rows, selectedManager])
+    const tokens = tokenize(query)
+    return rows
+      .filter((r) => !selectedManager || r.manager === selectedManager)
+      .filter((r) => matchesTokens(tokens, [r.customer, r.manager]))
+  }, [rows, selectedManager, query])
 
   const grouped = useMemo(() => {
     const byColumn: Record<ConfidenceColumnKey, Row[]> = {
@@ -245,6 +262,16 @@ export default function BranchPipelineKanban({ team, period, selectedMonth, refr
           ) : null
         })()}
         <div className="ml-auto flex items-center gap-1.5">
+          <label className="relative">
+            <span className="sr-only">칸반 검색</span>
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#111110]/35" aria-hidden="true" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="고객, 담당 검색"
+              className="h-7 w-40 rounded-full border border-[rgba(0,0,0,0.08)] bg-white pl-8 pr-3 text-[11px] outline-none transition focus:border-[#111110]/30"
+            />
+          </label>
           <label htmlFor="kanban-manager-filter" className="text-[11px] text-[#615D59]">담당자</label>
           <select
             id="kanban-manager-filter"
