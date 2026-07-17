@@ -19,7 +19,6 @@ import PipelineTable from "./sections/PipelineTable"
 import CampaignsSection from "./sections/CampaignsSection"
 import HardwareSection from "./sections/HardwareSection"
 import DataQualityPanel from "./sections/DataQualityPanel"
-import CrmVariancePanel from "./sections/CrmVariancePanel"
 import DealMixSection from "./sections/DealMixSection"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
 import { PERIODS, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
@@ -474,7 +473,6 @@ export default function BranchDashboardClient() {
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
               <BranchAiInsights team={team} refreshKey={refreshKey} summary={summary.data} canGenerate={canRunAdminOperations} />
               {canRunAdminOperations && <DataQualityPanel refreshKey={refreshKey} />}
-              <CrmVariancePanel />
             </div>
           )}
         </div>
