@@ -40,6 +40,7 @@ describe("runDataQuality", () => {
       const issue = out.find((i) => i.id === "DQ-15")
       expect(issue?.severity).toBe("warn")
       expect(issue?.message).toContain("상한 증설 검토")
+      expect(issue?.sheetRow).toBe(900)
     })
 
     it("errors once max sheet_row reaches the range upper bound (truncation risk)", () => {
@@ -50,6 +51,7 @@ describe("runDataQuality", () => {
       const issue = out.find((i) => i.id === "DQ-15")
       expect(issue?.severity).toBe("error")
       expect(issue?.message).toContain("범위 절단 의심")
+      expect(issue?.sheetRow).toBe(1000)
     })
 
     it("is skipped entirely when there are no deals", () => {

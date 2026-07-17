@@ -8,7 +8,9 @@ import { parseRangeLastRow } from "@/lib/branch/sync/range-truncation"
 import type { HwInbound, HwOutbound, HwStock } from "@/lib/repositories/branch-hw"
 
 export type Severity = "info" | "warn" | "error"
-export interface DqIssue { id: string; severity: Severity; message: string; samples?: unknown[] }
+// sheetRow는 선택 필드다 — 이슈가 특정 REV 시트 행에 닻을 내릴 수 있을 때만(현재 DQ-15)
+// 채운다. 소비자(IntegrityStrip)가 "장부에서 열기" 딥링크 노출 여부를 이 필드로 결정한다.
+export interface DqIssue { id: string; severity: Severity; message: string; samples?: unknown[]; sheetRow?: number }
 
 export const DATA_QUALITY_RULE_IDS = ["DQ-2", "DQ-3", "DQ-4", "DQ-7", "DQ-9", "DQ-10", "DQ-11", "DQ-13", "DQ-15"] as const
 export const DATA_QUALITY_RULE_COUNT = DATA_QUALITY_RULE_IDS.length
@@ -67,13 +69,13 @@ export function runDataQuality(inp: DqInputs): DqIssue[] {
       issues.push({
         id: "DQ-15", severity: "error",
         message: `REV 파싱 ${maxSheetRow}행 — 범위 상한(${revRangeLastRow}행)에 도달 · 범위 절단 의심`,
-        samples: [maxSheetRow],
+        samples: [maxSheetRow], sheetRow: maxSheetRow,
       })
     } else if (ratio >= REV_RANGE_USAGE_WARN_RATIO) {
       issues.push({
         id: "DQ-15", severity: "warn",
         message: `REV 행이 범위 상한의 ${pct}%까지 도달 — 상한 증설 검토 (${maxSheetRow}/${revRangeLastRow}행)`,
-        samples: [maxSheetRow],
+        samples: [maxSheetRow], sheetRow: maxSheetRow,
       })
     }
   }
