@@ -126,10 +126,14 @@ function IntegrityStripPanel({
 }) {
   const [expanded, setExpanded] = useState(false)
   const [showDetail, setShowDetail] = useState(false)
-  const { data, error, loading } = useBranchJson<DataQualityResponse>(
-    "/api/admin/branch/data-quality",
-    refreshKey,
-  )
+  // 품질 웨이브 3 — 항목 2. 재시도 버튼이 눌리면 nonce를 올려 캐시 키(url 기반)를 바꿔
+  // useBranchJson이 새 네트워크 요청을 쏘게 한다 — refreshKey(부모 전역 새로고침)는
+  // 건드리지 않고 이 스트립만 독립적으로 재시도한다.
+  const [retryNonce, setRetryNonce] = useState(0)
+  const dataUrl = retryNonce > 0
+    ? `/api/admin/branch/data-quality?retry=${retryNonce}`
+    : "/api/admin/branch/data-quality"
+  const { data, error, loading } = useBranchJson<DataQualityResponse>(dataUrl, refreshKey)
 
   // info는 참고용 각주라 배지 카운트·펼침 목록에서 제외한다 — 실제 조치가 필요한
   // warn/error만 "이슈"로 센다(예: DQ-11 SEG status==goal 지역 안내).
@@ -141,7 +145,22 @@ function IntegrityStripPanel({
   const errorCount = actionable.filter((issue) => issue.severity === "error").length
   const total = actionable.length
 
-  if (error) return null
+  // 이전엔 실패를 null로 위장해 "이슈 없음"과 "체크 자체가 안 됨"이 구분되지 않았다
+  // (품질 웨이브 3 — 항목 2). 이제 뉴트럴 톤 한 줄 + 재시도로 구분한다.
+  if (error) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3.5 py-2 text-[12px] text-[#615D59]">
+        <span>정합 체크 불가 — 재시도</span>
+        <button
+          type="button"
+          onClick={() => setRetryNonce((n) => n + 1)}
+          className="font-semibold text-[#111110] underline underline-offset-2"
+        >
+          다시 시도
+        </button>
+      </div>
+    )
+  }
   if (loading && !data) return <div className="h-9 animate-pulse rounded-xl bg-[#f0f0ec]" />
   if (!data) return null
 
