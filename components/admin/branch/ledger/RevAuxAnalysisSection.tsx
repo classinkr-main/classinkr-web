@@ -36,6 +36,10 @@ interface RevAuxAnalysisSectionProps {
   onToggleManagerSummaryExpanded: () => void
   onManagerRowClick: (manager: string) => void
   revProductTableRows: BreakdownNumbersRow[]
+  // 웨이브 5 — 항목 2: "담당자별 수치" 표만 M/Q/Y 토글을 따라가는 기간 인지 표시로 바뀌었다
+  // (표 자체는 selectedMonth 고정이던 다른 패널과 달리 period 반영). "7월" / "Q2(7-9월)" /
+  // "FY26-27" 중 하나 — 부모(SalesLedgerWorkbench)의 periodShortLabel이 계산해 내려준다.
+  revManagerPeriodLabel: string
 }
 
 export function RevAuxAnalysisSection({
@@ -61,6 +65,7 @@ export function RevAuxAnalysisSection({
   onToggleManagerSummaryExpanded,
   onManagerRowClick,
   revProductTableRows,
+  revManagerPeriodLabel,
 }: RevAuxAnalysisSectionProps) {
   return (
     <>
@@ -229,7 +234,7 @@ export function RevAuxAnalysisSection({
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <p className="flex items-center gap-2 text-[12px] font-bold text-[#111110]">
                           <TrendingUp className="h-3.5 w-3.5 text-[#A8741A]" />
-                          담당자별 월 수치
+                          {revManagerPeriodLabel} 담당자별 수치
                         </p>
                         <button
                           type="button"
@@ -243,10 +248,15 @@ export function RevAuxAnalysisSection({
                       </div>
                       <BreakdownNumbersTable
                         rows={revManagerTableRows}
-                        emptyLabel="선택 월에 담당자별 REV 금액이 없습니다."
+                        emptyLabel={`${revManagerPeriodLabel}에 담당자별 REV 금액이 없습니다.`}
                         onRowClick={onManagerRowClick}
                       />
-                      <p className="mt-1.5 text-[10px] text-[#615D59]">행 클릭 시 해당 담당자로 필터링됩니다.</p>
+                      {/* 웨이브 5 — 항목 2: 이 표만 상단 M/Q/Y 토글을 따라간다는 것을 명시 —
+                          같은 카드 위 패널(목표 대비·주차별)은 여전히 selectedMonth 고정이라
+                          혼동을 막는다. */}
+                      <p className="mt-1.5 text-[10px] text-[#615D59]">
+                        행 클릭 시 해당 담당자로 필터링됩니다 · 이 표만 상단 기간 토글(M/Q/Y)을 따라갑니다.
+                      </p>
                     </section>
                     <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-4">
                       <div className="mb-2 flex items-center justify-between gap-2">

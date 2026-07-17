@@ -268,7 +268,8 @@ interface RevMatrixColumn extends RevMonthlyBucket {
   goal: number | null
 }
 
-interface RevManagerSummary {
+// export: 웨이브 5 회귀 테스트(tests/branch)가 순수 집계 함수와 함께 이 타입을 직접 검증한다.
+export interface RevManagerSummary {
   manager: string
   total: number
   confirmed: number
@@ -644,6 +645,40 @@ export function periodShortLabel(period: Period, selectedMonth: string, periodMo
     return `Q${quarter}(${calendarMonths[0]}-${calendarMonths[calendarMonths.length - 1]}월)`
   }
   return `${Number(selectedMonth.split("-")[1])}월`
+}
+
+// 담당자별 기간 집계(품질 철칙: 확도 티어 합산은 rowMonthAmount/rowMonthConfirmed/
+// rowMonthHighConfidence를 월 단위로 호출해 합산만 — 새 확도 산식 금지). 금액은 월별로 실제로
+// 서로 다른 매출이라 월 3개를 더해도 이중계상이 아니다. 건수(rows)만 딜 id로 dedupe한다 —
+// 같은 딜이 분기 3개월 모두에 금액이 있어도 "1건"으로 세야 "N명의 담당자가 M건을 진행"이라는
+// 의미가 유지된다(월별로 세면 3배 부풀려진다).
+export function aggregatePeriodManagerSummaries(rows: LedgerRevenueRow[], months: string[]): RevManagerSummary[] {
+  const managers = new Map<string, RevManagerSummary & { rowIds: Set<string> }>()
+  for (const month of months) {
+    for (const row of rows) {
+      const total = rowMonthAmount(row, month)
+      if (total <= 0) continue
+      const manager = row.manager ?? "미지정"
+      const current = managers.get(manager) ?? {
+        manager,
+        total: 0,
+        confirmed: 0,
+        highConfidence: 0,
+        open: 0,
+        rows: 0,
+        rowIds: new Set<string>(),
+      }
+      current.total += total
+      current.confirmed += rowMonthConfirmed(row, month)
+      current.highConfidence += rowMonthHighConfidence(row, month)
+      current.open += rowMonthOpen(row, month)
+      current.rowIds.add(row.id)
+      managers.set(manager, current)
+    }
+  }
+  return Array.from(managers.values())
+    .map(({ rowIds, ...rest }) => ({ ...rest, rows: rowIds.size }))
+    .sort((a, b) => b.total - a.total)
 }
 
 // 매트릭스 1행×1월 파생값을 한 번에. rowMonthAmount를 4번 부르던 것을 1번으로 줄여
@@ -4211,29 +4246,12 @@ export default function SalesLedgerWorkbench() {
   const revPeakWeek = revWeekProjection.slice().sort((a, b) => b.total - a.total)[0]
   // 담당자 전체(캡 없음) — top6 캡은 표시 단계(revTopManagers)에서만 건다. "전체 보기" 토글이
   // 캡을 해제할 수 있도록 집계 자체는 항상 전체 담당자를 계산해 둔다(항목 6).
-  const revManagersSorted = useMemo<RevManagerSummary[]>(() => {
-    const managers = new Map<string, RevManagerSummary>()
-    for (const row of filteredRows) {
-      const total = rowMonthAmount(row, selectedMonth)
-      if (total <= 0) continue
-      const manager = row.manager ?? "미지정"
-      const current = managers.get(manager) ?? {
-        manager,
-        total: 0,
-        confirmed: 0,
-        highConfidence: 0,
-        open: 0,
-        rows: 0,
-      }
-      current.total += total
-      current.confirmed += rowMonthConfirmed(row, selectedMonth)
-      current.highConfidence += rowMonthHighConfidence(row, selectedMonth)
-      current.open += rowMonthOpen(row, selectedMonth)
-      current.rows += 1
-      managers.set(manager, current)
-    }
-    return Array.from(managers.values()).sort((a, b) => b.total - a.total)
-  }, [filteredRows, selectedMonth])
+  // 웨이브 5 — 항목 2: selectedMonth 고정이던 집계를 periodMonths(M=선택월/Q=현재 분기 3개월/
+  // Y=FY 전체)로 확장 — M은 periodMonths가 [selectedMonth] 단일 원소라 기존과 동일한 결과.
+  const revManagersSorted = useMemo<RevManagerSummary[]>(
+    () => aggregatePeriodManagerSummaries(filteredRows, periodMonths),
+    [filteredRows, periodMonths],
+  )
   const revTopManagers = useMemo(
     () => (revManagerSummaryExpanded ? revManagersSorted : revManagersSorted.slice(0, 6)),
     [revManagersSorted, revManagerSummaryExpanded],
@@ -5975,6 +5993,7 @@ export default function SalesLedgerWorkbench() {
                   onToggleManagerSummaryExpanded={() => setRevManagerSummaryExpanded((value) => !value)}
                   onManagerRowClick={setManagerFilter}
                   revProductTableRows={revProductTableRows}
+                  revManagerPeriodLabel={periodLabelShort}
                 />
 
                 <RevMobileList
