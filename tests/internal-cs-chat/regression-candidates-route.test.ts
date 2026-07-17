@@ -113,6 +113,8 @@ describe("listInternalCsRegressionCandidates", () => {
         capturedAt: "2026-07-16T02:00:00.000Z",
         outcome: "not_evaluated",
         reviewState: "changes_requested",
+        // corrected_content 없음 → 승격 자격 없음(계약 5 additive).
+        hasCorrectedContent: false,
       },
       {
         id: "message-judged",
@@ -121,6 +123,7 @@ describe("listInternalCsRegressionCandidates", () => {
         capturedAt: "2026-07-16T01:00:00.000Z",
         outcome: "pass",
         reviewState: "approved",
+        hasCorrectedContent: true,
       },
     ])
     // 미판정 우선 정렬은 2단계 쿼리로 구현된다: not_evaluated 먼저, 남은 자리만 판정 완료분.
@@ -303,6 +306,7 @@ describe("GET /api/admin/cs-chat/regression-candidates", () => {
           capturedAt: "2026-07-16T03:00:00.000Z",
           outcome: "not_evaluated",
           reviewState: "changes_requested",
+          hasCorrectedContent: false,
         },
       ],
     })
