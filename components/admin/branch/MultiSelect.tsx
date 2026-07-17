@@ -1,5 +1,5 @@
 "use client"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, Pin } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 // 멀티선택 드롭다운 SSOT(품질 웨이브 4 — 항목 2) — sections/PipelineTable.tsx가 지역
@@ -21,6 +21,7 @@ export default function MultiSelect({
   placeholder = "전체",
   align = "left",
   width = "w-44",
+  pinStorageKey,
 }: {
   label: string
   options: string[]
@@ -29,9 +30,28 @@ export default function MultiSelect({
   placeholder?: string
   align?: "left" | "right"
   width?: string
+  /** 웨이브 7 — Q5(개인화 라이트). 제공되면 트리거 옆에 작은 핀 토글을 렌더링해 현재
+   *  선택(첫 번째 값 — 이 필터가 어차피 크로스링크·URL 동기화에서 첫 값만 쓰는 것과
+   *  동일 컨벤션)을 localStorage 기본값으로 저장/해제한다. 마운트 시 URL 파라미터가
+   *  없을 때 이 값을 복원하는 로직은 상위(BranchDashboardClient)가 갖는다 — 이
+   *  컴포넌트는 저장/해제 UI와 쓰기만 담당한다. */
+  pinStorageKey?: string
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  // SSR-세이프 초기값(null) — 마운트 후 localStorage를 읽어 채운다(하이드레이션 불일치 방지,
+  // BranchDashboardClient의 canRunAdminOperations와 동일 패턴).
+  const [pinnedValue, setPinnedValue] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!pinStorageKey || typeof window === "undefined") return
+    const stored = window.localStorage.getItem(pinStorageKey)
+    if (stored) setPinnedValue(stored)
+    // pinStorageKey는 이 컴포넌트 인스턴스 수명 동안 바뀌지 않는 정적 prop(호출부가 상수를
+    // 넘긴다) — 마운트 시 1회만 읽는다(CrmUnifiedCustomersClient의 OWNER_STORAGE_KEY 복원
+    // effect·BranchDashboardClient의 canRunAdminOperations와 동일 "마운트 1회" 규약).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -63,6 +83,23 @@ export default function MultiSelect({
     onChange(next)
   }
 
+  // 웨이브 7 — Q5. 이 필터가 이미 다른 곳(크로스링크·URL 동기화)에서 "첫 번째 선택값만"
+  // 대표값으로 쓰는 컨벤션을 그대로 따른다 — 여러 개를 고른 채로 핀을 찍어도 저장되는
+  // 건 첫 값 하나뿐이다.
+  const firstSelected = Array.from(selected)[0] ?? ""
+  const isPinned = Boolean(pinStorageKey) && pinnedValue !== null && pinnedValue === firstSelected && firstSelected !== ""
+
+  function togglePin() {
+    if (!pinStorageKey || typeof window === "undefined") return
+    if (isPinned) {
+      window.localStorage.removeItem(pinStorageKey)
+      setPinnedValue(null)
+    } else if (firstSelected) {
+      window.localStorage.setItem(pinStorageKey, firstSelected)
+      setPinnedValue(firstSelected)
+    }
+  }
+
   return (
     <div ref={ref} className="relative flex items-center gap-1.5">
       <span className="text-[11px] font-medium text-[#111110]/50">{label}</span>
@@ -79,6 +116,22 @@ export default function MultiSelect({
         <span className={selected.size === 0 ? "text-[#111110]/55" : "text-[#111110]"}>{summary}</span>
         <ChevronDown className={`h-3.5 w-3.5 text-[#111110]/40 transition ${open ? "rotate-180" : ""}`} aria-hidden="true" />
       </button>
+      {pinStorageKey && (
+        <button
+          type="button"
+          onClick={togglePin}
+          disabled={!isPinned && !firstSelected}
+          aria-pressed={isPinned}
+          title={isPinned ? "기본값 해제" : "현재 선택을 기본값으로 저장"}
+          className={`inline-flex h-10 min-h-10 w-10 min-w-10 shrink-0 items-center justify-center rounded-full border transition disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:min-h-0 md:w-8 md:min-w-0 ${
+            isPinned
+              ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+              : "border-[rgba(0,0,0,0.08)] bg-white text-[#111110]/35 hover:text-[#111110]/70"
+          }`}
+        >
+          <Pin className={`h-3.5 w-3.5 ${isPinned ? "fill-current" : ""}`} aria-hidden="true" />
+        </button>
+      )}
       {open && (
         <div
           role="listbox"

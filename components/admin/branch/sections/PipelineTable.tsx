@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useBranchJson } from "../client-api"
 import { matchesTokens, tokenize } from "../search-tokens"
 import MultiSelect from "../MultiSelect"
-import { TEAMS, type BranchPipelineResponse, type BranchPipelineRow, type Team, type Period } from "../types"
+import { PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, TEAMS, type BranchPipelineResponse, type BranchPipelineRow, type Team, type Period } from "../types"
 
 const SELECTABLE_TEAMS = TEAMS.filter((t) => t !== "ALL") as Exclude<Team, "ALL">[]
 
@@ -319,6 +319,7 @@ export default function PipelineTable({
             onChange={(next) => { setSelectedManagers(next); setPage(1) }}
             placeholder="전체"
             width="w-44"
+            pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}
           />
           <MultiSelect
             label="지역"

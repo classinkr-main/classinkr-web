@@ -4,6 +4,14 @@ export type Period = "M" | "Q" | "Y"
 export const TEAMS: Team[] = ["ALL", "BD", "MKT", "CSM"]
 export const PERIODS: Period[] = ["M", "Q", "Y"]
 
+// 웨이브 7 — Q5(개인화 라이트). 파이프라인 탭(테이블·칸반이 공유하는 BranchDashboardClient의
+// pipelineManager 상태)의 "담당" 필터 기본값 저장 키. 두 뷰가 같은 상위 상태를 공유하므로
+// 키도 하나만 쓴다("화면별 키"는 다른 필터·다른 화면과 이름이 섞이지 않게 하는 네임스페이스
+// 목적 — 뷰마다 별도 값을 갖는다는 뜻이 아니다). BranchDashboardClient가 URL(mgr 파라미터)이
+// 없을 때만 이 값을 복원하고, PipelineTable·BranchPipelineKanban의 "담당" MultiSelect가
+// 저장/해제 핀 UI를 갖는다.
+export const PIPELINE_MANAGER_DEFAULT_STORAGE_KEY = "branch-pipeline-manager-default"
+
 export interface BranchMonthlySeries {
   months: string[]
   goal_cum: number[]

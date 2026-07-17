@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useBranchJson } from "../client-api"
 import { matchesTokens, tokenize } from "../search-tokens"
 import MultiSelect from "../MultiSelect"
-import type { BranchPipelineResponse, BranchPipelineRow, Period, Team } from "../types"
+import { PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, type BranchPipelineResponse, type BranchPipelineRow, type Period, type Team } from "../types"
 import { cny, cnyExact } from "@/lib/branch/money-format"
 import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
 import { ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
@@ -397,6 +397,7 @@ export default function BranchPipelineKanban({
             placeholder="전체"
             align="right"
             width="w-44"
+            pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}
           />
         </div>
       </div>

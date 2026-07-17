@@ -14,7 +14,7 @@ import CampaignsSection from "./sections/CampaignsSection"
 import HardwareSection from "./sections/HardwareSection"
 import DealMixSection from "./sections/DealMixSection"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
-import { PERIODS, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
+import { PERIODS, PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
 import { ADMIN_NAV, ADMIN_NAV_SECTION_META } from "../admin-nav"
 
 type BranchTab = "overview" | "pipeline" | "heatmap" | "ai"
@@ -143,6 +143,30 @@ export default function BranchDashboardClient() {
 
   useEffect(() => {
     setCanRunAdminOperations(canRunAdminOperationsFromSession())
+  }, [])
+
+  // 웨이브 7 — Q5(개인화 라이트). URL에 mgr이 없을 때만(우선순위: URL > localStorage >
+  // 없음) 저장된 담당 기본값을 1회 복원한다. window.location.search를 직접 다시 읽는
+  // 것은(위에서 이미 계산한 initialPipelineManager를 재사용하지 않는 것은) 이 effect를
+  // exhaustive-deps 경고 없이 순수 마운트-1회([])로 유지하기 위함 — outer 렌더 스코프
+  // 값(initialPipelineManager)을 클로저로 참조하면 그 값도 deps에 넣어야 하는데, 이
+  // 값은 마운트 시점 URL로만 SSR-세이프하게 계산되는 값이라 재실행될 이유가 없다.
+  // localStorage는 이 효과(마운트 후에만 실행)에서만 만진다 — canRunAdminOperations와
+  // 동일하게 서버 렌더와 클라 첫 렌더 사이 하이드레이션 불일치를 만들지 않기 위함.
+  // 개요 탭에서 진입하는 일반적인 경로에서는 파이프라인 탭(PipelineTable·칸반)이 아직
+  // 마운트되지 않은 상태라 이 복원이 끝난 뒤 정상적으로 initialManager로 전달된다 —
+  // 반대로 ?tab=pipeline 딥링크로 곧장 파이프라인 탭에 랜딩하면서 mgr만 빠진 경우는
+  // 자식이 마운트 시 1회만 initialManager를 읽는 기존 규약상 이 복원이 한 박자 늦게
+  // 반영될 수 있다 — 드문 조합이라 "라이트" 스코프에서는 알려진 한계로 둔다.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (new URLSearchParams(window.location.search).get("mgr")) return
+    const stored = window.localStorage.getItem(PIPELINE_MANAGER_DEFAULT_STORAGE_KEY)
+    if (!stored) return
+    setPipelineManager(stored)
+    const url = new URL(window.location.href)
+    url.searchParams.set("mgr", stored)
+    window.history.replaceState(null, "", url.toString())
   }, [])
 
   // 탭 전환 시 URL도 동기화 — 뒤로가기 히스토리를 오염시키지 않게 replaceState 사용.
