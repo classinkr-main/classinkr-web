@@ -249,9 +249,20 @@ function getGapClusterSourceBadge(cluster: GapCluster) {
 // ?source=all|chatbot|internal_cs 딥링크(예: /admin/docs?tab=gaps&source=chatbot) 프리셋.
 // useSearchParams는 Suspense 경계가 필요하지만 이 컴포넌트는 항상 app/admin/docs/page.tsx의
 // <Suspense fallback={null}> 하위(activeTab==="gaps")에서만 렌더되므로 별도 경계를 두지 않는다.
-function readSourceFilterFromParams(params: { get(key: string): string | null }): GapSourceFilter {
+interface GapSourceParams {
+  get(key: string): string | null
+}
+
+export function readSourceFilterFromParams(params: GapSourceParams): GapSourceFilter {
   const raw = params.get("source")
   return raw === "chatbot" || raw === "internal_cs" ? raw : "all"
+}
+
+// 컴포넌트 유지 상태의 쿼리 전용 이동(사이드바 재클릭·뒤로가기)용 반영 규칙 — source
+// 파라미터가 "존재할 때만" 프리셋을 반환한다(빈 값·잘못된 값은 all로 검증). 부재 시 null을
+// 반환해 사용자가 칩으로 바꾼 현재 상태를 URL이 덮지 않게 한다.
+export function resolveSourceFilterPreset(params: GapSourceParams): GapSourceFilter | null {
+  return params.get("source") == null ? null : readSourceFilterFromParams(params)
 }
 
 export default function DocsGapsPanel() {
@@ -262,11 +273,19 @@ export default function DocsGapsPanel() {
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [clusterActionId, setClusterActionId] = useState<string | null>(null)
-  // 마운트 시 1회만 URL을 읽어 초기값을 프리셋한다 — 이후 칩 클릭은 기존처럼 클라이언트 상태만
+  // URL의 source 값으로 초기값을 프리셋한다 — 칩 클릭은 기존처럼 클라이언트 상태만
   // 바뀌고 URL과 동기화하지 않는다(계약 1).
   const [sourceFilter, setSourceFilter] = useState<GapSourceFilter>(() =>
     readSourceFilterFromParams(searchParams)
   )
+
+  // 쿼리 전용 이동(예: ?source=chatbot 상태에서 사이드바 "문서 보강 큐" 재클릭, 브라우저
+  // 뒤로가기)은 컴포넌트를 유지한 채 searchParams만 바꾼다 — lazy init만으로는 URL과 칩이
+  // 어긋나므로 source 변경을 구독해 재적용한다. source 부재 시(null) 현재 칩 상태를 유지한다.
+  useEffect(() => {
+    const preset = resolveSourceFilterPreset(searchParams)
+    if (preset != null) setSourceFilter(preset)
+  }, [searchParams])
 
   const [draftingKey, setDraftingKey] = useState<string | null>(null)
   const [draft, setDraft] = useState<DocDraft | null>(null)
