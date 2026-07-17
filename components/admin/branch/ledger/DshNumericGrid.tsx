@@ -7,6 +7,7 @@
 // breakdown은 팀 필터와 무관한 Team KR 전사 수치다(summary API 참조).
 
 import Link from "next/link"
+import { ArrowLeftRight } from "lucide-react"
 import { useMemo, useState } from "react"
 import type { BranchDataSourceInfo, BranchDshBreakdownRow } from "../types"
 import { cnyExact } from "@/lib/branch/money-format"
@@ -266,50 +267,60 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false,
           DSH 상세 데이터가 없습니다 — 시트 &lsquo;1. DSH&rsquo; 동기화 후 다시 확인하세요.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] border-separate border-spacing-0 text-[11.5px] tabular-nums">
-            <thead>
-              <tr className="text-[10.5px] uppercase tracking-[0.04em] text-[#615D59]">
-                <th className={`${CELL} sticky left-0 z-[1] bg-[#F6F5F4] text-left font-bold`}>구분</th>
-                <th className={`${CELL} bg-[#F6F5F4] font-bold`}>연간</th>
-                {["Q1", "Q2", "Q3", "Q4"].map((label) => (
-                  <th key={label} className={`${CELL} bg-[#F6F5F4] font-bold`}>
-                    {label}
-                  </th>
+        <>
+          {/* 품질 웨이브 7 — 항목 5: min-w-[1080px] 표는 md 미만에서 첫 열만 고정한 채 나머지가
+              전부 가로 스크롤 밖으로 밀린다. 이 표는 검수용 밀도 높은 원장이라(헤더 주석 "숫자가
+              정본") 모바일에서 열을 줄인 축약 카드로 바꾸면 오히려 신뢰도가 떨어진다 — 대신
+              구분(sticky) 열은 그대로 두고, 스크롤이 더 있다는 사실만 명확히 알려준다. */}
+          <div className="flex items-center gap-1.5 border-b border-[rgba(0,0,0,0.08)] bg-[#FFFCF5] px-4 py-1.5 text-[10.5px] font-semibold text-[#7A520F] md:hidden">
+            <ArrowLeftRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            좌우로 스크롤하면 분기·월별 수치를 볼 수 있습니다 — 구분 열은 고정됩니다.
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1080px] border-separate border-spacing-0 text-[11.5px] tabular-nums">
+              <thead>
+                <tr className="text-[10.5px] uppercase tracking-[0.04em] text-[#615D59]">
+                  <th className={`${CELL} sticky left-0 z-[1] bg-[#F6F5F4] text-left font-bold`}>구분</th>
+                  <th className={`${CELL} bg-[#F6F5F4] font-bold`}>연간</th>
+                  {["Q1", "Q2", "Q3", "Q4"].map((label) => (
+                    <th key={label} className={`${CELL} bg-[#F6F5F4] font-bold`}>
+                      {label}
+                    </th>
+                  ))}
+                  {monthKeys.map((ym) => (
+                    <th key={ym} className={`${CELL} bg-[#F6F5F4] font-bold`}>
+                      {monthLabel(ym)}
+                    </th>
+                  ))}
+                  <th className={`${CELL} bg-[#F6F5F4] font-bold`}>비율</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className={`${CELL} sticky left-0 z-[1] bg-[#ECFDF5] text-left font-extrabold text-[#084734]`}>
+                    Team KR · Total
+                  </td>
+                  {numericCells(total, monthKeys, "bg-[#ECFDF5] font-extrabold text-[#084734]", showRawValue)}
+                  <td className={`${CELL} bg-[#ECFDF5] font-extrabold text-[#084734]`}>
+                    {view === "gap" ? "–" : formatRatio(total.annual, total.annual)}
+                  </td>
+                </tr>
+                {CATEGORY_ORDER.filter((category) => rows.some((row) => row.category === category)).map((category) => (
+                  <CategoryBlock
+                    key={category}
+                    category={category}
+                    rows={rows.filter((row) => row.category === category)}
+                    monthKeys={monthKeys}
+                    columnCount={columnCount}
+                    showRawValue={showRawValue}
+                    totalAnnual={total.annual}
+                    view={view}
+                  />
                 ))}
-                {monthKeys.map((ym) => (
-                  <th key={ym} className={`${CELL} bg-[#F6F5F4] font-bold`}>
-                    {monthLabel(ym)}
-                  </th>
-                ))}
-                <th className={`${CELL} bg-[#F6F5F4] font-bold`}>비율</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className={`${CELL} sticky left-0 z-[1] bg-[#ECFDF5] text-left font-extrabold text-[#084734]`}>
-                  Team KR · Total
-                </td>
-                {numericCells(total, monthKeys, "bg-[#ECFDF5] font-extrabold text-[#084734]", showRawValue)}
-                <td className={`${CELL} bg-[#ECFDF5] font-extrabold text-[#084734]`}>
-                  {view === "gap" ? "–" : formatRatio(total.annual, total.annual)}
-                </td>
-              </tr>
-              {CATEGORY_ORDER.filter((category) => rows.some((row) => row.category === category)).map((category) => (
-                <CategoryBlock
-                  key={category}
-                  category={category}
-                  rows={rows.filter((row) => row.category === category)}
-                  monthKeys={monthKeys}
-                  columnCount={columnCount}
-                  showRawValue={showRawValue}
-                  totalAnnual={total.annual}
-                  view={view}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </section>
   )
