@@ -5055,6 +5055,16 @@ export default function SalesLedgerWorkbench() {
   const ledgerConfirmed = (revenue?.confirmed ?? 0) + appliedDraftTotal
   const ledgerDelta = ledgerConfirmed - (revenue?.confirmed ?? 0)
   const periodLabel = period === "M" ? formatMonthLabel(selectedMonth) : period === "Q" ? "현재 분기" : fyLabel
+  // 파이프라인 탭 딥링크(품질 웨이브 3, 항목 9) — 지금 보고 있는 team/period 컨텍스트를 동봉해
+  // "KPI 보기" 클릭 후에도 같은 팀/기간을 유지한다. BranchDashboardClient가 읽는 파라미터(tab/team/
+  // period/month)만 넣는다 — mgr(담당자 필터)은 파이프라인 탭이 소비하지 않아 제외(있으나 마나 무시됨).
+  // 기본값(ALL/Q)은 그 페이지도 기본값이라 생략(URL 동기화 규약과 동일하게 diff만 반영).
+  const pipelineHref = useMemo(() => {
+    const params = new URLSearchParams({ tab: "pipeline" })
+    if (team !== "ALL") params.set("team", team)
+    if (period !== "Q") params.set("period", period)
+    return `/admin/branch?${params.toString()}`
+  }, [team, period])
   const canCreateEditDraft = Boolean(selectedRow && (selectedRow.ledgerOrigin === "sheet" || selectedRow.sourceDealId))
   const draftAmountValue = safeAmount(draftForm.amount)
   const draftAmountInvalid = !draftForm.amount.trim() || draftAmountValue <= 0
@@ -6328,9 +6338,10 @@ export default function SalesLedgerWorkbench() {
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    {/* KPI 렌즈는 KR Team 파이프라인 탭으로 이동 — 페이지 내 전환 대신 그 탭으로 링크. */}
+                    {/* KPI 렌즈는 KR Team 파이프라인 탭으로 이동 — 페이지 내 전환 대신 그 탭으로 링크.
+                        team/period 컨텍스트를 동봉(항목 9) — 필터를 좁혀 보던 도중에도 그대로 이어진다. */}
                     <Link
-                      href="/admin/branch?tab=pipeline"
+                      href={pipelineHref}
                       className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3 text-[11px] font-bold text-[#084734] transition hover:bg-[#D1FAE5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
                     >
                       <Users className="h-3.5 w-3.5" />
