@@ -101,8 +101,19 @@ export default function ActivityBottleneckSection({
                   return (
                     <tr key={row.member} className="border-t border-[#F0F0EC]">
                       <td className="px-2.5 py-2.5">
-                        <p className="font-bold text-[#111110]">{row.member}</p>
-                        {row.team && <p className="mt-0.5 text-[10.5px] text-[#615D59]">{row.team}</p>}
+                        <span className="inline-flex items-center gap-1.5">
+                          <span>
+                            <p className="font-bold text-[#111110]">{row.member}</p>
+                            {row.team && <p className="mt-0.5 text-[10.5px] text-[#615D59]">{row.team}</p>}
+                          </span>
+                          <Link
+                            href={`/admin/branch/ledger?lens=rev&mgr=${encodeURIComponent(row.member)}`}
+                            className="shrink-0 self-start text-[11px] font-medium text-[#084734] opacity-50 transition hover:opacity-100"
+                            title="담당자 매출 장부에서 열기"
+                          >
+                            ↗
+                          </Link>
+                        </span>
                       </td>
                       <td className="px-2.5 py-2.5 font-semibold text-[#111110]">
                         {METRIC_LABELS[row.metric] ?? row.metric}
