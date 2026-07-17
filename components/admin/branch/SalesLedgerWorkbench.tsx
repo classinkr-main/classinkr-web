@@ -2174,6 +2174,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
     <td
       ref={cellRef}
       title={title}
+      aria-label={interactive ? title : undefined}
       className={cellClassName}
       style={{ width: MATRIX_MONTH_W, minWidth: MATRIX_MONTH_W, maxWidth: MATRIX_MONTH_W }}
       {...interactiveHandlers}
@@ -2320,6 +2321,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
     <td
       ref={cellRef}
       title={title}
+      aria-label={interactive ? title : undefined}
       className={cellClassName}
       style={{ width: MATRIX_WEEK_W, minWidth: MATRIX_WEEK_W, maxWidth: MATRIX_WEEK_W }}
       {...interactiveHandlers}
