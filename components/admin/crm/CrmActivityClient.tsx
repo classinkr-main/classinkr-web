@@ -22,6 +22,7 @@ import {
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import CrmActionRail from "./rail/CrmActionRail"
+import CrmEventRow from "./CrmEventRow"
 import {
   EVENTS_URL,
   SENTIMENT_FILTERS,
@@ -32,7 +33,6 @@ import {
   isActivityTargetType,
   sentimentLabel,
   sentimentTone,
-  sourceLabel,
   type CrmEventRecord,
   type CrmEventsResponse,
   type Sentiment,
@@ -342,40 +342,29 @@ function CrmActivityClientInner() {
             </div>
           ) : null}
 
-          <section className="space-y-3">
+          <section className="space-y-1.5">
             {data?.rows.map((event) => (
-              <article key={event.id} className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                      <span className="rounded-full border border-[#D7EBDD] bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold text-[#084734]">
-                        {sourceLabel(event.sourceType)}
-                      </span>
-                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${sentimentTone(event.sentiment)}`}>
-                        {sentimentLabel(event.sentiment)}
-                      </span>
-                      {event.stageSignal ? (
-                        <span className="rounded-full border border-[#e8e8e4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#1a1a1a]/50">
-                          {event.stageSignal}
-                        </span>
-                      ) : null}
-                    </div>
-                    <h2 className="text-[15px] font-bold text-[#111110]">{event.title}</h2>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#1a1a1a]/42">
-                      <span className="inline-flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5" />
-                        {formatDateTime(event.occurredAt)}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <UserRound className="h-3.5 w-3.5" />
-                        {event.ownerName ?? "담당 미지정"}
-                      </span>
-                      <span>{event.targetLabel ?? "미연결 고객"}</span>
-                    </div>
-                  </div>
-                  <span className="shrink-0 rounded-lg bg-[#fafaf8] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/40">
-                    {event.targetType}
+              <CrmEventRow key={event.id} event={event}>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${sentimentTone(event.sentiment)}`}>
+                    {sentimentLabel(event.sentiment)}
                   </span>
+                  {event.stageSignal ? (
+                    <span className="rounded-full border border-[#e8e8e4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#1a1a1a]/50">
+                      {event.stageSignal}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#1a1a1a]/42">
+                  <span className="inline-flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {formatDateTime(event.occurredAt)}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <UserRound className="h-3.5 w-3.5" />
+                    {event.ownerName ?? "담당 미지정"}
+                  </span>
+                  <span>{event.targetLabel ?? "미연결 고객"}</span>
                 </div>
 
                 {event.summary ? <p className="mt-3 text-[13px] font-semibold text-[#111110]">{event.summary}</p> : null}
@@ -443,7 +432,7 @@ function CrmActivityClientInner() {
                     ))}
                   </div>
                 ) : null}
-              </article>
+              </CrmEventRow>
             ))}
 
             {loading && !data ? (
