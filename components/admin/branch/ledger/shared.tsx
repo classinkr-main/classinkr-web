@@ -5,6 +5,7 @@
 // 주의: 이 파일은 ../SalesLedgerWorkbench를 import하지 않는다 — 사이클 금지.
 
 import dynamic from "next/dynamic"
+import type { KeyboardEvent as ReactKeyboardEvent } from "react"
 import { Loader2 } from "lucide-react"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { ledgerMonthConfirmed, ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
@@ -57,6 +58,19 @@ export type LedgerRevenueRow = BranchPipelineRow & {
 }
 
 export type DraftConfidence = "expected" | "high-confidence" | "confirmed"
+
+// 입력 레일 저장 결과(품질 웨이브 3, 항목 3) — persisted: 서버에 실제로 저장됐으면 true,
+// 로컬 폴백(장부 적용 불가)이면 false. deduped: 새 초안을 만드는 대신 같은 딜·같은 셀(월/주차)에
+// 이미 열린 초안을 갱신했으면 true(이중계상 가드 발동) — InputRailSection이 "이미 대기 초안
+// 있음" 인라인 안내에 쓴다.
+export interface DraftSaveResult {
+  persisted: boolean
+  deduped: boolean
+  /** 품질 웨이브 4 — 항목 2: new-row 저장 시 같은 고객명·월 조합의 열린(draft|checked) 신규 초안이
+      이미 있으면 true — edit-row의 deduped(자동 PATCH 재지정)와 달리 저장은 그대로 진행(POST)하고
+      경고만 얹는다. new-row는 아직 매트릭스 행이 없어 "같은 딜"인지 확정할 수 없기 때문. */
+  duplicateWarning?: boolean
+}
 
 export interface DraftForm {
   operation: DraftOperation
@@ -124,6 +138,10 @@ export interface RevRowView {
   // 다중월 매트릭스용: 회계연도 12개월 각 셀 버킷 + 행 연간 합계(행 1패스 캐시).
   monthlyByMonth: Record<string, RevMonthlyBucket>
   annual: RevMonthlyBucket
+  /** 품질 웨이브 4 — 항목 1: 이 딜의 어떤 월이 이미 적용된 수정(edit-row) 초안으로 대체됐는지
+      (editRowOverrideMonths). 그 달은 원본 금액이 0으로 지워져도(adjustedSheetRows) 재편집 가능한
+      빈 칸으로 보이면 안 된다 — isMatrixCellLocked에 넘겨 금액과 무관하게 재잠금시킨다. */
+  correctedMonths?: Set<string> | null
 }
 
 // 같은 고객(normalizedAccountKey — lib/branch/account-key.ts SSOT)의 HW/SW/미분류 행 묶음.
@@ -408,12 +426,16 @@ export function WeekNumbersCell({
   return (
     <div className="grid grid-cols-5 items-center gap-1 text-right tabular-nums">
       {weeks.map((value, index) => (
+        // 품질 웨이브 4 — 항목 10: title은 마우스 hover에만 닿는다 — 값이 있는 칸은 키보드 포커스와
+        // aria-label로도 같은 정보(주차·금액)에 닿게 한다. 빈 칸("·")은 시각적으로도 정보가 없어 제외.
         <span
           key={index}
+          tabIndex={value > 0 ? 0 : undefined}
           title={`W${index + 1} ${formatMoney(value)}`}
+          aria-label={value > 0 ? `W${index + 1} ${formatMoney(value)}` : undefined}
           className={`text-[10.5px] leading-tight ${
             value > 0 ? (inferred ? "font-semibold text-[#615D59]" : "font-bold text-[#111110]") : "text-[#DDD9D3]"
-          }`}
+          } ${value > 0 ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 focus-visible:rounded" : ""}`}
         >
           {value > 0 ? formatWeekAmount(value) : "·"}
         </span>
@@ -456,12 +478,15 @@ export function DonutGauge({
             stroke="rgba(0,0,0,0.055)"
             strokeWidth={stroke}
           />
+          {/* overGoal 스트로크는 캐논 Warning(#A8741A)로 통일(품질 웨이브 3, 항목 7) — 아래
+              라벨(text-[#A8741A])과 동일 색으로, 목표 초과 신호가 도넛 링·숫자 라벨 전체에서
+              일관되게 읽힌다. */}
           <circle
             cx={size / 2}
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke={overGoal ? "#F59E0B" : color}
+            stroke={overGoal ? "#A8741A" : color}
             strokeWidth={stroke}
             strokeDasharray={circumference}
             strokeDashoffset={dashOffset}
@@ -562,7 +587,18 @@ export function numberCell(value: number, tone = "text-[#111110]") {
   return <span className={`font-bold ${tone}`}>{formatMoney(value)}</span>
 }
 
-export function BreakdownNumbersTable({ rows, emptyLabel }: { rows: BreakdownNumbersRow[]; emptyLabel: string }) {
+export function BreakdownNumbersTable({
+  rows,
+  emptyLabel,
+  onRowClick,
+  activeId = null,
+}: {
+  rows: BreakdownNumbersRow[]
+  emptyLabel: string
+  // 있으면 행이 클릭·키보드(Enter/Space) 가능해진다(예: 담당자별 수치 → 담당자 필터, 항목 6).
+  onRowClick?: (id: string) => void
+  activeId?: string | null
+}) {
   if (rows.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-3 text-[11px] leading-relaxed text-[#615D59]">
@@ -594,16 +630,39 @@ export function BreakdownNumbersTable({ rows, emptyLabel }: { rows: BreakdownNum
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="border-t border-[#F0F0EC]">
-              <td className="max-w-[160px] truncate py-2 pr-2 text-left font-bold text-[#111110]">{row.label}</td>
-              <td className="px-2 py-2">{numberCell(row.confirmed, CONFIDENCE_TOKENS.confirmed.textClass)}</td>
-              <td className="px-2 py-2">{numberCell(row.highConfidence, CONFIDENCE_TOKENS["high-confidence"].textClass)}</td>
-              <td className="px-2 py-2">{numberCell(row.open, CONFIDENCE_TOKENS.expected.textStrongClass)}</td>
-              <td className="px-2 py-2">{numberCell(row.total)}</td>
-              <td className="py-2 pl-2 font-semibold text-[#615D59]">{row.count}</td>
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const clickable = Boolean(onRowClick)
+            const active = activeId != null && activeId === row.id
+            return (
+              <tr
+                key={row.id}
+                className={`border-t border-[#F0F0EC] ${clickable ? "cursor-pointer hover:bg-[#FAFAF8]" : ""} ${
+                  active ? "bg-[#ECFDF5]" : ""
+                } ${clickable ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40" : ""}`}
+                {...(clickable
+                  ? {
+                      role: "button" as const,
+                      tabIndex: 0,
+                      "aria-pressed": active,
+                      onClick: () => onRowClick!(row.id),
+                      onKeyDown: (event: ReactKeyboardEvent<HTMLTableRowElement>) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault()
+                          onRowClick!(row.id)
+                        }
+                      },
+                    }
+                  : {})}
+              >
+                <td className="max-w-[160px] truncate py-2 pr-2 text-left font-bold text-[#111110]">{row.label}</td>
+                <td className="px-2 py-2">{numberCell(row.confirmed, CONFIDENCE_TOKENS.confirmed.textClass)}</td>
+                <td className="px-2 py-2">{numberCell(row.highConfidence, CONFIDENCE_TOKENS["high-confidence"].textClass)}</td>
+                <td className="px-2 py-2">{numberCell(row.open, CONFIDENCE_TOKENS.expected.textStrongClass)}</td>
+                <td className="px-2 py-2">{numberCell(row.total)}</td>
+                <td className="py-2 pl-2 font-semibold text-[#615D59]">{row.count}</td>
+              </tr>
+            )
+          })}
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] text-[12px]">
@@ -800,9 +859,12 @@ export interface WeeklyCloseDiffView {
   }>
 }
 
+// "증액"은 확도 신호(#1E5DA8, 확정/고확도/예정 3단 전용)가 아니라 캐논 Warning(#A8741A)로
+// 정정(품질 웨이브 3, 항목 7) — 증액은 검수자가 주의 깊게 봐야 할 변동이라 Warning 계열이
+// 의미상 더 맞고, #1E5DA8은 확도 맥락 밖 사용이 팔레트 위반이었다.
 export const WEEKLY_CLOSE_BUCKET_META: Array<{ id: WeeklyCloseBucketId; label: string; tone: string }> = [
   { id: "new", label: "신규", tone: "text-[#084734]" },
-  { id: "increased", label: "증액", tone: "text-[#1E5DA8]" },
+  { id: "increased", label: "증액", tone: "text-[#A8741A]" },
   { id: "decreased", label: "감액", tone: "text-[#A8741A]" },
   { id: "dropped", label: "소멸", tone: "text-[#B43E3E]" },
   { id: "unchanged", label: "유지", tone: "text-[#615D59]" },

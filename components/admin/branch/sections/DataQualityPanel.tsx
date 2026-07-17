@@ -9,7 +9,7 @@ type PanelMode = "ops" | "dev"
 type DqCategory = "crm" | "hw" | "kpi" | "geo"
 type FilterId = "all" | Severity | DqCategory
 
-interface Issue {
+export interface Issue {
   id: string
   severity: Severity
   message: string
@@ -22,6 +22,19 @@ interface DataQualityResponse {
   ruleCount?: number
   sourceCounts?: Record<string, number>
   error?: string
+}
+
+/**
+ * IntegrityStrip처럼 이미 `/api/admin/branch/data-quality`를 fetch해 둔 상위가 그 응답을
+ * 그대로 내려줄 때 쓰는 형태 — 이 prop이 오면 컴포넌트는 자체 fetch를 생략한다(중복 호출 금지).
+ */
+export interface DataQualityExternalData {
+  issues: Issue[] | null
+  checkedAt?: string
+  ruleCount?: number
+  sourceCounts?: Record<string, number>
+  error?: string | null
+  loading?: boolean
 }
 
 const FALLBACK_RULE_COUNT = 8
@@ -100,6 +113,9 @@ const RULE_META: Record<string, {
   },
 }
 
+// 캐논 Status Scale(DESIGN.md "운영 상태 스케일") — rose/amber/sky 독자 색 대신
+// Danger(#B43E3E/#FCE9E9/#F2B8B8, 강조 #8F2C2C) · Warning(#A8741A/#FBF1E0/#ECD29C,
+// 강조 #7A520F) · Success·Info(#084734/#ECFDF5/#BDEFD8) 3축만 사용한다.
 const SEVERITY_TONE: Record<Severity, {
   label: string
   dot: string
@@ -108,21 +124,21 @@ const SEVERITY_TONE: Record<Severity, {
 }> = {
   error: {
     label: "위험",
-    dot: "bg-rose-500",
-    chip: "border-rose-200 bg-rose-50 text-rose-700",
-    row: "border-rose-200 bg-rose-50/70 text-rose-900",
+    dot: "bg-[#B43E3E]",
+    chip: "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]",
+    row: "border-[#F2B8B8] bg-[#FCE9E9]/70 text-[#8F2C2C]",
   },
   warn: {
     label: "주의",
-    dot: "bg-amber-500",
-    chip: "border-amber-200 bg-amber-50 text-amber-800",
-    row: "border-amber-200 bg-amber-50/75 text-amber-900",
+    dot: "bg-[#A8741A]",
+    chip: "border-[#ECD29C] bg-[#FBF1E0] text-[#A8741A]",
+    row: "border-[#ECD29C] bg-[#FBF1E0]/75 text-[#7A520F]",
   },
   info: {
     label: "참고",
-    dot: "bg-sky-500",
-    chip: "border-sky-200 bg-sky-50 text-sky-800",
-    row: "border-sky-200 bg-sky-50/70 text-sky-900",
+    dot: "bg-[#084734]",
+    chip: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
+    row: "border-[#BDEFD8] bg-[#ECFDF5]/70 text-[#084734]",
   },
 }
 
@@ -203,9 +219,11 @@ function IssueSamples({ samples, mode }: { samples?: unknown[]; mode: PanelMode 
 export default function DataQualityPanel({
   refreshKey = 0,
   mode = "ops",
+  data: externalData,
 }: {
   refreshKey?: number
   mode?: PanelMode
+  data?: DataQualityExternalData
 }) {
   const [issues, setIssues] = useState<Issue[] | null>(null)
   const [checkedAt, setCheckedAt] = useState<string | undefined>()
@@ -218,6 +236,8 @@ export default function DataQualityPanel({
   const [localRefreshKey, setLocalRefreshKey] = useState(0)
 
   useEffect(() => {
+    // 상위가 이미 fetch한 데이터를 넘겨줄 때(externalData)는 여기서 다시 fetch하지 않는다.
+    if (externalData) return
     let active = true
 
     queueMicrotask(() => {
@@ -245,29 +265,36 @@ export default function DataQualityPanel({
       })
 
     return () => { active = false }
-  }, [refreshKey, localRefreshKey])
+  }, [refreshKey, localRefreshKey, externalData])
+
+  const effIssues = externalData ? externalData.issues : issues
+  const effCheckedAt = externalData ? externalData.checkedAt : checkedAt
+  const effRuleCount = externalData ? (externalData.ruleCount ?? FALLBACK_RULE_COUNT) : ruleCount
+  const effSourceCounts = externalData ? (externalData.sourceCounts ?? {}) : sourceCounts
+  const effError = externalData ? (externalData.error ?? null) : error
+  const effLoading = externalData ? (externalData.loading ?? false) : loading
 
   const counts = useMemo(() => {
-    const list = issues ?? []
+    const list = effIssues ?? []
     const triggeredRules = new Set(list.map((issue) => issue.id))
     return {
       error: list.filter((issue) => issue.severity === "error").length,
       warn: list.filter((issue) => issue.severity === "warn").length,
       info: list.filter((issue) => issue.severity === "info").length,
-      passed: Math.max(0, ruleCount - triggeredRules.size),
+      passed: Math.max(0, effRuleCount - triggeredRules.size),
     }
-  }, [issues, ruleCount])
+  }, [effIssues, effRuleCount])
 
   const filteredIssues = useMemo(() => {
-    return (issues ?? []).filter((issue) => filterIssue(issue, filter))
-  }, [filter, issues])
+    return (effIssues ?? []).filter((issue) => filterIssue(issue, filter))
+  }, [filter, effIssues])
 
   const visibleLimit = mode === "ops" && !showAll ? 3 : filteredIssues.length
   const visibleIssues = filteredIssues.slice(0, visibleLimit)
   const hiddenCount = Math.max(0, filteredIssues.length - visibleIssues.length)
   const isDev = mode === "dev"
 
-  if (issues === null && loading) {
+  if (effIssues === null && effLoading) {
     return <div className="h-44 animate-pulse rounded-xl bg-[#f0f0ec]" />
   }
 
@@ -280,18 +307,18 @@ export default function DataQualityPanel({
               <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">
                 {isDev ? "지사 데이터 품질 점검" : "데이터 품질 점검"}
               </h2>
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10.5px] font-bold text-emerald-700">
+              <span className="inline-flex items-center gap-1 rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] font-bold text-[#084734]">
                 <CheckCircle2 className="h-3 w-3" />
                 통과 {counts.passed}
               </span>
               {counts.error > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10.5px] font-bold text-rose-700">
+                <span className="inline-flex items-center gap-1 rounded-full border border-[#F2B8B8] bg-[#FCE9E9] px-2 py-0.5 text-[10.5px] font-bold text-[#B43E3E]">
                   <AlertTriangle className="h-3 w-3" />
                   위험 {counts.error}
                 </span>
               )}
               {counts.warn > 0 && (
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10.5px] font-bold text-amber-800">
+                <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-bold text-[#A8741A]">
                   주의 {counts.warn}
                 </span>
               )}
@@ -304,17 +331,21 @@ export default function DataQualityPanel({
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            <span className="hidden text-[11px] text-[#615D59] sm:inline">점검 {formatTime(checkedAt)}</span>
-            <button
-              type="button"
-              onClick={() => setLocalRefreshKey((key) => key + 1)}
-              disabled={loading}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59] transition hover:text-[#111110] disabled:opacity-50"
-              title="데이터 품질 다시 점검"
-              aria-label="데이터 품질 다시 점검"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            </button>
+            <span className="hidden text-[11px] text-[#615D59] sm:inline">점검 {formatTime(effCheckedAt)}</span>
+            {/* externalData 모드에서는 상위(IntegrityStrip)의 새로고침이 유일한 갱신 경로다 —
+                이 컴포넌트가 독자적으로 재요청하면 fetch가 중복된다. */}
+            {!externalData && (
+              <button
+                type="button"
+                onClick={() => setLocalRefreshKey((key) => key + 1)}
+                disabled={effLoading}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59] transition hover:text-[#111110] disabled:opacity-50"
+                title="데이터 품질 다시 점검"
+                aria-label="데이터 품질 다시 점검"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${effLoading ? "animate-spin" : ""}`} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -343,19 +374,19 @@ export default function DataQualityPanel({
       </div>
 
       <div className="space-y-2.5 p-5">
-        {error && (
-          <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-[12px] leading-relaxed text-rose-700">
-            데이터 품질 점검을 불러오지 못했습니다. {error}
+        {effError && (
+          <div className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] p-3 text-[12px] leading-relaxed text-[#8F2C2C]">
+            데이터 품질 점검을 불러오지 못했습니다. {effError}
           </div>
         )}
 
-        {(issues ?? []).length === 0 && !error && (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-[12px] leading-relaxed text-emerald-800">
+        {(effIssues ?? []).length === 0 && !effError && (
+          <div className="rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] p-4 text-[12px] leading-relaxed text-[#084734]">
             현재 검출된 데이터 품질 이슈가 없습니다. 분석 입력 데이터가 정상 범위로 보입니다.
           </div>
         )}
 
-        {filteredIssues.length === 0 && (issues ?? []).length > 0 && (
+        {filteredIssues.length === 0 && (effIssues ?? []).length > 0 && (
           <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-4 text-[12px] text-[#615D59]">
             선택한 필터에 해당하는 이슈가 없습니다.
           </div>
@@ -412,7 +443,7 @@ export default function DataQualityPanel({
                   </div>
                   <div className="rounded-lg bg-white/55 p-2.5">
                     <p className="font-bold text-[#111110]">Last Run</p>
-                    <p className="mt-1">{formatTime(checkedAt)}</p>
+                    <p className="mt-1">{formatTime(effCheckedAt)}</p>
                     <p className="mt-1">Samples: {issue.samples?.length ?? 0}</p>
                   </div>
                 </div>
@@ -432,14 +463,14 @@ export default function DataQualityPanel({
           </button>
         )}
 
-        {isDev && Object.keys(sourceCounts).length > 0 && (
+        {isDev && Object.keys(effSourceCounts).length > 0 && (
           <div className="mt-4 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
             <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold text-[#111110]">
               <Database className="h-3.5 w-3.5" />
               입력 소스 카운트
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {Object.entries(sourceCounts).map(([key, value]) => (
+              {Object.entries(effSourceCounts).map(([key, value]) => (
                 <span key={key} className="rounded-full border border-[rgba(0,0,0,0.06)] bg-white px-2 py-1 text-[11px] font-medium text-[#615D59]">
                   {SOURCE_LABELS[key] ?? key} {value.toLocaleString("ko-KR")}
                 </span>

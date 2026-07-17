@@ -1,6 +1,6 @@
 "use client"
 
-// CRM 기록 표면 — 좌: 필터+타임라인, 우: CrmActionRail(기록 빠른 생성·오늘 할 일·최근 기록).
+// CRM 기록 표면 — 좌: 컴포저(ActivityQuickForm composer)+필터+타임라인, 우: CrmActionRail(hideForm — 오늘 할 일·최근 기록).
 // 기록 생성 폼 SSOT는 rail/ActivityQuickForm — 이 파일은 폼을 직접 들고 있지 않는다.
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -22,6 +22,8 @@ import {
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import CrmActionRail from "./rail/CrmActionRail"
+import ActivityQuickForm from "./rail/ActivityQuickForm"
+import CrmEventRow from "./CrmEventRow"
 import {
   EVENTS_URL,
   SENTIMENT_FILTERS,
@@ -32,7 +34,6 @@ import {
   isActivityTargetType,
   sentimentLabel,
   sentimentTone,
-  sourceLabel,
   type CrmEventRecord,
   type CrmEventsResponse,
   type Sentiment,
@@ -232,17 +233,18 @@ function CrmActivityClientInner() {
         </div>
       ) : null}
 
-      {/* 좌: 타임라인(minmax(0,1fr)) · 우: 액션 레일(독립 스크롤). 모바일은 레일(빠른 생성) → 타임라인 스택. */}
+      {/* 좌: 컴포저+필터+타임라인(minmax(0,1fr)) · 우: 액션 레일(독립 스크롤, hideForm — 입력면은 본문 컴포저 하나).
+          모바일은 컴포저 → 필터 → 타임라인 → 레일 순 스택(컴포저가 첫 인터랙션 블록). */}
       <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <CrmActionRail
-          defaultTargetType={focusTargetType}
-          defaultTargetId={focusTargetId || undefined}
-          customerName={focusLabel || undefined}
-          onActivitySaved={handleRailSaved}
-          className="xl:col-start-2 xl:row-start-1"
-        />
-
         <div className="min-w-0 space-y-4 xl:col-start-1 xl:row-start-1">
+          <ActivityQuickForm
+            variant="composer"
+            defaultTargetType={focusTargetType}
+            defaultTargetId={focusTargetId || undefined}
+            defaultTargetLabel={focusLabel || undefined}
+            onSaved={handleRailSaved}
+          />
+
           <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
             <div className="grid gap-3 lg:grid-cols-[minmax(200px,1fr)_auto_auto_auto] lg:items-center">
               <label className="flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3">
@@ -305,26 +307,31 @@ function CrmActivityClientInner() {
             </div>
 
             {data ? (
-              <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-                <div className="rounded-xl bg-[#fafaf8] p-3">
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">총 기록</p>
-                  <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
+              <details className="mt-3">
+                <summary className="cursor-pointer select-none text-[12px] font-semibold text-[#1a1a1a]/50 transition-colors hover:text-[#111110]">
+                  기록 요약
+                </summary>
+                <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
+                  <div className="rounded-xl bg-[#fafaf8] p-3">
+                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">총 기록</p>
+                    <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
+                  </div>
+                  <div className="rounded-xl bg-[#fafaf8] p-3">
+                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">현재 녹음</p>
+                    <p className="mt-1 text-xl font-bold text-[#084734]">{data.summary.recordings.toLocaleString("ko-KR")}</p>
+                  </div>
+                  <div className="rounded-xl bg-[#fafaf8] p-3">
+                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">미처리 액션</p>
+                    <p className="mt-1 text-xl font-bold text-[#111110]">
+                      {data.summary.openNextActions.toLocaleString("ko-KR")}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-[#FEF3EE] p-3">
+                    <p className="text-[11px] font-semibold text-[#B85C33]/70">리스크</p>
+                    <p className="mt-1 text-xl font-bold text-[#B85C33]">{data.summary.risks.toLocaleString("ko-KR")}</p>
+                  </div>
                 </div>
-                <div className="rounded-xl bg-[#fafaf8] p-3">
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">현재 녹음</p>
-                  <p className="mt-1 text-xl font-bold text-[#084734]">{data.summary.recordings.toLocaleString("ko-KR")}</p>
-                </div>
-                <div className="rounded-xl bg-[#fafaf8] p-3">
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">미처리 액션</p>
-                  <p className="mt-1 text-xl font-bold text-[#111110]">
-                    {data.summary.openNextActions.toLocaleString("ko-KR")}
-                  </p>
-                </div>
-                <div className="rounded-xl bg-[#FEF3EE] p-3">
-                  <p className="text-[11px] font-semibold text-[#B85C33]/70">리스크</p>
-                  <p className="mt-1 text-xl font-bold text-[#B85C33]">{data.summary.risks.toLocaleString("ko-KR")}</p>
-                </div>
-              </div>
+              </details>
             ) : null}
           </section>
 
@@ -342,40 +349,29 @@ function CrmActivityClientInner() {
             </div>
           ) : null}
 
-          <section className="space-y-3">
+          <section className="space-y-1.5">
             {data?.rows.map((event) => (
-              <article key={event.id} className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                      <span className="rounded-full border border-[#D7EBDD] bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold text-[#084734]">
-                        {sourceLabel(event.sourceType)}
-                      </span>
-                      <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${sentimentTone(event.sentiment)}`}>
-                        {sentimentLabel(event.sentiment)}
-                      </span>
-                      {event.stageSignal ? (
-                        <span className="rounded-full border border-[#e8e8e4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#1a1a1a]/50">
-                          {event.stageSignal}
-                        </span>
-                      ) : null}
-                    </div>
-                    <h2 className="text-[15px] font-bold text-[#111110]">{event.title}</h2>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#1a1a1a]/42">
-                      <span className="inline-flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5" />
-                        {formatDateTime(event.occurredAt)}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <UserRound className="h-3.5 w-3.5" />
-                        {event.ownerName ?? "담당 미지정"}
-                      </span>
-                      <span>{event.targetLabel ?? "미연결 고객"}</span>
-                    </div>
-                  </div>
-                  <span className="shrink-0 rounded-lg bg-[#fafaf8] px-2.5 py-1 text-[11px] font-semibold text-[#1a1a1a]/40">
-                    {event.targetType}
+              <CrmEventRow key={event.id} event={event}>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${sentimentTone(event.sentiment)}`}>
+                    {sentimentLabel(event.sentiment)}
                   </span>
+                  {event.stageSignal ? (
+                    <span className="rounded-full border border-[#e8e8e4] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#1a1a1a]/50">
+                      {event.stageSignal}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#1a1a1a]/42">
+                  <span className="inline-flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {formatDateTime(event.occurredAt)}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <UserRound className="h-3.5 w-3.5" />
+                    {event.ownerName ?? "담당 미지정"}
+                  </span>
+                  <span>{event.targetLabel ?? "미연결 고객"}</span>
                 </div>
 
                 {event.summary ? <p className="mt-3 text-[13px] font-semibold text-[#111110]">{event.summary}</p> : null}
@@ -443,7 +439,7 @@ function CrmActivityClientInner() {
                     ))}
                   </div>
                 ) : null}
-              </article>
+              </CrmEventRow>
             ))}
 
             {loading && !data ? (
@@ -490,6 +486,15 @@ function CrmActivityClientInner() {
             ) : null}
           </section>
         </div>
+
+        <CrmActionRail
+          hideForm
+          defaultTargetType={focusTargetType}
+          defaultTargetId={focusTargetId || undefined}
+          customerName={focusLabel || undefined}
+          onActivitySaved={handleRailSaved}
+          className="xl:col-start-2 xl:row-start-1"
+        />
       </section>
     </div>
   )

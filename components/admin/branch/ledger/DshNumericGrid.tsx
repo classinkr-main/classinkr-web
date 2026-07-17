@@ -7,7 +7,7 @@
 // breakdown은 팀 필터와 무관한 Team KR 전사 수치다(summary API 참조).
 
 import Link from "next/link"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import type { BranchDataSourceInfo, BranchDshBreakdownRow } from "../types"
 import { cnyExact } from "@/lib/branch/money-format"
 import { formatDateTime, LoadingPanel } from "./shared"
@@ -158,21 +158,27 @@ function exactTitle(value: number): string {
   return `¥${cnyExact(value)} · 시트 원값 · 반올림 없음`
 }
 
-function numericCells(numbers: GridNumbers, monthKeys: string[], extra = "") {
+// 원값 접근성(품질 웨이브 2, 항목 8): hover-only title로만 원값을 확인할 수 있던 문제 —
+// 개별 셀 tabIndex 대신 헤더 토글로 표시 자체를 전환한다. 검수(reconciliation) 작업은
+// 여러 셀을 훑어야 해서, 셀 하나하나 포커스/hover하는 것보다 한 번의 토글로 표 전체가
+// 원값으로 바뀌는 쪽이 스크린리더·키보드 사용자 모두에게 더 빠르다 — 텍스트 자체가
+// 원값이 되므로 hover 의존이 없어진다. 집계·산식은 무변경(표시 전환만).
+function numericCells(numbers: GridNumbers, monthKeys: string[], extra = "", showRaw = false) {
   const tone = (value: number) => (value < 0 ? "text-[#B43E3E]" : "")
+  const display = (value: number) => (showRaw ? `¥${cnyExact(value)}` : formatThousands(value))
   return (
     <>
-      <td className={`${CELL} cursor-help ${tone(numbers.annual)} ${extra}`} title={exactTitle(numbers.annual)}>{formatThousands(numbers.annual)}</td>
+      <td className={`${CELL} cursor-help ${tone(numbers.annual)} ${extra}`} title={exactTitle(numbers.annual)}>{display(numbers.annual)}</td>
       {numbers.quarters.map((value, index) => (
         <td key={`q${index}`} className={`${CELL} cursor-help ${extra || "bg-[#FBFAF7]"} ${tone(value)}`} title={exactTitle(value)}>
-          {formatThousands(value)}
+          {display(value)}
         </td>
       ))}
       {monthKeys.map((ym) => {
         const value = numbers.months[ym] ?? 0
         return (
           <td key={ym} className={`${CELL} cursor-help ${tone(value)} ${extra}`} title={exactTitle(value)}>
-            {formatThousands(value)}
+            {display(value)}
           </td>
         )
       })}
@@ -192,6 +198,9 @@ interface DshNumericGridProps {
 
 export function DshNumericGrid({ breakdown, view, onViewChange, loading = false, dataSource = null }: DshNumericGridProps) {
   const { monthKeys, rows, total } = useMemo(() => aggregateDshBreakdown(breakdown, view), [breakdown, view])
+  // 원값 표시 토글(항목 8) — 기본은 기존 "단위: 천" 축약, 켜면 표 전체가 반올림 없는 원값(¥)으로
+  // 바뀐다. 검수용 표시 전환일 뿐 집계·산식은 그대로다.
+  const [showRawValue, setShowRawValue] = useState(false)
 
   const columnCount = 2 + 4 + monthKeys.length + 1
 
@@ -200,7 +209,8 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false,
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
         <div>
           <p className="text-[13px] font-bold text-[#111110]">
-            목표 · 실적 상세 <span className="font-semibold text-[#615D59]">(단위: 천)</span>
+            목표 · 실적 상세{" "}
+            <span className="font-semibold text-[#615D59]">{showRawValue ? "(원값)" : "(단위: 천)"}</span>
           </p>
           <p className="mt-0.5 text-[11px] text-[#615D59]">
             시트 &lsquo;1. DSH&rsquo; 미러 · Team KR 전사 — 팀 필터와 무관 · 숫자가 정본
@@ -208,6 +218,19 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false,
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            aria-pressed={showRawValue}
+            onClick={() => setShowRawValue((value) => !value)}
+            title="셀을 hover하지 않아도 반올림 없는 원값을 표에서 바로 확인합니다."
+            className={`rounded-md border px-3 py-1.5 text-[12px] font-bold transition ${
+              showRawValue
+                ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                : "border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
+            }`}
+          >
+            {showRawValue ? "원값 표시 중" : "원값 표시"}
+          </button>
           <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="Goal/Status/Gap 보기 전환">
             {VIEW_OPTIONS.map((option) => (
               <button
@@ -267,7 +290,7 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false,
                 <td className={`${CELL} sticky left-0 z-[1] bg-[#ECFDF5] text-left font-extrabold text-[#084734]`}>
                   Team KR · Total
                 </td>
-                {numericCells(total, monthKeys, "bg-[#ECFDF5] font-extrabold text-[#084734]")}
+                {numericCells(total, monthKeys, "bg-[#ECFDF5] font-extrabold text-[#084734]", showRawValue)}
                 <td className={`${CELL} bg-[#ECFDF5] font-extrabold text-[#084734]`}>
                   {view === "gap" ? "–" : formatRatio(total.annual, total.annual)}
                 </td>
@@ -279,6 +302,7 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false,
                   rows={rows.filter((row) => row.category === category)}
                   monthKeys={monthKeys}
                   columnCount={columnCount}
+                  showRawValue={showRawValue}
                   totalAnnual={total.annual}
                   view={view}
                 />
@@ -298,6 +322,7 @@ function CategoryBlock({
   columnCount,
   totalAnnual,
   view,
+  showRawValue,
 }: {
   category: string
   rows: GridRow[]
@@ -305,6 +330,7 @@ function CategoryBlock({
   columnCount: number
   totalAnnual: number
   view: DshGridView
+  showRawValue: boolean
 }) {
   return (
     <>
@@ -318,7 +344,7 @@ function CategoryBlock({
           <td className={`${CELL} sticky left-0 z-[1] bg-white text-left font-semibold`}>
             {row.status_type} · {row.channel}
           </td>
-          {numericCells(row, monthKeys)}
+          {numericCells(row, monthKeys, "", showRawValue)}
           <td className={`${CELL} text-[#615D59]`}>{view === "gap" ? "–" : formatRatio(row.annual, totalAnnual)}</td>
         </tr>
       ))}

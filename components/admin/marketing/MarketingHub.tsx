@@ -41,6 +41,7 @@ import KakaoComposer from "@/components/admin/marketing/KakaoComposer"
 import MessageLogTable from "@/components/admin/marketing/MessageLogTable"
 import { unwrapMessagingData, type MessagingStatus } from "@/lib/messaging-client-types"
 import type { EmailCampaign, EmailDraft, SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
+import type { MessagePrefill } from "@/lib/message-prefill"
 
 // 발송 상태 캐시 TTL — ChannelStatusStrip과 동일 엔드포인트(같은 URL 캐시 키)를 공유해
 // 초기 마운트 시 두 컴포넌트의 fetch가 왕복 1회로 수렴한다(CMP-2).
@@ -293,10 +294,46 @@ function MiniBadge({ children, tone = "neutral" }: { children: ReactNode; tone?:
   return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${className}`}>{children}</span>
 }
 
-export default function MarketingHub() {
+interface MarketingHubProps {
+  /** 고객 360 딥링크(?message_to=)에서 온 수신자 프리필 — 마운트 시 1회만 캡처한다. */
+  recipientPrefill?: MessagePrefill | null
+  /** 프리필을 적용(소모)한 직후 호출 — 부모가 상태를 비워 허브 재마운트 시 재적용을 막는다. */
+  onRecipientPrefillConsumed?: () => void
+}
+
+export default function MarketingHub({
+  recipientPrefill: recipientPrefillProp,
+  onRecipientPrefillConsumed,
+}: MarketingHubProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<Tab>("subscribers")
   const [channel, setChannel] = useState<Channel>("email")
+  // 수신자 프리필은 마운트 시점 값만 캡처한다(one-shot). 이후 부모가 비워도 배너·초기값은 유지되고,
+  // 사용자가 "지우기"를 누르면 여기서 함께 사라진다.
+  const [recipientPrefill, setRecipientPrefill] = useState<MessagePrefill | null>(
+    () => recipientPrefillProp ?? null
+  )
+  const recipientPrefillAppliedRef = useRef(false)
+
+  // 늦게 도착한 프리필 흡수 — ?tab=email 직링크에서는 허브(dynamic) 마운트가 부모의 프리필
+  // 캡처 effect보다 먼저 끝날 수 있다. 아직 한 번도 적용하지 않았을 때만 prop을 받아들이므로
+  // "지우기" 이후나 적용 완료 후에 다시 채워지는 일은 없다.
+  useEffect(() => {
+    if (!recipientPrefillProp || recipientPrefillAppliedRef.current) return
+    setRecipientPrefill(recipientPrefillProp)
+  }, [recipientPrefillProp])
+
+  // 프리필 1회 적용: 발송 작성 탭 + 카카오 채널로 이동.
+  // 전화번호 수신자 입력이 존재하는 유일한 채널이 카카오(테스트 발송 번호)다 —
+  // 문자(SMS/LMS)는 보류 상태 카드라 입력이 없고, 이메일은 이메일 주소 대상이다.
+  // ref 가드로 마운트 후 딱 한 번만 실행 — 이후 사용자의 탭·채널 이동을 다시 덮지 않는다.
+  useEffect(() => {
+    if (!recipientPrefill || recipientPrefillAppliedRef.current) return
+    recipientPrefillAppliedRef.current = true
+    setActiveTab("compose")
+    setChannel("kakao")
+    onRecipientPrefillConsumed?.()
+  }, [recipientPrefill, onRecipientPrefillConsumed])
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([])
   const [messagingStatus, setMessagingStatus] = useState<MessagingStatus | null>(null)
@@ -1356,6 +1393,29 @@ export default function MarketingHub() {
                 ))}
               </div>
 
+              {/* 수신자 프리필 배너 — 고객 360 딥링크에서 넘어온 맥락을 채널과 무관하게 보여준다 */}
+              {recipientPrefill && (
+                <div className="flex items-start justify-between gap-3 rounded-xl border border-[#084734]/20 bg-[#ECFDF5] px-4 py-3">
+                  <p className="min-w-0 text-[12px] leading-relaxed text-[#084734]">
+                    <span className="font-semibold">수신자</span>
+                    {" — "}
+                    {recipientPrefill.name ? `${recipientPrefill.name} · ` : ""}
+                    <span className="font-mono">{recipientPrefill.rawPhone}</span>
+                    <span className="ml-1 text-[#084734]/70">
+                      (고객 360에서 연결 · 카카오 테스트 발송 번호에 미리 입력됩니다)
+                    </span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setRecipientPrefill(null)}
+                    aria-label="수신자 프리필 지우기"
+                    className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-[#084734]/60 transition-colors hover:bg-[#D1FAE5] hover:text-[#084734]"
+                  >
+                    지우기
+                  </button>
+                </div>
+              )}
+
               {/* 초안 상태 배너 (이메일 채널 + 초안 있을 때만) */}
               {channel === "email" && (activeSegment || hasComposerDraft) && (
                 <div className="flex flex-col gap-2 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1396,6 +1456,7 @@ export default function MarketingHub() {
                   templates={messagingStatus?.templates ?? []}
                   channelRegistered={(messagingStatus?.kakaoChannels?.length ?? 0) > 0}
                   statusUnavailable={!messagingStatusLoaded || messagingStatus === null}
+                  initialTestPhone={recipientPrefill?.phone}
                 />
               ) : (
                 <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">

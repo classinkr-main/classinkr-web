@@ -477,17 +477,22 @@ export async function POST(req: NextRequest) {
 - [ ] **Step 3: 칩 클릭 ↔ URL 동기화** — `selectSavedView`(377행)에서 상태 변경 후 URL 반영. 기존 `?view=` 착지 효과(294-307행)와의 루프 방지를 위해 `lastViewParamRef.current`를 먼저 갱신:
 
 ```ts
-  const syncViewParam = useCallback((view: SavedViewFilter) => {
-    const params = new URLSearchParams(window.location.search)
-    if (view === "all") params.delete("view")
-    else params.set("view", view)
-    lastViewParamRef.current = view === "all" ? null : view
-    const qs = params.toString()
-    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname)
-  }, [])
+  const syncViewParam = useCallback(
+    (view: SavedViewFilter) => {
+      const params = new URLSearchParams(Array.from(searchParams.entries()))
+      if (view === "all") params.delete("view")
+      else params.set("view", view)
+      lastViewParamRef.current = view === "all" ? null : view
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    },
+    [router, pathname, searchParams]
+  )
 ```
 
-`selectSavedView`의 모든 `setSavedView(next)` 경로에서 `syncViewParam(next)` 호출(토글 해제 시 `"all"`). (openDrawer의 `?account=` push와 같은 history 스타일 — 기존 setDrawerUrl(243행) 구현을 참고해 동일 방식 사용.)
+> **주의**: raw `window.history.replaceState`를 쓰면 안 된다 — Next `useSearchParams()`와 desync되어, searchParams 훅 값으로 URL을 재조립하는 `setDrawerUrl`이 드로어 열기/닫기 시 `?view=`를 유실한다. `setDrawerUrl`(243행)과 동일하게 **라우터 경유**(`router.replace`, `{ scroll: false }`)로 동기화한다.
+
+`selectSavedView`의 모든 `setSavedView(next)` 경로에서 `syncViewParam(next)` 호출(토글 해제 시 `"all"`).
 
 - [ ] **Step 4: 게이트** — eslint+build PASS. 수동: 칩 클릭 시 주소창 `?view=` 반영, 사이드바 세그먼트 딥링크 착지 동작 불변.
 

@@ -29,6 +29,19 @@ export interface BranchDealMixSlice {
   goal: number
   actual: number
   pct: number
+  // app/api/admin/branch/summary/route.ts MixSlice 미러 — 전기 미가용(연간 스코프 등)이면
+  // 서버가 null을 내려보낸다. 0이 아니라 null인 경우에만 "데이터 없음"으로 취급할 것
+  // (0은 실제로 전기 실적이 0이었다는 유효한 값).
+  prev_actual?: number | null
+}
+
+// deal_mix 4개 분해축(category/status_type/channel/segment) 각각의 전기 비교 메타 —
+// app/api/admin/branch/summary/route.ts MixMeta 미러. prev_period_available이 false면
+// 그 축의 모든 슬라이스 prev_actual이 null이라는 뜻(예: period=Y는 전년 데이터 미로딩).
+export interface BranchDealMixMeta {
+  prev_period_label: string
+  prev_period_available: boolean
+  weekly_available: boolean
 }
 
 export interface BranchDealMix {
@@ -36,10 +49,20 @@ export interface BranchDealMix {
   by_status_type: BranchDealMixSlice[]
   by_channel: BranchDealMixSlice[]
   by_segment?: BranchDealMixSlice[]
+  meta?: {
+    by_category: BranchDealMixMeta
+    by_status_type: BranchDealMixMeta
+    by_channel: BranchDealMixMeta
+    by_segment: BranchDealMixMeta
+  }
 }
 
 // summary API의 dsh_breakdown 행 — lib/branch/parsers/dsh.ts DshBreakdownRow 미러.
 // 팀 필터와 무관한 Team KR 전사 수치라 어느 team 쿼리에서도 동일하게 실린다.
+// opt-in 필드: summary 요청에 `?breakdown=1`을 붙였을 때만 응답에 실린다(app/api/admin/
+// branch/summary/route.ts readBreakdownFlag). 소비처는 장부 DSH 수치 그리드(SalesLedgerWorkbench
+// 의 DshNumericGrid) 한 곳뿐이라 그 요청만 플래그를 보낸다 — 다른 summary 소비처(예: KR Team
+// 개요)는 이 필드를 받지 않는다.
 export interface BranchDshBreakdownRow {
   kind: "goal" | "status"
   category: string // "Software" | "Hardware"

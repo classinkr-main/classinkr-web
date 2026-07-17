@@ -9,10 +9,11 @@ import {
   type CrmPriorityBucket,
   type CrmPriorityItem,
 } from "@/lib/crm/priority"
+import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
 import {
   daysUntil,
-  matchesSavedView,
   rowMatchesOwner,
+  rowVisibleInView,
   type CrmUnifiedCustomerRow,
   type CrmUnifiedCustomerSource,
   type CrmUnifiedLifecycle,
@@ -20,17 +21,22 @@ import {
 } from "@/lib/crm/unified-view-rules"
 import { listAllCustomerListItemsLite } from "@/lib/portal/repositories/customers"
 import type { CustomerListItem } from "@/lib/portal/types"
-import { listConfirmedLeadCustomerLinks } from "@/lib/repositories/crm-source-links"
+import { getLeadFirstResponseMap } from "@/lib/repositories/crm-events"
+import {
+  listConfirmedLeadCustomerLinks,
+  listConfirmedLeadNeoLinkLeadIds,
+} from "@/lib/repositories/crm-source-links"
 import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
 import { computeCustomerHealth, type CustomerHealthBand } from "@/lib/crm/customer-health"
 import { getAllCustomerTagsMap } from "./crm-customer-tags"
 
-// 뷰 규칙(타입+순수 매칭 함수)은 lib/crm/unified-view-rules.ts로 분리 — 기존 임포터 호환 재수출.
+// 뷰 규칙(타입+순수 매칭 함수)의 SSOT는 lib/crm/unified-view-rules.ts — 매칭 함수는 그 모듈에서
+// 직접 import한다(여기서는 재수출하지 않음: provisional 게이트 없는 matchesSavedView를 repo 경유로
+// 쓰는 함정 방지). 내부 필터는 rowVisibleInView만 사용하고, 타입은 기존 임포터 호환으로 재수출.
 export type { CrmUnifiedCustomerRow, CrmUnifiedCustomerSource, CrmUnifiedLifecycle, CrmUnifiedSavedView }
-export { matchesSavedView }
 
 // 칩 카운트를 보여줄 세그먼트(저장 뷰).
-export const CRM_SEGMENT_VIEWS = ["expiring", "dormant", "hot_lead", "upsell"] as const
+export const CRM_SEGMENT_VIEWS = ["expiring", "dormant", "hot_lead", "upsell", "site_leads", "unanswered"] as const
 export type CrmUnifiedSourceStatusKey = "classin_leads" | "app_customers" | "external_crm" | "sheets"
 
 // 활성 고객(neo_account) 건강도 분포 — computeCustomerHealth(SSOT)로 매핑한 실집계.
@@ -164,6 +170,19 @@ function accountLifecycle(priority: CrmPriorityItem | null): CrmUnifiedLifecycle
   return priority && priority.score >= 42 ? "account_risk" : "active_account"
 }
 
+// 리드 전용 파생 필드(origin·NEO등록·SLA 등) — 비리드(neo/portal) 행은 항상 이 기본값.
+const NON_LEAD_ROW_DEFAULTS = {
+  origin: null,
+  crmRegistered: false,
+  provisional: false,
+  slaTarget: false,
+  firstResponseAt: null,
+  createdAt: null,
+} as const
+
+// 응답 SLA 대상 소스 — 고객이 직접 남긴 유입 채널만(수기 등록·동기화 소스 제외).
+const SLA_TARGET_LEAD_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
+
 // 리드 전환 산출물(portal customers) → 통합 행. 거래 요약(customer_deal_summary)이 있으면
 // 미수·진행 딜 신호로 다음 액션과 점수를 보수적으로 잡는다(우선순위 엔진 미적용 소스).
 function buildPortalCustomerRow(item: CustomerListItem): CrmUnifiedCustomerRow {
@@ -203,13 +222,7 @@ function buildPortalCustomerRow(item: CustomerListItem): CrmUnifiedCustomerRow {
     updatedAt: summary?.last_deal_updated_at ?? customer.updated_at ?? customer.created_at,
     expireAt: null,
     balance: null,
-    // 신규 뷰 필드 — 실제 파생은 Task 4에서 배선(현재는 기본값).
-    origin: null,
-    crmRegistered: false,
-    provisional: false,
-    slaTarget: false,
-    firstResponseAt: null,
-    createdAt: null,
+    ...NON_LEAD_ROW_DEFAULTS,
   }
 }
 
@@ -280,17 +293,31 @@ export async function getCrmUnifiedCustomers(
   let portalCustomersOk = true
   let rows: CrmUnifiedCustomerRow[] = []
 
-  const [leadResult, neoResult, portalCustomersResult, convertedLinksResult] = await Promise.allSettled([
-    getLeads(),
-    getNeoCrmCustomers(),
-    listAllCustomerListItemsLite(),
-    listConfirmedLeadCustomerLinks(),
-  ])
+  const [leadResult, neoResult, portalCustomersResult, convertedLinksResult, neoLinksResult, firstResponseResult] =
+    await Promise.allSettled([
+      getLeads(),
+      getNeoCrmCustomers(),
+      listAllCustomerListItemsLite(),
+      listConfirmedLeadCustomerLinks(),
+      listConfirmedLeadNeoLinkLeadIds(),
+      getLeadFirstResponseMap(),
+    ])
+
+  // 신규 뷰 파생 입력 — 실패해도 목록 자체는 유지(해당 뷰만 부정확)하고 빈 컬렉션 폴백.
+  if (neoLinksResult.status === "rejected") {
+    warnings.push("NEO 등록 링크를 불러오지 못해 '홈페이지 유입' 뷰가 부정확할 수 있습니다.")
+  }
+  const neoLinkedLeadIds = neoLinksResult.status === "fulfilled" ? neoLinksResult.value : new Set<string>()
+  if (firstResponseResult.status === "rejected") {
+    warnings.push("리드 첫 응답 기록을 불러오지 못해 '미응답' 뷰가 부정확할 수 있습니다.")
+  }
+  const firstResponseMap =
+    firstResponseResult.status === "fulfilled" ? firstResponseResult.value : new Map<string, string>()
 
   if (leadResult.status === "fulfilled") {
     for (const lead of leadResult.value) {
-      if (!shouldIncludeLeadInUnifiedCustomers(lead)) continue
       const priority = buildLeadPriorityItem(lead, now)
+      const hasAdClickId = Boolean(lead.gclid || lead.fbclid || lead.msclkid || lead.ttclid)
       rows.push({
         key: `lead:${lead.id}`,
         tags: [],
@@ -310,13 +337,13 @@ export async function getCrmUnifiedCustomers(
         updatedAt: lead.follow_up_at ?? lead.timestamp,
         expireAt: null,
         balance: null,
-        // 신규 뷰 필드 — 실제 파생은 Task 4에서 배선(현재는 기본값).
-        origin: null,
-        crmRegistered: false,
-        provisional: false,
-        slaTarget: false,
-        firstResponseAt: null,
-        createdAt: null,
+        origin: classifyLeadOrigin(lead.source, hasAdClickId),
+        crmRegistered: neoLinkedLeadIds.has(lead.id),
+        // 미확인 신규 리드도 행은 만들되 처리 큐 뷰(site_leads/unanswered)에서만 노출된다.
+        provisional: !shouldIncludeLeadInUnifiedCustomers(lead),
+        slaTarget: lead.status === "new" && SLA_TARGET_LEAD_SOURCES.has(lead.source),
+        firstResponseAt: firstResponseMap.get(lead.id) ?? null,
+        createdAt: lead.timestamp, // timestamp는 leads.created_at 매핑 (lib/repositories/leads.ts 참고)
       })
     }
   } else {
@@ -355,13 +382,7 @@ export async function getCrmUnifiedCustomers(
         updatedAt: account.updatedAt ?? account.lastClassAt ?? account.expireAt,
         expireAt: account.expireAt ?? null,
         balance: account.balance ?? null,
-        // 신규 뷰 필드 — 실제 파생은 Task 4에서 배선(현재는 기본값).
-        origin: null,
-        crmRegistered: false,
-        provisional: false,
-        slaTarget: false,
-        firstResponseAt: null,
-        createdAt: null,
+        ...NON_LEAD_ROW_DEFAULTS,
       })
     }
 
@@ -433,12 +454,13 @@ export async function getCrmUnifiedCustomers(
     if (!includesQuery(row, query)) return false
     return true
   })
-  const filtered = baseRows.filter((row) => matchesSavedView(row, view, ownerKeys, nowMs))
+  // provisional 게이트 포함 가시성 규칙 — 일반 뷰에서는 미확인 리드가 자동 제외된다.
+  const filtered = baseRows.filter((row) => rowVisibleInView(row, view, ownerKeys, nowMs))
   // 세그먼트 칩 카운트 — 현재 검색/담당 범위 안에서 각 세그먼트에 몇 건이 들어오는지.
   const viewCounts = Object.fromEntries(
     CRM_SEGMENT_VIEWS.map((segment) => [
       segment,
-      baseRows.filter((row) => matchesSavedView(row, segment, ownerKeys, nowMs)).length,
+      baseRows.filter((row) => rowVisibleInView(row, segment, ownerKeys, nowMs)).length,
     ])
   )
 
@@ -484,7 +506,8 @@ export async function getCrmUnifiedCustomers(
 
   const limit = clampInteger(options.limit, 100, 1, 200)
   const offset = clampInteger(options.offset, 0, 0, 100_000)
-  const owners = buildOwnerOptions(rows)
+  // provisional 리드는 기본 뷰에 안 보이므로 담당자 카운트에서도 제외 — 배지·목록 정합.
+  const owners = buildOwnerOptions(rows.filter((row) => !row.provisional))
   const pageRows = sorted.slice(offset, offset + limit)
   const nextOffset = offset + pageRows.length
   const neoLatestSyncedAt =

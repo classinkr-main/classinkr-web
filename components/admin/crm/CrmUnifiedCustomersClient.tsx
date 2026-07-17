@@ -19,6 +19,7 @@ import LeadRegisterModal from "./LeadRegisterModal"
 import CrmCustomerFlags from "./CrmCustomerFlags"
 import CrmContactValue from "./CrmContactValue"
 import { deriveCustomerFlags, type CustomerFlag } from "@/lib/crm/customer-flags"
+import { LEAD_BADGE_TONE_CLASSES, leadBadges } from "@/lib/crm/lead-badges"
 
 type SourceFilter = "all" | CrmUnifiedCustomerSource
 type LifecycleFilter = "all" | CrmUnifiedLifecycle
@@ -92,6 +93,8 @@ const SAVED_VIEW_FILTERS: Array<{
   { key: "dormant", label: "30일+ 미접촉", description: "마지막 활동 30일 초과" },
   { key: "hot_lead", label: "고전환 리드", description: "점수 상위 리드" },
   { key: "upsell", label: "업셀 후보", description: "활성 고객 · 잔액 보유" },
+  { key: "site_leads", label: "홈페이지 유입", description: "홈페이지로 들어와 NEO 미등록" },
+  { key: "unanswered", label: "미응답", description: "첫 응답 전 리드 (24h 초과 위험)" },
 ]
 
 const CACHE_TTL_MS = 90_000
@@ -199,6 +202,241 @@ function sourceBadge(row: CrmUnifiedCustomerRow) {
   )
 }
 
+// 리드 행 배지 — 파생 규칙은 lib/crm/lead-badges.ts(순수 모듈, 단위 테스트 대상) 소유.
+function LeadRowBadges({ row, nowMs }: { row: CrmUnifiedCustomerRow; nowMs: number }) {
+  const badges = leadBadges(row, nowMs)
+  if (!badges) return null
+  return (
+    <>
+      {badges.map((badge) => (
+        <span
+          key={badge.label}
+          className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${LEAD_BADGE_TONE_CLASSES[badge.tone]}`}
+        >
+          {badge.label}
+        </span>
+      ))}
+    </>
+  )
+}
+
+// 검색 패널 — 검색·소스 토글·상태/담당 셀렉트·라벨·요약 타일·소스 상태 타일.
+// quickMode(칩 진입)일 때는 렌더되지 않는다. 본체에서 기계적 추출 — 동작 동일.
+function CustomerSearchPanel({
+  query,
+  onQueryChange,
+  source,
+  onSourceChange,
+  lifecycle,
+  onLifecycleChange,
+  owner,
+  onOwnerChange,
+  currentOwner,
+  currentOwnerCount,
+  ownerOptions,
+  tagFilter,
+  onTagFilterChange,
+  data,
+  loading,
+}: {
+  query: string
+  onQueryChange: (value: string) => void
+  source: SourceFilter
+  onSourceChange: (value: SourceFilter) => void
+  lifecycle: LifecycleFilter
+  onLifecycleChange: (value: LifecycleFilter) => void
+  owner: string
+  onOwnerChange: (value: string) => void
+  currentOwner: ReturnType<typeof useCrmOwners>["currentOwner"]
+  currentOwnerCount: number
+  ownerOptions: ReturnType<typeof buildOwnerSelectOptions>
+  tagFilter: string
+  onTagFilterChange: (value: string) => void
+  data: CrmUnifiedCustomers | null
+  loading: boolean
+}) {
+  return (
+    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto] lg:items-center">
+        <label className="flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3">
+          <Search className="h-4 w-4 text-[#1a1a1a]/35" />
+          <input
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            className="h-full min-w-0 flex-1 bg-transparent text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/30"
+            placeholder="이름, 연락처, 담당자 검색"
+          />
+        </label>
+        <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1">
+          {SOURCE_FILTERS.map((filter) => (
+            <button
+              key={filter.key}
+              type="button"
+              onClick={() => onSourceChange(filter.key)}
+              className={`h-7 rounded-md px-3 text-[12px] font-semibold transition-colors ${
+                source === filter.key
+                  ? "bg-[#111110] text-white"
+                  : "text-[#1a1a1a]/55 hover:bg-white hover:text-[#111110]"
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+        <label className="flex h-10 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
+          <Filter className="h-3.5 w-3.5" />
+          <select
+            value={lifecycle}
+            onChange={(event) => onLifecycleChange(event.target.value as LifecycleFilter)}
+            className="h-full bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
+            aria-label="상태 필터"
+          >
+            {LIFECYCLE_FILTERS.map((filter) => (
+              <option key={filter.key} value={filter.key}>
+                {filter.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex h-10 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
+          <Filter className="h-3.5 w-3.5" />
+          <select
+            value={owner}
+            onChange={(event) => onOwnerChange(event.target.value)}
+            className="h-full min-w-[128px] bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
+            aria-label="담당자 필터"
+          >
+            <option value="">담당 전체</option>
+            {currentOwner ? (
+              <option value={CURRENT_OWNER_VALUE}>
+                내 담당 · {currentOwner.displayName}
+                {currentOwnerCount > 0 ? ` (${currentOwnerCount})` : ""}
+              </option>
+            ) : null}
+            {ownerOptions.map((option) => (
+              <option key={option.ownerName} value={option.ownerName}>
+                {option.label}
+                {option.teamRoleLabel ? ` · ${option.teamRoleLabel}` : ""}
+                {option.count > 0 ? ` (${option.count})` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {data?.summary.availableTags?.length ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="inline-flex h-8 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
+            <Tag className="h-3.5 w-3.5" />
+            라벨
+          </span>
+          {data.summary.availableTags.map((tag) => {
+            const isActive = tagFilter === tag
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => onTagFilterChange(tagFilter === tag ? "" : tag)}
+                className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
+                  isActive
+                    ? "border-[#111110] bg-[#111110] text-white"
+                    : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#c8c8c4] hover:text-[#111110]"
+                }`}
+              >
+                {tag}
+              </button>
+            )
+          })}
+          {tagFilter ? (
+            <button
+              type="button"
+              onClick={() => onTagFilterChange("")}
+              className="h-8 px-2 text-[12px] font-medium text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
+            >
+              초기화
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {data ? (
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">검색 결과</p>
+            <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">리드</p>
+            <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.leadCount.toLocaleString("ko-KR")}</p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객</p>
+            <p className="mt-1 text-xl font-bold text-[#111110]">
+              {data.summary.accountCount.toLocaleString("ko-KR")}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">전환 고객</p>
+            <p className="mt-1 text-xl font-bold text-[#111110]">
+              {(data.summary.customerCount ?? 0).toLocaleString("ko-KR")}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">우선 처리</p>
+            <p className="mt-1 text-xl font-bold text-[#B85C33]">
+              {data.summary.highPriorityCount.toLocaleString("ko-KR")}
+            </p>
+          </div>
+        </div>
+      ) : loading ? (
+        // 콜드로드 스켈레톤 — 실제 요약 타일 5칸 그리드와 동일 골격(0 플래시·점프 방지).
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="rounded-xl bg-[#fafaf8] p-3">
+              <div className="h-3 w-14 animate-pulse rounded bg-[#f0f0ec]" />
+              <div className="mt-2 h-6 w-16 animate-pulse rounded bg-[#f0f0ec]" />
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {data?.sources.statuses.length ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {data.sources.statuses.map((status) => (
+            <div
+              key={status.key}
+              className={`rounded-xl border px-3 py-2 ${
+                status.ok && !status.partial
+                  ? "border-[#D7EBDD] bg-[#ECFDF5]"
+                  : "border-[#F6D5C5] bg-[#FEF3EE]"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p
+                  className={`text-[12px] font-bold ${
+                    status.ok && !status.partial ? "text-[#084734]" : "text-[#B85C33]"
+                  }`}
+                >
+                  {status.label}
+                </p>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
+                  {status.role === "primary" ? "DB" : "SYNC"}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] leading-4 text-[#1a1a1a]/52">{status.message}</p>
+              {status.latestSyncedAt ? (
+                <p className="mt-1 text-[11px] font-medium text-[#1a1a1a]/35">
+                  마지막 동기화 {formatDate(status.latestSyncedAt)}
+                </p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 function mergePage(
   current: CrmUnifiedCustomers | null,
   next: CrmUnifiedCustomers,
@@ -234,6 +472,9 @@ export default function CrmUnifiedCustomersClient() {
   const [drawer, setDrawer] = useState<{ key: string; name: string } | null>(null)
   const [leadModalOpen, setLeadModalOpen] = useState(false)
   const requestSeq = useRef(0)
+  // 드로어 컴포저 dirty — 뒤로가기(?account= 소실) 닫기 경로가 드로어 내부 닫기 가드와
+  // 같은 확인을 거치게 한다(가드 없이는 뒤로가기가 작성 중 기록을 무음 폐기).
+  const drawerDirtyRef = useRef(false)
 
   // 드로어를 ?account= 에 동기화 — 딥링크/뒤로가기 (C9)
   const router = useRouter()
@@ -269,14 +510,32 @@ export default function CrmUnifiedCustomersClient() {
   }, [setDrawerUrl])
 
   // URL ↔ 드로어 상태 양방향 동기화 — 딥링크 복원 + 뒤로/앞으로가기(popstate) 대응.
+  // drawerRef: 이 효과는 searchParams 변화에만 반응해야 한다 — 드로어 상태를 deps에 넣으면
+  // closeDrawer의 replace가 착지하기 전 중간 렌더(드로어 null·URL은 아직 account 보유)에서
+  // 드로어를 되살린다.
+  const drawerRef = useRef(drawer)
+  useEffect(() => {
+    drawerRef.current = drawer
+  }, [drawer])
+
   useEffect(() => {
     const account = searchParams.get("account")
-    setDrawer((current) => {
-      if (!account) return current ? null : current
-      if (current?.key === account) return current
-      return { key: account, name: current?.name ?? "" }
-    })
-  }, [searchParams])
+    const current = drawerRef.current
+    if (!account) {
+      if (!current) return
+      // 뒤로가기로 ?account=가 사라질 때: 컴포저에 작성 중 기록이 있으면 확인 후에만 닫는다.
+      // 거부 시 라우터 push로 account를 복원(히스토리 한 단계 재적재) — raw history API는
+      // useSearchParams와 desync되므로 금지.
+      if (drawerDirtyRef.current && !window.confirm("작성 중인 기록이 있습니다. 닫을까요?")) {
+        setDrawerUrl(current.key, "push")
+        return
+      }
+      setDrawer(null)
+      return
+    }
+    if (current?.key === account) return
+    setDrawer({ key: account, name: current?.name ?? "" })
+  }, [searchParams, setDrawerUrl])
 
   // 리드 전환 완료 패널 '고객 보기' 딥링크(?q=) → 검색어 1회 복원.
   const restoredQueryRef = useRef(false)
@@ -305,8 +564,31 @@ export default function CrmUnifiedCustomersClient() {
     setQuery("")
     setOwner(view === "my_owner" ? CURRENT_OWNER_VALUE : "")
   }, [searchParams])
+
+  // 칩 클릭 ↔ URL 동기화 — setDrawerUrl과 동일하게 라우터 경유(router.replace).
+  // raw history API는 useSearchParams와 desync되어 드로어 열기/닫기가 ?view=를 유실한다.
+  // replace라 히스토리를 오염시키지 않고(뒤로가기 안전), lastViewParamRef를 라우터 호출보다
+  // 먼저 갱신해 우리 자신의 URL 변경이 위 착지 effect(필터 초기화)를 재발화시키지 않게 한다.
+  const syncViewParam = useCallback(
+    (view: SavedViewFilter) => {
+      const params = new URLSearchParams(Array.from(searchParams.entries()))
+      if (view === "all") params.delete("view")
+      else params.set("view", view)
+      lastViewParamRef.current = view === "all" ? null : view
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    },
+    [router, pathname, searchParams]
+  )
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
+
+  // 배지 SLA 경과 계산 기준 시각 — 행마다 Date.now() 호출 방지 + 60초 틱으로 경과시간 실시간 갱신.
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000)
+    return () => window.clearInterval(id)
+  }, [])
 
   const currentOwnerCount = useMemo(() => {
     const selected = normalizeText(owner === CURRENT_OWNER_VALUE ? currentOwner?.ownerKey : owner)
@@ -381,17 +663,21 @@ export default function CrmUnifiedCustomersClient() {
         setOwner("")
         persistOwner("")
         setSavedView("all")
+        syncViewParam("all")
         return
       }
       setOwner(CURRENT_OWNER_VALUE)
       persistOwner(CURRENT_OWNER_VALUE)
       setSavedView(view)
+      syncViewParam(view)
       setSource("all")
       setLifecycle("all")
       return
     }
 
-    setSavedView((current) => (current === view ? "all" : view))
+    const next: SavedViewFilter = savedView === view ? "all" : view
+    setSavedView(next)
+    syncViewParam(next)
     if (view === "new_leads") {
       setSource("lead")
       setLifecycle("all")
@@ -405,6 +691,22 @@ export default function CrmUnifiedCustomersClient() {
       setLifecycle("all")
     }
   }
+
+  // 빠른 보기 모드 — 칩(저장 뷰) 진입 시 검색 UI를 접고 결과 스트립만 보여준다.
+  // 숨김이지 리셋이 아님: query/owner 등 로컬 상태는 메모리에 유지된다.
+  const quickMode = savedView !== "all"
+
+  // 스트립의 '전체 보기' 전용 탈출 — selectSavedView와 달리 무조건 해제한다.
+  // (?view=my_owner 딥링크 착지 후 currentOwner가 없으면 selectSavedView는 조기 return이라
+  // 토글 해제가 막히는 탈출 트랩 방지. my_owner가 걸어둔 owner 필터도 함께 해제.)
+  const exitQuickView = useCallback(() => {
+    if (savedView === "my_owner") {
+      setOwner("")
+      persistOwner("")
+    }
+    setSavedView("all")
+    syncViewParam("all")
+  }, [persistOwner, savedView, syncViewParam])
 
   // 빈 상태 다음 행동 안내 — 필터가 걸려 있으면 초기화를, 아니면 리드 등록/매칭 연결을 권한다.
   const hasActiveFilters =
@@ -422,8 +724,9 @@ export default function CrmUnifiedCustomersClient() {
     setOwner("")
     persistOwner("")
     setSavedView("all")
+    syncViewParam("all")
     setTagFilter("")
-  }, [persistOwner])
+  }, [persistOwner, syncViewParam])
 
   return (
     <div className="min-h-screen bg-[#F6F5F4] px-4 py-6 sm:px-6 lg:px-8">
@@ -459,225 +762,84 @@ export default function CrmUnifiedCustomersClient() {
           </div>
         </div>
 
-        <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto] lg:items-center">
-            <label className="flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3">
-              <Search className="h-4 w-4 text-[#1a1a1a]/35" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                className="h-full min-w-0 flex-1 bg-transparent text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/30"
-                placeholder="이름, 연락처, 담당자 검색"
-              />
-            </label>
-            <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1">
-              {SOURCE_FILTERS.map((filter) => (
-                <button
-                  key={filter.key}
-                  type="button"
-                  onClick={() => setSource(filter.key)}
-                  className={`h-7 rounded-md px-3 text-[12px] font-semibold transition-colors ${
-                    source === filter.key
-                      ? "bg-[#111110] text-white"
-                      : "text-[#1a1a1a]/55 hover:bg-white hover:text-[#111110]"
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
-            <label className="flex h-10 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
-              <Filter className="h-3.5 w-3.5" />
-              <select
-                value={lifecycle}
-                onChange={(event) => setLifecycle(event.target.value as LifecycleFilter)}
-                className="h-full bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
-                aria-label="상태 필터"
+        {/* 빠른 필터 칩 — 검색 섹션과 독립인 항상 노출 행 (칩 진입 시에도 유지). */}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="inline-flex h-8 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
+            <Filter className="h-3.5 w-3.5" />
+            빠른 필터
+          </span>
+          {SAVED_VIEW_FILTERS.map((filter) => {
+            const isActive = savedView === filter.key
+            const disabled = filter.key === "my_owner" && !currentOwner
+            const segmentCount = data?.summary.viewCounts?.[filter.key]
+            const label =
+              filter.key === "my_owner" && currentOwner
+                ? `${filter.label}${currentOwnerCount ? ` ${currentOwnerCount}` : ""}`
+                : segmentCount != null
+                  ? `${filter.label} ${segmentCount}`
+                  : filter.label
+            return (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => selectSavedView(filter.key)}
+                disabled={disabled}
+                title={disabled ? "현재 Admin 계정에 CRM 담당자 매핑이 없습니다." : filter.description}
+                className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
+                  isActive
+                    ? "border-[#084734] bg-[#084734] text-white"
+                    : disabled
+                      ? "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/28"
+                      : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#D1FAE5] hover:bg-[#ECFDF5] hover:text-[#084734]"
+                }`}
               >
-                {LIFECYCLE_FILTERS.map((filter) => (
-                  <option key={filter.key} value={filter.key}>
-                    {filter.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex h-10 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
-              <Filter className="h-3.5 w-3.5" />
-              <select
-                value={owner}
-                onChange={(event) => {
-                  const nextOwner = event.target.value
-                  setOwner(nextOwner)
-                  persistOwner(nextOwner)
-                  if (!nextOwner && savedView === "my_owner") setSavedView("all")
-                }}
-                className="h-full min-w-[128px] bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
-                aria-label="담당자 필터"
-              >
-                <option value="">담당 전체</option>
-                {currentOwner ? (
-                  <option value={CURRENT_OWNER_VALUE}>
-                    내 담당 · {currentOwner.displayName}
-                    {currentOwnerCount > 0 ? ` (${currentOwnerCount})` : ""}
-                  </option>
-                ) : null}
-                {ownerOptions.map((option) => (
-                  <option key={option.ownerName} value={option.ownerName}>
-                    {option.label}
-                    {option.teamRoleLabel ? ` · ${option.teamRoleLabel}` : ""}
-                    {option.count > 0 ? ` (${option.count})` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+                {label}
+              </button>
+            )
+          })}
+        </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="inline-flex h-8 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
-              <UserRound className="h-3.5 w-3.5" />
-              저장 뷰
-            </span>
-            {SAVED_VIEW_FILTERS.map((filter) => {
-              const isActive = savedView === filter.key
-              const disabled = filter.key === "my_owner" && !currentOwner
-              const segmentCount = data?.summary.viewCounts?.[filter.key]
-              const label =
-                filter.key === "my_owner" && currentOwner
-                  ? `${filter.label}${currentOwnerCount ? ` ${currentOwnerCount}` : ""}`
-                  : segmentCount != null
-                    ? `${filter.label} ${segmentCount}`
-                    : filter.label
-              return (
-                <button
-                  key={filter.key}
-                  type="button"
-                  onClick={() => selectSavedView(filter.key)}
-                  disabled={disabled}
-                  title={disabled ? "현재 Admin 계정에 CRM 담당자 매핑이 없습니다." : filter.description}
-                  className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
-                    isActive
-                      ? "border-[#084734] bg-[#084734] text-white"
-                      : disabled
-                        ? "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/28"
-                        : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#D1FAE5] hover:bg-[#ECFDF5] hover:text-[#084734]"
-                  }`}
-                >
-                  {label}
-                </button>
-              )
-            })}
-          </div>
-
-          {data?.summary.availableTags?.length ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="inline-flex h-8 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
-                <Tag className="h-3.5 w-3.5" />
-                라벨
+        {quickMode ? (
+          // 빠른 보기 스트립 — 활성 뷰 이름 + 결과 건수 + 전체 보기(토글 해제) 복귀 버튼.
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
+            <p className="text-[13px] font-semibold text-[#111110]">
+              {SAVED_VIEW_FILTERS.find((f) => f.key === savedView)?.label}
+              <span className="ml-2 text-[12px] font-medium text-[#1a1a1a]/45 tabular-nums">
+                {data ? `${data.summary.total.toLocaleString("ko-KR")}건` : error ? "불러오지 못했습니다" : "불러오는 중"}
               </span>
-              {data.summary.availableTags.map((tag) => {
-                const isActive = tagFilter === tag
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => setTagFilter((current) => (current === tag ? "" : tag))}
-                    className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
-                      isActive
-                        ? "border-[#111110] bg-[#111110] text-white"
-                        : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#c8c8c4] hover:text-[#111110]"
-                    }`}
-                  >
-                    {tag}
-                  </button>
-                )
-              })}
-              {tagFilter ? (
-                <button
-                  type="button"
-                  onClick={() => setTagFilter("")}
-                  className="h-8 px-2 text-[12px] font-medium text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
-                >
-                  초기화
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-
-          {data ? (
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-              <div className="rounded-xl bg-[#fafaf8] p-3">
-                <p className="text-[11px] font-semibold text-[#1a1a1a]/35">검색 결과</p>
-                <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
-              </div>
-              <div className="rounded-xl bg-[#fafaf8] p-3">
-                <p className="text-[11px] font-semibold text-[#1a1a1a]/35">리드</p>
-                <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.leadCount.toLocaleString("ko-KR")}</p>
-              </div>
-              <div className="rounded-xl bg-[#fafaf8] p-3">
-                <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객</p>
-                <p className="mt-1 text-xl font-bold text-[#111110]">
-                  {data.summary.accountCount.toLocaleString("ko-KR")}
-                </p>
-              </div>
-              <div className="rounded-xl bg-[#fafaf8] p-3">
-                <p className="text-[11px] font-semibold text-[#1a1a1a]/35">전환 고객</p>
-                <p className="mt-1 text-xl font-bold text-[#111110]">
-                  {(data.summary.customerCount ?? 0).toLocaleString("ko-KR")}
-                </p>
-              </div>
-              <div className="rounded-xl bg-[#fafaf8] p-3">
-                <p className="text-[11px] font-semibold text-[#1a1a1a]/35">우선 처리</p>
-                <p className="mt-1 text-xl font-bold text-[#B85C33]">
-                  {data.summary.highPriorityCount.toLocaleString("ko-KR")}
-                </p>
-              </div>
-            </div>
-          ) : loading ? (
-            // 콜드로드 스켈레톤 — 실제 요약 타일 5칸 그리드와 동일 골격(0 플래시·점프 방지).
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <div key={index} className="rounded-xl bg-[#fafaf8] p-3">
-                  <div className="h-3 w-14 animate-pulse rounded bg-[#f0f0ec]" />
-                  <div className="mt-2 h-6 w-16 animate-pulse rounded bg-[#f0f0ec]" />
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          {data?.sources.statuses.length ? (
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {data.sources.statuses.map((status) => (
-                <div
-                  key={status.key}
-                  className={`rounded-xl border px-3 py-2 ${
-                    status.ok && !status.partial
-                      ? "border-[#D7EBDD] bg-[#ECFDF5]"
-                      : "border-[#F6D5C5] bg-[#FEF3EE]"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p
-                      className={`text-[12px] font-bold ${
-                        status.ok && !status.partial ? "text-[#084734]" : "text-[#B85C33]"
-                      }`}
-                    >
-                      {status.label}
-                    </p>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
-                      {status.role === "primary" ? "DB" : "SYNC"}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[11px] leading-4 text-[#1a1a1a]/52">{status.message}</p>
-                  {status.latestSyncedAt ? (
-                    <p className="mt-1 text-[11px] font-medium text-[#1a1a1a]/35">
-                      마지막 동기화 {formatDate(status.latestSyncedAt)}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </section>
+            </p>
+            <button
+              type="button"
+              onClick={exitQuickView}
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/60 hover:bg-[#fafaf8]"
+            >
+              전체 보기 (검색·필터)
+            </button>
+          </div>
+        ) : (
+          <CustomerSearchPanel
+            query={query}
+            onQueryChange={setQuery}
+            source={source}
+            onSourceChange={setSource}
+            lifecycle={lifecycle}
+            onLifecycleChange={setLifecycle}
+            owner={owner}
+            onOwnerChange={(nextOwner) => {
+              // 이 패널은 quickMode(savedView !== "all")에서 렌더되지 않으므로
+              // 여기 도달 시 savedView는 항상 "all" — my_owner 해제 가드 불필요.
+              setOwner(nextOwner)
+              persistOwner(nextOwner)
+            }}
+            currentOwner={currentOwner}
+            currentOwnerCount={currentOwnerCount}
+            ownerOptions={ownerOptions}
+            tagFilter={tagFilter}
+            onTagFilterChange={setTagFilter}
+            data={data}
+            loading={loading}
+          />
+        )}
 
         <Account360Lens />
 
@@ -761,7 +923,10 @@ export default function CrmUnifiedCustomersClient() {
                             </button>
                           )}
                           <CrmContactValue value={row.contact} className="mt-0.5" />
-                          <CrmCustomerFlags flags={rowToFlags(row)} max={4} className="mt-1" />
+                          <div className="mt-1 flex flex-wrap items-center gap-1 empty:hidden">
+                            <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
+                            <LeadRowBadges row={row} nowMs={nowMs} />
+                          </div>
                           <TagChips tags={row.tags} />
                         </div>
                         <Link
@@ -830,7 +995,10 @@ export default function CrmUnifiedCustomersClient() {
                       <div className="mb-1">{sourceBadge(row)}</div>
                       <p className="truncate text-[14px] font-bold text-[#111110]">{row.name}</p>
                       <CrmContactValue value={row.contact} className="pointer-events-auto mt-0.5" />
-                      <CrmCustomerFlags flags={rowToFlags(row)} max={4} className="mt-1.5" />
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1 empty:hidden">
+                        <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
+                        <LeadRowBadges row={row} nowMs={nowMs} />
+                      </div>
                       <TagChips tags={row.tags} />
                     </div>
                     <span className={`text-[20px] font-bold tabular-nums ${scoreTone(row.score)}`}>{row.score}</span>
@@ -927,6 +1095,9 @@ export default function CrmUnifiedCustomersClient() {
         customerKey={drawer?.key ?? null}
         name={drawer?.name}
         onClose={closeDrawer}
+        onDirtyChange={(dirty) => {
+          drawerDirtyRef.current = dirty
+        }}
       />
 
       <LeadRegisterModal

@@ -31,13 +31,15 @@ interface Props {
   onPick: (pick: CustomerPickValue) => void
   onFreeText: (label: string) => void
   onClear: () => void
+  /** 검색 소스 제한 — 지정 시 unified API `?source=`로 좁히고 최근 목록도 같은 소스만 남긴다. */
+  sources?: "lead" | "neo_account"
 }
 
 function rowFromRecent(recent: RecentCustomer): PickerRow {
   return { key: recent.key, name: recent.name, contact: null, sourceLabel: recent.sourceLabel, source: recent.source }
 }
 
-export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText, onClear }: Props) {
+export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText, onClear, sources }: Props) {
   const [open, setOpen] = useState(false)
   const [rows, setRows] = useState<PickerRow[]>([])
   const [recents, setRecents] = useState<PickerRow[]>([])
@@ -58,9 +60,10 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
     setLoading(true)
     const handle = setTimeout(async () => {
       try {
-        const query = term
+        const base = term
           ? `q=${encodeURIComponent(term)}&limit=8`
           : `owner=__me&limit=8`
+        const query = sources ? `${base}&source=${sources}` : base
         const data = await adminFetchJsonCached<UnifiedResponse>(`/api/admin/crm/customers/unified?${query}`, undefined, {
           cacheKey: `picker:${query}`,
           ttlMs: 30_000,
@@ -76,7 +79,7 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
       }
     }, 220)
     return () => clearTimeout(handle)
-  }, [label, open])
+  }, [label, open, sources])
 
   const handleSelect = useCallback(
     (row: PickerRow) => {
@@ -86,7 +89,9 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
     [onPick]
   )
 
-  const suggestions = label.trim() ? rows : dedupe([...recents, ...rows])
+  // 최근 목록은 소스 무관하게 쌓이므로, 소스 제한 시 검색 결과와 함께 여기서 거른다.
+  const pool = label.trim() ? rows : dedupe([...recents, ...rows])
+  const suggestions = sources ? pool.filter((row) => row.source === sources) : pool
 
   return (
     <div className="relative">

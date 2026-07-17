@@ -89,7 +89,10 @@ export default function BranchUpcomingDeals({
                   </div>
                   <div className="text-right">
                     {typeof it.amount === "number" ? (
-                      <p className="cursor-help text-[12.5px] font-bold tracking-[-0.01em]" style={{ color: "#1E5DA8" }}
+                      // :67 주석과 동일 원칙 — 확도 예외 파랑(#1E5DA8)은 REV 3단 확도
+                      // 맥락 전용. 이 목록의 금액은 확도 판정이 없는 "예정" 표시일 뿐이라
+                      // 뉴트럴로 표시한다(자기 파일 내 모순 제거).
+                      <p className="cursor-help text-[12.5px] font-bold tracking-[-0.01em] text-[#615D59]"
                         title={`¥${cnyExact(it.amount)} · 시트 원값 · 반올림 없음`}>
                         ¥{cny(it.amount)}
                       </p>

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react"
 import { RefreshCw, AlertTriangle, CheckCircle2, Clock, Database } from "lucide-react"
 import { isImportStale } from "@/lib/branch/data-source-freshness"
+import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
 import type { BranchDataSourceInfo, BranchDataSources } from "./types"
 
 interface SyncStatusBarProps {
@@ -11,12 +12,10 @@ interface SyncStatusBarProps {
   dataSources?: BranchDataSources | null
   onRefresh: () => Promise<void>
   syncEnabled?: boolean
+  /** 품질 웨이브 3 — 항목 1. summary GET 요청이 실패해 오래된 캐시로 조용히 대체된 경우
+   *  그 캐시가 저장된 시각(ms epoch). null/undefined면 정상(최신 데이터 또는 실패 없음). */
+  staleSince?: number | null
 }
-
-// Threshold above which a sheet edit that postdates the last sync is loud
-// enough to warn the user — short edits (cell renames, typo fixes) within a
-// minute or two of the last sync don't warrant a banner.
-const SHEET_AHEAD_WARN_MS = 2 * 60_000
 
 function relativeTime(iso: string, now: number): string {
   const t = Date.parse(iso)
@@ -37,7 +36,7 @@ function sourceLabel(source: BranchDataSourceInfo, now: number): string {
   return "라이브 시트"
 }
 
-export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, dataSources, onRefresh, syncEnabled = true }: SyncStatusBarProps) {
+export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, dataSources, onRefresh, syncEnabled = true, staleSince = null }: SyncStatusBarProps) {
   const [busy, setBusy] = useState(false)
   // Tick once a minute so relative timestamps stay current without a refetch.
   const [now, setNow] = useState(() => Date.now())
@@ -46,11 +45,9 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
     return () => window.clearInterval(id)
   }, [])
 
-  const sheetAhead =
-    !lastError &&
-    lastSync &&
-    sheetModifiedAt &&
-    Date.parse(sheetModifiedAt) - Date.parse(lastSync) > SHEET_AHEAD_WARN_MS
+  // 판정 로직은 lib/branch/sheet-freshness.ts로 추출(품질 웨이브 4 — 항목 4) — 장부 화면의
+  // "장부 원천 스트립"도 같은 함수로 동일 경고를 낸다.
+  const sheetAhead = !lastError && isSheetAheadOfSync(sheetModifiedAt, lastSync)
 
   // 임포트 원천이 시트 동기화보다 오래됐는지 — 2026-07-16 사고(7/3 스테일 임포트가 13일간
   // 최신 시트를 가림) 재발 시 이 배너로 드러난다. sheetAhead(시트가 미러보다 앞섬)와는
@@ -60,13 +57,22 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
   const dshImportStale = dataSources?.dsh.kind === "import" && isImportStale(dataSources.dsh.asOf, lastSync)
   const importStale = Boolean(revImportStale || dshImportStale)
 
+  // 갱신 실패 배너(staleSince) — GET 요청이 실패해 adminFetchJsonCachedWithMeta가 오래된
+  // 캐시로 조용히 대체한 경우다(품질 웨이브 3 — 항목 1). lastError(동기화 POST 실패 등
+  // 데이터 자체가 없는 완전 실패)보다는 덜 심각하지만("일단 예전 데이터는 보여줄 수 있음"),
+  // importStale/sheetAhead보다는 우선한다 — 이번 요청이 실제로 실패했다는 신호가 더 시급하다.
+  const staleRefresh = !lastError && staleSince != null
+
   const tone = lastError
-    ? { border: "border-rose-200", bg: "bg-rose-50" }
-    : importStale
+    ? { border: "border-[#F2B8B8]", bg: "bg-[#FCE9E9]" }
+    : staleRefresh
       ? { border: "border-[#ECD29C]", bg: "bg-[#FBF1E0]" }
-      : sheetAhead
-        ? { border: "border-amber-200", bg: "bg-amber-50" }
-        : { border: "border-[#e8e8e4]", bg: "bg-white" }
+      : importStale
+        ? { border: "border-[#ECD29C]", bg: "bg-[#FBF1E0]" }
+        : sheetAhead
+          // 품질 웨이브 4 — 항목 5: Tailwind 기본 amber-* → 캐논 Warning hex(DESIGN.md §2) 통일.
+          ? { border: "border-[#ECD29C]", bg: "bg-[#FBF1E0]" }
+          : { border: "border-[#e8e8e4]", bg: "bg-white" }
 
   return (
     <div className={`sticky top-0 z-30 border-b ${tone.border} ${tone.bg} px-4 py-3 text-[12px]`}>
@@ -74,20 +80,24 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             {lastError
-              ? <AlertTriangle className="h-4 w-4 text-rose-600" />
-              : importStale
+              ? <AlertTriangle className="h-4 w-4 text-[#B43E3E]" />
+              : staleRefresh
                 ? <AlertTriangle className="h-4 w-4 text-[#A8741A]" />
-                : sheetAhead
-                  ? <Clock className="h-4 w-4 text-amber-600" />
-                  : <CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+                : importStale
+                  ? <AlertTriangle className="h-4 w-4 text-[#A8741A]" />
+                  : sheetAhead
+                    ? <Clock className="h-4 w-4 text-[#A8741A]" />
+                    : <CheckCircle2 className="h-4 w-4 text-[#084734]" />}
             <span className="text-[#1a1a1a]/75">
               {lastError
                 ? lastError
-                : importStale
-                  ? "임포트가 시트 동기화보다 오래됨 — 장부에서 재동기화 필요"
-                  : sheetAhead
-                    ? `시트가 ${relativeTime(sheetModifiedAt!, now)} 수정 — DB는 ${relativeTime(lastSync!, now)} 동기화`
-                    : `마지막 동기화: ${lastSync ? relativeTime(lastSync, now) : "없음"}`}
+                : staleRefresh
+                  ? `갱신 실패 — ${relativeTime(new Date(staleSince as number).toISOString(), now)} 데이터 표시 중`
+                  : importStale
+                    ? "임포트가 시트 동기화보다 오래됨 — 장부에서 재동기화 필요"
+                    : sheetAhead
+                      ? `시트가 ${relativeTime(sheetModifiedAt!, now)} 수정 — DB는 ${relativeTime(lastSync!, now)} 동기화`
+                      : `마지막 동기화: ${lastSync ? relativeTime(lastSync, now) : "없음"}`}
             </span>
             {importStale && (
               <a
@@ -98,7 +108,7 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
               </a>
             )}
             {!importStale && sheetAhead && (
-              <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10.5px] font-semibold text-amber-800">
+              <span className="ml-2 rounded-full bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F]">
                 시트가 더 새로움
               </span>
             )}

@@ -7,23 +7,22 @@ import { CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
 import SyncStatusBar from "./SyncStatusBar"
 import IntegrityStrip from "./IntegrityStrip"
 import CoreKpiGrid from "./sections/CoreKpiGrid"
-import ActivityBottleneckSection from "./sections/ActivityBottleneckSection"
 import BranchHeroGauges from "./sections/BranchHeroGauges"
-import BranchKpiAccordion from "./sections/BranchKpiAccordion"
-import BranchPipelineKanban from "./sections/BranchPipelineKanban"
 import BranchUpcomingDeals from "./sections/BranchUpcomingDeals"
-import BranchRegionHeatmap from "./sections/BranchRegionHeatmap"
-import BranchAiInsights from "./sections/BranchAiInsights"
 import DealModal, { type DealModalDeal } from "./sections/DealModal"
-import PipelineTable from "./sections/PipelineTable"
 import CampaignsSection from "./sections/CampaignsSection"
 import HardwareSection from "./sections/HardwareSection"
-import DataQualityPanel from "./sections/DataQualityPanel"
 import DealMixSection from "./sections/DealMixSection"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
 import { PERIODS, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
+import { ADMIN_NAV, ADMIN_NAV_SECTION_META } from "../admin-nav"
 
 type BranchTab = "overview" | "pipeline" | "heatmap" | "ai"
+
+// 브레드크럼 세그먼트는 admin-nav.ts SSOT에서 파생한다 — "분석" 하드코딩 대신 /admin/branch가
+// 실제로 속한 섹션 라벨(현재 "영업·매출")을 읽는다. IA가 다시 재편돼도 이 화면은 자동으로 따라간다.
+const BRANCH_NAV_ITEM = ADMIN_NAV.find((item) => item.href === "/admin/branch")
+const BRANCH_SECTION_LABEL = BRANCH_NAV_ITEM ? ADMIN_NAV_SECTION_META[BRANCH_NAV_ITEM.section].label : "영업·매출"
 
 const BRANCH_TABS: Array<{ id: BranchTab; label: string; sub: string }> = [
   { id: "overview", label: "개요", sub: "실적 · 팀 · 재고 · 캠페인" },
@@ -73,6 +72,28 @@ function buildMonthOptions(now: Date) {
 
 const RevenueFlowSection = dynamic(() => import("./sections/RevenueFlowSection"), {
   loading: () => <div className="h-72 animate-pulse rounded-2xl bg-[#f0f0ec]" />,
+})
+
+// 탭 전용 컴포넌트 코드 스플리팅(품질 웨이브 2 — 항목 6) — 개요 탭은 즉시 보여야 하므로
+// 정적 유지, 파이프라인/히트맵/AI 탭 컴포넌트는 그 탭을 열 때만 청크를 내려받는다.
+// 로딩 스켈레톤은 각 컴포넌트 내부의 자체 로딩 상태(데이터 미도착 시)와 동일 톤으로 맞춘다.
+const BranchKpiAccordion = dynamic(() => import("./sections/BranchKpiAccordion"), {
+  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const ActivityBottleneckSection = dynamic(() => import("./sections/ActivityBottleneckSection"), {
+  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const BranchPipelineKanban = dynamic(() => import("./sections/BranchPipelineKanban"), {
+  loading: () => <div className="h-72 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const PipelineTable = dynamic(() => import("./sections/PipelineTable"), {
+  loading: () => <div className="h-64 animate-pulse rounded-2xl bg-[#F6F5F4]" />,
+})
+const BranchRegionHeatmap = dynamic(() => import("./sections/BranchRegionHeatmap"), {
+  loading: () => <div className="h-96 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const BranchAiInsights = dynamic(() => import("./sections/BranchAiInsights"), {
+  loading: () => <div className="h-96 animate-pulse rounded-xl bg-[#f0f0ec]" />,
 })
 
 export default function BranchDashboardClient() {
@@ -158,7 +179,12 @@ export default function BranchDashboardClient() {
     window.history.replaceState(null, "", url.toString())
   }, [])
 
+  // 재시도(품질 웨이브 3 — 항목 3)를 위해 마지막으로 연 딜의 원본 row를 기억해둔다 —
+  // selectedDeal(누적된 상세 필드 포함) 대신 이 최소 shape을 다시 넘겨 openDealLog를 그대로 재실행한다.
+  const lastDealRowRef = useRef<{ id: string; customer: string; manager: string | null; team: string | null; region: string | null; revenue: number; stageLabel?: string; stageColor?: string; probability?: number } | null>(null)
+
   const openDealLog = useCallback(async (row: { id: string; customer: string; manager: string | null; team: string | null; region: string | null; revenue: number; stageLabel?: string; stageColor?: string; probability?: number }) => {
+    lastDealRowRef.current = row
     setSelectedDeal({
       id: row.id, customer: row.customer, manager: row.manager, team: row.team,
       region: row.region, amount: row.revenue,
@@ -192,10 +218,19 @@ export default function BranchDashboardClient() {
         monthlyHighConfidence: d.monthly_high_conf ?? undefined,
         loadingDetail: false,
       } : cur)
-    } catch {
-      setSelectedDeal((cur) => cur && cur.id === row.id ? { ...cur, loadingDetail: false } : cur)
+    } catch (e) {
+      // 품질 웨이브 3 — 항목 3. 이전엔 여기서 에러를 완전히 삼켜 월별 매출 로그 섹션이
+      // 그냥 사라졌다(로딩만 멈추고 아무 설명 없음) — 이제 DealModal에 detailError로
+      // 전달해 "상세를 불러오지 못했습니다 — 재시도" 인라인 문구를 보여준다.
+      const message = e instanceof Error ? e.message : "상세를 불러오지 못했습니다."
+      setSelectedDeal((cur) => cur && cur.id === row.id ? { ...cur, loadingDetail: false, detailError: message } : cur)
     }
   }, [])
+
+  const retryDealDetail = useCallback(() => {
+    const row = lastDealRowRef.current
+    if (row) void openDealLog(row)
+  }, [openDealLog])
 
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   const summaryUrl = `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}`
@@ -225,6 +260,9 @@ export default function BranchDashboardClient() {
   const lastError = syncError ?? summary.error ?? summary.data?.lastError ?? null
   const sheetModifiedAt = summary.data?.sheetModifiedAt ?? null
   const dataSources = summary.data?.data_sources ?? null
+  // 품질 웨이브 3 — 항목 1. summary GET이 실패해 오래된 캐시로 조용히 대체됐을 때만 세팅 —
+  // lastError(완전 실패, 데이터 자체 없음)가 있으면 그쪽이 더 시급하므로 staleSince는 무시.
+  const summaryStaleSince = !lastError && summary.stale ? summary.staleSince : null
 
   // Filter visibility per design
   const showPeriodFilter = activeTab === "overview" || activeTab === "pipeline" || activeTab === "heatmap"
@@ -258,7 +296,7 @@ export default function BranchDashboardClient() {
               <span>ADMIN</span>
               <span className="opacity-50">›</span>
               <span className="inline-flex items-center gap-1">
-                <ChevronLeft className="h-3 w-3" /> 분석
+                <ChevronLeft className="h-3 w-3" /> {BRANCH_SECTION_LABEL}
               </span>
               <span className="opacity-50">›</span>
               <span>KR Team</span>
@@ -379,13 +417,16 @@ export default function BranchDashboardClient() {
           dataSources={dataSources}
           onRefresh={onRefresh}
           syncEnabled={canRunAdminOperations}
+          staleSince={summaryStaleSince}
         />
 
         <div className="mt-6">
           {activeTab === "overview" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
-              {/* 정합성 배지 승격(항목 3) — SyncStatusBar 바로 아래, 개요 탭에만. */}
-              <IntegrityStrip refreshKey={refreshKey} />
+              {/* 정합성 배지 승격(항목 3) — SyncStatusBar 바로 아래, 개요 탭에만.
+                  데이터 품질 상세(구 AI 탭 DataQualityPanel)는 이 스트립의 펼침 하단
+                  "전체 규칙 상세" 토글로 통합됐다(품질 웨이브 2 — 항목 4). */}
+              <IntegrityStrip refreshKey={refreshKey} canRunAdminOperations={canRunAdminOperations} />
               <CoreKpiGrid data={summary.data} loading={summary.loading} error={summary.error} />
               {/* D-1: 매출 목표(HeroGauges) 위, 매출 누적 흐름(RevenueFlowSection) 아래 */}
               <BranchHeroGauges
@@ -441,7 +482,10 @@ export default function BranchDashboardClient() {
                 </div>
                 <div className={pipelineView === "kanban" ? "" : "px-2.5 py-2"}>
                   {pipelineView === "table" ? (
-                    <PipelineTable key={`pipeline-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog} />
+                    // 품질 웨이브 4 — 항목 4. 이 카드가 이미 "파이프라인" 제목을 렌더하므로
+                    // PipelineTable 자체의 "REV 고객별 매출" <h2>는 hideHeader로 숨겨 이중화를 없앤다
+                    // (장부 링크·필터·표는 그대로 유지). 헤더가 필요한 히트맵 탭 사용처는 기본값 유지.
+                    <PipelineTable key={`pipeline-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog} hideHeader />
                   ) : (
                     <BranchPipelineKanban
                       team={team}
@@ -472,13 +516,12 @@ export default function BranchDashboardClient() {
           {activeTab === "ai" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
               <BranchAiInsights team={team} refreshKey={refreshKey} summary={summary.data} canGenerate={canRunAdminOperations} />
-              {canRunAdminOperations && <DataQualityPanel refreshKey={refreshKey} />}
             </div>
           )}
         </div>
       </div>
 
-      <DealModal deal={selectedDeal} onClose={() => setSelectedDeal(null)} />
+      <DealModal deal={selectedDeal} onClose={() => setSelectedDeal(null)} onRetryDetail={retryDealDetail} />
     </div>
   )
 }

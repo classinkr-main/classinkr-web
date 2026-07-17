@@ -2,12 +2,18 @@
 import type { BranchCampaignRow } from "../types"
 
 export default function CampaignsSection({ rows, loading, error }: { rows: BranchCampaignRow[] | null; loading: boolean; error: string | null }) {
-  if (error) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
-  if (loading || !rows) return <div className="h-32 animate-pulse rounded-2xl bg-[#f0f0ec]" />
+  if (error) return (
+    <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]">
+      {error}
+    </div>
+  )
+  if (loading || !rows) return <div className="h-32 animate-pulse rounded-xl bg-[#f0f0ec]" />
   return (
-    <section>
-      <h2 className="mb-3 text-[13px] font-semibold text-[#111110]/70">캠페인 성과 (최근 30일)</h2>
-      <div className="overflow-x-auto rounded-2xl border border-[#e8e8e4] bg-white">
+    <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
+        <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">캠페인 성과 (최근 30일)</h2>
+      </div>
+      <div className="overflow-x-auto">
         <table className="w-full text-[12px]">
           <thead className="bg-[#fafaf8] text-[#1a1a1a]/60">
             <tr>

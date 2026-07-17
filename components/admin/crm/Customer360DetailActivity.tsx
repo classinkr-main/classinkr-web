@@ -9,6 +9,8 @@ import {
   ClipboardList,
   FileAudio,
   FileText,
+  Globe,
+  MessageSquare,
   PhoneCall,
   StickyNote,
 } from "lucide-react"
@@ -40,6 +42,9 @@ const SOURCE_ICON: Record<string, React.ReactNode> = {
   lead_contact_log: <PhoneCall className="h-3.5 w-3.5" />,
   external_crm: <Building2 className="h-3.5 w-3.5" />,
   sheet: <ClipboardList className="h-3.5 w-3.5" />,
+  call: <PhoneCall className="h-3.5 w-3.5" />,
+  sms: <MessageSquare className="h-3.5 w-3.5" />,
+  site_inflow: <Globe className="h-3.5 w-3.5" />,
 }
 
 function matchesFilter(event: CrmCustomerEventRecord, filter: ActivityFilter): boolean {

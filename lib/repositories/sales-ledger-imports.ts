@@ -1,6 +1,7 @@
 import "server-only"
 
 import { unstable_cache } from "next/cache"
+import { cache } from "react"
 
 import type { DshBreakdownRow, DshOutput, DshRow } from "@/lib/branch/parsers/dsh"
 import { KPI_METRICS, type KpiBlocks, type KpiMetric, type KpiPair, type KpiRow } from "@/lib/branch/parsers/kpi"
@@ -11,13 +12,15 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 export const SALES_LEDGER_IMPORTS_CACHE_TAG = "sales-ledger-imports"
 
 type SalesLedgerTabKey = "dsh" | "rev" | "kpi"
+const SALES_LEDGER_TAB_KEYS: SalesLedgerTabKey[] = ["dsh", "rev", "kpi"]
 
 export interface ActiveImportRunInfo {
   runId: string
   startedAt: string | null
 }
 
-interface ActiveSourceRow {
+interface ActiveSourceYearRow {
+  tab_key: SalesLedgerTabKey
   import_run_id: string
   sales_ledger_import_runs: { started_at?: string } | Array<{ started_at?: string }> | null
 }
@@ -144,57 +147,69 @@ function addWeeklyPayment(target: Record<string, number[]>, month: string, weekL
 }
 
 // 액티브 임포트 포인터 조회는 summary/kpi/pipeline이 요청마다 부르는 핫패스다.
-// ①run 상태 확인을 inner join으로 합쳐 왕복 1회로, ②60초 unstable_cache로 감싸
-// "임포트 없음(null)"이 대부분인 현재 상태에서 요청당 Supabase 왕복을 없앤다.
-// 액티브 소스 전환(임포트 스크립트)은 앱 밖에서 일어나므로 최대 60초 지연 허용.
-// started_at도 함께 실어 "서빙 소스가 언제 캡처된 런인지"(data_sources 노출용)를
-// 별도 왕복 없이 답할 수 있게 한다 — 2026-07-16 스테일 임포트 사고 이후 요구사항.
-async function lookupActiveImportRunInfo(tabKey: SalesLedgerTabKey, fiscalYear: number): Promise<ActiveImportRunInfo | null> {
+// ①run 상태 확인을 inner join으로 합쳐 왕복 1회로, ②fiscal_year 단위로 dsh/rev/kpi 3개
+// tabKey를 한 쿼리에 담아(개별 tab_key 필터 제거) summary 라우트 같은 소비처가 Promise.all로
+// 세 tabKey를 동시에 조회할 때도 왕복이 늘지 않게 한다(품질 웨이브3 — 이전엔 tabKey별로
+// 별도 캐시 엔트리라 콜드일 때 3왕복이었다), ③60초 unstable_cache로 감싸 "임포트 없음(null)이
+// 대부분"인 현재 상태에서 요청당 Supabase 왕복을 없앤다. 액티브 소스 전환(임포트 스크립트)은
+// 앱 밖에서 일어나므로 최대 60초 지연 허용. started_at도 함께 실어 "서빙 소스가 언제 캡처된
+// 런인지"(data_sources 노출용)를 별도 왕복 없이 답할 수 있게 한다 — 2026-07-16 스테일 임포트
+// 사고 이후 요구사항.
+async function lookupActiveImportRunInfoForYear(fiscalYear: number): Promise<Record<SalesLedgerTabKey, ActiveImportRunInfo | null>> {
+  const empty: Record<SalesLedgerTabKey, ActiveImportRunInfo | null> = { dsh: null, rev: null, kpi: null }
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("sales_ledger_active_sources")
-    .select("import_run_id, sales_ledger_import_runs!inner(status, started_at)")
-    .eq("tab_key", tabKey)
+    .select("tab_key, import_run_id, sales_ledger_import_runs!inner(status, started_at)")
     .eq("fiscal_year", fiscalYear)
     .eq("sales_ledger_import_runs.status", "succeeded")
-    .maybeSingle()
 
   if (error) {
-    if (isMissingSalesLedgerImportTableError(error)) return null
+    if (isMissingSalesLedgerImportTableError(error)) return empty
     throw new Error(`[sales-ledger-imports] active source lookup failed: ${error.message}`)
   }
-  if (!data) return null
 
-  const row = data as ActiveSourceRow
-  // M2O inner join은 보통 객체로 오지만, 타입 미탐지 시 배열로 직렬화될 수 있어 양쪽 다 수용한다.
-  const joined = row.sales_ledger_import_runs
-  const startedAt = Array.isArray(joined) ? joined[0]?.started_at : joined?.started_at
-  return { runId: row.import_run_id, startedAt: startedAt ?? null }
+  const result = { ...empty }
+  for (const row of (data ?? []) as ActiveSourceYearRow[]) {
+    // M2O inner join은 보통 객체로 오지만, 타입 미탐지 시 배열로 직렬화될 수 있어 양쪽 다 수용한다.
+    const joined = row.sales_ledger_import_runs
+    const startedAt = Array.isArray(joined) ? joined[0]?.started_at : joined?.started_at
+    if (SALES_LEDGER_TAB_KEYS.includes(row.tab_key)) {
+      result[row.tab_key] = { runId: row.import_run_id, startedAt: startedAt ?? null }
+    }
+  }
+  return result
 }
 
-const getCachedActiveImportRunInfo = unstable_cache(
-  async (tabKey: SalesLedgerTabKey, fiscalYear: number) => lookupActiveImportRunInfo(tabKey, fiscalYear),
-  ["sales-ledger-active-import-run"],
+const getCachedActiveImportRunInfoForYear = unstable_cache(
+  async (fiscalYear: number) => lookupActiveImportRunInfoForYear(fiscalYear),
+  ["sales-ledger-active-import-run-year"],
   { revalidate: 60, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG] },
 )
 
+// React cache()로 같은 요청 안에서의 중복 실행을 접는다: summary 라우트는 dsh(readDshWithSource)·
+// kpi(readKpiBlocksPreferDb)·rev(readRevDealsPreferActiveWithSource)를 Promise.all로 동시에
+// 부르고, 셋 다 같은 fiscalYear로 이 배치 조회를 탄다 — cache() 없이는 콜드 캐시일 때 동일
+// fiscalYear 쿼리가 3번 동시 실행될 수 있다. lib/docs-content.ts의 getDocsContent와 같은 패턴
+// (Next 요청 스코프에서 안전하게 리셋되는 React 요청 메모이제이션).
+const getActiveImportRunInfoForYear = cache(
+  async (fiscalYear: number) => getCachedActiveImportRunInfoForYear(fiscalYear),
+)
+
 async function getActiveImportRunId(tabKey: SalesLedgerTabKey, fiscalYear: number): Promise<string | null> {
-  const info = await getCachedActiveImportRunInfo(tabKey, fiscalYear)
-  return info?.runId ?? null
+  const infoByTab = await getActiveImportRunInfoForYear(fiscalYear)
+  return infoByTab[tabKey]?.runId ?? null
 }
 
 // summary 라우트 등이 "지금 서빙 중인 소스가 임포트 런인지, 언제 캡처됐는지"를 표면화할 때
-// 쓴다(data_sources). 기존 unstable_cache 키를 그대로 재사용해 별도 캐시 엔트리를 늘리지 않는다.
+// 쓴다(data_sources). 기존 unstable_cache 키(getCachedActiveImportRunInfo 계열)를 fiscal_year
+// 단위 배치로 재구성했을 뿐 태그·TTL·반환 타입은 그대로다.
 export async function getActiveImportRunInfo(tabKey: SalesLedgerTabKey, fiscalYear: number): Promise<ActiveImportRunInfo | null> {
-  return getCachedActiveImportRunInfo(tabKey, fiscalYear)
+  const infoByTab = await getActiveImportRunInfoForYear(fiscalYear)
+  return infoByTab[tabKey] ?? null
 }
 
-// knownRunId: 호출부가 이미 getActiveImportRunInfo로 runId를 확보했을 때(WithSource 변형)
-// 넘겨 내부 재조회를 생략한다. 미전달 시(undefined) 기존과 동일하게 자체 조회한다.
-export async function readDshFromActiveImport(fiscalYear: number, knownRunId?: string): Promise<DshOutput | null> {
-  const importRunId = knownRunId ?? (await getActiveImportRunId("dsh", fiscalYear))
-  if (!importRunId) return null
-
+async function readDshContentForImportRun(importRunId: string): Promise<DshOutput | null> {
   const supabase = createSupabaseAdminClient()
   const { rows: data, error } = await fetchAllRows<DshDbRow>((from, to) =>
     supabase
@@ -247,6 +262,29 @@ export async function readDshFromActiveImport(fiscalYear: number, knownRunId?: s
 
   if (rows.length === 0 && breakdown.length === 0) return null
   return { rows, members, breakdown }
+}
+
+// DSH 콘텐츠(전량 페이징 조회, KR Team 등에서 요청마다 재계산)는 REV의
+// readCachedRevDealsForImportRun과 같은 이유로 캐시한다: succeeded run 아래 행은 캡처
+// 스크립트(scripts/import-sales-ledger-files.mjs)가 insert만 하고 이후 절대 update/delete하지
+// 않으므로 importRunId만으로 안전하게 불변 캐시할 수 있다. 액티브 소스 전환(→ 새 runId)은
+// getCachedActiveImportRunInfo의 기존 60초 TTL이 이미 감당하던 지연이라 이 캐시를 얹어도
+// 신선도 특성이 바뀌지 않는다 — 새 runId는 캐시 키가 달라 자연히 미스로 새로 읽는다.
+// DSH/KPI는 REV의 db-import 라우트(captureRevDbImport→activateRevImportRun) 같은 인앱
+// 재캡처/활성화 경로가 없어(외부 스크립트로만 active_sources 전환) revalidateTag를 추가로
+// 걸어야 할 인앱 뮤테이션이 없다(grep 확인: tab_key="dsh"/"kpi" upsert는 스크립트 전용).
+const readCachedDshContentForImportRun = unstable_cache(
+  async (importRunId: string) => readDshContentForImportRun(importRunId),
+  ["sales-ledger-dsh-import-run"],
+  { revalidate: 300, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG] },
+)
+
+// knownRunId: 호출부가 이미 getActiveImportRunInfo로 runId를 확보했을 때(WithSource 변형)
+// 넘겨 내부 재조회를 생략한다. 미전달 시(undefined) 기존과 동일하게 자체 조회한다.
+export async function readDshFromActiveImport(fiscalYear: number, knownRunId?: string): Promise<DshOutput | null> {
+  const importRunId = knownRunId ?? (await getActiveImportRunId("dsh", fiscalYear))
+  if (!importRunId) return null
+  return readCachedDshContentForImportRun(importRunId)
 }
 
 async function readRevDealsForImportRun(importRunId: string, team: string): Promise<BranchRevDeal[] | null> {
@@ -411,10 +449,7 @@ function rowsToKpiRows(rows: KpiDbRow[]) {
   }))
 }
 
-export async function readKpiBlocksFromActiveImport(fiscalYear: number): Promise<KpiBlocks | null> {
-  const importRunId = await getActiveImportRunId("kpi", fiscalYear)
-  if (!importRunId) return null
-
+async function readKpiContentForImportRun(importRunId: string): Promise<KpiBlocks | null> {
   const supabase = createSupabaseAdminClient()
   const { rows: dbRows, error } = await fetchAllRows<KpiDbRow>((from, to) =>
     supabase
@@ -457,4 +492,17 @@ export async function readKpiBlocksFromActiveImport(fiscalYear: number): Promise
     fy: rowsToKpiRows(fyRows),
     months,
   }
+}
+
+// DSH와 동일한 근거(위 readCachedDshContentForImportRun 주석 참조)로 importRunId 키 캐시.
+const readCachedKpiContentForImportRun = unstable_cache(
+  async (importRunId: string) => readKpiContentForImportRun(importRunId),
+  ["sales-ledger-kpi-import-run"],
+  { revalidate: 300, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG] },
+)
+
+export async function readKpiBlocksFromActiveImport(fiscalYear: number): Promise<KpiBlocks | null> {
+  const importRunId = await getActiveImportRunId("kpi", fiscalYear)
+  if (!importRunId) return null
+  return readCachedKpiContentForImportRun(importRunId)
 }

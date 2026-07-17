@@ -40,7 +40,9 @@ function parseSavedView(value: string | null): CrmUnifiedSavedView {
     value === "expiring" ||
     value === "dormant" ||
     value === "hot_lead" ||
-    value === "upsell"
+    value === "upsell" ||
+    value === "site_leads" ||
+    value === "unanswered"
   ) {
     return value
   }

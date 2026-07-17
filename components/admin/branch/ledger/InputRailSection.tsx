@@ -1,6 +1,6 @@
 "use client"
 
-import type { Dispatch, SetStateAction } from "react"
+import { useState, type Dispatch, type FormEvent, type SetStateAction } from "react"
 import { Loader2, Plus, Save, X } from "lucide-react"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
@@ -15,6 +15,7 @@ import {
   type DraftKind,
   type DraftOperation,
   type DraftQueueMode,
+  type DraftSaveResult,
   type LedgerDraft,
   type RevProductCategory,
 } from "./shared"
@@ -33,9 +34,14 @@ interface InputRailSectionProps {
   draftFormInvalid: boolean
   draftSaving: boolean
   canCreateEditDraft: boolean
-  saveEditedDraft: () => Promise<void>
+  // DraftSaveResult.persisted: 서버에 실제로 저장됐으면 true, 로컬 폴백(장부 적용 불가)이면 false.
+  // DraftSaveResult.deduped: 이중계상 가드(품질 웨이브 3, 항목 3)가 새 초안 대신 이미 열린 초안을
+  // 갱신했으면 true. DraftSaveResult.duplicateWarning(품질 웨이브 4, 항목 2): new-row 저장인데 같은
+  // 고객명·월에 이미 열린 신규 초안이 있으면 true(저장은 그대로 진행, 경고만) — 셋 다 저장 인라인
+  // 피드백(성공/실패/중복 안내 메시지)에 쓴다.
+  saveEditedDraft: () => Promise<DraftSaveResult>
   cancelDraftEdit: () => void
-  saveDraft: (kind: DraftKind) => Promise<void>
+  saveDraft: (kind: DraftKind) => Promise<DraftSaveResult>
 }
 
 export function InputRailSection({
@@ -55,6 +61,52 @@ export function InputRailSection({
   cancelDraftEdit,
   saveDraft,
 }: InputRailSectionProps) {
+  // 저장 성공/실패 인라인 피드백(버튼 인근) — 다른 초안을 편집하기 시작하면 이전 결과는 지운다.
+  // useEffect로 setState하면 커밋 후 리렌더가 한 번 더 도는 캐스케이드가 생겨(react-hooks 경고),
+  // React가 권장하는 "렌더 중 상태 조정" 패턴으로 처리한다 — editingDraft.id가 바뀐 그 렌더에서
+  // 바로 초기화해 깜빡임 없이 한 번에 반영된다.
+  const [feedback, setFeedback] = useState<{ kind: "success" | "error" | "warning"; text: string } | null>(null)
+  const [feedbackForDraftId, setFeedbackForDraftId] = useState<string | null>(editingDraft?.id ?? null)
+  if (feedbackForDraftId !== (editingDraft?.id ?? null)) {
+    setFeedbackForDraftId(editingDraft?.id ?? null)
+    setFeedback(null)
+  }
+
+  const runSave = async (action: () => Promise<DraftSaveResult>) => {
+    setFeedback(null)
+    const result = await action()
+    setFeedback(
+      !result.persisted
+        ? { kind: "error", text: "서버 저장에 실패해 로컬 임시 저장으로 대체됐습니다(장부 적용 불가) — 재연결 후 다시 저장하세요." }
+        : result.deduped
+          // 이중계상 가드(항목 3) — 같은 딜·같은 셀에 이미 열린 초안이 있어 새로 만들지 않고 그 초안을 갱신했다.
+          ? { kind: "success", text: "이미 대기 초안 있음 — 수정으로 반영됩니다. 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." }
+          : result.duplicateWarning
+            // 품질 웨이브 4, 항목 2 — new-row는 매트릭스 대응 행이 없어 자동 재지정할 수 없다.
+            // 저장은 그대로 진행하고, 같은 고객·월에 이미 열린 신규 초안이 있다는 사실만 경고한다.
+            ? { kind: "warning", text: "저장 완료 — 같은 고객·월에 이미 열린 신규 초안이 있습니다. 체크 큐에서 중복 여부를 확인하세요." }
+            : { kind: "success", text: "저장 완료 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." },
+    )
+  }
+
+  // 편집 중이 아닐 때 Enter로 제출될 "기본" 저장 종류 — 선택된 행이 있어 수정 초안이 가능하면
+  // 그쪽을, 없으면 신규 입력을 우선한다. 이 kind의 버튼만 type="submit"이라 브라우저가 텍스트
+  // 필드에서 Enter를 눌렀을 때 그 버튼을 기본 제출 대상으로 인식한다(제출 버튼이 없으면 크롬은
+  // Enter를 아예 무시한다 — 실측 확인됨). 나머지 버튼은 type="button"으로 자기 kind를 직접 저장한다.
+  const primaryDraftKind: DraftKind = canCreateEditDraft ? "edit-row" : "new-row"
+
+  // form 래핑으로 Enter 제출 — 편집 중이면 그 초안 갱신, 아니면 primaryDraftKind로 저장.
+  // 실제 버튼 클릭도 동일 코드 경로를 타 두 번 저장되지 않는다(submit 버튼은 onClick 없음).
+  const handleFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (draftSaving || draftFormInvalid) return
+    if (editingDraft) {
+      void runSave(saveEditedDraft)
+    } else {
+      void runSave(() => saveDraft(primaryDraftKind))
+    }
+  }
+
   return (
     <section className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white">
             <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
@@ -74,7 +126,7 @@ export function InputRailSection({
                 )}
               </div>
             </div>
-            <div className="space-y-3 p-4">
+            <form onSubmit={handleFormSubmit} className="space-y-3 p-4">
               <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
                 <p className="mb-2 text-[11px] font-bold text-[#615D59]">작업 유형</p>
                 <div className="grid grid-cols-2 gap-1.5">
@@ -245,11 +297,26 @@ export function InputRailSection({
                   고객명과 0보다 큰 금액을 입력해야 저장할 수 있습니다.
                 </p>
               )}
+              {feedback && (
+                <p
+                  role="status"
+                  className={`rounded-md border px-3 py-2 text-[11px] font-semibold leading-relaxed ${
+                    feedback.kind === "success"
+                      ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                      : feedback.kind === "warning"
+                        ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
+                        : "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]"
+                  }`}
+                >
+                  {feedback.text}
+                </p>
+              )}
               {editingDraft ? (
                 <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                  {/* type="submit" — 이 화면의 유일한 저장 동작이라 form onSubmit(Enter)이 그대로
+                      이 버튼과 같은 저장을 수행한다. onClick을 따로 달면 클릭 시 두 번 저장된다. */}
                   <button
-                    type="button"
-                    onClick={() => void saveEditedDraft()}
+                    type="submit"
                     disabled={draftSaving || draftFormInvalid}
                     className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
                   >
@@ -258,7 +325,10 @@ export function InputRailSection({
                   </button>
                   <button
                     type="button"
-                    onClick={cancelDraftEdit}
+                    onClick={() => {
+                      setFeedback(null)
+                      cancelDraftEdit()
+                    }}
                     disabled={draftSaving}
                     className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
                     aria-label="초안 편집 취소"
@@ -269,9 +339,12 @@ export function InputRailSection({
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
+                  {/* 둘 중 primaryDraftKind와 일치하는 쪽만 type="submit"(onClick 없음) — 그래야
+                      form의 기본 제출 버튼이 되어 Enter가 그 kind로 저장한다. 나머지는 type="button" +
+                      onClick으로 자기 kind를 직접 저장(클릭 시 이중 저장 방지). */}
                   <button
-                    type="button"
-                    onClick={() => void saveDraft("edit-row")}
+                    type={primaryDraftKind === "edit-row" ? "submit" : "button"}
+                    onClick={primaryDraftKind === "edit-row" ? undefined : () => void runSave(() => saveDraft("edit-row"))}
                     disabled={draftSaving || !canCreateEditDraft || draftFormInvalid}
                     className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3 text-[12px] font-bold text-[#084734] transition hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-45"
                   >
@@ -279,8 +352,8 @@ export function InputRailSection({
                     수정 초안
                   </button>
                   <button
-                    type="button"
-                    onClick={() => void saveDraft("new-row")}
+                    type={primaryDraftKind === "new-row" ? "submit" : "button"}
+                    onClick={primaryDraftKind === "new-row" ? undefined : () => void runSave(() => saveDraft("new-row"))}
                     disabled={draftSaving || draftFormInvalid}
                     className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
                   >
@@ -289,7 +362,7 @@ export function InputRailSection({
                   </button>
                 </div>
               )}
-            </div>
+            </form>
           </section>
   )
 }

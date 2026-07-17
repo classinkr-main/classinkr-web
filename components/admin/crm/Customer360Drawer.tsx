@@ -18,6 +18,7 @@ import {
   ExternalLink,
   FileAudio,
   FileText,
+  Globe,
   ListChecks,
   MessageSquare,
   Phone,
@@ -35,7 +36,10 @@ import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/
 import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import CrmCustomerFlags from "./CrmCustomerFlags"
+import CrmCustomerPicker from "./CrmCustomerPicker"
+import ActivityQuickForm from "./rail/ActivityQuickForm"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
+import { LEAD_BADGE_TONE_CLASSES } from "@/lib/crm/lead-badges"
 import { computeCustomerHealth, HEALTH_BAND_STYLE } from "@/lib/crm/customer-health"
 import { CS_MOTIONS, type CsMotion } from "@/lib/crm/cs-motions"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
@@ -66,11 +70,13 @@ interface Props {
   customerKey: string | null
   name?: string | null
   onClose: () => void
+  /** 컴포저 작성 중 여부 통지 — 부모의 URL 기반 닫기 경로(뒤로가기)가 같은 dirty 가드를 공유하게 한다. */
+  onDirtyChange?: (dirty: boolean) => void
 }
 
-// 섹션 점프 탭 — 스크롤 스파이는 DOM 등장 순서(요약→머니→딜→할일→활동)로 평가하고,
-// 탭 표시 순서는 스펙(요약·딜·머니·활동·할일)을 따른다.
-const C360_SECTION_DOM_ORDER = ["c360-summary", "c360-money", "c360-deal", "c360-tasks", "c360-activity"] as const
+// 섹션 점프 탭 — 활동 승격 스펙: 탭 표시·DOM 등장 순서 모두 요약→활동→할일→딜→머니.
+// 스크롤 스파이는 이 배열 순서로 '마지막 통과' 판정을 하므로 실제 렌더 순서와 함께 맞춘다.
+const C360_SECTION_DOM_ORDER = ["c360-summary", "c360-activity", "c360-tasks", "c360-deal", "c360-money"] as const
 
 const SERVICE_RISK_LABEL: Record<string, string> = {
   urgent: "긴급",
@@ -112,6 +118,7 @@ const EVENT_SOURCE_LABEL: Record<string, string> = {
   lead_contact_log: "리드 연락",
   external_crm: "외부 CRM",
   sheet: "시트",
+  site_inflow: "홈페이지 유입",
 }
 
 // 활동 출처별 아이콘 — 타임라인을 유형으로 빠르게 스캔.
@@ -125,15 +132,12 @@ const EVENT_SOURCE_ICON: Record<string, React.ReactNode> = {
   lead_contact_log: <PhoneCall className="h-3.5 w-3.5" />,
   external_crm: <Building2 className="h-3.5 w-3.5" />,
   sheet: <ClipboardList className="h-3.5 w-3.5" />,
+  site_inflow: <Globe className="h-3.5 w-3.5" />,
 }
 
-// 연락 입력 — 콜/문자/메모/회의록을 한 컴포저에서. sourceType로 그대로 저장돼 타임라인에 유형 표시.
-const NOTE_KIND_OPTIONS = [
-  { key: "manual_note", label: "메모", icon: <StickyNote className="h-3 w-3" />, placeholder: "빠른 메모 입력 후 저장", rows: 2 },
-  { key: "call", label: "콜", icon: <PhoneCall className="h-3 w-3" />, placeholder: "통화 내용·결과 입력 후 저장", rows: 2 },
-  { key: "sms", label: "문자", icon: <MessageSquare className="h-3 w-3" />, placeholder: "문자 내용 입력 후 저장", rows: 2 },
-  { key: "meeting_minutes", label: "회의록", icon: <FileText className="h-3 w-3" />, placeholder: "회의록 붙여넣기/입력 후 저장", rows: 4 },
-] as const
+// 고정 컴포저 본문 textarea id — 헤더 '활동 기록'·추천 '메모 남기기' CTA의 포커스 대상.
+// 콜/문자/메모/회의록 입력은 전부 고정 컴포저(ActivityQuickForm)가 담당한다(구 인라인 폼 제거).
+const COMPOSER_BODY_ID = "c360-composer-body"
 
 function sumAmounts(values: Array<number | null | undefined>): number | null {
   let total = 0
@@ -144,14 +148,6 @@ function sumAmounts(values: Array<number | null | undefined>): number | null {
     seen = true
   }
   return seen ? total : null
-}
-
-function focusSection(id: string) {
-  if (typeof document === "undefined") return
-  const el = document.getElementById(id)
-  if (!el) return
-  el.scrollIntoView({ behavior: "smooth", block: "center" })
-  if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) el.focus()
 }
 
 // 제품 매출 타일 — SW/HW 결제 누적(¥ CNY)·칠판 대수(대). REV/HW 원장을 계정키로 조인한 값.
@@ -264,12 +260,11 @@ function SectionTitle({ icon, children }: { icon: React.ReactNode; children: Rea
   )
 }
 
-export default function Customer360Drawer({ customerKey, name, onClose }: Props) {
+export default function Customer360Drawer({ customerKey, name, onClose, onDirtyChange }: Props) {
   const [data, setData] = useState<Customer360 | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [actingId, setActingId] = useState<string | null>(null)
-  const [note, setNote] = useState("")
   const [taskTitle, setTaskTitle] = useState("")
   const [taskType, setTaskType] = useState<CrmTaskType>("call")
   const [taskDue, setTaskDue] = useState("")
@@ -283,13 +278,30 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")
   const [tagBusy, setTagBusy] = useState(false)
-  const [noteKind, setNoteKind] = useState<"manual_note" | "meeting_minutes" | "call" | "sms">("manual_note")
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [activeSection, setActiveSection] = useState<string>("c360-summary")
+  // 고정 컴포저 작성 중 여부 — 닫기 가드용(ActivityQuickForm onDirtyChange가 플립 시점에만 통지).
+  const [composerDirty, setComposerDirty] = useState(false)
+  // 'NEO 등록됨' 수동 연결 패널 — 홈페이지 유입(site) 리드 전용.
+  const [neoLinkOpen, setNeoLinkOpen] = useState(false)
+  const [neoLinkBusy, setNeoLinkBusy] = useState(false)
+  const [neoLinkError, setNeoLinkError] = useState<string | null>(null)
+  const [neoPickerLabel, setNeoPickerLabel] = useState("")
+  const [neoPickerId, setNeoPickerId] = useState("")
   const router = useRouter()
   const bodyRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+
+  // dirty 통지는 ref 경유 — 부모가 인라인 함수를 넘겨도 콜백 재생성/재구독 루프가 없게.
+  const onDirtyChangeRef = useRef(onDirtyChange)
+  useEffect(() => {
+    onDirtyChangeRef.current = onDirtyChange
+  })
+  const handleComposerDirtyChange = useCallback((dirty: boolean) => {
+    setComposerDirty(dirty)
+    onDirtyChangeRef.current?.(dirty)
+  }, [])
 
   const url = customerKey ? `/api/admin/crm/customers/${encodeURIComponent(customerKey)}/360` : null
 
@@ -308,6 +320,13 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     root.scrollTo({ top: Math.max(0, top), behavior: "smooth" })
   }, [])
 
+  // 닫기 게이트 — 컴포저에 작성 중인 기록이 있으면 확인 후 닫는다.
+  // 배경 클릭·ESC·스와이프·닫기 버튼 등 모든 닫기 경로가 이 게이트를 지난다.
+  const requestClose = useCallback(() => {
+    if (composerDirty && !window.confirm("작성 중인 기록이 있습니다. 닫을까요?")) return
+    onClose()
+  }, [composerDirty, onClose])
+
   // 모바일 스와이프-닫기 — 오른쪽으로 충분히 밀면 닫는다(수평 제스처만).
   const onTouchStart = useCallback((event: React.TouchEvent) => {
     const touch = event.touches[0]
@@ -322,9 +341,9 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
       if (!touch) return
       const dx = touch.clientX - start.x
       const dy = touch.clientY - start.y
-      if (dx > 80 && Math.abs(dx) > Math.abs(dy) * 1.5) onClose()
+      if (dx > 80 && Math.abs(dx) > Math.abs(dy) * 1.5) requestClose()
     },
-    [onClose]
+    [requestClose]
   )
 
   const load = useCallback(
@@ -357,7 +376,6 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     // 고객이 바뀌면 이전 고객의 데이터/폼 입력이 새 드로어에 잔존하지 않게 초기화한다.
     setData(null)
     setError(null)
-    setNote("")
     setTaskTitle("")
     setTaskType("call")
     setTaskDue("")
@@ -367,24 +385,31 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     setActivityTab("timeline")
     setActivitySource("all")
     setEventsExpanded(false)
-    setNoteKind("manual_note")
     setDealFormOpen(false)
     setTaskFormOpen(false)
+    // 고객 전환 시 컴포저는 새 대상으로 리마운트되므로 dirty 가드도 초기화(부모에도 통지).
+    handleComposerDirtyChange(false)
+    // NEO 연결 패널도 이전 고객의 입력·에러가 남지 않게 닫는다.
+    setNeoLinkOpen(false)
+    setNeoLinkBusy(false)
+    setNeoLinkError(null)
+    setNeoPickerLabel("")
+    setNeoPickerId("")
     // 고객 전환 시 이전 고객의 스크롤 위치·활성 섹션 탭이 남지 않게 최상단으로 리셋.
     setActiveSection("c360-summary")
     bodyRef.current?.scrollTo({ top: 0 })
     if (customerKey) void load()
-  }, [customerKey, load])
+  }, [customerKey, load, handleComposerDirtyChange])
 
   // ESC 닫기 — 드로어가 열려 있을 때만 바인딩(닫힌 상태에서 페이지 전역 ESC가 onClose를 부르지 않게).
   useEffect(() => {
     if (!customerKey) return
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose()
+      if (event.key === "Escape") requestClose()
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [customerKey, onClose])
+  }, [customerKey, requestClose])
 
   // 스크롤 스파이 — 본문 스크롤 위치로 현재 섹션 탭을 활성화한다(DOM 순서로 '마지막 통과' 판정).
   useEffect(() => {
@@ -449,25 +474,46 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     await load({ force: true, expanded: eventsExpanded })
   }, [load, url, eventsExpanded])
 
-  const handleAddNote = useCallback(async () => {
-    const body = note.trim()
-    if (!body || !customerKey) return
-    setActingId("note")
-    setError(null)
-    try {
-      await adminFetchJson("/api/admin/crm/events", {
-        method: "POST",
-        body: JSON.stringify({ targetType, targetId: entityId, targetLabel: displayName, sourceType: noteKind, body }),
-      })
-      setNote("")
-      setSavedMsg("기록을 저장했어요")
-      await refetch()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "메모 저장에 실패했습니다.")
-    } finally {
-      setActingId(null)
-    }
-  }, [note, noteKind, customerKey, targetType, entityId, displayName, refetch])
+  // NEO 등록 액션·발송허브 딥링크용 파생값 — 등록 액션은 홈페이지 유입(site) 리드에만 노출.
+  const contactPhone = data?.contacts?.phone ?? null
+  const isSiteLead = Boolean(data?.found) && targetType === "lead" && data?.origin === "site"
+  const crmRegistered = data?.crmRegistered ?? false
+
+  // 리드 → NEO 계정 수동 등록 확정. 성공 시 360 재조회로 pill('정식 리드')로 전환된다.
+  const submitNeoLink = useCallback(
+    async (pick: { targetId: string; targetLabel: string }) => {
+      if (targetType !== "lead" || !entityId) return
+      setNeoLinkBusy(true)
+      setNeoLinkError(null)
+      try {
+        await adminFetchJson("/api/admin/crm/leads/neo-link", {
+          method: "POST",
+          body: JSON.stringify({ leadId: entityId, neoAccountId: pick.targetId, name: pick.targetLabel }),
+        })
+        setSavedMsg("정식 리드로 전환되었습니다")
+        setNeoLinkOpen(false)
+        setNeoPickerLabel("")
+        setNeoPickerId("")
+        await refetch()
+      } catch (err) {
+        // 실패 시 피커 선택을 되돌린다 — '연결됨' 표시가 에러 문구와 모순되지 않게.
+        setNeoPickerLabel("")
+        setNeoPickerId("")
+        // 409(이미 다른 타깃으로 확정)는 API가 원인 메시지를 담아 돌려준다 — 그대로 노출.
+        setNeoLinkError(err instanceof Error ? err.message : "NEO 등록 연결에 실패했습니다.")
+      } finally {
+        setNeoLinkBusy(false)
+      }
+    },
+    [targetType, entityId, refetch]
+  )
+
+  // 컴포저로 포커스 — 구 인라인 메모 폼을 대체한 CTA(헤더 '활동 기록'·추천 '메모 남기기').
+  // 컴포저는 스크롤 본문 밖에 고정돼 있어, 본문 스크롤만 최상단으로 되돌리고 입력에 포커스를 준다.
+  const focusComposer = useCallback(() => {
+    bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+    document.getElementById(COMPOSER_BODY_ID)?.focus()
+  }, [])
 
   const handleAddTask = useCallback(async () => {
     const title = taskTitle.trim()
@@ -782,8 +828,6 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
     [customerKey]
   )
 
-  const noteMeta = NOTE_KIND_OPTIONS.find((option) => option.key === noteKind) ?? NOTE_KIND_OPTIONS[0]
-
   // 다가오는 일정 — 기한 있는 열린 할 일 중 오늘 이후만, 가까운 순. (전체 할 일은 아래 목록.)
   const upcomingTasks = useMemo(() => {
     const rows = data?.tasks?.rows ?? []
@@ -800,7 +844,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/20" onClick={onClose} aria-hidden />
+      <div className="absolute inset-0 bg-black/20" onClick={requestClose} aria-hidden />
       <div
         className="relative z-10 flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl"
         onTouchStart={onTouchStart}
@@ -809,7 +853,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
         {/* 모바일 스와이프-닫기 힌트 — 왼쪽 그랩바(전체 화면 덮는 패널의 탭-투-클로즈 대체) */}
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           aria-label="닫기"
           className="absolute left-1 top-1/2 z-20 h-10 w-1.5 -translate-y-1/2 rounded-full bg-[#1a1a1a]/12 sm:hidden"
         />
@@ -861,7 +905,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
               aria-label="닫기"
             >
@@ -879,6 +923,24 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                 <Phone className="h-3.5 w-3.5" />콜
               </a>
             ) : null}
+            {/* 발송허브 딥링크 — 수신자 프리필 파라미터. 연락처 없으면 비활성 표기만. */}
+            {contactPhone ? (
+              <Link
+                href={`/admin/campaigns?message_to=${encodeURIComponent(contactPhone)}&message_name=${encodeURIComponent(displayName)}`}
+                title="알림톡/문자 발송허브로 이동"
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />알림톡/문자
+              </Link>
+            ) : (
+              <span
+                aria-disabled="true"
+                title="연락처가 없어 발송할 수 없습니다"
+                className="pointer-events-none inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] opacity-40"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />알림톡/문자
+              </span>
+            )}
             <button
               type="button"
               onClick={() =>
@@ -893,12 +955,63 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </button>
             <button
               type="button"
-              onClick={() => focusSection("c360-note")}
+              onClick={focusComposer}
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
             >
               <ClipboardList className="h-3.5 w-3.5" />활동 기록
             </button>
+            {/* NEO 등록 상태 — 홈페이지 유입 리드만: 등록 확정이면 pill, 아니면 수동 연결 액션. */}
+            {isSiteLead ? (
+              crmRegistered ? (
+                <span
+                  className={`inline-flex h-8 items-center rounded-lg border px-2.5 text-[12px] font-bold ${LEAD_BADGE_TONE_CLASSES.green}`}
+                >
+                  정식 리드 · NEO 등록
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNeoLinkOpen((value) => !value)
+                    setNeoLinkError(null)
+                  }}
+                  aria-expanded={neoLinkOpen}
+                  className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#fafaf8]"
+                >
+                  NEO 등록 연결…
+                </button>
+              )
+            ) : null}
           </div>
+
+          {/* NEO 연결 패널 — NEO 계정만 검색해 선택 즉시 확정 링크를 만든다. */}
+          {isSiteLead && !crmRegistered && neoLinkOpen ? (
+            <div className="mt-2 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3">
+              <p className="mb-1.5 text-[12px] font-semibold text-[#111110]">NEO 고객 계정과 연결</p>
+              <CrmCustomerPicker
+                sources="neo_account"
+                label={neoPickerLabel}
+                linkedId={neoPickerId}
+                onPick={(pick) => {
+                  setNeoPickerLabel(pick.targetLabel)
+                  setNeoPickerId(pick.targetId)
+                  void submitNeoLink(pick)
+                }}
+                onFreeText={(text) => {
+                  setNeoPickerLabel(text)
+                  setNeoPickerId("")
+                }}
+                onClear={() => {
+                  setNeoPickerLabel("")
+                  setNeoPickerId("")
+                }}
+              />
+              {neoLinkBusy ? <p className="mt-1.5 text-[11px] text-[#1a1a1a]/45">연결 중...</p> : null}
+              {neoLinkError ? (
+                <p className="mt-1.5 text-[11px] font-medium text-[#B85C33]">{neoLinkError}</p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {/* 섹션 점프 탭 — sticky 헤더 아래 고정, 스크롤에 따라 활성 탭 표시 */}
@@ -906,10 +1019,10 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
           <div className="no-scrollbar flex shrink-0 gap-0.5 overflow-x-auto border-b border-[#e8e8e4] bg-white px-3">
             {[
               { id: "c360-summary", label: "요약" },
-              { id: "c360-deal", label: `딜${data.deals.summary.total ? ` ${data.deals.summary.total}` : ""}` },
-              { id: "c360-money", label: "머니" },
               { id: "c360-activity", label: `활동${data.activity.summary.total ? ` ${data.activity.summary.total}` : ""}` },
               { id: "c360-tasks", label: `할일${data.tasks.summary.total ? ` ${data.tasks.summary.total}` : ""}` },
+              { id: "c360-deal", label: `딜${data.deals.summary.total ? ` ${data.deals.summary.total}` : ""}` },
+              { id: "c360-money", label: "머니" },
             ].map((tab) => {
               const active = activeSection === tab.id
               return (
@@ -928,6 +1041,23 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                 </button>
               )
             })}
+          </div>
+        ) : null}
+
+        {/* 고정 컴포저 — 한 줄 기록을 스크롤 없이 바로 남긴다. 스크롤 본문(body) 밖 형제라
+            레이아웃으로 항상 고정된다(sticky 불필요). 대상은 이 고객으로 잠금(lockTarget). */}
+        {data?.found ? (
+          <div className="shrink-0 border-b border-[#f0f0ec] bg-white px-4 py-2.5">
+            <ActivityQuickForm
+              variant="composer"
+              lockTarget
+              defaultTargetType={targetType}
+              defaultTargetId={entityId}
+              defaultTargetLabel={displayName}
+              bodyFieldId={COMPOSER_BODY_ID}
+              onSaved={() => void refetch()}
+              onDirtyChange={handleComposerDirtyChange}
+            />
           </div>
         ) : null}
 
@@ -1037,7 +1167,7 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                 </button>
                 <button
                   type="button"
-                  onClick={() => focusSection("c360-note")}
+                  onClick={focusComposer}
                   className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-white px-3 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD]"
                 >
                   <StickyNote className="h-3.5 w-3.5" />
@@ -1177,6 +1307,348 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </section>
           ) : null}
 
+          {/* activity timeline + 특이사항 피드 + quick note/회의록 */}
+          {data ? (
+            <section id="c360-activity" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+              <div className="mb-3 inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
+                {(
+                  [
+                    { key: "timeline", label: `타임라인${data.activity.summary.total > 0 ? ` ${data.activity.summary.total}` : ""}` },
+                    { key: "feed", label: `특이사항 피드${feedRows.length > 0 ? ` ${feedRows.length}` : ""}` },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setActivityTab(tab.key)}
+                    className={`h-7 rounded-md px-3 text-[12px] font-semibold transition-colors ${
+                      activityTab === tab.key ? "bg-[#111110] text-white" : "text-[#1a1a1a]/55 hover:text-[#111110]"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* 출처 필터 — 타임라인에서 메모/회의록만 빠르게 추림. 피드(위험 전용)에는 비표시. */}
+              {activityTab === "timeline" ? (
+                <div className="mb-3 inline-flex flex-wrap gap-1">
+                  {(
+                    [
+                      { key: "all", label: "전체" },
+                      { key: "manual_note", label: "메모" },
+                      { key: "meeting_minutes", label: "회의록" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setActivitySource(opt.key)}
+                      className={`inline-flex h-7 items-center rounded-full border px-2.5 text-[11px] font-semibold transition-colors ${
+                        activitySource === opt.key
+                          ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                          : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#111110] hover:text-[#111110]"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              {visibleActivity.length === 0 ? (
+                <p className="text-[12px] text-[#1a1a1a]/40">
+                  {activityTab === "feed"
+                    ? "특이사항(위험) 기록이 없습니다."
+                    : activitySource === "manual_note"
+                      ? "메모가 없습니다."
+                      : activitySource === "meeting_minutes"
+                        ? "회의록이 없습니다."
+                        : "기록된 활동이 없습니다."}
+                </p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {visibleActivity.map((event) => {
+                    // 메모·회의록은 본문이 핵심 — 클램프 없이 펼쳐 보여주고, 그 외는 요약 2줄로 압축.
+                    const isMemo = event.sourceType === "manual_note" || event.sourceType === "meeting_minutes"
+                    const memoText = event.body ?? event.summary
+                    const author = event.ownerName ?? event.createdBy
+                    return (
+                      <li key={event.id} className="flex gap-2.5">
+                        <span
+                          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${
+                            event.sentiment === "risk" ? "bg-[#FEF3EE] text-[#B85C33]" : "bg-[#fafaf8] text-[#1a1a1a]/45"
+                          }`}
+                        >
+                          {EVENT_SOURCE_ICON[event.sourceType] ?? <ClipboardList className="h-3.5 w-3.5" />}
+                        </span>
+                        <div className="min-w-0 flex-1 border-b border-[#f5f5f2] pb-2.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[11px] font-semibold text-[#1a1a1a]/45">
+                              {EVENT_SOURCE_LABEL[event.sourceType] ?? event.sourceType}
+                            </span>
+                            <span className="text-[11px] text-[#1a1a1a]/35">{formatDate(event.occurredAt)}</span>
+                            {author ? <span className="text-[11px] text-[#1a1a1a]/35">· {author}</span> : null}
+                            {event.sentiment === "risk" ? (
+                              <span className="rounded bg-[#FEF3EE] px-1.5 py-0.5 text-[10px] font-semibold text-[#B85C33]">위험</span>
+                            ) : null}
+                          </div>
+                          <p className="mt-0.5 text-[12px] font-semibold text-[#111110]">{event.title}</p>
+                          {isMemo ? (
+                            memoText ? (
+                              <p className="mt-0.5 whitespace-pre-wrap text-[12px] text-[#1a1a1a]/55">{memoText}</p>
+                            ) : null
+                          ) : event.summary || event.body ? (
+                            <p className="mt-0.5 line-clamp-2 text-[12px] text-[#1a1a1a]/55">{event.summary ?? event.body}</p>
+                          ) : null}
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+              {activityTab === "timeline" &&
+              !eventsExpanded &&
+              data.activity.summary.total > data.activity.rows.length ? (
+                <button
+                  type="button"
+                  onClick={() => void loadMoreEvents()}
+                  className="mt-2.5 inline-flex w-full items-center justify-center rounded-lg border border-[#e8e8e4] bg-white py-2 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                >
+                  전체 활동 보기 (최대 50)
+                </button>
+              ) : null}
+              {/* 활동 페이지 딥링크 — 이 고객으로 필터된 전체 활동(드로어 밖 상세 동선) */}
+              <Link
+                href={`/admin/crm/activity?targetType=${encodeURIComponent(targetType)}&targetId=${encodeURIComponent(entityId)}`}
+                className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734] transition-colors hover:underline"
+              >
+                이 고객 활동 전체보기
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </section>
+          ) : null}
+
+          {/* open tasks + quick add */}
+          {data ? (
+            <section id="c360-tasks" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+              <SectionTitle icon={<ListChecks className="h-3.5 w-3.5" />}>
+                열린 할 일 {data.tasks.summary.total > 0 ? `(${data.tasks.summary.total})` : ""}
+              </SectionTitle>
+              <div className="mb-3 space-y-1.5">
+                {data.tasks.rows.length === 0 ? (
+                  <p className="text-[12px] text-[#1a1a1a]/40">열린 할 일이 없습니다.</p>
+                ) : (
+                  data.tasks.rows.map((task) => (
+                    <div key={task.id} className="flex items-center justify-between gap-2 rounded-xl bg-[#fafaf8] px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-[12px] font-semibold text-[#111110]">{task.title}</p>
+                        <p className="text-[11px] text-[#1a1a1a]/40">
+                          <CalendarClock className="mr-1 inline h-3 w-3" />
+                          {task.dueAt ? formatDay(task.dueAt) : "기한 없음"}
+                          {task.ownerNameSnapshot ? ` · ${task.ownerNameSnapshot}` : ""}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleCompleteTask(task.id)}
+                        disabled={actingId === `task:${task.id}`}
+                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        완료
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="border-t border-[#f0f0ec] pt-3">
+                {taskFormOpen ? (
+                  <div className="flex flex-col gap-2">
+                    <input
+                      value={taskTitle}
+                      onChange={(event) => setTaskTitle(event.target.value)}
+                      placeholder="새 할 일 제목"
+                      autoFocus
+                      className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <select
+                        value={taskType}
+                        onChange={(event) => setTaskType(event.target.value as CrmTaskType)}
+                        className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
+                      >
+                        {TASK_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="date"
+                        value={taskDue}
+                        onChange={(event) => setTaskDue(event.target.value)}
+                        className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleAddTask()}
+                        disabled={!taskTitle.trim() || actingId === "task"}
+                        className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        내 할 일로 추가
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTaskFormOpen(false)}
+                        className="inline-flex h-9 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setTaskFormOpen(true)}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-dashed border-[#dcdcd6] px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#111110] hover:text-[#111110]"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    할 일 추가
+                  </button>
+                )}
+              </div>
+              <div className="mt-3 border-t border-[#f0f0ec] pt-3">
+                <p className="mb-1.5 text-[11px] font-semibold text-[#1a1a1a]/45">고객 성공(CS) 동선 · 원클릭</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {CS_MOTIONS.map((motion) => (
+                    <button
+                      key={motion.key}
+                      type="button"
+                      onClick={() => void handleCsMotion(motion)}
+                      disabled={actingId === `cs:${motion.key}`}
+                      className="inline-flex h-7 items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2.5 text-[11px] font-semibold text-[#1a1a1a]/65 transition-colors hover:border-[#084734] hover:text-[#084734] disabled:opacity-50"
+                    >
+                      <Plus className="h-3 w-3" />
+                      {motion.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {/* deals (Deal Lite) */}
+          {data ? (
+            <section id="c360-deal" className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+              <SectionTitle icon={<Briefcase className="h-3.5 w-3.5" />}>
+                딜 {data.deals.summary.total > 0 ? `(${data.deals.summary.total})` : ""}
+              </SectionTitle>
+              <div className="mb-3 space-y-1.5">
+                {data.deals.rows.length === 0 ? (
+                  <p className="text-[12px] text-[#1a1a1a]/40">진행 중인 딜이 없습니다.</p>
+                ) : (
+                  data.deals.rows.map((deal) => (
+                    <div key={deal.id} className="rounded-xl bg-[#fafaf8] px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="min-w-0 truncate text-[12px] font-semibold text-[#111110]">{deal.title}</p>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            deal.status === "won"
+                              ? "bg-[#ECFDF5] text-[#084734]"
+                              : deal.status === "lost"
+                                ? "bg-[#FEF3EE] text-[#B85C33]"
+                                : "bg-white text-[#1a1a1a]/55"
+                          }`}
+                        >
+                          {DEAL_STAGE_LABEL[deal.stage]}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-[#1a1a1a]/45">
+                          {deal.expectedAmount != null ? `${formatAmount(deal.expectedAmount)} · ` : ""}
+                          {deal.expectedCloseAt ? `예상 ${formatDay(deal.expectedCloseAt)}` : "종료일 미정"}
+                        </p>
+                        {deal.status === "open" ? (
+                          <select
+                            value={deal.stage}
+                            onChange={(event) => void handleDealStage(deal.id, event.target.value as CrmDealStage)}
+                            disabled={actingId === `deal:${deal.id}`}
+                            className="h-7 rounded-lg border border-[#e8e8e4] bg-white px-1.5 text-[11px] font-semibold text-[#111110] outline-none disabled:opacity-50"
+                            aria-label="딜 단계"
+                          >
+                            {DEAL_STAGE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="border-t border-[#f0f0ec] pt-3">
+                {dealFormOpen ? (
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      value={dealTitle}
+                      onChange={(event) => setDealTitle(event.target.value)}
+                      placeholder="새 딜 제목"
+                      autoFocus
+                      className="h-9 min-w-[140px] flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                    />
+                    <input
+                      value={dealAmount}
+                      onChange={(event) => setDealAmount(event.target.value)}
+                      inputMode="numeric"
+                      placeholder="예상금액"
+                      className="h-9 w-24 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                    />
+                    <select
+                      value={dealStage}
+                      onChange={(event) => setDealStage(event.target.value as CrmDealStage)}
+                      className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
+                    >
+                      {DEAL_STAGE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => void handleAddDeal()}
+                      disabled={!dealTitle.trim() || actingId === "deal"}
+                      className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      딜 추가
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDealFormOpen(false)}
+                      className="inline-flex h-9 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
+                    >
+                      취소
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setDealFormOpen(true)}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-dashed border-[#dcdcd6] px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#111110] hover:text-[#111110]"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    딜 추가
+                  </button>
+                )}
+              </div>
+            </section>
+          ) : null}
+
           {/* 머니 — 제품 매출(REV/HW 원장 계정키 조인) + NEO 수금·성과 상세 */}
           {data ? (
             <section id="c360-money" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
@@ -1312,383 +1784,6 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                 LTV는 수납·오더 기준 추정값 · 수금/성과/잔액은 위안화(¥), 오더는 달러($) · 공식 원천 NEO
               </p>
             </CollapsibleSection>
-          ) : null}
-
-          {/* deals (Deal Lite) */}
-          {data ? (
-            <section id="c360-deal" className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-              <SectionTitle icon={<Briefcase className="h-3.5 w-3.5" />}>
-                딜 {data.deals.summary.total > 0 ? `(${data.deals.summary.total})` : ""}
-              </SectionTitle>
-              <div className="mb-3 space-y-1.5">
-                {data.deals.rows.length === 0 ? (
-                  <p className="text-[12px] text-[#1a1a1a]/40">진행 중인 딜이 없습니다.</p>
-                ) : (
-                  data.deals.rows.map((deal) => (
-                    <div key={deal.id} className="rounded-xl bg-[#fafaf8] px-3 py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="min-w-0 truncate text-[12px] font-semibold text-[#111110]">{deal.title}</p>
-                        <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                            deal.status === "won"
-                              ? "bg-[#ECFDF5] text-[#084734]"
-                              : deal.status === "lost"
-                                ? "bg-[#FEF3EE] text-[#B85C33]"
-                                : "bg-white text-[#1a1a1a]/55"
-                          }`}
-                        >
-                          {DEAL_STAGE_LABEL[deal.stage]}
-                        </span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between gap-2">
-                        <p className="text-[11px] text-[#1a1a1a]/45">
-                          {deal.expectedAmount != null ? `${formatAmount(deal.expectedAmount)} · ` : ""}
-                          {deal.expectedCloseAt ? `예상 ${formatDay(deal.expectedCloseAt)}` : "종료일 미정"}
-                        </p>
-                        {deal.status === "open" ? (
-                          <select
-                            value={deal.stage}
-                            onChange={(event) => void handleDealStage(deal.id, event.target.value as CrmDealStage)}
-                            disabled={actingId === `deal:${deal.id}`}
-                            className="h-7 rounded-lg border border-[#e8e8e4] bg-white px-1.5 text-[11px] font-semibold text-[#111110] outline-none disabled:opacity-50"
-                            aria-label="딜 단계"
-                          >
-                            {DEAL_STAGE_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="border-t border-[#f0f0ec] pt-3">
-                {dealFormOpen ? (
-                  <div className="flex flex-wrap gap-2">
-                    <input
-                      value={dealTitle}
-                      onChange={(event) => setDealTitle(event.target.value)}
-                      placeholder="새 딜 제목"
-                      autoFocus
-                      className="h-9 min-w-[140px] flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
-                    />
-                    <input
-                      value={dealAmount}
-                      onChange={(event) => setDealAmount(event.target.value)}
-                      inputMode="numeric"
-                      placeholder="예상금액"
-                      className="h-9 w-24 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
-                    />
-                    <select
-                      value={dealStage}
-                      onChange={(event) => setDealStage(event.target.value as CrmDealStage)}
-                      className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                    >
-                      {DEAL_STAGE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => void handleAddDeal()}
-                      disabled={!dealTitle.trim() || actingId === "deal"}
-                      className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      딜 추가
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDealFormOpen(false)}
-                      className="inline-flex h-9 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
-                    >
-                      취소
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setDealFormOpen(true)}
-                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-dashed border-[#dcdcd6] px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#111110] hover:text-[#111110]"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    딜 추가
-                  </button>
-                )}
-              </div>
-            </section>
-          ) : null}
-
-          {/* open tasks + quick add */}
-          {data ? (
-            <section id="c360-tasks" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-              <SectionTitle icon={<ListChecks className="h-3.5 w-3.5" />}>
-                열린 할 일 {data.tasks.summary.total > 0 ? `(${data.tasks.summary.total})` : ""}
-              </SectionTitle>
-              <div className="mb-3 space-y-1.5">
-                {data.tasks.rows.length === 0 ? (
-                  <p className="text-[12px] text-[#1a1a1a]/40">열린 할 일이 없습니다.</p>
-                ) : (
-                  data.tasks.rows.map((task) => (
-                    <div key={task.id} className="flex items-center justify-between gap-2 rounded-xl bg-[#fafaf8] px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-[12px] font-semibold text-[#111110]">{task.title}</p>
-                        <p className="text-[11px] text-[#1a1a1a]/40">
-                          <CalendarClock className="mr-1 inline h-3 w-3" />
-                          {task.dueAt ? formatDay(task.dueAt) : "기한 없음"}
-                          {task.ownerNameSnapshot ? ` · ${task.ownerNameSnapshot}` : ""}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void handleCompleteTask(task.id)}
-                        disabled={actingId === `task:${task.id}`}
-                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
-                      >
-                        <CheckCircle2 className="h-3 w-3" />
-                        완료
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="border-t border-[#f0f0ec] pt-3">
-                {taskFormOpen ? (
-                  <div className="flex flex-col gap-2">
-                    <input
-                      value={taskTitle}
-                      onChange={(event) => setTaskTitle(event.target.value)}
-                      placeholder="새 할 일 제목"
-                      autoFocus
-                      className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      <select
-                        value={taskType}
-                        onChange={(event) => setTaskType(event.target.value as CrmTaskType)}
-                        className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                      >
-                        {TASK_TYPE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="date"
-                        value={taskDue}
-                        onChange={(event) => setTaskDue(event.target.value)}
-                        className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void handleAddTask()}
-                        disabled={!taskTitle.trim() || actingId === "task"}
-                        className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        내 할 일로 추가
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTaskFormOpen(false)}
-                        className="inline-flex h-9 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
-                      >
-                        취소
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setTaskFormOpen(true)}
-                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-dashed border-[#dcdcd6] px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#111110] hover:text-[#111110]"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    할 일 추가
-                  </button>
-                )}
-              </div>
-              <div className="mt-3 border-t border-[#f0f0ec] pt-3">
-                <p className="mb-1.5 text-[11px] font-semibold text-[#1a1a1a]/45">고객 성공(CS) 동선 · 원클릭</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {CS_MOTIONS.map((motion) => (
-                    <button
-                      key={motion.key}
-                      type="button"
-                      onClick={() => void handleCsMotion(motion)}
-                      disabled={actingId === `cs:${motion.key}`}
-                      className="inline-flex h-7 items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2.5 text-[11px] font-semibold text-[#1a1a1a]/65 transition-colors hover:border-[#084734] hover:text-[#084734] disabled:opacity-50"
-                    >
-                      <Plus className="h-3 w-3" />
-                      {motion.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
-          ) : null}
-
-          {/* activity timeline + 특이사항 피드 + quick note/회의록 */}
-          {data ? (
-            <section id="c360-activity" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-              <div className="mb-3 inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
-                {(
-                  [
-                    { key: "timeline", label: `타임라인${data.activity.summary.total > 0 ? ` ${data.activity.summary.total}` : ""}` },
-                    { key: "feed", label: `특이사항 피드${feedRows.length > 0 ? ` ${feedRows.length}` : ""}` },
-                  ] as const
-                ).map((tab) => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => setActivityTab(tab.key)}
-                    className={`h-7 rounded-md px-3 text-[12px] font-semibold transition-colors ${
-                      activityTab === tab.key ? "bg-[#111110] text-white" : "text-[#1a1a1a]/55 hover:text-[#111110]"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* 출처 필터 — 타임라인에서 메모/회의록만 빠르게 추림. 피드(위험 전용)에는 비표시. */}
-              {activityTab === "timeline" ? (
-                <div className="mb-3 inline-flex flex-wrap gap-1">
-                  {(
-                    [
-                      { key: "all", label: "전체" },
-                      { key: "manual_note", label: "메모" },
-                      { key: "meeting_minutes", label: "회의록" },
-                    ] as const
-                  ).map((opt) => (
-                    <button
-                      key={opt.key}
-                      type="button"
-                      onClick={() => setActivitySource(opt.key)}
-                      className={`inline-flex h-7 items-center rounded-full border px-2.5 text-[11px] font-semibold transition-colors ${
-                        activitySource === opt.key
-                          ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                          : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#111110] hover:text-[#111110]"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-
-              <div className="mb-3 flex flex-col gap-2 border-b border-[#f0f0ec] pb-3">
-                <div className="inline-flex w-fit rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
-                  {NOTE_KIND_OPTIONS.map((kind) => (
-                    <button
-                      key={kind.key}
-                      type="button"
-                      onClick={() => setNoteKind(kind.key)}
-                      className={`inline-flex h-7 items-center gap-1 rounded-md px-2.5 text-[11px] font-semibold transition-colors ${
-                        noteKind === kind.key ? "bg-white text-[#111110] shadow-sm" : "text-[#1a1a1a]/50 hover:text-[#111110]"
-                      }`}
-                    >
-                      {kind.icon}
-                      {kind.label}
-                    </button>
-                  ))}
-                </div>
-                <textarea
-                  id="c360-note"
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder={noteMeta.placeholder}
-                  rows={noteMeta.rows}
-                  className="rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleAddNote()}
-                  disabled={!note.trim() || actingId === "note"}
-                  className="inline-flex h-9 items-center justify-center gap-1 self-end rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-40"
-                >
-                  {noteMeta.icon}
-                  {noteMeta.label} 저장
-                </button>
-              </div>
-
-              {visibleActivity.length === 0 ? (
-                <p className="text-[12px] text-[#1a1a1a]/40">
-                  {activityTab === "feed"
-                    ? "특이사항(위험) 기록이 없습니다."
-                    : activitySource === "manual_note"
-                      ? "메모가 없습니다."
-                      : activitySource === "meeting_minutes"
-                        ? "회의록이 없습니다."
-                        : "기록된 활동이 없습니다."}
-                </p>
-              ) : (
-                <ul className="space-y-2.5">
-                  {visibleActivity.map((event) => {
-                    // 메모·회의록은 본문이 핵심 — 클램프 없이 펼쳐 보여주고, 그 외는 요약 2줄로 압축.
-                    const isMemo = event.sourceType === "manual_note" || event.sourceType === "meeting_minutes"
-                    const memoText = event.body ?? event.summary
-                    const author = event.ownerName ?? event.createdBy
-                    return (
-                      <li key={event.id} className="flex gap-2.5">
-                        <span
-                          className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${
-                            event.sentiment === "risk" ? "bg-[#FEF3EE] text-[#B85C33]" : "bg-[#fafaf8] text-[#1a1a1a]/45"
-                          }`}
-                        >
-                          {EVENT_SOURCE_ICON[event.sourceType] ?? <ClipboardList className="h-3.5 w-3.5" />}
-                        </span>
-                        <div className="min-w-0 flex-1 border-b border-[#f5f5f2] pb-2.5">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-[11px] font-semibold text-[#1a1a1a]/45">
-                              {EVENT_SOURCE_LABEL[event.sourceType] ?? event.sourceType}
-                            </span>
-                            <span className="text-[11px] text-[#1a1a1a]/35">{formatDate(event.occurredAt)}</span>
-                            {author ? <span className="text-[11px] text-[#1a1a1a]/35">· {author}</span> : null}
-                            {event.sentiment === "risk" ? (
-                              <span className="rounded bg-[#FEF3EE] px-1.5 py-0.5 text-[10px] font-semibold text-[#B85C33]">위험</span>
-                            ) : null}
-                          </div>
-                          <p className="mt-0.5 text-[12px] font-semibold text-[#111110]">{event.title}</p>
-                          {isMemo ? (
-                            memoText ? (
-                              <p className="mt-0.5 whitespace-pre-wrap text-[12px] text-[#1a1a1a]/55">{memoText}</p>
-                            ) : null
-                          ) : event.summary || event.body ? (
-                            <p className="mt-0.5 line-clamp-2 text-[12px] text-[#1a1a1a]/55">{event.summary ?? event.body}</p>
-                          ) : null}
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-              {activityTab === "timeline" &&
-              !eventsExpanded &&
-              data.activity.summary.total > data.activity.rows.length ? (
-                <button
-                  type="button"
-                  onClick={() => void loadMoreEvents()}
-                  className="mt-2.5 inline-flex w-full items-center justify-center rounded-lg border border-[#e8e8e4] bg-white py-2 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
-                >
-                  전체 활동 보기 (최대 50)
-                </button>
-              ) : null}
-              {/* 활동 페이지 딥링크 — 이 고객으로 필터된 전체 활동(드로어 밖 상세 동선) */}
-              <Link
-                href={`/admin/crm/activity?targetType=${encodeURIComponent(targetType)}&targetId=${encodeURIComponent(entityId)}`}
-                className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734] transition-colors hover:underline"
-              >
-                이 고객 활동 전체보기
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </Link>
-            </section>
           ) : null}
 
           {/* escape hatch — 신규 360 상세 페이지가 주 동선, 원본 화면은 보조 */}

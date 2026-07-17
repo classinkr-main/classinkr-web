@@ -2,7 +2,7 @@
 // CrmActivityClient(기록 표면)와 rail/ActivityQuickForm(빠른 생성)이 같은
 // 타입·필드 구성·직렬화 규칙을 공유한다 — 폼 필드를 바꾸면 여기 한 곳만 고친다.
 
-import { FileText, Mic, NotebookPen } from "lucide-react"
+import { FileText, MessageSquare, Mic, NotebookPen, PhoneCall } from "lucide-react"
 
 export type TargetType = "all" | "lead" | "neo_account" | "customer" | "deal" | "unknown"
 export type ActivityTargetType = Exclude<TargetType, "all">
@@ -17,8 +17,9 @@ export type SourceType =
   | "sheet"
   | "call"
   | "sms"
+  | "site_inflow"
 export type Sentiment = "all" | "positive" | "neutral" | "risk"
-export type FormMode = "manual_note" | "meeting_minutes" | "recording"
+export type FormMode = "manual_note" | "call" | "sms" | "meeting_minutes" | "recording"
 export type OptionalFieldKey =
   | "body"
   | "attendees"
@@ -101,7 +102,9 @@ export const MODE_OPTIONS: Array<{
   description: string
   icon: typeof NotebookPen
 }> = [
-  { key: "manual_note", label: "간단 메모", description: "통화·카톡·내부 코멘트", icon: NotebookPen },
+  { key: "manual_note", label: "간단 메모", description: "내부 코멘트·기타 기록", icon: NotebookPen },
+  { key: "call", label: "콜", description: "통화 내용·결과", icon: PhoneCall },
+  { key: "sms", label: "문자", description: "문자·카톡 발신/회신", icon: MessageSquare },
   { key: "meeting_minutes", label: "회의록", description: "요약·합의·리스크", icon: FileText },
   { key: "recording", label: "녹음", description: "음성 파일 + 요약", icon: Mic },
 ]
@@ -109,6 +112,16 @@ export const MODE_OPTIONS: Array<{
 // 모드별 노출 필드: primary = 항상 노출, advanced = "상세 입력" 토글 안, 그 외 = 값이 있을 때만 노출
 export const MODE_FIELDS: Record<FormMode, { primary: OptionalFieldKey[]; advanced: OptionalFieldKey[] }> = {
   manual_note: {
+    primary: ["body"],
+    advanced: ["nextAction", "sentiment", "tags"],
+  },
+  // 콜/문자 — 간단 메모와 같은 컴팩트 계약(본문만 필수 노출). 서버(CRM_EVENT_SOURCE_TYPES)·
+  // DB CHECK는 이미 call/sms를 허용한다 — 폼 SSOT만 여기서 따라붙는다.
+  call: {
+    primary: ["body"],
+    advanced: ["nextAction", "sentiment", "tags"],
+  },
+  sms: {
     primary: ["body"],
     advanced: ["nextAction", "sentiment", "tags"],
   },
@@ -151,6 +164,7 @@ export const SOURCE_FILTERS: Array<{ key: SourceType; label: string }> = [
   { key: "calendar_event", label: "캘린더" },
   { key: "external_crm", label: "외부 CRM" },
   { key: "sheet", label: "시트" },
+  { key: "site_inflow", label: "홈페이지 유입" },
 ]
 
 export const SENTIMENT_FILTERS: Array<{ key: Sentiment; label: string }> = [
@@ -210,6 +224,7 @@ export function sourceLabel(source: CrmEventRecord["sourceType"]) {
   if (source === "lead_contact_log") return "연락 로그"
   if (source === "external_crm") return "외부 CRM"
   if (source === "sheet") return "시트"
+  if (source === "site_inflow") return "홈페이지 유입"
   return "메모"
 }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowRight, CornerDownLeft, Search } from "lucide-react"
 import {
@@ -9,6 +9,10 @@ import {
   ADMIN_NAV_SECTION_META,
   CRM_CHILD_NAV,
 } from "./admin-nav"
+import { useDialogFocus } from "./use-dialog-focus"
+
+const PALETTE_LISTBOX_ID = "admin-command-palette-listbox"
+const paletteOptionId = (index: number) => `admin-command-palette-option-${index}`
 
 interface Command {
   label: string
@@ -81,19 +85,18 @@ export default function AdminCommandPalette({ open, onClose }: AdminCommandPalet
     )
   }, [query])
 
-  // 열릴 때 입력 포커스(DOM 사이드 이펙트만 — 상태 초기화는 닫을 때 수행).
-  useEffect(() => {
-    if (!open) return
-    const id = window.setTimeout(() => inputRef.current?.focus(), 0)
-    return () => window.clearTimeout(id)
-  }, [open])
-
   // 닫을 때 검색어·선택을 초기화해 다음 열기는 항상 깨끗한 상태로 시작한다.
   const close = useCallback(() => {
     setQuery("")
     setSelected(0)
     onClose()
   }, [onClose])
+
+  // 포커스 이동(열릴 때 검색창)·Escape 닫기·이전 포커스 복귀는 공용 훅으로 통일
+  // (품질 웨이브 3 — 항목 6, DealModal과 동일한 use-dialog-focus). 기존 setTimeout(0)
+  // 트릭은 DealModal도 쓰지 않는 패턴이라 제거 — 커밋 후 이펙트는 마운트/커밋 다음에
+  // 실행되므로 동기 focus()로 충분하다.
+  useDialogFocus(open, close, inputRef)
 
   const go = useCallback(
     (href: string) => {
@@ -114,10 +117,8 @@ export default function AdminCommandPalette({ open, onClose }: AdminCommandPalet
       event.preventDefault()
       const target = filtered[selected]
       if (target) go(target.href)
-    } else if (event.key === "Escape") {
-      event.preventDefault()
-      close()
     }
+    // Escape는 useDialogFocus의 전역 document keydown 리스너가 처리한다(위 참조).
   }
 
   if (!open) return null
@@ -131,6 +132,9 @@ export default function AdminCommandPalette({ open, onClose }: AdminCommandPalet
       role="presentation"
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="빠른 이동 · 검색"
         className="w-full max-w-xl overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
       >
@@ -138,6 +142,11 @@ export default function AdminCommandPalette({ open, onClose }: AdminCommandPalet
           <Search className="h-4 w-4 shrink-0 text-[#1a1a1a]/35" />
           <input
             ref={inputRef}
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={PALETTE_LISTBOX_ID}
+            aria-autocomplete="list"
+            aria-activedescendant={filtered.length > 0 ? paletteOptionId(safeSelected) : undefined}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value)
@@ -152,7 +161,7 @@ export default function AdminCommandPalette({ open, onClose }: AdminCommandPalet
           </kbd>
         </div>
 
-        <div className="max-h-[52vh] overflow-y-auto py-2">
+        <div id={PALETTE_LISTBOX_ID} role="listbox" aria-label="검색 결과" className="max-h-[52vh] overflow-y-auto py-2">
           {filtered.length === 0 ? (
             <p className="px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">일치하는 항목이 없습니다.</p>
           ) : (
@@ -161,6 +170,9 @@ export default function AdminCommandPalette({ open, onClose }: AdminCommandPalet
               return (
                 <button
                   key={cmd.href + cmd.label}
+                  id={paletteOptionId(index)}
+                  role="option"
+                  aria-selected={active}
                   type="button"
                   onMouseEnter={() => setSelected(index)}
                   onClick={() => go(cmd.href)}

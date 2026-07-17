@@ -116,9 +116,20 @@ describe("rail-utils · activityDeepLink", () => {
 })
 
 describe("activity-contract", () => {
-  it("keeps the mode-field SSOT contract for the three creation modes", () => {
-    expect(MODE_OPTIONS.map((option) => option.key)).toEqual(["manual_note", "meeting_minutes", "recording"])
+  it("keeps the mode-field SSOT contract for the five creation modes", () => {
+    expect(MODE_OPTIONS.map((option) => option.key)).toEqual([
+      "manual_note",
+      "call",
+      "sms",
+      "meeting_minutes",
+      "recording",
+    ])
     expect(MODE_FIELDS.manual_note.primary).toEqual(["body"])
+    // 콜/문자 — 간단 메모와 같은 컴팩트 계약(본문만 필수, 나머지는 상세 토글).
+    expect(MODE_FIELDS.call.primary).toEqual(["body"])
+    expect(MODE_FIELDS.sms.primary).toEqual(["body"])
+    expect(MODE_FIELDS.call.advanced).toEqual(MODE_FIELDS.manual_note.advanced)
+    expect(MODE_FIELDS.sms.advanced).toEqual(MODE_FIELDS.manual_note.advanced)
     expect(MODE_FIELDS.recording.primary).toEqual(["recording"])
     expect(MODE_FIELDS.meeting_minutes.advanced).toEqual([])
     // 회의록 모드는 다음 액션·단계 신호를 항상 노출한다(액션 누락 방지).
@@ -156,12 +167,21 @@ describe("CrmActionRail (static render)", () => {
     // CrmCustomerPicker가 연결됨 배지를 보여준다(linkedId 프리셀렉트)
     expect(html).toContain("연결됨")
   })
+
+  it("drops the quick-form card with hideForm while keeping tasks and recent sections", () => {
+    const html = renderToStaticMarkup(<CrmActionRail hideForm />)
+    expect(html).not.toContain("기록 빠른 생성")
+    expect(html).toContain("오늘 할 일")
+    expect(html).toContain("최근 기록")
+  })
 })
 
 describe("ActivityQuickForm (static render)", () => {
   it("keeps the API-contract fields visible in compact mode", () => {
     const html = renderToStaticMarkup(<ActivityQuickForm compact />)
     expect(html).toContain("간단 메모")
+    expect(html).toContain("콜")
+    expect(html).toContain("문자")
     expect(html).toContain("회의록")
     expect(html).toContain("녹음")
     expect(html).toContain("기록 시각")
@@ -176,5 +196,25 @@ describe("ActivityQuickForm (static render)", () => {
     )
     expect(html).toContain("프리셋 학원")
     expect(html).toContain("연결됨")
+  })
+
+  it("renders the one-line composer variant with body-first placeholder and detail toggle", () => {
+    const html = renderToStaticMarkup(<ActivityQuickForm variant="composer" />)
+    expect(html).toContain("무슨 일이 있었나요? (본문만 적어도 저장됩니다)")
+    expect(html).toContain("+ 상세 (제목·다음 액션 등)")
+    expect(html).toContain("저장")
+    // 한 줄 컴포저는 full/compact 필드 스택을 접어둔다
+    expect(html).not.toContain("기록 시각")
+  })
+
+  it("hides the target picker in composer when lockTarget is set", () => {
+    const withPicker = renderToStaticMarkup(<ActivityQuickForm variant="composer" />)
+    const locked = renderToStaticMarkup(
+      <ActivityQuickForm variant="composer" lockTarget defaultTargetType="lead" defaultTargetId="lead-9" defaultTargetLabel="프리셋 학원" />
+    )
+    expect(withPicker).toContain("고객/리드 검색 또는 직접 입력")
+    expect(locked).not.toContain("고객/리드 검색 또는 직접 입력")
+    // 고정 대상 라벨은 placeholder로 노출된다
+    expect(locked).toContain("프리셋 학원 기록 남기기")
   })
 })

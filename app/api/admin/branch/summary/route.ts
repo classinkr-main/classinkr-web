@@ -14,7 +14,7 @@ import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
 import { listMembersByTeam } from "@/lib/branch/computations/pacing"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
 import { getRecentSyncRuns } from "@/lib/repositories/branch-sync"
-import { listPublicEvents } from "@/lib/repositories/public-events"
+import { listCachedPublicEvents } from "@/lib/repositories/public-events"
 
 function pickValue(row: DshBreakdownRow, scope: "M" | "Q" | "Y", now: Date): number {
   if (scope === "Y") return row.annual
@@ -180,6 +180,15 @@ function readPeriodParam(url: URL): BranchPeriod | NextResponse {
   return NextResponse.json({ error: "Invalid period query" }, { status: 400 })
 }
 
+// dsh_breakdown opt-in — R4 실측상 summary 페이로드(53,305B)의 사실상 전부가 이 필드다.
+// 소비처는 장부 DSH 수치 그리드(SalesLedgerWorkbench의 DshNumericGrid) 한 곳뿐이라
+// 그 요청만 ?breakdown=1을 붙인다. KR Team 개요(BranchDashboardClient) 등 나머지
+// summary 소비처는 플래그를 안 보내 이 필드를 아예 받지 않는다 — revenue/deal_mix/
+// data_sources/lastSync 등 다른 필드는 플래그와 무관하게 항상 그대로 나간다.
+function readBreakdownFlag(url: URL): boolean {
+  return url.searchParams.get("breakdown") === "1"
+}
+
 // DSH/KPI는 DB-우선 사다리(액티브 임포트 → 시트 미러 → 라이브 시트 초기 폴백)를 탄다.
 // 계층별 캐시는 read-dsh-kpi.ts / branch-dsh-kpi-mirror.ts 안에 있다. WithSource 변형은
 // "지금 보는 수치가 어느 단계에서, 언제 왔는지"(data_sources)도 함께 반환한다.
@@ -204,12 +213,13 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const team = readTeamParam(url); if (team instanceof NextResponse) return team
   const period = readPeriodParam(url); if (period instanceof NextResponse) return period
+  const includeBreakdown = readBreakdownFlag(url)
   const currentDate = new Date()
   const periodDate = resolvePeriodDate(period, url.searchParams.get("month"), currentDate)
   if (!periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
     const [dshResult, kpi, revResult, campaigns, runs, events, sheetModifiedAt] = await Promise.all([
-      readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate)), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listPublicEvents(),
+      readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate)), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listCachedPublicEvents(),
       readSheetFreshness(),
     ])
     const dsh = dshResult.dsh
@@ -421,8 +431,11 @@ export async function GET(req: NextRequest) {
       deal_mix: dealMix,
       // 장부 DSH 수치 그리드 원천 — 파서 breakdown(DshBreakdownRow[])을 그대로 노출한다.
       // 팀 필터와 무관한 Team KR 전사 수치(시트 '1. DSH'의 Goal/Status × Software/Hardware
-      // × New/Renew × Direct/Channel 블록). 필드 추가는 unstable_cache 하위호환.
-      dsh_breakdown: breakdown,
+      // × New/Renew × Direct/Channel 블록). ?breakdown=1일 때만 실는다(readBreakdownFlag 주석
+      // 참고) — 플래그 없으면 키 자체를 생략한다(undefined 값이 아니라 spread 자체를 건너뜀).
+      // 이 분기는 응답 직렬화 단계뿐이라 unstable_cache(readSheetFreshness, 고정 키
+      // "branch-sheet-freshness")와는 무관 — 캐시 키에 breakdown을 안 태워도 안전하다.
+      ...(includeBreakdown ? { dsh_breakdown: breakdown } : {}),
     })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

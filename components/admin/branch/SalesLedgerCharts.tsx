@@ -122,7 +122,7 @@ const WEEK_SERIES: Array<{
   { key: "confirmed", label: CONFIDENCE_TOKENS.confirmed.label, color: CONFIDENCE_TOKENS.confirmed.color },
   { key: "highConfidence", label: CONFIDENCE_TOKENS["high-confidence"].label, color: CONFIDENCE_TOKENS["high-confidence"].color },
   { key: "open", label: CONFIDENCE_TOKENS.expected.label, color: CONFIDENCE_TOKENS.expected.color },
-  { key: "inferred", label: "일자 추정", color: "#6B7280" },
+  { key: "inferred", label: "일자 추정", color: "#615D59" },
   { key: "monthlyOnly", label: "월합계만", color: "#D9D6D0" },
 ]
 
@@ -369,7 +369,7 @@ export function RevWeekForecastChart({ data, monthGoal }: { data: RevWeekPoint[]
           <Bar dataKey="confirmed" name={CONFIDENCE_TOKENS.confirmed.label} stackId="week" fill={CONFIDENCE_TOKENS.confirmed.color} shape={makeStackSegmentShape("confirmed")} maxBarSize={48} />
           <Bar dataKey="highConfidence" name={CONFIDENCE_TOKENS["high-confidence"].label} stackId="week" fill={CONFIDENCE_TOKENS["high-confidence"].color} shape={makeStackSegmentShape("highConfidence")} maxBarSize={48} />
           <Bar dataKey="open" name={CONFIDENCE_TOKENS.expected.label} stackId="week" fill={CONFIDENCE_TOKENS.expected.color} shape={makeStackSegmentShape("open")} maxBarSize={48} />
-          <Bar dataKey="inferred" name="일자 추정" stackId="week" fill="#6B7280" shape={makeStackSegmentShape("inferred")} maxBarSize={48} />
+          <Bar dataKey="inferred" name="일자 추정" stackId="week" fill="#615D59" shape={makeStackSegmentShape("inferred")} maxBarSize={48} />
           <Bar dataKey="monthlyOnly" name="월합계만" stackId="week" fill="#D9D6D0" shape={makeStackSegmentShape("monthlyOnly")} maxBarSize={48} />
           <Line
             type="monotone"
@@ -527,7 +527,9 @@ export function KpiActivityChart({ rows }: { rows: KpiMetricView[] }) {
           contentStyle={{ border: "1px solid rgba(0,0,0,0.08)", borderRadius: 8, fontSize: 12 }}
         />
         <Bar dataKey="목표" fill="#D9D6D0" radius={[0, 4, 4, 0]} barSize={8} />
-        <Bar dataKey="실적" fill="#1E5DA8" radius={[0, 4, 4, 0]} barSize={8} />
+        {/* :505 KpiTeamChart의 실적 막대와 동일 캐논 그린으로 통일(확도 예외
+            파랑 #1E5DA8은 REV 3단 확도 맥락 전용 — 활동 KPI 실적은 그 맥락이 아니다). */}
+        <Bar dataKey="실적" fill="#084734" radius={[0, 4, 4, 0]} barSize={8} />
       </BarChart>
     </ResponsiveContainer>
   )

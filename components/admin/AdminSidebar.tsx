@@ -22,6 +22,7 @@ import { adminFetchJsonCached, clearAdminSessionStorage, warmAdminRequestCache }
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
+import { useDialogFocus } from "./use-dialog-focus"
 import {
   ADMIN_NAV,
   ADMIN_NAV_SECTIONS,
@@ -264,6 +265,10 @@ function AdminSidebarContent({ role, name, email }: Props) {
   })
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const mobileDrawerCloseRef = useRef<HTMLButtonElement | null>(null)
+  // 모바일 드로어 접근성(품질 웨이브 3 — 항목 5) — Escape 닫기 + 열릴 때 닫기 버튼으로
+  // 포커스 이동 · 닫힐 때 이전 포커스 복귀. DealModal과 동일한 공용 훅.
+  useDialogFocus(mobileMenuOpen, () => setMobileMenuOpen(false), mobileDrawerCloseRef)
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)")
@@ -465,7 +470,12 @@ function AdminSidebarContent({ role, name, email }: Props) {
           aria-label="Close admin menu"
           onClick={() => setMobileMenuOpen(false)}
         />
-        <div className="absolute inset-y-0 left-0 flex w-[min(88vw,360px)] flex-col border-r border-[#e8e8e4] bg-white shadow-2xl">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Admin menu"
+          className="absolute inset-y-0 left-0 flex w-[min(88vw,360px)] flex-col border-r border-[#e8e8e4] bg-white shadow-2xl"
+        >
           <div className="flex items-center gap-3 border-b border-[#e8e8e4] px-4 py-4">
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Classin</p>
@@ -473,6 +483,7 @@ function AdminSidebarContent({ role, name, email }: Props) {
             </div>
             <button
               type="button"
+              ref={mobileDrawerCloseRef}
               onClick={() => setMobileMenuOpen(false)}
               className="flex h-10 w-10 items-center justify-center rounded-md border border-[#e8e8e4] text-[#1a1a1a]/55"
               aria-label="Close admin menu"

@@ -4,6 +4,7 @@ import { Sparkles, FileDown, RefreshCw, AlertTriangle } from "lucide-react"
 import type { BranchSummaryResponse, Team } from "../types"
 import { adminFetchJson } from "../client-api"
 import { cny } from "@/lib/branch/money-format"
+import { TEAM_COLORS } from "@/lib/branch/team-colors"
 
 interface NextAction { title: string; why: string; owner: string; due?: string }
 
@@ -28,7 +29,10 @@ type View = "internal" | "external"
 const TONE = {
   risk:        { bg: "#FCE9E9", fg: "#B43E3E", label: "리스크" },
   opportunity: { bg: "#ECFDF5", fg: "#084734", label: "기회" },
-  team:        { bg: "#F1F4DE", fg: "#7B8B36", label: "팀" },
+  // "팀" 태그는 코칭/교육 등 팀 운영 액션 카테고리 — MKT 팀 자체를 가리키는 건
+  // 아니지만, 기존에 쓰던 값이 팀 아이덴티티 올리브와 같아 SSOT(team-colors.ts)로
+  // 일원화한다. 새 색을 만들지 않고 기존 시각을 그대로 승계.
+  team:        { bg: TEAM_COLORS.MKT.tintBg, fg: TEAM_COLORS.MKT.color, label: "팀" },
   inventory:   { bg: "#FBF1E0", fg: "#A8741A", label: "재고" },
   // 파이프라인 태그는 확도 신호가 아니라 액션 카테고리라 확도 예외 파랑(#1E5DA8)을
   // 쓸 이유가 없다 — 비확도 맥락은 뉴트럴(#615D59/#F6F5F4)로.
@@ -149,7 +153,9 @@ function ExternalReport({ summary, lang }: { summary: BranchSummaryResponse | nu
           </div>
           <div className="rounded-lg bg-[#F6F5F4] p-3">
             <p className="text-[10.5px] text-[#615D59]">{t.achievementLabel}</p>
-            <p className="mt-1 text-[18px] font-bold leading-none" style={{ color: rev.pacing_pct >= 90 ? "#084734" : rev.pacing_pct >= 70 ? "#7B8B36" : "#A8741A" }}>
+            {/* Status 3단(Success/Warning/Danger) 재사용 — 팀 아이덴티티 올리브를
+                페이싱 등급에 쓰던 오용을 정리(2026-07-17). */}
+            <p className="mt-1 text-[18px] font-bold leading-none" style={{ color: rev.pacing_pct >= 90 ? "#084734" : rev.pacing_pct >= 70 ? "#A8741A" : "#B43E3E" }}>
               {rev.pacing_pct.toFixed(0)}%
             </p>
           </div>
@@ -327,11 +333,11 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
       </div>
 
       {errorMsg && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-[12px] text-rose-700">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] p-3 text-[12px] text-[#B43E3E]">
           <span>{errorMsg}</span>
           {canGenerate && (
             <button type="button" onClick={handleRegenerate} disabled={refreshing}
-              className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-white px-2.5 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60">
+              className="inline-flex items-center gap-1 rounded-md border border-[#F2B8B8] bg-white px-2.5 py-1 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:opacity-60">
               <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
               다시 시도
             </button>

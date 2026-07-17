@@ -2,6 +2,11 @@
 // 장부 DSH 렌즈의 수치 상세 그리드는 파서가 이미 만드는 DshBreakdownRow[]를
 // summary 응답의 dsh_breakdown 필드로 소비한다. breakdown은 팀 필터와 무관한
 // Team KR 전사 수치이므로 team 파라미터가 있어도 그대로 실려야 한다.
+// dsh_breakdown은 opt-in 필드다(?breakdown=1) — R4 실측상 summary 페이로드의 사실상
+// 전부를 이 필드가 차지하는데(53,305B 중 대부분), 소비처는 장부 DSH 수치 그리드
+// 한 곳뿐이라 그 요청만 플래그를 보낸다. 플래그가 없으면 키 자체가 응답에서 빠지고,
+// KR Team 개요가 쓰는 revenue/deal_mix/data_sources/lastSync 등은 플래그와 무관하게
+// 항상 그대로 실린다.
 import { NextRequest, NextResponse } from "next/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -11,7 +16,7 @@ const readKpiBlocksPreferDb = vi.fn()
 const readRevDealsPreferActiveWithSource = vi.fn()
 const summarizeCampaigns = vi.fn()
 const getRecentSyncRuns = vi.fn()
-const listPublicEvents = vi.fn()
+const listCachedPublicEvents = vi.fn()
 const getSheetModifiedTime = vi.fn()
 
 vi.mock("@/lib/admin-auth", () => ({
@@ -48,7 +53,7 @@ vi.mock("@/lib/repositories/branch-sync", () => ({
 }))
 
 vi.mock("@/lib/repositories/public-events", () => ({
-  listPublicEvents,
+  listCachedPublicEvents,
 }))
 
 const BREAKDOWN = [
@@ -85,7 +90,7 @@ function mockHappyPath() {
   })
   summarizeCampaigns.mockResolvedValue({ count_30d: 0, avg_open_pct: 0, recent: [] })
   getRecentSyncRuns.mockResolvedValue([])
-  listPublicEvents.mockResolvedValue([])
+  listCachedPublicEvents.mockResolvedValue([])
   getSheetModifiedTime.mockResolvedValue(null)
 }
 
@@ -98,11 +103,39 @@ describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
     vi.clearAllMocks()
   })
 
-  it("exposes the parser breakdown rows as dsh_breakdown", async () => {
+  it("omits dsh_breakdown when the breakdown flag is absent", async () => {
     mockHappyPath()
 
     const { GET } = await import("@/app/api/admin/branch/summary/route")
     const response = await GET(summaryRequest())
+
+    expect(response.status).toBe(200)
+    const json = await response.json()
+    expect(json.dsh_breakdown).toBeUndefined()
+    expect("dsh_breakdown" in json).toBe(false)
+  })
+
+  it("keeps the KR Team overview fields present without the breakdown flag", async () => {
+    mockHappyPath()
+
+    const { GET } = await import("@/app/api/admin/branch/summary/route")
+    const response = await GET(summaryRequest())
+
+    expect(response.status).toBe(200)
+    const json = await response.json()
+    // BranchDashboardClient(KR Team 개요)가 소비하는 필드들 — breakdown 플래그와 무관하게
+    // 항상 그대로 실려야 한다.
+    expect(json.revenue).toBeDefined()
+    expect(json.deal_mix).toBeDefined()
+    expect(json.data_sources).toBeDefined()
+    expect("lastSync" in json).toBe(true)
+  })
+
+  it("exposes the parser breakdown rows as dsh_breakdown when breakdown=1", async () => {
+    mockHappyPath()
+
+    const { GET } = await import("@/app/api/admin/branch/summary/route")
+    const response = await GET(summaryRequest("?breakdown=1"))
 
     expect(response.status).toBe(200)
     const json = await response.json()
@@ -122,7 +155,7 @@ describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
     mockHappyPath()
 
     const { GET } = await import("@/app/api/admin/branch/summary/route")
-    const response = await GET(summaryRequest("?team=BD&period=M&month=2026-05"))
+    const response = await GET(summaryRequest("?team=BD&period=M&month=2026-05&breakdown=1"))
 
     expect(response.status).toBe(200)
     const json = await response.json()

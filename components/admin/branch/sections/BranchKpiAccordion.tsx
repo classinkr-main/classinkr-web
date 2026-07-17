@@ -1,8 +1,11 @@
 "use client"
+import Link from "next/link"
 import { useMemo, useState } from "react"
-import { ChevronRight } from "lucide-react"
+import { ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronRight, Search } from "lucide-react"
 import type { BranchKpiResponse, BranchKpiTeamRow, BranchKpiMemberRow } from "../types"
 import { cny, cnyExact } from "@/lib/branch/money-format"
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+import { matchesTokens, tokenize } from "../search-tokens"
 import MoneyValue from "../MoneyValue"
 
 const numberFmt = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 })
@@ -31,10 +34,8 @@ const TEAM_KPI_PLACEHOLDERS: Record<string, string[]> = {
 
 const COLORS = {
   green: "#084734",
-  olive: "#7B8B36",
-  amber: "#A8741A",
-  red: "#B43E3E",
-  blue: "#1E5DA8",
+  amber: "#A8741A", // Warning 축 — 페이싱 미달 신호(캐논 confidence-tokens와 동일 값)
+  amberStrong: "#7A520F", // Warning 강조 — 페이싱이 더 크게 미달일 때(구 올리브 대체)
   border: "rgba(0,0,0,0.08)",
 }
 
@@ -50,16 +51,21 @@ function GaugeBar({ value, goal, color, height = 6 }: { value: number; goal: num
 
 function pickKpiColor(pct: number) {
   if (pct >= 70) return COLORS.green
-  if (pct >= 50) return COLORS.olive
-  return COLORS.amber
+  if (pct >= 50) return COLORS.amber
+  return COLORS.amberStrong
 }
 
 function MemberRow({ member, viewMode }: { member: BranchKpiMemberRow; viewMode: "list" | "matrix" }) {
   const teamHasKpi = member.team ? KPI_ACTIVE_TEAMS.has(member.team) : false
   const memberPct = member.goal ? Math.round((member.confirmed / member.goal) * 100) : 0
   const kpiKeys = teamHasKpi ? Object.keys(member.kpi) : []
+  // 매출 장부 크로스링크 — PipelineTable(sections/PipelineTable.tsx)의 ledgerHref와
+  // 동일 파라미터 규약(lens=rev&mgr=). 장부의 담당 필터는 단일 select라 그대로 전달.
+  const ledgerHref = `/admin/branch/ledger?lens=rev&mgr=${encodeURIComponent(member.member)}`
   return (
-    <div className="grid items-center gap-4 border-t border-[rgba(0,0,0,0.05)] py-2.5"
+    <Link href={ledgerHref}
+      title={`매출 장부에서 ${member.member} 보기`}
+      className="-mx-1.5 grid items-center gap-4 rounded-lg border-t border-[rgba(0,0,0,0.05)] px-1.5 py-2.5 transition hover:bg-white"
       style={{ gridTemplateColumns: "minmax(160px,180px) 1fr 1.3fr" }}>
       <div className="flex items-center gap-2.5">
         <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#ECFDF5] text-[12px] font-bold text-[#084734]">
@@ -73,24 +79,25 @@ function MemberRow({ member, viewMode }: { member: BranchKpiMemberRow; viewMode:
       <div>
         <div className="mb-1 flex items-baseline justify-between text-[11px]">
           <span className="text-[#615D59]">
-            <span className="cursor-help font-semibold" style={{ color: COLORS.red }}
+            {/* 확정 매출 = 캐논 그린 — 빨강 아님(DealMixSection 웨이브3 수정과 동일 근거). */}
+            <span className="cursor-help font-semibold" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}
               title={`¥${cnyExact(member.confirmed)} · 시트 원값 · 반올림 없음`}>¥{cny(member.confirmed)}</span> / <span className="cursor-help" title={`¥${cnyExact(member.goal)} · 시트 원값 · 반올림 없음`}>¥{cny(member.goal)}</span>
           </span>
           <span className="font-bold" style={{ color: memberPct >= 70 ? COLORS.green : COLORS.amber }}>{memberPct}%</span>
         </div>
-        <GaugeBar value={member.confirmed} goal={member.goal} color={memberPct >= 70 ? COLORS.green : COLORS.olive} height={5} />
+        <GaugeBar value={member.confirmed} goal={member.goal} color={memberPct >= 70 ? COLORS.green : COLORS.amber} height={5} />
       </div>
       {!teamHasKpi ? (
         <div className="flex flex-wrap gap-1.5">
           {(TEAM_KPI_PLACEHOLDERS[member.team ?? ""] ?? []).map((k) => (
-            <span key={k}
+            <span key={k} title="KPI 목표는 현재 BD팀만 운영 — 아직 집계되지 않음"
               className="inline-flex items-baseline gap-1 rounded-full border border-dashed border-[rgba(0,0,0,0.1)] bg-[#F6F5F4] px-2 py-0.5 text-[10.5px]">
               <span className="font-semibold text-[#615D59]">{KPI_LABELS[k] ?? k}</span>
               <span className="font-bold text-[#A8741A]">?</span>
             </span>
           ))}
           {!TEAM_KPI_PLACEHOLDERS[member.team ?? ""] && (
-            <span className="text-[11px] font-medium text-[#A8741A]">?</span>
+            <span title="KPI 목표는 현재 BD팀만 운영 — 아직 집계되지 않음" className="text-[11px] font-medium text-[#A8741A]">?</span>
           )}
         </div>
       ) : viewMode === "matrix" ? (
@@ -99,10 +106,12 @@ function MemberRow({ member, viewMode }: { member: BranchKpiMemberRow; viewMode:
             const v = member.kpi[k]
             const p = v?.goal ? Math.round((v.actual / v.goal) * 100) : 0
             const intensity = Math.min(1, p / 100)
+            // 50-69%/미만 두 구간은 캐논 Warning 계열(rgb(168,116,26)=#A8741A,
+            // rgb(122,82,15)=#7A520F)의 반투명 스케일 — 구 올리브(rgb(123,139,54)) 대체.
             const bg = p >= 100 ? COLORS.green
               : p >= 70 ? `rgba(8,71,52,${0.15 + intensity * 0.45})`
-              : p >= 50 ? `rgba(123,139,54,${0.15 + intensity * 0.45})`
-              : `rgba(168,116,26,${0.15 + intensity * 0.45})`
+              : p >= 50 ? `rgba(168,116,26,${0.15 + intensity * 0.45})`
+              : `rgba(122,82,15,${0.15 + intensity * 0.45})`
             return (
               <div key={k} title={`${KPI_LABELS[k] ?? k} ${v?.actual}/${v?.goal}`}
                 className="rounded-md p-1.5 text-center"
@@ -130,17 +139,35 @@ function MemberRow({ member, viewMode }: { member: BranchKpiMemberRow; viewMode:
           })}
         </div>
       )}
-    </div>
+    </Link>
   )
 }
 
 function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; members: BranchKpiMemberRow[]; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(!!defaultOpen)
   const [viewMode, setViewMode] = useState<"list" | "matrix">("list")
+  // 달성률(확정/목표) 정렬 토글 — 기본은 원본 순서(default), 클릭할 때마다
+  // 높은순 → 낮은순 → 원본순으로 순환한다. KPI 미연동 팀(MKT/CSM)도 매출
+  // 달성률 자체는 있으므로 teamHasKpi와 무관하게 항상 노출한다.
+  const [memberSort, setMemberSort] = useState<"default" | "desc" | "asc">("default")
   const teamHasKpi = KPI_ACTIVE_TEAMS.has(team.team)
   const hasMembers = members.length > 0
   const pct = team.goal ? Math.round((team.status / team.goal) * 100) : 0
   const expandable = hasMembers
+
+  // 정렬 기준은 MemberRow가 실제로 표시하는 memberPct(확정/목표 단순 비율)와
+  // 동일해야 한다 — member.achievement_pct(페이싱 가중치 포함 별도 지표)를 쓰면
+  // 화면에 보이는 %와 정렬 순서가 어긋나 버그처럼 보인다.
+  const sortedMembers = useMemo(() => {
+    if (memberSort === "default") return members
+    const withPct = members.map((m) => ({ m, pct: m.goal ? (m.confirmed / m.goal) * 100 : 0 }))
+    withPct.sort((a, b) => (memberSort === "desc" ? b.pct - a.pct : a.pct - b.pct))
+    return withPct.map((x) => x.m)
+  }, [members, memberSort])
+
+  function cycleMemberSort() {
+    setMemberSort((s) => (s === "default" ? "desc" : s === "desc" ? "asc" : "default"))
+  }
 
   // aggregate KPIs across members for the team summary chips
   const aggKpis: Array<{ k: string; actual: number; goal: number }> = []
@@ -160,7 +187,7 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
       const placeholders = TEAM_KPI_PLACEHOLDERS[team.team]
       if (placeholders?.length) {
         return placeholders.map((k) => (
-          <span key={k}
+          <span key={k} title="KPI 목표는 현재 BD팀만 운영 — 아직 집계되지 않음"
             className="inline-flex items-baseline gap-1 rounded-full border border-dashed border-[rgba(0,0,0,0.1)] bg-[#F6F5F4] px-2 py-0.5 text-[10.5px]">
             <span className="font-semibold text-[#615D59]">{KPI_LABELS[k] ?? k}</span>
             <span className="font-bold text-[#A8741A]">?</span>
@@ -168,7 +195,7 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
         ))
       }
       return (
-        <span className="text-[11px] font-bold text-[#A8741A]">?</span>
+        <span title="KPI 목표는 현재 BD팀만 운영 — 아직 집계되지 않음" className="text-[11px] font-bold text-[#A8741A]">?</span>
       )
     }
     if (!hasMembers) {
@@ -212,11 +239,12 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
         <div>
           <div className="mb-1.5 flex justify-between text-[11.5px]">
             <span className="text-[#615D59]">
-              매출 <span className="font-bold" style={{ color: COLORS.red }}><MoneyValue value={team.status} /></span> / <MoneyValue value={team.goal} />
+              {/* 확정 매출 = 캐논 그린 — 빨강 아님. */}
+              매출 <span className="font-bold" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}><MoneyValue value={team.status} /></span> / <MoneyValue value={team.goal} />
             </span>
             <span className="font-bold" style={{ color: pct >= 70 ? COLORS.green : COLORS.amber }}>{pct}%</span>
           </div>
-          <GaugeBar value={team.status} goal={team.goal} color={pct >= 70 ? COLORS.green : COLORS.olive} height={7} />
+          <GaugeBar value={team.status} goal={team.goal} color={pct >= 70 ? COLORS.green : COLORS.amber} height={7} />
         </div>
         <div className="flex flex-wrap justify-end gap-1.5">
           {renderRightChip()}
@@ -231,8 +259,26 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
         >
           <div className="overflow-hidden">
             <div className="rounded-[10px] bg-[#F6F5F4] p-3.5">
-              {teamHasKpi && (
-                <div className="mb-2 flex justify-end">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={cycleMemberSort}
+                  disabled={members.length <= 1}
+                  className="inline-flex items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[10.5px] font-semibold text-[#615D59] transition hover:border-[#111110]/25 hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-50"
+                  title="달성률 기준 정렬"
+                >
+                  {memberSort === "desc" ? (
+                    <ArrowDownNarrowWide className="h-3 w-3" aria-hidden="true" />
+                  ) : memberSort === "asc" ? (
+                    <ArrowUpNarrowWide className="h-3 w-3" aria-hidden="true" />
+                  ) : (
+                    <ArrowDownNarrowWide className="h-3 w-3 opacity-35" aria-hidden="true" />
+                  )}
+                  <span>
+                    달성률{memberSort === "desc" ? " 높은순" : memberSort === "asc" ? " 낮은순" : "순 정렬"}
+                  </span>
+                </button>
+                {teamHasKpi && (
                   <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-white p-[3px]">
                     {(["list", "matrix"] as const).map((v) => (
                       <button key={v} type="button" onClick={() => setViewMode(v)}
@@ -243,9 +289,9 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
                       </button>
                     ))}
                   </div>
-                </div>
-              )}
-              {members.map((m) => <MemberRow key={m.member} member={m} viewMode={viewMode} />)}
+                )}
+              </div>
+              {sortedMembers.map((m) => <MemberRow key={m.member} member={m} viewMode={viewMode} />)}
             </div>
           </div>
         </div>
@@ -261,6 +307,8 @@ export default function BranchKpiAccordion({
   loading: boolean
   error: string | null
 }) {
+  const [query, setQuery] = useState("")
+
   const teamsWithMembers = useMemo(() => {
     if (!data) return []
     return data.teams.map((t) => ({
@@ -269,7 +317,23 @@ export default function BranchKpiAccordion({
     }))
   }, [data])
 
-  if (error) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
+  // 담당자 검색 — 팀 행 자체는 유지하되 팀 내 팀원만 이름 부분일치로 좁힌다.
+  // 매치가 하나도 없는 팀은 통째로 숨긴다(빈 "팀 단위 집계" placeholder 오표시 방지).
+  // 품질 웨이브 4 — 항목 3. 자체 includes 매칭 대신 search-tokens.ts SSOT(tokenize/
+  // matchesTokens)를 소비 — PipelineTable/BranchPipelineKanban과 동일 토큰화 규칙을 쓴다.
+  const filteredTeamsWithMembers = useMemo(() => {
+    const tokens = tokenize(query)
+    if (tokens.length === 0) return teamsWithMembers
+    return teamsWithMembers
+      .map((t) => ({ team: t.team, members: t.members.filter((m) => matchesTokens(tokens, [m.member])) }))
+      .filter((t) => t.members.length > 0)
+  }, [teamsWithMembers, query])
+
+  if (error) return (
+    <div role="alert" className="rounded-2xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]">
+      {error}
+    </div>
+  )
   if (loading || !data) return <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />
   if (teamsWithMembers.length === 0) return null
 
@@ -281,22 +345,51 @@ export default function BranchKpiAccordion({
   const headerSub = hasAnyMembers
     ? `${totalMembers}명`
     : "팀원 단위 데이터 미연동"
+  // MKT/CSM은 아직 KPI 목표 운영 대상이 아니다 — 그 팀 행의 "?" 칩이 버그처럼
+  // 보이지 않도록 헤더에 한 번 정직하게 고지한다(KPI_ACTIVE_TEAMS가 유일한 판정 기준).
+  const hasInactiveKpiTeam = teamsWithMembers.some((t) => !KPI_ACTIVE_TEAMS.has(t.team.team))
+  const isSearching = query.trim().length > 0
+  const noSearchMatches = isSearching && filteredTeamsWithMembers.length === 0
 
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
-        <div className="flex items-baseline gap-2">
-          <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">{headerTitle}</h2>
-          <span className="text-[11px] font-medium text-[#615D59]">{headerSub}</span>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">{headerTitle}</h2>
+            <span className="text-[11px] font-medium text-[#615D59]">{headerSub}</span>
+          </div>
+          {hasAnyMembers && (
+            <label className="relative">
+              <span className="sr-only">담당자 검색</span>
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#615D59]" aria-hidden="true" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="담당자 검색"
+                className="h-7 w-36 rounded-full border border-[rgba(0,0,0,0.08)] bg-white pl-8 pr-3 text-[11px] outline-none transition focus:border-[#111110]/30"
+              />
+            </label>
+          )}
         </div>
-        <p className="text-[10.5px] text-[#615D59]">
-          <span className="font-semibold text-[#B43E3E]">빨강 = 확정 매출</span>
+        <p className="text-right text-[10.5px] text-[#615D59]">
+          {hasInactiveKpiTeam && <span className="block">KPI 목표는 현재 BD팀만 운영</span>}
+          <span className={`font-semibold ${CONFIDENCE_TOKENS.confirmed.textClass}`}>그린 = 확정 매출</span>
         </p>
       </div>
       <div className="px-5 pb-2 pt-1">
-        {teamsWithMembers.map((t) => (
-          <TeamRow key={t.team.team} team={t.team} members={t.members} defaultOpen={false} />
-        ))}
+        {noSearchMatches ? (
+          <p className="py-6 text-center text-[11.5px] text-[#615D59]">&quot;{query}&quot; 검색 결과가 없습니다.</p>
+        ) : (
+          filteredTeamsWithMembers.map((t) => (
+            <TeamRow
+              key={`${t.team.team}-${isSearching ? "search" : "all"}`}
+              team={t.team}
+              members={t.members}
+              defaultOpen={isSearching}
+            />
+          ))
+        )}
       </div>
     </section>
   )

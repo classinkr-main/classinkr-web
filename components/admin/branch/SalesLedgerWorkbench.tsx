@@ -34,11 +34,13 @@ import {
   X,
 } from "lucide-react"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
+import { matchesTokens, tokenize } from "./search-tokens"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { ledgerMonthSplit, ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
+import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
 // ledger/ 섹션 파일들이 워크벤치를 단일 진입점으로 import — 포매터 SSOT는 lib/branch/ledger-format
 export { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import {
@@ -85,6 +87,7 @@ import {
   type DraftKind,
   type DraftOperation,
   type DraftQueueMode,
+  type DraftSaveResult,
   type DraftStatus,
   type LedgerDraft,
   type LedgerRevenueRow,
@@ -135,6 +138,7 @@ export type {
   DraftKind,
   DraftOperation,
   DraftQueueMode,
+  DraftSaveResult,
   KpiMemberView,
   KpiMetricView,
   LedgerDraft,
@@ -314,6 +318,8 @@ const MATRIX_PRODUCT_W = 56
 const MATRIX_MONTH_W = 64
 const MATRIX_WEEK_W = 52 // 월 확장(상세시트) 시 w1~w5 각 칸 — 금액 가독성 위해 넓게(가로 스크롤 허용)
 const MATRIX_ANNUAL_W = 96
+// 매트릭스 토스트 최대 스택 개수(품질 웨이브 3, 항목 6) — 이 이상 쌓이면 가장 오래된 info부터 밀어낸다.
+const MATRIX_TOAST_MAX = 3
 // 매트릭스 행 밀도(표시만 — 셀 폭·편집 로직 불변). localStorage에 저장해 재방문 시 복원.
 type MatrixDensity = "condensed" | "regular" | "relaxed"
 const MATRIX_DENSITY_STORAGE_KEY = "classin:rev-matrix-density"
@@ -416,8 +422,7 @@ function handleRovingTabKeyDown<T>(
 }
 
 // Source 스트립 시간 표기 — KR Team SyncStatusBar.tsx의 relativeTime과 같은 규칙("방금"/"N분 전"/
-// "N시간 전"/"N일 전")으로 통일한 워크벤치 로컬 사본. SyncStatusBar는 내부 미노출 함수라 import할
-// 수 없고, 소유 범위상 SyncStatusBar.tsx는 수정하지 않는다(읽기만) — 그래서 로직만 그대로 복제.
+// "N시간 전"/"N일 전")으로 통일한 워크벤치 로컬 사본(SyncStatusBar는 이 포매터를 내보내지 않는다).
 function relativeTimeFromNow(iso: string | null | undefined, now: number): string {
   if (!iso) return "미확인"
   const t = Date.parse(iso)
@@ -502,6 +507,16 @@ function ymKeyUtc(date: Date): string {
 function fiscalYearOf(date: Date): number {
   const month = date.getUTCMonth() + 1
   return month >= 4 ? date.getUTCFullYear() : date.getUTCFullYear() - 1
+}
+
+// FY 라벨(품질 웨이브 3, 항목 4) — fiscalYearOf 기반 "FY{시작}-{종료}" 2자리 문자열.
+// 브레드크럼·기간 라벨 2곳의 "FY26-27" 하드코딩을 대체하는 단일 계산원 — 회계연도가
+// 바뀌어도 코드 수정 없이 자동으로 다음 연도 라벨을 보여준다.
+function fiscalYearLabel(date: Date): string {
+  const fy = fiscalYearOf(date)
+  const startYY = String(fy % 100).padStart(2, "0")
+  const endYY = String((fy + 1) % 100).padStart(2, "0")
+  return `FY${startYY}-${endYY}`
 }
 
 function buildFiscalMonthOptions(now: Date) {
@@ -743,6 +758,24 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
+// 로컬 fallback 초안(local-*)을 서버 재연결 시 POST 재전송하기 위한 입력 복원.
+// LedgerDraft는 LedgerDraftInput의 상위집합이라 필드만 골라 뽑는다.
+function localDraftToInput(draft: LedgerDraft): LedgerDraftInput {
+  return {
+    kind: draft.kind,
+    sourceDealId: draft.sourceDealId,
+    sourceSheetRow: draft.sourceSheetRow,
+    sourceSnapshot: draft.sourceSnapshot,
+    customer: draft.customer,
+    manager: draft.manager,
+    team: draft.team,
+    month: draft.month,
+    amount: draft.amount,
+    note: draft.note,
+    metadata: draft.metadata,
+  }
+}
+
 function useLedgerDraftQueue() {
   const [drafts, setDrafts] = useState<LedgerDraft[]>([])
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
@@ -750,6 +783,14 @@ function useLedgerDraftQueue() {
   const [queueMode, setQueueMode] = useState<DraftQueueMode>("server")
   const [queueLoading, setQueueLoading] = useState(true)
   const [queueError, setQueueError] = useState<string | null>(null)
+  // 서버 재연결 시 재전송에 실패해 여전히 로컬에만 있는 초안 수 — 배지 경고용(항목 2).
+  const [unsyncedLocalCount, setUnsyncedLocalCount] = useState(0)
+  // loadDrafts가 drafts state를 deps로 갖지 않아도(안정 identity 유지) 최신 local-* 초안을
+  // 읽을 수 있게 미러링한다 — drafts가 바뀔 때마다 렌더 후 effect에서 갱신(렌더 중 ref 쓰기 금지).
+  const localDraftsRef = useRef<LedgerDraft[]>([])
+  useEffect(() => {
+    localDraftsRef.current = drafts.filter((draft) => draft.id.startsWith("local-"))
+  }, [drafts])
 
   const updateLocalDrafts = useCallback((updater: (current: LedgerDraft[]) => LedgerDraft[]) => {
     setDrafts((current) => {
@@ -773,11 +814,44 @@ function useLedgerDraftQueue() {
         setQueueError(data.health.message ?? "서버 입력 큐가 아직 준비되지 않았습니다.")
         return
       }
-      setDrafts(data.drafts ?? [])
+      // 서버 복구: data.drafts로 무병합 덮어쓰면 오프라인 동안 쌓인 local-* 초안이 화면에서
+      // 조용히 사라진다(무음 유실) — 덮어쓰기 전에 잔존 local-* 초안을 서버로 재전송한다.
+      // 성공분은 서버 초안으로 교체, 실패분은 local- id 그대로 유지해 계속 보이게 하고 배지로 경고한다.
+      const staleLocalDrafts = localDraftsRef.current
+      if (staleLocalDrafts.length === 0) {
+        setUnsyncedLocalCount(0)
+        setDrafts(data.drafts ?? [])
+        setQueueError(null)
+      } else {
+        const resendResults = await Promise.allSettled(
+          staleLocalDrafts.map((draft) =>
+            adminFetchJson<LedgerDraftResponse>("/api/admin/branch/ledger-drafts", {
+              method: "POST",
+              body: JSON.stringify(localDraftToInput(draft)),
+            }),
+          ),
+        )
+        const resent: LedgerDraft[] = []
+        const stillLocal: LedgerDraft[] = []
+        resendResults.forEach((result, index) => {
+          if (result.status === "fulfilled" && result.value.draft) {
+            resent.push(result.value.draft)
+          } else {
+            stillLocal.push(staleLocalDrafts[index])
+          }
+        })
+        writeLocalDrafts(stillLocal)
+        setUnsyncedLocalCount(stillLocal.length)
+        setDrafts([...resent, ...stillLocal, ...(data.drafts ?? [])].slice(0, 50))
+        setQueueError(
+          stillLocal.length > 0
+            ? `로컬 초안 ${stillLocal.length}건을 서버로 재전송하지 못했습니다 — 재연결 후 다시 시도하세요.`
+            : null,
+        )
+      }
       setLedgerEntries(data.entries ?? [])
       setLedgerHealth(data.ledgerHealth ?? null)
       setQueueMode("server")
-      setQueueError(null)
     } catch (error) {
       setDrafts(readLocalDrafts())
       setLedgerEntries([])
@@ -920,6 +994,7 @@ function useLedgerDraftQueue() {
     queueMode,
     queueLoading,
     queueError,
+    unsyncedLocalCount,
     createDraft,
     updateDraft,
     toggleDraft,
@@ -964,6 +1039,13 @@ function ErrorPanel({ message }: { message: string }) {
   )
 }
 
+// th의 aria-sort 값 계산(품질 웨이브 3, 항목 8) — RevSortHeader를 감싸는 <th>가 실제
+// aria-sort 소유자(ARIA 표준상 columnheader 상태). 비활성 컬럼은 "none".
+function revSortAriaValue(active: boolean, direction: RevSortDirection): "ascending" | "descending" | "none" {
+  if (!active) return "none"
+  return direction === "asc" ? "ascending" : "descending"
+}
+
 function RevSortHeader({
   label,
   sortKey,
@@ -994,7 +1076,8 @@ function RevSortHeader({
       } ${active ? "text-[#084734]" : "text-[#615D59]"}`}
     >
       <span>{label}</span>
-      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      {/* 비활성(정렬 안 됨) 화살표는 흐림 처리로 활성 상태와 구분(항목 8). */}
+      <Icon className={`h-3.5 w-3.5 ${active ? "" : "opacity-35"}`} aria-hidden="true" />
     </button>
   )
 }
@@ -1041,10 +1124,11 @@ function draftMatchesFilter(draft: LedgerDraft, filter: DraftStatusFilter) {
   return draft.status === filter
 }
 
+// 다중 토큰 AND 매칭(품질 웨이브 3, 항목 1) — search-tokens.ts SSOT 소비. "김민 BD"처럼
+// 서로 다른 필드에 걸친 복합 검색을 지원한다(기존엔 공백 포함 쿼리를 단일 문자열로만 비교해
+// 실패했다).
 function draftMatchesQuery(draft: LedgerDraft, query: string) {
-  const needle = query.trim().toLowerCase()
-  if (!needle) return true
-  return [
+  return matchesTokens(tokenize(query), [
     draft.customer,
     draft.manager,
     draft.team,
@@ -1052,7 +1136,7 @@ function draftMatchesQuery(draft: LedgerDraft, query: string) {
     draft.note,
     draft.sourceDealId,
     draft.sourceSheetRow ? String(draft.sourceSheetRow) : "",
-  ].some((value) => String(value ?? "").toLowerCase().includes(needle))
+  ])
 }
 
 function DraftQueue({
@@ -1085,6 +1169,19 @@ function DraftQueue({
   // "적용"은 큐에서 유일하게 비가역인 동작(DB 장부에 실제로 기록) — 확인 다이얼로그를 거친다.
   const [confirmApplyDraft, setConfirmApplyDraft] = useState<LedgerDraft | null>(null)
   const [applyingId, setApplyingId] = useState<string | null>(null)
+  // 다이얼로그 포커스 관리(DealModal.tsx 패턴 인라인 이식): 열릴 때 안전한 기본 컨트롤(취소)로
+  // 포커스를 옮기고, 닫힐 때 다이얼로그를 연 트리거로 복귀한다. "적용"은 비가역 동작이라
+  // autoFocus 기본값을 파괴적 버튼에 두지 않는다 — 초기 포커스는 "취소".
+  const confirmApplyCancelRef = useRef<HTMLButtonElement | null>(null)
+  const confirmApplyDraftId = confirmApplyDraft?.id ?? null
+  useEffect(() => {
+    if (!confirmApplyDraftId) return
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    confirmApplyCancelRef.current?.focus()
+    return () => {
+      previouslyFocused?.focus()
+    }
+  }, [confirmApplyDraftId])
   const confirmAndApply = async (id: string) => {
     setApplyingId(id)
     try {
@@ -1094,6 +1191,19 @@ function DraftQueue({
       setConfirmApplyDraft(null)
     }
   }
+  // "삭제"도 초안 자체가 사라져 되돌릴 수 없다 — 적용 확인과 같은 다이얼로그 셸(포커스 관리 포함)을
+  // 재사용해 확인을 거친다(품질 웨이브 4 — 항목 3). 오조작 방지가 목적이라 초기 포커스도 "취소".
+  const [confirmDeleteDraft, setConfirmDeleteDraft] = useState<LedgerDraft | null>(null)
+  const confirmDeleteCancelRef = useRef<HTMLButtonElement | null>(null)
+  const confirmDeleteDraftId = confirmDeleteDraft?.id ?? null
+  useEffect(() => {
+    if (!confirmDeleteDraftId) return
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    confirmDeleteCancelRef.current?.focus()
+    return () => {
+      previouslyFocused?.focus()
+    }
+  }, [confirmDeleteDraftId])
   // 체크토글·삭제 in-flight 표시 — InputRailSection의 draftSaving+Loader2 패턴 재사용.
   // 한 초안에 동시에 한 동작만(토글 중 삭제 클릭 등 이중 요청 방지) 진행되게 버튼도 함께 잠근다.
   const [rowActionBusy, setRowActionBusy] = useState<{ id: string; action: "toggle" | "delete" } | null>(null)
@@ -1114,6 +1224,12 @@ function DraftQueue({
       setRowActionBusy(null)
     }
   }
+  // 확인 다이얼로그의 "삭제" 클릭 → 기존 runDelete(rowActionBusy 추적) 그대로 실행 후 다이얼로그를 닫는다.
+  const confirmAndDelete = async (id: string) => {
+    await runDelete(id)
+    setConfirmDeleteDraft(null)
+  }
+  const deletingConfirmed = confirmDeleteDraft != null && rowActionBusy?.id === confirmDeleteDraft.id && rowActionBusy.action === "delete"
 
   if (loading && drafts.length === 0) {
     return (
@@ -1285,7 +1401,7 @@ function DraftQueue({
               </button>
               <button
                 type="button"
-                onClick={() => void runDelete(draft.id)}
+                onClick={() => setConfirmDeleteDraft(draft)}
                 disabled={draft.status === "checked" || draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label="초안 삭제"
@@ -1328,6 +1444,7 @@ function DraftQueue({
           </div>
           <div className="flex items-center justify-end gap-2 bg-[#FAFAF8] px-4 py-3">
             <button
+              ref={confirmApplyCancelRef}
               type="button"
               onClick={() => setConfirmApplyDraft(null)}
               disabled={applyingId === confirmApplyDraft.id}
@@ -1339,11 +1456,58 @@ function DraftQueue({
               type="button"
               onClick={() => void confirmAndApply(confirmApplyDraft.id)}
               disabled={applyingId === confirmApplyDraft.id}
-              autoFocus
               className="inline-flex h-9 items-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
             >
               {applyingId === confirmApplyDraft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
               적용
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    {/* 삭제 확인 다이얼로그(품질 웨이브 4 — 항목 3) — 적용 확인 다이얼로그와 동일 셸 재사용,
+        danger 톤(삭제 버튼과 동일 캐논 #B43E3E/#FCE9E9)만 다르다. */}
+    {confirmDeleteDraft && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="초안 삭제 확인"
+        className="fixed inset-0 z-[60] flex items-end justify-center bg-[#111110]/40 p-4 sm:items-center"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && !deletingConfirmed) {
+            event.stopPropagation()
+            setConfirmDeleteDraft(null)
+          }
+        }}
+      >
+        <div className="flex w-full max-w-sm flex-col overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_24px_70px_rgba(17,17,16,0.22)]">
+          <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
+            <p className="text-[13px] font-bold text-[#111110]">초안 삭제 확인</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#615D59]">
+              {confirmDeleteDraft.customer || "초안"} · {formatMonthLabel(confirmDeleteDraft.month)} · {formatMoney(confirmDeleteDraft.amount)}
+            </p>
+          </div>
+          <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FCE9E9] px-4 py-3 text-[11.5px] font-semibold leading-relaxed text-[#8F2C2C]">
+            삭제하면 이 초안이 완전히 사라집니다. 이 작업은 되돌릴 수 없습니다.
+          </div>
+          <div className="flex items-center justify-end gap-2 bg-[#FAFAF8] px-4 py-3">
+            <button
+              ref={confirmDeleteCancelRef}
+              type="button"
+              onClick={() => setConfirmDeleteDraft(null)}
+              disabled={deletingConfirmed}
+              className="inline-flex h-9 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmAndDelete(confirmDeleteDraft.id)}
+              disabled={deletingConfirmed}
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-[#B43E3E] bg-white px-3 text-[12px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {deletingConfirmed ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              삭제
             </button>
           </div>
         </div>
@@ -1364,7 +1528,7 @@ function DraftQueue({
 // 커밋 1건 = createDraft 1건(새 저장경로 없음). 낙관적 표시는 drafts 배열에서 파생.
 
 // 셀 좌표 = 행 id + 회계월. 편집가능 셀 순회(방향키/Tab)의 단위.
-interface MatrixCellCoord {
+export interface MatrixCellCoord {
   rowId: string
   month: string
   week?: number // 0~4 = 확장된 월의 w1~w5 주차 칸. 없으면 월 요약 셀.
@@ -1372,13 +1536,21 @@ interface MatrixCellCoord {
 
 // 셀 좌표 → 안정 키. 월 셀은 `rowId::month`(Phase 2와 동일), 주차 셀은 `rowId::month::wN`.
 // 월 셀 키를 그대로 유지해 기존 순회/pending 매칭 회귀를 막는다.
-function matrixCoordKey(coord: MatrixCellCoord): string {
+export function matrixCoordKey(coord: MatrixCellCoord): string {
   return coord.week == null ? `${coord.rowId}::${coord.month}` : `${coord.rowId}::${coord.month}::w${coord.week + 1}`
 }
 
 // 두 좌표가 같은 세로 열(같은 월·같은 주차)인지 — 아래/위 이동·fill-down 소스 판정용.
 function matrixSameColumn(a: MatrixCellCoord, b: MatrixCellCoord): boolean {
   return a.month === b.month && (a.week ?? -1) === (b.week ?? -1)
+}
+
+// 좌표 → 그 셀에 걸린 미검수 초안(있으면). 주차 좌표면 주차 키 우선, 없으면 월 키로 폴백
+// (월 단위로만 걸린 초안도 주차 칸 재편집 시 "이미 이 달에 초안이 있다"는 신호로 쓴다).
+// matrixCellValue(재편집 시작값)·matrixCellConfidence·onCommitCell(PATCH-vs-POST 타겟)이 공유.
+export function lookupMatrixPending(pendingByCell: Map<string, MatrixPendingDraft>, coord: MatrixCellCoord): MatrixPendingDraft | null {
+  const weekKey = coord.week != null ? matrixCoordKey(coord) : null
+  return (weekKey ? pendingByCell.get(weekKey) : null) ?? pendingByCell.get(matrixCoordKey({ rowId: coord.rowId, month: coord.month })) ?? null
 }
 
 // metadata.week 문자열("w1".."w5") → 0~4 인덱스. "month"/그 외/누락이면 null.
@@ -1420,25 +1592,130 @@ function weeklyPaymentsFromDraftMetadata(
   return weeklyPaymentsFromWeekToken(month, amount, metadataString(metadata, "week"))
 }
 
-// 셀에 걸린 미검수(draft|checked) 초안 요약. 낙관적 앰버 표시·툴팁용.
-interface MatrixPendingDraft {
+// 셀에 걸린 미검수(draft|checked) 초안 요약. 낙관적 앰버 표시·툴팁용 + 재편집/커밋 타겟 판정용.
+// id: PATCH 타겟(같은 셀 재편집 시 새 초안 대신 이 초안을 갱신). weekly: 주차 병합 배열(metadata.weekly) —
+// 있으면 주차별 금액 조회에 쓴다(없으면 amount가 곧 그 셀 금액, 주차 단일대체 규약과 동일).
+export interface MatrixPendingDraft {
+  id: string
   amount: number
   confidence: DraftConfidence
+  weekly: number[] | null
 }
 
-// 편집 input이 받는 문자열 → 원 단위 정수. rail의 safeAmount와 동일 규칙(¥·콤마·공백 제거).
-// 만 단위 입력은 지원하지 않는다(rail이 원 단위 String을 쓰므로 저장 정합을 위해 원 단위 고정).
-function parseMatrixAmount(value: string): number {
+// pending 요약에서 좌표(coord) 기준 실제 셀 금액을 뽑는다. 주차 좌표 + weekly 병합 배열이 있으면
+// 그 주차 값, 아니면(월 좌표거나 병합 배열이 없는 단일대체 케이스) summary.amount 그대로.
+export function pendingCellAmount(pending: MatrixPendingDraft, week?: number): number {
+  if (week != null && pending.weekly) return pending.weekly[week] ?? 0
+  return pending.amount
+}
+
+// 입력 레일 저장 시 이중계상 회피 대상 판정(품질 웨이브 3, 항목 3) — 매트릭스 셀 재편집(onCommitCell)과
+// 동일한 lookupMatrixPending 판정을, 레일 폼이 다루는 좌표(딜 행 rowId + 타겟 월/주차)에 그대로 적용한다.
+// 있으면 saveDraft가 새 POST(createDraft) 대신 이 초안을 PATCH(updateDraft)로 갱신해 같은 셀에
+// 열린 초안이 중복 생성되는 것을 막는다 — 두 초안이 모두 적용되면 같은 셀 매출이 이중 계상된다.
+// excludeDraftId: 지금 편집 중인 초안 자신(재저장 시 자기 자신과의 "충돌"로 오탐하지 않게) —
+// 신규 저장(saveDraft)에서는 항상 null.
+// 기간이동(period-shift)처럼 타겟 월이 실제로 다르면 coord.month가 달라 매칭되지 않으므로,
+// 같은 딜이라도 다른 달을 타겟하는 정당한 별건 초안까지 막지 않는다(차단이 아니라 타겟 재지정일 뿐).
+export function railDedupTarget(
+  pendingByCell: Map<string, MatrixPendingDraft>,
+  rowId: string,
+  month: string,
+  weekToken: string | null | undefined,
+  excludeDraftId: string | null,
+): MatrixPendingDraft | null {
+  const weekIdx = weekIndexFromToken(weekToken)
+  const coord: MatrixCellCoord = weekIdx == null ? { rowId, month } : { rowId, month, week: weekIdx }
+  const pending = lookupMatrixPending(pendingByCell, coord)
+  if (!pending || pending.id === excludeDraftId) return null
+  return pending
+}
+
+// 품질 웨이브 4 — 항목 2: new-row 저장 전, 같은 고객명·월 조합의 열린(draft|checked) 신규 초안이
+// 이미 있는지 검사한다. edit-row의 railDedupTarget(같은 셀 감지 시 자동 PATCH 재지정)과 달리
+// new-row는 아직 매트릭스에 대응 행이 없어 "같은 딜"인지 확정할 수 없다 — 그래서 저장을 막거나
+// 재지정하지 않고 그대로 새로 저장한 뒤, 사용자가 판단하도록 경고만 낸다.
+export function findOpenNewRowDuplicate(
+  drafts: LedgerDraft[],
+  customer: string,
+  month: string,
+): LedgerDraft | null {
+  const normalizedCustomer = customer.trim().toLowerCase()
+  if (!normalizedCustomer) return null
+  return (
+    drafts.find(
+      (draft) =>
+        draft.kind === "new-row" &&
+        (draft.status === "draft" || draft.status === "checked") &&
+        draft.month === month &&
+        draft.customer.trim().toLowerCase() === normalizedCustomer,
+    ) ?? null
+  )
+}
+
+// 미검수(draft|checked) 초안 → 셀 낙관적 표시 + 재편집/커밋 타겟 판정 맵. drafts에서 파생(별도 버퍼 없음).
+// 매칭: 초안 sourceDealId == 행 sourceDealId(또는 id) && 초안 month == 셀 month.
+// 월 키(`rowId::month`)와 주차 키(`rowId::month::wN`)를 각각 채운다:
+//   - 월 키: 그 달에 걸린 최신 초안(주차 초안 포함) → 접힌 월 셀 앰버 점 + 월 단위 재편집 타겟.
+//   - 주차 키: metadata.week가 wN인 초안만 → 확장 주차 칸 앰버 점 + 그 주차 재편집 타겟.
+// 같은 키에 여러 초안이 있으면 가장 최근(drafts 배열 앞쪽) 것을 표시 — 컴포넌트는 항상 최신순으로 prepend한다.
+// 순수 함수로 분리(useMemo 밖) — 컴포넌트 렌더 없이 회귀 테스트(같은 셀 재편집 시 초안 1건 유지) 가능.
+export function buildMatrixPendingByCell(
+  drafts: LedgerDraft[],
+  visibleDealRows: LedgerRevenueRow[],
+): Map<string, MatrixPendingDraft> {
+  const map = new Map<string, MatrixPendingDraft>()
+  const pending = drafts.filter((draft) => draft.status === "draft" || draft.status === "checked")
+  for (const row of visibleDealRows) {
+    const dealKey = row.sourceDealId ?? row.id
+    for (const draft of pending) {
+      const draftDealId = draft.sourceDealId ?? metadataString(draft.metadata, "sourceDealId")
+      if (draft.kind === "edit-row" ? draftDealId !== dealKey : draft.customer.trim() !== row.customer.trim()) continue
+      const summary: MatrixPendingDraft = {
+        id: draft.id,
+        amount: draft.amount,
+        confidence: draftConfidenceFromMetadata(draft.metadata),
+        weekly: mergedWeeklyFromMetadata(draft.metadata),
+      }
+      const monthKey = matrixCoordKey({ rowId: row.id, month: draft.month })
+      if (!map.has(monthKey)) map.set(monthKey, summary) // 월 셀: 첫(=최신) 초안
+      const weekIdx = weekIndexFromToken(metadataString(draft.metadata, "week"))
+      if (weekIdx != null) {
+        const weekKey = matrixCoordKey({ rowId: row.id, month: draft.month, week: weekIdx })
+        if (!map.has(weekKey)) map.set(weekKey, summary) // 주차 칸: 그 주차 첫(=최신) 초안
+      }
+    }
+  }
+  return map
+}
+
+// 편집 input이 받는 문자열 → 원 단위 정수 + 음수 클램프 여부. rail의 safeAmount와 동일 규칙
+// (¥·콤마·공백 제거). 만 단위 입력은 지원하지 않는다(rail이 원 단위 String을 쓰므로 단위 고정).
+// clamped=true면 파싱값이 음수라 0으로 잘렸다는 뜻 — 호출부가 무경고로 삼키지 않도록 신호를 남긴다.
+function parseMatrixAmountResult(value: string): { amount: number; clamped: boolean } {
   const normalized = value.replace(/[^\d.-]/g, "")
-  if (!normalized) return 0
+  if (!normalized) return { amount: 0, clamped: false }
   const numeric = Number(normalized)
-  return Number.isFinite(numeric) ? Math.max(Math.round(numeric), 0) : 0
+  if (!Number.isFinite(numeric)) return { amount: 0, clamped: false }
+  const rounded = Math.round(numeric)
+  return { amount: Math.max(rounded, 0), clamped: rounded < 0 }
+}
+
+function parseMatrixAmount(value: string): number {
+  return parseMatrixAmountResult(value).amount
 }
 
 // 딜행 × 월 셀이 확정 잠금(편집 불가)인지. monthlyRed 플래그 또는 확정액이 그 달 금액을 덮으면 잠금.
 // 적용된 초안(ledgerOrigin==="draft")은 확도와 무관하게 잠금 — 셀 편집이 만드는 새 초안은 sourceDealId
 // 기준이라 장부 반영분과 겹치면 이중계상이 되므로, 적용분 수정·취소는 입력 큐에서만 한다.
-function isMatrixCellLocked(row: LedgerRevenueRow, month: string): boolean {
+//
+// correctedMonths(품질 웨이브 4 — 항목 1, 회귀 방지): 이 행(원본 시트 딜)의 이 달이 이미 적용된 수정
+// (edit-row) 초안으로 대체됐는지 — editRowOverrideMonths.get(row.id). rows 파생 단계(adjustedSheetRows)가
+// 그 달의 원본 금액을 지워 amount<=0으로 만들기 때문에, 이 체크가 없으면 아래 "미입력=편집 가능" 분기로
+// 새어 정정 적용 직후 원본 셀이 재편집 가능해진다 — 새 셀 입력이 쌓이면 적용된 정정 + 신규 초안이 같은
+// (딜, 월)에 겹쳐 이중계상된다. 그래서 금액 판정보다 먼저, 금액과 무관하게 잠근다.
+export function isMatrixCellLocked(row: LedgerRevenueRow, month: string, correctedMonths?: Set<string> | null): boolean {
+  if (correctedMonths?.has(month)) return true
   const amount = rowMonthAmount(row, month)
   if (amount <= 0) return false // 미입력 = 편집 가능(예정 추가)
   if (row.ledgerOrigin === "draft" && row.draftMonth === month) return true
@@ -1448,8 +1725,8 @@ function isMatrixCellLocked(row: LedgerRevenueRow, month: string): boolean {
 }
 
 // 딜행 셀이 편집 가능한지 — 딜행(그룹 소계 제외)이면서 잠금 아님. 미래월 제한은 두지 않는다.
-function isMatrixCellEditable(row: LedgerRevenueRow, month: string): boolean {
-  return !isMatrixCellLocked(row, month)
+export function isMatrixCellEditable(row: LedgerRevenueRow, month: string, correctedMonths?: Set<string> | null): boolean {
+  return !isMatrixCellLocked(row, month, correctedMonths)
 }
 
 // ── SL-2: 엑셀 클립보드 TSV 붙여넣기 → 초안 큐 벌크 라우팅 ──────────────────────
@@ -1493,6 +1770,9 @@ function buildMatrixPastePlan(
   anchor: MatrixCellCoord,
   dealRows: LedgerRevenueRow[],
   months: string[],
+  // 품질 웨이브 4 — 항목 1: 정정 적용으로 재잠긴 (딜, 월) 칸을 붙여넣기 계획에서도 locked로
+  // 판정하기 위한 dealId → 대체된 월 집합(editRowOverrideMonths).
+  overrideMonthsByRow: Map<string, Set<string>>,
 ): MatrixPastePlan | null {
   const grid = parseTsvGrid(text)
   if (grid.length === 0) return null
@@ -1533,7 +1813,7 @@ function buildMatrixPastePlan(
       cellBudget -= 1
       const next = parseMatrixAmount(raw)
       const current = rowMonthAmount(row, month)
-      const locked = isMatrixCellLocked(row, month)
+      const locked = isMatrixCellLocked(row, month, overrideMonthsByRow.get(row.id))
       // 동일 금액은 초안을 만들지 않는다(commitBuffer의 중복 커밋 가드와 같은 취지).
       const status: MatrixPasteCellPlan["status"] =
         locked ? "locked" : next === current || (next <= 0 && current <= 0) ? "unchanged" : "apply"
@@ -1644,11 +1924,14 @@ function useMatrixEditor({
   cellValue,
   cellConfidence,
   onCommitCell,
+  onAmountClamped,
 }: {
   editableCells: MatrixCellCoord[] // 렌더 순서(행 위→아래, 월 좌→우, 확장월은 w1→w5)로 정렬된 편집가능 셀
   cellValue: (coord: MatrixCellCoord) => number // 커밋 기준값(원 단위) — fill-down 소스
   cellConfidence: (coord: MatrixCellCoord) => DraftConfidence // 셀 우세 확도(팝오버 기본값)
   onCommitCell: (rowId: string, month: string, amount: number, confidence: DraftConfidence, week?: number) => void
+  // 음수 입력이 0으로 클램프될 때 호출(커밋 결과와 무관 — 무입력 취급되는 경우도 포함). 항목 3.
+  onAmountClamped?: () => void
 }) {
   const [selected, setSelected] = useState<MatrixCellCoord | null>(null)
   const [editing, setEditing] = useState<MatrixCellCoord | null>(null)
@@ -1715,7 +1998,11 @@ function useMatrixEditor({
   // buffer는 latest-ref(bufferRef)로 읽어 콜백 identity를 고정한다(actions 안정화).
   const commitBuffer = useCallback(
     (coord: MatrixCellCoord, confidence: DraftConfidence): boolean => {
-      const amount = parseMatrixAmount(bufferRef.current)
+      const parsed = parseMatrixAmountResult(bufferRef.current)
+      // 클램프 여부는 커밋이 실제로 값을 바꾸는지와 무관하게 신호를 보낸다 — 그래야 "음수를 쳤는데
+      // 아무 일도 안 일어났다"는 무경고 0 클램프가 (아래 dup-guard로 조기 return 되더라도) 항상 뜬다.
+      if (parsed.clamped) onAmountClamped?.()
+      const amount = parsed.amount
       const previous = cellValue(coord)
       const previousConfidence = cellConfidence(coord)
       // 금액·확도 둘 다 그대로면 저장하지 않는다. (주차 셀도 cellValue/cellConfidence가 주차 기준이라 동일 가드 적용)
@@ -1724,7 +2011,7 @@ function useMatrixEditor({
       onCommitCell(coord.rowId, coord.month, amount, confidence, coord.week)
       return true
     },
-    [cellConfidence, cellValue, onCommitCell],
+    [cellConfidence, cellValue, onAmountClamped, onCommitCell],
   )
 
   const moveSelection = useCallback(
@@ -1964,7 +2251,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
   const cellClassName = `relative px-1.5 text-right align-middle tabular-nums ${
     mismatch ? "border-l-2 border-l-[#B43E3E]" : "border-l border-[#F2F1EE]"
   } ${bg} ${interactive && editable ? "cursor-cell" : ""} ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${
-    pending ? "shadow-[inset_0_-2px_0_0_#D4A017]" : ""
+    pending ? "shadow-[inset_0_-2px_0_0_#A8741A]" : ""
   } focus-visible:outline-none`
 
   const interactiveHandlers = interactive
@@ -1996,6 +2283,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
     <td
       ref={cellRef}
       title={title}
+      aria-label={interactive ? title : undefined}
       className={cellClassName}
       style={{ width: MATRIX_MONTH_W, minWidth: MATRIX_MONTH_W, maxWidth: MATRIX_MONTH_W }}
       {...interactiveHandlers}
@@ -2003,7 +2291,7 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
       {pending && (
         <span
           aria-hidden
-          className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#D4A017]"
+          className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#A8741A]"
         />
       )}
       {bucket.total > 0 ? (
@@ -2111,7 +2399,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
 
   const cellClassName = `relative border-l border-[#F2F1EE] px-1.5 text-right align-middle tabular-nums ${bgClass} ${
     interactive && editable ? "cursor-cell" : ""
-  } ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${pending ? "shadow-[inset_0_-2px_0_0_#D4A017]" : ""} focus-visible:outline-none`
+  } ${selected ? "ring-2 ring-inset ring-[#084734]/40" : ""} ${pending ? "shadow-[inset_0_-2px_0_0_#A8741A]" : ""} focus-visible:outline-none`
 
   const interactiveHandlers = interactive
     ? {
@@ -2142,11 +2430,12 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
     <td
       ref={cellRef}
       title={title}
+      aria-label={interactive ? title : undefined}
       className={cellClassName}
       style={{ width: MATRIX_WEEK_W, minWidth: MATRIX_WEEK_W, maxWidth: MATRIX_WEEK_W }}
       {...interactiveHandlers}
     >
-      {pending && <span aria-hidden className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#D4A017]" />}
+      {pending && <span aria-hidden className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-[#A8741A]" />}
       {/* 1만 미만(원시 위안) 값은 저대비·소형으로 강등 — 월 셀(RevMatrixMonthCell)과 동일 규약(SL-7). */}
       <span
         className={`inline-flex items-center gap-0.5 leading-none tabular-nums ${
@@ -2215,7 +2504,7 @@ function RevMatrixWeekCells({
         rowId={editContext?.rowId}
         editable={weekEditable}
         locked={editContext ? weekLocked && display > 0 : false}
-        lockLabel={editContext?.lockLabel}
+        lockLabel={editContext ? editContext.lockLabelOf(month ?? "") : undefined}
         editWarning={editContext ? editContext.weekEditNotice(month ?? "") : undefined}
         pending={editContext ? editContext.weekPendingOf(month ?? "", index) : null}
         actions={editContext?.actions ?? null}
@@ -2239,7 +2528,10 @@ interface RevMatrixEditContext {
   isEditingCell: (month: string, week?: number) => boolean // 이 행 기준 셀 편집 판정
   editBuffer: string // 편집 중 버퍼 값(편집 셀에만 의미)
   editConfidence: DraftConfidence // 편집 중 확도(편집 셀에만 의미)
-  lockLabel: string // 잠금 아이콘·툴팁 라벨 — 시트 원천은 "시트 확정", 적용 초안은 "장부 반영"
+  // 잠금 아이콘·툴팁 라벨(월별) — 시트 원천은 "시트 확정", 적용 초안은 "장부 반영", 정정 적용으로
+  // 재잠긴 원본 달은 "장부 반영(정정)"(품질 웨이브 4 — 항목 1: 정정이 셀을 지운 게 아니라 대체했음을
+  // 구분해 보여준다 — 재편집을 시도하면 우측 패널 정정 초안으로 유도).
+  lockLabelOf: (month: string) => string
   editableOf: (month: string) => boolean
   lockedOf: (month: string) => boolean
   pendingOf: (month: string) => MatrixPendingDraft | null
@@ -2300,7 +2592,7 @@ function RevMatrixMonthStrip({
             rowId={editContext?.rowId}
             editable={editContext ? editContext.editableOf(month) : false}
             locked={editContext ? editContext.lockedOf(month) : false}
-            lockLabel={editContext?.lockLabel}
+            lockLabel={editContext ? editContext.lockLabelOf(month) : undefined}
             pending={editContext ? editContext.pendingOf(month) : null}
             actions={editContext?.actions ?? null}
             selected={monthSelected}
@@ -2351,6 +2643,21 @@ function RevMatrixPasteDialog({
 }) {
   const shown = plan.cells.slice(0, MATRIX_PASTE_PREVIEW_LIMIT)
   const hidden = plan.cells.length - shown.length
+  // 다이얼로그 포커스 관리(DealModal.tsx 패턴 인라인 이식): 이 컴포넌트는 부모가 plan이 있을 때만
+  // 마운트하므로(조건부 렌더) 마운트 = 열림, 언마운트 = 닫힘이다. 마운트 시 트리거(붙여넣기 직전
+  // 포커스가 있던 매트릭스 셀 등)를 기억해 언마운트 때 되돌린다. 어느 버튼이 기본 포커스를
+  // 받는지는 기존 autoFocus 분기(취소 vs 확인, applyCount 유무)를 그대로 유지한다.
+  const cancelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const confirmButtonRef = useRef<HTMLButtonElement | null>(null)
+  const hasApplyCells = plan.applyCount > 0
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const target = hasApplyCells ? confirmButtonRef.current : cancelButtonRef.current
+    target?.focus()
+    return () => {
+      previouslyFocused?.focus()
+    }
+  }, [hasApplyCells])
   const statusMeta: Record<MatrixPasteCellPlan["status"], { label: string; className: string }> = {
     apply: { label: "초안 생성", className: "text-[#084734]" },
     locked: { label: "잠금 제외", className: "text-[#A39E98]" },
@@ -2468,20 +2775,20 @@ function RevMatrixPasteDialog({
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-3">
           <button
+            ref={cancelButtonRef}
             type="button"
             onClick={onCancel}
-            // applyCount=0이면 확인 버튼이 disabled라 autoFocus가 무시되고 포커스가 모달 뒤
-            // 그리드 셀에 남아 숫자 키가 편집을 시작한다 — 그 경우 취소 버튼이 포커스를 받는다.
-            autoFocus={plan.applyCount === 0}
+            // applyCount=0이면 확인 버튼이 disabled라 취소 버튼이 초기 포커스를 받는다(위 useEffect) —
+            // 그러지 않으면 포커스가 모달 뒤 그리드 셀에 남아 숫자 키가 편집을 시작해버린다.
             className="inline-flex h-9 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
           >
             취소
           </button>
           <button
+            ref={confirmButtonRef}
             type="button"
             onClick={onConfirm}
             disabled={plan.applyCount === 0}
-            autoFocus={plan.applyCount > 0}
             className="inline-flex h-9 items-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
           >
             검토 초안 {plan.applyCount.toLocaleString("ko-KR")}건 생성
@@ -2534,6 +2841,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
         }
       }}
       tabIndex={0}
+      role="row"
       title="클릭: 우측 요약 · ▸ 펼치기: 하위 딜행"
       aria-label={`${group.customer} ${group.rows.length}건 — 우측 요약 열기`}
       className={`group ${MATRIX_GROUP_ROW_HEIGHT[density]} cursor-pointer border-t border-[#EDECE8] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 ${
@@ -2706,12 +3014,14 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
           editingCoord != null && editingCoord.month === month && (editingCoord.week ?? -1) === (week ?? -1),
         editBuffer,
         editConfidence,
-        lockLabel: row.ledgerOrigin === "draft" ? "장부 반영" : "시트 확정",
-        editableOf: (month) => isMatrixCellEditable(row, month),
-        lockedOf: (month) => isMatrixCellLocked(row, month),
+        // 품질 웨이브 4 — 항목 1: 정정으로 재잠긴 달만 "장부 반영(정정)"으로 구분 — 나머지는 기존 규약.
+        lockLabelOf: (month) =>
+          view.correctedMonths?.has(month) ? "장부 반영(정정)" : row.ledgerOrigin === "draft" ? "장부 반영" : "시트 확정",
+        editableOf: (month) => isMatrixCellEditable(row, month, view.correctedMonths),
+        lockedOf: (month) => isMatrixCellLocked(row, month, view.correctedMonths),
         pendingOf: (month) => pendingByCell?.get(`${row.id}::${month}`) ?? null,
         // 주차 잠금 = 그 달 시트 확정 여부(월 잠금 규칙 승계). 주차 pending = `rowId::month::wN` 키.
-        weekLockedOf: (month) => isMatrixCellLocked(row, month),
+        weekLockedOf: (month) => isMatrixCellLocked(row, month, view.correctedMonths),
         weekPendingOf: (month, week) => pendingByCell?.get(`${row.id}::${month}::w${week + 1}`) ?? null,
         weekEditNotice: (month) =>
           rowWeeklySplit(row, month).source === "explicit"
@@ -2720,7 +3030,7 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
       }
     : null
   return (
-    <tr className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FBFBFA] hover:bg-[#FAFAF8]" : "hover:bg-[#FAFAF8]"}`}>
+    <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FBFBFA] hover:bg-[#FAFAF8]" : "hover:bg-[#FAFAF8]"}`}>
       <td
         className={`sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] pr-2 ${nested ? "border-l-2 border-l-[#CBD9D2] pl-12" : grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2"} ${rowBg}`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
@@ -2764,12 +3074,15 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
               HW ↗
             </Link>
           ) : (
-            <span className={`shrink-0 text-[10px] font-semibold ${productCategory === "hardware" ? "text-[#7A520F]" : "text-[#A39E98]"}`}>{productCategoryMeta(productCategory).shortLabel}</span>
+            // 품질 웨이브 4 — 항목 8: 실데이터 라벨(SW/HW 구분)은 플레이스홀더 톤(#A39E98)이 아니라
+            // 보조 텍스트 톤(#615D59)으로 승격 — DESIGN.md §2.
+            <span className={`shrink-0 text-[10px] font-semibold ${productCategory === "hardware" ? "text-[#7A520F]" : "text-[#615D59]"}`}>{productCategoryMeta(productCategory).shortLabel}</span>
           )}
         </div>
       </td>
       <td className="border-l border-[#F2F1EE] px-1.5 text-right align-middle" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
-        <span className={`text-[10px] font-semibold ${draftRow ? "text-[#A8741A]" : "text-[#A39E98]"}`}>
+        {/* 품질 웨이브 4 — 항목 8: "시트/장부" 원천 라벨도 실데이터라 #615D59로 승격. */}
+        <span className={`text-[10px] font-semibold ${draftRow ? "text-[#A8741A]" : "text-[#615D59]"}`}>
           {draftRow ? "장부" : "시트"}
         </span>
       </td>
@@ -2851,7 +3164,7 @@ const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
     return { weeks, inferred: !hasExplicit && hasInferred, monthOnlyAmount, mismatch: false }
   }
   return (
-    <tr className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${
+    <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${
       category === "hardware" ? "bg-[#FFFCF5] hover:bg-[#FBF6EC]" : "bg-[#FBFBFA] hover:bg-[#FAFAF8]"
     }`}>
       <td
@@ -2891,7 +3204,8 @@ const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
             HW ↗
           </Link>
         ) : (
-          <span className="text-[10px] font-semibold text-[#A39E98]">합산</span>
+          // 품질 웨이브 4 — 항목 8: "합산"도 실데이터 라벨이라 #615D59로 승격.
+          <span className="text-[10px] font-semibold text-[#615D59]">합산</span>
         )}
       </td>
       <RevMatrixMonthStrip
@@ -2932,7 +3246,7 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
   return (
     <tfoot className="sticky bottom-0 z-20">
       {/* 월별 확정/고확도/예정 스택 */}
-      <tr className="h-9 border-t-2 border-[#111110]/15 bg-[#F6F5F4]">
+      <tr role="row" className="h-9 border-t-2 border-[#111110]/15 bg-[#F6F5F4]">
         <td
           className="sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-[#615D59]"
           style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
@@ -2978,7 +3292,7 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
       </tr>
       {/* 월 목표 대비 % (DSH 월 목표 시리즈가 있을 때만) */}
       {hasAnyGoal && (
-        <tr className="h-7 border-t border-[#E7E5E1] bg-[#FAFAF8]">
+        <tr role="row" className="h-7 border-t border-[#E7E5E1] bg-[#FAFAF8]">
           <td
             className="sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-[10px] font-bold uppercase tracking-[0.06em] text-[#615D59]"
             style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
@@ -3079,19 +3393,30 @@ export default function SalesLedgerWorkbench() {
   }, [matrixDensity])
   // 기존 목표대비/주차별/담당자·상품군 패널은 접이식 보조 패널로 강등(기본 접힘). 1차 뷰는 매트릭스.
   const [revAuxOpen, setRevAuxOpen] = useState(false)
+  // 담당자별 월 수치 테이블 top6 캡 해제 토글(항목 6) — 기본은 캡, "전체 보기"로 전체 목록.
+  const [revManagerSummaryExpanded, setRevManagerSummaryExpanded] = useState(false)
   // 매트릭스 셀 커밋 실패(로컬 폴백) 등 편집 지점 인근 알림 토스트 — 상단 Source 바만으로는
-  // 편집 중 시야 밖이라 침묵 실패가 되던 문제 대응. 7초 뒤 자동 소멸.
-  const [matrixToast, setMatrixToast] = useState<{ kind: "error" | "info"; text: string } | null>(null)
-  // 단일 슬롯이라 에러 표시 도중 뒤이은 info 토스트가 그걸 덮어써 실패 알림을 놓칠 수 있었다
-  // — 에러가 떠 있는 동안은 info로 덮어쓰지 않는다(에러 자체는 항상 최신 것으로 갱신).
+  // 편집 중 시야 밖이라 침묵 실패가 되던 문제 대응. 각 토스트는 7초 뒤 자동 소멸.
+  // 최대 MATRIX_TOAST_MAX개 스택(품질 웨이브 3, 항목 6) — 이전엔 단일 슬롯이라 에러 표시 도중
+  // 뒤이은 info 토스트가 그걸 덮어써 실패 알림을 놓칠 수 있었다. 같은 문구는 dedupe(연타 방지),
+  // 초과분은 에러를 우선 유지하고 가장 오래된 info부터 밀어낸다(전부 에러면 가장 오래된 에러부터).
+  const [matrixToasts, setMatrixToasts] = useState<Array<{ id: string; kind: "error" | "info"; text: string }>>([])
   const pushMatrixToast = useCallback((next: { kind: "error" | "info"; text: string }) => {
-    setMatrixToast((current) => (current?.kind === "error" && next.kind !== "error" ? current : next))
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    setMatrixToasts((current) => {
+      if (current.some((toast) => toast.text === next.text)) return current
+      const stacked = [...current, { id, ...next }]
+      if (stacked.length <= MATRIX_TOAST_MAX) return stacked
+      const dropIndex = stacked.findIndex((toast) => toast.kind === "info")
+      return stacked.filter((_, index) => index !== (dropIndex !== -1 ? dropIndex : 0))
+    })
+    window.setTimeout(() => {
+      setMatrixToasts((current) => current.filter((toast) => toast.id !== id))
+    }, 7000)
   }, [])
-  useEffect(() => {
-    if (!matrixToast) return
-    const timer = window.setTimeout(() => setMatrixToast(null), 7000)
-    return () => window.clearTimeout(timer)
-  }, [matrixToast])
+  const dismissMatrixToast = useCallback((id: string) => {
+    setMatrixToasts((current) => current.filter((toast) => toast.id !== id))
+  }, [])
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(true)
   const [railView, setRailView] = useState<RailView>("detail")
   const [selectedRow, setSelectedRow] = useState<LedgerRevenueRow | null>(null)
@@ -3111,6 +3436,7 @@ export default function SalesLedgerWorkbench() {
     queueMode,
     queueLoading,
     queueError,
+    unsyncedLocalCount,
     createDraft,
     updateDraft,
     toggleDraft,
@@ -3119,6 +3445,8 @@ export default function SalesLedgerWorkbench() {
     reloadDrafts,
   } = useLedgerDraftQueue()
   const monthOptions = useMemo(() => buildFiscalMonthOptions(new Date()), [])
+  // 회계연도 라벨(품질 웨이브 3, 항목 4) — 브레드크럼·기간 라벨 2곳이 이 값 하나를 공유한다.
+  const fyLabel = useMemo(() => fiscalYearLabel(new Date()), [])
   // 매트릭스 12개 열의 회계월 값(4→3 순서). monthOptions와 동일 순서·동일 배열이나 값만 뽑아
   // 그룹/행 파생값 루프와 컬럼 memo가 공유한다.
   const matrixMonths = useMemo(() => monthOptions.map((option) => option.value), [monthOptions])
@@ -3490,7 +3818,7 @@ export default function SalesLedgerWorkbench() {
   }, [editingDraft, editingDraftId])
 
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
-  const summary = useBranchJson<BranchSummaryResponse>(`/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}`, refreshKey)
+  const summary = useBranchJson<BranchSummaryResponse>(`/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}&breakdown=1`, refreshKey)
   const kpi = useBranchJson<BranchKpiResponse>(`/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`, refreshKey)
   const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey)
 
@@ -3697,7 +4025,11 @@ export default function SalesLedgerWorkbench() {
   // 건수"가 일치하려면 다른 필터(담당자/상품/검색 등)는 이미 반영된 상태에서 세야 한다.
   // (기존엔 무필터 rows 기준이라 담당자 필터 중 "불일치 7" 클릭 → 2행만 나오는 불일치가 있었다.)
   const revBaseFilteredRows = useMemo(() => {
-    const needle = query.trim().toLowerCase()
+    // 다중 토큰 AND 매칭(품질 웨이브 3, 항목 1) — "김민 BD"처럼 서로 다른 필드에 걸친 복합
+    // 검색을 지원한다. sheetRow를 필드에 포함(항목 2) — IntegrityStrip의 "장부에서 열기 →"
+    // 딥링크(`?lens=rev&q=<sheetRow>`)가 실제로 그 행을 찾아 매칭되게 한다(기존엔 sheetRow가
+    // 검색 대상에 없어 링크를 눌러도 검색 결과가 비었다).
+    const tokens = tokenize(query)
     return rows
       .filter((row) => managerFilter === "ALL" || row.manager === managerFilter)
       .filter((row) => regionFilter === "ALL" || row.region === regionFilter)
@@ -3706,12 +4038,26 @@ export default function SalesLedgerWorkbench() {
       .filter((row) => revDealTypeFilter === "ALL" || row.dealType === revDealTypeFilter)
       .filter((row) => revOriginFilter === "all" || row.ledgerOrigin === revOriginFilter)
       .filter((row) => {
-        if (!needle) return true
+        if (tokens.length === 0) return true
         const originLabel = row.ledgerOrigin === "draft" ? "장부 입력 applied draft 신규 수정" : "시트 원본 sheet"
         const productMeta = productCategoryMeta(rowProductCategory(row))
-        return [row.customer, row.manager, row.team, row.region, row.status, row.dealType, row.productVersion, productMeta.label, productMeta.shortLabel, originLabel, row.draftKind, row.draftNote, row.draftMonth, row.sourceDealId].some((value) =>
-          String(value ?? "").toLowerCase().includes(needle),
-        )
+        return matchesTokens(tokens, [
+          row.customer,
+          row.manager,
+          row.team,
+          row.region,
+          row.status,
+          row.dealType,
+          row.productVersion,
+          productMeta.label,
+          productMeta.shortLabel,
+          originLabel,
+          row.draftKind,
+          row.draftNote,
+          row.draftMonth,
+          row.sourceDealId,
+          row.sheetRow != null ? String(row.sheetRow) : "",
+        ])
       })
   }, [managerFilter, productFilter, query, regionFilter, revDealTypeFilter, revOriginFilter, revStatusFilter, rows])
 
@@ -3775,7 +4121,9 @@ export default function SalesLedgerWorkbench() {
   const revMonthMonthlyOnly = revMonthScalars.monthlyOnlyOpen
   const revMonthOpen = Math.max(revMonthTotal - revMonthConfirmed - revMonthHighConfidence - revMonthMonthlyOnly, 0)
   const revPeakWeek = revWeekProjection.slice().sort((a, b) => b.total - a.total)[0]
-  const revTopManagers = useMemo<RevManagerSummary[]>(() => {
+  // 담당자 전체(캡 없음) — top6 캡은 표시 단계(revTopManagers)에서만 건다. "전체 보기" 토글이
+  // 캡을 해제할 수 있도록 집계 자체는 항상 전체 담당자를 계산해 둔다(항목 6).
+  const revManagersSorted = useMemo<RevManagerSummary[]>(() => {
     const managers = new Map<string, RevManagerSummary>()
     for (const row of filteredRows) {
       const total = rowMonthAmount(row, selectedMonth)
@@ -3796,8 +4144,12 @@ export default function SalesLedgerWorkbench() {
       current.rows += 1
       managers.set(manager, current)
     }
-    return Array.from(managers.values()).sort((a, b) => b.total - a.total).slice(0, 6)
+    return Array.from(managers.values()).sort((a, b) => b.total - a.total)
   }, [filteredRows, selectedMonth])
+  const revTopManagers = useMemo(
+    () => (revManagerSummaryExpanded ? revManagersSorted : revManagersSorted.slice(0, 6)),
+    [revManagersSorted, revManagerSummaryExpanded],
+  )
   const revProductSummary = useMemo(() => buildRevProductSummary(filteredRows, selectedMonth), [filteredRows, selectedMonth])
   const monthlySeriesRows = useMemo<MonthlyPlanRow[]>(() => {
     const series = summary.data?.monthly_series
@@ -4081,11 +4433,14 @@ export default function SalesLedgerWorkbench() {
           mismatch: rowWeeklyMismatch(row, selectedMonth),
           monthlyByMonth,
           annual,
+          // 품질 웨이브 4 — 항목 1: 정정 적용으로 재잠긴 월 집합을 행 뷰에 함께 캐시해
+          // RevMatrixDealRow가 매 렌더 별도 Map 조회 없이 소비하게 한다.
+          correctedMonths: editRowOverrideMonths.get(row.id) ?? null,
         })
       }
     }
     return views
-  }, [visibleGroups, matrixMonths, selectedMonth])
+  }, [visibleGroups, matrixMonths, selectedMonth, editRowOverrideMonths])
 
   // 매트릭스 12개 열의 그랜드토탈(필터 반영, 전체 그룹 기준) + 월 목표. 하단 sticky 합계행이 소비.
   // revCustomerGroups는 이미 월별 소계를 담으므로 그룹 소계만 합산하면 된다(행 재순회 없음).
@@ -4157,14 +4512,24 @@ export default function SalesLedgerWorkbench() {
     return map
   }, [visibleDealRows])
 
+  // dealKey(row.sourceDealId ?? row.id) → 그 행(품질 웨이브 3, 항목 3). pendingByCell의 dealKey
+  // 판정과 동일 규약 — saveEditedDraft가 editingDraft의 딜 정체성만으로 대응 행을 찾을 때 쓴다
+  // (큐에서 바로 "수정" 진입하면 selectedRow가 그 딜과 무관할 수 있어 selectedRow에 기댈 수 없다).
+  const rowByDealKey = useMemo(() => {
+    const map = new Map<string, LedgerRevenueRow>()
+    for (const row of visibleDealRows) map.set(row.sourceDealId ?? row.id, row)
+    return map
+  }, [visibleDealRows])
+
   // 편집가능 셀 좌표(렌더 순서: 행 위→아래, 월 좌→우, 확장월은 w1→w5). 잠금 셀은 제외.
   // 방향키/Tab 순회의 단일 소스. matrixMonths는 4→3 회계연도 순.
   // 확장된 편집가능 월은 주차 5칸으로 분해(Tab이 w1→…→w5→다음 월로 흐름), 비확장 월은 월 요약 셀 1칸.
   const editableCells = useMemo<MatrixCellCoord[]>(() => {
     const cells: MatrixCellCoord[] = []
     for (const row of visibleDealRows) {
+      const correctedMonths = editRowOverrideMonths.get(row.id)
       for (const month of matrixMonths) {
-        if (!isMatrixCellEditable(row, month)) continue
+        if (!isMatrixCellEditable(row, month, correctedMonths)) continue
         if (expandedRevMonths.has(month)) {
           for (let week = 0; week < 5; week += 1) cells.push({ rowId: row.id, month, week })
         } else {
@@ -4173,7 +4538,7 @@ export default function SalesLedgerWorkbench() {
       }
     }
     return cells
-  }, [visibleDealRows, matrixMonths, expandedRevMonths])
+  }, [visibleDealRows, matrixMonths, expandedRevMonths, editRowOverrideMonths])
 
   // 미검수(draft|checked) 초안 → 셀 낙관적 표시. drafts에서 파생(별도 버퍼 없음).
   // 매칭: 초안 sourceDealId == 행 sourceDealId(또는 id) && 초안 month == 셀 month.
@@ -4189,7 +4554,12 @@ export default function SalesLedgerWorkbench() {
       for (const draft of pending) {
         const draftDealId = draft.sourceDealId ?? metadataString(draft.metadata, "sourceDealId")
         if (draft.kind === "edit-row" ? draftDealId !== dealKey : draft.customer.trim() !== row.customer.trim()) continue
-        const summary: MatrixPendingDraft = { amount: draft.amount, confidence: draftConfidenceFromMetadata(draft.metadata) }
+        const summary: MatrixPendingDraft = {
+          id: draft.id,
+          amount: draft.amount,
+          confidence: draftConfidenceFromMetadata(draft.metadata),
+          weekly: mergedWeeklyFromMetadata(draft.metadata),
+        }
         const monthKey = `${row.id}::${draft.month}`
         if (!map.has(monthKey)) map.set(monthKey, summary) // 월 셀: 첫(=최신) 초안
         const weekIdx = weekIndexFromToken(metadataString(draft.metadata, "week"))
@@ -4203,24 +4573,27 @@ export default function SalesLedgerWorkbench() {
   }, [drafts, visibleDealRows])
 
   // 커밋 기준값(원 단위): 편집 진입 초기값·fill-down·중복 판정 소스.
-  // 주차 셀이면 그 주차의 현재 표시값(explicit/inferred 기준), 아니면 그 달 표시 금액.
+  // 그 셀에 미검수(draft|checked) 초안이 있으면 시트 원값 대신 그 초안 금액을 우선한다 — 그래야
+  // 재편집 시작값이 "이미 대기 중인 값"이 되어 (a) 같은 값 재입력이 중복 초안을 만들지 않고
+  // (b) 값을 바꿔도 onCommitCell이 새 초안 대신 이 초안을 PATCH한다(이중계상 방지, P0).
+  // pending이 없으면 기존 규약: 주차 셀은 그 주차의 현재 표시값, 아니면 그 달 표시 금액.
   const matrixCellValue = useCallback(
     (coord: MatrixCellCoord) => {
+      const pending = lookupMatrixPending(pendingByCell, coord)
+      if (pending) return pendingCellAmount(pending, coord.week)
       const row = rowById.get(coord.rowId)
       if (!row) return 0
       if (coord.week != null) return rowWeeklySplit(row, coord.month).weeks[coord.week] ?? 0
       return rowMonthAmount(row, coord.month)
     },
-    [rowById],
+    [pendingByCell, rowById],
   )
 
   // 셀 우세 확도 → 편집 팝오버 기본 선택. 미검수 초안이 있으면 그 확도 우선.
   // 주차 셀은 그 주차 pending → 없으면 월 pending → 없으면 월 버킷 우세 확도로 폴백.
   const matrixCellConfidence = useCallback(
     (coord: MatrixCellCoord): DraftConfidence => {
-      const pending =
-        (coord.week != null ? pendingByCell.get(`${coord.rowId}::${coord.month}::w${coord.week + 1}`) : null) ??
-        pendingByCell.get(`${coord.rowId}::${coord.month}`)
+      const pending = lookupMatrixPending(pendingByCell, coord)
       if (pending) return pending.confidence
       const row = rowById.get(coord.rowId)
       return row ? dominantCellConfidence(rowMonthBucket(row, coord.month)) : "expected"
@@ -4236,10 +4609,20 @@ export default function SalesLedgerWorkbench() {
   // 주차 병합: explicit 주차가 있는 행의 주차 셀 편집은 나머지 주차를 보존해 metadata.weekly(5칸)로
   // 싣고 amount=주차 합으로 재기재한다 — 단일 주차 값이 그 달 전체를 대체해 다른 주차가 소멸하던 버그 방지.
   // (inferred/월합계만 행은 보존할 실주차가 없어 기존 단일 주차 대체 규약 유지 — 팝오버/큐에서 경고.)
+  // 반환값: 서버에 실제로 반영됐으면 true, 로컬 폴백(장부 적용 불가)이면 false — 붙여넣기 루프가
+  // 이 값을 모아 "N건 생성 · M건 실패" 요약 토스트를 만든다(SL-2 실패 집계, 항목 4).
+  // options.silent=true면 개별 실패 토스트를 억제한다(붙여넣기 루프처럼 상위에서 집계 토스트를 낼 때).
   const onCommitCell = useCallback(
-    (rowId: string, month: string, amount: number, confidence: DraftConfidence, week?: number) => {
+    (
+      rowId: string,
+      month: string,
+      amount: number,
+      confidence: DraftConfidence,
+      week?: number,
+      options?: { silent?: boolean },
+    ): Promise<boolean> => {
       const row = rowById.get(rowId)
-      if (!row) return
+      if (!row) return Promise.resolve(false)
       const sourceDealId = row.sourceDealId ?? (row.ledgerOrigin === "sheet" ? row.id : undefined)
       const kind: DraftKind = sourceDealId ? "edit-row" : "new-row"
       const weekToken = week != null ? `w${week + 1}` : "month"
@@ -4296,25 +4679,38 @@ export default function SalesLedgerWorkbench() {
           sourceDealId: sourceDealId ?? null,
         },
       }
-      void createDraft(input).then((draft) => {
-        // createDraft는 실패 시에도 local-* 초안으로 폴백해 resolve된다 — 편집 지점에서 침묵하지 않게
-        // 셀 인근 토스트로 실패(=로컬 임시 저장, 장부 적용 불가)를 알린다. 성공 피드백은 셀 앰버 점.
-        if (draft?.id?.startsWith("local-")) {
+      // 같은 셀(월/주차)에 이미 대기 중(draft|checked)인 초안이 있으면 새 초안을 POST하지 않고
+      // 그 초안을 PATCH한다 — sourceDealId+month에 DB 유일성이 없어, 재편집 때마다 새 초안을 만들면
+      // 둘 다 적용됐을 때 같은 셀 매출이 이중 계상된다(P0). 상태 전이(draft/checked/applied)는 건드리지
+      // 않는다 — 이 input에는 status 필드가 없어 PATCH가 금액/메타데이터만 갱신한다.
+      const existingId = lookupMatrixPending(pendingByCell, { rowId, month, week })?.id ?? null
+      const persist = existingId ? updateDraft(existingId, input) : createDraft(input)
+      return persist.then((draft) => {
+        // createDraft는 실패 시에도 local-* 초안으로 폴백해 resolve된다. updateDraft의 로컬 폴백은
+        // 기존 서버 id를 유지하므로 이 접두어 판정만으론 못 잡지만, 그 경우는 queueError 전역 배너가 알린다.
+        const usedLocalFallback = !draft || draft.id.startsWith("local-")
+        if (usedLocalFallback && !options?.silent) {
           pushMatrixToast({
             kind: "error",
             text: "서버 저장 실패 — 로컬 임시 초안으로만 저장됐습니다 (장부 적용 불가). 입력 큐에서 서버 재연결 후 다시 입력하세요.",
           })
         }
+        return !usedLocalFallback
       })
     },
-    [createDraft, lens, period, pushMatrixToast, rowById, team],
+    [createDraft, lens, pendingByCell, period, pushMatrixToast, rowById, team, updateDraft],
   )
+
+  const onMatrixAmountClamped = useCallback(() => {
+    pushMatrixToast({ kind: "info", text: "음수는 0으로 처리됩니다 — 감액은 장부 가감 입력 사용" })
+  }, [pushMatrixToast])
 
   const matrixEditor = useMatrixEditor({
     editableCells,
     cellValue: matrixCellValue,
     cellConfidence: matrixCellConfidence,
     onCommitCell,
+    onAmountClamped: onMatrixAmountClamped,
   })
 
   // 딜행별 편집 prop — selected/editing 좌표를 이 행 스코프로 좁힌다. actions·selected·editing은
@@ -4350,7 +4746,7 @@ export default function SalesLedgerWorkbench() {
         pushMatrixToast({ kind: "info", text: "주차 칸에는 붙여넣기를 지원하지 않습니다 — 월 셀을 선택한 뒤 붙여넣으세요." })
         return
       }
-      const plan = buildMatrixPastePlan(text, anchor, visibleDealRows, matrixMonths)
+      const plan = buildMatrixPastePlan(text, anchor, visibleDealRows, matrixMonths, editRowOverrideMonths)
       if (!plan) {
         pushMatrixToast({ kind: "info", text: "붙여넣을 숫자 값을 찾지 못했습니다 — 엑셀에서 금액 셀 범위를 복사해 주세요." })
         return
@@ -4358,26 +4754,31 @@ export default function SalesLedgerWorkbench() {
       setPasteConfidence(loadStoredMatrixConfidence() ?? "expected")
       setPastePlan(plan)
     },
-    [matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows],
+    [matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows, editRowOverrideMonths],
   )
 
   // 프리뷰 확인 → 셀 편집과 동일한 onCommitCell 경로로만 커밋(셀당 검토 초안 1건, 2단 게이트 유지).
-  const confirmMatrixPaste = useCallback(() => {
+  // 붙여넣기 커밋 루프: 셀당 onCommitCell(silent) → 결과를 모아 성공/실패 건수를 한 번에 요약한다.
+  // 이전엔 셀마다 개별 실패 토스트가 fire-and-forget으로 날아와 단일 슬롯 토스트를 서로 덮어썼다
+  // (항목 4) — 이제 개별 토스트는 억제하고 전체 완료 후 "N건 생성 · M건 실패" 하나만 띄운다.
+  const confirmMatrixPaste = useCallback(async () => {
     if (!pastePlan) return
     storeMatrixConfidence(pasteConfidence)
-    let committed = 0
-    for (const cell of pastePlan.cells) {
-      if (cell.status !== "apply") continue
-      onCommitCell(cell.rowId, cell.month, cell.next, pasteConfidence)
-      committed += 1
-    }
+    const applyCells = pastePlan.cells.filter((cell) => cell.status === "apply")
     setPastePlan(null)
-    if (committed > 0) {
-      pushMatrixToast({
-        kind: "info",
-        text: `검토 초안 ${committed.toLocaleString("ko-KR")}건 생성 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.`,
-      })
-    }
+    if (applyCells.length === 0) return
+    const results = await Promise.all(
+      applyCells.map((cell) => onCommitCell(cell.rowId, cell.month, cell.next, pasteConfidence, undefined, { silent: true })),
+    )
+    const committed = results.filter(Boolean).length
+    const failed = results.length - committed
+    pushMatrixToast({
+      kind: failed > 0 ? "error" : "info",
+      text:
+        failed > 0
+          ? `${committed.toLocaleString("ko-KR")}건 생성 · ${failed.toLocaleString("ko-KR")}건 실패 — 실패분은 로컬 임시 저장(장부 적용 불가), 서버 재연결 후 다시 붙여넣으세요.`
+          : `검토 초안 ${committed.toLocaleString("ko-KR")}건 생성 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.`,
+    })
   }, [onCommitCell, pasteConfidence, pastePlan, pushMatrixToast])
 
   const toggleRevMonth = useCallback((month: string) => {
@@ -4645,17 +5046,40 @@ export default function SalesLedgerWorkbench() {
     }
   }, [detail, draftForm, lens, period, selectedMonth, selectedRow, team])
 
-  const saveDraft = useCallback(async (kind: DraftKind) => {
+  // 반환값(DraftSaveResult): persisted는 서버에 실제로 저장됐으면 true, 로컬 폴백(장부 적용 불가)이면
+  // false — InputRailSection이 이 값으로 저장 성공/실패 인라인 메시지를 낸다(항목 5). deduped는
+  // 이중계상 가드(품질 웨이브 3, 항목 3)가 새 POST 대신 기존 초안을 PATCH로 갱신했으면 true.
+  //
+  // 이중계상 가드: 매트릭스 셀 재편집(onCommitCell)과 동일한 lookupMatrixPending 판정을 여기서도
+  // 쓴다 — kind==="edit-row"이고 선택된 행이 있을 때, 그 행·타겟 월/주차에 이미 열린 초안이
+  // 있으면 새 초안을 만들지 않고 그 초안을 PATCH한다(railDedupTarget이 정확히 그 좌표만 비교하므로,
+  // 기간이동처럼 타겟 월이 실제로 다른 정당한 별건 초안은 막지 않는다 — 차단이 아니라 타겟 재지정).
+  // new-row(신규 고객)는 아직 매트릭스에 대응 행이 없어 이 재지정 판정 대상이 아니다 — 대신
+  // duplicateWarning(품질 웨이브 4, 항목 2)으로 같은 고객명·월 조합의 열린 초안이 있으면 경고만 낸다.
+  const saveDraft = useCallback(async (kind: DraftKind): Promise<DraftSaveResult> => {
     setDraftSaving(true)
     try {
-      await createDraft(buildDraftInput(kind))
+      const dedupTarget = kind === "edit-row" && selectedRow
+        ? railDedupTarget(pendingByCell, selectedRow.id, draftForm.month, draftForm.week, null)
+        : null
+      // 저장 전에 판정해둔다 — new-row 저장 성공 시 draftForm이 defaultDraftForm으로 리셋되므로
+      // 저장 후에는 이 시점의 customer/month를 다시 읽을 수 없다.
+      const duplicate = kind === "new-row" ? findOpenNewRowDuplicate(drafts, draftForm.customer, draftForm.month) : null
+      const draft = dedupTarget
+        ? await updateDraft(dedupTarget.id, buildDraftInput(kind))
+        : await createDraft(buildDraftInput(kind))
       if (kind === "new-row") {
         setDraftForm(defaultDraftForm)
+      }
+      return {
+        persisted: Boolean(draft && !draft.id.startsWith("local-")),
+        deduped: Boolean(dedupTarget),
+        duplicateWarning: Boolean(duplicate),
       }
     } finally {
       setDraftSaving(false)
     }
-  }, [buildDraftInput, createDraft, defaultDraftForm])
+  }, [buildDraftInput, createDraft, defaultDraftForm, draftForm.customer, draftForm.month, draftForm.week, drafts, pendingByCell, selectedRow, updateDraft])
 
   const editDraft = useCallback((draft: LedgerDraft) => {
     setEditingDraftId(draft.id)
@@ -4682,17 +5106,29 @@ export default function SalesLedgerWorkbench() {
     setDraftForm(defaultDraftForm)
   }, [defaultDraftForm])
 
-  const saveEditedDraft = useCallback(async () => {
-    if (!editingDraft) return
+  // saveEditedDraft는 항상 editingDraft.id를 PATCH 대상으로 삼는다(새 POST가 아니므로 그 자체로
+  // 이중계상을 만들지 않는다). 다만 편집 중 타겟 월/주차를 바꿔 "다른" 열린 초안과 같은 셀을
+  // 가리키게 될 수 있다 — 이 경우 저장을 막지 않고(정당한 편집일 수 있음), deduped=true로
+  // InputRailSection에 "이미 대기 초안 있음" 안내만 얹는다(항목 3, 판단은 사용자에게 맡긴다).
+  const saveEditedDraft = useCallback(async (): Promise<DraftSaveResult> => {
+    if (!editingDraft) return { persisted: false, deduped: false }
     setDraftSaving(true)
     try {
-      await updateDraft(editingDraft.id, buildDraftInput(editingDraft.kind, editingDraft))
+      const dealKey = editingDraft.kind === "edit-row"
+        ? editingDraft.sourceDealId ?? metadataString(editingDraft.metadata, "sourceDealId")
+        : null
+      const dedupRow = dealKey ? rowByDealKey.get(dealKey) : undefined
+      const dedupTarget = dedupRow
+        ? railDedupTarget(pendingByCell, dedupRow.id, draftForm.month, draftForm.week, editingDraft.id)
+        : null
+      const draft = await updateDraft(editingDraft.id, buildDraftInput(editingDraft.kind, editingDraft))
       setEditingDraftId(null)
       setDraftForm(defaultDraftForm)
+      return { persisted: Boolean(draft && !draft.id.startsWith("local-")), deduped: Boolean(dedupTarget) }
     } finally {
       setDraftSaving(false)
     }
-  }, [buildDraftInput, defaultDraftForm, editingDraft, updateDraft])
+  }, [buildDraftInput, defaultDraftForm, draftForm.month, draftForm.week, editingDraft, pendingByCell, rowByDealKey, updateDraft])
 
   const revenue = summary.data?.revenue
   // 첫 로드 중 타일이 가짜 ¥0을 보여주지 않도록 — 값이 오기 전에는 대시로 정직하게.
@@ -4738,7 +5174,17 @@ export default function SalesLedgerWorkbench() {
   const appliedDraftTotal = additiveAppliedDraftRows.reduce((sum, row) => sum + row.revenue, 0)
   const ledgerConfirmed = (revenue?.confirmed ?? 0) + appliedDraftTotal
   const ledgerDelta = ledgerConfirmed - (revenue?.confirmed ?? 0)
-  const periodLabel = period === "M" ? formatMonthLabel(selectedMonth) : period === "Q" ? "현재 분기" : "FY26-27"
+  const periodLabel = period === "M" ? formatMonthLabel(selectedMonth) : period === "Q" ? "현재 분기" : fyLabel
+  // 파이프라인 탭 딥링크(품질 웨이브 3, 항목 9) — 지금 보고 있는 team/period 컨텍스트를 동봉해
+  // "KPI 보기" 클릭 후에도 같은 팀/기간을 유지한다. BranchDashboardClient가 읽는 파라미터(tab/team/
+  // period/month)만 넣는다 — mgr(담당자 필터)은 파이프라인 탭이 소비하지 않아 제외(있으나 마나 무시됨).
+  // 기본값(ALL/Q)은 그 페이지도 기본값이라 생략(URL 동기화 규약과 동일하게 diff만 반영).
+  const pipelineHref = useMemo(() => {
+    const params = new URLSearchParams({ tab: "pipeline" })
+    if (team !== "ALL") params.set("team", team)
+    if (period !== "Q") params.set("period", period)
+    return `/admin/branch?${params.toString()}`
+  }, [team, period])
   const canCreateEditDraft = Boolean(selectedRow && (selectedRow.ledgerOrigin === "sheet" || selectedRow.sourceDealId))
   const draftAmountValue = safeAmount(draftForm.amount)
   const draftAmountInvalid = !draftForm.amount.trim() || draftAmountValue <= 0
@@ -4773,9 +5219,10 @@ export default function SalesLedgerWorkbench() {
                 KR Team
               </Link>
               <ChevronRight className="h-3.5 w-3.5" />
-              <span>FY26-27</span>
+              <span>{fyLabel}</span>
               <ChevronRight className="h-3.5 w-3.5" />
-              <span>Sales Ledger</span>
+              {/* 구 IA 시절 영문 라벨("Sales Ledger") 잔재 — 현재 admin-nav 섹션 라벨(sales="영업·매출")로 정정. */}
+              <span>영업·매출</span>
             </div>
             <h1 className="mt-2 text-[28px] font-bold tracking-[-0.02em] text-[#111110] sm:text-[32px]">
               매출 장부
@@ -4848,8 +5295,20 @@ export default function SalesLedgerWorkbench() {
         </div>
 
         {(syncError || summary.error || kpi.error || pipeline.error) && (
-          <div className="mt-4 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[12px] font-semibold text-[#8F2C2C]">
-            {syncError ?? summary.error ?? kpi.error ?? pipeline.error}
+          <div
+            role="alert"
+            className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[12px] font-semibold text-[#8F2C2C]"
+          >
+            <span>{syncError ?? summary.error ?? kpi.error ?? pipeline.error}</span>
+            <button
+              type="button"
+              onClick={() => void onRefresh()}
+              disabled={refreshing}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-[#B43E3E] bg-white px-2.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              다시 시도
+            </button>
           </div>
         )}
       </header>
@@ -4859,7 +5318,7 @@ export default function SalesLedgerWorkbench() {
         <IntegrityStrip refreshKey={refreshKey} />
         <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-1 self-start">
-          <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="Sales ledger views">
+          <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="장부 렌즈 전환">
             {LENSES.map((item, index) => (
               <button
                 key={item.id}
@@ -4909,6 +5368,14 @@ export default function SalesLedgerWorkbench() {
                 {relativeTimeFromNow(summary.data?.sheetModifiedAt, sourceStripNow)}
               </span>
             </span>
+            {/* 스테일 경고 공유화(품질 웨이브 4 — 항목 4) — SyncStatusBar와 같은 순수 판정
+                (lib/branch/sheet-freshness.ts)을 여기서도 써서 "시트수정"이 "sync"보다 눈에 띄게
+                앞서 있으면 동일 경고를 낸다(2026-07-16 사고 재발 감지력이 이 화면에도 있어야 한다). */}
+            {!summary.error && isSheetAheadOfSync(summary.data?.sheetModifiedAt, summary.data?.lastSync) && (
+              <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F]">
+                시트가 더 새로움 — 동기화 필요
+              </span>
+            )}
             <span>입력 큐 <span className="font-semibold text-[#111110]">{queueMode === "server" ? "서버" : "로컬"} · {openDrafts.length}건</span></span>
             <span>내부 원장 <span className="font-semibold text-[#111110]">{ledgerHealth?.ok === false ? "준비 필요" : `${ledgerEntries.length}건`}</span></span>
             <span className="flex items-center gap-1.5">
@@ -5110,90 +5577,105 @@ export default function SalesLedgerWorkbench() {
                       </button>
                     ))}
                   </div>
-                  <label className="relative min-w-[220px] flex-1 xl:w-[310px] xl:flex-none">
-                    <span className="sr-only">REV 매출 행 검색</span>
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
-                    <input
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder="고객, 담당자, 팀, 지역, 상태, 메모 검색"
-                      className="h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[12px] font-medium outline-none transition focus:border-[#084734]"
-                    />
-                  </label>
-                  <select
-                    value={managerFilter}
-                    onChange={(event) => setManagerFilter(event.target.value)}
-                    className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
-                    aria-label="담당자 필터"
-                  >
-                    <option value="ALL">담당자 전체</option>
-                    {managerOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-                  </select>
-                  <select
-                    value={regionFilter}
-                    onChange={(event) => setRegionFilter(event.target.value)}
-                    className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
-                    aria-label="지역 필터"
-                  >
-                    <option value="ALL">지역 전체</option>
-                    {regionOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setAdvancedFiltersOpen((value) => !value)}
-                    aria-expanded={advancedFiltersOpen}
-                    className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-[12px] font-bold transition ${
-                      advancedFiltersOpen || revStatusFilter !== "ALL" || revDealTypeFilter !== "ALL" || revOriginFilter !== "all" || revForecastFilter !== "all"
-                        ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
-                        : "border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
-                    }`}
-                  >
-                    <SlidersHorizontal className="h-3.5 w-3.5" />
-                    고급
-                  </button>
-                  <select
-                    value={revPageSize}
-                    onChange={(event) => setRevPageSize(Number(event.target.value) as RevPageSize)}
-                    className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
-                    aria-label="REV 표시 개수"
-                  >
-                    {REV_PAGE_SIZES.map((value) => <option key={value} value={value}>{value}개</option>)}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={resetRevFilters}
-                    disabled={!revControlsDirty}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label="REV 검색, 필터, 정렬 초기화"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    초기화
-                  </button>
-                  <button
-                    type="button"
-                    onClick={toggleAllRevGroups}
-                    disabled={multiRowGroupKeys.length === 0}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label={allRevGroupsExpanded ? "고객 묶음 모두 접기" : "고객 묶음 모두 펼치기"}
-                  >
-                    <ChevronRight className={`h-3.5 w-3.5 transition-transform ${allRevGroupsExpanded ? "rotate-90" : ""}`} />
-                    {allRevGroupsExpanded ? "모두 접기" : "모두 펼치기"}
-                  </button>
-                  <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" aria-label="매트릭스 행 밀도">
-                    {MATRIX_DENSITY_OPTIONS.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => setMatrixDensity(option.id)}
-                        title={option.title}
-                        aria-pressed={matrixDensity === option.id}
-                        className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold transition ${
-                          matrixDensity === option.id ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59] hover:text-[#111110]"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
+                  {/* 품질 웨이브 4 — 항목 9: 툴바를 탐색/표시/액션 3그룹으로 시각 구분(구분선+미세 라벨).
+                      컨트롤 자체(핸들러·disabled·aria-label 등)는 그대로 두고, 인접 배치와 얇은 라벨만
+                      더했다 — 그룹 안에서 초기화 버튼만 액션 그룹으로 옮겨 표시 그룹을 인접시켰다. */}
+                  <div className="flex flex-wrap items-center gap-2" role="group" aria-label="탐색">
+                    <span aria-hidden className="h-5 w-px shrink-0 bg-[rgba(0,0,0,0.08)]" />
+                    <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wider text-[#A39E98]">탐색</span>
+                    <label className="relative min-w-[220px] flex-1 xl:w-[310px] xl:flex-none">
+                      <span className="sr-only">REV 매출 행 검색</span>
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
+                      <input
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="고객, 담당자, 팀, 지역, 상태, 메모 검색"
+                        className="h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[12px] font-medium outline-none transition focus:border-[#084734]"
+                      />
+                    </label>
+                    <select
+                      value={managerFilter}
+                      onChange={(event) => setManagerFilter(event.target.value)}
+                      className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
+                      aria-label="담당자 필터"
+                    >
+                      <option value="ALL">담당자 전체</option>
+                      {managerOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                    </select>
+                    <select
+                      value={regionFilter}
+                      onChange={(event) => setRegionFilter(event.target.value)}
+                      className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
+                      aria-label="지역 필터"
+                    >
+                      <option value="ALL">지역 전체</option>
+                      {regionOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setAdvancedFiltersOpen((value) => !value)}
+                      aria-expanded={advancedFiltersOpen}
+                      className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-[12px] font-bold transition ${
+                        advancedFiltersOpen || revStatusFilter !== "ALL" || revDealTypeFilter !== "ALL" || revOriginFilter !== "all" || revForecastFilter !== "all"
+                          ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                          : "border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
+                      }`}
+                    >
+                      <SlidersHorizontal className="h-3.5 w-3.5" />
+                      고급
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2" role="group" aria-label="표시">
+                    <span aria-hidden className="h-5 w-px shrink-0 bg-[rgba(0,0,0,0.08)]" />
+                    <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wider text-[#A39E98]">표시</span>
+                    <select
+                      value={revPageSize}
+                      onChange={(event) => setRevPageSize(Number(event.target.value) as RevPageSize)}
+                      className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
+                      aria-label="REV 표시 개수"
+                    >
+                      {REV_PAGE_SIZES.map((value) => <option key={value} value={value}>{value}개</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={toggleAllRevGroups}
+                      disabled={multiRowGroupKeys.length === 0}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label={allRevGroupsExpanded ? "고객 묶음 모두 접기" : "고객 묶음 모두 펼치기"}
+                    >
+                      <ChevronRight className={`h-3.5 w-3.5 transition-transform ${allRevGroupsExpanded ? "rotate-90" : ""}`} />
+                      {allRevGroupsExpanded ? "모두 접기" : "모두 펼치기"}
+                    </button>
+                    <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" aria-label="매트릭스 행 밀도">
+                      {MATRIX_DENSITY_OPTIONS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => setMatrixDensity(option.id)}
+                          title={option.title}
+                          aria-pressed={matrixDensity === option.id}
+                          className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold transition ${
+                            matrixDensity === option.id ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59] hover:text-[#111110]"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2" role="group" aria-label="액션">
+                    <span aria-hidden className="h-5 w-px shrink-0 bg-[rgba(0,0,0,0.08)]" />
+                    <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wider text-[#A39E98]">액션</span>
+                    <button
+                      type="button"
+                      onClick={resetRevFilters}
+                      disabled={!revControlsDirty}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="REV 검색, 필터, 정렬 초기화"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      초기화
+                    </button>
                   </div>
                 </div>
               </div>
@@ -5357,6 +5839,22 @@ export default function SalesLedgerWorkbench() {
                     </button>
                   </div>
                 )}
+                {/* 서버는 복구됐지만(queueMode=server) 재연결 시 자동 재전송이 일부/전부 실패해 여전히
+                    로컬에만 남은 초안 — 무음 유실 방지 경고 배지(항목 2). 재시도는 loadDrafts 재호출로. */}
+                {queueMode === "server" && unsyncedLocalCount > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#F2B8B8] bg-[#FCE9E9] px-4 py-2.5">
+                    <p className="min-w-0 text-[11.5px] font-bold leading-relaxed text-[#B43E3E]">
+                      로컬 초안 {unsyncedLocalCount}건 미전송 — 서버 재연결 시 자동 재전송을 시도했지만 실패했습니다. 장부에 적용할 수 없습니다.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void reloadDrafts()}
+                      className="shrink-0 rounded-md border border-[#F2B8B8] bg-white px-2.5 py-1 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9]"
+                    >
+                      다시 재전송
+                    </button>
+                  </div>
+                )}
                 <RevAuxAnalysisSection
                   revAuxOpen={revAuxOpen}
                   setRevAuxOpen={setRevAuxOpen}
@@ -5375,6 +5873,10 @@ export default function SalesLedgerWorkbench() {
                   revWeekProjection={revWeekProjection}
                   revMonthRowCount={revMonthRowCount}
                   revManagerTableRows={revManagerTableRows}
+                  revManagerTotalCount={revManagersSorted.length}
+                  revManagerSummaryExpanded={revManagerSummaryExpanded}
+                  onToggleManagerSummaryExpanded={() => setRevManagerSummaryExpanded((value) => !value)}
+                  onManagerRowClick={setManagerFilter}
                   revProductTableRows={revProductTableRows}
                 />
 
@@ -5427,10 +5929,11 @@ export default function SalesLedgerWorkbench() {
                   className="relative hidden max-h-[calc(100vh-13rem)] min-h-[320px] overflow-auto md:block"
                   onPaste={handleMatrixPaste}
                 >
-                  <table className="w-max min-w-full border-collapse text-left text-[12px]">
+                  <table role="grid" aria-label="REV 매출 매트릭스" className="w-max min-w-full border-collapse text-left text-[12px]">
                     <thead className="text-[10px] uppercase tracking-[0.06em] text-[#615D59]">
-                      <tr className="h-8 bg-[#FAFAF8]">
+                      <tr role="row" className="h-8 bg-[#FAFAF8]">
                         <th
+                          aria-sort={revSortAriaValue(revSortKey === "customer", revSortDirection)}
                           className="sticky left-0 top-0 z-40 border-r border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-left align-middle"
                           style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
                         >
@@ -5479,6 +5982,7 @@ export default function SalesLedgerWorkbench() {
                           )
                         })}
                         <th
+                          aria-sort={revSortAriaValue(revSortKey === "annual", revSortDirection)}
                           className="sticky right-0 top-0 z-40 border-l border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 text-right align-middle"
                           style={{ width: MATRIX_ANNUAL_W, minWidth: MATRIX_ANNUAL_W, maxWidth: MATRIX_ANNUAL_W }}
                         >
@@ -5488,7 +5992,7 @@ export default function SalesLedgerWorkbench() {
                     </thead>
                     <tbody>
                       {filteredRows.length === 0 && (
-                        <tr>
+                        <tr role="row">
                           <td colSpan={matrixColSpan} className="p-4">
                             <div className="rounded-lg border border-dashed border-[rgba(0,0,0,0.12)] bg-[#FAFAF8] p-6 text-center text-[12px] text-[#615D59]">
                               <p>조건에 맞는 REV 행이 없습니다 · 필터/검색을 초기화해 보세요</p>
@@ -5507,7 +6011,7 @@ export default function SalesLedgerWorkbench() {
                         </tr>
                       )}
                       {pendingNewRowDrafts.length > 0 && (
-                        <tr className="border-t border-dashed border-[#ECD29C] bg-[#FFFCF5]">
+                        <tr role="row" className="border-t border-dashed border-[#ECD29C] bg-[#FFFCF5]">
                           <td colSpan={matrixColSpan} className="px-3 py-2">
                             <button
                               type="button"
@@ -5557,7 +6061,7 @@ export default function SalesLedgerWorkbench() {
                                   const catRows = group.rows.filter((row) => rowProductCategory(row) === category)
                                   const products = Array.from(new Set(catRows.map((row) => row.productVersion).filter((value): value is string => Boolean(value))))
                                   const catExpanded = expandedRevCategories.has(`${group.key}::${category}`)
-                                  const catEditable = catRows.some((row) => matrixMonths.some((month) => isMatrixCellEditable(row, month)))
+                                  const catEditable = catRows.some((row) => matrixMonths.some((month) => isMatrixCellEditable(row, month, editRowOverrideMonths.get(row.id))))
                                   return (
                                     <Fragment key={`cat-${group.key}-${category}`}>
                                       <RevMatrixCategoryRow
@@ -5685,16 +6189,29 @@ export default function SalesLedgerWorkbench() {
           />
         )}
 
-        {matrixToast && (
-          <div
-            role="alert"
-            className={`fixed bottom-20 left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-lg border px-4 py-2.5 text-[12px] font-bold shadow-[0_18px_48px_rgba(17,17,16,0.18)] ${
-              matrixToast.kind === "error"
-                ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"
-                : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
-            }`}
-          >
-            {matrixToast.text}
+        {matrixToasts.length > 0 && (
+          <div className="fixed bottom-20 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2">
+            {matrixToasts.map((toast) => (
+              <div
+                key={toast.id}
+                role="alert"
+                className={`flex items-start gap-2 rounded-lg border px-4 py-2.5 text-[12px] font-bold shadow-[0_18px_48px_rgba(17,17,16,0.18)] ${
+                  toast.kind === "error"
+                    ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"
+                    : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
+                }`}
+              >
+                <span className="pt-0.5">{toast.text}</span>
+                <button
+                  type="button"
+                  onClick={() => dismissMatrixToast(toast.id)}
+                  aria-label="알림 닫기"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-70 transition hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
@@ -5964,9 +6481,10 @@ export default function SalesLedgerWorkbench() {
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    {/* KPI 렌즈는 KR Team 파이프라인 탭으로 이동 — 페이지 내 전환 대신 그 탭으로 링크. */}
+                    {/* KPI 렌즈는 KR Team 파이프라인 탭으로 이동 — 페이지 내 전환 대신 그 탭으로 링크.
+                        team/period 컨텍스트를 동봉(항목 9) — 필터를 좁혀 보던 도중에도 그대로 이어진다. */}
                     <Link
-                      href="/admin/branch?tab=pipeline"
+                      href={pipelineHref}
                       className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3 text-[11px] font-bold text-[#084734] transition hover:bg-[#D1FAE5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
                     >
                       <Users className="h-3.5 w-3.5" />

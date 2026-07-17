@@ -2,7 +2,7 @@ import "server-only"
 
 import { createHash } from "node:crypto"
 
-import { revalidateTag } from "next/cache"
+import { revalidateTag, unstable_cache } from "next/cache"
 
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
@@ -159,13 +159,7 @@ export interface ActiveRevImportStatus {
   capturedAt: string | null
 }
 
-// 액티브 REV 소스 상태 조회(GET db-import 용) — 클라이언트가 "지금 DB 임포트 run을 읽는 중인지"를
-// localStorage 추정이 아니라 서버 원장(sales_ledger_active_sources)으로 판별하게 한다.
-// 의도적으로 60초 unstable_cache를 쓰지 않는 fresh 조회: 운영자가 수동으로 시트 모드로 되돌린
-// 직후 stale 'active' 응답이 동기화 재캡처 체인을 켜서 DB-native로 재전환하면 안 된다.
-// (tab_key+fiscal_year 유니크 인덱스 단건 조회라 비용은 미미하다.)
-export async function getActiveRevImportStatus(): Promise<ActiveRevImportStatus> {
-  const fiscalYear = fiscalYearOf(new Date())
+async function lookupActiveRevImportStatus(fiscalYear: number): Promise<ActiveRevImportStatus> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("sales_ledger_active_sources")
@@ -187,6 +181,26 @@ export async function getActiveRevImportStatus(): Promise<ActiveRevImportStatus>
   const joined = data?.sales_ledger_import_runs as { started_at?: string } | Array<{ started_at?: string }> | null | undefined
   const startedAt = Array.isArray(joined) ? joined[0]?.started_at : joined?.started_at
   return { active: Boolean(runId), fiscalYear, runId, capturedAt: startedAt ?? null }
+}
+
+// GET db-import 캐시(10초 TTL, SALES_LEDGER_IMPORTS_CACHE_TAG). activateRevImportRun(인앱
+// 재캡처/활성화)이 성공 직후 이 태그를 revalidateTag("max")로 즉시 무효화하므로(위 함수 끝)
+// 워크벤치에서 "재동기화 → 활성화"로 전환한 케이스는 지연 없이 반영된다. 이 캐시가 실제로
+// 지연시키는 유일한 경로는 앱 밖(운영 스크립트)이 sales_ledger_active_sources를 직접
+// upsert하는 경우 — 최대 10초 stale은 감내 가능한 트레이드오프로 판단(기존 60초 unstable_cache
+// 미적용 fresh 조회 대비 훨씬 짧다). "수동으로 시트 모드로 되돌린 직후" 시나리오도 이 10초
+// 창 안에서만 이전 상태가 보일 수 있다 — 완전한 fresh 보장이 필요해지면 이 캐시를 다시 벗긴다.
+const getCachedActiveRevImportStatus = unstable_cache(
+  async (fiscalYear: number) => lookupActiveRevImportStatus(fiscalYear),
+  ["sales-ledger-active-rev-import-status"],
+  { revalidate: 10, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG] },
+)
+
+// 액티브 REV 소스 상태 조회(GET db-import 용) — 클라이언트가 "지금 DB 임포트 run을 읽는 중인지"를
+// localStorage 추정이 아니라 서버 원장(sales_ledger_active_sources)으로 판별하게 한다.
+export async function getActiveRevImportStatus(): Promise<ActiveRevImportStatus> {
+  const fiscalYear = fiscalYearOf(new Date())
+  return getCachedActiveRevImportStatus(fiscalYear)
 }
 
 // 시트 미러 → 버전드 DB 임포트 + (기본) 활성화. 실패 시 run을 failed로 남기고 throw.

@@ -1559,6 +1559,165 @@ export async function listConfirmedLeadCustomerLinks(): Promise<Map<string, stri
   return map
 }
 
+const LEAD_NEO_LINK_PAGE_SIZE = 1000
+const LEAD_NEO_LINK_MAX_PAGES = 20
+
+/** NEO 등록 확정된 리드 id 집합 — source_object='leads' → target_type='external_account' confirmed. */
+export async function listConfirmedLeadNeoLinkLeadIds(): Promise<Set<string>> {
+  const sb = createSupabaseAdminClient()
+  const ids = new Set<string>()
+
+  // PostgREST는 요청당 기본 1000행에서 조용히 절단한다 — 절단되면 등록된 리드가
+  // '등록 대기'로 오판된다. 결정적 정렬(id) + range로 짧은 페이지가 나올 때까지
+  // 이어 읽고, 상한 초과는 무음 대신 에러로 드러낸다.
+  for (let page = 0; ; page += 1) {
+    if (page >= LEAD_NEO_LINK_MAX_PAGES) {
+      throw new Error(
+        `crm_source_links lead→neo 조회가 ${LEAD_NEO_LINK_MAX_PAGES}페이지(${LEAD_NEO_LINK_MAX_PAGES * LEAD_NEO_LINK_PAGE_SIZE}행)를 초과했습니다 — 페이지 상한을 재검토하세요.`
+      )
+    }
+    const from = page * LEAD_NEO_LINK_PAGE_SIZE
+    const { data, error } = await sb
+      .from("crm_source_links")
+      .select("source_record_key")
+      .eq("source_object", "leads")
+      .eq("target_type", "external_account")
+      .eq("status", "confirmed")
+      .order("id", { ascending: true })
+      .range(from, from + LEAD_NEO_LINK_PAGE_SIZE - 1)
+
+    if (error) throw new Error(`crm_source_links lead→neo 조회 실패: ${error.message}`)
+
+    const rows = data ?? []
+    for (const row of rows) ids.add(String(row.source_record_key))
+    if (rows.length < LEAD_NEO_LINK_PAGE_SIZE) break
+  }
+  return ids
+}
+
+/**
+ * 이 리드가 NEO 계정으로 등록 확정됐는지 단건 조회 (360 드로어용 — 벌크 Set 스캔 금지).
+ * 조회 모양은 listConfirmedLeadNeoLinkLeadIds와 동일(source_object='leads',
+ * target_type='external_account', status='confirmed')하되 리드 1건으로 좁힌다.
+ */
+export async function findConfirmedLeadNeoLink(leadId: string): Promise<{ targetId: string } | null> {
+  const sourceRecordKey = leadId.trim()
+  if (!sourceRecordKey) return null
+
+  const sb = createSupabaseAdminClient()
+  const { data, error } = await sb
+    .from("crm_source_links")
+    .select("target_id")
+    .eq("source_object", "leads")
+    .eq("source_record_key", sourceRecordKey)
+    .eq("target_type", "external_account")
+    .eq("status", "confirmed")
+    .limit(1)
+
+  if (error) throw new Error(`crm_source_links lead→neo 단건 조회 실패: ${error.message}`)
+
+  const link = (data ?? [])[0] as { target_id: string | null } | undefined
+  if (!link?.target_id) return null
+  return { targetId: link.target_id }
+}
+
+// 확정 충돌 에러 문구용 타깃 종류 한국어 라벨 — 어드민 화면 노출 카피.
+const CRM_LINK_TARGET_TYPE_KO: Record<string, string> = {
+  customer: "전환 고객",
+  partner_account: "파트너 계정",
+  deal: "딜",
+  external_account: "NEO 계정",
+}
+
+/**
+ * '리드 → NEO 계정' 수동 등록 확정(360 드로어 'NEO 등록 연결' 액션). 멱등:
+ * 이미 같은 페어가 confirmed면 그대로 { created: false }를 돌려준다. 같은 페어의
+ * 비확정 후보가 있으면 확정으로 갱신하고, 없으면 확정 행을 새로 만든다 —
+ * unique 제약(source_system,source_object,source_record_key,target_type,target_id)이
+ * select-then-insert 레이스를 upsert로 흡수한다. 확정된 행은 그대로
+ * listConfirmedLeadNeoLinkLeadIds의 조회 모양(source_object='leads',
+ * target_type='external_account', status='confirmed')에 잡힌다.
+ */
+export async function confirmLeadNeoLink(input: {
+  leadId: string
+  neoAccountId: string
+  normalizedName?: string | null
+  actorUserId?: string | null
+}): Promise<{ created: boolean }> {
+  const sb = createSupabaseAdminClient()
+  const leadId = input.leadId.trim()
+  const neoAccountId = input.neoAccountId.trim()
+  if (!leadId || !neoAccountId) {
+    throw new Error("lead→neo 링크 입력이 비어 있습니다.")
+  }
+
+  const { data, error: readError } = await sb
+    .from("crm_source_links")
+    .select("id, status, target_type, target_id, normalized_name, metadata")
+    .eq("source_system", "lead")
+    .eq("source_object", "leads")
+    .eq("source_record_key", leadId)
+
+  if (readError) throw new Error(`lead→neo 링크 조회 실패: ${readError.message}`)
+
+  const links = (data ?? []) as Array<{
+    id: string
+    status: string
+    target_type: string
+    target_id: string
+    normalized_name: string | null
+    metadata: Record<string, unknown> | null
+  }>
+  const existing = links.find(
+    (link) => link.target_type === "external_account" && link.target_id === neoAccountId
+  )
+  if (existing?.status === "confirmed") return { created: false }
+
+  // 부분 유니크 인덱스(crm_source_links_one_confirmed_source_idx)는 소스당 확정 1건만
+  // 허용한다. 이미 다른 타깃(예: convert-v2 lead→customer)으로 확정된 리드면 DB가
+  // 어차피 거부하므로, 불투명한 23505 대신 원인이 보이는 에러로 먼저 알린다.
+  // 메시지는 어드민 토스트에 그대로 노출된다 — raw enum/전체 id 대신 한국어 라벨 + 뒤 8자리.
+  const otherConfirmed = links.find((link) => link.status === "confirmed" && link !== existing)
+  if (otherConfirmed) {
+    const typeLabel = CRM_LINK_TARGET_TYPE_KO[otherConfirmed.target_type] ?? otherConfirmed.target_type
+    const shortId =
+      otherConfirmed.target_id.length > 8 ? `…${otherConfirmed.target_id.slice(-8)}` : otherConfirmed.target_id
+    throw new Error(
+      `이미 다른 타깃(${typeLabel} ${shortId})으로 확정된 리드입니다 — 기존 확정 링크를 해제한 뒤 다시 시도하세요.`
+    )
+  }
+
+  const now = new Date().toISOString()
+  const normalizedName = input.normalizedName?.trim()
+    ? normalizeCrmName(input.normalizedName)
+    : (existing?.normalized_name ?? null)
+
+  const { error } = await sb
+    .from("crm_source_links")
+    .upsert(
+      {
+        source_system: "lead",
+        source_object: "leads",
+        source_record_key: leadId,
+        normalized_name: normalizedName,
+        target_type: "external_account",
+        target_id: neoAccountId,
+        confidence: 1,
+        status: "confirmed",
+        confirmed_by: input.actorUserId ?? null,
+        confirmed_at: now,
+        // 기존 후보의 매칭 근거(metadata)는 보존하고 수동 확정 표식만 얹는다.
+        metadata: { ...(existing?.metadata ?? {}), manual: true, manual_confirmed_at: now },
+      },
+      {
+        onConflict: "source_system,source_object,source_record_key,target_type,target_id",
+      }
+    )
+
+  if (error) throw new Error(`lead→neo 링크 확정 실패: ${error.message}`)
+  return { created: !existing }
+}
+
 export async function updateCrmSourceLinkStatus(
   id: string,
   action: CrmSourceLinkAction,
