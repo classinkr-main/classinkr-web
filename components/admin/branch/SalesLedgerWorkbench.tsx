@@ -743,6 +743,24 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
+// 로컬 fallback 초안(local-*)을 서버 재연결 시 POST 재전송하기 위한 입력 복원.
+// LedgerDraft는 LedgerDraftInput의 상위집합이라 필드만 골라 뽑는다.
+function localDraftToInput(draft: LedgerDraft): LedgerDraftInput {
+  return {
+    kind: draft.kind,
+    sourceDealId: draft.sourceDealId,
+    sourceSheetRow: draft.sourceSheetRow,
+    sourceSnapshot: draft.sourceSnapshot,
+    customer: draft.customer,
+    manager: draft.manager,
+    team: draft.team,
+    month: draft.month,
+    amount: draft.amount,
+    note: draft.note,
+    metadata: draft.metadata,
+  }
+}
+
 function useLedgerDraftQueue() {
   const [drafts, setDrafts] = useState<LedgerDraft[]>([])
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
@@ -750,6 +768,14 @@ function useLedgerDraftQueue() {
   const [queueMode, setQueueMode] = useState<DraftQueueMode>("server")
   const [queueLoading, setQueueLoading] = useState(true)
   const [queueError, setQueueError] = useState<string | null>(null)
+  // 서버 재연결 시 재전송에 실패해 여전히 로컬에만 있는 초안 수 — 배지 경고용(항목 2).
+  const [unsyncedLocalCount, setUnsyncedLocalCount] = useState(0)
+  // loadDrafts가 drafts state를 deps로 갖지 않아도(안정 identity 유지) 최신 local-* 초안을
+  // 읽을 수 있게 미러링한다 — drafts가 바뀔 때마다 렌더 후 effect에서 갱신(렌더 중 ref 쓰기 금지).
+  const localDraftsRef = useRef<LedgerDraft[]>([])
+  useEffect(() => {
+    localDraftsRef.current = drafts.filter((draft) => draft.id.startsWith("local-"))
+  }, [drafts])
 
   const updateLocalDrafts = useCallback((updater: (current: LedgerDraft[]) => LedgerDraft[]) => {
     setDrafts((current) => {
@@ -773,11 +799,44 @@ function useLedgerDraftQueue() {
         setQueueError(data.health.message ?? "서버 입력 큐가 아직 준비되지 않았습니다.")
         return
       }
-      setDrafts(data.drafts ?? [])
+      // 서버 복구: data.drafts로 무병합 덮어쓰면 오프라인 동안 쌓인 local-* 초안이 화면에서
+      // 조용히 사라진다(무음 유실) — 덮어쓰기 전에 잔존 local-* 초안을 서버로 재전송한다.
+      // 성공분은 서버 초안으로 교체, 실패분은 local- id 그대로 유지해 계속 보이게 하고 배지로 경고한다.
+      const staleLocalDrafts = localDraftsRef.current
+      if (staleLocalDrafts.length === 0) {
+        setUnsyncedLocalCount(0)
+        setDrafts(data.drafts ?? [])
+        setQueueError(null)
+      } else {
+        const resendResults = await Promise.allSettled(
+          staleLocalDrafts.map((draft) =>
+            adminFetchJson<LedgerDraftResponse>("/api/admin/branch/ledger-drafts", {
+              method: "POST",
+              body: JSON.stringify(localDraftToInput(draft)),
+            }),
+          ),
+        )
+        const resent: LedgerDraft[] = []
+        const stillLocal: LedgerDraft[] = []
+        resendResults.forEach((result, index) => {
+          if (result.status === "fulfilled" && result.value.draft) {
+            resent.push(result.value.draft)
+          } else {
+            stillLocal.push(staleLocalDrafts[index])
+          }
+        })
+        writeLocalDrafts(stillLocal)
+        setUnsyncedLocalCount(stillLocal.length)
+        setDrafts([...resent, ...stillLocal, ...(data.drafts ?? [])].slice(0, 50))
+        setQueueError(
+          stillLocal.length > 0
+            ? `로컬 초안 ${stillLocal.length}건을 서버로 재전송하지 못했습니다 — 재연결 후 다시 시도하세요.`
+            : null,
+        )
+      }
       setLedgerEntries(data.entries ?? [])
       setLedgerHealth(data.ledgerHealth ?? null)
       setQueueMode("server")
-      setQueueError(null)
     } catch (error) {
       setDrafts(readLocalDrafts())
       setLedgerEntries([])
@@ -920,6 +979,7 @@ function useLedgerDraftQueue() {
     queueMode,
     queueLoading,
     queueError,
+    unsyncedLocalCount,
     createDraft,
     updateDraft,
     toggleDraft,
@@ -3166,6 +3226,7 @@ export default function SalesLedgerWorkbench() {
     queueMode,
     queueLoading,
     queueError,
+    unsyncedLocalCount,
     createDraft,
     updateDraft,
     toggleDraft,
@@ -5440,6 +5501,22 @@ export default function SalesLedgerWorkbench() {
                       className="shrink-0 rounded-md border border-[#ECD29C] bg-white px-2.5 py-1 text-[11px] font-bold text-[#7A520F] transition hover:bg-[#FBF1E0]"
                     >
                       서버 재연결
+                    </button>
+                  </div>
+                )}
+                {/* 서버는 복구됐지만(queueMode=server) 재연결 시 자동 재전송이 일부/전부 실패해 여전히
+                    로컬에만 남은 초안 — 무음 유실 방지 경고 배지(항목 2). 재시도는 loadDrafts 재호출로. */}
+                {queueMode === "server" && unsyncedLocalCount > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#F2B8B8] bg-[#FCE9E9] px-4 py-2.5">
+                    <p className="min-w-0 text-[11.5px] font-bold leading-relaxed text-[#B43E3E]">
+                      로컬 초안 {unsyncedLocalCount}건 미전송 — 서버 재연결 시 자동 재전송을 시도했지만 실패했습니다. 장부에 적용할 수 없습니다.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void reloadDrafts()}
+                      className="shrink-0 rounded-md border border-[#F2B8B8] bg-white px-2.5 py-1 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9]"
+                    >
+                      다시 재전송
                     </button>
                   </div>
                 )}
