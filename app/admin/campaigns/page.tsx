@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
 import dynamic from "next/dynamic"
+import { useRouter } from "next/navigation"
 import {
   Activity,
   AlertCircle,
@@ -43,6 +44,11 @@ import type { MetaPerfRow } from "@/components/admin/campaigns/MetaPerformanceCh
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { textMatchesEventToken } from "@/lib/events/attribution"
 import { useUrlState } from "@/lib/use-url-state"
+import {
+  parseMessagePrefill,
+  stripMessagePrefillParams,
+  type MessagePrefill,
+} from "@/lib/message-prefill"
 import type { LeadRecord } from "@/lib/db"
 import type { PublicEvent, EventStatus } from "@/lib/types/public-events"
 import {
@@ -1416,7 +1422,10 @@ function NumInput({
 // ─── main page ────────────────────────────────────────────────────────────────
 
 export default function AdminCampaignsPage() {
+  const router = useRouter()
   const [tabParam, setTabParam] = useUrlState("tab", "summary")
+  // 고객 360 딥링크(?message_to=&message_name=) 수신자 프리필 — 마운트 시 1회 소모
+  const [messagePrefill, setMessagePrefill] = useState<MessagePrefill | null>(null)
   const [events, setEvents] = useState<PublicEvent[]>([])
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [metricsMap, setMetricsMap] = useState<Record<string, EventMetrics>>({})
@@ -1469,6 +1478,25 @@ export default function AdminCampaignsPage() {
   useEffect(() => {
     load()
   }, [load])
+
+  // 캠페인 메시지 수신자 프리필 딥링크 소모 (message_to / message_name)
+  // - 파라미터를 state로 캡처하고 메시지 탭을 활성화한 뒤,
+  // - router.replace로 URL에서 제거해(one-shot) 새로고침 시 재적용을 막는다.
+  //   탭 활성화는 이 페이지의 탭 상태 메커니즘(useUrlState → history.replaceState)을 그대로 쓰고,
+  //   파라미터 제거는 라우터를 통해 수행한다(raw history API로 지우면 useSearchParams 구독과 어긋난다).
+  useEffect(() => {
+    const prefill = parseMessagePrefill(window.location.search)
+    if (!prefill) return
+    setMessagePrefill(prefill)
+    setTabParam("email") // "메시지" 탭 (id는 딥링크 호환상 email 유지)
+    // setTabParam이 동기적으로 URL에 tab=email을 반영한 뒤의 search에서 message_*만 벗겨낸다.
+    const rest = stripMessagePrefillParams(window.location.search)
+    router.replace(rest ? `${window.location.pathname}?${rest}` : window.location.pathname, {
+      scroll: false,
+    })
+  }, [router, setTabParam])
+
+  const consumeMessagePrefill = useCallback(() => setMessagePrefill(null), [])
 
   const loadMeta = useCallback(async () => {
     setMetaLoading(true)
@@ -2173,7 +2201,10 @@ export default function AdminCampaignsPage() {
       {/* Tab content */}
       {activeTab === "email" ? (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
-          <MarketingHub />
+          <MarketingHub
+            recipientPrefill={messagePrefill}
+            onRecipientPrefillConsumed={consumeMessagePrefill}
+          />
         </div>
       ) : activeTab === "meta" ? (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">

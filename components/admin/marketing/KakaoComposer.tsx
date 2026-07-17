@@ -34,6 +34,11 @@ interface Props {
   channelRegistered: boolean
   /** status API가 아직 안 붙었을 때 true — 안내 문구를 완화 */
   statusUnavailable?: boolean
+  /**
+   * 수신자 프리필(고객 360 딥링크) — 마운트 시 테스트 발송 번호의 초기값으로만 쓴다.
+   * useState 초기화로만 소비하므로 이후 사용자가 수정한 값을 절대 덮지 않는다.
+   */
+  initialTestPhone?: string
 }
 
 const SOLAPI_CONSOLE_URL = "https://console.solapi.com"
@@ -57,10 +62,15 @@ function detectVariables(template: MessagingTemplate | undefined): string[] {
   return Array.from(found)
 }
 
-export default function KakaoComposer({ templates, channelRegistered, statusUnavailable }: Props) {
+export default function KakaoComposer({
+  templates,
+  channelRegistered,
+  statusUnavailable,
+  initialTestPhone,
+}: Props) {
   const [selectedId, setSelectedId] = useState<string>("")
   const [vars, setVars] = useState<Array<{ key: string; value: string }>>([{ key: "", value: "" }])
-  const [testPhone, setTestPhone] = useState("")
+  const [testPhone, setTestPhone] = useState(initialTestPhone ?? "")
   const [testLoading, setTestLoading] = useState(false)
   const [testResult, setTestResult] = useState<MessagingTestSendResult | null>(null)
 
