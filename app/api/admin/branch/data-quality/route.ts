@@ -18,9 +18,13 @@ import { fyOf } from "@/lib/branch/fiscal"
 // 캐시 키를 summary/kpi의 DB-우선 readDsh(키 ["branch-dsh"] 등)와 공유하면 먼저
 // 워밍한 쪽의 데이터셋이 서빙될 수 있어 시트 QC 전용 키로 분리한다.
 // 태그는 sync 라우트의 무효화(["branch-dsh","branch-seg","branch-kpi"])를 그대로 받도록 유지.
+// TTL 60→300초(품질 웨이브3): DQ 이슈는 시트 편집을 즉시 반영해야 하는 정본 수치가
+// 아니라 후행 QC 지표(위 주석)라 정확성에 영향이 없다 — sync 라우트가 동기화 직후
+// 이 태그들을 무효화하므로(app/api/admin/branch/sync/route.ts:20 cacheTags) "방금 동기화"
+// 직후에는 여전히 즉시 갱신되고, TTL은 동기화 없이 유휴 상태로 재요청될 때만 체감된다.
 const readDsh = unstable_cache(
   async () => parseDsh(await readRangeWithFormat(envSheetId("dashboard"), DSH_RANGE), fyOf(new Date())),
-  ["branch-dsh-sheet-qc"], { revalidate: 60, tags: ["branch-dsh"] },
+  ["branch-dsh-sheet-qc"], { revalidate: 300, tags: ["branch-dsh"] },
 )
 // v2 시트(FY26-27 Sales Ledger)에는 '4. 지역 매출' 탭이 없다('4. 채널 정산'으로 대체).
 // SEG 탭이 없어도 나머지 QC 규칙은 살아 있어야 하므로 실패 시 빈 배열로 강등한다 —
@@ -33,11 +37,11 @@ const readSeg = unstable_cache(
       return []
     }
   },
-  ["branch-seg-sheet-qc"], { revalidate: 60, tags: ["branch-seg"] },
+  ["branch-seg-sheet-qc"], { revalidate: 300, tags: ["branch-seg"] },
 )
 const readKpi = unstable_cache(
   async () => parseKpi(await readRangeWithFormat(envSheetId("dashboard"), KPI_RANGE)),
-  ["branch-kpi-sheet-qc"], { revalidate: 60, tags: ["branch-kpi"] },
+  ["branch-kpi-sheet-qc"], { revalidate: 300, tags: ["branch-kpi"] },
 )
 
 export async function GET(req: NextRequest) {
