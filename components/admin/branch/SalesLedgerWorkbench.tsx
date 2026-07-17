@@ -1,6 +1,7 @@
 "use client"
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -390,6 +391,29 @@ const DRAFT_STATUS_FILTERS: Array<{ id: DraftStatusFilter; label: string }> = [
   { id: "applied", label: "적용" },
   { id: "all", label: "전체" },
 ]
+
+// role="tablist" 롤빙 tabIndex 키보드 내비 — BranchDashboardClient.tsx의 onTabKeyDown과
+// 동일 패턴(ArrowLeft/Right/Home/End)을 두 탭리스트(렌즈, 빠른 작업 보기)가 공유하도록 일반화.
+function handleRovingTabKeyDown<T>(
+  event: ReactKeyboardEvent<HTMLButtonElement>,
+  index: number,
+  items: T[],
+  refs: MutableRefObject<Array<HTMLButtonElement | null>>,
+  onSelect: (item: T, index: number) => void,
+) {
+  const lastIndex = items.length - 1
+  let nextIndex: number | null = null
+
+  if (event.key === "ArrowRight") nextIndex = index === lastIndex ? 0 : index + 1
+  if (event.key === "ArrowLeft") nextIndex = index === 0 ? lastIndex : index - 1
+  if (event.key === "Home") nextIndex = 0
+  if (event.key === "End") nextIndex = lastIndex
+
+  if (nextIndex == null) return
+  event.preventDefault()
+  onSelect(items[nextIndex], nextIndex)
+  refs.current[nextIndex]?.focus()
+}
 
 function canRunAdminOperationsFromSession(): boolean {
   if (typeof window === "undefined") return false
@@ -2909,6 +2933,9 @@ export default function SalesLedgerWorkbench() {
   // DSH 수치 그리드의 Goal/Status/Gap 토글 — 렌즈 로컬 상태.
   const [dshGridView, setDshGridView] = useState<DshGridView>("goal")
   const lensPanelRef = useRef<HTMLDivElement | null>(null)
+  // 두 tablist(렌즈 전환, 빠른 작업 보기 전환)의 롤빙 tabIndex 포커스 대상.
+  const lensTabRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const railTabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const [query, setQuery] = useState("")
   const [managerFilter, setManagerFilter] = useState("ALL")
   const [regionFilter, setRegionFilter] = useState("ALL")
@@ -4716,7 +4743,7 @@ export default function SalesLedgerWorkbench() {
         <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-1 self-start">
           <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="Sales ledger views">
-            {LENSES.map((item) => (
+            {LENSES.map((item, index) => (
               <button
                 key={item.id}
                 type="button"
@@ -4725,7 +4752,10 @@ export default function SalesLedgerWorkbench() {
                 aria-selected={lens === item.id}
                 aria-controls="sales-ledger-lens-panel"
                 title={item.description}
+                tabIndex={lens === item.id ? 0 : -1}
+                ref={(node) => { lensTabRefs.current[index] = node }}
                 onClick={() => selectLens(item.id)}
+                onKeyDown={(event) => handleRovingTabKeyDown(event, index, LENSES, lensTabRefs, (nextItem) => selectLens(nextItem.id))}
                 className={`inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-[13px] font-bold transition ${
                   lens === item.id ? "bg-[#111110] text-white" : "text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
                 }`}
@@ -5581,7 +5611,7 @@ export default function SalesLedgerWorkbench() {
               </button>
             </div>
             <div className="flex items-center gap-0.5 rounded-lg bg-[#F6F5F4] p-[3px]" role="tablist" aria-label="빠른 작업 보기 전환">
-              {railViewItems.map((item) => {
+              {railViewItems.map((item, index) => {
                 const Icon = item.icon
                 const active = railView === item.id
                 const showQueueBadge = item.id === "queue" && openDrafts.length > 0
@@ -5591,7 +5621,10 @@ export default function SalesLedgerWorkbench() {
                     type="button"
                     role="tab"
                     aria-selected={active}
+                    tabIndex={active ? 0 : -1}
+                    ref={(node) => { railTabRefs.current[index] = node }}
                     onClick={() => selectRailView(item.id)}
+                    onKeyDown={(event) => handleRovingTabKeyDown(event, index, railViewItems, railTabRefs, (nextItem) => selectRailView(nextItem.id))}
                     title={item.description}
                     className={`relative flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11.5px] font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734] ${
                       active ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "text-[#615D59] hover:text-[#111110]"
