@@ -4982,7 +4982,8 @@ export default function SalesLedgerWorkbench() {
               <ChevronRight className="h-3.5 w-3.5" />
               <span>FY26-27</span>
               <ChevronRight className="h-3.5 w-3.5" />
-              <span>Sales Ledger</span>
+              {/* 구 IA 시절 영문 라벨("Sales Ledger") 잔재 — 현재 admin-nav 섹션 라벨(sales="영업·매출")로 정정. */}
+              <span>영업·매출</span>
             </div>
             <h1 className="mt-2 text-[28px] font-bold tracking-[-0.02em] text-[#111110] sm:text-[32px]">
               매출 장부
