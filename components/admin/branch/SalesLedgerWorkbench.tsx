@@ -317,6 +317,8 @@ const MATRIX_PRODUCT_W = 56
 const MATRIX_MONTH_W = 64
 const MATRIX_WEEK_W = 52 // 월 확장(상세시트) 시 w1~w5 각 칸 — 금액 가독성 위해 넓게(가로 스크롤 허용)
 const MATRIX_ANNUAL_W = 96
+// 매트릭스 토스트 최대 스택 개수(품질 웨이브 3, 항목 6) — 이 이상 쌓이면 가장 오래된 info부터 밀어낸다.
+const MATRIX_TOAST_MAX = 3
 // 매트릭스 행 밀도(표시만 — 셀 폭·편집 로직 불변). localStorage에 저장해 재방문 시 복원.
 type MatrixDensity = "condensed" | "regular" | "relaxed"
 const MATRIX_DENSITY_STORAGE_KEY = "classin:rev-matrix-density"
@@ -3278,18 +3280,27 @@ export default function SalesLedgerWorkbench() {
   // 담당자별 월 수치 테이블 top6 캡 해제 토글(항목 6) — 기본은 캡, "전체 보기"로 전체 목록.
   const [revManagerSummaryExpanded, setRevManagerSummaryExpanded] = useState(false)
   // 매트릭스 셀 커밋 실패(로컬 폴백) 등 편집 지점 인근 알림 토스트 — 상단 Source 바만으로는
-  // 편집 중 시야 밖이라 침묵 실패가 되던 문제 대응. 7초 뒤 자동 소멸.
-  const [matrixToast, setMatrixToast] = useState<{ kind: "error" | "info"; text: string } | null>(null)
-  // 단일 슬롯이라 에러 표시 도중 뒤이은 info 토스트가 그걸 덮어써 실패 알림을 놓칠 수 있었다
-  // — 에러가 떠 있는 동안은 info로 덮어쓰지 않는다(에러 자체는 항상 최신 것으로 갱신).
+  // 편집 중 시야 밖이라 침묵 실패가 되던 문제 대응. 각 토스트는 7초 뒤 자동 소멸.
+  // 최대 MATRIX_TOAST_MAX개 스택(품질 웨이브 3, 항목 6) — 이전엔 단일 슬롯이라 에러 표시 도중
+  // 뒤이은 info 토스트가 그걸 덮어써 실패 알림을 놓칠 수 있었다. 같은 문구는 dedupe(연타 방지),
+  // 초과분은 에러를 우선 유지하고 가장 오래된 info부터 밀어낸다(전부 에러면 가장 오래된 에러부터).
+  const [matrixToasts, setMatrixToasts] = useState<Array<{ id: string; kind: "error" | "info"; text: string }>>([])
   const pushMatrixToast = useCallback((next: { kind: "error" | "info"; text: string }) => {
-    setMatrixToast((current) => (current?.kind === "error" && next.kind !== "error" ? current : next))
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+    setMatrixToasts((current) => {
+      if (current.some((toast) => toast.text === next.text)) return current
+      const stacked = [...current, { id, ...next }]
+      if (stacked.length <= MATRIX_TOAST_MAX) return stacked
+      const dropIndex = stacked.findIndex((toast) => toast.kind === "info")
+      return stacked.filter((_, index) => index !== (dropIndex !== -1 ? dropIndex : 0))
+    })
+    window.setTimeout(() => {
+      setMatrixToasts((current) => current.filter((toast) => toast.id !== id))
+    }, 7000)
   }, [])
-  useEffect(() => {
-    if (!matrixToast) return
-    const timer = window.setTimeout(() => setMatrixToast(null), 7000)
-    return () => window.clearTimeout(timer)
-  }, [matrixToast])
+  const dismissMatrixToast = useCallback((id: string) => {
+    setMatrixToasts((current) => current.filter((toast) => toast.id !== id))
+  }, [])
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(true)
   const [railView, setRailView] = useState<RailView>("detail")
   const [selectedRow, setSelectedRow] = useState<LedgerRevenueRow | null>(null)
@@ -6015,24 +6026,29 @@ export default function SalesLedgerWorkbench() {
           />
         )}
 
-        {matrixToast && (
-          <div
-            role="alert"
-            className={`fixed bottom-20 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] items-start gap-2 -translate-x-1/2 rounded-lg border px-4 py-2.5 text-[12px] font-bold shadow-[0_18px_48px_rgba(17,17,16,0.18)] ${
-              matrixToast.kind === "error"
-                ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"
-                : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
-            }`}
-          >
-            <span className="pt-0.5">{matrixToast.text}</span>
-            <button
-              type="button"
-              onClick={() => setMatrixToast(null)}
-              aria-label="알림 닫기"
-              className="shrink-0 rounded p-0.5 opacity-70 transition hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+        {matrixToasts.length > 0 && (
+          <div className="fixed bottom-20 left-1/2 z-50 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-col gap-2">
+            {matrixToasts.map((toast) => (
+              <div
+                key={toast.id}
+                role="alert"
+                className={`flex items-start gap-2 rounded-lg border px-4 py-2.5 text-[12px] font-bold shadow-[0_18px_48px_rgba(17,17,16,0.18)] ${
+                  toast.kind === "error"
+                    ? "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"
+                    : "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
+                }`}
+              >
+                <span className="pt-0.5">{toast.text}</span>
+                <button
+                  type="button"
+                  onClick={() => dismissMatrixToast(toast.id)}
+                  aria-label="알림 닫기"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded opacity-70 transition hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
