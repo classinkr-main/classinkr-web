@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3888",
-    "prebuild": "npm run check:vercel-crons",
+    "prebuild": "npm run check:vercel-crons && npm run check:design-tokens",
     "build": "next build",
     "postbuild": "npm run check:public-content",
     "start": "next start",
@@ -14,6 +14,7 @@
     "test:watch": "vitest --dir tests",
     "generate:segment-landings": "node scripts/generate-segment-landings.mjs",
     "check:vercel-crons": "node scripts/check-vercel-crons.mjs",
+    "check:design-tokens": "node scripts/check-design-tokens.mjs",
     "check:public-content": "node scripts/check-public-content-visibility.mjs",
     "sync:cs-figma-guides": "node scripts/generate-cs-figma-guides.mjs",
     "sync:cs-figma-assets": "node scripts/generate-cs-figma-assets-manifest.mjs",
