@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react"
 import { RefreshCw, AlertTriangle, CheckCircle2, Clock, Database } from "lucide-react"
 import { isImportStale } from "@/lib/branch/data-source-freshness"
-import { formatDateTime } from "./ledger/shared"
 import type { BranchDataSourceInfo, BranchDataSources } from "./types"
 
 interface SyncStatusBarProps {
@@ -29,8 +28,11 @@ function relativeTime(iso: string, now: number): string {
   return `${Math.floor(diff / 86_400_000)}일 전`
 }
 
-function sourceLabel(source: BranchDataSourceInfo): string {
-  if (source.kind === "import") return `장부 임포트${source.asOf ? ` (${formatDateTime(source.asOf)})` : ""}`
+// 항목 5: 이 바의 "라벨·시간 표기(상대시간)"를 기준으로 삼아 소스별 asOf도 절대시각(formatDateTime)
+// 대신 relativeTime으로 통일한다 — 위 헤더(마지막 동기화·시트 수정)와 동일한 표기라야 "REV 임포트가
+// 13일 전"처럼 스테일 정도가 한눈에 비교된다(2026-07-16 사고 재발 감지력).
+function sourceLabel(source: BranchDataSourceInfo, now: number): string {
+  if (source.kind === "import") return `장부 임포트${source.asOf ? ` (${relativeTime(source.asOf, now)})` : ""}`
   if (source.kind === "mirror") return "시트 미러"
   return "라이브 시트"
 }
@@ -82,7 +84,7 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
               {lastError
                 ? lastError
                 : importStale
-                  ? "임포트가 시트 동기화보다 오래됨 — 장부에서 DB 재동기화 필요"
+                  ? "임포트가 시트 동기화보다 오래됨 — 장부에서 재동기화 필요"
                   : sheetAhead
                     ? `시트가 ${relativeTime(sheetModifiedAt!, now)} 수정 — DB는 ${relativeTime(lastSync!, now)} 동기화`
                     : `마지막 동기화: ${lastSync ? relativeTime(lastSync, now) : "없음"}`}
@@ -118,10 +120,10 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
               원천
             </span>
             <span className={revImportStale ? "font-semibold text-[#7A520F]" : "text-[#615D59]"}>
-              REV {sourceLabel(dataSources.rev)}
+              REV {sourceLabel(dataSources.rev, now)}
             </span>
             <span className={dshImportStale ? "font-semibold text-[#7A520F]" : "text-[#615D59]"}>
-              DSH {sourceLabel(dataSources.dsh)}
+              DSH {sourceLabel(dataSources.dsh, now)}
             </span>
           </div>
         )}
