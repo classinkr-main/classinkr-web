@@ -507,6 +507,16 @@ function fiscalYearOf(date: Date): number {
   return month >= 4 ? date.getUTCFullYear() : date.getUTCFullYear() - 1
 }
 
+// FY 라벨(품질 웨이브 3, 항목 4) — fiscalYearOf 기반 "FY{시작}-{종료}" 2자리 문자열.
+// 브레드크럼·기간 라벨 2곳의 "FY26-27" 하드코딩을 대체하는 단일 계산원 — 회계연도가
+// 바뀌어도 코드 수정 없이 자동으로 다음 연도 라벨을 보여준다.
+function fiscalYearLabel(date: Date): string {
+  const fy = fiscalYearOf(date)
+  const startYY = String(fy % 100).padStart(2, "0")
+  const endYY = String((fy + 1) % 100).padStart(2, "0")
+  return `FY${startYY}-${endYY}`
+}
+
 function buildFiscalMonthOptions(now: Date) {
   const fy = fiscalYearOf(now)
   const current = ymKeyUtc(now)
@@ -3306,6 +3316,8 @@ export default function SalesLedgerWorkbench() {
     reloadDrafts,
   } = useLedgerDraftQueue()
   const monthOptions = useMemo(() => buildFiscalMonthOptions(new Date()), [])
+  // 회계연도 라벨(품질 웨이브 3, 항목 4) — 브레드크럼·기간 라벨 2곳이 이 값 하나를 공유한다.
+  const fyLabel = useMemo(() => fiscalYearLabel(new Date()), [])
   // 매트릭스 12개 열의 회계월 값(4→3 순서). monthOptions와 동일 순서·동일 배열이나 값만 뽑아
   // 그룹/행 파생값 루프와 컬럼 memo가 공유한다.
   const matrixMonths = useMemo(() => monthOptions.map((option) => option.value), [monthOptions])
@@ -5021,7 +5033,7 @@ export default function SalesLedgerWorkbench() {
   const appliedDraftTotal = additiveAppliedDraftRows.reduce((sum, row) => sum + row.revenue, 0)
   const ledgerConfirmed = (revenue?.confirmed ?? 0) + appliedDraftTotal
   const ledgerDelta = ledgerConfirmed - (revenue?.confirmed ?? 0)
-  const periodLabel = period === "M" ? formatMonthLabel(selectedMonth) : period === "Q" ? "현재 분기" : "FY26-27"
+  const periodLabel = period === "M" ? formatMonthLabel(selectedMonth) : period === "Q" ? "현재 분기" : fyLabel
   const canCreateEditDraft = Boolean(selectedRow && (selectedRow.ledgerOrigin === "sheet" || selectedRow.sourceDealId))
   const draftAmountValue = safeAmount(draftForm.amount)
   const draftAmountInvalid = !draftForm.amount.trim() || draftAmountValue <= 0
@@ -5056,7 +5068,7 @@ export default function SalesLedgerWorkbench() {
                 KR Team
               </Link>
               <ChevronRight className="h-3.5 w-3.5" />
-              <span>FY26-27</span>
+              <span>{fyLabel}</span>
               <ChevronRight className="h-3.5 w-3.5" />
               {/* 구 IA 시절 영문 라벨("Sales Ledger") 잔재 — 현재 admin-nav 섹션 라벨(sales="영업·매출")로 정정. */}
               <span>영업·매출</span>
