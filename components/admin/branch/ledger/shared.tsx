@@ -134,6 +134,10 @@ export interface RevRowView {
   // 다중월 매트릭스용: 회계연도 12개월 각 셀 버킷 + 행 연간 합계(행 1패스 캐시).
   monthlyByMonth: Record<string, RevMonthlyBucket>
   annual: RevMonthlyBucket
+  /** 품질 웨이브 4 — 항목 1: 이 딜의 어떤 월이 이미 적용된 수정(edit-row) 초안으로 대체됐는지
+      (editRowOverrideMonths). 그 달은 원본 금액이 0으로 지워져도(adjustedSheetRows) 재편집 가능한
+      빈 칸으로 보이면 안 된다 — isMatrixCellLocked에 넘겨 금액과 무관하게 재잠금시킨다. */
+  correctedMonths?: Set<string> | null
 }
 
 // 같은 고객(normalizedAccountKey — lib/branch/account-key.ts SSOT)의 HW/SW/미분류 행 묶음.

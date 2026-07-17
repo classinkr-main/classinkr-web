@@ -1619,7 +1619,14 @@ function parseMatrixAmount(value: string): number {
 // 딜행 × 월 셀이 확정 잠금(편집 불가)인지. monthlyRed 플래그 또는 확정액이 그 달 금액을 덮으면 잠금.
 // 적용된 초안(ledgerOrigin==="draft")은 확도와 무관하게 잠금 — 셀 편집이 만드는 새 초안은 sourceDealId
 // 기준이라 장부 반영분과 겹치면 이중계상이 되므로, 적용분 수정·취소는 입력 큐에서만 한다.
-function isMatrixCellLocked(row: LedgerRevenueRow, month: string): boolean {
+//
+// correctedMonths(품질 웨이브 4 — 항목 1, 회귀 방지): 이 행(원본 시트 딜)의 이 달이 이미 적용된 수정
+// (edit-row) 초안으로 대체됐는지 — editRowOverrideMonths.get(row.id). rows 파생 단계(adjustedSheetRows)가
+// 그 달의 원본 금액을 지워 amount<=0으로 만들기 때문에, 이 체크가 없으면 아래 "미입력=편집 가능" 분기로
+// 새어 정정 적용 직후 원본 셀이 재편집 가능해진다 — 새 셀 입력이 쌓이면 적용된 정정 + 신규 초안이 같은
+// (딜, 월)에 겹쳐 이중계상된다. 그래서 금액 판정보다 먼저, 금액과 무관하게 잠근다.
+export function isMatrixCellLocked(row: LedgerRevenueRow, month: string, correctedMonths?: Set<string> | null): boolean {
+  if (correctedMonths?.has(month)) return true
   const amount = rowMonthAmount(row, month)
   if (amount <= 0) return false // 미입력 = 편집 가능(예정 추가)
   if (row.ledgerOrigin === "draft" && row.draftMonth === month) return true
@@ -1629,8 +1636,8 @@ function isMatrixCellLocked(row: LedgerRevenueRow, month: string): boolean {
 }
 
 // 딜행 셀이 편집 가능한지 — 딜행(그룹 소계 제외)이면서 잠금 아님. 미래월 제한은 두지 않는다.
-function isMatrixCellEditable(row: LedgerRevenueRow, month: string): boolean {
-  return !isMatrixCellLocked(row, month)
+export function isMatrixCellEditable(row: LedgerRevenueRow, month: string, correctedMonths?: Set<string> | null): boolean {
+  return !isMatrixCellLocked(row, month, correctedMonths)
 }
 
 // ── SL-2: 엑셀 클립보드 TSV 붙여넣기 → 초안 큐 벌크 라우팅 ──────────────────────
@@ -1674,6 +1681,9 @@ function buildMatrixPastePlan(
   anchor: MatrixCellCoord,
   dealRows: LedgerRevenueRow[],
   months: string[],
+  // 품질 웨이브 4 — 항목 1: 정정 적용으로 재잠긴 (딜, 월) 칸을 붙여넣기 계획에서도 locked로
+  // 판정하기 위한 dealId → 대체된 월 집합(editRowOverrideMonths).
+  overrideMonthsByRow: Map<string, Set<string>>,
 ): MatrixPastePlan | null {
   const grid = parseTsvGrid(text)
   if (grid.length === 0) return null
@@ -1714,7 +1724,7 @@ function buildMatrixPastePlan(
       cellBudget -= 1
       const next = parseMatrixAmount(raw)
       const current = rowMonthAmount(row, month)
-      const locked = isMatrixCellLocked(row, month)
+      const locked = isMatrixCellLocked(row, month, overrideMonthsByRow.get(row.id))
       // 동일 금액은 초안을 만들지 않는다(commitBuffer의 중복 커밋 가드와 같은 취지).
       const status: MatrixPasteCellPlan["status"] =
         locked ? "locked" : next === current || (next <= 0 && current <= 0) ? "unchanged" : "apply"
@@ -2405,7 +2415,7 @@ function RevMatrixWeekCells({
         rowId={editContext?.rowId}
         editable={weekEditable}
         locked={editContext ? weekLocked && display > 0 : false}
-        lockLabel={editContext?.lockLabel}
+        lockLabel={editContext ? editContext.lockLabelOf(month ?? "") : undefined}
         editWarning={editContext ? editContext.weekEditNotice(month ?? "") : undefined}
         pending={editContext ? editContext.weekPendingOf(month ?? "", index) : null}
         actions={editContext?.actions ?? null}
@@ -2429,7 +2439,10 @@ interface RevMatrixEditContext {
   isEditingCell: (month: string, week?: number) => boolean // 이 행 기준 셀 편집 판정
   editBuffer: string // 편집 중 버퍼 값(편집 셀에만 의미)
   editConfidence: DraftConfidence // 편집 중 확도(편집 셀에만 의미)
-  lockLabel: string // 잠금 아이콘·툴팁 라벨 — 시트 원천은 "시트 확정", 적용 초안은 "장부 반영"
+  // 잠금 아이콘·툴팁 라벨(월별) — 시트 원천은 "시트 확정", 적용 초안은 "장부 반영", 정정 적용으로
+  // 재잠긴 원본 달은 "장부 반영(정정)"(품질 웨이브 4 — 항목 1: 정정이 셀을 지운 게 아니라 대체했음을
+  // 구분해 보여준다 — 재편집을 시도하면 우측 패널 정정 초안으로 유도).
+  lockLabelOf: (month: string) => string
   editableOf: (month: string) => boolean
   lockedOf: (month: string) => boolean
   pendingOf: (month: string) => MatrixPendingDraft | null
@@ -2490,7 +2503,7 @@ function RevMatrixMonthStrip({
             rowId={editContext?.rowId}
             editable={editContext ? editContext.editableOf(month) : false}
             locked={editContext ? editContext.lockedOf(month) : false}
-            lockLabel={editContext?.lockLabel}
+            lockLabel={editContext ? editContext.lockLabelOf(month) : undefined}
             pending={editContext ? editContext.pendingOf(month) : null}
             actions={editContext?.actions ?? null}
             selected={monthSelected}
@@ -2912,12 +2925,14 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
           editingCoord != null && editingCoord.month === month && (editingCoord.week ?? -1) === (week ?? -1),
         editBuffer,
         editConfidence,
-        lockLabel: row.ledgerOrigin === "draft" ? "장부 반영" : "시트 확정",
-        editableOf: (month) => isMatrixCellEditable(row, month),
-        lockedOf: (month) => isMatrixCellLocked(row, month),
+        // 품질 웨이브 4 — 항목 1: 정정으로 재잠긴 달만 "장부 반영(정정)"으로 구분 — 나머지는 기존 규약.
+        lockLabelOf: (month) =>
+          view.correctedMonths?.has(month) ? "장부 반영(정정)" : row.ledgerOrigin === "draft" ? "장부 반영" : "시트 확정",
+        editableOf: (month) => isMatrixCellEditable(row, month, view.correctedMonths),
+        lockedOf: (month) => isMatrixCellLocked(row, month, view.correctedMonths),
         pendingOf: (month) => pendingByCell?.get(`${row.id}::${month}`) ?? null,
         // 주차 잠금 = 그 달 시트 확정 여부(월 잠금 규칙 승계). 주차 pending = `rowId::month::wN` 키.
-        weekLockedOf: (month) => isMatrixCellLocked(row, month),
+        weekLockedOf: (month) => isMatrixCellLocked(row, month, view.correctedMonths),
         weekPendingOf: (month, week) => pendingByCell?.get(`${row.id}::${month}::w${week + 1}`) ?? null,
         weekEditNotice: (month) =>
           rowWeeklySplit(row, month).source === "explicit"
@@ -4325,11 +4340,14 @@ export default function SalesLedgerWorkbench() {
           mismatch: rowWeeklyMismatch(row, selectedMonth),
           monthlyByMonth,
           annual,
+          // 품질 웨이브 4 — 항목 1: 정정 적용으로 재잠긴 월 집합을 행 뷰에 함께 캐시해
+          // RevMatrixDealRow가 매 렌더 별도 Map 조회 없이 소비하게 한다.
+          correctedMonths: editRowOverrideMonths.get(row.id) ?? null,
         })
       }
     }
     return views
-  }, [visibleGroups, matrixMonths, selectedMonth])
+  }, [visibleGroups, matrixMonths, selectedMonth, editRowOverrideMonths])
 
   // 매트릭스 12개 열의 그랜드토탈(필터 반영, 전체 그룹 기준) + 월 목표. 하단 sticky 합계행이 소비.
   // revCustomerGroups는 이미 월별 소계를 담으므로 그룹 소계만 합산하면 된다(행 재순회 없음).
@@ -4416,8 +4434,9 @@ export default function SalesLedgerWorkbench() {
   const editableCells = useMemo<MatrixCellCoord[]>(() => {
     const cells: MatrixCellCoord[] = []
     for (const row of visibleDealRows) {
+      const correctedMonths = editRowOverrideMonths.get(row.id)
       for (const month of matrixMonths) {
-        if (!isMatrixCellEditable(row, month)) continue
+        if (!isMatrixCellEditable(row, month, correctedMonths)) continue
         if (expandedRevMonths.has(month)) {
           for (let week = 0; week < 5; week += 1) cells.push({ rowId: row.id, month, week })
         } else {
@@ -4426,7 +4445,7 @@ export default function SalesLedgerWorkbench() {
       }
     }
     return cells
-  }, [visibleDealRows, matrixMonths, expandedRevMonths])
+  }, [visibleDealRows, matrixMonths, expandedRevMonths, editRowOverrideMonths])
 
   // 미검수(draft|checked) 초안 → 셀 낙관적 표시. drafts에서 파생(별도 버퍼 없음).
   // 매칭: 초안 sourceDealId == 행 sourceDealId(또는 id) && 초안 month == 셀 month.
@@ -4634,7 +4653,7 @@ export default function SalesLedgerWorkbench() {
         pushMatrixToast({ kind: "info", text: "주차 칸에는 붙여넣기를 지원하지 않습니다 — 월 셀을 선택한 뒤 붙여넣으세요." })
         return
       }
-      const plan = buildMatrixPastePlan(text, anchor, visibleDealRows, matrixMonths)
+      const plan = buildMatrixPastePlan(text, anchor, visibleDealRows, matrixMonths, editRowOverrideMonths)
       if (!plan) {
         pushMatrixToast({ kind: "info", text: "붙여넣을 숫자 값을 찾지 못했습니다 — 엑셀에서 금액 셀 범위를 복사해 주세요." })
         return
@@ -4642,7 +4661,7 @@ export default function SalesLedgerWorkbench() {
       setPasteConfidence(loadStoredMatrixConfidence() ?? "expected")
       setPastePlan(plan)
     },
-    [matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows],
+    [matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows, editRowOverrideMonths],
   )
 
   // 프리뷰 확인 → 셀 편집과 동일한 onCommitCell 경로로만 커밋(셀당 검토 초안 1건, 2단 게이트 유지).
@@ -5918,7 +5937,7 @@ export default function SalesLedgerWorkbench() {
                                   const catRows = group.rows.filter((row) => rowProductCategory(row) === category)
                                   const products = Array.from(new Set(catRows.map((row) => row.productVersion).filter((value): value is string => Boolean(value))))
                                   const catExpanded = expandedRevCategories.has(`${group.key}::${category}`)
-                                  const catEditable = catRows.some((row) => matrixMonths.some((month) => isMatrixCellEditable(row, month)))
+                                  const catEditable = catRows.some((row) => matrixMonths.some((month) => isMatrixCellEditable(row, month, editRowOverrideMonths.get(row.id))))
                                   return (
                                     <Fragment key={`cat-${group.key}-${category}`}>
                                       <RevMatrixCategoryRow
