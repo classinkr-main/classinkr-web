@@ -214,7 +214,7 @@ export function RevAuxAnalysisSection({
                           {formatMonthLabel(selectedMonth)} 주차별 수치 (W1–W5)
                         </p>
                         <p className="mt-1 text-[11px] leading-relaxed text-[#615D59]">
-                          REV w1-w5 입력 기준 · 월합계만 입력된 행은 W5 열에 합산 · 주차 흐름 차트는 DSH 탭
+                          REV w1-w5 입력 기준 · 월합계만 입력된 행은 W5 열에 합산 · 주차 흐름 차트는 KR Team 개요
                         </p>
                       </div>
                       <span className="rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-bold text-[#084734]">
