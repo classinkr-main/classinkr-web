@@ -36,7 +36,9 @@ interface InputRailSectionProps {
   canCreateEditDraft: boolean
   // DraftSaveResult.persisted: 서버에 실제로 저장됐으면 true, 로컬 폴백(장부 적용 불가)이면 false.
   // DraftSaveResult.deduped: 이중계상 가드(품질 웨이브 3, 항목 3)가 새 초안 대신 이미 열린 초안을
-  // 갱신했으면 true — 둘 다 저장 인라인 피드백(성공/실패/중복 안내 메시지)에 쓴다.
+  // 갱신했으면 true. DraftSaveResult.duplicateWarning(품질 웨이브 4, 항목 2): new-row 저장인데 같은
+  // 고객명·월에 이미 열린 신규 초안이 있으면 true(저장은 그대로 진행, 경고만) — 셋 다 저장 인라인
+  // 피드백(성공/실패/중복 안내 메시지)에 쓴다.
   saveEditedDraft: () => Promise<DraftSaveResult>
   cancelDraftEdit: () => void
   saveDraft: (kind: DraftKind) => Promise<DraftSaveResult>
@@ -63,7 +65,7 @@ export function InputRailSection({
   // useEffect로 setState하면 커밋 후 리렌더가 한 번 더 도는 캐스케이드가 생겨(react-hooks 경고),
   // React가 권장하는 "렌더 중 상태 조정" 패턴으로 처리한다 — editingDraft.id가 바뀐 그 렌더에서
   // 바로 초기화해 깜빡임 없이 한 번에 반영된다.
-  const [feedback, setFeedback] = useState<{ kind: "success" | "error"; text: string } | null>(null)
+  const [feedback, setFeedback] = useState<{ kind: "success" | "error" | "warning"; text: string } | null>(null)
   const [feedbackForDraftId, setFeedbackForDraftId] = useState<string | null>(editingDraft?.id ?? null)
   if (feedbackForDraftId !== (editingDraft?.id ?? null)) {
     setFeedbackForDraftId(editingDraft?.id ?? null)
@@ -79,7 +81,11 @@ export function InputRailSection({
         : result.deduped
           // 이중계상 가드(항목 3) — 같은 딜·같은 셀에 이미 열린 초안이 있어 새로 만들지 않고 그 초안을 갱신했다.
           ? { kind: "success", text: "이미 대기 초안 있음 — 수정으로 반영됩니다. 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." }
-          : { kind: "success", text: "저장 완료 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." },
+          : result.duplicateWarning
+            // 품질 웨이브 4, 항목 2 — new-row는 매트릭스 대응 행이 없어 자동 재지정할 수 없다.
+            // 저장은 그대로 진행하고, 같은 고객·월에 이미 열린 신규 초안이 있다는 사실만 경고한다.
+            ? { kind: "warning", text: "저장 완료 — 같은 고객·월에 이미 열린 신규 초안이 있습니다. 체크 큐에서 중복 여부를 확인하세요." }
+            : { kind: "success", text: "저장 완료 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." },
     )
   }
 
@@ -297,7 +303,9 @@ export function InputRailSection({
                   className={`rounded-md border px-3 py-2 text-[11px] font-semibold leading-relaxed ${
                     feedback.kind === "success"
                       ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
-                      : "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]"
+                      : feedback.kind === "warning"
+                        ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
+                        : "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]"
                   }`}
                 >
                   {feedback.text}

@@ -588,11 +588,19 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
   )
   const selected = mappedRows.find((r) => r.label === selectedLabel) ?? mappedRows[0] ?? null
 
+  // 품질 웨이브 4 — 항목 7. Tailwind 기본 rose-* 팔레트 유출을 캐논 Danger(#B43E3E 계열)로
+  // 치환 — PipelineTable/BranchPipelineKanban의 동일 에러 배너 패턴과 통일.
   if (error) return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">
+    <div
+      role="alert"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]"
+    >
       <span>{error}</span>
-      <button type="button" onClick={() => setLocalRetry((v) => v + 1)}
-        className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-white px-2.5 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100">
+      <button
+        type="button"
+        onClick={() => setLocalRetry((v) => v + 1)}
+        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-[#B43E3E] bg-white px-2.5 text-[11px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9]"
+      >
         <RotateCcw className="h-3 w-3" aria-hidden="true" />
         다시 시도
       </button>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   buildMatrixPendingByCell,
+  findOpenNewRowDuplicate,
   lookupMatrixPending,
   matrixCoordKey,
   pendingCellAmount,
@@ -181,5 +182,51 @@ describe("입력 레일 저장 이중계상 가드 (item 3, 레일 경로)", () 
     // srv-editing을 9월로 옮기는 편집 중이라면, 9월엔 이미 srv-other가 열려 있어 충돌을 감지해야 한다.
     const target = railDedupTarget(pendingByCell, row.id, "2026-09", "month", "srv-editing")
     expect(target?.id).toBe("srv-other")
+  })
+})
+
+// 회귀 방지(품질 웨이브 4, 항목 2): new-row(신규 고객)는 아직 매트릭스에 대응 행이 없어
+// railDedupTarget의 셀 좌표 판정 대상이 아니다 — 대신 같은 고객명·월 조합의 열린(draft|checked)
+// 신규 초안을 찾아 경고만 낸다(자동 PATCH 재지정은 하지 않는다 — new-row는 "같은 딜"인지 확정할
+// 수 없으므로 저장을 막지 않는다).
+describe("new-row 중복 초안 경고 (품질 웨이브 4, 항목 2)", () => {
+  it("같은 고객명·월에 열린(draft) new-row 초안이 있으면 찾아낸다", () => {
+    const drafts: LedgerDraft[] = [
+      makeDraft({ id: "srv-new-1", kind: "new-row", sourceDealId: undefined, customer: "새 학원", month: "2026-08", amount: 1_000_000 }),
+    ]
+    const found = findOpenNewRowDuplicate(drafts, "새 학원", "2026-08")
+    expect(found?.id).toBe("srv-new-1")
+  })
+
+  it("고객명 공백·대소문자 차이는 같은 고객으로 판정한다", () => {
+    const drafts: LedgerDraft[] = [
+      makeDraft({ id: "srv-new-1", kind: "new-row", sourceDealId: undefined, customer: " ABC Academy ", month: "2026-08", amount: 1_000_000 }),
+    ]
+    expect(findOpenNewRowDuplicate(drafts, "abc academy", "2026-08")?.id).toBe("srv-new-1")
+  })
+
+  it("월이 다르면 별건으로 판단해 감지하지 않는다", () => {
+    const drafts: LedgerDraft[] = [
+      makeDraft({ id: "srv-new-1", kind: "new-row", sourceDealId: undefined, customer: "새 학원", month: "2026-08", amount: 1_000_000 }),
+    ]
+    expect(findOpenNewRowDuplicate(drafts, "새 학원", "2026-09")).toBeNull()
+  })
+
+  it("이미 적용(applied)되거나 취소(cancelled)된 초안은 열린 초안이 아니므로 무시한다", () => {
+    const drafts: LedgerDraft[] = [
+      makeDraft({ id: "srv-applied", kind: "new-row", sourceDealId: undefined, customer: "새 학원", month: "2026-08", status: "applied" }),
+      makeDraft({ id: "srv-cancelled", kind: "new-row", sourceDealId: undefined, customer: "새 학원", month: "2026-08", status: "cancelled" }),
+    ]
+    expect(findOpenNewRowDuplicate(drafts, "새 학원", "2026-08")).toBeNull()
+  })
+
+  it("edit-row 초안은 new-row 중복 판정에 섞이지 않는다", () => {
+    const drafts: LedgerDraft[] = [makeDraft({ id: "srv-edit", kind: "edit-row", customer: "새 학원", month: "2026-08" })]
+    expect(findOpenNewRowDuplicate(drafts, "새 학원", "2026-08")).toBeNull()
+  })
+
+  it("고객명이 비어 있으면 판정하지 않는다(무효 입력은 폼 검증이 이미 막음)", () => {
+    const drafts: LedgerDraft[] = [makeDraft({ id: "srv-new-1", kind: "new-row", sourceDealId: undefined, customer: "", month: "2026-08" })]
+    expect(findOpenNewRowDuplicate(drafts, "", "2026-08")).toBeNull()
   })
 })

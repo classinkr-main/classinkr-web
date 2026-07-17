@@ -1564,6 +1564,28 @@ export function railDedupTarget(
   return pending
 }
 
+// 품질 웨이브 4 — 항목 2: new-row 저장 전, 같은 고객명·월 조합의 열린(draft|checked) 신규 초안이
+// 이미 있는지 검사한다. edit-row의 railDedupTarget(같은 셀 감지 시 자동 PATCH 재지정)과 달리
+// new-row는 아직 매트릭스에 대응 행이 없어 "같은 딜"인지 확정할 수 없다 — 그래서 저장을 막거나
+// 재지정하지 않고 그대로 새로 저장한 뒤, 사용자가 판단하도록 경고만 낸다.
+export function findOpenNewRowDuplicate(
+  drafts: LedgerDraft[],
+  customer: string,
+  month: string,
+): LedgerDraft | null {
+  const normalizedCustomer = customer.trim().toLowerCase()
+  if (!normalizedCustomer) return null
+  return (
+    drafts.find(
+      (draft) =>
+        draft.kind === "new-row" &&
+        (draft.status === "draft" || draft.status === "checked") &&
+        draft.month === month &&
+        draft.customer.trim().toLowerCase() === normalizedCustomer,
+    ) ?? null
+  )
+}
+
 // 미검수(draft|checked) 초안 → 셀 낙관적 표시 + 재편집/커밋 타겟 판정 맵. drafts에서 파생(별도 버퍼 없음).
 // 매칭: 초안 sourceDealId == 행 sourceDealId(또는 id) && 초안 month == 셀 month.
 // 월 키(`rowId::month`)와 주차 키(`rowId::month::wN`)를 각각 채운다:
@@ -4961,24 +4983,32 @@ export default function SalesLedgerWorkbench() {
   // 쓴다 — kind==="edit-row"이고 선택된 행이 있을 때, 그 행·타겟 월/주차에 이미 열린 초안이
   // 있으면 새 초안을 만들지 않고 그 초안을 PATCH한다(railDedupTarget이 정확히 그 좌표만 비교하므로,
   // 기간이동처럼 타겟 월이 실제로 다른 정당한 별건 초안은 막지 않는다 — 차단이 아니라 타겟 재지정).
-  // new-row(신규 고객)는 아직 매트릭스에 대응 행이 없어 이 판정 대상이 아니다.
+  // new-row(신규 고객)는 아직 매트릭스에 대응 행이 없어 이 재지정 판정 대상이 아니다 — 대신
+  // duplicateWarning(품질 웨이브 4, 항목 2)으로 같은 고객명·월 조합의 열린 초안이 있으면 경고만 낸다.
   const saveDraft = useCallback(async (kind: DraftKind): Promise<DraftSaveResult> => {
     setDraftSaving(true)
     try {
       const dedupTarget = kind === "edit-row" && selectedRow
         ? railDedupTarget(pendingByCell, selectedRow.id, draftForm.month, draftForm.week, null)
         : null
+      // 저장 전에 판정해둔다 — new-row 저장 성공 시 draftForm이 defaultDraftForm으로 리셋되므로
+      // 저장 후에는 이 시점의 customer/month를 다시 읽을 수 없다.
+      const duplicate = kind === "new-row" ? findOpenNewRowDuplicate(drafts, draftForm.customer, draftForm.month) : null
       const draft = dedupTarget
         ? await updateDraft(dedupTarget.id, buildDraftInput(kind))
         : await createDraft(buildDraftInput(kind))
       if (kind === "new-row") {
         setDraftForm(defaultDraftForm)
       }
-      return { persisted: Boolean(draft && !draft.id.startsWith("local-")), deduped: Boolean(dedupTarget) }
+      return {
+        persisted: Boolean(draft && !draft.id.startsWith("local-")),
+        deduped: Boolean(dedupTarget),
+        duplicateWarning: Boolean(duplicate),
+      }
     } finally {
       setDraftSaving(false)
     }
-  }, [buildDraftInput, createDraft, defaultDraftForm, draftForm.month, draftForm.week, pendingByCell, selectedRow, updateDraft])
+  }, [buildDraftInput, createDraft, defaultDraftForm, draftForm.customer, draftForm.month, draftForm.week, drafts, pendingByCell, selectedRow, updateDraft])
 
   const editDraft = useCallback((draft: LedgerDraft) => {
     setEditingDraftId(draft.id)

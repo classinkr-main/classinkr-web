@@ -66,6 +66,10 @@ export type DraftConfidence = "expected" | "high-confidence" | "confirmed"
 export interface DraftSaveResult {
   persisted: boolean
   deduped: boolean
+  /** 품질 웨이브 4 — 항목 2: new-row 저장 시 같은 고객명·월 조합의 열린(draft|checked) 신규 초안이
+      이미 있으면 true — edit-row의 deduped(자동 PATCH 재지정)와 달리 저장은 그대로 진행(POST)하고
+      경고만 얹는다. new-row는 아직 매트릭스 행이 없어 "같은 딜"인지 확정할 수 없기 때문. */
+  duplicateWarning?: boolean
 }
 
 export interface DraftForm {
