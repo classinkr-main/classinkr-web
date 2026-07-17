@@ -2,7 +2,7 @@
  * Seed internal brand-canon 원문을 docs_articles(visibility='internal') + docs_ai_chunks 로 적재한다.
  *
  * Usage:
- *   GEMINI_API_KEY=... NEXT_PUBLIC_SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... GEMINI_EMBED_DIM=768 \
+ *   GEMINI_API_KEY=... NEXT_PUBLIC_SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
  *     npx tsx scripts/seed-internal-canon.ts
  *
  * Flags:
@@ -17,8 +17,9 @@
  *
  * 공간 정합(중요): docs_ai_chunks 는 공개 문서 청크와 같은 테이블·같은 RPC 로 검색되므로, seed 임베딩은
  * scripts/embed-docs-chunks.ts 와 "동일 모델·차원" 이어야 한다. 그래서 GEMINI_EMBED_MODEL/GEMINI_EMBED_DIM 을
- * 동일하게 읽는다. 현행 컬럼은 vector(768)(20260613_docs_chunk_embedding_768.sql)이므로 GEMINI_EMBED_DIM=768 로 실행한다.
- * (상담 청크 channel_conversation_chunks 는 별개 공간 — scripts/embed-channel-chunks.ts 참고.)
+ * 동일하게 읽고, 기본값은 vector(1536)(라이브 프로덕션 컬럼, embed-docs-chunks.ts 와 동일)이다. 그대로 실행하면 1536 이다.
+ * GEMINI_EMBED_DIM=768 은 768 축소 마이그레이션(20260613_docs_chunk_embedding_768.sql)을 적용한 환경에서만 넘긴다.
+ * (상담 청크 channel_conversation_chunks 는 항상 별개 768 공간 — scripts/embed-channel-chunks.ts 참고.)
  *
  * 문서/청크/임베딩 적재 로직은 lib/internal-cs-chat/internal-article-writer.ts 로 공용화되어 지식 승격
  * 라우트와 공유한다. 이 스크립트는 대상 수집·환경 로딩·로그만 소유한다.
