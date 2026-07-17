@@ -57,6 +57,7 @@ import { DshNumericGrid, type DshGridView } from "./ledger/DshNumericGrid"
 import { WeeklyCloseSection } from "./ledger/WeeklyCloseSection"
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
+import IntegrityStrip from "./IntegrityStrip"
 import { InputRailSection } from "./ledger/InputRailSection"
 import {
   buildRevWeekProjection,
@@ -4704,6 +4705,8 @@ export default function SalesLedgerWorkbench() {
       </header>
 
       <main className="space-y-5 px-4 pt-5 sm:px-6 lg:px-9">
+        {/* 정합성 배지 — KR Team 개요와 동일 컴포넌트(데이터품질 이슈 요약). 검수 화면이 원 소비처라 상단 고정. */}
+        <IntegrityStrip refreshKey={refreshKey} />
         <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-1 self-start">
           <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="Sales ledger views">
