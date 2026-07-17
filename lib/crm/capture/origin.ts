@@ -13,6 +13,16 @@ const KR_TEAM_LEAD_SOURCES = new Set([
   "channel_talk",
 ])
 
+export type LeadOriginClass = "ad" | "team" | "site"
+
+/** 리드 source 문자열 → 유입 출신. 홈페이지 공개 폼(또는 출처 미상)은 site. */
+export function classifyLeadOrigin(source: string | null | undefined, hasAdClickId: boolean): LeadOriginClass {
+  const normalized = (source ?? "").trim().toLowerCase()
+  if (hasAdClickId || AD_LEAD_SOURCES.has(normalized)) return "ad"
+  if (KR_TEAM_LEAD_SOURCES.has(normalized)) return "team"
+  return "site"
+}
+
 export interface DeriveAttendeeOriginInput {
   /** 매칭된 대상 종류 (매칭 없으면 null) */
   matchedTargetType: CaptureTargetType | null
@@ -33,9 +43,9 @@ export function deriveAttendeeOrigin(input: DeriveAttendeeOriginInput): Attendee
 
   switch (input.matchedTargetType) {
     case "lead": {
-      const source = (input.leadSource ?? "").trim().toLowerCase()
-      if (input.leadHasAdClickId || AD_LEAD_SOURCES.has(source)) return "ad_lead"
-      if (KR_TEAM_LEAD_SOURCES.has(source)) return "kr_team_lead"
+      const cls = classifyLeadOrigin(input.leadSource, Boolean(input.leadHasAdClickId))
+      if (cls === "ad") return "ad_lead"
+      if (cls === "team") return "kr_team_lead"
       return "site_lead" // 사이트 유입(또는 출처 미상) 리드
     }
     case "neo_account":

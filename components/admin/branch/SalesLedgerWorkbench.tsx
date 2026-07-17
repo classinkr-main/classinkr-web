@@ -1,7 +1,9 @@
 "use client"
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   AlertTriangle,
   ArrowDownNarrowWide,
@@ -146,7 +148,7 @@ export type {
   WeeklyCloseRunView,
 } from "./ledger/shared"
 
-type LedgerLens = "dsh" | "rev" | "kpi"
+type LedgerLens = "dsh" | "rev"
 type RailView = "detail" | "input" | "queue"
 type DraftStatusFilter = DraftStatus | "open" | "all"
 type RevSortKey = "customer" | "product" | "manager" | "team" | "region" | "month" | "revenue" | "annual" | "origin"
@@ -381,7 +383,6 @@ function MatrixToneLegend() {
 const LENSES: Array<{ id: LedgerLens; label: string; description: string }> = [
   { id: "dsh", label: "DSH", description: "수치 상세 · 목표/실적 그리드" },
   { id: "rev", label: "REV", description: "주차·목표 수치 검수와 행 상세" },
-  { id: "kpi", label: "KPI", description: "→ KR Team으로 이동" },
 ]
 const DRAFT_STATUS_FILTERS: Array<{ id: DraftStatusFilter; label: string }> = [
   { id: "open", label: "대기" },
@@ -390,6 +391,43 @@ const DRAFT_STATUS_FILTERS: Array<{ id: DraftStatusFilter; label: string }> = [
   { id: "applied", label: "적용" },
   { id: "all", label: "전체" },
 ]
+
+// role="tablist" 롤빙 tabIndex 키보드 내비 — BranchDashboardClient.tsx의 onTabKeyDown과
+// 동일 패턴(ArrowLeft/Right/Home/End)을 두 탭리스트(렌즈, 빠른 작업 보기)가 공유하도록 일반화.
+function handleRovingTabKeyDown<T>(
+  event: ReactKeyboardEvent<HTMLButtonElement>,
+  index: number,
+  items: T[],
+  refs: MutableRefObject<Array<HTMLButtonElement | null>>,
+  onSelect: (item: T, index: number) => void,
+) {
+  const lastIndex = items.length - 1
+  let nextIndex: number | null = null
+
+  if (event.key === "ArrowRight") nextIndex = index === lastIndex ? 0 : index + 1
+  if (event.key === "ArrowLeft") nextIndex = index === 0 ? lastIndex : index - 1
+  if (event.key === "Home") nextIndex = 0
+  if (event.key === "End") nextIndex = lastIndex
+
+  if (nextIndex == null) return
+  event.preventDefault()
+  onSelect(items[nextIndex], nextIndex)
+  refs.current[nextIndex]?.focus()
+}
+
+// Source 스트립 시간 표기 — KR Team SyncStatusBar.tsx의 relativeTime과 같은 규칙("방금"/"N분 전"/
+// "N시간 전"/"N일 전")으로 통일한 워크벤치 로컬 사본. SyncStatusBar는 내부 미노출 함수라 import할
+// 수 없고, 소유 범위상 SyncStatusBar.tsx는 수정하지 않는다(읽기만) — 그래서 로직만 그대로 복제.
+function relativeTimeFromNow(iso: string | null | undefined, now: number): string {
+  if (!iso) return "미확인"
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return iso
+  const diff = Math.max(0, now - t)
+  if (diff < 60_000) return "방금"
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}분 전`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}시간 전`
+  return `${Math.floor(diff / 86_400_000)}일 전`
+}
 
 function canRunAdminOperationsFromSession(): boolean {
   if (typeof window === "undefined") return false
@@ -989,6 +1027,9 @@ function draftStatusMeta(status: DraftStatus) {
     return { label: "적용됨", className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" }
   }
   if (status === "cancelled") {
+    // (미사용) — DB CHECK 제약(20260630_branch_sales_ledger_drafts.sql)엔 유효 상태지만
+    // 이 워크벤치 어느 동작도 초안을 cancelled로 전이시키지 않는다(직접 DB 조작 등으로만 도달).
+    // 배지는 그런 행이 조회될 가능성에 대비한 방어적 렌더 — DraftStatus 타입은 DB 계약과 맞춰 유지.
     return { label: "취소됨", className: "border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59]" }
   }
   return { label: "검토 필요", className: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]" }
@@ -1041,6 +1082,38 @@ function DraftQueue({
   const visibleDrafts = useMemo(() => {
     return drafts.filter((draft) => draftMatchesFilter(draft, statusFilter)).filter((draft) => draftMatchesQuery(draft, query))
   }, [drafts, query, statusFilter])
+  // "적용"은 큐에서 유일하게 비가역인 동작(DB 장부에 실제로 기록) — 확인 다이얼로그를 거친다.
+  const [confirmApplyDraft, setConfirmApplyDraft] = useState<LedgerDraft | null>(null)
+  const [applyingId, setApplyingId] = useState<string | null>(null)
+  const confirmAndApply = async (id: string) => {
+    setApplyingId(id)
+    try {
+      await onApply(id)
+    } finally {
+      setApplyingId(null)
+      setConfirmApplyDraft(null)
+    }
+  }
+  // 체크토글·삭제 in-flight 표시 — InputRailSection의 draftSaving+Loader2 패턴 재사용.
+  // 한 초안에 동시에 한 동작만(토글 중 삭제 클릭 등 이중 요청 방지) 진행되게 버튼도 함께 잠근다.
+  const [rowActionBusy, setRowActionBusy] = useState<{ id: string; action: "toggle" | "delete" } | null>(null)
+  const isRowBusy = (id: string) => rowActionBusy?.id === id || applyingId === id
+  const runToggle = async (id: string) => {
+    setRowActionBusy({ id, action: "toggle" })
+    try {
+      await onToggle(id)
+    } finally {
+      setRowActionBusy(null)
+    }
+  }
+  const runDelete = async (id: string) => {
+    setRowActionBusy({ id, action: "delete" })
+    try {
+      await onDelete(id)
+    } finally {
+      setRowActionBusy(null)
+    }
+  }
 
   if (loading && drafts.length === 0) {
     return (
@@ -1080,6 +1153,7 @@ function DraftQueue({
   }
 
   return (
+    <>
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
@@ -1187,39 +1261,95 @@ function DraftQueue({
               </button>
               <button
                 type="button"
-                onClick={() => void onToggle(draft.id)}
-                disabled={draft.status === "applied" || draft.status === "cancelled"}
+                onClick={() => void runToggle(draft.id)}
+                disabled={draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label="초안 체크 상태 변경"
                 title="초안 체크 상태 변경"
               >
-                <CheckCircle2 className="h-4 w-4" />
+                {rowActionBusy?.id === draft.id && rowActionBusy.action === "toggle" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
               </button>
               <button
                 type="button"
-                onClick={() => void onApply(draft.id)}
-                disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-")}
+                onClick={() => setConfirmApplyDraft(draft)}
+                disabled={draft.status !== "checked" || mode !== "server" || draft.id.startsWith("local-") || isRowBusy(draft.id)}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[#BDEFD8] text-[#084734] transition hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label={`${draft.customer || "초안"} 적용`}
                 title="체크 완료 초안 적용"
               >
-                <Send className="h-3.5 w-3.5" />
+                {applyingId === draft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
               </button>
               <button
                 type="button"
-                onClick={() => void onDelete(draft.id)}
-                disabled={draft.status === "checked" || draft.status === "applied" || draft.status === "cancelled"}
+                onClick={() => void runDelete(draft.id)}
+                disabled={draft.status === "checked" || draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-35"
                 aria-label="초안 삭제"
                 title="초안 삭제"
               >
-                <Trash2 className="h-4 w-4" />
+                {rowActionBusy?.id === draft.id && rowActionBusy.action === "delete" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
               </button>
             </div>
           </div>
         </div>
       ))}
     </div>
+    {/* 적용 확인 다이얼로그 — TSV 붙여넣기 미리보기(RevMatrixPasteDialog)와 동일 셸 스타일 재사용. */}
+    {confirmApplyDraft && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="초안 적용 확인"
+        className="fixed inset-0 z-[60] flex items-end justify-center bg-[#111110]/40 p-4 sm:items-center"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && applyingId !== confirmApplyDraft.id) {
+            event.stopPropagation()
+            setConfirmApplyDraft(null)
+          }
+        }}
+      >
+        <div className="flex w-full max-w-sm flex-col overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_24px_70px_rgba(17,17,16,0.22)]">
+          <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
+            <p className="text-[13px] font-bold text-[#111110]">초안 적용 확인</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#615D59]">
+              {confirmApplyDraft.customer || "초안"} · {formatMonthLabel(confirmApplyDraft.month)} · {formatMoney(confirmApplyDraft.amount)}
+            </p>
+          </div>
+          <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FBF1E0] px-4 py-3 text-[11.5px] font-semibold leading-relaxed text-[#7A520F]">
+            적용하면 장부 원장에 기록됩니다 — 초안 1건. 이 작업은 되돌릴 수 없습니다.
+          </div>
+          <div className="flex items-center justify-end gap-2 bg-[#FAFAF8] px-4 py-3">
+            <button
+              type="button"
+              onClick={() => setConfirmApplyDraft(null)}
+              disabled={applyingId === confirmApplyDraft.id}
+              className="inline-flex h-9 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmAndApply(confirmApplyDraft.id)}
+              disabled={applyingId === confirmApplyDraft.id}
+              autoFocus
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-[#084734] px-3 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {applyingId === confirmApplyDraft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              적용
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 
@@ -2028,7 +2158,7 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
               ? isMonthOnly
                 ? "font-semibold text-[#7A520F]"
                 : inferred
-                  ? "font-semibold text-[#A39E98]"
+                  ? "font-semibold text-[#615D59]"
                   : "font-bold text-[#111110]"
               : editable
                 ? "text-[#C9C5BF]"
@@ -2320,7 +2450,7 @@ function RevMatrixPasteDialog({
                   <td className="py-1.5 pr-2 text-[#615D59]">{productCategoryMeta(cell.productCategory).shortLabel}</td>
                   <td className="py-1.5 pr-2 font-semibold text-[#615D59]">{formatMonthLabel(cell.month)}</td>
                   <td className="py-1.5 pr-2 text-right tabular-nums">
-                    <span className="text-[#A39E98]">{cell.current > 0 ? formatMoney(cell.current) : "·"}</span>
+                    <span className="text-[#615D59]">{cell.current > 0 ? formatMoney(cell.current) : "·"}</span>
                     <span className="mx-1 text-[#A39E98]">→</span>
                     <span className="font-bold text-[#111110]">{formatMoney(cell.next)}</span>
                   </td>
@@ -2423,7 +2553,7 @@ const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
             }}
             aria-expanded={expanded}
             aria-label={`${group.customer} 하위 ${group.rows.length}건 ${expanded ? "접기" : "펼치기"}`}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[#615D59] transition hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#615D59] transition hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
           >
             <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-90" : ""}`} />
           </button>
@@ -2735,7 +2865,7 @@ const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
             aria-expanded={expanded}
             title={expanded ? "품목 접기" : editable ? "품목 펼쳐 엑셀식 편집" : "품목 보기 (전부 확정·잠금)"}
             aria-label={`${productCategoryMeta(category).label} 품목 ${expanded ? "접기" : "펼치기"}`}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[#615D59] transition hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#615D59] transition hover:bg-[#F0F0EC] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
           >
             <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-90" : ""}`} />
           </button>
@@ -2901,6 +3031,7 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
 })
 
 export default function SalesLedgerWorkbench() {
+  const router = useRouter()
   const [team, setTeam] = useState<Team>("ALL")
   const [period, setPeriod] = useState<Period>("Q")
   const [selectedMonth, setSelectedMonth] = useState(() => ymKeyUtc(new Date()))
@@ -2908,6 +3039,15 @@ export default function SalesLedgerWorkbench() {
   // DSH 수치 그리드의 Goal/Status/Gap 토글 — 렌즈 로컬 상태.
   const [dshGridView, setDshGridView] = useState<DshGridView>("goal")
   const lensPanelRef = useRef<HTMLDivElement | null>(null)
+  // 두 tablist(렌즈 전환, 빠른 작업 보기 전환)의 롤빙 tabIndex 포커스 대상.
+  const lensTabRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const railTabRefs = useRef<Array<HTMLButtonElement | null>>([])
+  // Source(원천) 스트립 상대 시간 표기용 tick — SyncStatusBar와 동일하게 1분마다 갱신.
+  const [sourceStripNow, setSourceStripNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setSourceStripNow(Date.now()), 60_000)
+    return () => window.clearInterval(id)
+  }, [])
   const [query, setQuery] = useState("")
   const [managerFilter, setManagerFilter] = useState("ALL")
   const [regionFilter, setRegionFilter] = useState("ALL")
@@ -2942,6 +3082,11 @@ export default function SalesLedgerWorkbench() {
   // 매트릭스 셀 커밋 실패(로컬 폴백) 등 편집 지점 인근 알림 토스트 — 상단 Source 바만으로는
   // 편집 중 시야 밖이라 침묵 실패가 되던 문제 대응. 7초 뒤 자동 소멸.
   const [matrixToast, setMatrixToast] = useState<{ kind: "error" | "info"; text: string } | null>(null)
+  // 단일 슬롯이라 에러 표시 도중 뒤이은 info 토스트가 그걸 덮어써 실패 알림을 놓칠 수 있었다
+  // — 에러가 떠 있는 동안은 info로 덮어쓰지 않는다(에러 자체는 항상 최신 것으로 갱신).
+  const pushMatrixToast = useCallback((next: { kind: "error" | "info"; text: string }) => {
+    setMatrixToast((current) => (current?.kind === "error" && next.kind !== "error" ? current : next))
+  }, [])
   useEffect(() => {
     if (!matrixToast) return
     const timer = window.setTimeout(() => setMatrixToast(null), 7000)
@@ -3163,7 +3308,12 @@ export default function SalesLedgerWorkbench() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const lensParam = params.get("lens")
-    if (lensParam === "dsh" || lensParam === "rev" || lensParam === "kpi") setLens(lensParam)
+    // KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다 — 옛 링크(?lens=kpi)는 그리로 리다이렉트.
+    if (lensParam === "kpi") {
+      router.replace("/admin/branch?tab=pipeline")
+      return
+    }
+    if (lensParam === "dsh" || lensParam === "rev") setLens(lensParam)
     const monthParam = params.get("month")
     if (monthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam)) setSelectedMonth(monthParam)
     const periodParam = params.get("period")
@@ -3195,7 +3345,7 @@ export default function SalesLedgerWorkbench() {
     const pageParam = Number(params.get("p"))
     if (Number.isInteger(pageParam) && pageParam > 1) setRevPage(pageParam)
     setUrlReady(true)
-  }, [])
+  }, [router])
 
   useEffect(() => {
     if (!urlReady) return
@@ -4150,14 +4300,14 @@ export default function SalesLedgerWorkbench() {
         // createDraft는 실패 시에도 local-* 초안으로 폴백해 resolve된다 — 편집 지점에서 침묵하지 않게
         // 셀 인근 토스트로 실패(=로컬 임시 저장, 장부 적용 불가)를 알린다. 성공 피드백은 셀 앰버 점.
         if (draft?.id?.startsWith("local-")) {
-          setMatrixToast({
+          pushMatrixToast({
             kind: "error",
             text: "서버 저장 실패 — 로컬 임시 초안으로만 저장됐습니다 (장부 적용 불가). 입력 큐에서 서버 재연결 후 다시 입력하세요.",
           })
         }
       })
     },
-    [createDraft, lens, period, rowById, team],
+    [createDraft, lens, period, pushMatrixToast, rowById, team],
   )
 
   const matrixEditor = useMatrixEditor({
@@ -4197,18 +4347,18 @@ export default function SalesLedgerWorkbench() {
       event.preventDefault()
       if (anchor.week != null) {
         // 주차 칸 붙여넣기는 B1 주차 병합 규약과 얽혀 파괴 위험 — 월 셀만 지원(잠금과 같은 안전 규약).
-        setMatrixToast({ kind: "info", text: "주차 칸에는 붙여넣기를 지원하지 않습니다 — 월 셀을 선택한 뒤 붙여넣으세요." })
+        pushMatrixToast({ kind: "info", text: "주차 칸에는 붙여넣기를 지원하지 않습니다 — 월 셀을 선택한 뒤 붙여넣으세요." })
         return
       }
       const plan = buildMatrixPastePlan(text, anchor, visibleDealRows, matrixMonths)
       if (!plan) {
-        setMatrixToast({ kind: "info", text: "붙여넣을 숫자 값을 찾지 못했습니다 — 엑셀에서 금액 셀 범위를 복사해 주세요." })
+        pushMatrixToast({ kind: "info", text: "붙여넣을 숫자 값을 찾지 못했습니다 — 엑셀에서 금액 셀 범위를 복사해 주세요." })
         return
       }
       setPasteConfidence(loadStoredMatrixConfidence() ?? "expected")
       setPastePlan(plan)
     },
-    [matrixEditor.editing, matrixEditor.selected, matrixMonths, visibleDealRows],
+    [matrixEditor.editing, matrixEditor.selected, matrixMonths, pushMatrixToast, visibleDealRows],
   )
 
   // 프리뷰 확인 → 셀 편집과 동일한 onCommitCell 경로로만 커밋(셀당 검토 초안 1건, 2단 게이트 유지).
@@ -4223,12 +4373,12 @@ export default function SalesLedgerWorkbench() {
     }
     setPastePlan(null)
     if (committed > 0) {
-      setMatrixToast({
+      pushMatrixToast({
         kind: "info",
         text: `검토 초안 ${committed.toLocaleString("ko-KR")}건 생성 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.`,
       })
     }
-  }, [onCommitCell, pasteConfidence, pastePlan])
+  }, [onCommitCell, pasteConfidence, pastePlan, pushMatrixToast])
 
   const toggleRevMonth = useCallback((month: string) => {
     setExpandedRevMonths((prev) => {
@@ -4710,7 +4860,7 @@ export default function SalesLedgerWorkbench() {
         <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-1 self-start">
           <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="Sales ledger views">
-            {LENSES.map((item) => (
+            {LENSES.map((item, index) => (
               <button
                 key={item.id}
                 type="button"
@@ -4719,7 +4869,10 @@ export default function SalesLedgerWorkbench() {
                 aria-selected={lens === item.id}
                 aria-controls="sales-ledger-lens-panel"
                 title={item.description}
+                tabIndex={lens === item.id ? 0 : -1}
+                ref={(node) => { lensTabRefs.current[index] = node }}
                 onClick={() => selectLens(item.id)}
+                onKeyDown={(event) => handleRovingTabKeyDown(event, index, LENSES, lensTabRefs, (nextItem) => selectLens(nextItem.id))}
                 className={`inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-[13px] font-bold transition ${
                   lens === item.id ? "bg-[#111110] text-white" : "text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
                 }`}
@@ -4727,7 +4880,7 @@ export default function SalesLedgerWorkbench() {
                 <span className={`flex h-6 w-6 items-center justify-center rounded-md ${
                   lens === item.id ? "bg-white/12" : "bg-[#ECFDF5] text-[#084734]"
                 }`}>
-                  {item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : item.id === "rev" ? <Table2 className="h-3.5 w-3.5" /> : <Users className="h-3.5 w-3.5" />}
+                  {item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : <Table2 className="h-3.5 w-3.5" />}
                 </span>
                 {item.label}
               </button>
@@ -4742,20 +4895,30 @@ export default function SalesLedgerWorkbench() {
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[11px] text-[#615D59]">
             <span className="flex items-center gap-1.5 font-bold text-[#111110]">
               <Database className="h-3.5 w-3.5 text-[#084734]" />
-              Source
+              원천
             </span>
-            <span>sync <span className="font-semibold text-[#111110]">{formatDateTime(summary.data?.lastSync)}</span></span>
-            <span>시트수정 <span className="font-semibold text-[#111110]">{formatDateTime(summary.data?.sheetModifiedAt)}</span></span>
+            <span>
+              sync{" "}
+              <span className="font-semibold text-[#111110]" title={formatDateTime(summary.data?.lastSync)}>
+                {relativeTimeFromNow(summary.data?.lastSync, sourceStripNow)}
+              </span>
+            </span>
+            <span>
+              시트수정{" "}
+              <span className="font-semibold text-[#111110]" title={formatDateTime(summary.data?.sheetModifiedAt)}>
+                {relativeTimeFromNow(summary.data?.sheetModifiedAt, sourceStripNow)}
+              </span>
+            </span>
             <span>입력 큐 <span className="font-semibold text-[#111110]">{queueMode === "server" ? "서버" : "로컬"} · {openDrafts.length}건</span></span>
             <span>내부 원장 <span className="font-semibold text-[#111110]">{ledgerHealth?.ok === false ? "준비 필요" : `${ledgerEntries.length}건`}</span></span>
             <span className="flex items-center gap-1.5">
               REV 원천{" "}
               <span
                 className="font-semibold text-[#111110]"
-                title={dbImportInfo ? `액티브 DB 임포트 run ${dbImportInfo.runId}` : undefined}
+                title={dbImportInfo ? `액티브 DB 임포트 run ${dbImportInfo.runId} · ${formatDateTime(dbImportInfo.capturedAt)}` : undefined}
               >
                 {dbImportInfo
-                  ? `DB run ${dbImportInfo.runId.slice(0, 8)}${dbImportInfo.capturedAt ? ` · ${formatDateTime(dbImportInfo.capturedAt)}` : ""}`
+                  ? `DB run ${dbImportInfo.runId.slice(0, 8)}${dbImportInfo.capturedAt ? ` · ${relativeTimeFromNow(dbImportInfo.capturedAt, sourceStripNow)}` : ""}`
                   : dbNativeActive
                     ? "DB 임포트 · run 미확인"
                     : dbSourceServerState === "inactive"
@@ -5081,9 +5244,35 @@ export default function SalesLedgerWorkbench() {
                 </div>
               )}
               <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-semibold text-[#615D59]">
-                <span className="rounded-full bg-[#F6F5F4] px-2.5 py-1">
-                  정렬 {REV_SORT_LABELS[revSortKey]} {revSortDirection === "asc" ? "오름차순" : "내림차순"}
-                </span>
+                {/* 정렬 드롭다운 — 매트릭스 열 구조상 헤더 클릭 정렬(고객/연간합계)이 없는 5개 키까지
+                    포함해 9개 정렬 키 전부를 여기서 노출한다. onRevSort 재사용: 다른 키 선택은 그
+                    키 기본 방향으로, 같은 키(방향 버튼)는 토글로 — RevSortHeader와 동일 로직. */}
+                <div className="inline-flex items-center gap-0.5 rounded-full bg-[#F6F5F4] pl-2.5 pr-1 py-0.5">
+                  <label htmlFor="rev-sort-key" className="sr-only">정렬 기준</label>
+                  <select
+                    id="rev-sort-key"
+                    value={revSortKey}
+                    onChange={(event) => onRevSort(event.target.value as RevSortKey)}
+                    className="h-6 rounded-full border-0 bg-transparent pr-1 text-[11px] font-bold text-[#615D59] outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
+                  >
+                    {(Object.keys(REV_SORT_LABELS) as RevSortKey[]).map((key) => (
+                      <option key={key} value={key}>{REV_SORT_LABELS[key]}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => onRevSort(revSortKey)}
+                    aria-label={`정렬 방향 전환 (현재 ${revSortDirection === "asc" ? "오름차순" : "내림차순"})`}
+                    title="정렬 방향 전환"
+                    className="flex h-6 w-6 items-center justify-center rounded-full text-[#615D59] transition hover:bg-white hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734]"
+                  >
+                    {revSortDirection === "asc" ? (
+                      <ArrowUpNarrowWide className="h-3.5 w-3.5" aria-hidden="true" />
+                    ) : (
+                      <ArrowDownNarrowWide className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                  </button>
+                </div>
                 {query.trim() && <FilterTag label={`검색 ${query.trim()}`} onClear={() => setQuery("")} />}
                 {managerFilter !== "ALL" && <FilterTag label={`담당자 ${managerFilter}`} onClear={() => setManagerFilter("ALL")} />}
                 {regionFilter !== "ALL" && <FilterTag label={`지역 ${regionFilter}`} onClear={() => setRegionFilter("ALL")} />}
@@ -5481,23 +5670,8 @@ export default function SalesLedgerWorkbench() {
             )}
               </section>
             )}
-
-            {lens === "kpi" && (
-              // KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다(2026-07-16 역할 재배분).
-              // 전환기 안내용 링크 카드만 남긴다 — 목업 "KPI 링크 카드" 마크업 그대로.
-              <section className="rounded-xl border-[1.5px] border-dashed border-[#BDEFD8] bg-[#ECFDF5] p-10 text-center">
-                <p className="text-[15px] font-extrabold text-[#084734]">활동 KPI는 KR Team으로 이동했습니다</p>
-                <p className="mt-2 text-[12.5px] leading-relaxed text-[#615D59]">
-                  목표 대비 활동과 병목·담당자 렌즈는 이제 <b>KR Team › 파이프라인 탭</b>에서 봅니다.
-                </p>
-                <Link
-                  href="/admin/branch?tab=pipeline"
-                  className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
-                >
-                  KR Team 파이프라인으로 가기 →
-                </Link>
-              </section>
-            )}
+            {/* KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다(2026-07-16 역할 재배분) — LENSES에서
+                제거됐고 ?lens=kpi는 마운트 시 /admin/branch?tab=pipeline로 리다이렉트된다. */}
           </div>
         </section>
 
@@ -5524,7 +5698,7 @@ export default function SalesLedgerWorkbench() {
           </div>
         )}
 
-        {lens !== "kpi" && sidePanelCollapsed && (
+        {sidePanelCollapsed && (
           <button
             type="button"
             onClick={() => setSidePanelCollapsed(false)}
@@ -5547,7 +5721,7 @@ export default function SalesLedgerWorkbench() {
           </button>
         )}
 
-        {lens !== "kpi" && !sidePanelCollapsed && (
+        {!sidePanelCollapsed && (
         <aside className="fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(420px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)]">
           <>
           <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1.5">
@@ -5564,7 +5738,7 @@ export default function SalesLedgerWorkbench() {
               </button>
             </div>
             <div className="flex items-center gap-0.5 rounded-lg bg-[#F6F5F4] p-[3px]" role="tablist" aria-label="빠른 작업 보기 전환">
-              {railViewItems.map((item) => {
+              {railViewItems.map((item, index) => {
                 const Icon = item.icon
                 const active = railView === item.id
                 const showQueueBadge = item.id === "queue" && openDrafts.length > 0
@@ -5574,7 +5748,10 @@ export default function SalesLedgerWorkbench() {
                     type="button"
                     role="tab"
                     aria-selected={active}
+                    tabIndex={active ? 0 : -1}
+                    ref={(node) => { railTabRefs.current[index] = node }}
                     onClick={() => selectRailView(item.id)}
+                    onKeyDown={(event) => handleRovingTabKeyDown(event, index, railViewItems, railTabRefs, (nextItem) => selectRailView(nextItem.id))}
                     title={item.description}
                     className={`relative flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[11.5px] font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734] ${
                       active ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "text-[#615D59] hover:text-[#111110]"
@@ -5787,14 +5964,14 @@ export default function SalesLedgerWorkbench() {
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => selectLens("kpi")}
+                    {/* KPI 렌즈는 KR Team 파이프라인 탭으로 이동 — 페이지 내 전환 대신 그 탭으로 링크. */}
+                    <Link
+                      href="/admin/branch?tab=pipeline"
                       className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3 text-[11px] font-bold text-[#084734] transition hover:bg-[#D1FAE5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
                     >
                       <Users className="h-3.5 w-3.5" />
-                      KPI 보기
-                    </button>
+                      KPI 보기 →
+                    </Link>
                     <button
                       type="button"
                       onClick={() => {

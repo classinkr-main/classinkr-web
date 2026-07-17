@@ -19,7 +19,6 @@ import PipelineTable from "./sections/PipelineTable"
 import CampaignsSection from "./sections/CampaignsSection"
 import HardwareSection from "./sections/HardwareSection"
 import DataQualityPanel from "./sections/DataQualityPanel"
-import CrmVariancePanel from "./sections/CrmVariancePanel"
 import DealMixSection from "./sections/DealMixSection"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
 import { PERIODS, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
@@ -77,16 +76,31 @@ const RevenueFlowSection = dynamic(() => import("./sections/RevenueFlowSection")
 })
 
 export default function BranchDashboardClient() {
-  const [team, setTeam] = useState<Team>("ALL")
-  const [period, setPeriod] = useState<Period>("Q")
-  const [selectedMonth, setSelectedMonth] = useState(() => ymKeyUtc(new Date()))
-  // 장부 등 외부에서 `?tab=pipeline` 딥링크로 진입할 수 있게 초기 탭을 URL에서 결정한다.
+  // 장부 등 외부에서 `?tab=pipeline&team=BD&period=M&month=2026-06` 딥링크로 진입할 수 있게
+  // 초기 필터를 URL에서 결정한다(탭과 동일 패턴 — 마운트 시 1회 파싱).
   const searchParams = useSearchParams()
   const initialTab = ((): BranchTab => {
     const t = searchParams.get("tab")
     return BRANCH_TABS.some((x) => x.id === t) ? (t as BranchTab) : "overview"
   })()
   const [activeTab, setActiveTab] = useState<BranchTab>(initialTab)
+  const initialTeam = ((): Team => {
+    const t = searchParams.get("team")
+    return t && (TEAMS as readonly string[]).includes(t) ? (t as Team) : "ALL"
+  })()
+  const [team, setTeam] = useState<Team>(initialTeam)
+  const initialPeriod = ((): Period => {
+    const p = searchParams.get("period")
+    return p && (PERIODS as readonly string[]).includes(p) ? (p as Period) : "Q"
+  })()
+  const [period, setPeriod] = useState<Period>(initialPeriod)
+  const initialMonth = ((): string => {
+    const m = searchParams.get("month")
+    if (!m) return ymKeyUtc(new Date())
+    const valid = buildMonthOptions(new Date()).some((option) => option.value === m)
+    return valid ? m : ymKeyUtc(new Date())
+  })()
+  const [selectedMonth, setSelectedMonth] = useState(initialMonth)
   const [pipelineView, setPipelineView] = useState<"table" | "kanban">("table")
   const [syncError, setSyncError] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -109,6 +123,38 @@ export default function BranchDashboardClient() {
     const url = new URL(window.location.href)
     if (tab === "overview") url.searchParams.delete("tab")
     else url.searchParams.set("tab", tab)
+    window.history.replaceState(null, "", url.toString())
+  }, [])
+
+  // team/period/month 필터도 탭과 동일한 방식으로 URL 쿼리에 동기화한다 — 파라미터 이름은
+  // API 쿼리(?team=&period=&month=)와 동일하게 맞춰 딥링크가 그대로 fetch URL 구성에 재사용된다.
+  // 기본값(ALL/Q/이번 달)일 땐 쿼리를 생략해 URL을 깨끗하게 유지한다.
+  const selectTeam = useCallback((next: Team) => {
+    setTeam(next)
+    const url = new URL(window.location.href)
+    if (next === "ALL") url.searchParams.delete("team")
+    else url.searchParams.set("team", next)
+    window.history.replaceState(null, "", url.toString())
+  }, [])
+
+  const selectPeriod = useCallback((next: Period) => {
+    setPeriod(next)
+    const url = new URL(window.location.href)
+    if (next === "Q") url.searchParams.delete("period")
+    else url.searchParams.set("period", next)
+    // month는 period === "M"일 때만 API에 실리는 파라미터라(:154) 다른 기간으로 바꾸면
+    // URL의 stale ?month=도 함께 지운다 — selectedMonth 상태 자체는 유지되어 다시 M으로
+    // 돌아오면 select가 이전 값을 그대로 보여준다.
+    if (next === "M" && selectedMonth !== ymKeyUtc(new Date())) url.searchParams.set("month", selectedMonth)
+    else if (next !== "M") url.searchParams.delete("month")
+    window.history.replaceState(null, "", url.toString())
+  }, [selectedMonth])
+
+  const selectMonth = useCallback((next: string) => {
+    setSelectedMonth(next)
+    const url = new URL(window.location.href)
+    if (next === ymKeyUtc(new Date())) url.searchParams.delete("month")
+    else url.searchParams.set("month", next)
     window.history.replaceState(null, "", url.toString())
   }, [])
 
@@ -240,7 +286,7 @@ export default function BranchDashboardClient() {
             {showTeamFilter && (
               <div className="flex gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white p-1" role="group" aria-label="팀 필터">
                 {TEAMS.map((t) => (
-                  <button key={t} type="button" onClick={() => setTeam(t)}
+                  <button key={t} type="button" onClick={() => selectTeam(t)}
                     aria-pressed={team === t}
                     className={`rounded-full px-3 py-1.5 text-[12px] font-semibold transition ${
                       team === t ? "bg-[#111110] text-white" : "text-[#615D59] hover:text-[#111110]"
@@ -254,7 +300,7 @@ export default function BranchDashboardClient() {
               <>
                 <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="기간 필터">
                   {PERIODS.map((p) => (
-                    <button key={p} type="button" onClick={() => setPeriod(p)}
+                    <button key={p} type="button" onClick={() => selectPeriod(p)}
                       aria-pressed={period === p}
                       className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${
                         period === p ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
@@ -269,7 +315,7 @@ export default function BranchDashboardClient() {
                     <span className="sr-only">월 선택</span>
                     <select
                       value={selectedMonth}
-                      onChange={(event) => setSelectedMonth(event.target.value)}
+                      onChange={(event) => selectMonth(event.target.value)}
                       className="h-7 bg-transparent pr-1 text-[12px] font-semibold text-[#111110] outline-none"
                       aria-label="월별 데이터 월 선택"
                     >
@@ -427,7 +473,6 @@ export default function BranchDashboardClient() {
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
               <BranchAiInsights team={team} refreshKey={refreshKey} summary={summary.data} canGenerate={canRunAdminOperations} />
               {canRunAdminOperations && <DataQualityPanel refreshKey={refreshKey} />}
-              <CrmVariancePanel />
             </div>
           )}
         </div>

@@ -56,33 +56,33 @@ function MultiSelect({
 
   return (
     <div ref={ref} className="relative flex items-center gap-1.5">
-      <span className="text-[11px] font-medium text-[#1a1a1a]/50">{label}</span>
+      <span className="text-[11px] font-medium text-[#111110]/50">{label}</span>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={options.length === 0}
-        className="inline-flex h-8 min-w-[7rem] items-center justify-between gap-2 rounded-full border border-[#e8e8e4] bg-white px-3 text-[12px] outline-none transition hover:border-[#111110]/25 focus:border-[#111110]/30 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex h-8 min-w-[7rem] items-center justify-between gap-2 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] outline-none transition hover:border-[#111110]/25 focus:border-[#111110]/30 disabled:cursor-not-allowed disabled:opacity-50"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className={selected.size === 0 ? "text-[#1a1a1a]/55" : "text-[#111110]"}>{summary}</span>
-        <ChevronDown className={`h-3.5 w-3.5 text-[#1a1a1a]/40 transition ${open ? "rotate-180" : ""}`} aria-hidden="true" />
+        <span className={selected.size === 0 ? "text-[#111110]/55" : "text-[#111110]"}>{summary}</span>
+        <ChevronDown className={`h-3.5 w-3.5 text-[#111110]/40 transition ${open ? "rotate-180" : ""}`} aria-hidden="true" />
       </button>
       {open && (
         <div
           role="listbox"
-          className={`absolute top-9 z-30 max-h-64 ${width} overflow-auto rounded-xl border border-[#e8e8e4] bg-white p-1 shadow-[0_10px_30px_rgba(0,0,0,0.08)] ${align === "right" ? "right-0" : "left-0"}`}
+          className={`absolute top-9 z-30 max-h-64 ${width} overflow-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-1 shadow-[0_10px_30px_rgba(0,0,0,0.08)] ${align === "right" ? "right-0" : "left-0"}`}
         >
           <button
             type="button"
             onClick={() => onChange(new Set())}
             className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
-              selected.size === 0 ? "bg-[#ECFDF5] text-[#0f5132]" : "text-[#1a1a1a]/65 hover:bg-[#fafaf8]"
+              selected.size === 0 ? "bg-[#ECFDF5] text-[#0f5132]" : "text-[#111110]/65 hover:bg-[#FAFAF8]"
             }`}
           >
             <span>전체 보기</span>
           </button>
-          <div className="my-1 h-px bg-[#f0f0ec]" />
+          <div className="my-1 h-px bg-[#F6F5F4]" />
           {options.map((opt) => {
             const checked = selected.has(opt)
             return (
@@ -91,7 +91,7 @@ function MultiSelect({
                 type="button"
                 onClick={() => toggle(opt)}
                 className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
-                  checked ? "bg-[#ECFDF5] text-[#0f5132]" : "text-[#1a1a1a]/75 hover:bg-[#fafaf8]"
+                  checked ? "bg-[#ECFDF5] text-[#0f5132]" : "text-[#111110]/75 hover:bg-[#FAFAF8]"
                 }`}
               >
                 <span className="truncate">{opt}</span>
@@ -127,6 +127,7 @@ export default function PipelineTable({
   const initialTeams: Set<string> = team === "ALL" ? new Set() : new Set([team])
   const [query, setQuery] = useState("")
   const [selectedTeams, setSelectedTeams] = useState<Set<string>>(initialTeams)
+  const [selectedManagers, setSelectedManagers] = useState<Set<string>>(new Set())
   const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set())
   const [revenueSort, setRevenueSort] = useState<RevenueSort>("desc")
   const [page, setPage] = useState(1)
@@ -135,6 +136,26 @@ export default function PipelineTable({
   const pipelineRows = pipeline.data?.rows
   const rows = useMemo(() => pipeline.loading ? null : (pipelineRows ?? []), [pipeline.loading, pipelineRows])
   const teamOptions = team === "ALL" ? SELECTABLE_TEAMS : [team]
+
+  // 장부 크로스링크 — 현재 team/period/selectedMonth를 그대로 동봉해 장부로 넘어가도
+  // 컨텍스트가 끊기지 않게 한다(파라미터 이름은 SalesLedgerWorkbench의 URL 파싱부 기준).
+  const ledgerHref = useMemo(() => {
+    const base = new URLSearchParams()
+    base.set("lens", "rev")
+    if (team !== "ALL") base.set("team", team)
+    if (period !== "Q") base.set("period", period)
+    if (period === "M") base.set("month", selectedMonth)
+    return (extra?: Record<string, string>) => {
+      const params = new URLSearchParams(base)
+      if (extra) for (const [k, v] of Object.entries(extra)) params.set(k, v)
+      return `/admin/branch/ledger?${params.toString()}`
+    }
+  }, [team, period, selectedMonth])
+
+  const managerOptions = useMemo(() => {
+    if (!rows) return []
+    return Array.from(new Set(rows.map((row) => row.manager).filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b, "ko"))
+  }, [rows])
 
   const regionOptions = useMemo(() => {
     if (!rows) return []
@@ -146,6 +167,7 @@ export default function PipelineTable({
     const trimmed = query.trim().toLowerCase()
     return rows
       .filter((row) => selectedTeams.size === 0 || (row.team !== null && selectedTeams.has(row.team)))
+      .filter((row) => selectedManagers.size === 0 || (row.manager !== null && selectedManagers.has(row.manager)))
       .filter((row) => selectedRegions.size === 0 || (row.region !== null && selectedRegions.has(row.region)))
       .filter((row) => {
         if (!trimmed) return true
@@ -158,7 +180,7 @@ export default function PipelineTable({
         if (diff !== 0) return diff
         return a.customer.localeCompare(b.customer, "ko")
       })
-  }, [query, revenueSort, rows, selectedRegions, selectedTeams])
+  }, [query, revenueSort, rows, selectedManagers, selectedRegions, selectedTeams])
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
   const safePage = Math.min(page, totalPages)
@@ -171,6 +193,7 @@ export default function PipelineTable({
     selectedTeams.size === baseTeamSet.size && Array.from(selectedTeams).every((t) => baseTeamSet.has(t))
   const filtersActive =
     query.trim().length > 0 ||
+    selectedManagers.size > 0 ||
     selectedRegions.size > 0 ||
     !teamsAtBaseline ||
     revenueSort !== "desc"
@@ -178,16 +201,17 @@ export default function PipelineTable({
   function resetFilters() {
     setQuery("")
     setSelectedTeams(team === "ALL" ? new Set() : new Set([team]))
+    setSelectedManagers(new Set())
     setSelectedRegions(new Set())
     setRevenueSort("desc")
     setPage(1)
   }
 
-  if (!rows) return <div className="h-64 animate-pulse rounded-2xl bg-[#f0f0ec]" />
+  if (!rows) return <div className="h-64 animate-pulse rounded-2xl bg-[#F6F5F4]" />
   if (rows.length === 0) return (
     <section>
       <h2 className="mb-3 text-[13px] font-semibold text-[#111110]/70">REV 고객별 매출</h2>
-      <div className="rounded-2xl border border-[#e8e8e4] bg-white p-6 text-[12px] text-[#1a1a1a]/40">표시할 매출 데이터가 없습니다.</div>
+      <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6 text-[12px] text-[#111110]/40">표시할 매출 데이터가 없습니다.</div>
     </section>
   )
 
@@ -197,19 +221,19 @@ export default function PipelineTable({
         <div className="flex items-center gap-2">
           <h2 className="text-[13px] font-semibold text-[#111110]/70">REV 고객별 매출</h2>
           <Link
-            href="/admin/branch/ledger?lens=rev"
+            href={ledgerHref()}
             className="text-[11px] font-medium text-[#084734] underline-offset-2 hover:underline"
           >
             장부에서 열기 ↗
           </Link>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] text-[#1a1a1a]/40">{filteredRows.length}건 · {pageSize}개씩</span>
-          <span className="mx-1 h-3 w-px bg-[#e8e8e4]" aria-hidden="true" />
+          <span className="text-[11px] text-[#111110]/40">{filteredRows.length}건 · {pageSize}개씩</span>
+          <span className="mx-1 h-3 w-px bg-[rgba(0,0,0,0.08)]" aria-hidden="true" />
           <button
             type="button"
             onClick={() => { setRevenueSort((v) => (v === "desc" ? "asc" : "desc")); setPage(1) }}
-            className="inline-flex h-7 items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2.5 text-[11px] font-medium text-[#1a1a1a]/65 transition hover:border-[#111110]/25 hover:text-[#111110]"
+            className="inline-flex h-7 items-center gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-medium text-[#111110]/65 transition hover:border-[#111110]/25 hover:text-[#111110]"
             title="매출 정렬 토글"
           >
             {revenueSort === "desc"
@@ -221,7 +245,7 @@ export default function PipelineTable({
             type="button"
             onClick={resetFilters}
             disabled={!filtersActive}
-            className="inline-flex h-7 items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2.5 text-[11px] font-medium text-[#1a1a1a]/65 transition hover:border-[#111110]/25 hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-7 items-center gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-medium text-[#111110]/65 transition hover:border-[#111110]/25 hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
             title="필터 초기화"
           >
             <RotateCcw className="h-3 w-3" aria-hidden="true" />
@@ -232,12 +256,12 @@ export default function PipelineTable({
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <label className="relative min-w-0 flex-1 sm:max-w-md">
           <span className="sr-only">REV 고객별 매출 검색</span>
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/35" aria-hidden="true" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#111110]/35" aria-hidden="true" />
           <input
             value={query}
             onChange={(e) => { setQuery(e.target.value); setPage(1) }}
             placeholder="고객사, 매니저, 지역 검색"
-            className="h-8 w-full rounded-full border border-[#e8e8e4] bg-white pl-9 pr-3 text-[12px] outline-none transition focus:border-[#111110]/30"
+            className="h-8 w-full rounded-full border border-[rgba(0,0,0,0.08)] bg-white pl-9 pr-3 text-[12px] outline-none transition focus:border-[#111110]/30"
           />
         </label>
         <MultiSelect
@@ -249,6 +273,14 @@ export default function PipelineTable({
           width="w-32"
         />
         <MultiSelect
+          label="담당"
+          options={managerOptions}
+          selected={selectedManagers}
+          onChange={(next) => { setSelectedManagers(next); setPage(1) }}
+          placeholder="전체"
+          width="w-44"
+        />
+        <MultiSelect
           label="지역"
           options={regionOptions}
           selected={selectedRegions}
@@ -258,7 +290,7 @@ export default function PipelineTable({
           width="w-44"
         />
       </div>
-      <div className="overflow-x-auto rounded-2xl border border-[#e8e8e4] bg-white">
+      <div className="overflow-x-auto rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white">
         <table className="w-full text-[12px]">
           <colgroup>
             <col style={{ width: "34%" }} />
@@ -267,7 +299,7 @@ export default function PipelineTable({
             <col style={{ width: "14%" }} />
             <col style={{ width: "26%" }} />
           </colgroup>
-          <thead className="bg-[#fafaf8] text-[#1a1a1a]/60">
+          <thead className="bg-[#FAFAF8] text-[#111110]/60">
             <tr>
               <th className="px-5 py-1 text-left">고객사</th>
               <th className="px-3 py-1">담당 매니저</th>
@@ -279,13 +311,13 @@ export default function PipelineTable({
           <tbody>
             {pageRows.length === 0 && (
               <tr>
-                <td className="px-5 py-10 text-center text-[#1a1a1a]/40" colSpan={5}>검색 결과가 없습니다.</td>
+                <td className="px-5 py-10 text-center text-[#111110]/40" colSpan={5}>검색 결과가 없습니다.</td>
               </tr>
             )}
             {pageRows.map((r) => (
               <tr key={r.id}
                 onClick={onRowClick ? () => onRowClick(r) : undefined}
-                className={`border-t border-[#f0f0ec] ${onRowClick ? "cursor-pointer transition hover:bg-[#FAFAF8]" : ""}`}>
+                className={`border-t border-[#F6F5F4] ${onRowClick ? "cursor-pointer transition hover:bg-[#FAFAF8]" : ""}`}>
                 <td className="px-5 py-1 font-medium">
                   <span
                     className="inline-flex max-w-full items-center gap-1.5"
@@ -304,7 +336,7 @@ export default function PipelineTable({
                       <span className="truncate">{r.customer}</span>
                     )}
                     <Link
-                      href={`/admin/branch/ledger?lens=rev&q=${encodeURIComponent(r.customer)}`}
+                      href={ledgerHref({ q: r.customer })}
                       onClick={(e) => e.stopPropagation()}
                       className="shrink-0 text-[11px] font-medium text-[#084734] opacity-50 transition hover:opacity-100"
                       title="매출 장부에서 열기"
@@ -316,13 +348,13 @@ export default function PipelineTable({
                 <td className="px-3 py-1 text-center">{r.manager ?? "-"}</td>
                 <td className="px-3 py-1 text-center">{r.team ?? "-"}</td>
                 <td className="px-3 py-1 text-center">{r.region ?? "-"}</td>
-                <td className="px-5 py-1 text-right font-semibold">¥{fmt(r.revenue)}</td>
+                <td className="px-5 py-1 text-right font-semibold tabular-nums">¥{fmt(r.revenue)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#f0f0ec] px-5 py-1">
-          <p className="text-[11px] text-[#1a1a1a]/45">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#F6F5F4] px-5 py-1">
+          <p className="text-[11px] text-[#111110]/45">
             {pageStart}-{pageEnd} / {filteredRows.length}건
           </p>
           <div className="flex items-center gap-2">
@@ -330,18 +362,18 @@ export default function PipelineTable({
               type="button"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={safePage === 1}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#e8e8e4] text-[#1a1a1a]/65 disabled:cursor-not-allowed disabled:opacity-35"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35"
               aria-label="이전 페이지"
               title="이전 페이지"
             >
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             </button>
-            <span className="min-w-14 text-center text-[12px] text-[#1a1a1a]/60">{safePage} / {totalPages}</span>
+            <span className="min-w-14 text-center text-[12px] text-[#111110]/60">{safePage} / {totalPages}</span>
             <button
               type="button"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={safePage === totalPages}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#e8e8e4] text-[#1a1a1a]/65 disabled:cursor-not-allowed disabled:opacity-35"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] text-[#111110]/65 disabled:cursor-not-allowed disabled:opacity-35"
               aria-label="다음 페이지"
               title="다음 페이지"
             >

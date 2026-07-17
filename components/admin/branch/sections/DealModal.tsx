@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react"
 import { X } from "lucide-react"
 import { cny, cnyExact } from "@/lib/branch/money-format"
 import { ledgerMonthConfirmed } from "@/lib/branch/computations/revenue-core"
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import MoneyValue from "../MoneyValue"
 
 export interface DealModalDeal {
@@ -120,7 +121,7 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                   {mix.hw.length > 0 && (
                     <span
-                      className="inline-flex items-center gap-1 rounded-full bg-[#1E5DA8]/10 px-2 py-[3px] font-semibold text-[#1E5DA8]"
+                      className="inline-flex items-center gap-1 rounded-full bg-[#F6F5F4] px-2 py-[3px] font-semibold text-[#615D59]"
                       title={mix.hw.join(", ")}
                     >
                       HW {mix.hw.length}
@@ -155,7 +156,7 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
               </>
             )}
             {deal.amount != null && (
-              <p className="mt-1 text-[14px] font-bold" style={{ color: isConfirmed ? "#B43E3E" : "#1E5DA8" }}>
+              <p className="mt-1 text-[14px] font-bold" style={{ color: isConfirmed ? CONFIDENCE_TOKENS.confirmed.color : CONFIDENCE_TOKENS.expected.color }}>
                 <MoneyValue value={deal.amount} />
                 <span className="ml-1.5 text-[10.5px] font-semibold text-[#615D59]">
                   {isConfirmed ? "· 확정" : "· 가능성"}

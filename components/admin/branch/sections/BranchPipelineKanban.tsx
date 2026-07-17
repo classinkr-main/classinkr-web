@@ -1,8 +1,10 @@
 "use client"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { useBranchJson } from "../client-api"
 import type { BranchPipelineResponse, BranchPipelineRow, Period, Team } from "../types"
 import { cny, cnyExact } from "@/lib/branch/money-format"
+import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
+import { ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
 import MoneyValue from "../MoneyValue"
 
 type Row = BranchPipelineRow
@@ -11,12 +13,51 @@ interface MergedRow extends Row {
   count: number  // number of deals merged under this customer
 }
 
-const STAGES = [
-  { key: "discovery",   label: "발견",   color: "#A8741A", bg: "rgba(168,116,26,0.08)",  probability: 25 },
-  { key: "qualified",   label: "적격",   color: "#7B8B36", bg: "rgba(123,139,54,0.08)",  probability: 50 },
-  { key: "proposal",    label: "제안",   color: "#1E5DA8", bg: "rgba(30,93,168,0.08)",   probability: 70 },
-  { key: "negotiation", label: "협의",   color: "#084734", bg: "rgba(8,71,52,0.08)",     probability: 90 },
-] as const
+// 확도 기반 칸반 컬럼 — 이전에는 딜 id 해시로 발견/적격/제안/협의 4단계를 무작위
+// 배정했다(실데이터와 무관한 가짜 단계). 파이프라인 행이 실제로 갖고 있는 필드는
+// 월별 확도 3분해(monthlyPayments/monthlyConfirmed/monthlyHighConfidence/monthlyRed —
+// DealModal의 월별 매출 로그가 쓰는 그 필드들)뿐이라, 그걸 rev-confirmed 캐논
+// (revenue-core.ledgerMonthSplit)에 그대로 넣어 딜 전체를 확정/고확도/예정 중 하나로
+// 분류한다. 색 데이터가 전혀 없는 딜(월별 데이터 자체가 없거나 3분해가 모두 0)은
+// "미분류"로 정직하게 남긴다 — 존재하지 않는 확률·단계를 발명하지 않는다.
+type ConfidenceColumnKey = ConfidenceKey | "unclassified"
+
+const CONFIDENCE_COLUMNS: ReadonlyArray<{
+  key: ConfidenceColumnKey
+  label: string
+  description: string
+  color: string
+  bg: string
+}> = [
+  {
+    key: "confirmed",
+    label: CONFIDENCE_TOKENS.confirmed.label,
+    description: "월별 확도 3분해 기준 확정분이 가장 큰 딜",
+    color: CONFIDENCE_TOKENS.confirmed.color,
+    bg: CONFIDENCE_TOKENS.confirmed.tintBg,
+  },
+  {
+    key: "high-confidence",
+    label: CONFIDENCE_TOKENS["high-confidence"].label,
+    description: "확정은 아니지만 클로징 임박 신호가 가장 큰 딜",
+    color: CONFIDENCE_TOKENS["high-confidence"].color,
+    bg: CONFIDENCE_TOKENS["high-confidence"].tintBg,
+  },
+  {
+    key: "expected",
+    label: CONFIDENCE_TOKENS.expected.label,
+    description: "확정·고확도 신호 없이 예상 금액만 있는 딜",
+    color: CONFIDENCE_TOKENS.expected.color,
+    bg: CONFIDENCE_TOKENS.expected.tintBg,
+  },
+  {
+    key: "unclassified",
+    label: "미분류",
+    description: "월별 매출 데이터 없음(확도 판정 불가)",
+    color: "#615D59",
+    bg: "#F6F5F4",
+  },
+]
 
 const TEAM_COLOR: Record<string, string> = {
   BD: "#084734",
@@ -24,10 +65,26 @@ const TEAM_COLOR: Record<string, string> = {
   CSM: "#A8741A",
 }
 
-function hashStageIndex(id: string): number {
-  let h = 0
-  for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0
-  return Math.abs(h) % STAGES.length
+/** 딜 하나의 월별 납부액을 rev-confirmed 캐논으로 확정/고확도/예정 3분해한 뒤,
+ *  가장 큰 값의 버킷으로 분류한다. 계산 로직(캐논)은 건드리지 않고 소비만 한다. */
+function rowConfidenceBucket(row: Row): ConfidenceColumnKey {
+  const entries = Object.entries(row.monthlyPayments ?? {})
+  if (entries.length === 0) return "unclassified"
+  let confirmed = 0
+  let highConfidence = 0
+  let expected = 0
+  for (const [ym, raw] of entries) {
+    const total = Number(raw)
+    if (total === 0) continue
+    const split = ledgerMonthSplit(row, ym, total)
+    confirmed += split.confirmed
+    highConfidence += split.highConfidence
+    expected += split.expected
+  }
+  if (confirmed === 0 && highConfidence === 0 && expected === 0) return "unclassified"
+  if (confirmed >= highConfidence && confirmed >= expected) return "confirmed"
+  if (highConfidence >= expected) return "high-confidence"
+  return "expected"
 }
 
 function PipelineCard({ deal, onClick }: { deal: MergedRow; onClick?: () => void }) {
@@ -58,8 +115,8 @@ function PipelineCard({ deal, onClick }: { deal: MergedRow; onClick?: () => void
       )}
       <div className="mt-2.5 flex items-center justify-between border-t border-[rgba(0,0,0,0.05)] pt-2">
         <span className="cursor-help text-[13px] font-bold tracking-[-0.01em] text-[#B43E3E]"
-          title={`₩${cnyExact(deal.revenue)} · 시트 원값 · 반올림 없음`}>
-          ₩{cny(deal.revenue)}
+          title={`¥${cnyExact(deal.revenue)} · 시트 원값 · 반올림 없음`}>
+          ¥{cny(deal.revenue)}
         </span>
         {deal.count === 1 && (
           <span className="text-[9.5px] font-medium text-[#9B9690]">{deal.id}</span>
@@ -69,44 +126,32 @@ function PipelineCard({ deal, onClick }: { deal: MergedRow; onClick?: () => void
   )
 }
 
-function PipelineColumn({ stage, deals, onCardClick }: {
-  stage: typeof STAGES[number]
+function PipelineColumn({ column, deals, onCardClick }: {
+  column: typeof CONFIDENCE_COLUMNS[number]
   deals: MergedRow[]
   onCardClick?: (d: MergedRow) => void
 }) {
   const total = deals.reduce((s, d) => s + d.revenue, 0)
-  const weighted = Math.round(total * (stage.probability / 100))
 
   return (
     <div className="flex min-w-0 flex-col rounded-xl border border-[rgba(0,0,0,0.08)]"
-      style={{ borderTop: `3px solid ${stage.color}` }}>
+      style={{ borderTop: `3px solid ${column.color}` }}>
       {/* Column header */}
       <div className="px-4 pb-3 pt-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-[13.5px] font-bold text-[#111110]">{stage.label}</span>
+            <span className="text-[13.5px] font-bold text-[#111110]">{column.label}</span>
             <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-1.5 text-[10.5px] font-bold text-[#111110]">
               {deals.length}
             </span>
           </div>
-          <span className="rounded-md px-2 py-0.5 text-[10px] font-bold"
-            style={{ background: stage.bg, color: stage.color }}>
-            {stage.probability}%
-          </span>
         </div>
         <p className="mt-2.5 text-[17px] font-bold tracking-[-0.02em] text-[#111110]">
-          <MoneyValue value={total} prefix="₩" />
+          <MoneyValue value={total} />
         </p>
-        <p className="mt-0.5 text-[10.5px] text-[#615D59]">
-          가중 <span className="font-semibold text-[#111110]"><MoneyValue value={weighted} prefix="₩" /></span>
-        </p>
-        {/* Probability fill bar */}
-        <div className="mt-3 h-[3px] overflow-hidden rounded-full bg-[rgba(0,0,0,0.06)]">
-          <div className="h-full rounded-full transition-[width] duration-700"
-            style={{ width: `${stage.probability}%`, background: stage.color }} />
-        </div>
+        <p className="mt-1 text-[10.5px] leading-relaxed text-[#615D59]">{column.description}</p>
       </div>
-      {/* Card list */}
+      {/* Card list — 컬럼 내 정렬은 매출 desc(grouped 단계에서 정렬 완료) */}
       <div className="flex flex-col gap-2 overflow-y-auto px-3 pb-4" style={{ maxHeight: 520 }}>
         {deals.length === 0 ? (
           <div className="flex items-center justify-center py-8">
@@ -125,23 +170,35 @@ export default function BranchPipelineKanban({ team, period, selectedMonth, refr
   period: Period
   selectedMonth: string
   refreshKey: number
-  onDealClick?: (d: Row & { stageLabel: string; stageColor: string; probability: number }) => void
+  onDealClick?: (d: Row & { stageLabel: string; stageColor: string; probability?: number }) => void
 }) {
+  const [selectedManager, setSelectedManager] = useState("")
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey)
   const pipelineRows = pipeline.data?.rows
   const rows = useMemo(() => pipeline.loading ? null : (pipelineRows ?? []), [pipeline.loading, pipelineRows])
 
+  const managerOptions = useMemo(() => {
+    if (!rows) return []
+    return Array.from(new Set(rows.map((r) => r.manager).filter((v): v is string => Boolean(v)))).sort((a, b) => a.localeCompare(b, "ko"))
+  }, [rows])
+
+  const filteredRows = useMemo(() => {
+    if (!rows) return null
+    return selectedManager ? rows.filter((r) => r.manager === selectedManager) : rows
+  }, [rows, selectedManager])
+
   const grouped = useMemo(() => {
-    const byStage: Record<string, Row[]> = {}
-    STAGES.forEach((s) => { byStage[s.key] = [] })
-    if (rows) for (const r of rows) {
-      byStage[STAGES[hashStageIndex(r.id)].key].push(r)
+    const byColumn: Record<ConfidenceColumnKey, Row[]> = {
+      confirmed: [], "high-confidence": [], expected: [], unclassified: [],
     }
-    const out: Record<string, MergedRow[]> = {}
-    for (const [stageKey, stageRows] of Object.entries(byStage)) {
+    if (filteredRows) for (const r of filteredRows) {
+      byColumn[rowConfidenceBucket(r)].push(r)
+    }
+    const out = {} as Record<ConfidenceColumnKey, MergedRow[]>
+    for (const [columnKey, columnRows] of Object.entries(byColumn) as [ConfidenceColumnKey, Row[]][]) {
       const mergeMap = new Map<string, MergedRow>()
-      for (const r of stageRows) {
+      for (const r of columnRows) {
         const key = r.customer.trim().toLowerCase()
         const existing = mergeMap.get(key)
         if (existing) {
@@ -151,17 +208,16 @@ export default function BranchPipelineKanban({ team, period, selectedMonth, refr
           mergeMap.set(key, { ...r, count: 1 })
         }
       }
-      out[stageKey] = Array.from(mergeMap.values())
+      out[columnKey] = Array.from(mergeMap.values()).sort((a, b) => b.revenue - a.revenue || a.customer.localeCompare(b.customer, "ko"))
     }
     return out
-  }, [rows])
+  }, [filteredRows])
 
   if (!rows) return <div className="h-72 animate-pulse rounded-xl bg-[#f0f0ec]" />
 
-  const totalAll = rows.reduce((s, r) => s + r.revenue, 0)
-  const totalWeighted = STAGES.reduce(
-    (s, st) => s + grouped[st.key].reduce((a, d) => a + d.revenue * (st.probability / 100), 0), 0
-  )
+  const totalAll = (filteredRows ?? []).reduce((s, r) => s + r.revenue, 0)
+  const confirmedTotal = grouped.confirmed.reduce((s, d) => s + d.revenue, 0)
+  const dealCount = filteredRows?.length ?? 0
 
   return (
     <>
@@ -169,31 +225,44 @@ export default function BranchPipelineKanban({ team, period, selectedMonth, refr
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 border-b border-[rgba(0,0,0,0.06)] px-5 py-3">
         <div className="flex items-baseline gap-1.5">
           <span className="text-[11px] text-[#615D59]">총 파이프라인</span>
-          <span className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]"><MoneyValue value={totalAll} prefix="₩" /></span>
+          <span className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]"><MoneyValue value={totalAll} /></span>
         </div>
         <div className="flex items-baseline gap-1.5">
-          <span className="text-[11px] text-[#615D59]">가중 합산</span>
-          <span className="text-[13px] font-bold text-[#084734]"><MoneyValue value={Math.round(totalWeighted)} prefix="₩" /></span>
+          <span className="text-[11px] text-[#615D59]">확정 합계</span>
+          <span className="text-[13px] font-bold" style={{ color: CONFIDENCE_TOKENS.confirmed.color }}><MoneyValue value={confirmedTotal} /></span>
         </div>
         <div className="flex items-baseline gap-1.5">
           <span className="text-[11px] text-[#615D59]">딜</span>
-          <span className="text-[13px] font-bold text-[#111110]">{rows.length}건</span>
+          <span className="text-[13px] font-bold text-[#111110]">{dealCount}건</span>
         </div>
         {(() => {
-          const merged = STAGES.reduce((s, st) => s + grouped[st.key].length, 0)
-          return rows.length !== merged ? (
+          const merged = CONFIDENCE_COLUMNS.reduce((s, c) => s + grouped[c.key].length, 0)
+          return dealCount !== merged ? (
             <div className="flex items-baseline gap-1.5">
               <span className="text-[11px] text-[#615D59]">고객</span>
               <span className="text-[13px] font-bold text-[#111110]">{merged}개사</span>
             </div>
           ) : null
         })()}
+        <div className="ml-auto flex items-center gap-1.5">
+          <label htmlFor="kanban-manager-filter" className="text-[11px] text-[#615D59]">담당자</label>
+          <select
+            id="kanban-manager-filter"
+            value={selectedManager}
+            onChange={(e) => setSelectedManager(e.target.value)}
+            disabled={managerOptions.length === 0}
+            className="h-7 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-medium text-[#111110] outline-none transition hover:border-[#111110]/25 focus:border-[#111110]/30 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="">전체</option>
+            {managerOptions.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
       </div>
       {/* Kanban grid — 1-col on mobile, 2-col on md, 4-col on xl */}
       <div className="grid grid-cols-1 gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
-        {STAGES.map((s) => (
-          <PipelineColumn key={s.key} stage={s} deals={grouped[s.key]}
-            onCardClick={(d) => onDealClick?.({ ...d, stageLabel: s.label, stageColor: s.color, probability: s.probability })} />
+        {CONFIDENCE_COLUMNS.map((c) => (
+          <PipelineColumn key={c.key} column={c} deals={grouped[c.key]}
+            onCardClick={(d) => onDealClick?.({ ...d, stageLabel: c.label, stageColor: c.color })} />
         ))}
       </div>
     </>

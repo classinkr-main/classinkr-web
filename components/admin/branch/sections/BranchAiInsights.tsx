@@ -30,7 +30,9 @@ const TONE = {
   opportunity: { bg: "#ECFDF5", fg: "#084734", label: "기회" },
   team:        { bg: "#F1F4DE", fg: "#7B8B36", label: "팀" },
   inventory:   { bg: "#FBF1E0", fg: "#A8741A", label: "재고" },
-  pipeline:    { bg: "#E8EFF8", fg: "#1E5DA8", label: "파이프라인" },
+  // 파이프라인 태그는 확도 신호가 아니라 액션 카테고리라 확도 예외 파랑(#1E5DA8)을
+  // 쓸 이유가 없다 — 비확도 맥락은 뉴트럴(#615D59/#F6F5F4)로.
+  pipeline:    { bg: "#F6F5F4", fg: "#615D59", label: "파이프라인" },
   general:     { bg: "rgba(0,0,0,0.05)", fg: "#111110", label: "일반" },
 } as const
 
@@ -325,7 +327,16 @@ export default function BranchAiInsights({ team, refreshKey, summary, canGenerat
       </div>
 
       {errorMsg && (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-[12px] text-rose-700">{errorMsg}</div>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-[12px] text-rose-700">
+          <span>{errorMsg}</span>
+          {canGenerate && (
+            <button type="button" onClick={handleRegenerate} disabled={refreshing}
+              className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-white px-2.5 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60">
+              <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+              다시 시도
+            </button>
+          )}
+        </div>
       )}
 
       {/* Content */}

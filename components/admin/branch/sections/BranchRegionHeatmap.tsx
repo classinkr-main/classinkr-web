@@ -439,7 +439,10 @@ function CompactRow({ row, rank, selected, onSelect, metric, maxExpected }: {
     : Math.min(100, row.progress)
   const barColor = heatColorRamp(metricValue, metricMax)
   const barOpacity = rampOpacity(metricValue, metricMax)
-  const valueColor = barColor
+  // 저대비 수정 — 이전에는 이 값 텍스트 색을 heatColorRamp 보간값으로 직접 칠해
+  // 중간 구간(예: 태닝 톤 #C09460)에서 흰 배경 대비 ~2.75:1까지 떨어졌다. 이제
+  // 텍스트는 항상 캐논 잉크(#111110)로 고정하고, 색 신호는 옆의 진행 바 + 작은
+  // 도트(칩)로만 전달한다.
   return (
     <button type="button" onClick={onSelect}
       className={`grid w-full grid-cols-[18px_56px_minmax(0,1fr)_56px] items-center gap-2 rounded px-1.5 py-1.5 text-left transition ${
@@ -450,7 +453,8 @@ function CompactRow({ row, rank, selected, onSelect, metric, maxExpected }: {
       <div className="h-1 overflow-hidden rounded-full bg-[#EFEDE7]">
         <div className="h-full rounded-full transition-[width]" style={{ width: `${barPct}%`, background: barColor, opacity: barOpacity }} />
       </div>
-      <span className="text-right text-[11px] font-bold tabular-nums" style={{ color: valueColor }}>
+      <span className="flex items-center justify-end gap-1.5 text-right text-[11px] font-bold tabular-nums text-[#111110]">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: barColor }} aria-hidden="true" />
         {metric === "revenue" ? `¥${cny(row.expected)}` : `${row.progress.toFixed(0)}%`}
       </span>
     </button>
@@ -552,7 +556,10 @@ function DetailPanel({ row, metric }: { row: MapRow | null; metric: Metric }) {
 
 export default function BranchRegionHeatmap({ team, period, selectedMonth, refreshKey }: { team: Team; period: Period; selectedMonth: string; refreshKey: number }) {
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
-  const heatmap = useBranchJson<{ rows?: Row[] }>(`/api/admin/branch/heatmap?team=${team}&period=${period}${monthQuery}`, refreshKey)
+  // 로컬 재시도 넛지 — 상위 refreshKey(전역 새로고침, 강제 스크롤 동반)에 기대지 않고
+  // 이 섹션만 useBranchJson의 기존 캐시키 재계산 경로(refreshKey:url)를 재사용해 다시 요청한다.
+  const [localRetry, setLocalRetry] = useState(0)
+  const heatmap = useBranchJson<{ rows?: Row[] }>(`/api/admin/branch/heatmap?team=${team}&period=${period}${monthQuery}`, refreshKey + localRetry)
   const rows = heatmap.loading ? null : (heatmap.data?.rows ?? EMPTY_ROWS)
   const error = heatmap.error
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null)
@@ -575,7 +582,16 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
   )
   const selected = mappedRows.find((r) => r.label === selectedLabel) ?? mappedRows[0] ?? null
 
-  if (error) return <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
+  if (error) return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">
+      <span>{error}</span>
+      <button type="button" onClick={() => setLocalRetry((v) => v + 1)}
+        className="inline-flex items-center gap-1 rounded-md border border-rose-300 bg-white px-2.5 py-1 text-[11px] font-bold text-rose-700 transition hover:bg-rose-100">
+        <RotateCcw className="h-3 w-3" aria-hidden="true" />
+        다시 시도
+      </button>
+    </div>
+  )
   if (!rows) return <div className="h-96 animate-pulse rounded-xl bg-[#f0f0ec]" />
   if (rows.length === 0) {
     return (

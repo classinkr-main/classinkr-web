@@ -45,16 +45,18 @@ function StatCard({ icon, label, value, sub, tone = "neutral", link }: { icon: R
 export default function CoreKpiGrid({ data, loading, error }: { data: BranchSummaryResponse | null; loading: boolean; error: string | null }) {
   if (error) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
   if (loading || !data) return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
       {Array.from({length:5}).map((_,i) => <div key={i} className="h-[92px] animate-pulse rounded-xl bg-[#f0f0ec]"/>)}
     </div>
   )
   return (
     <section>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+        {/* 목표·달성률은 아래 BranchHeroGauges가 유일한 '목표 대비' 표면이라 여기선 확정
+            매출 절대값만 보여준다(항목 2 — 같은 수치가 개요에서 3번 반복되던 것 정리). */}
         <StatCard tone="green" icon={<TrendingUp className="h-[18px] w-[18px]" />}
           label="총 매출 (확정)" value={<MoneyValue value={data.revenue.confirmed} />}
-          sub={<>목표 <MoneyValue value={data.revenue.goal} /> · {data.revenue.pacing_pct.toFixed(0)}%</>}
+          sub="목표 대비는 아래 게이지 참고"
           link={{ href: "/admin/branch/ledger?lens=rev", label: "장부에서 열기 ↗" }} />
         <StatCard tone="amber" icon={<Sparkles className="h-[18px] w-[18px]" />}
           label="활동 KPI 병목" value={metricLabel(data.bottleneck.metric)}
