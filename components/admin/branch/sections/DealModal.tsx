@@ -1,8 +1,9 @@
 "use client"
 import { useEffect, useRef } from "react"
 import { X } from "lucide-react"
-import { cny } from "@/lib/branch/money-format"
+import { cny, cnyExact } from "@/lib/branch/money-format"
 import { ledgerMonthConfirmed } from "@/lib/branch/computations/revenue-core"
+import MoneyValue from "../MoneyValue"
 
 export interface DealModalDeal {
   id: string
@@ -155,7 +156,7 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
             )}
             {deal.amount != null && (
               <p className="mt-1 text-[14px] font-bold" style={{ color: isConfirmed ? "#B43E3E" : "#1E5DA8" }}>
-                ¥{cny(deal.amount)}
+                <MoneyValue value={deal.amount} />
                 <span className="ml-1.5 text-[10.5px] font-semibold text-[#615D59]">
                   {isConfirmed ? "· 확정" : "· 가능성"}
                 </span>
@@ -194,7 +195,7 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
           {targetVal != null && (
             <div>
               <p className="text-[10.5px] font-semibold text-[#615D59]">계약 목표</p>
-              <p className="mt-1 text-[13.5px] font-bold text-[#111110]">¥{cny(targetVal)}</p>
+              <p className="mt-1 text-[13.5px] font-bold text-[#111110]"><MoneyValue value={targetVal} /></p>
             </div>
           )}
           {deal.firstPayment && (
@@ -218,8 +219,8 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
               <p className="text-[11px] font-bold text-[#111110]">월별 매출 로그</p>
               {monthlyEntries.length > 0 && (
                 <p className="text-[10.5px] text-[#615D59]">
-                  확정 <span className="font-bold text-[#B43E3E]">¥{cny(confirmedSum)}</span>
-                  {targetVal ? ` / 목표 ¥${cny(targetVal)}` : ""}
+                  확정 <span className="font-bold text-[#B43E3E]"><MoneyValue value={confirmedSum} /></span>
+                  {targetVal ? <> / 목표 <MoneyValue value={targetVal} /></> : ""}
                 </p>
               )}
             </div>
@@ -241,10 +242,12 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
                         <span className="font-mono text-[11.5px] text-[#615D59]">{ym}</span>
                         {!confirmed && <span className="text-[10px] font-semibold text-[#A8741A]">미확정</span>}
                         {confirmed && confirmedAmount < amount && (
-                          <span className="text-[10px] font-semibold text-[#A8741A]">부분 ¥{cny(confirmedAmount)}</span>
+                          <span className="cursor-help text-[10px] font-semibold text-[#A8741A]"
+                            title={`¥${cnyExact(confirmedAmount)} · 시트 원값 · 반올림 없음`}>부분 ¥{cny(confirmedAmount)}</span>
                         )}
                       </span>
-                      <span className={`font-bold ${confirmed ? "text-[#111110]" : "text-[#615D59]"}`}>
+                      <span className={`cursor-help font-bold ${confirmed ? "text-[#111110]" : "text-[#615D59]"}`}
+                        title={`¥${cnyExact(amount)} · 시트 원값 · 반올림 없음`}>
                         ¥{cny(amount)}
                       </span>
                     </li>

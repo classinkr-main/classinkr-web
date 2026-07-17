@@ -4,6 +4,7 @@ import type { BranchKpiResponse, BranchSummaryResponse } from "../types"
 import { GaugeRing } from "../../viz/GaugeRing"
 import { ProgressRoadmap } from "../../viz/ProgressRoadmap"
 import { cny } from "@/lib/branch/money-format"
+import MoneyValue from "../MoneyValue"
 
 const TEAM_LABEL: Record<string, { name: string; full: string }> = {
   BD: { name: "BD", full: "Business Development" },
@@ -40,9 +41,9 @@ export default function BranchHeroGauges({
           </p>
           <div className="mt-2 flex flex-wrap items-baseline gap-2.5">
             <span className="whitespace-nowrap text-[40px] font-bold leading-none tracking-[-0.03em] text-[#111110]">
-              ¥{cny(actual)}
+              <MoneyValue value={actual} />
             </span>
-            <span className="whitespace-nowrap text-[13px] text-[#615D59]">/ {cny(goal)}</span>
+            <span className="whitespace-nowrap text-[13px] text-[#615D59]">/ <MoneyValue value={goal} prefix="" /></span>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#084734]">
@@ -64,8 +65,8 @@ export default function BranchHeroGauges({
               </div>
               <GaugeRing value={t.status} goal={t.goal} />
               <p className="whitespace-nowrap text-center text-[11px] text-[#615D59]">
-                <span className="text-[13px] font-bold text-[#111110]">¥{cny(t.status)}</span>
-                <span> / {cny(t.goal)}</span>
+                <span className="text-[13px] font-bold text-[#111110]"><MoneyValue value={t.status} /></span>
+                <span> / <MoneyValue value={t.goal} prefix="" /></span>
               </p>
             </div>
           )

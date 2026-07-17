@@ -1,6 +1,6 @@
 "use client"
 import type { BranchDealMixSlice, BranchSummaryResponse } from "../types"
-import { cny } from "@/lib/branch/money-format"
+import MoneyValue from "../MoneyValue"
 
 const LABELS: Record<string, string> = {
   Software: "SW",
@@ -82,9 +82,9 @@ function CompareCard({ title, desc, a, b, aTone, bTone }: {
           </div>
           <div className="text-right">
             <p className="text-[13px] font-bold leading-none tracking-[-0.01em]" style={{ color: COLORS.red }}>
-              ¥{cny(row.side.actual)}
+              <MoneyValue value={row.side.actual} />
             </p>
-            <p className="mt-0.5 text-[9.5px] text-[#615D59]">목표 ¥{cny(row.side.goal)}</p>
+            <p className="mt-0.5 text-[9.5px] text-[#615D59]">목표 <MoneyValue value={row.side.goal} /></p>
           </div>
         </div>
       ))}
@@ -119,8 +119,8 @@ export default function DealMixSection({ summary, loading }: { summary: BranchSu
           <p className="mt-0.5 text-[11px] font-medium text-[#615D59]">제품 · 신규/갱신 · 채널 · 고객규모 — <span className="font-semibold text-[#B43E3E]">빨강 = 확정 매출</span></p>
         </div>
         <div className="text-right">
-          <p className="text-[18px] font-bold leading-none tracking-[-0.01em] text-[#111110]">¥{cny(totalActual)}</p>
-          <p className="mt-1 text-[10.5px] text-[#615D59]">확정 평균 · 잔량 ¥{cny(gap)}</p>
+          <p className="text-[18px] font-bold leading-none tracking-[-0.01em] text-[#111110]"><MoneyValue value={totalActual} /></p>
+          <p className="mt-1 text-[10.5px] text-[#615D59]">확정 평균 · 잔량 <MoneyValue value={gap} /></p>
         </div>
       </div>
       <div className={`grid gap-[18px] p-5 md:grid-cols-2 ${cardCount >= 4 ? "xl:grid-cols-4" : "lg:grid-cols-3"}`}>

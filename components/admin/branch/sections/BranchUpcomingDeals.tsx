@@ -2,7 +2,7 @@
 import Link from "next/link"
 import { Calendar, ExternalLink } from "lucide-react"
 import type { BranchMonthlySeries } from "../types"
-import { cny } from "@/lib/branch/money-format"
+import { cny, cnyExact } from "@/lib/branch/money-format"
 
 function isFutureOrToday(dateStr: string) {
   const d = new Date(dateStr)
@@ -88,7 +88,8 @@ export default function BranchUpcomingDeals({
                   </div>
                   <div className="text-right">
                     {typeof it.amount === "number" ? (
-                      <p className="text-[12.5px] font-bold tracking-[-0.01em]" style={{ color: "#1E5DA8" }}>
+                      <p className="cursor-help text-[12.5px] font-bold tracking-[-0.01em]" style={{ color: "#1E5DA8" }}
+                        title={`¥${cnyExact(it.amount)} · 시트 원값 · 반올림 없음`}>
                         ¥{cny(it.amount)}
                       </p>
                     ) : <span className="text-[10.5px] text-[#615D59]">—</span>}

@@ -9,6 +9,7 @@
 import Link from "next/link"
 import { useMemo } from "react"
 import type { BranchDshBreakdownRow } from "../types"
+import { cnyExact } from "@/lib/branch/money-format"
 import { LoadingPanel } from "./shared"
 
 export type DshGridView = "goal" | "status" | "gap"
@@ -142,20 +143,26 @@ export function aggregateDshBreakdown(breakdown: BranchDshBreakdownRow[], view: 
 
 const CELL = "whitespace-nowrap border-b border-r border-[rgba(0,0,0,0.08)] px-2.5 py-1.5 text-right"
 
+// 원값 호버(2026-07-17 사용성 디벨롭 항목 1) — formatThousands는 1,000 단위로 반올림
+// 표기하므로, title에 원값 전체 자릿수(¥, 반올림 없음)를 병기해 보정한다.
+function exactTitle(value: number): string {
+  return `¥${cnyExact(value)} · 시트 원값 · 반올림 없음`
+}
+
 function numericCells(numbers: GridNumbers, monthKeys: string[], extra = "") {
   const tone = (value: number) => (value < 0 ? "text-[#B43E3E]" : "")
   return (
     <>
-      <td className={`${CELL} ${tone(numbers.annual)} ${extra}`}>{formatThousands(numbers.annual)}</td>
+      <td className={`${CELL} cursor-help ${tone(numbers.annual)} ${extra}`} title={exactTitle(numbers.annual)}>{formatThousands(numbers.annual)}</td>
       {numbers.quarters.map((value, index) => (
-        <td key={`q${index}`} className={`${CELL} ${extra || "bg-[#FBFAF7]"} ${tone(value)}`}>
+        <td key={`q${index}`} className={`${CELL} cursor-help ${extra || "bg-[#FBFAF7]"} ${tone(value)}`} title={exactTitle(value)}>
           {formatThousands(value)}
         </td>
       ))}
       {monthKeys.map((ym) => {
         const value = numbers.months[ym] ?? 0
         return (
-          <td key={ym} className={`${CELL} ${tone(value)} ${extra}`}>
+          <td key={ym} className={`${CELL} cursor-help ${tone(value)} ${extra}`} title={exactTitle(value)}>
             {formatThousands(value)}
           </td>
         )

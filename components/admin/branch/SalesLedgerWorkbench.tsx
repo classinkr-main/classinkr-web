@@ -4608,6 +4608,7 @@ export default function SalesLedgerWorkbench() {
             </h1>
             <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[#615D59]">
               만지는 화면. 시트 수치 검수·장부 입력·주간 마감을 담당합니다. 차트·시각화는 KR Team으로 옮겨졌고, 여기는 수치가 정본입니다.
+              {" "}통화 ¥ — 본사 보고 기준 · 단위 표기가 있는 그리드·매트릭스 셀은 호버(또는 title)로 반올림 전 원값을 확인할 수 있습니다.
             </p>
           </div>
 
