@@ -499,7 +499,13 @@ export default function ActivityQuickForm({
           </div>
 
           <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
-            {!lockTarget ? <div className="shrink-0 sm:w-52">{customerPicker}</div> : null}
+            {!lockTarget ? (
+              // 컴포저에는 보이는 라벨이 없어 sr-only 라벨로 접근 가능한 이름을 준다.
+              <label className="shrink-0 sm:w-52">
+                <span className="sr-only">고객/리드</span>
+                {customerPicker}
+              </label>
+            ) : null}
             <textarea
               value={body}
               onChange={(event) => setBody(event.target.value)}
