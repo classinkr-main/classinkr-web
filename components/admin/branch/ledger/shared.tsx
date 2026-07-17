@@ -10,6 +10,7 @@ import { Loader2 } from "lucide-react"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { ledgerMonthConfirmed, ledgerMonthSplit } from "@/lib/branch/computations/revenue-core"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
+import { classifySalesLedgerProductCategory } from "@/lib/branch/product-category"
 import type { BranchKpiMemberRow, BranchPipelineRow } from "../types"
 
 // 포매터 SSOT는 lib/branch/ledger-format — 섹션 파일들이 shared를 단일 진입점으로 쓰도록 재수출한다.
@@ -96,6 +97,57 @@ export function mergedWeeklyFromMetadata(metadata: Record<string, unknown> | nul
   if (!weekly.every((value) => typeof value === "number" && Number.isFinite(value))) return null
   const weeks = weekly.map((value) => Math.max(value, 0))
   return weeks.some((value) => value > 0) ? weeks : null
+}
+
+// SalesLedgerWorkbench에서 물리 이동(웨이브 7 2단 F5): 워크벤치 본체와 ledger/RevMatrix가
+// 함께 쓰는 확도/상품군/주차 검수 판독 헬퍼 — 로직 무변경.
+export function isDraftConfidence(value: unknown): value is DraftConfidence {
+  return value === "expected" || value === "high-confidence" || value === "confirmed"
+}
+
+export function draftConfidenceFromMetadata(metadata: Record<string, unknown> | null | undefined): DraftConfidence {
+  const raw = metadataString(metadata, "confidence")?.replace("_", "-")
+  return isDraftConfidence(raw) ? raw : "expected"
+}
+
+export function isStoredProductCategory(value: unknown): value is Exclude<RevProductCategory, "all"> {
+  return value === "software" || value === "hardware" || value === "unknown"
+}
+
+export function productCategoryFromText(...values: Array<string | null | undefined>): Exclude<RevProductCategory, "all"> {
+  if (values.length >= 0) return classifySalesLedgerProductCategory({ rawText: values })
+  const haystack = values.filter(Boolean).join(" ").toLowerCase()
+  if (!haystack) return "unknown"
+  if (/(^|\s)(hw|hardware)(\s|$)|하드웨어|전자칠판|칠판|보드|board|device|display|camera|terminal|tablet|장비|기기|패드/.test(haystack)) {
+    return "hardware"
+  }
+  if (/(^|\s)(sw|software|saas)(\s|$)|소프트웨어|라이선스|license|licence|subscription|classin|online|cloud|platform|프로그램|서비스/.test(haystack)) {
+    return "software"
+  }
+  return "unknown"
+}
+
+export function rowProductCategory(row: Pick<LedgerRevenueRow, "customer" | "productVersion" | "draftMetadata">): Exclude<RevProductCategory, "all"> {
+  const stored = metadataString(row.draftMetadata, "productCategory")
+  if (stored === "hardware") return "hardware"
+  // 저장값이 software든 legacy unknown이든 HW가 아니면 전부 SW로 본다.
+  if (isStoredProductCategory(stored)) return "software"
+  return classifySalesLedgerProductCategory({
+    product: row.productVersion,
+    account: row.customer,
+    rawText: row.draftMetadata,
+  })
+}
+
+// 주차 입력(explicit) 합계와 월 금액이 어긋난 검수 대상 행. 반올림 오차 ¥1 이내는 정상으로 본다.
+// 시트에서 주차 셀만 고치고 월 합계를 안 고친(또는 반대) 케이스를 잡는 용도.
+export function rowWeeklyMismatch(row: LedgerRevenueRow, month: string): { weekly: number; monthly: number; diff: number } | null {
+  const split = rowWeeklySplit(row, month)
+  if (split.source !== "explicit") return null
+  const monthly = rowMonthAmount(row, month)
+  const diff = split.total - monthly
+  if (Math.abs(diff) <= 1) return null
+  return { weekly: split.total, monthly, diff }
 }
 
 // 웨이브 7 2단(I4) — 낙관적 잠금 충돌(409 {error, draft})의 사용자 안내 문구 SSOT. 큐 행 배지
