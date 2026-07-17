@@ -179,7 +179,12 @@ export default function BranchDashboardClient() {
     window.history.replaceState(null, "", url.toString())
   }, [])
 
+  // 재시도(품질 웨이브 3 — 항목 3)를 위해 마지막으로 연 딜의 원본 row를 기억해둔다 —
+  // selectedDeal(누적된 상세 필드 포함) 대신 이 최소 shape을 다시 넘겨 openDealLog를 그대로 재실행한다.
+  const lastDealRowRef = useRef<{ id: string; customer: string; manager: string | null; team: string | null; region: string | null; revenue: number; stageLabel?: string; stageColor?: string; probability?: number } | null>(null)
+
   const openDealLog = useCallback(async (row: { id: string; customer: string; manager: string | null; team: string | null; region: string | null; revenue: number; stageLabel?: string; stageColor?: string; probability?: number }) => {
+    lastDealRowRef.current = row
     setSelectedDeal({
       id: row.id, customer: row.customer, manager: row.manager, team: row.team,
       region: row.region, amount: row.revenue,
@@ -213,10 +218,19 @@ export default function BranchDashboardClient() {
         monthlyHighConfidence: d.monthly_high_conf ?? undefined,
         loadingDetail: false,
       } : cur)
-    } catch {
-      setSelectedDeal((cur) => cur && cur.id === row.id ? { ...cur, loadingDetail: false } : cur)
+    } catch (e) {
+      // 품질 웨이브 3 — 항목 3. 이전엔 여기서 에러를 완전히 삼켜 월별 매출 로그 섹션이
+      // 그냥 사라졌다(로딩만 멈추고 아무 설명 없음) — 이제 DealModal에 detailError로
+      // 전달해 "상세를 불러오지 못했습니다 — 재시도" 인라인 문구를 보여준다.
+      const message = e instanceof Error ? e.message : "상세를 불러오지 못했습니다."
+      setSelectedDeal((cur) => cur && cur.id === row.id ? { ...cur, loadingDetail: false, detailError: message } : cur)
     }
   }, [])
+
+  const retryDealDetail = useCallback(() => {
+    const row = lastDealRowRef.current
+    if (row) void openDealLog(row)
+  }, [openDealLog])
 
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   const summaryUrl = `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}`
@@ -500,7 +514,7 @@ export default function BranchDashboardClient() {
         </div>
       </div>
 
-      <DealModal deal={selectedDeal} onClose={() => setSelectedDeal(null)} />
+      <DealModal deal={selectedDeal} onClose={() => setSelectedDeal(null)} onRetryDetail={retryDealDetail} />
     </div>
   )
 }

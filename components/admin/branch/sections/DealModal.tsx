@@ -1,10 +1,11 @@
 "use client"
-import { useEffect, useRef } from "react"
+import { useRef } from "react"
 import { X } from "lucide-react"
 import { cny, cnyExact } from "@/lib/branch/money-format"
 import { ledgerMonthConfirmed } from "@/lib/branch/computations/revenue-core"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { teamColorOf } from "@/lib/branch/team-colors"
+import { useDialogFocus } from "../../use-dialog-focus"
 import MoneyValue from "../MoneyValue"
 
 export interface DealModalDeal {
@@ -30,6 +31,10 @@ export interface DealModalDeal {
   monthlyConfirmed?: Record<string, number>
   monthlyHighConfidence?: Record<string, number>
   loadingDetail?: boolean
+  /** 품질 웨이브 3 — 항목 3. 상세(월별 매출 로그 등) 로드가 실패했을 때의 에러 메시지.
+   *  이전엔 BranchDashboardClient의 openDealLog catch가 이를 삼켜 월별 로그 섹션이
+   *  그냥 증발했다 — 이제 인라인으로 "상세를 불러오지 못했습니다" + 재시도를 보여준다. */
+  detailError?: string | null
 }
 
 function summarizeProductMix(productVersion: string | null | undefined) {
@@ -49,26 +54,23 @@ function summarizeProductMix(productVersion: string | null | undefined) {
 }
 
 
-export default function DealModal({ deal, onClose }: { deal: DealModalDeal | null; onClose: () => void }) {
+export default function DealModal({
+  deal,
+  onClose,
+  onRetryDetail,
+}: {
+  deal: DealModalDeal | null
+  onClose: () => void
+  /** 품질 웨이브 3 — 항목 3. detailError가 있을 때 "다시 시도" 버튼이 호출한다. */
+  onRetryDetail?: () => void
+}) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
   const dealId = deal?.id ?? null
 
-  useEffect(() => {
-    if (!deal) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
-    document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
-  }, [deal, onClose])
-
-  useEffect(() => {
-    if (!dealId) return
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    closeButtonRef.current?.focus()
-
-    return () => {
-      previouslyFocused?.focus()
-    }
-  }, [dealId])
+  // 포커스 캡처/복귀·Escape 닫기는 공용 훅(use-dialog-focus)으로 추출됨(품질 웨이브 3 — 항목 4).
+  // dealId를 키로 써서 같은 딜의 상세가 로딩되는 동안(loadingDetail true→false) 포커스를
+  // 다시 훔치지 않는다 — 원래 동작과 동일.
+  useDialogFocus(dealId, onClose, closeButtonRef)
 
   if (!deal) return null
 
@@ -214,11 +216,11 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
           </div>
         )}
 
-        {(deal.loadingDetail || monthlyEntries.length > 0) && (
+        {(deal.loadingDetail || deal.detailError || monthlyEntries.length > 0) && (
           <div className="mt-3.5 rounded-[10px] border border-[rgba(0,0,0,0.06)] bg-white">
             <div className="flex items-baseline justify-between border-b border-[rgba(0,0,0,0.06)] px-3 py-2">
               <p className="text-[11px] font-bold text-[#111110]">월별 매출 로그</p>
-              {monthlyEntries.length > 0 && (
+              {!deal.detailError && monthlyEntries.length > 0 && (
                 <p className="text-[10.5px] text-[#615D59]">
                   확정 <span className="font-bold text-[#B43E3E]"><MoneyValue value={confirmedSum} /></span>
                   {targetVal ? <> / 목표 <MoneyValue value={targetVal} /></> : ""}
@@ -229,6 +231,19 @@ export default function DealModal({ deal, onClose }: { deal: DealModalDeal | nul
               <div className="px-3 py-4">
                 <div className="h-4 animate-pulse rounded bg-[#f0f0ec]" />
                 <div className="mt-2 h-4 w-3/4 animate-pulse rounded bg-[#f0f0ec]" />
+              </div>
+            ) : deal.detailError ? (
+              <div className="flex flex-wrap items-center gap-2 px-3 py-4 text-[12px] text-[#615D59]">
+                <span>상세를 불러오지 못했습니다 — 재시도</span>
+                {onRetryDetail && (
+                  <button
+                    type="button"
+                    onClick={onRetryDetail}
+                    className="font-semibold text-[#111110] underline underline-offset-2"
+                  >
+                    다시 시도
+                  </button>
+                )}
               </div>
             ) : (
               <ul className="max-h-[260px] overflow-y-auto px-1.5 py-1.5">
