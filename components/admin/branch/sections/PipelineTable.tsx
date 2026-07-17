@@ -9,9 +9,72 @@ const SELECTABLE_TEAMS = TEAMS.filter((t) => t !== "ALL") as Exclude<Team, "ALL"
 
 function fmt(n: number) { return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(n) }
 
-type RevenueSort = "desc" | "asc"
-
 type Row = BranchPipelineRow
+
+type SortKey = "customer" | "manager" | "team" | "region" | "revenue"
+type SortDir = "asc" | "desc"
+
+// 컬럼을 새로 클릭했을 때 적용할 기본 방향 — 매출은 desc(높은순 먼저), 텍스트 컬럼은
+// asc(가나다순)가 자연스러운 기본값이다. 같은 컬럼을 다시 클릭하면 토글.
+const SORT_DEFAULT_DIR: Record<SortKey, SortDir> = {
+  customer: "asc",
+  manager: "asc",
+  team: "asc",
+  region: "asc",
+  revenue: "desc",
+}
+
+function compareRows(a: Row, b: Row, key: SortKey, dir: SortDir): number {
+  const mul = dir === "asc" ? 1 : -1
+  const diff = key === "revenue" ? a.revenue - b.revenue : String(a[key] ?? "").localeCompare(String(b[key] ?? ""), "ko")
+  if (diff !== 0) return diff * mul
+  return a.customer.localeCompare(b.customer, "ko")
+}
+
+// 공백으로 나뉜 다중 토큰 AND 매칭 — "김민 BD"처럼 담당자/팀 등 서로 다른 필드에
+// 걸쳐 있어도 매치되게 한다(토큰별로 어느 필드에서든 부분일치하면 통과).
+function tokenize(query: string): string[] {
+  return query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+}
+
+function matchesTokens(tokens: string[], fields: Array<string | null | undefined>): boolean {
+  if (tokens.length === 0) return true
+  return tokens.every((token) => fields.some((f) => String(f ?? "").toLowerCase().includes(token)))
+}
+
+function SortableTh({
+  label, sortKeyValue, align, sortKey, sortDir, onSort, className,
+}: {
+  label: string
+  sortKeyValue: SortKey
+  align: "left" | "center" | "right"
+  sortKey: SortKey
+  sortDir: SortDir
+  onSort: (key: SortKey) => void
+  className: string
+}) {
+  const active = sortKey === sortKeyValue
+  return (
+    <th aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"} className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKeyValue)}
+        className={`inline-flex items-center gap-1 font-medium transition hover:text-[#111110] ${
+          active ? "text-[#111110]" : ""
+        } ${align === "right" ? "flex-row-reverse" : ""}`}
+      >
+        <span>{label}</span>
+        {active ? (
+          sortDir === "asc"
+            ? <ArrowUpNarrowWide className="h-3 w-3 shrink-0" aria-hidden="true" />
+            : <ArrowDownNarrowWide className="h-3 w-3 shrink-0" aria-hidden="true" />
+        ) : (
+          <span className="h-3 w-3 shrink-0" aria-hidden="true" />
+        )}
+      </button>
+    </th>
+  )
+}
 
 function MultiSelect({
   label,
@@ -96,7 +159,7 @@ function MultiSelect({
               >
                 <span className="truncate">{opt}</span>
                 <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${
-                  checked ? "border-emerald-600 bg-emerald-600 text-white" : "border-[#d8d8d4] bg-white"
+                  checked ? "border-[#084734] bg-[#084734] text-white" : "border-[#d8d8d4] bg-white"
                 }`}>
                   {checked && <span className="text-[10px] font-bold leading-none">✓</span>}
                 </span>
@@ -129,8 +192,15 @@ export default function PipelineTable({
   const [selectedTeams, setSelectedTeams] = useState<Set<string>>(initialTeams)
   const [selectedManagers, setSelectedManagers] = useState<Set<string>>(new Set())
   const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set())
-  const [revenueSort, setRevenueSort] = useState<RevenueSort>("desc")
+  const [sortKey, setSortKey] = useState<SortKey>("revenue")
+  const [sortDir, setSortDir] = useState<SortDir>("desc")
   const [page, setPage] = useState(1)
+
+  function handleSort(key: SortKey) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    else { setSortKey(key); setSortDir(SORT_DEFAULT_DIR[key]) }
+    setPage(1)
+  }
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey)
   const pipelineRows = pipeline.data?.rows
@@ -138,19 +208,39 @@ export default function PipelineTable({
   const teamOptions = team === "ALL" ? SELECTABLE_TEAMS : [team]
 
   // 장부 크로스링크 — 현재 team/period/selectedMonth를 그대로 동봉해 장부로 넘어가도
-  // 컨텍스트가 끊기지 않게 한다(파라미터 이름은 SalesLedgerWorkbench의 URL 파싱부 기준).
+  // 컨텍스트가 끊기지 않게 한다(파라미터 이름은 SalesLedgerWorkbench의 URL 파싱부 기준:
+  // q/mgr/region). 장부의 담당·지역 필터는 단일 select라 멀티선택 중 첫 번째 값만
+  // 전달하고 나머지는 생략한다 — 정보 손실은 crossLinkNotice로 링크 title에 고지한다.
   const ledgerHref = useMemo(() => {
     const base = new URLSearchParams()
     base.set("lens", "rev")
     if (team !== "ALL") base.set("team", team)
     if (period !== "Q") base.set("period", period)
     if (period === "M") base.set("month", selectedMonth)
+    const trimmedQuery = query.trim()
+    if (trimmedQuery) base.set("q", trimmedQuery)
+    const managerList = Array.from(selectedManagers)
+    if (managerList.length > 0) base.set("mgr", managerList[0])
+    const regionList = Array.from(selectedRegions)
+    if (regionList.length > 0) base.set("region", regionList[0])
     return (extra?: Record<string, string>) => {
       const params = new URLSearchParams(base)
       if (extra) for (const [k, v] of Object.entries(extra)) params.set(k, v)
       return `/admin/branch/ledger?${params.toString()}`
     }
-  }, [team, period, selectedMonth])
+  }, [team, period, selectedMonth, query, selectedManagers, selectedRegions])
+
+  // 멀티선택(담당/지역) 중 장부로 전달되지 않는 나머지 선택값을 링크 title로 고지.
+  const crossLinkNotice = useMemo(() => {
+    const notes: string[] = []
+    if (selectedManagers.size > 1) {
+      notes.push(`담당 ${selectedManagers.size}명 중 "${Array.from(selectedManagers)[0]}"만 장부에 전달(장부는 단일 선택)`)
+    }
+    if (selectedRegions.size > 1) {
+      notes.push(`지역 ${selectedRegions.size}곳 중 "${Array.from(selectedRegions)[0]}"만 장부에 전달(장부는 단일 선택)`)
+    }
+    return notes.length > 0 ? notes.join(" · ") : undefined
+  }, [selectedManagers, selectedRegions])
 
   const managerOptions = useMemo(() => {
     if (!rows) return []
@@ -164,23 +254,14 @@ export default function PipelineTable({
 
   const filteredRows = useMemo(() => {
     if (!rows) return []
-    const trimmed = query.trim().toLowerCase()
+    const tokens = tokenize(query)
     return rows
       .filter((row) => selectedTeams.size === 0 || (row.team !== null && selectedTeams.has(row.team)))
       .filter((row) => selectedManagers.size === 0 || (row.manager !== null && selectedManagers.has(row.manager)))
       .filter((row) => selectedRegions.size === 0 || (row.region !== null && selectedRegions.has(row.region)))
-      .filter((row) => {
-        if (!trimmed) return true
-        return [row.customer, row.manager, row.team, row.region].some((value) =>
-          String(value ?? "").toLowerCase().includes(trimmed),
-        )
-      })
-      .sort((a, b) => {
-        const diff = revenueSort === "desc" ? b.revenue - a.revenue : a.revenue - b.revenue
-        if (diff !== 0) return diff
-        return a.customer.localeCompare(b.customer, "ko")
-      })
-  }, [query, revenueSort, rows, selectedManagers, selectedRegions, selectedTeams])
+      .filter((row) => matchesTokens(tokens, [row.customer, row.manager, row.team, row.region]))
+      .sort((a, b) => compareRows(a, b, sortKey, sortDir))
+  }, [query, sortKey, sortDir, rows, selectedManagers, selectedRegions, selectedTeams])
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize))
   const safePage = Math.min(page, totalPages)
@@ -196,14 +277,15 @@ export default function PipelineTable({
     selectedManagers.size > 0 ||
     selectedRegions.size > 0 ||
     !teamsAtBaseline ||
-    revenueSort !== "desc"
+    !(sortKey === "revenue" && sortDir === "desc")
 
   function resetFilters() {
     setQuery("")
     setSelectedTeams(team === "ALL" ? new Set() : new Set([team]))
     setSelectedManagers(new Set())
     setSelectedRegions(new Set())
-    setRevenueSort("desc")
+    setSortKey("revenue")
+    setSortDir("desc")
     setPage(1)
   }
 
@@ -222,6 +304,7 @@ export default function PipelineTable({
           <h2 className="text-[13px] font-semibold text-[#111110]/70">REV 고객별 매출</h2>
           <Link
             href={ledgerHref()}
+            title={crossLinkNotice}
             className="text-[11px] font-medium text-[#084734] underline-offset-2 hover:underline"
           >
             장부에서 열기 ↗
@@ -230,17 +313,6 @@ export default function PipelineTable({
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] text-[#111110]/40">{filteredRows.length}건 · {pageSize}개씩</span>
           <span className="mx-1 h-3 w-px bg-[rgba(0,0,0,0.08)]" aria-hidden="true" />
-          <button
-            type="button"
-            onClick={() => { setRevenueSort((v) => (v === "desc" ? "asc" : "desc")); setPage(1) }}
-            className="inline-flex h-7 items-center gap-1 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[11px] font-medium text-[#111110]/65 transition hover:border-[#111110]/25 hover:text-[#111110]"
-            title="매출 정렬 토글"
-          >
-            {revenueSort === "desc"
-              ? <ArrowDownNarrowWide className="h-3 w-3" aria-hidden="true" />
-              : <ArrowUpNarrowWide className="h-3 w-3" aria-hidden="true" />}
-            <span>매출 {revenueSort === "desc" ? "높은순" : "낮은순"}</span>
-          </button>
           <button
             type="button"
             onClick={resetFilters}
@@ -301,11 +373,11 @@ export default function PipelineTable({
           </colgroup>
           <thead className="bg-[#FAFAF8] text-[#111110]/60">
             <tr>
-              <th className="px-5 py-1 text-left">고객사</th>
-              <th className="px-3 py-1">담당 매니저</th>
-              <th className="px-3 py-1">팀</th>
-              <th className="px-3 py-1">지역</th>
-              <th className="px-5 py-1 text-right">매출</th>
+              <SortableTh label="고객사" sortKeyValue="customer" align="left" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-5 py-1 text-left" />
+              <SortableTh label="담당 매니저" sortKeyValue="manager" align="center" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-3 py-1 text-center" />
+              <SortableTh label="팀" sortKeyValue="team" align="center" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-3 py-1 text-center" />
+              <SortableTh label="지역" sortKeyValue="region" align="center" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-3 py-1 text-center" />
+              <SortableTh label="매출" sortKeyValue="revenue" align="right" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-5 py-1 text-right" />
             </tr>
           </thead>
           <tbody>
@@ -339,7 +411,7 @@ export default function PipelineTable({
                       href={ledgerHref({ q: r.customer })}
                       onClick={(e) => e.stopPropagation()}
                       className="shrink-0 text-[11px] font-medium text-[#084734] opacity-50 transition hover:opacity-100"
-                      title="매출 장부에서 열기"
+                      title={crossLinkNotice ? `매출 장부에서 열기 · ${crossLinkNotice}` : "매출 장부에서 열기"}
                     >
                       ↗
                     </Link>
