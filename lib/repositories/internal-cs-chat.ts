@@ -973,7 +973,7 @@ function toNullableNumber(value: unknown) {
 // 마이그레이션 미적용(라이브) 시 internal_cs_metrics 함수 자체가 없다 — not-ready 로 잡아 빈 집계로 안전 렌더.
 function isInternalCsFunctionMissing(error: { code?: string; message?: string; details?: string; hint?: string }) {
   const text = [error.code, error.message, error.details, error.hint].filter(Boolean).join(" ").toLowerCase()
-  return (
+  const matched =
     text.includes("pgrst202") ||
     text.includes("42883") ||
     (text.includes("internal_cs_metrics") &&
@@ -981,7 +981,16 @@ function isInternalCsFunctionMissing(error: { code?: string; message?: string; d
         text.includes("could not find") ||
         text.includes("schema cache") ||
         text.includes("function")))
-  )
+
+  // 정확한 함수-부재 코드(PGRST202/42883) 없이 텍스트 휴리스틱으로만 잡힌 경우는 permission denied 류가
+  // 빈 계기판으로 무음 마스킹될 수 있어 원문을 남긴다. 판정 결과 자체는 바꾸지 않는다.
+  const exactCode = /^(pgrst202|42883)$/i.test(error.code ?? "")
+  if (matched && !exactCode) {
+    console.warn(
+      `[internal-cs-chat] metrics 오류를 not-ready로 흡수: ${[error.code, error.message, error.details, error.hint].filter(Boolean).join(" ")}`
+    )
+  }
+  return matched
 }
 
 /**

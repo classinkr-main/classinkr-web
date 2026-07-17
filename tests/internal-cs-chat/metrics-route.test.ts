@@ -84,10 +84,33 @@ describe("getInternalCsMetricsAggregate", () => {
       },
     })
     mocks.createSupabaseAdminClient.mockReturnValue({ rpc })
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined)
 
     const aggregate = await repo.getInternalCsMetricsAggregate(30)
 
     expect(aggregate).toEqual(repo.emptyInternalCsMetricsAggregate(30))
+    // 정확한 함수-부재 코드는 기대된 상태 — 경고 없이 조용히 흡수한다.
+    expect(warnSpy).not.toHaveBeenCalled()
+  })
+
+  it("warns when a text-fallback match absorbs a non-missing-function error (무음 마스킹 방지)", async () => {
+    const repo = await importRealRepo()
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: {
+        code: "42501",
+        message: "permission denied for function internal_cs_metrics",
+      },
+    })
+    mocks.createSupabaseAdminClient.mockReturnValue({ rpc })
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+
+    const aggregate = await repo.getInternalCsMetricsAggregate(7)
+
+    // 판정 로직은 불변: 여전히 빈 집계로 흡수하되, 원문이 로그로 남는다.
+    expect(aggregate).toEqual(repo.emptyInternalCsMetricsAggregate(7))
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("not-ready로 흡수"))
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("permission denied"))
   })
 
   it("throws on an unexpected database error", async () => {

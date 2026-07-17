@@ -331,7 +331,10 @@ export async function judgeRegression(input: {
         body: JSON.stringify(body),
       }
     )
-    if (!response.ok) return null
+    if (!response.ok) {
+      console.warn(`[regression-judge] ${JUDGE_MODEL} 응답 실패 — HTTP ${response.status}`)
+      return null
+    }
     const data = (await response.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[]
     }
@@ -339,18 +342,27 @@ export async function judgeRegression(input: {
       ?.map((part) => (typeof part.text === "string" ? part.text : ""))
       .join("")
       .trim()
-    if (!text) return null
+    if (!text) {
+      console.warn(`[regression-judge] ${JUDGE_MODEL} 응답에 판정 텍스트가 없습니다`)
+      return null
+    }
 
     const parsed = JSON.parse(text) as { outcome?: unknown; rationale?: unknown }
     const outcome =
       parsed.outcome === "pass" || parsed.outcome === "needs_fix" ? parsed.outcome : null
-    if (!outcome) return null
+    if (!outcome) {
+      console.warn(`[regression-judge] 판정 파싱 불가 — outcome 값이 pass/needs_fix 가 아닙니다`)
+      return null
+    }
     const rationale =
       typeof parsed.rationale === "string" && parsed.rationale.trim()
         ? parsed.rationale.trim()
         : "(사유 없음)"
     return { outcome, rationale, model: JUDGE_MODEL }
-  } catch {
+  } catch (error) {
+    console.warn(
+      `[regression-judge] 심판 호출 실패: ${error instanceof Error ? error.message : String(error)}`
+    )
     return null
   }
 }

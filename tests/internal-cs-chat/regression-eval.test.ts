@@ -241,15 +241,17 @@ describe("judgeRegression", () => {
     vi.unstubAllGlobals()
   })
 
-  it("returns null without an API key (no fetch)", async () => {
+  it("returns null without an API key (no fetch, no warn — 설정 상태는 조용히)", async () => {
     delete process.env.GEMINI_API_KEY
     const fetchSpy = vi.fn()
     vi.stubGlobal("fetch", fetchSpy)
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined)
 
     const verdict = await judgeRegression({ question: "q", reference: "r", regenerated: "g" })
 
     expect(verdict).toBeNull()
     expect(fetchSpy).not.toHaveBeenCalled()
+    expect(warnSpy).not.toHaveBeenCalled()
   })
 
   it("parses a pass/needs_fix verdict and embeds both answers in the prompt", async () => {
@@ -275,10 +277,13 @@ describe("judgeRegression", () => {
     expect(fetchSpy.mock.calls[0][1].headers["x-goog-api-key"]).toBe("test-key")
   })
 
-  it("returns null on a non-ok response or unparseable body", async () => {
+  it("returns null on a non-ok response or unparseable body, warning with the failure detail", async () => {
     process.env.GEMINI_API_KEY = "test-key"
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, json: async () => ({}) })))
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined)
+
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) })))
     expect(await judgeRegression({ question: "q", reference: "r", regenerated: "g" })).toBeNull()
+    expect(warnSpy).toHaveBeenLastCalledWith(expect.stringContaining("HTTP 503"))
 
     vi.stubGlobal(
       "fetch",
@@ -288,6 +293,24 @@ describe("judgeRegression", () => {
       }))
     )
     expect(await judgeRegression({ question: "q", reference: "r", regenerated: "g" })).toBeNull()
+    // JSON.parse throw → catch 경로: 에러 메시지를 포함해 경고한다.
+    expect(warnSpy).toHaveBeenLastCalledWith(expect.stringContaining("심판 호출 실패"))
+
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("network down") }))
+    expect(await judgeRegression({ question: "q", reference: "r", regenerated: "g" })).toBeNull()
+    expect(warnSpy).toHaveBeenLastCalledWith(expect.stringContaining("network down"))
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: JSON.stringify({ outcome: "maybe", rationale: "?" }) }] } }],
+        }),
+      }))
+    )
+    expect(await judgeRegression({ question: "q", reference: "r", regenerated: "g" })).toBeNull()
+    expect(warnSpy).toHaveBeenLastCalledWith(expect.stringContaining("파싱 불가"))
   })
 })
 

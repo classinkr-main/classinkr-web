@@ -7,6 +7,9 @@ import {
 } from "@/lib/internal-cs-chat/regression-eval"
 import { isInternalCsChatNotReadyError } from "@/lib/repositories/internal-cs-chat"
 
+// 후보 최대 10건 × (재생성 + 심판) 순차 LLM 호출 — 기본 함수 타임아웃을 넘을 수 있어 1분으로 연장.
+export const maxDuration = 60
+
 // 회귀 자동 평가(계약 2) — "자동 평가 실행" 버튼이 소비한다.
 // 응답의 suggestedOutcome 은 제안일 뿐이며 DB 의 regression_outcome 을 변경하지 않는다.
 // 확정은 기존 판정 PATCH(messages/[messageId])의 몫이다.
