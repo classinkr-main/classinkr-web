@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import {
   buildLeadContacts,
@@ -155,5 +155,142 @@ describe("computeCustomer360Risk", () => {
 
   it("maps a single overdue task to medium", () => {
     expect(computeCustomer360Risk({ overdueTaskCount: 1, riskEventCount: 0, nearestExpireAt: null, totalBalance: null, now: NOW }).severity).toBe("medium")
+  })
+})
+
+// ── getCrmCustomer360 오케스트레이터 (mocked harness) ────────────────────────
+// unified-customers.test.ts의 vi.doMock 패턴 — 서버 의존만 목킹하고
+// 순수 모듈(origin 분류·priority·service-risk)은 실물을 쓴다.
+
+function okEventsResult() {
+  return {
+    generatedAt: NOW.toISOString(),
+    health: { ok: true, message: null },
+    summary: { total: 0, returned: 0, recordings: 0, risks: 0, openNextActions: 0 },
+    pagination: { limit: 20, offset: 0, returned: 0, total: 0, hasMore: false, nextOffset: null },
+    rows: [],
+  }
+}
+
+function okTasksResult() {
+  return {
+    generatedAt: NOW.toISOString(),
+    health: { ok: true, message: null },
+    summary: { total: 0, returned: 0, open: 0, overdue: 0, dueToday: 0, snoozed: 0, done: 0 },
+    pagination: { limit: 50, offset: 0, returned: 0, total: 0, hasMore: false, nextOffset: null },
+    rows: [],
+  }
+}
+
+function okDealsResult() {
+  return {
+    generatedAt: NOW.toISOString(),
+    health: { ok: true, message: null },
+    summary: { total: 0, returned: 0, open: 0, won: 0, lost: 0, openAmount: 0, noNextActionCount: 0 },
+    pagination: { limit: 20, offset: 0, returned: 0, total: 0, hasMore: false, nextOffset: null },
+    rows: [],
+  }
+}
+
+async function loadCustomer360(options?: {
+  lead?: ReturnType<typeof makeLead> | null
+  neoLink?: { targetId: string } | null
+  neoLinkFail?: boolean
+}) {
+  vi.resetModules()
+
+  const findConfirmedLeadNeoLink = options?.neoLinkFail
+    ? vi.fn().mockRejectedValue(new Error("neo link unavailable"))
+    : vi.fn().mockResolvedValue(options?.neoLink ?? null)
+
+  vi.doMock("@/lib/repositories/leads", () => ({
+    getLeadById: vi.fn().mockResolvedValue(options?.lead ?? null),
+  }))
+  vi.doMock("@/lib/admin-crm-customers-neo", () => ({
+    getNeoCrmCustomerDetail: vi.fn().mockResolvedValue(makeNeoDetail()),
+  }))
+  vi.doMock("@/lib/repositories/crm-source-links", () => ({
+    findConfirmedLeadNeoLink,
+  }))
+  vi.doMock("@/lib/repositories/crm-events", () => ({
+    listCrmCustomerEvents: vi.fn().mockResolvedValue(okEventsResult()),
+  }))
+  vi.doMock("@/lib/repositories/crm-tasks", () => ({
+    listCrmTasks: vi.fn().mockResolvedValue(okTasksResult()),
+  }))
+  vi.doMock("@/lib/repositories/crm-deals", () => ({
+    listCrmDeals: vi.fn().mockResolvedValue(okDealsResult()),
+  }))
+  vi.doMock("@/lib/repositories/crm-account-money", () => ({
+    EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY: {
+      swCumulativeCNY: null,
+      hwCumulativeCNY: null,
+      hwBoardCount: null,
+      matched: false,
+    },
+    getCrmAccountProductSummary: vi.fn().mockResolvedValue({
+      swCumulativeCNY: null,
+      hwCumulativeCNY: null,
+      hwBoardCount: null,
+      matched: false,
+    }),
+  }))
+
+  const module = await import("@/lib/repositories/crm-customer-360")
+  return { getCrmCustomer360: module.getCrmCustomer360, findConfirmedLeadNeoLink }
+}
+
+const LEAD_KEY = { source: "lead", entityId: "lead-1", targetType: "lead" } as const
+
+describe("getCrmCustomer360 (mocked harness)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("wires origin/crmRegistered/neoAccountId for a site lead with a confirmed NEO link", async () => {
+    const { getCrmCustomer360, findConfirmedLeadNeoLink } = await loadCustomer360({
+      lead: makeLead({ source: "demo_modal" }),
+      neoLink: { targetId: "neo-acc-77" },
+    })
+
+    const result = await getCrmCustomer360(LEAD_KEY, { now: NOW })
+
+    expect(findConfirmedLeadNeoLink).toHaveBeenCalledWith("lead-1")
+    expect(result.found).toBe(true)
+    expect(result.header?.source).toBe("lead")
+    expect(result.origin).toBe("site")
+    expect(result.crmRegistered).toBe(true)
+    expect(result.neoAccountId).toBe("neo-acc-77")
+    expect(result.health.ok).toBe(true)
+  })
+
+  it("classifies ad-click leads as origin ad and stays unregistered without a link", async () => {
+    const { getCrmCustomer360 } = await loadCustomer360({
+      lead: makeLead({ source: "contact_page", gclid: "g-123" }),
+    })
+
+    const result = await getCrmCustomer360(LEAD_KEY, { now: NOW })
+
+    expect(result.origin).toBe("ad")
+    expect(result.crmRegistered).toBe(false)
+    expect(result.neoAccountId).toBeNull()
+  })
+
+  it("degrades to unregistered with a warning when the NEO-link lookup fails", async () => {
+    const { getCrmCustomer360 } = await loadCustomer360({
+      lead: makeLead(),
+      neoLinkFail: true,
+    })
+
+    const result = await getCrmCustomer360(LEAD_KEY, { now: NOW })
+
+    // 링크 조회 실패는 드로어 전체를 막지 않는다 — 페이로드는 그대로, 미등록 폴백 + 경고만.
+    expect(result.found).toBe(true)
+    expect(result.header).not.toBeNull()
+    expect(result.crmRegistered).toBe(false)
+    expect(result.neoAccountId).toBeNull()
+    expect(result.health.ok).toBe(false)
+    expect(result.health.warnings.join(" ")).toContain("NEO 등록 여부")
   })
 })
