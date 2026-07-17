@@ -3,13 +3,18 @@ import { dealHasColorData } from "@/lib/branch/computations/rev-confirmed"
 import type { DshOutput } from "@/lib/branch/parsers/dsh"
 import type { KpiRow } from "@/lib/branch/parsers/kpi"
 import type { SegRow } from "@/lib/branch/parsers/seg"
+import { REV_RANGE } from "@/lib/branch/parsers/rev"
+import { parseRangeLastRow } from "@/lib/branch/sync/range-truncation"
 import type { HwInbound, HwOutbound, HwStock } from "@/lib/repositories/branch-hw"
 
 export type Severity = "info" | "warn" | "error"
 export interface DqIssue { id: string; severity: Severity; message: string; samples?: unknown[] }
 
-export const DATA_QUALITY_RULE_IDS = ["DQ-2", "DQ-3", "DQ-4", "DQ-7", "DQ-9", "DQ-10", "DQ-11", "DQ-13"] as const
+export const DATA_QUALITY_RULE_IDS = ["DQ-2", "DQ-3", "DQ-4", "DQ-7", "DQ-9", "DQ-10", "DQ-11", "DQ-13", "DQ-15"] as const
 export const DATA_QUALITY_RULE_COUNT = DATA_QUALITY_RULE_IDS.length
+
+// REV_RANGE 상한 사용률 경고 임계값. 90%부터 warning으로 승격해 상한을 늘릴 여유를 준다.
+const REV_RANGE_USAGE_WARN_RATIO = 0.9
 
 export interface DqInputs {
   deals: BranchRevDeal[]; dsh: DshOutput; kpi: KpiRow[]; seg: SegRow[]
@@ -49,6 +54,29 @@ export function runDataQuality(inp: DqInputs): DqIssue[] {
 
   const unmapped = inp.kpi.map((r) => r.member).filter((m) => !inp.dsh.members[m])
   if (unmapped.length) issues.push({ id: "DQ-13", severity: "warn", message: "KPI 멤버 중 DSH 팀 매핑 누락", samples: unmapped })
+
+  // REV_RANGE 상한 사용률 — Sheets API는 선언된 범위를 넘는 행을 에러 없이 조용히 잘라낸다.
+  // 파싱된 최댓값(sheet_row)이 REV_RANGE의 마지막 행에 근접/도달했다면 다음 시트 증가분이
+  // 잘려 나갈 위험 신호다. 상한은 REV_RANGE 문자열에서 파생하며 하드코딩하지 않는다.
+  const revRangeLastRow = parseRangeLastRow(REV_RANGE)
+  if (revRangeLastRow != null && inp.deals.length > 0) {
+    const maxSheetRow = inp.deals.reduce((max, d) => Math.max(max, d.sheet_row), 0)
+    const ratio = maxSheetRow / revRangeLastRow
+    const pct = Math.round(ratio * 100)
+    if (maxSheetRow >= revRangeLastRow) {
+      issues.push({
+        id: "DQ-15", severity: "error",
+        message: `REV 파싱 ${maxSheetRow}행 — 범위 상한(${revRangeLastRow}행)에 도달 · 범위 절단 의심`,
+        samples: [maxSheetRow],
+      })
+    } else if (ratio >= REV_RANGE_USAGE_WARN_RATIO) {
+      issues.push({
+        id: "DQ-15", severity: "warn",
+        message: `REV 행이 범위 상한의 ${pct}%까지 도달 — 상한 증설 검토 (${maxSheetRow}/${revRangeLastRow}행)`,
+        samples: [maxSheetRow],
+      })
+    }
+  }
 
   return issues
 }
