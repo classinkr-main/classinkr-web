@@ -3074,12 +3074,15 @@ const RevMatrixDealRow = memo(function RevMatrixDealRow({
               HW ↗
             </Link>
           ) : (
-            <span className={`shrink-0 text-[10px] font-semibold ${productCategory === "hardware" ? "text-[#7A520F]" : "text-[#A39E98]"}`}>{productCategoryMeta(productCategory).shortLabel}</span>
+            // 품질 웨이브 4 — 항목 8: 실데이터 라벨(SW/HW 구분)은 플레이스홀더 톤(#A39E98)이 아니라
+            // 보조 텍스트 톤(#615D59)으로 승격 — DESIGN.md §2.
+            <span className={`shrink-0 text-[10px] font-semibold ${productCategory === "hardware" ? "text-[#7A520F]" : "text-[#615D59]"}`}>{productCategoryMeta(productCategory).shortLabel}</span>
           )}
         </div>
       </td>
       <td className="border-l border-[#F2F1EE] px-1.5 text-right align-middle" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
-        <span className={`text-[10px] font-semibold ${draftRow ? "text-[#A8741A]" : "text-[#A39E98]"}`}>
+        {/* 품질 웨이브 4 — 항목 8: "시트/장부" 원천 라벨도 실데이터라 #615D59로 승격. */}
+        <span className={`text-[10px] font-semibold ${draftRow ? "text-[#A8741A]" : "text-[#615D59]"}`}>
           {draftRow ? "장부" : "시트"}
         </span>
       </td>
@@ -3201,7 +3204,8 @@ const RevMatrixCategoryRow = memo(function RevMatrixCategoryRow({
             HW ↗
           </Link>
         ) : (
-          <span className="text-[10px] font-semibold text-[#A39E98]">합산</span>
+          // 품질 웨이브 4 — 항목 8: "합산"도 실데이터 라벨이라 #615D59로 승격.
+          <span className="text-[10px] font-semibold text-[#615D59]">합산</span>
         )}
       </td>
       <RevMatrixMonthStrip
