@@ -420,7 +420,8 @@ describe("getCrmUnifiedCustomers", () => {
     const result = await getCrmUnifiedCustomers({ now: NOW })
     expect(result.rows.map((row) => row.key)).toEqual(["lead:1"])
     expect(result.rows[0]).toMatchObject({ crmRegistered: false, firstResponseAt: null })
-    expect(result.sources.warnings.join(" ")).toContain("등록 대기")
+    // 경고 문구는 화면 칩 라벨(홈페이지 유입/미응답)과 같은 이름을 쓴다.
+    expect(result.sources.warnings.join(" ")).toContain("홈페이지 유입")
     expect(result.sources.warnings.join(" ")).toContain("미응답")
   })
 })
