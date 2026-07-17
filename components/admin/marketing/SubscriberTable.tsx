@@ -84,6 +84,24 @@ export default function SubscriberTable({
     setSelectedIds(new Set())
   }, [filterSignature])
 
+  // subscribers prop 자체가 바뀌면(단건 삭제·새로고침 등으로 사라진 행) 선택 집합을
+  // 현재 id 집합과의 교집합으로 정리한다 — 사라진 id가 선택 상태로 남아 벌크 대상에
+  // 끼는 것을 막는다. 교집합이 기존과 같으면 prev를 그대로 반환하므로, "더보기"로
+  // 배열 레퍼런스만 바뀌고 내용은 그대로일 때는 리렌더를 유발하지 않는다.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev
+      const currentIds = new Set(subscribers.map((s) => String(s.id)))
+      let changed = false
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (currentIds.has(id)) next.add(id)
+        else changed = true
+      }
+      return changed ? next : prev
+    })
+  }, [subscribers])
+
   if (subscribers.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-5 py-12 text-center">
