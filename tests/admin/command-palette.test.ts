@@ -23,8 +23,9 @@ describe("admin command palette (admin-nav 파생)", () => {
     expect(chatbotOps?.group).toBe("고객 지원")
   })
 
-  it("groups commands by sidebar section labels (하드웨어 재고=운영·시스템, 가이드 문서=고객 지원)", () => {
-    expect(byHref("/admin/hardware")[0]?.group).toBe("운영·시스템")
+  it("groups commands by sidebar section labels (하드웨어 재고=영업·매출, 가이드 문서=고객 지원)", () => {
+    // 하드웨어 재고는 견적·문서 바로 아래(sales 섹션)로 이동됨 — f25fccbc.
+    expect(byHref("/admin/hardware")[0]?.group).toBe("영업·매출")
     expect(byHref("/admin/docs")[0]?.group).toBe("고객 지원")
   })
 
