@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
     if (sourceSheetRow === null) return NextResponse.json({ error: "sourceSheetRow must be a number" }, { status: 400 })
     if (sourceSnapshot === null) return NextResponse.json({ error: "sourceSnapshot must be an object" }, { status: 400 })
 
-    const draft = await createBranchSalesLedgerDraft({
+    const { draft, dedupedRecent } = await createBranchSalesLedgerDraft({
       kind,
       sourceDealId: optionalString(raw.sourceDealId),
       sourceSheetRow,
@@ -150,7 +150,9 @@ export async function POST(req: NextRequest) {
       metadata,
     }, actor)
 
-    return NextResponse.json({ draft }, { status: 201 })
+    // dedupedRecent=true: 직전 60초 내 동일 입력의 열린 초안을 그대로 돌려준 것(더블클릭/더블탭
+    // 방어, 웨이브7 I1) — 새 리소스를 만들지 않았으므로 201이 아니라 200으로 응답한다.
+    return NextResponse.json({ draft, dedupedRecent }, { status: dedupedRecent ? 200 : 201 })
   } catch (error) {
     console.error("[POST /api/admin/branch/ledger-drafts]", error)
     return notReadyResponse(error) ?? NextResponse.json({ error: "Failed to create sales ledger draft" }, { status: 500 })

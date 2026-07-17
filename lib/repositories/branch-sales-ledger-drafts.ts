@@ -20,6 +20,11 @@ export type BranchSalesLedgerEntryStatus = (typeof BRANCH_SALES_LEDGER_ENTRY_STA
 const NOT_READY_MESSAGE = "매출 장부 입력 큐 DB 마이그레이션이 아직 적용되지 않았습니다."
 const INTERNAL_LEDGER_NOT_READY_MESSAGE = "매출 장부 내부 원장 DB 마이그레이션이 아직 적용되지 않았습니다."
 
+// 웨이브7(I1) — new-row 이중 제출 방어 창(더블클릭/더블탭). new-row는 forecast-add 누적처럼
+// 같은 딜·월에 여러 건이 정당하게 공존할 수 있어 하드 유니크 제약을 걸 수 없다 — 대신 짧은
+// 시간창 내 완전히 동일한 입력을 멱등 반환으로 흡수한다.
+const NEW_ROW_DEDUPE_WINDOW_MS = 60_000
+
 interface BranchSalesLedgerDraftRow {
   id: string
   kind: BranchSalesLedgerDraftKind
@@ -149,6 +154,15 @@ export interface BranchSalesLedgerDraftUpdateInput {
   currency?: string | null
   note?: string | null
   metadata?: Record<string, unknown> | null
+}
+
+export interface BranchSalesLedgerDraftCreateResult {
+  draft: BranchSalesLedgerDraft
+  /**
+   * true면 새로 INSERT하지 않고, 직전 60초 내 생성된 동일(kind=new-row, customer, month, amount)
+   * 열린(draft|checked) 초안을 그대로 반환했다는 뜻이다(웨이브7 I1 — 더블클릭/더블탭 이중 제출 방어).
+   */
+  dedupedRecent: boolean
 }
 
 export interface ListBranchSalesLedgerDraftsOptions {
@@ -433,11 +447,60 @@ export async function listBranchSalesLedgerEntries(
   }
 }
 
+/**
+ * new-row 이중 제출 방어(웨이브7 I1): 완전히 동일한 (kind=new-row, customer_name, ledger_month,
+ * amount)를 갖고 아직 열려 있는(draft|checked) 초안이 직전 NEW_ROW_DEDUPE_WINDOW_MS 내에
+ * 생성됐으면 그 행을 반환한다. edit-row는 호출하지 않는다(정정은 딜·월당 1건이 자연스러운
+ * 다른 방어선 — 적용 시 유일성 인덱스 — 을 이미 갖고 있어 이 창 기반 방어가 필요 없다).
+ */
+async function findRecentOpenNewRowDraft(params: {
+  customerName: string
+  month: string
+  amount: number
+}): Promise<BranchSalesLedgerDraftRow | null> {
+  const supabase = createSupabaseAdminClient()
+  const since = new Date(Date.now() - NEW_ROW_DEDUPE_WINDOW_MS).toISOString()
+
+  const { data, error } = await supabase
+    .from("branch_sales_ledger_drafts")
+    .select("*")
+    .eq("kind", "new-row")
+    .eq("customer_name", params.customerName)
+    .eq("ledger_month", params.month)
+    .eq("amount", params.amount)
+    .in("status", ["draft", "checked"])
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    if (isMissingDraftsTableError(error)) throw new Error(NOT_READY_MESSAGE)
+    throw new Error(`[branch-sales-ledger-drafts] 중복 확인 실패: ${error.message}`)
+  }
+
+  return (data as BranchSalesLedgerDraftRow | null) ?? null
+}
+
 export async function createBranchSalesLedgerDraft(
   input: BranchSalesLedgerDraftCreateInput,
   actor: string,
-): Promise<BranchSalesLedgerDraft> {
+): Promise<BranchSalesLedgerDraftCreateResult> {
   const supabase = createSupabaseAdminClient()
+
+  if (input.kind === "new-row") {
+    const normalizedCustomer = compactString(input.customer) ?? "고객명 미입력"
+    const normalizedAmount = amountOrZero(input.amount)
+    const existing = await findRecentOpenNewRowDraft({
+      customerName: normalizedCustomer,
+      month: input.month,
+      amount: normalizedAmount,
+    })
+    if (existing) {
+      return { draft: toDraft(existing), dedupedRecent: true }
+    }
+  }
+
   const { data, error } = await supabase
     .from("branch_sales_ledger_drafts")
     .insert(buildInsert(input, actor))
@@ -450,7 +513,7 @@ export async function createBranchSalesLedgerDraft(
   }
 
   revalidateTag(BRANCH_SALES_LEDGER_DRAFTS_CACHE_TAG, "max")
-  return toDraft(data as BranchSalesLedgerDraftRow)
+  return { draft: toDraft(data as BranchSalesLedgerDraftRow), dedupedRecent: false }
 }
 
 export async function updateBranchSalesLedgerDraft(

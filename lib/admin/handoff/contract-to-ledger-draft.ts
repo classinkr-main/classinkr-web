@@ -120,7 +120,13 @@ export async function proposeLedgerDraftForSignedContract(
     const sourceAmountLabel =
       sourceAmount != null ? `₩${Math.round(sourceAmount).toLocaleString("ko-KR")}` : "미상"
 
-    const draft = await createBranchSalesLedgerDraft(
+    // amount:0은 의도적 플레이스홀더다(아래 참고) — 웨이브7(20260718)에서 추가된
+    // branch_sales_ledger_drafts_amount_positive_check CHECK는 status가 draft인 동안은 0원을
+    // 허용하고, checked/applied로 전이할 때만 amount>0을 강제하므로 이 INSERT는 계속 안전하다.
+    // createBranchSalesLedgerDraft는 웨이브7(I1)부터 { draft, dedupedRecent }를 반환한다 —
+    // 이 핸드오프는 딜 단위 dedup(hasForecastDraftForDeal)을 이미 별도로 하므로 dedupedRecent는
+    // 무시한다(어느 쪽이든 안전하게 기존/신규 draft 하나를 돌려받는다).
+    const { draft } = await createBranchSalesLedgerDraft(
       {
         kind: "new-row",
         sourceDealId: deal.id,
