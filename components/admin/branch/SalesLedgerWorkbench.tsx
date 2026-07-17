@@ -4811,13 +4811,16 @@ export default function SalesLedgerWorkbench() {
     }
   }, [detail, draftForm, lens, period, selectedMonth, selectedRow, team])
 
-  const saveDraft = useCallback(async (kind: DraftKind) => {
+  // 반환값: 서버에 실제로 저장됐으면 true, 로컬 폴백(장부 적용 불가)이면 false — InputRailSection이
+  // 이 값으로 저장 성공/실패 인라인 메시지를 낸다(항목 5).
+  const saveDraft = useCallback(async (kind: DraftKind): Promise<boolean> => {
     setDraftSaving(true)
     try {
-      await createDraft(buildDraftInput(kind))
+      const draft = await createDraft(buildDraftInput(kind))
       if (kind === "new-row") {
         setDraftForm(defaultDraftForm)
       }
+      return !draft.id.startsWith("local-")
     } finally {
       setDraftSaving(false)
     }
@@ -4848,13 +4851,14 @@ export default function SalesLedgerWorkbench() {
     setDraftForm(defaultDraftForm)
   }, [defaultDraftForm])
 
-  const saveEditedDraft = useCallback(async () => {
-    if (!editingDraft) return
+  const saveEditedDraft = useCallback(async (): Promise<boolean> => {
+    if (!editingDraft) return false
     setDraftSaving(true)
     try {
-      await updateDraft(editingDraft.id, buildDraftInput(editingDraft.kind, editingDraft))
+      const draft = await updateDraft(editingDraft.id, buildDraftInput(editingDraft.kind, editingDraft))
       setEditingDraftId(null)
       setDraftForm(defaultDraftForm)
+      return Boolean(draft && !draft.id.startsWith("local-"))
     } finally {
       setDraftSaving(false)
     }
