@@ -888,6 +888,27 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
+// 품질 웨이브 7 — 항목 2: updateDraft/toggleDraft/deleteDraft가 4xx(레코드 소실·충돌)와
+// 5xx/네트워크를 구분하기 위한 판정. adminFetchJson(lib/admin-client.ts)은 실패한 fetch를
+// `new Error(data?.error ?? data?.message ?? "{status} {statusText}")`로만 던지고 HTTP status를
+// 던진 Error에 싣지 않는다 — 그 파일은 이 웨이브 소유 범위 밖이라 고치지 않고, 대신 이 라우트
+// (app/api/admin/branch/ledger-drafts/[id]/route.ts, 코드로 직접 확인함)가 PATCH(update 액션)·
+// DELETE 실패 시 레코드 소실을 항상 이 리터럴 문자열로만 응답하는 계약에 기대 구분한다. 이
+// 라우트가 update/delete에서 돌려주는 4xx는 현재 404 "Draft not found" 하나뿐이다(409는
+// action=apply 전용 — applyDraft가 이미 별도로 처리) — 다른 4xx 문구가 라우트에 추가되면
+// 여기 추가한다. 매칭되지 않는 에러(네트워크 실패·타임아웃·5xx로 감싸진 서버 오류)는 전부
+// 기존처럼 5xx/네트워크로 분류돼 큐 전체가 로컬 폴백으로 내려간다.
+const DRAFT_RECORD_ERROR_MESSAGES = new Set(["Draft not found"])
+
+export function isDraftRecordError(error: unknown): boolean {
+  return error instanceof Error && DRAFT_RECORD_ERROR_MESSAGES.has(error.message)
+}
+
+// 레코드별 에러 배지(품질 웨이브 7, 항목 2)에 쓰는 사용자 대상 문구 — 위 판정이 잡아내는 케이스가
+// 현재는 전부 "서버에 그 초안이 더 이상 없다"이므로 문구도 하나로 고정한다.
+const DRAFT_RECORD_ERROR_MESSAGE =
+  "서버에서 이 초안을 찾을 수 없습니다 — 다른 곳에서 이미 처리(적용/삭제)됐거나 목록이 바뀌었을 수 있습니다. 새로고침 후 다시 확인하세요."
+
 // 로컬 fallback 초안(local-*)을 서버 재연결 시 POST 재전송하기 위한 입력 복원.
 // LedgerDraft는 LedgerDraftInput의 상위집합이라 필드만 골라 뽑는다.
 function localDraftToInput(draft: LedgerDraft): LedgerDraftInput {
@@ -921,6 +942,26 @@ function useLedgerDraftQueue() {
   const [queueError, setQueueError] = useState<string | null>(null)
   // 서버 재연결 시 재전송에 실패해 여전히 로컬에만 있는 초안 수 — 배지 경고용(항목 2).
   const [unsyncedLocalCount, setUnsyncedLocalCount] = useState(0)
+  // 품질 웨이브 7 — 항목 2: 레코드별 에러(404 "레코드 소실" 등) — draft id → 사용자 대상 메시지.
+  // 이 Set/Map은 queueMode를 절대 건드리지 않는다(전역 강등 없음) — 그 행에만 배지로 보여주고
+  // 새로고침(loadDrafts)을 유도한다. loadDrafts가 서버 목록을 다시 받아오면 통째로 비운다 —
+  // 재조회로 실제 상태가 다시 맞춰지므로 오래된 행별 에러를 계속 들고 있을 이유가 없다.
+  const [recordErrors, setRecordErrors] = useState<Map<string, string>>(() => new Map())
+  const setRecordError = useCallback((id: string) => {
+    setRecordErrors((current) => {
+      const next = new Map(current)
+      next.set(id, DRAFT_RECORD_ERROR_MESSAGE)
+      return next
+    })
+  }, [])
+  const clearRecordError = useCallback((id: string) => {
+    setRecordErrors((current) => {
+      if (!current.has(id)) return current
+      const next = new Map(current)
+      next.delete(id)
+      return next
+    })
+  }, [])
   // loadDrafts가 drafts state를 deps로 갖지 않아도(안정 identity 유지) 최신 local-* 초안을
   // 읽을 수 있게 미러링한다 — drafts가 바뀔 때마다 렌더 후 effect에서 갱신(렌더 중 ref 쓰기 금지).
   const localDraftsRef = useRef<LedgerDraft[]>([])
@@ -954,6 +995,9 @@ function useLedgerDraftQueue() {
           return next
         })
       }
+      // 품질 웨이브 7 — 항목 2: 재조회 성공(서버가 응답함, health와 무관)마다 행별 에러를 비운다 —
+      // 새 목록이 그 행의 실제 서버 상태를 다시 반영하므로 오래된 배지를 들고 있을 이유가 없다.
+      setRecordErrors(new Map())
       if (data.health?.ok === false) {
         setDrafts(readLocalDrafts())
         setLedgerEntries([])
@@ -1006,6 +1050,7 @@ function useLedgerDraftQueue() {
       setLedgerHealth(null)
       setQueueMode("local")
       setQueueError(`서버 입력 큐를 불러오지 못해 로컬 큐로 전환했습니다. ${errorMessage(error)}`)
+      setRecordErrors(new Map())
     } finally {
       setQueueLoading(false)
     }
@@ -1040,6 +1085,16 @@ function useLedgerDraftQueue() {
     return localDraft
   }, [queueMode, updateLocalDrafts])
 
+  // 품질 웨이브 7 — 항목 2: 이전에는 이 catch가 에러 종류와 무관하게 무조건 setQueueMode("local")
+  // 후 이 서버-id 초안을 같은 id로 로컬 낙관 반영했다("서버-id 섀도 편집"). 문제는 두 가지였다:
+  // (1) 404(레코드 소실 — 다른 곳에서 이미 삭제/적용됨) 하나 때문에 큐 전체가 로컬로 강등돼
+  //     무관한 다른 초안 저장까지 전부 로컬 폴백으로 떨어졌다. (2) 서버-id(예: "srv-1")는
+  //     localDraftsRef가 "local-"로 시작하는 것만 재전송 대상으로 보므로(위 useEffect 참조),
+  //     이 낙관 편집은 재전송 판별에서 아예 보이지 않아 서버가 복구되면 다음 loadDrafts가
+  //     data.drafts(서버의 예전 값)로 조용히 덮어써 편집이 무음 소실됐다. 지금은: 404류
+  //     레코드 오류는 전역 강등 없이 그 행에만 에러를 붙이고(recordErrors), 5xx/네트워크만
+  //     기존처럼 큐를 로컬로 내리되 — 두 경우 모두 서버-id 레코드를 로컬에서 낙관 편집하지
+  //     않는다(그 편집은 그냥 실패로 끝난다 — 성공한 척 로컬에만 남기지 않음).
   const updateDraft = useCallback(async (id: string, input: LedgerDraftInput) => {
     if (queueMode === "server" && !id.startsWith("local-")) {
       try {
@@ -1050,10 +1105,16 @@ function useLedgerDraftQueue() {
         if (!data.draft) throw new Error(data.error ?? "초안 수정 응답이 비어 있습니다.")
         setDrafts((items) => items.map((draft) => (draft.id === id ? data.draft! : draft)))
         setQueueError(null)
+        clearRecordError(id)
         return data.draft
       } catch (error) {
+        if (isDraftRecordError(error)) {
+          setRecordError(id)
+          return null
+        }
         setQueueMode("local")
-        setQueueError(`서버 초안 수정에 실패해 로컬 큐로 전환했습니다. ${errorMessage(error)}`)
+        setQueueError(`서버 초안 수정에 실패했습니다(네트워크/서버 오류) — 재연결 후 다시 시도하세요. ${errorMessage(error)}`)
+        return null
       }
     }
 
@@ -1064,7 +1125,7 @@ function useLedgerDraftQueue() {
       return updated
     }))
     return updated
-  }, [queueMode, updateLocalDrafts])
+  }, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])
 
   const toggleDraft = useCallback(async (id: string) => {
     const current = drafts.find((draft) => draft.id === id)
@@ -1080,17 +1141,23 @@ function useLedgerDraftQueue() {
         if (!data.draft) throw new Error(data.error ?? "초안 수정 응답이 비어 있습니다.")
         setDrafts((items) => items.map((draft) => (draft.id === id ? data.draft! : draft)))
         setQueueError(null)
+        clearRecordError(id)
         return
       } catch (error) {
+        if (isDraftRecordError(error)) {
+          setRecordError(id)
+          return
+        }
         setQueueMode("local")
-        setQueueError(`서버 체크 상태 변경에 실패해 로컬 큐로 전환했습니다. ${errorMessage(error)}`)
+        setQueueError(`서버 체크 상태 변경에 실패했습니다(네트워크/서버 오류) — 재연결 후 다시 시도하세요. ${errorMessage(error)}`)
+        return
       }
     }
 
     updateLocalDrafts((items) => items.map((draft) =>
       draft.id === id ? { ...draft, status, updatedAt: new Date().toISOString() } : draft,
     ))
-  }, [drafts, queueMode, updateLocalDrafts])
+  }, [clearRecordError, drafts, queueMode, setRecordError, updateLocalDrafts])
 
   const applyDraft = useCallback(async (id: string) => {
     const current = drafts.find((draft) => draft.id === id)
@@ -1125,15 +1192,24 @@ function useLedgerDraftQueue() {
         await adminFetchJson(`/api/admin/branch/ledger-drafts/${encodeURIComponent(id)}`, { method: "DELETE" })
         setDrafts((items) => items.filter((draft) => draft.id !== id))
         setQueueError(null)
+        clearRecordError(id)
         return
       } catch (error) {
+        if (isDraftRecordError(error)) {
+          // 이미 서버에 없는 레코드 — 지우려던 목표는 사실상 달성됐지만, 로컬에서 조용히
+          // 지워버리면 "왜 없어졌는지" 신호가 사라진다. 배지+새로고침으로 안내하고, 실제 정리는
+          // 다음 loadDrafts(서버 목록 재조회)가 자연히 처리한다.
+          setRecordError(id)
+          return
+        }
         setQueueMode("local")
-        setQueueError(`서버 삭제에 실패해 로컬 큐로 전환했습니다. ${errorMessage(error)}`)
+        setQueueError(`서버 삭제에 실패했습니다(네트워크/서버 오류) — 재연결 후 다시 시도하세요. ${errorMessage(error)}`)
+        return
       }
     }
 
     updateLocalDrafts((items) => items.filter((draft) => draft.id !== id))
-  }, [queueMode, updateLocalDrafts])
+  }, [clearRecordError, queueMode, setRecordError, updateLocalDrafts])
 
   // "되돌리기" — 적용된(applied) 초안에 연결된 내부 원장 entry를 상쇄한다(active -> reversed).
   // draft.status는 절대 건드리지 않는다(감사 추적 보존, 백엔드도 동일 계약). 로컬 초안은
@@ -1171,6 +1247,7 @@ function useLedgerDraftQueue() {
     queueLoading,
     queueError,
     unsyncedLocalCount,
+    recordErrors,
     createDraft,
     updateDraft,
     toggleDraft,
@@ -1333,6 +1410,7 @@ function DraftQueue({
   loading,
   error,
   reversedDraftIds,
+  recordErrors,
   onReload,
   onEdit,
   onToggle,
@@ -1347,6 +1425,9 @@ function DraftQueue({
   // 웨이브 5 — "되돌리기": applied 초안 중 연결 entry가 상쇄된 것의 id 집합. draft.status는
   // 불변이라("applied" 그대로) 이 Set으로만 "적용됨" vs "적용됨(상쇄)" 배지를 구분한다.
   reversedDraftIds: Set<string>
+  // 품질 웨이브 7 — 항목 2: draft id → 그 행에 국한된 에러 메시지(404 레코드 소실 등). 전역
+  // queueError/mode와 별개 — 큐 전체를 로컬로 내리지 않고 그 행에만 배지+새로고침 유도를 낸다.
+  recordErrors: Map<string, string>
   onReload: () => void
   onEdit: (draft: LedgerDraft) => void
   onToggle: (id: string) => void | Promise<void>
@@ -1661,6 +1742,23 @@ function DraftQueue({
               </button>
             </div>
           </div>
+          {/* 품질 웨이브 7 — 항목 2: 레코드별 에러(404 등) — 큐 전체를 로컬로 강등하지 않고 이
+              행에만 배지+새로고침 유도를 낸다. */}
+          {recordErrors.get(draft.id) && (
+            <div
+              role="alert"
+              className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-2.5 py-1.5 text-[10.5px] font-semibold leading-relaxed text-[#8F2C2C]"
+            >
+              <span className="min-w-0">{recordErrors.get(draft.id)}</span>
+              <button
+                type="button"
+                onClick={onReload}
+                className="shrink-0 rounded border border-[#B43E3E]/40 bg-white px-2 py-0.5 text-[10px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9]"
+              >
+                새로고침
+              </button>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -3786,6 +3884,7 @@ export default function SalesLedgerWorkbench() {
     queueLoading,
     queueError,
     unsyncedLocalCount,
+    recordErrors,
     createDraft,
     updateDraft,
     toggleDraft,
@@ -7082,6 +7181,7 @@ export default function SalesLedgerWorkbench() {
                 loading={queueLoading}
                 error={queueError}
                 reversedDraftIds={reversedDraftIds}
+                recordErrors={recordErrors}
                 onReload={() => void reloadDrafts()}
                 onEdit={editDraft}
                 onToggle={toggleDraft}
