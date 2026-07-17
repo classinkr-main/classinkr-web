@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dialog"
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { StatTile } from "@/components/admin/viz"
+import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import SubscriberTable from "@/components/admin/marketing/SubscriberTable"
 import SubscriberForm from "@/components/admin/marketing/SubscriberForm"
 import EmailComposer from "@/components/admin/marketing/EmailComposer"
@@ -66,6 +67,11 @@ const EMPTY_DRAFT: EmailDraft = {
 }
 
 const SAVED_SEGMENTS_KEY = "classinkr.admin.email.savedSegments.v1"
+
+// 구독자 목록 무한스크롤 대체 — 검색어(query)는 서버 미지원(클라측 전용) 필터라 서버
+// offset 페이징을 도입하면 필터와 충돌한다(뒤 페이지에 검색어 일치 행이 남아있어도
+// 안 보임). 그래서 클라 배열 슬라이싱(ShowMore)으로 안전하게 처리한다 — 초기 50, step 50.
+const SUBSCRIBER_LIST_STEP = 50
 
 function safeTime(value?: string) {
   if (!value) return 0
@@ -508,6 +514,20 @@ export default function MarketingHub({
     const matchesSource = sourceFilter === "all" || subscriber.source === sourceFilter
     return matchesQuery && matchesStatus && matchesSource
   })
+
+  const {
+    visible: visibleSubscriberCount,
+    showMore: showMoreSubscribers,
+    collapse: collapseSubscribers,
+    canMore: canMoreSubscribers,
+    canCollapse: canCollapseSubscribers,
+  } = useVisibleCount(filteredSubscribers.length, SUBSCRIBER_LIST_STEP)
+
+  // 검색어/상태/유입 필터가 바뀌면 새 결과셋의 맨 위(초기 50건)부터 다시 보여준다 —
+  // 이전 필터에서 펼쳐둔 범위가 무관한 새 결과에 그대로 남지 않도록.
+  useEffect(() => {
+    collapseSubscribers()
+  }, [query, statusFilter, sourceFilter, collapseSubscribers])
 
   const filteredCampaigns = campaigns.filter((campaign) => campaignStatusFilter === "all" || campaign.status === campaignStatusFilter)
 
@@ -1288,15 +1308,32 @@ export default function MarketingHub({
                     }
                   />
                 ) : (
-                  <SubscriberTable
-                    subscribers={filteredSubscribers}
-                    onDelete={setDeleteTarget}
-                    onCompose={handleComposeFromSubscriber}
-                    onAddSubscriber={() => setIsFormOpen(true)}
-                    onComposeCampaign={() => setActiveTab("compose")}
-                    onBulkDelete={handleBulkDelete}
-                    onBulkTagAdd={handleBulkTagAdd}
-                  />
+                  <>
+                    <SubscriberTable
+                      subscribers={filteredSubscribers.slice(0, visibleSubscriberCount)}
+                      onDelete={setDeleteTarget}
+                      onCompose={handleComposeFromSubscriber}
+                      onAddSubscriber={() => setIsFormOpen(true)}
+                      onComposeCampaign={() => setActiveTab("compose")}
+                      onBulkDelete={handleBulkDelete}
+                      onBulkTagAdd={handleBulkTagAdd}
+                    />
+                    {(canMoreSubscribers || canCollapseSubscribers) && (
+                      <div className="mt-5 flex flex-col items-center gap-2 border-t border-[#e8e8e4] pt-4">
+                        <p role="status" className="text-[11px] font-medium tabular-nums text-[#1a1a1a]/45">
+                          {visibleSubscriberCount.toLocaleString("ko-KR")} / 총{" "}
+                          {filteredSubscribers.length.toLocaleString("ko-KR")}명 표시
+                        </p>
+                        <ShowMore
+                          visible={visibleSubscriberCount}
+                          total={filteredSubscribers.length}
+                          step={SUBSCRIBER_LIST_STEP}
+                          onMore={showMoreSubscribers}
+                          onCollapse={canCollapseSubscribers ? collapseSubscribers : undefined}
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
               </Panel>
             </div>
