@@ -62,6 +62,9 @@ interface BranchSalesLedgerEntryRow {
   note: string | null
   applied_by: string | null
   applied_at: string
+  reversed_at: string | null
+  reversed_by: string | null
+  reversal_reason: string | null
   metadata: Record<string, unknown> | null
   created_at: string
   updated_at: string
@@ -109,6 +112,9 @@ export interface BranchSalesLedgerEntry {
   note: string
   appliedBy: string | null
   appliedAt: string
+  reversedAt: string | null
+  reversedBy: string | null
+  reversalReason: string | null
   metadata: Record<string, unknown>
   createdAt: string
   updatedAt: string
@@ -205,12 +211,29 @@ function isMissingLedgerInfrastructureError(error: { code?: string; message?: st
     (haystack.includes("branch_sales_ledger_entries") &&
       (haystack.includes("does not exist") || haystack.includes("could not find") || haystack.includes("schema cache"))) ||
     (haystack.includes("apply_branch_sales_ledger_draft") &&
+      (haystack.includes("does not exist") || haystack.includes("could not find") || haystack.includes("schema cache"))) ||
+    (haystack.includes("reverse_branch_sales_ledger_entry") &&
       (haystack.includes("does not exist") || haystack.includes("could not find") || haystack.includes("schema cache")))
   )
 }
 
+// 딜·월당 활성 정정(manual-edit) 유일성 인덱스(20260717) 위반 — apply 중 발생하면 postgres
+// 23505. 회원가입류 "이미 존재" 충돌과 동일하게 409로 안내해야지, 500으로 흘리면 안 된다.
+const DUPLICATE_ACTIVE_CORRECTION_INDEX = "branch_sales_ledger_entries_active_manual_edit_unique"
+const DUPLICATE_ACTIVE_CORRECTION_MESSAGE =
+  "이미 이 딜·월에 적용된 정정 항목이 있습니다. 기존 항목을 먼저 반전한 뒤 다시 적용하세요."
+
+function isDuplicateActiveCorrectionIndexError(error: { code?: string; message?: string; details?: string }) {
+  const haystack = [error.code, error.message, error.details].filter(Boolean).join(" ").toLowerCase()
+  return error.code === "23505" && haystack.includes(DUPLICATE_ACTIVE_CORRECTION_INDEX)
+}
+
 export function isBranchSalesLedgerDraftsNotReadyError(error: unknown): error is Error {
   return error instanceof Error && error.message.includes("매출 장부")
+}
+
+export function isBranchSalesLedgerDuplicateActiveCorrectionError(error: unknown): error is Error {
+  return error instanceof Error && error.message === DUPLICATE_ACTIVE_CORRECTION_MESSAGE
 }
 
 function notReadyResult(): ListBranchSalesLedgerDraftsResult {
@@ -274,6 +297,9 @@ function toEntry(row: BranchSalesLedgerEntryRow): BranchSalesLedgerEntry {
     note: row.note ?? "",
     appliedBy: row.applied_by,
     appliedAt: row.applied_at,
+    reversedAt: row.reversed_at,
+    reversedBy: row.reversed_by,
+    reversalReason: row.reversal_reason,
     metadata: row.metadata ?? {},
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -445,6 +471,7 @@ export async function applyBranchSalesLedgerDraft(
 
   if (error) {
     if (isMissingLedgerInfrastructureError(error)) throw new Error(INTERNAL_LEDGER_NOT_READY_MESSAGE)
+    if (isDuplicateActiveCorrectionIndexError(error)) throw new Error(DUPLICATE_ACTIVE_CORRECTION_MESSAGE)
     throw new Error(`[branch-sales-ledger-drafts] 적용 실패: ${error.message}`)
   }
 
@@ -453,6 +480,51 @@ export async function applyBranchSalesLedgerDraft(
 
   const row = Array.isArray(data) ? data[0] : data
   return row ? toDraft(row as BranchSalesLedgerDraftRow) : null
+}
+
+/**
+ * 적용된 초안(draft)에 연결된 내부 원장 entry를 상쇄(active -> reversed)한다.
+ * draft.status는 절대 바꾸지 않는다 — "이 초안이 X일에 적용됐다"는 사실은 감사 추적으로
+ * 반전 이후에도 보존돼야 한다(사용자 확정: 상쇄 방식). draft_id는 entries에서 UNIQUE라
+ * 최대 한 건만 매칭된다. entry가 없으면(적용된 적 없는 초안 등) null.
+ * reverse_branch_sales_ledger_entry RPC 자체가 멱등이라(이미 reversed면 no-op 반환)
+ * 이 함수도 자연히 멱등이다.
+ */
+export async function reverseBranchSalesLedgerEntryByDraftId(
+  draftId: string,
+  actor: string,
+  reason?: string | null,
+): Promise<BranchSalesLedgerEntry | null> {
+  const supabase = createSupabaseAdminClient()
+
+  const { data: entryRow, error: lookupError } = await supabase
+    .from("branch_sales_ledger_entries")
+    .select("id")
+    .eq("draft_id", draftId)
+    .maybeSingle()
+
+  if (lookupError) {
+    if (isMissingLedgerInfrastructureError(lookupError)) throw new Error(INTERNAL_LEDGER_NOT_READY_MESSAGE)
+    throw new Error(`[branch-sales-ledger-drafts] 반전 대상 조회 실패: ${lookupError.message}`)
+  }
+  if (!entryRow) return null
+
+  const rpcParams: Record<string, unknown> = { p_entry_id: entryRow.id, p_actor: actor }
+  const trimmedReason = reason?.trim()
+  if (trimmedReason) rpcParams.p_reason = trimmedReason
+
+  const { data, error } = await supabase.rpc("reverse_branch_sales_ledger_entry", rpcParams)
+
+  if (error) {
+    if (isMissingLedgerInfrastructureError(error)) throw new Error(INTERNAL_LEDGER_NOT_READY_MESSAGE)
+    throw new Error(`[branch-sales-ledger-drafts] 반전 실패: ${error.message}`)
+  }
+
+  revalidateTag(BRANCH_SALES_LEDGER_DRAFTS_CACHE_TAG, "max")
+  revalidateTag(BRANCH_SALES_LEDGER_ENTRIES_CACHE_TAG, "max")
+
+  const row = Array.isArray(data) ? data[0] : data
+  return row ? toEntry(row as BranchSalesLedgerEntryRow) : null
 }
 
 export async function deleteBranchSalesLedgerDraft(id: string): Promise<boolean> {
