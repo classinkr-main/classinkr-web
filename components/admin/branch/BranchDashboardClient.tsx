@@ -450,11 +450,15 @@ export default function BranchDashboardClient() {
               <IntegrityStrip refreshKey={refreshKey} canRunAdminOperations={canRunAdminOperations} />
               <CoreKpiGrid data={summary.data} loading={summary.loading} error={summary.error} />
               {/* D-1: 매출 목표(HeroGauges) 위, 매출 누적 흐름(RevenueFlowSection) 아래 */}
+              {/* 항목 2 수정 — teams는 kpi.data에서 파생되는데 error로는 summary.error만 넘어가고
+                  있었다: kpi fetch만 실패해도(summary는 성공) error가 비어 팀별 게이지가 그냥
+                  0개로 조용히 렌더됐다(BranchHeroGauges teams=[] fallback) — 실패가 스켈레톤/에러
+                  배너 없이 숨겨진 것. kpi.error도 함께 전달해 둘 중 하나라도 실패를 보이게 한다. */}
               <BranchHeroGauges
                 summary={summary.data}
                 kpi={kpi.data}
                 periodLabel={activePeriodLabel}
-                error={summary.error}
+                error={summary.error ?? kpi.error}
               />
               <DealMixSection summary={summary.data} loading={summary.loading} error={summary.error} />
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
