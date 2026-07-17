@@ -1,7 +1,7 @@
 "use client"
 
 // CRM 우측 액션 레일 — "생성 및 기록들 보기, 오른쪽 따로 스크롤".
-// 구성(위→아래): ① 기록 빠른 생성(ActivityQuickForm 컴팩트) ② 오늘 할 일 요약(crm_tasks 상위 N)
+// 구성(위→아래): ① 기록 빠른 생성(ActivityQuickForm 컴팩트 — hideForm 시 생략) ② 오늘 할 일 요약(crm_tasks 상위 N)
 // ③ 최근 기록 타임라인(targetId 딥링크). 데이터는 전부 자체 fetch(adminFetchJsonCached) —
 // 부모와의 결합은 props(고객 프리셀렉트)와 onActivitySaved 콜백뿐이다.
 //
@@ -50,6 +50,8 @@ export interface CrmActionRailProps {
   customerName?: string
   /** 레일에서 기록 저장 성공 시 부모 갱신 콜백(타임라인 즉시 반영) */
   onActivitySaved?: () => void
+  /** true면 ① 기록 빠른 생성 카드 생략(기록 탭처럼 본문 컴포저가 따로 있는 표면용) */
+  hideForm?: boolean
   className?: string
 }
 
@@ -126,6 +128,7 @@ export default function CrmActionRail({
   defaultTargetId,
   customerName,
   onActivitySaved,
+  hideForm = false,
   className = "",
 }: CrmActionRailProps) {
   const scopedTargetId = defaultTargetId?.trim() || ""
@@ -235,19 +238,21 @@ export default function CrmActionRail({
       aria-label="CRM 액션 레일"
       className={`min-w-0 space-y-3 xl:sticky xl:top-6 xl:max-h-[calc(100dvh-3rem)] xl:self-start xl:overflow-y-auto xl:overscroll-contain xl:pb-6 ${className}`}
     >
-      <RailSection
-        icon={<NotebookPen className="h-4 w-4" />}
-        title="기록 빠른 생성"
-        caption={customerName ? `${customerName} 대상으로 저장` : "메모·회의록·녹음을 바로 남깁니다"}
-      >
-        <ActivityQuickForm
-          compact
-          defaultTargetType={defaultTargetType}
-          defaultTargetId={scopedTargetId || undefined}
-          defaultTargetLabel={customerName}
-          onSaved={handleSaved}
-        />
-      </RailSection>
+      {!hideForm ? (
+        <RailSection
+          icon={<NotebookPen className="h-4 w-4" />}
+          title="기록 빠른 생성"
+          caption={customerName ? `${customerName} 대상으로 저장` : "메모·회의록·녹음을 바로 남깁니다"}
+        >
+          <ActivityQuickForm
+            compact
+            defaultTargetType={defaultTargetType}
+            defaultTargetId={scopedTargetId || undefined}
+            defaultTargetLabel={customerName}
+            onSaved={handleSaved}
+          />
+        </RailSection>
+      ) : null}
 
       <RailSection
         icon={<ListChecks className="h-4 w-4" />}

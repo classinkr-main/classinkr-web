@@ -156,6 +156,13 @@ describe("CrmActionRail (static render)", () => {
     // CrmCustomerPicker가 연결됨 배지를 보여준다(linkedId 프리셀렉트)
     expect(html).toContain("연결됨")
   })
+
+  it("drops the quick-form card with hideForm while keeping tasks and recent sections", () => {
+    const html = renderToStaticMarkup(<CrmActionRail hideForm />)
+    expect(html).not.toContain("기록 빠른 생성")
+    expect(html).toContain("오늘 할 일")
+    expect(html).toContain("최근 기록")
+  })
 })
 
 describe("ActivityQuickForm (static render)", () => {
@@ -176,5 +183,25 @@ describe("ActivityQuickForm (static render)", () => {
     )
     expect(html).toContain("프리셋 학원")
     expect(html).toContain("연결됨")
+  })
+
+  it("renders the one-line composer variant with body-first placeholder and detail toggle", () => {
+    const html = renderToStaticMarkup(<ActivityQuickForm variant="composer" />)
+    expect(html).toContain("무슨 일이 있었나요? (본문만 적어도 저장됩니다)")
+    expect(html).toContain("+ 상세 (제목·다음 액션 등)")
+    expect(html).toContain("저장")
+    // 한 줄 컴포저는 full/compact 필드 스택을 접어둔다
+    expect(html).not.toContain("기록 시각")
+  })
+
+  it("hides the target picker in composer when lockTarget is set", () => {
+    const withPicker = renderToStaticMarkup(<ActivityQuickForm variant="composer" />)
+    const locked = renderToStaticMarkup(
+      <ActivityQuickForm variant="composer" lockTarget defaultTargetType="lead" defaultTargetId="lead-9" defaultTargetLabel="프리셋 학원" />
+    )
+    expect(withPicker).toContain("고객/리드 검색 또는 직접 입력")
+    expect(locked).not.toContain("고객/리드 검색 또는 직접 입력")
+    // 고정 대상 라벨은 placeholder로 노출된다
+    expect(locked).toContain("프리셋 학원 기록 남기기")
   })
 })

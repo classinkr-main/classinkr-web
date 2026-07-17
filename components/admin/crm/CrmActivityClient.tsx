@@ -1,6 +1,6 @@
 "use client"
 
-// CRM 기록 표면 — 좌: 필터+타임라인, 우: CrmActionRail(기록 빠른 생성·오늘 할 일·최근 기록).
+// CRM 기록 표면 — 좌: 컴포저(ActivityQuickForm composer)+필터+타임라인, 우: CrmActionRail(hideForm — 오늘 할 일·최근 기록).
 // 기록 생성 폼 SSOT는 rail/ActivityQuickForm — 이 파일은 폼을 직접 들고 있지 않는다.
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -22,6 +22,7 @@ import {
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import CrmActionRail from "./rail/CrmActionRail"
+import ActivityQuickForm from "./rail/ActivityQuickForm"
 import CrmEventRow from "./CrmEventRow"
 import {
   EVENTS_URL,
@@ -232,17 +233,18 @@ function CrmActivityClientInner() {
         </div>
       ) : null}
 
-      {/* 좌: 타임라인(minmax(0,1fr)) · 우: 액션 레일(독립 스크롤). 모바일은 레일(빠른 생성) → 타임라인 스택. */}
+      {/* 좌: 컴포저+필터+타임라인(minmax(0,1fr)) · 우: 액션 레일(독립 스크롤, hideForm — 입력면은 본문 컴포저 하나).
+          모바일은 컴포저 → 필터 → 타임라인 → 레일 순 스택(컴포저가 첫 인터랙션 블록). */}
       <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <CrmActionRail
-          defaultTargetType={focusTargetType}
-          defaultTargetId={focusTargetId || undefined}
-          customerName={focusLabel || undefined}
-          onActivitySaved={handleRailSaved}
-          className="xl:col-start-2 xl:row-start-1"
-        />
-
         <div className="min-w-0 space-y-4 xl:col-start-1 xl:row-start-1">
+          <ActivityQuickForm
+            variant="composer"
+            defaultTargetType={focusTargetType}
+            defaultTargetId={focusTargetId || undefined}
+            defaultTargetLabel={focusLabel || undefined}
+            onSaved={handleRailSaved}
+          />
+
           <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
             <div className="grid gap-3 lg:grid-cols-[minmax(200px,1fr)_auto_auto_auto] lg:items-center">
               <label className="flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3">
@@ -305,26 +307,31 @@ function CrmActivityClientInner() {
             </div>
 
             {data ? (
-              <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-                <div className="rounded-xl bg-[#fafaf8] p-3">
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">총 기록</p>
-                  <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
+              <details className="mt-3">
+                <summary className="cursor-pointer select-none text-[12px] font-semibold text-[#1a1a1a]/50 transition-colors hover:text-[#111110]">
+                  기록 요약
+                </summary>
+                <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
+                  <div className="rounded-xl bg-[#fafaf8] p-3">
+                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">총 기록</p>
+                    <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
+                  </div>
+                  <div className="rounded-xl bg-[#fafaf8] p-3">
+                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">현재 녹음</p>
+                    <p className="mt-1 text-xl font-bold text-[#084734]">{data.summary.recordings.toLocaleString("ko-KR")}</p>
+                  </div>
+                  <div className="rounded-xl bg-[#fafaf8] p-3">
+                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">미처리 액션</p>
+                    <p className="mt-1 text-xl font-bold text-[#111110]">
+                      {data.summary.openNextActions.toLocaleString("ko-KR")}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-[#FEF3EE] p-3">
+                    <p className="text-[11px] font-semibold text-[#B85C33]/70">리스크</p>
+                    <p className="mt-1 text-xl font-bold text-[#B85C33]">{data.summary.risks.toLocaleString("ko-KR")}</p>
+                  </div>
                 </div>
-                <div className="rounded-xl bg-[#fafaf8] p-3">
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">현재 녹음</p>
-                  <p className="mt-1 text-xl font-bold text-[#084734]">{data.summary.recordings.toLocaleString("ko-KR")}</p>
-                </div>
-                <div className="rounded-xl bg-[#fafaf8] p-3">
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">미처리 액션</p>
-                  <p className="mt-1 text-xl font-bold text-[#111110]">
-                    {data.summary.openNextActions.toLocaleString("ko-KR")}
-                  </p>
-                </div>
-                <div className="rounded-xl bg-[#FEF3EE] p-3">
-                  <p className="text-[11px] font-semibold text-[#B85C33]/70">리스크</p>
-                  <p className="mt-1 text-xl font-bold text-[#B85C33]">{data.summary.risks.toLocaleString("ko-KR")}</p>
-                </div>
-              </div>
+              </details>
             ) : null}
           </section>
 
@@ -479,6 +486,15 @@ function CrmActivityClientInner() {
             ) : null}
           </section>
         </div>
+
+        <CrmActionRail
+          hideForm
+          defaultTargetType={focusTargetType}
+          defaultTargetId={focusTargetId || undefined}
+          customerName={focusLabel || undefined}
+          onActivitySaved={handleRailSaved}
+          className="xl:col-start-2 xl:row-start-1"
+        />
       </section>
     </div>
   )
