@@ -13,17 +13,25 @@ const TEAM_LABEL: Record<string, { name: string; full: string }> = {
 }
 
 export default function BranchHeroGauges({
-  summary, kpi, periodLabel,
+  summary, kpi, periodLabel, error,
 }: {
   summary: BranchSummaryResponse | null
   kpi: BranchKpiResponse | null
   periodLabel: string
+  error?: string | null
 }) {
   const teams = useMemo(() => {
     if (!kpi?.teams) return []
     return kpi.teams.filter((t) => TEAM_LABEL[t.team])
   }, [kpi])
 
+  // 에러를 영구 스켈레톤으로 위장하지 않는다(품질 웨이브 5 — 항목 2) — summary fetch가
+  // 실패하면 summary는 항상 null이라 아래 !summary 스켈레톤 분기가 계속 돌고 있었다.
+  if (error) return (
+    <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]">
+      {error}
+    </div>
+  )
   if (!summary) return <div className="h-56 animate-pulse rounded-xl bg-[#f0f0ec]" />
 
   const actual = summary.revenue.confirmed

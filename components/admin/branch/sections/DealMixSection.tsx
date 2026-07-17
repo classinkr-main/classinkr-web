@@ -134,8 +134,15 @@ function CompareCard({ title, desc, a, b, aTone, bTone, prevMeta }: {
   )
 }
 
-export default function DealMixSection({ summary, loading }: { summary: BranchSummaryResponse | null; loading: boolean }) {
+export default function DealMixSection({ summary, loading, error }: { summary: BranchSummaryResponse | null; loading: boolean; error?: string | null }) {
   const data = summary?.deal_mix ?? null
+  // 에러를 빈 상태로 위장하지 않는다(품질 웨이브 5 — 항목 2) — fetch 실패 시 !data가
+  // 참이 되어 그냥 null(무표시)로 사라졌다.
+  if (error) return (
+    <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]">
+      {error}
+    </div>
+  )
   if (loading) return <div className="h-40 animate-pulse rounded-xl bg-[#f0f0ec]" />
   if (!data) return null
 

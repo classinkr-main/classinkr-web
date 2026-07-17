@@ -41,9 +41,11 @@ function bottleneckTone(pct: number) {
 export default function ActivityBottleneckSection({
   kpi,
   loading,
+  error,
 }: {
   kpi: BranchKpiResponse | null
   loading: boolean
+  error?: string | null
 }) {
   const rows = useMemo<BottleneckRow[]>(() => {
     const members = kpi?.members ?? []
@@ -61,6 +63,14 @@ export default function ActivityBottleneckSection({
     }
     return result.sort((a, b) => a.pct - b.pct || a.member.localeCompare(b.member, "ko"))
   }, [kpi])
+
+  // 에러를 빈 상태/영구 스켈레톤으로 위장하지 않는다(품질 웨이브 5 — 항목 2) —
+  // 형제 컴포넌트(BranchKpiAccordion:332, CampaignsSection)와 동일한 에러 배너 패턴.
+  if (error) return (
+    <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]">
+      {error}
+    </div>
+  )
 
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
