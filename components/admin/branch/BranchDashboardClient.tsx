@@ -18,7 +18,6 @@ import DealModal, { type DealModalDeal } from "./sections/DealModal"
 import PipelineTable from "./sections/PipelineTable"
 import CampaignsSection from "./sections/CampaignsSection"
 import HardwareSection from "./sections/HardwareSection"
-import DataQualityPanel from "./sections/DataQualityPanel"
 import DealMixSection from "./sections/DealMixSection"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
 import { PERIODS, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
@@ -390,8 +389,10 @@ export default function BranchDashboardClient() {
         <div className="mt-6">
           {activeTab === "overview" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
-              {/* 정합성 배지 승격(항목 3) — SyncStatusBar 바로 아래, 개요 탭에만. */}
-              <IntegrityStrip refreshKey={refreshKey} />
+              {/* 정합성 배지 승격(항목 3) — SyncStatusBar 바로 아래, 개요 탭에만.
+                  데이터 품질 상세(구 AI 탭 DataQualityPanel)는 이 스트립의 펼침 하단
+                  "전체 규칙 상세" 토글로 통합됐다(품질 웨이브 2 — 항목 4). */}
+              <IntegrityStrip refreshKey={refreshKey} canRunAdminOperations={canRunAdminOperations} />
               <CoreKpiGrid data={summary.data} loading={summary.loading} error={summary.error} />
               {/* D-1: 매출 목표(HeroGauges) 위, 매출 누적 흐름(RevenueFlowSection) 아래 */}
               <BranchHeroGauges
@@ -478,7 +479,6 @@ export default function BranchDashboardClient() {
           {activeTab === "ai" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
               <BranchAiInsights team={team} refreshKey={refreshKey} summary={summary.data} canGenerate={canRunAdminOperations} />
-              {canRunAdminOperations && <DataQualityPanel refreshKey={refreshKey} />}
             </div>
           )}
         </div>
