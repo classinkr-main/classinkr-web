@@ -204,6 +204,12 @@ interface LedgerEntry {
   note: string
   appliedBy: string | null
   appliedAt: string
+  // 웨이브 5 — "되돌리기": PATCH .../ledger-drafts/{id} action=reverse 응답에만 실려 온다.
+  // GET 목록 엔드포인트는 entry_status=active만 반환하므로(레포지토리 기본 필터) 이 필드들은
+  // 되돌리기 직후 로컬로 병합된 항목에서만 값을 가진다 — 서버 재조회 후엔 그 항목 자체가 사라진다.
+  reversedAt?: string | null
+  reversedBy?: string | null
+  reversalReason?: string | null
   metadata?: Record<string, unknown>
   createdAt: string
   updatedAt: string
@@ -233,6 +239,11 @@ interface LedgerDraftsResponse {
 
 interface LedgerDraftResponse {
   draft?: LedgerDraft
+  error?: string
+}
+
+interface LedgerEntryResponse {
+  entry?: LedgerEntry
   error?: string
 }
 
@@ -893,6 +904,12 @@ function localDraftToInput(draft: LedgerDraft): LedgerDraftInput {
 function useLedgerDraftQueue() {
   const [drafts, setDrafts] = useState<LedgerDraft[]>([])
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
+  // 웨이브 5 — "되돌리기": 상쇄한 draft id를 세션 동안 별도 보존한다. GET 목록의 entries는
+  // entry_status=active만 내려오므로(레포지토리 기본 필터) reversed 항목은 재조회 즉시
+  // ledgerEntries에서 통째로 사라진다 — 그것만으로 판단하면 appliedDraftFallbackRows(applied
+  // draft를 entries 누락 시 대체 표시하는 안전망)가 "아직 동기화 안 된 신규 적용"과 "방금
+  // 상쇄된 적용"을 구분 못 해 되돌린 행을 재조회 후 유령처럼 되살린다. 이 Set이 그 구분자.
+  const [reversedDraftIds, setReversedDraftIds] = useState<Set<string>>(new Set())
   const [ledgerHealth, setLedgerHealth] = useState<{ ok: boolean; message: string | null } | null>(null)
   const [queueMode, setQueueMode] = useState<DraftQueueMode>("server")
   const [queueLoading, setQueueLoading] = useState(true)
@@ -1101,9 +1118,37 @@ function useLedgerDraftQueue() {
     updateLocalDrafts((items) => items.filter((draft) => draft.id !== id))
   }, [queueMode, updateLocalDrafts])
 
+  // "되돌리기" — 적용된(applied) 초안에 연결된 내부 원장 entry를 상쇄한다(active -> reversed).
+  // draft.status는 절대 건드리지 않는다(감사 추적 보존, 백엔드도 동일 계약). 로컬 초안은
+  // DB 장부에 적용된 적이 없으니 되돌릴 대상도 없다 — applyDraft와 동일하게 서버 큐에서만 허용.
+  const reverseEntry = useCallback(async (draftId: string, reason?: string) => {
+    if (queueMode !== "server" || draftId.startsWith("local-")) {
+      throw new Error("로컬 임시 초안은 적용을 되돌릴 수 없습니다. 서버 큐가 복구된 뒤 다시 시도하세요.")
+    }
+    const body: Record<string, unknown> = { action: "reverse" }
+    if (reason) body.reason = reason
+    const data = await adminFetchJson<LedgerEntryResponse>(`/api/admin/branch/ledger-drafts/${encodeURIComponent(draftId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    })
+    if (!data.entry) throw new Error(data.error ?? "해당 초안에 연결된 적용 항목을 찾을 수 없습니다.")
+    const reversed = data.entry
+    // 서버가 돌려준 entryStatus를 그대로 신뢰(로컬에서 status를 임의로 뒤집지 않는다) —
+    // ledgerEntryRows의 기존 active 필터가 이 항목을 매트릭스 파생에서 자연히 제외한다.
+    setLedgerEntries((items) => items.map((entry) => (entry.id === reversed.id ? reversed : entry)))
+    setReversedDraftIds((current) => {
+      const next = new Set(current)
+      next.add(draftId)
+      return next
+    })
+    setQueueError(null)
+    return reversed
+  }, [queueMode])
+
   return {
     drafts,
     ledgerEntries,
+    reversedDraftIds,
     ledgerHealth,
     queueMode,
     queueLoading,
@@ -1114,6 +1159,7 @@ function useLedgerDraftQueue() {
     toggleDraft,
     applyDraft,
     deleteDraft,
+    reverseEntry,
     reloadDrafts: loadDrafts,
   }
 }
@@ -1221,11 +1267,17 @@ function SelectedWeekBars({ weeks }: { weeks: RevWeekPoint[] }) {
   )
 }
 
-function draftStatusMeta(status: DraftStatus) {
+// export: 웨이브 5 회귀 테스트(tests/branch)가 "적용됨(상쇄)" 배지 분기를 직접 검증한다.
+// reversed는 draft.status와 무관한 별도 신호(연결된 entry가 상쇄됐는지) — draft.status
+// 자체는 "applied"로 불변이라(백엔드가 감사 추적을 위해 건드리지 않는다) 여기서 라벨만 분기한다.
+export function draftStatusMeta(status: DraftStatus, reversed = false) {
   if (status === "checked") {
     return { label: "체크 완료", className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" }
   }
   if (status === "applied") {
+    if (reversed) {
+      return { label: "적용됨(상쇄)", className: "border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59]" }
+    }
     return { label: "적용됨", className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" }
   }
   if (status === "cancelled") {
@@ -1263,21 +1315,27 @@ function DraftQueue({
   mode,
   loading,
   error,
+  reversedDraftIds,
   onReload,
   onEdit,
   onToggle,
   onApply,
   onDelete,
+  onReverse,
 }: {
   drafts: LedgerDraft[]
   mode: DraftQueueMode
   loading: boolean
   error: string | null
+  // 웨이브 5 — "되돌리기": applied 초안 중 연결 entry가 상쇄된 것의 id 집합. draft.status는
+  // 불변이라("applied" 그대로) 이 Set으로만 "적용됨" vs "적용됨(상쇄)" 배지를 구분한다.
+  reversedDraftIds: Set<string>
   onReload: () => void
   onEdit: (draft: LedgerDraft) => void
   onToggle: (id: string) => void | Promise<void>
   onApply: (id: string) => void | Promise<void>
   onDelete: (id: string) => void | Promise<void>
+  onReverse: (id: string, reason?: string) => Promise<unknown> | void
 }) {
   const modeLabel = mode === "server" ? "서버 큐" : "로컬 fallback"
   const [query, setQuery] = useState("")
@@ -1323,10 +1381,41 @@ function DraftQueue({
       previouslyFocused?.focus()
     }
   }, [confirmDeleteDraftId])
+  // "되돌리기"(웨이브 5) — 적용을 상쇄하는 동작이라 danger는 아니지만(초안 기록은 감사용으로
+  // 유지된다) 장부 반영을 되돌리는 부수효과가 있어 적용/삭제와 동일한 확인 다이얼로그 셸을
+  // 재사용한다. 톤만 warning(#ECD29C/#FBF1E0/#7A520F)으로 danger(#B43E3E)와 구분.
+  const [confirmReverseDraft, setConfirmReverseDraft] = useState<LedgerDraft | null>(null)
+  const [reverseReason, setReverseReason] = useState("")
+  const [reversingId, setReversingId] = useState<string | null>(null)
+  const confirmReverseCancelRef = useRef<HTMLButtonElement | null>(null)
+  const confirmReverseDraftId = confirmReverseDraft?.id ?? null
+  useEffect(() => {
+    if (!confirmReverseDraftId) return
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    confirmReverseCancelRef.current?.focus()
+    return () => {
+      previouslyFocused?.focus()
+    }
+  }, [confirmReverseDraftId])
+  const closeReverseDialog = () => {
+    setConfirmReverseDraft(null)
+    setReverseReason("")
+  }
+  const confirmAndReverse = async (id: string) => {
+    setReversingId(id)
+    try {
+      await onReverse(id, reverseReason.trim() || undefined)
+    } catch {
+      // 에러 토스트는 onReverse를 감싼 부모(handleReverseEntry)가 이미 띄운다 — 여기선 상태만 정리.
+    } finally {
+      setReversingId(null)
+      closeReverseDialog()
+    }
+  }
   // 체크토글·삭제 in-flight 표시 — InputRailSection의 draftSaving+Loader2 패턴 재사용.
   // 한 초안에 동시에 한 동작만(토글 중 삭제 클릭 등 이중 요청 방지) 진행되게 버튼도 함께 잠근다.
   const [rowActionBusy, setRowActionBusy] = useState<{ id: string; action: "toggle" | "delete" } | null>(null)
-  const isRowBusy = (id: string) => rowActionBusy?.id === id || applyingId === id
+  const isRowBusy = (id: string) => rowActionBusy?.id === id || applyingId === id || reversingId === id
   const runToggle = async (id: string) => {
     setRowActionBusy({ id, action: "toggle" })
     try {
@@ -1451,8 +1540,8 @@ function DraftQueue({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${draftStatusMeta(draft.status).className}`}>
-                  {draftStatusMeta(draft.status).label}
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${draftStatusMeta(draft.status, reversedDraftIds.has(draft.id)).className}`}>
+                  {draftStatusMeta(draft.status, reversedDraftIds.has(draft.id)).label}
                 </span>
                 <span className="rounded-full border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10px] font-bold text-[#615D59]">
                   {draft.kind === "edit-row" ? "수정" : "신규 입력"}
@@ -1520,6 +1609,22 @@ function DraftQueue({
               </button>
               <button
                 type="button"
+                onClick={() => setConfirmReverseDraft(draft)}
+                disabled={
+                  draft.status !== "applied" ||
+                  mode !== "server" ||
+                  draft.id.startsWith("local-") ||
+                  reversedDraftIds.has(draft.id) ||
+                  isRowBusy(draft.id)
+                }
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-[#ECD29C] text-[#7A520F] transition hover:bg-[#FBF1E0] disabled:cursor-not-allowed disabled:opacity-35"
+                aria-label={`${draft.customer || "초안"} 적용 되돌리기`}
+                title={reversedDraftIds.has(draft.id) ? "이미 상쇄된 적용입니다" : "적용 되돌리기"}
+              >
+                {reversingId === draft.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+              </button>
+              <button
+                type="button"
                 onClick={() => setConfirmDeleteDraft(draft)}
                 disabled={draft.status === "checked" || draft.status === "applied" || draft.status === "cancelled" || isRowBusy(draft.id)}
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] text-[#B43E3E] transition hover:bg-[#FCE9E9] disabled:cursor-not-allowed disabled:opacity-35"
@@ -1579,6 +1684,66 @@ function DraftQueue({
             >
               {applyingId === confirmApplyDraft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
               적용
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    {/* 되돌리기 확인 다이얼로그(웨이브 5) — 적용 확인 다이얼로그와 동일 셸 재사용. danger는 아니다
+        (초안 기록은 감사용으로 그대로 남는다) — warning 톤(#ECD29C/#FBF1E0/#7A520F)으로 구분. */}
+    {confirmReverseDraft && (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="적용 되돌리기 확인"
+        className="fixed inset-0 z-[60] flex items-end justify-center bg-[#111110]/40 p-4 sm:items-center"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && reversingId !== confirmReverseDraft.id) {
+            event.stopPropagation()
+            closeReverseDialog()
+          }
+        }}
+      >
+        <div className="flex w-full max-w-sm flex-col overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_24px_70px_rgba(17,17,16,0.22)]">
+          <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
+            <p className="text-[13px] font-bold text-[#111110]">적용 되돌리기 확인</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-[#615D59]">
+              {confirmReverseDraft.customer || "초안"} · {formatMonthLabel(confirmReverseDraft.month)} · {formatMoney(confirmReverseDraft.amount)}
+            </p>
+          </div>
+          <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FBF1E0] px-4 py-3 text-[11.5px] font-semibold leading-relaxed text-[#7A520F]">
+            적용을 상쇄합니다. 초안 기록은 감사용으로 유지됩니다.
+          </div>
+          <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
+            <label className="block text-[10.5px] font-bold text-[#615D59]">
+              사유(선택)
+              <input
+                value={reverseReason}
+                onChange={(event) => setReverseReason(event.target.value)}
+                disabled={reversingId === confirmReverseDraft.id}
+                placeholder="예: 고객 요청으로 취소"
+                className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </label>
+          </div>
+          <div className="flex items-center justify-end gap-2 bg-[#FAFAF8] px-4 py-3">
+            <button
+              ref={confirmReverseCancelRef}
+              type="button"
+              onClick={closeReverseDialog}
+              disabled={reversingId === confirmReverseDraft.id}
+              className="inline-flex h-9 items-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmAndReverse(confirmReverseDraft.id)}
+              disabled={reversingId === confirmReverseDraft.id}
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-3 text-[12px] font-bold text-[#7A520F] transition hover:bg-[#F5E4C3] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {reversingId === confirmReverseDraft.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+              되돌리기
             </button>
           </div>
         </div>
@@ -3592,6 +3757,7 @@ export default function SalesLedgerWorkbench() {
   const {
     drafts,
     ledgerEntries,
+    reversedDraftIds,
     ledgerHealth,
     queueMode,
     queueLoading,
@@ -3602,8 +3768,22 @@ export default function SalesLedgerWorkbench() {
     toggleDraft,
     applyDraft,
     deleteDraft,
+    reverseEntry,
     reloadDrafts,
   } = useLedgerDraftQueue()
+  // 웨이브 5 — "되돌리기" 결과를 매트릭스 근처 토스트로 알린다(DraftQueue의 인라인 에러 배너와
+  // 별개 — 되돌리기는 상태 배지만 남기고 배너를 띄우지 않아 토스트가 유일한 즉시 피드백이다).
+  // 에러를 catch 후 다시 던져 DraftQueue의 confirmAndReverse가 다이얼로그를 항상 닫도록 둔다.
+  const handleReverseEntry = useCallback(async (draftId: string, reason?: string) => {
+    try {
+      const entry = await reverseEntry(draftId, reason)
+      pushMatrixToast({ kind: "info", text: "적용이 상쇄되었습니다" })
+      return entry
+    } catch (error) {
+      pushMatrixToast({ kind: "error", text: `적용 되돌리기에 실패했습니다. ${errorMessage(error)}` })
+      throw error
+    }
+  }, [reverseEntry, pushMatrixToast])
   const monthOptions = useMemo(() => buildFiscalMonthOptions(new Date()), [])
   // 회계연도 라벨(품질 웨이브 3, 항목 4) — 브레드크럼·기간 라벨 2곳이 이 값 하나를 공유한다.
   const fyLabel = useMemo(() => fiscalYearLabel(new Date()), [])
@@ -4082,6 +4262,11 @@ export default function SalesLedgerWorkbench() {
     return drafts
       .filter((draft) => draft.status === "applied")
       .filter((draft) => !draft.id.startsWith("local-"))
+      // 웨이브 5 — "되돌리기": draft.status는 상쇄 후에도 "applied" 그대로다(감사 추적 보존).
+      // reversedDraftIds 없이는 이 안전망(entries 누락 시 applied draft를 대체 표시)이 방금
+      // 상쇄된 항목까지 "아직 동기화 안 된 신규 적용"으로 오인해 되살린다 — 반드시 함께 걸러야
+      // ledgerEntryRows의 active 필터가 매트릭스에서 해당 반영분을 실제로 소거할 수 있다.
+      .filter((draft) => !reversedDraftIds.has(draft.id))
       // 버그 #3과 동일: 적용초안은 M/Q가 아니라 표시 열(matrixMonths) 스코프. 분기 밖 적용분 증발 방지.
       .filter((draft) => matrixMonths.includes(draft.month))
       .filter((draft) => team === "ALL" || draft.team === team)
@@ -4110,7 +4295,7 @@ export default function SalesLedgerWorkbench() {
         draftMetadata: draft.metadata,
         sourceDealId: draft.sourceDealId,
       }))
-  }, [drafts, matrixMonths, team])
+  }, [drafts, matrixMonths, team, reversedDraftIds])
   const appliedDraftRows = useMemo<LedgerRevenueRow[]>(() => {
     if (ledgerEntryRows.length === 0) return appliedDraftFallbackRows
 
@@ -6843,11 +7028,13 @@ export default function SalesLedgerWorkbench() {
                 mode={queueMode}
                 loading={queueLoading}
                 error={queueError}
+                reversedDraftIds={reversedDraftIds}
                 onReload={() => void reloadDrafts()}
                 onEdit={editDraft}
                 onToggle={toggleDraft}
                 onApply={applyDraft}
                 onDelete={deleteDraft}
+                onReverse={handleReverseEntry}
               />
             </div>
           </section>
