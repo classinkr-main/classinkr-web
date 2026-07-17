@@ -6110,6 +6110,12 @@ export default function SalesLedgerWorkbench() {
                     )}
                   </button>
                 </div>
+                {/* 품질 웨이브 6 — 항목 3: 초기 sortKey="revenue"인데 aria-sort는 고객/연간합계 th에만
+                    붙어 있어(테이블 구조는 그대로 둔다) 스크린리더 사용자에게 "기본 정렬 없음"으로
+                    잘못 들린다. 정렬 드롭다운·방향 토글이 바뀔 때마다 실제 상태를 능동 고지. */}
+                <span className="text-[10px] font-semibold text-[#A39E98]" aria-live="polite">
+                  현재 정렬: {REV_SORT_LABELS[revSortKey]} {revSortDirection === "asc" ? "오름차순" : "내림차순"}
+                </span>
                 {query.trim() && <FilterTag label={`검색 ${query.trim()}`} onClear={() => setQuery("")} />}
                 {managerFilter !== "ALL" && <FilterTag label={`담당자 ${managerFilter}`} onClear={() => setManagerFilter("ALL")} />}
                 {regionFilter !== "ALL" && <FilterTag label={`지역 ${regionFilter}`} onClear={() => setRegionFilter("ALL")} />}
