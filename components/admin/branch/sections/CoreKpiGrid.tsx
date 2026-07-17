@@ -45,7 +45,7 @@ function StatCard({ icon, label, value, sub, tone = "neutral", link }: { icon: R
 }
 
 export default function CoreKpiGrid({ data, loading, error }: { data: BranchSummaryResponse | null; loading: boolean; error: string | null }) {
-  if (error) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{error}</div>
+  if (error) return <div className="rounded-2xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] text-[#B43E3E]">{error}</div>
   if (loading || !data) return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
       {Array.from({length:5}).map((_,i) => <div key={i} className="h-[92px] animate-pulse rounded-xl bg-[#f0f0ec]"/>)}

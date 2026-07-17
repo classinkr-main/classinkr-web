@@ -131,7 +131,7 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
   const data = hw.data
 
   if (hw.loading) return <div className="h-48 animate-pulse rounded-xl bg-[#f0f0ec]" />
-  if (hw.error) return <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-[12px] text-rose-700">{hw.error}</div>
+  if (hw.error) return <div className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] text-[#B43E3E]">{hw.error}</div>
   if (!data) return null
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
