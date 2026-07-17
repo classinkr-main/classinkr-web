@@ -52,7 +52,9 @@ export interface DshSource {
 export async function readDshPreferDbWithSource(fiscalYear: number): Promise<{ dsh: DshOutput; source: DshSource }> {
   const runInfo = await getActiveImportRunInfo("dsh", fiscalYear)
   if (runInfo) {
-    const imported = await readDshFromActiveImport(fiscalYear)
+    // runId를 이미 확보했으므로 readDshFromActiveImport 내부의 getActiveImportRunId
+    // 재조회를 생략한다(이중 조회 제거).
+    const imported = await readDshFromActiveImport(fiscalYear, runInfo.runId)
     if (imported) {
       return { dsh: imported, source: { kind: "import", asOf: runInfo.startedAt, runId: runInfo.runId } }
     }

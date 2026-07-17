@@ -32,7 +32,9 @@ export async function readRevDealsPreferActiveWithSource(
 ): Promise<{ deals: BranchRevDeal[]; source: RevDealsSource }> {
   const runInfo = await getActiveImportRunInfo("rev", fiscalYear)
   if (runInfo) {
-    const imported = await readRevDealsFromActiveImport(fiscalYear, filter)
+    // runId를 이미 확보했으므로 readRevDealsFromActiveImport 내부의 getActiveImportRunId
+    // 재조회를 생략한다(이중 조회 제거).
+    const imported = await readRevDealsFromActiveImport(fiscalYear, filter, runInfo.runId)
     if (imported) {
       return { deals: imported, source: { kind: "import", asOf: runInfo.startedAt, runId: runInfo.runId } }
     }

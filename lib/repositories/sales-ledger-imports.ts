@@ -189,8 +189,10 @@ export async function getActiveImportRunInfo(tabKey: SalesLedgerTabKey, fiscalYe
   return getCachedActiveImportRunInfo(tabKey, fiscalYear)
 }
 
-export async function readDshFromActiveImport(fiscalYear: number): Promise<DshOutput | null> {
-  const importRunId = await getActiveImportRunId("dsh", fiscalYear)
+// knownRunId: 호출부가 이미 getActiveImportRunInfo로 runId를 확보했을 때(WithSource 변형)
+// 넘겨 내부 재조회를 생략한다. 미전달 시(undefined) 기존과 동일하게 자체 조회한다.
+export async function readDshFromActiveImport(fiscalYear: number, knownRunId?: string): Promise<DshOutput | null> {
+  const importRunId = knownRunId ?? (await getActiveImportRunId("dsh", fiscalYear))
   if (!importRunId) return null
 
   const supabase = createSupabaseAdminClient()
@@ -352,11 +354,15 @@ const readCachedRevDealsForImportRun = unstable_cache(
   { revalidate: 300, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG] },
 )
 
+// knownRunId: readRevDealsPreferActiveWithSource 등 호출부가 이미 getActiveImportRunInfo로
+// runId를 확보했을 때 넘겨 내부 재조회를 생략한다. 미전달 시(undefined) 기존과 동일하게
+// 자체 조회한다 — 기존 소비처(heatmap/kpi/data-quality/insights/pipeline route 등) 시그니처 불변.
 export async function readRevDealsFromActiveImport(
   fiscalYear: number,
   filter?: { team?: string },
+  knownRunId?: string,
 ): Promise<BranchRevDeal[] | null> {
-  const importRunId = await getActiveImportRunId("rev", fiscalYear)
+  const importRunId = knownRunId ?? (await getActiveImportRunId("rev", fiscalYear))
   if (!importRunId) return null
   const team = filter?.team && filter.team !== "ALL" ? filter.team : "ALL"
   return readCachedRevDealsForImportRun(importRunId, team)
