@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Loader2, Sparkles, RefreshCw, ClipboardCopy, Check, Plus, MessageSquare } from "lucide-react"
 import { adminFetchJson } from "@/lib/admin-client"
@@ -246,14 +246,27 @@ function getGapClusterSourceBadge(cluster: GapCluster) {
   return DEFAULT_GAP_SOURCE_BADGE
 }
 
+// ?source=all|chatbot|internal_cs 딥링크(예: /admin/docs?tab=gaps&source=chatbot) 프리셋.
+// useSearchParams는 Suspense 경계가 필요하지만 이 컴포넌트는 항상 app/admin/docs/page.tsx의
+// <Suspense fallback={null}> 하위(activeTab==="gaps")에서만 렌더되므로 별도 경계를 두지 않는다.
+function readSourceFilterFromParams(params: { get(key: string): string | null }): GapSourceFilter {
+  const raw = params.get("source")
+  return raw === "chatbot" || raw === "internal_cs" ? raw : "all"
+}
+
 export default function DocsGapsPanel() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [backlog, setBacklog] = useState<Backlog | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [clusterActionId, setClusterActionId] = useState<string | null>(null)
-  const [sourceFilter, setSourceFilter] = useState<GapSourceFilter>("all")
+  // 마운트 시 1회만 URL을 읽어 초기값을 프리셋한다 — 이후 칩 클릭은 기존처럼 클라이언트 상태만
+  // 바뀌고 URL과 동기화하지 않는다(계약 1).
+  const [sourceFilter, setSourceFilter] = useState<GapSourceFilter>(() =>
+    readSourceFilterFromParams(searchParams)
+  )
 
   const [draftingKey, setDraftingKey] = useState<string | null>(null)
   const [draft, setDraft] = useState<DocDraft | null>(null)
