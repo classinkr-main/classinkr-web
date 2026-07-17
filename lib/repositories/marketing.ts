@@ -7,6 +7,7 @@
  */
 
 import "server-only";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Subscriber, EmailCampaign } from "@/lib/marketing-types";
 
@@ -332,6 +333,17 @@ export async function getAllCampaigns(limit = 200, offset = 0): Promise<Campaign
   return (data ?? []).map(rowToCampaign);
 }
 
+export const MARKETING_CAMPAIGNS_CACHE_TAG = "marketing-campaigns";
+
+// summarizeCampaigns(branch summary의 "최근 30일 캠페인" 위젯)처럼 초단위 신선도가
+// 필요 없는 소비처용 60초 캐시. getAllCampaigns의 기본 인자(limit=200, offset=0) 호출만
+// 캐시한다 — createCampaign/updateCampaign이 뮤테이션마다 태그를 무효화한다.
+export const getCachedAllCampaigns = unstable_cache(
+  async () => getAllCampaigns(),
+  ["marketing-campaigns-default"],
+  { revalidate: 60, tags: [MARKETING_CAMPAIGNS_CACHE_TAG] },
+);
+
 export async function createCampaign(
   data: Omit<EmailCampaign, "id" | "createdAt">
 ): Promise<CampaignRow> {
@@ -354,6 +366,7 @@ export async function createCampaign(
     .select()
     .single();
   if (error) throw new Error(`[marketing] 캠페인 생성 실패: ${error.message}`);
+  revalidateTag(MARKETING_CAMPAIGNS_CACHE_TAG, "max");
   return rowToCampaign(row);
 }
 
@@ -375,6 +388,7 @@ export async function updateCampaign(
     .eq("id", id as string)
 
   if (error) throw new Error(`[marketing] 캠페인 업데이트 실패: ${error.message}`)
+  revalidateTag(MARKETING_CAMPAIGNS_CACHE_TAG, "max");
 }
 
 /* ─── 변환 헬퍼 ──────────────────────────────────────────── */

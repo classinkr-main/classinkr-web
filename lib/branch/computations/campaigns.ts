@@ -1,5 +1,5 @@
 import "server-only"
-import { getAllCampaigns } from "@/lib/repositories/marketing"
+import { getCachedAllCampaigns } from "@/lib/repositories/marketing"
 
 export interface CampaignSummary {
   recent: Array<{ id: string|number; subject: string; sentAt: string|undefined; recipientCount: number; openCount: number; openPct: number }>
@@ -8,7 +8,8 @@ export interface CampaignSummary {
 }
 
 export async function summarizeCampaigns(now: Date): Promise<CampaignSummary> {
-  const all = await getAllCampaigns()
+  // 60초 캐시(getCachedAllCampaigns) — summary 라우트는 초단위 신선도가 필요 없다.
+  const all = await getCachedAllCampaigns()
   const cutoff = new Date(now); cutoff.setUTCDate(cutoff.getUTCDate() - 30)
   const recent = all
     .filter((c) => c.sentAt && new Date(c.sentAt) >= cutoff)

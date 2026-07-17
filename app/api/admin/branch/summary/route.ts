@@ -14,7 +14,7 @@ import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
 import { listMembersByTeam } from "@/lib/branch/computations/pacing"
 import { summarizeCampaigns } from "@/lib/branch/computations/campaigns"
 import { getRecentSyncRuns } from "@/lib/repositories/branch-sync"
-import { listPublicEvents } from "@/lib/repositories/public-events"
+import { listCachedPublicEvents } from "@/lib/repositories/public-events"
 
 function pickValue(row: DshBreakdownRow, scope: "M" | "Q" | "Y", now: Date): number {
   if (scope === "Y") return row.annual
@@ -209,7 +209,7 @@ export async function GET(req: NextRequest) {
   if (!periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
     const [dshResult, kpi, revResult, campaigns, runs, events, sheetModifiedAt] = await Promise.all([
-      readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate)), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listPublicEvents(),
+      readDshWithSource(fyOf(periodDate)), readKpi(fyOf(periodDate)), readRevDealsPreferActiveWithSource(fyOf(periodDate), { team }), summarizeCampaigns(currentDate), getRecentSyncRuns(3), listCachedPublicEvents(),
       readSheetFreshness(),
     ])
     const dsh = dshResult.dsh

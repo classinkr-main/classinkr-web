@@ -11,7 +11,7 @@ const readKpiBlocksPreferDb = vi.fn()
 const readRevDealsPreferActiveWithSource = vi.fn()
 const summarizeCampaigns = vi.fn()
 const getRecentSyncRuns = vi.fn()
-const listPublicEvents = vi.fn()
+const listCachedPublicEvents = vi.fn()
 const getSheetModifiedTime = vi.fn()
 
 vi.mock("@/lib/admin-auth", () => ({
@@ -48,7 +48,7 @@ vi.mock("@/lib/repositories/branch-sync", () => ({
 }))
 
 vi.mock("@/lib/repositories/public-events", () => ({
-  listPublicEvents,
+  listCachedPublicEvents,
 }))
 
 const BREAKDOWN = [
@@ -85,7 +85,7 @@ function mockHappyPath() {
   })
   summarizeCampaigns.mockResolvedValue({ count_30d: 0, avg_open_pct: 0, recent: [] })
   getRecentSyncRuns.mockResolvedValue([])
-  listPublicEvents.mockResolvedValue([])
+  listCachedPublicEvents.mockResolvedValue([])
   getSheetModifiedTime.mockResolvedValue(null)
 }
 
