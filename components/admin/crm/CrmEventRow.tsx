@@ -39,12 +39,14 @@ export default function CrmEventRow({ event, children }: { event: CrmEventRecord
       : null
 
   return (
-    <article className="overflow-hidden rounded-xl border border-[#e8e8e4] bg-white">
+    <article
+      className={`overflow-hidden rounded-xl border bg-white transition-colors ${open ? "border-[#d8d8d2]" : "border-[#e8e8e4] hover:border-[#d8d8d2]"}`}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className={`flex w-full flex-col gap-1 px-3.5 py-2.5 text-left transition-colors ${open ? "bg-[#fafaf8]" : "hover:bg-[#fafaf8]"}`}
+        className="flex w-full flex-col gap-1 px-3.5 py-2.5 text-left"
       >
         <span className="flex items-center gap-2.5">
           <span className="shrink-0 rounded-full border border-[#e8e8e4] bg-[#fafaf8] px-2 py-0.5 text-[11px] font-bold text-[#1a1a1a]/55">
