@@ -5,6 +5,7 @@ import { ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronRight, Search } from "lu
 import type { BranchKpiResponse, BranchKpiTeamRow, BranchKpiMemberRow } from "../types"
 import { cny, cnyExact } from "@/lib/branch/money-format"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+import { matchesTokens, tokenize } from "../search-tokens"
 import MoneyValue from "../MoneyValue"
 
 const numberFmt = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 })
@@ -318,11 +319,13 @@ export default function BranchKpiAccordion({
 
   // 담당자 검색 — 팀 행 자체는 유지하되 팀 내 팀원만 이름 부분일치로 좁힌다.
   // 매치가 하나도 없는 팀은 통째로 숨긴다(빈 "팀 단위 집계" placeholder 오표시 방지).
+  // 품질 웨이브 4 — 항목 3. 자체 includes 매칭 대신 search-tokens.ts SSOT(tokenize/
+  // matchesTokens)를 소비 — PipelineTable/BranchPipelineKanban과 동일 토큰화 규칙을 쓴다.
   const filteredTeamsWithMembers = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return teamsWithMembers
+    const tokens = tokenize(query)
+    if (tokens.length === 0) return teamsWithMembers
     return teamsWithMembers
-      .map((t) => ({ team: t.team, members: t.members.filter((m) => m.member.toLowerCase().includes(q)) }))
+      .map((t) => ({ team: t.team, members: t.members.filter((m) => matchesTokens(tokens, [m.member])) }))
       .filter((t) => t.members.length > 0)
   }, [teamsWithMembers, query])
 
