@@ -205,7 +205,8 @@ export type CrmCustomerEventSourceType =
   | "external_crm"
   | "sheet"
   | "call"
-  | "sms";
+  | "sms"
+  | "site_inflow";
 export type CrmCustomerEventSentiment = "positive" | "neutral" | "risk";
 export type CrmNeoServiceRiskLevel = "urgent" | "soon" | "watch" | "normal";
 export type CrmNeoServiceRiskConfidence = "high" | "medium" | "low";

@@ -17,6 +17,7 @@ export type SourceType =
   | "sheet"
   | "call"
   | "sms"
+  | "site_inflow"
 export type Sentiment = "all" | "positive" | "neutral" | "risk"
 export type FormMode = "manual_note" | "meeting_minutes" | "recording"
 export type OptionalFieldKey =
@@ -151,6 +152,7 @@ export const SOURCE_FILTERS: Array<{ key: SourceType; label: string }> = [
   { key: "calendar_event", label: "캘린더" },
   { key: "external_crm", label: "외부 CRM" },
   { key: "sheet", label: "시트" },
+  { key: "site_inflow", label: "홈페이지 유입" },
 ]
 
 export const SENTIMENT_FILTERS: Array<{ key: Sentiment; label: string }> = [
@@ -210,6 +212,7 @@ export function sourceLabel(source: CrmEventRecord["sourceType"]) {
   if (source === "lead_contact_log") return "연락 로그"
   if (source === "external_crm") return "외부 CRM"
   if (source === "sheet") return "시트"
+  if (source === "site_inflow") return "홈페이지 유입"
   return "메모"
 }
 
