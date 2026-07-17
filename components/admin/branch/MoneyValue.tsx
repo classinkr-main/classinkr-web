@@ -15,7 +15,7 @@ export default function MoneyValue({
   const exact = `${prefix}${cnyExact(value)}`
   return (
     <span
-      className="group/money relative cursor-help border-b border-dashed border-black/25"
+      className="group/money relative cursor-help border-b border-dashed border-black/25 tabular-nums"
       title={exact}
     >
       {prefix}
