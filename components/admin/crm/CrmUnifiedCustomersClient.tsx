@@ -19,6 +19,7 @@ import LeadRegisterModal from "./LeadRegisterModal"
 import CrmCustomerFlags from "./CrmCustomerFlags"
 import CrmContactValue from "./CrmContactValue"
 import { deriveCustomerFlags, type CustomerFlag } from "@/lib/crm/customer-flags"
+import { LEAD_BADGE_TONE_CLASSES, leadBadges } from "@/lib/crm/lead-badges"
 
 type SourceFilter = "all" | CrmUnifiedCustomerSource
 type LifecycleFilter = "all" | CrmUnifiedLifecycle
@@ -201,39 +202,7 @@ function sourceBadge(row: CrmUnifiedCustomerRow) {
   )
 }
 
-type LeadBadgeTone = "neutral" | "green" | "risk"
-
-const LEAD_BADGE_TONE_CLASSES: Record<LeadBadgeTone, string> = {
-  neutral: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
-  green: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
-  risk: "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]",
-}
-
-// 리드 행 배지 — 홈페이지 유입/정식 리드(NEO 등록)/미응답 SLA 경과를 행 단위로 노출.
-function leadBadges(
-  row: CrmUnifiedCustomerRow,
-  nowMs: number
-): Array<{ label: string; tone: LeadBadgeTone }> | null {
-  if (row.source !== "lead") return null
-  const badges: Array<{ label: string; tone: LeadBadgeTone }> = []
-  if (row.origin === "site") {
-    badges.push(
-      row.crmRegistered
-        ? { label: "정식 리드 · NEO", tone: "green" }
-        : { label: "홈페이지", tone: "neutral" }
-    )
-  }
-  if (row.slaTarget && !row.firstResponseAt && row.createdAt) {
-    const createdMs = new Date(row.createdAt).getTime()
-    if (Number.isFinite(createdMs)) {
-      // 시계 스큐로 createdAt이 미래면 0h로 클램프.
-      const hours = Math.max(0, Math.floor((nowMs - createdMs) / 3_600_000))
-      badges.push({ label: `미응답 ${hours}h`, tone: hours >= 24 ? "risk" : "neutral" })
-    }
-  }
-  return badges.length ? badges : null
-}
-
+// 리드 행 배지 — 파생 규칙은 lib/crm/lead-badges.ts(순수 모듈, 단위 테스트 대상) 소유.
 function LeadRowBadges({ row, nowMs }: { row: CrmUnifiedCustomerRow; nowMs: number }) {
   const badges = leadBadges(row, nowMs)
   if (!badges) return null
@@ -248,6 +217,223 @@ function LeadRowBadges({ row, nowMs }: { row: CrmUnifiedCustomerRow; nowMs: numb
         </span>
       ))}
     </>
+  )
+}
+
+// 검색 패널 — 검색·소스 토글·상태/담당 셀렉트·라벨·요약 타일·소스 상태 타일.
+// quickMode(칩 진입)일 때는 렌더되지 않는다. 본체에서 기계적 추출 — 동작 동일.
+function CustomerSearchPanel({
+  query,
+  onQueryChange,
+  source,
+  onSourceChange,
+  lifecycle,
+  onLifecycleChange,
+  owner,
+  onOwnerChange,
+  currentOwner,
+  currentOwnerCount,
+  ownerOptions,
+  tagFilter,
+  onTagFilterChange,
+  data,
+  loading,
+}: {
+  query: string
+  onQueryChange: (value: string) => void
+  source: SourceFilter
+  onSourceChange: (value: SourceFilter) => void
+  lifecycle: LifecycleFilter
+  onLifecycleChange: (value: LifecycleFilter) => void
+  owner: string
+  onOwnerChange: (value: string) => void
+  currentOwner: ReturnType<typeof useCrmOwners>["currentOwner"]
+  currentOwnerCount: number
+  ownerOptions: ReturnType<typeof buildOwnerSelectOptions>
+  tagFilter: string
+  onTagFilterChange: (value: string) => void
+  data: CrmUnifiedCustomers | null
+  loading: boolean
+}) {
+  return (
+    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto] lg:items-center">
+        <label className="flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3">
+          <Search className="h-4 w-4 text-[#1a1a1a]/35" />
+          <input
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            className="h-full min-w-0 flex-1 bg-transparent text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/30"
+            placeholder="이름, 연락처, 담당자 검색"
+          />
+        </label>
+        <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1">
+          {SOURCE_FILTERS.map((filter) => (
+            <button
+              key={filter.key}
+              type="button"
+              onClick={() => onSourceChange(filter.key)}
+              className={`h-7 rounded-md px-3 text-[12px] font-semibold transition-colors ${
+                source === filter.key
+                  ? "bg-[#111110] text-white"
+                  : "text-[#1a1a1a]/55 hover:bg-white hover:text-[#111110]"
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+        <label className="flex h-10 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
+          <Filter className="h-3.5 w-3.5" />
+          <select
+            value={lifecycle}
+            onChange={(event) => onLifecycleChange(event.target.value as LifecycleFilter)}
+            className="h-full bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
+            aria-label="상태 필터"
+          >
+            {LIFECYCLE_FILTERS.map((filter) => (
+              <option key={filter.key} value={filter.key}>
+                {filter.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex h-10 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
+          <Filter className="h-3.5 w-3.5" />
+          <select
+            value={owner}
+            onChange={(event) => onOwnerChange(event.target.value)}
+            className="h-full min-w-[128px] bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
+            aria-label="담당자 필터"
+          >
+            <option value="">담당 전체</option>
+            {currentOwner ? (
+              <option value={CURRENT_OWNER_VALUE}>
+                내 담당 · {currentOwner.displayName}
+                {currentOwnerCount > 0 ? ` (${currentOwnerCount})` : ""}
+              </option>
+            ) : null}
+            {ownerOptions.map((option) => (
+              <option key={option.ownerName} value={option.ownerName}>
+                {option.label}
+                {option.teamRoleLabel ? ` · ${option.teamRoleLabel}` : ""}
+                {option.count > 0 ? ` (${option.count})` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {data?.summary.availableTags?.length ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="inline-flex h-8 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
+            <Tag className="h-3.5 w-3.5" />
+            라벨
+          </span>
+          {data.summary.availableTags.map((tag) => {
+            const isActive = tagFilter === tag
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => onTagFilterChange(tagFilter === tag ? "" : tag)}
+                className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
+                  isActive
+                    ? "border-[#111110] bg-[#111110] text-white"
+                    : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#c8c8c4] hover:text-[#111110]"
+                }`}
+              >
+                {tag}
+              </button>
+            )
+          })}
+          {tagFilter ? (
+            <button
+              type="button"
+              onClick={() => onTagFilterChange("")}
+              className="h-8 px-2 text-[12px] font-medium text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
+            >
+              초기화
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {data ? (
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">검색 결과</p>
+            <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">리드</p>
+            <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.leadCount.toLocaleString("ko-KR")}</p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객</p>
+            <p className="mt-1 text-xl font-bold text-[#111110]">
+              {data.summary.accountCount.toLocaleString("ko-KR")}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">전환 고객</p>
+            <p className="mt-1 text-xl font-bold text-[#111110]">
+              {(data.summary.customerCount ?? 0).toLocaleString("ko-KR")}
+            </p>
+          </div>
+          <div className="rounded-xl bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">우선 처리</p>
+            <p className="mt-1 text-xl font-bold text-[#B85C33]">
+              {data.summary.highPriorityCount.toLocaleString("ko-KR")}
+            </p>
+          </div>
+        </div>
+      ) : loading ? (
+        // 콜드로드 스켈레톤 — 실제 요약 타일 5칸 그리드와 동일 골격(0 플래시·점프 방지).
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="rounded-xl bg-[#fafaf8] p-3">
+              <div className="h-3 w-14 animate-pulse rounded bg-[#f0f0ec]" />
+              <div className="mt-2 h-6 w-16 animate-pulse rounded bg-[#f0f0ec]" />
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {data?.sources.statuses.length ? (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {data.sources.statuses.map((status) => (
+            <div
+              key={status.key}
+              className={`rounded-xl border px-3 py-2 ${
+                status.ok && !status.partial
+                  ? "border-[#D7EBDD] bg-[#ECFDF5]"
+                  : "border-[#F6D5C5] bg-[#FEF3EE]"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p
+                  className={`text-[12px] font-bold ${
+                    status.ok && !status.partial ? "text-[#084734]" : "text-[#B85C33]"
+                  }`}
+                >
+                  {status.label}
+                </p>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
+                  {status.role === "primary" ? "DB" : "SYNC"}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] leading-4 text-[#1a1a1a]/52">{status.message}</p>
+              {status.latestSyncedAt ? (
+                <p className="mt-1 text-[11px] font-medium text-[#1a1a1a]/35">
+                  마지막 동기화 {formatDate(status.latestSyncedAt)}
+                </p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
   )
 }
 
@@ -358,24 +544,30 @@ export default function CrmUnifiedCustomersClient() {
     setOwner(view === "my_owner" ? CURRENT_OWNER_VALUE : "")
   }, [searchParams])
 
-  // 칩 클릭 ↔ URL 동기화 — replaceState라 히스토리를 오염시키지 않는다(뒤로가기 안전).
-  // lastViewParamRef를 replaceState보다 먼저 갱신해, 우리 자신의 URL 변경이 위 착지
-  // effect(필터 초기화)를 재발화시키지 않게 한다.
-  const syncViewParam = useCallback((view: SavedViewFilter) => {
-    const params = new URLSearchParams(window.location.search)
-    if (view === "all") params.delete("view")
-    else params.set("view", view)
-    lastViewParamRef.current = view === "all" ? null : view
-    const qs = params.toString()
-    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname)
-  }, [])
+  // 칩 클릭 ↔ URL 동기화 — setDrawerUrl과 동일하게 라우터 경유(router.replace).
+  // raw history API는 useSearchParams와 desync되어 드로어 열기/닫기가 ?view=를 유실한다.
+  // replace라 히스토리를 오염시키지 않고(뒤로가기 안전), lastViewParamRef를 라우터 호출보다
+  // 먼저 갱신해 우리 자신의 URL 변경이 위 착지 effect(필터 초기화)를 재발화시키지 않게 한다.
+  const syncViewParam = useCallback(
+    (view: SavedViewFilter) => {
+      const params = new URLSearchParams(Array.from(searchParams.entries()))
+      if (view === "all") params.delete("view")
+      else params.set("view", view)
+      lastViewParamRef.current = view === "all" ? null : view
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    },
+    [router, pathname, searchParams]
+  )
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
 
-  // 배지 SLA 경과 계산 기준 시각 — 행마다 Date.now() 호출 방지. 데이터가 갱신될 때만
-  // 재계산되도록 data를 의도적 의존성으로 둔다(콜백 내 미참조라 규칙 예외 처리).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const nowMs = useMemo(() => Date.now(), [data])
+  // 배지 SLA 경과 계산 기준 시각 — 행마다 Date.now() 호출 방지 + 60초 틱으로 경과시간 실시간 갱신.
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000)
+    return () => window.clearInterval(id)
+  }, [])
 
   const currentOwnerCount = useMemo(() => {
     const selected = normalizeText(owner === CURRENT_OWNER_VALUE ? currentOwner?.ownerKey : owner)
@@ -483,6 +675,18 @@ export default function CrmUnifiedCustomersClient() {
   // 숨김이지 리셋이 아님: query/owner 등 로컬 상태는 메모리에 유지된다.
   const quickMode = savedView !== "all"
 
+  // 스트립의 '전체 보기' 전용 탈출 — selectSavedView와 달리 무조건 해제한다.
+  // (?view=my_owner 딥링크 착지 후 currentOwner가 없으면 selectSavedView는 조기 return이라
+  // 토글 해제가 막히는 탈출 트랩 방지. my_owner가 걸어둔 owner 필터도 함께 해제.)
+  const exitQuickView = useCallback(() => {
+    if (savedView === "my_owner") {
+      setOwner("")
+      persistOwner("")
+    }
+    setSavedView("all")
+    syncViewParam("all")
+  }, [persistOwner, savedView, syncViewParam])
+
   // 빈 상태 다음 행동 안내 — 필터가 걸려 있으면 초기화를, 아니면 리드 등록/매칭 연결을 권한다.
   const hasActiveFilters =
     Boolean(query.trim()) ||
@@ -580,202 +784,40 @@ export default function CrmUnifiedCustomersClient() {
             <p className="text-[13px] font-semibold text-[#111110]">
               {SAVED_VIEW_FILTERS.find((f) => f.key === savedView)?.label}
               <span className="ml-2 text-[12px] font-medium text-[#1a1a1a]/45 tabular-nums">
-                {data ? `${data.summary.total.toLocaleString("ko-KR")}건` : "불러오는 중"}
+                {data ? `${data.summary.total.toLocaleString("ko-KR")}건` : error ? "불러오지 못했습니다" : "불러오는 중"}
               </span>
             </p>
             <button
               type="button"
-              onClick={() => selectSavedView(savedView)}
+              onClick={exitQuickView}
               className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/60 hover:bg-[#fafaf8]"
             >
               전체 보기 (검색·필터)
             </button>
           </div>
         ) : (
-        <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto] lg:items-center">
-            <label className="flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3">
-              <Search className="h-4 w-4 text-[#1a1a1a]/35" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                className="h-full min-w-0 flex-1 bg-transparent text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/30"
-                placeholder="이름, 연락처, 담당자 검색"
-              />
-            </label>
-            <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1">
-              {SOURCE_FILTERS.map((filter) => (
-                <button
-                  key={filter.key}
-                  type="button"
-                  onClick={() => setSource(filter.key)}
-                  className={`h-7 rounded-md px-3 text-[12px] font-semibold transition-colors ${
-                    source === filter.key
-                      ? "bg-[#111110] text-white"
-                      : "text-[#1a1a1a]/55 hover:bg-white hover:text-[#111110]"
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
-            <label className="flex h-10 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
-              <Filter className="h-3.5 w-3.5" />
-              <select
-                value={lifecycle}
-                onChange={(event) => setLifecycle(event.target.value as LifecycleFilter)}
-                className="h-full bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
-                aria-label="상태 필터"
-              >
-                {LIFECYCLE_FILTERS.map((filter) => (
-                  <option key={filter.key} value={filter.key}>
-                    {filter.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex h-10 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
-              <Filter className="h-3.5 w-3.5" />
-              <select
-                value={owner}
-                onChange={(event) => {
-                  // 이 select는 quickMode(savedView !== "all")에서 렌더되지 않으므로
-                  // 여기 도달 시 savedView는 항상 "all" — my_owner 해제 가드 불필요.
-                  const nextOwner = event.target.value
-                  setOwner(nextOwner)
-                  persistOwner(nextOwner)
-                }}
-                className="h-full min-w-[128px] bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
-                aria-label="담당자 필터"
-              >
-                <option value="">담당 전체</option>
-                {currentOwner ? (
-                  <option value={CURRENT_OWNER_VALUE}>
-                    내 담당 · {currentOwner.displayName}
-                    {currentOwnerCount > 0 ? ` (${currentOwnerCount})` : ""}
-                  </option>
-                ) : null}
-                {ownerOptions.map((option) => (
-                  <option key={option.ownerName} value={option.ownerName}>
-                    {option.label}
-                    {option.teamRoleLabel ? ` · ${option.teamRoleLabel}` : ""}
-                    {option.count > 0 ? ` (${option.count})` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          {data?.summary.availableTags?.length ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="inline-flex h-8 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
-                <Tag className="h-3.5 w-3.5" />
-                라벨
-              </span>
-              {data.summary.availableTags.map((tag) => {
-                const isActive = tagFilter === tag
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => setTagFilter((current) => (current === tag ? "" : tag))}
-                    className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
-                      isActive
-                        ? "border-[#111110] bg-[#111110] text-white"
-                        : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#c8c8c4] hover:text-[#111110]"
-                    }`}
-                  >
-                    {tag}
-                  </button>
-                )
-              })}
-              {tagFilter ? (
-                <button
-                  type="button"
-                  onClick={() => setTagFilter("")}
-                  className="h-8 px-2 text-[12px] font-medium text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
-                >
-                  초기화
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-
-          {data ? (
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-              <div className="rounded-xl bg-[#fafaf8] p-3">
-                <p className="text-[11px] font-semibold text-[#1a1a1a]/35">검색 결과</p>
-                <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
-              </div>
-              <div className="rounded-xl bg-[#fafaf8] p-3">
-                <p className="text-[11px] font-semibold text-[#1a1a1a]/35">리드</p>
-                <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.leadCount.toLocaleString("ko-KR")}</p>
-              </div>
-              <div className="rounded-xl bg-[#fafaf8] p-3">
-                <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객</p>
-                <p className="mt-1 text-xl font-bold text-[#111110]">
-                  {data.summary.accountCount.toLocaleString("ko-KR")}
-                </p>
-              </div>
-              <div className="rounded-xl bg-[#fafaf8] p-3">
-                <p className="text-[11px] font-semibold text-[#1a1a1a]/35">전환 고객</p>
-                <p className="mt-1 text-xl font-bold text-[#111110]">
-                  {(data.summary.customerCount ?? 0).toLocaleString("ko-KR")}
-                </p>
-              </div>
-              <div className="rounded-xl bg-[#fafaf8] p-3">
-                <p className="text-[11px] font-semibold text-[#1a1a1a]/35">우선 처리</p>
-                <p className="mt-1 text-xl font-bold text-[#B85C33]">
-                  {data.summary.highPriorityCount.toLocaleString("ko-KR")}
-                </p>
-              </div>
-            </div>
-          ) : loading ? (
-            // 콜드로드 스켈레톤 — 실제 요약 타일 5칸 그리드와 동일 골격(0 플래시·점프 방지).
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-              {Array.from({ length: 5 }).map((_, index) => (
-                <div key={index} className="rounded-xl bg-[#fafaf8] p-3">
-                  <div className="h-3 w-14 animate-pulse rounded bg-[#f0f0ec]" />
-                  <div className="mt-2 h-6 w-16 animate-pulse rounded bg-[#f0f0ec]" />
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          {data?.sources.statuses.length ? (
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {data.sources.statuses.map((status) => (
-                <div
-                  key={status.key}
-                  className={`rounded-xl border px-3 py-2 ${
-                    status.ok && !status.partial
-                      ? "border-[#D7EBDD] bg-[#ECFDF5]"
-                      : "border-[#F6D5C5] bg-[#FEF3EE]"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p
-                      className={`text-[12px] font-bold ${
-                        status.ok && !status.partial ? "text-[#084734]" : "text-[#B85C33]"
-                      }`}
-                    >
-                      {status.label}
-                    </p>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
-                      {status.role === "primary" ? "DB" : "SYNC"}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[11px] leading-4 text-[#1a1a1a]/52">{status.message}</p>
-                  {status.latestSyncedAt ? (
-                    <p className="mt-1 text-[11px] font-medium text-[#1a1a1a]/35">
-                      마지막 동기화 {formatDate(status.latestSyncedAt)}
-                    </p>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </section>
+          <CustomerSearchPanel
+            query={query}
+            onQueryChange={setQuery}
+            source={source}
+            onSourceChange={setSource}
+            lifecycle={lifecycle}
+            onLifecycleChange={setLifecycle}
+            owner={owner}
+            onOwnerChange={(nextOwner) => {
+              // 이 패널은 quickMode(savedView !== "all")에서 렌더되지 않으므로
+              // 여기 도달 시 savedView는 항상 "all" — my_owner 해제 가드 불필요.
+              setOwner(nextOwner)
+              persistOwner(nextOwner)
+            }}
+            currentOwner={currentOwner}
+            currentOwnerCount={currentOwnerCount}
+            ownerOptions={ownerOptions}
+            tagFilter={tagFilter}
+            onTagFilterChange={setTagFilter}
+            data={data}
+            loading={loading}
+          />
         )}
 
         <Account360Lens />
