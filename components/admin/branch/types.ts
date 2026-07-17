@@ -59,6 +59,10 @@ export interface BranchDealMix {
 
 // summary API의 dsh_breakdown 행 — lib/branch/parsers/dsh.ts DshBreakdownRow 미러.
 // 팀 필터와 무관한 Team KR 전사 수치라 어느 team 쿼리에서도 동일하게 실린다.
+// opt-in 필드: summary 요청에 `?breakdown=1`을 붙였을 때만 응답에 실린다(app/api/admin/
+// branch/summary/route.ts readBreakdownFlag). 소비처는 장부 DSH 수치 그리드(SalesLedgerWorkbench
+// 의 DshNumericGrid) 한 곳뿐이라 그 요청만 플래그를 보낸다 — 다른 summary 소비처(예: KR Team
+// 개요)는 이 필드를 받지 않는다.
 export interface BranchDshBreakdownRow {
   kind: "goal" | "status"
   category: string // "Software" | "Hardware"

@@ -3710,7 +3710,7 @@ export default function SalesLedgerWorkbench() {
   }, [editingDraft, editingDraftId])
 
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
-  const summary = useBranchJson<BranchSummaryResponse>(`/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}`, refreshKey)
+  const summary = useBranchJson<BranchSummaryResponse>(`/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}&breakdown=1`, refreshKey)
   const kpi = useBranchJson<BranchKpiResponse>(`/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`, refreshKey)
   const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey)
 
