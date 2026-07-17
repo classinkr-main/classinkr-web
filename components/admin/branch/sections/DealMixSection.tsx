@@ -44,8 +44,12 @@ function CompareCard({ title, desc, a, b, aTone, bTone, prevMeta }: {
   prevMeta?: BranchDealMixMeta
 }) {
   const sum = a.actual + b.actual
-  const aPct = sum ? (a.actual / sum) * 100 : 0
-  const bPct = 100 - aPct
+  // 품질 웨이브 4 — 항목 6. 두 슬라이스 모두 실적 0이면 aPct/bPct는 "0%/100%"라는
+  // 거짓 신호가 된다(A가 0이 아니라 "데이터가 없다"는 뜻인데 B가 100% 우위처럼 보임).
+  // hasData=false일 땐 % 계산 자체를 렌더에 쓰지 않고 "데이터 없음" 상태로 명시한다.
+  const hasData = sum > 0
+  const aPct = hasData ? (a.actual / sum) * 100 : 0
+  const bPct = hasData ? 100 - aPct : 0
 
   // Goal mix marker — where A's share would be if both sides hit goal exactly
   const goalSum = a.goal + b.goal
@@ -66,10 +70,14 @@ function CompareCard({ title, desc, a, b, aTone, bTone, prevMeta }: {
           <p className="mt-0.5 text-[10.5px] text-[#615D59]">{desc}</p>
         </div>
         <div className="text-right">
-          <p className="whitespace-nowrap text-[10px] font-bold tracking-[0.04em] text-[#615D59]">
-            믹스 {mixShift >= 0 ? "+" : ""}{mixShift.toFixed(1)}%p
-          </p>
-          {prevDelta != null && (
+          {hasData ? (
+            <p className="whitespace-nowrap text-[10px] font-bold tracking-[0.04em] text-[#615D59]">
+              믹스 {mixShift >= 0 ? "+" : ""}{mixShift.toFixed(1)}%p
+            </p>
+          ) : (
+            <p className="whitespace-nowrap text-[10px] font-bold tracking-[0.04em] text-[#9B9690]">데이터 없음</p>
+          )}
+          {hasData && prevDelta != null && (
             <p className="mt-0.5 whitespace-nowrap text-[10px] font-bold tracking-[0.04em] text-[#615D59]">
               {prevMeta?.prev_period_label} 대비 {prevDelta >= 0 ? "+" : ""}{prevDelta.toFixed(0)}%
             </p>
@@ -77,26 +85,33 @@ function CompareCard({ title, desc, a, b, aTone, bTone, prevMeta }: {
         </div>
       </div>
 
-      {/* Stacked compare bar with goal-mix marker */}
-      <div className="relative mb-1.5 flex h-[22px] overflow-hidden rounded-md bg-[rgba(0,0,0,0.04)]">
-        <div className="flex items-center justify-end pr-1.5 text-[10px] font-bold text-white transition-[width] duration-700"
-          style={{ width: `${aPct}%`, background: aTone }}>
-          {aPct >= 18 && `${aPct.toFixed(0)}%`}
+      {/* Stacked compare bar with goal-mix marker — 데이터 없을 땐 0%/100% 막대 대신
+          중립 placeholder만 보여준다. */}
+      {hasData ? (
+        <div className="relative mb-1.5 flex h-[22px] overflow-hidden rounded-md bg-[rgba(0,0,0,0.04)]">
+          <div className="flex items-center justify-end pr-1.5 text-[10px] font-bold text-white transition-[width] duration-700"
+            style={{ width: `${aPct}%`, background: aTone }}>
+            {aPct >= 18 && `${aPct.toFixed(0)}%`}
+          </div>
+          <div className="flex items-center justify-start pl-1.5 text-[10px] font-bold text-white transition-[width] duration-700"
+            style={{ width: `${bPct}%`, background: bTone }}>
+            {bPct >= 18 && `${bPct.toFixed(0)}%`}
+          </div>
+          {/* Goal mix marker — dashed vertical line at goal split */}
+          <div title={`목표 믹스 ${aGoalPct.toFixed(0)}% / ${(100 - aGoalPct).toFixed(0)}%`}
+            className="pointer-events-none absolute -top-1 -bottom-1 w-px"
+            style={{
+              left: `${aGoalPct}%`,
+              backgroundImage: "linear-gradient(to bottom, rgba(0,0,0,0.5) 50%, transparent 50%)",
+              backgroundSize: "1px 3px",
+              backgroundRepeat: "repeat-y",
+            }} />
         </div>
-        <div className="flex items-center justify-start pl-1.5 text-[10px] font-bold text-white transition-[width] duration-700"
-          style={{ width: `${bPct}%`, background: bTone }}>
-          {bPct >= 18 && `${bPct.toFixed(0)}%`}
+      ) : (
+        <div className="mb-1.5 flex h-[22px] items-center justify-center rounded-md bg-[rgba(0,0,0,0.04)] text-[10px] font-semibold text-[#9B9690]">
+          데이터 없음
         </div>
-        {/* Goal mix marker — dashed vertical line at goal split */}
-        <div title={`목표 믹스 ${aGoalPct.toFixed(0)}% / ${(100 - aGoalPct).toFixed(0)}%`}
-          className="pointer-events-none absolute -top-1 -bottom-1 w-px"
-          style={{
-            left: `${aGoalPct}%`,
-            backgroundImage: "linear-gradient(to bottom, rgba(0,0,0,0.5) 50%, transparent 50%)",
-            backgroundSize: "1px 3px",
-            backgroundRepeat: "repeat-y",
-          }} />
-      </div>
+      )}
 
       {[{ side: a, tone: aTone }, { side: b, tone: bTone }].map((row, idx) => (
         <div key={row.side.name}
