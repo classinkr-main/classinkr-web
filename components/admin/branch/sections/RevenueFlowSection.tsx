@@ -11,7 +11,6 @@ import {
   ChartLegend,
   formatMoney,
   formatMonthLabel,
-  formatPercent,
   LoadingPanel,
   PacingChart,
   RevWeekForecastChart,
@@ -68,18 +67,13 @@ export default function RevenueFlowSection({
     return goal > 0 ? goal : null
   }, [summary, selectedMonth])
 
-  const revenue = summary?.revenue
-
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      {/* 목표·실적·달성률 텍스트는 제거(항목 2) — 아래 PacingChart가 이미 목표선을 그리고,
+          유일한 '목표 대비' 수치 표면은 개요 상단의 BranchHeroGauges다. */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
         <div>
           <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">매출 누적 흐름</h2>
-          <p className="mt-0.5 text-[11px] text-[#615D59]">
-            목표 <span className="font-bold text-[#111110]">{formatMoney(revenue?.goal)}</span>
-            {" · "}실적 <span className="font-bold text-[#084734]">{formatMoney(revenue?.confirmed)}</span>
-            {" · "}달성률 <span className="font-bold text-[#111110]">{formatPercent(revenue?.pacing_pct)}</span>
-          </p>
         </div>
         <Link
           href="/admin/branch/ledger"
