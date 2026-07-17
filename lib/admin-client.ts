@@ -18,6 +18,57 @@ const ADMIN_MEMORY_CACHE_LIMIT = 90
 const ADMIN_SESSION_CACHE_LIMIT = 70
 const MAX_SESSION_CACHE_CHARS = 350_000
 
+// 품질 웨이브 4 — 항목 3. 응답이 영원히 오지 않는 요청(네트워크 끊김·서버 행)을 방지하는
+// 클라이언트 타임아웃. 대부분의 어드민 요청은 45s면 충분하지만, 외부 동기화·가져오기·
+// LLM 평가류는 정상적으로 수십 초~수 분이 걸릴 수 있다 — 그런 경로를 아래 목록으로
+// 인식해 타임아웃을 끈다(무제한 대기 = 이 기능 도입 전과 동일한 동작, 오탐으로 인한
+// 회귀 없음). 필요하면 호출부에서 `adminTimeoutMs`로 개별 오버라이드할 수도 있다.
+const DEFAULT_ADMIN_FETCH_TIMEOUT_MS = 45_000
+const ADMIN_TIMEOUT_MESSAGE = "요청이 너무 오래 걸립니다 — 다시 시도해 주세요"
+
+// 실측(grep) 기준 — 동기화/가져오기/생성/평가/일괄 처리류. 어드민 어디서 호출하든(이
+// 파일을 import하는 한) 자동으로 타임아웃이 비활성화된다 — 호출부가 sections/*·
+// SalesLedgerWorkbench처럼 이 웨이브에서 손댈 수 없는 파일이어도 안전하게 적용된다.
+const LONG_RUNNING_ADMIN_PATHS = [
+  "/api/admin/branch/sync",
+  "/api/admin/branch/ledger/db-import",
+  "/api/admin/crm/external-sync",
+  "/api/admin/crm/source-links/generate",
+  "/api/admin/channel-talk/sync",
+  "/api/admin/chatbot/eval",
+  "/api/admin/subscribers/bulk",
+  "/api/admin/hardware/import-sheet",
+  "/api/admin/hardware/import-ledger",
+]
+// cs-chat AI 초안 생성은 대화 id가 경로 중간에 끼어 있어(/conversations/{id}/generate)
+// 정확한 경로 목록으로 못 잡는다 — 패턴으로 별도 매칭.
+const LONG_RUNNING_ADMIN_PATH_PATTERNS = [/^\/api\/admin\/cs-chat\/conversations\/[^/]+\/generate$/]
+
+function isLongRunningAdminPath(pathname: string) {
+  return (
+    LONG_RUNNING_ADMIN_PATHS.includes(pathname) ||
+    LONG_RUNNING_ADMIN_PATH_PATTERNS.some((pattern) => pattern.test(pathname))
+  )
+}
+
+export interface AdminFetchInit extends RequestInit {
+  /**
+   * 이 요청 하나의 타임아웃(ms)을 오버라이드한다.
+   * - 숫자: 그 ms로 교체.
+   * - false: 타임아웃 비활성화(무제한 대기).
+   * 생략 시 기본 45s — 단 LONG_RUNNING_ADMIN_PATHS에 매칭되는 경로는 자동으로
+   * 비활성화된다.
+   */
+  adminTimeoutMs?: number | false
+}
+
+function resolveAdminTimeoutMs(input: string, init?: AdminFetchInit): number | false {
+  if (init && init.adminTimeoutMs !== undefined) return init.adminTimeoutMs
+  const pathname = input.split("?")[0]
+  if (isLongRunningAdminPath(pathname)) return false
+  return DEFAULT_ADMIN_FETCH_TIMEOUT_MS
+}
+
 interface AdminCacheEntry<T> {
   data: T
   expiresAt: number
@@ -283,7 +334,7 @@ export function getAdminToken() {
   )
 }
 
-export async function adminFetch(input: string, init?: RequestInit) {
+export async function adminFetch(input: string, init?: AdminFetchInit) {
   const headers = new Headers(init?.headers)
   const token = getAdminToken()
   const method = init?.method?.toUpperCase() ?? "GET"
@@ -298,32 +349,65 @@ export async function adminFetch(input: string, init?: RequestInit) {
     headers.set("Authorization", `Bearer ${token}`)
   }
 
-  const response = await fetch(input, {
-    ...init,
-    ...(method === "GET" && !init?.cache && shouldBypassBrowserCache(input)
-      ? { cache: "no-cache" as RequestCache }
-      : {}),
-    headers,
-  })
+  const timeoutMs = resolveAdminTimeoutMs(input, init)
+  const externalSignal = init?.signal ?? null
+  let timeoutController: AbortController | null = null
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+  let timedOut = false
 
-  if (response.status === 401 && typeof window !== "undefined") {
-    clearAdminSessionStorage()
+  if (timeoutMs !== false) {
+    const controller = new AbortController()
+    timeoutController = controller
+    timeoutHandle = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, timeoutMs)
 
-    if (window.location.pathname !== "/admin/login") {
-      window.location.href = "/admin/login"
+    if (externalSignal) {
+      if (externalSignal.aborted) controller.abort()
+      else externalSignal.addEventListener("abort", () => controller.abort(), { once: true })
     }
   }
 
-  if (response.ok && method !== "GET") {
-    const scopes = invalidationScopesForUrl(input)
-    clearCacheScopes(scopes)
-    markAdminMutation(scopes)
-  }
+  try {
+    const response = await fetch(input, {
+      ...init,
+      ...(method === "GET" && !init?.cache && shouldBypassBrowserCache(input)
+        ? { cache: "no-cache" as RequestCache }
+        : {}),
+      headers,
+      signal: timeoutController ? timeoutController.signal : externalSignal ?? undefined,
+    })
 
-  return response
+    if (response.status === 401 && typeof window !== "undefined") {
+      clearAdminSessionStorage()
+
+      if (window.location.pathname !== "/admin/login") {
+        window.location.href = "/admin/login"
+      }
+    }
+
+    if (response.ok && method !== "GET") {
+      const scopes = invalidationScopesForUrl(input)
+      clearCacheScopes(scopes)
+      markAdminMutation(scopes)
+    }
+
+    return response
+  } catch (error) {
+    // fetch가 abort로 실패했더라도, 그 abort가 우리 타임아웃 때문이 아니라 호출부가
+    // 넘긴 signal(externalSignal) 때문일 수 있다 — timedOut 플래그로만 구분해서
+    // 진짜 우리 타임아웃일 때만 안내 메시지로 감싼다.
+    if (timedOut) {
+      throw new Error(ADMIN_TIMEOUT_MESSAGE)
+    }
+    throw error
+  } finally {
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle)
+  }
 }
 
-export async function adminFetchJson<T>(input: string, init?: RequestInit) {
+export async function adminFetchJson<T>(input: string, init?: AdminFetchInit) {
   const response = await adminFetch(input, init)
   const data = await response.json().catch(() => null)
 

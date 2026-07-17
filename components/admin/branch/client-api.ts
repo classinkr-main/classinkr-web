@@ -5,6 +5,7 @@ import {
   adminFetchJson as sharedAdminFetchJson,
   adminFetchJsonCachedWithMeta,
   clearAdminRequestCache,
+  type AdminFetchInit,
 } from "@/lib/admin-client"
 
 interface BranchJsonState<T> {
@@ -26,7 +27,11 @@ export function clearBranchRequestCache() {
   clearAdminRequestCache()
 }
 
-export async function adminFetchJson<T>(url: string, init: RequestInit = {}): Promise<T> {
+// 품질 웨이브 4 — 항목 3. init 타입을 AdminFetchInit으로 넓혀 이 파일을 통해 호출하는
+// 쪽(예: SalesLedgerWorkbench의 branch/sync·db-import 폴링)도 필요하면 adminTimeoutMs로
+// 개별 오버라이드할 수 있게 한다 — 다만 그 경로들은 lib/admin-client.ts의
+// LONG_RUNNING_ADMIN_PATHS로 이미 자동 opt-out되어 있어 당장 값을 넘길 필요는 없다.
+export async function adminFetchJson<T>(url: string, init: AdminFetchInit = {}): Promise<T> {
   return sharedAdminFetchJson<T>(url, init)
 }
 
