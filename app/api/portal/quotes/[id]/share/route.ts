@@ -44,9 +44,11 @@ export async function POST(
       );
     }
 
+    // 견적 발송의 목적은 고객 응답(검토 확인/진행 요청) 수집이므로 "sign" 모드로 발급한다.
+    // "view"로 발급하면 공유 페이지가 응답 버튼을 숨겨 응답 퍼널이 끊긴다.
     const ensured = await ensureQuoteDocumentShare({
       quote_document_id: id,
-      access_mode: "view",
+      access_mode: "sign",
       created_by: ctx.userId ?? null,
     });
 

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사용성×정확성 3종 목업 — 2026-07-17</title>
+<style>
+  :root{
+    --bg:#FAFAF8; --panel:#FFFFFF; --neutral:#F6F5F4; --ink:#111110; --sub:#615D59;
+    --line:rgba(0,0,0,0.08); --green:#084734; --mint:#ECFDF5; --mint-line:#BDEFD8;
+    --high:#1E5DA8; --exp:#A8741A; --exp-tint:#FBF1E0; --exp-line:#ECD29C;
+    --danger:#B85C33; --font:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:#E8E6E0;color:var(--ink);font-size:13px;line-height:1.5;padding:32px 16px}
+  .wrap{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+  h1{font-size:20px;font-weight:800;letter-spacing:-0.02em}
+  h1 small{display:block;font-size:12px;font-weight:500;color:var(--sub);margin-top:4px}
+  .demo{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 6px 24px rgba(0,0,0,0.06)}
+  .demo>h2{font-size:14px;font-weight:800;margin-bottom:4px}
+  .demo>p.note{font-size:11.5px;color:var(--sub);margin-bottom:16px}
+  .chip{display:inline-flex;align-items:center;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:700;margin-left:6px}
+  .chip.new{background:var(--mint);color:var(--green);border:1px solid var(--mint-line)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,0.02)}
+
+  /* ── 1. 원값 호버 ── */
+  .kpirow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .kpi{padding:14px 16px}
+  .kpi .lbl{font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.05em}
+  .kpi .val{font-size:22px;font-weight:800;margin-top:4px;letter-spacing:-0.02em}
+  .money{position:relative;cursor:help;border-bottom:1px dashed rgba(0,0,0,0.25)}
+  .money .tip{position:absolute;left:0;top:calc(100% + 8px);z-index:9;background:#111110;color:#fff;border-radius:8px;
+    padding:8px 12px;font-size:12px;font-weight:600;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;
+    box-shadow:0 8px 24px rgba(0,0,0,0.25)}
+  .money .tip small{display:block;font-size:10.5px;font-weight:500;color:#B9B5AF;margin-top:2px}
+  .money:hover .tip{opacity:1}
+  .unitnote{font-size:11px;color:var(--sub);margin-top:10px}
+
+  /* ── 2. 계보 툴팁 ── */
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{font-size:11px;font-weight:700;color:var(--sub);text-align:left;padding:8px 12px;border-bottom:1px solid var(--line)}
+  td{padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  tr:last-child td{border-bottom:0}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .lineage{position:relative;cursor:help}
+  .lineage .tip2{position:absolute;left:12px;top:calc(100% - 4px);z-index:9;background:#fff;border:1px solid var(--line);
+    border-radius:9px;padding:9px 12px;font-size:11.5px;box-shadow:0 8px 24px rgba(0,0,0,0.14);opacity:0;pointer-events:none;transition:opacity .12s;white-space:nowrap}
+  .lineage:hover .tip2{opacity:1}
+  .tip2 b{color:var(--green)}
+  .tip2 .row{display:flex;gap:8px;padding:1px 0}
+  .tip2 .k{color:var(--sub);min-width:56px}
+
+  /* ── 3. 정합성 배지 ── */
+  .strip{display:flex;align-items:center;gap:10px;border:1px solid var(--exp-line);background:var(--exp-tint);border-radius:10px;padding:9px 14px;font-size:12px;font-weight:600;color:#7A520F;cursor:pointer}
+  .strip.ok{border-color:var(--mint-line);background:var(--mint);color:var(--green)}
+  .strip .dot{width:8px;height:8px;border-radius:99px;background:var(--exp)}
+  .strip.ok .dot{background:var(--green)}
+  .strip .cnt{margin-left:auto;font-weight:800}
+  .strip-detail{margin-top:8px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:10px 14px;font-size:12px}
+  .strip-detail .item{display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}
+  .strip-detail .item:last-child{border-bottom:0}
+  .sev{flex-shrink:0;border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:700}
+  .sev.warn{background:var(--exp-tint);color:var(--exp);border:1px solid var(--exp-line)}
+  .sev.err{background:#FBEAE2;color:var(--danger);border:1px solid #EFC9B8}
+  .jump{margin-left:auto;color:var(--green);font-weight:700;font-size:11.5px;white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>사용성 × 정확성 3종 시안<small>전부 표시 레이어 — 집계 로직 무변경. 아래 요소들에 실제로 마우스를 올려보세요.</small></h1>
+
+  <!-- 1 -->
+  <div class="demo">
+    <h2>① 원값 호버 <span class="chip new">모든 축약 금액 공통</span></h2>
+    <p class="note">축약 표기(억/만)는 유지하되, 점선 밑줄 = "호버하면 원값". 반올림 손실이 있는 숫자를 그대로 신뢰하지 않게 합니다.</p>
+    <div class="kpirow">
+      <div class="card kpi">
+        <div class="lbl">분기 확정 매출</div>
+        <div class="val"><span class="money">¥8.3만<span class="tip">¥83,418<small>시트 원값 · 반올림 없음</small></span></span></div>
+      </div>
+      <div class="card kpi">
+        <div class="lbl">분기 목표</div>
+        <div class="val"><span class="money">¥301.0만<span class="tip">¥3,010,439<small>시트 원값 · 반올림 없음</small></span></span></div>
+      </div>
+      <div class="card kpi">
+        <div class="lbl">연간 목표</div>
+        <div class="val"><span class="money">¥1,000.0만<span class="tip">¥10,000,000<small>시트 원값 · 반올림 없음</small></span></span></div>
+      </div>
+    </div>
+    <p class="unitnote">헤더에 1회 명시: <b>통화 ¥ — 본사 보고 기준</b> · 장부 그리드(단위: 천)의 셀도 동일하게 호버 시 원값</p>
+  </div>
+
+  <!-- 2 -->
+  <div class="demo">
+    <h2>② 셀 계보 툴팁 <span class="chip new">REV 행 단위</span></h2>
+    <p class="note">"이 숫자 어디서 왔어?"를 원클릭 없이 호버로. 시트 행번호 + 서빙 원천 + 동기화 시각. (DSH 그리드는 카드 헤더 레벨 계보 — 파서가 행좌표를 방출하지 않아 이번 스코프 제외)</p>
+    <div class="card">
+      <table>
+        <thead><tr><th>고객</th><th>담당</th><th class="num">이번 분기</th></tr></thead>
+        <tr><td class="lineage"><b>메가스터디 러셀</b> ⓘ
+          <span class="tip2">
+            <span class="row"><span class="k">시트</span><b>'2. REV' 12행</b></span>
+            <span class="row"><span class="k">원천</span>장부 임포트 · 7.16 22:07 (run e7bc476b)</span>
+            <span class="row"><span class="k">동기화</span>7.17 07:00 · 시트 수정 06:42</span>
+          </span></td><td>Han</td><td class="num">¥36,000</td></tr>
+        <tr><td class="lineage"><b>목동 씨앤씨</b> ⓘ
+          <span class="tip2">
+            <span class="row"><span class="k">시트</span><b>'2. REV' 63행</b></span>
+            <span class="row"><span class="k">원천</span>장부 임포트 · 7.16 22:07</span>
+            <span class="row"><span class="k">동기화</span>7.17 07:00</span>
+          </span></td><td>Minjae</td><td class="num">¥6,400</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- 3 -->
+  <div class="demo">
+    <h2>③ 정합성 배지 승격 <span class="chip new">개요·장부 상단</span></h2>
+    <p class="note">AI 탭에 숨어 있던 데이터품질 체크를 한 줄로. 절단 임박 경고도 여기 합류. 클릭 시 상세(아래) 펼침 — 문제 0건이면 그린 액센트 한 줄.</p>
+    <div class="strip" onclick="document.getElementById('sd').style.display=document.getElementById('sd').style.display==='none'?'block':'none'">
+      <span class="dot"></span> 정합 체크 — 이슈 2건 (warning 2 · error 0) <span class="cnt">펼치기 ▾</span>
+    </div>
+    <div class="strip-detail" id="sd">
+      <div class="item"><span class="sev warn">DQ-10</span> 목동 씨앤씨(63행): 주차 합계 ≠ 월 합계 (6,400 vs 7,200) <span class="jump">장부에서 열기 →</span></div>
+      <div class="item"><span class="sev warn">DQ-15</span> REV 파싱 435행 — 범위 상한(1000행)의 44% (여유 충분) <span class="jump">규칙 보기</span></div>
+    </div>
+    <div style="height:12px"></div>
+    <div class="strip ok"><span class="dot"></span> 정합 체크 — 이슈 없음 (규칙 15개 통과 · 7.17 07:00 기준)</div>
+  </div>
+</div>
+</body>
+</html>

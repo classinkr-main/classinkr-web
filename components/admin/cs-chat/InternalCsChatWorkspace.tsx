@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
+  Clock,
   Copy,
   ExternalLink,
   FileCheck2,
@@ -39,6 +40,7 @@ import {
   Wifi,
   WifiOff,
   X,
+  type LucideIcon,
 } from "lucide-react"
 import {
   Suspense,
@@ -177,13 +179,67 @@ interface RegressionCandidateItem {
   capturedAt: string
   outcome: RegressionOutcome
   reviewState: string
+  // additive 필드 — 승격 자격(corrected_content 존재). 구응답에는 없을 수 있어 optional,
+  // 부재 시(?? true) approved 휴리스틱만으로 승격 버튼을 노출해 하위호환한다.
+  hasCorrectedContent?: boolean
 }
 
 interface RegressionCandidatesResponse {
   items: RegressionCandidateItem[]
 }
 
-type RegressionLoadState = "idle" | "loading" | "loaded" | "failed"
+// 회귀 위젯과 지표 카드 행이 함께 쓰는 4단계 로드 상태 — idle→loading은 탭 진입 시 1회만 자동,
+// failed 이후에는 수동 "다시 시도"로만 재조회한다(무한 재시도 루프 금지).
+type AsyncLoadState = "idle" | "loading" | "loaded" | "failed"
+
+// GET /api/admin/cs-chat/metrics?days=7|30 — 계약 1. 분모 0이면 rate는 null.
+interface InternalCsMetricsResponse {
+  range: { days: number; from: string; to: string }
+  volume: { questions: number; conversations: number }
+  fallbackRate: number | null
+  evidenceMix: { knowledge: number; docs: number; channel: number; none: number }
+  review: { approved: number; changesRequested: number; pending: number; approvalRate: number | null }
+  regression: { notEvaluated: number; pass: number; needsFix: number; promoted: number; excluded: number }
+  leadTimeHours: { median: number | null; p90: number | null }
+}
+
+// POST /api/admin/cs-chat/regression-eval — 계약 2. 제안만 반환하며 DB의 regression_outcome은
+// 이 호출만으로는 절대 바뀌지 않는다(확정은 기존 judgeRegressionCandidate 판정 버튼으로만).
+interface RegressionEvalItem {
+  messageId: string
+  conversationId: string
+  suggestedOutcome: "pass" | "needs_fix"
+  rationale: string
+  regeneratedExcerpt: string
+  judgeModel: string
+}
+
+interface RegressionEvalSkippedItem {
+  messageId: string
+  reason: string
+}
+
+interface RegressionEvalResponse {
+  items: RegressionEvalItem[]
+  skipped: RegressionEvalSkippedItem[]
+}
+
+type RegressionEvalRunState = "idle" | "running" | "done" | "failed"
+
+// POST /api/admin/cs-chat/messages/[messageId]/promote-knowledge — 계약 3.
+// 대상: review_state=approved && corrected_content 존재. 멱등 — 재승격 시 reused:true.
+interface PromoteKnowledgeResponse {
+  articleId: string
+  slug: string
+  reused: boolean
+  // additive — false면 문서는 저장됐지만 임베딩 실패로 검색 색인 대기 상태. true/부재는 정상.
+  searchable?: boolean
+}
+
+// 회귀 패널 항목과 대화 스레드의 승인된 메시지, 두 노출 지점이 messageId로 결과를 공유한다.
+type PromotionResult =
+  | { status: "success"; articleId: string; slug: string; reused: boolean; searchable?: boolean }
+  | { status: "error"; error: string }
 
 interface ConversationDetailResponse {
   conversation: InternalCsConversation
@@ -275,7 +331,8 @@ const OPERATING_TOOLS = [
     icon: Headphones,
   },
   {
-    href: "/admin/docs?tab=gaps",
+    // nav 재분리(2026-07-17): 외부 챗봇 운영 대시보드가 /admin/chatbot으로 독립 표면을 되찾았다.
+    href: "/admin/chatbot",
     title: "챗봇 운영 현황",
     description: "질문량 · 미해결률 · 응답 속도",
     icon: Bot,
@@ -470,6 +527,17 @@ function formatDay(value: string | null) {
   }).format(date)
 }
 
+// 지표 카드 행(계약 1) 전용 포맷터 — 분모 0으로 rate가 null이면 "—"로 표시한다.
+function formatMetricRate(value: number | null | undefined) {
+  if (value == null) return "—"
+  return `${Math.round(value * 100)}%`
+}
+
+function formatMetricHours(value: number | null | undefined) {
+  if (value == null) return "—"
+  return `${Number.isInteger(value) ? value : value.toFixed(1)}h`
+}
+
 function normalizeSourceRefs(values: unknown[]): InternalCsSourceRef[] {
   return values.flatMap((value) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return []
@@ -628,6 +696,91 @@ function StatusBadge({ status }: { status: ConversationStatus }) {
     <span className={cn("inline-flex h-7 items-center rounded-md border px-2 text-[11px] font-semibold", meta.className)}>
       {meta.label}
     </span>
+  )
+}
+
+// 운영 데스크 지표 카드 행(계약 1)의 셀 — 값 정규화(null→"—")는 호출부(metricCards)에서 이미 끝낸다.
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: LucideIcon
+  label: string
+  value: string
+  sub?: string
+}) {
+  return (
+    <div className="rounded-lg border border-black/[0.08] bg-white p-4">
+      <div className="flex items-center gap-2">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F6F5F4] text-[#615D59]">
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <p className="text-[11px] font-medium text-[#615D59]">{label}</p>
+      </div>
+      <p className="mt-2.5 text-[20px] font-semibold tracking-[-0.02em] text-[#31302E]">{value}</p>
+      {sub ? <p className="mt-1 text-[10px] leading-4 text-[#A39E98]">{sub}</p> : null}
+    </div>
+  )
+}
+
+// 계약 3 "지식으로 승격" 제어 — 회귀 패널 항목과 대화 스레드의 승인된 메시지 두 곳에서 공유한다.
+// 성공하면 버튼 대신 articleId 링크를 보여준다. 실패해도 버튼을 남겨 재시도할 수 있게 한다.
+function PromoteKnowledgeControl({
+  pending,
+  result,
+  onPromote,
+}: {
+  pending: boolean
+  result: PromotionResult | undefined
+  onPromote: () => void
+}) {
+  if (result?.status === "success") {
+    // searchable === false — 문서는 저장됐지만 임베딩 실패로 아직 검색에 잡히지 않는 상태(앰버).
+    // true/부재(구응답)는 기존 그린 배지 그대로. edit 링크는 양쪽 모두 유지한다.
+    const indexingPending = result.searchable === false
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold",
+            indexingPending ? "bg-[#FBF1E0] text-[#7A520F]" : "bg-[#ECFDF5] text-[#084734]"
+          )}
+        >
+          {indexingPending ? <AlertTriangle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+          {indexingPending
+            ? "승격됨 — 검색 색인 대기(임베딩 실패)"
+            : result.reused ? "기존 문서 갱신됨" : "지식으로 승격됨"}
+        </span>
+        <Link
+          href={`/admin/docs/${result.articleId}/edit`}
+          className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#084734] hover:underline"
+        >
+          문서 열기
+          <ExternalLink className="h-3 w-3" />
+        </Link>
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col items-start gap-1.5">
+      <button
+        type="button"
+        onClick={onPromote}
+        disabled={pending}
+        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[10px] font-semibold text-[#084734] hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <BookOpen className="h-3 w-3" />}
+        {pending ? "승격 중" : "지식으로 승격"}
+      </button>
+      {result?.status === "error" ? (
+        <p className="flex items-start gap-1 text-[10px] leading-4 text-[#8F2C2C]">
+          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+          {result.error}
+        </p>
+      ) : null}
+    </div>
   )
 }
 
@@ -834,11 +987,22 @@ function InternalCsChatWorkspaceInner() {
   const [docsGapsSummary, setDocsGapsSummary] = useState<DocsGapsDeskSummary | null>(null)
   const [docsGapsAttempted, setDocsGapsAttempted] = useState(false)
   const [regressionCandidates, setRegressionCandidates] = useState<RegressionCandidateItem[]>([])
-  const [regressionLoadState, setRegressionLoadState] = useState<RegressionLoadState>("idle")
+  const [regressionLoadState, setRegressionLoadState] = useState<AsyncLoadState>("idle")
   const [regressionError, setRegressionError] = useState<string | null>(null)
   // 운영 데스크 — 브리지 전송 옵션/최근 기록 펼침과 스탯 스트립 → 회귀 섹션 스크롤 타깃.
   const [bridgeDetailOpen, setBridgeDetailOpen] = useState(false)
   const regressionSectionRef = useRef<HTMLDivElement | null>(null)
+  // 계약 1 — 운영 데스크 지표 카드 행.
+  const [csMetrics, setCsMetrics] = useState<InternalCsMetricsResponse | null>(null)
+  const [metricsLoadState, setMetricsLoadState] = useState<AsyncLoadState>("idle")
+  // 계약 2 — 회귀 자동 평가는 제안만 저장한다(messageId로 색인, DB 미변경).
+  const [regressionEvalRunState, setRegressionEvalRunState] = useState<RegressionEvalRunState>("idle")
+  const [regressionEvalError, setRegressionEvalError] = useState<string | null>(null)
+  const [regressionSuggestions, setRegressionSuggestions] = useState<Record<string, RegressionEvalItem>>({})
+  const [regressionEvalSkipped, setRegressionEvalSkipped] = useState<RegressionEvalSkippedItem[]>([])
+  // 계약 3 — 지식 승격. 회귀 패널 항목·대화 스레드 두 노출 지점이 messageId로 결과를 공유한다.
+  const [promotingMessageId, setPromotingMessageId] = useState<string | null>(null)
+  const [promotionResults, setPromotionResults] = useState<Record<string, PromotionResult>>({})
   const [deepLinkChecked, setDeepLinkChecked] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isPending, startTransition] = useTransition()
@@ -909,20 +1073,53 @@ function InternalCsChatWorkspaceInner() {
 
   // 회귀 검수 미니 패널 — 미판정 우선 목록. 실패 시 섹션 자체에 재시도 폴백을 보여준다.
   // demoMode는 "다시 시도" 루프 대신 깨끗한 빈 상태로 처리한다.
+  // 재조회 진입 시 직전 자동 평가의 잔상(실행 상태·에러·건너뜀 경고)을 리셋하고,
+  // 성공 시 새 목록에 없는 메시지의 제안을 prune해 stale 배지를 막는다.
+  // promotionResults는 대화 스레드와 공유하는 맵이라 여기서 prune하지 않는다 —
+  // 스레드 메시지가 회귀 목록에 없으면 승격 성공 배지가 사라지는 부작용이 있고, 세션 한정 누적은 무해.
   const loadRegressionCandidates = useCallback(async () => {
+    setRegressionEvalRunState("idle")
+    setRegressionEvalError(null)
+    setRegressionEvalSkipped([])
     if (demoMode) {
       setRegressionCandidates([])
+      setRegressionSuggestions({})
       setRegressionLoadState("loaded")
       return
     }
     setRegressionLoadState("loading")
     try {
       const response = await adminFetchJson<RegressionCandidatesResponse>("/api/admin/cs-chat/regression-candidates")
-      setRegressionCandidates(Array.isArray(response.items) ? response.items : [])
+      const items = Array.isArray(response.items) ? response.items : []
+      setRegressionCandidates(items)
+      const liveIds = new Set(items.map((item) => item.id))
+      setRegressionSuggestions((current) =>
+        Object.fromEntries(Object.entries(current).filter(([id]) => liveIds.has(id)))
+      )
       setRegressionLoadState("loaded")
     } catch {
       setRegressionCandidates([])
+      setRegressionSuggestions({})
       setRegressionLoadState("failed")
+    }
+  }, [demoMode])
+
+  // tools 탭 지표 카드 행(계약 1). regressionLoadState와 동일한 idle→loading→loaded/failed
+  // 상태기계를 공유해 실패 시 자동 재시도 루프 없이 수동 "다시 시도"만 제공한다.
+  const loadCsMetrics = useCallback(async () => {
+    if (demoMode) {
+      setCsMetrics(null)
+      setMetricsLoadState("loaded")
+      return
+    }
+    setMetricsLoadState("loading")
+    try {
+      const response = await adminFetchJson<InternalCsMetricsResponse>("/api/admin/cs-chat/metrics?days=7")
+      setCsMetrics(response)
+      setMetricsLoadState("loaded")
+    } catch {
+      setCsMetrics(null)
+      setMetricsLoadState("failed")
     }
   }, [demoMode])
 
@@ -995,6 +1192,12 @@ function InternalCsChatWorkspaceInner() {
     }
   }, [loading, regressionLoadState, loadRegressionCandidates])
 
+  useEffect(() => {
+    if (activeTab === "tools" && metricsLoadState === "idle") {
+      void loadCsMetrics()
+    }
+  }, [activeTab, metricsLoadState, loadCsMetrics])
+
   const assets = useMemo(() => detail?.assets ?? [], [detail?.assets])
   const integrationEvents = useMemo(() => detail?.integrationEvents ?? [], [detail?.integrationEvents])
 
@@ -1049,6 +1252,70 @@ function InternalCsChatWorkspaceInner() {
     },
   ], [detail])
   const canApprove = Object.values(reviewChecks).every(Boolean) && Boolean(pendingMessage) && finalDraft.trim().length > 0
+
+  // 지표 카드 행(계약 1) — csMetrics가 없으면(idle/loading/failed/demoMode) 전 카드를 "—"로 조용히 표시한다.
+  const metricCards = useMemo(() => {
+    const m = csMetrics
+    return [
+      {
+        key: "volume",
+        icon: MessageSquare,
+        label: "질문량",
+        value: m ? String(m.volume.questions) : "—",
+        sub: m ? `대화 ${m.volume.conversations}건` : undefined,
+      },
+      {
+        key: "fallback",
+        icon: Search,
+        label: "폴백률",
+        value: formatMetricRate(m?.fallbackRate),
+        sub: "라이브 검색 실패 비율",
+      },
+      {
+        key: "evidence",
+        icon: BookOpen,
+        label: "근거 믹스",
+        value: m
+          ? String(m.evidenceMix.knowledge + m.evidenceMix.docs + m.evidenceMix.channel + m.evidenceMix.none)
+          : "—",
+        sub: m
+          ? `정본 ${m.evidenceMix.knowledge} · 문서 ${m.evidenceMix.docs} · 상담이관 ${m.evidenceMix.channel} · 근거없음 ${m.evidenceMix.none}`
+          : undefined,
+      },
+      {
+        key: "approval",
+        icon: CheckCircle2,
+        label: "승인율",
+        value: formatMetricRate(m?.review.approvalRate),
+        sub: m ? `승인 ${m.review.approved} · 수정요청 ${m.review.changesRequested} · 대기 ${m.review.pending}` : undefined,
+      },
+      {
+        key: "regression",
+        icon: History,
+        label: "회귀 분포",
+        value: m
+          ? String(m.regression.pass + m.regression.needsFix + m.regression.promoted + m.regression.excluded)
+          : "—",
+        sub: m
+          ? `통과 ${m.regression.pass} · 수정필요 ${m.regression.needsFix} · 반영 ${m.regression.promoted} · 제외 ${m.regression.excluded} · 미판정 ${m.regression.notEvaluated}`
+          : undefined,
+      },
+      {
+        key: "leadTime",
+        icon: Clock,
+        label: "리드타임",
+        value: formatMetricHours(m?.leadTimeHours.median),
+        sub: m ? `P90 ${formatMetricHours(m.leadTimeHours.p90)}` : undefined,
+      },
+    ]
+  }, [csMetrics])
+
+  // 자동 평가(계약 2) skipped 요약 — 회귀 패널 하단 경고 1줄. 사유는 중복 제거 후 최대 3개만 노출한다.
+  const regressionEvalSkippedSummary = useMemo(() => {
+    if (regressionEvalSkipped.length === 0) return null
+    const reasons = Array.from(new Set(regressionEvalSkipped.map((item) => item.reason))).slice(0, 3)
+    return `자동 평가에서 ${regressionEvalSkipped.length}건을 건너뛰었습니다 (${reasons.join(" · ")})`
+  }, [regressionEvalSkipped])
 
   async function handleSelect(conversation: InternalCsConversation) {
     if (demoMode && conversation.id === DEMO_CONVERSATION.id) {
@@ -1478,6 +1745,95 @@ function InternalCsChatWorkspaceInner() {
     }
   }
 
+  // 계약 2 "자동 평가 실행" — 제안만 받아온다. DB의 regression_outcome은 이 함수로 절대 바뀌지 않으며,
+  // 확정은 위 judgeRegressionCandidate(기존 판정 버튼)로만 이뤄진다.
+  async function runRegressionAutoEval() {
+    if (regressionEvalRunState === "running") return // 이중 클릭 방지
+    // demoMode에서는 후보 목록이 항상 비어 실행 버튼이 비활성이라 여기 도달하지 않지만,
+    // 버튼 활성 조건이 바뀌어도 데모에서 네트워크 호출이 새지 않도록 의도적으로 방어한다.
+    if (demoMode) {
+      setRegressionEvalRunState("done")
+      setRegressionEvalSkipped([])
+      setNotice("미리보기에는 평가할 회귀 후보가 없습니다. 실제 환경에서는 미판정 후보를 Gemini가 재평가해 제안합니다.")
+      return
+    }
+    setRegressionEvalRunState("running")
+    setRegressionEvalError(null)
+    try {
+      const response = await adminFetchJson<RegressionEvalResponse>("/api/admin/cs-chat/regression-eval", {
+        method: "POST",
+        body: JSON.stringify({}),
+      })
+      const items = Array.isArray(response.items) ? response.items : []
+      const skipped = Array.isArray(response.skipped) ? response.skipped : []
+      setRegressionSuggestions((current) => {
+        const next = { ...current }
+        for (const item of items) {
+          next[item.messageId] = item
+        }
+        return next
+      })
+      setRegressionEvalSkipped(skipped)
+      setRegressionEvalRunState("done")
+      // 제안도 건너뜀도 없는 성공은 화면 변화가 전혀 없어 무반응처럼 보인다 — notice로 완료를 알린다.
+      if (items.length === 0 && skipped.length === 0) {
+        setNotice("자동 평가 완료 — 새 제안 없음")
+      }
+    } catch (evalError) {
+      setRegressionEvalRunState("failed")
+      setRegressionEvalError(evalError instanceof Error ? evalError.message : "자동 평가를 실행하지 못했습니다.")
+    }
+  }
+
+  // 계약 3 "지식으로 승격" — 대상은 review_state=approved && corrected_content 존재.
+  // 멱등(같은 메시지 재승격 시 reused:true로 기존 문서 갱신). 회귀 패널 항목과 대화 스레드의
+  // 승인된 메시지 두 노출 지점이 이 함수 하나를 공유한다.
+  async function promoteMessageToKnowledge(messageId: string) {
+    if (promotingMessageId) return // 이중 클릭 방지(동시 승격 1건으로 제한)
+    setPromotingMessageId(messageId)
+    // 이전 실패 결과가 남아 있으면 재시도 스피너와 함께 잔상처럼 보이므로 시작 시 지운다.
+    setPromotionResults((current) => {
+      if (!(messageId in current)) return current
+      const next = { ...current }
+      delete next[messageId]
+      return next
+    })
+    if (demoMode) {
+      setPromotionResults((current) => ({
+        ...current,
+        [messageId]: { status: "error", error: "미리보기에서는 지식 승격을 실행할 수 없습니다. 실제 환경에서 시도해 주세요." },
+      }))
+      setPromotingMessageId(null)
+      return
+    }
+    try {
+      const response = await adminFetchJson<PromoteKnowledgeResponse>(
+        `/api/admin/cs-chat/messages/${messageId}/promote-knowledge`,
+        { method: "POST" }
+      )
+      setPromotionResults((current) => ({
+        ...current,
+        [messageId]: {
+          status: "success",
+          articleId: response.articleId,
+          slug: response.slug,
+          reused: response.reused,
+          searchable: response.searchable,
+        },
+      }))
+    } catch (promoteError) {
+      setPromotionResults((current) => ({
+        ...current,
+        [messageId]: {
+          status: "error",
+          error: promoteError instanceof Error ? promoteError.message : "지식 승격에 실패했습니다.",
+        },
+      }))
+    } finally {
+      setPromotingMessageId(null)
+    }
+  }
+
   function archiveConversation() {
     if (!detail || isPending) return
     if (demoMode) {
@@ -1713,6 +2069,15 @@ function InternalCsChatWorkspaceInner() {
                                 {message.model_name ? <span>{message.model_name}</span> : <span>결정론적 안전 초안</span>}
                                 {message.model_mode ? <span>· {message.model_mode}</span> : null}
                               </div>
+                              {message.review_state === "approved" && message.corrected_content ? (
+                                <div className="mt-3 border-t border-black/[0.06] pt-3">
+                                  <PromoteKnowledgeControl
+                                    pending={promotingMessageId === message.id}
+                                    result={promotionResults[message.id]}
+                                    onPromote={() => void promoteMessageToKnowledge(message.id)}
+                                  />
+                                </div>
+                              ) : null}
                             </div>
 
                             {isLatestAssistant ? (
@@ -2172,15 +2537,63 @@ function InternalCsChatWorkspaceInner() {
               </div>
             </div>
 
-            {/* 회귀 검수 대기 — 링크 목록보다 위, 데스크의 첫 번째 일감. */}
-            <div ref={regressionSectionRef} className="mt-8 flex scroll-mt-4 items-baseline justify-between gap-3">
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">회귀 검수 대기</h3>
-              {regressionLoadState === "loaded" ? (
-                <span className="text-[10.5px] text-[#A39E98] tabular-nums">
-                  미판정 {regressionPendingCount}건 · 전체 {regressionCandidates.length}건
-                </span>
+            {/* 코파일럿 운영 지표 (계약 1) — 최근 7일 성과. 큐(스탯 스트립) 다음, 일감(회귀) 이전. */}
+            <div className="mt-8 flex items-baseline justify-between gap-3">
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">
+                운영 지표 <span className="font-medium normal-case tracking-normal text-[#A39E98]">최근 7일</span>
+              </h3>
+              {metricsLoadState === "failed" ? (
+                <button
+                  type="button"
+                  onClick={() => void loadCsMetrics()}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[10px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
+                >
+                  <RefreshCcw className="h-3 w-3" />
+                  다시 시도
+                </button>
               ) : null}
             </div>
+            <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {metricCards.map((card) => (
+                <MetricCard key={card.key} icon={card.icon} label={card.label} value={card.value} sub={card.sub} />
+              ))}
+            </div>
+
+            {/* 회귀 검수 대기 — 링크 목록보다 위, 데스크의 첫 번째 일감. 자동 평가(계약 2)는 제안만 만든다. */}
+            <div ref={regressionSectionRef} className="mt-8 flex flex-wrap scroll-mt-4 items-center justify-between gap-3">
+              <h3 className="flex items-baseline gap-2.5 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">
+                <span>회귀 검수 대기</span>
+                {regressionLoadState === "loaded" ? (
+                  <span className="font-medium normal-case tracking-normal text-[#A39E98] tabular-nums">
+                    미판정 {regressionPendingCount}건 · 전체 {regressionCandidates.length}건
+                  </span>
+                ) : null}
+              </h3>
+              <button
+                type="button"
+                onClick={() => void runRegressionAutoEval()}
+                disabled={
+                  regressionEvalRunState === "running" || regressionLoadState !== "loaded" || regressionCandidates.length === 0
+                }
+                className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[10px] font-semibold text-[#084734] hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:text-[#A39E98] disabled:hover:bg-transparent"
+              >
+                {regressionEvalRunState === "running" ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3 w-3" />
+                )}
+                {regressionEvalRunState === "running" ? "평가 중" : "자동 평가 실행"}
+              </button>
+            </div>
+            <p className="mt-1.5 text-[10px] leading-4 text-[#A39E98]">
+              AI가 통과 / 수정 필요를 참고용으로만 제안합니다. 실제 판정은 행의 버튼으로 직접 확정해야 저장됩니다.
+            </p>
+            {regressionEvalError ? (
+              <p className="mt-1.5 flex items-start gap-2 text-[11px] text-[#8F2C2C]" role="alert">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {regressionEvalError}
+              </p>
+            ) : null}
             <div className="mt-2.5 overflow-hidden rounded-[10px] border border-black/[0.08] bg-white">
               {regressionLoadState === "idle" || regressionLoadState === "loading" ? (
                 <div className="flex items-center justify-center gap-2 px-5 py-8 text-[12px] text-[#615D59]">
@@ -2206,6 +2619,7 @@ function InternalCsChatWorkspaceInner() {
                   {regressionCandidates.map((item) => {
                     const judgedChip = regressionOutcomeChip(item.outcome)
                     const reviewLabel = REVIEW_META[item.reviewState as ReviewState]?.label
+                    const suggestion = regressionSuggestions[item.id]
                     return (
                       <li
                         key={item.id}
@@ -2234,36 +2648,77 @@ function InternalCsChatWorkspaceInner() {
                               <ExternalLink className="h-3 w-3" />
                             </button>
                           </div>
-                        </div>
-                        {judgedChip ? (
-                          <span className={cn("inline-flex h-7 shrink-0 items-center gap-1.5 self-start rounded-md px-2.5 text-[10.5px] font-bold", judgedChip.className)}>
-                            <CheckCircle2 className="h-3 w-3" />
-                            {judgedChip.label}
-                          </span>
-                        ) : (
-                          <div className="flex shrink-0 self-start overflow-hidden rounded-[7px] border border-black/[0.12]" role="group" aria-label={`회귀 판정: ${item.excerpt}`}>
-                            {REGRESSION_JUDGE_ACTIONS.map((action, index) => (
-                              <button
-                                key={action.value}
-                                type="button"
-                                onClick={() => void judgeRegressionCandidate(item, action.value)}
+                          {/* 자동 평가 제안(계약 2) — 판정 전 참고용. 판정이 끝난 행에는 숨긴다. */}
+                          {suggestion && !judgedChip ? (
+                            <div className="mt-2">
+                              <span
                                 className={cn(
-                                  "h-7 bg-white px-2.5 text-[10.5px] font-semibold text-[#31302E] transition-colors",
-                                  index > 0 && "border-l border-black/[0.10]",
-                                  action.hoverClassName
+                                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                                  suggestion.suggestedOutcome === "pass"
+                                    ? "bg-[#ECFDF5] text-[#084734]"
+                                    : "bg-[#FBF1E0] text-[#7A520F]"
                                 )}
                               >
-                                {action.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                                {suggestion.suggestedOutcome === "pass" ? "제안: 통과" : "제안: 수정 필요"}
+                              </span>
+                              <details className="mt-1">
+                                <summary className="cursor-pointer text-[10px] font-medium text-[#084734] hover:underline">
+                                  AI 판단 근거
+                                </summary>
+                                <p className="mt-1 max-w-[420px] text-[10px] leading-4 text-[#615D59]">
+                                  {suggestion.rationale}
+                                </p>
+                                <p className="mt-1 text-[10px] text-[#A39E98]">판정 모델: {suggestion.judgeModel}</p>
+                              </details>
+                            </div>
+                          ) : null}
+                        </div>
+                        <div className="flex shrink-0 flex-col items-start gap-2 self-start sm:items-end">
+                          {judgedChip ? (
+                            <span className={cn("inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[10.5px] font-bold", judgedChip.className)}>
+                              <CheckCircle2 className="h-3 w-3" />
+                              {judgedChip.label}
+                            </span>
+                          ) : (
+                            <div className="flex overflow-hidden rounded-[7px] border border-black/[0.12]" role="group" aria-label={`회귀 판정: ${item.excerpt}`}>
+                              {REGRESSION_JUDGE_ACTIONS.map((action, index) => (
+                                <button
+                                  key={action.value}
+                                  type="button"
+                                  onClick={() => void judgeRegressionCandidate(item, action.value)}
+                                  className={cn(
+                                    "h-7 bg-white px-2.5 text-[10.5px] font-semibold text-[#31302E] transition-colors",
+                                    index > 0 && "border-l border-black/[0.10]",
+                                    action.hoverClassName
+                                  )}
+                                >
+                                  {action.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {/* 지식 승격(계약 3) — hasCorrectedContent 부재(구응답)면 approved 휴리스틱만으로 노출. */}
+                          {item.reviewState === "approved" && (item.hasCorrectedContent ?? true) ? (
+                            <PromoteKnowledgeControl
+                              pending={promotingMessageId === item.id}
+                              result={promotionResults[item.id]}
+                              onPromote={() => void promoteMessageToKnowledge(item.id)}
+                            />
+                          ) : null}
+                        </div>
                       </li>
                     )
                   })}
                 </ul>
               )}
             </div>
+            {/* 목록이 비면 "판정이 필요한 회귀 후보가 없습니다" 빈 상태 문구와 모순되므로 skipped 경고를 숨긴다. */}
+            {regressionCandidates.length > 0 && regressionEvalSkippedSummary ? (
+              <p className="mt-2 flex items-start gap-2 text-[11px] text-[#7A520F]" role="status">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {regressionEvalSkippedSummary}
+              </p>
+            ) : null}
             {regressionError ? (
               <p className="mt-2 flex items-start gap-2 text-[11px] text-[#8F2C2C]" role="alert">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />

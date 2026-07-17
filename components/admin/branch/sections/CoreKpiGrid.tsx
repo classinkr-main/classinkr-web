@@ -2,7 +2,7 @@
 import Link from "next/link"
 import { TrendingUp, Users, Send, Calendar, Sparkles } from "lucide-react"
 import type { BranchSummaryResponse } from "../types"
-import { cny } from "@/lib/branch/money-format"
+import MoneyValue from "../MoneyValue"
 
 function metricLabel(metric: string | null | undefined): string {
   if (!metric) return "-"
@@ -19,7 +19,7 @@ const TONE: Record<Tone, { bg: string; fg: string }> = {
   neutral: { bg: "#F6F5F4", fg: "#111110" },
 }
 
-function StatCard({ icon, label, value, sub, tone = "neutral", link }: { icon: React.ReactNode; label: string; value: string; sub: string; tone?: Tone; link?: { href: string; label: string } }) {
+function StatCard({ icon, label, value, sub, tone = "neutral", link }: { icon: React.ReactNode; label: string; value: React.ReactNode; sub: React.ReactNode; tone?: Tone; link?: { href: string; label: string } }) {
   const t = TONE[tone]
   return (
     <div className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-[18px] shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
@@ -53,15 +53,15 @@ export default function CoreKpiGrid({ data, loading, error }: { data: BranchSumm
     <section>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard tone="green" icon={<TrendingUp className="h-[18px] w-[18px]" />}
-          label="총 매출 (확정)" value={`¥${cny(data.revenue.confirmed)}`}
-          sub={`목표 ¥${cny(data.revenue.goal)} · ${data.revenue.pacing_pct.toFixed(0)}%`}
+          label="총 매출 (확정)" value={<MoneyValue value={data.revenue.confirmed} />}
+          sub={<>목표 <MoneyValue value={data.revenue.goal} /> · {data.revenue.pacing_pct.toFixed(0)}%</>}
           link={{ href: "/admin/branch/ledger?lens=rev", label: "장부에서 열기 ↗" }} />
         <StatCard tone="amber" icon={<Sparkles className="h-[18px] w-[18px]" />}
           label="활동 KPI 병목" value={metricLabel(data.bottleneck.metric)}
           sub={`${data.bottleneck.pct.toFixed(0)}% · ${data.bottleneck.worst_member ?? "-"}`} />
         <StatCard tone="olive" icon={<Users className="h-[18px] w-[18px]" />}
           label="가까운 딜" value={`${data.closing.count}건`}
-          sub={`목표 합 ¥${cny(data.closing.total_target)}`} />
+          sub={<>목표 합 <MoneyValue value={data.closing.total_target} /></>} />
         <StatCard tone="red" icon={<Calendar className="h-[18px] w-[18px]" />}
           label="행사 (30일)" value={`${data.events_30d.count}건`}
           sub={`지역 ${data.events_30d.regions}개`} />

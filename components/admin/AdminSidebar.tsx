@@ -113,11 +113,16 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/docs/alpha-readiness",
   ],
   // 문서 보강 큐 nav 항목은 탭 딥링크(/admin/docs?tab=gaps)를 직접 가리킨다 — warm 키도 href와 동일해야 적중.
-  // 챗봇 운영 대시보드 흡수 후 DocsGapsPanel이 /api/admin/chatbot/stats(질문 패턴)도 읽으므로 함께 데운다.
+  // DocsGapsPanel이 /api/admin/chatbot/stats(질문 패턴)도 읽으므로 함께 데운다.
   "/admin/docs?tab=gaps": [
     "/api/admin/docs/alpha-readiness",
     "/api/admin/docs/gaps",
     "/api/admin/chatbot/stats",
+  ],
+  // 외부 챗봇 운영 대시보드(이원화로 재건) — 지표·준비도를 미리 데운다.
+  "/admin/chatbot": [
+    "/api/admin/chatbot/stats",
+    "/api/admin/docs/alpha-readiness",
   ],
   "/admin/branch": [
     "/api/admin/branch/summary?team=ALL&period=Q",

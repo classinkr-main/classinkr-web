@@ -2,7 +2,8 @@
 import { useMemo } from "react"
 import { useBranchJson } from "../client-api"
 import type { BranchPipelineResponse, BranchPipelineRow, Period, Team } from "../types"
-import { cny } from "@/lib/branch/money-format"
+import { cny, cnyExact } from "@/lib/branch/money-format"
+import MoneyValue from "../MoneyValue"
 
 type Row = BranchPipelineRow
 
@@ -56,7 +57,8 @@ function PipelineCard({ deal, onClick }: { deal: MergedRow; onClick?: () => void
         </p>
       )}
       <div className="mt-2.5 flex items-center justify-between border-t border-[rgba(0,0,0,0.05)] pt-2">
-        <span className="text-[13px] font-bold tracking-[-0.01em] text-[#B43E3E]">
+        <span className="cursor-help text-[13px] font-bold tracking-[-0.01em] text-[#B43E3E]"
+          title={`₩${cnyExact(deal.revenue)} · 시트 원값 · 반올림 없음`}>
           ₩{cny(deal.revenue)}
         </span>
         {deal.count === 1 && (
@@ -93,10 +95,10 @@ function PipelineColumn({ stage, deals, onCardClick }: {
           </span>
         </div>
         <p className="mt-2.5 text-[17px] font-bold tracking-[-0.02em] text-[#111110]">
-          ₩{cny(total)}
+          <MoneyValue value={total} prefix="₩" />
         </p>
         <p className="mt-0.5 text-[10.5px] text-[#615D59]">
-          가중 <span className="font-semibold text-[#111110]">₩{cny(weighted)}</span>
+          가중 <span className="font-semibold text-[#111110]"><MoneyValue value={weighted} prefix="₩" /></span>
         </p>
         {/* Probability fill bar */}
         <div className="mt-3 h-[3px] overflow-hidden rounded-full bg-[rgba(0,0,0,0.06)]">
@@ -167,11 +169,11 @@ export default function BranchPipelineKanban({ team, period, selectedMonth, refr
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 border-b border-[rgba(0,0,0,0.06)] px-5 py-3">
         <div className="flex items-baseline gap-1.5">
           <span className="text-[11px] text-[#615D59]">총 파이프라인</span>
-          <span className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">₩{cny(totalAll)}</span>
+          <span className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]"><MoneyValue value={totalAll} prefix="₩" /></span>
         </div>
         <div className="flex items-baseline gap-1.5">
           <span className="text-[11px] text-[#615D59]">가중 합산</span>
-          <span className="text-[13px] font-bold text-[#084734]">₩{cny(Math.round(totalWeighted))}</span>
+          <span className="text-[13px] font-bold text-[#084734]"><MoneyValue value={Math.round(totalWeighted)} prefix="₩" /></span>
         </div>
         <div className="flex items-baseline gap-1.5">
           <span className="text-[11px] text-[#615D59]">딜</span>

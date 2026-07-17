@@ -8,8 +8,9 @@
 
 import Link from "next/link"
 import { useMemo } from "react"
-import type { BranchDshBreakdownRow } from "../types"
-import { LoadingPanel } from "./shared"
+import type { BranchDataSourceInfo, BranchDshBreakdownRow } from "../types"
+import { cnyExact } from "@/lib/branch/money-format"
+import { formatDateTime, LoadingPanel } from "./shared"
 
 export type DshGridView = "goal" | "status" | "gap"
 
@@ -86,6 +87,15 @@ function monthLabel(ym: string) {
   return `${Number(ym.slice(5))}월`
 }
 
+// 카드 헤더 레벨 계보(2026-07-17 사용성 디벨롭 항목 2) — 파서가 DSH breakdown에
+// 행 좌표(sheet_row)를 방출하지 않아 셀 단위 계보는 스코프 밖(YAGNI). SyncStatusBar의
+// sourceLabel과 동일한 kind→라벨 매핑을 그리드 헤더 캡션용으로 재현한다.
+function dshSourceLabel(source: BranchDataSourceInfo): string {
+  if (source.kind === "import") return `장부 임포트${source.asOf ? ` · ${formatDateTime(source.asOf)}` : ""}`
+  if (source.kind === "mirror") return `시트 미러${source.asOf ? ` · ${formatDateTime(source.asOf)}` : ""}`
+  return `라이브 시트${source.asOf ? ` · ${formatDateTime(source.asOf)}` : ""}`
+}
+
 // breakdown 집계 — 컴포넌트 밖 순수 함수로 두어 단위 테스트가 가능하다.
 // breakdown에는 같은 (kind, category, status_type, channel) 콤보가 스코프별로 반복된다
 // (전사 + 팀/멤버 섹션 — 파서가 시트의 모든 섹션을 훑고, 액티브 임포트 소스는 순서까지 뒤섞임).
@@ -142,20 +152,26 @@ export function aggregateDshBreakdown(breakdown: BranchDshBreakdownRow[], view: 
 
 const CELL = "whitespace-nowrap border-b border-r border-[rgba(0,0,0,0.08)] px-2.5 py-1.5 text-right"
 
+// 원값 호버(2026-07-17 사용성 디벨롭 항목 1) — formatThousands는 1,000 단위로 반올림
+// 표기하므로, title에 원값 전체 자릿수(¥, 반올림 없음)를 병기해 보정한다.
+function exactTitle(value: number): string {
+  return `¥${cnyExact(value)} · 시트 원값 · 반올림 없음`
+}
+
 function numericCells(numbers: GridNumbers, monthKeys: string[], extra = "") {
   const tone = (value: number) => (value < 0 ? "text-[#B43E3E]" : "")
   return (
     <>
-      <td className={`${CELL} ${tone(numbers.annual)} ${extra}`}>{formatThousands(numbers.annual)}</td>
+      <td className={`${CELL} cursor-help ${tone(numbers.annual)} ${extra}`} title={exactTitle(numbers.annual)}>{formatThousands(numbers.annual)}</td>
       {numbers.quarters.map((value, index) => (
-        <td key={`q${index}`} className={`${CELL} ${extra || "bg-[#FBFAF7]"} ${tone(value)}`}>
+        <td key={`q${index}`} className={`${CELL} cursor-help ${extra || "bg-[#FBFAF7]"} ${tone(value)}`} title={exactTitle(value)}>
           {formatThousands(value)}
         </td>
       ))}
       {monthKeys.map((ym) => {
         const value = numbers.months[ym] ?? 0
         return (
-          <td key={ym} className={`${CELL} ${tone(value)} ${extra}`}>
+          <td key={ym} className={`${CELL} cursor-help ${tone(value)} ${extra}`} title={exactTitle(value)}>
             {formatThousands(value)}
           </td>
         )
@@ -169,9 +185,12 @@ interface DshNumericGridProps {
   view: DshGridView
   onViewChange: (view: DshGridView) => void
   loading?: boolean
+  // 카드 헤더 레벨 계보(항목 2) — summary.data_sources.dsh를 옵션으로 전달받아
+  // 헤더 캡션에 원천 kind·asOf를 짧게 표기한다. 신규 fetch 없음, additive.
+  dataSource?: BranchDataSourceInfo | null
 }
 
-export function DshNumericGrid({ breakdown, view, onViewChange, loading = false }: DshNumericGridProps) {
+export function DshNumericGrid({ breakdown, view, onViewChange, loading = false, dataSource = null }: DshNumericGridProps) {
   const { monthKeys, rows, total } = useMemo(() => aggregateDshBreakdown(breakdown, view), [breakdown, view])
 
   const columnCount = 2 + 4 + monthKeys.length + 1
@@ -185,6 +204,7 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false 
           </p>
           <p className="mt-0.5 text-[11px] text-[#615D59]">
             시트 &lsquo;1. DSH&rsquo; 미러 · Team KR 전사 — 팀 필터와 무관 · 숫자가 정본
+            {dataSource && <> · 원천 {dshSourceLabel(dataSource)}</>}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

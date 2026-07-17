@@ -2,7 +2,8 @@
 import { useMemo, useState } from "react"
 import { ChevronRight } from "lucide-react"
 import type { BranchKpiResponse, BranchKpiTeamRow, BranchKpiMemberRow } from "../types"
-import { cny } from "@/lib/branch/money-format"
+import { cny, cnyExact } from "@/lib/branch/money-format"
+import MoneyValue from "../MoneyValue"
 
 const numberFmt = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 })
 const fmt = (n: number) => numberFmt.format(n)
@@ -72,7 +73,8 @@ function MemberRow({ member, viewMode }: { member: BranchKpiMemberRow; viewMode:
       <div>
         <div className="mb-1 flex items-baseline justify-between text-[11px]">
           <span className="text-[#615D59]">
-            <span className="font-semibold" style={{ color: COLORS.red }}>¥{cny(member.confirmed)}</span> / ¥{cny(member.goal)}
+            <span className="cursor-help font-semibold" style={{ color: COLORS.red }}
+              title={`¥${cnyExact(member.confirmed)} · 시트 원값 · 반올림 없음`}>¥{cny(member.confirmed)}</span> / <span className="cursor-help" title={`¥${cnyExact(member.goal)} · 시트 원값 · 반올림 없음`}>¥{cny(member.goal)}</span>
           </span>
           <span className="font-bold" style={{ color: memberPct >= 70 ? COLORS.green : COLORS.amber }}>{memberPct}%</span>
         </div>
@@ -210,7 +212,7 @@ function TeamRow({ team, members, defaultOpen }: { team: BranchKpiTeamRow; membe
         <div>
           <div className="mb-1.5 flex justify-between text-[11.5px]">
             <span className="text-[#615D59]">
-              매출 <span className="font-bold" style={{ color: COLORS.red }}>¥{cny(team.status)}</span> / ¥{cny(team.goal)}
+              매출 <span className="font-bold" style={{ color: COLORS.red }}><MoneyValue value={team.status} /></span> / <MoneyValue value={team.goal} />
             </span>
             <span className="font-bold" style={{ color: pct >= 70 ? COLORS.green : COLORS.amber }}>{pct}%</span>
           </div>
