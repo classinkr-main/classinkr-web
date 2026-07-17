@@ -74,6 +74,7 @@ export default function PipelineTable({
   refreshKey,
   pageSize = 20,
   onRowClick,
+  hideHeader = false,
 }: {
   team: Team
   period: Period
@@ -81,6 +82,10 @@ export default function PipelineTable({
   refreshKey: number
   pageSize?: number
   onRowClick?: (row: Row) => void
+  /** 품질 웨이브 4 — 항목 4. true면 자체 "REV 고객별 매출" 제목(<h2>)만 숨긴다 — 장부
+   *  링크·필터·표는 그대로 유지. 부모가 이미 카드 제목(예: "파이프라인")을 렌더하는
+   *  컨텍스트(BranchDashboardClient 파이프라인 탭)에서 제목 이중화를 막는 용도. */
+  hideHeader?: boolean
 }) {
   const initialTeams: Set<string> = team === "ALL" ? new Set() : new Set([team])
   const [query, setQuery] = useState("")
@@ -194,7 +199,7 @@ export default function PipelineTable({
   // null이라 rows는 [](빈 배열)로 계산되므로 이 분기를 rows.length===0보다 먼저 둬야 한다.
   if (pipeline.error) return (
     <section>
-      <h2 className="mb-3 text-[13px] font-semibold text-[#111110]/70">REV 고객별 매출</h2>
+      {!hideHeader && <h2 className="mb-3 text-[14px] font-bold tracking-[-0.01em] text-[#111110]">REV 고객별 매출</h2>}
       <div
         role="alert"
         className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[12px] font-semibold text-[#8F2C2C]"
@@ -213,7 +218,7 @@ export default function PipelineTable({
   )
   if (rows.length === 0) return (
     <section>
-      <h2 className="mb-3 text-[13px] font-semibold text-[#111110]/70">REV 고객별 매출</h2>
+      {!hideHeader && <h2 className="mb-3 text-[14px] font-bold tracking-[-0.01em] text-[#111110]">REV 고객별 매출</h2>}
       <div className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-6 text-[12px] text-[#615D59]">표시할 매출 데이터가 없습니다.</div>
     </section>
   )
@@ -222,7 +227,7 @@ export default function PipelineTable({
     <section>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-[13px] font-semibold text-[#111110]/70">REV 고객별 매출</h2>
+          {!hideHeader && <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">REV 고객별 매출</h2>}
           <Link
             href={ledgerHref()}
             title={crossLinkNotice}

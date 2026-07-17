@@ -482,7 +482,10 @@ export default function BranchDashboardClient() {
                 </div>
                 <div className={pipelineView === "kanban" ? "" : "px-2.5 py-2"}>
                   {pipelineView === "table" ? (
-                    <PipelineTable key={`pipeline-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog} />
+                    // 품질 웨이브 4 — 항목 4. 이 카드가 이미 "파이프라인" 제목을 렌더하므로
+                    // PipelineTable 자체의 "REV 고객별 매출" <h2>는 hideHeader로 숨겨 이중화를 없앤다
+                    // (장부 링크·필터·표는 그대로 유지). 헤더가 필요한 히트맵 탭 사용처는 기본값 유지.
+                    <PipelineTable key={`pipeline-rev-${team}`} team={team} period={period} selectedMonth={selectedMonth} refreshKey={refreshKey} onRowClick={openDealLog} hideHeader />
                   ) : (
                     <BranchPipelineKanban
                       team={team}
