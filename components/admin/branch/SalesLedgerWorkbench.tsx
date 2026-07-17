@@ -35,6 +35,7 @@ import {
 } from "lucide-react"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
 import { matchesTokens, tokenize } from "./search-tokens"
+import { useDialogFocus } from "../use-dialog-focus"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { ledgerMonthSplit, ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
@@ -1346,19 +1347,11 @@ function DraftQueue({
   // "적용"은 큐에서 유일하게 비가역인 동작(DB 장부에 실제로 기록) — 확인 다이얼로그를 거친다.
   const [confirmApplyDraft, setConfirmApplyDraft] = useState<LedgerDraft | null>(null)
   const [applyingId, setApplyingId] = useState<string | null>(null)
-  // 다이얼로그 포커스 관리(DealModal.tsx 패턴 인라인 이식): 열릴 때 안전한 기본 컨트롤(취소)로
-  // 포커스를 옮기고, 닫힐 때 다이얼로그를 연 트리거로 복귀한다. "적용"은 비가역 동작이라
-  // autoFocus 기본값을 파괴적 버튼에 두지 않는다 — 초기 포커스는 "취소".
+  // 다이얼로그 포커스 캡처/복귀·Escape 닫기·Tab 트랩 = 공용 훅(use-dialog-focus, DealModal.tsx와
+  // 동일 패턴)에 위임(품질 웨이브 6 — 항목 1). "적용"은 비가역 동작이라 autoFocus 기본값을
+  // 파괴적 버튼에 두지 않는다 — 초기 포커스는 "취소"(confirmApplyCancelRef).
   const confirmApplyCancelRef = useRef<HTMLButtonElement | null>(null)
   const confirmApplyDraftId = confirmApplyDraft?.id ?? null
-  useEffect(() => {
-    if (!confirmApplyDraftId) return
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    confirmApplyCancelRef.current?.focus()
-    return () => {
-      previouslyFocused?.focus()
-    }
-  }, [confirmApplyDraftId])
   const confirmAndApply = async (id: string) => {
     setApplyingId(id)
     try {
@@ -1373,14 +1366,6 @@ function DraftQueue({
   const [confirmDeleteDraft, setConfirmDeleteDraft] = useState<LedgerDraft | null>(null)
   const confirmDeleteCancelRef = useRef<HTMLButtonElement | null>(null)
   const confirmDeleteDraftId = confirmDeleteDraft?.id ?? null
-  useEffect(() => {
-    if (!confirmDeleteDraftId) return
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    confirmDeleteCancelRef.current?.focus()
-    return () => {
-      previouslyFocused?.focus()
-    }
-  }, [confirmDeleteDraftId])
   // "되돌리기"(웨이브 5) — 적용을 상쇄하는 동작이라 danger는 아니지만(초안 기록은 감사용으로
   // 유지된다) 장부 반영을 되돌리는 부수효과가 있어 적용/삭제와 동일한 확인 다이얼로그 셸을
   // 재사용한다. 톤만 warning(#ECD29C/#FBF1E0/#7A520F)으로 danger(#B43E3E)와 구분.
@@ -1389,14 +1374,6 @@ function DraftQueue({
   const [reversingId, setReversingId] = useState<string | null>(null)
   const confirmReverseCancelRef = useRef<HTMLButtonElement | null>(null)
   const confirmReverseDraftId = confirmReverseDraft?.id ?? null
-  useEffect(() => {
-    if (!confirmReverseDraftId) return
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    confirmReverseCancelRef.current?.focus()
-    return () => {
-      previouslyFocused?.focus()
-    }
-  }, [confirmReverseDraftId])
   const closeReverseDialog = () => {
     setConfirmReverseDraft(null)
     setReverseReason("")
@@ -1438,6 +1415,35 @@ function DraftQueue({
     setConfirmDeleteDraft(null)
   }
   const deletingConfirmed = confirmDeleteDraft != null && rowActionBusy?.id === confirmDeleteDraft.id && rowActionBusy.action === "delete"
+  // 세 확인 다이얼로그(적용·되돌리기·삭제)의 포커스 캡처/복귀·Escape 닫기·Tab 트랩을 공용 훅에
+  // 위임(품질 웨이브 6 — 항목 1). 기존에는 각자 role="dialog" div의 onKeyDown에서 Escape만
+  // 개별 처리하고(Tab 트랩 없음) 포커스 이동은 별도 useEffect 3개로 중복 구현했다. onClose
+  // 클로저 안에서 in-flight(적용/되돌리기/삭제 진행 중) 가드를 그대로 유지해 작업 중 Escape로
+  // 다이얼로그가 닫혀버리는 회귀를 막는다.
+  useDialogFocus(
+    confirmApplyDraftId,
+    () => {
+      if (confirmApplyDraft && applyingId === confirmApplyDraft.id) return
+      setConfirmApplyDraft(null)
+    },
+    confirmApplyCancelRef
+  )
+  useDialogFocus(
+    confirmReverseDraftId,
+    () => {
+      if (confirmReverseDraft && reversingId === confirmReverseDraft.id) return
+      closeReverseDialog()
+    },
+    confirmReverseCancelRef
+  )
+  useDialogFocus(
+    confirmDeleteDraftId,
+    () => {
+      if (deletingConfirmed) return
+      setConfirmDeleteDraft(null)
+    },
+    confirmDeleteCancelRef
+  )
 
   if (loading && drafts.length === 0) {
     return (
@@ -1649,12 +1655,6 @@ function DraftQueue({
         aria-modal="true"
         aria-label="초안 적용 확인"
         className="fixed inset-0 z-[60] flex items-end justify-center bg-[#111110]/40 p-4 sm:items-center"
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && applyingId !== confirmApplyDraft.id) {
-            event.stopPropagation()
-            setConfirmApplyDraft(null)
-          }
-        }}
       >
         <div className="flex w-full max-w-sm flex-col overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_24px_70px_rgba(17,17,16,0.22)]">
           <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
@@ -1697,12 +1697,6 @@ function DraftQueue({
         aria-modal="true"
         aria-label="적용 되돌리기 확인"
         className="fixed inset-0 z-[60] flex items-end justify-center bg-[#111110]/40 p-4 sm:items-center"
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && reversingId !== confirmReverseDraft.id) {
-            event.stopPropagation()
-            closeReverseDialog()
-          }
-        }}
       >
         <div className="flex w-full max-w-sm flex-col overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_24px_70px_rgba(17,17,16,0.22)]">
           <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
@@ -1757,12 +1751,6 @@ function DraftQueue({
         aria-modal="true"
         aria-label="초안 삭제 확인"
         className="fixed inset-0 z-[60] flex items-end justify-center bg-[#111110]/40 p-4 sm:items-center"
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && !deletingConfirmed) {
-            event.stopPropagation()
-            setConfirmDeleteDraft(null)
-          }
-        }}
       >
         <div className="flex w-full max-w-sm flex-col overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_24px_70px_rgba(17,17,16,0.22)]">
           <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
@@ -2951,21 +2939,15 @@ function RevMatrixPasteDialog({
 }) {
   const shown = plan.cells.slice(0, MATRIX_PASTE_PREVIEW_LIMIT)
   const hidden = plan.cells.length - shown.length
-  // 다이얼로그 포커스 관리(DealModal.tsx 패턴 인라인 이식): 이 컴포넌트는 부모가 plan이 있을 때만
-  // 마운트하므로(조건부 렌더) 마운트 = 열림, 언마운트 = 닫힘이다. 마운트 시 트리거(붙여넣기 직전
-  // 포커스가 있던 매트릭스 셀 등)를 기억해 언마운트 때 되돌린다. 어느 버튼이 기본 포커스를
-  // 받는지는 기존 autoFocus 분기(취소 vs 확인, applyCount 유무)를 그대로 유지한다.
+  // 다이얼로그 포커스 캡처/복귀·Escape 닫기·Tab 트랩 = 공용 훅(use-dialog-focus)에 위임(품질
+  // 웨이브 6 — 항목 1). 이 컴포넌트는 부모가 plan이 있을 때만 마운트하므로(조건부 렌더) 마운트
+  // = 열림, 언마운트 = 닫힘 — openKey는 "이 마운트 동안 어느 버튼이 기본 포커스인가"를 그대로
+  // 나타내는 값("apply"/"review")을 쓴다: 항상 truthy라 열림 판정은 그대로 유지되면서, 기존
+  // autoFocus 분기(취소 vs 확인, applyCount 유무)가 바뀌면(이론상) 재포커스도 함께 일어난다.
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null)
   const confirmButtonRef = useRef<HTMLButtonElement | null>(null)
   const hasApplyCells = plan.applyCount > 0
-  useEffect(() => {
-    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const target = hasApplyCells ? confirmButtonRef.current : cancelButtonRef.current
-    target?.focus()
-    return () => {
-      previouslyFocused?.focus()
-    }
-  }, [hasApplyCells])
+  useDialogFocus(hasApplyCells ? "apply" : "review", onCancel, hasApplyCells ? confirmButtonRef : cancelButtonRef)
   const statusMeta: Record<MatrixPasteCellPlan["status"], { label: string; className: string }> = {
     apply: { label: "초안 생성", className: "text-[#084734]" },
     locked: { label: "잠금 제외", className: "text-[#A39E98]" },
@@ -2977,12 +2959,6 @@ function RevMatrixPasteDialog({
       aria-modal="true"
       aria-label="엑셀 붙여넣기 미리보기"
       className="fixed inset-0 z-[60] flex items-end justify-center bg-[#111110]/40 p-4 sm:items-center"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          event.stopPropagation()
-          onCancel()
-        }
-      }}
     >
       <div className="flex max-h-[85dvh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_24px_70px_rgba(17,17,16,0.22)]">
         <div className="border-b border-[rgba(0,0,0,0.08)] px-4 py-3">
