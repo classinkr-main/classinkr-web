@@ -69,9 +69,9 @@ interface Props {
   onClose: () => void
 }
 
-// 섹션 점프 탭 — 스크롤 스파이는 DOM 등장 순서(요약→머니→딜→할일→활동)로 평가하고,
-// 탭 표시 순서는 스펙(요약·딜·머니·활동·할일)을 따른다.
-const C360_SECTION_DOM_ORDER = ["c360-summary", "c360-money", "c360-deal", "c360-tasks", "c360-activity"] as const
+// 섹션 점프 탭 — 활동 승격 스펙: 탭 표시·DOM 등장 순서 모두 요약→활동→할일→딜→머니.
+// 스크롤 스파이는 이 배열 순서로 '마지막 통과' 판정을 하므로 실제 렌더 순서와 함께 맞춘다.
+const C360_SECTION_DOM_ORDER = ["c360-summary", "c360-activity", "c360-tasks", "c360-deal", "c360-money"] as const
 
 const SERVICE_RISK_LABEL: Record<string, string> = {
   urgent: "긴급",
@@ -909,10 +909,10 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
           <div className="no-scrollbar flex shrink-0 gap-0.5 overflow-x-auto border-b border-[#e8e8e4] bg-white px-3">
             {[
               { id: "c360-summary", label: "요약" },
-              { id: "c360-deal", label: `딜${data.deals.summary.total ? ` ${data.deals.summary.total}` : ""}` },
-              { id: "c360-money", label: "머니" },
               { id: "c360-activity", label: `활동${data.activity.summary.total ? ` ${data.activity.summary.total}` : ""}` },
               { id: "c360-tasks", label: `할일${data.tasks.summary.total ? ` ${data.tasks.summary.total}` : ""}` },
+              { id: "c360-deal", label: `딜${data.deals.summary.total ? ` ${data.deals.summary.total}` : ""}` },
+              { id: "c360-money", label: "머니" },
             ].map((tab) => {
               const active = activeSection === tab.id
               return (
@@ -1180,363 +1180,6 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
             </section>
           ) : null}
 
-          {/* 머니 — 제품 매출(REV/HW 원장 계정키 조인) + NEO 수금·성과 상세 */}
-          {data ? (
-            <section id="c360-money" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-              <SectionTitle icon={<Coins className="h-3.5 w-3.5" />}>머니 · 제품 매출</SectionTitle>
-              {/* SW 결제 누적 · HW 결제 누적(¥ CNY) · HW 대수(칠판, 대) */}
-              <div className="grid grid-cols-3 gap-2">
-                <ProductTile
-                  label="SW 결제 누적"
-                  chip="¥"
-                  display={formatCNY(productSummary?.swCumulativeCNY ?? null)}
-                  matched={productMatched}
-                />
-                <ProductTile
-                  label="HW 결제 누적"
-                  chip="¥"
-                  display={formatCNY(productSummary?.hwCumulativeCNY ?? null)}
-                  matched={productMatched}
-                />
-                <ProductTile
-                  label="HW 대수 · 칠판"
-                  chip="대"
-                  display={`${(productSummary?.hwBoardCount ?? 0).toLocaleString("ko-KR")}대`}
-                  matched={productMatched}
-                />
-              </div>
-              {productMatched ? (
-                <p className="mt-1.5 text-[10px] text-[#1a1a1a]/35">
-                  REV 원장 결제 누적(¥ CNY) · 칠판 대수는 HW 출고(배송예정 제외) · 계정키 조인
-                </p>
-              ) : (
-                <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-[#fafaf8] px-2.5 py-1.5">
-                  <span className="text-[11px] text-[#1a1a1a]/45">REV/HW 원장과 매칭된 기록이 없습니다.</span>
-                  <Link
-                    href={`/admin/crm/matching?name=${encodeURIComponent(displayName)}`}
-                    className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-[#084734] hover:underline"
-                  >
-                    매칭 연결
-                    <ArrowUpRight className="h-3 w-3" />
-                  </Link>
-                </div>
-              )}
-
-              {/* NEO 수금·성과 상세(공식 원천, ¥ CNY) — 데이터 있을 때만 유지 */}
-              {moneyVisible ? (
-                <div className="mt-3 space-y-3 border-t border-[#f0f0ec] pt-3">
-                  {(data.serviceRisk?.level === "urgent" || data.serviceRisk?.level === "soon") &&
-                  orderTotal != null &&
-                  orderTotal > 0 ? (
-                    <div className="flex items-center gap-1.5 rounded-lg bg-[#FBF1E0] px-2.5 py-1.5 text-[11px] font-medium text-[#7A520F]">
-                      <Sparkles className="h-3 w-3 shrink-0" />
-                      갱신 예상 {formatUSD(orderTotal)} · 직전 계약 기준 추정(만료 임박)
-                    </div>
-                  ) : null}
-
-                  {/* 수금 · 성과 합계 — 둘 다 CNY(¥). */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
-                      <p className="text-[11px] font-semibold text-[#1a1a1a]/35">수금 합계</p>
-                      <p className="text-[15px] font-bold text-[#111110]">{formatCNY(collectionTotal)}</p>
-                    </div>
-                    <div className="rounded-xl bg-[#ECFDF5] px-3 py-2">
-                      <p className="text-[11px] font-semibold text-[#084734]/70">성과 합계</p>
-                      <p className="text-[15px] font-bold text-[#084734]">{formatCNY(performanceTotal)}</p>
-                    </div>
-                  </div>
-                  {recentPerformances.length ? (
-                    <div className="space-y-1.5">
-                      {recentPerformances.map((perf) => (
-                        <div key={perf.id} className="flex items-center justify-between gap-2 text-[12px]">
-                          <span className="min-w-0 truncate font-medium text-[#111110]">{perf.title}</span>
-                          <span className="shrink-0 text-[#1a1a1a]/45">
-                            {formatCNY(perf.amount)}
-                            {perf.occurredAt ? ` · ${formatDay(perf.occurredAt)}` : ""}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {money?.eeoAccounts.length ? (
-                    <div className="space-y-1.5 border-t border-[#f0f0ec] pt-3">
-                      {money.eeoAccounts.slice(0, 4).map((eeo) => (
-                        <div key={eeo.id} className="flex items-center justify-between gap-2 text-[12px]">
-                          <span className="truncate font-medium text-[#111110]">{eeo.name}</span>
-                          <span className="shrink-0 text-[#1a1a1a]/45">
-                            잔액 {formatCNY(eeo.balance)} · 만료 {formatDay(eeo.expireAt)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
-          {/* 핵심 정보 — 참고 데이터, 기본 접힘 */}
-          {data ? (
-            <CollapsibleSection icon={<Sparkles className="h-3.5 w-3.5" />} title="핵심 정보">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12px]">
-                <div>
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객 가치 (LTV) · 추정</p>
-                  <p className="text-[15px] font-bold text-[#111110]">{ltv == null ? "-" : `₩${formatAmount(ltv)}`}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">잔액 합계</p>
-                  <p className="text-[15px] font-bold text-[#111110]">{formatCNY(money?.totalBalance ?? null)}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">담당</p>
-                  <p className="font-medium text-[#111110]">{header?.ownerName ?? "미배정"}</p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">
-                    {targetType === "neo_account" ? "지역" : "상태"}
-                  </p>
-                  <p className="font-medium text-[#111110]">
-                    {targetType === "neo_account" ? header?.region ?? "지역 미지정" : header?.statusLabel ?? "-"}
-                  </p>
-                </div>
-                {data.risk.nearestExpireAt ? (
-                  <div>
-                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">최근접 만료</p>
-                    <p className="font-medium text-[#111110]">{formatDay(data.risk.nearestExpireAt)}</p>
-                  </div>
-                ) : null}
-                <div>
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">생성일</p>
-                  <p className="font-medium text-[#111110]">{header?.createdAt ? formatDay(header.createdAt) : "-"}</p>
-                </div>
-              </div>
-              <p className="mt-2 text-[10px] text-[#1a1a1a]/35">
-                LTV는 수납·오더 기준 추정값 · 수금/성과/잔액은 위안화(¥), 오더는 달러($) · 공식 원천 NEO
-              </p>
-            </CollapsibleSection>
-          ) : null}
-
-          {/* deals (Deal Lite) */}
-          {data ? (
-            <section id="c360-deal" className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-              <SectionTitle icon={<Briefcase className="h-3.5 w-3.5" />}>
-                딜 {data.deals.summary.total > 0 ? `(${data.deals.summary.total})` : ""}
-              </SectionTitle>
-              <div className="mb-3 space-y-1.5">
-                {data.deals.rows.length === 0 ? (
-                  <p className="text-[12px] text-[#1a1a1a]/40">진행 중인 딜이 없습니다.</p>
-                ) : (
-                  data.deals.rows.map((deal) => (
-                    <div key={deal.id} className="rounded-xl bg-[#fafaf8] px-3 py-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="min-w-0 truncate text-[12px] font-semibold text-[#111110]">{deal.title}</p>
-                        <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                            deal.status === "won"
-                              ? "bg-[#ECFDF5] text-[#084734]"
-                              : deal.status === "lost"
-                                ? "bg-[#FEF3EE] text-[#B85C33]"
-                                : "bg-white text-[#1a1a1a]/55"
-                          }`}
-                        >
-                          {DEAL_STAGE_LABEL[deal.stage]}
-                        </span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between gap-2">
-                        <p className="text-[11px] text-[#1a1a1a]/45">
-                          {deal.expectedAmount != null ? `${formatAmount(deal.expectedAmount)} · ` : ""}
-                          {deal.expectedCloseAt ? `예상 ${formatDay(deal.expectedCloseAt)}` : "종료일 미정"}
-                        </p>
-                        {deal.status === "open" ? (
-                          <select
-                            value={deal.stage}
-                            onChange={(event) => void handleDealStage(deal.id, event.target.value as CrmDealStage)}
-                            disabled={actingId === `deal:${deal.id}`}
-                            className="h-7 rounded-lg border border-[#e8e8e4] bg-white px-1.5 text-[11px] font-semibold text-[#111110] outline-none disabled:opacity-50"
-                            aria-label="딜 단계"
-                          >
-                            {DEAL_STAGE_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="border-t border-[#f0f0ec] pt-3">
-                {dealFormOpen ? (
-                  <div className="flex flex-wrap gap-2">
-                    <input
-                      value={dealTitle}
-                      onChange={(event) => setDealTitle(event.target.value)}
-                      placeholder="새 딜 제목"
-                      autoFocus
-                      className="h-9 min-w-[140px] flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
-                    />
-                    <input
-                      value={dealAmount}
-                      onChange={(event) => setDealAmount(event.target.value)}
-                      inputMode="numeric"
-                      placeholder="예상금액"
-                      className="h-9 w-24 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
-                    />
-                    <select
-                      value={dealStage}
-                      onChange={(event) => setDealStage(event.target.value as CrmDealStage)}
-                      className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                    >
-                      {DEAL_STAGE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => void handleAddDeal()}
-                      disabled={!dealTitle.trim() || actingId === "deal"}
-                      className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      딜 추가
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDealFormOpen(false)}
-                      className="inline-flex h-9 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
-                    >
-                      취소
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setDealFormOpen(true)}
-                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-dashed border-[#dcdcd6] px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#111110] hover:text-[#111110]"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    딜 추가
-                  </button>
-                )}
-              </div>
-            </section>
-          ) : null}
-
-          {/* open tasks + quick add */}
-          {data ? (
-            <section id="c360-tasks" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-              <SectionTitle icon={<ListChecks className="h-3.5 w-3.5" />}>
-                열린 할 일 {data.tasks.summary.total > 0 ? `(${data.tasks.summary.total})` : ""}
-              </SectionTitle>
-              <div className="mb-3 space-y-1.5">
-                {data.tasks.rows.length === 0 ? (
-                  <p className="text-[12px] text-[#1a1a1a]/40">열린 할 일이 없습니다.</p>
-                ) : (
-                  data.tasks.rows.map((task) => (
-                    <div key={task.id} className="flex items-center justify-between gap-2 rounded-xl bg-[#fafaf8] px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-[12px] font-semibold text-[#111110]">{task.title}</p>
-                        <p className="text-[11px] text-[#1a1a1a]/40">
-                          <CalendarClock className="mr-1 inline h-3 w-3" />
-                          {task.dueAt ? formatDay(task.dueAt) : "기한 없음"}
-                          {task.ownerNameSnapshot ? ` · ${task.ownerNameSnapshot}` : ""}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void handleCompleteTask(task.id)}
-                        disabled={actingId === `task:${task.id}`}
-                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
-                      >
-                        <CheckCircle2 className="h-3 w-3" />
-                        완료
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="border-t border-[#f0f0ec] pt-3">
-                {taskFormOpen ? (
-                  <div className="flex flex-col gap-2">
-                    <input
-                      value={taskTitle}
-                      onChange={(event) => setTaskTitle(event.target.value)}
-                      placeholder="새 할 일 제목"
-                      autoFocus
-                      className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      <select
-                        value={taskType}
-                        onChange={(event) => setTaskType(event.target.value as CrmTaskType)}
-                        className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                      >
-                        {TASK_TYPE_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="date"
-                        value={taskDue}
-                        onChange={(event) => setTaskDue(event.target.value)}
-                        className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void handleAddTask()}
-                        disabled={!taskTitle.trim() || actingId === "task"}
-                        className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        내 할 일로 추가
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTaskFormOpen(false)}
-                        className="inline-flex h-9 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
-                      >
-                        취소
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setTaskFormOpen(true)}
-                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-dashed border-[#dcdcd6] px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#111110] hover:text-[#111110]"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    할 일 추가
-                  </button>
-                )}
-              </div>
-              <div className="mt-3 border-t border-[#f0f0ec] pt-3">
-                <p className="mb-1.5 text-[11px] font-semibold text-[#1a1a1a]/45">고객 성공(CS) 동선 · 원클릭</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {CS_MOTIONS.map((motion) => (
-                    <button
-                      key={motion.key}
-                      type="button"
-                      onClick={() => void handleCsMotion(motion)}
-                      disabled={actingId === `cs:${motion.key}`}
-                      className="inline-flex h-7 items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2.5 text-[11px] font-semibold text-[#1a1a1a]/65 transition-colors hover:border-[#084734] hover:text-[#084734] disabled:opacity-50"
-                    >
-                      <Plus className="h-3 w-3" />
-                      {motion.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
-          ) : null}
-
           {/* activity timeline + 특이사항 피드 + quick note/회의록 */}
           {data ? (
             <section id="c360-activity" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
@@ -1692,6 +1335,363 @@ export default function Customer360Drawer({ customerKey, name, onClose }: Props)
                 <ArrowUpRight className="h-3.5 w-3.5" />
               </Link>
             </section>
+          ) : null}
+
+          {/* open tasks + quick add */}
+          {data ? (
+            <section id="c360-tasks" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+              <SectionTitle icon={<ListChecks className="h-3.5 w-3.5" />}>
+                열린 할 일 {data.tasks.summary.total > 0 ? `(${data.tasks.summary.total})` : ""}
+              </SectionTitle>
+              <div className="mb-3 space-y-1.5">
+                {data.tasks.rows.length === 0 ? (
+                  <p className="text-[12px] text-[#1a1a1a]/40">열린 할 일이 없습니다.</p>
+                ) : (
+                  data.tasks.rows.map((task) => (
+                    <div key={task.id} className="flex items-center justify-between gap-2 rounded-xl bg-[#fafaf8] px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-[12px] font-semibold text-[#111110]">{task.title}</p>
+                        <p className="text-[11px] text-[#1a1a1a]/40">
+                          <CalendarClock className="mr-1 inline h-3 w-3" />
+                          {task.dueAt ? formatDay(task.dueAt) : "기한 없음"}
+                          {task.ownerNameSnapshot ? ` · ${task.ownerNameSnapshot}` : ""}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleCompleteTask(task.id)}
+                        disabled={actingId === `task:${task.id}`}
+                        className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                        완료
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="border-t border-[#f0f0ec] pt-3">
+                {taskFormOpen ? (
+                  <div className="flex flex-col gap-2">
+                    <input
+                      value={taskTitle}
+                      onChange={(event) => setTaskTitle(event.target.value)}
+                      placeholder="새 할 일 제목"
+                      autoFocus
+                      className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <select
+                        value={taskType}
+                        onChange={(event) => setTaskType(event.target.value as CrmTaskType)}
+                        className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
+                      >
+                        {TASK_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="date"
+                        value={taskDue}
+                        onChange={(event) => setTaskDue(event.target.value)}
+                        className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleAddTask()}
+                        disabled={!taskTitle.trim() || actingId === "task"}
+                        className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        내 할 일로 추가
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTaskFormOpen(false)}
+                        className="inline-flex h-9 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setTaskFormOpen(true)}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-dashed border-[#dcdcd6] px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#111110] hover:text-[#111110]"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    할 일 추가
+                  </button>
+                )}
+              </div>
+              <div className="mt-3 border-t border-[#f0f0ec] pt-3">
+                <p className="mb-1.5 text-[11px] font-semibold text-[#1a1a1a]/45">고객 성공(CS) 동선 · 원클릭</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {CS_MOTIONS.map((motion) => (
+                    <button
+                      key={motion.key}
+                      type="button"
+                      onClick={() => void handleCsMotion(motion)}
+                      disabled={actingId === `cs:${motion.key}`}
+                      className="inline-flex h-7 items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-2.5 text-[11px] font-semibold text-[#1a1a1a]/65 transition-colors hover:border-[#084734] hover:text-[#084734] disabled:opacity-50"
+                    >
+                      <Plus className="h-3 w-3" />
+                      {motion.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {/* deals (Deal Lite) */}
+          {data ? (
+            <section id="c360-deal" className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+              <SectionTitle icon={<Briefcase className="h-3.5 w-3.5" />}>
+                딜 {data.deals.summary.total > 0 ? `(${data.deals.summary.total})` : ""}
+              </SectionTitle>
+              <div className="mb-3 space-y-1.5">
+                {data.deals.rows.length === 0 ? (
+                  <p className="text-[12px] text-[#1a1a1a]/40">진행 중인 딜이 없습니다.</p>
+                ) : (
+                  data.deals.rows.map((deal) => (
+                    <div key={deal.id} className="rounded-xl bg-[#fafaf8] px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="min-w-0 truncate text-[12px] font-semibold text-[#111110]">{deal.title}</p>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            deal.status === "won"
+                              ? "bg-[#ECFDF5] text-[#084734]"
+                              : deal.status === "lost"
+                                ? "bg-[#FEF3EE] text-[#B85C33]"
+                                : "bg-white text-[#1a1a1a]/55"
+                          }`}
+                        >
+                          {DEAL_STAGE_LABEL[deal.stage]}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-[#1a1a1a]/45">
+                          {deal.expectedAmount != null ? `${formatAmount(deal.expectedAmount)} · ` : ""}
+                          {deal.expectedCloseAt ? `예상 ${formatDay(deal.expectedCloseAt)}` : "종료일 미정"}
+                        </p>
+                        {deal.status === "open" ? (
+                          <select
+                            value={deal.stage}
+                            onChange={(event) => void handleDealStage(deal.id, event.target.value as CrmDealStage)}
+                            disabled={actingId === `deal:${deal.id}`}
+                            className="h-7 rounded-lg border border-[#e8e8e4] bg-white px-1.5 text-[11px] font-semibold text-[#111110] outline-none disabled:opacity-50"
+                            aria-label="딜 단계"
+                          >
+                            {DEAL_STAGE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="border-t border-[#f0f0ec] pt-3">
+                {dealFormOpen ? (
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      value={dealTitle}
+                      onChange={(event) => setDealTitle(event.target.value)}
+                      placeholder="새 딜 제목"
+                      autoFocus
+                      className="h-9 min-w-[140px] flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                    />
+                    <input
+                      value={dealAmount}
+                      onChange={(event) => setDealAmount(event.target.value)}
+                      inputMode="numeric"
+                      placeholder="예상금액"
+                      className="h-9 w-24 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                    />
+                    <select
+                      value={dealStage}
+                      onChange={(event) => setDealStage(event.target.value as CrmDealStage)}
+                      className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
+                    >
+                      {DEAL_STAGE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => void handleAddDeal()}
+                      disabled={!dealTitle.trim() || actingId === "deal"}
+                      className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-[#111110] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      딜 추가
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDealFormOpen(false)}
+                      className="inline-flex h-9 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
+                    >
+                      취소
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setDealFormOpen(true)}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-dashed border-[#dcdcd6] px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#111110] hover:text-[#111110]"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    딜 추가
+                  </button>
+                )}
+              </div>
+            </section>
+          ) : null}
+
+          {/* 머니 — 제품 매출(REV/HW 원장 계정키 조인) + NEO 수금·성과 상세 */}
+          {data ? (
+            <section id="c360-money" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+              <SectionTitle icon={<Coins className="h-3.5 w-3.5" />}>머니 · 제품 매출</SectionTitle>
+              {/* SW 결제 누적 · HW 결제 누적(¥ CNY) · HW 대수(칠판, 대) */}
+              <div className="grid grid-cols-3 gap-2">
+                <ProductTile
+                  label="SW 결제 누적"
+                  chip="¥"
+                  display={formatCNY(productSummary?.swCumulativeCNY ?? null)}
+                  matched={productMatched}
+                />
+                <ProductTile
+                  label="HW 결제 누적"
+                  chip="¥"
+                  display={formatCNY(productSummary?.hwCumulativeCNY ?? null)}
+                  matched={productMatched}
+                />
+                <ProductTile
+                  label="HW 대수 · 칠판"
+                  chip="대"
+                  display={`${(productSummary?.hwBoardCount ?? 0).toLocaleString("ko-KR")}대`}
+                  matched={productMatched}
+                />
+              </div>
+              {productMatched ? (
+                <p className="mt-1.5 text-[10px] text-[#1a1a1a]/35">
+                  REV 원장 결제 누적(¥ CNY) · 칠판 대수는 HW 출고(배송예정 제외) · 계정키 조인
+                </p>
+              ) : (
+                <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-[#fafaf8] px-2.5 py-1.5">
+                  <span className="text-[11px] text-[#1a1a1a]/45">REV/HW 원장과 매칭된 기록이 없습니다.</span>
+                  <Link
+                    href={`/admin/crm/matching?name=${encodeURIComponent(displayName)}`}
+                    className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-[#084734] hover:underline"
+                  >
+                    매칭 연결
+                    <ArrowUpRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              )}
+
+              {/* NEO 수금·성과 상세(공식 원천, ¥ CNY) — 데이터 있을 때만 유지 */}
+              {moneyVisible ? (
+                <div className="mt-3 space-y-3 border-t border-[#f0f0ec] pt-3">
+                  {(data.serviceRisk?.level === "urgent" || data.serviceRisk?.level === "soon") &&
+                  orderTotal != null &&
+                  orderTotal > 0 ? (
+                    <div className="flex items-center gap-1.5 rounded-lg bg-[#FBF1E0] px-2.5 py-1.5 text-[11px] font-medium text-[#7A520F]">
+                      <Sparkles className="h-3 w-3 shrink-0" />
+                      갱신 예상 {formatUSD(orderTotal)} · 직전 계약 기준 추정(만료 임박)
+                    </div>
+                  ) : null}
+
+                  {/* 수금 · 성과 합계 — 둘 다 CNY(¥). */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-xl bg-[#fafaf8] px-3 py-2">
+                      <p className="text-[11px] font-semibold text-[#1a1a1a]/35">수금 합계</p>
+                      <p className="text-[15px] font-bold text-[#111110]">{formatCNY(collectionTotal)}</p>
+                    </div>
+                    <div className="rounded-xl bg-[#ECFDF5] px-3 py-2">
+                      <p className="text-[11px] font-semibold text-[#084734]/70">성과 합계</p>
+                      <p className="text-[15px] font-bold text-[#084734]">{formatCNY(performanceTotal)}</p>
+                    </div>
+                  </div>
+                  {recentPerformances.length ? (
+                    <div className="space-y-1.5">
+                      {recentPerformances.map((perf) => (
+                        <div key={perf.id} className="flex items-center justify-between gap-2 text-[12px]">
+                          <span className="min-w-0 truncate font-medium text-[#111110]">{perf.title}</span>
+                          <span className="shrink-0 text-[#1a1a1a]/45">
+                            {formatCNY(perf.amount)}
+                            {perf.occurredAt ? ` · ${formatDay(perf.occurredAt)}` : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {money?.eeoAccounts.length ? (
+                    <div className="space-y-1.5 border-t border-[#f0f0ec] pt-3">
+                      {money.eeoAccounts.slice(0, 4).map((eeo) => (
+                        <div key={eeo.id} className="flex items-center justify-between gap-2 text-[12px]">
+                          <span className="truncate font-medium text-[#111110]">{eeo.name}</span>
+                          <span className="shrink-0 text-[#1a1a1a]/45">
+                            잔액 {formatCNY(eeo.balance)} · 만료 {formatDay(eeo.expireAt)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
+
+          {/* 핵심 정보 — 참고 데이터, 기본 접힘 */}
+          {data ? (
+            <CollapsibleSection icon={<Sparkles className="h-3.5 w-3.5" />} title="핵심 정보">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12px]">
+                <div>
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객 가치 (LTV) · 추정</p>
+                  <p className="text-[15px] font-bold text-[#111110]">{ltv == null ? "-" : `₩${formatAmount(ltv)}`}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">잔액 합계</p>
+                  <p className="text-[15px] font-bold text-[#111110]">{formatCNY(money?.totalBalance ?? null)}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">담당</p>
+                  <p className="font-medium text-[#111110]">{header?.ownerName ?? "미배정"}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">
+                    {targetType === "neo_account" ? "지역" : "상태"}
+                  </p>
+                  <p className="font-medium text-[#111110]">
+                    {targetType === "neo_account" ? header?.region ?? "지역 미지정" : header?.statusLabel ?? "-"}
+                  </p>
+                </div>
+                {data.risk.nearestExpireAt ? (
+                  <div>
+                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">최근접 만료</p>
+                    <p className="font-medium text-[#111110]">{formatDay(data.risk.nearestExpireAt)}</p>
+                  </div>
+                ) : null}
+                <div>
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">생성일</p>
+                  <p className="font-medium text-[#111110]">{header?.createdAt ? formatDay(header.createdAt) : "-"}</p>
+                </div>
+              </div>
+              <p className="mt-2 text-[10px] text-[#1a1a1a]/35">
+                LTV는 수납·오더 기준 추정값 · 수금/성과/잔액은 위안화(¥), 오더는 달러($) · 공식 원천 NEO
+              </p>
+            </CollapsibleSection>
           ) : null}
 
           {/* escape hatch — 신규 360 상세 페이지가 주 동선, 원본 화면은 보조 */}
