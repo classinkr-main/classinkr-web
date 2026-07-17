@@ -5577,90 +5577,105 @@ export default function SalesLedgerWorkbench() {
                       </button>
                     ))}
                   </div>
-                  <label className="relative min-w-[220px] flex-1 xl:w-[310px] xl:flex-none">
-                    <span className="sr-only">REV 매출 행 검색</span>
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
-                    <input
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder="고객, 담당자, 팀, 지역, 상태, 메모 검색"
-                      className="h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[12px] font-medium outline-none transition focus:border-[#084734]"
-                    />
-                  </label>
-                  <select
-                    value={managerFilter}
-                    onChange={(event) => setManagerFilter(event.target.value)}
-                    className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
-                    aria-label="담당자 필터"
-                  >
-                    <option value="ALL">담당자 전체</option>
-                    {managerOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-                  </select>
-                  <select
-                    value={regionFilter}
-                    onChange={(event) => setRegionFilter(event.target.value)}
-                    className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
-                    aria-label="지역 필터"
-                  >
-                    <option value="ALL">지역 전체</option>
-                    {regionOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setAdvancedFiltersOpen((value) => !value)}
-                    aria-expanded={advancedFiltersOpen}
-                    className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-[12px] font-bold transition ${
-                      advancedFiltersOpen || revStatusFilter !== "ALL" || revDealTypeFilter !== "ALL" || revOriginFilter !== "all" || revForecastFilter !== "all"
-                        ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
-                        : "border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
-                    }`}
-                  >
-                    <SlidersHorizontal className="h-3.5 w-3.5" />
-                    고급
-                  </button>
-                  <select
-                    value={revPageSize}
-                    onChange={(event) => setRevPageSize(Number(event.target.value) as RevPageSize)}
-                    className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
-                    aria-label="REV 표시 개수"
-                  >
-                    {REV_PAGE_SIZES.map((value) => <option key={value} value={value}>{value}개</option>)}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={resetRevFilters}
-                    disabled={!revControlsDirty}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label="REV 검색, 필터, 정렬 초기화"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    초기화
-                  </button>
-                  <button
-                    type="button"
-                    onClick={toggleAllRevGroups}
-                    disabled={multiRowGroupKeys.length === 0}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
-                    aria-label={allRevGroupsExpanded ? "고객 묶음 모두 접기" : "고객 묶음 모두 펼치기"}
-                  >
-                    <ChevronRight className={`h-3.5 w-3.5 transition-transform ${allRevGroupsExpanded ? "rotate-90" : ""}`} />
-                    {allRevGroupsExpanded ? "모두 접기" : "모두 펼치기"}
-                  </button>
-                  <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" aria-label="매트릭스 행 밀도">
-                    {MATRIX_DENSITY_OPTIONS.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => setMatrixDensity(option.id)}
-                        title={option.title}
-                        aria-pressed={matrixDensity === option.id}
-                        className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold transition ${
-                          matrixDensity === option.id ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59] hover:text-[#111110]"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
+                  {/* 품질 웨이브 4 — 항목 9: 툴바를 탐색/표시/액션 3그룹으로 시각 구분(구분선+미세 라벨).
+                      컨트롤 자체(핸들러·disabled·aria-label 등)는 그대로 두고, 인접 배치와 얇은 라벨만
+                      더했다 — 그룹 안에서 초기화 버튼만 액션 그룹으로 옮겨 표시 그룹을 인접시켰다. */}
+                  <div className="flex flex-wrap items-center gap-2" role="group" aria-label="탐색">
+                    <span aria-hidden className="h-5 w-px shrink-0 bg-[rgba(0,0,0,0.08)]" />
+                    <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wider text-[#A39E98]">탐색</span>
+                    <label className="relative min-w-[220px] flex-1 xl:w-[310px] xl:flex-none">
+                      <span className="sr-only">REV 매출 행 검색</span>
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A39E98]" />
+                      <input
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder="고객, 담당자, 팀, 지역, 상태, 메모 검색"
+                        className="h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-9 pr-3 text-[12px] font-medium outline-none transition focus:border-[#084734]"
+                      />
+                    </label>
+                    <select
+                      value={managerFilter}
+                      onChange={(event) => setManagerFilter(event.target.value)}
+                      className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
+                      aria-label="담당자 필터"
+                    >
+                      <option value="ALL">담당자 전체</option>
+                      {managerOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                    </select>
+                    <select
+                      value={regionFilter}
+                      onChange={(event) => setRegionFilter(event.target.value)}
+                      className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
+                      aria-label="지역 필터"
+                    >
+                      <option value="ALL">지역 전체</option>
+                      {regionOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => setAdvancedFiltersOpen((value) => !value)}
+                      aria-expanded={advancedFiltersOpen}
+                      className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-[12px] font-bold transition ${
+                        advancedFiltersOpen || revStatusFilter !== "ALL" || revDealTypeFilter !== "ALL" || revOriginFilter !== "all" || revForecastFilter !== "all"
+                          ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                          : "border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
+                      }`}
+                    >
+                      <SlidersHorizontal className="h-3.5 w-3.5" />
+                      고급
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2" role="group" aria-label="표시">
+                    <span aria-hidden className="h-5 w-px shrink-0 bg-[rgba(0,0,0,0.08)]" />
+                    <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wider text-[#A39E98]">표시</span>
+                    <select
+                      value={revPageSize}
+                      onChange={(event) => setRevPageSize(Number(event.target.value) as RevPageSize)}
+                      className="h-9 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-semibold text-[#111110]"
+                      aria-label="REV 표시 개수"
+                    >
+                      {REV_PAGE_SIZES.map((value) => <option key={value} value={value}>{value}개</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={toggleAllRevGroups}
+                      disabled={multiRowGroupKeys.length === 0}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label={allRevGroupsExpanded ? "고객 묶음 모두 접기" : "고객 묶음 모두 펼치기"}
+                    >
+                      <ChevronRight className={`h-3.5 w-3.5 transition-transform ${allRevGroupsExpanded ? "rotate-90" : ""}`} />
+                      {allRevGroupsExpanded ? "모두 접기" : "모두 펼치기"}
+                    </button>
+                    <div className="inline-flex items-center gap-0.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" aria-label="매트릭스 행 밀도">
+                      {MATRIX_DENSITY_OPTIONS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => setMatrixDensity(option.id)}
+                          title={option.title}
+                          aria-pressed={matrixDensity === option.id}
+                          className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold transition ${
+                            matrixDensity === option.id ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59] hover:text-[#111110]"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2" role="group" aria-label="액션">
+                    <span aria-hidden className="h-5 w-px shrink-0 bg-[rgba(0,0,0,0.08)]" />
+                    <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wider text-[#A39E98]">액션</span>
+                    <button
+                      type="button"
+                      onClick={resetRevFilters}
+                      disabled={!revControlsDirty}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="REV 검색, 필터, 정렬 초기화"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      초기화
+                    </button>
                   </div>
                 </div>
               </div>
