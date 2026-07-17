@@ -1,7 +1,7 @@
 "use client"
 import Link from "next/link"
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronLeft, ChevronRight, RotateCcw, Search } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useBranchJson } from "../client-api"
 import { matchesTokens, tokenize } from "../search-tokens"
 import MultiSelect from "../MultiSelect"
@@ -75,6 +75,9 @@ export default function PipelineTable({
   pageSize = 20,
   onRowClick,
   hideHeader = false,
+  initialQuery,
+  initialManager,
+  onFilterChange,
 }: {
   team: Team
   period: Period
@@ -86,15 +89,29 @@ export default function PipelineTable({
    *  링크·필터·표는 그대로 유지. 부모가 이미 카드 제목(예: "파이프라인")을 렌더하는
    *  컨텍스트(BranchDashboardClient 파이프라인 탭)에서 제목 이중화를 막는 용도. */
   hideHeader?: boolean
+  /** 품질 웨이브 5 — 항목 6. 장부의 pipelineHref(향후 q/mgr 동봉 시)나 URL 딥링크로
+   *  들어올 때 검색어/담당 필터의 초기값으로만 쓰인다(마운트 이후 재적용 안 됨 —
+   *  team/period/month와 달리 이 두 필드는 사용자가 이 화면 안에서 계속 바꾸는
+   *  값이라 부모가 다시 밀어넣지 않는다. 이후 변경은 onFilterChange로 부모에 통지). */
+  initialQuery?: string
+  initialManager?: string
+  onFilterChange?: (next: { query: string; manager: string }) => void
 }) {
   const initialTeams: Set<string> = team === "ALL" ? new Set() : new Set([team])
-  const [query, setQuery] = useState("")
+  const [query, setQuery] = useState(initialQuery ?? "")
   const [selectedTeams, setSelectedTeams] = useState<Set<string>>(initialTeams)
-  const [selectedManagers, setSelectedManagers] = useState<Set<string>>(new Set())
+  const [selectedManagers, setSelectedManagers] = useState<Set<string>>(() => initialManager ? new Set([initialManager]) : new Set())
   const [selectedRegions, setSelectedRegions] = useState<Set<string>>(new Set())
   const [sortKey, setSortKey] = useState<SortKey>("revenue")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
   const [page, setPage] = useState(1)
+
+  // 품질 웨이브 5 — 항목 6. 검색어/담당(첫 번째 선택값만 — 장부와 동일하게 단일)이
+  // 바뀔 때마다 부모(BranchDashboardClient)에 통지해 URL(q/mgr)에 동기화한다.
+  // tab/team/period/month와 동일한 "URL이 현재 화면 상태를 반영" 규약의 확장.
+  useEffect(() => {
+    onFilterChange?.({ query, manager: Array.from(selectedManagers)[0] ?? "" })
+  }, [query, selectedManagers, onFilterChange])
 
   function handleSort(key: SortKey) {
     if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"))

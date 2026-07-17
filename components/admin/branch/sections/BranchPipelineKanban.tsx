@@ -1,7 +1,7 @@
 "use client"
 import Link from "next/link"
 import { RotateCcw, Search } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useBranchJson } from "../client-api"
 import { matchesTokens, tokenize } from "../search-tokens"
 import MultiSelect from "../MultiSelect"
@@ -204,17 +204,29 @@ const SORT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "customer-desc", label: "고객명 역순" },
 ]
 
-export default function BranchPipelineKanban({ team, period, selectedMonth, refreshKey, onDealClick }: {
+export default function BranchPipelineKanban({
+  team, period, selectedMonth, refreshKey, onDealClick, initialQuery, initialManager, onFilterChange,
+}: {
   team: Team
   period: Period
   selectedMonth: string
   refreshKey: number
   onDealClick?: (d: Row & { stageLabel: string; stageColor: string; probability?: number }) => void
+  /** 품질 웨이브 5 — 항목 6. PipelineTable과 동일 규약 — 마운트 시 1회 초기값으로만
+   *  쓰이고, 이후 변경은 onFilterChange로 부모(BranchDashboardClient)에 통지한다. */
+  initialQuery?: string
+  initialManager?: string
+  onFilterChange?: (next: { query: string; manager: string }) => void
 }) {
   // 담당 필터 — PipelineTable과 동일 멀티선택(품질 웨이브 4 — 항목 2, 이전엔 단일 select).
-  const [selectedManagers, setSelectedManagers] = useState<Set<string>>(new Set())
-  const [query, setQuery] = useState("")
+  const [selectedManagers, setSelectedManagers] = useState<Set<string>>(() => initialManager ? new Set([initialManager]) : new Set())
+  const [query, setQuery] = useState(initialQuery ?? "")
   const [sortValue, setSortValue] = useState<string>("revenue-desc")
+
+  // PipelineTable.tsx와 동일 패턴 — 검색어/담당 변경을 부모에 통지해 URL(q/mgr) 동기화.
+  useEffect(() => {
+    onFilterChange?.({ query, manager: Array.from(selectedManagers)[0] ?? "" })
+  }, [query, selectedManagers, onFilterChange])
   // 로컬 재시도 넛지 — BranchRegionHeatmap/PipelineTable과 동일 패턴(refreshKey에
   // 더해 로컬 카운터를 얹어 useBranchJson의 캐시키를 바꿔 재요청을 트리거).
   const [localRetry, setLocalRetry] = useState(0)
