@@ -1282,8 +1282,12 @@ export default function LeadsBoardClient() {
 
   // 필터(응대 큐/소스/채널/리드마그넷/검색어)가 바뀌면 새 결과셋의 맨 위(초기 50건)부터
   // 다시 보여준다 — 이전 필터에서 펼친 범위가 무관한 결과에 남지 않도록.
+  // 함께 벌크 선택도 비운다: 표시 상한만 접고 selectedLeadIds를 두면, 이전 필터에서
+  // 고른 "숨은" 리드가 벌크 삭제/전환 대상에 그대로 남는다(데이터 손실 위험).
+  // 마운트 시엔 selectedLeadIds가 이미 빈 Set이라 지울 선택이 없어 무해하다.
   useEffect(() => {
     collapseLeads()
+    setSelectedLeadIds(new Set())
   }, [filter, sourceDetailFilter, channelSource, leadMagnetFilter, searchQuery, collapseLeads])
 
   const todayFollowUps = leads.filter((l) =>
