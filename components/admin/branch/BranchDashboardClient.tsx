@@ -22,8 +22,14 @@ import DataQualityPanel from "./sections/DataQualityPanel"
 import DealMixSection from "./sections/DealMixSection"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
 import { PERIODS, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
+import { ADMIN_NAV, ADMIN_NAV_SECTION_META } from "../admin-nav"
 
 type BranchTab = "overview" | "pipeline" | "heatmap" | "ai"
+
+// 브레드크럼 세그먼트는 admin-nav.ts SSOT에서 파생한다 — "분석" 하드코딩 대신 /admin/branch가
+// 실제로 속한 섹션 라벨(현재 "영업·매출")을 읽는다. IA가 다시 재편돼도 이 화면은 자동으로 따라간다.
+const BRANCH_NAV_ITEM = ADMIN_NAV.find((item) => item.href === "/admin/branch")
+const BRANCH_SECTION_LABEL = BRANCH_NAV_ITEM ? ADMIN_NAV_SECTION_META[BRANCH_NAV_ITEM.section].label : "영업·매출"
 
 const BRANCH_TABS: Array<{ id: BranchTab; label: string; sub: string }> = [
   { id: "overview", label: "개요", sub: "실적 · 팀 · 재고 · 캠페인" },
@@ -258,7 +264,7 @@ export default function BranchDashboardClient() {
               <span>ADMIN</span>
               <span className="opacity-50">›</span>
               <span className="inline-flex items-center gap-1">
-                <ChevronLeft className="h-3 w-3" /> 분석
+                <ChevronLeft className="h-3 w-3" /> {BRANCH_SECTION_LABEL}
               </span>
               <span className="opacity-50">›</span>
               <span>KR Team</span>
