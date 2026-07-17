@@ -165,6 +165,21 @@ export interface BranchSalesLedgerDraftCreateResult {
   dedupedRecent: boolean
 }
 
+export type UpdateBranchSalesLedgerDraftResult =
+  | { outcome: "updated"; draft: BranchSalesLedgerDraft }
+  | { outcome: "not-found" }
+  /** 낙관적 잠금(웨이브7 I4) 충돌 — expectedUpdatedAt이 DB의 실제 updated_at과 달랐다. */
+  | { outcome: "conflict"; draft: BranchSalesLedgerDraft }
+
+export interface UpdateBranchSalesLedgerDraftOptions {
+  /**
+   * 지정하면 DB의 현재 updated_at과 일치할 때만 수정을 반영한다(compare-and-swap). 불일치 시
+   * outcome:"conflict"로 현재 행을 함께 반환해 클라가 최신 내용을 다시 확인할 수 있게 한다.
+   * 생략하면 기존 동작(무조건 덮어쓰기)과 동일 — 하위호환.
+   */
+  expectedUpdatedAt?: string
+}
+
 export interface ListBranchSalesLedgerDraftsOptions {
   status?: BranchSalesLedgerDraftStatus | "all"
   limit?: number
@@ -482,6 +497,22 @@ async function findRecentOpenNewRowDraft(params: {
   return (data as BranchSalesLedgerDraftRow | null) ?? null
 }
 
+export async function fetchBranchSalesLedgerDraftById(id: string): Promise<BranchSalesLedgerDraft | null> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("branch_sales_ledger_drafts")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (error) {
+    if (isMissingDraftsTableError(error)) throw new Error(NOT_READY_MESSAGE)
+    throw new Error(`[branch-sales-ledger-drafts] 조회 실패: ${error.message}`)
+  }
+
+  return data ? toDraft(data as BranchSalesLedgerDraftRow) : null
+}
+
 export async function createBranchSalesLedgerDraft(
   input: BranchSalesLedgerDraftCreateInput,
   actor: string,
@@ -516,19 +547,31 @@ export async function createBranchSalesLedgerDraft(
   return { draft: toDraft(data as BranchSalesLedgerDraftRow), dedupedRecent: false }
 }
 
+/**
+ * 낙관적 잠금(웨이브7 I4): options.expectedUpdatedAt이 주어지면 compare-and-swap으로 수정한다
+ * (.eq("updated_at", expectedUpdatedAt)를 update 필터에 추가) — DB의 실제 updated_at과 다르면
+ * 이 UPDATE는 0행에 매치되고, 원인이 "낙관적 잠금 충돌"인지 "찾을 수 없음/적용됨"인지 구분하기
+ * 위해 현재 행을 다시 읽어 반환한다. expectedUpdatedAt을 생략하면 기존 무조건 덮어쓰기 동작과
+ * 동일(하위호환) — draft 상태에서만 의미 있다(checked 이후는 트리거가 내용 변경 자체를 막는다).
+ */
 export async function updateBranchSalesLedgerDraft(
   id: string,
   input: BranchSalesLedgerDraftUpdateInput,
   actor: string,
-): Promise<BranchSalesLedgerDraft | null> {
+  options: UpdateBranchSalesLedgerDraftOptions = {},
+): Promise<UpdateBranchSalesLedgerDraftResult> {
   const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from("branch_sales_ledger_drafts")
     .update(buildUpdate(input, actor))
     .eq("id", id)
     .neq("status", "applied")
-    .select("*")
-    .maybeSingle()
+
+  if (options.expectedUpdatedAt) {
+    query = query.eq("updated_at", options.expectedUpdatedAt)
+  }
+
+  const { data, error } = await query.select("*").maybeSingle()
 
   if (error) {
     if (isMissingDraftsTableError(error)) throw new Error(NOT_READY_MESSAGE)
@@ -536,8 +579,23 @@ export async function updateBranchSalesLedgerDraft(
     throw new Error(`[branch-sales-ledger-drafts] 수정 실패: ${error.message}`)
   }
 
-  revalidateTag(BRANCH_SALES_LEDGER_DRAFTS_CACHE_TAG, "max")
-  return data ? toDraft(data as BranchSalesLedgerDraftRow) : null
+  if (data) {
+    revalidateTag(BRANCH_SALES_LEDGER_DRAFTS_CACHE_TAG, "max")
+    return { outcome: "updated", draft: toDraft(data as BranchSalesLedgerDraftRow) }
+  }
+
+  // 0행 매치 — expectedUpdatedAt이 있었다면 "낙관적 잠금 충돌"일 수 있으니 현재 행을 다시 읽어
+  // 구분한다. id가 아예 없거나 status가 applied(불변 잠금)라서 애초에 update 필터에 안 걸린
+  // 경우는 기존 404 동작을 그대로 보존한다(applied 잠금 케이스도 지금까지 "Draft not found"로
+  // 응답해왔다) — updated_at만 어긋나 실패한 진짜 충돌일 때만 409로 승격한다.
+  if (options.expectedUpdatedAt) {
+    const current = await fetchBranchSalesLedgerDraftById(id)
+    if (current && current.status !== "applied") {
+      return { outcome: "conflict", draft: current }
+    }
+  }
+
+  return { outcome: "not-found" }
 }
 
 export async function applyBranchSalesLedgerDraft(

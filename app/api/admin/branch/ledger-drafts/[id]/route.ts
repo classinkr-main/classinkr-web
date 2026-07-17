@@ -167,9 +167,33 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const update = parseUpdate(raw)
     if (update instanceof NextResponse) return update
 
-    const draft = await updateBranchSalesLedgerDraft(id, update, actor)
-    if (!draft) return NextResponse.json({ error: "Draft not found" }, { status: 404 })
-    return NextResponse.json({ draft })
+    // 낙관적 잠금(웨이브7 I4, 선택): 전달하면 DB의 실제 updated_at과 비교해 CAS로 반영한다.
+    // 생략하면 기존 무조건 덮어쓰기 동작과 동일(하위호환).
+    if (raw.expectedUpdatedAt !== undefined && (typeof raw.expectedUpdatedAt !== "string" || !raw.expectedUpdatedAt.trim())) {
+      return NextResponse.json({ error: "expectedUpdatedAt must be a non-empty string" }, { status: 400 })
+    }
+    const expectedUpdatedAt = typeof raw.expectedUpdatedAt === "string" ? raw.expectedUpdatedAt : undefined
+
+    const result = await updateBranchSalesLedgerDraft(
+      id,
+      update,
+      actor,
+      expectedUpdatedAt ? { expectedUpdatedAt } : undefined,
+    )
+
+    if (result.outcome === "not-found") {
+      return NextResponse.json({ error: "Draft not found" }, { status: 404 })
+    }
+    if (result.outcome === "conflict") {
+      return NextResponse.json(
+        {
+          error: "다른 곳에서 먼저 수정되었습니다. 최신 내용을 확인한 뒤 다시 시도하세요.",
+          draft: result.draft,
+        },
+        { status: 409 },
+      )
+    }
+    return NextResponse.json({ draft: result.draft })
   } catch (error) {
     console.error(`[PATCH /api/admin/branch/ledger-drafts/${id}]`, error)
     return (
