@@ -86,6 +86,7 @@ import {
   type DraftKind,
   type DraftOperation,
   type DraftQueueMode,
+  type DraftSaveResult,
   type DraftStatus,
   type LedgerDraft,
   type LedgerRevenueRow,
@@ -136,6 +137,7 @@ export type {
   DraftKind,
   DraftOperation,
   DraftQueueMode,
+  DraftSaveResult,
   KpiMemberView,
   KpiMetricView,
   LedgerDraft,
@@ -1518,6 +1520,28 @@ export interface MatrixPendingDraft {
 export function pendingCellAmount(pending: MatrixPendingDraft, week?: number): number {
   if (week != null && pending.weekly) return pending.weekly[week] ?? 0
   return pending.amount
+}
+
+// 입력 레일 저장 시 이중계상 회피 대상 판정(품질 웨이브 3, 항목 3) — 매트릭스 셀 재편집(onCommitCell)과
+// 동일한 lookupMatrixPending 판정을, 레일 폼이 다루는 좌표(딜 행 rowId + 타겟 월/주차)에 그대로 적용한다.
+// 있으면 saveDraft가 새 POST(createDraft) 대신 이 초안을 PATCH(updateDraft)로 갱신해 같은 셀에
+// 열린 초안이 중복 생성되는 것을 막는다 — 두 초안이 모두 적용되면 같은 셀 매출이 이중 계상된다.
+// excludeDraftId: 지금 편집 중인 초안 자신(재저장 시 자기 자신과의 "충돌"로 오탐하지 않게) —
+// 신규 저장(saveDraft)에서는 항상 null.
+// 기간이동(period-shift)처럼 타겟 월이 실제로 다르면 coord.month가 달라 매칭되지 않으므로,
+// 같은 딜이라도 다른 달을 타겟하는 정당한 별건 초안까지 막지 않는다(차단이 아니라 타겟 재지정일 뿐).
+export function railDedupTarget(
+  pendingByCell: Map<string, MatrixPendingDraft>,
+  rowId: string,
+  month: string,
+  weekToken: string | null | undefined,
+  excludeDraftId: string | null,
+): MatrixPendingDraft | null {
+  const weekIdx = weekIndexFromToken(weekToken)
+  const coord: MatrixCellCoord = weekIdx == null ? { rowId, month } : { rowId, month, week: weekIdx }
+  const pending = lookupMatrixPending(pendingByCell, coord)
+  if (!pending || pending.id === excludeDraftId) return null
+  return pending
 }
 
 // 미검수(draft|checked) 초안 → 셀 낙관적 표시 + 재편집/커밋 타겟 판정 맵. drafts에서 파생(별도 버퍼 없음).
@@ -4344,6 +4368,15 @@ export default function SalesLedgerWorkbench() {
     return map
   }, [visibleDealRows])
 
+  // dealKey(row.sourceDealId ?? row.id) → 그 행(품질 웨이브 3, 항목 3). pendingByCell의 dealKey
+  // 판정과 동일 규약 — saveEditedDraft가 editingDraft의 딜 정체성만으로 대응 행을 찾을 때 쓴다
+  // (큐에서 바로 "수정" 진입하면 selectedRow가 그 딜과 무관할 수 있어 selectedRow에 기댈 수 없다).
+  const rowByDealKey = useMemo(() => {
+    const map = new Map<string, LedgerRevenueRow>()
+    for (const row of visibleDealRows) map.set(row.sourceDealId ?? row.id, row)
+    return map
+  }, [visibleDealRows])
+
   // 편집가능 셀 좌표(렌더 순서: 행 위→아래, 월 좌→우, 확장월은 w1→w5). 잠금 셀은 제외.
   // 방향키/Tab 순회의 단일 소스. matrixMonths는 4→3 회계연도 순.
   // 확장된 편집가능 월은 주차 5칸으로 분해(Tab이 w1→…→w5→다음 월로 흐름), 비확장 월은 월 요약 셀 1칸.
@@ -4868,20 +4901,32 @@ export default function SalesLedgerWorkbench() {
     }
   }, [detail, draftForm, lens, period, selectedMonth, selectedRow, team])
 
-  // 반환값: 서버에 실제로 저장됐으면 true, 로컬 폴백(장부 적용 불가)이면 false — InputRailSection이
-  // 이 값으로 저장 성공/실패 인라인 메시지를 낸다(항목 5).
-  const saveDraft = useCallback(async (kind: DraftKind): Promise<boolean> => {
+  // 반환값(DraftSaveResult): persisted는 서버에 실제로 저장됐으면 true, 로컬 폴백(장부 적용 불가)이면
+  // false — InputRailSection이 이 값으로 저장 성공/실패 인라인 메시지를 낸다(항목 5). deduped는
+  // 이중계상 가드(품질 웨이브 3, 항목 3)가 새 POST 대신 기존 초안을 PATCH로 갱신했으면 true.
+  //
+  // 이중계상 가드: 매트릭스 셀 재편집(onCommitCell)과 동일한 lookupMatrixPending 판정을 여기서도
+  // 쓴다 — kind==="edit-row"이고 선택된 행이 있을 때, 그 행·타겟 월/주차에 이미 열린 초안이
+  // 있으면 새 초안을 만들지 않고 그 초안을 PATCH한다(railDedupTarget이 정확히 그 좌표만 비교하므로,
+  // 기간이동처럼 타겟 월이 실제로 다른 정당한 별건 초안은 막지 않는다 — 차단이 아니라 타겟 재지정).
+  // new-row(신규 고객)는 아직 매트릭스에 대응 행이 없어 이 판정 대상이 아니다.
+  const saveDraft = useCallback(async (kind: DraftKind): Promise<DraftSaveResult> => {
     setDraftSaving(true)
     try {
-      const draft = await createDraft(buildDraftInput(kind))
+      const dedupTarget = kind === "edit-row" && selectedRow
+        ? railDedupTarget(pendingByCell, selectedRow.id, draftForm.month, draftForm.week, null)
+        : null
+      const draft = dedupTarget
+        ? await updateDraft(dedupTarget.id, buildDraftInput(kind))
+        : await createDraft(buildDraftInput(kind))
       if (kind === "new-row") {
         setDraftForm(defaultDraftForm)
       }
-      return !draft.id.startsWith("local-")
+      return { persisted: Boolean(draft && !draft.id.startsWith("local-")), deduped: Boolean(dedupTarget) }
     } finally {
       setDraftSaving(false)
     }
-  }, [buildDraftInput, createDraft, defaultDraftForm])
+  }, [buildDraftInput, createDraft, defaultDraftForm, draftForm.month, draftForm.week, pendingByCell, selectedRow, updateDraft])
 
   const editDraft = useCallback((draft: LedgerDraft) => {
     setEditingDraftId(draft.id)
@@ -4908,18 +4953,29 @@ export default function SalesLedgerWorkbench() {
     setDraftForm(defaultDraftForm)
   }, [defaultDraftForm])
 
-  const saveEditedDraft = useCallback(async (): Promise<boolean> => {
-    if (!editingDraft) return false
+  // saveEditedDraft는 항상 editingDraft.id를 PATCH 대상으로 삼는다(새 POST가 아니므로 그 자체로
+  // 이중계상을 만들지 않는다). 다만 편집 중 타겟 월/주차를 바꿔 "다른" 열린 초안과 같은 셀을
+  // 가리키게 될 수 있다 — 이 경우 저장을 막지 않고(정당한 편집일 수 있음), deduped=true로
+  // InputRailSection에 "이미 대기 초안 있음" 안내만 얹는다(항목 3, 판단은 사용자에게 맡긴다).
+  const saveEditedDraft = useCallback(async (): Promise<DraftSaveResult> => {
+    if (!editingDraft) return { persisted: false, deduped: false }
     setDraftSaving(true)
     try {
+      const dealKey = editingDraft.kind === "edit-row"
+        ? editingDraft.sourceDealId ?? metadataString(editingDraft.metadata, "sourceDealId")
+        : null
+      const dedupRow = dealKey ? rowByDealKey.get(dealKey) : undefined
+      const dedupTarget = dedupRow
+        ? railDedupTarget(pendingByCell, dedupRow.id, draftForm.month, draftForm.week, editingDraft.id)
+        : null
       const draft = await updateDraft(editingDraft.id, buildDraftInput(editingDraft.kind, editingDraft))
       setEditingDraftId(null)
       setDraftForm(defaultDraftForm)
-      return Boolean(draft && !draft.id.startsWith("local-"))
+      return { persisted: Boolean(draft && !draft.id.startsWith("local-")), deduped: Boolean(dedupTarget) }
     } finally {
       setDraftSaving(false)
     }
-  }, [buildDraftInput, defaultDraftForm, editingDraft, updateDraft])
+  }, [buildDraftInput, defaultDraftForm, draftForm.month, draftForm.week, editingDraft, pendingByCell, rowByDealKey, updateDraft])
 
   const revenue = summary.data?.revenue
   // 첫 로드 중 타일이 가짜 ¥0을 보여주지 않도록 — 값이 오기 전에는 대시로 정직하게.

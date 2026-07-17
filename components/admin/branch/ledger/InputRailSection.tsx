@@ -15,6 +15,7 @@ import {
   type DraftKind,
   type DraftOperation,
   type DraftQueueMode,
+  type DraftSaveResult,
   type LedgerDraft,
   type RevProductCategory,
 } from "./shared"
@@ -33,11 +34,12 @@ interface InputRailSectionProps {
   draftFormInvalid: boolean
   draftSaving: boolean
   canCreateEditDraft: boolean
-  // 반환값: 서버에 실제로 저장됐으면 true, 로컬 폴백(장부 적용 불가)이면 false — 저장 인라인
-  // 피드백(성공/실패 메시지)에 쓴다.
-  saveEditedDraft: () => Promise<boolean>
+  // DraftSaveResult.persisted: 서버에 실제로 저장됐으면 true, 로컬 폴백(장부 적용 불가)이면 false.
+  // DraftSaveResult.deduped: 이중계상 가드(품질 웨이브 3, 항목 3)가 새 초안 대신 이미 열린 초안을
+  // 갱신했으면 true — 둘 다 저장 인라인 피드백(성공/실패/중복 안내 메시지)에 쓴다.
+  saveEditedDraft: () => Promise<DraftSaveResult>
   cancelDraftEdit: () => void
-  saveDraft: (kind: DraftKind) => Promise<boolean>
+  saveDraft: (kind: DraftKind) => Promise<DraftSaveResult>
 }
 
 export function InputRailSection({
@@ -68,13 +70,16 @@ export function InputRailSection({
     setFeedback(null)
   }
 
-  const runSave = async (action: () => Promise<boolean>) => {
+  const runSave = async (action: () => Promise<DraftSaveResult>) => {
     setFeedback(null)
-    const ok = await action()
+    const result = await action()
     setFeedback(
-      ok
-        ? { kind: "success", text: "저장 완료 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." }
-        : { kind: "error", text: "서버 저장에 실패해 로컬 임시 저장으로 대체됐습니다(장부 적용 불가) — 재연결 후 다시 저장하세요." },
+      !result.persisted
+        ? { kind: "error", text: "서버 저장에 실패해 로컬 임시 저장으로 대체됐습니다(장부 적용 불가) — 재연결 후 다시 저장하세요." }
+        : result.deduped
+          // 이중계상 가드(항목 3) — 같은 딜·같은 셀에 이미 열린 초안이 있어 새로 만들지 않고 그 초안을 갱신했다.
+          ? { kind: "success", text: "이미 대기 초안 있음 — 수정으로 반영됩니다. 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." }
+          : { kind: "success", text: "저장 완료 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." },
     )
   }
 

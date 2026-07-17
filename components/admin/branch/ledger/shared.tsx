@@ -59,6 +59,15 @@ export type LedgerRevenueRow = BranchPipelineRow & {
 
 export type DraftConfidence = "expected" | "high-confidence" | "confirmed"
 
+// 입력 레일 저장 결과(품질 웨이브 3, 항목 3) — persisted: 서버에 실제로 저장됐으면 true,
+// 로컬 폴백(장부 적용 불가)이면 false. deduped: 새 초안을 만드는 대신 같은 딜·같은 셀(월/주차)에
+// 이미 열린 초안을 갱신했으면 true(이중계상 가드 발동) — InputRailSection이 "이미 대기 초안
+// 있음" 인라인 안내에 쓴다.
+export interface DraftSaveResult {
+  persisted: boolean
+  deduped: boolean
+}
+
 export interface DraftForm {
   operation: DraftOperation
   customer: string
