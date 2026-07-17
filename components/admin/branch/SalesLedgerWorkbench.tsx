@@ -5314,7 +5314,7 @@ export default function SalesLedgerWorkbench() {
         <IntegrityStrip refreshKey={refreshKey} />
         <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-1 self-start">
-          <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="Sales ledger views">
+          <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="장부 렌즈 전환">
             {LENSES.map((item, index) => (
               <button
                 key={item.id}
