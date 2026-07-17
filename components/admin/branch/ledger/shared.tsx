@@ -222,11 +222,15 @@ export function productCategoryMeta(category: RevProductCategory) {
     }
   }
   if (category === "hardware") {
+    // 품질 웨이브 6 — 항목 5: 이전엔 "예정" 확도 칩(CONFIDENCE_TOKENS.expected.chipClass)·
+    // "월합계만" 배지(WeeklySourceBadge)와 byte-identical한 Warning 톤(#ECD29C/#FBF1E0/#7A520F)을
+    // 써서 세 서로 다른 개념이 같은 색으로 충돌했다. HW는 카테고리 구분일 뿐 경고 신호가 아니므로
+    // 뉴트럴로 분리 — "월합계만"은 주의가 필요한 신호라 Warning 톤을 그대로 유지한다.
     return {
       label: "HW",
       shortLabel: "HW",
-      className: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
-      color: "#A8741A",
+      className: "border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59]",
+      color: "#615D59",
     }
   }
   if (category === "unknown") {
