@@ -273,6 +273,7 @@ function CustomerSearchPanel({
               key={filter.key}
               type="button"
               onClick={() => onSourceChange(filter.key)}
+              aria-pressed={source === filter.key}
               className={`h-7 rounded-md px-3 text-[12px] font-semibold transition-colors ${
                 source === filter.key
                   ? "bg-[#111110] text-white"
@@ -337,6 +338,7 @@ function CustomerSearchPanel({
                 key={tag}
                 type="button"
                 onClick={() => onTagFilterChange(tagFilter === tag ? "" : tag)}
+                aria-pressed={isActive}
                 className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
                   isActive
                     ? "border-[#111110] bg-[#111110] text-white"
@@ -708,6 +710,31 @@ export default function CrmUnifiedCustomersClient() {
     syncViewParam("all")
   }, [persistOwner, savedView, syncViewParam])
 
+  // 빠른 보기 잔존 필터 힌트 — 숨김≠리셋 설계라 접힌 검색 패널의 검색어/담당/라벨이 남아
+  // 결과를 조용히 좁힐 수 있다. 남은 필터를 스트립에 명시하고 '해제'로 뷰는 유지한 채 푼다.
+  // my_owner 뷰의 담당 필터는 뷰 정의 그 자체라 잔존 필터로 치지 않는다(해제하면 뷰가 0건이 됨).
+  const trimmedQuery = query.trim()
+  const lingeringOwner = savedView !== "my_owner" ? owner : ""
+  const lingeringOwnerLabel = useMemo(() => {
+    if (!lingeringOwner) return null
+    if (lingeringOwner === CURRENT_OWNER_VALUE) return currentOwner?.displayName ?? "내 담당"
+    return ownerOptions.find((option) => option.ownerName === lingeringOwner)?.label ?? lingeringOwner
+  }, [currentOwner?.displayName, lingeringOwner, ownerOptions])
+  const lingeringParts = [
+    trimmedQuery ? `검색 "${trimmedQuery}"` : null,
+    lingeringOwnerLabel ? `담당 ${lingeringOwnerLabel}` : null,
+    tagFilter ? `라벨 ${tagFilter}` : null,
+  ].filter((part): part is string => Boolean(part))
+
+  const clearLingeringFilters = useCallback(() => {
+    setQuery("")
+    setTagFilter("")
+    if (savedView !== "my_owner") {
+      setOwner("")
+      persistOwner("")
+    }
+  }, [persistOwner, savedView])
+
   // 빈 상태 다음 행동 안내 — 필터가 걸려 있으면 초기화를, 아니면 리드 등록/매칭 연결을 권한다.
   const hasActiveFilters =
     Boolean(query.trim()) ||
@@ -784,6 +811,7 @@ export default function CrmUnifiedCustomersClient() {
                 type="button"
                 onClick={() => selectSavedView(filter.key)}
                 disabled={disabled}
+                aria-pressed={isActive}
                 title={disabled ? "현재 Admin 계정에 CRM 담당자 매핑이 없습니다." : filter.description}
                 className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
                   isActive
@@ -801,20 +829,37 @@ export default function CrmUnifiedCustomersClient() {
 
         {quickMode ? (
           // 빠른 보기 스트립 — 활성 뷰 이름 + 결과 건수 + 전체 보기(토글 해제) 복귀 버튼.
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
-            <p className="text-[13px] font-semibold text-[#111110]">
-              {SAVED_VIEW_FILTERS.find((f) => f.key === savedView)?.label}
-              <span className="ml-2 text-[12px] font-medium text-[#1a1a1a]/45 tabular-nums">
-                {data ? `${data.summary.total.toLocaleString("ko-KR")}건` : error ? "불러오지 못했습니다" : "불러오는 중"}
-              </span>
-            </p>
-            <button
-              type="button"
-              onClick={exitQuickView}
-              className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/60 hover:bg-[#fafaf8]"
-            >
-              전체 보기 (검색·필터)
-            </button>
+          <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[13px] font-semibold text-[#111110]">
+                {SAVED_VIEW_FILTERS.find((f) => f.key === savedView)?.label}
+                <span className="ml-2 text-[12px] font-medium text-[#1a1a1a]/45 tabular-nums">
+                  {data ? `${data.summary.total.toLocaleString("ko-KR")}건` : error ? "불러오지 못했습니다" : "불러오는 중"}
+                </span>
+              </p>
+              <button
+                type="button"
+                onClick={exitQuickView}
+                className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#1a1a1a]/60 hover:bg-[#fafaf8]"
+              >
+                전체 보기 (검색·필터)
+              </button>
+            </div>
+            {lingeringParts.length > 0 ? (
+              // 잔존 필터 힌트 — 접힌 검색 패널의 필터가 이 뷰 결과를 좁히고 있음을 알린다.
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center rounded-full border border-[#e8e8e4] bg-[#fafaf8] px-2.5 py-1 text-[11px] font-medium text-[#1a1a1a]/55">
+                  {lingeringParts.join(" · ")} 적용 중
+                </span>
+                <button
+                  type="button"
+                  onClick={clearLingeringFilters}
+                  className="h-6 rounded-md px-1.5 text-[11px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
+                >
+                  해제
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : (
           <CustomerSearchPanel
