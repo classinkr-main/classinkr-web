@@ -6,6 +6,12 @@ import { useEffect, useRef, useState } from "react"
 // 컴포넌트로 갖고 있던 것을 그대로(로직 무변경) 이 파일로 추출했다. 소비처:
 // PipelineTable.tsx(담당/지역 필터) · BranchPipelineKanban.tsx(담당 필터, 기존 단일
 // select를 이걸로 교체해 두 화면의 필터 기능을 동등화).
+//
+// R5 항목 2. role="listbox" 컨테이너인데 옵션이 plain <button>(role 없음)이라 ARIA
+// 트리 정합이 깨져 있었다(listbox는 option 자식만 유효 — 스크린리더가 옵션 개수·선택
+// 상태를 못 읽는다). 각 옵션에 role="option"+aria-selected를 부여해 정합을 맞추고,
+// "전체 보기"도 논리적으로 하나의 선택지이므로 동일하게 처리한다. Escape로 닫는 동작도
+// 추가(기존 outside-click 유지) — 표준 listbox 키보드 관례.
 
 export default function MultiSelect({
   label,
@@ -31,8 +37,17 @@ export default function MultiSelect({
     function onClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
-    if (open) document.addEventListener("mousedown", onClick)
-    return () => document.removeEventListener("mousedown", onClick)
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false)
+    }
+    if (open) {
+      document.addEventListener("mousedown", onClick)
+      document.addEventListener("keydown", onKeyDown)
+    }
+    return () => {
+      document.removeEventListener("mousedown", onClick)
+      document.removeEventListener("keydown", onKeyDown)
+    }
   }, [open])
 
   const summary = options.length === 0 || selected.size === 0
@@ -69,6 +84,8 @@ export default function MultiSelect({
         >
           <button
             type="button"
+            role="option"
+            aria-selected={selected.size === 0}
             onClick={() => onChange(new Set())}
             className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
               selected.size === 0 ? "bg-[#ECFDF5] text-[#084734]" : "text-[#111110]/65 hover:bg-[#FAFAF8]"
@@ -83,6 +100,8 @@ export default function MultiSelect({
               <button
                 key={opt}
                 type="button"
+                role="option"
+                aria-selected={checked}
                 onClick={() => toggle(opt)}
                 className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
                   checked ? "bg-[#ECFDF5] text-[#084734]" : "text-[#111110]/75 hover:bg-[#FAFAF8]"
