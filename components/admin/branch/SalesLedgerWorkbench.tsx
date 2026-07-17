@@ -2,6 +2,7 @@
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   AlertTriangle,
   ArrowDownNarrowWide,
@@ -146,7 +147,7 @@ export type {
   WeeklyCloseRunView,
 } from "./ledger/shared"
 
-type LedgerLens = "dsh" | "rev" | "kpi"
+type LedgerLens = "dsh" | "rev"
 type RailView = "detail" | "input" | "queue"
 type DraftStatusFilter = DraftStatus | "open" | "all"
 type RevSortKey = "customer" | "product" | "manager" | "team" | "region" | "month" | "revenue" | "annual" | "origin"
@@ -381,7 +382,6 @@ function MatrixToneLegend() {
 const LENSES: Array<{ id: LedgerLens; label: string; description: string }> = [
   { id: "dsh", label: "DSH", description: "수치 상세 · 목표/실적 그리드" },
   { id: "rev", label: "REV", description: "주차·목표 수치 검수와 행 상세" },
-  { id: "kpi", label: "KPI", description: "→ KR Team으로 이동" },
 ]
 const DRAFT_STATUS_FILTERS: Array<{ id: DraftStatusFilter; label: string }> = [
   { id: "open", label: "대기" },
@@ -2901,6 +2901,7 @@ const RevMatrixFooter = memo(function RevMatrixFooter({
 })
 
 export default function SalesLedgerWorkbench() {
+  const router = useRouter()
   const [team, setTeam] = useState<Team>("ALL")
   const [period, setPeriod] = useState<Period>("Q")
   const [selectedMonth, setSelectedMonth] = useState(() => ymKeyUtc(new Date()))
@@ -3163,7 +3164,12 @@ export default function SalesLedgerWorkbench() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const lensParam = params.get("lens")
-    if (lensParam === "dsh" || lensParam === "rev" || lensParam === "kpi") setLens(lensParam)
+    // KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다 — 옛 링크(?lens=kpi)는 그리로 리다이렉트.
+    if (lensParam === "kpi") {
+      router.replace("/admin/branch?tab=pipeline")
+      return
+    }
+    if (lensParam === "dsh" || lensParam === "rev") setLens(lensParam)
     const monthParam = params.get("month")
     if (monthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam)) setSelectedMonth(monthParam)
     const periodParam = params.get("period")
@@ -3195,7 +3201,7 @@ export default function SalesLedgerWorkbench() {
     const pageParam = Number(params.get("p"))
     if (Number.isInteger(pageParam) && pageParam > 1) setRevPage(pageParam)
     setUrlReady(true)
-  }, [])
+  }, [router])
 
   useEffect(() => {
     if (!urlReady) return
@@ -4727,7 +4733,7 @@ export default function SalesLedgerWorkbench() {
                 <span className={`flex h-6 w-6 items-center justify-center rounded-md ${
                   lens === item.id ? "bg-white/12" : "bg-[#ECFDF5] text-[#084734]"
                 }`}>
-                  {item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : item.id === "rev" ? <Table2 className="h-3.5 w-3.5" /> : <Users className="h-3.5 w-3.5" />}
+                  {item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : <Table2 className="h-3.5 w-3.5" />}
                 </span>
                 {item.label}
               </button>
@@ -5481,23 +5487,8 @@ export default function SalesLedgerWorkbench() {
             )}
               </section>
             )}
-
-            {lens === "kpi" && (
-              // KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다(2026-07-16 역할 재배분).
-              // 전환기 안내용 링크 카드만 남긴다 — 목업 "KPI 링크 카드" 마크업 그대로.
-              <section className="rounded-xl border-[1.5px] border-dashed border-[#BDEFD8] bg-[#ECFDF5] p-10 text-center">
-                <p className="text-[15px] font-extrabold text-[#084734]">활동 KPI는 KR Team으로 이동했습니다</p>
-                <p className="mt-2 text-[12.5px] leading-relaxed text-[#615D59]">
-                  목표 대비 활동과 병목·담당자 렌즈는 이제 <b>KR Team › 파이프라인 탭</b>에서 봅니다.
-                </p>
-                <Link
-                  href="/admin/branch?tab=pipeline"
-                  className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#084734] transition hover:bg-[#F6F5F4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
-                >
-                  KR Team 파이프라인으로 가기 →
-                </Link>
-              </section>
-            )}
+            {/* KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다(2026-07-16 역할 재배분) — LENSES에서
+                제거됐고 ?lens=kpi는 마운트 시 /admin/branch?tab=pipeline로 리다이렉트된다. */}
           </div>
         </section>
 
@@ -5524,7 +5515,7 @@ export default function SalesLedgerWorkbench() {
           </div>
         )}
 
-        {lens !== "kpi" && sidePanelCollapsed && (
+        {sidePanelCollapsed && (
           <button
             type="button"
             onClick={() => setSidePanelCollapsed(false)}
@@ -5547,7 +5538,7 @@ export default function SalesLedgerWorkbench() {
           </button>
         )}
 
-        {lens !== "kpi" && !sidePanelCollapsed && (
+        {!sidePanelCollapsed && (
         <aside className="fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(420px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)]">
           <>
           <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1.5">
@@ -5787,14 +5778,14 @@ export default function SalesLedgerWorkbench() {
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => selectLens("kpi")}
+                    {/* KPI 렌즈는 KR Team 파이프라인 탭으로 이동 — 페이지 내 전환 대신 그 탭으로 링크. */}
+                    <Link
+                      href="/admin/branch?tab=pipeline"
                       className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-3 text-[11px] font-bold text-[#084734] transition hover:bg-[#D1FAE5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
                     >
                       <Users className="h-3.5 w-3.5" />
-                      KPI 보기
-                    </button>
+                      KPI 보기 →
+                    </Link>
                     <button
                       type="button"
                       onClick={() => {
