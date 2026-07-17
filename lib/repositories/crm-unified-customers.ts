@@ -305,7 +305,7 @@ export async function getCrmUnifiedCustomers(
 
   // 신규 뷰 파생 입력 — 실패해도 목록 자체는 유지(해당 뷰만 부정확)하고 빈 컬렉션 폴백.
   if (neoLinksResult.status === "rejected") {
-    warnings.push("NEO 등록 링크를 불러오지 못해 '등록 대기' 뷰가 부정확할 수 있습니다.")
+    warnings.push("NEO 등록 링크를 불러오지 못해 '홈페이지 유입' 뷰가 부정확할 수 있습니다.")
   }
   const neoLinkedLeadIds = neoLinksResult.status === "fulfilled" ? neoLinksResult.value : new Set<string>()
   if (firstResponseResult.status === "rejected") {

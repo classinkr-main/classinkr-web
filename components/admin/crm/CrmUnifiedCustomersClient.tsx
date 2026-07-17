@@ -92,6 +92,8 @@ const SAVED_VIEW_FILTERS: Array<{
   { key: "dormant", label: "30일+ 미접촉", description: "마지막 활동 30일 초과" },
   { key: "hot_lead", label: "고전환 리드", description: "점수 상위 리드" },
   { key: "upsell", label: "업셀 후보", description: "활성 고객 · 잔액 보유" },
+  { key: "site_leads", label: "홈페이지 유입", description: "홈페이지로 들어와 NEO 미등록" },
+  { key: "unanswered", label: "미응답", description: "첫 응답 전 리드 (24h 초과 위험)" },
 ]
 
 const CACHE_TTL_MS = 90_000
@@ -305,6 +307,18 @@ export default function CrmUnifiedCustomersClient() {
     setQuery("")
     setOwner(view === "my_owner" ? CURRENT_OWNER_VALUE : "")
   }, [searchParams])
+
+  // 칩 클릭 ↔ URL 동기화 — replaceState라 히스토리를 오염시키지 않는다(뒤로가기 안전).
+  // lastViewParamRef를 replaceState보다 먼저 갱신해, 우리 자신의 URL 변경이 위 착지
+  // effect(필터 초기화)를 재발화시키지 않게 한다.
+  const syncViewParam = useCallback((view: SavedViewFilter) => {
+    const params = new URLSearchParams(window.location.search)
+    if (view === "all") params.delete("view")
+    else params.set("view", view)
+    lastViewParamRef.current = view === "all" ? null : view
+    const qs = params.toString()
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname)
+  }, [])
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
 
@@ -381,17 +395,21 @@ export default function CrmUnifiedCustomersClient() {
         setOwner("")
         persistOwner("")
         setSavedView("all")
+        syncViewParam("all")
         return
       }
       setOwner(CURRENT_OWNER_VALUE)
       persistOwner(CURRENT_OWNER_VALUE)
       setSavedView(view)
+      syncViewParam(view)
       setSource("all")
       setLifecycle("all")
       return
     }
 
-    setSavedView((current) => (current === view ? "all" : view))
+    const next: SavedViewFilter = savedView === view ? "all" : view
+    setSavedView(next)
+    syncViewParam(next)
     if (view === "new_leads") {
       setSource("lead")
       setLifecycle("all")
@@ -422,8 +440,9 @@ export default function CrmUnifiedCustomersClient() {
     setOwner("")
     persistOwner("")
     setSavedView("all")
+    syncViewParam("all")
     setTagFilter("")
-  }, [persistOwner])
+  }, [persistOwner, syncViewParam])
 
   return (
     <div className="min-h-screen bg-[#F6F5F4] px-4 py-6 sm:px-6 lg:px-8">
@@ -457,6 +476,43 @@ export default function CrmUnifiedCustomersClient() {
               새로고침
             </button>
           </div>
+        </div>
+
+        {/* 빠른 필터 칩 — 검색 섹션과 독립인 항상 노출 행 (칩 진입 시에도 유지). */}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <span className="inline-flex h-8 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
+            <Filter className="h-3.5 w-3.5" />
+            빠른 필터
+          </span>
+          {SAVED_VIEW_FILTERS.map((filter) => {
+            const isActive = savedView === filter.key
+            const disabled = filter.key === "my_owner" && !currentOwner
+            const segmentCount = data?.summary.viewCounts?.[filter.key]
+            const label =
+              filter.key === "my_owner" && currentOwner
+                ? `${filter.label}${currentOwnerCount ? ` ${currentOwnerCount}` : ""}`
+                : segmentCount != null
+                  ? `${filter.label} ${segmentCount}`
+                  : filter.label
+            return (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => selectSavedView(filter.key)}
+                disabled={disabled}
+                title={disabled ? "현재 Admin 계정에 CRM 담당자 매핑이 없습니다." : filter.description}
+                className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
+                  isActive
+                    ? "border-[#084734] bg-[#084734] text-white"
+                    : disabled
+                      ? "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/28"
+                      : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#D1FAE5] hover:bg-[#ECFDF5] hover:text-[#084734]"
+                }`}
+              >
+                {label}
+              </button>
+            )
+          })}
         </div>
 
         <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
@@ -509,7 +565,10 @@ export default function CrmUnifiedCustomersClient() {
                   const nextOwner = event.target.value
                   setOwner(nextOwner)
                   persistOwner(nextOwner)
-                  if (!nextOwner && savedView === "my_owner") setSavedView("all")
+                  if (!nextOwner && savedView === "my_owner") {
+                    setSavedView("all")
+                    syncViewParam("all")
+                  }
                 }}
                 className="h-full min-w-[128px] bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
                 aria-label="담당자 필터"
@@ -530,42 +589,6 @@ export default function CrmUnifiedCustomersClient() {
                 ))}
               </select>
             </label>
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="inline-flex h-8 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
-              <UserRound className="h-3.5 w-3.5" />
-              저장 뷰
-            </span>
-            {SAVED_VIEW_FILTERS.map((filter) => {
-              const isActive = savedView === filter.key
-              const disabled = filter.key === "my_owner" && !currentOwner
-              const segmentCount = data?.summary.viewCounts?.[filter.key]
-              const label =
-                filter.key === "my_owner" && currentOwner
-                  ? `${filter.label}${currentOwnerCount ? ` ${currentOwnerCount}` : ""}`
-                  : segmentCount != null
-                    ? `${filter.label} ${segmentCount}`
-                    : filter.label
-              return (
-                <button
-                  key={filter.key}
-                  type="button"
-                  onClick={() => selectSavedView(filter.key)}
-                  disabled={disabled}
-                  title={disabled ? "현재 Admin 계정에 CRM 담당자 매핑이 없습니다." : filter.description}
-                  className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
-                    isActive
-                      ? "border-[#084734] bg-[#084734] text-white"
-                      : disabled
-                        ? "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/28"
-                        : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#D1FAE5] hover:bg-[#ECFDF5] hover:text-[#084734]"
-                  }`}
-                >
-                  {label}
-                </button>
-              )
-            })}
           </div>
 
           {data?.summary.availableTags?.length ? (
