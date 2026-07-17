@@ -1,27 +1,30 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
-  MessageSquare,
-  Inbox,
+  Check,
+  ExternalLink,
+  Info,
   Link2,
+  Loader2,
+  MessageSquare,
   RefreshCw,
   Sparkles,
-  Info,
-  ExternalLink,
-  Check,
-  Loader2,
   UserPlus,
 } from "lucide-react"
 
-import { StatCard } from "@/components/admin/StatCard"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import {
+  aggregateConversationTags,
+  aggregateDailyActivity,
+} from "@/lib/channel-talk-insights"
 import {
   buildLeadPayloadFromConversation,
   buildPromotionPayload,
   isQuestionAlreadyPromoted,
   leadBoardDeepLink,
 } from "@/lib/channel-talk-loop"
+import { cn } from "@/lib/utils"
 
 type ConvState = "opened" | "closed" | "snoozed" | "unknown"
 
@@ -52,6 +55,8 @@ interface ChannelData {
   configured: boolean
   conversations: Conversation[]
   stats: Stats
+  lastSyncedAt?: string | null
+  source?: "supabase" | "local_json"
 }
 
 interface FaqSuggestion {
@@ -103,12 +108,12 @@ const STATE_LABEL: Record<ConvState, string> = {
 
 const STATE_BADGE: Record<ConvState, string> = {
   opened: "bg-[#ECFDF5] text-[#084734]",
-  closed: "bg-[#f0f0ec] text-[#1a1a1a]/55",
-  snoozed: "bg-[#FEF3EE] text-[#B85C33]",
-  unknown: "bg-[#f0f0ec] text-[#1a1a1a]/45",
+  closed: "bg-[#F6F5F4] text-[#615D59]",
+  snoozed: "bg-[#FBF1E0] text-[#7A520F]",
+  unknown: "bg-[#F6F5F4] text-[#A39E98]",
 }
 
-function formatWhen(iso?: string) {
+function formatWhen(iso?: string | null) {
   if (!iso) return "—"
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return "—"
@@ -119,6 +124,29 @@ function formatWhen(iso?: string) {
   const days = Math.floor(hours / 24)
   if (days < 7) return `${days}일 전`
   return date.toISOString().slice(0, 10)
+}
+
+// 데스크 스탯 스트립 셀 — 큰 라이닝 숫자 + 대문자 마이크로 라벨 (CS 코파일럿과 동일 문법).
+function StatCell({
+  label,
+  value,
+  context,
+  divider,
+}: {
+  label: string
+  value: number
+  context: string
+  divider?: boolean
+}) {
+  return (
+    <div className={cn("px-5 py-4", divider && "border-l border-black/[0.08]")}>
+      <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">{label}</p>
+      <p className="mt-2 text-[27px] font-bold leading-none tracking-[-0.02em] text-[#111110] tabular-nums">
+        {value}
+      </p>
+      <p className="mt-1.5 truncate text-[10.5px] text-[#A39E98]">{context}</p>
+    </div>
+  )
 }
 
 export default function ChannelTalkPage() {
@@ -269,45 +297,69 @@ export default function ChannelTalkPage() {
   }
 
   const stats = data?.stats
-  const conversations = data?.conversations ?? []
+  const conversations = useMemo(() => data?.conversations ?? [], [data?.conversations])
+
+  // 통계 패널 — 유형(태그) 분포와 최근 14일 응답 추이. 서버 왕복 없이 목록에서 집계한다.
+  const tagDistribution = useMemo(() => aggregateConversationTags(conversations, 6), [conversations])
+  const untaggedCount = useMemo(
+    () => conversations.filter((conversation) => (conversation.tags ?? []).length === 0).length,
+    [conversations]
+  )
+  const dailyActivity = useMemo(() => aggregateDailyActivity(conversations, 14), [conversations])
+  const activityTotals = useMemo(
+    () =>
+      dailyActivity.reduce(
+        (acc, day) => ({
+          conversations: acc.conversations + day.conversations,
+          messages: acc.messages + day.messages,
+        }),
+        { conversations: 0, messages: 0 }
+      ),
+    [dailyActivity]
+  )
+  const maxTagCount = tagDistribution[0]?.count ?? 0
+  const maxDailyConversations = Math.max(1, ...dailyActivity.map((day) => day.conversations))
 
   return (
     <div className="max-w-5xl px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-8">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-7">
         <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">
-            Admin
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#A39E98]">
+            고객 지원 · 인바운드
           </p>
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">채널톡 상담</h1>
-          <p className="mt-1 text-[13px] text-[#1a1a1a]/50">
+          <p className="mt-1 text-[13px] text-[#615D59]">
             상담 대화를 CRM 리드와 매칭하고, 자주 묻는 질문을 챗봇 학습 후보로 끌어옵니다.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-[11px] text-[#A39E98] tabular-nums">
+            마지막 동기화 {formatWhen(data?.lastSyncedAt)}
+          </span>
           <button
             type="button"
             onClick={() => void runSync()}
             disabled={syncing || loading || isUnconfigured}
             title={isUnconfigured ? "채널톡 Open API 키 설정 후 동기화할 수 있습니다." : undefined}
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#111110] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-2 rounded-md bg-[#31302E] px-4 text-[12px] font-semibold text-white transition-colors hover:bg-[#111110] disabled:opacity-50"
           >
-            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+            <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
             {syncing ? "동기화 중…" : isUnconfigured ? "설정 필요" : "지금 동기화"}
           </button>
           <button
             type="button"
             onClick={() => void runSync(true)}
             disabled={syncing || loading || isUnconfigured}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-black/[0.12] bg-white px-3 text-[12px] font-semibold text-[#31302E] transition-colors hover:bg-[#F6F5F4] disabled:opacity-50"
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className="h-3.5 w-3.5" />
             강제 갱신
           </button>
         </div>
       </div>
 
       {isUnconfigured ? (
-        <div className="mb-6 flex items-start gap-3 rounded-xl bg-[#FEF3EE] px-4 py-3.5 text-[13px] text-[#B85C33]">
+        <div className="mb-6 flex items-start gap-3 rounded-[10px] border border-[#ECD29C] bg-[#FBF1E0] px-4 py-3.5 text-[13px] text-[#7A520F]">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <p>
             채널톡 Open API 키가 없어 인바운드 동기화가 비활성 상태입니다. 서버{" "}
@@ -320,60 +372,129 @@ export default function ChannelTalkPage() {
       ) : null}
 
       {loadError ? (
-        <div className="mb-6 flex items-start gap-3 rounded-xl bg-[#FEF3EE] px-4 py-3.5 text-[13px] text-[#B85C33]">
+        <div className="mb-6 flex items-start gap-3 rounded-[10px] border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3.5 text-[13px] text-[#8F2C2C]">
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <p>상담 데이터를 불러오지 못했습니다. {loadError}</p>
         </div>
       ) : null}
 
       {notice ? (
-        <div className="mb-6 flex items-start gap-3 rounded-xl bg-[#f0f0ec] px-4 py-3.5 text-[13px] text-[#1a1a1a]/65">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#1a1a1a]/40" />
+        <div className="mb-6 flex items-start gap-3 rounded-[10px] border border-black/[0.08] bg-[#F6F5F4] px-4 py-3.5 text-[13px] text-[#31302E]">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#A39E98]" />
           <p>{notice}</p>
         </div>
       ) : null}
 
       {loading ? (
-        <p className="text-[13px] text-[#1a1a1a]/30">불러오는 중…</p>
+        <p className="text-[13px] text-[#A39E98]">불러오는 중…</p>
       ) : (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard
-              icon={<MessageSquare className="h-4 w-4" />}
+          {/* 스탯 스트립 — 파스텔 채움 없이 흰 카드 + 헤어라인 분할 (운영 데스크 문법) */}
+          <div className="grid grid-cols-2 overflow-hidden rounded-[10px] border border-black/[0.08] bg-white sm:grid-cols-4">
+            <StatCell
               label="전체 상담"
               value={stats?.total ?? 0}
-              sub={`최근 7일 ${stats?.last7Days ?? 0}건`}
+              context={`최근 7일 ${stats?.last7Days ?? 0}건`}
             />
-            <StatCard
-              icon={<Inbox className="h-4 w-4" />}
+            <StatCell
               label="진행 중"
               value={stats?.byState.opened ?? 0}
-              sub={`종료 ${stats?.byState.closed ?? 0}건`}
-              accent="bg-[#ECFDF5]"
-              iconColor="text-[#084734]"
+              context={`종료 ${stats?.byState.closed ?? 0} · 보류 ${stats?.byState.snoozed ?? 0}`}
+              divider
             />
-            <StatCard
-              icon={<Link2 className="h-4 w-4" />}
+            <StatCell
               label="CRM 매칭"
               value={stats?.matchedLeads ?? 0}
-              sub={`미매칭 ${stats?.unmatched ?? 0}건`}
+              context={`미매칭 ${stats?.unmatched ?? 0}건`}
             />
-            <StatCard
-              icon={<Sparkles className="h-4 w-4" />}
+            <StatCell
               label="FAQ 후보"
               value={suggestions.length}
-              sub="챗봇 미커버 질문"
-              accent="bg-[#ECFDF5]"
-              iconColor="text-[#084734]"
+              context="챗봇 미커버 질문"
+              divider
             />
           </div>
 
+          {/* 통계 패널 — 유형(태그) 분포 · 응답 추이 */}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <section className="rounded-[10px] border border-black/[0.08] bg-white px-5 py-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">유형 분포</h2>
+                <span className="text-[10px] text-[#A39E98]">채널톡 태그 기준</span>
+              </div>
+              {tagDistribution.length === 0 ? (
+                <p className="py-6 text-center text-[12px] text-[#A39E98]">태그가 붙은 상담이 없습니다.</p>
+              ) : (
+                <ul className="mt-3.5 space-y-2.5">
+                  {tagDistribution.map((row) => (
+                    <li key={row.tag} className="flex items-center gap-3">
+                      <span className="w-[128px] shrink-0 truncate text-[11px] font-medium text-[#31302E]" title={row.tag}>
+                        {row.tag}
+                      </span>
+                      <span className="h-[6px] min-w-0 flex-1 overflow-hidden rounded-full bg-[#F0EFED]">
+                        <span
+                          className="block h-full rounded-full bg-[#084734]"
+                          style={{ width: `${maxTagCount ? Math.max(6, Math.round((row.count / maxTagCount) * 100)) : 0}%` }}
+                        />
+                      </span>
+                      <span className="w-6 shrink-0 text-right text-[11px] font-bold text-[#111110] tabular-nums">
+                        {row.count}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {untaggedCount > 0 ? (
+                <p className="mt-3 text-[10px] text-[#A39E98]">태그 없음 {untaggedCount}건은 집계에서 제외</p>
+              ) : null}
+            </section>
+
+            <section className="rounded-[10px] border border-black/[0.08] bg-white px-5 py-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">응답 추이</h2>
+                <span className="text-[10px] text-[#A39E98] tabular-nums">
+                  14일 · 상담 {activityTotals.conversations} · 메시지 {activityTotals.messages}
+                </span>
+              </div>
+              <div className="mt-4 flex h-[88px] items-end gap-[3px]" role="img" aria-label="최근 14일 일별 상담 활동">
+                {dailyActivity.map((day, index) => {
+                  const isToday = index === dailyActivity.length - 1
+                  const height = day.conversations > 0
+                    ? Math.max(8, Math.round((day.conversations / maxDailyConversations) * 100))
+                    : 0
+                  return (
+                    <div key={day.date} className="group flex min-w-0 flex-1 flex-col items-center gap-1.5" title={`${day.label} · 상담 ${day.conversations}건 · 메시지 ${day.messages}개`}>
+                      <div className="flex w-full flex-1 items-end">
+                        <span
+                          className={cn(
+                            "block w-full rounded-[3px] transition-colors",
+                            day.conversations === 0
+                              ? "h-[3px] bg-[#F0EFED]"
+                              : isToday
+                                ? "bg-[#084734]"
+                                : "bg-[#31302E]/80 group-hover:bg-[#084734]"
+                          )}
+                          style={day.conversations > 0 ? { height: `${height}%` } : undefined}
+                        />
+                      </div>
+                      {index === 0 || isToday || index === Math.floor(dailyActivity.length / 2) ? (
+                        <span className="text-[9px] text-[#A39E98] tabular-nums">{isToday ? "오늘" : day.label}</span>
+                      ) : (
+                        <span className="text-[9px] text-transparent">·</span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          </div>
+
           {suggestions.length > 0 ? (
-            <section className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-              <div className="flex items-center gap-2 border-b border-[#e8e8e4] px-5 py-4">
+            <section className="overflow-hidden rounded-[10px] border border-black/[0.08] bg-white">
+              <div className="flex items-center gap-2 border-b border-black/[0.08] px-5 py-3.5">
                 <Sparkles className="h-4 w-4 text-[#084734]" />
-                <h2 className="text-[13px] font-semibold text-[#111110]">챗봇 학습 후보 (FAQ 플라이휠)</h2>
-                <span className="ml-auto text-[12px] text-[#1a1a1a]/40">{suggestions.length}건</span>
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">챗봇 학습 후보</h2>
+                <span className="ml-auto text-[11px] text-[#A39E98] tabular-nums">{suggestions.length}건</span>
               </div>
               <ul>
                 {suggestions.map((suggestion) => {
@@ -386,29 +507,29 @@ export default function ChannelTalkPage() {
                   return (
                     <li
                       key={suggestion.question}
-                      className="flex items-start gap-3 border-b border-[#e8e8e4] px-5 py-3.5 last:border-0"
+                      className="flex items-start gap-3 border-b border-black/[0.08] px-5 py-3.5 last:border-0"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-medium text-[#111110]">
                           {suggestion.question}
                         </p>
                         {extraSamples.length > 0 ? (
-                          <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/50">
+                          <p className="mt-0.5 truncate text-[11px] text-[#615D59]">
                             유사 질문: {extraSamples.join(" · ")}
                           </p>
                         ) : null}
-                        <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+                        <p className="mt-0.5 text-[11px] text-[#A39E98]">
                           최근 질문 {formatWhen(suggestion.lastAskedAt)}
                         </p>
                         {promoteError ? (
-                          <p className="mt-1 text-[11px] text-[#B85C33]">{promoteError}</p>
+                          <p className="mt-1 text-[11px] text-[#8F2C2C]">{promoteError}</p>
                         ) : null}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#084734]">
+                        <span className="rounded-full bg-[#ECFDF5] px-2.5 py-1 text-[11px] font-semibold text-[#084734] tabular-nums">
                           {suggestion.count}회
                         </span>
-                        <span className="rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55">
+                        <span className="rounded-full border border-black/[0.10] px-2 py-0.5 text-[10px] font-medium text-[#615D59]">
                           {faqCategoryLabel(suggestion.category)}
                         </span>
                         {alreadyPromoted ? (
@@ -421,7 +542,7 @@ export default function ChannelTalkPage() {
                             type="button"
                             onClick={() => void promoteSuggestion(suggestion)}
                             disabled={promoteBusy}
-                            className="mt-1 inline-flex items-center gap-1 rounded-lg border border-[#084734] px-2.5 py-1 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#084734] hover:text-white disabled:opacity-50"
+                            className="mt-1 inline-flex items-center gap-1 rounded-md border border-[#084734] px-2.5 py-1 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#084734] hover:text-white disabled:opacity-50"
                           >
                             {promoteBusy ? (
                               <Loader2 className="h-3 w-3 animate-spin" />
@@ -436,25 +557,23 @@ export default function ChannelTalkPage() {
                   )
                 })}
               </ul>
-              <p className="border-t border-[#e8e8e4] bg-[#fafaf8] px-5 py-3 text-[11px] text-[#1a1a1a]/45">
+              <p className="border-t border-black/[0.08] bg-[#FAFAF8] px-5 py-3 text-[11px] text-[#615D59]">
                 자주 묻는데 챗봇 골든셋에 없는 질문입니다. “추천질문으로 승격”은 챗봇 시작 화면 추천 질문(draft)으로
                 등록하며, <a href="/admin/docs" className="underline hover:text-[#111110]">/admin/docs 추천 질문 관리</a>에서
-                검토 후 발행합니다. 답변 자체는{" "}
-                <code className="rounded bg-white px-1 py-0.5 font-mono">data/chatbot-golden-set.json</code>{" "}
-                또는 가이드 문서에 반영하면 챗봇이 다음부터 자동 응대합니다.
+                검토 후 발행합니다. 답변 자체는 골든셋 또는 가이드 문서에 반영하면 챗봇이 다음부터 자동 응대합니다.
               </p>
             </section>
           ) : null}
 
-          <section className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-            <div className="flex items-center gap-2 border-b border-[#e8e8e4] px-5 py-4">
-              <MessageSquare className="h-4 w-4 text-[#1a1a1a]/40" />
-              <h2 className="text-[13px] font-semibold text-[#111110]">상담 대화</h2>
-              <span className="ml-auto text-[12px] text-[#1a1a1a]/40">{conversations.length}건</span>
+          <section className="overflow-hidden rounded-[10px] border border-black/[0.08] bg-white">
+            <div className="flex items-center gap-2 border-b border-black/[0.08] px-5 py-3.5">
+              <MessageSquare className="h-4 w-4 text-[#A39E98]" />
+              <h2 className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">상담 대화</h2>
+              <span className="ml-auto text-[11px] text-[#A39E98] tabular-nums">{conversations.length}건</span>
             </div>
 
             {conversations.length === 0 ? (
-              <p className="px-5 py-10 text-center text-[13px] text-[#1a1a1a]/30">
+              <p className="px-5 py-10 text-center text-[13px] text-[#A39E98]">
                 {isUnconfigured
                   ? "채널톡 Open API 키 설정 후 상담을 동기화할 수 있습니다."
                   : loadError
@@ -473,7 +592,7 @@ export default function ChannelTalkPage() {
                   return (
                     <li
                       key={conversation.id}
-                      className="flex flex-col gap-2 border-b border-[#e8e8e4] px-5 py-4 last:border-0 sm:flex-row sm:items-start sm:gap-4"
+                      className="flex flex-col gap-2 border-b border-black/[0.08] px-5 py-4 last:border-0 sm:flex-row sm:items-start sm:gap-4"
                     >
                       <div className="flex min-w-0 flex-1 flex-col gap-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -481,10 +600,18 @@ export default function ChannelTalkPage() {
                             {conversation.name || conversation.email || conversation.phone || "익명 고객"}
                           </span>
                           <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${STATE_BADGE[conversation.state]}`}
+                            className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", STATE_BADGE[conversation.state])}
                           >
                             {STATE_LABEL[conversation.state]}
                           </span>
+                          {(conversation.tags ?? []).slice(0, 2).map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full border border-black/[0.10] bg-white px-2 py-0.5 text-[10px] font-medium text-[#615D59]"
+                            >
+                              {tag}
+                            </span>
+                          ))}
                           {conversation.matchedLeadId ? (
                             <a
                               href={leadBoardDeepLink(conversation.matchedLeadId)}
@@ -506,7 +633,7 @@ export default function ChannelTalkPage() {
                               type="button"
                               onClick={() => void registerConversationAsLead(conversation)}
                               disabled={registerBusy}
-                              className="inline-flex items-center gap-1 rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55 transition-colors hover:border-[#084734] hover:text-[#084734] disabled:opacity-50"
+                              className="inline-flex items-center gap-1 rounded-full border border-black/[0.10] px-2 py-0.5 text-[10px] font-medium text-[#615D59] transition-colors hover:border-[#084734] hover:text-[#084734] disabled:opacity-50"
                             >
                               {registerBusy ? (
                                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -518,20 +645,20 @@ export default function ChannelTalkPage() {
                           ) : null}
                         </div>
                         {conversation.firstQuestion ? (
-                          <p className="line-clamp-2 text-[12px] text-[#1a1a1a]/60">
+                          <p className="line-clamp-2 text-[12px] text-[#615D59]">
                             “{conversation.firstQuestion}”
                           </p>
                         ) : null}
                         {conversation.lastMessageText ? (
-                          <p className="line-clamp-1 text-[11px] text-[#1a1a1a]/40">
+                          <p className="line-clamp-1 text-[11px] text-[#A39E98]">
                             최근: {conversation.lastMessageText}
                           </p>
                         ) : null}
                         {registerError ? (
-                          <p className="text-[11px] text-[#B85C33]">{registerError}</p>
+                          <p className="text-[11px] text-[#8F2C2C]">{registerError}</p>
                         ) : null}
                       </div>
-                      <div className="flex shrink-0 items-center gap-3 text-[11px] text-[#1a1a1a]/40 sm:flex-col sm:items-end sm:gap-1">
+                      <div className="flex shrink-0 items-center gap-3 text-[11px] text-[#A39E98] tabular-nums sm:flex-col sm:items-end sm:gap-1">
                         <span>{conversation.messageCount}개 메시지</span>
                         <span>{formatWhen(conversation.lastMessageAt)}</span>
                       </div>
@@ -544,7 +671,7 @@ export default function ChannelTalkPage() {
               href="https://desk.channel.io"
               target="_blank"
               rel="noreferrer"
-              className="flex items-center justify-center gap-1.5 border-t border-[#e8e8e4] bg-[#fafaf8] px-5 py-3 text-[12px] font-medium text-[#1a1a1a]/55 transition-colors hover:text-[#111110]"
+              className="flex items-center justify-center gap-1.5 border-t border-black/[0.08] bg-[#FAFAF8] px-5 py-3 text-[12px] font-medium text-[#615D59] transition-colors hover:text-[#111110]"
             >
               채널톡 데스크에서 열기
               <ExternalLink className="h-3.5 w-3.5" />

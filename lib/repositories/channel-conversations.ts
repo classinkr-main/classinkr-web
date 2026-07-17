@@ -361,6 +361,36 @@ export interface ChannelConversationSyncMeta {
  * TTL 판단 + locked/cached 조기 반환에 쓰는 경량 메타(Supabase 우선, 미설정/실패 시 JSON 폴백).
  * transcript(무거운 jsonb)는 제외하고 synced_at/matched_lead_id 만 스캔한다.
  */
+/**
+ * 어드민 탭 읽기 경로 — durable(Supabase) 목록을 최신 응답 순으로 읽는다.
+ * 미설정/실패 시 null 을 돌려 호출자(라우트)가 레거시 JSON 으로 폴백하게 한다(무음 빈 배열 금지).
+ */
+export async function listDurableConversations(
+  limit = 500
+): Promise<ChannelConversationRecord[] | null> {
+  if (!channelConversationsSupabaseEnabled()) return null
+
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from("channel_conversations")
+      .select(
+        "id, name, email, phone, state, tags, first_question, matched_lead_id, matched_org, last_message_at, transcript, synced_at"
+      )
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+      .limit(limit)
+    if (error) throw new Error(error.message)
+
+    return ((data ?? []) as SupabaseChannelConversationRow[]).map(supabaseRowToRecord)
+  } catch (error) {
+    console.warn(
+      "[channel-conversations] Supabase 목록 조회 실패, JSON 폴백:",
+      error instanceof Error ? error.message : error
+    )
+    return null
+  }
+}
+
 export async function getDurableConversationSyncMeta(): Promise<ChannelConversationSyncMeta> {
   if (channelConversationsSupabaseEnabled()) {
     try {

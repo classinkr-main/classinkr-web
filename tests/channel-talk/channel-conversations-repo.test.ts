@@ -17,6 +17,7 @@ import {
   upsertDurableConversations,
   type ChannelConversationMessage,
   type ChannelConversationRecord,
+  listDurableConversations,
 } from "@/lib/repositories/channel-conversations"
 
 const SUPABASE_ENV_KEYS = [
@@ -213,6 +214,65 @@ describe("getDurableConversationsByIds", () => {
 
     expect(createSupabaseAdminClient).toHaveBeenCalled()
     expect(result.size).toBe(0)
+    expect(warn).toHaveBeenCalled()
+  })
+})
+
+// 어드민 탭 읽기 경로(durable 우선) — 목록 전체를 최신 응답 순으로 읽고, 미설정/실패 시 null 을
+// 돌려 호출자(라우트)가 레거시 JSON 으로 폴백하게 한다.
+describe("listDurableConversations", () => {
+  it("reads the full list from Supabase ordered by last_message_at desc", async () => {
+    enableSupabase()
+    const limitFn = vi.fn(() => ({
+      data: [
+        {
+          id: "chat-2",
+          name: null,
+          email: null,
+          phone: null,
+          state: "opened",
+          tags: ["잠재고객/도입문의"],
+          first_question: "도입 문의",
+          matched_lead_id: null,
+          matched_org: null,
+          last_message_at: "2026-07-17T02:00:00.000Z",
+          transcript: [],
+          synced_at: "2026-07-17T02:05:00.000Z",
+        },
+      ],
+      error: null,
+    }))
+    const order = vi.fn(() => ({ limit: limitFn }))
+    const select = vi.fn(() => ({ order }))
+    createSupabaseAdminClient.mockReturnValue({ from: vi.fn(() => ({ select })) })
+
+    const records = await listDurableConversations(300)
+
+    expect(order).toHaveBeenCalledWith("last_message_at", { ascending: false, nullsFirst: false })
+    expect(limitFn).toHaveBeenCalledWith(300)
+    expect(records).toHaveLength(1)
+    expect(records?.[0]?.id).toBe("chat-2")
+    expect(records?.[0]?.tags).toEqual(["잠재고객/도입문의"])
+  })
+
+  it("returns null when Supabase is unconfigured", async () => {
+    disableSupabase()
+    const records = await listDurableConversations()
+    expect(records).toBeNull()
+    expect(createSupabaseAdminClient).not.toHaveBeenCalled()
+  })
+
+  it("returns null (with a warning) on a Supabase error so the caller can fall back", async () => {
+    enableSupabase()
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const limitFn = vi.fn(() => ({ data: null, error: { message: "rls denied" } }))
+    const order = vi.fn(() => ({ limit: limitFn }))
+    const select = vi.fn(() => ({ order }))
+    createSupabaseAdminClient.mockReturnValue({ from: vi.fn(() => ({ select })) })
+
+    const records = await listDurableConversations()
+
+    expect(records).toBeNull()
     expect(warn).toHaveBeenCalled()
   })
 })
