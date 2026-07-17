@@ -6,7 +6,9 @@ import { draftStatusMeta } from "@/components/admin/branch/SalesLedgerWorkbench"
 // 웨이브 5 — 장부 "되돌리기" 버튼 UI 배선 회귀 가드.
 // 백엔드(PATCH .../ledger-drafts/{id} action=reverse)는 이미 라이브 — 이 스위트는 프런트 배선만 본다:
 //  1) draftStatusMeta가 draft.status(불변, "applied" 그대로) 위에 reversed 신호를 얹어 배지를
-//     "적용됨" vs "적용됨(상쇄)"로 분기하는지(픽스처 기반, 실제 export 함수 호출).
+//     "적용완료" vs "적용완료(상쇄)"로 분기하는지(픽스처 기반, 실제 export 함수 호출). 라벨
+//     텍스트 자체는 품질 웨이브 7 — 항목 4(DRAFT_STATUS_LABELS SSOT, ledger/shared.tsx)로
+//     "적용됨"→"적용완료" 등으로 통일됐다 — 분기 로직은 그대로, 문구만 갱신.
 //  2) 훅의 reverseEntry가 서버 응답 entry를 그대로 ledgerEntries에 병합하는지(로컬에서 상태를
 //     임의로 뒤집지 않음 — 기존 ledgerEntryRows의 active 필터가 자연히 신뢰할 수 있게).
 //  3) appliedDraftFallbackRows(entries 누락 시 applied draft를 대체 표시하는 안전망)가
@@ -20,28 +22,28 @@ function workbenchSource() {
   return readFileSync(workbenchPath, "utf8")
 }
 
-describe("draftStatusMeta — 적용됨(상쇄) 배지 분기(웨이브 5)", () => {
-  it("status=applied, reversed=false면 기존과 동일한 '적용됨' 라벨/톤을 유지한다", () => {
+describe("draftStatusMeta — 적용완료(상쇄) 배지 분기(웨이브 5 로직 + 웨이브 7 라벨 SSOT)", () => {
+  it("status=applied, reversed=false면 기존과 동일한 '적용완료' 라벨/톤을 유지한다", () => {
     const meta = draftStatusMeta("applied", false)
-    expect(meta.label).toBe("적용됨")
+    expect(meta.label).toBe("적용완료")
     expect(meta.className).toContain("#084734")
   })
 
-  it("status=applied, reversed=true면 '적용됨(상쇄)' 라벨과 중립(회색) 톤을 반환한다", () => {
+  it("status=applied, reversed=true면 '적용완료(상쇄)' 라벨과 중립(회색) 톤을 반환한다", () => {
     const meta = draftStatusMeta("applied", true)
-    expect(meta.label).toBe("적용됨(상쇄)")
+    expect(meta.label).toBe("적용완료(상쇄)")
     // 초록(#084734/#ECFDF5) 대신 취소됨과 같은 계열의 중립 톤이어야 활성 적용과 시각적으로 구분된다.
     expect(meta.className).not.toContain("#084734")
     expect(meta.className).toContain("#615D59")
   })
 
   it("reversed 인자를 생략하면(다른 상태 호출부와의 하위 호환) 기본값 false로 동작한다", () => {
-    expect(draftStatusMeta("applied").label).toBe("적용됨")
+    expect(draftStatusMeta("applied").label).toBe("적용완료")
   })
 
   it("applied가 아닌 상태에서는 reversed=true를 넘겨도 기존 라벨을 그대로 반환한다", () => {
-    expect(draftStatusMeta("checked", true).label).toBe("체크 완료")
-    expect(draftStatusMeta("draft", true).label).toBe("검토 필요")
+    expect(draftStatusMeta("checked", true).label).toBe("체크완료")
+    expect(draftStatusMeta("draft", true).label).toBe("검토중")
     expect(draftStatusMeta("cancelled", true).label).toBe("취소됨")
   })
 })

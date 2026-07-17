@@ -18,6 +18,25 @@ export { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 export type DraftKind = "new-row" | "edit-row"
 export type DraftStatus = "draft" | "checked" | "applied" | "cancelled"
 
+// 품질 웨이브 7 — 항목 4: draft 상태 라벨 SSOT. 이전엔 필터 탭("검토"/"체크"/"적용")과 배지
+// ("검토 필요"/"체크 완료"/"적용됨")가 같은 상태를 서로 다른 말로 불렀다 — 뜻은 그대로 두고
+// 표기만 이 상수로 통일한다("검토중"/"체크완료"/"적용완료" + 상쇄 표기). "대기"(open — draft와
+// checked를 합친 필터 그룹핑)와 "전체"(all)는 단일 DraftStatus가 아니라 이 상수 밖에서 그대로
+// 유지한다.
+export const DRAFT_STATUS_LABELS: Record<DraftStatus, string> = {
+  draft: "검토중",
+  checked: "체크완료",
+  applied: "적용완료",
+  cancelled: "취소됨",
+}
+
+// 웨이브 5 — "되돌리기": applied인데 연결 entry가 상쇄된 경우만 "(상쇄)"를 덧붙인다. draft.status
+// 자체는 상쇄 후에도 "applied" 그대로다(감사 추적 보존, 백엔드 계약) — 라벨에서만 구분한다.
+export function draftStatusLabel(status: DraftStatus, reversed = false): string {
+  if (status === "applied" && reversed) return `${DRAFT_STATUS_LABELS.applied}(상쇄)`
+  return DRAFT_STATUS_LABELS[status]
+}
+
 export type DraftQueueMode = "server" | "local"
 
 export type RevProductCategory = "all" | "software" | "hardware" | "unknown"

@@ -71,6 +71,8 @@ import {
   buildRevWeekProjection,
   DRAFT_CONFIDENCE_OPTIONS,
   DRAFT_OPERATIONS,
+  DRAFT_STATUS_LABELS,
+  draftStatusLabel,
   formatDateTime,
   formatMonthLabel,
   formatWeekAmount,
@@ -413,11 +415,15 @@ const LENSES: Array<{ id: LedgerLens; label: string; description: string }> = [
   { id: "dsh", label: "DSH", description: "수치 상세 · 목표/실적 그리드" },
   { id: "rev", label: "REV", description: "주차·목표 수치 검수와 행 상세" },
 ]
+// 품질 웨이브 7 — 항목 4: draft/checked/applied 라벨은 DRAFT_STATUS_LABELS(ledger/shared.tsx)
+// SSOT를 그대로 쓴다 — 예전엔 이 탭이 "검토"/"체크"/"적용"으로, 배지(draftStatusMeta)는
+// "검토 필요"/"체크 완료"/"적용됨"으로 서로 다르게 불렀다. "대기"(open — draft+checked 묶음
+// 필터)와 "전체"(all)는 단일 상태가 아니라 그대로 유지.
 const DRAFT_STATUS_FILTERS: Array<{ id: DraftStatusFilter; label: string }> = [
   { id: "open", label: "대기" },
-  { id: "draft", label: "검토" },
-  { id: "checked", label: "체크" },
-  { id: "applied", label: "적용" },
+  { id: "draft", label: DRAFT_STATUS_LABELS.draft },
+  { id: "checked", label: DRAFT_STATUS_LABELS.checked },
+  { id: "applied", label: DRAFT_STATUS_LABELS.applied },
   { id: "all", label: "전체" },
 ]
 
@@ -1378,26 +1384,28 @@ function SelectedWeekBars({ weeks }: { weeks: RevWeekPoint[] }) {
   )
 }
 
-// export: 웨이브 5 회귀 테스트(tests/branch)가 "적용됨(상쇄)" 배지 분기를 직접 검증한다.
+// export: 웨이브 5 회귀 테스트(tests/branch)가 "적용완료(상쇄)" 배지 분기를 직접 검증한다.
 // reversed는 draft.status와 무관한 별도 신호(연결된 entry가 상쇄됐는지) — draft.status
 // 자체는 "applied"로 불변이라(백엔드가 감사 추적을 위해 건드리지 않는다) 여기서 라벨만 분기한다.
+// 라벨 문구 자체는 품질 웨이브 7 — 항목 4로 DRAFT_STATUS_LABELS(ledger/shared.tsx) SSOT로
+// 통일했다(톤/className은 이 함수 소관, 라벨 텍스트만 draftStatusLabel에 위임).
 export function draftStatusMeta(status: DraftStatus, reversed = false) {
   if (status === "checked") {
-    return { label: "체크 완료", className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" }
+    return { label: draftStatusLabel(status), className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" }
   }
   if (status === "applied") {
     if (reversed) {
-      return { label: "적용됨(상쇄)", className: "border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59]" }
+      return { label: draftStatusLabel(status, true), className: "border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59]" }
     }
-    return { label: "적용됨", className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" }
+    return { label: draftStatusLabel(status), className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" }
   }
   if (status === "cancelled") {
     // (미사용) — DB CHECK 제약(20260630_branch_sales_ledger_drafts.sql)엔 유효 상태지만
     // 이 워크벤치 어느 동작도 초안을 cancelled로 전이시키지 않는다(직접 DB 조작 등으로만 도달).
     // 배지는 그런 행이 조회될 가능성에 대비한 방어적 렌더 — DraftStatus 타입은 DB 계약과 맞춰 유지.
-    return { label: "취소됨", className: "border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59]" }
+    return { label: draftStatusLabel(status), className: "border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] text-[#615D59]" }
   }
-  return { label: "검토 필요", className: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]" }
+  return { label: draftStatusLabel(status), className: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]" }
 }
 
 function draftMatchesFilter(draft: LedgerDraft, filter: DraftStatusFilter) {
@@ -5652,7 +5660,8 @@ export default function SalesLedgerWorkbench() {
       label: "체크 큐",
       shortLabel: "큐",
       title: "검토 대기",
-      description: `${openDrafts.length}건의 초안/체크 항목을 확인합니다.`,
+      // 품질 웨이브 7 — 항목 4: "초안/체크"라는 산재 표현 대신 DRAFT_STATUS_LABELS SSOT 용어로.
+      description: `${openDrafts.length}건의 ${DRAFT_STATUS_LABELS.draft}/${DRAFT_STATUS_LABELS.checked} 항목을 확인합니다.`,
       badge: `${openDrafts.length}건`,
       icon: AlertTriangle,
     },
