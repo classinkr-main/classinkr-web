@@ -113,17 +113,17 @@ function IntegrityStripPanel({ refreshKey }: { refreshKey: number }) {
 
   if (total === 0) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-[12px] font-semibold text-emerald-800">
-        <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+      <div className="flex items-center gap-2 rounded-xl border border-[#BDEFD8] bg-[#ECFDF5] px-3.5 py-2 text-[12px] font-semibold text-[#084734]">
+        <span className="h-2 w-2 shrink-0 rounded-full bg-[#084734]" aria-hidden="true" />
         정합 체크 — 이슈 없음 (규칙 {data.ruleCount ?? 0}개 통과)
       </div>
     )
   }
 
-  // error가 하나라도 있으면 배지 톤을 테라코타로 승격 — warning만 있을 때는 기존
-  // SyncStatusBar의 "임포트 지연" 앰버 톤을 그대로 재사용한다.
+  // error가 하나라도 있으면 배지 톤을 캐논 Danger로 승격 — warning만 있을 때는 기존
+  // SyncStatusBar의 "임포트 지연" 앰버(캐논 Warning) 톤을 그대로 재사용한다.
   const tone = errorCount > 0
-    ? { border: "border-[#B85C33]/25", bg: "bg-[#FBEAE2]", text: "text-[#7A2A13]", dot: "bg-[#B85C33]" }
+    ? { border: "border-[#B43E3E]/25", bg: "bg-[#FCE9E9]", text: "text-[#8F2C2C]", dot: "bg-[#B43E3E]" }
     : { border: "border-[#ECD29C]", bg: "bg-[#FBF1E0]", text: "text-[#7A520F]", dot: "bg-[#A8741A]" }
 
   return (
@@ -152,7 +152,7 @@ function IntegrityStripPanel({ refreshKey }: { refreshKey: number }) {
               <span
                 className={`shrink-0 rounded-md border bg-white px-1.5 py-0.5 font-mono text-[10.5px] font-bold ${
                   issue.severity === "error"
-                    ? "border-[#B85C33]/25 text-[#B85C33]"
+                    ? "border-[#B43E3E]/25 text-[#B43E3E]"
                     : "border-[#ECD29C] text-[#A8741A]"
                 }`}
               >

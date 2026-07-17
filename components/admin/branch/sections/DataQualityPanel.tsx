@@ -100,6 +100,9 @@ const RULE_META: Record<string, {
   },
 }
 
+// 캐논 Status Scale(DESIGN.md "운영 상태 스케일") — rose/amber/sky 독자 색 대신
+// Danger(#B43E3E/#FCE9E9/#F2B8B8, 강조 #8F2C2C) · Warning(#A8741A/#FBF1E0/#ECD29C,
+// 강조 #7A520F) · Success·Info(#084734/#ECFDF5/#BDEFD8) 3축만 사용한다.
 const SEVERITY_TONE: Record<Severity, {
   label: string
   dot: string
@@ -108,21 +111,21 @@ const SEVERITY_TONE: Record<Severity, {
 }> = {
   error: {
     label: "위험",
-    dot: "bg-rose-500",
-    chip: "border-rose-200 bg-rose-50 text-rose-700",
-    row: "border-rose-200 bg-rose-50/70 text-rose-900",
+    dot: "bg-[#B43E3E]",
+    chip: "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]",
+    row: "border-[#F2B8B8] bg-[#FCE9E9]/70 text-[#8F2C2C]",
   },
   warn: {
     label: "주의",
-    dot: "bg-amber-500",
-    chip: "border-amber-200 bg-amber-50 text-amber-800",
-    row: "border-amber-200 bg-amber-50/75 text-amber-900",
+    dot: "bg-[#A8741A]",
+    chip: "border-[#ECD29C] bg-[#FBF1E0] text-[#A8741A]",
+    row: "border-[#ECD29C] bg-[#FBF1E0]/75 text-[#7A520F]",
   },
   info: {
     label: "참고",
-    dot: "bg-sky-500",
-    chip: "border-sky-200 bg-sky-50 text-sky-800",
-    row: "border-sky-200 bg-sky-50/70 text-sky-900",
+    dot: "bg-[#084734]",
+    chip: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
+    row: "border-[#BDEFD8] bg-[#ECFDF5]/70 text-[#084734]",
   },
 }
 
@@ -280,18 +283,18 @@ export default function DataQualityPanel({
               <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">
                 {isDev ? "지사 데이터 품질 점검" : "데이터 품질 점검"}
               </h2>
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10.5px] font-bold text-emerald-700">
+              <span className="inline-flex items-center gap-1 rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2 py-0.5 text-[10.5px] font-bold text-[#084734]">
                 <CheckCircle2 className="h-3 w-3" />
                 통과 {counts.passed}
               </span>
               {counts.error > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10.5px] font-bold text-rose-700">
+                <span className="inline-flex items-center gap-1 rounded-full border border-[#F2B8B8] bg-[#FCE9E9] px-2 py-0.5 text-[10.5px] font-bold text-[#B43E3E]">
                   <AlertTriangle className="h-3 w-3" />
                   위험 {counts.error}
                 </span>
               )}
               {counts.warn > 0 && (
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10.5px] font-bold text-amber-800">
+                <span className="rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[10.5px] font-bold text-[#A8741A]">
                   주의 {counts.warn}
                 </span>
               )}
@@ -344,13 +347,13 @@ export default function DataQualityPanel({
 
       <div className="space-y-2.5 p-5">
         {error && (
-          <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-[12px] leading-relaxed text-rose-700">
+          <div className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] p-3 text-[12px] leading-relaxed text-[#8F2C2C]">
             데이터 품질 점검을 불러오지 못했습니다. {error}
           </div>
         )}
 
         {(issues ?? []).length === 0 && !error && (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-[12px] leading-relaxed text-emerald-800">
+          <div className="rounded-lg border border-[#BDEFD8] bg-[#ECFDF5] p-4 text-[12px] leading-relaxed text-[#084734]">
             현재 검출된 데이터 품질 이슈가 없습니다. 분석 입력 데이터가 정상 범위로 보입니다.
           </div>
         )}
