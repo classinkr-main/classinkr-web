@@ -1,5 +1,6 @@
 "use client"
 import Link from "next/link"
+import type { KeyboardEvent } from "react"
 import { Calendar, ExternalLink } from "lucide-react"
 import type { BranchMonthlySeries } from "../types"
 import { cny, cnyExact } from "@/lib/branch/money-format"
@@ -27,12 +28,19 @@ export interface UpcomingDealClick {
 }
 
 export default function BranchUpcomingDeals({
-  data, loading, onDealClick,
+  data, loading, error, onDealClick,
 }: {
   data: BranchMonthlySeries | null
   loading: boolean
+  error?: string | null
   onDealClick?: (d: UpcomingDealClick) => void
 }) {
+  // 에러를 빈 상태/영구 스켈레톤으로 위장하지 않는다(품질 웨이브 5 — 항목 2).
+  if (error) return (
+    <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]">
+      {error}
+    </div>
+  )
   if (loading || !data) return <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />
 
   const items: Item[] = [
@@ -73,10 +81,19 @@ export default function BranchUpcomingDeals({
               const handleClick = clickable
                 ? () => onDealClick({ id: `upcoming-${i}`, customer: it.title, date: it.date, amount: it.amount as number })
                 : undefined
+              // 키보드 접근성(품질 웨이브 5 — 항목 5) — 클릭 가능한 항목만 칸반
+              // PipelineCard(BranchPipelineKanban.tsx:104-109)와 동일한 role/tabIndex/
+              // onKeyDown 패턴을 얹는다. 클릭 불가 항목(행사·캠페인)은 그대로 정적 li.
+              const handleKeyDown = clickable
+                ? (e: KeyboardEvent<HTMLLIElement>) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleClick?.() } }
+                : undefined
               return (
                 <li key={`${it.kind}-${i}-${it.date}`}
                   onClick={handleClick}
-                  className={`grid items-center gap-3 rounded-lg px-2 py-2 ${clickable ? "cursor-pointer hover:bg-[#F6F5F4]" : "hover:bg-[#FAFAF8]"}`}
+                  onKeyDown={handleKeyDown}
+                  role={clickable ? "button" : undefined}
+                  tabIndex={clickable ? 0 : undefined}
+                  className={`grid items-center gap-3 rounded-lg px-2 py-2 ${clickable ? "cursor-pointer outline-none hover:bg-[#F6F5F4] focus-visible:ring-2 focus-visible:ring-[#084734]/40" : "hover:bg-[#FAFAF8]"}`}
                   style={{ gridTemplateColumns: "44px 1fr auto" }}>
                   <div className="rounded-md py-1 text-center" style={{ background: tone.bg, color: tone.fg }}>
                     <p className="text-[9px] font-semibold">{m}월</p>
