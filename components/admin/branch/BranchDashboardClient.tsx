@@ -14,6 +14,8 @@ import CampaignsSection from "./sections/CampaignsSection"
 import HardwareSection from "./sections/HardwareSection"
 import DealMixSection from "./sections/DealMixSection"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
+import { adminFetchJsonCached } from "@/lib/admin-client"
+import { buildCrmSyncSummary, type CrmSyncSummary, type RevSyncCoverageView } from "@/lib/crm/rev-sync-health"
 import { PERIODS, PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
 import { ADMIN_NAV, ADMIN_NAV_SECTION_META } from "../admin-nav"
 
@@ -139,10 +141,32 @@ export default function BranchDashboardClient() {
   // (RefreshCw 버튼 라벨이 "다시 불러오기" → "지금 동기화"로 갈리는 실측 케이스). false로 고정하고
   // 아래 useEffect가 마운트 후 실제 세션 값으로 갱신한다(라벨이 잠깐 바뀌는 건 허용).
   const [canRunAdminOperations, setCanRunAdminOperations] = useState(false)
+  // CRM 싱크 칩(B안) 데이터 — coverage 응답을 요약으로 접어 SyncStatusBar에 prop으로 1회
+  // 전달한다(칩은 자체 fetch 없음). 실패·미지원(구 서버)·권한 없음은 null = 칩 미표시(fail-soft).
+  const [crmSync, setCrmSync] = useState<CrmSyncSummary | null>(null)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   useEffect(() => {
     setCanRunAdminOperations(canRunAdminOperationsFromSession())
+  }, [])
+
+  useEffect(() => {
+    let alive = true
+    // CrmCoverageStrip(/admin/crm)과 같은 캐시 키 — 같은 세션에서 두 화면을 오가도 요청 1회.
+    adminFetchJsonCached<{ revAccounts?: RevSyncCoverageView | null }>("/api/admin/crm/coverage", undefined, {
+      cacheKey: "/api/admin/crm/coverage",
+      ttlMs: 90_000,
+      staleWhileRevalidateMs: 5 * 60_000,
+    })
+      .then((response) => {
+        if (alive) setCrmSync(buildCrmSyncSummary(response?.revAccounts ?? null))
+      })
+      .catch(() => {
+        // fail-soft — 칩만 조용히 빠진다. 대시보드 본문은 영향 없음.
+      })
+    return () => {
+      alive = false
+    }
   }, [])
 
   // 웨이브 7 — Q5(개인화 라이트). URL에 mgr이 없을 때만(우선순위: URL > localStorage >
@@ -466,6 +490,7 @@ export default function BranchDashboardClient() {
           onRefresh={onRefresh}
           syncEnabled={canRunAdminOperations}
           staleSince={summaryStaleSince}
+          crmSync={crmSync}
         />
 
         <div className="mt-6">

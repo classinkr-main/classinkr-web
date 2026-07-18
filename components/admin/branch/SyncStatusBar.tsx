@@ -3,6 +3,8 @@ import { useEffect, useState } from "react"
 import { RefreshCw, AlertTriangle, CheckCircle2, Clock, Database } from "lucide-react"
 import { isImportStale } from "@/lib/branch/data-source-freshness"
 import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
+import { formatCNY } from "@/lib/crm/money-format"
+import type { CrmSyncSummary, RevSyncHealth } from "@/lib/crm/rev-sync-health"
 import type { BranchDataSourceInfo, BranchDataSources } from "./types"
 
 interface SyncStatusBarProps {
@@ -15,6 +17,17 @@ interface SyncStatusBarProps {
   /** 품질 웨이브 3 — 항목 1. summary GET 요청이 실패해 오래된 캐시로 조용히 대체된 경우
    *  그 캐시가 저장된 시각(ms epoch). null/undefined면 정상(최신 데이터 또는 실패 없음). */
   staleSince?: number | null
+  /** CRM 싱크 칩(B안 — 시안 rev-crm-sync-visual-2026-07-18) — 옵션. 데이터는 부모가
+   *  /api/admin/crm/coverage 응답을 buildCrmSyncSummary로 접어 1회 전달한다(자체 fetch 없음).
+   *  미전달(장부 등 다른 사용처)이면 칩 미표시 — 장부는 A안 스트립이 있어 중복 방지. */
+  crmSync?: CrmSyncSummary | null
+}
+
+// 칩 톤 — 계정 커버리지 3단계(낮음=테라코타/부분=앰버/건강=그린). 확도 전용 파랑 금지 축.
+const CRM_CHIP_TONE: Record<RevSyncHealth, { border: string; text: string; dot: string }> = {
+  low: { border: "border-[#EFC9B8]", text: "text-[#8A3F1D]", dot: "bg-[#B85C33]" },
+  partial: { border: "border-[#ECD29C]", text: "text-[#7A520F]", dot: "bg-[#A8741A]" },
+  healthy: { border: "border-[#BDEFD8]", text: "text-[#084734]", dot: "bg-[#084734]" },
 }
 
 function relativeTime(iso: string, now: number): string {
@@ -36,7 +49,7 @@ function sourceLabel(source: BranchDataSourceInfo, now: number): string {
   return "라이브 시트"
 }
 
-export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, dataSources, onRefresh, syncEnabled = true, staleSince = null }: SyncStatusBarProps) {
+export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, dataSources, onRefresh, syncEnabled = true, staleSince = null, crmSync = null }: SyncStatusBarProps) {
   const [busy, setBusy] = useState(false)
   // Tick once a minute so relative timestamps stay current without a refetch.
   const [now, setNow] = useState(() => Date.now())
@@ -123,18 +136,37 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
             {busy ? (syncEnabled ? "동기화 중..." : "불러오는 중...") : (syncEnabled ? "지금 동기화" : "다시 불러오기")}
           </button>
         </div>
-        {dataSources && (
+        {(dataSources || crmSync) && (
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-[10.5px]">
             <span className="inline-flex items-center gap-1 font-semibold text-[#615D59]">
               <Database className="h-3 w-3" />
               원천
             </span>
-            <span className={revImportStale ? "font-semibold text-[#7A520F]" : "text-[#615D59]"}>
-              REV {sourceLabel(dataSources.rev, now)}
-            </span>
-            <span className={dshImportStale ? "font-semibold text-[#7A520F]" : "text-[#615D59]"}>
-              DSH {sourceLabel(dataSources.dsh, now)}
-            </span>
+            {dataSources && (
+              <>
+                <span className={revImportStale ? "font-semibold text-[#7A520F]" : "text-[#615D59]"}>
+                  REV {sourceLabel(dataSources.rev, now)}
+                </span>
+                <span className={dshImportStale ? "font-semibold text-[#7A520F]" : "text-[#615D59]"}>
+                  DSH {sourceLabel(dataSources.dsh, now)}
+                </span>
+              </>
+            )}
+            {crmSync && (
+              // B안 컴팩트 칩 — 호버(title) 요약, 클릭 시 장부의 A안 CRM 싱크 스트립으로.
+              // <a>라 키보드 포커스가 되고, title은 포커스/호버 양쪽에서 읽힌다.
+              <a
+                href="/admin/branch/ledger"
+                title={`계정 ${crmSync.accountConnected}/${crmSync.accountTotal} · 매출 ${formatCNY(crmSync.revenueLinked)}/${formatCNY(crmSync.revenueTotal)} (${crmSync.revenuePctLabel}) · 검토 대기 ${crmSync.rows.review}행 · 고아 후보 ${crmSync.hygiene.orphanCandidates} — 클릭하면 장부의 CRM 싱크 패널`}
+                className={`inline-flex items-center gap-1.5 rounded-full border bg-white px-2 py-0.5 font-semibold ${CRM_CHIP_TONE[crmSync.health].border} ${CRM_CHIP_TONE[crmSync.health].text}`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${CRM_CHIP_TONE[crmSync.health].dot}`}
+                  aria-hidden="true"
+                />
+                CRM 연결 {crmSync.accountPctLabel}
+              </a>
+            )}
           </div>
         )}
       </div>
