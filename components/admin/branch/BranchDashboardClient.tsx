@@ -540,11 +540,10 @@ export default function BranchDashboardClient() {
 
           {activeTab === "pipeline" && (
             <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-4">
-              {/* 좌: 기존 KPI 아코디언 유지 / 우: 활동 병목·담당자(장부 KPI 렌즈 이식) — 목업 g2e 동일 */}
-              <div className="grid gap-6 xl:grid-cols-2">
-                <BranchKpiAccordion data={kpi.data} loading={kpi.loading} error={kpi.error} team={team} period={period} selectedMonth={selectedMonth} />
-                <ActivityBottleneckSection kpi={kpi.data} loading={kpi.loading} error={kpi.error} />
-              </div>
+              {/* 팀 KPI 아코디언 → 활동 병목·담당자 순으로 단일 열 세로 배치(2열 그리드 해제).
+                  부모 space-y-4가 아래 파이프라인 카드와 동일한 세로 리듬을 준다. */}
+              <BranchKpiAccordion data={kpi.data} loading={kpi.loading} error={kpi.error} team={team} period={period} selectedMonth={selectedMonth} />
+              <ActivityBottleneckSection kpi={kpi.data} loading={kpi.loading} error={kpi.error} />
               <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                 <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
                   <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">파이프라인</h2>
