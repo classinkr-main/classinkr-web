@@ -4281,6 +4281,35 @@ export default function SalesLedgerWorkbench() {
                       <Table2 className="h-3.5 w-3.5" />
                       담당 REV
                     </button>
+                    {/* 렌즈 교차 점프(라운드 2 Track C) — 같은 행 맥락을 유지한 채 다른 렌즈로 이동.
+                        REV에서 열었으면 보드(선택월 카드가 selectedRowId 링으로 하이라이트),
+                        그 외(보드/DSH)에서 열었으면 REV 매트릭스로 고객 검색을 걸어 그 행을 좁힌다.
+                        URL 반영은 렌즈 절대 계약(반응형 복원·writer)이 알아서 처리한다. */}
+                    {lens === "rev" ? (
+                      <button
+                        type="button"
+                        onClick={() => selectLens("board")}
+                        className="col-span-2 inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[11px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+                      >
+                        <Columns3 className="h-3.5 w-3.5" />
+                        보드에서 보기 — {formatMonthLabel(selectedMonth)} 주차 카드
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuery(selectedRow.customer)
+                          setManagerFilter(new Set())
+                          setRegionFilter(new Set())
+                          setRevPage(1)
+                          selectLens("rev")
+                        }}
+                        className="col-span-2 inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[11px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+                      >
+                        <Table2 className="h-3.5 w-3.5" />
+                        REV 매트릭스에서 보기 — 고객 검색 적용
+                      </button>
+                    )}
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
