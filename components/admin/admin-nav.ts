@@ -52,14 +52,15 @@ const STAFF_EDITOR: AdminRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, roles: [...ALL_STAFF, "BRANCH"], section: "home", keywords: "홈 대시보드 overview home" },
 
-  // 영업·매출 — 파이프라인(CRM)·산출물(견적)·재고(하드웨어)·성과(KR Team)·검수(매출 장부)·일정
+  // 영업·매출 — 성과(KR Team)·검수(매출 장부)·파이프라인(CRM)·산출물(견적)·재고(하드웨어)·일정
+  // (2026-07-18 재정렬) KR Team·매출 장부를 섹션 상단으로 — 사이드바 탭 우선순위 요청 반영.
+  { href: "/admin/branch", label: "KR Team", icon: Building2, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", keywords: "지사 브랜치 branch kr team 매출 성과" },
+  { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", badge: "MVP", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
   { href: "/admin/crm", label: "CRM", icon: Users, roles: [...ALL_STAFF, "BRANCH"], section: "sales", keywords: "crm 한국팀 매출 korea" },
   { href: "/admin/quotes", label: "견적·문서", icon: FileText, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", keywords: "견적 계약 영수증 quote contract receipt" },
   // 하드웨어 재고는 견적서 산출물과 바로 이어지는 재고 검증 표면이라 견적·문서 바로 아래에 둔다(2026-07-18 재배치, 이전엔 system 섹션).
   { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
   { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, roles: [...ALL_STAFF, "BRANCH"], section: "sales", keywords: "캘린더 일정 calendar schedule" },
-  { href: "/admin/branch", label: "KR Team", icon: Building2, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", keywords: "지사 브랜치 branch kr team 매출 성과" },
-  { href: "/admin/branch/ledger", label: "매출 장부", icon: ReceiptText, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", badge: "MVP", keywords: "매출 장부 ledger rev dsh kpi 수치 검수 sales 콕핏" },
 
   // 마케팅·분석 — 캠페인·콘텐츠·리드 + 웹/비즈니스 분석
   // 메시지 발송 허브(이메일·문자·카카오, /admin/marketing)는 캠페인의 "메시지" 탭으로 흡수 — 라우트는 redirect 유지.
