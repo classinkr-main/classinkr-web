@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>매출시트 ↔ CRM 싱크 시각 요소 시안 — 2026-07-18</title>
+<style>
+  :root{
+    --bg:#FAFAF8; --panel:#FFFFFF; --neutral:#F6F5F4; --ink:#111110; --sub:#615D59;
+    --line:rgba(0,0,0,0.08); --green:#084734; --mint:#ECFDF5; --mint-line:#BDEFD8;
+    --exp:#A8741A; --exp-tint:#FBF1E0; --exp-line:#ECD29C;
+    --danger:#B85C33; --danger-tint:#FBEAE2; --danger-line:#EFC9B8;
+    --font:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:#E8E6E0;color:var(--ink);font-size:13px;line-height:1.5;padding:32px 16px}
+  .wrap{max-width:1020px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+  h1{font-size:20px;font-weight:800;letter-spacing:-0.02em}
+  h1 small{display:block;font-size:12px;font-weight:500;color:var(--sub);margin-top:4px}
+  .demo{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:0 6px 24px rgba(0,0,0,0.06)}
+  .demo>h2{font-size:14px;font-weight:800;margin-bottom:4px}
+  .demo>p.note{font-size:11.5px;color:var(--sub);margin-bottom:16px}
+  .chip{display:inline-flex;align-items:center;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:700;margin-left:6px;background:var(--mint);color:var(--green);border:1px solid var(--mint-line)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ── 스트립 (IntegrityStrip 형제) ── */
+  .strip{display:flex;align-items:center;gap:10px;border:1px solid var(--danger-line);background:var(--danger-tint);border-radius:10px;padding:9px 14px;font-size:12px;font-weight:600;color:#8A3F1D;cursor:pointer}
+  .strip .dot{width:8px;height:8px;border-radius:99px;background:var(--danger);flex-shrink:0}
+  .strip .cnt{margin-left:auto;font-weight:800;white-space:nowrap}
+  .strip.mid{border-color:var(--exp-line);background:var(--exp-tint);color:#7A520F}
+  .strip.mid .dot{background:var(--exp)}
+  .strip.ok{border-color:var(--mint-line);background:var(--mint);color:var(--green)}
+  .strip.ok .dot{background:var(--green)}
+
+  /* ── 펼침 패널 ── */
+  .panel{margin-top:8px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:16px}
+  .cols{display:grid;grid-template-columns:1.1fr 1.4fr;gap:20px}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}}
+  .meter{margin-bottom:12px}
+  .meter .lbl{display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:var(--sub);margin-bottom:4px}
+  .meter .lbl b{color:var(--ink);font-weight:800}
+  .bar{height:8px;border-radius:99px;background:var(--neutral);border:1px solid var(--line);overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--green);border-radius:99px;min-width:2px}
+  .bar i.review{background:var(--exp)}
+  .hygiene{font-size:11.5px;color:var(--sub);border-top:1px dashed var(--line);padding-top:10px;margin-top:4px}
+  .hygiene b{color:var(--danger);font-weight:700}
+  .asof{font-size:10.5px;color:var(--sub);margin-top:8px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{font-size:10.5px;font-weight:700;color:var(--sub);text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}
+  td{padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  tr:last-child td{border-bottom:0}
+  td.r,th.r{text-align:right}
+  .link{color:var(--green);font-weight:700;font-size:11px;text-decoration:none;cursor:pointer;white-space:nowrap}
+  .actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}
+  .btn.primary{background:var(--green);border-color:var(--green);color:#fff}
+  .cap{font-size:11px;color:var(--sub);margin-top:10px}
+  .cap b{color:var(--ink)}
+
+  /* ── KR Team 컴팩트 칩 ── */
+  .srcbar{display:flex;align-items:center;gap:14px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:10px 14px;font-size:12px;flex-wrap:wrap}
+  .srcbar .k{color:var(--sub);font-weight:600}
+  .srcbar .v{font-weight:800}
+  .crmchip{position:relative;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--danger-line);background:#fff;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;color:#8A3F1D;cursor:help}
+  .crmchip .dot{width:6px;height:6px;border-radius:99px;background:var(--danger)}
+  .crmchip .tip{position:absolute;right:0;top:calc(100% + 8px);z-index:9;background:#111110;color:#fff;border-radius:8px;padding:8px 12px;font-size:11.5px;font-weight:500;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;box-shadow:0 8px 24px rgba(0,0,0,0.25)}
+  .crmchip .tip b{color:#BDEFD8}
+  .crmchip:hover .tip{opacity:1}
+
+  /* 상태 스와치 */
+  .swatches{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  @media(max-width:760px){.swatches{grid-template-columns:1fr}}
+  .sw{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fff;font-size:11.5px}
+  .sw .name{font-weight:800;font-size:12px;margin-bottom:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>매출시트 ↔ CRM 싱크 시각 요소<small>수치는 2026-07-18 프로덕션 실측. 표시 레이어 — 집계 로직 무변경. 새 API 불필요(기존 coverage API의 revAccounts 축 + 필드 2~3개 확장).</small></h1>
+
+  <!-- A안 -->
+  <div class="demo">
+    <h2>A안 — 장부·개요 상단 "CRM 싱크" 스트립 <span class="chip">정합 체크 스트립 형제</span></h2>
+    <p class="note">기존 정합 체크(시트 품질) 바로 아래 한 줄. 시트 품질 = "시트가 스스로 맞는가", CRM 싱크 = "시트가 CRM과 이어져 있는가" — 두 축을 분리해 나란히. 클릭 시 펼침.</p>
+
+    <div class="strip" onclick="var p=document.getElementById('pn');p.style.display=p.style.display==='none'?'block':'none'">
+      <span class="dot"></span> CRM 싱크 — <b class="num">&nbsp;계정 2/234 연결 · 매출 1.0% (¥76,585 / ¥7,610,544)&nbsp;</b> · 검토 대기 13행 <span class="cnt">펼치기 ▾</span>
+    </div>
+
+    <div class="panel" id="pn">
+      <div class="cols">
+        <div>
+          <div class="meter">
+            <div class="lbl"><span>계정 연결</span><b class="num">2 / 234 (0.9%)</b></div>
+            <div class="bar"><i style="width:2%"></i></div>
+          </div>
+          <div class="meter">
+            <div class="lbl"><span>행 연결 (매칭 대상 385행)</span><b class="num">확정 5 · 검토 13 · 미연결 367</b></div>
+            <div class="bar" style="display:flex"><i style="width:1.5%"></i><i class="review" style="width:3.5%"></i></div>
+          </div>
+          <div class="meter">
+            <div class="lbl"><span>매출 커버리지 (¥)</span><b class="num">76,585 / 7,610,544 (1.0%)</b></div>
+            <div class="bar"><i style="width:1.5%"></i></div>
+          </div>
+          <div class="hygiene">위생: 고아 후보 <b class="num">136</b>건(시트에 없는 행 키) · 스테일 링크 <b class="num">98</b>건 → <span class="link">후보 재생성</span> 권장</div>
+          <div class="asof">기준: 시트 동기화 7.18 00:33 · 플레이스홀더 49행(¥1,839,869)은 매칭 대상에서 제외됨</div>
+        </div>
+        <div>
+          <table>
+            <thead><tr><th>미연결 상위 (매출 큰 순)</th><th>담당</th><th class="r">매출(¥)</th><th></th></tr></thead>
+            <tr><td><b>윤유경플러스</b></td><td>BD Junhyuk</td><td class="r num">802,603</td><td><span class="link">매칭 →</span></td></tr>
+            <tr><td><b>학문당</b></td><td>BD Han</td><td class="r num">388,344</td><td><span class="link">매칭 →</span></td></tr>
+            <tr><td><b>정율사관</b></td><td>MKT Gyusung</td><td class="r num">362,606</td><td><span class="link">매칭 →</span></td></tr>
+            <tr><td><b>과사람</b></td><td>BD Wangchan</td><td class="r num">303,200</td><td><span class="link">매칭 →</span></td></tr>
+            <tr><td><b>이미숙국어</b></td><td>BD Han</td><td class="r num">181,820</td><td><span class="link">매칭 →</span></td></tr>
+          </table>
+          <div class="actions">
+            <button class="btn primary">매칭 인박스 열기 →</button>
+            <button class="btn">매출시트 READ 표면 →</button>
+            <button class="btn">후보 재생성</button>
+          </div>
+        </div>
+      </div>
+      <p class="cap"><b>정직성 원칙:</b> 금액 "불일치" 대조는 1차에서 제외 — 현재 confirmed 링크가 전부 고객(금액 필드 없음) 타깃이라 대조 가능한 쌍이 0건. 통화도 시트=CNY / 내부 딜=KRW / Xiaoshouyi=단위 비정규 3원 체제라 자동 환산 비교는 오보 위험. 2단계(딜 타깃 링크 확보 후)에 도입.</p>
+    </div>
+  </div>
+
+  <!-- B안 -->
+  <div class="demo">
+    <h2>B안 — KR Team 원천 바 "CRM" 칩 <span class="chip">SyncStatusBar 편승</span></h2>
+    <p class="note">KR Team은 차트 중심이라 한 칸만: 기존 원천 배지(REV 임포트·DSH 미러) 옆 컴팩트 칩. 호버 = 요약, 클릭 = 장부 A안 스트립으로 딥링크. A안과 같은 데이터를 소비 — 별도 계산 없음.</p>
+    <div class="srcbar">
+      <span>✓ 마지막 동기화: <b>4분 전</b></span>
+      <span class="k">원천</span><span>REV 장부 임포트 <b>(1분 전)</b></span><span>DSH 시트 미러</span>
+      <span class="crmchip"><span class="dot"></span> CRM 연결 0.9%
+        <span class="tip"><b>계정 2/234</b> · 매출 ¥76.6K/7.6M (1.0%)<br>검토 대기 13행 · 고아 후보 136<br>클릭 → 장부의 CRM 싱크 패널</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- 상태 규칙 -->
+  <div class="demo">
+    <h2>상태 3단계 규칙 <span class="chip">계정 커버리지 기준</span></h2>
+    <p class="note">confidence 캐논과 분리된 축 — 싱크 상태는 "낮음=테라코타 / 부분=앰버 / 건강=그린". 파랑(#1E5DA8)은 확도 전용 예외라 여기서 사용 금지.</p>
+    <div class="swatches">
+      <div class="sw"><div class="name" style="color:var(--danger)">● 낮음 — &lt;10%</div>연결이 사실상 없음. 스트립 상시 노출 + 미연결 상위 강조. <b>지금 상태(0.9%)</b>.</div>
+      <div class="sw"><div class="name" style="color:var(--exp)">● 부분 — 10~60%</div>연결 진행 중. 스트립 유지하되 검토 대기·위생 신호 중심.</div>
+      <div class="sw"><div class="name" style="color:var(--green)">● 건강 — ≥60%</div>한 줄 그린 요약으로 축소 ("계정 87% · 매출 92% 연결 · 이슈 없음").</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
