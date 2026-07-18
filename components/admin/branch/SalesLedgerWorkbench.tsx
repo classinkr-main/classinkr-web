@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Columns3,
   Database,
   FileSpreadsheet,
   Gauge,
@@ -79,6 +80,12 @@ const DshNumericGrid = dynamic(() => import("./ledger/DshNumericGrid").then((m) 
 const WeeklyCloseSection = dynamic(() => import("./ledger/WeeklyCloseSection").then((m) => m.WeeklyCloseSection), {
   ssr: false,
   loading: () => <LoadingPanel label="주간 마감 데이터를 불러오는 중" />,
+})
+// 주차 Forecast 보드(렌즈 "board", Board-1b 이식) — 기본 렌즈(REV) 첫 로드에 불필요한 서브트리라
+// DSH 렌즈와 동일 관례(ssr:false + LoadingPanel)로 지연 로드한다.
+const ForecastBoard = dynamic(() => import("./ledger/ForecastBoard").then((m) => m.ForecastBoard), {
+  ssr: false,
+  loading: () => <LoadingPanel label="주차 Forecast 보드를 불러오는 중" />,
 })
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
@@ -242,7 +249,7 @@ export type {
   WeeklyCloseRunView,
 } from "./ledger/shared"
 
-type LedgerLens = "dsh" | "rev"
+type LedgerLens = "dsh" | "rev" | "board"
 type RailView = "detail" | "input" | "queue"
 type RevSortKey = "customer" | "product" | "manager" | "team" | "region" | "month" | "revenue" | "annual" | "origin"
 type RevSortDirection = "asc" | "desc"
@@ -343,6 +350,7 @@ const EMPTY_MONTH_SET: Set<string> = new Set()
 const LENSES: Array<{ id: LedgerLens; label: string; description: string }> = [
   { id: "dsh", label: "DSH", description: "수치 상세 · 목표/실적 그리드" },
   { id: "rev", label: "REV", description: "주차·목표 수치 검수와 행 상세" },
+  { id: "board", label: "보드", description: "주차 Forecast 칸반 · 확정/고확도/예정 카드 검수" },
 ]
 // role="tablist" 롤빙 tabIndex 키보드 내비 — BranchDashboardClient.tsx의 onTabKeyDown과
 // 동일 패턴(ArrowLeft/Right/Home/End)을 두 탭리스트(렌즈, 빠른 작업 보기)가 공유하도록 일반화.
@@ -772,14 +780,6 @@ function MetricTile({
   )
 }
 
-function ErrorPanel({ message }: { message: string }) {
-  return (
-    <div className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[13px] font-semibold text-[#8F2C2C]">
-      {message}
-    </div>
-  )
-}
-
 // th의 aria-sort 값 계산(품질 웨이브 3, 항목 8) — RevSortHeader를 감싸는 <th>가 실제
 // aria-sort 소유자(ARIA 표준상 columnheader 상태). 비활성 컬럼은 "none".
 function revSortAriaValue(active: boolean, direction: RevSortDirection): "ascending" | "descending" | "none" {
@@ -1182,7 +1182,7 @@ export default function SalesLedgerWorkbench() {
       router.replace("/admin/branch?tab=pipeline")
       return
     }
-    setLens(lensParam === "dsh" ? "dsh" : "rev")
+    setLens(lensParam === "dsh" || lensParam === "board" ? lensParam : "rev")
     const monthParam = params.get("month")
     setSelectedMonth(
       monthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam) ? monthParam : defaultMonthRef.current,
@@ -2508,7 +2508,15 @@ export default function SalesLedgerWorkbench() {
         }))
       }
     } catch (error) {
-      setDetailError(error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      // 딜 상세 API의 raw 리터럴("not_found")을 그대로 노출하지 않는다 — 재동기화(시트 미러
+      // 교체·DB 재임포트)로 행 id가 바뀐 뒤 이전 화면의 행을 누르면 나는 상태라, 원인과 복구
+      // 동작(새로고침)을 함께 안내한다.
+      setDetailError(
+        message === "not_found"
+          ? "행 원천 딜을 찾을 수 없습니다 — 재동기화로 원천 데이터가 바뀌었을 수 있어요. 화면을 새로고침한 뒤 다시 선택해 주세요."
+          : message,
+      )
     } finally {
       setDetailLoading(false)
     }
@@ -2949,7 +2957,7 @@ export default function SalesLedgerWorkbench() {
                 <span className={`flex h-6 w-6 items-center justify-center rounded-md ${
                   lens === item.id ? "bg-white/12" : "bg-[#ECFDF5] text-[#084734]"
                 }`}>
-                  {item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : <Table2 className="h-3.5 w-3.5" />}
+                  {item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : item.id === "rev" ? <Table2 className="h-3.5 w-3.5" /> : <Columns3 className="h-3.5 w-3.5" />}
                 </span>
                 {item.label}
               </button>
@@ -3858,6 +3866,20 @@ export default function SalesLedgerWorkbench() {
             )}
               </section>
             )}
+
+            {/* 주차 Forecast 보드(Board-1b 이식) — REV와 같은 filteredRows 모집단(검색·담당자·지역·
+                상품 필터 반영)을 주차 칸반으로 재배열. 카드 클릭은 기존 빠른 작업 레일(행 상세)로
+                연결된다 — 보드 전용 편집 경로를 만들지 않는다. */}
+            {lens === "board" && (
+              <ForecastBoard
+                rows={filteredRows}
+                selectedMonth={selectedMonth}
+                monthOptions={monthOptions}
+                onSelectMonth={setSelectedMonth}
+                onOpenRow={(row) => void loadDealDetail(row)}
+                selectedRowId={selectedRow?.id ?? null}
+              />
+            )}
             {/* KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다(2026-07-16 역할 재배분) — LENSES에서
                 제거됐고 ?lens=kpi는 마운트 시 /admin/branch?tab=pipeline로 리다이렉트된다. */}
           </div>
@@ -4090,10 +4112,20 @@ export default function SalesLedgerWorkbench() {
                 </div>
               ) : detailLoading ? (
                 <LoadingPanel label="행 상세를 불러오는 중" />
-              ) : detailError ? (
-                <ErrorPanel message={detailError} />
               ) : (
                 <div>
+                  {/* 딜 원천 조회 실패가 패널 전체를 막지 않는다 — 아래 상세는 전부
+                      detail ?? selectedRow 폴백이라 행 기반 월 분해·주차 바·빠른 액션이 그대로
+                      동작한다. 경고 스트립만 얹어 사이드탭 데드엔드(과거 raw not_found 전면
+                      ErrorPanel)를 해소한다. */}
+                  {detailError && (
+                    <div
+                      role="alert"
+                      className="mb-3 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#7A520F]"
+                    >
+                      {detailError} 아래 정보는 화면 행 데이터 기준으로 표시합니다.
+                    </div>
+                  )}
                   <div className="flex items-start justify-between gap-3">
                     <p className="min-w-0 text-[15px] font-bold tracking-[-0.01em] text-[#111110]">
                       {detail?.customer_name ?? selectedRow.customer}
