@@ -83,6 +83,7 @@ const WeeklyCloseSection = dynamic(() => import("./ledger/WeeklyCloseSection").t
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
 import IntegrityStrip from "./IntegrityStrip"
+import CrmSyncStrip from "./CrmSyncStrip"
 import MultiSelect from "./MultiSelect"
 import { InputRailSection } from "./ledger/InputRailSection"
 // 검토 초안 체크 큐는 ledger/DraftQueue로 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
@@ -2902,6 +2903,9 @@ export default function SalesLedgerWorkbench() {
       <main className="space-y-5 px-4 pt-5 sm:px-6 lg:px-9">
         {/* 정합성 배지 — KR Team 개요와 동일 컴포넌트(데이터품질 이슈 요약). 검수 화면이 원 소비처라 상단 고정. */}
         <IntegrityStrip refreshKey={refreshKey} />
+        {/* CRM 싱크 스트립(A안) — 정합 체크(시트 자체 품질)의 형제 축: "시트가 CRM과 이어져
+            있는가". 표시 레이어 전용, fail-soft(로딩 미렌더·실패 시 조용한 한 줄). */}
+        <CrmSyncStrip />
         <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-1 self-start">
           <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="장부 렌즈 전환">
