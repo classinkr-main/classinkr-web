@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import type { KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
   ArrowDownNarrowWide,
@@ -503,6 +503,13 @@ export function serializeMultiFilterParam(values: Set<string>): string | null {
   return Array.from(values).sort((a, b) => a.localeCompare(b, "ko")).join(",")
 }
 
+// URL 복원이 반응형(딥링크마다 재실행)이 된 뒤로는 내용이 같은 Set을 새 참조로 갈아끼우면
+// 필터 memo 체인이 헛돌므로, 동치일 때 기존 참조를 유지한다.
+function replaceEquivalentSet(current: Set<string>, next: Set<string>): Set<string> {
+  if (current.size === next.size && Array.from(next).every((value) => current.has(value))) return current
+  return next
+}
+
 function metadataNumberString(metadata: Record<string, unknown> | null | undefined, key: string): string {
   const value = metadata?.[key]
   if (typeof value === "number" && Number.isFinite(value)) return String(value)
@@ -839,6 +846,7 @@ function SelectedWeekBars({ weeks }: { weeks: RevWeekPoint[] }) {
 
 export default function SalesLedgerWorkbench() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [team, setTeam] = useState<Team>("ALL")
   const [period, setPeriod] = useState<Period>("Q")
   const [selectedMonth, setSelectedMonth] = useState(() => ymKeyUtc(new Date()))
@@ -1155,50 +1163,59 @@ export default function SalesLedgerWorkbench() {
   }, [])
 
   // 필터 상태 URL 동기화 — 새로고침/링크 공유 시 렌즈·월·검색·필터·정렬이 유지된다.
-  // 마운트 시 한 번 읽고(urlReady 전에는 쓰지 않음), 이후 변경마다 replaceState로 반영(히스토리 오염 없음).
+  // 복원은 useSearchParams 반응형: 마운트뿐 아니라 same-route 소프트 내비게이션(IntegrityStrip
+  // "장부에서 열기" 등 장부 내부 딥링크)과 뒤로/앞으로가기에서도 재실행된다. 계약은 절대적 —
+  // 파라미터 생략은 "기본값 복귀"다(아래 writer가 기본값을 URL에서 지우는 규약의 정확한 역방향).
+  // writer가 replaceState한 자기 URL이 복원을 되돌리는 self-echo(입력 중 검색어 트림 등)는
+  // lastWrittenSearchRef로 차단한다. SSR 기본 렌더(REV 렌즈)와의 하이드레이션 미스매치를 피하기 위해
+  // 초기 적용은 lazy useState가 아니라 지금처럼 effect 시점에 한다.
   const defaultMonthRef = useRef(ymKeyUtc(new Date()))
   const [urlReady, setUrlReady] = useState(false)
+  const lastWrittenSearchRef = useRef<string | null>(null)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
+    const params = new URLSearchParams(searchParams.toString())
+    // writer가 방금 기록한 정규형과 같으면 상태가 이미 URL의 원천이므로 재적용하지 않는다.
+    if (params.toString() === lastWrittenSearchRef.current) return
     const lensParam = params.get("lens")
     // KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다 — 옛 링크(?lens=kpi)는 그리로 리다이렉트.
     if (lensParam === "kpi") {
       router.replace("/admin/branch?tab=pipeline")
       return
     }
-    if (lensParam === "dsh" || lensParam === "rev") setLens(lensParam)
+    setLens(lensParam === "dsh" ? "dsh" : "rev")
     const monthParam = params.get("month")
-    if (monthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam)) setSelectedMonth(monthParam)
+    setSelectedMonth(
+      monthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam) ? monthParam : defaultMonthRef.current,
+    )
     const periodParam = params.get("period")
-    if (periodParam && (PERIODS as string[]).includes(periodParam)) setPeriod(periodParam as Period)
+    setPeriod(periodParam && (PERIODS as string[]).includes(periodParam) ? (periodParam as Period) : "Q")
     const teamParam = params.get("team")
-    if (teamParam && (TEAMS as string[]).includes(teamParam)) setTeam(teamParam as Team)
-    const q = params.get("q")
-    if (q) setQuery(q)
-    const mgr = params.get("mgr")
-    if (mgr) setManagerFilter(parseMultiFilterParam(mgr))
-    const region = params.get("region")
-    if (region) setRegionFilter(parseMultiFilterParam(region))
+    setTeam(teamParam && (TEAMS as string[]).includes(teamParam) ? (teamParam as Team) : "ALL")
+    setQuery(params.get("q") ?? "")
+    const nextManagerFilter = parseMultiFilterParam(params.get("mgr"))
+    setManagerFilter((current) => replaceEquivalentSet(current, nextManagerFilter))
+    const nextRegionFilter = parseMultiFilterParam(params.get("region"))
+    setRegionFilter((current) => replaceEquivalentSet(current, nextRegionFilter))
     const prod = params.get("prod")
-    if (prod === "software" || prod === "hardware" || prod === "unknown") setProductFilter(prod)
-    const status = params.get("status")
-    if (status) setRevStatusFilter(status)
-    const dealType = params.get("type")
-    if (dealType) setRevDealTypeFilter(dealType)
+    setProductFilter(prod === "software" || prod === "hardware" || prod === "unknown" ? prod : "all")
+    setRevStatusFilter(params.get("status") ?? "ALL")
+    setRevDealTypeFilter(params.get("type") ?? "ALL")
     const origin = params.get("origin")
-    if (origin === "sheet" || origin === "draft") setRevOriginFilter(origin)
+    setRevOriginFilter(origin === "sheet" || origin === "draft" ? origin : "all")
     const fc = params.get("fc")
-    if (fc && REV_FORECAST_FILTERS.some((item) => item.id === fc)) setRevForecastFilter(fc as RevForecastFilter)
+    setRevForecastFilter(
+      fc && REV_FORECAST_FILTERS.some((item) => item.id === fc) ? (fc as RevForecastFilter) : "all",
+    )
     const sort = params.get("sort")
-    if (sort && sort in REV_SORT_LABELS) setRevSortKey(sort as RevSortKey)
+    setRevSortKey(sort && sort in REV_SORT_LABELS ? (sort as RevSortKey) : "revenue")
     const dir = params.get("dir")
-    if (dir === "asc" || dir === "desc") setRevSortDirection(dir)
+    setRevSortDirection(dir === "asc" || dir === "desc" ? dir : "desc")
     const ps = Number(params.get("ps"))
-    if ((REV_PAGE_SIZES as readonly number[]).includes(ps)) setRevPageSize(ps as RevPageSize)
+    setRevPageSize((REV_PAGE_SIZES as readonly number[]).includes(ps) ? (ps as RevPageSize) : 100)
     const pageParam = Number(params.get("p"))
-    if (Number.isInteger(pageParam) && pageParam > 1) setRevPage(pageParam)
+    setRevPage(Number.isInteger(pageParam) && pageParam > 1 ? pageParam : 1)
     setUrlReady(true)
-  }, [router])
+  }, [router, searchParams])
 
   useEffect(() => {
     if (!urlReady) return
@@ -1223,6 +1240,9 @@ export default function SalesLedgerWorkbench() {
     // 페이지 번호도 보존 — 3페이지 검수 중 새로고침하면 1페이지로 튕기던 맥락 소실 방지.
     if (revPage > 1) params.set("p", String(revPage))
     const search = params.toString()
+    // replaceState 여부와 무관하게 항상 기록 — "URL이 현재 상태의 정규형과 일치"가 복원 스킵 조건이라,
+    // 쓰기가 생략된 경우(이미 일치)에도 ref는 최신 정규형을 가리켜야 한다.
+    lastWrittenSearchRef.current = search
     const nextUrl = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`
     const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
     if (nextUrl !== currentUrl) window.history.replaceState(null, "", nextUrl)
