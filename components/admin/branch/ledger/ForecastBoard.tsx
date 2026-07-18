@@ -138,9 +138,11 @@ export function buildForecastBoardModel(rows: LedgerRevenueRow[], month: string)
 const OPEN_HATCH_BACKGROUND =
   "repeating-linear-gradient(45deg, #ECD29C, #ECD29C 4px, #FBF1E0 4px, #FBF1E0 8px)"
 
+// 좌측 확도 보더 색은 클래스 리터럴 대신 CONFIDENCE_TOKENS[…].color를 인라인 스타일로
+// 소비한다(확도 색 리터럴 재정의 금지 — confidence-tokens SSOT·디자인 토큰 가드 규약).
 const CARD_TONE_CLASS: Record<ConfidenceKey, string> = {
-  confirmed: "border border-[#BDEFD8] border-l-[3px] border-l-[#084734] bg-[#ECFDF5]",
-  "high-confidence": "border border-[#BFDBFE] border-l-[3px] border-l-[#1E5DA8] bg-[#EFF6FF]",
+  confirmed: "border border-[#BDEFD8] border-l-[3px] bg-[#ECFDF5]",
+  "high-confidence": "border border-[#BFDBFE] border-l-[3px] bg-[#EFF6FF]",
   expected: "border border-dashed border-[#ECD29C] bg-white",
 }
 
@@ -202,7 +204,10 @@ export function ForecastBoard({
                 <div className="bg-[#084734]" style={{ width: `${(model.monthConfirmed / model.monthTotal) * 100}%` }} />
               )}
               {model.monthHighConfidence > 0 && (
-                <div className="bg-[#1E5DA8]" style={{ width: `${(model.monthHighConfidence / model.monthTotal) * 100}%` }} />
+                <div
+                  className={CONFIDENCE_TOKENS["high-confidence"].bgClass}
+                  style={{ width: `${(model.monthHighConfidence / model.monthTotal) * 100}%` }}
+                />
               )}
               {model.monthOpen > 0 && (
                 <div className="flex-1 border-l border-dashed border-[#ECD29C]" style={{ background: OPEN_HATCH_BACKGROUND }} />
@@ -217,7 +222,7 @@ export function ForecastBoard({
               <span>
                 <span className={`inline-block h-2 w-2 rounded-[2px] align-middle ${CONFIDENCE_TOKENS["high-confidence"].bgClass}`} />{" "}
                 {CONFIDENCE_TOKENS["high-confidence"].label}{" "}
-                <span className="font-bold tabular-nums text-[#1E5DA8]">{formatMoney(model.monthHighConfidence)}</span> · {highPct}%
+                <span className={`font-bold tabular-nums ${CONFIDENCE_TOKENS["high-confidence"].textClass}`}>{formatMoney(model.monthHighConfidence)}</span> · {highPct}%
               </span>
               <span>
                 <span
@@ -317,6 +322,7 @@ export function ForecastBoard({
                               className={`rounded-md px-2 py-1.5 text-left transition hover:brightness-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 ${CARD_TONE_CLASS[card.confidence]} ${
                                 selectedRowId === card.rowId ? "ring-2 ring-[#084734]/30" : ""
                               }`}
+                              style={card.confidence === "expected" ? undefined : { borderLeftColor: token.color }}
                             >
                               <span className="block truncate text-[11px] font-bold leading-tight text-[#111110]">
                                 {card.customer}
@@ -347,7 +353,7 @@ export function ForecastBoard({
                                 <span className="mt-1 flex h-[3px] overflow-hidden rounded-sm bg-[#F0F0EC]">
                                   <span className="bg-[#084734]" style={{ width: `${card.confirmedRatio * 100}%` }} />
                                   {card.highRatio > 0 && (
-                                    <span className="bg-[#1E5DA8]" style={{ width: `${card.highRatio * 100}%` }} />
+                                    <span className={CONFIDENCE_TOKENS["high-confidence"].bgClass} style={{ width: `${card.highRatio * 100}%` }} />
                                   )}
                                 </span>
                               )}
