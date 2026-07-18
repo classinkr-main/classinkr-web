@@ -173,10 +173,14 @@ async function listQuoteDocuments(
       versionsForDocument[0] ??
       null;
     const latestShare = sharesForDocument[0] ?? null;
+    // 한 문서에 공유 링크가 여러 개면(레거시 view + 신규 sign, 또는 만료 후 재발급)
+    // 상호작용 로그가 share_id별로 흩어진다. 목록 요약은 "최신 공유"만 보면
+    // 이전 링크에 쌓인 열람·검토·수락이 사라지므로, 문서 전체 로그를 집계한다.
+    // (logsByDocument는 이미 target_id=문서 기준으로 그룹핑되어 있어 안전하다.)
     const interaction = summarizeQuoteInteractionLogs(logsByDocument.get(document.id) ?? [], {
-      version_id: currentVersion?.id ?? null,
-      share_id: latestShare?.id ?? null,
-      token: latestShare?.token ?? null,
+      version_id: null,
+      share_id: null,
+      token: null,
     });
 
     return {

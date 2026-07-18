@@ -1196,13 +1196,17 @@ export default function QuickQuoteComposer({
     }
   }
 
-  async function resolveCustomer(): Promise<ResolvedCustomer> {
+  // created: 이번 호출에서 고객을 새로 만들었는지(부분 실패 시 롤백 대상 판단용).
+  async function resolveCustomer(): Promise<{ customer: ResolvedCustomer; created: boolean }> {
     if (customerMode === "existing") {
       if (fallbackExistingCustomer) {
         return {
-          id: fallbackExistingCustomer.id,
-          name: fallbackExistingCustomer.name,
-          partnerAccountId: fallbackExistingCustomer.partner_account_id,
+          customer: {
+            id: fallbackExistingCustomer.id,
+            name: fallbackExistingCustomer.name,
+            partnerAccountId: fallbackExistingCustomer.partner_account_id,
+          },
+          created: false,
         }
       }
 
@@ -1249,19 +1253,23 @@ export default function QuickQuoteComposer({
     }
 
     return {
-      id: payload.customer.id,
-      name: payload.customer.name,
-      partnerAccountId: payload.customer.partner_account_id ?? portalPartnerAccountId,
-      listItem,
+      customer: {
+        id: payload.customer.id,
+        name: payload.customer.name,
+        partnerAccountId: payload.customer.partner_account_id ?? portalPartnerAccountId,
+        listItem,
+      },
+      created: true,
     }
   }
 
+  // created: 이번 호출에서 딜을 새로 만들었는지(부분 실패 시 롤백 대상 판단용).
   async function resolveDeal(customer: ResolvedCustomer) {
     const existingDeal =
       selectedDealId && deals.find((deal) => deal.id === selectedDealId && deal.customer_id === customer.id)
 
     if (existingDeal) {
-      return existingDeal
+      return { deal: existingDeal, created: false }
     }
 
     const title =
@@ -1309,11 +1317,33 @@ export default function QuickQuoteComposer({
     }
 
     return {
-      ...payload.deal,
-      customer_name: payload.deal.customer_name ?? customer.name,
-      customer_contact_name: payload.deal.customer_contact_name ?? null,
-      customer_region_label: payload.deal.customer_region_label ?? null,
-      customer_campus_name: payload.deal.customer_campus_name ?? null,
+      deal: {
+        ...payload.deal,
+        customer_name: payload.deal.customer_name ?? customer.name,
+        customer_contact_name: payload.deal.customer_contact_name ?? null,
+        customer_region_label: payload.deal.customer_region_label ?? null,
+        customer_campus_name: payload.deal.customer_campus_name ?? null,
+      },
+      created: true,
+    }
+  }
+
+  // 생성 롤백: 이번 시도에서 새로 만든 딜/고객만 삭제한다(서버가 빈 딜만 지우도록 가드).
+  // 딜을 먼저 지운다(고객을 FK 참조). 모두 best-effort — 실패해도 원래 에러를 가리지 않는다.
+  async function cleanupCreatedEntities(dealId: string | null, customerId: string | null) {
+    if (dealId) {
+      try {
+        await portalFetch(`${apiBase}/deals/${dealId}`, { method: "DELETE" })
+      } catch (cleanupError) {
+        console.warn("[quote-composer] orphan deal cleanup skipped", cleanupError)
+      }
+    }
+    if (customerId) {
+      try {
+        await portalFetch(`${apiBase}/customers/${customerId}`, { method: "DELETE" })
+      } catch (cleanupError) {
+        console.warn("[quote-composer] orphan customer cleanup skipped", cleanupError)
+      }
     }
   }
 
@@ -1339,9 +1369,16 @@ export default function QuickQuoteComposer({
     setSubmittingAction(action)
     setError(null)
 
+    // 부분 실패 시 이번 시도에서 새로 만든 딜/고객을 정리하기 위한 추적.
+    let createdCustomerId: string | null = null
+    let createdDealId: string | null = null
+    let quoteCreated = false
+
     try {
-      const customer = await resolveCustomer()
-      const deal = await resolveDeal(customer)
+      const { customer, created: customerCreated } = await resolveCustomer()
+      if (customerCreated) createdCustomerId = customer.id
+      const { deal, created: dealCreated } = await resolveDeal(customer)
+      if (dealCreated) createdDealId = deal.id
       const preparedQuote = finalizeStandardQuoteDetails(
         {
           ...quote,
@@ -1388,6 +1425,8 @@ export default function QuickQuoteComposer({
         throw new Error(payload?.error ?? "견적서 생성에 실패했습니다.")
       }
 
+      // 견적 문서가 생겼으니 이후 실패(공유 등)에서는 딜/고객을 롤백하지 않는다.
+      quoteCreated = true
       rememberResolvedCustomerAndDeal(customer, deal)
 
       let shareUrl: string | null = null
@@ -1462,6 +1501,11 @@ export default function QuickQuoteComposer({
     } catch (submitError) {
       if (previewWindow && !previewWindow.closed) {
         previewWindow.close()
+      }
+      // 견적 생성 전 실패라면 이번 시도에서 새로 만든 딜/고객을 정리한다
+      // (best-effort — 브라우저 종료 등은 커버하지 못한다).
+      if (!quoteCreated) {
+        void cleanupCreatedEntities(createdDealId, createdCustomerId)
       }
       const message = getQuoteSubmitErrorMessage(submitError)
       setError(message)

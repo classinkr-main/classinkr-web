@@ -6,6 +6,8 @@ import {
 } from "@/lib/portal/portal-context";
 import { authorizeForAccount, getActorInfo } from "@/lib/portal/portal-authorize";
 import {
+  dealHasBlockingDependents,
+  deleteDeal,
   getDeal,
   getDealDetail,
   getDealDetailForPartnerAccount,
@@ -125,5 +127,58 @@ export async function PUT(
   } catch (err) {
     console.error("[portal/deals/[id]] PUT error:", err);
     return NextResponse.json({ error: "딜 수정 실패" }, { status: 500 });
+  }
+}
+
+// 빈 딜만 삭제한다. 견적서 생성 롤백(고아 정리) 등에서 사용.
+// deals 자식 FK가 전부 ON DELETE CASCADE이므로, 문서·정산 이력이 있는 딜은
+// 삭제를 거부해(409) 실제 데이터가 조용히 지워지는 것을 막는다.
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ dealId: string }> }
+) {
+  const result = await requirePortalContext(req);
+  if (isErrorResponse(result)) return result;
+  const ctx = result;
+  const { dealId } = await params;
+
+  try {
+    const existing = await getDeal(dealId);
+    if (!existing) {
+      return NextResponse.json({ error: "딜을 찾을 수 없습니다" }, { status: 404 });
+    }
+    if (ctx.type === "partner") {
+      const forbidden = authorizeForAccount(ctx, existing.partner_account_id);
+      if (forbidden) return forbidden;
+    }
+
+    if (await dealHasBlockingDependents(dealId)) {
+      return NextResponse.json(
+        { error: "문서·정산 이력이 있는 딜은 삭제할 수 없습니다." },
+        { status: 409 }
+      );
+    }
+
+    await deleteDeal(dealId);
+
+    const actor = getActorInfo(ctx);
+    await logActivity({
+      partner_account_id: existing.partner_account_id,
+      // 삭제된 딜을 FK로 참조하지 않도록 deal_id는 비운다(활동 로그만 남긴다).
+      customer_id: existing.customer_id,
+      deal_id: null,
+      ...actor,
+      action_type: "delete",
+      target_type: "deal",
+      target_id: dealId,
+      summary: `딜 "${existing.title}" 삭제`,
+      before_json: existing as unknown as Record<string, unknown>,
+      after_json: null,
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[portal/deals/[id]] DELETE error:", err);
+    return NextResponse.json({ error: "딜 삭제 실패" }, { status: 500 });
   }
 }

@@ -60,6 +60,26 @@ async function materializeQuoteAcceptTask(input: {
   })
 }
 
+// 수락 상태 딜에 "계약 전환" CRM 카드가 존재하도록 멱등 보장한다.
+// - materializeQuoteAcceptTask가 딜당 활성 quote 태스크 1개만 만들도록 가드한다.
+// - 실패는 수락 응답을 막지 않도록 삼킨다(로그만). 다음 수락 요청에서 재시도된다.
+//   과거엔 `created` 플래그로만 태스크를 만들어, 첫 수락에서 생성이 한 번 실패하면
+//   24h dedupe가 이후 created=false로 굳혀 카드가 영구 유실됐다.
+async function ensureQuoteAcceptTaskSafely(input: {
+  dealId: string
+  document: Pick<QuoteDocument, "quote_number">
+  customerName: string | null
+}) {
+  try {
+    await materializeQuoteAcceptTask(input)
+  } catch (taskError) {
+    console.error(
+      "[share/quote/[token]/accept] CRM task materialize skipped",
+      taskError
+    )
+  }
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
@@ -127,10 +147,16 @@ export async function POST(
 
     if (existing.acceptedAt) {
       await markDocumentAccepted(document.id, document.status)
+      // 이미 수락된 상태여도, 이전에 태스크 생성이 실패했을 수 있으므로 재보장한다.
+      await ensureQuoteAcceptTaskSafely({
+        dealId: document.deal_id,
+        document,
+        customerName: customer_name,
+      })
       return NextResponse.json({ acceptedAt: existing.acceptedAt })
     }
 
-    const { log, created } = await ensureQuoteInteractionLog({
+    const { log } = await ensureQuoteInteractionLog({
       partner_account_id: deal.partner_account_id,
       customer_id: deal.customer_id,
       deal_id: document.deal_id,
@@ -158,22 +184,12 @@ export async function POST(
       dedupeWindowMinutes: 24 * 60,
     })
 
-    // 실제 새 수락 로그가 만들어졌을 때만(24h dedupe 통과) CRM 카드를 1건 남긴다.
-    // task 생성 실패는 수락 응답을 막지 않는다.
-    if (created) {
-      try {
-        await materializeQuoteAcceptTask({
-          dealId: document.deal_id,
-          document,
-          customerName: customer_name,
-        })
-      } catch (taskError) {
-        console.error(
-          "[share/quote/[token]/accept] CRM task materialize skipped",
-          taskError
-        )
-      }
-    }
+    // 새 수락 로그가 만들어졌으니 CRM 카드를 멱등 보장한다(딜당 1개 가드).
+    await ensureQuoteAcceptTaskSafely({
+      dealId: document.deal_id,
+      document,
+      customerName: customer_name,
+    })
 
     await markDocumentAccepted(document.id, document.status)
 

@@ -46,16 +46,24 @@ export async function createQuoteDocument(
   input: Omit<InsertQuoteDocument, "quote_number">
 ): Promise<QuoteDocument> {
   const supabase = createSupabaseAdminClient();
-  const quoteNumber = await generateQuoteNumber();
 
-  const { data, error } = await supabase
-    .from("quote_documents")
-    .insert({ ...input, quote_number: quoteNumber })
-    .select()
-    .single();
+  // quote_number는 COUNT+1로 생성되어 동시 생성 시 UNIQUE 충돌(23505)이 날 수 있다.
+  // 충돌 시 번호를 재계산해 재시도한다(충돌한 행은 이미 커밋되어 COUNT가 증가하므로 수렴).
+  const MAX_ATTEMPTS = 5;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const quoteNumber = await generateQuoteNumber();
+    const { data, error } = await supabase
+      .from("quote_documents")
+      .insert({ ...input, quote_number: quoteNumber })
+      .select()
+      .single();
 
-  if (error) throw error;
-  return data as QuoteDocument;
+    if (!error) return data as QuoteDocument;
+    if (error.code !== "23505") throw error;
+    lastError = error;
+  }
+  throw lastError;
 }
 
 export async function updateQuoteDocument(

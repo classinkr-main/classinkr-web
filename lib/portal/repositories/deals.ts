@@ -414,16 +414,24 @@ export async function createDeal(
   input: Omit<InsertDeal, "deal_code">
 ): Promise<Deal> {
   const supabase = createSupabaseAdminClient();
-  const dealCode = await generateDealCode();
 
-  const { data, error } = await supabase
-    .from("deals")
-    .insert({ ...input, deal_code: dealCode })
-    .select()
-    .single();
+  // deal_code는 COUNT+1로 생성되어 동시 생성 시 UNIQUE 충돌(23505)이 날 수 있다.
+  // 충돌 시 코드를 재계산해 재시도한다(충돌한 행은 이미 커밋되어 COUNT가 증가하므로 수렴).
+  const MAX_ATTEMPTS = 5;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const dealCode = await generateDealCode();
+    const { data, error } = await supabase
+      .from("deals")
+      .insert({ ...input, deal_code: dealCode })
+      .select()
+      .single();
 
-  if (error) throw error;
-  return data as Deal;
+    if (!error) return data as Deal;
+    if (error.code !== "23505") throw error;
+    lastError = error;
+  }
+  throw lastError;
 }
 
 export async function updateDeal(
@@ -441,6 +449,36 @@ export async function updateDeal(
 
   if (error) throw error;
   return data as Deal;
+}
+
+// 딜 삭제 안전 가드: 견적/계약/정산/설치 자식이 하나라도 있으면 true.
+// deals의 자식 FK가 전부 ON DELETE CASCADE이므로, 이 가드 없이 삭제하면
+// 실제 문서·정산 이력까지 조용히 삭제된다. "빈 딜"만 지우도록 막는다.
+export async function dealHasBlockingDependents(dealId: string): Promise<boolean> {
+  const supabase = createSupabaseAdminClient();
+  const tables = [
+    "quote_documents",
+    "contract_documents",
+    "payments_v2",
+    "receipts_v2",
+    "installation_events",
+  ] as const;
+
+  for (const table of tables) {
+    const { count, error } = await supabase
+      .from(table)
+      .select("*", { count: "exact", head: true })
+      .eq("deal_id", dealId);
+    if (error) throw error;
+    if ((count ?? 0) > 0) return true;
+  }
+  return false;
+}
+
+export async function deleteDeal(dealId: string): Promise<void> {
+  const supabase = createSupabaseAdminClient();
+  const { error } = await supabase.from("deals").delete().eq("id", dealId);
+  if (error) throw error;
 }
 
 export async function createDealLineItem(
