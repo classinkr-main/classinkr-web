@@ -7,7 +7,7 @@
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, ChevronRight, Lock } from "lucide-react"
+import { AlertTriangle, ChevronRight, Link2Off, Lock } from "lucide-react"
 
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
@@ -1255,10 +1255,84 @@ function RevMatrixMonthStrip({
 
 export const EMPTY_BUCKET: RevMonthlyBucket = { total: 0, confirmed: 0, high: 0, open: 0 }
 
+// SL-4 → 1열 다이어트(2026-07-18): 매트릭스 1열의 미연결 표시는 "직행 링크 칩"에서
+// "2단계 공개"로 바꾼다 — 대부분 행이 미연결이라 amber 칩 반복이 소음이었다(운영자 피드백).
+// 트리거는 톤 다운된 컴팩트 칩(아이콘+연결), 클릭 시 팝오버(간단 설명 + 매칭 인박스 딥링크).
+// open 상태는 부모(워크벤치)가 그룹키/행ID 단위로 1개만 들고 내려준다(동시 다중 열림 금지).
+// account-master의 unmatched 판정과 1:1이라 연결됨/드리프트 행에는 렌더되지 않는다(기존 규약 유지).
+export function NeedsLinkChip({
+  customer,
+  open,
+  onToggle,
+  onClose,
+}: {
+  customer: string
+  open: boolean
+  onToggle: () => void
+  onClose: () => void
+}) {
+  const wrapRef = useRef<HTMLSpanElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  // 외부 클릭·Escape 닫기 — 문서 리스너는 열려 있을 때만 부착한다(MultiSelect 관례).
+  useEffect(() => {
+    if (!open) return
+    const onDocMouseDown = (event: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) onClose()
+    }
+    const onDocKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose()
+        triggerRef.current?.focus()
+      }
+    }
+    document.addEventListener("mousedown", onDocMouseDown)
+    document.addEventListener("keydown", onDocKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown)
+      document.removeEventListener("keydown", onDocKeyDown)
+    }
+  }, [open, onClose])
+  return (
+    // 행 onClick(그룹 선택/상세 열기)과 분리 — 칩·팝오버 내부 클릭은 행 선택으로 전파하지 않는다.
+    <span ref={wrapRef} className="relative inline-flex shrink-0" onClick={(event) => event.stopPropagation()}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        title={`${customer} — CRM 미연결 · 클릭하면 연결 안내가 열립니다`}
+        className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded px-0.5 text-[9px] font-bold leading-none text-[#A8741A] transition hover:bg-[#FBF1E0] hover:text-[#7A520F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+      >
+        <Link2Off className="h-3 w-3 shrink-0" aria-hidden />
+        연결
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          aria-label={`${customer} CRM 연결 안내`}
+          className="absolute left-0 top-full z-40 mt-1 w-60 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-2.5 text-left shadow-lg"
+        >
+          <p className="truncate text-[11.5px] font-bold text-[#111110]">{customer}</p>
+          <p className="mt-1 text-[10.5px] font-semibold leading-relaxed text-[#615D59]">
+            CRM 미연결 — 매출·활동이 CRM 고객과 이어져 있지 않습니다.
+          </p>
+          <Link
+            href={`/admin/crm/matching?name=${encodeURIComponent(customer)}`}
+            className="mt-2 flex items-center justify-center rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2 py-1 text-[10.5px] font-bold text-[#7A520F] transition hover:bg-[#ECD29C]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+          >
+            매칭 인박스에서 연결 ↗
+          </Link>
+        </div>
+      )}
+    </span>
+  )
+}
+
 // SL-4: 미연결(needs link) 행 전용 매칭 인박스 딥링크 — /admin/crm/matching?name= 프리필로 착지.
-// 링크 확정은 매칭 인박스에서만 한다(장부=분석·검수, 매칭=링크 확정 역할 분리). account-master의
-// unmatched 판정과 1:1이라 연결됨/드리프트 행에는 렌더되지 않는다(확정 링크 오표기 회귀 방지).
-export function NeedsLinkBadge({ customer, long = false }: { customer: string; long?: boolean }) {
+// 우측 레일(상세 단계) 전용 — 매트릭스 1열은 NeedsLinkChip(2단계 팝오버)을 쓰고, 이미 "상세"인
+// 레일에서만 원클릭 직행을 유지한다. 링크 확정은 매칭 인박스에서만 한다(장부=분석·검수, 매칭=링크 확정).
+export function NeedsLinkBadge({ customer }: { customer: string }) {
   return (
     <Link
       href={`/admin/crm/matching?name=${encodeURIComponent(customer)}`}
@@ -1266,7 +1340,7 @@ export function NeedsLinkBadge({ customer, long = false }: { customer: string; l
       title={`${customer} — CRM 미연결(needs link) · 매칭 인박스에서 연결`}
       className="inline-flex shrink-0 items-center rounded-full border border-[#ECD29C] bg-[#FFFCF5] px-1.5 text-[9px] font-bold leading-4 text-[#7A520F] underline-offset-2 transition hover:bg-[#FBF1E0] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
     >
-      {long ? "매칭에서 연결 ↗" : "연결 ↗"}
+      매칭 인박스에서 연결 ↗
     </Link>
   )
 }
@@ -1442,6 +1516,9 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   expanded,
   selected,
   needsLink = false,
+  linkPopoverOpen = false,
+  onLinkPopoverToggle,
+  onLinkPopoverClose,
   onSelect,
   onToggle,
   density = "regular",
@@ -1452,7 +1529,10 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   expandedMonths: Set<string>
   expanded: boolean
   selected: boolean
-  needsLink?: boolean // account-master unmatched 판정 — 미연결 고객만 '연결 ↗' 딥링크(SL-4)
+  needsLink?: boolean // account-master unmatched 판정 — 미연결 고객만 NeedsLinkChip 트리거(SL-4)
+  linkPopoverOpen?: boolean // 미연결 팝오버 열림 — 부모가 그룹키 단위 1개만 열어준다
+  onLinkPopoverToggle?: (key: string) => void
+  onLinkPopoverClose?: () => void
   onSelect: (key: string) => void
   onToggle: (key: string) => void
   density?: MatrixDensity
@@ -1485,8 +1565,12 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
         selected ? "bg-[#ECFDF5]" : "hover:bg-[#FAFAF8]"
       }`}
     >
+      {/* 1열 다이어트(Ledger-1a): 항상 보이는 것 = 셰브론 + 고객명 + 서브라인 + 미연결 트리거뿐.
+          건수·장부 필·불일치 아이콘은 1열에서 뺀다 — 건수·불일치는 우측 레일 그룹 요약이, 불일치는
+          펼친 딜행 월 셀(빨강 배경+삼각형)이 이미 보여준다. 팝오버가 열린 셀만 z-30으로 승격해
+          sticky 1열(z-10)·sticky 푸터(z-20) 위에 뜨게 한다(헤더 코너 z-40 아래). */}
       <td
-        className={`sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] px-2 ${rowBg}`}
+        className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[rgba(0,0,0,0.08)] px-2 ${rowBg}`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
         <div className="flex items-center gap-1">
@@ -1505,19 +1589,14 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1">
               <span className="min-w-0 truncate text-[12px] font-bold text-[#111110]">{group.customer}</span>
-              <span className="shrink-0 rounded-full bg-[#ECFDF5] px-1 text-[9px] font-bold text-[#084734]">{group.rows.length}</span>
-              {group.hasDraft && (
-                <span className="shrink-0 rounded-full bg-[#FBF1E0] px-1 text-[9px] font-bold text-[#7A520F]">장부</span>
+              {needsLink && onLinkPopoverToggle && onLinkPopoverClose && (
+                <NeedsLinkChip
+                  customer={group.customer}
+                  open={linkPopoverOpen}
+                  onToggle={() => onLinkPopoverToggle(group.key)}
+                  onClose={onLinkPopoverClose}
+                />
               )}
-              {group.mismatchCount > 0 && (
-                <span
-                  title={`주차 합계 ≠ 월 금액 ${group.mismatchCount}행${group.mismatchMonths.length ? ` · 가장 이른 ${formatMonthLabel([...group.mismatchMonths].sort()[0])}` : ""}`}
-                  className="inline-flex shrink-0"
-                >
-                  <AlertTriangle className="h-3 w-3 text-[#B43E3E]" aria-label={`불일치 ${group.mismatchCount}건`} />
-                </span>
-              )}
-              {needsLink && <NeedsLinkBadge customer={group.customer} />}
             </div>
             {(group.managers.length > 0 || group.regions.length > 0) && (
               <span
@@ -1576,8 +1655,10 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   view,
   grouped,
   nested = false,
-  hardwareLinked = false,
   needsLink = false,
+  linkPopoverOpen = false,
+  onLinkPopoverToggle,
+  onLinkPopoverClose,
   months,
   expandedMonths,
   active,
@@ -1592,14 +1673,15 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   editConfidence = "expected",
   pendingByCell = null,
   density = "regular",
-  sourceLabel,
   periodMonths,
 }: {
   view: RevRowView
   grouped: boolean
   nested?: boolean // 카테고리(HW/SW) 합산행 아래 품목 잎 행 — 한 단계 더 들여쓰기
-  hardwareLinked?: boolean // 하드웨어 원장에 출고 이력이 있어 역링크를 걸어도 되는 고객인지
-  needsLink?: boolean // account-master unmatched 판정 — 단독 딜행(비그룹)에만 '연결 ↗' 딥링크(SL-4)
+  needsLink?: boolean // account-master unmatched 판정 — 단독 딜행(비그룹)에만 NeedsLinkChip 트리거(SL-4)
+  linkPopoverOpen?: boolean // 미연결 팝오버 열림 — 부모가 행ID 단위 1개만 열어준다
+  onLinkPopoverToggle?: (key: string) => void
+  onLinkPopoverClose?: () => void
   months: string[]
   expandedMonths: Set<string>
   active: boolean
@@ -1612,13 +1694,9 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   editConfidence?: DraftConfidence
   pendingByCell?: Map<string, MatrixPendingDraft> | null
   density?: MatrixDensity
-  // 셀 계보 툴팁(2026-07-17 사용성 디벨롭 항목 2) — "시트 미러 vs 장부 임포트"는 부모가
-  // 이미 가진 Source 스트립 신호(dbImportInfo/dbSourceServerState)에서 계산해 내려준다.
-  // 이 행은 신규 fetch 없이 문자열만 소비한다.
-  sourceLabel?: string
   periodMonths?: Set<string> // 웨이브 5 — 항목 1(b): 선택 기간 열 accent
 }) {
-  const { row, draftRow, productCategory, monthlyByMonth } = view
+  const { row, draftRow, monthlyByMonth } = view
   const rowBg = active
     ? "bg-[#ECFDF5]"
     : draftRow
@@ -1671,8 +1749,12 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
     : null
   return (
     <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FBFBFA] hover:bg-[#FAFAF8]" : "hover:bg-[#FAFAF8]"}`}>
+      {/* 1열 다이어트(Ledger-1a): 이름 + 서브라인 + (단독 미연결 행만) 트리거뿐. ⓘ 계보는 우측
+          레일 행 상세 헤더 아래 뮤트 라인으로 이동, SW/HW 라벨·HW ↗ 링크는 제거(상품 칼럼이
+          SW/HW를 이미 말하고, 하드웨어 ↗는 레일 상세·카테고리 합산행에 있다). 팝오버가 열린
+          셀만 z-30 승격 — 그룹 소계행과 동일 규약. */}
       <td
-        className={`sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] pr-2 ${nested ? "border-l-2 border-l-[#CBD9D2] pl-12" : grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2"} ${rowBg}`}
+        className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[rgba(0,0,0,0.08)] pr-2 ${nested ? "border-l-2 border-l-[#CBD9D2] pl-12" : grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2"} ${rowBg}`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
         <div className="flex items-center gap-1.5">
@@ -1692,31 +1774,14 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
               </span>
             )}
           </div>
-          {row.sheetRow != null && (
-            <span
-              tabIndex={0}
-              title={`시트 '2. REV' ${row.sheetRow}행 · 원천 ${sourceLabel ?? "미확인"}`}
-              className="shrink-0 cursor-help text-[10px] font-semibold text-[#A39E98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-              aria-label={`계보: 시트 '2. REV' ${row.sheetRow}행, 원천 ${sourceLabel ?? "미확인"}`}
-            >
-              ⓘ
-            </span>
-          )}
-          {/* 그룹 고객은 그룹 소계행이 배지를 가진다 — 단독 딜행에만 미연결 딥링크(중복 노출 방지). */}
-          {!grouped && needsLink && <NeedsLinkBadge customer={row.customer} />}
-          {productCategory === "hardware" && !nested && hardwareLinked ? (
-            // 단일 품목 HW 행 + 하드웨어 원장에 출고 이력 있는 고객만 역링크. 중첩 품목행은 위 카테고리 행이 링크를 가진다.
-            <Link
-              href={`/admin/hardware?customer=${encodeURIComponent(row.customer)}`}
-              title={`${row.customer} 하드웨어 거래이력 열기`}
-              className="shrink-0 text-[10px] font-semibold text-[#7A520F] underline-offset-2 transition hover:text-[#A8741A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-            >
-              HW ↗
-            </Link>
-          ) : (
-            // 품질 웨이브 4 — 항목 8: 실데이터 라벨(SW/HW 구분)은 플레이스홀더 톤(#A39E98)이 아니라
-            // 보조 텍스트 톤(#615D59)으로 승격 — DESIGN.md §2.
-            <span className={`shrink-0 text-[10px] font-semibold ${productCategory === "hardware" ? "text-[#7A520F]" : "text-[#615D59]"}`}>{productCategoryMeta(productCategory).shortLabel}</span>
+          {/* 그룹 고객은 그룹 소계행이 트리거를 가진다 — 단독 딜행에만(중복 노출 방지). */}
+          {!grouped && needsLink && onLinkPopoverToggle && onLinkPopoverClose && (
+            <NeedsLinkChip
+              customer={row.customer}
+              open={linkPopoverOpen}
+              onToggle={() => onLinkPopoverToggle(row.id)}
+              onClose={onLinkPopoverClose}
+            />
           )}
         </div>
       </td>

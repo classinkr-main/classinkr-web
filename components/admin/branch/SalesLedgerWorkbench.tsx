@@ -883,6 +883,13 @@ export default function SalesLedgerWorkbench() {
   const [expandedRevCategories, setExpandedRevCategories] = useState<Set<string>>(() => new Set())
   // 매트릭스: 월 헤더 클릭 시 그 달만 w1~w5 5칸으로 확장(기본은 전부 요약 1칸).
   const [expandedRevMonths, setExpandedRevMonths] = useState<Set<string>>(() => new Set())
+  // 1열 미연결 칩 팝오버(2단계 공개) — 열림은 매트릭스 전체에서 그룹키/행ID 1개만(동시 다중 열림 금지).
+  // 토글/닫기 콜백은 안정 참조로 내려 memo 행 리렌더를 열림이 바뀐 행으로만 좁힌다.
+  const [revLinkPopoverKey, setRevLinkPopoverKey] = useState<string | null>(null)
+  const toggleRevLinkPopover = useCallback((key: string) => {
+    setRevLinkPopoverKey((prev) => (prev === key ? null : key))
+  }, [])
+  const closeRevLinkPopover = useCallback(() => setRevLinkPopoverKey(null), [])
   // 매트릭스 행 밀도(좁게/보통/넓게). SSR 하이드레이션 안전을 위해 기본값으로 시작하고 마운트 후 복원.
   const [matrixDensity, setMatrixDensity] = useState<MatrixDensity>("regular")
   useEffect(() => {
@@ -3736,6 +3743,9 @@ export default function SalesLedgerWorkbench() {
                                 expanded={expanded}
                                 selected={selectedGroup?.key === group.key}
                                 needsLink={isNeedsLink(group.customer)}
+                                linkPopoverOpen={revLinkPopoverKey === group.key}
+                                onLinkPopoverToggle={toggleRevLinkPopover}
+                                onLinkPopoverClose={closeRevLinkPopover}
                                 onSelect={selectRevGroup}
                                 onToggle={toggleRevGroup}
                                 density={matrixDensity}
@@ -3787,7 +3797,6 @@ export default function SalesLedgerWorkbench() {
                                               {...matrixRowEditorProps(row.id)}
                                               pendingByCell={pendingByCell}
                                               density={matrixDensity}
-                                              sourceLabel={revRowSourceLabel}
                                               periodMonths={periodHighlightMonths}
                                             />
                                           )
@@ -3804,8 +3813,10 @@ export default function SalesLedgerWorkbench() {
                                       key={row.id}
                                       view={view}
                                       grouped={false}
-                                      hardwareLinked={isHardwareLinked(row.customer)}
                                       needsLink={isNeedsLink(row.customer)}
+                                      linkPopoverOpen={revLinkPopoverKey === row.id}
+                                      onLinkPopoverToggle={toggleRevLinkPopover}
+                                      onLinkPopoverClose={closeRevLinkPopover}
                                       months={matrixMonths}
                                       expandedMonths={expandedRevMonths}
                                       active={selectedRow?.id === row.id}
@@ -3814,7 +3825,6 @@ export default function SalesLedgerWorkbench() {
                                       {...matrixRowEditorProps(row.id)}
                                       pendingByCell={pendingByCell}
                                       density={matrixDensity}
-                                      sourceLabel={revRowSourceLabel}
                                       periodMonths={periodHighlightMonths}
                                     />
                                   )
@@ -4015,7 +4025,7 @@ export default function SalesLedgerWorkbench() {
                   </p>
                   {isNeedsLink(selectedGroup.customer) && (
                     <p className="mt-1.5">
-                      <NeedsLinkBadge customer={selectedGroup.customer} long />
+                      <NeedsLinkBadge customer={selectedGroup.customer} />
                     </p>
                   )}
                   <div className="mt-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
@@ -4143,6 +4153,13 @@ export default function SalesLedgerWorkbench() {
                       )}
                     </span>
                   </div>
+                  {/* 계보(1열 다이어트로 매트릭스 ⓘ 배지에서 이동) — 시트 N행·원천 라벨을 뮤트 라인으로.
+                      sheetRow 없는 행(장부 신규 등)은 생략한다. */}
+                  {selectedRow.sheetRow != null && (
+                    <p className="mt-1 text-[10px] font-semibold text-[#A39E98]">
+                      {`시트 '2. REV' ${selectedRow.sheetRow}행 · 원천 ${revRowSourceLabel}`}
+                    </p>
+                  )}
                   {selectedRow.ledgerOrigin === "draft" && (
                     <div className="mt-3 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] p-3 text-[11.5px] leading-relaxed text-[#7A520F]">
                       {selectedRow.draftKind === "edit-row"
