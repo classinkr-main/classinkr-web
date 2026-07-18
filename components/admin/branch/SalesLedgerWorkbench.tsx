@@ -161,6 +161,9 @@ import {
   DRAFT_DEDUPED_RECENT_NOTICE,
   DRAFT_OPERATIONS,
   DRAFT_STATUS_LABELS,
+  draftWeeklySaveContract,
+  draftWeeklyTotal,
+  emptyDraftWeekly,
   formatDateTime,
   formatMonthLabel,
   formatWeekAmount,
@@ -168,6 +171,7 @@ import {
   draftConfidenceFromMetadata,
   mergedWeeklyFromMetadata,
   metadataString,
+  operationSupportsWeeklySplit,
   productCategoryFromText,
   productCategoryMeta,
   ProductCategoryPill,
@@ -1286,6 +1290,10 @@ export default function SalesLedgerWorkbench() {
     amount: "",
     quantity: "",
     note: "",
+    // 주차 분해 그리드(Ledger-1a/Cockpit-1c)는 기본 꺼짐 — 리셋(저장 성공·편집 취소) 경로가
+    // 이 값을 그대로 쓰므로 weekly 버퍼도 여기서 함께 비워진다.
+    weeklyMode: false,
+    weekly: emptyDraftWeekly(),
   }), [selectedMonth, team])
   const [draftForm, setDraftForm] = useState<DraftForm>(defaultDraftForm)
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null)
@@ -2477,21 +2485,32 @@ export default function SalesLedgerWorkbench() {
     setDetail(null)
     setDetailError(null)
     setDetailLoading(true)
+    const operation: DraftOperation = row.ledgerOrigin === "draft" && isDraftOperation(metadataString(row.draftMetadata, "operation"))
+      ? metadataString(row.draftMetadata, "operation") as DraftOperation
+      : "amount-change"
+    const formMonth = row.draftMonth ?? selectedMonth
+    // 주차 프리필(Ledger-1a): 폼 타겟 월에 explicit 주차 입력이 있으면 5칸을 채워 주차 분해
+    // 모드로 연다 — inferred(일자 추정)/month-only는 실주차 입력이 아니라 월합계 모드 유지.
+    // week 토큰은 저장 계약(week:"month")·이중계상 dedup 좌표와 일치하도록 month로 고정한다.
+    const weeklySplit = rowWeeklySplit(row, formMonth)
+    const weeklyPrefill = weeklySplit.source === "explicit" && operationSupportsWeeklySplit(operation)
     setDraftForm({
-      operation: row.ledgerOrigin === "draft" && isDraftOperation(metadataString(row.draftMetadata, "operation"))
-        ? metadataString(row.draftMetadata, "operation") as DraftOperation
-        : "amount-change",
+      operation,
       customer: row.customer,
       manager: row.manager ?? "",
       team: row.team ?? (team === "ALL" ? "BD" : team),
       productCategory: rowProductCategory(row),
-      month: row.draftMonth ?? selectedMonth,
+      month: formMonth,
       fromMonth: metadataString(row.draftMetadata, "fromMonth") ?? row.draftMonth ?? selectedMonth,
-      week: metadataString(row.draftMetadata, "week") ?? "month",
+      week: weeklyPrefill ? "month" : metadataString(row.draftMetadata, "week") ?? "month",
       confidence: draftConfidenceFromMetadata(row.draftMetadata),
       amount: row.revenue ? String(Math.round(row.revenue)) : "",
       quantity: metadataNumberString(row.draftMetadata, "quantity"),
       note: row.draftNote ?? "",
+      weeklyMode: weeklyPrefill,
+      weekly: weeklyPrefill
+        ? weeklySplit.weeks.map((value) => (value > 0 ? String(Math.round(value)) : ""))
+        : emptyDraftWeekly(),
     })
     const detailId = row.ledgerOrigin === "draft" ? row.sourceDealId : row.id
     if (!detailId) {
@@ -2587,6 +2606,11 @@ export default function SalesLedgerWorkbench() {
       } : null,
     } : base?.sourceSnapshot
 
+    // 주차 분해 저장 계약(shared.draftWeeklySaveContract): weeklyMode + 지원 작업 유형(forecast-add·
+    // amount-change 한정 — 기간 이동/수량 변경은 단일 금액 UX 유지) + 주차 합>0이면
+    // amount=주차 합(draftForm.amount 무시)·metadata.weekly=5칸 숫자·metadata.week="month"로 싣는다 —
+    // onCommitCell의 주차 병합 초안과 동일한 metadata 키 규약이라 서버 스키마·적용(주차 복원) 경로 호환.
+    const weeklyContract = draftWeeklySaveContract(draftForm)
     return {
       kind,
       sourceDealId: kind === "edit-row" ? (selectedRow?.sourceDealId ?? selectedRow?.id ?? base?.sourceDealId) : undefined,
@@ -2596,7 +2620,7 @@ export default function SalesLedgerWorkbench() {
       manager: draftForm.manager.trim(),
       team: draftForm.team.trim(),
       month: draftForm.month,
-      amount: safeAmount(draftForm.amount),
+      amount: weeklyContract ? weeklyContract.amount : safeAmount(draftForm.amount),
       note: draftForm.note.trim(),
       metadata: {
         ...(base?.metadata ?? {}),
@@ -2607,7 +2631,10 @@ export default function SalesLedgerWorkbench() {
         operation: draftForm.operation,
         productCategory: draftForm.productCategory,
         fromMonth: draftForm.fromMonth,
-        week: draftForm.week,
+        week: weeklyContract ? weeklyContract.week : draftForm.week,
+        // 단일 금액 경로에서는 null을 명시해 base(재편집 초안)의 이전 weekly 잔존을 지운다 —
+        // 주차 분해를 껐다 저장하면 단일 금액 초안으로 되돌아간다(onCommitCell의 weekly: null 규약과 동일).
+        weekly: weeklyContract ? weeklyContract.weekly : null,
         confidence: draftForm.confidence,
         quantity: draftForm.quantity.trim() ? safeAmount(draftForm.quantity) : null,
       },
@@ -2660,19 +2687,28 @@ export default function SalesLedgerWorkbench() {
     setEditingDraftId(draft.id)
     setSidePanelCollapsed(false)
     setRailView("input")
+    const operation: DraftOperation = isDraftOperation(draft.metadata?.operation) ? draft.metadata.operation : "forecast-add"
+    // 주차 병합 초안(metadata.weekly — 레일 주차 분해 저장·onCommitCell 주차 병합 공통 규약)을
+    // 재편집하면 5칸을 그대로 프리필해 주차 분해 모드로 연다(월 합=주차 합 불변식 유지).
+    const mergedWeekly = mergedWeeklyFromMetadata(draft.metadata)
+    const weeklyPrefill = mergedWeekly != null && operationSupportsWeeklySplit(operation)
     setDraftForm({
-      operation: isDraftOperation(draft.metadata?.operation) ? draft.metadata.operation : "forecast-add",
+      operation,
       customer: draft.customer,
       manager: draft.manager,
       team: draft.team || (team === "ALL" ? "BD" : team),
       productCategory: draft.metadata?.productCategory === "hardware" ? "hardware" : "software",
       month: draft.month,
       fromMonth: metadataString(draft.metadata, "fromMonth") ?? draft.month,
-      week: metadataString(draft.metadata, "week") ?? "month",
+      week: weeklyPrefill ? "month" : metadataString(draft.metadata, "week") ?? "month",
       confidence: draftConfidenceFromMetadata(draft.metadata),
       amount: draft.amount ? String(Math.round(draft.amount)) : "",
       quantity: metadataNumberString(draft.metadata, "quantity"),
       note: draft.note,
+      weeklyMode: weeklyPrefill,
+      weekly: weeklyPrefill && mergedWeekly
+        ? mergedWeekly.map((value) => (value > 0 ? String(Math.round(value)) : ""))
+        : emptyDraftWeekly(),
     })
   }, [team])
 
@@ -2809,7 +2845,13 @@ export default function SalesLedgerWorkbench() {
     [isEditRowSaveTarget, draftEditTargetRow, draftForm.month, editRowOverrideMonths],
   )
   const draftAmountValue = safeAmount(draftForm.amount)
-  const draftAmountInvalid = !draftForm.amount.trim() || draftAmountValue <= 0
+  // 주차 분해 모드(지원 작업 유형 한정)에서는 단일 금액(draftForm.amount) 대신 주차 자동합계가
+  // 저장 금액이므로 "고객명 + 주차 합>0"이 유효 조건이다 — 음수/비숫자 칸은 draftWeeklyAmounts가
+  // 0 처리해 합계에서 자연히 빠진다(buildDraftInput의 draftWeeklySaveContract 게이트와 동일 판정).
+  const draftWeeklySplitActive = draftForm.weeklyMode && operationSupportsWeeklySplit(draftForm.operation)
+  const draftAmountInvalid = draftWeeklySplitActive
+    ? draftWeeklyTotal(draftForm.weekly) <= 0
+    : !draftForm.amount.trim() || draftAmountValue <= 0
   const draftQuantityInvalid = draftForm.operation === "quantity-change" && draftForm.quantity.trim() !== "" && safeAmount(draftForm.quantity) <= 0
   const draftFormInvalid = !draftForm.customer.trim() || draftAmountInvalid || draftQuantityInvalid
   const selectedProductCategory = selectedRow ? rowProductCategory(selectedRow) : "software"
@@ -2823,7 +2865,9 @@ export default function SalesLedgerWorkbench() {
       operation,
       productCategory: selectedRow ? rowProductCategory(selectedRow) : current.productCategory,
       fromMonth: current.fromMonth || current.month || selectedMonth,
-      week: current.week || "month",
+      // 주차 분해 유지 중 다른 작업 유형을 오갔다 돌아오면 그 사이 고른 week 토큰이 남을 수 있다 —
+      // 주차 분해가 다시 활성화되는 순간 저장 계약(week:"month")·dedup 좌표와 재일치시킨다.
+      week: current.weeklyMode && operationSupportsWeeklySplit(operation) ? "month" : current.week || "month",
       note: current.note || operationLabel,
     }))
   }, [selectedMonth, selectedRow])

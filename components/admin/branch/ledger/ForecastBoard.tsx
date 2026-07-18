@@ -9,6 +9,7 @@ import { useMemo, useState } from "react"
 import { CalendarRange } from "lucide-react"
 import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
 import {
+  FORECAST_WEEK_RANGE_LABELS,
   formatMoney,
   formatWeekAmount,
   formatMonthLabel,
@@ -22,8 +23,9 @@ import {
   type RevProductCategory,
 } from "./shared"
 
-// firstPaymentWeekIndex(ceil(day/7), 4주 상한)와 동일한 달력 구획 — 헤더 보조 라벨 전용.
-export const FORECAST_WEEK_RANGE_LABELS = ["1–7일", "8–14일", "15–21일", "22–28일", "29일~"] as const
+// 주차 날짜 구획 라벨의 SSOT는 shared로 이동(입력 레일 주차 분해 그리드와 공용) — 기존 소비처
+// (tests/branch/forecast-board.test.ts 등)의 import 표면 유지를 위한 재수출.
+export { FORECAST_WEEK_RANGE_LABELS } from "./shared"
 
 // 칼럼당 기본 노출 카드 수 — 초과분은 칼럼별 "더 보기"로 펼친다(숨김이 아니라 접힘, 건수 명시).
 export const FORECAST_BOARD_COLUMN_CAP = 30

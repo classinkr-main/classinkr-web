@@ -195,6 +195,12 @@ export interface DraftForm {
   amount: string
   quantity: string
   note: string
+  /** 주차 분해 입력(Ledger-1a "주차별 입력 — 금액만 넣으면 월 합 자동" + Cockpit-1c 주차 그리드):
+      true면 amount(단일 금액 버퍼) 대신 weekly 5칸 버퍼가 저장 금액의 원천이 된다 —
+      월 합 = 주차 자동합계(직접 수정 불가). 저장 계약은 draftWeeklySaveContract 참조. */
+  weeklyMode: boolean
+  /** W1~W5 문자열 입력 버퍼 5칸(빈 칸 허용). 숫자 해석·음수/비숫자 0 처리는 draftWeeklyAmounts. */
+  weekly: string[]
 }
 
 export const DRAFT_CONFIDENCE_OPTIONS: Array<{ id: DraftConfidence; label: string }> = [
@@ -379,6 +385,52 @@ export function safeAmount(value: string) {
   const normalized = value.replace(/[^\d.-]/g, "")
   const numeric = Number(normalized)
   return Number.isFinite(numeric) ? numeric : 0
+}
+
+// ── 주차 분해 입력(입력 레일) — Ledger-1a 편집 다이얼로그·Cockpit-1c 주차 그리드 이식 ──
+// 원칙: 월 합 = 주차 자동합계(직접 수정 불가). 저장은 onCommitCell의 주차 병합 초안과 동일한
+// metadata 키 규약(weekly 5칸 숫자 + week:"month" + amount=주차 합)을 재사용한다(서버 스키마 호환).
+
+// firstPaymentWeekIndex(ceil(day/7), 4주 상한)와 동일한 달력 구획 라벨 — ForecastBoard 칼럼
+// 헤더와 입력 레일 주차 그리드가 공유한다. SSOT는 이 파일(ForecastBoard는 여기서 재수입 —
+// shared→ForecastBoard 역방향 import 금지, 사이클 방지).
+export const FORECAST_WEEK_RANGE_LABELS = ["1–7일", "8–14일", "15–21일", "22–28일", "29일~"] as const
+
+// 주차 분해 입력을 노출·저장하는 작업 유형 — forecast-add·amount-change만. 기간 이동(period-shift)·
+// 수량 변경(quantity-change)은 기존 단일 금액 UX를 유지한다(이동 프리뷰·수량 검증 위에 주차
+// 그리드까지 겹치면 폼이 과밀해지는 것을 피한 스코프 결정 — InputRailSection 노출 조건과
+// buildDraftInput 저장 계약이 같은 게이트를 쓴다).
+export function operationSupportsWeeklySplit(operation: DraftOperation): boolean {
+  return operation === "forecast-add" || operation === "amount-change"
+}
+
+// 주차 입력 버퍼 5칸 초기값 — defaultDraftForm·프리필·리셋 경로가 공유(항상 새 배열 반환).
+export function emptyDraftWeekly(): string[] {
+  return ["", "", "", "", ""]
+}
+
+// 문자열 버퍼 5칸 → 숫자 5칸. 음수/비숫자는 0 처리(감액은 장부 가감 입력 사용 — 매트릭스 셀
+// onAmountClamped와 동일 규약). 버퍼가 5칸 미만이어도 항상 5칸으로 정규화한다.
+export function draftWeeklyAmounts(weekly: string[]): number[] {
+  return Array.from({ length: 5 }, (_, index) => Math.max(safeAmount(weekly[index] ?? ""), 0))
+}
+
+// 월 합 = 주차 자동합계 — 표시(읽기전용 굵은 합계)와 검증(주차 합>0)이 같은 산식을 소비한다.
+export function draftWeeklyTotal(weekly: string[]): number {
+  return draftWeeklyAmounts(weekly).reduce((sum, value) => sum + value, 0)
+}
+
+// 저장 계약: weeklyMode + 지원 작업 유형 + 주차 합>0이면 { amount: 주차 합, weekly: 5칸 숫자,
+// week: "month" }를 돌려준다 — buildDraftInput이 amount(draftForm.amount 무시)·metadata.weekly·
+// metadata.week에 그대로 싣는다. 조건 미충족이면 null(기존 단일 금액 경로 그대로).
+export function draftWeeklySaveContract(
+  form: Pick<DraftForm, "operation" | "weeklyMode" | "weekly">,
+): { amount: number; weekly: number[]; week: "month" } | null {
+  if (!form.weeklyMode || !operationSupportsWeeklySplit(form.operation)) return null
+  const weekly = draftWeeklyAmounts(form.weekly)
+  const amount = weekly.reduce((sum, value) => sum + value, 0)
+  if (amount <= 0) return null
+  return { amount, weekly, week: "month" }
 }
 
 // ── REV 행 단위 파생 헬퍼 (워크벤치에서 물리 이동, 2026-07-16 역할 재배분) ──
