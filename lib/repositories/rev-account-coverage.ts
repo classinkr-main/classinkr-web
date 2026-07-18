@@ -6,6 +6,13 @@ import {
   isInactiveSheetStatus,
   isPlaceholderCrmName,
 } from "@/lib/crm-source-linking"
+import {
+  revSyncHealth,
+  type RevSyncHealth,
+  type RevSyncHygiene,
+  type RevSyncRevenueCny,
+  type RevSyncRowsCoverage,
+} from "@/lib/crm/rev-sync-health"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 // ── 매출보유 계정 기준 커버리지 (스파인 키스톤 지표) ─────────────────────────
@@ -29,6 +36,7 @@ interface RevCoverageSheetRow {
   first_payment: string | null
   contract_target: number | null
   monthly_payments: Record<string, number> | null
+  synced_at: string | null
 }
 
 type RowLinkState = "linked" | "candidate" | "none"
@@ -39,6 +47,8 @@ export interface RevAccountCoverageAccount {
   rows: number
   /** 미연결 행의 매출 합(CNY) — topUnlinked 정렬 기준 */
   unlinkedRevenue: number
+  /** 시트 담당자(계정 내 첫 비어 있지 않은 값) — CRM 싱크 스트립 미연결 상위 표시용 */
+  manager: string | null
 }
 
 export interface RevAccountCoverage {
@@ -66,6 +76,20 @@ export interface RevAccountCoverage {
   }
   /** 미연결 매출 상위 계정 — 매칭 인박스로 보낼 우선순위 */
   topUnlinked: RevAccountCoverageAccount[]
+
+  // ── CRM 싱크 시각 요소 additive 확장 (2026-07-18 시안) ──────────────────
+  // 기존 소비자(CrmCoverageStrip·matching 밴드·os-summary)와의 하위호환을 위해
+  // 전부 새 키로만 얹는다 — 기존 필드의 의미·값은 무변경.
+  /** 시트 행 축 — 활성(취소/해지 제외)·플레이스홀더 제외 매칭 대상의 링크 상태 분해 */
+  rows: RevSyncRowsCoverage
+  /** 금액 축(CNY) — 기존 revenue와 동일 값. 통화를 이름에 명시한 확장 소비자용 별칭 */
+  revenueCny: RevSyncRevenueCny
+  /** 기준 시각 — branch_rev_deals.synced_at 최댓값(시트 동기화 시각) */
+  asOf: string | null
+  /** 링크 위생 — 고아 후보(현 시트에 없는 행 키)·스테일 링크 */
+  hygiene: RevSyncHygiene
+  /** 계정 커버리지(전행+부분 확정 계정 / 전체) 기준 3단계 — 문턱 10%/60% */
+  health: RevSyncHealth
 }
 
 const LINKED_STATUSES = new Set(["confirmed", "active"])
@@ -87,7 +111,7 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
   const [sheetResult, linksResult] = await Promise.all([
     sb
       .from("branch_rev_deals")
-      .select("sheet_row, customer_name, team, manager, status, first_payment, contract_target, monthly_payments")
+      .select("sheet_row, customer_name, team, manager, status, first_payment, contract_target, monthly_payments, synced_at")
       .limit(1000),
     sb
       .from("crm_source_links")
@@ -101,9 +125,11 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
   if (sheetResult.error) throw sheetResult.error
   if (linksResult.error) throw linksResult.error
 
+  const linkRows = (linksResult.data ?? []) as Array<{ source_record_key: string; status: string }>
+
   // 같은 source_record_key에 링크가 여러 개면 가장 강한 상태(확정 > 후보)를 취한다.
   const linkStateByKey = new Map<string, RowLinkState>()
-  for (const link of (linksResult.data ?? []) as Array<{ source_record_key: string; status: string }>) {
+  for (const link of linkRows) {
     const state: RowLinkState = LINKED_STATUSES.has(link.status) ? "linked" : "candidate"
     const prev = linkStateByKey.get(link.source_record_key)
     if (prev === "linked") continue
@@ -117,14 +143,30 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
     linkedRevenue: number
     linkedRows: number
     candidateRows: number
+    manager: string | null
   }
 
   const accountsByKey = new Map<string, AccountAgg>()
   let scannedRows = 0
   const placeholderAccountKeys = new Set<string>()
   let placeholderRevenue = 0
+  // 고아 판정용 현 시트 행 키 전집 — 비활성(취소/해지)·플레이스홀더 행도 "현 시트에 있는"
+  // 키이므로 포함한다. 고아 = 어떤 현 행으로도 해석되지 않는 키(행 이동/셀 수정으로 발생).
+  const sheetKeys = new Set<string>()
+  const rowsAxis: RevSyncRowsCoverage = { matchable: 0, linked: 0, review: 0, unlinked: 0 }
+  let asOfMs = Number.NEGATIVE_INFINITY
+  let asOf: string | null = null
 
   for (const row of (sheetResult.data ?? []) as RevCoverageSheetRow[]) {
+    sheetKeys.add(getBranchRevSourceRecordKey(row))
+    if (row.synced_at) {
+      const syncedMs = Date.parse(row.synced_at)
+      if (Number.isFinite(syncedMs) && syncedMs > asOfMs) {
+        asOfMs = syncedMs
+        asOf = row.synced_at
+      }
+    }
+
     if (isInactiveSheetStatus(row.status)) continue
     scannedRows += 1
 
@@ -140,6 +182,11 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
     const sourceRecordKey = getBranchRevSourceRecordKey(row)
     const linkState: RowLinkState = linkStateByKey.get(sourceRecordKey) ?? "none"
 
+    rowsAxis.matchable += 1
+    if (linkState === "linked") rowsAxis.linked += 1
+    else if (linkState === "candidate") rowsAxis.review += 1
+    else rowsAxis.unlinked += 1
+
     const agg = accountsByKey.get(accountKey) ?? {
       name: row.customer_name,
       rows: 0,
@@ -147,9 +194,11 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
       linkedRevenue: 0,
       linkedRows: 0,
       candidateRows: 0,
+      manager: null,
     }
     agg.rows += 1
     agg.revenue += revenue
+    if (!agg.manager && row.manager?.trim()) agg.manager = row.manager.trim()
     if (linkState === "linked") {
       agg.linkedRows += 1
       agg.linkedRevenue += revenue
@@ -157,6 +206,15 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
       agg.candidateRows += 1
     }
     accountsByKey.set(accountKey, agg)
+  }
+
+  // 링크 위생 — 집계 로직과 독립인 카운트 전용(같은 fetch 재사용, 추가 쿼리 없음).
+  const hygiene: RevSyncHygiene = { orphanCandidates: 0, staleLinks: 0 }
+  for (const link of linkRows) {
+    if (link.status === "stale") hygiene.staleLinks += 1
+    else if (link.status === "candidate" && !sheetKeys.has(link.source_record_key)) {
+      hygiene.orphanCandidates += 1
+    }
   }
 
   const accounts = {
@@ -182,21 +240,29 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
 
     const unlinkedRevenue = agg.revenue - agg.linkedRevenue
     if (agg.linkedRows < agg.rows && unlinkedRevenue > 0) {
-      unlinkedPool.push({ accountKey, name: agg.name, rows: agg.rows, unlinkedRevenue })
+      unlinkedPool.push({ accountKey, name: agg.name, rows: agg.rows, unlinkedRevenue, manager: agg.manager })
     }
   }
 
   unlinkedPool.sort((a, b) => b.unlinkedRevenue - a.unlinkedRevenue)
 
+  const revenueAxis: RevSyncRevenueCny = {
+    total: revenueTotal,
+    linked: revenueLinked,
+    coveragePct: revenueTotal > 0 ? Math.round((revenueLinked / revenueTotal) * 100) : 0,
+    placeholder: placeholderRevenue,
+  }
+
   return {
     scannedRows,
     accounts,
-    revenue: {
-      total: revenueTotal,
-      linked: revenueLinked,
-      coveragePct: revenueTotal > 0 ? Math.round((revenueLinked / revenueTotal) * 100) : 0,
-      placeholder: placeholderRevenue,
-    },
+    revenue: revenueAxis,
     topUnlinked: unlinkedPool.slice(0, TOP_UNLINKED_LIMIT),
+    rows: rowsAxis,
+    revenueCny: revenueAxis,
+    asOf,
+    hygiene,
+    // 연결 계정 = 전행 확정 + 부분 확정(확정 링크가 1행이라도 있으면 스파인에 잡힌다).
+    health: revSyncHealth(accounts.linked + accounts.partial, accounts.total),
   }
 }
