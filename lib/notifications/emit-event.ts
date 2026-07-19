@@ -113,6 +113,7 @@ function buildLeadCreatedWecomText(input: EmitNotificationEventInput) {
     labeledLine("연락처", getPayloadValue(input, "phone")),
     labeledLine("이메일", getPayloadValue(input, "email")),
     labeledLine("경로", sourceDetail),
+    labeledLine("문의 내용", getPayloadValue(input, "message")),
     labeledLine("확인", formatRouteUrl(input.routeUrl)),
   ]).join("\n")
 }
