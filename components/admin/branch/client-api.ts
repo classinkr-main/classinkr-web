@@ -27,6 +27,11 @@ interface BranchJsonState<T> {
   staleSince: number | null
 }
 
+interface UseBranchJsonOptions {
+  /** false면 네트워크 요청을 만들지 않는다. 탭·렌즈가 실제로 소비하는 동안에만 켠다. */
+  enabled?: boolean
+}
+
 const EMPTY_STATE = { data: null, error: null, loading: true, stale: false, staleSince: null } as const
 
 export function clearBranchRequestCache() {
@@ -48,11 +53,13 @@ function loadBranchJson<T>(key: string, url: string) {
   })
 }
 
-export function useBranchJson<T>(url: string, refreshKey: number): BranchJsonState<T> {
+export function useBranchJson<T>(url: string, refreshKey: number, options: UseBranchJsonOptions = {}): BranchJsonState<T> {
+  const enabled = options.enabled ?? true
   const cacheKey = `${refreshKey}:${url}`
   const [state, setState] = useState<BranchJsonState<T>>({ key: cacheKey, ...EMPTY_STATE })
 
   useEffect(() => {
+    if (!enabled) return
     let active = true
     void loadBranchJson<T>(cacheKey, url)
       .then((result) => {
@@ -82,7 +89,11 @@ export function useBranchJson<T>(url: string, refreshKey: number): BranchJsonSta
       })
 
     return () => { active = false }
-  }, [cacheKey, url])
+  }, [cacheKey, enabled, url])
+
+  if (!enabled) {
+    return { key: cacheKey, data: null, error: null, loading: false, stale: false, staleSince: null }
+  }
 
   if (state.key !== cacheKey) {
     return { key: cacheKey, ...EMPTY_STATE }

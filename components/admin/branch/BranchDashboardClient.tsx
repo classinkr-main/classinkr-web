@@ -5,21 +5,13 @@ import type { KeyboardEvent } from "react"
 import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
 import SyncStatusBar from "./SyncStatusBar"
-import IntegrityStrip from "./IntegrityStrip"
-import CoreKpiGrid from "./sections/CoreKpiGrid"
-import BranchHeroGauges from "./sections/BranchHeroGauges"
-import BranchUpcomingDeals from "./sections/BranchUpcomingDeals"
-import DealModal, { type DealModalDeal } from "./sections/DealModal"
-import CampaignsSection from "./sections/CampaignsSection"
-import HardwareSection from "./sections/HardwareSection"
-import DealMixSection from "./sections/DealMixSection"
+import type { DealModalDeal } from "./sections/DealModal"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { buildCrmSyncSummary, type CrmSyncSummary, type RevSyncCoverageView } from "@/lib/crm/rev-sync-health"
 import { PERIODS, PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
+import { getBranchTabDataNeeds, type BranchTab } from "./tab-data-needs"
 import { ADMIN_NAV, ADMIN_NAV_SECTION_META } from "../admin-nav"
-
-type BranchTab = "overview" | "pipeline" | "heatmap" | "ai"
 
 // 브레드크럼 세그먼트는 admin-nav.ts SSOT에서 파생한다 — "분석" 하드코딩 대신 /admin/branch가
 // 실제로 속한 섹션 라벨(현재 "영업·매출")을 읽는다. IA가 다시 재편돼도 이 화면은 자동으로 따라간다.
@@ -76,8 +68,33 @@ const RevenueFlowSection = dynamic(() => import("./sections/RevenueFlowSection")
   loading: () => <div className="h-72 animate-pulse rounded-2xl bg-[#f0f0ec]" />,
 })
 
-// 탭 전용 컴포넌트 코드 스플리팅(품질 웨이브 2 — 항목 6) — 개요 탭은 즉시 보여야 하므로
-// 정적 유지, 파이프라인/히트맵/AI 탭 컴포넌트는 그 탭을 열 때만 청크를 내려받는다.
+// 개요도 다른 탭과 같은 지연 로딩 규약을 쓴다. 파이프라인·히트맵·AI 딥링크에서
+// 개요 전용 차트·HW·정합성 UI 번들을 먼저 내려받지 않게 한다.
+const IntegrityStrip = dynamic(() => import("./IntegrityStrip"), {
+  loading: () => <div className="h-16 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const CoreKpiGrid = dynamic(() => import("./sections/CoreKpiGrid"), {
+  loading: () => <div className="h-32 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const BranchHeroGauges = dynamic(() => import("./sections/BranchHeroGauges"), {
+  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const BranchUpcomingDeals = dynamic(() => import("./sections/BranchUpcomingDeals"), {
+  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const CampaignsSection = dynamic(() => import("./sections/CampaignsSection"), {
+  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const HardwareSection = dynamic(() => import("./sections/HardwareSection"), {
+  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const DealMixSection = dynamic(() => import("./sections/DealMixSection"), {
+  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
+})
+const DealModal = dynamic(() => import("./sections/DealModal"))
+
+// 탭 전용 컴포넌트 코드 스플리팅(품질 웨이브 2 — 항목 6) — 개요를 포함한 각 탭의
+// 컴포넌트는 그 탭을 열 때만 청크를 내려받는다.
 // 로딩 스켈레톤은 각 컴포넌트 내부의 자체 로딩 상태(데이터 미도착 시)와 동일 톤으로 맞춘다.
 const BranchKpiAccordion = dynamic(() => import("./sections/BranchKpiAccordion"), {
   loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
@@ -304,8 +321,9 @@ export default function BranchDashboardClient() {
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   const summaryUrl = `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}`
   const kpiUrl = `/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`
+  const dataNeeds = getBranchTabDataNeeds(activeTab)
   const summary = useBranchJson<BranchSummaryResponse>(summaryUrl, refreshKey)
-  const kpi = useBranchJson<BranchKpiResponse>(kpiUrl, refreshKey)
+  const kpi = useBranchJson<BranchKpiResponse>(kpiUrl, refreshKey, { enabled: dataNeeds.kpi })
   const monthOptions = useMemo(() => buildMonthOptions(new Date()), [])
   const activePeriodLabel = period === "M" ? formatMonthLabel(selectedMonth) : PERIOD_LABEL[period]
 
