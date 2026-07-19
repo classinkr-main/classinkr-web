@@ -61,6 +61,7 @@ import {
 } from "@/lib/branch/product-category"
 import {
   PERIODS,
+  PIPELINE_MANAGER_DEFAULT_STORAGE_KEY,
   TEAMS,
   type BranchKpiResponse,
   type BranchPipelineResponse,
@@ -546,6 +547,17 @@ export function serializeMultiFilterParam(values: Set<string>): string | null {
 function replaceEquivalentSet(current: Set<string>, next: Set<string>): Set<string> {
   if (current.size === next.size && Array.from(next).every((value) => current.has(value))) return current
   return next
+}
+
+// 라운드 3 P3 — "내 딜" 담당자 프리셋 핀. pristine 진입(마운트 후 첫 실행 + URL 파라미터 0개)
+// 여부만 판정하는 순수 함수 — ref 갱신(1회 소비)·localStorage 읽기 등 부수효과는 호출부(URL
+// 복원 effect)가 담당한다. 파라미터가 하나라도 있으면(예: ?lens=rev&q=349) 이번이 이 컴포넌트의
+// 첫 실행이라도 false다 — 핀이 딥링크 결과를 가리면 안 된다(검색된 행이 다른 담당자 소유일 수
+// 있다). alreadyAttempted가 true면(직전 실행에서 이미 판정을 소비) 파라미터가 이번엔 우연히
+// 비어 있어도 항상 false — "pristine 진입 최초 1회만"이라 내비게이션·self-echo로 되돌아온
+// 빈 파라미터는 재시드 대상이 아니다.
+export function isPinSeedEligible(alreadyAttempted: boolean, searchParamsString: string): boolean {
+  return !alreadyAttempted && searchParamsString === ""
 }
 
 function metadataNumberString(metadata: Record<string, unknown> | null | undefined, key: string): string {
@@ -1209,10 +1221,20 @@ export default function SalesLedgerWorkbench() {
   const defaultMonthRef = useRef(ymKeyUtc(new Date()))
   const [urlReady, setUrlReady] = useState(false)
   const lastWrittenSearchRef = useRef<string | null>(null)
+  // 라운드 3 P3 — "내 딜" 담당자 프리셋 핀(웨이브 7 Q5와 storageKey 공유 — KR Team 개요에서
+  // 찍은 핀이 장부에도, 장부에서 찍은 핀이 개요에도 적용된다). ref로 이 컴포넌트 생애주기 동안
+  // isPinSeedEligible 판정을 딱 1번만 소비한다 — 아래에서 즉시 true로 갱신하므로 이후 실행
+  // (내비게이션·self-echo)은 항상 대상 밖이다.
+  const pinSeedAttemptedRef = useRef(false)
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
     // writer가 방금 기록한 정규형과 같으면 상태가 이미 URL의 원천이므로 재적용하지 않는다.
     if (params.toString() === lastWrittenSearchRef.current) return
+    // pristine 진입(마운트 후 첫 실행 + URL 파라미터 0개) 여부를 지금 판정하고 ref를 즉시
+    // 소비한다 — 판정 자체는 순수 함수(isPinSeedEligible)에 위임해 "1회만" 규약을 이 실행
+    // 시점의 ref 상태로 직접 단위 테스트할 수 있게 한다.
+    const pinSeedEligible = isPinSeedEligible(pinSeedAttemptedRef.current, params.toString())
+    pinSeedAttemptedRef.current = true
     const lensParam = params.get("lens")
     // KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다 — 옛 링크(?lens=kpi)는 그리로 리다이렉트.
     if (lensParam === "kpi") {
@@ -1230,6 +1252,16 @@ export default function SalesLedgerWorkbench() {
     setTeam(teamParam && (TEAMS as string[]).includes(teamParam) ? (teamParam as Team) : "ALL")
     setQuery(params.get("q") ?? "")
     const nextManagerFilter = parseMultiFilterParam(params.get("mgr"))
+    // pristine 1회 한정 핀 시드: params.toString() === ""가 이미 보장된 상태라 nextManagerFilter는
+    // 항상 빈 Set이다(mgr 파라미터 자체가 없으므로) — 핀 값 하나만 그대로 채워 넣으면 Set 1개
+    // 원소가 된다. 저장된 핀 담당자가 현재 managerOptions에 없어도 그대로 시드한다(옵션은 데이터
+    // 로드 후 채워지는 값이라 이 시점엔 검증 불가 — 필터 자체가 이름 문자열 매칭이라 무해하다).
+    // 별도 "핀으로 시드됨" 배지는 두지 않는다 — MultiSelect의 핀 아이콘(pinStorageKey prop, 아래
+    // 렌더부)이 이미 그 역할을 한다.
+    if (pinSeedEligible && typeof window !== "undefined") {
+      const pinnedManager = window.localStorage.getItem(PIPELINE_MANAGER_DEFAULT_STORAGE_KEY)
+      if (pinnedManager) nextManagerFilter.add(pinnedManager)
+    }
     setManagerFilter((current) => replaceEquivalentSet(current, nextManagerFilter))
     const nextRegionFilter = parseMultiFilterParam(params.get("region"))
     setRegionFilter((current) => replaceEquivalentSet(current, nextRegionFilter))
@@ -3359,6 +3391,9 @@ export default function SalesLedgerWorkbench() {
                       onChange={setManagerFilter}
                       placeholder="전체"
                       width="w-48"
+                      // 라운드 3 P3 — "내 딜" 프리셋 핀. KR Team 개요(BranchDashboardClient)와
+                      // storageKey를 공유해 사람 단위 개인화가 화면 간에 일관되게 이어진다.
+                      pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}
                     />
                     <MultiSelect
                       label="지역"
