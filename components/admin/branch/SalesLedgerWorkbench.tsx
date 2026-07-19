@@ -157,6 +157,8 @@ export {
 export type { MatrixCellCoord, MatrixPendingDraft } from "./ledger/RevMatrix"
 import {
   buildRevWeekProjection,
+  defaultDraftWeeklyConfidence,
+  dominantWeeklyConfidence,
   DRAFT_CONFLICT_MESSAGE,
   DRAFT_DEDUPED_RECENT_NOTICE,
   DRAFT_OPERATIONS,
@@ -171,6 +173,7 @@ import {
   draftConfidenceFromMetadata,
   mergedWeeklyFromMetadata,
   metadataString,
+  weeklyConfidenceFromMetadata,
   operationSupportsWeeklySplit,
   productCategoryFromText,
   productCategoryMeta,
@@ -287,11 +290,34 @@ interface DealDetailResponse {
 
 // 적용된 초안(장부 엔트리)의 확도를 행 확도 맵으로 변환. 확도와 무관하게 전액
 // monthlyConfirmed+red로 만들면 '예정' 입력도 적용 즉시 확정으로 집계된다(확정·달성률 인플레).
-function appliedDraftConfidenceMaps(
+// 라운드 3(P1): 유효한 weekly+weeklyConfidence(주차별 확도 병렬 배열)가 있으면 초안 단위
+// 확도 대신 주차 합 exact로 분해한다 —
+//   - monthlyConfirmed[month] = Σ(confirmed 주차 금액), monthlyHighConfidence = Σ(high-confidence).
+//   - monthlyRed[month]는 전액 확정(¥1 오차 허용 — confirmed 합 ≥ amount-1)일 때만 true.
+//     부분 확정을 red로 만들면 캐논(rev-confirmed)의 red 폴백이 월 전체를 확정으로 오집계한다.
+// weeklyConfidence 부재/무효(기존 초안)는 기존 로직 그대로 — 완전 하위호환.
+// export: tests/branch/weekly-confidence.test.ts가 exact 합·red 규칙을 직접 검증한다.
+export function appliedDraftConfidenceMaps(
   month: string,
   amount: number,
   metadata: Record<string, unknown> | null | undefined,
 ): Pick<LedgerRevenueRow, "monthlyConfirmed" | "monthlyHighConfidence" | "monthlyRed"> {
+  const weekly = mergedWeeklyFromMetadata(metadata)
+  const states = weekly ? weeklyConfidenceFromMetadata(metadata) : null
+  if (weekly && states) {
+    let confirmed = 0
+    let highConfidence = 0
+    weekly.forEach((value, index) => {
+      if (value <= 0) return
+      if (states[index] === "confirmed") confirmed += value
+      else if (states[index] === "high-confidence") highConfidence += value
+    })
+    return {
+      monthlyConfirmed: confirmed > 0 ? { [month]: confirmed } : {},
+      monthlyHighConfidence: highConfidence > 0 ? { [month]: highConfidence } : {},
+      monthlyRed: amount > 0 && confirmed >= amount - 1 ? { [month]: true } : {},
+    }
+  }
   const confidence = draftConfidenceFromMetadata(metadata)
   return {
     monthlyConfirmed: confidence === "confirmed" ? { [month]: amount } : {},
@@ -1294,6 +1320,8 @@ export default function SalesLedgerWorkbench() {
     // 이 값을 그대로 쓰므로 weekly 버퍼도 여기서 함께 비워진다.
     weeklyMode: false,
     weekly: emptyDraftWeekly(),
+    // 라운드 3(P1): 주차별 확도 버퍼도 기본 확도(expected)로 함께 리셋된다.
+    weeklyConfidence: defaultDraftWeeklyConfidence("expected"),
   }), [selectedMonth, team])
   const [draftForm, setDraftForm] = useState<DraftForm>(defaultDraftForm)
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null)
@@ -2181,11 +2209,22 @@ export default function SalesLedgerWorkbench() {
       const operation: DraftOperation = priorAmount > 0 ? "amount-change" : "forecast-add"
       let draftAmount = amount
       let mergedWeekly: number[] | null = null
+      // 라운드 3(P1): 주차 병합 시 확도도 병렬 구성 — 편집 주차는 팝오버 선택 확도, 나머지 주차는
+      // 이 행 draftMetadata의 기존 weeklyConfidence 보존(없으면 null — 확도 미기록). 금액 병합
+      // 기준이 행 표시값(rowWeeklySplit)인 것과 동일하게 확도 기준도 행(draftMetadata)이다.
+      // 금액 0이 된 주차는 스키마 계약대로 null로 정규화한다.
+      let mergedWeeklyConfidence: Array<DraftConfidence | null> | null = null
       if (week != null && weekSplit?.source === "explicit") {
         const weeks = Array.from({ length: 5 }, (_, index) => Math.max(Number(weekSplit.weeks[index] ?? 0), 0))
         weeks[week] = amount
         mergedWeekly = weeks
         draftAmount = weeks.reduce((sum, value) => sum + value, 0)
+        const baseStates = weeklyConfidenceFromMetadata(row.draftMetadata)
+        mergedWeeklyConfidence = weeks.map((value, index) => {
+          if (value <= 0) return null
+          if (index === week) return confidence
+          return baseStates?.[index] ?? null
+        })
       }
       const productCategory = rowProductCategory(row)
       const input: LedgerDraftInput = {
@@ -2224,7 +2263,12 @@ export default function SalesLedgerWorkbench() {
           fromMonth: month,
           week: weekToken,
           weekly: mergedWeekly,
-          confidence,
+          // 라운드 3(P1): 주차 병합이면 확도 병렬 배열 + 초안 단위 확도는 우세 확도 자동 기록.
+          // 단일 값 경로(월 셀·비병합 주차 셀)는 weekly와 동일하게 null 명시(잔존 제거 규약).
+          weeklyConfidence: mergedWeeklyConfidence,
+          confidence: mergedWeekly && mergedWeeklyConfidence
+            ? dominantWeeklyConfidence(mergedWeekly, mergedWeeklyConfidence)
+            : confidence,
           quantity: null,
           sourceDealId: sourceDealId ?? null,
         },
@@ -2494,6 +2538,11 @@ export default function SalesLedgerWorkbench() {
     // week 토큰은 저장 계약(week:"month")·이중계상 dedup 좌표와 일치하도록 month로 고정한다.
     const weeklySplit = rowWeeklySplit(row, formMonth)
     const weeklyPrefill = weeklySplit.source === "explicit" && operationSupportsWeeklySplit(operation)
+    // 라운드 3(P1) 주차별 확도 시드: 시트 행은 주차별 기록이 없어 전 주차를 폼 확도로 시드한다.
+    // 적용 초안 파생 행이 weeklyConfidence를 갖고 있으면 그대로 복원(null 칸은 폼 확도로 채움 —
+    // 버퍼는 빈 칸 없는 DraftConfidence 5칸).
+    const rowConfidence = draftConfidenceFromMetadata(row.draftMetadata)
+    const storedWeeklyConfidence = weeklyConfidenceFromMetadata(row.draftMetadata)
     setDraftForm({
       operation,
       customer: row.customer,
@@ -2503,7 +2552,7 @@ export default function SalesLedgerWorkbench() {
       month: formMonth,
       fromMonth: metadataString(row.draftMetadata, "fromMonth") ?? row.draftMonth ?? selectedMonth,
       week: weeklyPrefill ? "month" : metadataString(row.draftMetadata, "week") ?? "month",
-      confidence: draftConfidenceFromMetadata(row.draftMetadata),
+      confidence: rowConfidence,
       amount: row.revenue ? String(Math.round(row.revenue)) : "",
       quantity: metadataNumberString(row.draftMetadata, "quantity"),
       note: row.draftNote ?? "",
@@ -2511,6 +2560,9 @@ export default function SalesLedgerWorkbench() {
       weekly: weeklyPrefill
         ? weeklySplit.weeks.map((value) => (value > 0 ? String(Math.round(value)) : ""))
         : emptyDraftWeekly(),
+      weeklyConfidence: weeklyPrefill && storedWeeklyConfidence
+        ? storedWeeklyConfidence.map((state) => state ?? rowConfidence)
+        : defaultDraftWeeklyConfidence(rowConfidence),
     })
     const detailId = row.ledgerOrigin === "draft" ? row.sourceDealId : row.id
     if (!detailId) {
@@ -2635,7 +2687,12 @@ export default function SalesLedgerWorkbench() {
         // 단일 금액 경로에서는 null을 명시해 base(재편집 초안)의 이전 weekly 잔존을 지운다 —
         // 주차 분해를 껐다 저장하면 단일 금액 초안으로 되돌아간다(onCommitCell의 weekly: null 규약과 동일).
         weekly: weeklyContract ? weeklyContract.weekly : null,
-        confidence: draftForm.confidence,
+        // 라운드 3(P1): 주차별 확도 병렬 배열(금액>0 주차만 값, 나머지 null). 단일 금액 경로는
+        // weekly와 동일하게 null 명시 — 재편집 시 이전 weeklyConfidence 잔존을 지운다.
+        weeklyConfidence: weeklyContract ? weeklyContract.weeklyConfidence : null,
+        // 주차 분해 저장의 초안 단위 확도는 우세 확도(금액 합 최대 버킷, 동률은 낮은 확도) 자동 기록 —
+        // 큐 배지·매트릭스 pending 등 기존 metadata.confidence 소비자의 의미를 보존한다.
+        confidence: weeklyContract ? weeklyContract.dominantConfidence : draftForm.confidence,
         quantity: draftForm.quantity.trim() ? safeAmount(draftForm.quantity) : null,
       },
     }
@@ -2692,6 +2749,10 @@ export default function SalesLedgerWorkbench() {
     // 재편집하면 5칸을 그대로 프리필해 주차 분해 모드로 연다(월 합=주차 합 불변식 유지).
     const mergedWeekly = mergedWeeklyFromMetadata(draft.metadata)
     const weeklyPrefill = mergedWeekly != null && operationSupportsWeeklySplit(operation)
+    // 라운드 3(P1): 주차별 확도 복원 — metadata.weeklyConfidence가 있으면 그대로(null 칸은 초안
+    // 단위 확도로 채움), 없으면(기존 초안) 전 주차를 초안 단위 확도로 시드한다.
+    const draftConfidence = draftConfidenceFromMetadata(draft.metadata)
+    const storedWeeklyConfidence = weeklyConfidenceFromMetadata(draft.metadata)
     setDraftForm({
       operation,
       customer: draft.customer,
@@ -2701,7 +2762,7 @@ export default function SalesLedgerWorkbench() {
       month: draft.month,
       fromMonth: metadataString(draft.metadata, "fromMonth") ?? draft.month,
       week: weeklyPrefill ? "month" : metadataString(draft.metadata, "week") ?? "month",
-      confidence: draftConfidenceFromMetadata(draft.metadata),
+      confidence: draftConfidence,
       amount: draft.amount ? String(Math.round(draft.amount)) : "",
       quantity: metadataNumberString(draft.metadata, "quantity"),
       note: draft.note,
@@ -2709,6 +2770,9 @@ export default function SalesLedgerWorkbench() {
       weekly: weeklyPrefill && mergedWeekly
         ? mergedWeekly.map((value) => (value > 0 ? String(Math.round(value)) : ""))
         : emptyDraftWeekly(),
+      weeklyConfidence: weeklyPrefill && storedWeeklyConfidence
+        ? storedWeeklyConfidence.map((state) => state ?? draftConfidence)
+        : defaultDraftWeeklyConfidence(draftConfidence),
     })
   }, [team])
 

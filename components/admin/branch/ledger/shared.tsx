@@ -99,6 +99,22 @@ export function mergedWeeklyFromMetadata(metadata: Record<string, unknown> | nul
   return weeks.some((value) => value > 0) ? weeks : null
 }
 
+// 라운드 3(P1) — 주차별 확도 개별 기록: metadata.weeklyConfidence(5칸, metadata.weekly와 병렬)
+// 검증 판독기. mergedWeeklyFromMetadata와 대칭 규약 —
+//   - 필드 부재/무효(배열 아님·길이≠5·무효 원소)는 "없음"(null)으로 판독해 기존 폴백
+//     (초안 단위 metadata.confidence — draftConfidenceFromMetadata)을 그대로 태운다(완전 하위호환).
+//   - 전 칸 null(신호 없음)도 "없음"으로 본다 — mergedWeekly의 some(>0) 가드와 대칭.
+//   - 유효 원소는 null(금액 0/빈 주차) 또는 DraftConfidence 3단뿐이다.
+export function weeklyConfidenceFromMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): Array<DraftConfidence | null> | null {
+  const raw = metadata?.weeklyConfidence
+  if (!Array.isArray(raw) || raw.length !== 5) return null
+  if (!raw.every((value) => value === null || isDraftConfidence(value))) return null
+  const states = raw.map((value) => (isDraftConfidence(value) ? value : null))
+  return states.some((value) => value != null) ? states : null
+}
+
 // SalesLedgerWorkbench에서 물리 이동(웨이브 7 2단 F5): 워크벤치 본체와 ledger/RevMatrix가
 // 함께 쓰는 확도/상품군/주차 검수 판독 헬퍼 — 로직 무변경.
 export function isDraftConfidence(value: unknown): value is DraftConfidence {
@@ -201,6 +217,9 @@ export interface DraftForm {
   weeklyMode: boolean
   /** W1~W5 문자열 입력 버퍼 5칸(빈 칸 허용). 숫자 해석·음수/비숫자 0 처리는 draftWeeklyAmounts. */
   weekly: string[]
+  /** 라운드 3(P1): W1~W5 주차별 확도 버퍼 5칸(weekly와 병렬, 빈 칸 없음 — 항상 3단 중 하나).
+      저장 시에는 금액>0 주차만 이 값이 실리고 나머지는 null로 정규화된다(draftWeeklySaveContract). */
+  weeklyConfidence: DraftConfidence[]
 }
 
 export const DRAFT_CONFIDENCE_OPTIONS: Array<{ id: DraftConfidence; label: string }> = [
@@ -409,6 +428,31 @@ export function emptyDraftWeekly(): string[] {
   return ["", "", "", "", ""]
 }
 
+// 주차별 확도 버퍼 5칸 초기값 — emptyDraftWeekly와 대칭(항상 새 배열 반환). 프리필/리셋 경로가
+// 초안 단위 확도(또는 기본 "expected")로 전 주차를 시드할 때 쓴다.
+export function defaultDraftWeeklyConfidence(confidence: DraftConfidence): DraftConfidence[] {
+  return Array.from({ length: 5 }, () => confidence)
+}
+
+// 우세 확도(라운드 3 P1): 금액 합이 가장 큰 확도 버킷. 동률은 낮은 확도
+// (expected < high-confidence < confirmed) 우선 — 낮은 쪽을 남겨야 큐 배지·매트릭스 pending 등
+// metadata.confidence 소비자가 미확정 금액을 상향 왜곡하지 않는다. 상태 null(확도 미기록)인
+// 금액>0 주차도 같은 이유로 예정(expected) 버킷으로 계상한다.
+export function dominantWeeklyConfidence(
+  weekly: number[],
+  states: Array<DraftConfidence | null>,
+): DraftConfidence {
+  const sums: Record<DraftConfidence, number> = { expected: 0, "high-confidence": 0, confirmed: 0 }
+  weekly.forEach((value, index) => {
+    if (!(value > 0)) return
+    sums[states[index] ?? "expected"] += value
+  })
+  let dominant: DraftConfidence = "expected"
+  if (sums["high-confidence"] > sums[dominant]) dominant = "high-confidence"
+  if (sums.confirmed > sums[dominant]) dominant = "confirmed"
+  return dominant
+}
+
 // 문자열 버퍼 5칸 → 숫자 5칸. 음수/비숫자는 0 처리(감액은 장부 가감 입력 사용 — 매트릭스 셀
 // onAmountClamped와 동일 규약). 버퍼가 5칸 미만이어도 항상 5칸으로 정규화한다.
 export function draftWeeklyAmounts(weekly: string[]): number[] {
@@ -421,16 +465,34 @@ export function draftWeeklyTotal(weekly: string[]): number {
 }
 
 // 저장 계약: weeklyMode + 지원 작업 유형 + 주차 합>0이면 { amount: 주차 합, weekly: 5칸 숫자,
-// week: "month" }를 돌려준다 — buildDraftInput이 amount(draftForm.amount 무시)·metadata.weekly·
-// metadata.week에 그대로 싣는다. 조건 미충족이면 null(기존 단일 금액 경로 그대로).
+// week: "month", weeklyConfidence: 5칸 확도, dominantConfidence: 우세 확도 }를 돌려준다 —
+// buildDraftInput이 amount(draftForm.amount 무시)·metadata.weekly·metadata.week·
+// metadata.weeklyConfidence(라운드 3 P1)·metadata.confidence(우세 확도 자동 기록)에 그대로 싣는다.
+// weeklyConfidence는 금액>0 주차만 폼 버퍼 값, 금액 0/빈 주차는 반드시 null(스키마 계약).
+// 조건 미충족이면 null(기존 단일 금액 경로 그대로 — 그 경로는 weeklyConfidence: null 명시).
 export function draftWeeklySaveContract(
-  form: Pick<DraftForm, "operation" | "weeklyMode" | "weekly">,
-): { amount: number; weekly: number[]; week: "month" } | null {
+  form: Pick<DraftForm, "operation" | "weeklyMode" | "weekly" | "weeklyConfidence">,
+): {
+  amount: number
+  weekly: number[]
+  week: "month"
+  weeklyConfidence: Array<DraftConfidence | null>
+  dominantConfidence: DraftConfidence
+} | null {
   if (!form.weeklyMode || !operationSupportsWeeklySplit(form.operation)) return null
   const weekly = draftWeeklyAmounts(form.weekly)
   const amount = weekly.reduce((sum, value) => sum + value, 0)
   if (amount <= 0) return null
-  return { amount, weekly, week: "month" }
+  const weeklyConfidence = weekly.map((value, index) =>
+    value > 0 ? form.weeklyConfidence[index] ?? "expected" : null,
+  )
+  return {
+    amount,
+    weekly,
+    week: "month",
+    weeklyConfidence,
+    dominantConfidence: dominantWeeklyConfidence(weekly, weeklyConfidence),
+  }
 }
 
 // ── REV 행 단위 파생 헬퍼 (워크벤치에서 물리 이동, 2026-07-16 역할 재배분) ──
@@ -518,6 +580,31 @@ export function buildRevWeekProjection(rows: LedgerRevenueRow[], month: string):
         weeks[index].rows += 1
       })
       continue
+    }
+
+    // 라운드 3(P1) — 주차별 확도 exact 경로: 초안 파생 행이 유효한 weekly+weeklyConfidence를
+    // 함께 가지면 아래 비례 배분 대신 주차 상태를 confirmed/highConfidence/open 버킷에 직접
+    // 집계한다(appliedDraftConfidenceMaps의 월 합 exact와 주차 단위까지 일치). 상태 null(확도
+    // 미기록)인 금액>0 주차는 open — dominantWeeklyConfidence·확도 맵과 동일한 보수 판정.
+    // draftMonth 가드: metadata.weekly는 초안의 그 달 전용이라 다른 달 셀에 오적용하지 않는다.
+    // inferred/월합계만/시트 explicit(비초안) 행은 전부 기존 경로 무변경.
+    if (
+      row.draftMonth === month &&
+      mergedWeeklyFromMetadata(row.draftMetadata) != null
+    ) {
+      const exactStates = weeklyConfidenceFromMetadata(row.draftMetadata)
+      if (exactStates) {
+        weeklySplit.weeks.forEach((value, index) => {
+          if (value <= 0) return
+          const state = exactStates[index]
+          if (state === "confirmed") weeks[index].confirmed += value
+          else if (state === "high-confidence") weeks[index].highConfidence += value
+          else weeks[index].open += value
+          weeks[index].total += value
+          weeks[index].rows += 1
+        })
+        continue
+      }
     }
 
     const confirmedRatio = Math.min(rowMonthConfirmed(row, month) / amount, 1)

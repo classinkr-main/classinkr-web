@@ -10,6 +10,9 @@ import {
   DRAFT_OPERATIONS,
   FORECAST_WEEK_RANGE_LABELS,
   REV_PRODUCT_FILTERS,
+  defaultDraftWeeklyConfidence,
+  dominantWeeklyConfidence,
+  draftWeeklyAmounts,
   draftWeeklyTotal,
   formatMonthLabel,
   formatMoney,
@@ -128,6 +131,10 @@ export function InputRailSection({
   const weeklySplitAvailable = operationSupportsWeeklySplit(draftForm.operation)
   const weeklySplitActive = weeklySplitAvailable && draftForm.weeklyMode
   const weeklySum = draftWeeklyTotal(draftForm.weekly)
+  // 라운드 3(P1) — 주차별 확도: 금액 5칸(seg 비활성 판정)과 우세 확도 미리보기("저장 확도" 줄,
+  // buildDraftInput이 metadata.confidence로 자동 기록하는 값과 동일 산식 — draftWeeklySaveContract).
+  const weeklyAmounts = draftWeeklyAmounts(draftForm.weekly)
+  const railDominantConfidence = dominantWeeklyConfidence(weeklyAmounts, draftForm.weeklyConfidence)
 
   // 품질 웨이브 7 — 항목 1: targetCellLocked는 부모가 이미 "지금 제출이 edit-row 경로로 가는지"
   // (editingDraft.kind==="edit-row" 또는 canCreateEditDraft)까지 반영해 계산해준다 — new-row
@@ -303,26 +310,44 @@ export function InputRailSection({
                 )}
               </div>
               <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
-                <p className="mb-1.5 text-[11px] font-bold text-[#615D59]">확도</p>
+                <p className="mb-1.5 text-[11px] font-bold text-[#615D59]">
+                  {weeklySplitActive ? "확도 · 전체 일괄 적용" : "확도"}
+                </p>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {DRAFT_CONFIDENCE_OPTIONS.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => setDraftForm((current) => ({ ...current, confidence: option.id }))}
-                      aria-pressed={draftForm.confidence === option.id}
-                      className={`min-h-8 rounded-md px-2 py-1 text-[11px] font-bold transition ${
-                        draftForm.confidence === option.id
-                          ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
-                          : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+                  {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
+                    // 주차 분해 모드(라운드 3 P1)에서는 이 블록이 "전체 일괄 적용" — 클릭 시 주차별
+                    // 확도 5칸이 전부 이 확도로 세트되고, 그 뒤 그리드의 주차 seg로 개별 변경한다.
+                    // pressed 판정도 5칸 전부 일치일 때만(개별 변경 후 혼합 상태는 아무 버튼도 눌리지
+                    // 않은 표시). 단일 모드는 기존 그대로 confidence 1값 — 버퍼도 함께 시드해 나중에
+                    // 주차 분해로 전환했을 때 마지막 선택 확도가 기본값이 되게 한다.
+                    const pressed = weeklySplitActive
+                      ? draftForm.weeklyConfidence.every((value) => value === option.id)
+                      : draftForm.confidence === option.id
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setDraftForm((current) => ({
+                          ...current,
+                          confidence: option.id,
+                          weeklyConfidence: defaultDraftWeeklyConfidence(option.id),
+                        }))}
+                        aria-pressed={pressed}
+                        className={`min-h-8 rounded-md px-2 py-1 text-[11px] font-bold transition ${
+                          pressed
+                            ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
+                            : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
                 </div>
                 <p className="mt-1.5 text-[10.5px] leading-relaxed text-[#615D59]">
-                  초안 적용 시 확도가 함께 기록됩니다. 예정 → 고확도 → 확정 전환도 이 폼으로 남깁니다.
+                  {weeklySplitActive
+                    ? "전체 일괄 적용 — 주차별로 개별 변경 가능 · 저장 확도는 우세 버킷 자동"
+                    : "초안 적용 시 확도가 함께 기록됩니다. 예정 → 고확도 → 확정 전환도 이 폼으로 남깁니다."}
                 </p>
               </div>
               {draftForm.operation === "period-shift" && (
@@ -373,10 +398,44 @@ export function InputRailSection({
                   </div>
                   <div className="space-y-1.5">
                     {FORECAST_WEEK_RANGE_LABELS.map((rangeLabel, index) => (
-                      <label key={rangeLabel} className="grid grid-cols-[minmax(0,1fr)_112px] items-center gap-2">
-                        <span className="text-[11px] font-bold text-[#111110]">
+                      // label 래핑 대신 div — 행 안에 seg 버튼이 들어와 label 클릭 위임과 충돌한다.
+                      // 입력 필드 접근성 이름은 기존대로 aria-label(`W{n} 금액`)이 담당한다.
+                      <div key={rangeLabel} className="grid grid-cols-[minmax(0,1fr)_auto_104px] items-center gap-1.5">
+                        <span className="truncate text-[11px] font-bold text-[#111110]">
                           W{index + 1} <span className="ml-0.5 font-semibold text-[#A39E98]">{rangeLabel}</span>
                         </span>
+                        {/* 주차별 확도 seg(라운드 3 P1) — 축약 라벨(예·고·확), 전체 라벨은 title/aria-label.
+                            활성색은 CONFIDENCE_TOKENS bgClass만 사용. 금액 0인 주차는 저장 시 어차피
+                            null(확도 미기록)이라 seg를 비활성 톤으로 잠근다 — 금액을 넣으면 풀린다. */}
+                        <div role="group" aria-label={`W${index + 1} 확도`} className="flex gap-0.5">
+                          {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
+                            const zeroWeek = weeklyAmounts[index] <= 0
+                            const active = !zeroWeek && draftForm.weeklyConfidence[index] === option.id
+                            return (
+                              <button
+                                key={option.id}
+                                type="button"
+                                disabled={zeroWeek}
+                                aria-pressed={active}
+                                title={`W${index + 1} ${option.label}`}
+                                aria-label={`W${index + 1} ${option.label}`}
+                                onClick={() => setDraftForm((current) => ({
+                                  ...current,
+                                  weeklyConfidence: current.weeklyConfidence.map((value, i) => (i === index ? option.id : value)),
+                                }))}
+                                className={`h-8 w-6 rounded text-[10px] font-bold transition ${
+                                  zeroWeek
+                                    ? "cursor-not-allowed border border-[rgba(0,0,0,0.06)] bg-white text-[#DDD9D3]"
+                                    : active
+                                      ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
+                                      : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
+                                }`}
+                              >
+                                {option.label.slice(0, 1)}
+                              </button>
+                            )
+                          })}
+                        </div>
                         <span className="relative block">
                           <span aria-hidden className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[#A39E98]">
                             ¥
@@ -396,7 +455,7 @@ export function InputRailSection({
                             className="h-8 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-6 pr-2 text-right text-[12px] font-semibold tabular-nums text-[#111110] outline-none focus:border-[#084734]"
                           />
                         </span>
-                      </label>
+                      </div>
                     ))}
                   </div>
                   {/* 월 합은 읽기전용 자동합계 — 입력 필드가 아니라 표시 전용(직접 수정 불가 원칙). */}
@@ -406,8 +465,17 @@ export function InputRailSection({
                       {formatMoney(weeklySum)}
                     </span>
                   </div>
+                  {/* 우세 확도 미리보기(라운드 3 P1) — 저장 시 metadata.confidence로 자동 기록되는
+                      값(dominantWeeklyConfidence: 금액 합 최대 버킷, 동률은 낮은 확도). */}
+                  <div className="mt-1 flex items-baseline justify-between gap-2" aria-live="polite">
+                    <span className="text-[10.5px] font-bold text-[#615D59]">저장 확도</span>
+                    <span className={`text-[11px] font-bold ${weeklySum > 0 ? CONFIDENCE_TOKENS[railDominantConfidence].textClass : "text-[#A39E98]"}`}>
+                      {CONFIDENCE_TOKENS[railDominantConfidence].label}
+                      <span className="ml-1 text-[9.5px] font-semibold text-[#A39E98]">우세 버킷 자동</span>
+                    </span>
+                  </div>
                   <p className="mt-1.5 text-[10.5px] leading-relaxed text-[#615D59]">
-                    월 합 = 주차 자동합계(직접 수정 불가) · 확도는 초안 단위로 기록됩니다.
+                    월 합 = 주차 자동합계(직접 수정 불가) · 확도는 주차별로 기록됩니다.
                   </p>
                 </div>
               )}

@@ -13,12 +13,14 @@ import {
   formatMoney,
   formatWeekAmount,
   formatMonthLabel,
+  mergedWeeklyFromMetadata,
   productCategoryMeta,
   rowMonthAmount,
   rowMonthConfirmed,
   rowMonthHighConfidence,
   rowProductCategory,
   rowWeeklySplit,
+  weeklyConfidenceFromMetadata,
   type LedgerRevenueRow,
   type RevProductCategory,
 } from "./shared"
@@ -110,9 +112,31 @@ export function buildForecastBoardModel(rows: LedgerRevenueRow[], month: string)
 
     const split = rowWeeklySplit(row, month)
     if (split.source === "explicit" || split.source === "inferred") {
+      // 라운드 3(P1) — 주차별 확도 exact: 초안 파생 행이 유효한 weekly+weeklyConfidence를 가지면
+      // 카드 확도를 월 확도(cardConfidence) 대신 그 주차 슬롯의 상태로 직접 칠한다 —
+      // appliedDraftConfidenceMaps의 exact 합·buildRevWeekProjection exact 버킷과 동일 판정.
+      // draftMonth 가드: metadata.weekly는 초안의 그 달 전용. 그 외(시트 행·기존 초안)는 현행 유지.
+      const exactStates =
+        base.draft && row.draftMonth === month && split.source === "explicit" && mergedWeeklyFromMetadata(row.draftMetadata) != null
+          ? weeklyConfidenceFromMetadata(row.draftMetadata)
+          : null
       split.weeks.forEach((value, index) => {
         if (value <= 0) return
         columns[index].total += value
+        const slotState = exactStates?.[index] ?? null
+        if (slotState) {
+          // 주차 슬롯은 통째로 한 상태라 부분 확정 ratio 표기가 성립하지 않는다 — 1/0으로 고정해
+          // 카드 하단 마이크로 바(partial)가 뜨지 않게 한다.
+          columns[index].cards.push({
+            ...base,
+            amount: value,
+            inferred: false,
+            confidence: slotState,
+            confirmedRatio: slotState === "confirmed" ? 1 : 0,
+            highRatio: slotState === "high-confidence" ? 1 : 0,
+          })
+          return
+        }
         columns[index].cards.push({ ...base, amount: value, inferred: split.source === "inferred" })
       })
       continue

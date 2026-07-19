@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest"
 import { FORECAST_WEEK_RANGE_LABELS as BOARD_WEEK_RANGE_LABELS } from "@/components/admin/branch/ledger/ForecastBoard"
 import {
   FORECAST_WEEK_RANGE_LABELS,
+  defaultDraftWeeklyConfidence,
   draftWeeklyAmounts,
   draftWeeklySaveContract,
   draftWeeklyTotal,
@@ -78,31 +79,82 @@ describe("draftWeeklySaveContract — buildDraftInput 저장 계약", () => {
       operation: "forecast-add",
       weeklyMode: true,
       weekly: ["1000", "", "2000", "", ""],
+      // 라운드 3(P1): 확도 버퍼 병렬 — 금액>0 주차만 실리고 나머지는 null로 정규화된다.
+      weeklyConfidence: ["confirmed", "expected", "expected", "expected", "expected"],
     })
-    expect(contract).toEqual({ amount: 3000, weekly: [1000, 0, 2000, 0, 0], week: "month" })
+    expect(contract).toEqual({
+      amount: 3000,
+      weekly: [1000, 0, 2000, 0, 0],
+      week: "month",
+      weeklyConfidence: ["confirmed", null, "expected", null, null],
+      // 우세 확도 = 금액 합 최대 버킷(expected 2000 > confirmed 1000).
+      dominantConfidence: "expected",
+    })
   })
 
-  it("음수/비숫자 칸은 0으로 실려 합계에서 빠진다", () => {
+  it("음수/비숫자 칸은 0으로 실려 합계에서 빠진다(확도도 그 칸은 null)", () => {
     const contract = draftWeeklySaveContract({
       operation: "amount-change",
       weeklyMode: true,
       weekly: ["-999", "abc", "500", "", ""],
+      weeklyConfidence: defaultDraftWeeklyConfidence("high-confidence"),
     })
-    expect(contract).toEqual({ amount: 500, weekly: [0, 0, 500, 0, 0], week: "month" })
+    expect(contract).toEqual({
+      amount: 500,
+      weekly: [0, 0, 500, 0, 0],
+      week: "month",
+      weeklyConfidence: [null, null, "high-confidence", null, null],
+      dominantConfidence: "high-confidence",
+    })
   })
 
   it("weeklyMode가 꺼져 있으면 null — 단일 금액 경로 그대로", () => {
-    expect(draftWeeklySaveContract({ operation: "forecast-add", weeklyMode: false, weekly: ["1000", "", "", "", ""] })).toBeNull()
+    expect(
+      draftWeeklySaveContract({
+        operation: "forecast-add",
+        weeklyMode: false,
+        weekly: ["1000", "", "", "", ""],
+        weeklyConfidence: defaultDraftWeeklyConfidence("expected"),
+      }),
+    ).toBeNull()
   })
 
   it("기간 이동·수량 변경은 weeklyMode가 남아 있어도 null — 단일 금액 UX 유지(노출 조건과 동일 게이트)", () => {
-    expect(draftWeeklySaveContract({ operation: "period-shift", weeklyMode: true, weekly: ["1000", "", "", "", ""] })).toBeNull()
-    expect(draftWeeklySaveContract({ operation: "quantity-change", weeklyMode: true, weekly: ["1000", "", "", "", ""] })).toBeNull()
+    expect(
+      draftWeeklySaveContract({
+        operation: "period-shift",
+        weeklyMode: true,
+        weekly: ["1000", "", "", "", ""],
+        weeklyConfidence: defaultDraftWeeklyConfidence("expected"),
+      }),
+    ).toBeNull()
+    expect(
+      draftWeeklySaveContract({
+        operation: "quantity-change",
+        weeklyMode: true,
+        weekly: ["1000", "", "", "", ""],
+        weeklyConfidence: defaultDraftWeeklyConfidence("expected"),
+      }),
+    ).toBeNull()
   })
 
   it("주차 합이 0이면 null — 검증(고객명 + 주차 합>0)과 같은 판정", () => {
-    expect(draftWeeklySaveContract({ operation: "forecast-add", weeklyMode: true, weekly: ["", "", "", "", ""] })).toBeNull()
-    expect(draftWeeklySaveContract({ operation: "forecast-add", weeklyMode: true, weekly: ["-100", "abc", "", "", ""] })).toBeNull()
+    expect(
+      draftWeeklySaveContract({
+        operation: "forecast-add",
+        weeklyMode: true,
+        weekly: ["", "", "", "", ""],
+        weeklyConfidence: defaultDraftWeeklyConfidence("expected"),
+      }),
+    ).toBeNull()
+    expect(
+      draftWeeklySaveContract({
+        operation: "forecast-add",
+        weeklyMode: true,
+        weekly: ["-100", "abc", "", "", ""],
+        weeklyConfidence: defaultDraftWeeklyConfidence("expected"),
+      }),
+    ).toBeNull()
   })
 })
 
@@ -193,13 +245,15 @@ describe("InputRailSection — 주차 분해 그리드 UI 규약(소스 스캔)"
     expect(weeklyInput).toContain("aria-label={`W${index + 1} 금액`}")
   })
 
-  it("월 합은 읽기전용 자동합계 표시(입력 아님) + 안내 문구·초안 단위 확도 안내를 단다", () => {
+  it("월 합은 읽기전용 자동합계 표시(입력 아님) + 안내 문구·주차별 확도 안내를 단다", () => {
     expect(source).toContain("const weeklySum = draftWeeklyTotal(draftForm.weekly)")
     expect(source).toContain("{formatMoney(weeklySum)}")
     // weeklySum을 value로 받는 입력 필드는 없어야 한다(월 합 직접 수정 불가 원칙).
     expect(source).not.toContain("value={weeklySum}")
     expect(source).toContain("월 합 = 주차 자동합계(직접 수정 불가)")
-    expect(source).toContain("확도는 초안 단위로 기록됩니다")
+    // 라운드 3(P1): 확도는 더 이상 초안 단위가 아니라 주차별로 기록된다 — 안내 문구도 함께 갱신.
+    expect(source).toContain("확도는 주차별로 기록됩니다")
+    expect(source).not.toContain("확도는 초안 단위로 기록됩니다")
   })
 
   it("주차 분해 모드에서는 단일 금액 입력을 숨기고, 월합계 모드는 기존 UX(단일 금액 + week select)를 유지한다", () => {
