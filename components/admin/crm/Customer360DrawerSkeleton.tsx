@@ -12,6 +12,24 @@ export default function Customer360DrawerSkeleton() {
           <div className="mt-2 h-6 w-44 animate-pulse rounded bg-[#f0f0ec]" />
           <div className="mt-2 h-4 w-64 animate-pulse rounded bg-[#f5f5f2]" />
         </div>
+        <div
+          aria-label="간단 로그 불러오는 중"
+          data-testid="customer-quick-log-skeleton"
+          className="shrink-0 border-b border-[#f0f0ec] bg-white px-4 py-2.5"
+        >
+          <div className="mb-1.5 h-4 w-16 animate-pulse rounded bg-[#f0f0ec]" />
+          <div className="rounded-2xl border border-[#e8e8e4] bg-white p-2.5">
+            <div className="flex gap-1.5">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="h-8 w-14 animate-pulse rounded-lg bg-[#f5f5f2]" />
+              ))}
+            </div>
+            <div className="mt-2 flex gap-2">
+              <div className="h-12 flex-1 animate-pulse rounded-lg bg-[#f5f5f2]" />
+              <div className="h-10 w-16 animate-pulse rounded-lg bg-[#e4eee9]" />
+            </div>
+          </div>
+        </div>
         <div className="flex-1 space-y-3 overflow-hidden bg-[#f5f5f2] p-4">
           <div className="h-28 animate-pulse rounded-2xl bg-[#ecece8]" />
           <div className="h-44 animate-pulse rounded-2xl bg-[#ecece8]" />
