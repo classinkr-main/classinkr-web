@@ -46,7 +46,7 @@ import {
 export { isDraftRecordError } from "./ledger/useLedgerDraftQueue"
 import { matchesTokens, tokenize } from "./search-tokens"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
-import { revLinkedTargetHref, type RevSyncLinkedTarget } from "@/lib/crm/rev-sync-health"
+import { revLinkedTargetHref } from "@/lib/crm/rev-sync-health"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { ledgerMonthSplit, ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
@@ -92,7 +92,7 @@ const ForecastBoard = dynamic(() => import("./ledger/ForecastBoard").then((m) =>
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
 import IntegrityStrip from "./IntegrityStrip"
-import CrmSyncStrip from "./CrmSyncStrip"
+import CrmSyncStrip, { type CrmCoverageResponse } from "./CrmSyncStrip"
 import MultiSelect from "./MultiSelect"
 import { InputRailSection } from "./ledger/InputRailSection"
 // 검토 초안 체크 큐는 ledger/DraftQueue로 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
@@ -135,14 +135,15 @@ import {
   RevMatrixPasteDialog,
   storeMatrixConfidence,
   useMatrixEditor,
-  weekIndexFromToken,
   weeklyPaymentsFromDraftMetadata,
   type MatrixCellCoord,
   type MatrixDensity,
   type MatrixPastePlan,
-  type MatrixPendingDraft,
   type RevMatrixColumn,
 } from "./ledger/RevMatrix"
+// buildMatrixPendingByCell은 아래 재수출(export {...} from)에도 있지만 재수출은 로컬 바인딩을
+// 만들지 않는다 — pendingByCell memo가 직접 호출하므로 별도 import가 필요하다.
+import { buildMatrixPendingByCell } from "./ledger/RevMatrix"
 // 회귀 테스트(tests/branch/ledger-cell-dedup·ledger-cell-relock·rail-lock-precheck)가 이 모듈
 // 경로에서 import하는 기존 표면 유지용 재수출.
 export {
@@ -1493,10 +1494,9 @@ export default function SalesLedgerWorkbench() {
   // 우세 확정 링크 target을 계정키로 매핑한다. href 규칙은 rev-sync-health SSOT
   // (revLinkedTargetHref) — deal target은 상세 라우트가 없어 null(링크 미렌더).
   // needsLink와 동일하게 로딩/실패 중엔 링크를 걸지 않는다(기본 없음 = 오표기 없음).
-  const crmCoverage = useBranchJson<{ revAccounts?: { linkedTargets?: RevSyncLinkedTarget[] } | null }>(
-    "/api/admin/crm/coverage",
-    refreshKey,
-  )
+  // 전체 응답 타입(CrmCoverageResponse)으로 받아 CrmSyncStrip(A안 스트립)에도 주입한다 —
+  // 스트립 자체 fetch를 생략시켜 같은 화면에서 커버리지 GET이 한 번만 나간다.
+  const crmCoverage = useBranchJson<CrmCoverageResponse>("/api/admin/crm/coverage", refreshKey)
   const crmLinkedTargetByKey = useMemo(() => {
     const map = new Map<string, { href: string; label: string }>()
     for (const target of crmCoverage.data?.revAccounts?.linkedTargets ?? []) {
@@ -2182,31 +2182,10 @@ export default function SalesLedgerWorkbench() {
   //   - 월 키: 그 달에 걸린 최신 초안(주차 초안 포함) → 접힌 월 셀 앰버 점.
   //   - 주차 키: metadata.week가 wN인 초안만 → 확장 주차 칸 앰버 점.
   // 같은 키에 여러 초안이 있으면 가장 최근(drafts 앞쪽) 것을 표시.
-  const pendingByCell = useMemo(() => {
-    const map = new Map<string, MatrixPendingDraft>()
-    const pending = drafts.filter((draft) => draft.status === "draft" || draft.status === "checked")
-    for (const row of visibleDealRows) {
-      const dealKey = row.sourceDealId ?? row.id
-      for (const draft of pending) {
-        const draftDealId = draft.sourceDealId ?? metadataString(draft.metadata, "sourceDealId")
-        if (draft.kind === "edit-row" ? draftDealId !== dealKey : draft.customer.trim() !== row.customer.trim()) continue
-        const summary: MatrixPendingDraft = {
-          id: draft.id,
-          amount: draft.amount,
-          confidence: draftConfidenceFromMetadata(draft.metadata),
-          weekly: mergedWeeklyFromMetadata(draft.metadata),
-        }
-        const monthKey = `${row.id}::${draft.month}`
-        if (!map.has(monthKey)) map.set(monthKey, summary) // 월 셀: 첫(=최신) 초안
-        const weekIdx = weekIndexFromToken(metadataString(draft.metadata, "week"))
-        if (weekIdx != null) {
-          const weekKey = `${row.id}::${draft.month}::w${weekIdx + 1}`
-          if (!map.has(weekKey)) map.set(weekKey, summary) // 주차 칸: 그 주차 첫(=최신) 초안
-        }
-      }
-    }
-    return map
-  }, [drafts, visibleDealRows])
+  // 순수 함수(ledger/RevMatrix buildMatrixPendingByCell) 단일 소스 — 회귀 테스트(셀 dedup·relock)가
+  // 검증하는 그 함수를 그대로 소비한다. 이전엔 동일 로직 인라인 사본이 있어 드리프트 위험이 있었다
+  // (라운드 4 최적화에서 통합 — 주차별 확도 weeklyConfidence 동봉도 순수 함수 한 곳에서만 관리).
+  const pendingByCell = useMemo(() => buildMatrixPendingByCell(drafts, visibleDealRows), [drafts, visibleDealRows])
 
   // 커밋 기준값(원 단위): 편집 진입 초기값·fill-down·중복 판정 소스.
   // 그 셀에 미검수(draft|checked) 초안이 있으면 시트 원값 대신 그 초안 금액을 우선한다 — 그래야
@@ -2226,13 +2205,26 @@ export default function SalesLedgerWorkbench() {
   )
 
   // 셀 우세 확도 → 편집 팝오버 기본 선택. 미검수 초안이 있으면 그 확도 우선.
-  // 주차 셀은 그 주차 pending → 없으면 월 pending → 없으면 월 버킷 우세 확도로 폴백.
+  // 주차 셀은 슬롯 우선(라운드 3 P1 잔여 폴리시): pending의 그 주차 상태 → pending 초안 확도 →
+  // 적용 초안 행(draftMetadata)의 그 주차 상태 → 월 버킷 우세 확도 순으로 폴백한다 — 주차별
+  // 확도가 기록된 셀을 재편집할 때 기본값이 이웃 주차의 우세치로 뭉개지지 않는다.
   const matrixCellConfidence = useCallback(
     (coord: MatrixCellCoord): DraftConfidence => {
       const pending = lookupMatrixPending(pendingByCell, coord)
-      if (pending) return pending.confidence
+      if (pending) {
+        if (coord.week != null) {
+          const slot = pending.weeklyConfidence?.[coord.week]
+          if (slot) return slot
+        }
+        return pending.confidence
+      }
       const row = rowById.get(coord.rowId)
-      return row ? dominantCellConfidence(rowMonthBucket(row, coord.month)) : "expected"
+      if (!row) return "expected"
+      if (coord.week != null && row.draftMonth === coord.month) {
+        const slot = weeklyConfidenceFromMetadata(row.draftMetadata)?.[coord.week]
+        if (slot) return slot
+      }
+      return dominantCellConfidence(rowMonthBucket(row, coord.month))
     },
     [pendingByCell, rowById],
   )
@@ -3106,7 +3098,7 @@ export default function SalesLedgerWorkbench() {
         <IntegrityStrip refreshKey={refreshKey} />
         {/* CRM 싱크 스트립(A안) — 정합 체크(시트 자체 품질)의 형제 축: "시트가 CRM과 이어져
             있는가". 표시 레이어 전용, fail-soft(로딩 미렌더·실패 시 조용한 한 줄). */}
-        <CrmSyncStrip />
+        <CrmSyncStrip coverage={{ data: crmCoverage.data, loading: crmCoverage.loading, error: crmCoverage.error }} />
         <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-1 self-start">
           <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="장부 렌즈 전환">

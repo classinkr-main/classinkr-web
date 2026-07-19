@@ -30,8 +30,24 @@ export const CRM_SYNC_TONE: Record<
   healthy: { border: "border-[#BDEFD8]", bg: "bg-[#ECFDF5]", text: "text-[#084734]", dot: "bg-[#084734]" },
 }
 
-interface CoverageResponse {
+export interface CrmCoverageResponse {
   revAccounts?: RevSyncCoverageView | null
+}
+
+/** 부모가 이미 커버리지를 들고 있으면 주입 — 스트립 자체 fetch를 생략한다(같은 화면 이중 GET 제거).
+ *  생략(undefined)이면 독립 모드(기존 자체 fetch 동작 그대로). */
+interface CrmSyncStripProps {
+  coverage?: { data: CrmCoverageResponse | null; loading: boolean; error: string | null }
+}
+
+// 응답 → 스트립 상태 접기 — 자체 fetch 성공 경로와 부모 주입 경로가 같은 판정을 공유한다.
+function stripStateFromResponse(response: CrmCoverageResponse | null): StripState {
+  const rev = response?.revAccounts ?? null
+  const summary = buildCrmSyncSummary(rev)
+  if (rev && summary) return { status: "ready", rev, summary }
+  // 확장 필드가 아직 없거나(배포 스큐) 시트가 비어 있으면 조용히 사라진다.
+  if (rev && rev.scannedRows <= 0) return { status: "empty" }
+  return { status: "unavailable" }
 }
 
 const TOP_UNLINKED_DISPLAY = 5
@@ -87,29 +103,36 @@ type StripState =
   | { status: "empty" }
   | { status: "ready"; rev: RevSyncCoverageView; summary: CrmSyncSummary }
 
-export default function CrmSyncStrip() {
-  const [state, setState] = useState<StripState>({ status: "loading" })
+export default function CrmSyncStrip({ coverage }: CrmSyncStripProps = {}) {
+  const [fetched, setFetched] = useState<StripState>({ status: "loading" })
   const [expanded, setExpanded] = useState(false)
+  const injected = coverage !== undefined
 
   useEffect(() => {
+    // 부모 주입 모드 — 자체 fetch 생략(장부 워크벤치가 이미 같은 커버리지를 들고 있어 이중 GET 제거).
+    if (injected) return
     let alive = true
-    adminFetchJson<CoverageResponse>("/api/admin/crm/coverage")
+    adminFetchJson<CrmCoverageResponse>("/api/admin/crm/coverage")
       .then((response) => {
-        if (!alive) return
-        const rev = response?.revAccounts ?? null
-        const summary = buildCrmSyncSummary(rev)
-        if (rev && summary) setState({ status: "ready", rev, summary })
-        // 확장 필드가 아직 없거나(배포 스큐) 시트가 비어 있으면 조용히 사라진다.
-        else if (rev && rev.scannedRows <= 0) setState({ status: "empty" })
-        else setState({ status: "unavailable" })
+        if (alive) setFetched(stripStateFromResponse(response))
       })
       .catch(() => {
-        if (alive) setState({ status: "unavailable" })
+        if (alive) setFetched({ status: "unavailable" })
       })
     return () => {
       alive = false
     }
-  }, [])
+  }, [injected])
+
+  // 주입 모드는 부모 상태에서 매 렌더 파생(자체 상태 없음): 로딩(데이터 전) = loading(미렌더),
+  // 실패 = unavailable 한 줄, 데이터 도착 = 자체 fetch와 동일 판정(stripStateFromResponse).
+  const state: StripState = injected
+    ? coverage.loading && !coverage.data
+      ? { status: "loading" }
+      : coverage.data
+        ? stripStateFromResponse(coverage.data)
+        : { status: "unavailable" }
+    : fetched
 
   // fail-soft — 로딩 중엔 미렌더(레이아웃은 아래 콘텐츠가 그대로 올라와 있다가 준비되면 삽입).
   if (state.status === "loading" || state.status === "empty") return null

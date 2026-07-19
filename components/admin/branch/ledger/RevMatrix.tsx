@@ -20,6 +20,7 @@ import {
   isDraftConfidence,
   mapNumberValue,
   mergedWeeklyFromMetadata,
+  weeklyConfidenceFromMetadata,
   metadataString,
   productCategoryMeta,
   ProductCategoryPill,
@@ -192,6 +193,9 @@ export interface MatrixPendingDraft {
   amount: number
   confidence: DraftConfidence
   weekly: number[] | null
+  /** 주차별 확도(metadata.weeklyConfidence, 라운드 3 P1) — 주차 셀 팝오버 기본값이 슬롯 상태를
+      우선하도록 pending 요약에 동봉한다. 없으면 null(초안 단위 confidence 폴백). */
+  weeklyConfidence: (DraftConfidence | null)[] | null
 }
 
 // pending 요약에서 좌표(coord) 기준 실제 셀 금액을 뽑는다. 주차 좌표 + weekly 병합 배열이 있으면
@@ -268,6 +272,7 @@ export function buildMatrixPendingByCell(
         amount: draft.amount,
         confidence: draftConfidenceFromMetadata(draft.metadata),
         weekly: mergedWeeklyFromMetadata(draft.metadata),
+        weeklyConfidence: weeklyConfidenceFromMetadata(draft.metadata),
       }
       const monthKey = matrixCoordKey({ rowId: row.id, month: draft.month })
       if (!map.has(monthKey)) map.set(monthKey, summary) // 월 셀: 첫(=최신) 초안

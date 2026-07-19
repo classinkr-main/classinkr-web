@@ -359,3 +359,25 @@ describe("ForecastBoard / DraftQueue — exact 카드 톤·확도 도트 배선(
     expect(queue).toContain("<WeeklyConfidenceDots metadata={draft.metadata} />")
   })
 })
+
+// 라운드 4 최적화 — 주차 셀 팝오버 기본 확도의 슬롯 우선 규약 + pending 요약 동봉.
+describe("matrixCellConfidence — 주차 슬롯 우선(소스 스캔)", () => {
+  it("pending 요약(buildMatrixPendingByCell)에 weeklyConfidence가 동봉된다", () => {
+    const matrix = read("components/admin/branch/ledger/RevMatrix.tsx")
+    const summary = sliceBetween(matrix, "export function buildMatrixPendingByCell", "function parseMatrixAmountResult")
+    expect(summary).toContain("weeklyConfidence: weeklyConfidenceFromMetadata(draft.metadata)")
+  })
+
+  it("주차 좌표는 pending 슬롯 → pending 확도 → 행 슬롯 → 월 우세 순으로 폴백한다", () => {
+    const workbench = read("components/admin/branch/SalesLedgerWorkbench.tsx")
+    const fn = sliceBetween(workbench, "const matrixCellConfidence = useCallback", "const onCommitCell")
+    expect(fn).toContain("pending.weeklyConfidence?.[coord.week]")
+    expect(fn).toContain("weeklyConfidenceFromMetadata(row.draftMetadata)?.[coord.week]")
+    expect(fn).toContain("dominantCellConfidence(rowMonthBucket(row, coord.month))")
+  })
+
+  it("워크벤치 pendingByCell은 인라인 사본 없이 순수 함수를 소비한다(드리프트 차단)", () => {
+    const workbench = read("components/admin/branch/SalesLedgerWorkbench.tsx")
+    expect(workbench).toContain("useMemo(() => buildMatrixPendingByCell(drafts, visibleDealRows), [drafts, visibleDealRows])")
+  })
+})
