@@ -22,7 +22,10 @@ export interface ExternalCrmSyncChainResult {
   candidatesError?: string
 }
 
-async function notifySyncOutcome(result: ExternalCrmSyncChainResult, trigger: "manual" | "cron") {
+export async function notifyExternalCrmSyncOutcome(
+  result: ExternalCrmSyncChainResult,
+  trigger: "manual" | "cron"
+) {
   const { sync, candidates } = result
 
   try {
@@ -82,24 +85,38 @@ export async function runExternalCrmSyncChain(
   const sync = await syncXiaoshouyiSnapshots(trigger, options)
   const result: ExternalCrmSyncChainResult = { sync }
 
-  if (sync.ok && !sync.skipped) {
-    try {
-      result.neoCustomerSnapshots = await refreshCrmNeoCustomerSnapshotsFromExternalRecords()
-    } catch (error) {
-      result.neoCustomerSnapshotsError = error instanceof Error ? error.message : String(error)
-      console.error("[external-crm sync-chain] NEO customer snapshot refresh failed", error)
-    }
+  const shouldRefreshSnapshots = sync.ok && !sync.skipped
+  const shouldGenerateCandidates = sync.ok && !sync.skipped && !sync.cached
+  const [snapshotOutcome, candidateOutcome] = await Promise.all([
+    shouldRefreshSnapshots
+      ? refreshCrmNeoCustomerSnapshotsFromExternalRecords()
+          .then((value) => ({ value }))
+          .catch((error: unknown) => ({ error }))
+      : Promise.resolve(null),
+    shouldGenerateCandidates
+      ? generateExternalCrmLinkCandidates()
+          .then((value) => ({ value }))
+          .catch((error: unknown) => ({ error }))
+      : Promise.resolve(null),
+  ])
+
+  if (snapshotOutcome && "value" in snapshotOutcome) {
+    result.neoCustomerSnapshots = snapshotOutcome.value
+  } else if (snapshotOutcome && "error" in snapshotOutcome) {
+    result.neoCustomerSnapshotsError = snapshotOutcome.error instanceof Error
+      ? snapshotOutcome.error.message
+      : String(snapshotOutcome.error)
+    console.error("[external-crm sync-chain] NEO customer snapshot refresh failed", snapshotOutcome.error)
   }
 
-  if (sync.ok && !sync.skipped && !sync.cached) {
-    try {
-      result.candidates = await generateExternalCrmLinkCandidates()
-    } catch (error) {
-      result.candidatesError = error instanceof Error ? error.message : String(error)
-      console.error("[external-crm sync-chain] candidate generation failed", error)
-    }
+  if (candidateOutcome && "value" in candidateOutcome) {
+    result.candidates = candidateOutcome.value
+  } else if (candidateOutcome && "error" in candidateOutcome) {
+    result.candidatesError = candidateOutcome.error instanceof Error
+      ? candidateOutcome.error.message
+      : String(candidateOutcome.error)
+    console.error("[external-crm sync-chain] candidate generation failed", candidateOutcome.error)
   }
 
-  await notifySyncOutcome(result, trigger)
   return result
 }
