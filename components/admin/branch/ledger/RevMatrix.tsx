@@ -1345,6 +1345,38 @@ export function NeedsLinkBadge({ customer }: { customer: string }) {
   )
 }
 
+// P0-2(호환성 기획 2026-07-18 §4): 연결 확정(linked) 계정 전용 CRM 진입 링크 — NeedsLinkBadge의
+// 대칭짝. href는 커버리지 확장(revAccounts.linkedTargets)의 우세 확정 링크 target을
+// lib/crm/rev-sync-health.ts revLinkedTargetHref 규칙으로 만든 값을 그대로 받는다(여기서 재판정
+// 없음). 우측 레일 전용 — 매트릭스 1열은 무변경(미연결 NeedsLinkChip/팝오버 현행 유지).
+export function CrmLinkedBadge({
+  customer,
+  link,
+  variant = "badge",
+}: {
+  customer: string
+  /** null이면 미렌더(미연결·로딩·deal 등 href 없음) — 호출부가 조회값을 그대로 넘긴다. */
+  link: { href: string; label: string } | null
+  /** badge=그룹 요약(NeedsLinkBadge 자리 대칭 필), inline=행 상세('하드웨어 ↗'와 같은 톤/크기). */
+  variant?: "badge" | "inline"
+}) {
+  if (!link) return null
+  return (
+    <Link
+      href={link.href}
+      onClick={(event) => event.stopPropagation()}
+      title={`${customer} — CRM 연결됨(${link.label}) · CRM에서 보기`}
+      className={
+        variant === "inline"
+          ? "shrink-0 text-[10px] font-bold text-[#7A520F] underline-offset-2 transition hover:text-[#A8741A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+          : "inline-flex shrink-0 items-center rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-1.5 text-[9px] font-bold leading-4 text-[#084734] underline-offset-2 transition hover:bg-[#BDEFD8]/40 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+      }
+    >
+      CRM ↗
+    </Link>
+  )
+}
+
 // SL-2: 붙여넣기 프리뷰 다이얼로그 — 셀 매핑(고객·상품군·월·현재→새 값)과 일괄 확도를 확인한 뒤에만
 // 초안을 만든다. 여기서 만드는 것은 어디까지나 "검토 초안"이며 장부 반영은 체크 큐(2단 게이트)에서만.
 const MATRIX_PASTE_PREVIEW_LIMIT = 40

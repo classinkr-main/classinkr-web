@@ -65,6 +65,49 @@ export interface RevSyncHygiene {
   staleLinks: number
 }
 
+// ── 연결(linked) 계정 → CRM 진입로 (호환성 기획 2026-07-18 P0-2) ────────────
+// 미연결 계정은 매칭 인박스 딥링크가 있지만, 연결 확정된 계정일수록 장부에서 CRM으로
+// 갈 길이 없었다(§3 구조적 단절). 커버리지 확장(linkedTargets)이 계정별 우세 확정 링크
+// target을 싣고, href 규칙은 아래 revLinkedTargetHref 한 곳에서만 정한다.
+
+export type RevSyncLinkedTargetType = "customer" | "partner_account" | "deal"
+
+export interface RevSyncLinkedTarget {
+  /** normalizedAccountKey(시트 고객명) — 장부 레일 행과의 조인 키 */
+  accountKey: string
+  /** 시트 쪽 계정 대표명(집계 name) */
+  name: string
+  targetType: RevSyncLinkedTargetType
+  targetId: string
+  /** 링크 metadata.target_label(CRM 쪽 표시명) — 없으면 null */
+  label: string | null
+}
+
+/**
+ * 연결 계정 → CRM 진입 href.
+ * - customer: crm_source_links의 customer target_id는 포털 customers.id(UUID)다
+ *   (매칭 인박스 라벨 조회가 customers 테이블 — lib/admin-crm-matching.ts). 고객 360 키
+ *   규약(lead:{id}|neo:{accountId}) 어느 쪽으로도 해석되지 않아 360 직행이 불가하므로
+ *   (360 API는 그 외 키를 400으로 거부), 통합 고객 DB 검색 착지(?q=)로 보낸다 — P0-2 기본형.
+ * - partner_account: /admin/crm/partners/{id} (기존 파트너 상세 경로 규약).
+ * - deal: 딜 상세 라우트가 없어(개요 대시보드뿐) 링크 생략(null).
+ */
+export function revLinkedTargetHref(
+  target: Pick<RevSyncLinkedTarget, "targetType" | "targetId" | "label" | "name">
+): string | null {
+  const targetId = target.targetId?.trim()
+  if (!targetId) return null
+  if (target.targetType === "partner_account") {
+    return `/admin/crm/partners/${encodeURIComponent(targetId)}`
+  }
+  if (target.targetType === "customer") {
+    const q = (target.label ?? "").trim() || target.name.trim()
+    if (!q) return null
+    return `/admin/crm/customers/unified?q=${encodeURIComponent(q)}`
+  }
+  return null
+}
+
 /** 클라이언트가 보는 revAccounts 축(확장분은 배포 스큐 대비 optional). */
 export interface RevSyncCoverageView {
   scannedRows: number
@@ -89,6 +132,8 @@ export interface RevSyncCoverageView {
   asOf?: string | null
   hygiene?: RevSyncHygiene
   health?: RevSyncHealth
+  /** 연결(linked) 계정의 우세 확정 링크 target — 장부 레일 "CRM ↗" 진입로(P0-2) */
+  linkedTargets?: RevSyncLinkedTarget[]
 }
 
 /** A안 스트립 헤드라인·B안 칩이 공유하는 요약 모델. 확장 필드가 없으면(구 서버) null. */

@@ -46,6 +46,7 @@ import {
 export { isDraftRecordError } from "./ledger/useLedgerDraftQueue"
 import { matchesTokens, tokenize } from "./search-tokens"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
+import { revLinkedTargetHref, type RevSyncLinkedTarget } from "@/lib/crm/rev-sync-health"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { ledgerMonthSplit, ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
@@ -106,6 +107,7 @@ const DraftQueue = dynamic(() => import("./ledger/DraftQueue").then((m) => m.Dra
 // 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
 import {
   buildMatrixPastePlan,
+  CrmLinkedBadge,
   dominantCellConfidence,
   EMPTY_BUCKET,
   findOpenNewRowDuplicate,
@@ -1484,6 +1486,30 @@ export default function SalesLedgerWorkbench() {
   const isNeedsLink = useCallback(
     (customer: string) => needsLinkKeys.size > 0 && needsLinkKeys.has(normalizedAccountKey(customer)),
     [needsLinkKeys],
+  )
+
+  // P0-2(호환성 기획 2026-07-18 §4): 연결(linked) 계정 → CRM 진입로. needsLink(account-master
+  // unmatched)의 대칭 소스 — 커버리지 확장(/api/admin/crm/coverage revAccounts.linkedTargets)의
+  // 우세 확정 링크 target을 계정키로 매핑한다. href 규칙은 rev-sync-health SSOT
+  // (revLinkedTargetHref) — deal target은 상세 라우트가 없어 null(링크 미렌더).
+  // needsLink와 동일하게 로딩/실패 중엔 링크를 걸지 않는다(기본 없음 = 오표기 없음).
+  const crmCoverage = useBranchJson<{ revAccounts?: { linkedTargets?: RevSyncLinkedTarget[] } | null }>(
+    "/api/admin/crm/coverage",
+    refreshKey,
+  )
+  const crmLinkedTargetByKey = useMemo(() => {
+    const map = new Map<string, { href: string; label: string }>()
+    for (const target of crmCoverage.data?.revAccounts?.linkedTargets ?? []) {
+      if (!target?.accountKey || map.has(target.accountKey)) continue
+      const href = revLinkedTargetHref(target)
+      if (!href) continue
+      map.set(target.accountKey, { href, label: target.label?.trim() || target.name })
+    }
+    return map
+  }, [crmCoverage.data?.revAccounts?.linkedTargets])
+  const crmLinkedFor = useCallback(
+    (customer: string) => crmLinkedTargetByKey.get(normalizedAccountKey(customer)) ?? null,
+    [crmLinkedTargetByKey],
   )
 
   const sheetRows = useMemo<LedgerRevenueRow[]>(() => {
@@ -4167,9 +4193,10 @@ export default function SalesLedgerWorkbench() {
                       .filter(Boolean)
                       .join(" · ") || "-"}
                   </p>
-                  {isNeedsLink(selectedGroup.customer) && (
-                    <p className="mt-1.5">
-                      <NeedsLinkBadge customer={selectedGroup.customer} />
+                  {(isNeedsLink(selectedGroup.customer) || crmLinkedFor(selectedGroup.customer)) && (
+                    <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      {isNeedsLink(selectedGroup.customer) && <NeedsLinkBadge customer={selectedGroup.customer} />}
+                      <CrmLinkedBadge customer={selectedGroup.customer} link={crmLinkedFor(selectedGroup.customer)} />
                     </p>
                   )}
                   <div className="mt-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
@@ -4295,6 +4322,12 @@ export default function SalesLedgerWorkbench() {
                           하드웨어 ↗
                         </Link>
                       )}
+                      {/* P0-2: 연결 확정 고객만 CRM 진입 — '하드웨어 ↗'와 같은 톤/크기(inline). */}
+                      <CrmLinkedBadge
+                        customer={detail?.customer_name ?? selectedRow.customer}
+                        link={crmLinkedFor(detail?.customer_name ?? selectedRow.customer)}
+                        variant="inline"
+                      />
                     </span>
                   </div>
                   {/* 계보(1열 다이어트로 매트릭스 ⓘ 배지에서 이동) — 시트 N행·원천 라벨을 뮤트 라인으로.
