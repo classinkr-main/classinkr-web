@@ -761,6 +761,50 @@ export function DonutGauge({
   )
 }
 
+// 예정(잔여) 구간의 빗금 — Board-1b의 '예상' 해칭을 Warning 틴트 페어로 재현(팔레트 준수).
+// SSOT는 여기(shared) — ForecastBoard·ConfidenceStackBar가 동일 값을 재수입해 쓴다.
+export const OPEN_HATCH_BACKGROUND =
+  "repeating-linear-gradient(45deg, #ECD29C, #ECD29C 4px, #FBF1E0 4px, #FBF1E0 8px)"
+
+// 확도 스택 게이지 — 확정(솔리드)·고확도(솔리드)·예정 잔여(Warning 틴트 빗금) 3단 비율 바.
+// 라운드 3 P2: 보드 렌즈 헤더(ForecastBoard) 전용이던 시각 문법을 shared로 승격해 REV 렌즈
+// 확도 게이지가 같은 컴포넌트를 소비한다(중복 제거). 레전드(라벨·숫자)는 소비처마다 달라
+// 이 컴포넌트 밖에 둔다 — Board는 상시 노출 레전드를, REV는 title 툴팁을 쓴다.
+export interface ConfidenceStackBarProps {
+  /** 스코프(선택월 등) 총액. 0 이하면 아무것도 렌더하지 않는다(보드 헤더와 동일 가드). */
+  total: number
+  confirmed: number
+  high: number
+  /** 바 컨테이너에 얹을 추가 클래스(예: 상단 여백) — 기본은 없음(소비처가 배치를 정한다). */
+  className?: string
+  /** 네이티브 title 툴팁 — 상시 레전드가 없는 소비처(REV)가 확정/고확도/예정 수치를 hover로 노출할 때 쓴다. */
+  title?: string
+}
+
+export function ConfidenceStackBar({ total, confirmed, high, className = "", title }: ConfidenceStackBarProps) {
+  if (total <= 0) return null
+  const open = Math.max(total - confirmed - high, 0)
+  return (
+    <div
+      className={`flex h-[10px] overflow-hidden rounded-sm border border-[rgba(0,0,0,0.08)] ${className}`}
+      title={title}
+    >
+      {confirmed > 0 && (
+        <div className={CONFIDENCE_TOKENS.confirmed.bgClass} style={{ width: `${(confirmed / total) * 100}%` }} />
+      )}
+      {high > 0 && (
+        <div
+          className={CONFIDENCE_TOKENS["high-confidence"].bgClass}
+          style={{ width: `${(high / total) * 100}%` }}
+        />
+      )}
+      {open > 0 && (
+        <div className="flex-1 border-l border-dashed border-[#ECD29C]" style={{ background: OPEN_HATCH_BACKGROUND }} />
+      )}
+    </div>
+  )
+}
+
 export function LoadingPanel({ label }: { label: string }) {
   return (
     <div className="flex min-h-[180px] items-center justify-center rounded-lg border border-[rgba(0,0,0,0.08)] bg-white text-[13px] font-semibold text-[#615D59]">

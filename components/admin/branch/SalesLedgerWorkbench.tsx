@@ -3647,6 +3647,7 @@ export default function SalesLedgerWorkbench() {
                   selectedMonth={selectedMonth}
                   revComparableGoal={revComparableGoal}
                   revGoalMutedByFilter={revGoalMutedByFilter}
+                  revMonthTotal={revMonthTotal}
                   revMonthConfirmed={revMonthConfirmed}
                   revMonthPlanned={revMonthPlanned}
                   revMonthHighConfidence={revMonthHighConfidence}

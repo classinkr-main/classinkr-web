@@ -9,11 +9,13 @@ import { useMemo, useState } from "react"
 import { CalendarRange } from "lucide-react"
 import { CONFIDENCE_TOKENS, type ConfidenceKey } from "@/lib/branch/confidence-tokens"
 import {
+  ConfidenceStackBar,
   FORECAST_WEEK_RANGE_LABELS,
   formatMoney,
   formatWeekAmount,
   formatMonthLabel,
   mergedWeeklyFromMetadata,
+  OPEN_HATCH_BACKGROUND,
   productCategoryMeta,
   rowMonthAmount,
   rowMonthConfirmed,
@@ -160,10 +162,6 @@ export function buildForecastBoardModel(rows: LedgerRevenueRow[], month: string)
   }
 }
 
-// 예정(잔여) 구간의 빗금 — Board-1b의 '예상' 해칭을 Warning 틴트 페어로 재현(팔레트 준수).
-const OPEN_HATCH_BACKGROUND =
-  "repeating-linear-gradient(45deg, #ECD29C, #ECD29C 4px, #FBF1E0 4px, #FBF1E0 8px)"
-
 // 좌측 확도 보더 색은 클래스 리터럴 대신 CONFIDENCE_TOKENS[…].color를 인라인 스타일로
 // 소비한다(확도 색 리터럴 재정의 금지 — confidence-tokens SSOT·디자인 토큰 가드 규약).
 const CARD_TONE_CLASS: Record<ConfidenceKey, string> = {
@@ -225,20 +223,12 @@ export function ForecastBoard({
 
         {model.monthTotal > 0 && (
           <>
-            <div className="mt-3 flex h-[10px] overflow-hidden rounded-sm border border-[rgba(0,0,0,0.08)]">
-              {model.monthConfirmed > 0 && (
-                <div className="bg-[#084734]" style={{ width: `${(model.monthConfirmed / model.monthTotal) * 100}%` }} />
-              )}
-              {model.monthHighConfidence > 0 && (
-                <div
-                  className={CONFIDENCE_TOKENS["high-confidence"].bgClass}
-                  style={{ width: `${(model.monthHighConfidence / model.monthTotal) * 100}%` }}
-                />
-              )}
-              {model.monthOpen > 0 && (
-                <div className="flex-1 border-l border-dashed border-[#ECD29C]" style={{ background: OPEN_HATCH_BACKGROUND }} />
-              )}
-            </div>
+            <ConfidenceStackBar
+              total={model.monthTotal}
+              confirmed={model.monthConfirmed}
+              high={model.monthHighConfidence}
+              className="mt-3"
+            />
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-[#615D59]">
               <span>
                 <span className={`inline-block h-2 w-2 rounded-[2px] align-middle ${CONFIDENCE_TOKENS.confirmed.bgClass}`} />{" "}

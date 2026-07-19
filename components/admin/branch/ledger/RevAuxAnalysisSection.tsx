@@ -5,6 +5,7 @@ import { CalendarDays, ChevronRight, Target, TrendingUp } from "lucide-react"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   BreakdownNumbersTable,
+  ConfidenceStackBar,
   RevWeekNumbersTable,
   formatMonthLabel,
   formatMoney,
@@ -19,6 +20,8 @@ interface RevAuxAnalysisSectionProps {
   selectedMonth: string
   revComparableGoal: number | null
   revGoalMutedByFilter: boolean
+  /** 라운드 3 P2 — 확도 스택 게이지(ConfidenceStackBar) 분모. revMonthScalars.total 그대로(새 집계 아님). */
+  revMonthTotal: number
   revMonthConfirmed: number
   revMonthPlanned: number
   revMonthHighConfidence: number
@@ -48,6 +51,7 @@ export function RevAuxAnalysisSection({
   selectedMonth,
   revComparableGoal,
   revGoalMutedByFilter,
+  revMonthTotal,
   revMonthConfirmed,
   revMonthPlanned,
   revMonthHighConfidence,
@@ -67,6 +71,15 @@ export function RevAuxAnalysisSection({
   revProductTableRows,
   revManagerPeriodLabel,
 }: RevAuxAnalysisSectionProps) {
+  // 라운드 3 P2 — 확도 스택 게이지 title 툴팁(범례 대체). 퍼센트 반올림 관례는 ForecastBoard
+  // 헤더(confirmedPct/highPct/openPct)와 동일 — Math.round + 잔여는 100에서 역산.
+  const confidenceConfirmedPct = revMonthTotal > 0 ? Math.round((revMonthConfirmed / revMonthTotal) * 100) : 0
+  const confidenceHighPct = revMonthTotal > 0 ? Math.round((revMonthHighConfidence / revMonthTotal) * 100) : 0
+  const confidenceOpenPct = Math.max(100 - confidenceConfirmedPct - confidenceHighPct, 0)
+  const confidenceBarTitle =
+    `확정 ${formatMoney(revMonthConfirmed)} · ${confidenceConfirmedPct}%` +
+    ` · 고확도 ${formatMoney(revMonthHighConfidence)} · ${confidenceHighPct}%` +
+    ` · 예정 ${formatMoney(revMonthPlanned)} · ${confidenceOpenPct}%`
   return (
     <>
                 {/* 보조 분석(강등): 선택 월 목표대비·주차별·담당자/상품군. 기본 접힘 — 1차 뷰는 아래 매트릭스. */}
@@ -101,6 +114,20 @@ export function RevAuxAnalysisSection({
                       <ChevronRight className={`h-3.5 w-3.5 transition-transform ${revAuxOpen ? "rotate-90" : ""}`} />
                     </span>
                   </button>
+                  {/* 라운드 3 P2 — 확도 스택 게이지: ForecastBoard 헤더와 동일 시각 문법(확정/고확도
+                      솔리드 + 예정 잔여 빗금)을 REV로 승격. 선택월 스코프(revMonthScalars 그대로 소비,
+                      새 집계 없음) — 상단 MetricTile 5종(M/Q/Y 기간 요약)과는 스코프가 달라 중복이
+                      아니다. 접힘/펼침과 무관하게 상시 노출(보드 헤더처럼 상시 시각 요약). */}
+                  {revMonthTotal > 0 && (
+                    <div className="px-4 pb-3">
+                      <ConfidenceStackBar
+                        total={revMonthTotal}
+                        confirmed={revMonthConfirmed}
+                        high={revMonthHighConfidence}
+                        title={confidenceBarTitle}
+                      />
+                    </div>
+                  )}
                 </div>
                 {revAuxOpen && (
                 <div className="space-y-4 border-b border-[rgba(0,0,0,0.08)] p-4">
