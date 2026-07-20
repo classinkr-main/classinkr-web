@@ -270,7 +270,6 @@ export function ForecastBoard({
                     ? "border-l-2 border-l-[#084734] bg-[#ECFDF5] text-[#084734]"
                     : "text-[#A39E98] hover:bg-[#F6F5F4] hover:text-[#615D59]"
                 }`}
-                style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
               >
                 {Number(month.value.split("-")[1])}월
               </button>
