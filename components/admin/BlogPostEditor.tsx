@@ -1854,35 +1854,6 @@ export default function BlogPostEditor({
             </div>
           </div>
 
-          {/* Benefits */}
-          <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-[#111110]">
-                  이 글을 읽으면 좋은 점
-                  <FieldBadge />
-                </p>
-                <p className="mt-0.5 text-[12px] text-[#1a1a1a]/40">상세 페이지 상단에 노출되는 포인트</p>
-              </div>
-              <span className="rounded-full bg-[#f5f6f1] px-3 py-1 text-[12px] text-[#084734]">최대 3개</span>
-            </div>
-            <div className="space-y-2.5">
-              {form.benefitItems.map((benefit, index) => (
-                <Input
-                  key={index}
-                  value={benefit}
-                  onChange={(event) => updateBenefit(index, event.target.value)}
-                  placeholder={`좋은 점 ${index + 1}`}
-                />
-              ))}
-              <Input
-                value={form.targetReader || ""}
-                onChange={(event) => updateForm("targetReader", event.target.value)}
-                placeholder="추천 독자: 예) 상담 전환율을 높이고 싶은 학원 원장"
-              />
-            </div>
-          </div>
-
           {/* Editor */}
           <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -2147,6 +2118,35 @@ export default function BlogPostEditor({
                 </div>
               </TabsContent>
             </Tabs>
+          </div>
+
+          {/* Benefits */}
+          <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[#111110]">
+                  이 글을 읽으면 좋은 점
+                  <FieldBadge />
+                </p>
+                <p className="mt-0.5 text-[12px] text-[#1a1a1a]/40">상세 페이지 상단에 노출되는 포인트</p>
+              </div>
+              <span className="rounded-full bg-[#f5f6f1] px-3 py-1 text-[12px] text-[#084734]">최대 3개</span>
+            </div>
+            <div className="space-y-2.5">
+              {form.benefitItems.map((benefit, index) => (
+                <Input
+                  key={index}
+                  value={benefit}
+                  onChange={(event) => updateBenefit(index, event.target.value)}
+                  placeholder={`좋은 점 ${index + 1}`}
+                />
+              ))}
+              <Input
+                value={form.targetReader || ""}
+                onChange={(event) => updateForm("targetReader", event.target.value)}
+                placeholder="추천 독자: 예) 상담 전환율을 높이고 싶은 학원 원장"
+              />
+            </div>
           </div>
         </section>
 
