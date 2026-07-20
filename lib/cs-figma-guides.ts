@@ -793,6 +793,15 @@ function compactGuideAnswerText(value: string, hiddenTerms: string[], maxLength 
   return `${sanitized.slice(0, maxLength - 3).trim()}...`
 }
 
+// 캡처 제작·검수 과정에서만 의미가 있는 메타데이터. 생성형 가이드의 deepDive에
+// 이런 메모가 섞여 있어도 공개 CS 답변에는 절대 노출하지 않는다.
+export const INTERNAL_GUIDE_PRODUCTION_NOTE_RE =
+  /원본\s*(?:이미지|캡처|화면|파일)|회색\s*(?:빈\s*)?(?:플레이스홀더|박스|영역)|플레이스홀더|export(?:되지|되지\s*않|에서|\s*상태)|스크린샷\s*(?:자리|영역|상태)|스텝\s*\d+\s*스크린샷|\d+\s*단계\s*스크린샷|프로필\s*\(\s*블러|실제\s*화면\s*캡처|캡션만|이미지\s*(?:없음|누락)|source\s*digest|cs\s*주의사항/i
+
+function isPublicGuideText(value: string) {
+  return Boolean(value.trim()) && !INTERNAL_GUIDE_PRODUCTION_NOTE_RE.test(value)
+}
+
 // 단계/팁 텍스트에서 화면 주석("(…빨간 박스/화살표/표시…)"), 예시 식별자("예: 1026165787"),
 // 전화/계정 숫자, 피그마/캡처 표현을 제거해 소비자용으로 정리한다.
 export function sanitizeGuideStep(value: string, hiddenTerms: string[] = []) {
@@ -844,17 +853,22 @@ export function formatCsFigmaGuideAnswer(guide: CsFigmaGuide) {
     return blocks.join("\n\n")
   }
 
-  const stepLines = guide.steps.map((step, index) => `${index + 1}. ${sanitizeGuideStep(step, hiddenTerms)}`)
+  const publicSteps = guide.steps
+    .map((step) => sanitizeGuideStep(step, hiddenTerms))
+    .filter(isPublicGuideText)
+  const stepLines = publicSteps.map((step, index) => `${index + 1}. ${step}`)
   const deepDiveLines = guide.deepDive
     .filter((item) => !/순서\s*그대로\s*안내/.test(item.title))
-    .map((item) => {
+    .flatMap((item) => {
       const title = sanitizeGuideStep(item.title, hiddenTerms)
+      if (!isPublicGuideText(title)) return []
       const checks = item.checks
         .slice(0, 2)
         .map((check) => compactGuideAnswerText(sanitizeGuideStep(check, hiddenTerms), hiddenTerms, 88))
-        .filter(Boolean)
+        .filter(isPublicGuideText)
         .join(" / ")
-      return `- ${item.level} ${title}${checks ? `: ${checks}` : ""}`
+      if (!checks) return []
+      return [`- ${item.level} ${title}: ${checks}`]
     })
 
   return [

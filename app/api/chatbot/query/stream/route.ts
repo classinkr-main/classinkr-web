@@ -26,8 +26,8 @@ function getChatbotRouteTimeoutMs() {
 //   {"type":"replace","answer":"..."} 정제·검증된 최종 답변으로 확정
 //   {"type":"meta", ...}              출처/제안질문/세션/answerEventId 등 메타데이터
 //   {"type":"error","error":"..."}   처리 실패
-function emitRouteFallback(emit: (event: ChatbotStreamEvent) => void) {
-  const fallback = buildChatbotRouteFallback()
+function emitRouteFallback(emit: (event: ChatbotStreamEvent) => void, input?: unknown) {
+  const fallback = buildChatbotRouteFallback(input)
   emit({ type: "replace", answer: fallback.answer })
   emit({
     type: "meta",
@@ -37,8 +37,8 @@ function emitRouteFallback(emit: (event: ChatbotStreamEvent) => void) {
       needsHandoff: fallback.needsHandoff,
       unresolved: fallback.unresolved,
       handoffIntent: fallback.handoffIntent,
-      detectedCategory: "general",
-      detectedIntent: "docs_lookup",
+      detectedCategory: fallback.detectedCategory,
+      detectedIntent: fallback.detectedIntent,
       sources: fallback.sources,
       suggestedQuestions: fallback.suggestedQuestions,
       warning: fallback.warning,
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
       const timeoutId = setTimeout(() => {
         if (closed) return
         console.warn("[POST /api/chatbot/query/stream] timed out; returning deterministic fallback.")
-        emitRouteFallback(emit)
+        emitRouteFallback(emit, requestBody)
         close()
       }, getChatbotRouteTimeoutMs())
 
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
           emit({ type: "error", error: error.message })
         } else {
           console.error("[POST /api/chatbot/query/stream] error:", error)
-          emitRouteFallback(emit)
+          emitRouteFallback(emit, requestBody)
         }
       } finally {
         clearTimeout(timeoutId)

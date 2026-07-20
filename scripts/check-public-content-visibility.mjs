@@ -42,10 +42,9 @@ const [latestBlog, latestUpdateDoc] = await Promise.all([
   fetchLatestPublicUpdateDoc(),
 ])
 
+const failures = []
 const aboutText = readArtifacts(REQUIRED_ARTIFACTS.about)
 const updatesText = readArtifacts(REQUIRED_ARTIFACTS.updates)
-
-const failures = []
 
 if (!latestBlog) {
   failures.push("No published blog post was found in Supabase.")

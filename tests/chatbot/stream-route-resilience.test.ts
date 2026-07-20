@@ -31,6 +31,18 @@ describe("POST /api/chatbot/query/stream resilience", () => {
   })
 
   it("returns 400 before opening a stream when the message shape is invalid", async () => {
+    class MockChatbotInputError extends Error {
+      status = 400
+    }
+
+    vi.doMock("@/lib/chatbot/service", () => ({
+      ChatbotInputError: MockChatbotInputError,
+      streamChatbotQuery: vi.fn(),
+      validateChatbotQueryInput: vi.fn(() => {
+        throw new MockChatbotInputError("질문을 입력해 주세요.")
+      }),
+    }))
+
     const { POST } = await import("@/app/api/chatbot/query/stream/route")
 
     const response = await POST(makeStreamRequest({ message: "" }, "stream-bad-message"))
@@ -70,8 +82,8 @@ describe("POST /api/chatbot/query/stream resilience", () => {
         type: "meta",
         meta: expect.objectContaining({
           answerMode: "fallback",
-          detectedCategory: "general",
-          detectedIntent: "docs_lookup",
+          detectedCategory: "consultation",
+          detectedIntent: "sales_consulting",
           warning: expect.stringContaining("기본 안내"),
         }),
       })
@@ -95,7 +107,7 @@ describe("POST /api/chatbot/query/stream resilience", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     const { POST } = await import("@/app/api/chatbot/query/stream/route")
     const response = await POST(
-      makeStreamRequest({ message: "도입 상담이 궁금해요" }, "stream-timeout-fallback")
+      makeStreamRequest({ message: "로그인이 자꾸 안 됩니다" }, "stream-timeout-fallback")
     )
     const eventsPromise = readNdjson(response)
 
@@ -106,7 +118,7 @@ describe("POST /api/chatbot/query/stream resilience", () => {
     expect(events).toContainEqual(
       expect.objectContaining({
         type: "replace",
-        answer: expect.stringContaining("Classin"),
+        answer: expect.stringContaining("지원 상담"),
       })
     )
     expect(events).toContainEqual(
@@ -114,6 +126,10 @@ describe("POST /api/chatbot/query/stream resilience", () => {
         type: "meta",
         meta: expect.objectContaining({
           answerMode: "fallback",
+          detectedCategory: "troubleshooting",
+          detectedIntent: "troubleshooting",
+          handoffIntent: "support",
+          needsHandoff: true,
           warning: expect.stringContaining("기본 안내"),
         }),
       })

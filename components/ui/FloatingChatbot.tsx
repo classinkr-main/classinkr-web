@@ -53,7 +53,9 @@ import {
 type HandoffIntent = "demo" | "support"
 
 const UNRESOLVED_STREAK_THRESHOLD = 3
-const CHATBOT_REQUEST_TIMEOUT_MS = 14_000
+// 서버 route 기본 예산(13s)에 분산 rate-limit·왕복 네트워크 여유를 더한다.
+// 서버가 deterministic fallback을 확정하기 직전에 클라이언트가 먼저 끊지 않도록 한다.
+const CHATBOT_REQUEST_TIMEOUT_MS = 17_000
 const STARTER_SUGGESTION_LIMIT = 4
 const FOLLOW_UP_SUGGESTION_LIMIT = 3
 const ANSWER_SCROLL_TOP_OFFSET_PX = 32

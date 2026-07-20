@@ -34,6 +34,11 @@ import {
   sanitizeGuideStep,
 } from "@/lib/cs-figma-guides"
 import { getCsFigmaEnrichment } from "@/lib/cs-figma-enrichments"
+import {
+  OPS_BUILTIN_NOTE,
+  PRICE_COMPOSITION_ITEMS,
+  PRICE_FINAL_QUOTE_GUIDANCE,
+} from "@/lib/chatbot/pricing-policy"
 
 // CS 사용 가이드 직답의 출처 식별용 내부 헤딩(피그마/CS 표현 미노출)
 const CS_FIGMA_GUIDE_SOURCE_HEADING = "사용 순서 안내"
@@ -445,12 +450,126 @@ function isUnsupportedAcademyPaymentFeatureQuestion(question: NormalizedQuestion
   )
 }
 
-function buildPolicyGuardResponse(question: NormalizedQuestion): {
+type PolicyGuardResult = {
   response: Omit<ChatbotQueryResponse, "answerEventId" | "sessionId" | "warning" | "handoffIntent">
   category: string
   intent: ChatbotIntent
   handoffIntent: HandoffIntent
-} | null {
+}
+
+function buildSensitiveConfirmationResponse(question: NormalizedQuestion): PolicyGuardResult | null {
+  let answer: string
+  let category: string
+  let intent: ChatbotIntent
+  let handoffIntent: HandoffIntent
+  let heading: string
+  let sourceSlug = "pre-adoption-faq-22-questions"
+  let sourceCategory: string
+  let suggestedQuestions: string[]
+
+  if (isS65ExactSpecificationQuestion(question)) {
+    answer = getS65ExactSpecificationAnswer()
+    category = "hardware"
+    intent = "hardware_support"
+    handoffIntent = "demo"
+    heading = "S65 세부 사양 확인 필요"
+    sourceCategory = "hardware"
+    suggestedQuestions = [
+      "S65 최신 규격서를 확인하고 싶어요",
+      "S75와 S86 표준 모델을 비교해 주세요",
+      "교실 크기에 맞는 모델을 추천해 주세요",
+    ]
+  } else if (isHardwarePackageCompositionQuestion(question)) {
+    answer = getHardwarePackageCompositionAnswer()
+    category = "hardware"
+    intent = "hardware_support"
+    handoffIntent = "demo"
+    heading = "PC·카메라 구성 확인 필요"
+    sourceCategory = "hardware"
+    suggestedQuestions = [
+      "보드 모델별 기본 구성을 확인하고 싶어요",
+      "카메라와 마이크 구성 기준을 알려주세요",
+      "교실 설치 전 확인 항목을 알려주세요",
+    ]
+  } else if (isSecurityOrPrivacyAssuranceQuestion(question)) {
+    answer = getSecurityAndPrivacyConfirmationAnswer()
+    category = "admin"
+    intent = "admin_operations"
+    handoffIntent = "support"
+    heading = "보안·개인정보 확인 필요"
+    sourceCategory = "admin"
+    suggestedQuestions = [
+      "개인정보 처리 기준을 확인하고 싶어요",
+      "관리자 데이터 접근 권한을 확인하고 싶어요",
+      "데이터 보관·삭제 기준을 확인하고 싶어요",
+    ]
+  } else if (isInstallDurationQuestion(question)) {
+    answer = getInstallDurationConfirmationAnswer()
+    category = "hardware"
+    intent = "hardware_support"
+    handoffIntent = "demo"
+    heading = "설치 소요시간 확인 필요"
+    sourceCategory = "hardware"
+    suggestedQuestions = [
+      "설치 전 현장 확인 항목을 알려주세요",
+      "벽걸이와 이동형 스탠드를 비교해 주세요",
+      "설치 일정을 상담하고 싶어요",
+    ]
+  } else if (isAfterSalesSupportQuestion(question)) {
+    answer = getAfterSalesSupportConfirmationAnswer()
+    category = "hardware"
+    intent = "hardware_support"
+    handoffIntent = "support"
+    heading = "A/S 조건 확인 필요"
+    sourceCategory = "hardware"
+    suggestedQuestions = [
+      "현재 고장 증상별 점검 순서를 알려주세요",
+      "보증·출장 조건을 확인하고 싶어요",
+      "기술지원 상담으로 연결해 주세요",
+    ]
+  } else if (isSensitiveIntegrationQuestion(question)) {
+    answer = getIntegrationConfirmationAnswer()
+    category = "admin"
+    intent = "admin_operations"
+    handoffIntent = "demo"
+    heading = "API와 정직한 연동 범위"
+    sourceSlug = "academy-system-os-positioning"
+    sourceCategory = "admin"
+    suggestedQuestions = [
+      "연동하려는 데이터와 동작을 정리해 주세요",
+      "읽기와 쓰기 연동 범위를 확인하고 싶어요",
+      "API 연동 상담을 받고 싶어요",
+    ]
+  } else {
+    return null
+  }
+
+  const source = buildStaticDocSource(
+    "start",
+    sourceSlug,
+    heading,
+    answer,
+    420,
+    sourceCategory
+  )
+
+  return {
+    response: {
+      answer,
+      answerMode: "direct_answer",
+      confidence: 0.94,
+      needsHandoff: false,
+      sources: source ? [source] : [],
+      suggestedQuestions,
+      unresolved: true,
+    },
+    category,
+    intent,
+    handoffIntent,
+  }
+}
+
+function buildPolicyGuardResponse(question: NormalizedQuestion): PolicyGuardResult | null {
   const text = question.redacted.toLowerCase()
 
   if (isUnsupportedAcademyPaymentFeatureQuestion(question)) {
@@ -459,7 +578,7 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
         answer: [
           "학원 결제 기능은 제공하지 않습니다.",
           "Classin은 수업, 전자칠판, 녹화, EDB, LMS, 관리자 데이터를 중심으로 쓰는 수업 시스템 OS이고, 학원비 결제·수납·정산은 기존 학원 관리 시스템이나 별도 결제/정산 연동 범위로 분리해 설계하는 편이 맞습니다.",
-          "요금/견적은 전자칠판, OPS, 카메라, 스탠드/벽걸이, 소프트웨어, 설치·온보딩 구성 기준으로 안내할 수 있어요.",
+          "요금/견적은 선택한 보드 모델, 카메라·스탠드·벽걸이, 소프트웨어 연동, 온보딩 범위 기준으로 안내할 수 있어요. OPS는 전자칠판 내장 강점이며 별도 견적 항목이 아닙니다.",
         ].join("\n\n"),
         answerMode: "direct_answer",
         confidence: 0.96,
@@ -543,6 +662,11 @@ function buildPolicyGuardResponse(question: NormalizedQuestion): {
       handoffIntent: "support",
     }
   }
+
+  // 정책·계약·현장 조건 확인이 필요한 질문은 self-knowledge, 검색, 생성형 답변보다
+  // 먼저 고정 답변으로 잠근다. 확인 필요 문구가 AI 재작성으로 확정 표현이 되는 것을 막는다.
+  const sensitiveConfirmation = buildSensitiveConfirmationResponse(question)
+  if (sensitiveConfirmation) return sensitiveConfirmation
 
   const selfKnowledgeEntry = findChatbotSelfKnowledgeEntry(question.redacted)
   if (selfKnowledgeEntry) {
@@ -764,7 +888,54 @@ function isAssignmentQuestion(question: NormalizedQuestion) {
 }
 
 function isPrivacyProcessingQuestion(question: NormalizedQuestion) {
-  return /개인정보.*(처리|보관|관리|방침|유출|보호|보안)|데이터.*(처리|보관|지역|유출|보안)/.test(question.redacted.toLowerCase())
+  return /개인정보.*(처리|보관|관리|방침|유출|보호|보안)|(?:학생|학습|수업)?\s*데이터.*(처리|보관|지역|유출|보안|안전|보호|암호화|접근|열람|조회|삭제)/.test(question.redacted.toLowerCase())
+}
+
+function isSecurityOrPrivacyAssuranceQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return (
+    isPrivacyProcessingQuestion(question) ||
+    /(?:개인정보|학생\s*데이터|학습\s*데이터|수업\s*데이터|학원(?:의)?\s*(?:콘텐츠|자료|데이터)|수업\s*자료|콘텐츠).{0,24}(?:안전|보안|보호|암호화|유출|접근|열람|조회|볼\s*수|볼수|누가\s*보|관리자|권한|처리|보관|삭제|서버)/.test(text) ||
+    /(?:관리자|누가|권한).{0,18}(?:어떤|무슨|어디까지)?\s*(?:데이터|콘텐츠|자료).{0,10}(?:보|볼|열람|조회|접근)/.test(text)
+  )
+}
+
+function isInstallDurationQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return (
+    /설치.{0,24}(?:얼마나|기간|시간|며칠|몇\s*일|소요|일정|걸리|반나절|한나절|하루|당일)/.test(text) ||
+    /(?:얼마나|기간|시간|며칠|몇\s*일|소요|일정|반나절|한나절|하루|당일).{0,24}설치/.test(text)
+  )
+}
+
+function isAfterSalesSupportQuestion(question: NormalizedQuestion) {
+  return /(?:^|\s)(?:a\/?s|as)(?:\s|$|는|가|를|도)|애프터\s*서비스|보증\s*(?:기간|조건|범위)|무상\s*수리|유상\s*수리|출장\s*수리|원격\s*지원|유지\s*보수/.test(
+    question.redacted.toLowerCase()
+  )
+}
+
+function isSensitiveIntegrationQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return (
+    /api|sdk|양방향|쌍방향|자동\s*동기화|실시간\s*동기화/.test(text) ||
+    /(?:기존|외부|자체).{0,12}(?:시스템|crm|lms|erp).{0,14}연동/.test(text) ||
+    /연동.{0,14}(?:기존|외부|자체|crm|lms|erp|자동|양방향|쌍방향)/.test(text) ||
+    /데이터.{0,12}(?:쓰기|생성|수정|업데이트|전송|동기화)/.test(text)
+  )
+}
+
+function isS65ExactSpecificationQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return /s\s*65|65\s*인치/.test(text) && /사양|스펙|규격|크기|치수|무게|중량|전력|해상도|밝기|터치|카메라|마이크|ops|포트/.test(text)
+}
+
+function isHardwarePackageCompositionQuestion(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  return (
+    /(?:별도|외부|추가).{0,10}(?:pc|컴퓨터|노트북|카메라|마이크).{0,16}(?:필요|준비|구매|사야|있어야)/.test(text) ||
+    /(?:pc|컴퓨터|노트북|카메라|마이크).{0,10}(?:별도|외부|추가).{0,10}(?:필요|준비|구매|사야|있어야)/.test(text) ||
+    /(?:pc|컴퓨터|노트북|카메라|마이크).{0,14}(?:포함|기본\s*구성|패키지)/.test(text)
+  )
 }
 
 function isRecordingOptionComparisonQuestion(question: NormalizedQuestion) {
@@ -948,6 +1119,8 @@ function buildPositioningSource(question: NormalizedQuestion): ChatbotSource | n
   const isEdbQuestion = EDB_QUERY_RE.test(text) || /칠판\s*파일|교안/.test(text)
   const isApiQuestion = isApiIntegrationQuestion(question)
   const isIdentity = isIdentityQuestion(question) && !isComparisonQuestion(question)
+  const isZoomComparison = /zoom|줌|화상회의/.test(text)
+  const isBoardComparison = /전자칠판|칠판|보드|board/.test(text)
   const heading = isEdbQuestion
     ? "EDB와 교안 표준화"
     : isApiQuestion
@@ -960,8 +1133,12 @@ function buildPositioningSource(question: NormalizedQuestion): ChatbotSource | n
     : isApiQuestion
       ? `${CLASSIN_POSITIONING.honestLimit} ${CLASSIN_POSITIONING.apiStages.join(" ")}`
       : isIdentity
-        ? `${CLASSIN_POSITIONING.oneLine} ${CLASSIN_POSITIONING.localReality}`
-        : CLASSIN_POSITIONING.chatbot.identitySummary
+        ? CLASSIN_POSITIONING.oneLine
+        : isZoomComparison
+          ? CLASSIN_POSITIONING.comparisonPoints[0].point
+          : isBoardComparison
+            ? CLASSIN_POSITIONING.comparisonPoints[1].point
+            : CLASSIN_POSITIONING.chatbot.identitySummary
 
   return {
     title: "Classin을 수업 시스템 OS로 이해하기",
@@ -1047,7 +1224,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
       "start",
       "pre-adoption-faq-22-questions",
       "확인 필요한 정책·계약 항목",
-      "ClassIn 플랜 해지 시 환불 규정은 계약 형태(연간/월간)에 따르며, 미사용 기간에 대해 내부 규정 기준에 맞춰 환불 절차가 진행됩니다.",
+      "ClassIn 플랜 해지 시 환불 규정은 계약 형태(연간/월간)에 따르며, 미사용 기간에 대해 내부 규정 기준에 맞춰 환불 절차가 진행됩니다. 정확한 환불 가능 여부와 금액은 현재 계약 조건으로 확인해야 합니다.",
       310,
       "billing"
     )
@@ -1317,7 +1494,7 @@ function buildCuratedSources(question: NormalizedQuestion) {
       isSoftwarePricing ? "소프트웨어 요금과 플랜 안내" : "요금·견적 구성 안내",
       isSoftwarePricing
         ? "소프트웨어는 운영 규모에 따라 Standard, Plus, Enterprise처럼 단계가 나뉘고, 구독형·충전형 조건은 기능 범위와 계약에 따라 달라질 수 있습니다. 정확한 금액과 조건은 계정 수, 코스 규모, 필요한 기능 기준으로 확인합니다."
-        : "클래스인 비용은 고정가표가 아니라 전자칠판+OPS, 카메라·스탠드/벽걸이 구성, 소프트웨어 사용 범위, 설치·온보딩까지 묶어 구성 기준으로 산정합니다. 정확한 금액은 학원 규모와 구성에 따라 달라집니다.",
+        : "요금은 선택한 Classin Board 모델과 카메라·스탠드·벽걸이, 소프트웨어 연동, 온보딩 범위를 기준으로 확인합니다. 전자칠판에 내장된 OPS(윈도우 기반 컴퓨팅)는 별도 견적 항목이 아니라 기본 강점으로 설명합니다. 최종 견적과 구체 금액은 단정하지 않고 상담 연결로 맞춤 안내합니다.",
       295,
       "billing"
     )
@@ -2244,44 +2421,66 @@ function getConciseNextStep(category: string) {
   }
 }
 
-function getComparisonAnswer(question: NormalizedQuestion, top: ChatbotSource) {
-  const text = question.redacted.toLowerCase()
-  const zoomFocused = /zoom|줌|화상회의/.test(text)
-  // 시중 전자칠판(넥소 등) 또는 전자칠판/보드 비교는 하드웨어 차별점을 더 강하게 짚는다.
-  // 정책: 경쟁사 브랜드명은 노출하지 않고 타사 사양·우열은 단정하지 않는다.
-  const boardFocused =
-    !zoomFocused && (COMPETITOR_BOARD_RE.test(text) || /전자칠판|칠판|보드|board/.test(text))
-
-  if (boardFocused) {
-    return [
-      "네, 좋은 질문이에요. 같은 '전자칠판'처럼 보여도 Classin Board는 화면·판서에서 끝나지 않고 수업 운영 흐름 전체로 이어지는 게 가장 큰 차이예요.",
-      "일반 전자칠판이 화면 출력과 판서 중심이라면, Classin Board는 이렇게 달라요.\n- 윈도우 OPS 내장이라 외부 PC·노트북 없이 보드 하나로 수업을 구동해요\n- EDB 칠판 파일로 판서·이미지·자료를 최대 50페이지까지 저장하고 다음 수업에 그대로 재사용해요\n- 녹화·복습·LMS·관리자 데이터까지 한 흐름으로 이어져요",
-      "카메라·마이크도 내장이라 따로 장비를 붙일 필요가 줄어요. 어떤 점이 제일 궁금하신지 알려주시면 그 기준으로 더 좁혀 비교해드릴게요.",
-    ].join("\n\n")
-  }
-
-  return [
-    "네, 좋은 질문이에요. Classin은 Zoom이나 일반 전자칠판과 달리 '수업 운영 흐름' 전체에 초점이 있어요.",
-    "Zoom이 회의 중심이라면 Classin은 판서·녹화·복습·LMS를 하나로 연결하고,\n일반 전자칠판이 화면·판서에 머무는 것과 달리 EDB 교안과 관리자 데이터까지 이어줘요.",
-    top.heading === "핵심 포지셔닝"
-      ? "Zoom, 전자칠판, LMS 중 어떤 기준으로 비교 중이신지 알려주시면 그 부분만 더 좁혀드릴게요."
-      : null,
-  ].filter(Boolean).join("\n\n")
+function getComparisonAnswer(top: ChatbotSource) {
+  return top.excerpt
 }
 
 function getIdentityAnswer() {
   return [
-    "네, Classin은 학원 수업을 준비·진행·녹화·복습·과제(LMS)·관리자 데이터까지 한 흐름으로 묶는 수업 운영 솔루션이에요.",
-    "쉽게 말해 Zoom처럼 수업만 여는 도구가 아니라, 전자칠판·EDB 교안·녹화·관리자 운영까지 연결해 수업 품질을 표준화하는 시스템에 가까워요.",
-    "전자칠판, 온라인 수업, LMS/관리자 중 어떤 쪽이 궁금하신지 알려주시면 그 부분만 콕 짚어 정리해드릴게요.",
+    CLASSIN_POSITIONING.oneLine,
+    "전자칠판, 수업 녹화, EDB 교안, LMS, 학생 관리, 관리자 데이터 중 어떤 흐름이 필요한지 알려주시면 해당 범위로 좁혀드릴게요.",
   ].join("\n\n")
 }
 
 function getEdbAnswer() {
+  return CLASSIN_POSITIONING.edbSummary
+}
+
+function getSecurityAndPrivacyConfirmationAnswer() {
   return [
-    "EDB, 이디비는 Classin에서 쓰는 칠판 파일이에요.",
-    "판서, 이미지, 텍스트를 상호작용 가능한 상태로 저장해 두고 다시 불러올 수 있어서, 선생님이 만든 교안이나 활동 자료를 다음 수업에서도 그대로 재사용할 수 있습니다.",
-    "쉽게 말하면 한 번 만든 칠판 수업 자료를 파일처럼 저장하고, 불러오고, 공유하는 구조예요.",
+    "보안·개인정보 수준은 공개 답변에서 '모든 데이터가 암호화된다'처럼 일괄 단정하지 않습니다.",
+    "실제 처리·보관·삭제 방식과 관리자 접근 범위는 공식 개인정보처리방침, 기관 권한 설정, 계약 조건을 기준으로 확인해야 합니다.",
+    "확인하려는 데이터 종류와 필요한 관리자 역할을 알려주시면 보관·접근·삭제 항목으로 나눠 담당자 확인 범위를 정리해드릴게요.",
+  ].join("\n\n")
+}
+
+function getInstallDurationConfirmationAnswer() {
+  return [
+    "설치 소요시간은 반나절이나 하루처럼 고정해서 안내할 수 없으며 현장 확인이 필요합니다.",
+    "교실 수, 벽걸이·이동형 여부, 벽면 보강, 전원·네트워크 상태, 반입 동선과 설치 일정에 따라 달라집니다.",
+    "교실 수와 설치 형태를 알려주시면 실측 후 확인할 항목과 일정 문의 내용을 정리해드릴게요.",
+  ].join("\n\n")
+}
+
+function getAfterSalesSupportConfirmationAnswer() {
+  return [
+    "A/S 제공 방식과 보증 범위는 모델·계약·고장 원인에 따라 달라 최신 조건 확인이 필요합니다.",
+    "무상·유상 여부, 원격 지원과 출장 수리 범위, 처리 기한은 공개 답변에서 일괄 보장하지 않습니다. 연기·냄새·액체 유입·파손이 있으면 전원을 분리해 주세요.",
+    "모델명, 증상, 전원 LED 상태, 발생 시점과 계약 정보를 준비해 기술지원에 확인하면 가장 정확합니다.",
+  ].join("\n\n")
+}
+
+function getIntegrationConfirmationAnswer() {
+  return [
+    "API나 기존 시스템 연동은 가능 여부를 한 문장으로 확정하지 않고 현재 API·계약 범위 확인이 필요합니다.",
+    "조회 가능한 데이터와 생성·수정 같은 쓰기 동작은 범위가 다르며, 양방향·자동·실시간 동기화도 기본 제공으로 단정할 수 없습니다.",
+    "연동할 시스템과 데이터, 필요한 동작(조회·생성·수정), 동기화 주기를 알려주시면 공식 API 기준으로 확인할 항목을 정리해드릴게요.",
+  ].join("\n\n")
+}
+
+function getS65ExactSpecificationAnswer() {
+  return [
+    "S65의 정확한 사양은 현재 공개 답변에서 수치로 확정하지 않고 최신 규격서와 공급 조건 확인이 필요합니다.",
+    "화면 크기 외 해상도, 외형 치수, 무게, 소비전력, OPS·카메라 구성은 S75·S86의 공개 사양을 그대로 적용해 안내하면 안 됩니다.",
+    "필요한 항목과 설치 공간을 알려주시면 S65 최신 자료와 재고·견적을 함께 확인하도록 정리해드릴게요.",
+  ].join("\n\n")
+}
+
+function getHardwarePackageCompositionAnswer() {
+  return [
+    "별도 PC·카메라 필요 여부는 보드 모델과 선택한 패키지·교실 환경을 확인해야 합니다.",
+    OPS_BUILTIN_NOTE,
+    "카메라·마이크의 포함 여부와 외부 PC 연결 필요성은 최신 견적서와 모델 구성으로 확인해야 하므로 기본 포함이나 불필요로 단정하지 않습니다.",
   ].join("\n\n")
 }
 
@@ -2359,10 +2558,11 @@ function getWebLiveBillingAnswer() {
 }
 
 function getPricingAnswer() {
+  const compositionLines = PRICE_COMPOSITION_ITEMS.map((item) => `- ${item}`).join("\n")
   return [
-    "네, 요금은 고정가표보다 '구성 기준'으로 봐요. 보통 이렇게 묶여요.",
-    "- 전자칠판 + OPS(윈도우 컴퓨팅)\n- 카메라·마이크·스탠드/벽걸이 구성\n- 소프트웨어 사용 범위(녹화·LMS 등)\n- 설치·온보딩",
-    "교실 수랑 원하는 구성만 알려주시면 견적 범위를 잡아드릴게요.",
+    "요금은 선택한 Classin Board 모델과 아래 구성 항목을 기준으로 확인합니다.",
+    compositionLines,
+    `${OPS_BUILTIN_NOTE} ${PRICE_FINAL_QUOTE_GUIDANCE}`,
   ].join("\n\n")
 }
 
@@ -2392,9 +2592,8 @@ function getParentReportOrNotificationAnswer() {
 
 function getInstallFormAnswer() {
   return [
-    "네, 설치는 이동형 스탠드와 벽걸이 둘 다 가능해요. 이렇게 고르시면 돼요.",
-    "- 교실 간 이동이 필요하면 → 이동형 스탠드\n- 자리가 고정이고 공간을 아끼려면 → 벽걸이(벽면 보강 확인)",
-    "전원·네트워크·벽면 상태는 현장 실측에서 먼저 확인해요. 교실 환경만 알려주시면 맞는 형태로 안내해드릴게요.",
+    "Classin Board는 이동형 스탠드와 벽걸이 모두 설치할 수 있습니다.",
+    "선택할 때는 교실 이동 필요, 공간, 벽면 보강, 시야 거리를 확인하고, 전원·네트워크·벽면 상태는 현장 실측에서 점검합니다.",
   ].join("\n\n")
 }
 
@@ -2458,6 +2657,10 @@ function getHardwareConditionalPreAdoptionAnswer(question: NormalizedQuestion) {
 function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
   const text = question.redacted.toLowerCase()
 
+  if (/환불|해지|결제\s*취소/.test(text)) {
+    return "ClassIn 플랜 해지 시 환불 규정은 계약 형태(연간/월간)에 따르며, 미사용 기간에 대해 내부 규정 기준에 맞춰 환불 절차가 진행됩니다. 정확한 환불 가능 여부와 금액은 현재 계약 조건으로 확인해야 합니다."
+  }
+
   if (/서버|데이터\s*(처리|보관|지역)/.test(text)) {
     return [
       "서버 위치나 데이터 처리 지역은 추정으로 답하면 안 되는 항목입니다.",
@@ -2501,7 +2704,7 @@ function getPolicyConfirmationAnswer(question: NormalizedQuestion) {
   if (/정기\s*결제|결제.{0,10}포함|포함\s*항목/.test(text)) {
     return [
       "정기 결제나 견적 포함 항목은 고정 답변보다 구성 기준으로 확인해야 합니다.",
-      "보통 전자칠판, OPS, 카메라·마이크, 스탠드/벽걸이, 소프트웨어, 설치, 온보딩 범위를 함께 놓고 봅니다.",
+      "보통 선택한 보드 모델, 카메라·스탠드·벽걸이, 소프트웨어 연동, 온보딩 범위를 함께 놓고 봅니다. OPS는 전자칠판 내장 강점이며 별도 견적 항목이 아닙니다.",
       "정확히 무엇이 포함되는지는 학원 규모, 교실 수, 장비 구성, 계약 조건에 따라 달라져서 상담에서 견적 범위로 확인하는 게 맞습니다.",
     ].join("\n\n")
   }
@@ -2647,11 +2850,11 @@ function formatConsumerAnswer({
   if (isHardwareSpecsQuestion(question) && top.urlPath.includes("/docs/hardware/board-lineup-specs")) {
     return getHardwareSpecsAnswer(HARDWARE_BIG_MODEL_RE.test(question.redacted.toLowerCase()))
   }
-  if (isComparisonQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
-    return getComparisonAnswer(question, top)
-  }
   if (top.heading === "EDB와 교안 표준화") {
     return getEdbAnswer()
+  }
+  if (isComparisonQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
+    return getComparisonAnswer(top)
   }
   if (isIdentityQuestion(question) && top.urlPath.includes("/docs/start/academy-system-os-positioning")) {
     return getIdentityAnswer()
@@ -3305,6 +3508,7 @@ function isCuratedTemplateQuestion(question: NormalizedQuestion) {
     isWebLiveBillingQuestion(question) ||
     isPricingInfoQuestion(question) ||
     isSoftwarePricingQuestion(question) ||
+    isRefundQuestion(question) ||
     isTrialOrPilotQuestion(question) ||
     isInstallFormQuestion(question) ||
     isCoreFeatureYesNoQuestion(question) ||
