@@ -17,9 +17,28 @@ import path from "node:path"
 
 import { evaluateChatbotQuery, listChatbotRegressionEvalCases } from "./service"
 
-const JUDGE_MODEL = process.env.GEMINI_FAST_MODEL?.trim() || "gemini-3.5-flash"
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 const ANSWER_MODES = new Set(["direct_answer", "doc_suggestion"])
+const DEFAULT_JUDGE_MODEL = "gemini-3.5-flash"
+const DEFAULT_JUDGE_TIMEOUT_MS = 8_000
+const DEFAULT_EVAL_TIMEOUT_MS = 120_000
+
+export interface GoldenEvalGateThresholds {
+  categoryMatchRate: number
+  modeOkRate: number
+  sourceRate: number
+  judgeCoverageRate: number
+  faithfulRate: number
+  hallucinationRate: number
+}
+
+const DEFAULT_GATE_THRESHOLDS: GoldenEvalGateThresholds = {
+  categoryMatchRate: 0.92,
+  modeOkRate: 0.95,
+  sourceRate: 0.95,
+  judgeCoverageRate: 0.95,
+  faithfulRate: 0.97,
+  hallucinationRate: 0.02,
+} as const
 
 interface GoldenCase {
   id: string
@@ -50,6 +69,8 @@ export interface GoldenEvalFailure {
 export interface GoldenEvalReport {
   total: number
   durationMs: number
+  timedOutCases: number
+  regressionCasesTimedOut: boolean
   deterministic: {
     categoryMatch: number
     modeOk: number
@@ -61,11 +82,28 @@ export interface GoldenEvalReport {
   }
   judge: {
     enabled: boolean
+    applicable: number
     judged: number
+    coverageRate: number | null
     faithfulRate: number | null
     hallucinationRate: number | null
     addressesRate: number | null
     avgScore: number | null
+  }
+  gate: {
+    passed: boolean
+    thresholds: GoldenEvalGateThresholds
+    checks: {
+      categoryMatch: boolean
+      mode: boolean
+      sources: boolean
+      noTimeouts: boolean
+      regressionCasesLoaded: boolean
+      judgeCoverage: boolean | null
+      faithful: boolean | null
+      hallucination: boolean | null
+    }
+    reasons: string[]
   }
   failures: GoldenEvalFailure[]
 }
@@ -75,12 +113,102 @@ interface GoldenEvalCaseResult {
   modeOk: number
   sourceApplicable: number
   withSources: number
+  judgeApplicable: number
   judged: number
   faithfulHits: number
   hallucinations: number
   addressesHits: number
   scoreSum: number
+  timedOut: number
   failure: GoldenEvalFailure | null
+}
+
+function getGeminiApiKey() {
+  return process.env.GEMINI_API_KEY?.trim() || null
+}
+
+function getJudgeModel() {
+  return process.env.GEMINI_FAST_MODEL?.trim() || DEFAULT_JUDGE_MODEL
+}
+
+function boundedIntegerEnv(name: string, fallback: number, min: number, max: number) {
+  const parsed = Number(process.env[name])
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(max, Math.max(min, Math.trunc(parsed)))
+}
+
+function boundedRatioEnv(name: string, fallback: number) {
+  const parsed = Number(process.env[name])
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(1, Math.max(0, parsed))
+}
+
+function getJudgeTimeoutMs() {
+  return boundedIntegerEnv(
+    "CHATBOT_EVAL_JUDGE_TIMEOUT_MS",
+    DEFAULT_JUDGE_TIMEOUT_MS,
+    500,
+    30_000
+  )
+}
+
+function getEvalTimeoutMs() {
+  return boundedIntegerEnv(
+    "CHATBOT_EVAL_TIMEOUT_MS",
+    DEFAULT_EVAL_TIMEOUT_MS,
+    1_000,
+    300_000
+  )
+}
+
+function getGateThresholds(): GoldenEvalGateThresholds {
+  return {
+    categoryMatchRate: boundedRatioEnv(
+      "CHATBOT_EVAL_MIN_CATEGORY_MATCH_RATE",
+      DEFAULT_GATE_THRESHOLDS.categoryMatchRate
+    ),
+    modeOkRate: boundedRatioEnv(
+      "CHATBOT_EVAL_MIN_MODE_OK_RATE",
+      DEFAULT_GATE_THRESHOLDS.modeOkRate
+    ),
+    sourceRate: boundedRatioEnv(
+      "CHATBOT_EVAL_MIN_SOURCE_RATE",
+      DEFAULT_GATE_THRESHOLDS.sourceRate
+    ),
+    judgeCoverageRate: boundedRatioEnv(
+      "CHATBOT_EVAL_MIN_JUDGE_COVERAGE_RATE",
+      DEFAULT_GATE_THRESHOLDS.judgeCoverageRate
+    ),
+    faithfulRate: boundedRatioEnv(
+      "CHATBOT_EVAL_MIN_FAITHFUL_RATE",
+      DEFAULT_GATE_THRESHOLDS.faithfulRate
+    ),
+    hallucinationRate: boundedRatioEnv(
+      "CHATBOT_EVAL_MAX_HALLUCINATION_RATE",
+      DEFAULT_GATE_THRESHOLDS.hallucinationRate
+    ),
+  }
+}
+
+async function withTimeoutValue<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallback: () => T,
+  onTimeout?: () => void
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<T>((resolve) => {
+    timeoutId = setTimeout(() => {
+      onTimeout?.()
+      resolve(fallback())
+    }, Math.max(1, timeoutMs))
+  })
+
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+  }
 }
 
 function loadGoldenCases(): GoldenCase[] {
@@ -92,9 +220,11 @@ function loadGoldenCases(): GoldenCase[] {
 async function judge(
   question: string,
   answer: string,
-  sources: { title: string; excerpt: string }[]
+  sources: { title: string; excerpt: string }[],
+  deadline: number
 ): Promise<Judgement | null> {
-  if (!GEMINI_API_KEY) return null
+  const apiKey = getGeminiApiKey()
+  if (!apiKey) return null
 
   const context = sources
     .map((source, index) => `[${index + 1}] ${source.title}: ${source.excerpt}`)
@@ -135,14 +265,25 @@ async function judge(
   }
 
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${JUDGE_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      }
+    const remainingMs = deadline - Date.now()
+    if (remainingMs <= 0) return null
+
+    const controller = new AbortController()
+    const res = await withTimeoutValue(
+      fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${getJudgeModel()}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        }
+      ),
+      Math.min(getJudgeTimeoutMs(), remainingMs),
+      () => null,
+      () => controller.abort()
     )
+    if (!res) return null
     if (!res.ok) return null
     const data = (await res.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[]
@@ -179,7 +320,8 @@ async function mapWithConcurrency<T, R>(
 
 async function evaluateGoldenCase(
   testCase: GoldenCase,
-  useJudge: boolean
+  useJudge: boolean,
+  deadline: number
 ): Promise<GoldenEvalCaseResult> {
   const result = await evaluateChatbotQuery(testCase.question, { generateAnswer: useJudge })
   const isCategoryMatch = result.detectedCategory === testCase.expectCategory
@@ -198,6 +340,7 @@ async function evaluateGoldenCase(
       : 1
 
   let judged = 0
+  let judgeApplicable = 0
   let faithfulHits = 0
   let hallucinations = 0
   let addressesHits = 0
@@ -205,10 +348,12 @@ async function evaluateGoldenCase(
   let judgement: Judgement | null = null
 
   if (useJudge && ANSWER_MODES.has(result.answerMode) && hasSources) {
+    judgeApplicable = 1
     judgement = await judge(
       testCase.question,
       result.answer,
-      result.sources.map((source) => ({ title: source.title, excerpt: source.excerpt }))
+      result.sources.map((source) => ({ title: source.title, excerpt: source.excerpt })),
+      deadline
     )
     if (judgement) {
       judged = 1
@@ -224,6 +369,7 @@ async function evaluateGoldenCase(
   if (!isModeOk) flags.push(`mode:${result.answerMode}`)
   if (!isExpectedPathOk) flags.push(`sourcePath:${testCase.expectPathIncludes}`)
   if (!isExpectedHeadingOk) flags.push(`sourceHeading:${testCase.expectHeadingIncludes}`)
+  if (sourceApplicable && !hasSources) flags.push("source:missing")
   if (judgement?.hallucinated) flags.push("hallucinated")
   if (judgement && !judgement.faithful) flags.push("unfaithful")
 
@@ -232,11 +378,13 @@ async function evaluateGoldenCase(
     modeOk: isModeOk ? 1 : 0,
     sourceApplicable,
     withSources: sourceApplicable && hasSources ? 1 : 0,
+    judgeApplicable,
     judged,
     faithfulHits,
     hallucinations,
     addressesHits,
     scoreSum,
+    timedOut: 0,
     failure:
       flags.length > 0
         ? {
@@ -251,13 +399,60 @@ async function evaluateGoldenCase(
   }
 }
 
+function timedOutCaseResult(testCase: GoldenCase): GoldenEvalCaseResult {
+  return {
+    categoryMatch: 0,
+    modeOk: 0,
+    sourceApplicable: testCase.expectSources === false ? 0 : 1,
+    withSources: 0,
+    judgeApplicable: 0,
+    judged: 0,
+    faithfulHits: 0,
+    hallucinations: 0,
+    addressesHits: 0,
+    scoreSum: 0,
+    timedOut: 1,
+    failure: {
+      id: testCase.id,
+      question: testCase.question,
+      detectedCategory: "timeout",
+      expectCategory: testCase.expectCategory,
+      answerMode: "timeout",
+      flags: ["evaluation_timeout"],
+    },
+  }
+}
+
+function evaluateGoldenCaseWithinBudget(
+  testCase: GoldenCase,
+  useJudge: boolean,
+  deadline: number
+) {
+  const remainingMs = deadline - Date.now()
+  if (remainingMs <= 0) return Promise.resolve(timedOutCaseResult(testCase))
+  return withTimeoutValue(
+    evaluateGoldenCase(testCase, useJudge, deadline),
+    remainingMs,
+    () => timedOutCaseResult(testCase)
+  )
+}
+
 export async function runGoldenEval(
   options: { judge?: boolean; limit?: number } = {}
 ): Promise<GoldenEvalReport> {
   const startedAt = Date.now()
-  const useJudge = options.judge !== false && Boolean(GEMINI_API_KEY)
+  const deadline = startedAt + getEvalTimeoutMs()
+  const useJudge = options.judge !== false && Boolean(getGeminiApiKey())
   const allCases = loadGoldenCases()
-  const dbCases = await listChatbotRegressionEvalCases()
+  let regressionCasesTimedOut = false
+  const dbCases = await withTimeoutValue(
+    listChatbotRegressionEvalCases(),
+    Math.max(1, deadline - Date.now()),
+    () => {
+      regressionCasesTimedOut = true
+      return []
+    }
+  )
   const casesById = new Map<string, GoldenCase>()
 
   for (const testCase of [...allCases, ...dbCases]) {
@@ -271,7 +466,7 @@ export async function runGoldenEval(
   const results = await mapWithConcurrency(
     cases,
     useJudge ? 1 : 4,
-    (testCase) => evaluateGoldenCase(testCase, useJudge)
+    (testCase) => evaluateGoldenCaseWithinBudget(testCase, useJudge, deadline)
   )
   const totals = results.reduce(
     (acc, result) => ({
@@ -279,22 +474,26 @@ export async function runGoldenEval(
       modeOk: acc.modeOk + result.modeOk,
       sourceApplicable: acc.sourceApplicable + result.sourceApplicable,
       withSources: acc.withSources + result.withSources,
+      judgeApplicable: acc.judgeApplicable + result.judgeApplicable,
       judged: acc.judged + result.judged,
       faithfulHits: acc.faithfulHits + result.faithfulHits,
       hallucinations: acc.hallucinations + result.hallucinations,
       addressesHits: acc.addressesHits + result.addressesHits,
       scoreSum: acc.scoreSum + result.scoreSum,
+      timedOut: acc.timedOut + result.timedOut,
     }),
     {
       categoryMatch: 0,
       modeOk: 0,
       sourceApplicable: 0,
       withSources: 0,
+      judgeApplicable: 0,
       judged: 0,
       faithfulHits: 0,
       hallucinations: 0,
       addressesHits: 0,
       scoreSum: 0,
+      timedOut: 0,
     }
   )
   const failures = results
@@ -305,26 +504,68 @@ export async function runGoldenEval(
   const rate = (value: number) => (total === 0 ? 0 : value / total)
   const sourceRate =
     totals.sourceApplicable === 0 ? 0 : totals.withSources / totals.sourceApplicable
+  const categoryMatchRate = rate(totals.categoryMatch)
+  const modeOkRate = rate(totals.modeOk)
+  const judgeCoverageRate =
+    totals.judgeApplicable === 0 ? null : totals.judged / totals.judgeApplicable
+  const faithfulRate = totals.judged === 0 ? null : totals.faithfulHits / totals.judged
+  const hallucinationRate = totals.judged === 0 ? null : totals.hallucinations / totals.judged
+  const thresholds = getGateThresholds()
+  const checks = {
+    categoryMatch: categoryMatchRate >= thresholds.categoryMatchRate,
+    mode: modeOkRate >= thresholds.modeOkRate,
+    sources: sourceRate >= thresholds.sourceRate,
+    noTimeouts: totals.timedOut === 0,
+    regressionCasesLoaded: !regressionCasesTimedOut,
+    judgeCoverage: useJudge
+      ? judgeCoverageRate !== null && judgeCoverageRate >= thresholds.judgeCoverageRate
+      : null,
+    faithful: useJudge
+      ? faithfulRate !== null && faithfulRate >= thresholds.faithfulRate
+      : null,
+    hallucination: useJudge
+      ? hallucinationRate !== null && hallucinationRate <= thresholds.hallucinationRate
+      : null,
+  }
+  const reasons: string[] = []
+  if (!checks.categoryMatch) reasons.push("category_match_below_threshold")
+  if (!checks.mode) reasons.push("mode_rate_below_threshold")
+  if (!checks.sources) reasons.push("source_rate_below_threshold")
+  if (!checks.noTimeouts) reasons.push("evaluation_timeout")
+  if (!checks.regressionCasesLoaded) reasons.push("regression_cases_timeout")
+  if (checks.judgeCoverage === false) reasons.push("judge_coverage_below_threshold")
+  if (checks.faithful === false) reasons.push("faithful_rate_below_threshold")
+  if (checks.hallucination === false) reasons.push("hallucination_rate_above_threshold")
 
   return {
     total,
     durationMs: Date.now() - startedAt,
+    timedOutCases: totals.timedOut,
+    regressionCasesTimedOut,
     deterministic: {
       categoryMatch: totals.categoryMatch,
       modeOk: totals.modeOk,
       sourceApplicable: totals.sourceApplicable,
       withSources: totals.withSources,
-      categoryMatchRate: rate(totals.categoryMatch),
-      modeOkRate: rate(totals.modeOk),
+      categoryMatchRate,
+      modeOkRate,
       sourceRate,
     },
     judge: {
       enabled: useJudge,
+      applicable: totals.judgeApplicable,
       judged: totals.judged,
-      faithfulRate: totals.judged === 0 ? null : totals.faithfulHits / totals.judged,
-      hallucinationRate: totals.judged === 0 ? null : totals.hallucinations / totals.judged,
+      coverageRate: judgeCoverageRate,
+      faithfulRate,
+      hallucinationRate,
       addressesRate: totals.judged === 0 ? null : totals.addressesHits / totals.judged,
       avgScore: totals.judged === 0 ? null : totals.scoreSum / totals.judged,
+    },
+    gate: {
+      passed: reasons.length === 0,
+      thresholds,
+      checks,
+      reasons,
     },
     failures,
   }
