@@ -138,7 +138,7 @@ export default function CrmSyncStrip({ coverage }: CrmSyncStripProps = {}) {
   if (state.status === "loading" || state.status === "empty") return null
   if (state.status === "unavailable") {
     return (
-      <div className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3.5 py-2 text-[12px] text-[#615D59]">
+      <div className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10.5px] text-[#615D59]">
         CRM 싱크 상태 확인 불가 — 매칭 현황은{" "}
         <Link href="/admin/crm/matching" className="font-semibold text-[#111110] underline underline-offset-2">
           매칭 인박스
@@ -163,16 +163,15 @@ export default function CrmSyncStrip({ coverage }: CrmSyncStripProps = {}) {
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className={`flex w-full flex-wrap items-center gap-2 px-3.5 py-2 text-left text-[12px] font-semibold ${tone.text}`}
+        className={`flex w-full items-center gap-1 px-2 py-0.5 text-left text-[10.5px] font-semibold ${tone.text}`}
       >
-        <span className={`h-2 w-2 shrink-0 rounded-full ${tone.dot}`} aria-hidden="true" />
-        <span className="tabular-nums">
-          CRM 싱크 — 계정 {summary.accountConnected}/{summary.accountTotal} 연결 · 매출{" "}
-          {summary.revenuePctLabel} ({cny(summary.revenueLinked)} / {cny(summary.revenueTotal)}) · 검토 대기{" "}
-          {summary.rows.review}행
+        <span className={`h-[5px] w-[5px] shrink-0 rounded-full ${tone.dot}`} aria-hidden="true" />
+        <span className="min-w-0 truncate tabular-nums">
+          CRM 싱크 · 계정 {summary.accountConnected}/{summary.accountTotal} · 매출{" "}
+          {summary.revenuePctLabel} · 검토 {summary.rows.review}행
         </span>
         <ChevronDown
-          className={`ml-auto h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+          className={`ml-auto h-2.5 w-2.5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
           aria-hidden="true"
         />
       </button>
