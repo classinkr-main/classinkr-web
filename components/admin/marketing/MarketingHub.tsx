@@ -4,15 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import {
-  AlertCircle,
   ArrowRight,
   CheckCircle2,
   ChevronRight,
   History,
-  MessageCircle,
-  MessageSquare,
   Plus,
-  RefreshCw,
   Search,
   Send,
   Sparkles,
@@ -31,34 +27,24 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
-import { StatTile } from "@/components/admin/viz"
 import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import SubscriberTable from "@/components/admin/marketing/SubscriberTable"
 import SubscriberForm from "@/components/admin/marketing/SubscriberForm"
-import EmailComposer from "@/components/admin/marketing/EmailComposer"
 import CampaignHistory from "@/components/admin/marketing/CampaignHistory"
-import ChannelStatusStrip from "@/components/admin/marketing/ChannelStatusStrip"
-import KakaoComposer from "@/components/admin/marketing/KakaoComposer"
 import MessageLogTable from "@/components/admin/marketing/MessageLogTable"
+import SendCenter from "@/components/admin/marketing/SendCenter"
+import SendCenterHeader from "@/components/admin/marketing/SendCenterHeader"
+import type { PreSendCheck } from "@/components/admin/marketing/send-center-types"
 import { unwrapMessagingData, type MessagingStatus } from "@/lib/messaging-client-types"
 import type { EmailCampaign, EmailDraft, SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
 import type { MessagePrefill } from "@/lib/message-prefill"
 
-// 발송 상태 캐시 TTL — ChannelStatusStrip과 동일 엔드포인트(같은 URL 캐시 키)를 공유해
-// 초기 마운트 시 두 컴포넌트의 fetch가 왕복 1회로 수렴한다(CMP-2).
+// 발송 상태 캐시 TTL — 60초 stale 허용(같은 URL을 쓰는 다른 화면과 캐시 키 공유, CMP-2).
 const MESSAGING_STATUS_CACHE_TTL_MS = 60_000
 
 type Tab = "subscribers" | "compose" | "history" | "automation"
-type Channel = "email" | "sms" | "kakao"
 type SubscriberStatusFilter = "all" | Subscriber["status"]
 type SubscriberSourceFilter = "all" | Subscriber["source"]
-type PreSendCheckStatus = "ok" | "warning" | "error" | "info"
-type PreSendCheck = {
-  key: string
-  label: string
-  detail: string
-  status: PreSendCheckStatus
-}
 
 const EMPTY_DRAFT: EmailDraft = {
   subject: "",
@@ -112,26 +98,6 @@ function hasLikelyLink(body: string) {
 
 function hasPlaceholderLink(body: string) {
   return /example\.com|your-domain|localhost|dummy|placeholder/i.test(body)
-}
-
-function checkToneClass(status: PreSendCheckStatus) {
-  return status === "ok"
-    ? "border-green-100 bg-green-50 text-green-700"
-    : status === "warning"
-      ? "border-amber-100 bg-amber-50 text-amber-700"
-      : status === "error"
-        ? "border-red-100 bg-red-50 text-red-600"
-        : "border-[#e8e8e4] bg-[#f0f0ec] text-[#1a1a1a]/55"
-}
-
-function checkLabel(status: PreSendCheckStatus) {
-  return status === "ok"
-    ? "정상"
-    : status === "warning"
-      ? "주의"
-      : status === "error"
-        ? "미완료"
-        : "정보"
 }
 
 function areTagsEqual(left: string[], right: string[]) {
@@ -204,24 +170,6 @@ function Panel({
       <div className="p-4 sm:p-6">{children}</div>
     </section>
   )
-}
-
-function StatCard({
-  icon,
-  label,
-  value,
-  hint,
-  tone = "neutral",
-}: {
-  icon: ReactNode
-  label: string
-  value: string | number
-  hint?: string
-  tone?: "neutral" | "success" | "warning" | "danger"
-}) {
-  // KPI 카드는 공용 StatTile(components/admin/viz)로 통합 — 로컬 tone을 viz Tone으로 매핑만 한다.
-  const vizTone = tone === "success" ? "brand" : tone === "warning" ? "caution" : tone === "danger" ? "danger" : "neutral"
-  return <StatTile icon={icon} label={label} value={value} hint={hint} tone={vizTone} />
 }
 
 function TabButton({
@@ -313,7 +261,6 @@ export default function MarketingHub({
 }: MarketingHubProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<Tab>("subscribers")
-  const [channel, setChannel] = useState<Channel>("email")
   // 수신자 프리필은 마운트 시점 값만 캡처한다(one-shot). 이후 부모가 비워도 배너·초기값은 유지되고,
   // 사용자가 "지우기"를 누르면 여기서 함께 사라진다.
   const [recipientPrefill, setRecipientPrefill] = useState<MessagePrefill | null>(
@@ -329,15 +276,14 @@ export default function MarketingHub({
     setRecipientPrefill(recipientPrefillProp)
   }, [recipientPrefillProp])
 
-  // 프리필 1회 적용: 발송 작성 탭 + 카카오 채널로 이동.
-  // 전화번호 수신자 입력이 존재하는 유일한 채널이 카카오(테스트 발송 번호)다 —
-  // 문자(SMS/LMS)는 보류 상태 카드라 입력이 없고, 이메일은 이메일 주소 대상이다.
-  // ref 가드로 마운트 후 딱 한 번만 실행 — 이후 사용자의 탭·채널 이동을 다시 덮지 않는다.
+  // 프리필 1회 적용: 발송 작성(단체 발송 센터) 탭으로 이동한다.
+  // 전화번호 수신자 입력이 존재하는 곳은 알림톡 테스트 발송뿐이므로, 센터(SendCenter)가
+  // 프리필을 보고 알림톡 테스트 패널을 자동으로 열고 번호를 미리 채운다.
+  // ref 가드로 마운트 후 딱 한 번만 실행 — 이후 사용자의 탭 이동을 다시 덮지 않는다.
   useEffect(() => {
     if (!recipientPrefill || recipientPrefillAppliedRef.current) return
     recipientPrefillAppliedRef.current = true
     setActiveTab("compose")
-    setChannel("kakao")
     onRecipientPrefillConsumed?.()
   }, [recipientPrefill, onRecipientPrefillConsumed])
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
@@ -359,6 +305,8 @@ export default function MarketingHub({
   const [statusFilter, setStatusFilter] = useState<SubscriberStatusFilter>("all")
   const [sourceFilter, setSourceFilter] = useState<SubscriberSourceFilter>("all")
   const [campaignStatusFilter, setCampaignStatusFilter] = useState<"all" | EmailCampaign["status"]>("all")
+  // 헤더 DB 스트립 표기용 — 구독자 목록을 마지막으로 가져온 시각(실제 fetch 완료 기준)
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null)
 
   const contentRef = useRef<HTMLDivElement>(null)
   const isInitialMount = useRef(true)
@@ -398,6 +346,7 @@ export default function MarketingHub({
       if (res.ok) {
         const data = await res.json()
         setSubscribers(data.subscribers ?? [])
+        setLastSyncedAt(new Date())
       }
     } finally {
       setLoading(false)
@@ -422,7 +371,7 @@ export default function MarketingHub({
 
   const fetchMessagingStatus = useCallback(async () => {
     try {
-      // ChannelStatusStrip도 같은 URL을 adminFetchJsonCached로 조회한다 — 캐시 키가
+      // 같은 URL을 조회하는 다른 화면(예: ChannelStatusStrip을 쓰는 곳)과 캐시 키가
       // 같아 동시 마운트 시 in-flight dedupe로 왕복 1회에 수렴한다(CMP-2).
       const json = await adminFetchJsonCached<unknown>("/api/admin/messaging/status", undefined, {
         ttlMs: MESSAGING_STATUS_CACHE_TTL_MS,
@@ -446,17 +395,15 @@ export default function MarketingHub({
 
   const activeCount = subscribers.filter((s) => s.status === "active").length
   const unsubscribedCount = subscribers.length - activeCount
-  const sentCount = campaigns.filter((c) => c.status === "sent").length
   const draftCount = campaigns.filter((c) => c.status === "draft").length
-  const failedCount = campaigns.filter((c) => c.status === "failed").length
 
-  // 이번달 신규 구독자 — 옛 '현황 대시보드' 서브탭(/api/admin/marketing/stats)의 유일 고유
-  // 수치였던 항목을 이미 로드된 subscribers에서 동일 기준(월초 이후 createdAt)으로 파생해
-  // 이관한다(추가 fetch 없이 CMP-1 소비). 서버 산식(app/api/admin/marketing/stats/route.ts)과 동일.
-  const newSubscribersThisMonth = useMemo(() => {
-    const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-    return subscribers.filter((s) => s.createdAt && s.createdAt >= startOfMonth).length
+  // 헤더 "도달 채널" 스탯 — 활성 구독자 중 실제로 이메일/휴대폰이 채워진 수(실데이터 집계)
+  const { headerEmailReach, headerPhoneReach } = useMemo(() => {
+    const active = subscribers.filter((s) => s.status === "active")
+    return {
+      headerEmailReach: active.filter((s) => (s.email ?? "").trim().length > 0).length,
+      headerPhoneReach: active.filter((s) => (s.phone ?? "").trim().length > 0).length,
+    }
   }, [subscribers])
 
   const latestCampaign = useMemo(
@@ -467,7 +414,7 @@ export default function MarketingHub({
     () => [...subscribers].sort((a, b) => safeTime(b.createdAt) - safeTime(a.createdAt))[0],
     [subscribers]
   )
-  const { recentSentCampaigns, recentFailedCampaigns, recentDraftCampaigns, recentSuccessRate, recentAudienceAverage } = useMemo(() => {
+  const { recentFailedCampaigns, recentDraftCampaigns, recentSuccessRate } = useMemo(() => {
     const windowStart = Date.now() - 30 * 24 * 60 * 60 * 1000
     const window30d = campaigns.filter((c) => safeTime(c.sentAt ?? c.createdAt) >= windowStart)
     const sent = window30d.filter((c) => c.status === "sent")
@@ -476,26 +423,20 @@ export default function MarketingHub({
     const successRate = sent.length + failed.length > 0
       ? Math.round((sent.length / (sent.length + failed.length)) * 100)
       : null
-    const audienceAvg = sent.length > 0
-      ? Math.round(sent.reduce((s, c) => s + c.recipientCount, 0) / sent.length)
-      : 0
     return {
-      recentSentCampaigns: sent,
       recentFailedCampaigns: failed,
       recentDraftCampaigns: draft,
       recentSuccessRate: successRate,
-      recentAudienceAverage: audienceAvg,
     }
   }, [campaigns])
 
-  const { sourceRows, topSource } = useMemo(() => {
+  const sourceRows = useMemo(() => {
     const counts = countBy(subscribers.map((s) => s.source))
     const order = ["demo_modal", "contact_page", "newsletter", "meta_lead_ads", "manual"] as const
-    const rows = order
+    return order
       .map((source) => ({ source, count: counts[source] ?? 0 }))
       .filter((r) => r.count > 0)
       .sort((a, b) => b.count - a.count)
-    return { sourceRows: rows, topSource: rows[0] }
   }, [subscribers])
 
   const recentCampaigns = useMemo(
@@ -584,6 +525,46 @@ export default function MarketingHub({
       const ctaDetected = hasLikelyLink(draft.body)
       const ctaPlaceholder = hasPlaceholderLink(draft.body)
 
+      // 변수 치환 가능성 — 발송 백엔드(replacePlaceholders)는 {name}/{org}/{role}만 치환한다.
+      // 그 밖의 {token}과 {ai:} 블록은 글자 그대로 나가므로 경고, org/role 빈 값은
+      // 공백("")으로 발송되므로 대상 기준 빈 값 수를 정직하게 알린다.
+      const knownVariableKeys = ["name", "org", "role"] as const
+      const draftText = `${draft.subject} ${draft.body}`
+      const tokenKeys = Array.from(draftText.matchAll(/\{([a-zA-Z_]+)\}/g)).map((m) => m[1])
+      const usedKnown = knownVariableKeys.filter((key) => tokenKeys.includes(key))
+      const unknownTokens = Array.from(new Set(tokenKeys.filter((key) => !knownVariableKeys.includes(key as (typeof knownVariableKeys)[number]))))
+      const hasAiBlock = /\{ai:/i.test(draftText)
+      const draftRecipients =
+        draft.targetTags.length === 0
+          ? subscribers.filter((s) => s.status === "active")
+          : subscribers.filter(
+              (s) => s.status === "active" && s.tags.some((tag) => draft.targetTags.includes(tag))
+            )
+      const emptyValueNotes: string[] = []
+      if (usedKnown.includes("org")) {
+        const empties = draftRecipients.filter((s) => !(s.org ?? "").trim()).length
+        if (empties > 0) emptyValueNotes.push(`{org} 빈 값 ${empties}명`)
+      }
+      if (usedKnown.includes("role")) {
+        const empties = draftRecipients.filter((s) => !(s.role ?? "").trim()).length
+        if (empties > 0) emptyValueNotes.push(`{role} 빈 값 ${empties}명`)
+      }
+      const variableCheck: PreSendCheck = {
+        key: "variables",
+        label: "변수 치환",
+        status: unknownTokens.length > 0 || hasAiBlock ? "warning" : usedKnown.length === 0 ? "info" : "ok",
+        detail:
+          unknownTokens.length > 0
+            ? `치환되지 않는 변수 ${unknownTokens.map((t) => `{${t}}`).join(", ")} — 글자 그대로 발송됩니다.`
+            : hasAiBlock
+              ? "AI 블록({ai:})은 이 발송 경로에서 치환되지 않습니다."
+              : usedKnown.length === 0
+                ? "변수 미사용 — 모든 수신자에게 동일한 내용이 발송됩니다."
+                : emptyValueNotes.length > 0
+                  ? `변수 ${usedKnown.length}종 치환 가능 · ${emptyValueNotes.join(" · ")} — 빈 값은 공백으로 발송됩니다.`
+                  : `사용한 변수 ${usedKnown.length}종 모두 치환 가능합니다.`,
+      }
+
       const checks: PreSendCheck[] = [
         {
           key: "subject",
@@ -609,6 +590,7 @@ export default function MarketingHub({
                 ? `본문이 짧은 편입니다. (${length}자, 120자 이상 권장)`
                 : `본문이 너무 짧습니다. (${length}자, 최소 60자 권장)`,
         },
+        variableCheck,
         {
           key: "audience",
           label: "대상",
@@ -686,90 +668,26 @@ export default function MarketingHub({
         bodyLength: length,
       }
     },
-    [activeCount, campaigns, countSelectedAudience, unsubscribedCount]
+    [activeCount, campaigns, countSelectedAudience, subscribers, unsubscribedCount]
   )
 
   const composerReview = useMemo(() => evaluateDraft(composerDraft), [composerDraft, evaluateDraft])
 
-  // 채널별 발송 전 체크 — SMS/카카오는 작성기가 본문 state를 내부 소유하므로
-  // 여기서는 채널 준비 상태(발신번호·템플릿·발송 대상 규모) 중심의 체크를 만든다.
-  const channelChecks = useMemo<PreSendCheck[]>(() => {
-    if (channel === "email") return composerReview.checks
+  // 알림톡·문자 준비 상태 체크는 채널 캐스케이드 카드(ChannelCascadeCard)와
+  // KakaoComposer가 각자 소유한다 — 우측 레일 "최종 확인"은 실제 발송 경로인
+  // 이메일 초안 체크(composerReview)만 쓴다.
 
-    if (channel === "sms") {
-      const senderReady = !!messagingStatus?.senderNumber
-      return [
-        {
-          key: "sms-hold",
-          label: "발송 채널",
-          status: "info",
-          detail: "문자(SMS/LMS)는 현재 보류 중입니다. 지금은 이메일·카카오를 먼저 오픈합니다.",
-        },
-        {
-          key: "sms-sender",
-          label: "발신번호",
-          status: !messagingStatusLoaded ? "info" : senderReady ? "ok" : "warning",
-          detail: !messagingStatusLoaded
-            ? "발신번호 등록 상태를 확인 중입니다."
-            : senderReady
-              ? `발신번호는 이미 등록되어 있습니다. (${messagingStatus?.senderNumber}) 우선순위가 오르면 바로 활성화됩니다.`
-              : "발신번호 등록 상태를 확인해주세요.",
-        },
-      ]
-    }
+  // 헤더 CTA는 발송 로직을 중복하지 않는다 — 우측 레일의 실제 CTA/테스트 박스로 스크롤만.
+  const scrollToRailSection = useCallback((id: string) => {
+    if (typeof document === "undefined") return
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }, [])
 
-    // kakao
-    const templates = messagingStatus?.templates ?? []
-    const approved = templates.filter((t) => t.status?.toUpperCase() === "APPROVED").length
-    const channelReady = (messagingStatus?.kakaoChannels?.length ?? 0) > 0
-    return [
-      {
-        key: "kakao-channel",
-        label: "카카오 채널",
-        status: !messagingStatusLoaded ? "info" : channelReady ? "ok" : "error",
-        detail: !messagingStatusLoaded
-          ? "카카오 채널 연동 상태를 확인 중입니다."
-          : channelReady
-            ? "카카오 비즈니스 채널이 연동되어 있습니다."
-            : "카카오 채널이 연동되지 않았습니다. solapi 콘솔에서 연동하세요.",
-      },
-      {
-        key: "kakao-template",
-        label: "승인 템플릿",
-        status: !messagingStatusLoaded ? "info" : approved > 0 ? "ok" : "error",
-        detail: !messagingStatusLoaded
-          ? "템플릿 승인 상태를 확인 중입니다."
-          : approved > 0
-            ? `승인된 템플릿 ${approved}개로 발송할 수 있습니다.`
-            : "승인된 알림톡 템플릿이 없습니다. 템플릿을 등록·승인해야 발송할 수 있습니다.",
-      },
-      {
-        key: "kakao-test",
-        label: "테스트 발송",
-        status: "info",
-        detail: "지정 번호로 테스트 발송해 변수 치환과 도달을 확인하세요.",
-      },
-      {
-        key: "kakao-bulk",
-        label: "대량 발송",
-        status: "info",
-        detail: "대량 발송은 백엔드 준비 중입니다. 현재는 테스트 발송까지 사용할 수 있습니다.",
-      },
-    ]
-  }, [channel, composerReview.checks, messagingStatus, messagingStatusLoaded])
-
-  const channelReadiness = useMemo(() => {
-    if (channel === "email") return composerReview.readiness
-    const errorCount = channelChecks.filter((c) => c.status === "error").length
-    const warningCount = channelChecks.filter((c) => c.status === "warning").length
-    if (errorCount > 0) {
-      return { status: "error" as const, label: "발송 불가", detail: "필수 항목을 먼저 채워주세요." }
-    }
-    if (warningCount > 0) {
-      return { status: "warning" as const, label: "검토 필요", detail: "경고 항목을 확인 후 발송하세요." }
-    }
-    return { status: "ok" as const, label: "발송 가능", detail: "채널 준비 상태를 통과했습니다." }
-  }, [channel, composerReview.readiness, channelChecks])
+  const handleRefreshAll = useCallback(() => {
+    void fetchSubscribers()
+    void fetchCampaigns()
+    void fetchMessagingStatus()
+  }, [fetchSubscribers, fetchCampaigns, fetchMessagingStatus])
 
   useEffect(() => {
     if (!toast) return
@@ -1047,12 +965,6 @@ export default function MarketingHub({
     }
   }
 
-  const topActions: Array<{ key: Tab; label: string; icon: ReactNode }> = [
-    { key: "subscribers", label: "구독자 추가", icon: <Plus className="h-4 w-4" /> },
-    { key: "compose", label: "발송 작성", icon: <Send className="h-4 w-4" /> },
-    { key: "history", label: "이력 확인", icon: <History className="h-4 w-4" /> },
-  ]
-
   const hasComposerDraft =
     composerDraft.subject.trim() ||
     composerDraft.body.trim() ||
@@ -1070,99 +982,24 @@ export default function MarketingHub({
     <div>
       <div>
         <div className="mb-8 flex flex-col gap-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-2xl">
-              <h2 className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">메시지 발송 허브</h2>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-              <Button variant="outline" size="sm" onClick={() => { fetchSubscribers(); fetchCampaigns() }} disabled={loading} className="w-full sm:w-auto">
-                <RefreshCw className={`mr-1.5 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                새로고침
-              </Button>
-              {topActions
-                .filter((action) => action.key !== activeTab)
-                .map((action) => (
-                  <Button
-                    key={action.key}
-                    size="sm"
-                    variant={action.key === "compose" ? "default" : "outline"}
-                    onClick={() => setActiveTab(action.key)}
-                    className={`w-full sm:w-auto ${action.key === "compose" ? "bg-[#084734] hover:bg-[#084734]/90" : ""}`}
-                  >
-                    <span className="mr-1.5">{action.icon}</span>
-                    {action.label}
-                  </Button>
-                ))}
-            </div>
-          </div>
-
-          <ChannelStatusStrip />
-
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <StatCard icon={<Users className="h-4 w-4" />} label="전체 구독자" value={subscribers.length} />
-            <StatCard icon={<CheckCircle2 className="h-4 w-4" />} label="활성 구독자" value={activeCount} hint={`이번달 신규 ${newSubscribersThisMonth}명`} tone="success" />
-            <StatCard icon={<XCircle className="h-4 w-4" />} label="수신거부" value={unsubscribedCount} tone="warning" />
-            <StatCard icon={<Send className="h-4 w-4" />} label="발송 캠페인" value={campaigns.length} hint={`발송 ${sentCount} · 초안 ${draftCount}`} />
-            <StatCard icon={<AlertCircle className="h-4 w-4" />} label="실패 캠페인" value={failedCount} tone="danger" />
-          </div>
-
-          <Panel
-            title="운영 요약"
-            action={
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => setActiveTab("compose")}>
-                  <Send className="mr-1.5 h-4 w-4" />
-                  이메일 작성
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setActiveTab("history")}>
-                  <History className="mr-1.5 h-4 w-4" />
-                  발송 이력
-                </Button>
-              </div>
-            }
-          >
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">최근 30일 발송</p>
-                <p className="mt-2 text-[28px] font-bold tracking-[-0.03em] text-[#111110]">{recentSentCampaigns.length}건</p>
-                <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                  {recentSentCampaigns.length + recentFailedCampaigns.length + recentDraftCampaigns.length > 0
-                    ? `실패 ${recentFailedCampaigns.length}건 · 초안 ${recentDraftCampaigns.length}건`
-                    : "아직 최근 발송 기록이 없습니다."}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">발송 성공률</p>
-                <p className="mt-2 text-[28px] font-bold tracking-[-0.03em] text-[#111110]">
-                  {recentSuccessRate === null ? "—" : `${recentSuccessRate}%`}
-                </p>
-                <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                  발송 {recentSentCampaigns.length} · 실패 {recentFailedCampaigns.length}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">평균 대상 규모</p>
-                <p className="mt-2 text-[28px] font-bold tracking-[-0.03em] text-[#111110]">
-                  {recentSentCampaigns.length > 0 ? `${recentAudienceAverage}명` : "대기"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">현재 초안</p>
-                <p className="mt-2 text-[28px] font-bold tracking-[-0.03em] text-[#111110]">{composerReview.readiness.label}</p>
-                <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                  {composerReview.selectedAudience}명 대상 · 준비도 {composerReview.readinessScore}%
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px] text-[#1a1a1a]/45">
-              <MiniBadge tone={failedCount > 0 ? "warning" : "success"}>
-                {failedCount > 0 ? `확인 필요 ${failedCount}건` : "운영 안정"}
-              </MiniBadge>
-              <span>{latestCampaign ? `최근 발송: ${latestCampaign.subject}` : "최근 발송 없음"}</span>
-              {topSource && <span>주요 유입: {topSource.source === "demo_modal" ? "데모 신청" : topSource.source === "contact_page" ? "문의" : topSource.source === "newsletter" ? "뉴스레터" : topSource.source === "meta_lead_ads" ? "Meta 리드" : "수동 추가"}</span>}
-            </div>
-          </Panel>
+          {/* 상단 스탯 헤더 — 옛 5 StatCard + 운영 요약 패널 + 채널 스트립을 대체·압축 */}
+          <SendCenterHeader
+            composeActive={activeTab === "compose"}
+            totalSubscribers={subscribers.length}
+            activeCount={activeCount}
+            unsubscribedCount={unsubscribedCount}
+            emailReach={headerEmailReach}
+            phoneReach={headerPhoneReach}
+            selectedAudience={composerReview.selectedAudience}
+            messagingStatus={messagingStatus}
+            messagingStatusLoaded={messagingStatusLoaded}
+            lastSyncedAt={lastSyncedAt}
+            refreshing={loading}
+            onRefresh={handleRefreshAll}
+            onGoCompose={() => setActiveTab("compose")}
+            onScrollToSend={() => scrollToRailSection("send-rail-cta")}
+            onScrollToTest={() => scrollToRailSection("send-rail-test")}
+          />
 
           <div className="sticky top-16 z-20 -mx-4 px-4 pt-2 pb-3 sm:-mx-6 sm:px-6 lg:top-0" style={{ background: "linear-gradient(to bottom, #FAFAF8 85%, transparent)" }}>
             <div className="admin-scroll-snap-x no-scrollbar -mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
@@ -1233,7 +1070,7 @@ export default function MarketingHub({
                       <button
                         key={value}
                         onClick={() => setStatusFilter(value)}
-                        className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap ${
+                        className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap ${
                           statusFilter === value
                             ? "border-[#111110] bg-[#111110] text-white"
                             : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#c8c8c4] hover:text-[#111110]"
@@ -1248,9 +1085,9 @@ export default function MarketingHub({
                       <button
                         key={value}
                         onClick={() => setSourceFilter(value)}
-                        className={`rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap ${
+                        className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors whitespace-nowrap ${
                           sourceFilter === value
-                            ? "border-[#084734] bg-[#084734]/10 text-[#084734]"
+                            ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
                             : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#c8c8c4] hover:text-[#111110]"
                         }`}
                       >
@@ -1393,247 +1230,33 @@ export default function MarketingHub({
         )}
 
         {activeTab === "compose" && (
-          <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-            <div className="space-y-4">
-              {/* 채널 세그먼트 (이메일 / 카카오 / 문자) — 지금은 이메일·카톡 우선 */}
-              <div
-                role="tablist"
-                aria-label="발송 채널 선택"
-                className="grid grid-cols-3 gap-1 rounded-xl border border-[#e8e8e4] bg-white p-1.5"
-              >
-                {([
-                  { key: "email", label: "이메일", icon: <Send className="h-3.5 w-3.5" />, held: false },
-                  { key: "kakao", label: "카카오 알림톡", icon: <MessageCircle className="h-3.5 w-3.5" />, held: false },
-                  { key: "sms", label: "문자 (SMS/LMS)", icon: <MessageSquare className="h-3.5 w-3.5" />, held: true },
-                ] as const).map((tab) => (
-                  <button
-                    key={tab.key}
-                    role="tab"
-                    aria-selected={channel === tab.key}
-                    onClick={() => setChannel(tab.key)}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2.5 text-[12.5px] font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1 sm:gap-2 sm:text-[13px] ${
-                      channel === tab.key
-                        ? "bg-[#111110] text-white shadow-sm"
-                        : "text-[#1a1a1a]/55 hover:text-[#111110]"
-                    }`}
-                  >
-                    {tab.icon}
-                    <span className="truncate">{tab.label}</span>
-                    {tab.held && (
-                      <span
-                        className={`hidden shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold sm:inline ${
-                          channel === tab.key ? "bg-white/15 text-white/80" : "bg-[#FBF1E0] text-[#A8741A]"
-                        }`}
-                      >
-                        보류
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {/* 수신자 프리필 배너 — 고객 360 딥링크에서 넘어온 맥락을 채널과 무관하게 보여준다 */}
-              {recipientPrefill && (
-                <div className="flex items-start justify-between gap-3 rounded-xl border border-[#084734]/20 bg-[#ECFDF5] px-4 py-3">
-                  <p className="min-w-0 text-[12px] leading-relaxed text-[#084734]">
-                    <span className="font-semibold">수신자</span>
-                    {" — "}
-                    {recipientPrefill.name ? `${recipientPrefill.name} · ` : ""}
-                    <span className="font-mono">{recipientPrefill.rawPhone}</span>
-                    <span className="ml-1 text-[#084734]/70">
-                      (고객 360에서 연결 · 카카오 테스트 발송 번호에 미리 입력됩니다)
-                    </span>
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setRecipientPrefill(null)}
-                    aria-label="수신자 프리필 지우기"
-                    className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-[#084734]/60 transition-colors hover:bg-[#D1FAE5] hover:text-[#084734]"
-                  >
-                    지우기
-                  </button>
-                </div>
-              )}
-
-              {/* 초안 상태 배너 (이메일 채널 + 초안 있을 때만) */}
-              {channel === "email" && (activeSegment || hasComposerDraft) && (
-                <div className="flex flex-col gap-2 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-[12px] text-[#1a1a1a]/55">
-                    {draftNotice
-                      ? draftNotice
-                      : activeSegment
-                        ? `"${activeSegment.name}" 세그먼트 기준`
-                        : "초안이 유지됩니다 — 탭 이동 후 돌아와도 내용이 남아있습니다."}
-                  </p>
-                  <Button variant="outline" size="sm" onClick={clearComposerDraft} className="shrink-0 text-[12px]">
-                    초안 비우기
-                  </Button>
-                </div>
-              )}
-
-              {activeCount === 0 && channel === "email" && (
-                <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
-                  활성 구독자가 없습니다. 발송 대상이 비어 있을 수 있으니 먼저 구독자를 확인하세요.
-                </div>
-              )}
-
-              {channel === "email" ? (
-                <EmailComposer
-                  value={composerDraft}
-                  onChange={setComposerDraft}
-                  onSend={handleSendEmail}
-                  loading={sendLoading}
-                  subscriberCount={activeCount}
-                  countMap={tagCountMap}
-                  presendWarnings={composerReview.checks.filter((c) => c.status === "warning").map((c) => c.detail)}
-                  presendErrors={composerReview.checks.filter((c) => c.status === "error").map((c) => c.detail)}
-                  selectedAudience={composerReview.selectedAudience}
-                  subscribers={subscribers}
-                />
-              ) : channel === "kakao" ? (
-                <KakaoComposer
-                  templates={messagingStatus?.templates ?? []}
-                  channelRegistered={(messagingStatus?.kakaoChannels?.length ?? 0) > 0}
-                  statusUnavailable={!messagingStatusLoaded || messagingStatus === null}
-                  initialTestPhone={recipientPrefill?.phone}
-                />
-              ) : (
-                <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-                  <div className="border-b border-[#e8e8e4] bg-[#fafaf8] px-6 py-8 text-center">
-                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f0f0ec] text-[#1a1a1a]/45">
-                      <MessageSquare className="h-6 w-6" />
-                    </div>
-                    <p className="mt-4 text-[15px] font-semibold text-[#111110]">문자(SMS/LMS) 발송은 잠시 보류 중입니다</p>
-                    <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                      지금은 이메일과 카카오 알림톡을 먼저 오픈합니다. 발신번호(solapi)는 이미 정상 등록되어 있어,
-                      문자 발송이 우선순위에 올라오면 바로 활성화할 수 있습니다.
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2 px-6 py-4 sm:flex-row sm:justify-center">
-                    <Button variant="outline" size="sm" onClick={() => setChannel("kakao")}>
-                      <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
-                      카카오 알림톡으로 작성
-                    </Button>
-                    <Button size="sm" onClick={() => setChannel("email")} className="bg-[#084734] hover:bg-[#065c41]">
-                      <Send className="mr-1.5 h-3.5 w-3.5" />
-                      이메일로 작성
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-6">
-              <Panel
-                title="발송 전 체크"
-                action={
-                  <MiniBadge
-                    tone={channelReadiness.status === "ok" ? "success" : channelReadiness.status === "warning" ? "warning" : "danger"}
-                  >
-                    {channelReadiness.label}
-                  </MiniBadge>
-                }
-              >
-                <div className="space-y-1">
-                  {channelChecks.map((check) => (
-                    <div key={check.key} className={`rounded-lg border px-3 py-2 ${checkToneClass(check.status)}`}>
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-semibold leading-tight">{check.label}</p>
-                        <span className="shrink-0 rounded-full border border-current/15 px-2 py-0.5 text-[10px] font-medium">
-                          {checkLabel(check.status)}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-[11px] leading-snug opacity-70">{check.detail}</p>
-                    </div>
-                  ))}
-                </div>
-              </Panel>
-
-              {channel !== "email" && (
-                <Panel title={channel === "sms" ? "문자 발송 안내" : "알림톡 발송 안내"}>
-                  <div className="space-y-2 text-[12px] leading-relaxed text-[#1a1a1a]/55">
-                    {channel === "sms" ? (
-                      <>
-                        <p>· 문자(SMS/LMS)는 지금 보류 중입니다. 이메일·카카오를 먼저 오픈합니다.</p>
-                        <p>· 발신번호(solapi)는 이미 정상 등록되어 있습니다.</p>
-                        <p>· 우선순위가 오르면 별도 작업 없이 바로 활성화할 수 있습니다.</p>
-                      </>
-                    ) : (
-                      <>
-                        <p>· 알림톡은 카카오에 사전 승인된 템플릿으로만 발송됩니다.</p>
-                        <p>· 변수는 승인된 템플릿의 #{"{변수}"} 자리에 치환됩니다.</p>
-                        <p>· 대량 발송은 백엔드 준비 중 — 현재는 테스트 발송까지 사용할 수 있습니다.</p>
-                      </>
-                    )}
-                  </div>
-                </Panel>
-              )}
-
-              {channel === "email" && (
-              <Panel
-                title="저장 세그먼트"
-                action={activeSegment ? <MiniBadge tone="success">적용 중</MiniBadge> : undefined}
-              >
-                <div className="space-y-4">
-                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-                    <Input
-                      value={segmentName}
-                      onChange={(event) => setSegmentName(event.target.value)}
-                      placeholder="예) 원장 + VIP"
-                    />
-                    <Button
-                      type="button"
-                      onClick={handleSaveSegment}
-                      className="bg-[#084734] hover:bg-[#084734]/90"
-                      disabled={composerDraft.targetTags.length === 0}
-                    >
-                      세그먼트 저장
-                    </Button>
-                  </div>
-
-                  {savedSegmentViews.length === 0 ? (
-                    <EmptyInline message="저장된 세그먼트가 없습니다. 태그를 고른 뒤 이름을 붙여 저장해보세요." />
-                  ) : (
-                    <div className="space-y-3">
-                      {savedSegmentViews.map((segment) => {
-                        const isActive = activeSegment?.id === segment.id
-                        return (
-                          <div key={segment.id} className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="truncate text-[13px] font-semibold text-[#111110]">{segment.name}</p>
-                                  {isActive && <MiniBadge tone="success">적용됨</MiniBadge>}
-                                </div>
-                                <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
-                                  예상 발송 {segment.recipientCount}명 · {formatDateTime(segment.updatedAt)}
-                                </p>
-                                <div className="mt-3 flex flex-wrap gap-1.5">
-                                  {segment.targetTags.map((tag) => (
-                                    <MiniBadge key={tag}>#{tag}</MiniBadge>
-                                  ))}
-                                </div>
-                              </div>
-                              <div className="flex gap-2 sm:shrink-0">
-                                <Button variant="outline" size="sm" onClick={() => handleApplySegment(segment)}>
-                                  적용
-                                </Button>
-                                <Button variant="outline" size="sm" onClick={() => handleDeleteSegment(segment)}>
-                                  삭제
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              </Panel>
-              )}
-
-            </div>
-          </div>
+          <SendCenter
+            draft={composerDraft}
+            onDraftChange={setComposerDraft}
+            subscribers={subscribers}
+            activeCount={activeCount}
+            unsubscribedCount={unsubscribedCount}
+            tagCountMap={tagCountMap}
+            checks={composerReview.checks}
+            readiness={composerReview.readiness}
+            selectedAudience={composerReview.selectedAudience}
+            messagingStatus={messagingStatus}
+            messagingStatusLoaded={messagingStatusLoaded}
+            recipientPrefill={recipientPrefill}
+            onClearRecipientPrefill={() => setRecipientPrefill(null)}
+            draftNotice={draftNotice}
+            activeSegment={activeSegment}
+            hasDraft={!!hasComposerDraft}
+            onClearDraft={clearComposerDraft}
+            savedSegmentViews={savedSegmentViews}
+            segmentName={segmentName}
+            onSegmentNameChange={setSegmentName}
+            onSaveSegment={handleSaveSegment}
+            onApplySegment={handleApplySegment}
+            onDeleteSegment={handleDeleteSegment}
+            onSend={handleSendEmail}
+            sendLoading={sendLoading}
+          />
         )}
 
         {activeTab === "history" && (
@@ -1827,6 +1450,9 @@ export default function MarketingHub({
                   <Zap className="h-5 w-5" />
                 </div>
                 <p className="mt-4 text-[14px] font-semibold text-[#111110]">자동화 — 설계 확정 후 연결</p>
+                <p className="mx-auto mt-1 max-w-md text-[12px] leading-relaxed text-[#1a1a1a]/40">
+                  발송 센터와 같은 초안·세그먼트를 트리거에 연결하는 구조로 준비 중입니다.
+                </p>
                 <div className="mx-auto mt-5 grid max-w-md gap-2 text-left sm:grid-cols-3">
                   {[
                     { label: "트리거", desc: "폼 제출·스케줄·지연" },
@@ -1848,7 +1474,7 @@ export default function MarketingHub({
                   <p className="text-[12px] font-semibold text-[#7A520F]">설계 진행 중 — 자동 발송 미연결</p>
                 </div>
                 <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                  <p className="text-[12px] font-semibold text-[#111110]">수동 발송은 발송 작성 탭</p>
+                  <p className="text-[12px] font-semibold text-[#111110]">수동 발송은 발송 작성(단체 발송 센터)에서</p>
                 </div>
               </div>
             </Panel>
