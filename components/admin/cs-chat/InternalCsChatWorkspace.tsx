@@ -59,6 +59,8 @@ import { adminFetchJson } from "@/lib/admin-client"
 import { cn } from "@/lib/utils"
 
 import {
+  correctedContentForReview,
+  initialCustomerDraft,
   REGRESSION_JUDGE_ACTIONS,
   regressionOutcomeChip,
   summarizeDocsGaps,
@@ -1022,7 +1024,7 @@ function InternalCsChatWorkspaceInner() {
     if (demoMode && id === DEMO_CONVERSATION.id) {
       setDetail(DEMO_DETAIL)
       setSelectedId(id)
-      setFinalDraft(DEMO_MESSAGES[1].content)
+      setFinalDraft(initialCustomerDraft(DEMO_MESSAGES[1]))
       setReviewChecks(INITIAL_CHECKS)
       setReviewNote("")
       setExcludeFromGapQueue(false)
@@ -1034,7 +1036,7 @@ function InternalCsChatWorkspaceInner() {
     const pending = [...loaded.messages].reverse().find(
       (message) => message.role === "assistant" && message.review_state === "pending"
     )
-    setFinalDraft(pending?.corrected_content ?? pending?.content ?? "")
+    setFinalDraft(initialCustomerDraft(pending))
     setReviewChecks(INITIAL_CHECKS)
     setReviewNote("")
     setRegressionCandidate(pending?.regression_candidate ?? false)
@@ -1551,7 +1553,7 @@ function InternalCsChatWorkspaceInner() {
       setDetail(nextDetail)
       setPendingFiles([])
       setSelectedAssetId(previewAssets.at(-1)?.id ?? selectedAssetId)
-      setFinalDraft(nextAssistant.content)
+      setFinalDraft("")
       setReviewChecks(INITIAL_CHECKS)
       setNotice("미리보기 초안을 생성했습니다. 실제 환경에서는 Gemini와 내부 근거 검색을 사용합니다.")
       return
@@ -1612,7 +1614,7 @@ function InternalCsChatWorkspaceInner() {
         created_at: now,
       }
       setDetail((current) => current ? { ...current, messages: [...current.messages, proMessage] } : current)
-      setFinalDraft(proMessage.content)
+      setFinalDraft("")
       setReviewChecks(INITIAL_CHECKS)
       setNotice("Pro 심층 검토 미리보기를 추가했습니다.")
       return
@@ -1654,6 +1656,15 @@ function InternalCsChatWorkspaceInner() {
       setError("수정 요청 사유를 입력해 주세요.")
       return
     }
+    const correctedContent = correctedContentForReview({
+      decision,
+      draft: finalDraft,
+      original: pendingMessage.content,
+    })
+    if (decision === "approved" && !correctedContent) {
+      setError("고객 전달용 최종 답변을 별도로 작성해 주세요.")
+      return
+    }
 
     if (demoMode) {
       const now = new Date().toISOString()
@@ -1669,7 +1680,7 @@ function InternalCsChatWorkspaceInner() {
             ? {
                 ...message,
                 review_state: decision,
-                corrected_content: finalDraft,
+                corrected_content: correctedContent ?? null,
                 review_note: reviewNote || null,
                 regression_candidate: decision === "changes_requested" || regressionCandidate,
                 regression_outcome: decision === "changes_requested" ? "needs_fix" : "not_evaluated",
@@ -1683,7 +1694,7 @@ function InternalCsChatWorkspaceInner() {
         ? { ...conversation, status: nextStatus, updated_at: now, last_message_at: now }
         : conversation))
       if (decision === "approved") {
-        void copyText(finalDraft, "승인된 최종 답변을 복사했습니다.")
+        void copyText(correctedContent ?? "", "승인된 최종 답변을 복사했습니다.")
         setReviewOpen(false)
       } else {
         setNotice("수정 요청을 기록하고 회귀 개선 후보로 남겼습니다.")
@@ -1700,7 +1711,7 @@ function InternalCsChatWorkspaceInner() {
             method: "PATCH",
             body: JSON.stringify({
               decision,
-              correctedContent: finalDraft,
+              correctedContent,
               reviewNote: reviewNote || undefined,
               feedbackLabels: decision === "changes_requested" ? ["human_revision_requested"] : ["human_approved"],
               regressionCandidate: decision === "changes_requested" || regressionCandidate,
@@ -1711,7 +1722,7 @@ function InternalCsChatWorkspaceInner() {
           }
         )
         if (decision === "approved") {
-          await copyText(finalDraft, "승인된 최종 답변을 복사했습니다.")
+          await copyText(correctedContent ?? "", "승인된 최종 답변을 복사했습니다.")
           setReviewOpen(false)
         } else {
           setNotice("수정 요청을 기록하고 회귀 개선 후보로 남겼습니다.")
@@ -2925,8 +2936,8 @@ function InternalCsChatWorkspaceInner() {
 
               <div className="px-5 py-5">
                 <div className="flex items-center justify-between gap-3">
-                  <label htmlFor="internal-cs-final-answer" className="text-[13px] font-semibold">최종 답변</label>
-                  <span className="text-[10px] text-[#A39E98]">외부 전달용</span>
+                  <label htmlFor="internal-cs-final-answer" className="text-[13px] font-semibold">고객 전달용 최종 답변</label>
+                  <span className="text-[10px] text-[#A39E98]">내부 분석과 별도 작성</span>
                 </div>
                 <textarea
                   id="internal-cs-final-answer"
@@ -2934,7 +2945,7 @@ function InternalCsChatWorkspaceInner() {
                   onChange={(event) => setFinalDraft(event.target.value)}
                   rows={12}
                   className="mt-3 w-full resize-y rounded-md border border-black/[0.16] bg-white px-3 py-3 text-[12px] leading-5 text-[#31302E] outline-none focus:border-[#084734]/50 focus:ring-2 focus:ring-[#084734]/10"
-                  placeholder="AI 초안을 검토하고 최종 답변으로 다듬어 주세요."
+                  placeholder="위 내부 분석을 그대로 복사하지 말고, 확인된 사실만으로 고객 전달 문안을 작성해 주세요."
                 />
                 <div className="mt-4">
                   <label htmlFor="internal-cs-review-note" className="text-[12px] font-semibold text-[#31302E]">검토 메모</label>

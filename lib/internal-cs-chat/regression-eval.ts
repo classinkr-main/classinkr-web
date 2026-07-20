@@ -116,10 +116,15 @@ function clampLimit(limit: number | undefined) {
  */
 export function referenceAnswerFor(candidate: InternalCsRegressionEvalCandidate): string | null {
   const corrected = candidate.correctedContent?.trim()
-  if (corrected) return corrected
   if (candidate.reviewState === "approved") {
+    if (corrected) return corrected
     const content = candidate.content?.trim()
     if (content) return content
+  }
+  if (candidate.reviewState === "changes_requested" && corrected) {
+    const normalizedCorrection = corrected.replace(/\s+/g, " ")
+    const normalizedOriginal = candidate.content?.replace(/\s+/g, " ").trim() ?? ""
+    if (normalizedCorrection !== normalizedOriginal) return corrected
   }
   return null
 }

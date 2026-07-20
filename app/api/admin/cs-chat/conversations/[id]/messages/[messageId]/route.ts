@@ -93,6 +93,13 @@ export async function PATCH(req: NextRequest, context: Context) {
   if (raw.excludeFromGapQueue !== undefined && typeof raw.excludeFromGapQueue !== "boolean") {
     return NextResponse.json({ error: "excludeFromGapQueue must be a boolean" }, { status: 400 })
   }
+  const correctedContent = optionalString(raw.correctedContent)
+  if (!isRegressionOnly && raw.decision === "approved" && !correctedContent) {
+    return NextResponse.json(
+      { error: "Approved messages require a customer-ready correctedContent" },
+      { status: 400 }
+    )
+  }
 
   try {
     // 경량 경로는 regression_outcome 만 갱신한다 — 검토 필드(review_state/reviewed_*/
@@ -118,7 +125,7 @@ export async function PATCH(req: NextRequest, context: Context) {
       messageId,
       decision: raw.decision as "approved" | "changes_requested" | "rejected",
       reviewNote: optionalString(raw.reviewNote),
-      correctedContent: optionalString(raw.correctedContent),
+      correctedContent,
       feedbackLabels: raw.feedbackLabels as string[] | undefined,
       regressionCandidate: raw.regressionCandidate === true,
       regressionOutcome: raw.regressionOutcome as InternalCsRegressionOutcome | undefined,

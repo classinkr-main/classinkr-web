@@ -499,7 +499,11 @@ describe("PATCH messages/[messageId] regression-outcome-only path", () => {
     })
 
     const response = await messagesPatch(
-      patchRequest({ decision: "approved", regressionOutcome: "pass" }),
+      patchRequest({
+        decision: "approved",
+        regressionOutcome: "pass",
+        correctedContent: "고객 전달용으로 검토한 답변",
+      }),
       routeContext()
     )
 

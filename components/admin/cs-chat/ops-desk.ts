@@ -15,6 +15,29 @@ interface DocsGapsBacklogLike {
   zeroResultSearches?: unknown[] | null
 }
 
+interface ReviewMessageLike {
+  content: string
+  corrected_content?: string | null
+}
+
+export function initialCustomerDraft(message: ReviewMessageLike | null | undefined) {
+  return message?.corrected_content?.trim() || ""
+}
+
+export function correctedContentForReview(input: {
+  decision: "approved" | "changes_requested"
+  draft: string
+  original: string
+}) {
+  const draft = input.draft.trim()
+  if (!draft) return undefined
+  if (input.decision === "approved") return draft
+
+  const normalizedDraft = draft.replace(/\s+/g, " ")
+  const normalizedOriginal = input.original.replace(/\s+/g, " ").trim()
+  return normalizedDraft === normalizedOriginal ? undefined : draft
+}
+
 // GET /api/admin/docs/gaps 는 최대 30개 클러스터를 돌려준다 — 그 이상은 "30+"로 표기한다.
 const DOCS_GAPS_FETCH_CAP = 30
 

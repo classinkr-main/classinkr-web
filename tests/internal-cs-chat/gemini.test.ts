@@ -114,6 +114,32 @@ describe("generateInternalCsAnswer", () => {
     })
   })
 
+  it("redacts PII from the question, history, and internal context before model delivery", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key")
+    const fetchMock = vi.fn().mockResolvedValue(geminiResponse("redacted answer"))
+    vi.stubGlobal("fetch", fetchMock)
+
+    await generateInternalCsAnswer({
+      question: "Call 010-1234-5678 about customer@example.com",
+      internalContext: "Payment card 4111 1111 1111 1111 is shown.",
+      history: [
+        { role: "user", text: "Previous contact was 02-123-4567" },
+        { role: "model", text: "Email owner@example.com" },
+      ],
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const modelPayload = String(init.body)
+    expect(modelPayload).toContain("[phone]")
+    expect(modelPayload).toContain("[email]")
+    expect(modelPayload).toContain("[payment_number]")
+    expect(modelPayload).not.toContain("010-1234-5678")
+    expect(modelPayload).not.toContain("customer@example.com")
+    expect(modelPayload).not.toContain("4111 1111 1111 1111")
+    expect(modelPayload).not.toContain("02-123-4567")
+    expect(modelPayload).not.toContain("owner@example.com")
+  })
+
   it("enforces fact-first internal tone: conclusion-first, emotion-free, customer tone only in draft blocks", async () => {
     vi.stubEnv("GEMINI_API_KEY", "test-key")
     const fetchMock = vi.fn().mockResolvedValue(geminiResponse("S86 3.0 OPS: i5-13420H (확정)"))

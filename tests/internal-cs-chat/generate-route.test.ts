@@ -181,29 +181,59 @@ afterEach(() => {
 })
 
 describe("internal CS attachment evidence", () => {
-  it("labels pending image analysis as unverified context", () => {
+  it("excludes pending and rejected image analysis from factual evidence", () => {
     const evidence = buildInternalCsAssetEvidence([
       {
         id: "asset-1",
-        original_file_name: "refund-screen.png",
-        analysis_summary: "The screen shows a refund request.",
-        analysis_payload: {
-          extractedText: ["REFUND REQUESTED"],
-          sensitiveDataWarnings: ["Account identifier is visible"],
-        },
+        original_file_name: "pending.png",
+        analysis_summary: "PENDING CLAIM MUST NOT BE USED",
+        analysis_payload: {},
         review_state: "pending",
+        corrected_analysis: null,
+      } as unknown as InternalCsAssetRow,
+      {
+        id: "asset-2",
+        original_file_name: "rejected.png",
+        analysis_summary: "REJECTED CLAIM MUST NOT BE USED",
+        analysis_payload: {},
+        review_state: "rejected",
         corrected_analysis: null,
       } as unknown as InternalCsAssetRow,
     ])
 
+    expect(evidence.count).toBe(0)
+    expect(evidence.text).toBe("")
+    expect(evidence.sourceRefs).toEqual([])
+  })
+
+  it("uses only the approved corrected analysis and redacts PII", () => {
+    const evidence = buildInternalCsAssetEvidence([
+      {
+        id: "asset-approved",
+        original_file_name: "customer-010-1234-5678.png",
+        analysis_summary: "INCORRECT ORIGINAL SUMMARY",
+        analysis_payload: {
+          extractedText: ["UNSAFE ORIGINAL OCR customer@example.com"],
+          observations: ["UNSAFE ORIGINAL OBSERVATION"],
+        },
+        review_state: "approved",
+        corrected_analysis: "Approved refund evidence for 010-1234-5678 and customer@example.com",
+      } as unknown as InternalCsAssetRow,
+    ])
+
     expect(evidence.count).toBe(1)
-    expect(evidence.text).toContain("treat as unverified unless approved")
-    expect(evidence.text).toContain("REFUND REQUESTED")
+    expect(evidence.text).toContain("Approved refund evidence for [phone] and [email]")
+    expect(evidence.text).not.toContain("010-1234-5678")
+    expect(evidence.text).not.toContain("customer@example.com")
+    expect(evidence.text).not.toContain("INCORRECT ORIGINAL SUMMARY")
+    expect(evidence.text).not.toContain("UNSAFE ORIGINAL OCR")
+    expect(evidence.text).not.toContain("UNSAFE ORIGINAL OBSERVATION")
     expect(evidence.sourceRefs).toEqual([
       expect.objectContaining({
-        id: "internal-cs-asset:asset-1",
+        id: "internal-cs-asset:asset-approved",
         kind: "internal_asset",
-        reviewState: "pending",
+        label: "Attached image: customer-[phone].png",
+        reviewState: "approved",
       }),
     ])
   })
