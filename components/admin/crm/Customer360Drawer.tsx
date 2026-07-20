@@ -252,6 +252,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const [dealFormOpen, setDealFormOpen] = useState(false)
   const [taskFormOpen, setTaskFormOpen] = useState(false)
   const [activeSection, setActiveSection] = useState<string>("c360-summary")
+  const [drawerEntered, setDrawerEntered] = useState(false)
   // 고정 컴포저 작성 중 여부 — 닫기 가드용(ActivityQuickForm onDirtyChange가 플립 시점에만 통지).
   const [composerDirty, setComposerDirty] = useState(false)
   // 'NEO 등록됨' 수동 연결 패널 — 홈페이지 유입(site) 리드 전용.
@@ -263,6 +264,14 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const router = useRouter()
   const bodyRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
+
+  // 고객 클릭 피드백 — 우측 패널은 짧게 밀려 들어오고 배경은 함께 페이드된다.
+  // 고객 전환에도 같은 신호를 주되 prefers-reduced-motion에서는 CSS가 즉시 전환한다.
+  useEffect(() => {
+    setDrawerEntered(false)
+    const frame = window.requestAnimationFrame(() => setDrawerEntered(true))
+    return () => window.cancelAnimationFrame(frame)
+  }, [customerKey])
 
   // dirty 통지는 ref 경유 — 부모가 인라인 함수를 넘겨도 콜백 재생성/재구독 루프가 없게.
   const onDirtyChangeRef = useRef(onDirtyChange)
@@ -815,9 +824,19 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/20" onClick={requestClose} aria-hidden />
       <div
-        className="relative z-10 flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl"
+        data-testid="customer-drawer-backdrop"
+        className={`absolute inset-0 bg-black/20 transition-opacity duration-200 motion-reduce:transition-none ${
+          drawerEntered ? "opacity-100" : "opacity-0"
+        }`}
+        onClick={requestClose}
+        aria-hidden
+      />
+      <div
+        data-testid="customer-drawer-panel"
+        className={`relative z-10 flex h-full w-full max-w-xl transform-gpu flex-col overflow-hidden bg-white shadow-2xl transition-[transform,opacity] duration-300 ease-out motion-reduce:transition-none ${
+          drawerEntered ? "translate-x-0 opacity-100" : "translate-x-4 opacity-0"
+        }`}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >

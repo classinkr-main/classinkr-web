@@ -4,7 +4,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { AlertTriangle, Building2, ChevronLeft, ChevronRight, ExternalLink, Filter, PhoneCall, RefreshCw, Search, Tag, UserPlus, UserRound } from "lucide-react"
+import { AlertTriangle, ArrowDownWideNarrow, Building2, ChevronLeft, ChevronRight, ExternalLink, Filter, PhoneCall, RefreshCw, Search, Tag, UserPlus, UserRound } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import type {
@@ -20,6 +20,7 @@ import CrmCustomerFlags from "./CrmCustomerFlags"
 import CrmContactValue from "./CrmContactValue"
 import { deriveCustomerFlags, type CustomerFlag } from "@/lib/crm/customer-flags"
 import { LEAD_BADGE_TONE_CLASSES, leadBadges } from "@/lib/crm/lead-badges"
+import { getDefaultCustomerPlacement, type CrmCustomerPlacement } from "@/lib/crm/customer-placement"
 
 // 드로어·리드 등록 모달 코드 스플리팅(41af51a4 패턴) — 목록 첫 로드에서 청크를 제외하고
 // 행 클릭/딥링크(?account=)·리드 등록 클릭 시점에만 내려받는다. 열림 상태에서만 렌더하므로
@@ -230,6 +231,17 @@ function LeadRowBadges({ row, nowMs }: { row: CrmUnifiedCustomerRow; nowMs: numb
         </span>
       ))}
     </>
+  )
+}
+
+function PlacementCue({ order, placement }: { order: number; placement: CrmCustomerPlacement }) {
+  return (
+    <span className="mb-1 inline-flex items-center gap-1 text-[10px] font-bold tracking-[-0.01em] text-[#084734]">
+      <span className="inline-flex h-4 min-w-4 items-center justify-center rounded bg-[#ECFDF5] px-1 tabular-nums">
+        {order}
+      </span>
+      상단 추천 · {placement.label}
+    </span>
   )
 }
 
@@ -773,6 +785,25 @@ export default function CrmUnifiedCustomersClient() {
     setTagFilter("")
   }, [persistOwner, syncViewParam])
 
+  const showDefaultPlacement =
+    !query.trim() &&
+    source === "all" &&
+    lifecycle === "all" &&
+    savedView === "all" &&
+    !tagFilter &&
+    data?.pagination.offset === 0
+  const topPlacements = useMemo(() => {
+    const placements = new Map<string, { order: number; placement: CrmCustomerPlacement }>()
+    if (!showDefaultPlacement || !data) return placements
+    for (const row of data.rows) {
+      const placement = getDefaultCustomerPlacement(row, nowMs)
+      if (placement.band === "routine") continue
+      placements.set(row.key, { order: placements.size + 1, placement })
+      if (placements.size === 3) break
+    }
+    return placements
+  }, [data, nowMs, showDefaultPlacement])
+
   return (
     <div className="min-h-screen bg-[#F6F5F4] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
@@ -927,6 +958,20 @@ export default function CrmUnifiedCustomersClient() {
         ) : null}
 
         <section className="rounded-2xl border border-[#e8e8e4] bg-white">
+          {showDefaultPlacement && data?.rows.length ? (
+            <div
+              data-testid="default-customer-placement-guide"
+              className="flex flex-col gap-1 border-b border-[#e8e8e4] bg-[#ECFDF5] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <p className="inline-flex items-center gap-1.5 text-[12px] font-bold text-[#084734]">
+                <ArrowDownWideNarrow className="h-3.5 w-3.5" />
+                기본 상단 배치
+              </p>
+              <p className="text-[11px] font-medium text-[#084734]/70">
+                24시간+ 미응답 → 만료·고위험 → 오늘 응대 → 우선 관리 순
+              </p>
+            </div>
+          ) : null}
           <div className="hidden overflow-hidden lg:block">
             <table className="w-full border-collapse text-left">
               <thead className="bg-[#fafaf8] text-[11px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
@@ -966,11 +1011,26 @@ export default function CrmUnifiedCustomersClient() {
                       </tr>
                     ))
                   : null}
-                {data?.rows.map((row) => (
-                  <tr key={row.key} className="transition-colors hover:bg-[#fafaf8]">
+                {data?.rows.map((row) => {
+                  const placement = topPlacements.get(row.key)
+                  const selected = drawer?.key === row.key
+                  return (
+                  <tr
+                    key={row.key}
+                    data-selected={selected || undefined}
+                    data-testid={placement ? `default-placement-${placement.order}` : undefined}
+                    className={`transition-[background-color,box-shadow] duration-200 motion-reduce:transition-none ${
+                      selected
+                        ? "bg-[#ECFDF5] shadow-[inset_3px_0_0_#084734]"
+                        : placement
+                          ? "bg-[#FCFFFD] hover:bg-[#F6FBF8]"
+                          : "hover:bg-[#fafaf8]"
+                    }`}
+                  >
                     <td className="px-4 py-3">
                       <div className="flex min-w-0 items-center gap-2">
                         <div className="min-w-0 flex-1">
+                          {placement ? <PlacementCue order={placement.order} placement={placement.placement} /> : null}
                           {row.source === "customer" ? (
                             // 전환 고객은 360 드로어 미지원 — 파트너 워크스페이스(딜)로 이동.
                             <Link href={row.href} className="group block max-w-full text-left">
@@ -980,7 +1040,8 @@ export default function CrmUnifiedCustomersClient() {
                             <button
                               type="button"
                               onClick={() => openDrawer(row.key, row.name)}
-                              className="group block max-w-full text-left"
+                              aria-pressed={selected}
+                              className="group block max-w-full text-left transition-transform duration-150 active:scale-[0.985] motion-reduce:transition-none"
                             >
                               <p className="truncate text-[13px] font-bold text-[#111110] group-hover:underline">{row.name}</p>
                             </button>
@@ -1020,7 +1081,8 @@ export default function CrmUnifiedCustomersClient() {
                       {row.score}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -1040,8 +1102,22 @@ export default function CrmUnifiedCustomersClient() {
                   </div>
                 ))
               : null}
-            {data?.rows.map((row) => (
-              <div key={row.key} className="relative transition-colors hover:bg-[#fafaf8]">
+            {data?.rows.map((row) => {
+              const placement = topPlacements.get(row.key)
+              const selected = drawer?.key === row.key
+              return (
+              <div
+                key={row.key}
+                data-selected={selected || undefined}
+                data-testid={placement ? `default-placement-mobile-${placement.order}` : undefined}
+                className={`relative transition-[background-color,box-shadow,transform] duration-200 motion-reduce:transition-none ${
+                  selected
+                    ? "scale-[0.99] bg-[#ECFDF5] shadow-[inset_3px_0_0_#084734]"
+                    : placement
+                      ? "bg-[#FCFFFD] hover:bg-[#F6FBF8]"
+                      : "hover:bg-[#fafaf8]"
+                }`}
+              >
                 {row.source === "customer" ? (
                   <Link href={row.href} aria-label={`${row.name} 상세 보기`} className="absolute inset-0 z-0" />
                 ) : (
@@ -1049,10 +1125,12 @@ export default function CrmUnifiedCustomersClient() {
                     type="button"
                     onClick={() => openDrawer(row.key, row.name)}
                     aria-label={`${row.name} 상세 보기`}
-                    className="absolute inset-0 z-0"
+                    aria-pressed={selected}
+                    className="absolute inset-0 z-0 active:scale-[0.99]"
                   />
                 )}
                 <div className="pointer-events-none relative z-10 p-4">
+                  {placement ? <PlacementCue order={placement.order} placement={placement.placement} /> : null}
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="mb-1">{sourceBadge(row)}</div>
@@ -1079,7 +1157,8 @@ export default function CrmUnifiedCustomersClient() {
                   <p className="mt-2 text-[12px] text-[#1a1a1a]/45">{row.priorityReason}</p>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
 
           {data && data.pagination.total > 0 ? (
@@ -1158,6 +1237,7 @@ export default function CrmUnifiedCustomersClient() {
           열 때만 내려받고 닫힌 첫 로드에 로딩 폴백이 새어 나오지 않는다. */}
       {drawer ? (
         <Customer360Drawer
+          key={drawer.key}
           customerKey={drawer.key}
           name={drawer.name}
           onClose={closeDrawer}

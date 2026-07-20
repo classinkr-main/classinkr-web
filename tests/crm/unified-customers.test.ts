@@ -214,6 +214,33 @@ describe("getCrmUnifiedCustomers", () => {
     expect(mine.rows.every((row) => row.ownerName === "김담당")).toBe(true)
   })
 
+  it("uses response state and contract urgency for the default top placement", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [
+        lead({ id: "unanswered", timestamp: "2026-06-24T08:00:00.000Z" }),
+        lead({ id: "responded", timestamp: "2026-06-22T08:00:00.000Z" }),
+      ],
+      accounts: [
+        neoCustomer({ accountId: "expiring", expireAt: "2026-06-27T00:00:00.000Z" }),
+        neoCustomer({ accountId: "routine", expireAt: "2027-07-01T00:00:00.000Z" }),
+      ],
+      firstResponses: { responded: "2026-06-22T10:00:00.000Z" },
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    expect(result.rows.map((row) => row.key)).toEqual([
+      "lead:unanswered",
+      "neo:expiring",
+      "lead:responded",
+      "neo:routine",
+    ])
+    expect(result.rows.find((row) => row.key === "lead:responded")).toMatchObject({
+      nextActionLabel: "후속 확인",
+      priorityReason: "첫 응답 완료 · 다음 단계 확인",
+      score: 36,
+    })
+  })
+
   it("keeps unconfirmed public leads in the lead inbox until they are confirmed or handled", async () => {
     const { getCrmUnifiedCustomers } = await loadRepository({
       leads: [

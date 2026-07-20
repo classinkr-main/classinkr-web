@@ -2,13 +2,11 @@ import "server-only"
 
 import { getNeoCrmCustomers } from "@/lib/admin-crm-customers-neo"
 import {
-  CRM_PRIORITY_BUCKET_LABELS,
   buildLeadPriorityItem,
   buildNeoAccountPriorityItem,
-  sortPriorityItems,
-  type CrmPriorityBucket,
   type CrmPriorityItem,
 } from "@/lib/crm/priority"
+import { compareDefaultCustomerPlacement } from "@/lib/crm/customer-placement"
 import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
 import {
   daysUntil,
@@ -254,13 +252,6 @@ function buildOwnerOptions(rows: CrmUnifiedCustomerRow[]) {
     .sort((a, b) => b.count - a.count || a.ownerName.localeCompare(b.ownerName, "ko"))
 }
 
-function sortBucketForRow(row: CrmUnifiedCustomerRow): CrmPriorityBucket {
-  if (row.source === "lead" && row.score >= 42) return "today"
-  if (row.source === "neo_account" && row.nextActionLabel.includes("연장")) return "renewal"
-  if (row.source === "neo_account" && row.nextActionLabel.includes("장기")) return "stale_recovery"
-  return "watch"
-}
-
 function clampInteger(value: number | undefined, fallback: number, min: number, max: number) {
   const numeric = Number(value ?? fallback)
   if (!Number.isFinite(numeric)) return fallback
@@ -317,6 +308,10 @@ export async function getCrmUnifiedCustomers(
   if (leadResult.status === "fulfilled") {
     for (const lead of leadResult.value) {
       const priority = buildLeadPriorityItem(lead, now)
+      const firstResponseAt = firstResponseMap.get(lead.id) ?? null
+      // 기록 탭에 첫 응답이 남았는데 원천 리드 상태가 아직 new인 동기화 지연 구간에서는
+      // 미응답 점수를 계속 유지하지 않는다. 후속 확인으로 낮춰 상단 응대 큐를 정확하게 만든다.
+      const firstResponseCompleted = priority?.action === "respond_lead" && Boolean(firstResponseAt)
       const hasAdClickId = Boolean(lead.gclid || lead.fbclid || lead.msclkid || lead.ttclid)
       rows.push({
         key: `lead:${lead.id}`,
@@ -329,9 +324,13 @@ export async function getCrmUnifiedCustomers(
         ownerKeys: uniqueOwnerKeys([lead.assigned_to]),
         lifecycle: leadLifecycle(lead),
         statusLabel: leadStatusLabel(lead),
-        nextActionLabel: priority?.actionLabel ?? defaultLeadAction(lead),
-        priorityReason: priority?.reason ?? "리드 상태 확인",
-        score: priority?.score ?? (lead.status === "new" ? 40 : 20),
+        nextActionLabel: firstResponseCompleted ? "후속 확인" : priority?.actionLabel ?? defaultLeadAction(lead),
+        priorityReason: firstResponseCompleted
+          ? "첫 응답 완료 · 다음 단계 확인"
+          : priority?.reason ?? "리드 상태 확인",
+        score: firstResponseCompleted
+          ? Math.min(priority?.score ?? 36, 36)
+          : priority?.score ?? (lead.status === "new" ? 40 : 20),
         moneyLabel: null,
         href: `/admin/crm/customers/leads?lead=${encodeURIComponent(lead.id)}`,
         updatedAt: lead.follow_up_at ?? lead.timestamp,
@@ -342,7 +341,7 @@ export async function getCrmUnifiedCustomers(
         // 미확인 신규 리드도 행은 만들되 처리 큐 뷰(site_leads/unanswered)에서만 노출된다.
         provisional: !shouldIncludeLeadInUnifiedCustomers(lead),
         slaTarget: lead.status === "new" && SLA_TARGET_LEAD_SOURCES.has(lead.source),
-        firstResponseAt: firstResponseMap.get(lead.id) ?? null,
+        firstResponseAt,
         createdAt: lead.timestamp, // timestamp는 leads.created_at 매핑 (lib/repositories/leads.ts 참고)
       })
     }
@@ -464,35 +463,7 @@ export async function getCrmUnifiedCustomers(
     ])
   )
 
-  const sortedKeys = new Map(sortPriorityItems(filtered.map((row) => {
-    const bucket = sortBucketForRow(row)
-    return {
-      id: row.key,
-      // 전환 고객은 우선순위 엔진 소스 타입 밖 — 정렬 목적으로 계정 계열로 취급.
-      source: row.source === "customer" ? "neo_account" : row.source,
-      title: row.name,
-      subtitle: row.contact,
-      ownerName: row.ownerName,
-      ownerKeys: row.ownerKeys,
-      statusLabel: row.statusLabel,
-      score: row.score,
-      severity: row.score >= 85 ? "critical" : row.score >= 68 ? "high" : row.score >= 42 ? "medium" : "low",
-      bucket,
-      bucketLabel: CRM_PRIORITY_BUCKET_LABELS[bucket],
-      action: row.source === "lead" ? "follow_up_lead" : "watch_account",
-      actionLabel: row.nextActionLabel,
-      reason: row.priorityReason,
-      href: row.href,
-      dueAt: row.updatedAt,
-      updatedAt: row.updatedAt,
-    }
-  })).map((item, index) => [item.id, index]))
-
-  const sorted = [...filtered].sort((a, b) => {
-    const aIndex = sortedKeys.get(a.key) ?? Number.MAX_SAFE_INTEGER
-    const bIndex = sortedKeys.get(b.key) ?? Number.MAX_SAFE_INTEGER
-    return aIndex - bIndex
-  })
+  const sorted = [...filtered].sort((left, right) => compareDefaultCustomerPlacement(left, right, nowMs))
   // 활성 고객 건강도 분포 — 전역(필터 무관). 코크핏 도넛이 읽는 단일 진실원.
   const healthDistribution = rows.reduce<CrmHealthDistribution>(
     (acc, row) => {
