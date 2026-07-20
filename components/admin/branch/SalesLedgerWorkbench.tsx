@@ -20,6 +20,7 @@ import {
   Database,
   FileSpreadsheet,
   Gauge,
+  LayoutList,
   ListChecks,
   Loader2,
   Pencil,
@@ -95,6 +96,8 @@ import IntegrityStrip from "./IntegrityStrip"
 import CrmSyncStrip, { type CrmCoverageResponse } from "./CrmSyncStrip"
 import MultiSelect from "./MultiSelect"
 import { InputRailSection } from "./ledger/InputRailSection"
+import { CockpitDealList } from "./ledger/CockpitDealList"
+import { CockpitEditor } from "./ledger/CockpitEditor"
 // 검토 초안 체크 큐는 ledger/DraftQueue로 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
 // S4: 큐는 railView === "queue"에서만 렌더된다(기본 "detail") — 지연 로드로 첫 로드 번들에서
 // 제외한다. 정적 재수출을 함께 두면 청크 분리가 무효화되므로 draftStatusMeta 재수출은 두지
@@ -260,7 +263,7 @@ export type {
   WeeklyCloseRunView,
 } from "./ledger/shared"
 
-type LedgerLens = "dsh" | "rev" | "board"
+type LedgerLens = "dsh" | "rev" | "board" | "cockpit"
 type RailView = "detail" | "input" | "queue"
 type RevSortKey = "customer" | "product" | "manager" | "team" | "region" | "month" | "revenue" | "annual" | "origin"
 type RevSortDirection = "asc" | "desc"
@@ -385,6 +388,7 @@ const LENSES: Array<{ id: LedgerLens; label: string; description: string }> = [
   { id: "dsh", label: "DSH", description: "수치 상세 · 목표/실적 그리드" },
   { id: "rev", label: "REV", description: "주차·목표 수치 검수와 행 상세" },
   { id: "board", label: "보드", description: "주차 Forecast 칸반 · 확정/고확도/예정 카드 검수" },
+  { id: "cockpit", label: "콕핏", description: "내 딜 목록 → 우측 빠른 입력에서 주차별 확도 (콕핏 입력)" },
 ]
 // role="tablist" 롤빙 tabIndex 키보드 내비 — BranchDashboardClient.tsx의 onTabKeyDown과
 // 동일 패턴(ArrowLeft/Right/Home/End)을 두 탭리스트(렌즈, 빠른 작업 보기)가 공유하도록 일반화.
@@ -490,6 +494,13 @@ function clearStoredRevDbImport() {
 
 function ymKeyUtc(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
+}
+
+// 시간 게이트(2026-07-20): '미연결' 칩은 미래 '예정' 매출만 있는 계정엔 아직 안 띄운다 —
+// cutoffMonth(보통 이번 달) 이하 달에 확정 매출이 잡혀야 띄운다. 미래 달은 예측치라
+// 안 맞아도 정상이라 검사 대상에서 뺀다(월 키가 YYYY-MM zero-pad라 문자열 비교로 충분).
+function hasConfirmedThroughMonth(monthlyTotals: Record<string, RevMonthlyBucket>, cutoffMonth: string): boolean {
+  return Object.entries(monthlyTotals).some(([month, bucket]) => month <= cutoffMonth && bucket.confirmed > 0)
 }
 
 function fiscalYearOf(date: Date): number {
@@ -1244,7 +1255,7 @@ export default function SalesLedgerWorkbench() {
       router.replace("/admin/branch?tab=pipeline")
       return
     }
-    setLens(lensParam === "dsh" || lensParam === "board" ? lensParam : "rev")
+    setLens(lensParam === "dsh" || lensParam === "board" || lensParam === "cockpit" ? lensParam : "rev")
     const monthParam = params.get("month")
     setSelectedMonth(
       monthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam) ? monthParam : defaultMonthRef.current,
@@ -1441,6 +1452,18 @@ export default function SalesLedgerWorkbench() {
   useEffect(() => {
     if (editingDraftId && !editingDraft) setEditingDraftId(null)
   }, [editingDraft, editingDraftId])
+
+  // 콕핏 렌즈는 "항상 주차" — weeklyMode/week 토큰과 주차 지원 작업 유형을 강제해 저장 계약
+  // (draftWeeklySaveContract)이 주차 버퍼를 정본으로 쓰게 한다. 이미 정합이면 그대로 둔다(리렌더 루프 방지).
+  // draftForm 선언(위) 이후에 둬야 deps의 TDZ 참조를 피한다.
+  useEffect(() => {
+    if (lens !== "cockpit") return
+    setDraftForm((current) => {
+      const nextOperation = operationSupportsWeeklySplit(current.operation) ? current.operation : "amount-change"
+      if (current.weeklyMode && current.week === "month" && nextOperation === current.operation) return current
+      return { ...current, operation: nextOperation, weeklyMode: true, week: "month" }
+    })
+  }, [lens, draftForm.operation, draftForm.weeklyMode, draftForm.week])
 
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   const summary = useBranchJson<BranchSummaryResponse>(`/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}&breakdown=1`, refreshKey)
@@ -2986,6 +3009,27 @@ export default function SalesLedgerWorkbench() {
     }))
   }, [selectedMonth, selectedRow])
 
+  // 콕핏 인라인 편집기(2-pane 우측)와 우측 플로팅 레일이 같은 InputRailSection을 공유한다 —
+  // props 단일 정의로 두 소비처가 동일 draftForm·저장 계약을 쓰게 한다(로직 중복 금지).
+  const inputRailProps = {
+    editingDraft,
+    queueMode,
+    draftForm,
+    setDraftForm,
+    selectedDraftOperation,
+    monthOptions,
+    selectedMonth,
+    draftAmountInvalid,
+    draftQuantityInvalid,
+    draftFormInvalid,
+    draftSaving,
+    canCreateEditDraft,
+    targetCellLocked,
+    saveEditedDraft,
+    cancelDraftEdit,
+    saveDraft,
+  }
+
   return (
     <div className="min-h-screen bg-[#FAFAF8] pb-24 text-[#111110]">
       <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-5 sm:px-6 lg:px-9">
@@ -3122,7 +3166,7 @@ export default function SalesLedgerWorkbench() {
                 <span className={`flex h-6 w-6 items-center justify-center rounded-md ${
                   lens === item.id ? "bg-white/12" : "bg-[#ECFDF5] text-[#084734]"
                 }`}>
-                  {item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : item.id === "rev" ? <Table2 className="h-3.5 w-3.5" /> : <Columns3 className="h-3.5 w-3.5" />}
+                  {item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : item.id === "rev" ? <Table2 className="h-3.5 w-3.5" /> : item.id === "board" ? <Columns3 className="h-3.5 w-3.5" /> : <LayoutList className="h-3.5 w-3.5" />}
                 </span>
                 {item.label}
               </button>
@@ -3904,7 +3948,7 @@ export default function SalesLedgerWorkbench() {
                                 expandedMonths={expandedRevMonths}
                                 expanded={expanded}
                                 selected={selectedGroup?.key === group.key}
-                                needsLink={isNeedsLink(group.customer)}
+                                needsLink={isNeedsLink(group.customer) && hasConfirmedThroughMonth(group.monthlyTotals, ymKeyUtc(new Date()))}
                                 linkPopoverOpen={revLinkPopoverKey === group.key}
                                 onLinkPopoverToggle={toggleRevLinkPopover}
                                 onLinkPopoverClose={closeRevLinkPopover}
@@ -3975,7 +4019,7 @@ export default function SalesLedgerWorkbench() {
                                       key={row.id}
                                       view={view}
                                       grouped={false}
-                                      needsLink={isNeedsLink(row.customer)}
+                                      needsLink={isNeedsLink(row.customer) && hasConfirmedThroughMonth(view.monthlyByMonth, ymKeyUtc(new Date()))}
                                       linkPopoverOpen={revLinkPopoverKey === row.id}
                                       onLinkPopoverToggle={toggleRevLinkPopover}
                                       onLinkPopoverClose={closeRevLinkPopover}
@@ -4052,6 +4096,50 @@ export default function SalesLedgerWorkbench() {
                 selectedRowId={selectedRow?.id ?? null}
               />
             )}
+
+            {/* 콕핏 입력(Cockpit-1c 이식) — 화면을 꽉 채우는 인라인 2-pane. 좌: 내 딜 마스터 리스트,
+                우: 편집기(기존 InputRailSection을 그대로 인라인 배치 — 로직/저장 계약 재사용). 딜 선택은
+                REV·보드와 동일한 loadDealDetail로 draftForm을 채운다(새 편집 경로 없음). 콕핏에서는 우측
+                플로팅 레일·FAB를 렌더하지 않는다(아래 조건에서 lens !== "cockpit"). */}
+            {lens === "cockpit" && (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start">
+                <CockpitDealList
+                  rows={filteredRows}
+                  selectedMonth={selectedMonth}
+                  selectedRowId={selectedRow?.id ?? null}
+                  onSelectDeal={(row) => void loadDealDetail(row)}
+                  onNewDeal={() => {
+                    setEditingDraftId(null)
+                    setSelectedRow(null)
+                    setDraftForm(defaultDraftForm)
+                  }}
+                />
+                <CockpitEditor
+                  editingDraft={editingDraft}
+                  dealContext={
+                    selectedRow
+                      ? {
+                          status: selectedRow.status,
+                          dealType: selectedRow.dealType,
+                          region: selectedRow.region,
+                          productVersion: selectedRow.productVersion,
+                          firstPayment: selectedRow.firstPayment,
+                        }
+                      : null
+                  }
+                  draftForm={draftForm}
+                  setDraftForm={setDraftForm}
+                  monthOptions={monthOptions}
+                  draftFormInvalid={draftFormInvalid}
+                  draftSaving={draftSaving}
+                  canCreateEditDraft={canCreateEditDraft}
+                  targetCellLocked={targetCellLocked}
+                  saveEditedDraft={saveEditedDraft}
+                  cancelDraftEdit={cancelDraftEdit}
+                  saveDraft={saveDraft}
+                />
+              </div>
+            )}
             {/* KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다(2026-07-16 역할 재배분) — LENSES에서
                 제거됐고 ?lens=kpi는 마운트 시 /admin/branch?tab=pipeline로 리다이렉트된다. */}
           </div>
@@ -4093,7 +4181,7 @@ export default function SalesLedgerWorkbench() {
           </div>
         )}
 
-        {sidePanelCollapsed && (
+        {sidePanelCollapsed && lens !== "cockpit" && (
           <button
             type="button"
             onClick={() => setSidePanelCollapsed(false)}
@@ -4116,7 +4204,7 @@ export default function SalesLedgerWorkbench() {
           </button>
         )}
 
-        {!sidePanelCollapsed && (
+        {!sidePanelCollapsed && lens !== "cockpit" && (
         <aside className="fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(420px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)]">
           <>
           <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1.5">
@@ -4529,24 +4617,7 @@ export default function SalesLedgerWorkbench() {
           )}
 
           {railView === "input" && (
-          <InputRailSection
-            editingDraft={editingDraft}
-            queueMode={queueMode}
-            draftForm={draftForm}
-            setDraftForm={setDraftForm}
-            selectedDraftOperation={selectedDraftOperation}
-            monthOptions={monthOptions}
-            selectedMonth={selectedMonth}
-            draftAmountInvalid={draftAmountInvalid}
-            draftQuantityInvalid={draftQuantityInvalid}
-            draftFormInvalid={draftFormInvalid}
-            draftSaving={draftSaving}
-            canCreateEditDraft={canCreateEditDraft}
-            targetCellLocked={targetCellLocked}
-            saveEditedDraft={saveEditedDraft}
-            cancelDraftEdit={cancelDraftEdit}
-            saveDraft={saveDraft}
-          />
+          <InputRailSection {...inputRailProps} />
           )}
 
           {railView === "queue" && (
