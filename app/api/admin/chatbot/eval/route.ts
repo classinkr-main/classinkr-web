@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   const authError = await verifyAdmin(req)
   if (authError) return authError
 
-  let body: { judge?: boolean; limit?: number } = {}
+  let body: { judge?: boolean; limit?: number; enforceGate?: boolean } = {}
   try {
     body = await req.json()
   } catch {
@@ -20,7 +20,9 @@ export async function POST(req: NextRequest) {
       judge: body.judge,
       limit: typeof body.limit === "number" ? body.limit : undefined,
     })
-    return NextResponse.json(report)
+    return NextResponse.json(report, {
+      status: body.enforceGate === true && !report.gate.passed ? 422 : 200,
+    })
   } catch (error) {
     console.error("[POST /api/admin/chatbot/eval] error:", error)
     return NextResponse.json(
