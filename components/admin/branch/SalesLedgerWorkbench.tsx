@@ -1454,17 +1454,27 @@ export default function SalesLedgerWorkbench() {
     if (editingDraftId && !editingDraft) setEditingDraftId(null)
   }, [editingDraft, editingDraftId])
 
+  // M6: 편집 중인 초안의 작업 유형(metadata.operation, editDraft의 프리필 규약과 동일). 주차 미지원
+  // 작업(기간 이동/수량 변경)이면 콕핏 force-weekly coerce·CockpitEditor 폼을 건너뛰어야 한다.
+  const editingDraftOperation = useMemo<DraftOperation | null>(() => {
+    if (!editingDraft) return null
+    return isDraftOperation(editingDraft.metadata?.operation) ? editingDraft.metadata.operation : "forecast-add"
+  }, [editingDraft])
+
   // 콕핏 렌즈는 "항상 주차" — weeklyMode/week 토큰과 주차 지원 작업 유형을 강제해 저장 계약
   // (draftWeeklySaveContract)이 주차 버퍼를 정본으로 쓰게 한다. 이미 정합이면 그대로 둔다(리렌더 루프 방지).
   // draftForm 선언(위) 이후에 둬야 deps의 TDZ 참조를 피한다.
+  // M6: 편집 중인 초안이 주차 미지원 작업(기간 이동/수량 변경)이면 coerce하지 않는다 — amount-change로
+  // 덮으면 그 초안의 기간이동/수량 의미가 소실된다. 그 경우 CockpitEditor가 폼 대신 안내를 렌더한다.
   useEffect(() => {
     if (lens !== "cockpit") return
+    if (editingDraftOperation && !operationSupportsWeeklySplit(editingDraftOperation)) return
     setDraftForm((current) => {
       const nextOperation = operationSupportsWeeklySplit(current.operation) ? current.operation : "amount-change"
       if (current.weeklyMode && current.week === "month" && nextOperation === current.operation) return current
       return { ...current, operation: nextOperation, weeklyMode: true, week: "month" }
     })
-  }, [lens, draftForm.operation, draftForm.weeklyMode, draftForm.week])
+  }, [lens, editingDraftOperation, draftForm.operation, draftForm.weeklyMode, draftForm.week])
 
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   const summary = useBranchJson<BranchSummaryResponse>(`/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}&breakdown=1`, refreshKey)
@@ -2674,6 +2684,40 @@ export default function SalesLedgerWorkbench() {
     }
   }, [selectedMonth, team])
 
+  // M13: 콕핏 딜 선택 전용 진입 — loadDealDetail(REV·보드 공용, 시트 행을 항상 "예정"으로 시드)
+  // 뒤에 편집기 확도를 리스트 톤과 일치시킨다. 톤 규약은 CockpitDealList.rowConfidenceTone과 동일
+  // (전액 확정=확정, 고확도 보유=고확도, 나머지=예정 — 부분 확정은 올리지 않음). loadDealDetail의
+  // 동기 setDraftForm(전체 교체) 뒤에 함수형 갱신으로 얹혀 confidence/weeklyConfidence만 덮는다
+  // (후속 fetch setDraftForm은 확도를 건드리지 않아 이 시드가 살아남는다). 리스트와 동일하게
+  // selectedMonth 기준으로 판정한다.
+  const onSelectCockpitDeal = useCallback((row: LedgerRevenueRow) => {
+    void loadDealDetail(row)
+    const amount = rowMonthAmount(row, selectedMonth)
+    const confirmed = rowMonthConfirmed(row, selectedMonth)
+    const high = rowMonthHighConfidence(row, selectedMonth)
+    const tone: DraftConfidence =
+      amount <= 0 ? "expected" : confirmed >= amount - 1 ? "confirmed" : high > 0 ? "high-confidence" : "expected"
+    setDraftForm((current) => ({
+      ...current,
+      confidence: tone,
+      weeklyConfidence: defaultDraftWeeklyConfidence(tone),
+    }))
+  }, [loadDealDetail, selectedMonth])
+
+  // M11: 모바일(lg 미만)에서 콕핏은 리스트가 위·편집기가 아래라 딜을 눌러도 화면이 그대로라 반응이
+  // 없어 보인다. 좁은 화면에서만 편집기 컨테이너로 스크롤한다(lg 이상은 2-pane라 이미 나란히 보임).
+  // onSelectCockpitDeal(배치 A)의 loadDealDetail·확도 시드는 그대로 두고 스크롤만 얹는다.
+  const cockpitEditorRef = useRef<HTMLDivElement | null>(null)
+  const handleCockpitSelectDeal = useCallback((row: LedgerRevenueRow) => {
+    onSelectCockpitDeal(row)
+    if (typeof window === "undefined") return
+    if (window.matchMedia("(min-width: 1024px)").matches) return
+    // 편집기 내용이 렌더된 다음 프레임에 스크롤한다(선택 직후 draftForm 반영 전 스크롤 방지).
+    window.requestAnimationFrame(() => {
+      cockpitEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  }, [onSelectCockpitDeal])
+
   const onRefresh = useCallback(async () => {
     setSyncError(null)
     setRefreshing(true)
@@ -2800,6 +2844,9 @@ export default function SalesLedgerWorkbench() {
       // 이 가드로 동작이 바뀌지 않는다.)
       if (kind === "new-row" && draft) {
         setDraftForm(defaultDraftForm)
+        // M5: new-row 저장 성공 시 선택 딜도 함께 비운다 — 폼이 defaultDraftForm으로 리셋되므로
+        // 콕핏 편집기 dealContext 칩·리스트 하이라이트가 빈 폼과 어긋나지 않게(onNewDeal과 동일 규약).
+        setSelectedRow(null)
       }
       return {
         persisted: Boolean(draft && !draft.id.startsWith("local-")),
@@ -4107,14 +4154,19 @@ export default function SalesLedgerWorkbench() {
                 <CockpitDealList
                   rows={filteredRows}
                   selectedMonth={selectedMonth}
+                  monthOptions={monthOptions}
+                  onSelectMonth={setSelectedMonth}
+                  openDraftCount={openDrafts.length}
+                  onOpenQueue={() => selectRailView("queue")}
                   selectedRowId={selectedRow?.id ?? null}
-                  onSelectDeal={(row) => void loadDealDetail(row)}
+                  onSelectDeal={handleCockpitSelectDeal}
                   onNewDeal={() => {
                     setEditingDraftId(null)
                     setSelectedRow(null)
                     setDraftForm(defaultDraftForm)
                   }}
                 />
+                <div ref={cockpitEditorRef} className="min-w-0 scroll-mt-4">
                 <CockpitEditor
                   editingDraft={editingDraft}
                   dealContext={
@@ -4125,6 +4177,7 @@ export default function SalesLedgerWorkbench() {
                           region: selectedRow.region,
                           productVersion: selectedRow.productVersion,
                           firstPayment: selectedRow.firstPayment,
+                          contractTarget: selectedRow.contractTarget,
                         }
                       : null
                   }
@@ -4135,10 +4188,13 @@ export default function SalesLedgerWorkbench() {
                   draftSaving={draftSaving}
                   canCreateEditDraft={canCreateEditDraft}
                   targetCellLocked={targetCellLocked}
+                  currentMonthAmount={selectedRowMonthTotal}
                   saveEditedDraft={saveEditedDraft}
                   cancelDraftEdit={cancelDraftEdit}
                   saveDraft={saveDraft}
+                  onSwitchToRev={() => selectLens("rev")}
                 />
+                </div>
               </div>
             )}
             {/* KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다(2026-07-16 역할 재배분) — LENSES에서
@@ -4205,7 +4261,9 @@ export default function SalesLedgerWorkbench() {
           </button>
         )}
 
-        {!sidePanelCollapsed && lens !== "cockpit" && (
+        {/* M3: 콕핏은 플로팅 레일·FAB를 숨기지만, 헤더 "체크 큐" 버튼으로 연 큐(railView==="queue")만
+            예외로 이 패널을 허용한다 — 큐 진입은 헤더 버튼으로 일원화하고 FAB(위)는 계속 콕핏에서 숨긴다. */}
+        {!sidePanelCollapsed && (lens !== "cockpit" || railView === "queue") && (
         <aside className="fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(420px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)]">
           <>
           <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1.5">

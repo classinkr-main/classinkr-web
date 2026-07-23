@@ -5,10 +5,8 @@ import { Loader2, Plus, Save, X } from "lucide-react"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   DRAFT_CONFIDENCE_OPTIONS,
-  DRAFT_CONFLICT_MESSAGE,
-  DRAFT_DEDUPED_RECENT_NOTICE,
   DRAFT_OPERATIONS,
-  FORECAST_WEEK_RANGE_LABELS,
+  LOCK_WARNING_TEXT,
   REV_PRODUCT_FILTERS,
   defaultDraftWeeklyConfidence,
   dominantWeeklyConfidence,
@@ -18,6 +16,7 @@ import {
   formatMoney,
   operationSupportsWeeklySplit,
   productCategoryMeta,
+  resultToDraftFeedback,
   safeAmount,
   type DraftForm,
   type DraftKind,
@@ -27,6 +26,7 @@ import {
   type LedgerDraft,
   type RevProductCategory,
 } from "./shared"
+import { WeeklyAmountGrid } from "./WeeklyAmountGrid"
 import { TEAMS } from "../types"
 
 interface InputRailSectionProps {
@@ -88,34 +88,10 @@ export function InputRailSection({
   const runSave = async (action: () => Promise<DraftSaveResult>) => {
     setFeedback(null)
     const result = await action()
-    setFeedback(
-      result.conflict
-        // 웨이브 7 2단(I4) — 낙관적 잠금 충돌(409): 이번 수정은 반영되지 않았고 큐의 해당 초안은
-        // 서버 현재본으로 새로고침됐다. 편집 상태는 부모가 유지해주므로(saveEditedDraft) 값을
-        // 확인하고 그대로 다시 저장하면 된다.
-        ? { kind: "error" as const, text: DRAFT_CONFLICT_MESSAGE }
-        : result.validationMessage
-          // 웨이브 7 2단(I4) — 서버 검증 거부(400, 감액 양수 검증 등): 서버 문구를 그대로 보여준다.
-          ? { kind: "error" as const, text: result.validationMessage }
-          : !result.persisted
-            // 품질 웨이브 7 — 항목 2: updateDraft(기존 서버 초안 수정/편집 저장)는 이제 실패 시
-            // 서버-id 레코드를 로컬로 낙관 편집하지 않는다(재전송 판별 누락으로 무음 소실되던
-            // 경로 제거) — "로컬 임시 저장으로 대체됐습니다"는 createDraft(완전 신규 초안)에서만
-            // 여전히 참이라 두 경로 모두에 맞는 문구로 일반화한다.
-            ? { kind: "error" as const, text: "서버 저장에 실패했습니다(장부 적용 불가) — 잠시 후 다시 시도하거나 재연결 후 저장하세요." }
-            : result.dedupedRecent
-              // 웨이브 7 2단(I4) — POST 200 재사용: 저장은 유효하지만 새 초안이 생긴 게 아니다
-              // (60초 내 동일 입력 더블클릭/더블탭 방어). 중복 생성으로 오인하지 않게 명시한다.
-              ? { kind: "success" as const, text: `${DRAFT_DEDUPED_RECENT_NOTICE} 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.` }
-              : result.deduped
-                // 이중계상 가드(항목 3) — 같은 딜·같은 셀에 이미 열린 초안이 있어 새로 만들지 않고 그 초안을 갱신했다.
-                ? { kind: "success" as const, text: "이미 대기 초안 있음 — 수정으로 반영됩니다. 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." }
-                : result.duplicateWarning
-                  // 품질 웨이브 4, 항목 2 — new-row는 매트릭스 대응 행이 없어 자동 재지정할 수 없다.
-                  // 저장은 그대로 진행하고, 같은 고객·월에 이미 열린 신규 초안이 있다는 사실만 경고한다.
-                  ? { kind: "warning" as const, text: "저장 완료 — 같은 고객·월에 이미 열린 신규 초안이 있습니다. 체크 큐에서 중복 여부를 확인하세요." }
-                  : { kind: "success" as const, text: "저장 완료 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." },
-    )
+    // 저장 피드백 매핑은 shared.resultToDraftFeedback로 공용화(M9-2) — 콕핏 편집기와 문구·분기 동일
+    // (웨이브 7 2단 I4의 6분기: conflict → validationMessage → !persisted → dedupedRecent → deduped
+    //  → duplicateWarning → 성공을 그대로 담는다).
+    setFeedback(resultToDraftFeedback(result))
   }
 
   // 편집 중이 아닐 때 Enter로 제출될 "기본" 저장 종류 — 선택된 행이 있어 수정 초안이 가능하면
@@ -141,8 +117,6 @@ export function InputRailSection({
   // 저장·new-row 초안 편집은 대응 매트릭스 행이 없어 부모 쪽에서 항상 false로 내려온다. 여기서는
   // 그대로 소비만 한다(중복 판정 없음).
   const blockedByLock = targetCellLocked
-  const LOCK_WARNING_TEXT =
-    "이 딜의 해당 월 셀은 이미 잠겨 있습니다(시트 확정·장부 반영 등) — 수정 초안을 저장할 수 없습니다. 다른 월을 선택하거나 체크 큐에서 확인하세요."
 
   // form 래핑으로 Enter 제출 — 편집 중이면 그 초안 갱신, 아니면 primaryDraftKind로 저장.
   // 실제 버튼 클릭도 동일 코드 경로를 타 두 번 저장되지 않는다(submit 버튼은 onClick 없음).
@@ -396,68 +370,24 @@ export function InputRailSection({
                     <p className="text-[11px] font-bold text-[#615D59]">주차별 입력</p>
                     <p className="text-[10px] font-semibold text-[#A39E98]">금액만 넣으면 월 합 자동</p>
                   </div>
-                  <div className="space-y-1.5">
-                    {FORECAST_WEEK_RANGE_LABELS.map((rangeLabel, index) => (
-                      // label 래핑 대신 div — 행 안에 seg 버튼이 들어와 label 클릭 위임과 충돌한다.
-                      // 입력 필드 접근성 이름은 기존대로 aria-label(`W{n} 금액`)이 담당한다.
-                      <div key={rangeLabel} className="grid grid-cols-[minmax(0,1fr)_auto_104px] items-center gap-1.5">
-                        <span className="truncate text-[11px] font-bold text-[#111110]">
-                          W{index + 1} <span className="ml-0.5 font-semibold text-[#A39E98]">{rangeLabel}</span>
-                        </span>
-                        {/* 주차별 확도 seg(라운드 3 P1) — 축약 라벨(예·고·확), 전체 라벨은 title/aria-label.
-                            활성색은 CONFIDENCE_TOKENS bgClass만 사용. 금액 0인 주차는 저장 시 어차피
-                            null(확도 미기록)이라 seg를 비활성 톤으로 잠근다 — 금액을 넣으면 풀린다. */}
-                        <div role="group" aria-label={`W${index + 1} 확도`} className="flex gap-0.5">
-                          {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
-                            const zeroWeek = weeklyAmounts[index] <= 0
-                            const active = !zeroWeek && draftForm.weeklyConfidence[index] === option.id
-                            return (
-                              <button
-                                key={option.id}
-                                type="button"
-                                disabled={zeroWeek}
-                                aria-pressed={active}
-                                title={`W${index + 1} ${option.label}`}
-                                aria-label={`W${index + 1} ${option.label}`}
-                                onClick={() => setDraftForm((current) => ({
-                                  ...current,
-                                  weeklyConfidence: current.weeklyConfidence.map((value, i) => (i === index ? option.id : value)),
-                                }))}
-                                className={`h-8 w-6 rounded text-[10px] font-bold transition ${
-                                  zeroWeek
-                                    ? "cursor-not-allowed border border-[rgba(0,0,0,0.06)] bg-white text-[#DDD9D3]"
-                                    : active
-                                      ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
-                                      : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
-                                }`}
-                              >
-                                {option.label.slice(0, 1)}
-                              </button>
-                            )
-                          })}
-                        </div>
-                        <span className="relative block">
-                          <span aria-hidden className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[#A39E98]">
-                            ¥
-                          </span>
-                          <input
-                            value={draftForm.weekly[index] ?? ""}
-                            onChange={(event) => {
-                              // 숫자만 허용(음수/기호/문자 입력 차단) — 감액은 장부 가감 입력 사용.
-                              const nextValue = event.target.value.replace(/[^\d]/g, "")
-                              setDraftForm((current) => ({
-                                ...current,
-                                weekly: current.weekly.map((value, i) => (i === index ? nextValue : value)),
-                              }))
-                            }}
-                            inputMode="numeric"
-                            aria-label={`W${index + 1} 금액`}
-                            className="h-8 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-6 pr-2 text-right text-[12px] font-semibold tabular-nums text-[#111110] outline-none focus:border-[#084734]"
-                          />
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  {/* M9-1: 주차 행 그리드는 공용 WeeklyAmountGrid로 — 레일 variant(축약 라벨·소형 버튼·확도 seg 중간 열). */}
+                  <WeeklyAmountGrid
+                    weekly={draftForm.weekly}
+                    weeklyConfidence={draftForm.weeklyConfidence}
+                    onAmountChange={(index, rawValue) =>
+                      setDraftForm((current) => ({
+                        ...current,
+                        weekly: current.weekly.map((value, i) => (i === index ? rawValue : value)),
+                      }))
+                    }
+                    onConfidenceChange={(index, key) =>
+                      setDraftForm((current) => ({
+                        ...current,
+                        weeklyConfidence: current.weeklyConfidence.map((value, i) => (i === index ? key : value)),
+                      }))
+                    }
+                    variant="rail"
+                  />
                   {/* 월 합은 읽기전용 자동합계 — 입력 필드가 아니라 표시 전용(직접 수정 불가 원칙). */}
                   <div className="mt-2 flex items-baseline justify-between gap-2 border-t border-[rgba(0,0,0,0.08)] pt-2" aria-live="polite">
                     <span className="text-[11px] font-bold text-[#615D59]">월 합</span>

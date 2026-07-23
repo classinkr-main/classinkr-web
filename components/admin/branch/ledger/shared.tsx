@@ -177,6 +177,11 @@ export const DRAFT_CONFLICT_MESSAGE =
 export const DRAFT_DEDUPED_RECENT_NOTICE =
   "직전 동일 초안 재사용됨 — 60초 내 같은 내용의 초안이 이미 있어 새로 만들지 않았습니다."
 
+// M9-3 — 잠긴 (행, 월) 셀에 수정 초안을 저장하려 할 때의 안내 문구 SSOT. 콕핏 편집기·입력 레일이
+// 각자 복붙하던 리터럴을 하나로 통합한다(표현 분화 금지). 제출 사전차단 경고·인라인 배지가 공유한다.
+export const LOCK_WARNING_TEXT =
+  "이 딜의 해당 월 셀은 이미 잠겨 있습니다(시트 확정·장부 반영 등) — 수정 초안을 저장할 수 없습니다. 다른 월을 선택하거나 체크 큐에서 확인하세요."
+
 // 입력 레일 저장 결과(품질 웨이브 3, 항목 3) — persisted: 서버에 실제로 저장됐으면 true,
 // 로컬 폴백(장부 적용 불가)이면 false. deduped: 새 초안을 만드는 대신 같은 딜·같은 셀(월/주차)에
 // 이미 열린 초안을 갱신했으면 true(이중계상 가드 발동) — InputRailSection이 "이미 대기 초안
@@ -196,6 +201,41 @@ export interface DraftSaveResult {
   /** 웨이브 7 2단(I4): 서버 검증 거부(400) 문구 그대로(예: "감액은 장부 가감으로 처리하세요…") —
       큐 강등·로컬 폴백 없이 이 문구만 노출한다. */
   validationMessage?: string
+}
+
+// M9-2 — DraftSaveResult → 저장 인라인 피드백({kind, text}) 매핑 SSOT. 콕핏 편집기·입력 레일의
+// runSave가 각자 복붙하던 6분기(conflict → validationMessage → !persisted → dedupedRecent →
+// deduped → duplicateWarning → 성공)를 순수 함수 하나로 합쳐 문구 드리프트를 없앤다. 분기 순서와
+// 문구는 기존 그대로다(변경 시 두 표면 동시 반영). DRAFT_CONFLICT_MESSAGE·
+// DRAFT_DEDUPED_RECENT_NOTICE는 각 문구 SSOT를 재사용한다.
+export function resultToDraftFeedback(
+  result: DraftSaveResult,
+): { kind: "success" | "error" | "warning"; text: string } {
+  if (result.conflict) {
+    // 낙관적 잠금 충돌(409) — 이번 수정 미반영, 큐 해당 초안은 서버 현재본으로 새로고침됨.
+    return { kind: "error", text: DRAFT_CONFLICT_MESSAGE }
+  }
+  if (result.validationMessage) {
+    // 서버 검증 거부(400) — 서버 문구 그대로.
+    return { kind: "error", text: result.validationMessage }
+  }
+  if (!result.persisted) {
+    // 서버 저장 실패(장부 적용 불가) — createDraft 로컬 폴백/updateDraft 실패 공통 문구.
+    return { kind: "error", text: "서버 저장에 실패했습니다(장부 적용 불가) — 잠시 후 다시 시도하거나 재연결 후 저장하세요." }
+  }
+  if (result.dedupedRecent) {
+    // POST 200 재사용(60초 내 동일 입력 방어) — 새 초안이 생긴 게 아님을 명시.
+    return { kind: "success", text: `${DRAFT_DEDUPED_RECENT_NOTICE} 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.` }
+  }
+  if (result.deduped) {
+    // 이중계상 가드 — 같은 딜·같은 셀에 이미 열린 초안이 있어 새로 만들지 않고 그 초안을 갱신했다.
+    return { kind: "success", text: "이미 대기 초안 있음 — 수정으로 반영됩니다. 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." }
+  }
+  if (result.duplicateWarning) {
+    // new-row는 매트릭스 대응 행이 없어 자동 재지정할 수 없다. 저장은 진행하고 경고만.
+    return { kind: "warning", text: "저장 완료 — 같은 고객·월에 이미 열린 신규 초안이 있습니다. 체크 큐에서 중복 여부를 확인하세요." }
+  }
+  return { kind: "success", text: "저장 완료 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." }
 }
 
 export interface DraftForm {

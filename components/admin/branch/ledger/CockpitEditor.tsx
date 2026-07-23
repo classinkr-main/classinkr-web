@@ -9,36 +9,40 @@
 // 참고: New/Renew(상태)·Direct/Channel(타입)·지역·규모는 매출 드래프트 모델에 없다(딜 속성, CRM에서 편집).
 
 import { useState, type Dispatch, type FormEvent, type SetStateAction } from "react"
-import { Loader2, Lock, Plus, Save, X } from "lucide-react"
+import { ArrowRight, Loader2, Lock, Plus, Save, X } from "lucide-react"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   DRAFT_CONFIDENCE_OPTIONS,
-  DRAFT_CONFLICT_MESSAGE,
   FORECAST_WEEK_RANGE_LABELS,
+  LOCK_WARNING_TEXT,
   REV_PRODUCT_FILTERS,
   defaultDraftWeeklyConfidence,
   dominantWeeklyConfidence,
   draftWeeklyAmounts,
   draftWeeklyTotal,
   formatMoney,
+  operationSupportsWeeklySplit,
   productCategoryMeta,
+  resultToDraftFeedback,
   type DraftForm,
   type DraftKind,
   type DraftSaveResult,
   type LedgerDraft,
   type RevProductCategory,
 } from "./shared"
+import { WeeklyAmountGrid } from "./WeeklyAmountGrid"
 import { TEAMS } from "../types"
 
 interface CockpitEditorProps {
   editingDraft: LedgerDraft | null
-  // 선택 딜의 읽기 전용 속성(상태·타입·지역·제품·첫결제) — 매출 드래프트로는 편집 불가(딜 속성, CRM 소관).
+  // 선택 딜의 읽기 전용 속성(상태·타입·지역·제품·첫결제·계약목표) — 매출 드래프트로는 편집 불가(딜 속성, CRM 소관).
   dealContext: {
     status?: string | null
     dealType?: string | null
     region?: string | null
     productVersion?: string | null
     firstPayment?: string | null
+    contractTarget?: number | null
   } | null
   draftForm: DraftForm
   setDraftForm: Dispatch<SetStateAction<DraftForm>>
@@ -47,13 +51,15 @@ interface CockpitEditorProps {
   draftSaving: boolean
   canCreateEditDraft: boolean
   targetCellLocked: boolean
+  // M1(a): 선택 딜의 편집 대상 월 실장부금액(rowMonthAmount). 월합계-only 딜은 주차 버퍼가 비어
+  // 편집기 월 합이 ¥0으로 보이는데, 이 값이 >0이면 "전액을 특정 주에" 원클릭 참조를 노출한다.
+  currentMonthAmount: number
   saveEditedDraft: () => Promise<DraftSaveResult>
   cancelDraftEdit: () => void
   saveDraft: (kind: DraftKind) => Promise<DraftSaveResult>
+  // M6: 특수 작업(기간 이동/수량 변경) 초안은 콕핏에서 편집 불가 — REV 렌즈로 전환해 편집하도록 콜백.
+  onSwitchToRev: () => void
 }
-
-const LOCK_WARNING_TEXT =
-  "이 딜의 해당 월 셀은 이미 잠겨 있습니다(시트 확정·장부 반영 등) — 수정 초안을 저장할 수 없습니다. 다른 월을 선택하거나 체크 큐에서 확인하세요."
 
 export function CockpitEditor({
   editingDraft,
@@ -65,16 +71,62 @@ export function CockpitEditor({
   draftSaving,
   canCreateEditDraft,
   targetCellLocked,
+  currentMonthAmount,
   saveEditedDraft,
   cancelDraftEdit,
   saveDraft,
+  onSwitchToRev,
 }: CockpitEditorProps) {
   // 저장 인라인 피드백 — 다른 초안 편집으로 넘어가면 초기화(렌더 중 상태 조정, InputRailSection과 동일 패턴).
-  const [feedback, setFeedback] = useState<{ kind: "success" | "error"; text: string } | null>(null)
+  const [feedback, setFeedback] = useState<{ kind: "success" | "error" | "warning"; text: string } | null>(null)
   const [feedbackForDraftId, setFeedbackForDraftId] = useState<string | null>(editingDraft?.id ?? null)
+  // M1(a): "전액을 [Wn] 주에 넣기"의 대상 주차 인덱스(0~4) — 사용자 액션 전용 로컬 상태.
+  const [prefillWeekIndex, setPrefillWeekIndex] = useState(0)
   if (feedbackForDraftId !== (editingDraft?.id ?? null)) {
     setFeedbackForDraftId(editingDraft?.id ?? null)
     setFeedback(null)
+  }
+
+  // M6: 편집 중인 초안이 주차 미지원 작업(기간 이동/수량 변경)이면 콕핏 주차 폼으로는 그 의미를
+  // 담을 수 없다(부모 force-weekly effect도 coerce를 건너뛴다) — 폼 대신 안내 + REV 전환만 노출한다.
+  // 모든 훅 호출 이후에 조건 분기해 hooks 순서를 고정한다.
+  if (!operationSupportsWeeklySplit(draftForm.operation)) {
+    return (
+      <section className="rounded-lg border border-[#ECD29C] bg-white">
+        <div className="space-y-4 p-5">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#A39E98]">고객 · Account</p>
+            <p className="mt-1 text-[20px] font-bold tracking-[-0.3px] text-[#111110]">
+              {editingDraft?.customer || draftForm.customer || "초안"}
+            </p>
+          </div>
+          <div className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] p-4 text-[12px] leading-relaxed text-[#7A520F]">
+            <p className="font-bold">특수 작업 초안 — 콕핏에서 편집 불가</p>
+            <p className="mt-1.5">
+              이 초안은 특수 작업(기간 이동/수량 변경)입니다. 콕핏은 주차별 입력만 다루므로 여기서 편집하면 그
+              의미가 사라집니다. REV 렌즈 빠른 입력에서 수정하세요.
+            </p>
+          </div>
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+            <button
+              type="button"
+              onClick={onSwitchToRev}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white transition hover:bg-[#065c41]"
+            >
+              REV 렌즈에서 수정
+              <ArrowRight className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={cancelDraftEdit}
+              className="inline-flex h-10 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] px-4 text-[13px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+            >
+              편집 취소
+            </button>
+          </div>
+        </div>
+      </section>
+    )
   }
 
   const weeklyAmounts = draftWeeklyAmounts(draftForm.weekly)
@@ -82,8 +134,10 @@ export function CockpitEditor({
   const dominant = dominantWeeklyConfidence(weeklyAmounts, draftForm.weeklyConfidence)
   const blockedByLock = targetCellLocked
   const primaryDraftKind: DraftKind = canCreateEditDraft ? "edit-row" : "new-row"
+  // M1(a): 주차 합이 비었는데 월 장부금액이 있으면(월합계-only 딜) 원클릭 참조를 노출한다.
+  const showMonthAmountReference = weeklySum <= 0 && currentMonthAmount > 0
 
-  // 읽기 전용 컨텍스트 칩 — 값 있는 속성만. New/Renew·Direct/Channel 등 딜 속성을 참고용으로만 보여준다.
+  // 읽기 전용 컨텍스트 칩 — 값 있는 속성만. New/Renew·Direct/Channel 등 딜 속성 + 계약목표(M12)를 참고용으로만 보여준다.
   const contextChips = dealContext
     ? (
         [
@@ -92,6 +146,10 @@ export function CockpitEditor({
           { key: "지역", value: dealContext.region },
           { key: "제품", value: dealContext.productVersion },
           { key: "첫결제", value: dealContext.firstPayment },
+          {
+            key: "계약목표",
+            value: dealContext.contractTarget && dealContext.contractTarget > 0 ? formatMoney(dealContext.contractTarget) : null,
+          },
         ] as Array<{ key: string; value: string | null | undefined }>
       ).filter((chip): chip is { key: string; value: string } => Boolean(chip.value))
     : []
@@ -99,18 +157,15 @@ export function CockpitEditor({
   const runSave = async (action: () => Promise<DraftSaveResult>) => {
     setFeedback(null)
     const result = await action()
-    if (result.conflict) setFeedback({ kind: "error", text: DRAFT_CONFLICT_MESSAGE })
-    else if (result.validationMessage) setFeedback({ kind: "error", text: result.validationMessage })
-    else if (!result.persisted)
-      setFeedback({ kind: "error", text: "서버 저장에 실패했습니다(장부 적용 불가) — 잠시 후 다시 시도하세요." })
-    else setFeedback({ kind: "success", text: "저장 완료 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." })
+    // 저장 피드백 매핑은 shared.resultToDraftFeedback로 공용화(M9-2) — 입력 레일과 문구·분기 동일.
+    setFeedback(resultToDraftFeedback(result))
   }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (draftSaving || draftFormInvalid) return
     if (blockedByLock) {
-      setFeedback({ kind: "error", text: LOCK_WARNING_TEXT })
+      setFeedback({ kind: "warning", text: LOCK_WARNING_TEXT })
       return
     }
     if (editingDraft) void runSave(saveEditedDraft)
@@ -136,7 +191,7 @@ export function CockpitEditor({
           />
         </div>
 
-        {/* 읽기 전용 컨텍스트 칩 — 상태(New/Renew)·타입(Direct/Channel)·지역·제품·첫결제. 딜 속성이라 CRM 소관. */}
+        {/* 읽기 전용 컨텍스트 칩 — 상태(New/Renew)·타입(Direct/Channel)·지역·제품·첫결제·계약목표. 딜 속성이라 CRM 소관. */}
         {contextChips.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
             {contextChips.map((chip) => (
@@ -236,75 +291,70 @@ export function CockpitEditor({
           </div>
         </div>
 
+        {/* M1(a): 월합계-only 딜 — 주차 합이 비었지만 월 장부금액이 있을 때 원클릭 참조.
+            자동 채움 없이 사용자가 명시적으로 특정 주에 전액을 넣는다. */}
+        {showMonthAmountReference && (
+          <div className="rounded-lg border border-[#ECD29C] bg-[#FBF1E0] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-[#7A520F]">
+                현재 월 장부금액 <span className="font-bold tabular-nums">{formatMoney(currentMonthAmount)}</span>
+              </span>
+              <span className="text-[10px] font-bold text-[#A8741A]">주차 합이 비어 있어요 (월합계만)</span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-bold text-[#7A520F]">전액을</span>
+              <select
+                value={prefillWeekIndex}
+                onChange={(event) => setPrefillWeekIndex(Number(event.target.value))}
+                aria-label="전액 반영할 주차 선택"
+                className="h-8 rounded-md border border-[#ECD29C] bg-white px-2 text-[11px] font-bold text-[#7A520F] outline-none"
+              >
+                {FORECAST_WEEK_RANGE_LABELS.map((rangeLabel, index) => (
+                  <option key={rangeLabel} value={index}>W{index + 1} · {rangeLabel}</option>
+                ))}
+              </select>
+              <span className="text-[11px] font-bold text-[#7A520F]">주에</span>
+              <button
+                type="button"
+                onClick={() =>
+                  setDraftForm((current) => ({
+                    ...current,
+                    weekly: current.weekly.map((value, i) => (i === prefillWeekIndex ? String(Math.round(currentMonthAmount)) : value)),
+                  }))
+                }
+                className="inline-flex h-8 items-center gap-1 rounded-md bg-[#084734] px-3 text-[11px] font-bold text-white transition hover:bg-[#065c41]"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                넣기
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 주차별 입력 · W1~W5 — 금액 + 주차별 3단 확도. 월 합은 주차 자동합계(직접 수정 불가) */}
         <div>
           <div className="mb-2 flex items-baseline justify-between gap-2">
             <p className="text-[11px] font-bold text-[#615D59]">주차별 입력 · Weekly</p>
             <p className="text-[10px] font-semibold text-[#A39E98]">금액만 넣으면 월 합 자동</p>
           </div>
-          <div className="space-y-2">
-            {FORECAST_WEEK_RANGE_LABELS.map((rangeLabel, index) => {
-              const zeroWeek = weeklyAmounts[index] <= 0
-              return (
-                <div key={rangeLabel} className="grid grid-cols-[54px_minmax(0,1fr)_auto] items-center gap-2">
-                  <span className="text-[12px] font-bold text-[#111110]">
-                    W{index + 1}
-                    <span className="ml-1 text-[10px] font-semibold text-[#A39E98]">{rangeLabel}</span>
-                  </span>
-                  <span className="relative block">
-                    <span
-                      aria-hidden
-                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-[#A39E98]"
-                    >
-                      ¥
-                    </span>
-                    <input
-                      value={draftForm.weekly[index] ?? ""}
-                      onChange={(event) => {
-                        const nextValue = event.target.value.replace(/[^\d]/g, "")
-                        setDraftForm((current) => ({
-                          ...current,
-                          weekly: current.weekly.map((value, i) => (i === index ? nextValue : value)),
-                        }))
-                      }}
-                      inputMode="numeric"
-                      aria-label={`W${index + 1} 금액`}
-                      className="h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-7 pr-3 text-right text-[13px] font-semibold tabular-nums text-[#111110] outline-none focus:border-[#084734]"
-                    />
-                  </span>
-                  <div role="group" aria-label={`W${index + 1} 확도`} className="flex gap-1">
-                    {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
-                      const active = !zeroWeek && draftForm.weeklyConfidence[index] === option.id
-                      return (
-                        <button
-                          key={option.id}
-                          type="button"
-                          disabled={zeroWeek}
-                          aria-pressed={active}
-                          title={`W${index + 1} ${option.label}`}
-                          onClick={() =>
-                            setDraftForm((current) => ({
-                              ...current,
-                              weeklyConfidence: current.weeklyConfidence.map((value, i) => (i === index ? option.id : value)),
-                            }))
-                          }
-                          className={`h-10 rounded-md px-2.5 text-[11px] font-bold transition ${
-                            zeroWeek
-                              ? "cursor-not-allowed border border-[rgba(0,0,0,0.06)] bg-white text-[#DDD9D3]"
-                              : active
-                                ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
-                                : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          {/* M9-1: 주차 행 그리드는 공용 WeeklyAmountGrid로 — 콕핏 variant(전체 라벨·큰 입력). */}
+          <WeeklyAmountGrid
+            weekly={draftForm.weekly}
+            weeklyConfidence={draftForm.weeklyConfidence}
+            onAmountChange={(index, rawValue) =>
+              setDraftForm((current) => ({
+                ...current,
+                weekly: current.weekly.map((value, i) => (i === index ? rawValue : value)),
+              }))
+            }
+            onConfidenceChange={(index, key) =>
+              setDraftForm((current) => ({
+                ...current,
+                weeklyConfidence: current.weeklyConfidence.map((value, i) => (i === index ? key : value)),
+              }))
+            }
+            variant="cockpit"
+          />
         </div>
 
         {/* 월 합계(자동) + 저장 확도(우세 버킷) */}
@@ -340,7 +390,9 @@ export function CockpitEditor({
             className={`rounded-md border px-3 py-2 text-[11px] font-semibold leading-relaxed ${
               feedback.kind === "success"
                 ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
-                : "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]"
+                : feedback.kind === "warning"
+                  ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
+                  : "border-[#F2B8B8] bg-[#FCE9E9] text-[#8F2C2C]"
             }`}
           >
             {feedback.text}
@@ -371,37 +423,38 @@ export function CockpitEditor({
               <X className="h-4 w-4" />
             </button>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-2">
+        ) : canCreateEditDraft ? (
+          // M7: 딜 선택 상태 — 프라이머리 1개("이 딜 저장", edit-row) + 보조("새 딜", new-row).
+          // 이 딜 저장은 form submit(Enter도 동일 — primaryDraftKind==="edit-row"). 성공 후 폼 유지(연속 편집).
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
             <button
-              type={primaryDraftKind === "edit-row" ? "submit" : "button"}
-              onClick={
-                primaryDraftKind === "edit-row"
-                  ? undefined
-                  : () => {
-                      if (blockedByLock) {
-                        setFeedback({ kind: "error", text: LOCK_WARNING_TEXT })
-                        return
-                      }
-                      void runSave(() => saveDraft("edit-row"))
-                    }
-              }
-              disabled={draftSaving || !canCreateEditDraft || draftFormInvalid || blockedByLock}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#BDEFD8] bg-[#ECFDF5] px-4 text-[13px] font-bold text-[#084734] transition hover:bg-[#D1FAE5] disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              {draftSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              수정 초안
-            </button>
-            <button
-              type={primaryDraftKind === "new-row" ? "submit" : "button"}
-              onClick={primaryDraftKind === "new-row" ? undefined : () => void runSave(() => saveDraft("new-row"))}
-              disabled={draftSaving || draftFormInvalid}
+              type="submit"
+              disabled={draftSaving || draftFormInvalid || blockedByLock}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {draftSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              신규 입력
+              {draftSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              이 딜 저장
+            </button>
+            <button
+              type="button"
+              onClick={() => void runSave(() => saveDraft("new-row"))}
+              disabled={draftSaving || draftFormInvalid}
+              className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-4 text-[13px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <Plus className="h-4 w-4" />
+              새 딜
             </button>
           </div>
+        ) : (
+          // 선택 딜 없음 — 신규 입력만(new-row). form submit이 곧 신규 입력(primaryDraftKind==="new-row").
+          <button
+            type="submit"
+            disabled={draftSaving || draftFormInvalid}
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#084734] px-4 text-[13px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {draftSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            신규 입력
+          </button>
         )}
       </form>
     </section>

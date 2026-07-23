@@ -21,14 +21,23 @@ const MEMBER_KOREAN_ALIASES: Record<string, string[]> = {
   Chanwoo: ["황찬우", "찬우"],
 }
 
+// M14 — 한글 별칭 조회를 canonical의 대소문자와 무관하게 하기 위한 소문자 키 보조 인덱스.
+// Han/Junhyuk/Wangchan/Chanwoo는 MEMBER_NAME_ALIASES에 항목이 없어 canonical이 저장 원문의
+// 대소문자를 그대로 유지한다 — 매니저가 소문자 "wangchan"으로 저장되면 정규 대문자 키("Wangchan")
+// 직접 조회가 빗나가 "이왕찬"/"왕찬" 한글 별칭이 매칭되지 않던 버그를 없앤다.
+const MEMBER_KOREAN_ALIASES_BY_LOWER: Record<string, string[]> = Object.fromEntries(
+  Object.entries(MEMBER_KOREAN_ALIASES).map(([canonical, aliases]) => [canonical.toLowerCase(), aliases]),
+)
+
 /**
  * 매니저명의 검색용 문자열 — 원문·영문 정규명·한글 별칭을 공백으로 이어 소문자로 반환한다.
  * 부분일치 검색(query.includes) 대상: "Wangchan"·"wangchan"·"WangChan"·"이왕찬"·"왕찬"이 모두 매칭된다.
+ * 한글 별칭 조회는 canonical을 소문자로 정규화해 대소문자 저장 편차(예: "wangchan")에도 걸린다.
  */
 export function branchMemberSearchHaystack(value: string | null | undefined): string {
   const raw = value?.trim() ?? ""
   if (!raw) return ""
   const canonical = normalizeBranchMemberName(raw) ?? raw
-  const korean = MEMBER_KOREAN_ALIASES[canonical] ?? []
+  const korean = MEMBER_KOREAN_ALIASES_BY_LOWER[canonical.toLowerCase()] ?? []
   return [raw, canonical, ...korean].join(" ").toLowerCase()
 }
