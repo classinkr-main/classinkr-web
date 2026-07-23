@@ -24,4 +24,13 @@ describe("MarketingCrossLinks", () => {
     const html = renderToStaticMarkup(<MarketingCrossLinks currentHref="/admin/nonexistent" />)
     expect(html).toContain("마케팅 워크스페이스")
   })
+
+  it("omits routes passed in excludeHrefs (e.g. surfaces with a dedicated CTA)", () => {
+    const html = renderToStaticMarkup(
+      <MarketingCrossLinks currentHref="/admin/campaigns" excludeHrefs={["/admin/events"]} />
+    )
+    expect(html).not.toContain('href="/admin/events"')
+    // other siblings still present
+    expect(html).toContain('href="/admin/analytics"')
+  })
 })
