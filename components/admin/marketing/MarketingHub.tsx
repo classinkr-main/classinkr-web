@@ -26,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
+import { adminFetch, adminFetchJsonCached, getAdminToken } from "@/lib/admin-client"
 import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import SubscriberTable from "@/components/admin/marketing/SubscriberTable"
 import SubscriberForm from "@/components/admin/marketing/SubscriberForm"
@@ -34,9 +34,22 @@ import CampaignHistory from "@/components/admin/marketing/CampaignHistory"
 import MessageLogTable from "@/components/admin/marketing/MessageLogTable"
 import SendCenter from "@/components/admin/marketing/SendCenter"
 import SendCenterHeader from "@/components/admin/marketing/SendCenterHeader"
+import AutomationRuleList from "@/components/admin/marketing/AutomationRuleList"
+import AutomationRuleDetail from "@/components/admin/marketing/AutomationRuleDetail"
+import AutomationRuleSlideOver from "@/components/admin/marketing/AutomationRuleSlideOver"
+import AutomationLogTable from "@/components/admin/marketing/AutomationLogTable"
+import TemplateCard from "@/components/admin/marketing/TemplateCard"
+import TemplateEditorDrawer from "@/components/admin/marketing/TemplateEditorDrawer"
 import type { PreSendCheck } from "@/components/admin/marketing/send-center-types"
 import { unwrapMessagingData, type MessagingStatus } from "@/lib/messaging-client-types"
 import type { EmailCampaign, EmailDraft, SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
+import type {
+  AutomationRule,
+  AutomationLog,
+  EmailTemplate,
+  CreateRuleRequest,
+  CreateTemplateRequest,
+} from "@/lib/automation-types"
 import type { MessagePrefill } from "@/lib/message-prefill"
 
 // 발송 상태 캐시 TTL — 60초 stale 허용(같은 URL을 쓰는 다른 화면과 캐시 키 공유, CMP-2).
@@ -308,6 +321,22 @@ export default function MarketingHub({
   // 헤더 DB 스트립 표기용 — 구독자 목록을 마지막으로 가져온 시각(실제 fetch 완료 기준)
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null)
 
+  // ── 자동화(규칙·템플릿·로그) — 자동화 탭 최초 진입 시 lazy-load ──
+  const [autoRules, setAutoRules] = useState<AutomationRule[]>([])
+  const [autoTemplates, setAutoTemplates] = useState<EmailTemplate[]>([])
+  const [autoLogs, setAutoLogs] = useState<AutomationLog[]>([])
+  const [autoSubTab, setAutoSubTab] = useState<"rules" | "templates" | "logs">("rules")
+  const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null)
+  const [slideOverOpen, setSlideOverOpen] = useState(false)
+  const [editingRule, setEditingRule] = useState<AutomationRule | null>(null)
+  const [editorOpen, setEditorOpen] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null)
+  const [triggeringId, setTriggeringId] = useState<string | null>(null)
+  const [autoLoading, setAutoLoading] = useState(false) // 최초 GET 로드 표시용
+  const [autoSaving, setAutoSaving] = useState(false) // 슬라이드오버·에디터 저장 버튼용
+  const [autoLoaded, setAutoLoaded] = useState(false) // lazy-load 1회 가드
+  const [autoError, setAutoError] = useState(false) // GET 실패 상태(화이트스크린 방지)
+
   const contentRef = useRef<HTMLDivElement>(null)
   const isInitialMount = useRef(true)
 
@@ -392,6 +421,271 @@ export default function MarketingHub({
     void fetchCampaigns()
     void fetchMessagingStatus()
   }, [fetchSubscribers, fetchCampaigns, fetchMessagingStatus])
+
+  // ── 자동화 데이터 로더 — 실패해도 빈 상태로 강등하고 boolean으로 성공 여부만 알린다
+  //    (탭 화이트스크린 방지 · 온서브밋/크론 경로는 에러를 삼키므로 방어적 UI 필수) ──
+  const fetchAutoRules = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await adminFetch("/api/admin/automation/rules")
+      if (res.status === 401) {
+        handleUnauthorized()
+        return false
+      }
+      if (!res.ok) {
+        setAutoRules([])
+        return false
+      }
+      const data = await res.json()
+      setAutoRules(data.rules ?? [])
+      return true
+    } catch {
+      setAutoRules([])
+      return false
+    }
+  }, [handleUnauthorized])
+
+  const fetchAutoTemplates = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await adminFetch("/api/admin/automation/templates")
+      if (res.status === 401) {
+        handleUnauthorized()
+        return false
+      }
+      if (!res.ok) {
+        setAutoTemplates([])
+        return false
+      }
+      const data = await res.json()
+      setAutoTemplates(data.templates ?? [])
+      return true
+    } catch {
+      setAutoTemplates([])
+      return false
+    }
+  }, [handleUnauthorized])
+
+  const fetchAutoLogs = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await adminFetch("/api/admin/automation/logs")
+      if (res.status === 401) {
+        handleUnauthorized()
+        return false
+      }
+      if (!res.ok) {
+        setAutoLogs([])
+        return false
+      }
+      const data = await res.json()
+      setAutoLogs(data.logs ?? [])
+      return true
+    } catch {
+      setAutoLogs([])
+      return false
+    }
+  }, [handleUnauthorized])
+
+  // 자동화 탭 최초 진입 시 1회 로드(그 외 탭은 건드리지 않는다). "다시 시도"는 autoLoaded를 풀어 재실행.
+  useEffect(() => {
+    if (activeTab !== "automation" || autoLoaded) return
+    setAutoLoaded(true)
+    setAutoLoading(true)
+    void (async () => {
+      const results = await Promise.all([fetchAutoRules(), fetchAutoTemplates(), fetchAutoLogs()])
+      if (results.includes(false)) {
+        setAutoError(true)
+        showToast("error", "자동화 데이터를 불러오지 못했습니다.")
+      } else {
+        setAutoError(false)
+      }
+      setAutoLoading(false)
+    })()
+  }, [activeTab, autoLoaded, fetchAutoRules, fetchAutoTemplates, fetchAutoLogs, showToast])
+
+  const selectedRule = useMemo(
+    () => autoRules.find((r) => r.id === selectedRuleId) ?? null,
+    [autoRules, selectedRuleId]
+  )
+
+  // ── 규칙 핸들러 ──
+  const openCreateRule = () => {
+    setEditingRule(null)
+    setSlideOverOpen(true)
+  }
+
+  const handleSaveRule = async (data: CreateRuleRequest) => {
+    const target = editingRule
+    const isEdit = !!target
+    setAutoSaving(true)
+    try {
+      const res = await adminFetch(
+        isEdit ? `/api/admin/automation/rules/${target!.id}` : "/api/admin/automation/rules",
+        { method: isEdit ? "PATCH" : "POST", body: JSON.stringify(data) }
+      )
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      if (!res.ok) {
+        showToast("error", "규칙 저장에 실패했습니다.")
+        return
+      }
+      const json = await res.json().catch(() => null)
+      setSlideOverOpen(false)
+      setEditingRule(null)
+      await fetchAutoRules()
+      await fetchAutoLogs()
+      if (!isEdit && json?.rule?.id) setSelectedRuleId(json.rule.id as string)
+      showToast("success", isEdit ? "규칙을 수정했습니다." : "규칙을 만들었습니다.")
+    } catch {
+      showToast("error", "규칙 저장에 실패했습니다.")
+    } finally {
+      setAutoSaving(false)
+    }
+  }
+
+  const handleDeleteRule = async (rule: AutomationRule) => {
+    try {
+      const res = await adminFetch(`/api/admin/automation/rules/${rule.id}`, { method: "DELETE" })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      if (!res.ok) {
+        showToast("error", "규칙 삭제에 실패했습니다.")
+        return
+      }
+      if (selectedRuleId === rule.id) setSelectedRuleId(null)
+      await fetchAutoRules()
+      showToast("success", "규칙을 삭제했습니다.")
+    } catch {
+      showToast("error", "규칙 삭제에 실패했습니다.")
+    }
+  }
+
+  const handleToggleRuleStatus = async (rule: AutomationRule) => {
+    const next = rule.status === "active" ? "paused" : "active"
+    try {
+      const res = await adminFetch(`/api/admin/automation/rules/${rule.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: next }),
+      })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      if (!res.ok) {
+        showToast("error", "상태 변경에 실패했습니다.")
+        return
+      }
+      await fetchAutoRules()
+      showToast("success", next === "active" ? "규칙을 활성화했습니다." : "규칙을 일시정지했습니다.")
+    } catch {
+      showToast("error", "상태 변경에 실패했습니다.")
+    }
+  }
+
+  const handleTriggerRule = async (rule: AutomationRule) => {
+    setTriggeringId(rule.id)
+    try {
+      const res = await adminFetch(`/api/admin/automation/rules/${rule.id}/trigger`, { method: "POST" })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.ok) {
+        showToast("error", data?.error ? `발송 실패 — ${data.error}` : "즉시 실행에 실패했습니다.")
+      } else {
+        showToast("success", `${data.recipientCount ?? 0}명에게 발송했습니다.`)
+      }
+      await fetchAutoLogs()
+      await fetchAutoRules()
+    } catch {
+      showToast("error", "즉시 실행에 실패했습니다.")
+    } finally {
+      setTriggeringId(null)
+    }
+  }
+
+  // ── 템플릿 핸들러 ──
+  const openCreateTemplate = () => {
+    setEditingTemplate(null)
+    setEditorOpen(true)
+  }
+
+  const handleSaveTemplate = async (data: CreateTemplateRequest) => {
+    const target = editingTemplate
+    const isEdit = !!target
+    setAutoSaving(true)
+    try {
+      const res = await adminFetch(
+        isEdit
+          ? `/api/admin/automation/templates/${target!.id}`
+          : "/api/admin/automation/templates",
+        { method: isEdit ? "PATCH" : "POST", body: JSON.stringify(data) }
+      )
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      if (!res.ok) {
+        showToast("error", "템플릿 저장에 실패했습니다.")
+        return
+      }
+      setEditorOpen(false)
+      setEditingTemplate(null)
+      await fetchAutoTemplates()
+      showToast("success", isEdit ? "템플릿을 수정했습니다." : "템플릿을 만들었습니다.")
+    } catch {
+      showToast("error", "템플릿 저장에 실패했습니다.")
+    } finally {
+      setAutoSaving(false)
+    }
+  }
+
+  const handleDuplicateTemplate = async (t: EmailTemplate) => {
+    try {
+      const res = await adminFetch("/api/admin/automation/templates", {
+        method: "POST",
+        body: JSON.stringify({
+          name: `${t.name} 사본`,
+          subject: t.subject,
+          body: t.body,
+          variables: t.variables,
+        }),
+      })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      if (!res.ok) {
+        showToast("error", "템플릿 복제에 실패했습니다.")
+        return
+      }
+      await fetchAutoTemplates()
+      showToast("success", "템플릿을 복제했습니다.")
+    } catch {
+      showToast("error", "템플릿 복제에 실패했습니다.")
+    }
+  }
+
+  const handleDeleteTemplate = async (t: EmailTemplate) => {
+    try {
+      const res = await adminFetch(`/api/admin/automation/templates/${t.id}`, { method: "DELETE" })
+      if (res.status === 401) {
+        handleUnauthorized()
+        return
+      }
+      if (!res.ok) {
+        showToast("error", "템플릿 삭제에 실패했습니다.")
+        return
+      }
+      await fetchAutoTemplates()
+      showToast("success", "템플릿을 삭제했습니다.")
+    } catch {
+      showToast("error", "템플릿 삭제에 실패했습니다.")
+    }
+  }
 
   const activeCount = subscribers.filter((s) => s.status === "active").length
   const unsubscribedCount = subscribers.length - activeCount
@@ -1443,41 +1737,157 @@ export default function MarketingHub({
         )}
 
         {activeTab === "automation" && (
-          <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-            <Panel title="세그먼트 자동 발송">
-              <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-5 py-12 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-[#084734] shadow-[0_1px_0_rgba(17,17,16,0.03)]">
-                  <Zap className="h-5 w-5" />
-                </div>
-                <p className="mt-4 text-[14px] font-semibold text-[#111110]">자동화 — 설계 확정 후 연결</p>
-                <p className="mx-auto mt-1 max-w-md text-[12px] leading-relaxed text-[#1a1a1a]/40">
-                  발송 센터와 같은 초안·세그먼트를 트리거에 연결하는 구조로 준비 중입니다.
-                </p>
-                <div className="mx-auto mt-5 grid max-w-md gap-2 text-left sm:grid-cols-3">
-                  {[
-                    { label: "트리거", desc: "폼 제출·스케줄·지연" },
-                    { label: "세그먼트", desc: "리드·구독자·태그·기간" },
-                    { label: "템플릿", desc: "변수 치환 이메일" },
-                  ].map((item) => (
-                    <div key={item.label} className="rounded-xl border border-[#e8e8e4] bg-white px-3 py-2.5">
-                      <p className="text-[12px] font-semibold text-[#111110]">{item.label}</p>
-                      <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">{item.desc}</p>
-                    </div>
-                  ))}
-                </div>
+          <div className="space-y-4">
+            {/* 서브탭 헤더 (규칙 / 템플릿 / 로그) + 우측 생성 액션 */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="inline-flex items-center gap-1 self-start rounded-xl border border-[#e8e8e4] bg-white p-1">
+                {([
+                  ["rules", "규칙", autoRules.length],
+                  ["templates", "템플릿", autoTemplates.length],
+                  ["logs", "로그", autoLogs.length],
+                ] as const).map(([key, label, count]) => (
+                  <button
+                    key={key}
+                    onClick={() => setAutoSubTab(key)}
+                    className={`rounded-lg px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
+                      autoSubTab === key
+                        ? "bg-[#111110] text-white"
+                        : "text-[#1a1a1a]/55 hover:text-[#111110]"
+                    }`}
+                  >
+                    {label}
+                    <span className={`ml-1.5 ${autoSubTab === key ? "text-white/60" : "text-[#1a1a1a]/30"}`}>
+                      {count}
+                    </span>
+                  </button>
+                ))}
               </div>
-            </Panel>
 
-            <Panel title="현재 상태">
-              <div className="space-y-3">
-                <div className="rounded-2xl border border-[#ECD29C] bg-[#FBF1E0] p-4">
-                  <p className="text-[12px] font-semibold text-[#7A520F]">설계 진행 중 — 자동 발송 미연결</p>
-                </div>
-                <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                  <p className="text-[12px] font-semibold text-[#111110]">수동 발송은 발송 작성(단체 발송 센터)에서</p>
+              {autoSubTab === "rules" && (
+                <Button size="sm" onClick={openCreateRule} className="self-start bg-[#084734] hover:bg-[#084734]/90 sm:self-auto">
+                  <Plus className="mr-1.5 h-4 w-4" />새 규칙
+                </Button>
+              )}
+              {autoSubTab === "templates" && (
+                <Button size="sm" onClick={openCreateTemplate} className="self-start bg-[#084734] hover:bg-[#084734]/90 sm:self-auto">
+                  <Plus className="mr-1.5 h-4 w-4" />새 템플릿
+                </Button>
+              )}
+            </div>
+
+            {/* 본문 — 로딩 / 에러 / 서브뷰 */}
+            {autoLoading ? (
+              <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] px-6 py-16 text-center text-[13px] text-[#1a1a1a]/35">
+                자동화 데이터를 불러오는 중...
+              </div>
+            ) : autoError && autoRules.length === 0 && autoTemplates.length === 0 && autoLogs.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] px-6 py-16 text-center">
+                <p className="text-[13px] text-[#1a1a1a]/40">자동화 데이터를 불러오지 못했습니다.</p>
+                <div className="mt-3">
+                  <Button size="sm" variant="outline" onClick={() => setAutoLoaded(false)}>
+                    다시 시도
+                  </Button>
                 </div>
               </div>
-            </Panel>
+            ) : (
+              <>
+                {/* 규칙 — 좌 목록 / 우 상세 2-pane */}
+                {autoSubTab === "rules" && (
+                  <div className="grid gap-4 lg:h-[620px] lg:grid-cols-[360px_1fr]">
+                    <div className="h-[440px] lg:h-auto">
+                      <AutomationRuleList
+                        rules={autoRules}
+                        logs={autoLogs}
+                        selectedId={selectedRuleId ?? undefined}
+                        onSelect={(rule) => setSelectedRuleId(rule.id)}
+                      />
+                    </div>
+                    <div className="flex min-h-[520px] lg:min-h-0">
+                      <AutomationRuleDetail
+                        rule={selectedRule}
+                        logs={autoLogs}
+                        triggeringId={triggeringId ?? undefined}
+                        onEdit={(rule) => {
+                          setEditingRule(rule)
+                          setSlideOverOpen(true)
+                        }}
+                        onDelete={handleDeleteRule}
+                        onToggleStatus={handleToggleRuleStatus}
+                        onTrigger={handleTriggerRule}
+                        onShowAllLogs={() => setAutoSubTab("logs")}
+                        onCreateFirst={openCreateRule}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 템플릿 — 카드 그리드 */}
+                {autoSubTab === "templates" && (
+                  autoTemplates.length === 0 ? (
+                    <EmptyState
+                      title="등록된 템플릿이 없습니다."
+                      description="변수 치환 이메일 템플릿을 만들어 자동화 규칙에 연결하세요."
+                      action={
+                        <Button size="sm" onClick={openCreateTemplate} className="bg-[#084734] hover:bg-[#084734]/90">
+                          <Plus className="mr-1.5 h-4 w-4" />새 템플릿
+                        </Button>
+                      }
+                    />
+                  ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                      {autoTemplates.map((t) => (
+                        <TemplateCard
+                          key={t.id}
+                          template={t}
+                          rules={autoRules}
+                          onEdit={(tpl) => {
+                            setEditingTemplate(tpl)
+                            setEditorOpen(true)
+                          }}
+                          onDuplicate={handleDuplicateTemplate}
+                          onDelete={handleDeleteTemplate}
+                        />
+                      ))}
+                    </div>
+                  )
+                )}
+
+                {/* 로그 — 실행 이력 테이블 */}
+                {autoSubTab === "logs" && (
+                  <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+                    <AutomationLogTable logs={autoLogs} rules={autoRules} />
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* 오버레이 — 열릴 때마다 새로 마운트해 initial을 반영 */}
+            {slideOverOpen && (
+              <AutomationRuleSlideOver
+                open={slideOverOpen}
+                templates={autoTemplates}
+                initial={editingRule ?? undefined}
+                onSave={handleSaveRule}
+                onClose={() => {
+                  setSlideOverOpen(false)
+                  setEditingRule(null)
+                }}
+                adminToken={getAdminToken()}
+                loading={autoSaving}
+              />
+            )}
+            {editorOpen && (
+              <TemplateEditorDrawer
+                open={editorOpen}
+                initial={editingTemplate ?? undefined}
+                onSave={handleSaveTemplate}
+                onClose={() => {
+                  setEditorOpen(false)
+                  setEditingTemplate(null)
+                }}
+                loading={autoSaving}
+              />
+            )}
           </div>
         )}
 
