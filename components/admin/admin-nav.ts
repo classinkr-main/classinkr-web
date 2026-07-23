@@ -11,6 +11,7 @@ import {
   Code2,
   Eye,
   FileText,
+  FolderKanban,
   Globe,
   Headset,
   Layers,
@@ -68,6 +69,8 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/campaigns", label: "캠페인", icon: Megaphone, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", keywords: "캠페인 이메일 campaign email 메시지 발송 문자 sms 카카오 kakao 알림톡 솔라피 solapi" },
   // 크로스채널 캠페인 관리 — 이메일·문자·행사·Meta 실행을 하나의 캠페인 개체로 묶고 롤업(D1).
   { href: "/admin/campaigns/manage", label: "캠페인 관리", icon: Layers, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", keywords: "캠페인 관리 크로스채널 통합 롤업 연결 campaign manage cross-channel rollup" },
+  // 마케팅 프로젝트 — 여러 캠페인을 묶는 상위 개체. 멤버 캠페인 롤업 + 예산 소진(D3).
+  { href: "/admin/campaigns/projects", label: "마케팅 프로젝트", icon: FolderKanban, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", keywords: "마케팅 프로젝트 캠페인 묶음 롤업 예산 소진 project rollup budget" },
   { href: "/admin/blog", label: "콘텐츠", icon: FileText, roles: [...STAFF_EDITOR, "BRANCH"], section: "marketing", keywords: "블로그 콘텐츠 blog content" },
   { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, roles: [...STAFF_EDITOR, "BRANCH"], section: "marketing", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
   { href: "/admin/events", label: "공개 행사", icon: Globe, roles: [...STAFF_ADMIN, "BRANCH"], section: "marketing", keywords: "행사 이벤트 event 웨비나" },
