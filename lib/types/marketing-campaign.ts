@@ -67,3 +67,43 @@ export interface CampaignWithLinks extends MarketingCampaign {
   links: CampaignLink[]
   rollup?: CampaignRollup
 }
+
+/* ─────────────────────────────────────────────────────────────
+   마케팅 프로젝트 묶음(D3) — marketing_campaigns 를 묶는 상위 개체.
+   프로젝트는 멤버 캠페인들의 지표를 읽기시점에 롤업하는 우산이다.
+   스키마: supabase/migrations/20260724_marketing_projects.sql
+   ───────────────────────────────────────────────────────────── */
+
+// 프로젝트 상태값 집합은 캠페인과 동일하다(planned/active/paused/done) —
+// DRY 하게 CampaignStatus 를 재사용한다. 런타임 목록/라벨도 각각
+// CAMPAIGN_STATUSES / CAMPAIGN_STATUS_LABEL 를 그대로 쓴다(중복 리터럴 금지).
+export type ProjectStatus = CampaignStatus
+
+export interface MarketingProject {
+  id: string
+  name: string
+  objective: string | null
+  status: ProjectStatus
+  startsAt: string | null   // ISO date (YYYY-MM-DD)
+  endsAt: string | null
+  budget: number | null     // KRW — 프로젝트 배정 예산
+  owner: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+// 프로젝트 롤업은 멤버 캠페인에서 실제 가용한 값만 표기한다(정직 규칙).
+// 예산 소진은 KRW 배정 대비 KRW 집행만 — Meta 집행(USD 등)은 통화가 달라
+// 여기 budgetSpent 에 합산하지 않는다(채널·통화 가로지르는 조작 지표 금지).
+export interface ProjectRollup {
+  campaignCount: number
+  channelCount: number            // 멤버 캠페인을 가로지르는 distinct 채널 수
+  eventCount: number              // 멤버 캠페인의 event 링크 수
+  budgetAllocated: number | null  // project.budget
+  budgetSpent: number             // KRW 집행 합 — Meta USD 제외(정직)
+  spentPct: number | null         // budgetSpent / budgetAllocated * 100, 예산 없으면 null
+}
+
+export interface ProjectWithRollup extends MarketingProject {
+  rollup: ProjectRollup
+}
