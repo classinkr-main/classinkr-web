@@ -28,6 +28,7 @@ import {
   Trash2,
 } from "lucide-react"
 import AdminTabs from "@/components/admin/AdminTabs"
+import { MarketingCrossLinks } from "@/components/admin/MarketingCrossLinks"
 import { ChannelHubCards } from "@/components/admin/campaigns/ChannelHubCards"
 import { InsightsBanner } from "@/components/admin/campaigns/InsightsBanner"
 import type { Insight } from "@/components/admin/campaigns/InsightsBanner"
@@ -43,6 +44,7 @@ import type { ExportColumn } from "@/components/admin/campaigns/CampaignExportBu
 import { EventOriginMatrix } from "@/components/admin/campaigns/EventOriginMatrix"
 import type { TrendPoint } from "@/components/admin/campaigns/CampaignTrendChart"
 import type { ChannelEfficiencyRow } from "@/components/admin/campaigns/ChannelEfficiencyChart"
+import { ChannelBudgetTable } from "@/components/admin/campaigns/ChannelBudgetTable"
 import type { MetaPerfRow } from "@/components/admin/campaigns/MetaPerformanceCharts"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { textMatchesEventToken } from "@/lib/events/attribution"
@@ -71,6 +73,7 @@ import { EVENT_CATEGORIES, type EventCategory, type EventStatus, type PublicEven
 import {
   AD_CHANNEL_COLOR,
   AD_CHANNEL_LABEL,
+  AD_CHANNELS,
   computeEconomics,
   DEFAULT_EVENT_METRICS,
   type AdChannel,
@@ -176,9 +179,10 @@ type CampaignTab = "summary" | "events" | "meta" | "email"
 const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string; sub: string }> = [
   { id: "summary", label: "요약", sub: "성과 · 전환 · 채널 분포" },
   { id: "events", label: "행사", sub: "행사별 퍼널 · 딜 전환" },
-  { id: "meta", label: "Meta 광고", sub: "캠페인 현황 · 성과 · 상태 관리" },
+  // id는 딥링크(?tab=meta) 호환을 위해 "meta" 유지 — 라벨은 "광고"로 확장하되 sub에서 Meta만 라이브임을 정직하게 표기.
+  { id: "meta", label: "광고", sub: "Meta 라이브 · 캠페인·채널 예산·성과" },
   // id는 기존 딥링크(?tab=email) 호환을 위해 "email" 유지 — 내용은 이메일·문자·카카오 발송 허브.
-  { id: "email", label: "메시지", sub: "구독자 · 이메일·문자·카카오 발송 · 이력" },
+  { id: "email", label: "메시지", sub: "구독자 · 발송(이메일 라이브 · 문자·카카오 준비 중) · 이력" },
 ]
 
 type MetaDatePreset = "last_7d" | "last_30d" | "last_90d" | "this_month"
@@ -1216,6 +1220,9 @@ export default function AdminCampaignsPage() {
   const [metaDatePreset, setMetaDatePreset] = useState<MetaDatePreset>("last_30d")
   const [metaUpdatingId, setMetaUpdatingId] = useState<string | null>(null)
   const [emailStats, setEmailStats] = useState<MarketingStatsData | null>(null)
+  const [channelBudgets, setChannelBudgets] = useState<Record<AdChannel, number>>(
+    () => Object.fromEntries(AD_CHANNELS.map((c): [AdChannel, number] => [c, 0])) as Record<AdChannel, number>
+  )
   const [eventSort, setEventSort] = useState<"date" | "leads" | "deals" | "roi">("date")
   const activeTab: CampaignTab = CAMPAIGN_TABS.some((tab) => tab.id === tabParam)
     ? (tabParam as CampaignTab)
@@ -1315,6 +1322,34 @@ export default function AdminCampaignsPage() {
     }
   }, [activeTab, loadEmailStats])
 
+  // 채널 예산(배정)은 광고 탭에서만 필요 — 지연 로드. 실패해도 0으로 유지(무크래시).
+  const loadChannelBudgets = useCallback(async () => {
+    try {
+      const data = await adminFetchJson<{ budgets: Record<AdChannel, number> }>(
+        "/api/admin/channel-budgets"
+      )
+      setChannelBudgets(data.budgets)
+    } catch {
+      // 보조 데이터 — 조용히 실패, 기존 값(0) 유지
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === "meta") void loadChannelBudgets()
+  }, [activeTab, loadChannelBudgets])
+
+  const handleChannelBudgetChange = useCallback(async (channel: AdChannel, amount: number) => {
+    try {
+      const data = await adminFetchJson<{ budgets: Record<AdChannel, number> }>(
+        "/api/admin/channel-budgets",
+        { method: "PATCH", body: JSON.stringify({ channel, amount }) }
+      )
+      setChannelBudgets(data.budgets)
+    } catch (e) {
+      setMetaError(e instanceof Error ? e.message : "채널 예산 저장 실패")
+    }
+  }, [])
+
   const toggleMetaCampaignStatus = useCallback(
     async (campaign: MetaCampaignRow) => {
       const nextStatus = campaign.status === "ACTIVE" ? "PAUSED" : "ACTIVE"
@@ -1371,15 +1406,9 @@ export default function AdminCampaignsPage() {
     // 광고비까지 넣으면 매출 0으로 잡혀 누적 ROI가 거짓 적자로 끌려간다.
     let roiSpend = 0
     let roiRevenue = 0
-    const channelTotals: Record<AdChannel, number> = {
-      google: 0,
-      meta: 0,
-      naver: 0,
-      kakao: 0,
-      youtube: 0,
-      offline: 0,
-      other: 0,
-    }
+    const channelTotals = Object.fromEntries(
+      AD_CHANNELS.map((c): [AdChannel, number] => [c, 0])
+    ) as Record<AdChannel, number>
     for (const ev of filtered) {
       const metrics = metricsMap[ev.id] ?? {
         ...DEFAULT_EVENT_METRICS,
@@ -1559,12 +1588,12 @@ export default function AdminCampaignsPage() {
 
   // 채널별 효율 — 광고비는 채널 합산, 리드는 행사 내 광고비 비중으로 안분(추정)
   const channelEfficiencyData = useMemo<ChannelEfficiencyRow[]>(() => {
-    const spendByChannel: Record<AdChannel, number> = {
-      google: 0, meta: 0, naver: 0, kakao: 0, youtube: 0, offline: 0, other: 0,
-    }
-    const leadsByChannel: Record<AdChannel, number> = {
-      google: 0, meta: 0, naver: 0, kakao: 0, youtube: 0, offline: 0, other: 0,
-    }
+    const spendByChannel = Object.fromEntries(
+      AD_CHANNELS.map((c): [AdChannel, number] => [c, 0])
+    ) as Record<AdChannel, number>
+    const leadsByChannel = Object.fromEntries(
+      AD_CHANNELS.map((c): [AdChannel, number] => [c, 0])
+    ) as Record<AdChannel, number>
     for (const { metrics, funnel } of perEventEcon) {
       const entries = metrics.adSpendEntries
       const eventSpend = entries.reduce((sum, e) => sum + e.amount, 0)
@@ -1985,6 +2014,12 @@ export default function AdminCampaignsPage() {
         />
       </div>
 
+      {/* 마케팅 워크스페이스 크로스링크 — 형제 마케팅 표면으로 이동(사이드바 그룹 보조).
+          공개 행사는 헤더 "행사 관리" CTA로 이미 도달 가능하므로 여기선 제외(한 목적지 중복 라벨 방지). */}
+      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-2.5 sm:px-6 lg:px-9">
+        <MarketingCrossLinks currentHref="/admin/campaigns" excludeHrefs={["/admin/events"]} />
+      </div>
+
       {/* Tab content */}
       {activeTab === "email" ? (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
@@ -2019,6 +2054,24 @@ export default function AdminCampaignsPage() {
               <MetaPerformanceCharts rows={metaPerfRows} currency={metaDashboard?.account.currency ?? "USD"} />
             </div>
           )}
+          <div className="mt-8">
+            <div className="mb-3">
+              <h2 className="text-[15px] font-semibold text-[#111110]">채널 예산·집행</h2>
+              <p className="mt-0.5 text-[12px] text-[#1a1a1a]/50">
+                채널별 배정 예산을 입력하고 집행·전환(추정)·CPL과 대조합니다. 채널 귀속이 불가한 ROI는 종합만 표기합니다.
+              </p>
+            </div>
+            <ChannelBudgetTable
+              rows={channelEfficiencyData}
+              budgets={channelBudgets}
+              onBudgetChange={handleChannelBudgetChange}
+              totalSpend={aggregate.totalSpend}
+              totalRevenue={aggregate.totalRevenue}
+              overallRoi={aggregate.overallRoi}
+              metaLiveSpend={metaDashboard?.summary.spend ?? null}
+              metaCurrency={metaDashboard?.account.currency ?? "USD"}
+            />
+          </div>
         </div>
       ) : (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">

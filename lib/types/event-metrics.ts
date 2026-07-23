@@ -3,6 +3,9 @@
 
 export type AdChannel = "google" | "meta" | "naver" | "kakao" | "youtube" | "offline" | "other"
 
+// 7개 광고 채널의 런타임 SSOT — 저장소·API·UI가 이 순서/목록을 공유한다(중복 리터럴 금지).
+export const AD_CHANNELS: AdChannel[] = ["google", "meta", "naver", "kakao", "youtube", "offline", "other"]
+
 export interface AdSpendEntry {
   channel: AdChannel
   amount: number       // KRW
