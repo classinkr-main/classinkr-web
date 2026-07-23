@@ -24,8 +24,8 @@ export function EventDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-      <div className="max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
-        <div className="flex items-start justify-between gap-3 border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
+      <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
           <div className="min-w-0 flex-1">
             <EventCardHeader event={event} />
           </div>
@@ -35,10 +35,11 @@ export function EventDetailModal({
         </div>
 
         {publicHref && (
-          <div className="border-b border-[#e8e8e4] px-4 py-3 sm:px-6">
+          <div className="shrink-0 border-b border-[#e8e8e4] px-4 py-3 sm:px-6">
             <Link
               href={publicHref}
               target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#063d2a]"
             >
               홈페이지에서 보기
@@ -47,7 +48,7 @@ export function EventDetailModal({
           </div>
         )}
 
-        <div className="max-h-[calc(100dvh-14rem)] overflow-y-auto px-4 py-5 sm:px-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6">
           <EventDetailContent
             event={event}
             metrics={metrics}
@@ -56,7 +57,7 @@ export function EventDetailModal({
           />
         </div>
 
-        <div className="flex flex-col-reverse gap-2 border-t border-[#e8e8e4] px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:px-6">
+        <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-[#e8e8e4] px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:px-6">
           <button onClick={onClose} className="px-4 py-2 text-[13px] text-[#1a1a1a]/55 hover:text-[#111110]">
             닫기
           </button>
