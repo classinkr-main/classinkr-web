@@ -9,6 +9,11 @@ export interface AdSpendEntry {
   note?: string
 }
 
+export interface RelatedLink {
+  label: string
+  url: string
+}
+
 export interface EventMetrics {
   eventId: string
   // 목표
@@ -25,6 +30,8 @@ export interface EventMetrics {
   dealCustomers: string | null        // 성사 고객/기관 메모
   // 광고비
   adSpendEntries: AdSpendEntry[]
+  // 관련 자료 (블로그·보도자료 등 외부 링크, 수동 입력)
+  relatedLinks: RelatedLink[]
   // 회고 / 메모
   notes: string | null
   retrospective: string | null
@@ -44,6 +51,7 @@ export const DEFAULT_EVENT_METRICS: Omit<EventMetrics, "eventId" | "updatedAt"> 
   closedCustomerCount: null,
   dealCustomers: null,
   adSpendEntries: [],
+  relatedLinks: [],
   notes: null,
   retrospective: null,
   shareMemo: null,
