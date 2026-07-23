@@ -25,6 +25,7 @@ import { parseEventToken, setEventToken } from "@/lib/types/event-metrics"
 import {
   STATUS_LABEL,
   STATUS_COLOR,
+  StatusPill,
   SOURCE_LABEL,
   LOG_TYPE_LABEL,
   LOG_RESULT_LABEL,
@@ -48,6 +49,11 @@ import {
   getLeadSourceDetail,
   getLeadMagnetLabel,
   getLeadDisplayName,
+  getLeadSourceGroup,
+  SOURCE_GROUP_ORDER,
+  SOURCE_GROUP_LABEL,
+  SourceGroupDot,
+  type LeadSourceGroup,
   CopyButton,
   Toast,
 } from "@/components/admin/crm/leads/shared"
@@ -854,6 +860,8 @@ export default function LeadsBoardClient() {
   // 인사이트 '채널별 전환율'에서 ?source=로 진입하는 유입경로(source) 필터.
   const [channelSource, setChannelSource] = useState(searchParams.get("source")?.trim() ?? "")
   const [leadMagnetFilter, setLeadMagnetFilter] = useState("all")
+  // 상단 유입 칩 필터 — source를 7묶음으로 접어 거른다(상태/SLA 필터와 직교 AND 결합).
+  const [sourceGroup, setSourceGroup] = useState<LeadSourceGroup | "all">("all")
   const [selected, setSelected] = useState<LeadRecord | null>(null)
   const [logs, setLogs] = useState<ContactLogRecord[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
@@ -1236,7 +1244,8 @@ export default function LeadsBoardClient() {
     new Set(leads.map((lead) => lead.lead_magnet?.trim()).filter(Boolean) as string[])
   ).sort((a, b) => a.localeCompare(b, "ko"))
   const normalizedSearch = searchQuery.trim().toLowerCase()
-  const filtered = leads.filter((lead) => {
+  // 상태/SLA 필터까지만 적용한 중간 집합 — 유입 칩의 건수(패싯)는 이 집합 기준으로 센다.
+  const statusFiltered = leads.filter((lead) => {
     // 응대 SLA 큐·미확인 큐가 아니면 검토 전 리드는 기본 화면에서 숨긴다.
     if (!CONFIRMATION_GATE_EXEMPT_FILTERS.has(filter) && isUnconfirmedLead(lead)) return false
     if (filter === "all") return true
@@ -1246,7 +1255,19 @@ export default function LeadsBoardClient() {
     if (filter === "unresponded_48h") return isUnrespondedLead(lead) && hoursBetween(lead.timestamp, now) >= 48
     if (filter === "unassigned") return isActiveLead(lead.status) && !lead.assigned_to?.trim()
     return lead.status === filter
-  }).filter((lead) => {
+  })
+  // 유입 칩 — 현재 상태 뷰에 실제로 존재하는 묶음만 건수와 함께 노출(빈 묶음 숨김).
+  const sourceGroupCounts = new Map<LeadSourceGroup, number>()
+  for (const lead of statusFiltered) {
+    const group = getLeadSourceGroup(lead)
+    sourceGroupCounts.set(group, (sourceGroupCounts.get(group) ?? 0) + 1)
+  }
+  const sourceGroupChips = SOURCE_GROUP_ORDER
+    .map((group) => ({ group, label: SOURCE_GROUP_LABEL[group], count: sourceGroupCounts.get(group) ?? 0 }))
+    // 현재 상태 뷰에 존재하는 묶음만 노출하되, 이미 선택한 그룹은 0건이어도 남겨 해제할 수 있게 한다.
+    .filter((chip) => chip.count > 0 || chip.group === sourceGroup)
+  const filtered = statusFiltered.filter((lead) => {
+    if (sourceGroup !== "all" && getLeadSourceGroup(lead) !== sourceGroup) return false
     if (sourceDetailFilter !== "all" && getLeadSourceDetail(lead) !== sourceDetailFilter) return false
     if (channelSource && lead.source !== channelSource) return false
     if (leadMagnetFilter !== "all" && lead.lead_magnet !== leadMagnetFilter) return false
@@ -1288,7 +1309,7 @@ export default function LeadsBoardClient() {
   useEffect(() => {
     collapseLeads()
     setSelectedLeadIds(new Set())
-  }, [filter, sourceDetailFilter, channelSource, leadMagnetFilter, searchQuery, collapseLeads])
+  }, [filter, sourceGroup, sourceDetailFilter, channelSource, leadMagnetFilter, searchQuery, collapseLeads])
 
   const todayFollowUps = leads.filter((l) =>
     l.follow_up_at && toLocalDateKey(l.follow_up_at) === today && isActiveLead(l.status)
@@ -1599,22 +1620,60 @@ export default function LeadsBoardClient() {
       )}
 
       {/* 필터 카운트 카드 */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5 xl:grid-cols-10">
+      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-5 xl:grid-cols-10">
         {filterCards.map((item) => (
           <button
             key={item.key}
             onClick={() => setFilter(item.key)}
-            className={`min-h-[88px] rounded-xl border p-3 text-left transition-all sm:rounded-2xl sm:p-4 ${
+            className={`min-h-[62px] rounded-xl border px-3 py-2.5 text-left transition-all ${
               filter === item.key ? "border-[#111110] bg-[#111110] text-white" : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4] hover:shadow-sm"
             }`}
           >
-            <p className={`text-[11px] font-medium mb-1 ${filter === item.key ? "text-white/60" : "text-[#1a1a1a]/40"}`}>{item.label}</p>
-            <p className="text-2xl font-bold">{item.count}</p>
+            <p className={`text-[11px] font-medium mb-0.5 ${filter === item.key ? "text-white/60" : "text-[#1a1a1a]/40"}`}>{item.label}</p>
+            <p className="text-xl font-bold tabular-nums">{item.count}</p>
           </button>
         ))}
       </div>
 
       <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-3">
+        {sourceGroupChips.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-[11px] font-medium text-[#1a1a1a]/40">유입</span>
+            <button
+              type="button"
+              onClick={() => setSourceGroup("all")}
+              className={`inline-flex h-[30px] items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors ${
+                sourceGroup === "all"
+                  ? "bg-[#111110] text-white"
+                  : "border border-[#e8e8e4] bg-white text-[#111110] hover:border-[#c8c8c4]"
+              }`}
+            >
+              전체
+              <span className={`tabular-nums ${sourceGroup === "all" ? "text-white/55" : "text-[#1a1a1a]/40"}`}>
+                {statusFiltered.length}
+              </span>
+            </button>
+            {sourceGroupChips.map((chip) => {
+              const active = sourceGroup === chip.group
+              return (
+                <button
+                  key={chip.group}
+                  type="button"
+                  onClick={() => setSourceGroup(active ? "all" : chip.group)}
+                  className={`inline-flex h-[30px] items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors ${
+                    active
+                      ? "bg-[#111110] text-white"
+                      : "border border-[#e8e8e4] bg-white text-[#111110] hover:border-[#c8c8c4]"
+                  }`}
+                >
+                  <SourceGroupDot group={chip.group} />
+                  {chip.label}
+                  <span className={`tabular-nums ${active ? "text-white/55" : "text-[#1a1a1a]/40"}`}>{chip.count}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_240px_240px]">
           <label className="relative block">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/25" />
@@ -1646,16 +1705,18 @@ export default function LeadsBoardClient() {
             ))}
           </select>
         </div>
-        {(sourceDetailFilter !== "all" || leadMagnetFilter !== "all" || channelSource || searchQuery.trim()) && (
+        {(sourceGroup !== "all" || sourceDetailFilter !== "all" || leadMagnetFilter !== "all" || channelSource || searchQuery.trim()) && (
           <div className="mt-3 flex items-center justify-between gap-3 text-[12px] text-[#1a1a1a]/45">
             <span>
               현재 조건 {filtered.length}건
+              {sourceGroup !== "all" ? ` · 유입 ‘${SOURCE_GROUP_LABEL[sourceGroup]}’` : ""}
               {channelSource ? ` · 채널 ‘${channelSource}’` : ""}
             </span>
             <button
               type="button"
               onClick={() => {
                 setSearchQuery("")
+                setSourceGroup("all")
                 setSourceDetailFilter("all")
                 setLeadMagnetFilter("all")
                 setChannelSource("")
@@ -1741,6 +1802,7 @@ export default function LeadsBoardClient() {
                   onClick={() => {
                     setFilter("all")
                     setSearchQuery("")
+                    setSourceGroup("all")
                     setSourceDetailFilter("all")
                     setLeadMagnetFilter("all")
                     setChannelSource("")
@@ -1817,9 +1879,7 @@ export default function LeadsBoardClient() {
                           미확인
                         </span>
                       )}
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_COLOR[lead.status]}`}>
-                        {STATUS_LABEL[lead.status]}
-                      </span>
+                      <StatusPill status={lead.status} />
                       <button
                         type="button"
                         onClick={(event) => {
@@ -1837,8 +1897,9 @@ export default function LeadsBoardClient() {
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[#1a1a1a]/45">
-                    <span className="rounded-md bg-[#f0f0ec] px-2 py-1">
-                      {SOURCE_LABEL[lead.source] ?? lead.source}
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-[#f0f0ec] px-2 py-1">
+                      <SourceGroupDot group={getLeadSourceGroup(lead)} size={6} />
+                      {SOURCE_GROUP_LABEL[getLeadSourceGroup(lead)]} · {SOURCE_LABEL[lead.source] ?? lead.source}
                     </span>
                     {lead.source_detail ? (
                       <span className="rounded-md bg-[#ECFDF5] px-2 py-1 text-[#084734]">
@@ -1917,7 +1978,7 @@ export default function LeadsBoardClient() {
                     className="h-4 w-4 accent-[#084734] disabled:opacity-30"
                   />
                 </th>
-                {["시간", "응대", "소스", "이름", "기관", "담당자", "연락처", "팔로업", "정체", "상태"].map((h) => (
+                {["시간", "응대", "유입", "이름", "기관", "담당자", "연락처", "팔로업", "정체", "상태"].map((h) => (
                   <th key={h} className="text-left px-5 py-3.5 font-medium text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">{h}</th>
                 ))}
                 <th className="w-16 px-5 py-3.5 text-right text-[12px] font-medium text-[#1a1a1a]/40">관리</th>
@@ -1973,9 +2034,14 @@ export default function LeadsBoardClient() {
                       )}
                     </td>
                     <td className="px-5 py-4 whitespace-nowrap">
-                      <div className="flex max-w-[220px] flex-col items-start gap-1">
-                        <span className="px-2 py-0.5 rounded-md bg-[#f0f0ec] text-[#1a1a1a]/50 text-[11px]">
-                          {SOURCE_LABEL[lead.source] ?? lead.source}
+                      <div className="flex max-w-[240px] flex-col items-start gap-1">
+                        <span className="inline-flex items-center gap-1.5 text-[12px] text-[#111110]">
+                          <SourceGroupDot group={getLeadSourceGroup(lead)} />
+                          {SOURCE_GROUP_LABEL[getLeadSourceGroup(lead)]}
+                          <span className="text-[#1a1a1a]/30">·</span>
+                          <span className="max-w-[120px] truncate text-[#1a1a1a]/45">
+                            {SOURCE_LABEL[lead.source] ?? lead.source}
+                          </span>
                         </span>
                         {lead.source_detail ? (
                           <span className="max-w-full truncate rounded-md bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-medium text-[#084734]">
@@ -2031,9 +2097,7 @@ export default function LeadsBoardClient() {
                             미확인
                           </span>
                         )}
-                        <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLOR[lead.status]}`}>
-                          {STATUS_LABEL[lead.status]}
-                        </span>
+                        <StatusPill status={lead.status} />
                         {lead.status === "converted" && (
                           <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#ECFDF5] text-[#084734] border border-[#D7EBDD]">
                             CRM 전환
