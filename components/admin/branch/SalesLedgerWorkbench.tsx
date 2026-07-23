@@ -116,6 +116,7 @@ import {
   findOpenNewRowDuplicate,
   isDraftFormTargetLocked,
   isMatrixCellEditable,
+  isMatrixCellLocked,
   isMatrixDensity,
   loadStoredMatrixConfidence,
   lookupMatrixPending,
@@ -138,6 +139,7 @@ import {
   RevMatrixPasteDialog,
   storeMatrixConfidence,
   useMatrixEditor,
+  weeklyEditLockMask,
   weeklyPaymentsFromDraftMetadata,
   type MatrixCellCoord,
   type MatrixDensity,
@@ -152,6 +154,7 @@ import { buildMatrixPendingByCell } from "./ledger/RevMatrix"
 export {
   buildMatrixPendingByCell,
   computeWeekCellStates,
+  weeklyEditLockMask,
   findOpenNewRowDuplicate,
   isDraftFormTargetLocked,
   isMatrixCellEditable,
@@ -3020,7 +3023,7 @@ export default function SalesLedgerWorkbench() {
   // 직전 판정만 추가).
   const draftEditTargetRow = resolveDraftEditTargetRow(editingDraft, selectedRow, rowByDealKey)
   const isEditRowSaveTarget = editingDraft ? editingDraft.kind === "edit-row" : canCreateEditDraft
-  const targetCellLocked = useMemo(
+  const rawTargetCellLocked = useMemo(
     () => isDraftFormTargetLocked(
       isEditRowSaveTarget,
       draftEditTargetRow,
@@ -3029,6 +3032,22 @@ export default function SalesLedgerWorkbench() {
     ),
     [isEditRowSaveTarget, draftEditTargetRow, draftForm.month, editRowOverrideMonths],
   )
+  // Task B(2026-07-23) — "확정 주차 읽기전용, 빈 주차 추가만 허용". 확정으로 잠긴 달의 explicit
+  // 주차 중 값이 있는 칸만 잠근다(콕핏/레일 그리드에서 readOnly + 🔒). 매트릭스 주차 셀 수정(per-week
+  // 초안)과 규약을 맞춰, 콕핏/레일에서도 아직 안 지난 주차(빈 칸)를 확정 달에 새로 넣을 수 있게 한다.
+  const weeklyLockMask = useMemo<boolean[]>(() => {
+    if (!isEditRowSaveTarget || !draftEditTargetRow) return [false, false, false, false, false]
+    const corrected = editRowOverrideMonths.get(draftEditTargetRow.id)
+    const monthLocked = isMatrixCellLocked(draftEditTargetRow, draftForm.month, corrected)
+    const split = rowWeeklySplit(draftEditTargetRow, draftForm.month)
+    return weeklyEditLockMask(monthLocked, split.source === "explicit", split.weeks)
+  }, [isEditRowSaveTarget, draftEditTargetRow, draftForm.month, editRowOverrideMonths])
+  // 폼 전체 잠금 완화: 주차 분해 모드 + 확정 explicit 주차가 하나라도 있으면(=추가만 허용 케이스)
+  // 폼을 막지 않는다 — 확정 주차칸은 위 마스크로 읽기전용이라 덮어쓰기가 불가하고, 저장은 병합이라
+  // 확정 주차가 보존된다. 단일 금액 경로·월합계만 확정 달은 mask가 전 false라 잠금이 그대로 유지된다.
+  const weeklyAddUnlocked =
+    draftForm.weeklyMode && operationSupportsWeeklySplit(draftForm.operation) && weeklyLockMask.some(Boolean)
+  const targetCellLocked = rawTargetCellLocked && !weeklyAddUnlocked
   const draftAmountValue = safeAmount(draftForm.amount)
   // 주차 분해 모드(지원 작업 유형 한정)에서는 단일 금액(draftForm.amount) 대신 주차 자동합계가
   // 저장 금액이므로 "고객명 + 주차 합>0"이 유효 조건이다 — 음수/비숫자 칸은 draftWeeklyAmounts가
@@ -3073,6 +3092,7 @@ export default function SalesLedgerWorkbench() {
     draftSaving,
     canCreateEditDraft,
     targetCellLocked,
+    lockedWeeks: weeklyLockMask,
     saveEditedDraft,
     cancelDraftEdit,
     saveDraft,
@@ -4188,6 +4208,7 @@ export default function SalesLedgerWorkbench() {
                   draftSaving={draftSaving}
                   canCreateEditDraft={canCreateEditDraft}
                   targetCellLocked={targetCellLocked}
+                  lockedWeeks={weeklyLockMask}
                   currentMonthAmount={selectedRowMonthTotal}
                   saveEditedDraft={saveEditedDraft}
                   cancelDraftEdit={cancelDraftEdit}

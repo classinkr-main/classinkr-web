@@ -46,6 +46,9 @@ interface InputRailSectionProps {
   // 상태인지(SalesLedgerWorkbench의 isMatrixCellLocked 사전검사, correctedMonths 포함). true면
   // 제출 자체를 막고 인라인 경고만 보여준다 — 서버가 어차피 409로 튕길 걸 미리 걸러 헛수고를 없앤다.
   targetCellLocked: boolean
+  // Task B(2026-07-23): 확정으로 잠긴 달의 explicit 주차 중 값이 있는 칸(5칸 boolean) — WeeklyAmountGrid에
+  // 그대로 넘겨 그 주차만 읽기전용(🔒)으로 만든다(확정 주차 덮어쓰기 방지, 빈 칸에만 추가 허용).
+  lockedWeeks?: boolean[]
   // DraftSaveResult.persisted: 서버에 실제로 저장됐으면 true, 로컬 폴백(장부 적용 불가)이면 false.
   // DraftSaveResult.deduped: 이중계상 가드(품질 웨이브 3, 항목 3)가 새 초안 대신 이미 열린 초안을
   // 갱신했으면 true. DraftSaveResult.duplicateWarning(품질 웨이브 4, 항목 2): new-row 저장인데 같은
@@ -70,6 +73,7 @@ export function InputRailSection({
   draftSaving,
   canCreateEditDraft,
   targetCellLocked,
+  lockedWeeks,
   saveEditedDraft,
   cancelDraftEdit,
   saveDraft,
@@ -386,6 +390,7 @@ export function InputRailSection({
                         weeklyConfidence: current.weeklyConfidence.map((value, i) => (i === index ? key : value)),
                       }))
                     }
+                    lockedWeeks={lockedWeeks}
                     variant="rail"
                   />
                   {/* 월 합은 읽기전용 자동합계 — 입력 필드가 아니라 표시 전용(직접 수정 불가 원칙). */}

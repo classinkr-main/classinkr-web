@@ -51,6 +51,9 @@ interface CockpitEditorProps {
   draftSaving: boolean
   canCreateEditDraft: boolean
   targetCellLocked: boolean
+  // Task B(2026-07-23): 확정으로 잠긴 달의 explicit 주차 중 값이 있는 칸(5칸 boolean). true면 그 주차
+  // 입력을 읽기전용(🔒)으로 렌더한다 — 확정 주차 덮어쓰기 방지, 빈 칸에만 아직 안 지난 주차 추가 허용.
+  lockedWeeks?: boolean[]
   // M1(a): 선택 딜의 편집 대상 월 실장부금액(rowMonthAmount). 월합계-only 딜은 주차 버퍼가 비어
   // 편집기 월 합이 ¥0으로 보이는데, 이 값이 >0이면 "전액을 특정 주에" 원클릭 참조를 노출한다.
   currentMonthAmount: number
@@ -71,6 +74,7 @@ export function CockpitEditor({
   draftSaving,
   canCreateEditDraft,
   targetCellLocked,
+  lockedWeeks,
   currentMonthAmount,
   saveEditedDraft,
   cancelDraftEdit,
@@ -353,6 +357,7 @@ export function CockpitEditor({
                 weeklyConfidence: current.weeklyConfidence.map((value, i) => (i === index ? key : value)),
               }))
             }
+            lockedWeeks={lockedWeeks}
             variant="cockpit"
           />
         </div>

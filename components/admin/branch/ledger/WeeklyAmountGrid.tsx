@@ -14,6 +14,8 @@
 // 그 밖의 UI(확도 일괄 적용·월 합·저장 확도 미리보기·저장 버튼·M1(a) 월 장부금액 참조 등)는
 // 각 소비처가 그대로 소유한다 — 이 컴포넌트는 "주차 행 5줄"만 그린다.
 
+import { Lock } from "lucide-react"
+
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { DRAFT_CONFIDENCE_OPTIONS, FORECAST_WEEK_RANGE_LABELS, draftWeeklyAmounts, type DraftConfidence } from "./shared"
 
@@ -26,6 +28,9 @@ interface WeeklyAmountGridProps {
   onAmountChange: (index: number, rawValue: string) => void
   /** 주차 확도 변경 — 부모는 해당 칸만 세팅한다. */
   onConfidenceChange: (index: number, key: DraftConfidence) => void
+  /** Task B(2026-07-23): 확정으로 잠긴 달의 explicit 주차 중 값이 있는 칸(5칸 boolean). true면 그 주차는
+   *  읽기전용(🔒)으로 렌더해 확정값 덮어쓰기를 막고, 빈 칸에만 아직 안 지난 주차를 새로 넣게 한다. */
+  lockedWeeks?: boolean[]
   variant: "rail" | "cockpit"
 }
 
@@ -34,6 +39,7 @@ export function WeeklyAmountGrid({
   weeklyConfidence,
   onAmountChange,
   onConfidenceChange,
+  lockedWeeks,
   variant,
 }: WeeklyAmountGridProps) {
   const isCockpit = variant === "cockpit"
@@ -44,6 +50,8 @@ export function WeeklyAmountGrid({
     <div className={isCockpit ? "space-y-2" : "space-y-1.5"}>
       {FORECAST_WEEK_RANGE_LABELS.map((rangeLabel, index) => {
         const zeroWeek = weeklyAmounts[index] <= 0
+        // Task B: 확정으로 잠긴 주차칸(값 있는 explicit 주차) — 읽기전용·확도 고정. 빈 칸은 잠기지 않는다.
+        const locked = lockedWeeks?.[index] ?? false
 
         const label = isCockpit ? (
           <span className="text-[12px] font-bold text-[#111110]">
@@ -71,14 +79,30 @@ export function WeeklyAmountGrid({
             <input
               value={weekly[index] ?? ""}
               onChange={(event) => onAmountChange(index, event.target.value.replace(/[^\d]/g, ""))}
+              readOnly={locked}
               inputMode="numeric"
               aria-label={`W${index + 1} 금액`}
+              title={locked ? `W${index + 1} 확정 값이라 잠금(실수 방지) — 수정은 REV 렌즈 정정 초안으로` : undefined}
               className={
-                isCockpit
-                  ? "h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-7 pr-3 text-right text-[13px] font-semibold tabular-nums text-[#111110] outline-none focus:border-[#084734]"
-                  : "h-8 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-6 pr-2 text-right text-[12px] font-semibold tabular-nums text-[#111110] outline-none focus:border-[#084734]"
+                locked
+                  ? isCockpit
+                    ? "h-10 w-full cursor-not-allowed rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] pl-7 pr-7 text-right text-[13px] font-semibold tabular-nums text-[#615D59] outline-none"
+                    : "h-8 w-full cursor-not-allowed rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] pl-6 pr-6 text-right text-[12px] font-semibold tabular-nums text-[#615D59] outline-none"
+                  : isCockpit
+                    ? "h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-7 pr-3 text-right text-[13px] font-semibold tabular-nums text-[#111110] outline-none focus:border-[#084734]"
+                    : "h-8 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-6 pr-2 text-right text-[12px] font-semibold tabular-nums text-[#111110] outline-none focus:border-[#084734]"
               }
             />
+            {locked && (
+              <Lock
+                aria-hidden
+                className={
+                  isCockpit
+                    ? "pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[#A39E98]"
+                    : "pointer-events-none absolute right-1.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[#A39E98]"
+                }
+              />
+            )}
           </span>
         )
 
@@ -90,9 +114,9 @@ export function WeeklyAmountGrid({
                 <button
                   key={option.id}
                   type="button"
-                  disabled={zeroWeek}
+                  disabled={zeroWeek || locked}
                   aria-pressed={active}
-                  title={`W${index + 1} ${option.label}`}
+                  title={locked ? `W${index + 1} 확정 값이라 잠금` : `W${index + 1} ${option.label}`}
                   // rail은 축약 라벨이라 스크린리더용 전체 라벨을 aria-label로 보강한다(cockpit은 전체 라벨이라 불필요).
                   {...(isCockpit ? {} : { "aria-label": `W${index + 1} ${option.label}` })}
                   onClick={() => onConfidenceChange(index, option.id)}
@@ -104,8 +128,8 @@ export function WeeklyAmountGrid({
                     zeroWeek
                       ? "cursor-not-allowed border border-[rgba(0,0,0,0.06)] bg-white text-[#DDD9D3]"
                       : active
-                        ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
-                        : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
+                        ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white${locked ? " cursor-not-allowed opacity-90" : ""}`
+                        : `border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59]${locked ? " cursor-not-allowed opacity-60" : " hover:text-[#111110]"}`
                   }`}
                 >
                   {isCockpit ? option.label : option.label.slice(0, 1)}

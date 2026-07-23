@@ -1124,6 +1124,16 @@ export function computeWeekCellStates(
   })
 }
 
+// 콕핏/입력 레일의 주차 그리드(W1~W5) 칸별 잠금 마스크 — "확정 주차 읽기전용, 빈 주차 추가만 허용"
+// (2026-07-23, 매트릭스 규약과 동일). 확정으로 잠긴 달에서 이미 explicit 주차 금액이 있는 칸만 잠근다:
+// 그 칸은 읽기전용으로 두어 실수 덮어쓰기를 막고(저장은 병합이라 확정 주차 보존), 빈 칸에만 아직 안 지난
+// 주차를 새로 넣게 한다. explicit 주차가 없으면(월합계만/미입력) 개별로 보존할 주차가 없어 전(全) false를
+// 돌려주고 — 그 경우 폼 전체 잠금(단일 금액 경로 가드, isDraftFormTargetLocked)이 확정 달을 그대로 보호한다.
+export function weeklyEditLockMask(monthLocked: boolean, hasExplicitWeeks: boolean, weeks: number[]): boolean[] {
+  if (!monthLocked || !hasExplicitWeeks) return [false, false, false, false, false]
+  return Array.from({ length: 5 }, (_unused, index) => (weeks[index] ?? 0) > 0)
+}
+
 // 확장된 월의 w1~w5 5칸. editContext가 오면(딜행·비잠금월) 각 칸이 편집 셀이 된다.
 // month-only 행은 W5에 월합계를 얹어 시트 검수 감각을 유지(기존 읽기전용 규약 계승).
 function RevMatrixWeekCells({
