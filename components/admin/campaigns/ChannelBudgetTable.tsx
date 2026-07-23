@@ -4,19 +4,10 @@ import { useState } from "react"
 import {
   AD_CHANNEL_COLOR,
   AD_CHANNEL_LABEL,
+  AD_CHANNELS,
   type AdChannel,
 } from "@/lib/types/event-metrics"
 import { KRW, pct, won } from "@/components/admin/campaigns/event-format"
-
-const AD_CHANNELS: AdChannel[] = [
-  "google",
-  "meta",
-  "naver",
-  "kakao",
-  "youtube",
-  "offline",
-  "other",
-]
 
 // Meta 라이브 집행은 계정 통화(대개 USD)라 KRW 포맷을 쓰지 않고 통화 코드 + 소수 2자리로 표기한다.
 const NUM2 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 })
@@ -122,7 +113,9 @@ export function ChannelBudgetTable({
   const sumAllocated = merged.reduce((s, r) => s + r.allocated, 0)
   const sumSpend = merged.reduce((s, r) => s + r.spend, 0)
   const sumLeads = merged.reduce((s, r) => s + r.leads, 0)
-  const sumRemaining = sumAllocated > 0 ? sumAllocated - sumSpend : null
+  // 총계 잔여 = 열에 보이는 per-row 잔여의 합. 미배정(allocated=0) 채널은 잔여 "—"로
+  // 열에 기여하지 않으므로 총계에서도 그 집행을 빼지 않는다(0 기여). 열과 총계가 항상 일치.
+  const sumRemaining = sumAllocated > 0 ? merged.reduce((s, r) => s + (r.remaining ?? 0), 0) : null
 
   const metaManualSpend = merged.find((r) => r.channel === "meta")?.spend ?? 0
 
@@ -219,7 +212,7 @@ export function ChannelBudgetTable({
 
       {/* 표 하단 정직성 주석 */}
       <p className="px-1 text-[11px] leading-relaxed text-[#1a1a1a]/45">
-        전환은 광고비 비중으로 안분한 추정치이며 채널별 ROAS는 매출의 채널 귀속이 불가해 표기하지 않습니다.
+        전환은 광고비 비중으로 안분한 추정치이며 채널별 ROI는 매출의 채널 귀속이 불가해 표기하지 않습니다.
       </p>
 
       {/* 종합 스트립 — 채널별 표와 분리 */}
@@ -234,7 +227,7 @@ export function ChannelBudgetTable({
           <span className="text-[10px] text-[#1a1a1a]/35">(입력 기준 · 장부 확정매출 아님)</span>
         </span>
         <span className="flex items-baseline gap-1.5">
-          <span className="text-[11px] text-[#1a1a1a]/45">종합 ROAS</span>
+          <span className="text-[11px] text-[#1a1a1a]/45">종합 ROI</span>
           <span
             className={`text-[13px] font-semibold tabular-nums ${
               overallRoi != null && overallRoi >= 0 ? "text-[#084734]" : "text-[#111110]"

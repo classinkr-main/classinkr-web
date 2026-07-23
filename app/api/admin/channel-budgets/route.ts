@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { getChannelBudgets, saveChannelBudget } from "@/lib/repositories/channel-budgets"
-import type { AdChannel } from "@/lib/types/event-metrics"
+import { AD_CHANNELS, type AdChannel } from "@/lib/types/event-metrics"
 
-const VALID_CHANNELS = new Set<string>([
-  "google",
-  "meta",
-  "naver",
-  "kakao",
-  "youtube",
-  "offline",
-  "other",
-])
+const VALID_CHANNELS = new Set<string>(AD_CHANNELS)
 
 // PATCH 본문을 검증·정규화한다. 유효하지 않으면 null.
 //   channel — 7개 AdChannel enum 중 하나여야 한다.

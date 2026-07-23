@@ -65,16 +65,42 @@ describe("ChannelBudgetTable", () => {
     expect(html).toContain("합계")
     // sum 배정 = 16,000,000
     expect(html).toContain("₩16,000,000")
-    // sum 잔여 = 16,000,000 − 6,000,000(=meta 5M+google 1M) = 10,000,000
+    // sum 잔여 = 7,000,000(meta) + 3,000,000(google) = 10,000,000 (per-row remainings)
     expect(html).toContain("₩10,000,000")
   })
 
-  it("does NOT render a per-channel ROAS header (only the aggregate ROAS strip)", () => {
+  it("totals 잔여 equals the sum of visible per-row 잔여 — an unallocated channel's spend does NOT subtract", () => {
+    const rows: ChannelBudgetRow[] = [
+      { channel: "meta", label: "Meta", color: "#0866FF", spend: 5_000_000, leads: 40, cpl: 125_000 },
+      // 네이버: 집행 8M은 있지만 배정 0 → 잔여 "—", 총계 잔여에 기여하지 않아야 한다
+      { channel: "naver", label: "네이버", color: "#03C75A", spend: 8_000_000, leads: 10, cpl: 800_000 },
+    ]
+    const html = renderToStaticMarkup(
+      <ChannelBudgetTable
+        rows={rows}
+        budgets={makeBudgets({ meta: 20_000_000 })} // naver 미배정
+        onBudgetChange={() => {}}
+        totalSpend={13_000_000}
+        totalRevenue={0}
+        overallRoi={null}
+        metaLiveSpend={null}
+        metaCurrency="USD"
+      />
+    )
+    // meta 잔여 = 20,000,000 − 5,000,000 = 15,000,000; 총계 잔여도 15,000,000 이어야 함
+    expect(html).toContain("₩15,000,000")
+    // 구버전 버그(총계 = 배정합 20M − 전체집행 13M = 7,000,000)가 나오면 안 됨
+    expect(html).not.toContain("₩7,000,000")
+  })
+
+  it("labels the aggregate metric ROI (matching aggregate.overallRoi math), not ROAS, and shows no per-channel ROI/ROAS header", () => {
     const html = render()
-    // no element whose text is exactly "ROAS" (a channel-level column header)
+    // no bare per-channel metric column header (aggregate is labeled "종합 ROI")
     expect(html).not.toMatch(/>\s*ROAS\s*</)
-    // aggregate ROAS strip is present and caveated
-    expect(html).toContain("종합 ROAS")
+    expect(html).not.toMatch(/>\s*ROI\s*</)
+    // the shown value is net ROI ((revenue−spend)/spend), so it must read ROI, never ROAS
+    expect(html).toContain("종합 ROI")
+    expect(html).not.toContain("ROAS")
     expect(html).toContain("233%")
   })
 

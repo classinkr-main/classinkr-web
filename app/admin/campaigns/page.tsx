@@ -72,6 +72,7 @@ import { EVENT_CATEGORIES, type EventCategory, type EventStatus, type PublicEven
 import {
   AD_CHANNEL_COLOR,
   AD_CHANNEL_LABEL,
+  AD_CHANNELS,
   computeEconomics,
   DEFAULT_EVENT_METRICS,
   type AdChannel,
@@ -1218,15 +1219,9 @@ export default function AdminCampaignsPage() {
   const [metaDatePreset, setMetaDatePreset] = useState<MetaDatePreset>("last_30d")
   const [metaUpdatingId, setMetaUpdatingId] = useState<string | null>(null)
   const [emailStats, setEmailStats] = useState<MarketingStatsData | null>(null)
-  const [channelBudgets, setChannelBudgets] = useState<Record<AdChannel, number>>({
-    google: 0,
-    meta: 0,
-    naver: 0,
-    kakao: 0,
-    youtube: 0,
-    offline: 0,
-    other: 0,
-  })
+  const [channelBudgets, setChannelBudgets] = useState<Record<AdChannel, number>>(
+    () => Object.fromEntries(AD_CHANNELS.map((c): [AdChannel, number] => [c, 0])) as Record<AdChannel, number>
+  )
   const [eventSort, setEventSort] = useState<"date" | "leads" | "deals" | "roi">("date")
   const activeTab: CampaignTab = CAMPAIGN_TABS.some((tab) => tab.id === tabParam)
     ? (tabParam as CampaignTab)
@@ -1410,15 +1405,9 @@ export default function AdminCampaignsPage() {
     // 광고비까지 넣으면 매출 0으로 잡혀 누적 ROI가 거짓 적자로 끌려간다.
     let roiSpend = 0
     let roiRevenue = 0
-    const channelTotals: Record<AdChannel, number> = {
-      google: 0,
-      meta: 0,
-      naver: 0,
-      kakao: 0,
-      youtube: 0,
-      offline: 0,
-      other: 0,
-    }
+    const channelTotals = Object.fromEntries(
+      AD_CHANNELS.map((c): [AdChannel, number] => [c, 0])
+    ) as Record<AdChannel, number>
     for (const ev of filtered) {
       const metrics = metricsMap[ev.id] ?? {
         ...DEFAULT_EVENT_METRICS,
@@ -1598,12 +1587,12 @@ export default function AdminCampaignsPage() {
 
   // 채널별 효율 — 광고비는 채널 합산, 리드는 행사 내 광고비 비중으로 안분(추정)
   const channelEfficiencyData = useMemo<ChannelEfficiencyRow[]>(() => {
-    const spendByChannel: Record<AdChannel, number> = {
-      google: 0, meta: 0, naver: 0, kakao: 0, youtube: 0, offline: 0, other: 0,
-    }
-    const leadsByChannel: Record<AdChannel, number> = {
-      google: 0, meta: 0, naver: 0, kakao: 0, youtube: 0, offline: 0, other: 0,
-    }
+    const spendByChannel = Object.fromEntries(
+      AD_CHANNELS.map((c): [AdChannel, number] => [c, 0])
+    ) as Record<AdChannel, number>
+    const leadsByChannel = Object.fromEntries(
+      AD_CHANNELS.map((c): [AdChannel, number] => [c, 0])
+    ) as Record<AdChannel, number>
     for (const { metrics, funnel } of perEventEcon) {
       const entries = metrics.adSpendEntries
       const eventSpend = entries.reduce((sum, e) => sum + e.amount, 0)
@@ -2062,7 +2051,7 @@ export default function AdminCampaignsPage() {
             <div className="mb-3">
               <h2 className="text-[15px] font-semibold text-[#111110]">채널 예산·집행</h2>
               <p className="mt-0.5 text-[12px] text-[#1a1a1a]/50">
-                채널별 배정 예산을 입력하고 집행·전환(추정)·CPL과 대조합니다. 채널 귀속이 불가한 ROAS는 종합만 표기합니다.
+                채널별 배정 예산을 입력하고 집행·전환(추정)·CPL과 대조합니다. 채널 귀속이 불가한 ROI는 종합만 표기합니다.
               </p>
             </div>
             <ChannelBudgetTable

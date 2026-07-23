@@ -5,23 +5,14 @@
 import "server-only"
 import fs from "fs"
 import path from "path"
-import { type AdChannel } from "@/lib/types/event-metrics"
+import { AD_CHANNELS, type AdChannel } from "@/lib/types/event-metrics"
 import { atomicWriteJsonSync } from "@/lib/atomic-write"
 import { assertLocalJsonWriteAllowed } from "@/lib/server/runtime-persistence"
 
 const DATA_DIR = path.join(process.cwd(), "data")
 const FILE = "channel-budgets.json"
 
-// AdChannel enum의 SSOT는 lib/types/event-metrics. 여기서는 7개 키를 고정 순서로 갖는다.
-const AD_CHANNELS: AdChannel[] = [
-  "google",
-  "meta",
-  "naver",
-  "kakao",
-  "youtube",
-  "offline",
-  "other",
-]
+// AdChannel 목록의 SSOT는 lib/types/event-metrics(AD_CHANNELS). 여기서는 검증용 Set만 파생한다.
 const CHANNEL_SET = new Set<string>(AD_CHANNELS)
 
 // KRW 정수 예산. 파일에는 배정된 채널만 저장되고(누락=0), 값은 항상 0 이상 정수로 정규화한다.
