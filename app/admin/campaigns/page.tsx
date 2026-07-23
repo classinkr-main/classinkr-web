@@ -43,6 +43,7 @@ import type { ExportColumn } from "@/components/admin/campaigns/CampaignExportBu
 import { EventOriginMatrix } from "@/components/admin/campaigns/EventOriginMatrix"
 import type { TrendPoint } from "@/components/admin/campaigns/CampaignTrendChart"
 import type { ChannelEfficiencyRow } from "@/components/admin/campaigns/ChannelEfficiencyChart"
+import { ChannelBudgetTable } from "@/components/admin/campaigns/ChannelBudgetTable"
 import type { MetaPerfRow } from "@/components/admin/campaigns/MetaPerformanceCharts"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { textMatchesEventToken } from "@/lib/events/attribution"
@@ -177,7 +178,7 @@ const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string; sub: string }> = [
   { id: "summary", label: "요약", sub: "성과 · 전환 · 채널 분포" },
   { id: "events", label: "행사", sub: "행사별 퍼널 · 딜 전환" },
   // id는 딥링크(?tab=meta) 호환을 위해 "meta" 유지 — 라벨은 "광고"로 확장하되 sub에서 Meta만 라이브임을 정직하게 표기.
-  { id: "meta", label: "광고", sub: "Meta 라이브 · 캠페인·성과·상태 관리" },
+  { id: "meta", label: "광고", sub: "Meta 라이브 · 캠페인·채널 예산·성과" },
   // id는 기존 딥링크(?tab=email) 호환을 위해 "email" 유지 — 내용은 이메일·문자·카카오 발송 허브.
   { id: "email", label: "메시지", sub: "구독자 · 발송(이메일 라이브 · 문자·카카오 준비 중) · 이력" },
 ]
@@ -1217,6 +1218,15 @@ export default function AdminCampaignsPage() {
   const [metaDatePreset, setMetaDatePreset] = useState<MetaDatePreset>("last_30d")
   const [metaUpdatingId, setMetaUpdatingId] = useState<string | null>(null)
   const [emailStats, setEmailStats] = useState<MarketingStatsData | null>(null)
+  const [channelBudgets, setChannelBudgets] = useState<Record<AdChannel, number>>({
+    google: 0,
+    meta: 0,
+    naver: 0,
+    kakao: 0,
+    youtube: 0,
+    offline: 0,
+    other: 0,
+  })
   const [eventSort, setEventSort] = useState<"date" | "leads" | "deals" | "roi">("date")
   const activeTab: CampaignTab = CAMPAIGN_TABS.some((tab) => tab.id === tabParam)
     ? (tabParam as CampaignTab)
@@ -1315,6 +1325,34 @@ export default function AdminCampaignsPage() {
       void loadEmailStats()
     }
   }, [activeTab, loadEmailStats])
+
+  // 채널 예산(배정)은 광고 탭에서만 필요 — 지연 로드. 실패해도 0으로 유지(무크래시).
+  const loadChannelBudgets = useCallback(async () => {
+    try {
+      const data = await adminFetchJson<{ budgets: Record<AdChannel, number> }>(
+        "/api/admin/channel-budgets"
+      )
+      setChannelBudgets(data.budgets)
+    } catch {
+      // 보조 데이터 — 조용히 실패, 기존 값(0) 유지
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === "meta") void loadChannelBudgets()
+  }, [activeTab, loadChannelBudgets])
+
+  const handleChannelBudgetChange = useCallback(async (channel: AdChannel, amount: number) => {
+    try {
+      const data = await adminFetchJson<{ budgets: Record<AdChannel, number> }>(
+        "/api/admin/channel-budgets",
+        { method: "PATCH", body: JSON.stringify({ channel, amount }) }
+      )
+      setChannelBudgets(data.budgets)
+    } catch (e) {
+      setMetaError(e instanceof Error ? e.message : "채널 예산 저장 실패")
+    }
+  }, [])
 
   const toggleMetaCampaignStatus = useCallback(
     async (campaign: MetaCampaignRow) => {
@@ -2020,6 +2058,24 @@ export default function AdminCampaignsPage() {
               <MetaPerformanceCharts rows={metaPerfRows} currency={metaDashboard?.account.currency ?? "USD"} />
             </div>
           )}
+          <div className="mt-8">
+            <div className="mb-3">
+              <h2 className="text-[15px] font-semibold text-[#111110]">채널 예산·집행</h2>
+              <p className="mt-0.5 text-[12px] text-[#1a1a1a]/50">
+                채널별 배정 예산을 입력하고 집행·전환(추정)·CPL과 대조합니다. 채널 귀속이 불가한 ROAS는 종합만 표기합니다.
+              </p>
+            </div>
+            <ChannelBudgetTable
+              rows={channelEfficiencyData}
+              budgets={channelBudgets}
+              onBudgetChange={handleChannelBudgetChange}
+              totalSpend={aggregate.totalSpend}
+              totalRevenue={aggregate.totalRevenue}
+              overallRoi={aggregate.overallRoi}
+              metaLiveSpend={metaDashboard?.summary.spend ?? null}
+              metaCurrency={metaDashboard?.account.currency ?? "USD"}
+            />
+          </div>
         </div>
       ) : (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
