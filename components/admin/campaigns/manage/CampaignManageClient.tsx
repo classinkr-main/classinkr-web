@@ -1,7 +1,8 @@
 "use client"
 
 // components/admin/campaigns/manage/CampaignManageClient.tsx
-// 캠페인 관리(D1-5) — 리스트 + 생성/편집 드로어. 상세/롤업/링크 피커는 D1-6.
+// 캠페인 관리 — 리스트 + 생성 드로어(D1-5). 행 클릭 → 상세 패널(D1-6, 롤업 + 링크 피커).
+// 편집은 상세 패널이 CampaignFormDrawer 를 재사용하므로 여기선 "새 캠페인"(생성)만 드로어로 연다.
 // 마운트 시 adminFetchJson 으로 목록 조회. 마이그레이션 미적용이면 API 가 500 →
 // 크래시/화이트스크린 없이 에러 카드 + 재시도로 그레이스풀 강등(필수).
 // DESIGN.md 팔레트만 사용.
@@ -16,6 +17,7 @@ import type { CampaignWithLinks } from "@/lib/types/marketing-campaign"
 
 import { CampaignManageEmpty, CampaignRow } from "./CampaignRow"
 import { CampaignFormDrawer } from "./CampaignFormDrawer"
+import CampaignDetailPanel from "./CampaignDetailPanel"
 
 type DrawerState =
   | { mode: "create" }
@@ -28,6 +30,9 @@ export default function CampaignManageClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<DrawerState>(null)
+  // 상세 패널이 여는 캠페인(리스트 요약). null = 닫힘. onClose 는 memoized(상세의 load deps 안정).
+  const [detail, setDetail] = useState<CampaignWithLinks | null>(null)
+  const closeDetail = useCallback(() => setDetail(null), [])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -152,20 +157,25 @@ export default function CampaignManageClient() {
               <CampaignRow
                 key={campaign.id}
                 campaign={campaign}
-                onOpen={() => setDrawer({ mode: "edit", campaign })}
+                onOpen={() => setDetail(campaign)}
               />
             ))}
           </div>
         )}
       </div>
 
-      {/* 드로어 */}
+      {/* 생성 드로어 — "새 캠페인" 전용(편집은 상세 패널이 담당). */}
       {drawer && (
         <CampaignFormDrawer
           initial={drawer.mode === "edit" ? drawer.campaign : null}
           onClose={() => setDrawer(null)}
           onSuccess={handleSuccess}
         />
+      )}
+
+      {/* 상세 패널 — 행 클릭 시. 롤업 + 연결된 실행 + 링크 피커 + 편집(폼 드로어 재사용). */}
+      {detail && (
+        <CampaignDetailPanel campaign={detail} onClose={closeDetail} onListChanged={load} />
       )}
     </div>
   )
