@@ -1131,8 +1131,17 @@ function RevMatrixWeekCells({
     const isMonthOnly = display > 0 && value === 0
     // 편집 가능 여부: 딜행 + 월 편집 허용(editContext.editableOf) + 그 칸이 시트 확정 잠금이 아닐 때.
     // month-only 파생 표시(W5의 monthOnlyAmount)는 실제 주차 입력이 아니므로 편집 시작값은 value(0)로 둔다.
-    const weekLocked = editContext ? editContext.weekLockedOf(month ?? "", index) : true
-    const weekEditable = Boolean(editContext) && !weekLocked && Boolean(editContext?.editableOf(month ?? ""))
+    // 버그 수정(2026-07-20): weekLockedOf는 week 인자를 받고도 안 써서 "그 달이 확정됐는가" 하나로
+    // 5칸을 통째로 잠갔다 — 달의 한 주차만 확정돼도 나머지(미입력·아직 안 지난 주차 포함)까지 클릭이
+    // 씹혔는데, display=0이라 🔒도 안 뜨고 툴팁도 그냥 "미입력"이라 원인이 안 보였다. display>0(이
+    // 칸에 실제 확정액이 찍힌 경우)으로 좁혀 그 칸만 잠그고, 빈 칸은 같은 달이어도 새로 입력 가능하게 한다.
+    // editableOf(month)는 isMatrixCellEditable = !isMatrixCellLocked(row, month)의 그대로라
+    // weekLockedOf(수정 전 monthLocked)와 완전히 같은 값의 반전이었다 — 그래서 weekLocked만 좁히고
+    // 이 조건을 그대로 두면 "&& editableOf(month)"가 옛 월 단위 잠금을 도로 걸어 버그가 안 고쳐졌다.
+    // weekLocked 하나로 충분하므로 중복 조건을 제거한다.
+    const monthLocked = editContext ? editContext.weekLockedOf(month ?? "", index) : true
+    const weekLocked = monthLocked && display > 0
+    const weekEditable = Boolean(editContext) && !weekLocked
     // 선택/편집은 이 칸 기준으로 계산해 원시값으로 내린다 — 비선택·비편집 칸은 memo 스킵.
     const weekSelected = Boolean(editContext) && editContext!.isSelectedCell(month ?? "", index)
     const weekEditing = Boolean(editContext) && editContext!.isEditingCell(month ?? "", index)
@@ -1147,7 +1156,7 @@ function RevMatrixWeekCells({
         month={editContext ? month : undefined}
         rowId={editContext?.rowId}
         editable={weekEditable}
-        locked={editContext ? weekLocked && display > 0 : false}
+        locked={weekLocked}
         lockLabel={editContext ? editContext.lockLabelOf(month ?? "") : undefined}
         editWarning={editContext ? editContext.weekEditNotice(month ?? "") : undefined}
         pending={editContext ? editContext.weekPendingOf(month ?? "", index) : null}
@@ -1306,11 +1315,11 @@ export function NeedsLinkChip({
         onClick={onToggle}
         aria-expanded={open}
         aria-haspopup="dialog"
+        aria-label={`${customer} — CRM 미연결`}
         title={`${customer} — CRM 미연결 · 클릭하면 연결 안내가 열립니다`}
-        className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded px-0.5 text-[9px] font-bold leading-none text-[#A8741A] transition hover:bg-[#FBF1E0] hover:text-[#7A520F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[#A8741A] transition hover:bg-[#FBF1E0] hover:text-[#7A520F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
       >
         <Link2Off className="h-3 w-3 shrink-0" aria-hidden />
-        연결
       </button>
       {open && (
         <div
@@ -1624,17 +1633,7 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
             <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-90" : ""}`} />
           </button>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1">
-              <span className="min-w-0 truncate text-[12px] font-bold text-[#111110]">{group.customer}</span>
-              {needsLink && onLinkPopoverToggle && onLinkPopoverClose && (
-                <NeedsLinkChip
-                  customer={group.customer}
-                  open={linkPopoverOpen}
-                  onToggle={() => onLinkPopoverToggle(group.key)}
-                  onClose={onLinkPopoverClose}
-                />
-              )}
-            </div>
+            <span className="block truncate text-[12px] font-bold text-[#111110]">{group.customer}</span>
             {(group.managers.length > 0 || group.regions.length > 0) && (
               <span
                 title={[group.managers.join(", "), group.teams.join(", "), group.regions.join(", ")].filter(Boolean).join(" · ")}
@@ -1644,6 +1643,15 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
               </span>
             )}
           </div>
+          {/* 칩을 이름 옆이 아니라 행 우측 끝에 고정 — 이름 길이와 무관하게 열 우측 정렬(단독 딜행과 동일 규약). */}
+          {needsLink && onLinkPopoverToggle && onLinkPopoverClose && (
+            <NeedsLinkChip
+              customer={group.customer}
+              open={linkPopoverOpen}
+              onToggle={() => onLinkPopoverToggle(group.key)}
+              onClose={onLinkPopoverClose}
+            />
+          )}
         </div>
       </td>
       <td className="border-l border-[#F2F1EE] px-1.5 text-right" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
@@ -1794,7 +1802,10 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
         className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[rgba(0,0,0,0.08)] pr-2 ${nested ? "border-l-2 border-l-[#CBD9D2] pl-12" : grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2"} ${rowBg}`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
+          {/* 단독 딜행(비그룹·비중첩)은 그룹 소계행의 셰브론 폭(h-6 w-6)을 빈 자리로 예약한다 —
+              토글 유무로 고객명 시작 위치가 흔들리지 않도록 1열 정렬을 고정한다. */}
+          {!grouped && !nested && <span className="h-6 w-6 shrink-0" aria-hidden="true" />}
           <div className="min-w-0 flex-1">
             <button
               type="button"
