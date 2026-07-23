@@ -43,6 +43,18 @@ import type { ChannelEfficiencyRow } from "@/components/admin/campaigns/ChannelE
 import type { MetaPerfRow } from "@/components/admin/campaigns/MetaPerformanceCharts"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { textMatchesEventToken } from "@/lib/events/attribution"
+import { FunnelStage } from "@/components/admin/campaigns/FunnelStage"
+import {
+  KRW,
+  compact,
+  formatMetaDate,
+  formatRange,
+  money,
+  pct,
+  previewText,
+  statusTone,
+  won,
+} from "@/components/admin/campaigns/event-format"
 import { useUrlState } from "@/lib/use-url-state"
 import {
   parseMessagePrefill,
@@ -50,7 +62,7 @@ import {
   type MessagePrefill,
 } from "@/lib/message-prefill"
 import type { LeadRecord } from "@/lib/db"
-import type { PublicEvent, EventStatus } from "@/lib/types/public-events"
+import type { PublicEvent } from "@/lib/types/public-events"
 import {
   AD_CHANNEL_COLOR,
   AD_CHANNEL_LABEL,
@@ -102,58 +114,6 @@ const MarketingHub = dynamic(
   () => import("@/components/admin/marketing/MarketingHub"),
   { ssr: false, loading: () => <ChartSkeleton className="h-[420px]" /> }
 )
-
-const KRW = new Intl.NumberFormat("ko-KR")
-const KRW_CURRENCY = new Intl.NumberFormat("ko-KR", {
-  style: "currency",
-  currency: "KRW",
-  maximumFractionDigits: 0,
-})
-const won = (n: number | null | undefined) => (n == null ? "—" : KRW_CURRENCY.format(Math.round(n)))
-const pct = (n: number | null | undefined) => (n == null ? "—" : `${n}%`)
-const compact = new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 })
-
-function previewText(value: string | null | undefined, maxLength = 160) {
-  const text = value?.replace(/\s+/g, " ").trim()
-  if (!text) return null
-  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text
-}
-
-function money(value: number | null | undefined, currency = "USD") {
-  if (value == null) return "—"
-  if (currency === "USD") {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-    }).format(value)
-  }
-  return new Intl.NumberFormat("ko-KR", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2,
-  }).format(value)
-}
-
-function statusTone(status: EventStatus): string {
-  switch (status) {
-    case "진행 중":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200"
-    case "예정":
-      return "bg-blue-50 text-blue-700 border-blue-200"
-    case "마감":
-      return "bg-[#f0f0ec] text-[#1a1a1a]/40 border-[#e8e8e4]"
-  }
-}
-
-function formatRange(startsAt: string, endsAt: string | null) {
-  const s = new Date(startsAt)
-  const sLabel = `${s.getMonth() + 1}/${s.getDate()}`
-  if (!endsAt) return sLabel
-  const e = new Date(endsAt)
-  const eLabel = `${e.getMonth() + 1}/${e.getDate()}`
-  return `${sLabel} ~ ${eLabel}`
-}
 
 // ─── attribution: 행사 ↔ 리드 ──────────────────────────────────────────────────
 //   1) source/notes 필드에 event:<id> 또는 event:<slug> 토큰이 있으면 우선 매칭
@@ -351,13 +311,6 @@ const META_DATE_OPTIONS: Array<{ value: MetaDatePreset; label: string }> = [
   { value: "last_90d", label: "90일" },
   { value: "this_month", label: "이번 달" },
 ]
-
-function formatMetaDate(value?: string) {
-  if (!value) return "—"
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return "—"
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")}`
-}
 
 function MetaStatusPill({ status }: { status?: string }) {
   const normalized = status ?? "UNKNOWN"
@@ -666,44 +619,6 @@ function MetaLiveSummary({
           </div>
         </div>
       ) : null}
-    </div>
-  )
-}
-
-function FunnelStage({
-  label,
-  value,
-  prevValue,
-  tone = "neutral",
-}: {
-  label: string
-  value: number
-  prevValue?: number | null
-  tone?: "neutral" | "primary"
-}) {
-  const rate =
-    prevValue != null && prevValue > 0 && value > 0 ? Math.round((value / prevValue) * 100) : null
-  const bar =
-    prevValue != null && prevValue > 0
-      ? Math.max(8, Math.min(100, Math.round((value / prevValue) * 100)))
-      : value > 0
-        ? 100
-        : 8
-  const accent = tone === "primary" ? "bg-[#084734]" : "bg-[#111110]"
-  return (
-    <div className="rounded-xl border border-[#e8e8e4] bg-white px-3 py-2.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[11px] font-medium text-[#1a1a1a]/50">{label}</p>
-        {rate != null && (
-          <span className="text-[10px] font-medium text-[#1a1a1a]/35">{rate}%</span>
-        )}
-      </div>
-      <p className="mt-1 text-[18px] font-bold leading-none tracking-[-0.02em] text-[#111110]">
-        {KRW.format(value)}
-      </p>
-      <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-[#f0f0ec]">
-        <div className={`h-full ${accent}`} style={{ width: `${bar}%` }} />
-      </div>
     </div>
   )
 }
