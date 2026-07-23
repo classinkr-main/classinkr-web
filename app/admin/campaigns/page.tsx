@@ -2363,7 +2363,7 @@ export default function AdminCampaignsPage() {
                     onClick={() => setEventSort(s)}
                     className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
                       eventSort === s
-                        ? "bg-white text-[#111110] shadow-sm"
+                        ? "bg-[#fafaf8] text-[#111110] shadow-sm"
                         : "text-[#1a1a1a]/45 hover:text-[#111110]"
                     }`}
                   >
