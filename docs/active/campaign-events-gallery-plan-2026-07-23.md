@@ -1,6 +1,8 @@
 # 캠페인 행사 갤러리 뷰 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+- 상태: **완료** — 12개 태스크 전부 구현·2단계 리뷰(스펙·품질) 통과, 격리된 기능 브랜치에 전부 커밋. 기준 브랜치로 병합 및 배포는 별도 승인 대기.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** `/admin/campaigns?tab=events`에 리스트 뷰를 유지한 채 컴팩트 갤러리 뷰(옵션 토글) + 검색/필터 + 클릭 시 상세 모달(홈페이지 링크 + 신규 "관련 자료" 링크)을 추가한다.
 
@@ -50,7 +52,7 @@
 - Modify: `app/api/admin/event-metrics/[id]/route.ts`
 - Test: `tests/api/admin-event-metrics-related-links.test.ts`
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `tests/api/admin-event-metrics-related-links.test.ts` 생성:
 
@@ -94,12 +96,12 @@ describe("sanitizeRelatedLinks", () => {
 })
 ```
 
-- [ ] **Step 2: 테스트 실행해 실패 확인**
+- [x] **Step 2: 테스트 실행해 실패 확인**
 
 Run: `npx vitest run tests/api/admin-event-metrics-related-links.test.ts`
 Expected: FAIL — `sanitizeRelatedLinks is not a function` (아직 export되지 않음)
 
-- [ ] **Step 3: `RelatedLink` 타입 추가**
+- [x] **Step 3: `RelatedLink` 타입 추가**
 
 `lib/types/event-metrics.ts`에서 `AdSpendEntry` 인터페이스 바로 아래에 추가:
 
@@ -123,7 +125,7 @@ export interface RelatedLink {
   relatedLinks: [],
 ```
 
-- [ ] **Step 4: route.ts에 sanitizer 추가 + PATCH에 반영**
+- [x] **Step 4: route.ts에 sanitizer 추가 + PATCH에 반영**
 
 `app/api/admin/event-metrics/[id]/route.ts` 상단 import에 `RelatedLink` 추가:
 
@@ -156,12 +158,12 @@ export function sanitizeRelatedLinks(value: unknown): RelatedLink[] {
       relatedLinks: sanitizeRelatedLinks(body.relatedLinks),
 ```
 
-- [ ] **Step 5: 테스트 통과 확인**
+- [x] **Step 5: 테스트 통과 확인**
 
 Run: `npx vitest run tests/api/admin-event-metrics-related-links.test.ts`
 Expected: PASS (5 tests)
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 ```bash
 git add lib/types/event-metrics.ts app/api/admin/event-metrics/[id]/route.ts tests/api/admin-event-metrics-related-links.test.ts
@@ -177,7 +179,7 @@ git commit -m "feat(campaigns): EventMetrics에 relatedLinks 필드 + 서버 검
 
 이 파일은 `data/event-metrics.json`을 직접 읽고 쓰는 fs 기반 저장소이고 `DATA_DIR`이 `process.cwd()`에 고정돼 있어(주입 불가) 이 저장소는 지금도 전용 테스트가 없다(`adSpendEntries` 보정 로직도 테스트 없음 — 동일 패턴 유지, fs를 목킹하는 새 테스트 하네스를 이번 범위에서 새로 만들지 않는다). 검증은 Step 2의 수동 확인 + Task 12의 전체 브라우저 회귀로 대체한다.
 
-- [ ] **Step 1: `getEventMetrics`에 보정 추가**
+- [x] **Step 1: `getEventMetrics`에 보정 추가**
 
 `lib/repositories/event-metrics.ts`의 `getEventMetrics` 함수 안, `adSpendEntries: Array.isArray(existing.adSpendEntries) ? existing.adSpendEntries : [],` 줄 바로 아래에 추가:
 
@@ -185,7 +187,7 @@ git commit -m "feat(campaigns): EventMetrics에 relatedLinks 필드 + 서버 검
       relatedLinks: Array.isArray(existing.relatedLinks) ? existing.relatedLinks : [],
 ```
 
-- [ ] **Step 2: `getAllEventMetrics`에 보정 추가**
+- [x] **Step 2: `getAllEventMetrics`에 보정 추가**
 
 같은 파일 `getAllEventMetrics` 함수 안, 동일한 `adSpendEntries: Array.isArray(metrics.adSpendEntries) ? metrics.adSpendEntries : [],` 줄 바로 아래에 추가:
 
@@ -193,7 +195,7 @@ git commit -m "feat(campaigns): EventMetrics에 relatedLinks 필드 + 서버 검
       relatedLinks: Array.isArray(metrics.relatedLinks) ? metrics.relatedLinks : [],
 ```
 
-- [ ] **Step 3: `saveEventMetrics`에 병합 로직 추가**
+- [x] **Step 3: `saveEventMetrics`에 병합 로직 추가**
 
 같은 파일 `saveEventMetrics` 함수 안, `adSpendEntries: patch.adSpendEntries ?? current.adSpendEntries ?? [],` 줄 바로 아래에 추가:
 
@@ -201,11 +203,11 @@ git commit -m "feat(campaigns): EventMetrics에 relatedLinks 필드 + 서버 검
     relatedLinks: patch.relatedLinks ?? current.relatedLinks ?? [],
 ```
 
-- [ ] **Step 4: 수동 확인**
+- [x] **Step 4: 수동 확인**
 
 Run: `npx tsc --noEmit` (또는 `npm run build`의 타입체크 단계) — 컴파일 에러 없어야 함. `data/event-metrics.json`에 기존 항목이 있다면 `relatedLinks` 없이도 API가 500 없이 응답하는지는 Task 12에서 브라우저로 재확인.
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add lib/repositories/event-metrics.ts
@@ -225,7 +227,7 @@ git commit -m "feat(campaigns): event-metrics 저장소에 relatedLinks 보정 �
 
 `page.tsx`(현재 2585줄)에서 순수 함수 몇 개와 `FunnelStage` 컴포넌트를 그대로 옮기고, `page.tsx`는 옮긴 것을 import해서 쓰도록 바꾼다. 동작은 바뀌지 않는 순수 리팩터.
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `tests/campaigns/event-format.test.ts` 생성:
 
@@ -295,12 +297,12 @@ describe("FunnelStage", () => {
 })
 ```
 
-- [ ] **Step 2: 테스트 실행해 실패 확인**
+- [x] **Step 2: 테스트 실행해 실패 확인**
 
 Run: `npx vitest run tests/campaigns/event-format.test.ts tests/campaigns/funnel-stage.test.tsx`
 Expected: FAIL — 모듈을 찾을 수 없음(`Cannot find module '@/components/admin/campaigns/event-format'`)
 
-- [ ] **Step 3: `event-format.ts` 작성**
+- [x] **Step 3: `event-format.ts` 작성**
 
 `components/admin/campaigns/event-format.ts` 생성 — `app/admin/campaigns/page.tsx`의 기존 구현을 그대로 옮긴다(동작 변경 없음):
 
@@ -367,7 +369,7 @@ export function formatMetaDate(value?: string) {
 }
 ```
 
-- [ ] **Step 4: `FunnelStage.tsx` 작성**
+- [x] **Step 4: `FunnelStage.tsx` 작성**
 
 `components/admin/campaigns/FunnelStage.tsx` 생성 — `page.tsx`의 기존 `FunnelStage` 함수를 그대로 옮긴다:
 
@@ -413,12 +415,12 @@ export function FunnelStage({
 }
 ```
 
-- [ ] **Step 5: 테스트 통과 확인**
+- [x] **Step 5: 테스트 통과 확인**
 
 Run: `npx vitest run tests/campaigns/event-format.test.ts tests/campaigns/funnel-stage.test.tsx`
 Expected: PASS (9 tests)
 
-- [ ] **Step 6: `page.tsx`에서 로컬 정의 제거하고 import로 교체**
+- [x] **Step 6: `page.tsx`에서 로컬 정의 제거하고 import로 교체**
 
 `app/admin/campaigns/page.tsx`에서 다음 로컬 정의를 **삭제**한다(원래 105~156줄 부근, `KRW`/`KRW_CURRENCY`/`won`/`pct`/`compact`/`previewText`/`money`/`statusTone`/`formatRange`/`formatMetaDate` — `formatMetaDate`는 355~360줄 부근에 따로 있음)와 `FunnelStage` 함수 정의(673~709줄 부근) 전체를 삭제한다.
 
@@ -439,12 +441,12 @@ import {
 } from "@/components/admin/campaigns/event-format"
 ```
 
-- [ ] **Step 7: 빌드 확인**
+- [x] **Step 7: 빌드 확인**
 
 Run: `npm run build`
 Expected: 에러 없이 성공. (미사용 import·정의 중복 등 ESLint 경고가 뜨면 그 자리에서 정리)
 
-- [ ] **Step 8: 커밋**
+- [x] **Step 8: 커밋**
 
 ```bash
 git add components/admin/campaigns/event-format.ts components/admin/campaigns/FunnelStage.tsx app/admin/campaigns/page.tsx tests/campaigns/event-format.test.ts tests/campaigns/funnel-stage.test.tsx
@@ -461,7 +463,7 @@ git commit -m "refactor(campaigns): 포맷 헬퍼·FunnelStage를 components/adm
 
 **Files 참고 (원본):** `app/admin/campaigns/page.tsx`의 `EventFunnelCard` 헤더 블록(917~948줄 부근, `{/* header */}` 주석)
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `tests/campaigns/event-card-header.test.tsx` 생성:
 
@@ -523,12 +525,12 @@ describe("EventCardHeader", () => {
 })
 ```
 
-- [ ] **Step 2: 테스트 실행해 실패 확인**
+- [x] **Step 2: 테스트 실행해 실패 확인**
 
 Run: `npx vitest run tests/campaigns/event-card-header.test.tsx`
 Expected: FAIL — 모듈을 찾을 수 없음
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `components/admin/campaigns/EventCardHeader.tsx` 생성:
 
@@ -576,12 +578,12 @@ export function EventCardHeader({
 }
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `npx vitest run tests/campaigns/event-card-header.test.tsx`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add components/admin/campaigns/EventCardHeader.tsx tests/campaigns/event-card-header.test.tsx
@@ -598,7 +600,7 @@ git commit -m "feat(campaigns): EventCardHeader 컴포넌트 추가"
 
 **Files 참고 (원본):** `app/admin/campaigns/page.tsx`의 `EventFunnelCard`·`buildFunnel` (880~1111줄 부근), `lib/types/event-metrics.ts`의 `computeEconomics`
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `tests/campaigns/event-detail-content.test.tsx` 생성:
 
@@ -689,12 +691,12 @@ describe("EventDetailContent", () => {
 })
 ```
 
-- [ ] **Step 2: 테스트 실행해 실패 확인**
+- [x] **Step 2: 테스트 실행해 실패 확인**
 
 Run: `npx vitest run tests/campaigns/event-detail-content.test.tsx`
 Expected: FAIL — 모듈을 찾을 수 없음
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `components/admin/campaigns/EventDetailContent.tsx` 생성 — `page.tsx`의 `buildFunnel` 함수와 `EventFunnelCard` 본문(950~1108줄)을 그대로 옮기고, 끝에 관련 자료 블록을 추가한다:
 
@@ -940,12 +942,12 @@ export function EventDetailContent({
 }
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `npx vitest run tests/campaigns/event-detail-content.test.tsx`
 Expected: PASS (4 tests)
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add components/admin/campaigns/EventDetailContent.tsx tests/campaigns/event-detail-content.test.tsx
@@ -959,7 +961,7 @@ git commit -m "feat(campaigns): EventDetailContent 컴포넌트 추가 (관련 �
 **Files:**
 - Modify: `app/admin/campaigns/page.tsx`
 
-- [ ] **Step 1: `EventFunnelCard` 본문 교체**
+- [x] **Step 1: `EventFunnelCard` 본문 교체**
 
 `app/admin/campaigns/page.tsx`의 `EventFunnelCard` 함수(880~1111줄 부근, `// ─── event card ───` 주석 아래) 전체를 아래로 교체한다. 기존 `buildFunnel` 함수는 Task 5에서 `EventDetailContent.tsx`로 옮겨 `export`했으므로 `page.tsx`에서 **삭제**한다(207~223줄 부근, `assignEventLeads` 아래 `buildFunnel` 정의).
 
@@ -1016,18 +1018,18 @@ import { buildFunnel } from "@/components/admin/campaigns/EventDetailContent"
 
 (`buildFunnel`은 Task 5에서 이미 `export`된 상태이므로 이 import만 추가하면 된다.)
 
-- [ ] **Step 2: 빌드 확인**
+- [x] **Step 2: 빌드 확인**
 
 Run: `npm run build`
 Expected: 에러 없이 성공.
 
-- [ ] **Step 3: 브라우저로 리스트 뷰 회귀 확인**
+- [x] **Step 3: 브라우저로 리스트 뷰 회귀 확인**
 
 `npm run dev` 실행 후 `/admin/campaigns?tab=events` 접속:
 - 카드 3개(Classin Meets Incheon/Gwang-ju/Busan)가 리팩터 전과 시각적으로 동일하게 보이는지 확인(배지·제목·기간·성과 입력 버튼·경제지표 4칸·퍼널 6단계 모두).
 - "성과 입력" 클릭 → 드로어가 그대로 열리는지 확인.
 
-- [ ] **Step 4: 커밋**
+- [x] **Step 4: 커밋**
 
 ```bash
 git add app/admin/campaigns/page.tsx components/admin/campaigns/EventDetailContent.tsx
@@ -1043,7 +1045,7 @@ git commit -m "refactor(campaigns): EventFunnelCard가 EventCardHeader+EventDeta
 
 **참고 (원본 패턴):** 같은 파일의 "광고비 (채널별)" 섹션(1269~1335줄 부근) — add/remove 리스트 UI를 그대로 복제한다.
 
-- [ ] **Step 1: `MetricsEditor` state에 `relatedLinks` 추가**
+- [x] **Step 1: `MetricsEditor` state에 `relatedLinks` 추가**
 
 `MetricsEditor` 함수 안, `const [adSpend, setAdSpend] = useState<AdSpendEntry[]>(metrics.adSpendEntries ?? [])` 줄 바로 아래에 추가:
 
@@ -1061,7 +1063,7 @@ git commit -m "refactor(campaigns): EventFunnelCard가 EventCardHeader+EventDeta
   type RelatedLink,
 ```
 
-- [ ] **Step 2: 저장 payload에 반영**
+- [x] **Step 2: 저장 payload에 반영**
 
 `handleSave` 함수 안 `adminFetchJson<EventMetrics>` 호출의 body 객체, `adSpendEntries: adSpend,` 줄 바로 아래에 추가:
 
@@ -1069,7 +1071,7 @@ git commit -m "refactor(campaigns): EventFunnelCard가 EventCardHeader+EventDeta
             relatedLinks,
 ```
 
-- [ ] **Step 3: add/remove 핸들러 추가**
+- [x] **Step 3: add/remove 핸들러 추가**
 
 `addAdEntry`/`updateAdEntry`/`removeAdEntry` 함수 바로 아래에 추가:
 
@@ -1085,7 +1087,7 @@ git commit -m "refactor(campaigns): EventFunnelCard가 EventCardHeader+EventDeta
   }
 ```
 
-- [ ] **Step 4: 섹션 JSX 추가**
+- [x] **Step 4: 섹션 JSX 추가**
 
 "광고비 (채널별)" `<section>` 바로 아래, "메모 / 회고" `<section>` 바로 위에 삽입:
 
@@ -1145,16 +1147,16 @@ git commit -m "refactor(campaigns): EventFunnelCard가 EventCardHeader+EventDeta
           </section>
 ```
 
-- [ ] **Step 5: 빌드 확인**
+- [x] **Step 5: 빌드 확인**
 
 Run: `npm run build`
 Expected: 에러 없이 성공.
 
-- [ ] **Step 6: 브라우저로 수동 확인**
+- [x] **Step 6: 브라우저로 수동 확인**
 
 `/admin/campaigns?tab=events`에서 아무 카드나 "성과 입력" 클릭 → "관련 자료" 섹션에서 "링크 추가" → 라벨/URL 입력 → 저장 → 드로어를 다시 열어 값이 유지되는지 확인. `http://` 없이 저장 시도하면(서버 sanitizer가 걸러내므로) 해당 항목만 조용히 사라지는지도 확인.
 
-- [ ] **Step 7: 커밋**
+- [x] **Step 7: 커밋**
 
 ```bash
 git add app/admin/campaigns/page.tsx
@@ -1169,7 +1171,7 @@ git commit -m "feat(campaigns): 성과 입력 드로어에 관련 자료 링크 
 - Create: `components/admin/campaigns/filter-events.ts`
 - Test: `tests/campaigns/filter-events.test.ts`
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `tests/campaigns/filter-events.test.ts` 생성:
 
@@ -1237,12 +1239,12 @@ describe("filterEvents", () => {
 })
 ```
 
-- [ ] **Step 2: 테스트 실행해 실패 확인**
+- [x] **Step 2: 테스트 실행해 실패 확인**
 
 Run: `npx vitest run tests/campaigns/filter-events.test.ts`
 Expected: FAIL — 모듈을 찾을 수 없음
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `components/admin/campaigns/filter-events.ts` 생성:
 
@@ -1266,12 +1268,12 @@ export function filterEvents(events: PublicEvent[], opts: EventFilterOptions): P
 }
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `npx vitest run tests/campaigns/filter-events.test.ts`
 Expected: PASS (5 tests)
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add components/admin/campaigns/filter-events.ts tests/campaigns/filter-events.test.ts
@@ -1288,7 +1290,7 @@ git commit -m "feat(campaigns): 검색/상태/카테고리 필터 순수 함수 
 
 이미지 도메인은 `next.config.ts`의 `remotePatterns`에 `**.supabase.co/storage/v1/object/**`가 이미 허용돼 있으므로(참고: `app/events/EventsClient.tsx`의 `event.imageUrl` 사용부) `next/image`를 그대로 쓴다.
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `tests/campaigns/event-gallery-card.test.tsx` 생성:
 
@@ -1345,12 +1347,12 @@ describe("EventGalleryCard", () => {
 })
 ```
 
-- [ ] **Step 2: 테스트 실행해 실패 확인**
+- [x] **Step 2: 테스트 실행해 실패 확인**
 
 Run: `npx vitest run tests/campaigns/event-gallery-card.test.tsx`
 Expected: FAIL — 모듈을 찾을 수 없음
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `components/admin/campaigns/EventGalleryCard.tsx` 생성:
 
@@ -1404,12 +1406,12 @@ export function EventGalleryCard({
 }
 ```
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `npx vitest run tests/campaigns/event-gallery-card.test.tsx`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add components/admin/campaigns/EventGalleryCard.tsx tests/campaigns/event-gallery-card.test.tsx
@@ -1426,7 +1428,7 @@ git commit -m "feat(campaigns): EventGalleryCard(미니멀 커버) 컴포넌트 
 
 **참고 (원본 셸 패턴):** 같은 파일의 `MetricsEditor` 바깥 컨테이너(1192~1205줄 부근 — `fixed inset-0 z-50 ...` 오버레이 + `rounded-t-2xl ... sm:rounded-2xl` 패널)
 
-- [ ] **Step 1: 실패하는 테스트 작성**
+- [x] **Step 1: 실패하는 테스트 작성**
 
 `tests/campaigns/event-detail-modal.test.tsx` 생성:
 
@@ -1497,12 +1499,12 @@ describe("EventDetailModal", () => {
 })
 ```
 
-- [ ] **Step 2: 테스트 실행해 실패 확인**
+- [x] **Step 2: 테스트 실행해 실패 확인**
 
 Run: `npx vitest run tests/campaigns/event-detail-modal.test.tsx`
 Expected: FAIL — 모듈을 찾을 수 없음
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `components/admin/campaigns/EventDetailModal.tsx` 생성:
 
@@ -1584,12 +1586,12 @@ export function EventDetailModal({
 
 `EventCardHeader`가 헤더 자체에 `mb-3`을 갖고 있어 모달 헤더 컨테이너 안에서 여백이 이중으로 보이면, `EventCardHeader`에 `className`으로 마진을 덮어쓸 필요 없이 이 모달의 헤더 wrapper(`div.min-w-0.flex-1`)에는 추가 마진을 주지 않았으므로 그대로 둔다(리스트 카드와 다른 상하 패딩 컨텍스트이므로 시각적으로 자연스러운지 Step 5에서 눈으로 확인).
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 Run: `npx vitest run tests/campaigns/event-detail-modal.test.tsx`
 Expected: PASS (2 tests)
 
-- [ ] **Step 5: 커밋**
+- [x] **Step 5: 커밋**
 
 ```bash
 git add components/admin/campaigns/EventDetailModal.tsx tests/campaigns/event-detail-modal.test.tsx
@@ -1605,7 +1607,7 @@ git commit -m "feat(campaigns): EventDetailModal(중앙 오버레이 상세) 컴
 
 지금까지 만든 컴포넌트를 `events` 탭 렌더 블록(2485~2564줄 부근)에 실제로 연결한다. 이 태스크는 상태가 있는 배선이라 자동 렌더 테스트가 없다 — Step 마지막에 브라우저로 전체 시나리오를 확인한다.
 
-- [ ] **Step 1: import 추가**
+- [x] **Step 1: import 추가**
 
 파일 상단 import 블록에 추가:
 
@@ -1618,7 +1620,7 @@ import { filterEvents } from "@/components/admin/campaigns/filter-events"
 
 (기존 `lucide-react` import 블록에 `Search, LayoutGrid, List as ListIcon, Link2`를 합쳐도 된다 — 별개 import문으로 추가해도 번들링에는 차이 없음.)
 
-- [ ] **Step 2: 상태 추가**
+- [x] **Step 2: 상태 추가**
 
 `AdminCampaignsPage` 함수 안, `const [editing, setEditing] = useState<PublicEvent | null>(null)` 줄 바로 아래에 추가:
 
@@ -1639,7 +1641,7 @@ import { EVENT_CATEGORIES, type EventCategory } from "@/lib/types/public-events"
 
 (`EventStatus`는 이미 import돼 있음 — 53줄 부근 `import type { PublicEvent, EventStatus } from "@/lib/types/public-events"`.)
 
-- [ ] **Step 3: `visibleEvents` 파생값 추가**
+- [x] **Step 3: `visibleEvents` 파생값 추가**
 
 `sortedEvents` useMemo(1660~1689줄) 바로 아래에 추가:
 
@@ -1657,7 +1659,7 @@ import { EVENT_CATEGORIES, type EventCategory } from "@/lib/types/public-events"
 
 `viewingEvent`가 갱신된 데이터(예: 성과 입력 저장 직후)를 반영하도록, `editing` 저장 콜백 근처에 있는 `onSaved={(saved) => setMetricsMap((m) => ({ ...m, [saved.eventId]: saved }))}`는 그대로 두되(이미 `metricsMap`을 갱신하므로 `EventDetailModal`이 다시 열릴 때 최신 값을 받는다), 새로 추가할 `onEdit`에서 `setViewingEvent(null)`도 같이 호출해 모달이 편집 드로어와 겹치지 않게 한다(Step 5 참고).
 
-- [ ] **Step 4: 툴바 교체 — 뷰 토글 + 검색/필터**
+- [x] **Step 4: 툴바 교체 — 뷰 토글 + 검색/필터**
 
 `events` 탭 렌더 블록(2485줄 `{activeTab === "events" && (` 부근)의 툴바 `<div className="mb-3 flex flex-wrap items-center gap-2">...</div>`(2487~2526줄)를 아래로 교체한다. 기존 정렬 pill·기간 토글·CSV 버튼은 그대로 유지하되 2번째 행으로 옮긴다:
 
@@ -1776,7 +1778,7 @@ import { EVENT_CATEGORIES, type EventCategory } from "@/lib/types/public-events"
           </div>
 ```
 
-- [ ] **Step 5: 리스트/갤러리 렌더 분기 + 상세 모달**
+- [x] **Step 5: 리스트/갤러리 렌더 분기 + 상세 모달**
 
 같은 블록의 `{loading ? (...) : sortedEvents.length === 0 ? (...) : (<div className="space-y-3">{sortedEvents.map(...)}</div>)}` (2530~2562줄)을 아래로 교체:
 
@@ -1864,12 +1866,12 @@ import { EVENT_CATEGORIES, type EventCategory } from "@/lib/types/public-events"
       )}
 ```
 
-- [ ] **Step 6: 빌드 확인**
+- [x] **Step 6: 빌드 확인**
 
 Run: `npm run build`
 Expected: 에러 없이 성공.
 
-- [ ] **Step 7: 브라우저로 전체 시나리오 확인**
+- [x] **Step 7: 브라우저로 전체 시나리오 확인**
 
 `npm run dev` → `/admin/campaigns?tab=events`:
 1. 기본 진입 시 리스트 뷰(변경 없음) 확인.
@@ -1879,7 +1881,7 @@ Expected: 에러 없이 성공.
 5. 모달의 "성과 입력" 클릭 → 모달이 닫히고 편집 드로어가 열리는지, 드로어에서 저장 후 다시 카드를 열었을 때 값이 반영되는지 확인.
 6. "리스트"로 돌아가서 카드가 리팩터 전과 동일하게 보이는지 재확인(Task 6에서 이미 확인했지만 필터 배선 후 재확인).
 
-- [ ] **Step 8: 커밋**
+- [x] **Step 8: 커밋**
 
 ```bash
 git add app/admin/campaigns/page.tsx
@@ -1892,26 +1894,26 @@ git commit -m "feat(campaigns): 행사 탭에 갤러리 뷰 + 검색/필터 + �
 
 **Files:** 없음(검증 전용)
 
-- [ ] **Step 1: 전체 테스트**
+- [x] **Step 1: 전체 테스트**
 
 Run: `npm run test`
 Expected: 전체 PASS (기존 스위트 + 이번에 추가한 8개 파일 포함, 회귀 없음)
 
-- [ ] **Step 2: 린트**
+- [x] **Step 2: 린트**
 
 Run: `npx eslint app components lib --max-warnings=0`
 Expected: 경고/에러 0
 
-- [ ] **Step 3: 빌드**
+- [x] **Step 3: 빌드**
 
 Run: `npm run build`
 Expected: 성공
 
-- [ ] **Step 4: 브라우저 최종 확인**
+- [x] **Step 4: 브라우저 최종 확인**
 
 `/admin/campaigns?tab=events`에서 Task 11 Step 7의 시나리오를 모바일 뷰포트(375px)로도 한 번 더 확인 — 갤러리 그리드가 1열로 접히는지, 툴바가 줄바꿈되는지, 상세 모달이 바텀시트로 뜨는지.
 
-- [ ] **Step 5: 커밋 (필요 시)**
+- [x] **Step 5: 커밋 (필요 시)**
 
 이 태스크에서 코드 변경이 없다면 커밋할 것도 없다. 회귀 수정이 있었다면:
 
