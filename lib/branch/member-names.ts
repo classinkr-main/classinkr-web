@@ -11,13 +11,14 @@ export function normalizeBranchMemberName(value: string | null | undefined): str
 }
 
 // 매니저 영문 정규명 → 한글 이름 별칭(전체명 + 이름만). 한글/영문 교차 검색용.
-// 출처: data/team-calendars.json — 박한=Han · 문준혁=Junhyuk · 진소망=Somang · 이왕찬=Wangchan · 김민재=Minjae.
+// 출처: data/team-calendars.json — 박한=Han · 문준혁=Junhyuk · 진소망=Somang · 이왕찬=Wangchan · 김민재=Minjae · 황찬우=Chanwoo.
 const MEMBER_KOREAN_ALIASES: Record<string, string[]> = {
   Han: ["박한", "한"],
   Junhyuk: ["문준혁", "준혁"],
   Somang: ["진소망", "소망"],
   Wangchan: ["이왕찬", "왕찬"],
   Minjae: ["김민재", "민재"],
+  Chanwoo: ["황찬우", "찬우"],
 }
 
 /**
