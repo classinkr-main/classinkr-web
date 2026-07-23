@@ -11,7 +11,6 @@ import {
   type CampaignRollupSources,
 } from "@/lib/marketing/campaign-rollup"
 import type { CampaignLink } from "@/lib/types/marketing-campaign"
-import { getAllCampaigns } from "@/lib/repositories/marketing"
 import { getAllEventMetrics } from "@/lib/repositories/event-metrics"
 import { getMetaCampaignDashboard } from "@/lib/meta/marketing"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -37,22 +36,23 @@ async function gatherRollupSources(links: CampaignLink[]): Promise<CampaignRollu
     metaCampaigns: {},
   }
 
-  const emailIds = new Set(links.filter((l) => l.refType === "email_campaign").map((l) => l.refId))
+  const emailIds = links.filter((l) => l.refType === "email_campaign").map((l) => l.refId)
   const smsIds = links.filter((l) => l.refType === "sms_campaign").map((l) => l.refId)
   const eventIds = new Set(links.filter((l) => l.refType === "event").map((l) => l.refId))
   const hasMeta = links.some((l) => l.refType === "meta_campaign")
 
-  // ── 이메일: 최근 캠페인 목록에서 링크된 id 만 매핑(ref_id 는 문자열 id) ──
-  if (emailIds.size > 0) {
+  // ── 이메일: 링크된 id 로 직접 조회(지평 없음 — SMS 와 동일 패턴).
+  //    getAllCampaigns()(최근 N건)을 필터하면 N 밖의 오래된 링크가 사일런트 언더카운트되므로 쓰지 않는다.
+  if (emailIds.length > 0) {
     try {
-      const all = await getAllCampaigns()
-      for (const c of all) {
-        const key = String(c.id)
-        if (emailIds.has(key)) {
-          sources.emailCampaigns[key] = {
-            recipientCount: c.recipientCount ?? 0,
-            openCount: c.openCount ?? 0,
-          }
+      const { data } = await createSupabaseAdminClient()
+        .from("email_campaigns")
+        .select("id, recipient_count, open_count")
+        .in("id", emailIds)
+      for (const row of data ?? []) {
+        sources.emailCampaigns[String(row.id)] = {
+          recipientCount: row.recipient_count ?? 0,
+          openCount: row.open_count ?? 0,
         }
       }
     } catch {
@@ -84,7 +84,7 @@ async function gatherRollupSources(links: CampaignLink[]): Promise<CampaignRollu
           sources.eventMetrics[eventId] = {
             dealsCount: m.dealsCount,
             dealsRevenue: m.dealsRevenue,
-            leads: 0, // v1: 행사 리드 attribution 미집계(정직 0)
+            leads: 0, // v1 미집계(NOT "0 leads") — D1-6 UI 는 "미집계"로 라벨링할 것
           }
         }
       }
@@ -94,6 +94,8 @@ async function gatherRollupSources(links: CampaignLink[]): Promise<CampaignRollu
   }
 
   // ── Meta: 링크가 있을 때만 라이브 1콜. 실패 시 빈 맵 → 롤업 meta 0/null 강등 ──
+  // 주의: 라이브 대시보드 상위 N개만 조회 — 그 밖의(상위 N 밖) Meta 캠페인 링크는 집계 0
+  //       (id별 Graph 조회는 top-N 대시보드와 다른 호출이라 향후 개선 지점).
   if (hasMeta) {
     try {
       const dash = await getMetaCampaignDashboard()
