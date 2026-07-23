@@ -151,6 +151,7 @@ import { buildMatrixPendingByCell } from "./ledger/RevMatrix"
 // 경로에서 import하는 기존 표면 유지용 재수출.
 export {
   buildMatrixPendingByCell,
+  computeWeekCellStates,
   findOpenNewRowDuplicate,
   isDraftFormTargetLocked,
   isMatrixCellEditable,

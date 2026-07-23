@@ -1103,6 +1103,27 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   )
 })
 
+// 주차 5칸(W1~W5)의 표시 금액·월합계만 여부·잠금 상태를 순수 계산한다 — 렌더 없이 테스트 가능하게 분리.
+// 버그(2026-07-20) 회귀 방지의 핵심 규칙: 월이 확정으로 잠겨도(monthLocked) 실제 확정액이 찍힌 칸
+// (display>0)만 잠그고, 빈 칸은 같은 달이어도 편집 가능하게 둔다 — 아직 안 지난 주차(예: 당월 W5)
+// 입력을 월 단위 잠금이 통째로 막던 문제를 잡는다. 이전 구현은 월 단위 잠금(monthLockedOf)과
+// isMatrixCellEditable(=!monthLocked)을 AND로 겹쳐 5칸을 통째로 잠갔다. display 산식은 월합계만 행
+// (W5에 monthOnlyAmount 얹기)까지 포함해 실제 렌더와 1:1로 맞춘다.
+export function computeWeekCellStates(
+  weeks: number[],
+  monthOnlyAmount: number,
+  monthLocked: boolean,
+): Array<{ display: number; isMonthOnly: boolean; locked: boolean }> {
+  const anyExplicit = weeks.some((w) => w > 0)
+  return Array.from({ length: 5 }, (_unused, index) => {
+    const value = weeks[index] ?? 0
+    // 월합계만 있는 행은 마지막(W5) 칸에 금액을 얹어 시트 검수 감각을 유지한다.
+    const display = value > 0 ? value : index === 4 && monthOnlyAmount > 0 && !anyExplicit ? monthOnlyAmount : 0
+    const isMonthOnly = display > 0 && value === 0
+    return { display, isMonthOnly, locked: monthLocked && display > 0 }
+  })
+}
+
 // 확장된 월의 w1~w5 5칸. editContext가 오면(딜행·비잠금월) 각 칸이 편집 셀이 된다.
 // month-only 행은 W5에 월합계를 얹어 시트 검수 감각을 유지(기존 읽기전용 규약 계승).
 function RevMatrixWeekCells({
@@ -1122,25 +1143,13 @@ function RevMatrixWeekCells({
   editContext?: RevMatrixEditContext | null
   periodHighlighted?: boolean
 }) {
-  const anyExplicit = weeks.some((w) => w > 0)
+  // 월 단위 잠금은 주차 인덱스와 무관(monthLockedOf) — 한 번만 조회해 순수 함수에 넘긴다.
+  // 칸별 잠금(빈 칸은 열림)·표시 금액은 computeWeekCellStates가 결정한다(회귀 테스트가 검증하는 그 함수).
+  const monthLocked = editContext ? editContext.monthLockedOf(month ?? "") : true
+  const cellStates = computeWeekCellStates(weeks, monthOnlyAmount, monthLocked)
   const cells: React.ReactNode[] = []
   for (let index = 0; index < 5; index += 1) {
-    const value = weeks[index] ?? 0
-    // 월합계만 있는 행은 마지막(W5) 칸에 금액을 얹어 시트 검수 감각을 유지한다.
-    const display = value > 0 ? value : index === 4 && monthOnlyAmount > 0 && !anyExplicit ? monthOnlyAmount : 0
-    const isMonthOnly = display > 0 && value === 0
-    // 편집 가능 여부: 딜행 + 월 편집 허용(editContext.editableOf) + 그 칸이 시트 확정 잠금이 아닐 때.
-    // month-only 파생 표시(W5의 monthOnlyAmount)는 실제 주차 입력이 아니므로 편집 시작값은 value(0)로 둔다.
-    // 버그 수정(2026-07-20): weekLockedOf는 week 인자를 받고도 안 써서 "그 달이 확정됐는가" 하나로
-    // 5칸을 통째로 잠갔다 — 달의 한 주차만 확정돼도 나머지(미입력·아직 안 지난 주차 포함)까지 클릭이
-    // 씹혔는데, display=0이라 🔒도 안 뜨고 툴팁도 그냥 "미입력"이라 원인이 안 보였다. display>0(이
-    // 칸에 실제 확정액이 찍힌 경우)으로 좁혀 그 칸만 잠그고, 빈 칸은 같은 달이어도 새로 입력 가능하게 한다.
-    // editableOf(month)는 isMatrixCellEditable = !isMatrixCellLocked(row, month)의 그대로라
-    // weekLockedOf(수정 전 monthLocked)와 완전히 같은 값의 반전이었다 — 그래서 weekLocked만 좁히고
-    // 이 조건을 그대로 두면 "&& editableOf(month)"가 옛 월 단위 잠금을 도로 걸어 버그가 안 고쳐졌다.
-    // weekLocked 하나로 충분하므로 중복 조건을 제거한다.
-    const monthLocked = editContext ? editContext.weekLockedOf(month ?? "", index) : true
-    const weekLocked = monthLocked && display > 0
+    const { display, isMonthOnly, locked: weekLocked } = cellStates[index]
     const weekEditable = Boolean(editContext) && !weekLocked
     // 선택/편집은 이 칸 기준으로 계산해 원시값으로 내린다 — 비선택·비편집 칸은 memo 스킵.
     const weekSelected = Boolean(editContext) && editContext!.isSelectedCell(month ?? "", index)
@@ -1189,8 +1198,10 @@ interface RevMatrixEditContext {
   editableOf: (month: string) => boolean
   lockedOf: (month: string) => boolean
   pendingOf: (month: string) => MatrixPendingDraft | null
-  // 주차(확장월) 칸용. 잠금은 월 잠금 규칙을 그대로 승계(시트 확정 월이면 주차 칸도 잠금).
-  weekLockedOf: (month: string, week: number) => boolean
+  // 주차(확장월) 칸의 월 단위 잠금 판정. 시트 확정/장부반영 등으로 그 "달"이 잠겼는지만 본다 —
+  // 개별 주차 칸의 잠금(확정액이 찍힌 칸만 잠그고 빈 칸은 열기)은 computeWeekCellStates가 결정하므로
+  // week 인자를 받지 않는다(이전 weekLockedOf(month, week)는 week를 무시해 5칸을 통째로 잠그는 함정이었다).
+  monthLockedOf: (month: string) => boolean
   weekPendingOf: (month: string, week: number) => MatrixPendingDraft | null
   // 주차 셀 편집 팝오버 고지문 — explicit 행(주차 병합 보존) vs 그 외(월 전체 대체) 구분.
   weekEditNotice: (month: string) => string
@@ -1783,8 +1794,9 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
         editableOf: (month) => isMatrixCellEditable(row, month, view.correctedMonths),
         lockedOf: (month) => isMatrixCellLocked(row, month, view.correctedMonths),
         pendingOf: (month) => pendingByCell?.get(`${row.id}::${month}`) ?? null,
-        // 주차 잠금 = 그 달 시트 확정 여부(월 잠금 규칙 승계). 주차 pending = `rowId::month::wN` 키.
-        weekLockedOf: (month) => isMatrixCellLocked(row, month, view.correctedMonths),
+        // 월 단위 잠금 = 그 달 시트 확정 여부. 칸별 잠금은 computeWeekCellStates가 display>0로 좁힌다.
+        // 주차 pending = `rowId::month::wN` 키.
+        monthLockedOf: (month) => isMatrixCellLocked(row, month, view.correctedMonths),
         weekPendingOf: (month, week) => pendingByCell?.get(`${row.id}::${month}::w${week + 1}`) ?? null,
         weekEditNotice: (month) =>
           rowWeeklySplit(row, month).source === "explicit"
