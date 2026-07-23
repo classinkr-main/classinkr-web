@@ -70,6 +70,7 @@ import {
   type AdChannel,
   type AdSpendEntry,
   type EventMetrics,
+  type RelatedLink,
 } from "@/lib/types/event-metrics"
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -837,6 +838,7 @@ function MetricsEditor({
     shareMemo: metrics.shareMemo ?? "",
   })
   const [adSpend, setAdSpend] = useState<AdSpendEntry[]>(metrics.adSpendEntries ?? [])
+  const [relatedLinks, setRelatedLinks] = useState<RelatedLink[]>(metrics.relatedLinks ?? [])
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
@@ -864,6 +866,7 @@ function MetricsEditor({
             retrospective: form.retrospective.trim() || null,
             shareMemo: form.shareMemo.trim() || null,
             adSpendEntries: adSpend,
+            relatedLinks,
           }),
         }
       )
@@ -884,6 +887,16 @@ function MetricsEditor({
   }
   function removeAdEntry(idx: number) {
     setAdSpend((arr) => arr.filter((_, i) => i !== idx))
+  }
+
+  function addRelatedLink() {
+    setRelatedLinks((arr) => [...arr, { label: "", url: "" }])
+  }
+  function updateRelatedLink(idx: number, patch: Partial<RelatedLink>) {
+    setRelatedLinks((arr) => arr.map((e, i) => (i === idx ? { ...e, ...patch } : e)))
+  }
+  function removeRelatedLink(idx: number) {
+    setRelatedLinks((arr) => arr.filter((_, i) => i !== idx))
   }
 
   return (
@@ -1022,6 +1035,60 @@ function MetricsEditor({
                     <button
                       onClick={() => removeAdEntry(idx)}
                       aria-label="채널 삭제"
+                      className="rounded-md p-1.5 text-[#1a1a1a]/40 hover:bg-red-50 hover:text-red-600"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* 관련 자료 */}
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-[12px] font-semibold uppercase tracking-[0.15em] text-[#1a1a1a]/50">
+                관련 자료
+              </h3>
+              <button
+                onClick={addRelatedLink}
+                className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] font-medium text-[#1a1a1a]/60 hover:text-[#111110]"
+              >
+                <Plus className="w-3 h-3" />
+                링크 추가
+              </button>
+            </div>
+            {relatedLinks.length === 0 ? (
+              <p className="py-3 text-center text-[12px] text-[#1a1a1a]/30">
+                블로그·보도자료 등 관련 글 URL을 추가하세요.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {relatedLinks.map((link, idx) => (
+                  <div
+                    key={idx}
+                    className="grid grid-cols-[1fr_1.4fr_auto] items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5"
+                  >
+                    <input
+                      type="text"
+                      placeholder="라벨 (예: 블로그 후기)"
+                      aria-label="관련 자료 라벨"
+                      value={link.label}
+                      onChange={(e) => updateRelatedLink(idx, { label: e.target.value })}
+                      className="rounded-md border border-[#e8e8e4] bg-white px-2 py-1.5 text-[12px]"
+                    />
+                    <input
+                      type="url"
+                      placeholder="https://..."
+                      aria-label="관련 자료 URL"
+                      value={link.url}
+                      onChange={(e) => updateRelatedLink(idx, { url: e.target.value })}
+                      className="rounded-md border border-[#e8e8e4] bg-white px-2 py-1.5 text-[12px]"
+                    />
+                    <button
+                      onClick={() => removeRelatedLink(idx)}
+                      aria-label="관련 자료 삭제"
                       className="rounded-md p-1.5 text-[#1a1a1a]/40 hover:bg-red-50 hover:text-red-600"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
