@@ -483,7 +483,20 @@ export default function NeoCrmTeamPanel({
                 {(ordersExpanded ? data?.order.recent ?? [] : (data?.order.recent ?? []).slice(0, 5)).map((order) => (
                   <div key={order.key} className="grid grid-cols-[minmax(0,1fr)_92px] gap-2 py-2">
                     <div className="min-w-0">
-                      <p className="truncate text-[12px] font-semibold text-[#111110]">{order.customerName}</p>
+                      {/* 거래 행 → 계정 상세 딥링크(?account= — 고객 화면 빠른 보기, 오더 탭에 이 거래가
+                          있다). 오더 자체 상세 라우트는 없어 계정 착지가 정확한 최소 경로.
+                          accountId 없는(또는 캐시 스큐) 행은 기존 텍스트 그대로. */}
+                      {order.accountId ? (
+                        <Link
+                          href={`/admin/crm/customers/accounts?account=${encodeURIComponent(order.accountId)}`}
+                          title="고객 상세(오더 내역) 열기"
+                          className="block truncate text-[12px] font-semibold text-[#111110] underline-offset-2 hover:text-[#084734] hover:underline"
+                        >
+                          {order.customerName}
+                        </Link>
+                      ) : (
+                        <p className="truncate text-[12px] font-semibold text-[#111110]">{order.customerName}</p>
+                      )}
                       <p className="truncate text-[11px] text-[#1a1a1a]/40">
                         {order.ownerName ?? "담당 미지정"}
                         {order.status ? ` · ${order.status}` : ""}

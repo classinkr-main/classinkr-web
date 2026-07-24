@@ -439,6 +439,14 @@ function CustomerDetailPanel({
                 {displayOwner ?? "담당 미지정"}
                 {account?.phone ? ` · ${account.phone}` : ""}
               </p>
+              {/* 빠른 보기 → 고객 360 상세 페이지 진입로(모바일 카드 진입 포함) —
+                  키 규약은 unified 드로어 '자세히 보기'와 동일(neo:{accountId}). */}
+              <Link
+                href={`/admin/crm/customers/${encodeURIComponent(`neo:${accountId}`)}`}
+                className="mt-1.5 inline-flex items-center text-[11px] font-semibold text-[#084734] underline-offset-2 hover:underline"
+              >
+                고객 360 자세히 보기 →
+              </Link>
             </div>
             <button
               type="button"
@@ -962,6 +970,16 @@ export default function NeoCrmCustomersClient() {
                     <p className="flex items-center gap-1 text-[13px] font-semibold text-[#111110]">
                       {row.name}
                       <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/25" />
+                      {/* 행 클릭(빠른 보기 패널)과 별개로 고객 360 상세 페이지 직행 딥링크 —
+                          키 규약은 unified 드로어 '자세히 보기'와 동일(neo:{accountId}). */}
+                      <Link
+                        href={`/admin/crm/customers/${encodeURIComponent(`neo:${row.accountId}`)}`}
+                        onClick={(event) => event.stopPropagation()}
+                        title="고객 360 자세히 보기"
+                        className="shrink-0 text-[11px] font-semibold text-[#084734] underline-offset-2 hover:underline"
+                      >
+                        상세 ↗
+                      </Link>
                     </p>
                     <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
                       {row.uid ? `UID ${row.uid}` : "EEO 미연결"}

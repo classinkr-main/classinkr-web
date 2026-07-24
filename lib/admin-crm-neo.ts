@@ -40,6 +40,8 @@ export interface NeoCrmOrderItem {
   status: string | null
   amount: number | null
   occurredAt: string | null
+  /** opportunity payload.accountId(= account.external_id) — NEO 계정 딥링크(?account=)용. 없으면 null */
+  accountId: string | null
 }
 
 export interface NeoCrmTeamReport {
@@ -532,14 +534,20 @@ async function computeNeoCrmTeamReport(input: {
     .filter(({ occurredAt }) => isCurrent(occurredAt))
     .sort((a, b) => (b.occurredAt ?? "").localeCompare(a.occurredAt ?? ""))
     .slice(0, RECENT_ORDER_LIMIT)
-    .map(({ row, occurredAt }) => ({
-      key: `${row.object_api_key}:${row.external_id}`,
-      customerName: row.display_name ?? row.external_id,
-      ownerName: row.owner_name ? resolveOwnerName(row.owner_name, ownerNames) : null,
-      status: row.status,
-      amount: row.amount,
-      occurredAt,
-    }))
+    .map(({ row, occurredAt }) => {
+      // 계정 딥링크 키 — getNeoCrmCustomerDetail이 오더를 계정에 묶을 때 쓰는 그 조인 키
+      // (payload->>accountId = account.external_id)를 그대로 노출한다. 새 판정 없음.
+      const payloadAccountId = row.payload?.accountId
+      return {
+        key: `${row.object_api_key}:${row.external_id}`,
+        customerName: row.display_name ?? row.external_id,
+        ownerName: row.owner_name ? resolveOwnerName(row.owner_name, ownerNames) : null,
+        status: row.status,
+        amount: row.amount,
+        occurredAt,
+        accountId: typeof payloadAccountId === "string" && payloadAccountId.trim() ? payloadAccountId : null,
+      }
+    })
 
   const allCollections = ((collectionResult.data ?? []) as ScopedAmountRecord[]).filter(isScoped)
   const collectionRows = allCollections.filter((row) => isCurrent(row.occurred_at))

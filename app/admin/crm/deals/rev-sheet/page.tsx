@@ -18,6 +18,8 @@ import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { StatTile } from "@/components/admin/viz"
 // 고확도(임박) 금액 색은 확도 신호 토큰 SSOT — 원시 sky 리터럴 재정의 금지(DESIGN.md 확도 신호 토큰 절).
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+// 연결 대상 → CRM 진입 href 규칙 SSOT(장부 P0-2와 동일 소비) — 여기서 새 경로를 발명하지 않는다.
+import { revLinkedTargetHref } from "@/lib/crm/rev-sync-health"
 import type {
   AdminCrmRevenueSheetBreakdownRow,
   AdminCrmRevenueSheetRow,
@@ -108,6 +110,38 @@ function matchesStatusFilter(row: AdminCrmRevenueSheetRow, filter: StatusFilter)
   if (filter === "review") return row.linkStatus === null || row.linkStatus === "candidate" || row.linkStatus === "stale"
   if (filter === "unmatched") return row.linkStatus === null
   return row.linkStatus === filter
+}
+
+// 행 고객명 → 컨텍스트 딥링크(연결성): 확정 연결 행은 연결 대상 상세로 직행하고(href 규칙은
+// rev-sync-health SSOT — deal 타깃은 상세 라우트가 없어 null=링크 미렌더), 미확정 행은 매칭
+// 인박스 이름 프리필로 보낸다(기존 '연결하기'와 동일 목적지 — 이름만 눌러도 같은 동선).
+function customerNameHref(row: AdminCrmRevenueSheetRow): string | null {
+  if (row.linkStatus === "confirmed") {
+    if (!row.targetType || !row.targetId) return null
+    if (row.targetType !== "customer" && row.targetType !== "partner_account" && row.targetType !== "deal") return null
+    return revLinkedTargetHref({
+      targetType: row.targetType,
+      targetId: row.targetId,
+      label: row.targetLabel,
+      name: row.customerName,
+    })
+  }
+  return `/admin/crm/matching?name=${encodeURIComponent(row.customerName)}`
+}
+
+// 고객명 텍스트 자체를 딥링크로 — href를 못 만들면(확정 deal 타깃 등) 기존 <p> 그대로.
+function CustomerNameLink({ row, className }: { row: AdminCrmRevenueSheetRow; className: string }) {
+  const href = customerNameHref(row)
+  if (!href) return <p className={className}>{row.customerName}</p>
+  return (
+    <Link
+      href={href}
+      title={row.linkStatus === "confirmed" ? "연결된 CRM 대상 열기" : "매칭 인박스에서 이 고객명으로 연결"}
+      className={`${className} underline-offset-2 hover:text-[#084734] hover:underline`}
+    >
+      {row.customerName}
+    </Link>
+  )
 }
 
 function StatusBadge({ status }: { status: RevenueSheetLinkStatus }) {
@@ -505,7 +539,7 @@ export default function AdminCrmRevenueSheetPage() {
               <div key={row.id} className="rounded-xl border border-[#e8e8e4] bg-white p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="line-clamp-2 text-[13px] font-semibold text-[#111110]">{row.customerName}</p>
+                    <CustomerNameLink row={row} className="line-clamp-2 text-[13px] font-semibold text-[#111110]" />
                     <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
                       #{row.sheetRow}
                       {row.placeholder ? <span className="ml-1 font-semibold text-[#B85C33]">임시명</span> : null}
@@ -604,7 +638,7 @@ export default function AdminCrmRevenueSheetPage() {
                       {row.placeholder ? <p className="mt-1 text-[10.5px] font-semibold text-[#B85C33]">임시명</p> : null}
                     </td>
                     <td className="py-4 pr-4">
-                      <p className="line-clamp-2 text-[13px] font-semibold text-[#111110]">{row.customerName}</p>
+                      <CustomerNameLink row={row} className="line-clamp-2 text-[13px] font-semibold text-[#111110]" />
                       <p className="mt-1 text-[11px] text-[#1a1a1a]/40">
                         {[row.team, row.manager, row.region].filter(Boolean).join(" · ") || "-"}
                       </p>

@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import type { Dispatch, SetStateAction } from "react"
 import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
@@ -34,7 +35,7 @@ interface CustomerHistorySheetProps {
   reduceMotion: boolean | null
 }
 
-export default function CustomerHistorySheet({
+function CustomerHistorySheet({
   customerHistory,
   setCustomerDetail,
   setDetailId,
@@ -71,12 +72,22 @@ export default function CustomerHistorySheet({
                 </p>
                 <p className="mt-1 truncate text-[16px] font-bold tracking-[-0.01em] text-[#111110]">{customerHistory.name}</p>
                 {customerHistory.name !== UNSPECIFIED_CUSTOMER ? (
-                  <Link
-                    href={ledgerHref(customerHistory.name)}
-                    className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
-                  >
-                    매출 장부 ↗
-                  </Link>
+                  <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                    <Link
+                      href={ledgerHref(customerHistory.name)}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                    >
+                      매출 장부 ↗
+                    </Link>
+                    {/* CRM 진입 병행 — HW 시트 고객명은 CRM 키가 없어 통합 고객 DB 검색 착지(?q=)로
+                        보낸다(rev-sync-health P0-2와 동일한 이름 기반 진입 규약). */}
+                    <Link
+                      href={`/admin/crm/customers/unified?q=${encodeURIComponent(customerHistory.name)}`}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-[#084734] transition hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                    >
+                      CRM 고객 ↗
+                    </Link>
+                  </p>
                 ) : null}
               </div>
               <button
@@ -155,3 +166,5 @@ export default function CustomerHistorySheet({
     </AnimatePresence>
   )
 }
+
+export default memo(CustomerHistorySheet)
