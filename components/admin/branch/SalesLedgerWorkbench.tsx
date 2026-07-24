@@ -35,6 +35,7 @@ import {
   X,
 } from "lucide-react"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
+import { useVisibleInterval } from "./use-visible-interval"
 // 서버 입력 큐 훅(초안 CRUD·적용·되돌리기·로컬 폴백·낙관적 잠금)은 ledger/useLedgerDraftQueue로
 // 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
 import {
@@ -95,9 +96,21 @@ import { RevMobileList } from "./ledger/RevMobileList"
 import IntegrityStrip from "./IntegrityStrip"
 import CrmSyncStrip, { type CrmCoverageResponse } from "./CrmSyncStrip"
 import MultiSelect from "./MultiSelect"
-import { InputRailSection } from "./ledger/InputRailSection"
-import { CockpitDealList } from "./ledger/CockpitDealList"
-import { CockpitEditor } from "./ledger/CockpitEditor"
+// 입력 레일·콕핏 2-pane(~1,350줄)은 기본 화면(REV 렌즈 + 접힌 레일)에서 렌더되지 않는다 —
+// DSH/보드/큐와 동일 관례(ssr:false + LoadingPanel)로 지연 로드해 첫 로드 번들에서 청크를 뺀다.
+// 레일은 railView==="input" 열림 시, 콕핏 2-pane은 lens==="cockpit" 전환 시에만 로드된다.
+const InputRailSection = dynamic(() => import("./ledger/InputRailSection").then((m) => m.InputRailSection), {
+  ssr: false,
+  loading: () => <LoadingPanel label="빠른 입력 폼을 불러오는 중" />,
+})
+const CockpitDealList = dynamic(() => import("./ledger/CockpitDealList").then((m) => m.CockpitDealList), {
+  ssr: false,
+  loading: () => <LoadingPanel label="내 딜 목록을 불러오는 중" />,
+})
+const CockpitEditor = dynamic(() => import("./ledger/CockpitEditor").then((m) => m.CockpitEditor), {
+  ssr: false,
+  loading: () => <LoadingPanel label="콕핏 편집기를 불러오는 중" />,
+})
 // 검토 초안 체크 큐는 ledger/DraftQueue로 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
 // S4: 큐는 railView === "queue"에서만 렌더된다(기본 "detail") — 지연 로드로 첫 로드 번들에서
 // 제외한다. 정적 재수출을 함께 두면 청크 분리가 무효화되므로 draftStatusMeta 재수출은 두지
@@ -896,7 +909,7 @@ function SelectedWeekBars({ weeks }: { weeks: RevWeekPoint[] }) {
               style={{ height: `${week.total > 0 ? Math.max(8, (week.total / max) * 100) : 0}%` }}
             />
           </div>
-          <p className="mt-1 truncate text-[10px] font-bold text-[#111110]">{formatMoney(week.total)}</p>
+          <p className="mt-1 truncate text-[10px] font-bold tabular-nums text-[#111110]">{formatMoney(week.total)}</p>
         </div>
       ))}
     </div>
@@ -918,11 +931,9 @@ export default function SalesLedgerWorkbench() {
   const lensTabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const railTabRefs = useRef<Array<HTMLButtonElement | null>>([])
   // Source(원천) 스트립 상대 시간 표기용 tick — SyncStatusBar와 동일하게 1분마다 갱신.
+  // visibility-aware 공용 훅(코덱스 감사 #15) — 백그라운드 탭에서는 멈추고 복귀 즉시 따라잡는다.
   const [sourceStripNow, setSourceStripNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = window.setInterval(() => setSourceStripNow(Date.now()), 60_000)
-    return () => window.clearInterval(id)
-  }, [])
+  useVisibleInterval(() => setSourceStripNow(Date.now()), 60_000)
   const [query, setQuery] = useState("")
   // 품질 웨이브 7 — 항목 3: 단일 select → MultiSelect(Set) 전환. 빈 Set === "전체"(기존 "ALL"과
   // 동일 의미) — 필터 로직·URL 직렬화·크로스링크 모두 Set 기준으로 다시 쓴다.
@@ -1481,7 +1492,11 @@ export default function SalesLedgerWorkbench() {
 
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   const summary = useBranchJson<BranchSummaryResponse>(`/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}&breakdown=1`, refreshKey)
-  const kpi = useBranchJson<BranchKpiResponse>(`/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`, refreshKey)
+  // KPI 응답은 이 화면에서 우측 레일 "행 상세"의 담당자 KPI 박스(selectedMember)에만 쓰인다 —
+  // 마운트 즉시 fetch하면 접힌 레일만 보다 떠나는 세션에도 항상 요청이 나간다(코덱스 감사).
+  // 레일 열림 + detail 보기 + 행 선택일 때만 시작한다(콕핏은 detail 레일을 렌더하지 않으므로 제외).
+  const kpiNeeded = !sidePanelCollapsed && railView === "detail" && selectedRow != null && lens !== "cockpit"
+  const kpi = useBranchJson<BranchKpiResponse>(`/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`, refreshKey, { enabled: kpiNeeded })
   const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey)
 
   // 하드웨어 콘솔 역링크 게이팅: 하드웨어 원장에 실제 출고 이력이 있는 고객사만 링크로 건다.
@@ -2661,16 +2676,20 @@ export default function SalesLedgerWorkbench() {
       if (data.error) throw new Error(data.error)
       setDetail(data.deal ?? null)
       if (data.deal) {
-        const monthAmount = Number(data.deal.monthly_payments?.[selectedMonth] ?? row.revenue ?? 0)
-        setDraftForm((current) => ({
-          ...current,
-          customer: data.deal?.customer_name ?? row.customer,
-          manager: data.deal?.manager ?? row.manager ?? "",
-          team: data.deal?.team ?? row.team ?? current.team,
-          productCategory: productCategoryFromText(data.deal?.product_version, data.deal?.customer_name, row.customer),
-          amount: monthAmount ? String(Math.round(monthAmount)) : current.amount,
-          note: data.deal?.note ?? "",
-        }))
+        setDraftForm((current) => {
+          // 금액 갱신 기준 월은 폼의 타겟 월(current.month) — selectedMonth로 고정하면 초안 파생
+          // 행(draftMonth ≠ selectedMonth)을 열었을 때 원천 딜의 '다른 달' 금액이 폼 금액을 덮어썼다.
+          const monthAmount = Number(data.deal?.monthly_payments?.[current.month] ?? row.revenue ?? 0)
+          return {
+            ...current,
+            customer: data.deal?.customer_name ?? row.customer,
+            manager: data.deal?.manager ?? row.manager ?? "",
+            team: data.deal?.team ?? row.team ?? current.team,
+            productCategory: productCategoryFromText(data.deal?.product_version, data.deal?.customer_name, row.customer),
+            amount: monthAmount ? String(Math.round(monthAmount)) : current.amount,
+            note: data.deal?.note ?? "",
+          }
+        })
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -3345,8 +3364,9 @@ export default function SalesLedgerWorkbench() {
                     ) : (
                       <ArrowDownRight className="h-3 w-3" />
                     )}
+                    {/* % 자리수는 formatPercent SSOT(최대 1자리)로 통일 — REV 렌즈의 다른 달성률 표기와 동일 규칙. */}
                     {revPrevPeriodComparison.label} {revPrevPeriodComparison.deltaPct >= 0 ? "+" : ""}
-                    {revPrevPeriodComparison.deltaPct.toFixed(0)}%
+                    {formatPercent(revPrevPeriodComparison.deltaPct)}
                   </span>
                 )
               }
@@ -4514,7 +4534,7 @@ export default function SalesLedgerWorkbench() {
                         {selectedCustomerProductSummary.map((item) => (
                           <div key={item.category} className="flex items-center justify-between gap-2 text-[11px]">
                             <ProductCategoryPill category={item.category} compact />
-                            <span className="font-bold text-[#111110]">{formatMoney(item.total)}</span>
+                            <span className="font-bold tabular-nums text-[#111110]">{formatMoney(item.total)}</span>
                           </div>
                         ))}
                       </div>
@@ -4667,7 +4687,7 @@ export default function SalesLedgerWorkbench() {
                           }`}
                         >
                           <p className="text-[10px] font-bold text-[#615D59]">{month.label}</p>
-                          <p className="mt-1 text-[11px] font-bold text-[#111110]">{formatMoney(month.amount)}</p>
+                          <p className="mt-1 text-[11px] font-bold tabular-nums text-[#111110]">{formatMoney(month.amount)}</p>
                           {month.amount > 0 && (
                             <span className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-[#F0F0EC]" aria-label={`${month.label} 금액 분해`}>
                               <span

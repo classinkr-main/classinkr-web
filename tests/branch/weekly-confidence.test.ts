@@ -23,6 +23,8 @@ import {
 
 const workbenchPath = join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx")
 const railPath = join(process.cwd(), "components/admin/branch/ledger/InputRailSection.tsx")
+// M9-1 공용화: 주차 확도 seg를 포함한 그리드 본체는 WeeklyAmountGrid로 이동(레일·콕핏 공용).
+const gridPath = join(process.cwd(), "components/admin/branch/ledger/WeeklyAmountGrid.tsx")
 const boardPath = join(process.cwd(), "components/admin/branch/ledger/ForecastBoard.tsx")
 const queuePath = join(process.cwd(), "components/admin/branch/ledger/DraftQueue.tsx")
 
@@ -322,12 +324,14 @@ describe("SalesLedgerWorkbench — weeklyConfidence 배선 규약(소스 스캔)
 describe("InputRailSection — 주차별 확도 seg UI 규약(소스 스캔)", () => {
   const source = read(railPath)
 
-  it("주차 그리드 각 행에 3단 확도 seg(축약 라벨 + title/aria 전체 라벨, 금액 0은 비활성)를 단다", () => {
-    const grid = sliceBetween(source, "FORECAST_WEEK_RANGE_LABELS.map", "월 합 = 주차 자동합계")
+  it("주차 그리드 각 행에 3단 확도 seg(축약 라벨 + title/aria 전체 라벨, 금액 0은 비활성)를 단다 — M9 공용 그리드", () => {
+    // M9-1: 그리드 본체는 WeeklyAmountGrid로 이동 — 확도 seg 규약은 그 파일에서 검증한다.
+    const grid = read(gridPath)
     expect(grid).toContain("aria-label={`W${index + 1} 확도`}")
-    expect(grid).toContain("title={`W${index + 1} ${option.label}`}")
-    expect(grid).toContain("{option.label.slice(0, 1)}")
-    expect(grid).toContain("disabled={zeroWeek}")
+    expect(grid).toContain("`W${index + 1} ${option.label}`")
+    expect(grid).toContain("option.label.slice(0, 1)")
+    // Task B(2026-07-23): 확정 잠금 주차칸은 확도 seg도 함께 비활성(zeroWeek와 동일 disabled 게이트).
+    expect(grid).toContain("disabled={zeroWeek || locked}")
     // 활성색은 CONFIDENCE_TOKENS bgClass만 사용(확도 색 리터럴 재정의 금지).
     expect(grid).toContain("CONFIDENCE_TOKENS[option.id].bgClass")
   })

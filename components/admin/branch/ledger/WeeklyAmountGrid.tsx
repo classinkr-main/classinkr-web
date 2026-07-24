@@ -14,6 +14,7 @@
 // 그 밖의 UI(확도 일괄 적용·월 합·저장 확도 미리보기·저장 버튼·M1(a) 월 장부금액 참조 등)는
 // 각 소비처가 그대로 소유한다 — 이 컴포넌트는 "주차 행 5줄"만 그린다.
 
+import { useRef, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { Lock } from "lucide-react"
 
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
@@ -46,6 +47,21 @@ export function WeeklyAmountGrid({
   // zeroWeek 판정은 두 소비처가 쓰던 draftWeeklyAmounts(음수/비숫자 0 정규화)와 동일 산식.
   const weeklyAmounts = draftWeeklyAmounts(weekly)
 
+  // ↑/↓로 주차 금액 칸 사이를 바로 오간다 — Tab은 확도 seg 3버튼을 거치므로 연속 금액 입력에는
+  // 세로 이동이 빠르다(매트릭스 셀 순회와 같은 스프레드시트 감각). 잠금(readOnly) 칸도 포커스는
+  // 허용해 건너뛰지 않는다(읽기 확인 가능, 입력은 readOnly가 막는다). Enter는 기존 계약(M7:
+  // form submit = 저장) 그대로 — 여기서 가로채지 않는다.
+  const amountRefs = useRef<Array<HTMLInputElement | null>>([])
+  const onAmountKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>, index: number) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
+    const nextIndex = event.key === "ArrowDown" ? Math.min(index + 1, 4) : Math.max(index - 1, 0)
+    if (nextIndex === index) return
+    event.preventDefault()
+    const next = amountRefs.current[nextIndex]
+    next?.focus()
+    next?.select()
+  }
+
   return (
     <div className={isCockpit ? "space-y-2" : "space-y-1.5"}>
       {FORECAST_WEEK_RANGE_LABELS.map((rangeLabel, index) => {
@@ -77,8 +93,12 @@ export function WeeklyAmountGrid({
               ¥
             </span>
             <input
+              ref={(node) => {
+                amountRefs.current[index] = node
+              }}
               value={weekly[index] ?? ""}
               onChange={(event) => onAmountChange(index, event.target.value.replace(/[^\d]/g, ""))}
+              onKeyDown={(event) => onAmountKeyDown(event, index)}
               readOnly={locked}
               inputMode="numeric"
               aria-label={`W${index + 1} 금액`}

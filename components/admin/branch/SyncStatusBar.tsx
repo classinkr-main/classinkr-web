@@ -1,10 +1,11 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { RefreshCw, AlertTriangle, CheckCircle2, Clock, Database } from "lucide-react"
 import { isImportStale } from "@/lib/branch/data-source-freshness"
 import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
 import { formatCNY } from "@/lib/crm/money-format"
 import type { CrmSyncSummary, RevSyncHealth } from "@/lib/crm/rev-sync-health"
+import { useVisibleInterval } from "./use-visible-interval"
 import type { BranchDataSourceInfo, BranchDataSources } from "./types"
 
 interface SyncStatusBarProps {
@@ -52,11 +53,9 @@ function sourceLabel(source: BranchDataSourceInfo, now: number): string {
 export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, dataSources, onRefresh, syncEnabled = true, staleSince = null, crmSync = null }: SyncStatusBarProps) {
   const [busy, setBusy] = useState(false)
   // Tick once a minute so relative timestamps stay current without a refetch.
+  // visibility-aware(코덱스 감사 #15): 백그라운드 탭에서는 멈추고 복귀 즉시 1회 따라잡는다.
   const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 60_000)
-    return () => window.clearInterval(id)
-  }, [])
+  useVisibleInterval(() => setNow(Date.now()), 60_000)
 
   // 판정 로직은 lib/branch/sheet-freshness.ts로 추출(품질 웨이브 4 — 항목 4) — 장부 화면의
   // "장부 원천 스트립"도 같은 함수로 동일 경고를 낸다.

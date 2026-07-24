@@ -1,3 +1,5 @@
+import { readFileSync } from "fs"
+import { join } from "path"
 import { describe, expect, it } from "vitest"
 import { computeWeekCellStates } from "@/components/admin/branch/SalesLedgerWorkbench"
 
@@ -57,5 +59,21 @@ describe("computeWeekCellStates — 주차 칸 표시·잠금 순수 계산", ()
       { display: 0, isMonthOnly: false, locked: false },
       { display: 0, isMonthOnly: false, locked: false },
     ])
+  })
+})
+
+// 회귀 방지(2026-07-24): 잠금 "표시"(🔒 아이콘·시트 확정 툴팁)는 편집 가능한 딜행(editContext)
+// 에서만 — 읽기전용 경로(카테고리 합산행 등, editContext 없음)는 monthLocked 폴백이 true라
+// cellStates.locked가 display>0 칸마다 서므로, 그대로 locked prop에 넘기면 합산 주차칸마다
+// 🔒 + "시트 확정 잠금" 오표기가 찍힌다(9e8f1fc5 순수 함수화 때의 회귀 — 리팩터 이전에는
+// `locked={editContext ? … : false}`였다). 렌더 하네스가 없어 소스 스캔으로 게이트를 고정한다.
+describe("RevMatrixWeekCells — 잠금 표시는 editContext(딜행)에서만", () => {
+  it("locked prop은 Boolean(editContext) 게이트를 거친다(읽기전용 합산행 🔒 오표기 차단)", () => {
+    const source = readFileSync(
+      join(process.cwd(), "components/admin/branch/ledger/RevMatrix.tsx"),
+      "utf8",
+    )
+    expect(source).toContain("const weekLocked = Boolean(editContext) && cellLocked")
+    expect(source).toContain("const weekEditable = Boolean(editContext) && !cellLocked")
   })
 })

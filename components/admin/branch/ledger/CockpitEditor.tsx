@@ -318,15 +318,19 @@ export function CockpitEditor({
                 ))}
               </select>
               <span className="text-[11px] font-bold text-[#7A520F]">주에</span>
+              {/* 이 달이 잠겨 있으면(월합계-only 확정 등) 채워도 저장이 차단된다 — 막다른 입력을
+                  만들지 않도록 버튼만 비활성(참조 정보 자체는 계속 보여준다). 안내는 아래 잠금 배너. */}
               <button
                 type="button"
+                disabled={blockedByLock}
+                title={blockedByLock ? "이 달은 잠겨 있어 저장할 수 없습니다 — 다른 월을 선택하세요" : undefined}
                 onClick={() =>
                   setDraftForm((current) => ({
                     ...current,
                     weekly: current.weekly.map((value, i) => (i === prefillWeekIndex ? String(Math.round(currentMonthAmount)) : value)),
                   }))
                 }
-                className="inline-flex h-8 items-center gap-1 rounded-md bg-[#084734] px-3 text-[11px] font-bold text-white transition hover:bg-[#065c41]"
+                className="inline-flex h-8 items-center gap-1 rounded-md bg-[#084734] px-3 text-[11px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <Plus className="h-3.5 w-3.5" />
                 넣기

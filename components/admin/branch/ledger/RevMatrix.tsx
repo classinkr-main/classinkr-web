@@ -16,6 +16,7 @@ import {
   draftConfidenceFromMetadata,
   formatMoney,
   formatMonthLabel,
+  formatPercent,
   formatWeekAmount,
   isDraftConfidence,
   mapNumberValue,
@@ -1159,8 +1160,13 @@ function RevMatrixWeekCells({
   const cellStates = computeWeekCellStates(weeks, monthOnlyAmount, monthLocked)
   const cells: React.ReactNode[] = []
   for (let index = 0; index < 5; index += 1) {
-    const { display, isMonthOnly, locked: weekLocked } = cellStates[index]
-    const weekEditable = Boolean(editContext) && !weekLocked
+    const { display, isMonthOnly, locked: cellLocked } = cellStates[index]
+    // 잠금 "표시"(🔒 아이콘·"시트 확정 잠금" 툴팁)는 편집 가능한 딜행에만 — 읽기전용 경로(카테고리
+    // 합산행 등, editContext 없음)는 애초에 편집 대상이 아니라 잠금 신호가 오표기가 된다(9e8f1fc5
+    // 순수 함수화 때 `: false`였던 읽기전용 분기가 `: true` 폴백으로 바뀌며 합산 주차칸마다 🔒가
+    // 찍히던 회귀 — 리팩터 이전 렌더로 복원). 편집 판정(weekEditable)은 기존 그대로다.
+    const weekLocked = Boolean(editContext) && cellLocked
+    const weekEditable = Boolean(editContext) && !cellLocked
     // 선택/편집은 이 칸 기준으로 계산해 원시값으로 내린다 — 비선택·비편집 칸은 memo 스킵.
     const weekSelected = Boolean(editContext) && editContext!.isSelectedCell(month ?? "", index)
     const weekEditing = Boolean(editContext) && editContext!.isEditingCell(month ?? "", index)
@@ -2101,7 +2107,8 @@ export const RevMatrixFooter = memo(function RevMatrixFooter({
                 }`}
                 style={{ width, minWidth: width }}
               >
-                <span className={`text-[10px] font-bold ${tone}`}>{pct === null ? "·" : `${Math.round(pct)}%`}</span>
+                {/* % 자리수는 formatPercent SSOT(최대 1자리) — 보조 분석·레일 KPI 달성률과 동일 규칙. */}
+                <span className={`text-[10px] font-bold ${tone}`}>{pct === null ? "·" : formatPercent(pct)}</span>
               </td>
             )
           })}
@@ -2120,7 +2127,7 @@ export const RevMatrixFooter = memo(function RevMatrixFooter({
                   title={pct === null ? undefined : `목표 설정 ${goalMonths}/${columns.length}개월 합계 대비 확정${goalMonths < columns.length ? " — 부분 목표 기준" : ""}`}
                   className={`text-[10.5px] font-bold ${tone}`}
                 >
-                  {pct === null ? "·" : `${Math.round(pct)}%${goalMonths < columns.length ? "*" : ""}`}
+                  {pct === null ? "·" : `${formatPercent(pct)}${goalMonths < columns.length ? "*" : ""}`}
                 </span>
               )
             })()}

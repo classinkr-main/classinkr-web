@@ -23,6 +23,9 @@ import {
 
 const workbenchPath = join(process.cwd(), "components/admin/branch/SalesLedgerWorkbench.tsx")
 const railPath = join(process.cwd(), "components/admin/branch/ledger/InputRailSection.tsx")
+// M9-1 공용화: 주차 5행 그리드(금액 입력 + 확도 seg)는 레일·콕핏이 공유하는 WeeklyAmountGrid로
+// 물리 이동했다 — 그리드 자체 UI 규약은 이 파일을 스캔하고, 레일은 소비 배선만 검증한다.
+const gridPath = join(process.cwd(), "components/admin/branch/ledger/WeeklyAmountGrid.tsx")
 const boardPath = join(process.cwd(), "components/admin/branch/ledger/ForecastBoard.tsx")
 const sharedPath = join(process.cwd(), "components/admin/branch/ledger/shared.tsx")
 
@@ -205,6 +208,9 @@ describe("SalesLedgerWorkbench — 주차 분해 배선 규약(소스 스캔)", 
     expect(body).toContain(": emptyDraftWeekly()")
     // week 토큰은 저장 계약·dedup 좌표와 일치하게 month로 고정된다.
     expect(body).toContain('week: weeklyPrefill ? "month"')
+    // 상세 fetch 후 금액 갱신 기준 월 = 폼 타겟 월(current.month) — selectedMonth 고정이면 초안
+    // 파생 행(draftMonth ≠ selectedMonth)에서 다른 달 금액이 폼을 덮어쓴다(2026-07-24 수정 회귀 방지).
+    expect(body).toContain("monthly_payments?.[current.month]")
   })
 
   it("editDraft 프리필: metadata.weekly(mergedWeeklyFromMetadata)가 있으면 동일 프리필", () => {
@@ -237,12 +243,19 @@ describe("InputRailSection — 주차 분해 그리드 UI 규약(소스 스캔)"
     expect(source).toContain("({ ...current, weeklyMode: false })")
   })
 
-  it("주차 5행 입력은 숫자만 허용(inputMode numeric + 숫자 외 제거) + W라벨·날짜 구간을 단다", () => {
-    expect(source).toContain("FORECAST_WEEK_RANGE_LABELS.map((rangeLabel, index)")
-    const weeklyInput = sliceBetween(source, "FORECAST_WEEK_RANGE_LABELS.map", "월 합 = 주차 자동합계")
-    expect(weeklyInput).toContain('event.target.value.replace(/[^\\d]/g, "")')
-    expect(weeklyInput).toContain('inputMode="numeric"')
-    expect(weeklyInput).toContain("aria-label={`W${index + 1} 금액`}")
+  it("주차 5행 입력은 숫자만 허용(inputMode numeric + 숫자 외 제거) + W라벨·날짜 구간을 단다 — M9 공용 그리드", () => {
+    // M9-1: 그리드 본체는 WeeklyAmountGrid로 이동 — UI 규약은 그 파일에서 검증한다.
+    const grid = read(gridPath)
+    expect(grid).toContain("FORECAST_WEEK_RANGE_LABELS.map((rangeLabel, index)")
+    expect(grid).toContain('event.target.value.replace(/[^\\d]/g, "")')
+    expect(grid).toContain('inputMode="numeric"')
+    expect(grid).toContain("aria-label={`W${index + 1} 금액`}")
+    // ↑/↓ 세로 이동(스프레드시트 감각) — Enter는 기존 form submit 계약 그대로 가로채지 않는다.
+    expect(grid).toContain('event.key !== "ArrowDown" && event.key !== "ArrowUp"')
+    // 레일은 공용 그리드를 rail variant로 소비한다 — 인라인 사본 재생성 금지(드리프트 차단).
+    expect(source).toContain("<WeeklyAmountGrid")
+    expect(source).toContain('variant="rail"')
+    expect(source).not.toContain("FORECAST_WEEK_RANGE_LABELS.map(")
   })
 
   it("월 합은 읽기전용 자동합계 표시(입력 아님) + 안내 문구·주차별 확도 안내를 단다", () => {

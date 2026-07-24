@@ -227,6 +227,13 @@ export function CockpitDealList({
             <input
               value={term}
               onChange={(event) => setTerm(event.target.value)}
+              // M10(b) 연장: 검색 후 ↓ 한 번으로 결과 목록 첫 항목에 포커스 — 이후는 기존 롤빙
+              // (↑/↓/Home/End)과 Enter 선택이 이어진다. 마우스 없이 검색→선택이 한 흐름이 된다.
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowDown" || items.length === 0) return
+                event.preventDefault()
+                itemRefs.current[0]?.focus()
+              }}
               placeholder="고객·담당자 검색"
               aria-label="내 딜 검색"
               className="h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] pl-8 pr-3 text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734]"
