@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import type { Dispatch, Ref, SetStateAction } from "react"
 import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
@@ -27,7 +28,7 @@ interface MovementDetailSheetProps {
   voidMovement: (movement: HardwareMovement) => void
 }
 
-export default function MovementDetailSheet({
+function MovementDetailSheet({
   detailMovement,
   setDetailId,
   reduceMotion,
@@ -199,3 +200,5 @@ export default function MovementDetailSheet({
     </AnimatePresence>
   )
 }
+
+export default memo(MovementDetailSheet)

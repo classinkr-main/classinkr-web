@@ -1786,8 +1786,8 @@ export default function HardwareInventoryClient() {
             ]
           : []),
       ]
-    : []
-  const detailCrm = detailMovement ? extractCrmLink(detailMovement) : null
+    : [], [detailMovement])
+  const detailCrm = useMemo(() => (detailMovement ? extractCrmLink(detailMovement) : null), [detailMovement])
   const detailLotLabel = detailMovement ? formatLotLabel(movementLot(detailMovement)) : null
   const detailCanEdit =
     detailMovement != null &&

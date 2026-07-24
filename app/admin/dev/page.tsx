@@ -1,13 +1,19 @@
 "use client"
 
 import React, { useEffect, useState, useCallback } from "react"
+import dynamic from "next/dynamic"
 import type { PatchNote, PatchChange, ChangeType, NoteStatus } from "@/lib/patch-notes-data"
 import type {
   AdminIntegrationStatusResponse,
   AdminIntegrationHealth,
 } from "@/lib/admin-integrations/types"
 import { useRouter } from "next/navigation"
-import DataQualityPanel from "@/components/admin/branch/sections/DataQualityPanel"
+import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
+
+// 데이터 품질 패널은 dev의 한 탭에서만 쓰는 무거운 branch 컴포넌트 — 코드 스플릿(감사 3-B).
+const DataQualityPanel = dynamic(() => import("@/components/admin/branch/sections/DataQualityPanel"), {
+  loading: () => <div className="text-center py-12 text-[#1a1a1a]/40 text-[13px]">데이터 품질 패널 로딩중...</div>,
+})
 
 // ─── Types ───────────────────────────────────────────────
 interface RoadmapFeature {
@@ -83,22 +89,13 @@ function trimRef(ref: string): string {
     .trim()
 }
 
-// ─── Dev Cache ───────────────────────────────────────────
-const CACHE_TTL = 5 * 60 * 1000 // 5분
-
-function getCached<T>(key: string): T | null {
-  try {
-    const raw = sessionStorage.getItem(key)
-    if (!raw) return null
-    const { data, ts } = JSON.parse(raw)
-    if (new Date().getTime() - ts > CACHE_TTL) return null
-    return data as T
-  } catch { return null }
-}
-
-function setCache<T>(key: string, data: T) {
-  try { sessionStorage.setItem(key, JSON.stringify({ data, ts: new Date().getTime() })) } catch {}
-}
+// ─── Fetch/Cache ─────────────────────────────────────────
+// 자체 sessionStorage 캐시 + raw fetch를 공용 어드민 클라이언트로 이관(감사 3-C).
+// - 읽기: adminFetchJsonCached(60s TTL + SWR) — Bearer·타임아웃·401 리다이렉트 포함.
+// - 변경: adminFetch — 성공 시 해당 URL prefix 캐시만 무효화(clearAdminRequestCache 스코프 경로)
+//   + 60초간 브라우저 HTTP 캐시 우회 → bugs/patch-notes의 30s 캐시헤더로 인한 생성 직후 staleness 해소.
+const DEV_CACHE_TTL_MS = 60_000
+const GITLOG_CACHE_TTL_MS = 5 * 60_000
 
 function RefreshBtn({ onClick, refreshing }: { onClick: () => void; refreshing: boolean }) {
   return (
@@ -200,7 +197,7 @@ const EMPTY_VER_FORM = {
   targetDate: "",
 }
 
-function RoadmapTab({ token, notify }: { token: string; notify: Notify }) {
+function RoadmapTab({ notify }: { notify: Notify }) {
   const [versions, setVersions] = useState<RoadmapVersion[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -212,28 +209,18 @@ function RoadmapTab({ token, notify }: { token: string; notify: Notify }) {
   const [addingFeat, setAddingFeat] = useState<string | null>(null)
   const [featForm, setFeatForm] = useState({ title: "", status: "planned" as RoadmapFeature["status"], assignee: "" })
 
-  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
-
   const load = useCallback(async (force = false) => {
-    if (!force) {
-      const cached = getCached<RoadmapVersion[]>("dev_cache_roadmap")
-      if (cached) {
-        setVersions(cached)
-        setExpanded(new Set(cached.filter((v) => v.status === "in-progress").map((v) => v.id)))
-        setLoading(false)
-        return
-      }
-    }
     if (force) setRefreshing(true)
-    const data = await fetch("/api/admin/roadmap", { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json()).catch(() => [])
+    const data = await adminFetchJsonCached<RoadmapVersion[]>("/api/admin/roadmap", undefined, {
+      ttlMs: DEV_CACHE_TTL_MS,
+      force,
+    }).catch(() => [])
     const list = Array.isArray(data) ? data : []
     setVersions(list)
     setExpanded(new Set(list.filter((v: RoadmapVersion) => v.status === "in-progress").map((v: RoadmapVersion) => v.id)))
-    setCache("dev_cache_roadmap", list)
     setLoading(false)
     setRefreshing(false)
-  }, [token])
+  }, [])
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -261,8 +248,8 @@ function RoadmapTab({ token, notify }: { token: string; notify: Notify }) {
     setSubmitting(true)
     try {
       const res = editId
-        ? await fetch("/api/admin/roadmap", { method: "PATCH", headers, body: JSON.stringify({ id: editId, ...form }) })
-        : await fetch("/api/admin/roadmap", { method: "POST", headers, body: JSON.stringify({ ...form, features: [] }) })
+        ? await adminFetch("/api/admin/roadmap", { method: "PATCH", body: JSON.stringify({ id: editId, ...form }) })
+        : await adminFetch("/api/admin/roadmap", { method: "POST", body: JSON.stringify({ ...form, features: [] }) })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setShowForm(false); setEditId(null)
       notify(editId ? "버전을 수정했습니다." : "버전을 추가했습니다.")
@@ -278,7 +265,7 @@ function RoadmapTab({ token, notify }: { token: string; notify: Notify }) {
     const prev = ver.features
     setVersions((list) => list.map((v) => v.id === ver.id ? { ...v, features: updated } : v))
     try {
-      const res = await fetch("/api/admin/roadmap", { method: "PATCH", headers, body: JSON.stringify({ id: ver.id, features: updated }) })
+      const res = await adminFetch("/api/admin/roadmap", { method: "PATCH", body: JSON.stringify({ id: ver.id, features: updated }) })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
     } catch {
       setVersions((list) => list.map((v) => v.id === ver.id ? { ...v, features: prev } : v))
@@ -499,7 +486,7 @@ function RoadmapTab({ token, notify }: { token: string; notify: Notify }) {
 }
 
 // ─── Bug Report Tab ───────────────────────────────────────
-function BugsTab({ token, userName, notify, onCountChange }: { token: string; userName: string; notify: Notify; onCountChange?: (n: number) => void }) {
+function BugsTab({ userName, notify, onCountChange }: { userName: string; notify: Notify; onCountChange?: (n: number) => void }) {
   const [bugs, setBugs] = useState<BugReport[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<"all" | BugReport["status"]>("all")
@@ -515,25 +502,17 @@ function BugsTab({ token, userName, notify, onCountChange }: { token: string; us
   const [refreshing, setRefreshing] = useState(false)
 
   const load = useCallback(async (force = false) => {
-    if (!force) {
-      const cached = getCached<BugReport[]>("dev_cache_bugs")
-      if (cached) {
-        setBugs(cached)
-        onCountChange?.(cached.filter((b) => b.status === "open").length)
-        setLoading(false)
-        return
-      }
-    }
     if (force) setRefreshing(true)
-    const data = await fetch("/api/admin/bugs", { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json()).catch(() => [])
+    const data = await adminFetchJsonCached<BugReport[]>("/api/admin/bugs", undefined, {
+      ttlMs: DEV_CACHE_TTL_MS,
+      force,
+    }).catch(() => [])
     const list = Array.isArray(data) ? data : []
     setBugs(list)
     onCountChange?.(list.filter((b: BugReport) => b.status === "open").length)
-    setCache("dev_cache_bugs", list)
     setLoading(false)
     setRefreshing(false)
-  }, [token, onCountChange])
+  }, [onCountChange])
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -545,9 +524,8 @@ function BugsTab({ token, userName, notify, onCountChange }: { token: string; us
     e.preventDefault()
     setSubmitting(true)
     try {
-      const res = await fetch("/api/admin/bugs", {
+      const res = await adminFetch("/api/admin/bugs", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ ...form, tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean), reporter: userName }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -568,13 +546,11 @@ function BugsTab({ token, userName, notify, onCountChange }: { token: string; us
     setBugs(next)
     onCountChange?.(next.filter((b) => b.status === "open").length)
     try {
-      const res = await fetch(`/api/admin/bugs/${id}`, {
+      const res = await adminFetch(`/api/admin/bugs/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ status }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setCache("dev_cache_bugs", next)
     } catch {
       setBugs(prev)
       onCountChange?.(prev.filter((b) => b.status === "open").length)
@@ -589,9 +565,8 @@ function BugsTab({ token, userName, notify, onCountChange }: { token: string; us
     setDeleteConfirm(null)
     onCountChange?.(next.filter((b) => b.status === "open").length)
     try {
-      const res = await fetch(`/api/admin/bugs/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })
+      const res = await adminFetch(`/api/admin/bugs/${id}`, { method: "DELETE" })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setCache("dev_cache_bugs", next)
       notify("버그 리포트를 삭제했습니다.")
     } catch {
       setBugs(prev)
@@ -768,7 +743,7 @@ const EMPTY_FORM = {
   changes: [] as PatchChange[],
 }
 
-function PatchNotesTab({ token, notify }: { token: string; notify: Notify }) {
+function PatchNotesTab({ notify }: { notify: Notify }) {
   const [notes, setNotes] = React.useState<PatchNote[]>([])
   const [loading, setLoading] = React.useState(true)
   const [showForm, setShowForm] = React.useState(false)
@@ -777,24 +752,19 @@ function PatchNotesTab({ token, notify }: { token: string; notify: Notify }) {
   const [submitting, setSubmitting] = React.useState(false)
   const [expandedIds, setExpandedIds] = React.useState<Set<string>>(new Set())
 
-  const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
-
   const [refreshing, setRefreshing] = React.useState(false)
 
   const load = React.useCallback(async (force = false) => {
-    if (!force) {
-      const cached = getCached<PatchNote[]>("dev_cache_patchnotes")
-      if (cached) { setNotes(cached); setLoading(false); return }
-    }
     if (force) setRefreshing(true)
-    const data = await fetch("/api/admin/patch-notes", { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => r.json()).catch(() => [])
+    const data = await adminFetchJsonCached<PatchNote[]>("/api/admin/patch-notes", undefined, {
+      ttlMs: DEV_CACHE_TTL_MS,
+      force,
+    }).catch(() => [])
     const list = Array.isArray(data) ? data : []
     setNotes(list)
-    setCache("dev_cache_patchnotes", list)
     setLoading(false)
     setRefreshing(false)
-  }, [token])
+  }, [])
 
   React.useEffect(() => {
     queueMicrotask(() => {
@@ -850,8 +820,8 @@ function PatchNotesTab({ token, notify }: { token: string; notify: Notify }) {
     setSubmitting(true)
     try {
       const res = editId
-        ? await fetch(`/api/admin/patch-notes/${editId}`, { method: "PATCH", headers, body: JSON.stringify(form) })
-        : await fetch("/api/admin/patch-notes", { method: "POST", headers, body: JSON.stringify(form) })
+        ? await adminFetch(`/api/admin/patch-notes/${editId}`, { method: "PATCH", body: JSON.stringify(form) })
+        : await adminFetch("/api/admin/patch-notes", { method: "POST", body: JSON.stringify(form) })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       notify(editId ? "패치노트를 수정했습니다." : "패치노트를 등록했습니다.")
       closeForm()
@@ -869,11 +839,10 @@ function PatchNotesTab({ token, notify }: { token: string; notify: Notify }) {
     const updated = notes.map((n) => n.id === note.id ? { ...n, status: next } : n)
     setNotes(updated)
     try {
-      const res = await fetch(`/api/admin/patch-notes/${note.id}`, {
-        method: "PATCH", headers, body: JSON.stringify({ status: next }),
+      const res = await adminFetch(`/api/admin/patch-notes/${note.id}`, {
+        method: "PATCH", body: JSON.stringify({ status: next }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setCache("dev_cache_patchnotes", updated)
       notify(next === "published" ? "발행 처리했습니다." : "초안으로 되돌렸습니다.")
     } catch {
       setNotes(prev)
@@ -887,9 +856,8 @@ function PatchNotesTab({ token, notify }: { token: string; notify: Notify }) {
     const next = notes.filter((n) => n.id !== id)
     setNotes(next)
     try {
-      const res = await fetch(`/api/admin/patch-notes/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } })
+      const res = await adminFetch(`/api/admin/patch-notes/${id}`, { method: "DELETE" })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setCache("dev_cache_patchnotes", next)
       notify("패치노트를 삭제했습니다.")
     } catch {
       setNotes(prev)
@@ -1224,26 +1192,21 @@ function getSupabaseHost(): string | null {
   }
 }
 
-function ArchitectureTab({ token }: { token: string }) {
+function ArchitectureTab() {
   const [status, setStatus] = useState<AdminIntegrationStatusResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [statusError, setStatusError] = useState("")
 
   const loadStatus = useCallback(async (force = false) => {
-    if (!force) {
-      const cached = getCached<AdminIntegrationStatusResponse>("dev_cache_integrations")
-      if (cached) { setStatus(cached); setLoading(false); return }
-    }
     if (force) setRefreshing(true)
     try {
-      const r = await fetch("/api/admin/settings/integrations/status", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (!r.ok) throw new Error(`HTTP ${r.status}`)
-      const data = (await r.json()) as AdminIntegrationStatusResponse
+      const data = await adminFetchJsonCached<AdminIntegrationStatusResponse>(
+        "/api/admin/settings/integrations/status",
+        undefined,
+        { ttlMs: DEV_CACHE_TTL_MS, force }
+      )
       setStatus(data)
-      setCache("dev_cache_integrations", data)
       setStatusError("")
     } catch {
       setStatusError("연동 상태를 불러오지 못했습니다.")
@@ -1251,7 +1214,7 @@ function ArchitectureTab({ token }: { token: string }) {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [token])
+  }, [])
 
   useEffect(() => { loadStatus() }, [loadStatus])
 
@@ -1407,7 +1370,7 @@ function ArchitectureTab({ token }: { token: string }) {
 }
 
 // ─── Git Log Tab ──────────────────────────────────────────
-function GitLogTab({ token }: { token: string }) {
+function GitLogTab() {
   const [commits, setCommits] = useState<GitCommit[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -1416,19 +1379,17 @@ function GitLogTab({ token }: { token: string }) {
   const [expandedCommits, setExpandedCommits] = useState<Set<string>>(new Set())
 
   const fetchCommits = useCallback(async (force = false) => {
-    if (!force) {
-      const cached = getCached<GitCommit[]>("dev_cache_gitlog")
-      if (cached) { setCommits(cached); setLoading(false); return }
-    }
     if (force) setRefreshing(true)
     try {
-      const r = await fetch("/api/admin/git-log", { headers: { Authorization: `Bearer ${token}` } })
-      const data = await r.json()
-      if (data.error) setError(data.error)
+      // 커밋 이력은 변동이 드물다 — 다른 탭(60s)보다 긴 5분 TTL, 새로고침 버튼은 force로 우회.
+      const data = await adminFetchJsonCached<GitCommit[] | { error?: string }>("/api/admin/git-log", undefined, {
+        ttlMs: GITLOG_CACHE_TTL_MS,
+        force,
+      })
+      if (data && !Array.isArray(data) && data.error) setError(data.error)
       else {
         const list = Array.isArray(data) ? data : []
         setCommits(list)
-        setCache("dev_cache_gitlog", list)
         setLastUpdated(new Date())
         setError("")
       }
@@ -1438,7 +1399,7 @@ function GitLogTab({ token }: { token: string }) {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [token])
+  }, [])
 
   useEffect(() => { fetchCommits() }, [fetchCommits])
 
@@ -1743,13 +1704,13 @@ export default function DevPage() {
 
       {/* Tab Content */}
       <section id={`dev-panel-${tab}`} role="tabpanel" aria-labelledby={`dev-tab-${tab}`}>
-        {tab === "roadmap" && <RoadmapTab token={token} notify={notify} />}
-        {tab === "bugs" && <BugsTab token={token} userName={userName} notify={notify} onCountChange={setOpenBugCount} />}
+        {tab === "roadmap" && <RoadmapTab notify={notify} />}
+        {tab === "bugs" && <BugsTab userName={userName} notify={notify} onCountChange={setOpenBugCount} />}
         {tab === "releaseCriteria" && <ReleaseCriteriaTab openBugCount={openBugCount} onNavigate={selectTab} />}
         {tab === "dataQuality" && <DataQualityPanel mode="dev" />}
-        {tab === "patchnotes" && <PatchNotesTab token={token} notify={notify} />}
-        {tab === "architecture" && <ArchitectureTab token={token} />}
-        {tab === "gitlog" && <GitLogTab token={token} />}
+        {tab === "patchnotes" && <PatchNotesTab notify={notify} />}
+        {tab === "architecture" && <ArchitectureTab />}
+        {tab === "gitlog" && <GitLogTab />}
       </section>
 
       {toast && <DevToast msg={toast.msg} type={toast.type} />}

@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import type { Dispatch, SetStateAction } from "react"
 import { ChevronDown } from "lucide-react"
 
@@ -25,7 +26,7 @@ interface LocationMapSectionProps {
   prepareQuickEntry: (itemId: string, presetKey: string) => void
 }
 
-export default function LocationMapSection({
+function LocationMapSection({
   locationMap,
   locationMapExpanded,
   setLocationMapExpanded,
@@ -111,3 +112,5 @@ export default function LocationMapSection({
     </section>
   )
 }
+
+export default memo(LocationMapSection)

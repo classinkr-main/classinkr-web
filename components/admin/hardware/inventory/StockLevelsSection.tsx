@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import type { Dispatch, SetStateAction } from "react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
@@ -28,7 +29,7 @@ interface StockLevelsSectionProps {
   prepareQuickEntry: (itemId: string, presetKey: string) => void
 }
 
-export default function StockLevelsSection({
+function StockLevelsSection({
   openSections,
   toggleSection,
   data,
@@ -143,3 +144,5 @@ export default function StockLevelsSection({
     </section>
   )
 }
+
+export default memo(StockLevelsSection)
