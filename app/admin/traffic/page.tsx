@@ -19,10 +19,10 @@ import { InsightCard, MetricRankList, Panel, StatTile, TableEmpty } from "@/comp
 
 // 방문자/트래픽 전용 대시보드.
 // 기존 /admin/analytics 안에 묻혀 있던 "홈페이지 흐름 · 추적 현황"을 따로 모은 화면이다.
-// 데이터는 전부 기존 어드민 API를 재사용한다(신규 백엔드 없음):
-//   - /api/admin/visitor-stats          방문자 수 기본
-//   - /api/admin/homepage-flow          페이지별 흐름·이탈
-//   - /api/admin/event-counts           전환 이벤트 카운트
+// 데이터 소스(7-23 감사 3-A에서 단일화):
+//   - /api/admin/traffic-summary        방문자·흐름·이벤트 카운트 통합(1회 스캔).
+//     visitor-stats / homepage-flow / event-counts 3개 라우트가 같은 client_events
+//     윈도우를 3중 스캔하던 것을 대체한다(개별 라우트는 다른 소비자용으로 유지).
 //   - /api/admin/marketing/conversions/status  GA4·Meta·Google Ads 픽셀 설정 상태
 
 type RangeDays = 7 | 14 | 30
@@ -83,6 +83,16 @@ interface ClientEventCounts {
   byEvent: Array<{ event: string; count: number; lastSeen: string | null }>
   byButton: Array<{ button: string; event: string; count: number; lastSeen: string | null }>
   daily: Array<{ date: string; count: number }>
+}
+
+// /api/admin/traffic-summary 응답 — 세 하위 페이로드는 기존 개별 라우트 계약과 동일.
+interface TrafficSummary {
+  rangeDays: number
+  timezone: "Asia/Seoul"
+  generatedAt: string
+  visitorStats: VisitorStats
+  homepageFlow: HomepageFlow
+  eventCounts: ClientEventCounts
 }
 
 interface MarketingConversionStatus {
@@ -165,16 +175,14 @@ export default function TrafficPage() {
     // (이펙트 바디에서 setState 직접 호출 회피).
     const load = async () => {
       setLoading(true)
-      const [stats, flow, counts, status] = await Promise.all([
-        fetchJson<VisitorStats>(`/api/admin/visitor-stats?range=${range}`),
-        fetchJson<HomepageFlow>(`/api/admin/homepage-flow?range=${range}`),
-        fetchJson<ClientEventCounts>(`/api/admin/event-counts?range=${range}`),
+      const [summary, status] = await Promise.all([
+        fetchJson<TrafficSummary>(`/api/admin/traffic-summary?range=${range}`),
         fetchJson<MarketingConversionStatus>("/api/admin/marketing/conversions/status"),
       ])
       if (cancelled) return
-      setVisitorStats(stats ?? null)
-      setHomepageFlow(flow ?? null)
-      setEventCounts(counts ?? null)
+      setVisitorStats(summary?.visitorStats ?? null)
+      setHomepageFlow(summary?.homepageFlow ?? null)
+      setEventCounts(summary?.eventCounts ?? null)
       setConversionStatus(status ?? null)
       setLoading(false)
     }

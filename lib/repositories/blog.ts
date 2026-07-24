@@ -134,6 +134,24 @@ export async function getAllPosts(): Promise<BlogPost[]> {
   return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
 }
 
+// 카운트 소비자용(os-summary 등) — 전체 행 로드(getAllPosts) 없이 발행 글 수만 센다.
+// 술어는 "getAllPosts() 후 status === 'published' 필터"와 동치다:
+// deleted_at null + status ∈ PUBLISHED_STATUS_VALUES(레거시 매핑이 "published"로 접는 값 전부).
+// getPublishedPosts의 publishedAtVisibleFilter(예약 발행 가시성)는 여기 적용하지 않는다 —
+// 기존 os-summary 카운트도 status만 봤으므로 수치 동일성을 유지한다.
+export async function countPublishedPosts(): Promise<number> {
+
+  const supabase = createSupabaseAdminClient();
+  const { count, error } = await supabase
+    .from("blog_posts")
+    .select("id", { count: "exact", head: true })
+    .in("status", PUBLISHED_STATUS_VALUES)
+    .is("deleted_at", null);
+
+  if (error) throw new Error(`[blog] 발행 글 수 조회 실패: ${error.message}`);
+  return count ?? 0;
+}
+
 export async function getPublishedPosts(): Promise<BlogPost[]> {
 
   const supabase = await createSupabaseBlogReadClient();
