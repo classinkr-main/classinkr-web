@@ -1,6 +1,8 @@
 # 크로스채널 캠페인 개체(D1) + 프로젝트 묶음(D3) — 설계 & 구현 계획
 
-> **실행:** superpowers:subagent-driven-development — 태스크별 서브에이전트 + 스펙·품질 2단계 리뷰. 체크박스(`- [ ]`) 추적.
+- 상태: **구현 완료 + 마이그레이션 라이브 적용 완료** (2026-07-24). CS_UP1 머지(11커밋). 두 마이그(`20260724_marketing_campaigns.sql`, `20260724_marketing_projects.sql`)를 classinkr-main 프로덕션 DB에 순서대로 적용 — `marketing_campaigns`/`campaign_links`/`marketing_projects` 라이브 확인(행 0, project_id FK 존재). 검증: `tmp/db-probe-marketing-tables.mjs`.
+
+> **실행:** superpowers:subagent-driven-development — 태스크별 서브에이전트 + 스펙·품질 2단계 리뷰. 체크박스(`- [x]`) 추적.
 
 **목표:** 오늘 채널별 실행(email_campaigns·sms_campaigns·public_events·Meta)으로 파편화된 "캠페인"을, 이들을 **연결·롤업하는 크로스채널 캠페인 1급 개체**(D1)로 통합하고, 그 위에 캠페인을 묶는 **프로젝트**(D3)를 얹는다. 출처: [campaign-marketing-ia-develop-analysis-2026-07-23.md](campaign-marketing-ia-develop-analysis-2026-07-23.md) P2-P3.
 
@@ -73,61 +75,61 @@ D3 마이그레이션(`<date>_marketing_projects.sql`)에서 `marketing_projects
 
 ### Task D1-1: 스키마 마이그레이션 + 타입
 **Files:** Create `supabase/migrations/<date>_marketing_campaigns.sql`, `lib/types/marketing-campaign.ts`
-- [ ] Step 1: 마이그레이션 작성 — 위 설계의 두 테이블 + 인덱스 + updated_at 트리거 + RLS admin-only(기존 `supabase/migrations/*rls_admin_only*` 파일에서 정확한 패턴 확인 후 동일 적용).
-- [ ] Step 2: 타입 파일 — `MarketingCampaign`(스키마 컬럼 그대로), `CampaignRefType = "email_campaign"|"sms_campaign"|"event"|"meta_campaign"`, `CampaignStatus`, `CampaignLink`, `CampaignRollup`, `CampaignWithLinks`. `CAMPAIGN_STATUSES`/`CAMPAIGN_REF_TYPES` 런타임 상수 배열도 export(sanitizer·UI 공용 SSOT).
-- [ ] Step 3: **읽기전용 프로브로 마이그 적용 여부 확인용 스크립트**는 만들지 않는다(적용은 사람이 라이브에 수동 적용 — 기존 관행). 대신 마이그 SQL이 문법상 유효한지 로컬에서 육안 검토.
-- [ ] Step 4: `npx tsc --noEmit` 통과. Commit `feat(campaigns): marketing_campaigns/campaign_links 스키마 + 타입`.
+- [x] Step 1: 마이그레이션 작성 — 위 설계의 두 테이블 + 인덱스 + updated_at 트리거 + RLS admin-only(기존 `supabase/migrations/*rls_admin_only*` 파일에서 정확한 패턴 확인 후 동일 적용).
+- [x] Step 2: 타입 파일 — `MarketingCampaign`(스키마 컬럼 그대로), `CampaignRefType = "email_campaign"|"sms_campaign"|"event"|"meta_campaign"`, `CampaignStatus`, `CampaignLink`, `CampaignRollup`, `CampaignWithLinks`. `CAMPAIGN_STATUSES`/`CAMPAIGN_REF_TYPES` 런타임 상수 배열도 export(sanitizer·UI 공용 SSOT).
+- [x] Step 3: **읽기전용 프로브로 마이그 적용 여부 확인용 스크립트**는 만들지 않는다(적용은 사람이 라이브에 수동 적용 — 기존 관행). 대신 마이그 SQL이 문법상 유효한지 로컬에서 육안 검토.
+- [x] Step 4: `npx tsc --noEmit` 통과. Commit `feat(campaigns): marketing_campaigns/campaign_links 스키마 + 타입`.
 
 ### Task D1-2: 저장소
 **Files:** Create `lib/repositories/marketing-campaigns.ts`, Test `tests/repositories/marketing-campaigns.test.ts`
-- [ ] Step 1: 기존 Supabase 저장소(예: `lib/repositories/automation.ts`)의 admin-client 패턴을 읽고 미러. 함수: `listCampaigns()`(+links 조인), `getCampaign(id)`, `createCampaign(input)`, `updateCampaign(id, patch)`, `deleteCampaign(id)`, `addLink(campaignId, refType, refId)`, `removeLink(linkId)`. admin 클라이언트 사용(RLS 메모 준수).
-- [ ] Step 2: TDD — vitest에서 supabase admin 클라이언트를 목킹(기존 `tests/repositories/*.test.ts`의 `vi.mock("@/lib/supabase/admin")` 패턴 복제)해 listCampaigns가 from("marketing_campaigns")+links 조인 형태를 호출하는지, createCampaign이 sanitize된 payload를 insert하는지 검증.
-- [ ] Step 3: lint+tsc. Commit.
+- [x] Step 1: 기존 Supabase 저장소(예: `lib/repositories/automation.ts`)의 admin-client 패턴을 읽고 미러. 함수: `listCampaigns()`(+links 조인), `getCampaign(id)`, `createCampaign(input)`, `updateCampaign(id, patch)`, `deleteCampaign(id)`, `addLink(campaignId, refType, refId)`, `removeLink(linkId)`. admin 클라이언트 사용(RLS 메모 준수).
+- [x] Step 2: TDD — vitest에서 supabase admin 클라이언트를 목킹(기존 `tests/repositories/*.test.ts`의 `vi.mock("@/lib/supabase/admin")` 패턴 복제)해 listCampaigns가 from("marketing_campaigns")+links 조인 형태를 호출하는지, createCampaign이 sanitize된 payload를 insert하는지 검증.
+- [x] Step 3: lint+tsc. Commit.
 
 ### Task D1-3: 링크 후보 + 롤업 순수함수
 **Files:** Create `lib/marketing/campaign-rollup.ts`, Test `tests/marketing/campaign-rollup.test.ts`
-- [ ] Step 1: TDD — `computeCampaignRollup(links, { emailCampaigns, smsCampaigns, eventMetrics, metaCampaigns })` 순수함수. 테스트: email 링크 2건→recipient/open 합산, event 링크→leads/deals/revenue 합(revenue "입력기준" 플래그), meta 링크→spend/currency 보존(KRW 합산 안 함), 빈 링크→0.
-- [ ] Step 2: 구현. Commit.
+- [x] Step 1: TDD — `computeCampaignRollup(links, { emailCampaigns, smsCampaigns, eventMetrics, metaCampaigns })` 순수함수. 테스트: email 링크 2건→recipient/open 합산, event 링크→leads/deals/revenue 합(revenue "입력기준" 플래그), meta 링크→spend/currency 보존(KRW 합산 안 함), 빈 링크→0.
+- [x] Step 2: 구현. Commit.
 
 ### Task D1-4: API 라우트
 **Files:** Create `app/api/admin/marketing-campaigns/route.ts`, `[id]/route.ts`, `[id]/links/route.ts`, `link-candidates/route.ts`, Test `tests/api/admin-marketing-campaigns.test.ts`
-- [ ] Step 1: 기존 `app/api/admin/automation/rules/route.ts`의 verifyAdmin+sanitize 패턴 미러. sanitizer(`sanitizeCampaignInput`, `sanitizeLinkInput`) export해 단위테스트.
-- [ ] Step 2: TDD — sanitizer 테스트(유효 입력 통과·잘못된 status/ref_type 거부·name 빈값 거부). Commit.
+- [x] Step 1: 기존 `app/api/admin/automation/rules/route.ts`의 verifyAdmin+sanitize 패턴 미러. sanitizer(`sanitizeCampaignInput`, `sanitizeLinkInput`) export해 단위테스트.
+- [x] Step 2: TDD — sanitizer 테스트(유효 입력 통과·잘못된 status/ref_type 거부·name 빈값 거부). Commit.
 
 ### Task D1-5: 캠페인 관리 UI — 리스트 + 생성/편집 드로어
 **Files:** Create `app/admin/campaigns/manage/page.tsx`, `components/admin/campaigns/manage/CampaignManageClient.tsx`, `CampaignFormDrawer.tsx`, Test(렌더)
-- [ ] Step 1: 얇은 서버 페이지(verifyAdmin 게이트) + 클라이언트 컴포넌트. 리스트: 이름·상태칩·채널칩·기간·예산·롤업요약·담당자. adminFetchJson으로 조회. DESIGN.md 토큰.
-- [ ] Step 2: 생성/편집 드로어(name/objective/status/channels/기간/budget/owner). PATCH/POST.
-- [ ] Step 3: 렌더 테스트(renderToStaticMarkup) — 리스트 행·상태칩·빈 상태. Commit.
+- [x] Step 1: 얇은 서버 페이지(verifyAdmin 게이트) + 클라이언트 컴포넌트. 리스트: 이름·상태칩·채널칩·기간·예산·롤업요약·담당자. adminFetchJson으로 조회. DESIGN.md 토큰.
+- [x] Step 2: 생성/편집 드로어(name/objective/status/channels/기간/budget/owner). PATCH/POST.
+- [x] Step 3: 렌더 테스트(renderToStaticMarkup) — 리스트 행·상태칩·빈 상태. Commit.
 
 ### Task D1-6: 상세 — 롤업 + 링크 추가/해제 피커
 **Files:** Create `components/admin/campaigns/manage/CampaignDetailPanel.tsx`, `LinkPicker.tsx`, Test
-- [ ] Step 1: 상세 패널 — 롤업 카드(채널별 가용 지표, 정직 라벨, 종합 ROAS 없음) + 링크된 실행 목록.
-- [ ] Step 2: LinkPicker — `link-candidates` 조회해 미연결 email/sms/event/meta 실행을 유형별로 보여주고 추가; 링크 행에 해제 버튼.
-- [ ] Step 3: 렌더 테스트. Commit.
+- [x] Step 1: 상세 패널 — 롤업 카드(채널별 가용 지표, 정직 라벨, 종합 ROAS 없음) + 링크된 실행 목록.
+- [x] Step 2: LinkPicker — `link-candidates` 조회해 미연결 email/sms/event/meta 실행을 유형별로 보여주고 추가; 링크 행에 해제 버튼.
+- [x] Step 3: 렌더 테스트. Commit.
 
 ### Task D1-7: 진입 링크 배선 (최소 침습)
 **Files:** Modify `components/admin/admin-nav.ts`(marketing 섹션에 "캠페인 관리" 항목 추가) + `components/admin/MarketingCrossLinks.tsx`는 nav SSOT 파생이라 자동 반영. 캠페인 허브 헤더에 링크 1개.
-- [ ] Step 1: admin-nav marketing 섹션에 `{ href: "/admin/campaigns/manage", label: "캠페인 관리", ... }` 추가(하드코딩 라우트 목록 없음 — SSOT). R4 크로스링크는 자동 포함.
-- [ ] Step 2: 캠페인 허브(`/admin/campaigns`) 헤더 액션에 "캠페인 관리" 링크 추가(page.tsx 최소 3줄 — 리팩터 충돌 최소화). lint+build. Commit.
+- [x] Step 1: admin-nav marketing 섹션에 `{ href: "/admin/campaigns/manage", label: "캠페인 관리", ... }` 추가(하드코딩 라우트 목록 없음 — SSOT). R4 크로스링크는 자동 포함.
+- [x] Step 2: 캠페인 허브(`/admin/campaigns`) 헤더 액션에 "캠페인 관리" 링크 추가(page.tsx 최소 3줄 — 리팩터 충돌 최소화). lint+build. Commit.
 
 ### Task D1-8: D1 회귀 게이트
-- [ ] 전체 vitest + `eslint app components lib --max-warnings=0` + `npm run build`. 브라우저: `/admin/campaigns/manage`에서 생성→링크추가→롤업 표시→해제 왕복(라이브 DB 쓰기 주의 — 테스트 데이터는 삭제).
+- [x] 전체 vitest + `eslint app components lib --max-warnings=0` + `npm run build`. 브라우저: `/admin/campaigns/manage`에서 생성→링크추가→롤업 표시→해제 왕복(라이브 DB 쓰기 주의 — 테스트 데이터는 삭제).
 
 ### Task D3-1: 프로젝트 스키마 + 타입 + 저장소
 **Files:** Create `supabase/migrations/<date>_marketing_projects.sql`, extend `lib/types/marketing-campaign.ts`, `lib/repositories/marketing-projects.ts`, Test
-- [ ] `marketing_projects`(name/objective/status/starts_at/ends_at/budget/owner/timestamps) + `marketing_campaigns.project_id` FK(ON DELETE SET NULL). 저장소 CRUD + `assignCampaignToProject`. TDD. Commit.
+- [x] `marketing_projects`(name/objective/status/starts_at/ends_at/budget/owner/timestamps) + `marketing_campaigns.project_id` FK(ON DELETE SET NULL). 저장소 CRUD + `assignCampaignToProject`. TDD. Commit.
 
 ### Task D3-2: 프로젝트 API + 롤업
 **Files:** Create `app/api/admin/marketing-projects/`, extend rollup
-- [ ] verifyAdmin CRUD + 프로젝트 롤업(멤버 캠페인 수·채널/행사 수·예산 소진%=합산집행/합산배정). sanitizer 테스트. Commit.
+- [x] verifyAdmin CRUD + 프로젝트 롤업(멤버 캠페인 수·채널/행사 수·예산 소진%=합산집행/합산배정). sanitizer 테스트. Commit.
 
 ### Task D3-3: 프로젝트 UI
 **Files:** Create `app/admin/campaigns/projects/page.tsx` + client + 생성/편집 + 캠페인 배정
-- [ ] 프로젝트 리스트(레퍼런스 프로젝트 요약 형태: 캠페인/광고/행사 수 + 예산 소진 바) + 캠페인↔프로젝트 배정 UI. nav 항목 추가(SSOT). 렌더 테스트. Commit.
+- [x] 프로젝트 리스트(레퍼런스 프로젝트 요약 형태: 캠페인/광고/행사 수 + 예산 소진 바) + 캠페인↔프로젝트 배정 UI. nav 항목 추가(SSOT). 렌더 테스트. Commit.
 
 ### Task D3-4: 최종 회귀
-- [ ] 전체 게이트 + 브라우저 왕복(프로젝트 생성→캠페인 배정→롤업).
+- [x] 전체 게이트 + 브라우저 왕복(프로젝트 생성→캠페인 배정→롤업).
 
 ---
 
