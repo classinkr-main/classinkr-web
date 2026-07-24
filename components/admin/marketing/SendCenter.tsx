@@ -16,18 +16,26 @@
  */
 
 import { useMemo, useRef, useState } from "react"
+import dynamic from "next/dynamic"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { EmailDraft, SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
 import type { MessagingStatus } from "@/lib/messaging-client-types"
 import type { MessagePrefill } from "@/lib/message-prefill"
-import KakaoComposer from "./KakaoComposer"
 import ReachCoverageCard from "./ReachCoverageCard"
 import ChannelCascadeCard from "./ChannelCascadeCard"
 import MessageComposeCard from "./MessageComposeCard"
 import SendInvoiceRail from "./SendInvoiceRail"
 import type { PreSendCheck, SendReadiness, VariableBlockDef } from "./send-center-types"
+
+// 알림톡 테스트 발송 패널은 열릴 때만 렌더되므로 청크도 그때만 로드한다.
+// 프리필 자동 오픈 경로는 그대로 — 패널 섹션(헤더 포함)은 즉시 열리고,
+// 컴포저 본체만 청크 도착까지 골격으로 대체된다(recipientPrefill은 허브 상태라 유실 없음).
+const KakaoComposer = dynamic(() => import("./KakaoComposer"), {
+  ssr: false,
+  loading: () => <div className="h-40 animate-pulse rounded-xl bg-[#f0f0ec]" aria-hidden />,
+})
 
 type AudienceMode = "tags" | "direct"
 

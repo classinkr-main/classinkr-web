@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
+import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import {
   ArrowRight,
@@ -11,7 +12,6 @@ import {
   Plus,
   Search,
   Send,
-  Sparkles,
   Users,
   XCircle,
   Zap,
@@ -26,20 +26,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { adminFetch, adminFetchJsonCached, getAdminToken } from "@/lib/admin-client"
+import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import SubscriberTable from "@/components/admin/marketing/SubscriberTable"
 import SubscriberForm from "@/components/admin/marketing/SubscriberForm"
-import CampaignHistory from "@/components/admin/marketing/CampaignHistory"
-import MessageLogTable from "@/components/admin/marketing/MessageLogTable"
-import SendCenter from "@/components/admin/marketing/SendCenter"
 import SendCenterHeader from "@/components/admin/marketing/SendCenterHeader"
-import AutomationRuleList from "@/components/admin/marketing/AutomationRuleList"
-import AutomationRuleDetail from "@/components/admin/marketing/AutomationRuleDetail"
-import AutomationRuleSlideOver from "@/components/admin/marketing/AutomationRuleSlideOver"
-import AutomationLogTable from "@/components/admin/marketing/AutomationLogTable"
-import TemplateCard from "@/components/admin/marketing/TemplateCard"
-import TemplateEditorDrawer from "@/components/admin/marketing/TemplateEditorDrawer"
+import {
+  EmptyInline,
+  EmptyState,
+  Panel,
+  TabLoadingSkeleton,
+  formatDateTime,
+} from "@/components/admin/marketing/tabs/tab-ui"
 import type { PreSendCheck } from "@/components/admin/marketing/send-center-types"
 import { unwrapMessagingData, type MessagingStatus } from "@/lib/messaging-client-types"
 import type { EmailCampaign, EmailDraft, SavedEmailSegment, Subscriber } from "@/lib/marketing-types"
@@ -51,6 +49,22 @@ import type {
   CreateTemplateRequest,
 } from "@/lib/automation-types"
 import type { MessagePrefill } from "@/lib/message-prefill"
+
+// ── 탭 청크 분할 — 기본 탭(subscribers)만 정적 번들에 남기고, compose(SendCenter)·
+//    history·automation 패널은 활성 탭 진입 시에만 청크를 로드한다. 상태·핸들러는
+//    전부 이 허브가 계속 소유하고 props로 내려보낸다(로직 이동 없음). ──
+const SendCenter = dynamic(() => import("@/components/admin/marketing/SendCenter"), {
+  ssr: false,
+  loading: () => <TabLoadingSkeleton label="발송 작성 화면을 불러오는 중..." />,
+})
+const HistoryTab = dynamic(() => import("@/components/admin/marketing/tabs/HistoryTab"), {
+  ssr: false,
+  loading: () => <TabLoadingSkeleton label="발송 이력을 불러오는 중..." />,
+})
+const AutomationTab = dynamic(() => import("@/components/admin/marketing/tabs/AutomationTab"), {
+  ssr: false,
+  loading: () => <TabLoadingSkeleton label="자동화 화면을 불러오는 중..." />,
+})
 
 // 발송 상태 캐시 TTL — 60초 stale 허용(같은 URL을 쓰는 다른 화면과 캐시 키 공유, CMP-2).
 const MESSAGING_STATUS_CACHE_TTL_MS = 60_000
@@ -76,18 +90,6 @@ function safeTime(value?: string) {
   if (!value) return 0
   const ts = new Date(value).getTime()
   return Number.isNaN(ts) ? 0 : ts
-}
-
-function formatDateTime(value?: string) {
-  if (!value) return "시간 정보 없음"
-  const ts = new Date(value)
-  if (Number.isNaN(ts.getTime())) return "시간 정보 없음"
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(ts)
 }
 
 function countBy<T extends string>(items: T[]) {
@@ -160,31 +162,6 @@ function createSavedSegmentId() {
   return `segment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-function Panel({
-  title,
-  description,
-  action,
-  children,
-}: {
-  title: string
-  description?: string
-  action?: ReactNode
-  children: ReactNode
-}) {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white shadow-[0_1px_0_rgba(17,17,16,0.02)]">
-      <div className="flex flex-col gap-3 border-b border-[#e8e8e4] px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
-        <div>
-          <h2 className="text-[14px] font-semibold text-[#111110]">{title}</h2>
-          {description && <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">{description}</p>}
-        </div>
-        {action}
-      </div>
-      <div className="p-4 sm:p-6">{children}</div>
-    </section>
-  )
-}
-
 function TabButton({
   active,
   icon,
@@ -223,43 +200,6 @@ function TabButton({
   )
 }
 
-
-function EmptyState({
-  title,
-  description,
-  action,
-}: {
-  title: string
-  description: string
-  action?: ReactNode
-}) {
-  return (
-    <div className="rounded-2xl border border-dashed border-[#e0e0dc] bg-[#fafaf8] px-5 py-12 text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#1a1a1a]/35 shadow-[0_1px_0_rgba(17,17,16,0.03)]">
-        <Sparkles className="h-5 w-5" />
-      </div>
-      <p className="mt-4 text-[14px] font-medium text-[#111110]">{title}</p>
-      <p className="mx-auto mt-1 max-w-md text-[12px] leading-relaxed text-[#1a1a1a]/40">{description}</p>
-      {action && <div className="mt-4">{action}</div>}
-    </div>
-  )
-}
-
-function EmptyInline({ message }: { message: string }) {
-  return <p className="py-8 text-center text-[12px] text-[#1a1a1a]/30">{message}</p>
-}
-
-function MiniBadge({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "success" | "warning" | "danger" }) {
-  const className =
-    tone === "success"
-      ? "bg-green-50 text-green-700"
-      : tone === "warning"
-        ? "bg-amber-50 text-amber-700"
-        : tone === "danger"
-          ? "bg-red-50 text-red-600"
-          : "bg-[#f0f0ec] text-[#1a1a1a]/55"
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${className}`}>{children}</span>
-}
 
 interface MarketingHubProps {
   /** 고객 360 딥링크(?message_to=)에서 온 수신자 프리필 — 마운트 시 1회만 캡처한다. */
@@ -301,6 +241,8 @@ export default function MarketingHub({
   }, [recipientPrefill, onRecipientPrefillConsumed])
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([])
+  const [campaignsLoading, setCampaignsLoading] = useState(false)
+  const [campaignsError, setCampaignsError] = useState<string | null>(null)
   const [messagingStatus, setMessagingStatus] = useState<MessagingStatus | null>(null)
   const [messagingStatusLoaded, setMessagingStatusLoaded] = useState(false)
   const [composerDraft, setComposerDraft] = useState<EmailDraft>(EMPTY_DRAFT)
@@ -383,6 +325,8 @@ export default function MarketingHub({
   }, [handleUnauthorized])
 
   const fetchCampaigns = useCallback(async () => {
+    setCampaignsLoading(true)
+    setCampaignsError(null)
     try {
       const res = await adminFetch("/api/admin/email")
       if (res.status === 401) {
@@ -392,9 +336,13 @@ export default function MarketingHub({
       if (res.ok) {
         const data = await res.json()
         setCampaigns(data.campaigns ?? [])
+      } else {
+        setCampaignsError("캠페인 이력을 불러오지 못했습니다.")
       }
     } catch {
-      // silent
+      setCampaignsError("캠페인 이력을 불러오지 못했습니다.")
+    } finally {
+      setCampaignsLoading(false)
     }
   }, [handleUnauthorized])
 
@@ -1554,341 +1502,71 @@ export default function MarketingHub({
         )}
 
         {activeTab === "history" && (
-          <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-            <div className="space-y-6">
-              <Panel
-                title="발송 이력"
-                action={
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setCampaignStatusFilter("all")}>
-                      전체
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => setActiveTab("compose")}>
-                      <Send className="mr-1.5 h-4 w-4" />
-                      이메일 작성
-                    </Button>
-                  </div>
-                }
-              >
-                <div className="mb-4 flex flex-wrap gap-2">
-                  {(["all", "sent", "draft", "failed"] as const).map((value) => (
-                    <button
-                      key={value}
-                      onClick={() => setCampaignStatusFilter(value)}
-                      className={`rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                        campaignStatusFilter === value
-                          ? "border-[#111110] bg-[#111110] text-white"
-                          : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#c8c8c4] hover:text-[#111110]"
-                      }`}
-                    >
-                      {value === "all" ? "전체" : value === "sent" ? "발송됨" : value === "draft" ? "초안" : "실패"}
-                    </button>
-                  ))}
-                </div>
-
-                {campaigns.length === 0 ? (
-                  <EmptyState
-                    title="아직 발송된 캠페인이 없습니다."
-                    description="첫 발송을 만들면 이력과 요약이 동시에 쌓입니다."
-                    action={
-                      <div className="flex flex-wrap items-center justify-center gap-2">
-                        <Button size="sm" onClick={() => setActiveTab("compose")} className="bg-[#084734] hover:bg-[#084734]/90">
-                          발송 만들기
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setActiveTab("subscribers")}>
-                          구독자 확인
-                        </Button>
-                      </div>
-                    }
-                  />
-                ) : filteredCampaigns.length === 0 ? (
-                  <EmptyState
-                    title="필터에 맞는 캠페인이 없습니다."
-                    description="상태 필터를 조금 넓혀보세요. 초안, 발송됨, 실패를 각각 따로 볼 수 있습니다."
-                    action={
-                      <div className="flex flex-wrap items-center justify-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => setCampaignStatusFilter("all")}>
-                          필터 초기화
-                        </Button>
-                        <Button size="sm" onClick={() => setActiveTab("compose")} className="bg-[#084734] hover:bg-[#084734]/90">
-                          <Send className="mr-1.5 h-4 w-4" />
-                          발송 만들기
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => setActiveTab("subscribers")}>
-                          구독자 보기
-                        </Button>
-                      </div>
-                    }
-                  />
-                ) : (
-                  <div className="overflow-hidden rounded-2xl border border-[#e8e8e4]">
-                    <CampaignHistory
-                      campaigns={filteredCampaigns}
-                      onDuplicate={handleDuplicateCampaign}
-                      onCopy={handleCopyCampaign}
-                      onCreateCampaign={() => setActiveTab("compose")}
-                      onViewSubscribers={() => setActiveTab("subscribers")}
-                    />
-                  </div>
-                )}
-              </Panel>
-
-              <Panel title="문자·카카오 발송 로그">
-                <MessageLogTable />
-              </Panel>
-            </div>
-
-            <div className="space-y-6">
-              <Panel title="상태 요약">
-                {recentCampaigns.length === 0 ? (
-                  <EmptyInline message="최근 캠페인 정보가 없습니다." />
-                ) : (
-                  <div className="space-y-3">
-                    {recentCampaigns.map((campaign) => (
-                      <div key={campaign.id} className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-[13px] font-semibold text-[#111110]">{campaign.subject}</p>
-                            <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
-                              {formatDateTime(campaign.sentAt ?? campaign.createdAt)} · 대상 {campaign.recipientCount}명
-                            </p>
-                          </div>
-                          <MiniBadge
-                            tone={
-                              campaign.status === "sent"
-                                ? "success"
-                                : campaign.status === "failed"
-                                  ? "danger"
-                                  : "warning"
-                            }
-                          >
-                            {campaign.status === "sent" ? "발송됨" : campaign.status === "failed" ? "실패" : "초안"}
-                          </MiniBadge>
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-1.5">
-                            {campaign.targetTags.length > 0 ? (
-                              campaign.targetTags.map((tag) => (
-                                <MiniBadge key={tag}>#{tag}</MiniBadge>
-                              ))
-                            ) : (
-                              <MiniBadge>전체 발송</MiniBadge>
-                            )}
-                        </div>
-                        <div className="mt-3 flex justify-end">
-                          <Button variant="outline" size="sm" onClick={() => handleDuplicateCampaign(campaign)}>
-                            복제해서 작성
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Panel>
-
-              <Panel title="추천 다음 액션">
-                <div className="space-y-2">
-                  {recentDraftCampaigns.length > 0 && (
-                    <button
-                      onClick={() => setActiveTab("compose")}
-                      className="w-full rounded-xl border border-amber-100 bg-amber-50 p-3 text-left transition-colors hover:bg-amber-100/60"
-                    >
-                      <p className="text-[12px] font-semibold text-amber-700">
-                        미완성 초안 {recentDraftCampaigns.length}개
-                      </p>
-                    </button>
-                  )}
-                  {recentFailedCampaigns.length > 0 && (
-                    <button
-                      onClick={() => setCampaignStatusFilter("failed")}
-                      className="w-full rounded-xl border border-red-100 bg-red-50 p-3 text-left transition-colors hover:bg-red-100/60"
-                    >
-                      <p className="text-[12px] font-semibold text-red-700">
-                        실패 캠페인 {recentFailedCampaigns.length}개 점검 필요
-                      </p>
-                    </button>
-                  )}
-                  {recentSuccessRate !== null && recentSuccessRate > 0 && recentSuccessRate < 80 && (
-                    <button
-                      onClick={() => setActiveTab("subscribers")}
-                      className="w-full rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3 text-left transition-colors hover:bg-[#f0f0ec]"
-                    >
-                      <p className="text-[12px] font-semibold text-[#111110]">
-                        최근 성공률 {recentSuccessRate}% — 구독자 점검
-                      </p>
-                    </button>
-                  )}
-                  {latestCampaign && (
-                    <button
-                      onClick={() => handleDuplicateCampaign(latestCampaign)}
-                      className="w-full rounded-xl border border-[#084734]/15 bg-[#ECFDF5] p-3 text-left transition-colors hover:bg-[#D1FAE5]"
-                    >
-                      <p className="truncate text-[12px] font-semibold text-[#084734]">
-                        최근 캠페인 복제 · &ldquo;{latestCampaign.subject}&rdquo;
-                      </p>
-                    </button>
-                  )}
-                  {recentDraftCampaigns.length === 0 && recentFailedCampaigns.length === 0 && !latestCampaign && (
-                    <EmptyInline message="발송 이력이 쌓이면 제안이 나타납니다." />
-                  )}
-                </div>
-              </Panel>
-            </div>
-          </div>
+          <HistoryTab
+            campaigns={campaigns}
+            filteredCampaigns={filteredCampaigns}
+            campaignStatusFilter={campaignStatusFilter}
+            onCampaignStatusFilterChange={setCampaignStatusFilter}
+            campaignsLoading={campaignsLoading}
+            campaignsError={campaignsError}
+            onRetryCampaigns={() => void fetchCampaigns()}
+            recentCampaigns={recentCampaigns}
+            recentDraftCampaigns={recentDraftCampaigns}
+            recentFailedCampaigns={recentFailedCampaigns}
+            recentSuccessRate={recentSuccessRate}
+            latestCampaign={latestCampaign}
+            onDuplicateCampaign={handleDuplicateCampaign}
+            onCopyCampaign={handleCopyCampaign}
+            onGoCompose={() => setActiveTab("compose")}
+            onGoSubscribers={() => setActiveTab("subscribers")}
+          />
         )}
 
         {activeTab === "automation" && (
-          <div className="space-y-4">
-            {/* 서브탭 헤더 (규칙 / 템플릿 / 로그) + 우측 생성 액션 */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="inline-flex items-center gap-1 self-start rounded-xl border border-[#e8e8e4] bg-white p-1">
-                {([
-                  ["rules", "규칙", autoRules.length],
-                  ["templates", "템플릿", autoTemplates.length],
-                  ["logs", "로그", autoLogs.length],
-                ] as const).map(([key, label, count]) => (
-                  <button
-                    key={key}
-                    onClick={() => setAutoSubTab(key)}
-                    className={`rounded-lg px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
-                      autoSubTab === key
-                        ? "bg-[#111110] text-white"
-                        : "text-[#1a1a1a]/55 hover:text-[#111110]"
-                    }`}
-                  >
-                    {label}
-                    <span className={`ml-1.5 ${autoSubTab === key ? "text-white/60" : "text-[#1a1a1a]/30"}`}>
-                      {count}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {autoSubTab === "rules" && (
-                <Button size="sm" onClick={openCreateRule} className="self-start bg-[#084734] hover:bg-[#084734]/90 sm:self-auto">
-                  <Plus className="mr-1.5 h-4 w-4" />새 규칙
-                </Button>
-              )}
-              {autoSubTab === "templates" && (
-                <Button size="sm" onClick={openCreateTemplate} className="self-start bg-[#084734] hover:bg-[#084734]/90 sm:self-auto">
-                  <Plus className="mr-1.5 h-4 w-4" />새 템플릿
-                </Button>
-              )}
-            </div>
-
-            {/* 본문 — 로딩 / 에러 / 서브뷰 */}
-            {autoLoading ? (
-              <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] px-6 py-16 text-center text-[13px] text-[#1a1a1a]/35">
-                자동화 데이터를 불러오는 중...
-              </div>
-            ) : autoError && autoRules.length === 0 && autoTemplates.length === 0 && autoLogs.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] px-6 py-16 text-center">
-                <p className="text-[13px] text-[#1a1a1a]/40">자동화 데이터를 불러오지 못했습니다.</p>
-                <div className="mt-3">
-                  <Button size="sm" variant="outline" onClick={() => setAutoLoaded(false)}>
-                    다시 시도
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* 규칙 — 좌 목록 / 우 상세 2-pane */}
-                {autoSubTab === "rules" && (
-                  <div className="grid gap-4 lg:h-[620px] lg:grid-cols-[360px_1fr]">
-                    <div className="h-[440px] lg:h-auto">
-                      <AutomationRuleList
-                        rules={autoRules}
-                        logs={autoLogs}
-                        selectedId={selectedRuleId ?? undefined}
-                        onSelect={(rule) => setSelectedRuleId(rule.id)}
-                      />
-                    </div>
-                    <div className="flex min-h-[520px] lg:min-h-0">
-                      <AutomationRuleDetail
-                        rule={selectedRule}
-                        logs={autoLogs}
-                        triggeringId={triggeringId ?? undefined}
-                        onEdit={(rule) => {
-                          setEditingRule(rule)
-                          setSlideOverOpen(true)
-                        }}
-                        onDelete={handleDeleteRule}
-                        onToggleStatus={handleToggleRuleStatus}
-                        onTrigger={handleTriggerRule}
-                        onShowAllLogs={() => setAutoSubTab("logs")}
-                        onCreateFirst={openCreateRule}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* 템플릿 — 카드 그리드 */}
-                {autoSubTab === "templates" && (
-                  autoTemplates.length === 0 ? (
-                    <EmptyState
-                      title="등록된 템플릿이 없습니다."
-                      description="변수 치환 이메일 템플릿을 만들어 자동화 규칙에 연결하세요."
-                      action={
-                        <Button size="sm" onClick={openCreateTemplate} className="bg-[#084734] hover:bg-[#084734]/90">
-                          <Plus className="mr-1.5 h-4 w-4" />새 템플릿
-                        </Button>
-                      }
-                    />
-                  ) : (
-                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                      {autoTemplates.map((t) => (
-                        <TemplateCard
-                          key={t.id}
-                          template={t}
-                          rules={autoRules}
-                          onEdit={(tpl) => {
-                            setEditingTemplate(tpl)
-                            setEditorOpen(true)
-                          }}
-                          onDuplicate={handleDuplicateTemplate}
-                          onDelete={handleDeleteTemplate}
-                        />
-                      ))}
-                    </div>
-                  )
-                )}
-
-                {/* 로그 — 실행 이력 테이블 */}
-                {autoSubTab === "logs" && (
-                  <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-                    <AutomationLogTable logs={autoLogs} rules={autoRules} />
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* 오버레이 — 열릴 때마다 새로 마운트해 initial을 반영 */}
-            {slideOverOpen && (
-              <AutomationRuleSlideOver
-                open={slideOverOpen}
-                templates={autoTemplates}
-                initial={editingRule ?? undefined}
-                onSave={handleSaveRule}
-                onClose={() => {
-                  setSlideOverOpen(false)
-                  setEditingRule(null)
-                }}
-                adminToken={getAdminToken()}
-                loading={autoSaving}
-              />
-            )}
-            {editorOpen && (
-              <TemplateEditorDrawer
-                open={editorOpen}
-                initial={editingTemplate ?? undefined}
-                onSave={handleSaveTemplate}
-                onClose={() => {
-                  setEditorOpen(false)
-                  setEditingTemplate(null)
-                }}
-                loading={autoSaving}
-              />
-            )}
-          </div>
+          <AutomationTab
+            autoRules={autoRules}
+            autoTemplates={autoTemplates}
+            autoLogs={autoLogs}
+            autoSubTab={autoSubTab}
+            onAutoSubTabChange={setAutoSubTab}
+            autoLoading={autoLoading}
+            autoError={autoError}
+            onRetryLoad={() => setAutoLoaded(false)}
+            selectedRuleId={selectedRuleId}
+            selectedRule={selectedRule}
+            onSelectRule={(rule) => setSelectedRuleId(rule.id)}
+            triggeringId={triggeringId}
+            onOpenCreateRule={openCreateRule}
+            onOpenCreateTemplate={openCreateTemplate}
+            onEditRule={(rule) => {
+              setEditingRule(rule)
+              setSlideOverOpen(true)
+            }}
+            onDeleteRule={handleDeleteRule}
+            onToggleRuleStatus={handleToggleRuleStatus}
+            onTriggerRule={handleTriggerRule}
+            onEditTemplate={(tpl) => {
+              setEditingTemplate(tpl)
+              setEditorOpen(true)
+            }}
+            onDuplicateTemplate={handleDuplicateTemplate}
+            onDeleteTemplate={handleDeleteTemplate}
+            slideOverOpen={slideOverOpen}
+            editingRule={editingRule}
+            onSaveRule={handleSaveRule}
+            onCloseSlideOver={() => {
+              setSlideOverOpen(false)
+              setEditingRule(null)
+            }}
+            editorOpen={editorOpen}
+            editingTemplate={editingTemplate}
+            onSaveTemplate={handleSaveTemplate}
+            onCloseEditor={() => {
+              setEditorOpen(false)
+              setEditingTemplate(null)
+            }}
+            autoSaving={autoSaving}
+          />
         )}
 
         </div>
