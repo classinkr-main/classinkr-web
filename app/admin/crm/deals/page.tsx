@@ -640,9 +640,10 @@ export default function AdminCrmRevenuePage() {
         } else {
           setError(outcome.message)
         }
-        await load({ force: true })
         if (expandedWriteRequestId === requestId) {
-          await loadWriteRequestDetail(requestId)
+          await Promise.all([load({ force: true }), loadWriteRequestDetail(requestId)])
+        } else {
+          await load({ force: true })
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "외부 CRM 쓰기 실행에 실패했습니다.")
