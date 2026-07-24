@@ -309,9 +309,17 @@ function readAdminCache<T>(cacheKey: string, allowExpired = false): AdminCacheEn
   return null
 }
 
-export function clearAdminRequestCache() {
-  clearCacheScopes([GLOBAL_CACHE_SCOPE])
-  markAdminMutation([GLOBAL_CACHE_SCOPE])
+/**
+ * 어드민 요청 캐시 무효화.
+ * - 무인자: 전역 클리어(기존 동작 그대로 — 로그아웃·전체 리셋용).
+ * - prefix(예: "/api/admin/branch"): 그 prefix가 포함된 캐시 키만 지우고, 같은 스코프의
+ *   브라우저 HTTP 캐시 우회(60초)도 그 prefix에만 건다 — branch 새로고침이 다른 어드민
+ *   탭 캐시까지 날리지 않게 한다(감사 #13).
+ */
+export function clearAdminRequestCache(prefix?: string) {
+  const scopes = prefix ? [prefix] : [GLOBAL_CACHE_SCOPE]
+  clearCacheScopes(scopes)
+  markAdminMutation(scopes)
 }
 
 export function clearAdminSessionStorage() {
