@@ -24,6 +24,11 @@ import type { Subscriber } from "@/lib/marketing-types"
 
 type AnalyticsTab = "leads" | "sources" | "content"
 
+// /api/admin/subscribers?scope=analytics 응답 행 — 이 화면은 구독자에서
+// 추세(createdAt)·활성 수(status)·소스 롤업(source)만 계산하므로 그 세 필드만 받는다.
+// 같은 조회의 투영이라 롤업 수치는 전체 응답과 동일하다.
+type AnalyticsSubscriberRow = Pick<Subscriber, "createdAt" | "status" | "source">
+
 // Analytics는 리드·소스·콘텐츠 비즈니스 분석 전용 화면이다.
 // 행사 퍼널·이메일 캠페인 성과는 /admin/campaigns, 홈페이지 흐름·트래픽은 /admin/traffic에 단일화되어
 // 중복 탭(campaigns·events·flow·tracking)은 이 화면에서 제거했다(근거: admin-ia-redesign-2026-06-29 §2-🟠4).
@@ -246,7 +251,7 @@ export default function AnalyticsPage() {
   const [range, setRange] = useState<7 | 14 | 30>(30)
   const [loading, setLoading] = useState(true)
   const [leads, setLeads] = useState<LeadRecord[]>([])
-  const [subscribers, setSubscribers] = useState<Subscriber[]>([])
+  const [subscribers, setSubscribers] = useState<AnalyticsSubscriberRow[]>([])
   const [posts, setPosts] = useState<BlogPost[]>([])
   const activeTab: AnalyticsTab = ANALYTICS_TABS.some((tab) => tab.key === tabParam)
     ? (tabParam as AnalyticsTab)
@@ -262,7 +267,8 @@ export default function AnalyticsPage() {
         // Analytics는 리드의 source/status/timestamp만 소비 — 대시보드 스코프로 좁혀
         // select * 대신 필요한 컬럼만 받는다(과다 페치 제거, 응답 형태는 동일).
         fetchJson<{ leads: LeadRecord[] }>("/api/admin/leads?scope=dashboard"),
-        fetchJson<{ subscribers: Subscriber[] }>("/api/admin/subscribers"),
+        // 구독자도 롤업에 쓰는 필드만 받는다(scope=analytics — 생성일·상태·소스).
+        fetchJson<{ subscribers: AnalyticsSubscriberRow[] }>("/api/admin/subscribers?scope=analytics"),
         fetchJson<{ posts: BlogPost[] }>("/api/admin/blog"),
       ])
 
