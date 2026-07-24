@@ -290,14 +290,22 @@ export const listCachedPublicEventSlugs = unstable_cache(
   }
 )
 
+// 목록 조회 시 필요한 컬럼만 (content_markdown 본문 제외 — 리스트는 본문을 렌더하지 않음)
+const ADMIN_LIST_COLUMNS = [
+  "id", "title", "description", "category", "tag",
+  "starts_at", "ends_at", "location", "cta_label", "cta_href",
+  "image_path", "highlight", "status_override", "publication_status",
+  "slug", "created_at", "updated_at",
+].join(", ")
+
 export async function getAllEventsForAdmin(): Promise<PublicEvent[]> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("public_events")
-    .select("*")
+    .select(ADMIN_LIST_COLUMNS)
     .order("starts_at", { ascending: false })
   if (error) throw error
-  return (data as PublicEventRow[]).map(rowToEvent)
+  return (data as unknown as PublicEventRow[]).map(rowToEvent)
 }
 
 export async function createPublicEvent(input: PublicEventInsert): Promise<PublicEvent> {

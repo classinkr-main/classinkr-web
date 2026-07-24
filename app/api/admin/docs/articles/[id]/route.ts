@@ -169,7 +169,22 @@ export async function PATCH(
 
     revalidateDocsArticlePaths(existing, detail)
 
-    const reindexWarning = docsReindexNeeded(existing.status, detail.status)
+    // chunk 내용/포함 여부에 영향 없는 필드(순서·대표·SEO 메타·게시일)만 바뀐 저장은
+    // 재임베딩이 불필요하다. 그 외 필드가 하나라도 패치에 있으면 안전하게 재색인한다.
+    const NON_REINDEX_FIELDS = new Set<keyof DocsArticlePatchInput>([
+      "orderIndex",
+      "featured",
+      "seoTitle",
+      "seoDescription",
+      "publishedAt",
+      "updatedBy",
+    ])
+    const patchedFields = (Object.keys(patch) as (keyof DocsArticlePatchInput)[]).filter(
+      (key) => !NON_REINDEX_FIELDS.has(key)
+    )
+    const contentAffectingChange = patchedFields.length > 0
+
+    const reindexWarning = docsReindexNeeded(existing.status, detail.status, contentAffectingChange)
       ? await reindexDocsArticleServerSide(detail.id, "PATCH /api/admin/docs/articles/[id]")
       : undefined
 

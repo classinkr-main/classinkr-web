@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useDeferredValue, useMemo } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import {
@@ -1225,72 +1225,187 @@ export default function LeadsBoardClient() {
     })
   }
 
-  const now = new Date()
-  const today = toLocalDateKey(now)
-  // 미확인(공개 채널, 검토 전) 리드는 별도 수신함으로 취급 — "활성/단계별" 집계에서 제외해
-  // 실제로 다루고 있는 리드 수만 반영한다. 응대 SLA(미응답 큐)는 확인 여부와 무관하게 잡는다.
-  const unconfirmedLeads = leads.filter(isUnconfirmedLead)
-  const confirmedLeads = leads.filter((l) => !isUnconfirmedLead(l))
-  const counts = confirmedLeads.reduce((acc, l) => { acc[l.status] = (acc[l.status] ??  0) + 1; return acc }, {} as Record<string, number>)
-  const activeLeads = confirmedLeads.filter((l) => isActiveLead(l.status))
-  const unrespondedLeads = leads.filter(isUnrespondedLead)
-  const unresponded24h = unrespondedLeads.filter((lead) => hoursBetween(lead.timestamp, now) >= 24)
-  const unresponded48h = unrespondedLeads.filter((lead) => hoursBetween(lead.timestamp, now) >= 48)
-  const unassignedLeads = activeLeads.filter((l) => !l.assigned_to?.trim())
-  const sourceDetailOptions = Array.from(
-    new Set(leads.map((lead) => getLeadSourceDetail(lead)).filter(Boolean))
-  ).sort((a, b) => a.localeCompare(b, "ko"))
-  const leadMagnetOptions = Array.from(
-    new Set(leads.map((lead) => lead.lead_magnet?.trim()).filter(Boolean) as string[])
-  ).sort((a, b) => a.localeCompare(b, "ko"))
-  const normalizedSearch = searchQuery.trim().toLowerCase()
-  // 상태/SLA 필터까지만 적용한 중간 집합 — 유입 칩의 건수(패싯)는 이 집합 기준으로 센다.
-  const statusFiltered = leads.filter((lead) => {
-    // 응대 SLA 큐·미확인 큐가 아니면 검토 전 리드는 기본 화면에서 숨긴다.
-    if (!CONFIRMATION_GATE_EXEMPT_FILTERS.has(filter) && isUnconfirmedLead(lead)) return false
-    if (filter === "all") return true
-    if (filter === "unconfirmed") return isUnconfirmedLead(lead)
-    if (filter === "unresponded") return isUnrespondedLead(lead)
-    if (filter === "unresponded_24h") return isUnrespondedLead(lead) && hoursBetween(lead.timestamp, now) >= 24
-    if (filter === "unresponded_48h") return isUnrespondedLead(lead) && hoursBetween(lead.timestamp, now) >= 48
-    if (filter === "unassigned") return isActiveLead(lead.status) && !lead.assigned_to?.trim()
-    return lead.status === filter
-  })
-  // 유입 칩 — 현재 상태 뷰에 실제로 존재하는 묶음만 건수와 함께 노출(빈 묶음 숨김).
-  const sourceGroupCounts = new Map<LeadSourceGroup, number>()
-  for (const lead of statusFiltered) {
-    const group = getLeadSourceGroup(lead)
-    sourceGroupCounts.set(group, (sourceGroupCounts.get(group) ?? 0) + 1)
-  }
-  const sourceGroupChips = SOURCE_GROUP_ORDER
-    .map((group) => ({ group, label: SOURCE_GROUP_LABEL[group], count: sourceGroupCounts.get(group) ?? 0 }))
-    // 현재 상태 뷰에 존재하는 묶음만 노출하되, 이미 선택한 그룹은 0건이어도 남겨 해제할 수 있게 한다.
-    .filter((chip) => chip.count > 0 || chip.group === sourceGroup)
-  const filtered = statusFiltered.filter((lead) => {
-    if (sourceGroup !== "all" && getLeadSourceGroup(lead) !== sourceGroup) return false
-    if (sourceDetailFilter !== "all" && getLeadSourceDetail(lead) !== sourceDetailFilter) return false
-    if (channelSource && lead.source !== channelSource) return false
-    if (leadMagnetFilter !== "all" && lead.lead_magnet !== leadMagnetFilter) return false
-    if (!normalizedSearch) return true
+  const deferredSearch = useDeferredValue(searchQuery)
 
-    return [
-      lead.name,
-      lead.org,
-      lead.role,
-      lead.size,
-      lead.email,
-      lead.phone,
-      lead.message,
-      lead.source,
-      lead.source_detail,
-      lead.lead_magnet,
-      lead.utm_source,
-      lead.utm_medium,
-      lead.utm_campaign,
+  // 시간 버킷(24h/48h·오늘/지연 판정)이 렌더마다 흔들리지 않도록 now를 60초 틱으로 고정한다.
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // 리드 파생 집계 — 렌더마다 재계산하지 않도록 입력(리드·필터·지연검색·now틱)에만 반응해 memo한다.
+  // 계산 내용·필터 의미·유입 패싯 카운트 규칙은 이전과 동일. 선택(selectedLeadIds)·삭제중(deletingIds)
+  // 상태 의존 값만 memo 밖에서 계산해, 체크박스 토글이 보드 전체 재계산을 유발하지 않게 한다.
+  const {
+    now,
+    today,
+    unconfirmedLeads,
+    activeLeads,
+    sourceDetailOptions,
+    leadMagnetOptions,
+    statusFiltered,
+    sourceGroupChips,
+    filtered,
+    filteredIds,
+    overdueFollowUps,
+    stalledLeads,
+    pipelineRiskLeads,
+    stageSummaries,
+    ownerSummaries,
+    filterCards,
+    pipelineCards,
+  } = useMemo(() => {
+    const now = new Date(nowMs)
+    const today = toLocalDateKey(now)
+    // 미확인(공개 채널, 검토 전) 리드는 별도 수신함으로 취급 — "활성/단계별" 집계에서 제외해
+    // 실제로 다루고 있는 리드 수만 반영한다. 응대 SLA(미응답 큐)는 확인 여부와 무관하게 잡는다.
+    const unconfirmedLeads = leads.filter(isUnconfirmedLead)
+    const confirmedLeads = leads.filter((l) => !isUnconfirmedLead(l))
+    const counts = confirmedLeads.reduce((acc, l) => { acc[l.status] = (acc[l.status] ??  0) + 1; return acc }, {} as Record<string, number>)
+    const activeLeads = confirmedLeads.filter((l) => isActiveLead(l.status))
+    const unrespondedLeads = leads.filter(isUnrespondedLead)
+    const unresponded24h = unrespondedLeads.filter((lead) => hoursBetween(lead.timestamp, now) >= 24)
+    const unresponded48h = unrespondedLeads.filter((lead) => hoursBetween(lead.timestamp, now) >= 48)
+    const unassignedLeads = activeLeads.filter((l) => !l.assigned_to?.trim())
+    const sourceDetailOptions = Array.from(
+      new Set(leads.map((lead) => getLeadSourceDetail(lead)).filter(Boolean))
+    ).sort((a, b) => a.localeCompare(b, "ko"))
+    const leadMagnetOptions = Array.from(
+      new Set(leads.map((lead) => lead.lead_magnet?.trim()).filter(Boolean) as string[])
+    ).sort((a, b) => a.localeCompare(b, "ko"))
+    const normalizedSearch = deferredSearch.trim().toLowerCase()
+    // 상태/SLA 필터까지만 적용한 중간 집합 — 유입 칩의 건수(패싯)는 이 집합 기준으로 센다.
+    const statusFiltered = leads.filter((lead) => {
+      // 응대 SLA 큐·미확인 큐가 아니면 검토 전 리드는 기본 화면에서 숨긴다.
+      if (!CONFIRMATION_GATE_EXEMPT_FILTERS.has(filter) && isUnconfirmedLead(lead)) return false
+      if (filter === "all") return true
+      if (filter === "unconfirmed") return isUnconfirmedLead(lead)
+      if (filter === "unresponded") return isUnrespondedLead(lead)
+      if (filter === "unresponded_24h") return isUnrespondedLead(lead) && hoursBetween(lead.timestamp, now) >= 24
+      if (filter === "unresponded_48h") return isUnrespondedLead(lead) && hoursBetween(lead.timestamp, now) >= 48
+      if (filter === "unassigned") return isActiveLead(lead.status) && !lead.assigned_to?.trim()
+      return lead.status === filter
+    })
+    // 유입 칩 — 현재 상태 뷰에 실제로 존재하는 묶음만 건수와 함께 노출(빈 묶음 숨김).
+    const sourceGroupCounts = new Map<LeadSourceGroup, number>()
+    for (const lead of statusFiltered) {
+      const group = getLeadSourceGroup(lead)
+      sourceGroupCounts.set(group, (sourceGroupCounts.get(group) ?? 0) + 1)
+    }
+    const sourceGroupChips = SOURCE_GROUP_ORDER
+      .map((group) => ({ group, label: SOURCE_GROUP_LABEL[group], count: sourceGroupCounts.get(group) ?? 0 }))
+      // 현재 상태 뷰에 존재하는 묶음만 노출하되, 이미 선택한 그룹은 0건이어도 남겨 해제할 수 있게 한다.
+      .filter((chip) => chip.count > 0 || chip.group === sourceGroup)
+    const filtered = statusFiltered.filter((lead) => {
+      if (sourceGroup !== "all" && getLeadSourceGroup(lead) !== sourceGroup) return false
+      if (sourceDetailFilter !== "all" && getLeadSourceDetail(lead) !== sourceDetailFilter) return false
+      if (channelSource && lead.source !== channelSource) return false
+      if (leadMagnetFilter !== "all" && lead.lead_magnet !== leadMagnetFilter) return false
+      if (!normalizedSearch) return true
+
+      return [
+        lead.name,
+        lead.org,
+        lead.role,
+        lead.size,
+        lead.email,
+        lead.phone,
+        lead.message,
+        lead.source,
+        lead.source_detail,
+        lead.lead_magnet,
+        lead.utm_source,
+        lead.utm_medium,
+        lead.utm_campaign,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch))
+    })
+    const todayFollowUps = leads.filter((l) =>
+      l.follow_up_at && toLocalDateKey(l.follow_up_at) === today && isActiveLead(l.status)
+    )
+    const overdueFollowUps = leads.filter((l) =>
+      l.follow_up_at && toLocalDateKey(l.follow_up_at) < today && isActiveLead(l.status)
+    )
+    const stalledLeads = activeLeads.filter((lead) => {
+      const createdDays = daysBetween(lead.timestamp)
+      const followUpKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
+      return createdDays >= 7 && (!followUpKey || followUpKey < today)
+    })
+    const pipelineRiskLeads = [...activeLeads]
+      .filter((lead) => stalledLeads.some((stalled) => stalled.id === lead.id) || overdueFollowUps.some((overdue) => overdue.id === lead.id))
+      .sort((a, b) => {
+        const aFollowUp = a.follow_up_at ? toLocalDateKey(a.follow_up_at) : null
+        const bFollowUp = b.follow_up_at ? toLocalDateKey(b.follow_up_at) : null
+        const aOverdueDays = aFollowUp && aFollowUp < today ? daysBetween(a.follow_up_at!) : 0
+        const bOverdueDays = bFollowUp && bFollowUp < today ? daysBetween(b.follow_up_at!) : 0
+        return bOverdueDays - aOverdueDays || daysBetween(b.timestamp) - daysBetween(a.timestamp)
+      })
+      .slice(0, 5)
+    const stageSummaries = (Object.keys(STATUS_LABEL) as LeadStatus[]).map((status) => {
+      const stageLeads = confirmedLeads.filter((lead) => lead.status === status)
+      const stageOverdue = stageLeads.filter((lead) => lead.follow_up_at && toLocalDateKey(lead.follow_up_at) < today && isActiveLead(lead.status)).length
+      const highScore = stageLeads.filter((lead) => calcScore(lead) >= 70).length
+      return { status, count: stageLeads.length, stageOverdue, highScore }
+    })
+    const ownerSummaries = Array.from(
+      activeLeads.reduce((acc, lead) => {
+        const owner = getLeadOwner(lead)
+        const current = acc.get(owner) ?? { owner, total: 0, newCount: 0, contactedCount: 0, unrespondedCount: 0, overdueCount: 0, highScoreCount: 0 }
+        current.total += 1
+        if (lead.status === "new") current.newCount += 1
+        if (lead.status === "contacted") current.contactedCount += 1
+        if (isUnrespondedLead(lead)) current.unrespondedCount += 1
+        if (lead.follow_up_at && toLocalDateKey(lead.follow_up_at) < today) current.overdueCount += 1
+        if (calcScore(lead) >= 70) current.highScoreCount += 1
+        acc.set(owner, current)
+        return acc
+      }, new Map<string, { owner: string; total: number; newCount: number; contactedCount: number; unrespondedCount: number; overdueCount: number; highScoreCount: number }>())
+        .values()
+    ).sort((a, b) => b.total - a.total || b.overdueCount - a.overdueCount)
+    const filterCards: Array<{ key: LeadFilter; label: string; count: number }> = [
+      { key: "all", label: "전체", count: confirmedLeads.length },
+      { key: "unconfirmed", label: "미확인", count: unconfirmedLeads.length },
+      { key: "new", label: "신규", count: counts.new ?? 0 },
+      { key: "unresponded", label: "응대 전", count: unrespondedLeads.length },
+      { key: "unresponded_24h", label: "24h+", count: unresponded24h.length },
+      { key: "unresponded_48h", label: "48h+", count: unresponded48h.length },
+      { key: "unassigned", label: "미배정", count: unassignedLeads.length },
+      { key: "contacted", label: "연락중", count: counts.contacted ?? 0 },
+      { key: "converted", label: "전환", count: counts.converted ?? 0 },
+      { key: "closed", label: "종료", count: counts.closed ?? 0 },
     ]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(normalizedSearch))
-  })
+    const pipelineCards: Array<{ label: string; value: number; tone: string; filterKey?: LeadFilter }> = [
+      { label: "미확인 유입", value: unconfirmedLeads.length, tone: "text-[#8D6C1F]", filterKey: "unconfirmed" },
+      { label: "신규 유입", value: counts.new ?? 0, tone: "text-[#111110]", filterKey: "new" },
+      { label: "응대 전", value: unrespondedLeads.length, tone: "text-[#B85C33]", filterKey: "unresponded" },
+      { label: "24h+", value: unresponded24h.length, tone: "text-[#7A520F]", filterKey: "unresponded_24h" },
+      { label: "48h+", value: unresponded48h.length, tone: "text-[#B85C33]", filterKey: "unresponded_48h" },
+      { label: "연락 진행", value: counts.contacted ?? 0, tone: "text-[#7A520F]", filterKey: "contacted" },
+      { label: "오늘 예정", value: todayFollowUps.length, tone: "text-[#084734]" },
+    ]
+    const filteredIds = filtered.map((lead) => lead.id)
+    return {
+      now,
+      today,
+      unconfirmedLeads,
+      activeLeads,
+      sourceDetailOptions,
+      leadMagnetOptions,
+      statusFiltered,
+      sourceGroupChips,
+      filtered,
+      filteredIds,
+      overdueFollowUps,
+      stalledLeads,
+      pipelineRiskLeads,
+      stageSummaries,
+      ownerSummaries,
+      filterCards,
+      pipelineCards,
+    }
+  }, [leads, filter, sourceGroup, sourceDetailFilter, channelSource, leadMagnetFilter, deferredSearch, nowMs])
 
   // 더보기(클라 배열 슬라이싱) — 모바일 카드·데스크톱 테이블이 공유한다.
   const {
@@ -1311,70 +1426,6 @@ export default function LeadsBoardClient() {
     setSelectedLeadIds(new Set())
   }, [filter, sourceGroup, sourceDetailFilter, channelSource, leadMagnetFilter, searchQuery, collapseLeads])
 
-  const todayFollowUps = leads.filter((l) =>
-    l.follow_up_at && toLocalDateKey(l.follow_up_at) === today && isActiveLead(l.status)
-  )
-  const overdueFollowUps = leads.filter((l) =>
-    l.follow_up_at && toLocalDateKey(l.follow_up_at) < today && isActiveLead(l.status)
-  )
-  const stalledLeads = activeLeads.filter((lead) => {
-    const createdDays = daysBetween(lead.timestamp)
-    const followUpKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
-    return createdDays >= 7 && (!followUpKey || followUpKey < today)
-  })
-  const pipelineRiskLeads = [...activeLeads]
-    .filter((lead) => stalledLeads.some((stalled) => stalled.id === lead.id) || overdueFollowUps.some((overdue) => overdue.id === lead.id))
-    .sort((a, b) => {
-      const aFollowUp = a.follow_up_at ? toLocalDateKey(a.follow_up_at) : null
-      const bFollowUp = b.follow_up_at ? toLocalDateKey(b.follow_up_at) : null
-      const aOverdueDays = aFollowUp && aFollowUp < today ? daysBetween(a.follow_up_at!) : 0
-      const bOverdueDays = bFollowUp && bFollowUp < today ? daysBetween(b.follow_up_at!) : 0
-      return bOverdueDays - aOverdueDays || daysBetween(b.timestamp) - daysBetween(a.timestamp)
-    })
-    .slice(0, 5)
-  const stageSummaries = (Object.keys(STATUS_LABEL) as LeadStatus[]).map((status) => {
-    const stageLeads = confirmedLeads.filter((lead) => lead.status === status)
-    const stageOverdue = stageLeads.filter((lead) => lead.follow_up_at && toLocalDateKey(lead.follow_up_at) < today && isActiveLead(lead.status)).length
-    const highScore = stageLeads.filter((lead) => calcScore(lead) >= 70).length
-    return { status, count: stageLeads.length, stageOverdue, highScore }
-  })
-  const ownerSummaries = Array.from(
-    activeLeads.reduce((acc, lead) => {
-      const owner = getLeadOwner(lead)
-      const current = acc.get(owner) ?? { owner, total: 0, newCount: 0, contactedCount: 0, unrespondedCount: 0, overdueCount: 0, highScoreCount: 0 }
-      current.total += 1
-      if (lead.status === "new") current.newCount += 1
-      if (lead.status === "contacted") current.contactedCount += 1
-      if (isUnrespondedLead(lead)) current.unrespondedCount += 1
-      if (lead.follow_up_at && toLocalDateKey(lead.follow_up_at) < today) current.overdueCount += 1
-      if (calcScore(lead) >= 70) current.highScoreCount += 1
-      acc.set(owner, current)
-      return acc
-    }, new Map<string, { owner: string; total: number; newCount: number; contactedCount: number; unrespondedCount: number; overdueCount: number; highScoreCount: number }>())
-      .values()
-  ).sort((a, b) => b.total - a.total || b.overdueCount - a.overdueCount)
-  const filterCards: Array<{ key: LeadFilter; label: string; count: number }> = [
-    { key: "all", label: "전체", count: confirmedLeads.length },
-    { key: "unconfirmed", label: "미확인", count: unconfirmedLeads.length },
-    { key: "new", label: "신규", count: counts.new ?? 0 },
-    { key: "unresponded", label: "응대 전", count: unrespondedLeads.length },
-    { key: "unresponded_24h", label: "24h+", count: unresponded24h.length },
-    { key: "unresponded_48h", label: "48h+", count: unresponded48h.length },
-    { key: "unassigned", label: "미배정", count: unassignedLeads.length },
-    { key: "contacted", label: "연락중", count: counts.contacted ?? 0 },
-    { key: "converted", label: "전환", count: counts.converted ?? 0 },
-    { key: "closed", label: "종료", count: counts.closed ?? 0 },
-  ]
-  const pipelineCards: Array<{ label: string; value: number; tone: string; filterKey?: LeadFilter }> = [
-    { label: "미확인 유입", value: unconfirmedLeads.length, tone: "text-[#8D6C1F]", filterKey: "unconfirmed" },
-    { label: "신규 유입", value: counts.new ?? 0, tone: "text-[#111110]", filterKey: "new" },
-    { label: "응대 전", value: unrespondedLeads.length, tone: "text-[#B85C33]", filterKey: "unresponded" },
-    { label: "24h+", value: unresponded24h.length, tone: "text-[#7A520F]", filterKey: "unresponded_24h" },
-    { label: "48h+", value: unresponded48h.length, tone: "text-[#B85C33]", filterKey: "unresponded_48h" },
-    { label: "연락 진행", value: counts.contacted ?? 0, tone: "text-[#7A520F]", filterKey: "contacted" },
-    { label: "오늘 예정", value: todayFollowUps.length, tone: "text-[#084734]" },
-  ]
-  const filteredIds = filtered.map((lead) => lead.id)
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedLeadIds.has(id))
   const selectedFilteredCount = filteredIds.filter((id) => selectedLeadIds.has(id)).length
   const selectedDeleting = Array.from(selectedLeadIds).some((id) => deletingIds.has(id))

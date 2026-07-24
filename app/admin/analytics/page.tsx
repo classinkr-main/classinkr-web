@@ -259,7 +259,9 @@ export default function AnalyticsPage() {
       setLoading(true)
 
       const [leadData, subscriberData, blogData] = await Promise.all([
-        fetchJson<{ leads: LeadRecord[] }>("/api/admin/leads"),
+        // Analytics는 리드의 source/status/timestamp만 소비 — 대시보드 스코프로 좁혀
+        // select * 대신 필요한 컬럼만 받는다(과다 페치 제거, 응답 형태는 동일).
+        fetchJson<{ leads: LeadRecord[] }>("/api/admin/leads?scope=dashboard"),
         fetchJson<{ subscribers: Subscriber[] }>("/api/admin/subscribers"),
         fetchJson<{ posts: BlogPost[] }>("/api/admin/blog"),
       ])
@@ -388,6 +390,8 @@ export default function AnalyticsPage() {
           {([7, 14, 30] as const).map((value) => (
             <button
               key={value}
+              type="button"
+              aria-pressed={range === value}
               onClick={() => setRange(value)}
               className={`rounded-md px-2.5 py-2 text-[12px] font-medium transition-colors whitespace-nowrap sm:px-3 sm:py-1.5 ${
                 range === value ? "bg-white text-[#111110] shadow-sm" : "text-[#1a1a1a]/50"

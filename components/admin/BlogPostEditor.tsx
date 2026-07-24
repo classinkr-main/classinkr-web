@@ -1,6 +1,7 @@
 ﻿"use client"
 
 import Image from "next/image"
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import {
   startTransition,
@@ -44,7 +45,7 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
-import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
+import { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import {
   BLOG_STATUS_OPTIONS,
   CATEGORIES,
@@ -454,6 +455,11 @@ function FieldHint({ children }: { children: ReactNode }) {
   return <p className="text-[11px] leading-relaxed text-[#1a1a1a]/40">{children}</p>
 }
 
+const RichMarkdownEditor = dynamic(() => import("@/components/admin/RichMarkdownEditor"), {
+  loading: () => <div className="h-[600px] animate-pulse rounded-xl bg-[#f0f0ec]" />,
+  ssr: false,
+})
+
 export default function BlogPostEditor({
   mode,
   initialPost,
@@ -531,8 +537,14 @@ export default function BlogPostEditor({
   }, [])
 
   const draftStorageKey = `admin-blog-editor-${initialPost?.id ?? "new"}`
-  const filteredPosts = allPosts.filter((post) => post.id !== initialPost?.id)
-  const computedReadTime = estimateReadTime(form.contentMarkdown)
+  const filteredPosts = useMemo(
+    () => allPosts.filter((post) => post.id !== initialPost?.id),
+    [allPosts, initialPost?.id]
+  )
+  const computedReadTime = useMemo(
+    () => estimateReadTime(form.contentMarkdown),
+    [form.contentMarkdown]
+  )
   const coverPreviewUrl = form.heroImageUrl || form.imageUrl
   const authorAvatarSrc = sanitizePublicImageUrl(form.authorAvatarUrl, "")
   const authorInitial = form.author.trim().slice(0, 1) || "C"
@@ -621,7 +633,17 @@ export default function BlogPostEditor({
     const scoreBorder = score >= 80 ? "#bbf7d0" : score >= 50 ? "#fde68a" : "#fecaca"
 
     return { score, checks, scoreLabel, scoreColor, scoreBg, scoreBorder, effectiveTitle, effectiveDesc }
-  }, [form, headings, tagKeywords.length])
+  }, [
+    form.seoTitle,
+    form.title,
+    form.seoDescription,
+    form.excerpt,
+    form.imageUrl,
+    form.heroImageUrl,
+    form.slug,
+    headings,
+    tagKeywords.length,
+  ])
 
   useEffect(() => {
     formRef.current = form

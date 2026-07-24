@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { listHardwareCrmOrderCandidates } from "@/lib/repositories/hardware-crm-orders"
 
 function readPositiveInt(value: string | null) {
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const result = await listHardwareCrmOrderCandidates({ productName, quantity })
-    return NextResponse.json(result)
+    return adminCachedJson(result)
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to read CRM order candidates" },

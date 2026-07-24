@@ -1037,6 +1037,7 @@ function AdminDocsPageContent() {
                               value={draft.title}
                               disabled={rowSaving}
                               onChange={(event) => updateInlineDraft("title", event.target.value)}
+                              aria-label="문서 제목"
                               className="h-9 rounded-lg border border-[#d6d6d0] bg-white px-3 text-[13px] font-semibold text-[#111110] outline-none focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-60"
                             />
                             <textarea
@@ -1046,6 +1047,7 @@ function AdminDocsPageContent() {
                               onChange={(event) =>
                                 updateInlineDraft("description", event.target.value)
                               }
+                              aria-label="문서 설명"
                               className="w-full resize-none rounded-lg border border-[#d6d6d0] bg-white px-3 py-2 text-[12px] leading-relaxed text-[#1a1a1a]/70 outline-none focus:border-[#084734] disabled:cursor-not-allowed disabled:opacity-60"
                             />
                             <p className="font-mono text-[11px] text-[#1a1a1a]/30">{article.slug}</p>

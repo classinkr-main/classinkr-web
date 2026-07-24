@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { listAdminDocsContent } from "@/lib/admin-docs"
 
 export async function GET(req: NextRequest) {
@@ -9,7 +10,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const result = await listAdminDocsContent()
-    return NextResponse.json(result)
+    return adminCachedJson(result)
   } catch (error) {
     console.error("[GET /api/admin/docs] error:", error)
     return NextResponse.json(

@@ -1,5 +1,6 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { getAllRules, createRule } from "@/lib/repositories/automation"
 
 export async function GET(req: NextRequest) {
@@ -8,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const rules = await getAllRules()
-    return NextResponse.json({ rules })
+    return adminCachedJson({ rules })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react"
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -34,7 +35,7 @@ import {
   X,
 } from "lucide-react"
 
-import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
+import { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import {
   DocsArticle,
@@ -1071,6 +1072,11 @@ function FieldLabel({
   )
 }
 
+const RichMarkdownEditor = dynamic(() => import("@/components/admin/RichMarkdownEditor"), {
+  loading: () => <div className="h-[600px] animate-pulse rounded-xl bg-[#f0f0ec]" />,
+  ssr: false,
+})
+
 export default function DocsArticleEditor({ mode, categories, article }: Props) {
   const router = useRouter()
   const editorRef = useRef<RichMarkdownEditorHandle | null>(null)
@@ -1130,9 +1136,10 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     () => markdownToSections(form.contentMarkdown),
     [form.contentMarkdown]
   )
+  // 미리보기 모달(previewOpen)에서만 소비되므로 닫혀 있으면 섹션 오브젝트 빌드를 건너뛴다.
   const previewArticleSections = useMemo(
-    () => toPreviewArticleSections(previewSections),
-    [previewSections]
+    () => (previewOpen ? toPreviewArticleSections(previewSections) : []),
+    [previewOpen, previewSections]
   )
   const previewTocItems = useMemo(
     () => toPreviewTocItems(previewSections),
@@ -1181,6 +1188,8 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   const canMovePreviewDown =
     currentPreviewSidebarIndex >= 0 && currentPreviewSidebarIndex < previewSidebarOrderItems.length - 1
   const previewNavGroups = useMemo<DocsNavGroup[]>(() => {
+    // 미리보기 사이드바(모달 전용)에서만 소비 — 닫혀 있으면 전체 카테고리×문서 매핑을 건너뛴다.
+    if (!previewOpen) return []
     const currentHref = "#preview-current-doc"
     const currentTitle = form.title.trim() || "새 문서"
     const currentOrder = Number.isFinite(form.orderIndex) ? form.orderIndex : 100
@@ -1221,7 +1230,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
           })),
       }
     })
-  }, [categories, form.categoryId, form.orderIndex, form.title, support.articleOptions])
+  }, [previewOpen, categories, form.categoryId, form.orderIndex, form.title, support.articleOptions])
   const chatbotIncluded =
     form.status === "published" && form.visibility !== "internal" && !form.noindex
   const aiChecklist = useMemo(
