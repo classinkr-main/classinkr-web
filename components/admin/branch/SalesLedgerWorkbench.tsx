@@ -81,6 +81,20 @@ const DshNumericGrid = dynamic(() => import("./ledger/DshNumericGrid").then((m) 
   ssr: false,
   loading: () => <LoadingPanel label="DSH 수치 그리드를 불러오는 중" />,
 })
+// DSH 렌즈 디벨롭(2026-07-27) 신규 카드 3종 — 지표 밴드·월별 페이스·팀 그리드도 수치
+// 그리드와 동일 관례(ssr:false + LoadingPanel)로 지연 로드해 첫 로드 번들에서 제외한다.
+const DshMetricsBand = dynamic(() => import("./ledger/DshMetricsBand").then((m) => m.DshMetricsBand), {
+  ssr: false,
+  loading: () => <LoadingPanel label="DSH 핵심 지표를 불러오는 중" />,
+})
+const DshMonthlyPace = dynamic(() => import("./ledger/DshMonthlyPace").then((m) => m.DshMonthlyPace), {
+  ssr: false,
+  loading: () => <LoadingPanel label="월별 페이스를 불러오는 중" />,
+})
+const DshTeamGrid = dynamic(() => import("./ledger/DshTeamGrid").then((m) => m.DshTeamGrid), {
+  ssr: false,
+  loading: () => <LoadingPanel label="팀·멤버 수치를 불러오는 중" />,
+})
 const WeeklyCloseSection = dynamic(() => import("./ledger/WeeklyCloseSection").then((m) => m.WeeklyCloseSection), {
   ssr: false,
   loading: () => <LoadingPanel label="주간 마감 데이터를 불러오는 중" />,
@@ -3408,10 +3422,31 @@ export default function SalesLedgerWorkbench() {
           >
             {lens === "dsh" && (
               <div className="space-y-5">
+                {/* DSH 렌즈 배치(2026-07-27 디벨롭): 지표 밴드 → 수치 그리드 → 월별 페이스 →
+                    팀·멤버 그리드 → 주간 마감. 밴드/페이스는 dsh_breakdown 클라이언트 파생,
+                    팀 그리드만 dsh_rows(같은 ?breakdown=1 opt-in) 신규 필드를 소비한다. */}
+                <DshMetricsBand
+                  breakdown={summary.data?.dsh_breakdown ?? []}
+                  loading={summary.loading && !summary.data}
+                  dataSource={summary.data?.data_sources?.dsh ?? null}
+                />
+
                 <DshNumericGrid
                   breakdown={summary.data?.dsh_breakdown ?? []}
                   view={dshGridView}
                   onViewChange={setDshGridView}
+                  loading={summary.loading && !summary.data}
+                  dataSource={summary.data?.data_sources?.dsh ?? null}
+                />
+
+                <DshMonthlyPace
+                  breakdown={summary.data?.dsh_breakdown ?? []}
+                  loading={summary.loading && !summary.data}
+                  dataSource={summary.data?.data_sources?.dsh ?? null}
+                />
+
+                <DshTeamGrid
+                  rows={summary.data?.dsh_rows ?? []}
                   loading={summary.loading && !summary.data}
                   dataSource={summary.data?.data_sources?.dsh ?? null}
                 />

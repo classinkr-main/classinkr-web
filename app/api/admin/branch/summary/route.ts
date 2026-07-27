@@ -435,7 +435,11 @@ export async function GET(req: NextRequest) {
       // 참고) — 플래그 없으면 키 자체를 생략한다(undefined 값이 아니라 spread 자체를 건너뜀).
       // 이 분기는 응답 직렬화 단계뿐이라 unstable_cache(readSheetFreshness, 고정 키
       // "branch-sheet-freshness")와는 무관 — 캐시 키에 breakdown을 안 태워도 안전하다.
-      ...(includeBreakdown ? { dsh_breakdown: breakdown } : {}),
+      // dsh_rows(파서 DshRow[]: 팀 ALL/BD/MKT/CSM + 멤버 × goal/status)는 장부 DSH 렌즈의
+      // 팀·멤버 그리드(DshTeamGrid) 원천 — breakdown과 동일한 opt-in 플래그에 함께 태운다
+      // (같은 소비처 한 곳뿐이라 별도 플래그를 늘리지 않는다). 추가 페이로드는 팀 8행+멤버
+      // ~20행 수준으로 breakdown보다 훨씬 작고, 캐시 키 무변경 안전 근거도 위와 동일하다.
+      ...(includeBreakdown ? { dsh_breakdown: breakdown, dsh_rows: dsh.rows } : {}),
     })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
