@@ -11,7 +11,7 @@
 
 import { fiscalQuarter, fyOf, ymKey } from "@/lib/branch/fiscal"
 import { cnyExact } from "@/lib/branch/money-format"
-import type { BranchDshBreakdownRow, BranchDshRow } from "../types"
+import type { BranchDealMix, BranchDshBreakdownRow, BranchDshRow } from "../types"
 
 // ── 수치 묶음(연간/분기/월) 공통 형태 ────────────────────────────────────────
 
@@ -266,6 +266,167 @@ export function deriveDshMetricsBand(breakdown: BranchDshBreakdownRow[], now: Da
         segment("Channel", (row) => row.channel === "Channel"),
         // "(미구분)" = 파서가 채널 공란 행을 버리지 않고 채택한 값(dsh.ts 2차 패스 주석 참조).
         segment("(미구분)", (row) => row.channel !== "Direct" && row.channel !== "Channel"),
+      ],
+    },
+  }
+}
+
+// ── 스코프(월/분기/연간) 지표 파생 — 지표 밴드 기간 토글용 ───────────────────
+
+// 밴드 기간 토글 스코프. W(주)는 DSH 시트에 주 단위 목표/실적이 없어 breakdown이 아니라
+// summary deal_mix의 주간 실적(deriveDshWeeklyFromDealMix)을 쓴다 — 아래 주석 참조.
+export type DshBandScope = "W" | "M" | "Q" | "Y"
+
+export interface DshScopedMetrics {
+  /** 타일 라벨용 스코프 표기 — "연간" | "Q2" | "7월" | "범위 밖". */
+  scopeLabel: string
+  total: DshMetricTriple & { gap: number }
+  software: DshMetricTriple
+  hardware: DshMetricTriple
+  newBiz: DshMetricTriple
+  renew: DshMetricTriple
+  direct: DshMetricTriple
+  channel: DshMetricTriple
+  composition: DshMetricsBandData["composition"]
+}
+
+function pickScopedValue(row: DshNumbersLike, scope: "M" | "Q" | "Y", quarterIndex: number, ym: string | null): number {
+  if (scope === "Y") return row.annual
+  if (scope === "Q") return row.quarters[quarterIndex] ?? 0
+  return ym ? row.months[ym] ?? 0 : 0
+}
+
+// 월/분기/연간 스코프의 차원별(전사/SW/HW/New/Renew/Direct/Channel) 목표·실적·달성률 —
+// 전부 dedupeDshByKind를 거친다(3중 계상 방지 절대 규칙). 기준 기간은 "오늘"(UTC)이 속한
+// 현재 회계분기/회계월 고정 — 과거 기간 탐색은 월별 페이스·수치 그리드가 담당한다.
+export function deriveDshScopedMetrics(
+  breakdown: BranchDshBreakdownRow[],
+  now: Date,
+  scope: "M" | "Q" | "Y",
+): DshScopedMetrics | null {
+  if (breakdown.length === 0) return null
+  const deduped = dedupeDshByKind(breakdown)
+  const quarterIndex = fiscalQuarter(now.getUTCMonth() + 1) - 1
+  const nowYm = ymKey(now)
+  const ym = deduped.monthKeys.includes(nowYm) ? nowYm : null
+
+  const sum = (bucket: Map<string, BranchDshBreakdownRow>, pred?: (row: BranchDshBreakdownRow) => boolean): number => {
+    let acc = 0
+    for (const row of bucket.values()) {
+      if (pred && !pred(row)) continue
+      acc += pickScopedValue(row, scope, quarterIndex, ym)
+    }
+    return acc
+  }
+  const triple = (pred?: (row: BranchDshBreakdownRow) => boolean): DshMetricTriple => {
+    const goal = sum(deduped.goal, pred)
+    const status = sum(deduped.status, pred)
+    return { goal, status, pct: dshRate(status, goal) }
+  }
+  const segment = (label: string, pred: (row: BranchDshBreakdownRow) => boolean): DshCompositionSegment => ({
+    label,
+    value: sum(deduped.status, pred),
+  })
+
+  const total = triple()
+  return {
+    scopeLabel: scope === "Y" ? "연간" : scope === "Q" ? `Q${quarterIndex + 1}` : ym ? dshMonthLabel(ym) : "범위 밖",
+    total: { ...total, gap: total.status - total.goal },
+    software: triple((row) => row.category === "Software"),
+    hardware: triple((row) => row.category === "Hardware"),
+    newBiz: triple((row) => row.status_type === "New"),
+    renew: triple((row) => row.status_type === "Renew"),
+    direct: triple((row) => row.channel === "Direct"),
+    channel: triple((row) => row.channel === "Channel"),
+    composition: {
+      swHw: [
+        segment("SW", (row) => row.category === "Software"),
+        segment("HW", (row) => row.category === "Hardware"),
+      ],
+      newRenew: [
+        segment("New", (row) => row.status_type === "New"),
+        segment("Renew", (row) => row.status_type === "Renew"),
+      ],
+      channel: [
+        segment("Direct", (row) => row.channel === "Direct"),
+        segment("Channel", (row) => row.channel === "Channel"),
+        segment("(미구분)", (row) => row.channel !== "Direct" && row.channel !== "Channel"),
+      ],
+    },
+  }
+}
+
+// ── 주간 지표 파생 (deal_mix 원천) ───────────────────────────────────────────
+
+export interface DshWeeklyDimension {
+  actual: number
+  /** 주간 합계 대비 구성비(%) — 합계가 0이면 null. */
+  share: number | null
+}
+
+export interface DshWeeklyDealMetrics {
+  total: { actual: number; prevActual: number }
+  software: DshWeeklyDimension
+  hardware: DshWeeklyDimension
+  newBiz: DshWeeklyDimension
+  renew: DshWeeklyDimension
+  direct: DshWeeklyDimension
+  channel: DshWeeklyDimension
+  composition: DshMetricsBandData["composition"]
+}
+
+// 주간 뷰의 데이터 진실: DSH 시트에는 주 단위 목표/실적이 없다. summary deal_mix의
+// week_actual(REV 딜 first_payment가 이번 주(월요일 시작, UTC)에 잡힌 계약 금액 —
+// app/api/admin/branch/summary/route.ts aggregateWeekly)을 그대로 쓴다. 따라서
+// ① 주 목표·달성률은 존재하지 않는다(합성 금지) ② summary 요청의 팀 필터를 따른다
+// (breakdown 기반 M/Q/Y가 전사 고정인 것과 다름 — 밴드 캡션에 명시할 것)
+// ③ 채널 축은 Direct/Channel 매핑 딜만 집계된다(미매핑 딜 제외라 SW:HW 합과 다를 수 있음).
+export function deriveDshWeeklyFromDealMix(dealMix: BranchDealMix | null | undefined): DshWeeklyDealMetrics | null {
+  if (!dealMix) return null
+  // weekly_available=false면 축 전체 week_actual이 null(서버 규약) — 주간 뷰 자체를 접는다.
+  if (dealMix.meta && !dealMix.meta.by_category.weekly_available) return null
+  const week = (slices: { name: string; week_actual?: number | null }[] | undefined, name: string): number => {
+    const slice = slices?.find((s) => s.name === name)
+    return slice?.week_actual ?? 0
+  }
+  const prevWeek = (slices: { name: string; prev_week_actual?: number | null }[] | undefined): number =>
+    (slices ?? []).reduce((acc, s) => acc + (s.prev_week_actual ?? 0), 0)
+
+  // category 분류기는 전 딜을 Software/Hardware 중 하나로 귀속시킨다(null 없음) —
+  // 주간 총액은 category 축 합이 정본이다.
+  const software = week(dealMix.by_category, "Software")
+  const hardware = week(dealMix.by_category, "Hardware")
+  const total = software + hardware
+  if (total === 0 && prevWeek(dealMix.by_category) === 0) {
+    // 주간 매핑 딜이 있어도 금액이 전부 0이면 표시 가치가 없다 — 빈 상태 문구로 처리.
+    return null
+  }
+  const dim = (actual: number): DshWeeklyDimension => ({ actual, share: total > 0 ? (actual / total) * 100 : null })
+
+  const newBiz = week(dealMix.by_status_type, "New")
+  const renew = week(dealMix.by_status_type, "Renew")
+  const direct = week(dealMix.by_channel, "Direct")
+  const channel = week(dealMix.by_channel, "Channel")
+  return {
+    total: { actual: total, prevActual: prevWeek(dealMix.by_category) },
+    software: dim(software),
+    hardware: dim(hardware),
+    newBiz: dim(newBiz),
+    renew: dim(renew),
+    direct: dim(direct),
+    channel: dim(channel),
+    composition: {
+      swHw: [
+        { label: "SW", value: software },
+        { label: "HW", value: hardware },
+      ],
+      newRenew: [
+        { label: "New", value: newBiz },
+        { label: "Renew", value: renew },
+      ],
+      channel: [
+        { label: "Direct", value: direct },
+        { label: "Channel", value: channel },
       ],
     },
   }

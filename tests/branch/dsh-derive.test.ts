@@ -3,10 +3,12 @@ import {
   aggregateDshTotals,
   deriveDshMetricsBand,
   deriveDshMonthlyPace,
+  deriveDshScopedMetrics,
+  deriveDshWeeklyFromDealMix,
   dshRate,
   dshRateToneClass,
 } from "@/components/admin/branch/ledger/dsh-derive"
-import type { BranchDshBreakdownRow } from "@/components/admin/branch/types"
+import type { BranchDealMix, BranchDshBreakdownRow } from "@/components/admin/branch/types"
 
 // DSH 렌즈 파생 SSOT(dsh-derive) 검증 — 지표 밴드·월별 페이스가 소비하는 전사 합계·기간
 // 지표·필요 페이스·구성비. 핵심 회귀: breakdown 스코프 중복(전사+팀+멤버)은 합산하면
@@ -237,4 +239,85 @@ describe("deriveDshMonthlyPace", () => {
     if (!pace) throw new Error("fixture pace must not be null")
     return pace
   }
+})
+
+describe("deriveDshScopedMetrics", () => {
+  it("Q 스코프: 현재 회계분기(Q2) 값을 dedupe 후 합산한다 — 중복 채택 회귀 포함", () => {
+    const scoped = deriveDshScopedMetrics(bandFixture(), NOW, "Q")
+    if (!scoped) throw new Error("fixture scoped must not be null")
+    expect(scoped.scopeLabel).toBe("Q2")
+    // 중복 멤버 행(annual 400k, Q 100k)이 합산됐다면 goal 550k — 정답은 300k(SW) + 150k(HW).
+    expect(scoped.total.goal).toBe(450_000)
+    expect(scoped.total.status).toBe(280_000)
+    expect(scoped.total.gap).toBe(-170_000)
+    expect(scoped.software.goal).toBe(300_000)
+    expect(scoped.software.pct).toBeCloseTo((280_000 / 300_000) * 100, 6)
+    expect(scoped.hardware.status).toBe(0)
+    // 픽스처에 Channel 콤보가 없다 — 목표 0이면 달성률은 null("–")이어야 한다.
+    expect(scoped.channel.goal).toBe(0)
+    expect(scoped.channel.pct).toBeNull()
+    // 구성비도 같은 스코프(Q2 Status) 기준.
+    expect(scoped.composition.swHw.map((s) => s.value)).toEqual([280_000, 0])
+  })
+
+  it("M 스코프: 현재 회계월(7월) 값 — New/Renew·Direct 축까지 스코프를 따른다", () => {
+    const scoped = deriveDshScopedMetrics(bandFixture(), NOW, "M")
+    if (!scoped) throw new Error("fixture scoped must not be null")
+    expect(scoped.scopeLabel).toBe("7월")
+    expect(scoped.total.goal).toBe(150_000)
+    expect(scoped.total.status).toBe(280_000)
+    expect(scoped.newBiz.status).toBe(280_000)
+    expect(scoped.renew.goal).toBe(50_000)
+    expect(scoped.direct.status).toBe(280_000)
+    expect(scoped.composition.channel.map((s) => s.value)).toEqual([280_000, 0, 0])
+  })
+
+  it("빈 breakdown은 null", () => {
+    expect(deriveDshScopedMetrics([], NOW, "Q")).toBeNull()
+  })
+})
+
+describe("deriveDshWeeklyFromDealMix", () => {
+  function slice(name: string, week: number | null, prevWeek: number | null) {
+    return { name, goal: 0, actual: 0, pct: 0, week_actual: week, prev_week_actual: prevWeek }
+  }
+  function mix(): BranchDealMix {
+    return {
+      by_category: [slice("Software", 30_000, 10_000), slice("Hardware", 70_000, 40_000)],
+      by_status_type: [slice("New", 60_000, 20_000), slice("Renew", 40_000, 30_000)],
+      by_channel: [slice("Direct", 55_000, 25_000), slice("Channel", 20_000, 0)],
+    }
+  }
+
+  it("주간 총액은 category 축 합(전 딜 귀속) — 구성비·전주도 함께 파생한다", () => {
+    const weekly = deriveDshWeeklyFromDealMix(mix())
+    if (!weekly) throw new Error("fixture weekly must not be null")
+    expect(weekly.total.actual).toBe(100_000)
+    expect(weekly.total.prevActual).toBe(50_000)
+    expect(weekly.software.share).toBeCloseTo(30, 6)
+    expect(weekly.hardware.share).toBeCloseTo(70, 6)
+    // 채널 축은 미매핑 딜이 빠져 총액(100k)보다 작을 수 있다 — 있는 그대로 노출.
+    expect(weekly.direct.actual).toBe(55_000)
+    expect(weekly.channel.actual).toBe(20_000)
+    expect(weekly.composition.newRenew.map((s) => s.value)).toEqual([60_000, 40_000])
+  })
+
+  it("weekly_available=false(메타)면 null — 주간 뷰를 접는다", () => {
+    const meta = { prev_period_label: "전월", prev_period_available: false, weekly_available: false }
+    const unavailable: BranchDealMix = {
+      ...mix(),
+      meta: { by_category: meta, by_status_type: meta, by_channel: meta, by_segment: meta },
+    }
+    expect(deriveDshWeeklyFromDealMix(unavailable)).toBeNull()
+  })
+
+  it("deal_mix 자체가 없거나 주간 금액이 전부 0/null이면 null", () => {
+    expect(deriveDshWeeklyFromDealMix(null)).toBeNull()
+    const empty: BranchDealMix = {
+      by_category: [slice("Software", null, null), slice("Hardware", null, null)],
+      by_status_type: [],
+      by_channel: [],
+    }
+    expect(deriveDshWeeklyFromDealMix(empty)).toBeNull()
+  })
 })

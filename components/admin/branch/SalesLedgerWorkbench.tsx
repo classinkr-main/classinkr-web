@@ -3429,6 +3429,10 @@ export default function SalesLedgerWorkbench() {
                   breakdown={summary.data?.dsh_breakdown ?? []}
                   loading={summary.loading && !summary.data}
                   dataSource={summary.data?.data_sources?.dsh ?? null}
+                  // 주간 뷰 원천 — deal_mix(week_actual)는 summary 팀 필터를 따르므로 team도
+                  // 함께 넘겨 밴드 캡션이 스코프를 정직하게 표기하게 한다(M/Q/Y는 전사 고정).
+                  dealMix={summary.data?.deal_mix ?? null}
+                  team={team}
                 />
 
                 <DshNumericGrid

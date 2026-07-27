@@ -41,6 +41,11 @@ export interface BranchDealMixSlice {
   // 서버가 null을 내려보낸다. 0이 아니라 null인 경우에만 "데이터 없음"으로 취급할 것
   // (0은 실제로 전기 실적이 0이었다는 유효한 값).
   prev_actual?: number | null
+  // 이번 주/전주(월요일 시작, UTC) REV 딜 first_payment 기준 확정 금액 — 서버 MixSlice의
+  // week_actual/prev_week_actual 미러. meta.weekly_available=false면 축 전체가 null.
+  // 소비처: 장부 DSH 지표 밴드 주간 뷰(ledger/dsh-derive.ts deriveDshWeeklyFromDealMix).
+  week_actual?: number | null
+  prev_week_actual?: number | null
 }
 
 // deal_mix 4개 분해축(category/status_type/channel/segment) 각각의 전기 비교 메타 —
