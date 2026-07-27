@@ -200,8 +200,15 @@ export async function postJson(
         method: "POST",
         servername: parsed.hostname, // TLS SNI/인증서는 원래 호스트명 기준
         // 검증된 단일 IP만 반환한다. 추가 DNS 조회는 일어나지 않는다.
-        lookup: (_hostname, _options, callback) => {
-          callback(null, pinned.address, pinned.family)
+        // Node 20+ 의 autoSelectFamily(기본 ON) 경로는 lookup 을 all:true 로
+        // 호출하고 배열 콜백을 기대한다 — 문자열로 응답하면 net 이
+        // "Invalid IP address: undefined" 로 연결 자체를 못 연다.
+        lookup: (_hostname, options, callback) => {
+          if (options?.all) {
+            callback(null, [{ address: pinned.address, family: pinned.family }])
+          } else {
+            callback(null, pinned.address, pinned.family)
+          }
         },
         headers: {
           "Content-Type": "application/json",
