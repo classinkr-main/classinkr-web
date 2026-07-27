@@ -11,6 +11,8 @@
 //  - 행사 매출: null → "미입력"(0원과 구분).
 //  - Meta 집행: 계정 통화 네이티브(예: "USD 1,234.5") — 절대 ₩ 로 접지 않는다.
 //  - 채널·통화를 가로지르는 종합 합산·수익률(ROAS) 지표는 만들지 않는다(타입에 필드 없음).
+//  - 연결 0 건 채널: 0 의 나열 대신 "연결 없음" + 점선/뉴트럴로 물러난다(0건 ≠ 성과 0).
+//  - 연결된 실행: API 가 붙여준 label 우선, 없으면 raw refId 폴백(라벨 조작 금지).
 // DESIGN.md 팔레트만 사용.
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
@@ -62,6 +64,8 @@ const CHANNEL_ICON: Record<CampaignRefType, ReactNode> = {
 
 /* ── 롤업 카드(순수·프레젠테이션·테스트 대상) ─────────────────── */
 
+// 연결된 실행이 0 인 채널은 실데이터 채널과 같은 무게로 외치면 안 된다 —
+// 점선 보더 + 뉴트럴로 물러나고, 0 의 나열 대신 "연결 없음"만 말한다(정직: 0 건 ≠ 성과 0).
 function RollupTile({
   icon,
   label,
@@ -73,19 +77,58 @@ function RollupTile({
   count: number
   children: ReactNode
 }) {
+  const empty = count === 0
   return (
-    <div className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#fafaf8] px-3 py-2.5">
+    <div
+      className={`rounded-xl border px-3 py-2.5 ${
+        empty
+          ? "border-dashed border-[#e8e8e4] bg-transparent"
+          : "border-[rgba(0,0,0,0.08)] bg-[#fafaf8]"
+      }`}
+    >
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#111110]">
-          <span className="text-[#615D59]">{icon}</span>
+        <span
+          className={`inline-flex items-center gap-1.5 text-[12px] font-semibold ${
+            empty ? "text-[#A39E98]" : "text-[#111110]"
+          }`}
+        >
+          <span className={empty ? "text-[#A39E98]" : "text-[#615D59]"}>{icon}</span>
           {label}
         </span>
-        <span className="shrink-0 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-1.5 py-0.5 text-[10.5px] font-medium tabular-nums text-[#615D59]">
-          {count}건
-        </span>
+        {!empty && (
+          <span className="shrink-0 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-1.5 py-0.5 text-[10.5px] font-medium tabular-nums text-[#615D59]">
+            {count}건
+          </span>
+        )}
       </div>
-      <p className="text-[12px] leading-relaxed tabular-nums text-[#31302E]">{children}</p>
+      <p
+        className={`text-[12px] leading-relaxed tabular-nums ${
+          empty ? "text-[#A39E98]" : "text-[#31302E]"
+        }`}
+      >
+        {empty ? "연결 없음" : children}
+      </p>
     </div>
+  )
+}
+
+/* ── 연결된 실행의 라벨(순수·테스트 대상) ─────────────────────── */
+
+// API 가 읽기시점에 붙여준 사람이 읽는 이름(label)을 우선 표기한다.
+// 해석 실패(실행 삭제 · Meta 조회 지평 밖)면 label 이 없다 → raw refId 로 폴백(mono·말줄임).
+// 절대 "이메일 캠페인" 같은 그럴듯한 이름을 지어내지 않는다.
+export function CampaignLinkLabel({ link }: { link: CampaignLink }) {
+  if (link.label) {
+    return (
+      <span className="truncate text-[12px] text-[#31302E]" title={`${link.label} · ${link.refId}`}>
+        {link.label}
+      </span>
+    )
+  }
+  return (
+    <span className="truncate font-mono text-[11px] text-[#615D59]" title={link.refId}>
+      {link.refId}
+    </span>
   )
 }
 
@@ -409,12 +452,7 @@ export default function CampaignDetailPanel({
                                   key={link.id}
                                   className="flex items-center justify-between gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#fafaf8] px-2.5 py-1.5"
                                 >
-                                  <span
-                                    className="truncate font-mono text-[11px] text-[#615D59]"
-                                    title={link.refId}
-                                  >
-                                    {link.refId}
-                                  </span>
+                                  <CampaignLinkLabel link={link} />
                                   <button
                                     type="button"
                                     onClick={() => void handleRemove(link.id)}
