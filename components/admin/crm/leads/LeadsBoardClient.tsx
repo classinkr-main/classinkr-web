@@ -63,6 +63,15 @@ import {
 // 모바일 카드·데스크톱 테이블이 같은 filtered를 그리므로 visible 상한을 공유한다.
 const LEAD_BOARD_LIST_STEP = 50
 
+// 유입 셀의 보조 세그먼트 — 그룹 라벨과 사실상 같은 말이면 생략해 "메타 · Meta 리드" 같은
+// 중복 표기를 막는다(메타는 광고명 칩이 세부를 담당). 그룹 내 소스가 여럿인 경우(홈페이지의
+// 데모/문의/CTA 등)에만 구분값으로 노출한다.
+function getLeadSourceSegment(lead: LeadRecord): string | null {
+  if (lead.source === "meta_lead_ads") return null
+  const label = SOURCE_LABEL[lead.source] ?? lead.source
+  return label === SOURCE_GROUP_LABEL[getLeadSourceGroup(lead)] ? null : label
+}
+
 type ConvertLeadResponse = {
   customer: {
     id?: string
@@ -1260,7 +1269,7 @@ export default function LeadsBoardClient() {
     stageSummaries,
     ownerSummaries,
     filterCards,
-    pipelineCards,
+    todayFollowUpCount,
   } = useMemo(() => {
     const now = new Date(nowMs)
     const today = toLocalDateKey(now)
@@ -1382,15 +1391,9 @@ export default function LeadsBoardClient() {
       { key: "converted", label: "전환", count: counts.converted ?? 0 },
       { key: "closed", label: "종료", count: counts.closed ?? 0 },
     ]
-    const pipelineCards: Array<{ label: string; value: number; tone: string; filterKey?: LeadFilter }> = [
-      { label: "미확인 유입", value: unconfirmedLeads.length, tone: "text-[#8D6C1F]", filterKey: "unconfirmed" },
-      { label: "신규 유입", value: counts.new ?? 0, tone: "text-[#111110]", filterKey: "new" },
-      { label: "응대 전", value: unrespondedLeads.length, tone: "text-[#B85C33]", filterKey: "unresponded" },
-      { label: "24h+", value: unresponded24h.length, tone: "text-[#7A520F]", filterKey: "unresponded_24h" },
-      { label: "48h+", value: unresponded48h.length, tone: "text-[#B85C33]", filterKey: "unresponded_48h" },
-      { label: "연락 진행", value: counts.contacted ?? 0, tone: "text-[#7A520F]", filterKey: "contacted" },
-      { label: "오늘 예정", value: todayFollowUps.length, tone: "text-[#084734]" },
-    ]
+    // 숫자 진입점은 아래 필터 카운트 카드로 단일화 — 여기서 별도 카드 배열을 만들지 않는다.
+    // 필터 카드에 없는 "오늘 예정"(팔로업)만 큐 패널 헤더 배지로 노출한다.
+    const todayFollowUpCount = todayFollowUps.length
     const filteredIds = filtered.map((lead) => lead.id)
     return {
       now,
@@ -1409,7 +1412,7 @@ export default function LeadsBoardClient() {
       stageSummaries,
       ownerSummaries,
       filterCards,
-      pipelineCards,
+      todayFollowUpCount,
     }
   }, [leads, filter, sourceGroup, sourceDetailFilter, channelSource, leadMagnetFilter, deferredSearch, nowMs])
 
@@ -1486,51 +1489,40 @@ export default function LeadsBoardClient() {
         </div>
       </div>
 
-      {/* 리드 응대 큐 */}
-      <div id="lead-queue" className="mb-4 grid gap-3 lg:grid-cols-[1.1fr_0.9fr] scroll-mt-24">
+      {/* 파이프라인 단계 + 담당자 — 숫자·필터 진입은 아래 카운트 카드가 단일 창구.
+          여기는 카드에 없는 부가 정보(단계별 고득점·지연, 오늘 예정, 담당자 분포)만 남긴다. */}
+      <div id="lead-queue" className="mb-4 grid gap-3 lg:grid-cols-2 scroll-mt-24">
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Lead Queue</p>
-              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">리드 응대 큐</h2>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Pipeline</p>
+              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">단계별 현황</h2>
             </div>
-            <span className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[12px] font-medium text-[#1a1a1a]/55">
-              활성 {activeLeads.length}건
-            </span>
+            <div className="flex items-center gap-2">
+              {todayFollowUpCount > 0 && (
+                <span className="rounded-full border border-[#D7EBDD] px-3 py-1 text-[12px] font-medium text-[#084734]">
+                  오늘 예정 {todayFollowUpCount}
+                </span>
+              )}
+              <span className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[12px] font-medium text-[#1a1a1a]/55">
+                활성 {activeLeads.length}건
+              </span>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7">
-            {pipelineCards.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => item.filterKey && setFilter(item.filterKey)}
-                className={`rounded-xl bg-[#fafaf8] px-3 py-3 text-left transition-colors ${
-                  item.filterKey ? "hover:bg-[#f0f0ec]" : "cursor-default"
-                }`}
-              >
-                <p className="text-[11px] font-medium text-[#1a1a1a]/40">{item.label}</p>
-                <p className={`mt-1 text-2xl font-bold ${item.tone}`}>{item.value}</p>
-              </button>
-            ))}
-          </div>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <div className="divide-y divide-[#f0f0ec]">
             {stageSummaries.map((stage) => (
               <button
                 key={stage.status}
                 type="button"
                 onClick={() => setFilter(stage.status)}
-                className="rounded-xl border border-[#e8e8e4] px-3 py-3 text-left transition-colors hover:border-[#c8c8c4] hover:bg-[#fafaf8]"
+                className="flex w-full items-center justify-between gap-3 px-1 py-2.5 text-left transition-colors hover:bg-[#fafaf8]"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_COLOR[stage.status]}`}>
-                    {STATUS_LABEL[stage.status]}
-                  </span>
-                  <span className="text-[18px] font-bold text-[#111110]">{stage.count}</span>
-                </div>
-                <div className="mt-2 flex items-center gap-2 text-[11px] text-[#1a1a1a]/40">
+                <StatusPill status={stage.status} />
+                <span className="flex items-center gap-3 text-[11px] text-[#1a1a1a]/40">
                   <span>고득점 {stage.highScore}</span>
                   {stage.stageOverdue > 0 && <span className="font-medium text-[#B85C33]">지연 {stage.stageOverdue}</span>}
-                </div>
+                  <span className="min-w-[2.5rem] text-right text-[15px] font-bold tabular-nums text-[#111110]">{stage.count}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -1606,7 +1598,10 @@ export default function LeadsBoardClient() {
                     <p className="truncate text-[13px] font-semibold text-[#111110]">{lead.name ?? lead.org ?? "이름 없음"}</p>
                     <ScoreBadge score={calcScore(lead)} />
                   </div>
-                  <p className="mt-1 truncate text-[12px] text-[#1a1a1a]/45">{SOURCE_LABEL[lead.source] ?? lead.source}</p>
+                  {/* 세부 유입(메타는 광고명)이 있으면 그쪽이 더 정보값 — 없을 때만 소스 라벨 */}
+                  <p className="mt-1 truncate text-[12px] text-[#1a1a1a]/45">
+                    {getLeadSourceDetail(lead) || (SOURCE_LABEL[lead.source] ?? lead.source)}
+                  </p>
                 </button>
                 <button
                   type="button"
@@ -1888,6 +1883,8 @@ export default function LeadsBoardClient() {
               const isTodayFollowUp = followUpDateKey === today
               const ageDays = daysBetween(lead.timestamp)
               const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp, now) : null
+              const sourceDetail = getLeadSourceDetail(lead)
+              const sourceSegment = getLeadSourceSegment(lead)
 
               return (
                 <div
@@ -1956,11 +1953,12 @@ export default function LeadsBoardClient() {
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[#1a1a1a]/45">
                     <span className="inline-flex items-center gap-1.5 rounded-md bg-[#f0f0ec] px-2 py-1">
                       <SourceGroupDot group={getLeadSourceGroup(lead)} size={6} />
-                      {SOURCE_GROUP_LABEL[getLeadSourceGroup(lead)]} · {SOURCE_LABEL[lead.source] ?? lead.source}
+                      {SOURCE_GROUP_LABEL[getLeadSourceGroup(lead)]}
+                      {sourceSegment ? ` · ${sourceSegment}` : ""}
                     </span>
-                    {getLeadSourceDetail(lead) ? (
+                    {sourceDetail ? (
                       <span className="rounded-md bg-[#ECFDF5] px-2 py-1 text-[#084734]">
-                        {getLeadSourceDetail(lead)}
+                        {sourceDetail}
                       </span>
                     ) : null}
                     {lead.lead_magnet ? (
@@ -2048,6 +2046,8 @@ export default function LeadsBoardClient() {
                 const isTodayFollowUp = followUpDateKey === today
                 const ageDays = daysBetween(lead.timestamp)
                 const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp, now) : null
+                const sourceDetail = getLeadSourceDetail(lead)
+                const sourceSegment = getLeadSourceSegment(lead)
                 return (
                   <tr
                     key={lead.id}
@@ -2095,14 +2095,16 @@ export default function LeadsBoardClient() {
                         <span className="inline-flex items-center gap-1.5 text-[12px] text-[#111110]">
                           <SourceGroupDot group={getLeadSourceGroup(lead)} />
                           {SOURCE_GROUP_LABEL[getLeadSourceGroup(lead)]}
-                          <span className="text-[#1a1a1a]/30">·</span>
-                          <span className="max-w-[120px] truncate text-[#1a1a1a]/45">
-                            {SOURCE_LABEL[lead.source] ?? lead.source}
-                          </span>
+                          {sourceSegment ? (
+                            <>
+                              <span className="text-[#1a1a1a]/30">·</span>
+                              <span className="max-w-[120px] truncate text-[#1a1a1a]/45">{sourceSegment}</span>
+                            </>
+                          ) : null}
                         </span>
-                        {getLeadSourceDetail(lead) ? (
+                        {sourceDetail ? (
                           <span className="max-w-full truncate rounded-md bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-medium text-[#084734]">
-                            {getLeadSourceDetail(lead)}
+                            {sourceDetail}
                           </span>
                         ) : null}
                         {lead.lead_magnet ? (
