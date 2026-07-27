@@ -4,6 +4,12 @@ import { getAllCampaigns } from "@/lib/repositories/marketing"
 import { getAllEventsForAdmin } from "@/lib/repositories/public-events"
 import { getMetaCampaignDashboard } from "@/lib/meta/marketing"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import {
+  emailCampaignLabel,
+  eventLabel,
+  metaCampaignLabel,
+  smsCampaignLabel,
+} from "@/lib/marketing/campaign-labels"
 
 /**
  * GET /api/admin/marketing-campaigns/link-candidates
@@ -19,18 +25,15 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 type Candidate = { id: string; label: string }
 
-function snippet(text: string, max = 40): string {
-  const t = text.trim().replace(/\s+/g, " ")
-  return t.length > max ? `${t.slice(0, max)}…` : t
-}
+// 라벨 규칙은 lib/marketing/campaign-labels.ts 단일 진실원 — 캠페인 상세/목록의
+// links[].label 이 같은 함수를 쓴다(피커에서 고른 이름 ≠ 붙인 뒤 보이는 이름 방지).
+
+type SmsRow = { id: string | number; message?: string | null }
 
 async function safeEmailCandidates(): Promise<Candidate[]> {
   try {
     const all = await getAllCampaigns()
-    return all.map((c) => ({
-      id: String(c.id),
-      label: c.subject?.trim() || `(제목 없음) #${c.id}`,
-    }))
+    return all.map((c) => ({ id: String(c.id), label: emailCampaignLabel(c) }))
   } catch {
     return []
   }
@@ -43,9 +46,9 @@ async function safeSmsCandidates(): Promise<Candidate[]> {
       .select("id, message, created_at")
       .order("created_at", { ascending: false })
       .limit(200)
-    return (data ?? []).map((row) => ({
+    return ((data ?? []) as SmsRow[]).map((row) => ({
       id: String(row.id),
-      label: row.message ? snippet(String(row.message)) : `문자 #${row.id}`,
+      label: smsCampaignLabel(row),
     }))
   } catch {
     return []
@@ -55,7 +58,7 @@ async function safeSmsCandidates(): Promise<Candidate[]> {
 async function safeEventCandidates(): Promise<Candidate[]> {
   try {
     const events = await getAllEventsForAdmin()
-    return events.map((e) => ({ id: e.id, label: e.title?.trim() || `행사 ${e.id}` }))
+    return events.map((e) => ({ id: e.id, label: eventLabel(e) }))
   } catch {
     return []
   }
@@ -64,7 +67,7 @@ async function safeEventCandidates(): Promise<Candidate[]> {
 async function safeMetaCandidates(): Promise<Candidate[]> {
   try {
     const dash = await getMetaCampaignDashboard()
-    return dash.campaigns.map((c) => ({ id: c.id, label: c.name?.trim() || c.id }))
+    return dash.campaigns.map((c) => ({ id: c.id, label: metaCampaignLabel(c) }))
   } catch {
     // Meta 미구성/레이트리밋 → 빈 목록(라우트 전체는 계속 200).
     return []

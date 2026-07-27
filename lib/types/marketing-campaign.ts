@@ -45,6 +45,11 @@ export interface CampaignLink {
   refType: CampaignRefType
   refId: string
   createdAt: string
+  // 링크된 실행의 사람이 읽는 이름(제목/본문 스니펫/행사명/Meta 캠페인명).
+  // 저장 컬럼이 아니라 API 레이어의 읽기시점 enrichment 라 optional —
+  // 저장소(marketing-campaigns.ts)는 채우지 않는다. 해석 실패(실행 삭제 · Meta 조회
+  // 지평 밖)면 undefined 로 남겨 UI 가 raw refId 로 폴백한다(라벨 조작 금지).
+  label?: string
 }
 
 // 롤업은 링크된 실행에서 실제 가용한 값만 표기한다(정직 규칙).
