@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { adminFetchJson } from "@/lib/admin-client"
 import {
   buildStandardQuoteDetails,
   buildStandardQuoteFileLabel,
@@ -62,26 +63,18 @@ const SELECT_CLASSNAME =
 const TEXTAREA_CLASSNAME =
   "flex min-h-[112px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 
-function getToken() {
-  return sessionStorage.getItem("admin_password") ?? ""
+// 파트너 mutation 라우트 공통 응답 형태 — { workspace, source, warning }.
+interface PartnerMutationResponse {
+  workspace: PartnerWorkspace
+  source: PartnerDataSource
+  warning?: string
 }
 
+// 공용 어드민 클라이언트로 위임 — 자체 fetch(admin_password만 읽음)와 달리 401 → 로그인
+// 리다이렉트·세션 정리, mutation 성공 시 관련 GET 캐시 무효화(/api/admin/partners·CRM 집계)가
+// 함께 적용된다. 응답 바디가 JSON이 아니면 기존과 동일하게 null이 될 수 있다.
 async function adminFetch(url: string, options?: RequestInit) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getToken()}`,
-      ...options?.headers,
-    },
-  })
-
-  const data = await response.json().catch(() => null)
-  if (!response.ok) {
-    throw new Error(data?.error ?? "요청에 실패했습니다.")
-  }
-
-  return data
+  return adminFetchJson<PartnerMutationResponse | null>(url, options)
 }
 
 function toDateTimeInputValue(value?: string) {

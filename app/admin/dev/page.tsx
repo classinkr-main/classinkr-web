@@ -16,36 +16,15 @@ const DataQualityPanel = dynamic(() => import("@/components/admin/branch/section
 })
 
 // ─── Types ───────────────────────────────────────────────
-interface RoadmapFeature {
-  id: string
-  title: string
-  status: "done" | "in-progress" | "planned"
-  assignee: string
-}
-
-interface RoadmapVersion {
-  id: string
-  version: string
-  title: string
-  status: "done" | "in-progress" | "planned"
-  startDate: string
-  targetDate: string
-  features: RoadmapFeature[]
-}
-
-interface BugReport {
-  id: string
-  title: string
-  description: string
-  severity: "low" | "medium" | "high" | "critical"
-  status: "open" | "in-progress" | "resolved" | "closed"
-  reporter: string
-  assignee?: string
-  createdAt: string
-  updatedAt: string
-  tags: string[]
-  environment?: string
-}
+// 로드맵·버그 타입은 로컬 재선언 대신 캐논 원천을 쓴다(감사 #7 — 드리프트 방지):
+// - RoadmapItem/RoadmapFeature: lib/roadmap-data (repositories/roadmap이 재수출하는 실제
+//   API 계약 — assignee/startDate/targetDate는 optional이며 아래 사용처는 이미 전부 가드됨).
+//   기존 usage 명칭을 유지하기 위해 RoadmapItem을 RoadmapVersion으로 별칭한다.
+// - BugReport: lib/bugs-data (overview 페이지와 동일 원천). import type라 fs 의존은
+//   클라이언트 번들에 딸려오지 않는다.
+// GitCommit은 캐논 홈이 없어(git-log 라우트 ad hoc 응답) 로컬 선언을 유지한다.
+import type { BugReport } from "@/lib/bugs-data"
+import type { RoadmapFeature, RoadmapItem as RoadmapVersion } from "@/lib/roadmap-data"
 
 interface GitCommit {
   hash: string

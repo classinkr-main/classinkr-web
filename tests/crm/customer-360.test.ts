@@ -235,9 +235,12 @@ async function loadCustomer360(options?: {
       matched: false,
     }),
   }))
+  vi.doMock("@/lib/repositories/crm-customer-tags", () => ({
+    getCustomerTags: vi.fn().mockResolvedValue([]),
+  }))
 
-  const module = await import("@/lib/repositories/crm-customer-360")
-  return { getCrmCustomer360: module.getCrmCustomer360, findConfirmedLeadNeoLink }
+  const loaded = await import("@/lib/repositories/crm-customer-360")
+  return { getCrmCustomer360: loaded.getCrmCustomer360, findConfirmedLeadNeoLink }
 }
 
 const LEAD_KEY = { source: "lead", entityId: "lead-1", targetType: "lead" } as const
@@ -263,6 +266,8 @@ describe("getCrmCustomer360 (mocked harness)", () => {
     expect(result.crmRegistered).toBe(true)
     expect(result.neoAccountId).toBe("neo-acc-77")
     expect(result.health.ok).toBe(true)
+    // 수기 라벨은 360 페이로드에 additive로 동승한다(드로어 온-오픈 별도 fetch 제거).
+    expect(result.tags).toEqual([])
   })
 
   it("classifies ad-click leads as origin ad and stays unregistered without a link", async () => {

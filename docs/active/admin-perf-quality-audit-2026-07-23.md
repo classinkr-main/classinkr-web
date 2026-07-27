@@ -140,3 +140,21 @@
 
 ### 실측 정정
 - "알림 countOnly=1 페이지당 2회"는 **React StrictMode 개발모드 이중호출**이 주원인(프로덕션 마운트 1회). 코드상 진짜 중복(패널 열닫 재구독)만 제거함.
+
+---
+
+## Wave 3 결과 (2026-07-24)
+
+**대부분 동시 세션이 선구현·커밋**: de23a854(os-summary·traffic-summary 신설·unified 서버 메모 — unstable_cache 채택, admin-crm-revenue:1534 선례), 68fda8c7(HW 9/9 memo·파트너 파생 memo·dev 페치 이관), 760a338b(에디터 디바운스+flush), 264b2b95(스코프 엔드포인트 2종+content_length 생성컬럼), fdee1530(캐시 prefix 무효화). → 후속 백로그 1-6 사실상 전부 해소.
+
+**이 세션 잔여분 적용(7파일)**:
+- 360 태그 통합: `getCrmCustomer360`에 tags 추가(allSettled 6번째), 드로어 온-오픈 태그 페치 제거(2요청→1), 태그 뮤테이션에 `clearAdminRequestCache()`(캐시 부활 방지). 테스트 하드닝 포함(18/18).
+- dev 페이지 로컬 타입 → canonical import(roadmap-data/bugs-data).
+- HW: 비기본탭 3섹션(InboundLots·OutboundPeriod·HistoryLog) dynamic() 코드스플릿(LocationMap은 기본탭이라 eager 유지), `load()` adminFetchJsonCached+force 전환, refresh는 `/api/admin/hardware` prefix 무효화.
+- 파트너 2클라이언트: 자체 getToken/adminFetch → 공용 `@/lib/admin-client`(401 리다이렉트+뮤테이션 무효화 획득).
+
+**스킵**: unified 재구현(선커밋 존중, ≤60s staleness 수용 — invalidateCrmUnifiedSourceSnapshot 훅은 존재·미배선), product summary 배치 편입(이름 파생 경로가 조인 결과를 바꿀 위험), 팀 A의 unstable_cache→모듈TTL 변환은 **되돌림**(선례 있는 커밋 구현 존중).
+
+**실측**: unified 콜드 732ms → 웜 **12~35ms**(이전 0.8~1.6s). 360 페이로드 tags 확인, 드로어 정상.
+
+**알려진 이슈**: `tests/campaigns/projects.test.tsx` pre-existing tsc 에러(0731b520발, ProjectRollup 필드 3개 누락) — next build 게이트엔 안 걸리나 전체 tsc는 빨감. 별도 태스크 칩 스폰됨.

@@ -34,7 +34,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
-import { adminFetch, adminFetchJson, clearAdminRequestCache } from "@/lib/admin-client"
+import { adminFetch, adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import { paginateAdminList } from "@/lib/admin-list-pagination"
 import { fiscalQuarter } from "@/lib/branch/fiscal"
 import CategoryCardsSection from "@/components/admin/hardware/inventory/CategoryCardsSection"
@@ -43,9 +43,6 @@ import LocationMapSection from "@/components/admin/hardware/inventory/LocationMa
 import PlannedOutboundPanel from "@/components/admin/hardware/inventory/PlannedOutboundPanel"
 import StockLevelsSection from "@/components/admin/hardware/inventory/StockLevelsSection"
 import AlertsOutboundSections from "@/components/admin/hardware/inventory/AlertsOutboundSections"
-import InboundLotsSection from "@/components/admin/hardware/inventory/InboundLotsSection"
-import OutboundPeriodSection from "@/components/admin/hardware/inventory/OutboundPeriodSection"
-import HistoryLogSection from "@/components/admin/hardware/inventory/HistoryLogSection"
 import MovementDetailSheet from "@/components/admin/hardware/inventory/MovementDetailSheet"
 import CustomerHistorySheet from "@/components/admin/hardware/inventory/CustomerHistorySheet"
 import {
@@ -639,6 +636,28 @@ function parseHardwareLineText(line: string) {
 const CrmConfirmModal = dynamic(() => import("@/components/admin/hardware/inventory/CrmConfirmModal"), { loading: () => null })
 const VoidConfirmModal = dynamic(() => import("@/components/admin/hardware/inventory/VoidConfirmModal"), { loading: () => null })
 
+// 비기본 탭 섹션 코드 스플릿 — 입고/출고 집계(entry)·상세 내역(history)은 첫 페인트("home" 탭)에
+// 없으므로 지연 로드한다. 세 섹션 모두 내부 useState가 없는 프레젠테이션 컴포넌트(검색어·페이지 등
+// 상태는 전부 부모 소유)라 지연 마운트로 잃는 폼 상태가 없다. ssr:false + 가벼운 스켈레톤은
+// 장부 워크벤치의 검증된 관례를 따른다.
+const SectionLoadingFallback = () => (
+  <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-5 py-10 text-center text-[12px] font-semibold text-[#A39E98]">
+    섹션을 불러오는 중…
+  </section>
+)
+const InboundLotsSection = dynamic(() => import("@/components/admin/hardware/inventory/InboundLotsSection"), {
+  ssr: false,
+  loading: () => <SectionLoadingFallback />,
+})
+const OutboundPeriodSection = dynamic(() => import("@/components/admin/hardware/inventory/OutboundPeriodSection"), {
+  ssr: false,
+  loading: () => <SectionLoadingFallback />,
+})
+const HistoryLogSection = dynamic(() => import("@/components/admin/hardware/inventory/HistoryLogSection"), {
+  ssr: false,
+  loading: () => <SectionLoadingFallback />,
+})
+
 // 기존 기록에서 편집/복제 시 복원할 프리셋 키 — 상태를 읽지 않는 순수 함수라 컴포넌트 밖에 둔다
 // (editMovement useCallback의 의존에서 빼기 위함).
 function presetKeyForMovement(movement: HardwareMovement): string {
@@ -847,11 +866,16 @@ export default function HardwareInventoryClient() {
     return () => previousFocus?.focus?.()
   }, [sheetOpen])
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options: { force?: boolean } = {}) => {
     setLoading(true)
     setError(null)
     try {
-      const next = await adminFetchJson<HardwareDashboard>("/api/admin/hardware", { cache: "no-cache" })
+      // 재방문·뒤로가기는 공용 클라이언트 캐시(45s TTL + stale-while-revalidate)로 즉시 페인트한다
+      // (서버도 이미 max-age=30/swr=120을 보낸다). 새로고침·저장 후 재조회는 force로 우회한다 —
+      // CRM 화면들의 load({ force: true }) 관례와 동일.
+      const next = await adminFetchJsonCached<HardwareDashboard>("/api/admin/hardware", undefined, {
+        force: options.force,
+      })
       setData(next)
       setSelectedItemId((current) => current || defaultEntryItemId(next.items))
     } catch (err) {
@@ -866,9 +890,11 @@ export default function HardwareInventoryClient() {
   }, [load])
 
   // 저장/확정 후 재조회 — 확정 핸들러들(useCallback)의 의존이라 load 바로 아래에 선언한다(TDZ).
+  // 전역 캐시 전체 삭제 대신 하드웨어 스코프만 무효화한다 — 키 포함 매칭이라 다른 소비처의
+  // branch:* /api/admin/hardware 캐시도 함께 지워지고, 무관한 어드민 탭 캐시는 살아남는다(감사 #13).
   const refresh = useCallback(async () => {
-    clearAdminRequestCache()
-    await load()
+    clearAdminRequestCache("/api/admin/hardware")
+    await load({ force: true })
   }, [load])
 
   // 반복 입력 기억 복원 — 하이드레이션 불일치를 피하려고 마운트 후 1회만 읽는다.

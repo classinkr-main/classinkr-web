@@ -419,21 +419,17 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     return () => clearTimeout(timer)
   }, [savedMsg])
 
-  // 라벨(수기 태그) — 고객 전환 시 재조회. 시스템 파생 플래그와 별개.
+  // 라벨(수기 태그) — 360 페이로드에 동승하므로 온-오픈 별도 fetch는 없다. 고객 전환 시 리셋만.
   useEffect(() => {
     setTags([])
     setTagInput("")
-    if (!customerKey) return
-    let alive = true
-    adminFetchJson<{ tags: string[] }>(`/api/admin/crm/customers/${encodeURIComponent(customerKey)}/tags`)
-      .then((result) => {
-        if (alive) setTags(result.tags ?? [])
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
   }, [customerKey])
+
+  // 360 도착/갱신 시 페이로드의 라벨로 동기화. 태그 편집 직후에는 mutation 응답이 setTags로
+  // 이미 최신이고 data는 그대로라 이 효과가 되돌리지 않는다(이후 refetch 페이로드도 같은 값).
+  useEffect(() => {
+    if (data) setTags(data.tags ?? [])
+  }, [data])
 
   const header = data?.header
   const displayName = header?.name ?? name ?? "고객"
@@ -771,6 +767,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
       )
       setTags(result.tags ?? [])
       setTagInput("")
+      // 태그가 360 페이로드에 동승하므로, 캐시를 비워 재오픈 시 편집 전 태그가 되살아나지 않게 한다.
+      clearAdminRequestCache()
       setSavedMsg("라벨을 추가했어요")
     } catch (err) {
       setError(err instanceof Error ? err.message : "라벨 추가에 실패했습니다.")
@@ -789,6 +787,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           { method: "DELETE" }
         )
         setTags(result.tags ?? [])
+        // 태그가 360 페이로드에 동승하므로, 캐시를 비워 재오픈 시 편집 전 태그가 되살아나지 않게 한다.
+        clearAdminRequestCache()
         setSavedMsg("라벨을 지웠어요")
       } catch (err) {
         setError(err instanceof Error ? err.message : "라벨 삭제에 실패했습니다.")
