@@ -22,7 +22,13 @@ function makeRollup(overrides: Partial<ProjectRollup> = {}): ProjectRollup {
   }
 }
 
-function makeProject(overrides: Partial<ProjectWithRollup> = {}): ProjectWithRollup {
+// rollup 만 Partial 을 한 겹 더 허용한다 — Partial<ProjectWithRollup> 은 rollup 을
+// "optional 이지만 통째로" 요구해서, 예산 필드만 갈아끼우는 makeRollup 병합을 막는다.
+type ProjectOverrides = Partial<Omit<ProjectWithRollup, "rollup">> & {
+  rollup?: Partial<ProjectRollup>
+}
+
+function makeProject(overrides: ProjectOverrides = {}): ProjectWithRollup {
   const { rollup, ...rest } = overrides
   return {
     id: "prj-1",
