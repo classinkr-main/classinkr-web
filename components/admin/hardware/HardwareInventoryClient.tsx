@@ -14,8 +14,6 @@ import {
   Clock3,
   FileSpreadsheet,
   Filter,
-  LayoutDashboard,
-  ListChecks,
   Minus,
   Monitor,
   Plus,
@@ -38,6 +36,7 @@ import { adminFetch, adminFetchJson, adminFetchJsonCached, clearAdminRequestCach
 import { paginateAdminList } from "@/lib/admin-list-pagination"
 import { fiscalQuarter } from "@/lib/branch/fiscal"
 import CategoryCardsSection from "@/components/admin/hardware/inventory/CategoryCardsSection"
+import SalesPeriodSummary from "@/components/admin/hardware/inventory/SalesPeriodSummary"
 import HardwareSearchPanel from "@/components/admin/hardware/inventory/HardwareSearchPanel"
 import LocationMapSection from "@/components/admin/hardware/inventory/LocationMapSection"
 import PlannedOutboundPanel from "@/components/admin/hardware/inventory/PlannedOutboundPanel"
@@ -45,6 +44,8 @@ import StockLevelsSection from "@/components/admin/hardware/inventory/StockLevel
 import AlertsOutboundSections from "@/components/admin/hardware/inventory/AlertsOutboundSections"
 import MovementDetailSheet from "@/components/admin/hardware/inventory/MovementDetailSheet"
 import CustomerHistorySheet from "@/components/admin/hardware/inventory/CustomerHistorySheet"
+import SampleTrackerSection from "@/components/admin/hardware/inventory/SampleTrackerSection"
+import SampleUnitSheet from "@/components/admin/hardware/inventory/SampleUnitSheet"
 import {
   formatCurrency,
   formatDate,
@@ -65,6 +66,8 @@ import {
   type HardwareMovement,
   type HardwareMovementDraft,
   type HardwareMovementType,
+  type HardwareSampleEvent,
+  type HardwareSampleUnit,
   type HardwareSectionKey,
   type HardwareStockRow,
   type HardwareTab,
@@ -197,10 +200,13 @@ const ALERT_PAGE_SIZE = 5
 const LOG_GROUP_PAGE_SIZE = 8
 const PLANNED_PAGE_SIZE = 5
 
-const HARDWARE_TABS: Array<{ id: HardwareTab; label: string; icon: LucideIcon; description: string }> = [
-  { id: "home", label: "홈", icon: LayoutDashboard, description: "현황 · 예상 출고" },
-  { id: "entry", label: "입출고", icon: ArrowRightLeft, description: "입고 · 출고 기록" },
-  { id: "history", label: "내역", icon: ListChecks, description: "전체 원장" },
+// 하위 탭은 지사 대시보드(BranchDashboardClient)와 같은 폴더형 규약을 쓴다 — 라벨 + 부제 2줄,
+// 활성 탭은 본문 배경(#FAFAF8)으로 채워 #EBE8E2 스트립에서 앞으로 튀어나온 것처럼 보이게 한다.
+// 아이콘은 부제가 역할을 대신하므로 두지 않는다(레퍼런스와 동일한 에디토리얼 톤).
+const HARDWARE_TABS: Array<{ id: HardwareTab; label: string; description: string }> = [
+  { id: "home", label: "홈", description: "현황 · 예상 출고" },
+  { id: "entry", label: "입출고", description: "입고 · 출고 기록" },
+  { id: "history", label: "내역", description: "전체 원장" },
 ]
 
 const DEFAULT_OPEN_SECTIONS: Record<HardwareSectionKey, boolean> = {
@@ -288,6 +294,18 @@ function periodKey(date: string, granularity: PeriodGranularity): { key: string;
     return { key: `${fyStartYear}Q${quarter}`, label: `${fyLabel} 회계연도 ${quarter}분기` }
   }
   return { key: date.slice(0, 7), label: `${year}년 ${month}월` }
+}
+
+// 확정 판매·설치 출고만 남긴다(무효·예정·샘플·수리 제외) — 기간별 출고 집계(outboundBuckets)와
+// 홈 판매·설치 요약(salesPeriodSummary)이 같은 모수를 쓰도록 필터를 SSOT로 뽑아둔다.
+function confirmedSalesMovements(movements: HardwareMovement[]): HardwareMovement[] {
+  return movements.filter(
+    (movement) =>
+      movement.movement_type === "outbound" &&
+      !movement.voided_at &&
+      !/예정|예약|대기/.test(movement.status ?? "") &&
+      !/샘플|사무실|수리|sample|repair/i.test(`${movement.to_location ?? ""} ${movement.status ?? ""}`)
+  )
 }
 
 // 제품 칩용 단축명 (기간 집계 칩에서 길이 절약).
@@ -726,6 +744,9 @@ export default function HardwareInventoryClient() {
   const [kitMultiplier, setKitMultiplier] = useState(1)
   // 샘플 대여 출처 — 기본 사무실(남은 샘플), 사무실 재고가 없으면 창고에서 바로 반출.
   const [sampleSource, setSampleSource] = useState<SampleSource>("사무실")
+  // 샘플 유닛 트래커 연계 — 대여 고객사 + 나갈/돌아올 유닛 선택(단건 시트 전용).
+  const [sampleCustomer, setSampleCustomer] = useState("")
+  const [sampleUnitSelection, setSampleUnitSelection] = useState<string[]>([])
   const [openSections, setOpenSections] = useState<Record<HardwareSectionKey, boolean>>(() => ({ ...DEFAULT_OPEN_SECTIONS }))
   const [stockPage, setStockPage] = useState(1)
   const [outboundPage, setOutboundPage] = useState(1)
@@ -734,6 +755,8 @@ export default function HardwareInventoryClient() {
   const [expandedLogGroups, setExpandedLogGroups] = useState<Set<string>>(() => new Set())
   const [plannedPage, setPlannedPage] = useState(1)
   const [activeTab, setActiveTab] = useState<HardwareTab>("home")
+  // 하위 탭 roving tabindex — 지사 대시보드와 동일한 키보드 규약(←/→/Home/End).
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const [productFilter, setProductFilter] = useState<ProductFilterKey>("")
   const [historyType, setHistoryType] = useState<HardwareMovementType | "all" | "sample">("all")
   const [historySort, setHistorySort] = useState<"desc" | "asc">("desc")
@@ -897,6 +920,40 @@ export default function HardwareInventoryClient() {
     await load({ force: true })
   }, [load])
 
+  // 샘플 유닛 트래커 — 대시보드와 별도 수명주기(작은 테이블, 캐시 없음). 부모가 소유해야
+  // 입출고 시트(대여 유닛 선택)와 홈 섹션·상세 시트가 같은 데이터를 본다.
+  const [sampleUnits, setSampleUnits] = useState<HardwareSampleUnit[] | null>(null)
+  const [sampleLatestEvents, setSampleLatestEvents] = useState<Record<string, HardwareSampleEvent>>({})
+  const [sampleUnitsLoading, setSampleUnitsLoading] = useState(false)
+  const [sampleUnitsError, setSampleUnitsError] = useState<string | null>(null)
+  const [sampleUnitSheetId, setSampleUnitSheetId] = useState<string | null>(null)
+
+  const loadSampleUnits = useCallback(async () => {
+    setSampleUnitsLoading(true)
+    try {
+      const result = await adminFetchJson<{
+        units: HardwareSampleUnit[]
+        latestEvents: Record<string, HardwareSampleEvent>
+      }>("/api/admin/hardware/samples")
+      setSampleUnits(result.units)
+      setSampleLatestEvents(result.latestEvents ?? {})
+      setSampleUnitsError(null)
+    } catch (err) {
+      setSampleUnitsError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSampleUnitsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadSampleUnits()
+  }, [loadSampleUnits])
+
+  const selectedSampleUnit = useMemo(
+    () => sampleUnits?.find((unit) => unit.id === sampleUnitSheetId) ?? null,
+    [sampleUnits, sampleUnitSheetId]
+  )
+
   // 반복 입력 기억 복원 — 하이드레이션 불일치를 피하려고 마운트 후 1회만 읽는다.
   useEffect(() => {
     const savedOwner = readLocalString(QUICK_RECORD_OWNER_KEY)
@@ -1025,7 +1082,12 @@ export default function HardwareInventoryClient() {
     // Sort by the real transaction date only. Rows whose date didn't parse (fuzzy
     // "3월초", malformed source dates) must NOT borrow the import timestamp — otherwise
     // they'd masquerade as the newest rows. Dateless rows always sink to the bottom.
+    // 예정(예약) 건은 항상 확정 기록 아래 티어로 — 내역의 기본 질문은 "무슨 일이 있었나"라
+    // 아직 안 일어난 예정이 최신 날짜라는 이유로 상단을 점유하면 안 된다(예정만 볼 땐 상태 칩).
     const sorted = [...rows].sort((a, b) => {
+      const aPlanned = isPlannedMovement(a)
+      const bPlanned = isPlannedMovement(b)
+      if (aPlanned !== bPlanned) return aPlanned ? 1 : -1
       const aTime = a.occurred_at ? new Date(a.occurred_at).getTime() : null
       const bTime = b.occurred_at ? new Date(b.occurred_at).getTime() : null
       if (aTime == null && bTime == null) return 0
@@ -1658,13 +1720,7 @@ export default function HardwareInventoryClient() {
   }, [data?.movements, inboundSearch])
 
   const outboundBuckets = useMemo(() => {
-    const sales = (data?.movements ?? []).filter(
-      (movement) =>
-        movement.movement_type === "outbound" &&
-        !movement.voided_at &&
-        !/예정|예약|대기/.test(movement.status ?? "") &&
-        !/샘플|사무실|수리|sample|repair/i.test(`${movement.to_location ?? ""} ${movement.status ?? ""}`)
-    )
+    const sales = confirmedSalesMovements(data?.movements ?? [])
     type BucketAgg = {
       key: string
       label: string
@@ -1718,6 +1774,71 @@ export default function HardwareInventoryClient() {
         .map(([name, value]) => ({ name, qty: value.qty, revenue: value.revenue, hasRevenue: value.revenue > 0, dateLabel: formatDateSpan(value.firstDate, value.lastDate) })),
     }))
   }, [data?.movements, outPeriod])
+
+  // 홈 탭 판매·설치 요약 — 이번 달/이번 분기(회계)/올해를 한 줄에 같이 본다. 모수·매출 규약은
+  // 기간별 출고 집계와 동일: 대수는 확정 출고 전체(샘플·수리 제외), 매출은 실판매(sales) USD만.
+  const salesPeriodSummary = useMemo(() => {
+    const sales = confirmedSalesMovements(data?.movements ?? [])
+    const today = todayKey()
+    // 직전 기간 앵커 날짜 — 월초로 고정한 뒤 월/분기(3개월)/연 단위로 되돌린다.
+    // (fiscal 분기는 월 경계라 3개월 전 날짜가 항상 직전 분기에 떨어진다.)
+    const prevAnchor = (granularity: PeriodGranularity): string => {
+      const anchor = new Date(`${today.slice(0, 7)}-01T00:00:00Z`)
+      if (granularity === "month") anchor.setUTCMonth(anchor.getUTCMonth() - 1)
+      if (granularity === "quarter") anchor.setUTCMonth(anchor.getUTCMonth() - 3)
+      if (granularity === "year") anchor.setUTCFullYear(anchor.getUTCFullYear() - 1)
+      return anchor.toISOString().slice(0, 10)
+    }
+    const TITLES: Record<PeriodGranularity, { title: string; prevTitle: string }> = {
+      month: { title: "이번 달", prevTitle: "지난 달" },
+      quarter: { title: "이번 분기", prevTitle: "지난 분기" },
+      year: { title: "연간", prevTitle: "지난해" },
+    }
+    return (["month", "quarter", "year"] as const).map((granularity) => {
+      const current = periodKey(today, granularity)
+      const previous = periodKey(prevAnchor(granularity), granularity)
+      let qty = 0
+      let revenue = 0
+      let hasRevenue = false
+      let prevQty = 0
+      const byProduct = new Map<string, number>()
+      for (const movement of sales) {
+        const date = movement.occurred_at?.slice(0, 10) ?? movement.created_at.slice(0, 10)
+        const key = periodKey(date, granularity).key
+        if (key === previous.key) {
+          prevQty += movement.quantity
+          continue
+        }
+        if (key !== current.key) continue
+        qty += movement.quantity
+        const saleType = outboundSaleType(movement) ?? "sales"
+        if (saleType === "sales" && movement.amount_usd != null) {
+          revenue += movement.amount_usd
+          hasRevenue = true
+        }
+        byProduct.set(movement.product_name, (byProduct.get(movement.product_name) ?? 0) + movement.quantity)
+      }
+      return {
+        granularity,
+        ...TITLES[granularity],
+        label: current.label,
+        qty,
+        revenue,
+        hasRevenue,
+        prevQty,
+        chips: Array.from(byProduct.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([product, chipQty]) => ({ product: shortProductName(product), qty: chipQty })),
+      }
+    })
+  }, [data?.movements])
+
+  // 홈 요약 → 입출고 탭 "출고 · 기간 집계" 딥링크(버킷 전체·고객사 펼침은 그쪽이 담당).
+  const openOutboundDetail = useCallback(() => {
+    setActiveTab("entry")
+    setEntrySub("outbound")
+  }, [])
 
   const historyCustomers = useMemo(() => {
     const set = new Set<string>()
@@ -2449,6 +2570,40 @@ export default function HardwareInventoryClient() {
     }
   }
 
+  // 샘플 프리셋 ↔ 유닛 트래커 연계 — 현재 폼 품목 기준 선택 풀과 필요 선택 수.
+  // 필요 수 = min(수량, 풀 크기): 풀이 수량보다 작으면 있는 만큼 선택하고 부족분은 저장 시 자동 발급.
+  const draftProductName = customProduct.trim() || selectedItem?.name || ""
+  const draftQuantityNumber = Math.max(0, Math.floor(Number(quantity) || 0))
+  const sampleLoanPool = useMemo(
+    () => (sampleUnits ?? []).filter((unit) => unit.status === "office" && unit.product_name === draftProductName),
+    [sampleUnits, draftProductName]
+  )
+  const sampleReturnPool = useMemo(
+    () => (sampleUnits ?? []).filter((unit) => unit.status === "loaned" && unit.product_name === draftProductName),
+    [sampleUnits, draftProductName]
+  )
+  const sampleLoanNeed = sampleSource === "사무실" ? Math.min(draftQuantityNumber, sampleLoanPool.length) : 0
+  const sampleReturnNeed = Math.min(draftQuantityNumber, sampleReturnPool.length)
+
+  const toggleSampleUnit = (unitId: string, cap: number) => {
+    setSampleUnitSelection((current) => {
+      if (current.includes(unitId)) return current.filter((id) => id !== unitId)
+      if (current.length >= cap) return current
+      return [...current, unitId]
+    })
+  }
+
+  // 품목·프리셋이 바뀌면 기존 유닛 선택은 무효 — 시트가 닫히면 고객명도 함께 리셋.
+  useEffect(() => {
+    setSampleUnitSelection([])
+  }, [activePresetKey, draftProductName])
+  useEffect(() => {
+    if (!sheetOpen) {
+      setSampleCustomer("")
+      setSampleUnitSelection([])
+    }
+  }, [sheetOpen])
+
   const buildMovementDraft = (): HardwareMovementDraft => {
     const productName = customProduct.trim() || selectedItem?.name || ""
     return {
@@ -2673,6 +2828,77 @@ export default function HardwareInventoryClient() {
     setSelectedCrmCandidateId(null)
   }
 
+  // 원장 저장 성공 후 샘플 유닛 트래커 동기화 — 대여(loan)/반환(return)/배정(register).
+  // movement와는 soft 참조(movementRef)로만 잇는다. 실패해도 원장은 이미 저장된 상태이므로
+  // 호출부에서 별도 에러로 알린다(원장 실패와 구분).
+  const syncSampleTracker = async (draft: HardwareMovementDraft, movementRef: string | null) => {
+    const common = {
+      occurredAt: draft.occurredAt || todayKey(),
+      movementRef: movementRef ?? undefined,
+      memo: draft.memo.trim() || undefined,
+    }
+    if (activePresetKey === "sampleAssign") {
+      await adminFetchJson("/api/admin/hardware/samples", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "register",
+          itemId: draft.itemId,
+          productName: draft.productName,
+          count: draft.quantity,
+          status: "office",
+          owner: draft.owner.trim() || undefined,
+          ...common,
+        }),
+      })
+    } else if (activePresetKey === "sample") {
+      const customer = sampleCustomer.trim()
+      const selected = sampleUnitSelection.slice(0, draft.quantity)
+      if (selected.length > 0) {
+        await adminFetchJson("/api/admin/hardware/samples", {
+          method: "POST",
+          body: JSON.stringify({
+            action: "event",
+            eventType: "loan",
+            unitIds: selected,
+            customer,
+            owner: draft.owner.trim() || undefined,
+            ...common,
+          }),
+        })
+      }
+      const mint = draft.quantity - selected.length
+      if (mint > 0) {
+        await adminFetchJson("/api/admin/hardware/samples", {
+          method: "POST",
+          body: JSON.stringify({
+            action: "register",
+            itemId: draft.itemId,
+            productName: draft.productName,
+            count: mint,
+            status: "loaned",
+            customer,
+            owner: draft.owner.trim() || undefined,
+            ...common,
+            memo: [draft.memo.trim(), "대여 반출 시 자동 발급"].filter(Boolean).join(" · "),
+          }),
+        })
+      }
+    } else if (activePresetKey === "sampleReturn" && sampleUnitSelection.length > 0) {
+      await adminFetchJson("/api/admin/hardware/samples", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "event",
+          eventType: "return",
+          unitIds: sampleUnitSelection,
+          ...common,
+        }),
+      })
+    }
+    setSampleCustomer("")
+    setSampleUnitSelection([])
+    await loadSampleUnits()
+  }
+
   const createMovementFromDraft = async (
     draft: HardwareMovementDraft,
     crmCandidate: HardwareCrmOrderCandidate | null
@@ -2688,7 +2914,7 @@ export default function HardwareInventoryClient() {
       // status 파생·isPlanned 제거를 전송 직전에 적용한다.
       const serverDraft = toServerDraft(draft)
 
-      await adminFetchJson("/api/admin/hardware/movements", {
+      const saveResult = await adminFetchJson<{ movement?: HardwareMovement }>("/api/admin/hardware/movements", {
         method: "POST",
         body: JSON.stringify({
           ...serverDraft,
@@ -2728,6 +2954,18 @@ export default function HardwareInventoryClient() {
       // 저장 대기 바구니가 남아 있으면 시트를 닫지 않는다(조용한 저장 누락 방지).
       if (!stayOpenAfterSave && quickCart.length === 0) setSheetOpen(false)
       setPendingMovement(null)
+      // 샘플 프리셋이면 유닛 트래커도 함께 기록 — 원장은 이미 저장됐으므로 실패는 별도 문구로 알린다.
+      if (activePresetKey === "sample" || activePresetKey === "sampleReturn" || activePresetKey === "sampleAssign") {
+        try {
+          await syncSampleTracker(draft, saveResult?.movement?.id ?? null)
+        } catch (syncErr) {
+          setError(
+            `원장은 저장됐지만 샘플 트래커 기록에 실패했습니다: ${
+              syncErr instanceof Error ? syncErr.message : String(syncErr)
+            } — 샘플 트래커에서 수동으로 정정하세요.`
+          )
+        }
+      }
       await refresh()
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -2782,6 +3020,21 @@ export default function HardwareInventoryClient() {
       await submitEdit(draft)
       return
     }
+    // 샘플 트래커 연계 검증 — 원장 저장 전에 막아야 원장·트래커가 어긋나지 않는다.
+    if (activePresetKey === "sample") {
+      if (!sampleCustomer.trim()) {
+        setError("샘플 대여에는 고객사명이 필요합니다 — 트래커가 유닛 행방을 기록합니다.")
+        return
+      }
+      if (sampleSource === "사무실" && sampleUnitSelection.length !== sampleLoanNeed) {
+        setError(`대여 나갈 유닛 ${formatNumber(sampleLoanNeed)}대를 선택하세요 (사무실 보유 ${formatNumber(sampleLoanPool.length)}대).`)
+        return
+      }
+    }
+    if (activePresetKey === "sampleReturn" && sampleReturnNeed > 0 && sampleUnitSelection.length !== sampleReturnNeed) {
+      setError(`반환할 유닛 ${formatNumber(sampleReturnNeed)}대를 선택하세요 (대여중 ${formatNumber(sampleReturnPool.length)}대).`)
+      return
+    }
     const planned = isDraftPlanned(draft)
     // CRM 오더 확인은 단건 실제 "판매" 출고에만 뜬다 — 샘플 대여(사무실→샘플)는 CRM 연동 없이 바로 저장한다.
     if (draft.movementType === "outbound" && !planned && !isSampleOutbound(draft)) {
@@ -2791,9 +3044,27 @@ export default function HardwareInventoryClient() {
     await createMovementFromDraft(draft, null)
   }
 
+  const activeTabId = `hardware-tab-${activeTab}`
+  const activePanelId = `hardware-tabpanel-${activeTab}`
+
+  const onTabKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, index: number) => {
+    const lastIndex = HARDWARE_TABS.length - 1
+    let nextIndex: number | null = null
+
+    if (event.key === "ArrowRight") nextIndex = index === lastIndex ? 0 : index + 1
+    if (event.key === "ArrowLeft") nextIndex = index === 0 ? lastIndex : index - 1
+    if (event.key === "Home") nextIndex = 0
+    if (event.key === "End") nextIndex = lastIndex
+
+    if (nextIndex == null) return
+    event.preventDefault()
+    setActiveTab(HARDWARE_TABS[nextIndex].id)
+    tabRefs.current[nextIndex]?.focus()
+  }
+
   return (
     <div className="min-h-screen bg-[#FAFAF8] pb-24">
-      <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 pb-0 pt-6 sm:px-6 lg:px-9 lg:pt-8">
+      <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 pb-5 pt-6 sm:px-6 lg:px-9 lg:pt-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#615D59]">
@@ -2812,7 +3083,10 @@ export default function HardwareInventoryClient() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => void refresh()}
+              onClick={() => {
+                void refresh()
+                void loadSampleUnits()
+              }}
               disabled={loading || busy != null}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -2852,35 +3126,49 @@ export default function HardwareInventoryClient() {
           </div>
         </div>
 
-        <nav className="-mb-px mt-5 flex gap-1 overflow-x-auto" aria-label="하드웨어 하위 탭">
-          {HARDWARE_TABS.map((tab) => {
-            const TabIcon = tab.icon
+      </header>
+
+      {/* Sub-tabs — 지사 대시보드와 동일한 폴더형 스트립(#EBE8E2 위에 활성 탭만 본문색으로 채움) */}
+      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#EBE8E2] px-2 sm:px-4 lg:px-9">
+        <div className="admin-scroll-snap-x no-scrollbar -mb-px flex flex-nowrap gap-0 overflow-x-auto" role="tablist" aria-label="하드웨어 하위 탭">
+          {HARDWARE_TABS.map((tab, index) => {
             const active = activeTab === tab.id
             const plannedCount = data?.plannedMovements.length ?? 0
             return (
               <button
                 key={tab.id}
+                id={`hardware-tab-${tab.id}`}
                 type="button"
+                role="tab"
+                aria-selected={active}
+                aria-controls={`hardware-tabpanel-${tab.id}`}
+                tabIndex={active ? 0 : -1}
+                ref={(node) => { tabRefs.current[index] = node }}
                 onClick={() => setActiveTab(tab.id)}
-                aria-current={active ? "page" : undefined}
-                className={`inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-t-md border-b-2 px-4 py-3 text-[13px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 ${
+                onKeyDown={(event) => onTabKeyDown(event, index)}
+                className={`relative mt-1 flex shrink-0 cursor-pointer flex-col items-start gap-0.5 rounded-t-lg px-4 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 sm:px-5 sm:py-3 ${
                   active
-                    ? "border-[#084734] text-[#084734]"
-                    : "border-transparent text-[#615D59] hover:text-[#111110]"
+                    ? "bg-[#FAFAF8] text-[#111110]"
+                    : "bg-transparent text-[#615D59] hover:text-[#111110]"
                 }`}
               >
-                <TabIcon className="h-4 w-4" />
-                {tab.label}
-                {tab.id === "home" && plannedCount > 0 ? (
-                  <span className="rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[11px] font-bold text-[#A8741A]">
-                    {formatNumber(plannedCount)}
-                  </span>
-                ) : null}
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-bold tracking-[-0.01em]">
+                  {tab.label}
+                  {tab.id === "home" && plannedCount > 0 ? (
+                    <span className="rounded-full bg-[#FBF1E0] px-1.5 py-0.5 text-[10.5px] font-bold text-[#A8741A]">
+                      {formatNumber(plannedCount)}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="hidden whitespace-nowrap text-[10.5px] font-medium text-[#615D59] min-[420px]:block">{tab.description}</span>
+                {active && (
+                  <span className="absolute inset-x-3 -bottom-px h-[2.5px] rounded-sm bg-[#084734]" />
+                )}
               </button>
             )
           })}
-        </nav>
-      </header>
+        </div>
+      </div>
 
       <main className="px-4 pt-6 sm:px-6 lg:px-9">
         {error && (
@@ -2932,8 +3220,10 @@ export default function HardwareInventoryClient() {
         ) : (
           <>
             {activeTab === "home" && (
-            <div className="space-y-4">
+            <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-4">
             <CategoryCardsSection categoryCards={categoryCards} />
+
+            <SalesPeriodSummary summary={salesPeriodSummary} onOpenDetail={openOutboundDetail} />
 
             <HardwareSearchPanel
               hardwareSearch={hardwareSearch}
@@ -2957,6 +3247,16 @@ export default function HardwareInventoryClient() {
               locationMapExpanded={locationMapExpanded}
               setLocationMapExpanded={setLocationMapExpanded}
               prepareQuickEntry={prepareQuickEntry}
+            />
+
+            <SampleTrackerSection
+              units={sampleUnits}
+              latestEvents={sampleLatestEvents}
+              loading={sampleUnitsLoading}
+              error={sampleUnitsError}
+              stock={data?.stock ?? null}
+              onOpenUnit={setSampleUnitSheetId}
+              onChanged={loadSampleUnits}
             />
 
             <PlannedOutboundPanel
@@ -2999,7 +3299,7 @@ export default function HardwareInventoryClient() {
             )}
 
             {activeTab === "entry" && (
-            <div className="mt-6 space-y-5">
+            <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="mt-6 space-y-5">
               <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                 <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
                   <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
@@ -3713,6 +4013,102 @@ export default function HardwareInventoryClient() {
                         <p className="mt-1.5 text-[11px] text-[#A39E98]">
                           기본은 사무실 보관 샘플. 사무실 재고가 없으면 창고에서 바로 반출합니다.
                         </p>
+                      </div>
+                    )}
+                    {/* 샘플 유닛 트래커 연계 — 대여: 고객사 + 나갈 유닛 선택 / 반환: 돌아올 유닛 선택.
+                        원장 저장 시 loan/return 이벤트가 유닛 타임라인에 함께 남는다. */}
+                    {activePresetKey === "sample" && !editingId && (
+                      <div className="space-y-3">
+                        <label className="block">
+                          <span className={SHEET_LABEL_CLASS}>대여 고객사</span>
+                          <input
+                            value={sampleCustomer}
+                            onChange={(event) => setSampleCustomer(event.target.value)}
+                            placeholder="예: 남명학원 — 트래커에 유닛 행방으로 기록됩니다"
+                            list="hardware-customer-options"
+                            className={SHEET_INPUT_CLASS}
+                          />
+                        </label>
+                        {sampleSource === "사무실" && (
+                          <div>
+                            <span className={SHEET_LABEL_CLASS}>
+                              나갈 유닛 선택 ({formatNumber(sampleUnitSelection.length)}/{formatNumber(sampleLoanNeed)})
+                            </span>
+                            {sampleLoanPool.length === 0 ? (
+                              <p className="mt-1.5 text-[11px] text-[#A39E98]">
+                                등록된 사무실 유닛이 없어 저장 시 관리번호가 자동 발급됩니다.
+                              </p>
+                            ) : (
+                              <>
+                                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                  {sampleLoanPool.map((unit) => {
+                                    const selected = sampleUnitSelection.includes(unit.id)
+                                    return (
+                                      <button
+                                        key={unit.id}
+                                        type="button"
+                                        aria-pressed={selected}
+                                        onClick={() => toggleSampleUnit(unit.id, sampleLoanNeed)}
+                                        className={`cursor-pointer rounded-md border px-2 py-1 text-[11.5px] font-bold tabular-nums transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 ${
+                                          selected
+                                            ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                                            : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
+                                        }`}
+                                      >
+                                        {unit.asset_code}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                                {draftQuantityNumber > sampleLoanPool.length && (
+                                  <p className="mt-1.5 text-[11px] text-[#A39E98]">
+                                    부족분 {formatNumber(draftQuantityNumber - sampleLoanPool.length)}대는 저장 시 자동 발급됩니다.
+                                  </p>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
+                        {sampleSource === "창고" && (
+                          <p className="text-[11px] text-[#A39E98]">
+                            창고 반출은 저장 시 유닛 {formatNumber(Math.max(1, draftQuantityNumber))}대가 자동 발급되어 대여중으로 등록됩니다.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {activePresetKey === "sampleReturn" && !editingId && (
+                      <div>
+                        <span className={SHEET_LABEL_CLASS}>
+                          반환 유닛 선택 ({formatNumber(sampleUnitSelection.length)}/{formatNumber(sampleReturnNeed)})
+                        </span>
+                        {sampleReturnPool.length === 0 ? (
+                          <p className="mt-1.5 text-[11px] text-[#A39E98]">
+                            이 품목의 대여중 유닛이 없습니다 — 트래커 미등록 반환은 원장에만 기록됩니다.
+                          </p>
+                        ) : (
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {sampleReturnPool.map((unit) => {
+                              const selected = sampleUnitSelection.includes(unit.id)
+                              return (
+                                <button
+                                  key={unit.id}
+                                  type="button"
+                                  aria-pressed={selected}
+                                  onClick={() => toggleSampleUnit(unit.id, sampleReturnNeed)}
+                                  title={unit.current_customer ?? undefined}
+                                  className={`cursor-pointer rounded-md border px-2 py-1 text-[11.5px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 ${
+                                    selected
+                                      ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                                      : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
+                                  }`}
+                                >
+                                  <span className="tabular-nums">{unit.asset_code}</span>
+                                  <span className="ml-1 font-semibold text-[#A39E98]">{unit.current_customer ?? "미상"}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                     {availabilityWarning && (
@@ -4442,7 +4838,7 @@ export default function HardwareInventoryClient() {
             </AnimatePresence>
 
             {activeTab === "history" && (
-            <div className="mt-6 space-y-4">
+            <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="mt-6 space-y-4">
                 <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <label className="relative block min-w-[240px] flex-1 sm:max-w-[440px]">
@@ -4884,7 +5280,14 @@ export default function HardwareInventoryClient() {
         reduceMotion={reduceMotion}
       />
 
-      {!sheetOpen && !pendingMovement && !voidTarget && !detailId && !customerDetail && (
+      <SampleUnitSheet
+        unit={selectedSampleUnit}
+        onClose={() => setSampleUnitSheetId(null)}
+        onChanged={loadSampleUnits}
+        reduceMotion={reduceMotion}
+      />
+
+      {!sheetOpen && !pendingMovement && !voidTarget && !detailId && !customerDetail && !sampleUnitSheetId && (
         <button
           type="button"
           onClick={openFreshSheet}
