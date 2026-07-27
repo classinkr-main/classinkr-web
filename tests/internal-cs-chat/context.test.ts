@@ -49,7 +49,7 @@ describe("buildInternalCsCopilotContext", () => {
     })
     expect(result.internalContext).toContain("공개 고객 응대 안전 초안")
     expect(result.internalContext).toContain("최종 판단, 고객 전달, 본사 전달, 승인 권한은 CS 담당자")
-    expect(result.internalContext).toContain("결론·사실 우선")
+    expect(result.internalContext).toContain("직접 답을 먼저")
     expect(result.internalContext).toContain("[KR-CS][우선순위][제품 영역][케이스 ID]")
     expect(result.sourceRefs).toContainEqual({
       id: "article-recording",
@@ -61,8 +61,7 @@ describe("buildInternalCsCopilotContext", () => {
     ]))
     expect(result.curatedEvidence.recommendedTags).toContain("area:software")
     expect(result.deterministicFallback).toContain("관리자 녹화 메뉴")
-    expect(result.deterministicFallback).toContain("정리된 내부 기준")
-    expect(result.deterministicFallback).toContain("CS 담당자의 검토와 승인")
+    expect(result.deterministicFallback).toContain("## 확인 상태")
   })
 
   it("remains usable when public document retrieval fails", async () => {
@@ -74,7 +73,48 @@ describe("buildInternalCsCopilotContext", () => {
     expect(result.publicEvidence.warning).toContain("검색에 실패")
     expect(result.internalContext).toContain("본사 확인·소통 기준")
     expect(result.internalContext).toContain("정리된 내부 CS 지식")
-    expect(result.deterministicFallback).toContain("직접 일치하는 공개 가이드 근거를 찾지 못했습니다")
+    expect(result.deterministicFallback).toContain("직접 일치하는 근거를 찾지 못했습니다")
+  })
+
+  it("answers S110 net weight directly without unrelated lineup copy", async () => {
+    mocks.evaluateChatbotQuery.mockResolvedValue({
+      answer: "S75 54kg, S86 69.5kg, S98 Pro 89kg, S110 137kg입니다.",
+      sources: [{
+        articleId: "board-specs",
+        title: "Classin Board 스펙",
+        heading: "모델별 무게",
+        urlPath: "/docs/hardware/board-lineup-specs",
+        category: "hardware",
+        excerpt: "S110 — 모델명 BS110A, 본체 순중량 137kg.",
+        score: 99,
+      }],
+    })
+
+    const result = await buildInternalCsCopilotContext("110인치 무게")
+
+    expect(result.deterministicFallback).toContain("S110 본체 **순중량은 137kg**")
+    expect(result.deterministicFallback).not.toContain("S75 54kg")
+  })
+
+  it("does not substitute S110 net weight for packaging gross weight", async () => {
+    mocks.evaluateChatbotQuery.mockResolvedValue({
+      answer: "S110 본체 순중량은 137kg입니다.",
+      sources: [{
+        articleId: "board-specs",
+        title: "Classin Board 스펙",
+        heading: "모델별 무게",
+        urlPath: "/docs/hardware/board-lineup-specs",
+        category: "hardware",
+        excerpt: "S110 — 모델명 BS110A, 본체 순중량 137kg.",
+        score: 99,
+      }],
+    })
+
+    const result = await buildInternalCsCopilotContext("110인치 박스 무게는?")
+
+    expect(result.deterministicFallback).toContain("포장 총중량은 현재 검색 근거에서 확인되지 않습니다")
+    expect(result.deterministicFallback).toContain("본체 순중량은 **137kg**")
+    expect(result.deterministicFallback).toContain("본체 순중량을 박스 포함 중량으로 안내하면 안 됩니다")
   })
 
   it("uses queue tags to surface conflict evidence and require deeper review", async () => {

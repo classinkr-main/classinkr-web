@@ -55,6 +55,7 @@ import {
   useTransition,
 } from "react"
 
+import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { adminFetchJson } from "@/lib/admin-client"
 import { cn } from "@/lib/utils"
 
@@ -64,6 +65,7 @@ import {
   summarizeDocsGaps,
   type DocsGapsDeskSummary,
 } from "./ops-desk"
+import { shouldSubmitComposerOnKeyDown } from "./composer-keyboard"
 
 type WorkspaceTab = "chat" | "queue" | "archive" | "tools"
 type ModelMode = "auto" | "fast" | "deep"
@@ -2074,8 +2076,21 @@ function InternalCsChatWorkspaceInner() {
                               message.review_state === "changes_requested" && "border-l-[3px] border-l-[#F2B8B8]"
                             )}
                           >
-                            <div className="whitespace-pre-wrap px-5 py-4 text-[14px] leading-7 text-[#31302E]">
-                              {visibleContent}
+                            <div className="px-5 py-4">
+                              <BlogMarkdownRenderer
+                                markdown={visibleContent}
+                                className={cn(
+                                  "text-[14px] leading-7 text-[#31302E]",
+                                  "[&>*:first-child]:!mt-0 [&>*:last-child]:!mb-0",
+                                  "[&_h2]:!mt-6 [&_h2]:!text-[18px] [&_h2]:!leading-7 [&_h2]:!tracking-[-0.02em]",
+                                  "[&_h3]:!mt-5 [&_h3]:!text-[16px] [&_h3]:!leading-7 [&_h3]:!tracking-[-0.01em]",
+                                  "[&_p]:!mt-3 [&_p]:!text-[14px] [&_p]:!leading-7 [&_p]:!text-[#31302E]",
+                                  "[&_ul]:!my-3 [&_ul]:!space-y-1 [&_ul]:!pl-5 [&_ul]:!text-[14px] [&_ul]:!leading-7 [&_ul]:!text-[#31302E]",
+                                  "[&_ol]:!my-3 [&_ol]:!space-y-1 [&_ol]:!pl-5 [&_ol]:!text-[14px] [&_ol]:!leading-7 [&_ol]:!text-[#31302E]",
+                                  "[&_blockquote]:!my-4 [&_blockquote]:!rounded-lg [&_blockquote]:!px-4 [&_blockquote]:!py-3 [&_blockquote]:!text-[14px] [&_blockquote]:!leading-7",
+                                  "[&_hr]:!my-5"
+                                )}
+                              />
                               <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-[#A39E98]">
                                 {message.model_name ? <span>{message.model_name}</span> : <span>결정론적 안전 초안</span>}
                                 {message.model_mode ? <span>· {message.model_mode}</span> : null}
@@ -2432,7 +2447,12 @@ function InternalCsChatWorkspaceInner() {
                 value={composer}
                 onChange={(event) => setComposer(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
+                  if (shouldSubmitComposerOnKeyDown({
+                    key: event.key,
+                    shiftKey: event.shiftKey,
+                    isComposing: event.nativeEvent.isComposing,
+                    keyCode: event.nativeEvent.keyCode,
+                  })) {
                     event.preventDefault()
                     event.currentTarget.form?.requestSubmit()
                   }
