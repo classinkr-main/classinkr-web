@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
         id: result.code.id,
         code: result.code.code,
         kind: result.code.kind,
-        amountCny: result.code.amountCny,
+        amountKrw: result.code.amountKrw,
         amountUsd: result.code.amountUsd,
         organizationName: result.code.organizationName,
         expiresAt: result.code.expiresAt,

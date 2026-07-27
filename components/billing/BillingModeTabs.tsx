@@ -9,7 +9,7 @@ interface Props {
 
 const TABS: Array<{ id: BillingMode; title: string; caption: string }> = [
   { id: "subscription", title: "구독형", caption: "USD 월/연 정기" },
-  { id: "business", title: "충전형", caption: "CNY 선충전" },
+  { id: "business", title: "충전형", caption: "원화 선충전" },
 ]
 
 export function BillingModeTabs({ mode, onChange }: Props) {

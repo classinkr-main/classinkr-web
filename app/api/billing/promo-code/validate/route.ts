@@ -43,7 +43,9 @@ export async function POST(req: NextRequest) {
       typeof body?.baseAmount === "number"
         ? body.baseAmount
         : Number.parseFloat(String(body?.baseAmount ?? ""))
-    const currency = typeof body?.currency === "string" ? body.currency.toUpperCase() : "CNY"
+    // 기본값은 원화 — 이 라우트를 부르는 유일한 화면(충전형 Business)이 2026-07 부터
+    // 원화 선충전이다. 구독형은 currency 를 명시해 호출한다.
+    const currency = typeof body?.currency === "string" ? body.currency.toUpperCase() : "KRW"
 
     if (!Number.isFinite(baseAmount) || baseAmount <= 0) {
       return NextResponse.json({

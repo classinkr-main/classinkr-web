@@ -68,7 +68,7 @@
 
 ## 7. 현재 목표 & 백로그 (2026-06-23 스냅샷)
 
-- **결제 개편 잔여**: P0 — 미커밋 파일 정리, Vercel 환경변수(KRW→USD) 교체, 마이그레이션 3종(20260415/20260416/rls_financial) 순서 적용. P1 — 구매 주체 한국 법인 확인(중국 기관 직결 시 Toss KRW 부적합 → Alipay/WeChat), 견적코드 `QB-YYYY-XXXX`(4자리=브루트포스 가능) → 암호학적 8자리. P2 — FX 캐시 in-memory → KV/Supabase, validate 엔드포인트 rate limiting, 결제완료 이메일, 어드민 구독 뷰, redemption 실패 알림.
+- **결제 개편 잔여**: P0 — 미커밋 파일 정리, Vercel 환경변수(KRW→USD) 교체, 마이그레이션 3종(20260415/20260416/rls_financial) 순서 적용(미확인, 재검증 필요). P1 — 구매 주체 한국 법인 확인(중국 기관 직결 시 Toss KRW 부적합 → Alipay/WeChat) 미착수. 견적코드 `QB-YYYY-XXXX`(4자리=브루트포스 가능) → crypto 8자리(혼동문자 I/O/0/1 제외) 완료(2026-07-27, `lib/billing/quote-codes.ts`). P2 — FX 캐시 in-memory → KV/Supabase 미착수, validate 엔드포인트 rate limiting 완료 확인(코드 점검 결과 이미 구현되어 있었음 — IP+코드값 이중 키, `checkRateLimitDistributed`/Upstash+메모리 폴백, `app/api/billing/**` 5개 라우트 전부 적용), 결제완료 이메일 미착수, 어드민 구독 뷰 미착수, redemption 실패 알림 완료(2026-07-27, `markSoftwareCheckoutOrderPaid`에서 기존 `emitNotificationEvent` 호출 — categoryTag "finance"/severity "warning", 전용 eventType 없어 근접 타입 사용). 추가 발견·수정: prepare 라우트에 서버측 피처플래그(`isSoftwareCheckoutEnabled`) 검증이 없어 플래그 OFF에도 pending 주문 생성 가능했던 갭 → 완료(2026-07-27). confirm/fail은 기존 HMAC 서명 checkoutToken + 기존 주문 필수라 동일 갭 없음(의도적으로 게이트 미적용, 이유는 커밋/PR 참고).
 - **Supabase 마이그레이션 체크리스트(2.22)**: base 스키마 재현, `blog_posts.visibility` 선택 적용, quote approval enum 보강. 배포 후 docs/blog/quote smoke test.
 - **Portal 통합**: legacy `partner_users` ↔ v2 `partner_account_users` 통합. `context.ts`에 아직 이중 경로 존재.
 - **성능**: 어드민 SQL 집계 마이그(`20260618_*`) 적용, commercial/CRM 라운드트립 축소 완료.

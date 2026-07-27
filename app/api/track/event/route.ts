@@ -50,7 +50,6 @@ const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
     "plan_id",
     "billing_cycle",
     "account_count",
-    "amount_cny",
     "quote_code",
     "promo_code",
     "value",

@@ -6,30 +6,37 @@ import { Ban, Copy, Loader2, Plus, RefreshCw, Ticket, Trash2 } from "lucide-reac
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { BUSINESS_RECHARGE, formatRechargeKrw } from "@/lib/billing/recharge"
 
 type QuoteCodeKind = "business_recharge" | "subscription"
 
+/**
+ * GET /api/admin/software-quote-codes 는 lib/billing/quote-codes 의 mapQuoteCode 를 거친
+ * camelCase 객체를 돌려준다. (이전 버전은 여기서 snake_case 로 읽어 금액·대상·만료·상태가
+ * 전부 빈 값/"활성"으로만 보였다.)
+ * amount_cny 는 역사 보존용 컬럼이라 매핑 자체를 하지 않는다 — 충전형 금액은 amountKrw 뿐.
+ */
 interface QuoteCodeRow {
   id: string
   code: string
   kind: QuoteCodeKind
-  organization_name: string | null
-  buyer_name: string | null
-  buyer_email: string | null
-  amount_cny: number | string | null
-  amount_usd: number | string | null
+  organizationName: string | null
+  buyerName: string | null
+  buyerEmail: string | null
+  amountKrw: number | string | null
+  amountUsd: number | string | null
   notes: string | null
-  expires_at: string | null
-  redeemed_at: string | null
-  redeemed_order_id: string | null
-  created_by: string | null
-  created_at: string
-  updated_at: string
+  expiresAt: string | null
+  redeemedAt: string | null
+  redeemedOrderId: string | null
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 const EMPTY_FORM = {
   kind: "business_recharge" as QuoteCodeKind,
-  amountCny: "10000",
+  amountKrw: String(BUSINESS_RECHARGE.baseMinKrw),
   amountUsd: "",
   organizationName: "",
   buyerName: "",
@@ -65,10 +72,10 @@ function toNumber(value: number | string | null) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function formatCny(value: number | string | null) {
+function formatKrw(value: number | string | null) {
   const amount = toNumber(value)
   if (amount == null) return "-"
-  return `¥${Math.round(amount).toLocaleString("en-US")}`
+  return formatRechargeKrw(amount)
 }
 
 function formatUsd(value: number | string | null) {
@@ -94,11 +101,11 @@ function formatDate(value: string | null) {
 }
 
 function statusMeta(code: QuoteCodeRow) {
-  if (code.redeemed_at) {
+  if (code.redeemedAt) {
     return { label: "사용됨", color: "bg-[#ECFDF5] text-[#084734]" }
   }
 
-  if (code.expires_at && new Date(code.expires_at).getTime() < Date.now()) {
+  if (code.expiresAt && new Date(code.expiresAt).getTime() < Date.now()) {
     return { label: "만료", color: "bg-[#f0f0ec] text-[#1a1a1a]/50" }
   }
 
@@ -122,7 +129,7 @@ export default function SoftwareQuoteCodesPanel() {
       }
     }
 
-    return [...codes].sort((a, b) => time(b.created_at) - time(a.created_at))
+    return [...codes].sort((a, b) => time(b.createdAt) - time(a.createdAt))
   }, [codes])
 
   const load = async () => {
@@ -165,7 +172,7 @@ export default function SoftwareQuoteCodesPanel() {
       }
 
       if (form.kind === "business_recharge") {
-        payload.amountCny = Number.parseInt(form.amountCny.replace(/[^0-9]/g, ""), 10)
+        payload.amountKrw = Number.parseInt(form.amountKrw.replace(/[^0-9]/g, ""), 10)
       } else {
         payload.amountUsd = Number.parseFloat(form.amountUsd)
       }
@@ -317,19 +324,19 @@ export default function SoftwareQuoteCodesPanel() {
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-[#1a1a1a]">
                         {code.kind === "business_recharge"
-                          ? formatCny(code.amount_cny)
-                          : formatUsd(code.amount_usd)}
+                          ? formatKrw(code.amountKrw)
+                          : formatUsd(code.amountUsd)}
                       </td>
                       <td className="px-4 py-3 text-xs text-[#1a1a1a]/70">
-                        {code.organization_name ?? "-"}
-                        {code.buyer_email ? (
+                        {code.organizationName ?? "-"}
+                        {code.buyerEmail ? (
                           <span className="block text-[11px] text-[#1a1a1a]/40">
-                            {code.buyer_email}
+                            {code.buyerEmail}
                           </span>
                         ) : null}
                       </td>
                       <td className="px-4 py-3 text-xs text-[#1a1a1a]/60">
-                        {formatDate(code.expires_at)}
+                        {formatDate(code.expiresAt)}
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -349,7 +356,7 @@ export default function SoftwareQuoteCodesPanel() {
                             <Copy className="h-3.5 w-3.5" />
                             결제 링크
                           </button>
-                          {!code.redeemed_at ? (
+                          {!code.redeemedAt ? (
                             <button
                               type="button"
                               onClick={() => handleCancel(code.id)}
@@ -360,7 +367,7 @@ export default function SoftwareQuoteCodesPanel() {
                               만료
                             </button>
                           ) : null}
-                          {!code.redeemed_at ? (
+                          {!code.redeemedAt ? (
                             <button
                               type="button"
                               onClick={() => handleDelete(code.id)}
@@ -426,19 +433,21 @@ export default function SoftwareQuoteCodesPanel() {
 
               {form.kind === "business_recharge" ? (
                 <div className="space-y-2">
-                  <Label htmlFor="amountCny">충전 금액 (CNY) *</Label>
+                  <Label htmlFor="amountKrw">충전 금액 (KRW) *</Label>
                   <Input
-                    id="amountCny"
+                    id="amountKrw"
                     type="text"
                     inputMode="numeric"
-                    value={form.amountCny}
+                    value={form.amountKrw}
                     onChange={(event) =>
-                      setForm((prev) => ({ ...prev, amountCny: event.target.value }))
+                      setForm((prev) => ({ ...prev, amountKrw: event.target.value }))
                     }
-                    placeholder="10000"
+                    placeholder={String(BUSINESS_RECHARGE.baseMinKrw)}
                   />
                   <p className="text-[11px] text-[#1a1a1a]/45">
-                    최초 10,000 CNY 이상, 이후 2,000 CNY 단위만 허용합니다.
+                    최초 {formatRechargeKrw(BUSINESS_RECHARGE.baseMinKrw)} 이상, 이후{" "}
+                    {formatRechargeKrw(BUSINESS_RECHARGE.incrementKrw)} 단위만 허용합니다 (1회 상한{" "}
+                    {formatRechargeKrw(BUSINESS_RECHARGE.maxKrw)}).
                   </p>
                 </div>
               ) : (

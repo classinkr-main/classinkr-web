@@ -8,14 +8,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { CodeInputField, type CodeFieldStatus } from "@/components/billing/CodeInputField"
-import { KrwConversionNote } from "@/components/billing/KrwConversionNote"
+import { CheckoutRequestForm } from "@/components/checkout/CheckoutRequestForm"
+import type { CheckoutRequestItem } from "@/lib/billing/hardware-catalog"
 import {
   BUSINESS_RECHARGE,
   buildRechargeOrderName,
-  formatCny,
+  formatRechargeKrw,
   validateRechargeAmount,
 } from "@/lib/billing/recharge"
-import { formatKrw } from "@/lib/billing/plans"
 import {
   getTossWidgetClientKey,
   hasTossWidgetClientKey,
@@ -31,26 +31,23 @@ type FormState = {
   buyerPhone: string
 }
 
-type FxState = {
-  cnyKrw: number | null
-  fetchedAt: string | null
-  isStale: boolean
-  loading: boolean
-}
-
 type QuoteCodeApplied = {
   id: string
   code: string
-  amountCny: number
+  amountKrw: number
   organizationName: string | null
   notes: string | null
 }
 
+/**
+ * 충전형은 원화 선충전이라 서버(lib/billing/promo-codes)가 percent 와 flat_krw 만 통과시킨다.
+ * flat_cny / flat_usd 는 검증 단계에서 거부되므로 여기까지 오지 않는다.
+ */
 type PromoApplied = {
   id: string
   code: string
   label: string | null
-  discountType: "percent" | "flat_cny" | "flat_usd" | "flat_krw"
+  discountType: "percent" | "flat_krw"
   discountValue: number
   amountAfter: number
   discountAmount: number
@@ -66,6 +63,10 @@ const EMPTY_FORM: FormState = {
 const TOSS_METHODS_ID = "toss-business-payment-methods"
 const TOSS_AGREEMENT_ID = "toss-business-agreement"
 
+/**
+ * 사용 차감 단가표 — 위안화 기준의 사실 기술이라 원화 충전 전환과 무관하게 유지한다.
+ * (고객은 원화로 충전하고, 아래 단가로 잔액에서 차감된다.)
+ */
 const RATE_TABLE_ROWS: Array<{ label: string; price: string }> = [
   { label: "1v0 기본", price: "1 CNY / 1명 / 1시간" },
   { label: "1v1", price: "2 CNY / 1명 / 1시간" },
@@ -77,11 +78,6 @@ const RATE_TABLE_ROWS: Array<{ label: string; price: string }> = [
   { label: "녹화 (단일/듀얼)", price: "2 / 4 CNY" },
 ]
 
-function approxKrw(amountCny: number | null, rate: number | null) {
-  if (amountCny == null || !rate || rate <= 0) return null
-  return Math.round(amountCny * rate)
-}
-
 interface Props {
   initialQuoteCode?: string
 }
@@ -89,10 +85,10 @@ interface Props {
 export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [customAmountInput, setCustomAmountInput] = useState<string>(
-    BUSINESS_RECHARGE.presetsCny[0].toString()
+    BUSINESS_RECHARGE.presetsKrw[0].toString()
   )
-  const [selectedPresetCny, setSelectedPresetCny] = useState<number | null>(
-    BUSINESS_RECHARGE.presetsCny[0]
+  const [selectedPresetKrw, setSelectedPresetKrw] = useState<number | null>(
+    BUSINESS_RECHARGE.presetsKrw[0]
   )
   const [amountError, setAmountError] = useState<string | null>(null)
 
@@ -102,16 +98,10 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
   const [promo, setPromo] = useState<PromoApplied | null>(null)
   const [promoStatus, setPromoStatus] = useState<CodeFieldStatus>({ kind: "idle" })
 
-  const [fx, setFx] = useState<FxState>({
-    cnyKrw: null,
-    fetchedAt: null,
-    isStale: false,
-    loading: true,
-  })
-
   const [isWidgetReady, setIsWidgetReady] = useState(false)
   const [isPreparing, setIsPreparing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [requestOpen, setRequestOpen] = useState(false)
 
   const widgetsRef = useRef<TossPaymentsWidgets | null>(null)
   const paymentMethodWidgetRef = useRef<{ destroy: () => Promise<void> } | null>(null)
@@ -120,19 +110,42 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
   const checkoutEnabled = isSoftwareCheckoutEnabled()
   const hasWidgetKey = hasTossWidgetClientKey()
 
-  const effectiveBaseAmountCny = useMemo(() => {
-    if (quoteCode) return quoteCode.amountCny
+  const effectiveBaseAmountKrw = useMemo(() => {
+    if (quoteCode) return quoteCode.amountKrw
     const parsed = Number.parseInt(customAmountInput.replace(/[^0-9]/g, ""), 10)
     return Number.isFinite(parsed) ? parsed : 0
   }, [quoteCode, customAmountInput])
 
-  const effectiveFinalAmountCny = promo ? promo.amountAfter : effectiveBaseAmountCny
-  const approxAmountKrw = useMemo(
-    () => approxKrw(effectiveFinalAmountCny, fx.cnyKrw),
-    [effectiveFinalAmountCny, fx.cnyKrw]
-  )
+  const effectiveFinalAmountKrw = promo ? promo.amountAfter : effectiveBaseAmountKrw
   const isFormComplete = Boolean(
     form.organizationName.trim() && form.buyerName.trim() && form.buyerEmail.trim()
+  )
+  // 토스 키가 없거나 공개 결제 플래그가 꺼져 있으면 온라인 결제 경로 자체가 없다.
+  const paymentAvailable = checkoutEnabled && hasWidgetKey
+
+  /**
+   * 도입 신청 차단 사유. 충전액이 이미 원화라 환율 가드는 사라졌고, 금액 미입력만 남는다
+   * (₩0 신청이 저장돼 위컴·리드에 ₩0 으로 보이는 것만 막으면 된다).
+   */
+  const requestBlockReason = useMemo(() => {
+    if (effectiveFinalAmountKrw > 0) return null
+    return "충전 금액을 먼저 입력해 주세요."
+  }, [effectiveFinalAmountKrw])
+
+  // 입력 원화가 곧 계약 금액이다 — 환산 워크어라운드 없음.
+  const requestItems = useMemo<CheckoutRequestItem[]>(
+    () => [
+      {
+        sku: "sw-business-recharge",
+        name: `충전형 Business 선충전 ${formatRechargeKrw(effectiveFinalAmountKrw || 0)}${
+          quoteCode ? ` · 견적 ${quoteCode.code}` : ""
+        }${promo ? ` · 프로모 ${promo.code}` : ""}`,
+        qty: 1,
+        unitAmount: effectiveFinalAmountKrw || 0,
+        currency: "KRW",
+      },
+    ],
+    [effectiveFinalAmountKrw, quoteCode, promo]
   )
 
   // URL 쿼리에 quote 코드가 실려 들어온 경우 자동 적용
@@ -153,7 +166,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
               code: {
                 id: string
                 code: string
-                amountCny: number | null
+                amountKrw: number | null
                 organizationName: string | null
                 notes: string | null
               }
@@ -162,20 +175,20 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
           | null
 
         if (cancelled) return
-        if (!response.ok || !payload || !payload.ok || payload.code.amountCny == null) return
+        if (!response.ok || !payload || !payload.ok || payload.code.amountKrw == null) return
 
         setQuoteCode({
           id: payload.code.id,
           code: payload.code.code,
-          amountCny: payload.code.amountCny,
+          amountKrw: payload.code.amountKrw,
           organizationName: payload.code.organizationName,
           notes: payload.code.notes,
         })
-        setCustomAmountInput(payload.code.amountCny.toString())
-        setSelectedPresetCny(null)
+        setCustomAmountInput(payload.code.amountKrw.toString())
+        setSelectedPresetKrw(null)
         setQuoteStatus({
           kind: "applied",
-          summary: `${payload.code.code} · ${formatCny(payload.code.amountCny)} 적용`,
+          summary: `${payload.code.code} · ${formatRechargeKrw(payload.code.amountKrw)} 적용`,
         })
       } catch {
         // URL 자동 적용 실패는 조용히 무시. 사용자가 수동 재입력 가능.
@@ -188,41 +201,11 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
     }
   }, [initialQuoteCode])
 
-  // FX 초기 로드
+  // 토스 위젯 mount — 결제가 실제로 가능한 상태에서만 붙인다.
+  // (결제 불가 상태에서는 mount 대상 div 자체를 렌더하지 않으므로 여기서 함께 막아야
+  //  selector 를 못 찾아 "위젯을 불러오지 못했습니다" 오류가 뜨지 않는다.)
   useEffect(() => {
-    let cancelled = false
-
-    async function loadFx() {
-      try {
-        const response = await fetch("/api/billing/fx", { cache: "no-store" })
-        if (!response.ok) throw new Error("환율 조회 실패")
-        const payload = (await response.json()) as {
-          cnyKrw: number
-          fetchedAt: string
-          isStale: boolean
-        }
-        if (cancelled) return
-        setFx({
-          cnyKrw: payload.cnyKrw,
-          fetchedAt: payload.fetchedAt,
-          isStale: Boolean(payload.isStale),
-          loading: false,
-        })
-      } catch {
-        if (cancelled) return
-        setFx((prev) => ({ ...prev, loading: false }))
-      }
-    }
-
-    void loadFx()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  // 토스 위젯 mount
-  useEffect(() => {
-    if (!hasWidgetKey) return
+    if (!paymentAvailable) return
 
     let cancelled = false
 
@@ -231,10 +214,10 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
         const tossPayments = await loadTossPayments(getTossWidgetClientKey())
         const widgets = tossPayments.widgets({ customerKey: ANONYMOUS })
 
-        // 최소 충전 금액 × 대략 환율. mount 후 setAmount 로 재반영.
+        // 최소 충전 금액으로 초기화. mount 후 setAmount 로 재반영.
         await widgets.setAmount({
           currency: "KRW",
-          value: Math.max(BUSINESS_RECHARGE.baseMinCny * 190, 1),
+          value: Math.max(BUSINESS_RECHARGE.baseMinKrw, 1),
         })
 
         const paymentMethodWidget = await widgets.renderPaymentMethods({
@@ -273,30 +256,30 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
       paymentMethodWidgetRef.current = null
       agreementWidgetRef.current = null
     }
-  }, [hasWidgetKey])
+  }, [paymentAvailable])
 
   // 금액 변경 시 위젯 setAmount 갱신
   useEffect(() => {
     if (!widgetsRef.current) return
-    if (!approxAmountKrw || approxAmountKrw <= 0) return
+    if (!effectiveFinalAmountKrw || effectiveFinalAmountKrw <= 0) return
 
     void widgetsRef.current
-      .setAmount({ currency: "KRW", value: approxAmountKrw })
+      .setAmount({ currency: "KRW", value: effectiveFinalAmountKrw })
       .catch((amountError) => {
         console.error("[business-recharge] setAmount error:", amountError)
       })
-  }, [approxAmountKrw])
+  }, [effectiveFinalAmountKrw])
 
   function selectPreset(amount: number) {
     if (quoteCode) return
-    setSelectedPresetCny(amount)
+    setSelectedPresetKrw(amount)
     setCustomAmountInput(amount.toString())
     setAmountError(null)
   }
 
   function handleCustomInput(value: string) {
     setCustomAmountInput(value)
-    setSelectedPresetCny(null)
+    setSelectedPresetKrw(null)
     setAmountError(null)
   }
 
@@ -309,7 +292,10 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
     }
     const validation = validateRechargeAmount(parsed)
     if (!validation.ok) {
-      setAmountError(validation.reason + (validation.suggested ? ` (예: ${validation.suggested.toLocaleString()} CNY)` : ""))
+      setAmountError(
+        validation.reason +
+          (validation.suggested ? ` (예: ${formatRechargeKrw(validation.suggested)})` : "")
+      )
     } else {
       setAmountError(null)
       setCustomAmountInput(parsed.toString())
@@ -327,7 +313,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
       const payload = (await response.json().catch(() => null)) as
         | {
             ok: true
-            code: { id: string; code: string; amountCny: number | null; organizationName: string | null; notes: string | null }
+            code: { id: string; code: string; amountKrw: number | null; organizationName: string | null; notes: string | null }
           }
         | { ok: false; message: string }
         | null
@@ -339,7 +325,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
         setQuoteStatus({ kind: "error", message: payload.message })
         return
       }
-      if (payload.code.amountCny == null || payload.code.amountCny <= 0) {
+      if (payload.code.amountKrw == null || payload.code.amountKrw <= 0) {
         setQuoteStatus({ kind: "error", message: "이 코드에는 충전 금액이 지정되어 있지 않습니다." })
         return
       }
@@ -347,19 +333,19 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
       setQuoteCode({
         id: payload.code.id,
         code: payload.code.code,
-        amountCny: payload.code.amountCny,
+        amountKrw: payload.code.amountKrw,
         organizationName: payload.code.organizationName,
         notes: payload.code.notes,
       })
-      setCustomAmountInput(payload.code.amountCny.toString())
-      setSelectedPresetCny(null)
+      setCustomAmountInput(payload.code.amountKrw.toString())
+      setSelectedPresetKrw(null)
       setAmountError(null)
       // 프로모는 금액이 바뀌므로 해제
       setPromo(null)
       setPromoStatus({ kind: "idle" })
       setQuoteStatus({
         kind: "applied",
-        summary: `${payload.code.code} · ${formatCny(payload.code.amountCny)} 적용`,
+        summary: `${payload.code.code} · ${formatRechargeKrw(payload.code.amountKrw)} 적용`,
       })
     } catch (codeError) {
       setQuoteStatus({
@@ -372,14 +358,14 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
   function handleRemoveQuoteCode() {
     setQuoteCode(null)
     setQuoteStatus({ kind: "idle" })
-    setCustomAmountInput(BUSINESS_RECHARGE.presetsCny[0].toString())
-    setSelectedPresetCny(BUSINESS_RECHARGE.presetsCny[0])
+    setCustomAmountInput(BUSINESS_RECHARGE.presetsKrw[0].toString())
+    setSelectedPresetKrw(BUSINESS_RECHARGE.presetsKrw[0])
     setPromo(null)
     setPromoStatus({ kind: "idle" })
   }
 
   async function handleApplyPromo(code: string) {
-    if (!effectiveBaseAmountCny || effectiveBaseAmountCny <= 0) {
+    if (!effectiveBaseAmountKrw || effectiveBaseAmountKrw <= 0) {
       setPromoStatus({ kind: "error", message: "먼저 충전 금액을 입력해 주세요." })
       return
     }
@@ -392,8 +378,8 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
         body: JSON.stringify({
           code,
           target: "business_recharge",
-          baseAmount: effectiveBaseAmountCny,
-          currency: "CNY",
+          baseAmount: effectiveBaseAmountKrw,
+          currency: "KRW",
         }),
       })
       const payload = (await response.json().catch(() => null)) as
@@ -403,7 +389,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
               id: string
               code: string
               label: string | null
-              discountType: "percent" | "flat_cny" | "flat_usd" | "flat_krw"
+              discountType: "percent" | "flat_krw"
               discountValue: number
             }
             amountBefore: number
@@ -433,7 +419,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
       })
       setPromoStatus({
         kind: "applied",
-        summary: `${payload.promo.code} · -${formatCny(payload.discountAmount)} 적용`,
+        summary: `${payload.promo.code} · -${formatRechargeKrw(payload.discountAmount)} 적용`,
       })
     } catch (codeError) {
       setPromoStatus({
@@ -448,6 +434,17 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
     setPromoStatus({ kind: "idle" })
   }
 
+  function openRequest() {
+    // 환산 실패(₩0) 상태에서는 폼 자체를 열지 않는다 — 버튼 disabled 와 같은 진실.
+    if (requestBlockReason) return
+    trackEvent("click_cta", {
+      button: "sw_business_request_open",
+      page: "/checkout",
+      product_family: "software",
+    })
+    setRequestOpen(true)
+  }
+
   async function handleCheckout() {
     if (!checkoutEnabled) {
       setError("공개 결제는 아직 활성화되지 않았습니다. 환경 설정 후 다시 시도해주세요.")
@@ -457,12 +454,12 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
       setError("결제위젯 준비가 아직 끝나지 않았습니다.")
       return
     }
-    if (!effectiveFinalAmountCny || effectiveFinalAmountCny <= 0) {
+    if (!effectiveFinalAmountKrw || effectiveFinalAmountKrw <= 0) {
       setError("충전 금액을 먼저 설정해 주세요.")
       return
     }
     if (!quoteCode) {
-      const validation = validateRechargeAmount(effectiveBaseAmountCny)
+      const validation = validateRechargeAmount(effectiveBaseAmountKrw)
       if (!validation.ok) {
         setError(validation.reason)
         return
@@ -478,7 +475,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: "business",
-          amountCny: effectiveBaseAmountCny,
+          amountKrw: effectiveBaseAmountKrw,
           organizationName: form.organizationName,
           buyerName: form.buyerName,
           buyerEmail: form.buyerEmail,
@@ -497,8 +494,6 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
             conversionEventId?: string
             amount: number
             amountKrw: number
-            amountCny: number
-            fxRate: number
           }
         | { error?: string }
         | null
@@ -509,9 +504,9 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
 
       await widgetsRef.current.setAmount({ currency: "KRW", value: payload.amountKrw })
 
+      // 충전액이 곧 승인 금액이라 value/currency 가 그대로 충전 금액이다(별도 통화 파라미터 불필요).
       trackEvent("begin_checkout", {
         mode: "business",
-        amount_cny: payload.amountCny,
         quote_code: quoteCode?.code,
         promo_code: promo?.code,
         event_id: payload.conversionEventId,
@@ -530,7 +525,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
         customerMobilePhone: form.buyerPhone.replace(/\D/g, ""),
         metadata: {
           mode: "business",
-          amountCny: String(payload.amountCny),
+          amountKrw: String(payload.amountKrw),
           quoteCode: quoteCode?.code ?? "",
           promoCode: promo?.code ?? "",
         },
@@ -555,13 +550,14 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
           <div className="flex items-baseline justify-between">
             <p className="text-[13px] font-semibold text-[#111110]">충전 금액</p>
             <p className="text-[11px] text-[#7C8A83]">
-              최초 10,000 · 추가 2,000 CNY 단위
+              최초 {(BUSINESS_RECHARGE.baseMinKrw / 10_000).toLocaleString("ko-KR")}만 · 추가{" "}
+              {(BUSINESS_RECHARGE.incrementKrw / 10_000).toLocaleString("ko-KR")}만원 단위
             </p>
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-            {BUSINESS_RECHARGE.presetsCny.map((amount) => {
-              const active = selectedPresetCny === amount && !quoteCode
+            {BUSINESS_RECHARGE.presetsKrw.map((amount) => {
+              const active = selectedPresetKrw === amount && !quoteCode
               return (
                 <button
                   key={amount}
@@ -574,9 +570,8 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
                       : "border-black/10 bg-white hover:border-black/20"
                   } ${quoteCode ? "cursor-not-allowed opacity-50" : ""}`}
                 >
-                  <p className="text-[13px] font-semibold text-[#111110]">{formatCny(amount)}</p>
-                  <p className="mt-0.5 text-[11px] text-[#7C8A83]">
-                    ≈ {approxKrw(amount, fx.cnyKrw) ? formatKrw(approxKrw(amount, fx.cnyKrw) as number) : "-"}
+                  <p className="text-[13px] font-semibold text-[#111110]">
+                    {formatRechargeKrw(amount)}
                   </p>
                 </button>
               )
@@ -584,15 +579,15 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
           </div>
 
           <div className="mt-4 space-y-1.5">
-            <Label htmlFor="custom-cny" className="text-[12px] text-[#44514A]">
-              직접 입력 (CNY)
+            <Label htmlFor="custom-krw" className="text-[12px] text-[#44514A]">
+              직접 입력 (KRW)
             </Label>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[13px] text-[#7C8A83]">
-                ¥
+                ₩
               </span>
               <Input
-                id="custom-cny"
+                id="custom-krw"
                 type="text"
                 inputMode="numeric"
                 value={customAmountInput}
@@ -600,7 +595,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
                 onChange={(event) => handleCustomInput(event.target.value)}
                 onBlur={blurValidateCustom}
                 className="h-10 rounded-lg border-black/10 bg-white pl-7"
-                placeholder="10000"
+                placeholder={String(BUSINESS_RECHARGE.baseMinKrw)}
               />
             </div>
             {amountError ? (
@@ -612,7 +607,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
         <CodeInputField
           title="견적서 코드"
           description="어드민에서 발급된 코드를 넣으면 지정 금액으로 고정됩니다."
-          placeholder="QB-2026-XXXX"
+          placeholder="QB-2026-XXXXXXXX"
           status={quoteStatus}
           onApply={handleApplyQuoteCode}
           onRemove={handleRemoveQuoteCode}
@@ -643,7 +638,10 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
                 </li>
               ))}
             </ul>
-            <p className="mt-4 text-[11px] leading-relaxed text-[#7C8A83]">
+            <p className="mt-3 text-[11px] leading-relaxed text-[#44514A]">
+              수업 단가는 위안화 기준이며, 충전 잔액에서 이용 시점에 차감됩니다.
+            </p>
+            <p className="mt-2 text-[11px] leading-relaxed text-[#7C8A83]">
               학생이 10분 이하로 교실에 머무르면 과금되지 않고, 30분 이하 수업은 30분 기준으로 계산됩니다.
               수업 알림 SMS · 웹라이브 · 스토리지 초과분은 별도 요율로 차감됩니다.
             </p>
@@ -660,7 +658,7 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
           <div className="mt-3 flex items-baseline justify-between">
             <div>
               <p className="text-[15px] font-semibold text-[#111110]">
-                {buildRechargeOrderName(effectiveFinalAmountCny || BUSINESS_RECHARGE.baseMinCny)}
+                {buildRechargeOrderName(effectiveFinalAmountKrw || BUSINESS_RECHARGE.baseMinKrw)}
               </p>
               <p className="mt-0.5 text-[12px] text-[#615D59]">
                 {quoteCode ? `견적 ${quoteCode.code}` : "선충전"}
@@ -668,26 +666,25 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
               </p>
             </div>
             <p className="text-[28px] font-semibold tracking-tight text-[#111110]">
-              {formatCny(effectiveFinalAmountCny || 0)}
+              {formatRechargeKrw(effectiveFinalAmountKrw || 0)}
             </p>
           </div>
 
           {promo ? (
             <div className="mt-3 flex items-center justify-between rounded-lg bg-[#ECFDF5] px-3 py-2 text-[12px]">
-              <span className="text-[#44514A]">충전 {formatCny(effectiveBaseAmountCny)}</span>
+              <span className="text-[#44514A]">
+                충전 {formatRechargeKrw(effectiveBaseAmountKrw)}
+              </span>
               <span className="font-semibold text-[#084734]">
-                -{formatCny(promo.discountAmount)}
+                -{formatRechargeKrw(promo.discountAmount)}
               </span>
             </div>
           ) : null}
 
           <div className="mt-4 border-t border-black/5 pt-3">
-            <KrwConversionNote
-              amountKrw={approxAmountKrw}
-              fxRate={fx.cnyKrw}
-              isStale={fx.isStale}
-              loading={fx.loading}
-            />
+            <p className="text-[11px] leading-relaxed text-[#7C8A83]">
+              원화로 충전하고, 수업 이용 시점에 잔액에서 차감됩니다.
+            </p>
           </div>
         </div>
 
@@ -757,25 +754,19 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-black/10 bg-white p-6">
-          <p className="text-[13px] font-semibold text-[#111110]">결제수단</p>
-          <p className="mt-1 text-[12px] text-[#615D59]">카드 · 네이버페이</p>
+        {paymentAvailable ? (
+          <div className="rounded-2xl border border-black/10 bg-white p-6">
+            <p className="text-[13px] font-semibold text-[#111110]">결제수단</p>
+            <p className="mt-1 text-[12px] text-[#615D59]">카드 · 네이버페이</p>
 
-          <div
-            id={TOSS_METHODS_ID}
-            className="mt-4 min-h-[200px] rounded-lg border border-black/5 bg-[#FAFAF8]"
-          />
-          <div
-            id={TOSS_AGREEMENT_ID}
-            className="mt-3 min-h-[88px] rounded-lg border border-black/5 bg-[#FAFAF8]"
-          />
-        </div>
-
-        {!checkoutEnabled || !hasWidgetKey ? (
-          <div className="rounded-lg border border-[#EAD7B2] bg-[#FFF9EB] px-4 py-3 text-[12px] leading-relaxed text-[#8D6C1F]">
-            {!checkoutEnabled
-              ? "`NEXT_PUBLIC_SW_CHECKOUT_ENABLED=true` 설정 전까지 공개 결제는 비활성 상태입니다."
-              : "토스 위젯 키가 없습니다. `.env.local`에 `NEXT_PUBLIC_TOSS_WIDGET_CLIENT_KEY`를 설정해 주세요."}
+            <div
+              id={TOSS_METHODS_ID}
+              className="mt-4 min-h-[200px] rounded-lg border border-black/5 bg-[#FAFAF8]"
+            />
+            <div
+              id={TOSS_AGREEMENT_ID}
+              className="mt-3 min-h-[88px] rounded-lg border border-black/5 bg-[#FAFAF8]"
+            />
           </div>
         ) : null}
 
@@ -786,25 +777,71 @@ export function BusinessRechargePanel({ initialQuoteCode }: Props = {}) {
           </div>
         ) : null}
 
-        <Button
-          type="button"
-          size="lg"
-          className="h-12 w-full rounded-lg bg-[#084734] text-[14px] font-semibold text-white hover:bg-[#065C41]"
-          disabled={
-            !hasWidgetKey ||
-            !isWidgetReady ||
-            isPreparing ||
-            !isFormComplete ||
-            !effectiveFinalAmountCny
-          }
-          onClick={() => {
-            void handleCheckout()
-          }}
-        >
-          {isPreparing
-            ? "결제 준비 중..."
-            : `${formatCny(effectiveFinalAmountCny || 0)} 충전하기`}
-        </Button>
+        {paymentAvailable ? (
+          <div className="space-y-3">
+            <Button
+              type="button"
+              size="lg"
+              className="h-12 w-full rounded-lg bg-[#084734] text-[14px] font-semibold text-white hover:bg-[#065C41]"
+              disabled={
+                !isWidgetReady || isPreparing || !isFormComplete || !effectiveFinalAmountKrw
+              }
+              onClick={() => {
+                void handleCheckout()
+              }}
+            >
+              {isPreparing
+                ? "결제 준비 중..."
+                : `${formatRechargeKrw(effectiveFinalAmountKrw || 0)} 충전하기`}
+            </Button>
+
+            <button
+              type="button"
+              onClick={openRequest}
+              disabled={Boolean(requestBlockReason)}
+              className="w-full rounded-lg border border-black/[0.08] bg-white py-2.5 text-[13px] font-medium text-[#084734] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white"
+            >
+              결제 없이 도입 신청
+            </button>
+
+            {requestBlockReason ? (
+              <p className="text-center text-[11px] text-[#A39E98]">{requestBlockReason}</p>
+            ) : null}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-black/[0.08] bg-white p-6">
+            <p className="text-[13px] font-semibold text-[#111110]">온라인 결제 오픈 준비 중</p>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-[#615D59]">
+              아래 도입 신청을 남기시면 결제 없이 도입을 도와드립니다. 담당자가 1영업일 내에 연락해
+              충전 금액 확정과 계약을 함께 진행합니다.
+            </p>
+
+            <Button
+              type="button"
+              size="lg"
+              className="mt-4 h-12 w-full rounded-lg bg-[#084734] text-[14px] font-semibold text-white hover:bg-[#065C41]"
+              disabled={Boolean(requestBlockReason)}
+              onClick={openRequest}
+            >
+              결제 없이 도입 신청
+            </Button>
+
+            {requestBlockReason ? (
+              <p className="mt-2 text-center text-[11px] text-[#A39E98]">{requestBlockReason}</p>
+            ) : null}
+          </div>
+        )}
+
+        <CheckoutRequestForm
+          open={requestOpen}
+          onOpenChange={setRequestOpen}
+          kind="software"
+          items={requestItems}
+          sourcePage="/checkout?type=sw&mode=business"
+          summaryTitle="충전형 Business 선충전"
+          summaryValue={formatRechargeKrw(effectiveFinalAmountKrw || 0)}
+          summaryNote="충전 잔액은 수업 이용 시점에 차감됩니다"
+        />
       </aside>
     </div>
   )

@@ -47,14 +47,14 @@ export async function POST(req: NextRequest) {
     }
 
     const kind = parseKind(body.kind)
-    const amountCny = kind === "business_recharge" ? parseAmount(body.amountCny) : null
+    const amountKrw = kind === "business_recharge" ? parseAmount(body.amountKrw) : null
     const amountUsd = kind === "subscription" ? parseAmount(body.amountUsd) : null
 
     if (kind === "business_recharge") {
-      if (amountCny == null) {
-        return NextResponse.json({ error: "충전 금액(CNY)을 입력해 주세요." }, { status: 400 })
+      if (amountKrw == null) {
+        return NextResponse.json({ error: "충전 금액(KRW)을 입력해 주세요." }, { status: 400 })
       }
-      const validation = validateRechargeAmount(amountCny)
+      const validation = validateRechargeAmount(amountKrw)
       if (!validation.ok) {
         return NextResponse.json({ error: validation.reason }, { status: 400 })
       }
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     const code = await createQuoteCode({
       kind,
-      amountCny,
+      amountKrw,
       amountUsd,
       organizationName: normalizeString(body.organizationName) || null,
       buyerName: normalizeString(body.buyerName) || null,

@@ -167,8 +167,5 @@ export function convertUsdToKrw(amountUsd: number, rate: number) {
   return Math.round(amountUsd * rate)
 }
 
-export function convertCnyToKrw(amountCny: number, rate: number) {
-  if (!Number.isFinite(amountCny) || amountCny < 0) return 0
-  if (!Number.isFinite(rate) || rate <= 0) return 0
-  return Math.round(amountCny * rate)
-}
+// convertCnyToKrw 는 충전형 KRW 전환(2026-07)으로 참조 0이 되어 제거했다.
+// cnyKrw 환율 자체는 lib/admin-crm-neo.ts 의 USD/CNY 크로스 계산이 아직 쓰므로 유지한다.

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { isSoftwareCheckoutEnabled } from "@/lib/billing/public-env"
 import {
   createBusinessRechargeOrder,
   createSubscriptionCheckoutOrder,
@@ -71,6 +72,14 @@ function emitBeginCheckoutConversion(req: NextRequest, order: SoftwareCheckoutOr
 }
 
 export async function POST(req: NextRequest) {
+  // 서버측 가드: 클라이언트 플래그(NEXT_PUBLIC_SW_CHECKOUT_ENABLED)만으로는 UI만 숨길 뿐,
+  // 비활성 상태에서도 외부에서 직접 POST하면 pending 주문이 생성될 수 있었다.
+  // prepare 는 새 주문을 "생성"하는 유일한 진입점이므로 여기서 막으면 confirm/fail 로 이어질
+  // pending 주문 자체가 생기지 않는다.
+  if (!isSoftwareCheckoutEnabled()) {
+    return NextResponse.json({ ok: false, error: "checkout_disabled" }, { status: 403 })
+  }
+
   const ip = getClientIp(req)
   const { allowed } = await checkRateLimitDistributed(ip, "billing-checkout-prepare", {
     windowMs: 60_000,
@@ -115,13 +124,10 @@ export async function POST(req: NextRequest) {
           orderName: order.orderName,
           conversionEventId: emitBeginCheckoutConversion(req, order),
           amount: order.amount,
-          amountKrw: order.amount,
-          amountCny: order.amountCny,
-          amountCnyBeforeDiscount: order.amountCnyBeforeDiscount,
+          // 충전형은 원화 선충전이라 환산이 없다 — amount === amountKrw === Toss 승인 금액.
+          amountKrw: order.amountKrw,
+          amountKrwBeforeDiscount: order.amountKrwBeforeDiscount,
           discount: order.discount,
-          fxRate: order.fxRate,
-          fxFetchedAt: order.fxFetchedAt,
-          fxIsStale: order.fxSource === "env_fallback",
           quoteCode: order.quoteCode?.code ?? null,
           promoCode: order.appliedPromo?.code ?? null,
         },
