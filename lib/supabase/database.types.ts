@@ -532,7 +532,9 @@ export interface AuditLog {
 
 /* ─── Partner Portal Types ─── */
 
-export type PartnerStatus = "active" | "inactive" | "pending";
+// 20260727_partners_status_text_check.sql 이후 partners.status 는 TEXT+CHECK.
+// 값 집합의 단일 진실원은 lib/partners-data.ts PARTNER_STATUSES.
+export type PartnerStatus = "lead" | "active" | "paused" | "churn_risk";
 export type PipelineStage = "prospect" | "quoting" | "contracted" | "installing" | "completed" | "cancelled";
 
 export interface PartnerUser {

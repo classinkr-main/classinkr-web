@@ -152,9 +152,38 @@ function getMonthPrefix(year: number, month: number) {
   return `${year}-${String(month).padStart(2, "0")}`
 }
 
+// Asia/Seoul 고정 오프셋(DST 없음)
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000
+// 'Z' 또는 '±hh(:)mm' 로 끝나는, 이미 절대 시각인 값 판별용
+const EXPLICIT_OFFSET_REGEX = /(?:Z|[+-]\d{2}:?\d{2})$/i
+
+// 오프셋 포함 인스턴트(Supabase timestamptz 왕복값)를 KST 벽시계 문자열로 환산.
+// 오프셋 없는 값은 KST 벽시계로 간주하고 'T' 구분자만 정규화해 돌려준다.
+function toBusinessClock(value: string) {
+  const normalized = value.replace(" ", "T")
+  if (!EXPLICIT_OFFSET_REGEX.test(normalized)) return normalized
+
+  const parsed = new Date(normalized)
+  if (Number.isNaN(parsed.getTime())) return normalized
+
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(parsed)
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "00"
+
+  return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`
+}
+
 function getMonthRange(year: number, month: number) {
-  const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0))
-  const end = new Date(Date.UTC(year, month, 1, 0, 0, 0))
+  // KST 자정 기준 월 경계 — 저장된 timestamptz 인스턴트를 같은 기준으로 거른다
+  const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0) - KST_OFFSET_MS)
+  const end = new Date(Date.UTC(year, month, 1, 0, 0, 0) - KST_OFFSET_MS)
   return {
     startIso: start.toISOString(),
     endIso: end.toISOString(),
@@ -171,14 +200,13 @@ function isEventVisibleInMonth(event: CalendarEvent, year: number, month: number
 
 function parseDatePart(value?: string) {
   if (!value) return undefined
-  const match = value.match(/^(\d{4}-\d{2}-\d{2})/)
+  const match = toBusinessClock(value).match(/^(\d{4}-\d{2}-\d{2})/)
   return match?.[1]
 }
 
 function parseTimePart(value?: string) {
   if (!value) return undefined
-  const normalized = value.replace(" ", "T")
-  const match = normalized.match(/T(\d{2}:\d{2})/)
+  const match = toBusinessClock(value).match(/T(\d{2}:\d{2})/)
   return match?.[1]
 }
 
