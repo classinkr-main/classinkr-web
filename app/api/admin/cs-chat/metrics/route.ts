@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { getInternalCsMetrics } from "@/lib/internal-cs-chat/metrics"
 import { isInternalCsChatNotReadyError } from "@/lib/repositories/internal-cs-chat"
@@ -17,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const metrics = await getInternalCsMetrics(days)
-    return NextResponse.json(metrics)
+    return adminCachedJson(metrics)
   } catch (error) {
     console.error("[GET /api/admin/cs-chat/metrics]", error)
     if (isInternalCsChatNotReadyError(error)) {
