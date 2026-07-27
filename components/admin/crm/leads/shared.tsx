@@ -214,8 +214,44 @@ export function getLeadOwner(lead: LeadRecord) {
   return lead.assigned_to?.trim() || "미배정"
 }
 
+// ─── Meta 광고 식별 ────────────────────────────────────────────
+// Meta 리드애즈 웹훅은 광고 정보를 두 곳에 남긴다:
+//  - 신규(웹훅 개편 후): source_detail=광고명, utm_campaign/utm_term/utm_content 구조화 필드
+//  - 구버전: utm_campaign만 구조화, 광고·세트명은 message 텍스트의 "ad="/"adset=" 줄에만 존재
+// 이 파서가 두 세대를 하나의 형태로 통일한다 — 백필 없이 기존 리드도 광고 단위로 식별된다.
+export interface MetaAdInfo {
+  campaign?: string
+  adset?: string
+  ad?: string
+}
+
+export function getMetaAdInfo(lead: LeadRecord): MetaAdInfo | null {
+  if (lead.source !== "meta_lead_ads") return null
+  const info: MetaAdInfo = {
+    campaign: lead.utm_campaign?.trim() || undefined,
+    adset: lead.utm_term?.trim() || undefined,
+    ad: lead.utm_content?.trim() || undefined,
+  }
+  if (!info.campaign || !info.adset || !info.ad) {
+    for (const line of (lead.message ?? "").split("\n")) {
+      const idx = line.indexOf("=")
+      if (idx <= 0) continue
+      const key = line.slice(0, idx).trim()
+      const value = line.slice(idx + 1).trim()
+      if (!value || value === "-") continue
+      if (key === "campaign" && !info.campaign) info.campaign = value
+      else if (key === "adset" && !info.adset) info.adset = value
+      else if (key === "ad" && !info.ad) info.ad = value
+    }
+  }
+  return info.campaign || info.adset || info.ad ? info : null
+}
+
 export function getLeadSourceDetail(lead: LeadRecord) {
-  return lead.source_detail?.trim() || ""
+  const explicit = lead.source_detail?.trim()
+  if (explicit) return explicit
+  // Meta 리드는 광고명이 실질적 세부 유입 — 세부유입 드롭다운·필터·목록 표시가 광고 단위로 작동한다.
+  return getMetaAdInfo(lead)?.ad || ""
 }
 
 export function getLeadMagnetLabel(value?: string) {

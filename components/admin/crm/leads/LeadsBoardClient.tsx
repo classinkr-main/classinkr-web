@@ -47,6 +47,7 @@ import {
   formatResponseAge,
   getLeadOwner,
   getLeadSourceDetail,
+  getMetaAdInfo,
   getLeadMagnetLabel,
   getLeadDisplayName,
   getLeadSourceGroup,
@@ -287,8 +288,13 @@ function LeadDrawer({
   const score = calcScore(lead)
   const unconfirmed = isUnconfirmedLead(lead)
   const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp) : null
+  const metaAdInfo = getMetaAdInfo(lead)
   const attributionItems = [
     { label: "Source Detail", value: lead.source_detail },
+    // 구버전 Meta 리드는 utm_term/content가 비어 광고가 안 보였다 — 파서 값으로 항상 노출.
+    // (캠페인은 아래 UTM Campaign 줄이 이미 커버)
+    { label: "Meta 광고", value: metaAdInfo?.ad },
+    { label: "Meta 광고세트", value: metaAdInfo?.adset },
     { label: "Lead Magnet", value: getLeadMagnetLabel(lead.lead_magnet) || lead.lead_magnet },
     { label: "UTM Source", value: lead.utm_source },
     { label: "UTM Medium", value: lead.utm_medium },
@@ -1952,9 +1958,9 @@ export default function LeadsBoardClient() {
                       <SourceGroupDot group={getLeadSourceGroup(lead)} size={6} />
                       {SOURCE_GROUP_LABEL[getLeadSourceGroup(lead)]} · {SOURCE_LABEL[lead.source] ?? lead.source}
                     </span>
-                    {lead.source_detail ? (
+                    {getLeadSourceDetail(lead) ? (
                       <span className="rounded-md bg-[#ECFDF5] px-2 py-1 text-[#084734]">
-                        {lead.source_detail}
+                        {getLeadSourceDetail(lead)}
                       </span>
                     ) : null}
                     {lead.lead_magnet ? (
@@ -2094,9 +2100,9 @@ export default function LeadsBoardClient() {
                             {SOURCE_LABEL[lead.source] ?? lead.source}
                           </span>
                         </span>
-                        {lead.source_detail ? (
+                        {getLeadSourceDetail(lead) ? (
                           <span className="max-w-full truncate rounded-md bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-medium text-[#084734]">
-                            {lead.source_detail}
+                            {getLeadSourceDetail(lead)}
                           </span>
                         ) : null}
                         {lead.lead_magnet ? (
