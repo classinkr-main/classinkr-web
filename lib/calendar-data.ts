@@ -21,6 +21,7 @@ import { assertLocalJsonWriteAllowed } from "@/lib/server/runtime-persistence"
 import {
   getEffectivePublicEventEndIso,
   getPublicEventDatePart,
+  normalizeSessionDates,
 } from "@/lib/public-event-dates"
 import { getNotionMarketingCalendarEvents } from "@/lib/notion-marketing-calendar"
 import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
@@ -378,6 +379,7 @@ interface PublicEventCalendarRow {
   title: string
   starts_at: string
   ends_at: string | null
+  session_dates?: unknown
   created_at: string
   updated_at: string
 }
@@ -385,26 +387,57 @@ interface PublicEventCalendarRow {
 async function getPublicEventsAsCalendarEvents(): Promise<CalendarEvent[]> {
   try {
     const supabase = createSupabaseAdminClient()
-    const { data, error } = await supabase
+    const primary = await supabase
       .from("public_events")
-      .select("id, title, starts_at, ends_at, created_at, updated_at")
+      .select("id, title, starts_at, ends_at, session_dates, created_at, updated_at")
       .order("starts_at")
-    if (error) return []
-    return (data as PublicEventCalendarRow[]).map((row) => ({
-      id: row.id,
-      title: row.title,
-      date: getPublicEventDatePart(row.starts_at),
-      endDate: getPublicEventDatePart(getEffectivePublicEventEndIso(row.starts_at, row.ends_at) ?? row.starts_at),
-      type: "launch" as EventType,
-      source: "event" as EventSource,
-      sourceLabel: "공개 행사",
-      readonly: true,
-      // 행사별 편집 딥링크 — 목록(/admin/events) 대신 해당 행사의 편집 화면으로 직행.
-      // 노션/쇼룸/팀원 행사 등 외부 소스 href(외부 URL)는 각자의 빌더가 따로 관리한다.
-      href: `/admin/events/${encodeURIComponent(row.id)}/edit`,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }))
+
+    // session_dates 마이그레이션 적용 전에도 캘린더가 비지 않도록 한 번 물러선다
+    let rows: PublicEventCalendarRow[]
+    if (primary.error) {
+      const legacy = await supabase
+        .from("public_events")
+        .select("id, title, starts_at, ends_at, created_at, updated_at")
+        .order("starts_at")
+      if (legacy.error) return []
+      rows = legacy.data as unknown as PublicEventCalendarRow[]
+    } else {
+      rows = primary.data as unknown as PublicEventCalendarRow[]
+    }
+
+    return rows.flatMap((row) => {
+      const base = {
+        title: row.title,
+        type: "launch" as EventType,
+        source: "event" as EventSource,
+        sourceLabel: "공개 행사",
+        readonly: true,
+        // 행사별 편집 딥링크 — 목록(/admin/events) 대신 해당 행사의 편집 화면으로 직행.
+        // 노션/쇼룸/팀원 행사 등 외부 소스 href(외부 URL)는 각자의 빌더가 따로 관리한다.
+        href: `/admin/events/${encodeURIComponent(row.id)}/edit`,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }
+
+      // 띄엄띄엄 열리는 회차 행사는 봉투를 통짜 띠로 그리지 않고 회차 날짜에만 찍는다
+      const sessions = normalizeSessionDates(row.session_dates)
+      if (sessions) {
+        return sessions.map((date, index) => ({
+          ...base,
+          id: `${row.id}:${date}`,
+          title: `${row.title} (${index + 1}/${sessions.length}회차)`,
+          date,
+          endDate: date,
+        }))
+      }
+
+      return [{
+        ...base,
+        id: row.id,
+        date: getPublicEventDatePart(row.starts_at),
+        endDate: getPublicEventDatePart(getEffectivePublicEventEndIso(row.starts_at, row.ends_at) ?? row.starts_at),
+      }]
+    })
   } catch {
     return []
   }

@@ -9,8 +9,9 @@ export interface PublicEvent {
   description: string | null
   category: EventCategory
   tag: string | null
-  startsAt: string       // ISO datetime string
-  endsAt: string | null
+  startsAt: string       // ISO datetime string. 회차 행사면 첫 회차 시작(봉투 시작)
+  endsAt: string | null  // 회차 행사면 마지막 회차 종료(봉투 끝)
+  sessionDates: string[] | null  // "YYYY-MM-DD"[] — 띄엄띄엄 열리는 회차 날짜. NULL이면 단일 기간
   location: string | null
   ctaLabel: string
   ctaHref: string | null
@@ -33,6 +34,7 @@ export type PublicEventInsert = {
   tag?: string | null
   startsAt: string
   endsAt?: string | null
+  sessionDates?: string[] | null
   location?: string | null
   ctaLabel?: string
   ctaHref?: string | null

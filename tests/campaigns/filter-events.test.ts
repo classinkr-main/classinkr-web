@@ -11,6 +11,7 @@ function makeEvent(overrides: Partial<PublicEvent> = {}): PublicEvent {
     tag: null,
     startsAt: "2026-07-18T00:00:00.000Z",
     endsAt: null,
+    sessionDates: null,
     location: "인천",
     ctaLabel: "신청하기",
     ctaHref: null,

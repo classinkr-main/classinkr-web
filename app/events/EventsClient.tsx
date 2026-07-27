@@ -8,7 +8,7 @@ import Link from "next/link"
 import type { PublicEvent, EventStatus } from "@/lib/types/public-events"
 import type { PublicSeminarCard } from "@/lib/seminars/catalog"
 import { SeminarCard } from "@/components/seminars/SeminarCard"
-import { formatPublicEventDate } from "@/lib/public-event-dates"
+import { formatPublicEventSchedule } from "@/lib/public-event-dates"
 
 const CATEGORIES = ["전체", "웨비나", "오프라인 행사", "프로모션", "얼리버드", "파트너십"] as const
 const EVENTS_CONTACT_HREF = `/contact?topic=${encodeURIComponent("도입 상담")}&prefill=${encodeURIComponent("행사/프로모션 관련 문의입니다.")}#contact-form`
@@ -186,8 +186,7 @@ export default function EventsClient({
                           <div className="flex flex-wrap items-center gap-4 text-[12px] text-white/40 mb-6">
                             <span className="flex items-center gap-1.5">
                               <Calendar className="w-3.5 h-3.5" />
-                              {formatPublicEventDate(event.startsAt)}
-                              {event.endsAt ? ` ~ ${formatPublicEventDate(event.endsAt)}` : ""}
+                              {formatPublicEventSchedule(event.startsAt, event.endsAt, event.sessionDates)}
                             </span>
                             {event.location && (
                               <span className="flex items-center gap-1.5">
@@ -313,8 +312,7 @@ export default function EventsClient({
                     <div className="flex flex-wrap items-center gap-3 mt-1.5">
                       <span className="text-[11px] text-[#1a1a1a]/30 flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {formatPublicEventDate(event.startsAt)}
-                        {event.endsAt ? ` ~ ${formatPublicEventDate(event.endsAt)}` : ""}
+                        {formatPublicEventSchedule(event.startsAt, event.endsAt, event.sessionDates)}
                       </span>
                       {event.location && (
                         <>

@@ -6,6 +6,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Plus, Pencil, Trash2, X, Upload, ImageIcon, ArrowRight, ClipboardPaste } from "lucide-react"
 import { adminFetch, adminFetchJsonCached, getAdminToken } from "@/lib/admin-client"
+import EventDateField from "@/components/admin/EventDateField"
+import { formatPublicEventSchedule } from "@/lib/public-event-dates"
 import type { PublicEvent, EventCategory, EventPublicationStatus, EventStatus } from "@/lib/types/public-events"
 import { EVENT_CATEGORIES } from "@/lib/types/public-events"
 
@@ -20,11 +22,6 @@ function adminUpload(url: string, formData: FormData) {
 // signup-counts는 정규 키(slug ?? id)로 집계된다 — slug 없는 행사는 id 키로 조회
 function eventSignupCount(counts: Record<string, number>, event: PublicEvent): number {
   return (event.slug ? counts[event.slug] : undefined) ?? counts[event.id] ?? 0
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, "0")}. ${String(d.getDate()).padStart(2, "0")}`
 }
 
 function localDatetimeToIso(value: string): string {
@@ -42,6 +39,7 @@ interface FormState {
   tag: string
   startsAt: string
   endsAt: string
+  sessionDates: string[]
   location: string
   ctaLabel: string
   ctaHref: string
@@ -57,6 +55,7 @@ const DEFAULT_FORM: FormState = {
   tag: "",
   startsAt: "",
   endsAt: "",
+  sessionDates: [],
   location: "",
   ctaLabel: "자세히 보기",
   ctaHref: "",
@@ -176,6 +175,7 @@ export default function AdminEventsPage() {
         tag: form.tag || null,
         startsAt: localDatetimeToIso(form.startsAt),
         endsAt: form.endsAt ? localDatetimeToIso(form.endsAt) : null,
+        sessionDates: form.sessionDates.length > 0 ? form.sessionDates : null,
         location: form.location || null,
         ctaLabel: form.ctaLabel || "자세히 보기",
         ctaHref: form.ctaHref || "/contact#contact-form",
@@ -310,8 +310,7 @@ export default function AdminEventsPage() {
                   </td>
                   <td className="px-4 py-3 text-[#1a1a1a]/50">{event.category}</td>
                   <td className="px-4 py-3 text-[#1a1a1a]/50">
-                    {formatDate(event.startsAt)}
-                    {event.endsAt ? ` ~ ${formatDate(event.endsAt)}` : ""}
+                    {formatPublicEventSchedule(event.startsAt, event.endsAt, event.sessionDates)}
                   </td>
                   <td className="px-4 py-3">
                     {eventSignupCount(signupCounts, event) > 0 ? (
@@ -438,26 +437,12 @@ export default function AdminEventsPage() {
                 />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">시작일시 *</label>
-                  <input
-                    type="datetime-local"
-                    value={form.startsAt}
-                    onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
-                    className="w-full px-3 py-2 border border-[rgba(0,0,0,0.12)] rounded-lg text-[13px] focus:outline-none focus:border-[#111110]/30"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">종료일시</label>
-                  <input
-                    type="datetime-local"
-                    value={form.endsAt}
-                    onChange={(e) => setForm({ ...form, endsAt: e.target.value })}
-                    className="w-full px-3 py-2 border border-[rgba(0,0,0,0.12)] rounded-lg text-[13px] focus:outline-none focus:border-[#111110]/30"
-                  />
-                </div>
-              </div>
+              <EventDateField
+                value={{ startsAt: form.startsAt, endsAt: form.endsAt, sessionDates: form.sessionDates }}
+                onChange={(next) => setForm({ ...form, ...next })}
+                inputClassName="w-full px-3 py-2 border border-[rgba(0,0,0,0.12)] rounded-lg text-[13px] focus:outline-none focus:border-[#111110]/30"
+                labelClassName="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5"
+              />
 
               <div>
                 <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">장소</label>
