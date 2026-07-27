@@ -36,7 +36,7 @@ const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
     "slug",
     "event_slug",
   ]),
-  submit_demo_request: new Set(["event_id", "source", "lead_id", "stored", "event_slug"]),
+  submit_demo_request: new Set(["event_id", "source", "lead_id", "stored", "event_slug", "lead_magnet"]),
   submit_newsletter: new Set(["event_id", "source", "lead_magnet", "post_slug", "gate"]),
   download_materials: new Set(["event_id", "asset_id", "page", "source", "lead_magnet", "post_slug", "gate"]),
   view_resource_card: new Set(["event_id", "source", "lead_magnet", "gate", "tier", "category"]),

@@ -51,7 +51,7 @@ export function Manifesto() {
                     className="text-xl md:text-2xl text-white/50 max-w-2xl mx-auto leading-relaxed font-light break-keep"
                 >
                     에이스 강사의 수업 방식을 시스템으로 만들어,<br className="hidden md:block" />{" "}
-                    모든 반, 모든 지점에 그대로 적용합니다.
+                    모든 반, 모든 지점이 같은 기준으로 운영되도록 돕습니다.
                 </motion.p>
 
                 {/* Divider dots */}
