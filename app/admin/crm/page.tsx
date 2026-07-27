@@ -13,7 +13,6 @@ import {
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
 import { StatTile } from "@/components/admin/viz"
-import NeoCrmTeamPanel from "@/components/admin/crm/NeoCrmTeamPanel"
 import CrmCoverageStrip from "@/components/admin/crm/CrmCoverageStrip"
 import CrmPriorityQueuePanel from "@/components/admin/crm/CrmPriorityQueuePanel"
 import CrmWeekAheadPanel from "@/components/admin/crm/CrmWeekAheadPanel"
@@ -45,6 +44,13 @@ const Customer360Drawer = dynamic(() => import("@/components/admin/crm/Customer3
 })
 const LeadRegisterModal = dynamic(() => import("@/components/admin/crm/LeadRegisterModal"), {
   loading: () => <div className="fixed inset-0 z-50 bg-black/20" aria-hidden />,
+})
+// 팀 성과 패널(보고성 블록, 기본 접힘) 코드 스플리팅(감사 #6) — teamReportOpen일 때만
+// 렌더되는 기존 게이트는 그대로 두고, 청크도 접힘을 펼치는 시점에만 내려받는다.
+// 폴백은 펼친 섹션 안에서만 잠깐 보이는 골격 스켈레톤(닫힌 첫 화면 노출 없음).
+const NeoCrmTeamPanel = dynamic(() => import("@/components/admin/crm/NeoCrmTeamPanel"), {
+  // 실제 패널은 다중 섹션(수백 px) — 폴백이 낮으면 교체 순간 하단 콘텐츠가 크게 밀린다(코덱스 리뷰 P2).
+  loading: () => <div className="h-96 animate-pulse rounded-xl bg-[#f0f0ec]" />,
 })
 
 const CRM_ACTION_KPIS_URL = "/api/admin/crm/action-kpis"

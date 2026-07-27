@@ -14,6 +14,9 @@ import { useCrmOwners } from "./useCrmOwners"
 
 const TTL_MS = 90_000
 const CURRENT_OWNER_VALUE = "__me"
+// 담당자 해석 관찰용 — useCrmOwners와 동일 URL·cacheKey·TTL(인플라이트 공유, 추가 네트워크 없음).
+const OWNERS_URL = "/api/admin/crm/owners"
+const OWNERS_TTL_MS = 120_000
 
 const BUCKET_LABEL: Record<WeekAheadBucket, string> = {
   overdue: "지연",
@@ -47,16 +50,37 @@ export default function CrmWeekAheadPanel({
   embedded?: boolean
 }) {
   const { currentOwner } = useCrmOwners()
-  const [owner, setOwner] = useState<string>("")
+  // 담당자(__me) 해석 확정 게이트(감사 #9) — 해석 전 전체(owner 없음) 요청 + 해석 후 __me
+  // 재요청의 이중 fetch를 제거한다. useCrmOwners는 실패 시에도 currentOwner=null만 유지해
+  // 로딩/실패를 구분할 수 없으므로, 같은 cacheKey의 동일 요청을 직접 관찰해(성공·실패 무관)
+  // settle 시점을 잡는다. useCrmOwners의 effect가 먼저 등록되므로 settle 시점에는
+  // currentOwner 반영이 끝나 있다(같은 프라미스에 먼저 구독).
+  const [ownersSettled, setOwnersSettled] = useState(false)
+  useEffect(() => {
+    let mounted = true
+    void adminFetchJsonCached<unknown>(OWNERS_URL, undefined, {
+      cacheKey: OWNERS_URL,
+      ttlMs: OWNERS_TTL_MS,
+      staleWhileRevalidateMs: 5 * 60_000,
+    })
+      .catch(() => null)
+      .then(() => {
+        if (mounted) setOwnersSettled(true)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  // 사용자가 직접 고르기 전(null)에는 해석 결과에서 기본 담당(내 담당)을 파생한다 —
+  // "해석 후 setOwner 왕복"이 사라져 최종 owner URL이 한 번에 선다.
+  const [ownerChoice, setOwnerChoice] = useState<string | null>(null)
+  const owner = ownerChoice ?? (currentOwner ? CURRENT_OWNER_VALUE : "")
   const [data, setData] = useState<ListCrmTasksResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [actingId, setActingId] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (currentOwner && owner === "") setOwner(CURRENT_OWNER_VALUE)
-  }, [currentOwner, owner])
 
   const url = useMemo(() => {
     const params = new URLSearchParams({ status: "active", limit: "100" })
@@ -88,9 +112,11 @@ export default function CrmWeekAheadPanel({
     [url]
   )
 
+  // 담당자 해석 확정 전에는 fetch를 열지 않는다 — settle 후 최종 owner URL로 1회만.
   useEffect(() => {
+    if (!ownersSettled) return
     void load()
-  }, [load])
+  }, [load, ownersSettled])
 
   const groups = useMemo(() => {
     const nowMs = Date.now()
@@ -139,7 +165,7 @@ export default function CrmWeekAheadPanel({
             <Filter className="h-3.5 w-3.5" />
             <select
               value={owner}
-              onChange={(event) => setOwner(event.target.value)}
+              onChange={(event) => setOwnerChoice(event.target.value)}
               className="h-full bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
               aria-label="담당자 필터"
             >
@@ -149,8 +175,12 @@ export default function CrmWeekAheadPanel({
           </label>
           <button
             type="button"
-            onClick={() => void load({ force: true })}
-            disabled={refreshing}
+            onClick={() => {
+              // owner settle 전 클릭 시 전체 스코프 URL로 한 번 새는 것 방지(코덱스 리뷰 P2)
+              if (!ownersSettled) return
+              void load({ force: true })
+            }}
+            disabled={refreshing || !ownersSettled}
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />

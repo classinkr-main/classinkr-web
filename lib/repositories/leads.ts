@@ -265,6 +265,29 @@ export async function getDashboardLeads(): Promise<LeadRecord[]> {
   return (data as Lead[]).map(supabaseToLegacy);
 }
 
+/**
+ * 캠페인 화면 전용 경량 조회 — 행사↔리드 귀속에 필요한 최소 컬럼만 가져온다.
+ * 귀속 해시는 `${lead.source} ${lead.notes}`(event:<id|slug> 토큰 탐지), 기간 창 매칭은
+ * created_at(timestamp)을 쓴다. dashboard 스코프에는 notes가 없어 재사용할 수 없다
+ * (감사 2026-07-23 §후속 2). status는 LeadRecord 필수 필드 정합용으로 포함한다.
+ * supabaseToLegacy는 미선택 컬럼을 `?? undefined`로 처리하므로 그대로 재사용 가능.
+ */
+export async function getCampaignLeads(): Promise<LeadRecord[]> {
+  if (!USE_SUPABASE) {
+    const { getLeads: jsonGetLeads } = await import("@/lib/db");
+    return jsonGetLeads();
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .select("id, source, status, notes, created_at")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(`[leads] 캠페인 조회 실패: ${error.message}`);
+  return (data as Lead[]).map(supabaseToLegacy);
+}
+
 export async function getLeadById(id: string): Promise<LeadRecord | null> {
   if (!USE_SUPABASE) {
     const { getLeads: jsonGetLeads } = await import("@/lib/db");

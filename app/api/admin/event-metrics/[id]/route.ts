@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { saveEventMetrics } from "@/lib/repositories/event-metrics"
-import type { AdSpendEntry } from "@/lib/types/event-metrics"
+import type { AdSpendEntry, RelatedLink } from "@/lib/types/event-metrics"
 
 const VALID_CHANNELS = new Set([
   "google",
@@ -47,6 +47,21 @@ function sanitizeAdSpend(value: unknown): AdSpendEntry[] {
     .filter((entry): entry is AdSpendEntry => entry !== null)
 }
 
+export function sanitizeRelatedLinks(value: unknown): RelatedLink[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((entry): RelatedLink | null => {
+      if (!entry || typeof entry !== "object") return null
+      const obj = entry as Record<string, unknown>
+      const label = typeof obj.label === "string" ? obj.label.trim() : ""
+      const url = typeof obj.url === "string" ? obj.url.trim() : ""
+      if (!label || !/^https?:\/\//i.test(url)) return null
+      return { label, url }
+    })
+    .filter((entry): entry is RelatedLink => entry !== null)
+    .slice(0, 10)
+}
+
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -70,6 +85,7 @@ export async function PATCH(
       closedCustomerCount: sanitizeCount(body.closedCustomerCount),
       dealCustomers: sanitizeText(body.dealCustomers),
       adSpendEntries: sanitizeAdSpend(body.adSpendEntries),
+      relatedLinks: sanitizeRelatedLinks(body.relatedLinks),
       notes: sanitizeText(body.notes),
       retrospective: sanitizeText(body.retrospective),
       shareMemo: sanitizeText(body.shareMemo),

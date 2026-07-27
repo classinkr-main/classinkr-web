@@ -14,6 +14,7 @@ import {
   type CrmAccountProductSummary,
 } from "@/lib/repositories/crm-account-money"
 import { deriveServiceRisk, type ServiceRisk } from "@/lib/crm/service-risk"
+import { getCustomerTags } from "@/lib/repositories/crm-customer-tags"
 import { listCrmCustomerEvents, type ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
 import { findConfirmedLeadNeoLink } from "@/lib/repositories/crm-source-links"
 import { listCrmDeals, type ListCrmDealsResult } from "@/lib/repositories/crm-deals"
@@ -114,6 +115,8 @@ export interface Customer360 {
   activity: ListCrmCustomerEventsResult
   tasks: ListCrmTasksResult
   deals: ListCrmDealsResult
+  /** 수기 라벨(crm_customer_tags) — 드로어 온-오픈 별도 태그 fetch를 없애기 위한 additive 필드 */
+  tags: string[]
 }
 
 function latestLastClassAt(eeoAccounts: NeoCrmCustomerEeoAccount[]): string | null {
@@ -361,7 +364,7 @@ export async function getCrmCustomer360(
   const key = `${parsed.source}:${parsed.entityId}`
   const warnings: string[] = []
 
-  const [headerResult, eventsResult, tasksResult, dealsResult, neoLinkResult] = await Promise.allSettled([
+  const [headerResult, eventsResult, tasksResult, dealsResult, neoLinkResult, tagsResult] = await Promise.allSettled([
     parsed.source === "lead"
       ? getLeadById(parsed.entityId)
       : getNeoCrmCustomerDetail(parsed.entityId),
@@ -370,6 +373,8 @@ export async function getCrmCustomer360(
     listCrmDeals({ targetType: parsed.targetType, targetId: parsed.entityId, limit: 20 }),
     // 리드 → NEO 등록 확정 여부(드로어 'NEO 등록됨' 액션용). NEO 계정 드로어는 해당 없음.
     parsed.source === "lead" ? findConfirmedLeadNeoLink(parsed.entityId) : Promise.resolve(null),
+    // 수기 라벨 — 드로어가 열릴 때 별도 태그 fetch를 하지 않도록 360에 동승시킨다.
+    getCustomerTags(parsed.targetType, parsed.entityId),
   ])
 
   let header: Customer360Header | null = null
@@ -431,6 +436,10 @@ export async function getCrmCustomer360(
   const neoLink = neoLinkResult.status === "fulfilled" ? neoLinkResult.value : null
   if (neoLinkResult.status === "rejected") warnings.push("NEO 등록 여부를 확인하지 못했습니다.")
 
+  // 수기 라벨 — 실패 시 경고 없이 빈 배열. (기존 드로어의 무음 폴백과 동일하게 두어
+  // health.ok(warnings.length===0) 의미가 태그 실패로 바뀌지 않게 한다 — additive 필드 원칙.)
+  const tags = tagsResult.status === "fulfilled" ? tagsResult.value : []
+
   const risk = computeCustomer360Risk({
     overdueTaskCount: tasks.summary.overdue,
     riskEventCount: activity.summary.risks,
@@ -469,5 +478,6 @@ export async function getCrmCustomer360(
     activity,
     tasks,
     deals,
+    tags,
   }
 }

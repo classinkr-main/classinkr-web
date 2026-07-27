@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useMemo } from "react"
 import type { ReactNode } from "react"
 import {
   AlertTriangle,
@@ -194,6 +195,15 @@ const ISSUE_SEVERITY_WEIGHT = {
   high: 1,
   medium: 2,
   low: 3,
+} as const
+
+const DOCUMENT_PRIORITY = {
+  overdue: 0,
+  sent: 1,
+  draft: 2,
+  signed: 3,
+  paid: 4,
+  archived: 5,
 } as const
 
 function formatCurrency(value: number) {
@@ -546,78 +556,122 @@ export default function PartnerWorkspaceShell({
   onEditActivityLog,
 }: PartnerWorkspaceShellProps) {
   const workspace = rawWorkspace as WorkspaceWithOps
-  const checklists = workspace.checklists ?? []
-  const issues = workspace.issues ?? []
-  const activityLogs = workspace.activityLogs ?? []
-  const totalNetSales = workspace.sales.reduce((sum, sale) => sum + sale.netAmount, 0)
-  const totalUnits = workspace.sales.reduce((sum, sale) => sum + sale.unitsSold, 0)
-  const dealTitleById = new Map(workspace.deals.map((deal) => [deal.id, deal.title]))
-  const pendingDocuments = workspace.documents.filter((document) =>
-    ["draft", "sent", "overdue"].includes(document.status)
-  )
-  const documentPriority = {
-    overdue: 0,
-    sent: 1,
-    draft: 2,
-    signed: 3,
-    paid: 4,
-    archived: 5,
-  } as const
-  const prioritizedDocuments = [...workspace.documents].sort((left, right) => {
-    const priorityDelta = documentPriority[left.status] - documentPriority[right.status]
-    if (priorityDelta !== 0) return priorityDelta
-    return (left.dueAt ?? left.issuedAt ?? left.title).localeCompare(right.dueAt ?? right.issuedAt ?? right.title, "ko")
-  })
-  const primaryContact = workspace.contacts.find((contact) => contact.isPrimary) ?? workspace.contacts[0]
-  const secondaryContacts = workspace.contacts.filter((contact) => contact.id !== primaryContact?.id)
-  const overdueDocuments = workspace.documents.filter((document) => document.status === "overdue")
-  const signedDocuments = workspace.documents.filter((document) => ["signed", "paid"].includes(document.status))
-  const docsRequiringAttention = prioritizedDocuments.filter((document) => {
-    const latestDelivery = getDocumentLatestDelivery(document)
-    return (
-      document.status === "draft" ||
-      document.status === "overdue" ||
-      !latestDelivery ||
-      ["expired", "revoked", "failed"].includes(latestDelivery.status)
+  // 파생 블록 전체를 workspace(실데이터 prop) 키 useMemo로 묶는다 — 부모의 인라인 콜백 prop 때문에
+  // Shell은 매 렌더 다시 그려지지만, 14 filter/3 sort/집계 재계산은 데이터가 바뀔 때만 하도록 차단
+  // (감사 2026-07-23 후속 #6). 콜백 prop 23개는 건드리지 않는다.
+  const {
+    checklists,
+    issues,
+    activityLogs,
+    totalNetSales,
+    totalUnits,
+    dealTitleById,
+    pendingDocuments,
+    prioritizedDocuments,
+    primaryContact,
+    secondaryContacts,
+    overdueDocuments,
+    signedDocuments,
+    docsRequiringAttention,
+    openIssues,
+    judgmentNeededIssues,
+    openChecklistItems,
+    completedChecklistItems,
+    quantityMismatchCount,
+    fulfillmentPriorityItems,
+    upcomingSchedule,
+    mainDeal,
+    todayActionCount,
+  } = useMemo(() => {
+    const checklists = workspace.checklists ?? []
+    const issues = workspace.issues ?? []
+    const activityLogs = workspace.activityLogs ?? []
+    const totalNetSales = workspace.sales.reduce((sum, sale) => sum + sale.netAmount, 0)
+    const totalUnits = workspace.sales.reduce((sum, sale) => sum + sale.unitsSold, 0)
+    const dealTitleById = new Map(workspace.deals.map((deal) => [deal.id, deal.title]))
+    const pendingDocuments = workspace.documents.filter((document) =>
+      ["draft", "sent", "overdue"].includes(document.status)
     )
-  })
-  const openIssues = issues.filter((issue) => issue.status !== "resolved")
-  const judgmentNeededIssues = [...openIssues].sort((left, right) => {
-    const weightDelta = getIssueWeight(left.severity) - getIssueWeight(right.severity)
-    if (weightDelta !== 0) return weightDelta
-    return (left.dueAt ?? left.title).localeCompare(right.dueAt ?? right.title, "ko")
-  })
-  const openChecklistItems = checklists.filter((item) => item.todoStatus !== "done" && item.todoStatus !== "canceled")
-  const completedChecklistItems = checklists.filter((item) => item.todoStatus === "done" || item.todoStatus === "canceled")
-  const quantityMismatchCount = checklists.filter(
-    (item) =>
-      item.plannedQuantity != null &&
-      item.confirmedQuantity != null &&
-      item.plannedQuantity !== item.confirmedQuantity
-  ).length
-  const fulfillmentPriorityItems = [...checklists]
-    .filter((item) => item.todoStatus !== "done" && item.todoStatus !== "canceled")
-    .sort((left, right) => {
-      const leftWeight =
-        (left.todoStatus === "blocked" ? 0 : 1) +
-        (left.installStatus === "issue" ? 0 : 1) +
-        (left.plannedQuantity != null && left.confirmedQuantity != null && left.plannedQuantity !== left.confirmedQuantity ? 0 : 1)
-      const rightWeight =
-        (right.todoStatus === "blocked" ? 0 : 1) +
-        (right.installStatus === "issue" ? 0 : 1) +
-        (right.plannedQuantity != null &&
-        right.confirmedQuantity != null &&
-        right.plannedQuantity !== right.confirmedQuantity
-          ? 0
-          : 1)
-      if (leftWeight !== rightWeight) return leftWeight - rightWeight
+    const prioritizedDocuments = [...workspace.documents].sort((left, right) => {
+      const priorityDelta = DOCUMENT_PRIORITY[left.status] - DOCUMENT_PRIORITY[right.status]
+      if (priorityDelta !== 0) return priorityDelta
+      return (left.dueAt ?? left.issuedAt ?? left.title).localeCompare(right.dueAt ?? right.issuedAt ?? right.title, "ko")
+    })
+    const primaryContact = workspace.contacts.find((contact) => contact.isPrimary) ?? workspace.contacts[0]
+    const secondaryContacts = workspace.contacts.filter((contact) => contact.id !== primaryContact?.id)
+    const overdueDocuments = workspace.documents.filter((document) => document.status === "overdue")
+    const signedDocuments = workspace.documents.filter((document) => ["signed", "paid"].includes(document.status))
+    const docsRequiringAttention = prioritizedDocuments.filter((document) => {
+      const latestDelivery = getDocumentLatestDelivery(document)
+      return (
+        document.status === "draft" ||
+        document.status === "overdue" ||
+        !latestDelivery ||
+        ["expired", "revoked", "failed"].includes(latestDelivery.status)
+      )
+    })
+    const openIssues = issues.filter((issue) => issue.status !== "resolved")
+    const judgmentNeededIssues = [...openIssues].sort((left, right) => {
+      const weightDelta = getIssueWeight(left.severity) - getIssueWeight(right.severity)
+      if (weightDelta !== 0) return weightDelta
       return (left.dueAt ?? left.title).localeCompare(right.dueAt ?? right.title, "ko")
     })
-  const upcomingSchedule = workspace.schedule.filter((item) => item.status === "planned")
-  const mainDeal =
-    workspace.deals.find((deal) => ["active", "contract_sent", "quoted", "discovery"].includes(deal.stage)) ??
-    workspace.deals[0]
-  const todayActionCount = openChecklistItems.length + upcomingSchedule.length
+    const openChecklistItems = checklists.filter((item) => item.todoStatus !== "done" && item.todoStatus !== "canceled")
+    const completedChecklistItems = checklists.filter((item) => item.todoStatus === "done" || item.todoStatus === "canceled")
+    const quantityMismatchCount = checklists.filter(
+      (item) =>
+        item.plannedQuantity != null &&
+        item.confirmedQuantity != null &&
+        item.plannedQuantity !== item.confirmedQuantity
+    ).length
+    const fulfillmentPriorityItems = [...checklists]
+      .filter((item) => item.todoStatus !== "done" && item.todoStatus !== "canceled")
+      .sort((left, right) => {
+        const leftWeight =
+          (left.todoStatus === "blocked" ? 0 : 1) +
+          (left.installStatus === "issue" ? 0 : 1) +
+          (left.plannedQuantity != null && left.confirmedQuantity != null && left.plannedQuantity !== left.confirmedQuantity ? 0 : 1)
+        const rightWeight =
+          (right.todoStatus === "blocked" ? 0 : 1) +
+          (right.installStatus === "issue" ? 0 : 1) +
+          (right.plannedQuantity != null &&
+          right.confirmedQuantity != null &&
+          right.plannedQuantity !== right.confirmedQuantity
+            ? 0
+            : 1)
+        if (leftWeight !== rightWeight) return leftWeight - rightWeight
+        return (left.dueAt ?? left.title).localeCompare(right.dueAt ?? right.title, "ko")
+      })
+    const upcomingSchedule = workspace.schedule.filter((item) => item.status === "planned")
+    const mainDeal =
+      workspace.deals.find((deal) => ["active", "contract_sent", "quoted", "discovery"].includes(deal.stage)) ??
+      workspace.deals[0]
+    const todayActionCount = openChecklistItems.length + upcomingSchedule.length
+    return {
+      checklists,
+      issues,
+      activityLogs,
+      totalNetSales,
+      totalUnits,
+      dealTitleById,
+      pendingDocuments,
+      prioritizedDocuments,
+      primaryContact,
+      secondaryContacts,
+      overdueDocuments,
+      signedDocuments,
+      docsRequiringAttention,
+      openIssues,
+      judgmentNeededIssues,
+      openChecklistItems,
+      completedChecklistItems,
+      quantityMismatchCount,
+      fulfillmentPriorityItems,
+      upcomingSchedule,
+      mainDeal,
+      todayActionCount,
+    }
+  }, [workspace])
   const handleCreateContact = onCreateContact ?? onEditPartner
   const handleEditContact = (contact: PartnerContact) => {
     if (onEditContact) {

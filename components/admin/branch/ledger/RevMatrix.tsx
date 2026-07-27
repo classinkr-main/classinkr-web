@@ -7,7 +7,7 @@
 
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, ChevronRight, Lock } from "lucide-react"
+import { AlertTriangle, ChevronRight, Link2Off, Lock } from "lucide-react"
 
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
@@ -16,10 +16,12 @@ import {
   draftConfidenceFromMetadata,
   formatMoney,
   formatMonthLabel,
+  formatPercent,
   formatWeekAmount,
   isDraftConfidence,
   mapNumberValue,
   mergedWeeklyFromMetadata,
+  weeklyConfidenceFromMetadata,
   metadataString,
   productCategoryMeta,
   ProductCategoryPill,
@@ -192,6 +194,9 @@ export interface MatrixPendingDraft {
   amount: number
   confidence: DraftConfidence
   weekly: number[] | null
+  /** 주차별 확도(metadata.weeklyConfidence, 라운드 3 P1) — 주차 셀 팝오버 기본값이 슬롯 상태를
+      우선하도록 pending 요약에 동봉한다. 없으면 null(초안 단위 confidence 폴백). */
+  weeklyConfidence: (DraftConfidence | null)[] | null
 }
 
 // pending 요약에서 좌표(coord) 기준 실제 셀 금액을 뽑는다. 주차 좌표 + weekly 병합 배열이 있으면
@@ -268,6 +273,7 @@ export function buildMatrixPendingByCell(
         amount: draft.amount,
         confidence: draftConfidenceFromMetadata(draft.metadata),
         weekly: mergedWeeklyFromMetadata(draft.metadata),
+        weeklyConfidence: weeklyConfidenceFromMetadata(draft.metadata),
       }
       const monthKey = matrixCoordKey({ rowId: row.id, month: draft.month })
       if (!map.has(monthKey)) map.set(monthKey, summary) // 월 셀: 첫(=최신) 초안
@@ -1098,6 +1104,37 @@ const RevMatrixWeekCell = memo(function RevMatrixWeekCell({
   )
 })
 
+// 주차 5칸(W1~W5)의 표시 금액·월합계만 여부·잠금 상태를 순수 계산한다 — 렌더 없이 테스트 가능하게 분리.
+// 버그(2026-07-20) 회귀 방지의 핵심 규칙: 월이 확정으로 잠겨도(monthLocked) 실제 확정액이 찍힌 칸
+// (display>0)만 잠그고, 빈 칸은 같은 달이어도 편집 가능하게 둔다 — 아직 안 지난 주차(예: 당월 W5)
+// 입력을 월 단위 잠금이 통째로 막던 문제를 잡는다. 이전 구현은 월 단위 잠금(monthLockedOf)과
+// isMatrixCellEditable(=!monthLocked)을 AND로 겹쳐 5칸을 통째로 잠갔다. display 산식은 월합계만 행
+// (W5에 monthOnlyAmount 얹기)까지 포함해 실제 렌더와 1:1로 맞춘다.
+export function computeWeekCellStates(
+  weeks: number[],
+  monthOnlyAmount: number,
+  monthLocked: boolean,
+): Array<{ display: number; isMonthOnly: boolean; locked: boolean }> {
+  const anyExplicit = weeks.some((w) => w > 0)
+  return Array.from({ length: 5 }, (_unused, index) => {
+    const value = weeks[index] ?? 0
+    // 월합계만 있는 행은 마지막(W5) 칸에 금액을 얹어 시트 검수 감각을 유지한다.
+    const display = value > 0 ? value : index === 4 && monthOnlyAmount > 0 && !anyExplicit ? monthOnlyAmount : 0
+    const isMonthOnly = display > 0 && value === 0
+    return { display, isMonthOnly, locked: monthLocked && display > 0 }
+  })
+}
+
+// 콕핏/입력 레일의 주차 그리드(W1~W5) 칸별 잠금 마스크 — "확정 주차 읽기전용, 빈 주차 추가만 허용"
+// (2026-07-23, 매트릭스 규약과 동일). 확정으로 잠긴 달에서 이미 explicit 주차 금액이 있는 칸만 잠근다:
+// 그 칸은 읽기전용으로 두어 실수 덮어쓰기를 막고(저장은 병합이라 확정 주차 보존), 빈 칸에만 아직 안 지난
+// 주차를 새로 넣게 한다. explicit 주차가 없으면(월합계만/미입력) 개별로 보존할 주차가 없어 전(全) false를
+// 돌려주고 — 그 경우 폼 전체 잠금(단일 금액 경로 가드, isDraftFormTargetLocked)이 확정 달을 그대로 보호한다.
+export function weeklyEditLockMask(monthLocked: boolean, hasExplicitWeeks: boolean, weeks: number[]): boolean[] {
+  if (!monthLocked || !hasExplicitWeeks) return [false, false, false, false, false]
+  return Array.from({ length: 5 }, (_unused, index) => (weeks[index] ?? 0) > 0)
+}
+
 // 확장된 월의 w1~w5 5칸. editContext가 오면(딜행·비잠금월) 각 칸이 편집 셀이 된다.
 // month-only 행은 W5에 월합계를 얹어 시트 검수 감각을 유지(기존 읽기전용 규약 계승).
 function RevMatrixWeekCells({
@@ -1117,17 +1154,19 @@ function RevMatrixWeekCells({
   editContext?: RevMatrixEditContext | null
   periodHighlighted?: boolean
 }) {
-  const anyExplicit = weeks.some((w) => w > 0)
+  // 월 단위 잠금은 주차 인덱스와 무관(monthLockedOf) — 한 번만 조회해 순수 함수에 넘긴다.
+  // 칸별 잠금(빈 칸은 열림)·표시 금액은 computeWeekCellStates가 결정한다(회귀 테스트가 검증하는 그 함수).
+  const monthLocked = editContext ? editContext.monthLockedOf(month ?? "") : true
+  const cellStates = computeWeekCellStates(weeks, monthOnlyAmount, monthLocked)
   const cells: React.ReactNode[] = []
   for (let index = 0; index < 5; index += 1) {
-    const value = weeks[index] ?? 0
-    // 월합계만 있는 행은 마지막(W5) 칸에 금액을 얹어 시트 검수 감각을 유지한다.
-    const display = value > 0 ? value : index === 4 && monthOnlyAmount > 0 && !anyExplicit ? monthOnlyAmount : 0
-    const isMonthOnly = display > 0 && value === 0
-    // 편집 가능 여부: 딜행 + 월 편집 허용(editContext.editableOf) + 그 칸이 시트 확정 잠금이 아닐 때.
-    // month-only 파생 표시(W5의 monthOnlyAmount)는 실제 주차 입력이 아니므로 편집 시작값은 value(0)로 둔다.
-    const weekLocked = editContext ? editContext.weekLockedOf(month ?? "", index) : true
-    const weekEditable = Boolean(editContext) && !weekLocked && Boolean(editContext?.editableOf(month ?? ""))
+    const { display, isMonthOnly, locked: cellLocked } = cellStates[index]
+    // 잠금 "표시"(🔒 아이콘·"시트 확정 잠금" 툴팁)는 편집 가능한 딜행에만 — 읽기전용 경로(카테고리
+    // 합산행 등, editContext 없음)는 애초에 편집 대상이 아니라 잠금 신호가 오표기가 된다(9e8f1fc5
+    // 순수 함수화 때 `: false`였던 읽기전용 분기가 `: true` 폴백으로 바뀌며 합산 주차칸마다 🔒가
+    // 찍히던 회귀 — 리팩터 이전 렌더로 복원). 편집 판정(weekEditable)은 기존 그대로다.
+    const weekLocked = Boolean(editContext) && cellLocked
+    const weekEditable = Boolean(editContext) && !cellLocked
     // 선택/편집은 이 칸 기준으로 계산해 원시값으로 내린다 — 비선택·비편집 칸은 memo 스킵.
     const weekSelected = Boolean(editContext) && editContext!.isSelectedCell(month ?? "", index)
     const weekEditing = Boolean(editContext) && editContext!.isEditingCell(month ?? "", index)
@@ -1142,7 +1181,7 @@ function RevMatrixWeekCells({
         month={editContext ? month : undefined}
         rowId={editContext?.rowId}
         editable={weekEditable}
-        locked={editContext ? weekLocked && display > 0 : false}
+        locked={weekLocked}
         lockLabel={editContext ? editContext.lockLabelOf(month ?? "") : undefined}
         editWarning={editContext ? editContext.weekEditNotice(month ?? "") : undefined}
         pending={editContext ? editContext.weekPendingOf(month ?? "", index) : null}
@@ -1175,8 +1214,10 @@ interface RevMatrixEditContext {
   editableOf: (month: string) => boolean
   lockedOf: (month: string) => boolean
   pendingOf: (month: string) => MatrixPendingDraft | null
-  // 주차(확장월) 칸용. 잠금은 월 잠금 규칙을 그대로 승계(시트 확정 월이면 주차 칸도 잠금).
-  weekLockedOf: (month: string, week: number) => boolean
+  // 주차(확장월) 칸의 월 단위 잠금 판정. 시트 확정/장부반영 등으로 그 "달"이 잠겼는지만 본다 —
+  // 개별 주차 칸의 잠금(확정액이 찍힌 칸만 잠그고 빈 칸은 열기)은 computeWeekCellStates가 결정하므로
+  // week 인자를 받지 않는다(이전 weekLockedOf(month, week)는 week를 무시해 5칸을 통째로 잠그는 함정이었다).
+  monthLockedOf: (month: string) => boolean
   weekPendingOf: (month: string, week: number) => MatrixPendingDraft | null
   // 주차 셀 편집 팝오버 고지문 — explicit 행(주차 병합 보존) vs 그 외(월 전체 대체) 구분.
   weekEditNotice: (month: string) => string
@@ -1255,10 +1296,84 @@ function RevMatrixMonthStrip({
 
 export const EMPTY_BUCKET: RevMonthlyBucket = { total: 0, confirmed: 0, high: 0, open: 0 }
 
+// SL-4 → 1열 다이어트(2026-07-18): 매트릭스 1열의 미연결 표시는 "직행 링크 칩"에서
+// "2단계 공개"로 바꾼다 — 대부분 행이 미연결이라 amber 칩 반복이 소음이었다(운영자 피드백).
+// 트리거는 톤 다운된 컴팩트 칩(아이콘+연결), 클릭 시 팝오버(간단 설명 + 매칭 인박스 딥링크).
+// open 상태는 부모(워크벤치)가 그룹키/행ID 단위로 1개만 들고 내려준다(동시 다중 열림 금지).
+// account-master의 unmatched 판정과 1:1이라 연결됨/드리프트 행에는 렌더되지 않는다(기존 규약 유지).
+export function NeedsLinkChip({
+  customer,
+  open,
+  onToggle,
+  onClose,
+}: {
+  customer: string
+  open: boolean
+  onToggle: () => void
+  onClose: () => void
+}) {
+  const wrapRef = useRef<HTMLSpanElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  // 외부 클릭·Escape 닫기 — 문서 리스너는 열려 있을 때만 부착한다(MultiSelect 관례).
+  useEffect(() => {
+    if (!open) return
+    const onDocMouseDown = (event: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) onClose()
+    }
+    const onDocKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose()
+        triggerRef.current?.focus()
+      }
+    }
+    document.addEventListener("mousedown", onDocMouseDown)
+    document.addEventListener("keydown", onDocKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown)
+      document.removeEventListener("keydown", onDocKeyDown)
+    }
+  }, [open, onClose])
+  return (
+    // 행 onClick(그룹 선택/상세 열기)과 분리 — 칩·팝오버 내부 클릭은 행 선택으로 전파하지 않는다.
+    <span ref={wrapRef} className="relative inline-flex shrink-0" onClick={(event) => event.stopPropagation()}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={`${customer} — CRM 미연결`}
+        title={`${customer} — CRM 미연결 · 클릭하면 연결 안내가 열립니다`}
+        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[#A8741A] transition hover:bg-[#FBF1E0] hover:text-[#7A520F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+      >
+        <Link2Off className="h-3 w-3 shrink-0" aria-hidden />
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          aria-label={`${customer} CRM 연결 안내`}
+          className="absolute left-0 top-full z-40 mt-1 w-60 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-2.5 text-left shadow-lg"
+        >
+          <p className="truncate text-[11.5px] font-bold text-[#111110]">{customer}</p>
+          <p className="mt-1 text-[10.5px] font-semibold leading-relaxed text-[#615D59]">
+            CRM 미연결 — 매출·활동이 CRM 고객과 이어져 있지 않습니다.
+          </p>
+          <Link
+            href={`/admin/crm/matching?name=${encodeURIComponent(customer)}`}
+            className="mt-2 flex items-center justify-center rounded-md border border-[#ECD29C] bg-[#FBF1E0] px-2 py-1 text-[10.5px] font-bold text-[#7A520F] transition hover:bg-[#ECD29C]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+          >
+            매칭 인박스에서 연결 ↗
+          </Link>
+        </div>
+      )}
+    </span>
+  )
+}
+
 // SL-4: 미연결(needs link) 행 전용 매칭 인박스 딥링크 — /admin/crm/matching?name= 프리필로 착지.
-// 링크 확정은 매칭 인박스에서만 한다(장부=분석·검수, 매칭=링크 확정 역할 분리). account-master의
-// unmatched 판정과 1:1이라 연결됨/드리프트 행에는 렌더되지 않는다(확정 링크 오표기 회귀 방지).
-export function NeedsLinkBadge({ customer, long = false }: { customer: string; long?: boolean }) {
+// 우측 레일(상세 단계) 전용 — 매트릭스 1열은 NeedsLinkChip(2단계 팝오버)을 쓰고, 이미 "상세"인
+// 레일에서만 원클릭 직행을 유지한다. 링크 확정은 매칭 인박스에서만 한다(장부=분석·검수, 매칭=링크 확정).
+export function NeedsLinkBadge({ customer }: { customer: string }) {
   return (
     <Link
       href={`/admin/crm/matching?name=${encodeURIComponent(customer)}`}
@@ -1266,7 +1381,39 @@ export function NeedsLinkBadge({ customer, long = false }: { customer: string; l
       title={`${customer} — CRM 미연결(needs link) · 매칭 인박스에서 연결`}
       className="inline-flex shrink-0 items-center rounded-full border border-[#ECD29C] bg-[#FFFCF5] px-1.5 text-[9px] font-bold leading-4 text-[#7A520F] underline-offset-2 transition hover:bg-[#FBF1E0] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
     >
-      {long ? "매칭에서 연결 ↗" : "연결 ↗"}
+      매칭 인박스에서 연결 ↗
+    </Link>
+  )
+}
+
+// P0-2(호환성 기획 2026-07-18 §4): 연결 확정(linked) 계정 전용 CRM 진입 링크 — NeedsLinkBadge의
+// 대칭짝. href는 커버리지 확장(revAccounts.linkedTargets)의 우세 확정 링크 target을
+// lib/crm/rev-sync-health.ts revLinkedTargetHref 규칙으로 만든 값을 그대로 받는다(여기서 재판정
+// 없음). 우측 레일 전용 — 매트릭스 1열은 무변경(미연결 NeedsLinkChip/팝오버 현행 유지).
+export function CrmLinkedBadge({
+  customer,
+  link,
+  variant = "badge",
+}: {
+  customer: string
+  /** null이면 미렌더(미연결·로딩·deal 등 href 없음) — 호출부가 조회값을 그대로 넘긴다. */
+  link: { href: string; label: string } | null
+  /** badge=그룹 요약(NeedsLinkBadge 자리 대칭 필), inline=행 상세('하드웨어 ↗'와 같은 톤/크기). */
+  variant?: "badge" | "inline"
+}) {
+  if (!link) return null
+  return (
+    <Link
+      href={link.href}
+      onClick={(event) => event.stopPropagation()}
+      title={`${customer} — CRM 연결됨(${link.label}) · CRM에서 보기`}
+      className={
+        variant === "inline"
+          ? "shrink-0 text-[10px] font-bold text-[#7A520F] underline-offset-2 transition hover:text-[#A8741A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+          : "inline-flex shrink-0 items-center rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-1.5 text-[9px] font-bold leading-4 text-[#084734] underline-offset-2 transition hover:bg-[#BDEFD8]/40 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
+      }
+    >
+      CRM ↗
     </Link>
   )
 }
@@ -1442,6 +1589,9 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   expanded,
   selected,
   needsLink = false,
+  linkPopoverOpen = false,
+  onLinkPopoverToggle,
+  onLinkPopoverClose,
   onSelect,
   onToggle,
   density = "regular",
@@ -1452,7 +1602,10 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
   expandedMonths: Set<string>
   expanded: boolean
   selected: boolean
-  needsLink?: boolean // account-master unmatched 판정 — 미연결 고객만 '연결 ↗' 딥링크(SL-4)
+  needsLink?: boolean // account-master unmatched 판정 — 미연결 고객만 NeedsLinkChip 트리거(SL-4)
+  linkPopoverOpen?: boolean // 미연결 팝오버 열림 — 부모가 그룹키 단위 1개만 열어준다
+  onLinkPopoverToggle?: (key: string) => void
+  onLinkPopoverClose?: () => void
   onSelect: (key: string) => void
   onToggle: (key: string) => void
   density?: MatrixDensity
@@ -1485,8 +1638,12 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
         selected ? "bg-[#ECFDF5]" : "hover:bg-[#FAFAF8]"
       }`}
     >
+      {/* 1열 다이어트(Ledger-1a): 항상 보이는 것 = 셰브론 + 고객명 + 서브라인 + 미연결 트리거뿐.
+          건수·장부 필·불일치 아이콘은 1열에서 뺀다 — 건수·불일치는 우측 레일 그룹 요약이, 불일치는
+          펼친 딜행 월 셀(빨강 배경+삼각형)이 이미 보여준다. 팝오버가 열린 셀만 z-30으로 승격해
+          sticky 1열(z-10)·sticky 푸터(z-20) 위에 뜨게 한다(헤더 코너 z-40 아래). */}
       <td
-        className={`sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] px-2 ${rowBg}`}
+        className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[rgba(0,0,0,0.08)] px-2 ${rowBg}`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
         <div className="flex items-center gap-1">
@@ -1503,22 +1660,7 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
             <ChevronRight className={`h-3.5 w-3.5 transition-transform ${expanded ? "rotate-90" : ""}`} />
           </button>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1">
-              <span className="min-w-0 truncate text-[12px] font-bold text-[#111110]">{group.customer}</span>
-              <span className="shrink-0 rounded-full bg-[#ECFDF5] px-1 text-[9px] font-bold text-[#084734]">{group.rows.length}</span>
-              {group.hasDraft && (
-                <span className="shrink-0 rounded-full bg-[#FBF1E0] px-1 text-[9px] font-bold text-[#7A520F]">장부</span>
-              )}
-              {group.mismatchCount > 0 && (
-                <span
-                  title={`주차 합계 ≠ 월 금액 ${group.mismatchCount}행${group.mismatchMonths.length ? ` · 가장 이른 ${formatMonthLabel([...group.mismatchMonths].sort()[0])}` : ""}`}
-                  className="inline-flex shrink-0"
-                >
-                  <AlertTriangle className="h-3 w-3 text-[#B43E3E]" aria-label={`불일치 ${group.mismatchCount}건`} />
-                </span>
-              )}
-              {needsLink && <NeedsLinkBadge customer={group.customer} />}
-            </div>
+            <span className="block truncate text-[12px] font-bold text-[#111110]">{group.customer}</span>
             {(group.managers.length > 0 || group.regions.length > 0) && (
               <span
                 title={[group.managers.join(", "), group.teams.join(", "), group.regions.join(", ")].filter(Boolean).join(" · ")}
@@ -1528,6 +1670,15 @@ export const RevMatrixGroupRow = memo(function RevMatrixGroupRow({
               </span>
             )}
           </div>
+          {/* 칩을 이름 옆이 아니라 행 우측 끝에 고정 — 이름 길이와 무관하게 열 우측 정렬(단독 딜행과 동일 규약). */}
+          {needsLink && onLinkPopoverToggle && onLinkPopoverClose && (
+            <NeedsLinkChip
+              customer={group.customer}
+              open={linkPopoverOpen}
+              onToggle={() => onLinkPopoverToggle(group.key)}
+              onClose={onLinkPopoverClose}
+            />
+          )}
         </div>
       </td>
       <td className="border-l border-[#F2F1EE] px-1.5 text-right" style={{ width: MATRIX_PRODUCT_W, minWidth: MATRIX_PRODUCT_W, maxWidth: MATRIX_PRODUCT_W }}>
@@ -1576,8 +1727,10 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   view,
   grouped,
   nested = false,
-  hardwareLinked = false,
   needsLink = false,
+  linkPopoverOpen = false,
+  onLinkPopoverToggle,
+  onLinkPopoverClose,
   months,
   expandedMonths,
   active,
@@ -1592,14 +1745,15 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   editConfidence = "expected",
   pendingByCell = null,
   density = "regular",
-  sourceLabel,
   periodMonths,
 }: {
   view: RevRowView
   grouped: boolean
   nested?: boolean // 카테고리(HW/SW) 합산행 아래 품목 잎 행 — 한 단계 더 들여쓰기
-  hardwareLinked?: boolean // 하드웨어 원장에 출고 이력이 있어 역링크를 걸어도 되는 고객인지
-  needsLink?: boolean // account-master unmatched 판정 — 단독 딜행(비그룹)에만 '연결 ↗' 딥링크(SL-4)
+  needsLink?: boolean // account-master unmatched 판정 — 단독 딜행(비그룹)에만 NeedsLinkChip 트리거(SL-4)
+  linkPopoverOpen?: boolean // 미연결 팝오버 열림 — 부모가 행ID 단위 1개만 열어준다
+  onLinkPopoverToggle?: (key: string) => void
+  onLinkPopoverClose?: () => void
   months: string[]
   expandedMonths: Set<string>
   active: boolean
@@ -1612,13 +1766,9 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
   editConfidence?: DraftConfidence
   pendingByCell?: Map<string, MatrixPendingDraft> | null
   density?: MatrixDensity
-  // 셀 계보 툴팁(2026-07-17 사용성 디벨롭 항목 2) — "시트 미러 vs 장부 임포트"는 부모가
-  // 이미 가진 Source 스트립 신호(dbImportInfo/dbSourceServerState)에서 계산해 내려준다.
-  // 이 행은 신규 fetch 없이 문자열만 소비한다.
-  sourceLabel?: string
   periodMonths?: Set<string> // 웨이브 5 — 항목 1(b): 선택 기간 열 accent
 }) {
-  const { row, draftRow, productCategory, monthlyByMonth } = view
+  const { row, draftRow, monthlyByMonth } = view
   const rowBg = active
     ? "bg-[#ECFDF5]"
     : draftRow
@@ -1660,8 +1810,9 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
         editableOf: (month) => isMatrixCellEditable(row, month, view.correctedMonths),
         lockedOf: (month) => isMatrixCellLocked(row, month, view.correctedMonths),
         pendingOf: (month) => pendingByCell?.get(`${row.id}::${month}`) ?? null,
-        // 주차 잠금 = 그 달 시트 확정 여부(월 잠금 규칙 승계). 주차 pending = `rowId::month::wN` 키.
-        weekLockedOf: (month) => isMatrixCellLocked(row, month, view.correctedMonths),
+        // 월 단위 잠금 = 그 달 시트 확정 여부. 칸별 잠금은 computeWeekCellStates가 display>0로 좁힌다.
+        // 주차 pending = `rowId::month::wN` 키.
+        monthLockedOf: (month) => isMatrixCellLocked(row, month, view.correctedMonths),
         weekPendingOf: (month, week) => pendingByCell?.get(`${row.id}::${month}::w${week + 1}`) ?? null,
         weekEditNotice: (month) =>
           rowWeeklySplit(row, month).source === "explicit"
@@ -1671,11 +1822,18 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
     : null
   return (
     <tr role="row" className={`group ${MATRIX_DEAL_ROW_HEIGHT[density]} border-t border-[#F2F1EE] transition ${active ? "bg-[#ECFDF5]" : draftRow ? "bg-[#FFFCF5] hover:bg-[#FBF1E0]" : grouped ? "bg-[#FBFBFA] hover:bg-[#FAFAF8]" : "hover:bg-[#FAFAF8]"}`}>
+      {/* 1열 다이어트(Ledger-1a): 이름 + 서브라인 + (단독 미연결 행만) 트리거뿐. ⓘ 계보는 우측
+          레일 행 상세 헤더 아래 뮤트 라인으로 이동, SW/HW 라벨·HW ↗ 링크는 제거(상품 칼럼이
+          SW/HW를 이미 말하고, 하드웨어 ↗는 레일 상세·카테고리 합산행에 있다). 팝오버가 열린
+          셀만 z-30 승격 — 그룹 소계행과 동일 규약. */}
       <td
-        className={`sticky left-0 z-10 border-r border-[rgba(0,0,0,0.08)] pr-2 ${nested ? "border-l-2 border-l-[#CBD9D2] pl-12" : grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2"} ${rowBg}`}
+        className={`sticky left-0 ${linkPopoverOpen ? "z-30" : "z-10"} border-r border-[rgba(0,0,0,0.08)] pr-2 ${nested ? "border-l-2 border-l-[#CBD9D2] pl-12" : grouped ? "border-l-2 border-l-[#DDE7E2] pl-7" : "pl-2"} ${rowBg}`}
         style={{ width: MATRIX_CUSTOMER_W, minWidth: MATRIX_CUSTOMER_W, maxWidth: MATRIX_CUSTOMER_W }}
       >
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
+          {/* 단독 딜행(비그룹·비중첩)은 그룹 소계행의 셰브론 폭(h-6 w-6)을 빈 자리로 예약한다 —
+              토글 유무로 고객명 시작 위치가 흔들리지 않도록 1열 정렬을 고정한다. */}
+          {!grouped && !nested && <span className="h-6 w-6 shrink-0" aria-hidden="true" />}
           <div className="min-w-0 flex-1">
             <button
               type="button"
@@ -1692,31 +1850,14 @@ export const RevMatrixDealRow = memo(function RevMatrixDealRow({
               </span>
             )}
           </div>
-          {row.sheetRow != null && (
-            <span
-              tabIndex={0}
-              title={`시트 '2. REV' ${row.sheetRow}행 · 원천 ${sourceLabel ?? "미확인"}`}
-              className="shrink-0 cursor-help text-[10px] font-semibold text-[#A39E98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-              aria-label={`계보: 시트 '2. REV' ${row.sheetRow}행, 원천 ${sourceLabel ?? "미확인"}`}
-            >
-              ⓘ
-            </span>
-          )}
-          {/* 그룹 고객은 그룹 소계행이 배지를 가진다 — 단독 딜행에만 미연결 딥링크(중복 노출 방지). */}
-          {!grouped && needsLink && <NeedsLinkBadge customer={row.customer} />}
-          {productCategory === "hardware" && !nested && hardwareLinked ? (
-            // 단일 품목 HW 행 + 하드웨어 원장에 출고 이력 있는 고객만 역링크. 중첩 품목행은 위 카테고리 행이 링크를 가진다.
-            <Link
-              href={`/admin/hardware?customer=${encodeURIComponent(row.customer)}`}
-              title={`${row.customer} 하드웨어 거래이력 열기`}
-              className="shrink-0 text-[10px] font-semibold text-[#7A520F] underline-offset-2 transition hover:text-[#A8741A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30"
-            >
-              HW ↗
-            </Link>
-          ) : (
-            // 품질 웨이브 4 — 항목 8: 실데이터 라벨(SW/HW 구분)은 플레이스홀더 톤(#A39E98)이 아니라
-            // 보조 텍스트 톤(#615D59)으로 승격 — DESIGN.md §2.
-            <span className={`shrink-0 text-[10px] font-semibold ${productCategory === "hardware" ? "text-[#7A520F]" : "text-[#615D59]"}`}>{productCategoryMeta(productCategory).shortLabel}</span>
+          {/* 그룹 고객은 그룹 소계행이 트리거를 가진다 — 단독 딜행에만(중복 노출 방지). */}
+          {!grouped && needsLink && onLinkPopoverToggle && onLinkPopoverClose && (
+            <NeedsLinkChip
+              customer={row.customer}
+              open={linkPopoverOpen}
+              onToggle={() => onLinkPopoverToggle(row.id)}
+              onClose={onLinkPopoverClose}
+            />
           )}
         </div>
       </td>
@@ -1966,7 +2107,8 @@ export const RevMatrixFooter = memo(function RevMatrixFooter({
                 }`}
                 style={{ width, minWidth: width }}
               >
-                <span className={`text-[10px] font-bold ${tone}`}>{pct === null ? "·" : `${Math.round(pct)}%`}</span>
+                {/* % 자리수는 formatPercent SSOT(최대 1자리) — 보조 분석·레일 KPI 달성률과 동일 규칙. */}
+                <span className={`text-[10px] font-bold ${tone}`}>{pct === null ? "·" : formatPercent(pct)}</span>
               </td>
             )
           })}
@@ -1985,7 +2127,7 @@ export const RevMatrixFooter = memo(function RevMatrixFooter({
                   title={pct === null ? undefined : `목표 설정 ${goalMonths}/${columns.length}개월 합계 대비 확정${goalMonths < columns.length ? " — 부분 목표 기준" : ""}`}
                   className={`text-[10.5px] font-bold ${tone}`}
                 >
-                  {pct === null ? "·" : `${Math.round(pct)}%${goalMonths < columns.length ? "*" : ""}`}
+                  {pct === null ? "·" : `${formatPercent(pct)}${goalMonths < columns.length ? "*" : ""}`}
                 </span>
               )
             })()}

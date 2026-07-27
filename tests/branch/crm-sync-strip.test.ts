@@ -62,12 +62,22 @@ describe("CrmSyncStrip — 낮음 상태 렌더 규약", () => {
   it("장부 워크벤치에서 IntegrityStrip 바로 아래에 렌더된다", () => {
     const source = readFileSync(workbenchPath, "utf8")
     const integrityAt = source.indexOf("<IntegrityStrip refreshKey={refreshKey} />")
-    const stripAt = source.indexOf("<CrmSyncStrip />")
+    // 라운드 4 최적화: 워크벤치가 커버리지를 주입한다(<CrmSyncStrip coverage={…} /> —
+    // 이중 GET 제거). 위치 규약은 프리픽스 매칭으로 유지한다.
+    const stripAt = source.indexOf("<CrmSyncStrip ")
     expect(integrityAt).toBeGreaterThan(-1)
     expect(stripAt).toBeGreaterThan(integrityAt)
     // 두 스트립 사이에 다른 섹션이 끼지 않는다(형제 인접 — 주석만 허용).
     const between = source.slice(integrityAt, stripAt)
     expect(between).not.toContain("<aside")
     expect(between).not.toContain("<section")
+  })
+
+  it("장부 워크벤치는 커버리지를 주입해 스트립 자체 fetch를 생략시킨다(이중 GET 제거)", () => {
+    const source = readFileSync(workbenchPath, "utf8")
+    expect(source).toContain("<CrmSyncStrip coverage={{ data: crmCoverage.data, loading: crmCoverage.loading, error: crmCoverage.error }} />")
+    const strip = readFileSync(stripPath, "utf8")
+    // 주입 모드에서는 effect가 자체 fetch를 건너뛴다.
+    expect(strip).toContain("if (injected) return")
   })
 })

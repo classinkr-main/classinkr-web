@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { after, NextRequest, NextResponse } from "next/server"
 import { getMarketingRequestMeta } from "@/lib/marketing/server-conversions"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { submitLeadCapture } from "@/lib/server/lead-capture"
@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null)
     const bodyObject = body && typeof body === "object" ? (body as Record<string, unknown>) : {}
     const result = await submitLeadCapture(body, {
+      deferTask: (task) => after(task),
       requestMeta: getMarketingRequestMeta(req, {
         sourceUrl:
           typeof bodyObject.currentPage === "string"

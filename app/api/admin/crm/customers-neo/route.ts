@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { getNeoCrmCustomers } from "@/lib/admin-crm-customers-neo"
 
@@ -9,7 +10,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const list = await getNeoCrmCustomers()
-    return NextResponse.json(list)
+    return adminCachedJson(list)
   } catch (error) {
     console.error("[GET /api/admin/crm/customers-neo]", error)
     return NextResponse.json({ error: "Failed to load Neo CRM customers" }, { status: 500 })

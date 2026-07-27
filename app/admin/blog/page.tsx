@@ -167,6 +167,7 @@ export default function AdminBlogPage() {
 
     const [deleteTarget, setDeleteTarget] = useState<BlogPost | null>(null)
     const [permanentTarget, setPermanentTarget] = useState<BlogPost | null>(null)
+    const [actionError, setActionError] = useState<string | null>(null)
 
     const fetchPosts = useCallback(async () => {
         setLoading(true)
@@ -257,46 +258,64 @@ export default function AdminBlogPage() {
         }
     }
 
+    // 목록 액션(복원/대표/공개/복제) 공용 실행기 — 401은 로그인으로, 실패는 배너로 노출.
+    // 이전에는 응답을 확인하지 않아 401·서버 오류가 조용히 삼켜졌다.
+    const runPostAction = async (action: () => Promise<Response>) => {
+        setActionError(null)
+        try {
+            const res = await action()
+            if (res.status === 401) { handleUnauthorized(); return }
+            if (!res.ok) {
+                setActionError("작업을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+                return
+            }
+            await fetchPosts()
+        } catch {
+            setActionError("작업을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+        }
+    }
+
     // Restore from trash
-    const handleRestore = async (post: BlogPost) => {
-        await adminFetch(`/api/admin/blog/${post._uuid ?? post.id}`, {
-            method: "PUT",
-            body: JSON.stringify({ restore: true }),
-        })
-        await fetchPosts()
-    }
+    const handleRestore = (post: BlogPost) =>
+        runPostAction(() =>
+            adminFetch(`/api/admin/blog/${post._uuid ?? post.id}`, {
+                method: "PUT",
+                body: JSON.stringify({ restore: true }),
+            })
+        )
 
-    const handleToggleFeatured = async (post: BlogPost) => {
-        await adminFetch(`/api/admin/blog/${post._uuid ?? post.id}`, {
-            method: "PUT",
-            body: JSON.stringify({ featured: !post.featured }),
-        })
-        await fetchPosts()
-    }
+    const handleToggleFeatured = (post: BlogPost) =>
+        runPostAction(() =>
+            adminFetch(`/api/admin/blog/${post._uuid ?? post.id}`, {
+                method: "PUT",
+                body: JSON.stringify({ featured: !post.featured }),
+            })
+        )
 
-    const handleTogglePublished = async (post: BlogPost) => {
-        const nextStatus = post.status === "published" ? "draft" : "published"
-        await adminFetch(`/api/admin/blog/${post._uuid ?? post.id}`, {
-            method: "PUT",
-            body: JSON.stringify({ status: nextStatus }),
-        })
-        await fetchPosts()
-    }
+    const handleTogglePublished = (post: BlogPost) =>
+        runPostAction(() =>
+            adminFetch(`/api/admin/blog/${post._uuid ?? post.id}`, {
+                method: "PUT",
+                body: JSON.stringify({
+                    status: post.status === "published" ? "draft" : "published",
+                }),
+            })
+        )
 
-    const handleDuplicate = async (post: BlogPost) => {
-        await adminFetch("/api/admin/blog", {
-            method: "POST",
-            body: JSON.stringify({
-                ...post,
-                title: `${post.title} (복사)`,
-                slug: "",
-                status: "draft",
-                featured: false,
-                publishedAt: undefined,
-            }),
-        })
-        await fetchPosts()
-    }
+    const handleDuplicate = (post: BlogPost) =>
+        runPostAction(() =>
+            adminFetch("/api/admin/blog", {
+                method: "POST",
+                body: JSON.stringify({
+                    ...post,
+                    title: `${post.title} (복사)`,
+                    slug: "",
+                    status: "draft",
+                    featured: false,
+                    publishedAt: undefined,
+                }),
+            })
+        )
 
     const filteredPosts = useMemo(() => {
         const base =
@@ -486,6 +505,24 @@ export default function AdminBlogPage() {
                 <div className="mb-4 flex items-start gap-2 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[13px] text-[#B85C33]">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     휴지통의 글은 복원하거나 완전히 삭제할 수 있습니다. 완전 삭제는 되돌릴 수 없습니다.
+                </div>
+            )}
+
+            {/* 목록 액션 실패 배너 */}
+            {actionError && (
+                <div className="mb-4 flex items-start justify-between gap-2 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[13px] text-[#B85C33]">
+                    <span className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                        {actionError}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setActionError(null)}
+                        className="shrink-0 text-[#B85C33]/60 transition-colors hover:text-[#B85C33]"
+                        aria-label="오류 메시지 닫기"
+                    >
+                        <X className="h-3.5 w-3.5" />
+                    </button>
                 </div>
             )}
 

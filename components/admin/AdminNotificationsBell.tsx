@@ -74,9 +74,14 @@ export default function AdminNotificationsBell({ placement = "floating" }: BellP
     }
   }, [])
 
+  // 초기 미읽음 카운트는 마운트 시 한 번만 가져온다. 아래 폴링 이펙트는 `open`에
+  // 의존해 패널을 열고 닫을 때마다 재구독되는데, 초기 fetch가 그 안에 있으면 열림/닫힘마다
+  // countOnly가 중복 호출된다(패널을 열면 load()가 이미 unreadCount를 갱신함). 분리해서 중복 제거.
   useEffect(() => {
     void loadUnreadCount()
+  }, [loadUnreadCount])
 
+  useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.hidden) return
       if (open) void load(true)

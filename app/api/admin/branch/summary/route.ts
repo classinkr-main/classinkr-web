@@ -3,6 +3,7 @@ import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { unstable_cache } from "next/cache"
 import { envSheetId, getSheetModifiedTime } from "@/lib/branch/google-sheets"
+import { dedupeDshByKind } from "@/lib/branch/dsh-dedupe"
 import type { DshBreakdownRow } from "@/lib/branch/parsers/dsh"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { readRevDealsPreferActiveWithSource } from "@/lib/branch/read-rev-deals"
@@ -135,15 +136,20 @@ function buildMix(
   const actuals = new Map<string, number>()
   const prevActuals = new Map<string, number>()
   const prevAvailable = isPrevPeriodAvailable(breakdown, scope, now)
-  for (const row of breakdown) {
+  // 파서 breakdown은 같은 (kind, category, status_type, channel) 콤보를 스코프별
+  // (전사 + 팀/멤버 섹션)로 반복 방출한다 — raw 합산은 전사 연간 목표를 ~3배로 부풀리고,
+  // goal·status 배율이 달라 pct까지 왜곡된다. 최대-annual 채택(dedupeDshByKind)이 필수다.
+  const deduped = dedupeDshByKind(breakdown)
+  for (const row of deduped.goal.values()) {
     const key = row[dim]
-    if (row.kind === "goal") goals.set(key, (goals.get(key) ?? 0) + pickValue(row, scope, now))
-    else {
-      actuals.set(key, (actuals.get(key) ?? 0) + pickValue(row, scope, now))
-      if (prevAvailable) {
-        const prev = pickPrevValue(row, scope, now) ?? 0
-        prevActuals.set(key, (prevActuals.get(key) ?? 0) + prev)
-      }
+    goals.set(key, (goals.get(key) ?? 0) + pickValue(row, scope, now))
+  }
+  for (const row of deduped.status.values()) {
+    const key = row[dim]
+    actuals.set(key, (actuals.get(key) ?? 0) + pickValue(row, scope, now))
+    if (prevAvailable) {
+      const prev = pickPrevValue(row, scope, now) ?? 0
+      prevActuals.set(key, (prevActuals.get(key) ?? 0) + prev)
     }
   }
   const keys = new Set([...goals.keys(), ...actuals.keys()])
@@ -435,7 +441,11 @@ export async function GET(req: NextRequest) {
       // 참고) — 플래그 없으면 키 자체를 생략한다(undefined 값이 아니라 spread 자체를 건너뜀).
       // 이 분기는 응답 직렬화 단계뿐이라 unstable_cache(readSheetFreshness, 고정 키
       // "branch-sheet-freshness")와는 무관 — 캐시 키에 breakdown을 안 태워도 안전하다.
-      ...(includeBreakdown ? { dsh_breakdown: breakdown } : {}),
+      // dsh_rows(파서 DshRow[]: 팀 ALL/BD/MKT/CSM + 멤버 × goal/status)는 장부 DSH 렌즈의
+      // 팀·멤버 그리드(DshTeamGrid) 원천 — breakdown과 동일한 opt-in 플래그에 함께 태운다
+      // (같은 소비처 한 곳뿐이라 별도 플래그를 늘리지 않는다). 추가 페이로드는 팀 8행+멤버
+      // ~20행 수준으로 breakdown보다 훨씬 작고, 캐시 키 무변경 안전 근거도 위와 동일하다.
+      ...(includeBreakdown ? { dsh_breakdown: breakdown, dsh_rows: dsh.rows } : {}),
     })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })

@@ -149,7 +149,7 @@ function IntegrityStripPanel({
   // (품질 웨이브 3 — 항목 2). 이제 뉴트럴 톤 한 줄 + 재시도로 구분한다.
   if (error) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3.5 py-2 text-[12px] text-[#615D59]">
+      <div className="flex items-center gap-1 rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10.5px] text-[#615D59]">
         <span>정합 체크 불가 — 재시도</span>
         <button
           type="button"
@@ -191,14 +191,16 @@ function IntegrityStripPanel({
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className={`flex w-full items-center gap-2 px-3.5 py-2 text-left text-[12px] font-semibold ${tone.text}`}
+        className={`flex w-full items-center gap-1 px-2 py-0.5 text-left text-[10.5px] font-semibold ${tone.text}`}
       >
-        <span className={`h-2 w-2 shrink-0 rounded-full ${tone.dot}`} aria-hidden="true" />
-        {clean
-          ? <>정합 체크 — 이슈 없음 (규칙 {data.ruleCount ?? 0}개 통과)</>
-          : <>정합 체크 — 이슈 {total}건 (warning {warnCount} · error {errorCount})</>}
+        <span className={`h-[5px] w-[5px] shrink-0 rounded-full ${tone.dot}`} aria-hidden="true" />
+        <span className="min-w-0 truncate">
+          {clean
+            ? <>정합 이슈 없음 (규칙 {data.ruleCount ?? 0}개 통과)</>
+            : <>정합 이슈 {total}건 (경고{warnCount}·오류{errorCount})</>}
+        </span>
         <ChevronDown
-          className={`ml-auto h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+          className={`ml-auto h-2.5 w-2.5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
           aria-hidden="true"
         />
       </button>

@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import type { Dispatch, SetStateAction } from "react"
 import { CheckCheck, Clock3 } from "lucide-react"
 
@@ -44,7 +45,7 @@ interface PlannedOutboundPanelProps {
   confirmPlannedMovement: (movement: HardwareMovement, override?: { quantity?: number; occurredAt?: string }) => Promise<void>
 }
 
-export default function PlannedOutboundPanel({
+function PlannedOutboundPanel({
   data,
   plannedMovementQuantity,
   startPlannedEntry,
@@ -210,3 +211,5 @@ export default function PlannedOutboundPanel({
     </section>
   )
 }
+
+export default memo(PlannedOutboundPanel)

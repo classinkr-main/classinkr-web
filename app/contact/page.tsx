@@ -579,7 +579,7 @@ export default function ContactPage() {
                                     <div>
                                         <h4 className="font-bold text-slate-900 mb-0.5 text-sm">지사 전화</h4>
                                         <p className="text-slate-600 font-medium">02-6958-8566</p>
-                                        <p className="text-sm text-slate-500 mt-1">평일 09:00 - 18:00 (점심시간 12:00-13:00)</p>
+                                        <p className="text-sm text-slate-500 mt-1">평일 09:00~18:00 (점심시간 12:00~13:00)</p>
                                     </div>
                                 </div>
                                 

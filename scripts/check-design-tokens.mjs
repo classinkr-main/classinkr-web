@@ -57,9 +57,12 @@ function listSourceFiles(dir) {
 }
 
 /** 블록 주석(/* *\/)을 통째로 지우고, 줄 주석(//)을 잘라낸 "코드만" 텍스트로 정규화.
- *  "https://" 등 스킴 뒤 "//"는 보존한다(":" 바로 뒤 "//"는 자르지 않음). */
+ *  "https://" 등 스킴 뒤 "//"는 보존한다(":" 바로 뒤 "//"는 자르지 않음).
+ *  CRLF 정규화 필수 — autocrlf 체크아웃에서는 각 줄이 "\r"로 끝나는데, "."은 "\r"를
+ *  못 넘고 "$"(비-multiline)는 문자열 끝만 매칭해 줄 주석 제거가 통째로 무력화된다
+ *  (주석 속 hex 언급이 전부 오탐 — tests/branch 소스 스캔 CRLF 수리와 동일 계열). */
 function stripComments(source) {
-  const noBlockComments = source.replace(/\/\*[\s\S]*?\*\//g, "");
+  const noBlockComments = source.replace(/\r\n/g, "\n").replace(/\/\*[\s\S]*?\*\//g, "");
   return noBlockComments
     .split("\n")
     .map((line) => line.replace(/(?<!:)\/\/.*$/, ""))

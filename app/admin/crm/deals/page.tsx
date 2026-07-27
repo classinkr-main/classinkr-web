@@ -1,6 +1,6 @@
 "use client"
 
-import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import {
   AlertCircle,
@@ -90,22 +90,26 @@ interface ExternalCrmSyncResult {
   cached?: boolean
   locked?: boolean
   skipped?: boolean
+  complete?: boolean
   error?: string
   lastSyncedAt?: string
+  completedAt?: string
+  durationMs?: number
+  neoCustomerSnapshotsError?: string | null
+  candidatesError?: string | null
   objects?: Array<{
     objectApiKey: string
     status: "success" | "failed" | "skipped"
+    rowsScanned: number
+    rowsUpserted: number
+    rowsUnchanged?: number
+    staleMarked?: number
+    truncated?: boolean
     error?: string
   }>
 }
 
-interface ExternalCrmSyncPreflight {
-  configured: boolean
-  missingEnvGroups: string[]
-  pageSize: number
-  maxPages: number
-  objects: Array<{ objectApiKey: string }>
-}
+type ExternalCrmSyncPhase = "idle" | "syncing" | "refreshing"
 
 interface WriteMetadataPreflight {
   ok: boolean
@@ -174,6 +178,58 @@ function formatCurrency(value: number) {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("ko-KR").format(value)
+}
+
+function formatDuration(durationMs: number | undefined) {
+  if (durationMs == null || !Number.isFinite(durationMs)) return null
+  if (durationMs < 1_000) return `${Math.max(1, Math.round(durationMs))}ms`
+  return `${(durationMs / 1_000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}초`
+}
+
+function summarizeExternalCrmSync(result: ExternalCrmSyncResult) {
+  if (result.locked) {
+    return result.lastSyncedAt
+      ? `다른 동기화가 진행 중입니다 · 시작 ${new Date(result.lastSyncedAt).toLocaleString("ko-KR")}`
+      : "다른 동기화가 진행 중입니다. 완료 후 새로고침하면 최신 결과가 표시됩니다."
+  }
+  if (result.cached) {
+    const truncated = (result.objects ?? []).filter((object) => object.truncated)
+    const rangeNote = truncated.length > 0
+      ? ` · 범위 제한: ${truncated.map((object) => object.objectApiKey).join(", ")}`
+      : ""
+    return result.lastSyncedAt
+      ? `최근 1분 이내의 동기화 결과를 재사용했습니다 · 기준 ${new Date(result.lastSyncedAt).toLocaleString("ko-KR")}${rangeNote}`
+      : `최근 1분 이내의 동기화 결과를 재사용했습니다${rangeNote}`
+  }
+
+  const objects = result.objects ?? []
+  const success = objects.filter((object) => object.status === "success")
+  const failed = objects.filter((object) => object.status === "failed")
+  const truncated = objects.filter((object) => object.truncated)
+  const scanned = objects.reduce((sum, object) => sum + (object.rowsScanned || 0), 0)
+  const changed = objects.reduce((sum, object) => sum + (object.rowsUpserted || 0), 0)
+  const stale = objects.reduce((sum, object) => sum + (object.staleMarked || 0), 0)
+  const duration = formatDuration(result.durationMs)
+  const stats = [
+    `원천 ${success.length}/${objects.length}`,
+    `확인 ${formatNumber(scanned)}건`,
+    `변경 ${formatNumber(changed)}건`,
+    `종료 ${formatNumber(stale)}건`,
+    duration,
+  ].filter(Boolean).join(" · ")
+
+  const issues = [
+    failed.length > 0 ? `실패: ${failed.map((object) => object.objectApiKey).join(", ")}` : null,
+    truncated.length > 0 ? `범위 제한: ${truncated.map((object) => object.objectApiKey).join(", ")}` : null,
+    result.neoCustomerSnapshotsError ? "고객 스냅샷 재생성 확인 필요" : null,
+    result.candidatesError ? "매칭 후보 재생성 확인 필요" : null,
+  ].filter(Boolean)
+
+  if (result.skipped && success.length === 0) {
+    const reason = result.error ?? objects.find((object) => object.error)?.error ?? "동기화를 시작하지 못했습니다."
+    return `동기화 준비 필요 · ${reason}`
+  }
+  return `${issues.length > 0 ? "부분 반영" : "동기화 완료"} · ${stats}${issues.length > 0 ? ` · ${issues.join(" · ")}` : ""}`
 }
 
 // REV 시트·Neo CRM 스냅샷 금액은 위안화(CNY) — ¥ 만 단위 2자리.
@@ -402,7 +458,8 @@ export default function AdminCrmRevenuePage() {
   const [months, setMonths] = useState(6)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
-  const [syncingExternal, setSyncingExternal] = useState(false)
+  const [externalSyncPhase, setExternalSyncPhase] = useState<ExternalCrmSyncPhase>("idle")
+  const externalSyncInFlightRef = useRef(false)
   const [generatingLinks, setGeneratingLinks] = useState(false)
   const [updatingWriteRequestId, setUpdatingWriteRequestId] = useState<string | null>(null)
   const [executingWriteRequestId, setExecutingWriteRequestId] = useState<string | null>(null)
@@ -415,6 +472,7 @@ export default function AdminCrmRevenuePage() {
   const [readiness, setReadiness] = useState<CrmReadinessReport | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [syncNotice, setSyncNotice] = useState<string | null>(null)
+  const syncingExternal = externalSyncPhase !== "idle"
 
   const load = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
@@ -470,49 +528,42 @@ export default function AdminCrmRevenuePage() {
   }, [load])
 
   const syncExternalCrm = useCallback(async (force = false) => {
-    setSyncingExternal(true)
+    if (externalSyncInFlightRef.current) return
+    externalSyncInFlightRef.current = true
+    setExternalSyncPhase("syncing")
     setError(null)
     setSyncNotice(null)
     try {
-      const readinessReport = await adminFetchJson<CrmReadinessReport>(`/api/admin/crm/readiness`)
-      setReadiness(readinessReport)
-      const blockedSync = readinessReport.checks.find((check) =>
-        check.status === "blocked" && ["external_crm_sync_runs", "external_crm_records"].includes(check.key)
-      )
-      if (blockedSync) {
-        const action = blockedSync.action ? ` · ${blockedSync.action}` : ""
-        setError(`외부 CRM 동기화 준비 필요: ${blockedSync.label} · ${blockedSync.detail}${action}`)
-        return
-      }
-
-      const preflight = await adminFetchJson<ExternalCrmSyncPreflight>(`/api/admin/crm/external-sync`)
-      if (!preflight.configured) {
-        const missing = preflight.missingEnvGroups.length > 0 ? preflight.missingEnvGroups.join(", ") : "credential"
-        setError(`외부 CRM 동기화 준비 필요: ${missing}`)
-        return
-      }
-
-      const result = await adminFetchJson<ExternalCrmSyncResult>(`/api/admin/crm/external-sync`, {
+      const response = await adminFetch(`/api/admin/crm/external-sync`, {
         method: "POST",
         body: JSON.stringify({ force }),
       })
-      await load({ force: true })
-      if (result.locked) {
-        setSyncNotice(result.error ?? "이미 외부 CRM 동기화가 진행 중입니다.")
-      } else if (result.cached) {
-        setSyncNotice(
-          result.lastSyncedAt
-            ? `최근 외부 CRM 동기화 결과를 사용했습니다. 마지막 동기화: ${new Date(result.lastSyncedAt).toLocaleString("ko-KR")}`
-            : "최근 외부 CRM 동기화 결과를 사용했습니다."
-        )
-      } else if (result.skipped) {
-        const reason = result.error ?? result.objects?.find((item) => item.error)?.error
-        setError(reason ? `외부 CRM 동기화 skipped: ${reason}` : "외부 CRM credential 미설정으로 동기화를 건너뛰었습니다.")
+      const result = (await response.json().catch(() => null)) as ExternalCrmSyncResult | null
+      if (!result) {
+        throw new Error(`${response.status} ${response.statusText}`.trim() || "외부 CRM 응답을 읽지 못했습니다.")
       }
+
+      const hasFreshRows = (result.objects ?? []).some(
+        (object) => object.status === "success" || object.rowsUpserted > 0
+      )
+      if (hasFreshRows) {
+        setExternalSyncPhase("refreshing")
+        await load({ force: true })
+      }
+
+      const summary = summarizeExternalCrmSync(result)
+      const hasIssues =
+        !response.ok ||
+        (result.skipped === true && !result.cached && !result.locked) ||
+        (result.objects ?? []).some((object) => object.status === "failed" || object.truncated) ||
+        Boolean(result.neoCustomerSnapshotsError || result.candidatesError)
+      if (hasIssues) setError(summary)
+      else setSyncNotice(summary)
     } catch (err) {
       setError(err instanceof Error ? err.message : "외부 CRM 동기화에 실패했습니다.")
     } finally {
-      setSyncingExternal(false)
+      externalSyncInFlightRef.current = false
+      setExternalSyncPhase("idle")
     }
   }, [load])
 
@@ -589,9 +640,10 @@ export default function AdminCrmRevenuePage() {
         } else {
           setError(outcome.message)
         }
-        await load({ force: true })
         if (expandedWriteRequestId === requestId) {
-          await loadWriteRequestDetail(requestId)
+          await Promise.all([load({ force: true }), loadWriteRequestDetail(requestId)])
+        } else {
+          await load({ force: true })
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "외부 CRM 쓰기 실행에 실패했습니다.")
@@ -691,23 +743,29 @@ export default function AdminCrmRevenuePage() {
             type="button"
             onClick={() => void syncExternalCrm()}
             disabled={syncingExternal || loading}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+            aria-busy={syncingExternal}
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-[#084734] bg-[#084734] px-3 text-[13px] font-semibold text-white transition-colors hover:border-[#065c41] hover:bg-[#065c41] disabled:opacity-50"
           >
             {syncingExternal ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <ServerCog className="h-4 w-4" />
             )}
-            외부 CRM
+            {externalSyncPhase === "syncing"
+              ? "CRM 읽는 중"
+              : externalSyncPhase === "refreshing"
+                ? "화면 갱신 중"
+                : "CRM 동기화"}
           </button>
           <button
             type="button"
             onClick={() => void syncExternalCrm(true)}
             disabled={syncingExternal || loading}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+            title="최근 1분 결과도 재사용하지 않고 외부 CRM 전체를 다시 읽습니다."
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
           >
             <RotateCcw className="h-4 w-4" />
-            강제 CRM
+            전체 다시 읽기
           </button>
           <button
             type="button"
@@ -726,13 +784,13 @@ export default function AdminCrmRevenuePage() {
       </div>
 
       {syncNotice ? (
-        <div className="mb-6 border-l-2 border-[#D6EFE5] pl-3 text-[13px] text-[#084734]">
+        <div role="status" aria-live="polite" className="mb-6 border-l-2 border-[#D6EFE5] pl-3 text-[13px] text-[#084734]">
           {syncNotice}
         </div>
       ) : null}
 
       {error ? (
-        <div className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">
+        <div role="alert" aria-live="assertive" className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">
           {error}
         </div>
       ) : null}

@@ -28,15 +28,15 @@ const hookPath = join(process.cwd(), "components/admin/branch/ledger/useLedgerDr
 const queuePath = join(process.cwd(), "components/admin/branch/ledger/DraftQueue.tsx")
 
 function workbenchSource() {
-  return readFileSync(workbenchPath, "utf8")
+  return readFileSync(workbenchPath, "utf8").replace(/\r\n/g, "\n")
 }
 
 function queueSource() {
-  return readFileSync(queuePath, "utf8")
+  return readFileSync(queuePath, "utf8").replace(/\r\n/g, "\n")
 }
 
 function hookSource() {
-  return readFileSync(hookPath, "utf8")
+  return readFileSync(hookPath, "utf8").replace(/\r\n/g, "\n")
 }
 
 describe("draftStatusMeta — 적용완료(상쇄) 배지 분기(웨이브 5 로직 + 웨이브 7 라벨 SSOT)", () => {

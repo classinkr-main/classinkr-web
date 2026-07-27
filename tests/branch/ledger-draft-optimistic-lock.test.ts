@@ -230,26 +230,46 @@ describe("saveDraft/saveEditedDraft — 입력 레일 결과 플래그 전파(�
   })
 })
 
-describe("InputRailSection — 인라인 피드백 배선(웨이브 7 2단, I4)", () => {
+// M9-2: 6분기 피드백 매핑(conflict → validationMessage → !persisted → dedupedRecent → deduped →
+// duplicateWarning → 성공)은 shared.resultToDraftFeedback SSOT로 이동했다 — 분기 순서는 그 함수
+// 본문에서 검증하고, 레일·콕핏 편집기는 그 함수를 소비하는 배선만 검증한다(문구 드리프트 차단).
+describe("resultToDraftFeedback SSOT + 소비 배선(웨이브 7 2단 I4 → M9-2)", () => {
+  const sharedPath = join(process.cwd(), "components/admin/branch/ledger/shared.tsx")
+  const cockpitPath = join(process.cwd(), "components/admin/branch/ledger/CockpitEditor.tsx")
+  const feedbackBody = () => sliceFn(
+    readFileSync(sharedPath, "utf8"),
+    "export function resultToDraftFeedback(",
+    "export interface DraftForm",
+  )
+
   it("conflict가 최우선으로 DRAFT_CONFLICT_MESSAGE를 보여준다", () => {
-    const source = railSource()
-    const runSaveIndex = source.indexOf("const runSave = async")
-    const conflictIndex = source.indexOf("result.conflict", runSaveIndex)
-    const validationIndex = source.indexOf("result.validationMessage", runSaveIndex)
-    const persistedIndex = source.indexOf("!result.persisted", runSaveIndex)
-    expect(conflictIndex).toBeGreaterThan(runSaveIndex)
+    const body = feedbackBody()
+    const conflictIndex = body.indexOf("result.conflict")
+    const validationIndex = body.indexOf("result.validationMessage")
+    const persistedIndex = body.indexOf("!result.persisted")
+    const dedupedRecentIndex = body.indexOf("result.dedupedRecent")
+    expect(conflictIndex).toBeGreaterThan(-1)
     expect(validationIndex).toBeGreaterThan(conflictIndex)
     expect(persistedIndex).toBeGreaterThan(validationIndex)
-    expect(source).toContain("text: DRAFT_CONFLICT_MESSAGE")
+    expect(dedupedRecentIndex).toBeGreaterThan(persistedIndex)
+    expect(body).toContain("text: DRAFT_CONFLICT_MESSAGE")
   })
 
   it("validationMessage는 서버 문구를 그대로(가공 없이) 보여준다", () => {
-    expect(railSource()).toContain("text: result.validationMessage")
+    expect(feedbackBody()).toContain("text: result.validationMessage")
   })
 
   it("dedupedRecent는 성공 피드백에 '재사용' 안내를 얹는다", () => {
-    const source = railSource()
-    expect(source).toContain("result.dedupedRecent")
-    expect(source).toContain("DRAFT_DEDUPED_RECENT_NOTICE")
+    const body = feedbackBody()
+    expect(body).toContain("result.dedupedRecent")
+    expect(body).toContain("DRAFT_DEDUPED_RECENT_NOTICE")
+  })
+
+  it("입력 레일·콕핏 편집기 둘 다 이 SSOT를 소비한다(인라인 6분기 사본 금지)", () => {
+    for (const source of [railSource(), readFileSync(cockpitPath, "utf8")]) {
+      expect(source).toContain("setFeedback(resultToDraftFeedback(result))")
+      // 사본 재생성 감지 — 분기 리터럴이 소비처에 다시 나타나면 SSOT가 무력화된 것.
+      expect(source).not.toContain("text: DRAFT_CONFLICT_MESSAGE")
+    }
   })
 })

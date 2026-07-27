@@ -315,18 +315,6 @@ export async function listHardwareItems(): Promise<HardwareItem[]> {
   return (data ?? []) as HardwareItem[]
 }
 
-export async function listHardwareMovements(limit = 300): Promise<HardwareMovement[]> {
-  const sb = createSupabaseAdminClient()
-  const { data, error } = await sb
-    .from("hardware_movements")
-    .select("*")
-    .order("occurred_at", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .limit(limit)
-  if (error) throw error
-  return (data ?? []) as HardwareMovement[]
-}
-
 // The live sheet-import RPC doesn't persist amount_usd/unit_price/importer (the costing
 // migration is pending on prod), so file-imported movements stash those in `raw`. Recover
 // them here when the dedicated column is null — a no-op once the migration is applied.

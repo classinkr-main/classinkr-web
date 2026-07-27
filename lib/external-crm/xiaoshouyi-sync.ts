@@ -3,6 +3,7 @@ import "server-only"
 import { createHash } from "crypto"
 
 import { normalizeCrmName } from "@/lib/crm-source-linking"
+import { resolveXiaoshouyiOrderBy } from "@/lib/external-crm/sync-query"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 type ExternalCrmSyncTrigger = "manual" | "cron" | "import"
@@ -69,6 +70,7 @@ export interface ExternalCrmSyncObjectResult {
   rowsUnchanged?: number
   pagesScanned?: number
   staleMarked?: number
+  truncated?: boolean
   cursorValue?: string
   error?: string
 }
@@ -78,6 +80,7 @@ export interface ExternalCrmSyncResult {
   cached?: boolean
   locked?: boolean
   skipped?: boolean
+  complete?: boolean
   objects: ExternalCrmSyncObjectResult[]
   error?: string
   lastSyncedAt?: string
@@ -124,6 +127,7 @@ const DEFAULT_SYNC_PAGE_SIZE = 100
 const DEFAULT_SYNC_MAX_PAGES = 20
 const MAX_SYNC_PAGE_SIZE = 100
 const ACTIVE_SYNC_STALE_MS = 30 * 60_000
+const SYNC_LOCK_OBJECT_KEY = "__sync_lock__"
 
 const DEFAULT_OBJECTS: XiaoshouyiObjectConfig[] = [
   {
@@ -455,7 +459,7 @@ export function getXiaoshouyiSyncPreflight(): ExternalCrmSyncPreflight {
   const objects = getSelectedObjects().map((object) => ({
     objectApiKey: object.objectApiKey,
     fields: object.fields,
-    orderBy: object.orderBy ?? (object.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC"),
+    orderBy: resolveXiaoshouyiOrderBy(object.fields, object.orderBy),
   }))
 
   return {
@@ -480,7 +484,7 @@ export async function getXiaoshouyiSyncRuntimePreflight(): Promise<ExternalCrmSy
     objects: objects.map((object) => ({
       objectApiKey: object.objectApiKey,
       fields: object.fields,
-      orderBy: object.orderBy ?? (object.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC"),
+      orderBy: resolveXiaoshouyiOrderBy(object.fields, object.orderBy),
       whereClause: object.whereClause ?? null,
       pageSize: object.pageSize ?? base.pageSize,
       maxPages: object.maxPages ?? base.maxPages,
@@ -713,7 +717,7 @@ async function queryXiaoshouyiRecords(
   pageSize: number,
   offset: number
 ) {
-  const orderBy = object.orderBy ?? (object.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC")
+  const orderBy = resolveXiaoshouyiOrderBy(object.fields, object.orderBy)
   const whereClause = object.whereClause?.trim()
   const whereSql = whereClause ? ` WHERE ${whereClause}` : ""
   const query = `SELECT ${object.fields.join(",")} FROM ${object.objectApiKey}${whereSql} ORDER BY ${orderBy} LIMIT ${offset},${pageSize}`
@@ -765,7 +769,12 @@ function toExternalRecord(
   }
 }
 
-async function createRun(objectApiKey: string, trigger: ExternalCrmSyncTrigger, status: "running" | "skipped" = "running", error?: string) {
+async function createRun(
+  objectApiKey: string,
+  trigger: ExternalCrmSyncTrigger,
+  status: "running" | "skipped" = "running",
+  error?: string
+): Promise<string | null> {
   const sb = createSupabaseAdminClient()
   const now = new Date().toISOString()
   const { data, error: insertError } = await sb
@@ -782,6 +791,9 @@ async function createRun(objectApiKey: string, trigger: ExternalCrmSyncTrigger, 
     .select("id")
     .single()
 
+  if (insertError?.code === "23505" && objectApiKey === SYNC_LOCK_OBJECT_KEY && status === "running") {
+    return null
+  }
   if (insertError) throw insertError
   return data.id as string
 }
@@ -789,7 +801,7 @@ async function createRun(objectApiKey: string, trigger: ExternalCrmSyncTrigger, 
 async function finishRun(
   id: string,
   patch: {
-    status: "success" | "failed"
+    status: "success" | "failed" | "skipped"
     rowsScanned?: number
     rowsUpserted?: number
     cursorValue?: string
@@ -814,6 +826,17 @@ async function finishRun(
   if (error) throw error
 }
 
+async function heartbeatRun(id: string, completedObjects: number) {
+  const sb = createSupabaseAdminClient()
+  const { error } = await sb
+    .from("external_crm_sync_runs")
+    .update({ metadata: { heartbeatAt: new Date().toISOString(), completedObjects } })
+    .eq("id", id)
+    .eq("status", "running")
+
+  if (error) throw error
+}
+
 async function getRecentSuccessfulSyncReuse(
   objects: XiaoshouyiObjectConfig[],
   ttlMs: number
@@ -823,7 +846,18 @@ async function getRecentSuccessfulSyncReuse(
   const objectKeys = [...new Set(objects.map((object) => object.objectApiKey))]
   const since = new Date(Date.now() - ttlMs).toISOString()
   const sb = createSupabaseAdminClient()
-  const { data, error } = await sb
+  const { data: coordinator } = await sb
+    .from("external_crm_sync_runs")
+    .select("started_at, finished_at")
+    .eq("source_system", "xiaoshouyi")
+    .eq("object_api_key", SYNC_LOCK_OBJECT_KEY)
+    .eq("status", "success")
+    .gte("finished_at", since)
+    .order("finished_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  let recentRunsQuery = sb
     .from("external_crm_sync_runs")
     .select("object_api_key, finished_at, rows_scanned, rows_upserted, cursor_value, metadata")
     .eq("source_system", "xiaoshouyi")
@@ -831,6 +865,17 @@ async function getRecentSuccessfulSyncReuse(
     .in("object_api_key", objectKeys)
     .gte("finished_at", since)
     .order("finished_at", { ascending: false })
+
+  if (coordinator?.started_at && coordinator.finished_at) {
+    // Reuse only object rows from the same successful top-level run. Without
+    // this bound, a fresh failure could be hidden by an older per-object
+    // success that happened to remain inside the TTL window.
+    recentRunsQuery = recentRunsQuery
+      .gte("started_at", coordinator.started_at)
+      .lte("finished_at", coordinator.finished_at)
+  }
+
+  const { data, error } = await recentRunsQuery
 
   if (error || !data?.length) return null
 
@@ -847,27 +892,58 @@ async function getRecentSuccessfulSyncReuse(
   const finishedTimes = Array.from(latestByObject.values())
     .map((row) => (typeof row.finished_at === "string" ? new Date(row.finished_at).getTime() : 0))
     .filter((time) => Number.isFinite(time) && time > 0)
+  // The oldest required object determines whole-dataset freshness. Reporting
+  // the newest object here made partially staggered runs look fresher than the
+  // data users were actually viewing.
   const lastSyncedAt = finishedTimes.length > 0
-    ? new Date(Math.max(...finishedTimes)).toISOString()
+    ? new Date(Math.min(...finishedTimes)).toISOString()
     : undefined
+
+  const reusedObjects = objectKeys.map((objectApiKey) => {
+    const row = latestByObject.get(objectApiKey)
+    const metadata = row?.metadata && typeof row.metadata === "object"
+      ? row.metadata as Record<string, unknown>
+      : {}
+    return {
+      objectApiKey,
+      status: "skipped" as const,
+      rowsScanned: Number(row?.rows_scanned ?? 0),
+      rowsUpserted: Number(row?.rows_upserted ?? 0),
+      cursorValue: typeof row?.cursor_value === "string" ? row.cursor_value : undefined,
+      truncated: metadata.truncated === true,
+      error: "recent-sync-cache",
+    }
+  })
 
   return {
     ok: true,
     cached: true,
     skipped: true,
+    complete: reusedObjects.every((object) => !object.truncated),
     error: "최근 외부 CRM 동기화 결과를 사용했습니다.",
     lastSyncedAt,
-    objects: objectKeys.map((objectApiKey) => {
-      const row = latestByObject.get(objectApiKey)
-      return {
-        objectApiKey,
-        status: "skipped",
-        rowsScanned: Number(row?.rows_scanned ?? 0),
-        rowsUpserted: Number(row?.rows_upserted ?? 0),
-        cursorValue: typeof row?.cursor_value === "string" ? row.cursor_value : undefined,
-        error: "recent-sync-cache",
-      }
-    }),
+    objects: reusedObjects,
+  }
+}
+
+async function expireStaleSyncCoordinators() {
+  const cutoff = new Date(Date.now() - ACTIVE_SYNC_STALE_MS).toISOString()
+  const finishedAt = new Date().toISOString()
+  const sb = createSupabaseAdminClient()
+  const { error } = await sb
+    .from("external_crm_sync_runs")
+    .update({
+      status: "failed",
+      finished_at: finishedAt,
+      error: "동기화 heartbeat가 30분 이상 없어 잠금을 자동 해제했습니다.",
+    })
+    .eq("source_system", "xiaoshouyi")
+    .eq("object_api_key", SYNC_LOCK_OBJECT_KEY)
+    .eq("status", "running")
+    .lt("updated_at", cutoff)
+
+  if (error) {
+    console.error("[external-crm sync] stale coordinator cleanup failed", error)
   }
 }
 
@@ -879,14 +955,15 @@ async function getActiveSyncRunReuse(): Promise<ExternalCrmSyncResult | null> {
     .select("object_api_key, started_at, rows_scanned, rows_upserted")
     .eq("source_system", "xiaoshouyi")
     .eq("status", "running")
-    .gte("started_at", since)
-    .order("started_at", { ascending: false })
+    .gte("updated_at", since)
+    .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle()
 
   if (error || !data) return null
 
-  const objectApiKey = String(data.object_api_key ?? "all")
+  const rawObjectApiKey = String(data.object_api_key ?? "all")
+  const objectApiKey = rawObjectApiKey === SYNC_LOCK_OBJECT_KEY ? "all" : rawObjectApiKey
   const startedAt =
     typeof data.started_at === "string"
       ? data.started_at
@@ -911,6 +988,167 @@ async function getActiveSyncRunReuse(): Promise<ExternalCrmSyncResult | null> {
   }
 }
 
+async function syncXiaoshouyiObject(
+  config: XiaoshouyiConfig,
+  token: string,
+  object: XiaoshouyiObjectConfig,
+  trigger: ExternalCrmSyncTrigger
+): Promise<ExternalCrmSyncObjectResult> {
+  const runId = await createRun(object.objectApiKey, trigger)
+  if (!runId) throw new Error(`Failed to create sync run for ${object.objectApiKey}`)
+
+  const syncedAt = new Date().toISOString()
+  const pageSize = object.pageSize ?? getSyncPageSize()
+  const maxPages = object.maxPages ?? getSyncMaxPages()
+  let rowsScanned = 0
+  let rowsUpserted = 0
+  let rowsUnchanged = 0
+  let pagesScanned = 0
+  let nextOffset = 0
+  let truncated = false
+
+  try {
+    const sb = createSupabaseAdminClient()
+    for (let page = 0; page < maxPages; page += 1) {
+      const offset = page * pageSize
+      const records = await queryXiaoshouyiRecords(config, token, object, pageSize, offset)
+      pagesScanned += 1
+      rowsScanned += records.length
+      nextOffset = offset + records.length
+
+      const rowsById = new Map<string, ExternalRecordRow>()
+      for (const record of records) {
+        const row = toExternalRecord(object, record, syncedAt, runId)
+        if (row) rowsById.set(row.external_id, row)
+      }
+      const rows = Array.from(rowsById.values())
+
+      if (rows.length > 0) {
+        const { data: existingRows, error: existingError } = await sb
+          .from("external_crm_records")
+          .select("external_id, payload_hash")
+          .eq("source_system", "xiaoshouyi")
+          .eq("object_api_key", object.objectApiKey)
+          .in("external_id", rows.map((row) => row.external_id))
+
+        if (existingError) throw existingError
+
+        const existingHashes = new Map(
+          ((existingRows ?? []) as Array<{ external_id: string; payload_hash: string | null }>).map((row) => [
+            row.external_id,
+            row.payload_hash,
+          ])
+        )
+        const changedRows = rows.filter((row) => existingHashes.get(row.external_id) !== row.payload_hash)
+        const unchangedIds = rows
+          .filter((row) => existingHashes.get(row.external_id) === row.payload_hash)
+          .map((row) => row.external_id)
+
+        if (changedRows.length > 0) {
+          const { data, error } = await sb
+            .from("external_crm_records")
+            .upsert(changedRows, { onConflict: "source_system,object_api_key,external_id" })
+            .select("id")
+
+          if (error) throw error
+          rowsUpserted += data?.length ?? changedRows.length
+        }
+
+        if (unchangedIds.length > 0) {
+          const { error: touchError } = await sb
+            .from("external_crm_records")
+            .update({ last_seen_run_id: runId, synced_at: syncedAt, is_stale: false, stale_at: null })
+            .eq("source_system", "xiaoshouyi")
+            .eq("object_api_key", object.objectApiKey)
+            .in("external_id", unchangedIds)
+
+          if (touchError) throw touchError
+          rowsUnchanged += unchangedIds.length
+        }
+      }
+
+      if (records.length < pageSize) {
+        truncated = false
+        break
+      }
+      truncated = page === maxPages - 1
+    }
+
+    let staleMarked: number | null = null
+    if (!truncated) {
+      const { data: staleRows, error: staleError } = await sb
+        .from("external_crm_records")
+        .update({ is_stale: true, stale_at: syncedAt })
+        .eq("source_system", "xiaoshouyi")
+        .eq("object_api_key", object.objectApiKey)
+        .or(`last_seen_run_id.is.null,last_seen_run_id.neq.${runId}`)
+        .eq("is_stale", false)
+        .select("id")
+
+      if (staleError) throw staleError
+      staleMarked = staleRows?.length ?? 0
+    }
+
+    const cursorValue = truncated ? `offset:${nextOffset}` : "complete"
+    await finishRun(runId, {
+      status: "success",
+      rowsScanned,
+      rowsUpserted,
+      cursorValue,
+      metadata: {
+        pageSize,
+        maxPages,
+        pagesScanned,
+        truncated,
+        staleMarked,
+        rowsUnchanged,
+        orderBy: resolveXiaoshouyiOrderBy(object.fields, object.orderBy),
+        whereClause: object.whereClause ?? null,
+        catalogSource: object.catalogSource ?? "runtime",
+        syncPriority: object.syncPriority ?? null,
+      },
+    })
+
+    return {
+      objectApiKey: object.objectApiKey,
+      status: "success",
+      rowsScanned,
+      rowsUpserted,
+      rowsUnchanged,
+      pagesScanned,
+      staleMarked: staleMarked ?? undefined,
+      truncated,
+      cursorValue,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await finishRun(runId, {
+      status: "failed",
+      error: message,
+      rowsScanned,
+      rowsUpserted,
+      cursorValue: nextOffset > 0 ? `offset:${nextOffset}` : undefined,
+      metadata: {
+        pageSize,
+        maxPages,
+        pagesScanned,
+        rowsUnchanged,
+        catalogSource: object.catalogSource ?? "runtime",
+      },
+    })
+    return {
+      objectApiKey: object.objectApiKey,
+      status: "failed",
+      rowsScanned,
+      rowsUpserted,
+      rowsUnchanged,
+      pagesScanned,
+      cursorValue: nextOffset > 0 ? `offset:${nextOffset}` : undefined,
+      error: message,
+    }
+  }
+}
+
 export async function syncXiaoshouyiSnapshots(
   trigger: ExternalCrmSyncTrigger = "manual",
   options: { force?: boolean; recentSyncTtlMs?: number } = {}
@@ -921,188 +1159,98 @@ export async function syncXiaoshouyiSnapshots(
     return {
       ok: false,
       skipped: true,
+      complete: false,
       error: message,
       objects: [{ objectApiKey: "all", status: "skipped", rowsScanned: 0, rowsUpserted: 0, error: message }],
     }
   }
 
+  await expireStaleSyncCoordinators()
   const active = await getActiveSyncRunReuse()
   if (active) return active
 
   const config = getXiaoshouyiConfig()
   if (!config) {
-    await createRun("all", trigger, "skipped", "Missing Xiaoshouyi base URL")
+    const message = "Missing Xiaoshouyi base URL"
+    await createRun("all", trigger, "skipped", message)
     return {
-      ok: true,
+      ok: false,
       skipped: true,
-      objects: [{ objectApiKey: "all", status: "skipped", rowsScanned: 0, rowsUpserted: 0, error: "Missing Xiaoshouyi base URL" }],
+      complete: false,
+      error: message,
+      objects: [{ objectApiKey: "all", status: "skipped", rowsScanned: 0, rowsUpserted: 0, error: message }],
     }
   }
 
-  const token = await getAccessToken(config)
-  if (!token) {
-    await createRun("all", trigger, "skipped", "Missing Xiaoshouyi access token or service credentials")
-    return {
-      ok: true,
-      skipped: true,
-      objects: [{ objectApiKey: "all", status: "skipped", rowsScanned: 0, rowsUpserted: 0, error: "Missing Xiaoshouyi access token or service credentials" }],
-    }
-  }
-
-  const results: ExternalCrmSyncObjectResult[] = []
   const runtimeObjects = await getRuntimeSelectedObjects()
   if (!options.force) {
     const recent = await getRecentSuccessfulSyncReuse(runtimeObjects, options.recentSyncTtlMs ?? 0)
     if (recent) return recent
   }
 
-  for (const object of runtimeObjects) {
-    const runId = await createRun(object.objectApiKey, trigger)
-    try {
-      const syncedAt = new Date().toISOString()
-      let rowsScanned = 0
-      let rowsUpserted = 0
-      let rowsUnchanged = 0
-      let pagesScanned = 0
-      let nextOffset = 0
-      let truncated = false
-      const sb = createSupabaseAdminClient()
-      const pageSize = object.pageSize ?? getSyncPageSize()
-      const maxPages = object.maxPages ?? getSyncMaxPages()
-
-      for (let page = 0; page < maxPages; page += 1) {
-        const offset = page * pageSize
-        const records = await queryXiaoshouyiRecords(config, token, object, pageSize, offset)
-        pagesScanned += 1
-        rowsScanned += records.length
-        nextOffset = offset + records.length
-
-        const rows = records
-          .map((record) => toExternalRecord(object, record, syncedAt, runId))
-          .filter((row): row is ExternalRecordRow => Boolean(row))
-
-        if (rows.length > 0) {
-          // Unchanged payloads only need their run marker refreshed; a full
-          // upsert per record makes sync cost scale with snapshot size
-          // instead of change volume.
-          const { data: existingRows, error: existingError } = await sb
-            .from("external_crm_records")
-            .select("external_id, payload_hash")
-            .eq("source_system", "xiaoshouyi")
-            .eq("object_api_key", object.objectApiKey)
-            .in(
-              "external_id",
-              rows.map((row) => row.external_id)
-            )
-
-          if (existingError) throw existingError
-
-          const existingHashes = new Map(
-            ((existingRows ?? []) as Array<{ external_id: string; payload_hash: string | null }>).map((row) => [
-              row.external_id,
-              row.payload_hash,
-            ])
-          )
-          const changedRows = rows.filter((row) => existingHashes.get(row.external_id) !== row.payload_hash)
-          const unchangedIds = rows
-            .filter((row) => existingHashes.get(row.external_id) === row.payload_hash)
-            .map((row) => row.external_id)
-
-          if (changedRows.length > 0) {
-            const { data, error } = await sb
-              .from("external_crm_records")
-              .upsert(changedRows, { onConflict: "source_system,object_api_key,external_id" })
-              .select("id")
-
-            if (error) throw error
-            rowsUpserted += data?.length ?? changedRows.length
-          }
-
-          if (unchangedIds.length > 0) {
-            const { error: touchError } = await sb
-              .from("external_crm_records")
-              .update({ last_seen_run_id: runId, synced_at: syncedAt, is_stale: false, stale_at: null })
-              .eq("source_system", "xiaoshouyi")
-              .eq("object_api_key", object.objectApiKey)
-              .in("external_id", unchangedIds)
-
-            if (touchError) throw touchError
-            rowsUnchanged += unchangedIds.length
-          }
-        }
-
-        if (records.length < pageSize) {
-          truncated = false
-          break
-        }
-
-        truncated = page === maxPages - 1
-      }
-
-      let staleMarked: number | null = null
-      if (!truncated) {
-        const { data: staleRows, error: staleError } = await sb
-          .from("external_crm_records")
-          .update({
-            is_stale: true,
-            stale_at: syncedAt,
-          })
-          .eq("source_system", "xiaoshouyi")
-          .eq("object_api_key", object.objectApiKey)
-          .or(`last_seen_run_id.is.null,last_seen_run_id.neq.${runId}`)
-          .eq("is_stale", false)
-          .select("id")
-
-        if (staleError) throw staleError
-        staleMarked = staleRows?.length ?? 0
-      }
-
-      const cursorValue = truncated ? `offset:${nextOffset}` : "complete"
-      await finishRun(runId, {
-        status: "success",
-        rowsScanned,
-        rowsUpserted,
-        cursorValue,
-        metadata: {
-          pageSize,
-          maxPages,
-          pagesScanned,
-          truncated,
-          staleMarked,
-          rowsUnchanged,
-          orderBy: object.orderBy ?? (object.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC"),
-          whereClause: object.whereClause ?? null,
-          catalogSource: object.catalogSource ?? "runtime",
-          syncPriority: object.syncPriority ?? null,
-        },
-      })
-      results.push({
-        objectApiKey: object.objectApiKey,
-        status: "success",
-        rowsScanned,
-        rowsUpserted,
-        rowsUnchanged,
-        pagesScanned,
-        staleMarked: staleMarked ?? undefined,
-        cursorValue,
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      await finishRun(runId, {
-        status: "failed",
-        error: message,
-        rowsScanned: 0,
-        rowsUpserted: 0,
-        metadata: {
-          pageSize: object.pageSize ?? getSyncPageSize(),
-          maxPages: object.maxPages ?? getSyncMaxPages(),
-          catalogSource: object.catalogSource ?? "runtime",
-        },
-      })
-      results.push({ objectApiKey: object.objectApiKey, status: "failed", rowsScanned: 0, rowsUpserted: 0, error: message })
+  const coordinatorRunId = await createRun(SYNC_LOCK_OBJECT_KEY, trigger)
+  if (!coordinatorRunId) {
+    return (await getActiveSyncRunReuse()) ?? {
+      ok: true,
+      cached: true,
+      locked: true,
+      skipped: true,
+      complete: false,
+      error: "이미 외부 CRM 동기화가 진행 중입니다.",
+      lastSyncedAt: new Date().toISOString(),
+      objects: [{ objectApiKey: "all", status: "skipped", rowsScanned: 0, rowsUpserted: 0, error: "sync-in-progress" }],
     }
   }
 
-  const ok = results.every((result) => result.status === "success")
-  return { ok, objects: results, error: ok ? undefined : "One or more Xiaoshouyi objects failed to sync" }
+  const results: ExternalCrmSyncObjectResult[] = []
+  try {
+    const token = await getAccessToken(config)
+    if (!token) {
+      const message = "Missing Xiaoshouyi access token or service credentials"
+      await finishRun(coordinatorRunId, { status: "skipped", error: message })
+      await createRun("all", trigger, "skipped", message)
+      return {
+        ok: false,
+        skipped: true,
+        complete: false,
+        error: message,
+        objects: [{ objectApiKey: "all", status: "skipped", rowsScanned: 0, rowsUpserted: 0, error: message }],
+      }
+    }
+
+    for (const object of runtimeObjects) {
+      results.push(await syncXiaoshouyiObject(config, token, object, trigger))
+      await heartbeatRun(coordinatorRunId, results.length)
+    }
+
+    const ok = results.every((result) => result.status === "success")
+    const complete = ok && results.every((result) => !result.truncated)
+    const rowsScanned = results.reduce((sum, result) => sum + result.rowsScanned, 0)
+    const rowsUpserted = results.reduce((sum, result) => sum + result.rowsUpserted, 0)
+    const truncatedObjects = results.filter((result) => result.truncated).map((result) => result.objectApiKey)
+    const error = ok ? undefined : "One or more Xiaoshouyi objects failed to sync"
+
+    await finishRun(coordinatorRunId, {
+      status: ok ? "success" : "failed",
+      rowsScanned,
+      rowsUpserted,
+      cursorValue: complete ? "complete" : "partial",
+      error,
+      metadata: { complete, objectCount: results.length, truncatedObjects },
+    })
+
+    return { ok, complete, objects: results, error }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await finishRun(coordinatorRunId, {
+      status: "failed",
+      rowsScanned: results.reduce((sum, result) => sum + result.rowsScanned, 0),
+      rowsUpserted: results.reduce((sum, result) => sum + result.rowsUpserted, 0),
+      error: message,
+      metadata: { complete: false, objectCount: results.length },
+    }).catch((finishError) => {
+      console.error("[external-crm sync] failed to close coordinator", finishError)
+    })
+    throw error
+  }
 }

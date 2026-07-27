@@ -283,10 +283,51 @@ function rowHealthBand(row: CrmUnifiedCustomerRow, nowMs: number): CustomerHealt
   }).band
 }
 
-export async function getCrmUnifiedCustomers(
-  options: CrmUnifiedCustomersOptions = {}
-): Promise<CrmUnifiedCustomers> {
-  const now = options.now ?? new Date()
+// ── 소스 스냅샷 60초 모듈 캐시 (7-23 감사 3-A 서버 메모이제이션) ──────────────
+// 필터/검색/페이지/뷰가 바뀔 때마다 — limit=1 헬스 집계 호출까지 — 6개 소스를 전부
+// 다시 모아 행을 재조립했다(실측 0.8~1.6s). 조립 결과는 옵션과 무관한 "필터 이전"
+// 스냅샷이므로 한 번 만들어 60초 공유한다. NEO 모듈 캐시
+// (lib/admin-crm-customers-neo.ts:132)와 같은 패턴·같은 TTL.
+// - 태그는 스냅샷에 넣지 않는다 — 요청마다 getAllCustomerTagsMap(자체 30초 캐시,
+//   쓰기 시 즉시 무효화)을 읽어 부착하므로 태그 추가/삭제가 이 TTL을 기다리지 않는다.
+// - 모든 소스가 성공했을 때만 저장(NEO의 `if (value.ok)`와 동일 원칙) — 부분 실패
+//   스냅샷을 60초 고정하지 않고 다음 요청이 즉시 재시도한다.
+// - options.now가 주어진 호출(테스트·고정 시각)은 캐시를 읽지도 쓰지도 않는다.
+// - 이 파일에는 쓰기 경로가 없다. 리드 상태 등 소스 쓰기는 TTL(≤60초)로 수렴하며,
+//   즉시 반영이 필요한 쓰기 라우트가 생기면 invalidateCrmUnifiedSourceSnapshot() 호출.
+interface CrmUnifiedSourceSnapshot {
+  rows: CrmUnifiedCustomerRow[]
+  warnings: string[]
+  leadsOk: boolean
+  neoAccountsOk: boolean
+  portalCustomersOk: boolean
+  neoLatestSyncedAt: string | null
+  neoPartial: boolean
+  /** 6개 소스가 전부 성공해 캐시해도 되는 스냅샷인지. */
+  complete: boolean
+}
+
+let sourceSnapshotCache: { at: number; value: CrmUnifiedSourceSnapshot } | null = null
+const SOURCE_SNAPSHOT_TTL_MS = 60_000
+
+export function invalidateCrmUnifiedSourceSnapshot() {
+  sourceSnapshotCache = null
+}
+
+async function getSourceSnapshot(now: Date, bypassCache: boolean): Promise<CrmUnifiedSourceSnapshot> {
+  if (!bypassCache) {
+    const cached = sourceSnapshotCache
+    if (cached && Date.now() - cached.at < SOURCE_SNAPSHOT_TTL_MS) return cached.value
+  }
+  const value = await loadSourceSnapshot(now)
+  if (!bypassCache && value.complete) sourceSnapshotCache = { at: Date.now(), value }
+  return value
+}
+
+// 소스 수집 + 행 조립 + 전환 중복 접기까지의 "필터 이전" 단계. 행의 우선순위 점수는
+// 이 시점의 now로 계산되어 캐시 TTL 동안(≤60초) 고정된다 — 뷰 매칭·건강도 등
+// now 민감 판정은 getCrmUnifiedCustomers가 요청 시각으로 다시 수행한다.
+async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> {
   const warnings: string[] = []
   let leadsOk = true
   let neoAccountsOk = true
@@ -430,12 +471,42 @@ export async function getCrmUnifiedCustomers(
     })
   }
 
-  // 수기 라벨 — 소규모 태그 테이블을 한 번 읽어 행에 부착(없으면 graceful 빈 맵).
-  const tagsMap = await getAllCustomerTagsMap().catch(() => ({}) as Record<string, string[]>)
-  for (const row of rows) {
-    const idPart = row.key.slice(row.key.indexOf(":") + 1)
-    row.tags = tagsMap[`${row.source}:${idPart}`] ?? []
+  const neoOk = neoResult.status === "fulfilled" && neoResult.value.ok
+  return {
+    rows,
+    warnings,
+    leadsOk,
+    neoAccountsOk,
+    portalCustomersOk,
+    neoLatestSyncedAt: neoOk ? neoResult.value.latestSyncedAt : null,
+    neoPartial: neoOk ? neoResult.value.syncHealth.isShroffAccountStale : !neoAccountsOk,
+    complete:
+      leadResult.status === "fulfilled" &&
+      neoOk &&
+      portalCustomersResult.status === "fulfilled" &&
+      convertedLinksResult.status === "fulfilled" &&
+      neoLinksResult.status === "fulfilled" &&
+      firstResponseResult.status === "fulfilled",
   }
+}
+
+export async function getCrmUnifiedCustomers(
+  options: CrmUnifiedCustomersOptions = {}
+): Promise<CrmUnifiedCustomers> {
+  const now = options.now ?? new Date()
+  const snapshot = await getSourceSnapshot(now, options.now != null)
+  const { leadsOk, neoAccountsOk, portalCustomersOk } = snapshot
+  const warnings = [...snapshot.warnings]
+
+  // 수기 라벨 — 소규모 태그 테이블을 요청마다 읽어 부착(자체 30초 캐시 + 쓰기 즉시
+  // 무효화라 태그 변경이 스냅샷 TTL을 기다리지 않는다; 실패 시 graceful 빈 맵).
+  // 공유 스냅샷 행을 요청 간 오염시키지 않도록 얕은 복사본에 붙인다 — 이후 단계는
+  // 행을 변형하지 않고 읽기만 한다.
+  const tagsMap = await getAllCustomerTagsMap().catch(() => ({}) as Record<string, string[]>)
+  const rows = snapshot.rows.map((row) => ({
+    ...row,
+    tags: tagsMap[`${row.source}:${row.key.slice(row.key.indexOf(":") + 1)}`] ?? [],
+  }))
   const availableTags = Array.from(new Set(Object.values(tagsMap).flat())).sort((a, b) => a.localeCompare(b, "ko"))
   const tagFilter = (options.tag ?? "").trim()
 
@@ -510,12 +581,7 @@ export async function getCrmUnifiedCustomers(
   const owners = buildOwnerOptions(rows.filter((row) => !row.provisional))
   const pageRows = sorted.slice(offset, offset + limit)
   const nextOffset = offset + pageRows.length
-  const neoLatestSyncedAt =
-    neoResult.status === "fulfilled" && neoResult.value.ok ? neoResult.value.latestSyncedAt : null
-  const neoPartial =
-    neoResult.status === "fulfilled" && neoResult.value.ok
-      ? neoResult.value.syncHealth.isShroffAccountStale
-      : !neoAccountsOk
+  const { neoLatestSyncedAt, neoPartial } = snapshot
   const sourceStatuses: CrmUnifiedCustomers["sources"]["statuses"] = [
     {
       key: "classin_leads",

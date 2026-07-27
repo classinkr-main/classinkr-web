@@ -19,11 +19,74 @@ export const STATUS_COLOR: Record<LeadStatus, string> = {
   converted: "bg-green-50 text-green-600",
   closed: "bg-[#f0f0ec] text-[#1a1a1a]/40",
 }
+// 목록 행 상태 표시 — 파스텔 채움 대신 점+라벨(아웃라인 취향, 유입 색점과 같은 시스템).
+export const STATUS_DOT: Record<LeadStatus, string> = {
+  new: "#1D9E75", contacted: "#D97706", converted: "#084734", closed: "#9A9A94",
+}
+
+export function StatusPill({ status }: { status: LeadStatus }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-[12px] whitespace-nowrap ${status === "closed" ? "text-[#1a1a1a]/45" : "text-[#111110]"}`}>
+      <span aria-hidden className="inline-block h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: STATUS_DOT[status] }} />
+      {STATUS_LABEL[status]}
+    </span>
+  )
+}
 export const SOURCE_LABEL: Record<string, string> = {
   demo_modal: "데모 신청", contact_page: "문의", newsletter: "뉴스레터", meta_lead_ads: "Meta 리드",
   channel_talk: "채널톡",
 }
 export const RESPONSE_TARGET_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
+
+// ─── 유입 그룹 ──────────────────────────────────────────────────
+// 실제 source 값은 16종+로 잘게 흩어져 있어, 리드 보드 상단 유입 칩 필터는 이 7묶음으로 접는다.
+// 여기가 source→그룹 매핑의 단일 진실원 — 새 유입 채널이 생기면 이 표에만 추가한다.
+export type LeadSourceGroup =
+  | "meta" | "homepage" | "resources" | "newsletter" | "channel_talk" | "chatbot" | "manual_etc"
+
+export const SOURCE_GROUP_ORDER: LeadSourceGroup[] = [
+  "meta", "homepage", "resources", "newsletter", "channel_talk", "chatbot", "manual_etc",
+]
+
+export const SOURCE_GROUP_LABEL: Record<LeadSourceGroup, string> = {
+  meta: "메타", homepage: "홈페이지", resources: "자료실", newsletter: "뉴스레터",
+  channel_talk: "채널톡", chatbot: "챗봇", manual_etc: "수기·기타",
+}
+
+// 웨이파인딩용 색점 — 라이트/다크 공통으로 보이는 중간 톤(넓은 채움 아님, 점만).
+export const SOURCE_GROUP_DOT: Record<LeadSourceGroup, string> = {
+  meta: "#378ADD", homepage: "#1D9E75", resources: "#BA7517", newsletter: "#7F77DD",
+  channel_talk: "#D85A30", chatbot: "#D4537E", manual_etc: "#888780",
+}
+
+const SOURCE_GROUP_BY_SOURCE: Record<string, LeadSourceGroup> = {
+  meta_lead_ads: "meta",
+  demo_modal: "homepage", contact_page: "homepage", home_lead_magnet: "homepage",
+  home_final_cta: "homepage", website: "homepage", teaser: "homepage",
+  resource_pdf_download: "resources", resource_pdf_cta: "resources", resources_hub: "resources",
+  resource_detail: "resources", resource_reference: "resources", resource_related: "resources",
+  lead_magnet: "resources", blog_lead_magnet: "resources", materials_direct: "resources",
+  newsletter: "newsletter",
+  channel_talk: "channel_talk", channel_talk_mining: "channel_talk",
+  chatbot: "chatbot",
+  admin_manual: "manual_etc", manual: "manual_etc",
+  seminar: "manual_etc", event: "manual_etc", team_event: "manual_etc", showroom: "manual_etc",
+}
+
+// 매핑에 없는 source는 전부 '수기·기타'로 흡수 — 칩에서 리드가 새지 않게 한다.
+export function getLeadSourceGroup(lead: LeadRecord): LeadSourceGroup {
+  return SOURCE_GROUP_BY_SOURCE[lead.source] ?? "manual_etc"
+}
+
+export function SourceGroupDot({ group, size = 7 }: { group: LeadSourceGroup; size?: number }) {
+  return (
+    <span
+      aria-hidden
+      className="inline-block shrink-0 rounded-full"
+      style={{ width: size, height: size, backgroundColor: SOURCE_GROUP_DOT[group] }}
+    />
+  )
+}
 
 export type LeadFilter =
   | LeadStatus

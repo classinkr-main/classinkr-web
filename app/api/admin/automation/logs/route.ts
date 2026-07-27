@@ -1,5 +1,6 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { getAllLogs } from "@/lib/repositories/automation"
 
 export async function GET(req: NextRequest) {
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const logs = await getAllLogs(ruleId)
-    return NextResponse.json({ logs })
+    return adminCachedJson({ logs })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
