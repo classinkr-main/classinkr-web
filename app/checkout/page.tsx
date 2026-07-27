@@ -1,17 +1,25 @@
 import type { Metadata } from "next"
 
-import { SoftwareCheckoutClient } from "@/components/billing/SoftwareCheckoutClient"
+import { CheckoutClient, type ProductFamily } from "@/components/checkout/CheckoutClient"
 import type { BillingMode } from "@/components/billing/BillingModeTabs"
 
 export const metadata: Metadata = {
   title: "Checkout",
-  description: "Classin 소프트웨어 플랜을 카드와 네이버페이로 결제하는 체크아웃 페이지입니다.",
+  description:
+    "Classin 소프트웨어 플랜 결제와 하드웨어 도입 신청을 한 곳에서 진행하는 체크아웃 페이지입니다.",
   robots: { index: false, follow: false },
 }
 
 function pickString(value: string | string[] | undefined) {
   const v = Array.isArray(value) ? value[0] : value
   return typeof v === "string" ? v.trim() : ""
+}
+
+function resolveProductFamily(typeParam: string | string[] | undefined): ProductFamily {
+  const raw = pickString(typeParam).toLowerCase()
+  // ?type=hw 딥링크(하드웨어 랜딩·제품 페이지 CTA)만 하드웨어로 열고, 기본은 소프트웨어.
+  if (raw === "hw" || raw === "hardware") return "hw"
+  return "sw"
 }
 
 function resolveInitialMode(
@@ -36,8 +44,11 @@ export default async function CheckoutPage({
   const params = await searchParams
   const initialQuote = pickString(params?.quote)
   const initialMode = resolveInitialMode(params?.mode, Boolean(initialQuote))
+  const initialFamily = resolveProductFamily(params?.type)
+
   return (
-    <SoftwareCheckoutClient
+    <CheckoutClient
+      initialFamily={initialFamily}
       initialMode={initialMode}
       initialQuoteCode={initialQuote || undefined}
     />

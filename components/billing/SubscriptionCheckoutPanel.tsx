@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { AccountCountStepper } from "@/components/billing/AccountCountStepper"
 import { KrwConversionNote } from "@/components/billing/KrwConversionNote"
+import { CheckoutRequestForm } from "@/components/checkout/CheckoutRequestForm"
+import type { CheckoutRequestItem } from "@/lib/billing/hardware-catalog"
 import {
   DEFAULT_ACCOUNT_COUNT,
   SOFTWARE_PLANS,
@@ -69,6 +71,7 @@ export function SubscriptionCheckoutPanel() {
   const [isWidgetReady, setIsWidgetReady] = useState(false)
   const [isPreparing, setIsPreparing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [requestOpen, setRequestOpen] = useState(false)
   const [fx, setFx] = useState<FxState>({
     rate: null,
     fetchedAt: null,
@@ -97,6 +100,22 @@ export function SubscriptionCheckoutPanel() {
   const approxAmountKrw = useMemo(() => approxKrw(amountUsd, fx.rate), [amountUsd, fx.rate])
   const isFormComplete = Boolean(
     form.organizationName.trim() && form.buyerName.trim() && form.buyerEmail.trim()
+  )
+  // 토스 키가 없거나 공개 결제 플래그가 꺼져 있으면 온라인 결제 경로 자체가 없다.
+  const paymentAvailable = checkoutEnabled && hasWidgetKey
+
+  // 도입 신청에 실릴 플랜 스냅샷. 단가는 계정당 금액, 수량은 계정 수.
+  const requestItems = useMemo<CheckoutRequestItem[]>(
+    () => [
+      {
+        sku: `sw-${selectedPlan.id}-${billingCycle}`,
+        name: `${selectedPlan.title} ${billingCycle === "monthly" ? "월간" : "연간"} 구독`,
+        qty: clampAccountCount(accountCount),
+        unitAmount: selectedPrice.amount,
+        currency: "USD",
+      },
+    ],
+    [selectedPlan.id, selectedPlan.title, billingCycle, accountCount, selectedPrice.amount]
   )
 
   // FX 초기 로드
@@ -141,9 +160,11 @@ export function SubscriptionCheckoutPanel() {
     }
   }, [])
 
-  // 토스 위젯 mount
+  // 토스 위젯 mount — 결제가 실제로 가능한 상태에서만 붙인다.
+  // (결제 불가 상태에서는 mount 대상 div 자체를 렌더하지 않으므로 여기서 함께 막아야
+  //  selector 를 못 찾아 "위젯을 불러오지 못했습니다" 오류가 뜨지 않는다.)
   useEffect(() => {
-    if (!hasWidgetKey) return
+    if (!paymentAvailable) return
 
     let cancelled = false
 
@@ -192,7 +213,7 @@ export function SubscriptionCheckoutPanel() {
       paymentMethodWidgetRef.current = null
       agreementWidgetRef.current = null
     }
-  }, [hasWidgetKey])
+  }, [paymentAvailable])
 
   // 금액 변경 시 위젯 setAmount 갱신 (미리보기용 KRW)
   useEffect(() => {
@@ -502,25 +523,19 @@ export function SubscriptionCheckoutPanel() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-black/10 bg-white p-6">
-          <p className="text-[13px] font-semibold text-[#111110]">결제수단</p>
-          <p className="mt-1 text-[12px] text-[#615D59]">카드 · 네이버페이</p>
+        {paymentAvailable ? (
+          <div className="rounded-2xl border border-black/10 bg-white p-6">
+            <p className="text-[13px] font-semibold text-[#111110]">결제수단</p>
+            <p className="mt-1 text-[12px] text-[#615D59]">카드 · 네이버페이</p>
 
-          <div
-            id="toss-payment-methods"
-            className="mt-4 min-h-[200px] rounded-lg border border-black/5 bg-[#FAFAF8]"
-          />
-          <div
-            id="toss-agreement"
-            className="mt-3 min-h-[88px] rounded-lg border border-black/5 bg-[#FAFAF8]"
-          />
-        </div>
-
-        {!checkoutEnabled || !hasWidgetKey ? (
-          <div className="rounded-lg border border-[#EAD7B2] bg-[#FFF9EB] px-4 py-3 text-[12px] leading-relaxed text-[#8D6C1F]">
-            {!checkoutEnabled
-              ? "`NEXT_PUBLIC_SW_CHECKOUT_ENABLED=true` 설정 전까지 공개 결제는 비활성 상태입니다."
-              : "토스 위젯 키가 없습니다. `.env.local`에 `NEXT_PUBLIC_TOSS_WIDGET_CLIENT_KEY`를 설정해 주세요."}
+            <div
+              id="toss-payment-methods"
+              className="mt-4 min-h-[200px] rounded-lg border border-black/5 bg-[#FAFAF8]"
+            />
+            <div
+              id="toss-agreement"
+              className="mt-3 min-h-[88px] rounded-lg border border-black/5 bg-[#FAFAF8]"
+            />
           </div>
         ) : null}
 
@@ -531,17 +546,75 @@ export function SubscriptionCheckoutPanel() {
           </div>
         ) : null}
 
-        <Button
-          type="button"
-          size="lg"
-          className="h-12 w-full rounded-lg bg-[#084734] text-[14px] font-semibold text-white hover:bg-[#065C41]"
-          disabled={!hasWidgetKey || !isWidgetReady || isPreparing || !isFormComplete}
-          onClick={() => {
-            void handleCheckout()
-          }}
-        >
-          {isPreparing ? "결제 준비 중..." : `${formatUsd(amountUsd)} 결제하기`}
-        </Button>
+        {paymentAvailable ? (
+          <div className="space-y-3">
+            <Button
+              type="button"
+              size="lg"
+              className="h-12 w-full rounded-lg bg-[#084734] text-[14px] font-semibold text-white hover:bg-[#065C41]"
+              disabled={!isWidgetReady || isPreparing || !isFormComplete}
+              onClick={() => {
+                void handleCheckout()
+              }}
+            >
+              {isPreparing ? "결제 준비 중..." : `${formatUsd(amountUsd)} 결제하기`}
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => {
+                trackEvent("click_cta", {
+                  button: "sw_subscription_request_open",
+                  page: "/checkout",
+                  product_family: "software",
+                  plan_id: planId,
+                  billing_cycle: billingCycle,
+                })
+                setRequestOpen(true)
+              }}
+              className="w-full rounded-lg border border-black/[0.08] bg-white py-2.5 text-[13px] font-medium text-[#084734] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+            >
+              결제 없이 도입 신청
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-black/[0.08] bg-white p-6">
+            <p className="text-[13px] font-semibold text-[#111110]">온라인 결제 오픈 준비 중</p>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-[#615D59]">
+              아래 도입 신청을 남기시면 결제 없이 도입을 도와드립니다. 담당자가 1영업일 내에 연락해
+              플랜 확정과 계약을 함께 진행합니다.
+            </p>
+
+            <Button
+              type="button"
+              size="lg"
+              className="mt-4 h-12 w-full rounded-lg bg-[#084734] text-[14px] font-semibold text-white hover:bg-[#065C41]"
+              onClick={() => {
+                trackEvent("click_cta", {
+                  button: "sw_subscription_request_open",
+                  page: "/checkout",
+                  product_family: "software",
+                  plan_id: planId,
+                  billing_cycle: billingCycle,
+                })
+                setRequestOpen(true)
+              }}
+            >
+              결제 없이 도입 신청
+            </Button>
+          </div>
+        )}
+
+        <CheckoutRequestForm
+          open={requestOpen}
+          onOpenChange={setRequestOpen}
+          kind="software"
+          items={requestItems}
+          sourcePage="/checkout?type=sw&mode=subscription"
+          summaryTitle={`${selectedPlan.title} · ${billingCycle === "monthly" ? "월간" : "연간"}`}
+          summaryValue={formatUsd(amountUsd)}
+          summaryNote={`${clampAccountCount(accountCount)}계정 기준`}
+        />
       </aside>
     </div>
   )

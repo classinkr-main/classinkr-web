@@ -700,21 +700,26 @@ function TestimonialSection() {
 /* ── Section: Space Scenarios ────────────────────────────────────── */
 const spaceImageVersion = "20260429-1604"
 
+/**
+ * `sku` 는 체크아웃 카탈로그(lib/billing/hardware-catalog)의 식별자다 —
+ * CTA 가 `/checkout?type=hw&sku=…` 로 구성을 실어 보내 수량 1로 프리셀렉트된다.
+ * S110 은 아직 공개 카탈로그에 없어 sku 가 없다 → 상담(/contact) 경로로 보낸다.
+ */
 const spaceScenarios = [
     {
-        model: "S110", size: '110"', badge: "FLAGSHIP",
+        model: "S110", size: '110"', badge: "FLAGSHIP", sku: null,
         tag: "강당 · 대형 강의실",
         story: "300명이 앉은 강당에서도 맨 뒷자리가 선명합니다. 110인치 화면이 공간을 압도하며, 교사 한 명의 판서가 전석에 전달됩니다. 대규모 강의, 특강, 입시 설명회에 최적.",
         image: `/images/product/hw/spaces/space-s110-hall.webp?v=${spaceImageVersion}`,
     },
     {
-        model: "S86", size: '86"', badge: "BEST",
+        model: "S86", size: '86"', badge: "BEST", sku: "hw-board-86",
         tag: "일반 교실 · 회의실",
         story: "30명 담임반의 하루 6교시를 완주하는 기준 모델. 가장 많은 교실 환경에 최적화된 사이즈. 8배열 마이크가 교실 소음 속에서도 교사 음성을 또렷이 전달합니다.",
         image: `/images/product/hw/spaces/space-s86-classroom.webp?v=${spaceImageVersion}`,
     },
     {
-        model: "S75", size: '75"', badge: "",
+        model: "S75", size: '75"', badge: "", sku: "hw-board-75",
         tag: "세미나 · 중형 회의실",
         story: "20명 내외의 세미나실과 중형 회의실에 딱 맞는 사이즈. 임원 PT, 팀 회의, 교사 연수에서 화이트보드를 완전히 대체합니다.",
         image: `/images/product/hw/spaces/space-s75-seminar.webp?v=${spaceImageVersion}`,
@@ -795,10 +800,14 @@ function SpaceScenarioSection() {
                         <p className="text-[#615D59] leading-relaxed mb-8">{scenario.story}</p>
                         <Button asChild className="h-12 rounded-full bg-[#084734] px-8 text-sm font-bold text-white shadow-md transition-all hover:bg-[#065c41] hover:shadow-lg group">
                             <Link
-                                href="/contact#contact-form"
-                                onClick={() => trackEvent("click_cta", { button: "hw_model_inquiry", page: "/product/hw", model: scenario.model })}
+                                href={scenario.sku ? `/checkout?type=hw&sku=${scenario.sku}` : "/contact#contact-form"}
+                                onClick={() => trackEvent("click_cta", {
+                                    button: scenario.sku ? "hw_model_checkout" : "hw_model_consult",
+                                    page: "/product/hw",
+                                    model: scenario.model,
+                                })}
                             >
-                            이 모델로 문의하기
+                            {scenario.sku ? "이 구성으로 도입 신청" : "이 구성으로 상담 신청"}
                             <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                             </Link>
                         </Button>
