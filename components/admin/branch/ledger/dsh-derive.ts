@@ -9,6 +9,7 @@
 // 최대 annual 행 하나를 채택한다. 이 모듈의 모든 breakdown 파생은 dedupeDshByKind를 유일한
 // 진입점으로 쓴다 — 새 파생을 추가할 때도 raw breakdown을 직접 합산하지 말 것.
 
+import { dedupeDshByKind } from "@/lib/branch/dsh-dedupe"
 import { fiscalQuarter, fyOf, ymKey } from "@/lib/branch/fiscal"
 import { cnyExact } from "@/lib/branch/money-format"
 import type { BranchDealMix, BranchDshBreakdownRow, BranchDshRow } from "../types"
@@ -52,34 +53,11 @@ export function subtractDshNumbers(status: DshNumbersLike, goal: DshNumbersLike,
 }
 
 // ── breakdown 중복 제거(최대-annual 채택) — 모든 파생의 단일 진입점 ──────────
+// 구현은 lib/branch/dsh-dedupe.ts로 이동했다(SSOT — summary 라우트 deal_mix도 같은
+// 함수를 쓴다). 기존 소비처(DshNumericGrid·테스트) 임포트 경로 보존을 위해 재노출한다.
 
-export interface DshDedupeResult {
-  monthKeys: string[]
-  goal: Map<string, BranchDshBreakdownRow>
-  status: Map<string, BranchDshBreakdownRow>
-}
-
-export function dedupeDshByKind(breakdown: BranchDshBreakdownRow[]): DshDedupeResult {
-  const keys = new Set<string>()
-  for (const row of breakdown) for (const ym of Object.keys(row.months)) keys.add(ym)
-  // 회계월 키는 breakdown이 실제로 담고 있는 달의 합집합 — YYYY-MM 문자열 정렬이
-  // FY 경계(4월 시작 → 이듬해 3월)를 그대로 보존한다.
-  const monthKeys = [...keys].sort()
-
-  const byKind: Record<"goal" | "status", Map<string, BranchDshBreakdownRow>> = {
-    goal: new Map(),
-    status: new Map(),
-  }
-  for (const row of breakdown) {
-    const bucket = byKind[row.kind]
-    if (!bucket) continue
-    const key = `${row.category}|${row.status_type}|${row.channel}`
-    const existing = bucket.get(key)
-    // 전사 행은 부분 행들의 합이라 annual이 항상 최대 — 합산 대신 최대 행 하나만 채택한다.
-    if (!existing || row.annual > existing.annual) bucket.set(key, row)
-  }
-  return { monthKeys, goal: byKind.goal, status: byKind.status }
-}
+export { dedupeDshByKind }
+export type { DshDedupeResult } from "@/lib/branch/dsh-dedupe"
 
 function sumRows(
   rows: Iterable<BranchDshBreakdownRow>,

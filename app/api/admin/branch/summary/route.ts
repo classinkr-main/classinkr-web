@@ -3,6 +3,7 @@ import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { unstable_cache } from "next/cache"
 import { envSheetId, getSheetModifiedTime } from "@/lib/branch/google-sheets"
+import { dedupeDshByKind } from "@/lib/branch/dsh-dedupe"
 import type { DshBreakdownRow } from "@/lib/branch/parsers/dsh"
 import type { BranchRevDeal } from "@/lib/repositories/branch-deals"
 import { readRevDealsPreferActiveWithSource } from "@/lib/branch/read-rev-deals"
@@ -135,15 +136,20 @@ function buildMix(
   const actuals = new Map<string, number>()
   const prevActuals = new Map<string, number>()
   const prevAvailable = isPrevPeriodAvailable(breakdown, scope, now)
-  for (const row of breakdown) {
+  // 파서 breakdown은 같은 (kind, category, status_type, channel) 콤보를 스코프별
+  // (전사 + 팀/멤버 섹션)로 반복 방출한다 — raw 합산은 전사 연간 목표를 ~3배로 부풀리고,
+  // goal·status 배율이 달라 pct까지 왜곡된다. 최대-annual 채택(dedupeDshByKind)이 필수다.
+  const deduped = dedupeDshByKind(breakdown)
+  for (const row of deduped.goal.values()) {
     const key = row[dim]
-    if (row.kind === "goal") goals.set(key, (goals.get(key) ?? 0) + pickValue(row, scope, now))
-    else {
-      actuals.set(key, (actuals.get(key) ?? 0) + pickValue(row, scope, now))
-      if (prevAvailable) {
-        const prev = pickPrevValue(row, scope, now) ?? 0
-        prevActuals.set(key, (prevActuals.get(key) ?? 0) + prev)
-      }
+    goals.set(key, (goals.get(key) ?? 0) + pickValue(row, scope, now))
+  }
+  for (const row of deduped.status.values()) {
+    const key = row[dim]
+    actuals.set(key, (actuals.get(key) ?? 0) + pickValue(row, scope, now))
+    if (prevAvailable) {
+      const prev = pickPrevValue(row, scope, now) ?? 0
+      prevActuals.set(key, (prevActuals.get(key) ?? 0) + prev)
     }
   }
   const keys = new Set([...goals.keys(), ...actuals.keys()])
