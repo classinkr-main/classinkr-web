@@ -2,6 +2,9 @@ const MEMBER_NAME_ALIASES: Record<string, string> = {
   "new 2": "Minjae",
   minjae: "Minjae",
   somang: "Somang",
+  // 황찬우 — 시트가 성(Hwang)으로 기재하지만 표기 정본은 이름(Chanwoo)이다(2026-07-27 확정).
+  // 다른 멤버는 전부 이름 표기라 성 표기가 섞이면 같은 사람이 두 명으로 보인다.
+  hwang: "Chanwoo",
 }
 
 export function normalizeBranchMemberName(value: string | null | undefined): string | null {
