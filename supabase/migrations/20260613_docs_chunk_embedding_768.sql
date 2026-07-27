@@ -1,59 +1,78 @@
--- 챗봇 임베딩 모델을 text-embedding-004(768차원)로 맞추기 위해 벡터 차원을 768로 정렬.
--- (20260613_docs_chunk_vector_search.sql 의 vector(1536) RPC/인덱스를 768로 교체)
+-- ═══════════════════════════════════════════════════════════════
+-- ⚠️ RETIRED — 절대 실행 금지 (2026-07-27 DB 전수 감사)
+-- ═══════════════════════════════════════════════════════════════
 --
--- 임베딩 백필 전 적용한다. embedding 컬럼은 아직 비어 있으므로 USING null 로 안전하게 재정의한다.
--- 이 마이그레이션은 1536 버전 적용 여부와 무관하게 동작한다(drop ... if exists).
+-- 이 마이그레이션은 채택되지 않은 768차원 전환안이다. 운영 DB의
+-- docs_ai_chunks.embedding 은 vector(1536)으로 확정됐고, 감사 시점 기준
+-- 임베딩 889행이 실제 값을 보유하고 있다. 아래 본문의
+--   alter column embedding type extensions.vector(768) using null
+-- 은 기존 임베딩 전량을 NULL 로 파괴하므로 어떤 환경에서도 실행하면 안 된다.
+-- (파일 작성 당시에는 "embedding 컬럼은 아직 비어 있다"는 전제였으나,
+--  이후 1536 기준으로 백필이 완료되어 그 전제가 더 이상 성립하지 않는다.)
+--
+-- 현행 정의는 다음 두 파일을 본다:
+--   20260613_docs_chunk_vector_search.sql          (1536d RPC/HNSW 인덱스)
+--   20260616_docs_chunk_vector_rpc_text_compat.sql (text 호환 오버로드)
+--
+-- 기록 보존을 위해 파일은 삭제하지 않고 본문 전체를 주석 처리했다.
+-- ═══════════════════════════════════════════════════════════════
 
-drop index if exists public.docs_ai_chunks_embedding_hnsw_idx;
-drop function if exists public.match_docs_ai_chunks(extensions.vector, int);
-
-alter table public.docs_ai_chunks
-  alter column embedding type extensions.vector(768) using null;
-
-create index if not exists docs_ai_chunks_embedding_hnsw_idx
-  on public.docs_ai_chunks using hnsw (embedding extensions.vector_cosine_ops)
-  where embedding is not null;
-
-create or replace function public.match_docs_ai_chunks(
-  query_embedding extensions.vector(768),
-  match_count int default 8
-)
-returns table (
-  id uuid,
-  article_id uuid,
-  heading text,
-  content text,
-  metadata jsonb,
-  category_id text,
-  slug text,
-  title text,
-  canonical_path text,
-  similarity double precision
-)
-language sql
-stable
-security definer
-set search_path = public, extensions
-as $$
-  select
-    c.id,
-    c.article_id,
-    c.heading,
-    c.content,
-    c.metadata,
-    a.category_id,
-    a.slug,
-    a.title,
-    a.canonical_path,
-    1 - (c.embedding <=> query_embedding) as similarity
-  from public.docs_ai_chunks c
-  join public.docs_articles a on a.id = c.article_id
-  where c.embedding is not null
-    and a.status = 'published'
-    and a.visibility in ('public', 'unlisted')
-    and a.noindex = false
-  order by c.embedding <=> query_embedding
-  limit greatest(match_count, 1);
-$$;
-
-comment on function public.match_docs_ai_chunks(extensions.vector, int) is 'Cosine-similarity search over docs_ai_chunks (768d, text-embedding-004) for the public chatbot. Published, non-internal, non-noindex only.';
+-- -- 챗봇 임베딩 모델을 text-embedding-004(768차원)로 맞추기 위해 벡터 차원을 768로 정렬.
+-- -- (20260613_docs_chunk_vector_search.sql 의 vector(1536) RPC/인덱스를 768로 교체)
+-- --
+-- -- 임베딩 백필 전 적용한다. embedding 컬럼은 아직 비어 있으므로 USING null 로 안전하게 재정의한다.
+-- -- 이 마이그레이션은 1536 버전 적용 여부와 무관하게 동작한다(drop ... if exists).
+--
+-- drop index if exists public.docs_ai_chunks_embedding_hnsw_idx;
+-- drop function if exists public.match_docs_ai_chunks(extensions.vector, int);
+--
+-- alter table public.docs_ai_chunks
+--   alter column embedding type extensions.vector(768) using null;
+--
+-- create index if not exists docs_ai_chunks_embedding_hnsw_idx
+--   on public.docs_ai_chunks using hnsw (embedding extensions.vector_cosine_ops)
+--   where embedding is not null;
+--
+-- create or replace function public.match_docs_ai_chunks(
+--   query_embedding extensions.vector(768),
+--   match_count int default 8
+-- )
+-- returns table (
+--   id uuid,
+--   article_id uuid,
+--   heading text,
+--   content text,
+--   metadata jsonb,
+--   category_id text,
+--   slug text,
+--   title text,
+--   canonical_path text,
+--   similarity double precision
+-- )
+-- language sql
+-- stable
+-- security definer
+-- set search_path = public, extensions
+-- as $$
+--   select
+--     c.id,
+--     c.article_id,
+--     c.heading,
+--     c.content,
+--     c.metadata,
+--     a.category_id,
+--     a.slug,
+--     a.title,
+--     a.canonical_path,
+--     1 - (c.embedding <=> query_embedding) as similarity
+--   from public.docs_ai_chunks c
+--   join public.docs_articles a on a.id = c.article_id
+--   where c.embedding is not null
+--     and a.status = 'published'
+--     and a.visibility in ('public', 'unlisted')
+--     and a.noindex = false
+--   order by c.embedding <=> query_embedding
+--   limit greatest(match_count, 1);
+-- $$;
+--
+-- comment on function public.match_docs_ai_chunks(extensions.vector, int) is 'Cosine-similarity search over docs_ai_chunks (768d, text-embedding-004) for the public chatbot. Published, non-internal, non-noindex only.';
