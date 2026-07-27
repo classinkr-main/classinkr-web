@@ -5,7 +5,7 @@
 // + 멤버 캠페인 목록(각 "제외") + "캠페인 추가" 피커. GET /[id] 로 프로젝트 + 롤업 + 멤버 캠페인을 조회한다.
 // 마이그 미적용이면 API 가 500/404 → 크래시 없이 에러 카드/자동 닫힘으로 강등(그레이스풀).
 // "편집"은 ProjectFormDrawer 를 재사용한다(리빌드 금지).
-// 정직 규칙: 예산 소진은 행사 KRW 광고비만(Meta USD·이메일·문자 제외) — ProjectBudgetBar 가 캡션으로 명시.
+// 정직 규칙: 예산 소진은 행사 KRW 광고비만(Meta USD·이메일·문자 제외) — 요약 카드가 ProjectBudgetCaveat 로 1회 명시.
 // DESIGN.md 팔레트만 사용.
 
 import { useCallback, useEffect, useState } from "react"
@@ -31,7 +31,8 @@ import type {
 import { channelLabel } from "../manage/CampaignRow"
 import { ProjectFormDrawer } from "./ProjectFormDrawer"
 import {
-  ProjectBudgetBar,
+  ProjectBudgetBlock,
+  ProjectBudgetCaveat,
   ProjectRollupStats,
   ProjectStatusChip,
 } from "./ProjectCard"
@@ -112,8 +113,10 @@ function AssignCampaignPicker({
     setLoading(true)
     setError(null)
     try {
+      // ?rollup=0 — 이 피커는 이름/소속(projectId)만 읽는다. 기본 응답의 크로스채널 롤업은
+      // 라이브 Meta Graph 콜까지 유발하므로, 쓰지도 않을 지표 때문에 광고 API 를 때리지 않도록 옵트아웃.
       const data = await adminFetchJson<{ campaigns: CampaignWithLinks[] }>(
-        "/api/admin/marketing-campaigns",
+        "/api/admin/marketing-campaigns?rollup=0",
       )
       setCampaigns(data.campaigns ?? [])
     } catch (e) {
@@ -422,9 +425,12 @@ export default function ProjectDetailPanel({
                     <span className="text-[11px] text-[#615D59]">읽기 시점 롤업</span>
                   </div>
                   <ProjectRollupStats rollup={rollup} />
-                  <div className="mt-3.5">
-                    <ProjectBudgetBar rollup={rollup} />
+                  <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-[rgba(0,0,0,0.08)] pt-3">
+                    <span className="text-[11.5px] text-[#615D59]">배정 대비 소진</span>
+                    <ProjectBudgetBlock rollup={rollup} meterClassName="w-20" />
                   </div>
+                  {/* 정직 캐비앗 — 이 패널은 프로젝트 1개짜리라 여기서 1회만 나온다. */}
+                  <ProjectBudgetCaveat className="mt-2" />
                 </section>
 
                 {/* 멤버 캠페인 */}

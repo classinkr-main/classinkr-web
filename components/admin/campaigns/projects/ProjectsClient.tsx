@@ -15,7 +15,7 @@ import { adminFetchJson } from "@/lib/admin-client"
 import { useToast } from "@/components/ui/toast"
 import type { ProjectWithRollup } from "@/lib/types/marketing-campaign"
 
-import { ProjectCard, ProjectsEmpty } from "./ProjectCard"
+import { ProjectBudgetCaveat, ProjectCard, ProjectsEmpty } from "./ProjectCard"
 import { ProjectFormDrawer } from "./ProjectFormDrawer"
 import ProjectDetailPanel from "./ProjectDetailPanel"
 
@@ -121,9 +121,9 @@ export default function ProjectsClient() {
       {/* 본문 */}
       <div className="px-4 pt-6 sm:px-6 lg:px-9">
         {loading ? (
-          <div className="space-y-2.5" aria-busy="true">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="h-[132px] animate-pulse rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#f0f0ec]" />
+          <div className="space-y-1.5" aria-busy="true">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="h-[76px] animate-pulse rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#f0f0ec]" />
             ))}
           </div>
         ) : error ? (
@@ -150,10 +150,15 @@ export default function ProjectsClient() {
         ) : projects.length === 0 ? (
           <ProjectsEmpty onCreate={() => setCreating(true)} />
         ) : (
-          <div className="space-y-2.5">
-            <p className="text-[12px] text-[#615D59]">
-              프로젝트 <span className="font-semibold tabular-nums text-[#111110]">{projects.length}</span>개
-            </p>
+          <div className="space-y-1.5">
+            {/* 정직 캐비앗은 여기서 한 번만 — 카드마다 반복하면 벽지가 된다.
+                우측 정렬이라 카드의 "소진" 열 바로 위에 붙어 열 주석처럼 읽힌다. */}
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 pb-0.5">
+              <p className="text-[12px] text-[#615D59]">
+                프로젝트 <span className="font-semibold tabular-nums text-[#111110]">{projects.length}</span>개
+              </p>
+              <ProjectBudgetCaveat />
+            </div>
             {projects.map((project) => (
               <ProjectCard
                 key={project.id}
