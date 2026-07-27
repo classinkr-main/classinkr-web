@@ -3,6 +3,11 @@ import "server-only"
 import { promises as fs } from "fs"
 import path from "path"
 
+import {
+  formatBusinessDateTimeLabel,
+  getBusinessDateParts,
+  toBusinessStorageDateTime,
+} from "@/lib/business-time"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
@@ -36,11 +41,6 @@ import type {
 } from "./partners-types"
 
 const LOCAL_FILE = path.join(process.cwd(), "data", "partners-workspaces.json")
-const BUSINESS_TIME_ZONE = "Asia/Seoul"
-// Asia/Seoul 고정 오프셋(DST 없음) — 오프셋 없는 입력을 timestamptz 에 넣을 때 명시한다.
-const BUSINESS_UTC_OFFSET = "+09:00"
-// 'Z' 또는 '±hh(:)mm' 로 끝나는, 이미 절대 시각인 값 판별용
-const EXPLICIT_OFFSET_REGEX = /(?:Z|[+-]\d{2}:?\d{2})$/i
 const PARTNER_STATUSES = ["lead", "active", "paused", "churn_risk"] as const
 const PARTNER_CHANNELS = ["reseller", "referral", "branch", "direct"] as const
 const DEAL_STAGES = ["discovery", "quoted", "contract_sent", "active", "closed_won", "closed_lost"] as const
@@ -329,36 +329,12 @@ function toOptionalBoolean(value: unknown) {
   return typeof value === "boolean" ? value : undefined
 }
 
-function formatBusinessDateTime(date: Date) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date)
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? "00"
-
-  return `${part("year")}-${part("month")}-${part("day")} ${part("hour")}:${part("minute")}`
-}
-
 function formatDateTime(value: string | null | undefined) {
   const text = toOptionalString(value)
   if (!text) return undefined
 
-  const normalized = text.replace(" ", "T")
   // timestamptz 왕복값(오프셋 포함, 예: '2026-07-27T05:00:00+00:00')은 KST 벽시계로 환산
-  if (EXPLICIT_OFFSET_REGEX.test(normalized)) {
-    const parsed = new Date(normalized)
-    if (!Number.isNaN(parsed.getTime())) return formatBusinessDateTime(parsed)
-  }
-
-  const match = normalized.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
-  if (match) return `${match[1]} ${match[2]}`
-
-  return text
+  return formatBusinessDateTimeLabel(text)
 }
 
 function formatDate(value: string | null | undefined) {
@@ -450,15 +426,8 @@ function toStorageDateTime(value?: string) {
   const text = toOptionalString(value)
   if (!text) return undefined
 
-  const normalized = text.replace(" ", "T")
-  // 이미 오프셋을 가진 절대 시각은 그대로 저장(이중 보정 방지)
-  if (EXPLICIT_OFFSET_REGEX.test(normalized)) return normalized
-
-  const match = normalized.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
   // 오프셋 없는 datetime-local 입력은 KST 벽시계 — 명시하지 않으면 timestamptz 가 UTC 로 해석해 9시간 스큐
-  if (match) return `${match[1]}T${match[2]}${BUSINESS_UTC_OFFSET}`
-
-  return normalized
+  return toBusinessStorageDateTime(text)
 }
 
 function makeId(prefix: string) {
@@ -489,23 +458,6 @@ function asArray<T>(value: T[] | null | undefined) {
 
 function sortSchedule(items: PartnerScheduleItem[]) {
   return [...items].sort((a, b) => (a.startsAt || "").localeCompare(b.startsAt || ""))
-}
-
-function getBusinessDateParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date)
-  const year = parts.find((part) => part.type === "year")?.value ?? "0000"
-  const month = parts.find((part) => part.type === "month")?.value ?? "01"
-  const day = parts.find((part) => part.type === "day")?.value ?? "01"
-
-  return {
-    date: `${year}-${month}-${day}`,
-    month: `${year}-${month}`,
-  }
 }
 
 function getMainDeal(deals: PartnerDeal[]) {
