@@ -64,6 +64,20 @@ function getPayloadValue(
   return normalizeWebhookValue(input.payload?.[key])
 }
 
+/** 배열 payload(품목 라인 등)를 줄 단위로 꺼낸다 — 한 줄씩 120자 규칙을 적용한다. */
+function getPayloadLines(input: EmitNotificationEventInput, key: string) {
+  const raw = input.payload?.[key]
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((entry) => normalizeWebhookValue(entry))
+    .filter((line): line is string => Boolean(line))
+}
+
+function getPayloadCount(input: EmitNotificationEventInput, key: string) {
+  const parsed = Number(getPayloadValue(input, key))
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
 function getLeadSourceLabel(source?: string) {
   if (source === "meta_lead_ads") return "Meta 광고"
   if (source === "newsletter") return "뉴스레터"
@@ -253,6 +267,36 @@ function buildLeadWecomText(input: EmitNotificationEventInput) {
   return null
 }
 
+/**
+ * 결제창 무결제 도입 신청(checkout.request_created) — 결제가 아니라 "연락해서 진행할 건"
+ * 이므로 담당자가 창을 열지 않고도 바로 전화할 수 있게 품목·금액·희망 날짜·연락처를 다 편다.
+ */
+function buildCheckoutRequestWecomText(input: EmitNotificationEventInput) {
+  const kindLabel = getPayloadValue(input, "kindLabel")
+  const itemLines = getPayloadLines(input, "itemLines")
+  const overflowCount = getPayloadCount(input, "itemOverflowCount")
+
+  return compactLines([
+    `${kindLabel ? `${kindLabel} ` : ""}도입 신청이 1건 들어왔습니다 (결제 없이 접수 — 연락 필요)`,
+    "",
+    labeledLine("학원", getPayloadValue(input, "org")),
+    labeledLine("담당자", getPayloadValue(input, "name")),
+    labeledLine("연락처", getPayloadValue(input, "phone")),
+    labeledLine("이메일", getPayloadValue(input, "email")),
+    labeledLine("설치/배송 주소", getPayloadValue(input, "address")),
+    labeledLine("희망 날짜", getPayloadValue(input, "desiredDate")),
+    itemLines.length ? "" : undefined,
+    itemLines.length ? `품목 ${countLabel(getPayloadValue(input, "itemCount"))}` : undefined,
+    ...itemLines.map((line) => `- ${line}`),
+    overflowCount > 0 ? `- 외 ${overflowCount}건` : undefined,
+    labeledLine("합계", getPayloadValue(input, "totalLabel")),
+    labeledLine("메모", getPayloadValue(input, "memo")),
+    labeledLine("신청 경로", getPayloadValue(input, "sourcePage")),
+    labeledLine("신청 번호", getPayloadValue(input, "requestId")),
+    labeledLine("확인", formatRouteUrl(input.routeUrl)),
+  ]).join("\n")
+}
+
 function buildCsNoticeWecomText(input: EmitNotificationEventInput) {
   if (input.eventType === "channel_talk.message") {
     return compactLines([
@@ -295,6 +339,15 @@ function buildWecomPayload(input: EmitNotificationEventInput) {
     input.eventType === "lead.digest.monthly"
   ) {
     return buildLeadDigestWecomCard(input)
+  }
+
+  if (input.eventType === "checkout.request_created") {
+    return {
+      msgtype: "text",
+      text: {
+        content: buildCheckoutRequestWecomText(input),
+      },
+    }
   }
 
   const csNoticeText = input.source === "channel_talk" || input.source === "chatbot"

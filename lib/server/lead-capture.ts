@@ -123,6 +123,12 @@ export type LeadSubmissionResult =
 export interface LeadCaptureContext {
   requestMeta?: MarketingRequestMeta | null
   deferTask?: (task: () => Promise<void>) => void
+  /**
+   * 상위 플로우가 자체 알림을 이미 소유할 때 lead.created 알림만 생략한다.
+   * (예: 결제창 무결제 도입 신청 — checkout.request_created 1건으로 통일)
+   * 리드 저장·구글시트·채널톡·CRM 타임라인·서버 전환은 그대로 수행한다.
+   */
+  suppressLeadCreatedNotification?: boolean
 }
 
 function normalizeString(value: unknown) {
@@ -449,10 +455,13 @@ export async function submitLeadCapture(
         }
       }
 
-      if (context.deferTask) {
-        context.deferTask(emitLeadCreatedNotificationSafely)
-      } else {
-        void emitLeadCreatedNotificationSafely()
+      // 상위 플로우가 알림을 소유하면 건너뛴다 — 여기서 또 보내면 ops 방에 2건이 뜬다.
+      if (!context.suppressLeadCreatedNotification) {
+        if (context.deferTask) {
+          context.deferTask(emitLeadCreatedNotificationSafely)
+        } else {
+          void emitLeadCreatedNotificationSafely()
+        }
       }
 
       // 홈페이지 유입 자동 타임라인 이벤트 — 실패해도 리드 저장에 영향 없음(스펙 §D).
