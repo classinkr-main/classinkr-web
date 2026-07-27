@@ -37,11 +37,18 @@
 ## 검증 기준
 
 ```bash
+npm run typecheck
 npx eslint app components lib --max-warnings=0
 npm run build
 ```
 
-현재 저장소에서는 위 두 명령을 기본 품질 게이트로 본다.
+현재 저장소에서는 위 세 명령을 기본 품질 게이트로 본다.
+
+`typecheck`(`tsc --noEmit`)를 맨 앞에 둔다. 나머지 두 명령은 `tests/` 를 비껴간다 —
+eslint 는 인자가 `app components lib` 로 경로 스코프돼 `tests/` 를 아예 열지 않고,
+`next build` 도 `tests/` 의 타입 오류를 통과시킨다. 반면 tsconfig 의 include 는
+`**/*.ts(x)` 라서 tsc 만이 `tests/`·`scripts/` 까지 검사한다. 실행 ~30초로 build 보다
+싸고 더 빨리 실패하므로 맨 앞이 맞다.
 
 ## UI 작업 시 필수 체크
 
