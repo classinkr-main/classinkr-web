@@ -58,7 +58,8 @@ function campaign(id: string, links: Link[]) {
   }
 }
 
-const req = () => new NextRequest("http://localhost/api/admin/marketing-campaigns")
+const req = (query = "") =>
+  new NextRequest(`http://localhost/api/admin/marketing-campaigns${query}`)
 
 beforeEach(() => {
   mocks.verifyAdmin.mockReset()
@@ -156,6 +157,34 @@ describe("GET /api/admin/marketing-campaigns", () => {
 
     expect(res.status).toBe(500)
     expect(mocks.gatherRollupSources).not.toHaveBeenCalled()
+  })
+
+  it("?rollup=0 이면 소스 수집을 아예 하지 않는다(Meta/이메일/문자/행사 조회 0회)", async () => {
+    mocks.listCampaigns.mockResolvedValue([
+      campaign("camp-1", [link("email_campaign", "e-1", "camp-1"), link("meta_campaign", "m-1", "camp-1")]),
+    ])
+
+    const body = await (await GET(req("?rollup=0"))).json()
+
+    // 롤업이 필요 없는 호출자(프로젝트 패널 등)는 라이브 광고 API 를 때리지 않는다.
+    expect(mocks.gatherRollupSources).not.toHaveBeenCalled()
+    expect(body.campaigns[0].rollup).toBeUndefined()
+    expect(body.campaigns[0].links[0].label).toBeUndefined()
+    // 캠페인·링크 자체는 그대로 온다(멤버십 해석용).
+    expect(body.campaigns[0].id).toBe("camp-1")
+    expect(body.campaigns[0].links).toHaveLength(2)
+  })
+
+  it("?rollup=none 도 같은 경량 모드 · 그 외 값은 기본(롤업 포함) 경로", async () => {
+    mocks.listCampaigns.mockResolvedValue([campaign("camp-1", [link("email_campaign", "e-1", "camp-1")])])
+
+    await GET(req("?rollup=none"))
+    expect(mocks.gatherRollupSources).not.toHaveBeenCalled()
+
+    // 알 수 없는 값은 옵트아웃으로 해석하지 않는다 — 기본은 롤업 포함(1회 수집).
+    const body = await (await GET(req("?rollup=1"))).json()
+    expect(mocks.gatherRollupSources).toHaveBeenCalledTimes(1)
+    expect(body.campaigns[0].rollup).toBeDefined()
   })
 
   it("인증 실패면 그대로 반환하고 데이터에 손대지 않는다", async () => {

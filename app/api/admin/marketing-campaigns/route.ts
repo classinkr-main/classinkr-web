@@ -19,6 +19,11 @@ export { sanitizeCampaignInput }
  * 캠페인 수가 늘어도 쿼리 수는 그대로고, 캠페인별 집계는 수집된 sources 로 메모리에서 계산한다.
  * 롤업/라벨 규칙은 상세 라우트와 같은 구현을 공유한다(lib/marketing/campaign-rollup-sources.ts).
  *
+ * ?rollup=0 (또는 rollup=none): 롤업·라벨을 생략하는 경량 모드 — 소스 조회를 아예 건너뛴다
+ * (Meta Graph 콜 0회). 캠페인 이름/멤버십만 필요한 호출자(예: 프로젝트 패널의 멤버 해석)가
+ * 쓰지도 않을 지표 때문에 라이브 광고 API 를 때리지 않게 하는 옵트아웃이다.
+ * 기본(파라미터 없음)은 롤업 포함 — 무시돼도 느려질 뿐 깨지지 않는다.
+ *
  * 그레이스풀 강등: listCampaigns 는 DB 오류 시 throw 한다(마이그레이션 미적용이면
  * relation 부재로 throw). 라우트가 크래시하지 않도록 try/catch 로 500 강등 →
  * UI 레이어가 빈/에러 상태를 렌더한다. 채널 소스 실패는 gatherRollupSources 내부에서
@@ -28,8 +33,14 @@ export async function GET(req: NextRequest) {
   const authError = await verifyAdmin(req)
   if (authError) return authError
 
+  const rollupParam = req.nextUrl.searchParams.get("rollup")
+  const skipRollup = rollupParam === "0" || rollupParam === "none"
+
   try {
     const campaigns = await listCampaigns()
+    // 경량 모드: 저장소 결과 그대로(rollup·label 없음) — 채널 소스 조회 0회.
+    if (skipRollup) return NextResponse.json({ campaigns })
+
     const { sources, labels } = await gatherRollupSources(campaigns.flatMap((c) => c.links))
     const enriched = campaigns.map((campaign) => {
       const links = withLinkLabels(campaign.links, labels)
