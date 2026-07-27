@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import {
   isInternalCsChatNotReadyError,
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const items = await listInternalCsRegressionCandidates(50)
-    return NextResponse.json({ items })
+    return adminCachedJson({ items })
   } catch (error) {
     console.error("[GET /api/admin/cs-chat/regression-candidates]", error)
     if (isInternalCsChatNotReadyError(error)) {

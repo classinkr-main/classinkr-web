@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import type { Dispatch, SetStateAction } from "react"
 import { Search } from "lucide-react"
 
@@ -38,7 +39,7 @@ interface InboundLotsSectionProps {
   inboundLots: InboundLotsData
 }
 
-export default function InboundLotsSection({ inboundSearch, setInboundSearch, inboundLots }: InboundLotsSectionProps) {
+function InboundLotsSection({ inboundSearch, setInboundSearch, inboundLots }: InboundLotsSectionProps) {
   return (
     <section className="overflow-hidden rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[rgba(0,0,0,0.08)] px-5 py-4">
@@ -133,3 +134,5 @@ export default function InboundLotsSection({ inboundSearch, setInboundSearch, in
     </section>
   )
 }
+
+export default memo(InboundLotsSection)

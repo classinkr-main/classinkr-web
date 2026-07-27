@@ -5,13 +5,18 @@ import { Loader2, Plus, Save, X } from "lucide-react"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   DRAFT_CONFIDENCE_OPTIONS,
-  DRAFT_CONFLICT_MESSAGE,
-  DRAFT_DEDUPED_RECENT_NOTICE,
   DRAFT_OPERATIONS,
+  LOCK_WARNING_TEXT,
   REV_PRODUCT_FILTERS,
+  defaultDraftWeeklyConfidence,
+  dominantWeeklyConfidence,
+  draftWeeklyAmounts,
+  draftWeeklyTotal,
   formatMonthLabel,
   formatMoney,
+  operationSupportsWeeklySplit,
   productCategoryMeta,
+  resultToDraftFeedback,
   safeAmount,
   type DraftForm,
   type DraftKind,
@@ -21,6 +26,7 @@ import {
   type LedgerDraft,
   type RevProductCategory,
 } from "./shared"
+import { WeeklyAmountGrid } from "./WeeklyAmountGrid"
 import { TEAMS } from "../types"
 
 interface InputRailSectionProps {
@@ -40,6 +46,9 @@ interface InputRailSectionProps {
   // 상태인지(SalesLedgerWorkbench의 isMatrixCellLocked 사전검사, correctedMonths 포함). true면
   // 제출 자체를 막고 인라인 경고만 보여준다 — 서버가 어차피 409로 튕길 걸 미리 걸러 헛수고를 없앤다.
   targetCellLocked: boolean
+  // Task B(2026-07-23): 확정으로 잠긴 달의 explicit 주차 중 값이 있는 칸(5칸 boolean) — WeeklyAmountGrid에
+  // 그대로 넘겨 그 주차만 읽기전용(🔒)으로 만든다(확정 주차 덮어쓰기 방지, 빈 칸에만 추가 허용).
+  lockedWeeks?: boolean[]
   // DraftSaveResult.persisted: 서버에 실제로 저장됐으면 true, 로컬 폴백(장부 적용 불가)이면 false.
   // DraftSaveResult.deduped: 이중계상 가드(품질 웨이브 3, 항목 3)가 새 초안 대신 이미 열린 초안을
   // 갱신했으면 true. DraftSaveResult.duplicateWarning(품질 웨이브 4, 항목 2): new-row 저장인데 같은
@@ -64,6 +73,7 @@ export function InputRailSection({
   draftSaving,
   canCreateEditDraft,
   targetCellLocked,
+  lockedWeeks,
   saveEditedDraft,
   cancelDraftEdit,
   saveDraft,
@@ -82,34 +92,10 @@ export function InputRailSection({
   const runSave = async (action: () => Promise<DraftSaveResult>) => {
     setFeedback(null)
     const result = await action()
-    setFeedback(
-      result.conflict
-        // 웨이브 7 2단(I4) — 낙관적 잠금 충돌(409): 이번 수정은 반영되지 않았고 큐의 해당 초안은
-        // 서버 현재본으로 새로고침됐다. 편집 상태는 부모가 유지해주므로(saveEditedDraft) 값을
-        // 확인하고 그대로 다시 저장하면 된다.
-        ? { kind: "error" as const, text: DRAFT_CONFLICT_MESSAGE }
-        : result.validationMessage
-          // 웨이브 7 2단(I4) — 서버 검증 거부(400, 감액 양수 검증 등): 서버 문구를 그대로 보여준다.
-          ? { kind: "error" as const, text: result.validationMessage }
-          : !result.persisted
-            // 품질 웨이브 7 — 항목 2: updateDraft(기존 서버 초안 수정/편집 저장)는 이제 실패 시
-            // 서버-id 레코드를 로컬로 낙관 편집하지 않는다(재전송 판별 누락으로 무음 소실되던
-            // 경로 제거) — "로컬 임시 저장으로 대체됐습니다"는 createDraft(완전 신규 초안)에서만
-            // 여전히 참이라 두 경로 모두에 맞는 문구로 일반화한다.
-            ? { kind: "error" as const, text: "서버 저장에 실패했습니다(장부 적용 불가) — 잠시 후 다시 시도하거나 재연결 후 저장하세요." }
-            : result.dedupedRecent
-              // 웨이브 7 2단(I4) — POST 200 재사용: 저장은 유효하지만 새 초안이 생긴 게 아니다
-              // (60초 내 동일 입력 더블클릭/더블탭 방어). 중복 생성으로 오인하지 않게 명시한다.
-              ? { kind: "success" as const, text: `${DRAFT_DEDUPED_RECENT_NOTICE} 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.` }
-              : result.deduped
-                // 이중계상 가드(항목 3) — 같은 딜·같은 셀에 이미 열린 초안이 있어 새로 만들지 않고 그 초안을 갱신했다.
-                ? { kind: "success" as const, text: "이미 대기 초안 있음 — 수정으로 반영됩니다. 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." }
-                : result.duplicateWarning
-                  // 품질 웨이브 4, 항목 2 — new-row는 매트릭스 대응 행이 없어 자동 재지정할 수 없다.
-                  // 저장은 그대로 진행하고, 같은 고객·월에 이미 열린 신규 초안이 있다는 사실만 경고한다.
-                  ? { kind: "warning" as const, text: "저장 완료 — 같은 고객·월에 이미 열린 신규 초안이 있습니다. 체크 큐에서 중복 여부를 확인하세요." }
-                  : { kind: "success" as const, text: "저장 완료 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." },
-    )
+    // 저장 피드백 매핑은 shared.resultToDraftFeedback로 공용화(M9-2) — 콕핏 편집기와 문구·분기 동일
+    // (웨이브 7 2단 I4의 6분기: conflict → validationMessage → !persisted → dedupedRecent → deduped
+    //  → duplicateWarning → 성공을 그대로 담는다).
+    setFeedback(resultToDraftFeedback(result))
   }
 
   // 편집 중이 아닐 때 Enter로 제출될 "기본" 저장 종류 — 선택된 행이 있어 수정 초안이 가능하면
@@ -118,13 +104,23 @@ export function InputRailSection({
   // Enter를 아예 무시한다 — 실측 확인됨). 나머지 버튼은 type="button"으로 자기 kind를 직접 저장한다.
   const primaryDraftKind: DraftKind = canCreateEditDraft ? "edit-row" : "new-row"
 
+  // 주차 분해 입력(Ledger-1a "주차별 입력 — 금액만 넣으면 월 합 자동" + Cockpit-1c 주차 그리드).
+  // 노출 조건: forecast-add·amount-change 한정 — 기간 이동(period-shift)·수량 변경(quantity-change)은
+  // 기존 단일 금액 UX를 유지한다(shared.operationSupportsWeeklySplit — buildDraftInput 저장 계약과
+  // 같은 게이트). weeklySum은 검증(draftAmountInvalid)·저장(draftWeeklySaveContract)과 동일 산식.
+  const weeklySplitAvailable = operationSupportsWeeklySplit(draftForm.operation)
+  const weeklySplitActive = weeklySplitAvailable && draftForm.weeklyMode
+  const weeklySum = draftWeeklyTotal(draftForm.weekly)
+  // 라운드 3(P1) — 주차별 확도: 금액 5칸(seg 비활성 판정)과 우세 확도 미리보기("저장 확도" 줄,
+  // buildDraftInput이 metadata.confidence로 자동 기록하는 값과 동일 산식 — draftWeeklySaveContract).
+  const weeklyAmounts = draftWeeklyAmounts(draftForm.weekly)
+  const railDominantConfidence = dominantWeeklyConfidence(weeklyAmounts, draftForm.weeklyConfidence)
+
   // 품질 웨이브 7 — 항목 1: targetCellLocked는 부모가 이미 "지금 제출이 edit-row 경로로 가는지"
   // (editingDraft.kind==="edit-row" 또는 canCreateEditDraft)까지 반영해 계산해준다 — new-row
   // 저장·new-row 초안 편집은 대응 매트릭스 행이 없어 부모 쪽에서 항상 false로 내려온다. 여기서는
   // 그대로 소비만 한다(중복 판정 없음).
   const blockedByLock = targetCellLocked
-  const LOCK_WARNING_TEXT =
-    "이 딜의 해당 월 셀은 이미 잠겨 있습니다(시트 확정·장부 반영 등) — 수정 초안을 저장할 수 없습니다. 다른 월을 선택하거나 체크 큐에서 확인하세요."
 
   // form 래핑으로 Enter 제출 — 편집 중이면 그 초안 갱신, 아니면 primaryDraftKind로 저장.
   // 실제 버튼 클릭도 동일 코드 경로를 타 두 번 저장되지 않는다(submit 버튼은 onClick 없음).
@@ -169,7 +165,13 @@ export function InputRailSection({
                     <button
                       key={operation.id}
                       type="button"
-                      onClick={() => setDraftForm((current) => ({ ...current, operation: operation.id }))}
+                      onClick={() => setDraftForm((current) => ({
+                        ...current,
+                        operation: operation.id,
+                        // 주차 분해 유지 상태로 작업 유형을 오가면 week 토큰이 남을 수 있다 —
+                        // 주차 분해가 다시 활성화되는 유형이면 저장 계약(week:"month")과 재일치.
+                        week: current.weeklyMode && operationSupportsWeeklySplit(operation.id) ? "month" : current.week,
+                      }))}
                       className={`min-h-9 rounded-md px-2 py-1.5 text-left text-[11px] font-bold transition ${
                         draftForm.operation === operation.id
                           ? "bg-[#111110] text-white"
@@ -226,39 +228,104 @@ export function InputRailSection({
                     ))}
                   </select>
                 </label>
-                <label className="block text-[11px] font-bold text-[#615D59]">
-                  주차
-                  <select
-                    value={draftForm.week}
-                    onChange={(event) => setDraftForm((current) => ({ ...current, week: event.target.value }))}
-                    className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
-                  >
-                    <option value="month">월합계</option>
-                    {[1, 2, 3, 4, 5].map((week) => <option key={week} value={`w${week}`}>W{week}</option>)}
-                  </select>
-                </label>
+                {weeklySplitAvailable ? (
+                  // 주차 분해 노출 유형(forecast-add·amount-change)에서만 '주차' select 자리가
+                  // 모드 토글로 바뀐다 — 월합계 모드는 기존 UX 그대로(단일 금액 + week 토큰 select 유지).
+                  <div className="block text-[11px] font-bold text-[#615D59]">
+                    주차
+                    <div
+                      role="group"
+                      aria-label="금액 입력 방식"
+                      className="mt-1 grid h-9 grid-cols-2 gap-0.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white p-0.5"
+                    >
+                      <button
+                        type="button"
+                        aria-pressed={!weeklySplitActive}
+                        onClick={() => setDraftForm((current) => ({ ...current, weeklyMode: false }))}
+                        className={`rounded-[5px] px-1 text-[10px] font-bold transition ${
+                          !weeklySplitActive ? "bg-[#111110] text-white" : "text-[#615D59] hover:text-[#111110]"
+                        }`}
+                      >
+                        월합계 한 줄
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={weeklySplitActive}
+                        // week 토큰을 month로 고정 — 저장 계약(metadata.week="month")·이중계상
+                        // dedup 좌표(railDedupTarget)가 같은 셀(월)을 가리키게 한다.
+                        onClick={() => setDraftForm((current) => ({ ...current, weeklyMode: true, week: "month" }))}
+                        className={`rounded-[5px] px-1 text-[10px] font-bold transition ${
+                          weeklySplitActive ? "bg-[#111110] text-white" : "text-[#615D59] hover:text-[#111110]"
+                        }`}
+                      >
+                        주차 분해
+                      </button>
+                    </div>
+                    {!weeklySplitActive && (
+                      <select
+                        value={draftForm.week}
+                        onChange={(event) => setDraftForm((current) => ({ ...current, week: event.target.value }))}
+                        aria-label="주차 선택"
+                        className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
+                      >
+                        <option value="month">월합계</option>
+                        {[1, 2, 3, 4, 5].map((week) => <option key={week} value={`w${week}`}>W{week}</option>)}
+                      </select>
+                    )}
+                  </div>
+                ) : (
+                  <label className="block text-[11px] font-bold text-[#615D59]">
+                    주차
+                    <select
+                      value={draftForm.week}
+                      onChange={(event) => setDraftForm((current) => ({ ...current, week: event.target.value }))}
+                      className="mt-1 h-9 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
+                    >
+                      <option value="month">월합계</option>
+                      {[1, 2, 3, 4, 5].map((week) => <option key={week} value={`w${week}`}>W{week}</option>)}
+                    </select>
+                  </label>
+                )}
               </div>
               <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
-                <p className="mb-1.5 text-[11px] font-bold text-[#615D59]">확도</p>
+                <p className="mb-1.5 text-[11px] font-bold text-[#615D59]">
+                  {weeklySplitActive ? "확도 · 전체 일괄 적용" : "확도"}
+                </p>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {DRAFT_CONFIDENCE_OPTIONS.map((option) => (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => setDraftForm((current) => ({ ...current, confidence: option.id }))}
-                      aria-pressed={draftForm.confidence === option.id}
-                      className={`min-h-8 rounded-md px-2 py-1 text-[11px] font-bold transition ${
-                        draftForm.confidence === option.id
-                          ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
-                          : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+                  {DRAFT_CONFIDENCE_OPTIONS.map((option) => {
+                    // 주차 분해 모드(라운드 3 P1)에서는 이 블록이 "전체 일괄 적용" — 클릭 시 주차별
+                    // 확도 5칸이 전부 이 확도로 세트되고, 그 뒤 그리드의 주차 seg로 개별 변경한다.
+                    // pressed 판정도 5칸 전부 일치일 때만(개별 변경 후 혼합 상태는 아무 버튼도 눌리지
+                    // 않은 표시). 단일 모드는 기존 그대로 confidence 1값 — 버퍼도 함께 시드해 나중에
+                    // 주차 분해로 전환했을 때 마지막 선택 확도가 기본값이 되게 한다.
+                    const pressed = weeklySplitActive
+                      ? draftForm.weeklyConfidence.every((value) => value === option.id)
+                      : draftForm.confidence === option.id
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setDraftForm((current) => ({
+                          ...current,
+                          confidence: option.id,
+                          weeklyConfidence: defaultDraftWeeklyConfidence(option.id),
+                        }))}
+                        aria-pressed={pressed}
+                        className={`min-h-8 rounded-md px-2 py-1 text-[11px] font-bold transition ${
+                          pressed
+                            ? `${CONFIDENCE_TOKENS[option.id].bgClass} text-white`
+                            : "border border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:text-[#111110]"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
                 </div>
                 <p className="mt-1.5 text-[10.5px] leading-relaxed text-[#615D59]">
-                  초안 적용 시 확도가 함께 기록됩니다. 예정 → 고확도 → 확정 전환도 이 폼으로 남깁니다.
+                  {weeklySplitActive
+                    ? "전체 일괄 적용 — 주차별로 개별 변경 가능 · 저장 확도는 우세 버킷 자동"
+                    : "초안 적용 시 확도가 함께 기록됩니다. 예정 → 고확도 → 확정 전환도 이 폼으로 남깁니다."}
                 </p>
               </div>
               {draftForm.operation === "period-shift" && (
@@ -274,7 +341,7 @@ export function InputRailSection({
                 </label>
               )}
               <div className="grid grid-cols-2 gap-2">
-                <label className="block text-[11px] font-bold text-[#615D59]">
+                <label className={`block text-[11px] font-bold text-[#615D59] ${weeklySplitActive ? "col-span-2" : ""}`}>
                   {draftForm.operation === "period-shift" ? "이동 월" : "월"}
                   <select
                     value={draftForm.month}
@@ -284,19 +351,69 @@ export function InputRailSection({
                     {monthOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </label>
-                <label className="block text-[11px] font-bold text-[#615D59]">
-                  금액
-                  <input
-                    value={draftForm.amount}
-                    onChange={(event) => setDraftForm((current) => ({ ...current, amount: event.target.value }))}
-                    inputMode="numeric"
-                    aria-invalid={draftAmountInvalid}
-                    className={`mt-1 h-9 w-full rounded-md border bg-[#FAFAF8] px-3 text-right text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734] ${
-                      draftAmountInvalid ? "border-[#B43E3E]" : "border-[rgba(0,0,0,0.08)]"
-                    }`}
-                  />
-                </label>
+                {/* 주차 분해 모드에서는 단일 금액 입력을 숨긴다 — draftForm.amount는 저장 시 무시되고
+                    (buildDraftInput의 draftWeeklySaveContract) 월 합은 아래 그리드의 자동합계가 정본. */}
+                {!weeklySplitActive && (
+                  <label className="block text-[11px] font-bold text-[#615D59]">
+                    금액
+                    <input
+                      value={draftForm.amount}
+                      onChange={(event) => setDraftForm((current) => ({ ...current, amount: event.target.value }))}
+                      inputMode="numeric"
+                      aria-invalid={draftAmountInvalid}
+                      className={`mt-1 h-9 w-full rounded-md border bg-[#FAFAF8] px-3 text-right text-[12px] font-semibold text-[#111110] outline-none focus:border-[#084734] ${
+                        draftAmountInvalid ? "border-[#B43E3E]" : "border-[rgba(0,0,0,0.08)]"
+                      }`}
+                    />
+                  </label>
+                )}
               </div>
+              {weeklySplitActive && (
+                <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2">
+                  <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                    <p className="text-[11px] font-bold text-[#615D59]">주차별 입력</p>
+                    <p className="text-[10px] font-semibold text-[#A39E98]">금액만 넣으면 월 합 자동</p>
+                  </div>
+                  {/* M9-1: 주차 행 그리드는 공용 WeeklyAmountGrid로 — 레일 variant(축약 라벨·소형 버튼·확도 seg 중간 열). */}
+                  <WeeklyAmountGrid
+                    weekly={draftForm.weekly}
+                    weeklyConfidence={draftForm.weeklyConfidence}
+                    onAmountChange={(index, rawValue) =>
+                      setDraftForm((current) => ({
+                        ...current,
+                        weekly: current.weekly.map((value, i) => (i === index ? rawValue : value)),
+                      }))
+                    }
+                    onConfidenceChange={(index, key) =>
+                      setDraftForm((current) => ({
+                        ...current,
+                        weeklyConfidence: current.weeklyConfidence.map((value, i) => (i === index ? key : value)),
+                      }))
+                    }
+                    lockedWeeks={lockedWeeks}
+                    variant="rail"
+                  />
+                  {/* 월 합은 읽기전용 자동합계 — 입력 필드가 아니라 표시 전용(직접 수정 불가 원칙). */}
+                  <div className="mt-2 flex items-baseline justify-between gap-2 border-t border-[rgba(0,0,0,0.08)] pt-2" aria-live="polite">
+                    <span className="text-[11px] font-bold text-[#615D59]">월 합</span>
+                    <span className={`text-[14px] font-bold tabular-nums ${weeklySum > 0 ? "text-[#111110]" : "text-[#A39E98]"}`}>
+                      {formatMoney(weeklySum)}
+                    </span>
+                  </div>
+                  {/* 우세 확도 미리보기(라운드 3 P1) — 저장 시 metadata.confidence로 자동 기록되는
+                      값(dominantWeeklyConfidence: 금액 합 최대 버킷, 동률은 낮은 확도). */}
+                  <div className="mt-1 flex items-baseline justify-between gap-2" aria-live="polite">
+                    <span className="text-[10.5px] font-bold text-[#615D59]">저장 확도</span>
+                    <span className={`text-[11px] font-bold ${weeklySum > 0 ? CONFIDENCE_TOKENS[railDominantConfidence].textClass : "text-[#A39E98]"}`}>
+                      {CONFIDENCE_TOKENS[railDominantConfidence].label}
+                      <span className="ml-1 text-[9.5px] font-semibold text-[#A39E98]">우세 버킷 자동</span>
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[10.5px] leading-relaxed text-[#615D59]">
+                    월 합 = 주차 자동합계(직접 수정 불가) · 확도는 주차별로 기록됩니다.
+                  </p>
+                </div>
+              )}
               {draftForm.operation === "quantity-change" && (
                 <label className="block text-[11px] font-bold text-[#615D59]">
                   예상 수량
@@ -329,7 +446,9 @@ export function InputRailSection({
               </label>
               {draftFormInvalid && (
                 <p className="rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[11px] font-semibold text-[#8F2C2C]" role="alert">
-                  고객명과 0보다 큰 금액을 입력해야 저장할 수 있습니다.
+                  {weeklySplitActive
+                    ? "고객명을 입력하고 주차 금액을 1칸 이상 넣어야(월 합 0보다 큼) 저장할 수 있습니다."
+                    : "고객명과 0보다 큰 금액을 입력해야 저장할 수 있습니다."}
                 </p>
               )}
               {/* 품질 웨이브 7 — 항목 1: 제출을 시도하기 전에도 잠금 사실을 미리 보여준다(사전검사가

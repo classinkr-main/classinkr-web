@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import type { Dispatch, SetStateAction } from "react"
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
@@ -35,7 +36,7 @@ interface OutboundPeriodSectionProps {
   setCustomerDetail: Dispatch<SetStateAction<string | null>>
 }
 
-export default function OutboundPeriodSection({
+function OutboundPeriodSection({
   outboundBuckets,
   outPeriod,
   setOutPeriod,
@@ -166,3 +167,5 @@ export default function OutboundPeriodSection({
     </section>
   )
 }
+
+export default memo(OutboundPeriodSection)

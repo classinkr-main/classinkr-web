@@ -122,6 +122,7 @@ export type LeadSubmissionResult =
 
 export interface LeadCaptureContext {
   requestMeta?: MarketingRequestMeta | null
+  deferTask?: (task: () => Promise<void>) => void
 }
 
 function normalizeString(value: unknown) {
@@ -400,45 +401,59 @@ export async function submitLeadCapture(
         console.warn("[lead-capture] server conversion failed:", error)
       })
 
-      void emitNotificationEvent({
-        eventType: "lead.created",
-        notificationType: "action_required",
-        categoryTag: "lead",
-        severity: "info",
-        scopeTag: "org_admin",
-        title: buildLeadNotificationTitle(body),
-        message: buildLeadNotificationMessage(body),
-        routeUrl: "/admin/crm",
-        source: "lead",
-        sourceId: savedLeadId,
-        payload: {
-          leadId: savedLeadId,
-          source: body.source,
-          sourceDetail: body.sourceDetail,
-          leadMagnet: body.leadMagnet,
-          name: body.name,
-          org: body.org,
-          role: body.role,
-          size: body.size,
-          email: body.email,
-          phone: body.phone,
-          utmSource: body.utmSource,
-          utmMedium: body.utmMedium,
-          utmCampaign: body.utmCampaign,
-          utmTerm: body.utmTerm,
-          utmContent: body.utmContent,
-          gclid: body.gclid,
-          fbclid: body.fbclid,
-          msclkid: body.msclkid,
-          ttclid: body.ttclid,
-          landingPage: body.landingPage,
-          currentPage: body.currentPage,
-          referrer: body.referrer,
-        },
-        channels: WECOM_LEAD_SOURCES.has(body.source) ? ["wecom_webhook"] : undefined,
-      }).catch((error) => {
-        console.error("[lead-capture] notification emit failed:", error)
-      })
+      const emitLeadCreatedNotification = async () => {
+        await emitNotificationEvent({
+          eventType: "lead.created",
+          notificationType: "action_required",
+          categoryTag: "lead",
+          severity: "info",
+          scopeTag: "org_admin",
+          title: buildLeadNotificationTitle(body),
+          message: buildLeadNotificationMessage(body),
+          routeUrl: "/admin/crm",
+          source: "lead",
+          sourceId: savedLeadId,
+          payload: {
+            leadId: savedLeadId,
+            source: body.source,
+            sourceDetail: body.sourceDetail,
+            leadMagnet: body.leadMagnet,
+            name: body.name,
+            org: body.org,
+            role: body.role,
+            size: body.size,
+            email: body.email,
+            phone: body.phone,
+            message: body.message,
+            utmSource: body.utmSource,
+            utmMedium: body.utmMedium,
+            utmCampaign: body.utmCampaign,
+            utmTerm: body.utmTerm,
+            utmContent: body.utmContent,
+            gclid: body.gclid,
+            fbclid: body.fbclid,
+            msclkid: body.msclkid,
+            ttclid: body.ttclid,
+            landingPage: body.landingPage,
+            currentPage: body.currentPage,
+            referrer: body.referrer,
+          },
+          channels: WECOM_LEAD_SOURCES.has(body.source) ? ["wecom_webhook"] : undefined,
+        })
+      }
+      const emitLeadCreatedNotificationSafely = async () => {
+        try {
+          await emitLeadCreatedNotification()
+        } catch (error) {
+          console.error("[lead-capture] notification emit failed:", error)
+        }
+      }
+
+      if (context.deferTask) {
+        context.deferTask(emitLeadCreatedNotificationSafely)
+      } else {
+        void emitLeadCreatedNotificationSafely()
+      }
 
       // 홈페이지 유입 자동 타임라인 이벤트 — 실패해도 리드 저장에 영향 없음(스펙 §D).
       const hasAdClickId = Boolean(body.gclid || body.fbclid || body.msclkid || body.ttclid)

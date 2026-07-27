@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
@@ -215,8 +215,69 @@ function sourceBadge(row: CrmUnifiedCustomerRow) {
   )
 }
 
+// 공용 분(分) 시계 — 상대시간 배지 전용(감사 #8). 구독자가 있을 때만 interval을 1개 돌리고
+// (배지 인스턴스 수와 무관), 탭이 숨겨지면 정지·복귀 시 즉시 갱신 후 재개한다.
+// 부모 리스트 상태가 아니므로 분 틱마다 전 행이 아니라 구독한 배지 소컴포넌트만 리렌더된다.
+const MINUTE_TICK_MS = 60_000
+let minuteClockNowMs = Date.now()
+let minuteClockTimer: number | null = null
+const minuteClockListeners = new Set<() => void>()
+
+function emitMinuteClock() {
+  minuteClockNowMs = Date.now()
+  for (const listener of minuteClockListeners) listener()
+}
+
+function stopMinuteClockTimer() {
+  if (minuteClockTimer == null) return
+  window.clearInterval(minuteClockTimer)
+  minuteClockTimer = null
+}
+
+function startMinuteClockTimer() {
+  if (minuteClockTimer != null || minuteClockListeners.size === 0) return
+  minuteClockTimer = window.setInterval(emitMinuteClock, MINUTE_TICK_MS)
+}
+
+function onMinuteClockVisibility() {
+  if (document.hidden) {
+    stopMinuteClockTimer()
+  } else {
+    emitMinuteClock()
+    startMinuteClockTimer()
+  }
+}
+
+function subscribeMinuteClock(listener: () => void) {
+  if (minuteClockListeners.size === 0) {
+    // 첫 구독(리스트 재진입 포함) — 마지막 emit이 오래됐을 수 있어 기준 시각부터 갱신한다.
+    // useSyncExternalStore가 구독 직후 스냅샷을 재확인하므로 별도 통지는 필요 없다.
+    minuteClockNowMs = Date.now()
+    document.addEventListener("visibilitychange", onMinuteClockVisibility)
+  }
+  minuteClockListeners.add(listener)
+  if (!document.hidden) startMinuteClockTimer()
+  return () => {
+    minuteClockListeners.delete(listener)
+    if (minuteClockListeners.size === 0) {
+      document.removeEventListener("visibilitychange", onMinuteClockVisibility)
+      stopMinuteClockTimer()
+    }
+  }
+}
+
+function getMinuteClockSnapshot() {
+  return minuteClockNowMs
+}
+
+function useMinuteNow() {
+  return useSyncExternalStore(subscribeMinuteClock, getMinuteClockSnapshot, getMinuteClockSnapshot)
+}
+
 // 리드 행 배지 — 파생 규칙은 lib/crm/lead-badges.ts(순수 모듈, 단위 테스트 대상) 소유.
-function LeadRowBadges({ row, nowMs }: { row: CrmUnifiedCustomerRow; nowMs: number }) {
+// nowMs는 부모 상태가 아니라 배지 내부의 공용 분 시계 구독으로 받는다(감사 #8).
+function LeadRowBadgeList({ row }: { row: CrmUnifiedCustomerRow }) {
+  const nowMs = useMinuteNow()
   const badges = leadBadges(row, nowMs)
   if (!badges) return null
   return (
@@ -232,6 +293,13 @@ function LeadRowBadges({ row, nowMs }: { row: CrmUnifiedCustomerRow; nowMs: numb
     </>
   )
 }
+
+// memo 소컴포넌트로 격리 — 부모가 다른 이유로 리렌더돼도 row가 같으면 건너뛰고,
+// 리드가 아닌 행(배지 없음 확정)은 시계 구독 자체를 생략한다.
+const LeadRowBadges = memo(function LeadRowBadges({ row }: { row: CrmUnifiedCustomerRow }) {
+  if (row.source !== "lead") return null
+  return <LeadRowBadgeList row={row} />
+})
 
 // 검색 패널 — 검색·소스 토글·상태/담당 셀렉트·라벨·요약 타일·소스 상태 타일.
 // quickMode(칩 진입)일 때는 렌더되지 않는다. 본체에서 기계적 추출 — 동작 동일.
@@ -602,13 +670,6 @@ export default function CrmUnifiedCustomersClient() {
   )
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
-
-  // 배지 SLA 경과 계산 기준 시각 — 행마다 Date.now() 호출 방지 + 60초 틱으로 경과시간 실시간 갱신.
-  const [nowMs, setNowMs] = useState(() => Date.now())
-  useEffect(() => {
-    const id = window.setInterval(() => setNowMs(Date.now()), 60_000)
-    return () => window.clearInterval(id)
-  }, [])
 
   const currentOwnerCount = useMemo(() => {
     const selected = normalizeText(owner === CURRENT_OWNER_VALUE ? currentOwner?.ownerKey : owner)
@@ -988,7 +1049,7 @@ export default function CrmUnifiedCustomersClient() {
                           <CrmContactValue value={row.contact} className="mt-0.5" />
                           <div className="mt-1 flex flex-wrap items-center gap-1 empty:hidden">
                             <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
-                            <LeadRowBadges row={row} nowMs={nowMs} />
+                            <LeadRowBadges row={row} />
                           </div>
                           <TagChips tags={row.tags} />
                         </div>
@@ -1060,7 +1121,7 @@ export default function CrmUnifiedCustomersClient() {
                       <CrmContactValue value={row.contact} className="pointer-events-auto mt-0.5" />
                       <div className="mt-1.5 flex flex-wrap items-center gap-1 empty:hidden">
                         <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
-                        <LeadRowBadges row={row} nowMs={nowMs} />
+                        <LeadRowBadges row={row} />
                       </div>
                       <TagChips tags={row.tags} />
                     </div>

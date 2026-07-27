@@ -62,16 +62,18 @@ const repositoryPath = join(
   "lib/repositories/branch-sales-ledger-drafts.ts",
 )
 
+// CRLF 정규화: autocrlf 체크아웃(Windows)에서 "\n}\n" 같은 여러 줄 스캔 경계가 -1이 되어
+// slice가 파일 끝까지 훑는 조용한 약화를 막는다.
 function routeSource() {
-  return readFileSync(routePath, "utf8")
+  return readFileSync(routePath, "utf8").replace(/\r\n/g, "\n")
 }
 
 function collectionRouteSource() {
-  return readFileSync(collectionRoutePath, "utf8")
+  return readFileSync(collectionRoutePath, "utf8").replace(/\r\n/g, "\n")
 }
 
 function repositorySource() {
-  return readFileSync(repositoryPath, "utf8")
+  return readFileSync(repositoryPath, "utf8").replace(/\r\n/g, "\n")
 }
 
 describe("branch ledger draft route", () => {

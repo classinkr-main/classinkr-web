@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest } from "next/server"
 
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
 
 async function verifyStatusRequest(req: NextRequest) {
@@ -14,5 +15,5 @@ export async function GET(req: NextRequest) {
   if (err) return err
 
   const { getAdminIntegrationStatusResponse } = await import("@/lib/admin-integrations/status")
-  return NextResponse.json(await getAdminIntegrationStatusResponse())
+  return adminCachedJson(await getAdminIntegrationStatusResponse())
 }

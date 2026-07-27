@@ -1,16 +1,30 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
-import { getLeads, getDashboardLeads, saveLead, type LeadRecord } from "@/lib/repositories/leads"
+import {
+  getLeads,
+  getDashboardLeads,
+  getCampaignLeads,
+  saveLead,
+  type LeadRecord,
+} from "@/lib/repositories/leads"
 
 export async function GET(req: NextRequest) {
   const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   try {
-    // ?scope=dashboard 는 화면에 쓰는 컬럼만 가져와 페이로드를 줄인다.
+    // 스코프별로 화면에 쓰는 컬럼만 가져와 페이로드를 줄인다.
+    // - dashboard: overview/analytics 집계용(id·source·name·org·email·status·branch·created_at·confirmed_at)
+    // - campaigns: 행사↔리드 귀속용(id·source·status·notes·created_at) — 귀속 해시가 notes를 요구한다
+    // - 기본(무스코프): 전체 컬럼 — LeadsBoard(검색이 utm_* 필요)는 불변
     const scope = new URL(req.url).searchParams.get("scope")
-    const leads = scope === "dashboard" ? await getDashboardLeads() : await getLeads()
+    const leads =
+      scope === "dashboard"
+        ? await getDashboardLeads()
+        : scope === "campaigns"
+          ? await getCampaignLeads()
+          : await getLeads()
     return adminCachedJson({ leads })
   } catch (error) {
     console.error("[GET /api/admin/leads] error:", error)

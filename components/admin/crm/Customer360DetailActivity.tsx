@@ -13,12 +13,13 @@ import {
 } from "./Customer360DetailShared"
 import { eventSourceIcon, eventSourceLabel } from "./event-source-meta"
 
-type ActivityFilter = "all" | "memo" | "meeting" | "calls_etc"
+type ActivityFilter = "all" | "memo" | "meeting" | "cs_inflow" | "calls_etc"
 
 const FILTERS: Array<{ key: ActivityFilter; label: string }> = [
   { key: "all", label: "전체" },
   { key: "memo", label: "메모" },
   { key: "meeting", label: "회의록" },
+  { key: "cs_inflow", label: "CS·웹유입" },
   { key: "calls_etc", label: "통화·기타" },
 ]
 
@@ -26,8 +27,23 @@ function matchesFilter(event: CrmCustomerEventRecord, filter: ActivityFilter): b
   if (filter === "all") return true
   if (filter === "memo") return event.sourceType === "manual_note"
   if (filter === "meeting") return event.sourceType === "meeting_minutes"
-  // 통화·기타 = 메모/회의록을 제외한 나머지 출처.
-  return event.sourceType !== "manual_note" && event.sourceType !== "meeting_minutes"
+  if (filter === "cs_inflow") {
+    return (
+      event.sourceType === "site_inflow" ||
+      event.sourceType === "lead_contact_log" ||
+      event.tags.some((t) => {
+        const lower = t.toLowerCase()
+        return lower.includes("cs") || lower.includes("chatbot") || lower.includes("channel") || lower.includes("demo")
+      })
+    )
+  }
+  // 통화·기타 = 메모/회의록/CS웹유입을 제외한 나머지 출처.
+  return (
+    event.sourceType !== "manual_note" &&
+    event.sourceType !== "meeting_minutes" &&
+    event.sourceType !== "site_inflow" &&
+    event.sourceType !== "lead_contact_log"
+  )
 }
 
 function sentimentClass(sentiment: string): string {

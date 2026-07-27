@@ -4,7 +4,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import type { KeyboardEvent as ReactKeyboardEvent, MutableRefObject } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
   ArrowDownNarrowWide,
@@ -16,9 +16,11 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Columns3,
   Database,
   FileSpreadsheet,
   Gauge,
+  LayoutList,
   ListChecks,
   Loader2,
   Pencil,
@@ -33,6 +35,7 @@ import {
   X,
 } from "lucide-react"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
+import { useVisibleInterval } from "./use-visible-interval"
 // 서버 입력 큐 훅(초안 CRUD·적용·되돌리기·로컬 폴백·낙관적 잠금)은 ledger/useLedgerDraftQueue로
 // 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
 import {
@@ -45,6 +48,7 @@ import {
 export { isDraftRecordError } from "./ledger/useLedgerDraftQueue"
 import { matchesTokens, tokenize } from "./search-tokens"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
+import { revLinkedTargetHref } from "@/lib/crm/rev-sync-health"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { ledgerMonthSplit, ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
@@ -60,6 +64,7 @@ import {
 } from "@/lib/branch/product-category"
 import {
   PERIODS,
+  PIPELINE_MANAGER_DEFAULT_STORAGE_KEY,
   TEAMS,
   type BranchKpiResponse,
   type BranchPipelineResponse,
@@ -76,16 +81,50 @@ const DshNumericGrid = dynamic(() => import("./ledger/DshNumericGrid").then((m) 
   ssr: false,
   loading: () => <LoadingPanel label="DSH 수치 그리드를 불러오는 중" />,
 })
+// DSH 렌즈 디벨롭(2026-07-27) 신규 카드 3종 — 지표 밴드·월별 페이스·팀 그리드도 수치
+// 그리드와 동일 관례(ssr:false + LoadingPanel)로 지연 로드해 첫 로드 번들에서 제외한다.
+const DshMetricsBand = dynamic(() => import("./ledger/DshMetricsBand").then((m) => m.DshMetricsBand), {
+  ssr: false,
+  loading: () => <LoadingPanel label="DSH 핵심 지표를 불러오는 중" />,
+})
+const DshMonthlyPace = dynamic(() => import("./ledger/DshMonthlyPace").then((m) => m.DshMonthlyPace), {
+  ssr: false,
+  loading: () => <LoadingPanel label="월별 페이스를 불러오는 중" />,
+})
+const DshTeamGrid = dynamic(() => import("./ledger/DshTeamGrid").then((m) => m.DshTeamGrid), {
+  ssr: false,
+  loading: () => <LoadingPanel label="팀·멤버 수치를 불러오는 중" />,
+})
 const WeeklyCloseSection = dynamic(() => import("./ledger/WeeklyCloseSection").then((m) => m.WeeklyCloseSection), {
   ssr: false,
   loading: () => <LoadingPanel label="주간 마감 데이터를 불러오는 중" />,
 })
+// 주차 Forecast 보드(렌즈 "board", Board-1b 이식) — 기본 렌즈(REV) 첫 로드에 불필요한 서브트리라
+// DSH 렌즈와 동일 관례(ssr:false + LoadingPanel)로 지연 로드한다.
+const ForecastBoard = dynamic(() => import("./ledger/ForecastBoard").then((m) => m.ForecastBoard), {
+  ssr: false,
+  loading: () => <LoadingPanel label="주차 Forecast 보드를 불러오는 중" />,
+})
 import { RevAuxAnalysisSection } from "./ledger/RevAuxAnalysisSection"
 import { RevMobileList } from "./ledger/RevMobileList"
 import IntegrityStrip from "./IntegrityStrip"
-import CrmSyncStrip from "./CrmSyncStrip"
+import CrmSyncStrip, { type CrmCoverageResponse } from "./CrmSyncStrip"
 import MultiSelect from "./MultiSelect"
-import { InputRailSection } from "./ledger/InputRailSection"
+// 입력 레일·콕핏 2-pane(~1,350줄)은 기본 화면(REV 렌즈 + 접힌 레일)에서 렌더되지 않는다 —
+// DSH/보드/큐와 동일 관례(ssr:false + LoadingPanel)로 지연 로드해 첫 로드 번들에서 청크를 뺀다.
+// 레일은 railView==="input" 열림 시, 콕핏 2-pane은 lens==="cockpit" 전환 시에만 로드된다.
+const InputRailSection = dynamic(() => import("./ledger/InputRailSection").then((m) => m.InputRailSection), {
+  ssr: false,
+  loading: () => <LoadingPanel label="빠른 입력 폼을 불러오는 중" />,
+})
+const CockpitDealList = dynamic(() => import("./ledger/CockpitDealList").then((m) => m.CockpitDealList), {
+  ssr: false,
+  loading: () => <LoadingPanel label="내 딜 목록을 불러오는 중" />,
+})
+const CockpitEditor = dynamic(() => import("./ledger/CockpitEditor").then((m) => m.CockpitEditor), {
+  ssr: false,
+  loading: () => <LoadingPanel label="콕핏 편집기를 불러오는 중" />,
+})
 // 검토 초안 체크 큐는 ledger/DraftQueue로 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
 // S4: 큐는 railView === "queue"에서만 렌더된다(기본 "detail") — 지연 로드로 첫 로드 번들에서
 // 제외한다. 정적 재수출을 함께 두면 청크 분리가 무효화되므로 draftStatusMeta 재수출은 두지
@@ -98,11 +137,13 @@ const DraftQueue = dynamic(() => import("./ledger/DraftQueue").then((m) => m.Dra
 // 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
 import {
   buildMatrixPastePlan,
+  CrmLinkedBadge,
   dominantCellConfidence,
   EMPTY_BUCKET,
   findOpenNewRowDuplicate,
   isDraftFormTargetLocked,
   isMatrixCellEditable,
+  isMatrixCellLocked,
   isMatrixDensity,
   loadStoredMatrixConfidence,
   lookupMatrixPending,
@@ -125,18 +166,22 @@ import {
   RevMatrixPasteDialog,
   storeMatrixConfidence,
   useMatrixEditor,
-  weekIndexFromToken,
+  weeklyEditLockMask,
   weeklyPaymentsFromDraftMetadata,
   type MatrixCellCoord,
   type MatrixDensity,
   type MatrixPastePlan,
-  type MatrixPendingDraft,
   type RevMatrixColumn,
 } from "./ledger/RevMatrix"
+// buildMatrixPendingByCell은 아래 재수출(export {...} from)에도 있지만 재수출은 로컬 바인딩을
+// 만들지 않는다 — pendingByCell memo가 직접 호출하므로 별도 import가 필요하다.
+import { buildMatrixPendingByCell } from "./ledger/RevMatrix"
 // 회귀 테스트(tests/branch/ledger-cell-dedup·ledger-cell-relock·rail-lock-precheck)가 이 모듈
 // 경로에서 import하는 기존 표면 유지용 재수출.
 export {
   buildMatrixPendingByCell,
+  computeWeekCellStates,
+  weeklyEditLockMask,
   findOpenNewRowDuplicate,
   isDraftFormTargetLocked,
   isMatrixCellEditable,
@@ -150,10 +195,15 @@ export {
 export type { MatrixCellCoord, MatrixPendingDraft } from "./ledger/RevMatrix"
 import {
   buildRevWeekProjection,
+  defaultDraftWeeklyConfidence,
+  dominantWeeklyConfidence,
   DRAFT_CONFLICT_MESSAGE,
   DRAFT_DEDUPED_RECENT_NOTICE,
   DRAFT_OPERATIONS,
   DRAFT_STATUS_LABELS,
+  draftWeeklySaveContract,
+  draftWeeklyTotal,
+  emptyDraftWeekly,
   formatDateTime,
   formatMonthLabel,
   formatWeekAmount,
@@ -161,6 +211,8 @@ import {
   draftConfidenceFromMetadata,
   mergedWeeklyFromMetadata,
   metadataString,
+  weeklyConfidenceFromMetadata,
+  operationSupportsWeeklySplit,
   productCategoryFromText,
   productCategoryMeta,
   ProductCategoryPill,
@@ -242,7 +294,7 @@ export type {
   WeeklyCloseRunView,
 } from "./ledger/shared"
 
-type LedgerLens = "dsh" | "rev"
+type LedgerLens = "dsh" | "rev" | "board" | "cockpit"
 type RailView = "detail" | "input" | "queue"
 type RevSortKey = "customer" | "product" | "manager" | "team" | "region" | "month" | "revenue" | "annual" | "origin"
 type RevSortDirection = "asc" | "desc"
@@ -276,11 +328,34 @@ interface DealDetailResponse {
 
 // 적용된 초안(장부 엔트리)의 확도를 행 확도 맵으로 변환. 확도와 무관하게 전액
 // monthlyConfirmed+red로 만들면 '예정' 입력도 적용 즉시 확정으로 집계된다(확정·달성률 인플레).
-function appliedDraftConfidenceMaps(
+// 라운드 3(P1): 유효한 weekly+weeklyConfidence(주차별 확도 병렬 배열)가 있으면 초안 단위
+// 확도 대신 주차 합 exact로 분해한다 —
+//   - monthlyConfirmed[month] = Σ(confirmed 주차 금액), monthlyHighConfidence = Σ(high-confidence).
+//   - monthlyRed[month]는 전액 확정(¥1 오차 허용 — confirmed 합 ≥ amount-1)일 때만 true.
+//     부분 확정을 red로 만들면 캐논(rev-confirmed)의 red 폴백이 월 전체를 확정으로 오집계한다.
+// weeklyConfidence 부재/무효(기존 초안)는 기존 로직 그대로 — 완전 하위호환.
+// export: tests/branch/weekly-confidence.test.ts가 exact 합·red 규칙을 직접 검증한다.
+export function appliedDraftConfidenceMaps(
   month: string,
   amount: number,
   metadata: Record<string, unknown> | null | undefined,
 ): Pick<LedgerRevenueRow, "monthlyConfirmed" | "monthlyHighConfidence" | "monthlyRed"> {
+  const weekly = mergedWeeklyFromMetadata(metadata)
+  const states = weekly ? weeklyConfidenceFromMetadata(metadata) : null
+  if (weekly && states) {
+    let confirmed = 0
+    let highConfidence = 0
+    weekly.forEach((value, index) => {
+      if (value <= 0) return
+      if (states[index] === "confirmed") confirmed += value
+      else if (states[index] === "high-confidence") highConfidence += value
+    })
+    return {
+      monthlyConfirmed: confirmed > 0 ? { [month]: confirmed } : {},
+      monthlyHighConfidence: highConfidence > 0 ? { [month]: highConfidence } : {},
+      monthlyRed: amount > 0 && confirmed >= amount - 1 ? { [month]: true } : {},
+    }
+  }
   const confidence = draftConfidenceFromMetadata(metadata)
   return {
     monthlyConfirmed: confidence === "confirmed" ? { [month]: amount } : {},
@@ -343,6 +418,8 @@ const EMPTY_MONTH_SET: Set<string> = new Set()
 const LENSES: Array<{ id: LedgerLens; label: string; description: string }> = [
   { id: "dsh", label: "DSH", description: "수치 상세 · 목표/실적 그리드" },
   { id: "rev", label: "REV", description: "주차·목표 수치 검수와 행 상세" },
+  { id: "board", label: "보드", description: "주차 Forecast 칸반 · 확정/고확도/예정 카드 검수" },
+  { id: "cockpit", label: "콕핏", description: "내 딜 목록 → 우측 빠른 입력에서 주차별 확도 (콕핏 입력)" },
 ]
 // role="tablist" 롤빙 tabIndex 키보드 내비 — BranchDashboardClient.tsx의 onTabKeyDown과
 // 동일 패턴(ArrowLeft/Right/Home/End)을 두 탭리스트(렌즈, 빠른 작업 보기)가 공유하도록 일반화.
@@ -450,6 +527,13 @@ function ymKeyUtc(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`
 }
 
+// 시간 게이트(2026-07-20): '미연결' 칩은 미래 '예정' 매출만 있는 계정엔 아직 안 띄운다 —
+// cutoffMonth(보통 이번 달) 이하 달에 확정 매출이 잡혀야 띄운다. 미래 달은 예측치라
+// 안 맞아도 정상이라 검사 대상에서 뺀다(월 키가 YYYY-MM zero-pad라 문자열 비교로 충분).
+function hasConfirmedThroughMonth(monthlyTotals: Record<string, RevMonthlyBucket>, cutoffMonth: string): boolean {
+  return Object.entries(monthlyTotals).some(([month, bucket]) => month <= cutoffMonth && bucket.confirmed > 0)
+}
+
 function fiscalYearOf(date: Date): number {
   const month = date.getUTCMonth() + 1
   return month >= 4 ? date.getUTCFullYear() : date.getUTCFullYear() - 1
@@ -501,6 +585,24 @@ export function parseMultiFilterParam(value: string | null): Set<string> {
 export function serializeMultiFilterParam(values: Set<string>): string | null {
   if (values.size === 0) return null
   return Array.from(values).sort((a, b) => a.localeCompare(b, "ko")).join(",")
+}
+
+// URL 복원이 반응형(딥링크마다 재실행)이 된 뒤로는 내용이 같은 Set을 새 참조로 갈아끼우면
+// 필터 memo 체인이 헛돌므로, 동치일 때 기존 참조를 유지한다.
+function replaceEquivalentSet(current: Set<string>, next: Set<string>): Set<string> {
+  if (current.size === next.size && Array.from(next).every((value) => current.has(value))) return current
+  return next
+}
+
+// 라운드 3 P3 — "내 딜" 담당자 프리셋 핀. pristine 진입(마운트 후 첫 실행 + URL 파라미터 0개)
+// 여부만 판정하는 순수 함수 — ref 갱신(1회 소비)·localStorage 읽기 등 부수효과는 호출부(URL
+// 복원 effect)가 담당한다. 파라미터가 하나라도 있으면(예: ?lens=rev&q=349) 이번이 이 컴포넌트의
+// 첫 실행이라도 false다 — 핀이 딥링크 결과를 가리면 안 된다(검색된 행이 다른 담당자 소유일 수
+// 있다). alreadyAttempted가 true면(직전 실행에서 이미 판정을 소비) 파라미터가 이번엔 우연히
+// 비어 있어도 항상 false — "pristine 진입 최초 1회만"이라 내비게이션·self-echo로 되돌아온
+// 빈 파라미터는 재시드 대상이 아니다.
+export function isPinSeedEligible(alreadyAttempted: boolean, searchParamsString: string): boolean {
+  return !alreadyAttempted && searchParamsString === ""
 }
 
 function metadataNumberString(metadata: Record<string, unknown> | null | undefined, key: string): string {
@@ -765,14 +867,6 @@ function MetricTile({
   )
 }
 
-function ErrorPanel({ message }: { message: string }) {
-  return (
-    <div className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[13px] font-semibold text-[#8F2C2C]">
-      {message}
-    </div>
-  )
-}
-
 // th의 aria-sort 값 계산(품질 웨이브 3, 항목 8) — RevSortHeader를 감싸는 <th>가 실제
 // aria-sort 소유자(ARIA 표준상 columnheader 상태). 비활성 컬럼은 "none".
 function revSortAriaValue(active: boolean, direction: RevSortDirection): "ascending" | "descending" | "none" {
@@ -829,7 +923,7 @@ function SelectedWeekBars({ weeks }: { weeks: RevWeekPoint[] }) {
               style={{ height: `${week.total > 0 ? Math.max(8, (week.total / max) * 100) : 0}%` }}
             />
           </div>
-          <p className="mt-1 truncate text-[10px] font-bold text-[#111110]">{formatMoney(week.total)}</p>
+          <p className="mt-1 truncate text-[10px] font-bold tabular-nums text-[#111110]">{formatMoney(week.total)}</p>
         </div>
       ))}
     </div>
@@ -839,6 +933,7 @@ function SelectedWeekBars({ weeks }: { weeks: RevWeekPoint[] }) {
 
 export default function SalesLedgerWorkbench() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [team, setTeam] = useState<Team>("ALL")
   const [period, setPeriod] = useState<Period>("Q")
   const [selectedMonth, setSelectedMonth] = useState(() => ymKeyUtc(new Date()))
@@ -850,11 +945,9 @@ export default function SalesLedgerWorkbench() {
   const lensTabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const railTabRefs = useRef<Array<HTMLButtonElement | null>>([])
   // Source(원천) 스트립 상대 시간 표기용 tick — SyncStatusBar와 동일하게 1분마다 갱신.
+  // visibility-aware 공용 훅(코덱스 감사 #15) — 백그라운드 탭에서는 멈추고 복귀 즉시 따라잡는다.
   const [sourceStripNow, setSourceStripNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = window.setInterval(() => setSourceStripNow(Date.now()), 60_000)
-    return () => window.clearInterval(id)
-  }, [])
+  useVisibleInterval(() => setSourceStripNow(Date.now()), 60_000)
   const [query, setQuery] = useState("")
   // 품질 웨이브 7 — 항목 3: 단일 select → MultiSelect(Set) 전환. 빈 Set === "전체"(기존 "ALL"과
   // 동일 의미) — 필터 로직·URL 직렬화·크로스링크 모두 Set 기준으로 다시 쓴다.
@@ -875,6 +968,13 @@ export default function SalesLedgerWorkbench() {
   const [expandedRevCategories, setExpandedRevCategories] = useState<Set<string>>(() => new Set())
   // 매트릭스: 월 헤더 클릭 시 그 달만 w1~w5 5칸으로 확장(기본은 전부 요약 1칸).
   const [expandedRevMonths, setExpandedRevMonths] = useState<Set<string>>(() => new Set())
+  // 1열 미연결 칩 팝오버(2단계 공개) — 열림은 매트릭스 전체에서 그룹키/행ID 1개만(동시 다중 열림 금지).
+  // 토글/닫기 콜백은 안정 참조로 내려 memo 행 리렌더를 열림이 바뀐 행으로만 좁힌다.
+  const [revLinkPopoverKey, setRevLinkPopoverKey] = useState<string | null>(null)
+  const toggleRevLinkPopover = useCallback((key: string) => {
+    setRevLinkPopoverKey((prev) => (prev === key ? null : key))
+  }, [])
+  const closeRevLinkPopover = useCallback(() => setRevLinkPopoverKey(null), [])
   // 매트릭스 행 밀도(좁게/보통/넓게). SSR 하이드레이션 안전을 위해 기본값으로 시작하고 마운트 후 복원.
   const [matrixDensity, setMatrixDensity] = useState<MatrixDensity>("regular")
   useEffect(() => {
@@ -1155,50 +1255,79 @@ export default function SalesLedgerWorkbench() {
   }, [])
 
   // 필터 상태 URL 동기화 — 새로고침/링크 공유 시 렌즈·월·검색·필터·정렬이 유지된다.
-  // 마운트 시 한 번 읽고(urlReady 전에는 쓰지 않음), 이후 변경마다 replaceState로 반영(히스토리 오염 없음).
+  // 복원은 useSearchParams 반응형: 마운트뿐 아니라 same-route 소프트 내비게이션(IntegrityStrip
+  // "장부에서 열기" 등 장부 내부 딥링크)과 뒤로/앞으로가기에서도 재실행된다. 계약은 절대적 —
+  // 파라미터 생략은 "기본값 복귀"다(아래 writer가 기본값을 URL에서 지우는 규약의 정확한 역방향).
+  // writer가 replaceState한 자기 URL이 복원을 되돌리는 self-echo(입력 중 검색어 트림 등)는
+  // lastWrittenSearchRef로 차단한다. SSR 기본 렌더(REV 렌즈)와의 하이드레이션 미스매치를 피하기 위해
+  // 초기 적용은 lazy useState가 아니라 지금처럼 effect 시점에 한다.
   const defaultMonthRef = useRef(ymKeyUtc(new Date()))
   const [urlReady, setUrlReady] = useState(false)
+  const lastWrittenSearchRef = useRef<string | null>(null)
+  // 라운드 3 P3 — "내 딜" 담당자 프리셋 핀(웨이브 7 Q5와 storageKey 공유 — KR Team 개요에서
+  // 찍은 핀이 장부에도, 장부에서 찍은 핀이 개요에도 적용된다). ref로 이 컴포넌트 생애주기 동안
+  // isPinSeedEligible 판정을 딱 1번만 소비한다 — 아래에서 즉시 true로 갱신하므로 이후 실행
+  // (내비게이션·self-echo)은 항상 대상 밖이다.
+  const pinSeedAttemptedRef = useRef(false)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
+    const params = new URLSearchParams(searchParams.toString())
+    // writer가 방금 기록한 정규형과 같으면 상태가 이미 URL의 원천이므로 재적용하지 않는다.
+    if (params.toString() === lastWrittenSearchRef.current) return
+    // pristine 진입(마운트 후 첫 실행 + URL 파라미터 0개) 여부를 지금 판정하고 ref를 즉시
+    // 소비한다 — 판정 자체는 순수 함수(isPinSeedEligible)에 위임해 "1회만" 규약을 이 실행
+    // 시점의 ref 상태로 직접 단위 테스트할 수 있게 한다.
+    const pinSeedEligible = isPinSeedEligible(pinSeedAttemptedRef.current, params.toString())
+    pinSeedAttemptedRef.current = true
     const lensParam = params.get("lens")
     // KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다 — 옛 링크(?lens=kpi)는 그리로 리다이렉트.
     if (lensParam === "kpi") {
       router.replace("/admin/branch?tab=pipeline")
       return
     }
-    if (lensParam === "dsh" || lensParam === "rev") setLens(lensParam)
+    setLens(lensParam === "dsh" || lensParam === "board" || lensParam === "cockpit" ? lensParam : "rev")
     const monthParam = params.get("month")
-    if (monthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam)) setSelectedMonth(monthParam)
+    setSelectedMonth(
+      monthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam) ? monthParam : defaultMonthRef.current,
+    )
     const periodParam = params.get("period")
-    if (periodParam && (PERIODS as string[]).includes(periodParam)) setPeriod(periodParam as Period)
+    setPeriod(periodParam && (PERIODS as string[]).includes(periodParam) ? (periodParam as Period) : "Q")
     const teamParam = params.get("team")
-    if (teamParam && (TEAMS as string[]).includes(teamParam)) setTeam(teamParam as Team)
-    const q = params.get("q")
-    if (q) setQuery(q)
-    const mgr = params.get("mgr")
-    if (mgr) setManagerFilter(parseMultiFilterParam(mgr))
-    const region = params.get("region")
-    if (region) setRegionFilter(parseMultiFilterParam(region))
+    setTeam(teamParam && (TEAMS as string[]).includes(teamParam) ? (teamParam as Team) : "ALL")
+    setQuery(params.get("q") ?? "")
+    const nextManagerFilter = parseMultiFilterParam(params.get("mgr"))
+    // pristine 1회 한정 핀 시드: params.toString() === ""가 이미 보장된 상태라 nextManagerFilter는
+    // 항상 빈 Set이다(mgr 파라미터 자체가 없으므로) — 핀 값 하나만 그대로 채워 넣으면 Set 1개
+    // 원소가 된다. 저장된 핀 담당자가 현재 managerOptions에 없어도 그대로 시드한다(옵션은 데이터
+    // 로드 후 채워지는 값이라 이 시점엔 검증 불가 — 필터 자체가 이름 문자열 매칭이라 무해하다).
+    // 별도 "핀으로 시드됨" 배지는 두지 않는다 — MultiSelect의 핀 아이콘(pinStorageKey prop, 아래
+    // 렌더부)이 이미 그 역할을 한다.
+    if (pinSeedEligible && typeof window !== "undefined") {
+      const pinnedManager = window.localStorage.getItem(PIPELINE_MANAGER_DEFAULT_STORAGE_KEY)
+      if (pinnedManager) nextManagerFilter.add(pinnedManager)
+    }
+    setManagerFilter((current) => replaceEquivalentSet(current, nextManagerFilter))
+    const nextRegionFilter = parseMultiFilterParam(params.get("region"))
+    setRegionFilter((current) => replaceEquivalentSet(current, nextRegionFilter))
     const prod = params.get("prod")
-    if (prod === "software" || prod === "hardware" || prod === "unknown") setProductFilter(prod)
-    const status = params.get("status")
-    if (status) setRevStatusFilter(status)
-    const dealType = params.get("type")
-    if (dealType) setRevDealTypeFilter(dealType)
+    setProductFilter(prod === "software" || prod === "hardware" || prod === "unknown" ? prod : "all")
+    setRevStatusFilter(params.get("status") ?? "ALL")
+    setRevDealTypeFilter(params.get("type") ?? "ALL")
     const origin = params.get("origin")
-    if (origin === "sheet" || origin === "draft") setRevOriginFilter(origin)
+    setRevOriginFilter(origin === "sheet" || origin === "draft" ? origin : "all")
     const fc = params.get("fc")
-    if (fc && REV_FORECAST_FILTERS.some((item) => item.id === fc)) setRevForecastFilter(fc as RevForecastFilter)
+    setRevForecastFilter(
+      fc && REV_FORECAST_FILTERS.some((item) => item.id === fc) ? (fc as RevForecastFilter) : "all",
+    )
     const sort = params.get("sort")
-    if (sort && sort in REV_SORT_LABELS) setRevSortKey(sort as RevSortKey)
+    setRevSortKey(sort && sort in REV_SORT_LABELS ? (sort as RevSortKey) : "revenue")
     const dir = params.get("dir")
-    if (dir === "asc" || dir === "desc") setRevSortDirection(dir)
+    setRevSortDirection(dir === "asc" || dir === "desc" ? dir : "desc")
     const ps = Number(params.get("ps"))
-    if ((REV_PAGE_SIZES as readonly number[]).includes(ps)) setRevPageSize(ps as RevPageSize)
+    setRevPageSize((REV_PAGE_SIZES as readonly number[]).includes(ps) ? (ps as RevPageSize) : 100)
     const pageParam = Number(params.get("p"))
-    if (Number.isInteger(pageParam) && pageParam > 1) setRevPage(pageParam)
+    setRevPage(Number.isInteger(pageParam) && pageParam > 1 ? pageParam : 1)
     setUrlReady(true)
-  }, [router])
+  }, [router, searchParams])
 
   useEffect(() => {
     if (!urlReady) return
@@ -1223,6 +1352,9 @@ export default function SalesLedgerWorkbench() {
     // 페이지 번호도 보존 — 3페이지 검수 중 새로고침하면 1페이지로 튕기던 맥락 소실 방지.
     if (revPage > 1) params.set("p", String(revPage))
     const search = params.toString()
+    // replaceState 여부와 무관하게 항상 기록 — "URL이 현재 상태의 정규형과 일치"가 복원 스킵 조건이라,
+    // 쓰기가 생략된 경우(이미 일치)에도 ref는 최신 정규형을 가리켜야 한다.
+    lastWrittenSearchRef.current = search
     const nextUrl = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`
     const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
     if (nextUrl !== currentUrl) window.history.replaceState(null, "", nextUrl)
@@ -1259,6 +1391,12 @@ export default function SalesLedgerWorkbench() {
     amount: "",
     quantity: "",
     note: "",
+    // 주차 분해 그리드(Ledger-1a/Cockpit-1c)는 기본 꺼짐 — 리셋(저장 성공·편집 취소) 경로가
+    // 이 값을 그대로 쓰므로 weekly 버퍼도 여기서 함께 비워진다.
+    weeklyMode: false,
+    weekly: emptyDraftWeekly(),
+    // 라운드 3(P1): 주차별 확도 버퍼도 기본 확도(expected)로 함께 리셋된다.
+    weeklyConfidence: defaultDraftWeeklyConfidence("expected"),
   }), [selectedMonth, team])
   const [draftForm, setDraftForm] = useState<DraftForm>(defaultDraftForm)
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null)
@@ -1344,9 +1482,35 @@ export default function SalesLedgerWorkbench() {
     if (editingDraftId && !editingDraft) setEditingDraftId(null)
   }, [editingDraft, editingDraftId])
 
+  // M6: 편집 중인 초안의 작업 유형(metadata.operation, editDraft의 프리필 규약과 동일). 주차 미지원
+  // 작업(기간 이동/수량 변경)이면 콕핏 force-weekly coerce·CockpitEditor 폼을 건너뛰어야 한다.
+  const editingDraftOperation = useMemo<DraftOperation | null>(() => {
+    if (!editingDraft) return null
+    return isDraftOperation(editingDraft.metadata?.operation) ? editingDraft.metadata.operation : "forecast-add"
+  }, [editingDraft])
+
+  // 콕핏 렌즈는 "항상 주차" — weeklyMode/week 토큰과 주차 지원 작업 유형을 강제해 저장 계약
+  // (draftWeeklySaveContract)이 주차 버퍼를 정본으로 쓰게 한다. 이미 정합이면 그대로 둔다(리렌더 루프 방지).
+  // draftForm 선언(위) 이후에 둬야 deps의 TDZ 참조를 피한다.
+  // M6: 편집 중인 초안이 주차 미지원 작업(기간 이동/수량 변경)이면 coerce하지 않는다 — amount-change로
+  // 덮으면 그 초안의 기간이동/수량 의미가 소실된다. 그 경우 CockpitEditor가 폼 대신 안내를 렌더한다.
+  useEffect(() => {
+    if (lens !== "cockpit") return
+    if (editingDraftOperation && !operationSupportsWeeklySplit(editingDraftOperation)) return
+    setDraftForm((current) => {
+      const nextOperation = operationSupportsWeeklySplit(current.operation) ? current.operation : "amount-change"
+      if (current.weeklyMode && current.week === "month" && nextOperation === current.operation) return current
+      return { ...current, operation: nextOperation, weeklyMode: true, week: "month" }
+    })
+  }, [lens, editingDraftOperation, draftForm.operation, draftForm.weeklyMode, draftForm.week])
+
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   const summary = useBranchJson<BranchSummaryResponse>(`/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}&breakdown=1`, refreshKey)
-  const kpi = useBranchJson<BranchKpiResponse>(`/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`, refreshKey)
+  // KPI 응답은 이 화면에서 우측 레일 "행 상세"의 담당자 KPI 박스(selectedMember)에만 쓰인다 —
+  // 마운트 즉시 fetch하면 접힌 레일만 보다 떠나는 세션에도 항상 요청이 나간다(코덱스 감사).
+  // 레일 열림 + detail 보기 + 행 선택일 때만 시작한다(콕핏은 detail 레일을 렌더하지 않으므로 제외).
+  const kpiNeeded = !sidePanelCollapsed && railView === "detail" && selectedRow != null && lens !== "cockpit"
+  const kpi = useBranchJson<BranchKpiResponse>(`/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`, refreshKey, { enabled: kpiNeeded })
   const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey)
 
   // 하드웨어 콘솔 역링크 게이팅: 하드웨어 원장에 실제 출고 이력이 있는 고객사만 링크로 건다.
@@ -1389,6 +1553,29 @@ export default function SalesLedgerWorkbench() {
   const isNeedsLink = useCallback(
     (customer: string) => needsLinkKeys.size > 0 && needsLinkKeys.has(normalizedAccountKey(customer)),
     [needsLinkKeys],
+  )
+
+  // P0-2(호환성 기획 2026-07-18 §4): 연결(linked) 계정 → CRM 진입로. needsLink(account-master
+  // unmatched)의 대칭 소스 — 커버리지 확장(/api/admin/crm/coverage revAccounts.linkedTargets)의
+  // 우세 확정 링크 target을 계정키로 매핑한다. href 규칙은 rev-sync-health SSOT
+  // (revLinkedTargetHref) — deal target은 상세 라우트가 없어 null(링크 미렌더).
+  // needsLink와 동일하게 로딩/실패 중엔 링크를 걸지 않는다(기본 없음 = 오표기 없음).
+  // 전체 응답 타입(CrmCoverageResponse)으로 받아 CrmSyncStrip(A안 스트립)에도 주입한다 —
+  // 스트립 자체 fetch를 생략시켜 같은 화면에서 커버리지 GET이 한 번만 나간다.
+  const crmCoverage = useBranchJson<CrmCoverageResponse>("/api/admin/crm/coverage", refreshKey)
+  const crmLinkedTargetByKey = useMemo(() => {
+    const map = new Map<string, { href: string; label: string }>()
+    for (const target of crmCoverage.data?.revAccounts?.linkedTargets ?? []) {
+      if (!target?.accountKey || map.has(target.accountKey)) continue
+      const href = revLinkedTargetHref(target)
+      if (!href) continue
+      map.set(target.accountKey, { href, label: target.label?.trim() || target.name })
+    }
+    return map
+  }, [crmCoverage.data?.revAccounts?.linkedTargets])
+  const crmLinkedFor = useCallback(
+    (customer: string) => crmLinkedTargetByKey.get(normalizedAccountKey(customer)) ?? null,
+    [crmLinkedTargetByKey],
   )
 
   const sheetRows = useMemo<LedgerRevenueRow[]>(() => {
@@ -2061,31 +2248,10 @@ export default function SalesLedgerWorkbench() {
   //   - 월 키: 그 달에 걸린 최신 초안(주차 초안 포함) → 접힌 월 셀 앰버 점.
   //   - 주차 키: metadata.week가 wN인 초안만 → 확장 주차 칸 앰버 점.
   // 같은 키에 여러 초안이 있으면 가장 최근(drafts 앞쪽) 것을 표시.
-  const pendingByCell = useMemo(() => {
-    const map = new Map<string, MatrixPendingDraft>()
-    const pending = drafts.filter((draft) => draft.status === "draft" || draft.status === "checked")
-    for (const row of visibleDealRows) {
-      const dealKey = row.sourceDealId ?? row.id
-      for (const draft of pending) {
-        const draftDealId = draft.sourceDealId ?? metadataString(draft.metadata, "sourceDealId")
-        if (draft.kind === "edit-row" ? draftDealId !== dealKey : draft.customer.trim() !== row.customer.trim()) continue
-        const summary: MatrixPendingDraft = {
-          id: draft.id,
-          amount: draft.amount,
-          confidence: draftConfidenceFromMetadata(draft.metadata),
-          weekly: mergedWeeklyFromMetadata(draft.metadata),
-        }
-        const monthKey = `${row.id}::${draft.month}`
-        if (!map.has(monthKey)) map.set(monthKey, summary) // 월 셀: 첫(=최신) 초안
-        const weekIdx = weekIndexFromToken(metadataString(draft.metadata, "week"))
-        if (weekIdx != null) {
-          const weekKey = `${row.id}::${draft.month}::w${weekIdx + 1}`
-          if (!map.has(weekKey)) map.set(weekKey, summary) // 주차 칸: 그 주차 첫(=최신) 초안
-        }
-      }
-    }
-    return map
-  }, [drafts, visibleDealRows])
+  // 순수 함수(ledger/RevMatrix buildMatrixPendingByCell) 단일 소스 — 회귀 테스트(셀 dedup·relock)가
+  // 검증하는 그 함수를 그대로 소비한다. 이전엔 동일 로직 인라인 사본이 있어 드리프트 위험이 있었다
+  // (라운드 4 최적화에서 통합 — 주차별 확도 weeklyConfidence 동봉도 순수 함수 한 곳에서만 관리).
+  const pendingByCell = useMemo(() => buildMatrixPendingByCell(drafts, visibleDealRows), [drafts, visibleDealRows])
 
   // 커밋 기준값(원 단위): 편집 진입 초기값·fill-down·중복 판정 소스.
   // 그 셀에 미검수(draft|checked) 초안이 있으면 시트 원값 대신 그 초안 금액을 우선한다 — 그래야
@@ -2105,13 +2271,26 @@ export default function SalesLedgerWorkbench() {
   )
 
   // 셀 우세 확도 → 편집 팝오버 기본 선택. 미검수 초안이 있으면 그 확도 우선.
-  // 주차 셀은 그 주차 pending → 없으면 월 pending → 없으면 월 버킷 우세 확도로 폴백.
+  // 주차 셀은 슬롯 우선(라운드 3 P1 잔여 폴리시): pending의 그 주차 상태 → pending 초안 확도 →
+  // 적용 초안 행(draftMetadata)의 그 주차 상태 → 월 버킷 우세 확도 순으로 폴백한다 — 주차별
+  // 확도가 기록된 셀을 재편집할 때 기본값이 이웃 주차의 우세치로 뭉개지지 않는다.
   const matrixCellConfidence = useCallback(
     (coord: MatrixCellCoord): DraftConfidence => {
       const pending = lookupMatrixPending(pendingByCell, coord)
-      if (pending) return pending.confidence
+      if (pending) {
+        if (coord.week != null) {
+          const slot = pending.weeklyConfidence?.[coord.week]
+          if (slot) return slot
+        }
+        return pending.confidence
+      }
       const row = rowById.get(coord.rowId)
-      return row ? dominantCellConfidence(rowMonthBucket(row, coord.month)) : "expected"
+      if (!row) return "expected"
+      if (coord.week != null && row.draftMonth === coord.month) {
+        const slot = weeklyConfidenceFromMetadata(row.draftMetadata)?.[coord.week]
+        if (slot) return slot
+      }
+      return dominantCellConfidence(rowMonthBucket(row, coord.month))
     },
     [pendingByCell, rowById],
   )
@@ -2146,11 +2325,22 @@ export default function SalesLedgerWorkbench() {
       const operation: DraftOperation = priorAmount > 0 ? "amount-change" : "forecast-add"
       let draftAmount = amount
       let mergedWeekly: number[] | null = null
+      // 라운드 3(P1): 주차 병합 시 확도도 병렬 구성 — 편집 주차는 팝오버 선택 확도, 나머지 주차는
+      // 이 행 draftMetadata의 기존 weeklyConfidence 보존(없으면 null — 확도 미기록). 금액 병합
+      // 기준이 행 표시값(rowWeeklySplit)인 것과 동일하게 확도 기준도 행(draftMetadata)이다.
+      // 금액 0이 된 주차는 스키마 계약대로 null로 정규화한다.
+      let mergedWeeklyConfidence: Array<DraftConfidence | null> | null = null
       if (week != null && weekSplit?.source === "explicit") {
         const weeks = Array.from({ length: 5 }, (_, index) => Math.max(Number(weekSplit.weeks[index] ?? 0), 0))
         weeks[week] = amount
         mergedWeekly = weeks
         draftAmount = weeks.reduce((sum, value) => sum + value, 0)
+        const baseStates = weeklyConfidenceFromMetadata(row.draftMetadata)
+        mergedWeeklyConfidence = weeks.map((value, index) => {
+          if (value <= 0) return null
+          if (index === week) return confidence
+          return baseStates?.[index] ?? null
+        })
       }
       const productCategory = rowProductCategory(row)
       const input: LedgerDraftInput = {
@@ -2189,7 +2379,12 @@ export default function SalesLedgerWorkbench() {
           fromMonth: month,
           week: weekToken,
           weekly: mergedWeekly,
-          confidence,
+          // 라운드 3(P1): 주차 병합이면 확도 병렬 배열 + 초안 단위 확도는 우세 확도 자동 기록.
+          // 단일 값 경로(월 셀·비병합 주차 셀)는 weekly와 동일하게 null 명시(잔존 제거 규약).
+          weeklyConfidence: mergedWeeklyConfidence,
+          confidence: mergedWeekly && mergedWeeklyConfidence
+            ? dominantWeeklyConfidence(mergedWeekly, mergedWeeklyConfidence)
+            : confidence,
           quantity: null,
           sourceDealId: sourceDealId ?? null,
         },
@@ -2450,21 +2645,40 @@ export default function SalesLedgerWorkbench() {
     setDetail(null)
     setDetailError(null)
     setDetailLoading(true)
+    const operation: DraftOperation = row.ledgerOrigin === "draft" && isDraftOperation(metadataString(row.draftMetadata, "operation"))
+      ? metadataString(row.draftMetadata, "operation") as DraftOperation
+      : "amount-change"
+    const formMonth = row.draftMonth ?? selectedMonth
+    // 주차 프리필(Ledger-1a): 폼 타겟 월에 explicit 주차 입력이 있으면 5칸을 채워 주차 분해
+    // 모드로 연다 — inferred(일자 추정)/month-only는 실주차 입력이 아니라 월합계 모드 유지.
+    // week 토큰은 저장 계약(week:"month")·이중계상 dedup 좌표와 일치하도록 month로 고정한다.
+    const weeklySplit = rowWeeklySplit(row, formMonth)
+    const weeklyPrefill = weeklySplit.source === "explicit" && operationSupportsWeeklySplit(operation)
+    // 라운드 3(P1) 주차별 확도 시드: 시트 행은 주차별 기록이 없어 전 주차를 폼 확도로 시드한다.
+    // 적용 초안 파생 행이 weeklyConfidence를 갖고 있으면 그대로 복원(null 칸은 폼 확도로 채움 —
+    // 버퍼는 빈 칸 없는 DraftConfidence 5칸).
+    const rowConfidence = draftConfidenceFromMetadata(row.draftMetadata)
+    const storedWeeklyConfidence = weeklyConfidenceFromMetadata(row.draftMetadata)
     setDraftForm({
-      operation: row.ledgerOrigin === "draft" && isDraftOperation(metadataString(row.draftMetadata, "operation"))
-        ? metadataString(row.draftMetadata, "operation") as DraftOperation
-        : "amount-change",
+      operation,
       customer: row.customer,
       manager: row.manager ?? "",
       team: row.team ?? (team === "ALL" ? "BD" : team),
       productCategory: rowProductCategory(row),
-      month: row.draftMonth ?? selectedMonth,
+      month: formMonth,
       fromMonth: metadataString(row.draftMetadata, "fromMonth") ?? row.draftMonth ?? selectedMonth,
-      week: metadataString(row.draftMetadata, "week") ?? "month",
-      confidence: draftConfidenceFromMetadata(row.draftMetadata),
+      week: weeklyPrefill ? "month" : metadataString(row.draftMetadata, "week") ?? "month",
+      confidence: rowConfidence,
       amount: row.revenue ? String(Math.round(row.revenue)) : "",
       quantity: metadataNumberString(row.draftMetadata, "quantity"),
       note: row.draftNote ?? "",
+      weeklyMode: weeklyPrefill,
+      weekly: weeklyPrefill
+        ? weeklySplit.weeks.map((value) => (value > 0 ? String(Math.round(value)) : ""))
+        : emptyDraftWeekly(),
+      weeklyConfidence: weeklyPrefill && storedWeeklyConfidence
+        ? storedWeeklyConfidence.map((state) => state ?? rowConfidence)
+        : defaultDraftWeeklyConfidence(rowConfidence),
     })
     const detailId = row.ledgerOrigin === "draft" ? row.sourceDealId : row.id
     if (!detailId) {
@@ -2476,23 +2690,69 @@ export default function SalesLedgerWorkbench() {
       if (data.error) throw new Error(data.error)
       setDetail(data.deal ?? null)
       if (data.deal) {
-        const monthAmount = Number(data.deal.monthly_payments?.[selectedMonth] ?? row.revenue ?? 0)
-        setDraftForm((current) => ({
-          ...current,
-          customer: data.deal?.customer_name ?? row.customer,
-          manager: data.deal?.manager ?? row.manager ?? "",
-          team: data.deal?.team ?? row.team ?? current.team,
-          productCategory: productCategoryFromText(data.deal?.product_version, data.deal?.customer_name, row.customer),
-          amount: monthAmount ? String(Math.round(monthAmount)) : current.amount,
-          note: data.deal?.note ?? "",
-        }))
+        setDraftForm((current) => {
+          // 금액 갱신 기준 월은 폼의 타겟 월(current.month) — selectedMonth로 고정하면 초안 파생
+          // 행(draftMonth ≠ selectedMonth)을 열었을 때 원천 딜의 '다른 달' 금액이 폼 금액을 덮어썼다.
+          const monthAmount = Number(data.deal?.monthly_payments?.[current.month] ?? row.revenue ?? 0)
+          return {
+            ...current,
+            customer: data.deal?.customer_name ?? row.customer,
+            manager: data.deal?.manager ?? row.manager ?? "",
+            team: data.deal?.team ?? row.team ?? current.team,
+            productCategory: productCategoryFromText(data.deal?.product_version, data.deal?.customer_name, row.customer),
+            amount: monthAmount ? String(Math.round(monthAmount)) : current.amount,
+            note: data.deal?.note ?? "",
+          }
+        })
       }
     } catch (error) {
-      setDetailError(error instanceof Error ? error.message : String(error))
+      const message = error instanceof Error ? error.message : String(error)
+      // 딜 상세 API의 raw 리터럴("not_found")을 그대로 노출하지 않는다 — 재동기화(시트 미러
+      // 교체·DB 재임포트)로 행 id가 바뀐 뒤 이전 화면의 행을 누르면 나는 상태라, 원인과 복구
+      // 동작(새로고침)을 함께 안내한다.
+      setDetailError(
+        message === "not_found"
+          ? "행 원천 딜을 찾을 수 없습니다 — 재동기화로 원천 데이터가 바뀌었을 수 있어요. 화면을 새로고침한 뒤 다시 선택해 주세요."
+          : message,
+      )
     } finally {
       setDetailLoading(false)
     }
   }, [selectedMonth, team])
+
+  // M13: 콕핏 딜 선택 전용 진입 — loadDealDetail(REV·보드 공용, 시트 행을 항상 "예정"으로 시드)
+  // 뒤에 편집기 확도를 리스트 톤과 일치시킨다. 톤 규약은 CockpitDealList.rowConfidenceTone과 동일
+  // (전액 확정=확정, 고확도 보유=고확도, 나머지=예정 — 부분 확정은 올리지 않음). loadDealDetail의
+  // 동기 setDraftForm(전체 교체) 뒤에 함수형 갱신으로 얹혀 confidence/weeklyConfidence만 덮는다
+  // (후속 fetch setDraftForm은 확도를 건드리지 않아 이 시드가 살아남는다). 리스트와 동일하게
+  // selectedMonth 기준으로 판정한다.
+  const onSelectCockpitDeal = useCallback((row: LedgerRevenueRow) => {
+    void loadDealDetail(row)
+    const amount = rowMonthAmount(row, selectedMonth)
+    const confirmed = rowMonthConfirmed(row, selectedMonth)
+    const high = rowMonthHighConfidence(row, selectedMonth)
+    const tone: DraftConfidence =
+      amount <= 0 ? "expected" : confirmed >= amount - 1 ? "confirmed" : high > 0 ? "high-confidence" : "expected"
+    setDraftForm((current) => ({
+      ...current,
+      confidence: tone,
+      weeklyConfidence: defaultDraftWeeklyConfidence(tone),
+    }))
+  }, [loadDealDetail, selectedMonth])
+
+  // M11: 모바일(lg 미만)에서 콕핏은 리스트가 위·편집기가 아래라 딜을 눌러도 화면이 그대로라 반응이
+  // 없어 보인다. 좁은 화면에서만 편집기 컨테이너로 스크롤한다(lg 이상은 2-pane라 이미 나란히 보임).
+  // onSelectCockpitDeal(배치 A)의 loadDealDetail·확도 시드는 그대로 두고 스크롤만 얹는다.
+  const cockpitEditorRef = useRef<HTMLDivElement | null>(null)
+  const handleCockpitSelectDeal = useCallback((row: LedgerRevenueRow) => {
+    onSelectCockpitDeal(row)
+    if (typeof window === "undefined") return
+    if (window.matchMedia("(min-width: 1024px)").matches) return
+    // 편집기 내용이 렌더된 다음 프레임에 스크롤한다(선택 직후 draftForm 반영 전 스크롤 방지).
+    window.requestAnimationFrame(() => {
+      cockpitEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  }, [onSelectCockpitDeal])
 
   const onRefresh = useCallback(async () => {
     setSyncError(null)
@@ -2552,6 +2812,11 @@ export default function SalesLedgerWorkbench() {
       } : null,
     } : base?.sourceSnapshot
 
+    // 주차 분해 저장 계약(shared.draftWeeklySaveContract): weeklyMode + 지원 작업 유형(forecast-add·
+    // amount-change 한정 — 기간 이동/수량 변경은 단일 금액 UX 유지) + 주차 합>0이면
+    // amount=주차 합(draftForm.amount 무시)·metadata.weekly=5칸 숫자·metadata.week="month"로 싣는다 —
+    // onCommitCell의 주차 병합 초안과 동일한 metadata 키 규약이라 서버 스키마·적용(주차 복원) 경로 호환.
+    const weeklyContract = draftWeeklySaveContract(draftForm)
     return {
       kind,
       sourceDealId: kind === "edit-row" ? (selectedRow?.sourceDealId ?? selectedRow?.id ?? base?.sourceDealId) : undefined,
@@ -2561,7 +2826,7 @@ export default function SalesLedgerWorkbench() {
       manager: draftForm.manager.trim(),
       team: draftForm.team.trim(),
       month: draftForm.month,
-      amount: safeAmount(draftForm.amount),
+      amount: weeklyContract ? weeklyContract.amount : safeAmount(draftForm.amount),
       note: draftForm.note.trim(),
       metadata: {
         ...(base?.metadata ?? {}),
@@ -2572,8 +2837,16 @@ export default function SalesLedgerWorkbench() {
         operation: draftForm.operation,
         productCategory: draftForm.productCategory,
         fromMonth: draftForm.fromMonth,
-        week: draftForm.week,
-        confidence: draftForm.confidence,
+        week: weeklyContract ? weeklyContract.week : draftForm.week,
+        // 단일 금액 경로에서는 null을 명시해 base(재편집 초안)의 이전 weekly 잔존을 지운다 —
+        // 주차 분해를 껐다 저장하면 단일 금액 초안으로 되돌아간다(onCommitCell의 weekly: null 규약과 동일).
+        weekly: weeklyContract ? weeklyContract.weekly : null,
+        // 라운드 3(P1): 주차별 확도 병렬 배열(금액>0 주차만 값, 나머지 null). 단일 금액 경로는
+        // weekly와 동일하게 null 명시 — 재편집 시 이전 weeklyConfidence 잔존을 지운다.
+        weeklyConfidence: weeklyContract ? weeklyContract.weeklyConfidence : null,
+        // 주차 분해 저장의 초안 단위 확도는 우세 확도(금액 합 최대 버킷, 동률은 낮은 확도) 자동 기록 —
+        // 큐 배지·매트릭스 pending 등 기존 metadata.confidence 소비자의 의미를 보존한다.
+        confidence: weeklyContract ? weeklyContract.dominantConfidence : draftForm.confidence,
         quantity: draftForm.quantity.trim() ? safeAmount(draftForm.quantity) : null,
       },
     }
@@ -2607,6 +2880,9 @@ export default function SalesLedgerWorkbench() {
       // 이 가드로 동작이 바뀌지 않는다.)
       if (kind === "new-row" && draft) {
         setDraftForm(defaultDraftForm)
+        // M5: new-row 저장 성공 시 선택 딜도 함께 비운다 — 폼이 defaultDraftForm으로 리셋되므로
+        // 콕핏 편집기 dealContext 칩·리스트 하이라이트가 빈 폼과 어긋나지 않게(onNewDeal과 동일 규약).
+        setSelectedRow(null)
       }
       return {
         persisted: Boolean(draft && !draft.id.startsWith("local-")),
@@ -2625,19 +2901,35 @@ export default function SalesLedgerWorkbench() {
     setEditingDraftId(draft.id)
     setSidePanelCollapsed(false)
     setRailView("input")
+    const operation: DraftOperation = isDraftOperation(draft.metadata?.operation) ? draft.metadata.operation : "forecast-add"
+    // 주차 병합 초안(metadata.weekly — 레일 주차 분해 저장·onCommitCell 주차 병합 공통 규약)을
+    // 재편집하면 5칸을 그대로 프리필해 주차 분해 모드로 연다(월 합=주차 합 불변식 유지).
+    const mergedWeekly = mergedWeeklyFromMetadata(draft.metadata)
+    const weeklyPrefill = mergedWeekly != null && operationSupportsWeeklySplit(operation)
+    // 라운드 3(P1): 주차별 확도 복원 — metadata.weeklyConfidence가 있으면 그대로(null 칸은 초안
+    // 단위 확도로 채움), 없으면(기존 초안) 전 주차를 초안 단위 확도로 시드한다.
+    const draftConfidence = draftConfidenceFromMetadata(draft.metadata)
+    const storedWeeklyConfidence = weeklyConfidenceFromMetadata(draft.metadata)
     setDraftForm({
-      operation: isDraftOperation(draft.metadata?.operation) ? draft.metadata.operation : "forecast-add",
+      operation,
       customer: draft.customer,
       manager: draft.manager,
       team: draft.team || (team === "ALL" ? "BD" : team),
       productCategory: draft.metadata?.productCategory === "hardware" ? "hardware" : "software",
       month: draft.month,
       fromMonth: metadataString(draft.metadata, "fromMonth") ?? draft.month,
-      week: metadataString(draft.metadata, "week") ?? "month",
-      confidence: draftConfidenceFromMetadata(draft.metadata),
+      week: weeklyPrefill ? "month" : metadataString(draft.metadata, "week") ?? "month",
+      confidence: draftConfidence,
       amount: draft.amount ? String(Math.round(draft.amount)) : "",
       quantity: metadataNumberString(draft.metadata, "quantity"),
       note: draft.note,
+      weeklyMode: weeklyPrefill,
+      weekly: weeklyPrefill && mergedWeekly
+        ? mergedWeekly.map((value) => (value > 0 ? String(Math.round(value)) : ""))
+        : emptyDraftWeekly(),
+      weeklyConfidence: weeklyPrefill && storedWeeklyConfidence
+        ? storedWeeklyConfidence.map((state) => state ?? draftConfidence)
+        : defaultDraftWeeklyConfidence(draftConfidence),
     })
   }, [team])
 
@@ -2764,7 +3056,7 @@ export default function SalesLedgerWorkbench() {
   // 직전 판정만 추가).
   const draftEditTargetRow = resolveDraftEditTargetRow(editingDraft, selectedRow, rowByDealKey)
   const isEditRowSaveTarget = editingDraft ? editingDraft.kind === "edit-row" : canCreateEditDraft
-  const targetCellLocked = useMemo(
+  const rawTargetCellLocked = useMemo(
     () => isDraftFormTargetLocked(
       isEditRowSaveTarget,
       draftEditTargetRow,
@@ -2773,8 +3065,30 @@ export default function SalesLedgerWorkbench() {
     ),
     [isEditRowSaveTarget, draftEditTargetRow, draftForm.month, editRowOverrideMonths],
   )
+  // Task B(2026-07-23) — "확정 주차 읽기전용, 빈 주차 추가만 허용". 확정으로 잠긴 달의 explicit
+  // 주차 중 값이 있는 칸만 잠근다(콕핏/레일 그리드에서 readOnly + 🔒). 매트릭스 주차 셀 수정(per-week
+  // 초안)과 규약을 맞춰, 콕핏/레일에서도 아직 안 지난 주차(빈 칸)를 확정 달에 새로 넣을 수 있게 한다.
+  const weeklyLockMask = useMemo<boolean[]>(() => {
+    if (!isEditRowSaveTarget || !draftEditTargetRow) return [false, false, false, false, false]
+    const corrected = editRowOverrideMonths.get(draftEditTargetRow.id)
+    const monthLocked = isMatrixCellLocked(draftEditTargetRow, draftForm.month, corrected)
+    const split = rowWeeklySplit(draftEditTargetRow, draftForm.month)
+    return weeklyEditLockMask(monthLocked, split.source === "explicit", split.weeks)
+  }, [isEditRowSaveTarget, draftEditTargetRow, draftForm.month, editRowOverrideMonths])
+  // 폼 전체 잠금 완화: 주차 분해 모드 + 확정 explicit 주차가 하나라도 있으면(=추가만 허용 케이스)
+  // 폼을 막지 않는다 — 확정 주차칸은 위 마스크로 읽기전용이라 덮어쓰기가 불가하고, 저장은 병합이라
+  // 확정 주차가 보존된다. 단일 금액 경로·월합계만 확정 달은 mask가 전 false라 잠금이 그대로 유지된다.
+  const weeklyAddUnlocked =
+    draftForm.weeklyMode && operationSupportsWeeklySplit(draftForm.operation) && weeklyLockMask.some(Boolean)
+  const targetCellLocked = rawTargetCellLocked && !weeklyAddUnlocked
   const draftAmountValue = safeAmount(draftForm.amount)
-  const draftAmountInvalid = !draftForm.amount.trim() || draftAmountValue <= 0
+  // 주차 분해 모드(지원 작업 유형 한정)에서는 단일 금액(draftForm.amount) 대신 주차 자동합계가
+  // 저장 금액이므로 "고객명 + 주차 합>0"이 유효 조건이다 — 음수/비숫자 칸은 draftWeeklyAmounts가
+  // 0 처리해 합계에서 자연히 빠진다(buildDraftInput의 draftWeeklySaveContract 게이트와 동일 판정).
+  const draftWeeklySplitActive = draftForm.weeklyMode && operationSupportsWeeklySplit(draftForm.operation)
+  const draftAmountInvalid = draftWeeklySplitActive
+    ? draftWeeklyTotal(draftForm.weekly) <= 0
+    : !draftForm.amount.trim() || draftAmountValue <= 0
   const draftQuantityInvalid = draftForm.operation === "quantity-change" && draftForm.quantity.trim() !== "" && safeAmount(draftForm.quantity) <= 0
   const draftFormInvalid = !draftForm.customer.trim() || draftAmountInvalid || draftQuantityInvalid
   const selectedProductCategory = selectedRow ? rowProductCategory(selectedRow) : "software"
@@ -2788,10 +3102,34 @@ export default function SalesLedgerWorkbench() {
       operation,
       productCategory: selectedRow ? rowProductCategory(selectedRow) : current.productCategory,
       fromMonth: current.fromMonth || current.month || selectedMonth,
-      week: current.week || "month",
+      // 주차 분해 유지 중 다른 작업 유형을 오갔다 돌아오면 그 사이 고른 week 토큰이 남을 수 있다 —
+      // 주차 분해가 다시 활성화되는 순간 저장 계약(week:"month")·dedup 좌표와 재일치시킨다.
+      week: current.weeklyMode && operationSupportsWeeklySplit(operation) ? "month" : current.week || "month",
       note: current.note || operationLabel,
     }))
   }, [selectedMonth, selectedRow])
+
+  // 콕핏 인라인 편집기(2-pane 우측)와 우측 플로팅 레일이 같은 InputRailSection을 공유한다 —
+  // props 단일 정의로 두 소비처가 동일 draftForm·저장 계약을 쓰게 한다(로직 중복 금지).
+  const inputRailProps = {
+    editingDraft,
+    queueMode,
+    draftForm,
+    setDraftForm,
+    selectedDraftOperation,
+    monthOptions,
+    selectedMonth,
+    draftAmountInvalid,
+    draftQuantityInvalid,
+    draftFormInvalid,
+    draftSaving,
+    canCreateEditDraft,
+    targetCellLocked,
+    lockedWeeks: weeklyLockMask,
+    saveEditedDraft,
+    cancelDraftEdit,
+    saveDraft,
+  }
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] pb-24 text-[#111110]">
@@ -2905,7 +3243,7 @@ export default function SalesLedgerWorkbench() {
         <IntegrityStrip refreshKey={refreshKey} />
         {/* CRM 싱크 스트립(A안) — 정합 체크(시트 자체 품질)의 형제 축: "시트가 CRM과 이어져
             있는가". 표시 레이어 전용, fail-soft(로딩 미렌더·실패 시 조용한 한 줄). */}
-        <CrmSyncStrip />
+        <CrmSyncStrip coverage={{ data: crmCoverage.data, loading: crmCoverage.loading, error: crmCoverage.error }} />
         <aside className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-1 self-start">
           <div className="inline-flex flex-wrap gap-1 self-start rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1" role="tablist" aria-label="장부 렌즈 전환">
@@ -2929,7 +3267,7 @@ export default function SalesLedgerWorkbench() {
                 <span className={`flex h-6 w-6 items-center justify-center rounded-md ${
                   lens === item.id ? "bg-white/12" : "bg-[#ECFDF5] text-[#084734]"
                 }`}>
-                  {item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : <Table2 className="h-3.5 w-3.5" />}
+                  {item.id === "dsh" ? <Gauge className="h-3.5 w-3.5" /> : item.id === "rev" ? <Table2 className="h-3.5 w-3.5" /> : item.id === "board" ? <Columns3 className="h-3.5 w-3.5" /> : <LayoutList className="h-3.5 w-3.5" />}
                 </span>
                 {item.label}
               </button>
@@ -3040,8 +3378,9 @@ export default function SalesLedgerWorkbench() {
                     ) : (
                       <ArrowDownRight className="h-3 w-3" />
                     )}
+                    {/* % 자리수는 formatPercent SSOT(최대 1자리)로 통일 — REV 렌즈의 다른 달성률 표기와 동일 규칙. */}
                     {revPrevPeriodComparison.label} {revPrevPeriodComparison.deltaPct >= 0 ? "+" : ""}
-                    {revPrevPeriodComparison.deltaPct.toFixed(0)}%
+                    {formatPercent(revPrevPeriodComparison.deltaPct)}
                   </span>
                 )
               }
@@ -3083,10 +3422,35 @@ export default function SalesLedgerWorkbench() {
           >
             {lens === "dsh" && (
               <div className="space-y-5">
+                {/* DSH 렌즈 배치(2026-07-27 디벨롭): 지표 밴드 → 수치 그리드 → 월별 페이스 →
+                    팀·멤버 그리드 → 주간 마감. 밴드/페이스는 dsh_breakdown 클라이언트 파생,
+                    팀 그리드만 dsh_rows(같은 ?breakdown=1 opt-in) 신규 필드를 소비한다. */}
+                <DshMetricsBand
+                  breakdown={summary.data?.dsh_breakdown ?? []}
+                  loading={summary.loading && !summary.data}
+                  dataSource={summary.data?.data_sources?.dsh ?? null}
+                  // 주간 뷰 원천 — deal_mix(week_actual)는 summary 팀 필터를 따르므로 team도
+                  // 함께 넘겨 밴드 캡션이 스코프를 정직하게 표기하게 한다(M/Q/Y는 전사 고정).
+                  dealMix={summary.data?.deal_mix ?? null}
+                  team={team}
+                />
+
                 <DshNumericGrid
                   breakdown={summary.data?.dsh_breakdown ?? []}
                   view={dshGridView}
                   onViewChange={setDshGridView}
+                  loading={summary.loading && !summary.data}
+                  dataSource={summary.data?.data_sources?.dsh ?? null}
+                />
+
+                <DshMonthlyPace
+                  breakdown={summary.data?.dsh_breakdown ?? []}
+                  loading={summary.loading && !summary.data}
+                  dataSource={summary.data?.data_sources?.dsh ?? null}
+                />
+
+                <DshTeamGrid
+                  rows={summary.data?.dsh_rows ?? []}
                   loading={summary.loading && !summary.data}
                   dataSource={summary.data?.data_sources?.dsh ?? null}
                 />
@@ -3216,6 +3580,9 @@ export default function SalesLedgerWorkbench() {
                       onChange={setManagerFilter}
                       placeholder="전체"
                       width="w-48"
+                      // 라운드 3 P3 — "내 딜" 프리셋 핀. KR Team 개요(BranchDashboardClient)와
+                      // storageKey를 공유해 사람 단위 개인화가 화면 간에 일관되게 이어진다.
+                      pinStorageKey={PIPELINE_MANAGER_DEFAULT_STORAGE_KEY}
                     />
                     <MultiSelect
                       label="지역"
@@ -3504,6 +3871,7 @@ export default function SalesLedgerWorkbench() {
                   selectedMonth={selectedMonth}
                   revComparableGoal={revComparableGoal}
                   revGoalMutedByFilter={revGoalMutedByFilter}
+                  revMonthTotal={revMonthTotal}
                   revMonthConfirmed={revMonthConfirmed}
                   revMonthPlanned={revMonthPlanned}
                   revMonthHighConfidence={revMonthHighConfidence}
@@ -3707,7 +4075,10 @@ export default function SalesLedgerWorkbench() {
                                 expandedMonths={expandedRevMonths}
                                 expanded={expanded}
                                 selected={selectedGroup?.key === group.key}
-                                needsLink={isNeedsLink(group.customer)}
+                                needsLink={isNeedsLink(group.customer) && hasConfirmedThroughMonth(group.monthlyTotals, ymKeyUtc(new Date()))}
+                                linkPopoverOpen={revLinkPopoverKey === group.key}
+                                onLinkPopoverToggle={toggleRevLinkPopover}
+                                onLinkPopoverClose={closeRevLinkPopover}
                                 onSelect={selectRevGroup}
                                 onToggle={toggleRevGroup}
                                 density={matrixDensity}
@@ -3759,7 +4130,6 @@ export default function SalesLedgerWorkbench() {
                                               {...matrixRowEditorProps(row.id)}
                                               pendingByCell={pendingByCell}
                                               density={matrixDensity}
-                                              sourceLabel={revRowSourceLabel}
                                               periodMonths={periodHighlightMonths}
                                             />
                                           )
@@ -3776,8 +4146,10 @@ export default function SalesLedgerWorkbench() {
                                       key={row.id}
                                       view={view}
                                       grouped={false}
-                                      hardwareLinked={isHardwareLinked(row.customer)}
-                                      needsLink={isNeedsLink(row.customer)}
+                                      needsLink={isNeedsLink(row.customer) && hasConfirmedThroughMonth(view.monthlyByMonth, ymKeyUtc(new Date()))}
+                                      linkPopoverOpen={revLinkPopoverKey === row.id}
+                                      onLinkPopoverToggle={toggleRevLinkPopover}
+                                      onLinkPopoverClose={closeRevLinkPopover}
                                       months={matrixMonths}
                                       expandedMonths={expandedRevMonths}
                                       active={selectedRow?.id === row.id}
@@ -3786,7 +4158,6 @@ export default function SalesLedgerWorkbench() {
                                       {...matrixRowEditorProps(row.id)}
                                       pendingByCell={pendingByCell}
                                       density={matrixDensity}
-                                      sourceLabel={revRowSourceLabel}
                                       periodMonths={periodHighlightMonths}
                                     />
                                   )
@@ -3838,6 +4209,74 @@ export default function SalesLedgerWorkbench() {
             )}
               </section>
             )}
+
+            {/* 주차 Forecast 보드(Board-1b 이식) — REV와 같은 filteredRows 모집단(검색·담당자·지역·
+                상품 필터 반영)을 주차 칸반으로 재배열. 카드 클릭은 기존 빠른 작업 레일(행 상세)로
+                연결된다 — 보드 전용 편집 경로를 만들지 않는다. */}
+            {lens === "board" && (
+              <ForecastBoard
+                rows={filteredRows}
+                selectedMonth={selectedMonth}
+                monthOptions={monthOptions}
+                onSelectMonth={setSelectedMonth}
+                onOpenRow={(row) => void loadDealDetail(row)}
+                selectedRowId={selectedRow?.id ?? null}
+              />
+            )}
+
+            {/* 콕핏 입력(Cockpit-1c 이식) — 화면을 꽉 채우는 인라인 2-pane. 좌: 내 딜 마스터 리스트,
+                우: 편집기(기존 InputRailSection을 그대로 인라인 배치 — 로직/저장 계약 재사용). 딜 선택은
+                REV·보드와 동일한 loadDealDetail로 draftForm을 채운다(새 편집 경로 없음). 콕핏에서는 우측
+                플로팅 레일·FAB를 렌더하지 않는다(아래 조건에서 lens !== "cockpit"). */}
+            {lens === "cockpit" && (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start">
+                <CockpitDealList
+                  rows={filteredRows}
+                  selectedMonth={selectedMonth}
+                  monthOptions={monthOptions}
+                  onSelectMonth={setSelectedMonth}
+                  openDraftCount={openDrafts.length}
+                  onOpenQueue={() => selectRailView("queue")}
+                  selectedRowId={selectedRow?.id ?? null}
+                  onSelectDeal={handleCockpitSelectDeal}
+                  onNewDeal={() => {
+                    setEditingDraftId(null)
+                    setSelectedRow(null)
+                    setDraftForm(defaultDraftForm)
+                  }}
+                />
+                <div ref={cockpitEditorRef} className="min-w-0 scroll-mt-4">
+                <CockpitEditor
+                  editingDraft={editingDraft}
+                  dealContext={
+                    selectedRow
+                      ? {
+                          status: selectedRow.status,
+                          dealType: selectedRow.dealType,
+                          region: selectedRow.region,
+                          productVersion: selectedRow.productVersion,
+                          firstPayment: selectedRow.firstPayment,
+                          contractTarget: selectedRow.contractTarget,
+                        }
+                      : null
+                  }
+                  draftForm={draftForm}
+                  setDraftForm={setDraftForm}
+                  monthOptions={monthOptions}
+                  draftFormInvalid={draftFormInvalid}
+                  draftSaving={draftSaving}
+                  canCreateEditDraft={canCreateEditDraft}
+                  targetCellLocked={targetCellLocked}
+                  lockedWeeks={weeklyLockMask}
+                  currentMonthAmount={selectedRowMonthTotal}
+                  saveEditedDraft={saveEditedDraft}
+                  cancelDraftEdit={cancelDraftEdit}
+                  saveDraft={saveDraft}
+                  onSwitchToRev={() => selectLens("rev")}
+                />
+                </div>
+              </div>
+            )}
             {/* KPI 렌즈는 KR Team 파이프라인 탭으로 흡수됐다(2026-07-16 역할 재배분) — LENSES에서
                 제거됐고 ?lens=kpi는 마운트 시 /admin/branch?tab=pipeline로 리다이렉트된다. */}
           </div>
@@ -3879,7 +4318,7 @@ export default function SalesLedgerWorkbench() {
           </div>
         )}
 
-        {sidePanelCollapsed && (
+        {sidePanelCollapsed && lens !== "cockpit" && (
           <button
             type="button"
             onClick={() => setSidePanelCollapsed(false)}
@@ -3902,7 +4341,9 @@ export default function SalesLedgerWorkbench() {
           </button>
         )}
 
-        {!sidePanelCollapsed && (
+        {/* M3: 콕핏은 플로팅 레일·FAB를 숨기지만, 헤더 "체크 큐" 버튼으로 연 큐(railView==="queue")만
+            예외로 이 패널을 허용한다 — 큐 진입은 헤더 버튼으로 일원화하고 FAB(위)는 계속 콕핏에서 숨긴다. */}
+        {!sidePanelCollapsed && (lens !== "cockpit" || railView === "queue") && (
         <aside className="fixed inset-x-3 bottom-3 top-auto z-50 max-h-[86dvh] overflow-y-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-2 shadow-[0_24px_70px_rgba(17,17,16,0.22)] sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-4 sm:w-[min(420px,calc(100vw-2rem))] sm:max-h-[calc(100dvh-2rem)]">
           <>
           <div className="rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-1.5">
@@ -3971,9 +4412,10 @@ export default function SalesLedgerWorkbench() {
                       .filter(Boolean)
                       .join(" · ") || "-"}
                   </p>
-                  {isNeedsLink(selectedGroup.customer) && (
-                    <p className="mt-1.5">
-                      <NeedsLinkBadge customer={selectedGroup.customer} long />
+                  {(isNeedsLink(selectedGroup.customer) || crmLinkedFor(selectedGroup.customer)) && (
+                    <p className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      {isNeedsLink(selectedGroup.customer) && <NeedsLinkBadge customer={selectedGroup.customer} />}
+                      <CrmLinkedBadge customer={selectedGroup.customer} link={crmLinkedFor(selectedGroup.customer)} />
                     </p>
                   )}
                   <div className="mt-3 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-3">
@@ -4070,10 +4512,20 @@ export default function SalesLedgerWorkbench() {
                 </div>
               ) : detailLoading ? (
                 <LoadingPanel label="행 상세를 불러오는 중" />
-              ) : detailError ? (
-                <ErrorPanel message={detailError} />
               ) : (
                 <div>
+                  {/* 딜 원천 조회 실패가 패널 전체를 막지 않는다 — 아래 상세는 전부
+                      detail ?? selectedRow 폴백이라 행 기반 월 분해·주차 바·빠른 액션이 그대로
+                      동작한다. 경고 스트립만 얹어 사이드탭 데드엔드(과거 raw not_found 전면
+                      ErrorPanel)를 해소한다. */}
+                  {detailError && (
+                    <div
+                      role="alert"
+                      className="mb-3 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[11px] font-semibold leading-relaxed text-[#7A520F]"
+                    >
+                      {detailError} 아래 정보는 화면 행 데이터 기준으로 표시합니다.
+                    </div>
+                  )}
                   <div className="flex items-start justify-between gap-3">
                     <p className="min-w-0 text-[15px] font-bold tracking-[-0.01em] text-[#111110]">
                       {detail?.customer_name ?? selectedRow.customer}
@@ -4089,8 +4541,21 @@ export default function SalesLedgerWorkbench() {
                           하드웨어 ↗
                         </Link>
                       )}
+                      {/* P0-2: 연결 확정 고객만 CRM 진입 — '하드웨어 ↗'와 같은 톤/크기(inline). */}
+                      <CrmLinkedBadge
+                        customer={detail?.customer_name ?? selectedRow.customer}
+                        link={crmLinkedFor(detail?.customer_name ?? selectedRow.customer)}
+                        variant="inline"
+                      />
                     </span>
                   </div>
+                  {/* 계보(1열 다이어트로 매트릭스 ⓘ 배지에서 이동) — 시트 N행·원천 라벨을 뮤트 라인으로.
+                      sheetRow 없는 행(장부 신규 등)은 생략한다. */}
+                  {selectedRow.sheetRow != null && (
+                    <p className="mt-1 text-[10px] font-semibold text-[#A39E98]">
+                      {`시트 '2. REV' ${selectedRow.sheetRow}행 · 원천 ${revRowSourceLabel}`}
+                    </p>
+                  )}
                   {selectedRow.ledgerOrigin === "draft" && (
                     <div className="mt-3 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] p-3 text-[11.5px] leading-relaxed text-[#7A520F]">
                       {selectedRow.draftKind === "edit-row"
@@ -4108,7 +4573,7 @@ export default function SalesLedgerWorkbench() {
                         {selectedCustomerProductSummary.map((item) => (
                           <div key={item.category} className="flex items-center justify-between gap-2 text-[11px]">
                             <ProductCategoryPill category={item.category} compact />
-                            <span className="font-bold text-[#111110]">{formatMoney(item.total)}</span>
+                            <span className="font-bold tabular-nums text-[#111110]">{formatMoney(item.total)}</span>
                           </div>
                         ))}
                       </div>
@@ -4168,6 +4633,35 @@ export default function SalesLedgerWorkbench() {
                       <Table2 className="h-3.5 w-3.5" />
                       담당 REV
                     </button>
+                    {/* 렌즈 교차 점프(라운드 2 Track C) — 같은 행 맥락을 유지한 채 다른 렌즈로 이동.
+                        REV에서 열었으면 보드(선택월 카드가 selectedRowId 링으로 하이라이트),
+                        그 외(보드/DSH)에서 열었으면 REV 매트릭스로 고객 검색을 걸어 그 행을 좁힌다.
+                        URL 반영은 렌즈 절대 계약(반응형 복원·writer)이 알아서 처리한다. */}
+                    {lens === "rev" ? (
+                      <button
+                        type="button"
+                        onClick={() => selectLens("board")}
+                        className="col-span-2 inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[11px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+                      >
+                        <Columns3 className="h-3.5 w-3.5" />
+                        보드에서 보기 — {formatMonthLabel(selectedMonth)} 주차 카드
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuery(selectedRow.customer)
+                          setManagerFilter(new Set())
+                          setRegionFilter(new Set())
+                          setRevPage(1)
+                          selectLens("rev")
+                        }}
+                        className="col-span-2 inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[11px] font-bold text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+                      >
+                        <Table2 className="h-3.5 w-3.5" />
+                        REV 매트릭스에서 보기 — 고객 검색 적용
+                      </button>
+                    )}
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
@@ -4232,7 +4726,7 @@ export default function SalesLedgerWorkbench() {
                           }`}
                         >
                           <p className="text-[10px] font-bold text-[#615D59]">{month.label}</p>
-                          <p className="mt-1 text-[11px] font-bold text-[#111110]">{formatMoney(month.amount)}</p>
+                          <p className="mt-1 text-[11px] font-bold tabular-nums text-[#111110]">{formatMoney(month.amount)}</p>
                           {month.amount > 0 && (
                             <span className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-[#F0F0EC]" aria-label={`${month.label} 금액 분해`}>
                               <span
@@ -4262,24 +4756,7 @@ export default function SalesLedgerWorkbench() {
           )}
 
           {railView === "input" && (
-          <InputRailSection
-            editingDraft={editingDraft}
-            queueMode={queueMode}
-            draftForm={draftForm}
-            setDraftForm={setDraftForm}
-            selectedDraftOperation={selectedDraftOperation}
-            monthOptions={monthOptions}
-            selectedMonth={selectedMonth}
-            draftAmountInvalid={draftAmountInvalid}
-            draftQuantityInvalid={draftQuantityInvalid}
-            draftFormInvalid={draftFormInvalid}
-            draftSaving={draftSaving}
-            canCreateEditDraft={canCreateEditDraft}
-            targetCellLocked={targetCellLocked}
-            saveEditedDraft={saveEditedDraft}
-            cancelDraftEdit={cancelDraftEdit}
-            saveDraft={saveDraft}
-          />
+          <InputRailSection {...inputRailProps} />
           )}
 
           {railView === "queue" && (

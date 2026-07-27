@@ -1,6 +1,7 @@
 import "server-only"
 import { unstable_cache, revalidateTag } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { normalizeBranchMemberName } from "@/lib/branch/member-names"
 import type { DshBreakdownRow, DshOutput, DshRow } from "@/lib/branch/parsers/dsh"
 import { KPI_METRICS, type KpiBlocks, type KpiMetric, type KpiPair, type KpiRow } from "@/lib/branch/parsers/kpi"
 
@@ -92,14 +93,18 @@ async function readDshMirrorUncached(fiscalYear: number): Promise<DshOutput | nu
       breakdown.push({ kind: row.row_kind, category: row.category, status_type: row.status_type, channel: row.channel, annual: toNumber(row.annual), quarters, months })
       continue
     }
+    // 멤버명은 읽기 시점에도 정규화한다 — 미러에는 동기화 당시 표기(예: "Hwang")가 그대로
+    // 저장돼 있어, member-names 별칭 추가가 재동기화 전까지 화면에 안 먹는 문제를 막는다
+    // (파서 파싱 시점 정규화와 이중 방어 — branch-deals.ts의 REV manager 읽기 정규화와 동일 계열).
+    const member = normalizeBranchMemberName(row.member)
     if (row.row_level === "member") {
-      if (!row.member || !row.team) continue
-      members[row.member] = row.team
+      if (!member || !row.team) continue
+      members[member] = row.team
     }
     rows.push({
       level: row.row_level,
       team: row.team ?? "ALL",
-      member: row.member ?? undefined,
+      member: member ?? undefined,
       kind: row.row_kind,
       annual: toNumber(row.annual),
       quarters,
@@ -149,7 +154,9 @@ async function readKpiMirrorUncached(fiscalYear: number): Promise<KpiBlocks | nu
   const fy: KpiRow[] = []
   const months: Record<number, KpiRow[]> = {}
   for (const row of data) {
-    const kpiRow: KpiRow = { member: row.member, pairs: toKpiPairs(row.pairs) }
+    // DSH 미러와 같은 이유의 읽기 시점 멤버명 정규화 — DSH members("Chanwoo")와 KPI
+    // 매칭 키("Hwang")가 어긋나면 kpi 라우트의 kpiRowsByMember 조회가 빗나간다.
+    const kpiRow: KpiRow = { member: normalizeBranchMemberName(row.member) ?? row.member, pairs: toKpiPairs(row.pairs) }
     if (row.period_month == null) {
       fy.push(kpiRow)
       continue

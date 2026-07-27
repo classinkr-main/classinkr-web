@@ -94,6 +94,8 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
   "/admin/campaigns": [
     "/api/admin/email",
     "/api/admin/subscribers",
+    // 캠페인 페이지의 리드 귀속 소비는 scope=campaigns(경량 컬럼) — warm 키 일치 필수.
+    "/api/admin/leads?scope=campaigns",
     "/api/admin/events",
     "/api/admin/event-metrics",
     "/api/admin/meta/campaigns?datePreset=last_30d&limit=50",
@@ -136,14 +138,15 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
   ],
   "/admin/hardware": ["/api/admin/hardware"],
   "/admin/traffic": [
-    "/api/admin/visitor-stats?range=30",
-    "/api/admin/homepage-flow?range=30",
-    "/api/admin/event-counts?range=30",
+    // 3중 스캔(visitor-stats/homepage-flow/event-counts)은 단일 집계 traffic-summary로 대체됨 —
+    // warm 키도 페이지 소비 URL과 일치해야 적중한다(Wave 3-A).
+    "/api/admin/traffic-summary?range=30",
     "/api/admin/marketing/conversions/status",
   ],
   "/admin/analytics": [
-    "/api/admin/leads",
-    "/api/admin/subscribers",
+    // 페이지 소비가 스코프 파라미터로 좁혀짐 — warm 키를 소비 URL과 일치시킨다.
+    "/api/admin/leads?scope=dashboard",
+    "/api/admin/subscribers?scope=analytics",
     "/api/admin/email",
     "/api/admin/blog",
     "/api/admin/events",
@@ -422,9 +425,24 @@ function AdminSidebarContent({ role, name, email }: Props) {
 
   useEffect(() => () => cancelWarmAdminTab(), [cancelWarmAdminTab])
 
+  // 코덱스 감사 #3 — 유휴 prefetch 축소. 과거엔 유휴 시 visibleNav 상위 6개(2026-07-18 재정렬
+  // 후 전부 대형 라우트: overview·branch·ledger·crm·quotes·hardware)를 일괄 router.prefetch해
+  // 로그인 직후 대역폭·서버 렌더를 크게 썼다. 이제 유휴 시간에는
+  //  (a) 현재 활성 탭과 같은 섹션(admin-nav.ts section 필드)의 바로 이웃(±1) 탭만 내려받는다
+  //      — 다음 이동 확률이 가장 높은 후보. 탭 이동(currentNavItem 변경) 시 새 이웃을 다시 잡는다.
+  //  (b) 그 외 탭은 hover/focus/터치 시점의 warmAdminTab/scheduleWarmAdminTab 경로가 즉시
+  //      prefetch한다(기존 동작 유지 — prefetchAdminRoute가 warm 경로에 이미 배선돼 있다).
+  // prefetchedHrefs Set이 중복 prefetch를 막는다.
   useEffect(() => {
+    if (!currentNavItem) return
+
     const run = () => {
-      visibleNav.slice(0, 6).forEach((item) => prefetchAdminRoute(item.href))
+      const sectionItems = visibleNav.filter((item) => item.section === currentNavItem.section)
+      const index = sectionItems.findIndex((item) => item.href === currentNavItem.href)
+      if (index === -1) return
+      for (const neighbor of [sectionItems[index - 1], sectionItems[index + 1]]) {
+        if (neighbor) prefetchAdminRoute(neighbor.href)
+      }
     }
     const idleWindow = window as typeof window & {
       requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number
@@ -438,7 +456,7 @@ function AdminSidebarContent({ role, name, email }: Props) {
 
     const timeoutId = window.setTimeout(run, 650)
     return () => window.clearTimeout(timeoutId)
-  }, [prefetchAdminRoute, visibleNav])
+  }, [currentNavItem, prefetchAdminRoute, visibleNav])
 
   return (
     <>

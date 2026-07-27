@@ -249,3 +249,46 @@ describe("submitLeadCapture site_inflow auto event", () => {
     expect(createCrmCustomerEvent).not.toHaveBeenCalled()
   })
 })
+
+describe("submitLeadCapture WeCom notification", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("defers a CONTACT notification to the existing WeCom room with inquiry details", async () => {
+    const { submitLeadCapture, saveLead, emitNotificationEvent } = await loadLeadCapture()
+    const deferredTasks: Array<() => Promise<void>> = []
+    saveLead.mockResolvedValue({ id: "lead-contact-wecom-1" })
+
+    const result = await submitLeadCapture(
+      {
+        ...baseLead,
+        sourceDetail: "도입 상담",
+      },
+      {
+        deferTask: (task) => deferredTasks.push(task),
+      }
+    )
+
+    expect(result.status).toBe(200)
+    expect(deferredTasks).toHaveLength(1)
+    expect(emitNotificationEvent).not.toHaveBeenCalled()
+
+    await deferredTasks[0]()
+
+    expect(emitNotificationEvent).toHaveBeenCalledTimes(1)
+    expect(emitNotificationEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "lead.created",
+        channels: ["wecom_webhook"],
+        payload: expect.objectContaining({
+          leadId: "lead-contact-wecom-1",
+          source: "contact_page",
+          sourceDetail: "도입 상담",
+          message: "문의 테스트",
+        }),
+      })
+    )
+  })
+})

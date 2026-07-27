@@ -163,6 +163,69 @@ describe("GET /api/admin/branch/summary — dsh_breakdown", () => {
     expect(json.dsh_breakdown).toHaveLength(2)
   })
 
+  it("dedupes per-scope duplicated breakdown combos in deal_mix (3중 계상 방지)", async () => {
+    // 파서 breakdown은 같은 (kind, category, status_type, channel) 콤보를 스코프별
+    // (전사 + 팀 + 멤버 섹션)로 반복 방출한다 — 전사 행은 부분 행들의 합이라 annual이
+    // 항상 최대다. deal_mix는 raw 합산이 아니라 dedupeDshByKind(최대-annual 채택)를
+    // 거쳐야 한다. 실측 사고: raw 합산 시 전사 연간 목표 10,000,000이 30,000,000으로
+    // 3배 부풀고, goal(3.0배)·status(스코프 결측으로 ~2.5배) 배율이 달라 pct도 왜곡됐다.
+    const mk = (
+      kind: "goal" | "status",
+      category: "Software" | "Hardware",
+      channel: "Direct" | "Channel",
+      annual: number,
+    ) => ({
+      kind,
+      category,
+      status_type: "New",
+      channel,
+      annual,
+      quarters: [annual / 4, annual / 4, annual / 4, annual / 4],
+      months: { "2026-04": annual / 12 },
+    })
+    mockHappyPath()
+    readDshPreferDbWithSource.mockResolvedValue({
+      dsh: {
+        rows: [],
+        members: {},
+        breakdown: [
+          // Software New Direct — 전사 60M = 팀 40M + 멤버 20M
+          mk("goal", "Software", "Direct", 60_000_000),
+          mk("goal", "Software", "Direct", 40_000_000),
+          mk("goal", "Software", "Direct", 20_000_000),
+          mk("status", "Software", "Direct", 24_000_000),
+          mk("status", "Software", "Direct", 16_000_000),
+          mk("status", "Software", "Direct", 8_000_000),
+          // Hardware New Channel — 단일 담당 콤보(전사=팀=멤버 동액 3행)
+          mk("goal", "Hardware", "Channel", 30_000_000),
+          mk("goal", "Hardware", "Channel", 30_000_000),
+          mk("goal", "Hardware", "Channel", 30_000_000),
+          mk("status", "Hardware", "Channel", 9_000_000),
+          mk("status", "Hardware", "Channel", 9_000_000),
+          mk("status", "Hardware", "Channel", 9_000_000),
+        ],
+      },
+      source: { kind: "mirror", asOf: null },
+    })
+
+    const { GET } = await import("@/app/api/admin/branch/summary/route")
+    const response = await GET(summaryRequest("?period=Y"))
+
+    expect(response.status).toBe(200)
+    const json = await response.json()
+    const byCategory = json.deal_mix.by_category as Array<{ name: string; goal: number; actual: number; pct: number }>
+    const software = byCategory.find((s) => s.name === "Software")
+    const hardware = byCategory.find((s) => s.name === "Hardware")
+    // 전사(최대-annual) 값 그대로 — raw 합산이면 Software goal 120M / Hardware goal 90M으로 부푼다.
+    expect(software).toMatchObject({ goal: 60_000_000, actual: 24_000_000 })
+    expect(software?.pct).toBeCloseTo(40, 5)
+    expect(hardware).toMatchObject({ goal: 30_000_000, actual: 9_000_000 })
+
+    const byChannel = json.deal_mix.by_channel as Array<{ name: string; goal: number; actual: number }>
+    expect(byChannel.find((s) => s.name === "Direct")).toMatchObject({ goal: 60_000_000, actual: 24_000_000 })
+    expect(byChannel.find((s) => s.name === "Channel")).toMatchObject({ goal: 30_000_000, actual: 9_000_000 })
+  })
+
   it("returns the guard response when verifyAdmin rejects", async () => {
     const denied = NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     verifyAdmin.mockResolvedValue(denied)

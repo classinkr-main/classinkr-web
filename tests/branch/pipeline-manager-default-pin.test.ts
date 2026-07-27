@@ -13,8 +13,10 @@ const pipelineTablePath = join(process.cwd(), "components/admin/branch/sections/
 const kanbanPath = join(process.cwd(), "components/admin/branch/sections/BranchPipelineKanban.tsx")
 const dashboardClientPath = join(process.cwd(), "components/admin/branch/BranchDashboardClient.tsx")
 
+// CRLF 정규화: autocrlf 체크아웃(Windows)에서도 여러 줄 "\n" 스캔 패턴이 일치하도록
+// (tests/db/hardware-sheet-import-inbound-costing-migration.test.ts와 동일 관례).
 function read(path: string) {
-  return readFileSync(path, "utf8")
+  return readFileSync(path, "utf8").replace(/\r\n/g, "\n")
 }
 
 describe("웨이브 7 — Q5. 공유 저장 키", () => {

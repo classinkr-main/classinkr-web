@@ -431,7 +431,9 @@ async function getPublicEventsAsCalendarEvents(): Promise<CalendarEvent[]> {
       source: "event" as EventSource,
       sourceLabel: "공개 행사",
       readonly: true,
-      href: "/admin/events",
+      // 행사별 편집 딥링크 — 목록(/admin/events) 대신 해당 행사의 편집 화면으로 직행.
+      // 노션/쇼룸/팀원 행사 등 외부 소스 href(외부 URL)는 각자의 빌더가 따로 관리한다.
+      href: `/admin/events/${encodeURIComponent(row.id)}/edit`,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }))

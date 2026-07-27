@@ -11,6 +11,7 @@ import { CheckCircle2, Loader2, Pencil, RefreshCw, RotateCcw, Search, Send, Tras
 
 import { matchesTokens, tokenize } from "../search-tokens"
 import { useDialogFocus } from "../../use-dialog-focus"
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   DRAFT_STATUS_LABELS,
   draftStatusLabel,
@@ -18,6 +19,7 @@ import {
   formatMonthLabel,
   mergedWeeklyFromMetadata,
   metadataString,
+  weeklyConfidenceFromMetadata,
   type DraftQueueMode,
   type DraftStatus,
   type LedgerDraft,
@@ -65,6 +67,32 @@ function draftMatchesFilter(draft: LedgerDraft, filter: DraftStatusFilter) {
   if (filter === "all") return true
   if (filter === "open") return draft.status === "draft" || draft.status === "checked"
   return draft.status === filter
+}
+
+// 라운드 3(P1) — 주차 병합 초안의 주차별 확도 도트: metadata.weekly + weeklyConfidence가 둘 다
+// 유효할 때만 금액>0 주차를 W라벨+3px 원(CONFIDENCE_TOKENS color)으로 한 줄 표기한다.
+// 확도 미기록(null) 주차는 도트 없이 건너뛴다 — 과밀 방지, 상세는 title/aria-label로 보강.
+function WeeklyConfidenceDots({ metadata }: { metadata: Record<string, unknown> | null | undefined }) {
+  const weekly = mergedWeeklyFromMetadata(metadata)
+  const states = weekly ? weeklyConfidenceFromMetadata(metadata) : null
+  if (!weekly || !states) return null
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9.5px] font-semibold text-[#615D59]">
+      {weekly.map((value, index) => {
+        if (value <= 0) return null
+        const state = states[index]
+        if (!state) return null
+        const token = CONFIDENCE_TOKENS[state]
+        const description = `W${index + 1} ${token.label} ${formatMoney(value)}`
+        return (
+          <span key={index} className="inline-flex items-center gap-1" title={description} aria-label={description}>
+            <span aria-hidden className="h-[3px] w-[3px] rounded-full" style={{ backgroundColor: token.color }} />
+            W{index + 1}
+          </span>
+        )
+      })}
+    </p>
+  )
 }
 
 // 다중 토큰 AND 매칭(품질 웨이브 3, 항목 1) — search-tokens.ts SSOT 소비. "김민 BD"처럼
@@ -337,6 +365,7 @@ export function DraftQueue({
               <p className="mt-1 text-[11px] text-[#615D59]">
                 {formatMonthLabel(draft.month)} · {draft.manager || "-"} · {draft.team || "-"} · {formatMoney(draft.amount)}
               </p>
+              <WeeklyConfidenceDots metadata={draft.metadata} />
               {/* 주차 셀 초안 고지: 병합(metadata.weekly 보존) vs 레거시 단일값(월 전체 대체) 구분 */}
               {draft.kind === "edit-row" &&
                 /^w[1-5]$/.test(metadataString(draft.metadata, "week") ?? "") &&

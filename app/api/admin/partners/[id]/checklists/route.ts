@@ -12,6 +12,7 @@ import {
   toErrorResponse,
 } from "@/app/api/admin/partners/_validation"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { getPartnerWorkspaceData, upsertPartnerChecklist } from "@/lib/partners-data"
 
 export async function GET(
@@ -25,7 +26,7 @@ export async function GET(
     const { id } = await params
     const { workspace, source, warning } = await getPartnerWorkspaceData(id)
     if (!workspace) return NextResponse.json({ error: "Not found" }, { status: 404 })
-    return NextResponse.json({ items: workspace.checklists, source, warning })
+    return adminCachedJson({ items: workspace.checklists, source, warning })
   } catch {
     return NextResponse.json({ error: "Failed to read checklists" }, { status: 500 })
   }

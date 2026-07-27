@@ -41,6 +41,11 @@ export interface BranchDealMixSlice {
   // 서버가 null을 내려보낸다. 0이 아니라 null인 경우에만 "데이터 없음"으로 취급할 것
   // (0은 실제로 전기 실적이 0이었다는 유효한 값).
   prev_actual?: number | null
+  // 이번 주/전주(월요일 시작, UTC) REV 딜 first_payment 기준 확정 금액 — 서버 MixSlice의
+  // week_actual/prev_week_actual 미러. meta.weekly_available=false면 축 전체가 null.
+  // 소비처: 장부 DSH 지표 밴드 주간 뷰(ledger/dsh-derive.ts deriveDshWeeklyFromDealMix).
+  week_actual?: number | null
+  prev_week_actual?: number | null
 }
 
 // deal_mix 4개 분해축(category/status_type/channel/segment) 각각의 전기 비교 메타 —
@@ -81,6 +86,21 @@ export interface BranchDshBreakdownRow {
   months: Record<string, number>
 }
 
+// summary API의 dsh_rows 행 — lib/branch/parsers/dsh.ts DshRow 미러. 시트 '1. DSH'의
+// 팀(Team KR=ALL/BD/MKT/CSM)·멤버 단위 Goal/Status 수치로, breakdown과 마찬가지로 팀 필터와
+// 무관한 전사 데이터다. dsh_breakdown과 같은 opt-in(`?breakdown=1`)으로만 실린다 — 소비처는
+// 장부 DSH 렌즈의 팀·멤버 그리드(SalesLedgerWorkbench의 DshTeamGrid) 한 곳뿐이다.
+// member 행은 파서가 팀 매핑에 성공한 것만 실리며 그 경우 team이 항상 채워져 있다.
+export interface BranchDshRow {
+  level: "team" | "member"
+  team: string // "ALL" | "BD" | "MKT" | "CSM"
+  member?: string
+  kind: "goal" | "status"
+  annual: number
+  quarters: [number, number, number, number]
+  months: Record<string, number>
+}
+
 // 서빙 소스 메타 — REV/DSH 각각 "지금 보는 수치가 어느 단계(장부 액티브 임포트/시트
 // 미러/라이브 시트)에서, 언제 온 것인지"를 알린다. 2026-07-16 사고(7/3 스테일 임포트가
 // 13일간 최신 시트 반영분을 가렸으나 화면은 "마지막 동기화: 방금"만 보여줬다) 재발 시
@@ -110,6 +130,7 @@ export interface BranchSummaryResponse {
   campaigns_recent: BranchCampaignRow[]
   deal_mix: BranchDealMix | null
   dsh_breakdown?: BranchDshBreakdownRow[]
+  dsh_rows?: BranchDshRow[]
   monthly_series: BranchMonthlySeries
   lastSync: string | null
   lastError: string | null

@@ -21,9 +21,11 @@ import {
   Code2,
   Globe,
   UserCog,
+  KeyRound,
 } from "lucide-react"
 
 import { MembersPanel } from "@/components/admin/settings/MembersPanel"
+import { SecurityPanel } from "@/components/admin/settings/SecurityPanel"
 import { NotificationIcon } from "@/components/notifications/NotificationIcon"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import {
@@ -247,6 +249,9 @@ function ToggleRow({
       </div>
       <button
         type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
         onClick={() => onChange(!checked)}
         className={cn(
           "relative h-6 w-11 shrink-0 rounded-full transition-colors",
@@ -463,7 +468,16 @@ function WebhookRow({
   )
 }
 
-type SettingsTab = "general" | "lead" | "cta" | "links" | "integrations" | "notifications" | "members" | "history"
+type SettingsTab =
+  | "general"
+  | "lead"
+  | "cta"
+  | "links"
+  | "integrations"
+  | "notifications"
+  | "security"
+  | "members"
+  | "history"
 
 type SettingsKey = keyof SiteSettings
 
@@ -517,6 +531,12 @@ const NAV_ITEMS: Array<{
     label: "알림",
     desc: "알림 외관 및 수신자 설정",
     icon: <Sparkles className="w-4 h-4" />,
+  },
+  {
+    key: "security",
+    label: "보안",
+    desc: "비밀번호와 로그인 세션",
+    icon: <KeyRound className="w-4 h-4" />,
   },
   {
     // 구 /admin/users(회원 관리)를 Settings 탭으로 흡수(2026-07-04) — 읽기 전용 계정 디렉터리.
@@ -743,6 +763,7 @@ const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
     "emailWebhookUrl",
   ],
   notifications: ["notificationDigestEmailList", "notificationAppearance"],
+  security: [],
   members: [], // 읽기 전용 계정 디렉터리 — 편집 필드 없음(dirty 계산 제외)
   history: [],
 }
@@ -1239,7 +1260,7 @@ export default function SettingsPage() {
           <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">Settings</h1>
           <p className="text-[13px] text-[#1a1a1a]/45 mt-2 max-w-2xl">
-            배포 없이 바꾸는 운영 제어판입니다. 일반·리드·연동·알림 설정은 저장 즉시 반영됩니다.
+            배포 없이 바꾸는 운영 제어판입니다. 일반·리드·연동·알림·보안 설정은 저장 즉시 반영됩니다.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:min-w-[280px]">
@@ -1339,7 +1360,7 @@ export default function SettingsPage() {
           <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-4">
             <p className="text-[12px] font-medium text-[#111110]">운영 메모</p>
             <p className="text-[12px] text-[#1a1a1a]/45 mt-1 leading-relaxed">
-              주소 탭은 복사 전용이고, 리드/폼과 외부 연동은 즉시 저장 가능합니다. CTA·변경 이력은 데이터 모델 연결 전까지 카테고리에서 숨겨둡니다.
+              주소 탭은 복사 전용이고, 보안 탭의 비밀번호 변경은 별도로 즉시 적용됩니다. CTA·변경 이력은 데이터 모델 연결 전까지 카테고리에서 숨겨둡니다.
             </p>
           </div>
         </aside>
@@ -1907,6 +1928,8 @@ export default function SettingsPage() {
               </PanelCard>
             </>
           )}
+
+          {activeTab === "security" && <SecurityPanel />}
 
           {activeTab === "members" && <MembersPanel />}
 

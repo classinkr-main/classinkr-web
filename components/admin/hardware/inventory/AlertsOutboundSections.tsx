@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import type { Dispatch, SetStateAction } from "react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
@@ -23,7 +24,7 @@ interface AlertsOutboundSectionsProps {
   setOutboundPage: Dispatch<SetStateAction<number>>
 }
 
-export default function AlertsOutboundSections({
+function AlertsOutboundSections({
   openSections,
   toggleSection,
   alertsPagination,
@@ -107,3 +108,5 @@ export default function AlertsOutboundSections({
     </div>
   )
 }
+
+export default memo(AlertsOutboundSections)

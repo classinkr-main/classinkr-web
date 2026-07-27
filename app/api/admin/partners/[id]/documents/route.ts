@@ -19,6 +19,7 @@ import {
   toErrorResponse,
 } from "@/app/api/admin/partners/_validation"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { getPartnerWorkspaceData, upsertPartnerDocument } from "@/lib/partners-data"
 import type { PartnerQuoteDetailsInput, PartnerQuoteLineItemInput } from "@/lib/partners-types"
 
@@ -162,7 +163,7 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    return NextResponse.json({ items: workspace.documents, source, warning })
+    return adminCachedJson({ items: workspace.documents, source, warning })
   } catch {
     return NextResponse.json({ error: "Failed to read documents" }, { status: 500 })
   }

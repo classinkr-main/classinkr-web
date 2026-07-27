@@ -99,6 +99,22 @@ export function mergedWeeklyFromMetadata(metadata: Record<string, unknown> | nul
   return weeks.some((value) => value > 0) ? weeks : null
 }
 
+// 라운드 3(P1) — 주차별 확도 개별 기록: metadata.weeklyConfidence(5칸, metadata.weekly와 병렬)
+// 검증 판독기. mergedWeeklyFromMetadata와 대칭 규약 —
+//   - 필드 부재/무효(배열 아님·길이≠5·무효 원소)는 "없음"(null)으로 판독해 기존 폴백
+//     (초안 단위 metadata.confidence — draftConfidenceFromMetadata)을 그대로 태운다(완전 하위호환).
+//   - 전 칸 null(신호 없음)도 "없음"으로 본다 — mergedWeekly의 some(>0) 가드와 대칭.
+//   - 유효 원소는 null(금액 0/빈 주차) 또는 DraftConfidence 3단뿐이다.
+export function weeklyConfidenceFromMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): Array<DraftConfidence | null> | null {
+  const raw = metadata?.weeklyConfidence
+  if (!Array.isArray(raw) || raw.length !== 5) return null
+  if (!raw.every((value) => value === null || isDraftConfidence(value))) return null
+  const states = raw.map((value) => (isDraftConfidence(value) ? value : null))
+  return states.some((value) => value != null) ? states : null
+}
+
 // SalesLedgerWorkbench에서 물리 이동(웨이브 7 2단 F5): 워크벤치 본체와 ledger/RevMatrix가
 // 함께 쓰는 확도/상품군/주차 검수 판독 헬퍼 — 로직 무변경.
 export function isDraftConfidence(value: unknown): value is DraftConfidence {
@@ -161,6 +177,11 @@ export const DRAFT_CONFLICT_MESSAGE =
 export const DRAFT_DEDUPED_RECENT_NOTICE =
   "직전 동일 초안 재사용됨 — 60초 내 같은 내용의 초안이 이미 있어 새로 만들지 않았습니다."
 
+// M9-3 — 잠긴 (행, 월) 셀에 수정 초안을 저장하려 할 때의 안내 문구 SSOT. 콕핏 편집기·입력 레일이
+// 각자 복붙하던 리터럴을 하나로 통합한다(표현 분화 금지). 제출 사전차단 경고·인라인 배지가 공유한다.
+export const LOCK_WARNING_TEXT =
+  "이 딜의 해당 월 셀은 이미 잠겨 있습니다(시트 확정·장부 반영 등) — 수정 초안을 저장할 수 없습니다. 다른 월을 선택하거나 체크 큐에서 확인하세요."
+
 // 입력 레일 저장 결과(품질 웨이브 3, 항목 3) — persisted: 서버에 실제로 저장됐으면 true,
 // 로컬 폴백(장부 적용 불가)이면 false. deduped: 새 초안을 만드는 대신 같은 딜·같은 셀(월/주차)에
 // 이미 열린 초안을 갱신했으면 true(이중계상 가드 발동) — InputRailSection이 "이미 대기 초안
@@ -182,6 +203,41 @@ export interface DraftSaveResult {
   validationMessage?: string
 }
 
+// M9-2 — DraftSaveResult → 저장 인라인 피드백({kind, text}) 매핑 SSOT. 콕핏 편집기·입력 레일의
+// runSave가 각자 복붙하던 6분기(conflict → validationMessage → !persisted → dedupedRecent →
+// deduped → duplicateWarning → 성공)를 순수 함수 하나로 합쳐 문구 드리프트를 없앤다. 분기 순서와
+// 문구는 기존 그대로다(변경 시 두 표면 동시 반영). DRAFT_CONFLICT_MESSAGE·
+// DRAFT_DEDUPED_RECENT_NOTICE는 각 문구 SSOT를 재사용한다.
+export function resultToDraftFeedback(
+  result: DraftSaveResult,
+): { kind: "success" | "error" | "warning"; text: string } {
+  if (result.conflict) {
+    // 낙관적 잠금 충돌(409) — 이번 수정 미반영, 큐 해당 초안은 서버 현재본으로 새로고침됨.
+    return { kind: "error", text: DRAFT_CONFLICT_MESSAGE }
+  }
+  if (result.validationMessage) {
+    // 서버 검증 거부(400) — 서버 문구 그대로.
+    return { kind: "error", text: result.validationMessage }
+  }
+  if (!result.persisted) {
+    // 서버 저장 실패(장부 적용 불가) — createDraft 로컬 폴백/updateDraft 실패 공통 문구.
+    return { kind: "error", text: "서버 저장에 실패했습니다(장부 적용 불가) — 잠시 후 다시 시도하거나 재연결 후 저장하세요." }
+  }
+  if (result.dedupedRecent) {
+    // POST 200 재사용(60초 내 동일 입력 방어) — 새 초안이 생긴 게 아님을 명시.
+    return { kind: "success", text: `${DRAFT_DEDUPED_RECENT_NOTICE} 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다.` }
+  }
+  if (result.deduped) {
+    // 이중계상 가드 — 같은 딜·같은 셀에 이미 열린 초안이 있어 새로 만들지 않고 그 초안을 갱신했다.
+    return { kind: "success", text: "이미 대기 초안 있음 — 수정으로 반영됩니다. 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." }
+  }
+  if (result.duplicateWarning) {
+    // new-row는 매트릭스 대응 행이 없어 자동 재지정할 수 없다. 저장은 진행하고 경고만.
+    return { kind: "warning", text: "저장 완료 — 같은 고객·월에 이미 열린 신규 초안이 있습니다. 체크 큐에서 중복 여부를 확인하세요." }
+  }
+  return { kind: "success", text: "저장 완료 — 체크 큐에서 검수(체크 → 적용) 후 장부에 반영됩니다." }
+}
+
 export interface DraftForm {
   operation: DraftOperation
   customer: string
@@ -195,6 +251,15 @@ export interface DraftForm {
   amount: string
   quantity: string
   note: string
+  /** 주차 분해 입력(Ledger-1a "주차별 입력 — 금액만 넣으면 월 합 자동" + Cockpit-1c 주차 그리드):
+      true면 amount(단일 금액 버퍼) 대신 weekly 5칸 버퍼가 저장 금액의 원천이 된다 —
+      월 합 = 주차 자동합계(직접 수정 불가). 저장 계약은 draftWeeklySaveContract 참조. */
+  weeklyMode: boolean
+  /** W1~W5 문자열 입력 버퍼 5칸(빈 칸 허용). 숫자 해석·음수/비숫자 0 처리는 draftWeeklyAmounts. */
+  weekly: string[]
+  /** 라운드 3(P1): W1~W5 주차별 확도 버퍼 5칸(weekly와 병렬, 빈 칸 없음 — 항상 3단 중 하나).
+      저장 시에는 금액>0 주차만 이 값이 실리고 나머지는 null로 정규화된다(draftWeeklySaveContract). */
+  weeklyConfidence: DraftConfidence[]
 }
 
 export const DRAFT_CONFIDENCE_OPTIONS: Array<{ id: DraftConfidence; label: string }> = [
@@ -381,6 +446,95 @@ export function safeAmount(value: string) {
   return Number.isFinite(numeric) ? numeric : 0
 }
 
+// ── 주차 분해 입력(입력 레일) — Ledger-1a 편집 다이얼로그·Cockpit-1c 주차 그리드 이식 ──
+// 원칙: 월 합 = 주차 자동합계(직접 수정 불가). 저장은 onCommitCell의 주차 병합 초안과 동일한
+// metadata 키 규약(weekly 5칸 숫자 + week:"month" + amount=주차 합)을 재사용한다(서버 스키마 호환).
+
+// firstPaymentWeekIndex(ceil(day/7), 4주 상한)와 동일한 달력 구획 라벨 — ForecastBoard 칼럼
+// 헤더와 입력 레일 주차 그리드가 공유한다. SSOT는 이 파일(ForecastBoard는 여기서 재수입 —
+// shared→ForecastBoard 역방향 import 금지, 사이클 방지).
+export const FORECAST_WEEK_RANGE_LABELS = ["1–7일", "8–14일", "15–21일", "22–28일", "29일~"] as const
+
+// 주차 분해 입력을 노출·저장하는 작업 유형 — forecast-add·amount-change만. 기간 이동(period-shift)·
+// 수량 변경(quantity-change)은 기존 단일 금액 UX를 유지한다(이동 프리뷰·수량 검증 위에 주차
+// 그리드까지 겹치면 폼이 과밀해지는 것을 피한 스코프 결정 — InputRailSection 노출 조건과
+// buildDraftInput 저장 계약이 같은 게이트를 쓴다).
+export function operationSupportsWeeklySplit(operation: DraftOperation): boolean {
+  return operation === "forecast-add" || operation === "amount-change"
+}
+
+// 주차 입력 버퍼 5칸 초기값 — defaultDraftForm·프리필·리셋 경로가 공유(항상 새 배열 반환).
+export function emptyDraftWeekly(): string[] {
+  return ["", "", "", "", ""]
+}
+
+// 주차별 확도 버퍼 5칸 초기값 — emptyDraftWeekly와 대칭(항상 새 배열 반환). 프리필/리셋 경로가
+// 초안 단위 확도(또는 기본 "expected")로 전 주차를 시드할 때 쓴다.
+export function defaultDraftWeeklyConfidence(confidence: DraftConfidence): DraftConfidence[] {
+  return Array.from({ length: 5 }, () => confidence)
+}
+
+// 우세 확도(라운드 3 P1): 금액 합이 가장 큰 확도 버킷. 동률은 낮은 확도
+// (expected < high-confidence < confirmed) 우선 — 낮은 쪽을 남겨야 큐 배지·매트릭스 pending 등
+// metadata.confidence 소비자가 미확정 금액을 상향 왜곡하지 않는다. 상태 null(확도 미기록)인
+// 금액>0 주차도 같은 이유로 예정(expected) 버킷으로 계상한다.
+export function dominantWeeklyConfidence(
+  weekly: number[],
+  states: Array<DraftConfidence | null>,
+): DraftConfidence {
+  const sums: Record<DraftConfidence, number> = { expected: 0, "high-confidence": 0, confirmed: 0 }
+  weekly.forEach((value, index) => {
+    if (!(value > 0)) return
+    sums[states[index] ?? "expected"] += value
+  })
+  let dominant: DraftConfidence = "expected"
+  if (sums["high-confidence"] > sums[dominant]) dominant = "high-confidence"
+  if (sums.confirmed > sums[dominant]) dominant = "confirmed"
+  return dominant
+}
+
+// 문자열 버퍼 5칸 → 숫자 5칸. 음수/비숫자는 0 처리(감액은 장부 가감 입력 사용 — 매트릭스 셀
+// onAmountClamped와 동일 규약). 버퍼가 5칸 미만이어도 항상 5칸으로 정규화한다.
+export function draftWeeklyAmounts(weekly: string[]): number[] {
+  return Array.from({ length: 5 }, (_, index) => Math.max(safeAmount(weekly[index] ?? ""), 0))
+}
+
+// 월 합 = 주차 자동합계 — 표시(읽기전용 굵은 합계)와 검증(주차 합>0)이 같은 산식을 소비한다.
+export function draftWeeklyTotal(weekly: string[]): number {
+  return draftWeeklyAmounts(weekly).reduce((sum, value) => sum + value, 0)
+}
+
+// 저장 계약: weeklyMode + 지원 작업 유형 + 주차 합>0이면 { amount: 주차 합, weekly: 5칸 숫자,
+// week: "month", weeklyConfidence: 5칸 확도, dominantConfidence: 우세 확도 }를 돌려준다 —
+// buildDraftInput이 amount(draftForm.amount 무시)·metadata.weekly·metadata.week·
+// metadata.weeklyConfidence(라운드 3 P1)·metadata.confidence(우세 확도 자동 기록)에 그대로 싣는다.
+// weeklyConfidence는 금액>0 주차만 폼 버퍼 값, 금액 0/빈 주차는 반드시 null(스키마 계약).
+// 조건 미충족이면 null(기존 단일 금액 경로 그대로 — 그 경로는 weeklyConfidence: null 명시).
+export function draftWeeklySaveContract(
+  form: Pick<DraftForm, "operation" | "weeklyMode" | "weekly" | "weeklyConfidence">,
+): {
+  amount: number
+  weekly: number[]
+  week: "month"
+  weeklyConfidence: Array<DraftConfidence | null>
+  dominantConfidence: DraftConfidence
+} | null {
+  if (!form.weeklyMode || !operationSupportsWeeklySplit(form.operation)) return null
+  const weekly = draftWeeklyAmounts(form.weekly)
+  const amount = weekly.reduce((sum, value) => sum + value, 0)
+  if (amount <= 0) return null
+  const weeklyConfidence = weekly.map((value, index) =>
+    value > 0 ? form.weeklyConfidence[index] ?? "expected" : null,
+  )
+  return {
+    amount,
+    weekly,
+    week: "month",
+    weeklyConfidence,
+    dominantConfidence: dominantWeeklyConfidence(weekly, weeklyConfidence),
+  }
+}
+
 // ── REV 행 단위 파생 헬퍼 (워크벤치에서 물리 이동, 2026-07-16 역할 재배분) ──
 // buildRevWeekProjection을 KR Team 개요(sections/RevenueFlowSection)가 함께 소비하게 되면서
 // 부모(SalesLedgerWorkbench) 역import 없이 공유하도록 의존 클로저째로 이 파일에 둔다.
@@ -466,6 +620,31 @@ export function buildRevWeekProjection(rows: LedgerRevenueRow[], month: string):
         weeks[index].rows += 1
       })
       continue
+    }
+
+    // 라운드 3(P1) — 주차별 확도 exact 경로: 초안 파생 행이 유효한 weekly+weeklyConfidence를
+    // 함께 가지면 아래 비례 배분 대신 주차 상태를 confirmed/highConfidence/open 버킷에 직접
+    // 집계한다(appliedDraftConfidenceMaps의 월 합 exact와 주차 단위까지 일치). 상태 null(확도
+    // 미기록)인 금액>0 주차는 open — dominantWeeklyConfidence·확도 맵과 동일한 보수 판정.
+    // draftMonth 가드: metadata.weekly는 초안의 그 달 전용이라 다른 달 셀에 오적용하지 않는다.
+    // inferred/월합계만/시트 explicit(비초안) 행은 전부 기존 경로 무변경.
+    if (
+      row.draftMonth === month &&
+      mergedWeeklyFromMetadata(row.draftMetadata) != null
+    ) {
+      const exactStates = weeklyConfidenceFromMetadata(row.draftMetadata)
+      if (exactStates) {
+        weeklySplit.weeks.forEach((value, index) => {
+          if (value <= 0) return
+          const state = exactStates[index]
+          if (state === "confirmed") weeks[index].confirmed += value
+          else if (state === "high-confidence") weeks[index].highConfidence += value
+          else weeks[index].open += value
+          weeks[index].total += value
+          weeks[index].rows += 1
+        })
+        continue
+      }
     }
 
     const confirmedRatio = Math.min(rowMonthConfirmed(row, month) / amount, 1)
@@ -618,6 +797,50 @@ export function DonutGauge({
         {value && <p className="mt-1 text-[11px] font-semibold text-[#615D59]">{value}</p>}
         {goal && <p className="mt-0.5 text-[10.5px] text-[#615D59]">{goal}</p>}
       </div>
+    </div>
+  )
+}
+
+// 예정(잔여) 구간의 빗금 — Board-1b의 '예상' 해칭을 Warning 틴트 페어로 재현(팔레트 준수).
+// SSOT는 여기(shared) — ForecastBoard·ConfidenceStackBar가 동일 값을 재수입해 쓴다.
+export const OPEN_HATCH_BACKGROUND =
+  "repeating-linear-gradient(45deg, #ECD29C, #ECD29C 4px, #FBF1E0 4px, #FBF1E0 8px)"
+
+// 확도 스택 게이지 — 확정(솔리드)·고확도(솔리드)·예정 잔여(Warning 틴트 빗금) 3단 비율 바.
+// 라운드 3 P2: 보드 렌즈 헤더(ForecastBoard) 전용이던 시각 문법을 shared로 승격해 REV 렌즈
+// 확도 게이지가 같은 컴포넌트를 소비한다(중복 제거). 레전드(라벨·숫자)는 소비처마다 달라
+// 이 컴포넌트 밖에 둔다 — Board는 상시 노출 레전드를, REV는 title 툴팁을 쓴다.
+export interface ConfidenceStackBarProps {
+  /** 스코프(선택월 등) 총액. 0 이하면 아무것도 렌더하지 않는다(보드 헤더와 동일 가드). */
+  total: number
+  confirmed: number
+  high: number
+  /** 바 컨테이너에 얹을 추가 클래스(예: 상단 여백) — 기본은 없음(소비처가 배치를 정한다). */
+  className?: string
+  /** 네이티브 title 툴팁 — 상시 레전드가 없는 소비처(REV)가 확정/고확도/예정 수치를 hover로 노출할 때 쓴다. */
+  title?: string
+}
+
+export function ConfidenceStackBar({ total, confirmed, high, className = "", title }: ConfidenceStackBarProps) {
+  if (total <= 0) return null
+  const open = Math.max(total - confirmed - high, 0)
+  return (
+    <div
+      className={`flex h-[10px] overflow-hidden rounded-sm border border-[rgba(0,0,0,0.08)] ${className}`}
+      title={title}
+    >
+      {confirmed > 0 && (
+        <div className={CONFIDENCE_TOKENS.confirmed.bgClass} style={{ width: `${(confirmed / total) * 100}%` }} />
+      )}
+      {high > 0 && (
+        <div
+          className={CONFIDENCE_TOKENS["high-confidence"].bgClass}
+          style={{ width: `${(high / total) * 100}%` }}
+        />
+      )}
+      {open > 0 && (
+        <div className="flex-1 border-l border-dashed border-[#ECD29C]" style={{ background: OPEN_HATCH_BACKGROUND }} />
+      )}
     </div>
   )
 }

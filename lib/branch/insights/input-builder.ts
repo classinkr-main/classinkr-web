@@ -8,6 +8,7 @@ import { deriveMemberTeams } from "@/lib/branch/computations/member-teams"
 import { computeHeatmap } from "@/lib/branch/computations/heatmap"
 import { dealProbability } from "@/lib/branch/computations/pipeline"
 import { confirmedMonthAmount } from "@/lib/branch/computations/rev-confirmed"
+import { dedupeDshByKind } from "@/lib/branch/dsh-dedupe"
 import { fyOf, fiscalQuarter, ymKey } from "@/lib/branch/fiscal"
 import type { Period } from "@/lib/branch/computations/heatmap"
 
@@ -87,10 +88,17 @@ function buildMix(
 ): Array<{ name: string; goal: number; actual: number; pct: number }> {
   const goals = new Map<string, number>()
   const actuals = new Map<string, number>()
-  for (const row of breakdown) {
+  // summary 라우트 deal_mix와 동일한 절대 규칙 — 파서 breakdown은 같은 콤보를 스코프별
+  // (전사 + 팀/멤버 섹션)로 반복 방출하므로, 최대-annual 채택(dedupeDshByKind) 없이
+  // raw 합산하면 전사 수치가 ~3배로 부푼다.
+  const deduped = dedupeDshByKind(breakdown)
+  for (const row of deduped.goal.values()) {
     const key = row[dim]
-    if (row.kind === "goal") goals.set(key, (goals.get(key) ?? 0) + pickBreakdownValue(row, scope, now))
-    else actuals.set(key, (actuals.get(key) ?? 0) + pickBreakdownValue(row, scope, now))
+    goals.set(key, (goals.get(key) ?? 0) + pickBreakdownValue(row, scope, now))
+  }
+  for (const row of deduped.status.values()) {
+    const key = row[dim]
+    actuals.set(key, (actuals.get(key) ?? 0) + pickBreakdownValue(row, scope, now))
   }
   const keys = new Set([...goals.keys(), ...actuals.keys()])
   return [...keys].map((k) => {

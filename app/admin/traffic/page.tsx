@@ -19,10 +19,10 @@ import { InsightCard, MetricRankList, Panel, StatTile, TableEmpty } from "@/comp
 
 // 방문자/트래픽 전용 대시보드.
 // 기존 /admin/analytics 안에 묻혀 있던 "홈페이지 흐름 · 추적 현황"을 따로 모은 화면이다.
-// 데이터는 전부 기존 어드민 API를 재사용한다(신규 백엔드 없음):
-//   - /api/admin/visitor-stats          방문자 수 기본
-//   - /api/admin/homepage-flow          페이지별 흐름·이탈
-//   - /api/admin/event-counts           전환 이벤트 카운트
+// 데이터 소스(7-23 감사 3-A에서 단일화):
+//   - /api/admin/traffic-summary        방문자·흐름·이벤트 카운트 통합(1회 스캔).
+//     visitor-stats / homepage-flow / event-counts 3개 라우트가 같은 client_events
+//     윈도우를 3중 스캔하던 것을 대체한다(개별 라우트는 다른 소비자용으로 유지).
 //   - /api/admin/marketing/conversions/status  GA4·Meta·Google Ads 픽셀 설정 상태
 
 type RangeDays = 7 | 14 | 30
@@ -83,6 +83,16 @@ interface ClientEventCounts {
   byEvent: Array<{ event: string; count: number; lastSeen: string | null }>
   byButton: Array<{ button: string; event: string; count: number; lastSeen: string | null }>
   daily: Array<{ date: string; count: number }>
+}
+
+// /api/admin/traffic-summary 응답 — 세 하위 페이로드는 기존 개별 라우트 계약과 동일.
+interface TrafficSummary {
+  rangeDays: number
+  timezone: "Asia/Seoul"
+  generatedAt: string
+  visitorStats: VisitorStats
+  homepageFlow: HomepageFlow
+  eventCounts: ClientEventCounts
 }
 
 interface MarketingConversionStatus {
@@ -154,21 +164,31 @@ export default function TrafficPage() {
   const [homepageFlow, setHomepageFlow] = useState<HomepageFlow | null>(null)
   const [eventCounts, setEventCounts] = useState<ClientEventCounts | null>(null)
   const [conversionStatus, setConversionStatus] = useState<MarketingConversionStatus | null>(null)
+  // 첫 페치가 끝나기 전(state가 null)에는 실패 카피 대신 스켈레톤을 보여준다 —
+  // 로딩과 진짜 실패/빈 데이터를 구분한다.
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
-    void Promise.all([
-      fetchJson<VisitorStats>(`/api/admin/visitor-stats?range=${range}`),
-      fetchJson<HomepageFlow>(`/api/admin/homepage-flow?range=${range}`),
-      fetchJson<ClientEventCounts>(`/api/admin/event-counts?range=${range}`),
-      fetchJson<MarketingConversionStatus>("/api/admin/marketing/conversions/status"),
-    ]).then(([stats, flow, counts, status]) => {
+
+    // Overview/Analytics와 동일 패턴 — 내부 async 함수로 감싸 로딩 플래그를 관리한다
+    // (이펙트 바디에서 setState 직접 호출 회피).
+    const load = async () => {
+      setLoading(true)
+      const [summary, status] = await Promise.all([
+        fetchJson<TrafficSummary>(`/api/admin/traffic-summary?range=${range}`),
+        fetchJson<MarketingConversionStatus>("/api/admin/marketing/conversions/status"),
+      ])
       if (cancelled) return
-      setVisitorStats(stats ?? null)
-      setHomepageFlow(flow ?? null)
-      setEventCounts(counts ?? null)
+      setVisitorStats(summary?.visitorStats ?? null)
+      setHomepageFlow(summary?.homepageFlow ?? null)
+      setEventCounts(summary?.eventCounts ?? null)
       setConversionStatus(status ?? null)
-    })
+      setLoading(false)
+    }
+
+    void load()
+
     return () => {
       cancelled = true
     }
@@ -197,6 +217,16 @@ export default function TrafficPage() {
 
   const tz = visitorStats?.timezone ?? homepageFlow?.timezone ?? "Asia/Seoul"
 
+  // 로딩 스켈레톤 — 중립 톤(#f0f0ec, 어드민 공통), 파스텔/그린 채움 없음.
+  const chartSkeleton = <div className="h-56 w-full animate-pulse rounded-xl bg-[#f0f0ec]" />
+  const panelSkeleton = (
+    <div className="space-y-2.5">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="h-11 animate-pulse rounded-xl bg-[#f0f0ec]" />
+      ))}
+    </div>
+  )
+
   return (
     <div className="px-4 pt-8 pb-16 sm:px-6 sm:pt-10 sm:pb-20 lg:px-8">
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -212,6 +242,8 @@ export default function TrafficPage() {
           {([7, 14, 30] as const).map((value) => (
             <button
               key={value}
+              type="button"
+              aria-pressed={range === value}
               onClick={() => setRange(value)}
               className={`rounded-md px-2.5 py-2 text-[12px] font-medium whitespace-nowrap transition-colors sm:px-3 sm:py-1.5 ${
                 range === value ? "bg-white text-[#111110] shadow-sm" : "text-[#1a1a1a]/50"
@@ -255,7 +287,9 @@ export default function TrafficPage() {
 
       <div className="mb-6 grid gap-6 xl:grid-cols-2">
         <Panel title="일별 방문자" description="전체 공개 페이지 순방문자 추이입니다.">
-          {allVisitorChartData.length > 0 ? (
+          {loading ? (
+            chartSkeleton
+          ) : allVisitorChartData.length > 0 ? (
             <div className="h-56 w-full">
               <DailyEventCountsChart data={allVisitorChartData} />
             </div>
@@ -264,7 +298,9 @@ export default function TrafficPage() {
           )}
         </Panel>
         <Panel title="일별 홈 방문자" description="홈(/) 페이지 순방문자 추이입니다.">
-          {homeVisitorChartData.length > 0 ? (
+          {loading ? (
+            chartSkeleton
+          ) : homeVisitorChartData.length > 0 ? (
             <div className="h-56 w-full">
               <DailyEventCountsChart data={homeVisitorChartData} />
             </div>
@@ -313,7 +349,9 @@ export default function TrafficPage() {
           description="홈 방문 후 다음으로 이동한 경로 또는 사이트 이탈 후보입니다."
           action={<span className="text-[12px] text-[#1a1a1a]/40">{tz}</span>}
         >
-          {homepageFlow ? (
+          {loading ? (
+            panelSkeleton
+          ) : homepageFlow ? (
             <div className="grid gap-6 xl:grid-cols-[1.1fr_1fr]">
               <div className="space-y-3">
                 {homepageFlow.nextStepsFromHome.map((step) => (
@@ -464,7 +502,9 @@ export default function TrafficPage() {
 
       <div className="mb-6 grid gap-6 xl:grid-cols-2">
         <Panel title="일별 이벤트" description="자체 DB에 적재된 전체 클라이언트 이벤트 추이입니다.">
-          {eventCounts && eventCounts.daily.length > 0 ? (
+          {loading ? (
+            chartSkeleton
+          ) : eventCounts && eventCounts.daily.length > 0 ? (
             <div className="h-56 w-full">
               <DailyEventCountsChart data={eventCounts.daily} />
             </div>
@@ -483,7 +523,9 @@ export default function TrafficPage() {
             )
           }
         >
-          {conversionStatus ? (
+          {loading ? (
+            panelSkeleton
+          ) : conversionStatus ? (
             <div className="space-y-2.5">
               <StatusRow
                 label="내부 추적 (client_events)"

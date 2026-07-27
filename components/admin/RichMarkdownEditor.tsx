@@ -2,6 +2,7 @@
 
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -11,7 +12,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
 } from "react"
-import { useEditor, EditorContent, Extension } from "@tiptap/react"
+import { useEditor, EditorContent, Extension, type Editor } from "@tiptap/react"
 import { Plugin, PluginKey } from "@tiptap/pm/state"
 import { Decoration, DecorationSet } from "@tiptap/pm/view"
 import StarterKit from "@tiptap/starter-kit"
@@ -138,7 +139,12 @@ const ResizableMarkdownImage = Image.extend({
   },
 })
 
+// onChange 트레일링 디바운스(ms): 키 입력마다 마크다운 직렬화 + 부모(수천 줄) 전체 리렌더를 막는다.
+const EMIT_DEBOUNCE_MS = 200
+
 export interface RichMarkdownEditorHandle {
+  /** 디바운스로 대기 중인 본문 변경을 부모로 즉시 전파한다 — 저장(버튼/Cmd+S) 직전에 호출. */
+  flush: () => void
   toggleBold: () => void
   toggleItalic: () => void
   setHeading: (level: 2 | 3) => void
@@ -178,6 +184,9 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
   ) {
     const lastEmitted = useRef(value)
     const skipNextUpdate = useRef(false)
+    const onChangeRef = useRef(onChange)
+    const emitTimerRef = useRef<number | null>(null)
+    const pendingEmitRef = useRef(false)
     const savedSelection = useRef<SavedSelection | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [hasSelection, setHasSelection] = useState(false)
@@ -199,6 +208,55 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
     useEffect(() => {
       setSlashIndex(0)
     }, [slashQuery])
+
+    useEffect(() => {
+      onChangeRef.current = onChange
+    }, [onChange])
+
+    const clearEmitTimer = useCallback(() => {
+      if (emitTimerRef.current !== null) {
+        window.clearTimeout(emitTimerRef.current)
+        emitTimerRef.current = null
+      }
+    }, [])
+
+    // 대기 중 변경을 지금 직렬화해 부모로 전파한다.
+    // 에디터를 변형하지 않는 읽기 전용 경로라 한글 IME 조합(composition)을 깨지 않으며,
+    // lastEmitted를 먼저 갱신하므로 부모 에코(value 동기화 effect)가 setContent를 호출하지 않는다.
+    const emitPendingChange = useCallback(
+      (editorInstance: Editor) => {
+        clearEmitTimer()
+        if (!pendingEmitRef.current || editorInstance.isDestroyed) return
+        pendingEmitRef.current = false
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const markdown = (editorInstance.storage as any).markdown.getMarkdown() as string
+        if (markdown === lastEmitted.current) return
+        lastEmitted.current = markdown
+        onChangeRef.current(markdown)
+      },
+      [clearEmitTimer]
+    )
+
+    // 트레일링 디바운스 예약. 한글 IME 주의: 조합 중(view.composing)에는 발화를 연기하고
+    // (한글은 마지막 음절이 조합 상태로 남을 수 있다) 조합 종료 후 첫 만료 때 전파한다.
+    const scheduleEmit = useCallback(
+      (editorInstance: Editor) => {
+        const arm = () => {
+          clearEmitTimer()
+          emitTimerRef.current = window.setTimeout(() => {
+            emitTimerRef.current = null
+            if (editorInstance.isDestroyed) return
+            if (editorInstance.view.composing) {
+              arm()
+              return
+            }
+            emitPendingChange(editorInstance)
+          }, EMIT_DEBOUNCE_MS)
+        }
+        arm()
+      },
+      [clearEmitTimer, emitPendingChange]
+    )
 
     const closeImageDialog = () => {
       setShowImageDialog(false)
@@ -491,10 +549,10 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
           skipNextUpdate.current = false
           return
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const markdown = (editor.storage as any).markdown.getMarkdown() as string
-        lastEmitted.current = markdown
-        onChange(markdown)
+        // 키 입력마다 직렬화·부모 리렌더하지 않고 트레일링 디바운스로 모아 전파한다.
+        // 저장 경로는 flush()로 대기분을 즉시 회수한다.
+        pendingEmitRef.current = true
+        scheduleEmit(editor)
       },
       onSelectionUpdate({ editor }) {
         const { from, to } = editor.state.selection
@@ -505,14 +563,42 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
     // 외부에서 value가 변경될 때(언두/리두, 드래프트 불러오기 등) 에디터에 반영
     useEffect(() => {
       if (!editor || value === lastEmitted.current) return
+      // 외부 주입이 이기도록 디바운스 대기분은 폐기한다
+      // (주입 직후 타이머가 만료되며 정규화된 마크다운을 역전파하는 것 방지).
+      clearEmitTimer()
+      pendingEmitRef.current = false
       lastEmitted.current = value
       skipNextUpdate.current = true
       editor.commands.setContent(value)
-    }, [editor, value])
+    }, [editor, value, clearEmitTimer])
+
+    // 언마운트(블로그 작성/미리보기 탭 전환 등) 시 대기 중 변경을 마지막으로 전파해 상실을 막는다.
+    useEffect(() => {
+      if (!editor) return
+      return () => {
+        if (!pendingEmitRef.current) return
+        pendingEmitRef.current = false
+        clearEmitTimer()
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const markdown = (editor.storage as any).markdown.getMarkdown() as string
+          if (markdown !== lastEmitted.current) {
+            lastEmitted.current = markdown
+            onChangeRef.current(markdown)
+          }
+        } catch {
+          // 에디터가 이미 파괴돼 직렬화가 불가하면 마지막 전파본을 유지한다.
+        }
+      }
+    }, [editor, clearEmitTimer])
 
     const isEmpty = editor?.isEmpty ?? (!value || value.trim() === "")
 
     useImperativeHandle(ref, () => ({
+      flush: () => {
+        if (!editor) return
+        emitPendingChange(editor)
+      },
       toggleBold: () => editor?.chain().focus().toggleBold().run(),
       toggleItalic: () => editor?.chain().focus().toggleItalic().run(),
       setHeading: (level) => editor?.chain().focus().toggleHeading({ level }).run(),
@@ -567,7 +653,7 @@ const RichMarkdownEditor = forwardRef<RichMarkdownEditorHandle, RichMarkdownEdit
         editor.chain().focus().insertContent(markdown).run()
       },
       insertDivider: () => editor?.chain().focus().setHorizontalRule().run(),
-    }), [editor])
+    }), [editor, emitPendingChange])
 
     const handleOptimizeClick = () => {
       if (!onSelectionOptimize) return
