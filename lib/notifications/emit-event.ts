@@ -283,6 +283,7 @@ function buildCheckoutRequestWecomText(input: EmitNotificationEventInput) {
     labeledLine("담당자", getPayloadValue(input, "name")),
     labeledLine("연락처", getPayloadValue(input, "phone")),
     labeledLine("이메일", getPayloadValue(input, "email")),
+    labeledLine("설치 유형", getPayloadValue(input, "installTypeLabel")),
     labeledLine("설치/배송 주소", getPayloadValue(input, "address")),
     labeledLine("희망 날짜", getPayloadValue(input, "desiredDate")),
     itemLines.length ? "" : undefined,

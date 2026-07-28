@@ -40,15 +40,33 @@ interface Props {
   summaryTitle: string
   summaryValue: string
   summaryNote?: string
+  /** 패널의 주문자 정보 입력값 — 모달이 열릴 때 초기값으로 프리필된다(모달에서 수정 가능). */
+  initialContact?: { org?: string; name?: string; phone?: string; email?: string }
 }
 
-type FieldKey = "org" | "name" | "phone" | "email" | "address" | "desiredDate" | "consent"
+type FieldKey =
+  | "org"
+  | "name"
+  | "phone"
+  | "email"
+  | "installType"
+  | "address"
+  | "desiredDate"
+  | "consent"
+
+type InstallType = "stand" | "wall"
+
+const INSTALL_TYPE_OPTIONS: Array<{ value: InstallType; label: string; hint: string }> = [
+  { value: "stand", label: "스탠드형", hint: "이동식 스탠드 설치" },
+  { value: "wall", label: "벽걸이형", hint: "벽면 고정 설치" },
+]
 
 type FormState = {
   org: string
   name: string
   phone: string
   email: string
+  installType: InstallType | ""
   address: string
   memo: string
   desiredDate: string
@@ -60,6 +78,7 @@ const EMPTY_FORM: FormState = {
   name: "",
   phone: "",
   email: "",
+  installType: "",
   address: "",
   memo: "",
   desiredDate: "",
@@ -73,6 +92,7 @@ const CONTRACT_FIELDS = new Set<FieldKey>([
   "name",
   "phone",
   "email",
+  "installType",
   "address",
   "desiredDate",
   "consent",
@@ -91,7 +111,9 @@ function validate(
 
   if (!form.org.trim()) errors.org = "기관명을 입력해 주세요."
   if (!form.name.trim()) errors.name = "성함을 입력해 주세요."
-  // 하드웨어는 장비가 실제로 배송·설치되는 곳이라 주소가 필수다(서버 계약 field:'address').
+  // 하드웨어는 장비가 실제로 배송·설치되는 곳이라 설치 유형·주소가 필수다(서버 계약).
+  if (requireAddress && !form.installType)
+    errors.installType = "설치 유형을 선택해 주세요."
   if (requireAddress && !form.address.trim())
     errors.address = "설치/배송 주소를 입력해 주세요."
 
@@ -128,6 +150,7 @@ export function CheckoutRequestForm({
   summaryTitle,
   summaryValue,
   summaryNote,
+  initialContact,
 }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [errors, setErrors] = useState<Partial<Record<FieldKey, string>>>({})
@@ -149,8 +172,18 @@ export function CheckoutRequestForm({
   )
 
   // 닫았다 다시 열면 깨끗한 상태에서 시작한다. 진행 중인 제출은 함께 끊는다.
+  // 열릴 때는 패널의 주문자 정보를 초기값으로 프리필한다(이중 입력 제거).
   useEffect(() => {
-    if (open) return
+    if (open) {
+      setForm((current) => ({
+        ...current,
+        org: initialContact?.org?.trim() || current.org,
+        name: initialContact?.name?.trim() || current.name,
+        phone: initialContact?.phone?.trim() || current.phone,
+        email: initialContact?.email?.trim() || current.email,
+      }))
+      return
+    }
     abortRef.current?.abort()
     abortRef.current = null
     submitLock.current = false
@@ -159,6 +192,8 @@ export function CheckoutRequestForm({
     setFormError(null)
     setIsSubmitting(false)
     setRequestId(null)
+    // initialContact 는 열리는 순간의 스냅샷만 쓰면 된다 — 참조 변경마다 재시드하지 않는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   // 언마운트(페이지 이동·상품군 전환)에서도 진행 중인 제출을 끊는다.
@@ -227,7 +262,9 @@ export function CheckoutRequestForm({
           name: form.name.trim(),
           phone: form.phone.trim(),
           ...(email ? { email } : {}),
-          ...(kind === "hardware" ? { address: form.address.trim() } : {}),
+          ...(kind === "hardware"
+            ? { installType: form.installType, address: form.address.trim() }
+            : {}),
           desiredDate: form.desiredDate,
           ...(memo ? { memo } : {}),
           sourcePage,
@@ -298,7 +335,7 @@ export function CheckoutRequestForm({
               <Check className="h-5 w-5 text-[#084734]" strokeWidth={2.4} />
             </div>
             <DialogHeader className="mt-4">
-              <DialogTitle>도입 신청이 접수되었습니다</DialogTitle>
+              <DialogTitle>주문 신청이 접수되었습니다</DialogTitle>
               <DialogDescription>
                 담당자가 1영업일 내에 연락드려 결제·설치 일정을 함께 잡아드립니다.
               </DialogDescription>
@@ -330,10 +367,9 @@ export function CheckoutRequestForm({
         ) : (
           <>
             <DialogHeader className="pr-8">
-              <DialogTitle>도입 신청</DialogTitle>
+              <DialogTitle>주문 신청</DialogTitle>
               <DialogDescription>
-                결제 없이 접수됩니다. 남겨주신 연락처로 담당자가 1영업일 내에 연락드려 결제와 설치
-                일정을 안내드립니다.
+                남겨주신 연락처로 담당자가 1영업일 내에 연락드려 결제와 설치 일정을 안내드립니다.
               </DialogDescription>
             </DialogHeader>
 
@@ -447,6 +483,51 @@ export function CheckoutRequestForm({
 
               {kind === "hardware" ? (
                 <div className="space-y-1.5">
+                  <span className="text-[12px] font-medium text-[#44514A]">설치 유형</span>
+                  <div
+                    role="radiogroup"
+                    aria-label="설치 유형"
+                    className="grid grid-cols-2 gap-2"
+                  >
+                    {INSTALL_TYPE_OPTIONS.map((option) => {
+                      const selected = form.installType === option.value
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => update("installType", option.value)}
+                          className={`rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] ${
+                            selected
+                              ? "border-[#084734]/60 bg-[#ECFDF5]/60"
+                              : errors.installType
+                                ? "border-[#B43E3E] bg-white hover:bg-[#F6F5F4]"
+                                : "border-black/[0.08] bg-white hover:bg-[#F6F5F4]"
+                          }`}
+                        >
+                          <span
+                            className={`block text-[13px] font-semibold ${
+                              selected ? "text-[#084734]" : "text-[#111110]"
+                            }`}
+                          >
+                            {option.label}
+                          </span>
+                          <span className="mt-0.5 block text-[11px] text-[#7C8A83]">
+                            {option.hint}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {errors.installType ? (
+                    <p className="text-[11px] text-[#B43E3E]">{errors.installType}</p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {kind === "hardware" ? (
+                <div className="space-y-1.5">
                   <Label htmlFor="request-address" className="text-[12px] text-[#44514A]">
                     설치/배송 주소
                   </Label>
@@ -555,7 +636,7 @@ export function CheckoutRequestForm({
                 className="h-12 w-full rounded-lg bg-[#084734] text-[14px] font-semibold text-white hover:bg-[#065C41]"
                 disabled={isSubmitting}
               >
-                {isSubmitting ? "접수 중..." : "도입 신청 보내기"}
+                {isSubmitting ? "접수 중..." : "주문 신청 보내기"}
               </Button>
             </form>
           </>

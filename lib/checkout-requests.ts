@@ -119,6 +119,8 @@ export interface NormalizedCheckoutRequest {
   name: string
   phone: string
   email: string | null
+  /** 설치 유형 — 하드웨어 신청만 필수(stand=스탠드형/wall=벽걸이형), 소프트웨어는 null. */
+  installType: "stand" | "wall" | null
   /** 설치/배송 주소 — 하드웨어 신청만 필수(장비가 실제로 가는 곳), 소프트웨어는 null. */
   address: string | null
   desiredDate: string
@@ -363,6 +365,15 @@ export function normalizeCheckoutRequest(
     return { ok: false, field: "desiredDate" }
   }
 
+  // 설치 유형 — 하드웨어는 stand/wall 중 필수, 소프트웨어 신청은 받지 않는다(보내와도 무시).
+  let installType: "stand" | "wall" | null = null
+  if (kind === "hardware") {
+    if (body.installType !== "stand" && body.installType !== "wall") {
+      return { ok: false, field: "installType" }
+    }
+    installType = body.installType
+  }
+
   // 설치/배송 주소 — 하드웨어는 필수, 소프트웨어 신청은 받지 않는다(보내와도 무시).
   let address: string | null = null
   if (kind === "hardware") {
@@ -384,6 +395,7 @@ export function normalizeCheckoutRequest(
       name,
       phone,
       email,
+      installType,
       address,
       desiredDate,
       memo: normalizeMultilineText(body.memo, MAX_MEMO_LENGTH),
@@ -422,6 +434,12 @@ export function getCheckoutRequestKindLabel(kind: CheckoutRequestKind) {
   return KIND_LABEL[kind]
 }
 
+const INSTALL_TYPE_LABEL = { stand: "스탠드형", wall: "벽걸이형" } as const
+
+export function getInstallTypeLabel(installType: "stand" | "wall" | null) {
+  return installType ? INSTALL_TYPE_LABEL[installType] : null
+}
+
 /** 리드 큐/구글시트/채널톡이 그대로 읽을 수 있는 자기설명형 본문. */
 export function buildCheckoutRequestLeadMessage(
   request: NormalizedCheckoutRequest,
@@ -430,6 +448,7 @@ export function buildCheckoutRequestLeadMessage(
   return [
     `[${getCheckoutRequestKindLabel(request.kind)} 도입 신청] 결제 없이 접수된 신청입니다.`,
     `희망 날짜: ${request.desiredDate}`,
+    request.installType ? `설치 유형: ${getInstallTypeLabel(request.installType)}` : null,
     request.address ? `설치/배송 주소: ${request.address}` : null,
     "품목:",
     ...buildCheckoutItemLines(request).map((line) => `- ${line}`),
@@ -489,6 +508,7 @@ export function buildCheckoutRequestNotification({
       name: request.name,
       phone: request.phone,
       email: request.email,
+      installTypeLabel: getInstallTypeLabel(request.installType),
       address: request.address,
       desiredDate: request.desiredDate,
       memo: request.memo,
@@ -560,6 +580,7 @@ async function insertCheckoutRequest(request: NormalizedCheckoutRequest) {
       name: request.name,
       phone: request.phone,
       email: request.email,
+      install_type: request.installType,
       address: request.address,
       desired_date: request.desiredDate,
       memo: request.memo,

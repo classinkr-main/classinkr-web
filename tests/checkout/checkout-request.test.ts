@@ -23,6 +23,7 @@ const VALID_PAYLOAD = {
   name: "김원장",
   phone: "010-1234-5678",
   email: "won@happy.co.kr",
+  installType: "wall",
   address: "서울시 강남구 테헤란로 123, 4층",
   desiredDate: "2026-08-10",
   memo: "2층 교실 먼저 설치 희망",
@@ -216,6 +217,25 @@ describe("normalizeCheckoutRequest — 필수 필드", () => {
     expect(normalizeCheckoutRequest({ ...VALID_PAYLOAD, phone: "1234" })).toMatchObject({
       field: "phone",
     })
+  })
+
+  it("설치 유형은 하드웨어만 stand/wall 필수 — 소프트웨어는 무시한다", async () => {
+    const { normalizeCheckoutRequest } = await loadWithMockedNotifications()
+
+    expect(normalizeCheckoutRequest({ ...VALID_PAYLOAD, installType: undefined })).toMatchObject({
+      field: "installType",
+    })
+    expect(normalizeCheckoutRequest({ ...VALID_PAYLOAD, installType: "ceiling" })).toMatchObject({
+      field: "installType",
+    })
+
+    const hardware = normalizeCheckoutRequest(VALID_PAYLOAD)
+    expect(hardware.ok && hardware.value.installType).toBe("wall")
+
+    const software = normalizeCheckoutRequest({ ...SOFTWARE_PAYLOAD, installType: undefined })
+    expect(software.ok).toBe(true)
+    const softwareWithType = normalizeCheckoutRequest(SOFTWARE_PAYLOAD)
+    expect(softwareWithType.ok && softwareWithType.value.installType).toBeNull()
   })
 
   it("주소는 하드웨어만 필수 — 소프트웨어는 보내와도 무시한다", async () => {
@@ -743,6 +763,7 @@ describe("WeCom ops 알림 본문", () => {
     expect(content).toContain("담당자: 김원장")
     expect(content).toContain("연락처: 010-1234-5678")
     expect(content).toContain("이메일: won@happy.co.kr")
+    expect(content).toContain("설치 유형: 벽걸이형")
     expect(content).toContain("설치/배송 주소: 서울시 강남구 테헤란로 123, 4층")
     expect(content).toContain("희망 날짜: 2026-08-10")
     expect(content).toContain("품목 2개")
