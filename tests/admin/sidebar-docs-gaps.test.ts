@@ -1,30 +1,98 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-import { Bot, Search } from "lucide-react"
+import { BookOpen, Bot, Headset, MessageSquare, Search } from "lucide-react"
 import { describe, expect, it } from "vitest"
 
 import { ADMIN_NAV } from "@/components/admin/admin-nav"
+import { CS_CONSOLE_MODES, resolveCsConsoleMode } from "@/components/admin/cs/CsConsoleNav"
 
 // nav SSOT는 components/admin/admin-nav.ts — 사이드바(AdminSidebar)와
 // 커맨드 팔레트(AdminCommandPalette)가 이를 임포트해 렌더한다.
-describe("admin sidebar docs gap discoverability", () => {
+// CS 콘솔 IA 재구성(docs/active/cs-admin-console-ia-2026-07-27.md §2)으로 cs 섹션은
+// 5항목 → 3항목이 되고, 보강 큐·채널톡은 콘솔 가로 메뉴(CsConsoleNav)로 옮겨갔다.
+// URL은 하나도 바뀌지 않았으므로 이 테스트는 "이동했지 사라지지 않았다"를 고정한다.
+describe("admin cs nav — 사이드바 3항목 + 콘솔 가로 메뉴", () => {
   const sidebarSource = readFileSync(
     join(process.cwd(), "components/admin/AdminSidebar.tsx"),
     "utf8"
   )
+  const csNav = ADMIN_NAV.filter((item) => item.section === "cs")
+  const customerItems = CS_CONSOLE_MODES.find((mode) => mode.mode === "customer")!.items
+  const internalItems = CS_CONSOLE_MODES.find((mode) => mode.mode === "internal")!.items
 
-  it("exposes the docs gap queue as a first-class cs nav item deep-linking to the docs tab", () => {
-    // nav 재분리(2026-07-17): "챗봇 운영·보강 큐" 겸직 항목을 "챗봇 운영"(외부)과
-    // "문서 보강 큐"(챗봇+내부CS 공유 큐)로 분리했다 — 이 테스트는 보강 큐 표면을 검증한다.
-    const gapItem = ADMIN_NAV.find((item) => item.label === "문서 보강 큐")
+  it("reduces the sidebar cs section to guide docs / CS console / internal CS", () => {
+    expect(csNav.map((item) => item.href)).toEqual([
+      "/admin/docs",
+      "/admin/chatbot",
+      "/admin/cs-chatbot",
+    ])
+    expect(csNav.map((item) => item.label)).toEqual(["가이드 문서", "CS 콘솔", "내부 CS"])
+    expect(csNav.map((item) => item.icon)).toEqual([BookOpen, Bot, Headset])
+  })
+
+  it("drops the two absorbed sidebar items (they live on the console menu now)", () => {
+    // 화면이 사라진 게 아니라 진입점이 옮겨간 것이다 — 아래 콘솔 메뉴 검증이 짝을 이룬다.
+    expect(ADMIN_NAV.some((item) => item.href === "/admin/docs?tab=gaps")).toBe(false)
+    expect(ADMIN_NAV.some((item) => item.href === "/admin/channel-talk")).toBe(false)
+  })
+
+  it("keeps ⌘K searchability for the absorbed surfaces on the CS console item", () => {
+    const console = csNav.find((item) => item.href === "/admin/chatbot")
+    expect(console?.keywords).toContain("채널톡")
+    expect(console?.keywords).toContain("channel talk")
+    expect(console?.keywords).toContain("보강")
+    expect(console?.keywords).toContain("gaps")
+  })
+
+  it("exposes the gap queue as the console's 미해결 큐 menu, still deep-linking to the docs tab", () => {
+    const gapItem = customerItems.find((item) => item.label === "미해결 큐")
     expect(gapItem).toBeDefined()
     // redirect 스텁(/admin/docs/gaps) 대신 탭 딥링크를 직접 가리켜 active 하이라이트가 동작한다.
     // 스텁 라우트는 북마크 호환용으로만 유지(app/admin/docs/gaps/page.tsx).
     expect(gapItem?.href).toBe("/admin/docs?tab=gaps")
-    expect(gapItem?.section).toBe("cs")
-    // 아이콘은 Search — "챗봇 운영"(Bot)과 시각적으로 구분되는 별도 표면임을 드러낸다.
+    // 아이콘은 Search — "대시보드"(Bot)와 시각적으로 구분되는 별도 표면임을 드러낸다.
     expect(gapItem?.icon).toBe(Search)
+  })
+
+  it("exposes channel talk as the console's 상담 Inbox menu, admin-only as before", () => {
+    const inbox = customerItems.find((item) => item.href === "/admin/channel-talk")
+    expect(inbox?.label).toBe("상담 Inbox")
+    expect(inbox?.icon).toBe(MessageSquare)
+    // 사이드바 시절 STAFF_ADMIN(+BRANCH) 롤을 그대로 승계 — 콘솔에서만 유일하게 좁은 항목.
+    expect(inbox?.roles).toEqual(["SUPER_ADMIN", "ADMIN", "BRANCH"])
+    expect(inbox?.roles).not.toContain("EDITOR")
+    for (const item of customerItems.filter((entry) => entry.href !== "/admin/channel-talk")) {
+      expect(item.roles, item.label).toContain("EDITOR")
+    }
+  })
+
+  it("groups 가이드 문서 over documents / categories / redirects (§5)", () => {
+    const guide = customerItems.find((item) => item.label === "가이드 문서")
+    expect(guide?.href).toBe("/admin/docs?tab=documents")
+    expect(guide?.activeWhen).toContain("/admin/docs?tab=categories")
+    expect(guide?.activeWhen).toContain("/admin/docs?tab=redirects")
+  })
+
+  it("renders 본사 확인 in the internal menu now that P3 shipped the screen", () => {
+    const hq = internalItems.find((item) => item.href === "/admin/cs-chatbot?tab=hq")
+    expect(hq?.label).toBe("본사 확인")
+    // P3 이전에는 enabled:false로 렌더에서 빠져 있었다 — 화면(tab=hq)이 생기면서 켜졌다.
+    expect(hq?.enabled).not.toBe(false)
+    // 내부 메뉴 4항목이 §2 표 순서 그대로 전부 렌더된다.
+    expect(internalItems.filter((item) => item.enabled !== false).map((item) => item.label)).toEqual([
+      "내부 상담",
+      "대기열",
+      "본사 확인",
+      "운영 도구",
+    ])
+  })
+
+  it("derives the console mode from pathname only (no mode param — §5)", () => {
+    expect(resolveCsConsoleMode("/admin/cs-chatbot")).toBe("internal")
+    expect(resolveCsConsoleMode("/admin/chatbot")).toBe("customer")
+    expect(resolveCsConsoleMode("/admin/channel-talk")).toBe("customer")
+    expect(resolveCsConsoleMode("/admin/docs")).toBe("customer")
   })
 
   it("keeps guide docs and gap queue distinguishable via query-aware active matching", () => {
@@ -33,34 +101,23 @@ describe("admin sidebar docs gap discoverability", () => {
     // 사이드바가 tab 쿼리를 읽어 두 항목의 하이라이트를 구분한다(useSearchParams + Suspense 경계).
     expect(sidebarSource).toContain("useSearchParams")
     expect(sidebarSource).toContain("Suspense")
+    // 판정 자체는 nav-active.ts(SSOT)에서 온다 — 사이드바가 자체 구현을 다시 들고 있지 않다.
+    expect(sidebarSource).toContain('from "./nav-active"')
   })
 
-  it("warms alpha readiness and chatbot pattern data when the gap queue nav item is hovered", () => {
-    // warm-up 키는 nav href(쿼리 포함)와 완전히 같아야 적중한다.
+  it("keeps warm-up keys for the surfaces that moved to the console menu", () => {
+    // warm-up 키는 href(쿼리 포함)와 완전히 같아야 적중한다. URL이 안 바뀌었으므로 키도 유효하다.
     expect(sidebarSource).toContain('"/admin/docs?tab=gaps"')
+    expect(sidebarSource).toContain('"/admin/channel-talk"')
     expect(sidebarSource).toContain("/api/admin/docs/alpha-readiness")
     expect(sidebarSource).toContain("/api/admin/docs/gaps")
-    // 챗봇 운영이 별도 표면(/admin/chatbot)이 된 뒤에도 DocsGapsPanel은 질문 패턴(stats)을
-    // 계속 읽으므로(챗봇 발 유입 배지 표시) warm 대상에서 빠지지 않는다.
+    // DocsGapsPanel은 질문 패턴(stats)도 읽는다(챗봇 발 유입 배지).
     expect(sidebarSource).toContain("/api/admin/chatbot/stats")
   })
 
-  it("exposes the external chatbot ops dashboard as a standalone cs nav item", () => {
-    // nav 재분리(2026-07-17): Task X가 /admin/chatbot을 얇은 외부 운영 대시보드로 재건 —
-    // "보강 큐" 탭으로 흡수돼 있던 이전 상태를 되돌려 독립 nav 항목으로 다시 표면화한다.
-    const chatbotItem = ADMIN_NAV.find((item) => item.href === "/admin/chatbot")
-    expect(chatbotItem).toBeDefined()
-    expect(chatbotItem?.label).toBe("챗봇 운영")
-    expect(chatbotItem?.section).toBe("cs")
-    expect(chatbotItem?.icon).toBe(Bot)
-
-    // ⌘K 검색성 재분배 — 챗봇 운영 검색어는 이 항목으로, 보강 큐 검색어는 gap 항목으로
-    // 나뉜다(재병합이 아니라 재분배임을 확인).
-    expect(chatbotItem?.keywords).toContain("챗봇")
-    expect(chatbotItem?.keywords).toContain("chatbot")
-
-    const gapItem = ADMIN_NAV.find((item) => item.href === "/admin/docs?tab=gaps")
-    expect(gapItem?.keywords).toContain("보강")
-    expect(gapItem?.keywords).toContain("gaps")
+  it("warms the internal CS workspace mount fetches", () => {
+    expect(sidebarSource).toContain('"/admin/cs-chatbot"')
+    expect(sidebarSource).toContain("/api/admin/cs-chat/conversations?status=all&limit=100")
+    expect(sidebarSource).toContain("/api/admin/cs-chat/regression-candidates")
   })
 })

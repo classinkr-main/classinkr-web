@@ -28,9 +28,17 @@ import {
   ADMIN_NAV_SECTIONS,
   ADMIN_NAV_SECTION_META,
   CRM_CHILD_NAV,
+  normalizeAdminRole,
   type AdminNavItem,
   type AdminRole,
 } from "./admin-nav"
+// active 판정(splitNavHref/queryMatches/isNavActive)은 nav-active.ts로 추출됨 — CS 콘솔
+// 가로 메뉴(cs/CsConsoleNav)와 같은 판정을 공유한다. 여기서는 클로저 인자만 채워 넘긴다.
+import {
+  isNavActive as matchNavActive,
+  queryMatches as matchNavQuery,
+  splitNavHref,
+} from "./nav-active"
 
 // NAV(섹션·항목·롤·뱃지)·SECTION_META·CRM 하위 nav는 admin-nav.ts(SSOT)로 추출됨 —
 // 커맨드 팔레트(AdminCommandPalette)와 공유한다. 이 파일은 렌더링·warm-up 등 동작만 담당.
@@ -50,7 +58,14 @@ function overviewCalendarUrls() {
   return months.map(({ year, month }) => `/api/admin/calendar?year=${year}&month=${month}`)
 }
 
-const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
+// CS 콘솔 IA 재구성(2026-07-27) 이후에도 이 맵의 키는 href 문자열 그대로 유지한다.
+// 사이드바 CS 섹션이 3항목으로 줄면서 "/admin/docs?tab=gaps"·"/admin/channel-talk"는
+// 사이드바 hover 경로에서 빠졌지만, 두 화면은 사라진 게 아니라 CS 콘솔 가로 메뉴
+// (components/admin/cs/CsConsoleNav.tsx)로 옮겨간 것이고 URL도 동일하다 —
+// 키를 지우면 "어느 화면이 어떤 API를 먼저 부르는지"의 유일한 기록이 사라져
+// P1에서 다시 유추해야 하고, 그때 키가 어긋나면 warm이 조용히 빗나간다(이 파일 상단 경고).
+// 그래서 남겨두고 export만 열어 콘솔 내비가 같은 맵을 그대로 쓸 수 있게 한다.
+export const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
   "/admin/overview": () => [
     // overview 페이지가 실제 호출하는 URL과 캐시 키를 맞춰야 hover-warm이 적중한다.
     "/api/admin/leads?scope=dashboard",
@@ -84,6 +99,7 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/crm/matching",
     "/api/admin/crm/overview",
   ],
+  // 채널톡 상담도 CS 콘솔 "상담 Inbox" 메뉴로 옮겨갔다 — 라우트·초기 페치가 동일해 키 유지.
   "/admin/channel-talk": ["/api/admin/channel-talk", "/api/admin/channel-talk/mine"],
   "/admin/calendar": () => {
     // 캘린더 페이지 초기 로드는 항상 현재 연/월 쿼리를 붙인다.
@@ -115,17 +131,42 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/docs/gaps",
     "/api/admin/docs/alpha-readiness",
   ],
-  // 문서 보강 큐 nav 항목은 탭 딥링크(/admin/docs?tab=gaps)를 직접 가리킨다 — warm 키도 href와 동일해야 적중.
-  // DocsGapsPanel이 /api/admin/chatbot/stats(질문 패턴)도 읽으므로 함께 데운다.
+  // 문서 센터 탭 딥링크들 — warm 키는 href(쿼리 포함)와 문자 그대로 같아야 적중한다.
+  // 사이드바 항목에서 CS 콘솔 가로 메뉴로 옮겨갔지만 href가 그대로라 키도 유효하다.
+  // 어느 탭으로 들어가든 페이지 자체가 /api/admin/docs와 analytics를 캐시 페치하므로 공통으로 넣는다.
+  //
+  // 보강 큐 — DocsGapsPanel이 /api/admin/chatbot/stats(질문 패턴)도 읽는다.
+  // alpha-readiness는 AI 품질 검수 탭으로 이관돼 여기서는 더 이상 호출되지 않는다(§7).
   "/admin/docs?tab=gaps": [
-    "/api/admin/docs/alpha-readiness",
+    "/api/admin/docs",
+    "/api/admin/docs/analytics?days=30",
     "/api/admin/docs/gaps",
     "/api/admin/chatbot/stats",
   ],
+  // AI 품질 검수 — 알파 준비도가 이 탭의 마운트 페치다(품질 평가는 POST라 warm 대상 아님).
+  "/admin/docs?tab=quality": [
+    "/api/admin/docs",
+    "/api/admin/docs/analytics?days=30",
+    "/api/admin/docs/alpha-readiness",
+  ],
+  // 가이드 문서·추천 질문 — 탭 전용 페치는 캐시를 쓰지 않으므로(DocsRecommendedQuestionsManager는
+  // adminFetchJson) 페이지 공통 두 건만 데운다.
+  "/admin/docs?tab=documents": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
+  "/admin/docs?tab=recommended": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
   // 외부 챗봇 운영 대시보드(이원화로 재건) — 지표·준비도를 미리 데운다.
+  // CS 콘솔 IA 재구성 이후 이 href는 외부 축의 첫 화면("대시보드")이자 사이드바 "CS 콘솔" 항목이다.
   "/admin/chatbot": [
     "/api/admin/chatbot/stats",
     "/api/admin/docs/alpha-readiness",
+  ],
+  // 내부 CS 워크스페이스 — 마운트 시점에 실제로 나가는 두 요청만 데운다.
+  // conversations는 첫 화면을 막는 블로킹 로드이고, regression-candidates는
+  // "운영 도구" 탭 진입 전에 미리 받는다(InternalCsChatWorkspace의 두 mount effect).
+  // integrations/status·docs/gaps·cs-chat/metrics는 tools 탭에 들어가야 호출되므로 제외 —
+  // 안 여는 탭을 데우면 대역폭만 쓴다. (P2가 탭을 URL 상태로 옮기면 ?tab=tools 키를 따로 잡으면 된다.)
+  "/admin/cs-chatbot": [
+    "/api/admin/cs-chat/conversations?status=all&limit=100",
+    "/api/admin/cs-chat/regression-candidates",
   ],
   "/admin/branch": [
     "/api/admin/branch/summary?team=ALL&period=Q",
@@ -223,27 +264,6 @@ interface Props {
   email: string
 }
 
-function normalizeRole(role: string): AdminRole {
-  const normalized = role.trim()
-
-  if (normalized === "admin" || normalized === "ADMIN") return "ADMIN"
-  if (normalized === "branch" || normalized === "BRANCH") return "BRANCH"
-  if (normalized === "partner" || normalized === "PARTNER") return "PARTNER"
-  if (normalized === "SUPER_ADMIN") return "SUPER_ADMIN"
-  if (normalized === "EDITOR") return "EDITOR"
-  if (normalized === "VIEWER") return "VIEWER"
-
-  return "ADMIN"
-}
-
-// nav href의 쿼리 딥링크(예: /admin/docs?tab=gaps)를 path와 query로 분리한다.
-function splitNavHref(href: string): { path: string; query: string | null } {
-  const queryIndex = href.indexOf("?")
-  return queryIndex === -1
-    ? { path: href, query: null }
-    : { path: href.slice(0, queryIndex), query: href.slice(queryIndex + 1) }
-}
-
 export default function AdminSidebar(props: Props) {
   // useSearchParams(쿼리 인지형 active 매칭)는 프리렌더 시 Suspense 경계를 요구한다.
   // 사이드바는 클라이언트 컴포넌트지만 정적 프리렌더 대상이 될 수 있어 자체 경계로 감싼다.
@@ -330,37 +350,14 @@ function AdminSidebarContent({ role, name, email }: Props) {
     router.refresh()
   }
 
-  const normalizedRole = normalizeRole(role)
+  const normalizedRole = normalizeAdminRole(role)
   const visibleNav = useMemo(
     () => ADMIN_NAV.filter((item) => item.roles.includes(normalizedRole)),
     [normalizedRole]
   )
-  // 현재 URL 쿼리가 nav href의 쿼리(예: tab=gaps)를 전부 포함하는지 판별.
-  const queryMatches = (query: string) => {
-    const wanted = new URLSearchParams(query)
-    for (const [key, value] of wanted.entries()) {
-      if (searchParams.get(key) !== value) return false
-    }
-    return true
-  }
-  // 쿼리 인지형 active 매칭 — 쿼리 딥링크 항목은 path+query가 모두 맞아야 active,
-  // 쿼리 없는 항목은 같은 경로의 쿼리 딥링크 형제가 매칭되면 하이라이트를 양보한다
-  // (가이드 문서 /admin/docs vs 문서 보강 큐 /admin/docs?tab=gaps).
-  const isNavActive = (href: string) => {
-    const { path, query } = splitNavHref(href)
-    const onPath = pathname === path || pathname.startsWith(`${path}/`)
-    if (!onPath) return false
-    if (query) return queryMatches(query)
-    return !visibleNav.some((item) => {
-      const sibling = splitNavHref(item.href)
-      // 쿼리 딥링크 형제(같은 경로, 예: /admin/docs vs /admin/docs?tab=gaps)에 양보.
-      if (sibling.path === path && sibling.query !== null && queryMatches(sibling.query)) return true
-      // 더 깊은 경로 형제(예: /admin/branch vs /admin/branch/ledger)가 현재 경로에 맞으면 상위는 양보 —
-      // KR Team과 매출 장부가 동시에 하이라이트되지 않게 한다.
-      if (sibling.path.startsWith(`${path}/`) && (pathname === sibling.path || pathname.startsWith(`${sibling.path}/`))) return true
-      return false
-    })
-  }
+  const queryMatches = (query: string) => matchNavQuery(query, searchParams)
+  const isNavActive = (href: string) =>
+    matchNavActive(href, { pathname, searchParams, siblings: visibleNav })
   const currentNavItem = visibleNav.find((item) => isNavActive(item.href)) ?? visibleNav[0]
   const currentCrmChild = inCrm ? CRM_CHILD_NAV.find((item) => item.match(pathname ?? "")) : undefined
   const mobilePrimaryNav = MOBILE_PRIMARY_NAV.filter((item) => item.roles.includes(normalizedRole))

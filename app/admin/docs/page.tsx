@@ -22,6 +22,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sparkles,
   ThumbsUp,
   X,
@@ -30,9 +31,11 @@ import {
 import DocsCategoryManager from "@/components/admin/docs/DocsCategoryManager"
 import { StatTile } from "@/components/admin/viz"
 import DocsGapsPanel from "@/components/admin/docs/DocsGapsPanel"
+import DocsQualityPanel from "@/components/admin/docs/DocsQualityPanel"
 import DocsRecommendedQuestionsManager from "@/components/admin/docs/DocsRecommendedQuestionsManager"
 import DocsRedirectManager from "@/components/admin/docs/DocsRedirectManager"
 import AdminTabs from "@/components/admin/AdminTabs"
+import CsConsoleNav from "@/components/admin/cs/CsConsoleNav"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import type {
   AdminDocsAnalyticsResponse,
@@ -171,9 +174,17 @@ const DOCS_TABS = [
   { value: "categories", label: "카테고리", icon: FolderTree },
   { value: "redirects", label: "리디렉트", icon: ExternalLink },
   { value: "gaps", label: "보강 큐", icon: Sparkles },
+  { value: "quality", label: "AI 품질 검수", icon: ShieldCheck },
 ] as const
 
 type DocsTab = (typeof DOCS_TABS)[number]["value"]
+
+// CS 콘솔의 `가이드 문서` 메뉴가 품는 보조 탭 그룹
+// (docs/active/cs-admin-console-ia-2026-07-27.md §5 "가이드 문서 그룹 매핑").
+// 카테고리·리디렉트를 콘솔 메뉴로 올리면 외부 축이 8개가 되어 레이아웃 1b 한계를 넘는다.
+// 그래서 이 3탭만 화면 안쪽 보조 탭바로 남기고, 콘솔은 그룹 전체를 하나의 active로 잡는다.
+// recommended·gaps·quality는 콘솔 가로 메뉴가 그 층을 담당하므로 보조 탭바를 그리지 않는다.
+const DOCS_GUIDE_GROUP_TABS: readonly DocsTab[] = ["documents", "categories", "redirects"]
 
 function getSourceLabel(content: AdminDocsContentResponse | null) {
   if (!content) return "연결 확인 중"
@@ -697,9 +708,17 @@ function AdminDocsPageContent() {
   const summary = analytics?.summary
   const canMutateDocs = content?.status === "live"
   const showBulkActions = activeTab === "documents" && selectedArticleIds.length > 0
+  const isGuideGroupTab = DOCS_GUIDE_GROUP_TABS.includes(activeTab)
 
   return (
-    <div
+    <>
+      {/* CS 콘솔 2단 내비 — 페이지 최상단 풀블리드. 하단 보더는 컴포넌트가 그린다(§4).
+          문서 편집기(/admin/docs/new, /admin/docs/[id]/edit)에는 의도적으로 붙이지 않는다.
+          contentClassName은 이 화면의 본문 거터(px-4/sm:px-6/lg:px-8, 폭 제한 없음)와 맞춘다 —
+          문서 목록 테이블이 넓어 1240px 상한을 두면 가로 스크롤이 상시화된다. */}
+      <CsConsoleNav contentClassName="w-full px-4 sm:px-6 lg:px-8" />
+      {/* 본문 — 들여쓰기를 유지하려 fragment 자식으로 평평하게 둔다(diff 최소화). */}
+      <div
       className={`px-4 pt-8 sm:px-6 sm:pt-10 lg:px-8 ${
         showBulkActions ? "pb-44 sm:pb-32" : "pb-16 sm:pb-20"
       }`}
@@ -843,20 +862,22 @@ function AdminDocsPageContent() {
         />
       </section>
 
-      <AdminTabs
-        className="mb-6"
-        label="문서 관리 섹션"
-        items={DOCS_TABS.map((tab) => {
-          const Icon = tab.icon
-          return {
-            value: tab.value,
-            label: tab.label,
-            icon: <Icon className="h-4 w-4" />,
-          }
-        })}
-        value={activeTab}
-        onValueChange={setTabParam}
-      />
+      {isGuideGroupTab ? (
+        <AdminTabs
+          className="mb-6"
+          label="가이드 문서 섹션"
+          items={DOCS_TABS.filter((tab) => DOCS_GUIDE_GROUP_TABS.includes(tab.value)).map((tab) => {
+            const Icon = tab.icon
+            return {
+              value: tab.value,
+              label: tab.label,
+              icon: <Icon className="h-4 w-4" />,
+            }
+          })}
+          value={activeTab}
+          onValueChange={setTabParam}
+        />
+      ) : null}
 
       {activeTab === "documents" ? (
         <>
@@ -1436,6 +1457,12 @@ function AdminDocsPageContent() {
         </section>
       ) : null}
 
+      {activeTab === "quality" ? (
+        <section className="mb-8">
+          <DocsQualityPanel />
+        </section>
+      ) : null}
+
       {showBulkActions ? (
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-[#e8e8e4] bg-white/95 px-4 py-3 shadow-[0_-12px_30px_rgba(17,17,16,0.08)] backdrop-blur sm:px-6 lg:px-8">
           <div className="mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1502,7 +1529,8 @@ function AdminDocsPageContent() {
           </div>
         </div>
       ) : null}
-    </div>
+      </div>
+    </>
   )
 }
 

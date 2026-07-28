@@ -13,6 +13,7 @@ import {
   UserPlus,
 } from "lucide-react"
 
+import CsConsoleNav from "@/components/admin/cs/CsConsoleNav"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import {
   aggregateConversationTags,
@@ -332,7 +333,12 @@ export default function ChannelTalkPage() {
   const maxDailyConversations = Math.max(1, ...dailyActivity.map((day) => day.conversations))
 
   return (
-    <div className="max-w-5xl px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
+    <>
+      {/* CS 콘솔 2단 내비 — 최상단 풀블리드. contentClassName은 이 화면 본문 컨테이너(max-w-5xl,
+          좌측 정렬)와 같은 폭·거터로 맞춰야 좌우 끝이 일치한다(§4). */}
+      <CsConsoleNav contentClassName="w-full max-w-5xl px-4 sm:px-6 lg:px-8" />
+      {/* 본문 — 들여쓰기를 유지하려 fragment 자식으로 평평하게 둔다(diff 최소화). */}
+      <div className="max-w-5xl px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-7">
         <div>
           <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#A39E98]">
@@ -705,6 +711,7 @@ export default function ChannelTalkPage() {
           </section>
         </div>
       )}
-    </div>
+      </div>
+    </>
   )
 }

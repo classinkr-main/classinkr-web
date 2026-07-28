@@ -6,10 +6,10 @@ import { useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
   Archive,
-  ArrowLeft,
   ArrowUpRight,
   BookOpen,
   Bot,
+  Building,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -55,10 +55,22 @@ import {
   useTransition,
 } from "react"
 
+import CsConsoleNav from "@/components/admin/cs/CsConsoleNav"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { adminFetchJson } from "@/lib/admin-client"
+import { useUrlState } from "@/lib/use-url-state"
 import { cn } from "@/lib/utils"
 
+import {
+  formatWaitingElapsed,
+  HQ_PENDING_TAG,
+  hqWaitingSince,
+  isHqPending,
+  isHqStale,
+  selectHqPending,
+  withHqConfirmed,
+  withHqPending,
+} from "./hq-desk"
 import {
   REGRESSION_JUDGE_ACTIONS,
   regressionOutcomeChip,
@@ -67,7 +79,7 @@ import {
 } from "./ops-desk"
 import { shouldSubmitComposerOnKeyDown } from "./composer-keyboard"
 
-type WorkspaceTab = "chat" | "queue" | "archive" | "tools"
+type WorkspaceTab = "chat" | "queue" | "hq" | "tools"
 type ModelMode = "auto" | "fast" | "deep"
 type ConversationStatus = "queue" | "active" | "waiting_review" | "resolved" | "archived"
 type ConversationPriority = "low" | "normal" | "high" | "urgent"
@@ -83,6 +95,9 @@ interface InternalCsConversation {
   tags: string[]
   customer_context: Record<string, unknown>
   last_message_at: string | null
+  // 목록 API는 select("*")라 두 시각이 모두 온다. 본사 확인 화면이 등록 시각(created_at)과
+  // 대기 경과 근사(updated_at)를 각각 쓴다 — hq-desk.ts hqWaitingSince 주석 참조.
+  created_at: string
   updated_at: string
   archive_reason: string | null
 }
@@ -298,11 +313,30 @@ const ACCEPTED_ASSET_TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
 // fetch 경로에 그대로 꽂히므로 UUID 형태가 아니면 요청조차 만들지 않는다.
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-const WORKSPACE_TABS: Array<{ value: WorkspaceTab; label: string }> = [
-  { value: "chat", label: "대화" },
-  { value: "queue", label: "대기열" },
-  { value: "archive", label: "아카이브" },
-  { value: "tools", label: "운영 도구" },
+// 내부 축 탭은 URL 표준 키 `tab`에 산다(docs/active/cs-admin-console-ia-2026-07-27.md §5).
+// 가로 메뉴 자체는 CsConsoleNav가 그리므로 여기에는 값 집합만 남는다.
+const WORKSPACE_TAB_VALUES: readonly WorkspaceTab[] = ["chat", "queue", "hq", "tools"]
+
+// 흡수된 레거시 값 — `아카이브` 탭은 대기열의 상태 칩(종료·보관)이 되었다.
+// 옛 북마크가 그대로 살도록 queue + closed 칩으로 착지시킨다.
+const LEGACY_ARCHIVE_TAB = "archive"
+
+// 콘솔 내비(max-w-[1240px])와 좌우 정렬을 맞추는 본문 컨테이너.
+const CONSOLE_CONTENT_CLASS = "mx-auto w-full max-w-[1240px] px-4 sm:px-6 lg:px-8"
+
+// 대기열 상태 칩 — 5개 상태를 겹침 없이 3분할하고 `전체`가 그 합집합이다.
+// 흡수 전 두 탭이 보여주던 행 집합(대기열=비아카이브, 아카이브=아카이브)이 모두 도달 가능하다.
+type QueueStatusFilter = "all" | "waiting" | "progress" | "closed"
+
+const QUEUE_STATUS_CHIPS: Array<{
+  value: QueueStatusFilter
+  label: string
+  match: (status: ConversationStatus) => boolean
+}> = [
+  { value: "all", label: "전체", match: () => true },
+  { value: "waiting", label: "대기", match: (status) => status === "queue" },
+  { value: "progress", label: "진행", match: (status) => status === "active" || status === "waiting_review" },
+  { value: "closed", label: "종료 · 보관", match: (status) => status === "resolved" || status === "archived" },
 ]
 
 // 모델 모드 세그먼트 — 네이티브 select 대신 현재 모드가 항상 보이는 3분할 컨트롤.
@@ -386,7 +420,10 @@ const DEMO_CONVERSATION: InternalCsConversation = {
   tags: ["area:billing", "intent:hq_confirmation", "evidence:hq_pending"],
   customer_context: {},
   last_message_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
+  // 미리보기 대화는 이틀 전 등록 · 하루 전 마지막 갱신으로 둬서 본사 확인 화면의
+  // 등록 시각/대기 경과 두 칼럼이 서로 다른 값을 보여준다.
+  created_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+  updated_at: new Date(Date.now() - 86_400_000).toISOString(),
   archive_reason: null,
 }
 
@@ -658,40 +695,6 @@ function buildHqTemplate(detail: ConversationDetailResponse | null) {
   ].join("\n")
 }
 
-function TabButton({
-  active,
-  children,
-  onClick,
-  count,
-  dot,
-}: {
-  active: boolean
-  children: ReactNode
-  onClick: () => void
-  /** 탭 라벨 옆 위첨자 작업량 — 0이면 표시하지 않는다. */
-  count?: number
-  /** "판정 대기 있음" 앰버 점 — 숫자보다 약한 신호가 맞을 때 쓴다. */
-  dot?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "relative h-16 px-4 text-[14px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]",
-        active ? "text-[#111110]" : "text-[#615D59] hover:text-[#111110]"
-      )}
-    >
-      {children}
-      {count ? (
-        <sup className="ml-1 text-[10px] font-bold tabular-nums text-[#084734]">{count}</sup>
-      ) : null}
-      {dot ? <span className="ml-1.5 inline-block h-[5px] w-[5px] -translate-y-1.5 rounded-full bg-[#A8741A]" /> : null}
-      {active ? <span className="absolute inset-x-3 bottom-0 h-0.5 bg-[#111110]" /> : null}
-    </button>
-  )
-}
-
 function StatusBadge({ status }: { status: ConversationStatus }) {
   const meta = STATUS_META[status]
   return (
@@ -904,10 +907,15 @@ function ConversationTable({
   conversations,
   emptyLabel,
   onSelect,
+  // 행 안의 2차 액션(본사 확인 요청). 행 자체가 클릭 가능하므로 버튼은 전파를 멈춘다.
+  onRequestHq,
+  hqBusyId,
 }: {
   conversations: InternalCsConversation[]
   emptyLabel: string
   onSelect: (conversation: InternalCsConversation) => void
+  onRequestHq?: (conversation: InternalCsConversation) => void
+  hqBusyId?: string | null
 }) {
   if (conversations.length === 0) {
     return (
@@ -921,7 +929,7 @@ function ConversationTable({
 
   return (
     <div className="overflow-x-auto border-t border-black/[0.08]">
-      <table className="w-full min-w-[760px] border-collapse text-left">
+      <table className={cn("w-full border-collapse text-left", onRequestHq ? "min-w-[900px]" : "min-w-[760px]")}>
         <thead className="bg-[#F6F5F4] text-[11px] font-semibold text-[#615D59]">
           <tr>
             <th className="px-5 py-3">상태</th>
@@ -929,6 +937,7 @@ function ConversationTable({
             <th className="px-5 py-3">우선순위</th>
             <th className="px-5 py-3">담당자</th>
             <th className="px-5 py-3">업데이트</th>
+            {onRequestHq ? <th className="px-5 py-3 text-right">본사</th> : null}
             <th className="w-12 px-3 py-3" />
           </tr>
         </thead>
@@ -956,6 +965,27 @@ function ConversationTable({
                 </td>
                 <td className="px-5 py-4 text-[12px] text-[#615D59]">{conversation.assignee_name ?? "미지정"}</td>
                 <td className="px-5 py-4 text-[12px] text-[#615D59]">{formatDay(conversation.last_message_at)}</td>
+                {onRequestHq ? (
+                  <td className="px-5 py-4 text-right">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onRequestHq(conversation)
+                      }}
+                      disabled={hqBusyId === conversation.id}
+                      className={cn(
+                        "inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold transition-colors disabled:opacity-40",
+                        isHqPending(conversation)
+                          ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F] hover:bg-[#F6E7CE]"
+                          : "border-black/[0.08] bg-white text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
+                      )}
+                    >
+                      <Building className="h-3.5 w-3.5" />
+                      {isHqPending(conversation) ? "확인 대기" : "본사 확인 요청"}
+                    </button>
+                  </td>
+                ) : null}
                 <td className="px-3 py-4"><ChevronRight className="h-4 w-4 text-[#A39E98]" /></td>
               </tr>
             )
@@ -967,8 +997,41 @@ function ConversationTable({
 }
 
 function InternalCsChatWorkspaceInner() {
+  // 이 화면에는 URL을 보는 눈이 둘이고, 둘은 서로 다른 순간에 진실이다.
+  //
+  //  · useSearchParams()  — 라우터가 커밋한 값. 콘솔 내비 <Link>는 라우터 상태를 먼저 바꾸고
+  //    실제 pushState는 커밋 이후(HistoryUpdater 이펙트)에 적용한다. 그래서 Link 이동 직후의
+  //    렌더에서는 window.location이 아직 옛 값이고 이쪽만 새 값을 안다.
+  //  · useUrlState("tab") — window.location.search를 렌더마다 다시 읽는 값이자 쓰기 창구.
+  //    내부 setTab은 replaceState라 location이 먼저 바뀌고 라우터는 트랜지션으로 뒤따른다.
+  //
+  // 그래서 읽기는 "라우터 값 우선, 없으면 location 값"으로 합친다.
+  //  - Link 이동: 라우터 값이 즉시 새 값 → 지연 없음.
+  //  - 내부 setTab: 기존 tab 파라미터가 없었으면(대화 탭) 라우터 값이 null이라 location 값이 바로 이긴다.
+  //    파라미터가 있었으면 라우터 트랜지션 한 틱만큼 뒤따라온다(값이 어긋난 채 굳는 상태는 없다).
+  // 두 눈이 같은 키(`tab`)만 보므로 어긋나도 항상 같은 값으로 수렴한다.
   const searchParams = useSearchParams()
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>("chat")
+  const [tabParam, setTabParam] = useUrlState("tab", "chat")
+  const rawTab = searchParams.get("tab") ?? tabParam
+  // 미지원 값(?tab=hq · 오타)은 조용히 대화 탭으로 되돌린다 — 빈 화면을 만들지 않는다.
+  const activeTab: WorkspaceTab = WORKSPACE_TAB_VALUES.includes(rawTab as WorkspaceTab)
+    ? (rawTab as WorkspaceTab)
+    : rawTab === LEGACY_ARCHIVE_TAB
+      ? "queue"
+      : "chat"
+  const setActiveTab = useCallback((tab: WorkspaceTab) => setTabParam(tab), [setTabParam])
+  // 본사 확인 화면의 펼친 행을 `conversation` 딥링크로 되비춘다(§5는 이 키를 그대로 두라고 규약한다).
+  // 읽기는 위의 searchParams(라우터 값)가 맡고, 여기서는 쓰기만 쓴다 — 같은 replaceState 창구라
+  // tab과 순서대로 호출하면 두 파라미터가 한 주소에 함께 실린다.
+  const [, setConversationParam] = useUrlState("conversation", "")
+  // 상태 칩은 목록 안쪽 필터라 URL로 올리지 않는다(§5는 `tab`만 규약한다).
+  // 옛 ?tab=archive 북마크만 마운트 시 종료·보관 칩으로 착지시켜 행 집합을 그대로 재현한다.
+  const [queueFilter, setQueueFilter] = useState<QueueStatusFilter>(() =>
+    (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null) ===
+    LEGACY_ARCHIVE_TAB
+      ? "closed"
+      : "all"
+  )
   const [conversations, setConversations] = useState<InternalCsConversation[]>([])
   const [detail, setDetail] = useState<ConversationDetailResponse | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -1017,6 +1080,13 @@ function InternalCsChatWorkspaceInner() {
   const [promotingMessageId, setPromotingMessageId] = useState<string | null>(null)
   const [promotionResults, setPromotionResults] = useState<Record<string, PromotionResult>>({})
   const [deepLinkChecked, setDeepLinkChecked] = useState(false)
+  // 본사 확인(tab=hq) — 목록은 이미 받아 둔 conversations를 태그로 거른 것이고,
+  // 행을 펼칠 때만 상세를 가져온다(buildHqTemplate이 messages·assets를 요구한다).
+  // 상세는 여기 캐시에 따로 담는다 — 대화 탭의 detail/finalDraft 상태를 건드리지 않기 위함이다.
+  const [hqExpandedId, setHqExpandedId] = useState<string | null>(null)
+  const [hqDetails, setHqDetails] = useState<Record<string, ConversationDetailResponse>>({})
+  const [hqDetailError, setHqDetailError] = useState<string | null>(null)
+  const [hqPendingActionId, setHqPendingActionId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -1169,6 +1239,12 @@ function InternalCsChatWorkspaceInner() {
     }
   }, [conversations.length, detail, error, loadConversations, loading])
 
+  // 레거시 ?tab=archive URL 정규화 — 화면은 이미 대기열 + 종료·보관 칩으로 착지해 있고,
+  // 주소만 새 값으로 바꿔 콘솔 내비 하이라이트(`대기열`)까지 일치시킨다.
+  useEffect(() => {
+    if (tabParam === LEGACY_ARCHIVE_TAB) setTabParam("queue")
+  }, [tabParam, setTabParam])
+
   // 딥링크 수신 — ?conversation=<uuid>. 최초 목록 부트스트랩(loading→false)이 끝난 뒤
   // 한 번만 시도해 기본 선택과의 경합을 피한다. 없는/접근 불가한 id는 조용히 무시하고
   // 부트스트랩이 이미 고른 기본 화면을 그대로 둔다.
@@ -1179,11 +1255,51 @@ function InternalCsChatWorkspaceInner() {
     // UUID 형태가 아니면(오타·조작된 값) fetch 경로에 꽂지 않고 조용히 무시한다.
     if (!deepLinkId || !UUID_PATTERN.test(deepLinkId)) return
     loadConversation(deepLinkId)
-      .then(() => setActiveTab("chat"))
+      .then(() => {
+        // §5 — tab이 명시되지 않은 채 conversation만 오면 대화 탭으로 강제한다.
+        // 명시된 tab(예: ?tab=tools&conversation=)은 존중한다: 대화는 뒤에서 열려 있고
+        // 그 탭으로 돌아오면 그대로 보인다.
+        if (!new URLSearchParams(window.location.search).get("tab")) setActiveTab("chat")
+      })
       .catch(() => {
         // 존재하지 않거나 조회 실패한 대화 id — 기본 화면 유지
       })
-  }, [deepLinkChecked, loading, loadConversation, searchParams])
+  }, [deepLinkChecked, loading, loadConversation, searchParams, setActiveTab])
+
+  // ?tab=hq&conversation=<id> — 본사 확인 목록에서 그 행을 펼친 채로 착지시킨다.
+  // 위 승계 로직(tab 미지정일 때만 chat 강제)과 겹치지 않는다: 여기서는 탭을 건드리지 않고
+  // 펼침 대상만 정한다. tab=hq면 아래 목록이 펼쳐진 채로 그려지고, 다른 탭이면 아무 일도 없다.
+  useEffect(() => {
+    const deepLinkId = searchParams.get("conversation")
+    if (!deepLinkId || !UUID_PATTERN.test(deepLinkId)) return
+    setHqExpandedId((current) => current ?? deepLinkId)
+  }, [searchParams])
+
+  // 펼친 행의 상세 로드 — buildHqTemplate은 messages·assets를 읽으므로 목록 응답만으로는 부족하다.
+  // 대화 탭이 이미 같은 대화를 들고 있으면(딥링크 승계 포함) 그 detail을 재사용해 중복 요청을 만들지 않는다.
+  useEffect(() => {
+    const id = hqExpandedId
+    if (!id || hqDetails[id]) return
+    if (detail && detail.conversation.id === id) {
+      setHqDetails((current) => ({ ...current, [id]: detail }))
+      return
+    }
+    if (demoMode || !UUID_PATTERN.test(id)) return
+    let cancelled = false
+    adminFetchJson<ConversationDetailResponse>(`/api/admin/cs-chat/conversations/${id}`)
+      .then((loaded) => {
+        if (cancelled) return
+        setHqDetails((current) => ({ ...current, [id]: loaded }))
+        setHqDetailError(null)
+      })
+      .catch((loadError) => {
+        if (cancelled) return
+        setHqDetailError(loadError instanceof Error ? loadError.message : "본사 확인 초안을 불러오지 못했습니다.")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [demoMode, detail, hqDetails, hqExpandedId])
 
   useEffect(() => {
     if (activeTab === "tools" && !integrationAttempted && !integrationLoading) {
@@ -1221,14 +1337,32 @@ function InternalCsChatWorkspaceInner() {
     })
   }, [assets])
 
+  // 대화 스위처(헤더 드롭다운)는 흡수 전과 같이 살아 있는 대화만 보여준다.
   const queueConversations = useMemo(
     () => conversations.filter((conversation) => conversation.status !== "archived"),
     [conversations]
   )
-  const archivedConversations = useMemo(
-    () => conversations.filter((conversation) => conversation.status === "archived"),
-    [conversations]
-  )
+  // 상태 칩별 건수 — 흡수된 탭의 위첨자 카운트를 대신하는 작업량 신호.
+  const queueChipCounts = useMemo(() => {
+    const counts = {} as Record<QueueStatusFilter, number>
+    for (const chip of QUEUE_STATUS_CHIPS) {
+      counts[chip.value] = conversations.filter((conversation) => chip.match(conversation.status)).length
+    }
+    return counts
+  }, [conversations])
+  const filteredQueueConversations = useMemo(() => {
+    const chip = QUEUE_STATUS_CHIPS.find((item) => item.value === queueFilter) ?? QUEUE_STATUS_CHIPS[0]
+    return conversations.filter((conversation) => chip.match(conversation.status))
+  }, [conversations, queueFilter])
+  // 본사 확인 목록 — 신규 API 없이 같은 status=all 응답을 태그로 거른다(§6).
+  const hqConversations = useMemo(() => selectHqPending(conversations), [conversations])
+  // 펼친 행의 상세. 대화 탭이 마침 같은 대화를 들고 있으면 그 detail을 그대로 쓴다
+  // (딥링크 ?tab=hq&conversation= 로 들어온 경우가 여기에 해당해 추가 요청이 없다).
+  const hqDetail = useMemo(() => {
+    if (!hqExpandedId) return null
+    if (hqDetails[hqExpandedId]) return hqDetails[hqExpandedId]
+    return detail && detail.conversation.id === hqExpandedId ? detail : null
+  }, [detail, hqDetails, hqExpandedId])
   const pendingMessage = useMemo(
     () => [...(detail?.messages ?? [])].reverse().find(
       (message) => message.role === "assistant" && message.review_state === "pending"
@@ -1725,6 +1859,106 @@ function InternalCsChatWorkspaceInner() {
     })
   }
 
+  // ── 본사 확인 태그 전이(§6) ────────────────────────────────────────────────
+  // 티켓 엔티티를 만들지 않는다. 상태는 tags[] 하나에 살고, 쓰기는 이미 있는
+  // PATCH /api/admin/cs-chat/conversations/[id] { action:"update", tags } 하나뿐이다.
+
+  // 저장된 태그를 목록·대화 상세·본사 확인 캐시 세 곳에 동시에 반영한다.
+  // 전체 재조회(loadConversations) 대신 이 좁은 갱신을 쓰는 이유는 작성 중인 최종 답변 초안을
+  // 날리지 않기 위해서다.
+  //
+  // updated_at도 서버 응답 값으로 함께 덮는다. 태그를 쓰면 updated_at 트리거가 반드시 다시 찍히는데,
+  // 태그만 갈아끼우면 대기 경과가 방금 올린 건에 "7일" 같은 옛 값을 그대로 보여준다.
+  function applyConversationPatch(id: string, patch: Pick<InternalCsConversation, "tags" | "updated_at">) {
+    setConversations((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)))
+    setDetail((current) =>
+      current && current.conversation.id === id
+        ? { ...current, conversation: { ...current.conversation, ...patch } }
+        : current
+    )
+    setHqDetails((current) => {
+      const cached = current[id]
+      if (!cached) return current
+      return { ...current, [id]: { ...cached, conversation: { ...cached.conversation, ...patch } } }
+    })
+  }
+
+  // 펼침 상태를 URL(`conversation`)과 함께 움직인다 — 새로고침·링크 공유에도 같은 행이 열린다.
+  function toggleHqRow(id: string) {
+    const next = hqExpandedId === id ? null : id
+    setHqExpandedId(next)
+    setConversationParam(next ?? "")
+  }
+
+  // 저장된 태그가 기대와 다르면(서버 cleanInternalCsTags의 20개 상한에 걸려 잘린 경우)
+  // 성공으로 위장하지 않고 알린다 — 조용히 목록에서 사라지는 것이 가장 나쁜 실패다.
+  // 그래서 요청 본문이 아니라 응답이 돌려준 tags를 화면의 진실로 삼는다.
+  async function patchConversationTags(id: string, tags: string[], fallback: InternalCsConversation) {
+    if (demoMode) return { tags, updated_at: new Date().toISOString() }
+    const response = await adminFetchJson<{ conversation: InternalCsConversation }>(
+      `/api/admin/cs-chat/conversations/${id}`,
+      { method: "PATCH", body: JSON.stringify({ action: "update", tags }) }
+    )
+    return {
+      tags: response.conversation?.tags ?? [],
+      updated_at: response.conversation?.updated_at ?? fallback.updated_at,
+    }
+  }
+
+  // 대기열·내부 상담 → 본사 확인 대기. 축을 넘는 동선은 이 함수 하나로 모인다.
+  async function requestHqConfirmation(conversation: InternalCsConversation) {
+    if (hqPendingActionId) return
+    // 이미 대기 중이면 태그를 다시 쓰지 않고 화면만 옮긴다.
+    if (isHqPending(conversation)) {
+      setHqExpandedId(conversation.id)
+      setConversationParam(conversation.id)
+      setActiveTab("hq")
+      return
+    }
+    setHqPendingActionId(conversation.id)
+    setError(null)
+    try {
+      const saved = await patchConversationTags(conversation.id, withHqPending(conversation.tags), conversation)
+      if (!saved.tags.includes(HQ_PENDING_TAG)) {
+        setError("본사 확인 태그가 저장되지 않았습니다. 대화 태그 수가 상한에 걸렸는지 확인해 주세요.")
+        return
+      }
+      applyConversationPatch(conversation.id, saved)
+      setHqExpandedId(conversation.id)
+      setConversationParam(conversation.id)
+      setActiveTab("hq")
+      setNotice("본사 확인 대기로 보냈습니다. 초안을 복사해 본사에 전달해 주세요.")
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "본사 확인 요청을 저장하지 못했습니다.")
+    } finally {
+      setHqPendingActionId(null)
+    }
+  }
+
+  // 회신 처리 — evidence:hq_pending을 빼고 evidence:confirmed를 넣으면 목록에서 빠진다.
+  async function resolveHqConfirmation(conversation: InternalCsConversation) {
+    if (hqPendingActionId) return
+    setHqPendingActionId(conversation.id)
+    setError(null)
+    try {
+      const saved = await patchConversationTags(conversation.id, withHqConfirmed(conversation.tags), conversation)
+      if (saved.tags.includes(HQ_PENDING_TAG)) {
+        setError("본사 확인 완료를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+        return
+      }
+      applyConversationPatch(conversation.id, saved)
+      if (hqExpandedId === conversation.id) {
+        setHqExpandedId(null)
+        setConversationParam("")
+      }
+      setNotice("본사 회신을 반영했습니다. 대기 목록에서 제외됩니다.")
+    } catch (resolveError) {
+      setError(resolveError instanceof Error ? resolveError.message : "본사 확인 완료를 저장하지 못했습니다.")
+    } finally {
+      setHqPendingActionId(null)
+    }
+  }
+
   // 회귀 패널의 "대화 보기" — 대화 탭으로 전환하고 해당 대화를 직접 로드한다(사이드바 목록 의존 없음).
   function openConversationById(conversationId: string) {
     setActiveTab("chat")
@@ -1852,7 +2086,9 @@ function InternalCsChatWorkspaceInner() {
     if (demoMode) {
       setDetail((current) => current ? { ...current, conversation: { ...current.conversation, status: "archived" } } : current)
       setConversations((current) => current.map((item) => item.id === detail.conversation.id ? { ...item, status: "archived" } : item))
-      setActiveTab("archive")
+      // 흡수 후 착지점 — 대기열 탭 + 종료·보관 칩(옛 아카이브 탭과 같은 행 집합).
+      setQueueFilter("closed")
+      setActiveTab("queue")
       setNotice("미리보기 대화를 아카이브했습니다.")
       return
     }
@@ -1863,7 +2099,8 @@ function InternalCsChatWorkspaceInner() {
           body: JSON.stringify({ action: "archive", archiveReason: "CS 담당자 수동 아카이브" }),
         })
         await loadConversations(null)
-        setActiveTab("archive")
+        setQueueFilter("closed")
+        setActiveTab("queue")
         setNotice("대화를 아카이브했습니다.")
       } catch (archiveError) {
         setError(archiveError instanceof Error ? archiveError.message : "아카이브하지 못했습니다.")
@@ -1896,78 +2133,69 @@ function InternalCsChatWorkspaceInner() {
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-white font-sans text-[#111110]">
-      <header className="flex h-16 shrink-0 items-center justify-between bg-[#31302E] px-5 text-white sm:px-7">
-        <div className="flex min-w-0 items-center gap-4">
-          <div className="flex items-center gap-2.5">
-            <Sparkles className="h-5 w-5 text-[#6EE7B7]" />
-            <h1 className="whitespace-nowrap text-[19px] font-semibold tracking-[-0.02em]">CS 코파일럿</h1>
+    // 콘솔 내비는 Suspense 바깥(기본 export)에서 이미 그려졌다 — 여기서는 그 아래 본문만 만든다.
+    <>
+      <header className="shrink-0 border-b border-black/[0.08] bg-white">
+        <div className={cn(CONSOLE_CONTENT_CLASS, "flex items-center justify-between gap-3 py-2.5")}>
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#31302E] text-white">
+              <Sparkles className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h1 className="truncate text-[15px] font-semibold tracking-[-0.02em]">CS 코파일럿</h1>
+              <p className="hidden truncate text-[11px] text-[#615D59] sm:block">
+                내부 정보와 본사 소통 기준을 함께 확인합니다
+              </p>
+            </div>
           </div>
-          <span className="hidden h-6 w-px bg-white/20 sm:block" />
-          <p className="hidden truncate text-[12px] text-white/65 sm:block">
-            내부 정보와 본사 소통 기준을 함께 확인합니다
-          </p>
-        </div>
-        <div className="flex items-center gap-1">
-          <Link
-            href="/admin/overview"
-            className="mr-1 inline-flex h-9 items-center gap-1.5 rounded-md border border-white/15 px-2.5 text-[11px] font-semibold text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 sm:px-3 sm:text-[12px]"
-            aria-label="어드민으로 돌아가기"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            어드민
-          </Link>
-          <button
-            type="button"
-            onClick={() => setActiveTab("tools")}
-            className="flex h-9 w-9 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-            aria-label="운영 도구 열기"
-          >
-            <HelpCircle className="h-4.5 w-4.5" />
-          </button>
-          <span className="ml-2 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-[12px] font-semibold">CS</span>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => void loadConversations(selectedId)}
+              disabled={loading || isPending}
+              className="hidden h-9 items-center gap-2 rounded-md px-3 text-[12px] font-medium text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110] disabled:opacity-40 sm:inline-flex"
+            >
+              <RefreshCcw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+              새로고침
+            </button>
+            {/* 흡수된 자체 탭의 앰버 점 신호를 여기서 승계한다 — 미판정 회귀 후보가 있으면 켜진다. */}
+            <button
+              type="button"
+              onClick={() => setActiveTab("tools")}
+              className="relative flex h-9 w-9 items-center justify-center rounded-md text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+              aria-label="운영 도구 열기"
+            >
+              <HelpCircle className="h-4.5 w-4.5" />
+              {regressionPendingCount > 0 ? (
+                <span
+                  aria-hidden
+                  className="absolute right-1.5 top-1.5 h-[6px] w-[6px] rounded-full bg-[#A8741A] ring-2 ring-white"
+                />
+              ) : null}
+            </button>
+          </div>
         </div>
       </header>
 
-      <nav className="flex h-16 shrink-0 items-center justify-between border-b border-black/[0.08] bg-white px-3 sm:px-5">
-        <div className="flex min-w-0 items-center overflow-x-auto">
-          {WORKSPACE_TABS.map((tab) => (
-            <TabButton
-              key={tab.value}
-              active={activeTab === tab.value}
-              onClick={() => setActiveTab(tab.value)}
-              count={tab.value === "queue" ? queueConversations.length : undefined}
-              dot={tab.value === "tools" && regressionPendingCount > 0}
-            >
-              {tab.label}
-            </TabButton>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => void loadConversations(selectedId)}
-          disabled={loading || isPending}
-          className="mr-2 hidden h-9 items-center gap-2 rounded-md px-3 text-[12px] font-medium text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110] disabled:opacity-40 sm:inline-flex"
-        >
-          <RefreshCcw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-          새로고침
-        </button>
-      </nav>
-
       {error ? (
-        <div className="border-b border-[#F2B8B8] bg-[#FCE9E9] px-5 py-2.5 text-[12px] text-[#8F2C2C]">
-          {error}
+        <div className="shrink-0 border-b border-[#F2B8B8] bg-[#FCE9E9]">
+          <p className={cn(CONSOLE_CONTENT_CLASS, "py-2.5 text-[12px] text-[#8F2C2C]")}>{error}</p>
         </div>
       ) : null}
       {notice ? (
-        <div className="border-b border-[#BDEFD8] bg-[#ECFDF5] px-5 py-2.5 text-[12px] text-[#084734]">
-          {notice}
+        <div className="shrink-0 border-b border-[#BDEFD8] bg-[#ECFDF5]">
+          <p className={cn(CONSOLE_CONTENT_CLASS, "py-2.5 text-[12px] text-[#084734]")}>{notice}</p>
         </div>
       ) : null}
 
+      {/* 본문 영역 — 검토 드로어의 기준 요소다. 오버레이 시절 드로어는 root(fixed inset-0)에
+          top-16(자체 헤더 높이)으로 걸려 있었는데, 그 헤더가 사라졌으므로 상수 대신
+          "탭 패널이 차지하는 영역" 자체를 기준으로 삼아 inset-y-0로 잡는다. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
       {activeTab === "chat" ? (
         <div className={cn("flex min-h-0 flex-1 flex-col", reviewOpen && "xl:pr-[438px]")}>
-          <div className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-black/[0.08] px-5 py-3 sm:px-7">
+          <div className="shrink-0 border-b border-black/[0.08]">
+          <div className={cn(CONSOLE_CONTENT_CLASS, "flex min-h-16 flex-wrap items-center justify-between gap-3 py-3")}>
             <div className="flex min-w-0 items-center gap-2">
               <button
                 type="button"
@@ -2010,6 +2238,26 @@ function InternalCsChatWorkspaceInner() {
                   </button>
                 ))}
               </div>
+              {/* 축을 넘는 동선(§6) — 지금 보고 있는 대화를 본사 확인 대기로 보낸다.
+                  이미 대기 중이면 태그를 다시 쓰지 않고 본사 확인 화면으로만 넘어간다. */}
+              {detail ? (
+                <button
+                  type="button"
+                  onClick={() => void requestHqConfirmation(detail.conversation)}
+                  disabled={hqPendingActionId === detail.conversation.id}
+                  className={cn(
+                    "inline-flex h-9 items-center gap-2 rounded-md border px-3 text-[12px] font-semibold transition-colors disabled:opacity-40",
+                    isHqPending(detail.conversation)
+                      ? "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F] hover:bg-[#F6E7CE]"
+                      : "border-black/[0.08] bg-white text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
+                  )}
+                >
+                  <Building className="h-4 w-4" />
+                  <span className="hidden sm:inline">
+                    {isHqPending(detail.conversation) ? "본사 확인 대기" : "본사 확인 요청"}
+                  </span>
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setReviewOpen(true)}
@@ -2024,8 +2272,10 @@ function InternalCsChatWorkspaceInner() {
               </button>
             </div>
           </div>
+          </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-[#FFFFFF] px-5 py-7 sm:px-8">
+          <div className="min-h-0 flex-1 overflow-y-auto bg-white">
+            <div className={cn(CONSOLE_CONTENT_CLASS, "py-7")}>
             <div className={cn("w-full max-w-[820px] space-y-8", reviewOpen ? "xl:mr-auto xl:ml-0" : "mx-auto")}>
               {loading && !detail ? (
                 <div className="flex min-h-[360px] items-center justify-center text-[#615D59]">
@@ -2379,9 +2629,11 @@ function InternalCsChatWorkspaceInner() {
                 </section>
               ) : null}
             </div>
+            </div>
           </div>
 
-          <form onSubmit={submitQuestion} className="shrink-0 border-t border-black/[0.08] bg-white px-5 py-4 sm:px-7">
+          <div className="shrink-0 border-t border-black/[0.08] bg-white">
+          <form onSubmit={submitQuestion} className={cn(CONSOLE_CONTENT_CLASS, "py-4")}>
             <input
               ref={fileInputRef}
               type="file"
@@ -2475,41 +2727,219 @@ function InternalCsChatWorkspaceInner() {
               사진은 JPG·PNG·WebP 최대 3장 · AI 답변과 이미지 분석은 CS 담당자 승인 전 외부로 전달되지 않습니다.
             </p>
           </form>
+          </div>
         </div>
       ) : null}
 
       {activeTab === "queue" ? (
         <section className="min-h-0 flex-1 overflow-y-auto bg-white">
-          <div className="flex items-center justify-between px-5 py-6 sm:px-7">
-            <div>
-              <h2 className="text-[20px] font-semibold tracking-[-0.02em]">대기열</h2>
-              <p className="mt-1 text-[12px] text-[#615D59]">검토와 담당자 판단이 필요한 내부 CS 대화입니다.</p>
+          <div className={cn(CONSOLE_CONTENT_CLASS, "py-6")}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[20px] font-semibold tracking-[-0.02em]">대기열</h2>
+                <p className="mt-1 text-[12px] text-[#615D59]">
+                  검토와 담당자 판단이 필요한 내부 CS 대화입니다. 종료·보관한 상담도 상태 칩으로 함께 확인합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={startNewConversation}
+                className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md bg-[#31302E] px-4 text-[12px] font-semibold text-white hover:bg-[#111110]"
+              >
+                <MessageSquare className="h-4 w-4" />
+                새 대화
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={startNewConversation}
-              className="inline-flex h-9 items-center gap-2 rounded-md bg-[#31302E] px-4 text-[12px] font-semibold text-white hover:bg-[#111110]"
-            >
-              <MessageSquare className="h-4 w-4" />
-              새 대화
-            </button>
+
+            {/* 흡수된 `아카이브` 탭 — 같은 목록(status=all)에 상태 칩만 다르게 건다. */}
+            <div className="mt-4 flex flex-wrap gap-1.5" role="group" aria-label="대화 상태 필터">
+              {QUEUE_STATUS_CHIPS.map((chip) => {
+                const active = queueFilter === chip.value
+                return (
+                  <button
+                    key={chip.value}
+                    type="button"
+                    onClick={() => setQueueFilter(chip.value)}
+                    aria-pressed={active}
+                    className={cn(
+                      "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[12px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40",
+                      active
+                        ? "border-[#31302E] bg-[#31302E] text-white"
+                        : "border-black/[0.08] bg-white text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
+                    )}
+                  >
+                    {chip.label}
+                    <span className={cn("tabular-nums text-[11px]", active ? "text-white/70" : "text-[#A39E98]")}>
+                      {queueChipCounts[chip.value]}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
-          <ConversationTable conversations={queueConversations} emptyLabel="대기 중인 대화가 없습니다." onSelect={(item) => void handleSelect(item)} />
+          <ConversationTable
+            conversations={filteredQueueConversations}
+            emptyLabel={queueFilter === "closed" ? "종료·보관한 대화가 없습니다." : "대기 중인 대화가 없습니다."}
+            onSelect={(item) => void handleSelect(item)}
+            onRequestHq={(item) => void requestHqConfirmation(item)}
+            hqBusyId={hqPendingActionId}
+          />
         </section>
       ) : null}
 
-      {activeTab === "archive" ? (
+      {/* 본사 확인(§6) — 신규 테이블·API 없이 tags[]만으로 세운 화면.
+          목록은 위 conversations(status=all 한 번 받은 응답)를 evidence:hq_pending으로 거른 것이고,
+          펼침 본문은 기존 buildHqTemplate()의 6항목 고정 포맷을 그대로 쓴다. */}
+      {activeTab === "hq" ? (
         <section className="min-h-0 flex-1 overflow-y-auto bg-white">
-          <div className="px-5 py-6 sm:px-7">
-            <h2 className="text-[20px] font-semibold tracking-[-0.02em]">아카이브</h2>
-            <p className="mt-1 text-[12px] text-[#615D59]">종료 후 보관한 상담과 승인 이력을 다시 확인합니다.</p>
+          <div className={cn(CONSOLE_CONTENT_CLASS, "py-6")}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[20px] font-semibold tracking-[-0.02em]">본사 확인</h2>
+                <p className="mt-1 max-w-[640px] text-[12px] leading-5 text-[#615D59]">
+                  본사 회신을 기다리는 대화입니다. 행을 펼치면 6항목 고정 포맷 요청 초안이 그대로 나옵니다.
+                  이 화면의 내용은 사내 전용이며 고객 안내 문안과 섞지 마세요.
+                </p>
+              </div>
+              <span className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-black/[0.08] bg-[#F6F5F4] px-3 text-[12px] font-semibold text-[#31302E]">
+                대기
+                <span className="tabular-nums text-[#615D59]">{hqConversations.length}</span>
+              </span>
+            </div>
+            {/* 근사 명시 — 대기 시작 시각을 저장하는 칼럼이 없다(hq-desk.ts hqWaitingSince). */}
+            <p className="mt-3 rounded-md border border-black/[0.08] bg-[#FAFAF8] px-3 py-2 text-[11px] leading-4 text-[#615D59]">
+              대기 경과는 마지막 업데이트 시각(updated_at) 기준 <strong className="font-semibold text-[#31302E]">근사값</strong>입니다.
+              태그가 붙은 시각은 따로 저장하지 않으므로, 이후 담당자·상태·제목을 바꾸면 경과가 다시 0부터 계산됩니다.
+            </p>
+            {hqDetailError ? (
+              <p className="mt-3 rounded-md border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[11.5px] text-[#8F2C2C]">
+                {hqDetailError}
+              </p>
+            ) : null}
           </div>
-          <ConversationTable conversations={archivedConversations} emptyLabel="아카이브한 대화가 없습니다." onSelect={(item) => void handleSelect(item)} />
+
+          {hqConversations.length === 0 ? (
+            <div className="flex min-h-[320px] flex-col items-center justify-center border-t border-black/[0.08] px-6 text-center">
+              <Building className="h-8 w-8 text-[#A39E98]" />
+              <p className="mt-4 text-[14px] font-semibold text-[#31302E]">본사 회신을 기다리는 건이 없습니다.</p>
+              <p className="mt-1 max-w-[420px] text-[12px] leading-5 text-[#615D59]">
+                대기열이나 내부 상담에서 <span className="font-semibold text-[#31302E]">본사 확인 요청</span>을 누르면 이곳에 쌓입니다.
+              </p>
+            </div>
+          ) : (
+            <div className="border-t border-black/[0.08]">
+              {hqConversations.map((conversation) => {
+                const expanded = hqExpandedId === conversation.id
+                const since = hqWaitingSince(conversation)
+                const stale = isHqStale(since)
+                const busy = hqPendingActionId === conversation.id
+                const rowDetail = expanded ? hqDetail : null
+                return (
+                  <article key={conversation.id} className="border-b border-black/[0.08] bg-white">
+                    <button
+                      type="button"
+                      onClick={() => toggleHqRow(conversation.id)}
+                      aria-expanded={expanded}
+                      className="flex w-full items-start gap-4 px-4 py-4 text-left transition-colors hover:bg-[#FAFAF8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]/40 sm:px-6"
+                    >
+                      <ChevronRight
+                        aria-hidden
+                        className={cn(
+                          "mt-1 h-4 w-4 shrink-0 text-[#A39E98] transition-transform",
+                          expanded && "rotate-90"
+                        )}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="truncate text-[14px] font-semibold text-[#111110]">{conversation.title}</span>
+                          <StatusBadge status={conversation.status} />
+                        </span>
+                        <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[#615D59]">
+                          <span>담당 {conversation.assignee_name ?? "미지정"}</span>
+                          <span className="text-[#D8D5D1]" aria-hidden>·</span>
+                          <span>등록 {formatDay(conversation.created_at)}</span>
+                          <span className="text-[#D8D5D1]" aria-hidden>·</span>
+                          <span className="truncate text-[#A39E98]">
+                            {conversation.tags.length > 0 ? conversation.tags.join(" · ") : "분류 전"}
+                          </span>
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-[#A39E98]">대기 경과</span>
+                        <span
+                          className={cn(
+                            "mt-1 inline-flex items-center gap-1.5 text-[13px] font-semibold tabular-nums",
+                            stale ? "text-[#7A520F]" : "text-[#31302E]"
+                          )}
+                        >
+                          {stale ? <Clock className="h-3.5 w-3.5" aria-hidden /> : null}
+                          {formatWaitingElapsed(since)}
+                        </span>
+                      </span>
+                    </button>
+
+                    {expanded ? (
+                      <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-4 py-4 sm:px-6">
+                        {rowDetail ? (
+                          <>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#31302E]">
+                                본사 요청 초안 · 6항목 고정 포맷
+                              </h3>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void copyText(buildHqTemplate(rowDetail), "본사 확인 초안을 복사했습니다.")}
+                                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold hover:bg-[#F6F5F4]"
+                                >
+                                  <Copy className="h-3 w-3" />
+                                  초안 복사
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void handleSelect(conversation)}
+                                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
+                                >
+                                  <MessageSquare className="h-3 w-3" />
+                                  대화 열기
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void resolveHqConfirmation(conversation)}
+                                  disabled={busy}
+                                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white transition-colors hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
+                                >
+                                  {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                                  본사 확인 완료
+                                </button>
+                              </div>
+                            </div>
+                            <pre className="mt-3 max-h-[420px] overflow-auto whitespace-pre-wrap rounded-md border border-black/[0.08] bg-white px-3.5 py-3 font-sans text-[11.5px] leading-5 text-[#31302E]">
+                              {buildHqTemplate(rowDetail)}
+                            </pre>
+                            <p className="mt-2 text-[10.5px] leading-4 text-[#A39E98]">
+                              회신을 받으면 본사 확인 완료를 눌러 주세요 — 근거 태그가 확정으로 바뀌고 이 목록에서 빠집니다.
+                            </p>
+                          </>
+                        ) : (
+                          <p className="flex items-center gap-2 py-3 text-[12px] text-[#615D59]">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            본사 요청 초안을 준비하는 중입니다.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
+                  </article>
+                )
+              })}
+            </div>
+          )}
         </section>
       ) : null}
 
       {activeTab === "tools" ? (
-        <section className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAF8] px-5 py-7 sm:px-8">
+        <section className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAF8]">
+          <div className={cn(CONSOLE_CONTENT_CLASS, "py-7")}>
           <div className="mx-auto max-w-[920px]">
             <h2 className="text-[20px] font-semibold tracking-[-0.02em]">운영 데스크</h2>
             <p className="mt-1 text-[12px] text-[#615D59]">오늘 처리할 검수와 큐 상태를 한 화면에서 확인합니다.</p>
@@ -2891,6 +3321,7 @@ function InternalCsChatWorkspaceInner() {
               })}
             </div>
           </div>
+          </div>
         </section>
       ) : null}
 
@@ -2898,11 +3329,11 @@ function InternalCsChatWorkspaceInner() {
         <>
           <button
             type="button"
-            className="absolute inset-x-0 top-32 bottom-0 z-30 bg-black/10 xl:hidden"
+            className="absolute inset-0 z-30 bg-black/10 xl:hidden"
             onClick={() => setReviewOpen(false)}
             aria-label="검토 패널 닫기"
           />
-          <aside className="absolute top-16 right-0 bottom-0 z-40 flex w-full max-w-[438px] flex-col border-l border-black/[0.08] bg-white shadow-[-14px_0_36px_rgba(0,0,0,0.06)]">
+          <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[438px] flex-col border-l border-black/[0.08] bg-white shadow-[-14px_0_36px_rgba(0,0,0,0.06)]">
             <div className="flex h-16 shrink-0 items-center justify-between border-b border-black/[0.08] px-5">
               <div>
                 <h2 className="text-[16px] font-semibold">검토</h2>
@@ -3052,15 +3483,17 @@ function InternalCsChatWorkspaceInner() {
           )}
         </div>
       ) : null}
-    </div>
+      </div>
+    </>
   )
 }
 
 // useSearchParams()는 정적 렌더링 시 Suspense 경계를 요구한다. 페이지(app/admin/cs-chatbot/page.tsx)를
 // 바꾸지 않고 이 컴포넌트 내부에서 해결한다.
+// 오버레이 해제 후에는 셸 안쪽에서 본문 높이를 그대로 차지해야 스트리밍 중 점프가 없다.
 function WorkspaceLoadingShell() {
   return (
-    <div className="fixed inset-0 z-[80] flex h-[100dvh] items-center justify-center bg-white">
+    <div className="flex min-h-0 flex-1 items-center justify-center bg-white">
       <Loader2 className="h-5 w-5 animate-spin text-[#084734]" />
     </div>
   )
@@ -3068,8 +3501,15 @@ function WorkspaceLoadingShell() {
 
 export default function InternalCsChatWorkspace() {
   return (
-    <Suspense fallback={<WorkspaceLoadingShell />}>
-      <InternalCsChatWorkspaceInner />
-    </Suspense>
+    // 오버레이(fixed inset-0 z-[80]) 해제 — 어드민 셸 안쪽의 일반 페이지다(§9).
+    // 셸의 main은 lg에서 정확히 100dvh(좌우 패딩만 있고 상하 패딩 0)라 lg:h-[100dvh]가 그대로 맞고,
+    // lg 미만에서는 main의 pt-16 pb-24(=10rem, 모바일 상단바·하단탭바 자리)만큼 빼면 뷰포트에 딱 맞는다.
+    // 콘솔 내비는 Suspense 바깥에 둬서 본문이 스트리밍되는 동안에도 자리를 지킨다.
+    <div className="flex h-[calc(100dvh-10rem)] min-h-[560px] flex-col overflow-hidden bg-white font-sans text-[#111110] lg:h-[100dvh]">
+      <CsConsoleNav className="shrink-0" />
+      <Suspense fallback={<WorkspaceLoadingShell />}>
+        <InternalCsChatWorkspaceInner />
+      </Suspense>
+    </div>
   )
 }

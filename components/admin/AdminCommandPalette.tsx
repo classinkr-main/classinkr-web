@@ -56,6 +56,13 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<Command, "group">>> = {
   "/admin/docs": [
     { label: "추천 질문 관리", href: "/admin/docs?tab=recommended", keywords: "추천 질문 starter chatbot recommended" },
   ],
+  // CS 콘솔 IA 재구성(2026-07-27) — 사이드바 cs 섹션이 3항목으로 줄면서 "문서 보강 큐"·"채널톡 상담"
+  // 항목이 콘솔 가로 메뉴로 옮겨갔다. URL은 그대로이므로 ⌘K 도달성은 자식 커맨드로 보존한다
+  // (라벨은 콘솔 메뉴명과 일치시켜 두 표면의 어휘가 갈리지 않게 한다).
+  "/admin/chatbot": [
+    { label: "상담 Inbox (채널톡)", href: "/admin/channel-talk", keywords: "채널톡 상담 문의 채팅 channel talk chat inbox" },
+    { label: "미해결 큐", href: "/admin/docs?tab=gaps", keywords: "보강 큐 gaps faq 문서 검색 초안 질문 패턴 미해결" },
+  ],
   "/admin/settings": [
     { label: "통합 설정", href: "/admin/settings?tab=integrations", keywords: "설정 settings integrations webhook api key" },
   ],

@@ -18,10 +18,8 @@ import {
   LayoutDashboard,
   Magnet,
   Megaphone,
-  MessageSquare,
   PackageCheck,
   ReceiptText,
-  Search,
   Settings,
   Users,
 } from "lucide-react"
@@ -41,8 +39,27 @@ export interface AdminNavItem {
 }
 
 const ALL_STAFF: AdminRole[]    = ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER"]
-const STAFF_ADMIN: AdminRole[]  = ["SUPER_ADMIN", "ADMIN"]
-const STAFF_EDITOR: AdminRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
+// CS 콘솔 가로 메뉴(cs/CsConsoleNav)도 같은 롤 묶음을 써야 사이드바와 가시성이 어긋나지 않는다.
+export const STAFF_ADMIN: AdminRole[]  = ["SUPER_ADMIN", "ADMIN"]
+export const STAFF_EDITOR: AdminRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
+
+/**
+ * 세션에 저장된 role 문자열(대소문자·레거시 소문자 혼재)을 AdminRole로 정규화한다.
+ * AdminSidebar에 있던 것을 nav SSOT로 올린 것 — CS 콘솔 내비도 같은 정규화를 써야
+ * 두 내비의 권한 필터가 갈리지 않는다. 로직 변경 없음.
+ */
+export function normalizeAdminRole(role: string): AdminRole {
+  const normalized = role.trim()
+
+  if (normalized === "admin" || normalized === "ADMIN") return "ADMIN"
+  if (normalized === "branch" || normalized === "BRANCH") return "BRANCH"
+  if (normalized === "partner" || normalized === "PARTNER") return "PARTNER"
+  if (normalized === "SUPER_ADMIN") return "SUPER_ADMIN"
+  if (normalized === "EDITOR") return "EDITOR"
+  if (normalized === "VIEWER") return "VIEWER"
+
+  return "ADMIN"
+}
 
 // IA 재편(2026-07-04): 6섹션 → 4섹션 병합. "너무 세분화" 해소 — 웹 분석(Analytics·트래픽)은
 // marketing으로, 매출 성과(KR Team·매출 장부)는 sales로 흡수해 잡탕이던 "분석" 섹션을 해체.
@@ -51,6 +68,7 @@ const STAFF_EDITOR: AdminRole[] = ["SUPER_ADMIN", "ADMIN", "EDITOR"]
 // (이전 재편) 자료 퍼널=/lead-magnets 통일, 하드웨어=SCM 운영 콘솔이라 system, 챗봇→docs?tab=gaps 흡수.
 // (2026-07-17) CS 탭 외부/내부 이원화 — "챗봇 운영·보강 큐" 겸직 항목을 "챗봇 운영"(/admin/chatbot,
 // 외부 공개 운영 대시보드)과 "문서 보강 큐"(/admin/docs?tab=gaps, 챗봇+내부CS 공유 큐)로 재분리.
+// (2026-07-27) CS 어드민 콘솔 IA 재구성 — cs 섹션 5 → 3항목. 아래 cs 블록 주석 참조.
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, roles: [...ALL_STAFF, "BRANCH"], section: "home", keywords: "홈 대시보드 overview home" },
 
@@ -77,18 +95,19 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/analytics", label: "Analytics", icon: BarChart2, roles: [...ALL_STAFF, "BRANCH"], section: "marketing", keywords: "analytics 분석 통계" },
   { href: "/admin/traffic", label: "방문자/트래픽", icon: Eye, roles: [...ALL_STAFF, "BRANCH"], section: "marketing", keywords: "방문자 트래픽 추적 현황 홈페이지 흐름 tracking client events pixel 계측 traffic" },
 
-  // 고객 지원 (가이드 문서 → 챗봇 운영 → 문서 보강 큐 → 내부 CS 챗봇 → channel-talk)
-  { href: "/admin/docs", label: "가이드 문서", icon: BookOpen, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "가이드 문서 docs guide 챗봇 chatbot faq 추천질문" },
-  // 챗봇 운영 — 외부(공개) 챗봇 운영 대시보드. 과거 docs?tab=gaps로 흡수돼 redirect 스텁이었으나
-  // Task X가 /admin/chatbot을 얇은 서버 페이지로 재건하며 독립 표면을 복원했다(2026-07-17).
-  { href: "/admin/chatbot", label: "챗봇 운영", icon: Bot, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops" },
-  // 문서 보강 큐는 문서 센터(/admin/docs)의 "보강 큐" 탭으로 병합됨 — nav는 탭 딥링크를 직접 가리켜
-  // active 하이라이트가 동작하게 한다. /admin/docs/gaps는 북마크 호환용 redirect 스텁으로만 유지.
-  // 챗봇 발/내부CS 발 질문이 함께 모이는 공유 큐라 "챗봇 운영"과는 별개 표면으로 유지한다.
-  { href: "/admin/docs?tab=gaps", label: "문서 보강 큐", icon: Search, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "보강 큐 gaps faq 문서 검색 초안 질문 패턴" },
-  // 내부 CS 챗봇 — 상담원용 워크스페이스(내부 지식·대화 큐·아카이브). 공개 챗봇 운영과 별개 표면.
-  { href: "/admin/cs-chatbot", label: "내부 CS 챗봇", icon: Headset, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "내부 cs 챗봇 상담 도우미 소통 가이드 템플릿 큐 아카이브 internal support assistant" },
-  { href: "/admin/channel-talk", label: "채널톡 상담", icon: MessageSquare, roles: [...STAFF_ADMIN, "BRANCH"], section: "cs", keywords: "채널톡 상담 문의 채팅 channel talk chat inbox" },
+  // 고객 지원 — CS 콘솔 IA 재구성(2026-07-27, docs/active/cs-admin-console-ia-2026-07-27.md §2)으로
+  // 5항목 → 3항목. 사라진 화면은 없고, 진입점이 콘솔 가로 메뉴(components/admin/cs/CsConsoleNav.tsx)로
+  // 옮겨갔다. 흡수 관계:
+  //   문서 보강 큐(/admin/docs?tab=gaps) → 콘솔 외부 축 "미해결 큐"
+  //   채널톡 상담(/admin/channel-talk)   → 콘솔 외부 축 "상담 Inbox"
+  // 두 URL은 그대로 살아 있고(딥링크·북마크 무손실) ⌘K 팔레트에도 자식 커맨드로 남아 있다.
+  // 가이드 문서는 콘텐츠 파트 공용 표면이라 사이드바에도 유지한다(§2 흡수 관계 표).
+  { href: "/admin/docs", label: "가이드 문서", icon: BookOpen, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "가이드 문서 docs guide 챗봇 chatbot faq 추천질문 카테고리 리디렉트" },
+  // CS 콘솔 — 외부(고객용) 축의 첫 화면. 대시보드·상담 Inbox·미해결 큐·품질 검수·가이드 문서·추천 질문이
+  // 이 화면 상단의 콘솔 가로 메뉴로 이어진다(구 "챗봇 운영").
+  { href: "/admin/chatbot", label: "CS 콘솔", icon: Bot, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "cs 콘솔 챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops console 채널톡 상담 문의 채팅 channel talk chat inbox 보강 큐 미해결 gaps 질문 패턴" },
+  // 내부 CS — 내부(사내) 축 전체의 진입점. 상담원용 워크스페이스(AI 초안·대기열·운영 도구).
+  { href: "/admin/cs-chatbot", label: "내부 CS", icon: Headset, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "내부 cs 챗봇 상담 도우미 소통 가이드 템플릿 큐 아카이브 대기열 본사 확인 internal support assistant" },
 
   // 운영·시스템
   { href: "/admin/ops", label: "운영 상태", icon: Activity, roles: [...STAFF_ADMIN, "BRANCH"], section: "system", keywords: "ops health 상태 통합 크론 cron automation" },
@@ -103,7 +122,7 @@ export const ADMIN_NAV_SECTION_META: Record<AdminNavSection, { label: string; de
   home: { label: "홈", description: "오늘 먼저 볼 운영 허브" },
   sales: { label: "영업·매출", description: "CRM·견적·하드웨어 재고·매출 성과·장부" },
   marketing: { label: "마케팅·분석", description: "캠페인·콘텐츠·리드·웹 분석" },
-  cs: { label: "고객 지원", description: "가이드 문서·챗봇·채널톡" },
+  cs: { label: "고객 지원", description: "가이드 문서·CS 콘솔(외부)·내부 CS" },
   system: { label: "운영·시스템", description: "상태·설정·권한" },
 }
 
