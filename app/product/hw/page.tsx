@@ -807,7 +807,7 @@ function SpaceScenarioSection() {
                                     model: scenario.model,
                                 })}
                             >
-                            {scenario.sku ? "이 구성으로 도입 신청" : "이 구성으로 상담 신청"}
+                            {scenario.sku ? "이 구성으로 주문 신청" : "이 구성으로 상담 신청"}
                             <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                             </Link>
                         </Button>

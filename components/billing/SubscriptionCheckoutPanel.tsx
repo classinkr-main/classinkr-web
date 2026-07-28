@@ -99,7 +99,10 @@ export function SubscriptionCheckoutPanel() {
   )
   const approxAmountKrw = useMemo(() => approxKrw(amountUsd, fx.rate), [amountUsd, fx.rate])
   const isFormComplete = Boolean(
-    form.organizationName.trim() && form.buyerName.trim() && form.buyerEmail.trim()
+    form.organizationName.trim() &&
+      form.buyerName.trim() &&
+      form.buyerPhone.trim() &&
+      form.buyerEmail.trim()
   )
   // 토스 키가 없거나 공개 결제 플래그가 꺼져 있으면 온라인 결제 경로 자체가 없다.
   const paymentAvailable = checkoutEnabled && hasWidgetKey
@@ -492,7 +495,7 @@ export function SubscriptionCheckoutPanel() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="buyerPhone" className="text-[12px] text-[#44514A]">
-                  연락처 <span className="text-[#A39E98]">(선택)</span>
+                  연락처
                 </Label>
                 <Input
                   id="buyerPhone"
@@ -574,15 +577,14 @@ export function SubscriptionCheckoutPanel() {
               }}
               className="w-full rounded-lg border border-black/[0.08] bg-white py-2.5 text-[13px] font-medium text-[#084734] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
             >
-              결제 없이 도입 신청
+              주문 신청하기
             </button>
           </div>
         ) : (
           <div className="rounded-2xl border border-black/[0.08] bg-white p-6">
-            <p className="text-[13px] font-semibold text-[#111110]">온라인 결제 오픈 준비 중</p>
+            <p className="text-[13px] font-semibold text-[#111110]">주문 신청</p>
             <p className="mt-1.5 text-[12px] leading-relaxed text-[#615D59]">
-              아래 도입 신청을 남기시면 결제 없이 도입을 도와드립니다. 담당자가 1영업일 내에 연락해
-              플랜 확정과 계약을 함께 진행합니다.
+              주문을 남기시면 담당자가 1영업일 내에 연락해 플랜 확정과 계약을 함께 진행합니다.
             </p>
 
             <Button
@@ -600,7 +602,7 @@ export function SubscriptionCheckoutPanel() {
                 setRequestOpen(true)
               }}
             >
-              결제 없이 도입 신청
+              주문 신청하기
             </Button>
           </div>
         )}
@@ -611,6 +613,12 @@ export function SubscriptionCheckoutPanel() {
           kind="software"
           items={requestItems}
           sourcePage="/checkout?type=sw&mode=subscription"
+          initialContact={{
+            org: form.organizationName,
+            name: form.buyerName,
+            phone: form.buyerPhone,
+            email: form.buyerEmail,
+          }}
           summaryTitle={`${selectedPlan.title} · ${billingCycle === "monthly" ? "월간" : "연간"}`}
           summaryValue={formatUsd(amountUsd)}
           summaryNote={`${clampAccountCount(accountCount)}계정 기준`}

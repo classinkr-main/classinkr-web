@@ -7,6 +7,8 @@ import { useSearchParams } from "next/navigation"
 import { ArrowRight, Minus, Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { CheckoutRequestForm } from "@/components/checkout/CheckoutRequestForm"
 import {
   HARDWARE_CATALOG,
@@ -179,6 +181,8 @@ export function HardwareCheckoutPanel() {
     createPreselectedHardwareQuantities(initialSkuParam)
   )
   const [requestOpen, setRequestOpen] = useState(false)
+  // SW 패널과 동일한 인라인 주문자 정보 — 주문 모달에 프리필된다(모달에서 수정 가능).
+  const [buyer, setBuyer] = useState({ org: "", name: "", phone: "", email: "" })
 
   const totalKrw = useMemo(() => computeHardwareTotalKrw(quantities), [quantities])
   const unitCount = useMemo(() => countHardwareUnits(quantities), [quantities])
@@ -285,10 +289,70 @@ export function HardwareCheckoutPanel() {
         </div>
 
         <div className="rounded-2xl border border-black/[0.08] bg-white p-6">
-          <p className="text-[13px] font-semibold text-[#111110]">온라인 결제 오픈 준비 중</p>
+          <p className="text-[13px] font-semibold text-[#111110]">주문자 정보</p>
+
+          <div className="mt-4 space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="hw-buyer-org" className="text-[12px] text-[#44514A]">
+                기관명 / 학원명
+              </Label>
+              <Input
+                id="hw-buyer-org"
+                value={buyer.org}
+                onChange={(event) => setBuyer((c) => ({ ...c, org: event.target.value }))}
+                placeholder="예: 무궁화학원"
+                autoComplete="organization"
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="hw-buyer-name" className="text-[12px] text-[#44514A]">
+                  담당자명
+                </Label>
+                <Input
+                  id="hw-buyer-name"
+                  value={buyer.name}
+                  onChange={(event) => setBuyer((c) => ({ ...c, name: event.target.value }))}
+                  placeholder="홍길동"
+                  autoComplete="name"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="hw-buyer-phone" className="text-[12px] text-[#44514A]">
+                  연락처
+                </Label>
+                <Input
+                  id="hw-buyer-phone"
+                  type="tel"
+                  value={buyer.phone}
+                  onChange={(event) => setBuyer((c) => ({ ...c, phone: event.target.value }))}
+                  placeholder="010-0000-0000"
+                  autoComplete="tel"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="hw-buyer-email" className="text-[12px] text-[#44514A]">
+                이메일 <span className="text-[#A39E98]">(선택)</span>
+              </Label>
+              <Input
+                id="hw-buyer-email"
+                type="email"
+                value={buyer.email}
+                onChange={(event) => setBuyer((c) => ({ ...c, email: event.target.value }))}
+                placeholder="ops@classin.co.kr"
+                autoComplete="email"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-black/[0.08] bg-white p-6">
+          <p className="text-[13px] font-semibold text-[#111110]">주문 신청</p>
           <p className="mt-1.5 text-[12px] leading-relaxed text-[#615D59]">
-            하드웨어는 아직 웹에서 바로 결제할 수 없습니다. 도입 신청을 남겨주시면 담당자가 연락해
-            결제와 설치 일정을 함께 진행합니다.
+            구성을 담아 주문을 남기시면 담당자가 연락드려 결제와 설치 일정을 함께 진행합니다.
           </p>
 
           <Button
@@ -298,7 +362,7 @@ export function HardwareCheckoutPanel() {
             disabled={!hasSelection}
             onClick={openRequest}
           >
-            도입 신청하기
+            주문 신청하기
           </Button>
 
           {!hasSelection ? (
@@ -333,6 +397,7 @@ export function HardwareCheckoutPanel() {
         summaryTitle={unitCount > 0 ? `선택 구성 ${unitCount}점` : "선택 구성"}
         summaryValue={formatHardwareKrw(totalKrw)}
         summaryNote={HARDWARE_ORDER_NOTE}
+        initialContact={buyer}
       />
     </div>
   )

@@ -26,7 +26,7 @@ const FAMILY_COPY: Record<ProductFamily, { eyebrow: string; title: string; descr
     eyebrow: "Hardware",
     title: "하드웨어 도입",
     description:
-      "전자칠판 · AI 카메라 · 올인원 녹화 스튜디오 구성을 담아보세요. 온라인 결제는 준비 중이라, 도입 신청을 남기시면 담당자가 결제와 설치 일정을 함께 진행합니다.",
+      "전자칠판 · AI 카메라 · 올인원 녹화 스튜디오 구성을 담아 주문을 남겨주세요. 담당자가 연락드려 결제와 설치 일정을 함께 진행합니다.",
   },
 }
 

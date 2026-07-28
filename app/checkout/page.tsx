@@ -6,7 +6,7 @@ import type { BillingMode } from "@/components/billing/BillingModeTabs"
 export const metadata: Metadata = {
   title: "Checkout",
   description:
-    "Classin 소프트웨어 플랜 결제와 하드웨어 도입 신청을 한 곳에서 진행하는 체크아웃 페이지입니다.",
+    "Classin 소프트웨어 플랜 결제와 하드웨어 주문 신청을 한 곳에서 진행하는 체크아웃 페이지입니다.",
   robots: { index: false, follow: false },
 }
 
