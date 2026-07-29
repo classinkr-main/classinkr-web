@@ -132,6 +132,37 @@ export function resolveCsConsoleMode(pathname: string): CsConsoleMode {
     : "customer"
 }
 
+/**
+ * 콘솔 메뉴 한 항목의 가시성 판정 — 콘솔의 유일한 판정 창구다.
+ * 렌더는 이 함수만 호출하고, 어디에서도 `item.roles`를 직접 읽지 않는다.
+ *
+ * ── 교체 지점 ──────────────────────────────────────────────────────────────
+ * 어드민 탭 재구성(docs/active/admin-tab-restructure-2026-07-29.md §5)이 들어오면
+ * 판정 축이 `roles` 배열에서 `(role, preset, overrides) → placement`로 바뀐다.
+ * 그때 **이 함수 본문만** 갈아끼운다 — 호출부는 그대로 둔다.
+ *
+ *   import { resolveNavPlacement } from "../admin-nav-access"   // 그쪽 신규 모듈
+ *   // href의 쿼리를 떼야 한다 — 그쪽 placement 키는 nav href(`/admin/docs`)이고
+ *   // 콘솔 href는 탭 딥링크(`/admin/docs?tab=gaps`)라 문자열이 다르다.
+ *   return resolveNavPlacement(item.href.split("?")[0], ctx) !== "deny"
+ *
+ * 지금 `roles`를 미리 좁히지 않는 이유 두 가지.
+ *  1. 그쪽 §5.3-1이 `nav_preset` NULL이면 기존 roles 동작을 유지하도록 못 박았고
+ *     배포 시점에는 전원 NULL이다(§8). 지금 좁히면 그쪽 P4("기본값은 무변화")를 먼저 깬다.
+ *  2. 롤 배열로는 그 모델을 표현할 수 없다. `/admin/chatbot`은 MOON_ONLY지만
+ *     §5.3-3의 오버라이드가 비-super에게도 열어줄 수 있어, `["SUPER_ADMIN"]`로 굳히면
+ *     오버라이드로 부여받은 사람을 잘못 막는다.
+ *
+ * 교체 후 `대시보드`(/admin/chatbot)가 비-super에게서 빠져도 외부 축은 살아 있다 —
+ * `/admin/docs`가 그쪽 `OPEN` 묶음이자 `staff` 프리셋 상시라 전 프리셋이 그 화면에서
+ * 이 내비를 타고 형제 메뉴로 간다(정본 §14).
+ * ───────────────────────────────────────────────────────────────────────────
+ */
+export function isCsConsoleItemVisible(item: CsConsoleNavItem, role: AdminRole): boolean {
+  if (item.enabled === false) return false
+  return item.roles.includes(role)
+}
+
 export interface CsConsoleNavProps {
   /**
    * 현재 사용자 역할. 생략하면 sessionStorage("admin_role")에서 읽는다 —
@@ -195,8 +226,9 @@ function CsConsoleNavContent({ role, contentClassName, className }: CsConsoleNav
   const mode = resolveCsConsoleMode(pathname)
   const spec = CS_CONSOLE_MODES.find((entry) => entry.mode === mode) ?? CS_CONSOLE_MODES[0]
 
+  // 가시성 판정은 전부 isCsConsoleItemVisible 한 곳을 거친다(위 "교체 지점" 주석).
   const visibleItems = useMemo(
-    () => spec.items.filter((item) => item.enabled !== false && item.roles.includes(normalizedRole)),
+    () => spec.items.filter((item) => isCsConsoleItemVisible(item, normalizedRole)),
     [spec, normalizedRole]
   )
 
