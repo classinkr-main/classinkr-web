@@ -16,7 +16,8 @@ describe("MarketingCrossLinks", () => {
     }
     // derives from the SSOT nav labels
     expect(html).toContain("자료 퍼널")
-    expect(html).toContain("방문자/트래픽")
+    // /admin/events → 캘린더 흡수, /admin/traffic → Analytics 흡수 (2026-07-29 탭 재구성).
+    // 라우트는 살아 있고 nav 항목만 내려갔다 — 마케팅 섹션에서 두 라벨은 더 이상 나오지 않는다.
   })
 
   it("renders nothing when every marketing route is the current one", () => {
