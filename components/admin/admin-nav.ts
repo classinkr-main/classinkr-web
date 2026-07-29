@@ -125,12 +125,11 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // 이 화면 상단의 콘솔 가로 메뉴로 이어진다(구 "챗봇 운영").
   { href: "/admin/chatbot", label: "CS 콘솔", icon: Bot, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", category: "system", keywords: "cs 콘솔 챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops console 채널톡 상담 문의 채팅 channel talk chat inbox 보강 큐 미해결 gaps 질문 패턴" },
   // 내부 CS — 내부(사내) 축 전체의 진입점. 상담원용 워크스페이스(AI 초안·대기열·운영 도구).
-  // (2026-07-29) 사이드바 상시 후보 순서상으로는 이 항목이 "가이드 문서"보다 앞서야 하지만(TODO: 아래 참고),
-  // ADMIN_NAV 선언 순서를 바꾸면 sidebar-docs-gaps.test.ts의 cs 섹션 순서 계약([docs, chatbot, cs-chatbot])이
-  // 깨진다 — 두 필터(section==="cs" / 상시 후보 7개) 모두 배열 선언 순서를 그대로 보존해서 읽으므로
-  // "docs가 cs-chatbot보다 앞" 과 "cs-chatbot이 docs보다 앞"을 동시에 만족하는 배열 순서가 존재하지 않는다.
-  // section 계약을 우선 보존했다 — nav-access.test.ts의 마지막 케이스는 의도적으로 실패 상태로 남겨두고
-  // 작업 보고에 그대로 적었다(Task 2에서 상시 목록 순서를 별도 상수로 분리하거나 이 테스트를 다시 논의해야 한다).
+  // (2026-07-29) 이 항목은 반드시 "가이드 문서" 아래에 남아야 한다. sidebar-docs-gaps.test.ts가
+  // cs 섹션 선언 순서를 [docs, chatbot, cs-chatbot]로 고정하고 있고, 상시 목록도 같은 배열을
+  // filter로 읽어 선언 순서를 그대로 쓴다 — 둘 다 순서를 보존하므로 "cs-chatbot이 docs보다 앞"은
+  // 표현 자체가 불가능하다. IA상으로도 이게 맞다: 가이드 문서는 전원 상시, 내부 CS는 cs 프리셋 전용이라
+  // 보편적인 쪽이 위로 간다.
   { href: "/admin/cs-chatbot", label: "내부 CS", icon: Headset, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", keywords: "내부 cs 챗봇 상담 도우미 소통 가이드 템플릿 큐 아카이브 대기열 본사 확인 internal support assistant" },
 
   // 운영·시스템
