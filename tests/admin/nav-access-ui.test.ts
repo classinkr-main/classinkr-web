@@ -57,3 +57,49 @@ describe("AdminLayout — 차단 탭 라우트 가드", () => {
     expect(layout).toContain("보안 경계가 아니다")
   })
 })
+
+const drawer = readFileSync(
+  join(process.cwd(), "components/admin/settings/MemberNavAccessDrawer.tsx"),
+  "utf8"
+)
+
+describe("MemberNavAccessDrawer", () => {
+  it("previews with the shared resolver instead of a second implementation", () => {
+    // 미리보기가 자체 계산을 하면 실제 사이드바와 어긋나고, 어긋난 미리보기는
+    // 이 기능 전체의 신뢰를 깎는다.
+    expect(drawer).toContain("resolveNavAccess(")
+    expect(drawer).toContain('from "@/components/admin/admin-nav-access"')
+  })
+
+  it("locks every row when the target is a SUPER_ADMIN", () => {
+    expect(drawer).toContain('targetRole === "SUPER_ADMIN"')
+  })
+
+  it("marks rows that differ from the preset as 예외", () => {
+    expect(drawer).toContain("예외")
+  })
+
+  it("always sends both nav fields — the PATCH overwrites both columns", () => {
+    expect(drawer).toContain("navPreset")
+    expect(drawer).toContain("navOverrides")
+    expect(drawer).toContain('method: "PATCH"')
+  })
+
+  it("renders explicit saving, saved, and error states", () => {
+    expect(drawer).toContain('"saving"')
+    expect(drawer).toContain('"saved"')
+    expect(drawer).toContain('role="alert"')
+  })
+})
+
+describe("MembersPanel — 탭 권한 진입점", () => {
+  const panel = readFileSync(
+    join(process.cwd(), "components/admin/settings/MembersPanel.tsx"),
+    "utf8"
+  )
+
+  it("shows the nav access entry only to a SUPER_ADMIN viewer", () => {
+    expect(panel).toContain("canManageCapabilities")
+    expect(panel).toContain("MemberNavAccessDrawer")
+  })
+})
