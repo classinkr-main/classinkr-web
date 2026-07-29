@@ -55,8 +55,13 @@ describe("admin nav — 기타 범주 메타", () => {
       "/admin/hardware",
       "/admin/campaigns",
       "/admin/blog",
-      "/admin/cs-chatbot",
+      // 가이드 문서가 내부 CS보다 위다. 두 가지 이유가 겹친다:
+      //  (1) 가이드 문서는 전원 상시, 내부 CS는 cs 프리셋 전용 — 보편적인 쪽이 위로 간다.
+      //  (2) sidebar-docs-gaps.test.ts가 cs 섹션 선언 순서를 [docs, chatbot, cs-chatbot]로
+      //      고정하고 있어 docs < cs-chatbot이 강제된다. 두 계약이 같은 배열을 filter로
+      //      읽으므로 반대 순서는 애초에 표현 불가능하다.
       "/admin/docs",
+      "/admin/cs-chatbot",
     ]
     const declared = ADMIN_NAV.map((item) => item.href).filter((href) =>
       primaryCandidates.includes(href)

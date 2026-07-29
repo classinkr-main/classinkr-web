@@ -135,8 +135,11 @@ describe("admin nav — 기타 범주 메타", () => {
       "/admin/hardware",
       "/admin/campaigns",
       "/admin/blog",
-      "/admin/cs-chatbot",
+      // 가이드 문서가 내부 CS보다 위다. sidebar-docs-gaps.test.ts가 cs 섹션 선언 순서를
+      // [docs, chatbot, cs-chatbot]로 고정해 docs < cs-chatbot이 강제되기 때문 —
+      // 같은 배열을 filter로 읽는 두 계약이라 반대 순서는 표현 불가능하다.
       "/admin/docs",
+      "/admin/cs-chatbot",
     ]
     const declared = ADMIN_NAV.map((item) => item.href).filter((href) =>
       primaryCandidates.includes(href)
@@ -229,11 +232,14 @@ export const ADMIN_NAV_CATEGORIES = Object.keys(ADMIN_NAV_CATEGORY_META) as Admi
 /admin/hardware
 /admin/campaigns
 /admin/blog
-/admin/cs-chatbot
 /admin/docs
+/admin/cs-chatbot
 ```
 
-실무적으로는 `/admin/calendar` 한 줄을 배열 맨 앞(구 `/admin/overview` 자리)으로 올리고, `cs` 블록에서 `/admin/cs-chatbot`을 `/admin/docs` **위로** 올리면 나머지는 이미 이 순서다. 옮기면서 `section` 값은 **바꾸지 않는다** — 커맨드 팔레트 그룹 라벨이 거기 묶여 있다.
+실무적으로는 **`/admin/calendar` 한 줄을 배열 맨 앞으로 올리는 것만으로 끝난다** — 나머지는 이미 이 순서다.
+`cs-chatbot`을 `docs` 위로 올리면 안 된다: `tests/admin/sidebar-docs-gaps.test.ts`가 cs 섹션 선언 순서를
+`[docs, chatbot, cs-chatbot]`로 고정하고 있어 `docs < cs-chatbot`이 강제되고, 두 계약이 같은 배열을
+`filter`로 읽으므로 반대 순서는 표현 자체가 불가능하다. 옮기면서 `section` 값은 **바꾸지 않는다** — 커맨드 팔레트 그룹 라벨이 거기 묶여 있다.
 
 옮긴 이유를 주석으로 남긴다:
 
