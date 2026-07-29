@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
@@ -586,6 +586,21 @@ export default function CrmUnifiedCustomersClient() {
     [setDrawerUrl]
   )
 
+  // 행 더블클릭 = 드로어 열기. 이름 버튼이 유일한 진입점이라 "행을 눌렀는데 안 열린다"가 반복됐다.
+  // 단일 클릭은 그대로 비워 둔다 — 행 안의 링크·복사 버튼과 충돌하고, 스캔 중 오작동이 잦다.
+  // 내부 인터랙티브 요소 위의 더블클릭은 그 요소가 처리하므로 제외한다(연락처 복사 버튼 등).
+  // 전환 고객은 360 드로어 미지원(파트너 워크스페이스행) — 이름 링크와 같은 규칙을 따른다.
+  const handleRowDoubleClick = useCallback(
+    (event: MouseEvent<HTMLElement>, row: CrmUnifiedCustomerRow) => {
+      if (row.source === "customer") return
+      if ((event.target as HTMLElement).closest("a, button, input, textarea, select")) return
+      // 더블클릭의 브라우저 기본 동작(텍스트 선택)이 드로어 위에 남지 않게 지운다.
+      window.getSelection()?.removeAllRanges()
+      openDrawer(row.key, row.name)
+    },
+    [openDrawer]
+  )
+
   // 닫을 때는 replace로 account만 제거(불필요한 히스토리 항목을 남기지 않음).
   // dirty 리셋: 드로어가 dynamic 전환으로 닫힘=언마운트가 되면서, 마운트 유지 시절
   // 드로어 내부 리셋 효과가 하던 onDirtyChange(false) 통지가 사라졌다 — 부모가 직접 리셋한다.
@@ -1028,7 +1043,12 @@ export default function CrmUnifiedCustomersClient() {
                     ))
                   : null}
                 {data?.rows.map((row) => (
-                  <tr key={row.key} className="transition-colors hover:bg-[#fafaf8]">
+                  <tr
+                    key={row.key}
+                    onDoubleClick={(event) => handleRowDoubleClick(event, row)}
+                    title={row.source === "customer" ? undefined : "더블클릭 — 고객 카드 열기"}
+                    className="transition-colors hover:bg-[#fafaf8]"
+                  >
                     <td className="px-4 py-3">
                       <div className="flex min-w-0 items-center gap-2">
                         <div className="min-w-0 flex-1">
