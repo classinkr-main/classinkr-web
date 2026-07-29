@@ -279,15 +279,24 @@ COMMENT ON COLUMN public.admin_profiles.nav_overrides IS
 ```
 
 위 예시: `cs` 프리셋의 상시 4개 + 오버라이드로 하드웨어 재고 1개 승격 = 상시 5.
-접근 가능한 `OPEN` 10개 중 나머지 5개가 기타로 간다. `MOON_ONLY` 7개와 `RESTRICTED` 2개는 목록에
-회색 잠금 상태로 보이되 켤 수 없다(슈퍼 관리자가 `RESTRICTED`는 명시 부여 가능 — 아래).
+접근 가능한 `OPEN` 10개 중 나머지 5개가 기타로 간다.
+
+`MOON_ONLY`·`RESTRICTED` 항목도 **행은 잠기지 않는다** — §5.3대로 오버라이드가 차단 묶음을 뚫기
+때문이다. 이 드로어를 여는 사람은 이미 슈퍼 관리자이므로, 필요하면 그 자리에서 열어줄 수 있어야 한다.
+잠기는 것은 **대상이 SUPER_ADMIN일 때 드로어 전체**뿐이다(자기 발등 찍기 방지).
 
 - 프리셋 변경 시 오버라이드는 **유지**하고 "예외 N개" 뱃지로 알린다. "프리셋만 적용(예외 지우기)" 버튼 별도.
 - 프리셋 기본값과 다른 행에는 `예외` 뱃지.
 - SUPER_ADMIN 대상 행은 전부 잠금(🔒) — §5.3 4번.
 - 우측 미리보기는 실제 `AdminSidebar` 렌더 로직을 공유한다(별도 구현 금지 — 어긋나면 신뢰를 잃는다).
 
-**API**: `PATCH /api/admin/users/[userId]/nav-access` — `requireVerifiedAdminContext(req, ["SUPER_ADMIN"])`.
+**API**: `PATCH /api/admin/users` — 기존 capabilities 엔드포인트에 body 판별자로 nav 분기를 얹는다
+(`navPreset`/`navOverrides` 키가 있으면 nav 경로). 별도 라우트를 새로 파지 않는 이유는 가드
+(`requireVerifiedAdminContext(req, ["SUPER_ADMIN"])`)와 감사 로그 배선이 이미 거기 있기 때문이다.
+감사 action만 `admin.nav_access.update`로 분리해 capabilities 변경과 구분한다.
+
+**주의**: nav 분기는 두 컬럼을 함께 덮어쓴다(완전 상태 전송 — capabilities 경로와 같은 관례).
+호출하는 쪽은 `navPreset`과 `navOverrides`를 **항상 같이** 보내야 한다.
 
 ### 5.5 보안 경계 — 이 설정이 하는 일과 하지 않는 일
 
