@@ -9,7 +9,7 @@ import {
 } from "@/components/admin/admin-nav-access"
 
 // 기타 그룹은 3범주(고객·매출 / 마케팅·분석 / 시스템)로 묶인다.
-// 상시 후보 7개는 범주가 필요 없다(기타에 들어갈 때만 쓰인다).
+// 범주는 전 항목에 붙는다 — 프리셋에 따라 상시 후보도 기타로 내려가기 때문(Task 2 Step 0).
 describe("admin nav — 기타 범주 메타", () => {
   it("assigns a category to every tab that can be folded", () => {
     const expected: Record<string, string> = {
