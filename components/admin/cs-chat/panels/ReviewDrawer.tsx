@@ -5,6 +5,8 @@ import { BookOpen, ExternalLink, LockKeyhole, UserRound, X } from "lucide-react"
 import type { InternalCsMessage, ReviewChecks } from "../types"
 
 // 검토 드로어 — 본문 영역(relative) 기준 `absolute inset-y-0 right-0`. 본문은 xl에서 pr-[438px]로 양보한다.
+// 양보가 대화 패널에만 걸려 있으므로 워크스페이스는 이 드로어를 대화 탭에만 붙인다
+// (정본: docs/active/cs-admin-console-ia-2026-07-27.md §9 "검토 드로어의 기준과 범위").
 // 승인은 최종 답변을 고정하고 클립보드에 복사할 뿐, 자동 외부 전송은 하지 않는다(하단 경계 문구).
 export default function ReviewDrawer({
   reviewChecks,

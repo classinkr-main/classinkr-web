@@ -5,12 +5,14 @@ import { describe, expect, it } from "vitest"
 import {
   formatWaitingElapsed,
   HQ_CONFIRMED_TAG,
+  HQ_DETAIL_CACHE_LIMIT,
   HQ_INTENT_TAG,
   HQ_PENDING_TAG,
   hqWaitingSince,
   INTERNAL_CS_TAG_LIMIT,
   isHqPending,
   isHqStale,
+  putHqDetail,
   selectHqPending,
   withHqConfirmed,
   withHqPending,
@@ -143,5 +145,42 @@ describe("hqWaitingSince / isHqStale", () => {
     const now = Date.parse("2026-07-27T12:00:00.000Z")
     expect(isHqStale(new Date(now - 71 * HOUR).toISOString(), now)).toBe(false)
     expect(isHqStale(new Date(now - 72 * HOUR).toISOString(), now)).toBe(true)
+  })
+})
+
+describe("putHqDetail", () => {
+  const load = (limit: number) => {
+    let cache: Record<string, string> = {}
+    for (let index = 0; index < limit; index += 1) {
+      cache = putHqDetail(cache, `id-${index}`, `detail-${index}`)
+    }
+    return cache
+  }
+
+  it("keeps every entry until the cap", () => {
+    const cache = load(HQ_DETAIL_CACHE_LIMIT)
+    expect(Object.keys(cache)).toHaveLength(HQ_DETAIL_CACHE_LIMIT)
+    expect(cache["id-0"]).toBe("detail-0")
+  })
+
+  it("drops the oldest entry once the cap is passed — 무한 성장 방지", () => {
+    const cache = putHqDetail(load(HQ_DETAIL_CACHE_LIMIT), "overflow", "detail-overflow")
+    expect(Object.keys(cache)).toHaveLength(HQ_DETAIL_CACHE_LIMIT)
+    expect(cache["id-0"]).toBeUndefined()
+    expect(cache["id-1"]).toBe("detail-1")
+    expect(cache.overflow).toBe("detail-overflow")
+  })
+
+  it("never exceeds the cap however many rows are expanded", () => {
+    const cache = load(HQ_DETAIL_CACHE_LIMIT * 9)
+    expect(Object.keys(cache)).toHaveLength(HQ_DETAIL_CACHE_LIMIT)
+    expect(cache[`id-${HQ_DETAIL_CACHE_LIMIT * 9 - 1}`]).toBe(`detail-${HQ_DETAIL_CACHE_LIMIT * 9 - 1}`)
+  })
+
+  it("does not mutate the previous cache object", () => {
+    const before = load(HQ_DETAIL_CACHE_LIMIT)
+    const after = putHqDetail(before, "overflow", "detail-overflow")
+    expect(before["id-0"]).toBe("detail-0")
+    expect(after).not.toBe(before)
   })
 })

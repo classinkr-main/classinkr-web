@@ -15,7 +15,7 @@ import {
   WifiOff,
   type LucideIcon,
 } from "lucide-react"
-import type { RefObject } from "react"
+import { useRef } from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -54,7 +54,6 @@ export default function ToolsPanel({
   regressionPendingCount,
   bridgeState,
   integrationLoading,
-  regressionSectionRef,
   metricsLoadState,
   metricCards,
   regressionEvalRunState,
@@ -87,7 +86,6 @@ export default function ToolsPanel({
   regressionPendingCount: number
   bridgeState: ReturnType<typeof integrationState>
   integrationLoading: boolean
-  regressionSectionRef: RefObject<HTMLDivElement | null>
   metricsLoadState: AsyncLoadState
   metricCards: Array<{ key: string; icon: LucideIcon; label: string; value: string; sub?: string }>
   regressionEvalRunState: RegressionEvalRunState
@@ -115,6 +113,10 @@ export default function ToolsPanel({
   onDispatch: () => void
   onIncludeOriginalChange: (checked: boolean) => void
 }) {
+  // 스탯 스트립 → 회귀 섹션 스크롤. 트리거와 타깃이 둘 다 이 패널 안이라 ref도 여기 산다
+  // (워크스페이스 상태와 달리 탭이 언마운트되면 같이 사라져야 맞는 값이다).
+  const regressionSectionRef = useRef<HTMLDivElement | null>(null)
+
   return (
     <section className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAF8]">
       <div className={cn(CONSOLE_CONTENT_CLASS, "py-7")}>

@@ -53,6 +53,7 @@ import {
 import {
   HQ_PENDING_TAG,
   isHqPending,
+  putHqDetail,
   selectHqPending,
   withHqConfirmed,
   withHqPending,
@@ -141,6 +142,11 @@ function InternalCsChatWorkspaceInner() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // 개발 전용 폴백 — loadConversations()가 실패했을 때만 켜진다(아래 catch).
+  // demoMode를 읽는 분기 중 demo-data를 실제로 참조하는 네 곳은 조건에
+  // `process.env.NODE_ENV === "development"`를 함께 둔다. 번들러가 이 리터럴 비교를 정적으로
+  // 접어 프로덕션에서는 분기째 사라지고, 데모 데이터 문자열도 클라이언트 번들에서 빠진다.
+  // (상수로 빼면 접히지 않을 수 있어 조건에 직접 쓴다.)
   const [demoMode, setDemoMode] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [assetError, setAssetError] = useState<string | null>(null)
@@ -159,9 +165,9 @@ function InternalCsChatWorkspaceInner() {
   const [regressionCandidates, setRegressionCandidates] = useState<RegressionCandidateItem[]>([])
   const [regressionLoadState, setRegressionLoadState] = useState<AsyncLoadState>("idle")
   const [regressionError, setRegressionError] = useState<string | null>(null)
-  // 운영 데스크 — 브리지 전송 옵션/최근 기록 펼침과 스탯 스트립 → 회귀 섹션 스크롤 타깃.
+  // 운영 데스크 — 브리지 전송 옵션/최근 기록 펼침.
+  // 스탯 스트립 → 회귀 섹션 스크롤 ref는 트리거·타깃이 둘 다 ToolsPanel 안이라 그쪽 로컬에 산다.
   const [bridgeDetailOpen, setBridgeDetailOpen] = useState(false)
-  const regressionSectionRef = useRef<HTMLDivElement | null>(null)
   // 계약 1 — 운영 데스크 지표 카드 행.
   const [csMetrics, setCsMetrics] = useState<InternalCsMetricsResponse | null>(null)
   const [metricsLoadState, setMetricsLoadState] = useState<AsyncLoadState>("idle")
@@ -177,6 +183,7 @@ function InternalCsChatWorkspaceInner() {
   // 본사 확인(tab=hq) — 목록은 이미 받아 둔 conversations를 태그로 거른 것이고,
   // 행을 펼칠 때만 상세를 가져온다(buildHqTemplate이 messages·assets를 요구한다).
   // 상세는 여기 캐시에 따로 담는다 — 대화 탭의 detail/finalDraft 상태를 건드리지 않기 위함이다.
+  // 적재는 putHqDetail만 거친다(HQ_DETAIL_CACHE_LIMIT 상한, 오래된 것부터 폐기).
   const [hqExpandedId, setHqExpandedId] = useState<string | null>(null)
   const [hqDetails, setHqDetails] = useState<Record<string, ConversationDetailResponse>>({})
   const [hqDetailError, setHqDetailError] = useState<string | null>(null)
@@ -185,7 +192,7 @@ function InternalCsChatWorkspaceInner() {
   const [isPending, startTransition] = useTransition()
 
   const loadConversation = useCallback(async (id: string) => {
-    if (demoMode && id === DEMO_CONVERSATION.id) {
+    if (process.env.NODE_ENV === "development" && demoMode && id === DEMO_CONVERSATION.id) {
       setDetail(DEMO_DETAIL)
       setSelectedId(id)
       setFinalDraft(DEMO_MESSAGES[1].content)
@@ -375,7 +382,7 @@ function InternalCsChatWorkspaceInner() {
     const id = hqExpandedId
     if (!id || hqDetails[id]) return
     if (detail && detail.conversation.id === id) {
-      setHqDetails((current) => ({ ...current, [id]: detail }))
+      setHqDetails((current) => putHqDetail(current, id, detail))
       return
     }
     if (demoMode || !UUID_PATTERN.test(id)) return
@@ -383,7 +390,7 @@ function InternalCsChatWorkspaceInner() {
     adminFetchJson<ConversationDetailResponse>(`/api/admin/cs-chat/conversations/${id}`)
       .then((loaded) => {
         if (cancelled) return
-        setHqDetails((current) => ({ ...current, [id]: loaded }))
+        setHqDetails((current) => putHqDetail(current, id, loaded))
         setHqDetailError(null)
       })
       .catch((loadError) => {
@@ -559,7 +566,7 @@ function InternalCsChatWorkspaceInner() {
   }, [regressionEvalSkipped])
 
   async function handleSelect(conversation: InternalCsConversation) {
-    if (demoMode && conversation.id === DEMO_CONVERSATION.id) {
+    if (process.env.NODE_ENV === "development" && demoMode && conversation.id === DEMO_CONVERSATION.id) {
       setDetail((current) => current ?? DEMO_DETAIL)
       setSelectedId(conversation.id)
       setActiveTab("chat")
@@ -745,7 +752,7 @@ function InternalCsChatWorkspaceInner() {
     setError(null)
     setNotice(null)
     setComposer("")
-    if (demoMode) {
+    if (process.env.NODE_ENV === "development" && demoMode) {
       const now = new Date().toISOString()
       const previewAssets: InternalCsAsset[] = filesToUpload.map((file, index) => ({
         id: `preview-asset-${Date.now()}-${index}`,
@@ -831,7 +838,7 @@ function InternalCsChatWorkspaceInner() {
   function rerunWithPro() {
     const question = [...(detail?.messages ?? [])].reverse().find((message) => message.role === "user")?.content
     if (!question || !selectedId || isPending) return
-    if (demoMode) {
+    if (process.env.NODE_ENV === "development" && demoMode) {
       const now = new Date().toISOString()
       const proMessage: InternalCsMessage = {
         ...DEMO_MESSAGES[1],
@@ -1321,7 +1328,6 @@ function InternalCsChatWorkspaceInner() {
           regressionPendingCount={regressionPendingCount}
           bridgeState={bridgeState}
           integrationLoading={integrationLoading}
-          regressionSectionRef={regressionSectionRef}
           metricsLoadState={metricsLoadState}
           metricCards={metricCards}
           regressionEvalRunState={regressionEvalRunState}
@@ -1351,7 +1357,13 @@ function InternalCsChatWorkspaceInner() {
         />
       ) : null}
 
-      {reviewOpen ? (
+      {/* 검토 드로어는 대화 탭에만 붙는다.
+          드로어 내용(체크 3종·최종 답변·검토 메모)은 지금 열려 있는 그 대화의 검토라,
+          목록(대기열·본사 확인)이나 운영 지표 위에 떠 있으면 가리키는 대상이 화면에 없다.
+          게다가 양보(xl:pr-[438px])는 ChatPanel에만 걸려 있어 다른 탭에서는 본문 우측을
+          그냥 덮었고, xl 미만에서는 스크림까지 얹혀 목록을 통째로 가렸다.
+          reviewOpen/finalDraft/reviewNote는 여기(Inner) 상태라 탭을 다녀와도 그대로 복원된다. */}
+      {activeTab === "chat" && reviewOpen ? (
         <ReviewDrawer
           reviewChecks={reviewChecks}
           finalDraft={finalDraft}

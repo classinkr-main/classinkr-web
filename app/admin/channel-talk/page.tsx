@@ -335,7 +335,8 @@ export default function ChannelTalkPage() {
   return (
     <>
       {/* CS 콘솔 2단 내비 — 최상단 풀블리드. contentClassName은 이 화면 본문 컨테이너(max-w-5xl,
-          좌측 정렬)와 같은 폭·거터로 맞춰야 좌우 끝이 일치한다(§4). */}
+          좌측 정렬)와 같은 폭·거터로 맞춰야 좌우 끝이 일치한다(§1 · §4).
+          이 max-w-5xl은 콘솔 이전부터 있던 이 화면의 폭이다. */}
       <CsConsoleNav contentClassName="w-full max-w-5xl px-4 sm:px-6 lg:px-8" />
       {/* 본문 — 들여쓰기를 유지하려 fragment 자식으로 평평하게 둔다(diff 최소화). */}
       <div className="max-w-5xl px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">

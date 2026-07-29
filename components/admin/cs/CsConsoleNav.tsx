@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
+  BadgeCheck,
   BookOpen,
   Bot,
   Building,
@@ -12,7 +13,6 @@ import {
   MessageSquare,
   MessageSquareText,
   Search,
-  ShieldCheck,
   Wrench,
   type LucideIcon,
 } from "lucide-react"
@@ -74,8 +74,11 @@ const CUSTOMER_ITEMS: CsConsoleNavItem[] = [
   // 채널톡만 STAFF_ADMIN — 사이드바 시절 롤을 그대로 승계한다(§4).
   { href: "/admin/channel-talk", label: "상담 Inbox", icon: MessageSquare, roles: CS_STAFF_ADMIN },
   { href: "/admin/docs?tab=gaps", label: "미해결 큐", icon: Search, roles: CS_STAFF_EDITOR },
-  // tab=quality 화면은 P1에서 DOCS_TABS에 추가된다 — 메뉴는 지금 확정하고 링크만 먼저 산다.
-  { href: "/admin/docs?tab=quality", label: "AI 품질 검수", icon: ShieldCheck, roles: CS_STAFF_EDITOR },
+  // 10개 메뉴 중 유일한 신설 아이콘(§2). BadgeCheck = 검증·인증 완료.
+  // ShieldCheck를 쓰지 않는다 — 이 저장소에서 방패는 이미 보안·동의·권한을 뜻한다
+  // (설정 보안 패널, 연동 제어, 멤버 권한, 리드 마케팅 동의, CRM 커버리지, 자산 담당자 확인).
+  // 이 화면은 알파 준비도 점검 + 골든셋 회귀 품질이라 보안 축이 아니다.
+  { href: "/admin/docs?tab=quality", label: "AI 품질 검수", icon: BadgeCheck, roles: CS_STAFF_EDITOR },
   {
     href: "/admin/docs?tab=documents",
     label: "가이드 문서",
@@ -130,7 +133,14 @@ export interface CsConsoleNavProps {
    * 서버 컴포넌트 페이지에서 `<CsConsoleNav />`로 그대로 붙일 수 있게 하기 위함.
    */
   role?: string
-  /** 본문 컨테이너와 좌우 정렬을 맞추는 내부 래퍼 클래스(§1 — 기본 1240px). */
+  /**
+   * 본문 컨테이너와 좌우 정렬을 맞추는 내부 래퍼 클래스.
+   *
+   * 폭 계약은 "1240px"이 아니라 "그 화면 본문과 좌우가 맞는다"이다(§1 "본문 폭을 1240px로
+   * 통일하지 않는 이유"). 기본값은 1240px 중앙 정렬이고, 본문이 그 폭이 아닌 화면
+   * (`/admin/docs` 폭 제한 없음 · `/admin/channel-talk` max-w-5xl 좌측 정렬)만 자기 폭을 넘긴다.
+   * 1480 미만 뷰포트에서는 어차피 상한이 걸리지 않아 네 화면의 렌더 결과가 같다.
+   */
   contentClassName?: string
   /** 바깥 래퍼 추가 클래스. */
   className?: string

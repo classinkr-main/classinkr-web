@@ -77,6 +77,30 @@ export function isHqStale(since: string, now: number = Date.now()) {
 }
 
 /**
+ * 펼친 행의 상세 캐시 상한.
+ *
+ * 본사 확인 목록은 `status=all&limit=100` 응답을 태그로 거른 부분집합이라 한 세션에서
+ * 펼칠 수 있는 행이 최대 100개다. 캐시가 그만큼 자라도 세션 한정이라 무해하지만 상한이 없었다.
+ * 12개면 한 화면에서 오가며 비교하는 범위를 덮고, 넘어가면 가장 오래 담긴 것부터 버린다.
+ */
+export const HQ_DETAIL_CACHE_LIMIT = 12
+
+/**
+ * 상세 캐시에 한 건을 넣고 상한을 넘으면 오래된 것부터 버린다.
+ *
+ * 삽입 순서를 그대로 나이로 쓴다 — 호출부가 캐시 히트일 때 아예 다시 넣지 않으므로
+ * 재삽입으로 순서가 갱신되는 경우가 없고, 그래서 삽입 순서 = 최초 적재 순서다.
+ * (키는 UUID 문자열이라 JS 객체의 정수형 키 재정렬 규칙에 걸리지 않는다.)
+ */
+export function putHqDetail<T>(current: Record<string, T>, id: string, detail: T): Record<string, T> {
+  const next = { ...current, [id]: detail }
+  const keys = Object.keys(next)
+  if (keys.length <= HQ_DETAIL_CACHE_LIMIT) return next
+  for (const stale of keys.slice(0, keys.length - HQ_DETAIL_CACHE_LIMIT)) delete next[stale]
+  return next
+}
+
+/**
  * 본사 확인 요청 — 의도 태그와 대기 태그를 붙이고, 상충하는 `evidence:confirmed`만 걷어낸다.
  * evidence 축의 다른 값(conditional·conflict·field_verified)과 area/topic 태그는 건드리지 않는다.
  * 기존 순서를 보존하고 새 태그만 뒤에 붙인다.

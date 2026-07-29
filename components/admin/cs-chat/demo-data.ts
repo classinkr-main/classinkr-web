@@ -1,7 +1,14 @@
 // 개발 전용 폴백 데이터.
 // 진입 조건은 loadConversations()의 catch 안 `process.env.NODE_ENV === "development"` 하나뿐이다 —
-// 프로덕션에서는 demoMode가 켜지지 않는다. 다만 loadConversation()이 DEMO_CONVERSATION.id를
-// 무조건 참조하므로 이 모듈은 분리 전과 똑같이 클라이언트 번들에 남는다(분리로 나빠지지 않는다).
+// 프로덕션에서는 demoMode가 켜지지 않는다.
+//
+// 프로덕션 번들 잔존 — 이 모듈을 참조하는 워크스페이스 분기는 조건에
+// `process.env.NODE_ENV === "development"`를 함께 달아 두어(InternalCsChatWorkspace.tsx demoMode 주석)
+// 번들러가 분기째 접는다. 그 결과 DEMO_MESSAGES·DEMO_DETAIL은 프로덕션 청크에서 사라졌다.
+// DEMO_CONVERSATION 객체 하나(~0.4KB)만 남는데, 모듈 최상위의 new Date() 때문에 미니파이어가
+// 선언을 순수하다고 보지 못해서다. /*#__PURE__*/ 주석으로 지워지는지 실측했으나 효과가 없었다
+// (Next 16 SWC 미니파이어). 남은 값을 마저 빼려면 상수를 팩토리 함수로 바꿔야 하는데,
+// 0.4KB 때문에 개발 폴백 호출부 10곳을 건드릴 값어치가 없다고 판단했다.
 
 import type {
   ConversationDetailResponse,

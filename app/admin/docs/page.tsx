@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   AlertCircle,
+  BadgeCheck,
   BarChart3,
   Bot,
   Bookmark,
@@ -22,7 +23,6 @@ import {
   Plus,
   RefreshCw,
   Search,
-  ShieldCheck,
   Sparkles,
   ThumbsUp,
   X,
@@ -174,7 +174,8 @@ const DOCS_TABS = [
   { value: "categories", label: "카테고리", icon: FolderTree },
   { value: "redirects", label: "리디렉트", icon: ExternalLink },
   { value: "gaps", label: "보강 큐", icon: Sparkles },
-  { value: "quality", label: "AI 품질 검수", icon: ShieldCheck },
+  // 아이콘은 콘솔 가로 메뉴(components/admin/cs/CsConsoleNav.tsx)와 같은 값을 쓴다.
+  { value: "quality", label: "AI 품질 검수", icon: BadgeCheck },
 ] as const
 
 type DocsTab = (typeof DOCS_TABS)[number]["value"]
@@ -715,7 +716,9 @@ function AdminDocsPageContent() {
       {/* CS 콘솔 2단 내비 — 페이지 최상단 풀블리드. 하단 보더는 컴포넌트가 그린다(§4).
           문서 편집기(/admin/docs/new, /admin/docs/[id]/edit)에는 의도적으로 붙이지 않는다.
           contentClassName은 이 화면의 본문 거터(px-4/sm:px-6/lg:px-8, 폭 제한 없음)와 맞춘다 —
-          문서 목록 테이블이 넓어 1240px 상한을 두면 가로 스크롤이 상시화된다. */}
+          내비의 폭 계약은 1240px이 아니라 "그 화면 본문과 좌우가 맞는다"이다(§1).
+          이 화면 본문은 콘솔 이전부터 폭 제한이 없었고(2열 + 넓은 문서 테이블), 내비만 1240으로
+          묶으면 1480 이상 뷰포트에서 좌우 끝이 어긋난다. */}
       <CsConsoleNav contentClassName="w-full px-4 sm:px-6 lg:px-8" />
       {/* 본문 — 들여쓰기를 유지하려 fragment 자식으로 평평하게 둔다(diff 최소화). */}
       <div
