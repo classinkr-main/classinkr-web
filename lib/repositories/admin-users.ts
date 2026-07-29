@@ -24,6 +24,8 @@ export interface AdminCrmOwnerOption {
   neoOwnerId: string | null
   sortOrder: number
   capabilities?: string[]
+  navPreset?: string | null
+  navOverrides?: Record<string, string>
 }
 
 export interface AdminUserDirectory {
@@ -64,6 +66,8 @@ type ExtendedAdminProfile = BaseAdminProfile &
     | "neo_owner_id"
     | "crm_sort_order"
     | "capabilities"
+    | "nav_preset"
+    | "nav_overrides"
   >
 
 const CRM_ASSIGNABLE_ROLES = new Set<AdminRole>(["SUPER_ADMIN", "ADMIN", "BRANCH"])
@@ -116,6 +120,8 @@ function toCrmOwnerOption(profile: ExtendedAdminProfile | BaseAdminProfile): Adm
     neoOwnerId: extended.neo_owner_id ?? null,
     sortOrder: extended.crm_sort_order ?? 100,
     capabilities: extended.capabilities ?? [],
+    navPreset: extended.nav_preset ?? null,
+    navOverrides: (extended.nav_overrides as Record<string, string> | undefined) ?? {},
   }
 }
 
@@ -195,14 +201,16 @@ function isMissingCrmProfileColumns(error: { code?: string; message?: string; de
     haystack.includes("crm_team_role") ||
     haystack.includes("crm_assignable") ||
     haystack.includes("crm_owner_key") ||
-    haystack.includes("neo_owner_id")
+    haystack.includes("neo_owner_id") ||
+    haystack.includes("nav_preset") ||
+    haystack.includes("nav_overrides")
   )
 }
 
 async function listSupabaseAdminProfiles(): Promise<{ users: AdminCrmOwnerOption[]; warning: string | null }> {
   const supabase = createSupabaseAdminClient()
   const extendedSelect =
-    "user_id, display_name, role, status, last_login_at, created_at, updated_at, branch_name, crm_team_role, crm_assignable, crm_owner_key, crm_owner_aliases, neo_owner_id, crm_sort_order, capabilities"
+    "user_id, display_name, role, status, last_login_at, created_at, updated_at, branch_name, crm_team_role, crm_assignable, crm_owner_key, crm_owner_aliases, neo_owner_id, crm_sort_order, capabilities, nav_preset, nav_overrides"
 
   const extended = await supabase
     .from("admin_profiles")

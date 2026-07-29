@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+
 import { describe, expect, it } from "vitest"
 
 import { ADMIN_NAV } from "@/components/admin/admin-nav"
@@ -175,5 +178,30 @@ describe("resolveNavAccess", () => {
     for (const key of Object.keys(NAV_PRESETS)) {
       expect(NAV_PRESETS[key as keyof typeof NAV_PRESETS].primary.length, key).toBeGreaterThan(0)
     }
+  })
+})
+
+describe("PATCH /api/admin/users — nav access 계약", () => {
+  const route = readFileSync(join(process.cwd(), "app/api/admin/users/route.ts"), "utf8")
+
+  it("stays SUPER_ADMIN-only", () => {
+    expect(route).toContain('requireVerifiedAdminContext(req, ["SUPER_ADMIN"])')
+  })
+
+  it("accepts navPreset and navOverrides alongside capabilities", () => {
+    expect(route).toContain("navPreset")
+    expect(route).toContain("navOverrides")
+    expect(route).toContain("isNavPresetKey")
+    expect(route).toContain("normalizeNavOverrides")
+  })
+
+  it("audits nav access changes separately from capability changes", () => {
+    expect(route).toContain('action: "admin.nav_access.update"')
+  })
+
+  it("keeps the existing capabilities contract intact", () => {
+    // tests/admin/members-capability-ui.test.ts가 고정한 계약 — 깨면 안 된다.
+    expect(route).toContain("normalizeAdminCapabilities")
+    expect(route).toContain('action: "admin.capabilities.update"')
   })
 })
