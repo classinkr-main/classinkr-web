@@ -173,6 +173,9 @@ const DOCS_TABS = [
   { value: "recommended", label: "추천 질문", icon: MessageSquareText },
   { value: "categories", label: "카테고리", icon: FolderTree },
   { value: "redirects", label: "리디렉트", icon: ExternalLink },
+  // 검색·조회·피드백 읽기 위젯 3종. `문서` 탭 안에서는 어떤 액션도 문서 목록으로 흐르지 않는
+  // 완전 고립 블록이었다 — 같은 그룹의 4번째 보조 탭으로 분리한다(P6).
+  { value: "analytics", label: "성과", icon: BarChart3 },
   { value: "gaps", label: "보강 큐", icon: Sparkles },
   // 아이콘은 콘솔 가로 메뉴(components/admin/cs/CsConsoleNav.tsx)와 같은 값을 쓴다.
   { value: "quality", label: "AI 품질 검수", icon: BadgeCheck },
@@ -183,9 +186,16 @@ type DocsTab = (typeof DOCS_TABS)[number]["value"]
 // CS 콘솔의 `가이드 문서` 메뉴가 품는 보조 탭 그룹
 // (docs/active/cs-admin-console-ia-2026-07-27.md §5 "가이드 문서 그룹 매핑").
 // 카테고리·리디렉트를 콘솔 메뉴로 올리면 외부 축이 8개가 되어 레이아웃 1b 한계를 넘는다.
-// 그래서 이 3탭만 화면 안쪽 보조 탭바로 남기고, 콘솔은 그룹 전체를 하나의 active로 잡는다.
+// 그래서 이 4탭만 화면 안쪽 보조 탭바로 남기고, 콘솔은 그룹 전체를 하나의 active로 잡는다.
+// `성과`도 같은 이유로 콘솔이 아니라 이 그룹에 들어간다 — 키가 `sub`이 아니라 `tab`인 것은
+// 이 그룹이 이미 tab=documents|categories|redirects를 쓰고 기존 북마크가 거기 걸려 있기 때문이다.
 // recommended·gaps·quality는 콘솔 가로 메뉴가 그 층을 담당하므로 보조 탭바를 그리지 않는다.
-const DOCS_GUIDE_GROUP_TABS: readonly DocsTab[] = ["documents", "categories", "redirects"]
+const DOCS_GUIDE_GROUP_TABS: readonly DocsTab[] = [
+  "documents",
+  "categories",
+  "redirects",
+  "analytics",
+]
 
 function getSourceLabel(content: AdminDocsContentResponse | null) {
   if (!content) return "연결 확인 중"
@@ -710,6 +720,10 @@ function AdminDocsPageContent() {
   const canMutateDocs = content?.status === "live"
   const showBulkActions = activeTab === "documents" && selectedArticleIds.length > 0
   const isGuideGroupTab = DOCS_GUIDE_GROUP_TABS.includes(activeTab)
+  // 이 페이지가 페치하는 두 응답(content·analytics)을 실제로 읽는 탭.
+  // gaps·quality는 props 없이 마운트돼(아래 탭 분기 참고) 이 데이터를 전혀 쓰지 않고
+  // 각자 자기 에러 표면을 갖는다 — 그쪽 화면에 이 데이터의 에러/경고를 띄우면 순수 노이즈다.
+  const usesDocsPageData = isGuideGroupTab || activeTab === "recommended"
 
   return (
     <>
@@ -726,84 +740,95 @@ function AdminDocsPageContent() {
         showBulkActions ? "pb-44 sm:pb-32" : "pb-16 sm:pb-20"
       }`}
     >
-      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">
-              Admin
+      {/* 가이드 문서 그룹 전용 크롬 — 제목·상태 배지·문서 CRUD 액션(P6).
+          미해결 큐·AI 품질 검수·추천 질문은 이 크롬과 무관한 일을 하므로 여기서 제외한다.
+          특히 gaps·quality는 props 없이 마운트돼 content/analytics를 아예 읽지 않는데
+          그 KPI가 화면 상단에 붙어 있었다. */}
+      {isGuideGroupTab ? (
+        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">
+                Admin
+              </p>
+              <StatusBadge
+                label={getSourceLabel(content)}
+                tone={
+                  content?.status === "live"
+                    ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                    : "border-amber-100 bg-amber-50 text-amber-700"
+                }
+              />
+            </div>
+            <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">
+              문서 센터 관리
+            </h1>
+            <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
+              공개 문서 카테고리와 문서 상태, 검색·피드백 성과를 확인합니다.
             </p>
-            <StatusBadge
-              label={getSourceLabel(content)}
-              tone={
-                content?.status === "live"
-                  ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                  : "border-amber-100 bg-amber-50 text-amber-700"
-              }
-            />
           </div>
-          <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">
-            문서 센터 관리
-          </h1>
-          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            공개 문서 카테고리와 문서 상태, 검색·피드백·챗봇 질문 흐름을 확인합니다.
-          </p>
-        </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          {canMutateDocs ? (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {canMutateDocs ? (
+              <Link
+                href="/admin/docs/new"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#084734] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41]"
+              >
+                <Plus className="h-4 w-4" />
+                새 문서
+              </Link>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="inline-flex h-9 cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-[#084734] px-3 text-[13px] font-semibold text-white opacity-45"
+                title="Supabase 문서 원본이 연결되면 새 문서를 만들 수 있습니다."
+              >
+                <Plus className="h-4 w-4" />
+                새 문서
+              </button>
+            )}
             <Link
-              href="/admin/docs/new"
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#084734] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41]"
+              href="/docs"
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
             >
-              <Plus className="h-4 w-4" />
-              새 문서
+              <ExternalLink className="h-4 w-4" />
+              공개 문서
             </Link>
-          ) : (
             <button
               type="button"
-              disabled
-              className="inline-flex h-9 cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-[#084734] px-3 text-[13px] font-semibold text-white opacity-45"
-              title="Supabase 문서 원본이 연결되면 새 문서를 만들 수 있습니다."
+              onClick={() => void handleReindex()}
+              disabled={loading || reindexing}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Plus className="h-4 w-4" />
-              새 문서
+              <Database className="h-4 w-4" />
+              {reindexing ? "인덱싱 중" : "검색 인덱스 재생성"}
             </button>
-          )}
-          <Link
-            href="/docs"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-          >
-            <ExternalLink className="h-4 w-4" />
-            공개 문서
-          </Link>
-          <button
-            type="button"
-            onClick={() => void handleReindex()}
-            disabled={loading || reindexing}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Database className="h-4 w-4" />
-            {reindexing ? "인덱싱 중" : "검색 인덱스 재생성"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void load()}
-            disabled={loading}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#111110] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            새로고침
-          </button>
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={loading}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#111110] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#2a2a28] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              새로고침
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      {error ? (
+      {/* 배너 4종 — 전부 이 페이지가 페치·변경하는 문서 데이터에 대한 것이라 그 데이터를
+          쓰는 탭에서만 뜬다. `환경 미설정`류 경고도 문안 자체가 "분석 데이터를 빈 상태로
+          표시합니다"처럼 이 페이로드 한정이고, gaps는 자체 에러 배너를,
+          quality는 알파 준비도의 `Supabase 운영 연결` 체크를 이미 갖고 있다. */}
+      {usesDocsPageData && error ? (
         <div className="mb-6 rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-[13px] text-[#B85C33]">
           {error}
         </div>
       ) : null}
 
-      {reindexNotice ? (
+      {/* 재색인·문서 저장 알림은 트리거(그룹 크롬의 액션 버튼·문서 목록)가 그룹 안에만 있다. */}
+      {isGuideGroupTab && reindexNotice ? (
         <div
           className={`mb-6 rounded-2xl border px-4 py-3 text-[13px] ${
             reindexNotice.tone === "success"
@@ -815,13 +840,13 @@ function AdminDocsPageContent() {
         </div>
       ) : null}
 
-      {articleNotice ? (
+      {isGuideGroupTab && articleNotice ? (
         <div className="mb-6 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-[13px] text-emerald-800">
           {articleNotice}
         </div>
       ) : null}
 
-      {warnings.length > 0 ? (
+      {usesDocsPageData && warnings.length > 0 ? (
         <div className="mb-6 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
           <div className="flex gap-2 text-[13px] text-amber-800">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -834,36 +859,38 @@ function AdminDocsPageContent() {
         </div>
       ) : null}
 
-      <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          icon={<FolderTree className="h-5 w-5" />}
-          label="카테고리"
-          value={formatNumber(content?.categories.length ?? 0)}
-          hint={`${formatNumber(content?.articles.length ?? 0)}개 문서 연결`}
-        />
-        <MetricCard
-          icon={<ThumbsUp className="h-5 w-5" />}
-          label="문서 피드백"
-          value={formatNumber(summary?.feedbackTotal ?? 0)}
-          hint={
-            summary?.helpfulRate == null
-              ? "최근 30일 피드백 없음"
-              : `도움됨 ${summary.helpfulRate}% · 부정 ${formatNumber(summary.notHelpfulTotal)}건`
-          }
-        />
-        <MetricCard
-          icon={<Search className="h-5 w-5" />}
-          label="검색 이벤트"
-          value={formatNumber(summary?.searchTotal ?? 0)}
-          hint={`결과 없음 ${formatNumber(summary?.zeroResultSearches ?? 0)}건`}
-        />
-        <MetricCard
-          icon={<Bot className="h-5 w-5" />}
-          label="챗봇 질문"
-          value={formatNumber(summary?.chatbotQuestions ?? 0)}
-          hint={`미해결 ${formatNumber(summary?.chatbotUnresolved ?? 0)}건 · 상담 연결 ${formatNumber(summary?.chatbotHandoffs ?? 0)}건`}
-        />
-      </section>
+      {isGuideGroupTab ? (
+        <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            icon={<FolderTree className="h-5 w-5" />}
+            label="카테고리"
+            value={formatNumber(content?.categories.length ?? 0)}
+            hint={`${formatNumber(content?.articles.length ?? 0)}개 문서 연결`}
+          />
+          <MetricCard
+            icon={<ThumbsUp className="h-5 w-5" />}
+            label="문서 피드백"
+            value={formatNumber(summary?.feedbackTotal ?? 0)}
+            hint={
+              summary?.helpfulRate == null
+                ? "최근 30일 피드백 없음"
+                : `도움됨 ${summary.helpfulRate}% · 부정 ${formatNumber(summary.notHelpfulTotal)}건`
+            }
+          />
+          <MetricCard
+            icon={<Search className="h-5 w-5" />}
+            label="검색 이벤트"
+            value={formatNumber(summary?.searchTotal ?? 0)}
+            hint={`결과 없음 ${formatNumber(summary?.zeroResultSearches ?? 0)}건`}
+          />
+          <MetricCard
+            icon={<Bot className="h-5 w-5" />}
+            label="챗봇 질문"
+            value={formatNumber(summary?.chatbotQuestions ?? 0)}
+            hint={`미해결 ${formatNumber(summary?.chatbotUnresolved ?? 0)}건 · 상담 연결 ${formatNumber(summary?.chatbotHandoffs ?? 0)}건`}
+          />
+        </section>
+      ) : null}
 
       {isGuideGroupTab ? (
         <AdminTabs
@@ -883,8 +910,7 @@ function AdminDocsPageContent() {
       ) : null}
 
       {activeTab === "documents" ? (
-        <>
-          <section className="mb-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <section className="mb-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
           <div className="flex flex-col gap-4 border-b border-[#e8e8e4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -1331,7 +1357,14 @@ function AdminDocsPageContent() {
               )}
             </div>
           </div>
+        </aside>
+        </section>
+      ) : null}
 
+      {/* 성과 — 읽기 전용 위젯 3종. `문서` 탭 안에 있을 때는 어떤 클릭도 문서 목록으로
+          흐르지 않는 고립 블록이었다(카테고리 카드만 목록을 필터하므로 그쪽에 남긴다). */}
+      {activeTab === "analytics" ? (
+        <section className="mb-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
             <div className="border-b border-[#e8e8e4] px-4 py-4">
               <div className="flex items-center gap-2">
@@ -1393,51 +1426,56 @@ function AdminDocsPageContent() {
               )}
             </div>
           </div>
-        </aside>
-      </section>
 
-          <section className="mb-8">
-        <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-          <div className="border-b border-[#e8e8e4] px-4 py-4">
-            <div className="flex items-center gap-2">
-              <MessageSquareText className="h-4 w-4 text-[#1a1a1a]/35" />
-              <h2 className="text-[14px] font-semibold text-[#111110]">최근 문서 피드백</h2>
+          <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white md:col-span-2 xl:col-span-1">
+            <div className="border-b border-[#e8e8e4] px-4 py-4">
+              <div className="flex items-center gap-2">
+                <MessageSquareText className="h-4 w-4 text-[#1a1a1a]/35" />
+                <h2 className="text-[14px] font-semibold text-[#111110]">최근 문서 피드백</h2>
+              </div>
+            </div>
+            <div className="divide-y divide-[#f0f0ec]">
+              {(analytics?.recentFeedback.length ?? 0) === 0 ? (
+                <p className="px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">
+                  최근 30일 문서 피드백이 없습니다.
+                </p>
+              ) : (
+                analytics?.recentFeedback.map((item) => (
+                  <div key={item.id} className="px-4 py-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge
+                        label={item.helpful ? "helpful" : "not helpful"}
+                        tone={
+                          item.helpful
+                            ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                            : "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
+                        }
+                      />
+                      <p className="text-[12px] text-[#1a1a1a]/35">{formatDateTime(item.createdAt)}</p>
+                    </div>
+                    <p className="mt-2 text-[13px] font-semibold text-[#111110]">{item.articleTitle}</p>
+                    {item.reason ? (
+                      <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">{item.reason}</p>
+                    ) : null}
+                  </div>
+                ))
+              )}
             </div>
           </div>
-          <div className="divide-y divide-[#f0f0ec]">
-            {(analytics?.recentFeedback.length ?? 0) === 0 ? (
-              <p className="px-4 py-8 text-center text-[13px] text-[#1a1a1a]/35">
-                최근 30일 문서 피드백이 없습니다.
-              </p>
-            ) : (
-              analytics?.recentFeedback.map((item) => (
-                <div key={item.id} className="px-4 py-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge
-                      label={item.helpful ? "helpful" : "not helpful"}
-                      tone={
-                        item.helpful
-                          ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                          : "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
-                      }
-                    />
-                    <p className="text-[12px] text-[#1a1a1a]/35">{formatDateTime(item.createdAt)}</p>
-                  </div>
-                  <p className="mt-2 text-[13px] font-semibold text-[#111110]">{item.articleTitle}</p>
-                  {item.reason ? (
-                    <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">{item.reason}</p>
-                  ) : null}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-          </section>
-        </>
+        </section>
       ) : null}
 
+      {/* 추천 질문 — 그룹 크롬이 빠진 자리에 화면 제목을 세운다. 형제인 미해결 큐·AI 품질
+          검수(DocsGapsPanel·DocsQualityPanel)는 자체 h2를 갖고 있고, 이 화면의 매니저는
+          14px 카드 헤더만 갖고 있어 같은 층의 제목이 없었다. */}
       {activeTab === "recommended" ? (
         <section className="mb-8">
+          <div className="mb-6">
+            <h2 className="text-xl font-bold tracking-[-0.02em] text-[#111110]">추천 질문</h2>
+            <p className="mt-1.5 text-sm text-[#615D59]">
+              공개 상담창이 처음 보여주는 시작 질문을 관리합니다.
+            </p>
+          </div>
           <DocsRecommendedQuestionsManager articles={content?.articles ?? []} />
         </section>
       ) : null}

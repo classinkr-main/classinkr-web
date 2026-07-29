@@ -87,7 +87,12 @@ const CUSTOMER_ITEMS: CsConsoleNavItem[] = [
     // 카테고리·리디렉트는 화면 안쪽 보조 탭이라 같은 메뉴로 묶인다.
     // 쿼리 없는 `/admin/docs`도 포함 — 문서 화면의 기본 탭이 documents이고,
     // 형제 딥링크(gaps·quality·recommended)가 매칭될 때는 nav-active가 알아서 양보한다.
-    activeWhen: ["/admin/docs?tab=categories", "/admin/docs?tab=redirects", "/admin/docs"],
+    activeWhen: [
+      "/admin/docs?tab=categories",
+      "/admin/docs?tab=redirects",
+      "/admin/docs?tab=analytics",
+      "/admin/docs",
+    ],
   },
   { href: "/admin/docs?tab=recommended", label: "추천 질문", icon: MessageSquareText, roles: CS_STAFF_EDITOR },
 ]

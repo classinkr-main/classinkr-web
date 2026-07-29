@@ -1,8 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import Link from "next/link"
-import { ArrowRight, Loader2, RefreshCw } from "lucide-react"
+import { Loader2, RefreshCw } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { cn } from "@/lib/utils"
@@ -188,14 +187,9 @@ export default function DocsQualityPanel() {
                 : "운영 DB, 문서 근거, 임베딩, 추천 질문, 보강 큐를 한 번에 점검합니다."}
             </p>
           </div>
+          {/* 여기 있던 큐 바로가기 링크는 제거했다 — 콘솔 가로 메뉴의 형제 항목과
+              목적지가 완전히 같아 한 화면에 같은 이동이 두 벌이었다(P6 이탈점 정리). */}
           <div className="flex shrink-0 flex-wrap items-center gap-3">
-            <Link
-              href="/admin/docs?tab=gaps"
-              className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734] hover:underline"
-            >
-              미해결 큐 보기
-              <ArrowRight className="h-3 w-3" />
-            </Link>
             <button
               type="button"
               onClick={() => void loadReadiness({ force: true })}

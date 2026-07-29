@@ -70,8 +70,23 @@ describe("admin docs alpha readiness surface", () => {
 
     expect(page).toContain('{ value: "quality", label: "AI 품질 검수"')
     expect(page).toContain("DocsQualityPanel")
-    // 가이드 문서 그룹(문서·카테고리·리디렉트)에서만 보조 탭바를 렌더한다(§5).
-    expect(page).toContain('DOCS_GUIDE_GROUP_TABS: readonly DocsTab[] = ["documents", "categories", "redirects"]')
+
+    // 가이드 문서 그룹에서만 보조 탭바를 렌더한다(§5). 멤버십으로 검증한다 —
+    // 리터럴 문자열을 통째로 비교하면 그룹에 탭이 하나 늘 때마다 무관하게 깨진다
+    // (P6에서 `성과`가 4번째 보조 탭으로 들어왔다).
+    const guideGroup = page.match(
+      /const DOCS_GUIDE_GROUP_TABS: readonly DocsTab\[\] = \[([\s\S]*?)\]/
+    )?.[1]
+    expect(guideGroup).toBeTruthy()
+    for (const tab of ["documents", "categories", "redirects", "analytics"]) {
+      expect(guideGroup).toContain(`"${tab}"`)
+    }
+    // 콘솔 가로 메뉴가 자기 층을 갖는 탭은 그룹에 들어가면 안 된다 — 들어가면
+    // 그 화면 상단에 문서 CRUD 크롬이 다시 샌다(P6이 고친 바로 그 누수).
+    for (const tab of ["recommended", "gaps", "quality"]) {
+      expect(guideGroup).not.toContain(`"${tab}"`)
+    }
+
     expect(nav).toContain('href: "/admin/docs?tab=quality"')
   })
 })

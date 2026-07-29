@@ -109,10 +109,24 @@ describe("admin cs nav — 사이드바 3항목 + 콘솔 가로 메뉴", () => {
     // warm-up 키는 href(쿼리 포함)와 완전히 같아야 적중한다. URL이 안 바뀌었으므로 키도 유효하다.
     expect(sidebarSource).toContain('"/admin/docs?tab=gaps"')
     expect(sidebarSource).toContain('"/admin/channel-talk"')
+    // 알파 준비도는 AI 품질 검수 탭이 유일한 소비처다(§7 중복 단일화) — 그 키에만 남는다.
     expect(sidebarSource).toContain("/api/admin/docs/alpha-readiness")
-    expect(sidebarSource).toContain("/api/admin/docs/gaps")
-    // DocsGapsPanel은 질문 패턴(stats)도 읽는다(챗봇 발 유입 배지).
+    // 질문 패턴(stats)은 외부 대시보드가 캐시로 소비한다 — /admin/chatbot 키에 산다.
     expect(sidebarSource).toContain("/api/admin/chatbot/stats")
+  })
+
+  // P6 — 등재만 되고 아무도 읽지 않는 warm 키를 걷어냈다. 키는 href와 문자 그대로 같아야
+  // 적중하고, warm은 adminFetchJsonCached가 읽는 캐시에만 들어간다. 그래서
+  // "소비 쪽이 adminFetchJson(직페치)이면 데워도 못 읽는다"가 판정 기준이다.
+  it("drops warm-up URLs whose consumers never read the admin cache", () => {
+    // DocsGapsPanel은 docs/gaps·chatbot/stats를 adminFetchJson으로 직접 받는다 —
+    // ?tab=gaps 키에서 데워도 적중하지 않는다(소비 변경은 그 패널의 결정이라 하지 않았다).
+    expect(sidebarSource).not.toContain('"/api/admin/docs/gaps"')
+    // 알파 준비도는 이제 ?tab=quality 한 곳에서만 데운다 — 대시보드·문서 기본 탭에서는 뺐다.
+    // 등재 여부는 따옴표까지 포함한 리터럴로 센다(설명 주석에 같은 경로가 나와도 오탐하지 않게).
+    expect(sidebarSource.match(/"\/api\/admin\/docs\/alpha-readiness"/g)).toHaveLength(1)
+    // 질문 패턴도 한 곳(/admin/chatbot)만 남는다.
+    expect(sidebarSource.match(/"\/api\/admin\/chatbot\/stats"/g)).toHaveLength(1)
   })
 
   it("warms the internal CS workspace mount fetches", () => {

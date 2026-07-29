@@ -1,7 +1,7 @@
 // 내부 CS 코파일럿 워크스페이스의 상수·표시 메타.
 // 화면 로직은 담지 않는다 — 값 집합과 팔레트 매핑만 산다(DESIGN.md 팔레트).
 
-import { BookOpen, Bot, ClipboardCheck, Headphones, Search, Settings2 } from "lucide-react"
+import { Settings2 } from "lucide-react"
 
 import type {
   ConversationPriority,
@@ -52,6 +52,13 @@ export const QUEUE_STATUS_CHIPS: Array<{
   { value: "closed", label: "종료 · 보관", match: (status) => status === "resolved" || status === "archived" },
 ]
 
+// 옛 `?tab=archive` 북마크의 착지 칩을 정한다.
+// 호출부는 반드시 라우터가 준 tab 값을 넘긴다 — `typeof window` 분기로 읽으면
+// /admin/cs-chatbot이 정적 프리렌더(○)라 SSR 경로에서 무조건 `all`이 나온다.
+export function resolveInitialQueueFilter(rawTab: string | null | undefined): QueueStatusFilter {
+  return rawTab === LEGACY_ARCHIVE_TAB ? "closed" : "all"
+}
+
 // 모델 모드 세그먼트 — 네이티브 select 대신 현재 모드가 항상 보이는 3분할 컨트롤.
 export const MODEL_MODE_SEGMENTS: Array<{ value: ModelMode; label: string }> = [
   { value: "auto", label: "자동" },
@@ -59,39 +66,28 @@ export const MODEL_MODE_SEGMENTS: Array<{ value: ModelMode; label: string }> = [
   { value: "deep", label: "Pro" },
 ]
 
-// 운영 화면 바로가기 — 라이브 지표(스탯 스트립·회귀 검수) 아래에 2열 그리드로 붙는 보조 유틸리티.
+// 운영 도구 화면 안쪽 하위탭(`sub`) — 콘솔 메뉴 층(`tab`) 아래의 2단째.
+// 한 패널에 쌓여 있던 성격이 다른 다섯 덩어리를 서로 결합하지 않는 세 묶음으로 접는다.
+//   regression : 회귀 검수 대기 — 이 화면의 유일한 "일감"이라 기본값이자 첫 자리
+//   metrics    : 스탯 스트립(큐 요약) + 운영 지표 7일 (관측 · 판정하지 않는다)
+//   bridge     : 내부 AI/MCP 분석 + 콘솔 밖 연동 설정 (설정 · 연동)
+export const TOOLS_SUBTABS = [
+  { value: "regression", label: "회귀 검수" },
+  { value: "metrics", label: "지표" },
+  { value: "bridge", label: "AI 브리지" },
+] as const
+
+export type ToolsSub = (typeof TOOLS_SUBTABS)[number]["value"]
+
+export const DEFAULT_TOOLS_SUB: ToolsSub = "regression"
+
+// 콘솔 밖 바로가기 — `sub=bridge` 탭 하단의 보조 유틸리티.
+//
+// 6개 → 1개. 나머지 5개(문서 보강 큐·추천 질문·채널톡·챗봇 대시보드·가이드 문서)는
+// CS 콘솔 가로 메뉴(CsConsoleNav의 `미해결 큐`·`추천 질문`·`상담 Inbox`·`대시보드`·`가이드 문서`)와
+// 목적지가 그대로 겹친다 — 같은 화면에 두 개의 경쟁하는 내비를 두지 않는다.
+// 설정 연동만 콘솔 밖 표면이라 남는다(연동 성격이라 AI 브리지 탭이 제자리다).
 export const OPERATING_TOOLS = [
-  {
-    href: "/admin/docs?tab=gaps",
-    title: "문서 보강 · 회귀 검수",
-    description: "반복·미해결 질문을 문서 초안으로 연결",
-    icon: Search,
-  },
-  {
-    href: "/admin/docs?tab=recommended",
-    title: "추천 질문 승인",
-    description: "초안 질문 공개 여부·노출 순서 결정",
-    icon: ClipboardCheck,
-  },
-  {
-    href: "/admin/channel-talk",
-    title: "상담 동기화 · FAQ 후보",
-    description: "채널톡 상담 원문과 미커버 질문 확인",
-    icon: Headphones,
-  },
-  {
-    // nav 재분리(2026-07-17): 외부 챗봇 운영 대시보드가 /admin/chatbot으로 독립 표면을 되찾았다.
-    href: "/admin/chatbot",
-    title: "챗봇 운영 현황",
-    description: "질문량 · 미해결률 · 응답 속도",
-    icon: Bot,
-  },
-  {
-    href: "/admin/docs",
-    title: "가이드 정본 관리",
-    description: "본사 확인 정보의 정본 반영과 게시",
-    icon: BookOpen,
-  },
   {
     href: "/admin/settings?tab=integrations",
     title: "연동 상태 확인",

@@ -100,6 +100,8 @@ export const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = 
     "/api/admin/crm/overview",
   ],
   // 채널톡 상담도 CS 콘솔 "상담 Inbox" 메뉴로 옮겨갔다 — 라우트·초기 페치가 동일해 키 유지.
+  // 두 URL 모두 화면이 adminFetchJsonCached로 소비한다(상담 목록은 cache:"no-cache" 직페치에서
+  // 캐시 소비로 바꿔 이 warm이 실제로 적중하게 했다 — P6). 동기화 버튼은 force로 우회한다.
   "/admin/channel-talk": ["/api/admin/channel-talk", "/api/admin/channel-talk/mine"],
   "/admin/calendar": () => {
     // 캘린더 페이지 초기 로드는 항상 현재 연/월 쿼리를 붙인다.
@@ -124,24 +126,24 @@ export const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = 
   ],
   "/admin/blog": ["/api/admin/blog", "/api/admin/blog?trash=1"],
   "/admin/events": ["/api/admin/events"],
+  // 쿼리 없는 진입은 문서 화면의 기본 탭(documents)이고, 그 탭은 페이지 공통 두 건만 쓴다.
+  // 예전에 함께 데우던 docs/gaps·alpha-readiness는 각각 gaps·quality 탭 전용이라
+  // documents 탭에서는 호출되지 않는다 — 안 여는 탭을 데우면 대역폭만 쓴다(P6).
   "/admin/docs": [
     "/api/admin/docs",
     "/api/admin/docs/analytics?days=30",
-    // 보강 큐 탭(문서 센터로 병합됨)을 호버 시 미리 데워둔다.
-    "/api/admin/docs/gaps",
-    "/api/admin/docs/alpha-readiness",
   ],
   // 문서 센터 탭 딥링크들 — warm 키는 href(쿼리 포함)와 문자 그대로 같아야 적중한다.
   // 사이드바 항목에서 CS 콘솔 가로 메뉴로 옮겨갔지만 href가 그대로라 키도 유효하다.
   // 어느 탭으로 들어가든 페이지 자체가 /api/admin/docs와 analytics를 캐시 페치하므로 공통으로 넣는다.
   //
-  // 보강 큐 — DocsGapsPanel이 /api/admin/chatbot/stats(질문 패턴)도 읽는다.
-  // alpha-readiness는 AI 품질 검수 탭으로 이관돼 여기서는 더 이상 호출되지 않는다(§7).
+  // 보강 큐 — DocsGapsPanel의 두 마운트 페치(/api/admin/docs/gaps · /api/admin/chatbot/stats)는
+  // adminFetchJson(캐시를 읽지 않는 직페치)이라 warm이 원리적으로 적중할 수 없다.
+  // 데워도 쓰이지 않는 두 건을 뺐다 — 소비를 캐시로 바꾸는 쪽은 그 패널의 결정이라 여기서 하지 않는다(P6).
+  // alpha-readiness도 AI 품질 검수 탭으로 이관돼 여기서는 호출되지 않는다(§7).
   "/admin/docs?tab=gaps": [
     "/api/admin/docs",
     "/api/admin/docs/analytics?days=30",
-    "/api/admin/docs/gaps",
-    "/api/admin/chatbot/stats",
   ],
   // AI 품질 검수 — 알파 준비도가 이 탭의 마운트 페치다(품질 평가는 POST라 warm 대상 아님).
   "/admin/docs?tab=quality": [
@@ -153,11 +155,12 @@ export const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = 
   // adminFetchJson) 페이지 공통 두 건만 데운다.
   "/admin/docs?tab=documents": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
   "/admin/docs?tab=recommended": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
-  // 외부 챗봇 운영 대시보드(이원화로 재건) — 지표·준비도를 미리 데운다.
+  // 외부 챗봇 운영 대시보드(이원화로 재건) — 지표 6카드가 이 화면의 유일한 마운트 페치다.
   // CS 콘솔 IA 재구성 이후 이 href는 외부 축의 첫 화면("대시보드")이자 사이드바 "CS 콘솔" 항목이다.
+  // 알파 준비도는 §7 중복 단일화로 AI 품질 검수 탭(위 ?tab=quality 키)으로 넘어갔고
+  // ExternalChatbotOpsDashboard는 더 이상 호출하지 않는다 — 죽은 키라 뺀다(P6).
   "/admin/chatbot": [
     "/api/admin/chatbot/stats",
-    "/api/admin/docs/alpha-readiness",
   ],
   // 내부 CS 워크스페이스 — 마운트 시점에 실제로 나가는 두 요청만 데운다.
   // conversations는 첫 화면을 막는 블로킹 로드이고, regression-candidates는
@@ -470,9 +473,9 @@ function AdminSidebarContent({ role, name, email }: Props) {
         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
           Classin Admin
         </p>
-        <h1 className="truncate text-[15px] font-semibold text-[#111110]">
+        <p className="truncate text-[15px] font-semibold text-[#111110]">
           {currentCrmChild?.label ?? currentNavItem?.label ?? "Admin"}
-        </h1>
+        </p>
       </div>
       {isDesktop === false ? <AdminNotificationsBell placement="inline" /> : null}
     </header>

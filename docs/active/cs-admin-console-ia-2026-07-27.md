@@ -133,10 +133,34 @@ URL이 그대로이므로 [AdminSidebar](../../components/admin/AdminSidebar.tsx
 별도 `mode` 파라미터는 desync 위험만 늘린다.
 모드 탭 클릭은 그 축의 첫 화면(`외부`→대시보드, `내부`→내부 상담)으로 이동한다.
 
-### 키는 `tab`으로 통일
+### 2단 계약 — `tab`은 메뉴 층, `sub`는 화면 안쪽 층
 
-저장소에서 이미 8개 화면이 쓰는 표준 키다.
+`tab`은 저장소에서 이미 8개 화면이 쓰는 표준 키다.
 `view`·`lens`는 각각 다른 의미로 쓰이고 있어 재사용하지 않는다.
+
+화면 안쪽 하위탭은 `sub`를 쓴다. 두 층이 다른 키를 쓰므로 서로 덮지 않는다.
+
+| 화면 | `sub` 값 | 기본값 |
+|---|---|---|
+| 미해결 큐 | `queue` · `patterns` | `queue` |
+| 상담 Inbox | `conversations` · `trends` · `faq` | `conversations` |
+| 운영 도구 | `regression` · `metrics` · `bridge` | `regression` |
+
+기본값이면 파라미터를 URL에서 지운다.
+하위탭바는 공용 [AdminTabs](../../components/admin/AdminTabs.tsx)를 `variant="subtle"`로 재사용한다 — 새 컴포넌트를 만들지 않는다.
+
+**예외 하나** — `가이드 문서` 그룹의 보조 탭(`문서`·`카테고리`·`리디렉트`·`성과`)은 `sub`가 아니라 `tab`에 산다.
+`?tab=categories`·`?tab=redirects` 북마크가 이미 거기 걸려 있어서, 일관성을 위해 옮기면 그 북마크가 깨진다.
+`성과`도 같은 층에 `tab=analytics`로 붙인다.
+
+**`sub`는 `tab`의 합성 읽기를 쓰지 않는다.** `tab`은 콘솔 내비 `<Link>`가 값을 실어 나르므로
+라우터 값이 먼저 맞아 `searchParams.get("tab") ?? tabParam` 합성이 필요하지만,
+`sub`는 쓰기 창구가 `AdminTabs` 하나(=`useUrlState`의 `replaceState`)뿐이라 `window.location`이 먼저 맞는다.
+합성을 얹으면 하위탭을 누를 때마다 라우터가 따라오는 동안 직전 탭이 다시 그려진다.
+
+대신 반대 방향의 구멍을 막는다 — `?sub=trends` 상태에서 콘솔 내비(`sub` 없는 href)를 누르면
+`<Link>`의 `pushState`가 `popstate`를 쏘지 않아 `useUrlState`가 주소 변경을 못 본다.
+`searchParams`를 읽기가 아니라 **"라우터가 주소를 커밋했다"는 신호로만** 써서 기본 탭으로 되돌린다.
 
 ### 가이드 문서 그룹 매핑
 
@@ -210,6 +234,52 @@ PATCH 응답의 `tags`를 되짚어 대기 태그가 실제로 저장됐는지 �
 ([20260715_internal_cs_chat.sql](../../supabase/migrations/20260715_internal_cs_chat.sql) `internal_cs_conversations_tags_idx`).
 게다가 현재 구현은 클라이언트 필터라 `tags` 조건이 SQL로 내려가지도 않는다.
 새 인덱스를 만들면 중복 부채다. **마이그레이션 0건.**
+
+## 6-1. 크롬 누수 — 위계가 무너지던 지점
+
+`app/admin/docs/page.tsx`의 공통 크롬 138줄(제목 `문서 센터 관리` · 액션 4버튼 · KPI 4카드)이
+`activeTab` 조건 **바깥**에 있었다. 그래서 콘솔에서 `미해결 큐`·`AI 품질 검수`·`추천 질문`을 눌러도
+화면 상단에 문서 CRUD 크롬이 먼저 떴다. 셋 다 그 화면의 일과 무관하다.
+
+증거: `gaps`·`quality`는 **props 없이 마운트된다** — 페이지가 페치한 `content`·`analytics`를
+아예 쓰지 않는데 그 KPI가 위에 붙어 있었다.
+
+스코프를 두 단계로 나눠 고친다.
+
+| 스코프 | 대상 탭 | 무엇을 받나 |
+|---|---|---|
+| `isGuideGroupTab` | documents · categories · redirects · analytics | 크롬 전체 + 보조 탭바 + 재색인·문서 저장 알림 |
+| `usesDocsPageData` | 위 + recommended | 로드 에러 · 데이터 경고 배너 |
+| (없음) | gaps · quality | 자기 제목만 |
+
+`recommended`가 배너를 받는 이유는 `content.articles`를 쓰기 때문이다 —
+로드가 실패하면 그 화면의 문서 선택기가 조용히 빈다.
+`gaps`·`quality`를 뺀 이유는 정보 손실이 없어서다. `gaps`는 자체 에러 배너를,
+`quality`는 알파 준비도의 `Supabase 운영 연결`·`챗봇 DB 스키마` 체크를 이미 갖고 있고 그쪽이 더 정확하다.
+
+## 6-2. 하위탭 배치와 근거
+
+메뉴 수는 그대로 두고 화면 **안쪽**만 접는다. 가른 기준은 섹션 간 결합도다.
+
+| 화면 | 하위탭 | 근거 |
+|---|---|---|
+| 미해결 큐 | `보강 큐` / `질문 패턴` | 패턴 분석은 결합이 0 — `회귀 후보` 토글이 자기 로컬 상태만 갱신하고 큐로 흐르지 않는다. 반대로 `문서 없는 질문`·`결과 없는 검색어`·`AI 초안`은 초안 슬롯 하나를 공유하는 강한 결합이라 한 탭에 묶는다 |
+| 상담 Inbox | `상담 대화` / `유형·추이` / `학습 후보` | 독립적인 일이 3개(동기화·FAQ 승격·CRM 리드 등록). 스탯 4셀은 목록 파생 요약이라 탭 바깥 상시 |
+| 운영 도구 | `회귀 검수` / `지표` / `연동` | 5개 일 중 회귀 검수만 일감이고 나머지는 관측·설정·내비. 일감이 첫 자리 |
+| 가이드 문서 | `문서` / `카테고리` / `리디렉트` / `성과` | `검색 상위`·`조회 상위`·`피드백`이 완전히 고립된 읽기 위젯 — 어떤 액션도 문서 목록에 반영되지 않는다 |
+| AI 품질 검수 | 없음 | 세로 2화면에 섹션 2개. 하위탭이 과하다 |
+| 추천 질문 | 없음 | 순수 CRUD 한 덩어리 |
+
+`?tab=gaps&source=chatbot` 딥링크는 별도 분기 없이 `보강 큐`에 착지한다 —
+딥링크가 `sub`를 싣지 않으니 `useUrlState`가 기본값을 돌려주는 것뿐이다.
+강제 분기를 넣으면 사용자가 손으로 만든 `&sub=patterns`와 싸운다.
+
+### 레거시 `?tab=archive` 착지 칩
+
+옛 `아카이브` 탭은 대기열의 `종료 · 보관` 칩으로 흡수됐다.
+착지 칩을 `typeof window` 분기로 읽으면 `/admin/cs-chatbot`이 정적 프리렌더(`○`)라
+SSR 경로에서 무조건 `전체`가 나온다. 라우터가 준 `tab` 값을 쓰는
+순수 함수 `resolveInitialQueueFilter`로 고정하고 테스트로 못 박는다.
 
 ## 7. 중복 단일화
 

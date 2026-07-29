@@ -3,13 +3,46 @@
 import { useCallback, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Loader2, Sparkles, RefreshCw, ClipboardCopy, Check, Plus, MessageSquare } from "lucide-react"
+import {
+  BarChart3,
+  Check,
+  ClipboardCopy,
+  Inbox,
+  Loader2,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react"
 import { adminFetchJson } from "@/lib/admin-client"
 import { buildDocDraftArticlePayload } from "@/lib/chatbot/doc-draft-article"
 import { cn } from "@/lib/utils"
+import AdminTabs from "@/components/admin/AdminTabs"
 import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
+import { useUrlState } from "@/lib/use-url-state"
 
 const GAP_LIST_PAGE_SIZE = 12
+
+// 화면 안쪽 하위탭 — 2단 계약에서 `tab`은 콘솔 메뉴 층, `sub`는 화면 안쪽 층이다
+// (docs/active/cs-admin-console-ia-2026-07-27.md §5 승계).
+//
+// 이 화면에는 결합이 0인 일이 두 개 있었다.
+//  - 처리 큐: 문서 없는 질문 → 결과 없는 검색어 → AI 초안. 두 리스트가 `draft` 상태 슬롯
+//    하나를 공유해 강하게 결합한다 — 절대 쪼개지 않는다.
+//  - 패턴 분석: `회귀 후보` 토글 결과가 자기 로컬 상태(chatbotStats)만 갱신하고 아래로
+//    전혀 흐르지 않는다.
+//
+// 기본값이 queue인 이유: 이 화면의 이름이 `미해결 큐`이고, 인바운드 딥링크
+// (?tab=gaps&source=chatbot|internal_cs)의 소스 칩이 queue 쪽에 있다. sub 없이 들어오면
+// useUrlState가 기본값을 돌려주므로 딥링크는 자동으로 queue에 착지한다.
+const GAP_SUB_TABS = [
+  { value: "queue", label: "처리 큐", icon: Inbox },
+  { value: "patterns", label: "질문 패턴", icon: BarChart3 },
+] as const
+
+type GapSubTab = (typeof GAP_SUB_TABS)[number]["value"]
+
+const DEFAULT_GAP_SUB_TAB: GapSubTab = "queue"
 
 interface GapClusterInternalCsRef {
   conversationId: string
@@ -226,6 +259,13 @@ export default function DocsGapsPanel() {
   const [sourceFilter, setSourceFilter] = useState<GapSourceFilter>(() =>
     readSourceFilterFromParams(searchParams)
   )
+
+  // 하위탭 — 기본값(queue)이면 useUrlState가 파라미터를 URL에서 지운다.
+  // 알 수 없는 값(?sub=bogus)은 기본값으로 흡수해 화면이 비지 않게 한다.
+  const [subParam, setSubParam] = useUrlState("sub", DEFAULT_GAP_SUB_TAB)
+  const activeSub: GapSubTab = GAP_SUB_TABS.some((item) => item.value === subParam)
+    ? (subParam as GapSubTab)
+    : DEFAULT_GAP_SUB_TAB
 
   // 쿼리 전용 이동(예: ?source=chatbot 상태에서 사이드바 "문서 보강 큐" 재클릭, 브라우저
   // 뒤로가기)은 컴포넌트를 유지한 채 searchParams만 바꾼다 — lazy init만으로는 URL과 칩이
@@ -510,14 +550,36 @@ export default function DocsGapsPanel() {
         </p>
       )}
 
-      <QuestionPatternPanel
-        stats={chatbotStats}
-        loading={chatbotStatsLoading}
-        promotingClusterId={promotingClusterId}
-        onRefresh={loadChatbotStats}
-        onSetRegressionCandidate={setRegressionCandidate}
+      <AdminTabs
+        className="mt-5"
+        label="미해결 큐 섹션"
+        variant="subtle"
+        items={GAP_SUB_TABS.map((item) => {
+          const Icon = item.icon
+          return {
+            value: item.value,
+            label: item.label,
+            icon: <Icon className="h-4 w-4" />,
+          }
+        })}
+        value={activeSub}
+        onValueChange={setSubParam}
       />
 
+      {activeSub === "patterns" ? (
+        <QuestionPatternPanel
+          stats={chatbotStats}
+          loading={chatbotStatsLoading}
+          promotingClusterId={promotingClusterId}
+          onRefresh={loadChatbotStats}
+          onSetRegressionCandidate={setRegressionCandidate}
+        />
+      ) : null}
+
+      {/* 처리 큐 — 두 리스트와 AI 초안은 `draft` 상태 슬롯 하나를 공유하는 한 흐름이라
+          반드시 같은 탭 안에 있어야 한다(리스트 → 초안 → 문서 저장 → /admin/docs/[id]/edit). */}
+      {activeSub === "queue" ? (
+        <>
       {loading ? (
         <p className="mt-8 flex items-center gap-2 text-sm text-[#615D59]">
           <Loader2 className="h-4 w-4 animate-spin" /> 불러오는 중…
@@ -752,6 +814,8 @@ export default function DocsGapsPanel() {
           </p>
         </section>
       )}
+        </>
+      ) : null}
     </div>
   )
 }

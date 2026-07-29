@@ -33,6 +33,7 @@ import {
   ACCEPTED_ASSET_TYPES,
   INITIAL_CHECKS,
   LEGACY_ARCHIVE_TAB,
+  resolveInitialQueueFilter,
   MAX_ASSET_BYTES,
   MAX_PENDING_ASSETS,
   QUEUE_STATUS_CHIPS,
@@ -122,10 +123,7 @@ function InternalCsChatWorkspaceInner() {
   // 상태 칩은 목록 안쪽 필터라 URL로 올리지 않는다(§5는 `tab`만 규약한다).
   // 옛 ?tab=archive 북마크만 마운트 시 종료·보관 칩으로 착지시켜 행 집합을 그대로 재현한다.
   const [queueFilter, setQueueFilter] = useState<QueueStatusFilter>(() =>
-    (typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null) ===
-    LEGACY_ARCHIVE_TAB
-      ? "closed"
-      : "all"
+    resolveInitialQueueFilter(rawTab)
   )
   const [conversations, setConversations] = useState<InternalCsConversation[]>([])
   const [detail, setDetail] = useState<ConversationDetailResponse | null>(null)

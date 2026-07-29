@@ -15,13 +15,23 @@ import {
   WifiOff,
   type LucideIcon,
 } from "lucide-react"
-import { useRef } from "react"
+import { useSearchParams } from "next/navigation"
+import { useEffect, useRef } from "react"
 
+import { useUrlState } from "@/lib/use-url-state"
 import { cn } from "@/lib/utils"
 
+import AdminTabs from "../../AdminTabs"
 import MetricCard from "../components/MetricCard"
 import PromoteKnowledgeControl from "../components/PromoteKnowledgeControl"
-import { CONSOLE_CONTENT_CLASS, OPERATING_TOOLS, REVIEW_META } from "../constants"
+import {
+  CONSOLE_CONTENT_CLASS,
+  DEFAULT_TOOLS_SUB,
+  OPERATING_TOOLS,
+  REVIEW_META,
+  TOOLS_SUBTABS,
+  type ToolsSub,
+} from "../constants"
 import {
   formatDay,
   formatTime,
@@ -113,21 +123,75 @@ export default function ToolsPanel({
   onDispatch: () => void
   onIncludeOriginalChange: (checked: boolean) => void
 }) {
-  // 스탯 스트립 → 회귀 섹션 스크롤. 트리거와 타깃이 둘 다 이 패널 안이라 ref도 여기 산다
-  // (워크스페이스 상태와 달리 탭이 언마운트되면 같이 사라져야 맞는 값이다).
-  const regressionSectionRef = useRef<HTMLDivElement | null>(null)
+  // 읽기는 useUrlState(window.location)만 쓴다 — `tab`처럼 `searchParams.get() ?? …`으로
+  // 합성하지 않는다. 합성이 필요한 쪽은 `<Link>`가 값을 실어 나르는 키다(콘솔 내비가
+  // ?tab=tools를 들고 오므로 `tab`은 라우터 값이 먼저 맞는다). `sub`를 쓰는 창구는 아래
+  // AdminTabs 하나뿐이고 그 쓰기는 replaceState라 location이 항상 먼저 맞는다.
+  // 실측: 라우터가 그 replaceState를 따라잡는 데 개발 서버에서 ~1초가 걸렸다 —
+  // searchParams를 읽기에 얹었다면 그 1초 동안 직전 하위탭이 다시 그려졌을 것이다.
+  const [subParam, setSubParam] = useUrlState("sub", DEFAULT_TOOLS_SUB)
+  const activeSub: ToolsSub = TOOLS_SUBTABS.some((item) => item.value === subParam)
+    ? (subParam as ToolsSub)
+    : DEFAULT_TOOLS_SUB
+
+  // …다만 반대 방향으로 한 구멍이 남는다(실측으로 재현했다).
+  // 콘솔 내비의 `운영 도구` href에는 `sub`가 없어서, ?tab=tools&sub=bridge 상태로 그 메뉴를
+  // 다시 누르면 URL에서는 sub가 사라지는데 useUrlState는 그걸 못 본다 —
+  // Next의 <Link>는 pushState로 주소를 바꾸고 pushState는 popstate를 쏘지 않기 때문이다.
+  // 그래서 searchParams는 읽기가 아니라 "라우터가 주소를 커밋했다"는 신호로만 쓴다:
+  // 커밋된 쿼리 문자열이 실제로 바뀌었고 그 안에 sub가 없으면 기본 탭으로 되돌린다.
+  // 우리 replaceState는 커밋 문자열을 바꾸지 않은 채 먼저 반영되므로(위 ~1초 지연) 이 이펙트에
+  // 걸리지 않고, 뒤늦게 커밋될 때는 sub가 들어 있어 되돌림 대상이 아니다 — 경합이 없다.
+  const searchParams = useSearchParams()
+  const committedSearch = searchParams.toString()
+  const lastCommittedSearch = useRef(committedSearch)
+  useEffect(() => {
+    if (lastCommittedSearch.current === committedSearch) return
+    lastCommittedSearch.current = committedSearch
+    if (new URLSearchParams(committedSearch).get("sub") === null) setSubParam(DEFAULT_TOOLS_SUB)
+  }, [committedSearch, setSubParam])
+
+  // 하위탭을 옮기면 스크롤을 위로 돌린다 — 긴 회귀 목록을 내려보다 지표 탭으로 가면
+  // 짧은 본문이 스크롤된 채 나타나 빈 화면처럼 보인다.
+  const scrollRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 })
+  }, [activeSub])
 
   return (
-    <section className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAF8]">
+    <section ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAF8]">
       <div className={cn(CONSOLE_CONTENT_CLASS, "py-7")}>
       <div className="mx-auto max-w-[920px]">
         <h2 className="text-[20px] font-semibold tracking-[-0.02em]">운영 데스크</h2>
         <p className="mt-1 text-[12px] text-[#615D59]">오늘 처리할 검수와 큐 상태를 한 화면에서 확인합니다.</p>
 
+        {/* 하위탭 — 공용 AdminTabs를 subtle로 재사용한다(전용 탭 컴포넌트를 새로 만들지 않는다).
+            내부 축이라 액센트는 웜 뉴트럴 계열이고 바이올렛은 쓰지 않는다(IA 문서 §8). */}
+        <AdminTabs
+          className="mt-5"
+          items={TOOLS_SUBTABS.map((item) => ({
+            ...item,
+            badge:
+              item.value === "regression" && regressionLoadState === "loaded" && regressionPendingCount > 0
+                ? regressionPendingCount
+                : undefined,
+          }))}
+          value={activeSub}
+          onValueChange={(next) => setSubParam(next)}
+          label="운영 도구 하위 화면"
+          variant="subtle"
+        />
+
+        {/* ── sub=metrics — 큐 요약 스탯 스트립 + 운영 지표 7일. 둘 다 관측이고 판정하지 않는다. */}
+        {activeSub === "metrics" ? (
+        <>
         {/* 스탯 스트립 — 라이브 지표가 먼저. 파스텔 채움 없이 흰 카드 + 헤어라인 분할(에디토리얼). */}
         <div className="mt-5 grid grid-cols-2 overflow-hidden rounded-[10px] border border-black/[0.08] bg-white sm:grid-cols-4">
+          {/* 두 카드가 나눠 보여주는 건수 그대로 착지하도록 `source` 프리셋을 붙인다 —
+              ?tab=gaps&source=chatbot|internal_cs 는 이미 구현된 인바운드 계약이다
+              (계약 1: 인바운드 전용 · 칩 클릭은 URL에 역기록하지 않는다). */}
           <Link
-            href="/admin/docs?tab=gaps"
+            href="/admin/docs?tab=gaps&source=chatbot"
             className="group relative border-b border-black/[0.08] px-5 py-4 transition-colors hover:bg-[#FAFAF8] sm:border-b-0"
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">보강 큐 · 챗봇</p>
@@ -140,7 +204,7 @@ export default function ToolsPanel({
             <ArrowUpRight className="absolute right-4 top-4 h-3.5 w-3.5 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
           </Link>
           <Link
-            href="/admin/docs?tab=gaps"
+            href="/admin/docs?tab=gaps&source=internal_cs"
             className="group relative border-b border-l border-black/[0.08] px-5 py-4 transition-colors hover:bg-[#FAFAF8] sm:border-b-0"
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">보강 큐 · 내부 CS</p>
@@ -154,17 +218,20 @@ export default function ToolsPanel({
             </p>
             <ArrowUpRight className="absolute right-4 top-4 h-3.5 w-3.5 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
           </Link>
+          {/* 하위탭 도입 전에는 같은 화면 아래쪽 회귀 섹션으로 scrollIntoView 점프였다.
+              두 덩어리가 다른 탭으로 갈리면서 그 점프는 성립하지 않는다 — 탭 전환으로 바꾼다.
+              전환 후 회귀 섹션이 탭 본문의 맨 위라 별도 스크롤이 필요 없다(위 scrollTo(0)). */}
           <button
             type="button"
-            onClick={() => regressionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            onClick={() => setSubParam("regression")}
             className="group relative border-black/[0.08] px-5 py-4 text-left transition-colors hover:bg-[#FAFAF8] sm:border-l"
           >
             <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">회귀 검수 대기</p>
             <p className="mt-2 text-[27px] font-bold leading-none tracking-[-0.02em] text-[#111110] tabular-nums">
               {regressionLoadState === "loaded" ? regressionPendingCount : "—"}
             </p>
-            <p className="mt-1.5 truncate text-[10.5px] text-[#A39E98]">아래에서 바로 판정</p>
-            <ChevronDown className="absolute right-4 top-4 h-3.5 w-3.5 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
+            <p className="mt-1.5 truncate text-[10.5px] text-[#A39E98]">회귀 검수 탭에서 바로 판정</p>
+            <ArrowUpRight className="absolute right-4 top-4 h-3.5 w-3.5 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
           </button>
           <div className="relative border-l border-black/[0.08] px-5 py-4">
             <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">AI 브리지</p>
@@ -199,9 +266,15 @@ export default function ToolsPanel({
             <MetricCard key={card.key} icon={card.icon} label={card.label} value={card.value} sub={card.sub} />
           ))}
         </div>
+        </>
+        ) : null}
 
-        {/* 회귀 검수 대기 — 링크 목록보다 위, 데스크의 첫 번째 일감. 자동 평가(계약 2)는 제안만 만든다. */}
-        <div ref={regressionSectionRef} className="mt-8 flex flex-wrap scroll-mt-4 items-center justify-between gap-3">
+        {/* ── sub=regression(기본) — 데스크의 유일한 일감. 자동 평가(계약 2)는 제안만 만든다.
+            탭 바 순서는 회귀 → 지표 → 브리지지만 소스 순서는 원래 자리를 지킨다(diff 최소화).
+            한 번에 한 탭만 렌더되므로 소스 순서는 화면에 드러나지 않는다. */}
+        {activeSub === "regression" ? (
+        <>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <h3 className="flex items-baseline gap-2.5 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">
             <span>회귀 검수 대기</span>
             {regressionLoadState === "loaded" ? (
@@ -369,9 +442,13 @@ export default function ToolsPanel({
             {regressionError}
           </p>
         ) : null}
+        </>
+        ) : null}
 
-        {/* AI 브리지 — 한 줄 요약 행 + 전송 옵션/최근 기록 펼침. */}
-        <h3 className="mt-8 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">내부 AI/MCP 분석</h3>
+        {/* ── sub=bridge — 설정·연동. AI 브리지 한 줄 요약 행 + 전송 옵션/최근 기록 펼침. */}
+        {activeSub === "bridge" ? (
+        <>
+        <h3 className="mt-5 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">내부 AI/MCP 분석</h3>
         <div className="mt-2.5 overflow-hidden rounded-[10px] border border-black/[0.08] bg-white">
           <div className="flex flex-wrap items-center gap-3 px-5 py-3.5">
             <span className={cn(
@@ -476,15 +553,17 @@ export default function ToolsPanel({
           ) : null}
         </div>
 
-        {/* 운영 화면 바로가기 — 보조 유틸리티, 2열 컴팩트 그리드로 시각적 무게를 낮춘다. */}
-        <h3 className="mt-8 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">운영 화면 바로가기</h3>
+        {/* 콘솔 밖 바로가기 — 6개 → 1개(constants.ts 참조).
+            나머지 5개는 CS 콘솔 가로 메뉴와 목적지가 그대로 겹쳐 지웠다.
+            남은 하나는 설정(연동)이라 콘솔 밖 표면이고, 성격상 이 브리지 탭이 제자리다. */}
+        <h3 className="mt-8 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">콘솔 밖 바로가기</h3>
         <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {OPERATING_TOOLS.map((tool) => {
             const Icon = tool.icon
             return (
               <Link
-                // href 는 중복될 수 있다 (챗봇 운영 현황이 보강 큐 탭에 흡수됨) — title 이 키.
-                key={tool.title}
+                // 콘솔 메뉴와 겹치던 항목을 걷어내면서 href가 유일해졌다 — 키를 href로 되돌린다.
+                key={tool.href}
                 href={tool.href}
                 className="group flex items-center gap-3 rounded-[9px] border border-black/[0.08] bg-white px-3.5 py-3 transition-colors hover:border-[#084734]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
               >
@@ -500,6 +579,8 @@ export default function ToolsPanel({
             )
           })}
         </div>
+        </>
+        ) : null}
       </div>
       </div>
     </section>

@@ -1,20 +1,24 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Check,
   ExternalLink,
   Info,
   Link2,
   Loader2,
+  LineChart,
   MessageSquare,
   RefreshCw,
   Sparkles,
   UserPlus,
 } from "lucide-react"
 
+import AdminTabs from "@/components/admin/AdminTabs"
 import CsConsoleNav from "@/components/admin/cs/CsConsoleNav"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { useUrlState } from "@/lib/use-url-state"
 import {
   aggregateConversationTags,
   aggregateDailyActivity,
@@ -30,6 +34,24 @@ import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 
 // 상담 목록 무한스크롤 대체 — 초기 50건, "더보기"로 50건씩 확장(계획 문서 Phase W1).
 const CONVERSATION_LIST_STEP = 50
+
+// 상담 Inbox 하위탭(`sub`) — 이 화면이 실제로 하는 독립적인 일은 세 가지다.
+//   conversations : 상담 → CRM 리드 등록 (기본값 · 이 화면의 본업)
+//   trends        : 유형 분포 · 응답 추이 (위 목록에서 파생된 집계, 서버 왕복 없음)
+//   faq           : FAQ 후보 → 챗봇 추천 질문 승격
+// 동기화(헤더)와 스탯 4셀은 세 탭 전부에 걸리는 신호라 탭 바깥 상시 노출이다.
+//
+// URL 키는 `sub` — 콘솔 메뉴 층인 `tab`과 2단 계약을 이룬다
+// (docs/active/cs-admin-console-ia-2026-07-27.md §5는 `tab`을 메뉴 층으로 규약한다).
+const INBOX_SUBTABS = [
+  { value: "conversations", label: "상담 대화", icon: <MessageSquare className="h-3.5 w-3.5" /> },
+  { value: "trends", label: "유형 · 추이", icon: <LineChart className="h-3.5 w-3.5" /> },
+  { value: "faq", label: "FAQ 후보", icon: <Sparkles className="h-3.5 w-3.5" /> },
+] as const
+
+type InboxSub = (typeof INBOX_SUBTABS)[number]["value"]
+
+const DEFAULT_INBOX_SUB: InboxSub = "conversations"
 
 type ConvState = "opened" | "closed" | "snoozed" | "unknown"
 
@@ -154,7 +176,34 @@ function StatCell({
   )
 }
 
-export default function ChannelTalkPage() {
+function ChannelTalkInbox() {
+  // 읽기는 useUrlState(window.location)만 쓴다 — useSearchParams와 합성하지 않는다.
+  // 합성이 필요한 쪽은 `<Link>`가 값을 실어 나르는 키뿐이다(내부 축의 `tab`이 그렇다).
+  // `sub`를 쓰는 창구는 아래 AdminTabs 하나뿐이고 그 쓰기는 replaceState라 location이 항상
+  // 먼저 맞는다. 실측상 라우터가 replaceState를 따라잡는 데 개발 서버에서 ~1초가 걸렸으므로,
+  // `searchParams.get("sub") ?? subParam`을 얹었다면 그동안 직전 탭이 다시 그려졌을 것이다.
+  const [subParam, setSubParam] = useUrlState("sub", DEFAULT_INBOX_SUB)
+  // 오타·미지원 값은 조용히 기본 탭으로 — 빈 화면을 만들지 않는다.
+  const activeSub: InboxSub = INBOX_SUBTABS.some((item) => item.value === subParam)
+    ? (subParam as InboxSub)
+    : DEFAULT_INBOX_SUB
+
+  // 반대 방향의 구멍 하나는 실측으로 재현됐다 — 콘솔 내비의 `상담 Inbox` href에는 `sub`가
+  // 없어서, ?sub=trends 상태로 그 메뉴를 다시 누르면 주소에서 sub가 사라지는데 useUrlState는
+  // 그걸 못 본다(Next <Link>는 pushState로 주소를 바꾸고 pushState는 popstate를 쏘지 않는다).
+  // 그래서 searchParams는 읽기가 아니라 "라우터가 주소를 커밋했다"는 신호로만 쓴다:
+  // 커밋된 쿼리가 실제로 바뀌었고 그 안에 sub가 없으면 기본 탭으로 되돌린다.
+  // 우리 replaceState는 커밋 문자열을 바꾸지 않은 채 먼저 반영되므로 이 이펙트에 걸리지 않고,
+  // 뒤늦게 커밋될 때는 sub가 들어 있어 되돌림 대상이 아니다 — 경합이 없다.
+  const searchParams = useSearchParams()
+  const committedSearch = searchParams.toString()
+  const lastCommittedSearch = useRef(committedSearch)
+  useEffect(() => {
+    if (lastCommittedSearch.current === committedSearch) return
+    lastCommittedSearch.current = committedSearch
+    if (new URLSearchParams(committedSearch).get("sub") === null) setSubParam(DEFAULT_INBOX_SUB)
+  }, [committedSearch, setSubParam])
+
   const [data, setData] = useState<ChannelData | null>(null)
   const [suggestions, setSuggestions] = useState<FaqSuggestion[]>([])
   const [loading, setLoading] = useState(true)
@@ -173,7 +222,15 @@ export default function ChannelTalkPage() {
   const load = useCallback(async (force = false) => {
     setLoadError(null)
     const [main, mined, recommended] = await Promise.allSettled([
-      adminFetchJson<ChannelData>("/api/admin/channel-talk", { cache: "no-cache" }),
+      // 캐시 소비 — 사이드바·콘솔 hover-warm(NAV_WARMUP_REQUESTS["/admin/channel-talk"])이
+      // 같은 URL 키로 데운 캐시를 그대로 읽는다(URL 문자열이 캐시 키라 warm 목록과 byte-동일해야 적중).
+      // 이전에는 cache:"no-cache"로 항상 네트워크를 탔고, 그래서 warm 키가 죽어 있었다.
+      // 신선도는 두 겹으로 보장된다 — 동기화 버튼은 force로 우회하고(아래 load(true)),
+      // POST /api/admin/channel-talk/sync 성공 자체가 /api/admin/channel-talk 스코프 캐시를 비운다.
+      adminFetchJsonCached<ChannelData>("/api/admin/channel-talk", undefined, {
+        ttlMs: 60_000,
+        force,
+      }),
       adminFetchJsonCached<{ suggestions?: FaqSuggestion[] }>(
         "/api/admin/channel-talk/mine",
         undefined,
@@ -334,10 +391,6 @@ export default function ChannelTalkPage() {
 
   return (
     <>
-      {/* CS 콘솔 2단 내비 — 최상단 풀블리드. contentClassName은 이 화면 본문 컨테이너(max-w-5xl,
-          좌측 정렬)와 같은 폭·거터로 맞춰야 좌우 끝이 일치한다(§1 · §4).
-          이 max-w-5xl은 콘솔 이전부터 있던 이 화면의 폭이다. */}
-      <CsConsoleNav contentClassName="w-full max-w-5xl px-4 sm:px-6 lg:px-8" />
       {/* 본문 — 들여쓰기를 유지하려 fragment 자식으로 평평하게 둔다(diff 최소화). */}
       <div className="max-w-5xl px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3 sm:mb-7">
@@ -433,7 +486,23 @@ export default function ChannelTalkPage() {
             />
           </div>
 
-          {/* 통계 패널 — 유형(태그) 분포 · 응답 추이 */}
+          {/* 하위탭 — 콘솔 가로 메뉴(`tab`) 아래 화면 안쪽 층(`sub`).
+              공용 AdminTabs를 subtle로 재사용한다(전용 탭 컴포넌트를 새로 만들지 않는다). */}
+          <AdminTabs
+            items={INBOX_SUBTABS.map((item) => ({
+              ...item,
+              badge:
+                item.value === "faq" && suggestions.length > 0 ? suggestions.length : undefined,
+            }))}
+            value={activeSub}
+            onValueChange={(next) => setSubParam(next)}
+            label="상담 Inbox 하위 화면"
+            variant="subtle"
+          />
+
+          {/* sub=trends — 유형(태그) 분포 · 응답 추이. 둘 다 상담 목록에서 파생된 집계라
+              탭을 옮겨도 서버 왕복이 생기지 않는다(같은 conversations 배열의 useMemo). */}
+          {activeSub === "trends" ? (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <section className="rounded-[10px] border border-black/[0.08] bg-white px-5 py-4">
               <div className="flex items-baseline justify-between gap-3">
@@ -506,8 +575,21 @@ export default function ChannelTalkPage() {
               </div>
             </section>
           </div>
+          ) : null}
 
-          {suggestions.length > 0 ? (
+          {/* sub=faq — FAQ 후보 → 챗봇 추천 질문(draft) 승격.
+              탭이 생기기 전에는 후보가 0건이면 섹션째 사라졌지만, 이제는 탭이 비어 보이면
+              안 되므로 빈 상태 문구를 둔다(기능 손실 없음 · 노출만 명시적으로 바뀐다). */}
+          {activeSub === "faq" ? (
+            suggestions.length === 0 ? (
+              <section className="rounded-[10px] border border-black/[0.08] bg-white px-5 py-10 text-center">
+                <p className="text-[13px] text-[#A39E98]">
+                  {isUnconfigured
+                    ? "채널톡 Open API 키 설정 후 상담을 동기화하면 FAQ 후보가 채워집니다."
+                    : "챗봇 골든셋이 아직 못 받는 반복 질문이 없습니다."}
+                </p>
+              </section>
+            ) : (
             <section className="overflow-hidden rounded-[10px] border border-black/[0.08] bg-white">
               <div className="flex items-center gap-2 border-b border-black/[0.08] px-5 py-3.5">
                 <Sparkles className="h-4 w-4 text-[#084734]" />
@@ -581,8 +663,11 @@ export default function ChannelTalkPage() {
                 검토 후 발행합니다. 답변 자체는 골든셋 또는 가이드 문서에 반영하면 챗봇이 다음부터 자동 응대합니다.
               </p>
             </section>
+            )
           ) : null}
 
+          {/* sub=conversations(기본) — 상담 → CRM 리드 등록. 이 화면의 본업이라 첫 자리다. */}
+          {activeSub === "conversations" ? (
           <section className="overflow-hidden rounded-[10px] border border-black/[0.08] bg-white">
             <div className="flex items-center gap-2 border-b border-black/[0.08] px-5 py-3.5">
               <MessageSquare className="h-4 w-4 text-[#A39E98]" />
@@ -710,9 +795,32 @@ export default function ChannelTalkPage() {
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           </section>
+          ) : null}
         </div>
       )}
       </div>
+    </>
+  )
+}
+
+// useSearchParams()는 정적 렌더링 시 Suspense 경계를 요구한다(내부 축 워크스페이스와 같은 이유).
+// 콘솔 내비는 경계 바깥에 둬서 본문이 스트리밍되는 동안에도 자리를 지킨다.
+export default function ChannelTalkPage() {
+  return (
+    <>
+      {/* CS 콘솔 2단 내비 — 최상단 풀블리드. contentClassName은 이 화면 본문 컨테이너(max-w-5xl,
+          좌측 정렬)와 같은 폭·거터로 맞춰야 좌우 끝이 일치한다(§1 · §4).
+          이 max-w-5xl은 콘솔 이전부터 있던 이 화면의 폭이다. */}
+      <CsConsoleNav contentClassName="w-full max-w-5xl px-4 sm:px-6 lg:px-8" />
+      <Suspense
+        fallback={
+          <div className="max-w-5xl px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
+            <p className="text-[13px] text-[#A39E98]">불러오는 중…</p>
+          </div>
+        }
+      >
+        <ChannelTalkInbox />
+      </Suspense>
     </>
   )
 }
