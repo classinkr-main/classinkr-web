@@ -39,3 +39,21 @@ describe("AdminSidebar — 상시/기타 2단 구조", () => {
     expect(sidebar).toContain('href: "/admin/quotes"')
   })
 })
+
+const layout = readFileSync(join(process.cwd(), "app/admin/layout.tsx"), "utf8")
+
+describe("AdminLayout — 차단 탭 라우트 가드", () => {
+  it("blocks rendering when the current path resolves to deny", () => {
+    expect(layout).toContain("resolveNavPlacement(")
+    expect(layout).toContain('=== "deny"')
+  })
+
+  it("explains the block instead of silently redirecting", () => {
+    // 조용한 리다이렉트는 "왜 튕겼지"를 남긴다 — 문구로 알린다.
+    expect(layout).toContain("접근 권한이 없습니다")
+  })
+
+  it("states plainly that this is a surface guard, not a security boundary", () => {
+    expect(layout).toContain("보안 경계가 아니다")
+  })
+})

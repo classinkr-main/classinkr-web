@@ -1,10 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 
 import AdminSidebar from "@/components/admin/AdminSidebar"
 import AdminCommandPaletteLauncher from "@/components/admin/AdminCommandPaletteLauncher"
+import { ADMIN_NAV, normalizeAdminRole } from "@/components/admin/admin-nav"
+import { isNavPresetKey, normalizeNavOverrides, resolveNavPlacement } from "@/components/admin/admin-nav-access"
 import { RouteTransition } from "@/components/transitions/RouteTransition"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
@@ -198,6 +201,33 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [isLoginPage, router])
 
+  // 차단된 탭에 URL을 직접 쳐서 들어온 경우를 막는다.
+  //
+  // ⚠️ 이것은 업무 표면 가드이지 보안 경계가 아니다. 이 레이아웃은 클라이언트 컴포넌트라
+  // 우회 가능하고, 이 저장소에는 middleware도 없다. 실제 데이터 차단은 각 API의
+  // requireVerifiedAdminContext 롤 목록이 담당한다(스펙 §5.5).
+  const blocked = (() => {
+    if (!session || isLoginPage) return false
+    const preset = isNavPresetKey(session.navPreset) ? session.navPreset : null
+    if (!preset) return false
+
+    // 하위 경로(/admin/crm/customers/...)도 상위 탭의 판정을 따른다.
+    // 가장 긴 매칭을 고르는 이유: /admin/branch 와 /admin/branch/ledger 가 둘 다 매칭될 때
+    // 더 구체적인 쪽(ledger)의 판정이 옳다.
+    const target = ADMIN_NAV.map((item) => item.href.split("?")[0])
+      .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+      .sort((a, b) => b.length - a.length)[0]
+    if (!target) return false
+
+    return (
+      resolveNavPlacement(target, {
+        role: normalizeAdminRole(session.role),
+        preset,
+        overrides: normalizeNavOverrides(session.navOverrides),
+      }) === "deny"
+    )
+  })()
+
   if (isLoginPage) return <>{children}</>
 
   return (
@@ -229,7 +259,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       )}
       <main className="min-w-0 flex-1 overflow-x-hidden pt-16 pb-24 lg:overflow-y-auto lg:overscroll-contain lg:pt-0 lg:pb-0">
         <div className="mx-auto w-full max-w-[1680px]">
-          <RouteTransition tone="admin">{children}</RouteTransition>
+          <RouteTransition tone="admin">
+            {blocked ? (
+              <div className="flex min-h-[60vh] items-center justify-center px-6">
+                <div className="max-w-sm text-center">
+                  <p className="text-[15px] font-semibold text-[#111110]">접근 권한이 없습니다</p>
+                  <p className="mt-1 text-[13px] text-[#1a1a1a]/45">
+                    이 화면은 현재 계정에 배정되지 않았습니다. 필요하면 최고 관리자에게 요청하세요.
+                  </p>
+                  <Link
+                    href="/admin/calendar"
+                    className="mt-4 inline-block rounded-lg bg-[#111110] px-4 py-2 text-[13px] font-medium text-white"
+                  >
+                    캘린더로 이동
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              children
+            )}
+          </RouteTransition>
         </div>
       </main>
       <AdminCommandPaletteLauncher />
