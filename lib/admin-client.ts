@@ -7,6 +7,8 @@ const STORAGE_KEYS = [
   "admin_name",
   "admin_email",
   "admin_branch",
+  "admin_nav_preset",
+  "admin_nav_overrides",
 ] as const
 
 const ADMIN_REQUEST_CACHE_PREFIX = "admin_request_cache:"

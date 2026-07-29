@@ -15,6 +15,8 @@ interface SessionInfo {
   role: string
   name: string
   email: string
+  navPreset: string | null
+  navOverrides: Record<string, string>
 }
 
 // dev 바이패스 토큰은 모듈 로드 시점(어떤 컴포넌트 렌더/이펙트보다 먼저)에 기록한다.
@@ -38,7 +40,18 @@ function readCachedSession(): SessionInfo | null {
   const email = sessionStorage.getItem("admin_email") ?? ""
 
   if (!role || !name) return null
-  return { role, name, email }
+
+  // nav_preset/nav_overrides는 20260729 마이그레이션 이후에만 채워진다. 빈 문자열(프리셋
+  // 미배정)은 null로 정규화하고, 깨진 JSON 하나로 로그인 캐시 전체가 막히지 않도록 try/catch로 감싼다.
+  const navPreset = sessionStorage.getItem("admin_nav_preset")
+  let navOverrides: Record<string, string> = {}
+  try {
+    navOverrides = JSON.parse(sessionStorage.getItem("admin_nav_overrides") ?? "{}")
+  } catch {
+    navOverrides = {}
+  }
+
+  return { role, name, email, navPreset: navPreset || null, navOverrides }
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -47,7 +60,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const isLoginPage = pathname === "/admin/login"
   const [session, setSession] = useState<SessionInfo | null>(() => {
     if (process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH === "true") {
-      return { role: "admin", name: "Dev", email: "dev@local" }
+      return { role: "admin", name: "Dev", email: "dev@local", navPreset: null, navOverrides: {} }
     }
 
     return readCachedSession()
@@ -69,7 +82,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         sessionStorage.setItem("admin_role", "admin")
         sessionStorage.setItem("admin_name", "Dev")
         sessionStorage.setItem("admin_email", "dev@local")
-        setSession({ role: "admin", name: "Dev", email: "dev@local" })
+        setSession({ role: "admin", name: "Dev", email: "dev@local", navPreset: null, navOverrides: {} })
       })
       return
     }
@@ -107,6 +120,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               role: data.role ?? "admin",
               name: data.name ?? "Admin",
               email: "",
+              // legacy 세션(/api/admin/auth)은 admin_profiles를 거치지 않아 프리셋 데이터가 없다.
+              navPreset: null,
+              navOverrides: {},
             })
           }
         } catch {
@@ -128,11 +144,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         return
       }
 
-      const { data: profile } = await supabase
+      // nav_preset/nav_overrides는 20260729 마이그레이션 이후에만 존재한다.
+      // 미적용 환경에서 select 실패로 로그인이 막히는 걸 막으려고 확장 select를 먼저 시도하고,
+      // 실패하면 기존 3컬럼으로 폴백한다(= preset 없음 = 오늘과 동일한 동작).
+      const extended = await supabase
         .from("admin_profiles")
-        .select("display_name, role, status")
+        .select("display_name, role, status, nav_preset, nav_overrides")
         .eq("user_id", user.id)
         .single()
+
+      const { data: profile } = extended.error
+        ? await supabase
+            .from("admin_profiles")
+            .select("display_name, role, status")
+            .eq("user_id", user.id)
+            .single()
+        : extended
 
       if (!profile || profile.status !== "ACTIVE") {
         clearAdminSessionStorage()
@@ -142,17 +169,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       }
 
       if (!cancelled) {
+        const navPreset = (profile as { nav_preset?: string | null }).nav_preset ?? null
+        const navOverrides = (profile as { nav_overrides?: Record<string, string> }).nav_overrides ?? {}
+
         sessionStorage.setItem("admin_password", "supabase-authed")
         sessionStorage.setItem("admin_token", "supabase-authed")
         sessionStorage.setItem("admin_role", profile.role)
         sessionStorage.setItem("admin_name", profile.display_name)
         sessionStorage.setItem("admin_email", user.email ?? "")
         sessionStorage.removeItem("admin_branch")
+        sessionStorage.setItem("admin_nav_preset", navPreset ?? "")
+        sessionStorage.setItem("admin_nav_overrides", JSON.stringify(navOverrides))
 
         setSession({
           role: profile.role,
           name: profile.display_name,
           email: user.email ?? "",
+          navPreset,
+          navOverrides,
         })
       }
     }
@@ -173,6 +207,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           role={session.role}
           name={session.name}
           email={session.email}
+          navPreset={session.navPreset}
+          navOverrides={session.navOverrides}
         />
       ) : (
         <aside
