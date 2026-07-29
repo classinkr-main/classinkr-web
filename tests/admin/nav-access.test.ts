@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest"
 
 import { ADMIN_NAV } from "@/components/admin/admin-nav"
+import {
+  NAV_PRESETS,
+  resolveNavAccess,
+  resolveNavPlacement,
+  type NavAccessContext,
+} from "@/components/admin/admin-nav-access"
 
 // 기타 그룹은 3범주(고객·매출 / 마케팅·분석 / 시스템)로 묶인다.
 // 상시 후보 7개는 범주가 필요 없다(기타에 들어갈 때만 쓰인다).
@@ -67,5 +73,107 @@ describe("admin nav — 기타 범주 메타", () => {
       primaryCandidates.includes(href)
     )
     expect(declared).toEqual(primaryCandidates)
+  })
+})
+
+const ctx = (over: Partial<NavAccessContext> = {}): NavAccessContext => ({
+  role: "ADMIN",
+  preset: "staff",
+  overrides: {},
+  ...over,
+})
+
+describe("resolveNavPlacement", () => {
+  it("falls back to legacy role behaviour when no preset is assigned", () => {
+    // preset=null이면 오늘과 완전히 동일해야 한다 — 배포 시점 무변화가 이 설계의 안전장치다.
+    expect(resolveNavPlacement("/admin/settings", ctx({ preset: null }))).toBe("primary")
+    expect(resolveNavPlacement("/admin/crm", ctx({ preset: null }))).toBe("primary")
+  })
+
+  it("denies MOON_ONLY tabs for every non-super preset", () => {
+    for (const preset of ["staff", "sales", "marketing", "cs", "lead", "branch"] as const) {
+      expect(resolveNavPlacement("/admin/settings", ctx({ preset })), preset).toBe("deny")
+      expect(resolveNavPlacement("/admin/overview", ctx({ preset })), preset).toBe("deny")
+      expect(resolveNavPlacement("/admin/chatbot", ctx({ preset })), preset).toBe("deny")
+    }
+  })
+
+  it("restricts 매출 장부 to lead/branch and Analytics to lead", () => {
+    expect(resolveNavPlacement("/admin/branch/ledger", ctx({ preset: "lead" }))).toBe("folded")
+    expect(resolveNavPlacement("/admin/branch/ledger", ctx({ preset: "marketing" }))).toBe("deny")
+    expect(resolveNavPlacement("/admin/analytics", ctx({ preset: "lead" }))).toBe("folded")
+    expect(resolveNavPlacement("/admin/analytics", ctx({ preset: "branch" }))).toBe("deny")
+  })
+
+  it("promotes 매출 장부 to primary for the branch preset that declares it", () => {
+    expect(resolveNavPlacement("/admin/branch/ledger", ctx({ preset: "branch" }))).toBe("primary")
+  })
+
+  it("folds every OPEN tab the preset did not promote", () => {
+    expect(resolveNavPlacement("/admin/calendar", ctx({ preset: "cs" }))).toBe("primary")
+    expect(resolveNavPlacement("/admin/hardware", ctx({ preset: "cs" }))).toBe("folded")
+  })
+
+  it("lets an override promote, demote, or grant access", () => {
+    const granted = ctx({ preset: "marketing", overrides: { "/admin/branch/ledger": "folded" } })
+    expect(resolveNavPlacement("/admin/branch/ledger", granted)).toBe("folded")
+
+    const promoted = ctx({ preset: "cs", overrides: { "/admin/hardware": "primary" } })
+    expect(resolveNavPlacement("/admin/hardware", promoted)).toBe("primary")
+
+    const revoked = ctx({ preset: "lead", overrides: { "/admin/analytics": "deny" } })
+    expect(resolveNavPlacement("/admin/analytics", revoked)).toBe("deny")
+  })
+
+  it("never denies SUPER_ADMIN, even with a deny override", () => {
+    // 슈퍼 관리자가 자기 설정 화면을 잠그면 복구 경로가 없다.
+    // 단 배치(상시/기타)까지 무시하지는 않는다 — 문준혁도 접힌 사이드바를 본다.
+    const locked = ctx({
+      role: "SUPER_ADMIN",
+      preset: "staff",
+      overrides: { "/admin/settings": "deny" },
+    })
+    expect(resolveNavPlacement("/admin/settings", locked)).not.toBe("deny")
+  })
+})
+
+describe("resolveNavAccess", () => {
+  it("splits the cs preset into 4 primary items in declaration order", () => {
+    const { primary } = resolveNavAccess(ctx({ preset: "cs" }))
+    expect(primary.map((item) => item.href)).toEqual([
+      "/admin/calendar",
+      "/admin/quotes",
+      "/admin/docs",
+      "/admin/cs-chatbot",
+    ])
+  })
+
+  it("folds the reachable rest and hides the denied ones", () => {
+    const { folded } = resolveNavAccess(ctx({ preset: "cs" }))
+    const foldedHrefs = folded.flatMap((group) => group.items.map((item) => item.href))
+    expect(foldedHrefs).toContain("/admin/crm")
+    expect(foldedHrefs).toContain("/admin/hardware")
+    expect(foldedHrefs).not.toContain("/admin/settings")
+    expect(foldedHrefs).not.toContain("/admin/branch/ledger")
+  })
+
+  it("orders folded groups 고객·매출 → 마케팅·분석 → 시스템 and drops empty ones", () => {
+    const { folded } = resolveNavAccess(ctx({ preset: "cs" }))
+    // cs 프리셋에서 시스템 범주 항목은 전부 차단(overview·chatbot·ops·settings·dev)이거나
+    // 상시(docs·cs-chatbot)라 시스템 그룹은 비어 사라진다.
+    expect(folded.map((group) => group.category)).toEqual(["customer", "growth"])
+    expect(folded.every((group) => group.items.length > 0)).toBe(true)
+  })
+
+  it("gives super 7 primary and 12 folded", () => {
+    const { primary, folded } = resolveNavAccess(ctx({ role: "SUPER_ADMIN", preset: "super" }))
+    expect(primary).toHaveLength(7)
+    expect(folded.flatMap((group) => group.items)).toHaveLength(12)
+  })
+
+  it("declares a primary set for every preset key", () => {
+    for (const key of Object.keys(NAV_PRESETS)) {
+      expect(NAV_PRESETS[key as keyof typeof NAV_PRESETS].primary.length, key).toBeGreaterThan(0)
+    }
   })
 })
