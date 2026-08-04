@@ -1,8 +1,10 @@
 "use client"
 
 import { useEffect, useState, type ReactNode } from "react"
-import { Building2, Check, CircleAlert, Info, Loader2, ShieldCheck, UserRound } from "lucide-react"
+import { Building2, Check, CircleAlert, Info, Loader2, PanelsTopLeft, ShieldCheck, UserRound } from "lucide-react"
 
+import { NAV_PRESETS, isNavPresetKey, type NavPlacement } from "@/components/admin/admin-nav-access"
+import MemberNavAccessDrawer from "@/components/admin/settings/MemberNavAccessDrawer"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 
 // 구 /admin/users(회원 관리) 페이지 콘텐츠 — Settings "회원" 탭으로 흡수(2026-07-04).
@@ -24,6 +26,8 @@ interface AdminUser {
   neoOwnerId: string | null
   sortOrder: number
   capabilities?: string[]
+  navPreset?: string | null
+  navOverrides?: Record<string, string>
 }
 
 type CapabilitySaveState =
@@ -74,6 +78,7 @@ function UserSection({
   canManageCapabilities,
   capabilityStates,
   onCapabilityToggle,
+  onOpenNavAccess,
 }: {
   title: string
   icon: ReactNode
@@ -82,6 +87,7 @@ function UserSection({
   canManageCapabilities: boolean
   capabilityStates: Record<string, CapabilitySaveState | undefined>
   onCapabilityToggle: (user: AdminUser, capability: string) => void
+  onOpenNavAccess: (user: AdminUser) => void
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-[#e8e8e4] bg-white">
@@ -123,6 +129,21 @@ function UserSection({
                       <span className="rounded-md bg-[#fafaf8] px-2 py-1">alias {user.ownerAliases.length}</span>
                     ) : null}
                   </div>
+                  {canManageCapabilities && user.userId && user.source === "supabase" ? (
+                    <div className="mt-2.5">
+                      <button
+                        type="button"
+                        onClick={() => onOpenNavAccess(user)}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-[rgba(0,0,0,0.05)] px-3 py-1.5 text-[11px] font-medium text-[#111110] transition-colors hover:bg-[rgba(0,0,0,0.08)]"
+                      >
+                        <PanelsTopLeft className="h-3.5 w-3.5 text-[#1a1a1a]/45" />
+                        탭 권한
+                        <span className="text-[#1a1a1a]/40">
+                          {isNavPresetKey(user.navPreset) ? NAV_PRESETS[user.navPreset].label : "미배정"}
+                        </span>
+                      </button>
+                    </div>
+                  ) : null}
                   {canManageCapabilities ? (
                     <div className="mt-3 rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -206,6 +227,7 @@ export function MembersPanel() {
   const [capabilityStates, setCapabilityStates] = useState<
     Record<string, CapabilitySaveState | undefined>
   >({})
+  const [navTarget, setNavTarget] = useState<AdminUser | null>(null)
 
   useEffect(() => {
     adminFetchJsonCached<AdminUsersResponse>("/api/admin/users", undefined, { ttlMs: 60_000 })
@@ -265,6 +287,24 @@ export function MembersPanel() {
     }
   }
 
+  // 드로어가 성공 응답으로 직접 반환한 preset/overrides로 로컬 목록을 갱신한다 — 재조회 없이
+  // "탭 권한" 버튼의 현재 프리셋 라벨이 바로 최신화된다(handleCapabilityToggle과 동일한 패턴).
+  const handleNavAccessSaved = (
+    targetUserId: string,
+    navPreset: string | null,
+    navOverrides: Record<string, NavPlacement>
+  ) => {
+    const updateUsers = (users: AdminUser[]) =>
+      users.map((item) => (item.userId === targetUserId ? { ...item, navPreset, navOverrides } : item))
+
+    setDirectory((previous) =>
+      previous
+        ? { ...previous, users: updateUsers(previous.users), crmOwners: updateUsers(previous.crmOwners) }
+        : previous
+    )
+    setNavTarget(null)
+  }
+
   const crmOwners = directory?.crmOwners ?? []
   const branchDirectors = crmOwners.filter((user) => user.teamRole === "branch_director")
   const managers = crmOwners.filter((user) => user.teamRole === "manager")
@@ -322,6 +362,7 @@ export function MembersPanel() {
             canManageCapabilities={canManageCapabilities}
             capabilityStates={capabilityStates}
             onCapabilityToggle={handleCapabilityToggle}
+            onOpenNavAccess={setNavTarget}
             empty="등록된 지사장 없음"
           />
           <UserSection
@@ -331,6 +372,7 @@ export function MembersPanel() {
             canManageCapabilities={canManageCapabilities}
             capabilityStates={capabilityStates}
             onCapabilityToggle={handleCapabilityToggle}
+            onOpenNavAccess={setNavTarget}
             empty="등록된 매니저 없음"
           />
           <UserSection
@@ -340,10 +382,28 @@ export function MembersPanel() {
             canManageCapabilities={canManageCapabilities}
             capabilityStates={capabilityStates}
             onCapabilityToggle={handleCapabilityToggle}
+            onOpenNavAccess={setNavTarget}
             empty="기타 관리자 없음"
           />
         </div>
       )}
+
+      {navTarget?.userId ? (
+        <MemberNavAccessDrawer
+          userId={navTarget.userId}
+          displayName={navTarget.displayName}
+          targetRole={String(navTarget.role)}
+          initialPreset={navTarget.navPreset ?? null}
+          initialOverrides={navTarget.navOverrides ?? {}}
+          onClose={() => setNavTarget(null)}
+          onSaved={(navPreset, navOverrides) => {
+            // navTarget.userId는 위 조건에서 이미 string으로 좁혀졌지만, 클로저 안에서
+            // TS가 그 좁힘을 유지하지 못해 로컬 상수로 다시 고정한다.
+            const targetUserId = navTarget.userId as string
+            handleNavAccessSaved(targetUserId, navPreset, navOverrides)
+          }}
+        />
+      ) : null}
     </div>
   )
 }

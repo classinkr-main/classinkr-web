@@ -2069,21 +2069,10 @@ export default function BlogPostEditor({
                         <Wand2 className="h-3 w-3 text-[#084734]" />
                         <p className="text-[12px] font-semibold text-[#111110]">AI</p>
                       </div>
+                      {/* 순서: 초안 생성 → 본문 다듬기.
+                          빈 글에서 시작하는 동작이 먼저 오는 게 실제 작업 순서다
+                          (2026-07-29 회의: "본문 다듬기 초안 생성 먼저 아니에요"). */}
                       <div className="space-y-1.5">
-                        <button
-                          type="button"
-                          disabled={aiState?.status === "loading" || aiState?.status === "streaming"}
-                          onClick={() => handleAiAction("optimize")}
-                          className="flex w-full items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[11px] font-medium text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40 transition-colors"
-                        >
-                          {aiState?.action === "optimize" && (aiState.status === "loading" || aiState.status === "streaming") ? (
-                            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-[#084734]" />
-                          ) : (
-                            <Sparkles className="h-3 w-3 shrink-0 text-[#084734]" />
-                          )}
-                          본문 다듬기
-                        </button>
-
                         {!showInlineDraft ? (
                           <button
                             type="button"
@@ -2095,6 +2084,9 @@ export default function BlogPostEditor({
                           </button>
                         ) : (
                           <div className="space-y-1.5 rounded-lg border border-[#e8e8e4] bg-white p-2.5">
+                            {/* 입력 배경은 흰색이어야 한다. 회색(#f8f8f6)이던 시절 회의에서
+                                "저도 이거 못 바꾸는 줄 알았어"라는 반응이 나왔다 — 회색 입력은
+                                비활성으로 읽힌다. */}
                             <input
                               autoFocus
                               type="text"
@@ -2109,7 +2101,7 @@ export default function BlogPostEditor({
                                 if (e.key === "Escape") { setShowInlineDraft(false); setInlineDraftTopic("") }
                               }}
                               placeholder="주제를 입력하세요"
-                              className="w-full rounded-md border border-[#e8e8e4] bg-[#f8f8f6] px-2 py-1.5 text-[11px] outline-none focus:border-[#084734]"
+                              className="w-full rounded-md border border-[#e8e8e4] bg-white px-2 py-1.5 text-[11px] outline-none focus:border-[#084734]"
                             />
                             <div className="flex gap-1">
                               <button
@@ -2134,6 +2126,27 @@ export default function BlogPostEditor({
                             </div>
                           </div>
                         )}
+
+                        <button
+                          type="button"
+                          disabled={aiState?.status === "loading" || aiState?.status === "streaming"}
+                          onClick={() => handleAiAction("optimize")}
+                          className="flex w-full items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[11px] font-medium text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40 transition-colors"
+                        >
+                          {aiState?.action === "optimize" && (aiState.status === "loading" || aiState.status === "streaming") ? (
+                            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-[#084734]" />
+                          ) : (
+                            <Sparkles className="h-3 w-3 shrink-0 text-[#084734]" />
+                          )}
+                          본문 다듬기
+                        </button>
+                        {/* 이 버튼은 옵션 선택 없이 전체 본문을 보내고 결과를 바로 적용한다
+                            (handleAiAction의 shouldAutoApplyOptimize). 회의에서 "아무것도 안 눌렀는데
+                            그냥 다듬기 들어가네"라는 반응이 나온 지점이라 무엇이 일어나는지 미리 알린다.
+                            구간만 다듬으려면 에디터에서 텍스트를 선택한 뒤 "선택 구간 다듬기"를 쓴다. */}
+                        <p className="px-0.5 text-[10px] leading-tight text-[#1a1a1a]/35">
+                          전체 본문에 바로 적용됩니다
+                        </p>
                       </div>
                     </div>
 

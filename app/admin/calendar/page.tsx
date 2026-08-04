@@ -1,10 +1,10 @@
 "use client"
 
 import Link from "next/link"
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { Fragment, useState, useEffect, useCallback, useMemo } from "react"
 import {
   ChevronLeft, ChevronRight, Plus, Clock, Users,
-  AlignLeft, Trash2, Pencil, CalendarDays, Check,
+  AlignLeft, Trash2, Pencil, CalendarDays, Check, ArrowUpRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import type { CalendarEvent, EventSource, EventType } from "@/lib/calendar-data"
+import { getTeamMemberColor } from "@/lib/team-member-colors"
 
 // ─── 상수 ─────────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,11 @@ const SOURCE_OPTIONS: { value: EventSource; label: string; dot: string }[] = [
   { value: "notion", label: "마케팅(노션)", dot: "#0E766E" },
   { value: "showroom", label: "쇼룸 예약", dot: "#5B6470" },
   { value: "team_event", label: "팀원 행사", dot: "#6D4AA8" },
+  // 공휴일은 캐논 Danger 레드(DESIGN.md). 한국 캘린더 관례가 빨강이기도 하고,
+  // 앰버(공개 행사)·테라코타(파트너)와 색상군이 갈려야 한다 — 라벨 없이 점만 찍히는
+  // 모바일 요약에서 같은 날 두 소스가 겹치면 색이 유일한 단서다.
+  // (회의에서 지적된 구글 캘린더의 실패 지점이 정확히 "색깔도 비슷하다"였다.)
+  { value: "holiday", label: "공휴일", dot: "#B43E3E" },
 ]
 
 const FILTER_STORAGE_KEY = "admin.calendar.filters.v1"
@@ -58,6 +64,15 @@ function getEventSource(event: CalendarEvent): EventSource {
 
 function getEventSourceLabel(event: CalendarEvent) {
   return event.sourceLabel ?? (getEventSource(event) === "partner" ? "파트너" : "팀")
+}
+
+// 팀원 행사(source === "team_event")는 소스 팔레트(보라 한 가지) 대신 담당자 고정색을 쓴다 —
+// "누구 건지"가 소스 단위가 아니라 사람 단위로 구분돼야 하기 때문(회의 2026-07-29).
+// 담당자 개념이 없는 소스(공개 행사·쇼룸·노션·공휴일 등)는 기존 소스 색을 그대로 쓴다.
+function getEventDotColor(event: CalendarEvent): string {
+  const source = getEventSource(event)
+  if (source === "team_event") return getTeamMemberColor(event.assignees?.[0])
+  return getSourceColor(source)
 }
 
 function toDateStr(y: number, m: number, d: number) {
@@ -85,6 +100,18 @@ function enumerateEventDates(event: CalendarEvent) {
   }
 
   return dates
+}
+
+// 같은 날짜 안에서 공개 행사를 최상단으로 올리는 안정 정렬 — 회의: "행사가 가장 우선으로
+// 캘린더에 붙여진다." 행사가 아닌 항목끼리는 비교자가 0을 반환해 기존(날짜·시간·제목) 순서를
+// 그대로 보존한다(JS 배열 정렬은 ES2019+ 안정 정렬이 보장된다).
+function sortEventFirst(list: CalendarEvent[]): CalendarEvent[] {
+  return [...list].sort((a, b) => {
+    const aIsEvent = getEventSource(a) === "event"
+    const bIsEvent = getEventSource(b) === "event"
+    if (aIsEvent === bIsEvent) return 0
+    return aIsEvent ? -1 : 1
+  })
 }
 
 // ─── 인증 헬퍼 ────────────────────────────────────────────────────────────────
@@ -311,6 +338,14 @@ function CheckChip({
   )
 }
 
+// ─── 미응답 리드 배너 ─────────────────────────────────────────────────────────
+// 캐논 원천은 /api/admin/crm/action-kpis(getLeadActionStats) — Overview·CRM 액션 밴드와
+// 동일 수치·동일 정의(status=new AND source∈{데모·문의·Meta}). 여기서 재정의하지 않는다.
+interface LeadActionKpisPayload {
+  unrespondedCount: number
+  unresponded24hCount: number
+}
+
 // ─── 메인 페이지 ──────────────────────────────────────────────────────────────
 
 export default function AdminCalendarPage() {
@@ -324,6 +359,7 @@ export default function AdminCalendarPage() {
   const [loading, setLoading] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(null)
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -347,6 +383,26 @@ export default function AdminCalendarPage() {
   }, [year, month])
 
   useEffect(() => { fetchEvents() }, [fetchEvents])
+
+  // Overview가 하던 "홈페이지 리드 대응" 진입점을 캘린더로 이관 — 월 이동과 무관하게 한 번만.
+  // 실패해도 배너는 부가 정보일 뿐이라 캘린더 본 기능(일정 조회)을 막지 않는다.
+  useEffect(() => {
+    let cancelled = false
+    adminFetchJsonCached<{ leads: LeadActionKpisPayload }>(
+      "/api/admin/crm/action-kpis",
+      undefined,
+      { cacheKey: "calendar:lead-action-kpis", ttlMs: 120_000, staleWhileRevalidateMs: 300_000 }
+    )
+      .then((data) => {
+        if (!cancelled) setLeadActionKpis(data?.leads ?? null)
+      })
+      .catch(() => {
+        /* 조회 실패 시 배너를 숨긴 채로 둔다 — 캘린더 자체 오류로 취급하지 않는다 */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // 필터 상태 복원 (새로고침/탭 이동 후 유지) — 초기 렌더는 전체 표시로 SSR 일치, 이후 저장값 적용
   useEffect(() => {
@@ -454,6 +510,39 @@ export default function AdminCalendarPage() {
     })
     return acc
   }, {})
+  // 공개 행사를 각 날짜 최상단으로 — 나머지 항목의 상대 순서는 그대로 둔다(sortEventFirst 참고).
+  for (const key of Object.keys(eventsByDate)) {
+    eventsByDate[key] = sortEventFirst(eventsByDate[key])
+  }
+
+  // 이번 주(월~일) 요약 — 새 페치 없이 visibleEvents만 재사용. 회의: "회의할 때 구글 캘린더
+  // 켜놓고 '누구누구 이거 합니다' 이런 거 못 하거든요" — 이 스트립이 그 용도.
+  const weekStrip = useMemo(() => {
+    const now = new Date()
+    const day = (now.getDay() + 6) % 7 // 월=0
+    const monday = new Date(now)
+    monday.setDate(now.getDate() - day)
+    const sunday = new Date(monday)
+    sunday.setDate(monday.getDate() + 6)
+
+    // KST 로컬 필드로 직접 조립 — toISOString()은 UTC 변환이라 날짜가 하루 밀릴 수 있다.
+    const toKey = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+    const from = toKey(monday)
+    const to = toKey(sunday)
+
+    const byAssignee = new Map<string, CalendarEvent[]>()
+    for (const event of visibleEvents) {
+      if (event.date < from || event.date > to) continue
+      for (const assignee of event.assignees?.length ? event.assignees : ["미지정"]) {
+        const bucket = byAssignee.get(assignee)
+        if (bucket) bucket.push(event)
+        else byAssignee.set(assignee, [event])
+      }
+    }
+
+    return [...byAssignee.entries()].sort((a, b) => b[1].length - a[1].length)
+  }, [visibleEvents])
 
   const prevMonth = () => {
     if (month === 1) { setYear(y => y - 1); setMonth(12) }
@@ -587,6 +676,26 @@ export default function AdminCalendarPage() {
         </div>
       )}
 
+      {/* 미응답 리드 배너 — Overview의 "홈페이지 리드 대응" 진입점을 캘린더로 이관. 0건이면 소음이라 렌더하지 않는다. */}
+      {leadActionKpis && leadActionKpis.unrespondedCount > 0 && (
+        <Link
+          href="/admin/crm"
+          className="mb-6 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-5 py-3 text-[12px] font-medium text-[#B85C33] transition-colors hover:border-[#B85C33]/35"
+        >
+          <span>
+            미응답 리드 <strong className="font-semibold">{leadActionKpis.unrespondedCount}건</strong>
+            {" "}· 데모·문의·Meta 신규 문의가 대기 중입니다
+            {leadActionKpis.unresponded24hCount > 0 && (
+              <span className="ml-1 text-[#9A4A27]">(24h+ {leadActionKpis.unresponded24hCount}건)</span>
+            )}
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px]">
+            CRM에서 확인
+            <ArrowUpRight className="h-3 w-3" />
+          </span>
+        </Link>
+      )}
+
       {/* Filter bar */}
       <div className="mb-6 overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
         {/* 소스 필터 */}
@@ -595,14 +704,25 @@ export default function AdminCalendarPage() {
             소스
           </span>
           {SOURCE_OPTIONS.map((option) => (
-            <CheckChip
-              key={option.value}
-              checked={!hiddenSources.has(option.value)}
-              label={option.label}
-              count={sourceCounts[option.value] ?? 0}
-              onToggle={() => toggleSource(option.value)}
-              dot={option.dot}
-            />
+            <Fragment key={option.value}>
+              <CheckChip
+                checked={!hiddenSources.has(option.value)}
+                label={option.label}
+                count={sourceCounts[option.value] ?? 0}
+                onToggle={() => toggleSource(option.value)}
+                dot={option.dot}
+              />
+              {option.value === "event" && (
+                <Link
+                  href="/admin/events"
+                  title="공개 행사 관리로 이동"
+                  className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-1 text-[10px] font-medium text-[#1a1a1a]/40 transition-colors hover:text-[#111110] hover:underline"
+                >
+                  행사 관리
+                  <ArrowUpRight className="h-2.5 w-2.5" />
+                </Link>
+              )}
+            </Fragment>
           ))}
           <button
             type="button"
@@ -633,6 +753,7 @@ export default function AdminCalendarPage() {
                 label={member.name}
                 count={member.count}
                 onToggle={() => toggleAssignee(member.name)}
+                dot={getTeamMemberColor(member.name)}
                 avatar
                 dim={!teamEventSourceVisible}
               />
@@ -665,6 +786,28 @@ export default function AdminCalendarPage() {
           })}
         </div>
       </div>
+
+      {/* 이번 주 요약 — 담당자별 묶음. 회의: "누구누구 이거 합니다 이런 거 못 하거든요" 대응. */}
+      {weekStrip.length > 0 && (
+        <div className="mb-6 flex flex-wrap items-center gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
+          <span className="mr-1 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
+            이번 주
+          </span>
+          {weekStrip.map(([assignee, evts]) => (
+            <span
+              key={assignee}
+              className="inline-flex items-center gap-1.5 rounded-full border border-[#e8e8e4] bg-[#fafaf8] px-2.5 py-1 text-[11px] font-medium text-[#1a1a1a]/70"
+            >
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: getTeamMemberColor(assignee) }}
+              />
+              {assignee}
+              <span className="text-[#1a1a1a]/35">{evts.length}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Main grid */}
       <div className="flex flex-col gap-6 items-stretch xl:flex-row xl:items-start">
@@ -770,7 +913,7 @@ export default function AdminCalendarPage() {
                         <span
                           key={`dot-${ev.id}`}
                           className="h-1.5 w-1.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: getSourceColor(getEventSource(ev)) }}
+                          style={{ backgroundColor: getEventDotColor(ev) }}
                         />
                       ))}
                       {dayEvents.length > 3 && (
@@ -790,7 +933,7 @@ export default function AdminCalendarPage() {
                       return (
                         <div
                           key={ev.id}
-                          style={{ boxShadow: `inset 2px 0 0 0 ${getSourceColor(evSource)}` }}
+                          style={{ boxShadow: `inset 2px 0 0 0 ${getEventDotColor(ev)}` }}
                           className={`flex items-center gap-1 rounded border py-0.5 pl-2 pr-1.5 text-[10px] font-medium truncate ${style.bg} ${style.color}`}
                         >
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${style.dot}`} />

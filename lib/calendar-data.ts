@@ -26,11 +26,12 @@ import {
 import { getNotionMarketingCalendarEvents } from "@/lib/notion-marketing-calendar"
 import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
 import { getTeamEventsCalendarEvents } from "@/lib/team-member-calendars"
+import { getKoreaHolidayEvents } from "@/lib/korea-holidays"
 
 const FILE = path.join(process.cwd(), "data", "calendar-events.json")
 
 export type EventType = "team" | "deadline" | "meeting" | "launch" | "holiday" | "other"
-export type EventSource = "calendar" | "partner" | "event" | "notion" | "showroom" | "team_event"
+export type EventSource = "calendar" | "partner" | "event" | "notion" | "showroom" | "team_event" | "holiday"
 
 export interface CalendarEvent {
   id: string
@@ -444,26 +445,28 @@ async function getPublicEventsAsCalendarEvents(): Promise<CalendarEvent[]> {
 }
 
 export async function getAllEvents(): Promise<CalendarEvent[]> {
-  const [partnerEvents, publicEvents, notionEvents, showroomEvents, teamEventEvents] = await Promise.all([
+  const [partnerEvents, publicEvents, notionEvents, showroomEvents, teamEventEvents, holidayEvents] = await Promise.all([
     getPartnerCalendarEvents(),
     getPublicEventsAsCalendarEvents(),
     getNotionMarketingCalendarEvents(),
     getShowroomCalendarEvents(),
     getTeamEventsCalendarEvents(),
+    getKoreaHolidayEvents(),
   ])
-  return [...getStoredEvents(), ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents, ...teamEventEvents].sort(compareEvents)
+  return [...getStoredEvents(), ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents, ...teamEventEvents, ...holidayEvents].sort(compareEvents)
 }
 
 export async function getEventsByMonth(year: number, month: number): Promise<CalendarEvent[]> {
-  const [partnerEvents, publicEvents, notionEvents, showroomEvents, teamEventEvents] = await Promise.all([
+  const [partnerEvents, publicEvents, notionEvents, showroomEvents, teamEventEvents, holidayEvents] = await Promise.all([
     getPartnerCalendarEvents({ year, month }),
     getPublicEventsAsCalendarEvents(),
     getNotionMarketingCalendarEvents({ year, month }),
     getShowroomCalendarEvents({ year, month }),
     getTeamEventsCalendarEvents({ year, month }),
+    getKoreaHolidayEvents({ year, month }),
   ])
   const prefix = `${year}-${String(month).padStart(2, "0")}`
-  return [...getStoredEvents(), ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents, ...teamEventEvents]
+  return [...getStoredEvents(), ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents, ...teamEventEvents, ...holidayEvents]
     .filter((event) => isEventVisibleInMonth(event, year, month) || event.date.startsWith(prefix))
     .sort(compareEvents)
 }

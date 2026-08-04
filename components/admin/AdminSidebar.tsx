@@ -7,8 +7,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  ClipboardPaste,
-  LayoutDashboard,
+  FileText,
   LogOut,
   Menu,
   MoreHorizontal,
@@ -25,13 +24,15 @@ import AdminNotificationsBell from "./AdminNotificationsBell"
 import { useDialogFocus } from "./use-dialog-focus"
 import {
   ADMIN_NAV,
-  ADMIN_NAV_SECTIONS,
-  ADMIN_NAV_SECTION_META,
+  ADMIN_NAV_CATEGORY_META,
   CRM_CHILD_NAV,
   normalizeAdminRole,
   type AdminNavItem,
   type AdminRole,
 } from "./admin-nav"
+// 상시/기타 배치 SSOT — 사이드바·커맨드 팔레트·권한 설정 미리보기가 전부 이 모듈의
+// resolveNavAccess를 호출해야 세 화면이 어긋나지 않는다(사이드바 자체 계산 금지).
+import { isNavPresetKey, normalizeNavOverrides, resolveNavAccess } from "./admin-nav-access"
 // active 판정(splitNavHref/queryMatches/isNavActive)은 nav-active.ts로 추출됨 — CS 콘솔
 // 가로 메뉴(cs/CsConsoleNav)와 같은 판정을 공유한다. 여기서는 클로저 인자만 채워 넘긴다.
 import {
@@ -219,37 +220,12 @@ const CRM_SEGMENTS: Array<{ view: string; label: string }> = [
   { view: "upsell", label: "업셀 후보" },
 ]
 
-// 현장 사용 빈도를 기준으로 모바일은 오늘 현황·CRM·일정·입력에 집중한다.
-// 견적과 나머지 운영 화면은 More의 전체 메뉴에서 그대로 접근할 수 있다.
+// 현장 사용 빈도 기준 — 2026-07-29 탭 재구성으로 첫 화면이 캘린더가 되면서 Overview를 내렸다.
+// 나머지는 More의 전체 메뉴에서 접근한다.
 const MOBILE_PRIMARY_NAV: AdminNavItem[] = [
-  {
-    href: "/admin/overview",
-    label: "Overview",
-    icon: LayoutDashboard,
-    roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"],
-    section: "home",
-  },
-  {
-    href: "/admin/crm",
-    label: "CRM",
-    icon: Users,
-    roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"],
-    section: "sales",
-  },
-  {
-    href: "/admin/calendar",
-    label: "캘린더",
-    icon: CalendarDays,
-    roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"],
-    section: "sales",
-  },
-  {
-    href: "/admin/crm/capture",
-    label: "입력함",
-    icon: ClipboardPaste,
-    roles: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
-    section: "sales",
-  },
+  { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"], section: "sales" },
+  { href: "/admin/quotes", label: "견적", icon: FileText, roles: ["SUPER_ADMIN", "ADMIN", "BRANCH"], section: "sales" },
+  { href: "/admin/crm", label: "CRM", icon: Users, roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"], section: "sales" },
 ]
 
 const ROLE_LABEL: Record<AdminRole, string> = {
@@ -265,6 +241,8 @@ interface Props {
   role: string
   name: string
   email: string
+  navPreset: string | null
+  navOverrides: Record<string, string>
 }
 
 export default function AdminSidebar(props: Props) {
@@ -278,7 +256,7 @@ export default function AdminSidebar(props: Props) {
   )
 }
 
-function AdminSidebarContent({ role, name, email }: Props) {
+function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Props) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -291,6 +269,12 @@ function AdminSidebarContent({ role, name, email }: Props) {
   })
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  // 기타 접힘 패널 펼침 상태 — 새로고침에도 유지. 로그아웃 정리(clearAdminSessionStorage) 대상이
+  // 아니다 — 세션 신원이 아니라 UI 취향이라 계정이 바뀌어도 지울 이유가 없다.
+  const [otherOpen, setOtherOpen] = useState(() => {
+    if (typeof window === "undefined") return false
+    return localStorage.getItem("admin_sidebar_other_open") === "true"
+  })
   const mobileDrawerCloseRef = useRef<HTMLButtonElement | null>(null)
   // 모바일 드로어 접근성(품질 웨이브 3 — 항목 5) — Escape 닫기 + 열릴 때 닫기 버튼으로
   // 포커스 이동 · 닫힐 때 이전 포커스 복귀. DealModal과 동일한 공용 훅.
@@ -339,6 +323,23 @@ function AdminSidebarContent({ role, name, email }: Props) {
     })
   }
 
+  const toggleOther = () => {
+    // 접힌 상태에서는 라벨이 렌더되지 않아 기타 패널을 펼쳐도 내용을 알아볼 수 없다 —
+    // 그때는 사이드바부터 펼치고 기타 패널도 함께 연다(닫는 방향으로는 토글하지 않는다).
+    if (effectiveCollapsed) {
+      setCollapsed(false)
+      localStorage.setItem("admin_sidebar_collapsed", "false")
+      setOtherOpen(true)
+      localStorage.setItem("admin_sidebar_other_open", "true")
+      return
+    }
+
+    setOtherOpen((prev) => {
+      localStorage.setItem("admin_sidebar_other_open", String(!prev))
+      return !prev
+    })
+  }
+
   const handleLogout = async () => {
     clearAdminSessionStorage()
 
@@ -358,6 +359,16 @@ function AdminSidebarContent({ role, name, email }: Props) {
     () => ADMIN_NAV.filter((item) => item.roles.includes(normalizedRole)),
     [normalizedRole]
   )
+  // 상시/기타 배치는 반드시 resolveNavAccess를 통해서만 계산한다 — 사이드바가 자체 계산을
+  // 하면 나중에 권한 설정 화면의 미리보기와 어긋난다. preset이 없으면(마이그레이션 미적용·
+  // 프리셋 미배정) resolveNavPlacement가 전부 "primary"로 돌려줘 오늘과 동일한 화면을 보장한다.
+  const navAccess = useMemo(() => {
+    const preset = isNavPresetKey(navPreset) ? navPreset : null
+    return resolveNavAccess(
+      { role: normalizedRole, preset, overrides: normalizeNavOverrides(navOverrides) },
+      visibleNav
+    )
+  }, [normalizedRole, navPreset, navOverrides, visibleNav])
   const queryMatches = (query: string) => matchNavQuery(query, searchParams)
   const isNavActive = (href: string) =>
     matchNavActive(href, { pathname, searchParams, siblings: visibleNav })
@@ -375,10 +386,6 @@ function AdminSidebarContent({ role, name, email }: Props) {
     return path.length > bestPath.length ? item.href : bestHref
   }, null)
   const mobileBottomColumns = Math.min(mobilePrimaryNav.length + 1, 5)
-  const groupedNav = ADMIN_NAV_SECTIONS.map((section) => ({
-    section,
-    items: visibleNav.filter((item) => item.section === section),
-  })).filter((group) => group.items.length > 0)
 
   const prefetchAdminRoute = useCallback((href: string) => {
     if (prefetchedHrefs.current.has(href)) return
@@ -582,18 +589,9 @@ function AdminSidebarContent({ role, name, email }: Props) {
                 })}
               </div>
             ) : (
-              groupedNav.map(({ section, items }, groupIndex) => (
-              <div key={`mobile-${section}`} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
-                {/* home(Overview 단독)은 헤더 없이 최상위에 렌더. */}
-                {section !== "home" && (
-                  <div className="px-3 pb-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
-                      {ADMIN_NAV_SECTION_META[section].label}
-                    </p>
-                  </div>
-                )}
+              <>
                 <div className="space-y-1">
-                  {items.map((item) => {
+                  {navAccess.primary.map((item) => {
                     const isActive = isNavActive(item.href)
 
                     return (
@@ -631,8 +629,75 @@ function AdminSidebarContent({ role, name, email }: Props) {
                     )
                   })}
                 </div>
-              </div>
-              ))
+
+                {navAccess.folded.length > 0 && (
+                  <div className="mt-5 border-t border-[#f0f0ec] pt-4">
+                    <button
+                      type="button"
+                      onClick={toggleOther}
+                      aria-expanded={otherOpen}
+                      className="flex min-h-11 w-full items-center gap-1.5 rounded-md px-3 text-[13px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                    >
+                      <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${otherOpen ? "rotate-90" : ""}`} />
+                      <span className="flex-1 text-left">기타</span>
+                      <span className="tabular-nums text-[#1a1a1a]/30">
+                        {navAccess.folded.reduce((sum, group) => sum + group.items.length, 0)}
+                      </span>
+                    </button>
+
+                    {otherOpen && (
+                      <div className="mt-1 space-y-3">
+                        {navAccess.folded.map(({ category, items }) => (
+                          <div key={`mobile-${category}`}>
+                            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
+                              {ADMIN_NAV_CATEGORY_META[category].label}
+                            </p>
+                            <div className="space-y-1">
+                              {items.map((item) => {
+                                const isActive = isNavActive(item.href)
+                                const isWip = item.maturity === "wip"
+
+                                return (
+                                  <Link
+                                    key={`mobile-${item.href}`}
+                                    href={item.href}
+                                    onFocus={() => warmAdminTab(item.href)}
+                                    onMouseEnter={() => scheduleWarmAdminTab(item.href)}
+                                    onMouseLeave={cancelWarmAdminTab}
+                                    onPointerDown={() => warmAdminTab(item.href)}
+                                    onTouchStart={() => warmAdminTab(item.href)}
+                                    onClick={() => {
+                                      warmAdminTab(item.href)
+                                      setMobileMenuOpen(false)
+                                    }}
+                                    className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
+                                      isActive
+                                        ? "bg-[#111110] text-white"
+                                        : isWip
+                                          ? "text-[#1a1a1a]/40 hover:bg-[#f5f5f2] hover:text-[#1a1a1a]/65"
+                                          : "text-[#1a1a1a]/65 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                                    }`}
+                                  >
+                                    <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
+                                      <item.icon className="h-4 w-4" />
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                                    {isWip && !isActive && (
+                                      <span className="rounded bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-normal text-[#1a1a1a]/40">
+                                        다듬는 중
+                                      </span>
+                                    )}
+                                  </Link>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </nav>
 
@@ -807,21 +872,12 @@ function AdminSidebarContent({ role, name, email }: Props) {
             })}
           </div>
         ) : (
-          groupedNav.map(({ section, items }, groupIndex) => (
-          <div key={section} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
-            {/* home(Overview 단독)은 헤더 없이 최상위에 렌더. 나머지 섹션은 라벨만(부제 미표시). */}
-            {!effectiveCollapsed && section !== "home" && (
-              <div className="px-3 pb-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
-                  {ADMIN_NAV_SECTION_META[section].label}
-                </p>
-              </div>
-            )}
+          <>
             <div className="space-y-0.5">
-              {items.map((item) => {
+              {navAccess.primary.map((item) => {
                 const isActive = isNavActive(item.href)
 
-                const linkEl = (
+                return (
                   <Link
                     key={item.href}
                     href={item.href}
@@ -861,12 +917,78 @@ function AdminSidebarContent({ role, name, email }: Props) {
                     )}
                   </Link>
                 )
-
-                return linkEl
               })}
             </div>
-          </div>
-          ))
+
+            {navAccess.folded.length > 0 && (
+              <div className="mt-5 border-t border-[#f0f0ec] pt-4">
+                <button
+                  type="button"
+                  onClick={toggleOther}
+                  aria-expanded={otherOpen}
+                  className="flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                >
+                  <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${otherOpen ? "rotate-90" : ""}`} />
+                  {!effectiveCollapsed && (
+                    <>
+                      <span className="flex-1 text-left">기타</span>
+                      <span className="tabular-nums text-[#1a1a1a]/30">
+                        {navAccess.folded.reduce((sum, group) => sum + group.items.length, 0)}
+                      </span>
+                    </>
+                  )}
+                </button>
+
+                {otherOpen && !effectiveCollapsed && (
+                  <div className="mt-1 space-y-3">
+                    {navAccess.folded.map(({ category, items }) => (
+                      <div key={category}>
+                        <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
+                          {ADMIN_NAV_CATEGORY_META[category].label}
+                        </p>
+                        <div className="space-y-0.5">
+                          {items.map((item) => {
+                            const isActive = isNavActive(item.href)
+                            const isWip = item.maturity === "wip"
+
+                            return (
+                              <Link
+                                key={item.href}
+                                href={item.href}
+                                onFocus={() => warmAdminTab(item.href)}
+                                onMouseEnter={() => scheduleWarmAdminTab(item.href)}
+                                onMouseLeave={cancelWarmAdminTab}
+                                onPointerDown={() => warmAdminTab(item.href)}
+                                onTouchStart={() => warmAdminTab(item.href)}
+                                onClick={() => warmAdminTab(item.href)}
+                                className={`group flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
+                                  isActive
+                                    ? "bg-[#111110] text-white"
+                                    : isWip
+                                      ? "text-[#1a1a1a]/35 hover:bg-[#f5f5f2] hover:text-[#1a1a1a]/60"
+                                      : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                                }`}
+                              >
+                                <span className={isActive ? "text-white" : "text-[#1a1a1a]/30"}>
+                                  <item.icon className="h-4 w-4" />
+                                </span>
+                                <span className="flex-1">{item.label}</span>
+                                {isWip && !isActive && (
+                                  <span className="rounded bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-normal text-[#1a1a1a]/40">
+                                    다듬는 중
+                                  </span>
+                                )}
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </nav>
 
