@@ -22,6 +22,21 @@ interface SessionInfo {
   navOverrides: Record<string, string>
 }
 
+// dev 바이패스가 흉내 낼 페르소나 — 사이드바 프리셋을 로컬에서 검증하기 위한 손잡이.
+//
+// 바이패스는 어떤 계정으로 들어오든 세션을 Dev/dev@local로 덮어쓰고 nav_preset을 비운다.
+// nav_preset이 비면 설계상 "기존 동작 = 전 탭 상시"라(admin-nav-access.ts resolveNavPlacement
+// 첫 분기) 로컬에서는 프리셋이 적용된 화면을 아예 볼 수 없었다 — 확인하려면 매번 이 파일을
+// 손으로 고쳤다 되돌려야 했다. 그래서 env로 뺀다.
+//
+//   NEXT_PUBLIC_DEV_NAV_PRESET=sales   # staff|sales|marketing|cs|lead|branch|super
+//   NEXT_PUBLIC_DEV_ROLE=ADMIN         # 생략 시 admin
+//
+// 둘 다 미설정이면 기존 동작 그대로다. 프로덕션에는 영향이 없다 —
+// isAdminAuthBypassEnabled()가 NODE_ENV=development + !VERCEL을 요구한다.
+const DEV_ROLE = process.env.NEXT_PUBLIC_DEV_ROLE?.trim() || "admin"
+const DEV_NAV_PRESET = process.env.NEXT_PUBLIC_DEV_NAV_PRESET?.trim() || ""
+
 // dev 바이패스 토큰은 모듈 로드 시점(어떤 컴포넌트 렌더/이펙트보다 먼저)에 기록한다.
 // React 이펙트는 자식이 부모보다 먼저 실행되므로, 레이아웃 이펙트에서만 기록하면
 // 페이지 컴포넌트의 첫 데이터 fetch가 토큰 없이 나가는 마운트 레이스가 생긴다.
@@ -29,9 +44,11 @@ if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH ===
   if (!sessionStorage.getItem("admin_token")) {
     sessionStorage.setItem("admin_password", "dev-skip")
     sessionStorage.setItem("admin_token", "dev-skip")
-    sessionStorage.setItem("admin_role", "admin")
-    sessionStorage.setItem("admin_name", "Dev")
+    sessionStorage.setItem("admin_role", DEV_ROLE)
+    sessionStorage.setItem("admin_name", DEV_NAV_PRESET ? `Dev (${DEV_NAV_PRESET})` : "Dev")
     sessionStorage.setItem("admin_email", "dev@local")
+    sessionStorage.setItem("admin_nav_preset", DEV_NAV_PRESET)
+    sessionStorage.setItem("admin_nav_overrides", "{}")
   }
 }
 
@@ -63,7 +80,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const isLoginPage = pathname === "/admin/login"
   const [session, setSession] = useState<SessionInfo | null>(() => {
     if (process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH === "true") {
-      return { role: "admin", name: "Dev", email: "dev@local", navPreset: null, navOverrides: {} }
+      return {
+        role: DEV_ROLE,
+        name: DEV_NAV_PRESET ? `Dev (${DEV_NAV_PRESET})` : "Dev",
+        email: "dev@local",
+        navPreset: DEV_NAV_PRESET || null,
+        navOverrides: {},
+      }
     }
 
     return readCachedSession()
@@ -80,12 +103,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     if (isAdminAuthBypassEnabled()) {
       queueMicrotask(() => {
+        // 여기서는 모듈 상단과 달리 무조건 덮어쓴다 — 이전에 다른 페르소나로 켜뒀던
+        // sessionStorage가 남아 있으면 env를 바꿔도 화면이 안 바뀌기 때문이다.
         sessionStorage.setItem("admin_password", "dev-skip")
         sessionStorage.setItem("admin_token", "dev-skip")
-        sessionStorage.setItem("admin_role", "admin")
-        sessionStorage.setItem("admin_name", "Dev")
+        sessionStorage.setItem("admin_role", DEV_ROLE)
+        sessionStorage.setItem("admin_name", DEV_NAV_PRESET ? `Dev (${DEV_NAV_PRESET})` : "Dev")
         sessionStorage.setItem("admin_email", "dev@local")
-        setSession({ role: "admin", name: "Dev", email: "dev@local", navPreset: null, navOverrides: {} })
+        sessionStorage.setItem("admin_nav_preset", DEV_NAV_PRESET)
+        sessionStorage.setItem("admin_nav_overrides", "{}")
+        setSession({
+          role: DEV_ROLE,
+          name: DEV_NAV_PRESET ? `Dev (${DEV_NAV_PRESET})` : "Dev",
+          email: "dev@local",
+          navPreset: DEV_NAV_PRESET || null,
+          navOverrides: {},
+        })
       })
       return
     }
