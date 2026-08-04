@@ -349,6 +349,38 @@ COMMENT ON COLUMN public.admin_profiles.nav_overrides IS
 4. 공지          변경 안내 (탭이 사라진 게 아니라 "기타"에 있다는 점 명시)
 ```
 
+### 8.1 실행 기록 (2026-07-29)
+
+| 단계 | 상태 |
+|---|---|
+| `home_v3_tabs` → `home_v3` 병합 | ✅ 완료 (14커밋, 충돌 없음) |
+| 마이그레이션 프로덕션 적용 | ✅ 완료 — 컬럼 2개 + CHECK 제약 2개 확인 |
+| 프리셋 배정 9명 | ✅ 완료 (아래 표) |
+| 코드 배포 | ❌ 미실행 — **이것 전까지 팀원 화면은 안 바뀐다** |
+
+배정 결과:
+
+| 계정 | 롤 | 프리셋 | 예외 |
+|---|---|---|---|
+| MOON (문준혁) | SUPER_ADMIN | `super` | — |
+| Jung Gyusung (정규성) | ADMIN | `lead` | — |
+| Heesung Shin (신희성) | ADMIN | `marketing` | 매출 장부 열기 |
+| Hwang Chanwoo (황찬우) | ADMIN | `marketing` | — |
+| Minjae Kim (김민재) | ADMIN | `cs` | — |
+| Wangchan Lee (이왕찬) | ADMIN | `sales` | — |
+| Han Park (박한) | ADMIN | `sales` | — |
+| Somang Jin (진소망) | ADMIN | `sales` | — |
+| Jungmoo Kim (김정무) | ADMIN | `branch` | — |
+| classin-admin | ADMIN | **미배정** | 공용 계정이라 의도적으로 제외 |
+
+신희성의 매출 장부 예외는 회의의 "희성 님하고 저랑" 반영 — `marketing` 프리셋은 기본 차단이다(§5.2 `RESTRICTED`).
+
+**현재 상태는 "스키마·설정이 코드보다 앞선" 안전 구간이다.** 프로덕션은 아직 `nav_preset`을
+읽지 않는 코드가 돌고 있어 배정값이 무시된다. 코드가 배포되는 순간 위 표대로 화면이 바뀐다.
+
+되돌리기: `UPDATE public.admin_profiles SET nav_preset = NULL, nav_overrides = '{}'::jsonb;`
+— 즉시 전원 기존 동작. 배포 롤백 불필요.
+
 되돌리기: 해당 사용자의 `nav_preset`을 NULL로 되돌리면 즉시 기존 동작. 배포 롤백 불필요.
 
 다음 주 VP 방문 일정이 있으므로 3단계는 방문 전에 마친다.
