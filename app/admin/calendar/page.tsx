@@ -41,7 +41,11 @@ const SOURCE_OPTIONS: { value: EventSource; label: string; dot: string }[] = [
   { value: "notion", label: "마케팅(노션)", dot: "#0E766E" },
   { value: "showroom", label: "쇼룸 예약", dot: "#5B6470" },
   { value: "team_event", label: "팀원 행사", dot: "#6D4AA8" },
-  { value: "holiday", label: "공휴일", dot: "#A8741A" },
+  // 공휴일은 캐논 Danger 레드(DESIGN.md). 한국 캘린더 관례가 빨강이기도 하고,
+  // 앰버(공개 행사)·테라코타(파트너)와 색상군이 갈려야 한다 — 라벨 없이 점만 찍히는
+  // 모바일 요약에서 같은 날 두 소스가 겹치면 색이 유일한 단서다.
+  // (회의에서 지적된 구글 캘린더의 실패 지점이 정확히 "색깔도 비슷하다"였다.)
+  { value: "holiday", label: "공휴일", dot: "#B43E3E" },
 ]
 
 const FILTER_STORAGE_KEY = "admin.calendar.filters.v1"
