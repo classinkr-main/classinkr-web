@@ -15,6 +15,8 @@
 - `lib/consent/consent.ts` + `app/api/consent/route.ts` — 쿠키 동의(옵트인) + Consent Mode v2 + `consent_logs` 감사(IP는 sha256만), `cln_aid` 익명ID.
 - `lib/analytics.ts` + `lib/analytics-config.ts` — `trackEvent`/`trackAdsConversion`: dataLayer/gtag/Meta/Kakao + 내부 `/api/track/event` 적재(동의 게이팅).
 - `app/api/track/event/route.ts` — 내부 이벤트 적재: `ALLOWED_EVENTS` 화이트리스트 + 파라미터 allowlist + PII redaction → `client_events`.
+- `lib/crm/lead-attribution.ts` — 리드 귀속 단일 진실원: source→유입 7묶음 매핑, Meta 광고 파서, 마케팅 렌즈 판정(`isMarketingLead`), 트래킹 5축 키 추출(채널·캠페인·광고·마그넷·랜딩). `components/admin/crm/leads/shared.tsx`가 re-export만 한다.
+- `lib/crm/lead-ranking.ts` — 리드 보드 기본 정렬의 근거: 자주(참여 빈도)·최근(마지막 접점)·주요(매출 근접도)·긴급(응대 SLA) 4축 합성 점수 + 정렬 9종 + 토큰 AND 검색 + 트래킹 롤업.
 - `lib/admin-crm-revenue.ts` — 매출 퍼널 대시보드(견적→계약→수금), 시트 REV 매칭/이중계상 제거(`crm_source_links` confirmed만 합산).
 - `lib/admin-crm-overview.ts` — 비즈니스 KPI 집계 + 싱크 건강도(레거시+V2 합산 시 중복 위험 주석).
 - `lib/admin-crm-neo.ts` / `admin-crm-customers-neo.ts` — NEO/샤오셔우이 매출·고객·EEO·리뉴얼(한국 스코프).
@@ -44,7 +46,9 @@
 - **Consent/Lead**: 옵트인 기본(미결정=전부 거부). `marketingConsent===true`일 때만 구독DB 동기화. 쿠키 13개월(391일, KR PIPA), 정책버전 명시. IP 원본 미저장(sha256만).
 - **Notion = SoR, 복제 금지**: ERP blueprint §4·§6 명시 — 노션 캘린더를 Supabase로 복제 ❌. `NOTION_API_TOKEN`은 서버전용(`NEXT_PUBLIC_` 금지).
 - **추적 컨벤션**: 이벤트는 `lib/analytics.ts` `EventNames` 유니온 + `/api/track/event` `ALLOWED_EVENTS`·`ALLOWED_PARAM_KEYS` 양쪽에 등록(누락 시 무음 드랍). 파라미터는 화이트리스트만 + PII redaction.
-- **리드 확인 게이트(2026-07-04)**: 공개 채널(문의/데모/뉴스레터/Meta 리드애즈 등)로 들어온 리드는 `leads.confirmed_at`이 null인 채로 생성돼 리드 보드 기본 화면·우선순위 작업대에서 숨는다. 어드민 수기 등록(`app/api/admin/leads` POST)만 생성 시점에 즉시 채워 게이트 대상에서 빠진다. 승격 트리거는 (1) 드로어/수신함의 "확인" 버튼(`PATCH {confirmed:true}`) 또는 (2) 상태가 `new`에서 벗어남(연락중/전환/종료) — 둘 다 `app/api/admin/leads/[id]/route.ts`에서 자동 처리. **응대 SLA(미응답/24h/48h)는 확인 여부와 무관하게 계속 노출** — `components/admin/crm/leads/shared.tsx`의 `CONFIRMATION_GATE_EXEMPT_FILTERS`가 그 예외 목록. 새 리드 관련 화면/집계를 추가할 때 이 게이트를 빠뜨리면 미확인 저의도 리드가 다시 클러터로 샌다.
+- **리드 확인 게이트(2026-07-04)**: 공개 채널(문의/데모/뉴스레터/Meta 리드애즈 등)로 들어온 리드는 `leads.confirmed_at`이 null인 채로 생성돼 리드 보드 기본 화면·우선순위 작업대에서 숨는다. 어드민 수기 등록(`app/api/admin/leads` POST)만 생성 시점에 즉시 채워 게이트 대상에서 빠진다. 승격 트리거는 (1) 드로어/수신함의 "확인" 버튼(`PATCH {confirmed:true}`) 또는 (2) 상태가 `new`에서 벗어남(연락중/전환/종료) — 둘 다 `app/api/admin/leads/[id]/route.ts`에서 자동 처리. **응대 SLA(미응답/24h/48h)는 확인 여부와 무관하게 계속 노출** — `components/admin/crm/leads/shared.tsx`의 `CONFIRMATION_GATE_EXEMPT_FILTERS`가 그 예외 목록. 새 리드 관련 화면/집계를 추가할 때 이 게이트를 빠뜨리면 미확인 저의도 리드가 다시 클러터로 샌다. **게이트는 기본값으로 유지하되 리드 보드의 "미확인 포함" 토글로 한 번에 해제할 수 있다**(2026-08-05) — 숨긴 건수를 토글 옆에 항상 표시해 "안 보이는 리드"가 생기지 않게 한다.
+- **리드 보드 기본 정렬(2026-08-05)**: 등록 최신순이 아니라 `lib/crm/lead-ranking.ts`의 우선순위 합성 점수(가중치 최근 .28 / 자주 .24 / 주요 .30 / 긴급 .18, 전환·종료는 ×0.35)다. `value`(주요)는 **원(₩) 추정이 아니다** — 리드 테이블에 금액이 없고 단가 상수도 없어 임의 환산은 근거 없는 숫자가 된다. 규모(원생 수)·유입 의도·진행 단계·도달 가능성의 0~100 상대 점수이며, 근거를 행에 문자열로 같이 노출한다. 금액 기반으로 바꾸려면 `crm_source_links`로 딜을 붙인 뒤 실제 예상 매출을 입력으로 넣는다.
+- **모아보기 렌즈**: `?lens=all|marketing` · `?sort=` 로 URL에 남는다. 마케팅 렌즈는 `isMarketingLead`(마케팅 채널 묶음 OR 트래킹 흔적)로 모집단을 자르고, 단계별/담당자 카드 자리에 트래킹 롤업 패널을 바꿔 끼운다(패널을 더하지 않는다).
 
 ## 5. 절대 깨면 안 되는 것 / 주의점
 

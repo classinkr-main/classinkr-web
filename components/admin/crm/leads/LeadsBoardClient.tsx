@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useDeferredValue, useMemo } from "react"
+import { useState, useEffect, useCallback, useDeferredValue, useMemo, useRef } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import {
@@ -10,9 +10,10 @@ import {
   PhoneCall, Bell, UserPlus, Link2, ExternalLink,
   Clock, Search, Check,
   Activity, Download, LogIn, MousePointerClick, ShieldCheck,
-  FileText,
+  FileText, Flame, Layers, Megaphone, ArrowUpDown,
 } from "lucide-react"
 import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
+import LeadTrackingPanel from "@/components/admin/crm/leads/LeadTrackingPanel"
 import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
@@ -58,6 +59,23 @@ import {
   CopyButton,
   Toast,
 } from "@/components/admin/crm/leads/shared"
+import {
+  isMarketingLead,
+  getLeadTrackingKey,
+  TRACKING_DIMENSIONS,
+  type TrackingDimension,
+} from "@/lib/crm/lead-attribution"
+import {
+  LEAD_SORT_OPTIONS,
+  calcLeadPriority,
+  getEngagement,
+  isLeadSortKey,
+  matchesLeadSearch,
+  sortLeads,
+  tokenizeLeadSearch,
+  type LeadPriority,
+  type LeadSortKey,
+} from "@/lib/crm/lead-ranking"
 
 // 리드 보드 목록 무한스크롤 대체 — 초기 50건, "더보기"로 50건씩 확장(계획 문서 Phase W1).
 // 모바일 카드·데스크톱 테이블이 같은 filtered를 그리므로 visible 상한을 공유한다.
@@ -70,6 +88,51 @@ function getLeadSourceSegment(lead: LeadRecord): string | null {
   if (lead.source === "meta_lead_ads") return null
   const label = SOURCE_LABEL[lead.source] ?? lead.source
   return label === SOURCE_GROUP_LABEL[getLeadSourceGroup(lead)] ? null : label
+}
+
+// ─── 모아보기 렌즈 ─────────────────────────────────────────────
+// 리드를 담는 두 그릇. 렌즈는 목록의 모집단 자체를 바꾸고, 아래 상태·유입 필터와 AND로 겹친다.
+//  - 전체: 모든 리드 + 단계별/담당자 운영 패널
+//  - 마케팅: 마케팅 귀속 리드만 + 트래킹 롤업 패널(채널·캠페인·광고·마그넷·랜딩)
+type LeadLens = "all" | "marketing"
+
+const LENS_OPTIONS: Array<{ key: LeadLens; label: string; hint: string }> = [
+  { key: "all", label: "전체 리드", hint: "모든 유입 · 단계와 담당자 중심" },
+  { key: "marketing", label: "마케팅 리드", hint: "트래킹이 붙은 유입 · 채널 성과 중심" },
+]
+
+function isLeadLens(value: string | null | undefined): value is LeadLens {
+  return value === "all" || value === "marketing"
+}
+
+// 우선순위 점수 밴드 — 70+ 는 오늘 손대야 하는 리드, 45+ 는 살아있는 리드, 그 아래는 배경.
+function priorityToneClass(total: number) {
+  if (total >= 70) return "bg-[#ECFDF5] text-[#084734]"
+  if (total >= 45) return "bg-[#f0f0ec] text-[#1a1a1a]/60"
+  return "bg-[#fafaf8] text-[#1a1a1a]/35"
+}
+
+function priorityBreakdownTitle(priority: LeadPriority) {
+  return `최근 ${priority.recency} · 자주 ${priority.frequency} · 주요 ${priority.value} · 긴급 ${priority.urgency}`
+}
+
+function PriorityCell({ priority }: { priority: LeadPriority }) {
+  return (
+    <div className="flex max-w-[230px] flex-col items-start gap-1">
+      <span
+        title={priorityBreakdownTitle(priority)}
+        className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold tabular-nums ${priorityToneClass(priority.total)}`}
+      >
+        <Flame className="h-3 w-3" />
+        {priority.total}
+      </span>
+      {priority.reasons.length > 0 ? (
+        <span className="max-w-full truncate text-[11px] text-[#1a1a1a]/45">
+          {priority.reasons.join(" · ")}
+        </span>
+      ) : null}
+    </div>
+  )
 }
 
 type ConvertLeadResponse = {
@@ -865,11 +928,23 @@ export default function LeadsBoardClient() {
   })()
   const focusRisk = searchParams.get("focus") === "risk"
   const deepLinkedLeadId = searchParams.get("lead")?.trim() ?? ""
+  const initialLens: LeadLens = isLeadLens(searchParams.get("lens")) ? (searchParams.get("lens") as LeadLens) : "all"
+  const initialSort: LeadSortKey = isLeadSortKey(searchParams.get("sort"))
+    ? (searchParams.get("sort") as LeadSortKey)
+    : "priority"
 
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [leadModalOpen, setLeadModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState<LeadFilter>(initialFilter)
+  // 모아보기 렌즈 · 정렬 — URL에 남겨 공유·뒤로가기가 같은 화면을 재현하게 한다.
+  const [lens, setLens] = useState<LeadLens>(initialLens)
+  const [sortKey, setSortKey] = useState<LeadSortKey>(initialSort)
+  // 확인 게이트 우회 토글. 기본은 기존 규칙(미확인 숨김) 그대로 두되, 한 번의 클릭으로
+  // "정말 전부" 볼 수 있게 한다 — 모아보기의 전제.
+  const [includeUnconfirmed, setIncludeUnconfirmed] = useState(false)
+  const [trackingDimension, setTrackingDimension] = useState<TrackingDimension>("channel")
+  const [trackingKey, setTrackingKey] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [sourceDetailFilter, setSourceDetailFilter] = useState("all")
   // 인사이트 '채널별 전환율'에서 ?source=로 진입하는 유입경로(source) 필터.
@@ -891,6 +966,20 @@ export default function LeadsBoardClient() {
   const [deletingIds, setDeletingIds] = useState<Set<string>>(() => new Set())
   const [confirmingIds, setConfirmingIds] = useState<Set<string>>(() => new Set())
   const [dismissedDeepLinkedLeadId, setDismissedDeepLinkedLeadId] = useState<string | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // "/" 로 검색창 포커스 — 목록을 훑다가 손을 옮기지 않고 바로 좁힐 수 있게.
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return
+      event.preventDefault()
+      searchInputRef.current?.focus()
+    }
+    window.addEventListener("keydown", handleKey)
+    return () => window.removeEventListener("keydown", handleKey)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -1006,6 +1095,23 @@ export default function LeadsBoardClient() {
     url.searchParams.delete("lead")
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
   }, [deepLinkedLeadId])
+
+  // 렌즈·정렬을 URL에 반영한다(히스토리를 늘리지 않는 replace) — 링크 공유·새로고침에서 같은 화면.
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    const apply = (key: string, value: string, fallback: string) => {
+      if (value === fallback) url.searchParams.delete(key)
+      else url.searchParams.set(key, value)
+    }
+    apply("lens", lens, "all")
+    apply("sort", sortKey, "priority")
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
+  }, [lens, sortKey])
+
+  // 렌즈나 축이 바뀌면 이전 축의 트래킹 선택은 의미를 잃는다 — 조용히 남겨두면 빈 목록이 된다.
+  useEffect(() => {
+    setTrackingKey(null)
+  }, [lens, trackingDimension])
 
   // 드로어 열릴 때 로그 + 활동 인텔리전스 로드
   useEffect(() => {
@@ -1270,30 +1376,45 @@ export default function LeadsBoardClient() {
     ownerSummaries,
     filterCards,
     todayFollowUpCount,
+    priorityMap,
+    lensCounts,
+    trackingScopeLeads,
+    hiddenUnconfirmedCount,
   } = useMemo(() => {
     const now = new Date(nowMs)
     const today = toLocalDateKey(now)
+    // 우선순위는 리드 전체에 대해 한 번만 계산하고 정렬·행 표시·요약이 같은 Map을 본다.
+    // (activitySummary가 늦게 도착하면 그때 한 번 더 계산 — 그 사이에도 유입 신호만으로 순서가 선다.)
+    const priorityMap = new Map<string, LeadPriority>()
+    for (const lead of leads) {
+      priorityMap.set(lead.id, calcLeadPriority(lead, getEngagement(activitySummary, lead.id), nowMs))
+    }
+    // 렌즈가 모집단을 먼저 자른다 — 아래 상태·유입·검색 필터는 전부 이 집합 위에서 돈다.
+    const marketingLeads = leads.filter(isMarketingLead)
+    const lensCounts = { all: leads.length, marketing: marketingLeads.length }
+    const lensLeads = lens === "marketing" ? marketingLeads : leads
     // 미확인(공개 채널, 검토 전) 리드는 별도 수신함으로 취급 — "활성/단계별" 집계에서 제외해
     // 실제로 다루고 있는 리드 수만 반영한다. 응대 SLA(미응답 큐)는 확인 여부와 무관하게 잡는다.
-    const unconfirmedLeads = leads.filter(isUnconfirmedLead)
-    const confirmedLeads = leads.filter((l) => !isUnconfirmedLead(l))
+    const unconfirmedLeads = lensLeads.filter(isUnconfirmedLead)
+    const confirmedLeads = lensLeads.filter((l) => !isUnconfirmedLead(l))
     const counts = confirmedLeads.reduce((acc, l) => { acc[l.status] = (acc[l.status] ??  0) + 1; return acc }, {} as Record<string, number>)
     const activeLeads = confirmedLeads.filter((l) => isActiveLead(l.status))
-    const unrespondedLeads = leads.filter(isUnrespondedLead)
+    const unrespondedLeads = lensLeads.filter(isUnrespondedLead)
     const unresponded24h = unrespondedLeads.filter((lead) => hoursBetween(lead.timestamp, now) >= 24)
     const unresponded48h = unrespondedLeads.filter((lead) => hoursBetween(lead.timestamp, now) >= 48)
     const unassignedLeads = activeLeads.filter((l) => !l.assigned_to?.trim())
     const sourceDetailOptions = Array.from(
-      new Set(leads.map((lead) => getLeadSourceDetail(lead)).filter(Boolean))
+      new Set(lensLeads.map((lead) => getLeadSourceDetail(lead)).filter(Boolean))
     ).sort((a, b) => a.localeCompare(b, "ko"))
     const leadMagnetOptions = Array.from(
-      new Set(leads.map((lead) => lead.lead_magnet?.trim()).filter(Boolean) as string[])
+      new Set(lensLeads.map((lead) => lead.lead_magnet?.trim()).filter(Boolean) as string[])
     ).sort((a, b) => a.localeCompare(b, "ko"))
-    const normalizedSearch = deferredSearch.trim().toLowerCase()
+    const searchTokens = tokenizeLeadSearch(deferredSearch)
     // 상태/SLA 필터까지만 적용한 중간 집합 — 유입 칩의 건수(패싯)는 이 집합 기준으로 센다.
-    const statusFiltered = leads.filter((lead) => {
-      // 응대 SLA 큐·미확인 큐가 아니면 검토 전 리드는 기본 화면에서 숨긴다.
-      if (!CONFIRMATION_GATE_EXEMPT_FILTERS.has(filter) && isUnconfirmedLead(lead)) return false
+    const statusFiltered = lensLeads.filter((lead) => {
+      // 응대 SLA 큐·미확인 큐가 아니면 검토 전 리드는 기본 화면에서 숨긴다("미확인 포함"으로 해제).
+      if (!includeUnconfirmed && !CONFIRMATION_GATE_EXEMPT_FILTERS.has(filter) && isUnconfirmedLead(lead))
+        return false
       if (filter === "all") return true
       if (filter === "unconfirmed") return isUnconfirmedLead(lead)
       if (filter === "unresponded") return isUnrespondedLead(lead)
@@ -1312,35 +1433,27 @@ export default function LeadsBoardClient() {
       .map((group) => ({ group, label: SOURCE_GROUP_LABEL[group], count: sourceGroupCounts.get(group) ?? 0 }))
       // 현재 상태 뷰에 존재하는 묶음만 노출하되, 이미 선택한 그룹은 0건이어도 남겨 해제할 수 있게 한다.
       .filter((chip) => chip.count > 0 || chip.group === sourceGroup)
-    const filtered = statusFiltered.filter((lead) => {
+    // 트래킹 롤업이 보는 집합 — 렌즈+상태+유입+검색까지. 롤업 행을 고르면 여기서 한 겹 더 좁힌다.
+    const trackingScopeLeads = statusFiltered.filter((lead) => {
       if (sourceGroup !== "all" && getLeadSourceGroup(lead) !== sourceGroup) return false
       if (sourceDetailFilter !== "all" && getLeadSourceDetail(lead) !== sourceDetailFilter) return false
       if (channelSource && lead.source !== channelSource) return false
       if (leadMagnetFilter !== "all" && lead.lead_magnet !== leadMagnetFilter) return false
-      if (!normalizedSearch) return true
-
-      return [
-        lead.name,
-        lead.org,
-        lead.role,
-        lead.size,
-        lead.email,
-        lead.phone,
-        lead.message,
-        lead.source,
-        lead.source_detail,
-        lead.lead_magnet,
-        lead.utm_source,
-        lead.utm_medium,
-        lead.utm_campaign,
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedSearch))
+      return matchesLeadSearch(lead, searchTokens)
     })
-    const todayFollowUps = leads.filter((l) =>
+    const filtered = sortLeads(
+      trackingKey
+        ? trackingScopeLeads.filter(
+            (lead) => getLeadTrackingKey(lead, trackingDimension) === trackingKey
+          )
+        : trackingScopeLeads,
+      sortKey,
+      { engagements: activitySummary, priorities: priorityMap, nowMs }
+    )
+    const todayFollowUps = lensLeads.filter((l) =>
       l.follow_up_at && toLocalDateKey(l.follow_up_at) === today && isActiveLead(l.status)
     )
-    const overdueFollowUps = leads.filter((l) =>
+    const overdueFollowUps = lensLeads.filter((l) =>
       l.follow_up_at && toLocalDateKey(l.follow_up_at) < today && isActiveLead(l.status)
     )
     const stalledLeads = activeLeads.filter((lead) => {
@@ -1380,7 +1493,7 @@ export default function LeadsBoardClient() {
         .values()
     ).sort((a, b) => b.total - a.total || b.overdueCount - a.overdueCount)
     const filterCards: Array<{ key: LeadFilter; label: string; count: number }> = [
-      { key: "all", label: "전체", count: confirmedLeads.length },
+      { key: "all", label: "전체", count: includeUnconfirmed ? lensLeads.length : confirmedLeads.length },
       { key: "unconfirmed", label: "미확인", count: unconfirmedLeads.length },
       { key: "new", label: "신규", count: counts.new ?? 0 },
       { key: "unresponded", label: "응대 전", count: unrespondedLeads.length },
@@ -1395,6 +1508,11 @@ export default function LeadsBoardClient() {
     // 필터 카드에 없는 "오늘 예정"(팔로업)만 큐 패널 헤더 배지로 노출한다.
     const todayFollowUpCount = todayFollowUps.length
     const filteredIds = filtered.map((lead) => lead.id)
+    // 지금 게이트에 걸려 안 보이는 미확인 리드 수 — 숫자를 숨기지 않고 토글 옆에 그대로 붙인다.
+    const hiddenUnconfirmedCount =
+      !includeUnconfirmed && !CONFIRMATION_GATE_EXEMPT_FILTERS.has(filter)
+        ? unconfirmedLeads.length
+        : 0
     return {
       now,
       today,
@@ -1413,8 +1531,27 @@ export default function LeadsBoardClient() {
       ownerSummaries,
       filterCards,
       todayFollowUpCount,
+      priorityMap,
+      lensCounts,
+      trackingScopeLeads,
+      hiddenUnconfirmedCount,
     }
-  }, [leads, filter, sourceGroup, sourceDetailFilter, channelSource, leadMagnetFilter, deferredSearch, nowMs])
+  }, [
+    leads,
+    activitySummary,
+    lens,
+    sortKey,
+    includeUnconfirmed,
+    trackingDimension,
+    trackingKey,
+    filter,
+    sourceGroup,
+    sourceDetailFilter,
+    channelSource,
+    leadMagnetFilter,
+    deferredSearch,
+    nowMs,
+  ])
 
   // 더보기(클라 배열 슬라이싱) — 모바일 카드·데스크톱 테이블이 공유한다.
   const {
@@ -1433,7 +1570,18 @@ export default function LeadsBoardClient() {
   useEffect(() => {
     collapseLeads()
     setSelectedLeadIds(new Set())
-  }, [filter, sourceGroup, sourceDetailFilter, channelSource, leadMagnetFilter, searchQuery, collapseLeads])
+  }, [
+    lens,
+    includeUnconfirmed,
+    trackingKey,
+    filter,
+    sourceGroup,
+    sourceDetailFilter,
+    channelSource,
+    leadMagnetFilter,
+    searchQuery,
+    collapseLeads,
+  ])
 
   const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedLeadIds.has(id))
   const selectedFilteredCount = filteredIds.filter((id) => selectedLeadIds.has(id)).length
@@ -1489,8 +1637,51 @@ export default function LeadsBoardClient() {
         </div>
       </div>
 
-      {/* 파이프라인 단계 + 담당자 — 숫자·필터 진입은 아래 카운트 카드가 단일 창구.
-          여기는 카드에 없는 부가 정보(단계별 고득점·지연, 오늘 예정, 담당자 분포)만 남긴다. */}
+      {/* 모아보기 렌즈 — 목록의 모집단을 정하는 최상위 축. 아래 상태·유입·검색 필터가 이 위에서 돈다. */}
+      <div className="mb-4 flex flex-col gap-1.5 rounded-2xl border border-[#e8e8e4] bg-white p-2 sm:flex-row sm:items-stretch">
+        {LENS_OPTIONS.map((option) => {
+          const active = lens === option.key
+          return (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setLens(option.key)}
+              aria-pressed={active}
+              className={`flex flex-1 items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left transition-colors ${
+                active ? "bg-[#111110] text-white" : "hover:bg-[#fafaf8]"
+              }`}
+            >
+              <span className={active ? "text-white" : "text-[#1a1a1a]/35"}>
+                {option.key === "all" ? <Layers className="h-4 w-4" /> : <Megaphone className="h-4 w-4" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-baseline gap-2">
+                  <span className="text-[13px] font-semibold">{option.label}</span>
+                  <span className="text-[14px] font-bold tabular-nums">
+                    {lensCounts[option.key].toLocaleString("ko-KR")}
+                  </span>
+                </span>
+                <span className={`mt-0.5 block truncate text-[11px] ${active ? "text-white/55" : "text-[#1a1a1a]/40"}`}>
+                  {option.hint}
+                </span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* 마케팅 렌즈에서는 단계·담당자 카드 자리를 트래킹 롤업이 대신한다(패널을 더하지 않고 바꿔 끼운다). */}
+      {lens === "marketing" ? (
+        <LeadTrackingPanel
+          leads={trackingScopeLeads}
+          dimension={trackingDimension}
+          onDimensionChange={setTrackingDimension}
+          activeKey={trackingKey}
+          onSelectKey={setTrackingKey}
+        />
+      ) : (
+      /* 파이프라인 단계 + 담당자 — 숫자·필터 진입은 아래 카운트 카드가 단일 창구.
+         여기는 카드에 없는 부가 정보(단계별 고득점·지연, 오늘 예정, 담당자 분포)만 남긴다. */
       <div id="lead-queue" className="mb-4 grid gap-3 lg:grid-cols-2 scroll-mt-24">
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -1559,6 +1750,7 @@ export default function LeadsBoardClient() {
           )}
         </div>
       </div>
+      )}
 
       {/* 미확인 수신함 — 공개 폼(문의·데모·뉴스레터 등) 원본 유입. 확인해야 아래 리드 목록에 반영된다. */}
       {unconfirmedLeads.length > 0 && (
@@ -1688,8 +1880,9 @@ export default function LeadsBoardClient() {
       </div>
 
       <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-3">
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
         {sourceGroupChips.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <>
             <span className="mr-1 text-[11px] font-medium text-[#1a1a1a]/40">유입</span>
             <button
               type="button"
@@ -1724,18 +1917,73 @@ export default function LeadsBoardClient() {
                 </button>
               )
             })}
-          </div>
+          </>
         )}
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_240px_240px]">
-          <label className="relative block">
+          {/* 확인 게이트 우회 — 기본은 규칙대로 숨기되, 가려진 건수를 옆에 붙여 한 번에 열 수 있게 한다. */}
+          <button
+            type="button"
+            onClick={() => setIncludeUnconfirmed((prev) => !prev)}
+            aria-pressed={includeUnconfirmed}
+            title="공개 폼에서 들어와 아직 확인하지 않은 리드를 목록에 함께 표시합니다."
+            className={`ml-auto inline-flex h-[30px] shrink-0 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors ${
+              includeUnconfirmed
+                ? "bg-[#8D6C1F] text-white"
+                : "border border-[#e8e8e4] bg-white text-[#1a1a1a]/60 hover:border-[#c8c8c4]"
+            }`}
+          >
+            <Check className="h-3 w-3" />
+            미확인 포함
+            {hiddenUnconfirmedCount > 0 ? (
+              <span className="tabular-nums text-[#1a1a1a]/40">{hiddenUnconfirmedCount}</span>
+            ) : null}
+          </button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_200px_200px_200px]">
+          <label className="relative block md:col-span-2 xl:col-span-1">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/25" />
             <input
+              ref={searchInputRef}
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="이름, 기관, 연락처, 세부 유입 검색"
-              className="h-11 w-full rounded-xl border border-[#e8e8e4] bg-[#fafaf8] pl-10 pr-3 text-[13px] text-[#111110] outline-none transition-colors placeholder:text-[#1a1a1a]/30 focus:border-[#c8c8c4] focus:bg-white"
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && searchQuery) {
+                  event.preventDefault()
+                  setSearchQuery("")
+                }
+              }}
+              placeholder="이름·기관·연락처·캠페인 검색 (띄어쓰기로 조건 AND, / 로 포커스)"
+              className="h-11 w-full rounded-xl border border-[#e8e8e4] bg-[#fafaf8] pl-10 pr-10 text-[13px] text-[#111110] outline-none transition-colors placeholder:text-[#1a1a1a]/30 focus:border-[#c8c8c4] focus:bg-white"
             />
+            {searchQuery ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("")
+                  searchInputRef.current?.focus()
+                }}
+                aria-label="검색어 지우기"
+                className="absolute right-2.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-[#1a1a1a]/35 transition-colors hover:bg-[#f0f0ec] hover:text-[#111110]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
           </label>
+          <div
+            title={LEAD_SORT_OPTIONS.find((option) => option.key === sortKey)?.hint}
+            className="flex h-11 items-center gap-2 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 transition-colors focus-within:border-[#c8c8c4] focus-within:bg-white"
+          >
+            <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/25" />
+            <select
+              value={sortKey}
+              onChange={(event) => setSortKey(event.target.value as LeadSortKey)}
+              aria-label="정렬 기준"
+              className="h-full w-full bg-transparent text-[13px] text-[#111110] outline-none"
+            >
+              {LEAD_SORT_OPTIONS.map((option) => (
+                <option key={option.key} value={option.key}>{option.label}</option>
+              ))}
+            </select>
+          </div>
           <select
             value={sourceDetailFilter}
             onChange={(event) => setSourceDetailFilter(event.target.value)}
@@ -1757,12 +2005,20 @@ export default function LeadsBoardClient() {
             ))}
           </select>
         </div>
-        {(sourceGroup !== "all" || sourceDetailFilter !== "all" || leadMagnetFilter !== "all" || channelSource || searchQuery.trim()) && (
+        {(sourceGroup !== "all" ||
+          sourceDetailFilter !== "all" ||
+          leadMagnetFilter !== "all" ||
+          channelSource ||
+          trackingKey ||
+          searchQuery.trim()) && (
           <div className="mt-3 flex items-center justify-between gap-3 text-[12px] text-[#1a1a1a]/45">
             <span>
               현재 조건 {filtered.length}건
               {sourceGroup !== "all" ? ` · 유입 ‘${SOURCE_GROUP_LABEL[sourceGroup]}’` : ""}
               {channelSource ? ` · 채널 ‘${channelSource}’` : ""}
+              {trackingKey
+                ? ` · ${TRACKING_DIMENSIONS.find((item) => item.key === trackingDimension)?.label} ‘${trackingKey}’`
+                : ""}
             </span>
             <button
               type="button"
@@ -1772,6 +2028,7 @@ export default function LeadsBoardClient() {
                 setSourceDetailFilter("all")
                 setLeadMagnetFilter("all")
                 setChannelSource("")
+                setTrackingKey(null)
               }}
               className="font-medium text-[#084734] hover:text-[#063d2a]"
             >
@@ -1852,12 +2109,14 @@ export default function LeadsBoardClient() {
                 <button
                   type="button"
                   onClick={() => {
+                    setLens("all")
                     setFilter("all")
                     setSearchQuery("")
                     setSourceGroup("all")
                     setSourceDetailFilter("all")
                     setLeadMagnetFilter("all")
                     setChannelSource("")
+                    setTrackingKey(null)
                   }}
                   className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
                 >
@@ -1885,6 +2144,7 @@ export default function LeadsBoardClient() {
               const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp, now) : null
               const sourceDetail = getLeadSourceDetail(lead)
               const sourceSegment = getLeadSourceSegment(lead)
+              const priority = priorityMap.get(lead.id)
 
               return (
                 <div
@@ -1920,12 +2180,25 @@ export default function LeadsBoardClient() {
                         <p className="truncate text-[14px] font-semibold text-[#111110]">
                           {lead.name ?? "No name"}
                         </p>
-                        <ScoreBadge score={calcScore(lead)} />
+                        {priority ? (
+                          <span
+                            title={priorityBreakdownTitle(priority)}
+                            className={`inline-flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${priorityToneClass(priority.total)}`}
+                          >
+                            <Flame className="h-2.5 w-2.5" />
+                            {priority.total}
+                          </span>
+                        ) : null}
                         <LeadActivityChip badge={activitySummary[lead.id]} />
                       </div>
                       <p className="mt-1 truncate text-[12px] text-[#1a1a1a]/50">
                         {lead.org ?? lead.phone ?? lead.email ?? "-"}
                       </p>
+                      {priority && priority.reasons.length > 0 ? (
+                        <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/40">
+                          {priority.reasons.join(" · ")}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {isUnconfirmedLead(lead) && (
@@ -2020,7 +2293,7 @@ export default function LeadsBoardClient() {
             })}
           </div>
           <div className="hidden overflow-x-auto sm:block">
-          <table className="min-w-[1240px] w-full text-[13px]">
+          <table className="min-w-[1400px] w-full text-[13px]">
             <thead>
               <tr className="border-b border-[#e8e8e4] bg-[#fafaf8]">
                 <th className="w-12 px-5 py-3.5">
@@ -2033,7 +2306,7 @@ export default function LeadsBoardClient() {
                     className="h-4 w-4 accent-[#084734] disabled:opacity-30"
                   />
                 </th>
-                {["시간", "응대", "유입", "이름", "기관", "담당자", "연락처", "팔로업", "정체", "상태"].map((h) => (
+                {["우선순위", "시간", "응대", "유입", "이름", "기관", "담당자", "연락처", "팔로업", "정체", "상태"].map((h) => (
                   <th key={h} className="text-left px-5 py-3.5 font-medium text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">{h}</th>
                 ))}
                 <th className="w-16 px-5 py-3.5 text-right text-[12px] font-medium text-[#1a1a1a]/40">관리</th>
@@ -2048,6 +2321,7 @@ export default function LeadsBoardClient() {
                 const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp, now) : null
                 const sourceDetail = getLeadSourceDetail(lead)
                 const sourceSegment = getLeadSourceSegment(lead)
+                const priority = priorityMap.get(lead.id)
                 return (
                   <tr
                     key={lead.id}
@@ -2065,6 +2339,9 @@ export default function LeadsBoardClient() {
                         aria-label={`${getLeadDisplayName(lead)} 선택`}
                         className="h-4 w-4 accent-[#084734]"
                       />
+                    </td>
+                    <td className="px-5 py-4">
+                      {priority ? <PriorityCell priority={priority} /> : <span className="text-[#1a1a1a]/25">—</span>}
                     </td>
                     <td className="px-5 py-4 text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">
                       {new Date(lead.timestamp).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
@@ -2117,7 +2394,6 @@ export default function LeadsBoardClient() {
                     <td className="px-5 py-4 font-medium text-[#111110]">
                       <div className="flex items-center gap-1.5">
                         {lead.name ?? "—"}
-                        <ScoreBadge score={calcScore(lead)} />
                         <LeadActivityChip badge={activitySummary[lead.id]} />
                       </div>
                     </td>

@@ -15,6 +15,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import type { LeadEngagement } from "@/lib/crm/lead-ranking"
 
 export interface LeadAuthProfile {
   provider: string | null
@@ -61,12 +62,14 @@ export interface LeadActivity {
   events: LeadEventRecord[]
 }
 
-/** 리스트 한눈 표시용 경량 배지 — 리드별 로그인 여부/공급자/다운로드 수 */
-export interface LeadActivityBadge {
-  authenticated: boolean
-  providers: string[]
-  downloadCount: number
-}
+/**
+ * 리스트 한눈 표시용 경량 배지 겸 랭킹 입력.
+ *
+ * 리드 보드 기본 정렬이 "자주·최근·주요" 합성 점수로 바뀌면서, 배지가 화면 장식이 아니라
+ * 정렬의 입력이 됐다. 그래서 로그인/다운로드에 더해 이벤트 수·연락 횟수·마지막 접점까지
+ * 여기서 같이 내려준다(형태는 lib/crm/lead-ranking.ts 의 LeadEngagement 와 동일).
+ */
+export type LeadActivityBadge = LeadEngagement
 
 interface RawProfile {
   provider: string | null
@@ -213,31 +216,149 @@ export async function getLeadActivity(leadId: string): Promise<LeadActivity> {
   }
 }
 
+// PostgREST 는 한 응답의 행 수를 서버 설정(기본 1000)으로 자른다. client_events 처럼
+// 리드당 수십 행이 쌓이는 테이블은 한 번의 select 로 다 못 받으므로 range 페이징으로 훑고,
+// 그래도 끝이 안 보이면 상한에서 멈춘다(최신순이라 잘리는 쪽은 항상 오래된 활동).
+const BULK_PAGE_SIZE = 1000
+/** 행동 로그(이벤트·다운로드) 상한 — 리드당 수십 행까지 감안한 값. */
+const ACTIVITY_ROW_CAP = 20_000
+const CONTACT_LOG_ROW_CAP = 10_000
+
+type PageResult<T> = { data: T[] | null; error: { message?: string } | null }
+
+async function fetchPagedRows<T>(
+  fetchPage: (from: number, to: number) => PromiseLike<PageResult<T>>,
+  cap: number
+): Promise<T[]> {
+  const rows: T[] = []
+  for (let from = 0; from < cap; from += BULK_PAGE_SIZE) {
+    const to = Math.min(from + BULK_PAGE_SIZE, cap) - 1
+    const { data, error } = await fetchPage(from, to)
+    if (error) throw new Error(error.message ?? "unknown database error")
+    const page = data ?? []
+    rows.push(...page)
+    if (page.length < to - from + 1) break
+  }
+  return rows
+}
+
+/** 보조 신호 하나가 실패해도 보드 전체(정렬 포함)를 죽이지 않는다. */
+async function softly<T>(label: string, run: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await run()
+  } catch (error) {
+    console.warn(`[lead-activity] ${label} 집계 실패 — 해당 신호 없이 계속합니다:`, error)
+    return fallback
+  }
+}
+
+function maxIso(a: string | null, b: string | null) {
+  if (!a) return b
+  if (!b) return a
+  return a > b ? a : b
+}
+
 /**
- * 리드 보드 전체에 한 번에 뿌릴 경량 배지 맵. lead_id가 연결된 행만 모은다.
- * (로그인 공개 사용자·다운로드는 보통 수백 건 규모라 JS 집계로 충분하다.)
+ * 리드 보드 전체에 한 번에 뿌릴 참여 신호 맵 — 정렬(자주·최근)의 입력이자 행 배지.
+ * lead_id가 연결된 행만 모아 JS로 집계한다.
  */
 export async function getLeadsActivitySummary(): Promise<Record<string, LeadActivityBadge>> {
   const supabase = createSupabaseAdminClient()
 
-  const [profilesRes, downloadsRes] = await Promise.all([
-    supabase.from("user_profiles").select("lead_id, provider").not("lead_id", "is", null),
-    supabase.from("material_downloads").select("lead_id").not("lead_id", "is", null),
+  const [profiles, downloads, events, contactLogs] = await Promise.all([
+    softly(
+      "user_profiles",
+      async () => {
+        const { data, error } = await supabase
+          .from("user_profiles")
+          .select("lead_id, provider")
+          .not("lead_id", "is", null)
+        if (error) throw new Error(error.message)
+        return (data ?? []) as { lead_id: string; provider: string | null }[]
+      },
+      [] as { lead_id: string; provider: string | null }[]
+    ),
+    softly(
+      "material_downloads",
+      async () =>
+        (await fetchPagedRows<{ lead_id: string; created_at: string }>(
+          (from, to) =>
+            supabase
+              .from("material_downloads")
+              .select("lead_id, created_at")
+              .not("lead_id", "is", null)
+              .order("created_at", { ascending: false })
+              .range(from, to),
+          ACTIVITY_ROW_CAP
+        )) ?? [],
+      [] as { lead_id: string; created_at: string }[]
+    ),
+    softly(
+      "client_events",
+      async () =>
+        (await fetchPagedRows<{ lead_id: string; created_at: string }>(
+          (from, to) =>
+            supabase
+              .from("client_events")
+              .select("lead_id, created_at")
+              .not("lead_id", "is", null)
+              .order("created_at", { ascending: false })
+              .range(from, to),
+          ACTIVITY_ROW_CAP
+        )) ?? [],
+      [] as { lead_id: string; created_at: string }[]
+    ),
+    softly(
+      "lead_contact_logs",
+      async () =>
+        (await fetchPagedRows<{ lead_id: string; contacted_at: string }>(
+          (from, to) =>
+            supabase
+              .from("lead_contact_logs")
+              .select("lead_id, contacted_at")
+              .order("contacted_at", { ascending: false })
+              .range(from, to),
+          CONTACT_LOG_ROW_CAP
+        )) ?? [],
+      [] as { lead_id: string; contacted_at: string }[]
+    ),
   ])
 
   const map: Record<string, LeadActivityBadge> = {}
   const ensure = (leadId: string) =>
-    (map[leadId] ??= { authenticated: false, providers: [], downloadCount: 0 })
+    (map[leadId] ??= {
+      authenticated: false,
+      providers: [],
+      downloadCount: 0,
+      eventCount: 0,
+      contactLogCount: 0,
+      lastActivityAt: null,
+      lastContactAt: null,
+    })
 
-  for (const row of (profilesRes.data as { lead_id: string; provider: string | null }[] | null) ??
-    []) {
+  for (const row of profiles) {
     const entry = ensure(row.lead_id)
     entry.authenticated = true
     if (row.provider && !entry.providers.includes(row.provider)) entry.providers.push(row.provider)
   }
 
-  for (const row of (downloadsRes.data as { lead_id: string }[] | null) ?? []) {
-    ensure(row.lead_id).downloadCount += 1
+  for (const row of downloads) {
+    const entry = ensure(row.lead_id)
+    entry.downloadCount += 1
+    entry.lastActivityAt = maxIso(entry.lastActivityAt, row.created_at)
+  }
+
+  for (const row of events) {
+    const entry = ensure(row.lead_id)
+    entry.eventCount += 1
+    entry.lastActivityAt = maxIso(entry.lastActivityAt, row.created_at)
+  }
+
+  for (const row of contactLogs) {
+    if (!row.lead_id) continue
+    const entry = ensure(row.lead_id)
+    entry.contactLogCount += 1
+    entry.lastContactAt = maxIso(entry.lastContactAt, row.contacted_at)
   }
 
   return map

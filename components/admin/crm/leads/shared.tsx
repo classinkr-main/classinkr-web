@@ -6,6 +6,32 @@ import { Check, Copy } from "lucide-react"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogResult, ContactLogType } from "@/lib/repositories/contact-logs"
 import { getLeadMagnetIntentScore, getLeadMagnetTitle } from "@/lib/lead-magnets"
+import {
+  RESPONSE_TARGET_SOURCES,
+  SOURCE_GROUP_DOT,
+  SOURCE_GROUP_LABEL,
+  SOURCE_GROUP_ORDER,
+  SOURCE_LABEL,
+  getLeadSourceDetail,
+  getLeadSourceGroup,
+  getMetaAdInfo,
+  type LeadSourceGroup,
+  type MetaAdInfo,
+} from "@/lib/crm/lead-attribution"
+
+// 유입 그룹·Meta 광고 파싱 규칙은 lib/crm/lead-attribution.ts(순수 모듈)로 옮겼다 —
+// 서버 집계·트래킹 롤업이 같은 표를 봐야 하기 때문. 기존 import 경로 유지를 위해 여기서 다시 내보낸다.
+export {
+  SOURCE_LABEL,
+  RESPONSE_TARGET_SOURCES,
+  SOURCE_GROUP_ORDER,
+  SOURCE_GROUP_LABEL,
+  SOURCE_GROUP_DOT,
+  getLeadSourceGroup,
+  getMetaAdInfo,
+  getLeadSourceDetail,
+}
+export type { LeadSourceGroup, MetaAdInfo }
 
 // 리드 보드(/admin/crm/customers/leads)와 현황 액션 밴드(/admin/crm)가 같이 쓰는
 // 상수·계산 헬퍼·소형 UI. 리드 분류 규칙을 한 곳에서만 정의한다.
@@ -32,52 +58,6 @@ export function StatusPill({ status }: { status: LeadStatus }) {
     </span>
   )
 }
-export const SOURCE_LABEL: Record<string, string> = {
-  demo_modal: "데모 신청", contact_page: "문의", newsletter: "뉴스레터", meta_lead_ads: "Meta 리드",
-  channel_talk: "채널톡",
-}
-export const RESPONSE_TARGET_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
-
-// ─── 유입 그룹 ──────────────────────────────────────────────────
-// 실제 source 값은 16종+로 잘게 흩어져 있어, 리드 보드 상단 유입 칩 필터는 이 7묶음으로 접는다.
-// 여기가 source→그룹 매핑의 단일 진실원 — 새 유입 채널이 생기면 이 표에만 추가한다.
-export type LeadSourceGroup =
-  | "meta" | "homepage" | "resources" | "newsletter" | "channel_talk" | "chatbot" | "manual_etc"
-
-export const SOURCE_GROUP_ORDER: LeadSourceGroup[] = [
-  "meta", "homepage", "resources", "newsletter", "channel_talk", "chatbot", "manual_etc",
-]
-
-export const SOURCE_GROUP_LABEL: Record<LeadSourceGroup, string> = {
-  meta: "메타", homepage: "홈페이지", resources: "자료실", newsletter: "뉴스레터",
-  channel_talk: "채널톡", chatbot: "챗봇", manual_etc: "수기·기타",
-}
-
-// 웨이파인딩용 색점 — 라이트/다크 공통으로 보이는 중간 톤(넓은 채움 아님, 점만).
-export const SOURCE_GROUP_DOT: Record<LeadSourceGroup, string> = {
-  meta: "#378ADD", homepage: "#1D9E75", resources: "#BA7517", newsletter: "#7F77DD",
-  channel_talk: "#D85A30", chatbot: "#D4537E", manual_etc: "#888780",
-}
-
-const SOURCE_GROUP_BY_SOURCE: Record<string, LeadSourceGroup> = {
-  meta_lead_ads: "meta",
-  demo_modal: "homepage", contact_page: "homepage", home_lead_magnet: "homepage",
-  home_final_cta: "homepage", website: "homepage", teaser: "homepage",
-  resource_pdf_download: "resources", resource_pdf_cta: "resources", resources_hub: "resources",
-  resource_detail: "resources", resource_reference: "resources", resource_related: "resources",
-  lead_magnet: "resources", blog_lead_magnet: "resources", materials_direct: "resources",
-  newsletter: "newsletter",
-  channel_talk: "channel_talk", channel_talk_mining: "channel_talk",
-  chatbot: "chatbot",
-  admin_manual: "manual_etc", manual: "manual_etc",
-  seminar: "manual_etc", event: "manual_etc", team_event: "manual_etc", showroom: "manual_etc",
-}
-
-// 매핑에 없는 source는 전부 '수기·기타'로 흡수 — 칩에서 리드가 새지 않게 한다.
-export function getLeadSourceGroup(lead: LeadRecord): LeadSourceGroup {
-  return SOURCE_GROUP_BY_SOURCE[lead.source] ?? "manual_etc"
-}
-
 export function SourceGroupDot({ group, size = 7 }: { group: LeadSourceGroup; size?: number }) {
   return (
     <span
@@ -212,46 +192,6 @@ export function formatResponseAge(hours: number) {
 
 export function getLeadOwner(lead: LeadRecord) {
   return lead.assigned_to?.trim() || "미배정"
-}
-
-// ─── Meta 광고 식별 ────────────────────────────────────────────
-// Meta 리드애즈 웹훅은 광고 정보를 두 곳에 남긴다:
-//  - 신규(웹훅 개편 후): source_detail=광고명, utm_campaign/utm_term/utm_content 구조화 필드
-//  - 구버전: utm_campaign만 구조화, 광고·세트명은 message 텍스트의 "ad="/"adset=" 줄에만 존재
-// 이 파서가 두 세대를 하나의 형태로 통일한다 — 백필 없이 기존 리드도 광고 단위로 식별된다.
-export interface MetaAdInfo {
-  campaign?: string
-  adset?: string
-  ad?: string
-}
-
-export function getMetaAdInfo(lead: LeadRecord): MetaAdInfo | null {
-  if (lead.source !== "meta_lead_ads") return null
-  const info: MetaAdInfo = {
-    campaign: lead.utm_campaign?.trim() || undefined,
-    adset: lead.utm_term?.trim() || undefined,
-    ad: lead.utm_content?.trim() || undefined,
-  }
-  if (!info.campaign || !info.adset || !info.ad) {
-    for (const line of (lead.message ?? "").split("\n")) {
-      const idx = line.indexOf("=")
-      if (idx <= 0) continue
-      const key = line.slice(0, idx).trim()
-      const value = line.slice(idx + 1).trim()
-      if (!value || value === "-") continue
-      if (key === "campaign" && !info.campaign) info.campaign = value
-      else if (key === "adset" && !info.adset) info.adset = value
-      else if (key === "ad" && !info.ad) info.ad = value
-    }
-  }
-  return info.campaign || info.adset || info.ad ? info : null
-}
-
-export function getLeadSourceDetail(lead: LeadRecord) {
-  const explicit = lead.source_detail?.trim()
-  if (explicit) return explicit
-  // Meta 리드는 광고명이 실질적 세부 유입 — 세부유입 드롭다운·필터·목록 표시가 광고 단위로 작동한다.
-  return getMetaAdInfo(lead)?.ad || ""
 }
 
 export function getLeadMagnetLabel(value?: string) {
