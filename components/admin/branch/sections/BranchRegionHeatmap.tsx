@@ -1,6 +1,7 @@
 "use client"
-import { useEffect, useMemo, useRef, useState } from "react"
-import { MapPin, Minus, Plus, RotateCcw } from "lucide-react"
+import { useSearchParams } from "next/navigation"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { AlertTriangle, ArrowUpRight, Link2, MapPin, MapPinned, Minus, Plus, RotateCcw } from "lucide-react"
 import {
   KOREA_PROVINCE_BY_LABEL,
   KOREA_PROVINCE_HEIGHT,
@@ -10,6 +11,10 @@ import {
 import { useBranchJson } from "../client-api"
 import { cny } from "@/lib/branch/money-format"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+import type {
+  NaverMapCountSummary,
+  NaverMapRegionSummaryRow,
+} from "@/lib/crm/naver-map-region-summary"
 import type { Period, Team } from "../types"
 
 interface TopCustomer {
@@ -47,6 +52,14 @@ interface MapRow extends Row {
   regions: string[]
 }
 
+interface HeatmapMapSource {
+  status: "ready" | "unavailable"
+  latestSyncedAt: string | null
+  isStale: boolean
+  summary: NaverMapCountSummary | null
+  warnings: string[]
+}
+
 const REGION_ALIASES: Array<[string, string]> = [
   ["서울", "서울"], ["인천", "인천"], ["경기", "경기"], ["강원", "강원"],
   ["충북", "충북"], ["충청북", "충북"], ["충남", "충남"], ["충청남", "충남"],
@@ -58,6 +71,18 @@ const REGION_ALIASES: Array<[string, string]> = [
 ]
 
 function fmt(n: number) { return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(n) }
+
+function formatMapSourceDate(value: string | null) {
+  if (!value) return "수집 이력 없음"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "수집 시각 확인 필요"
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date)
+}
 
 // Heat ramp — premium business palette, 4-stop gradient from terracotta to
 // deep forest. Every stop is desaturated and mid-dark so it reads as a
@@ -562,15 +587,99 @@ function DetailPanel({ row, metric }: { row: MapRow | null; metric: Metric }) {
   )
 }
 
+function MapSourceStrip({ source, href }: { source: HeatmapMapSource | null; href: string }) {
+  if (!source) return null
+  const summary = source.summary
+  const unavailable = source.status === "unavailable" || !summary
+
+  return (
+    <div
+      className={`flex flex-col gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3 sm:flex-row sm:items-center sm:justify-between ${
+        unavailable || source.isStale ? "bg-[#FFF9ED]" : "bg-[#ECFDF5]"
+      }`}
+    >
+      <div className="flex min-w-0 items-start gap-2.5">
+        {unavailable ? (
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#A8741A]" aria-hidden="true" />
+        ) : (
+          <MapPinned className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" aria-hidden="true" />
+        )}
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold text-[#111110]">
+            {unavailable ? "CRM 지도 원천 연결 확인 필요" : `CRM 지도 기회 ${fmt(summary.active)}곳 · ${summary.regions.length}개 지역`}
+          </p>
+          <p className="mt-0.5 text-[10.5px] leading-4 text-[#615D59]">
+            {unavailable
+              ? source.warnings[0]
+              : `연결 ${fmt(summary.linked)} · 유력 ${fmt(summary.prelinked)} · 검토 ${fmt(summary.review)} · 미매칭 ${fmt(summary.unmatched)} · ${formatMapSourceDate(source.latestSyncedAt)}`}
+            {!unavailable && source.isStale ? " · 7일 이상 갱신되지 않음" : ""}
+          </p>
+        </div>
+      </div>
+      <a
+        href={href}
+        className="inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-md border border-[#B7DEC4] bg-white px-3 text-[11px] font-bold text-[#084734] transition hover:bg-[#F6F5F4]"
+      >
+        지도 원천 검수
+        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+      </a>
+    </div>
+  )
+}
+
+function RegionMapSourcePanel({
+  region,
+  source,
+  href,
+}: {
+  region: string | null
+  source: HeatmapMapSource | null
+  href: string
+}) {
+  if (!region || !source || source.status === "unavailable" || !source.summary) return null
+  const row: NaverMapRegionSummaryRow | null =
+    source.summary.regions.find((candidate) => candidate.label === region) ?? null
+
+  return (
+    <div className="rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="flex items-center gap-1.5 text-[11px] font-bold text-[#084734]">
+          <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+          CRM 지도 기회
+        </p>
+        <span className="text-[10px] font-semibold text-[#084734]/55">팀 필터와 무관</span>
+      </div>
+      <div className="mt-2 flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[22px] font-bold tracking-[-0.04em] text-[#111110]">
+            {fmt(row?.count ?? 0)}<span className="ml-1 text-[11px] font-semibold text-[#615D59]">곳</span>
+          </p>
+          <p className="mt-0.5 text-[10.5px] text-[#615D59]">
+            연결 {fmt(row?.linked ?? 0)} · 유력 {fmt(row?.prelinked ?? 0)} · 검토 {fmt(row?.review ?? 0)} · 미매칭 {fmt(row?.unmatched ?? 0)}
+          </p>
+        </div>
+        <a href={href} className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-[#084734] hover:underline">
+          {region} 검수
+          <ArrowUpRight className="h-3 w-3" aria-hidden="true" />
+        </a>
+      </div>
+    </div>
+  )
+}
+
 export default function BranchRegionHeatmap({ team, period, selectedMonth, refreshKey }: { team: Team; period: Period; selectedMonth: string; refreshKey: number }) {
+  const searchParams = useSearchParams()
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
   // 로컬 재시도 넛지 — 상위 refreshKey(전역 새로고침, 강제 스크롤 동반)에 기대지 않고
   // 이 섹션만 useBranchJson의 기존 캐시키 재계산 경로(refreshKey:url)를 재사용해 다시 요청한다.
   const [localRetry, setLocalRetry] = useState(0)
-  const heatmap = useBranchJson<{ rows?: Row[] }>(`/api/admin/branch/heatmap?team=${team}&period=${period}${monthQuery}`, refreshKey + localRetry)
+  const heatmap = useBranchJson<{ rows?: Row[]; mapSource?: HeatmapMapSource }>(`/api/admin/branch/heatmap?team=${team}&period=${period}${monthQuery}`, refreshKey + localRetry)
   const rows = heatmap.loading ? null : (heatmap.data?.rows ?? EMPTY_ROWS)
+  const mapSource = heatmap.data?.mapSource ?? null
   const error = heatmap.error
-  const [selectedLabel, setSelectedLabel] = useState<string | null>(null)
+  const [selectedLabel, setSelectedLabel] = useState<string | null>(() =>
+    canonicalRegion(searchParams.get("region") ?? "")
+  )
   // Default to revenue — magnitude tells the operator where the money is,
   // which is more actionable than achievement %.
   const [metric, setMetric] = useState<Metric>("revenue")
@@ -589,6 +698,15 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
     [rows],
   )
   const selected = mappedRows.find((r) => r.label === selectedLabel) ?? mappedRows[0] ?? null
+  const selectRegion = useCallback((label: string) => {
+    setSelectedLabel(label)
+    const url = new URL(window.location.href)
+    url.searchParams.set("region", label)
+    window.history.replaceState(null, "", url.toString())
+  }, [])
+  const mapSourceHref = selected
+    ? `/admin/crm/customers/map?region=${encodeURIComponent(selected.label)}`
+    : "/admin/crm/customers/map"
 
   // 품질 웨이브 4 — 항목 7. Tailwind 기본 rose-* 팔레트 유출을 캐논 Danger(#B43E3E 계열)로
   // 치환 — PipelineTable/BranchPipelineKanban의 동일 에러 배너 패턴과 통일.
@@ -637,12 +755,15 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
         </div>
       </div>
 
+      <MapSourceStrip source={mapSource} href={mapSourceHref} />
+
       <div className="grid w-full gap-6 p-5 lg:grid-cols-[minmax(520px,1fr)_minmax(280px,360px)]">
         <HeatMap rows={mappedRows} selectedLabel={selected?.label ?? null}
-          onSelect={(r) => setSelectedLabel(r.label)} metric={metric} />
+          onSelect={(r) => selectRegion(r.label)} metric={metric} />
 
         <div className="flex w-full max-w-[360px] flex-col gap-4 lg:ml-auto">
           <DetailPanel row={selected} metric={metric} />
+          <RegionMapSourcePanel region={selected?.label ?? null} source={mapSource} href={mapSourceHref} />
 
           <div>
             <p className="mb-2 px-1 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-[#615D59]">
@@ -655,7 +776,7 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
                 return (
                   <CompactRow key={r.region} row={r} rank={i + 1} selected={sel}
                     metric={metric} maxExpected={maxExpected}
-                    onSelect={() => { if (canon) setSelectedLabel(canon) }} />
+                    onSelect={() => { if (canon) selectRegion(canon) }} />
                 )
               })}
             </div>

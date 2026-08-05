@@ -22,6 +22,10 @@ import {
 import { normalizeRegionLabel } from "@/lib/regions/korea-regions"
 import { deriveCustomerRegion, REGION_UNSPECIFIED } from "@/lib/crm/region-label"
 import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
+import {
+  summarizeNaverMapRows,
+  type NaverMapCountSummary,
+} from "@/lib/crm/naver-map-region-summary"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 const MAP_SOURCE_FRESHNESS_HOURS = 24 * 7
@@ -77,16 +81,7 @@ export interface CrmNaverMapSourceList {
   latestSyncedAt: string | null
   freshnessHours: number
   isStale: boolean
-  summary: {
-    total: number
-    active: number
-    stale: number
-    linked: number
-    prelinked: number
-    review: number
-    unmatched: number
-    regions: Array<{ label: string; count: number }>
-  }
+  summary: NaverMapCountSummary
   warnings: string[]
   rows: CrmNaverMapRow[]
 }
@@ -509,29 +504,14 @@ export async function listCrmNaverMapSource(): Promise<CrmNaverMapSourceList> {
   }
   if (rows.length > 0 && isStale) warnings.push("네이버 공유지도 스냅샷이 7일 이상 갱신되지 않았습니다.")
 
-  const activeRows = rows.filter((row) => !row.isStale)
-  const regionCounts = new Map<string, number>()
-  for (const row of activeRows) {
-    regionCounts.set(row.regionLabel, (regionCounts.get(row.regionLabel) ?? 0) + 1)
-  }
+  const summary = summarizeNaverMapRows(rows)
 
   return {
     generatedAt: new Date().toISOString(),
     latestSyncedAt,
     freshnessHours: MAP_SOURCE_FRESHNESS_HOURS,
     isStale,
-    summary: {
-      total: rows.length,
-      active: activeRows.length,
-      stale: rows.filter((row) => row.isStale).length,
-      linked: activeRows.filter((row) => row.matchStatus === "linked").length,
-      prelinked: activeRows.filter((row) => row.matchStatus === "prelinked").length,
-      review: activeRows.filter((row) => row.matchStatus === "review").length,
-      unmatched: activeRows.filter((row) => row.matchStatus === "unmatched").length,
-      regions: Array.from(regionCounts, ([label, count]) => ({ label, count })).sort(
-        (left, right) => right.count - left.count || left.label.localeCompare(right.label, "ko")
-      ),
-    },
+    summary,
     warnings,
     rows,
   }

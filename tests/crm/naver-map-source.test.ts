@@ -7,6 +7,7 @@ import {
   parseNaverMapImportText,
   type NaverMapMatchTarget,
 } from "@/lib/crm/naver-map-source"
+import { summarizeNaverMapRows } from "@/lib/crm/naver-map-region-summary"
 
 function target(
   targetId: string,
@@ -124,5 +125,30 @@ describe("assessNaverMapPlaceMatch", () => {
     )
 
     expect(result.status).toBe("unmatched")
+  })
+})
+
+describe("summarizeNaverMapRows", () => {
+  it("uses only active rows and keeps each match status by region", () => {
+    const summary = summarizeNaverMapRows([
+      { regionLabel: "서울", isStale: false, matchStatus: "linked" },
+      { regionLabel: "서울", isStale: false, matchStatus: "review" },
+      { regionLabel: "경기", isStale: false, matchStatus: "prelinked" },
+      { regionLabel: "경기", isStale: true, matchStatus: "unmatched" },
+    ])
+
+    expect(summary).toMatchObject({
+      total: 4,
+      active: 3,
+      stale: 1,
+      linked: 1,
+      prelinked: 1,
+      review: 1,
+      unmatched: 0,
+    })
+    expect(summary.regions).toEqual([
+      { label: "서울", count: 2, linked: 1, prelinked: 0, review: 1, unmatched: 0 },
+      { label: "경기", count: 1, linked: 0, prelinked: 1, review: 0, unmatched: 0 },
+    ])
   })
 })

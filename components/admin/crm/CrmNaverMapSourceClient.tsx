@@ -1,5 +1,6 @@
 "use client"
 
+import { useSearchParams } from "next/navigation"
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
 import {
   AlertTriangle,
@@ -20,6 +21,7 @@ import {
   type NaverMapMatchStatus,
   type NaverMapPlaceInput,
 } from "@/lib/crm/naver-map-source"
+import { normalizeRegionLabel } from "@/lib/regions/korea-regions"
 import type {
   CrmNaverMapRow,
   CrmNaverMapSourceList,
@@ -222,12 +224,15 @@ function MapSourceRow({
 }
 
 export default function CrmNaverMapSourceClient() {
+  const searchParams = useSearchParams()
   const [data, setData] = useState<CrmNaverMapSourceList | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState("")
   const [matchFilter, setMatchFilter] = useState<"all" | NaverMapMatchStatus>("all")
-  const [regionFilter, setRegionFilter] = useState("all")
+  const [regionFilter, setRegionFilter] = useState(() =>
+    normalizeRegionLabel(searchParams.get("region")) ?? "all"
+  )
   const [includeStale, setIncludeStale] = useState(false)
   const [visibleCount, setVisibleCount] = useState(LIST_PAGE_SIZE)
   const deferredQuery = useDeferredValue(query.trim().toLowerCase())
@@ -242,6 +247,14 @@ export default function CrmNaverMapSourceClient() {
   const [importMessage, setImportMessage] = useState<string | null>(null)
   const [linkingExternalId, setLinkingExternalId] = useState<string | null>(null)
   const [linkMessage, setLinkMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null)
+
+  const selectRegionFilter = useCallback((region: string) => {
+    setRegionFilter(region)
+    const url = new URL(window.location.href)
+    if (region === "all") url.searchParams.delete("region")
+    else url.searchParams.set("region", region)
+    window.history.replaceState(null, "", url.toString())
+  }, [])
 
   const load = useCallback(async (force = false) => {
     setLoading(true)
@@ -377,15 +390,25 @@ export default function CrmNaverMapSourceClient() {
             네이버 공유지도를 CRM 정본과 분리해 보관하고, 주소 기반 지역 라벨과 기존 고객·REV 매칭 후보를 검수합니다.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void load(true)}
-          disabled={loading}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-black/[0.08] bg-white px-4 text-[13px] font-semibold text-[#1a1a1a]/70 transition-colors hover:bg-[#F6F5F4] disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          새로고침
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={`/admin/branch?tab=heatmap${regionFilter === "all" ? "" : `&region=${encodeURIComponent(regionFilter)}`}`}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#B7DEC4] bg-[#ECFDF5] px-4 text-[13px] font-semibold text-[#084734] transition-colors hover:bg-white"
+          >
+            <MapPin className="h-4 w-4" />
+            KR 히트맵
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+          <button
+            type="button"
+            onClick={() => void load(true)}
+            disabled={loading}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-black/[0.08] bg-white px-4 text-[13px] font-semibold text-[#1a1a1a]/70 transition-colors hover:bg-[#F6F5F4] disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            새로고침
+          </button>
+        </div>
       </header>
 
       {error ? (
@@ -573,7 +596,7 @@ export default function CrmNaverMapSourceClient() {
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
           <button
             type="button"
-            onClick={() => setRegionFilter("all")}
+            onClick={() => selectRegionFilter("all")}
             className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold ${regionFilter === "all" ? "border-[#084734] bg-[#084734] text-white" : "border-black/[0.08] bg-white text-[#1a1a1a]/55"}`}
           >
             지역 전체
@@ -582,7 +605,7 @@ export default function CrmNaverMapSourceClient() {
             <button
               key={region.label}
               type="button"
-              onClick={() => setRegionFilter(region.label)}
+              onClick={() => selectRegionFilter(region.label)}
               className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold ${regionFilter === region.label ? "border-[#084734] bg-[#084734] text-white" : "border-black/[0.08] bg-white text-[#1a1a1a]/55"}`}
             >
               {region.label} {region.count}

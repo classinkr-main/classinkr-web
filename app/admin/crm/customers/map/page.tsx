@@ -1,3 +1,5 @@
+import { Suspense } from "react"
+
 import CrmNaverMapSourceClient from "@/components/admin/crm/CrmNaverMapSourceClient"
 
 export const metadata = {
@@ -5,5 +7,9 @@ export const metadata = {
 }
 
 export default function AdminCrmCustomersMapPage() {
-  return <CrmNaverMapSourceClient />
+  return (
+    <Suspense fallback={<div className="mx-auto h-96 max-w-7xl animate-pulse rounded-xl bg-[#F6F5F4]" />}>
+      <CrmNaverMapSourceClient />
+    </Suspense>
+  )
 }
