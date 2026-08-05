@@ -174,6 +174,22 @@ describe("CrmActionRail (static render)", () => {
     expect(html).toContain("오늘 할 일")
     expect(html).toContain("최근 기록")
   })
+
+  // CRM 홈은 본문 주간 조망(CrmWeekAheadPanel)이 같은 crm_tasks를 상위집합으로 다뤄
+  // 레일의 '오늘 할 일'을 끈다 — 폼·최근 기록은 그대로 남아야 한다.
+  it("drops the tasks card with hideTasks while keeping form and recent sections", () => {
+    const html = renderToStaticMarkup(<CrmActionRail hideTasks />)
+    expect(html).not.toContain("오늘 할 일")
+    expect(html).toContain("기록 빠른 생성")
+    expect(html).toContain("최근 기록")
+  })
+
+  it("can drop both optional cards at once", () => {
+    const html = renderToStaticMarkup(<CrmActionRail hideForm hideTasks />)
+    expect(html).not.toContain("기록 빠른 생성")
+    expect(html).not.toContain("오늘 할 일")
+    expect(html).toContain("최근 기록")
+  })
 })
 
 describe("ActivityQuickForm (static render)", () => {

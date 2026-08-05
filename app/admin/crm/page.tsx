@@ -1169,6 +1169,156 @@ function CrmOperationsDashboard({
   )
 }
 
+// ─── 리포트 · 분석 (참조 블록 단일화) ──────────────────────────
+// 매출 상세 / 성과 분석 / 리드 분석 / 팀 KPI / 수납·로그가 각각 최상위 섹션으로 쌓여
+// 아침 화면 아래쪽이 다섯 덩어리였다. 전부 "보고서를 볼 때 여는" 참조 표면이라 한 아코디언
+// 안의 탭으로 접는다. 기본 접힘 + 선택한 탭만 렌더 — Recharts 청크(성과·리드)가 첫 페인트에서
+// 아예 빠지고, 작업대(우선순위 큐)가 화면의 주인공으로 남는다.
+type CrmReportTab = "revenue" | "performance" | "leads" | "team" | "ops"
+
+const CRM_REPORT_TABS: Array<{ key: CrmReportTab; label: string; hint: string }> = [
+  { key: "revenue", label: "매출 상세", hint: "견적 · 계약 · 수금 분해 · 통화별" },
+  { key: "performance", label: "성과 분석", hint: "CRM 매출(¥, REV 동기화) 기준 · 최근 6개월" },
+  { key: "leads", label: "리드 분석", hint: "리드 KPI 기반 시각화" },
+  { key: "team", label: "팀 KPI", hint: "총 · 팀별 · 개인별 · NEO 팀 현황" },
+  { key: "ops", label: "수납 · 로그", hint: "미수 리스크 · 최근 고객별 로그" },
+]
+
+function CrmHomeReportSection({
+  open,
+  onToggle,
+  tab,
+  onTabChange,
+  overview,
+  loading,
+  error,
+  branchKpis,
+  branchError,
+  leadKpis,
+  refreshing,
+  neoCrmRefreshKey,
+}: {
+  open: boolean
+  onToggle: () => void
+  tab: CrmReportTab
+  onTabChange: (tab: CrmReportTab) => void
+  overview: AdminCrmOverview | null
+  loading: boolean
+  error: string | null
+  branchKpis: BranchKpiResponse | null
+  branchError: string | null
+  leadKpis: LeadActionKpis | null
+  refreshing: boolean
+  neoCrmRefreshKey: number
+}) {
+  const activeTab = CRM_REPORT_TABS.find((item) => item.key === tab) ?? CRM_REPORT_TABS[0]
+
+  return (
+    <div className="mb-4">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        // 참조(보고) 표면 — 행동 표면과의 톤차 위계(W2-6): 베이지로 가라앉힌다
+        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3 transition-colors hover:bg-white"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <BarChart3 className="h-4 w-4 shrink-0 text-[#1a1a1a]/40" />
+          <span className="shrink-0 text-[14px] font-bold text-[#111110]">리포트 · 분석</span>
+          <span className="hidden truncate text-[11px] text-[#1a1a1a]/35 sm:inline">
+            {CRM_REPORT_TABS.map((item) => item.label).join(" · ")}
+          </span>
+        </span>
+        <ChevronDown
+          className={`h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${open ? "" : "-rotate-90"}`}
+        />
+      </button>
+
+      {open ? (
+        <div className="mt-3">
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            {CRM_REPORT_TABS.map((item) => {
+              const active = item.key === tab
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => onTabChange(item.key)}
+                  aria-pressed={active}
+                  className={`inline-flex h-[30px] items-center rounded-full px-3 text-[12px] font-medium transition-colors ${
+                    active
+                      ? "bg-[#111110] text-white"
+                      : "border border-[#e8e8e4] bg-white text-[#111110] hover:border-[#c8c8c4]"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              )
+            })}
+            <span className="ml-auto hidden text-[11px] text-[#1a1a1a]/35 sm:inline">{activeTab.hint}</span>
+          </div>
+
+          {tab === "revenue" ? (
+            <CrmOperationsDashboard part="revenue" overview={overview} loading={loading} error={error} />
+          ) : null}
+
+          {tab === "performance" ? (
+            <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-[15px] font-bold text-[#111110]">성과 분석 · 팀/개인</h2>
+                  <p className="text-[11px] text-[#1a1a1a]/35">CRM 매출(¥, REV 동기화) 기준 · 최근 6개월</p>
+                </div>
+                <ActivityGoalGauge branchKpis={branchKpis} />
+              </div>
+              <CrmPerformanceCharts />
+            </section>
+          ) : null}
+
+          {tab === "leads" ? (
+            <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="text-[15px] font-bold text-[#111110]">리드 분석</h2>
+                <Link
+                  href="/admin/crm/customers/leads"
+                  className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
+                >
+                  리드 보드
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              </div>
+              {leadKpis && leadKpis.total > 0 ? (
+                <CrmHomeCharts leadKpis={leadKpis} />
+              ) : (
+                <p className="rounded-xl bg-white px-3 py-8 text-center text-[13px] text-[#1a1a1a]/30">
+                  집계할 리드가 아직 없습니다.
+                </p>
+              )}
+            </section>
+          ) : null}
+
+          {tab === "team" ? (
+            <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
+              <NeoCrmTeamPanel refreshKey={neoCrmRefreshKey} />
+              <CrmTeamKpiBoard
+                overview={overview}
+                branchKpis={branchKpis}
+                loading={refreshing}
+                branchError={branchError}
+              />
+              <CrmRankingBoard branchKpis={branchKpis} />
+            </section>
+          ) : null}
+
+          {tab === "ops" ? (
+            <CrmOperationsDashboard part="risk" overview={overview} loading={loading} error={error} />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 // ─── 메인 페이지 ───────────────────────────────────────────────
 export default function CrmPage() {
   const router = useRouter()
@@ -1180,10 +1330,10 @@ export default function CrmPage() {
   const [drawerTarget, setDrawerTarget] = useState<{ key: string; name: string } | null>(null)
   const [recentCustomers, setRecentCustomers] = useState<RecentCustomer[]>([])
   const [leadModalOpen, setLeadModalOpen] = useState(false)
-  // 팀 성과·KPI 보고는 보고성 블록 — 기본 접힘으로 첫 화면을 작업대에 집중시킨다.
-  const [teamReportOpen, setTeamReportOpen] = useState(false)
-  // 매출 상세(견적/계약/수금 분해)는 상단 KPI 히어로와 중복 — 기본 접힘, 필요 시 펼침.
-  const [revenueDetailOpen, setRevenueDetailOpen] = useState(false)
+  // 리포트(매출 상세·성과·리드·팀 KPI·수납/로그)는 전부 참조 표면 — 기본 접힘으로
+  // 첫 화면을 작업대에 집중시키고, 열었을 때도 탭 하나만 렌더한다.
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportTab, setReportTab] = useState<CrmReportTab>("revenue")
 
   // 고객 바로 가기 — 최근 본 고객(로컬). 드로어 열고 닫을 때마다 갱신.
   useEffect(() => {
@@ -1319,7 +1469,8 @@ export default function CrmPage() {
         </p>
       </div>
 
-      {/* 빠른 실행 바 — 사용자 경로 순서: ①리드 등록 ②기록 추가 ③검색 ⌘K ④새로고침 + 보조 딥링크.
+      {/* 빠른 실행 바 — 액션만: ①리드 등록 ②기록 추가 ③검색 ⌘K ④새로고침.
+          화면 이동 링크는 하단 '바로 가기' 한 줄로 모았다(sticky 바에 두 종류가 섞여 있었다).
           lg+에서 sticky(admin main이 스크롤 컨테이너라 body overflow-x 함정 무관).
           <lg는 body 스크롤 + overflow-x:hidden으로 sticky가 깨지는 저장소 함정이 있어 일반 플로우 폴백. */}
       <div className="-mx-4 mb-4 px-4 py-2 sm:-mx-6 sm:px-6 lg:sticky lg:top-0 lg:z-40 lg:-mx-8 lg:border-b lg:border-[#e8e8e4] lg:bg-[#FAFAF8]/92 lg:px-8 lg:backdrop-blur">
@@ -1360,30 +1511,6 @@ export default function CrmPage() {
           >
             <RefreshCw className={`w-4 h-4 ${pageRefreshing ? "animate-spin" : ""}`} />새로고침
           </Button>
-
-          <span aria-hidden className="hidden h-5 w-px bg-[#e8e8e4] sm:block" />
-
-          <Link
-            href="/admin/crm/customers/leads"
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
-          >
-            <PhoneCall className="h-3.5 w-3.5" />
-            리드
-          </Link>
-          <Link
-            href="/admin/crm/deals"
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
-          >
-            <CircleDollarSign className="h-3.5 w-3.5" />
-            견적·매출
-          </Link>
-          <Link
-            href="/admin/crm/customers/unified"
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
-          >
-            <Building2 className="h-3.5 w-3.5" />
-            고객·후속
-          </Link>
         </div>
       </div>
 
@@ -1395,9 +1522,10 @@ export default function CrmPage() {
       {/* 우선순위 작업대 — 아침 지휘대의 첫 화면 주인공(H3). 3소스 룰베이스 큐 */}
       <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} />
 
-      {/* 고객 검색 — 떠올린 고객을 바로 카드로 (canon §4.2) */}
+      {/* 고객 찾기 — 검색 + 최근 본 + 자주 접촉을 한 표면에. 고객으로 가는 입구를 한 곳으로 모은다
+          (자주 접촉 칩은 리드·일정 요약 안에 끼어 있던 것을 여기로 옮겼다). */}
       <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">고객 검색</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">고객 찾기</p>
         <CrmCustomerPicker
           label={searchQuery}
           linkedId=""
@@ -1423,7 +1551,7 @@ export default function CrmPage() {
         </p>
         {recentCustomers.length > 0 ? (
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]/30">바로 가기</span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]/30">최근 본 고객</span>
             {recentCustomers.slice(0, 6).map((rc) => (
               <button
                 key={rc.key}
@@ -1437,14 +1565,34 @@ export default function CrmPage() {
             ))}
           </div>
         ) : null}
+
+        {(crmOverview?.business.frequentCustomers.length ?? 0) > 0 ? (
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]/30">자주 접촉 · 14일</span>
+            {crmOverview?.business.frequentCustomers.map((customer) => (
+              <Link
+                key={customer.customerId}
+                href={customer.href}
+                title={customer.latestSummary ?? undefined}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#e8e8e4] bg-white px-2.5 py-1 text-[11px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4] hover:bg-[#fafaf8]"
+              >
+                <span className="max-w-[120px] truncate">{customer.customerName}</span>
+                <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[10px] font-semibold tabular-nums text-[#1a1a1a]/55">
+                  {customer.contactCount}
+                </span>
+              </Link>
+            ))}
+          </div>
+        ) : null}
       </section>
 
-      {/* 리드·일정 빠른 지표 — 집계 딥링크(작업대와 별개, 한눈 카운트) */}
+      {/* 리드 요약 — 집계 딥링크(작업대와 별개, 한눈 카운트).
+          '이번 주 설치·방문' 타일은 아래 설치·방문 일정 카드와 같은 데이터라 카드 쪽으로 합쳤다. */}
       <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Quick Stats</p>
-            <h2 className="mt-1 text-[18px] font-bold text-[#111110]">리드·일정 요약</h2>
+            <h2 className="mt-1 text-[18px] font-bold text-[#111110]">리드 요약</h2>
           </div>
           <span className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[12px] font-medium text-[#1a1a1a]/55">
             딥링크
@@ -1453,7 +1601,7 @@ export default function CrmPage() {
 
         {/* KPI 로컬 재구현 금지(W2-2b) — viz StatTile(soft) 위임. 값·라벨·캡션·딥링크·스켈레톤 불변,
             breach 색은 신호 예산제대로 값에만(정상=중립, 컨테이너 상시 채색 제거). */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatTile
             icon={<UserPlus className="h-4 w-4" />}
             iconLayout="inline"
@@ -1520,30 +1668,6 @@ export default function CrmPage() {
           />
 
           <StatTile
-            icon={<Calendar className="h-4 w-4" />}
-            iconLayout="inline"
-            variant="soft"
-            compact
-            href="/admin/calendar"
-            label="이번 주 설치·방문"
-            value={
-              // 0 플래시 금지(CRM-5) — overview 도착 전엔 스켈레톤
-              crmOverviewLoading && !crmOverview ? (
-                <ValueSkeleton className="h-6 w-12" />
-              ) : (
-                <span className="text-[#084734]">{crmOverview?.business.upcomingThisWeek.count ?? 0}</span>
-              )
-            }
-            hint={
-              <span className="block truncate">
-                {crmOverview?.business.upcomingThisWeek.items[0]?.customerName
-                  ? `다음 · ${crmOverview.business.upcomingThisWeek.items[0]?.customerName}`
-                  : "예정 일정"}
-              </span>
-            }
-          />
-
-          <StatTile
             icon={<Target className="h-4 w-4" />}
             iconLayout="inline"
             variant="soft"
@@ -1590,9 +1714,26 @@ export default function CrmPage() {
 
         {/* 설치·방문 일정 — upcomingThisWeek(install|visit) 상위 3건 */}
         <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="mb-3 flex items-center gap-1.5 text-[#1a1a1a]/45">
-            <Calendar className="h-3.5 w-3.5" />
-            <p className="text-[11px] font-bold uppercase tracking-[0.08em]">설치·방문 일정</p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[#1a1a1a]/45">
+              <Calendar className="h-3.5 w-3.5" />
+              <p className="text-[11px] font-bold uppercase tracking-[0.08em]">설치·방문 일정</p>
+              {/* 0 플래시 금지(CRM-5) — overview 도착 전엔 스켈레톤 */}
+              {crmOverviewLoading && !crmOverview ? (
+                <ValueSkeleton className="h-4 w-8" />
+              ) : (
+                <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-semibold tabular-nums text-[#084734]">
+                  이번 주 {crmOverview?.business.upcomingThisWeek.count ?? 0}
+                </span>
+              )}
+            </div>
+            <Link
+              href="/admin/calendar"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1a1a1a]/40 transition-colors hover:text-[#111110]"
+            >
+              캘린더
+              <ExternalLink className="h-3 w-3" />
+            </Link>
           </div>
           {(crmOverview?.business.upcomingThisWeek.items.length ?? 0) === 0 ? (
             crmOverviewLoading && !crmOverview ? (
@@ -1637,114 +1778,43 @@ export default function CrmPage() {
         <CrmHealthDonut />
       </div>
 
-      {/* 매출 상세 — 상단 KPI 히어로와 중복이라 기본 접힘(견적/계약/수금 분해는 펼쳐 확인) */}
-      <div className="mb-4">
-        <button
-          type="button"
-          onClick={() => setRevenueDetailOpen((value) => !value)}
-          // 참조(보고) 블록 — 행동 표면과의 톤차 위계(W2-6): 베이지로 가라앉힌다
-          className="flex w-full items-center justify-between gap-2 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3 transition-colors hover:bg-white"
-          aria-expanded={revenueDetailOpen}
-        >
-          <span className="flex items-center gap-2">
-            <CircleDollarSign className="h-4 w-4 text-[#1a1a1a]/40" />
-            <span className="text-[14px] font-bold text-[#111110]">매출 상세 · 견적 / 계약 / 수금</span>
-            <span className="hidden text-[11px] text-[#1a1a1a]/35 sm:inline">상단 KPI 분해 · 통화별</span>
-          </span>
-          <ChevronDown
-            className={`h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${revenueDetailOpen ? "" : "-rotate-90"}`}
-          />
-        </button>
-        {revenueDetailOpen ? (
-          <div className="mt-3">
-            <CrmOperationsDashboard
-              part="revenue"
-              overview={crmOverview}
-              loading={crmOverviewLoading}
-              error={crmOverviewError}
-            />
-          </div>
-        ) : null}
-      </div>
           <CrmCoverageStrip />
         </div>
 
-        {/* 우측 액션 레일(H4) — 기록 빠른 생성 · 오늘 할 일 · 최근 기록. 데이터 자체 fetch,
-            xl+에서 sticky + 독립 스크롤(레일 내부에서 처리). 저장 성공 시 최근 고객 로그 갱신. */}
-        <CrmActionRail onActivitySaved={() => void fetchCrmOverview({ force: true })} />
+        {/* 우측 액션 레일(H4) — 기록 빠른 생성 · 최근 기록. 데이터 자체 fetch,
+            xl+에서 sticky + 독립 스크롤(레일 내부에서 처리). 저장 성공 시 최근 고객 로그 갱신.
+            '오늘 할 일'은 hideTasks로 끈다 — 본문 주간 조망의 CrmWeekAheadPanel이 같은 crm_tasks를
+            지연·오늘·이번 주·미룬 버킷 + 완료/미루기까지 상위집합으로 이미 다룬다. */}
+        <CrmActionRail hideTasks onActivitySaved={() => void fetchCrmOverview({ force: true })} />
       </div>
 
-      {/* 성과 분석 — CRM 매출 데이터 기준 팀/개인/월 (지연 로드, 로딩/빈/에러 내부 처리)
-          참조 표면 — 톤차 위계(W2-6): 베이지 */}
-      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-[15px] font-bold text-[#111110]">성과 분석 · 팀/개인</h2>
-            <p className="text-[11px] text-[#1a1a1a]/35">CRM 매출(¥, REV 동기화) 기준 · 최근 6개월</p>
-          </div>
-          <ActivityGoalGauge branchKpis={branchKpis} />
-        </div>
-        <CrmPerformanceCharts />
-      </section>
-
-      {/* 분석 · 시각화 — 리드 KPI 기반 차트(지연 로드) · 참조 표면 — 톤차 위계(W2-6): 베이지 */}
-      {leadKpis && leadKpis.total > 0 ? (
-        <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-[15px] font-bold text-[#111110]">분석 · 시각화</h2>
-            <span className="text-[11px] text-[#1a1a1a]/35">리드 KPI 기준</span>
-          </div>
-          <CrmHomeCharts leadKpis={leadKpis} />
-        </section>
-      ) : null}
-
-      {/* 팀 성과 · KPI 보고 — 보고성 블록, 기본 접힘(작업대 집중) · 참조 표면 — 톤차 위계(W2-6): 베이지 */}
-      <section className="mb-4 overflow-hidden rounded-2xl border border-[#e8e8e4] bg-[#fafaf8]">
-        <button
-          type="button"
-          onClick={() => setTeamReportOpen((value) => !value)}
-          className="flex w-full items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-white"
-          aria-expanded={teamReportOpen}
-        >
-          <span className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-[#1a1a1a]/40" />
-            <span className="text-[14px] font-bold text-[#111110]">팀 성과 · KPI 보고</span>
-            <span className="hidden text-[11px] text-[#1a1a1a]/35 sm:inline">총 · 팀별 · 개인별 · NEO 팀 현황</span>
-          </span>
-          <ChevronDown
-            className={`h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${teamReportOpen ? "" : "-rotate-90"}`}
-          />
-        </button>
-        {teamReportOpen ? (
-          <div className="border-t border-[#f0f0ec] p-4">
-            <NeoCrmTeamPanel refreshKey={neoCrmRefreshKey} />
-            <CrmTeamKpiBoard
-              overview={crmOverview}
-              branchKpis={branchKpis}
-              loading={pageRefreshing}
-              branchError={branchKpisError}
-            />
-            <CrmRankingBoard branchKpis={branchKpis} />
-          </div>
-        ) : null}
-      </section>
-
-      {/* 맨 하단 — 수납 리스크 + 최근 고객별 로그 (간소화) */}
-      <CrmOperationsDashboard
-        part="risk"
+      {/* 리포트 · 분석 — 흩어져 있던 참조 블록 5개를 한 아코디언 안의 탭으로 단일화 */}
+      <CrmHomeReportSection
+        open={reportOpen}
+        onToggle={() => setReportOpen((value) => !value)}
+        tab={reportTab}
+        onTabChange={setReportTab}
         overview={crmOverview}
         loading={crmOverviewLoading}
         error={crmOverviewError}
+        branchKpis={branchKpis}
+        branchError={branchKpisError}
+        leadKpis={leadKpis}
+        refreshing={pageRefreshing}
+        neoCrmRefreshKey={neoCrmRefreshKey}
       />
 
-      {/* 심화 — 최상위 탭에서 내린 분석/백오피스 화면으로의 경량 진입(딥링크 보존, 사이드바 '검수' 탭과 병행) */}
+      {/* 바로 가기 — 상단 sticky 바의 보조 링크와 하단 '심화 보기'로 갈려 있던 딥링크를 한 줄로 모았다.
+          (주요 화면 이동은 사이드바 CRM 확장이 담당 — 여기는 보조 경로) */}
       <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px]">
-        <span className="text-[#1a1a1a]/35">심화 보기</span>
+        <span className="text-[#1a1a1a]/35">바로 가기</span>
         {[
+          { href: "/admin/crm/customers/leads", label: "리드" },
+          { href: "/admin/crm/deals", label: "견적·매출" },
+          { href: "/admin/crm/customers/unified", label: "고객·후속" },
           { href: "/admin/crm/matching", label: "데이터 매칭 인박스" },
           { href: "/admin/crm/deals/rev-sheet", label: "매출시트" },
           { href: "/admin/crm/insights", label: "인사이트 분석" },
-          { href: "/admin/crm/deals", label: "돈흐름 상세" },
         ].map((link) => (
           <Link
             key={link.href}
