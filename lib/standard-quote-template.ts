@@ -1153,13 +1153,19 @@ export function buildConfigurableStandardQuoteDetails({
     }
   }
 
+  // 작성자가 직접 추가한 정보 라인(isUserAdded)은 템플릿 재생성 대상이 아니므로
+  // 옵션/수량을 바꿔도 살아남도록 생성 라인 뒤에 이어 붙인다.
+  const userAddedItems = (existing.lineItems ?? []).filter((item) => item.isUserAdded === true)
+
   return finalizeStandardQuoteDetails(
     {
       ...existing,
       templateId: resolvedTemplateId,
       optionSelections: selections,
       pricingSource: "standard_quote_builder",
-      lineItems: generatedItems.map((item, index) => createGeneratedLine(item, index)),
+      lineItems: [...generatedItems, ...userAddedItems].map((item, index) =>
+        createGeneratedLine(item, index)
+      ),
     },
     resolvedTemplateId
   )
@@ -1185,4 +1191,217 @@ export function buildStandardQuoteTitle(quoteDetails: PartnerQuoteDetailsInput) 
 export function buildStandardQuoteFileLabel(quoteDetails: PartnerQuoteDetailsInput) {
   const title = sanitizeFileNameSegment(buildStandardQuoteTitle(quoteDetails))
   return `${title || "표준 견적서"}.pdf`
+}
+
+/* ── 견적 제품군(SW/HW) ────────────────────────────────────────
+ * 견적서는 SW(구독형, 공급자=클래스인)와 HW(장비, 공급자=퀴드러닝) 두 갈래다.
+ * 목록/작성기 어디서나 같은 기준으로 판정하도록 여기에 모은다.
+ */
+
+export type QuoteProductLine = "software" | "hardware"
+
+export const DEFAULT_SOFTWARE_QUOTE_TEMPLATE_ID: StandardQuoteTemplateId = "online_suite"
+export const DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID: StandardQuoteTemplateId = "board_86"
+
+/**
+ * 제목/거래명에서 SW 견적을 알아보는 보조 신호.
+ * 목록 API(/api/portal/documents)가 structured_json 을 주지 않아 templateId 를 모를 때만 쓴다.
+ */
+const SOFTWARE_QUOTE_TEXT_HINTS = [
+  "소프트웨어",
+  "software",
+  "ai suite",
+  "구독형",
+  "enterprise",
+  "sw 견적",
+]
+
+export function getQuoteProductLineLabel(productLine: QuoteProductLine) {
+  return productLine === "software" ? "SW" : "HW"
+}
+
+export function getQuoteProductLineTemplateId(productLine: QuoteProductLine) {
+  return productLine === "software"
+    ? DEFAULT_SOFTWARE_QUOTE_TEMPLATE_ID
+    : DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID
+}
+
+/**
+ * 견적 한 건의 제품군을 정한다.
+ * - templateId 를 알면 그것이 정본(isSoftwareQuoteTemplate).
+ * - 모르면 제목/거래명 텍스트로 추정하고, 판정 불가하면 HW 로 본다.
+ */
+export function resolveQuoteProductLine(input: {
+  templateId?: string | null
+  title?: string | null
+  dealTitle?: string | null
+}): QuoteProductLine {
+  if (input.templateId) {
+    return isSoftwareQuoteTemplate(input.templateId) ? "software" : "hardware"
+  }
+
+  const haystack = [input.title, input.dealTitle]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join(" ")
+    .toLowerCase()
+  if (!haystack) return "hardware"
+
+  const matchesSoftwareTemplateLabel = STANDARD_QUOTE_TEMPLATES.some(
+    (template) =>
+      isSoftwareQuoteTemplate(template.id) && haystack.includes(template.label.toLowerCase())
+  )
+  if (matchesSoftwareTemplateLabel) return "software"
+
+  return SOFTWARE_QUOTE_TEXT_HINTS.some((hint) => haystack.includes(hint)) ? "software" : "hardware"
+}
+
+/* ── 기타/특약 메모 프리셋 · 정보 라인 ─────────────────────────────
+ * 견적 작성기에서 클릭 한 번으로 붙이는 실무 문구. 저장 계약은 그대로이며
+ * (generalNotes / specialTerms 문자열, lineItems 스키마) 입력 편의만 제공한다.
+ */
+
+export type QuoteNotePresetGroup = "general" | "special"
+
+export type QuoteNotePreset = {
+  id: string
+  group: QuoteNotePresetGroup
+  /** 칩에 표시할 짧은 이름 */
+  label: string
+  /** 메모에 실제로 추가되는 한 줄 */
+  text: string
+}
+
+export const QUOTE_NOTE_PRESETS: QuoteNotePreset[] = [
+  {
+    id: "general_delivery_schedule",
+    group: "general",
+    label: "납품 일정",
+    text: "납품 및 설치 일정은 계약 후 상호 협의하여 확정합니다.",
+  },
+  {
+    id: "general_payment_terms",
+    group: "general",
+    label: "결제 조건",
+    text: "결제 조건: 세금계산서 발행 후 30일 이내 입금",
+  },
+  {
+    id: "general_validity",
+    group: "general",
+    label: "유효기간",
+    text: "견적 유효기간 경과 시 단가는 변동될 수 있습니다.",
+  },
+  {
+    id: "general_training",
+    group: "general",
+    label: "무상 교육",
+    text: "설치 완료 후 기본 운영 교육 1회를 무상 제공합니다.",
+  },
+  {
+    id: "general_warranty",
+    group: "general",
+    label: "유지보수",
+    text: "제품 보증 기간은 1년이며, 이후 유지보수는 별도 협의합니다.",
+  },
+  {
+    id: "general_vat",
+    group: "general",
+    label: "부가세",
+    text: "상기 금액은 부가세 별도 금액입니다.",
+  },
+  {
+    id: "general_delivery_cost",
+    group: "general",
+    label: "배송·설치비",
+    text: "설치 및 배송비는 견적 금액에 포함되어 있습니다.",
+  },
+  {
+    id: "special_installment",
+    group: "special",
+    label: "분할 납부",
+    text: "대금은 계약 시 50%, 설치 완료 후 50%로 분할 납부합니다.",
+  },
+  {
+    id: "special_pilot",
+    group: "special",
+    label: "시범 운영",
+    text: "시범 운영 1개월 후 정식 도입 여부를 결정합니다.",
+  },
+  {
+    id: "special_site",
+    group: "special",
+    label: "현장 조건",
+    text: "전기·네트워크 등 현장 사전 공사는 고객사 부담으로 진행합니다.",
+  },
+  {
+    id: "special_lead_time",
+    group: "special",
+    label: "납기",
+    text: "발주 확정 후 납기는 영업일 기준 2~3주 소요됩니다.",
+  },
+  {
+    id: "special_cancel",
+    group: "special",
+    label: "주문 취소",
+    text: "설치 착수 이후 주문 취소 시 발생 실비가 청구됩니다.",
+  },
+  {
+    id: "special_price_hold",
+    group: "special",
+    label: "단가 유지",
+    text: "동일 조건 추가 발주 시 본 견적 단가를 6개월간 동일하게 적용합니다.",
+  },
+]
+
+export function getQuoteNotePresets(group: QuoteNotePresetGroup) {
+  return QUOTE_NOTE_PRESETS.filter((preset) => preset.group === group)
+}
+
+/** 메모 안에 해당 문구가 이미 한 줄로 들어가 있는지 확인한다(칩 중복 방지). */
+export function quoteNoteHasLine(note: string | null | undefined, text: string) {
+  const target = text.trim()
+  if (!target) return false
+  return (note ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .includes(target)
+}
+
+/** 메모 끝에 문구를 새 줄로 추가한다. 이미 있으면 원본을 그대로 돌려준다. */
+export function appendQuoteNoteLine(note: string | null | undefined, text: string) {
+  const target = text.trim()
+  const base = (note ?? "").replace(/\s+$/, "")
+  if (!target) return base
+  if (quoteNoteHasLine(base, target)) return base
+  return base ? `${base}\n${target}` : target
+}
+
+export const QUOTE_INFORMATIONAL_LINE_DEFAULT_NAME = "안내"
+
+/**
+ * 금액 없는 정보성 라인(note_only)을 만든다. 합계에 잡히지 않고 미리보기에서 단가/수량이
+ * "-"로 비워진다. isUserAdded=true 이므로 옵션을 바꿔 재생성해도 유지된다.
+ */
+export function createInformationalQuoteLine(input: {
+  itemName?: string | null
+  itemDescription?: string | null
+  sortOrder?: number
+}): PartnerQuoteLineItemInput {
+  const sortOrder = clampPositiveInteger(input.sortOrder ?? 1, 1)
+
+  return {
+    sortOrder,
+    lineNumber: sortOrder,
+    itemType: "note_only",
+    itemName: input.itemName?.trim() || QUOTE_INFORMATIONAL_LINE_DEFAULT_NAME,
+    itemDescription: input.itemDescription?.trim() || undefined,
+    quantity: undefined,
+    unitPrice: undefined,
+    vatIncluded: true,
+    lineStatus: "informational",
+    billingMode: "included_in_quote",
+    isOptional: true,
+    isUserAdded: true,
+    priceLocked: true,
+    quantityLocked: true,
+  }
 }
