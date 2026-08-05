@@ -147,13 +147,13 @@ export const STANDARD_QUOTE_DEFAULT_VAT_LABEL = "(단위:원, VAT포함)"
 export const STANDARD_QUOTE_DEFAULT_VAT_EXCLUDED_LABEL = "(단위:원, VAT별도)"
 export const STANDARD_QUOTE_DEFAULT_DELIVERY_NOTE = "구매처 지정장소"
 
-const STANDARD_PRICE_BOARD_86 = getProductBySku("board-86")?.unit_price ?? 5_800_000
-const STANDARD_PRICE_BOARD_75 = getProductBySku("board-75")?.unit_price ?? 4_900_000
+const STANDARD_PRICE_BOARD_86 = getProductBySku("board-86")?.unit_price ?? 6_300_000
+const STANDARD_PRICE_BOARD_75 = getProductBySku("board-75")?.unit_price ?? 5_400_000
 const STANDARD_PRICE_CAMERA_T1 = getProductBySku("camera-t1")?.unit_price ?? 1_200_000
 const STANDARD_PRICE_STAND = getProductBySku("stand")?.unit_price ?? 500_000
 const STANDARD_PRICE_WALL_MOUNT = getProductBySku("wall-mount")?.unit_price ?? 500_000
 const STANDARD_PRICE_RECORDING_STUDIO =
-  getProductBySku("ai-studio-recording-set")?.unit_price ?? 7_800_000
+  getProductBySku("ai-studio-recording-set")?.unit_price ?? 8_300_000
 const STANDARD_PRICE_ONLINE_SUITE_MONTHLY =
   getProductBySku("online-suite-monthly")?.unit_price ?? 400_000
 
