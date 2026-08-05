@@ -369,6 +369,351 @@ export const CURATED_CS_FIGMA_GUIDES: CsFigmaGuide[] = [
     sourceImageFiles: ["Classin AI 비활성화 안내.png"],
     sourceDigestLineHint: "docs/active/cs-figma-board-digest-2026-06-21.md:759",
   },
+  {
+    slug: "classin-app-download",
+    docSlug: "cs-classin-app-download",
+    docCategory: "start",
+    category: "onboarding",
+    title: "클래스인 앱 다운로드와 설치",
+    audience: "학생, 교사, 학부모, 기관 관리자",
+    summary:
+      "Windows·macOS는 공식 다운로드 페이지에서, Android·iOS는 각 앱 스토어에서 클래스인 앱을 내려받아 설치하는 절차입니다.",
+    keywords: [
+      "클래스인 다운로드",
+      "클래스인 설치",
+      "Windows 설치",
+      "윈도우 설치",
+      "Mac 설치",
+      "안드로이드 설치",
+      "아이폰 설치",
+      "앱스토어",
+      "플레이 스토어",
+    ],
+    steps: [
+      "PC에서는 클래스인 공식 다운로드 페이지를 엽니다.",
+      "Windows 사용자는 Windows용 다운로드를 선택하고 내려받은 설치 파일을 실행합니다.",
+      "Mac 사용자는 Mac용 다운로드에서 사용 중인 기기에 맞는 설치 파일을 선택합니다.",
+      "Android 기기는 Play 스토어에서 ClassIn을 검색해 설치합니다.",
+      "iPhone 또는 iPad는 App Store에서 ClassIn을 검색해 설치합니다.",
+      "설치가 끝나면 앱을 실행하고 기존 계정으로 로그인하거나 회원가입을 진행합니다.",
+    ],
+    deepDive: [
+      {
+        level: "1단계",
+        title: "기기에 맞는 설치 경로",
+        body: "PC는 공식 다운로드 페이지, 모바일은 운영체제의 앱 스토어를 이용합니다.",
+        checks: ["Windows 또는 Mac 구분", "Android 또는 iOS 구분"],
+      },
+      {
+        level: "2단계",
+        title: "앱 확인",
+        body: "검색 결과에서 ClassIn 앱 이름과 아이콘을 확인한 뒤 설치합니다.",
+        checks: ["앱 이름 ClassIn", "설치 완료 후 앱 실행"],
+      },
+      {
+        level: "3단계",
+        title: "설치 문제 확인",
+        body: "설치가 되지 않으면 저장 공간, 운영체제 버전, 네트워크 상태를 먼저 확인합니다.",
+        checks: ["저장 공간", "운영체제와 네트워크"],
+      },
+    ],
+    sourceImageFiles: [],
+    sourceDigestLineHint: "docs/active/cs-figma-board-update-2026-08-05.md",
+  },
+  {
+    slug: "classin-account-signup",
+    docSlug: "cs-classin-account-signup",
+    docCategory: "start",
+    category: "onboarding",
+    title: "클래스인 회원가입",
+    audience: "학생, 교사, 학부모, 신규 사용자",
+    summary:
+      "클래스인 앱의 로그인 화면에서 회원가입으로 이동해 본인 인증, 계정 정보 입력, 필수 동의를 마치고 프로필을 확인하는 순서입니다.",
+    keywords: [
+      "클래스인 회원가입",
+      "회원가입 방법",
+      "신규 가입",
+      "본인 인증",
+      "인증 코드",
+      "계정 만들기",
+      "프로필 설정",
+    ],
+    steps: [
+      "클래스인 앱을 실행하고 로그인 화면에서 회원가입을 선택합니다.",
+      "화면에 표시된 휴대전화 또는 이메일 인증 방식을 선택합니다.",
+      "인증 정보를 입력하고 받은 인증 코드를 확인합니다.",
+      "비밀번호와 이름 등 화면에 표시된 필수 계정 정보를 입력합니다.",
+      "필수 약관을 확인하고 회원가입을 완료합니다.",
+      "가입한 계정으로 로그인한 뒤 이름과 프로필 정보가 맞는지 확인합니다.",
+    ],
+    deepDive: [
+      {
+        level: "1단계",
+        title: "본인 인증",
+        body: "가입 화면에 표시되는 인증 방식에 따라 휴대전화 또는 이메일 인증을 진행합니다.",
+        checks: ["국가 번호와 연락처", "인증 코드 수신"],
+      },
+      {
+        level: "2단계",
+        title: "계정 정보 입력",
+        body: "이름과 비밀번호 등 필수 항목을 빠짐없이 입력하고 필수 약관을 확인합니다.",
+        checks: ["필수 입력값", "필수 약관 동의"],
+      },
+      {
+        level: "3단계",
+        title: "가입 완료 확인",
+        body: "로그인 후 프로필에서 이름과 계정 정보가 올바르게 저장됐는지 확인합니다.",
+        checks: ["로그인 성공", "프로필 이름"],
+      },
+    ],
+    sourceImageFiles: [],
+    sourceDigestLineHint: "docs/active/cs-figma-board-update-2026-08-05.md",
+  },
+  {
+    slug: "classin-account-delete",
+    docSlug: "cs-classin-account-delete",
+    docCategory: "start",
+    category: "onboarding",
+    title: "클래스인 계정 삭제와 회원 탈퇴",
+    audience: "학생, 교사, 학부모, 일반 사용자",
+    summary:
+      "모바일 앱의 프로필에서 계정 및 보안으로 이동해 계정 삭제 안내를 확인하고 본인 인증을 거쳐 탈퇴하는 절차입니다.",
+    keywords: [
+      "계정 삭제",
+      "회원 탈퇴",
+      "클래스인 탈퇴",
+      "계정 및 보안",
+      "계정 지우기",
+      "탈퇴 방법",
+      "본인 확인",
+    ],
+    steps: [
+      "모바일 앱에 로그인한 뒤 좌측 상단의 프로필 이미지를 누릅니다.",
+      "계정 및 보안을 선택합니다.",
+      "계정 삭제를 선택하고 삭제 안내와 주의사항을 끝까지 확인합니다.",
+      "계정 삭제에 동의한다는 확인 항목을 선택하고 다음을 누릅니다.",
+      "화면에 표시된 방식으로 본인 인증을 완료합니다.",
+      "최종 삭제를 확인한 뒤 계정이 로그아웃되고 더 이상 로그인되지 않는지 확인합니다.",
+    ],
+    deepDive: [
+      {
+        level: "1단계",
+        title: "삭제 전 확인",
+        body: "계정 삭제는 되돌리기 어려우므로 필요한 수업 자료와 기록을 먼저 확인합니다.",
+        checks: ["보관할 자료", "참여 중인 코스"],
+      },
+      {
+        level: "2단계",
+        title: "삭제 동의와 인증",
+        body: "삭제 안내에 동의한 뒤 계정 소유자 본인 인증을 완료합니다.",
+        checks: ["삭제 동의", "본인 인증"],
+      },
+      {
+        level: "3단계",
+        title: "완료 확인",
+        body: "최종 확인 후 자동 로그아웃과 재로그인 가능 여부를 확인합니다.",
+        checks: ["자동 로그아웃", "삭제 완료 안내"],
+      },
+    ],
+    sourceImageFiles: [],
+    sourceDigestLineHint: "docs/active/cs-figma-board-update-2026-08-05.md",
+  },
+  {
+    slug: "transfer-student-registration",
+    docSlug: "cs-transfer-student-registration",
+    docCategory: "admin",
+    category: "admin",
+    title: "편입생(참관생) 등록",
+    audience: "기관 관리자, 코스 관리자, CS 담당자",
+    summary:
+      "관리자 대시보드의 코스 상세 화면에서 편입생을 추가하고 목록 반영 여부까지 확인하는 절차입니다.",
+    keywords: [
+      "편입생 등록",
+      "참관생 등록",
+      "편입생 추가",
+      "참관생 추가",
+      "코스 관리",
+      "코스 상세",
+      "학생 검색",
+    ],
+    steps: [
+      "관리자 대시보드에 로그인한 뒤 기관 관리의 코스 관리로 이동합니다.",
+      "편입생을 등록할 코스 이름을 눌러 코스 상세 화면을 엽니다.",
+      "코스 상세 화면에서 편입생 항목을 선택하고 추가를 누릅니다.",
+      "학생 이름을 검색하거나 아래 목록에서 대상 학생을 찾습니다.",
+      "대상 학생 왼쪽의 체크박스를 선택하고 확인을 누릅니다.",
+      "코스 상세 화면의 편입생 목록에 해당 학생이 표시되는지 확인합니다.",
+    ],
+    deepDive: [
+      {
+        level: "1단계",
+        title: "코스 선택",
+        body: "기관 관리의 코스 관리에서 대상 코스를 정확히 선택합니다.",
+        checks: ["코스 이름", "코스 상태"],
+      },
+      {
+        level: "2단계",
+        title: "학생 추가",
+        body: "편입생 추가 창에서 검색 또는 목록으로 학생을 찾고 체크박스를 선택합니다.",
+        checks: ["학생 이름", "체크박스와 확인 버튼"],
+      },
+      {
+        level: "3단계",
+        title: "등록 결과 확인",
+        body: "같은 이름의 학생을 잘못 선택하지 않았는지 편입생 목록에서 다시 확인합니다.",
+        checks: ["편입생 목록 반영", "동명이인 여부"],
+      },
+    ],
+    sourceImageFiles: [],
+    sourceDigestLineHint: "docs/active/cs-figma-board-update-2026-08-05.md",
+  },
+  {
+    slug: "course-member-management",
+    docSlug: "cs-course-member-management",
+    docCategory: "admin",
+    category: "admin",
+    title: "코스 구성원 추가와 삭제",
+    audience: "교사, 코스 관리자, CS 담당자",
+    summary:
+      "코스 설정 또는 코스 관리에서 구성원을 직접 추가하거나 초대하고, 구성원 목록에서 대상을 삭제하는 절차입니다.",
+    keywords: [
+      "코스 구성원 추가",
+      "코스 구성원 삭제",
+      "코스 멤버 추가",
+      "코스 멤버 삭제",
+      "구성원 및 그룹 구성",
+      "코스 초대 링크",
+      "QR 초대",
+    ],
+    steps: [
+      "대상 코스로 이동한 뒤 코스 이름 또는 코스 정보 영역을 눌러 코스 설정을 엽니다.",
+      "코스 관리 또는 코스 구성원 및 그룹 구성을 선택합니다.",
+      "구성원을 직접 추가할 때는 추가 버튼을 누르고 대상 사용자와 역할을 확인한 뒤 저장합니다.",
+      "사용자가 직접 입장하게 하려면 코스 QR 코드 또는 초대 링크를 전달합니다.",
+      "구성원을 삭제할 때는 구성원 목록에서 대상 사용자의 더보기 메뉴를 열고 멤버 삭제를 선택합니다.",
+      "추가 또는 삭제 후 구성원 수와 역할이 의도대로 반영됐는지 확인합니다.",
+    ],
+    deepDive: [
+      {
+        level: "1단계",
+        title: "구성원 메뉴 진입",
+        body: "코스 설정에서 구성원 및 그룹 구성 또는 코스 관리 메뉴를 찾습니다.",
+        checks: ["대상 코스", "구성원 메뉴"],
+      },
+      {
+        level: "2단계",
+        title: "추가 방식 선택",
+        body: "관리자가 직접 추가하거나 QR·초대 링크로 사용자가 직접 들어오게 할 수 있습니다.",
+        checks: ["직접 추가", "QR 또는 초대 링크"],
+      },
+      {
+        level: "3단계",
+        title: "삭제 전 역할 확인",
+        body: "담임 교사나 운영 담당자를 잘못 삭제하지 않도록 대상과 역할을 먼저 확인합니다.",
+        checks: ["사용자 이름", "교사·학생 역할"],
+      },
+    ],
+    sourceImageFiles: [],
+    sourceDigestLineHint: "docs/active/cs-figma-board-update-2026-08-05.md",
+  },
+  {
+    slug: "course-wide-chat-control",
+    docSlug: "cs-course-wide-chat-control",
+    docCategory: "admin",
+    category: "admin",
+    title: "코스 전체 학생 채팅 활성화와 비활성화",
+    audience: "교사, 코스 관리자, CS 담당자",
+    summary:
+      "코스 관리의 전체 학생 채팅 금지 옵션으로 학생의 채팅 가능 범위를 켜거나 제한하는 절차입니다.",
+    keywords: [
+      "코스 전체 채팅",
+      "전체 학생 채팅 금지",
+      "학생 채팅 비활성화",
+      "학생 채팅 활성화",
+      "코스 채팅 제한",
+      "채팅 금지",
+      "코스 관리",
+    ],
+    steps: [
+      "대상 코스로 이동합니다.",
+      "좌측 상단의 코스 이름을 누르고 코스 관리를 선택합니다.",
+      "코스 관리 옵션에서 전체 학생 채팅 금지를 찾습니다.",
+      "학생의 전체 채팅을 제한하려면 옵션을 켭니다.",
+      "학생의 전체 채팅을 다시 허용하려면 옵션을 끕니다.",
+      "설정 후 학생 계정에서 채팅 가능 범위가 의도대로 바뀌었는지 확인합니다.",
+    ],
+    deepDive: [
+      {
+        level: "1단계",
+        title: "코스 관리 열기",
+        body: "코스 이름 메뉴에서 코스 관리로 이동합니다.",
+        checks: ["대상 코스", "코스 관리 메뉴"],
+      },
+      {
+        level: "2단계",
+        title: "채팅 범위 변경",
+        body: "전체 학생 채팅 금지 토글의 현재 상태를 확인하고 필요한 방향으로 변경합니다.",
+        checks: ["금지 토글 ON·OFF", "학생 채팅 범위"],
+      },
+      {
+        level: "3단계",
+        title: "학생 화면 검수",
+        body: "설정 변경 후 교사 화면뿐 아니라 학생 화면에서도 채팅 동작을 확인합니다.",
+        checks: ["학생 계정 확인", "기존 채팅방 동작"],
+      },
+    ],
+    sourceImageFiles: [],
+    sourceDigestLineHint: "docs/active/cs-figma-board-update-2026-08-05.md",
+  },
+  {
+    slug: "course-create-and-close",
+    docSlug: "cs-course-create-and-close",
+    docCategory: "admin",
+    category: "admin",
+    title: "코스 생성과 종료",
+    audience: "교사, 코스 관리자, CS 담당자",
+    summary:
+      "앱에서 새 코스를 만들고 코스 설정을 확인하며, 운영이 끝난 코스를 종료하는 기본 절차입니다.",
+    keywords: [
+      "코스 생성",
+      "코스 만들기",
+      "새 코스",
+      "코스 삭제",
+      "코스 종료",
+      "코스 관리",
+      "코스 설정",
+    ],
+    steps: [
+      "앱 홈의 코스 목록에서 코스 만들기를 선택합니다.",
+      "코스 이름과 기간 등 화면에 표시된 필수 정보를 입력하고 코스를 생성합니다.",
+      "생성된 코스로 들어가 코스 이름을 누르면 코스 설정과 코스 관리 메뉴를 열 수 있습니다.",
+      "코스 운영이 끝났다면 코스 설정 하단의 코스 종료 항목을 선택합니다.",
+      "종료 안내와 데이터 접근 영향을 확인한 뒤 최종 확인합니다.",
+      "코스 목록에서 상태가 종료됨으로 바뀌었는지 확인합니다.",
+    ],
+    deepDive: [
+      {
+        level: "1단계",
+        title: "새 코스 만들기",
+        body: "코스 만들기에서 기본 정보와 운영 기간을 확인한 뒤 생성합니다.",
+        checks: ["코스 이름", "운영 기간과 역할"],
+      },
+      {
+        level: "2단계",
+        title: "코스 설정 확인",
+        body: "코스 이름 메뉴에서 구성원, 초대, 채팅 등 운영 옵션으로 이동할 수 있습니다.",
+        checks: ["코스 설정", "코스 관리"],
+      },
+      {
+        level: "3단계",
+        title: "종료 전 주의",
+        body: "코스 종료 전 구성원과 수업 자료의 접근 범위가 어떻게 달라지는지 확인합니다.",
+        checks: ["필요한 자료 보관", "코스 상태 종료됨"],
+      },
+    ],
+    sourceImageFiles: [],
+    sourceDigestLineHint: "docs/active/cs-figma-board-update-2026-08-05.md",
+  },
 ]
 
 export const CS_FIGMA_GUIDES = [
@@ -518,6 +863,47 @@ function hasAppDownloadIntent(normalizedQuestion: string) {
   return asksDownload && asksApp && !asksRecording
 }
 
+function hasAccountSignupProcedureIntent(normalizedQuestion: string) {
+  const asksAboutSignup = /회원\s*가입|계정\s*만들|신규\s*가입/.test(normalizedQuestion)
+  const asksProcedure = /방법|순서|어디|진행|완료|인증|가입/.test(normalizedQuestion)
+  const asksRequiredPersonalInfo = /필요|개인정보|전화번호나|이메일만/.test(normalizedQuestion)
+  return asksAboutSignup && asksProcedure && !asksRequiredPersonalInfo
+}
+
+function hasAccountDeletionProcedureIntent(normalizedQuestion: string) {
+  const asksAboutAccount = /계정|회원/.test(normalizedQuestion)
+  const asksAboutDeletion = /삭제|탈퇴|지우/.test(normalizedQuestion)
+  const asksProcedure = /방법|순서|어디|진행|삭제|탈퇴/.test(normalizedQuestion)
+  return asksAboutAccount && asksAboutDeletion && asksProcedure
+}
+
+function hasTransferStudentRegistrationIntent(normalizedQuestion: string) {
+  const asksAboutTransferStudent = /편입생|참관생/.test(normalizedQuestion)
+  const asksProcedure = /등록|추가|방법|순서|어디|선택/.test(normalizedQuestion)
+  return asksAboutTransferStudent && asksProcedure
+}
+
+function hasCourseMemberManagementIntent(normalizedQuestion: string) {
+  const asksAboutCourseMember = /코스\s*(구성원|멤버)|구성원\s*(추가|삭제)|멤버\s*(추가|삭제)/.test(
+    normalizedQuestion
+  )
+  const asksProcedure = /추가|삭제|초대|방법|순서|어디|관리/.test(normalizedQuestion)
+  return asksAboutCourseMember && asksProcedure
+}
+
+function hasCourseWideChatControlIntent(normalizedQuestion: string) {
+  const asksAboutCourseChat = /코스.*채팅|전체\s*학생\s*채팅|학생\s*채팅/.test(normalizedQuestion)
+  const asksAboutControl = /활성|비활성|금지|제한|허용|켜|끄|설정|방법|어디/.test(normalizedQuestion)
+  return asksAboutCourseChat && asksAboutControl
+}
+
+function hasCourseCreateOrCloseIntent(normalizedQuestion: string) {
+  const asksAboutCourse = /코스/.test(normalizedQuestion)
+  const asksAboutLifecycle = /생성|만들|종료|삭제/.test(normalizedQuestion)
+  const asksProcedure = /방법|순서|어디|생성|만들|종료|삭제/.test(normalizedQuestion)
+  return asksAboutCourse && asksAboutLifecycle && asksProcedure
+}
+
 function hasLessonDeletionProcedureIntent(normalizedQuestion: string) {
   if (/수업\s*교사|담임\s*교사|교사\s*설정/.test(normalizedQuestion)) return false
   const asksAboutLessonDeletion =
@@ -631,6 +1017,12 @@ function hasKnownWebLiveChatVisibilityIntent(normalizedQuestion: string) {
 }
 
 function findKnownCsFigmaIntentSlug(normalizedQuestion: string) {
+  if (hasAccountSignupProcedureIntent(normalizedQuestion)) return "classin-account-signup"
+  if (hasAccountDeletionProcedureIntent(normalizedQuestion)) return "classin-account-delete"
+  if (hasTransferStudentRegistrationIntent(normalizedQuestion)) return "transfer-student-registration"
+  if (hasCourseMemberManagementIntent(normalizedQuestion)) return "course-member-management"
+  if (hasCourseWideChatControlIntent(normalizedQuestion)) return "course-wide-chat-control"
+  if (hasCourseCreateOrCloseIntent(normalizedQuestion)) return "course-create-and-close"
   if (hasKnownWebLiveChatVisibilityIntent(normalizedQuestion)) return "web-live-create"
   if (hasDashboardWebLiveCreateProcedureIntent(normalizedQuestion)) return "cs-figma-digest-350"
   if (hasElectronicBoardLocalRecordingProcedureIntent(normalizedQuestion)) return "cs-figma-digest-449"
@@ -719,14 +1111,19 @@ export function findCsFigmaGuideForQuestion(question: string): CsFigmaGuide | nu
 
     if (hasProcedureIntent || hasSymptomIntent) score += 4
     if (isCurated && (titleMatched || strongKeywordHits > 0 || tokenHits >= 1)) score += 8
-    const inviteActivationMatched = hasInviteActivationIntent && isQrInviteActivationGuide(haystack)
+    const inviteActivationMatched =
+      hasInviteActivationIntent &&
+      guide.slug !== "course-member-management" &&
+      isQrInviteActivationGuide(haystack)
     if (hasInviteActivationIntent) {
       if (inviteActivationMatched) score += 16
+      if (guide.slug === "course-member-management") score -= 16
       if (!normalized.includes("스캔") && isStudentQrScanGuide(haystack)) score -= 12
     }
     if (hasRecordingDownload && guide.slug === "recording-download-share") score += 24
     if (hasAppDownload) {
-      if (guide.slug === "cs-figma-digest-1602") score += 28
+      if (guide.slug === "classin-app-download") score += 36
+      if (guide.slug === "cs-figma-digest-1602") score += 12
       if (haystack.includes("수업 녹화 데이터") || haystack.includes("녹화본 다운로드")) score -= 16
     }
     const knownIntentMatched = knownIntentSlug === guide.slug

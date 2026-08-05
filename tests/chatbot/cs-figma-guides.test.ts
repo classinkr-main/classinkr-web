@@ -101,11 +101,59 @@ describe("CS Figma guide source", () => {
     })
   })
 
-  it("routes app download questions to the Windows download guide instead of recording data", () => {
+  it("routes app download questions to the current cross-platform install guide instead of recording data", () => {
     expect(findCsFigmaGuideForQuestion("클래스인 다운로드 어디서 해요")).toMatchObject({
-      slug: "cs-figma-digest-1602",
-      title: "Windows용 클래스인",
+      slug: "classin-app-download",
+      title: "클래스인 앱 다운로드와 설치",
     })
+  })
+
+  it("routes newly interpreted onboarding procedures from the current Figma board", () => {
+    expect(findCsFigmaGuideForQuestion("클래스인 회원가입 방법 알려줘")).toMatchObject({
+      slug: "classin-account-signup",
+      title: "클래스인 회원가입",
+    })
+    expect(findCsFigmaGuideForQuestion("클래스인 계정 삭제는 어디서 해요")).toMatchObject({
+      slug: "classin-account-delete",
+      title: "클래스인 계정 삭제와 회원 탈퇴",
+    })
+    expect(findCsFigmaGuideForQuestion("회원가입 때 전화번호나 이메일만 있으면 되나요?")).toBeNull()
+  })
+
+  it("routes newly interpreted admin procedures from the current Figma board", () => {
+    expect(findCsFigmaGuideForQuestion("편입생 등록 방법 알려줘")).toMatchObject({
+      slug: "transfer-student-registration",
+      title: "편입생(참관생) 등록",
+    })
+    expect(findCsFigmaGuideForQuestion("코스 구성원 추가 삭제 순서 알려줘")).toMatchObject({
+      slug: "course-member-management",
+      title: "코스 구성원 추가와 삭제",
+    })
+    expect(findCsFigmaGuideForQuestion("코스 전체 학생 채팅 어디서 끄나요")).toMatchObject({
+      slug: "course-wide-chat-control",
+      title: "코스 전체 학생 채팅 활성화와 비활성화",
+    })
+    expect(findCsFigmaGuideForQuestion("새 코스 만들고 종료하는 방법 알려줘")).toMatchObject({
+      slug: "course-create-and-close",
+      title: "코스 생성과 종료",
+    })
+  })
+
+  it("answers the current transfer-student procedure without external search", async () => {
+    disableExternalChatbotServices()
+
+    const result = await evaluateChatbotQuery("편입생 등록 방법 알려줘", {
+      generateAnswer: false,
+    })
+
+    expect(result.answerMode).toBe("direct_answer")
+    expect(result.sources[0]).toMatchObject({
+      title: "편입생(참관생) 등록",
+      heading: "사용 순서 안내",
+      urlPath: "/docs/admin/cs-transfer-student-registration",
+    })
+    expect(result.answer).toContain("3. 코스 상세 화면에서 편입생 항목을 선택하고 추가를 누릅니다.")
+    expect(result.answer).not.toMatch(/Figma|캡처|고객사/i)
   })
 
   it("answers exact procedural digest guides even when titles include numbering or policy words", () => {
@@ -276,7 +324,7 @@ describe("CS Figma guide source", () => {
       const answer = formatCsFigmaGuideAnswer(guide)
       const enrichment = getCsFigmaEnrichment(guide.docSlug)
 
-      for (const [index, step] of guide.steps.entries()) {
+      for (const step of guide.steps) {
         expect(step, guide.slug).toBeTruthy()
       }
 

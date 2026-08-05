@@ -205,7 +205,7 @@ export function buildCsFigmaDocArticle(
     slug: guide.docSlug,
     category: guide.docCategory,
     audience: guide.audience,
-    updatedAt: "2026-06-21",
+    updatedAt: guide.sourceDigestLineHint.includes("2026-08-05") ? "2026-08-05" : "2026-06-21",
     featured: false,
     tags: baseTags,
     keywords: baseKeywords,
