@@ -3,6 +3,12 @@ import type { NeoCrmCustomerRow } from "@/lib/admin-crm-customers-neo"
 import type { CrmTaskPriority, CrmTaskRecord, CrmTaskType } from "@/lib/repositories/crm-tasks"
 import { parseLeadSize, type LeadEngagement } from "@/lib/crm/lead-ranking"
 import { getMetaIntent, isTestLead } from "@/lib/crm/lead-attribution"
+import {
+  demoSignalLabel,
+  demoSignalLift,
+  findDemoSignal,
+  type DemoSignalIndex,
+} from "@/lib/crm/demo-signal"
 
 export type CrmPrioritySource = "lead" | "neo_account" | "task"
 export type CrmPrioritySeverity = "critical" | "high" | "medium" | "low"
@@ -37,6 +43,8 @@ export interface CrmPriorityItem {
 }
 
 const RESPONSE_TARGET_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
+/** 데모 색인이 없을 때 쓰는 빈 색인 — 호출부마다 null 분기를 두지 않기 위해. */
+const EMPTY_DEMO_INDEX: DemoSignalIndex = { byName: new Map(), unmatched: [], total: 0 }
 const DAY_MS = 24 * 60 * 60 * 1000
 const STALE_RECOVERY_EXPIRED_DAYS = 60
 /** 미응답이 "오늘 처리"에서 "관찰"로 내려가는 선(48h 봉우리 이후 경과일). */
@@ -104,6 +112,8 @@ function isResponseTargetLead(lead: LeadRecord) {
 export interface BuildLeadPriorityOptions {
   /** 참여 신호(연락 후 재방문·자료 수령·로그인). 없으면 반응 축을 건너뛴다. */
   engagement?: LeadEngagement | null
+  /** 쇼룸 캘린더에서 온 데모 일정 색인. 없으면 데모 신호를 건너뛴다. */
+  demoIndex?: DemoSignalIndex | null
 }
 
 export function buildLeadPriorityItem(
@@ -208,6 +218,17 @@ export function buildLeadPriorityItem(
     if (engagement.authenticated) score += 6
   }
 
+  // ─ 데모 — 퍼널에서 매출에 가장 가까운 상태. 예정·당일은 무엇보다 우선한다.
+  const demo = findDemoSignal(options?.demoIndex ?? EMPTY_DEMO_INDEX, lead.org ?? lead.name)
+  if (demo) {
+    score += demoSignalLift(demo)
+    reason = demoSignalLabel(demo)
+    action = "follow_up_lead"
+    actionLabel = demo.phase === "recent" ? "데모 후속" : "데모"
+    bucket = "today"
+    dueAt = demo.date
+  }
+
   if (lead.phone) score += 4
 
   const finalScore = clampScore(score)
@@ -234,7 +255,8 @@ export function buildLeadPriorityItem(
 
 export function buildNeoAccountPriorityItem(
   account: NeoCrmCustomerRow,
-  now = new Date()
+  now = new Date(),
+  options?: { demoIndex?: DemoSignalIndex | null }
 ): CrmPriorityItem | null {
   const nowMs = now.getTime()
   const expiryDays = daysFromNow(account.expireAt, nowMs)
@@ -299,6 +321,18 @@ export function buildNeoAccountPriorityItem(
     reason = "충전 잔액 소진"
     score = account.riskLevel === "urgent" ? 82 : 70
     dueAt = account.updatedAt ?? account.lastClassAt ?? null
+  }
+
+  // 데모가 잡힌 고객은 만료·잔액과 무관하게 지금 챙겨야 한다 — 다른 사유가 없어도
+  // 데모 하나만으로 작업대에 올린다.
+  const demo = findDemoSignal(options?.demoIndex ?? EMPTY_DEMO_INDEX, account.name)
+  if (demo) {
+    action = action ?? "watch_account"
+    actionLabel = demo.phase === "recent" ? "데모 후속" : "데모"
+    reason = demoSignalLabel(demo)
+    bucket = "today"
+    score += demoSignalLift(demo)
+    dueAt = demo.date
   }
 
   if (!action) return null

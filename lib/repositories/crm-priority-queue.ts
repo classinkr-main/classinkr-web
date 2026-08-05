@@ -14,6 +14,8 @@ import {
 import { getLeads } from "@/lib/repositories/leads"
 import { listCrmTasks } from "@/lib/repositories/crm-tasks"
 import { getLeadsActivitySummary } from "@/lib/repositories/lead-activity"
+import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
+import { buildDemoSignalIndex } from "@/lib/crm/demo-signal"
 
 /**
  * "customer" 는 리드 + ClassIn 고객을 한 묶음으로 보는 가상 소스다.
@@ -52,6 +54,11 @@ export interface CrmPriorityQueue {
      * "할 일 N건"을 정직하게 표시하려면 현재 뷰가 아니라 전체 기준이 필요하다.
      */
     sourceTotals: { lead: number; neoAccount: number; task: number }
+    /**
+     * 쇼룸 캘린더 데모 현황. unmatched 는 일정은 있는데 고객을 못 붙인 건수다 —
+     * 제목이 자유 텍스트라 전수 매칭이 안 되므로, 조용히 버리지 않고 화면에 노출한다.
+     */
+    demo: { total: number; matched: number; unmatched: number }
   }
   buckets: Array<{ bucket: CrmPriorityBucket; label: string; count: number }>
   owners: Array<{ ownerName: string; count: number }>
@@ -129,21 +136,30 @@ export async function getCrmPriorityQueue(
   let neoAccountsOk = true
   let tasksOk = true
 
-  const [leadResult, neoResult, taskResult, engagementResult] = await Promise.allSettled([
+  const [leadResult, neoResult, taskResult, engagementResult, demoResult] = await Promise.allSettled([
     getLeads(),
     getNeoCrmCustomers(),
     listCrmTasks({ status: "active", limit: 200, now }),
     getLeadsActivitySummary(),
+    getShowroomCalendarEvents(),
   ])
 
   const items: CrmPriorityItem[] = []
   // 참여 신호는 우선순위를 더 정확하게 만들 뿐 없어도 큐는 서야 한다 —
   // 실패하면 반응 축만 조용히 빠지고 경고도 띄우지 않는다(보조 지표).
   const engagements = engagementResult.status === "fulfilled" ? engagementResult.value : null
+  // 데모 일정도 마찬가지 — 캘린더가 죽어도 큐는 선다.
+  const demoIndex = buildDemoSignalIndex(
+    demoResult.status === "fulfilled" ? demoResult.value : [],
+    now
+  )
 
   if (leadResult.status === "fulfilled") {
     for (const lead of leadResult.value) {
-      const item = buildLeadPriorityItem(lead, now, { engagement: engagements?.[lead.id] ?? null })
+      const item = buildLeadPriorityItem(lead, now, {
+        engagement: engagements?.[lead.id] ?? null,
+        demoIndex,
+      })
       if (item) items.push(item)
     }
   } else {
@@ -153,7 +169,7 @@ export async function getCrmPriorityQueue(
 
   if (neoResult.status === "fulfilled" && neoResult.value.ok) {
     for (const account of neoResult.value.rows) {
-      const item = buildNeoAccountPriorityItem(account, now)
+      const item = buildNeoAccountPriorityItem(account, now, { demoIndex })
       if (item) items.push(item)
     }
   } else {
@@ -196,6 +212,11 @@ export async function getCrmPriorityQueue(
         lead: ownerScoped.filter((item) => item.source === "lead").length,
         neoAccount: ownerScoped.filter((item) => item.source === "neo_account").length,
         task: ownerScoped.filter((item) => item.source === "task").length,
+      },
+      demo: {
+        total: demoIndex.total,
+        matched: demoIndex.byName.size,
+        unmatched: demoIndex.unmatched.length,
       },
     },
     buckets: buildBucketOptions(bucketCounts),

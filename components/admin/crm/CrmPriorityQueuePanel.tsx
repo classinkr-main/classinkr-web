@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, Building2, CheckCircle2, Clock3, ExternalLink, Filter, ListChecks, PhoneCall, RefreshCw } from "lucide-react"
+import { AlertTriangle, Building2, CalendarClock, CheckCircle2, Clock3, ExternalLink, Filter, ListChecks, PhoneCall, RefreshCw } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import type { CrmPriorityBucket, CrmPriorityItem, CrmPrioritySource } from "@/lib/crm/priority"
@@ -31,6 +31,7 @@ interface CrmPriorityQueue {
     ownerCount: number
     bucketCounts: Record<CrmPriorityBucket, number>
     sourceTotals?: { lead: number; neoAccount: number; task: number }
+    demo?: { total: number; matched: number; unmatched: number }
   }
   buckets: Array<{ bucket: CrmPriorityBucket; label: string; count: number }>
   owners: Array<{ ownerName: string; count: number }>
@@ -350,6 +351,20 @@ export default function CrmPriorityQueuePanel({
               </p>
             </Link>
           </div>
+        </div>
+      ) : null}
+
+      {/*
+        쇼룸 캘린더 일정 중 고객을 못 붙인 건 — 제목이 자유 텍스트라 전수 매칭이 안 된다.
+        조용히 버리면 "데모가 없다"로 오인되므로 건수를 그대로 드러낸다.
+      */}
+      {data?.summary.demo && data.summary.demo.unmatched > 0 ? (
+        <div className="mb-3 flex items-start gap-2 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2 text-[12px] text-[#1a1a1a]/55">
+          <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/35" />
+          <span>
+            쇼룸 캘린더 데모 {data.summary.demo.total}건 중 {data.summary.demo.unmatched}건은 고객을
+            찾지 못해 우선순위에 반영되지 않았습니다 — 캘린더 제목에 고객명이 없거나 표기가 다릅니다.
+          </span>
         </div>
       ) : null}
 
