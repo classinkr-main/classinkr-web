@@ -45,9 +45,52 @@ describe("CRM priority rules", () => {
 
     expect(item?.action).toBe("respond_lead")
     expect(item?.bucket).toBe("today")
-    expect(item?.severity).toBe("critical")
+    // 오늘 처리 큐에는 남지만 critical 을 독점하지는 않는다 — 살아 있는 거래에 자리를 내준다.
+    expect(item?.severity).toBe("high")
     expect(item?.reason).toContain("48시간")
     expect(item?.ownerKeys).toEqual([])
+  })
+
+  it("오래 방치된 미응답은 봉우리를 지나 식는다", () => {
+    const twoDays = buildLeadPriorityItem(lead(), NOW)
+    const twoWeeks = buildLeadPriorityItem(
+      lead({ timestamp: new Date(NOW.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString() }),
+      NOW
+    )
+
+    expect(twoWeeks!.score).toBeLessThan(twoDays!.score)
+    expect(twoWeeks?.reason).toContain("식음")
+  })
+
+  it("연락에 반응한 리드가 방치된 미응답보다 위에 선다", () => {
+    const neglected = buildLeadPriorityItem(
+      lead({ timestamp: new Date(NOW.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString() }),
+      NOW
+    )
+    const responsive = buildLeadPriorityItem(
+      lead({
+        id: "responsive",
+        status: "contacted",
+        source: "demo_modal",
+        size: "320",
+        confirmed_at: new Date(NOW.getTime() - 20 * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+      NOW,
+      {
+        engagement: {
+          authenticated: true,
+          providers: ["google"],
+          downloadCount: 2,
+          eventCount: 11,
+          contactLogCount: 3,
+          lastContactAt: new Date(NOW.getTime() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+          lastActivityAt: new Date(NOW.getTime() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+      }
+    )
+
+    expect(responsive!.score).toBeGreaterThan(neglected!.score)
+    expect(responsive?.reason).toBe("연락 후 재방문")
   })
 
   it("keeps converted and closed leads out of the queue", () => {
@@ -63,6 +106,18 @@ describe("CRM priority rules", () => {
     expect(item?.reason).toContain("일 내 만료")
     expect(item?.score).toBeGreaterThanOrEqual(90)
     expect(item?.ownerKeys).toEqual(["담당자", "owner-1"])
+  })
+
+  it("만료 경과가 길수록 점수가 오르지 않는다 — 곧 만료될 계정이 두 달 전 만료를 이긴다", () => {
+    const days = (n: number) => new Date(NOW.getTime() + n * 24 * 60 * 60 * 1000).toISOString()
+    const expiringSoon = buildNeoAccountPriorityItem(account({ expireAt: days(3) }), NOW)
+    const justExpired = buildNeoAccountPriorityItem(account({ expireAt: days(-5) }), NOW)
+    const longExpired = buildNeoAccountPriorityItem(account({ expireAt: days(-56) }), NOW)
+
+    // 살릴 수 있는 건이 죽은 건보다 위 — 이전 곡선(82 + 경과일)에서는 사실상 동점이었다.
+    expect(expiringSoon!.score).toBeGreaterThan(longExpired!.score)
+    expect(justExpired!.score).toBeGreaterThan(longExpired!.score)
+    expect(longExpired?.reason).toContain("식음")
   })
 
   it("moves very stale expired accounts into a separate recovery bucket with capped urgency", () => {

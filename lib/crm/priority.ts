@@ -1,6 +1,7 @@
 import type { LeadRecord } from "@/lib/repositories/leads"
 import type { NeoCrmCustomerRow } from "@/lib/admin-crm-customers-neo"
 import type { CrmTaskPriority, CrmTaskRecord, CrmTaskType } from "@/lib/repositories/crm-tasks"
+import { parseLeadSize, type LeadEngagement } from "@/lib/crm/lead-ranking"
 
 export type CrmPrioritySource = "lead" | "neo_account" | "task"
 export type CrmPrioritySeverity = "critical" | "high" | "medium" | "low"
@@ -37,6 +38,12 @@ export interface CrmPriorityItem {
 const RESPONSE_TARGET_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
 const DAY_MS = 24 * 60 * 60 * 1000
 const STALE_RECOVERY_EXPIRED_DAYS = 60
+/** 미응답이 "오늘 처리"에서 "관찰"로 내려가는 선(48h 봉우리 이후 경과일). */
+const UNRESPONDED_COOLED_DAYS = 3
+/** 만료 직후 회복 골든타임 — 이 안에서는 봉우리 점수를 유지한다. */
+const EXPIRED_GOLDEN_DAYS = 14
+/** 골든타임 이후 감쇠 반감기. 60일(장기 회복 진입선)에서 44~48 근처로 착지하도록 잡았다. */
+const EXPIRED_HALF_LIFE_DAYS = 50
 
 export const CRM_PRIORITY_BUCKET_LABELS: Record<CrmPriorityBucket, string> = {
   today: "오늘 처리",
@@ -93,7 +100,16 @@ function isResponseTargetLead(lead: LeadRecord) {
   return lead.status === "new" && RESPONSE_TARGET_SOURCES.has(lead.source)
 }
 
-export function buildLeadPriorityItem(lead: LeadRecord, now = new Date()): CrmPriorityItem | null {
+export interface BuildLeadPriorityOptions {
+  /** 참여 신호(연락 후 재방문·자료 수령·로그인). 없으면 반응 축을 건너뛴다. */
+  engagement?: LeadEngagement | null
+}
+
+export function buildLeadPriorityItem(
+  lead: LeadRecord,
+  now = new Date(),
+  options?: BuildLeadPriorityOptions
+): CrmPriorityItem | null {
   if (lead.status === "converted" || lead.status === "closed") return null
   // 공개 채널에서 막 들어와 아직 검토(확인)되지 않은 저의도 리드(뉴스레터 등)는 작업대 노이즈라 제외.
   // 응대 SLA가 걸린 소스(문의/데모/Meta 리드애즈)는 미확인이어도 "첫 응답" 큐로 즉시 노출한다.
@@ -102,10 +118,12 @@ export function buildLeadPriorityItem(lead: LeadRecord, now = new Date()): CrmPr
   const nowMs = now.getTime()
   const ageHours = hoursSince(lead.timestamp, nowMs) ?? 0
   const followUpDays = daysFromNow(lead.follow_up_at, nowMs)
+  const engagement = options?.engagement ?? null
   let action: CrmPriorityAction = "follow_up_lead"
   let actionLabel = "팔로업"
   let reason = "진행 중인 리드"
-  let score = lead.status === "new" ? 46 : 32
+  // 대화가 열린 리드(contacted)가 아직 말도 못 붙인 신규보다 높게 출발한다.
+  let score = lead.status === "contacted" ? 52 : 40
   let dueAt = lead.follow_up_at ?? null
   let bucket: CrmPriorityBucket = "watch"
 
@@ -113,15 +131,24 @@ export function buildLeadPriorityItem(lead: LeadRecord, now = new Date()): CrmPr
     action = "respond_lead"
     actionLabel = "첫 응답"
     bucket = "today"
-    score = 55
+    // 봉우리형 — 24~48h 가 최고점이고 그 뒤로는 식는다. 오래 방치됐다는 이유만으로
+    // 살아 있는 거래를 밀어내던 이전 곡선(48h → +35 고정, 총 90점)을 대체한다.
+    score = 44
     if (ageHours >= 48) {
-      score += 35
-      reason = "48시간 이상 미응답"
+      const daysPast = (ageHours - 48) / 24
+      score += Math.max(4, Math.round(26 * Math.pow(0.5, daysPast / 3)))
+      const days = Math.floor(ageHours / 24)
+      const cooled = daysPast > UNRESPONDED_COOLED_DAYS
+      reason = cooled ? `${days}일 미응답 · 식음` : "48시간 이상 미응답"
+      // 버킷 정렬이 점수보다 우선하므로(sortPriorityItems), 식은 건을 계속 "오늘 처리"에
+      // 두면 점수를 아무리 낮춰도 살아 있는 거래 위에 그대로 남는다. 라벨과 자리를 맞춘다 —
+      // 닷새 넘게 답 못 한 문의는 오늘의 할 일이 아니라 관찰 대상이다.
+      if (cooled) bucket = "watch"
     } else if (ageHours >= 24) {
-      score += 24
+      score += 26
       reason = "24시간 이상 미응답"
     } else {
-      score += 12
+      score += 14
       reason = "신규 문의 응답 필요"
     }
     dueAt = lead.timestamp
@@ -129,20 +156,43 @@ export function buildLeadPriorityItem(lead: LeadRecord, now = new Date()): CrmPr
 
   if (followUpDays != null) {
     if (followUpDays < 0) {
-      score += 34
-      reason = `${Math.abs(followUpDays)}일 지연된 팔로업`
+      const overdue = Math.abs(followUpDays)
+      // 지연 팔로업도 같은 원리 — 1~3일이 봉우리, 이후 감쇠.
+      score += Math.max(4, Math.round(28 * Math.pow(0.5, Math.max(0, overdue - 3) / 4)))
+      reason = overdue > 7 ? `${overdue}일 지연된 팔로업 · 식음` : `${overdue}일 지연된 팔로업`
       bucket = "today"
     } else if (followUpDays === 0) {
-      score += 22
+      score += 26
       reason = "오늘 예정된 팔로업"
       bucket = "today"
     } else if (followUpDays <= 2) {
-      score += 10
+      score += 12
       reason = `${followUpDays}일 뒤 팔로업 예정`
     }
   }
 
+  // ─ 감도(유입 의도)·규모 — "지금 사줄 것 같은 곳"을 위로 올리는 축.
+  if (lead.source === "demo_modal") score += 12
+  else if (lead.source === "contact_page") score += 6
   if (lead.source === "meta_lead_ads") score += 8
+
+  const size = parseLeadSize(lead.size)
+  if (size >= 300) score += 12
+  else if (size >= 100) score += 7
+
+  // ─ 반응 — 상대가 우리 쪽으로 움직였는가. 참여 데이터가 없으면 조용히 0.
+  if (engagement) {
+    const contactMs = parseTime(engagement.lastContactAt)
+    const activityMs = parseTime(engagement.lastActivityAt)
+    if (contactMs != null && activityMs != null && activityMs > contactMs) {
+      score += 16
+      reason = "연락 후 재방문"
+      if (bucket === "watch") bucket = "today"
+    }
+    if (engagement.downloadCount > 0) score += 8
+    if (engagement.authenticated) score += 6
+  }
+
   if (lead.phone) score += 4
 
   const finalScore = clampScore(score)
@@ -188,12 +238,20 @@ export function buildNeoAccountPriorityItem(
     const expiredDays = Math.abs(expiryDays)
     bucket = expiredDays > STALE_RECOVERY_EXPIRED_DAYS ? "stale_recovery" : "today"
     actionLabel = bucket === "stale_recovery" ? "장기 회복" : "만료 회복"
-    reason =
-      bucket === "stale_recovery" ? `${expiredDays}일 전 만료 · 장기 회복` : `${expiredDays}일 전 만료`
-    score =
-      bucket === "stale_recovery"
-        ? 44 + Math.min(16, Math.floor((expiredDays - STALE_RECOVERY_EXPIRED_DAYS) / 14))
-        : 82 + Math.min(10, expiredDays)
+    if (bucket === "stale_recovery") {
+      reason = `${expiredDays}일 전 만료 · 장기 회복`
+      score = 44 + Math.min(16, Math.floor((expiredDays - STALE_RECOVERY_EXPIRED_DAYS) / 14))
+    } else {
+      // 리드의 미응답과 같은 원리 — 이전에는 `82 + min(10, 경과일)` 이라 오래 만료될수록
+      // 점수가 올라, 두 달 전에 죽은 계정이 사흘 뒤 만료되는(아직 살릴 수 있는) 계정과
+      // 동점이 됐다. 회복 골든타임(2주)에서 봉우리를 찍고 장기 회복 진입선까지 감쇠한다.
+      const pastGolden = Math.max(0, expiredDays - EXPIRED_GOLDEN_DAYS)
+      score = Math.max(48, 88 * Math.pow(0.5, pastGolden / EXPIRED_HALF_LIFE_DAYS))
+      reason =
+        pastGolden > EXPIRED_HALF_LIFE_DAYS / 2
+          ? `${expiredDays}일 전 만료 · 식음`
+          : `${expiredDays}일 전 만료`
+    }
     dueAt = account.expireAt
   } else if (expiryDays != null && expiryDays <= 30) {
     action = "renew_account"

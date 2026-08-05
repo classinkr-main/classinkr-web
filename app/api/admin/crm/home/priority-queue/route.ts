@@ -7,11 +7,16 @@ import {
   findAdminCrmOwner,
   listAdminUserDirectory,
 } from "@/lib/repositories/admin-users"
-import { getCrmPriorityQueue } from "@/lib/repositories/crm-priority-queue"
-import type { CrmPriorityBucket, CrmPrioritySource } from "@/lib/crm/priority"
+import {
+  getCrmPriorityQueue,
+  type CrmPriorityQueueSource,
+} from "@/lib/repositories/crm-priority-queue"
+import type { CrmPriorityBucket } from "@/lib/crm/priority"
 
-function parseSource(value: string | null): CrmPrioritySource | "all" {
-  return value === "lead" || value === "neo_account" || value === "task" ? value : "all"
+function parseSource(value: string | null): CrmPriorityQueueSource {
+  return value === "lead" || value === "neo_account" || value === "task" || value === "customer"
+    ? value
+    : "all"
 }
 
 function parseBucket(value: string | null): CrmPriorityBucket | "all" {

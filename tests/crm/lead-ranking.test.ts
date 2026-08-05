@@ -13,6 +13,7 @@ import {
   parseLeadSize,
   scoreFrequency,
   scoreRecency,
+  scoreResponse,
   scoreValue,
   sortLeads,
   tokenizeLeadSearch,
@@ -98,6 +99,49 @@ describe("scoreValue", () => {
   })
 })
 
+describe("scoreResponse", () => {
+  it("우리 연락 이후의 재방문을 가장 무겁게 센다", () => {
+    const noReaction = scoreResponse(
+      makeEngagement({
+        contactLogCount: 3,
+        lastContactAt: new Date(NOW_MS - 2 * DAY_MS).toISOString(),
+      }),
+      NOW_MS
+    )
+    const cameBack = scoreResponse(
+      makeEngagement({
+        contactLogCount: 3,
+        lastContactAt: new Date(NOW_MS - 2 * DAY_MS).toISOString(),
+        lastActivityAt: new Date(NOW_MS - DAY_MS).toISOString(),
+      }),
+      NOW_MS
+    )
+    expect(cameBack).toBeGreaterThan(noReaction)
+  })
+
+  it("우리가 아무리 많이 연락해도 그 자체는 반응이 아니다", () => {
+    expect(scoreResponse(makeEngagement({ contactLogCount: 12 }), NOW_MS)).toBe(0)
+  })
+
+  it("오래된 반응은 식는다", () => {
+    const build = (daysAgo: number) =>
+      scoreResponse(
+        makeEngagement({
+          lastContactAt: new Date(NOW_MS - (daysAgo + 1) * DAY_MS).toISOString(),
+          lastActivityAt: new Date(NOW_MS - daysAgo * DAY_MS).toISOString(),
+        }),
+        NOW_MS
+      )
+    expect(build(60)).toBeLessThan(build(1))
+  })
+
+  it("자료 수령·로그인 신원은 반응으로 가산된다", () => {
+    expect(scoreResponse(makeEngagement({ downloadCount: 2 }), NOW_MS)).toBeGreaterThan(0)
+    expect(scoreResponse(makeEngagement({ authenticated: true }), NOW_MS)).toBeGreaterThan(0)
+    expect(scoreResponse(makeEngagement(), NOW_MS)).toBe(0)
+  })
+})
+
 describe("calcLeadPriority", () => {
   it("자주·최근·주요가 겹친 리드가 오늘 들어온 저의도 리드보다 위에 선다", () => {
     const engagedWhale = calcLeadPriority(
@@ -127,14 +171,80 @@ describe("calcLeadPriority", () => {
     expect(engagedWhale.total).toBeGreaterThan(freshNewsletter.total)
   })
 
-  it("미응답 48시간이 지난 문의는 긴급 축이 만점", () => {
-    const priority = calcLeadPriority(
-      makeLead({ source: "contact_page", status: "new", timestamp: new Date(NOW_MS - 3 * DAY_MS).toISOString() }),
+  it("미응답은 24~48시간에서 봉우리를 찍고 그 뒤로는 식는다", () => {
+    const urgencyAfter = (hours: number) =>
+      calcLeadPriority(
+        makeLead({
+          source: "contact_page",
+          status: "new",
+          timestamp: new Date(NOW_MS - hours * 3600_000).toISOString(),
+        }),
+        makeEngagement(),
+        NOW_MS
+      ).urgency
+
+    const justIn = urgencyAfter(2)
+    const peak = urgencyAfter(36)
+    const threeDays = urgencyAfter(72)
+    const twoWeeks = urgencyAfter(24 * 14)
+
+    expect(peak).toBeGreaterThan(justIn)
+    // 핵심: 오래 방치될수록 점수가 계속 오르던 이전 곡선을 끊는다.
+    expect(threeDays).toBeLessThan(peak)
+    expect(twoWeeks).toBeLessThan(threeDays)
+    expect(twoWeeks).toBeLessThanOrEqual(15)
+  })
+
+  it("지연된 팔로업도 봉우리 이후 감쇠한다 — 40일 지연이 2일 지연을 이기지 못한다", () => {
+    const urgencyForOverdue = (days: number) =>
+      calcLeadPriority(
+        makeLead({
+          source: "manual",
+          status: "contacted",
+          follow_up_at: new Date(NOW_MS - days * DAY_MS).toISOString(),
+        }),
+        makeEngagement(),
+        NOW_MS
+      ).urgency
+
+    expect(urgencyForOverdue(40)).toBeLessThan(urgencyForOverdue(2))
+  })
+
+  it("방치된 미응답 리드는 컨택·데모·반응이 겹친 리드를 이기지 못한다", () => {
+    // 사용자 요청의 핵심 회귀 방지: "미응답 길어짐"만으로 상단을 먹지 않는다.
+    const neglected = calcLeadPriority(
+      makeLead({
+        id: "neglected",
+        source: "contact_page",
+        status: "new",
+        timestamp: new Date(NOW_MS - 9 * DAY_MS).toISOString(),
+        follow_up_at: new Date(NOW_MS - 7 * DAY_MS).toISOString(),
+      }),
       makeEngagement(),
       NOW_MS
     )
-    expect(priority.urgency).toBe(100)
-    expect(priority.reasons[0]).toBe("미응답 3일")
+    const engagedDemo = calcLeadPriority(
+      makeLead({
+        id: "engaged",
+        source: "demo_modal",
+        status: "contacted",
+        size: "220",
+        org: "반응학원",
+        phone: "010-1111-2222",
+        timestamp: new Date(NOW_MS - 12 * DAY_MS).toISOString(),
+      }),
+      makeEngagement({
+        eventCount: 9,
+        downloadCount: 2,
+        contactLogCount: 2,
+        lastContactAt: new Date(NOW_MS - 5 * DAY_MS).toISOString(),
+        lastActivityAt: new Date(NOW_MS - 2 * DAY_MS).toISOString(),
+      }),
+      NOW_MS
+    )
+
+    expect(engagedDemo.total).toBeGreaterThan(neglected.total)
+    expect(engagedDemo.reasons[0]).not.toContain("미응답")
   })
 
   it("전환·종료 리드는 목록에 남되 상단에서 내려간다", () => {

@@ -8,7 +8,9 @@ import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import type { CrmPriorityBucket, CrmPriorityItem, CrmPrioritySource } from "@/lib/crm/priority"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 
-type SourceFilter = "all" | CrmPrioritySource
+// 할 일은 이 목록에서 빠지고 상단 현황판에 건수로만 남는다("고객 운영 우선순위"라는
+// 이름값 — 고객과 할 일이 한 목록에서 경쟁하면 상위 5건이 할 일로 쏠린다).
+type SourceFilter = "customer" | Exclude<CrmPrioritySource, "task">
 type BucketFilter = "all" | CrmPriorityBucket
 
 interface CrmPriorityQueue {
@@ -28,6 +30,7 @@ interface CrmPriorityQueue {
     taskCount: number
     ownerCount: number
     bucketCounts: Record<CrmPriorityBucket, number>
+    sourceTotals?: { lead: number; neoAccount: number; task: number }
   }
   buckets: Array<{ bucket: CrmPriorityBucket; label: string; count: number }>
   owners: Array<{ ownerName: string; count: number }>
@@ -35,10 +38,9 @@ interface CrmPriorityQueue {
 }
 
 const SOURCE_FILTERS: Array<{ key: SourceFilter; label: string }> = [
-  { key: "all", label: "전체" },
+  { key: "customer", label: "전체" },
   { key: "lead", label: "리드" },
-  { key: "neo_account", label: "고객" },
-  { key: "task", label: "할 일" },
+  { key: "neo_account", label: "ClassIn 고객" },
 ]
 
 const FALLBACK_BUCKETS: Array<{ bucket: CrmPriorityBucket; label: string; count: number }> = [
@@ -49,14 +51,13 @@ const FALLBACK_BUCKETS: Array<{ bucket: CrmPriorityBucket; label: string; count:
 ]
 
 const QUEUE_TTL_MS = 90_000
-// 홈 첫 화면에서 한 번에 그리는 작업대 항목 수. 받아오는 건 최대 12건이고,
-// 나머지는 "+N건 더 보기"로 펼친다 — 아침 화면이 스크롤 목록이 되지 않게 하는 상한.
-const QUEUE_PREVIEW_COUNT = 6
+// 홈 첫 화면에서 한 번에 그리는 항목 수. 받아오는 건 최대 12건이고, 나머지는
+// "+N건 더 보기"로 펼친다 — 아침 화면이 스크롤 목록이 되지 않게 하는 상한.
+const QUEUE_PREVIEW_COUNT = 5
 const CURRENT_OWNER_VALUE = "__me"
 
 function queueUrl(source: SourceFilter, owner: string, bucket: BucketFilter, limit: number) {
-  const params = new URLSearchParams({ limit: String(limit) })
-  if (source !== "all") params.set("source", source)
+  const params = new URLSearchParams({ limit: String(limit), source })
   if (owner) params.set("owner", owner)
   if (bucket !== "all") params.set("bucket", bucket)
   return `/api/admin/crm/home/priority-queue?${params.toString()}`
@@ -113,7 +114,7 @@ export default function CrmPriorityQueuePanel({
   previewCount?: number
 }) {
   const [expanded, setExpanded] = useState(false)
-  const [source, setSource] = useState<SourceFilter>("all")
+  const [source, setSource] = useState<SourceFilter>("customer")
   const [bucket, setBucket] = useState<BucketFilter>("today")
   const [owner, setOwner] = useState("")
   const [data, setData] = useState<CrmPriorityQueue | null>(null)
@@ -245,7 +246,8 @@ export default function CrmPriorityQueuePanel({
             </p>
             <h2 className="mt-1 text-[18px] font-bold text-[#111110]">고객 운영 우선순위</h2>
             <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
-              규칙 기반 우선순위 · 응답지연·만료·미수 신호 가중<span className="text-[#1a1a1a]/30">(Derived)</span>
+              컨택·데모·유입 감도·반응 가중 · 방치 신호는 봉우리 이후 감쇠
+              <span className="text-[#1a1a1a]/30">(Derived)</span>
             </p>
           </div>
         )}
@@ -300,28 +302,53 @@ export default function CrmPriorityQueuePanel({
       </div>
 
       {data && !compact ? (
-        <div className="mb-3 grid gap-2 grid-cols-2 lg:grid-cols-5">
-          <div className="rounded-xl bg-[#fafaf8] p-3">
-            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">선택 후보</p>
-            <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
+        // 현황판 — 왼쪽에 "오늘 처리"를 크게 세우고, 나머지는 구성 내역으로 붙인다.
+        // 할 일은 목록에서 빠졌으므로 여기서 건수 + 딥링크로만 존재한다.
+        <div className="mb-3 grid gap-2 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)]">
+          <div className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">오늘 처리</p>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="text-[28px] font-bold leading-none tabular-nums text-[#111110]">
+                {(data.summary.bucketCounts.today ?? 0).toLocaleString("ko-KR")}
+              </span>
+              <span className="text-[12px] font-medium text-[#1a1a1a]/40">
+                / 후보 {data.summary.total.toLocaleString("ko-KR")}
+              </span>
+            </div>
+            {data.summary.critical > 0 ? (
+              <p className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-[#F6D5C5] bg-[#FEF3EE] px-2 py-0.5 text-[11px] font-semibold text-[#B85C33]">
+                <AlertTriangle className="h-3 w-3" />
+                긴급 {data.summary.critical.toLocaleString("ko-KR")}
+              </p>
+            ) : (
+              <p className="mt-1.5 text-[11px] font-medium text-[#1a1a1a]/35">긴급 없음</p>
+            )}
           </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
-            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">긴급</p>
-            <p className="mt-1 text-xl font-bold text-[#B85C33]">{data.summary.critical.toLocaleString("ko-KR")}</p>
-          </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
-            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">할 일</p>
-            <p className="mt-1 text-xl font-bold text-[#084734]">{data.summary.taskCount.toLocaleString("ko-KR")}</p>
-          </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
-            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">리드</p>
-            <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.leadCount.toLocaleString("ko-KR")}</p>
-          </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
-            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">ClassIn 고객</p>
-            <p className="mt-1 text-xl font-bold text-[#111110]">
-              {data.summary.neoAccountCount.toLocaleString("ko-KR")}
-            </p>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl border border-[#f0f0ec] bg-white p-3">
+              <p className="text-[11px] font-semibold text-[#1a1a1a]/35">리드</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-[#111110]">
+                {(data.summary.sourceTotals?.lead ?? data.summary.leadCount).toLocaleString("ko-KR")}
+              </p>
+            </div>
+            <div className="rounded-xl border border-[#f0f0ec] bg-white p-3">
+              <p className="text-[11px] font-semibold text-[#1a1a1a]/35">ClassIn 고객</p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-[#111110]">
+                {(data.summary.sourceTotals?.neoAccount ?? data.summary.neoAccountCount).toLocaleString("ko-KR")}
+              </p>
+            </div>
+            <Link
+              href="/admin/crm/activity"
+              className="group rounded-xl border border-[#f0f0ec] bg-white p-3 transition-colors hover:border-[#D7EBDD] hover:bg-[#ECFDF5]"
+            >
+              <p className="flex items-center gap-1 text-[11px] font-semibold text-[#1a1a1a]/35">
+                할 일
+                <ExternalLink className="h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
+              </p>
+              <p className="mt-1 text-xl font-bold tabular-nums text-[#084734]">
+                {(data.summary.sourceTotals?.task ?? data.summary.taskCount).toLocaleString("ko-KR")}
+              </p>
+            </Link>
           </div>
         </div>
       ) : null}

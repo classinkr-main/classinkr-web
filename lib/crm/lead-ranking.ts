@@ -3,16 +3,24 @@
  *
  * 리드 보드의 기본 순서는 "최근 등록순"이었다. 그래서 3개월 전에 데모를 신청하고
  * 지금도 매주 자료를 받아가는 300명 규모 학원이, 오늘 들어온 뉴스레터 구독 1건보다
- * 아래에 깔렸다. 이 모듈은 그 순서를 네 축의 합성 점수로 바꾼다:
+ * 아래에 깔렸다. 이 모듈은 그 순서를 다섯 축의 합성 점수로 바꾼다:
  *
- *   자주(frequency) — 사이트 활동·자료 다운로드·우리 쪽 연락 횟수
- *   최근(recency)   — 마지막 접점(유입/활동/연락) 이후 경과. 14일 반감기 지수감쇠
- *   주요(value)     — 매출 근접도: 규모(원생 수) · 유입 의도 · 진행 단계 · 도달 가능성
- *   긴급(urgency)   — 응대 SLA(미응답 24/48h)와 지연된 팔로업
+ *   주요(value)      — 매출 근접도: 진행 단계(컨택) · 유입 의도(데모·문의) · 규모 · 도달 가능성
+ *   반응(response)   — 상대가 우리 쪽으로 움직였는가: 연락 후 재방문 · 자료 수령 · 로그인 신원
+ *   최근(recency)    — 마지막 접점(유입/활동/연락) 이후 경과. 14일 반감기 지수감쇠
+ *   자주(frequency)  — 사이트 활동·자료 다운로드·우리 쪽 연락 횟수
+ *   긴급(urgency)    — 응대 SLA(미응답)와 지연된 팔로업
  *
  * value 는 원(₩) 추정이 아니다. 리드 테이블에는 금액이 없고 단가 상수도 저장소에
  * 없어서, 임의의 환산은 근거 없는 숫자를 만든다. 대신 "예상 매출에 얼마나 가까운가"를
  * 0~100 상대 점수로만 표현하고, 근거(원생 수·데모 신청 등)를 reasons 로 같이 돌려준다.
+ *
+ * ─── 긴급(urgency)을 봉우리형으로 바꾼 이유 ───────────────────────
+ * 이전 버전은 미응답·지연 팔로업이 **오래될수록 점수가 계속 올라갔다**(지연일수 × 5).
+ * 그래서 40일 밀린 죽은 리드가 어제 데모를 신청한 300명 학원을 이겼다. 방치는 급한
+ * 일의 신호이긴 하지만 오래된 방치는 급한 게 아니라 **식은 것**이다. 지금은 놓치기
+ * 직전 구간에서 봉우리를 찍고 그 뒤로는 반감기로 식는다. SLA 는 목록에 남되 상단을
+ * 독점하지 않는다.
  */
 
 import { getLeadMagnetIntentScore } from "@/lib/lead-magnets"
@@ -67,8 +75,8 @@ export function getEngagement(map: LeadEngagementMap | undefined, leadId: string
 // "이 경로로 들어온 사람이 구매 대화에 얼마나 가까운가"의 사전값. 데모 신청이 최상단,
 // 뉴스레터 구독이 최하단. 표에 없는 source 는 DEFAULT.
 const SOURCE_INTENT: Record<string, number> = {
-  demo_modal: 24,
-  contact_page: 18,
+  demo_modal: 30,
+  contact_page: 22,
   meta_lead_ads: 14,
   seminar: 14,
   showroom: 14,
@@ -172,8 +180,10 @@ export function scoreValue(lead: LeadRecord): number {
   if (lead.lead_magnet) score += Math.round(getLeadMagnetIntentScore(lead.lead_magnet) / 2)
 
   // 진행: 대화가 시작됐고 다음 약속이 잡혀 있나.
-  if (lead.status === "contacted") score += 14
-  if (lead.follow_up_at) score += 8
+  // 컨택은 이 축에서 가장 무거운 단일 신호다 — 아직 말도 못 붙인 리드 100건보다
+  // 이미 대화가 열린 1건이 매출에 가깝다.
+  if (lead.status === "contacted") score += 22
+  if (lead.follow_up_at) score += 12
 
   // 도달 가능성: 지금 당장 연결할 수단이 있나.
   if (lead.phone) score += 12
@@ -184,16 +194,41 @@ export function scoreValue(lead: LeadRecord): number {
   return clamp100(score)
 }
 
-/** 응대 SLA·팔로업 지연. 비활성(전환/종료) 리드는 0. */
+/**
+ * 봉우리 이후 감쇠 — 신호가 가장 뜨거운 구간에서 최고점을 찍고 반감기로 식는다.
+ * "오래 방치됨 = 더 급함"이라는 단조 증가를 끊는 장치.
+ */
+function decayAfterPeak(peakScore: number, daysPastPeak: number, halfLifeDays: number, floor = 0) {
+  if (daysPastPeak <= 0) return peakScore
+  return Math.max(floor, peakScore * Math.pow(0.5, daysPastPeak / halfLifeDays))
+}
+
+/** 미응답이 봉우리를 찍는 지점 — 이 시각을 넘기면 놓친 것에 가깝다. */
+const UNRESPONDED_PEAK_HOURS = 48
+const UNRESPONDED_HALF_LIFE_DAYS = 3
+/** 팔로업 지연이 봉우리를 유지하는 기간. 이후 감쇠. */
+const FOLLOW_UP_PEAK_DAYS = 3
+const FOLLOW_UP_HALF_LIFE_DAYS = 4
+
+/**
+ * 응대 SLA·팔로업 지연. 비활성(전환/종료) 리드는 0.
+ *
+ * 곡선: 미응답은 24~48h 에서 88 로 봉우리를 찍고 3일 반감기로 식는다(2주 방치 ≈ 12).
+ * 지연 팔로업은 1~3일 지연에서 86, 이후 4일 반감기(2주 지연 ≈ 15). 둘 다 바닥이 있어
+ * 목록에서 사라지지는 않되, 살아 있는 거래를 밀어내지 못한다.
+ */
 export function scoreUrgency(lead: LeadRecord, nowMs: number, todayKey: string): number {
   if (!isActiveLeadStatus(lead.status)) return 0
   let score = 0
 
   if (isUnrespondedLead(lead)) {
     const hours = Math.max(0, (nowMs - (parseTimeMs(lead.timestamp) ?? nowMs)) / HOUR_MS)
-    if (hours >= 48) score = Math.max(score, 100)
-    else if (hours >= 24) score = Math.max(score, 78)
-    else score = Math.max(score, 55)
+    if (hours >= UNRESPONDED_PEAK_HOURS) {
+      const daysPast = (hours - UNRESPONDED_PEAK_HOURS) / 24
+      score = Math.max(score, decayAfterPeak(88, daysPast, UNRESPONDED_HALF_LIFE_DAYS, 10))
+    } else if (hours >= 24) score = Math.max(score, 88)
+    else if (hours >= 6) score = Math.max(score, 70)
+    else score = Math.max(score, 52)
   }
 
   if (lead.follow_up_at) {
@@ -203,18 +238,55 @@ export function scoreUrgency(lead: LeadRecord, nowMs: number, todayKey: string):
         1,
         Math.floor((nowMs - (parseTimeMs(lead.follow_up_at) ?? nowMs)) / DAY_MS)
       )
-      score = Math.max(score, Math.min(95, 60 + overdueDays * 5))
+      score = Math.max(
+        score,
+        decayAfterPeak(86, overdueDays - FOLLOW_UP_PEAK_DAYS, FOLLOW_UP_HALF_LIFE_DAYS, 10)
+      )
     } else if (followUpKey === todayKey) {
-      score = Math.max(score, 62)
+      score = Math.max(score, 72)
     }
   }
 
-  return clamp100(score)
+  return clamp100(Math.round(score))
 }
 
-// 축별 가중치 — 사용자 요청 순서(자주·최근·주요)를 주축으로 두고, 이미 운영 중인
-// 응대 SLA(긴급)를 무너뜨리지 않을 만큼만 섞는다. 합은 1.
-const WEIGHT = { recency: 0.28, frequency: 0.24, value: 0.3, urgency: 0.18 }
+/**
+ * 반응 — 상대가 우리 쪽으로 움직였는가. value(우리가 본 잠재력)와 달리 이 축은
+ * 리드 본인의 행동만 센다. 우리가 다섯 번 전화한 건 frequency 가 세지 반응이 아니다.
+ *
+ * 가장 무거운 신호는 "우리 연락 이후의 재방문" — 회신 여부를 직접 저장하는 컬럼이
+ * 없으므로, 연락 시각 뒤에 사이트 활동이 찍혔는지로 대신한다. 이 반응도 시간이
+ * 지나면 식으므로 21일 반감기를 건다.
+ */
+export function scoreResponse(engagement: LeadEngagement, nowMs: number): number {
+  let score = 0
+
+  const contactMs = parseTimeMs(engagement.lastContactAt)
+  const activityMs = parseTimeMs(engagement.lastActivityAt)
+  if (contactMs != null && activityMs != null && activityMs > contactMs) {
+    const daysSince = Math.max(0, (nowMs - activityMs) / DAY_MS)
+    score += 46 * Math.pow(0.5, daysSince / 21)
+  }
+
+  // 자료를 직접 받아갔다 — 노출이 아니라 능동 행동.
+  if (engagement.downloadCount > 0) score += Math.min(24, 12 + (engagement.downloadCount - 1) * 6)
+
+  // 소셜 로그인으로 신원을 내줬다 — 익명 트래픽과 갈리는 지점.
+  if (engagement.authenticated) score += 18
+
+  // 재방문 — 한 번 보고 만 게 아니다.
+  if (engagement.eventCount >= 8) score += 16
+  else if (engagement.eventCount >= 3) score += 9
+
+  return clamp100(Math.round(score))
+}
+
+// 축별 가중치 — 운영 요청 순서(컨택·데모·감도 = value, 반응 = response)를 주축으로 두고,
+// 응대 SLA(긴급)는 목록에서 사라지지 않을 만큼만 남긴다. 합은 1.
+//
+// value + response 가 0.52 로 과반이라, "대화가 열렸고 상대가 반응하는 거래"가
+// "아무 반응 없이 오래 방치된 리드"를 항상 이긴다. urgency 는 0.18 → 0.10 으로 강등.
+const WEIGHT = { value: 0.32, response: 0.2, recency: 0.22, frequency: 0.16, urgency: 0.1 }
 /** 전환·종료 리드는 목록에서 지우지 않되 상단은 비워준다. */
 const INACTIVE_MULTIPLIER = 0.35
 
@@ -223,6 +295,7 @@ export interface LeadPriority {
   recency: number
   frequency: number
   value: number
+  response: number
   urgency: number
   /** 왜 위로 올라왔는지 — 행에 칩으로 그대로 노출한다(최대 3개). */
   reasons: string[]
@@ -238,12 +311,14 @@ export function calcLeadPriority(
   const recency = scoreRecency(lastTouchMs, nowMs)
   const frequency = scoreFrequency(engagement)
   const value = scoreValue(lead)
+  const response = scoreResponse(engagement, nowMs)
   const urgency = scoreUrgency(lead, nowMs, todayKey)
 
   const blended =
+    WEIGHT.value * value +
+    WEIGHT.response * response +
     WEIGHT.recency * recency +
     WEIGHT.frequency * frequency +
-    WEIGHT.value * value +
     WEIGHT.urgency * urgency
   const total = clamp100(
     Math.round(isActiveLeadStatus(lead.status) ? blended : blended * INACTIVE_MULTIPLIER)
@@ -254,6 +329,7 @@ export function calcLeadPriority(
     recency,
     frequency,
     value,
+    response,
     urgency,
     reasons: buildPriorityReasons(lead, engagement, nowMs, todayKey, lastTouchMs),
   }
@@ -266,26 +342,28 @@ function buildPriorityReasons(
   todayKey: string,
   lastTouchMs: number
 ): string[] {
+  // 순서 = 우선순위를 실제로 끌어올린 순서. 방치 신호(미응답·지연)는 맨 뒤로 보낸다 —
+  // 칩 3개 안에서 먼저 보여야 할 건 "왜 지금 이 고객인가"지 "왜 늦었나"가 아니다.
   const reasons: string[] = []
+  const active = isActiveLeadStatus(lead.status)
 
-  if (isActiveLeadStatus(lead.status)) {
-    if (isUnrespondedLead(lead)) {
-      const hours = Math.max(0, Math.floor((nowMs - (parseTimeMs(lead.timestamp) ?? nowMs)) / HOUR_MS))
-      reasons.push(`미응답 ${formatDuration(hours)}`)
-    }
-    if (lead.follow_up_at) {
-      const followUpKey = toLocalDateKey(lead.follow_up_at)
-      if (followUpKey < todayKey) {
-        const overdueDays = Math.max(
-          1,
-          Math.floor((nowMs - (parseTimeMs(lead.follow_up_at) ?? nowMs)) / DAY_MS)
-        )
-        reasons.push(`팔로업 ${overdueDays}일 지연`)
-      } else if (followUpKey === todayKey) {
-        reasons.push("오늘 팔로업")
-      }
-    }
+  if (active && lead.follow_up_at && toLocalDateKey(lead.follow_up_at) === todayKey) {
+    reasons.push("오늘 팔로업")
   }
+
+  // 반응 — 우리가 연락한 뒤에 상대가 다시 움직인 흔적.
+  const contactMs = parseTimeMs(engagement.lastContactAt)
+  const activityMs = parseTimeMs(engagement.lastActivityAt)
+  if (contactMs != null && activityMs != null && activityMs > contactMs) {
+    const days = Math.floor((nowMs - activityMs) / DAY_MS)
+    reasons.push(days <= 0 ? "연락 후 재방문" : `연락 후 재방문 ${days}일 전`)
+  }
+
+  if (active && lead.status === "contacted") reasons.push("연락 진행 중")
+  if (lead.source === "demo_modal") reasons.push("데모 신청")
+
+  const size = parseLeadSize(lead.size)
+  if (size >= 100) reasons.push(`원생 ${size.toLocaleString("ko-KR")}명`)
 
   const touches = engagement.eventCount + engagement.downloadCount + engagement.contactLogCount
   if (touches >= 3) {
@@ -296,15 +374,31 @@ function buildPriorityReasons(
   }
 
   // 유입 자체가 최근 접점이면 "N일 전 활동"은 시간 컬럼과 같은 말이라 생략한다.
-  const activityMs = parseTimeMs(engagement.lastActivityAt)
   if (activityMs && activityMs === lastTouchMs && activityMs > (parseTimeMs(lead.timestamp) ?? 0)) {
     const days = Math.floor((nowMs - activityMs) / DAY_MS)
     reasons.push(days <= 0 ? "오늘 사이트 활동" : `${days}일 전 사이트 활동`)
   }
 
-  const size = parseLeadSize(lead.size)
-  if (size >= 100) reasons.push(`원생 ${size.toLocaleString("ko-KR")}명`)
-  if (lead.source === "demo_modal") reasons.push("데모 신청")
+  // ─ 방치 신호: 여기서부터는 "늦었다"는 말이라 뒤에 붙인다.
+  if (active) {
+    if (lead.follow_up_at) {
+      const followUpKey = toLocalDateKey(lead.follow_up_at)
+      if (followUpKey < todayKey) {
+        const overdueDays = Math.max(
+          1,
+          Math.floor((nowMs - (parseTimeMs(lead.follow_up_at) ?? nowMs)) / DAY_MS)
+        )
+        // 봉우리를 지난 지연은 급한 게 아니라 식은 것 — 점수 강등과 라벨을 일치시킨다.
+        const cooled = overdueDays > FOLLOW_UP_PEAK_DAYS + FOLLOW_UP_HALF_LIFE_DAYS
+        reasons.push(`팔로업 ${overdueDays}일 지연${cooled ? " · 식음" : ""}`)
+      }
+    }
+    if (isUnrespondedLead(lead)) {
+      const hours = Math.max(0, Math.floor((nowMs - (parseTimeMs(lead.timestamp) ?? nowMs)) / HOUR_MS))
+      const cooled = hours > UNRESPONDED_PEAK_HOURS + UNRESPONDED_HALF_LIFE_DAYS * 24
+      reasons.push(`미응답 ${formatDuration(hours)}${cooled ? " · 식음" : ""}`)
+    }
+  }
 
   return reasons.slice(0, 3)
 }
@@ -333,7 +427,7 @@ export type LeadSortKey =
   | "org"
 
 export const LEAD_SORT_OPTIONS: Array<{ key: LeadSortKey; label: string; hint: string }> = [
-  { key: "priority", label: "우선순위", hint: "자주 · 최근 · 주요 합성(기본)" },
+  { key: "priority", label: "우선순위", hint: "컨택 · 데모 · 감도 · 반응 합성(기본)" },
   { key: "recent_touch", label: "최근 접점", hint: "유입·활동·연락 중 최신순" },
   { key: "frequent", label: "활동 많은 순", hint: "이벤트·자료·연락 횟수" },
   { key: "value", label: "매출 근접", hint: "규모·의도·진행 단계" },

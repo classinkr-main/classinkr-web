@@ -13,12 +13,19 @@ import {
 } from "@/lib/crm/priority"
 import { getLeads } from "@/lib/repositories/leads"
 import { listCrmTasks } from "@/lib/repositories/crm-tasks"
+import { getLeadsActivitySummary } from "@/lib/repositories/lead-activity"
+
+/**
+ * "customer" 는 리드 + ClassIn 고객을 한 묶음으로 보는 가상 소스다.
+ * 현황 홈의 [고객 운영 우선순위]가 할 일과 경쟁하지 않게 하려고 둔다.
+ */
+export type CrmPriorityQueueSource = CrmPrioritySource | "customer" | "all"
 
 export interface CrmPriorityQueueOptions {
   limit?: number
   owner?: string
   ownerKeys?: string[]
-  source?: CrmPrioritySource | "all"
+  source?: CrmPriorityQueueSource
   bucket?: CrmPriorityBucket | "all"
   now?: Date
 }
@@ -40,6 +47,11 @@ export interface CrmPriorityQueue {
     taskCount: number
     ownerCount: number
     bucketCounts: Record<CrmPriorityBucket, number>
+    /**
+     * 소스 필터를 걷어낸 건수(담당자 필터는 유지). 목록에서 할 일을 분리해 놓고도
+     * "할 일 N건"을 정직하게 표시하려면 현재 뷰가 아니라 전체 기준이 필요하다.
+     */
+    sourceTotals: { lead: number; neoAccount: number; task: number }
   }
   buckets: Array<{ bucket: CrmPriorityBucket; label: string; count: number }>
   owners: Array<{ ownerName: string; count: number }>
@@ -60,11 +72,18 @@ function applyFilters(items: CrmPriorityItem[], options: CrmPriorityQueueOptions
   const bucket = options.bucket ?? "all"
 
   return items.filter((item) => {
-    if (source !== "all" && item.source !== source) return false
+    if (source === "customer") {
+      if (item.source !== "lead" && item.source !== "neo_account") return false
+    } else if (source !== "all" && item.source !== source) return false
     if (ownerKeys.size > 0 && !item.ownerKeys.some((key) => ownerKeys.has(key))) return false
     if (bucket !== "all" && item.bucket !== bucket) return false
     return true
   })
+}
+
+/** 담당자 필터만 적용 — 소스별 총량을 정직하게 세기 위한 기준선. */
+function applyOwnerFilter(items: CrmPriorityItem[], options: CrmPriorityQueueOptions) {
+  return applyFilters(items, { ...options, source: "all", bucket: "all" })
 }
 
 function applyBaseFilters(items: CrmPriorityItem[], options: CrmPriorityQueueOptions) {
@@ -110,17 +129,21 @@ export async function getCrmPriorityQueue(
   let neoAccountsOk = true
   let tasksOk = true
 
-  const [leadResult, neoResult, taskResult] = await Promise.allSettled([
+  const [leadResult, neoResult, taskResult, engagementResult] = await Promise.allSettled([
     getLeads(),
     getNeoCrmCustomers(),
     listCrmTasks({ status: "active", limit: 200, now }),
+    getLeadsActivitySummary(),
   ])
 
   const items: CrmPriorityItem[] = []
+  // 참여 신호는 우선순위를 더 정확하게 만들 뿐 없어도 큐는 서야 한다 —
+  // 실패하면 반응 축만 조용히 빠지고 경고도 띄우지 않는다(보조 지표).
+  const engagements = engagementResult.status === "fulfilled" ? engagementResult.value : null
 
   if (leadResult.status === "fulfilled") {
     for (const lead of leadResult.value) {
-      const item = buildLeadPriorityItem(lead, now)
+      const item = buildLeadPriorityItem(lead, now, { engagement: engagements?.[lead.id] ?? null })
       if (item) items.push(item)
     }
   } else {
@@ -151,6 +174,7 @@ export async function getCrmPriorityQueue(
   const sorted = sortPriorityItems(items)
   const baseFiltered = applyBaseFilters(sorted, options)
   const filtered = applyFilters(sorted, options)
+  const ownerScoped = applyOwnerFilter(sorted, options)
   const limit = Math.max(1, Math.min(options.limit ?? 12, 50))
   const visible = filtered.slice(0, limit)
   const owners = buildOwnerOptions(sorted)
@@ -168,6 +192,11 @@ export async function getCrmPriorityQueue(
       taskCount: filtered.filter((item) => item.source === "task").length,
       ownerCount: owners.length,
       bucketCounts,
+      sourceTotals: {
+        lead: ownerScoped.filter((item) => item.source === "lead").length,
+        neoAccount: ownerScoped.filter((item) => item.source === "neo_account").length,
+        task: ownerScoped.filter((item) => item.source === "task").length,
+      },
     },
     buckets: buildBucketOptions(bucketCounts),
     owners,
