@@ -177,8 +177,8 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
   {
     id: "recording_studio",
     label: "녹화 세트",
-    description: "OMO 780",
-    price: getProductBySku("ai-studio-recording-set")?.unit_price ?? 7_800_000,
+    description: "OMO 830",
+    price: getProductBySku("ai-studio-recording-set")?.unit_price ?? 8_300_000,
   },
   {
     id: "online_suite",
@@ -190,13 +190,13 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
     id: "board_86",
     label: '전자칠판 86"',
     description: "",
-    price: getProductBySku("board-86")?.unit_price ?? 5_800_000,
+    price: getProductBySku("board-86")?.unit_price ?? 6_300_000,
   },
   {
     id: "board_75",
     label: '전자칠판 75"',
     description: "",
-    price: getProductBySku("board-75")?.unit_price ?? 4_900_000,
+    price: getProductBySku("board-75")?.unit_price ?? 5_400_000,
   },
   {
     id: "camera_t1",
@@ -220,7 +220,7 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
     id: "bundle_86_t1_wall",
     label: "번들",
     description: '86" + T1 + 벽걸이',
-    price: getProductBySku("bundle-86-t1-wall")?.unit_price ?? 7_500_000,
+    price: getProductBySku("bundle-86-t1-wall")?.unit_price ?? 8_000_000,
   },
 ]
 
