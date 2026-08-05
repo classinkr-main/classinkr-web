@@ -12,6 +12,7 @@ export interface LeadPayload {
   size?: string
   email?: string
   phone?: string
+  branch?: string
   message?: string
   timestamp: string
   marketingConsent?: boolean

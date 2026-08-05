@@ -7,6 +7,7 @@ import {
   type NeoCrmCustomerMoneyItem,
 } from "@/lib/admin-crm-customers-neo"
 import { classifyLeadOrigin, type LeadOriginClass } from "@/lib/crm/capture/origin"
+import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { buildLeadPriorityItem } from "@/lib/crm/priority"
 import {
   EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY,
@@ -69,6 +70,7 @@ export interface Customer360ContactField {
 export interface Customer360Contacts {
   phone: string | null
   email: string | null
+  message: string | null
   extra: Customer360ContactField[]
 }
 
@@ -175,7 +177,7 @@ export function buildLeadHeader(key: string, lead: LeadRecord, now = new Date())
     statusLabel: LEAD_STATUS_LABELS[lead.status] ?? "리드",
     ownerName: lead.assigned_to ?? null,
     ownerKeys: uniqueOwnerKeys([lead.assigned_to]),
-    region: null,
+    region: deriveLeadRegionLabel(lead),
     score: priority?.score ?? null,
     priorityReason: priority?.reason ?? null,
     nextActionLabel: priority?.actionLabel ?? null,
@@ -191,10 +193,10 @@ export function buildLeadContacts(lead: LeadRecord): Customer360Contacts {
   if (lead.size) extra.push({ label: "규모", value: lead.size })
   if (lead.source) extra.push({ label: "유입", value: lead.source_detail ? `${lead.source} · ${lead.source_detail}` : lead.source })
   if (lead.lead_magnet) extra.push({ label: "자료", value: lead.lead_magnet })
-  if (lead.message) extra.push({ label: "메시지", value: lead.message })
   return {
     phone: lead.phone ?? null,
     email: lead.email ?? null,
+    message: lead.message ?? null,
     extra,
   }
 }
@@ -403,6 +405,7 @@ export async function getCrmCustomer360(
         contacts = {
           phone: detail.account.phone,
           email: null,
+          message: null,
           extra: [{ label: "고객 ID", value: detail.account.accountId }],
         }
         money = summarizeNeoMoney(detail)

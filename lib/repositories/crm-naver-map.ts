@@ -20,6 +20,8 @@ import {
   scoreCrmEntityMatch,
 } from "@/lib/crm-source-linking"
 import { normalizeRegionLabel } from "@/lib/regions/korea-regions"
+import { deriveCustomerRegion, REGION_UNSPECIFIED } from "@/lib/crm/region-label"
+import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 const MAP_SOURCE_FRESHNESS_HOURS = 24 * 7
@@ -201,9 +203,9 @@ async function loadMatchTargets(warnings: string[]) {
       .select("account_id, account_name, region_label")
       .eq("is_stale", false)
       .limit(10_000),
-    sb.from("customers").select("id, name, campus_name").limit(2_000),
-    sb.from("partner_accounts").select("id, name").limit(2_000),
-    sb.from("leads").select("id, name, org, branch").limit(5_000),
+    sb.from("customers").select("id, name, campus_name, region_label, address").limit(2_000),
+    sb.from("partner_accounts").select("id, name, address").limit(2_000),
+    sb.from("leads").select("id, name, org, branch, message").limit(5_000),
     sb
       .from("branch_rev_deals")
       .select("id, customer_name, region, status")
@@ -232,32 +234,41 @@ async function loadMatchTargets(warnings: string[]) {
       id: string
       name: string
       campus_name: string | null
+      region_label: string | null
+      address: string | null
     }>).map((row) => ({
       source: "customer" as const,
       targetType: "customer" as const,
       targetId: row.id,
       label: [row.name, row.campus_name].filter(Boolean).join(" · "),
-      regionLabel: null,
+      regionLabel: (() => {
+        const region = deriveCustomerRegion([row.region_label, row.address])
+        return region.label === REGION_UNSPECIFIED ? null : region.label
+      })(),
     })),
-    ...((partners.error ? [] : partners.data ?? []) as Array<{ id: string; name: string }>).map((row) => ({
+    ...((partners.error ? [] : partners.data ?? []) as Array<{ id: string; name: string; address: string | null }>).map((row) => ({
       source: "partner" as const,
       targetType: "partner_account" as const,
       targetId: row.id,
       label: row.name,
-      regionLabel: null,
+      regionLabel: (() => {
+        const region = deriveCustomerRegion([row.address])
+        return region.label === REGION_UNSPECIFIED ? null : region.label
+      })(),
     })),
     ...((leads.error ? [] : leads.data ?? []) as Array<{
       id: string
       name: string | null
       org: string | null
       branch: string | null
+      message: string | null
     }>)
       .map((row) => ({
         source: "lead" as const,
         targetType: "lead" as const,
         targetId: row.id,
         label: targetLabelFromLead(row),
-        regionLabel: normalizeRegionLabel(row.branch),
+        regionLabel: deriveLeadRegionLabel(row),
       }))
       .filter((row) => row.label),
   ]
@@ -308,35 +319,40 @@ async function loadConfirmedLinkTarget(
   if (targetType === "customer") {
     const { data, error } = await sb
       .from("customers")
-      .select("name, campus_name")
+      .select("name, campus_name, region_label, address")
       .eq("id", targetId)
       .maybeSingle()
     if (error) throw error
     if (!data) throw new Error("연결할 전환 고객을 찾지 못했습니다.")
-    return { label: [data.name, data.campus_name].filter(Boolean).join(" · "), regionLabel: null }
+    const region = deriveCustomerRegion([data.region_label, data.address])
+    return {
+      label: [data.name, data.campus_name].filter(Boolean).join(" · "),
+      regionLabel: region.label === REGION_UNSPECIFIED ? null : region.label,
+    }
   }
 
   if (targetType === "partner_account") {
     const { data, error } = await sb
       .from("partner_accounts")
-      .select("name")
+      .select("name, address")
       .eq("id", targetId)
       .maybeSingle()
     if (error) throw error
     if (!data) throw new Error("연결할 파트너 계정을 찾지 못했습니다.")
-    return { label: data.name, regionLabel: null }
+    const region = deriveCustomerRegion([data.address])
+    return { label: data.name, regionLabel: region.label === REGION_UNSPECIFIED ? null : region.label }
   }
 
   const { data, error } = await sb
     .from("leads")
-    .select("name, org, branch")
+    .select("name, org, branch, message")
     .eq("id", targetId)
     .maybeSingle()
   if (error) throw error
   if (!data) throw new Error("연결할 리드를 찾지 못했습니다.")
   return {
     label: targetLabelFromLead(data),
-    regionLabel: normalizeRegionLabel(data.branch),
+    regionLabel: deriveLeadRegionLabel(data),
   }
 }
 
@@ -488,7 +504,9 @@ export async function listCrmNaverMapSource(): Promise<CrmNaverMapSourceList> {
   const latestSyncedAt = rows.map((row) => row.syncedAt).filter(Boolean).sort().at(-1) ?? null
   const ageHours = hoursSince(latestSyncedAt)
   const isStale = ageHours == null || ageHours > MAP_SOURCE_FRESHNESS_HOURS
-  if (rows.length === 0) warnings.push("가져온 네이버 공유지도 스냅샷이 없습니다.")
+  if (rows.length === 0) {
+    warnings.push("공유지도 URL은 연결됐지만 장소 스냅샷을 아직 가져오지 않아 0건으로 표시됩니다.")
+  }
   if (rows.length > 0 && isStale) warnings.push("네이버 공유지도 스냅샷이 7일 이상 갱신되지 않았습니다.")
 
   const activeRows = rows.filter((row) => !row.isStale)

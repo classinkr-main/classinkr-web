@@ -204,6 +204,7 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
     size: normalizeString(body.size),
     email: email ?? undefined,
     phone: normalizeString(body.phone),
+    branch: normalizeString(body.branch),
     message: normalizeString(body.message),
     timestamp: new Date().toISOString(),
     marketingConsent: body.marketingConsent === true,

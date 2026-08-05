@@ -60,7 +60,7 @@ export default function Customer360DetailClient({ data, customerKey }: Props) {
   const sourceLabel = header?.sourceLabel ?? (isLead ? "리드" : "고객")
   const metaLine = [
     header?.ownerName ?? "담당 미배정",
-    !isLead ? header?.region ?? "지역 미지정" : null,
+    header?.region ?? "지역 미지정",
     header?.score != null ? `점수 ${header.score}` : null,
   ]
     .filter(Boolean)

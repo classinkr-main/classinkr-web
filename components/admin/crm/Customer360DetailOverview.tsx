@@ -7,6 +7,7 @@ import {
   Gauge,
   GraduationCap,
   Hourglass,
+  MapPin,
   Receipt,
   Sparkles,
   TrendingUp,
@@ -15,6 +16,7 @@ import {
 
 import { MiniFunnel, Panel, StatTile, type FunnelStage } from "@/components/admin/viz"
 import CrmContactValue from "@/components/admin/crm/CrmContactValue"
+import LeadMessageCard from "@/components/admin/crm/LeadMessageCard"
 import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
 
@@ -140,10 +142,25 @@ export default function Customer360DetailOverview({ data }: { data: Customer360 
               )
             }
           />
+          <FieldCell
+            label="지역"
+            value={
+              <span className="inline-flex items-center gap-1 font-semibold text-[#084734]">
+                <MapPin className="h-3.5 w-3.5" />
+                {header?.region ?? "지역 미지정"}
+              </span>
+            }
+          />
           {data.contacts?.extra.map((field) => (
             <FieldCell key={`${field.label}:${field.value}`} label={field.label} value={field.value} />
           ))}
         </div>
+        {data.contacts?.message ? (
+          <div className="mt-4 border-t border-[#f0f0ec] pt-4">
+            <p className="mb-2 text-[11px] font-semibold text-[#1a1a1a]/35">제출 메시지</p>
+            <LeadMessageCard message={data.contacts.message} />
+          </div>
+        ) : null}
       </Panel>
 
       {/* 재무 현황 (NEO 고객만) */}

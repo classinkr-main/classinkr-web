@@ -92,14 +92,25 @@ describe("lead header + contacts", () => {
     const contacts = buildLeadContacts(makeLead({ role: "원장", message: "7월 도입 검토", size: undefined }))
     expect(contacts.phone).toBe("010-0000-0000")
     expect(contacts.email).toBe("owner@test.com")
+    expect(contacts.message).toBe("7월 도입 검토")
     expect(contacts.extra).toEqual(
       expect.arrayContaining([
         { label: "기관", value: "테스트 학원" },
         { label: "역할", value: "원장" },
-        { label: "메시지", value: "7월 도입 검토" },
       ])
     )
+    expect(contacts.extra.find((field) => field.label === "메시지")).toBeUndefined()
     expect(contacts.extra.find((field) => field.label === "규모")).toBeUndefined()
+  })
+
+  it("maps a structured branch and legacy Meta city into a region label", () => {
+    expect(buildLeadHeader("lead:1", makeLead({ branch: "부산광역시 해운대구" }), NOW).region).toBe("부산")
+    expect(
+      buildLeadHeader("lead:1", makeLead({
+        branch: undefined,
+        message: "Meta Lead Ads\nfields=full_name: 홍길동 / city: Cheongju",
+      }), NOW).region
+    ).toBe("충북")
   })
 })
 

@@ -74,6 +74,11 @@ describe("submitLeadCapture duplicate handling", () => {
     vi.resetModules()
   })
 
+  it("normalizes a region value so Meta city can be stored in leads.branch", async () => {
+    const { buildLeadPayload } = await loadLeadCapture()
+    expect(buildLeadPayload({ ...baseLead, branch: "  Cheongju  " }).branch).toBe("Cheongju")
+  })
+
   it("does not cache a failed submission as a successful duplicate", async () => {
     const { submitLeadCapture, saveLead } = await loadLeadCapture()
     saveLead.mockRejectedValue(new Error("database unavailable"))

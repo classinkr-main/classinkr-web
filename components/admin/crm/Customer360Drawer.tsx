@@ -16,6 +16,7 @@ import {
   Coins,
   ExternalLink,
   ListChecks,
+  MapPin,
   MessageSquare,
   Phone,
   Plus,
@@ -32,6 +33,7 @@ import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import CrmCustomerFlags from "./CrmCustomerFlags"
 import CrmCustomerPicker from "./CrmCustomerPicker"
+import LeadMessageCard from "./LeadMessageCard"
 import { eventSourceIcon, eventSourceLabel } from "./event-source-meta"
 import ActivityQuickForm from "./rail/ActivityQuickForm"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
@@ -684,7 +686,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const derivedSummary = useMemo(() => {
     if (!data?.found || !header) return null
     const segs: string[] = []
-    if (targetType === "neo_account") segs.push(`${header.region ?? "지역 미상"} 소재 고객`)
+    if (header.region) segs.push(`${header.region} 소재`)
+    if (targetType === "neo_account") segs.push("고객")
     else segs.push(`${header.statusLabel ?? "리드"} 단계`)
     if (header.ownerName) segs.push(`담당 ${header.ownerName}`)
     if (data.risk?.severity === "critical") segs.push("이탈 위험 긴급")
@@ -861,7 +864,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               <User2 className="mr-1 inline h-3 w-3" />
               {data?.contacts?.phone ? `${data.contacts.phone} · ` : ""}
               {header?.ownerName ?? "담당 미배정"}
-              {targetType === "neo_account" ? ` · ${header?.region ?? "지역 미지정"}` : ""}
+              {` · ${header?.region ?? "지역 미지정"}`}
               {header?.priorityReason ? ` · ${header.priorityReason}` : ""}
             </p>
           </div>
@@ -1240,6 +1243,13 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                     {data.contacts?.email ?? "이메일 미확인"}
                   </p>
                 </div>
+                <div className="col-span-2">
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">지역</p>
+                  <p className="inline-flex items-center gap-1 font-semibold text-[#084734]">
+                    <MapPin className="h-3.5 w-3.5" />
+                    {header?.region ?? "지역 미지정"}
+                  </p>
+                </div>
                 {data.contacts?.extra.map((field) => (
                   <div key={`${field.label}:${field.value}`} className="col-span-2">
                     <p className="text-[11px] font-semibold text-[#1a1a1a]/35">{field.label}</p>
@@ -1247,6 +1257,12 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                   </div>
                 ))}
               </div>
+              {data.contacts?.message ? (
+                <div className="mt-3 border-t border-[#f0f0ec] pt-3">
+                  <p className="mb-2 text-[11px] font-semibold text-[#1a1a1a]/35">제출 메시지</p>
+                  <LeadMessageCard message={data.contacts.message} />
+                </div>
+              ) : null}
               {data.serviceRisk ? (
                 <div className="mt-3 rounded-xl border border-[#f0f0ec] bg-[#fafaf8] px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
@@ -1746,10 +1762,10 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                 </div>
                 <div>
                   <p className="text-[11px] font-semibold text-[#1a1a1a]/35">
-                    {targetType === "neo_account" ? "지역" : "상태"}
+                    지역
                   </p>
                   <p className="font-medium text-[#111110]">
-                    {targetType === "neo_account" ? header?.region ?? "지역 미지정" : header?.statusLabel ?? "-"}
+                    {header?.region ?? "지역 미지정"}
                   </p>
                 </div>
                 {data.risk.nearestExpireAt ? (

@@ -10,6 +10,8 @@ import {
   type CrmPriorityItem,
 } from "@/lib/crm/priority"
 import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
+import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
+import { deriveCustomerRegion, REGION_UNSPECIFIED } from "@/lib/crm/region-label"
 import {
   daysUntil,
   rowMatchesOwner,
@@ -191,6 +193,7 @@ function buildPortalCustomerRow(item: CustomerListItem): CrmUnifiedCustomerRow {
   const activeDeals = summary?.active_deals ?? 0
   const contractedLabel = formatKRW(summary?.contracted_amount)
   const outstandingLabel = formatKRW(outstanding)
+  const region = deriveCustomerRegion([customer.region_label, customer.address])
   return {
     key: `customer:${customer.id}`,
     tags: [],
@@ -198,6 +201,7 @@ function buildPortalCustomerRow(item: CustomerListItem): CrmUnifiedCustomerRow {
     sourceLabel: "전환 고객",
     name: [customer.name, customer.campus_name].filter(Boolean).join(" · "),
     contact: customer.phone ?? customer.email ?? customer.contact_name,
+    regionLabel: region.label === REGION_UNSPECIFIED ? null : region.label,
     ownerName: null,
     ownerKeys: [],
     lifecycle: "active_account",
@@ -236,7 +240,7 @@ function uniqueOwnerKeys(values: Array<string | null | undefined>) {
 
 function includesQuery(row: CrmUnifiedCustomerRow, query: string) {
   if (!query) return true
-  const haystack = [row.name, row.contact, row.ownerName, row.statusLabel, row.priorityReason]
+  const haystack = [row.name, row.contact, row.regionLabel, row.ownerName, row.statusLabel, row.priorityReason]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()
@@ -366,6 +370,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         sourceLabel: leadSourceLabel(lead),
         name: leadName(lead),
         contact: lead.phone ?? lead.email ?? lead.source,
+        regionLabel: deriveLeadRegionLabel(lead),
         ownerName: lead.assigned_to ?? null,
         ownerKeys: uniqueOwnerKeys([lead.assigned_to]),
         lifecycle: leadLifecycle(lead),
@@ -404,6 +409,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         sourceLabel: "고객",
         name: account.name,
         contact: account.phone ?? account.uid ?? account.accountId,
+        regionLabel: account.regionLabel ?? null,
         ownerName: account.ownerName,
         ownerKeys: uniqueOwnerKeys([account.ownerName, account.ownerId]),
         lifecycle: accountLifecycle(priority),

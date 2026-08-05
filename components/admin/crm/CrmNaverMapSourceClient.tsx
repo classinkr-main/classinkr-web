@@ -29,6 +29,7 @@ import type {
 const DEFAULT_SOURCE_URL =
   "https://map.naver.com/p/favorite/sharedPlace/folder/d34ac347a4754d119e80bb77fb8acfcf"
 const CACHE_TTL_MS = 60_000
+const LIST_PAGE_SIZE = 40
 
 const MATCH_FILTERS: Array<{ key: "all" | NaverMapMatchStatus; label: string }> = [
   { key: "all", label: "매칭 전체" },
@@ -228,6 +229,7 @@ export default function CrmNaverMapSourceClient() {
   const [matchFilter, setMatchFilter] = useState<"all" | NaverMapMatchStatus>("all")
   const [regionFilter, setRegionFilter] = useState("all")
   const [includeStale, setIncludeStale] = useState(false)
+  const [visibleCount, setVisibleCount] = useState(LIST_PAGE_SIZE)
   const deferredQuery = useDeferredValue(query.trim().toLowerCase())
 
   const [sourceUrl, setSourceUrl] = useState(DEFAULT_SOURCE_URL)
@@ -235,6 +237,7 @@ export default function CrmNaverMapSourceClient() {
   const [expectedCount, setExpectedCount] = useState("199")
   const [rawImport, setRawImport] = useState("")
   const [fullSnapshot, setFullSnapshot] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState<string | null>(null)
   const [linkingExternalId, setLinkingExternalId] = useState<string | null>(null)
@@ -260,6 +263,10 @@ export default function CrmNaverMapSourceClient() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (data && data.summary.total === 0) setImportOpen(true)
+  }, [data])
 
   const parsedImport = useMemo(() => {
     if (!rawImport.trim()) return { places: [] as NaverMapPlaceInput[], error: null as string | null }
@@ -287,6 +294,12 @@ export default function CrmNaverMapSourceClient() {
     })
   }, [data?.rows, deferredQuery, includeStale, matchFilter, regionFilter])
 
+  useEffect(() => {
+    setVisibleCount(LIST_PAGE_SIZE)
+  }, [deferredQuery, includeStale, matchFilter, regionFilter])
+
+  const visibleRows = filteredRows.slice(0, visibleCount)
+
   const submitImport = useCallback(async () => {
     if (parsedImport.error || parsedImport.places.length === 0) {
       setImportMessage(parsedImport.error ?? "가져올 장소를 붙여넣으세요.")
@@ -312,6 +325,8 @@ export default function CrmNaverMapSourceClient() {
         `${response.result.imported}개를 저장했습니다.${response.result.staleMarked ? ` 이전 항목 ${response.result.staleMarked}개를 오래됨 처리했습니다.` : ""}`
       )
       await load(true)
+      setRawImport("")
+      setImportOpen(false)
     } catch (importError) {
       setImportMessage(importError instanceof Error ? importError.message : "가져오기에 실패했습니다.")
     } finally {
@@ -380,6 +395,30 @@ export default function CrmNaverMapSourceClient() {
         </div>
       ) : null}
 
+      <section className="mt-5 grid gap-3 rounded-xl border border-black/[0.08] bg-white p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold text-[#1a1a1a]/35">연결된 외부 목록</p>
+          <a
+            href={DEFAULT_SOURCE_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 inline-flex max-w-full items-center gap-1.5 text-[14px] font-bold text-[#111110] hover:underline"
+          >
+            <span className="truncate">Han37 고객사 · 네이버 공유지도</span>
+            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[#084734]" />
+          </a>
+          <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/45">
+            URL은 원천 위치를 가리키는 참조값입니다. 장소 목록은 스냅샷으로 가져온 뒤 기존 CRM·REV와 비교합니다.
+          </p>
+        </div>
+        <div className={`rounded-lg border px-3 py-2 text-left sm:text-right ${data?.summary.total ? "border-[#D7EBDD] bg-[#ECFDF5]" : "border-[#E9D8B4] bg-[#FFF9ED]"}`}>
+          <p className="text-[10px] font-semibold text-[#1a1a1a]/40">스냅샷 상태</p>
+          <p className={`mt-0.5 text-[13px] font-bold ${data?.summary.total ? "text-[#084734]" : "text-[#8B5E14]"}`}>
+            {data?.summary.total ? `${data.summary.active.toLocaleString("ko-KR")}개 등록됨` : "아직 가져오지 않음 · 원천 199개"}
+          </p>
+        </div>
+      </section>
+
       {data?.warnings.map((warning) => (
         <div key={warning} className="mt-3 flex items-start gap-2 rounded-xl border border-[#E9D8B4] bg-[#FFF9ED] p-3 text-[12px] text-[#8B5E14]">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -412,7 +451,12 @@ export default function CrmNaverMapSourceClient() {
         {metricCard("미매칭", data?.summary.unmatched ?? 0)}
       </section>
 
-      <details className="mt-6 rounded-xl border border-black/[0.08] bg-white">
+      <details
+        id="naver-map-import"
+        open={importOpen}
+        onToggle={(event) => setImportOpen(event.currentTarget.open)}
+        className="mt-6 rounded-xl border border-black/[0.08] bg-white"
+      >
         <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 text-[13px] font-semibold text-[#111110] marker:hidden">
           <FileInput className="h-4 w-4 text-[#084734]" />
           지도 스냅샷 가져오기
@@ -548,7 +592,9 @@ export default function CrmNaverMapSourceClient() {
       </section>
 
       <div className="mt-4 flex items-center justify-between text-[12px] text-[#1a1a1a]/45">
-        <span>표시 {filteredRows.length.toLocaleString("ko-KR")}개</span>
+        <span>
+          표시 {Math.min(visibleCount, filteredRows.length).toLocaleString("ko-KR")} / {filteredRows.length.toLocaleString("ko-KR")}개
+        </span>
         <span>최근 수집 {formatDateTime(data?.latestSyncedAt)}</span>
       </div>
 
@@ -558,21 +604,51 @@ export default function CrmNaverMapSourceClient() {
           지도 원천을 불러오는 중입니다.
         </div>
       ) : filteredRows.length > 0 ? (
-        <div className="mt-3 grid gap-3 lg:grid-cols-2">
-          {filteredRows.map((row) => (
-            <MapSourceRow
-              key={row.externalId}
-              row={row}
-              confirming={linkingExternalId === row.externalId}
-              onConfirm={(candidateRow) => void confirmCandidate(candidateRow)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            {visibleRows.map((row) => (
+              <MapSourceRow
+                key={row.externalId}
+                row={row}
+                confirming={linkingExternalId === row.externalId}
+                onConfirm={(candidateRow) => void confirmCandidate(candidateRow)}
+              />
+            ))}
+          </div>
+          {visibleRows.length < filteredRows.length ? (
+            <button
+              type="button"
+              onClick={() => setVisibleCount((count) => count + LIST_PAGE_SIZE)}
+              className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-black/[0.08] bg-white px-4 text-[12px] font-semibold text-[#111110] hover:bg-[#F6F5F4]"
+            >
+              장소 더 보기 · 남은 {(filteredRows.length - visibleRows.length).toLocaleString("ko-KR")}개
+            </button>
+          ) : null}
+        </>
       ) : (
         <div className="mt-3 flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed border-black/[0.12] bg-[#F6F5F4] px-6 text-center">
           <MapPinned className="h-7 w-7 text-[#1a1a1a]/25" />
-          <p className="mt-3 text-[14px] font-semibold text-[#111110]">표시할 지도 장소가 없습니다.</p>
-          <p className="mt-1 text-[12px] text-[#1a1a1a]/45">필터를 바꾸거나 위 가져오기 영역에서 스냅샷을 등록하세요.</p>
+          <p className="mt-3 text-[14px] font-semibold text-[#111110]">
+            {data?.summary.total === 0 ? "지도 목록이 비어 있는 이유" : "조건에 맞는 장소가 없습니다."}
+          </p>
+          <p className="mt-1 max-w-md text-[12px] leading-5 text-[#1a1a1a]/45">
+            {data?.summary.total === 0
+              ? "공유지도 URL만 연결돼 있고 199개 장소 스냅샷을 아직 가져오지 않았습니다. 위 가져오기 영역에 장소 목록을 등록하면 지역 라벨링과 기존 CRM 비교가 자동으로 시작됩니다."
+              : "검색어·매칭 상태·지역 필터를 바꿔 다시 확인하세요."}
+          </p>
+          {data?.summary.total === 0 ? (
+            <button
+              type="button"
+              onClick={() => {
+                setImportOpen(true)
+                document.getElementById("naver-map-import")?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }}
+              className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#084734] px-4 text-[12px] font-semibold text-white"
+            >
+              <FileInput className="h-3.5 w-3.5" />
+              199개 장소 가져오기
+            </button>
+          ) : null}
         </div>
       )}
     </div>

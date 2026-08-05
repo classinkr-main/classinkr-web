@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation"
 import {
   RefreshCw, X, Trash2,
   Phone, Mail, Building2, Users, Calendar,
-  MessageSquare, Tag, Save, Loader2, Plus,
+  MapPin, Tag, Save, Loader2, Plus,
   PhoneCall, Bell, UserPlus, Link2, ExternalLink,
   Clock, Search, Check,
   Activity, Download, LogIn, MousePointerClick, ShieldCheck,
@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
 import LeadTrackingPanel from "@/components/admin/crm/leads/LeadTrackingPanel"
+import LeadMessageCard from "@/components/admin/crm/LeadMessageCard"
 import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
@@ -77,6 +78,7 @@ import {
   type LeadPriority,
   type LeadSortKey,
 } from "@/lib/crm/lead-ranking"
+import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 
 // 리드 보드 목록 무한스크롤 대체 — 초기 50건, "더보기"로 50건씩 확장(계획 문서 Phase W1).
 // 모바일 카드·데스크톱 테이블이 같은 filtered를 그리므로 visible 상한을 공유한다.
@@ -362,6 +364,7 @@ function LeadDrawer({
   const unconfirmed = isUnconfirmedLead(lead)
   const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp) : null
   const metaAdInfo = getMetaAdInfo(lead)
+  const regionLabel = deriveLeadRegionLabel(lead)
   const attributionItems = [
     { label: "Source Detail", value: lead.source_detail },
     // 구버전 Meta 리드는 utm_term/content가 비어 광고가 안 보였다 — 파서 값으로 항상 노출.
@@ -533,6 +536,12 @@ function LeadDrawer({
                   <span className="text-[13px] text-[#111110]">원생 {lead.size}명</span>
                 </div>
               )}
+              <div className="flex items-center gap-2.5">
+                <MapPin className="h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/30" />
+                <span className={`text-[13px] ${regionLabel ? "font-medium text-[#084734]" : "text-[#1a1a1a]/35"}`}>
+                  {regionLabel ?? "지역 미지정"}
+                </span>
+              </div>
               <div className="flex items-center gap-2.5">
                 <Calendar className="w-3.5 h-3.5 text-[#1a1a1a]/30 shrink-0" />
                 <span className="text-[13px] text-[#1a1a1a]/50">
@@ -792,10 +801,7 @@ function LeadDrawer({
           {lead.message && (
             <div className="px-6 py-4 border-b border-[#e8e8e4]">
               <p className="text-[11px] font-semibold text-[#1a1a1a]/30 uppercase tracking-wide mb-3">제출 메시지</p>
-              <div className="flex gap-2">
-                <MessageSquare className="w-3.5 h-3.5 text-[#1a1a1a]/30 mt-0.5 shrink-0" />
-                <p className="text-[13px] text-[#1a1a1a]/70 leading-relaxed">{lead.message}</p>
-              </div>
+              <LeadMessageCard message={lead.message} />
             </div>
           )}
 

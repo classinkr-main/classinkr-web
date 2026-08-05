@@ -27,6 +27,7 @@ export interface CrmUnifiedCustomerRow {
   sourceLabel: string
   name: string
   contact: string | null
+  regionLabel?: string | null
   ownerName: string | null
   ownerKeys: string[]
   lifecycle: CrmUnifiedLifecycle

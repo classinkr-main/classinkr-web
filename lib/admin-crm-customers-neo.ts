@@ -11,6 +11,7 @@ export interface NeoCrmCustomerRow {
   ownerId: string | null
   ownerName: string
   phone: string | null
+  regionLabel?: string | null
   balance: number | null
   expireAt: string | null
   lastClassAt: string | null
@@ -158,6 +159,7 @@ async function computeNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
       ownerId: row.ownerId,
       ownerName: row.ownerName,
       phone: row.phone,
+      regionLabel: row.regionLabel,
       balance: row.balance,
       expireAt: row.expireAt,
       lastClassAt: row.lastClassAt,

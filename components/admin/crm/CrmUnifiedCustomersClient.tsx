@@ -4,7 +4,7 @@ import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useSta
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { AlertTriangle, Building2, ChevronLeft, ChevronRight, ExternalLink, Filter, PhoneCall, RefreshCw, Search, Tag, UserPlus, UserRound } from "lucide-react"
+import { AlertTriangle, Building2, ChevronLeft, ChevronRight, ExternalLink, Filter, MapPin, PhoneCall, RefreshCw, Search, Tag, UserPlus, UserRound } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import type {
@@ -345,7 +345,7 @@ function CustomerSearchPanel({
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             className="h-full min-w-0 flex-1 bg-transparent text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/30"
-            placeholder="이름, 연락처, 담당자 검색"
+            placeholder="이름, 연락처, 지역, 담당자 검색"
           />
         </label>
         <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1">
@@ -1067,6 +1067,10 @@ export default function CrmUnifiedCustomersClient() {
                             </button>
                           )}
                           <CrmContactValue value={row.contact} className="mt-0.5" />
+                          <p className={`mt-1 inline-flex items-center gap-1 text-[11px] font-semibold ${row.regionLabel ? "text-[#084734]" : "text-[#1a1a1a]/30"}`}>
+                            <MapPin className="h-3 w-3" />
+                            {row.regionLabel ?? "지역 미지정"}
+                          </p>
                           <div className="mt-1 flex flex-wrap items-center gap-1 empty:hidden">
                             <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
                             <LeadRowBadges row={row} />
@@ -1139,6 +1143,10 @@ export default function CrmUnifiedCustomersClient() {
                       <div className="mb-1">{sourceBadge(row)}</div>
                       <p className="truncate text-[14px] font-bold text-[#111110]">{row.name}</p>
                       <CrmContactValue value={row.contact} className="pointer-events-auto mt-0.5" />
+                      <p className={`mt-1 inline-flex items-center gap-1 text-[11px] font-semibold ${row.regionLabel ? "text-[#084734]" : "text-[#1a1a1a]/30"}`}>
+                        <MapPin className="h-3 w-3" />
+                        {row.regionLabel ?? "지역 미지정"}
+                      </p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-1 empty:hidden">
                         <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
                         <LeadRowBadges row={row} />

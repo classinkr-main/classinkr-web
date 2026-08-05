@@ -215,6 +215,15 @@ function buildLeadCapturePayload(value: MetaLeadValue, detail?: MetaLeadDetail) 
       "전화번호",
       "휴대폰",
     ]),
+    branch: pickField(fields, [
+      "city",
+      "region",
+      "province",
+      "address",
+      "지역",
+      "주소",
+      "도시",
+    ]),
     message: buildMetaMessage(value, detail),
     marketingConsent: hasMarketingConsent(fields),
     // 광고 계층을 구조화 필드에 저장 — 어드민 리드 보드의 세부유입(광고명) 표시·필터가

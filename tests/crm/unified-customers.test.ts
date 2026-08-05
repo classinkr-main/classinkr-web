@@ -10,6 +10,8 @@ function lead(overrides: {
   assigned_to?: string
   timestamp?: string
   source?: string
+  branch?: string
+  message?: string
   confirmed_at?: string | null
 }) {
   return {
@@ -22,6 +24,8 @@ function lead(overrides: {
     timestamp: overrides.timestamp ?? "2026-06-23T08:00:00.000Z",
     status: overrides.status ?? "new",
     assigned_to: overrides.assigned_to,
+    branch: overrides.branch,
+    message: overrides.message,
     confirmed_at: overrides.confirmed_at === null ? undefined : overrides.confirmed_at ?? "2026-06-23T09:00:00.000Z",
   }
 }
@@ -31,6 +35,7 @@ function neoCustomer(overrides: {
   ownerName?: string
   expireAt?: string | null
   updatedAt?: string | null
+  regionLabel?: string | null
 }) {
   return {
     accountId: overrides.accountId,
@@ -38,6 +43,7 @@ function neoCustomer(overrides: {
     ownerId: `owner-${overrides.ownerName ?? "미배정"}`,
     ownerName: overrides.ownerName ?? "담당자",
     phone: "010-1111-2222",
+    regionLabel: overrides.regionLabel ?? null,
     balance: 120_000,
     expireAt: overrides.expireAt ?? "2026-07-05T00:00:00.000Z",
     lastClassAt: "2026-06-20T00:00:00.000Z",
@@ -57,6 +63,8 @@ function portalCustomer(overrides: {
   activeDeals?: number
   outstanding?: number
   summary?: null
+  regionLabel?: string | null
+  address?: string | null
 }) {
   const name = overrides.name ?? `전환 고객 ${overrides.id}`
   return {
@@ -67,10 +75,10 @@ function portalCustomer(overrides: {
       contact_name: null,
       email: `${overrides.id}@portal.example.com`,
       phone: overrides.phone ?? null,
-      address: null,
+      address: overrides.address ?? null,
       business_number: null,
       campus_name: null,
-      region_label: null,
+      region_label: overrides.regionLabel ?? null,
       notes: null,
       created_by: null,
       created_at: "2026-06-01T00:00:00.000Z",
@@ -292,6 +300,22 @@ describe("getCrmUnifiedCustomers", () => {
     expect(result.summary.customerCount).toBe(1)
     expect(result.sources.portalCustomersOk).toBe(true)
     expect(result.sources.statuses.map((status) => status.key)).toContain("app_customers")
+  })
+
+  it("preserves region labels from lead, NEO, and converted customer sources and searches them", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [lead({ id: "lead-region", branch: "부산광역시 해운대구" })],
+      accounts: [neoCustomer({ accountId: "neo-region", regionLabel: "경기" })],
+      portalCustomers: [portalCustomer({ id: "customer-region", address: "충청북도 청주시 상당구" })],
+    })
+
+    const all = await getCrmUnifiedCustomers({ now: NOW })
+    expect(all.rows.find((row) => row.key === "lead:lead-region")?.regionLabel).toBe("부산")
+    expect(all.rows.find((row) => row.key === "neo:neo-region")?.regionLabel).toBe("경기")
+    expect(all.rows.find((row) => row.key === "customer:customer-region")?.regionLabel).toBe("충북")
+
+    const searched = await getCrmUnifiedCustomers({ q: "충북", now: NOW })
+    expect(searched.rows.map((row) => row.key)).toEqual(["customer:customer-region"])
   })
 
   it("filters by the customer source and keeps rows without confirmed links separate", async () => {
