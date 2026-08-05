@@ -1243,7 +1243,7 @@ export function FloatingChatbot() {
                                 <div className="flex min-w-0 items-center gap-3">
                                     <motion.div
                                         animate={(!isSending && !isStreaming) ? { scale: [1, 1.15, 1] } : {}}
-                                        transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                                        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                                         className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] border border-white/70 bg-[linear-gradient(145deg,rgba(255,255,255,0.82),rgba(209,250,229,0.50))] shadow-[0_10px_26px_rgba(8,71,52,0.12),inset_0_1px_0_rgba(255,255,255,0.80)]"
                                     >
                                         {isDeepConsultation ? (
