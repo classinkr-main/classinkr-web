@@ -85,6 +85,38 @@ describe("chatbot new-docs RAG source relevance", () => {
     expect(result.answer).not.toContain("지금 바로 확정하기 어려워요")
   })
 
+  it("surfaces the board-lineup-specs doc for hardware installation and S-series spec questions", async () => {
+    disableExternalChatbotServices()
+
+    const questions = [
+      "전자칠판 S65 S75 S86 S110 모델별 사양 차이",
+    ]
+
+    for (const question of questions) {
+      const result = await evaluateChatbotQuery(question, { generateAnswer: false })
+
+      expect(
+        result.sources.some((s) => s.urlPath === "/docs/hardware/board-lineup-specs" || s.urlPath === "/docs/hardware/hardware-spec-installation-faq")
+      ).toBe(true)
+    }
+  })
+
+  it("surfaces the value-and-cost-framing doc for software pricing and bundle quote questions", async () => {
+    disableExternalChatbotServices()
+
+    const questions = [
+      "ClassIn Pro 요금제와 Enterprise 라이선스 기능 비교",
+    ]
+
+    for (const question of questions) {
+      const result = await evaluateChatbotQuery(question, { generateAnswer: false })
+
+      expect(
+        result.sources.some((s) => s.urlPath === "/docs/start/value-and-cost-framing" || s.urlPath === "/docs/software/software-pricing-quote-bundle-faq")
+      ).toBe(true)
+    }
+  })
+
   it("surfaces the why-classin-needs doc for adoption-objection questions", async () => {
     disableExternalChatbotServices()
 
