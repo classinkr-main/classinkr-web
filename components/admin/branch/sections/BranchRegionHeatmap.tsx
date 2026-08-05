@@ -587,7 +587,15 @@ function DetailPanel({ row, metric }: { row: MapRow | null; metric: Metric }) {
   )
 }
 
-function MapSourceStrip({ source, href }: { source: HeatmapMapSource | null; href: string }) {
+function MapSourceStrip({ source, href, loading }: { source: HeatmapMapSource | null; href: string; loading: boolean }) {
+  if (loading && !source) {
+    return (
+      <div className="flex min-h-[61px] items-center gap-2.5 border-b border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-5 py-3 text-[11px] font-semibold text-[#615D59]">
+        <MapPinned className="h-4 w-4 text-[#084734]" aria-hidden="true" />
+        CRM 지도 기회를 병렬로 불러오는 중입니다.
+      </div>
+    )
+  }
   if (!source) return null
   const summary = source.summary
   const unavailable = source.status === "unavailable" || !summary
@@ -673,9 +681,21 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
   // 로컬 재시도 넛지 — 상위 refreshKey(전역 새로고침, 강제 스크롤 동반)에 기대지 않고
   // 이 섹션만 useBranchJson의 기존 캐시키 재계산 경로(refreshKey:url)를 재사용해 다시 요청한다.
   const [localRetry, setLocalRetry] = useState(0)
-  const heatmap = useBranchJson<{ rows?: Row[]; mapSource?: HeatmapMapSource }>(`/api/admin/branch/heatmap?team=${team}&period=${period}${monthQuery}`, refreshKey + localRetry)
+  const requestKey = refreshKey + localRetry
+  const heatmap = useBranchJson<{ rows?: Row[] }>(`/api/admin/branch/heatmap?team=${team}&period=${period}${monthQuery}`, requestKey)
+  // REV와 독립 요청으로 시작한다. 지도 199곳 전체 매칭이 느려도 히트맵 본체는 먼저 렌더된다.
+  const mapSourceRequest = useBranchJson<HeatmapMapSource>(
+    "/api/admin/branch/heatmap/map-source",
+    requestKey
+  )
   const rows = heatmap.loading ? null : (heatmap.data?.rows ?? EMPTY_ROWS)
-  const mapSource = heatmap.data?.mapSource ?? null
+  const mapSource = mapSourceRequest.data ?? (mapSourceRequest.error ? {
+    status: "unavailable" as const,
+    latestSyncedAt: null,
+    isStale: true,
+    summary: null,
+    warnings: [mapSourceRequest.error],
+  } : null)
   const error = heatmap.error
   const [selectedLabel, setSelectedLabel] = useState<string | null>(() =>
     canonicalRegion(searchParams.get("region") ?? "")
@@ -755,7 +775,7 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
         </div>
       </div>
 
-      <MapSourceStrip source={mapSource} href={mapSourceHref} />
+      <MapSourceStrip source={mapSource} href={mapSourceHref} loading={mapSourceRequest.loading} />
 
       <div className="grid w-full gap-6 p-5 lg:grid-cols-[minmax(520px,1fr)_minmax(280px,360px)]">
         <HeatMap rows={mappedRows} selectedLabel={selected?.label ?? null}

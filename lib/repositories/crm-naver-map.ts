@@ -29,8 +29,13 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 const MAP_SOURCE_FRESHNESS_HOURS = 24 * 7
+const MAP_SOURCE_LIST_CACHE_TTL_MS = 45_000
 const IMPORT_CHUNK_SIZE = 500
 const LIST_LIMIT = 2_000
+
+let mapSourceCacheVersion = 0
+let mapSourceListCache: { savedAt: number; version: number; value: CrmNaverMapSourceList } | null = null
+let mapSourceListInFlight: { version: number; request: Promise<CrmNaverMapSourceList> } | null = null
 
 interface ExternalMapRecordRow {
   external_id: string
@@ -113,6 +118,11 @@ export interface ConfirmCrmNaverMapLinkInput {
   targetId: string
   actorUserId?: string | null
   actorLabel?: string | null
+}
+
+export function invalidateCrmNaverMapSourceCache() {
+  mapSourceCacheVersion += 1
+  mapSourceListCache = null
 }
 
 function payloadString(payload: Record<string, unknown> | null, key: string) {
@@ -423,10 +433,11 @@ export async function confirmCrmNaverMapLink(input: ConfirmCrmNaverMapLinkInput)
     .select("id, target_type, target_id, confidence, confirmed_at")
     .single()
   if (linkError) throw linkError
+  invalidateCrmNaverMapSourceCache()
   return link
 }
 
-export async function listCrmNaverMapSource(): Promise<CrmNaverMapSourceList> {
+async function loadCrmNaverMapSource(): Promise<CrmNaverMapSourceList> {
   const sb = createSupabaseAdminClient()
   const warnings: string[] = []
   const [recordsResult, linksResult, targets] = await Promise.all([
@@ -514,6 +525,32 @@ export async function listCrmNaverMapSource(): Promise<CrmNaverMapSourceList> {
     summary,
     warnings,
     rows,
+  }
+}
+
+export async function listCrmNaverMapSource(options: { bypassCache?: boolean } = {}): Promise<CrmNaverMapSourceList> {
+  if (options.bypassCache) invalidateCrmNaverMapSourceCache()
+
+  const version = mapSourceCacheVersion
+  const cached = mapSourceListCache
+  if (
+    cached &&
+    cached.version === version &&
+    Date.now() - cached.savedAt < MAP_SOURCE_LIST_CACHE_TTL_MS
+  ) return cached.value
+  if (mapSourceListInFlight?.version === version) return mapSourceListInFlight.request
+
+  const request = loadCrmNaverMapSource()
+  mapSourceListInFlight = { version, request }
+  try {
+    const value = await request
+    // 부분 원천 실패는 짧은 캐시에도 고정하지 않아 다음 요청에서 즉시 회복을 시도한다.
+    if (value.warnings.length === 0 && version === mapSourceCacheVersion) {
+      mapSourceListCache = { savedAt: Date.now(), version, value }
+    }
+    return value
+  } finally {
+    if (mapSourceListInFlight?.request === request) mapSourceListInFlight = null
   }
 }
 
@@ -606,6 +643,8 @@ export async function importCrmNaverMapSource(input: ImportCrmNaverMapInput): Pr
       })
       .eq("id", runId)
     if (finishError) throw finishError
+
+    invalidateCrmNaverMapSourceCache()
 
     return {
       runId,

@@ -30,7 +30,9 @@ export async function GET(req: NextRequest) {
   if (admin instanceof NextResponse) return admin
 
   try {
-    return NextResponse.json(await listCrmNaverMapSource())
+    return NextResponse.json(
+      await listCrmNaverMapSource({ bypassCache: req.nextUrl.searchParams.get("fresh") === "1" })
+    )
   } catch (error) {
     console.error("[GET /api/admin/crm/map-source]", error)
     return NextResponse.json({ error: "네이버 지도 원천을 불러오지 못했습니다." }, { status: 500 })

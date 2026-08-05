@@ -1,7 +1,7 @@
 "use client"
 
 import { useSearchParams } from "next/navigation"
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -15,7 +15,7 @@ import {
   Search,
 } from "lucide-react"
 
-import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import {
   parseNaverMapImportText,
   type NaverMapMatchStatus,
@@ -166,7 +166,7 @@ function CandidateSummary({
   )
 }
 
-function MapSourceRow({
+const MapSourceRow = memo(function MapSourceRow({
   row,
   confirming,
   onConfirm,
@@ -177,7 +177,7 @@ function MapSourceRow({
 }) {
   const match = MATCH_META[row.matchStatus]
   return (
-    <article className={`rounded-xl border border-black/[0.08] bg-white p-4 ${row.isStale ? "opacity-60" : ""}`}>
+    <article className={`rounded-xl border border-black/[0.08] bg-white p-4 [contain-intrinsic-size:auto_210px] [content-visibility:auto] ${row.isStale ? "opacity-60" : ""}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -221,7 +221,7 @@ function MapSourceRow({
       </div>
     </article>
   )
-}
+})
 
 export default function CrmNaverMapSourceClient() {
   const searchParams = useSearchParams()
@@ -260,10 +260,11 @@ export default function CrmNaverMapSourceClient() {
     setLoading(true)
     setError(null)
     try {
+      const requestUrl = force ? "/api/admin/crm/map-source?fresh=1" : "/api/admin/crm/map-source"
       const next = await adminFetchJsonCached<CrmNaverMapSourceList>(
-        "/api/admin/crm/map-source",
+        requestUrl,
         undefined,
-        { ttlMs: CACHE_TTL_MS, force }
+        { ttlMs: CACHE_TTL_MS, force, cacheKey: "/api/admin/crm/map-source" }
       )
       setData(next)
     } catch (loadError) {
@@ -337,6 +338,7 @@ export default function CrmNaverMapSourceClient() {
       setImportMessage(
         `${response.result.imported}개를 저장했습니다.${response.result.staleMarked ? ` 이전 항목 ${response.result.staleMarked}개를 오래됨 처리했습니다.` : ""}`
       )
+      clearAdminRequestCache("/api/admin/branch/heatmap/map-source")
       await load(true)
       setRawImport("")
       setImportOpen(false)
@@ -363,6 +365,7 @@ export default function CrmNaverMapSourceClient() {
             targetId: candidate.targetId,
           }),
         })
+        clearAdminRequestCache("/api/admin/branch/heatmap/map-source")
         setLinkMessage({ tone: "success", text: `${row.name}을(를) ${candidate.label}과 연결했습니다.` })
         await load(true)
       } catch (linkError) {
@@ -634,7 +637,7 @@ export default function CrmNaverMapSourceClient() {
                 key={row.externalId}
                 row={row}
                 confirming={linkingExternalId === row.externalId}
-                onConfirm={(candidateRow) => void confirmCandidate(candidateRow)}
+                onConfirm={confirmCandidate}
               />
             ))}
           </div>

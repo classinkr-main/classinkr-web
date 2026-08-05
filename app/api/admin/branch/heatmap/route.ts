@@ -4,7 +4,6 @@ import { adminCachedJson } from "@/lib/admin-api-response"
 import { readRevDealsPreferActive } from "@/lib/branch/read-rev-deals"
 import { computeHeatmap } from "@/lib/branch/computations/heatmap"
 import { fyOf, resolvePeriodDate } from "@/lib/branch/fiscal"
-import { listCrmNaverMapSource } from "@/lib/repositories/crm-naver-map"
 
 type BranchTeam = "ALL" | "BD" | "MKT" | "CSM"
 type BranchPeriod = "M" | "Q" | "Y"
@@ -33,30 +32,11 @@ export async function GET(req: NextRequest) {
   if (!periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
     // summary와 동일 규약: DB-native 액티브 임포트 우선, 시트 미러 폴백 — 탭 간 데이터 정합
-    // 지도 원천은 보조 렌즈다. 지도 쿼리가 실패해도 REV 정본 히트맵은 계속 제공한다.
-    const [dealsResult, mapSourceResult] = await Promise.allSettled([
-      readRevDealsPreferActive(fyOf(periodDate), { team }),
-      listCrmNaverMapSource(),
-    ])
-    if (dealsResult.status === "rejected") throw dealsResult.reason
-
-    const rows = computeHeatmap(dealsResult.value, period, periodDate, team)
-    const mapSource = mapSourceResult.status === "fulfilled"
-      ? {
-          status: "ready" as const,
-          latestSyncedAt: mapSourceResult.value.latestSyncedAt,
-          isStale: mapSourceResult.value.isStale,
-          summary: mapSourceResult.value.summary,
-          warnings: mapSourceResult.value.warnings,
-        }
-      : {
-          status: "unavailable" as const,
-          latestSyncedAt: null,
-          isStale: true,
-          summary: null,
-          warnings: ["CRM 지도 원천을 불러오지 못했습니다. REV 매출 히트맵만 표시합니다."],
-        }
-    return adminCachedJson({ rows, mapSource })
+    // CRM 지도 비교는 별도 경량 API에서 병렬로 읽는다. 무거운 전체 매칭이 REV 첫 렌더를
+    // 막지 않게 이 응답은 히트맵 정본 데이터만 기다린다.
+    const deals = await readRevDealsPreferActive(fyOf(periodDate), { team })
+    const rows = computeHeatmap(deals, period, periodDate, team)
+    return adminCachedJson({ rows })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
