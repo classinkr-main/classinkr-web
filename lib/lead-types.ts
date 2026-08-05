@@ -30,4 +30,6 @@ export interface LeadPayload {
   landingPage?: string
   currentPage?: string
   referrer?: string
+  /** 제출 시점의 익명 식별자(cln_aid) — 사이트 활동을 이 리드에 귀속하는 결합 키. */
+  anonymousId?: string
 }

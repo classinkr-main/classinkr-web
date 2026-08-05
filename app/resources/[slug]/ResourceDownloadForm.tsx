@@ -7,6 +7,7 @@ import { PublicLoginDialog } from "@/components/auth/PublicLoginDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { trackEvent } from "@/lib/analytics"
+import { getAnonymousId } from "@/lib/consent/consent"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import { MaterialDownloadError, requestMaterialDownload } from "@/lib/materials-client"
 import { cn } from "@/lib/utils"
@@ -157,6 +158,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
           currentPage: attribution.currentPage ?? window.location.href,
           landingPage: attribution.landingPage ?? window.location.origin + window.location.pathname,
           referrer: attribution.referrer ?? document.referrer,
+          anonymousId: getAnonymousId(),
           website: form.website,
         }),
       })

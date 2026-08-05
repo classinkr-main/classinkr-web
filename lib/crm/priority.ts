@@ -123,7 +123,9 @@ export function buildLeadPriorityItem(
   let actionLabel = "팔로업"
   let reason = "진행 중인 리드"
   // 대화가 열린 리드(contacted)가 아직 말도 못 붙인 신규보다 높게 출발한다.
-  let score = lead.status === "contacted" ? 52 : 40
+  // status 표기가 안 바뀌었어도 연락 기록이 있으면 컨택으로 친다(lead-ranking 과 동일 규칙).
+  const hasContacted = lead.status === "contacted" || (engagement?.contactLogCount ?? 0) > 0
+  let score = hasContacted ? 52 : 40
   let dueAt = lead.follow_up_at ?? null
   let bucket: CrmPriorityBucket = "watch"
 

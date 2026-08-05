@@ -163,7 +163,7 @@ export function scoreFrequency(engagement: LeadEngagement): number {
  * 매출 근접도 — 규모 + 유입 의도 + 진행 단계 + 도달 가능성.
  * 계약 금액이 없는 리드 단계에서 "이 사람이 매출에 가까운가"를 세우는 대리 지표.
  */
-export function scoreValue(lead: LeadRecord): number {
+export function scoreValue(lead: LeadRecord, engagement?: LeadEngagement): number {
   let score = 0
 
   // 규모: 원생 수는 계약 규모의 1차 프록시(HW 대수·SW 좌석 모두 여기에 비례).
@@ -182,7 +182,12 @@ export function scoreValue(lead: LeadRecord): number {
   // 진행: 대화가 시작됐고 다음 약속이 잡혀 있나.
   // 컨택은 이 축에서 가장 무거운 단일 신호다 — 아직 말도 못 붙인 리드 100건보다
   // 이미 대화가 열린 1건이 매출에 가깝다.
-  if (lead.status === "contacted") score += 22
+  //
+  // status 하나에만 기대지 않는다. 실측(2026-08-05)상 리드 114건이 전부 status=new 였다 —
+  // 실제로 연락을 안 한 게 아니라 목록에서 상태를 안 바꾼 것에 가깝다. 연락 기록이
+  // 남아 있으면 상태 표기와 무관하게 컨택으로 친다.
+  const contacted = lead.status === "contacted" || (engagement?.contactLogCount ?? 0) > 0
+  if (contacted) score += 22
   if (lead.follow_up_at) score += 12
 
   // 도달 가능성: 지금 당장 연결할 수단이 있나.
@@ -310,7 +315,7 @@ export function calcLeadPriority(
   const lastTouchMs = getLeadLastTouchMs(lead, engagement)
   const recency = scoreRecency(lastTouchMs, nowMs)
   const frequency = scoreFrequency(engagement)
-  const value = scoreValue(lead)
+  const value = scoreValue(lead, engagement)
   const response = scoreResponse(engagement, nowMs)
   const urgency = scoreUrgency(lead, nowMs, todayKey)
 
@@ -359,7 +364,9 @@ function buildPriorityReasons(
     reasons.push(days <= 0 ? "연락 후 재방문" : `연락 후 재방문 ${days}일 전`)
   }
 
-  if (active && lead.status === "contacted") reasons.push("연락 진행 중")
+  if (active && (lead.status === "contacted" || engagement.contactLogCount > 0)) {
+    reasons.push("연락 진행 중")
+  }
   if (lead.source === "demo_modal") reasons.push("데모 신청")
 
   const size = parseLeadSize(lead.size)
@@ -488,7 +495,11 @@ export function sortLeads(
             getWeightedTouchCount(getEngagement(engagements, a.id)) || fallbackNewest(a, b)
       )
     case "value":
-      return sorted.sort((a, b) => scoreValue(b) - scoreValue(a) || fallbackNewest(a, b))
+      return sorted.sort(
+        (a, b) =>
+          scoreValue(b, getEngagement(engagements, b.id)) -
+            scoreValue(a, getEngagement(engagements, a.id)) || fallbackNewest(a, b)
+      )
     case "newest":
       return sorted.sort(fallbackNewest)
     case "oldest":

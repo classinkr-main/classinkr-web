@@ -52,6 +52,7 @@ const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "current_page",
   "referrer",
   "confirmed_at",
+  "anonymous_id",
 ] as const satisfies readonly (keyof LeadInsert)[];
 
 interface SupabaseColumnError {
@@ -97,6 +98,8 @@ export interface LeadRecord {
   // 공개 채널 리드는 검토 전 null(미확인) — "확인" 액션 또는 상태 변경(new 이탈)으로 채워짐.
   // admin_manual(어드민 수기 등록)은 생성 시점에 즉시 채워진다.
   confirmed_at?: string;
+  // 제출 시점의 익명 식별자(cln_aid) — 사이트 활동 귀속의 결합 키.
+  anonymous_id?: string;
 }
 
 export interface LeadActionStats {
@@ -171,10 +174,23 @@ function isMissingLeadColumn(error: SupabaseColumnError, column: keyof LeadInser
   return Boolean(haystack) && haystack.includes(String(column).toLowerCase());
 }
 
-function stripOptionalLeadColumns(insert: LeadInsert) {
+/**
+ * 스키마에 없는 컬럼만 골라 덜어낸다.
+ *
+ * 예전에는 어떤 컬럼 하나가 없으면 선택 컬럼 전부를 버렸다. 그래서 마이그레이션이
+ * 아직 안 걸린 배포 창에서 리드 1건이 utm_source·gclid·landing_page 까지 통째로
+ * 잃었다 — 없는 컬럼 하나 때문에 멀쩡한 귀속 데이터를 버리는 셈이다.
+ * 오류 메시지가 컬럼을 지목하면 그것만 덜고, 못 짚으면 예전처럼 전부 덜어낸다.
+ */
+function stripOptionalLeadColumns(insert: LeadInsert, error?: SupabaseColumnError) {
   const fallbackInsert: Partial<LeadInsert> = { ...insert };
 
-  for (const column of OPTIONAL_LEAD_INSERT_COLUMNS) {
+  const named = error
+    ? OPTIONAL_LEAD_INSERT_COLUMNS.filter((column) => isMissingLeadColumn(error, column))
+    : [];
+  const doomed = named.length > 0 ? named : OPTIONAL_LEAD_INSERT_COLUMNS;
+
+  for (const column of doomed) {
     delete fallbackInsert[column];
   }
 
@@ -213,6 +229,7 @@ function supabaseToLegacy(row: Lead): LeadRecord {
     current_page: row.current_page ?? undefined,
     referrer: row.referrer ?? undefined,
     confirmed_at: row.confirmed_at ?? undefined,
+    anonymous_id: row.anonymous_id ?? undefined,
   };
 }
 
@@ -351,6 +368,7 @@ export async function saveLead(
     // 호출자가 명시하지 않으면 미확인(null) — 공개 채널 리드의 기본값.
     // 어드민 수기 등록(app/api/admin/leads)만 생성 시점에 confirmed_at을 명시적으로 채운다.
     confirmed_at: lead.confirmed_at ?? null,
+    anonymous_id: lead.anonymous_id ?? null,
   };
 
   const { data, error } = await supabase
@@ -362,21 +380,42 @@ export async function saveLead(
   if (error) {
     if (isMissingOptionalLeadColumn(error)) {
       console.warn(
-        "[leads] optional lead columns are missing; retrying with core lead fields only:",
+        "[leads] optional lead columns are missing; retrying without the named columns:",
         error.message
       );
 
+      // 1차 재시도 — 오류가 지목한 컬럼만 덜어낸다. 나머지 귀속 데이터는 지킨다.
       const fallback = await supabase
         .from("leads")
-        .insert(stripOptionalLeadColumns(insert))
+        .insert(stripOptionalLeadColumns(insert, error))
         .select()
         .single();
 
-      if (fallback.error) {
-        throw new Error(`[leads] 저장 실패: ${fallback.error.message}`);
+      if (!fallback.error) return supabaseToLegacy(fallback.data as Lead);
+
+      // 2차 재시도 — 여러 컬럼이 한꺼번에 없으면(마이그레이션 여러 개 미적용) 오류가
+      // 한 번에 하나씩만 지목한다. 이때는 예전처럼 선택 컬럼을 전부 덜어 저장을 살린다.
+      // 리드를 잃는 것보다 귀속을 잃는 게 낫다.
+      if (isMissingOptionalLeadColumn(fallback.error)) {
+        console.warn(
+          "[leads] still missing optional columns; retrying with core lead fields only:",
+          fallback.error.message
+        );
+
+        const bare = await supabase
+          .from("leads")
+          .insert(stripOptionalLeadColumns(insert))
+          .select()
+          .single();
+
+        if (bare.error) {
+          throw new Error(`[leads] 저장 실패: ${bare.error.message}`);
+        }
+
+        return supabaseToLegacy(bare.data as Lead);
       }
 
-      return supabaseToLegacy(fallback.data as Lead);
+      throw new Error(`[leads] 저장 실패: ${fallback.error.message}`);
     }
 
     throw new Error(`[leads] 저장 실패: ${error.message}`);

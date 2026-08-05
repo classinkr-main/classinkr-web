@@ -222,6 +222,7 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
     landingPage: normalizeString(body.landingPage ?? body.landing_page),
     currentPage: normalizeString(body.currentPage ?? body.current_page),
     referrer: normalizeString(body.referrer),
+    anonymousId: normalizeString(body.anonymousId ?? body.anonymous_id),
   }
 
   if (
@@ -337,10 +338,39 @@ export async function submitLeadCapture(
         landing_page: body.landingPage,
         current_page: body.currentPage,
         referrer: body.referrer,
+        anonymous_id: body.anonymousId,
       })
       savedLeadId = savedLead.id
       conversionEventId = `lead:${savedLead.id}`
       stored = true
+
+      // 제출 전에 쌓인 익명 활동을 이 리드로 귀속한다.
+      //
+      // 신원 결합 모듈은 원래부터 있었지만(로그인 콜백·자료 다운로드·뉴스레터에서 호출),
+      // 정작 리드 제출 경로에서는 한 번도 부르지 않았다. 그래서 client_events 2,159행 중
+      // lead_id 가 채워진 행이 0이었고, 리드 참여 신호가 항상 빈손이었다(2026-08-05 실측).
+      //
+      // 응답을 막지 않게 뒤로 미룬다 — 리드 저장은 이미 끝났으므로 실패해도 경고만 남긴다.
+      if (body.anonymousId) {
+        const leadIdForStitch = savedLead.id
+        const anonymousIdForStitch = body.anonymousId
+        const stitchTask = async () => {
+          try {
+            const { stitchIdentity } = await import("@/lib/identity/stitch")
+            const result = await stitchIdentity({
+              anonymousId: anonymousIdForStitch,
+              leadId: leadIdForStitch,
+            })
+            if (result.warnings.length) {
+              console.warn("[lead-capture] identity stitch warnings:", result.warnings.join(" | "))
+            }
+          } catch (error) {
+            console.warn("[lead-capture] identity stitch failed:", error)
+          }
+        }
+        if (context.deferTask) context.deferTask(stitchTask)
+        else void stitchTask()
+      }
     } catch (error) {
       console.error("[lead-capture] saveLead error:", error)
       storageError = "Failed to store the lead record."
