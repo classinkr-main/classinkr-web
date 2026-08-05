@@ -5,7 +5,8 @@ import { CalendarClock, CheckCircle2, Clock3, Filter, ListTodo, RefreshCw } from
 
 import { adminFetchJson, adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import {
-  WEEK_AHEAD_VISIBLE_BUCKETS,
+  WEEK_AHEAD_PREVIEW_ROWS,
+  budgetWeekAheadBuckets,
   classifyTaskBucket,
   type WeekAheadBucket,
 } from "@/lib/crm/week-ahead"
@@ -45,10 +46,14 @@ function formatDay(value: string | null) {
 export default function CrmWeekAheadPanel({
   compact = false,
   embedded = false,
+  previewRows = WEEK_AHEAD_PREVIEW_ROWS,
 }: {
   compact?: boolean
   embedded?: boolean
+  /** 접힌 상태에서 그릴 할 일 행 수(버킷 합산). 나머지는 "+N건 더 보기"로 펼친다. */
+  previewRows?: number
 }) {
+  const [expanded, setExpanded] = useState(false)
   const { currentOwner } = useCrmOwners()
   // 담당자(__me) 해석 확정 게이트(감사 #9) — 해석 전 전체(owner 없음) 요청 + 해석 후 __me
   // 재요청의 이중 fetch를 제거한다. useCrmOwners는 실패 시에도 currentOwner=null만 유지해
@@ -124,6 +129,13 @@ export default function CrmWeekAheadPanel({
     for (const task of data?.rows ?? []) map[classifyTaskBucket(task, nowMs)].push(task)
     return map
   }, [data])
+
+  // 요약 표면(홈)에서 버킷을 전부 펼치면 활성 할 일이 많을 때 수십 행이 된다 —
+  // 지연 → 오늘 → 이번 주 순으로 previewRows개까지만 그리고 나머지는 "+N건 더 보기"로 접는다.
+  const budgeted = useMemo(
+    () => budgetWeekAheadBuckets(groups, expanded ? null : previewRows),
+    [groups, expanded, previewRows]
+  )
 
   const handleAction = useCallback(
     async (task: CrmTaskRecord, action: "complete" | "snooze") => {
@@ -207,13 +219,14 @@ export default function CrmWeekAheadPanel({
         <div className="p-6 text-center text-[13px] text-[#1a1a1a]/40">열린 할 일이 없습니다.</div>
       ) : (
         <div className="space-y-3">
-          {WEEK_AHEAD_VISIBLE_BUCKETS.filter((bucket) => groups[bucket].length > 0).map((bucket) => (
+          {budgeted.slices.map(({ bucket, tasks, total }) => (
             <div key={bucket}>
+              {/* 헤더 카운트는 잘라내기 전 버킷 총량 — 미리보기가 총량을 숨기지 않게 한다 */}
               <p className={`mb-1.5 text-[11px] font-bold uppercase tracking-[0.06em] ${BUCKET_TONE[bucket]}`}>
-                {BUCKET_LABEL[bucket]} ({groups[bucket].length})
+                {BUCKET_LABEL[bucket]} ({total})
               </p>
               <div className="space-y-1.5">
-                {groups[bucket].map((task) => (
+                {tasks.map((task) => (
                   <div key={task.id} className="flex items-center justify-between gap-2 rounded-xl bg-[#fafaf8] px-3 py-2">
                     <div className="min-w-0">
                       <p className="truncate text-[12px] font-semibold text-[#111110]">{task.title}</p>
@@ -251,6 +264,18 @@ export default function CrmWeekAheadPanel({
               </div>
             </div>
           ))}
+
+          {budgeted.totalCount > previewRows ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              className="w-full rounded-xl border border-[#e8e8e4] bg-white py-2 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+            >
+              {expanded
+                ? `접기 · 상위 ${previewRows}건만`
+                : `+${budgeted.hiddenCount}건 더 보기 · 전체 ${budgeted.totalCount}건`}
+            </button>
+          ) : null}
         </div>
       )}
     </section>

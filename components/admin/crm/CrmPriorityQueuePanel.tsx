@@ -49,6 +49,9 @@ const FALLBACK_BUCKETS: Array<{ bucket: CrmPriorityBucket; label: string; count:
 ]
 
 const QUEUE_TTL_MS = 90_000
+// 홈 첫 화면에서 한 번에 그리는 작업대 항목 수. 받아오는 건 최대 12건이고,
+// 나머지는 "+N건 더 보기"로 펼친다 — 아침 화면이 스크롤 목록이 되지 않게 하는 상한.
+const QUEUE_PREVIEW_COUNT = 6
 const CURRENT_OWNER_VALUE = "__me"
 
 function queueUrl(source: SourceFilter, owner: string, bucket: BucketFilter, limit: number) {
@@ -101,11 +104,15 @@ export default function CrmPriorityQueuePanel({
   refreshKey = 0,
   compact = false,
   embedded = false,
+  previewCount = QUEUE_PREVIEW_COUNT,
 }: {
   refreshKey?: number
   compact?: boolean
   embedded?: boolean
+  /** 접힌 상태에서 그릴 항목 수. 나머지는 "+N건 더 보기"로 펼친다(추가 요청 없음). */
+  previewCount?: number
 }) {
+  const [expanded, setExpanded] = useState(false)
   const [source, setSource] = useState<SourceFilter>("all")
   const [bucket, setBucket] = useState<BucketFilter>("today")
   const [owner, setOwner] = useState("")
@@ -118,6 +125,12 @@ export default function CrmPriorityQueuePanel({
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
 
   const url = useMemo(() => queueUrl(source, owner, bucket, compact ? 4 : 12), [source, owner, bucket, compact])
+  // 받아온 큐(최대 12건)에서 먼저 previewCount개만 그린다 — 펼침은 추가 요청 없이 같은 배열을 쓴다.
+  const visibleItems = useMemo(
+    () => (expanded ? (data?.items ?? []) : (data?.items ?? []).slice(0, previewCount)),
+    [data, expanded, previewCount]
+  )
+  const hiddenItemCount = Math.max(0, (data?.items.length ?? 0) - visibleItems.length)
   const bucketOptions = data?.buckets.length ? data.buckets : FALLBACK_BUCKETS
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
 
@@ -375,7 +388,7 @@ export default function CrmPriorityQueuePanel({
           <div className="p-6 text-center text-[13px] text-[#1a1a1a]/40">우선순위를 계산 중입니다...</div>
         ) : data && data.items.length > 0 ? (
           <div className="divide-y divide-[#f0f0ec]">
-            {data.items.map((item) =>
+            {visibleItems.map((item) =>
               compact ? (
                 // 사이드바 컴팩트: 3줄(배지+점수 / 이름 / 사유·담당·날짜) + 한 줄 액션
                 <div key={item.id} className="p-2.5 transition-colors hover:bg-[#fafaf8]">
@@ -532,6 +545,17 @@ export default function CrmPriorityQueuePanel({
                 </div>
               )
             )}
+            {data.items.length > previewCount ? (
+              <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                className="w-full bg-white py-2 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#fafaf8] hover:text-[#111110]"
+              >
+                {expanded
+                  ? `접기 · 상위 ${previewCount}건만`
+                  : `+${hiddenItemCount}건 더 보기 · 이 큐 ${data.items.length}건`}
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="p-6 text-center text-[13px] text-[#1a1a1a]/40">오늘 표시할 우선순위가 없습니다.</div>
