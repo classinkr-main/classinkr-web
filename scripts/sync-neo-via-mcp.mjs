@@ -1,16 +1,38 @@
 import { createHash } from "node:crypto"
 import { existsSync, readFileSync } from "node:fs"
 import { createRequire } from "node:module"
+import { homedir } from "node:os"
 import { resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
 import { createClient } from "@supabase/supabase-js"
 
 const PROJECT_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)))
-const DEFAULT_MCP_ROOT = "C:/tmp/eeocrm-personal"
-const MCP_ROOT = process.env.EEOCRM_MCP_ROOT ?? DEFAULT_MCP_ROOT
-const MCP_SSE_URL = process.env.EEOCRM_MCP_SSE_URL ?? "http://127.0.0.1:3000/sse"
+const MCP_ROOT_CANDIDATES = [
+  resolve(PROJECT_ROOT, "../eeocrm-personal"),
+  resolve(homedir(), "Desktop/Projects/eeocrm-personal"),
+  "C:/tmp/eeocrm-personal",
+]
+const MCP_ROOT =
+  process.env.EEOCRM_MCP_ROOT ??
+  MCP_ROOT_CANDIDATES.find((candidate) => existsSync(resolve(candidate, "package.json"))) ??
+  MCP_ROOT_CANDIDATES[0]
+const MCP_SSE_URL =
+  process.env.EEOCRM_MCP_SSE_URL ?? `http://127.0.0.1:${readMcpPort(MCP_ROOT) ?? 3001}/sse`
 const SOURCE_SYSTEM = "xiaoshouyi"
+
+function readMcpPort(root) {
+  const envPath = resolve(root, ".env")
+  if (!existsSync(envPath)) return null
+
+  const line = readFileSync(envPath, "utf8")
+    .split(/\r?\n/)
+    .find((candidate) => candidate.trim().startsWith("PORT="))
+  if (!line) return null
+
+  const port = Number(line.slice(line.indexOf("=") + 1).trim().replace(/^["']|["']$/g, ""))
+  return Number.isInteger(port) && port > 0 && port <= 65_535 ? port : null
+}
 
 function loadDotEnvLocal() {
   const path = resolve(PROJECT_ROOT, ".env.local")
@@ -121,11 +143,21 @@ function parseToolJson(result) {
   return JSON.parse(text)
 }
 
+function resolveOrderBy(row) {
+  const configured = row.order_by ?? (row.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC")
+  const hasIdOrder = configured
+    .split(",")
+    .map((clause) => clause.trim().split(/\s+/)[0]?.toLowerCase())
+    .includes("id")
+
+  return hasIdOrder || !row.fields.includes("id") ? configured : `${configured}, id DESC`
+}
+
 function buildQuery(row, pageSize, offset) {
   const fields = row.fields.join(",")
   const whereClause = row.where_clause?.trim()
   const whereSql = whereClause ? ` WHERE ${whereClause}` : ""
-  const orderBy = row.order_by ?? (row.fields.includes("updatedAt") ? "updatedAt DESC" : "id DESC")
+  const orderBy = resolveOrderBy(row)
   return `SELECT ${fields} FROM ${row.object_api_key}${whereSql} ORDER BY ${orderBy} LIMIT ${offset},${pageSize}`
 }
 
@@ -275,7 +307,7 @@ async function main() {
             pagesScanned,
             truncated,
             staleMarked,
-            orderBy: row.order_by ?? null,
+            orderBy: resolveOrderBy(row),
             whereClause: row.where_clause ?? null,
           },
         })
