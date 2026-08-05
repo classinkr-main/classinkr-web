@@ -80,4 +80,14 @@ describe("chatbot golden set coverage", () => {
       expect(testCase?.expectSources).toBe(false)
     }
   })
+
+  it("covers new hardware & software packaging FAQ golden cases", () => {
+    const hwCase = cases.find((candidate) => candidate.id === "hardware-board-specs")
+    const swCase = cases.find((candidate) => candidate.id === "value-cost-included")
+
+    expect(hwCase).toBeDefined()
+    expect(swCase).toBeDefined()
+    expect(hwCase?.expectCategory).toBe("hardware")
+    expect(swCase?.expectCategory).toBe("billing")
+  })
 })
