@@ -97,9 +97,14 @@ function matrixBucketTone(bucket: RevMonthlyBucket): keyof typeof MATRIX_TONE {
 }
 
 // 매트릭스 확도 색 레전드. 셀 글자색(MATRIX_TONE)과 1:1 대응 — 값 자체는 바꾸지 않는다.
-const MATRIX_TONE_LEGEND_ITEMS: Array<{ label: string; color: string }> = [
+// tint가 있는 항목은 셀에도 같은 배경이 깔린다는 뜻 — 범례 스와치를 그 틴트 위에 얹어 대응을 보여준다.
+const MATRIX_TONE_LEGEND_ITEMS: Array<{ label: string; color: string; tint?: string }> = [
   { label: CONFIDENCE_TOKENS.confirmed.label, color: CONFIDENCE_TOKENS.confirmed.color },
-  { label: CONFIDENCE_TOKENS["high-confidence"].label, color: CONFIDENCE_TOKENS["high-confidence"].color },
+  {
+    label: CONFIDENCE_TOKENS["high-confidence"].label,
+    color: CONFIDENCE_TOKENS["high-confidence"].color,
+    tint: CONFIDENCE_TOKENS["high-confidence"].tintBg,
+  },
   { label: CONFIDENCE_TOKENS.expected.label, color: CONFIDENCE_TOKENS.expected.color },
   { label: "불일치", color: "#B43E3E" },
 ]
@@ -108,7 +113,17 @@ export function MatrixToneLegend() {
     <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-[#615D59]">
       {MATRIX_TONE_LEGEND_ITEMS.map((item) => (
         <span key={item.label} className="inline-flex items-center gap-1">
-          <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+          {item.tint ? (
+            <span
+              aria-hidden
+              className="inline-flex h-3 w-3 shrink-0 items-center justify-center rounded-[3px]"
+              style={{ backgroundColor: item.tint }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: item.color }} />
+            </span>
+          ) : (
+            <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+          )}
           {item.label}
         </span>
       ))}
@@ -881,7 +896,11 @@ const RevMatrixMonthCell = memo(function RevMatrixMonthCell({
     )
   }
 
-  const bg = mismatch ? "bg-[#FCE9E9]" : bgClass
+  // 고확도(90%+ 마감임박) 셀만 은은한 파란 틴트를 깐다 — 확정(그린)·예정(앰버)은 글자색만 유지해
+  // "강조는 한 곳만" 위계를 지킨다. 색은 CONFIDENCE_TOKENS['high-confidence'].tintBg(#EFF6FF) SSOT.
+  // 불일치(빨강)·미검수 초안은 운영상 더 급한 신호라 틴트보다 우선한다.
+  const highTint = !mismatch && !pending && tone === "high"
+  const bg = mismatch ? "bg-[#FCE9E9]" : highTint ? "bg-[#EFF6FF]" : bgClass
   const cellClassName = `relative px-1.5 text-right align-middle tabular-nums ${
     mismatch
       ? "border-l-2 border-l-[#B43E3E]"
