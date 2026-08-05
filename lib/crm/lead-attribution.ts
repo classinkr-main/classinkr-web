@@ -86,6 +86,78 @@ export function getMetaAdInfo(lead: LeadRecord): MetaAdInfo | null {
   return info.campaign || info.adset || info.ad ? info : null
 }
 
+// ─── 테스트 리드 식별 ──────────────────────────────────────────
+// Meta 리드애즈 폼 테스트 도구는 제출할 때마다 `<test lead: dummy data ...>` 리드를
+// 실제 웹훅으로 쏜다. 우리 쪽 E2E 검증도 비슷한 흔적을 남긴다. 이것들이 운영 목록
+// 상단에 섞이면(2026-08-05 기준 우선순위 상위 12건에 3건이 잡혔다) 아침에 볼 목록이
+// 오염된다.
+//
+// 지우는 대신 식별한다 — 폼을 테스트할 때마다 또 들어오므로 1회성 삭제로는 안 끝나고,
+// 웹훅이 정상 동작한다는 증거이기도 해서 기록 자체는 남겨 두는 편이 낫다.
+//
+// 오검출이 실제 리드를 숨기므로 판정은 좁게 잡는다 — 상호에 "테스트"가 들어가는
+// 진짜 학원(예: "테스트베드 아카데미")을 걸러내면 안 된다.
+const TEST_LEAD_EMAILS = new Set(["test@meta.com"])
+
+export function isTestLead(lead: LeadRecord): boolean {
+  const email = lead.email?.trim().toLowerCase() ?? ""
+  if (TEST_LEAD_EMAILS.has(email)) return true
+  // 우리 E2E 가 쓰는 플러스 주소(test+...@) — 실제 사용자가 쓸 일은 없다.
+  if (/^test\+/.test(email)) return true
+
+  // Meta 테스트 도구의 고정 문구. 접두 일치로만 본다.
+  const name = lead.name?.trim().toLowerCase() ?? ""
+  const org = lead.org?.trim().toLowerCase() ?? ""
+  if (name.startsWith("<test lead") || org.startsWith("<test lead")) return true
+
+  return false
+}
+
+// ─── Meta 광고 감도(구매 의도) ─────────────────────────────────
+// Meta 리드는 우리 리드의 대다수인데(2026-08-05 기준 114건 중 108건) 우선순위에서는
+// 전부 같은 유입 의도 점수를 받았다. 그래서 "감도 높은 곳을 위로"가 Meta 안에서는
+// 아무것도 가르지 못했다 — 전자칠판 업그레이드를 찾아 들어온 사람과 기능 소개 광고를
+// 눌러본 사람이 동점이었다.
+//
+// 광고 단위 전환 실적이 아직 없어서(리드가 전부 status=new) 성과 기반 학습은 불가능하다.
+// 대신 캠페인·광고세트·광고명 텍스트의 키워드로 가른다 — 광고 이름은 마케팅이 직접
+// 붙이는 값이라 의도가 그대로 드러난다. 캠페인이 새로 생기면 이 표만 손보면 된다.
+const META_INTENT_RULES: Array<{ label: string; lift: number; keywords: string[] }> = [
+  // 장비를 사겠다고 들어온 사람 — 이 묶음이 매출에 가장 가깝다.
+  { label: "장비 구매", lift: 12, keywords: ["하드웨어", "hw", "전자칠판", "칠판", "업그레이드", "설치", "구매"] },
+  // 얼굴을 볼 기회가 잡힌 사람 — 설명회·세미나는 대면 전환율이 높다.
+  { label: "설명회", lift: 9, keywords: ["설명회", "세미나", "bd_", "방문", "체험"] },
+  // 기능을 보러 온 사람 — 관심은 있지만 아직 구매 대화는 아니다.
+  { label: "기능 관심", lift: 4, keywords: ["녹화", "기능", "수업", "온라인", "sw", "소프트웨어"] },
+]
+
+export interface MetaIntent {
+  label: string
+  lift: number
+}
+
+/**
+ * Meta 광고 리드의 구매 의도 가산점. Meta 가 아니거나 어느 규칙에도 안 걸리면 null.
+ * 캠페인 → 광고세트 → 광고명 순으로 훑고 가장 높은 규칙 하나만 적용한다.
+ */
+export function getMetaIntent(lead: LeadRecord): MetaIntent | null {
+  const info = getMetaAdInfo(lead)
+  if (!info) return null
+
+  const haystack = [info.campaign, info.adset, info.ad]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+  if (!haystack) return null
+
+  for (const rule of META_INTENT_RULES) {
+    if (rule.keywords.some((keyword) => haystack.includes(keyword))) {
+      return { label: rule.label, lift: rule.lift }
+    }
+  }
+  return null
+}
+
 export function getLeadSourceDetail(lead: LeadRecord) {
   const explicit = lead.source_detail?.trim()
   if (explicit) return explicit

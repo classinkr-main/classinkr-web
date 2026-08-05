@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest"
 
 import {
   getLeadTrackingKey,
+  getMetaIntent,
   hasTrackingSignal,
   isMarketingLead,
+  isTestLead,
 } from "@/lib/crm/lead-attribution"
 import {
   EMPTY_LEAD_ENGAGEMENT,
@@ -427,5 +429,62 @@ describe("buildTrackingRollup", () => {
     const empty = buildTrackingRollup([], (lead) => getLeadTrackingKey(lead, "campaign"))
     expect(empty.rows).toEqual([])
     expect(empty.total).toBe(0)
+  })
+})
+
+describe("Meta 광고 감도 · 테스트 리드", () => {
+  function metaLead(overrides: Partial<LeadRecord> = {}) {
+    return makeLead({ source: "meta_lead_ads", ...overrides })
+  }
+
+  it("광고 문구의 구매 의도가 높을수록 매출 근접 점수가 높다", () => {
+    const equipment = scoreValue(metaLead({ utm_campaign: "오프라인 HW/SW" }))
+    const seminar = scoreValue(metaLead({ utm_campaign: "BD_설명회_7월 전국 설명회_0723-31" }))
+    const feature = scoreValue(metaLead({ utm_campaign: "교실녹화기능 광고" }))
+    const unknown = scoreValue(metaLead({ utm_campaign: "브랜드 인지" }))
+
+    expect(equipment).toBeGreaterThan(seminar)
+    expect(seminar).toBeGreaterThan(feature)
+    expect(feature).toBeGreaterThan(unknown)
+  })
+
+  it("구버전 리드는 message 의 campaign= 줄에서도 의도를 읽는다", () => {
+    const legacy = metaLead({ message: "Meta Lead Ads\ncampaign=전자칠판을 업그레이드 해드립니다\nad=-" })
+    const plain = metaLead({ message: "Meta Lead Ads\ncampaign=브랜드 인지\nad=-" })
+    expect(scoreValue(legacy)).toBeGreaterThan(scoreValue(plain))
+  })
+
+  it("Meta 가 아닌 리드에는 광고 의도 가산이 붙지 않는다", () => {
+    const info = getMetaIntent(makeLead({ source: "contact_page", utm_campaign: "오프라인 HW/SW" }))
+    expect(info).toBeNull()
+  })
+
+  it("폼 테스트 리드는 식별되고 목록 맨 아래로 내려간다", () => {
+    const dummy = metaLead({
+      id: "meta-test",
+      name: "<test lead: dummy data for form>",
+      email: "test@meta.com",
+      utm_campaign: "오프라인 HW/SW",
+      timestamp: new Date(NOW_MS - 3600_000).toISOString(),
+    })
+    const real = metaLead({
+      id: "real",
+      org: "진짜학원",
+      utm_campaign: "오프라인 HW/SW",
+      timestamp: new Date(NOW_MS - 3600_000).toISOString(),
+    })
+
+    expect(isTestLead(dummy)).toBe(true)
+    expect(isTestLead(real)).toBe(false)
+
+    const dummyPriority = calcLeadPriority(dummy, makeEngagement(), NOW_MS)
+    const realPriority = calcLeadPriority(real, makeEngagement(), NOW_MS)
+    expect(dummyPriority.total).toBeLessThan(realPriority.total)
+    expect(dummyPriority.reasons).toEqual(["테스트 리드"])
+  })
+
+  it("상호에 테스트가 들어간 진짜 학원은 걸러내지 않는다", () => {
+    expect(isTestLead(makeLead({ org: "테스트베드 아카데미", email: "won@testbed.co.kr" }))).toBe(false)
+    expect(isTestLead(makeLead({ name: "테스트 준비반", email: "hello@academy.kr" }))).toBe(false)
   })
 })

@@ -2,6 +2,7 @@ import type { LeadRecord } from "@/lib/repositories/leads"
 import type { NeoCrmCustomerRow } from "@/lib/admin-crm-customers-neo"
 import type { CrmTaskPriority, CrmTaskRecord, CrmTaskType } from "@/lib/repositories/crm-tasks"
 import { parseLeadSize, type LeadEngagement } from "@/lib/crm/lead-ranking"
+import { getMetaIntent, isTestLead } from "@/lib/crm/lead-attribution"
 
 export type CrmPrioritySource = "lead" | "neo_account" | "task"
 export type CrmPrioritySeverity = "critical" | "high" | "medium" | "low"
@@ -111,6 +112,9 @@ export function buildLeadPriorityItem(
   options?: BuildLeadPriorityOptions
 ): CrmPriorityItem | null {
   if (lead.status === "converted" || lead.status === "closed") return null
+  // 폼 테스트가 남긴 리드는 아침에 처리할 일이 아니다 — 작업대에서 제외한다.
+  // (목록에서 지우지는 않는다. 리드 보드에서는 칩으로 표시만 한다.)
+  if (isTestLead(lead)) return null
   // 공개 채널에서 막 들어와 아직 검토(확인)되지 않은 저의도 리드(뉴스레터 등)는 작업대 노이즈라 제외.
   // 응대 SLA가 걸린 소스(문의/데모/Meta 리드애즈)는 미확인이어도 "첫 응답" 큐로 즉시 노출한다.
   if (!lead.confirmed_at && !isResponseTargetLead(lead)) return null
@@ -176,7 +180,16 @@ export function buildLeadPriorityItem(
   // ─ 감도(유입 의도)·규모 — "지금 사줄 것 같은 곳"을 위로 올리는 축.
   if (lead.source === "demo_modal") score += 12
   else if (lead.source === "contact_page") score += 6
-  if (lead.source === "meta_lead_ads") score += 8
+  if (lead.source === "meta_lead_ads") {
+    score += 8
+    // Meta 안에서도 광고 문구가 드러내는 의도로 한 번 더 가른다 — 리드 대다수가
+    // 여기라, 이게 없으면 "감도 높은 곳 우선"이 Meta 안에서 아무것도 못 가른다.
+    const metaIntent = getMetaIntent(lead)
+    if (metaIntent) {
+      score += metaIntent.lift
+      if (bucket === "watch") reason = `광고 · ${metaIntent.label}`
+    }
+  }
 
   const size = parseLeadSize(lead.size)
   if (size >= 300) score += 12

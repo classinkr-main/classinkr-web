@@ -26,7 +26,12 @@
 import { getLeadMagnetIntentScore } from "@/lib/lead-magnets"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 
-import { RESPONSE_TARGET_SOURCES, getLeadSourceDetail } from "@/lib/crm/lead-attribution"
+import {
+  RESPONSE_TARGET_SOURCES,
+  getLeadSourceDetail,
+  getMetaIntent,
+  isTestLead,
+} from "@/lib/crm/lead-attribution"
 
 const DAY_MS = 86_400_000
 const HOUR_MS = 3_600_000
@@ -178,6 +183,8 @@ export function scoreValue(lead: LeadRecord, engagement?: LeadEngagement): numbe
   // 의도: 어떤 경로로 들어왔나.
   score += SOURCE_INTENT[lead.source] ?? SOURCE_INTENT_DEFAULT
   if (lead.lead_magnet) score += Math.round(getLeadMagnetIntentScore(lead.lead_magnet) / 2)
+  // Meta 리드는 source 만으로는 전부 동점이라, 광고 문구가 드러내는 의도로 한 번 더 가른다.
+  score += getMetaIntent(lead)?.lift ?? 0
 
   // 진행: 대화가 시작됐고 다음 약속이 잡혀 있나.
   // 컨택은 이 축에서 가장 무거운 단일 신호다 — 아직 말도 못 붙인 리드 100건보다
@@ -325,9 +332,10 @@ export function calcLeadPriority(
     WEIGHT.recency * recency +
     WEIGHT.frequency * frequency +
     WEIGHT.urgency * urgency
-  const total = clamp100(
-    Math.round(isActiveLeadStatus(lead.status) ? blended : blended * INACTIVE_MULTIPLIER)
-  )
+  // 폼 테스트가 남긴 리드는 목록에서 지우지 않되(웹훅이 살아 있다는 증거다) 맨 아래로
+  // 보낸다. 전환·종료 리드와 같은 취급.
+  const demoted = !isActiveLeadStatus(lead.status) || isTestLead(lead)
+  const total = clamp100(Math.round(demoted ? blended * INACTIVE_MULTIPLIER : blended))
 
   return {
     total,
@@ -352,6 +360,9 @@ function buildPriorityReasons(
   const reasons: string[] = []
   const active = isActiveLeadStatus(lead.status)
 
+  // 왜 아래에 깔렸는지 한 눈에 보이게 — 진짜 리드가 실수로 걸린 거면 바로 알아챌 수 있다.
+  if (isTestLead(lead)) return ["테스트 리드"]
+
   if (active && lead.follow_up_at && toLocalDateKey(lead.follow_up_at) === todayKey) {
     reasons.push("오늘 팔로업")
   }
@@ -368,6 +379,8 @@ function buildPriorityReasons(
     reasons.push("연락 진행 중")
   }
   if (lead.source === "demo_modal") reasons.push("데모 신청")
+  const metaIntent = getMetaIntent(lead)
+  if (metaIntent) reasons.push(`광고 · ${metaIntent.label}`)
 
   const size = parseLeadSize(lead.size)
   if (size >= 100) reasons.push(`원생 ${size.toLocaleString("ko-KR")}명`)

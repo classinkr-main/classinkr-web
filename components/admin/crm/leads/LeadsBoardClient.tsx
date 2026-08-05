@@ -61,6 +61,7 @@ import {
 } from "@/components/admin/crm/leads/shared"
 import {
   isMarketingLead,
+  isTestLead,
   getLeadTrackingKey,
   TRACKING_DIMENSIONS,
   type TrackingDimension,
@@ -113,7 +114,7 @@ function priorityToneClass(total: number) {
 }
 
 function priorityBreakdownTitle(priority: LeadPriority) {
-  return `최근 ${priority.recency} · 자주 ${priority.frequency} · 주요 ${priority.value} · 긴급 ${priority.urgency}`
+  return `주요 ${priority.value} · 반응 ${priority.response} · 최근 ${priority.recency} · 자주 ${priority.frequency} · 긴급 ${priority.urgency}`
 }
 
 function PriorityCell({ priority }: { priority: LeadPriority }) {
@@ -2433,6 +2434,25 @@ export default function LeadsBoardClient() {
                           </span>
                         )}
                         <StatusPill status={lead.status} />
+                        {/*
+                          상태 전환은 드로어를 열고 스크롤해야만 가능했다. 그래서 리드
+                          115건이 전부 new 로 남아 있었고(2026-08-05 실측), 컨택 신호가
+                          우선순위에서 아무 일도 하지 못했다. 목록에서 한 번에 넘긴다.
+                        */}
+                        {lead.status === "new" && !isTestLead(lead) && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void handleStatus(lead.id, "contacted")
+                            }}
+                            title="연락중으로 넘기기"
+                            className="inline-flex items-center gap-1 rounded-full border border-[#D7EBDD] bg-white px-2 py-0.5 text-[11px] font-medium text-[#084734] transition-colors hover:bg-[#ECFDF5]"
+                          >
+                            <Check className="h-3 w-3" />
+                            연락함
+                          </button>
+                        )}
                         {lead.status === "converted" && (
                           <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#ECFDF5] text-[#084734] border border-[#D7EBDD]">
                             CRM 전환
