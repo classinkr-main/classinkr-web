@@ -7,6 +7,7 @@ import {
   Building2,
   CircleDollarSign,
   FileSpreadsheet,
+  MapPinned,
   PhoneCall,
   Target,
   Truck,
@@ -17,7 +18,7 @@ import { warmAdminRequestCache } from "@/lib/admin-client"
 
 type CrmSection = "home" | "customers" | "activity" | "deals" | "insights" | "sync"
 type DealsSub = "revenue" | "revSheet" | "orders" | "kpi"
-type CustomersSub = "unified" | "leads" | "accounts"
+type CustomersSub = "unified" | "leads" | "accounts" | "map"
 
 // 상단 primary 탭은 글로벌 사이드바(AdminSidebar)의 CRM 확장으로 이전됨.
 // CrmSubnav는 컨텍스트 sub-tab(고객·돈흐름 내부)만 본문 상단에 렌더한다.
@@ -35,6 +36,7 @@ const CUSTOMERS_SUBTABS = [
   { key: "unified", href: "/admin/crm/customers/unified", label: "통합", icon: <Users className="h-3.5 w-3.5" /> },
   { key: "leads", href: "/admin/crm/customers/leads", label: "리드", icon: <PhoneCall className="h-3.5 w-3.5" /> },
   { key: "accounts", href: "/admin/crm/customers/accounts", label: "원천 고객", icon: <Building2 className="h-3.5 w-3.5" /> },
+  { key: "map", href: "/admin/crm/customers/map", label: "지도 원천", icon: <MapPinned className="h-3.5 w-3.5" /> },
 ] satisfies Array<{ key: CustomersSub; href: string; label: string; icon: ReactNode }>
 
 const SUBTAB_WARMUP_REQUESTS: Record<string, string[]> = {
@@ -47,6 +49,7 @@ const SUBTAB_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/leads/activity-summary",
   ],
   "/admin/crm/customers/accounts": ["/api/admin/crm/customers-neo"],
+  "/admin/crm/customers/map": ["/api/admin/crm/map-source"],
   "/admin/crm/deals": [
     "/api/admin/crm/revenue?months=6",
     "/api/admin/crm/readiness",
@@ -93,6 +96,7 @@ function resolveCustomersSub(pathname: string | null): CustomersSub | null {
   if (!pathname) return null
   if (pathname === "/admin/crm/customers" || pathname.startsWith("/admin/crm/customers/unified")) return "unified"
   if (pathname.startsWith("/admin/crm/customers/leads")) return "leads"
+  if (pathname.startsWith("/admin/crm/customers/map")) return "map"
   if (
     pathname.startsWith("/admin/crm/customers/accounts") ||
     pathname.startsWith("/admin/crm/partners/customers")
