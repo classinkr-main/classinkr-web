@@ -765,7 +765,7 @@ const PROCEDURE_INTENT_PATTERN =
   /어떻게|방법|순서|가이드|하는 법|어디|어느|위치|설정|업로드|다운로드|제출|삭제|업데이트|클릭|누르|선택|켜|끄|만들|생성|추가|확인|비활성화|활성화|첨부|바꾸|변경|등록|스캔|초대|가입/
 
 const TROUBLE_SYMPTOM_PATTERN =
-  /안\s*돼|안됨|끊|나가|튕|오류|문제\s*(있|발생|생기)|불가|실패|느려|꺼짐|안\s*켜|켜지지|안\s*나|안\s*들|안\s*보/
+  /안\s*돼|안됨|끊|나가|튕|오류|문제\s*(있|발생|생기)|불가|실패|느려|꺼짐|안\s*켜|켜지지|안\s*나|안\s*들|안\s*보|안\s*떠|안\s*뜬|못\s*보|못\s*봐/
 
 const BILLING_OR_PURCHASE_PATTERN =
   /요금|가격|비용|견적|결제|정기|단가|유료|무료|환불|계약|플랜|과금|수납|구매처|구매/
@@ -1016,6 +1016,24 @@ function hasKnownWebLiveChatVisibilityIntent(normalizedQuestion: string) {
   return asksAboutWebLive && asksAboutChat && asksAboutVisibility
 }
 
+function hasLateJoinedStudentReplayIntent(normalizedQuestion: string) {
+  const asksAboutReplay = /다시보기|녹화본|리플레이/.test(normalizedQuestion)
+  const mentionsSpecificPreviousLesson =
+    /이전\s*수업|과거\s*수업|지난\s*수업|지난\s*강의|1강|첫\s*수업/.test(normalizedQuestion)
+  const mentionsAffectedStudent = /학생|수강생|편입생|참관생/.test(normalizedQuestion)
+  const mentionsLateJoin =
+    /수업\s*(?:후|끝나고|종료.*후).*가입|나중에\s*(?:가입|들어)|뒤늦게\s*(?:가입|등록|합류)|새로\s*(?:가입|참여|들어)|중간\s*(?:합류|등록)|가입.*(?:후|뒤).*이전|편입.*이전/.test(
+      normalizedQuestion
+    )
+  const asksAboutAccess = /안\s*(?:떠|뜬|보|나)|못\s*(?:보|봐)|시청|권한|허용|설정|보이|볼\s*수/.test(
+    normalizedQuestion
+  )
+  const explicitLateJoinAccess = mentionsLateJoin && asksAboutAccess
+  const specificReplaySymptom =
+    mentionsAffectedStudent && mentionsSpecificPreviousLesson && (asksAboutReplay || asksAboutAccess)
+  return explicitLateJoinAccess || specificReplaySymptom
+}
+
 function findKnownCsFigmaIntentSlug(normalizedQuestion: string) {
   if (hasAccountSignupProcedureIntent(normalizedQuestion)) return "classin-account-signup"
   if (hasAccountDeletionProcedureIntent(normalizedQuestion)) return "classin-account-delete"
@@ -1023,6 +1041,7 @@ function findKnownCsFigmaIntentSlug(normalizedQuestion: string) {
   if (hasCourseMemberManagementIntent(normalizedQuestion)) return "course-member-management"
   if (hasCourseWideChatControlIntent(normalizedQuestion)) return "course-wide-chat-control"
   if (hasCourseCreateOrCloseIntent(normalizedQuestion)) return "course-create-and-close"
+  if (hasLateJoinedStudentReplayIntent(normalizedQuestion)) return "cs-figma-digest-1054"
   if (hasKnownWebLiveChatVisibilityIntent(normalizedQuestion)) return "web-live-create"
   if (hasDashboardWebLiveCreateProcedureIntent(normalizedQuestion)) return "cs-figma-digest-350"
   if (hasElectronicBoardLocalRecordingProcedureIntent(normalizedQuestion)) return "cs-figma-digest-449"

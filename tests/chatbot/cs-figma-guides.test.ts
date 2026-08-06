@@ -238,6 +238,47 @@ describe("CS Figma guide source", () => {
     })
   })
 
+  it("routes late-joiner replay questions phrased like real CS messages", () => {
+    const questions = [
+      "학생이 1강 다시보기가 안 뜬다고 합니다",
+      "수업 끝나고 코스에 가입한 학생이 이전 강의를 못 봐요",
+      "나중에 들어온 학생은 과거 수업 다시보기를 어떻게 열어주나요?",
+      "수업 후 가입된 학생들은 이전 수업을 못 보는군요",
+    ]
+
+    for (const question of questions) {
+      expect(findCsFigmaGuideForQuestion(question), question).toMatchObject({
+        slug: "cs-figma-digest-1054",
+        title: "새로 들어온 학생도 수업 다시보기 시청",
+      })
+    }
+
+    expect(findCsFigmaGuideForQuestion("학생 다시보기 시청 기록은 어디서 확인해요")?.slug).not.toBe(
+      "cs-figma-digest-1054"
+    )
+  })
+
+  it("answers late-joiner replay issues with the current setting labels and re-entry step", async () => {
+    disableExternalChatbotServices()
+
+    const result = await evaluateChatbotQuery("학생이 1강 다시보기가 안 뜬다고 합니다", {
+      generateAnswer: false,
+    })
+
+    expect(result.detectedCategory).toBe("classroom")
+    expect(result.answerMode).toBe("direct_answer")
+    expect(result.sources[0]).toMatchObject({
+      title: "새로 들어온 학생도 수업 다시보기 시청",
+      heading: "사용 순서 안내",
+      urlPath: "/docs/admin/cs-figma-digest-1054",
+    })
+    expect(result.answer).toContain("먼저 학생이 해당 수업이 끝난 뒤 코스에 가입했는지 확인해 주세요.")
+    expect(result.answer).toContain("새로 참여한 학생은 이전 수업 데이터를 볼 수 있습니다")
+    expect(result.answer).toContain("대상 학생을 코스에서 내보낸 뒤 다시 추가")
+    expect(result.answer).toContain("위 순서로도 해결되지 않으면 담당자 상담으로 연결해 드릴 수 있어요.")
+    expect(result.answer).not.toMatch(/Figma|원본 캡처|Classin_Hope|EEO-TEST/i)
+  })
+
   it("does not turn policy or capability checks into Figma procedure answers", async () => {
     disableExternalChatbotServices()
     const questions = [

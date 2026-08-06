@@ -69,6 +69,8 @@
     { "id": "channel-board-only-sale", "question": "전자칠판만 따로 판매하시기도 하나요?", "expectCategory": "hardware", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/hardware/board-overview", "expectHeadingIncludes": "전자칠판 단품과 시스템 구성" },
     { "id": "channel-platform-in-board", "question": "플랫폼이 내장된 전자칠판인가요?", "expectCategory": "hardware", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/hardware/board-overview", "expectHeadingIncludes": "전자칠판 단품과 시스템 구성" },
     { "id": "channel-camera-one-user", "question": "두 명이 한 반에 들어왔는데 카메라는 한 명만 켜져요", "expectCategory": "troubleshooting", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/teacher/lesson-option-concepts", "expectHeadingIncludes": "수업 카메라 충돌 점검" },
+    { "id": "cs-late-joiner-replay-missing", "question": "학생이 1강 다시보기가 안 뜬다고 합니다", "expectCategory": "classroom", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/admin/cs-figma-digest-1054", "expectHeadingIncludes": "사용 순서 안내" },
+    { "id": "cs-late-joiner-replay-after-class", "question": "수업 끝나고 코스에 가입한 학생이 이전 강의를 못 봐요", "expectCategory": "classroom", "expectMode": ["direct_answer"], "expectPathIncludes": "/docs/admin/cs-figma-digest-1054", "expectHeadingIncludes": "사용 순서 안내" },
     { "id": "company-intro", "question": "클래스인 회사 소개해줘", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/company-overview" },
     { "id": "company-products", "question": "클래스인 제품 라인이 어떻게 되나요?", "expectCategory": "onboarding", "expectMode": ["direct_answer", "doc_suggestion", "handoff"], "expectPathIncludes": "/docs/start/company-overview" }
   ]
