@@ -136,6 +136,17 @@ function latestLastClassAt(eeoAccounts: NeoCrmCustomerEeoAccount[]): string | nu
   return bestIso
 }
 
+function latestEeoSyncedAt(eeoAccounts: NeoCrmCustomerEeoAccount[]): string | null {
+  let latest: string | null = null
+  for (const account of eeoAccounts) {
+    if (!account.syncedAt) continue
+    const time = new Date(account.syncedAt).getTime()
+    if (Number.isNaN(time)) continue
+    if (!latest || time > new Date(latest).getTime()) latest = account.syncedAt
+  }
+  return latest
+}
+
 export interface GetCrmCustomer360Options {
   eventsLimit?: number
   tasksLimit?: number
@@ -414,7 +425,8 @@ export async function getCrmCustomer360(
           expireAt: nearestExpireAt(detail.eeoAccounts),
           balance: money.totalBalance,
           lastClassAt: latestLastClassAt(detail.eeoAccounts),
-          syncedAt: detail.account.updatedAt,
+          // 만료·잔액 위험의 최신성은 account 메타가 아니라 실제 서비스(Shroff/EEO) 스냅샷 기준.
+          syncedAt: latestEeoSyncedAt(detail.eeoAccounts) ?? detail.account.updatedAt,
           now,
         })
         found = true

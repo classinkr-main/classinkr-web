@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import Customer360Drawer from "@/components/admin/crm/Customer360Drawer"
 import Customer360DrawerSkeleton from "@/components/admin/crm/Customer360DrawerSkeleton"
+import CrmContactValue from "@/components/admin/crm/CrmContactValue"
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -26,5 +27,16 @@ describe("Customer360Drawer quick log", () => {
 
     expect(html).toContain('data-testid="customer-quick-log-skeleton"')
     expect(html).toContain('aria-label="간단 로그 불러오는 중"')
+  })
+})
+
+describe("CrmContactValue", () => {
+  it("renders the formatted phone number as an explicit copy control", () => {
+    const html = renderToStaticMarkup(<CrmContactValue value="01012345678" />)
+
+    expect(html).toContain("010-1234-5678")
+    expect(html).toContain('aria-label="연락처 010-1234-5678 복사"')
+    expect(html).toContain("클릭하여 복사")
+    expect(html).toContain("opacity-45")
   })
 })

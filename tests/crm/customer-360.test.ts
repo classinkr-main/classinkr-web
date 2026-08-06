@@ -118,7 +118,7 @@ describe("neo header + money", () => {
   it("flags 관리 필요 when an EEO account expires within 30 days", () => {
     const soon = new Date(NOW.getTime() + 10 * 24 * 60 * 60 * 1000).toISOString()
     const detail = makeNeoDetail({
-      eeoAccounts: [{ id: "e1", name: "EEO", uid: null, balance: 1000, expireAt: soon, lastClassAt: null, serviceStatus: "active" }],
+      eeoAccounts: [{ id: "e1", name: "EEO", uid: null, balance: 1000, expireAt: soon, lastClassAt: null, serviceStatus: "active", syncedAt: NOW.toISOString() }],
     })
     expect(buildNeoHeader("neo:acc-9", detail, NOW).statusLabel).toBe("관리 필요")
   })
@@ -126,7 +126,7 @@ describe("neo header + money", () => {
   it("shows 활성 고객 when EEO accounts exist but none expire soon", () => {
     const far = new Date(NOW.getTime() + 200 * 24 * 60 * 60 * 1000).toISOString()
     const detail = makeNeoDetail({
-      eeoAccounts: [{ id: "e1", name: "EEO", uid: null, balance: 1000, expireAt: far, lastClassAt: null, serviceStatus: "active" }],
+      eeoAccounts: [{ id: "e1", name: "EEO", uid: null, balance: 1000, expireAt: far, lastClassAt: null, serviceStatus: "active", syncedAt: NOW.toISOString() }],
     })
     expect(buildNeoHeader("neo:acc-9", detail, NOW).statusLabel).toBe("활성 고객")
   })
@@ -134,8 +134,8 @@ describe("neo header + money", () => {
   it("aggregates neo money totals from eeo balances and orders", () => {
     const detail = makeNeoDetail({
       eeoAccounts: [
-        { id: "e1", name: "EEO1", uid: null, balance: 1000, expireAt: null, lastClassAt: null, serviceStatus: null },
-        { id: "e2", name: "EEO2", uid: null, balance: 500, expireAt: null, lastClassAt: null, serviceStatus: null },
+        { id: "e1", name: "EEO1", uid: null, balance: 1000, expireAt: null, lastClassAt: null, serviceStatus: null, syncedAt: NOW.toISOString() },
+        { id: "e2", name: "EEO2", uid: null, balance: 500, expireAt: null, lastClassAt: null, serviceStatus: null, syncedAt: NOW.toISOString() },
       ],
       orders: [{ id: "o1", title: "주문", amount: 3000, occurredAt: null, ownerName: "이매니저", status: "완료" }],
     })
@@ -205,6 +205,7 @@ function okDealsResult() {
 
 async function loadCustomer360(options?: {
   lead?: ReturnType<typeof makeLead> | null
+  neoDetail?: NeoCrmCustomerDetail
   neoLink?: { targetId: string } | null
   neoLinkFail?: boolean
 }) {
@@ -218,7 +219,7 @@ async function loadCustomer360(options?: {
     getLeadById: vi.fn().mockResolvedValue(options?.lead ?? null),
   }))
   vi.doMock("@/lib/admin-crm-customers-neo", () => ({
-    getNeoCrmCustomerDetail: vi.fn().mockResolvedValue(makeNeoDetail()),
+    getNeoCrmCustomerDetail: vi.fn().mockResolvedValue(options?.neoDetail ?? makeNeoDetail()),
   }))
   vi.doMock("@/lib/repositories/crm-source-links", () => ({
     findConfirmedLeadNeoLink,
@@ -255,6 +256,7 @@ async function loadCustomer360(options?: {
 }
 
 const LEAD_KEY = { source: "lead", entityId: "lead-1", targetType: "lead" } as const
+const NEO_KEY = { source: "neo", entityId: "acc-9", targetType: "neo_account" } as const
 
 describe("getCrmCustomer360 (mocked harness)", () => {
   afterEach(() => {
@@ -308,5 +310,32 @@ describe("getCrmCustomer360 (mocked harness)", () => {
     expect(result.neoAccountId).toBeNull()
     expect(result.health.ok).toBe(false)
     expect(result.health.warnings.join(" ")).toContain("NEO 등록 여부")
+  })
+
+  it("uses the EEO snapshot timestamp for service-risk freshness", async () => {
+    const expireAt = new Date(NOW.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    const syncedAt = new Date(NOW.getTime() - 2 * 60 * 60 * 1000).toISOString()
+    const { getCrmCustomer360 } = await loadCustomer360({
+      neoDetail: makeNeoDetail({
+        eeoAccounts: [
+          {
+            id: "e1",
+            name: "EEO",
+            uid: null,
+            balance: 1000,
+            expireAt,
+            lastClassAt: null,
+            serviceStatus: "active",
+            syncedAt,
+          },
+        ],
+      }),
+    })
+
+    const result = await getCrmCustomer360(NEO_KEY, { now: NOW })
+
+    expect(result.serviceRisk?.confidence).toBe("high")
+    expect(result.serviceRisk?.freshnessLabel).toBe("NEO 2시간 전")
+    expect(result.serviceRisk?.reasons.map((reason) => reason.code)).not.toContain("stale_snapshot")
   })
 })

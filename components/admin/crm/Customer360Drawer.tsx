@@ -32,6 +32,7 @@ import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/
 import { formatCNY, formatUSD } from "@/lib/crm/money-format"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import CrmCustomerFlags from "./CrmCustomerFlags"
+import CrmContactValue from "./CrmContactValue"
 import CrmCustomerPicker from "./CrmCustomerPicker"
 import LeadMessageCard from "./LeadMessageCard"
 import { eventSourceIcon, eventSourceLabel } from "./event-source-meta"
@@ -39,6 +40,7 @@ import ActivityQuickForm from "./rail/ActivityQuickForm"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
 import { LEAD_BADGE_TONE_CLASSES } from "@/lib/crm/lead-badges"
 import { computeCustomerHealth, HEALTH_BAND_STYLE } from "@/lib/crm/customer-health"
+import { buildCustomerNextActionRecommendation } from "@/lib/crm/customer-next-action"
 import { CS_MOTIONS, type CsMotion } from "@/lib/crm/cs-motions"
 import type { Customer360 } from "@/lib/repositories/crm-customer-360"
 import type { CrmDealStage } from "@/lib/repositories/crm-deals"
@@ -667,19 +669,12 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   // 다음 액션 추천 — 규칙 기반(nextAction·우선순위 사유·서비스 위험 합성). AI 아님, 출처 표시.
   const recommendation = useMemo(() => {
     if (!data?.found) return null
-    const title =
-      header?.nextActionLabel ??
-      (data.serviceRisk?.level === "urgent" || data.serviceRisk?.level === "soon"
-        ? "재계약·갱신 확인"
-        : header?.priorityReason
-          ? "후속 연락"
-          : null)
-    if (!title) return null
-    const reasons: string[] = []
-    if (header?.priorityReason) reasons.push(header.priorityReason)
-    if (data.serviceRisk?.reasons.length) reasons.push(...data.serviceRisk.reasons.map((r) => r.label))
-    if (data.risk.reasons.length) reasons.push(...data.risk.reasons)
-    return { title, reason: reasons.slice(0, 3).join(" · ") || "우선순위 신호 기준 추천" }
+    return buildCustomerNextActionRecommendation({
+      nextActionLabel: header?.nextActionLabel,
+      priorityReason: header?.priorityReason,
+      serviceRisk: data.serviceRisk,
+      riskReasons: data.risk.reasons,
+    })
   }, [data, header])
 
   // 고객 요약 — LLM 아님. 위치·단계·위험·만료·미수 신호를 규칙으로 합성한 한 문장(Derived).
@@ -729,7 +724,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         method: "POST",
         body: JSON.stringify({
           title: recommendation.title,
-          taskType: "call",
+          taskType: recommendation.taskType,
           targetType,
           targetId: entityId,
           targetLabel: displayName,
@@ -860,13 +855,20 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               {headerFlags.length > 0 ? <CrmCustomerFlags flags={headerFlags} max={5} /> : null}
             </div>
             <h2 className="truncate text-[18px] font-bold text-[#111110]">{displayName}</h2>
-            <p className="mt-0.5 truncate text-[12px] text-[#1a1a1a]/45">
-              <User2 className="mr-1 inline h-3 w-3" />
-              {data?.contacts?.phone ? `${data.contacts.phone} · ` : ""}
-              {header?.ownerName ?? "담당 미배정"}
-              {` · ${header?.region ?? "지역 미지정"}`}
-              {header?.priorityReason ? ` · ${header.priorityReason}` : ""}
-            </p>
+            <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[12px] text-[#1a1a1a]/45">
+              <User2 className="h-3 w-3 shrink-0" />
+              {contactPhone ? (
+                <>
+                  <CrmContactValue value={contactPhone} className="shrink-0" />
+                  <span aria-hidden>·</span>
+                </>
+              ) : null}
+              <span className="truncate">
+                {header?.ownerName ?? "담당 미배정"}
+                {` · ${header?.region ?? "지역 미지정"}`}
+                {header?.priorityReason ? ` · ${header.priorityReason}` : ""}
+              </span>
+            </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
@@ -1235,7 +1237,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12px]">
                 <div>
                   <p className="text-[11px] font-semibold text-[#1a1a1a]/35">전화</p>
-                  <p className="font-medium text-[#111110]">{data.contacts?.phone ?? "-"}</p>
+                  <CrmContactValue value={data.contacts?.phone} className="font-medium text-[#111110]" />
                 </div>
                 <div>
                   <p className="text-[11px] font-semibold text-[#1a1a1a]/35">이메일</p>
