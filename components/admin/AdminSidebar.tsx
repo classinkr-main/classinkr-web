@@ -21,6 +21,11 @@ import { adminFetchJsonCached, clearAdminSessionStorage, warmAdminRequestCache }
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
+import {
+  CRM_SAVED_VIEWS,
+  isCrmSavedViewActive,
+  isCrmSavedViewsPath,
+} from "./crm/crm-sidebar-navigation"
 import { useDialogFocus } from "./use-dialog-focus"
 import {
   ADMIN_NAV,
@@ -212,14 +217,6 @@ export const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = 
 const MINIMAL_SCROLLBAR =
   "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/10 hover:[&::-webkit-scrollbar-thumb]:bg-black/20"
 
-// 저장된 세그먼트 — 고객 하위 퀵필터(?view=). 카운트는 통합 API summary.viewCounts.
-const CRM_SEGMENTS: Array<{ view: string; label: string }> = [
-  { view: "expiring", label: "만료 임박" },
-  { view: "dormant", label: "30일+ 미접촉" },
-  { view: "hot_lead", label: "고전환 리드" },
-  { view: "upsell", label: "업셀 후보" },
-]
-
 // 현장 사용 빈도 기준 — 2026-07-29 탭 재구성으로 첫 화면이 캘린더가 되면서 Overview를 내렸다.
 // 나머지는 More의 전체 메뉴에서 접근한다.
 const MOBILE_PRIMARY_NAV: AdminNavItem[] = [
@@ -292,15 +289,20 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
 
   const effectiveCollapsed = isDesktop === true && collapsed
   const inCrm = pathname?.startsWith("/admin/crm") ?? false
+  const showCrmSavedViews = isCrmSavedViewsPath(pathname)
+  const currentCrmSavedView = searchParams.get("view")
+  const hasActiveCrmSavedView =
+    showCrmSavedViews && CRM_SAVED_VIEWS.some(({ view }) => view === currentCrmSavedView)
   const [crmSegCounts, setCrmSegCounts] = useState<Record<string, number> | null>(null)
   // CRM 하위탭 접기 — admin layout이 유지 마운트라 네비게이션 동안 상태 보존(하드 리로드만 리셋).
   // CRM 드릴인 nav — 진입 시 기본 글로벌 탭이 접히고 CRM 하위 패널이 열린다. '← 전체 메뉴'로 복귀.
   const [navView, setNavView] = useState<"auto" | "global">("auto")
   const crmDrill = inCrm && navView !== "global" && !effectiveCollapsed
 
-  // CRM 진입 시에만 세그먼트 카운트 1회 lazy 로드(캐시, 논블로킹). 미로드 시 라벨만 표시.
+  // 통합 고객 목록에서만 저장 보기 카운트를 1회 lazy 로드한다. 다른 CRM 화면은
+  // 저장 보기를 렌더하지 않으므로 관련 API 요청도 만들지 않는다.
   useEffect(() => {
-    if (!inCrm || crmSegCounts) return
+    if (!showCrmSavedViews || crmSegCounts) return
     let alive = true
     adminFetchJsonCached<{ summary?: { viewCounts?: Record<string, number> } }>(
       "/api/admin/crm/customers/unified?limit=1",
@@ -314,7 +316,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
     return () => {
       alive = false
     }
-  }, [inCrm, crmSegCounts])
+  }, [showCrmSavedViews, crmSegCounts])
 
   const toggle = () => {
     setCollapsed((prev) => {
@@ -554,6 +556,12 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                           warmAdminTab(child.href)
                           setMobileMenuOpen(false)
                         }}
+                        aria-current={
+                          childActive &&
+                          !(child.href === "/admin/crm/customers/unified" && hasActiveCrmSavedView)
+                            ? "page"
+                            : undefined
+                        }
                         className={`flex min-h-11 items-center rounded-md px-3 text-[14px] font-medium transition-colors ${
                           childActive
                             ? "bg-[#111110] text-white"
@@ -562,23 +570,47 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                       >
                         {child.label}
                       </Link>
-                      {child.href === "/admin/crm/customers/unified" ? (
-                        <div className="ml-3 mt-0.5 space-y-px border-l border-[#e8e8e4] pl-3">
-                          {CRM_SEGMENTS.map((seg) => {
+                      {child.href === "/admin/crm/customers/unified" && showCrmSavedViews ? (
+                        <div
+                          className="ml-3 mt-1 space-y-px border-l border-[#e8e8e4] pb-1 pl-3"
+                          role="group"
+                          aria-label="고객DB 저장 보기"
+                        >
+                          <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#1a1a1a]/35">
+                            저장 보기
+                          </p>
+                          {CRM_SAVED_VIEWS.map((seg) => {
                             const count = crmSegCounts?.[seg.view]
+                            const segmentActive = isCrmSavedViewActive(
+                              pathname,
+                              currentCrmSavedView,
+                              seg.view
+                            )
                             return (
                               <Link
                                 key={`mobile-${seg.view}`}
                                 href={`/admin/crm/customers/unified?view=${seg.view}`}
                                 onClick={() => setMobileMenuOpen(false)}
-                                className="flex min-h-9 items-center gap-2 rounded px-3 text-[12px] text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                                aria-current={segmentActive ? "page" : undefined}
+                                className={`flex min-h-11 items-center gap-2 rounded-md px-3 text-[12px] transition-colors ${
+                                  segmentActive
+                                    ? "bg-[#ECFDF5] font-semibold text-[#084734]"
+                                    : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                                }`}
                               >
                                 <span className="flex-1 truncate">{seg.label}</span>
-                                {count != null ? (
-                                  <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[10px] font-semibold tabular-nums text-[#1a1a1a]/55">
-                                    {count}
-                                  </span>
-                                ) : null}
+                                <span
+                                  aria-hidden={count == null}
+                                  className={`min-w-5 rounded-full px-1.5 text-center text-[10px] font-semibold tabular-nums ${
+                                    count == null
+                                      ? "bg-transparent"
+                                      : segmentActive
+                                      ? "bg-white/80 text-[#084734]"
+                                      : "bg-[#f0f0ec] text-[#1a1a1a]/55"
+                                  }`}
+                                >
+                                  {count ?? ""}
+                                </span>
                               </Link>
                             )
                           })}
@@ -838,6 +870,12 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                     onPointerDown={() => warmAdminTab(child.href)}
                     onTouchStart={() => warmAdminTab(child.href)}
                     onClick={() => warmAdminTab(child.href)}
+                    aria-current={
+                      childActive &&
+                      !(child.href === "/admin/crm/customers/unified" && hasActiveCrmSavedView)
+                        ? "page"
+                        : undefined
+                    }
                     className={`flex items-center rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
                       childActive
                         ? "bg-[#111110] text-white"
@@ -846,22 +884,46 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                   >
                     {child.label}
                   </Link>
-                  {child.href === "/admin/crm/customers/unified" ? (
-                    <div className="mb-1 ml-3 mt-0.5 space-y-px border-l border-[#e8e8e4] pl-2.5">
-                      {CRM_SEGMENTS.map((seg) => {
+                  {child.href === "/admin/crm/customers/unified" && showCrmSavedViews ? (
+                    <div
+                      className="mb-1 ml-3 mt-1 space-y-px border-l border-[#e8e8e4] pb-1 pl-2.5"
+                      role="group"
+                      aria-label="고객DB 저장 보기"
+                    >
+                      <p className="px-2.5 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#1a1a1a]/35">
+                        저장 보기
+                      </p>
+                      {CRM_SAVED_VIEWS.map((seg) => {
                         const count = crmSegCounts?.[seg.view]
+                        const segmentActive = isCrmSavedViewActive(
+                          pathname,
+                          currentCrmSavedView,
+                          seg.view
+                        )
                         return (
                           <Link
                             key={seg.view}
                             href={`/admin/crm/customers/unified?view=${seg.view}`}
-                            className="flex items-center gap-2 rounded px-2.5 py-1 text-[11px] text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                            aria-current={segmentActive ? "page" : undefined}
+                            className={`flex min-h-7 items-center gap-2 rounded-md px-2.5 py-1 text-[11px] transition-colors ${
+                              segmentActive
+                                ? "bg-[#ECFDF5] font-semibold text-[#084734]"
+                                : "text-[#1a1a1a]/45 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                            }`}
                           >
                             <span className="flex-1 truncate">{seg.label}</span>
-                            {count != null ? (
-                              <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[10px] font-semibold tabular-nums text-[#1a1a1a]/55">
-                                {count}
-                              </span>
-                            ) : null}
+                            <span
+                              aria-hidden={count == null}
+                              className={`min-w-5 rounded-full px-1.5 text-center text-[10px] font-semibold tabular-nums ${
+                                count == null
+                                  ? "bg-transparent"
+                                  : segmentActive
+                                  ? "bg-white/80 text-[#084734]"
+                                  : "bg-[#f0f0ec] text-[#1a1a1a]/55"
+                              }`}
+                            >
+                              {count ?? ""}
+                            </span>
                           </Link>
                         )
                       })}
