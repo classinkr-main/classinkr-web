@@ -205,6 +205,18 @@ describe("getCrmUnifiedCustomers", () => {
     })
   })
 
+  it("allows internal capture matching to read beyond the public 200-row page cap", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: Array.from({ length: 250 }, (_, index) => lead({ id: `lead-${index}` })),
+    })
+
+    const result = await getCrmUnifiedCustomers({ limit: 250, now: NOW })
+
+    expect(result.rows).toHaveLength(250)
+    expect(result.pagination.limit).toBe(250)
+    expect(result.pagination.total).toBe(250)
+  })
+
   it("applies practical saved views on existing customer fields", async () => {
     const { getCrmUnifiedCustomers } = await loadRepository({
       leads: [

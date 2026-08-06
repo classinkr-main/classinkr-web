@@ -103,6 +103,56 @@ describe("CRM NEO customer snapshot read model", () => {
     expect(rows).toEqual([])
   })
 
+  it("uses the last active paid EEO expiry for the customer-level renewal window", () => {
+    const rows = buildCrmNeoCustomerSnapshotInserts({
+      now: NOW,
+      accounts: [
+        {
+          external_id: "acc-multi",
+          display_name: "다중 서비스 고객",
+          owner_name: "owner-1",
+          occurred_at: "2026-06-25T00:00:00.000Z",
+          synced_at: "2026-06-26T08:00:00.000Z",
+          last_seen_run_id: "run-account",
+          payload: {},
+        },
+      ],
+      shroffAccounts: [
+        {
+          external_id: "eeo-soon",
+          synced_at: "2026-06-26T08:10:00.000Z",
+          last_seen_run_id: "run-shroff",
+          payload: {
+            Account__c: "acc-multi",
+            CurrencyAmount__c: 100,
+            expireTime__c: "2026-06-29T00:00:00.000Z",
+            serviceState__c: "1",
+          },
+        },
+        {
+          external_id: "eeo-later",
+          synced_at: "2026-06-26T08:11:00.000Z",
+          last_seen_run_id: "run-shroff",
+          payload: {
+            Account__c: "acc-multi",
+            CurrencyAmount__c: 200,
+            expireTime__c: "2026-12-31T00:00:00.000Z",
+            serviceState__c: "1",
+          },
+        },
+      ],
+      opportunities: [],
+      ownerNames: new Map([["owner-1", "김담당"]]),
+      excludedOwnerIds: new Set(),
+    })
+
+    expect(rows[0]?.expire_at).toBe("2026-12-31T00:00:00.000Z")
+    expect(rows[0]?.balance).toBe(300)
+    expect(rows[0]?.risk_reasons).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: "subscription_expiring" })])
+    )
+  })
+
   it("stores region from a confirmed REV sheet mapping on the CRM-owned snapshot", () => {
     const rows = buildCrmNeoCustomerSnapshotInserts({
       now: NOW,

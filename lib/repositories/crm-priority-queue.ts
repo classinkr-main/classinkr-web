@@ -6,9 +6,11 @@ import {
   buildNeoAccountPriorityItem,
   buildTaskPriorityItem,
   CRM_PRIORITY_BUCKET_LABELS,
+  CRM_PRIORITY_LANE_LABELS,
   sortPriorityItems,
   type CrmPriorityBucket,
   type CrmPriorityItem,
+  type CrmPriorityLane,
   type CrmPrioritySource,
 } from "@/lib/crm/priority"
 import { getLeads } from "@/lib/repositories/leads"
@@ -28,6 +30,7 @@ export interface CrmPriorityQueueOptions {
   owner?: string
   ownerKeys?: string[]
   source?: CrmPriorityQueueSource
+  lane?: CrmPriorityLane | "all"
   bucket?: CrmPriorityBucket | "all"
   now?: Date
 }
@@ -49,6 +52,9 @@ export interface CrmPriorityQueue {
     taskCount: number
     ownerCount: number
     bucketCounts: Record<CrmPriorityBucket, number>
+    laneTotals: Record<CrmPriorityLane, number>
+    /** 현재 소스·담당·레인 범위에서 시점 필터와 무관한 긴급 후보 수. */
+    laneCritical: number
     /**
      * 소스 필터를 걷어낸 건수(담당자 필터는 유지). 목록에서 할 일을 분리해 놓고도
      * "할 일 N건"을 정직하게 표시하려면 현재 뷰가 아니라 전체 기준이 필요하다.
@@ -61,6 +67,7 @@ export interface CrmPriorityQueue {
     demo: { total: number; matched: number; unmatched: number }
   }
   buckets: Array<{ bucket: CrmPriorityBucket; label: string; count: number }>
+  lanes: Array<{ lane: CrmPriorityLane; label: string; count: number }>
   owners: Array<{ ownerName: string; count: number }>
   items: CrmPriorityItem[]
 }
@@ -76,6 +83,7 @@ function buildOwnerFilter(options: CrmPriorityQueueOptions) {
 function applyFilters(items: CrmPriorityItem[], options: CrmPriorityQueueOptions) {
   const ownerKeys = buildOwnerFilter(options)
   const source = options.source ?? "all"
+  const lane = options.lane ?? "all"
   const bucket = options.bucket ?? "all"
 
   return items.filter((item) => {
@@ -83,6 +91,7 @@ function applyFilters(items: CrmPriorityItem[], options: CrmPriorityQueueOptions
       if (item.source !== "lead" && item.source !== "neo_account") return false
     } else if (source !== "all" && item.source !== source) return false
     if (ownerKeys.size > 0 && !item.ownerKeys.some((key) => ownerKeys.has(key))) return false
+    if (lane !== "all" && item.lane !== lane) return false
     if (bucket !== "all" && item.bucket !== bucket) return false
     return true
   })
@@ -90,11 +99,16 @@ function applyFilters(items: CrmPriorityItem[], options: CrmPriorityQueueOptions
 
 /** 담당자 필터만 적용 — 소스별 총량을 정직하게 세기 위한 기준선. */
 function applyOwnerFilter(items: CrmPriorityItem[], options: CrmPriorityQueueOptions) {
-  return applyFilters(items, { ...options, source: "all", bucket: "all" })
+  return applyFilters(items, { ...options, source: "all", lane: "all", bucket: "all" })
 }
 
 function applyBaseFilters(items: CrmPriorityItem[], options: CrmPriorityQueueOptions) {
   return applyFilters(items, { ...options, bucket: "all" })
+}
+
+/** 현재 소스·담당 범위에서 레인 선택만 걷어낸 총량. 레인 탭 카운트 기준이다. */
+function applyLaneBaseFilters(items: CrmPriorityItem[], options: CrmPriorityQueueOptions) {
+  return applyFilters(items, { ...options, lane: "all", bucket: "all" })
 }
 
 function buildBucketCounts(items: CrmPriorityItem[]) {
@@ -113,6 +127,24 @@ function buildBucketOptions(counts: Record<CrmPriorityBucket, number>) {
     bucket,
     label: CRM_PRIORITY_BUCKET_LABELS[bucket],
     count: counts[bucket],
+  }))
+}
+
+function buildLaneCounts(items: CrmPriorityItem[]) {
+  const counts: Record<CrmPriorityLane, number> = {
+    sales: 0,
+    renewal: 0,
+    customer_care: 0,
+  }
+  for (const item of items) counts[item.lane] += 1
+  return counts
+}
+
+function buildLaneOptions(counts: Record<CrmPriorityLane, number>) {
+  return (Object.keys(CRM_PRIORITY_LANE_LABELS) as CrmPriorityLane[]).map((lane) => ({
+    lane,
+    label: CRM_PRIORITY_LANE_LABELS[lane],
+    count: counts[lane],
   }))
 }
 
@@ -191,10 +223,12 @@ export async function getCrmPriorityQueue(
   const baseFiltered = applyBaseFilters(sorted, options)
   const filtered = applyFilters(sorted, options)
   const ownerScoped = applyOwnerFilter(sorted, options)
+  const laneBaseFiltered = applyLaneBaseFilters(sorted, options)
   const limit = Math.max(1, Math.min(options.limit ?? 12, 50))
   const visible = filtered.slice(0, limit)
   const owners = buildOwnerOptions(sorted)
   const bucketCounts = buildBucketCounts(baseFiltered)
+  const laneTotals = buildLaneCounts(laneBaseFiltered)
 
   return {
     generatedAt: now.toISOString(),
@@ -208,6 +242,8 @@ export async function getCrmPriorityQueue(
       taskCount: filtered.filter((item) => item.source === "task").length,
       ownerCount: owners.length,
       bucketCounts,
+      laneTotals,
+      laneCritical: baseFiltered.filter((item) => item.severity === "critical").length,
       sourceTotals: {
         lead: ownerScoped.filter((item) => item.source === "lead").length,
         neoAccount: ownerScoped.filter((item) => item.source === "neo_account").length,
@@ -220,6 +256,7 @@ export async function getCrmPriorityQueue(
       },
     },
     buckets: buildBucketOptions(bucketCounts),
+    lanes: buildLaneOptions(laneTotals),
     owners,
     items: visible,
   }

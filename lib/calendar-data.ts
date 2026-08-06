@@ -1,6 +1,13 @@
 /**
- * calendar-data.ts — 팀 캘린더 CRUD (JSON 파일 기반)
- * Supabase 전환 시 함수 시그니처 유지, 내부 구현만 교체.
+ * calendar-data.ts — 팀 캘린더 CRUD
+ *
+ * 저장소는 두 갈래다:
+ *   - Supabase 자격이 있으면 admin_calendar_events 테이블(lib/repositories/admin-calendar-events.ts)
+ *   - 없으면(자격 없는 로컬 개발) 기존 data/calendar-events.json 파일
+ *
+ * 원래는 JSON 파일 전용이었는데, assertLocalJsonWriteAllowed() 가 배포 환경에서 throw 하는
+ * 탓에 프로덕션에서는 팀 일정 생성·수정·삭제가 전부 실패했다(= source "calendar" 가 영구 0건).
+ * 그래서 저장소만 Supabase 로 옮기고 이 모듈의 함수 시그니처는 그대로 뒀다.
  */
 import fs from "fs"
 import path from "path"
@@ -27,6 +34,16 @@ import { getNotionMarketingCalendarEvents } from "@/lib/notion-marketing-calenda
 import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
 import { getTeamEventsCalendarEvents } from "@/lib/team-member-calendars"
 import { getKoreaHolidayEvents } from "@/lib/korea-holidays"
+import { normalizeAssigneeNames } from "@/lib/admin-calendar/people"
+import { enumerateMonths, overlapsRange } from "@/lib/admin-calendar/range"
+import {
+  deleteStoredCalendarEvent,
+  getStoredCalendarEvent,
+  insertStoredCalendarEvent,
+  listStoredCalendarEvents,
+  updateStoredCalendarEvent,
+  type StoredCalendarEventRange,
+} from "@/lib/repositories/admin-calendar-events"
 
 const FILE = path.join(process.cwd(), "data", "calendar-events.json")
 
@@ -112,19 +129,19 @@ function readEnv(name: string) {
   return value && value.length > 0 ? value : null
 }
 
-function hasPartnerCalendarSupabaseConfig() {
+function hasSupabaseServerConfig() {
   return Boolean(
     hasSupabaseBrowserEnv() &&
       (readEnv("SUPABASE_SECRET_KEY") ?? readEnv("SUPABASE_SERVICE_ROLE_KEY"))
   )
 }
 
-function read(): CalendarEvent[] {
+function readJsonFile(): CalendarEvent[] {
   if (!fs.existsSync(FILE)) return []
   return JSON.parse(fs.readFileSync(FILE, "utf8")) as CalendarEvent[]
 }
 
-function write(data: CalendarEvent[]) {
+function writeJsonFile(data: CalendarEvent[]) {
   assertLocalJsonWriteAllowed("admin-calendar")
   atomicWriteJsonSync(FILE, data)
 }
@@ -144,14 +161,28 @@ function compareEvents(a: CalendarEvent, b: CalendarEvent) {
 function normalizeStoredEvent(event: CalendarEvent): CalendarEvent {
   return {
     ...event,
+    // 담당자는 폼에서 자유 입력이라 표기가 흔들린다 — 외부 소스와 같은 캐논으로 눕힌다.
+    assignees: normalizeAssigneeNames(event.assignees),
     source: "calendar",
     sourceLabel: "팀 일정",
     readonly: false,
   }
 }
 
-function getStoredEvents(): CalendarEvent[] {
-  return read().map(normalizeStoredEvent)
+/**
+ * 팀 일정 조회. Supabase 자격이 있으면 테이블에서, 없으면 JSON 파일에서 읽는다.
+ * range 는 Supabase 경로에서만 질의로 내려가고, JSON 경로는 호출부의 월 필터가 마저 거른다.
+ */
+async function getStoredEvents(range?: StoredCalendarEventRange): Promise<CalendarEvent[]> {
+  if (hasSupabaseServerConfig()) {
+    try {
+      return (await listStoredCalendarEvents(range)).map(normalizeStoredEvent)
+    } catch (error) {
+      // 조회 실패가 캘린더 전체를 비우지 않도록 파일로 물러선다(운영에선 대개 빈 배열).
+      console.error("[calendar-data] failed to list stored events from Supabase", error)
+    }
+  }
+  return readJsonFile().map(normalizeStoredEvent)
 }
 
 function getMonthPrefix(year: number, month: number) {
@@ -229,11 +260,7 @@ function createPartnerCalendarEvent(input: {
     endTime: endsTime,
     type: mapPartnerScheduleType(input.kind),
     description: descriptionParts.join(" · "),
-    assignees: input.owner
-      ? [input.owner]
-      : input.fallbackAssignee
-        ? [input.fallbackAssignee]
-        : [],
+    assignees: normalizeAssigneeNames([input.owner ?? input.fallbackAssignee]),
     allDay: !startsTime && !endsTime,
     source: "partner",
     sourceLabel: "파트너 일정",
@@ -364,7 +391,7 @@ async function querySupabasePartnerCalendarEventsByMonth(
 async function getPartnerCalendarEvents(
   options?: PartnerCalendarQueryOptions
 ): Promise<CalendarEvent[]> {
-  if (options?.year && options?.month && hasPartnerCalendarSupabaseConfig()) {
+  if (options?.year && options?.month && hasSupabaseServerConfig()) {
     try {
       return await querySupabasePartnerCalendarEventsByMonth(options.year, options.month)
     } catch {
@@ -445,7 +472,8 @@ async function getPublicEventsAsCalendarEvents(): Promise<CalendarEvent[]> {
 }
 
 export async function getAllEvents(): Promise<CalendarEvent[]> {
-  const [partnerEvents, publicEvents, notionEvents, showroomEvents, teamEventEvents, holidayEvents] = await Promise.all([
+  const [storedEvents, partnerEvents, publicEvents, notionEvents, showroomEvents, teamEventEvents, holidayEvents] = await Promise.all([
+    getStoredEvents(),
     getPartnerCalendarEvents(),
     getPublicEventsAsCalendarEvents(),
     getNotionMarketingCalendarEvents(),
@@ -453,11 +481,16 @@ export async function getAllEvents(): Promise<CalendarEvent[]> {
     getTeamEventsCalendarEvents(),
     getKoreaHolidayEvents(),
   ])
-  return [...getStoredEvents(), ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents, ...teamEventEvents, ...holidayEvents].sort(compareEvents)
+  return [...storedEvents, ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents, ...teamEventEvents, ...holidayEvents].sort(compareEvents)
 }
 
 export async function getEventsByMonth(year: number, month: number): Promise<CalendarEvent[]> {
-  const [partnerEvents, publicEvents, notionEvents, showroomEvents, teamEventEvents, holidayEvents] = await Promise.all([
+  const prefix = getMonthPrefix(year, month)
+  const [storedEvents, partnerEvents, publicEvents, notionEvents, showroomEvents, teamEventEvents, holidayEvents] = await Promise.all([
+    getStoredEvents({
+      from: `${prefix}-01`,
+      to: `${prefix}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`,
+    }),
     getPartnerCalendarEvents({ year, month }),
     getPublicEventsAsCalendarEvents(),
     getNotionMarketingCalendarEvents({ year, month }),
@@ -465,9 +498,34 @@ export async function getEventsByMonth(year: number, month: number): Promise<Cal
     getTeamEventsCalendarEvents({ year, month }),
     getKoreaHolidayEvents({ year, month }),
   ])
-  const prefix = `${year}-${String(month).padStart(2, "0")}`
-  return [...getStoredEvents(), ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents, ...teamEventEvents, ...holidayEvents]
+  return [...storedEvents, ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents, ...teamEventEvents, ...holidayEvents]
     .filter((event) => isEventVisibleInMonth(event, year, month) || event.date.startsWith(prefix))
+    .sort(compareEvents)
+}
+
+/**
+ * 임의 기간 조회. 주간(달 경계를 넘음)·타임라인(8주) 뷰가 쓴다.
+ *
+ * 소스 어댑터(노션·쇼룸·구글·공휴일·파트너)는 전부 월 단위 시그니처라, 새 축을 만드는
+ * 대신 걸치는 달들을 각각 조회해 id 로 합친다. 8주여도 최대 3개월이고, 각 어댑터의
+ * 인메모리 캐시가 월 키로 잡혀 있어 뷰를 오가도 같은 달은 다시 안 부른다.
+ */
+export async function getEventsByRange(from: string, to: string): Promise<CalendarEvent[]> {
+  const months = enumerateMonths({ from, to })
+  if (months.length === 0) return []
+
+  const perMonth = await Promise.all(
+    months.map(({ year, month }) => getEventsByMonth(year, month))
+  )
+
+  // 멀티데이 일정은 걸치는 달마다 중복해서 나오므로 id 로 한 번 눌러준다.
+  const byId = new Map<string, CalendarEvent>()
+  for (const events of perMonth) {
+    for (const event of events) byId.set(event.id, event)
+  }
+
+  return Array.from(byId.values())
+    .filter((event) => overlapsRange(event, { from, to }))
     .sort(compareEvents)
 }
 
@@ -557,8 +615,6 @@ async function syncStoredEventWithGoogle(event: CalendarEvent): Promise<Calendar
 export async function createEvent(
   data: StoredCalendarEventInput
 ): Promise<CalendarEvent> {
-  assertLocalJsonWriteAllowed("admin-calendar")
-  const events = read()
   const now = new Date().toISOString()
   const event: CalendarEvent = {
     ...data,
@@ -566,9 +622,18 @@ export async function createEvent(
     createdAt: now,
     updatedAt: now,
   }
+  // 구글 미러를 먼저 시도해 그 결과(이벤트 id·에러)를 저장할 행에 실어 보낸다.
+  // 미러가 실패해도 syncStoredEventWithGoogle 은 에러 문자열만 채워 돌려주므로 저장은 계속된다.
   const syncedEvent = await syncStoredEventWithGoogle(event)
+
+  if (hasSupabaseServerConfig()) {
+    return normalizeStoredEvent(await insertStoredCalendarEvent(syncedEvent))
+  }
+
+  assertLocalJsonWriteAllowed("admin-calendar")
+  const events = readJsonFile()
   events.push(syncedEvent)
-  write(events)
+  writeJsonFile(events)
   return normalizeStoredEvent(syncedEvent)
 }
 
@@ -576,8 +641,21 @@ export async function updateEvent(
   id: string,
   patch: Partial<StoredCalendarEventInput>
 ): Promise<CalendarEvent | null> {
+  if (hasSupabaseServerConfig()) {
+    const current = await getStoredCalendarEvent(id)
+    if (!current) return null
+    const merged = await syncStoredEventWithGoogle({
+      ...current,
+      ...patch,
+      id,
+      updatedAt: new Date().toISOString(),
+    })
+    const saved = await updateStoredCalendarEvent(merged)
+    return saved ? normalizeStoredEvent(saved) : null
+  }
+
   assertLocalJsonWriteAllowed("admin-calendar")
-  const events = read()
+  const events = readJsonFile()
   const idx = events.findIndex((e) => e.id === id)
   if (idx === -1) return null
   const updatedEvent = {
@@ -587,25 +665,34 @@ export async function updateEvent(
     updatedAt: new Date().toISOString(),
   }
   events[idx] = await syncStoredEventWithGoogle(updatedEvent)
-  write(events)
+  writeJsonFile(events)
   return normalizeStoredEvent(events[idx])
 }
 
+/** 구글 미러 삭제는 실패해도 로컬 삭제를 막지 않는다 — 남은 고아 이벤트가 삭제 불가보다 낫다. */
+async function unmirrorFromGoogle(event: CalendarEvent) {
+  if (!event.googleCalendarEventId || !isGoogleCalendarSyncConfigured()) return
+  try {
+    await deleteGoogleCalendarEvent(event.googleCalendarEventId)
+  } catch (error) {
+    console.error("[calendar-data] failed to delete Google Calendar event", error)
+  }
+}
+
 export async function deleteEvent(id: string): Promise<boolean> {
+  if (hasSupabaseServerConfig()) {
+    const current = await getStoredCalendarEvent(id)
+    if (!current) return false
+    await unmirrorFromGoogle(current)
+    return deleteStoredCalendarEvent(id)
+  }
+
   assertLocalJsonWriteAllowed("admin-calendar")
-  const events = read()
+  const events = readJsonFile()
   const current = events.find((event) => event.id === id)
   if (!current) return false
 
-  if (current.googleCalendarEventId && isGoogleCalendarSyncConfigured()) {
-    try {
-      await deleteGoogleCalendarEvent(current.googleCalendarEventId)
-    } catch (error) {
-      console.error("[calendar-data] failed to delete Google Calendar event", error)
-    }
-  }
-
-  const next = events.filter((e) => e.id !== id)
-  write(next)
+  await unmirrorFromGoogle(current)
+  writeJsonFile(events.filter((e) => e.id !== id))
   return true
 }

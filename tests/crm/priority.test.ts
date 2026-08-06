@@ -44,6 +44,8 @@ describe("CRM priority rules", () => {
     const item = buildLeadPriorityItem(lead(), NOW)
 
     expect(item?.action).toBe("respond_lead")
+    expect(item?.lane).toBe("sales")
+    expect(item?.laneLabel).toBe("신규·추가 매출")
     expect(item?.bucket).toBe("today")
     // 오늘 처리 큐에는 남지만 critical 을 독점하지는 않는다 — 살아 있는 거래에 자리를 내준다.
     expect(item?.severity).toBe("high")
@@ -102,6 +104,7 @@ describe("CRM priority rules", () => {
     const item = buildNeoAccountPriorityItem(account(), NOW)
 
     expect(item?.action).toBe("renew_account")
+    expect(item?.lane).toBe("renewal")
     expect(item?.bucket).toBe("today")
     expect(item?.reason).toContain("일 내 만료")
     expect(item?.score).toBeGreaterThanOrEqual(90)
@@ -143,8 +146,35 @@ describe("CRM priority rules", () => {
 
     expect(item?.action).toBe("renew_account")
     expect(item?.actionLabel).toBe("충전 안내")
+    expect(item?.lane).toBe("customer_care")
     expect(item?.bucket).toBe("today")
     expect(item?.reason).toContain("충전 잔액")
+  })
+
+  it("promotes a purchased customer's demo into the additional-sales lane", () => {
+    const item = buildNeoAccountPriorityItem(account(), NOW, {
+      demoIndex: {
+        byName: new Map([
+          [
+            "classin학원",
+            {
+              title: "ClassIn 학원 데모",
+              customerName: "ClassIn 학원",
+              date: "2026-06-27",
+              phase: "upcoming",
+              daysFromNow: 1,
+            },
+          ],
+        ]),
+        unmatched: [],
+        total: 1,
+      },
+    })
+
+    expect(item?.lane).toBe("sales")
+    expect(item?.laneLabel).toBe("신규·추가 매출")
+    expect(item?.actionLabel).toBe("데모")
+    expect(item?.reason).toBe("내일 데모")
   })
 
   it("sorts higher score before older due date", () => {

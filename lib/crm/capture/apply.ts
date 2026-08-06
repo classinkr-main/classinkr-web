@@ -1,10 +1,14 @@
 import "server-only"
 
-import { createCrmCustomerEvent } from "@/lib/repositories/crm-events"
-import { createCrmTask, inferTaskTypeFromTitle } from "@/lib/repositories/crm-tasks"
+import { getOrCreateCrmCustomerEventBySource } from "@/lib/repositories/crm-events"
+import {
+  createCrmTask,
+  getCrmTaskBySourceEventId,
+  inferTaskTypeFromTitle,
+} from "@/lib/repositories/crm-tasks"
 import { getLeadById, saveLead } from "@/lib/repositories/leads"
 import { getPublicEventById } from "@/lib/repositories/public-events"
-import type { CrmCustomerEventTargetType } from "@/lib/supabase/database.types"
+import type { CrmCaptureBatchStatus, CrmCustomerEventTargetType } from "@/lib/supabase/database.types"
 import { setEventToken } from "@/lib/types/event-metrics"
 import { captureActivityLabel } from "./activity-types"
 import { deriveAttendeeOrigin } from "./origin"
@@ -26,18 +30,59 @@ export interface ApplyCaptureSummary {
   reviewRemaining: number
 }
 
+export class CaptureApplyConflictError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "CaptureApplyConflictError"
+  }
+}
+
+export function captureBatchStatusAfterApply(input: {
+  failed: number
+  reviewRemaining: number
+}): CrmCaptureBatchStatus {
+  if (input.failed > 0) return "partial_failed"
+  if (input.reviewRemaining > 0) return "reviewed"
+  return "applied"
+}
+
 function targetTypeOrUnknown(value: CaptureRowRecord["matchedTargetType"]): CrmCustomerEventTargetType {
   if (value === "lead" || value === "neo_account" || value === "customer" || value === "deal") return value
   return "unknown"
 }
 
+function selectedRowsForApply(rows: CaptureRowRecord[], requestedIds?: string[]) {
+  const ids = requestedIds ?? rows.filter((row) => row.selected && row.applyStatus !== "applied").map((row) => row.id)
+  const uniqueIds = [...new Set(ids.map((id) => id.trim()).filter(Boolean))]
+  if (uniqueIds.length === 0) throw new CaptureApplyConflictError("적용할 행을 1개 이상 선택하세요.")
+
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  return uniqueIds.map((id) => {
+    const row = byId.get(id)
+    if (!row) throw new CaptureApplyConflictError("선택한 행 중 현재 배치에 없는 항목이 있습니다.")
+    if (!row.selected) throw new CaptureApplyConflictError("선택이 해제된 행이 포함되어 있습니다. 목록을 새로고침하세요.")
+    if (row.matchStatus === "duplicate_in_batch") {
+      throw new CaptureApplyConflictError("배치 내 중복 행은 적용할 수 없습니다.")
+    }
+    if (row.applyStatus === "applied") {
+      throw new CaptureApplyConflictError("이미 적용된 행이 포함되어 있습니다. 목록을 새로고침하세요.")
+    }
+    return row
+  })
+}
+
 export async function applyCaptureBatch(
   batchId: string,
-  options: { createdBy?: string | null; now?: Date } = {}
+  options: { createdBy?: string | null; now?: Date; selectedRowIds?: string[] } = {}
 ): Promise<{ summary: ApplyCaptureSummary } | null> {
   const loaded = await getCaptureBatchWithRows(batchId)
   if (!loaded) return null
   const { batch, rows } = loaded
+  if (batch.status === "applied" || batch.status === "canceled") {
+    throw new CaptureApplyConflictError("이미 완료되었거나 취소된 배치입니다.")
+  }
+
+  const rowsToApply = selectedRowsForApply(rows, options.selectedRowIds)
   const now = options.now ?? new Date()
   const createdBy = options.createdBy?.trim() || batch.createdBy
 
@@ -45,38 +90,31 @@ export async function applyCaptureBatch(
   let taskCreated = batch.taskCreatedCount
   let leadCreated = batch.leadCreatedCount
   let failed = 0
-  let skipped = 0
+  const skipped = 0
   let appliedThisRun = 0
+  const appliedIds = new Set(rows.filter((row) => row.applyStatus === "applied").map((row) => row.id))
 
   // 리드 notes 토큰은 공개 신청 리드와 같은 규약으로 slug 우선(없으면 id 폴백).
-  // 과거 id 토큰 데이터는 읽기 측(lib/events/attribution.ts)이 정규화한다.
   let publicEventToken: string | null = batch.publicEventId
   if (batch.publicEventId) {
     try {
       const publicEvent = await getPublicEventById(batch.publicEventId)
       publicEventToken = publicEvent?.slug ?? batch.publicEventId
     } catch {
-      // 조회 실패 시 id 토큰으로 폴백 — 적용 자체를 막지 않는다
+      // 조회 실패 시 id 토큰으로 폴백 — 적용 자체를 막지 않는다.
     }
   }
 
-  for (const row of rows) {
-    // 멱등: 이미 적용되어 이벤트가 만들어진 행은 재생성하지 않는다.
-    if (row.applyStatus === "applied" && row.createdEventId) continue
-    if (!row.selected || row.matchStatus === "duplicate_in_batch") {
-      skipped += 1
-      continue
-    }
-
-    // 직전 부분 실패로 리드가 이미 생성됐을 수 있어 try 밖에서 선언 — 실패 패치에도 담아
-    // 재시도 시 중복 saveLead를 막는다.
+  for (const row of rowsToApply) {
     let createdLeadId = row.createdLeadId
+    let createdEventId = row.createdEventId
+    let createdTaskId = row.createdTaskId
+
     try {
       let targetType = row.matchedTargetType
       let targetId = row.matchedTargetId
       let targetLabel = row.matchedTargetLabel
 
-      // 선택된 신규 리드 후보 → 리드 생성 후 타깃으로 사용
       if (!targetId && row.matchStatus === "new_lead_candidate" && !createdLeadId) {
         const lead = await saveLead({
           source: "crm_capture",
@@ -85,7 +123,6 @@ export async function applyCaptureBatch(
           phone: row.phone ?? undefined,
           email: row.email ?? undefined,
           message: row.memo ?? undefined,
-          // 행사 명단이면 리드에도 토큰을 달아 리드 쪽 집계와 일관성 유지
           notes: publicEventToken ? setEventToken("", publicEventToken) : undefined,
           timestamp: now.toISOString(),
         })
@@ -94,18 +131,23 @@ export async function applyCaptureBatch(
         targetId = lead.id
         targetLabel = lead.org || lead.name || row.organizationName || null
         leadCreated += 1
+        await updateCaptureRowApplyResult(row.id, {
+          apply_status: "pending",
+          created_lead_id: createdLeadId,
+          matched_target_type: targetType,
+          matched_target_id: targetId,
+          matched_target_label: targetLabel,
+          match_status: "confirmed_lead",
+          error_message: null,
+        })
       } else if (!targetId && createdLeadId) {
-        // 재시도: 리드는 이미 생성됐으니 중복 없이 그 리드를 타깃으로 사용.
         targetType = "lead"
         targetId = createdLeadId
       }
 
       const activityLabel = captureActivityLabel(row.activityType)
-
-      // 참석자 출신(origin) — 행에 수동 지정(override)이 있으면 우선, 없으면 자동 도출.
       let attendeeOrigin = row.attendeeOrigin
       if (!attendeeOrigin) {
-        // 기존 리드 매칭이면 그 리드의 source로 ad/site 구분.
         let leadSource: string | null = null
         let leadHasAdClickId = false
         if (targetType === "lead" && row.matchStatus !== "new_lead_candidate" && targetId) {
@@ -123,42 +165,62 @@ export async function applyCaptureBatch(
         })
       }
 
-      const event = await createCrmCustomerEvent({
-        targetType: targetTypeOrUnknown(targetType),
-        targetId,
-        targetLabel: targetLabel ?? row.organizationName ?? row.contactName,
-        sourceType: "sheet",
-        sourceId: `capture:${row.id}`,
-        occurredAt: now.toISOString(),
-        title: `${activityLabel} 기록`,
-        summary: row.memo,
-        publicEventId: batch.publicEventId,
-        attendeeOrigin,
-        ownerName: createdBy,
-        createdBy,
-      })
-      eventCreated += 1
-
-      let createdTaskId: string | null = null
-      const template = captureTaskTemplate(row.activityType)
-      if (row.createTask && template) {
-        const task = await createCrmTask({
+      if (!createdEventId) {
+        const eventResult = await getOrCreateCrmCustomerEventBySource({
           targetType: targetTypeOrUnknown(targetType),
           targetId,
           targetLabel: targetLabel ?? row.organizationName ?? row.contactName,
-          taskType: inferTaskTypeFromTitle(template.title),
-          title: template.title,
-          dueAt: row.taskDueAt ?? captureTaskDueAt(row.activityType, now, batch.defaultTaskOffsetDays),
-          sourceEventId: event.id,
+          sourceType: "sheet",
+          sourceId: `capture:${row.id}`,
+          occurredAt: now.toISOString(),
+          title: `${activityLabel} 기록`,
+          summary: row.memo,
+          publicEventId: batch.publicEventId,
+          attendeeOrigin,
+          ownerName: createdBy,
           createdBy,
         })
-        createdTaskId = task.id
-        taskCreated += 1
+        createdEventId = eventResult.record.id
+        if (eventResult.created) eventCreated += 1
+        await updateCaptureRowApplyResult(row.id, {
+          apply_status: "pending",
+          created_event_id: createdEventId,
+          created_lead_id: createdLeadId,
+          error_message: null,
+        })
+      }
+
+      const template = captureTaskTemplate(row.activityType)
+      if (row.createTask && template && !createdTaskId) {
+        const existingTask = await getCrmTaskBySourceEventId(createdEventId)
+        if (existingTask) {
+          createdTaskId = existingTask.id
+        } else {
+          const task = await createCrmTask({
+            targetType: targetTypeOrUnknown(targetType),
+            targetId,
+            targetLabel: targetLabel ?? row.organizationName ?? row.contactName,
+            taskType: inferTaskTypeFromTitle(template.title),
+            title: template.title,
+            dueAt: row.taskDueAt ?? captureTaskDueAt(row.activityType, now, batch.defaultTaskOffsetDays),
+            sourceEventId: createdEventId,
+            createdBy,
+          })
+          createdTaskId = task.id
+          taskCreated += 1
+        }
+        await updateCaptureRowApplyResult(row.id, {
+          apply_status: "pending",
+          created_event_id: createdEventId,
+          created_task_id: createdTaskId,
+          created_lead_id: createdLeadId,
+          error_message: null,
+        })
       }
 
       await updateCaptureRowApplyResult(row.id, {
         apply_status: "applied",
-        created_event_id: event.id,
+        created_event_id: createdEventId,
         created_task_id: createdTaskId,
         created_lead_id: createdLeadId,
         error_message: null,
@@ -167,12 +229,14 @@ export async function applyCaptureBatch(
         matched_target_label: targetLabel,
         match_status: createdLeadId && row.matchStatus === "new_lead_candidate" ? "confirmed_lead" : row.matchStatus,
       })
+      appliedIds.add(row.id)
       appliedThisRun += 1
     } catch (error) {
       failed += 1
       await updateCaptureRowApplyResult(row.id, {
         apply_status: "failed",
-        // 리드가 이미 생성됐다면 기록 — 재시도 시 중복 생성 방지.
+        created_event_id: createdEventId,
+        created_task_id: createdTaskId,
         created_lead_id: createdLeadId,
         error_message: error instanceof Error ? error.message : "적용 실패",
       }).catch(() => {})
@@ -180,9 +244,9 @@ export async function applyCaptureBatch(
   }
 
   const reviewRemaining = rows.filter(
-    (row) => row.applyStatus !== "applied" && !row.selected && row.matchStatus !== "duplicate_in_batch"
+    (row) => row.matchStatus !== "duplicate_in_batch" && !appliedIds.has(row.id)
   ).length
-  const status = failed > 0 ? "partial_failed" : "applied"
+  const status = captureBatchStatusAfterApply({ failed, reviewRemaining })
   await updateBatchCounts(batchId, { status, eventCreated, taskCreated, leadCreated })
 
   return {

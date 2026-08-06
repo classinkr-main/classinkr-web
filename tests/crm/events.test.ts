@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest"
 
-import { buildCrmCustomerEventInsert, parseLooseList } from "@/lib/repositories/crm-events"
+import {
+  CRM_WORK_ACTIVITY_SOURCE_TYPES,
+  buildCrmCustomerEventInsert,
+  parseLooseList,
+} from "@/lib/repositories/crm-events"
 
 const NOW = new Date("2026-06-26T09:00:00.000Z")
 
 describe("CRM customer events", () => {
+  it("keeps the default work timeline focused on human sales activity", () => {
+    expect(CRM_WORK_ACTIVITY_SOURCE_TYPES).toEqual(
+      expect.arrayContaining(["manual_note", "call", "sms", "meeting_minutes", "recording", "lead_contact_log", "calendar_event"])
+    )
+    expect(CRM_WORK_ACTIVITY_SOURCE_TYPES).not.toEqual(expect.arrayContaining(["site_inflow", "external_crm", "sheet"]))
+  })
+
   it("parses comma and newline separated quick-entry fields", () => {
     expect(parseLooseList("김담당, 박원장\n이실장")).toEqual(["김담당", "박원장", "이실장"])
     expect(parseLooseList(["견적", "  갱신  ", ""])).toEqual(["견적", "갱신"])

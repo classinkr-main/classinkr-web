@@ -317,11 +317,13 @@ function LeadSummaryPanel({
 }) {
   const valueOrSkeleton = (value: number | null | undefined, tone?: string) =>
     loading && !leadKpis ? (
-      <ValueSkeleton className="h-6 w-12" />
+      <ValueSkeleton className="h-9 w-16" />
     ) : error && !leadKpis ? (
-      <span className="text-[#B85C33]">—</span>
+      <span className="text-[34px] font-extrabold leading-none tracking-[-0.045em] text-[#B85C33]">—</span>
     ) : (
-      <span className={tone}>{formatNumber(value)}</span>
+      <span className={`text-[34px] font-extrabold leading-none tracking-[-0.045em] ${tone ?? "text-[#111110]"}`}>
+        {formatNumber(value)}
+      </span>
     )
 
   return (
@@ -761,8 +763,8 @@ function CrmCockpitHero({
           </div>
           <CurrencyChip currency="KRW" tone="dark" />
         </div>
-        <p className="mt-1.5 text-[22px] font-bold leading-none tracking-[-0.03em]">
-          {pending ? <ValueSkeleton className="h-6 w-28 bg-white/15" /> : formatKRWAbbrev(revenue?.deliveryTotalAmount)}
+        <p className="mt-2 text-[30px] font-extrabold leading-none tracking-[-0.045em]">
+          {pending ? <ValueSkeleton className="h-8 w-32 bg-white/15" /> : formatKRWAbbrev(revenue?.deliveryTotalAmount)}
         </p>
         <p className="mt-1 text-[11px] opacity-75">
           견적 {pending ? <ValueSkeleton className="h-3 w-10 bg-white/15" /> : formatKRWAbbrev(revenue?.acceptedQuoteAmount)} · 계약{" "}
@@ -783,8 +785,8 @@ function CrmCockpitHero({
           </div>
           <CurrencyChip currency="USD" />
         </div>
-        <p className="mt-1.5 text-[22px] font-bold leading-none tracking-[-0.03em] text-[#111110]">
-          {pending ? <ValueSkeleton className="h-6 w-24" /> : formatUSD(neoKpis?.opportunityAmount)}
+        <p className="mt-2 text-[30px] font-extrabold leading-none tracking-[-0.045em] text-[#111110]">
+          {pending ? <ValueSkeleton className="h-8 w-28" /> : formatUSD(neoKpis?.opportunityAmount)}
         </p>
         <p className="mt-1 text-[11px] text-[#1a1a1a]/45">
           이번 달 {pending ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(neoKpis?.opportunityCountMonth)}건
@@ -803,8 +805,8 @@ function CrmCockpitHero({
           </div>
           <CurrencyChip currency="CNY" />
         </div>
-        <p className="mt-1.5 text-[22px] font-bold leading-none tracking-[-0.03em] text-[#084734]">
-          {pending ? <ValueSkeleton className="h-6 w-24" /> : formatCNY(neoKpis?.salesAmountMonth)}
+        <p className="mt-2 text-[30px] font-extrabold leading-none tracking-[-0.045em] text-[#084734]">
+          {pending ? <ValueSkeleton className="h-8 w-28" /> : formatCNY(neoKpis?.salesAmountMonth)}
         </p>
         <p className="mt-1 text-[11px] text-[#1a1a1a]/45">
           수금 {pending ? <ValueSkeleton className="h-3 w-10" /> : formatCNY(neoKpis?.collectionAmountMonth)}
@@ -828,13 +830,13 @@ function CrmCockpitHero({
           </div>
           <CurrencyChip currency="KRW" />
         </div>
-        <p className={`mt-1.5 text-[22px] font-bold leading-none tracking-[-0.03em] ${hasRisk ? "text-[#B85C33]" : "text-[#111110]"}`}>
+        <p className={`mt-2 text-[30px] font-extrabold leading-none tracking-[-0.045em] ${hasRisk ? "text-[#B85C33]" : "text-[#111110]"}`}>
           {pending ? (
-            <ValueSkeleton className="h-6 w-12" />
+            <ValueSkeleton className="h-8 w-16" />
           ) : (
             <>
               {formatNumber(riskCount)}
-              <span className="ml-1 text-[14px] font-bold">곳</span>
+              <span className="ml-1 text-[16px] font-bold">곳</span>
             </>
           )}
         </p>
@@ -903,7 +905,7 @@ function CrmHealthDonut() {
       <div className="flex items-center gap-4">
         <div className="relative h-24 w-24 shrink-0 rounded-full" style={{ background: gradient }}>
           <div className="absolute inset-[18px] flex flex-col items-center justify-center rounded-full bg-white">
-            <span className="text-[18px] font-bold leading-none text-[#111110]">{safePct}%</span>
+            <span className="text-[24px] font-extrabold leading-none tracking-[-0.035em] text-[#111110]">{safePct}%</span>
             <span className="text-[9px] font-semibold text-[#1a1a1a]/45">안전</span>
           </div>
         </div>

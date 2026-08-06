@@ -757,7 +757,9 @@ const SECTION_FIELDS: Record<SettingsTab, SettingsKey[]> = {
     "leadWebhookUrl",
     "channelTalkWebhookUrl",
     "wecomOpsWebhookUrl",
+    "wecomOpsWebhookEnabled",
     "wecomCsWebhookUrl",
+    "wecomLeadReportWebhookUrl",
     "wecomCriticalWebhookUrl",
     "kakaoAlimtalkWebhookUrl",
     "emailWebhookUrl",
@@ -1741,6 +1743,14 @@ export default function SettingsPage() {
                   placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
                   value={settings.wecomOpsWebhookUrl ?? ""}
                   onChange={(v) => set({ wecomOpsWebhookUrl: v })}
+                  webhookType="wecom"
+                />
+                <WebhookRow
+                  label="WeCom 리드 리포트 Webhook"
+                  description="매일 10:10 리드 카드와 주간·월간 리드 리포트에만 사용됩니다."
+                  placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
+                  value={settings.wecomLeadReportWebhookUrl ?? ""}
+                  onChange={(v) => set({ wecomLeadReportWebhookUrl: v })}
                   webhookType="wecom"
                 />
                 <WebhookRow

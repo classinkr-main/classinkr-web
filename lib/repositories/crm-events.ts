@@ -31,6 +31,15 @@ export const CRM_EVENT_SOURCE_TYPES = [
   "sms",
   "site_inflow",
 ] as const
+export const CRM_WORK_ACTIVITY_SOURCE_TYPES: CrmCustomerEventSourceType[] = [
+  "manual_note",
+  "call",
+  "sms",
+  "meeting_minutes",
+  "recording",
+  "lead_contact_log",
+  "calendar_event",
+]
 export const CRM_EVENT_SENTIMENTS = ["positive", "neutral", "risk"] as const
 
 export interface CrmEventNextAction {
@@ -110,6 +119,7 @@ export interface ListCrmCustomerEventsOptions {
   q?: string
   targetType?: CrmCustomerEventTargetType | "all"
   sourceType?: CrmCustomerEventSourceType | "all"
+  sourceTypes?: CrmCustomerEventSourceType[]
   sentiment?: CrmCustomerEventSentiment | "all"
   targetId?: string
   limit?: number
@@ -380,6 +390,8 @@ export async function listCrmCustomerEvents(
   }
   if (options.sourceType && options.sourceType !== "all") {
     query = query.eq("source_type", options.sourceType)
+  } else if (options.sourceTypes && options.sourceTypes.length > 0) {
+    query = query.in("source_type", [...new Set(options.sourceTypes)])
   }
   if (options.sentiment && options.sentiment !== "all") {
     query = query.eq("sentiment", options.sentiment)
@@ -518,4 +530,55 @@ export async function createCrmCustomerEvent(input: CrmCustomerEventCreateInput)
   }
   const [record] = await recordsWithSignedUrls([data as CrmCustomerEvent])
   return record
+}
+
+export async function getOrCreateCrmCustomerEventBySource(
+  input: CrmCustomerEventCreateInput & { sourceType: CrmCustomerEventSourceType; sourceId: string }
+): Promise<{ record: CrmCustomerEventRecord; created: boolean }> {
+  const sourceId = input.sourceId.trim()
+  if (!sourceId) throw new Error("[crm-events] sourceId가 필요합니다.")
+
+  const supabase = createSupabaseAdminClient()
+  const findExisting = async () => {
+    const { data, error } = await supabase
+      .from("crm_customer_events")
+      .select("*")
+      .eq("source_type", input.sourceType)
+      .eq("source_id", sourceId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    if (error) {
+      if (isMissingCrmEventsTableError(error)) {
+        throw new Error("CRM 기록 DB 마이그레이션이 아직 적용되지 않았습니다.")
+      }
+      throw new Error(`[crm-events] source 기록 조회 실패: ${error.message}`)
+    }
+    if (!data) return null
+    const [record] = await recordsWithSignedUrls([data as CrmCustomerEvent])
+    return record
+  }
+
+  const existing = await findExisting()
+  if (existing) return { record: existing, created: false }
+
+  const insert = buildCrmCustomerEventInsert({ ...input, sourceId })
+  const { data, error } = await supabase
+    .from("crm_customer_events")
+    .insert(insert)
+    .select("*")
+    .single()
+
+  if (error) {
+    if (error.code === "23505") {
+      const concurrent = await findExisting()
+      if (concurrent) return { record: concurrent, created: false }
+    }
+    if (isMissingCrmEventsTableError(error)) {
+      throw new Error("CRM 기록 DB 마이그레이션이 아직 적용되지 않았습니다.")
+    }
+    throw new Error(`[crm-events] 저장 실패: ${error.message}`)
+  }
+  const [record] = await recordsWithSignedUrls([data as CrmCustomerEvent])
+  return { record, created: true }
 }

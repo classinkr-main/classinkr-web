@@ -54,6 +54,9 @@ interface CaptureRow {
   attendeeOrigin: string | null
   selected: boolean
   applyStatus: string
+  createdEventId: string | null
+  createdTaskId: string | null
+  createdLeadId: string | null
 }
 
 interface ApplySummary {
@@ -175,18 +178,30 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
     [events, selectedEventId]
   )
 
+  const activeRows = useMemo(() => rows.filter((row) => row.applyStatus !== "applied"), [rows])
+  const selectedRowIds = useMemo(
+    () => activeRows.filter((row) => row.selected && row.matchStatus !== "duplicate_in_batch").map((row) => row.id),
+    [activeRows]
+  )
+  const hasAppliedSideEffects = useMemo(
+    () => rows.some((row) => row.applyStatus === "applied" || row.createdEventId || row.createdTaskId || row.createdLeadId),
+    [rows]
+  )
+
   const counts = useMemo(() => {
-    const selected = rows.filter((r) => r.selected).length
-    const newLeads = rows.filter((r) => r.matchStatus === "new_lead_candidate").length
-    const review = rows.filter(
+    const newLeads = activeRows.filter((r) => r.matchStatus === "new_lead_candidate").length
+    const review = activeRows.filter(
       (r) => r.matchStatus === "needs_review" || r.matchStatus === "multiple_candidates"
     ).length
-    return { total: rows.length, selected, newLeads, review }
-  }, [rows])
+    return { total: activeRows.length, selected: selectedRowIds.length, newLeads, review }
+  }, [activeRows, selectedRowIds.length])
 
   const visibleRows = useMemo(
-    () => (reviewOnly ? rows.filter((r) => r.matchStatus !== "confirmed_lead" && r.matchStatus !== "confirmed_customer") : rows),
-    [rows, reviewOnly]
+    () =>
+      reviewOnly
+        ? activeRows.filter((r) => r.matchStatus !== "confirmed_lead" && r.matchStatus !== "confirmed_customer")
+        : activeRows,
+    [activeRows, reviewOnly]
   )
 
   // 지금 작업 중인 배치는 이어하기 목록에서 제외
@@ -198,6 +213,10 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
   const canAnalyze = Boolean(selectedEventId && rawText.trim())
 
   const handleAnalyze = useCallback(async () => {
+    if (hasAppliedSideEffects) {
+      setError("이미 일부 적용된 명단은 다시 분석할 수 없습니다. 남은 행을 이어서 검토하세요.")
+      return
+    }
     if (!selectedEventId) {
       setError("행사를 먼저 선택하세요.")
       return
@@ -237,7 +256,7 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
     } finally {
       setBusy(false)
     }
-  }, [selectedEventId, selectedEvent, rawText, mode, batch, loadOpenBatches])
+  }, [selectedEventId, selectedEvent, rawText, mode, batch, loadOpenBatches, hasAppliedSideEffects])
 
   const toggleRow = useCallback(async (row: CaptureRow, next: boolean) => {
     setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, selected: next } : r)))
@@ -271,7 +290,7 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
       setRows((prev) =>
         prev.map((r) => (targets.some((t) => t.id === r.id) ? { ...r, selected: next } : r))
       )
-      await Promise.allSettled(
+      const results = await Promise.allSettled(
         targets.map((r) =>
           adminFetchJson(`/api/admin/crm/capture/rows/${r.id}`, {
             method: "PATCH",
@@ -279,8 +298,22 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
           })
         )
       )
+      if (results.some((result) => result.status === "rejected")) {
+        setError("일부 선택 상태를 저장하지 못했습니다. 서버 상태로 다시 불러왔습니다.")
+        if (batch) {
+          try {
+            const data = await adminFetchJson<{ batch: CaptureBatch; rows: CaptureRow[] }>(
+              `/api/admin/crm/capture/batches/${batch.id}`
+            )
+            setBatch(data.batch)
+            setRows(data.rows)
+          } catch {
+            setError("선택 상태 확인에 실패했습니다. 페이지를 새로고침해 주세요.")
+          }
+        }
+      }
     },
-    [visibleRows]
+    [visibleRows, batch]
   )
 
   const handleApply = useCallback(async () => {
@@ -289,16 +322,18 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
       setError("확정할 행을 1개 이상 선택하세요.")
       return
     }
-    if (!window.confirm(`${counts.selected}건을 확정합니다.\n신규는 리드로 생성되고, 모두 "${selectedEvent?.title ?? "행사"}" 참석으로 기록됩니다.`)) {
+    if (!window.confirm(`선택한 ${counts.selected}건만 확정합니다.\n신규는 리드로 생성되고, 모두 "${selectedEvent?.title ?? "행사"}" 참석으로 기록됩니다.`)) {
       return
     }
     setApplying(true)
     setError(null)
     try {
-      const result = await adminFetchJson<{ batch: CaptureBatch; summary: ApplySummary }>(
+      const result = await adminFetchJson<{ batch: CaptureBatch; rows: CaptureRow[]; summary: ApplySummary }>(
         `/api/admin/crm/capture/batches/${batch.id}/apply`,
-        { method: "POST" }
+        { method: "POST", body: JSON.stringify({ rowIds: selectedRowIds }) }
       )
+      setBatch(result.batch)
+      setRows(result.rows)
       setSummary(result.summary)
       setStep("done")
       void loadOpenBatches()
@@ -307,7 +342,7 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
     } finally {
       setApplying(false)
     }
-  }, [batch, counts.selected, selectedEvent, loadOpenBatches])
+  }, [batch, counts.selected, selectedEvent, loadOpenBatches, selectedRowIds])
 
   const reset = useCallback(() => {
     setBatch(null)
@@ -411,10 +446,12 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-6">
           <div className="flex items-center gap-2 text-[#084734]">
             <CheckCircle2 className="h-5 w-5" />
-            <h2 className="text-[15px] font-bold">확정 완료</h2>
+            <h2 className="text-[15px] font-bold">선택 행 적용 완료</h2>
           </div>
           <p className="mt-1 text-[12px] text-[#1a1a1a]/50">
-            {selectedEvent?.title ?? "행사"} 참석자가 CRM에 기록되었습니다.
+            {summary.reviewRemaining > 0
+              ? `${selectedEvent?.title ?? "행사"} 참석자 중 선택한 행을 기록했습니다. 남은 행은 이 배치에서 계속 검토할 수 있습니다.`
+              : `${selectedEvent?.title ?? "행사"} 참석자가 CRM에 기록되었습니다.`}
           </p>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <SummaryStat label="참석 기록" value={summary.eventCreated} tone="success" />
@@ -426,10 +463,27 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
             <p className="mt-3 text-[12px] text-[#B85C33]">{summary.failed}건은 적용에 실패했습니다. 다시 시도해 주세요.</p>
           )}
           <div className="mt-5 flex flex-wrap items-center gap-2">
+            {summary.reviewRemaining > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSummary(null)
+                  setStep("review")
+                  setError(null)
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+              >
+                <ArrowRight className="h-4 w-4" />남은 {summary.reviewRemaining}건 계속 검토
+              </button>
+            )}
             <button
               type="button"
               onClick={reset}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
+              className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-[13px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
+                summary.reviewRemaining > 0
+                  ? "border border-[#e8e8e4] bg-white text-[#111110] hover:bg-[#F6F5F4]"
+                  : "bg-[#084734] text-white hover:bg-[#065c41]"
+              }`}
             >
               <ClipboardPaste className="h-4 w-4" />새 명단 입력
             </button>
@@ -582,7 +636,8 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
                 <button
                   type="button"
                   onClick={handleAnalyze}
-                  disabled={busy}
+                  disabled={busy || hasAppliedSideEffects}
+                  title={hasAppliedSideEffects ? "일부 적용 후에는 기존 매칭을 유지해야 합니다." : undefined}
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#111110] transition-colors hover:bg-[#F6F5F4] disabled:opacity-50"
                 >
                   {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -590,6 +645,11 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
                 </button>
               )}
             </div>
+            {step === "review" && hasAppliedSideEffects && (
+              <p className="mt-2 text-right text-[11px] text-[#1a1a1a]/45">
+                일부 적용된 배치는 기존 연결을 보호하기 위해 다시 분석할 수 없습니다.
+              </p>
+            )}
           </div>
 
           {/* review */}

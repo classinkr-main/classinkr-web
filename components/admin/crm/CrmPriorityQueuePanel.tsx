@@ -370,7 +370,7 @@ export default function CrmPriorityQueuePanel({
           <div className="border-b border-[#e8e8e4] py-3 pr-3 sm:border-b-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">오늘 처리</p>
             <div className="mt-1 flex items-baseline gap-1.5">
-              <span className="text-[28px] font-bold leading-none tabular-nums text-[#111110]">
+              <span className="text-[38px] font-extrabold leading-none tracking-[-0.045em] tabular-nums text-[#111110]">
                 {(data.summary.bucketCounts.today ?? 0).toLocaleString("ko-KR")}
               </span>
               <span className="text-[11px] font-medium text-[#615D59]">
@@ -405,7 +405,7 @@ export default function CrmPriorityQueuePanel({
               <p className={`text-[11px] font-semibold ${lane === filter.key ? "text-[#084734]" : "text-[#615D59]"}`}>
                 {filter.label}
               </p>
-              <p className={`mt-1 text-xl font-bold tabular-nums ${lane === filter.key ? "text-[#084734]" : "text-[#111110]"}`}>
+              <p className={`mt-1 text-[28px] font-extrabold leading-none tracking-[-0.035em] tabular-nums ${lane === filter.key ? "text-[#084734]" : "text-[#111110]"}`}>
                 {data.summary.laneTotals[filter.key].toLocaleString("ko-KR")}
               </p>
             </button>

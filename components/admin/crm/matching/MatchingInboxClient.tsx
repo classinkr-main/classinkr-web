@@ -69,7 +69,7 @@ const SOURCE_FILTERS: Array<{ key: SourceFilter; label: string }> = [
 ]
 
 const STATUS_FILTERS: Array<{ key: StatusFilter; label: string }> = [
-  { key: "review", label: "검토 필요" },
+  { key: "review", label: "처리 필요" },
   { key: "auto", label: "자동 확정" },
   { key: "confirmed", label: "확정" },
   { key: "rejected", label: "제외" },
@@ -418,6 +418,10 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
   }, [])
 
   const totals = data?.totals
+  const actionableCount = useMemo(
+    () => (data?.rows ?? []).filter((row) => matchesStatusFilter(row, "review")).length,
+    [data]
+  )
 
   // 행 액션(확정/제외/되돌리기) — 데스크톱 표 셀과 <sm 카드 폴백이 같은 핸들러·마크업을 공유한다(W2-6).
   const renderRowActions = (row: CrmMatchingRow) => {
@@ -542,7 +546,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">데이터 매칭 인박스</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
             외부 CRM 스냅샷, REV 시트, 리드를 ClassIn 고객 DB에 연결합니다. 고확신 매칭은 자동 확정되고, 여기서는
-            검토가 필요한 항목만 처리하면 됩니다.
+            미연결·후보·재검수 상태처럼 처리가 필요한 항목을 한 번에 정리합니다.
           </p>
         </div>
 
@@ -587,9 +591,9 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
 
       <section className="mb-6 grid grid-cols-2 gap-x-4 gap-y-5 border-y border-[#f0f0ec] py-5 xl:grid-cols-4">
         <MetricCard
-          label="검토 대기"
-          value={loading && !data ? <ValueSkeleton /> : formatNumber(totals?.reviewCount ?? 0)}
-          hint="후보·재검수 상태로 admin 확인이 필요한 연결"
+          label="처리 필요"
+          value={loading && !data ? <ValueSkeleton /> : formatNumber(actionableCount)}
+          hint="현재 필터와 같은 범위 · 미연결 + 후보 + 재검수"
         />
         <MetricCard
           label="미매칭 REV"
@@ -597,9 +601,9 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           hint={`따로 노는 시트 금액 ${formatCurrency(data?.summary.branch_rev_sheet.unmatchedAmount ?? 0)}`}
         />
         <MetricCard
-          label="자동 확정"
-          value={loading && !data ? <ValueSkeleton /> : formatNumber(totals?.autoConfirmedCount ?? 0)}
-          hint="고확신 자동 확정 — 잘못된 건은 행에서 되돌리기"
+          label="후보·재검수"
+          value={loading && !data ? <ValueSkeleton /> : formatNumber(totals?.reviewCount ?? 0)}
+          hint="관리자 판단으로 확정하거나 제외할 연결"
         />
         <MetricCard
           label="시트 매칭률"
@@ -623,6 +627,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
               key={filter.key}
               type="button"
               onClick={() => setSourceFilter(filter.key)}
+              aria-pressed={sourceFilter === filter.key}
               className={`h-8 rounded-lg border px-3 text-[12px] font-semibold transition-colors ${
                 sourceFilter === filter.key
                   ? "border-[#111110] bg-[#111110] text-white"
@@ -638,6 +643,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
               key={filter.key}
               type="button"
               onClick={() => setStatusFilter(filter.key)}
+              aria-pressed={statusFilter === filter.key}
               className={`h-8 rounded-lg border px-3 text-[12px] font-semibold transition-colors ${
                 statusFilter === filter.key
                   ? "border-[#111110] bg-[#111110] text-white"
@@ -710,7 +716,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         ) : visibleRows.length === 0 ? (
           <p className="rounded-xl bg-[#fafaf8] px-3 py-10 text-center text-[13px] text-[#1a1a1a]/35">
             {statusFilter === "review"
-              ? "검토할 매칭이 없습니다. 모두 처리됐어요."
+              ? "처리할 매칭이 없습니다. 모두 정리됐어요."
               : "표시할 매칭 데이터가 없습니다."}
           </p>
         ) : (
@@ -795,7 +801,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
               <tr>
                 <td colSpan={10} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
                   {statusFilter === "review"
-                    ? "검토할 매칭이 없습니다. 모두 처리됐어요."
+                    ? "처리할 매칭이 없습니다. 모두 정리됐어요."
                     : "표시할 매칭 데이터가 없습니다."}
                 </td>
               </tr>

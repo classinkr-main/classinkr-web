@@ -34,6 +34,7 @@ export const NOTIFICATION_CHANNELS = [
   "in_app",
   "wecom_webhook",
   "wecom_cs_webhook",
+  "wecom_lead_report_webhook",
   "channel_talk_webhook",
   "kakao_alimtalk",
   "email",

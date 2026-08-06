@@ -14,6 +14,8 @@ function item(overrides: Partial<CrmPriorityItem>): CrmPriorityItem {
     statusLabel: "할 일",
     score: 80,
     severity: "high",
+    lane: "sales",
+    laneLabel: "신규·추가 매출",
     bucket: "today",
     bucketLabel: "오늘 처리",
     action: "do_task",

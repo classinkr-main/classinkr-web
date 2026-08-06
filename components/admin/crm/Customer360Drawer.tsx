@@ -816,6 +816,9 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
       <div className="absolute inset-0 bg-black/20" onClick={requestClose} aria-hidden />
       <div
         className="relative z-10 flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="crm-customer-drawer-title"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
@@ -854,7 +857,9 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               ) : null}
               {headerFlags.length > 0 ? <CrmCustomerFlags flags={headerFlags} max={5} /> : null}
             </div>
-            <h2 className="truncate text-[18px] font-bold text-[#111110]">{displayName}</h2>
+            <h2 id="crm-customer-drawer-title" className="truncate text-[18px] font-bold text-[#111110]">
+              {displayName}
+            </h2>
             <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[12px] text-[#1a1a1a]/45">
               <User2 className="h-3 w-3 shrink-0" />
               {contactPhone ? (

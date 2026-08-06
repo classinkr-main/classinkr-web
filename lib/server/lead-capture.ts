@@ -21,12 +21,6 @@ const VALID_SOURCES = new Set<LeadSource>([
   "newsletter",
   "meta_lead_ads",
 ])
-const WECOM_LEAD_SOURCES = new Set<LeadSource>([
-  "demo_modal",
-  "contact_page",
-  "meta_lead_ads",
-])
-
 // site_inflow 타임라인 이벤트 summary에 쓰는 유입 경로 한글 라벨.
 const SITE_INFLOW_SOURCE_LABELS = {
   demo_modal: "데모 신청",
@@ -475,7 +469,8 @@ export async function submitLeadCapture(
             currentPage: body.currentPage,
             referrer: body.referrer,
           },
-          channels: WECOM_LEAD_SOURCES.has(body.source) ? ["wecom_webhook"] : undefined,
+          // 개별 리드는 관리자 인앱에 즉시 남기되 WeCom은 10:10 일일 카드로 묶는다.
+          channels: [],
         })
       }
       const emitLeadCreatedNotificationSafely = async () => {

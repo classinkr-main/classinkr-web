@@ -322,10 +322,7 @@ export async function sendLeadDigestAlert(
       previousRangeStart: range.previousStart.toISOString(),
       previousRangeEnd: range.previousEnd.toISOString(),
     },
-    channels:
-      period === "weekly"
-        ? ["wecom_webhook", "wecom_cs_webhook"]
-        : ["wecom_webhook"],
+    channels: ["wecom_lead_report_webhook"],
   })
 
   return {

@@ -255,13 +255,13 @@ describe("submitLeadCapture site_inflow auto event", () => {
   })
 })
 
-describe("submitLeadCapture WeCom notification", () => {
+describe("submitLeadCapture notification", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.resetModules()
   })
 
-  it("defers a CONTACT notification to the existing WeCom room with inquiry details", async () => {
+  it("keeps the CONTACT in-app event but defers WeCom delivery to the morning digest", async () => {
     const { submitLeadCapture, saveLead, emitNotificationEvent } = await loadLeadCapture()
     const deferredTasks: Array<() => Promise<void>> = []
     saveLead.mockResolvedValue({ id: "lead-contact-wecom-1" })
@@ -286,7 +286,7 @@ describe("submitLeadCapture WeCom notification", () => {
     expect(emitNotificationEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "lead.created",
-        channels: ["wecom_webhook"],
+        channels: [],
         payload: expect.objectContaining({
           leadId: "lead-contact-wecom-1",
           source: "contact_page",

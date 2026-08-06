@@ -114,8 +114,64 @@ const SAVED_VIEW_FILTERS: Array<{
   { key: "expiring", label: "만료 임박", description: "만료 14일 이내(지난 것 포함)" },
 ]
 
+const PRIMARY_SAVED_VIEW_KEYS = new Set<SavedViewFilter>([
+  "my_owner",
+  "priority",
+  "new_leads",
+  "unanswered",
+  "hot_lead",
+  "upsell",
+  "needs_care",
+])
+const PRIMARY_SAVED_VIEW_FILTERS = SAVED_VIEW_FILTERS.filter((filter) => PRIMARY_SAVED_VIEW_KEYS.has(filter.key))
+const SECONDARY_SAVED_VIEW_FILTERS = SAVED_VIEW_FILTERS.filter((filter) => !PRIMARY_SAVED_VIEW_KEYS.has(filter.key))
+
 const CACHE_TTL_MS = 90_000
-const PAGE_LIMIT = 100
+// 데스크톱 한 화면에 100행을 붙이면 초기 DOM과 스크린리더 탐색 비용이 과도하다.
+// 50행 단위로 맞춰 필터/상세 전환 반응성을 우선한다.
+const PAGE_LIMIT = 50
+
+function SavedViewButton({
+  filter,
+  active,
+  disabled,
+  count,
+  currentOwnerCount,
+  onSelect,
+}: {
+  filter: (typeof SAVED_VIEW_FILTERS)[number]
+  active: boolean
+  disabled: boolean
+  count: number | undefined
+  currentOwnerCount: number
+  onSelect: (view: SavedViewFilter) => void
+}) {
+  const label =
+    filter.key === "my_owner"
+      ? `${filter.label}${currentOwnerCount ? ` ${currentOwnerCount}` : ""}`
+      : count != null
+        ? `${filter.label} ${count}`
+        : filter.label
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(filter.key)}
+      disabled={disabled}
+      aria-pressed={active}
+      title={disabled ? "현재 Admin 계정에 CRM 담당자 매핑이 없습니다." : filter.description}
+      className={`h-8 shrink-0 rounded-full border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
+        active
+          ? "border-[#084734] bg-[#084734] text-white"
+          : disabled
+            ? "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/28"
+            : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#D1FAE5] hover:bg-[#ECFDF5] hover:text-[#084734]"
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
 
 function rowToFlags(row: CrmUnifiedCustomerRow): CustomerFlag[] {
   return deriveCustomerFlags({
@@ -530,20 +586,18 @@ function CustomerSearchPanel({
       ) : null}
 
       {data?.sources.statuses.length ? (
-        <>
-          <details className="group mt-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] sm:hidden">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[12px] font-semibold text-[#111110]">
-              <span>
-                원천 상태 · 정상 {data.sources.statuses.filter((status) => status.ok && !status.partial).length}/
-                {data.sources.statuses.length}
-              </span>
-              <span className="text-[11px] font-medium text-[#1a1a1a]/40 group-open:hidden">펼치기</span>
-              <span className="hidden text-[11px] font-medium text-[#1a1a1a]/40 group-open:inline">접기</span>
-            </summary>
-            <CustomerSourceStatusGrid statuses={data.sources.statuses} className="border-t border-[#e8e8e4] p-2" />
-          </details>
-          <CustomerSourceStatusGrid statuses={data.sources.statuses} className="mt-3 hidden sm:grid" />
-        </>
+        <details className="group mt-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8]">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[12px] font-semibold text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]">
+            <span>
+              데이터 원천 · 정상 {data.sources.statuses.filter((status) => status.ok && !status.partial).length}/
+              {data.sources.statuses.length}
+              <span className="ml-2 font-medium text-[#1a1a1a]/40">운영 기준 DB와 동기화 참고자료</span>
+            </span>
+            <span className="text-[11px] font-medium text-[#1a1a1a]/40 group-open:hidden">상세 보기</span>
+            <span className="hidden text-[11px] font-medium text-[#1a1a1a]/40 group-open:inline">접기</span>
+          </summary>
+          <CustomerSourceStatusGrid statuses={data.sources.statuses} className="border-t border-[#e8e8e4] p-2" />
+        </details>
       ) : null}
     </section>
   )
@@ -879,8 +933,7 @@ export default function CrmUnifiedCustomersClient() {
   }, [persistOwner, syncViewParam])
 
   return (
-    <div className="min-h-screen bg-[#F6F5F4] px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
+    <div className="mx-auto max-w-7xl">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">
@@ -912,45 +965,43 @@ export default function CrmUnifiedCustomersClient() {
           </div>
         </div>
 
-        {/* 빠른 필터 칩 — 검색 섹션과 독립인 항상 노출 행 (칩 진입 시에도 유지). */}
-        <div
-          className="no-scrollbar mb-3 flex items-center gap-2 overflow-x-auto pb-1"
-          aria-label="빠른 고객 필터"
-        >
+        {/* 행동 빈도가 높은 보기만 1차 노출하고, 참조성 보기는 한 묶음으로 접는다. */}
+        <div className="mb-3 flex flex-wrap items-center gap-2" aria-label="빠른 고객 필터">
           <span className="inline-flex h-8 shrink-0 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
             <Filter className="h-3.5 w-3.5" />
             빠른 필터
           </span>
-          {SAVED_VIEW_FILTERS.map((filter) => {
-            const isActive = savedView === filter.key
-            const disabled = filter.key === "my_owner" && !currentOwner
-            const segmentCount = data?.summary.viewCounts?.[filter.key]
-            const label =
-              filter.key === "my_owner" && currentOwner
-                ? `${filter.label}${currentOwnerCount ? ` ${currentOwnerCount}` : ""}`
-                : segmentCount != null
-                  ? `${filter.label} ${segmentCount}`
-                  : filter.label
-            return (
-              <button
-                key={filter.key}
-                type="button"
-                onClick={() => selectSavedView(filter.key)}
-                disabled={disabled}
-                aria-pressed={isActive}
-                title={disabled ? "현재 Admin 계정에 CRM 담당자 매핑이 없습니다." : filter.description}
-                className={`h-8 shrink-0 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
-                  isActive
-                    ? "border-[#084734] bg-[#084734] text-white"
-                    : disabled
-                      ? "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/28"
-                      : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#D1FAE5] hover:bg-[#ECFDF5] hover:text-[#084734]"
-                }`}
-              >
-                {label}
-              </button>
-            )
-          })}
+          {PRIMARY_SAVED_VIEW_FILTERS.map((filter) => (
+            <SavedViewButton
+              key={filter.key}
+              filter={filter}
+              active={savedView === filter.key}
+              disabled={filter.key === "my_owner" && !currentOwner}
+              count={data?.summary.viewCounts?.[filter.key]}
+              currentOwnerCount={currentOwnerCount}
+              onSelect={selectSavedView}
+            />
+          ))}
+          <details className="group relative shrink-0">
+            <summary className="flex h-8 cursor-pointer list-none items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/58 transition-colors hover:bg-[#fafaf8] hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]">
+              추가 보기
+              <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+            </summary>
+            <div className="absolute right-0 top-10 z-30 flex w-[min(430px,calc(100vw-3rem))] flex-wrap gap-2 rounded-xl border border-[#e8e8e4] bg-white p-3 shadow-xl">
+              <p className="w-full text-[11px] font-semibold text-[#1a1a1a]/40">최근 진행·유입·만료 보기</p>
+              {SECONDARY_SAVED_VIEW_FILTERS.map((filter) => (
+                <SavedViewButton
+                  key={filter.key}
+                  filter={filter}
+                  active={savedView === filter.key}
+                  disabled={false}
+                  count={data?.summary.viewCounts?.[filter.key]}
+                  currentOwnerCount={currentOwnerCount}
+                  onSelect={selectSavedView}
+                />
+              ))}
+            </div>
+          </details>
         </div>
 
         {quickMode ? (
@@ -1306,7 +1357,6 @@ export default function CrmUnifiedCustomersClient() {
         <div className="mt-4">
           <Account360Lens />
         </div>
-      </div>
 
       {/* 열림 상태에서만 렌더 — 닫힘=null 렌더였던 기존과 동일 화면이면서, dynamic 청크를
           열 때만 내려받고 닫힌 첫 로드에 로딩 폴백이 새어 나오지 않는다. */}

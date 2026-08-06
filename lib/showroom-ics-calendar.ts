@@ -6,6 +6,7 @@
  * SHOWROOM_CALENDAR_ICS_URL은 절대 클라이언트로 노출되지 않는다.
  */
 import type { CalendarEvent } from "@/lib/calendar-data"
+import { normalizeAssigneeNames } from "@/lib/admin-calendar/people"
 
 const CACHE_TTL_MS = 5 * 60_000
 const MAX_EVENTS = 500
@@ -210,6 +211,7 @@ function mapVEvent(ev: VEvent): CalendarEvent | null {
 
   const createdAt = parseIcsTimestamp(ev.created)
   const updatedAt = parseIcsTimestamp(ev.lastModified ?? ev.created)
+  const attendees = normalizeAssigneeNames(ev.attendees)
 
   return {
     id: `showroom_${ev.uid.replace(/[^a-zA-Z0-9_-]/g, "_")}`,
@@ -220,7 +222,8 @@ function mapVEvent(ev: VEvent): CalendarEvent | null {
     endTime,
     type: "meeting",
     description: ev.description,
-    assignees: ev.attendees.length > 0 ? ev.attendees : undefined,
+    // ICS ATTENDEE 는 대개 이메일 원문이라 캐논 이름으로 눕힌다(사내 참석자에 한해 매칭).
+    assignees: attendees.length > 0 ? attendees : undefined,
     allDay: !start.time && !endTime,
     source: "showroom",
     sourceLabel: "쇼룸 예약",

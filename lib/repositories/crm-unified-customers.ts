@@ -591,6 +591,8 @@ export async function getCrmUnifiedCustomers(
       statusLabel: row.statusLabel,
       score: row.score,
       severity: row.score >= 85 ? "critical" : row.score >= 68 ? "high" : row.score >= 42 ? "medium" : "low",
+      lane: row.source === "lead" ? "sales" : "customer_care",
+      laneLabel: row.source === "lead" ? "신규·추가 매출" : "고객관리",
       bucket,
       bucketLabel: CRM_PRIORITY_BUCKET_LABELS[bucket],
       action: row.source === "lead" ? "follow_up_lead" : "watch_account",
@@ -618,7 +620,8 @@ export async function getCrmUnifiedCustomers(
     { total: 0, safe: 0, watch: 0, risk: 0 }
   )
 
-  const limit = clampInteger(options.limit, 100, 1, 200)
+  // 내부 일괄 매칭은 전체 고객 집합을 읽어야 한다. 외부 API 상한(200)은 라우트에서 별도로 유지한다.
+  const limit = clampInteger(options.limit, 100, 1, 2_000)
   const offset = clampInteger(options.offset, 0, 0, 100_000)
   // provisional 리드는 기본 뷰에 안 보이므로 담당자 카운트에서도 제외 — 배지·목록 정합.
   const owners = buildOwnerOptions(rows.filter((row) => !row.provisional))

@@ -42,12 +42,15 @@ import {
 
 const CACHE_TTL_MS = 30_000
 const PAGE_LIMIT = 50
+type ActivityScope = "work" | "all"
+const AUTOMATED_EVENT_SOURCES = new Set<SourceType>(["site_inflow", "external_crm", "sheet"])
 
 function listUrl(input: {
   query: string
   targetType: TargetType
   sourceType: SourceType
   sentiment: Sentiment
+  scope: ActivityScope
   offset: number
   targetId?: string
 }) {
@@ -56,6 +59,7 @@ function listUrl(input: {
   if (input.targetType !== "all") params.set("targetType", input.targetType)
   if (input.sourceType !== "all") params.set("sourceType", input.sourceType)
   if (input.sentiment !== "all") params.set("sentiment", input.sentiment)
+  if (input.scope === "work" && input.sourceType === "all") params.set("scope", "work")
   if (input.targetId?.trim()) params.set("targetId", input.targetId.trim())
   return `${EVENTS_URL}?${params.toString()}`
 }
@@ -105,6 +109,7 @@ function CrmActivityClientInner() {
   const [filterTarget, setFilterTarget] = useState<TargetType>("all")
   const [filterSource, setFilterSource] = useState<SourceType>("all")
   const [filterSentiment, setFilterSentiment] = useState<Sentiment>("all")
+  const [activityScope, setActivityScope] = useState<ActivityScope>("work")
   const [data, setData] = useState<CrmEventsResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -138,6 +143,7 @@ function CrmActivityClientInner() {
         targetType: filterTarget,
         sourceType: filterSource,
         sentiment: filterSentiment,
+        scope: activityScope,
         offset,
         targetId: focusTargetId,
       })
@@ -174,7 +180,7 @@ function CrmActivityClientInner() {
         }
       }
     },
-    [filterSentiment, filterSource, filterTarget, query, focusTargetId]
+    [activityScope, filterSentiment, filterSource, filterTarget, query, focusTargetId]
   )
 
   useEffect(() => {
@@ -245,6 +251,34 @@ function CrmActivityClientInner() {
           />
 
           <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#F6F5F4] p-1" role="group" aria-label="기록 범위">
+                {([
+                  { key: "work", label: "업무 기록" },
+                  { key: "all", label: "전체 이벤트" },
+                ] as const).map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => {
+                      setActivityScope(option.key)
+                      if (option.key === "work" && AUTOMATED_EVENT_SOURCES.has(filterSource)) setFilterSource("all")
+                    }}
+                    aria-pressed={activityScope === option.key}
+                    className={`h-8 rounded-md px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
+                      activityScope === option.key
+                        ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                        : "text-[#615D59] hover:text-[#111110]"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-[#1a1a1a]/42">
+                {activityScope === "work" ? "사람이 남긴 메모·통화·회의·일정을 우선 표시" : "유입·시트·외부 CRM 자동 이벤트 포함"}
+              </p>
+            </div>
             <div className="grid gap-3 lg:grid-cols-[minmax(200px,1fr)_auto_auto_auto] lg:items-center">
               <label className="flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3">
                 <Search className="h-4 w-4 text-[#1a1a1a]/35" />
@@ -252,6 +286,7 @@ function CrmActivityClientInner() {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="고객명, 요약, 담당자 검색"
+                  aria-label="CRM 기록 검색"
                   className="h-full min-w-0 flex-1 bg-transparent text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/30"
                 />
               </label>
@@ -276,7 +311,11 @@ function CrmActivityClientInner() {
                 <Filter className="h-3.5 w-3.5" />
                 <select
                   value={filterSource}
-                  onChange={(event) => setFilterSource(event.target.value as SourceType)}
+                  onChange={(event) => {
+                    const next = event.target.value as SourceType
+                    setFilterSource(next)
+                    if (AUTOMATED_EVENT_SOURCES.has(next)) setActivityScope("all")
+                  }}
                   className="h-full bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
                   aria-label="기록 종류 필터"
                 >
@@ -312,7 +351,9 @@ function CrmActivityClientInner() {
                 </summary>
                 <div className="mt-2 grid grid-cols-2 gap-2 lg:grid-cols-4">
                   <div className="rounded-xl bg-[#fafaf8] p-3">
-                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">총 기록</p>
+                    <p className="text-[11px] font-semibold text-[#1a1a1a]/35">
+                      {activityScope === "work" ? "업무 기록" : "전체 기록"}
+                    </p>
                     <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
                   </div>
                   <div className="rounded-xl bg-[#fafaf8] p-3">
@@ -447,7 +488,7 @@ function CrmActivityClientInner() {
               </div>
             ) : data && data.rows.length === 0 ? (
               <div className="rounded-2xl border border-[#e8e8e4] bg-white p-8 text-center text-[13px] text-[#1a1a1a]/40">
-                조건에 맞는 회의·녹음 기록이 없습니다.
+                조건에 맞는 {activityScope === "work" ? "업무 기록" : "이벤트"}이 없습니다.
               </div>
             ) : null}
 

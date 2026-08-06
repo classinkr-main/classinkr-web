@@ -13,6 +13,7 @@ import {
 export type CrmPrioritySource = "lead" | "neo_account" | "task"
 export type CrmPrioritySeverity = "critical" | "high" | "medium" | "low"
 export type CrmPriorityBucket = "today" | "renewal" | "stale_recovery" | "watch"
+export type CrmPriorityLane = "sales" | "renewal" | "customer_care"
 export type CrmPriorityAction =
   | "respond_lead"
   | "follow_up_lead"
@@ -32,6 +33,8 @@ export interface CrmPriorityItem {
   statusLabel: string
   score: number
   severity: CrmPrioritySeverity
+  lane: CrmPriorityLane
+  laneLabel: string
   bucket: CrmPriorityBucket
   bucketLabel: string
   action: CrmPriorityAction
@@ -59,6 +62,12 @@ export const CRM_PRIORITY_BUCKET_LABELS: Record<CrmPriorityBucket, string> = {
   renewal: "연장 관리",
   stale_recovery: "장기 회복",
   watch: "관찰",
+}
+
+export const CRM_PRIORITY_LANE_LABELS: Record<CrmPriorityLane, string> = {
+  sales: "신규·추가 매출",
+  renewal: "연장",
+  customer_care: "고객관리",
 }
 
 const BUCKET_SORT_RANK: Record<CrmPriorityBucket, number> = {
@@ -242,6 +251,8 @@ export function buildLeadPriorityItem(
     statusLabel: lead.status === "new" ? "신규 리드" : "접촉 중",
     score: finalScore,
     severity: severityFromScore(finalScore),
+    lane: "sales",
+    laneLabel: CRM_PRIORITY_LANE_LABELS.sales,
     bucket,
     bucketLabel: CRM_PRIORITY_BUCKET_LABELS[bucket],
     action,
@@ -269,8 +280,10 @@ export function buildNeoAccountPriorityItem(
   let score = 0
   let dueAt: string | null = null
   let bucket: CrmPriorityBucket = "watch"
+  let lane: CrmPriorityLane = "customer_care"
 
   if (expiryDays != null && expiryDays < 0) {
+    lane = "renewal"
     action = "recover_expired"
     const expiredDays = Math.abs(expiryDays)
     bucket = expiredDays > STALE_RECOVERY_EXPIRED_DAYS ? "stale_recovery" : "today"
@@ -291,6 +304,7 @@ export function buildNeoAccountPriorityItem(
     }
     dueAt = account.expireAt
   } else if (expiryDays != null && expiryDays <= 30) {
+    lane = "renewal"
     action = "renew_account"
     actionLabel = "연장 제안"
     bucket = expiryDays <= 7 ? "today" : "renewal"
@@ -327,6 +341,8 @@ export function buildNeoAccountPriorityItem(
   // 데모 하나만으로 작업대에 올린다.
   const demo = findDemoSignal(options?.demoIndex ?? EMPTY_DEMO_INDEX, account.name)
   if (demo) {
+    // 기존 고객의 데모는 단순 운영 신호가 아니라 추가 매출 기회로 본다.
+    lane = "sales"
     action = action ?? "watch_account"
     actionLabel = demo.phase === "recent" ? "데모 후속" : "데모"
     reason = demoSignalLabel(demo)
@@ -351,6 +367,8 @@ export function buildNeoAccountPriorityItem(
     statusLabel: "기존 고객",
     score: finalScore,
     severity: severityFromScore(finalScore),
+    lane,
+    laneLabel: CRM_PRIORITY_LANE_LABELS[lane],
     bucket,
     bucketLabel: CRM_PRIORITY_BUCKET_LABELS[bucket],
     action,
@@ -396,6 +414,14 @@ function taskHref(task: CrmTaskRecord) {
   return "/admin/crm/activity"
 }
 
+function taskLane(taskType: CrmTaskType): CrmPriorityLane {
+  if (taskType === "renewal") return "renewal"
+  if (taskType === "install" || taskType === "cs_checkin" || taskType === "data_fix") {
+    return "customer_care"
+  }
+  return "sales"
+}
+
 export function buildTaskPriorityItem(task: CrmTaskRecord, now = new Date()): CrmPriorityItem | null {
   if (task.status === "done" || task.status === "canceled") return null
 
@@ -434,6 +460,7 @@ export function buildTaskPriorityItem(task: CrmTaskRecord, now = new Date()): Cr
   }
 
   const taskLabel = TASK_TYPE_ACTION_LABELS[task.taskType]
+  const lane = taskLane(task.taskType)
   const finalScore = clampScore(score)
   return {
     id: `task:${task.id}`,
@@ -445,6 +472,8 @@ export function buildTaskPriorityItem(task: CrmTaskRecord, now = new Date()): Cr
     statusLabel: task.status === "snoozed" ? "미룬 할 일" : "할 일",
     score: finalScore,
     severity: severityFromScore(finalScore),
+    lane,
+    laneLabel: CRM_PRIORITY_LANE_LABELS[lane],
     bucket,
     bucketLabel: CRM_PRIORITY_BUCKET_LABELS[bucket],
     action: "do_task",

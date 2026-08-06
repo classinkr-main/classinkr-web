@@ -37,6 +37,14 @@ interface EmitNotificationEventInput {
   payload?: Record<string, unknown>
   recipients?: NotificationRecipientTarget[]
   channels?: NotificationChannel[]
+  /** 예약 리포트처럼 실제 외부 전달 성공이 완료 조건인 호출에서만 사용한다. */
+  requireSuccessfulDelivery?: boolean
+}
+
+interface NotificationDeliveryResult {
+  channel: Exclude<NotificationChannel, "in_app">
+  status: "sent" | "failed" | "skipped"
+  errorMessage?: string
 }
 
 function uniqueRecipients(recipients: NotificationRecipientTarget[]) {
@@ -173,14 +181,13 @@ function buildLeadDigestWecomCard(input: EmitNotificationEventInput) {
   const totalLeads = getPayloadValue(input, "totalLeads") ?? "0"
   const contactPageLeadCount = getPayloadValue(input, "contactPageLeadCount")
   const demoModalLeadCount = getPayloadValue(input, "demoModalLeadCount")
+  const metaLeadAdsLeadCount = getPayloadValue(input, "metaLeadAdsLeadCount")
   const channelTalkInquiryCount = getPayloadValue(input, "channelTalkInquiryCount")
   const chatbotHandoffCount = getPayloadValue(input, "chatbotHandoffCount")
   const chatbotHandoffSentCount = getPayloadValue(input, "chatbotHandoffSentCount")
   const delta = formatDigestDelta(getPayloadValue(input, "deltaLeads"))
   const unrespondedCount = getPayloadValue(input, "unrespondedCount")
   const convertedCount = getPayloadValue(input, "convertedCount")
-  const topSourceLabel = getPayloadValue(input, "topSourceLabel") ?? "없음"
-  const topSourceCount = getPayloadValue(input, "topSourceCount")
   const periodLabel = getPayloadValue(input, "periodLabel")
   const previousLabel = period === "monthly" ? "전월 대비" : "전주 대비"
   const handoffLabel = chatbotHandoffCount
@@ -214,6 +221,10 @@ function buildLeadDigestWecomCard(input: EmitNotificationEventInput) {
           value: countLabel(demoModalLeadCount),
         },
         {
+          keyname: "Meta 광고",
+          value: countLabel(metaLeadAdsLeadCount),
+        },
+        {
           keyname: "채널톡 문의",
           value: countLabel(channelTalkInquiryCount),
         },
@@ -224,12 +235,6 @@ function buildLeadDigestWecomCard(input: EmitNotificationEventInput) {
         {
           keyname: "전환",
           value: countLabel(convertedCount),
-        },
-        {
-          keyname: "주요 경로",
-          value: topSourceCount
-            ? `${topSourceLabel} (${countLabel(topSourceCount)})`
-            : topSourceLabel,
         },
       ],
       jump_list: [
@@ -243,6 +248,67 @@ function buildLeadDigestWecomCard(input: EmitNotificationEventInput) {
         type: 1,
         url: routeUrl,
       },
+    },
+  }
+}
+
+function buildLeadMorningWecomCard(input: EmitNotificationEventInput) {
+  const reportType = getPayloadValue(input, "reportType") === "meta" ? "meta" : "homepage"
+  const routeUrl = formatRouteUrl(input.routeUrl) ?? "https://classin.co.kr/admin/crm"
+  const totalLeads = getPayloadValue(input, "totalLeads") ?? "0"
+  const common = {
+    card_type: "text_notice",
+    source: {
+      desc: reportType === "meta" ? "Classin Marketing" : "Classin CRM",
+      desc_color: 3,
+    },
+    main_title: {
+      title: input.title,
+      desc: getPayloadValue(input, "periodLabel"),
+    },
+    emphasis_content: {
+      title: totalLeads,
+      desc: "전체 접수",
+    },
+    jump_list: [
+      {
+        type: 1,
+        title: "리드 보드 보기",
+        url: routeUrl,
+      },
+    ],
+    card_action: {
+      type: 1,
+      url: routeUrl,
+    },
+  }
+
+  const metaRows = [
+    { keyname: "미응대", value: countLabel(getPayloadValue(input, "unrespondedCount")) },
+    { keyname: "상담 진행", value: countLabel(getPayloadValue(input, "contactedCount")) },
+    { keyname: "전환", value: countLabel(getPayloadValue(input, "convertedCount")) },
+    {
+      keyname: "주요 캠페인",
+      value: getPayloadValue(input, "topCampaignLabel") ?? "없음",
+    },
+  ]
+
+  const homepageRows = [
+    { keyname: "홈페이지 문의", value: countLabel(getPayloadValue(input, "contactPageLeadCount")) },
+    { keyname: "데모 신청", value: countLabel(getPayloadValue(input, "demoModalLeadCount")) },
+    {
+      keyname: "Meta 광고 경유",
+      value: countLabel(getPayloadValue(input, "metaAttributedWebsiteLeadCount")),
+    },
+    { keyname: "미응대", value: countLabel(getPayloadValue(input, "unrespondedCount")) },
+    { keyname: "전환", value: countLabel(getPayloadValue(input, "convertedCount")) },
+  ]
+
+  return {
+    msgtype: "template_card",
+    template_card: {
+      ...common,
+      horizontal_content_list: reportType === "meta" ? metaRows : homepageRows,
     },
   }
 }
@@ -336,6 +402,13 @@ function buildCsNoticeWecomText(input: EmitNotificationEventInput) {
 
 function buildWecomPayload(input: EmitNotificationEventInput) {
   if (
+    input.eventType === "lead.digest.daily.meta" ||
+    input.eventType === "lead.digest.daily.homepage"
+  ) {
+    return buildLeadMorningWecomCard(input)
+  }
+
+  if (
     input.eventType === "lead.digest.weekly" ||
     input.eventType === "lead.digest.monthly"
   ) {
@@ -391,7 +464,11 @@ function buildExternalPayload(
   channel: Exclude<NotificationChannel, "in_app">,
   input: EmitNotificationEventInput
 ) {
-  if (channel === "wecom_webhook" || channel === "wecom_cs_webhook") {
+  if (
+    channel === "wecom_webhook" ||
+    channel === "wecom_cs_webhook" ||
+    channel === "wecom_lead_report_webhook"
+  ) {
     return buildWecomPayload(input)
   }
 
@@ -415,13 +492,20 @@ function getWebhookUrl(
   settings: Awaited<ReturnType<typeof getResolvedSettings>>
 ) {
   if (channel === "wecom_webhook") {
-    return severity === "critical"
-      ? settings.wecomCriticalWebhookUrl ?? settings.wecomOpsWebhookUrl
+    if (severity === "critical") {
+      return settings.wecomCriticalWebhookUrl ?? settings.wecomOpsWebhookUrl
+    }
+    return settings.wecomOpsWebhookEnabled === false
+      ? undefined
       : settings.wecomOpsWebhookUrl ?? settings.wecomCriticalWebhookUrl
   }
 
   if (channel === "wecom_cs_webhook") {
     return settings.wecomCsWebhookUrl
+  }
+
+  if (channel === "wecom_lead_report_webhook") {
+    return settings.wecomLeadReportWebhookUrl
   }
 
   if (channel === "channel_talk_webhook") {
@@ -454,7 +538,11 @@ async function deliverEmailChannel(
       requestPayload: { title: input.title },
       errorMessage: "Notification digest email list is empty.",
     })
-    return
+    return {
+      channel: "email",
+      status: "skipped",
+      errorMessage: "Notification digest email list is empty.",
+    } satisfies NotificationDeliveryResult
   }
 
   const html = wrapNotificationHtml(input.title, input.message, input.routeUrl)
@@ -469,23 +557,35 @@ async function deliverEmailChannel(
       routeUrl: input.routeUrl,
     })
 
+    const status = result.failed === recipients.length ? "failed" : "sent"
     await createDeliveryLog({
       eventId,
       channel: "email",
-      status: result.failed === recipients.length ? "failed" : "sent",
+      status,
       requestPayload: { to: recipients, provider: result.provider },
       responsePayload: { sent: result.sent, failed: result.failed },
       ...(result.sent > 0 ? { deliveredAt: new Date().toISOString() } : {}),
       ...(result.errors?.length ? { errorMessage: result.errors.join("; ") } : {}),
     })
+    return {
+      channel: "email",
+      status,
+      ...(result.errors?.length ? { errorMessage: result.errors.join("; ") } : {}),
+    } satisfies NotificationDeliveryResult
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
     await createDeliveryLog({
       eventId,
       channel: "email",
       status: "failed",
       requestPayload: { to: recipients },
-      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      errorMessage,
     })
+    return {
+      channel: "email",
+      status: "failed",
+      errorMessage,
+    } satisfies NotificationDeliveryResult
   }
 }
 
@@ -507,7 +607,11 @@ async function deliverWebhookChannel(
       requestPayload: payload,
       errorMessage: "Notification channel is not configured.",
     })
-    return
+    return {
+      channel,
+      status: "skipped",
+      errorMessage: "Notification channel is not configured.",
+    } satisfies NotificationDeliveryResult
   }
 
   try {
@@ -526,7 +630,11 @@ async function deliverWebhookChannel(
         responsePayload,
         errorMessage: `HTTP ${response.status}`,
       })
-      return
+      return {
+        channel,
+        status: "failed",
+        errorMessage: `HTTP ${response.status}`,
+      } satisfies NotificationDeliveryResult
     }
 
     await createDeliveryLog({
@@ -537,14 +645,21 @@ async function deliverWebhookChannel(
       responsePayload,
       deliveredAt: new Date().toISOString(),
     })
+    return { channel, status: "sent" } satisfies NotificationDeliveryResult
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
     await createDeliveryLog({
       eventId,
       channel,
       status: "failed",
       requestPayload: payload,
-      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      errorMessage,
     })
+    return {
+      channel,
+      status: "failed",
+      errorMessage,
+    } satisfies NotificationDeliveryResult
   }
 }
 
@@ -602,7 +717,7 @@ export async function emitNotificationEvent(input: EmitNotificationEventInput) {
       channel !== "in_app"
   )
 
-  await Promise.all(
+  const deliveryResults = await Promise.all(
     channels.map((channel) =>
       channel === "email"
         ? deliverEmailChannel(input, String(event.id))
@@ -610,5 +725,17 @@ export async function emitNotificationEvent(input: EmitNotificationEventInput) {
     )
   )
 
-  return event
+  const unsuccessful = deliveryResults.filter((result) => result.status !== "sent")
+  if (input.requireSuccessfulDelivery && unsuccessful.length > 0) {
+    throw new Error(
+      unsuccessful
+        .map(
+          (result) =>
+            `${result.channel}: ${result.errorMessage ?? result.status}`
+        )
+        .join("; ")
+    )
+  }
+
+  return { ...event, deliveryResults }
 }

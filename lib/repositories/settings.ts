@@ -54,12 +54,15 @@ function publicSettings(settings: SiteSettings): SiteSettings {
     emailWebhookUrl: "",
     wecomOpsWebhookUrl: "",
     wecomCsWebhookUrl: "",
+    wecomLeadReportWebhookUrl: "",
     wecomCriticalWebhookUrl: "",
     kakaoAlimtalkWebhookUrl: "",
   }
 }
 
 function mergeResolvedSettings(settings: SiteSettings): SiteSettings {
+  const wecomOpsWebhookEnabled = settings.wecomOpsWebhookEnabled !== false
+
   return {
     ...DEFAULT_SITE_SETTINGS,
     ...settings,
@@ -75,12 +78,17 @@ function mergeResolvedSettings(settings: SiteSettings): SiteSettings {
     emailWebhookUrl:
       normalizeOptional(settings.emailWebhookUrl) ??
       normalizeOptional(process.env.EMAIL_WEBHOOK_URL),
-    wecomOpsWebhookUrl:
-      normalizeOptional(settings.wecomOpsWebhookUrl) ??
-      normalizeOptional(process.env.WECOM_OPS_WEBHOOK_URL),
+    wecomOpsWebhookEnabled,
+    wecomOpsWebhookUrl: wecomOpsWebhookEnabled
+      ? normalizeOptional(settings.wecomOpsWebhookUrl) ??
+        normalizeOptional(process.env.WECOM_OPS_WEBHOOK_URL)
+      : undefined,
     wecomCsWebhookUrl:
       normalizeOptional(settings.wecomCsWebhookUrl) ??
       normalizeOptional(process.env.WECOM_CS_WEBHOOK_URL),
+    wecomLeadReportWebhookUrl:
+      normalizeOptional(settings.wecomLeadReportWebhookUrl) ??
+      normalizeOptional(process.env.WECOM_LEAD_REPORT_WEBHOOK_URL),
     wecomCriticalWebhookUrl:
       normalizeOptional(settings.wecomCriticalWebhookUrl) ??
       normalizeOptional(process.env.WECOM_CRITICAL_WEBHOOK_URL),
@@ -169,8 +177,13 @@ export async function updateSettings(
       normalizeOptional(patch.emailWebhookUrl) ?? current.emailWebhookUrl,
     wecomOpsWebhookUrl:
       normalizeOptional(patch.wecomOpsWebhookUrl) ?? current.wecomOpsWebhookUrl,
+    wecomOpsWebhookEnabled:
+      patch.wecomOpsWebhookEnabled ?? current.wecomOpsWebhookEnabled,
     wecomCsWebhookUrl:
       normalizeOptional(patch.wecomCsWebhookUrl) ?? current.wecomCsWebhookUrl,
+    wecomLeadReportWebhookUrl:
+      normalizeOptional(patch.wecomLeadReportWebhookUrl) ??
+      current.wecomLeadReportWebhookUrl,
     wecomCriticalWebhookUrl:
       normalizeOptional(patch.wecomCriticalWebhookUrl) ??
       current.wecomCriticalWebhookUrl,
@@ -203,7 +216,9 @@ export async function updateSettings(
         channel_talk_webhook_url: next.channelTalkWebhookUrl ?? null,
         email_webhook_url: next.emailWebhookUrl ?? null,
         wecom_ops_webhook_url: next.wecomOpsWebhookUrl ?? null,
+        wecom_ops_webhook_enabled: next.wecomOpsWebhookEnabled,
         wecom_cs_webhook_url: next.wecomCsWebhookUrl ?? null,
+        wecom_lead_report_webhook_url: next.wecomLeadReportWebhookUrl ?? null,
         wecom_critical_webhook_url: next.wecomCriticalWebhookUrl ?? null,
         kakao_alimtalk_webhook_url: next.kakaoAlimtalkWebhookUrl ?? null,
         notification_digest_email_list: next.notificationDigestEmailList,
@@ -243,7 +258,10 @@ function rowToLegacy(row: any): SiteSettings {
     channelTalkWebhookUrl: row.channel_talk_webhook_url ?? undefined,
     emailWebhookUrl: row.email_webhook_url ?? undefined,
     wecomOpsWebhookUrl: row.wecom_ops_webhook_url ?? undefined,
+    wecomOpsWebhookEnabled: row.wecom_ops_webhook_enabled !== false,
     wecomCsWebhookUrl: row.wecom_cs_webhook_url ?? undefined,
+    wecomLeadReportWebhookUrl:
+      row.wecom_lead_report_webhook_url ?? undefined,
     wecomCriticalWebhookUrl: row.wecom_critical_webhook_url ?? undefined,
     kakaoAlimtalkWebhookUrl: row.kakao_alimtalk_webhook_url ?? undefined,
     notificationDigestEmailList: normalizeStringArray(
