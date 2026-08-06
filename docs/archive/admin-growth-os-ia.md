@@ -1,5 +1,7 @@
 # Admin Growth OS IA
 
+> 상태: 역사 기록. 현재 Admin 기준은 `docs/active/admin-guidance-map.md`에서 시작한다.
+
 기준 시점: 2026-03-20  
 문서 목적: `Classin Home`의 관리자 페이지를 단순 CMS가 아니라 "콘텐츠 + 리드 + 캠페인 + 사이트 전환"을 통합 운영하는 `Growth OS`로 설계한다.  
 적용 범위: 정보구조, 화면 구조, 운영 흐름, MVP 우선순위

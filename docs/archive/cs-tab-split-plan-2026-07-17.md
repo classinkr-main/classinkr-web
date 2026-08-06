@@ -1,5 +1,7 @@
 # CS 탭 외부/내부 이원화 (A안 얇은 대시보드) — 설계·구현 계획
 
+> 상태: 역사 기록. 현재 CS 정보구조는 `docs/active/cs-admin-console-ia-2026-07-27.md`를 따른다.
+
 > **For agentic workers:** 독립 worktree 실행. 계약 변경 금지. 한국어 conventional commit, push 금지.
 
 **Goal:** CS 섹션을 외부(공개 챗봇 운영)/내부(코파일럿)/공유 큐 3면으로 재편 — `/admin/chatbot`을 얇은 외부 운영 대시보드로 재건하고 nav를 재분리한다. 기능 이동 없음(A안): 기존 API·패널 재사용 + 링크 허브.

@@ -8,7 +8,7 @@
 
 - [quote-lifecycle-execution-plan.md](./quote-lifecycle-execution-plan.md)
 - [quick-quote-builder-plan.md](./quick-quote-builder-plan.md)
-- [repository-audit-2026-04-15.md](./repository-audit-2026-04-15.md)
+- [repository-audit-2026-04-15.md](../archive/repository-audit-2026-04-15.md) — 역사 기록
 
 관련 소스:
 
@@ -979,4 +979,3 @@ Only `amountKrw` is re-verified. A race between two prepare calls could result i
 - RLS missing on 3 financial tables
 - No rate limiting on validate endpoints
 - Migration atomicity gap
-

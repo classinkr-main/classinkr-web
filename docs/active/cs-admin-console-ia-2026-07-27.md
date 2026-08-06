@@ -52,7 +52,7 @@ docs를 1240으로 묶어도 문서 테이블의 가로 스크롤은 사라지�
 
 | 메뉴 | URL | 아이콘 | 실체 |
 |---|---|---|---|
-| 대시보드 | `/admin/chatbot` | Bot | 운영 지표 6카드 (품질 평가·알파 준비도는 이관됨) |
+| 대시보드 | `/admin/chatbot` | Bot | **현재 CS 운영 대시보드**. 운영 지표 6카드 (품질 평가·알파 준비도는 이관됨) |
 | 상담 Inbox | `/admin/channel-talk` | MessageSquare | 채널톡 상담 목록·유형 분포·응답 추이·FAQ 후보 |
 | 미해결 큐 | `/admin/docs?tab=gaps` | Search | 보강 큐 — 문서 없는 질문 + 결과 없는 검색어 |
 | AI 품질 검수 | `/admin/docs?tab=quality` | BadgeCheck **(신설)** | 품질 평가 + 알파 준비도 — 중복 2벌 통합 |
@@ -99,7 +99,8 @@ docs를 1240으로 묶어도 문서 테이블의 가로 스크롤은 사라지�
 
 ## 3. 왜 이 골격이 성립하는가
 
-10개 메뉴가 실제로는 **3개 라우트**에 얹힌다.
+10개 메뉴가 실제로는 **4개 라우트**에 얹힌다. `/admin/chatbot`은 리다이렉트 스텁이 아니라
+운영 지표를 직접 렌더하는 CS 운영 대시보드다.
 
 - `/admin/chatbot` — 대시보드
 - `/admin/channel-talk` — 상담 Inbox
@@ -124,6 +125,9 @@ URL이 그대로이므로 [AdminSidebar](../../components/admin/AdminSidebar.tsx
 
 `CsConsoleNav`가 메뉴 정의의 단일 진실 원천이다. 항목별로 `roles`를 들고
 권한 미달 항목은 렌더하지 않는다 — 채널톡만 `STAFF_ADMIN`이고 나머지는 `STAFF_EDITOR`다.
+
+이 `roles` 필터는 콘솔 메뉴 가시성을 정리하는 UX 규칙이다. URL 직접 진입이나 데이터 접근을 막는
+보안 경계로 간주하지 않으며, 실제 읽기·쓰기는 각 API의 관리자 가드와 필요한 기능 권한에서 강제한다.
 
 ## 5. URL 규약
 
@@ -373,7 +377,7 @@ CS 형제 화면으로 돌아갈 수 없다.
 
 ## 11. 선행 계약 처리
 
-[CS 탭 외부/내부 이원화 계획](cs-tab-split-plan-2026-07-17.md)이 현행 nav 구조의 근거 문서이며 계약 1~4를 명문화한다.
+[CS 탭 외부/내부 이원화 계획](../archive/cs-tab-split-plan-2026-07-17.md)이 현행 nav 구조의 역사적 근거이며 계약 1~4를 명문화한다.
 
 | 계약 | 처리 |
 |---|---|
@@ -386,6 +390,7 @@ CS 형제 화면으로 돌아갈 수 없다.
 ## 12. 검증
 
 ```bash
+npm run typecheck
 npx eslint app components lib --max-warnings=0
 npm run build
 ```
@@ -410,45 +415,40 @@ npx vitest run tests/admin/sidebar-docs-gaps.test.ts tests/admin/command-palette
 
 [어드민 탭 재구성 스펙](admin-tab-restructure-2026-07-29.md)이 사이드바를 프리셋 기반
 `(role, preset, overrides) → placement` 모델로 바꾼다. 그 §5.2가 `CS 콘솔`(`/admin/chatbot`)을
-`MOON_ONLY`(super 외 전원 차단)로, `가이드 문서`(`/admin/docs`)를 `OPEN`(전 프리셋 접근) +
-`staff` 프리셋 상시로 분류한다. 그쪽 구현이 들어올 때 이 콘솔이 걸림돌이 되지 않도록 미리 맞춘 것과,
-**그쪽 구현자가 갈아끼워야 할 지점**을 여기 적는다.
+최고 관리자 전용(super 외 기본 차단)으로, `가이드 문서`(`/admin/docs`)를 `OPEN`(전 프리셋 접근) +
+`staff` 프리셋 상시로 분류한다. 사이드바 프리셋과 콘솔 내부 메뉴 필터는 현재 완전히 같은 축이
+아니므로 아래 경계를 명시한다.
 
-### 14.1 지금 맞춘 것
+### 14.1 현재 맞춰진 것
 
 | # | 무엇 | 어디 |
 |---|---|---|
 | A | 가시성 판정을 함수 하나로 모음 — 렌더가 `item.roles`를 직접 읽지 않는다 | [`isCsConsoleItemVisible`](../../components/admin/cs/CsConsoleNav.tsx) |
 | B | ⌘K 자식 커맨드 2개(`상담 Inbox`·`미해결 큐`)의 숙주를 `/admin/chatbot` → `/admin/docs`로 이관 | [`PALETTE_CHILD_COMMANDS`](../../components/admin/AdminCommandPalette.tsx) |
 
-**B의 근거.** 자식 커맨드는 부모 nav 항목이 `ADMIN_COMMANDS`에 살아남을 때만 방출된다
-(`ADMIN_NAV.filter(...).flatMap(...)`). 팔레트가 접근 필터를 갖는 순간 `MOON_ONLY`인
-`/admin/chatbot` 밑의 자식은 비-super 계정에서 통째로 사라진다 — 그쪽 §10이 정확히 이
-필터링(`cs` 프리셋 계정에서 특정 탭이 ⌘K에도 안 나오는가)을 검증 기준으로 잡고 있다.
-`/admin/docs`는 `OPEN`이라 어떤 프리셋에서도 살아남는다. 두 항목의 `section`이 같아(`cs`)
-그룹 라벨(`고객 지원`)은 이관 전후로 동일하고, [command-palette 테스트](../../tests/admin/command-palette.test.ts)의
-그룹 고정도 그대로 통과한다.
+**B의 근거.** 자식 커맨드는 부모 nav 항목에서 파생된다. `상담 Inbox`와 `미해결 큐`는
+모든 프리셋에 열린 `/admin/docs`를 숙주로 사용해 CS 운영 대시보드의 가시성에 종속되지 않는다.
+두 항목의 `section`이 같아(`cs`) 그룹 라벨(`고객 지원`)도 유지된다.
 
-### 14.2 `대시보드` 항목을 지금 super 전용으로 좁히지 않는 이유
+### 14.2 콘솔 메뉴 가시성의 현재 경계
 
-콘솔의 `대시보드`는 `/admin/chatbot`을 가리키면서 `STAFF_EDITOR + BRANCH`에 보인다.
-그쪽 `MOON_ONLY`와 어긋나 보이지만, **지금 좁히는 것이 오답이다.**
+콘솔의 `대시보드`는 `/admin/chatbot`을 가리키며 `STAFF_EDITOR + BRANCH` 역할 필터를 사용한다.
+반면 사이드바와 `app/admin/layout.tsx`의 업무 표면 가드는 `nav_preset`·`nav_overrides`를 적용한다.
+따라서 비-super 사용자에게 콘솔 메뉴가 보이더라도 직접 진입 시 업무 표면 가드에서 막힐 수 있다.
+이는 현재 알려진 UX 정합성 갭이다.
 
-1. 그쪽 §5.3-1이 `nav_preset` NULL이면 기존 `roles` 동작을 유지하도록 못 박았고,
-   배포 시점에는 전원 NULL이다(§8 롤아웃 1단계). 지금 좁히면 그쪽 모듈이 존재하기도 전에
-   ADMIN·EDITOR·BRANCH 계정에서 항목이 사라져 그쪽 P4("기본값은 무변화")를 먼저 깬다.
-2. 롤 배열로는 그 모델을 표현할 수 없다. `MOON_ONLY`는 무조건적 super 전용이 아니라
-   §5.3-3의 `nav_overrides`가 비-super에게도 열어줄 수 있는 축이다. `["SUPER_ADMIN"]`으로
-   굳히면 오버라이드로 부여받은 사람을 잘못 막는다 — 양방향으로 틀린다.
+역할 배열을 `["SUPER_ADMIN"]`으로 고정하는 것은 해법이 아니다. 사람별 오버라이드로
+`/admin/chatbot`을 연 사용자를 다시 막기 때문이다. 통합할 때는 `isCsConsoleItemVisible`이
+역할·프리셋·오버라이드를 함께 받아 `resolveNavPlacement` 결과를 사용해야 한다.
 
-그래서 판정을 §14.1-A의 함수 하나로 모으고, 좁히는 일은 그쪽 모듈이 들어오는 시점에
-그 함수 본문 교체로 한 번에 처리한다.
+이 가시성은 보안 경계가 아니다. 실제 데이터·동작 권한은 각 API의 관리자 가드와 필요한
+`capabilities` 검사에서 강제한다.
 
-### 14.3 그쪽 구현자가 갈아끼울 것 — 한 곳
+### 14.3 정합성 갭을 닫을 지점
 
-`components/admin/admin-nav-access.ts`가 생기면
-[`isCsConsoleItemVisible`](../../components/admin/cs/CsConsoleNav.tsx) **본문만** 바꾼다.
-호출부(`visibleItems`)는 건드리지 않는다.
+[`isCsConsoleItemVisible`](../../components/admin/cs/CsConsoleNav.tsx)은 현재 role만 받는다.
+이 함수와 `CsConsoleNavProps`에 `preset`·`overrides`를 전달하고, href의 쿼리를 제거한 뒤
+`resolveNavPlacement`를 호출하는 것이 정합성 갭을 닫는 변경 지점이다.
 
 ```ts
 import { resolveNavPlacement } from "../admin-nav-access"
@@ -458,41 +458,23 @@ import { resolveNavPlacement } from "../admin-nav-access"
 resolveNavPlacement(item.href.split("?")[0], { role, preset, overrides }) !== "deny"
 ```
 
-`preset`·`overrides`를 넘기려면 `CsConsoleNavProps`에 두 값을 추가해야 한다. 현재 `role`은
-prop이 없으면 `sessionStorage("admin_role")`에서 읽는 폴백을 쓰는데, 그쪽 Task 4가
-세션에 nav 접근 정보를 싣는다면 같은 소스에서 함께 읽는 것이 자연스럽다 —
-콘솔을 붙이는 4개 페이지가 전부 서버 컴포넌트여서 prop 배선이 그만큼 늘어난다.
+현재 `role`은 prop이 없으면 `sessionStorage("admin_role")`에서 읽는다. `admin_nav_preset`과
+`admin_nav_overrides`도 같은 세션 소스에 있으므로, 서버 페이지별 prop 배선을 늘리지 않고 같은 방식으로
+읽을 수 있다. 이 변경 전까지는 §14.2의 UX 갭을 현재 동작으로 간주한다.
 
-### 14.4 교체 후에도 외부 축이 살아 있다는 근거 (코드 확인)
+### 14.4 외부 축 도달성
 
-`대시보드`가 비-super에게서 빠져도 콘솔 자체는 도달 가능하다.
+`대시보드`가 비-super에게서 빠져도 콘솔의 나머지 외부 축은 도달 가능하다.
 
 - `CsConsoleNav`는 4개 화면이 직접 불러 쓴다(§4) — `/admin/chatbot`, `/admin/channel-talk`,
   [`/admin/docs`](../../app/admin/docs/page.tsx), `/admin/cs-chatbot`.
-- `/admin/docs`는 그쪽 `OPEN` + `staff` 프리셋 상시라 **모든 프리셋에서 상시 노출**이고,
+- `/admin/docs`는 `OPEN` + `staff` 프리셋 상시라 **모든 프리셋에서 상시 노출**이고,
   그 화면이 콘솔 내비를 렌더하므로 거기서 형제 메뉴 전부로 이동할 수 있다.
-- 그쪽 Task 6의 라우트 가드는 `ADMIN_NAV` href 중 최장 일치를 골라 `deny`면 막는다.
+- `app/admin/layout.tsx`의 업무 표면 가드는 `ADMIN_NAV` href 중 최장 일치를 골라 `deny`면 막는다.
   `/admin/docs`는 `OPEN`이라 걸리지 않는다. `/admin/channel-talk`은 §2 재구성으로
   `ADMIN_NAV`에서 빠져 있어 일치 대상이 없고, 따라서 가드가 `false`로 통과시킨다.
 - `/admin/cs-chatbot`(내부 축 전체)은 `OPEN`이고 `cs` 프리셋의 상시다.
 
-즉 비-super가 잃는 것은 `/admin/chatbot` 화면 하나 — §7 중복 단일화 이후 그 화면에 남은 것은
+비-super에게 `/admin/chatbot`이 차단되더라도 그 화면에 남은 것은
 운영 지표 6카드뿐이고, 품질 평가·알파 준비도는 이미 `?tab=quality`로 옮겨져 `OPEN` 쪽에 있다.
 기능 손실이 아니라 지표 대시보드 1개의 접근 축소다.
-
-### 14.5 인접 파일에서 확인한 것
-
-- **`normalizeAdminRole` 맞물림 — 이미 맞다.** 그쪽 계획이
-  `import { normalizeAdminRole } from "@/components/admin/admin-nav"`로 임포트하는데,
-  이 함수는 P0에서 `AdminSidebar`의 private 복사본을 nav SSOT로 올리며 export된 상태다
-  (사이드바·콘솔 내비가 같은 정규화를 공유). 그쪽 코드가 적힌 그대로 해석된다.
-- **`admin-nav.ts` 충돌 여지 — 있다(§14.6).** 이 문서의 P0가 cs 섹션을 5 → 3항목으로 줄여
-  같은 블록을 만져 놨다.
-
-### 14.6 그쪽 구현 시 깨질 것 (여기서 고치지 않는다 — 그쪽 몫)
-
-| # | 무엇 | 처방 |
-|---|---|---|
-| 1 | 그쪽 Step 3b가 `/admin/cs-chatbot`을 `/admin/docs` 위로 올리면 [sidebar-docs-gaps 테스트](../../tests/admin/sidebar-docs-gaps.test.ts)의 cs 섹션 순서 고정 3줄(`href`·`label`·`icon` 배열)이 **실패한다** | 그 3줄의 기대 배열을 새 순서로 갱신 |
-| 2 | 그쪽 Task 1이 `/admin/events`를 `ADMIN_NAV`에서 지우면 `PALETTE_CHILD_COMMANDS["/admin/events"]`의 `새 행사 등록`(`/admin/events/new`)이 고아가 되어 ⌘K에서 사라진다 (§14.1-B와 같은 메커니즘, 원인만 다름) | 숙주를 `/admin/calendar`로 옮긴다 — 공개 행사를 흡수하는 항목이라 어휘도 맞는다 |
-| 3 | 그쪽 계획의 Architecture 문장은 "사이드바·커맨드 팔레트·권한 설정 미리보기가 같은 함수를 쓴다"이고 §10이 ⌘K 필터링을 검증 기준으로 잡았지만, **14개 Task 어디에도 `AdminCommandPalette.tsx` 수정이 없다**(수정 파일 목록에도 없음). 현재 `ADMIN_COMMANDS`는 모듈 상수라 롤 필터가 전혀 없다 | 팔레트를 `resolveNavAccess` 기반으로 바꾸는 Task 추가. 이때 `ADMIN_NAV`에 없는 자식 href(`/admin/channel-talk` 등)는 placement 조회 대상이 없으므로 **부모 기준으로 필터**해야 한다 — href 기준으로 필터하면 자식이 전부 탈락한다 |

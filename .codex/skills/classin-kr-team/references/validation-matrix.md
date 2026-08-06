@@ -15,6 +15,7 @@
 ## 완료 게이트
 
 ```bash
+npm run typecheck
 npx eslint app components lib --max-warnings=0
 npm run build
 ```

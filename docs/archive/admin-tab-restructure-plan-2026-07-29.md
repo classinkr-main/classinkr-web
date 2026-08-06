@@ -1,6 +1,6 @@
 # 어드민 탭 재구성 구현 계획 (2026-07-29)
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> 상태: 역사 기록. 현재 탭 기준은 `docs/active/admin-tab-restructure-2026-07-29.md`와 실제 코드다.
 
 **Goal:** 어드민 사이드바 21탭을 사람별 상시 5±2개 + 하단 "기타" 접힘 그룹으로 재구성하고, 슈퍼 관리자가 탭 접근 권한을 UI에서 배정할 수 있게 한다.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16 App Router · React 19 · TypeScript · Supabase · Vitest (`npm test` = `vitest run --dir tests`)
 
-**스펙:** [admin-tab-restructure-2026-07-29.md](admin-tab-restructure-2026-07-29.md)
+**스펙:** [admin-tab-restructure-2026-07-29.md](../active/admin-tab-restructure-2026-07-29.md)
 
 ---
 

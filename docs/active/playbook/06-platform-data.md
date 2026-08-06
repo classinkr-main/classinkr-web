@@ -1,97 +1,86 @@
-# 파트 가이드 — 플랫폼 & 데이터 인프라 (Platform / Data)
+# 파트 가이드 — 플랫폼 & 데이터 인프라
 
-> 담당 에이전트: `.claude/agents/platform-data.md` · 기준 시점: 2026-06-23
-> 변경 검증: `npx eslint app components lib --max-warnings=0` + `npm run build`
+> 담당 에이전트: `.claude/agents/platform-data.md`
 
-## 1. 파트 한 줄 정의
+## 1. 책임 범위
 
-다른 모든 파트가 올라가는 **공유 데이터/플랫폼 기반층** — Supabase(service-role admin vs SSR partner 클라이언트 분리), `supabase/migrations/` 마이그레이션 규율, Portal V2 API + 통합 인증/인가(`portal-context` → `portal-authorize`), 소프트웨어 결제 백엔드(Toss), Vercel Cron 자동화, 알림 파이프라인, OAuth/identity, `data/*.json` ↔ Supabase 듀얼모드 저장소, 그리고 검증 게이트.
+모든 도메인이 공유하는 Supabase 클라이언트와 마이그레이션 기반, Portal V2 인증/인가, 결제 기반, cron·웹훅·알림·OAuth/identity, 공용 검증 설정을 소유한다.
 
-## 2. 핵심 디렉토리/파일 맵
+- `lib/supabase/*`, `supabase/migrations/*`
+- `lib/portal/*`, `app/api/portal/**`, 파트너 share/auth 표면
+- `lib/server/software-checkout.ts`, `lib/billing/*`, `app/api/billing/**`, checkout/receipt 기반
+- `app/api/cron/**`, `app/api/webhook/**`, `lib/notifications/*`
+- `lib/auth/*`, `lib/identity/*`, `lib/storage/*`, `lib/regions/*`
+- `next.config.ts`, `vercel.json`, `eslint.config.mjs`, `vitest.config.ts`의 공용 기반 규칙
 
-- `lib/supabase/admin.ts` — service-role 싱글톤 admin 클라이언트(RLS 우회). 어드민/공개 API 표준 진입점.
-- `lib/supabase/server.ts` — `@supabase/ssr` 쿠키 기반 클라이언트(RLS 적용). 로그인 파트너 SSR 전용.
-- `lib/supabase/database.types.ts` / `database.types.v2.ts` — DB 타입 단일 원천(v2=partner portal V2).
-- `lib/supabase/middleware.ts`, `pagination.ts`, `public-env.ts`, `server-env.ts` — 세션 동기화·페이지네이션·환경변수 게이트.
-- `supabase/migrations/` — SQL 마이그레이션(`YYYYMMDD_설명.sql`). 스키마/RLS의 진실 원천.
-- `lib/db.ts` — 레거시 JSON 저장소(`data/*.json`)의 leads/settings 폴백(`atomic-write` 사용).
-- `lib/portal/portal-context.ts` — 통합 컨텍스트 resolver: partner(Supabase cookie) → admin(Bearer) 순서. `requirePortalContext`가 same-origin + 401 가드.
-- `lib/portal/portal-authorize.ts` — 인가 핵심: `authorizeForAccount`(partner는 자기 `partner_account_id`만, admin 통과), `resolvePartnerAccountId`(write 시 partner account 강제 주입).
-- `lib/portal/context.ts` — `resolvePartnerAccountContext`: Supabase 유저 → `partner_account_users`(v2)/`partner_users`(legacy) 매핑.
-- `lib/portal/repositories/` — Portal V2 데이터 접근(deals, quote-documents, contract-documents, activity, payments 등).
-- `app/api/portal/**/route.ts` — Portal V2 라우트. 모두 `requirePortalContext` + `authorizeForAccount` 패턴.
-- `app/share/quote/[token]/page.tsx`, `app/share/contract/[token]/page.tsx` — 토큰 기반 공개 견적/계약 뷰(`force-dynamic`, noindex).
-- `lib/server/software-checkout.ts` + `app/api/billing/checkout/{prepare,confirm,fail}/route.ts` + `lib/billing/{toss,promo-codes,quote-codes,fx}.ts` — Toss 결제 백엔드, 금액·토큰·멱등성 검증.
-- `app/api/cron/**` + `vercel.json`(crons) + `lib/automation-engine.ts` — 일배치 cron, `Bearer CRON_SECRET` + `x-vercel-cron` 인증.
-- `lib/notifications/repository.ts` + `emit-event.ts` + `app/api/webhook/channel-talk/route.ts` — 알림 이벤트(HMAC 검증 웹훅 유입), 항상 admin 클라이언트.
-- `lib/auth/`(`guards.ts`, `public-user.ts`, `session-logout.ts`) + `app/auth/callback/route.ts` + `lib/identity/stitch.ts` — OAuth 콜백, public user upsert, 익명→유저 identity stitch.
+Platform은 `lib/server/*`, `app/api/*`, `tests/*` 전체를 소유하지 않는다. 예를 들어 `lib/server/lead-capture.ts`와 리드 테스트는 Growth 소유다. 테스트의 소유권은 검증 대상 도메인을 따르며, Platform은 테스트 인프라와 공통 게이트만 관리한다.
 
-## 3. 가장 중요한 업무
+## 2. 핵심 계약
 
-- Supabase 클라이언트 선택 규율 강제(admin vs server) — 잘못 쓰면 빈 배열/무음 차단.
-- 모든 스키마/타입 변경에 마이그레이션 파일 동반(silent INSERT 실패 방지).
-- Portal V2 인가 게이트(`authorizeForAccount`) — partner 데이터 격리 보장.
-- 결제 confirm 경로의 금액·토큰·Toss 응답 교차검증 + 멱등성.
-- Cron 인증 + 듀얼모드(JSON↔Supabase) 저장소 일관성.
-- 검증 게이트(eslint 0 warning + build) 통과.
+### Supabase 클라이언트
 
-## 4. 지침 & 규칙
+- `createSupabaseAdminClient()`: service-role 기반 서버 작업과 어드민 API
+- `createSupabaseServerClient()`: 로그인 사용자의 쿠키와 RLS를 적용하는 SSR 경로
 
-- **마이그레이션 규율**: `database.types.ts`/repo INSERT에 컬럼 추가 시 반드시 `supabase/migrations/YYYYMMDD_설명.sql`(`ADD COLUMN IF NOT EXISTS`)를 함께. 순서: 타입 → repo INSERT → migration SQL → 적용(`supabase db push` 또는 대시보드 SQL Editor). 빠뜨리면 "column does not exist"로 INSERT가 catch에 먹혀 무음 실패.
-- **RLS + admin 클라이언트**: 어드민/service API는 항상 `createSupabaseAdminClient()`. `createSupabaseServerClient()`는 `auth.uid()` null → `is_active_admin()` false → 전 행 차단, 로그인 파트너 SSR에서만 사용.
-- **Portal 인가**: 라우트는 `requirePortalContext`(same-origin + 인증) → partner면 `authorizeForAccount(ctx, resource.partner_account_id)`로 403 가드. write는 `resolvePartnerAccountId`로 partner account 강제 주입(클라이언트 값 신뢰 금지).
-- **듀얼모드 저장소**: `USE_SUPABASE_*` 플래그(`USE_SUPABASE_LEADS`, `USE_SUPABASE_DOCS`, `USE_SUPABASE_BLOG`)로 JSON↔Supabase 전환. `lib/repositories/leads.ts`가 패턴 표준. 운영은 모두 `true`.
-- **RLS deny-all 기본**: 금융/관리자 전용 테이블은 생성 즉시 RLS enable + service-role 전용(예: `20260423_rls_admin_only_tables.sql`, `20260416_rls_financial_tables.sql`).
-- **검증 게이트**: `npx eslint app components lib --max-warnings=0` + `npm run build`(prebuild `check:vercel-crons`, postbuild `check:public-content`).
-- **Cron 인증**: `process.env.VERCEL && !x-vercel-cron` → 401, 추가로 `Authorization: Bearer ${CRON_SECRET}` 일치 필수.
-- **웹훅 인증**: HMAC-SHA256 + `timingSafeEqual` 서명 검증.
+어드민 API에서 server client를 사용하면 `auth.uid()`가 기대와 달라 빈 결과가 반환될 수 있다. 반대로 사용자 격리가 필요한 Portal SSR에서 admin client를 무비판적으로 사용하지 않는다.
 
-## 5. 절대 깨면 안 되는 것 / 주의점
+### 마이그레이션
 
-- **누락 마이그레이션 = 무음 INSERT 실패**: 실제로 `follow_up_at`/`assigned_to`가 타입엔 있고 DB엔 없어서 문의 접수가 통째로 저장 안 된 사고 발생. 컬럼 추가 시 migration 절대 누락 금지.
-- **RLS 차단 = 빈 배열**: 어드민 경로에서 server 클라이언트 쓰면 SELECT/UPDATE/DELETE 전부 막혀 `{"leads":[]}`. admin 클라이언트 고정.
-- **Portal authz 우회**: partner 라우트에서 `authorizeForAccount` 또는 partner_account 필터를 빠뜨리면 타 파트너 데이터 노출. write는 body의 `partnerAccountId`를 믿지 말고 `resolvePartnerAccountId`로 덮어쓸 것.
-- **JSON↔DB drift**: `USE_SUPABASE_*` 플래그 환경별 불일치 시 데이터가 두 곳으로 갈림. 여전히 JSON-only(폴백)인 엔티티 다수(예: `channel-conversations`, `event-metrics`, `lead-magnets`, 레거시 `settings.json`/`leads.json`) — 마이그레이션 여부 개별 확인.
-- **결제 검증**: confirm 라우트에서 저장 금액 == 요청 금액 == Toss 응답 금액 + checkout token + status==="DONE" 모두 통과해야 paid 마킹. 멱등(paid+동일 paymentKey면 기존 반환). 느슨해지면 결제 위변조.
-- **promo used_count**: 반드시 RPC(`increment_promo_code_used_count`)만(SELECT+UPDATE 조합은 race).
-- **신규 금융 테이블**: 생성 즉시 RLS enable(deny-all) 안 하면 anon 키로 노출.
+- 타입과 repository 쿼리는 실제 DB 스키마와 동시에 변경한다.
+- 새 migration은 `supabase/migrations/YYYYMMDD_설명.sql` 형식과 idempotent 구문을 사용한다.
+- 금융·관리자 전용 테이블은 생성 즉시 RLS를 활성화하고 정책을 명시한다.
+- migration 적용 여부와 feature flag를 확인하기 전 JSON/Supabase 운영 모드를 단정하지 않는다.
 
-## 6. 관련 문서
+### Portal V2 인가
 
-- `docs/active/supabase-backend-masterplan.md` — Supabase 백엔드 마스터플랜.
-- `docs/active/architecture-schema-erd.md` — 스키마 ERD.
-- `docs/active/supabase-migration-checklist-2.22.md` — 배포 순서·미적용 마이그레이션·smoke test(가장 실용적).
-- `docs/active/partner-portal-master-spec.md`, `partner-portal-front-back-contract.md`, `partner-portal-document-hub-execution-plan.md`, `partner-portal-unification.md` — Portal V2 스펙·계약·통합.
-- `docs/active/notification-architecture-plan.md` — 알림 아키텍처.
-- `docs/active/software-checkout-revamp-plan.md`, `quote-lifecycle-execution-plan.md` — 결제 개편·견적 라이프사이클.
-- `docs/adr/README.md` — ADR 규칙(본문 미작성, 후보만 나열).
+- route는 `requirePortalContext()`로 same-origin과 인증을 확인한다.
+- partner는 `authorizeForAccount()`로 대상 `partner_account_id`를 검증한다.
+- write 시 body의 account ID를 신뢰하지 않고 `resolvePartnerAccountId()`로 서버 컨텍스트를 강제한다.
+- 데이터 구현은 `lib/portal/repositories/`에 둔다.
 
-## 7. 현재 목표 & 백로그 (2026-06-23 스냅샷)
+### 결제·cron·웹훅
 
-- **결제 개편 잔여**: P0 — 미커밋 파일 정리, Vercel 환경변수(KRW→USD) 교체, 마이그레이션 3종(20260415/20260416/rls_financial) 순서 적용(미확인, 재검증 필요). P1 — 구매 주체 한국 법인 확인(중국 기관 직결 시 Toss KRW 부적합 → Alipay/WeChat) 미착수. 견적코드 `QB-YYYY-XXXX`(4자리=브루트포스 가능) → crypto 8자리(혼동문자 I/O/0/1 제외) 완료(2026-07-27, `lib/billing/quote-codes.ts`). P2 — FX 캐시 in-memory → KV/Supabase 미착수, validate 엔드포인트 rate limiting 완료 확인(코드 점검 결과 이미 구현되어 있었음 — IP+코드값 이중 키, `checkRateLimitDistributed`/Upstash+메모리 폴백, `app/api/billing/**` 5개 라우트 전부 적용), 결제완료 이메일 미착수, 어드민 구독 뷰 미착수, redemption 실패 알림 완료(2026-07-27, `markSoftwareCheckoutOrderPaid`에서 기존 `emitNotificationEvent` 호출 — categoryTag "finance"/severity "warning", 전용 eventType 없어 근접 타입 사용). 추가 발견·수정: prepare 라우트에 서버측 피처플래그(`isSoftwareCheckoutEnabled`) 검증이 없어 플래그 OFF에도 pending 주문 생성 가능했던 갭 → 완료(2026-07-27). confirm/fail은 기존 HMAC 서명 checkoutToken + 기존 주문 필수라 동일 갭 없음(의도적으로 게이트 미적용, 이유는 커밋/PR 참고).
-- **Supabase 마이그레이션 체크리스트(2.22)**: base 스키마 재현, `blog_posts.visibility` 선택 적용, quote approval enum 보강. 배포 후 docs/blog/quote smoke test.
-- **Portal 통합**: legacy `partner_users` ↔ v2 `partner_account_users` 통합. `context.ts`에 아직 이중 경로 존재.
-- **성능**: 어드민 SQL 집계 마이그(`20260618_*`) 적용, commercial/CRM 라운드트립 축소 완료.
+- 결제 confirm은 저장 금액, 요청 금액, 결제사 응답 금액, checkout token, 최종 상태를 교차 검증하고 멱등성을 유지한다.
+- 사용 횟수처럼 경쟁 조건이 있는 카운터는 원자적 RPC/트랜잭션을 사용한다.
+- cron은 `CRON_SECRET`과 Vercel cron 요청 여부를 검증한다.
+- Vercel 플랜은 명시 확인 전 Hobby로 보고 각 `vercel.json` cron은 하루 1회 이하로 둔다. sub-daily 작업은 외부 스케줄러나 플랜 결정을 먼저 한다.
+- 웹훅은 공급자 계약에 맞는 HMAC/서명 검증과 timing-safe 비교를 사용한다.
 
-## 8. 검증 방법
+## 3. 도메인 경계
+
+- Admin Core는 어드민 인증·role/capability 규약을 소유하고 Platform은 Supabase·RLS 기반을 제공한다.
+- Growth는 리드/CRM/영업 repository와 워크플로를 소유한다. Platform은 스키마·클라이언트·결제 기반 규약을 제공한다.
+- Content와 Chatbot은 각자의 문서/검색 데이터를 소유한다. Platform은 migration과 DB 계약 검증을 지원한다.
+- `data/*.json` 듀얼모드의 파일 I/O 규약은 Platform과 함께 검토하되, 어떤 데이터가 정본인지와 전환 시점은 해당 도메인이 결정한다.
+- `admin_profiles`는 운영 관리자 프로필 정본이다. `ADMIN_USERS`/`ADMIN_PASSWORD` 레거시 폴백 정책은 Admin Core 가이드를 따른다.
+
+## 4. 검증
+
+기본 게이트는 다른 파트와 같은 순서다.
 
 ```bash
-# 품질 게이트
+npm run typecheck
 npx eslint app components lib --max-warnings=0
-npm run build      # prebuild=check:vercel-crons, postbuild=check:public-content
-
-# 타입체크 / 테스트
-npm run typecheck  # tsc --noEmit
-npx vitest run     # tests/ (db/, api/, regions/ 등)
-npm run check:vercel-crons   # vercel.json cron 스케줄 검증
+npm run build
 ```
 
-**마이그레이션 적용 절차**: 1) 타입(`database.types.ts`) → 2) repository INSERT → 3) `supabase/migrations/YYYYMMDD_설명.sql`(`IF NOT EXISTS`로 idempotent) → 4) 적용(`supabase db push` 또는 SQL Editor) → 5) `USE_SUPABASE_*` 확인 → 6) smoke test. 재실행 시 `CREATE POLICY` 중복 에러 주의(`drop policy if exists`). 의존 마이그레이션은 순서대로 동시 배포.
+변경 범위에 따라 추가한다.
 
-## 9. 작업 시작 시 먼저 읽을 것
+```bash
+npx vitest run
+npm run check:vercel-crons
+```
 
-1. `CLAUDE.md` — 코드 규칙·검증 게이트.
-2. `lib/supabase/admin.ts` + `lib/supabase/server.ts` — 두 클라이언트의 차이(빈 배열/무음 INSERT 함정의 근원).
-3. `lib/portal/portal-context.ts` + `lib/portal/portal-authorize.ts` — Portal V2 인증/인가 전체 흐름.
-4. `docs/active/supabase-migration-checklist-2.22.md` — 실제 배포 순서·적용 상태.
-5. `lib/repositories/leads.ts`(듀얼모드 표준) + `lib/server/software-checkout.ts` — 저장소 패턴 및 결제 백엔드.
+- migration 변경: 타입 → repository 쿼리 → SQL → 적용 → feature flag → smoke test 순서 확인
+- Portal 변경: 다른 partner account의 직접 접근이 403인지 확인
+- 결제 변경: 금액 불일치, 중복 confirm, 잘못된 token/status 회귀 확인
+- cron 변경: `npm run check:vercel-crons` 필수
+- 챗봇 DB/RPC 변경: `npm run check:alpha-db` 추가
+
+## 5. 먼저 읽을 것
+
+1. `lib/supabase/admin.ts`, `lib/supabase/server.ts`
+2. `lib/portal/portal-context.ts`, `lib/portal/portal-authorize.ts`
+3. 변경 대상의 repository와 관련 migration
+4. 결제 변경이면 `lib/server/software-checkout.ts`, `lib/billing/*`
+5. cron 변경이면 `vercel.json`과 `scripts/check-vercel-crons.mjs`

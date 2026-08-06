@@ -1,15 +1,18 @@
 ---
 name: classin-kr-team
-description: Classin Home의 KR Team 대시보드·매출 장부·동기화 정확성 작업을 필요한 파일과 검증만으로 안전하게 수행할 때 사용한다.
+description: Classin Home의 /admin/branch KR Team 대시보드·매출 장부·동기화 정확성 작업을 필요한 파일과 검증만으로 안전하게 수행할 때 사용한다. Admin 전체 작업에는 사용하지 않는다.
 ---
 
 # Classin KR Team
 
 KR Team 작업을 화면·데이터·정합성 단위로 좁혀 수행한다. 모든 branch 파일을 한꺼번에 읽거나 전체 장부 파일부터 여는 습관을 피한다.
 
+이 스킬의 범위는 `/admin/branch`와 `/admin/branch/ledger`다. Admin 셸·CRM·콘텐츠·CS·설정
+전체를 대표하는 스킬이 아니며, 공통 기준은 [Admin 작업 지침 맵](../../../docs/active/admin-guidance-map.md)을 따른다.
+
 ## 시작 절차
 
-1. 저장소 `AGENTS.md`, `docs/README.md`, 최신 운영 결정, `DESIGN.md`의 관련 규칙을 확인한다.
+1. 저장소 `AGENTS.md`, `docs/active/admin-guidance-map.md`, 최신 운영 결정, `DESIGN.md`의 관련 규칙을 확인한다.
 2. 사용자 요청을 `개요`, `파이프라인`, `히트맵`, `AI`, `매출 장부`, `동기화·정합성` 중 하나 이상으로 분류한다.
 3. [routing-map.md](references/routing-map.md)에서 해당 행의 시작 파일만 연다.
 4. `rg`로 실제 import·호출·테스트 연결을 확인한 뒤에만 인접 파일을 추가한다.

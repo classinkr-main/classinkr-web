@@ -39,4 +39,5 @@
 - 구현 단계별 TODO는 로드맵 문서에 두고, ADR에는 남기지 않는다.
 - 항상 repo-relative 링크만 사용한다.
 
-현재 기준 상태와 우선 정리 항목은 [../active/repository-audit-2026-04-15.md](../active/repository-audit-2026-04-15.md)를 먼저 본다.
+현재 기준 문서는 [문서 인덱스](../README.md)에서 찾는다. 2026-04-15 감사는
+[역사 기록](../archive/repository-audit-2026-04-15.md)으로만 참고한다.

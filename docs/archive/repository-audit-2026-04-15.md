@@ -1,6 +1,7 @@
 # Repository Audit And Fix Playbook
 
 기준 시점: 2026-04-15  
+상태: 역사 기록. 현재 상태 판단과 작업 라우팅에는 사용하지 않는다.
 문서 목적: 이 저장소를 나중에 다시 수정하거나 검증할 때, 어디부터 읽고 무엇을 먼저 고치고 어떤 명령으로 확인해야 하는지 빠르게 찾게 한다.
 
 ## 1. Current Truth Snapshot
@@ -31,9 +32,9 @@
 
 지금 기준으로 먼저 봐야 하는 문서는 아래다.
 
-- 공개 사이트 제품 기준: [prd.md](./prd.md)
-- 파트너 포털 제품 기준: [partner-portal-master-spec.md](./partner-portal-master-spec.md)
-- 아키텍처 입구: [architecture-schema-erd.md](./architecture-schema-erd.md)
+- 공개 사이트 제품 기준: [prd.md](../active/prd.md)
+- 파트너 포털 제품 기준: [partner-portal-master-spec.md](../active/partner-portal-master-spec.md)
+- 아키텍처 입구: [architecture-schema-erd.md](../active/architecture-schema-erd.md)
 - 하드웨어 운영 허브: [../hardware-ops/README.md](../hardware-ops/README.md)
 - ADR 규칙: [../adr/README.md](../adr/README.md)
 
@@ -75,18 +76,18 @@ npm run build
 
 ### 현재 기준으로 유지
 
-- [prd.md](./prd.md)
-- [partner-portal-master-spec.md](./partner-portal-master-spec.md)
-- [architecture-schema-erd.md](./architecture-schema-erd.md)
-- [notification-architecture-plan.md](./notification-architecture-plan.md)
+- [prd.md](../active/prd.md)
+- [partner-portal-master-spec.md](../active/partner-portal-master-spec.md)
+- [architecture-schema-erd.md](../active/architecture-schema-erd.md)
+- [notification-architecture-plan.md](../active/notification-architecture-plan.md)
 - [../hardware-ops/README.md](../hardware-ops/README.md)
 
 ### 중복 또는 링크 정리가 필요한 활성 문서
 
 활성 유지:
 
-- [partner-portal-front-back-contract.md](./partner-portal-front-back-contract.md)
-- [partner-portal-implementation-roadmap.md](./partner-portal-implementation-roadmap.md)
+- [partner-portal-front-back-contract.md](../active/partner-portal-front-back-contract.md)
+- [partner-portal-implementation-roadmap.md](../active/partner-portal-implementation-roadmap.md)
 
 2026-04-23 아카이브 (중복 제거):
 
@@ -102,8 +103,8 @@ npm run build
 
 ### 역사적 구현 스냅샷으로 읽어야 하는 문서
 
-- [MARKETING_EMAIL_SYSTEM.md](./MARKETING_EMAIL_SYSTEM.md)
-- [supabase-backend-masterplan.md](./supabase-backend-masterplan.md)
+- [MARKETING_EMAIL_SYSTEM.md](../active/MARKETING_EMAIL_SYSTEM.md)
+- [supabase-backend-masterplan.md](../active/supabase-backend-masterplan.md)
 - [../archive/error-fix-notes.md](../archive/error-fix-notes.md)
 - [../archive/error_handle.md](../archive/error_handle.md)
 - [../archive/SESSION_2026-03-22.md](../archive/SESSION_2026-03-22.md)
@@ -147,7 +148,7 @@ npm run build
 ### 스키마 중복 / Split-brain
 
 - V1 파트너 포털 테이블(partners, quotes, contracts, receipts, partner_users 등 20260402_partner_portal.sql) 과 V2(partner_accounts, customers, deals, quote_documents, contract_documents, payments_v2, receipts_v2 — 20260404_partner_portal_v2_domain.sql) 이 **공존**한다.
-- Admin API 는 V1, Partner Portal API 는 V2 에 쓰고, Partner Portal 은 [lib/partner-portal/repositories/legacy.ts](../../lib/partner-portal/repositories/legacy.ts) 를 통해 V1 을 V2 타입으로 매핑해 **읽기만** 한다.
+- Admin API 는 V1, Partner Portal API 는 V2 에 쓰고, Partner Portal 은 [lib/portal/repositories/legacy.ts](../../lib/portal/repositories/legacy.ts) 를 통해 V1 을 V2 타입으로 매핑해 **읽기만** 한다.
 - 결과: admin 이 만든 파트너/견적/계약을 portal 이 읽기는 하나 편집은 못 하고, 반대로 portal 이 만든 deal/quote_document 를 admin 이 못 본다.
 - 통합 방향 결정 필요 (ADR 후보).
 

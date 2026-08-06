@@ -22,6 +22,15 @@ import {
   Users,
 } from "lucide-react"
 
+/**
+ * 운영 정본 역할은 SUPER_ADMIN / ADMIN / BRANCH 3종이다.
+ * EDITOR / VIEWER / PARTNER는 기존 프로필·세션을 깨지 않기 위한 nav 호환 값이며,
+ * 신규 권한 모델의 역할 단계로 취급하지 않는다.
+ *
+ * 이 roles 필드는 nav 소비자가 적용하는 UX 가시성 메타데이터다. 실제 데이터·동작 권한은
+ * 각 API의 관리자 가드와 capability 검사에서 강제해야 한다. 현재 커맨드 팔레트처럼 이 필드를
+ * 소비하지 않는 표면도 있으므로 보안 경계로 간주하면 안 된다.
+ */
 export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
 export type AdminNavSection = "home" | "sales" | "marketing" | "cs" | "system"
 
@@ -77,8 +86,9 @@ export function normalizeAdminRole(role: string): AdminRole {
   return "ADMIN"
 }
 
-// IA 재편(2026-07-04): 6섹션 → 4섹션 병합. "너무 세분화" 해소 — 웹 분석(Analytics·트래픽)은
-// marketing으로, 매출 성과(KR Team·매출 장부)는 sales로 흡수해 잡탕이던 "분석" 섹션을 해체.
+// IA 재편(2026-07-04): 6섹션 → 4섹션 병합. "너무 세분화" 해소 — 비즈니스 분석(Analytics)은
+// marketing으로, 매출 성과(KR Team·매출 장부)는 sales로 옮겨 잡탕이던 "분석" 섹션을 해체.
+// 트래픽은 nav에서만 내렸고 /admin/traffic 독립 화면을 유지한다. Analytics가 그 화면으로 링크한다.
 // Overview는 헤더 없는 최상위 단독 항목으로 렌더(AdminSidebar가 home 섹션 헤더를 생략).
 // 섹션 부제(설명 줄)는 사이드바에서 미렌더 — 시각 밀도만 낮춘다(팔레트 그룹은 label만 사용).
 // (이전 재편) 자료 퍼널=/lead-magnets 통일, 하드웨어=SCM 운영 콘솔이라 system, 챗봇→docs?tab=gaps 흡수.
@@ -113,7 +123,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/lead-magnets", label: "자료 퍼널", icon: Magnet, roles: [...STAFF_EDITOR, "BRANCH"], section: "marketing", category: "growth", keywords: "자료 퍼널 리드마그넷 material funnel download lead magnet" },
   // (2026-07-29 탭 재구성) 공개 행사(/admin/events)는 캘린더 항목으로 흡수됐다 —
   // 캘린더는 이미 source: "event"로 공개 행사를 그리고 있어 화면 병합이 아니라 nav 항목만 내린 것이다.
-  // 방문자/트래픽(/admin/traffic)은 Analytics의 ?tab=traffic으로 흡수. 두 라우트 다 살아 있다.
+  // 방문자/트래픽(/admin/traffic)은 nav에서만 내렸다. 화면·라우트는 독립 유지하며 Analytics가 링크한다.
   { href: "/admin/analytics", label: "Analytics", icon: BarChart2, roles: [...ALL_STAFF, "BRANCH"], section: "marketing", category: "growth", keywords: "analytics 분석 통계 방문자 트래픽 traffic 추적 pixel 계측 홈페이지 흐름" },
 
   // 고객 지원 — CS 콘솔 IA 재구성(2026-07-27, docs/active/cs-admin-console-ia-2026-07-27.md §2)으로
@@ -125,7 +135,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // 가이드 문서는 콘텐츠 파트 공용 표면이라 사이드바에도 유지한다(§2 흡수 관계 표).
   { href: "/admin/docs", label: "가이드 문서", icon: BookOpen, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", category: "system", keywords: "가이드 문서 docs guide 챗봇 chatbot faq 추천질문 카테고리 리디렉트" },
   // CS 콘솔 — 외부(고객용) 축의 첫 화면. 대시보드·상담 Inbox·미해결 큐·품질 검수·가이드 문서·추천 질문이
-  // 이 화면 상단의 콘솔 가로 메뉴로 이어진다(구 "챗봇 운영").
+  // 이 화면 상단의 콘솔 가로 메뉴로 이어진다(구 "챗봇 운영"). redirect 스텁이 아닌 운영 대시보드다.
   { href: "/admin/chatbot", label: "CS 콘솔", icon: Bot, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", category: "system", keywords: "cs 콘솔 챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops console 채널톡 상담 문의 채팅 channel talk chat inbox 보강 큐 미해결 gaps 질문 패턴" },
   // 내부 CS — 내부(사내) 축 전체의 진입점. 상담원용 워크스페이스(AI 초안·대기열·운영 도구).
   // (2026-07-29) 이 항목은 반드시 "가이드 문서" 아래에 남아야 한다. sidebar-docs-gaps.test.ts가

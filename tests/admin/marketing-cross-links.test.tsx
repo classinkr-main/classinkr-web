@@ -16,22 +16,25 @@ describe("MarketingCrossLinks", () => {
     }
     // derives from the SSOT nav labels
     expect(html).toContain("자료 퍼널")
-    // /admin/events → 캘린더 흡수, /admin/traffic → Analytics 흡수 (2026-07-29 탭 재구성).
-    // 라우트는 살아 있고 nav 항목만 내려갔다 — 마케팅 섹션에서 두 라벨은 더 이상 나오지 않는다.
+    // 공개 행사와 트래픽은 최상위 nav에서만 내려갔다. 두 독립 라우트는 계속 살아 있지만
+    // 이 컴포넌트는 ADMIN_NAV의 marketing 형제만 파생하므로 여기에는 나오지 않는다.
+    expect(html).not.toContain('href="/admin/events"')
+    expect(html).not.toContain('href="/admin/traffic"')
+    // 트래픽 진입은 Analytics 화면 안의 전용 크로스링크가 담당한다.
+    expect(html).toContain('href="/admin/analytics"')
   })
 
-  it("renders nothing when every marketing route is the current one", () => {
-    // a non-marketing currentHref still yields the full sibling set (non-empty)
+  it("renders the full marketing workspace for a non-marketing current route", () => {
     const html = renderToStaticMarkup(<MarketingCrossLinks currentHref="/admin/nonexistent" />)
     expect(html).toContain("마케팅 워크스페이스")
   })
 
   it("omits routes passed in excludeHrefs (e.g. surfaces with a dedicated CTA)", () => {
     const html = renderToStaticMarkup(
-      <MarketingCrossLinks currentHref="/admin/campaigns" excludeHrefs={["/admin/events"]} />
+      <MarketingCrossLinks currentHref="/admin/campaigns" excludeHrefs={["/admin/analytics"]} />
     )
-    expect(html).not.toContain('href="/admin/events"')
+    expect(html).not.toContain('href="/admin/analytics"')
     // other siblings still present
-    expect(html).toContain('href="/admin/analytics"')
+    expect(html).toContain('href="/admin/blog"')
   })
 })

@@ -1,18 +1,33 @@
 # Docs Index
 
-기준 시점: 2026-06-08
+기준 시점: 2026-08-06
 문서 목적: 현재 저장소에서 무엇을 먼저 읽어야 하는지, 어떤 문서를 믿어야 하는지, 어떤 문서가 역사 기록인지 빠르게 구분한다.
+
+## Admin OS 정본 우선순위
+
+Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 해당 화면·도메인의 정본을 먼저 찾고, 아래 순서로 적용한다. 지침 맵은 라우팅 진입점이며 정책 정본 자체를 대체하지 않는다. 상위 문서는 정책을, 하위 문서는 그 정책 안의 구체적 화면 또는 실행 범위를 정의한다.
+
+1. [Admin OS 운영 결정](./active/admin-os-operating-decisions-2026-07-11.md)
+   - 역할·권한, 데이터 정본, 상태·삭제·공개 기준의 최우선 정책 문서다.
+2. [어드민 탭 재구성](./active/admin-tab-restructure-2026-07-29.md)
+   - 운영 결정 안에서 내비게이션, 탭 노출, 화면 배치를 정의하는 UI 구조 정본이다.
+3. [CS 어드민 콘솔 IA](./active/cs-admin-console-ia-2026-07-27.md)
+   - CS 영역의 정보 구조와 작업 흐름을 정의한다. 상위 두 문서의 권한·탭 배치를 바꾸지는 않는다.
+4. [Classin KR Team 스킬](../.codex/skills/classin-kr-team/SKILL.md)
+   - `/admin/branch`와 매출 장부·동기화 정합성 작업을 안전하게 라우팅하는 실행 지침이다. Admin 전체 정책의 정본이 아니다.
 
 ## 1. Start Here
 
+- [active/admin-guidance-map.md](./active/admin-guidance-map.md)
+  - **Admin 작업 라우팅 정본.** 화면·도메인별로 읽을 운영 결정, UI 구조, 실행 지침을 연결하는 진입점.
 - [active/admin-os-operating-decisions-2026-07-11.md](./active/admin-os-operating-decisions-2026-07-11.md)
   - **Admin OS 현재 운영 결정.** 관리자 역할·기능 권한, V2 정본, CRM 5작업면, 상태·삭제·공개 기준의 최우선 문서.
+- [active/admin-tab-restructure-2026-07-29.md](./active/admin-tab-restructure-2026-07-29.md)
+  - **Admin UI 구조 정본.** 상시 탭과 기타 메뉴, 모바일 내비게이션, 경로별 화면 배치 기준.
+- [active/cs-admin-console-ia-2026-07-27.md](./active/cs-admin-console-ia-2026-07-27.md)
+  - **CS 영역 IA 정본.** CS 콘솔의 정보 구조, 작업 큐, 상세 화면 관계 기준.
 - [active/playbook/README.md](./active/playbook/README.md)
   - **파트별 운영 플레이북.** 작업이 어느 파트(홈/어드민/콘텐츠/그로스/챗봇/플랫폼)인지 판별 → 담당 에이전트(`.claude/agents/`)·가이드·공통 철칙 적용. 업무 분담의 진입점.
-- [active/repository-status-2026-06-08.md](./active/repository-status-2026-06-08.md)
-  - 현재 검증 상태, 활성 개발 요소, 문서 신뢰도, 다음 우선순위
-- [active/repository-audit-2026-04-15.md](./active/repository-audit-2026-04-15.md)
-  - 2026-04-15 기준 감사 기록. 현재 상태 판단용이 아니라 히스토리로 읽는다.
 - [active/prd.md](./active/prd.md)
   - Classin Home 공개 사이트의 현재 기준 PRD
 - [active/brand-canon/README.md](./active/brand-canon/README.md)
@@ -63,7 +78,7 @@
 - [active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md](./active/admin-3-revenue-sheet-workspace-plan-2026-06-29.md)
   - 매출시트 별도 탭, REV 동기화본 운영화, 매칭 커버리지, app-owned revenue ledger 전환 기준
 - [active/partner-portal-implementation-roadmap.md](./active/partner-portal-implementation-roadmap.md)
-  - 파트너 포털 구현 순서. 현재 경로명은 `repository-status-2026-06-08.md`와 실제 코드로 재확인
+  - 파트너 포털 구현 순서. 현재 경로명과 구현 상태는 실제 코드로 재확인
 - [active/quote-lifecycle-execution-plan.md](./active/quote-lifecycle-execution-plan.md)
   - 견적 문서 라이프사이클 실행 기준
 - [active/quote-feature-agent-audit-2026-06-26.md](./active/quote-feature-agent-audit-2026-06-26.md)
@@ -114,12 +129,16 @@
 
 ## 5. Runbooks And Incidents
 
+- [archive/repository-status-2026-06-08.md](./archive/repository-status-2026-06-08.md)
+  - 2026-06-08 시점의 저장소 상태 스냅샷. 현재 상태 판단에는 사용하지 않는다.
+- [archive/repository-audit-2026-04-15.md](./archive/repository-audit-2026-04-15.md)
+  - 2026-04-15 시점의 역사적 감사 스냅샷. 파일 위치와 무관하게 현재 상태 판단이나 선행 지침으로 사용하지 않는다.
 - [archive/error-fix-notes.md](./archive/error-fix-notes.md)
   - 과거 에러/불안 요소 메모
   - 현재 상태 단정에 쓰지 말고, 히스토리 참고용으로만 사용
 - [archive/error_handle.md](./archive/error_handle.md)
   - 관리자 로그인/배포 설정 관련 과거 장애 메모
-  - 현재 운영 기준은 항상 실제 코드와 현재 audit 문서로 재검증
+  - 현재 운영 기준은 항상 실제 코드와 이 인덱스가 지정한 최신 정본으로 재검증
 
 ## 6. Operating Rules
 
