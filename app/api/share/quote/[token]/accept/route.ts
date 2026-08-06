@@ -6,6 +6,7 @@ import {
   summarizeQuoteInteractions,
 } from "@/lib/portal/repositories/activity"
 import { getDeal } from "@/lib/portal/repositories/deals"
+import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
   getPublicQuoteByToken,
   updateQuoteDocument,
@@ -14,8 +15,57 @@ import {
   createCrmTask,
   listActiveTasksForDealByType,
 } from "@/lib/repositories/crm-tasks"
-import type { QuoteDocument } from "@/lib/portal/types"
+import type { QuoteDocument, QuoteDocumentVersion } from "@/lib/portal/types"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
+
+// 고객이 "이 견적으로 진행"을 누르면 담당자가 바로 계약 전환에 착수해야 하므로
+// action_required로 알린다. CRM 카드 생성과 마찬가지로 알림 실패가 수락 응답을
+// 막으면 안 되므로 호출부에서 흡수한다(throw하지 않음).
+function notifyQuoteAccepted(input: {
+  dealId: string
+  document: Pick<QuoteDocument, "id" | "quote_number">
+  version: Pick<QuoteDocumentVersion, "id" | "version_number" | "total_amount">
+  dealTitle: string
+  customerName: string | null
+  shareId: string
+  token: string
+  recipientEmail: string | null
+  recipientVerified: boolean
+}) {
+  emitNotificationEvent({
+    eventType: "quote.accepted",
+    notificationType: "action_required",
+    categoryTag: "lead",
+    severity: "info",
+    scopeTag: "org_admin",
+    title: `견적서 ${input.document.quote_number} 진행 요청 — 계약 전환 필요`,
+    message: [
+      `${input.customerName?.trim() || "고객"}님이 이 견적으로 진행을 요청했습니다.`,
+      `거래: ${input.dealTitle}`,
+      `버전 v${input.version.version_number} · 합계 ${input.version.total_amount.toLocaleString("ko-KR")}원`,
+      "계약 전환을 진행해 주세요.",
+    ].join("\n"),
+    routeUrl: `/admin/quotes/${input.document.id}/view`,
+    source: "quote",
+    sourceId: input.document.id,
+    payload: {
+      quoteNumber: input.document.quote_number,
+      dealId: input.dealId,
+      dealTitle: input.dealTitle,
+      customerName: input.customerName,
+      versionId: input.version.id,
+      versionNumber: input.version.version_number,
+      shareId: input.shareId,
+      token: input.token,
+      requestedAction: "convert_to_contract",
+      recipientEmail: input.recipientEmail,
+      recipientVerified: input.recipientVerified,
+    },
+    channels: ["wecom_webhook"],
+  }).catch((notifyError) => {
+    console.error("[share/quote/[token]/accept] notification emit failed:", notifyError)
+  })
+}
 
 async function markDocumentAccepted(documentId: string, currentStatus: string) {
   if (currentStatus === "accepted" || currentStatus === "archived" || currentStatus === "expired") {
@@ -192,6 +242,18 @@ export async function POST(
     })
 
     await markDocumentAccepted(document.id, document.status)
+
+    notifyQuoteAccepted({
+      dealId: document.deal_id,
+      document,
+      version,
+      dealTitle: deal.title,
+      customerName: customer_name,
+      shareId: share.id,
+      token,
+      recipientEmail: providedEmail,
+      recipientVerified,
+    })
 
     return NextResponse.json({ acceptedAt: log.created_at })
   } catch (error) {

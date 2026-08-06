@@ -6,8 +6,58 @@ import {
   summarizeQuoteInteractions,
 } from "@/lib/portal/repositories/activity"
 import { getDeal } from "@/lib/portal/repositories/deals"
+import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import { getPublicQuoteByToken } from "@/lib/portal/repositories/quote-documents"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
+
+// 고객 확인은 담당자가 발송 후 잊고 있던 견적이 "읽혔는지"를 알려주는 첫 신호다.
+// 알림 전송 실패가 확인 기록 저장 자체를 막으면 안 되므로 항상 흡수(catch)한다.
+function notifyQuoteReviewConfirmed(input: {
+  documentId: string
+  quoteNumber: string
+  dealTitle: string
+  dealId: string
+  customerName: string | null
+  versionId: string
+  versionNumber: number
+  totalAmount: number
+  shareId: string
+  token: string
+  recipientEmail: string | null
+  recipientVerified: boolean
+}) {
+  emitNotificationEvent({
+    eventType: "quote.review_confirmed",
+    notificationType: "status_update",
+    categoryTag: "lead",
+    severity: "info",
+    scopeTag: "org_admin",
+    title: `견적서 ${input.quoteNumber} 고객 확인 완료`,
+    message: [
+      `${input.customerName?.trim() || "고객"}님이 견적서를 확인했습니다.`,
+      `거래: ${input.dealTitle}`,
+      `버전 v${input.versionNumber} · 합계 ${input.totalAmount.toLocaleString("ko-KR")}원`,
+    ].join("\n"),
+    routeUrl: `/admin/quotes/${input.documentId}/view`,
+    source: "quote",
+    sourceId: input.documentId,
+    payload: {
+      quoteNumber: input.quoteNumber,
+      dealId: input.dealId,
+      dealTitle: input.dealTitle,
+      customerName: input.customerName,
+      versionId: input.versionId,
+      versionNumber: input.versionNumber,
+      shareId: input.shareId,
+      token: input.token,
+      recipientEmail: input.recipientEmail,
+      recipientVerified: input.recipientVerified,
+    },
+    channels: ["wecom_webhook"],
+  }).catch((notifyError) => {
+    console.error("[share/quote/[token]/confirm] notification emit failed:", notifyError)
+  })
+}
 
 export async function POST(
   req: NextRequest,
@@ -46,7 +96,7 @@ export async function POST(
       return NextResponse.json({ error: "만료된 견적서입니다." }, { status: 410 })
     }
 
-    const { document, version, share, customer_email } = result
+    const { document, version, share, customer_email, customer_name } = result
 
     // 등록된 고객 이메일이 있을 때만 대조한다. CRM에 이메일이 없는 고객이 많아
     // 무조건 대조하면 응답 버튼이 영구히 403으로 죽는다. 이메일이 없으면
@@ -100,6 +150,21 @@ export async function POST(
       dedupeByShare: share.id,
       dedupeByToken: token,
       dedupeWindowMinutes: 24 * 60,
+    })
+
+    notifyQuoteReviewConfirmed({
+      documentId: document.id,
+      quoteNumber: document.quote_number,
+      dealTitle: deal.title,
+      dealId: document.deal_id,
+      customerName: customer_name,
+      versionId: version.id,
+      versionNumber: version.version_number,
+      totalAmount: version.total_amount,
+      shareId: share.id,
+      token,
+      recipientEmail: providedEmail,
+      recipientVerified,
     })
 
     return NextResponse.json({ confirmedAt: log.created_at })
