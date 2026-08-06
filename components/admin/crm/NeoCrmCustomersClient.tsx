@@ -1,9 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
 import {
   AlertTriangle,
@@ -674,6 +674,8 @@ function KpiTile({ icon, label, value, hint, tone = "text-[#111110]" }: { icon: 
 
 export default function NeoCrmCustomersClient() {
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
   const deepLinkedAccountId = searchParams.get("account")?.trim() ?? ""
   // ?expiring=1 딥링크 — Overview 리뉴얼 타일에서 '만료 임박만' 필터가 켜진 채 착지한다.
   const deepLinkedExpiring = searchParams.get("expiring") === "1"
@@ -719,22 +721,30 @@ export default function NeoCrmCustomersClient() {
     setSelectedAccountId(deepLinkedAccountId)
   }, [deepLinkedAccountId, dismissedDeepLinkedAccountId, selectedAccountId])
 
+  // raw history API는 useSearchParams와 desync된다(CrmUnifiedCustomersClient가 같은 이유로 금지).
+  // 주소창에서는 ?account=가 사라졌는데 useSearchParams는 계속 옛 값을 돌려줘, 현재 쿼리를
+  // 이어 붙이는 다른 경로가 닫은 고객을 되살릴 수 있다. 라우터를 경유해 한 곳에서 상태를 맞춘다.
   const closeSelectedAccount = useCallback(() => {
     setSelectedAccountId(null)
     if (deepLinkedAccountId) setDismissedDeepLinkedAccountId(deepLinkedAccountId)
-    const url = new URL(window.location.href)
-    if (!url.searchParams.has("account")) return
-    url.searchParams.delete("account")
-    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
-  }, [deepLinkedAccountId])
+    if (!searchParams.has("account")) return
+    const params = new URLSearchParams(Array.from(searchParams.entries()))
+    params.delete("account")
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [deepLinkedAccountId, pathname, router, searchParams])
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
   }, [query, ownerFilter, sortKey, expiringOnly])
 
+  // 서버가 한 번에 최대 1만 건을 내려주고 "더보기"로 누적 렌더한다. 매 키 입력마다 전체를
+  // 다시 걸러 정렬하면 입력이 눈에 띄게 밀린다(통합 목록은 이미 같은 이유로 지연값을 쓴다).
+  const deferredQuery = useDeferredValue(query)
+
   const filtered = useMemo(() => {
     const rows = data?.rows ?? []
-    const q = query.trim().toLowerCase()
+    const q = deferredQuery.trim().toLowerCase()
     const result = rows.filter((row) => {
       if (ownerFilter !== "all" && row.ownerId !== ownerFilter) return false
       if (expiringOnly) {
@@ -770,7 +780,7 @@ export default function NeoCrmCustomersClient() {
       }
     })
     return sorted
-  }, [data, query, ownerFilter, sortKey, expiringOnly])
+  }, [data, deferredQuery, ownerFilter, sortKey, expiringOnly])
 
   const visibleRows = filtered.slice(0, visibleCount)
   const hasActiveFilters = Boolean(query.trim()) || ownerFilter !== "all" || expiringOnly

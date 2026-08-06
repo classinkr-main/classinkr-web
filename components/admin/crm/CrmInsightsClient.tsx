@@ -116,6 +116,8 @@ export default function CrmInsightsClient() {
   const [error, setError] = useState<string | null>(null)
   const [leadKpis, setLeadKpis] = useState<LeadFunnelKpis | null>(null)
   const [channels, setChannels] = useState<LeadChannelStat[]>([])
+  /** 새로고침이 퍼널·채널 블록까지 닿게 하는 키(0이면 첫 로드 — 캐시 사용). */
+  const [secondaryRefreshKey, setSecondaryRefreshKey] = useState(0)
   // 주간 리포트(narrative)는 보고성 — 기본 접힘으로 스캔 지표(퍼널·채널·KPI)를 먼저.
   const [reportOpen, setReportOpen] = useState(false)
 
@@ -151,12 +153,15 @@ export default function CrmInsightsClient() {
   }, [load])
 
   // 전환 퍼널 — 리드 status 집계(action-kpis). 별도 백엔드 불필요.
+  // 새로고침이 이 두 블록에 닿지 않아, 리드를 등록하고 새로고침해도 퍼널·채널은 첫 로드 값
+  // 그대로였다(빈 의존성 배열이라 effect가 다시 돌지 않는다). refreshKey로 함께 강제 재조회한다.
   useEffect(() => {
     let alive = true
     adminFetchJsonCached<{ leads: LeadFunnelKpis }>("/api/admin/crm/action-kpis", undefined, {
       cacheKey: "/api/admin/crm/action-kpis",
       ttlMs: 120_000,
       staleWhileRevalidateMs: 300_000,
+      force: secondaryRefreshKey > 0,
     })
       .then((d) => {
         if (alive) setLeadKpis(d?.leads ?? null)
@@ -165,7 +170,7 @@ export default function CrmInsightsClient() {
     return () => {
       alive = false
     }
-  }, [])
+  }, [secondaryRefreshKey])
 
   // 채널별 전환율 — lead-channels 집계.
   useEffect(() => {
@@ -174,6 +179,7 @@ export default function CrmInsightsClient() {
       cacheKey: "/api/admin/crm/lead-channels",
       ttlMs: 120_000,
       staleWhileRevalidateMs: 300_000,
+      force: secondaryRefreshKey > 0,
     })
       .then((d) => {
         if (alive) setChannels(d?.channels ?? [])
@@ -182,7 +188,7 @@ export default function CrmInsightsClient() {
     return () => {
       alive = false
     }
-  }, [])
+  }, [secondaryRefreshKey])
 
   const funnelStages = leadKpis
     ? [
@@ -223,7 +229,10 @@ export default function CrmInsightsClient() {
           </div>
           <button
             type="button"
-            onClick={() => void load({ force: true })}
+            onClick={() => {
+              void load({ force: true })
+              setSecondaryRefreshKey((value) => value + 1)
+            }}
             className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] lg:w-auto"
             disabled={refreshing}
           >

@@ -85,6 +85,12 @@ export interface ListCrmDealsResult {
     lost: number
     openAmount: number
     noNextActionCount: number
+    /**
+     * open/won/lost/openAmount는 이번 페이지(rows)만 센 값이다. total은 DB 전체 건수라
+     * 둘이 섞이면 "딜 25건"인데 금액은 20건 합계인 상태가 화면에 그대로 나간다.
+     * 이 플래그가 true면 집계가 전체를 덮지 못한다는 뜻이므로 화면에 그 사실을 밝힌다.
+     */
+    aggregateTruncated: boolean
   }
   pagination: { limit: number; offset: number; returned: number; total: number; hasMore: boolean; nextOffset: number | null }
   rows: CrmDealRecord[]
@@ -133,7 +139,7 @@ function emptyDealsResult(limit: number, offset: number, message: string | null)
   return {
     generatedAt: new Date().toISOString(),
     health: { ok: !message, message },
-    summary: { total: 0, returned: 0, open: 0, won: 0, lost: 0, openAmount: 0, noNextActionCount: 0 },
+    summary: { total: 0, returned: 0, open: 0, won: 0, lost: 0, openAmount: 0, noNextActionCount: 0, aggregateTruncated: false },
     pagination: { limit, offset, returned: 0, total: 0, hasMore: false, nextOffset: null },
     rows: [],
   }
@@ -202,6 +208,7 @@ function summarize(rows: CrmDealRecord[], total: number) {
       .filter((row) => row.status === "open")
       .reduce((sum, row) => sum + (row.expectedAmount ?? 0), 0),
     noNextActionCount: rows.filter((row) => row.status === "open" && !row.nextTaskId).length,
+    aggregateTruncated: rows.length < total,
   }
 }
 

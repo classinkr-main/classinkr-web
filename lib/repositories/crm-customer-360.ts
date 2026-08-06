@@ -150,6 +150,8 @@ function latestEeoSyncedAt(eeoAccounts: NeoCrmCustomerEeoAccount[]): string | nu
 export interface GetCrmCustomer360Options {
   eventsLimit?: number
   tasksLimit?: number
+  /** 딜 조회 상한. 상세 페이지는 드로어보다 넉넉히 잡아 요약 집계가 전체를 덮게 한다. */
+  dealsLimit?: number
   now?: Date
 }
 
@@ -361,7 +363,7 @@ function emptyDealsResult(): ListCrmDealsResult {
   return {
     generatedAt: new Date().toISOString(),
     health: { ok: false, message: "딜을 불러오지 못했습니다." },
-    summary: { total: 0, returned: 0, open: 0, won: 0, lost: 0, openAmount: 0, noNextActionCount: 0 },
+    summary: { total: 0, returned: 0, open: 0, won: 0, lost: 0, openAmount: 0, noNextActionCount: 0, aggregateTruncated: false },
     pagination: { limit: 0, offset: 0, returned: 0, total: 0, hasMore: false, nextOffset: null },
     rows: [],
   }
@@ -374,6 +376,7 @@ export async function getCrmCustomer360(
   const now = options.now ?? new Date()
   const eventsLimit = clampInt(options.eventsLimit, 20, 1, 50)
   const tasksLimit = clampInt(options.tasksLimit, 50, 1, 50)
+  const dealsLimit = clampInt(options.dealsLimit, 20, 1, 200)
   const key = `${parsed.source}:${parsed.entityId}`
   const warnings: string[] = []
 
@@ -383,7 +386,7 @@ export async function getCrmCustomer360(
       : getNeoCrmCustomerDetail(parsed.entityId),
     listCrmCustomerEvents({ targetType: parsed.targetType, targetId: parsed.entityId, limit: eventsLimit }),
     listCrmTasks({ targetType: parsed.targetType, targetId: parsed.entityId, status: "active", limit: tasksLimit, now }),
-    listCrmDeals({ targetType: parsed.targetType, targetId: parsed.entityId, limit: 20 }),
+    listCrmDeals({ targetType: parsed.targetType, targetId: parsed.entityId, limit: dealsLimit }),
     // 리드 → NEO 등록 확정 여부(드로어 'NEO 등록됨' 액션용). NEO 계정 드로어는 해당 없음.
     parsed.source === "lead" ? findConfirmedLeadNeoLink(parsed.entityId) : Promise.resolve(null),
     // 수기 라벨 — 드로어가 열릴 때 별도 태그 fetch를 하지 않도록 360에 동승시킨다.

@@ -57,6 +57,8 @@ interface CaptureRow {
   createdEventId: string | null
   createdTaskId: string | null
   createdLeadId: string | null
+  /** 적용 실패 사유. 서버는 행별로 남기는데 화면에서 버리면 "3건 실패"만 남아 어느 행인지 알 수 없다. */
+  errorMessage: string | null
 }
 
 interface ApplySummary {
@@ -181,6 +183,7 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
   )
 
   const activeRows = useMemo(() => rows.filter((row) => row.applyStatus !== "applied"), [rows])
+  const failedRows = useMemo(() => rows.filter((row) => row.applyStatus === "failed"), [rows])
   const selectedRowIds = useMemo(
     () => activeRows.filter((row) => row.selected && row.matchStatus !== "duplicate_in_batch").map((row) => row.id),
     [activeRows]
@@ -468,7 +471,21 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
             <SummaryStat label="검토 보류" value={summary.reviewRemaining} tone={summary.reviewRemaining > 0 ? "warn" : "neutral"} />
           </div>
           {summary.failed > 0 && (
-            <p className="mt-3 text-[12px] text-[#B85C33]">{summary.failed}건은 적용에 실패했습니다. 다시 시도해 주세요.</p>
+            <div className="mt-3 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]">
+              <p className="font-semibold">{summary.failed}건은 적용에 실패했습니다.</p>
+              {/* 개수만 알려주면 어느 행을 다시 손봐야 하는지 표에서 일일이 찾아야 한다. */}
+              <ul className="mt-1 space-y-0.5">
+                {failedRows.slice(0, 5).map((row) => (
+                  <li key={row.id}>
+                    {row.rowIndex + 1}행 · {row.organizationName || row.contactName || row.phone || "이름 없음"}
+                    {row.errorMessage ? ` — ${row.errorMessage}` : ""}
+                  </li>
+                ))}
+              </ul>
+              {failedRows.length > 5 ? (
+                <p className="mt-1">외 {failedRows.length - 5}건</p>
+              ) : null}
+            </div>
           )}
           <div className="mt-5 flex flex-wrap items-center gap-2">
             {summary.reviewRemaining > 0 && (

@@ -16,7 +16,9 @@ const loadCustomer360 = cache(async (key: string) => {
   const parsed = parseUnifiedCustomerKey(key)
   if (!parsed) return null
   // 자세히 보기는 활동/할 일을 최대치로 끌어와 한 화면에서 전부 보여준다(드로어는 요약).
-  return getCrmCustomer360(parsed, { eventsLimit: 50, tasksLimit: 50 })
+  // 상세 페이지는 요약 집계(진행 딜·예상금액)가 전체를 덮어야 한다 — 드로어 기본 20건으로는
+  // 딜이 20건을 넘는 고객에서 금액이 조용히 일부만 합산된다.
+  return getCrmCustomer360(parsed, { eventsLimit: 50, tasksLimit: 50, dealsLimit: 200 })
 })
 
 export async function generateMetadata({
