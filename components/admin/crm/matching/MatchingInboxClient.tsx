@@ -180,7 +180,9 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("review")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [pendingLinkId, setPendingLinkId] = useState<string | null>(null)
+  // 행별 잠금 — 스칼라 하나로 잡으면 B행을 누르는 순간 A행 버튼이 요청 중인데도 다시 활성화돼
+  // 같은 링크에 PATCH가 두 번 나갈 수 있다.
+  const [pendingLinkIds, setPendingLinkIds] = useState<Set<string>>(() => new Set())
   const [bulkPending, setBulkPending] = useState(false)
   const [manualQueries, setManualQueries] = useState<Record<string, string>>({})
   const [manualTargets, setManualTargets] = useState<Record<string, ManualLinkTargetOption[]>>({})
@@ -236,7 +238,18 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
 
   const updateSourceLink = useCallback(
     async (linkId: string, action: "confirm" | "reject" | "stale") => {
-      setPendingLinkId(linkId)
+      let alreadyPending = false
+      setPendingLinkIds((prev) => {
+        if (prev.has(linkId)) {
+          alreadyPending = true
+          return prev
+        }
+        const next = new Set(prev)
+        next.add(linkId)
+        return next
+      })
+      if (alreadyPending) return
+
       setError(null)
       try {
         await adminFetchJson(`/api/admin/crm/source-links/${linkId}`, {
@@ -247,11 +260,24 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
       } catch (err) {
         setError(err instanceof Error ? err.message : "매칭 상태 변경에 실패했습니다.")
       } finally {
-        setPendingLinkId(null)
+        setPendingLinkIds((prev) => {
+          const next = new Set(prev)
+          next.delete(linkId)
+          return next
+        })
       }
     },
     [applyRowStatus]
   )
+
+  // 실패 알림에 쓸 링크 id → 표시 이름. id 앞 8자만 보여주면 어느 행인지 알 수 없다.
+  const rowLabelByLinkId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const row of data?.rows ?? []) {
+      if (row.linkId) map.set(row.linkId, row.sourceLabel)
+    }
+    return map
+  }, [data])
 
   const bulkUpdate = useCallback(
     async (ids: string[], action: "confirm" | "reject") => {
@@ -260,18 +286,32 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
       setError(null)
       setNotice(null)
       try {
-        const result = await adminFetchJson<{ updated: number; failed: Array<{ id: string; error: string }> }>(
-          `/api/admin/crm/source-links/bulk`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({ ids, action }),
-          }
-        )
-        setNotice(
-          `${action === "confirm" ? "확정" : "제외"} ${formatNumber(result.updated)}건 처리${
-            result.failed.length > 0 ? ` · 실패 ${formatNumber(result.failed.length)}건` : ""
-          }`
-        )
+        const result = await adminFetchJson<{
+          updated: number
+          failed: Array<{ id: string; error: string }>
+          skipped?: number
+        }>(`/api/admin/crm/source-links/bulk`, {
+          method: "PATCH",
+          body: JSON.stringify({ ids, action }),
+        })
+
+        // 처리·실패·미처리(요청 상한 초과)를 모두 밝힌다. 합이 선택 건수와 맞아야
+        // 운영자가 "왜 몇 건이 그대로지"를 표에서 되짚지 않는다.
+        const actionLabel = action === "confirm" ? "확정" : "제외"
+        const parts = [`${actionLabel} ${formatNumber(result.updated)}건 처리`]
+        if (result.failed.length > 0) {
+          // 실패 건은 개수만이 아니라 어느 행인지 알아야 다시 손댈 수 있다.
+          const names = result.failed
+            .slice(0, 3)
+            .map(({ id }) => rowLabelByLinkId.get(id) ?? id.slice(0, 8))
+            .join(", ")
+          const more = result.failed.length > 3 ? ` 외 ${formatNumber(result.failed.length - 3)}건` : ""
+          parts.push(`실패 ${formatNumber(result.failed.length)}건 (${names}${more})`)
+        }
+        if (result.skipped && result.skipped > 0) {
+          parts.push(`미처리 ${formatNumber(result.skipped)}건 · 한 번에 처리할 수 있는 한도를 넘어 남겨 두었습니다`)
+        }
+        setNotice(parts.join(" · "))
         await load({ force: true })
       } catch (err) {
         setError(err instanceof Error ? err.message : "일괄 처리에 실패했습니다.")
@@ -279,7 +319,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         setBulkPending(false)
       }
     },
-    [load]
+    [load, rowLabelByLinkId]
   )
 
   const generateCandidates = useCallback(async () => {
@@ -431,12 +471,12 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           <button
             type="button"
             onClick={() => void updateSourceLink(row.linkId as string, "confirm")}
-            disabled={pendingLinkId === row.linkId}
+            disabled={pendingLinkIds.has(row.linkId as string)}
             className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
             title="확정"
             aria-label="확정"
           >
-            {pendingLinkId === row.linkId ? (
+            {pendingLinkIds.has(row.linkId as string) ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Check className="h-3.5 w-3.5" />
@@ -445,7 +485,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           <button
             type="button"
             onClick={() => void updateSourceLink(row.linkId as string, "reject")}
-            disabled={pendingLinkId === row.linkId}
+            disabled={pendingLinkIds.has(row.linkId as string)}
             className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
             title="제외"
             aria-label="제외"
@@ -460,11 +500,11 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         <button
           type="button"
           onClick={() => void updateSourceLink(row.linkId as string, "stale")}
-          disabled={pendingLinkId === row.linkId}
+          disabled={pendingLinkIds.has(row.linkId as string)}
           className="inline-flex h-7 items-center gap-1 rounded-lg border border-amber-100 bg-amber-50 px-2 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
           title="확정을 되돌리고 재검수로 보냅니다"
         >
-          {pendingLinkId === row.linkId ? (
+          {pendingLinkIds.has(row.linkId as string) ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <RotateCcw className="h-3.5 w-3.5" />
@@ -626,7 +666,10 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
             <button
               key={filter.key}
               type="button"
-              onClick={() => setSourceFilter(filter.key)}
+              onClick={() => {
+                setSourceFilter(filter.key)
+                setSelectedIds(new Set())
+              }}
               aria-pressed={sourceFilter === filter.key}
               className={`h-8 rounded-lg border px-3 text-[12px] font-semibold transition-colors ${
                 sourceFilter === filter.key
@@ -642,7 +685,10 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
             <button
               key={filter.key}
               type="button"
-              onClick={() => setStatusFilter(filter.key)}
+              onClick={() => {
+                setStatusFilter(filter.key)
+                setSelectedIds(new Set())
+              }}
               aria-pressed={statusFilter === filter.key}
               className={`h-8 rounded-lg border px-3 text-[12px] font-semibold transition-colors ${
                 statusFilter === filter.key

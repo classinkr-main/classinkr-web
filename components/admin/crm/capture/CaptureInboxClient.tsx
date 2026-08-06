@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import {
   AlertCircle,
@@ -141,6 +141,8 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
   const [summary, setSummary] = useState<ApplySummary | null>(null)
 
   const [busy, setBusy] = useState(false)
+  /** 분석 요청 동기 잠금 — busy(state) 커밋 전 두 번째 클릭이 배치를 중복 생성하는 것을 막는다. */
+  const analyzeInFlightRef = useRef(false)
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reviewOnly, setReviewOnly] = useState(false)
@@ -225,6 +227,11 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
       setError("명단을 붙여넣으세요.")
       return
     }
+    // busy는 상태라 리렌더가 커밋된 뒤에야 버튼이 비활성화된다. 두 번 빠르게 누르면 두 클릭 모두
+    // batch?.id를 undefined로 읽어 빈 배치가 두 개 생긴다(하나는 고아로 남아 수동 취소해야 한다).
+    // 동기 ref로 먼저 잠근다.
+    if (analyzeInFlightRef.current) return
+    analyzeInFlightRef.current = true
     setBusy(true)
     setError(null)
     try {
@@ -254,6 +261,7 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
     } catch (e) {
       setError(e instanceof Error ? e.message : "분석에 실패했습니다.")
     } finally {
+      analyzeInFlightRef.current = false
       setBusy(false)
     }
   }, [selectedEventId, selectedEvent, rawText, mode, batch, loadOpenBatches, hasAppliedSideEffects])

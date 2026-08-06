@@ -46,3 +46,38 @@ export const CRM_CURRENCY_BADGE: Record<CrmCurrency, { symbol: string; label: st
   USD: { symbol: "$", label: "NEO 오더" },
   CNY: { symbol: "¥", label: "NEO 동기화" },
 }
+
+/** 값과 통화를 함께 들고 다니는 금액. 출처가 다른 금액을 한 변수에 담을 때 통화를 잃지 않기 위해. */
+export interface CrmMoney {
+  amount: number
+  currency: CrmCurrency
+}
+
+/** 통화에 맞는 표기로 렌더한다. 하드코딩된 기호 접두사(항상 "₩")를 대체한다. */
+export function formatCrmMoney(money: CrmMoney | null | undefined): string {
+  if (!money || !Number.isFinite(money.amount)) return "-"
+  if (money.currency === "CNY") return formatCNY(money.amount)
+  if (money.currency === "USD") return formatUSD(money.amount)
+  return formatKRWAbbrev(money.amount)
+}
+
+/**
+ * VIP 배지 기준선 — 통화별로 따로 둔다.
+ *
+ * 이전에는 통화 구분 없이 하나의 임계값(30,000,000)을 썼다. 그래서 ₩3천만(견적 기준)과
+ * ¥3천만(수금 기준)이 같은 선으로 취급돼, 원화 견적 한 건이면 VIP가 되고 실제 CNY 고객은
+ * 사실상 도달할 수 없는 선이 됐다.
+ *
+ * 이 값들은 배지 표시용 어림 환산이다(회계 수치 아님). 정산·보고에는 쓰지 않는다.
+ */
+export const CRM_VIP_THRESHOLD: Record<CrmCurrency, number> = {
+  KRW: 30_000_000,
+  USD: 22_000,
+  CNY: 160_000,
+}
+
+/** 통화별 기준선으로 VIP 여부를 판정한다. 금액이 없으면 false. */
+export function isCrmVipMoney(money: CrmMoney | null | undefined): boolean {
+  if (!money || !Number.isFinite(money.amount)) return false
+  return money.amount >= CRM_VIP_THRESHOLD[money.currency]
+}

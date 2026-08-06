@@ -15,6 +15,7 @@ import CrmCustomerPicker from "@/components/admin/crm/CrmCustomerPicker"
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import {
   EVENTS_URL,
+  CRM_RECORDING_MAX_BYTES,
   MODE_FIELDS,
   MODE_OPTIONS,
   STAGE_SIGNALS,
@@ -97,15 +98,26 @@ export default function ActivityQuickForm({
   const ownerListId = useId()
 
   // 딥링크/부모가 대상을 지정하면 폼 대상을 1회 프리셋한다(같은 대상 재지정은 무시).
+  // 범위 해제(고객 스코프 → 전체)도 같은 축으로 처리해야 한다. /activity?targetId=A 에서
+  // '전체 보기'를 누르면 같은 라우트라 이 컴포넌트가 리마운트되지 않는데, falsy에서 그냥
+  // early-return 하면 화면은 "전체"인데 컴포저 대상은 A로 남아 상태가 어긋난다.
   const presetRef = useRef<string | null>(defaultTargetId ?? null)
   useEffect(() => {
-    if (!defaultTargetId) return
+    if (!defaultTargetId) {
+      // 프리셋으로 채워졌던 대상만 되돌린다(사용자가 직접 고른 적 없는 상태에서만 발생).
+      if (presetRef.current == null) return
+      presetRef.current = null
+      setTargetId("")
+      setTargetLabel("")
+      setTargetType(presetTargetType)
+      return
+    }
     if (presetRef.current === defaultTargetId) return
     presetRef.current = defaultTargetId
     setTargetId(defaultTargetId)
     if (defaultTargetType) setTargetType(defaultTargetType)
     if (defaultTargetLabel) setTargetLabel(defaultTargetLabel)
-  }, [defaultTargetId, defaultTargetType, defaultTargetLabel])
+  }, [defaultTargetId, defaultTargetType, defaultTargetLabel, presetTargetType])
 
   useEffect(() => {
     if (!toast) return
@@ -277,7 +289,21 @@ export default function ActivityQuickForm({
         ref={fileInputRef}
         type="file"
         accept="audio/*,video/mp4,video/quicktime"
-        onChange={(event) => setRecordingName(event.target.files?.[0]?.name ?? null)}
+        onChange={(event) => {
+          const file = event.target.files?.[0] ?? null
+          // 상한 검사가 서버에만 있으면, 300MB 파일도 일단 전부 올린 뒤에야 거절당한다
+          // (느린 회선에서 수 분). 고르는 즉시 막고 입력을 비운다.
+          if (file && file.size > CRM_RECORDING_MAX_BYTES) {
+            event.target.value = ""
+            setRecordingName(null)
+            setToast({
+              msg: `녹음파일은 ${Math.round(CRM_RECORDING_MAX_BYTES / (1024 * 1024))}MB 이하만 올릴 수 있습니다.`,
+              type: "error",
+            })
+            return
+          }
+          setRecordingName(file?.name ?? null)
+        }}
         className="mt-1 block w-full rounded-lg border border-dashed border-[#d8d8d2] bg-[#fafaf8] px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/60 file:mr-3 file:rounded-md file:border-0 file:bg-[#111110] file:px-3 file:py-1.5 file:text-[12px] file:font-semibold file:text-white"
       />
       <span className="mt-1 block text-[11px] font-medium text-[#1a1a1a]/35">mp3, m4a, wav, webm, ogg, mp4 · 최대 50MB</span>

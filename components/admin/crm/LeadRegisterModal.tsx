@@ -1,11 +1,12 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import Link from "next/link"
 import { CheckCircle2, ClipboardList, Loader2, Plus, UserPlus, X } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
+import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 
 interface BulkRow {
   org?: string
@@ -80,25 +81,43 @@ export default function LeadRegisterModal({
 
   const bulkRows = useMemo(() => parseBulk(bulkText), [bulkText])
 
-  if (!open || typeof document === "undefined") return null
-
   // 작성 중(단건 입력 or 벌크 붙여넣기) 닫기 시 실수로 내용이 날아가지 않게 확인한다.
   const isDirty =
     Boolean(single.org || single.name || single.phone || single.email || single.source || single.notes) ||
     Boolean(bulkText.trim())
 
-  const close = () => {
+  const close = useCallback(() => {
     if (isDirty && !result && !window.confirm("작성 중인 내용이 있습니다. 닫으면 사라집니다. 닫을까요?")) return
     setError(null)
     setResult(null)
     setSingle(EMPTY_SINGLE)
     setBulkText("")
     onClose()
-  }
+  }, [isDirty, result, onClose])
+
+  // Escape 닫기 + Tab 포커스 트랩 + 이전 포커스 복귀. 이 모달은 셋 다 없어서 키보드 사용자가
+  // Escape로 닫지 못하고, Tab이 배경 페이지로 새어 나갔다(aria-modal 계약 위반).
+  // 훅은 조기 반환보다 위에 둔다 — open 토글마다 호출 순서가 달라지면 안 된다.
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  useDialogFocus(open, close, closeButtonRef)
+
+  if (!open || typeof document === "undefined") return null
 
   const submitSingle = async () => {
     if (!single.org && !single.name && !single.phone && !single.email) {
       setError("학원명·이름·전화·이메일 중 하나는 입력하세요.")
+      return
+    }
+    // 형식 검사가 전혀 없어 "asdf" 같은 값도 그대로 저장됐다. 나중에 문자·메일 발송이
+    // 조용히 실패하는 연락처가 CRM에 쌓인다. 벌크 파서와 같은 기준을 쓴다.
+    const phone = single.phone.trim()
+    if (phone && !/^[\d()+\-\s]{8,}$/.test(phone)) {
+      setError("전화번호 형식을 확인하세요. 숫자와 - ( ) + 공백만 쓸 수 있고 8자 이상이어야 합니다.")
+      return
+    }
+    const email = single.email.trim()
+    if (email && !/^\S+@\S+\.\S+$/.test(email)) {
+      setError("이메일 형식을 확인하세요. 예: name@example.com")
       return
     }
     setSubmitting(true)
@@ -157,13 +176,19 @@ export default function LeadRegisterModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/20" onClick={close} aria-hidden />
-      <div className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div
+        className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="crm-lead-register-title"
+      >
         <div className="flex items-center justify-between border-b border-[#e8e8e4] px-5 py-4">
-          <h2 className="flex items-center gap-2 text-[16px] font-bold text-[#111110]">
+          <h2 id="crm-lead-register-title" className="flex items-center gap-2 text-[16px] font-bold text-[#111110]">
             <UserPlus className="h-4 w-4 text-[#084734]" />
             리드 등록
           </h2>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={close}
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"

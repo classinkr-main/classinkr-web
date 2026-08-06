@@ -474,7 +474,13 @@ export default function AdminCrmRevenuePage() {
   const [syncNotice, setSyncNotice] = useState<string | null>(null)
   const syncingExternal = externalSyncPhase !== "idle"
 
+  // 기간(6/12개월)을 연달아 바꾸면 서로 다른 URL로 요청이 겹친다. 늦게 끝난 이전 기간 응답이
+  // 최신 화면을 덮어쓰면, 선택은 12개월인데 차트·요약은 6개월 숫자인 채로 남는다.
+  const revenueRequestSeq = useRef(0)
+
   const load = useCallback(async (options?: { force?: boolean }) => {
+    const seq = ++revenueRequestSeq.current
+    const isLatest = () => revenueRequestSeq.current === seq
     setLoading(true)
     setError(null)
     setSyncNotice(null)
@@ -483,11 +489,13 @@ export default function AdminCrmRevenuePage() {
         ttlMs: 30_000,
         force: options?.force,
       })
+      if (!isLatest()) return
       setData(next)
     } catch (err) {
+      if (!isLatest()) return
       setError(err instanceof Error ? err.message : "매출 데이터를 불러오지 못했습니다.")
     } finally {
-      setLoading(false)
+      if (isLatest()) setLoading(false)
     }
   }, [months])
 

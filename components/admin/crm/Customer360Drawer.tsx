@@ -29,7 +29,14 @@ import {
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
-import { formatCNY, formatUSD } from "@/lib/crm/money-format"
+import {
+  CRM_CURRENCY_BADGE,
+  formatCNY,
+  formatCrmMoney,
+  formatUSD,
+  isCrmVipMoney,
+  type CrmMoney,
+} from "@/lib/crm/money-format"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
 import CrmCustomerFlags from "./CrmCustomerFlags"
 import CrmContactValue from "./CrmContactValue"
@@ -37,6 +44,7 @@ import CrmCustomerPicker from "./CrmCustomerPicker"
 import LeadMessageCard from "./LeadMessageCard"
 import { eventSourceIcon, eventSourceLabel } from "./event-source-meta"
 import ActivityQuickForm from "./rail/ActivityQuickForm"
+import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import { deriveCustomerFlags } from "@/lib/crm/customer-flags"
 import { LEAD_BADGE_TONE_CLASSES } from "@/lib/crm/lead-badges"
 import { computeCustomerHealth, HEALTH_BAND_STYLE } from "@/lib/crm/customer-health"
@@ -249,6 +257,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
   const [activityTab, setActivityTab] = useState<"timeline" | "feed">("timeline")
   const [activitySource, setActivitySource] = useState<"all" | "manual_note" | "meeting_minutes">("all")
   const [eventsExpanded, setEventsExpanded] = useState(false)
+  const [eventsLoading, setEventsLoading] = useState(false)
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")
@@ -376,15 +385,23 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     if (customerKey) void load()
   }, [customerKey, load, handleComposerDirtyChange])
 
-  // ESC 닫기 — 드로어가 열려 있을 때만 바인딩(닫힌 상태에서 페이지 전역 ESC가 onClose를 부르지 않게).
+  // Escape 닫기 + Tab 포커스 트랩 + 이전 포커스 복귀를 공용 훅에 위임한다.
+  // 직접 만든 ESC 리스너에는 트랩이 없어, aria-modal="true"를 선언해 놓고도 Tab이 백드롭 뒤
+  // 배경 페이지 컨트롤로 새어 나갔다. 훅은 focusRef의 role="dialog" 조상을 트랩 범위로 잡는다.
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  useDialogFocus(customerKey, requestClose, closeButtonRef)
+
+  // 배경 스크롤 잠금 — 드로어는 fixed라 배경 목록이 그대로 스크롤된다. 백드롭 위에서 휠·스와이프하면
+  // 뒤 목록이 드로어 밑에서 밀려나가고, 닫았을 때 원래 자리가 아닌 곳에 서 있게 된다.
   useEffect(() => {
     if (!customerKey) return
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") requestClose()
+    const previous = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = previous
     }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [customerKey, requestClose])
+  }, [customerKey])
+
 
   // 스크롤 스파이 — 본문 스크롤 위치로 현재 섹션 탭을 활성화한다(DOM 순서로 '마지막 통과' 판정).
   useEffect(() => {
@@ -633,8 +650,19 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         .slice(0, 3),
     [money]
   )
-  const outstanding = orderTotal != null && collectionTotal != null ? orderTotal - collectionTotal : null
-  const ltv = collectionTotal ?? orderTotal ?? quoteTotal ?? null
+  // 오더는 USD($), 수금은 CNY(¥)다. 두 값을 빼면 통화가 다른 수를 뺀 무의미한 결과가 나오는데,
+  // 그게 "미수" 배지의 근거로 쓰이고 있었다(수금이 크면 미수 없음, 반대면 허위 미수).
+  // 같은 통화의 미수 원천이 360 페이로드에 없으므로, 틀린 신호를 만들어 내는 대신 배지를 끈다.
+  // 통화별 금액은 아래 '수금·성과 요약'과 상세 화면에서 분리해 그대로 보여준다.
+  const outstanding = null
+  // LTV도 같은 문제였다 — ¥수금 / $오더 / ₩견적 중 아무거나 골라 한 숫자로 쓰고 항상 "₩"를 붙였다.
+  // 통화를 값과 함께 들고 다녀 표기와 VIP 기준선이 출처를 따라가게 한다.
+  const ltv: CrmMoney | null = useMemo(() => {
+    if (collectionTotal != null) return { amount: collectionTotal, currency: "CNY" }
+    if (orderTotal != null) return { amount: orderTotal, currency: "USD" }
+    if (quoteTotal != null) return { amount: quoteTotal, currency: "KRW" }
+    return null
+  }, [collectionTotal, orderTotal, quoteTotal])
 
   // 헤더 스캔 플래그 — 리스트와 동일 어휘(VIP·만료·미수·핫·업셀…), 360 데이터로 파생.
   const headerFlags = useMemo(
@@ -647,7 +675,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
             outstanding,
             updatedAt: header?.updatedAt ?? null,
             balance: money?.totalBalance ?? null,
-            vip: (ltv ?? 0) >= 30_000_000,
+            vip: isCrmVipMoney(ltv),
             lifecycle:
               data.serviceRisk && (data.serviceRisk.level === "urgent" || data.serviceRisk.level === "soon")
                 ? "account_risk"
@@ -742,15 +770,21 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
 
   const loadMoreEvents = useCallback(async () => {
     if (!url) return
-    setEventsExpanded(true)
+    // 성공한 뒤에만 펼침으로 표시한다. 요청 전에 켜 두면 실패했을 때 목록은 그대로인데
+    // "전체 활동 보기" 버튼(!eventsExpanded 조건)만 사라져, 잘린 목록에 재시도 수단 없이 갇힌다.
+    setEventsLoading(true)
+    setError(null)
     try {
       const next = await adminFetchJsonCached<Customer360>(`${url}?eventsLimit=50`, undefined, {
         cacheKey: `${url}:all`,
         ttlMs: 15_000,
       })
       setData(next)
-    } catch {
-      // 실패 시 현재 데이터 유지
+      setEventsExpanded(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "전체 활동을 불러오지 못했습니다.")
+    } finally {
+      setEventsLoading(false)
     }
   }, [url])
 
@@ -885,6 +919,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </button>
             <button
+              ref={closeButtonRef}
               type="button"
               onClick={requestClose}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
@@ -1055,7 +1090,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         ) : null}
 
         {savedMsg ? (
-          <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
+          // 2.2초 뒤 사라지는 토스트라 시각적으로 놓치면 끝이다 — 보조기술에도 결과를 알린다.
+          <div role="status" aria-live="polite" className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
             <div className="flex items-center gap-1.5 rounded-full bg-[#084734] px-3.5 py-2 text-[12px] font-semibold text-white shadow-lg">
               <CheckCircle2 className="h-3.5 w-3.5" />
               {savedMsg}
@@ -1066,7 +1102,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
         {/* body */}
         <div ref={bodyRef} className="flex-1 space-y-3 overflow-y-auto bg-[#f5f5f2] p-4">
           {error ? (
-            <div className="flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
+            <div role="alert" className="flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{error}</span>
             </div>
@@ -1419,9 +1455,10 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                 <button
                   type="button"
                   onClick={() => void loadMoreEvents()}
-                  className="mt-2.5 inline-flex w-full items-center justify-center rounded-lg border border-[#e8e8e4] bg-white py-2 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                  disabled={eventsLoading}
+                  className="mt-2.5 inline-flex w-full items-center justify-center rounded-lg border border-[#e8e8e4] bg-white py-2 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] disabled:opacity-50"
                 >
-                  전체 활동 보기 (최대 50)
+                  {eventsLoading ? "불러오는 중..." : "전체 활동 보기 (최대 50)"}
                 </button>
               ) : null}
               {/* 활동 페이지 딥링크 — 이 고객으로 필터된 전체 활동(드로어 밖 상세 동선) */}
@@ -1756,8 +1793,15 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
             <CollapsibleSection icon={<Sparkles className="h-3.5 w-3.5" />} title="핵심 정보">
               <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[12px]">
                 <div>
-                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객 가치 (LTV) · 추정</p>
-                  <p className="text-[15px] font-bold text-[#111110]">{ltv == null ? "-" : `₩${formatAmount(ltv)}`}</p>
+                  <p className="text-[11px] font-semibold text-[#1a1a1a]/35">
+                    고객 가치 (LTV) · 추정
+                    {ltv ? (
+                      <span className="ml-1 font-medium text-[#1a1a1a]/30">
+                        {CRM_CURRENCY_BADGE[ltv.currency].label}
+                      </span>
+                    ) : null}
+                  </p>
+                  <p className="text-[15px] font-bold text-[#111110]">{formatCrmMoney(ltv)}</p>
                 </div>
                 <div>
                   <p className="text-[11px] font-semibold text-[#1a1a1a]/35">잔액 합계</p>

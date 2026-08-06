@@ -608,6 +608,25 @@ function CustomerDetailPanel({
 }
 
 // 빈 상태 — 다음 행동 안내(필터 초기화 / 통합 고객 DB 딥링크). 데스크톱 표·모바일 카드 공용.
+// 조회 실패와 "고객 없음"은 다른 상태다. 실패를 빈 목록으로 그리면 화면이 "동기화된 고객이
+// 아직 없습니다"라고 단언해, 장애를 데이터 없음으로 오인시킨다.
+function CustomersLoadFailed({ message, onRetry }: { message: string | null; onRetry: () => void }) {
+  return (
+    <div className="py-14 text-center">
+      <AlertTriangle className="mx-auto mb-2 h-5 w-5 text-[#B85C33]/60" />
+      <p className="text-[13px] font-medium text-[#111110]">고객 목록을 불러오지 못했습니다.</p>
+      <p className="mt-1 text-[12px] text-[#1a1a1a]/40">{message ?? "잠시 후 다시 시도해 주세요."}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-4 inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+      >
+        다시 시도
+      </button>
+    </div>
+  )
+}
+
 function EmptyCustomers({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) {
   return (
     <div className="py-14 text-center">
@@ -893,6 +912,8 @@ export default function NeoCrmCustomersClient() {
               </div>
             ))}
           </div>
+        ) : !data ? (
+          <CustomersLoadFailed message={error} onRetry={() => void load({ force: true })} />
         ) : visibleRows.length === 0 ? (
           <EmptyCustomers hasFilters={hasActiveFilters} onReset={resetFilters} />
         ) : (
@@ -953,6 +974,12 @@ export default function NeoCrmCustomersClient() {
                   ))}
                 </tr>
               ))
+            ) : !data ? (
+              <tr>
+                <td colSpan={6}>
+                  <CustomersLoadFailed message={error} onRetry={() => void load({ force: true })} />
+                </td>
+              </tr>
             ) : visibleRows.length === 0 ? (
               <tr>
                 <td colSpan={6}>

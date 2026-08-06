@@ -6,7 +6,9 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export const CRM_RECORDINGS_BUCKET = "crm-recordings"
 
-const MAX_RECORDING_BYTES = 50 * 1024 * 1024
+// 상한은 폼과 공유하는 계약(activity-contract)에서 가져온다 — 두 값이 갈라지면
+// 클라이언트가 통과시킨 파일을 서버가 거절하는 상태가 조용히 생긴다.
+import { CRM_RECORDING_MAX_BYTES as MAX_RECORDING_BYTES } from "@/components/admin/crm/rail/activity-contract"
 const ALLOWED_RECORDING_TYPES = new Set([
   "audio/mpeg",
   "audio/mp3",

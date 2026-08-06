@@ -1475,8 +1475,13 @@ export default function LeadsBoardClient() {
       const followUpKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
       return createdDays >= 7 && (!followUpKey || followUpKey < today)
     })
+    // 두 배열을 매 리드마다 선형 탐색하면 활성 리드 수의 제곱으로 늘어난다(3천 건이면 수백만 비교).
+    // 이 memo는 60초 틱과 모든 필터 변경마다 다시 도므로 id Set으로 한 번만 색인한다.
+    const riskIds = new Set<string>()
+    for (const lead of stalledLeads) riskIds.add(lead.id)
+    for (const lead of overdueFollowUps) riskIds.add(lead.id)
     const pipelineRiskLeads = [...activeLeads]
-      .filter((lead) => stalledLeads.some((stalled) => stalled.id === lead.id) || overdueFollowUps.some((overdue) => overdue.id === lead.id))
+      .filter((lead) => riskIds.has(lead.id))
       .sort((a, b) => {
         const aFollowUp = a.follow_up_at ? toLocalDateKey(a.follow_up_at) : null
         const bFollowUp = b.follow_up_at ? toLocalDateKey(b.follow_up_at) : null
@@ -2310,20 +2315,29 @@ export default function LeadsBoardClient() {
           <table className="min-w-[1400px] w-full text-[13px]">
             <thead>
               <tr className="border-b border-[#e8e8e4] bg-[#fafaf8]">
-                <th className="w-12 px-5 py-3.5">
+                <th scope="col" className="w-12 px-5 py-3.5">
                   <input
                     type="checkbox"
+                    // 일부만 선택된 상태를 "선택 안 됨"으로 그리면, 클릭이 전체 선택인지 전체 해제인지
+                    // 예측할 수 없다. 부분 선택은 indeterminate로 드러낸다.
+                    ref={(node) => {
+                      if (node) node.indeterminate = !allFilteredSelected && selectedFilteredCount > 0
+                    }}
                     checked={allFilteredSelected}
                     disabled={filtered.length === 0}
                     onChange={(event) => handleToggleFilteredSelection(event.target.checked)}
-                    aria-label="현재 목록 전체 선택"
+                    aria-label={
+                      allFilteredSelected
+                        ? "현재 목록 전체 선택 해제"
+                        : `현재 목록 전체 선택 (${filtered.length}건 중 ${selectedFilteredCount}건 선택됨)`
+                    }
                     className="h-4 w-4 accent-[#084734] disabled:opacity-30"
                   />
                 </th>
                 {["우선순위", "시간", "응대", "유입", "이름", "기관", "담당자", "연락처", "팔로업", "정체", "상태"].map((h) => (
-                  <th key={h} className="text-left px-5 py-3.5 font-medium text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">{h}</th>
+                  <th key={h} scope="col" className="text-left px-5 py-3.5 font-medium text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">{h}</th>
                 ))}
-                <th className="w-16 px-5 py-3.5 text-right text-[12px] font-medium text-[#1a1a1a]/40">관리</th>
+                <th scope="col" className="w-16 px-5 py-3.5 text-right text-[12px] font-medium text-[#1a1a1a]/40">관리</th>
               </tr>
             </thead>
             <tbody>

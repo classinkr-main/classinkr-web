@@ -8,7 +8,10 @@ export async function GET(req: NextRequest) {
   if (admin instanceof NextResponse) return admin
 
   try {
-    const months = Number(req.nextUrl.searchParams.get("months") ?? 6)
+    // months=abc면 NaN이 되고, 하위 clamp(Math.min/max)도 NaN을 통과시켜 월 목록이 빈 배열이 된다.
+    // 그러면 오류 없이 월별 흐름 차트만 텅 빈 화면이 나간다. 숫자가 아니면 기본값으로 되돌린다.
+    const rawMonths = Number(req.nextUrl.searchParams.get("months") ?? 6)
+    const months = Number.isFinite(rawMonths) ? rawMonths : 6
     const dashboard = await getAdminCrmRevenueDashboard(months)
     const response = NextResponse.json(dashboard)
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useSearchParams } from "next/navigation"
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -245,7 +245,9 @@ export default function CrmNaverMapSourceClient() {
   const [importOpen, setImportOpen] = useState(false)
   const [importing, setImporting] = useState(false)
   const [importMessage, setImportMessage] = useState<string | null>(null)
-  const [linkingExternalId, setLinkingExternalId] = useState<string | null>(null)
+  // 행별 잠금 — 스칼라 하나로 잡으면 B행을 누르는 순간 A행 버튼이 요청 중인데도 다시 활성화돼
+  // 같은 장소에 연결 요청이 두 번 나갈 수 있다.
+  const [linkingExternalIds, setLinkingExternalIds] = useState<Set<string>>(() => new Set())
   const [linkMessage, setLinkMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null)
 
   const selectRegionFilter = useCallback((region: string) => {
@@ -278,8 +280,13 @@ export default function CrmNaverMapSourceClient() {
     void load()
   }, [load])
 
+  // 스냅샷이 비었을 때 가져오기 아코디언을 자동으로 연다. 단, 최초 1회만 —
+  // data는 새로고침마다 새 객체라, 조건만 보면 사용자가 접어 둔 아코디언이 새로고침 때마다 다시 열린다.
+  const autoOpenedImportRef = useRef(false)
   useEffect(() => {
-    if (data && data.summary.total === 0) setImportOpen(true)
+    if (!data || data.summary.total !== 0 || autoOpenedImportRef.current) return
+    autoOpenedImportRef.current = true
+    setImportOpen(true)
   }, [data])
 
   const parsedImport = useMemo(() => {
@@ -354,7 +361,18 @@ export default function CrmNaverMapSourceClient() {
       const candidate = row.candidate
       if (!candidate || candidate.confidence < 0.72 || candidate.targetType === "rev_deal") return
 
-      setLinkingExternalId(row.externalId)
+      let alreadyLinking = false
+      setLinkingExternalIds((prev) => {
+        if (prev.has(row.externalId)) {
+          alreadyLinking = true
+          return prev
+        }
+        const next = new Set(prev)
+        next.add(row.externalId)
+        return next
+      })
+      if (alreadyLinking) return
+
       setLinkMessage(null)
       try {
         await adminFetchJson("/api/admin/crm/map-source/link", {
@@ -374,7 +392,11 @@ export default function CrmNaverMapSourceClient() {
           text: linkError instanceof Error ? linkError.message : "CRM 연결을 확정하지 못했습니다.",
         })
       } finally {
-        setLinkingExternalId(null)
+        setLinkingExternalIds((prev) => {
+          const next = new Set(prev)
+          next.delete(row.externalId)
+          return next
+        })
       }
     },
     [load]
@@ -636,7 +658,7 @@ export default function CrmNaverMapSourceClient() {
               <MapSourceRow
                 key={row.externalId}
                 row={row}
-                confirming={linkingExternalId === row.externalId}
+                confirming={linkingExternalIds.has(row.externalId)}
                 onConfirm={confirmCandidate}
               />
             ))}
