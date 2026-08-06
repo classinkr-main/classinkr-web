@@ -82,6 +82,19 @@ describe("기존 저장 뷰 회귀 (규칙 모듈 분리 전 동작 보존)", ()
     expect(matchesSavedView(row, "my_owner", new Set(), NOW)).toBe(false)
   })
 
+  it("recent_contact — 최근 30일 내 사람이 남긴 컨택만", () => {
+    expect(matchesSavedView(leadRow({ lastContactAt: "2026-07-16T09:00:00Z" }), "recent_contact", new Set(), NOW)).toBe(true)
+    expect(matchesSavedView(neoRow({ lastContactAt: "2026-06-18T09:00:00Z" }), "recent_contact", new Set(), NOW)).toBe(true)
+    expect(matchesSavedView(neoRow({ lastContactAt: "2026-06-16T09:00:00Z" }), "recent_contact", new Set(), NOW)).toBe(false)
+    expect(matchesSavedView(neoRow({ lastContactAt: null }), "recent_contact", new Set(), NOW)).toBe(false)
+  })
+
+  it("active_deal — 진행 중인 Portal V2 딜이 있는 행만", () => {
+    expect(matchesSavedView(neoRow({ source: "customer", activeDealCount: 2 }), "active_deal", new Set(), NOW)).toBe(true)
+    expect(matchesSavedView(neoRow({ source: "customer", activeDealCount: 0 }), "active_deal", new Set(), NOW)).toBe(false)
+    expect(matchesSavedView(neoRow({ activeDealCount: 0 }), "active_deal", new Set(), NOW)).toBe(false)
+  })
+
   it("expiring — 만료 14일 이내(지난 것 포함), null 제외", () => {
     expect(matchesSavedView(neoRow({ expireAt: "2026-07-30T09:00:00Z" }), "expiring", new Set(), NOW)).toBe(true)
     expect(matchesSavedView(neoRow({ expireAt: "2026-07-01T09:00:00Z" }), "expiring", new Set(), NOW)).toBe(true)
@@ -127,10 +140,18 @@ describe("unanswered 뷰", () => {
 })
 
 describe("provisional(미확인 신규) 노출 규칙", () => {
-  it("site_leads/unanswered 뷰에서만 보인다", () => {
+  it("처리 큐와 실제 컨택이 있는 최근 컨택 뷰에서만 보인다", () => {
     const row = leadRow({ provisional: true })
     expect(rowVisibleInView(row, "site_leads", new Set(), NOW)).toBe(true)
     expect(rowVisibleInView(row, "unanswered", new Set(), NOW)).toBe(true)
+    expect(
+      rowVisibleInView(
+        leadRow({ provisional: true, lastContactAt: "2026-07-16T09:00:00Z" }),
+        "recent_contact",
+        new Set(),
+        NOW
+      )
+    ).toBe(true)
     expect(rowVisibleInView(row, "all", new Set(), NOW)).toBe(false)
     expect(rowVisibleInView(row, "new_leads", new Set(), NOW)).toBe(false)
   })

@@ -104,12 +104,14 @@ const SAVED_VIEW_FILTERS: Array<{
   { key: "priority", label: "우선 처리", description: "점수 68점 이상" },
   { key: "new_leads", label: "신규 리드", description: "첫 응답 대상" },
   { key: "needs_care", label: "관리 필요 고객", description: "만료·휴면 위험" },
-  { key: "expiring", label: "만료 임박", description: "만료 14일 이내(지난 것 포함)" },
-  { key: "dormant", label: "30일+ 미접촉", description: "마지막 활동 30일 초과" },
+  { key: "recent_contact", label: "최근 컨택", description: "최근 30일 내 사람이 남긴 CRM 기록" },
+  { key: "active_deal", label: "진행 중인 딜", description: "Portal V2 진행 딜 1건 이상" },
   { key: "hot_lead", label: "고전환 리드", description: "점수 상위 리드" },
   { key: "upsell", label: "업셀 후보", description: "활성 고객 · 잔액 보유" },
   { key: "site_leads", label: "홈페이지 유입", description: "홈페이지로 들어와 NEO 미등록" },
   { key: "unanswered", label: "미응답", description: "첫 응답 전 리드 (24h 초과 위험)" },
+  { key: "dormant", label: "30일+ 미접촉", description: "마지막 활동 30일 초과" },
+  { key: "expiring", label: "만료 임박", description: "만료 14일 이내(지난 것 포함)" },
 ]
 
 const CACHE_TTL_MS = 90_000
@@ -1234,11 +1236,21 @@ export default function CrmUnifiedCustomersClient() {
 
           {!loading && data && data.rows.length === 0 ? (
             <div className="px-6 py-12 text-center">
-              <p className="text-[13px] font-semibold text-[#111110]">조건에 맞는 고객이 없습니다.</p>
+              <p className="text-[13px] font-semibold text-[#111110]">
+                {savedView === "recent_contact"
+                  ? "최근 30일 내 컨택 기록이 없습니다."
+                  : savedView === "active_deal"
+                    ? "현재 진행 중인 딜이 없습니다."
+                    : "조건에 맞는 고객이 없습니다."}
+              </p>
               <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
-                {hasActiveFilters
-                  ? "필터를 초기화하거나 새 리드를 등록해 시작하세요."
-                  : "새 리드를 등록하거나 REV/HW 원장 매칭을 연결해 시작하세요."}
+                {savedView === "recent_contact"
+                  ? "고객이나 리드에 메모·콜·문자를 남기면 최근 컨택에 표시됩니다."
+                  : savedView === "active_deal"
+                    ? "Portal V2에서 진행 상태인 딜이 연결되면 여기에 표시됩니다."
+                    : hasActiveFilters
+                      ? "필터를 초기화하거나 새 리드를 등록해 시작하세요."
+                      : "새 리드를 등록하거나 REV/HW 원장 매칭을 연결해 시작하세요."}
               </p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 {hasActiveFilters ? (
@@ -1250,21 +1262,41 @@ export default function CrmUnifiedCustomersClient() {
                     필터 초기화
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => setLeadModalOpen(true)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-                >
-                  <UserPlus className="h-3.5 w-3.5" />
-                  리드 등록
-                </button>
-                <Link
-                  href="/admin/crm/matching"
-                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-                >
-                  매칭 연결
-                  <ExternalLink className="h-3 w-3" />
-                </Link>
+                {savedView === "recent_contact" ? (
+                  <Link
+                    href="/admin/crm/activity"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+                  >
+                    <PhoneCall className="h-3.5 w-3.5" />
+                    기록 남기기
+                  </Link>
+                ) : savedView === "active_deal" ? (
+                  <Link
+                    href="/admin/crm/deals"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+                  >
+                    진행 딜 확인
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setLeadModalOpen(true)}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      리드 등록
+                    </button>
+                    <Link
+                      href="/admin/crm/matching"
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+                    >
+                      매칭 연결
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           ) : null}

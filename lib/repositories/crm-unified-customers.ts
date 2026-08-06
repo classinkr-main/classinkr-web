@@ -23,7 +23,10 @@ import {
 } from "@/lib/crm/unified-view-rules"
 import { listAllCustomerListItemsLite } from "@/lib/portal/repositories/customers"
 import type { CustomerListItem } from "@/lib/portal/types"
-import { getLeadFirstResponseMap } from "@/lib/repositories/crm-events"
+import {
+  crmContactTargetKey,
+  getCrmCustomerContactMaps,
+} from "@/lib/repositories/crm-events"
 import {
   listConfirmedLeadCustomerLinks,
   listConfirmedLeadNeoLinkLeadIds,
@@ -38,7 +41,16 @@ import { getAllCustomerTagsMap } from "./crm-customer-tags"
 export type { CrmUnifiedCustomerRow, CrmUnifiedCustomerSource, CrmUnifiedLifecycle, CrmUnifiedSavedView }
 
 // 칩 카운트를 보여줄 세그먼트(저장 뷰).
-export const CRM_SEGMENT_VIEWS = ["expiring", "dormant", "hot_lead", "upsell", "site_leads", "unanswered"] as const
+export const CRM_SEGMENT_VIEWS = [
+  "recent_contact",
+  "active_deal",
+  "hot_lead",
+  "upsell",
+  "dormant",
+  "site_leads",
+  "unanswered",
+  "expiring",
+] as const
 export type CrmUnifiedSourceStatusKey = "classin_leads" | "app_customers" | "external_crm" | "sheets"
 
 // 활성 고객(neo_account) 건강도 분포 — computeCustomerHealth(SSOT)로 매핑한 실집계.
@@ -187,7 +199,7 @@ const SLA_TARGET_LEAD_SOURCES = new Set(["demo_modal", "contact_page", "meta_lea
 
 // 리드 전환 산출물(portal customers) → 통합 행. 거래 요약(customer_deal_summary)이 있으면
 // 미수·진행 딜 신호로 다음 액션과 점수를 보수적으로 잡는다(우선순위 엔진 미적용 소스).
-function buildPortalCustomerRow(item: CustomerListItem): CrmUnifiedCustomerRow {
+function buildPortalCustomerRow(item: CustomerListItem, lastContactAt: string | null): CrmUnifiedCustomerRow {
   const { customer, summary } = item
   const outstanding = summary?.outstanding_amount ?? 0
   const activeDeals = summary?.active_deals ?? 0
@@ -226,8 +238,16 @@ function buildPortalCustomerRow(item: CustomerListItem): CrmUnifiedCustomerRow {
     updatedAt: summary?.last_deal_updated_at ?? customer.updated_at ?? customer.created_at,
     expireAt: null,
     balance: null,
+    lastContactAt,
+    activeDealCount: activeDeals,
     ...NON_LEAD_ROW_DEFAULTS,
   }
+}
+
+function latestIso(first: string | null | undefined, second: string | null | undefined) {
+  if (!first) return second ?? null
+  if (!second) return first
+  return new Date(first).getTime() >= new Date(second).getTime() ? first : second
 }
 
 function normalize(value: string | null | undefined) {
@@ -338,14 +358,14 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
   let portalCustomersOk = true
   let rows: CrmUnifiedCustomerRow[] = []
 
-  const [leadResult, neoResult, portalCustomersResult, convertedLinksResult, neoLinksResult, firstResponseResult] =
+  const [leadResult, neoResult, portalCustomersResult, convertedLinksResult, neoLinksResult, contactMapsResult] =
     await Promise.allSettled([
       getLeads(),
       getNeoCrmCustomers(),
       listAllCustomerListItemsLite(),
       listConfirmedLeadCustomerLinks(),
       listConfirmedLeadNeoLinkLeadIds(),
-      getLeadFirstResponseMap(),
+      getCrmCustomerContactMaps(),
     ])
 
   // 신규 뷰 파생 입력 — 실패해도 목록 자체는 유지(해당 뷰만 부정확)하고 빈 컬렉션 폴백.
@@ -353,11 +373,17 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
     warnings.push("NEO 등록 링크를 불러오지 못해 '홈페이지 유입' 뷰가 부정확할 수 있습니다.")
   }
   const neoLinkedLeadIds = neoLinksResult.status === "fulfilled" ? neoLinksResult.value : new Set<string>()
-  if (firstResponseResult.status === "rejected") {
-    warnings.push("리드 첫 응답 기록을 불러오지 못해 '미응답' 뷰가 부정확할 수 있습니다.")
+  if (contactMapsResult.status === "rejected") {
+    warnings.push("CRM 컨택 기록을 불러오지 못해 '최근 컨택'·'미응답' 뷰가 부정확할 수 있습니다.")
   }
   const firstResponseMap =
-    firstResponseResult.status === "fulfilled" ? firstResponseResult.value : new Map<string, string>()
+    contactMapsResult.status === "fulfilled"
+      ? contactMapsResult.value.firstResponseByLead
+      : new Map<string, string>()
+  const latestContactMap =
+    contactMapsResult.status === "fulfilled"
+      ? contactMapsResult.value.latestContactByTarget
+      : new Map<string, string>()
 
   if (leadResult.status === "fulfilled") {
     for (const lead of leadResult.value) {
@@ -390,6 +416,8 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         slaTarget: lead.status === "new" && SLA_TARGET_LEAD_SOURCES.has(lead.source),
         firstResponseAt: firstResponseMap.get(lead.id) ?? null,
         createdAt: lead.timestamp, // timestamp는 leads.created_at 매핑 (lib/repositories/leads.ts 참고)
+        lastContactAt: latestContactMap.get(crmContactTargetKey("lead", lead.id)) ?? null,
+        activeDealCount: 0,
       })
     }
   } else {
@@ -429,6 +457,9 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         updatedAt: account.updatedAt ?? account.lastClassAt ?? account.expireAt,
         expireAt: account.expireAt ?? null,
         balance: account.balance ?? null,
+        lastContactAt:
+          latestContactMap.get(crmContactTargetKey("neo_account", account.accountId)) ?? null,
+        activeDealCount: 0,
         ...NON_LEAD_ROW_DEFAULTS,
       })
     }
@@ -443,7 +474,12 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
 
   if (portalCustomersResult.status === "fulfilled") {
     for (const item of portalCustomersResult.value) {
-      rows.push(buildPortalCustomerRow(item))
+      rows.push(
+        buildPortalCustomerRow(
+          item,
+          latestContactMap.get(crmContactTargetKey("customer", item.customer.id)) ?? null
+        )
+      )
     }
   } else {
     portalCustomersOk = false
@@ -472,6 +508,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
       if (!customerRow.ownerName && row.ownerName) customerRow.ownerName = row.ownerName
       customerRow.ownerKeys = [...new Set([...customerRow.ownerKeys, ...row.ownerKeys])]
       if (!customerRow.contact && row.contact) customerRow.contact = row.contact
+      customerRow.lastContactAt = latestIso(customerRow.lastContactAt, row.lastContactAt)
       if (customerRow.statusLabel === "전환 고객") customerRow.statusLabel = "리드 전환 완료"
       return false
     })
@@ -492,7 +529,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
       portalCustomersResult.status === "fulfilled" &&
       convertedLinksResult.status === "fulfilled" &&
       neoLinksResult.status === "fulfilled" &&
-      firstResponseResult.status === "fulfilled",
+      contactMapsResult.status === "fulfilled",
   }
 }
 

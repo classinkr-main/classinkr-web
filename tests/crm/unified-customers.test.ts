@@ -113,6 +113,7 @@ async function loadRepository(options?: {
   convertedLinks?: Record<string, string>
   neoLinkedLeadIds?: string[]
   firstResponses?: Record<string, string>
+  recentContacts?: Record<string, string>
   staleExternalCrm?: boolean
   portalCustomersFail?: boolean
   convertedLinksFail?: boolean
@@ -138,9 +139,13 @@ async function loadRepository(options?: {
       : vi.fn().mockResolvedValue(new Set(options?.neoLinkedLeadIds ?? [])),
   }))
   vi.doMock("@/lib/repositories/crm-events", () => ({
-    getLeadFirstResponseMap: options?.firstResponsesFail
+    crmContactTargetKey: (targetType: string, targetId: string) => `${targetType}:${targetId}`,
+    getCrmCustomerContactMaps: options?.firstResponsesFail
       ? vi.fn().mockRejectedValue(new Error("first responses unavailable"))
-      : vi.fn().mockResolvedValue(new Map(Object.entries(options?.firstResponses ?? {}))),
+      : vi.fn().mockResolvedValue({
+          firstResponseByLead: new Map(Object.entries(options?.firstResponses ?? {})),
+          latestContactByTarget: new Map(Object.entries(options?.recentContacts ?? {})),
+        }),
   }))
   vi.doMock("@/lib/admin-crm-customers-neo", () => ({
     getNeoCrmCustomers: vi.fn().mockResolvedValue({
@@ -403,6 +408,7 @@ describe("getCrmUnifiedCustomers", () => {
       ],
       neoLinkedLeadIds: ["site-confirmed"],
       firstResponses: { "site-confirmed": "2026-06-24T00:00:00.000Z" },
+      recentContacts: { "lead:site-confirmed": "2026-06-25T00:00:00.000Z" },
     })
 
     // 기본(all) 뷰 — 미확인 리드는 여전히 숨고, 파생 필드는 채워진다.
@@ -414,6 +420,7 @@ describe("getCrmUnifiedCustomers", () => {
       provisional: false,
       slaTarget: true,
       firstResponseAt: "2026-06-24T00:00:00.000Z",
+      lastContactAt: "2026-06-25T00:00:00.000Z",
     })
     expect(all.rows.find((row) => row.key === "lead:team-manual")).toMatchObject({
       origin: "team",
@@ -421,6 +428,7 @@ describe("getCrmUnifiedCustomers", () => {
     })
     expect(all.summary.viewCounts.site_leads).toBe(1)
     expect(all.summary.viewCounts.unanswered).toBe(1)
+    expect(all.summary.viewCounts.recent_contact).toBe(1)
 
     // provisional 리드의 담당자는 담당자 카운트에 새지 않는다(기본 뷰 배지·목록 정합).
     const ownerNames = all.owners.map((owner) => owner.ownerName)
@@ -432,6 +440,27 @@ describe("getCrmUnifiedCustomers", () => {
     expect(siteLeads.rows.map((row) => row.key)).toEqual(["lead:site-unconfirmed"])
     const unanswered = await getCrmUnifiedCustomers({ view: "unanswered", now: NOW })
     expect(unanswered.rows.map((row) => row.key)).toEqual(["lead:site-unconfirmed"])
+  })
+
+  it("filters recent contacts and currently active Portal V2 deals", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [lead({ id: "recent" }), lead({ id: "stale" })],
+      portalCustomers: [
+        portalCustomer({ id: "active", activeDeals: 2 }),
+        portalCustomer({ id: "inactive", activeDeals: 0 }),
+      ],
+      recentContacts: {
+        "lead:recent": "2026-06-25T00:00:00.000Z",
+        "lead:stale": "2026-05-01T00:00:00.000Z",
+      },
+    })
+
+    const recent = await getCrmUnifiedCustomers({ view: "recent_contact", now: NOW })
+    expect(recent.rows.map((row) => row.key)).toEqual(["lead:recent"])
+
+    const activeDeals = await getCrmUnifiedCustomers({ view: "active_deal", now: NOW })
+    expect(activeDeals.rows.map((row) => row.key)).toEqual(["customer:active"])
+    expect(activeDeals.rows[0]).toMatchObject({ activeDealCount: 2 })
   })
 
   it("degrades to empty derived inputs when neo-link/first-response lookups fail", async () => {

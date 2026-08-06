@@ -22,6 +22,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
 import {
+  CRM_SAVED_VIEW_GROUPS,
   CRM_SAVED_VIEWS,
   isCrmSavedViewActive,
   isCrmSavedViewsPath,
@@ -572,48 +573,54 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                       </Link>
                       {child.href === "/admin/crm/customers/unified" && showCrmSavedViews ? (
                         <div
-                          className="ml-3 mt-1 space-y-px border-l border-[#e8e8e4] pb-1 pl-3"
+                          className="ml-3 mt-1 space-y-2 border-l border-[#e8e8e4] pb-1 pl-3"
                           role="group"
                           aria-label="고객DB 저장 보기"
                         >
-                          <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#1a1a1a]/35">
-                            저장 보기
-                          </p>
-                          {CRM_SAVED_VIEWS.map((seg) => {
-                            const count = crmSegCounts?.[seg.view]
-                            const segmentActive = isCrmSavedViewActive(
-                              pathname,
-                              currentCrmSavedView,
-                              seg.view
-                            )
-                            return (
-                              <Link
-                                key={`mobile-${seg.view}`}
-                                href={`/admin/crm/customers/unified?view=${seg.view}`}
-                                onClick={() => setMobileMenuOpen(false)}
-                                aria-current={segmentActive ? "page" : undefined}
-                                className={`flex min-h-11 items-center gap-2 rounded-md px-3 text-[12px] transition-colors ${
-                                  segmentActive
-                                    ? "bg-[#ECFDF5] font-semibold text-[#084734]"
-                                    : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
-                                }`}
-                              >
-                                <span className="flex-1 truncate">{seg.label}</span>
-                                <span
-                                  aria-hidden={count == null}
-                                  className={`min-w-5 rounded-full px-1.5 text-center text-[10px] font-semibold tabular-nums ${
-                                    count == null
-                                      ? "bg-transparent"
-                                      : segmentActive
-                                      ? "bg-white/80 text-[#084734]"
-                                      : "bg-[#f0f0ec] text-[#1a1a1a]/55"
-                                  }`}
-                                >
-                                  {count ?? ""}
-                                </span>
-                              </Link>
-                            )
-                          })}
+                          {CRM_SAVED_VIEW_GROUPS.map((group) => (
+                            <div key={`mobile-${group.key}`}>
+                              <p className="px-3 pb-1 pt-1 text-[10px] font-semibold tracking-[0.02em] text-[#1a1a1a]/55">
+                                {group.label}
+                              </p>
+                              <div className="space-y-px">
+                                {group.views.map((seg) => {
+                                  const count = crmSegCounts?.[seg.view]
+                                  const segmentActive = isCrmSavedViewActive(
+                                    pathname,
+                                    currentCrmSavedView,
+                                    seg.view
+                                  )
+                                  return (
+                                    <Link
+                                      key={`mobile-${seg.view}`}
+                                      href={`/admin/crm/customers/unified?view=${seg.view}`}
+                                      onClick={() => setMobileMenuOpen(false)}
+                                      aria-current={segmentActive ? "page" : undefined}
+                                      className={`flex min-h-11 items-center gap-2 rounded-md px-3 text-[12px] transition-colors ${
+                                        segmentActive
+                                          ? "bg-[#ECFDF5] font-semibold text-[#084734]"
+                                          : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                                      }`}
+                                    >
+                                      <span className="flex-1 truncate">{seg.label}</span>
+                                      <span
+                                        aria-hidden={count == null}
+                                        className={`min-w-5 rounded-full px-1.5 text-center text-[10px] font-semibold tabular-nums ${
+                                          count == null
+                                            ? "bg-transparent"
+                                            : segmentActive
+                                            ? "bg-white/80 text-[#084734]"
+                                            : "bg-[#f0f0ec] text-[#1a1a1a]/55"
+                                        }`}
+                                      >
+                                        {count ?? ""}
+                                      </span>
+                                    </Link>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ) : null}
                     </div>
@@ -886,47 +893,53 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                   </Link>
                   {child.href === "/admin/crm/customers/unified" && showCrmSavedViews ? (
                     <div
-                      className="mb-1 ml-3 mt-1 space-y-px border-l border-[#e8e8e4] pb-1 pl-2.5"
+                      className="mb-1 ml-3 mt-1 space-y-1.5 border-l border-[#e8e8e4] pb-1 pl-2.5"
                       role="group"
                       aria-label="고객DB 저장 보기"
                     >
-                      <p className="px-2.5 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#1a1a1a]/35">
-                        저장 보기
-                      </p>
-                      {CRM_SAVED_VIEWS.map((seg) => {
-                        const count = crmSegCounts?.[seg.view]
-                        const segmentActive = isCrmSavedViewActive(
-                          pathname,
-                          currentCrmSavedView,
-                          seg.view
-                        )
-                        return (
-                          <Link
-                            key={seg.view}
-                            href={`/admin/crm/customers/unified?view=${seg.view}`}
-                            aria-current={segmentActive ? "page" : undefined}
-                            className={`flex min-h-7 items-center gap-2 rounded-md px-2.5 py-1 text-[11px] transition-colors ${
-                              segmentActive
-                                ? "bg-[#ECFDF5] font-semibold text-[#084734]"
-                                : "text-[#1a1a1a]/45 hover:bg-[#f5f5f2] hover:text-[#111110]"
-                            }`}
-                          >
-                            <span className="flex-1 truncate">{seg.label}</span>
-                            <span
-                              aria-hidden={count == null}
-                              className={`min-w-5 rounded-full px-1.5 text-center text-[10px] font-semibold tabular-nums ${
-                                count == null
-                                  ? "bg-transparent"
-                                  : segmentActive
-                                  ? "bg-white/80 text-[#084734]"
-                                  : "bg-[#f0f0ec] text-[#1a1a1a]/55"
-                              }`}
-                            >
-                              {count ?? ""}
-                            </span>
-                          </Link>
-                        )
-                      })}
+                      {CRM_SAVED_VIEW_GROUPS.map((group) => (
+                        <div key={group.key}>
+                          <p className="px-2.5 pb-1 pt-1 text-[10px] font-semibold tracking-[0.02em] text-[#1a1a1a]/55">
+                            {group.label}
+                          </p>
+                          <div className="space-y-px">
+                            {group.views.map((seg) => {
+                              const count = crmSegCounts?.[seg.view]
+                              const segmentActive = isCrmSavedViewActive(
+                                pathname,
+                                currentCrmSavedView,
+                                seg.view
+                              )
+                              return (
+                                <Link
+                                  key={seg.view}
+                                  href={`/admin/crm/customers/unified?view=${seg.view}`}
+                                  aria-current={segmentActive ? "page" : undefined}
+                                  className={`flex min-h-7 items-center gap-2 rounded-md px-2.5 py-1 text-[11px] transition-colors ${
+                                    segmentActive
+                                      ? "bg-[#ECFDF5] font-semibold text-[#084734]"
+                                      : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                                  }`}
+                                >
+                                  <span className="flex-1 truncate">{seg.label}</span>
+                                  <span
+                                    aria-hidden={count == null}
+                                    className={`min-w-5 rounded-full px-1.5 text-center text-[10px] font-semibold tabular-nums ${
+                                      count == null
+                                        ? "bg-transparent"
+                                        : segmentActive
+                                        ? "bg-white/80 text-[#084734]"
+                                        : "bg-[#f0f0ec] text-[#1a1a1a]/55"
+                                    }`}
+                                  >
+                                    {count ?? ""}
+                                  </span>
+                                </Link>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : null}
                 </div>

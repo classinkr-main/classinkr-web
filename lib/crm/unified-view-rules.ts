@@ -14,6 +14,8 @@ export type CrmUnifiedSavedView =
   | "new_leads"
   | "needs_care"
   | "my_owner"
+  | "recent_contact"
+  | "active_deal"
   | "expiring"
   | "dormant"
   | "hot_lead"
@@ -53,6 +55,10 @@ export interface CrmUnifiedCustomerRow {
   firstResponseAt: string | null
   /** 리드 생성 시각(SLA 경과 계산용, lead 전용) */
   createdAt: string | null
+  /** 사람이 남긴 CRM 기록 중 가장 최근 컨택 시각 */
+  lastContactAt?: string | null
+  /** Portal V2에서 현재 진행 중인 딜 수 */
+  activeDealCount?: number
 }
 
 export function rowMatchesOwner(row: CrmUnifiedCustomerRow, ownerKeys: Set<string>) {
@@ -78,6 +84,13 @@ export function matchesSavedView(
   if (view === "new_leads") return row.lifecycle === "new_lead"
   if (view === "needs_care") return row.source === "neo_account" && row.lifecycle === "account_risk"
   if (view === "my_owner") return ownerKeys.size > 0 && rowMatchesOwner(row, ownerKeys)
+  // 최근 컨택: 사람이 남긴 CRM 기록이 최근 30일 안에 있는 고객/리드.
+  if (view === "recent_contact") {
+    const d = daysUntil(row.lastContactAt ?? null, nowMs)
+    return d != null && d <= 0 && d >= -30
+  }
+  // 진행 중인 딜: Portal V2 고객 중 active_deals가 1건 이상.
+  if (view === "active_deal") return row.source === "customer" && (row.activeDealCount ?? 0) > 0
   // 만료 임박: NEO 만료일이 14일 이내(지난 것 포함).
   if (view === "expiring") {
     const d = daysUntil(row.expireAt, nowMs)
@@ -101,8 +114,12 @@ export function matchesSavedView(
   return true
 }
 
-// 미확인(provisional) 리드는 처리 큐 성격의 두 뷰에서만 노출한다 — 일반 뷰 오염 방지.
-const PROVISIONAL_VISIBLE_VIEWS: ReadonlySet<CrmUnifiedSavedView> = new Set(["site_leads", "unanswered"])
+// 미확인(provisional) 리드는 처리 큐 또는 실제 컨택 근거가 있는 뷰에서만 노출한다.
+const PROVISIONAL_VISIBLE_VIEWS: ReadonlySet<CrmUnifiedSavedView> = new Set([
+  "site_leads",
+  "unanswered",
+  "recent_contact",
+])
 
 export function rowVisibleInView(
   row: CrmUnifiedCustomerRow,
