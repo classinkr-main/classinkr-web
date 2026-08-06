@@ -18,7 +18,6 @@ import CrmPriorityQueuePanel from "@/components/admin/crm/CrmPriorityQueuePanel"
 import CrmWeekAheadPanel from "@/components/admin/crm/CrmWeekAheadPanel"
 import CrmCustomerPicker from "@/components/admin/crm/CrmCustomerPicker"
 import Customer360DrawerSkeleton from "@/components/admin/crm/Customer360DrawerSkeleton"
-import CrmActionRail from "@/components/admin/crm/rail/CrmActionRail"
 import { getRecentCustomers, type RecentCustomer } from "@/lib/crm/recent-customers"
 import { Toast } from "@/components/admin/crm/leads/shared"
 import { formatCNY, formatKRWAbbrev, CRM_CURRENCY_BADGE, type CrmCurrency } from "@/lib/crm/money-format"
@@ -302,6 +301,117 @@ function CustomerLogIcon({ kind }: { kind: AdminCrmCustomerLogKind }) {
 function ValueSkeleton({ className = "h-6 w-20" }: { className?: string }) {
   return (
     <span aria-hidden className={`inline-block animate-pulse rounded-md bg-[#f0f0ec] align-middle ${className}`} />
+  )
+}
+
+function LeadSummaryPanel({
+  leadKpis,
+  loading,
+  error,
+  onRetry,
+}: {
+  leadKpis: LeadActionKpis | null
+  loading: boolean
+  error: string | null
+  onRetry: () => void
+}) {
+  const valueOrSkeleton = (value: number | null | undefined, tone?: string) =>
+    loading && !leadKpis ? (
+      <ValueSkeleton className="h-6 w-12" />
+    ) : error && !leadKpis ? (
+      <span className="text-[#B85C33]">—</span>
+    ) : (
+      <span className={tone}>{formatNumber(value)}</span>
+    )
+
+  return (
+    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">New Sales</p>
+          <h2 className="mt-1 text-[18px] font-bold text-[#111110]">리드 요약</h2>
+        </div>
+        <Link
+          href="/admin/crm/customers/leads"
+          className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734] underline-offset-2 hover:underline"
+        >
+          구매 전 리드
+          <ExternalLink className="h-3 w-3" />
+        </Link>
+      </div>
+
+      {error && !leadKpis ? (
+        <div role="alert" className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]">
+          <span>리드 현황을 확인하지 못했습니다. 아래 숫자는 0이 아니라 확인 불가 상태입니다.</span>
+          <button type="button" onClick={onRetry} className="shrink-0 font-semibold underline underline-offset-2">
+            다시 확인
+          </button>
+        </div>
+      ) : null}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile
+          icon={<UserPlus className="h-4 w-4" />}
+          iconLayout="inline"
+          variant="bare"
+          compact
+          href="/admin/crm/customers/leads?filter=unconfirmed"
+          label="미확인 유입"
+          value={valueOrSkeleton(
+            leadKpis?.unconfirmedCount,
+            (leadKpis?.unconfirmedCount ?? 0) > 0 ? "text-[#8D6C1F]" : undefined
+          )}
+          hint="문의·데모·뉴스레터 · 확인 전"
+        />
+
+        <StatTile
+          icon={<PhoneCall className="h-4 w-4" />}
+          iconLayout="inline"
+          variant="bare"
+          compact
+          href="/admin/crm/customers/leads?filter=unresponded"
+          label="미응답 리드"
+          value={valueOrSkeleton(
+            leadKpis?.unrespondedCount,
+            (leadKpis?.unrespondedCount ?? 0) > 0 ? "text-[#B85C33]" : undefined
+          )}
+          hint={
+            <>
+              48h 이상 {loading && !leadKpis ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(leadKpis?.unresponded48hCount)}건
+            </>
+          }
+        />
+
+        <StatTile
+          icon={<AlertCircle className="h-4 w-4" />}
+          iconLayout="inline"
+          variant="bare"
+          compact
+          href="/admin/crm/customers/leads?focus=risk"
+          label="오버듀 팔로업"
+          value={valueOrSkeleton(
+            leadKpis?.overdueFollowUpCount,
+            (leadKpis?.overdueFollowUpCount ?? 0) > 0 ? "text-[#B85C33]" : undefined
+          )}
+          hint={
+            <>
+              오늘 예정 {loading && !leadKpis ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(leadKpis?.todayFollowUpCount)}건
+            </>
+          }
+        />
+
+        <StatTile
+          icon={<Target className="h-4 w-4" />}
+          iconLayout="inline"
+          variant="bare"
+          compact
+          href="/admin/crm/customers/leads?filter=contacted"
+          label="컨택 중"
+          value={valueOrSkeleton(leadKpis?.byStatus.contacted, "text-[#084734]")}
+          hint="구매 전 영업 진행 리드"
+        />
+      </div>
+    </section>
   )
 }
 
@@ -610,7 +720,17 @@ function CurrencyChip({ currency, tone = "light" }: { currency: CrmCurrency; ton
 // 코크핏 KPI 히어로 — 흩어진 핵심 지표를 상단 한 밴드로 합성(B 코크핏 이식). snapshot 필드만 재배치(추가 fetch 0).
 // 통화 3종이 인접하므로 카드마다 통화 칩을 강제: 인식매출·미수=₩(자체집계), 오더=$(USD), 동기화=¥(CNY).
 // 아침 지휘대 재배치(H3) — 우선순위 큐가 첫 화면 주인공이 되도록 컴팩트 밴드로 축소(값·캡션 불변).
-function CrmCockpitHero({ overview, loading }: { overview: AdminCrmOverview | null; loading: boolean }) {
+function CrmCockpitHero({
+  overview,
+  loading,
+  error,
+  onRetry,
+}: {
+  overview: AdminCrmOverview | null
+  loading: boolean
+  error: string | null
+  onRetry: () => void
+}) {
   const revenue = overview?.business.revenue
   const kpis = overview?.business.kpis
   const neoKpis = overview?.neoCrm?.kpis
@@ -618,6 +738,17 @@ function CrmCockpitHero({ overview, loading }: { overview: AdminCrmOverview | nu
   const pending = loading && !overview
   const riskCount = kpis?.paymentRiskCount ?? 0
   const hasRisk = riskCount > 0 || (revenue?.outstandingAmount ?? 0) > 0
+
+  if (error && !overview) {
+    return (
+      <div role="alert" className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-[12px] text-[#B85C33]">
+        <span>매출·수금 현황을 확인하지 못했습니다. 의사결정용 수치를 0으로 대체하지 않았습니다.</span>
+        <button type="button" onClick={onRetry} className="shrink-0 font-semibold underline underline-offset-2">
+          다시 확인
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="mb-4 grid grid-cols-2 gap-2.5 xl:grid-cols-4">
@@ -1324,7 +1455,7 @@ export default function CrmPage() {
   const router = useRouter()
   const [leadKpis, setLeadKpis] = useState<LeadActionKpis | null>(null)
   const [leadKpisLoading, setLeadKpisLoading] = useState(true)
-  const [, setLeadKpisError] = useState<string | null>(null)
+  const [leadKpisError, setLeadKpisError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [drawerTarget, setDrawerTarget] = useState<{ key: string; name: string } | null>(null)
@@ -1447,17 +1578,10 @@ export default function CrmPage() {
     setNeoCrmRefreshKey((current) => current + 1)
   }, [fetchLeadKpis, fetchCrmOverview, fetchBranchKpis, reportOpen, reportTab])
 
-  // 빠른 실행 ② 기록 추가 — 우측 액션 레일(빠른 생성 폼)로 스크롤·포커스.
-  // 레일이 없으면(예외 상황) 기록 표면 딥링크로 폴백한다.
+  // 기록 입력은 /activity의 단일 컴포저가 소유한다. 홈 우측 레일과 기록 화면에 같은 폼을
+  // 중복 노출하면 우선순위 큐가 좁아지고 사용자는 저장 위치를 다시 판단해야 한다.
   const focusQuickRecord = useCallback(() => {
-    const rail = document.querySelector<HTMLElement>('aside[aria-label="CRM 액션 레일"]')
-    if (!rail) {
-      router.push("/admin/crm/activity")
-      return
-    }
-    rail.scrollIntoView({ behavior: "smooth", block: "start" })
-    const field = rail.querySelector<HTMLElement>("input:not([type='file']), textarea")
-    field?.focus({ preventScroll: true })
+    router.push("/admin/crm/activity")
   }, [router])
 
   // 빠른 실행 ③ 검색 — 사이드바 '빠른 이동·검색'과 동일 이벤트로 CrmCommandPalette를 연다.
@@ -1521,13 +1645,24 @@ export default function CrmPage() {
         </div>
       </div>
 
-      {/* 코크핏 KPI 히어로 — 컴팩트 밴드(H3): 우선순위 큐 위에 핵심 숫자만 한 줄 */}
-      <CrmCockpitHero overview={crmOverview} loading={crmOverviewLoading} />
+      {/* 구매 전 신규 매출 풀을 먼저 확인하고, 바로 아래 행동 큐에서 처리한다. */}
+      <LeadSummaryPanel
+        leadKpis={leadKpis}
+        loading={leadKpisLoading}
+        error={leadKpisError}
+        onRetry={() => void fetchLeadKpis({ force: true })}
+      />
 
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="min-w-0">
-      {/* 우선순위 작업대 — 아침 지휘대의 첫 화면 주인공(H3). 3소스 룰베이스 큐 */}
+      {/* 리드 요약 다음에 오늘의 행동 큐를 붙여 숫자 확인 → 처리 흐름을 한 축으로 만든다. */}
       <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} />
+
+      {/* 결과 지표는 행동 큐 뒤의 참고 밴드로 둔다. */}
+      <CrmCockpitHero
+        overview={crmOverview}
+        loading={crmOverviewLoading}
+        error={crmOverviewError}
+        onRetry={() => void fetchCrmOverview({ force: true })}
+      />
 
       {/* 고객 찾기 — 검색 + 최근 본 + 자주 접촉을 한 표면에. 고객으로 가는 입구를 한 곳으로 모은다
           (자주 접촉 칩은 리드·일정 요약 안에 끼어 있던 것을 여기로 옮겼다). */}
@@ -1589,127 +1724,6 @@ export default function CrmPage() {
                 </span>
               </Link>
             ))}
-          </div>
-        ) : null}
-      </section>
-
-      {/* 리드 요약 — 집계 딥링크(작업대와 별개, 한눈 카운트).
-          '이번 주 설치·방문' 타일은 아래 설치·방문 일정 카드와 같은 데이터라 카드 쪽으로 합쳤다. */}
-      <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Quick Stats</p>
-            <h2 className="mt-1 text-[18px] font-bold text-[#111110]">리드 요약</h2>
-          </div>
-          <span className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[12px] font-medium text-[#1a1a1a]/55">
-            딥링크
-          </span>
-        </div>
-
-        {/* KPI 로컬 재구현 금지(W2-2b) — viz StatTile(soft) 위임. 값·라벨·캡션·딥링크·스켈레톤 불변,
-            breach 색은 신호 예산제대로 값에만(정상=중립, 컨테이너 상시 채색 제거). */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatTile
-            icon={<UserPlus className="h-4 w-4" />}
-            iconLayout="inline"
-            variant="soft"
-            compact
-            href="/admin/crm/customers/leads?filter=unconfirmed"
-            label="미확인 유입"
-            value={
-              leadKpisLoading && !leadKpis ? (
-                <ValueSkeleton className="h-6 w-12" />
-              ) : (
-                <span className={(leadKpis?.unconfirmedCount ?? 0) > 0 ? "text-[#8D6C1F]" : undefined}>
-                  {formatNumber(leadKpis?.unconfirmedCount)}
-                </span>
-              )
-            }
-            hint="공개 폼(문의·데모·뉴스레터) · 확인 전"
-          />
-
-          <StatTile
-            icon={<PhoneCall className="h-4 w-4" />}
-            iconLayout="inline"
-            variant="soft"
-            compact
-            href="/admin/crm/customers/leads?filter=unresponded"
-            label="미응답 리드"
-            value={
-              leadKpisLoading && !leadKpis ? (
-                <ValueSkeleton className="h-6 w-12" />
-              ) : (
-                <span className={(leadKpis?.unrespondedCount ?? 0) > 0 ? "text-[#B85C33]" : undefined}>
-                  {formatNumber(leadKpis?.unrespondedCount)}
-                </span>
-              )
-            }
-            hint={
-              <>
-                48h 이상 {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(leadKpis?.unresponded48hCount)}건
-              </>
-            }
-          />
-
-          <StatTile
-            icon={<AlertCircle className="h-4 w-4" />}
-            iconLayout="inline"
-            variant="soft"
-            compact
-            href="/admin/crm/customers/leads?focus=risk"
-            label="오버듀 팔로업"
-            value={
-              leadKpisLoading && !leadKpis ? (
-                <ValueSkeleton className="h-6 w-12" />
-              ) : (
-                <span className={(leadKpis?.overdueFollowUpCount ?? 0) > 0 ? "text-[#B85C33]" : undefined}>
-                  {formatNumber(leadKpis?.overdueFollowUpCount)}
-                </span>
-              )
-            }
-            hint={
-              <>
-                오늘 예정 {leadKpisLoading && !leadKpis ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(leadKpis?.todayFollowUpCount)}건
-              </>
-            }
-          />
-
-          <StatTile
-            icon={<Target className="h-4 w-4" />}
-            iconLayout="inline"
-            variant="soft"
-            compact
-            href="/admin/crm/customers/leads?filter=converted"
-            label="전환 고객"
-            value={
-              leadKpisLoading && !leadKpis ? (
-                <ValueSkeleton className="h-6 w-12" />
-              ) : (
-                <span className="text-[#084734]">{formatNumber(leadKpis?.byStatus.converted)}</span>
-              )
-            }
-            hint="누적 어카운트 전환"
-          />
-        </div>
-
-        {(crmOverview?.business.frequentCustomers.length ?? 0) > 0 ? (
-          <div className="mt-3 flex flex-col gap-2 rounded-xl bg-[#fafaf8] px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3">
-            <span className="shrink-0 text-[11px] font-semibold text-[#1a1a1a]/40">자주 접촉 고객 · 14일</span>
-            <div className="no-scrollbar flex gap-2 overflow-x-auto">
-              {crmOverview?.business.frequentCustomers.map((customer) => (
-                <Link
-                  key={customer.customerId}
-                  href={customer.href}
-                  title={customer.latestSummary ?? undefined}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-1 text-[12px] text-[#111110] transition-colors hover:border-[#c8c8c4]"
-                >
-                  <span className="max-w-[140px] truncate font-medium">{customer.customerName}</span>
-                  <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[11px] font-semibold tabular-nums text-[#1a1a1a]/55">
-                    {customer.contactCount}
-                  </span>
-                </Link>
-              ))}
-            </div>
           </div>
         ) : null}
       </section>
@@ -1785,15 +1799,7 @@ export default function CrmPage() {
         <CrmHealthDonut />
       </div>
 
-          <CrmCoverageStrip />
-        </div>
-
-        {/* 우측 액션 레일(H4) — 기록 빠른 생성 · 최근 기록. 데이터 자체 fetch,
-            xl+에서 sticky + 독립 스크롤(레일 내부에서 처리). 저장 성공 시 최근 고객 로그 갱신.
-            '오늘 할 일'은 hideTasks로 끈다 — 본문 주간 조망의 CrmWeekAheadPanel이 같은 crm_tasks를
-            지연·오늘·이번 주·미룬 버킷 + 완료/미루기까지 상위집합으로 이미 다룬다. */}
-        <CrmActionRail hideTasks onActivitySaved={() => void fetchCrmOverview({ force: true })} />
-      </div>
+      <CrmCoverageStrip />
 
       {/* 리포트 · 분석 — 흩어져 있던 참조 블록 5개를 한 아코디언 안의 탭으로 단일화 */}
       <CrmHomeReportSection
