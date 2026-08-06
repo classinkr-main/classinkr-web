@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { CalendarClock, CheckCircle2, Clock3, Filter, ListTodo, RefreshCw } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
@@ -47,11 +47,14 @@ export default function CrmWeekAheadPanel({
   compact = false,
   embedded = false,
   previewRows = WEEK_AHEAD_PREVIEW_ROWS,
+  refreshKey = 0,
 }: {
   compact?: boolean
   embedded?: boolean
   /** 접힌 상태에서 그릴 할 일 행 수(버킷 합산). 나머지는 "+N건 더 보기"로 펼친다. */
   previewRows?: number
+  /** 값이 바뀌면 캐시를 건너뛰고 다시 조회한다(홈 새로고침 연동). */
+  refreshKey?: number
 }) {
   const [expanded, setExpanded] = useState(false)
   const { currentOwner } = useCrmOwners()
@@ -93,8 +96,15 @@ export default function CrmWeekAheadPanel({
     return `/api/admin/crm/tasks?${params.toString()}`
   }, [owner])
 
+  // 담당자를 바꾸면 요청이 겹친다. 늦게 끝난 이전 요청이 최신 목록을 덮어쓰지 않도록
+  // 마지막 요청만 상태에 반영한다.
+  const requestSeq = useRef(0)
+
   const load = useCallback(
     async (options?: { force?: boolean }) => {
+      const seq = ++requestSeq.current
+      const isLatest = () => requestSeq.current === seq
+
       const cached = getCachedAdminJson<ListCrmTasksResult>(url, { cacheKey: url })
       if (cached && !options?.force) setData(cached)
       setLoading(!cached)
@@ -106,22 +116,30 @@ export default function CrmWeekAheadPanel({
           undefined,
           { cacheKey: url, ttlMs: TTL_MS, staleWhileRevalidateMs: 5 * 60_000, force: options?.force }
         )
+        if (!isLatest()) return
         setData(next)
       } catch (err) {
+        if (!isLatest()) return
         setError(err instanceof Error ? err.message : "이번 주 할 일을 불러오지 못했습니다.")
       } finally {
-        setLoading(false)
-        setRefreshing(false)
+        if (isLatest()) {
+          setLoading(false)
+          setRefreshing(false)
+        }
       }
     },
     [url]
   )
 
   // 담당자 해석 확정 전에는 fetch를 열지 않는다 — settle 후 최종 owner URL로 1회만.
+  // 홈 새로고침(refreshKey)은 TTL 캐시를 건너뛰어야 실제로 다시 세어진다.
+  const lastRefreshKey = useRef(refreshKey)
   useEffect(() => {
     if (!ownersSettled) return
-    void load()
-  }, [load, ownersSettled])
+    const forced = lastRefreshKey.current !== refreshKey
+    lastRefreshKey.current = refreshKey
+    void load(forced ? { force: true } : undefined)
+  }, [load, ownersSettled, refreshKey])
 
   const groups = useMemo(() => {
     const nowMs = Date.now()

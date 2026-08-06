@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { AlertTriangle, CalendarClock, CheckCircle2, Clock3, ExternalLink, Filter, RefreshCw, XCircle } from "lucide-react"
 
@@ -160,8 +160,15 @@ export default function CrmPriorityQueuePanel({
   const laneCopy = LANE_FILTERS.find((filter) => filter.key === lane) ?? LANE_FILTERS[0]
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
 
+  // 필터를 연타하면 요청이 겹친다. 늦게 끝난 이전 요청이 최신 화면을 덮어쓰면
+  // 제목(레인)과 목록이 어긋난 채로 남으므로, 마지막 요청만 상태에 반영한다.
+  const requestSeq = useRef(0)
+
   const load = useCallback(
     async (options?: { force?: boolean }) => {
+      const seq = ++requestSeq.current
+      const isLatest = () => requestSeq.current === seq
+
       const cached = getCachedAdminJson<CrmPriorityQueue>(url, { cacheKey: url })
       if (cached && !options?.force) setData(cached)
       // 레인·소스·시점 필터가 바뀌어 새 URL 캐시가 없으면 이전 큐를 남기지 않는다.
@@ -182,19 +189,28 @@ export default function CrmPriorityQueuePanel({
             force: options?.force,
           }
         )
+        if (!isLatest()) return
         setData(next)
       } catch (err) {
+        if (!isLatest()) return
         setError(err instanceof Error ? err.message : "우선순위를 불러오지 못했습니다.")
       } finally {
-        setLoading(false)
-        setRefreshing(false)
+        if (isLatest()) {
+          setLoading(false)
+          setRefreshing(false)
+        }
       }
     },
     [url]
   )
 
+  // 홈 새로고침(refreshKey 증가)은 "지금 다시 세어 달라"는 뜻이다. force 없이 load()만
+  // 다시 부르면 90초 TTL 캐시가 그대로 돌아와 화면이 아무것도 바뀌지 않는다.
+  const lastRefreshKey = useRef(refreshKey)
   useEffect(() => {
-    void load()
+    const forced = lastRefreshKey.current !== refreshKey
+    lastRefreshKey.current = refreshKey
+    void load(forced ? { force: true } : undefined)
   }, [load, refreshKey])
 
   const handleLeadAction = useCallback(
@@ -241,6 +257,9 @@ export default function CrmPriorityQueuePanel({
       setActingId(`${item.id}:contact`)
       setActionMessage(null)
       setError(null)
+      // 기록 저장과 상태 갱신은 별개의 두 요청이다. 뒤쪽이 실패했을 때 "저장 실패"라고만 하면
+      // 이미 남은 연락 기록을 운영자가 다시 입력해 중복이 생긴다 — 어디까지 됐는지 말한다.
+      let logSaved = false
       try {
         await adminFetchJsonCached<{ log: unknown }>(`/api/admin/leads/${encodeURIComponent(leadId)}/logs`, {
           method: "POST",
@@ -250,6 +269,7 @@ export default function CrmPriorityQueuePanel({
             notes: draft.notes.trim() || undefined,
           }),
         })
+        logSaved = true
 
         const patch: { status: "contacted"; follow_up_at?: string | null } = { status: "contacted" }
         if (draft.nextSchedule === "tomorrow") patch.follow_up_at = tomorrowMorningIso()
@@ -263,7 +283,15 @@ export default function CrmPriorityQueuePanel({
         setActionMessage("선택한 채널·결과로 연락 기록을 저장했습니다.")
         await load({ force: true })
       } catch (err) {
-        setError(err instanceof Error ? err.message : "연락 결과 저장에 실패했습니다.")
+        const detail = err instanceof Error ? err.message : "알 수 없는 오류"
+        if (logSaved) {
+          // 기록은 남았다 — 폼을 닫아 재입력(중복 기록)을 막고 남은 작업만 알린다.
+          setLeadContactDraft(null)
+          setError(`연락 기록은 저장됐지만 상태·다음 일정 반영에 실패했습니다(${detail}). 리드 보드에서 상태를 확인하세요.`)
+          await load({ force: true })
+        } else {
+          setError(`연락 기록을 저장하지 못했습니다(${detail}). 입력은 그대로 두었으니 다시 시도하세요.`)
+        }
       } finally {
         setActingId(null)
       }
@@ -310,6 +338,8 @@ export default function CrmPriorityQueuePanel({
             <h2 className="mt-1 text-[18px] font-bold text-[#111110]">{laneCopy.label} 우선순위</h2>
             <p className="mt-0.5 text-[11px] leading-relaxed text-[#615D59]">
               {laneCopy.description} · 시점 범주 우선, 같은 범주에서는 점수 높은 순
+              {/* 캐시로 뜨는 목록이라 "지금 상태"인지 아닌지를 화면에서 알 수 있어야 한다. */}
+              {data?.generatedAt ? ` · 기준 ${formatDate(data.generatedAt)}` : ""}
             </p>
           </div>
         )}
@@ -371,10 +401,10 @@ export default function CrmPriorityQueuePanel({
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">오늘 처리</p>
             <div className="mt-1 flex items-baseline gap-1.5">
               <span className="text-[38px] font-extrabold leading-none tracking-[-0.045em] tabular-nums text-[#111110]">
-                {(data.summary.bucketCounts.today ?? 0).toLocaleString("ko-KR")}
+                {(data.summary.bucketCounts?.today ?? 0).toLocaleString("ko-KR")}
               </span>
               <span className="text-[11px] font-medium text-[#615D59]">
-                / 후보 {data.summary.laneTotals[lane].toLocaleString("ko-KR")}
+                / 후보 {(data.summary.laneTotals?.[lane] ?? 0).toLocaleString("ko-KR")}
               </span>
             </div>
             {data.summary.laneCritical > 0 ? (
@@ -394,7 +424,7 @@ export default function CrmPriorityQueuePanel({
                 setLane(filter.key)
                 setBucket("all")
               }}
-              aria-label={`${filter.label} ${data.summary.laneTotals[filter.key].toLocaleString("ko-KR")}건`}
+              aria-label={`${filter.label} ${(data.summary.laneTotals?.[filter.key] ?? 0).toLocaleString("ko-KR")}건`}
               aria-pressed={lane === filter.key}
               className={`relative border-b border-l border-[#e8e8e4] px-3 py-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] sm:border-b-0 ${
                 lane === filter.key
@@ -406,7 +436,7 @@ export default function CrmPriorityQueuePanel({
                 {filter.label}
               </p>
               <p className={`mt-1 text-[28px] font-extrabold leading-none tracking-[-0.035em] tabular-nums ${lane === filter.key ? "text-[#084734]" : "text-[#111110]"}`}>
-                {data.summary.laneTotals[filter.key].toLocaleString("ko-KR")}
+                {(data.summary.laneTotals?.[filter.key] ?? 0).toLocaleString("ko-KR")}
               </p>
             </button>
           ))}
@@ -785,12 +815,136 @@ export default function CrmPriorityQueuePanel({
               </div>
             ) : null}
           </div>
-        ) : (
+        ) : !data ? (
+          // 실패와 "할 일 없음"은 다른 상태다 — 못 불러온 것을 "없다"로 말하지 않는다.
           <div className="p-6 text-center text-[13px] text-[#1a1a1a]/40">
-            {laneCopy.label} 레인에 표시할 우선순위가 없습니다.
+            우선순위를 불러오지 못했습니다. 위 새로고침으로 다시 시도하세요.
           </div>
+        ) : (
+          <PriorityQueueEmptyState
+            laneLabel={laneCopy.label}
+            lane={lane}
+            laneTotals={data.summary.laneTotals}
+            bucket={bucket}
+            bucketLabel={bucketOptions.find((option) => option.bucket === bucket)?.label ?? null}
+            bucketTotal={Object.values(data.summary.bucketCounts ?? {}).reduce((sum, count) => sum + count, 0)}
+            ownerFiltered={owner !== ""}
+            onClearBucket={() => setBucket("all")}
+            onClearOwner={() => setOwner("")}
+            onSelectLane={(next) => {
+              setLane(next)
+              setBucket("all")
+            }}
+          />
         )}
       </div>
+
+      {/*
+        할 일은 이 큐에서 의도적으로 뺐다(매출 기회와 경쟁시키지 않기 위해). 그런데 건수를
+        아무 데도 안 보여주면 "할 일이 없다"로 읽힌다 — 규모와 갈 곳을 한 줄로 남긴다.
+      */}
+      {(data?.summary.sourceTotals?.task ?? 0) > 0 ? (
+        <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-[11px] text-[#1a1a1a]/45">
+          <span>
+            이 목록에는 할 일이 빠져 있습니다 · 활성 할 일{" "}
+            <b className="font-semibold text-[#111110]">
+              {(data?.summary.sourceTotals?.task ?? 0).toLocaleString("ko-KR")}건
+            </b>
+          </span>
+          <Link href="/admin/crm/activity" className="font-semibold text-[#084734] underline-offset-2 hover:underline">
+            할 일에서 보기
+          </Link>
+        </p>
+      ) : null}
     </section>
+  )
+}
+
+/**
+ * 빈 목록은 원인이 셋이다 — 시점 필터, 담당자 필터, 정말 없음. 셋을 구분하지 않으면
+ * 운영자가 "왜 비었지"를 필터를 하나씩 되돌리며 알아내야 한다. 원인과 되돌릴 버튼을 같이 준다.
+ */
+function PriorityQueueEmptyState({
+  laneLabel,
+  lane,
+  laneTotals,
+  bucket,
+  bucketLabel,
+  bucketTotal,
+  ownerFiltered,
+  onClearBucket,
+  onClearOwner,
+  onSelectLane,
+}: {
+  laneLabel: string
+  lane: LaneFilter
+  laneTotals: Record<CrmPriorityLane, number>
+  bucket: BucketFilter
+  bucketLabel: string | null
+  bucketTotal: number
+  ownerFiltered: boolean
+  onClearBucket: () => void
+  onClearOwner: () => void
+  onSelectLane: (lane: LaneFilter) => void
+}) {
+  const otherLanes = LANE_FILTERS.filter((filter) => filter.key !== lane && (laneTotals?.[filter.key] ?? 0) > 0)
+  const bucketFiltered = bucket !== "all"
+  const resolvedCause = bucketFiltered && bucketTotal > 0 ? "bucket" : ownerFiltered ? "owner" : "none"
+
+  return (
+    <div className="px-4 py-6 text-center">
+      <p className="text-[13px] font-semibold text-[#111110]">
+        {resolvedCause === "bucket"
+          ? `‘${bucketLabel ?? "선택한 시점"}’에 해당하는 건이 없습니다`
+          : resolvedCause === "owner"
+            ? `선택한 담당자의 ${laneLabel} 건이 없습니다`
+            : `${laneLabel} 레인은 지금 비어 있습니다`}
+      </p>
+      <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
+        {resolvedCause === "bucket"
+          ? `시점 필터를 풀면 이 레인에 ${bucketTotal.toLocaleString("ko-KR")}건이 있습니다.`
+          : resolvedCause === "owner"
+            ? "담당 전체로 넓히면 다른 담당자의 건이 보일 수 있습니다."
+            : "처리할 후보가 없다는 뜻입니다 — 데이터 누락이 아닙니다."}
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+        {resolvedCause === "bucket" ? (
+          <button
+            type="button"
+            onClick={onClearBucket}
+            className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+          >
+            시점 필터 해제
+          </button>
+        ) : null}
+        {ownerFiltered ? (
+          <button
+            type="button"
+            onClick={onClearOwner}
+            className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+          >
+            담당 전체로 보기
+          </button>
+        ) : null}
+        {otherLanes.map((filter) => (
+          <button
+            key={filter.key}
+            type="button"
+            onClick={() => onSelectLane(filter.key)}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+          >
+            {filter.label}
+            <span className="tabular-nums text-[#084734]">{laneTotals[filter.key].toLocaleString("ko-KR")}</span>
+          </button>
+        ))}
+        <Link
+          href="/admin/crm/customers/leads"
+          className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/60 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+        >
+          리드 보드 열기
+        </Link>
+      </div>
+    </div>
   )
 }

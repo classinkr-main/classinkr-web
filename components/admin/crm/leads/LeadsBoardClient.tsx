@@ -1019,9 +1019,16 @@ export default function LeadsBoardClient() {
     return () => { cancelled = true }
   }, [])
 
+  // 언마운트 후 setState(경고) 방지 + 토스트가 연달아 뜰 때 이전 타이머가 새 토스트를 지우지 않게.
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+  }, [])
+
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000)
   }
 
   const fetchLeads = useCallback(async (options?: { force?: boolean }) => {

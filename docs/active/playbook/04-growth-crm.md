@@ -55,6 +55,15 @@
 - `nav_preset`은 메뉴 배치일 뿐 API 권한이 아니다.
 - 데이터 접근은 `createSupabaseAdminClient()`와 해당 도메인 repository를 사용한다.
 
+### 전량 조회
+
+- PostgREST는 서버 `max-rows`를 넘는 행을 오류 없이 잘라 준다. 전량을 전제로 하는 조회
+  (리드 보드·우선순위 큐·캠페인 귀속)는 `range` 페이지네이션으로 끝까지 넘긴다.
+  `lib/repositories/leads.ts`의 `fetchAllLeadRows`가 기준 구현이다.
+- 페이지 전진은 요청 크기가 아니라 실제 수신 행 수만큼 한다. 서버 상한이 요청 크기보다 작을 수 있다.
+- 정렬은 전순서여야 한다. `created_at` 단독 정렬은 동시각 행이 페이지 경계에서 중복·누락되므로
+  `id` 같은 타이브레이커를 함께 건다.
+
 ## 4. 검증
 
 ```bash
@@ -68,6 +77,8 @@ npm run build
 ```bash
 npx vitest run tests/api/lead-capture.test.ts
 npx vitest run tests/repositories/leads-mode.test.ts
+npx vitest run tests/repositories/leads-pagination.test.ts
+npx vitest run tests/crm
 ```
 
 - 이벤트 타입과 서버 allowlist 동시 등록 확인
@@ -77,6 +88,8 @@ npx vitest run tests/repositories/leads-mode.test.ts
 
 ## 5. 먼저 읽을 것
 
+0. CRM 탭 작업이면 [CRM 탭 품질 감사(2026-08-06)](../crm-tab-quality-audit-2026-08-06.md) —
+   항목별 채점, 고친 결함, 90선에 못 미친 채 남긴 항목(큐 스코어링 비용, 필터 URL 소유권)
 1. `lib/server/lead-capture.ts`
 2. `lib/consent/consent.ts`, `lib/analytics.ts`, `app/api/track/event/route.ts`
 3. `lib/admin-crm-revenue.ts`, `lib/crm-source-linking.ts`

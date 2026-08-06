@@ -235,20 +235,65 @@ function supabaseToLegacy(row: Lead): LeadRecord {
 
 /* ─── READ ─── */
 
+/**
+ * PostgREST는 서버의 max-rows 설정을 넘는 행을 조용히 잘라 반환한다. 전량이 필요한 화면
+ * (리드 보드·우선순위 큐·캠페인 귀속)에서 이 절단은 에러가 아니라 "그런 리드는 없다"로
+ * 보이므로, 페이지를 끝까지 넘겨 전량을 모은다.
+ *
+ * created_at 하나만으로는 전순서가 아니다 — 동일 시각 리드가 페이지 경계에 걸리면 중복·누락이
+ * 생기므로 id를 타이브레이커로 함께 정렬한다. 페이지 전진은 요청한 크기가 아니라 실제로 받은
+ * 행 수만큼 한다(서버 상한이 요청 크기보다 작아도 건너뛰지 않는다).
+ */
+const LEAD_PAGE_SIZE = 1000;
+/** 폭주 방지용 상한. 실제 리드 규모를 훨씬 넘는 값이다. */
+const LEAD_MAX_ROWS = 100_000;
+
+/** 컬럼 누락 폴백(대시보드 조회)이 원본 오류 모양을 그대로 볼 수 있게 감싸 전달한다. */
+class LeadQueryError extends Error {
+  readonly supabaseError: SupabaseColumnError;
+
+  constructor(message: string, supabaseError: SupabaseColumnError) {
+    super(message);
+    this.name = "LeadQueryError";
+    this.supabaseError = supabaseError;
+  }
+}
+
+async function fetchAllLeadRows(columns: string, label: string): Promise<Lead[]> {
+  const supabase = createSupabaseAdminClient();
+  const rows: Lead[] = [];
+  let total: number | null = null;
+
+  while (rows.length < LEAD_MAX_ROWS) {
+    const isFirstPage = rows.length === 0;
+    const { data, error, count } = await supabase
+      .from("leads")
+      .select(columns, isFirstPage ? { count: "exact" } : undefined)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(rows.length, rows.length + LEAD_PAGE_SIZE - 1);
+
+    if (error) throw new LeadQueryError(`[leads] ${label} 실패: ${error.message}`, error);
+
+    if (isFirstPage) total = typeof count === "number" ? count : null;
+
+    const batch = (data ?? []) as unknown as Lead[];
+    rows.push(...batch);
+    if (batch.length === 0) break;
+    if (total != null && rows.length >= total) break;
+  }
+
+  return rows;
+}
+
 export async function getLeads(): Promise<LeadRecord[]> {
   if (!USE_SUPABASE) {
     const { getLeads: jsonGetLeads } = await import("@/lib/db");
     return jsonGetLeads();
   }
 
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("leads")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) throw new Error(`[leads] 조회 실패: ${error.message}`);
-  return (data as Lead[]).map(supabaseToLegacy);
+  const rows = await fetchAllLeadRows("*", "조회");
+  return rows.map(supabaseToLegacy);
 }
 
 /**
@@ -262,24 +307,22 @@ export async function getDashboardLeads(): Promise<LeadRecord[]> {
     return jsonGetLeads();
   }
 
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("leads")
-    .select("id, source, name, org, email, status, branch, created_at, confirmed_at")
-    .order("created_at", { ascending: false });
-
-  if (error && isMissingLeadColumn(error, "confirmed_at")) {
-    const fallback = await supabase
-      .from("leads")
-      .select("id, source, name, org, email, status, branch, created_at")
-      .order("created_at", { ascending: false });
-
-    if (fallback.error) throw new Error(`[leads] 대시보드 조회 실패: ${fallback.error.message}`);
-    return (fallback.data as Lead[]).map(supabaseToLegacy);
+  try {
+    const rows = await fetchAllLeadRows(
+      "id, source, name, org, email, status, branch, created_at, confirmed_at",
+      "대시보드 조회"
+    );
+    return rows.map(supabaseToLegacy);
+  } catch (error) {
+    if (!(error instanceof LeadQueryError) || !isMissingLeadColumn(error.supabaseError, "confirmed_at")) {
+      throw error;
+    }
+    const fallback = await fetchAllLeadRows(
+      "id, source, name, org, email, status, branch, created_at",
+      "대시보드 조회"
+    );
+    return fallback.map(supabaseToLegacy);
   }
-
-  if (error) throw new Error(`[leads] 대시보드 조회 실패: ${error.message}`);
-  return (data as Lead[]).map(supabaseToLegacy);
 }
 
 /**
@@ -295,14 +338,8 @@ export async function getCampaignLeads(): Promise<LeadRecord[]> {
     return jsonGetLeads();
   }
 
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("leads")
-    .select("id, source, status, notes, created_at")
-    .order("created_at", { ascending: false });
-
-  if (error) throw new Error(`[leads] 캠페인 조회 실패: ${error.message}`);
-  return (data as Lead[]).map(supabaseToLegacy);
+  const rows = await fetchAllLeadRows("id, source, status, notes, created_at", "캠페인 조회");
+  return rows.map(supabaseToLegacy);
 }
 
 export async function getLeadById(id: string): Promise<LeadRecord | null> {
