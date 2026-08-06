@@ -13,6 +13,10 @@ import "server-only"
 
 const API_BASE = "https://api.channel.io/open/v5"
 const REQUEST_TIMEOUT_MS = 15_000
+const DEFAULT_PAGE_SIZE = 50
+const MAX_PAGE_SIZE = 100
+const DEFAULT_MAX_PAGES = 10
+const MAX_TOTAL_ITEMS = 1_000
 
 export class ChannelApiError extends Error {
   status: number
@@ -124,12 +128,27 @@ export interface ChannelMessage {
   personId?: string
   plainText?: string
   createdAt?: number
+  files?: ChannelMessageFile[]
+}
+
+export interface ChannelMessageFile {
+  type?: string
+  contentType?: string
 }
 
 export interface ListUserChatsResult {
   userChats: ChannelUserChat[]
   users: ChannelUser[]
   next?: string
+  pagesFetched?: number
+  complete?: boolean
+}
+
+export interface ListUserChatMessagesResult {
+  messages: ChannelMessage[]
+  next?: string
+  pagesFetched: number
+  complete: boolean
 }
 
 export interface UpsertChannelUserInput {
@@ -147,44 +166,161 @@ export interface CreateUserChatResult {
 
 /* ─── 엔드포인트 ─── */
 
-export async function listUserChats(
-  options: { state?: string; limit?: number; since?: string; sortOrder?: "asc" | "desc" } = {}
-): Promise<ListUserChatsResult> {
-  const data = await channelApiFetch<{
+function boundedInteger(value: number | undefined, fallback: number, min: number, max: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback
+  return Math.min(max, Math.max(min, Math.trunc(value)))
+}
+
+async function listUserChatsPage(options: {
+  state?: string
+  limit: number
+  since?: string
+  sortOrder: "asc" | "desc"
+}) {
+  return channelApiFetch<{
     userChats?: ChannelUserChat[]
     users?: ChannelUser[]
     next?: string
   }>("/user-chats", {
-    query: {
-      state: options.state,
-      limit: options.limit ?? 25,
-      since: options.since,
-      sortOrder: options.sortOrder ?? "desc",
-    },
+    query: options,
   })
+}
+
+export async function listUserChats(
+  options: {
+    state?: string
+    /** 모든 페이지를 합친 최대 고유 상담 수. 페이지당 개수가 아니다. */
+    limit?: number
+    since?: string
+    sortOrder?: "asc" | "desc"
+    pageSize?: number
+    maxPages?: number
+  } = {}
+): Promise<ListUserChatsResult> {
+  const totalLimit = boundedInteger(options.limit, 25, 1, MAX_TOTAL_ITEMS)
+  const pageSize = boundedInteger(options.pageSize, DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE)
+  const maxPages = boundedInteger(options.maxPages, DEFAULT_MAX_PAGES, 1, DEFAULT_MAX_PAGES)
+  const sortOrder = options.sortOrder ?? "desc"
+  const chatsById = new Map<string, ChannelUserChat>()
+  const usersById = new Map<string, ChannelUser>()
+  const seenCursors = new Set<string>()
+  let cursor = options.since
+  let next: string | undefined
+  let pagesFetched = 0
+
+  while (pagesFetched < maxPages && chatsById.size < totalLimit) {
+    const remaining = totalLimit - chatsById.size
+    const data = await listUserChatsPage({
+      state: options.state,
+      limit: Math.min(pageSize, remaining),
+      since: cursor,
+      sortOrder,
+    })
+    pagesFetched += 1
+
+    for (const chat of data.userChats ?? []) {
+      if (chat?.id && !chatsById.has(chat.id)) chatsById.set(chat.id, chat)
+    }
+    for (const user of data.users ?? []) {
+      if (user?.id) usersById.set(user.id, user)
+    }
+
+    next = typeof data.next === "string" && data.next.trim() ? data.next : undefined
+    if (!next || seenCursors.has(next)) break
+    seenCursors.add(next)
+    cursor = next
+  }
 
   return {
-    userChats: data.userChats ?? [],
-    users: data.users ?? [],
-    next: data.next,
+    userChats: [...chatsById.values()].slice(0, totalLimit),
+    users: [...usersById.values()],
+    next,
+    pagesFetched,
+    complete: !next,
   }
 }
 
-export async function getUserChatMessages(
+async function getUserChatMessagesPage(
   userChatId: string,
-  options: { limit?: number; sortOrder?: "asc" | "desc" } = {}
-): Promise<ChannelMessage[]> {
-  const data = await channelApiFetch<{ messages?: ChannelMessage[] }>(
+  options: { limit: number; sortOrder: "asc" | "desc"; since?: string }
+) {
+  return channelApiFetch<{ messages?: ChannelMessage[]; next?: string }>(
     `/user-chats/${encodeURIComponent(userChatId)}/messages`,
     {
       query: {
-        limit: options.limit ?? 50,
-        sortOrder: options.sortOrder ?? "asc",
+        limit: options.limit,
+        sortOrder: options.sortOrder,
+        since: options.since,
       },
     }
   )
+}
 
-  return data.messages ?? []
+/**
+ * 메시지 페이지를 bounded하게 합친다. limit은 모든 페이지를 합친 최대 고유 메시지 수다.
+ * complete=false/next는 제한 또는 반복 cursor 때문에 후속 메시지가 남았음을 호출자에게 알린다.
+ */
+export async function listUserChatMessages(
+  userChatId: string,
+  options: {
+    limit?: number
+    sortOrder?: "asc" | "desc"
+    since?: string
+    pageSize?: number
+    maxPages?: number
+  } = {}
+): Promise<ListUserChatMessagesResult> {
+  const totalLimit = boundedInteger(options.limit, 50, 1, MAX_TOTAL_ITEMS)
+  const pageSize = boundedInteger(options.pageSize, DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE)
+  const maxPages = boundedInteger(options.maxPages, DEFAULT_MAX_PAGES, 1, DEFAULT_MAX_PAGES)
+  const sortOrder = options.sortOrder ?? "asc"
+  const messagesById = new Map<string, ChannelMessage>()
+  const seenCursors = new Set<string>()
+  let cursor = options.since
+  let next: string | undefined
+  let pagesFetched = 0
+
+  while (pagesFetched < maxPages && messagesById.size < totalLimit) {
+    const remaining = totalLimit - messagesById.size
+    const data = await getUserChatMessagesPage(userChatId, {
+      limit: Math.min(pageSize, remaining),
+      sortOrder,
+      since: cursor,
+    })
+    pagesFetched += 1
+
+    for (const message of data.messages ?? []) {
+      if (message?.id && !messagesById.has(message.id)) messagesById.set(message.id, message)
+    }
+
+    next = typeof data.next === "string" && data.next.trim() ? data.next : undefined
+    if (!next || seenCursors.has(next)) break
+    seenCursors.add(next)
+    cursor = next
+  }
+
+  return {
+    messages: [...messagesById.values()].slice(0, totalLimit),
+    next,
+    pagesFetched,
+    complete: !next,
+  }
+}
+
+/** 기존 배열 반환 계약. 페이지 상태가 필요한 동기화는 listUserChatMessages를 사용한다. */
+export async function getUserChatMessages(
+  userChatId: string,
+  options: {
+    limit?: number
+    sortOrder?: "asc" | "desc"
+    since?: string
+    pageSize?: number
+    maxPages?: number
+  } = {}
+): Promise<ChannelMessage[]> {
+  const result = await listUserChatMessages(userChatId, options)
+
+  return result.messages
 }
 
 /** memberId 기준으로 채널톡 User를 생성/갱신한다. */

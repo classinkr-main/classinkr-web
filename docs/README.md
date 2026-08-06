@@ -1,6 +1,6 @@
 # Docs Index
 
-기준 시점: 2026-08-06
+기준 시점: 2026-08-07
 문서 목적: 현재 저장소에서 무엇을 먼저 읽어야 하는지, 어떤 문서를 믿어야 하는지, 어떤 문서가 역사 기록인지 빠르게 구분한다.
 
 ## Admin OS 정본 우선순위
@@ -129,6 +129,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
 
 ## 5. Runbooks And Incidents
 
+- [active/cs-ops-standard-runbook-2026-08.md](./active/cs-ops-standard-runbook-2026-08.md)
+  - CS 운영 데스크, 문서 보강 큐, 회귀 검수와 채널톡 실제 원인 검토 절차
 - [archive/repository-status-2026-06-08.md](./archive/repository-status-2026-06-08.md)
   - 2026-06-08 시점의 저장소 상태 스냅샷. 현재 상태 판단에는 사용하지 않는다.
 - [archive/repository-audit-2026-04-15.md](./archive/repository-audit-2026-04-15.md)

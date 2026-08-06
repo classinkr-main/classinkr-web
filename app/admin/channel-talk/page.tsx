@@ -4,6 +4,8 @@ import { useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Check,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   Info,
   Link2,
@@ -16,6 +18,7 @@ import {
 } from "lucide-react"
 
 import AdminTabs from "@/components/admin/AdminTabs"
+import ChannelCauseReviewPanel from "@/components/admin/channel-talk/ChannelCauseReviewPanel"
 import CsConsoleNav from "@/components/admin/cs/CsConsoleNav"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { useUrlState } from "@/lib/use-url-state"
@@ -218,6 +221,9 @@ function ChannelTalkInbox() {
   const [registeredLeads, setRegisteredLeads] = useState<Record<string, string>>({})
   const [registeringId, setRegisteringId] = useState<string | null>(null)
   const [registerErrors, setRegisterErrors] = useState<Record<string, string>>({})
+  // 상담 전문은 목록 응답에 싣지 않는다. 원인 검토 행을 펼칠 때 해당 패널이 상세 API를
+  // lazy-load하고, 한 번에 한 대화만 열어 개인정보 노출 면적과 요청량을 제한한다.
+  const [expandedCauseReviewId, setExpandedCauseReviewId] = useState<string | null>(null)
 
   const load = useCallback(async (force = false) => {
     setLoadError(null)
@@ -692,11 +698,13 @@ function ChannelTalkInbox() {
                   )
                   const registerBusy = registeringId === conversation.id
                   const registerError = registerErrors[conversation.id]
+                  const causeReviewOpen = expandedCauseReviewId === conversation.id
                   return (
                     <li
                       key={conversation.id}
-                      className="flex flex-col gap-2 border-b border-black/[0.08] px-5 py-4 last:border-0 sm:flex-row sm:items-start sm:gap-4"
+                      className="border-b border-black/[0.08] last:border-0"
                     >
+                      <div className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-start sm:gap-4">
                       <div className="flex min-w-0 flex-1 flex-col gap-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-[13px] font-semibold text-[#111110]">
@@ -761,10 +769,33 @@ function ChannelTalkInbox() {
                           <p className="text-[11px] text-[#8F2C2C]">{registerError}</p>
                         ) : null}
                       </div>
-                      <div className="flex shrink-0 items-center gap-3 text-[11px] text-[#A39E98] tabular-nums sm:flex-col sm:items-end sm:gap-1">
-                        <span>{conversation.messageCount}개 메시지</span>
-                        <span>{formatWhen(conversation.lastMessageAt)}</span>
+                      <div className="flex shrink-0 flex-wrap items-center gap-2 text-[11px] text-[#A39E98] tabular-nums sm:flex-col sm:items-end sm:gap-1.5">
+                        <span>{conversation.messageCount}개 메시지 · {formatWhen(conversation.lastMessageAt)}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpandedCauseReviewId((current) =>
+                              current === conversation.id ? null : conversation.id
+                            )
+                          }
+                          aria-expanded={causeReviewOpen}
+                          aria-controls={`channel-cause-review-${conversation.id}`}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.12] bg-white px-3 text-[11px] font-semibold text-[#31302E] transition-colors hover:border-[#084734]/40 hover:text-[#084734]"
+                        >
+                          원인 검토
+                          {causeReviewOpen ? (
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          )}
+                        </button>
                       </div>
+                      </div>
+                      {causeReviewOpen ? (
+                        <div id={`channel-cause-review-${conversation.id}`}>
+                          <ChannelCauseReviewPanel conversationId={conversation.id} />
+                        </div>
+                      ) : null}
                     </li>
                   )
                 })}
