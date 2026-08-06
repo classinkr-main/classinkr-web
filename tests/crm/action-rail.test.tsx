@@ -190,6 +190,13 @@ describe("CrmActionRail (static render)", () => {
     expect(html).not.toContain("오늘 할 일")
     expect(html).toContain("최근 기록")
   })
+
+  it("drops the recent card independently when the page already owns the timeline", () => {
+    const html = renderToStaticMarkup(<CrmActionRail hideForm hideRecent />)
+    expect(html).not.toContain("기록 빠른 생성")
+    expect(html).toContain("오늘 할 일")
+    expect(html).not.toContain("최근 기록")
+  })
 })
 
 describe("ActivityQuickForm (static render)", () => {

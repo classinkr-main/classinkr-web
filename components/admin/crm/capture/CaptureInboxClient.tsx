@@ -72,10 +72,10 @@ type Step = "compose" | "review" | "done"
 // ─── 상수 ──────────────────────────────────────────────────────────────────────
 
 const MATCH_LABEL: Record<string, { label: string; tone: string; origin: string }> = {
-  confirmed_lead: { label: "리드 확정", tone: "border-emerald-200 bg-emerald-50 text-emerald-700", origin: "리드 출신" },
-  confirmed_customer: { label: "고객 확정", tone: "border-sky-200 bg-sky-50 text-sky-700", origin: "기존/파트너 고객" },
-  new_lead_candidate: { label: "신규 리드", tone: "border-amber-200 bg-amber-50 text-amber-700", origin: "행사 신규" },
-  multiple_candidates: { label: "다중 후보", tone: "border-purple-200 bg-purple-50 text-purple-700", origin: "검토 후 결정" },
+  confirmed_lead: { label: "리드 확정", tone: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]", origin: "리드 출신" },
+  confirmed_customer: { label: "고객 확정", tone: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]", origin: "기존/파트너 고객" },
+  new_lead_candidate: { label: "신규 리드", tone: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]", origin: "행사 신규" },
+  multiple_candidates: { label: "다중 후보", tone: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]", origin: "검토 후 결정" },
   needs_review: { label: "검토 필요", tone: "border-[#e8e8e4] bg-[#f6f5f4] text-[#1a1a1a]/55", origin: "미상" },
   duplicate_in_batch: { label: "중복", tone: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/40", origin: "—" },
 }
@@ -117,6 +117,12 @@ const PLACEHOLDER = `엑셀/구글시트에서 복사한 표를 그대로 붙여
 기관명\t담당자\t연락처\t이메일
 ○○학원\t김선생\t010-1234-5678\tkim@example.com
 △△캠퍼스\t이원장\t010-2222-3333\tlee@example.com`
+
+const CAPTURE_STEPS: Array<{ key: Step; label: string }> = [
+  { key: "compose", label: "명단 입력" },
+  { key: "review", label: "매칭 검토" },
+  { key: "done", label: "확정 완료" },
+]
 
 // ─── 컴포넌트 ────────────────────────────────────────────────────────────────────
 
@@ -188,6 +194,8 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
     () => openBatches.filter((b) => b.id !== batch?.id),
     [openBatches, batch]
   )
+  const currentStepIndex = CAPTURE_STEPS.findIndex((item) => item.key === step)
+  const canAnalyze = Boolean(selectedEventId && rawText.trim())
 
   const handleAnalyze = useCallback(async () => {
     if (!selectedEventId) {
@@ -365,10 +373,35 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
         <p className="mt-0.5 text-[13px] text-[#1a1a1a]/45">
           행사 참석·신청 명단을 붙여넣어 리드·고객과 매칭합니다. 확정한 행은 CRM 기록과 후속 태스크로 연결됩니다.
         </p>
+        <ol className="mt-4 grid grid-cols-3 gap-2" aria-label="입력 진행 단계">
+          {CAPTURE_STEPS.map((item, index) => {
+            const active = index === currentStepIndex
+            const complete = index < currentStepIndex
+            return (
+              <li
+                key={item.key}
+                aria-current={active ? "step" : undefined}
+                className={`rounded-xl border px-3 py-2 ${
+                  active
+                    ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                    : complete
+                      ? "border-[#BDEFD8] bg-white text-[#084734]"
+                      : "border-[#e8e8e4] bg-white text-[#1a1a1a]/40"
+                }`}
+              >
+                <span className="block text-[10px] font-bold tabular-nums">{index + 1}</span>
+                <span className="mt-0.5 block text-[12px] font-semibold">{item.label}</span>
+              </li>
+            )
+          })}
+        </ol>
       </div>
 
       {error && (
-        <div className="mb-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+        <div
+          role="alert"
+          className="mb-4 flex items-start gap-2 rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[13px] text-[#B43E3E]"
+        >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -394,8 +427,9 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
           )}
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <button
+              type="button"
               onClick={reset}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[#111110] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-emerald-700"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]"
             >
               <ClipboardPaste className="h-4 w-4" />새 명단 입력
             </button>
@@ -470,17 +504,18 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
           <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
               <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
+                <label htmlFor="capture-event" className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">
                   <CalendarIcon className="mr-1 inline h-3.5 w-3.5" />행사 선택
                 </label>
                 <select
+                  id="capture-event"
                   value={selectedEventId}
                   onChange={(e) => {
                     setSelectedEventId(e.target.value)
                     if (batch) reset()
                   }}
                   disabled={step === "review"}
-                  className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none disabled:bg-[#f6f5f4] disabled:text-[#1a1a1a]/45"
+                  className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] disabled:bg-[#f6f5f4] disabled:text-[#1a1a1a]/45"
                 >
                   <option value="">행사를 선택하세요…</option>
                   {events.map((event) => (
@@ -497,7 +532,8 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
                     type="button"
                     onClick={() => setMode(m)}
                     disabled={step === "review"}
-                    className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition disabled:opacity-50 ${
+                    aria-pressed={mode === m}
+                    className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#084734] disabled:opacity-50 ${
                       mode === m ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                     }`}
                   >
@@ -507,30 +543,44 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
               </div>
             </div>
 
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <label htmlFor="capture-roster" className="text-[12px] font-medium text-[#1a1a1a]/50">
+                명단 내용
+              </label>
+              <span className="text-[11px] tabular-nums text-[#1a1a1a]/35">{rawText.trim().length.toLocaleString("ko-KR")}자</span>
+            </div>
             <textarea
+              id="capture-roster"
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
               disabled={step === "review"}
               rows={step === "review" ? 3 : 8}
               placeholder={PLACEHOLDER}
-              className="mt-3 w-full resize-y rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 font-mono text-[12px] leading-relaxed focus:border-[#111110]/30 focus:outline-none disabled:bg-[#f6f5f4] disabled:text-[#1a1a1a]/45"
+              aria-describedby="capture-analyze-help"
+              className="mt-1.5 w-full resize-y rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 font-mono text-[12px] leading-relaxed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] disabled:bg-[#f6f5f4] disabled:text-[#1a1a1a]/45"
             />
 
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <p className="text-[11px] text-[#1a1a1a]/40">
-                전화·이메일이 정확히 일치하면 자동 확정, 그 외에는 검토 후 체크하세요.
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p id="capture-analyze-help" className="text-[11px] text-[#1a1a1a]/45">
+                {!selectedEventId
+                  ? "1단계: 행사를 선택하세요."
+                  : !rawText.trim()
+                    ? "2단계: 명단을 붙여넣으세요. 전화·이메일 일치 항목은 자동 확정됩니다."
+                    : "준비 완료 · 분석 후 자동 확정과 검토 필요 항목을 나눠 보여드립니다."}
               </p>
               {step === "compose" ? (
                 <button
+                  type="button"
                   onClick={handleAnalyze}
-                  disabled={busy}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#111110] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                  disabled={busy || !canAnalyze}
+                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   명단 분석
                 </button>
               ) : (
                 <button
+                  type="button"
                   onClick={handleAnalyze}
                   disabled={busy}
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#111110] transition-colors hover:bg-[#F6F5F4] disabled:opacity-50"
@@ -550,8 +600,8 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
                   <span className="inline-flex items-center gap-1 rounded-full bg-[#f0f0ec] px-2 py-0.5 font-medium text-[#1a1a1a]/60">
                     <Users className="h-3.5 w-3.5" />총 {counts.total}
                   </span>
-                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">선택 {counts.selected}</span>
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">신규 {counts.newLeads}</span>
+                  <span className="rounded-full bg-[#ECFDF5] px-2 py-0.5 font-semibold text-[#084734]">선택 {counts.selected}</span>
+                  <span className="rounded-full bg-[#FBF1E0] px-2 py-0.5 font-medium text-[#7A520F]">신규 {counts.newLeads}</span>
                   {counts.review > 0 && (
                     <span className="rounded-full bg-[#f6f5f4] px-2 py-0.5 font-medium text-[#1a1a1a]/55">검토 {counts.review}</span>
                   )}
@@ -582,12 +632,13 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
                       const meta = matchMeta(row.matchStatus)
                       const disabled = row.matchStatus === "duplicate_in_batch"
                       return (
-                        <tr key={row.id} className={row.selected ? "bg-emerald-50/30" : ""}>
+                        <tr key={row.id} className={row.selected ? "bg-[#ECFDF5]/40" : ""}>
                           <td className="px-3 py-2.5">
                             <input
                               type="checkbox"
                               checked={row.selected}
                               disabled={disabled}
+                              aria-label={`${row.organizationName ?? row.contactName ?? "이름 없음"} 선택`}
                               onChange={(e) => toggleRow(row, e.target.checked)}
                               className="h-4 w-4 accent-[#084734] disabled:opacity-30"
                             />
@@ -634,6 +685,7 @@ export default function CaptureInboxClient({ initialEventId = "" }: { initialEve
 
               <div className="flex flex-col-reverse items-stretch gap-2 border-t border-[#e8e8e4] px-4 py-4 sm:flex-row sm:items-center sm:justify-end sm:px-5">
                 <button
+                  type="button"
                   onClick={handleApply}
                   disabled={applying || counts.selected === 0}
                   className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-5 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#063d2a] disabled:opacity-50"

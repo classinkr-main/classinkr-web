@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 
 import CrmMatchingCoverageBand from "@/components/admin/crm/matching/CrmMatchingCoverageBand"
 import HwRevReconcilePanel from "@/components/admin/crm/matching/HwRevReconcilePanel"
@@ -12,16 +12,28 @@ import MatchingInboxClient from "@/components/admin/crm/matching/MatchingInboxCl
 // initialNameFilter: 매칭 page가 ?name= 딥링크(rev-sheet '연결하기' 등)에서 시드(CRM-1).
 export default function CrmMatchingWorkspace({ initialNameFilter }: { initialNameFilter?: string } = {}) {
   const [nameFilter, setNameFilter] = useState(initialNameFilter ?? "")
+  const inboxRef = useRef<HTMLDivElement>(null)
+
+  const selectAccount = (name: string) => {
+    setNameFilter((current) => (current === name ? "" : name))
+    window.requestAnimationFrame(() => {
+      inboxRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  }
 
   return (
     <>
+      <div ref={inboxRef}>
+        <MatchingInboxClient
+          nameFilter={nameFilter || undefined}
+          onClearNameFilter={() => setNameFilter("")}
+        />
+      </div>
+      {/* 커버리지는 진단·필터 보조 표면이다. 확정 인박스 뒤에 두되 계정 선택 시
+          결과가 있는 인박스로 되돌려, 아래에서 필터하고 위에서 찾는 단절을 막는다. */}
       <CrmMatchingCoverageBand
-        onSelectAccount={(name) => setNameFilter((current) => (current === name ? "" : name))}
+        onSelectAccount={selectAccount}
         activeName={nameFilter || undefined}
-      />
-      <MatchingInboxClient
-        nameFilter={nameFilter || undefined}
-        onClearNameFilter={() => setNameFilter("")}
       />
       <HwRevReconcilePanel />
     </>

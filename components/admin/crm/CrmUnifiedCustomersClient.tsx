@@ -77,6 +77,8 @@ interface CrmUnifiedCustomers {
   rows: CrmUnifiedCustomerRow[]
 }
 
+type CustomerSourceStatus = CrmUnifiedCustomers["sources"]["statuses"][number]
+
 const SOURCE_FILTERS: Array<{ key: SourceFilter; label: string }> = [
   { key: "all", label: "전체" },
   { key: "lead", label: "리드" },
@@ -126,6 +128,48 @@ function rowToFlags(row: CrmUnifiedCustomerRow): CustomerFlag[] {
 }
 const OWNER_STORAGE_KEY = "classin_crm_unified_owner"
 const CURRENT_OWNER_VALUE = "__me"
+
+function CustomerSourceStatusGrid({
+  statuses,
+  className = "",
+}: {
+  statuses: CustomerSourceStatus[]
+  className?: string
+}) {
+  return (
+    <div className={`grid gap-2 sm:grid-cols-2 lg:grid-cols-4 ${className}`}>
+      {statuses.map((status) => (
+        <div
+          key={status.key}
+          className={`rounded-xl border px-3 py-2 ${
+            status.ok && !status.partial
+              ? "border-[#D7EBDD] bg-[#ECFDF5]"
+              : "border-[#F6D5C5] bg-[#FEF3EE]"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <p
+              className={`text-[12px] font-bold ${
+                status.ok && !status.partial ? "text-[#084734]" : "text-[#B85C33]"
+              }`}
+            >
+              {status.label}
+            </p>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
+              {status.role === "primary" ? "DB" : "SYNC"}
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] leading-4 text-[#1a1a1a]/52">{status.message}</p>
+          {status.latestSyncedAt ? (
+            <p className="mt-1 text-[11px] font-medium text-[#1a1a1a]/35">
+              마지막 동기화 {formatDate(status.latestSyncedAt)}
+            </p>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function listUrl(input: {
   query: string
@@ -338,8 +382,8 @@ function CustomerSearchPanel({
 }) {
   return (
     <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-      <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto] lg:items-center">
-        <label className="flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto] lg:items-center">
+        <label className="col-span-2 flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 lg:col-span-1">
           <Search className="h-4 w-4 text-[#1a1a1a]/35" />
           <input
             value={query}
@@ -348,7 +392,7 @@ function CustomerSearchPanel({
             placeholder="이름, 연락처, 지역, 담당자 검색"
           />
         </label>
-        <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1">
+        <div className="col-span-2 inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1 lg:col-span-1">
           {SOURCE_FILTERS.map((filter) => (
             <button
               key={filter.key}
@@ -365,12 +409,12 @@ function CustomerSearchPanel({
             </button>
           ))}
         </div>
-        <label className="flex h-10 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
+        <label className="flex h-10 min-w-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
           <Filter className="h-3.5 w-3.5" />
           <select
             value={lifecycle}
             onChange={(event) => onLifecycleChange(event.target.value as LifecycleFilter)}
-            className="h-full bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
+            className="h-full min-w-0 flex-1 bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
             aria-label="상태 필터"
           >
             {LIFECYCLE_FILTERS.map((filter) => (
@@ -380,12 +424,12 @@ function CustomerSearchPanel({
             ))}
           </select>
         </label>
-        <label className="flex h-10 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
+        <label className="flex h-10 min-w-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
           <Filter className="h-3.5 w-3.5" />
           <select
             value={owner}
             onChange={(event) => onOwnerChange(event.target.value)}
-            className="h-full min-w-[128px] bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
+            className="h-full min-w-0 flex-1 bg-transparent text-[12px] font-semibold text-[#111110] outline-none lg:min-w-[128px]"
             aria-label="담당자 필터"
           >
             <option value="">담당 전체</option>
@@ -443,28 +487,28 @@ function CustomerSearchPanel({
       ) : null}
 
       {data ? (
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-          <div className="rounded-xl bg-[#fafaf8] p-3">
+        <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-5 sm:overflow-visible sm:pb-0">
+          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">검색 결과</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
           </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
+          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">리드</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.leadCount.toLocaleString("ko-KR")}</p>
           </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
+          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">
               {data.summary.accountCount.toLocaleString("ko-KR")}
             </p>
           </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
+          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">전환 고객</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">
               {(data.summary.customerCount ?? 0).toLocaleString("ko-KR")}
             </p>
           </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
+          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">우선 처리</p>
             <p className="mt-1 text-xl font-bold text-[#B85C33]">
               {data.summary.highPriorityCount.toLocaleString("ko-KR")}
@@ -473,9 +517,9 @@ function CustomerSearchPanel({
         </div>
       ) : loading ? (
         // 콜드로드 스켈레톤 — 실제 요약 타일 5칸 그리드와 동일 골격(0 플래시·점프 방지).
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-5 sm:overflow-visible sm:pb-0">
           {Array.from({ length: 5 }).map((_, index) => (
-            <div key={index} className="rounded-xl bg-[#fafaf8] p-3">
+            <div key={index} className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
               <div className="h-3 w-14 animate-pulse rounded bg-[#f0f0ec]" />
               <div className="mt-2 h-6 w-16 animate-pulse rounded bg-[#f0f0ec]" />
             </div>
@@ -484,37 +528,20 @@ function CustomerSearchPanel({
       ) : null}
 
       {data?.sources.statuses.length ? (
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {data.sources.statuses.map((status) => (
-            <div
-              key={status.key}
-              className={`rounded-xl border px-3 py-2 ${
-                status.ok && !status.partial
-                  ? "border-[#D7EBDD] bg-[#ECFDF5]"
-                  : "border-[#F6D5C5] bg-[#FEF3EE]"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p
-                  className={`text-[12px] font-bold ${
-                    status.ok && !status.partial ? "text-[#084734]" : "text-[#B85C33]"
-                  }`}
-                >
-                  {status.label}
-                </p>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
-                  {status.role === "primary" ? "DB" : "SYNC"}
-                </span>
-              </div>
-              <p className="mt-1 text-[11px] leading-4 text-[#1a1a1a]/52">{status.message}</p>
-              {status.latestSyncedAt ? (
-                <p className="mt-1 text-[11px] font-medium text-[#1a1a1a]/35">
-                  마지막 동기화 {formatDate(status.latestSyncedAt)}
-                </p>
-              ) : null}
-            </div>
-          ))}
-        </div>
+        <>
+          <details className="group mt-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] sm:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[12px] font-semibold text-[#111110]">
+              <span>
+                원천 상태 · 정상 {data.sources.statuses.filter((status) => status.ok && !status.partial).length}/
+                {data.sources.statuses.length}
+              </span>
+              <span className="text-[11px] font-medium text-[#1a1a1a]/40 group-open:hidden">펼치기</span>
+              <span className="hidden text-[11px] font-medium text-[#1a1a1a]/40 group-open:inline">접기</span>
+            </summary>
+            <CustomerSourceStatusGrid statuses={data.sources.statuses} className="border-t border-[#e8e8e4] p-2" />
+          </details>
+          <CustomerSourceStatusGrid statuses={data.sources.statuses} className="mt-3 hidden sm:grid" />
+        </>
       ) : null}
     </section>
   )
@@ -884,8 +911,11 @@ export default function CrmUnifiedCustomersClient() {
         </div>
 
         {/* 빠른 필터 칩 — 검색 섹션과 독립인 항상 노출 행 (칩 진입 시에도 유지). */}
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="inline-flex h-8 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
+        <div
+          className="no-scrollbar mb-3 flex items-center gap-2 overflow-x-auto pb-1"
+          aria-label="빠른 고객 필터"
+        >
+          <span className="inline-flex h-8 shrink-0 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
             <Filter className="h-3.5 w-3.5" />
             빠른 필터
           </span>
@@ -907,7 +937,7 @@ export default function CrmUnifiedCustomersClient() {
                 disabled={disabled}
                 aria-pressed={isActive}
                 title={disabled ? "현재 Admin 계정에 CRM 담당자 매핑이 없습니다." : filter.description}
-                className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
+                className={`h-8 shrink-0 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
                   isActive
                     ? "border-[#084734] bg-[#084734] text-white"
                     : disabled
@@ -979,8 +1009,6 @@ export default function CrmUnifiedCustomersClient() {
             loading={loading}
           />
         )}
-
-        <Account360Lens />
 
         {error ? (
           <div className="mb-4 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
@@ -1241,6 +1269,11 @@ export default function CrmUnifiedCustomersClient() {
             </div>
           ) : null}
         </section>
+
+        {/* REV 스파인은 참조 렌즈다. 검색 결과와 고객 작업을 먼저 보여준 뒤 하단에 둔다. */}
+        <div className="mt-4">
+          <Account360Lens />
+        </div>
       </div>
 
       {/* 열림 상태에서만 렌더 — 닫힘=null 렌더였던 기존과 동일 화면이면서, dynamic 청크를

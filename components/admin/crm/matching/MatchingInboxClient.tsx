@@ -585,7 +585,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         </div>
       ))}
 
-      <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-6 grid grid-cols-2 gap-x-4 gap-y-5 border-y border-[#f0f0ec] py-5 xl:grid-cols-4">
         <MetricCard
           label="검토 대기"
           value={loading && !data ? <ValueSkeleton /> : formatNumber(totals?.reviewCount ?? 0)}

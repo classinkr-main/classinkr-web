@@ -620,7 +620,7 @@ function CrmCockpitHero({ overview, loading }: { overview: AdminCrmOverview | nu
   const hasRisk = riskCount > 0 || (revenue?.outstandingAmount ?? 0) > 0
 
   return (
-    <div className="mb-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="mb-4 grid grid-cols-2 gap-2.5 xl:grid-cols-4">
       {/* 1. 이번 달 인식 매출 — 다크 히어로 (자체집계 ₩) */}
       <div className="rounded-2xl bg-[#084734] p-3.5 text-white shadow-[0_8px_22px_rgba(8,71,52,0.18)]">
         <div className="flex items-center justify-between gap-2">
@@ -1343,7 +1343,9 @@ export default function CrmPage() {
   const [crmOverviewLoading, setCrmOverviewLoading] = useState(true)
   const [crmOverviewError, setCrmOverviewError] = useState<string | null>(null)
   const [branchKpis, setBranchKpis] = useState<BranchKpiResponse | null>(null)
-  const [branchKpisLoading, setBranchKpisLoading] = useState(true)
+  // 팀 KPI는 기본 접힘인 리포트의 '팀 KPI' 탭에서만 쓴다. 첫 화면에서 미리 요청하면
+  // overview·우선순위 작업대와 같은 연결을 경쟁하므로, 해당 탭을 열 때까지 지연한다.
+  const [branchKpisLoading, setBranchKpisLoading] = useState(false)
   const [branchKpisError, setBranchKpisError] = useState<string | null>(null)
   const [neoCrmRefreshKey, setNeoCrmRefreshKey] = useState(0)
 
@@ -1428,17 +1430,22 @@ export default function CrmPage() {
   useEffect(() => {
     void fetchLeadKpis()
     void fetchCrmOverview()
-    void fetchBranchKpis()
-  }, [fetchLeadKpis, fetchCrmOverview, fetchBranchKpis])
+  }, [fetchLeadKpis, fetchCrmOverview])
 
-  const pageRefreshing = leadKpisLoading || crmOverviewLoading || branchKpisLoading
+  useEffect(() => {
+    if (!reportOpen || reportTab !== "team") return
+    void fetchBranchKpis()
+  }, [fetchBranchKpis, reportOpen, reportTab])
+
+  const branchKpisVisible = reportOpen && reportTab === "team"
+  const pageRefreshing = leadKpisLoading || crmOverviewLoading || (branchKpisVisible && branchKpisLoading)
 
   const refreshAll = useCallback(() => {
     void fetchLeadKpis({ force: true })
     void fetchCrmOverview({ force: true })
-    void fetchBranchKpis({ force: true })
+    if (reportOpen && reportTab === "team") void fetchBranchKpis({ force: true })
     setNeoCrmRefreshKey((current) => current + 1)
-  }, [fetchLeadKpis, fetchCrmOverview, fetchBranchKpis])
+  }, [fetchLeadKpis, fetchCrmOverview, fetchBranchKpis, reportOpen, reportTab])
 
   // 빠른 실행 ② 기록 추가 — 우측 액션 레일(빠른 생성 폼)로 스크롤·포커스.
   // 레일이 없으면(예외 상황) 기록 표면 딥링크로 폴백한다.

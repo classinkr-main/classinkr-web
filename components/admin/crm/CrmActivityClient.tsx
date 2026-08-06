@@ -1,6 +1,6 @@
 "use client"
 
-// CRM 기록 표면 — 좌: 컴포저(ActivityQuickForm composer)+필터+타임라인, 우: CrmActionRail(hideForm — 오늘 할 일·최근 기록).
+// CRM 기록 표면 — 좌: 컴포저(ActivityQuickForm composer)+필터+타임라인, 우: CrmActionRail(hideForm·hideRecent — 오늘 할 일).
 // 기록 생성 폼 SSOT는 rail/ActivityQuickForm — 이 파일은 폼을 직접 들고 있지 않는다.
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -469,6 +469,7 @@ function CrmActivityClientInner() {
 
         <CrmActionRail
           hideForm
+          hideRecent
           defaultTargetType={focusTargetType}
           defaultTargetId={focusTargetId || undefined}
           customerName={focusLabel || undefined}

@@ -2,7 +2,7 @@
 
 // CRM 우측 액션 레일 — "생성 및 기록들 보기, 오른쪽 따로 스크롤".
 // 구성(위→아래): ① 기록 빠른 생성(ActivityQuickForm 컴팩트 — hideForm 시 생략) ② 오늘 할 일 요약(crm_tasks 상위 N, hideTasks 시 생략)
-// ③ 최근 기록 타임라인(targetId 딥링크). 데이터는 전부 자체 fetch(adminFetchJsonCached) —
+// ③ 최근 기록 타임라인(targetId 딥링크, hideRecent 시 생략). 데이터는 전부 자체 fetch(adminFetchJsonCached) —
 // 부모와의 결합은 props(고객 프리셀렉트)와 onActivitySaved 콜백뿐이다.
 //
 // 스크롤: xl+에서 sticky + max-h(100dvh-오프셋) + overflow-y-auto로 본문과 독립 스크롤.
@@ -58,6 +58,8 @@ export interface CrmActionRailProps {
    * 그 '오늘' 버킷의 부분집합이라 두 목록이 겹친다 — 그런 표면에서 켠다.
    */
   hideTasks?: boolean
+  /** true면 ③ 최근 기록 카드와 요청을 생략한다(본문에 동일 타임라인이 있는 기록 탭용). */
+  hideRecent?: boolean
   className?: string
 }
 
@@ -136,6 +138,7 @@ export default function CrmActionRail({
   onActivitySaved,
   hideForm = false,
   hideTasks = false,
+  hideRecent = false,
   className = "",
 }: CrmActionRailProps) {
   const scopedTargetId = defaultTargetId?.trim() || ""
@@ -205,8 +208,9 @@ export default function CrmActionRail({
   }, [loadTasks, hideTasks])
 
   useEffect(() => {
+    if (hideRecent) return
     void loadRecent()
-  }, [loadRecent])
+  }, [hideRecent, loadRecent])
 
   // 상태 전이는 명시 액션 API만 사용한다(complete/snooze) — 임의 상태 PATCH 금지.
   const runTaskAction = useCallback(
@@ -356,6 +360,7 @@ export default function CrmActionRail({
       </RailSection>
       ) : null}
 
+      {!hideRecent ? (
       <RailSection
         icon={<History className="h-4 w-4" />}
         title="최근 기록"
@@ -427,6 +432,7 @@ export default function CrmActionRail({
           </Link>
         </div>
       </RailSection>
+      ) : null}
     </aside>
   )
 }
