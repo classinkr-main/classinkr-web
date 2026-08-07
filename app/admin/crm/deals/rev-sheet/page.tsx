@@ -393,9 +393,9 @@ export default function AdminCrmRevenueSheetPage() {
             {(data?.monthly ?? []).map((point) => (
               <div key={point.month} className="flex min-w-[46px] flex-1 flex-col items-stretch justify-end gap-1">
                 {[
-                  ["confirmedAmount", "bg-[#084734]"],
-                  ["highConfidenceAmount", "bg-sky-500"],
-                  ["expectedAmount", "bg-[#6EE7B7]"],
+                  ["confirmedAmount", CONFIDENCE_TOKENS.confirmed.bgClass],
+                  ["highConfidenceAmount", CONFIDENCE_TOKENS["high-confidence"].bgClass],
+                  ["expectedAmount", CONFIDENCE_TOKENS.expected.bgClass],
                   ["pastUnconfirmedAmount", "bg-[#B85C33]"],
                 ].map(([field, tone]) => {
                   const amount = Number(point[field as keyof typeof point] ?? 0)
@@ -414,9 +414,9 @@ export default function AdminCrmRevenueSheetPage() {
             ))}
           </div>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#1a1a1a]/45">
-            <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-[#084734]" />확정</span>
-            <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-sky-500" />임박</span>
-            <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-[#6EE7B7]" />예정</span>
+            <span className="inline-flex items-center gap-1"><i className={`h-2 w-2 rounded-sm ${CONFIDENCE_TOKENS.confirmed.bgClass}`} />확정</span>
+            <span className="inline-flex items-center gap-1"><i className={`h-2 w-2 rounded-sm ${CONFIDENCE_TOKENS["high-confidence"].bgClass}`} />임박</span>
+            <span className="inline-flex items-center gap-1"><i className={`h-2 w-2 rounded-sm ${CONFIDENCE_TOKENS.expected.bgClass}`} />예정</span>
             <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-[#B85C33]" />전환 대기</span>
           </div>
         </div>

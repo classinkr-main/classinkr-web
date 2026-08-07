@@ -25,6 +25,8 @@ import {
 
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { StatTile } from "@/components/admin/viz"
+// 확도(예상·시트 확정/임박/예상) 색은 확도 신호 토큰 SSOT — 색 리터럴 재정의 금지(DESIGN.md 확도 신호 토큰 절).
+import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import {
   resolveCrmWriteExecuteOutcome,
   type CrmWriteExecuteResponseBody,
@@ -1352,10 +1354,10 @@ export default function AdminCrmRevenuePage() {
                     ["견적", point.quotedAmount, "bg-[#84827a]"],
                     ["계약", point.contractedAmount, "bg-[#084734]"],
                     ["입금", point.paidAmount, "bg-[#084734]"],
-                    ["예상", point.expectedAmount, "bg-amber-300"],
-                    ["시트 확정", point.sheetConfirmedAmount, "bg-[#065c41]"],
-                    ["시트 임박", point.sheetHighConfidenceAmount, "bg-[#b8b6ae]"],
-                    ["시트 예상", point.sheetExpectedAmount, "bg-[#6EE7B7]"],
+                    ["예상", point.expectedAmount, CONFIDENCE_TOKENS.expected.bgClass],
+                    ["시트 확정", point.sheetConfirmedAmount, CONFIDENCE_TOKENS.confirmed.bgClass],
+                    ["시트 임박", point.sheetHighConfidenceAmount, CONFIDENCE_TOKENS["high-confidence"].bgClass],
+                    ["시트 예상", point.sheetExpectedAmount, CONFIDENCE_TOKENS.expected.bgClass],
                   ].map(([label, amount, color]) => {
                     const numericAmount = Number(amount)
                     // 시트 계열 금액은 CNY, 앱(견적/계약/입금/예상)은 KRW.
