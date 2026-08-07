@@ -32,7 +32,12 @@ export default function Customer360DetailDeals({ deals }: { deals: ListCrmDealsR
           icon={<FileText className="h-4 w-4" />}
           label="진행 딜 예상금액"
           value={formatKRW(summary.openAmount)}
-          hint="Deal Lite · 내부 ₩"
+          // 집계가 전체를 못 덮으면 그 사실을 밝힌다 — 부분 합계를 총액처럼 읽히게 두지 않는다.
+          hint={
+            summary.aggregateTruncated
+              ? `Deal Lite · 내부 ₩ · 상위 ${summary.returned}/${summary.total}건 기준`
+              : "Deal Lite · 내부 ₩"
+          }
           tone="neutral"
         />
       </div>

@@ -125,8 +125,14 @@ export default function NeoCrmTeamPanel({
   const [ownerSort, setOwnerSort] = useState<"amount" | "delta">("amount")
   const [ordersExpanded, setOrdersExpanded] = useState(false)
 
+  // 기간 이동(이전/다음)을 연타하면 요청이 겹친다. 늦게 끝난 이전 기간 응답이 최신 기간 화면을
+  // 덮어쓰면, 헤더는 새 기간인데 매출·오더 숫자는 다른 기간인 채로 남는다(오류 표시도 없다).
+  const requestSeq = useRef(0)
+
   const load = useCallback(
     async (options?: { force?: boolean }) => {
+      const seq = ++requestSeq.current
+      const isLatest = () => requestSeq.current === seq
       const baseUrl = getNeoCrmUrl(granularity, offset)
       const requestUrl = options?.force ? `${baseUrl}&force=1` : baseUrl
       const cachedReport = getCachedAdminJson<NeoCrmTeamReport>(baseUrl, {
@@ -155,13 +161,15 @@ export default function NeoCrmTeamPanel({
             staleWhileRevalidateMs: NEO_CRM_STALE_WHILE_REVALIDATE_MS,
           }
         )
+        if (!isLatest()) return
         setData(next)
         dataRef.current = next
         if (!next.ok && next.error) setError(next.error)
       } catch (err) {
+        if (!isLatest()) return
         setError(err instanceof Error ? err.message : "외부 CRM 동기화 데이터를 불러오지 못했습니다.")
       } finally {
-        setLoading(false)
+        if (isLatest()) setLoading(false)
       }
     },
     [granularity, offset]

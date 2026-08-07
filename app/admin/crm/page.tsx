@@ -1,6 +1,14 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react"
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react"
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
@@ -54,8 +62,9 @@ const NeoCrmTeamPanel = dynamic(() => import("@/components/admin/crm/NeoCrmTeamP
 
 const CRM_ACTION_KPIS_URL = "/api/admin/crm/action-kpis"
 const CRM_OVERVIEW_URL = "/api/admin/crm/overview"
-const CRM_BRANCH_KPI_MONTH = getKstMonthKey(new Date())
-const CRM_BRANCH_KPI_URL = `/api/admin/branch/kpi?team=ALL&period=M&month=${CRM_BRANCH_KPI_MONTH}`
+// 월 키를 모듈 로드 시점에 굳히면, 탭을 켜 둔 채 달이 바뀐 세션이 지난달 KPI를 이번 달로
+// 계속 보여준다. 조회 시점마다 다시 계산한다.
+const branchKpiUrl = (month: string) => `/api/admin/branch/kpi?team=ALL&period=M&month=${month}`
 const CRM_HOME_TTL_MS = 120_000
 const CRM_HOME_STALE_WHILE_REVALIDATE_MS = 10 * 60_000
 
@@ -575,11 +584,13 @@ function CrmTeamKpiBoard({
   branchKpis,
   loading,
   branchError,
+  month,
 }: {
   overview: AdminCrmOverview | null
   branchKpis: BranchKpiResponse | null
   loading: boolean
   branchError: string | null
+  month: string
 }) {
   // 콜드 로드 — '...' 텍스트 대신 타일 값 크기 스켈레톤(CRM-5).
   const loadingValue = loading && !overview ? <ValueSkeleton className="h-5 w-16" /> : null
@@ -624,7 +635,7 @@ function CrmTeamKpiBoard({
           <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Performance KPI</p>
           <h2 className="mt-1 text-[17px] font-bold text-[#111110]">KPI · 총 · 팀별 · 개인별</h2>
           <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
-            {CRM_BRANCH_KPI_MONTH} · 외부 CRM 동기화 완료량 기준 · 기준/완료/달성률
+            {month} · 외부 CRM 동기화 완료량 기준 · 기준/완료/달성률
           </p>
         </div>
         <span className="inline-flex h-8 items-center rounded-full bg-[#ECFDF5] px-3 text-[12px] font-semibold text-[#084734]">
@@ -1330,6 +1341,7 @@ function CrmHomeReportSection({
   leadKpis,
   refreshing,
   neoCrmRefreshKey,
+  branchKpiMonth,
 }: {
   open: boolean
   onToggle: () => void
@@ -1343,8 +1355,24 @@ function CrmHomeReportSection({
   leadKpis: LeadActionKpis | null
   refreshing: boolean
   neoCrmRefreshKey: number
+  branchKpiMonth: string
 }) {
   const activeTab = CRM_REPORT_TABS.find((item) => item.key === tab) ?? CRM_REPORT_TABS[0]
+
+  // 화살표로 탭 사이를 옮기고 Home/End로 양 끝으로 — 탭 위젯의 표준 키보드 계약.
+  const handleTabKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const index = CRM_REPORT_TABS.findIndex((item) => item.key === tab)
+    let nextIndex: number | null = null
+    if (event.key === "ArrowRight") nextIndex = (index + 1) % CRM_REPORT_TABS.length
+    else if (event.key === "ArrowLeft") nextIndex = (index - 1 + CRM_REPORT_TABS.length) % CRM_REPORT_TABS.length
+    else if (event.key === "Home") nextIndex = 0
+    else if (event.key === "End") nextIndex = CRM_REPORT_TABS.length - 1
+    if (nextIndex == null) return
+    event.preventDefault()
+    const nextTab = CRM_REPORT_TABS[nextIndex]
+    onTabChange(nextTab.key)
+    document.getElementById(`crm-report-tab-${nextTab.key}`)?.focus()
+  }
 
   return (
     <div className="mb-4">
@@ -1369,16 +1397,21 @@ function CrmHomeReportSection({
 
       {open ? (
         <div className="mt-3">
-          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <div className="mb-3 flex flex-wrap items-center gap-1.5" role="tablist" aria-label="리포트 · 분석">
             {CRM_REPORT_TABS.map((item) => {
               const active = item.key === tab
               return (
                 <button
                   key={item.key}
+                  id={`crm-report-tab-${item.key}`}
                   type="button"
+                  role="tab"
+                  aria-selected={active}
+                  aria-controls={`crm-report-panel-${item.key}`}
+                  tabIndex={active ? 0 : -1}
                   onClick={() => onTabChange(item.key)}
-                  aria-pressed={active}
-                  className={`inline-flex h-[30px] items-center rounded-full px-3 text-[12px] font-medium transition-colors ${
+                  onKeyDown={handleTabKeyDown}
+                  className={`inline-flex h-[30px] items-center rounded-full px-3 text-[12px] font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
                     active
                       ? "bg-[#111110] text-white"
                       : "border border-[#e8e8e4] bg-white text-[#111110] hover:border-[#c8c8c4]"
@@ -1391,6 +1424,12 @@ function CrmHomeReportSection({
             <span className="ml-auto hidden text-[11px] text-[#1a1a1a]/35 sm:inline">{activeTab.hint}</span>
           </div>
 
+          <div
+            id={`crm-report-panel-${tab}`}
+            role="tabpanel"
+            aria-labelledby={`crm-report-tab-${tab}`}
+            tabIndex={-1}
+          >
           {tab === "revenue" ? (
             <CrmOperationsDashboard part="revenue" overview={overview} loading={loading} error={error} />
           ) : null}
@@ -1438,6 +1477,7 @@ function CrmHomeReportSection({
                 branchKpis={branchKpis}
                 loading={refreshing}
                 branchError={branchError}
+                month={branchKpiMonth}
               />
               <CrmRankingBoard branchKpis={branchKpis} />
             </section>
@@ -1446,6 +1486,7 @@ function CrmHomeReportSection({
           {tab === "ops" ? (
             <CrmOperationsDashboard part="risk" overview={overview} loading={loading} error={error} />
           ) : null}
+          </div>
         </div>
       ) : null}
     </div>
@@ -1480,11 +1521,19 @@ export default function CrmPage() {
   // overview·우선순위 작업대와 같은 연결을 경쟁하므로, 해당 탭을 열 때까지 지연한다.
   const [branchKpisLoading, setBranchKpisLoading] = useState(false)
   const [branchKpisError, setBranchKpisError] = useState<string | null>(null)
+  const [branchKpiMonth, setBranchKpiMonth] = useState(() => getKstMonthKey(new Date()))
   const [neoCrmRefreshKey, setNeoCrmRefreshKey] = useState(0)
+
+  // 언마운트 후 setState(경고) 방지 + 토스트가 연달아 뜰 때 이전 타이머가 새 토스트를 지우지 않게.
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+  }, [])
 
   const showToast = useCallback((msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000)
   }, [])
 
   const fetchLeadKpis = useCallback(async (options?: { force?: boolean }) => {
@@ -1538,16 +1587,16 @@ export default function CrmPage() {
   }, [])
 
   const fetchBranchKpis = useCallback(async (options?: { force?: boolean }) => {
-    const hasCached = Boolean(
-      getCachedAdminJson<BranchKpiResponse>(CRM_BRANCH_KPI_URL, {
-        cacheKey: CRM_BRANCH_KPI_URL,
-      })
-    )
+    // 조회 시점의 KST 월로 URL을 만든다 — 자정을 넘긴 세션도 이번 달을 본다.
+    const month = getKstMonthKey(new Date())
+    const url = branchKpiUrl(month)
+    const hasCached = Boolean(getCachedAdminJson<BranchKpiResponse>(url, { cacheKey: url }))
+    setBranchKpiMonth(month)
     setBranchKpisLoading(options?.force || !hasCached)
     setBranchKpisError(null)
     try {
-      const data = await adminFetchJsonCached<BranchKpiResponse>(CRM_BRANCH_KPI_URL, undefined, {
-        cacheKey: CRM_BRANCH_KPI_URL,
+      const data = await adminFetchJsonCached<BranchKpiResponse>(url, undefined, {
+        cacheKey: url,
         ttlMs: CRM_HOME_TTL_MS,
         force: options?.force,
         staleWhileRevalidateMs: CRM_HOME_STALE_WHILE_REVALIDATE_MS,
@@ -1733,7 +1782,7 @@ export default function CrmPage() {
       {/* 주간 조망 밴드 — 우측 aside에서 본문으로 이동(H4: 우측 열은 액션 레일 전용) · 기능 보존 */}
       <div className="mb-4 grid items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {/* 이번 주 할 일 — 주간 일정·버킷 조망 */}
-        <CrmWeekAheadPanel compact />
+        <CrmWeekAheadPanel compact refreshKey={neoCrmRefreshKey} />
 
         {/* 설치·방문 일정 — upcomingThisWeek(install|visit) 상위 3건 */}
         <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
@@ -1817,6 +1866,7 @@ export default function CrmPage() {
         leadKpis={leadKpis}
         refreshing={pageRefreshing}
         neoCrmRefreshKey={neoCrmRefreshKey}
+        branchKpiMonth={branchKpiMonth}
       />
 
       {/* 바로 가기 — 상단 sticky 바의 보조 링크와 하단 '심화 보기'로 갈려 있던 딥링크를 한 줄로 모았다.

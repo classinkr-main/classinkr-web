@@ -4,6 +4,12 @@
 
 import { FileText, MessageSquare, Mic, NotebookPen, PhoneCall } from "lucide-react"
 
+/**
+ * 녹음 업로드 상한. 서버(lib/storage/crm-recordings.ts)와 폼이 같은 값을 봐야
+ * "업로드를 끝까지 기다린 뒤 거절"이 아니라 고르는 즉시 막을 수 있다.
+ */
+export const CRM_RECORDING_MAX_BYTES = 50 * 1024 * 1024
+
 export type TargetType = "all" | "lead" | "neo_account" | "customer" | "deal" | "unknown"
 export type ActivityTargetType = Exclude<TargetType, "all">
 export type SourceType =

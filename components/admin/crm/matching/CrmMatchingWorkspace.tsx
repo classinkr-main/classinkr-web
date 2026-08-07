@@ -14,6 +14,15 @@ export default function CrmMatchingWorkspace({ initialNameFilter }: { initialNam
   const [nameFilter, setNameFilter] = useState(initialNameFilter ?? "")
   const inboxRef = useRef<HTMLDivElement>(null)
 
+  // useState 초기값으로만 받으면 첫 마운트 이후의 ?name= 변경(다른 딥링크·뒤로가기)이 무시돼
+  // 주소는 새 고객인데 인박스는 이전 고객 필터에 머문다.
+  // prop이 바뀔 때 상태를 맞추는 렌더 중 조정 패턴 — effect + setState보다 리렌더가 한 번 적다.
+  const [seenInitialNameFilter, setSeenInitialNameFilter] = useState(initialNameFilter)
+  if (initialNameFilter !== seenInitialNameFilter) {
+    setSeenInitialNameFilter(initialNameFilter)
+    setNameFilter(initialNameFilter ?? "")
+  }
+
   const selectAccount = (name: string) => {
     setNameFilter((current) => (current === name ? "" : name))
     window.requestAnimationFrame(() => {
