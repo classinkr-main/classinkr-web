@@ -50,6 +50,11 @@ const KIND_LABEL: Record<QuoteCodeKind, string> = {
   subscription: "구독형",
 }
 
+// 필드 중요도에 따른 입력 크기 — QuickQuoteComposer 컴팩트 규칙과 통일.
+// 금액(결제 직결, 필수)만 기본 높이를 유지하고 나머지는 한 단계 낮춘다.
+const COMPACT_INPUT_CLASS = "h-9 text-[13px]"
+const AMOUNT_INPUT_CLASS = "text-[15px] font-semibold"
+
 function adminFetch(url: string, options?: RequestInit) {
   const token =
     typeof window !== "undefined" ? sessionStorage.getItem("admin_password") : null
@@ -443,6 +448,7 @@ export default function SoftwareQuoteCodesPanel() {
                       setForm((prev) => ({ ...prev, amountKrw: event.target.value }))
                     }
                     placeholder={String(BUSINESS_RECHARGE.baseMinKrw)}
+                    className={AMOUNT_INPUT_CLASS}
                   />
                   <p className="text-[11px] text-[#1a1a1a]/45">
                     최초 {formatRechargeKrw(BUSINESS_RECHARGE.baseMinKrw)} 이상, 이후{" "}
@@ -463,10 +469,12 @@ export default function SoftwareQuoteCodesPanel() {
                       setForm((prev) => ({ ...prev, amountUsd: event.target.value }))
                     }
                     placeholder="0"
+                    className={AMOUNT_INPUT_CLASS}
                   />
                 </div>
               )}
 
+              {/* 기관명·담당자명은 비중이 같아 균등 2열, 필수도가 낮아 컴팩트 높이로 낮춘다. */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="organizationName">기관명</Label>
@@ -479,6 +487,7 @@ export default function SoftwareQuoteCodesPanel() {
                         organizationName: event.target.value,
                       }))
                     }
+                    className={COMPACT_INPUT_CLASS}
                   />
                 </div>
                 <div className="space-y-2">
@@ -489,11 +498,13 @@ export default function SoftwareQuoteCodesPanel() {
                     onChange={(event) =>
                       setForm((prev) => ({ ...prev, buyerName: event.target.value }))
                     }
+                    className={COMPACT_INPUT_CLASS}
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* 이메일은 긴 문자열을 담으므로 더 넓게, 만료일은 고정 폭 날짜 포맷이라 좁게 배정. */}
+              <div className="grid grid-cols-[1.4fr_1fr] gap-3">
                 <div className="space-y-2">
                   <Label htmlFor="buyerEmail">이메일</Label>
                   <Input
@@ -503,6 +514,7 @@ export default function SoftwareQuoteCodesPanel() {
                     onChange={(event) =>
                       setForm((prev) => ({ ...prev, buyerEmail: event.target.value }))
                     }
+                    className={COMPACT_INPUT_CLASS}
                   />
                 </div>
                 <div className="space-y-2">
@@ -514,6 +526,7 @@ export default function SoftwareQuoteCodesPanel() {
                     onChange={(event) =>
                       setForm((prev) => ({ ...prev, expiresAt: event.target.value }))
                     }
+                    className={COMPACT_INPUT_CLASS}
                   />
                 </div>
               </div>
@@ -527,6 +540,7 @@ export default function SoftwareQuoteCodesPanel() {
                     setForm((prev) => ({ ...prev, notes: event.target.value }))
                   }
                   placeholder="내부 메모 (고객에게 노출되지 않음)"
+                  className={COMPACT_INPUT_CLASS}
                 />
               </div>
 
