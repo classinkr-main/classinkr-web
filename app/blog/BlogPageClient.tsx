@@ -110,7 +110,10 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                         initial={reduceMotion ? false : { opacity: 0, y: 16 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: reduceMotion ? 0 : 0.1 }}
-                        className="mb-6 grid grid-cols-1 gap-3 lg:aspect-[1100/460] lg:grid-cols-3 lg:grid-rows-2"
+                        // 3단 사다리: 모바일 세로 스택 → sm부터 히어로 전폭 + 서브 2열 → lg에서 3열.
+                        // sm~lg 구간에 별도 배치가 없으면 709×443 카드 3장이 1353px를 먹으면서
+                        // "1 큰 카드 + 2 작은 카드"라는 위계 자체가 사라진다.
+                        className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:aspect-[1100/460] lg:grid-cols-3 lg:grid-rows-2"
                     >
                         {galleryPosts.map((post, idx) => {
                             const isHero = idx === 0
@@ -119,7 +122,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                 <Link
                                     key={post.id}
                                     href={`/blog/${post.slug}`}
-                                    className={`group relative ${CARD_FOCUS_RING} ${isHero ? "lg:col-span-2 lg:row-span-2" : ""}`}
+                                    className={`group relative ${CARD_FOCUS_RING} ${isHero ? "sm:col-span-2 lg:row-span-2" : ""}`}
                                 >
                                     <article className="relative aspect-[16/10] overflow-hidden rounded-2xl bg-[#f0f0ec] ring-1 ring-black/5 transition-all duration-500 ease-out group-hover:-translate-y-0.5 group-hover:shadow-[0_22px_55px_-25px_rgba(0,0,0,0.45)] group-hover:ring-black/10 lg:aspect-auto lg:h-full">
                                         <BlogThumb
@@ -129,9 +132,10 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                             tone="dark"
                                             // LCP 후보라 첫 카드만 즉시 로드한다(preload 링크까지 생성된다).
                                             priority={isHero}
+                                            // 서브 카드는 sm부터 절반 폭이다 — full width로 선언하면 2배 큰 후보를 받는다.
                                             sizes={isHero
                                                 ? "(min-width: 1148px) 730px, (min-width: 1024px) calc(66vw), (min-width: 640px) calc(100vw - 48px), calc(100vw - 32px)"
-                                                : "(min-width: 1148px) 360px, (min-width: 1024px) calc(33vw), (min-width: 640px) calc(100vw - 48px), calc(100vw - 32px)"}
+                                                : "(min-width: 1148px) 360px, (min-width: 1024px) calc(33vw), (min-width: 640px) calc(50vw - 30px), calc(100vw - 32px)"}
                                             className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.06] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                                             fallbackIndex={post.id}
                                         />
@@ -164,7 +168,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                                 차오르면 스크림을 아무리 올려도 상단 칩이 판독 한계에 걸린다. */}
                                             {isHero ? (
                                                 <>
-                                                    <p className="mb-3 hidden line-clamp-2 text-sm text-white/80 md:block">
+                                                    <p className="mb-3 line-clamp-2 text-sm text-white/80 max-md:hidden">
                                                         {post.excerpt}
                                                     </p>
                                                     <div className="flex items-center gap-2 text-xs text-white/80">
@@ -298,7 +302,10 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                         <Link href={`/blog/${post.slug}`} className={`group block ${CARD_FOCUS_RING}`}>
                             {/* 좌측 160px 카테고리 열을 없애고 본문에 폭을 돌려줬다.
                                 비호버 항목을 흐리는 대신 호버 대상만 배경으로 강조한다. */}
-                            <article className="-mx-3 grid grid-cols-[1fr_104px] gap-3 rounded-lg border-b border-[#ebebea] px-3 py-5 transition-colors duration-200 group-hover:bg-[#F3F2EF] md:grid-cols-[1fr_200px] md:gap-8 md:py-6">
+                            {/* 썸네일 폭 사다리 128 → 160 → 200. 768px에서 104→200으로 두 배 튀던 걸 없앤다.
+                                모바일은 요약을 숨겨 텍스트 높이를 썸네일에 맞추고(기존엔 81px가 비었다),
+                                items-center로 남는 차이를 가운데로 흡수한다. */}
+                            <article className="-mx-3 grid grid-cols-[1fr_128px] items-center gap-3 rounded-lg border-b border-[#ebebea] px-3 py-5 transition-colors duration-200 group-hover:bg-[#F3F2EF] sm:grid-cols-[1fr_160px] sm:gap-5 md:grid-cols-[1fr_200px] md:items-start md:gap-8 md:py-6">
                                 <div className="flex flex-col gap-1.5">
                                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#31302E]">
@@ -315,7 +322,10 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                     <h2 className="line-clamp-2 text-lg font-semibold leading-snug tracking-[-0.015em] text-[#111110] transition-colors duration-300 group-hover:text-[#084734] md:text-xl">
                                         {post.title}
                                     </h2>
-                                    <p className="line-clamp-2 text-sm leading-relaxed text-[#615D59]">
+                                    {/* 모바일에서 요약은 좁은 폭에 잘려 정보 가치가 낮다 — 제목에 자리를 넘긴다.
+                                        숨김은 max-sm:hidden으로 한다. `hidden … sm:block`을 쓰면 sm 이상에서
+                                        display:block이 line-clamp의 -webkit-box를 덮어써 줄 제한이 풀린다. */}
+                                    <p className="line-clamp-2 text-sm leading-relaxed text-[#615D59] max-sm:hidden">
                                         {post.excerpt}
                                     </p>
                                     {/* 작성자는 전 행이 동일해 판별 정보가 없어 상세 페이지로 넘겼다. */}
@@ -334,7 +344,7 @@ export default function BlogPageClient({ posts, loadFailed = false }: BlogPageCl
                                         src={post.imageUrl}
                                         alt={post.title}
                                         category={post.category}
-                                        sizes="(min-width: 768px) 200px, 104px"
+                                        sizes="(min-width: 768px) 200px, (min-width: 640px) 160px, 128px"
                                         className="object-cover transition-transform duration-500 group-hover:scale-[1.04] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                                         fallbackIndex={post.id}
                                     />
