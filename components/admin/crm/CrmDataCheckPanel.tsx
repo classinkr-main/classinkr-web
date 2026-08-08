@@ -18,7 +18,7 @@ function getOverviewStatusLabel(status: AdminCrmOverviewStatus) {
 
 function getOverviewStatusTone(status: AdminCrmOverviewStatus) {
   if (status === "ok") return "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]"
-  if (status === "warning") return "border-amber-100 bg-amber-50 text-amber-700"
+  if (status === "warning") return "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
   return "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
 }
 
@@ -97,7 +97,7 @@ export default function CrmDataCheckPanel({
         {[
           { label: "스키마", value: schemaDetail, tone: overview?.schema.blocked ? "text-[#B85C33]" : "text-[#084734]" },
           { label: "Xiaoshouyi", value: xiaoshouyiCardDetail, tone: hasXiaoshouyiSnapshot || overview?.xiaoshouyi.configured ? "text-[#084734]" : "text-[#B85C33]" },
-          { label: "시트·외부 링크", value: sourceLinkDetail, tone: overview?.sourceLinks.candidate || overview?.sourceLinks.stale ? "text-amber-700" : "text-[#111110]" },
+          { label: "시트·외부 링크", value: sourceLinkDetail, tone: overview?.sourceLinks.candidate || overview?.sourceLinks.stale ? "text-[#7A520F]" : "text-[#111110]" },
           {
             label: `Snapshot · ${formatOverviewDate(overview?.externalSnapshots.latestSyncedAt)}`,
             value: snapshotDetail,

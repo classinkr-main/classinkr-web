@@ -53,8 +53,20 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<Command, "group">>> = {
   "/admin/events": [
     { label: "새 행사 등록", href: "/admin/events/new", keywords: "새 행사 등록 new event" },
   ],
+  // CS 콘솔 IA 재구성(2026-07-27) — 사이드바 cs 섹션이 3항목으로 줄면서 "문서 보강 큐"·"채널톡 상담"
+  // 항목이 콘솔 가로 메뉴로 옮겨갔다. URL은 그대로이므로 ⌘K 도달성은 자식 커맨드로 보존한다
+  // (라벨은 콘솔 메뉴명과 일치시켜 두 표면의 어휘가 갈리지 않게 한다).
+  //
+  // 숙주가 `/admin/chatbot`이 아니라 `/admin/docs`인 이유 — 자식 커맨드는 부모 nav 항목이
+  // ADMIN_COMMANDS에 살아남을 때만 방출된다(아래 flatMap). 어드민 탭 재구성
+  // (docs/active/admin-tab-restructure-2026-07-29.md §5.2)이 `/admin/chatbot`을 MOON_ONLY로
+  // 분류해 비-super에게 차단하므로, 그 밑에 두면 팔레트가 접근 필터를 갖는 순간 둘 다 고아가 된다.
+  // `/admin/docs`는 같은 표의 `OPEN` 묶음(전 프리셋 접근)이자 `staff` 프리셋 상시라 안전한 숙주다.
+  // 두 항목의 section이 같아(cs) 그룹 라벨("고객 지원")은 이관 전후로 동일하다.
   "/admin/docs": [
     { label: "추천 질문 관리", href: "/admin/docs?tab=recommended", keywords: "추천 질문 starter chatbot recommended" },
+    { label: "상담 Inbox (채널톡)", href: "/admin/channel-talk", keywords: "채널톡 상담 문의 채팅 channel talk chat inbox" },
+    { label: "미해결 큐", href: "/admin/docs?tab=gaps", keywords: "보강 큐 gaps faq 문서 검색 초안 질문 패턴 미해결" },
   ],
   "/admin/settings": [
     { label: "통합 설정", href: "/admin/settings?tab=integrations", keywords: "설정 settings integrations webhook api key" },

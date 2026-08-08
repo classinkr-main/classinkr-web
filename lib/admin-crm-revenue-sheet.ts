@@ -178,6 +178,19 @@ export async function getAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenu
   if (customersResult.error) warnings.push(`고객 라벨을 읽지 못했습니다: ${customersResult.error.message}`)
   if (dealsResult.error) warnings.push(`거래 라벨을 읽지 못했습니다: ${dealsResult.error.message}`)
 
+  // 상한에 정확히 닿았다면 그 뒤가 잘렸을 수 있다. 형제 모듈(admin-crm-revenue)은 같은 위험을
+  // getQueryLimitWarning으로 알리는데 여기만 조용히 잘라, 요약·팀별 집계가 소리 없이 과소 집계된다.
+  if ((sheetResult.data?.length ?? 0) >= QUERY_LIMIT) {
+    warnings.push(
+      `REV 시트: ${QUERY_LIMIT.toLocaleString("ko-KR")}건까지만 읽었습니다. 요약·팀별 집계가 이후 행을 포함하지 않습니다.`
+    )
+  }
+  if ((linksResult.data?.length ?? 0) >= QUERY_LIMIT * 3) {
+    warnings.push(
+      `REV 매칭 링크: ${(QUERY_LIMIT * 3).toLocaleString("ko-KR")}건까지만 읽었습니다. 일부 행의 연결 상태가 비어 보일 수 있습니다.`
+    )
+  }
+
   const partnerAccounts = new Map(
     ((accountsResult.data ?? []) as Array<{ id: string; name: string }>).map((row) => [row.id, row.name])
   )

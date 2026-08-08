@@ -431,6 +431,18 @@
     padding-top: 24px;
   }
   .col-block + .col-block { margin-top: 84px; }
+  .col-cta {
+    margin-top: 52px;
+    padding-top: 32px;
+    border-top: 1px solid var(--line-soft);
+    text-align: center;
+  }
+  .col-cta-note {
+    margin: 14px 0 0;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--ink-mute);
+  }
   .col-story {
     font-family: 'Noto Serif KR', serif;
     font-style: italic;
@@ -1136,7 +1148,7 @@
       <div class="s-kicker">Classin Standard · The Collection</div>
       <h2 class="s-title">선택받은 학원을 위한,<br class="br-desktop" />검증된 컬렉션.</h2>
       <p class="s-desc">
-        시그니처 디바이스. 올인원 스튜디오. 구독형 운영. 학원의 다음 표준을 구성하는 세 가지 답을 선보입니다.
+        시그니처 디바이스. 올인원 스튜디오. 학원의 다음 표준을 구성하는 두 가지 답을 선보입니다.
       </p>
     </div>
 
@@ -1151,7 +1163,7 @@
           <p class="item-spec">75-inch Interactive Display</p>
           <p class="item-desc">교실의 새로운 기준이 되는 대형 인터랙티브 보드.</p>
         </div>
-        <div class="item-price">490<span class="unit">만원</span></div>
+        <div class="item-price">540<span class="unit">만원</span></div>
       </div>
 
       <div class="item-row">
@@ -1160,7 +1172,7 @@
           <p class="item-spec">86-inch Flagship Display</p>
           <p class="item-desc">몰입형 수업과 시연에 최적화된 플래그십 디스플레이.</p>
         </div>
-        <div class="item-price">580<span class="unit">만원</span></div>
+        <div class="item-price">630<span class="unit">만원</span></div>
       </div>
 
       <div class="item-row">
@@ -1182,7 +1194,7 @@
         <span class="tag">Signature</span>
         <h4 class="pkg-name">올인원 녹화수업 세트</h4>
         <div class="pkg-price">
-          <span class="num">780</span>
+          <span class="num">830</span>
           <span class="unit">만원</span>
         </div>
         <div class="pkg-divider"></div>
@@ -1192,23 +1204,12 @@
       </div>
     </div>
 
-    <!-- BLOCK C: Package 2 -->
-    <div class="col-block reveal">
-      <h3 class="col-title"><span class="num">Package 2.</span>Online Suite</h3>
-      <div class="col-kicker">Academy Consulting · Subscription</div>
-
-      <div class="pkg-card bordered">
-        <span class="tag">Subscription</span>
-        <h4 class="pkg-name">구독형 통합 학원 패키지</h4>
-        <div class="pkg-price">
-          <span class="num">40</span>
-          <span class="unit">만원 / 월</span>
-        </div>
-        <div class="pkg-divider"></div>
-        <p class="pkg-spec">전자칠판 · 카메라 · 무제한 녹화 및 수업 · 랜딩페이지 · 사업자 인가 대행 (온라인 관련)</p>
-        <p class="pkg-desc">온·오프라인 수업 전환을 위한 학원 풀 패키지.</p>
-        <div class="pkg-note"><span class="star">*</span>설치 배송비 별도 · 36개월 할부</div>
-      </div>
+    <div class="col-cta reveal">
+      <!-- sku= 는 lib/billing/hardware-catalog 의 식별자다. 체크아웃이 이 구성을 수량 1로 프리셀렉트한다. -->
+      <a href="/checkout?type=hw&amp;sku=hw-package-ai-studio" class="btn btn-primary">
+        구성 그대로 주문 신청하기 <span class="arrow">→</span>
+      </a>
+      <p class="col-cta-note">신청을 남기시면 담당자가 연락드려 결제·설치 일정을 안내드립니다.</p>
     </div>
   </div>
 </section>

@@ -49,7 +49,10 @@ type QuoteVersionListRow = Pick<
   | "valid_until"
   | "created_by"
   | "created_at"
->;
+> & {
+  /** structured_json에서 JSON 경로로 추출한 견적 템플릿 id — SW/HW 배지 확정 판정용. */
+  template_id: string | null;
+};
 
 type ContractVersionListRow = Pick<
   ContractDocumentVersion,
@@ -129,7 +132,8 @@ async function listQuoteDocuments(
     supabase
       .from("quote_document_versions")
       .select(
-        "id, quote_document_id, version_number, title, subtotal, discount_amount, tax_amount, total_amount, valid_until, created_by, created_at"
+        // template_id는 JSON 경로 추출 별칭 — structured_json 전체를 목록으로 끌고 오지 않는다(과다 페치 방지).
+        "id, quote_document_id, version_number, title, subtotal, discount_amount, tax_amount, total_amount, valid_until, created_by, created_at, template_id:structured_json->quoteDetails->>templateId"
       )
       .in("quote_document_id", documentIds)
       .order("version_number", { ascending: false }),
@@ -192,6 +196,7 @@ async function listQuoteDocuments(
       deal_title: deal?.title ?? "",
       document_number: document.quote_number,
       title: currentVersion?.title ?? "견적서",
+      template_id: currentVersion?.template_id ?? null,
       status: document.status,
       version_count: versionsForDocument.length,
       total_amount: currentVersion?.total_amount ?? null,

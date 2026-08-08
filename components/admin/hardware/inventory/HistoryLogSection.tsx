@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import type { Dispatch, ReactNode, SetStateAction } from "react"
 import { ChevronDown, ChevronRight, Clock3 } from "lucide-react"
 
@@ -44,7 +45,7 @@ interface HistoryLogSectionProps {
   setMovementsPage: Dispatch<SetStateAction<number>>
 }
 
-export default function HistoryLogSection({
+function HistoryLogSection({
   filteredMovements,
   logGroups,
   pageLogGroupKeys,
@@ -172,3 +173,5 @@ export default function HistoryLogSection({
     </section>
   )
 }
+
+export default memo(HistoryLogSection)

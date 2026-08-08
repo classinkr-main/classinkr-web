@@ -2,7 +2,7 @@
 
 상태: 기획 확정 → 단계별 구현 착수
 운영 결정: [admin-os-operating-decisions-2026-07-11.md](admin-os-operating-decisions-2026-07-11.md) — 역할·V2 정본·CRM 5작업면·상태·삭제 정책은 이 문서보다 우선한다.
-선행 문서: [admin-ia-redesign-2026-06-29.md](admin-ia-redesign-2026-06-29.md) · [admin-organic-audit-2026-07-02.md](admin-organic-audit-2026-07-02.md) · [erp-blueprint-2026-06-22.md](erp-blueprint-2026-06-22.md) · [classin-operating-canon-2026-07-02.md](classin-operating-canon-2026-07-02.md)
+선행 문서: [admin-ia-redesign-2026-06-29.md](../archive/admin-ia-redesign-2026-06-29.md) · [admin-organic-audit-2026-07-02.md](admin-organic-audit-2026-07-02.md) · [erp-blueprint-2026-06-22.md](erp-blueprint-2026-06-22.md) · [classin-operating-canon-2026-07-02.md](classin-operating-canon-2026-07-02.md)
 
 ---
 

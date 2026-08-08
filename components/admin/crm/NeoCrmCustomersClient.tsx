@@ -1,9 +1,9 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react"
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
 import {
   AlertTriangle,
@@ -439,6 +439,14 @@ function CustomerDetailPanel({
                 {displayOwner ?? "담당 미지정"}
                 {account?.phone ? ` · ${account.phone}` : ""}
               </p>
+              {/* 빠른 보기 → 고객 360 상세 페이지 진입로(모바일 카드 진입 포함) —
+                  키 규약은 unified 드로어 '자세히 보기'와 동일(neo:{accountId}). */}
+              <Link
+                href={`/admin/crm/customers/${encodeURIComponent(`neo:${accountId}`)}`}
+                className="mt-1.5 inline-flex items-center text-[11px] font-semibold text-[#084734] underline-offset-2 hover:underline"
+              >
+                고객 360 자세히 보기 →
+              </Link>
             </div>
             <button
               type="button"
@@ -600,6 +608,25 @@ function CustomerDetailPanel({
 }
 
 // 빈 상태 — 다음 행동 안내(필터 초기화 / 통합 고객 DB 딥링크). 데스크톱 표·모바일 카드 공용.
+// 조회 실패와 "고객 없음"은 다른 상태다. 실패를 빈 목록으로 그리면 화면이 "동기화된 고객이
+// 아직 없습니다"라고 단언해, 장애를 데이터 없음으로 오인시킨다.
+function CustomersLoadFailed({ message, onRetry }: { message: string | null; onRetry: () => void }) {
+  return (
+    <div className="py-14 text-center">
+      <AlertTriangle className="mx-auto mb-2 h-5 w-5 text-[#B85C33]/60" />
+      <p className="text-[13px] font-medium text-[#111110]">고객 목록을 불러오지 못했습니다.</p>
+      <p className="mt-1 text-[12px] text-[#1a1a1a]/40">{message ?? "잠시 후 다시 시도해 주세요."}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-4 inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+      >
+        다시 시도
+      </button>
+    </div>
+  )
+}
+
 function EmptyCustomers({ hasFilters, onReset }: { hasFilters: boolean; onReset: () => void }) {
   return (
     <div className="py-14 text-center">
@@ -647,6 +674,8 @@ function KpiTile({ icon, label, value, hint, tone = "text-[#111110]" }: { icon: 
 
 export default function NeoCrmCustomersClient() {
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
   const deepLinkedAccountId = searchParams.get("account")?.trim() ?? ""
   // ?expiring=1 딥링크 — Overview 리뉴얼 타일에서 '만료 임박만' 필터가 켜진 채 착지한다.
   const deepLinkedExpiring = searchParams.get("expiring") === "1"
@@ -692,22 +721,30 @@ export default function NeoCrmCustomersClient() {
     setSelectedAccountId(deepLinkedAccountId)
   }, [deepLinkedAccountId, dismissedDeepLinkedAccountId, selectedAccountId])
 
+  // raw history API는 useSearchParams와 desync된다(CrmUnifiedCustomersClient가 같은 이유로 금지).
+  // 주소창에서는 ?account=가 사라졌는데 useSearchParams는 계속 옛 값을 돌려줘, 현재 쿼리를
+  // 이어 붙이는 다른 경로가 닫은 고객을 되살릴 수 있다. 라우터를 경유해 한 곳에서 상태를 맞춘다.
   const closeSelectedAccount = useCallback(() => {
     setSelectedAccountId(null)
     if (deepLinkedAccountId) setDismissedDeepLinkedAccountId(deepLinkedAccountId)
-    const url = new URL(window.location.href)
-    if (!url.searchParams.has("account")) return
-    url.searchParams.delete("account")
-    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
-  }, [deepLinkedAccountId])
+    if (!searchParams.has("account")) return
+    const params = new URLSearchParams(Array.from(searchParams.entries()))
+    params.delete("account")
+    const qs = params.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }, [deepLinkedAccountId, pathname, router, searchParams])
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
   }, [query, ownerFilter, sortKey, expiringOnly])
 
+  // 서버가 한 번에 최대 1만 건을 내려주고 "더보기"로 누적 렌더한다. 매 키 입력마다 전체를
+  // 다시 걸러 정렬하면 입력이 눈에 띄게 밀린다(통합 목록은 이미 같은 이유로 지연값을 쓴다).
+  const deferredQuery = useDeferredValue(query)
+
   const filtered = useMemo(() => {
     const rows = data?.rows ?? []
-    const q = query.trim().toLowerCase()
+    const q = deferredQuery.trim().toLowerCase()
     const result = rows.filter((row) => {
       if (ownerFilter !== "all" && row.ownerId !== ownerFilter) return false
       if (expiringOnly) {
@@ -743,7 +780,7 @@ export default function NeoCrmCustomersClient() {
       }
     })
     return sorted
-  }, [data, query, ownerFilter, sortKey, expiringOnly])
+  }, [data, deferredQuery, ownerFilter, sortKey, expiringOnly])
 
   const visibleRows = filtered.slice(0, visibleCount)
   const hasActiveFilters = Boolean(query.trim()) || ownerFilter !== "all" || expiringOnly
@@ -885,6 +922,8 @@ export default function NeoCrmCustomersClient() {
               </div>
             ))}
           </div>
+        ) : !data ? (
+          <CustomersLoadFailed message={error} onRetry={() => void load({ force: true })} />
         ) : visibleRows.length === 0 ? (
           <EmptyCustomers hasFilters={hasActiveFilters} onReset={resetFilters} />
         ) : (
@@ -945,6 +984,12 @@ export default function NeoCrmCustomersClient() {
                   ))}
                 </tr>
               ))
+            ) : !data ? (
+              <tr>
+                <td colSpan={6}>
+                  <CustomersLoadFailed message={error} onRetry={() => void load({ force: true })} />
+                </td>
+              </tr>
             ) : visibleRows.length === 0 ? (
               <tr>
                 <td colSpan={6}>
@@ -962,6 +1007,16 @@ export default function NeoCrmCustomersClient() {
                     <p className="flex items-center gap-1 text-[13px] font-semibold text-[#111110]">
                       {row.name}
                       <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/25" />
+                      {/* 행 클릭(빠른 보기 패널)과 별개로 고객 360 상세 페이지 직행 딥링크 —
+                          키 규약은 unified 드로어 '자세히 보기'와 동일(neo:{accountId}). */}
+                      <Link
+                        href={`/admin/crm/customers/${encodeURIComponent(`neo:${row.accountId}`)}`}
+                        onClick={(event) => event.stopPropagation()}
+                        title="고객 360 자세히 보기"
+                        className="shrink-0 text-[11px] font-semibold text-[#084734] underline-offset-2 hover:underline"
+                      >
+                        상세 ↗
+                      </Link>
                     </p>
                     <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
                       {row.uid ? `UID ${row.uid}` : "EEO 미연결"}

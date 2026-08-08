@@ -45,7 +45,9 @@ export interface SiteSettings {
   channelTalkWebhookUrl?: string
   emailWebhookUrl?: string
   wecomOpsWebhookUrl?: string
+  wecomOpsWebhookEnabled: boolean
   wecomCsWebhookUrl?: string
+  wecomLeadReportWebhookUrl?: string
   wecomCriticalWebhookUrl?: string
   kakaoAlimtalkWebhookUrl?: string
   notificationDigestEmailList: string[]

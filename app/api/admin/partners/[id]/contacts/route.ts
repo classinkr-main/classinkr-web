@@ -10,6 +10,7 @@ import {
   PartnerApiValidationError,
 } from "@/app/api/admin/partners/_validation"
 import { verifyAdmin } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import * as partnersData from "@/lib/partners-data"
 import type { PartnerContactInput, PartnerDataSource } from "@/lib/partners-types"
 
@@ -65,7 +66,7 @@ export async function GET(
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    return NextResponse.json({ items: workspace.contacts, source, warning })
+    return adminCachedJson({ items: workspace.contacts, source, warning })
   } catch {
     return NextResponse.json({ error: "Failed to read contacts" }, { status: 500 })
   }

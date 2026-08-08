@@ -20,6 +20,7 @@ import {
   Share2,
   Smartphone,
   Sparkles,
+  Trash2,
   X,
   ZoomIn,
   ZoomOut,
@@ -27,7 +28,6 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { normalizeQuoteDetailsFromStructuredJson } from "@/lib/portal/quote-details"
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import { getProductBySku } from "@/lib/product-templates"
@@ -42,18 +42,26 @@ import type {
   PartnerQuoteLineItemInput,
 } from "@/lib/partners-types"
 import {
+  DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID,
+  appendQuoteNoteLine,
   buildConfigurableStandardQuoteDetails,
   buildStandardQuoteTitle,
   calculateStandardQuoteTotals,
+  createInformationalQuoteLine,
   finalizeStandardQuoteDetails,
   formatStandardQuoteCurrency,
+  getQuoteNotePresets,
   getStandardQuoteDefaultSelections,
   getStandardQuoteOptionGroups,
   getStandardQuoteQuickPresets,
+  getQuoteProductLineTemplateId,
   getStandardQuoteTemplate,
   inferStandardQuoteTemplateId,
   isSoftwareQuoteTemplate,
+  quoteNoteHasLine,
   resolveQuoteSupplier,
+  type QuoteNotePresetGroup,
+  type QuoteProductLine,
   type StandardQuoteOptionSelections,
   type StandardQuoteTemplateId,
 } from "@/lib/standard-quote-template"
@@ -83,6 +91,8 @@ type ErrorToastState = {
 
 export type QuickQuoteCreatedPayload = {
   action: CreateAction
+  /** 저장에 사용한 표준 템플릿 — 호출 측이 SW/HW 유형을 추정 없이 알 수 있게 함께 넘긴다. */
+  templateId: StandardQuoteTemplateId
   shareUrl?: string | null
   shareError?: string | null
   share?: QuoteDocumentShare | null
@@ -104,6 +114,19 @@ export type QuickQuoteCreatedPayload = {
   version: QuoteDocumentVersion
 }
 
+/**
+ * 공급자 담당자 드롭다운에 채울 후보. 어드민 화면(HardwareQuotesPanel)이 CRM 매니저 목록을
+ * 주입한다 — 포털 번들이 어드민 클라이언트를 끌어오지 않도록 훅을 여기서 부르지 않는다.
+ */
+export type QuickQuoteManagerOption = {
+  /** 견적서에 표기될 담당자명 */
+  name: string
+  /** 드롭다운 표시용(예: "정규성 · 매니저"). 없으면 name 사용 */
+  label?: string
+  /** 연락처를 아는 경우에만. 없으면 연락처는 수동 입력으로 남는다 */
+  phone?: string | null
+}
+
 type QuickQuoteComposerProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -112,6 +135,8 @@ type QuickQuoteComposerProps = {
   apiBase?: QuickQuoteApiBase
   portalPartnerAccountId?: string | null
   initialTemplateId?: StandardQuoteTemplateId
+  /** 공급자 담당자 드롭다운 후보(비면 기존처럼 자유 텍스트 입력만 노출). */
+  supplierManagerOptions?: QuickQuoteManagerOption[]
   /**
    * 딜/고객 컨텍스트에서 진입할 때 프리필할 대상. 값이 있으면 고객·거래 목록이 로드된 뒤
    * "기존 고객" 모드로 해당 고객·거래를 자동 선택한다. (새 고객 암묵 생성 없음)
@@ -177,8 +202,8 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
   {
     id: "recording_studio",
     label: "녹화 세트",
-    description: "OMO 780",
-    price: getProductBySku("ai-studio-recording-set")?.unit_price ?? 7_800_000,
+    description: "OMO 830",
+    price: getProductBySku("ai-studio-recording-set")?.unit_price ?? 8_300_000,
   },
   {
     id: "online_suite",
@@ -190,13 +215,13 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
     id: "board_86",
     label: '전자칠판 86"',
     description: "",
-    price: getProductBySku("board-86")?.unit_price ?? 5_800_000,
+    price: getProductBySku("board-86")?.unit_price ?? 6_300_000,
   },
   {
     id: "board_75",
     label: '전자칠판 75"',
     description: "",
-    price: getProductBySku("board-75")?.unit_price ?? 4_900_000,
+    price: getProductBySku("board-75")?.unit_price ?? 5_400_000,
   },
   {
     id: "camera_t1",
@@ -220,9 +245,177 @@ const QUICK_ADD_RAIL_ITEMS: QuickAddRailItem[] = [
     id: "bundle_86_t1_wall",
     label: "번들",
     description: '86" + T1 + 벽걸이',
-    price: getProductBySku("bundle-86-t1-wall")?.unit_price ?? 7_500_000,
+    price: getProductBySku("bundle-86-t1-wall")?.unit_price ?? 8_000_000,
   },
 ]
+
+/* ── 컴팩트 폼 토큰 ─────────────────────────────────────────────
+ * 입력 h-9 / 라벨 11px / 카드 whisper border. DESIGN.md 팔레트만 사용한다.
+ */
+const COMPACT_INPUT_CLASS = "h-9 text-[13px]"
+const COMPACT_SELECT_CLASS =
+  "flex h-9 w-full min-w-0 rounded-[6px] border border-[#E5E5E0] bg-white px-2.5 text-[13px] text-[#111110] outline-none transition-colors hover:border-[#D8D8D2] focus-visible:border-[#084734] focus-visible:ring-2 focus-visible:ring-[#084734]/20 disabled:cursor-not-allowed disabled:opacity-50"
+const COMPACT_CARD_CLASS = "rounded-[12px] border border-black/[0.08] bg-white p-3.5"
+const COMPACT_CHIP_CLASS =
+  "inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[12px] transition-colors"
+const MANAGER_CUSTOM_VALUE = "__custom__"
+
+function SectionHeading({
+  step,
+  title,
+  hint,
+  required,
+  action,
+}: {
+  step: string
+  title: string
+  hint?: string
+  required?: boolean
+  action?: ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-baseline gap-2">
+        <span className="shrink-0 text-[11px] font-bold tabular-nums text-[#084734]">{step}</span>
+        <h3 className="flex shrink-0 items-center gap-1 text-[13px] font-semibold text-[#111110]">
+          {title}
+          {required && (
+            <>
+              <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-[#B43E3E]" />
+              <span className="sr-only">필수</span>
+            </>
+          )}
+        </h3>
+        {hint && <span className="truncate text-[11px] text-[#A39E98]">{hint}</span>}
+      </div>
+      {action}
+    </div>
+  )
+}
+
+function FieldLabel({
+  htmlFor,
+  children,
+  required,
+  hint,
+}: {
+  htmlFor?: string
+  children: ReactNode
+  required?: boolean
+  hint?: string
+}) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className="flex items-center gap-1 text-[11px] font-semibold leading-none text-[#615D59]"
+    >
+      <span className={required ? "text-[#111110]" : undefined}>{children}</span>
+      {required && (
+        <>
+          <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-[#B43E3E]" />
+          <span className="sr-only">필수</span>
+        </>
+      )}
+      {hint && <span className="truncate font-normal text-[#A39E98]">{hint}</span>}
+    </label>
+  )
+}
+
+/** 프리셋 칩 + 직접 추가 + textarea 한 세트(기타사항/특약사항 공용). */
+function QuoteNoteField({
+  id,
+  label,
+  group,
+  value,
+  placeholder,
+  onChange,
+}: {
+  id: string
+  label: string
+  group: QuoteNotePresetGroup
+  value: string
+  placeholder?: string
+  onChange: (next: string) => void
+}) {
+  const presets = getQuoteNotePresets(group)
+  const [customOpen, setCustomOpen] = useState(false)
+  const [customText, setCustomText] = useState("")
+
+  function commitCustomText() {
+    const next = appendQuoteNoteLine(value, customText)
+    if (next !== value) onChange(next)
+    setCustomText("")
+    setCustomOpen(false)
+  }
+
+  return (
+    <div className="grid gap-1.5">
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <div className="flex flex-wrap items-center gap-1">
+        {presets.map((preset) => {
+          const included = quoteNoteHasLine(value, preset.text)
+
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              title={preset.text}
+              disabled={included}
+              onClick={() => onChange(appendQuoteNoteLine(value, preset.text))}
+              className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium transition-colors ${
+                included
+                  ? "cursor-default border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
+                  : "border-black/[0.08] bg-white text-[#615D59] hover:border-[#BDEFD8] hover:text-[#111110]"
+              }`}
+            >
+              {included ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+              {preset.label}
+            </button>
+          )
+        })}
+        <button
+          type="button"
+          onClick={() => setCustomOpen((current) => !current)}
+          className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-black/[0.14] px-2.5 text-[11px] font-medium text-[#615D59] transition-colors hover:border-[#084734] hover:text-[#084734]"
+        >
+          직접 추가
+        </button>
+      </div>
+
+      {customOpen && (
+        <div className="flex items-center gap-1.5">
+          <Input
+            value={customText}
+            onChange={(event) => setCustomText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                commitCustomText()
+              }
+            }}
+            placeholder="추가할 문구를 입력하고 Enter"
+            className="h-8 text-[13px]"
+          />
+          <button
+            type="button"
+            onClick={commitCustomText}
+            className="inline-flex h-8 shrink-0 items-center rounded-[6px] border border-black/[0.08] bg-white px-3 text-[12px] font-medium text-[#111110] transition-colors hover:bg-[#F6F5F4]"
+          >
+            추가
+          </button>
+        </div>
+      )}
+
+      <textarea
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="min-h-[72px] w-full rounded-[6px] border border-[#E5E5E0] bg-white px-3 py-2 text-[13px] text-[#111110] outline-none transition-colors placeholder:text-[#A39E98] focus-visible:border-[#084734] focus-visible:ring-2 focus-visible:ring-[#084734]/20"
+      />
+    </div>
+  )
+}
 
 function mergeCustomerListItems(
   preferred: CustomerListItem[],
@@ -268,6 +461,10 @@ function getBaseLine(quote: PartnerQuoteDetailsInput) {
     quote.lineItems?.find((item) => item.itemType === "hardware") ??
     quote.lineItems?.[0]
   )
+}
+
+function renumberLineItems(items: PartnerQuoteLineItemInput[]) {
+  return items.map((item, index) => ({ ...item, sortOrder: index + 1, lineNumber: index + 1 }))
 }
 
 function parseNumericInput(value: string) {
@@ -428,9 +625,9 @@ function ShareOptionButton({
       type="button"
       title={title}
       onClick={onClick}
-      className="flex h-[74px] w-[76px] flex-col items-center justify-center gap-1.5 rounded-xl border border-[#e8e8e4] bg-white text-[#111110] shadow-sm transition-colors hover:border-[#B7E8D1] hover:bg-[#F0FDF7]"
+      className="flex h-[58px] w-[64px] flex-col items-center justify-center gap-1 rounded-[10px] border border-black/[0.08] bg-white text-[#111110] transition-colors hover:border-[#BDEFD8] hover:bg-[#F0FDF7]"
     >
-      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f6f5f2] text-[#615D59]">
+      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f6f5f2] text-[#615D59]">
         {icon}
       </span>
       <span className="whitespace-nowrap text-[11px] font-medium">{label}</span>
@@ -594,6 +791,7 @@ export default function QuickQuoteComposer({
   apiBase = "/api/portal",
   portalPartnerAccountId = null,
   initialTemplateId = "board_86",
+  supplierManagerOptions,
   prefill = null,
 }: QuickQuoteComposerProps) {
   const today = getTodayDateValue()
@@ -632,21 +830,101 @@ export default function QuickQuoteComposer({
   const [linkCopied, setLinkCopied] = useState(false)
   const [saveToast, setSaveToast] = useState(false)
   const [errorToast, setErrorToast] = useState<ErrorToastState | null>(null)
-  // SW 견적 공급자 담당자(클래스인 명의). 이름은 로그인 관리자에서 자동 채우고 수정 가능.
+  // 공급자 담당자 override. 비우면 공급자 블록 기본값(SW=클래스인 매니저, HW=퀴드러닝 담당자)을 쓴다.
   const [managerContactName, setManagerContactName] = useState("")
   const [managerContactPhone, setManagerContactPhone] = useState("")
+  const [managerSelection, setManagerSelection] = useState("")
+  // 정보 라인(금액 없는 note_only) 인라인 추가 폼
+  const [noteLineOpen, setNoteLineOpen] = useState(false)
+  const [noteLineTitle, setNoteLineTitle] = useState("")
+  const [noteLineText, setNoteLineText] = useState("")
+
+  const isSoftwareQuote = isSoftwareQuoteTemplate(templateId)
+  const activeProductLine: QuoteProductLine = isSoftwareQuote ? "software" : "hardware"
+  const activeTemplateLabel = getStandardQuoteTemplate(templateId).label
+  const supplierFamilyRef = useRef(isSoftwareQuote)
+  // HW 로 돌아올 때 직전에 쓰던 HW 템플릿을 복원한다(전자칠판 75"였다면 그대로).
+  const lastHardwareTemplateRef = useRef<StandardQuoteTemplateId>(
+    isSoftwareQuote ? DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID : templateId
+  )
+
+  useEffect(() => {
+    if (!isSoftwareQuoteTemplate(templateId)) {
+      lastHardwareTemplateRef.current = templateId
+    }
+  }, [templateId])
+
+  /** 헤더 세그먼트: 제품군 전환. 품목은 템플릿 기준으로 재생성되고 고객·거래 입력은 유지된다. */
+  function handleProductLineChange(nextLine: QuoteProductLine) {
+    if (nextLine === activeProductLine) return
+    const nextTemplateId =
+      nextLine === "software"
+        ? getQuoteProductLineTemplateId("software")
+        : lastHardwareTemplateRef.current
+    updateTemplateShortcut(
+      nextTemplateId,
+      getStandardQuoteDefaultSelections(nextTemplateId),
+      1
+    )
+  }
+
+  // 공급자 블록이 바뀌면(SW 클래스인 ↔ HW 퀴드러닝) 담당자 override 를 비워
+  // 새 블록의 기본 담당자로 되돌린다. SW 명의가 HW 견적에 새어 나가지 않게 하는 가드.
+  useEffect(() => {
+    if (supplierFamilyRef.current === isSoftwareQuote) return
+    supplierFamilyRef.current = isSoftwareQuote
+    setManagerContactName("")
+    setManagerContactPhone("")
+    setManagerSelection("")
+  }, [isSoftwareQuote])
 
   useEffect(() => {
     if (typeof window === "undefined") return
+    // SW 견적만 클래스인 명의라 로그인 관리자를 자동 채운다.
+    // HW는 퀴드러닝 담당자가 기본값이므로 비워둔 채로 시작한다(기존 발행물과 동일).
+    if (!isSoftwareQuote) return
     const adminName = window.sessionStorage.getItem("admin_name")
     if (adminName) setManagerContactName((prev) => prev || adminName)
-  }, [])
+  }, [isSoftwareQuote])
 
-  const isSoftwareQuote = isSoftwareQuoteTemplate(templateId)
+  const managerOptions = useMemo(() => supplierManagerOptions ?? [], [supplierManagerOptions])
+  const hasManagerOptions = managerOptions.length > 0
+  const managerManualMode = !hasManagerOptions || managerSelection === MANAGER_CUSTOM_VALUE
+
+  const supplierDefaults = useMemo(() => resolveQuoteSupplier(templateId), [templateId])
+  // 공급자 블록은 템플릿이 정하고(SW=클래스인 / HW=퀴드러닝), 담당자·연락처만 작성자가 덮어쓴다.
   const resolvedSupplier = useMemo(
-    () => resolveQuoteSupplier(templateId, { name: managerContactName, phone: managerContactPhone }),
-    [templateId, managerContactName, managerContactPhone],
+    () => ({
+      ...supplierDefaults,
+      supplierContactName: managerContactName.trim() || supplierDefaults.supplierContactName,
+      supplierContactPhone: managerContactPhone.trim() || supplierDefaults.supplierContactPhone,
+    }),
+    [supplierDefaults, managerContactName, managerContactPhone],
   )
+
+  // 목록이 도착하면 현재 담당자명을 드롭다운 값과 한 번 맞춘다(사용자가 고르면 그 값을 유지).
+  useEffect(() => {
+    if (!hasManagerOptions || managerSelection) return
+    const current = managerContactName.trim()
+    if (!current) return
+    const matched = managerOptions.find((option) => option.name === current)
+    setManagerSelection(matched ? matched.name : MANAGER_CUSTOM_VALUE)
+  }, [hasManagerOptions, managerContactName, managerOptions, managerSelection])
+
+  function handleManagerSelectionChange(value: string) {
+    setManagerSelection(value)
+    if (value === MANAGER_CUSTOM_VALUE) return
+    if (!value) {
+      // "기본 담당자" — override 를 비워 공급자 블록 기본값으로 되돌린다.
+      setManagerContactName("")
+      setManagerContactPhone("")
+      return
+    }
+    const option = managerOptions.find((item) => item.name === value)
+    if (!option) return
+    setManagerContactName(option.name)
+    if (option.phone?.trim()) setManagerContactPhone(option.phone.trim())
+  }
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false)
   const errorToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // 프리필은 이번 open 세션에서 한 번만 적용한다(사용자가 이후 수동 변경하면 덮어쓰지 않음).
@@ -720,6 +998,10 @@ export default function QuickQuoteComposer({
   const bundlePreset =
     getStandardQuoteQuickPresets("board_86").find((preset) => preset.id === "board_86_bundle") ?? null
   const hasNoExpiration = !quote.validUntil
+  const validityPresetValue = hasNoExpiration
+    ? "none"
+    : [7, 14, 30].find((days) => quote.validUntil === addDays(quote.issuedAt || today, days))?.toString() ??
+      "custom"
   const isBundleSelected =
     templateId === "board_86" &&
     optionSelections.camera_bundle === true &&
@@ -827,6 +1109,9 @@ export default function QuickQuoteComposer({
     setSaveToast(false)
     setErrorToast(null)
     setMobilePreviewOpen(false)
+    setNoteLineOpen(false)
+    setNoteLineTitle("")
+    setNoteLineText("")
     setError(null)
   }, [hasPrefillTarget, initialTemplateId, open, prefill?.customerId, prefill?.customerName, prefill?.dealId, today])
 
@@ -1095,6 +1380,50 @@ export default function QuickQuoteComposer({
         {
           ...current,
           lineItems: nextItems,
+        },
+        templateId
+      )
+    })
+  }
+
+  /** 금액 없는 정보 라인 추가(스키마 그대로 note_only + informational). */
+  function addInformationalLine() {
+    const itemName = noteLineTitle.trim()
+    const itemDescription = noteLineText.trim()
+    if (!itemName && !itemDescription) return
+
+    setQuote((current) => {
+      const items = current.lineItems ?? []
+      return finalizeStandardQuoteDetails(
+        {
+          ...current,
+          lineItems: renumberLineItems([
+            ...items,
+            createInformationalQuoteLine({
+              itemName,
+              itemDescription,
+              sortOrder: items.length + 1,
+            }),
+          ]),
+        },
+        templateId
+      )
+    })
+
+    setNoteLineTitle("")
+    setNoteLineText("")
+    setNoteLineOpen(false)
+  }
+
+  function removeLine(lineIndex: number) {
+    setQuote((current) => {
+      const items = current.lineItems ?? []
+      if (!items[lineIndex]) return current
+      return finalizeStandardQuoteDetails(
+        {
+          ...current,
+          // finalize 는 기존 lineNumber 를 존중하므로 삭제 후 번호를 다시 매긴다(미리보기 번호 구멍 방지).
+          lineItems: renumberLineItems(items.filter((_, index) => index !== lineIndex)),
         },
         templateId
       )
@@ -1476,6 +1805,7 @@ export default function QuickQuoteComposer({
 
       await onCreated({
         action,
+        templateId,
         shareUrl,
         shareError,
         share,
@@ -1528,15 +1858,44 @@ export default function QuickQuoteComposer({
         aria-labelledby="quick-quote-composer-title"
         className="relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-[rgba(255,255,255,0.25)] bg-white shadow-[0_24px_80px_rgba(17,17,16,0.28)] sm:h-[min(860px,calc(100dvh-48px))] sm:max-h-[calc(100dvh-32px)] sm:max-w-[1480px] sm:rounded-2xl xl:rounded-[24px]"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-[#ecebe6] px-4 py-3 sm:px-5 lg:px-6">
+        <div className="flex items-start justify-between gap-3 border-b border-[#ecebe6] px-4 py-3 sm:px-5 lg:px-6">
           <div className="min-w-0">
             <h2 id="quick-quote-composer-title" className="flex items-center gap-2 text-lg font-semibold text-[#111110]">
               <Sparkles className="h-4 w-4 text-[#084734]" />
-              빠른 견적 작성
+              {isSoftwareQuote ? "SW 견적서 작성" : "HW 견적서 작성"}
             </h2>
-            <p className="mt-0.5 truncate text-xs text-[#615D59]">
-              고객사와 구성만 정하면 합계와 발송본이 바로 맞춰집니다.
-            </p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <div
+                role="group"
+                aria-label="견적 유형"
+                className="inline-flex items-center rounded-full border border-black/[0.08] bg-[#fafaf8] p-0.5"
+              >
+                {(
+                  [
+                    { line: "software" as const, label: "소프트웨어" },
+                    { line: "hardware" as const, label: "하드웨어" },
+                  ]
+                ).map((item) => {
+                  const active = activeProductLine === item.line
+                  return (
+                    <button
+                      key={item.line}
+                      type="button"
+                      onClick={() => handleProductLineChange(item.line)}
+                      aria-pressed={active}
+                      className={`h-7 rounded-full px-3 text-[11px] font-semibold transition-colors ${
+                        active ? "bg-white text-[#111110] shadow-sm" : "text-[#615D59] hover:text-[#111110]"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <span className="truncate text-[11px] text-[#A39E98]">
+                {isSoftwareQuote ? "공급자 클래스인" : "공급자 퀴드러닝"} · {activeTemplateLabel} · 유형을 바꾸면 품목만 템플릿 기준으로 다시 잡히고 고객·거래 입력은 유지됩니다.
+              </span>
+            </div>
           </div>
           <button
             type="button"
@@ -1551,6 +1910,14 @@ export default function QuickQuoteComposer({
         <div className="border-b border-[#ecebe6] bg-[#fafaf8] px-4 py-2 sm:px-5 lg:px-6">
           <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
             <div className="admin-scroll-snap-x no-scrollbar flex min-w-0 gap-2 overflow-x-auto pb-1 xl:flex-1 xl:flex-wrap xl:overflow-visible xl:pb-0">
+              <div className="flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2.5 py-1">
+                <span className="text-[11px] font-bold text-[#084734]">
+                  {isSoftwareQuote ? "SW 견적" : "HW 견적"}
+                </span>
+                <span className="max-w-[150px] truncate text-xs font-semibold text-[#111110]">
+                  {activeTemplateLabel}
+                </span>
+              </div>
               {readyChecks.map((item) => (
                 <div
                   key={item.label}
@@ -1586,40 +1953,41 @@ export default function QuickQuoteComposer({
         </div>
 
         <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1fr)_minmax(520px,560px)]">
-          <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-5 lg:px-6">
-            <div className="space-y-4">
+          <div className="min-h-0 overflow-y-auto bg-[#fafaf8] px-4 py-4 sm:px-5 lg:px-6">
+            <div className="space-y-3">
               {recentQuotes.length > 0 && (
-              <section className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-[#111110]">최근 견적 복제</p>
-                    <p className="mt-0.5 text-xs text-[#615D59]">이전 견적을 불러와 고객사만 바꿉니다.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const defaultSelections = getStandardQuoteDefaultSelections(templateId)
-                      setOptionSelections(defaultSelections)
-                      setQuote(
-                        buildConfigurableStandardQuoteDetails({
-                          templateId,
-                          input: {
-                            ...quote,
-                            issuedAt: today,
-                            validUntil: quote.validUntil || addDays(today, 7),
-                            generatedFromVersionId: undefined,
-                          },
-                          optionSelections: defaultSelections,
-                        })
-                      )
-                    }}
-                    className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-medium text-[#1a1a1a]/60 ring-1 ring-[#e8e8e4] hover:text-[#111110]"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    초기화
-                  </button>
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
+              <section className={COMPACT_CARD_CLASS}>
+                <SectionHeading
+                  step="00"
+                  title="최근 견적 복제"
+                  hint="이전 견적을 불러와 고객사만 바꿉니다"
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const defaultSelections = getStandardQuoteDefaultSelections(templateId)
+                        setOptionSelections(defaultSelections)
+                        setQuote(
+                          buildConfigurableStandardQuoteDetails({
+                            templateId,
+                            input: {
+                              ...quote,
+                              issuedAt: today,
+                              validUntil: quote.validUntil || addDays(today, 7),
+                              generatedFromVersionId: undefined,
+                            },
+                            optionSelections: defaultSelections,
+                          })
+                        )
+                      }}
+                      className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-black/[0.08] bg-white px-2.5 text-[11px] font-medium text-[#615D59] transition-colors hover:text-[#111110]"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      초기화
+                    </button>
+                  }
+                />
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
                   {recentQuotes.slice(0, 5).map((item) => (
                       <button
                         key={item.id}
@@ -1628,59 +1996,63 @@ export default function QuickQuoteComposer({
                           void handleReuseQuote(item.id)
                         }}
                         disabled={reuseLoadingId === item.id}
-                        className="rounded-2xl border border-[#ecebe6] bg-white px-3 py-2 text-left text-xs text-[#1a1a1a]/70 hover:border-[#D1FAE5] hover:bg-[#ECFDF5] disabled:opacity-60"
+                        className={`${COMPACT_CHIP_CLASS} border-black/[0.08] bg-white text-[#615D59] hover:border-[#BDEFD8] hover:bg-[#ECFDF5] disabled:opacity-60`}
                       >
-                        <div className="font-medium text-[#111110]">
+                        <span className="font-medium text-[#111110]">
                           {reuseLoadingId === item.id ? "불러오는 중..." : item.customerName}
-                        </div>
-                        <div className="mt-0.5">
+                        </span>
+                        <span className="max-w-[140px] truncate text-[11px] text-[#A39E98]">
                           {item.currentVersionLabel ?? item.title}
-                        </div>
+                        </span>
                       </button>
                     ))}
                 </div>
               </section>
               )}
 
-              <section className="grid gap-3 rounded-xl border border-[#e8e8e4] bg-white p-3 md:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label>고객사</Label>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCustomerMode("new")
-                        setSelectedDealId("")
-                      }}
-                      className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                        customerMode === "new"
-                          ? "bg-[#111110] text-white"
-                          : "bg-[#f6f5f2] text-[#615D59]"
-                      }`}
-                    >
-                      바로 입력
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCustomerMode("existing")}
-                      className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                        customerMode === "existing"
-                          ? "bg-[#111110] text-white"
-                          : "bg-[#f6f5f2] text-[#615D59]"
-                      }`}
-                    >
-                      기존 고객
-                    </button>
+              <section className={COMPACT_CARD_CLASS}>
+                <SectionHeading step="01" title="고객 · 거래" hint="누구에게 보내는 견적인지" />
+                <div className="mt-2.5 grid gap-2.5 md:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <FieldLabel required>고객사</FieldLabel>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomerMode("new")
+                          setSelectedDealId("")
+                        }}
+                        className={`h-7 rounded-full px-2.5 text-[11px] font-medium transition-colors ${
+                          customerMode === "new"
+                            ? "bg-[#111110] text-white"
+                            : "bg-[#f6f5f2] text-[#615D59] hover:text-[#111110]"
+                        }`}
+                      >
+                        바로 입력
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomerMode("existing")}
+                        className={`h-7 rounded-full px-2.5 text-[11px] font-medium transition-colors ${
+                          customerMode === "existing"
+                            ? "bg-[#111110] text-white"
+                            : "bg-[#f6f5f2] text-[#615D59] hover:text-[#111110]"
+                        }`}
+                      >
+                        기존 고객
+                      </button>
+                    </div>
                   </div>
                   {customerMode === "existing" ? (
-                    <div className="grid gap-2">
+                    <div className="grid gap-1.5">
                       <label className="relative block">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#1a1a1a]/35" />
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#A39E98]" />
                         <input
                           value={customerQuery}
                           onChange={(event) => setCustomerQuery(event.target.value)}
                           placeholder="고객사, 캠퍼스, 지역 검색"
-                          className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          className="h-9 w-full rounded-[6px] border border-[#E5E5E0] bg-white pl-8 pr-3 text-[13px] outline-none transition-colors placeholder:text-[#A39E98] focus-visible:border-[#084734] focus-visible:ring-2 focus-visible:ring-[#084734]/20"
                         />
                       </label>
                       <select
@@ -1690,7 +2062,7 @@ export default function QuickQuoteComposer({
                           setSelectedCustomerId(event.target.value)
                           setSelectedDealId("")
                         }}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        className={COMPACT_SELECT_CLASS}
                       >
                         {sortedCustomers.length === 0 ? (
                           <option value="">등록된 고객이 없습니다</option>
@@ -1707,38 +2079,42 @@ export default function QuickQuoteComposer({
                       </select>
                     </div>
                   ) : (
-                    <div className="grid gap-2">
+                    <div className="grid gap-1.5">
                       <Input
                         value={newCustomerName}
                         onChange={(event) => setNewCustomerName(event.target.value)}
                         placeholder="학원/기관명 입력"
+                        className={COMPACT_INPUT_CLASS}
                       />
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-1.5 sm:grid-cols-2">
                         <Input
                           value={newCustomerContactName}
                           onChange={(event) => setNewCustomerContactName(event.target.value)}
                           placeholder="담당자명(선택)"
+                          className={COMPACT_INPUT_CLASS}
                         />
                         <Input
                           value={newCustomerPhone}
                           onChange={(event) => setNewCustomerPhone(event.target.value)}
                           placeholder="연락처(선택)"
+                          className={COMPACT_INPUT_CLASS}
                         />
                       </div>
-                      <p className="text-xs text-[#615D59]">
+                      <p className="text-[11px] text-[#A39E98]">
                         홈페이지 리드가 없어도 저장 시 고객과 거래가 함께 생성됩니다.
                       </p>
                     </div>
                   )}
                 </div>
 
-                <div className="grid gap-2">
-                  <Label>거래 연결</Label>
+                <div className="grid gap-1.5">
+                  <FieldLabel htmlFor="quote-deal">거래 연결</FieldLabel>
                   <select
+                    id="quote-deal"
                     value={selectedDealId}
                     disabled={loadingOptions}
                     onChange={(event) => setSelectedDealId(event.target.value)}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    className={COMPACT_SELECT_CLASS}
                   >
                     <option value="">새 거래로 생성</option>
                     {availableDeals.map((deal) => (
@@ -1752,219 +2128,45 @@ export default function QuickQuoteComposer({
                       value={newDealTitle}
                       onChange={(event) => setNewDealTitle(event.target.value)}
                       placeholder="예: 본관 전자칠판 4대 설치"
+                      className={COMPACT_INPUT_CLASS}
                     />
                   )}
                 </div>
-
-                {isSoftwareQuote && (
-                  <div className="md:col-span-2 grid gap-2 rounded-xl border border-[#cfe9dd] bg-[#f2fbf7] px-3 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Label className="text-xs font-semibold text-[#0b5a41]">공급자 담당자 (클래스인 명의)</Label>
-                      <span className="text-[11px] text-[#4f7a68]">SW 견적 · 로그인 관리자 자동 채움 · 수정 가능</span>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <Input
-                        value={managerContactName}
-                        onChange={(event) => setManagerContactName(event.target.value)}
-                        placeholder="담당자명"
-                      />
-                      <Input
-                        value={managerContactPhone}
-                        onChange={(event) => setManagerContactPhone(event.target.value)}
-                        placeholder="연락처 (예: 010-0000-0000)"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <details className="md:col-span-2 rounded-xl border border-[#ecebe6] bg-[#fafaf8] px-3 py-2">
-                  <summary className="cursor-pointer list-none text-xs font-semibold text-[#111110]">
-                    발행/세금 옵션
-                    <span className="ml-2 font-normal text-[#615D59]">
-                      {quote.issuedAt ?? today} · {hasNoExpiration ? "기한 없음" : `${quote.validUntil ?? addDays(today, 7)}까지`} · {quote.vatPolicyLabel}
-                    </span>
-                  </summary>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor="quote-issued-at">발행일</Label>
-                      <Input
-                        id="quote-issued-at"
-                        type="date"
-                        value={quote.issuedAt ?? ""}
-                        onChange={(event) =>
-                          setQuote((current) =>
-                            finalizeStandardQuoteDetails(
-                              {
-                                ...current,
-                                issuedAt: event.target.value,
-                              },
-                              templateId
-                            )
-                          )
-                        }
-                      />
-                    </div>
-
-                    <div className="grid gap-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <Label htmlFor="quote-valid-until">유효기한</Label>
-                        <span className="text-[11px] font-medium text-[#1a1a1a]/35">
-                          {hasNoExpiration ? "만료일 없음" : "빠른 선택 가능"}
-                        </span>
-                      </div>
-                      <Input
-                        id="quote-valid-until"
-                        type="date"
-                        disabled={hasNoExpiration}
-                        value={quote.validUntil ?? ""}
-                        onChange={(event) =>
-                          setQuote((current) =>
-                            finalizeStandardQuoteDetails(
-                              {
-                                ...current,
-                                validUntil: event.target.value,
-                              },
-                              templateId
-                            )
-                          )
-                        }
-                      />
-                      <div className="flex flex-wrap gap-1.5">
-                        {[7, 14, 30].map((days) => {
-                          const active = quote.validUntil === addDays(quote.issuedAt || today, days)
-
-                          return (
-                            <button
-                              key={days}
-                              type="button"
-                              onClick={() => setValidityDays(days)}
-                              className={`rounded-full px-3 py-1.5 text-[11px] font-medium ${
-                                active
-                                  ? "bg-[#111110] text-white"
-                                  : "bg-white text-[#615D59] ring-1 ring-[#e8e8e4] hover:text-[#111110]"
-                              }`}
-                            >
-                              {days}일
-                            </button>
-                          )
-                        })}
-                        <button
-                          type="button"
-                          onClick={() => setValidityDays(null)}
-                          className={`rounded-full px-3 py-1.5 text-[11px] font-medium ${
-                            hasNoExpiration
-                              ? "bg-[#111110] text-white"
-                              : "bg-white text-[#615D59] ring-1 ring-[#e8e8e4] hover:text-[#111110]"
-                          }`}
-                        >
-                          없음
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label htmlFor="quote-reference">참조</Label>
-                      <Input
-                        id="quote-reference"
-                        value={quote.referenceName ?? ""}
-                        onChange={(event) =>
-                          setQuote((current) =>
-                            finalizeStandardQuoteDetails(
-                              {
-                                ...current,
-                                referenceName: event.target.value,
-                              },
-                              templateId
-                            )
-                          )
-                        }
-                        placeholder="예: 담당자명"
-                      />
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label>VAT 정책</Label>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setQuote((current) =>
-                              finalizeStandardQuoteDetails(
-                                {
-                                  ...current,
-                                  vatIncluded: true,
-                                  vatPolicyLabel: undefined,
-                                },
-                                templateId
-                              )
-                            )
-                          }
-                          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                            (quote.vatIncluded ?? true)
-                              ? "bg-[#111110] text-white"
-                              : "bg-white text-[#615D59] ring-1 ring-[#e8e8e4]"
-                          }`}
-                        >
-                          VAT 포함
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setQuote((current) =>
-                              finalizeStandardQuoteDetails(
-                                {
-                                  ...current,
-                                  vatIncluded: false,
-                                  vatPolicyLabel: undefined,
-                                },
-                                templateId
-                              )
-                            )
-                          }
-                          className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                            quote.vatIncluded === false
-                              ? "bg-[#111110] text-white"
-                              : "bg-white text-[#615D59] ring-1 ring-[#e8e8e4]"
-                          }`}
-                        >
-                          VAT 별도
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </details>
+                </div>
               </section>
 
-              <section className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-[#111110]">구성</p>
-                    <p className="mt-0.5 text-xs text-[#615D59]">버튼을 눌러 품목을 바로 바꿉니다.</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2 rounded-full bg-white px-2 py-1 text-[11px] font-medium text-[#615D59] ring-1 ring-[#e8e8e4]">
-                    <button
-                      type="button"
-                      title={`${quantityHeading} 줄이기`}
-                      onClick={() => rebuildQuote({ baseQuantity: Math.max(1, baseQuantity - 1) })}
-                      className="rounded-full p-1 text-[#615D59] hover:bg-[#f6f5f2] hover:text-[#111110]"
-                    >
-                      <Minus className="h-3.5 w-3.5" />
-                    </button>
-                    <span className="min-w-10 text-center text-xs font-semibold text-[#111110]">
-                      {baseQuantity}
-                      {quantityUnitLabel}
-                    </span>
-                    <button
-                      type="button"
-                      title={`${quantityHeading} 늘리기`}
-                      onClick={() => rebuildQuote({ baseQuantity: baseQuantity + 1 })}
-                      className="rounded-full p-1 text-[#615D59] hover:bg-[#f6f5f2] hover:text-[#111110]"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-3 grid gap-2 md:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
+              <section className={COMPACT_CARD_CLASS}>
+                <SectionHeading
+                  step="02"
+                  title="구성 · 품목"
+                  hint="칩을 눌러 품목을 바꿉니다"
+                  required
+                  action={
+                    <div className="flex h-8 shrink-0 items-center gap-1 rounded-full border border-black/[0.08] bg-white px-1">
+                      <button
+                        type="button"
+                        title={`${quantityHeading} 줄이기`}
+                        onClick={() => rebuildQuote({ baseQuantity: Math.max(1, baseQuantity - 1) })}
+                        className="rounded-full p-1 text-[#615D59] transition-colors hover:bg-[#f6f5f2] hover:text-[#111110]"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </button>
+                      <span className="min-w-[40px] text-center text-[12px] font-semibold tabular-nums text-[#111110]">
+                        {baseQuantity}
+                        {quantityUnitLabel}
+                      </span>
+                      <button
+                        type="button"
+                        title={`${quantityHeading} 늘리기`}
+                        onClick={() => rebuildQuote({ baseQuantity: baseQuantity + 1 })}
+                        className="rounded-full p-1 text-[#615D59] transition-colors hover:bg-[#f6f5f2] hover:text-[#111110]"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    </div>
+                  }
+                />
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
                   {QUICK_ADD_RAIL_ITEMS.map((item) => {
                     const active =
                       (item.id === "recording_studio" && templateId === "recording_studio") ||
@@ -1984,36 +2186,38 @@ export default function QuickQuoteComposer({
                       <button
                         key={item.id}
                         type="button"
+                        title={item.description ? `${item.label} · ${item.description}` : item.label}
                         onClick={() => handleQuickAdd(item.id)}
-                        className={`rounded-xl border px-2.5 py-2 text-left transition-colors ${
+                        className={`${COMPACT_CHIP_CLASS} ${
                           active
                             ? "border-[#084734] bg-[#ECFDF5]"
-                            : "border-[#e8e8e4] bg-white hover:border-[#CBE7DE] hover:bg-[#f8fbf9]"
+                            : "border-black/[0.08] bg-white hover:border-[#BDEFD8] hover:bg-[#f8fbf9]"
                         }`}
                       >
-                        <div className="truncate text-sm font-semibold text-[#111110]">{item.label}</div>
-                        {item.description && <div className="mt-0.5 truncate text-[11px] text-[#615D59]">{item.description}</div>}
-                        <div className="mt-1 text-xs font-medium text-[#111110]">
+                        <span className="font-semibold text-[#111110]">{item.label}</span>
+                        {item.description && (
+                          <span className="hidden text-[11px] text-[#A39E98] sm:inline">{item.description}</span>
+                        )}
+                        <span className="text-[11px] font-medium tabular-nums text-[#615D59]">
                           {formatQuickAddPrice(item.price)}
-                        </div>
+                        </span>
                       </button>
                     )
                   })}
                 </div>
-              </section>
 
-              <section className="grid gap-3 lg:grid-cols-2">
-                {optionGroups.map((group) => (
-                  <div key={group.id} className="rounded-xl border border-[#e8e8e4] bg-white p-3">
-                    <div>
-                      <p className="text-sm font-semibold text-[#111110]">{group.label}</p>
+                <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
+                  {optionGroups.map((group) => (
+                  <div key={group.id} className="rounded-[10px] border border-black/[0.08] bg-[#fbfaf8] p-2.5">
+                    <div className="flex min-w-0 items-baseline gap-1.5">
+                      <p className="shrink-0 text-[12px] font-semibold text-[#111110]">{group.label}</p>
                       {group.description && (
-                        <p className="mt-0.5 text-xs text-[#615D59]">{group.description}</p>
+                        <p className="truncate text-[11px] text-[#A39E98]">{group.description}</p>
                       )}
                     </div>
 
                     {group.control === "radio" ? (
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-1.5 flex flex-wrap gap-1">
                         {group.options.map((option) => {
                           const active = optionSelections[group.id] === option.value
                           return (
@@ -2029,10 +2233,10 @@ export default function QuickQuoteComposer({
                                 rebuildQuote({ optionSelections: nextSelections })
                               }}
                               title={option.description}
-                              className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+                              className={`h-7 rounded-full border px-2.5 text-[11px] font-medium transition-colors ${
                                 active
-                                  ? "border-[#084734] bg-[#ECFDF5]"
-                                  : "border-[#ecebe6] bg-[#fafaf8] text-[#615D59] hover:text-[#111110]"
+                                  ? "border-[#084734] bg-[#ECFDF5] text-[#111110]"
+                                  : "border-black/[0.08] bg-white text-[#615D59] hover:text-[#111110]"
                               }`}
                             >
                               {option.label}
@@ -2051,60 +2255,60 @@ export default function QuickQuoteComposer({
                           setOptionSelections(nextSelections)
                           rebuildQuote({ optionSelections: nextSelections })
                         }}
-                        className={`mt-3 flex w-full items-center justify-between rounded-xl border px-3 py-2 ${
+                        className={`mt-1.5 flex h-8 w-full items-center justify-between gap-2 rounded-full border px-2.5 transition-colors ${
                           optionSelections[group.id]
                             ? "border-[#084734] bg-[#ECFDF5]"
-                            : "border-[#ecebe6] bg-[#fafaf8]"
+                            : "border-black/[0.08] bg-white"
                         }`}
                       >
-                        <div className="text-left">
-                          <div className="text-sm font-medium text-[#111110]">{group.label}</div>
-                          <div className="mt-0.5 text-xs text-[#615D59]">
-                            {optionSelections[group.id] ? group.enabledLabel ?? "활성" : group.disabledLabel ?? "비활성"}
-                          </div>
-                        </div>
-                        <span className="rounded-full bg-white px-2 py-1 text-[11px] font-medium text-[#084734]">
+                        <span className="truncate text-[11px] text-[#615D59]">
+                          {optionSelections[group.id] ? group.enabledLabel ?? "활성" : group.disabledLabel ?? "비활성"}
+                        </span>
+                        <span className="shrink-0 text-[11px] font-semibold text-[#084734]">
                           {optionSelections[group.id] ? "ON" : "OFF"}
                         </span>
                       </button>
                     )}
                   </div>
                 ))}
-              </section>
+                </div>
 
-              <details className="rounded-xl border border-[#e8e8e4] bg-white p-3">
+              <details className="mt-2.5 rounded-[10px] border border-black/[0.08] bg-white p-2.5">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
-                  <span>
-                    <span className="block text-sm font-semibold text-[#111110]">세부 품목 수정</span>
-                    <span className="mt-0.5 block text-xs text-[#615D59]">
+                  <span className="flex items-baseline gap-1.5">
+                    <span className="text-[12px] font-semibold text-[#111110]">세부 품목 수정</span>
+                    <span className="text-[11px] text-[#A39E98]">
                       {lineItemCount}개 품목 · {quote.vatPolicyLabel}
                     </span>
                   </span>
-                  <span className="rounded-full bg-[#f6f5f2] px-3 py-1 text-xs font-semibold text-[#111110]">
+                  <span className="rounded-full bg-[#f6f5f2] px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#111110]">
                     {formatStandardQuoteCurrency(totals.grandTotalAmount)}원
                   </span>
                 </summary>
 
-                <div className="mt-3 overflow-x-auto rounded-xl border border-[#ecebe6]">
-                  <table className="min-w-[760px] w-full text-sm">
-                    <thead className="bg-[#f7f6f3] text-[#1a1a1a]/55">
+                <div className="mt-2 overflow-x-auto rounded-[10px] border border-black/[0.08]">
+                  <table className="min-w-[760px] w-full text-[13px]">
+                    <thead className="bg-[#f7f6f3] text-[#615D59]">
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium">No</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium">품목</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium">세부내역</th>
-                        <th className="px-3 py-2 text-right text-xs font-medium">단가</th>
-                        <th className="px-3 py-2 text-right text-xs font-medium">수량</th>
-                        <th className="px-3 py-2 text-right text-xs font-medium">공급가액</th>
+                        <th className="px-2.5 py-1.5 text-left text-[11px] font-medium">No</th>
+                        <th className="px-2.5 py-1.5 text-left text-[11px] font-medium">품목</th>
+                        <th className="px-2.5 py-1.5 text-left text-[11px] font-medium">세부내역</th>
+                        <th className="px-2.5 py-1.5 text-right text-[11px] font-medium">단가</th>
+                        <th className="px-2.5 py-1.5 text-right text-[11px] font-medium">수량</th>
+                        <th className="px-2.5 py-1.5 text-right text-[11px] font-medium">공급가액</th>
+                        <th className="w-9 px-1 py-1.5">
+                          <span className="sr-only">행 삭제</span>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {(quote.lineItems ?? []).map((line, index) => (
-                        <tr key={`${line.itemCode ?? line.itemName}-${line.lineNumber}`} className="border-t border-[#f0efea] align-top">
-                          <td className="px-3 py-3 text-xs text-[#1a1a1a]/45">{line.lineNumber}</td>
-                          <td className="px-3 py-3 font-medium text-[#111110]">{line.itemName}</td>
-                          <td className="px-3 py-3 text-xs text-[#1a1a1a]/55">{line.itemDescription || "-"}</td>
-                          <td className="px-3 py-3">
-                            <div className="ml-auto w-28">
+                        <tr key={`${line.itemCode ?? line.itemName}-${line.lineNumber}`} className="border-t border-[#f0efea] align-middle">
+                          <td className="px-2.5 py-1.5 text-[11px] tabular-nums text-[#A39E98]">{line.lineNumber}</td>
+                          <td className="px-2.5 py-1.5 font-medium text-[#111110]">{line.itemName}</td>
+                          <td className="px-2.5 py-1.5 text-[11px] text-[#615D59]">{line.itemDescription || "-"}</td>
+                          <td className="px-2.5 py-1.5">
+                            <div className="ml-auto w-24">
                               <Input
                                 type="number"
                                 min={0}
@@ -2113,19 +2317,20 @@ export default function QuickQuoteComposer({
                                 onChange={(event) =>
                                   updateLine(index, { unitPrice: parseNumericInput(event.target.value) })
                                 }
-                                className="text-right"
+                                className="h-8 text-right text-[13px]"
                               />
                             </div>
                           </td>
-                          <td className="px-3 py-3">
-                            <div className="ml-auto flex w-[124px] items-center gap-2">
+                          <td className="px-2.5 py-1.5">
+                            <div className="ml-auto flex w-[108px] items-center gap-1">
                               <button
                                 type="button"
+                                title="수량 줄이기"
                                 onClick={() => nudgeLineQuantity(index, -1)}
                                 disabled={line.quantityLocked === true && line.optionGroupId !== "main_product"}
-                                className="rounded-full border border-[#e8e8e4] p-1 text-[#615D59] hover:bg-[#f6f5f2] disabled:cursor-not-allowed disabled:opacity-40"
+                                className="shrink-0 rounded-full border border-black/[0.08] p-1 text-[#615D59] hover:bg-[#f6f5f2] disabled:cursor-not-allowed disabled:opacity-40"
                               >
-                                <Minus className="h-3.5 w-3.5" />
+                                <Minus className="h-3 w-3" />
                               </button>
                               <Input
                                 type="number"
@@ -2135,107 +2340,324 @@ export default function QuickQuoteComposer({
                                 onChange={(event) =>
                                   updateLine(index, { quantity: parseNumericInput(event.target.value) })
                                 }
-                                className="text-center"
+                                className="h-8 px-1 text-center text-[13px]"
                               />
                               <button
                                 type="button"
+                                title="수량 늘리기"
                                 onClick={() => nudgeLineQuantity(index, 1)}
                                 disabled={line.quantityLocked === true && line.optionGroupId !== "main_product"}
-                                className="rounded-full border border-[#e8e8e4] p-1 text-[#615D59] hover:bg-[#f6f5f2] disabled:cursor-not-allowed disabled:opacity-40"
+                                className="shrink-0 rounded-full border border-black/[0.08] p-1 text-[#615D59] hover:bg-[#f6f5f2] disabled:cursor-not-allowed disabled:opacity-40"
                               >
-                                <Plus className="h-3.5 w-3.5" />
+                                <Plus className="h-3 w-3" />
                               </button>
                             </div>
                           </td>
-                          <td className="px-3 py-3 text-right font-medium text-[#111110]">
+                          <td className="px-2.5 py-1.5 text-right font-medium tabular-nums text-[#111110]">
                             {line.lineSupplyAmount == null ? "-" : `${formatStandardQuoteCurrency(line.lineSupplyAmount)}원`}
+                          </td>
+                          <td className="px-1 py-1.5 text-right">
+                            {line.isUserAdded === true && (
+                              <button
+                                type="button"
+                                title="정보 라인 삭제"
+                                aria-label={`${line.itemName} 정보 라인 삭제`}
+                                onClick={() => removeLine(index)}
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-[6px] text-[#A39E98] transition-colors hover:bg-[#FCE9E9] hover:text-[#B43E3E]"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setNoteLineOpen((current) => !current)}
+                    className="inline-flex h-8 items-center gap-1 rounded-full border border-dashed border-black/[0.14] px-2.5 text-[11px] font-medium text-[#615D59] transition-colors hover:border-[#084734] hover:text-[#084734]"
+                  >
+                    <Plus className="h-3 w-3" />
+                    정보 라인 추가
+                  </button>
+                  <span className="text-[11px] text-[#A39E98]">금액 없이 안내 문구만 들어가는 행입니다.</span>
+                </div>
+
+                {noteLineOpen && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <Input
+                      value={noteLineTitle}
+                      onChange={(event) => setNoteLineTitle(event.target.value)}
+                      placeholder="구분(예: 납품 조건)"
+                      className="h-8 w-[150px] text-[13px]"
+                    />
+                    <Input
+                      value={noteLineText}
+                      onChange={(event) => setNoteLineText(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault()
+                          addInformationalLine()
+                        }
+                      }}
+                      placeholder="세부내역(예: 설치 배송비 포함)"
+                      className="h-8 min-w-[180px] flex-1 text-[13px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={addInformationalLine}
+                      className="inline-flex h-8 shrink-0 items-center rounded-[6px] border border-black/[0.08] bg-white px-3 text-[12px] font-medium text-[#111110] transition-colors hover:bg-[#F6F5F4]"
+                    >
+                      추가
+                    </button>
+                  </div>
+                )}
               </details>
 
-              <section className="grid gap-3 md:grid-cols-[minmax(0,1fr)_240px]">
-                <details className="rounded-xl border border-[#e8e8e4] bg-white p-3">
-                  <summary className="cursor-pointer list-none text-sm font-semibold text-[#111110]">
-                    기타/특약 메모
-                    <span className="ml-2 text-xs font-normal text-[#615D59]">필요할 때만 수정</span>
-                  </summary>
-                  <div className="mt-3 grid gap-3">
-                    <div className="grid gap-2">
-                      <Label htmlFor="quote-general-notes">기타사항</Label>
-                      <textarea
-                        id="quote-general-notes"
-                        value={quote.generalNotes ?? ""}
+              <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-[10px] border border-black/[0.08] bg-white px-3 py-2">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[#615D59]">
+                  <span>공급가 <span className="tabular-nums text-[#111110]">{formatStandardQuoteCurrency(totals.subtotalAmount)}</span></span>
+                  <span>VAT <span className="tabular-nums text-[#111110]">{formatStandardQuoteCurrency(totals.vatAmount)}</span></span>
+                  <span className="text-[#A39E98]">{quote.vatPolicyLabel}</span>
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[11px] font-semibold text-[#084734]">합계</span>
+                  <span className="text-[19px] font-bold leading-none tabular-nums text-[#111110]">
+                    {formatStandardQuoteCurrency(totals.grandTotalAmount)}
+                  </span>
+                  <span className="text-[12px] font-medium text-[#615D59]">원</span>
+                </div>
+              </div>
+              {totals.hasPendingAmounts && (
+                <p className="mt-1 text-[11px] leading-5 text-[#B85C33]">{totals.pendingAmountNote}</p>
+              )}
+              </section>
+
+              <section className={COMPACT_CARD_CLASS}>
+                <SectionHeading step="03" title="조건" hint="발행 · 유효기한 · 세금 · 우리 쪽 담당자" />
+                <div className="mt-2.5 grid gap-2.5 md:grid-cols-3">
+                  <div className="grid gap-1.5">
+                    <FieldLabel htmlFor="quote-issued-at">발행일</FieldLabel>
+                    <Input
+                      id="quote-issued-at"
+                      type="date"
+                      value={quote.issuedAt ?? ""}
+                      onChange={(event) =>
+                        setQuote((current) =>
+                          finalizeStandardQuoteDetails(
+                            {
+                              ...current,
+                              issuedAt: event.target.value,
+                            },
+                            templateId
+                          )
+                        )
+                      }
+                      className={COMPACT_INPUT_CLASS}
+                    />
+                  </div>
+
+                  <div className="grid gap-1.5">
+                    <FieldLabel htmlFor="quote-valid-until" required>
+                      유효기한
+                    </FieldLabel>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        id="quote-valid-until"
+                        type="date"
+                        disabled={hasNoExpiration}
+                        value={quote.validUntil ?? ""}
                         onChange={(event) =>
                           setQuote((current) =>
                             finalizeStandardQuoteDetails(
                               {
                                 ...current,
-                                generalNotes: event.target.value,
+                                validUntil: event.target.value,
                               },
                               templateId
                             )
                           )
                         }
-                        className="min-h-[88px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        className={`${COMPACT_INPUT_CLASS} min-w-0 flex-1`}
                       />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="quote-special-terms">특약사항</Label>
-                      <textarea
-                        id="quote-special-terms"
-                        value={quote.specialTerms ?? ""}
-                        onChange={(event) =>
-                          setQuote((current) =>
-                            finalizeStandardQuoteDetails(
-                              {
-                                ...current,
-                                specialTerms: event.target.value,
-                              },
-                              templateId
-                            )
-                          )
-                        }
-                        className="min-h-[88px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        placeholder="필요한 경우에만 입력합니다."
-                      />
+                      <select
+                        value={validityPresetValue}
+                        aria-label="유효기한 빠른 선택"
+                        onChange={(event) => {
+                          const next = event.target.value
+                          if (next === "none") {
+                            setValidityDays(null)
+                            return
+                          }
+                          if (next === "custom") {
+                            // 기한 없음 상태에서 직접 지정으로 오면 날짜 입력을 다시 열어준다.
+                            if (hasNoExpiration) setValidityDays(7)
+                            return
+                          }
+                          setValidityDays(Number(next))
+                        }}
+                        className={`${COMPACT_SELECT_CLASS} w-[76px] shrink-0 px-1.5`}
+                      >
+                        <option value="7">7일</option>
+                        <option value="14">14일</option>
+                        <option value="30">30일</option>
+                        <option value="custom">직접</option>
+                        <option value="none">없음</option>
+                      </select>
                     </div>
                   </div>
-                </details>
 
-                <div className="rounded-xl border border-[#e8e8e4] bg-white p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1a1a1a]/35">금액 요약</p>
-                  <div className="mt-3 space-y-2 text-sm">
-                    <div className="flex items-center justify-between text-[#1a1a1a]/55">
-                      <span>공급가액 합계</span>
-                      <span className="font-medium text-[#111110]">{formatStandardQuoteCurrency(totals.subtotalAmount)}원</span>
+                  <div className="grid gap-1.5">
+                    <FieldLabel htmlFor="quote-vat-policy">세금</FieldLabel>
+                    <select
+                      id="quote-vat-policy"
+                      value={(quote.vatIncluded ?? true) ? "included" : "excluded"}
+                      onChange={(event) => {
+                        const vatIncluded = event.target.value === "included"
+                        setQuote((current) =>
+                          finalizeStandardQuoteDetails(
+                            {
+                              ...current,
+                              vatIncluded,
+                              vatPolicyLabel: undefined,
+                            },
+                            templateId
+                          )
+                        )
+                      }}
+                      className={COMPACT_SELECT_CLASS}
+                    >
+                      <option value="included">VAT 포함</option>
+                      <option value="excluded">VAT 별도</option>
+                    </select>
+                  </div>
+
+                  <div className="grid gap-1.5">
+                    <FieldLabel htmlFor="quote-reference">참조</FieldLabel>
+                    <Input
+                      id="quote-reference"
+                      value={quote.referenceName ?? ""}
+                      onChange={(event) =>
+                        setQuote((current) =>
+                          finalizeStandardQuoteDetails(
+                            {
+                              ...current,
+                              referenceName: event.target.value,
+                            },
+                            templateId
+                          )
+                        )
+                      }
+                      placeholder="예: 담당자명"
+                      className={COMPACT_INPUT_CLASS}
+                    />
+                  </div>
+
+                  <div className="grid gap-1.5 md:col-span-2">
+                    <FieldLabel
+                      htmlFor="quote-supplier-manager"
+                      hint={isSoftwareQuote ? "클래스인 명의" : "퀴드러닝 명의"}
+                    >
+                      공급자 담당자
+                    </FieldLabel>
+                    <div className={`grid gap-1.5 ${managerManualMode && hasManagerOptions ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+                      {hasManagerOptions && (
+                        <select
+                          id="quote-supplier-manager"
+                          value={managerSelection}
+                          onChange={(event) => handleManagerSelectionChange(event.target.value)}
+                          className={COMPACT_SELECT_CLASS}
+                        >
+                          <option value="">
+                            {supplierDefaults.supplierContactName
+                              ? `기본 담당자 (${supplierDefaults.supplierContactName})`
+                              : "담당자 선택"}
+                          </option>
+                          {managerOptions.map((option) => (
+                            <option key={option.name} value={option.name}>
+                              {option.label ?? option.name}
+                            </option>
+                          ))}
+                          <option value={MANAGER_CUSTOM_VALUE}>직접 입력</option>
+                        </select>
+                      )}
+                      {managerManualMode && (
+                        <Input
+                          value={managerContactName}
+                          onChange={(event) => setManagerContactName(event.target.value)}
+                          placeholder="담당자명"
+                          className={COMPACT_INPUT_CLASS}
+                          aria-label="공급자 담당자명"
+                        />
+                      )}
+                      <Input
+                        value={managerContactPhone}
+                        onChange={(event) => setManagerContactPhone(event.target.value)}
+                        placeholder={supplierDefaults.supplierContactPhone || "연락처 (010-0000-0000)"}
+                        className={COMPACT_INPUT_CLASS}
+                        aria-label="공급자 담당자 연락처"
+                      />
                     </div>
-                    <div className="flex items-center justify-between text-[#1a1a1a]/55">
-                      <span>VAT</span>
-                      <span className="font-medium text-[#111110]">{formatStandardQuoteCurrency(totals.vatAmount)}원</span>
-                    </div>
-                    <div className="flex items-center justify-between border-t border-[#ebeae3] pt-3 text-base">
-                      <span className="font-semibold text-[#111110]">합계</span>
-                      <span className="font-bold text-[#111110]">{formatStandardQuoteCurrency(totals.grandTotalAmount)}원</span>
-                    </div>
-                    {totals.hasPendingAmounts && (
-                      <p className="pt-2 text-xs leading-5 text-[#B85C33]">{totals.pendingAmountNote}</p>
-                    )}
+                    <p className="text-[11px] text-[#A39E98]">
+                      견적서 표기: {resolvedSupplier.supplierContactName || "-"} / {resolvedSupplier.supplierContactPhone || "-"}
+                    </p>
                   </div>
                 </div>
               </section>
 
+              <section className={COMPACT_CARD_CLASS}>
+                <SectionHeading step="04" title="메모" hint="칩을 누르면 아래 메모에 한 줄로 추가됩니다" />
+                <div className="mt-2.5 grid gap-2.5 lg:grid-cols-2">
+                  <QuoteNoteField
+                    id="quote-general-notes"
+                    label="기타사항"
+                    group="general"
+                    value={quote.generalNotes ?? ""}
+                    onChange={(next) =>
+                      setQuote((current) =>
+                        finalizeStandardQuoteDetails(
+                          {
+                            ...current,
+                            generalNotes: next,
+                          },
+                          templateId
+                        )
+                      )
+                    }
+                  />
+                  <QuoteNoteField
+                    id="quote-special-terms"
+                    label="특약사항"
+                    group="special"
+                    value={quote.specialTerms ?? ""}
+                    placeholder="필요한 경우에만 입력합니다."
+                    onChange={(next) =>
+                      setQuote((current) =>
+                        finalizeStandardQuoteDetails(
+                          {
+                            ...current,
+                            specialTerms: next,
+                          },
+                          templateId
+                        )
+                      )
+                    }
+                  />
+                </div>
+              </section>
+
               {loadingOptions && (
-                <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3 text-sm text-[#615D59]">
+                <div className="rounded-[10px] border border-black/[0.08] bg-white px-3 py-2 text-[12px] text-[#615D59]">
                   고객과 거래 데이터를 불러오는 중입니다.
                 </div>
               )}
 
               {error && (
-                <div className="rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-sm text-[#B85C33]">
+                <div className="rounded-[10px] border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]">
                   {error}
                 </div>
               )}
@@ -2372,7 +2794,7 @@ export default function QuickQuoteComposer({
                   onClick={() => {
                     setShareSheet(null)
                   }}
-                  className="flex h-[74px] w-10 items-center justify-center rounded-xl border border-[#e8e8e4] bg-white text-[#615D59] shadow-sm transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
+                  className="flex h-[58px] w-9 items-center justify-center rounded-[10px] border border-black/[0.08] bg-white text-[#615D59] transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -2383,7 +2805,12 @@ export default function QuickQuoteComposer({
 
         <div className="flex flex-col gap-3 border-t border-[#ecebe6] bg-white px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5 lg:px-6">
           <div className="min-w-0 flex-1 text-sm text-[#615D59]">
-            <div className="truncate">{buildStandardQuoteTitle(quote)}</div>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="shrink-0 rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-bold text-[#084734]">
+                {isSoftwareQuote ? "SW" : "HW"}
+              </span>
+              <span className="truncate">{buildStandardQuoteTitle(quote)}</span>
+            </div>
             {shareSheet && (
               <p className="mt-1 text-xs text-[#084734]">공유 메뉴에서 복사하거나 앱으로 바로 보낼 수 있습니다.</p>
             )}
@@ -2393,6 +2820,8 @@ export default function QuickQuoteComposer({
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
+                className="h-9 text-[13px]"
                 onClick={() => {
                   setShareSheet(null)
                 }}
@@ -2401,11 +2830,12 @@ export default function QuickQuoteComposer({
               </Button>
               <Button
                 type="button"
+                size="sm"
                 onClick={() => {
                   setShareSheet(null)
                   onOpenChange(false)
                 }}
-                className="bg-[#084734] text-white hover:bg-[#065c41]"
+                className="h-9 bg-[#084734] text-[13px] text-white hover:bg-[#065c41]"
               >
                 완료
               </Button>
@@ -2414,30 +2844,32 @@ export default function QuickQuoteComposer({
             <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:flex sm:flex-wrap">
               <Button
                 type="button"
-                variant="outline"
-                onClick={() => setMobilePreviewOpen(true)}
-                className="hidden xl:hidden"
+                variant="ghost"
+                size="sm"
+                className="h-9 text-[13px] text-[#615D59] hover:text-[#111110] hover:no-underline"
+                onClick={() => onOpenChange(false)}
+                disabled={Boolean(submittingAction)}
               >
-                <Eye className="mr-2 h-4 w-4" />
-                화면 미리보기
-              </Button>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={Boolean(submittingAction)}>
                 취소
               </Button>
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
+                className="h-9 text-[13px]"
                 disabled={Boolean(submittingAction) || loadingOptions || !canCreateQuote}
                 onClick={() => {
                   void handleSubmit("save")
                 }}
               >
-                {submittingAction === "save" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {submittingAction === "save" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
                 저장
               </Button>
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
+                className="h-9 text-[13px]"
                 title="저장 후 미리보기"
                 disabled={Boolean(submittingAction) || loadingOptions || !canCreateQuote}
                 onClick={() => {
@@ -2445,25 +2877,26 @@ export default function QuickQuoteComposer({
                 }}
               >
                 {submittingAction === "save_and_preview" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Eye className="mr-2 h-4 w-4" />
+                  <Eye className="mr-1.5 h-3.5 w-3.5" />
                 )}
                 미리보기
               </Button>
               <Button
                 type="button"
+                size="sm"
                 title="저장 후 공유 링크 생성"
                 disabled={Boolean(submittingAction) || loadingOptions || !canCreateQuote}
                 onClick={() => {
                   void handleSubmit("save_and_send")
                 }}
-                className="bg-[#084734] text-white hover:bg-[#065c41]"
+                className="h-9 bg-[#084734] text-[13px] text-white hover:bg-[#065c41]"
               >
                 {submittingAction === "save_and_send" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Send className="mr-2 h-4 w-4" />
+                  <Send className="mr-1.5 h-3.5 w-3.5" />
                 )}
                 발송
               </Button>

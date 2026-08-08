@@ -19,6 +19,12 @@ function getConfiguredSiteImageHosts() {
 const SAFE_SITE_IMAGE_HOSTS = getConfiguredSiteImageHosts()
 const SAFE_REMOTE_IMAGE_HOSTS = new Set(["images.unsplash.com"])
 
+// next.config.ts 의 siteImageHosts 와 동기화 대상 — 여기만 허용하고 remotePatterns/CSP에
+// 빠지면 이미지가 조용히 폴백되거나 CSP로 차단된다. tests/blog/public-image-hosts.test.ts 가 감시한다.
+export function listSafeSiteImageHosts() {
+  return Array.from(SAFE_SITE_IMAGE_HOSTS)
+}
+
 export function isAllowedPublicImageHost(hostname: string) {
   return (
     SAFE_SITE_IMAGE_HOSTS.has(hostname) ||

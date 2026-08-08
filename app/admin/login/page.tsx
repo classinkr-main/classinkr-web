@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Lock } from "lucide-react"
 import Image from "next/image"
@@ -10,6 +10,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ADMIN_PASSWORD_CHANGED_NOTICE_KEY } from "@/lib/auth/admin-password"
 
 const INVALID_CREDENTIALS_MESSAGE = "이메일 또는 비밀번호가 올바르지 않습니다."
 const UNAUTHORIZED_MESSAGE = "관리자 권한이 있는 계정만 로그인할 수 있습니다."
@@ -20,8 +21,17 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
   const [loading, setLoading] = useState(false)
   const [shake, setShake] = useState(false)
+
+  useEffect(() => {
+    if (sessionStorage.getItem(ADMIN_PASSWORD_CHANGED_NOTICE_KEY) !== "success") return
+
+    sessionStorage.removeItem(ADMIN_PASSWORD_CHANGED_NOTICE_KEY)
+    setNotice("비밀번호가 변경되었습니다. 새 비밀번호로 다시 로그인해 주세요.")
+  }, [])
+
   const triggerShake = () => {
     setShake(true)
     setTimeout(() => setShake(false), 200)
@@ -150,6 +160,15 @@ export default function AdminLoginPage() {
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-3">
+            {notice ? (
+              <p
+                role="status"
+                aria-live="polite"
+                className="rounded-xl bg-[#ECFDF5] px-3 py-2 text-[13px] text-[#084734]"
+              >
+                {notice}
+              </p>
+            ) : null}
             {useSupabaseAuth ? (
               <Input
                 type="email"

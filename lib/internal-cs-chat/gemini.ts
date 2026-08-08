@@ -80,7 +80,6 @@ const MAX_QUESTION_LENGTH = 12_000
 const MAX_CONTEXT_LENGTH = 48_000
 const MAX_HISTORY_TURNS = 8
 const MAX_HISTORY_TURN_LENGTH = 6_000
-const MAX_ANSWER_LENGTH = 16_000
 
 const REVIEW_GUARDRAILS = [
   "cs_owner_review_required",
@@ -117,6 +116,10 @@ const DEEP_KEYWORDS = [
   /사양\s*(?:검증|대조)|세대\s*(?:확인|비교)|재현\s*절차/i,
 ]
 
+const DIRECT_LOOKUP_KEYWORDS = [
+  /무게|중량|크기|치수|사이즈|규격|소비전력|해상도|모델명|버전|메뉴|경로|위치/i,
+]
+
 const DEFAULT_DETERMINISTIC_FALLBACK = [
   "AI 초안을 생성하지 못했습니다.",
   "확인된 내부 자료만 기준으로 답변을 작성하고, 충돌하거나 미확정인 내용은 ‘확인 필요’로 표시해 주세요.",
@@ -126,11 +129,15 @@ const DEFAULT_DETERMINISTIC_FALLBACK = [
 const SYSTEM_INSTRUCTION = [
   "너는 Classin 한국팀의 내부 CS 코파일럿이다.",
   "사용자는 고객이 아니라 CS 담당자다. 내부 자료와 외부 공개 자료를 함께 사용할 수 있지만 둘의 공개 가능 범위를 구분한다.",
-  "내부 답변은 빠른 사실 전달이 목적이다. 결론부터 제시하고, 정보성 질문은 '- ' 불릿 2~5개로 짧게 정리하며, 배경 설명은 판단에 필요한 것만 남긴다.",
+  "질문에 대한 직접 답을 첫 문단에 제시한다. 단순 사실 조회는 필요한 값과 단위부터 답하고, 복합 질문은 관련 근거와 판단 과정을 충분히 설명한다.",
+  "답변 길이, 문단 수, 불릿 수를 임의로 제한하지 않는다. 질문 해결에 필요한 확인된 정보는 누락하지 않되 같은 내용과 일반론을 반복하지 않는다.",
+  "Markdown을 사용한다. 기본 구조는 '## 바로 답변'이며, 비교는 표, 절차는 번호 목록, 주의·미확인 항목은 별도 제목이나 불릿으로 정리한다. 짧은 답은 억지로 섹션을 늘리지 않는다.",
+  "사용자가 묻지 않은 고객용 문안, 제품군 전체 소개, 영업 제안은 자동으로 덧붙이지 않는다.",
+  "순중량·포장 총중량, 본체·스탠드·OPS, 모델·세대처럼 서로 다른 값을 바꿔 답하지 않는다. 요청한 값의 근거가 없으면 확인된 인접 값과 미확인 값을 명확히 분리한다.",
   "인사말·공감·사과·감탄·이모지 같은 감정 표현을 넣지 않는다. 고객 응대 톤은 명시적으로 요청받은 고객 전달 문안 블록 안에서만 쓴다.",
   "답변의 사실 상태를 확인됨 / 조건부 / 본사 확인 필요 / 자료 충돌로 구분한다.",
   "서로 다른 자료가 충돌하면 임의로 하나를 정답으로 고르지 말고 충돌 지점, 필요한 확인 질문, 권장 임시 응대를 정리한다.",
-  "정리된 내부 지식의 외부 사용 경계를 지킨다. ‘담당자 검토 후 고객 안내 가능’만 고객 초안의 사실 근거로 쓰고, ‘내부 전용’은 노출하지 않으며, ‘확인 전 외부 단정 금지’는 확인 질문과 임시 안내에만 쓴다.",
+  "내부 답변에는 내부 전용 근거도 담당자 판단에 필요한 범위에서 사용할 수 있다. 고객 전달 초안에는 ‘담당자 검토 후 고객 안내 가능’ 근거만 쓰고, ‘내부 전용’은 제외하며, ‘확인 전 외부 단정 금지’는 확인 질문과 임시 안내에만 쓴다.",
   "고객 답변이나 본사 소통문을 요청받으면 반드시 ‘검토 전 초안’으로 작성하고, 전송·확정·승인을 했다고 말하지 않는다.",
   "가격, 환불, 계약, 개인정보, 보안, 장애 원인, 설치 가능 여부, 제품 사양은 제공된 근거 없이 단정하지 않는다.",
   "개인정보·API 키·내부 비밀번호·불필요한 고객 식별정보를 답변에 복제하지 않는다.",
@@ -183,11 +190,17 @@ export function selectInternalCsModelMode({
   "question" | "requestedMode" | "riskLevel" | "requiresEvidenceReview"
 >): InternalCsModelMode {
   if (requestedMode === "fast" || requestedMode === "deep") return requestedMode
-  if (riskLevel === "high" || requiresEvidenceReview) return "deep"
+  if (riskLevel === "high") return "deep"
 
   const normalizedQuestion = trimTo(question, MAX_QUESTION_LENGTH)
   if (normalizedQuestion.length >= 500) return "deep"
-  return DEEP_KEYWORDS.some((pattern) => pattern.test(normalizedQuestion)) ? "deep" : "fast"
+  if (DEEP_KEYWORDS.some((pattern) => pattern.test(normalizedQuestion))) return "deep"
+
+  const isDirectLookup = normalizedQuestion.length <= 160 &&
+    DIRECT_LOOKUP_KEYWORDS.some((pattern) => pattern.test(normalizedQuestion))
+  if (isDirectLookup) return "fast"
+
+  return requiresEvidenceReview ? "deep" : "fast"
 }
 
 export function getInternalCsModelChain(mode: InternalCsModelMode) {
@@ -241,16 +254,14 @@ function buildContents(input: GenerateInternalCsAnswerInput) {
   const prompt = [
     context ? `내부 참고 정보:\n${context}` : "내부 참고 정보: 없음",
     `담당자 질문:\n${question}`,
-    "내부 검토용 답변을 결론부터 사실 위주로 짧게 작성해. 외부 전달 문안이 포함되면 검토 전 초안임을 표시해.",
+    "질문에 직접 답하고 질문의 복잡도에 필요한 만큼 충분히 작성해. 관련 없는 일반론은 빼고 Markdown으로 읽기 좋게 정리해. 외부 전달 문안이 명시적으로 요청된 경우에만 별도 '검토 전 초안' 블록을 포함해.",
   ].join("\n\n")
 
   return [...history, { role: "user" as const, parts: [{ text: prompt }] }]
 }
 
 function buildGenerationConfig(model: string, mode: InternalCsModelMode) {
-  const generationConfig: Record<string, unknown> = {
-    maxOutputTokens: mode === "deep" ? 4_096 : 2_048,
-  }
+  const generationConfig: Record<string, unknown> = {}
 
   // Gemini 3.x uses thinkingLevel. 3.5 Flash supports low/high and 3.1 Pro supports high.
   if (model.startsWith("gemini-3.5-flash")) {
@@ -270,7 +281,7 @@ function readCandidateText(data: unknown) {
     ?.map((part) => (typeof part.text === "string" ? part.text : ""))
     .join("")
     .trim()
-  return answer ? answer.slice(0, MAX_ANSWER_LENGTH) : null
+  return answer || null
 }
 
 function deterministicResult({
@@ -285,7 +296,7 @@ function deterministicResult({
   citations: InternalCsSourceRef[]
 }): InternalCsAnswerResult {
   return {
-    answer: trimTo(input.deterministicFallback, MAX_ANSWER_LENGTH) || DEFAULT_DETERMINISTIC_FALLBACK,
+    answer: input.deterministicFallback?.trim() || DEFAULT_DETERMINISTIC_FALLBACK,
     mode,
     model: null,
     origin: "deterministic",

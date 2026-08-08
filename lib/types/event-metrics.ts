@@ -3,10 +3,18 @@
 
 export type AdChannel = "google" | "meta" | "naver" | "kakao" | "youtube" | "offline" | "other"
 
+// 7개 광고 채널의 런타임 SSOT — 저장소·API·UI가 이 순서/목록을 공유한다(중복 리터럴 금지).
+export const AD_CHANNELS: AdChannel[] = ["google", "meta", "naver", "kakao", "youtube", "offline", "other"]
+
 export interface AdSpendEntry {
   channel: AdChannel
   amount: number       // KRW
   note?: string
+}
+
+export interface RelatedLink {
+  label: string
+  url: string
 }
 
 export interface EventMetrics {
@@ -25,6 +33,8 @@ export interface EventMetrics {
   dealCustomers: string | null        // 성사 고객/기관 메모
   // 광고비
   adSpendEntries: AdSpendEntry[]
+  // 관련 자료 (블로그·보도자료 등 외부 링크, 수동 입력)
+  relatedLinks: RelatedLink[]
   // 회고 / 메모
   notes: string | null
   retrospective: string | null
@@ -44,6 +54,7 @@ export const DEFAULT_EVENT_METRICS: Omit<EventMetrics, "eventId" | "updatedAt"> 
   closedCustomerCount: null,
   dealCustomers: null,
   adSpendEntries: [],
+  relatedLinks: [],
   notes: null,
   retrospective: null,
   shareMemo: null,

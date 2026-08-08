@@ -7,8 +7,7 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  ClipboardPaste,
-  LayoutDashboard,
+  FileText,
   LogOut,
   Menu,
   MoreHorizontal,
@@ -22,15 +21,31 @@ import { adminFetchJsonCached, clearAdminSessionStorage, warmAdminRequestCache }
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
+import {
+  CRM_SAVED_VIEW_GROUPS,
+  CRM_SAVED_VIEWS,
+  isCrmSavedViewActive,
+  isCrmSavedViewsPath,
+} from "./crm/crm-sidebar-navigation"
 import { useDialogFocus } from "./use-dialog-focus"
 import {
   ADMIN_NAV,
-  ADMIN_NAV_SECTIONS,
-  ADMIN_NAV_SECTION_META,
+  ADMIN_NAV_CATEGORY_META,
   CRM_CHILD_NAV,
+  normalizeAdminRole,
   type AdminNavItem,
   type AdminRole,
 } from "./admin-nav"
+// 상시/기타 배치 SSOT — 사이드바·커맨드 팔레트·권한 설정 미리보기가 전부 이 모듈의
+// resolveNavAccess를 호출해야 세 화면이 어긋나지 않는다(사이드바 자체 계산 금지).
+import { isNavPresetKey, normalizeNavOverrides, resolveNavAccess } from "./admin-nav-access"
+// active 판정(splitNavHref/queryMatches/isNavActive)은 nav-active.ts로 추출됨 — CS 콘솔
+// 가로 메뉴(cs/CsConsoleNav)와 같은 판정을 공유한다. 여기서는 클로저 인자만 채워 넘긴다.
+import {
+  isNavActive as matchNavActive,
+  queryMatches as matchNavQuery,
+  splitNavHref,
+} from "./nav-active"
 
 // NAV(섹션·항목·롤·뱃지)·SECTION_META·CRM 하위 nav는 admin-nav.ts(SSOT)로 추출됨 —
 // 커맨드 팔레트(AdminCommandPalette)와 공유한다. 이 파일은 렌더링·warm-up 등 동작만 담당.
@@ -50,7 +65,14 @@ function overviewCalendarUrls() {
   return months.map(({ year, month }) => `/api/admin/calendar?year=${year}&month=${month}`)
 }
 
-const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
+// CS 콘솔 IA 재구성(2026-07-27) 이후에도 이 맵의 키는 href 문자열 그대로 유지한다.
+// 사이드바 CS 섹션이 3항목으로 줄면서 "/admin/docs?tab=gaps"·"/admin/channel-talk"는
+// 사이드바 hover 경로에서 빠졌지만, 두 화면은 사라진 게 아니라 CS 콘솔 가로 메뉴
+// (components/admin/cs/CsConsoleNav.tsx)로 옮겨간 것이고 URL도 동일하다 —
+// 키를 지우면 "어느 화면이 어떤 API를 먼저 부르는지"의 유일한 기록이 사라져
+// P1에서 다시 유추해야 하고, 그때 키가 어긋나면 warm이 조용히 빗나간다(이 파일 상단 경고).
+// 그래서 남겨두고 export만 열어 콘솔 내비가 같은 맵을 그대로 쓸 수 있게 한다.
+export const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
   "/admin/overview": () => [
     // overview 페이지가 실제 호출하는 URL과 캐시 키를 맞춰야 hover-warm이 적중한다.
     "/api/admin/leads?scope=dashboard",
@@ -84,6 +106,9 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
     "/api/admin/crm/matching",
     "/api/admin/crm/overview",
   ],
+  // 채널톡 상담도 CS 콘솔 "상담 Inbox" 메뉴로 옮겨갔다 — 라우트·초기 페치가 동일해 키 유지.
+  // 두 URL 모두 화면이 adminFetchJsonCached로 소비한다(상담 목록은 cache:"no-cache" 직페치에서
+  // 캐시 소비로 바꿔 이 warm이 실제로 적중하게 했다 — P6). 동기화 버튼은 force로 우회한다.
   "/admin/channel-talk": ["/api/admin/channel-talk", "/api/admin/channel-talk/mine"],
   "/admin/calendar": () => {
     // 캘린더 페이지 초기 로드는 항상 현재 연/월 쿼리를 붙인다.
@@ -94,6 +119,8 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
   "/admin/campaigns": [
     "/api/admin/email",
     "/api/admin/subscribers",
+    // 캠페인 페이지의 리드 귀속 소비는 scope=campaigns(경량 컬럼) — warm 키 일치 필수.
+    "/api/admin/leads?scope=campaigns",
     "/api/admin/events",
     "/api/admin/event-metrics",
     "/api/admin/meta/campaigns?datePreset=last_30d&limit=50",
@@ -106,24 +133,50 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
   ],
   "/admin/blog": ["/api/admin/blog", "/api/admin/blog?trash=1"],
   "/admin/events": ["/api/admin/events"],
+  // 쿼리 없는 진입은 문서 화면의 기본 탭(documents)이고, 그 탭은 페이지 공통 두 건만 쓴다.
+  // 예전에 함께 데우던 docs/gaps·alpha-readiness는 각각 gaps·quality 탭 전용이라
+  // documents 탭에서는 호출되지 않는다 — 안 여는 탭을 데우면 대역폭만 쓴다(P6).
   "/admin/docs": [
     "/api/admin/docs",
     "/api/admin/docs/analytics?days=30",
-    // 보강 큐 탭(문서 센터로 병합됨)을 호버 시 미리 데워둔다.
-    "/api/admin/docs/gaps",
-    "/api/admin/docs/alpha-readiness",
   ],
-  // 문서 보강 큐 nav 항목은 탭 딥링크(/admin/docs?tab=gaps)를 직접 가리킨다 — warm 키도 href와 동일해야 적중.
-  // DocsGapsPanel이 /api/admin/chatbot/stats(질문 패턴)도 읽으므로 함께 데운다.
+  // 문서 센터 탭 딥링크들 — warm 키는 href(쿼리 포함)와 문자 그대로 같아야 적중한다.
+  // 사이드바 항목에서 CS 콘솔 가로 메뉴로 옮겨갔지만 href가 그대로라 키도 유효하다.
+  // 어느 탭으로 들어가든 페이지 자체가 /api/admin/docs와 analytics를 캐시 페치하므로 공통으로 넣는다.
+  //
+  // 보강 큐 — DocsGapsPanel의 두 마운트 페치(/api/admin/docs/gaps · /api/admin/chatbot/stats)는
+  // adminFetchJson(캐시를 읽지 않는 직페치)이라 warm이 원리적으로 적중할 수 없다.
+  // 데워도 쓰이지 않는 두 건을 뺐다 — 소비를 캐시로 바꾸는 쪽은 그 패널의 결정이라 여기서 하지 않는다(P6).
+  // alpha-readiness도 AI 품질 검수 탭으로 이관돼 여기서는 호출되지 않는다(§7).
   "/admin/docs?tab=gaps": [
-    "/api/admin/docs/alpha-readiness",
-    "/api/admin/docs/gaps",
-    "/api/admin/chatbot/stats",
+    "/api/admin/docs",
+    "/api/admin/docs/analytics?days=30",
   ],
-  // 외부 챗봇 운영 대시보드(이원화로 재건) — 지표·준비도를 미리 데운다.
+  // AI 품질 검수 — 알파 준비도가 이 탭의 마운트 페치다(품질 평가는 POST라 warm 대상 아님).
+  "/admin/docs?tab=quality": [
+    "/api/admin/docs",
+    "/api/admin/docs/analytics?days=30",
+    "/api/admin/docs/alpha-readiness",
+  ],
+  // 가이드 문서·추천 질문 — 탭 전용 페치는 캐시를 쓰지 않으므로(DocsRecommendedQuestionsManager는
+  // adminFetchJson) 페이지 공통 두 건만 데운다.
+  "/admin/docs?tab=documents": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
+  "/admin/docs?tab=recommended": ["/api/admin/docs", "/api/admin/docs/analytics?days=30"],
+  // 외부 챗봇 운영 대시보드(이원화로 재건) — 지표 6카드가 이 화면의 유일한 마운트 페치다.
+  // CS 콘솔 IA 재구성 이후 이 href는 외부 축의 첫 화면("대시보드")이자 사이드바 "CS 콘솔" 항목이다.
+  // 알파 준비도는 §7 중복 단일화로 AI 품질 검수 탭(위 ?tab=quality 키)으로 넘어갔고
+  // ExternalChatbotOpsDashboard는 더 이상 호출하지 않는다 — 죽은 키라 뺀다(P6).
   "/admin/chatbot": [
     "/api/admin/chatbot/stats",
-    "/api/admin/docs/alpha-readiness",
+  ],
+  // 내부 CS 워크스페이스 — 마운트 시점에 실제로 나가는 두 요청만 데운다.
+  // conversations는 첫 화면을 막는 블로킹 로드이고, regression-candidates는
+  // "운영 도구" 탭 진입 전에 미리 받는다(InternalCsChatWorkspace의 두 mount effect).
+  // integrations/status·docs/gaps·cs-chat/metrics는 tools 탭에 들어가야 호출되므로 제외 —
+  // 안 여는 탭을 데우면 대역폭만 쓴다. (P2가 탭을 URL 상태로 옮기면 ?tab=tools 키를 따로 잡으면 된다.)
+  "/admin/cs-chatbot": [
+    "/api/admin/cs-chat/conversations?status=all&limit=100",
+    "/api/admin/cs-chat/regression-candidates",
   ],
   "/admin/branch": [
     "/api/admin/branch/summary?team=ALL&period=Q",
@@ -136,14 +189,15 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
   ],
   "/admin/hardware": ["/api/admin/hardware"],
   "/admin/traffic": [
-    "/api/admin/visitor-stats?range=30",
-    "/api/admin/homepage-flow?range=30",
-    "/api/admin/event-counts?range=30",
+    // 3중 스캔(visitor-stats/homepage-flow/event-counts)은 단일 집계 traffic-summary로 대체됨 —
+    // warm 키도 페이지 소비 URL과 일치해야 적중한다(Wave 3-A).
+    "/api/admin/traffic-summary?range=30",
     "/api/admin/marketing/conversions/status",
   ],
   "/admin/analytics": [
-    "/api/admin/leads",
-    "/api/admin/subscribers",
+    // 페이지 소비가 스코프 파라미터로 좁혀짐 — warm 키를 소비 URL과 일치시킨다.
+    "/api/admin/leads?scope=dashboard",
+    "/api/admin/subscribers?scope=analytics",
     "/api/admin/email",
     "/api/admin/blog",
     "/api/admin/events",
@@ -164,45 +218,12 @@ const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
 const MINIMAL_SCROLLBAR =
   "[scrollbar-width:thin] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-black/10 hover:[&::-webkit-scrollbar-thumb]:bg-black/20"
 
-// 저장된 세그먼트 — 고객 하위 퀵필터(?view=). 카운트는 통합 API summary.viewCounts.
-const CRM_SEGMENTS: Array<{ view: string; label: string }> = [
-  { view: "expiring", label: "만료 임박" },
-  { view: "dormant", label: "30일+ 미접촉" },
-  { view: "hot_lead", label: "고전환 리드" },
-  { view: "upsell", label: "업셀 후보" },
-]
-
-// 현장 사용 빈도를 기준으로 모바일은 오늘 현황·CRM·일정·입력에 집중한다.
-// 견적과 나머지 운영 화면은 More의 전체 메뉴에서 그대로 접근할 수 있다.
+// 현장 사용 빈도 기준 — 2026-07-29 탭 재구성으로 첫 화면이 캘린더가 되면서 Overview를 내렸다.
+// 나머지는 More의 전체 메뉴에서 접근한다.
 const MOBILE_PRIMARY_NAV: AdminNavItem[] = [
-  {
-    href: "/admin/overview",
-    label: "Overview",
-    icon: LayoutDashboard,
-    roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"],
-    section: "home",
-  },
-  {
-    href: "/admin/crm",
-    label: "CRM",
-    icon: Users,
-    roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"],
-    section: "sales",
-  },
-  {
-    href: "/admin/calendar",
-    label: "캘린더",
-    icon: CalendarDays,
-    roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"],
-    section: "sales",
-  },
-  {
-    href: "/admin/crm/capture",
-    label: "입력함",
-    icon: ClipboardPaste,
-    roles: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
-    section: "sales",
-  },
+  { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"], section: "sales" },
+  { href: "/admin/quotes", label: "견적", icon: FileText, roles: ["SUPER_ADMIN", "ADMIN", "BRANCH"], section: "sales" },
+  { href: "/admin/crm", label: "CRM", icon: Users, roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"], section: "sales" },
 ]
 
 const ROLE_LABEL: Record<AdminRole, string> = {
@@ -218,27 +239,8 @@ interface Props {
   role: string
   name: string
   email: string
-}
-
-function normalizeRole(role: string): AdminRole {
-  const normalized = role.trim()
-
-  if (normalized === "admin" || normalized === "ADMIN") return "ADMIN"
-  if (normalized === "branch" || normalized === "BRANCH") return "BRANCH"
-  if (normalized === "partner" || normalized === "PARTNER") return "PARTNER"
-  if (normalized === "SUPER_ADMIN") return "SUPER_ADMIN"
-  if (normalized === "EDITOR") return "EDITOR"
-  if (normalized === "VIEWER") return "VIEWER"
-
-  return "ADMIN"
-}
-
-// nav href의 쿼리 딥링크(예: /admin/docs?tab=gaps)를 path와 query로 분리한다.
-function splitNavHref(href: string): { path: string; query: string | null } {
-  const queryIndex = href.indexOf("?")
-  return queryIndex === -1
-    ? { path: href, query: null }
-    : { path: href.slice(0, queryIndex), query: href.slice(queryIndex + 1) }
+  navPreset: string | null
+  navOverrides: Record<string, string>
 }
 
 export default function AdminSidebar(props: Props) {
@@ -252,7 +254,7 @@ export default function AdminSidebar(props: Props) {
   )
 }
 
-function AdminSidebarContent({ role, name, email }: Props) {
+function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Props) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -265,6 +267,12 @@ function AdminSidebarContent({ role, name, email }: Props) {
   })
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  // 기타 접힘 패널 펼침 상태 — 새로고침에도 유지. 로그아웃 정리(clearAdminSessionStorage) 대상이
+  // 아니다 — 세션 신원이 아니라 UI 취향이라 계정이 바뀌어도 지울 이유가 없다.
+  const [otherOpen, setOtherOpen] = useState(() => {
+    if (typeof window === "undefined") return false
+    return localStorage.getItem("admin_sidebar_other_open") === "true"
+  })
   const mobileDrawerCloseRef = useRef<HTMLButtonElement | null>(null)
   // 모바일 드로어 접근성(품질 웨이브 3 — 항목 5) — Escape 닫기 + 열릴 때 닫기 버튼으로
   // 포커스 이동 · 닫힐 때 이전 포커스 복귀. DealModal과 동일한 공용 훅.
@@ -282,15 +290,20 @@ function AdminSidebarContent({ role, name, email }: Props) {
 
   const effectiveCollapsed = isDesktop === true && collapsed
   const inCrm = pathname?.startsWith("/admin/crm") ?? false
+  const showCrmSavedViews = isCrmSavedViewsPath(pathname)
+  const currentCrmSavedView = searchParams.get("view")
+  const hasActiveCrmSavedView =
+    showCrmSavedViews && CRM_SAVED_VIEWS.some(({ view }) => view === currentCrmSavedView)
   const [crmSegCounts, setCrmSegCounts] = useState<Record<string, number> | null>(null)
   // CRM 하위탭 접기 — admin layout이 유지 마운트라 네비게이션 동안 상태 보존(하드 리로드만 리셋).
   // CRM 드릴인 nav — 진입 시 기본 글로벌 탭이 접히고 CRM 하위 패널이 열린다. '← 전체 메뉴'로 복귀.
   const [navView, setNavView] = useState<"auto" | "global">("auto")
   const crmDrill = inCrm && navView !== "global" && !effectiveCollapsed
 
-  // CRM 진입 시에만 세그먼트 카운트 1회 lazy 로드(캐시, 논블로킹). 미로드 시 라벨만 표시.
+  // 통합 고객 목록에서만 저장 보기 카운트를 1회 lazy 로드한다. 다른 CRM 화면은
+  // 저장 보기를 렌더하지 않으므로 관련 API 요청도 만들지 않는다.
   useEffect(() => {
-    if (!inCrm || crmSegCounts) return
+    if (!showCrmSavedViews || crmSegCounts) return
     let alive = true
     adminFetchJsonCached<{ summary?: { viewCounts?: Record<string, number> } }>(
       "/api/admin/crm/customers/unified?limit=1",
@@ -304,11 +317,28 @@ function AdminSidebarContent({ role, name, email }: Props) {
     return () => {
       alive = false
     }
-  }, [inCrm, crmSegCounts])
+  }, [showCrmSavedViews, crmSegCounts])
 
   const toggle = () => {
     setCollapsed((prev) => {
       localStorage.setItem("admin_sidebar_collapsed", String(!prev))
+      return !prev
+    })
+  }
+
+  const toggleOther = () => {
+    // 접힌 상태에서는 라벨이 렌더되지 않아 기타 패널을 펼쳐도 내용을 알아볼 수 없다 —
+    // 그때는 사이드바부터 펼치고 기타 패널도 함께 연다(닫는 방향으로는 토글하지 않는다).
+    if (effectiveCollapsed) {
+      setCollapsed(false)
+      localStorage.setItem("admin_sidebar_collapsed", "false")
+      setOtherOpen(true)
+      localStorage.setItem("admin_sidebar_other_open", "true")
+      return
+    }
+
+    setOtherOpen((prev) => {
+      localStorage.setItem("admin_sidebar_other_open", String(!prev))
       return !prev
     })
   }
@@ -327,37 +357,24 @@ function AdminSidebarContent({ role, name, email }: Props) {
     router.refresh()
   }
 
-  const normalizedRole = normalizeRole(role)
+  const normalizedRole = normalizeAdminRole(role)
   const visibleNav = useMemo(
     () => ADMIN_NAV.filter((item) => item.roles.includes(normalizedRole)),
     [normalizedRole]
   )
-  // 현재 URL 쿼리가 nav href의 쿼리(예: tab=gaps)를 전부 포함하는지 판별.
-  const queryMatches = (query: string) => {
-    const wanted = new URLSearchParams(query)
-    for (const [key, value] of wanted.entries()) {
-      if (searchParams.get(key) !== value) return false
-    }
-    return true
-  }
-  // 쿼리 인지형 active 매칭 — 쿼리 딥링크 항목은 path+query가 모두 맞아야 active,
-  // 쿼리 없는 항목은 같은 경로의 쿼리 딥링크 형제가 매칭되면 하이라이트를 양보한다
-  // (가이드 문서 /admin/docs vs 문서 보강 큐 /admin/docs?tab=gaps).
-  const isNavActive = (href: string) => {
-    const { path, query } = splitNavHref(href)
-    const onPath = pathname === path || pathname.startsWith(`${path}/`)
-    if (!onPath) return false
-    if (query) return queryMatches(query)
-    return !visibleNav.some((item) => {
-      const sibling = splitNavHref(item.href)
-      // 쿼리 딥링크 형제(같은 경로, 예: /admin/docs vs /admin/docs?tab=gaps)에 양보.
-      if (sibling.path === path && sibling.query !== null && queryMatches(sibling.query)) return true
-      // 더 깊은 경로 형제(예: /admin/branch vs /admin/branch/ledger)가 현재 경로에 맞으면 상위는 양보 —
-      // KR Team과 매출 장부가 동시에 하이라이트되지 않게 한다.
-      if (sibling.path.startsWith(`${path}/`) && (pathname === sibling.path || pathname.startsWith(`${sibling.path}/`))) return true
-      return false
-    })
-  }
+  // 상시/기타 배치는 반드시 resolveNavAccess를 통해서만 계산한다 — 사이드바가 자체 계산을
+  // 하면 나중에 권한 설정 화면의 미리보기와 어긋난다. preset이 없으면(마이그레이션 미적용·
+  // 프리셋 미배정) resolveNavPlacement가 전부 "primary"로 돌려줘 오늘과 동일한 화면을 보장한다.
+  const navAccess = useMemo(() => {
+    const preset = isNavPresetKey(navPreset) ? navPreset : null
+    return resolveNavAccess(
+      { role: normalizedRole, preset, overrides: normalizeNavOverrides(navOverrides) },
+      visibleNav
+    )
+  }, [normalizedRole, navPreset, navOverrides, visibleNav])
+  const queryMatches = (query: string) => matchNavQuery(query, searchParams)
+  const isNavActive = (href: string) =>
+    matchNavActive(href, { pathname, searchParams, siblings: visibleNav })
   const currentNavItem = visibleNav.find((item) => isNavActive(item.href)) ?? visibleNav[0]
   const currentCrmChild = inCrm ? CRM_CHILD_NAV.find((item) => item.match(pathname ?? "")) : undefined
   const mobilePrimaryNav = MOBILE_PRIMARY_NAV.filter((item) => item.roles.includes(normalizedRole))
@@ -372,10 +389,6 @@ function AdminSidebarContent({ role, name, email }: Props) {
     return path.length > bestPath.length ? item.href : bestHref
   }, null)
   const mobileBottomColumns = Math.min(mobilePrimaryNav.length + 1, 5)
-  const groupedNav = ADMIN_NAV_SECTIONS.map((section) => ({
-    section,
-    items: visibleNav.filter((item) => item.section === section),
-  })).filter((group) => group.items.length > 0)
 
   const prefetchAdminRoute = useCallback((href: string) => {
     if (prefetchedHrefs.current.has(href)) return
@@ -422,9 +435,24 @@ function AdminSidebarContent({ role, name, email }: Props) {
 
   useEffect(() => () => cancelWarmAdminTab(), [cancelWarmAdminTab])
 
+  // 코덱스 감사 #3 — 유휴 prefetch 축소. 과거엔 유휴 시 visibleNav 상위 6개(2026-07-18 재정렬
+  // 후 전부 대형 라우트: overview·branch·ledger·crm·quotes·hardware)를 일괄 router.prefetch해
+  // 로그인 직후 대역폭·서버 렌더를 크게 썼다. 이제 유휴 시간에는
+  //  (a) 현재 활성 탭과 같은 섹션(admin-nav.ts section 필드)의 바로 이웃(±1) 탭만 내려받는다
+  //      — 다음 이동 확률이 가장 높은 후보. 탭 이동(currentNavItem 변경) 시 새 이웃을 다시 잡는다.
+  //  (b) 그 외 탭은 hover/focus/터치 시점의 warmAdminTab/scheduleWarmAdminTab 경로가 즉시
+  //      prefetch한다(기존 동작 유지 — prefetchAdminRoute가 warm 경로에 이미 배선돼 있다).
+  // prefetchedHrefs Set이 중복 prefetch를 막는다.
   useEffect(() => {
+    if (!currentNavItem) return
+
     const run = () => {
-      visibleNav.slice(0, 6).forEach((item) => prefetchAdminRoute(item.href))
+      const sectionItems = visibleNav.filter((item) => item.section === currentNavItem.section)
+      const index = sectionItems.findIndex((item) => item.href === currentNavItem.href)
+      if (index === -1) return
+      for (const neighbor of [sectionItems[index - 1], sectionItems[index + 1]]) {
+        if (neighbor) prefetchAdminRoute(neighbor.href)
+      }
     }
     const idleWindow = window as typeof window & {
       requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number
@@ -438,7 +466,7 @@ function AdminSidebarContent({ role, name, email }: Props) {
 
     const timeoutId = window.setTimeout(run, 650)
     return () => window.clearTimeout(timeoutId)
-  }, [prefetchAdminRoute, visibleNav])
+  }, [currentNavItem, prefetchAdminRoute, visibleNav])
 
   return (
     <>
@@ -455,9 +483,9 @@ function AdminSidebarContent({ role, name, email }: Props) {
         <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
           Classin Admin
         </p>
-        <h1 className="truncate text-[15px] font-semibold text-[#111110]">
+        <p className="truncate text-[15px] font-semibold text-[#111110]">
           {currentCrmChild?.label ?? currentNavItem?.label ?? "Admin"}
-        </h1>
+        </p>
       </div>
       {isDesktop === false ? <AdminNotificationsBell placement="inline" /> : null}
     </header>
@@ -529,6 +557,12 @@ function AdminSidebarContent({ role, name, email }: Props) {
                           warmAdminTab(child.href)
                           setMobileMenuOpen(false)
                         }}
+                        aria-current={
+                          childActive &&
+                          !(child.href === "/admin/crm/customers/unified" && hasActiveCrmSavedView)
+                            ? "page"
+                            : undefined
+                        }
                         className={`flex min-h-11 items-center rounded-md px-3 text-[14px] font-medium transition-colors ${
                           childActive
                             ? "bg-[#111110] text-white"
@@ -537,26 +571,56 @@ function AdminSidebarContent({ role, name, email }: Props) {
                       >
                         {child.label}
                       </Link>
-                      {child.href === "/admin/crm/customers/unified" ? (
-                        <div className="ml-3 mt-0.5 space-y-px border-l border-[#e8e8e4] pl-3">
-                          {CRM_SEGMENTS.map((seg) => {
-                            const count = crmSegCounts?.[seg.view]
-                            return (
-                              <Link
-                                key={`mobile-${seg.view}`}
-                                href={`/admin/crm/customers/unified?view=${seg.view}`}
-                                onClick={() => setMobileMenuOpen(false)}
-                                className="flex min-h-9 items-center gap-2 rounded px-3 text-[12px] text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
-                              >
-                                <span className="flex-1 truncate">{seg.label}</span>
-                                {count != null ? (
-                                  <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[10px] font-semibold tabular-nums text-[#1a1a1a]/55">
-                                    {count}
-                                  </span>
-                                ) : null}
-                              </Link>
-                            )
-                          })}
+                      {child.href === "/admin/crm/customers/unified" && showCrmSavedViews ? (
+                        <div
+                          className="ml-3 mt-1 space-y-2 border-l border-[#e8e8e4] pb-1 pl-3"
+                          role="group"
+                          aria-label="고객DB 저장 보기"
+                        >
+                          {CRM_SAVED_VIEW_GROUPS.map((group) => (
+                            <div key={`mobile-${group.key}`}>
+                              <p className="px-3 pb-1 pt-1 text-[10px] font-semibold tracking-[0.02em] text-[#1a1a1a]/55">
+                                {group.label}
+                              </p>
+                              <div className="space-y-px">
+                                {group.views.map((seg) => {
+                                  const count = crmSegCounts?.[seg.view]
+                                  const segmentActive = isCrmSavedViewActive(
+                                    pathname,
+                                    currentCrmSavedView,
+                                    seg.view
+                                  )
+                                  return (
+                                    <Link
+                                      key={`mobile-${seg.view}`}
+                                      href={`/admin/crm/customers/unified?view=${seg.view}`}
+                                      onClick={() => setMobileMenuOpen(false)}
+                                      aria-current={segmentActive ? "page" : undefined}
+                                      className={`flex min-h-11 items-center gap-2 rounded-md px-3 text-[12px] transition-colors ${
+                                        segmentActive
+                                          ? "bg-[#ECFDF5] font-semibold text-[#084734]"
+                                          : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                                      }`}
+                                    >
+                                      <span className="flex-1 truncate">{seg.label}</span>
+                                      <span
+                                        aria-hidden={count == null}
+                                        className={`min-w-5 rounded-full px-1.5 text-center text-[10px] font-semibold tabular-nums ${
+                                          count == null
+                                            ? "bg-transparent"
+                                            : segmentActive
+                                            ? "bg-white/80 text-[#084734]"
+                                            : "bg-[#f0f0ec] text-[#1a1a1a]/55"
+                                        }`}
+                                      >
+                                        {count ?? ""}
+                                      </span>
+                                    </Link>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ) : null}
                     </div>
@@ -564,18 +628,9 @@ function AdminSidebarContent({ role, name, email }: Props) {
                 })}
               </div>
             ) : (
-              groupedNav.map(({ section, items }, groupIndex) => (
-              <div key={`mobile-${section}`} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
-                {/* home(Overview 단독)은 헤더 없이 최상위에 렌더. */}
-                {section !== "home" && (
-                  <div className="px-3 pb-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
-                      {ADMIN_NAV_SECTION_META[section].label}
-                    </p>
-                  </div>
-                )}
+              <>
                 <div className="space-y-1">
-                  {items.map((item) => {
+                  {navAccess.primary.map((item) => {
                     const isActive = isNavActive(item.href)
 
                     return (
@@ -613,8 +668,75 @@ function AdminSidebarContent({ role, name, email }: Props) {
                     )
                   })}
                 </div>
-              </div>
-              ))
+
+                {navAccess.folded.length > 0 && (
+                  <div className="mt-5 border-t border-[#f0f0ec] pt-4">
+                    <button
+                      type="button"
+                      onClick={toggleOther}
+                      aria-expanded={otherOpen}
+                      className="flex min-h-11 w-full items-center gap-1.5 rounded-md px-3 text-[13px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                    >
+                      <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${otherOpen ? "rotate-90" : ""}`} />
+                      <span className="flex-1 text-left">기타</span>
+                      <span className="tabular-nums text-[#1a1a1a]/30">
+                        {navAccess.folded.reduce((sum, group) => sum + group.items.length, 0)}
+                      </span>
+                    </button>
+
+                    {otherOpen && (
+                      <div className="mt-1 space-y-3">
+                        {navAccess.folded.map(({ category, items }) => (
+                          <div key={`mobile-${category}`}>
+                            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
+                              {ADMIN_NAV_CATEGORY_META[category].label}
+                            </p>
+                            <div className="space-y-1">
+                              {items.map((item) => {
+                                const isActive = isNavActive(item.href)
+                                const isWip = item.maturity === "wip"
+
+                                return (
+                                  <Link
+                                    key={`mobile-${item.href}`}
+                                    href={item.href}
+                                    onFocus={() => warmAdminTab(item.href)}
+                                    onMouseEnter={() => scheduleWarmAdminTab(item.href)}
+                                    onMouseLeave={cancelWarmAdminTab}
+                                    onPointerDown={() => warmAdminTab(item.href)}
+                                    onTouchStart={() => warmAdminTab(item.href)}
+                                    onClick={() => {
+                                      warmAdminTab(item.href)
+                                      setMobileMenuOpen(false)
+                                    }}
+                                    className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
+                                      isActive
+                                        ? "bg-[#111110] text-white"
+                                        : isWip
+                                          ? "text-[#1a1a1a]/40 hover:bg-[#f5f5f2] hover:text-[#1a1a1a]/65"
+                                          : "text-[#1a1a1a]/65 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                                    }`}
+                                  >
+                                    <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
+                                      <item.icon className="h-4 w-4" />
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                                    {isWip && !isActive && (
+                                      <span className="rounded bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-normal text-[#1a1a1a]/40">
+                                        다듬는 중
+                                      </span>
+                                    )}
+                                  </Link>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </nav>
 
@@ -755,6 +877,12 @@ function AdminSidebarContent({ role, name, email }: Props) {
                     onPointerDown={() => warmAdminTab(child.href)}
                     onTouchStart={() => warmAdminTab(child.href)}
                     onClick={() => warmAdminTab(child.href)}
+                    aria-current={
+                      childActive &&
+                      !(child.href === "/admin/crm/customers/unified" && hasActiveCrmSavedView)
+                        ? "page"
+                        : undefined
+                    }
                     className={`flex items-center rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
                       childActive
                         ? "bg-[#111110] text-white"
@@ -763,25 +891,55 @@ function AdminSidebarContent({ role, name, email }: Props) {
                   >
                     {child.label}
                   </Link>
-                  {child.href === "/admin/crm/customers/unified" ? (
-                    <div className="mb-1 ml-3 mt-0.5 space-y-px border-l border-[#e8e8e4] pl-2.5">
-                      {CRM_SEGMENTS.map((seg) => {
-                        const count = crmSegCounts?.[seg.view]
-                        return (
-                          <Link
-                            key={seg.view}
-                            href={`/admin/crm/customers/unified?view=${seg.view}`}
-                            className="flex items-center gap-2 rounded px-2.5 py-1 text-[11px] text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
-                          >
-                            <span className="flex-1 truncate">{seg.label}</span>
-                            {count != null ? (
-                              <span className="rounded-full bg-[#f0f0ec] px-1.5 text-[10px] font-semibold tabular-nums text-[#1a1a1a]/55">
-                                {count}
-                              </span>
-                            ) : null}
-                          </Link>
-                        )
-                      })}
+                  {child.href === "/admin/crm/customers/unified" && showCrmSavedViews ? (
+                    <div
+                      className="mb-1 ml-3 mt-1 space-y-1.5 border-l border-[#e8e8e4] pb-1 pl-2.5"
+                      role="group"
+                      aria-label="고객DB 저장 보기"
+                    >
+                      {CRM_SAVED_VIEW_GROUPS.map((group) => (
+                        <div key={group.key}>
+                          <p className="px-2.5 pb-1 pt-1 text-[10px] font-semibold tracking-[0.02em] text-[#1a1a1a]/55">
+                            {group.label}
+                          </p>
+                          <div className="space-y-px">
+                            {group.views.map((seg) => {
+                              const count = crmSegCounts?.[seg.view]
+                              const segmentActive = isCrmSavedViewActive(
+                                pathname,
+                                currentCrmSavedView,
+                                seg.view
+                              )
+                              return (
+                                <Link
+                                  key={seg.view}
+                                  href={`/admin/crm/customers/unified?view=${seg.view}`}
+                                  aria-current={segmentActive ? "page" : undefined}
+                                  className={`flex min-h-7 items-center gap-2 rounded-md px-2.5 py-1 text-[11px] transition-colors ${
+                                    segmentActive
+                                      ? "bg-[#ECFDF5] font-semibold text-[#084734]"
+                                      : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                                  }`}
+                                >
+                                  <span className="flex-1 truncate">{seg.label}</span>
+                                  <span
+                                    aria-hidden={count == null}
+                                    className={`min-w-5 rounded-full px-1.5 text-center text-[10px] font-semibold tabular-nums ${
+                                      count == null
+                                        ? "bg-transparent"
+                                        : segmentActive
+                                        ? "bg-white/80 text-[#084734]"
+                                        : "bg-[#f0f0ec] text-[#1a1a1a]/55"
+                                    }`}
+                                  >
+                                    {count ?? ""}
+                                  </span>
+                                </Link>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : null}
                 </div>
@@ -789,21 +947,12 @@ function AdminSidebarContent({ role, name, email }: Props) {
             })}
           </div>
         ) : (
-          groupedNav.map(({ section, items }, groupIndex) => (
-          <div key={section} className={groupIndex === 0 ? "" : "mt-5 border-t border-[#f0f0ec] pt-4"}>
-            {/* home(Overview 단독)은 헤더 없이 최상위에 렌더. 나머지 섹션은 라벨만(부제 미표시). */}
-            {!effectiveCollapsed && section !== "home" && (
-              <div className="px-3 pb-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
-                  {ADMIN_NAV_SECTION_META[section].label}
-                </p>
-              </div>
-            )}
+          <>
             <div className="space-y-0.5">
-              {items.map((item) => {
+              {navAccess.primary.map((item) => {
                 const isActive = isNavActive(item.href)
 
-                const linkEl = (
+                return (
                   <Link
                     key={item.href}
                     href={item.href}
@@ -843,12 +992,78 @@ function AdminSidebarContent({ role, name, email }: Props) {
                     )}
                   </Link>
                 )
-
-                return linkEl
               })}
             </div>
-          </div>
-          ))
+
+            {navAccess.folded.length > 0 && (
+              <div className="mt-5 border-t border-[#f0f0ec] pt-4">
+                <button
+                  type="button"
+                  onClick={toggleOther}
+                  aria-expanded={otherOpen}
+                  className="flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                >
+                  <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${otherOpen ? "rotate-90" : ""}`} />
+                  {!effectiveCollapsed && (
+                    <>
+                      <span className="flex-1 text-left">기타</span>
+                      <span className="tabular-nums text-[#1a1a1a]/30">
+                        {navAccess.folded.reduce((sum, group) => sum + group.items.length, 0)}
+                      </span>
+                    </>
+                  )}
+                </button>
+
+                {otherOpen && !effectiveCollapsed && (
+                  <div className="mt-1 space-y-3">
+                    {navAccess.folded.map(({ category, items }) => (
+                      <div key={category}>
+                        <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
+                          {ADMIN_NAV_CATEGORY_META[category].label}
+                        </p>
+                        <div className="space-y-0.5">
+                          {items.map((item) => {
+                            const isActive = isNavActive(item.href)
+                            const isWip = item.maturity === "wip"
+
+                            return (
+                              <Link
+                                key={item.href}
+                                href={item.href}
+                                onFocus={() => warmAdminTab(item.href)}
+                                onMouseEnter={() => scheduleWarmAdminTab(item.href)}
+                                onMouseLeave={cancelWarmAdminTab}
+                                onPointerDown={() => warmAdminTab(item.href)}
+                                onTouchStart={() => warmAdminTab(item.href)}
+                                onClick={() => warmAdminTab(item.href)}
+                                className={`group flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
+                                  isActive
+                                    ? "bg-[#111110] text-white"
+                                    : isWip
+                                      ? "text-[#1a1a1a]/35 hover:bg-[#f5f5f2] hover:text-[#1a1a1a]/60"
+                                      : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                                }`}
+                              >
+                                <span className={isActive ? "text-white" : "text-[#1a1a1a]/30"}>
+                                  <item.icon className="h-4 w-4" />
+                                </span>
+                                <span className="flex-1">{item.label}</span>
+                                {isWip && !isActive && (
+                                  <span className="rounded bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-normal text-[#1a1a1a]/40">
+                                    다듬는 중
+                                  </span>
+                                )}
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </nav>
 

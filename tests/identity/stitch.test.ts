@@ -28,6 +28,10 @@ function makeBuilder(table: string, method: string, payload?: unknown) {
     op.filters[`order:${col}`] = opts ?? null
     return builder
   }
+  builder.limit = (n: number) => {
+    op.filters["limit"] = n
+    return builder
+  }
 
   // Resolution: an injected error wins; else a `select` on leads returns the configured rows;
   // everything else resolves clean. PostgREST resolves (never throws) with { data, error }.
@@ -37,6 +41,15 @@ function makeBuilder(table: string, method: string, payload?: unknown) {
     : table === "leads" && method === "select"
       ? { data: selectLeadsRows, error: null }
       : { data: null, error: null }
+
+  // maybeSingle 은 배열이 아니라 행 하나(또는 null)를 돌려준다.
+  builder.maybeSingle = () => {
+    const rows = (resolved.data ?? null) as Array<{ id: string }> | null
+    return Promise.resolve({
+      data: Array.isArray(rows) ? (rows[0] ?? null) : rows,
+      error: resolved.error,
+    })
+  }
 
   ;(builder as { then: unknown }).then = (
     onFulfilled: (value: unknown) => unknown
@@ -58,6 +71,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 import {
   associateLeadsForVerifiedEmail,
+  resolveLeadIdForAnonymousId,
   shouldAutoLinkEmail,
   stitchIdentity,
 } from "@/lib/identity/stitch"
@@ -237,5 +251,84 @@ describe("stitchIdentity verification gate", () => {
         (op.payload as { lead_id?: string }).lead_id === LEAD_B
     )
     expect(explicitProfileLink).toBeDefined()
+  })
+})
+
+describe("리드 제출 경로 신원 결합 (2026-08-05 갭)", () => {
+  beforeEach(() => {
+    ops.length = 0
+    selectLeadsRows = [{ id: LEAD_A }]
+    errorFor = {}
+    from.mockClear()
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("익명 id + 리드 id 만으로도 client_events 를 소급 귀속한다", async () => {
+    // 리드 제출 경로에는 userId·검증이메일이 없다. 이 조합에서도 결합이 돌아야
+    // client_events.lead_id 가 채워진다(이 호출이 빠져 2,159행 중 0행이었다).
+    await stitchIdentity({ anonymousId: "anon-lead-capture", leadId: LEAD_A })
+
+    const backfill = ops.find(
+      (op) => op.table === "client_events" && op.method === "update"
+    )
+    expect(backfill).toBeDefined()
+    expect((backfill?.payload as { lead_id?: string })?.lead_id).toBe(LEAD_A)
+    expect(backfill?.filters["eq:anonymous_id"]).toBe("anon-lead-capture")
+  })
+
+  it("자료 다운로드도 같은 익명 id 로 귀속한다 — 참여 신호의 downloadCount 입력", async () => {
+    await stitchIdentity({ anonymousId: "anon-with-downloads", leadId: LEAD_A })
+
+    const downloads = ops.find(
+      (op) => op.table === "material_downloads" && op.method === "update"
+    )
+    expect(downloads).toBeDefined()
+    expect((downloads?.payload as { lead_id?: string })?.lead_id).toBe(LEAD_A)
+    expect(downloads?.filters["eq:anonymous_id"]).toBe("anon-with-downloads")
+    // 이미 다른 리드에 붙은 다운로드는 빼앗지 않는다.
+    expect(downloads?.filters["is:lead_id"]).toBeNull()
+  })
+
+  it("리드를 모르면 자료 다운로드는 건드리지 않는다", async () => {
+    await stitchIdentity({ anonymousId: "anon-no-lead", userId: USER_ID })
+    expect(ops.some((op) => op.table === "material_downloads")).toBe(false)
+  })
+})
+
+describe("resolveLeadIdForAnonymousId", () => {
+  beforeEach(() => {
+    ops.length = 0
+    selectLeadsRows = [{ id: LEAD_B }]
+    errorFor = {}
+    from.mockClear()
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("익명 id 로 가장 최근 리드를 찾는다 — 전환 이후 이벤트의 정방향 귀속", async () => {
+    const leadId = await resolveLeadIdForAnonymousId("anon-known")
+    expect(leadId).toBe(LEAD_B)
+
+    const query = ops.find((op) => op.table === "leads" && op.method === "select")
+    expect(query?.filters["eq:anonymous_id"]).toBe("anon-known")
+    // 같은 브라우저의 재문의는 가장 최근 건으로 — 지금 진행 중인 대화가 그쪽이다.
+    expect(query?.filters["order:created_at"]).toEqual({ ascending: false })
+    expect(query?.filters["limit"]).toBe(1)
+  })
+
+  it("익명 id 가 없거나 공백이면 조회 자체를 하지 않는다", async () => {
+    expect(await resolveLeadIdForAnonymousId(null)).toBeNull()
+    expect(await resolveLeadIdForAnonymousId("   ")).toBeNull()
+    expect(ops.length).toBe(0)
+  })
+
+  it("조회가 실패해도 null 로 떨어질 뿐 추적을 막지 않는다", async () => {
+    errorFor["leads:select"] = { message: "db down" }
+    expect(await resolveLeadIdForAnonymousId("anon-known")).toBeNull()
   })
 })

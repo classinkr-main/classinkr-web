@@ -44,6 +44,7 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
   const [rows, setRows] = useState<PickerRow[]>([])
   const [recents, setRecents] = useState<PickerRow[]>([])
   const [loading, setLoading] = useState(false)
+  const [searchFailed, setSearchFailed] = useState(false)
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reqId = useRef(0)
 
@@ -71,9 +72,15 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
         })
         if (current === reqId.current) {
           setRows((data.rows ?? []).filter((row): row is PickerRow => row.source !== "customer"))
+          setSearchFailed(false)
         }
       } catch {
-        if (current === reqId.current) setRows([])
+        // 검색 실패를 "일치하는 고객이 없습니다 · 직접 입력으로 저장됩니다"로 그리면,
+        // 실제로는 있는 고객을 자유 텍스트로 새로 만들게 만든다(중복·미연결 레코드).
+        if (current === reqId.current) {
+          setRows([])
+          setSearchFailed(true)
+        }
       } finally {
         if (current === reqId.current) setLoading(false)
       }
@@ -143,6 +150,10 @@ export default function CrmCustomerPicker({ label, linkedId, onPick, onFreeText,
           ) : null}
           {loading && suggestions.length === 0 ? (
             <p className="px-3 py-2 text-[12px] text-[#1a1a1a]/40">검색 중...</p>
+          ) : searchFailed && suggestions.length === 0 ? (
+            <p role="alert" className="px-3 py-2 text-[12px] text-[#B85C33]">
+              고객 검색에 실패했습니다. 이대로 저장하면 미연결 기록이 되니 다시 시도해 주세요.
+            </p>
           ) : suggestions.length === 0 ? (
             <p className="px-3 py-2 text-[12px] text-[#1a1a1a]/40">일치하는 고객이 없습니다. 직접 입력으로 저장됩니다.</p>
           ) : (

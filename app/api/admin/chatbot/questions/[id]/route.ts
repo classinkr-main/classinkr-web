@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { reindexDocsArticleServerSide } from "@/app/api/admin/docs/articles/_reindex"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { ChatbotInputError, updateQuestionCluster } from "@/lib/chatbot/service"
 import { promoteRegressionOutcomes } from "@/lib/repositories/internal-cs-chat"
@@ -45,6 +46,18 @@ async function propagatePromotedOutcomes(body: unknown, cluster: unknown) {
   }
 }
 
+async function triggerDocReindex(cluster: unknown) {
+  try {
+    const clusterRow = getRecord(cluster)
+    const articleId = typeof clusterRow?.mapped_article_id === "string" ? clusterRow.mapped_article_id : null
+    if (articleId) {
+      await reindexDocsArticleServerSide(articleId, "PATCH /api/admin/chatbot/questions/[id]")
+    }
+  } catch (error) {
+    console.error("[PATCH /api/admin/chatbot/questions/[id]] auto reindex failed:", error)
+  }
+}
+
 export async function PATCH(req: NextRequest, context: QuestionClusterRouteContext) {
   const authError = await verifyAdmin(req)
   if (authError) return authError
@@ -54,6 +67,7 @@ export async function PATCH(req: NextRequest, context: QuestionClusterRouteConte
     const body = (await req.json()) as unknown
     const result = await updateQuestionCluster(id, body)
     await propagatePromotedOutcomes(body, result.cluster)
+    await triggerDocReindex(result.cluster)
     return NextResponse.json(result)
   } catch (error) {
     if (error instanceof ChatbotInputError) {

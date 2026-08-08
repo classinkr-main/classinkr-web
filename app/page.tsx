@@ -3,6 +3,7 @@ import { Hero } from "@/components/sections/Hero"
 import { LogoBar } from "@/components/sections/LogoBar"
 import { EraVision } from "@/components/sections/EraVision"
 import { HomeEntitySummary } from "@/components/sections/HomeEntitySummary"
+import { HomeLeadMagnet } from "@/components/sections/HomeLeadMagnet"
 import { ProblemCost } from "@/components/sections/ProblemCost"
 import { Manifesto } from "@/components/sections/Manifesto"
 import { GlobalScale } from "@/components/sections/GlobalScale"
@@ -55,6 +56,7 @@ export default function LandingPage() {
 
       {/* Act 3: 공감 — 원장이 겪는 현실 */}
       <ProblemCost />
+      <HomeLeadMagnet />
 
       {/* Act 3: 전환점 — 수업은 개인기가 아니다 */}
       <Manifesto />

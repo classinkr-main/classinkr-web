@@ -2082,16 +2082,18 @@ function buildSuggestedQuestions(category: string) {
 }
 
 function wantsImmediateHumanHandoff(question: NormalizedQuestion) {
+  const text = question.redacted.toLowerCase()
+  const explicitHandoff =
+    /상담\s*(?:받|받고|하고|하고\s*싶|할래|신청|연결|이어|부탁|필요|문의|원해|원함)|상담받|상담할래|상담하고\s*싶|상담\s*(?:원|사)|담당자.{0,10}(?:상담|연결|연락|통화|배정|문의)|매니저.{0,10}(?:상담|연결|연락|통화|문의)|상담원.{0,10}(?:상담|연결|연락|통화|문의)|(?:상담|연결|연락|통화|문의).{0,10}(?:담당자|매니저|상담원)|전담\s*매니저|연락\s*(?:주세요|받고|하고|원해|원함|가능)|전화\s*(?:주세요|받고|하고|원해|원함|가능)|통화\s*(?:하고|원해|원함|가능)|미팅\s*(?:잡|하고|원해|원함)|데모\s*(?:신청|보고|연결|원해|원함)|시연\s*(?:신청|보고|연결|원해|원함)|쇼룸\s*(?:방문|데모|신청|예약|연결|체험|보|보러)|채널톡\s*(?:연결|상담|문의)|구매\s*상담|도입\s*(?:상담|문의|검토)/.test(text)
+  const contextualInquiry =
+    /문의/.test(text) && /담당자|매니저|상담원|채널톡|쇼룸|연락|전화|통화|구매|도입|시연|데모/.test(text)
+
+  if (explicitHandoff || contextualInquiry) return true
+
   if (isHardwareSpecsQuestion(question)) return false
   if (isHardwareBoardLineupQuestion(question)) return false
 
-  const text = question.redacted.toLowerCase()
-  const explicitHandoff =
-    /상담\s*(?:받|받고|하고|하고\s*싶|할래|신청|연결|이어|부탁|필요|문의|원해|원함)|상담받|상담할래|상담하고\s*싶|상담\s*(?:원|사)|담당자.{0,10}(?:상담|연결|연락|통화|배정|문의)|매니저.{0,10}(?:상담|연결|연락|통화|문의)|(?:상담|연결|연락|통화|문의).{0,10}(?:담당자|매니저)|전담\s*매니저|연락\s*(?:주세요|받고|하고|원해|원함|가능)|전화\s*(?:주세요|받고|하고|원해|원함|가능)|통화\s*(?:하고|원해|원함|가능)|미팅\s*(?:잡|하고|원해|원함)|데모\s*(?:신청|보고|연결|원해|원함)|시연\s*(?:신청|보고|연결|원해|원함)|구매\s*상담|도입\s*(?:상담|문의|검토)/.test(text)
-  const contextualInquiry =
-    /문의/.test(text) && /담당자|매니저|연락|전화|통화|구매|도입|시연|데모/.test(text)
-
-  return explicitHandoff || contextualInquiry
+  return false
 }
 
 function wantsHumanConsultation(question: NormalizedQuestion) {

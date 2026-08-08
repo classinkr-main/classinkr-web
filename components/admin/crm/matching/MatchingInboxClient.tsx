@@ -42,7 +42,7 @@ const SOURCE_LABEL: Record<CrmMatchingSourceSystem, string> = {
 }
 
 const SOURCE_TONE: Record<CrmMatchingSourceSystem, string> = {
-  branch_rev_sheet: "border-amber-100 bg-amber-50 text-amber-700",
+  branch_rev_sheet: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
   xiaoshouyi: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
   lead: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
 }
@@ -58,7 +58,7 @@ const STATUS_TONE: Record<CrmSourceLinkStatus, string> = {
   candidate: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
   confirmed: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
   rejected: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/45",
-  stale: "border-amber-100 bg-amber-50 text-amber-700",
+  stale: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
 }
 
 const SOURCE_FILTERS: Array<{ key: SourceFilter; label: string }> = [
@@ -69,7 +69,7 @@ const SOURCE_FILTERS: Array<{ key: SourceFilter; label: string }> = [
 ]
 
 const STATUS_FILTERS: Array<{ key: StatusFilter; label: string }> = [
-  { key: "review", label: "검토 필요" },
+  { key: "review", label: "처리 필요" },
   { key: "auto", label: "자동 확정" },
   { key: "confirmed", label: "확정" },
   { key: "rejected", label: "제외" },
@@ -180,7 +180,9 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("review")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [pendingLinkId, setPendingLinkId] = useState<string | null>(null)
+  // 행별 잠금 — 스칼라 하나로 잡으면 B행을 누르는 순간 A행 버튼이 요청 중인데도 다시 활성화돼
+  // 같은 링크에 PATCH가 두 번 나갈 수 있다.
+  const [pendingLinkIds, setPendingLinkIds] = useState<Set<string>>(() => new Set())
   const [bulkPending, setBulkPending] = useState(false)
   const [manualQueries, setManualQueries] = useState<Record<string, string>>({})
   const [manualTargets, setManualTargets] = useState<Record<string, ManualLinkTargetOption[]>>({})
@@ -236,7 +238,18 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
 
   const updateSourceLink = useCallback(
     async (linkId: string, action: "confirm" | "reject" | "stale") => {
-      setPendingLinkId(linkId)
+      let alreadyPending = false
+      setPendingLinkIds((prev) => {
+        if (prev.has(linkId)) {
+          alreadyPending = true
+          return prev
+        }
+        const next = new Set(prev)
+        next.add(linkId)
+        return next
+      })
+      if (alreadyPending) return
+
       setError(null)
       try {
         await adminFetchJson(`/api/admin/crm/source-links/${linkId}`, {
@@ -247,11 +260,24 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
       } catch (err) {
         setError(err instanceof Error ? err.message : "매칭 상태 변경에 실패했습니다.")
       } finally {
-        setPendingLinkId(null)
+        setPendingLinkIds((prev) => {
+          const next = new Set(prev)
+          next.delete(linkId)
+          return next
+        })
       }
     },
     [applyRowStatus]
   )
+
+  // 실패 알림에 쓸 링크 id → 표시 이름. id 앞 8자만 보여주면 어느 행인지 알 수 없다.
+  const rowLabelByLinkId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const row of data?.rows ?? []) {
+      if (row.linkId) map.set(row.linkId, row.sourceLabel)
+    }
+    return map
+  }, [data])
 
   const bulkUpdate = useCallback(
     async (ids: string[], action: "confirm" | "reject") => {
@@ -260,18 +286,32 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
       setError(null)
       setNotice(null)
       try {
-        const result = await adminFetchJson<{ updated: number; failed: Array<{ id: string; error: string }> }>(
-          `/api/admin/crm/source-links/bulk`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({ ids, action }),
-          }
-        )
-        setNotice(
-          `${action === "confirm" ? "확정" : "제외"} ${formatNumber(result.updated)}건 처리${
-            result.failed.length > 0 ? ` · 실패 ${formatNumber(result.failed.length)}건` : ""
-          }`
-        )
+        const result = await adminFetchJson<{
+          updated: number
+          failed: Array<{ id: string; error: string }>
+          skipped?: number
+        }>(`/api/admin/crm/source-links/bulk`, {
+          method: "PATCH",
+          body: JSON.stringify({ ids, action }),
+        })
+
+        // 처리·실패·미처리(요청 상한 초과)를 모두 밝힌다. 합이 선택 건수와 맞아야
+        // 운영자가 "왜 몇 건이 그대로지"를 표에서 되짚지 않는다.
+        const actionLabel = action === "confirm" ? "확정" : "제외"
+        const parts = [`${actionLabel} ${formatNumber(result.updated)}건 처리`]
+        if (result.failed.length > 0) {
+          // 실패 건은 개수만이 아니라 어느 행인지 알아야 다시 손댈 수 있다.
+          const names = result.failed
+            .slice(0, 3)
+            .map(({ id }) => rowLabelByLinkId.get(id) ?? id.slice(0, 8))
+            .join(", ")
+          const more = result.failed.length > 3 ? ` 외 ${formatNumber(result.failed.length - 3)}건` : ""
+          parts.push(`실패 ${formatNumber(result.failed.length)}건 (${names}${more})`)
+        }
+        if (result.skipped && result.skipped > 0) {
+          parts.push(`미처리 ${formatNumber(result.skipped)}건 · 한 번에 처리할 수 있는 한도를 넘어 남겨 두었습니다`)
+        }
+        setNotice(parts.join(" · "))
         await load({ force: true })
       } catch (err) {
         setError(err instanceof Error ? err.message : "일괄 처리에 실패했습니다.")
@@ -279,7 +319,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         setBulkPending(false)
       }
     },
-    [load]
+    [load, rowLabelByLinkId]
   )
 
   const generateCandidates = useCallback(async () => {
@@ -418,6 +458,10 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
   }, [])
 
   const totals = data?.totals
+  const actionableCount = useMemo(
+    () => (data?.rows ?? []).filter((row) => matchesStatusFilter(row, "review")).length,
+    [data]
+  )
 
   // 행 액션(확정/제외/되돌리기) — 데스크톱 표 셀과 <sm 카드 폴백이 같은 핸들러·마크업을 공유한다(W2-6).
   const renderRowActions = (row: CrmMatchingRow) => {
@@ -427,12 +471,12 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           <button
             type="button"
             onClick={() => void updateSourceLink(row.linkId as string, "confirm")}
-            disabled={pendingLinkId === row.linkId}
+            disabled={pendingLinkIds.has(row.linkId as string)}
             className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
             title="확정"
             aria-label="확정"
           >
-            {pendingLinkId === row.linkId ? (
+            {pendingLinkIds.has(row.linkId as string) ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <Check className="h-3.5 w-3.5" />
@@ -441,7 +485,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           <button
             type="button"
             onClick={() => void updateSourceLink(row.linkId as string, "reject")}
-            disabled={pendingLinkId === row.linkId}
+            disabled={pendingLinkIds.has(row.linkId as string)}
             className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
             title="제외"
             aria-label="제외"
@@ -456,11 +500,11 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         <button
           type="button"
           onClick={() => void updateSourceLink(row.linkId as string, "stale")}
-          disabled={pendingLinkId === row.linkId}
-          className="inline-flex h-7 items-center gap-1 rounded-lg border border-amber-100 bg-amber-50 px-2 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+          disabled={pendingLinkIds.has(row.linkId as string)}
+          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-2 text-[11px] font-semibold text-[#7A520F] transition-colors hover:bg-[#ECD29C] disabled:opacity-50"
           title="확정을 되돌리고 재검수로 보냅니다"
         >
-          {pendingLinkId === row.linkId ? (
+          {pendingLinkIds.has(row.linkId as string) ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <RotateCcw className="h-3.5 w-3.5" />
@@ -542,7 +586,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">데이터 매칭 인박스</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
             외부 CRM 스냅샷, REV 시트, 리드를 ClassIn 고객 DB에 연결합니다. 고확신 매칭은 자동 확정되고, 여기서는
-            검토가 필요한 항목만 처리하면 됩니다.
+            미연결·후보·재검수 상태처럼 처리가 필요한 항목을 한 번에 정리합니다.
           </p>
         </div>
 
@@ -580,16 +624,16 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         <div className="mb-6 border-l-2 border-[#D7EBDD] pl-3 text-[13px] text-[#084734]">{notice}</div>
       ) : null}
       {(data?.warnings ?? []).map((warning) => (
-        <div key={warning} className="mb-6 border-l-2 border-amber-200 pl-3 text-[13px] text-amber-800">
+        <div key={warning} className="mb-6 border-l-2 border-[#ECD29C] pl-3 text-[13px] text-[#7A520F]">
           {warning}
         </div>
       ))}
 
-      <section className="mb-8 grid gap-8 border-y border-[#f0f0ec] py-6 md:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-6 grid grid-cols-2 gap-x-4 gap-y-5 border-y border-[#f0f0ec] py-5 xl:grid-cols-4">
         <MetricCard
-          label="검토 대기"
-          value={loading && !data ? <ValueSkeleton /> : formatNumber(totals?.reviewCount ?? 0)}
-          hint="후보·재검수 상태로 admin 확인이 필요한 연결"
+          label="처리 필요"
+          value={loading && !data ? <ValueSkeleton /> : formatNumber(actionableCount)}
+          hint="현재 필터와 같은 범위 · 미연결 + 후보 + 재검수"
         />
         <MetricCard
           label="미매칭 REV"
@@ -597,9 +641,9 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           hint={`따로 노는 시트 금액 ${formatCurrency(data?.summary.branch_rev_sheet.unmatchedAmount ?? 0)}`}
         />
         <MetricCard
-          label="자동 확정"
-          value={loading && !data ? <ValueSkeleton /> : formatNumber(totals?.autoConfirmedCount ?? 0)}
-          hint="고확신 자동 확정 — 잘못된 건은 행에서 되돌리기"
+          label="후보·재검수"
+          value={loading && !data ? <ValueSkeleton /> : formatNumber(totals?.reviewCount ?? 0)}
+          hint="관리자 판단으로 확정하거나 제외할 연결"
         />
         <MetricCard
           label="시트 매칭률"
@@ -622,7 +666,11 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
             <button
               key={filter.key}
               type="button"
-              onClick={() => setSourceFilter(filter.key)}
+              onClick={() => {
+                setSourceFilter(filter.key)
+                setSelectedIds(new Set())
+              }}
+              aria-pressed={sourceFilter === filter.key}
               className={`h-8 rounded-lg border px-3 text-[12px] font-semibold transition-colors ${
                 sourceFilter === filter.key
                   ? "border-[#111110] bg-[#111110] text-white"
@@ -637,7 +685,11 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
             <button
               key={filter.key}
               type="button"
-              onClick={() => setStatusFilter(filter.key)}
+              onClick={() => {
+                setStatusFilter(filter.key)
+                setSelectedIds(new Set())
+              }}
+              aria-pressed={statusFilter === filter.key}
               className={`h-8 rounded-lg border px-3 text-[12px] font-semibold transition-colors ${
                 statusFilter === filter.key
                   ? "border-[#111110] bg-[#111110] text-white"
@@ -710,7 +762,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         ) : visibleRows.length === 0 ? (
           <p className="rounded-xl bg-[#fafaf8] px-3 py-10 text-center text-[13px] text-[#1a1a1a]/35">
             {statusFilter === "review"
-              ? "검토할 매칭이 없습니다. 모두 처리됐어요."
+              ? "처리할 매칭이 없습니다. 모두 정리됐어요."
               : "표시할 매칭 데이터가 없습니다."}
           </p>
         ) : (
@@ -763,7 +815,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         <table className="min-w-[1240px] w-full text-left">
           <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
             <tr>
-              <th className="py-3 pr-3 font-semibold">
+              <th scope="col" className="py-3 pr-3 font-semibold">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -772,15 +824,15 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
                   className="h-3.5 w-3.5 accent-[#111110]"
                 />
               </th>
-              <th className="py-3 pr-4 font-semibold">소스</th>
-              <th className="py-3 pr-4 font-semibold">상태</th>
-              <th className="py-3 pr-4 font-semibold">원천 레코드</th>
-              <th className="py-3 pr-4 font-semibold">담당</th>
-              <th className="py-3 pr-4 font-semibold">연결 대상</th>
-              <th className="py-3 pr-4 text-right font-semibold">신뢰도</th>
-              <th className="py-3 pr-4 text-right font-semibold">금액</th>
-              <th className="py-3 pl-4 font-semibold">수동 연결</th>
-              <th className="py-3 pl-4 text-right font-semibold">액션</th>
+              <th scope="col" className="py-3 pr-4 font-semibold">소스</th>
+              <th scope="col" className="py-3 pr-4 font-semibold">상태</th>
+              <th scope="col" className="py-3 pr-4 font-semibold">원천 레코드</th>
+              <th scope="col" className="py-3 pr-4 font-semibold">담당</th>
+              <th scope="col" className="py-3 pr-4 font-semibold">연결 대상</th>
+              <th scope="col" className="py-3 pr-4 text-right font-semibold">신뢰도</th>
+              <th scope="col" className="py-3 pr-4 text-right font-semibold">금액</th>
+              <th scope="col" className="py-3 pl-4 font-semibold">수동 연결</th>
+              <th scope="col" className="py-3 pl-4 text-right font-semibold">액션</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#f0f0ec]">
@@ -795,7 +847,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
               <tr>
                 <td colSpan={10} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
                   {statusFilter === "review"
-                    ? "검토할 매칭이 없습니다. 모두 처리됐어요."
+                    ? "처리할 매칭이 없습니다. 모두 정리됐어요."
                     : "표시할 매칭 데이터가 없습니다."}
                 </td>
               </tr>

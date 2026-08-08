@@ -1776,6 +1776,12 @@ export async function updateCrmSourceLinkStatus(
 export interface BulkUpdateCrmSourceLinksResult {
   updated: number
   failed: Array<{ id: string; error: string }>
+  /**
+   * 요청 상한(BULK_LINK_ACTION_LIMIT)을 넘어 처리하지 않은 건수.
+   * 조용히 잘라 내면 updated + failed 합이 사용자가 선택한 수와 달라지는데
+   * 화면에는 그 차이를 설명할 근거가 없다.
+   */
+  skipped: number
 }
 
 const BULK_LINK_ACTION_LIMIT = 200
@@ -1785,10 +1791,9 @@ export async function bulkUpdateCrmSourceLinkStatus(
   action: CrmSourceLinkAction,
   actorUserId?: string | null
 ): Promise<BulkUpdateCrmSourceLinksResult> {
-  const uniqueIds = Array.from(new Set(ids.filter((id) => typeof id === "string" && id.trim()))).slice(
-    0,
-    BULK_LINK_ACTION_LIMIT
-  )
+  const deduped = Array.from(new Set(ids.filter((id) => typeof id === "string" && id.trim())))
+  const uniqueIds = deduped.slice(0, BULK_LINK_ACTION_LIMIT)
+  const skipped = deduped.length - uniqueIds.length
   const failed: Array<{ id: string; error: string }> = []
   let updated = 0
 
@@ -1801,7 +1806,7 @@ export async function bulkUpdateCrmSourceLinkStatus(
     }
   }
 
-  return { updated, failed }
+  return { updated, failed, skipped }
 }
 
 export interface ReattachBranchRevLinksResult {

@@ -51,7 +51,7 @@ const DEFAULT_PUBLIC_CONTEXT_TIMEOUT_MS = 3_500
 
 const INTERNAL_OPERATING_GUIDE = [
   "[내부 CS 운영 원칙]",
-  "- 내부 답변은 결론·사실 우선으로 짧게 쓰고, 인사·공감 같은 감정 표현은 고객 전달 문안에만 쓴다.",
+  "- 내부 답변은 질문에 대한 직접 답을 먼저 쓰고, 필요한 정보는 임의로 축약하지 않는다. 비교·절차·주의 사항은 Markdown으로 구조화한다.",
   "- 최종 판단, 고객 전달, 본사 전달, 승인 권한은 CS 담당자에게 있다.",
   "- AI 결과는 검토 전 초안이다. 담당자가 승인하거나 수정하기 전에는 외부로 전송하지 않는다.",
   "- 공개 가이드와 내부 정보가 충돌하면 임의로 결론 내리지 않고 적용 모델·세대·앱 버전·시장·출처일을 확인한다.",
@@ -176,6 +176,89 @@ function formatPublicEvidence(answer: string | null, sources: ChatbotSource[], w
   ].filter(Boolean).join("\n")
 }
 
+function requestedBoardModel(question: string) {
+  const model = question.match(/\bS\s*(65|75|86|98|110)\b/i)?.[1]
+  if (model) return `S${model}`
+  const inches = question.match(/\b(65|75|86|98|110)\s*인치/i)?.[1]
+  return inches ? `S${inches}` : null
+}
+
+function relevantWeightEvidence(question: string, publicEvidence: InternalCsCopilotContext["publicEvidence"]) {
+  if (!/(?:무게|중량|weight)/i.test(question)) return null
+  const model = requestedBoardModel(question)
+  if (!model) return null
+
+  const evidenceText = [
+    publicEvidence.answer ?? "",
+    ...publicEvidence.sources.map((source) => `${source.title} ${source.heading ?? ""} ${source.excerpt}`),
+  ].join("\n")
+  const modelPattern = new RegExp(`${model.replace("S", "S\\s*")}(?:(?!S\\s*(?:65|75|86|98|110)).){0,180}?(\\d+(?:\\.\\d+)?)\\s*kg`, "is")
+  const weight = evidenceText.match(modelPattern)?.[1]
+  const asksPackagingWeight = /박스|포장|총중량|gross|package|packaging/i.test(question)
+  const hasPackagingEvidence = new RegExp(
+    `${model.replace("S", "S\\s*")}(?:(?!S\\s*(?:65|75|86|98|110)).){0,180}?(?:박스|포장|총중량|gross|package|packaging)(?:(?!S\\s*(?:65|75|86|98|110)).){0,80}?(\\d+(?:\\.\\d+)?)\\s*kg`,
+    "is"
+  ).exec(evidenceText)?.[1]
+
+  if (asksPackagingWeight) {
+    if (hasPackagingEvidence) {
+      return [
+        "## 바로 답변",
+        `- **확인됨:** ${model} 박스 포함 포장 총중량은 **${hasPackagingEvidence}kg**입니다.`,
+      ].join("\n\n")
+    }
+    return [
+      "## 바로 답변",
+      `- **미확인:** ${model}의 박스·완충재 포함 **포장 총중량은 현재 검색 근거에서 확인되지 않습니다.**`,
+      weight ? `- **확인된 인접 값:** ${model} 본체 순중량은 **${weight}kg**입니다.` : "",
+      "- 본체 순중량을 박스 포함 중량으로 안내하면 안 됩니다.",
+      "",
+      "## 다음 확인",
+      "최신 출고 포장 규격서 또는 물류 담당자에게 `Gross weight / 포장 총중량` 항목을 확인하세요.",
+    ].filter(Boolean).join("\n")
+  }
+
+  if (!weight) return null
+  return [
+    "## 바로 답변",
+    `${model} 본체 **순중량은 ${weight}kg**입니다.`,
+    "",
+    "박스·완충재·스탠드를 포함한 중량은 별도 값이므로, 포장 또는 설치 중량을 묻는 경우 다시 구분해 확인해야 합니다.",
+  ].join("\n")
+}
+
+function buildDeterministicFallback({
+  question,
+  publicEvidence,
+  selectedFacts,
+  consultationCount,
+}: {
+  question: string
+  publicEvidence: InternalCsCopilotContext["publicEvidence"]
+  selectedFacts: ReturnType<typeof selectInternalCsKnowledge>["entries"]
+  consultationCount: number
+}) {
+  const focusedWeightAnswer = relevantWeightEvidence(question, publicEvidence)
+  const directAnswer = focusedWeightAnswer || [
+    "## 바로 답변",
+    publicEvidence.answer
+      ? publicEvidence.answer.trim()
+      : "현재 질문과 직접 일치하는 근거를 찾지 못했습니다. 확인되지 않은 사실은 만들지 않습니다.",
+  ].join("\n\n")
+
+  const evidenceSummary = selectedFacts.length > 0
+    ? [
+        "## 확인 상태",
+        ...selectedFacts.map((entry) => `- **${statusLabel(entry.status)} · ${entry.title}:** ${entry.summary}`),
+      ].join("\n")
+    : ""
+  const consultationSummary = consultationCount > 0
+    ? `## 참고 사례\n과거 유사 상담 ${consultationCount}건이 검색됐습니다. 최신 정책·계약·사양과 대조한 뒤 사용하세요.`
+    : ""
+
+  return [directAnswer, evidenceSummary, consultationSummary].filter(Boolean).join("\n\n")
+}
+
 async function getPublicEvidence(
   question: string,
   options: { includeInternalDocs?: boolean } = {}
@@ -241,23 +324,12 @@ export async function buildInternalCsCopilotContext(
     )
     .map((entry) => `${entry.title}: ${statusLabel(entry.status)}`)
 
-  const deterministicFallback = [
-    "검토 전 내부 초안",
-    publicEvidence.answer
-      ? `확인된 공개 가이드 기준으로는 다음과 같이 안내할 수 있습니다.\n${compact(publicEvidence.answer, 1_500)}`
-      : "현재 질문과 직접 일치하는 공개 가이드 근거를 찾지 못했습니다.",
-    selectedFacts.length > 0
-      ? [
-          "정리된 내부 기준:",
-          ...selectedFacts.slice(0, 3).map((entry) => `- [${statusLabel(entry.status)}] ${entry.summary}`),
-        ].join("\n")
-      : "정리된 내부 기준과 직접 일치하는 항목이 없어 담당자 확인이 필요합니다.",
-    consultationEvidence.length > 0
-      ? `과거 유사 상담 사례 ${consultationEvidence.length}건이 검색되었습니다. 최신 정책·계약·사양과 다를 수 있어 인용 전 담당자 확인이 필요합니다.`
-      : "과거 유사 상담 사례는 찾지 못했습니다.",
-    "내부 정보 또는 본사 회신과 충돌하는 항목은 적용 모델·세대·버전과 출처일을 확인한 뒤 답변해야 합니다.",
-    "외부 전달 전 CS 담당자의 검토와 승인이 필요합니다.",
-  ].join("\n\n")
+  const deterministicFallback = buildDeterministicFallback({
+    question,
+    publicEvidence,
+    selectedFacts,
+    consultationCount: consultationEvidence.length,
+  })
 
   return {
     internalContext: [

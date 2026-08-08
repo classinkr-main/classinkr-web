@@ -208,6 +208,72 @@ export function outboundSaleType(movement: HardwareMovement): OutboundSaleType |
   return "sales"
 }
 
+// ---------------------------------------------------------------------------
+// 샘플 유닛 트래킹 (개체 단위) — 서버 저장소(lib/repositories/hardware-samples)와 필드 규약 동일.
+// 클라이언트 섹션·시트·부모가 함께 쓰는 타입/라벨만 여기 둔다(server-only 모듈 import 금지).
+
+export type SampleUnitStatus = "office" | "loaned" | "repair" | "converted" | "retired"
+
+export type SampleEventType = "assign" | "loan" | "return" | "repair" | "convert" | "adjust" | "memo" | "retire"
+
+export interface HardwareSampleUnit {
+  id: string
+  item_id: string | null
+  product_name: string
+  asset_code: string
+  serial_no: string | null
+  status: SampleUnitStatus
+  current_customer: string | null
+  current_owner: string | null
+  loaned_at: string | null
+  expected_return_at: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface HardwareSampleEvent {
+  id: string
+  unit_id: string
+  event_type: SampleEventType
+  occurred_at: string
+  customer: string | null
+  from_location: string | null
+  to_location: string | null
+  memo: string | null
+  movement_ref: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export const SAMPLE_STATUS_META: Record<SampleUnitStatus, { label: string; tone: string }> = {
+  office: { label: "사무실", tone: "bg-[#F6F5F4] text-[#31302E]" },
+  loaned: { label: "대여중", tone: "bg-[#FCE9E9] text-[#B43E3E]" },
+  repair: { label: "수리", tone: "bg-[#FBF1E0] text-[#A8741A]" },
+  converted: { label: "판매 전환", tone: "bg-[#ECFDF5] text-[#084734]" },
+  retired: { label: "폐기", tone: "bg-[#F6F5F4] text-[#A39E98]" },
+}
+
+export const SAMPLE_EVENT_META: Record<SampleEventType, { label: string; dot: string }> = {
+  assign: { label: "등록·배정", dot: "#084734" },
+  loan: { label: "대여", dot: "#B43E3E" },
+  return: { label: "반환", dot: "#084734" },
+  repair: { label: "수리", dot: "#A8741A" },
+  convert: { label: "판매 전환", dot: "#084734" },
+  adjust: { label: "정정", dot: "#615D59" },
+  memo: { label: "메모", dot: "#A39E98" },
+  retire: { label: "폐기", dot: "#615D59" },
+}
+
+// 대여 경과일 — loaned 유닛 목록·시트 공용. 날짜만 비교(UTC 자정 기준).
+export function loanElapsedDays(loanedAt: string | null): number | null {
+  if (!loanedAt) return null
+  const start = new Date(`${loanedAt.slice(0, 10)}T00:00:00Z`).getTime()
+  if (Number.isNaN(start)) return null
+  const today = new Date(`${todayKey()}T00:00:00Z`).getTime()
+  return Math.max(0, Math.round((today - start) / 86400000))
+}
+
 export function todayKey() {
   return new Date().toISOString().slice(0, 10)
 }

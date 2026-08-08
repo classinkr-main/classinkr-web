@@ -21,6 +21,11 @@ import {
 } from "lucide-react"
 
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { useDialogFocus } from "@/components/admin/use-dialog-focus"
+
+// 스크린리더 combobox 연결용 고정 id — AdminCommandPalette와 동일 패턴.
+const CRM_PALETTE_LISTBOX_ID = "crm-command-palette-listbox"
+const crmPaletteOptionId = (index: number) => `crm-command-palette-option-${index}`
 
 // CRM 내비 라우트 인덱스 — ⌘K "이동" 명령. AdminSidebar의 CRM 확장과 동일 라우트
 // + 머니 표면(매출 장부·하드웨어 재고) 점프를 함께 인덱싱한다.
@@ -63,6 +68,9 @@ export default function CrmCommandPalette() {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [rows, setRows] = useState<CustomerRow[]>([])
+  // 고객 검색 fetch 진행/실패 표시 — "일치하는 결과가 없습니다" 선행 깜빡임과 침묵 실패 방지.
+  const [searching, setSearching] = useState(false)
+  const [searchError, setSearchError] = useState(false)
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const reqId = useRef(0)
@@ -75,6 +83,8 @@ export default function CrmCommandPalette() {
     function openFresh() {
       setQuery("")
       setRows([])
+      setSearching(false)
+      setSearchError(false)
       setActive(0)
       setOpen(true)
     }
@@ -83,11 +93,12 @@ export default function CrmCommandPalette() {
         event.preventDefault()
         setQuery("")
         setRows([])
+        setSearching(false)
+        setSearchError(false)
         setActive(0)
         setOpen((value) => !value)
-      } else if (event.key === "Escape") {
-        setOpen(false)
       }
+      // Escape는 useDialogFocus의 document keydown 리스너가 처리한다(아래 참조).
     }
     window.addEventListener("keydown", onKey)
     window.addEventListener("admin:open-command-palette", openFresh)
@@ -97,12 +108,12 @@ export default function CrmCommandPalette() {
     }
   }, [])
 
-  // 열릴 때 입력 포커스 — DOM 부수효과만(setState 없음).
-  useEffect(() => {
-    if (!open) return
-    const handle = setTimeout(() => inputRef.current?.focus(), 20)
-    return () => clearTimeout(handle)
-  }, [open])
+  const close = useCallback(() => setOpen(false), [])
+
+  // 열릴 때 입력 포커스·Escape 닫기·이전 포커스 복귀·Tab 트랩은 공용 훅으로 통일
+  // (AdminCommandPalette와 동일 — use-dialog-focus). 커밋 후 이펙트는 포털 마운트 뒤에
+  // 실행되므로 기존 setTimeout(20) 트릭 없이 동기 focus()로 충분하다.
+  useDialogFocus(open, close, inputRef)
 
   // 고객 검색 — CrmCustomerPicker와 동일 엔드포인트 재사용(디바운스). 빈 쿼리는 fetch 생략(rows는 useMemo에서 무시).
   useEffect(() => {
@@ -117,9 +128,18 @@ export default function CrmCommandPalette() {
           undefined,
           { cacheKey: `cmdk:${term}`, ttlMs: 30_000, staleWhileRevalidateMs: 60_000 }
         )
-        if (current === reqId.current) setRows(data.rows ?? [])
+        if (current === reqId.current) {
+          setRows(data.rows ?? [])
+          setSearching(false)
+          setSearchError(false)
+        }
       } catch {
-        if (current === reqId.current) setRows([])
+        // 침묵 금지 — 실패를 결과 영역에 한 줄로 알린다(선점된 요청이면 무시).
+        if (current === reqId.current) {
+          setRows([])
+          setSearching(false)
+          setSearchError(true)
+        }
       }
     }, 200)
     return () => clearTimeout(handle)
@@ -180,12 +200,18 @@ export default function CrmCommandPalette() {
   // document.body로 포털 — RouteTransition 래퍼 등 조상에 transform이 걸리면 fixed가
   // 그 조상 기준으로 배치돼(containing block) 팔레트가 뷰포트 밖으로 밀리는 문제를 차단한다.
   // (AdminNotificationsBell 패널과 동일한 회피 패턴)
+  const hasQuery = query.trim().length > 0
+
   return createPortal(
     <div
       className="fixed inset-0 z-[90] flex items-start justify-center bg-[#111110]/40 pt-[12vh]"
-      onClick={() => setOpen(false)}
+      onClick={close}
+      role="presentation"
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="CRM 빠른 이동"
         className="w-[min(560px,92vw)] overflow-hidden rounded-2xl bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
@@ -193,8 +219,21 @@ export default function CrmCommandPalette() {
           <Search className="h-4 w-4 shrink-0 text-[#1a1a1a]/40" />
           <input
             ref={inputRef}
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={CRM_PALETTE_LISTBOX_ID}
+            aria-autocomplete="list"
+            aria-activedescendant={items.length > 0 ? crmPaletteOptionId(activeIndex) : undefined}
+            aria-label="화면 이동 · 고객/리드 검색"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              const next = event.target.value
+              setQuery(next)
+              // fetch는 디바운스로 늦게 뜨므로 이벤트 핸들러에서 즉시 '검색 중' 전환
+              // (set-state-in-effect 회피 + "결과 없음" 선행 깜빡임 방지).
+              setSearching(next.trim().length > 0)
+              setSearchError(false)
+            }}
             onKeyDown={onInputKey}
             placeholder="화면 이동 · 고객/리드 검색"
             className="flex-1 border-none bg-transparent text-[15px] text-[#111110] outline-none placeholder:text-[#1a1a1a]/30"
@@ -203,13 +242,21 @@ export default function CrmCommandPalette() {
             ESC
           </kbd>
         </div>
-        <div className="max-h-[340px] overflow-y-auto p-2">
-          {items.length === 0 ? (
+        <div
+          id={CRM_PALETTE_LISTBOX_ID}
+          role="listbox"
+          aria-label="검색 결과"
+          className="max-h-[340px] overflow-y-auto p-2"
+        >
+          {items.length === 0 && !searching && !searchError ? (
             <p className="px-3 py-6 text-center text-[13px] text-[#1a1a1a]/40">일치하는 결과가 없습니다.</p>
           ) : (
             items.map((item, index) => (
               <button
                 key={item.id}
+                id={crmPaletteOptionId(index)}
+                role="option"
+                aria-selected={index === activeIndex}
                 type="button"
                 onMouseEnter={() => setActive(index)}
                 onClick={() => run(item)}
@@ -234,6 +281,17 @@ export default function CrmCommandPalette() {
               </button>
             ))
           )}
+          {/* 고객 검색 진행/실패 상태 줄 — 내비 매치 아래에 붙어 fetch 결과 자리임을 알린다. */}
+          {hasQuery && searching ? (
+            <p role="status" className="px-3 py-2.5 text-[12px] text-[#1a1a1a]/40">
+              검색 중…
+            </p>
+          ) : null}
+          {hasQuery && !searching && searchError ? (
+            <p role="status" className="px-3 py-2.5 text-[12px] text-[#B85C33]">
+              고객 검색이 잠시 실패했습니다 — 다시 입력해 보세요
+            </p>
+          ) : null}
         </div>
       </div>
     </div>,

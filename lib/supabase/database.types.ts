@@ -40,6 +40,10 @@ export interface AdminProfile {
   neo_owner_id: string | null;
   crm_sort_order: number;
   capabilities: string[];
+  /** 사이드바 프리셋 키. NULL이면 기존 role 기반 동작(무변화) — 20260729_admin_nav_access.sql */
+  nav_preset: string | null;
+  /** 프리셋 대비 사람별 예외. {"/admin/crm":"primary"} — 값 검증은 normalizeNavOverrides가 한다. */
+  nav_overrides: Record<string, string>;
   created_at: string;
   updated_at: string;
 }
@@ -110,6 +114,9 @@ export interface Lead {
   current_page: string | null;
   referrer: string | null;
   user_id: string | null;
+  // 리드 제출 시점의 익명 식별자(cln_aid). 제출 전후의 client_events·material_downloads를
+  // 이 리드에 귀속하는 결합 키 — lib/server/lead-identity-stitch.ts 참조.
+  anonymous_id: string | null;
   // 공개 채널(문의/데모/뉴스레터/Meta 리드애즈 등) 리드는 null로 생성되며,
   // 관리자 확인(확인 버튼) 또는 상태가 new에서 벗어날 때 채워진다.
   // admin_manual(어드민 수기 등록) 소스는 즉시 채워져 게이트 대상에서 제외된다.
@@ -532,7 +539,9 @@ export interface AuditLog {
 
 /* ─── Partner Portal Types ─── */
 
-export type PartnerStatus = "active" | "inactive" | "pending";
+// 20260727_partners_status_text_check.sql 이후 partners.status 는 TEXT+CHECK.
+// 값 집합의 단일 진실원은 lib/partners-data.ts PARTNER_STATUSES.
+export type PartnerStatus = "lead" | "active" | "paused" | "churn_risk";
 export type PipelineStage = "prospect" | "quoting" | "contracted" | "installing" | "completed" | "cancelled";
 
 export interface PartnerUser {

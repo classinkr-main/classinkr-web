@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
+import { createCrmCustomerEvent } from "@/lib/repositories/crm-events"
 
 interface ChannelWebhookEntity {
   personType?: string
@@ -111,6 +112,31 @@ export async function POST(req: NextRequest) {
     }).catch((error) => {
       console.error("[webhook/channel-talk] notification emit failed:", error)
     })
+  }
+
+  const isChatClosed =
+    payload.type === "chat.closed" ||
+    payload.event === "userChat.closed" ||
+    payload.type === "userChat.closed"
+
+  if (isChatClosed) {
+    const chatId = typeof entity?.chatId === "string" ? entity.chatId : null
+    if (chatId) {
+      void createCrmCustomerEvent({
+        targetType: "customer",
+        targetId: null,
+        sourceType: "site_inflow",
+        sourceId: `channel:${chatId}`,
+        occurredAt: new Date().toISOString(),
+        title: "채널톡 실시간 상담 완결",
+        summary: `채널톡 대화(${chatId})가 완결되어 CRM 타임라인에 실시간 스탬프되었습니다.`,
+        body: typeof entity?.plainText === "string" ? entity.plainText : null,
+        sentiment: "neutral",
+        tags: ["channel_talk", "cs_inquiry", "realtime_webhook"],
+      }).catch((error) => {
+        console.error("[webhook/channel-talk] crm event emission failed:", error)
+      })
+    }
   }
 
   return NextResponse.json({ ok: true })

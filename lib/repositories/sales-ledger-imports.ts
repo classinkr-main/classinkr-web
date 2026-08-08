@@ -254,11 +254,15 @@ async function readDshContentForImportRun(importRunId: string): Promise<DshOutpu
 
     if (row.row_level !== "team" && row.row_level !== "member" && row.row_level !== "total") continue
     if (!row.team && row.row_level !== "total") continue
-    if (row.row_level === "member" && row.member && row.team) members[row.member] = row.team
+    // 임포트 행에는 캡처 당시 표기(예: "Hwang")가 저장돼 있다 — REV manager(아래
+    // readRevDealsForImportRun)와 동일하게 읽기 시점에 정규화해, member-names 별칭
+    // 추가가 액티브 임포트 재캡처 없이도 바로 반영되게 한다.
+    const member = normalizeBranchMemberName(row.member)
+    if (row.row_level === "member" && member && row.team) members[member] = row.team
     rows.push({
       level: row.row_level === "member" ? "member" : "team",
       team: row.row_level === "total" ? "ALL" : row.team ?? "ALL",
-      member: row.member ?? undefined,
+      member: member ?? undefined,
       kind: row.row_kind,
       annual: toNumber(row.annual),
       quarters: [toNumber(row.q1), toNumber(row.q2), toNumber(row.q3), toNumber(row.q4)] as [number, number, number, number],
@@ -439,8 +443,10 @@ function rowsToKpiRows(rows: KpiDbRow[]) {
 
   for (const row of rows) {
     if (row.row_kind !== "goal" && row.row_kind !== "status") continue
-    if (!byMember.has(row.member)) byMember.set(row.member, { team: row.team, pairs: emptyKpiPairs() })
-    const target = byMember.get(row.member)!
+    // DSH members("Chanwoo")와 매칭 키가 어긋나지 않게 KPI 임포트 행도 읽기 시점 정규화.
+    const member = normalizeBranchMemberName(row.member) ?? row.member
+    if (!byMember.has(member)) byMember.set(member, { team: row.team, pairs: emptyKpiPairs() })
+    const target = byMember.get(member)!
     if (!target.team && row.team) target.team = row.team
     KPI_METRICS.forEach((metric) => {
       const value = kpiMetricValue(row.metrics, metric)

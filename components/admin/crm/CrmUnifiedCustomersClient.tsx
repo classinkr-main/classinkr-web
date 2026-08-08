@@ -1,10 +1,10 @@
 "use client"
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { AlertTriangle, Building2, ChevronLeft, ChevronRight, ExternalLink, Filter, PhoneCall, RefreshCw, Search, Tag, UserPlus, UserRound } from "lucide-react"
+import { AlertTriangle, Building2, ChevronLeft, ChevronRight, ExternalLink, Filter, MapPin, PhoneCall, RefreshCw, Search, Tag, UserPlus, UserRound } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import type {
@@ -77,6 +77,8 @@ interface CrmUnifiedCustomers {
   rows: CrmUnifiedCustomerRow[]
 }
 
+type CustomerSourceStatus = CrmUnifiedCustomers["sources"]["statuses"][number]
+
 const SOURCE_FILTERS: Array<{ key: SourceFilter; label: string }> = [
   { key: "all", label: "전체" },
   { key: "lead", label: "리드" },
@@ -102,16 +104,74 @@ const SAVED_VIEW_FILTERS: Array<{
   { key: "priority", label: "우선 처리", description: "점수 68점 이상" },
   { key: "new_leads", label: "신규 리드", description: "첫 응답 대상" },
   { key: "needs_care", label: "관리 필요 고객", description: "만료·휴면 위험" },
-  { key: "expiring", label: "만료 임박", description: "만료 14일 이내(지난 것 포함)" },
-  { key: "dormant", label: "30일+ 미접촉", description: "마지막 활동 30일 초과" },
+  { key: "recent_contact", label: "최근 컨택", description: "최근 30일 내 사람이 남긴 CRM 기록" },
+  { key: "active_deal", label: "진행 중인 딜", description: "Portal V2 진행 딜 1건 이상" },
   { key: "hot_lead", label: "고전환 리드", description: "점수 상위 리드" },
   { key: "upsell", label: "업셀 후보", description: "활성 고객 · 잔액 보유" },
   { key: "site_leads", label: "홈페이지 유입", description: "홈페이지로 들어와 NEO 미등록" },
   { key: "unanswered", label: "미응답", description: "첫 응답 전 리드 (24h 초과 위험)" },
+  { key: "dormant", label: "30일+ 미접촉", description: "마지막 활동 30일 초과" },
+  { key: "expiring", label: "만료 임박", description: "만료 14일 이내(지난 것 포함)" },
 ]
 
+const PRIMARY_SAVED_VIEW_KEYS = new Set<SavedViewFilter>([
+  "my_owner",
+  "priority",
+  "new_leads",
+  "unanswered",
+  "hot_lead",
+  "upsell",
+  "needs_care",
+])
+const PRIMARY_SAVED_VIEW_FILTERS = SAVED_VIEW_FILTERS.filter((filter) => PRIMARY_SAVED_VIEW_KEYS.has(filter.key))
+const SECONDARY_SAVED_VIEW_FILTERS = SAVED_VIEW_FILTERS.filter((filter) => !PRIMARY_SAVED_VIEW_KEYS.has(filter.key))
+
 const CACHE_TTL_MS = 90_000
-const PAGE_LIMIT = 100
+// 데스크톱 한 화면에 100행을 붙이면 초기 DOM과 스크린리더 탐색 비용이 과도하다.
+// 50행 단위로 맞춰 필터/상세 전환 반응성을 우선한다.
+const PAGE_LIMIT = 50
+
+function SavedViewButton({
+  filter,
+  active,
+  disabled,
+  count,
+  currentOwnerCount,
+  onSelect,
+}: {
+  filter: (typeof SAVED_VIEW_FILTERS)[number]
+  active: boolean
+  disabled: boolean
+  count: number | undefined
+  currentOwnerCount: number
+  onSelect: (view: SavedViewFilter) => void
+}) {
+  const label =
+    filter.key === "my_owner"
+      ? `${filter.label}${currentOwnerCount ? ` ${currentOwnerCount}` : ""}`
+      : count != null
+        ? `${filter.label} ${count}`
+        : filter.label
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(filter.key)}
+      disabled={disabled}
+      aria-pressed={active}
+      title={disabled ? "현재 Admin 계정에 CRM 담당자 매핑이 없습니다." : filter.description}
+      className={`h-8 shrink-0 rounded-full border px-3 text-[12px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
+        active
+          ? "border-[#084734] bg-[#084734] text-white"
+          : disabled
+            ? "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/28"
+            : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#D1FAE5] hover:bg-[#ECFDF5] hover:text-[#084734]"
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
 
 function rowToFlags(row: CrmUnifiedCustomerRow): CustomerFlag[] {
   return deriveCustomerFlags({
@@ -126,6 +186,48 @@ function rowToFlags(row: CrmUnifiedCustomerRow): CustomerFlag[] {
 }
 const OWNER_STORAGE_KEY = "classin_crm_unified_owner"
 const CURRENT_OWNER_VALUE = "__me"
+
+function CustomerSourceStatusGrid({
+  statuses,
+  className = "",
+}: {
+  statuses: CustomerSourceStatus[]
+  className?: string
+}) {
+  return (
+    <div className={`grid gap-2 sm:grid-cols-2 lg:grid-cols-4 ${className}`}>
+      {statuses.map((status) => (
+        <div
+          key={status.key}
+          className={`rounded-xl border px-3 py-2 ${
+            status.ok && !status.partial
+              ? "border-[#D7EBDD] bg-[#ECFDF5]"
+              : "border-[#F6D5C5] bg-[#FEF3EE]"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <p
+              className={`text-[12px] font-bold ${
+                status.ok && !status.partial ? "text-[#084734]" : "text-[#B85C33]"
+              }`}
+            >
+              {status.label}
+            </p>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
+              {status.role === "primary" ? "DB" : "SYNC"}
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] leading-4 text-[#1a1a1a]/52">{status.message}</p>
+          {status.latestSyncedAt ? (
+            <p className="mt-1 text-[11px] font-medium text-[#1a1a1a]/35">
+              마지막 동기화 {formatDate(status.latestSyncedAt)}
+            </p>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function listUrl(input: {
   query: string
@@ -157,10 +259,128 @@ function formatDate(value: string | null | undefined) {
   }).format(date)
 }
 
-function scoreTone(score: number) {
-  if (score >= 85) return "text-[#B85C33]"
-  if (score >= 68) return "text-[#084734]"
-  return "text-[#1a1a1a]/50"
+// 클라이언트 정렬 — 이 화면은 탐색 전용이라 서버 추천 정렬(버킷→점수→시각)을 기본으로 두고,
+// 헤더 클릭 시 현재 페이지에 로드된 rows(≤200)만 브라우저에서 재정렬한다(서버 재요청 없음).
+// Array.prototype.sort는 안정 정렬이므로 동률 행은 서버 추천 순서를 그대로 유지한다.
+type SortKey = "name" | "status" | "updated" | "owner" | "score"
+type SortDirection = "asc" | "desc"
+interface SortState {
+  key: SortKey
+  direction: SortDirection
+}
+
+const SORT_LABELS: Record<SortKey, string> = {
+  name: "고객명",
+  status: "상태",
+  updated: "최근 업데이트",
+  owner: "담당",
+  score: "점수",
+}
+
+// 컬럼 성격별 첫 클릭 방향 — 이름·상태·담당은 가나다, 시각·점수는 최신·높은 순이 자연스럽다.
+const SORT_DEFAULT_DIRECTION: Record<SortKey, SortDirection> = {
+  name: "asc",
+  status: "asc",
+  updated: "desc",
+  owner: "asc",
+  score: "desc",
+}
+
+function updatedAtMs(row: CrmUnifiedCustomerRow): number | null {
+  if (!row.updatedAt) return null
+  const ms = new Date(row.updatedAt).getTime()
+  return Number.isNaN(ms) ? null : ms
+}
+
+// 담당 미배정·업데이트 시각 없음은 방향과 무관하게 항상 마지막 — 방향을 토글할 때마다
+// 빈 값이 맨 위로 튀어 오르면 탐색 스캔이 끊긴다.
+function sortValueMissing(row: CrmUnifiedCustomerRow, key: SortKey) {
+  if (key === "owner") return !row.ownerName
+  if (key === "updated") return updatedAtMs(row) == null
+  return false
+}
+
+function compareRows(a: CrmUnifiedCustomerRow, b: CrmUnifiedCustomerRow, key: SortKey) {
+  switch (key) {
+    case "name":
+      return a.name.localeCompare(b.name, "ko")
+    case "status":
+      return a.statusLabel.localeCompare(b.statusLabel, "ko")
+    case "updated":
+      return (updatedAtMs(a) ?? 0) - (updatedAtMs(b) ?? 0)
+    case "owner":
+      return (a.ownerName ?? "").localeCompare(b.ownerName ?? "", "ko")
+    case "score":
+      return a.score - b.score
+  }
+}
+
+function sortRows(rows: CrmUnifiedCustomerRow[], sort: SortState) {
+  const sign = sort.direction === "asc" ? 1 : -1
+  return [...rows].sort((a, b) => {
+    const aMissing = sortValueMissing(a, sort.key)
+    const bMissing = sortValueMissing(b, sort.key)
+    if (aMissing !== bMissing) return aMissing ? 1 : -1
+    return sign * compareRows(a, b, sort.key)
+  })
+}
+
+// 정렬 헤더 셀 — 활성 컬럼에만 ▲▼·aria-sort를 노출한다. 기본(추천순)에서는 어느 헤더에도
+// 활성 표시가 없어 "서버 추천 순서 그대로"임이 드러난다.
+function SortableHeaderCell({
+  label,
+  sortKey,
+  sort,
+  onToggle,
+  align = "left",
+}: {
+  label: string
+  sortKey: SortKey
+  sort: SortState | null
+  onToggle: (key: SortKey) => void
+  align?: "left" | "right"
+}) {
+  const active = sort?.key === sortKey
+  return (
+    <th
+      className={`px-4 py-3 ${align === "right" ? "text-right" : ""}`}
+      aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
+    >
+      <button
+        type="button"
+        onClick={() => onToggle(sortKey)}
+        title={`${label} 기준 정렬`}
+        className={`inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
+          active ? "text-[#111110]" : "text-[#1a1a1a]/35"
+        }`}
+      >
+        {label}
+        {active ? <span aria-hidden>{sort.direction === "asc" ? "▲" : "▼"}</span> : null}
+      </button>
+    </th>
+  )
+}
+
+// 돈흐름 3상태 표기 — moneyState(lib/crm/unified-view-rules)가 "-"의 사유를 구분한다.
+// value=금액 그대로 · zero=0원(중립) · unsynced=동기화 대기(주의 톤) · none=리드(돈흐름 개념 없음).
+function moneyCell(row: CrmUnifiedCustomerRow) {
+  if (row.moneyState === "value") {
+    return <span className="text-[12px] font-medium text-[#1a1a1a]/55">{row.moneyLabel ?? "-"}</span>
+  }
+  if (row.moneyState === "zero") {
+    return <span className="text-[12px] font-medium text-[#1a1a1a]/40">0원</span>
+  }
+  if (row.moneyState === "unsynced") {
+    return (
+      <span
+        className="text-[11px] font-semibold text-[#A8741A]"
+        title="외부 CRM 잔액·만료 동기화가 아직 안 된 고객입니다"
+      >
+        동기화 대기
+      </span>
+    )
+  }
+  return <span className="text-[12px] font-medium text-[#1a1a1a]/30">—</span>
 }
 
 function normalizeText(value: string | null | undefined) {
@@ -215,8 +435,69 @@ function sourceBadge(row: CrmUnifiedCustomerRow) {
   )
 }
 
+// 공용 분(分) 시계 — 상대시간 배지 전용(감사 #8). 구독자가 있을 때만 interval을 1개 돌리고
+// (배지 인스턴스 수와 무관), 탭이 숨겨지면 정지·복귀 시 즉시 갱신 후 재개한다.
+// 부모 리스트 상태가 아니므로 분 틱마다 전 행이 아니라 구독한 배지 소컴포넌트만 리렌더된다.
+const MINUTE_TICK_MS = 60_000
+let minuteClockNowMs = Date.now()
+let minuteClockTimer: number | null = null
+const minuteClockListeners = new Set<() => void>()
+
+function emitMinuteClock() {
+  minuteClockNowMs = Date.now()
+  for (const listener of minuteClockListeners) listener()
+}
+
+function stopMinuteClockTimer() {
+  if (minuteClockTimer == null) return
+  window.clearInterval(minuteClockTimer)
+  minuteClockTimer = null
+}
+
+function startMinuteClockTimer() {
+  if (minuteClockTimer != null || minuteClockListeners.size === 0) return
+  minuteClockTimer = window.setInterval(emitMinuteClock, MINUTE_TICK_MS)
+}
+
+function onMinuteClockVisibility() {
+  if (document.hidden) {
+    stopMinuteClockTimer()
+  } else {
+    emitMinuteClock()
+    startMinuteClockTimer()
+  }
+}
+
+function subscribeMinuteClock(listener: () => void) {
+  if (minuteClockListeners.size === 0) {
+    // 첫 구독(리스트 재진입 포함) — 마지막 emit이 오래됐을 수 있어 기준 시각부터 갱신한다.
+    // useSyncExternalStore가 구독 직후 스냅샷을 재확인하므로 별도 통지는 필요 없다.
+    minuteClockNowMs = Date.now()
+    document.addEventListener("visibilitychange", onMinuteClockVisibility)
+  }
+  minuteClockListeners.add(listener)
+  if (!document.hidden) startMinuteClockTimer()
+  return () => {
+    minuteClockListeners.delete(listener)
+    if (minuteClockListeners.size === 0) {
+      document.removeEventListener("visibilitychange", onMinuteClockVisibility)
+      stopMinuteClockTimer()
+    }
+  }
+}
+
+function getMinuteClockSnapshot() {
+  return minuteClockNowMs
+}
+
+function useMinuteNow() {
+  return useSyncExternalStore(subscribeMinuteClock, getMinuteClockSnapshot, getMinuteClockSnapshot)
+}
+
 // 리드 행 배지 — 파생 규칙은 lib/crm/lead-badges.ts(순수 모듈, 단위 테스트 대상) 소유.
-function LeadRowBadges({ row, nowMs }: { row: CrmUnifiedCustomerRow; nowMs: number }) {
+// nowMs는 부모 상태가 아니라 배지 내부의 공용 분 시계 구독으로 받는다(감사 #8).
+function LeadRowBadgeList({ row }: { row: CrmUnifiedCustomerRow }) {
+  const nowMs = useMinuteNow()
   const badges = leadBadges(row, nowMs)
   if (!badges) return null
   return (
@@ -232,6 +513,13 @@ function LeadRowBadges({ row, nowMs }: { row: CrmUnifiedCustomerRow; nowMs: numb
     </>
   )
 }
+
+// memo 소컴포넌트로 격리 — 부모가 다른 이유로 리렌더돼도 row가 같으면 건너뛰고,
+// 리드가 아닌 행(배지 없음 확정)은 시계 구독 자체를 생략한다.
+const LeadRowBadges = memo(function LeadRowBadges({ row }: { row: CrmUnifiedCustomerRow }) {
+  if (row.source !== "lead") return null
+  return <LeadRowBadgeList row={row} />
+})
 
 // 검색 패널 — 검색·소스 토글·상태/담당 셀렉트·라벨·요약 타일·소스 상태 타일.
 // quickMode(칩 진입)일 때는 렌더되지 않는다. 본체에서 기계적 추출 — 동작 동일.
@@ -270,17 +558,17 @@ function CustomerSearchPanel({
 }) {
   return (
     <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-      <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto] lg:items-center">
-        <label className="flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto] lg:items-center">
+        <label className="col-span-2 flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 lg:col-span-1">
           <Search className="h-4 w-4 text-[#1a1a1a]/35" />
           <input
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             className="h-full min-w-0 flex-1 bg-transparent text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/30"
-            placeholder="이름, 연락처, 담당자 검색"
+            placeholder="이름, 연락처, 지역, 담당자 검색"
           />
         </label>
-        <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1">
+        <div className="col-span-2 inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1 lg:col-span-1">
           {SOURCE_FILTERS.map((filter) => (
             <button
               key={filter.key}
@@ -297,12 +585,12 @@ function CustomerSearchPanel({
             </button>
           ))}
         </div>
-        <label className="flex h-10 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
+        <label className="flex h-10 min-w-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
           <Filter className="h-3.5 w-3.5" />
           <select
             value={lifecycle}
             onChange={(event) => onLifecycleChange(event.target.value as LifecycleFilter)}
-            className="h-full bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
+            className="h-full min-w-0 flex-1 bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
             aria-label="상태 필터"
           >
             {LIFECYCLE_FILTERS.map((filter) => (
@@ -312,12 +600,12 @@ function CustomerSearchPanel({
             ))}
           </select>
         </label>
-        <label className="flex h-10 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
+        <label className="flex h-10 min-w-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
           <Filter className="h-3.5 w-3.5" />
           <select
             value={owner}
             onChange={(event) => onOwnerChange(event.target.value)}
-            className="h-full min-w-[128px] bg-transparent text-[12px] font-semibold text-[#111110] outline-none"
+            className="h-full min-w-0 flex-1 bg-transparent text-[12px] font-semibold text-[#111110] outline-none lg:min-w-[128px]"
             aria-label="담당자 필터"
           >
             <option value="">담당 전체</option>
@@ -375,39 +663,34 @@ function CustomerSearchPanel({
       ) : null}
 
       {data ? (
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-          <div className="rounded-xl bg-[#fafaf8] p-3">
+        // 탐색 전용 화면 — "우선 처리" 타일은 실행 지표라 CRM 홈으로 이관, 여기는 규모 파악 4칸만 남긴다.
+        <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-4 sm:overflow-visible sm:pb-0">
+          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">검색 결과</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
           </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
+          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">리드</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.leadCount.toLocaleString("ko-KR")}</p>
           </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
+          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">고객</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">
               {data.summary.accountCount.toLocaleString("ko-KR")}
             </p>
           </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
+          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">전환 고객</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">
               {(data.summary.customerCount ?? 0).toLocaleString("ko-KR")}
             </p>
           </div>
-          <div className="rounded-xl bg-[#fafaf8] p-3">
-            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">우선 처리</p>
-            <p className="mt-1 text-xl font-bold text-[#B85C33]">
-              {data.summary.highPriorityCount.toLocaleString("ko-KR")}
-            </p>
-          </div>
         </div>
       ) : loading ? (
-        // 콜드로드 스켈레톤 — 실제 요약 타일 5칸 그리드와 동일 골격(0 플래시·점프 방지).
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <div key={index} className="rounded-xl bg-[#fafaf8] p-3">
+        // 콜드로드 스켈레톤 — 실제 요약 타일 4칸 그리드와 동일 골격(0 플래시·점프 방지).
+        <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-4 sm:overflow-visible sm:pb-0">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
               <div className="h-3 w-14 animate-pulse rounded bg-[#f0f0ec]" />
               <div className="mt-2 h-6 w-16 animate-pulse rounded bg-[#f0f0ec]" />
             </div>
@@ -416,37 +699,18 @@ function CustomerSearchPanel({
       ) : null}
 
       {data?.sources.statuses.length ? (
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {data.sources.statuses.map((status) => (
-            <div
-              key={status.key}
-              className={`rounded-xl border px-3 py-2 ${
-                status.ok && !status.partial
-                  ? "border-[#D7EBDD] bg-[#ECFDF5]"
-                  : "border-[#F6D5C5] bg-[#FEF3EE]"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p
-                  className={`text-[12px] font-bold ${
-                    status.ok && !status.partial ? "text-[#084734]" : "text-[#B85C33]"
-                  }`}
-                >
-                  {status.label}
-                </p>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
-                  {status.role === "primary" ? "DB" : "SYNC"}
-                </span>
-              </div>
-              <p className="mt-1 text-[11px] leading-4 text-[#1a1a1a]/52">{status.message}</p>
-              {status.latestSyncedAt ? (
-                <p className="mt-1 text-[11px] font-medium text-[#1a1a1a]/35">
-                  마지막 동기화 {formatDate(status.latestSyncedAt)}
-                </p>
-              ) : null}
-            </div>
-          ))}
-        </div>
+        <details className="group mt-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8]">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[12px] font-semibold text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]">
+            <span>
+              데이터 원천 · 정상 {data.sources.statuses.filter((status) => status.ok && !status.partial).length}/
+              {data.sources.statuses.length}
+              <span className="ml-2 font-medium text-[#1a1a1a]/40">운영 기준 DB와 동기화 참고자료</span>
+            </span>
+            <span className="text-[11px] font-medium text-[#1a1a1a]/40 group-open:hidden">상세 보기</span>
+            <span className="hidden text-[11px] font-medium text-[#1a1a1a]/40 group-open:inline">접기</span>
+          </summary>
+          <CustomerSourceStatusGrid statuses={data.sources.statuses} className="border-t border-[#e8e8e4] p-2" />
+        </details>
       ) : null}
     </section>
   )
@@ -479,6 +743,8 @@ export default function CrmUnifiedCustomersClient() {
   const [owner, setOwner] = useState("")
   const [savedView, setSavedView] = useState<SavedViewFilter>("all")
   const [tagFilter, setTagFilter] = useState("")
+  // 정렬 상태 — null=추천순(서버 버킷→점수→시각 순서 그대로). 탐색용 일회성 상태라 URL·저장소에 영속하지 않는다.
+  const [sort, setSort] = useState<SortState | null>(null)
   const [data, setData] = useState<CrmUnifiedCustomers | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -516,6 +782,21 @@ export default function CrmUnifiedCustomersClient() {
       setDrawerUrl(key, "push")
     },
     [setDrawerUrl]
+  )
+
+  // 행 더블클릭 = 드로어 열기. 이름 버튼이 유일한 진입점이라 "행을 눌렀는데 안 열린다"가 반복됐다.
+  // 단일 클릭은 그대로 비워 둔다 — 행 안의 링크·복사 버튼과 충돌하고, 스캔 중 오작동이 잦다.
+  // 내부 인터랙티브 요소 위의 더블클릭은 그 요소가 처리하므로 제외한다(연락처 복사 버튼 등).
+  // 전환 고객은 360 드로어 미지원(파트너 워크스페이스행) — 이름 링크와 같은 규칙을 따른다.
+  const handleRowDoubleClick = useCallback(
+    (event: MouseEvent<HTMLElement>, row: CrmUnifiedCustomerRow) => {
+      if (row.source === "customer") return
+      if ((event.target as HTMLElement).closest("a, button, input, textarea, select")) return
+      // 더블클릭의 브라우저 기본 동작(텍스트 선택)이 드로어 위에 남지 않게 지운다.
+      window.getSelection()?.removeAllRanges()
+      openDrawer(row.key, row.name)
+    },
+    [openDrawer]
   )
 
   // 닫을 때는 replace로 account만 제거(불필요한 히스토리 항목을 남기지 않음).
@@ -602,13 +883,6 @@ export default function CrmUnifiedCustomersClient() {
   )
   const { owners: crmOwners, currentOwner, health: ownerHealth } = useCrmOwners()
   const ownerOptions = useMemo(() => buildOwnerSelectOptions(data?.owners, crmOwners), [crmOwners, data?.owners])
-
-  // 배지 SLA 경과 계산 기준 시각 — 행마다 Date.now() 호출 방지 + 60초 틱으로 경과시간 실시간 갱신.
-  const [nowMs, setNowMs] = useState(() => Date.now())
-  useEffect(() => {
-    const id = window.setInterval(() => setNowMs(Date.now()), 60_000)
-    return () => window.clearInterval(id)
-  }, [])
 
   const currentOwnerCount = useMemo(() => {
     const selected = normalizeText(owner === CURRENT_OWNER_VALUE ? currentOwner?.ownerKey : owner)
@@ -773,9 +1047,22 @@ export default function CrmUnifiedCustomersClient() {
     setTagFilter("")
   }, [persistOwner, syncViewParam])
 
+  // 같은 키 재클릭=방향 토글, 다른 키=성격별 기본 방향으로 진입. 추천순 복귀는 전용 버튼만 담당한다.
+  const toggleSort = useCallback((key: SortKey) => {
+    setSort((current) =>
+      current?.key === key
+        ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: SORT_DEFAULT_DIRECTION[key] }
+    )
+  }, [])
+
+  const sortedRows = useMemo(() => {
+    const rows = data?.rows ?? []
+    return sort ? sortRows(rows, sort) : rows
+  }, [data?.rows, sort])
+
   return (
-    <div className="min-h-screen bg-[#F6F5F4] px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
+    <div className="mx-auto max-w-7xl">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">
@@ -783,7 +1070,7 @@ export default function CrmUnifiedCustomersClient() {
             </p>
             <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">ClassIn 고객 DB</h1>
             <p className="mt-1 text-[13px] text-[#1a1a1a]/42">
-              ClassIn 고객을 기준으로 운영하고, 리드·외부 CRM 데이터는 동기화 참고자료로 표시합니다.
+              전체 리드·고객을 검색·필터로 탐색합니다. 오늘 할 일은 현황의 &lsquo;오늘 전화할 고객&rsquo;에서.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -807,42 +1094,43 @@ export default function CrmUnifiedCustomersClient() {
           </div>
         </div>
 
-        {/* 빠른 필터 칩 — 검색 섹션과 독립인 항상 노출 행 (칩 진입 시에도 유지). */}
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="inline-flex h-8 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
+        {/* 행동 빈도가 높은 보기만 1차 노출하고, 참조성 보기는 한 묶음으로 접는다. */}
+        <div className="mb-3 flex flex-wrap items-center gap-2" aria-label="빠른 고객 필터">
+          <span className="inline-flex h-8 shrink-0 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
             <Filter className="h-3.5 w-3.5" />
             빠른 필터
           </span>
-          {SAVED_VIEW_FILTERS.map((filter) => {
-            const isActive = savedView === filter.key
-            const disabled = filter.key === "my_owner" && !currentOwner
-            const segmentCount = data?.summary.viewCounts?.[filter.key]
-            const label =
-              filter.key === "my_owner" && currentOwner
-                ? `${filter.label}${currentOwnerCount ? ` ${currentOwnerCount}` : ""}`
-                : segmentCount != null
-                  ? `${filter.label} ${segmentCount}`
-                  : filter.label
-            return (
-              <button
-                key={filter.key}
-                type="button"
-                onClick={() => selectSavedView(filter.key)}
-                disabled={disabled}
-                aria-pressed={isActive}
-                title={disabled ? "현재 Admin 계정에 CRM 담당자 매핑이 없습니다." : filter.description}
-                className={`h-8 rounded-full border px-3 text-[12px] font-semibold transition-colors ${
-                  isActive
-                    ? "border-[#084734] bg-[#084734] text-white"
-                    : disabled
-                      ? "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/28"
-                      : "border-[#e8e8e4] bg-white text-[#1a1a1a]/58 hover:border-[#D1FAE5] hover:bg-[#ECFDF5] hover:text-[#084734]"
-                }`}
-              >
-                {label}
-              </button>
-            )
-          })}
+          {PRIMARY_SAVED_VIEW_FILTERS.map((filter) => (
+            <SavedViewButton
+              key={filter.key}
+              filter={filter}
+              active={savedView === filter.key}
+              disabled={filter.key === "my_owner" && !currentOwner}
+              count={data?.summary.viewCounts?.[filter.key]}
+              currentOwnerCount={currentOwnerCount}
+              onSelect={selectSavedView}
+            />
+          ))}
+          <details className="group relative shrink-0">
+            <summary className="flex h-8 cursor-pointer list-none items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/58 transition-colors hover:bg-[#fafaf8] hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]">
+              추가 보기
+              <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+            </summary>
+            <div className="absolute right-0 top-10 z-30 flex w-[min(430px,calc(100vw-3rem))] flex-wrap gap-2 rounded-xl border border-[#e8e8e4] bg-white p-3 shadow-xl">
+              <p className="w-full text-[11px] font-semibold text-[#1a1a1a]/40">최근 진행·유입·만료 보기</p>
+              {SECONDARY_SAVED_VIEW_FILTERS.map((filter) => (
+                <SavedViewButton
+                  key={filter.key}
+                  filter={filter}
+                  active={savedView === filter.key}
+                  disabled={false}
+                  count={data?.summary.viewCounts?.[filter.key]}
+                  currentOwnerCount={currentOwnerCount}
+                  onSelect={selectSavedView}
+                />
+              ))}
+            </div>
+          </details>
         </div>
 
         {quickMode ? (
@@ -904,8 +1192,6 @@ export default function CrmUnifiedCustomersClient() {
           />
         )}
 
-        <Account360Lens />
-
         {error ? (
           <div className="mb-4 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
             {error}
@@ -927,21 +1213,55 @@ export default function CrmUnifiedCustomersClient() {
         ) : null}
 
         <section className="rounded-2xl border border-[#e8e8e4] bg-white">
+          {/* 정렬 툴바 — 현재 정렬 상태 표시 + 점수 정렬 진입점. 점수 컬럼은 화면에서 제거됐지만
+              정렬 옵션으로는 유지한다(이 버튼이 유일한 진입점). 추천순 복귀 버튼은 정렬 활성 시에만 노출. */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f0f0ec] px-4 py-2">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/40">
+              정렬 ·{" "}
+              {sort
+                ? `${SORT_LABELS[sort.key]} ${sort.direction === "asc" ? "오름차순" : "내림차순"}`
+                : "추천순 (기본)"}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => toggleSort("score")}
+                aria-pressed={sort?.key === "score"}
+                title="우선순위 점수 기준 정렬 (기본 내림차순)"
+                className={`h-7 rounded-md border px-2.5 text-[11px] font-semibold transition-colors ${
+                  sort?.key === "score"
+                    ? "border-[#111110] bg-[#111110] text-white"
+                    : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:text-[#111110]"
+                }`}
+              >
+                점수순{sort?.key === "score" ? (sort.direction === "asc" ? " ▲" : " ▼") : ""}
+              </button>
+              {sort ? (
+                <button
+                  type="button"
+                  onClick={() => setSort(null)}
+                  className="h-7 rounded-md border border-[#e8e8e4] bg-white px-2.5 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
+                >
+                  추천순으로 되돌리기
+                </button>
+              ) : null}
+            </div>
+          </div>
           <div className="hidden overflow-hidden lg:block">
             <table className="w-full border-collapse text-left">
               <thead className="bg-[#fafaf8] text-[11px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
                 <tr>
-                  <th className="px-4 py-3">고객</th>
-                  <th className="px-4 py-3">상태</th>
+                  <SortableHeaderCell label="고객" sortKey="name" sort={sort} onToggle={toggleSort} />
+                  <SortableHeaderCell label="상태" sortKey="status" sort={sort} onToggle={toggleSort} />
                   <th className="px-4 py-3">다음 액션</th>
                   <th className="px-4 py-3">돈흐름</th>
-                  <th className="px-4 py-3">담당</th>
-                  <th className="px-4 py-3 text-right">점수</th>
+                  <SortableHeaderCell label="담당" sortKey="owner" sort={sort} onToggle={toggleSort} />
+                  <SortableHeaderCell label="최근 업데이트" sortKey="updated" sort={sort} onToggle={toggleSort} align="right" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f0f0ec]">
                 {loading && !data
-                  ? // 콜드로드 스켈레톤 — 컬럼(고객/상태/다음 액션/돈흐름/담당/점수) 골격 일치.
+                  ? // 콜드로드 스켈레톤 — 컬럼(고객/상태/다음 액션/돈흐름/담당/최근 업데이트) 골격 일치.
                     Array.from({ length: 8 }).map((_, index) => (
                       <tr key={`sk-${index}`}>
                         <td className="px-4 py-3">
@@ -961,13 +1281,18 @@ export default function CrmUnifiedCustomersClient() {
                           <div className="h-4 w-16 animate-pulse rounded bg-[#f0f0ec]" />
                         </td>
                         <td className="px-4 py-3">
-                          <div className="ml-auto h-5 w-8 animate-pulse rounded bg-[#f0f0ec]" />
+                          <div className="ml-auto h-4 w-14 animate-pulse rounded bg-[#f0f0ec]" />
                         </td>
                       </tr>
                     ))
                   : null}
-                {data?.rows.map((row) => (
-                  <tr key={row.key} className="transition-colors hover:bg-[#fafaf8]">
+                {sortedRows.map((row) => (
+                  <tr
+                    key={row.key}
+                    onDoubleClick={(event) => handleRowDoubleClick(event, row)}
+                    title={row.source === "customer" ? undefined : "더블클릭 — 고객 카드 열기"}
+                    className="transition-colors hover:bg-[#fafaf8]"
+                  >
                     <td className="px-4 py-3">
                       <div className="flex min-w-0 items-center gap-2">
                         <div className="min-w-0 flex-1">
@@ -986,9 +1311,13 @@ export default function CrmUnifiedCustomersClient() {
                             </button>
                           )}
                           <CrmContactValue value={row.contact} className="mt-0.5" />
+                          <p className={`mt-1 inline-flex items-center gap-1 text-[11px] font-semibold ${row.regionLabel ? "text-[#084734]" : "text-[#1a1a1a]/30"}`}>
+                            <MapPin className="h-3 w-3" />
+                            {row.regionLabel ?? "지역 미지정"}
+                          </p>
                           <div className="mt-1 flex flex-wrap items-center gap-1 empty:hidden">
                             <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
-                            <LeadRowBadges row={row} nowMs={nowMs} />
+                            <LeadRowBadges row={row} />
                           </div>
                           <TagChips tags={row.tags} />
                         </div>
@@ -1011,13 +1340,13 @@ export default function CrmUnifiedCustomersClient() {
                       <p className="text-[12px] font-semibold text-[#111110]">{row.nextActionLabel}</p>
                       <p className="mt-0.5 max-w-[220px] truncate text-[11px] text-[#1a1a1a]/40">{row.priorityReason}</p>
                     </td>
-                    <td className="px-4 py-3 text-[12px] font-medium text-[#1a1a1a]/55">{row.moneyLabel ?? "-"}</td>
+                    <td className="px-4 py-3">{moneyCell(row)}</td>
                     <td className="px-4 py-3">
                       <p className="text-[12px] font-semibold text-[#111110]">{row.ownerName ?? "미배정"}</p>
-                      <p className="text-[11px] text-[#1a1a1a]/35">{formatDate(row.updatedAt)}</p>
                     </td>
-                    <td className={`px-4 py-3 text-right text-[18px] font-bold tabular-nums ${scoreTone(row.score)}`}>
-                      {row.score}
+                    {/* 점수 컬럼 자리 — 탐색 테이블에서 점수 숫자는 숨기고 최근 업데이트 날짜로 대체. */}
+                    <td className="px-4 py-3 text-right text-[12px] font-medium tabular-nums text-[#1a1a1a]/55">
+                      {formatDate(row.updatedAt)}
                     </td>
                   </tr>
                 ))}
@@ -1040,7 +1369,7 @@ export default function CrmUnifiedCustomersClient() {
                   </div>
                 ))
               : null}
-            {data?.rows.map((row) => (
+            {sortedRows.map((row) => (
               <div key={row.key} className="relative transition-colors hover:bg-[#fafaf8]">
                 {row.source === "customer" ? (
                   <Link href={row.href} aria-label={`${row.name} 상세 보기`} className="absolute inset-0 z-0" />
@@ -1058,13 +1387,20 @@ export default function CrmUnifiedCustomersClient() {
                       <div className="mb-1">{sourceBadge(row)}</div>
                       <p className="truncate text-[14px] font-bold text-[#111110]">{row.name}</p>
                       <CrmContactValue value={row.contact} className="pointer-events-auto mt-0.5" />
+                      <p className={`mt-1 inline-flex items-center gap-1 text-[11px] font-semibold ${row.regionLabel ? "text-[#084734]" : "text-[#1a1a1a]/30"}`}>
+                        <MapPin className="h-3 w-3" />
+                        {row.regionLabel ?? "지역 미지정"}
+                      </p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-1 empty:hidden">
                         <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
-                        <LeadRowBadges row={row} nowMs={nowMs} />
+                        <LeadRowBadges row={row} />
                       </div>
                       <TagChips tags={row.tags} />
                     </div>
-                    <span className={`text-[20px] font-bold tabular-nums ${scoreTone(row.score)}`}>{row.score}</span>
+                    {/* 점수 숫자 숨김(탐색 전용) — 카드 우측 상단은 최근 업데이트 날짜로 대체. */}
+                    <span className="shrink-0 text-[11px] font-medium tabular-nums text-[#1a1a1a]/35">
+                      {formatDate(row.updatedAt)}
+                    </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-[12px]">
                     <div>
@@ -1117,11 +1453,21 @@ export default function CrmUnifiedCustomersClient() {
 
           {!loading && data && data.rows.length === 0 ? (
             <div className="px-6 py-12 text-center">
-              <p className="text-[13px] font-semibold text-[#111110]">조건에 맞는 고객이 없습니다.</p>
+              <p className="text-[13px] font-semibold text-[#111110]">
+                {savedView === "recent_contact"
+                  ? "최근 30일 내 컨택 기록이 없습니다."
+                  : savedView === "active_deal"
+                    ? "현재 진행 중인 딜이 없습니다."
+                    : "조건에 맞는 고객이 없습니다."}
+              </p>
               <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
-                {hasActiveFilters
-                  ? "필터를 초기화하거나 새 리드를 등록해 시작하세요."
-                  : "새 리드를 등록하거나 REV/HW 원장 매칭을 연결해 시작하세요."}
+                {savedView === "recent_contact"
+                  ? "고객이나 리드에 메모·콜·문자를 남기면 최근 컨택에 표시됩니다."
+                  : savedView === "active_deal"
+                    ? "Portal V2에서 진행 상태인 딜이 연결되면 여기에 표시됩니다."
+                    : hasActiveFilters
+                      ? "필터를 초기화하거나 새 리드를 등록해 시작하세요."
+                      : "새 리드를 등록하거나 REV/HW 원장 매칭을 연결해 시작하세요."}
               </p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 {hasActiveFilters ? (
@@ -1133,26 +1479,50 @@ export default function CrmUnifiedCustomersClient() {
                     필터 초기화
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => setLeadModalOpen(true)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-                >
-                  <UserPlus className="h-3.5 w-3.5" />
-                  리드 등록
-                </button>
-                <Link
-                  href="/admin/crm/matching"
-                  className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-                >
-                  매칭 연결
-                  <ExternalLink className="h-3 w-3" />
-                </Link>
+                {savedView === "recent_contact" ? (
+                  <Link
+                    href="/admin/crm/activity"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+                  >
+                    <PhoneCall className="h-3.5 w-3.5" />
+                    기록 남기기
+                  </Link>
+                ) : savedView === "active_deal" ? (
+                  <Link
+                    href="/admin/crm/deals"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+                  >
+                    진행 딜 확인
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setLeadModalOpen(true)}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      리드 등록
+                    </button>
+                    <Link
+                      href="/admin/crm/matching"
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+                    >
+                      매칭 연결
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           ) : null}
         </section>
-      </div>
+
+        {/* REV 스파인은 참조 렌즈다. 검색 결과와 고객 작업을 먼저 보여준 뒤 하단에 둔다. */}
+        <div className="mt-4">
+          <Account360Lens />
+        </div>
 
       {/* 열림 상태에서만 렌더 — 닫힘=null 렌더였던 기존과 동일 화면이면서, dynamic 청크를
           열 때만 내려받고 닫힌 첫 로드에 로딩 폴백이 새어 나오지 않는다. */}

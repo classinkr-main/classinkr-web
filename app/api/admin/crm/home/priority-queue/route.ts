@@ -7,15 +7,25 @@ import {
   findAdminCrmOwner,
   listAdminUserDirectory,
 } from "@/lib/repositories/admin-users"
-import { getCrmPriorityQueue } from "@/lib/repositories/crm-priority-queue"
-import type { CrmPriorityBucket, CrmPrioritySource } from "@/lib/crm/priority"
+import {
+  getCrmPriorityQueue,
+  type CrmPriorityQueueSource,
+} from "@/lib/repositories/crm-priority-queue"
+import type { CrmPriorityBucket, CrmPriorityLane } from "@/lib/crm/priority"
 
-function parseSource(value: string | null): CrmPrioritySource | "all" {
-  return value === "lead" || value === "neo_account" || value === "task" ? value : "all"
+function parseSource(value: string | null): CrmPriorityQueueSource {
+  return value === "lead" || value === "neo_account" || value === "task" || value === "customer"
+    ? value
+    : "all"
 }
 
 function parseBucket(value: string | null): CrmPriorityBucket | "all" {
   if (value === "today" || value === "renewal" || value === "stale_recovery" || value === "watch") return value
+  return "all"
+}
+
+function parseLane(value: string | null): CrmPriorityLane | "all" {
+  if (value === "sales" || value === "renewal" || value === "customer_care") return value
   return "all"
 }
 
@@ -39,6 +49,7 @@ export async function GET(req: NextRequest) {
       owner: isMine ? undefined : ownerParam,
       ownerKeys,
       source: parseSource(url.searchParams.get("source")),
+      lane: parseLane(url.searchParams.get("lane")),
       bucket: parseBucket(url.searchParams.get("bucket")),
     })
 

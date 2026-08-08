@@ -10,6 +10,8 @@ import {
   revSyncHealth,
   type RevSyncHealth,
   type RevSyncHygiene,
+  type RevSyncLinkedTarget,
+  type RevSyncLinkedTargetType,
   type RevSyncRevenueCny,
   type RevSyncRowsCoverage,
 } from "@/lib/crm/rev-sync-health"
@@ -90,10 +92,19 @@ export interface RevAccountCoverage {
   hygiene: RevSyncHygiene
   /** 계정 커버리지(전행+부분 확정 계정 / 전체) 기준 3단계 — 문턱 10%/60% */
   health: RevSyncHealth
+  // ── 연결 고객 → CRM 진입로 additive 확장 (2026-07-19 · 호환성 기획 P0-2) ──
+  /** 연결(linked) 계정의 우세 확정 링크 target — 같은 계정 키에 linked 링크가 여럿이면
+   *  시트 순서상 첫 linked 행의 target을 취한다(candidate/stale은 target 후보에서 제외).
+   *  topUnlinked의 대칭짝 — 장부 레일 "CRM ↗" 진입로가 이 배열로 계정키→href 맵을 만든다. */
+  linkedTargets: RevSyncLinkedTarget[]
 }
 
 const LINKED_STATUSES = new Set(["confirmed", "active"])
 const TOP_UNLINKED_LIMIT = 8
+
+function asLinkedTargetType(value: string | null | undefined): RevSyncLinkedTargetType | null {
+  return value === "customer" || value === "partner_account" || value === "deal" ? value : null
+}
 
 function rowRevenue(row: RevCoverageSheetRow): number {
   const payments = row.monthly_payments ?? {}
@@ -115,7 +126,7 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
       .limit(1000),
     sb
       .from("crm_source_links")
-      .select("source_record_key, status")
+      .select("source_record_key, status, target_type, target_id, target_label:metadata->>target_label")
       .eq("source_system", "branch_rev_sheet")
       .eq("source_object", "branch_rev_deals")
       .neq("status", "rejected")
@@ -125,12 +136,36 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
   if (sheetResult.error) throw sheetResult.error
   if (linksResult.error) throw linksResult.error
 
-  const linkRows = (linksResult.data ?? []) as Array<{ source_record_key: string; status: string }>
+  const linkRows = (linksResult.data ?? []) as Array<{
+    source_record_key: string
+    status: string
+    target_type?: string | null
+    target_id?: string | null
+    target_label?: string | null
+  }>
 
   // 같은 source_record_key에 링크가 여러 개면 가장 강한 상태(확정 > 후보)를 취한다.
+  // linked 링크의 target은 record key당 첫 해석 가능한 것(customer/partner_account/deal +
+  // target_id 존재)만 담는다 — candidate/stale은 target 후보에서 제외(P0-2 additive).
   const linkStateByKey = new Map<string, RowLinkState>()
+  const linkedTargetByRecordKey = new Map<
+    string,
+    Pick<RevSyncLinkedTarget, "targetType" | "targetId" | "label">
+  >()
   for (const link of linkRows) {
-    const state: RowLinkState = LINKED_STATUSES.has(link.status) ? "linked" : "candidate"
+    const isLinked = LINKED_STATUSES.has(link.status)
+    if (isLinked && !linkedTargetByRecordKey.has(link.source_record_key)) {
+      const targetType = asLinkedTargetType(link.target_type)
+      const targetId = link.target_id?.trim()
+      if (targetType && targetId) {
+        linkedTargetByRecordKey.set(link.source_record_key, {
+          targetType,
+          targetId,
+          label: link.target_label?.trim() || null,
+        })
+      }
+    }
+    const state: RowLinkState = isLinked ? "linked" : "candidate"
     const prev = linkStateByKey.get(link.source_record_key)
     if (prev === "linked") continue
     linkStateByKey.set(link.source_record_key, state)
@@ -144,6 +179,8 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
     linkedRows: number
     candidateRows: number
     manager: string | null
+    /** 우세 확정 링크 target — 시트 순서상 첫 linked 행의 해석 가능한 target(P0-2) */
+    linkedTarget: Pick<RevSyncLinkedTarget, "targetType" | "targetId" | "label"> | null
   }
 
   const accountsByKey = new Map<string, AccountAgg>()
@@ -195,6 +232,7 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
       linkedRows: 0,
       candidateRows: 0,
       manager: null,
+      linkedTarget: null,
     }
     agg.rows += 1
     agg.revenue += revenue
@@ -202,6 +240,8 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
     if (linkState === "linked") {
       agg.linkedRows += 1
       agg.linkedRevenue += revenue
+      // 첫 linked 우선 — 이미 target이 붙었으면 뒤 linked 행의 target은 무시한다.
+      if (!agg.linkedTarget) agg.linkedTarget = linkedTargetByRecordKey.get(sourceRecordKey) ?? null
     } else if (linkState === "candidate") {
       agg.candidateRows += 1
     }
@@ -228,6 +268,7 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
   let revenueTotal = 0
   let revenueLinked = 0
   const unlinkedPool: RevAccountCoverageAccount[] = []
+  const linkedTargets: RevSyncLinkedTarget[] = []
 
   for (const [accountKey, agg] of accountsByKey) {
     revenueTotal += agg.revenue
@@ -241,6 +282,10 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
     const unlinkedRevenue = agg.revenue - agg.linkedRevenue
     if (agg.linkedRows < agg.rows && unlinkedRevenue > 0) {
       unlinkedPool.push({ accountKey, name: agg.name, rows: agg.rows, unlinkedRevenue, manager: agg.manager })
+    }
+
+    if (agg.linkedTarget) {
+      linkedTargets.push({ accountKey, name: agg.name, ...agg.linkedTarget })
     }
   }
 
@@ -264,5 +309,6 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
     hygiene,
     // 연결 계정 = 전행 확정 + 부분 확정(확정 링크가 1행이라도 있으면 스파인에 잡힌다).
     health: revSyncHealth(accounts.linked + accounts.partial, accounts.total),
+    linkedTargets,
   }
 }

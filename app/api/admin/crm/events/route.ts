@@ -6,6 +6,7 @@ import {
   CRM_EVENT_SENTIMENTS,
   CRM_EVENT_SOURCE_TYPES,
   CRM_EVENT_TARGET_TYPES,
+  CRM_WORK_ACTIVITY_SOURCE_TYPES,
   createCrmCustomerEvent,
   listCrmCustomerEvents,
   parseLooseList,
@@ -115,11 +116,14 @@ export async function GET(req: NextRequest) {
     const targetType = url.searchParams.get("targetType")
     const sourceType = url.searchParams.get("sourceType")
     const sentiment = url.searchParams.get("sentiment")
+    const scope = url.searchParams.get("scope")
+    const parsedSourceType = sourceType && SOURCE_TYPES.has(sourceType) ? (sourceType as CrmCustomerEventSourceType) : "all"
     const events = await listCrmCustomerEvents({
       q: url.searchParams.get("q") ?? undefined,
       targetId: url.searchParams.get("targetId") ?? undefined,
       targetType: targetType && TARGET_TYPES.has(targetType) ? (targetType as CrmCustomerEventTargetType) : "all",
-      sourceType: sourceType && SOURCE_TYPES.has(sourceType) ? (sourceType as CrmCustomerEventSourceType) : "all",
+      sourceType: parsedSourceType,
+      sourceTypes: scope === "work" && parsedSourceType === "all" ? CRM_WORK_ACTIVITY_SOURCE_TYPES : undefined,
       sentiment: sentiment && SENTIMENTS.has(sentiment) ? (sentiment as CrmCustomerEventSentiment) : "all",
       limit: parseBoundedInt(url.searchParams.get("limit"), 50, 1, 100),
       offset: parseBoundedInt(url.searchParams.get("offset"), 0, 0, 100_000),

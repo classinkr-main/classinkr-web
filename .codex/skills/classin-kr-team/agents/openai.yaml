@@ -1,0 +1,4 @@
+interface:
+  display_name: "Classin KR Team"
+  short_description: "/admin/branch와 매출 장부 범위·정합성·검증 안내"
+  default_prompt: "$classin-kr-team을 사용해 KR Team 변경 범위를 좁히고 필요한 코드와 검증만 수행해 주세요."

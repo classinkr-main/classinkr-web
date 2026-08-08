@@ -79,6 +79,9 @@ describe("internal CS Gemini model routing", () => {
     expect(selectInternalCsModelMode({ question: "본사 확인이 필요한 사양 충돌이야" })).toBe(
       "deep"
     )
+    expect(
+      selectInternalCsModelMode({ question: "110인치 무게", requiresEvidenceReview: true })
+    ).toBe("fast")
   })
 })
 
@@ -127,11 +130,25 @@ describe("generateInternalCsAnswer", () => {
       contents: { parts: { text: string }[] }[]
     }
     const system = body.systemInstruction.parts[0].text
-    expect(system).toContain("결론부터")
+    expect(system).toContain("직접 답")
+    expect(system).toContain("임의로 제한하지 않는다")
+    expect(system).toContain("내부 전용 근거도")
     expect(system).toContain("감정 표현")
     expect(system).toContain("고객 전달 문안")
     const prompt = body.contents.at(-1)?.parts[0]?.text ?? ""
-    expect(prompt).toContain("결론부터 사실 위주로")
+    expect(prompt).toContain("필요한 만큼 충분히")
+    expect(body).not.toHaveProperty("generationConfig.maxOutputTokens")
+  })
+
+  it("does not truncate a complete internal answer at the previous application limit", async () => {
+    vi.stubEnv("GEMINI_API_KEY", "test-key")
+    const longAnswer = `## 바로 답변\n\n${"확인된 상세 내용 ".repeat(2_500)}`
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(geminiResponse(longAnswer)))
+
+    const result = await generateInternalCsAnswer({ question: "전체 내용을 빠짐없이 정리해줘" })
+
+    expect(result.answer).toBe(longAnswer.trim())
+    expect(result.answer.length).toBeGreaterThan(16_000)
   })
 
   it("routes deep review to latest Pro and falls back to 3.5 Flash", async () => {

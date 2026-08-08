@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { matchCaptureRows } from "@/lib/crm/capture/matching"
 import { parseTabularGrid, parseUnstructuredLines, type ColumnMap } from "@/lib/crm/capture/parsers"
-import { getCaptureBatch, replaceCaptureRows } from "@/lib/crm/capture/repository"
+import { getCaptureBatchWithRows, replaceCaptureRows } from "@/lib/crm/capture/repository"
 import { getCrmUnifiedCustomers } from "@/lib/repositories/crm-unified-customers"
 
 export const dynamic = "force-dynamic"
@@ -14,10 +14,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params
 
   try {
-    const batch = await getCaptureBatch(id)
-    if (!batch) return NextResponse.json({ error: "Batch not found" }, { status: 404 })
+    const loaded = await getCaptureBatchWithRows(id)
+    if (!loaded) return NextResponse.json({ error: "Batch not found" }, { status: 404 })
+    const { batch, rows: existingRows } = loaded
     if (batch.status === "applied" || batch.status === "canceled") {
       return NextResponse.json({ error: "이미 적용되었거나 취소된 배치는 다시 파싱할 수 없습니다." }, { status: 409 })
+    }
+    if (existingRows.some((row) => row.applyStatus === "applied" || row.createdEventId || row.createdTaskId || row.createdLeadId)) {
+      return NextResponse.json(
+        { error: "이미 일부 적용된 배치는 다시 파싱할 수 없습니다. 남은 행을 이어서 검토하세요." },
+        { status: 409 }
+      )
     }
 
     const body = await req.json().catch(() => null)
@@ -33,13 +40,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const parsed = mode === "text" ? parseUnstructuredLines(rawInput) : parseTabularGrid(rawInput, { hasHeader, mapping }).rows
     if (parsed.length === 0) return NextResponse.json({ error: "해석된 행이 없습니다." }, { status: 400 })
+    if (parsed.length > 2_000) {
+      return NextResponse.json({ error: "한 번에 최대 2,000행까지 분석할 수 있습니다." }, { status: 413 })
+    }
 
     const customers = await getCrmUnifiedCustomers({ limit: 2000 })
     const matched = matchCaptureRows(parsed, customers.rows)
     const rows = await replaceCaptureRows(batch, matched)
 
-    const refreshed = await getCaptureBatch(id)
-    return NextResponse.json({ batch: refreshed ?? batch, rows })
+    const refreshed = await getCaptureBatchWithRows(id)
+    return NextResponse.json({ batch: refreshed?.batch ?? batch, rows })
   } catch (error) {
     console.error(`[POST /api/admin/crm/capture/batches/${id}/parse]`, error)
     return NextResponse.json({ error: "Failed to parse capture batch" }, { status: 500 })

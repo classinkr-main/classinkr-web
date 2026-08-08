@@ -1,0 +1,42 @@
+---
+name: classin-kr-team
+description: Classin Home의 /admin/branch KR Team 대시보드·매출 장부·동기화 정확성 작업을 필요한 파일과 검증만으로 안전하게 수행할 때 사용한다. Admin 전체 작업에는 사용하지 않는다.
+---
+
+# Classin KR Team
+
+KR Team 작업을 화면·데이터·정합성 단위로 좁혀 수행한다. 모든 branch 파일을 한꺼번에 읽거나 전체 장부 파일부터 여는 습관을 피한다.
+
+이 스킬의 범위는 `/admin/branch`와 `/admin/branch/ledger`다. Admin 셸·CRM·콘텐츠·CS·설정
+전체를 대표하는 스킬이 아니며, 공통 기준은 [Admin 작업 지침 맵](../../../docs/active/admin-guidance-map.md)을 따른다.
+
+## 시작 절차
+
+1. 저장소 `AGENTS.md`, `docs/active/admin-guidance-map.md`, 최신 운영 결정, `DESIGN.md`의 관련 규칙을 확인한다.
+2. 사용자 요청을 `개요`, `파이프라인`, `히트맵`, `AI`, `매출 장부`, `동기화·정합성` 중 하나 이상으로 분류한다.
+3. [routing-map.md](references/routing-map.md)에서 해당 행의 시작 파일만 연다.
+4. `rg`로 실제 import·호출·테스트 연결을 확인한 뒤에만 인접 파일을 추가한다.
+5. 기존 더티 변경을 확인하고, 다른 작업 파일은 수정하거나 스테이징하지 않는다.
+
+## 구현 원칙
+
+- 보는 화면은 `/admin/branch`, 수치 검수·입력·마감은 `/admin/branch/ledger`에 둔다.
+- 탭이 소비하지 않는 API와 컴포넌트는 요청·마운트·초기 번들에서 제외한다.
+- 데이터 계보는 `액티브 임포트 → DB 미러 → 라이브 시트 폴백` 순서를 유지하고, 원천·시각·부분 실패를 숨기지 않는다.
+- 금액·확도·팀 색·지역 램프는 기존 SSOT를 import한다. 로컬 색·포맷 사본을 만들지 않는다.
+- mutation 뒤에는 관련 캐시만 무효화하고, 실패를 성공으로 바꾸거나 오래된 데이터를 최신처럼 표시하지 않는다.
+- 공용 로직은 `lib/branch/`, 데이터 접근은 `lib/repositories/`, 화면 조합은 `components/admin/branch/`에 둔다.
+- `SalesLedgerWorkbench.tsx` 전체를 열기 전에 `components/admin/branch/ledger/`의 분리 컴포넌트와 `rg` 결과로 수정 위치를 좁힌다.
+
+## 검증
+
+[validation-matrix.md](references/validation-matrix.md)에 따라 변경 중에는 가장 가까운 테스트만 실행한다. 완료 전에는 저장소 기본 품질 게이트를 실행한다.
+
+브라우저 검증은 영향 탭의 딥링크로 바로 진입한다. 읽기·필터·탭 전환은 실화면에서 확인하되, 실제 동기화·마감·대량 임포트 같은 운영 mutation은 명시된 테스트 계정·승인 없이는 실행하지 않는다.
+
+## 완료 조건
+
+- 변경 파일과 검증 범위가 요청한 화면에 한정되어 있다.
+- 로딩·빈 상태·실패·오래된 데이터 상태가 구분된다.
+- 숫자와 원천이 인접 화면 및 장부 정본과 모순되지 않는다.
+- 관련 파일만 명시적으로 스테이징하고 staged diff를 확인한 뒤 커밋한다.

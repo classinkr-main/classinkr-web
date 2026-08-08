@@ -31,6 +31,15 @@ export const CRM_EVENT_SOURCE_TYPES = [
   "sms",
   "site_inflow",
 ] as const
+export const CRM_WORK_ACTIVITY_SOURCE_TYPES: CrmCustomerEventSourceType[] = [
+  "manual_note",
+  "call",
+  "sms",
+  "meeting_minutes",
+  "recording",
+  "lead_contact_log",
+  "calendar_event",
+]
 export const CRM_EVENT_SENTIMENTS = ["positive", "neutral", "risk"] as const
 
 export interface CrmEventNextAction {
@@ -110,6 +119,7 @@ export interface ListCrmCustomerEventsOptions {
   q?: string
   targetType?: CrmCustomerEventTargetType | "all"
   sourceType?: CrmCustomerEventSourceType | "all"
+  sourceTypes?: CrmCustomerEventSourceType[]
   sentiment?: CrmCustomerEventSentiment | "all"
   targetId?: string
   limit?: number
@@ -380,6 +390,8 @@ export async function listCrmCustomerEvents(
   }
   if (options.sourceType && options.sourceType !== "all") {
     query = query.eq("source_type", options.sourceType)
+  } else if (options.sourceTypes && options.sourceTypes.length > 0) {
+    query = query.in("source_type", [...new Set(options.sourceTypes)])
   }
   if (options.sentiment && options.sentiment !== "all") {
     query = query.eq("sentiment", options.sentiment)
@@ -438,44 +450,67 @@ export async function listCrmCustomerEvents(
 
 // 팀 응답으로 치는 기록 종류 allowlist — 사람이 남긴 기록만.
 const RESPONSE_SOURCE_TYPES = ["manual_note", "call", "sms", "meeting_minutes", "recording", "lead_contact_log"] as const
-const FIRST_RESPONSE_PAGE_SIZE = 1000
-const FIRST_RESPONSE_MAX_PAGES = 20
+const CONTACT_PAGE_SIZE = 1000
+const CONTACT_MAX_PAGES = 20
 
-/** 리드별 팀 최초 기록 시각. 자동 유입(site_inflow)·동기화 소스는 응답으로 치지 않는다. */
-export async function getLeadFirstResponseMap(): Promise<Map<string, string>> {
+export interface CrmCustomerContactMaps {
+  firstResponseByLead: Map<string, string>
+  latestContactByTarget: Map<string, string>
+}
+
+export function crmContactTargetKey(targetType: CrmCustomerEventTargetType, targetId: string) {
+  return `${targetType}:${targetId}`
+}
+
+/**
+ * 사람이 남긴 CRM 기록을 한 번 읽어 리드 최초 응답과 대상별 최근 컨택을 함께 만든다.
+ * 자동 유입(site_inflow)·동기화 소스는 컨택으로 치지 않는다.
+ */
+export async function getCrmCustomerContactMaps(): Promise<CrmCustomerContactMaps> {
   const supabase = createSupabaseAdminClient()
-  const map = new Map<string, string>()
+  const firstResponseByLead = new Map<string, string>()
+  const latestContactByTarget = new Map<string, string>()
 
   // PostgREST는 요청당 기본 1000행에서 조용히 절단한다 — 오름차순 정렬에서 절단되면
-  // 최신 첫 응답이 빠져 해당 리드가 미응답으로 오판된다. 결정적 정렬(occurred_at, id) +
+  // 최근 컨택이 빠지고 리드 최초 응답도 누락될 수 있다. 결정적 정렬(occurred_at, id) +
   // range로 짧은 페이지가 나올 때까지 이어 읽고, 상한 초과는 무음 대신 에러로 드러낸다.
   for (let page = 0; ; page += 1) {
-    if (page >= FIRST_RESPONSE_MAX_PAGES) {
+    if (page >= CONTACT_MAX_PAGES) {
       throw new Error(
-        `리드 첫 응답 조회가 ${FIRST_RESPONSE_MAX_PAGES}페이지(${FIRST_RESPONSE_MAX_PAGES * FIRST_RESPONSE_PAGE_SIZE}행)를 초과했습니다 — 페이지 상한을 재검토하세요.`
+        `CRM 컨택 기록 조회가 ${CONTACT_MAX_PAGES}페이지(${CONTACT_MAX_PAGES * CONTACT_PAGE_SIZE}행)를 초과했습니다 — 페이지 상한을 재검토하세요.`
       )
     }
-    const from = page * FIRST_RESPONSE_PAGE_SIZE
+    const from = page * CONTACT_PAGE_SIZE
     const { data, error } = await supabase
       .from("crm_customer_events")
-      .select("target_id, occurred_at")
-      .eq("target_type", "lead")
+      .select("target_type, target_id, occurred_at")
       .not("target_id", "is", null)
       .in("source_type", [...RESPONSE_SOURCE_TYPES])
       .order("occurred_at", { ascending: true })
       .order("id", { ascending: true })
-      .range(from, from + FIRST_RESPONSE_PAGE_SIZE - 1)
+      .range(from, from + CONTACT_PAGE_SIZE - 1)
 
-    if (error) throw new Error(`리드 첫 응답 조회 실패: ${error.message}`)
+    if (error) throw new Error(`CRM 컨택 기록 조회 실패: ${error.message}`)
 
     const rows = data ?? []
     for (const row of rows) {
       const id = String(row.target_id)
-      if (!map.has(id)) map.set(id, String(row.occurred_at))
+      const targetType = row.target_type as CrmCustomerEventTargetType
+      const occurredAt = String(row.occurred_at)
+      if (targetType === "lead" && !firstResponseByLead.has(id)) {
+        firstResponseByLead.set(id, occurredAt)
+      }
+      // 오름차순으로 읽으므로 같은 대상의 마지막 대입이 최신 컨택이다.
+      latestContactByTarget.set(crmContactTargetKey(targetType, id), occurredAt)
     }
-    if (rows.length < FIRST_RESPONSE_PAGE_SIZE) break
+    if (rows.length < CONTACT_PAGE_SIZE) break
   }
-  return map
+  return { firstResponseByLead, latestContactByTarget }
+}
+
+/** 리드별 팀 최초 기록 시각. 기존 소비처 호환용 얇은 래퍼. */
+export async function getLeadFirstResponseMap(): Promise<Map<string, string>> {
+  return (await getCrmCustomerContactMaps()).firstResponseByLead
 }
 
 export async function createCrmCustomerEvent(input: CrmCustomerEventCreateInput) {
@@ -495,4 +530,55 @@ export async function createCrmCustomerEvent(input: CrmCustomerEventCreateInput)
   }
   const [record] = await recordsWithSignedUrls([data as CrmCustomerEvent])
   return record
+}
+
+export async function getOrCreateCrmCustomerEventBySource(
+  input: CrmCustomerEventCreateInput & { sourceType: CrmCustomerEventSourceType; sourceId: string }
+): Promise<{ record: CrmCustomerEventRecord; created: boolean }> {
+  const sourceId = input.sourceId.trim()
+  if (!sourceId) throw new Error("[crm-events] sourceId가 필요합니다.")
+
+  const supabase = createSupabaseAdminClient()
+  const findExisting = async () => {
+    const { data, error } = await supabase
+      .from("crm_customer_events")
+      .select("*")
+      .eq("source_type", input.sourceType)
+      .eq("source_id", sourceId)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    if (error) {
+      if (isMissingCrmEventsTableError(error)) {
+        throw new Error("CRM 기록 DB 마이그레이션이 아직 적용되지 않았습니다.")
+      }
+      throw new Error(`[crm-events] source 기록 조회 실패: ${error.message}`)
+    }
+    if (!data) return null
+    const [record] = await recordsWithSignedUrls([data as CrmCustomerEvent])
+    return record
+  }
+
+  const existing = await findExisting()
+  if (existing) return { record: existing, created: false }
+
+  const insert = buildCrmCustomerEventInsert({ ...input, sourceId })
+  const { data, error } = await supabase
+    .from("crm_customer_events")
+    .insert(insert)
+    .select("*")
+    .single()
+
+  if (error) {
+    if (error.code === "23505") {
+      const concurrent = await findExisting()
+      if (concurrent) return { record: concurrent, created: false }
+    }
+    if (isMissingCrmEventsTableError(error)) {
+      throw new Error("CRM 기록 DB 마이그레이션이 아직 적용되지 않았습니다.")
+    }
+    throw new Error(`[crm-events] 저장 실패: ${error.message}`)
+  }
+  const [record] = await recordsWithSignedUrls([data as CrmCustomerEvent])
+  return { record, created: true }
 }

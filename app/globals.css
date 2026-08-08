@@ -878,3 +878,12 @@
   /* 여백 */
   @page { margin: 12mm 10mm; }
 }
+
+/* ─── CRM 어드민 키보드 포커스 링 (DESIGN.md §6) ─────────────────────────────
+   [data-admin-crm] 범위의 모든 인터랙티브 요소에 focus-visible 링을 일괄 적용한다.
+   개별 컴포넌트가 자체 링을 정의하면 그 규칙이 이긴다(여긴 폴백). 마우스 클릭에는
+   나타나지 않고 키보드 탐색에만 나타난다. */
+[data-admin-crm] :is(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid #084734;
+  outline-offset: 2px;
+}

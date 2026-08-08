@@ -8,6 +8,7 @@
  * 이 모듈은 서버 전용이다. NOTION_API_TOKEN은 절대 클라이언트로 노출되지 않는다.
  */
 import type { CalendarEvent } from "@/lib/calendar-data"
+import { normalizeAssigneeNames } from "@/lib/admin-calendar/people"
 
 const NOTION_VERSION = "2022-06-28"
 const NOTION_API = "https://api.notion.com/v1"
@@ -202,7 +203,9 @@ function mapRow(row: NotionRow): CalendarEvent | null {
     endTime,
     type: "other",
     description,
-    assignees: people,
+    // 노션 people 표기("GyusungJung")를 캐논 이름("정규성")으로 눕힌다 —
+    // 담당자 필터·스윔레인이 사람 단위로 묶이려면 표기가 통일돼야 한다.
+    assignees: normalizeAssigneeNames(people),
     allDay: !time && !endTime,
     source: "notion",
     sourceLabel: "마케팅(노션)",

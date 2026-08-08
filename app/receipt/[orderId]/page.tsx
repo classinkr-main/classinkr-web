@@ -3,7 +3,7 @@ import { headers } from "next/headers"
 
 import { getSoftwareCheckoutOrder } from "@/lib/server/software-checkout"
 import { formatKrw, formatUsd, getBillingCycleLabel } from "@/lib/billing/plans"
-import { formatCny } from "@/lib/billing/recharge"
+import { formatRechargeKrw } from "@/lib/billing/recharge"
 import { ReceiptView } from "@/components/billing/ReceiptView"
 
 function formatDate(iso: string) {
@@ -144,36 +144,32 @@ export default async function ReceiptPage({
               </div>
             )}
 
+            {/* 충전형은 원화 선충전이라 환율 표기가 없다 — 아래 KRW 승인 금액과 동일한 값이다. */}
             {order.mode === "business" && (
               <div className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-4">
                 <div className="flex items-baseline justify-between gap-4">
                   <p className="text-sm text-[#615D59]">Business 충전</p>
-                  {typeof raw.amountCny === "number" && (
+                  {typeof raw.amountKrw === "number" && (
                     <p className="text-lg font-semibold text-[#111110]">
-                      {formatCny(raw.amountCny)}
+                      {formatRechargeKrw(raw.amountKrw)}
                     </p>
                   )}
                 </div>
-                {typeof raw.amountCnyBeforeDiscount === "number" &&
-                  typeof raw.amountCny === "number" &&
-                  raw.amountCnyBeforeDiscount !== raw.amountCny && (
+                {typeof raw.amountKrwBeforeDiscount === "number" &&
+                  typeof raw.amountKrw === "number" &&
+                  raw.amountKrwBeforeDiscount !== raw.amountKrw && (
                     <div className="mt-2 space-y-1 text-xs text-[#615D59]">
                       <p>
-                        할인 전: {formatCny(Number(raw.amountCnyBeforeDiscount))}
+                        할인 전: {formatRechargeKrw(Number(raw.amountKrwBeforeDiscount))}
                       </p>
-                      {typeof raw.discountAmountCny === "number" &&
-                        Number(raw.discountAmountCny) > 0 && (
+                      {typeof raw.discountAmountKrw === "number" &&
+                        Number(raw.discountAmountKrw) > 0 && (
                           <p>
-                            할인: -{formatCny(Number(raw.discountAmountCny))}
+                            할인: -{formatRechargeKrw(Number(raw.discountAmountKrw))}
                           </p>
                         )}
                     </div>
                   )}
-                {typeof raw.fxRate === "number" && (
-                  <p className="mt-2 text-xs text-[#A39E98]">
-                    적용 환율: 1 CNY = {Number(raw.fxRate).toLocaleString("ko-KR")}원
-                  </p>
-                )}
               </div>
             )}
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { isNavPresetKey, normalizeNavOverrides } from "@/components/admin/admin-nav-access"
 import { normalizeAdminCapabilities } from "@/lib/admin-capabilities"
 import {
   requireVerifiedAdminContext,
@@ -31,16 +32,55 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json().catch(() => null)
   const userId = typeof body?.userId === "string" ? body.userId.trim() : ""
+
+  if (!userId) {
+    return NextResponse.json({ error: "userId is required" }, { status: 400 })
+  }
+
+  const supabase = createSupabaseAdminClient()
+
+  // nav 배치 갱신 — capabilities와 별개 축이라 별도 분기·별도 감사 로그를 쓴다.
+  if ("navPreset" in (body ?? {}) || "navOverrides" in (body ?? {})) {
+    const rawPreset = body?.navPreset
+    if (rawPreset != null && !isNavPresetKey(rawPreset)) {
+      return NextResponse.json({ error: "Unknown navPreset" }, { status: 400 })
+    }
+
+    const navPreset = (rawPreset ?? null) as string | null
+    const navOverrides = normalizeNavOverrides(body?.navOverrides)
+
+    const { data, error } = await supabase
+      .from("admin_profiles")
+      .update({ nav_preset: navPreset, nav_overrides: navOverrides })
+      .eq("user_id", userId)
+      .select("user_id, display_name, role, status, nav_preset, nav_overrides")
+      .single()
+
+    if (error || !data) {
+      console.error("[PATCH /api/admin/users nav]", error)
+      return NextResponse.json({ error: "Failed to update admin nav access" }, { status: 500 })
+    }
+
+    await logAdminAudit({
+      admin,
+      action: "admin.nav_access.update",
+      targetType: "admin_profile",
+      targetId: userId,
+      payload: { navPreset, navOverrides },
+    })
+
+    return NextResponse.json({ user: data })
+  }
+
   const capabilities = normalizeAdminCapabilities(body?.capabilities)
 
-  if (!userId || !capabilities) {
+  if (!capabilities) {
     return NextResponse.json(
       { error: "userId and a valid capabilities array are required" },
       { status: 400 }
     )
   }
 
-  const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("admin_profiles")
     .update({ capabilities })

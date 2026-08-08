@@ -45,10 +45,12 @@ export default async function AdminCrmMatchingPage({
         </Link>
         에서 합니다.
       </p>
+      <CrmMatchingWorkspace initialNameFilter={initialNameFilter} />
+      {/* 링크 확정 인박스가 이 화면의 주 작업이다. 정합성 진단은 하단 참조 표면으로 내려
+          첫 화면과 서버 스트리밍을 막지 않는다. */}
       <Suspense fallback={<CrmDataCheckPanel overview={null} loading />}>
         <DataCheckPanelAsync />
       </Suspense>
-      <CrmMatchingWorkspace initialNameFilter={initialNameFilter} />
     </>
   )
 }

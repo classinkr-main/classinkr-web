@@ -330,6 +330,22 @@ export async function getCrmTaskById(id: string): Promise<CrmTaskRecord | null> 
   return data ? toCrmTaskRecord(data as CrmTask) : null
 }
 
+export async function getCrmTaskBySourceEventId(sourceEventId: string): Promise<CrmTaskRecord | null> {
+  const supabase = createSupabaseAdminClient()
+  const { data, error } = await supabase
+    .from("crm_tasks")
+    .select("*")
+    .eq("source_event_id", sourceEventId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (error) {
+    if (isMissingCrmTasksTableError(error)) throw new Error(NOT_READY_MESSAGE)
+    throw new Error(`[crm-tasks] source event 조회 실패: ${error.message}`)
+  }
+  return data ? toCrmTaskRecord(data as CrmTask) : null
+}
+
 export async function createCrmTask(input: CrmTaskCreateInput): Promise<CrmTaskRecord> {
   const supabase = createSupabaseAdminClient()
   const insert = buildCrmTaskInsert(input)

@@ -21,7 +21,9 @@ import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
 import { CalendarPlus } from "lucide-react"
 import {
   formatPublicEventDate,
+  formatPublicEventSchedule,
   getEffectivePublicEventEndIso,
+  getPublicEventSessionRanges,
 } from "@/lib/public-event-dates"
 
 export const revalidate = 3600
@@ -50,10 +52,16 @@ function buildGoogleCalendarUrl(event: {
   description: string | null
   startsAt: string
   endsAt: string | null
+  sessionDates: string[] | null
   location: string | null
 }, eventUrl: string): string {
-  const start = toCalendarUtc(event.startsAt)
-  const effectiveEnd = getEffectivePublicEventEndIso(event.startsAt, event.endsAt)
+  // 구글 캘린더 템플릿 링크는 일정 하나만 담을 수 있다.
+  // 회차 행사는 첫 회차를 걸고, 전체 회차는 .ics 내려받기로 안내한다.
+  const ranges = getPublicEventSessionRanges(event.startsAt, event.endsAt, event.sessionDates)
+  const first = ranges[0]
+
+  const start = first ? toCalendarUtc(first.startIso) : toCalendarUtc(event.startsAt)
+  const effectiveEnd = first?.endIso ?? getEffectivePublicEventEndIso(event.startsAt, event.endsAt)
   const end = effectiveEnd ? toCalendarUtc(effectiveEnd) : start
   const params = new URLSearchParams({
     action: "TEMPLATE",
@@ -131,6 +139,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
             endDate: event.endsAt ?? undefined,
             locationName: event.location ?? undefined,
             imageUrl: event.imageUrl ?? undefined,
+            sessions: getPublicEventSessionRanges(event.startsAt, event.endsAt, event.sessionDates),
           }),
           createBreadcrumbJsonLd([
             { name: "홈", path: "/" },
@@ -177,8 +186,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
               <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-[#1a1a1a]/40">
                 <span className="inline-flex items-center gap-1.5">
                   <Calendar className="h-4 w-4" />
-                  {formatPublicEventDate(event.startsAt)}
-                  {event.endsAt ? ` ~ ${formatPublicEventDate(event.endsAt)}` : ""}
+                  {formatPublicEventSchedule(event.startsAt, event.endsAt, event.sessionDates)}
                 </span>
                 {event.location && (
                   <span className="inline-flex items-center gap-1.5">

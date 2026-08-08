@@ -11,7 +11,7 @@
 - 분류 6종+ 병존, 허브 후보 = `ChatbotCategory`(lib/chatbot/classification.ts 8종) + question_clusters.
 - 임베딩 컨벤션: `scripts/embed-docs-chunks.ts` (Gemini text-embedding-004, 768d).
 - PII: `redactPii`(lib/chatbot/service.ts export됨) 재사용.
-- nav: "챗봇 운영" 항목은 ALL_NEW1 IA에서 의도적 흡수(admin-ia-redesign-2026-06-29.md) — 복원은 라벨·아이콘 가시성만.
+- nav: "챗봇 운영" 항목의 과거 흡수 결정은 [IA 역사 기록](../archive/admin-ia-redesign-2026-06-29.md)에 남아 있다. 현재 구조는 `admin-guidance-map.md`와 CS 콘솔 IA를 따른다.
 
 ## 인터페이스 계약 (전 태스크 공통 — 변경 금지)
 

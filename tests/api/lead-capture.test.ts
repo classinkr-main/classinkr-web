@@ -74,6 +74,11 @@ describe("submitLeadCapture duplicate handling", () => {
     vi.resetModules()
   })
 
+  it("normalizes a region value so Meta city can be stored in leads.branch", async () => {
+    const { buildLeadPayload } = await loadLeadCapture()
+    expect(buildLeadPayload({ ...baseLead, branch: "  Cheongju  " }).branch).toBe("Cheongju")
+  })
+
   it("does not cache a failed submission as a successful duplicate", async () => {
     const { submitLeadCapture, saveLead } = await loadLeadCapture()
     saveLead.mockRejectedValue(new Error("database unavailable"))
@@ -247,5 +252,48 @@ describe("submitLeadCapture site_inflow auto event", () => {
 
     expect(result.status).toBe(502)
     expect(createCrmCustomerEvent).not.toHaveBeenCalled()
+  })
+})
+
+describe("submitLeadCapture notification", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("keeps the CONTACT in-app event but defers WeCom delivery to the morning digest", async () => {
+    const { submitLeadCapture, saveLead, emitNotificationEvent } = await loadLeadCapture()
+    const deferredTasks: Array<() => Promise<void>> = []
+    saveLead.mockResolvedValue({ id: "lead-contact-wecom-1" })
+
+    const result = await submitLeadCapture(
+      {
+        ...baseLead,
+        sourceDetail: "도입 상담",
+      },
+      {
+        deferTask: (task) => deferredTasks.push(task),
+      }
+    )
+
+    expect(result.status).toBe(200)
+    expect(deferredTasks).toHaveLength(1)
+    expect(emitNotificationEvent).not.toHaveBeenCalled()
+
+    await deferredTasks[0]()
+
+    expect(emitNotificationEvent).toHaveBeenCalledTimes(1)
+    expect(emitNotificationEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "lead.created",
+        channels: [],
+        payload: expect.objectContaining({
+          leadId: "lead-contact-wecom-1",
+          source: "contact_page",
+          sourceDetail: "도입 상담",
+          message: "문의 테스트",
+        }),
+      })
+    )
   })
 })

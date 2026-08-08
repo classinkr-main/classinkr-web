@@ -88,7 +88,26 @@ export function buildInternalCsMetrics(
   }
 }
 
+const METRICS_CACHE_TTL_MS = 60_000
+interface CachedMetricsEntry {
+  data: InternalCsMetrics
+  fetchedAt: number
+}
+const metricsCache = new Map<number, CachedMetricsEntry>()
+
 export async function getInternalCsMetrics(days: number, nowMs?: number): Promise<InternalCsMetrics> {
+  const now = nowMs ?? Date.now()
+  if (!nowMs) {
+    const cached = metricsCache.get(days)
+    if (cached && now - cached.fetchedAt < METRICS_CACHE_TTL_MS) {
+      return cached.data
+    }
+  }
+
   const aggregate = await getInternalCsMetricsAggregate(days)
-  return buildInternalCsMetrics(aggregate, nowMs ?? Date.now())
+  const result = buildInternalCsMetrics(aggregate, now)
+  if (!nowMs) {
+    metricsCache.set(days, { data: result, fetchedAt: now })
+  }
+  return result
 }

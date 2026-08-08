@@ -5,7 +5,8 @@ Classin Home is a mixed Next.js workspace for the public marketing site and admi
 ## Start Here
 
 - [Docs index](docs/README.md)
-- [Current repo audit and fix playbook](docs/active/repository-audit-2026-04-15.md)
+- [Documentation index](docs/README.md)
+- [Admin guidance map](docs/active/admin-guidance-map.md)
 - [Homepage PRD](docs/active/prd.md)
 - [Design system](DESIGN.md)
 

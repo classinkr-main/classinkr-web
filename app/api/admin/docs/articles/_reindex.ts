@@ -5,12 +5,23 @@ import type { DocsArticleStatus } from "@/lib/repositories/docs-articles"
  * 변경 전/후 상태 중 하나라도 published를 스치면 챗봇 인덱스(docs_ai_chunks)에
  * 영향이 있으므로 재색인이 필요하다. (게시·게시 중 수정·게시 해제 → chunk 정리)
  * draft 저장처럼 공개본에 영향 없는 변경은 재색인하지 않는다.
+ *
+ * `contentAffectingChange`는 published→published(상태 유지) 패치에서만 의미가 있다.
+ * order_index·featured·SEO 메타처럼 chunk 내용/포함 여부에 영향 없는 필드만 바뀐
+ * 재정렬 저장은 카테고리 전체를 재임베딩(1536-dim)할 필요가 없다. 기본값은 true라
+ * 세 번째 인자를 넘기지 않는 기존 호출자는 종전과 동일하게 동작한다(안전 우선).
  */
 export function docsReindexNeeded(
   before: DocsArticleStatus | null | undefined,
-  after: DocsArticleStatus | null | undefined
+  after: DocsArticleStatus | null | undefined,
+  contentAffectingChange: boolean = true
 ): boolean {
-  return before === "published" || after === "published"
+  const touchesPublished = before === "published" || after === "published"
+  if (!touchesPublished) return false
+  // published↔비published 전이는 chunk 포함 여부가 바뀌므로 항상 재색인.
+  if (before !== after) return true
+  // 상태 유지(published→published): chunk에 영향을 주는 필드가 바뀐 경우에만 재색인.
+  return contentAffectingChange
 }
 
 /**

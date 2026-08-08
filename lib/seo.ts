@@ -206,6 +206,7 @@ export function createEventJsonLd({
   endDate,
   locationName,
   imageUrl,
+  sessions,
 }: {
   path: string
   name: string
@@ -214,11 +215,25 @@ export function createEventJsonLd({
   endDate?: string
   locationName?: string
   imageUrl?: string
+  /**
+   * 띄엄띄엄 열리는 회차 행사의 구간들. 2개 이상이면 EventSeries + subEvent로 표기한다.
+   * (검색엔진이 "8/3 ~ 8/17 연속 개최"로 오해하지 않게 하는 것이 목적)
+   */
+  sessions?: { startIso: string; endIso: string }[]
 }): JsonLdNode {
   // 장소가 있으면 오프라인 행사, 없으면 온라인(웨비나 등)으로 표기
+  const attendanceMode = locationName
+    ? "https://schema.org/OfflineEventAttendanceMode"
+    : "https://schema.org/OnlineEventAttendanceMode"
+  const location = locationName
+    ? { "@type": "Place", name: locationName, address: locationName }
+    : { "@type": "VirtualLocation", url: toAbsoluteUrl(path) }
+
+  const isSeries = (sessions?.length ?? 0) > 1
+
   return {
     "@context": "https://schema.org",
-    "@type": "Event",
+    "@type": isSeries ? "EventSeries" : "Event",
     "@id": `${toAbsoluteUrl(path)}#event`,
     name,
     url: toAbsoluteUrl(path),
@@ -226,14 +241,26 @@ export function createEventJsonLd({
     startDate,
     ...(endDate ? { endDate } : {}),
     inLanguage: "ko-KR",
-    eventAttendanceMode: locationName
-      ? "https://schema.org/OfflineEventAttendanceMode"
-      : "https://schema.org/OnlineEventAttendanceMode",
-    location: locationName
-      ? { "@type": "Place", name: locationName, address: locationName }
-      : { "@type": "VirtualLocation", url: toAbsoluteUrl(path) },
+    eventAttendanceMode: attendanceMode,
+    location,
     ...(imageUrl ? { image: toAbsoluteUrl(imageUrl) } : {}),
     organizer: { "@id": ORGANIZATION_ID },
+    ...(isSeries
+      ? {
+          subEvent: sessions!.map((session, index) => ({
+            "@type": "Event",
+            "@id": `${toAbsoluteUrl(path)}#event-${index + 1}`,
+            name: `${name} (${index + 1}/${sessions!.length}회차)`,
+            url: toAbsoluteUrl(path),
+            startDate: session.startIso,
+            endDate: session.endIso,
+            inLanguage: "ko-KR",
+            eventAttendanceMode: attendanceMode,
+            location,
+            organizer: { "@id": ORGANIZATION_ID },
+          })),
+        }
+      : {}),
   }
 }
 

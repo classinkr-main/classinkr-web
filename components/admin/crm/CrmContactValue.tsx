@@ -52,7 +52,7 @@ export default function CrmContactValue({ value, className = "" }: CrmContactVal
       {copied ? (
         <Check className="h-3 w-3 shrink-0 text-[#084734]" />
       ) : (
-        <Copy className="h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover/contact:opacity-60" />
+        <Copy className="h-3 w-3 shrink-0 opacity-45 transition-opacity group-hover/contact:opacity-80" />
       )}
     </button>
   )

@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
+import { resolveLeadIdForAnonymousId } from "@/lib/identity/stitch"
 
 const ALLOWED_EVENTS = new Set([
   "page_view",
@@ -36,7 +37,7 @@ const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
     "slug",
     "event_slug",
   ]),
-  submit_demo_request: new Set(["event_id", "source", "lead_id", "stored", "event_slug"]),
+  submit_demo_request: new Set(["event_id", "source", "lead_id", "stored", "event_slug", "lead_magnet"]),
   submit_newsletter: new Set(["event_id", "source", "lead_magnet", "post_slug", "gate"]),
   download_materials: new Set(["event_id", "asset_id", "page", "source", "lead_magnet", "post_slug", "gate"]),
   view_resource_card: new Set(["event_id", "source", "lead_magnet", "gate", "tier", "category"]),
@@ -50,7 +51,6 @@ const ALLOWED_PARAM_KEYS: Record<string, Set<string>> = {
     "plan_id",
     "billing_cycle",
     "account_count",
-    "amount_cny",
     "quote_code",
     "promo_code",
     "value",
@@ -122,6 +122,11 @@ export async function POST(req: NextRequest) {
   const anonymousId =
     typeof body.anonymousId === "string" ? body.anonymousId.slice(0, 100) : null
 
+  // 이미 리드로 전환된 방문자면 이벤트에 lead_id 를 붙인다. 이게 있어야 "연락 후 재방문"
+  // 같은 반응 신호가 잡힌다 — 없으면 전환 이후의 활동이 영영 익명으로 남는다.
+  // 조회 실패는 익명 적재로 떨어질 뿐 추적을 막지 않는다.
+  const leadId = anonymousId ? await resolveLeadIdForAnonymousId(anonymousId) : null
+
   try {
     const sb = createSupabaseAdminClient()
     const { error } = await sb.from("client_events").insert({
@@ -132,6 +137,7 @@ export async function POST(req: NextRequest) {
       referrer,
       user_agent: userAgent,
       anonymous_id: anonymousId,
+      lead_id: leadId,
     })
     if (error) {
       console.warn("[track/event] client_events insert failed:", error.message)

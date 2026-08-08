@@ -14,9 +14,11 @@ function escapeXml(value: string): string {
 
 export async function GET() {
   let posts: Awaited<ReturnType<typeof getPublishedPostsForStaticSitemap>> = []
+  let loadFailed = false
   try {
     posts = await getPublishedPostsForStaticSitemap()
   } catch (error) {
+    loadFailed = true
     console.error("[blog/rss] failed to load posts:", error)
   }
 
@@ -54,7 +56,8 @@ export async function GET() {
   return new Response(xml, {
     headers: {
       "Content-Type": "application/rss+xml; charset=utf-8",
-      "Cache-Control": "public, max-age=3600",
+      // 조회 실패로 빈 피드가 나갔다면 캐시하지 않는다 — 순간 장애가 "글 0개"로 1시간 고정되는 걸 막는다.
+      "Cache-Control": loadFailed ? "no-store" : "public, max-age=3600",
     },
   })
 }

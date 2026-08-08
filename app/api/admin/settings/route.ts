@@ -10,6 +10,7 @@ const WEBHOOK_SETTING_KEYS = [
   "emailWebhookUrl",
   "wecomOpsWebhookUrl",
   "wecomCsWebhookUrl",
+  "wecomLeadReportWebhookUrl",
   "wecomCriticalWebhookUrl",
   "kakaoAlimtalkWebhookUrl",
 ] as const
@@ -53,6 +54,7 @@ export async function PATCH(req: NextRequest) {
     emailWebhookUrl: "",
     wecomOpsWebhookUrl: "",
     wecomCsWebhookUrl: "",
+    wecomLeadReportWebhookUrl: "",
     wecomCriticalWebhookUrl: "",
     kakaoAlimtalkWebhookUrl: "",
   })

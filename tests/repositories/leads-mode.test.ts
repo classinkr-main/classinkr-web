@@ -33,7 +33,7 @@ describe("saveLead", () => {
     vi.resetModules()
   })
 
-  it("retries with core lead fields when optional attribution columns are missing", async () => {
+  it("retries dropping only the named column — 나머지 귀속 데이터는 지킨다", async () => {
     vi.resetModules()
     process.env.USE_SUPABASE_LEADS = "true"
 
@@ -102,9 +102,75 @@ describe("saveLead", () => {
       message: "문의 테스트",
       status: "new",
     })
-    expect(insert.mock.calls[1]?.[0]).not.toHaveProperty("source_detail")
+    // 오류가 지목한 컬럼만 빠진다.
     expect(insert.mock.calls[1]?.[0]).not.toHaveProperty("landing_page")
-    expect(insert.mock.calls[1]?.[0]).not.toHaveProperty("referrer")
+    // 멀쩡한 귀속 컬럼은 살아남는다 — 예전에는 이것들까지 통째로 버렸다.
+    expect(insert.mock.calls[1]?.[0]).toMatchObject({
+      source_detail: "도입 상담",
+      current_page: "https://classin.co.kr/contact",
+      referrer: "https://classin.co.kr/",
+    })
+  })
+
+  it("여러 컬럼이 없으면 2차로 선택 컬럼을 전부 덜어 저장을 살린다", async () => {
+    vi.resetModules()
+    process.env.USE_SUPABASE_LEADS = "true"
+
+    // PostgREST 는 한 번에 한 컬럼만 지목한다 — 지목된 것만 덜면 다음 컬럼에서 또 걸린다.
+    const single = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: null,
+        error: {
+          code: "PGRST204",
+          message: "Could not find the 'anonymous_id' column of 'leads' in the schema cache",
+        },
+      })
+      .mockResolvedValueOnce({
+        data: null,
+        error: {
+          code: "PGRST204",
+          message: "Could not find the 'landing_page' column of 'leads' in the schema cache",
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          id: "lead-2",
+          source: "contact_page",
+          name: "Codex Test",
+          status: "new",
+          created_at: "2026-08-05T00:00:00.000Z",
+          updated_at: "2026-08-05T00:00:00.000Z",
+        },
+        error: null,
+      })
+    const insert = vi.fn((_payload: Record<string, unknown>) => ({
+      select: () => ({ single }),
+    }))
+    const from = vi.fn(() => ({ insert }))
+
+    vi.doMock("@/lib/supabase/admin", () => ({
+      createSupabaseAdminClient: vi.fn(() => ({ from })),
+    }))
+
+    const { saveLead } = await import("@/lib/repositories/leads")
+
+    const saved = await saveLead({
+      source: "contact_page",
+      name: "Codex Test",
+      timestamp: "2026-08-05T00:00:00.000Z",
+      anonymous_id: "anon-1",
+      landing_page: "https://classin.co.kr/contact",
+      source_detail: "도입 상담",
+    })
+
+    expect(saved.id).toBe("lead-2")
+    expect(insert).toHaveBeenCalledTimes(3)
+    // 2차 재시도는 선택 컬럼을 전부 덜어낸다 — 리드를 잃는 것보다 귀속을 잃는 게 낫다.
+    expect(insert.mock.calls[2]?.[0]).not.toHaveProperty("anonymous_id")
+    expect(insert.mock.calls[2]?.[0]).not.toHaveProperty("landing_page")
+    expect(insert.mock.calls[2]?.[0]).not.toHaveProperty("source_detail")
+    expect(insert.mock.calls[2]?.[0]).toMatchObject({ source: "contact_page", name: "Codex Test" })
   })
 
   it("does not retry non-schema storage failures", async () => {

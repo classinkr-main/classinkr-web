@@ -6,7 +6,7 @@
 
 관련 기준 문서:
 
-- [repository-status-2026-06-08.md](./repository-status-2026-06-08.md)
+- [repository-status-2026-06-08.md](../archive/repository-status-2026-06-08.md) — 당시 경로 상태 기록
 - [partner-portal-master-spec.md](./partner-portal-master-spec.md)
 - [partner-portal-front-back-contract.md](./partner-portal-front-back-contract.md)
 - [partner-portal-unification.md](./partner-portal-unification.md)
@@ -59,7 +59,7 @@ Partner Action Portal
 | 어드민 운영 | `app/admin/commercial`, `app/admin/crm/**`, `app/admin/quotes` | 실제 운영 화면. 하드웨어 허브로 수렴 후보 |
 | 구 파트너/문서 모델 | V1 `partners`, `quotes`, `contracts`, `receipts` | 호환/마이그레이션 대상 |
 
-[repository-status-2026-06-08.md](./repository-status-2026-06-08.md)는 `app/partner`, `app/api/partner`, `components/partner-portal`, `lib/partner-portal` 표현을 히스토리로 보라고 정리한다. 이 문서도 그 기준을 따른다.
+[repository-status-2026-06-08.md](../archive/repository-status-2026-06-08.md)는 `app/partner`, `app/api/partner`, `components/partner-portal`, `lib/partner-portal` 표현을 히스토리로 보라고 정리한다. 이 문서도 그 기준을 따른다.
 
 ## 3. 소유 경계
 

@@ -134,6 +134,41 @@ export async function associateLeadsForVerifiedEmail(
   return { leadIds, canonicalLeadId }
 }
 
+/**
+ * 이 익명 방문자가 이미 리드로 전환됐는지 찾는다 — 이벤트 적재 시점의 정방향 귀속용.
+ *
+ * stitchIdentity 는 "지금까지 쌓인 것"을 소급해 붙이는 함수라, 전환 이후에 새로 쌓이는
+ * 이벤트는 다시 익명으로 떨어진다. 그런데 반응(response) 신호의 핵심인 "우리가 연락한
+ * 뒤에 다시 들어왔다"는 정확히 그 구간에서 만들어진다. 그래서 적재 시점에도 한 번
+ * 붙여야 한다.
+ *
+ * leads(anonymous_id, created_at desc) 부분 인덱스를 그대로 타며, 같은 브라우저에서
+ * 여러 번 문의했으면 가장 최근 리드로 붙인다 — 지금 진행 중인 대화가 그쪽이다.
+ */
+export async function resolveLeadIdForAnonymousId(
+  anonymousId: string | null | undefined
+): Promise<string | null> {
+  const normalized = normalizeShortText(anonymousId, 100)
+  if (!normalized) return null
+
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from("leads")
+      .select("id")
+      .eq("anonymous_id", normalized)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error || !data) return null
+    return typeof data.id === "string" ? data.id : null
+  } catch {
+    // 귀속 실패가 추적을 막지 않는다 — 못 찾으면 익명으로 적재한다.
+    return null
+  }
+}
+
 export async function stitchIdentity(input: StitchIdentityInput): Promise<StitchIdentityResult> {
   const anonymousId = normalizeShortText(input.anonymousId, 100)
   const userId = normalizeUuid(input.userId)
@@ -171,6 +206,18 @@ export async function stitchIdentity(input: StitchIdentityInput): Promise<Stitch
       .eq("anonymous_id", anonymousId)
       .or("lead_id.is.null,user_id.is.null")
     await captureWarning("client_events anonymous backfill", query, warnings)
+
+    // 자료 다운로드도 같은 익명 id 로 소급 귀속한다. getLeadsActivitySummary 가
+    // downloadCount 를 여기서 읽으므로, 빠뜨리면 "자료를 받아간 리드"가 참여 신호에서
+    // 통째로 누락된다(CRM 우선순위의 반응 축 입력).
+    if (leadId) {
+      const downloads = supabase
+        .from("material_downloads")
+        .update({ lead_id: leadId })
+        .eq("anonymous_id", anonymousId)
+        .is("lead_id", null)
+      await captureWarning("material_downloads anonymous backfill", downloads, warnings)
+    }
   }
 
   // explicit leadId 경로: 이미 알고 있는 lead를 user_id/profile에 연결(이메일 추측 없음).

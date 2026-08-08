@@ -2,10 +2,9 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { BROCHURE_URL } from "@/lib/marketing-links"
 import { DemoModal } from "./DemoModal"
-import { NewsletterModal } from "./NewsletterModal"
-import { ArrowRight, CalendarDays, FileText, Newspaper } from "lucide-react"
+import { TrackedLink } from "@/components/TrackedLink"
+import { ArrowRight, CalendarDays, FileCheck2, Newspaper } from "lucide-react"
 
 export function FinalCTA() {
     return (
@@ -21,51 +20,39 @@ export function FinalCTA() {
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#6EE7B7]/30" />
                         <span className="relative inline-flex h-2 w-2 rounded-full bg-[#6EE7B7]" />
                     </span>
-                    <span className="tracking-[0.04em]">무료 컨설팅 제공</span>
+                    <span className="tracking-[0.04em]">대표 수업 1개부터</span>
                 </span>
 
                 <h2 className="text-3xl md:text-5xl lg:text-[3.5rem] font-black text-white mb-6 leading-[1.1] break-keep" style={{ letterSpacing: '-1.25px' }}>
-                    강사 의존도에서 벗어날<br className="hidden md:block" /> 준비가 됐다면
+                    전체를 한 번에 바꾸지 마세요.<br className="hidden md:block" /> 가장 손이 많이 가는 수업부터 검증하세요.
                 </h2>
 
                 <p className="text-xl md:text-2xl text-white/60 max-w-3xl mx-auto mb-12 font-light leading-relaxed break-keep">
-                    15분이면 내 학원에 맞는 시스템 설계를 받을 수 있습니다. <br className="hidden md:block" />
-                    전담 매니저가 직접 도입 플랜을 함께 짜드립니다.
+                    대표 교안 1개와 줄이고 싶은 반복 업무 3가지만 준비하세요. <br className="hidden md:block" />
+                    판서부터 녹화·복습·관리자 확인까지 첫 파일럿 순서를 함께 설계합니다.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
                     <DemoModal trackingButton="final_consultation">
                         <Button size="lg" className="h-16 px-10 text-lg font-bold bg-white text-[#111110] hover:bg-[#F6F5F4] hover:scale-105 active:scale-95 transition-all shadow-xl shadow-white/10 w-full sm:w-auto rounded-full">
-                            무료 컨설팅 신청하기
+                            1개 교실 파일럿 상담받기
                             <ArrowRight className="ml-2 w-5 h-5" />
                         </Button>
                     </DemoModal>
 
-                    <NewsletterModal
-                        source="finalcta_download"
-                        variant="dark"
-                        badge="무료 자료"
-                        title="서비스 소개서 받아보기"
-                        description="이메일을 남겨주시면 Classin 소개서를 바로 열람하실 수 있습니다."
-                        benefits={[
-                            "Classin 주요 기능 한눈에 정리",
-                            "도입 사례 및 성과 데이터 포함",
-                            "요금제 · 도입 프로세스 안내",
-                        ]}
-                        successCta={{
-                            label: "소개서 지금 바로 열기",
-                            href: BROCHURE_URL,
-                        }}
+                    <TrackedLink
+                        href="/resources/academy-system-checklist#download"
+                        ctaId="final_lead_magnet"
+                        tracking={{ source: "home_final_cta", lead_magnet: "academy-system-checklist" }}
+                        className="inline-flex h-16 w-full items-center justify-center rounded-full border border-white/20 bg-white/5 px-10 text-lg font-semibold text-white shadow-xl backdrop-blur-md transition-all hover:scale-105 hover:bg-white/10 sm:w-auto"
                     >
-                        <Button variant="outline" className="h-16 px-10 text-lg bg-white/5 text-white border-white/20 hover:bg-white/10 hover:text-white transition-all hover:scale-105 active:scale-95 shadow-xl w-full sm:w-auto rounded-full backdrop-blur-md">
-                            <FileText className="mr-2 w-5 h-5" />
-                            서비스 소개서 다운로드
-                        </Button>
-                    </NewsletterModal>
+                        <FileCheck2 className="mr-2 h-5 w-5" />
+                        먼저 운영 누수 진단하기
+                    </TrackedLink>
                 </div>
 
                 <p className="mt-10 text-sm text-white/40 font-medium tracking-wide break-keep">
-                    카드 등록 불필요 ∙ 전담 매니저 배정 ∙ 무료 로드맵 상담 포함
+                    대표 수업 기준 ∙ 도입 범위 확인 ∙ 90일 파일럿 순서
                 </p>
 
                 {/* 아직 상담이 이르다면 — 콘텐츠 탐색 경로 */}

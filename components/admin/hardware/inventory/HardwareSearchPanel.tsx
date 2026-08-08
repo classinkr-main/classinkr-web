@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import type { Dispatch, SetStateAction } from "react"
 import { Search } from "lucide-react"
 
@@ -40,7 +41,7 @@ interface HardwareSearchPanelProps {
   setCustomerDetail: Dispatch<SetStateAction<string | null>>
 }
 
-export default function HardwareSearchPanel({
+function HardwareSearchPanel({
   hardwareSearch,
   setHardwareSearch,
   hardwareSearchResults,
@@ -203,3 +204,5 @@ export default function HardwareSearchPanel({
     </section>
   )
 }
+
+export default memo(HardwareSearchPanel)

@@ -1,52 +1,21 @@
 "use client"
 
-import Image from "next/image"
-import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import {
-  AlertTriangle,
   Archive,
-  ArrowLeft,
-  ArrowUpRight,
   BookOpen,
-  Bot,
   CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  ClipboardCheck,
   Clock,
-  Copy,
-  ExternalLink,
-  FileCheck2,
-  Headphones,
-  HelpCircle,
   History,
-  ImageIcon,
   Loader2,
-  LockKeyhole,
   MessageSquare,
-  Paperclip,
-  PanelRightOpen,
-  Plus,
-  RefreshCcw,
   RotateCcw,
   Search,
-  Send,
-  Settings2,
-  ShieldCheck,
-  Sparkles,
-  Trash2,
-  UserRound,
-  Wifi,
-  WifiOff,
-  X,
-  type LucideIcon,
 } from "lucide-react"
 import {
   Suspense,
   type ChangeEvent,
   type FormEvent,
-  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -55,918 +24,107 @@ import {
   useTransition,
 } from "react"
 
+import CsConsoleNav from "@/components/admin/cs/CsConsoleNav"
 import { adminFetchJson } from "@/lib/admin-client"
-import { cn } from "@/lib/utils"
+import { useUrlState } from "@/lib/use-url-state"
 
+import WorkspaceHeader from "./components/WorkspaceHeader"
 import {
-  REGRESSION_JUDGE_ACTIONS,
-  regressionOutcomeChip,
-  summarizeDocsGaps,
-  type DocsGapsDeskSummary,
-} from "./ops-desk"
-
-type WorkspaceTab = "chat" | "queue" | "archive" | "tools"
-type ModelMode = "auto" | "fast" | "deep"
-type ConversationStatus = "queue" | "active" | "waiting_review" | "resolved" | "archived"
-type ConversationPriority = "low" | "normal" | "high" | "urgent"
-type ReviewState = "not_required" | "pending" | "approved" | "changes_requested" | "rejected"
-
-interface InternalCsConversation {
-  id: string
-  title: string
-  status: ConversationStatus
-  priority: ConversationPriority
-  assignee_user_id: string | null
-  assignee_name: string | null
-  tags: string[]
-  customer_context: Record<string, unknown>
-  last_message_at: string | null
-  updated_at: string
-  archive_reason: string | null
-}
-
-interface InternalCsSourceRef {
-  id: string
-  label?: string
-  kind?: "public_doc" | "internal_guide" | "curated_knowledge" | "internal_asset"
-  verificationStatus?: "confirmed" | "conditional" | "conflicting_sources" | "hq_confirmation_required"
-  externalUse?: "reviewed_summary_allowed" | "internal_only" | "confirmation_required"
-  reviewState?: "pending" | "approved" | "changes_requested" | "rejected"
-}
-
-interface InternalCsMessage {
-  id: string
-  conversation_id: string
-  role: "user" | "assistant" | "internal_note" | "system"
-  content: string
-  model_name: string | null
-  model_mode: "fast" | "deep" | "backup" | null
-  source_refs: unknown[]
-  metadata: Record<string, unknown>
-  review_state: ReviewState
-  corrected_content: string | null
-  review_note: string | null
-  feedback_labels: string[]
-  regression_candidate: boolean
-  regression_outcome: "not_evaluated" | "pass" | "needs_fix" | "promoted" | "excluded"
-  reviewed_by: string | null
-  reviewed_at: string | null
-  created_at: string
-}
-
-interface InternalCsAsset {
-  id: string
-  file_name?: string | null
-  original_file_name?: string | null
-  name?: string | null
-  mime_type?: string | null
-  thumbnail_url?: string | null
-  preview_url?: string | null
-  signed_url?: string | null
-  url?: string | null
-  instruction?: string | null
-  analysis_summary?: string | null
-  analysis_payload?: unknown
-  analysis?: string | null
-  analysis_text?: string | null
-  analysis_json?: unknown
-  analysis_status?: string | null
-  status?: string | null
-  review_state?: string | null
-  analysis_review_state?: string | null
-  human_review_required?: boolean | null
-  created_at?: string | null
-}
-
-interface InternalCsIntegrationEvent {
-  id: string
-  direction?: string | null
-  transport?: string | null
-  event_type?: string | null
-  source_system?: string | null
-  destination?: string | null
-  integration?: string | null
-  status?: string | null
-  result?: unknown
-  include_original?: boolean | null
-  includeOriginal?: boolean | null
-  summary?: string | null
-  error_message?: string | null
-  errorMessage?: string | null
-  created_at?: string | null
-  createdAt?: string | null
-}
-
-interface ConversationListResponse {
-  conversations: InternalCsConversation[]
-  pagination: { total: number }
-}
-
-// GET /api/admin/docs/gaps — 클러스터별 metadata.source로 챗봇/내부CS 유입을 구분한다.
-// 스탯 스트립 집계(summarizeDocsGaps)에 필요한 필드만 취한다.
-interface DocGapsSummaryResponse {
-  gapClusters?: Array<{ metadata?: { source?: string } | null }> | null
-  zeroResultSearches?: unknown[] | null
-}
-
-// GET /api/admin/cs-chat/regression-candidates — 회귀 후보(미판정 우선) 메시지 목록.
-type RegressionOutcome = "not_evaluated" | "pass" | "needs_fix" | "promoted" | "excluded"
-
-interface RegressionCandidateItem {
-  id: string
-  conversationId: string
-  excerpt: string
-  capturedAt: string
-  outcome: RegressionOutcome
-  reviewState: string
-  // additive 필드 — 승격 자격(corrected_content 존재). 구응답에는 없을 수 있어 optional,
-  // 부재 시(?? true) approved 휴리스틱만으로 승격 버튼을 노출해 하위호환한다.
-  hasCorrectedContent?: boolean
-}
-
-interface RegressionCandidatesResponse {
-  items: RegressionCandidateItem[]
-}
-
-// 회귀 위젯과 지표 카드 행이 함께 쓰는 4단계 로드 상태 — idle→loading은 탭 진입 시 1회만 자동,
-// failed 이후에는 수동 "다시 시도"로만 재조회한다(무한 재시도 루프 금지).
-type AsyncLoadState = "idle" | "loading" | "loaded" | "failed"
-
-// GET /api/admin/cs-chat/metrics?days=7|30 — 계약 1. 분모 0이면 rate는 null.
-interface InternalCsMetricsResponse {
-  range: { days: number; from: string; to: string }
-  volume: { questions: number; conversations: number }
-  fallbackRate: number | null
-  evidenceMix: { knowledge: number; docs: number; channel: number; none: number }
-  review: { approved: number; changesRequested: number; pending: number; approvalRate: number | null }
-  regression: { notEvaluated: number; pass: number; needsFix: number; promoted: number; excluded: number }
-  leadTimeHours: { median: number | null; p90: number | null }
-}
-
-// POST /api/admin/cs-chat/regression-eval — 계약 2. 제안만 반환하며 DB의 regression_outcome은
-// 이 호출만으로는 절대 바뀌지 않는다(확정은 기존 judgeRegressionCandidate 판정 버튼으로만).
-interface RegressionEvalItem {
-  messageId: string
-  conversationId: string
-  suggestedOutcome: "pass" | "needs_fix"
-  rationale: string
-  regeneratedExcerpt: string
-  judgeModel: string
-}
-
-interface RegressionEvalSkippedItem {
-  messageId: string
-  reason: string
-}
-
-interface RegressionEvalResponse {
-  items: RegressionEvalItem[]
-  skipped: RegressionEvalSkippedItem[]
-}
-
-type RegressionEvalRunState = "idle" | "running" | "done" | "failed"
-
-// POST /api/admin/cs-chat/messages/[messageId]/promote-knowledge — 계약 3.
-// 대상: review_state=approved && corrected_content 존재. 멱등 — 재승격 시 reused:true.
-interface PromoteKnowledgeResponse {
-  articleId: string
-  slug: string
-  reused: boolean
-  // additive — false면 문서는 저장됐지만 임베딩 실패로 검색 색인 대기 상태. true/부재는 정상.
-  searchable?: boolean
-}
-
-// 회귀 패널 항목과 대화 스레드의 승인된 메시지, 두 노출 지점이 messageId로 결과를 공유한다.
-type PromotionResult =
-  | { status: "success"; articleId: string; slug: string; reused: boolean; searchable?: boolean }
-  | { status: "error"; error: string }
-
-interface ConversationDetailResponse {
-  conversation: InternalCsConversation
-  messages: InternalCsMessage[]
-  assets?: InternalCsAsset[]
-  integrationEvents?: InternalCsIntegrationEvent[]
-}
-
-interface IntegrationStatusResponse {
-  configured?: boolean
-  status?: string
-  provider?: string
-  label?: string
-  message?: string
-  lastCheckedAt?: string | null
-  bridge?: {
-    configured?: boolean
-    status?: string
-    provider?: string
-    label?: string
-    message?: string
-    lastCheckedAt?: string | null
-  }
-}
-
-interface GenerateResponse {
-  message: InternalCsMessage
-  result: {
-    mode: "fast" | "deep"
-    model: string | null
-    fallbackUsed: boolean
-    userMessageSaved: boolean
-    assistantMessageSaved: boolean
-  }
-}
-
-interface ReviewChecks {
-  customer: boolean
-  evidence: boolean
-  externalScope: boolean
-}
-
-const INITIAL_CHECKS: ReviewChecks = {
-  customer: false,
-  evidence: false,
-  externalScope: false,
-}
-
-const MAX_PENDING_ASSETS = 3
-const MAX_ASSET_BYTES = 8 * 1024 * 1024
-const ACCEPTED_ASSET_TYPES = new Set(["image/jpeg", "image/png", "image/webp"])
-
-// 딥링크 ?conversation= 값은 URL을 통해 들어오는 유일한 미신뢰 id다.
-// fetch 경로에 그대로 꽂히므로 UUID 형태가 아니면 요청조차 만들지 않는다.
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-const WORKSPACE_TABS: Array<{ value: WorkspaceTab; label: string }> = [
-  { value: "chat", label: "대화" },
-  { value: "queue", label: "대기열" },
-  { value: "archive", label: "아카이브" },
-  { value: "tools", label: "운영 도구" },
-]
-
-// 모델 모드 세그먼트 — 네이티브 select 대신 현재 모드가 항상 보이는 3분할 컨트롤.
-const MODEL_MODE_SEGMENTS: Array<{ value: ModelMode; label: string }> = [
-  { value: "auto", label: "자동" },
-  { value: "fast", label: "Flash" },
-  { value: "deep", label: "Pro" },
-]
-
-// 운영 화면 바로가기 — 라이브 지표(스탯 스트립·회귀 검수) 아래에 2열 그리드로 붙는 보조 유틸리티.
-const OPERATING_TOOLS = [
-  {
-    href: "/admin/docs?tab=gaps",
-    title: "문서 보강 · 회귀 검수",
-    description: "반복·미해결 질문을 문서 초안으로 연결",
-    icon: Search,
-  },
-  {
-    href: "/admin/docs?tab=recommended",
-    title: "추천 질문 승인",
-    description: "초안 질문 공개 여부·노출 순서 결정",
-    icon: ClipboardCheck,
-  },
-  {
-    href: "/admin/channel-talk",
-    title: "상담 동기화 · FAQ 후보",
-    description: "채널톡 상담 원문과 미커버 질문 확인",
-    icon: Headphones,
-  },
-  {
-    // nav 재분리(2026-07-17): 외부 챗봇 운영 대시보드가 /admin/chatbot으로 독립 표면을 되찾았다.
-    href: "/admin/chatbot",
-    title: "챗봇 운영 현황",
-    description: "질문량 · 미해결률 · 응답 속도",
-    icon: Bot,
-  },
-  {
-    href: "/admin/docs",
-    title: "가이드 정본 관리",
-    description: "본사 확인 정보의 정본 반영과 게시",
-    icon: BookOpen,
-  },
-  {
-    href: "/admin/settings?tab=integrations",
-    title: "연동 상태 확인",
-    description: "Gemini · Channel Talk · WeCom 점검",
-    icon: Settings2,
-  },
-] as const
-
-const STATUS_META: Record<ConversationStatus, { label: string; className: string }> = {
-  queue: { label: "대기", className: "border-black/10 bg-[#F6F5F4] text-[#615D59]" },
-  active: { label: "진행중", className: "border-[#084734]/15 bg-[#ECFDF5] text-[#084734]" },
-  waiting_review: { label: "검토 필요", className: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]" },
-  resolved: { label: "승인 완료", className: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]" },
-  archived: { label: "아카이브", className: "border-black/10 bg-white text-[#615D59]" },
-}
-
-const PRIORITY_META: Record<ConversationPriority, { label: string; dot: string }> = {
-  low: { label: "낮음", dot: "bg-[#A39E98]" },
-  normal: { label: "보통", dot: "bg-[#A8741A]" },
-  high: { label: "높음", dot: "bg-[#B43E3E]" },
-  urgent: { label: "긴급", dot: "bg-[#8F2C2C]" },
-}
-
-const REVIEW_META: Record<ReviewState, { label: string; className: string }> = {
-  not_required: { label: "기록", className: "bg-[#F6F5F4] text-[#615D59]" },
-  pending: { label: "검토 전 초안", className: "bg-[#FBF1E0] text-[#7A520F]" },
-  approved: { label: "승인됨", className: "bg-[#ECFDF5] text-[#084734]" },
-  changes_requested: { label: "수정 요청", className: "bg-[#FCE9E9] text-[#8F2C2C]" },
-  rejected: { label: "사용 안 함", className: "bg-[#F6F5F4] text-[#615D59]" },
-}
-
-const DEMO_CONVERSATION: InternalCsConversation = {
-  id: "preview-internal-cs",
-  title: "환불 정책 확인",
-  status: "waiting_review",
-  priority: "high",
-  assignee_user_id: null,
-  assignee_name: "CS 담당자",
-  tags: ["area:billing", "intent:hq_confirmation", "evidence:hq_pending"],
-  customer_context: {},
-  last_message_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-  archive_reason: null,
-}
-
-const DEMO_MESSAGES: InternalCsMessage[] = [
-  {
-    id: "preview-user-message",
-    conversation_id: DEMO_CONVERSATION.id,
-    role: "user",
-    content: "결제 후 수업을 한 번도 듣지 않았고, 7일 이내 환불을 요청했습니다. 환불 가능 여부와 본사 확인이 필요한지 검토하고 답변 초안을 작성해 주세요.",
-    model_name: null,
-    model_mode: null,
-    source_refs: [],
-    metadata: {},
-    review_state: "not_required",
-    corrected_content: null,
-    review_note: null,
-    feedback_labels: [],
-    regression_candidate: false,
-    regression_outcome: "not_evaluated",
-    reviewed_by: null,
-    reviewed_at: null,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: "preview-assistant-message",
-    conversation_id: DEMO_CONVERSATION.id,
-    role: "assistant",
-    content: "검토 전 내부 초안\n\n환불 조건은 결제·계약 방식에 따라 달라질 수 있어 현재 정보만으로 확정할 수 없습니다. 고객의 계약서 또는 주문 조건을 먼저 확인하고, 프로모션 코드가 적용된 건이라면 본사 확인 후 안내하는 것이 안전합니다.\n\n고객에게는 ‘계약 조건과 결제 내역을 확인한 뒤 담당자가 환불 가능 여부와 처리 일정을 안내하겠다’고 우선 답변해 주세요.",
-    model_name: "gemini-3.1-pro-preview",
-    model_mode: "deep",
-    source_refs: [
-      { id: "/docs/getting-started/pre-adoption-checklist", label: "도입 전 확인 기준", kind: "public_doc" },
-      { id: "docs/active/classin-operating-canon-2026-07-02.md", label: "Classin 운영 정본", kind: "internal_guide" },
-      {
-        id: "docs/active/internal-cs-content-arrangement-2026-07-15.md#가격계약환불보증",
-        label: "가격·계약·환불의 한국 적용 범위",
-        kind: "curated_knowledge",
-        verificationStatus: "hq_confirmation_required",
-        externalUse: "confirmation_required",
-      },
-    ],
-    metadata: { origin: "model", fallbackUsed: false },
-    review_state: "pending",
-    corrected_content: null,
-    review_note: null,
-    feedback_labels: [],
-    regression_candidate: false,
-    regression_outcome: "not_evaluated",
-    reviewed_by: null,
-    reviewed_at: null,
-    created_at: new Date().toISOString(),
-  },
-]
-
-const DEMO_DETAIL: ConversationDetailResponse = {
-  conversation: DEMO_CONVERSATION,
-  messages: DEMO_MESSAGES,
-  assets: [],
-  integrationEvents: [],
-}
-
-function assetFileName(asset: InternalCsAsset) {
-  return asset.original_file_name ?? asset.file_name ?? asset.name ?? "첨부 이미지"
-}
-
-function assetPreviewUrl(asset: InternalCsAsset) {
-  return asset.signed_url ?? asset.thumbnail_url ?? asset.preview_url ?? asset.url ?? null
-}
-
-function assetAnalysis(asset: InternalCsAsset) {
-  if (asset.analysis_summary) return asset.analysis_summary
-  if (asset.analysis_text) return asset.analysis_text
-  if (asset.analysis) return asset.analysis
-  if (asset.analysis_payload && typeof asset.analysis_payload === "object") {
-    return JSON.stringify(asset.analysis_payload, null, 2)
-  }
-  if (asset.analysis_json && typeof asset.analysis_json === "object") {
-    return JSON.stringify(asset.analysis_json, null, 2)
-  }
-  return "분석 결과가 아직 준비되지 않았습니다."
-}
-
-function assetAnalysisStatus(asset: InternalCsAsset) {
-  return asset.analysis_status ?? asset.status ?? "completed"
-}
-
-function assetNeedsHumanReview(asset: InternalCsAsset) {
-  if (asset.human_review_required != null) return asset.human_review_required
-  return (asset.analysis_review_state ?? asset.review_state) !== "approved"
-}
-
-function integrationState(response: IntegrationStatusResponse | null) {
-  const bridge = response?.bridge ?? response
-  const configured = bridge?.configured ?? response?.configured ?? false
-  const status = bridge?.status ?? response?.status ?? (configured ? "ready" : "unconfigured")
-  const ready = configured && ["ready", "connected", "ok", "healthy", "active"].includes(status.toLowerCase())
-  return {
-    configured,
-    ready,
-    status,
-    label: bridge?.label ?? bridge?.provider ?? response?.label ?? response?.provider ?? "AI 브리지",
-    message: bridge?.message ?? response?.message ?? (ready ? "현재 대화를 안전하게 전달할 수 있습니다." : "연동 설정과 상태를 확인해 주세요."),
-    lastCheckedAt: bridge?.lastCheckedAt ?? response?.lastCheckedAt ?? null,
-  }
-}
-
-function integrationEventWhen(event: InternalCsIntegrationEvent) {
-  return event.created_at ?? event.createdAt ?? null
-}
-
-function integrationEventSummary(event: InternalCsIntegrationEvent) {
-  if (event.summary) return event.summary
-  if (typeof event.result === "string") return event.result
-  if (event.error_message ?? event.errorMessage) return event.error_message ?? event.errorMessage ?? ""
-  return event.event_type ?? "내부 분석 요청"
-}
-
-function fileKey(file: File) {
-  return `${file.name}:${file.size}:${file.lastModified}`
-}
-
-function formatTime(value: string | null) {
-  if (!value) return "방금"
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ""
-  return new Intl.DateTimeFormat("ko-KR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(date)
-}
-
-function formatDay(value: string | null) {
-  if (!value) return "오늘"
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ""
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "short",
-    day: "numeric",
-  }).format(date)
-}
-
-// 지표 카드 행(계약 1) 전용 포맷터 — 분모 0으로 rate가 null이면 "—"로 표시한다.
-function formatMetricRate(value: number | null | undefined) {
-  if (value == null) return "—"
-  return `${Math.round(value * 100)}%`
-}
-
-function formatMetricHours(value: number | null | undefined) {
-  if (value == null) return "—"
-  return `${Number.isInteger(value) ? value : value.toFixed(1)}h`
-}
-
-function normalizeSourceRefs(values: unknown[]): InternalCsSourceRef[] {
-  return values.flatMap((value) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return []
-    const source = value as Record<string, unknown>
-    if (typeof source.id !== "string" || !source.id.trim()) return []
-    const kind = typeof source.kind === "string" ? source.kind : undefined
-    const verificationStatus = typeof source.verificationStatus === "string"
-      ? source.verificationStatus
-      : undefined
-    const externalUse = typeof source.externalUse === "string" ? source.externalUse : undefined
-    const reviewState = typeof source.reviewState === "string" ? source.reviewState : undefined
-    return [{
-      id: source.id,
-      label: typeof source.label === "string" ? source.label : undefined,
-      kind: kind as InternalCsSourceRef["kind"],
-      verificationStatus: verificationStatus as InternalCsSourceRef["verificationStatus"],
-      externalUse: externalUse as InternalCsSourceRef["externalUse"],
-      reviewState: reviewState as InternalCsSourceRef["reviewState"],
-    }]
-  })
-}
-
-function sourceStatus(source: InternalCsSourceRef) {
-  if (source.kind === "internal_asset") {
-    if (source.reviewState === "approved") return { label: "담당자 확인", tone: "confirmed" as const }
-    return { label: "이미지 미검토", tone: "pending" as const }
-  }
-  if (source.verificationStatus === "confirmed") {
-    return { label: "확정", tone: "confirmed" as const }
-  }
-  if (source.verificationStatus === "conditional") {
-    return { label: "조건부", tone: "conditional" as const }
-  }
-  if (source.verificationStatus === "conflicting_sources") {
-    return { label: "자료 충돌", tone: "pending" as const }
-  }
-  if (source.verificationStatus === "hq_confirmation_required") {
-    return { label: "본사 확인", tone: "pending" as const }
-  }
-  return null
-}
-
-function sourceHref(source: InternalCsSourceRef) {
-  if (source.id.startsWith("/")) return source.id.split("#")[0]
-  if (source.id.startsWith("docs/")) return null
-  return null
-}
-
-function getLastQuestion(detail: ConversationDetailResponse) {
-  return [...detail.messages].reverse().find((message) => message.role === "user")?.content
-}
-
-function buildCustomerHoldingTemplate(detail: ConversationDetailResponse | null) {
-  if (!detail) return ""
-  return [
-    "안녕하세요.",
-    "현재 확인된 범위: [확인된 내용 입력]",
-    "추가 확인 중인 항목: [모델·세대·버전·계약 등 입력]",
-    "확정 전 안내하지 않는 항목: [가격·환불·보증·원인 등 해당 시 입력]",
-    `다음 안내: ${detail.conversation.assignee_name ?? "담당자 지정 필요"} · [회신 예정 시각]`,
-  ].join("\n")
-}
-
-function buildInternalHandoffTemplate(detail: ConversationDetailResponse | null) {
-  if (!detail) return ""
-  return [
-    `[CS-${detail.conversation.id}] ${detail.conversation.title}`,
-    `우선순위 / 상태: ${detail.conversation.priority} / ${detail.conversation.status}`,
-    `담당자: ${detail.conversation.assignee_name ?? "지정 필요"}`,
-    `분류 태그: ${detail.conversation.tags.join(", ") || "분류 필요"}`,
-    "제품·모델·세대·앱 버전: 확인 필요",
-    `문의 / 현상: ${getLastQuestion(detail) ?? "입력 필요"}`,
-    "영향·긴급도: 입력 필요",
-    "확인한 내용 / 시도 결과: 입력 필요",
-    "고객에게 안내한 내용: 입력 필요",
-    "미확정·충돌·리스크: 입력 필요",
-    "다음 액션 / 담당자 / 기한: 입력 필요",
-    `관련 근거·첨부: 이미지 ${detail.assets?.length ?? 0}건 / 근거 링크 입력 필요`,
-  ].join("\n")
-}
-
-function buildHqTemplate(detail: ConversationDetailResponse | null) {
-  if (!detail) return ""
-  const area = detail.conversation.tags
-    .find((tag) => tag.startsWith("area:"))
-    ?.slice("area:".length) || "AREA"
-  const lastQuestion = getLastQuestion(detail)
-  return [
-    `[KR-CS][${detail.conversation.priority.toUpperCase()}][${area}][${detail.conversation.id}] ${detail.conversation.title}`,
-    "",
-    "1. Case",
-    `- 내부 케이스 ID: ${detail.conversation.id}`,
-    `- 한국 담당자: ${detail.conversation.assignee_name ?? "지정 필요"}`,
-    "- 발생 시각(KST) / 기관·계정 식별자: 입력 필요 (개인정보 최소화)",
-    "- 제품·모델·세대·앱 버전: 확인 필요",
-    "",
-    "2. Impact",
-    "- 영향 사용자·수업·기기 수: 확인 필요",
-    "- 수업 차단 여부 / 고객 요구 시한: 확인 필요",
-    "",
-    "3. Question / Reproduction",
-    `- 현상: ${lastQuestion ?? "질문과 현상을 입력해 주세요."}`,
-    "- 재현 절차 / Expected / Actual / Frequency: 입력 필요",
-    "",
-    "4. Korea checks",
-    "- 이미 확인한 항목 / 시도한 조치 / 임시 우회 결과: 입력 필요",
-    "",
-    "5. Evidence",
-    `- 개인정보 제거 첨부 ${detail.assets?.length ?? 0}건 / 내부 근거 링크: 입력 필요`,
-    "",
-    "6. Request to HQ",
-    "- 답변이 필요한 질문 1~3개: 입력 필요",
-    "- 원인 / 조치 / 버그 여부 / ETA 중 필요한 항목: 입력 필요",
-    "- Reply needed by (KST): 입력 필요",
-    "- Please include applicable market/models, generation, effective date, and source document/version.",
-  ].join("\n")
-}
-
-function TabButton({
-  active,
-  children,
-  onClick,
-  count,
-  dot,
-}: {
-  active: boolean
-  children: ReactNode
-  onClick: () => void
-  /** 탭 라벨 옆 위첨자 작업량 — 0이면 표시하지 않는다. */
-  count?: number
-  /** "판정 대기 있음" 앰버 점 — 숫자보다 약한 신호가 맞을 때 쓴다. */
-  dot?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "relative h-16 px-4 text-[14px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]",
-        active ? "text-[#111110]" : "text-[#615D59] hover:text-[#111110]"
-      )}
-    >
-      {children}
-      {count ? (
-        <sup className="ml-1 text-[10px] font-bold tabular-nums text-[#084734]">{count}</sup>
-      ) : null}
-      {dot ? <span className="ml-1.5 inline-block h-[5px] w-[5px] -translate-y-1.5 rounded-full bg-[#A8741A]" /> : null}
-      {active ? <span className="absolute inset-x-3 bottom-0 h-0.5 bg-[#111110]" /> : null}
-    </button>
-  )
-}
-
-function StatusBadge({ status }: { status: ConversationStatus }) {
-  const meta = STATUS_META[status]
-  return (
-    <span className={cn("inline-flex h-7 items-center rounded-md border px-2 text-[11px] font-semibold", meta.className)}>
-      {meta.label}
-    </span>
-  )
-}
-
-// 운영 데스크 지표 카드 행(계약 1)의 셀 — 값 정규화(null→"—")는 호출부(metricCards)에서 이미 끝낸다.
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: LucideIcon
-  label: string
-  value: string
-  sub?: string
-}) {
-  return (
-    <div className="rounded-lg border border-black/[0.08] bg-white p-4">
-      <div className="flex items-center gap-2">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F6F5F4] text-[#615D59]">
-          <Icon className="h-3.5 w-3.5" />
-        </span>
-        <p className="text-[11px] font-medium text-[#615D59]">{label}</p>
-      </div>
-      <p className="mt-2.5 text-[20px] font-semibold tracking-[-0.02em] text-[#31302E]">{value}</p>
-      {sub ? <p className="mt-1 text-[10px] leading-4 text-[#A39E98]">{sub}</p> : null}
-    </div>
-  )
-}
-
-// 계약 3 "지식으로 승격" 제어 — 회귀 패널 항목과 대화 스레드의 승인된 메시지 두 곳에서 공유한다.
-// 성공하면 버튼 대신 articleId 링크를 보여준다. 실패해도 버튼을 남겨 재시도할 수 있게 한다.
-function PromoteKnowledgeControl({
-  pending,
-  result,
-  onPromote,
-  compact = false,
-}: {
-  pending: boolean
-  result: PromotionResult | undefined
-  onPromote: () => void
-  // compact — 밀도 높은 리스트 행(회귀 후보) 안에서 쓰는 변형. 기본 중립 톤, hover에서만
-  // 강조색을 드러내 옆의 판정 버튼군(1차 액션)보다 시각 무게를 낮춘다. 대화 상세의 답변 카드
-  // (기본값)는 카드 하단 여유 공간에 단독으로 놓이므로 기존 강조 스타일을 유지한다.
-  compact?: boolean
-}) {
-  if (result?.status === "success") {
-    // searchable === false — 문서는 저장됐지만 임베딩 실패로 아직 검색에 잡히지 않는 상태(앰버).
-    // true/부재(구응답)는 기존 그린 배지 그대로. edit 링크는 양쪽 모두 유지한다.
-    const indexingPending = result.searchable === false
-    return (
-      <div className="flex flex-wrap items-center gap-2">
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 rounded-md font-semibold",
-            compact ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-1 text-[10px]",
-            indexingPending ? "bg-[#FBF1E0] text-[#7A520F]" : "bg-[#ECFDF5] text-[#084734]"
-          )}
-        >
-          {indexingPending ? <AlertTriangle className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
-          {indexingPending
-            ? "승격됨 — 검색 색인 대기(임베딩 실패)"
-            : result.reused ? "기존 문서 갱신됨" : "지식으로 승격됨"}
-        </span>
-        <Link
-          href={`/admin/docs/${result.articleId}/edit`}
-          className="inline-flex items-center gap-1 text-[10px] font-semibold text-[#084734] hover:underline"
-        >
-          문서 열기
-          <ExternalLink className="h-3 w-3" />
-        </Link>
-      </div>
-    )
-  }
-  return (
-    <div className="flex flex-col items-start gap-1.5">
-      <button
-        type="button"
-        onClick={onPromote}
-        disabled={pending}
-        className={cn(
-          "inline-flex items-center gap-1.5 rounded-md border font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-          compact
-            ? "h-6 border-black/[0.08] px-2 text-[10px] text-[#615D59] hover:border-[#084734]/20 hover:bg-[#ECFDF5] hover:text-[#084734]"
-            : "h-7 border-black/[0.08] px-2.5 text-[10px] text-[#084734] hover:bg-[#ECFDF5]"
-        )}
-      >
-        {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <BookOpen className="h-3 w-3" />}
-        {pending ? "승격 중" : "지식으로 승격"}
-      </button>
-      {result?.status === "error" ? (
-        <p className="flex items-start gap-1 text-[10px] leading-4 text-[#8F2C2C]">
-          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-          {result.error}
-        </p>
-      ) : null}
-    </div>
-  )
-}
-
-// AI 답변 카드 하단의 가로 푸터 칩 — Disclosure(세로 아코디언 3단)를 대체한다.
-// 기본은 중립, 활성(펼침) 상태만 옅은 서피스로 표시한다.
-function AnswerFooterChip({
-  active,
-  onClick,
-  icon,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  icon: ReactNode
-  children: ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]",
-        active ? "bg-[#F6F5F4] text-[#111110]" : "text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
-      )}
-    >
-      {icon}
-      {children}
-    </button>
-  )
-}
-
-// 대화 스위처 — 네이티브 select 대신 제목 + 셰브론 트리거와 드롭 목록.
-// 목록에는 상태 라벨을 함께 보여줘 전환 전에 검토 필요 여부를 알 수 있다.
-function ConversationSwitcher({
-  label,
-  conversations,
-  selectedId,
-  onSelect,
-}: {
-  label: string
-  conversations: InternalCsConversation[]
-  selectedId: string | null
-  onSelect: (conversation: InternalCsConversation) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function handlePointerDown(event: MouseEvent | TouchEvent) {
-      if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
-    }
-    document.addEventListener("mousedown", handlePointerDown)
-    document.addEventListener("touchstart", handlePointerDown)
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown)
-      document.removeEventListener("touchstart", handlePointerDown)
-    }
-  }, [open])
-
-  return (
-    <div ref={containerRef} className="relative min-w-0">
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        disabled={conversations.length === 0}
-        className="flex h-9 max-w-[300px] items-center gap-2 rounded-md px-2.5 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 disabled:cursor-default disabled:hover:bg-transparent"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-      >
-        <span className="min-w-0 truncate">{label}</span>
-        {conversations.length > 0 ? (
-          <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-[#A39E98] transition-transform", open && "rotate-180")} />
-        ) : null}
-      </button>
-      {open ? (
-        <ul
-          role="listbox"
-          className="absolute left-0 top-10 z-50 max-h-72 w-72 overflow-y-auto rounded-lg border border-black/[0.08] bg-white py-1 shadow-[0_14px_36px_rgba(0,0,0,0.10)]"
-        >
-          {conversations.map((conversation) => (
-            <li key={conversation.id}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={conversation.id === selectedId}
-                onClick={() => {
-                  setOpen(false)
-                  onSelect(conversation)
-                }}
-                className={cn(
-                  "flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition-colors hover:bg-[#F6F5F4]",
-                  conversation.id === selectedId ? "font-semibold text-[#084734]" : "text-[#31302E]"
-                )}
-              >
-                <span className="min-w-0 flex-1 truncate">{conversation.title}</span>
-                <span className="shrink-0 text-[10px] text-[#A39E98]">{STATUS_META[conversation.status].label}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  )
-}
-
-function ConversationTable({
-  conversations,
-  emptyLabel,
-  onSelect,
-}: {
-  conversations: InternalCsConversation[]
-  emptyLabel: string
-  onSelect: (conversation: InternalCsConversation) => void
-}) {
-  if (conversations.length === 0) {
-    return (
-      <div className="flex min-h-[360px] flex-col items-center justify-center px-6 text-center">
-        <Archive className="h-8 w-8 text-[#A39E98]" />
-        <p className="mt-4 text-[14px] font-semibold text-[#31302E]">{emptyLabel}</p>
-        <p className="mt-1 text-[12px] text-[#615D59]">새 상담을 시작하면 이곳에 기록됩니다.</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="overflow-x-auto border-t border-black/[0.08]">
-      <table className="w-full min-w-[760px] border-collapse text-left">
-        <thead className="bg-[#F6F5F4] text-[11px] font-semibold text-[#615D59]">
-          <tr>
-            <th className="px-5 py-3">상태</th>
-            <th className="px-5 py-3">대화</th>
-            <th className="px-5 py-3">우선순위</th>
-            <th className="px-5 py-3">담당자</th>
-            <th className="px-5 py-3">업데이트</th>
-            <th className="w-12 px-3 py-3" />
-          </tr>
-        </thead>
-        <tbody>
-          {conversations.map((conversation) => {
-            const priority = PRIORITY_META[conversation.priority]
-            return (
-              <tr
-                key={conversation.id}
-                className="cursor-pointer border-b border-black/[0.08] bg-white transition-colors hover:bg-[#FAFAF8]"
-                onClick={() => onSelect(conversation)}
-              >
-                <td className="px-5 py-4"><StatusBadge status={conversation.status} /></td>
-                <td className="px-5 py-4">
-                  <p className="max-w-[360px] truncate text-[14px] font-semibold text-[#111110]">{conversation.title}</p>
-                  <p className="mt-1 max-w-[360px] truncate text-[11px] text-[#615D59]">
-                    {conversation.tags.length > 0 ? conversation.tags.join(" · ") : "분류 전"}
-                  </p>
-                </td>
-                <td className="px-5 py-4 text-[12px] text-[#615D59]">
-                  <span className="inline-flex items-center gap-2">
-                    <span className={cn("h-1.5 w-1.5 rounded-full", priority.dot)} />
-                    {priority.label}
-                  </span>
-                </td>
-                <td className="px-5 py-4 text-[12px] text-[#615D59]">{conversation.assignee_name ?? "미지정"}</td>
-                <td className="px-5 py-4 text-[12px] text-[#615D59]">{formatDay(conversation.last_message_at)}</td>
-                <td className="px-3 py-4"><ChevronRight className="h-4 w-4 text-[#A39E98]" /></td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
+  ACCEPTED_ASSET_TYPES,
+  INITIAL_CHECKS,
+  LEGACY_ARCHIVE_TAB,
+  resolveInitialQueueFilter,
+  MAX_ASSET_BYTES,
+  MAX_PENDING_ASSETS,
+  QUEUE_STATUS_CHIPS,
+  UUID_PATTERN,
+  WORKSPACE_TAB_VALUES,
+  type QueueStatusFilter,
+} from "./constants"
+import { DEMO_CONVERSATION, DEMO_DETAIL, DEMO_MESSAGES } from "./demo-data"
+import {
+  buildCustomerHoldingTemplate,
+  buildHqTemplate,
+  buildInternalHandoffTemplate,
+  fileKey,
+  formatMetricHours,
+  formatMetricRate,
+  integrationState,
+} from "./formatters"
+import {
+  HQ_PENDING_TAG,
+  isHqPending,
+  putHqDetail,
+  selectHqPending,
+  withHqConfirmed,
+  withHqPending,
+} from "./hq-desk"
+import { summarizeDocsGaps, type DocsGapsDeskSummary } from "./ops-desk"
+import ChatPanel from "./panels/ChatPanel"
+import HqPanel from "./panels/HqPanel"
+import QueuePanel from "./panels/QueuePanel"
+import ReviewDrawer from "./panels/ReviewDrawer"
+import ToolsPanel from "./panels/ToolsPanel"
+import type {
+  AsyncLoadState,
+  ConversationDetailResponse,
+  ConversationListResponse,
+  ConversationStatus,
+  DocGapsSummaryResponse,
+  GenerateResponse,
+  IntegrationStatusResponse,
+  InternalCsAsset,
+  InternalCsConversation,
+  InternalCsIntegrationEvent,
+  InternalCsMessage,
+  InternalCsMetricsResponse,
+  ModelMode,
+  PromoteKnowledgeResponse,
+  PromotionResult,
+  RegressionCandidateItem,
+  RegressionCandidatesResponse,
+  RegressionEvalItem,
+  RegressionEvalResponse,
+  RegressionEvalRunState,
+  RegressionEvalSkippedItem,
+  RegressionOutcome,
+  ReviewChecks,
+  WorkspaceTab,
+} from "./types"
 
 function InternalCsChatWorkspaceInner() {
+  // 이 화면에는 URL을 보는 눈이 둘이고, 둘은 서로 다른 순간에 진실이다.
+  //
+  //  · useSearchParams()  — 라우터가 커밋한 값. 콘솔 내비 <Link>는 라우터 상태를 먼저 바꾸고
+  //    실제 pushState는 커밋 이후(HistoryUpdater 이펙트)에 적용한다. 그래서 Link 이동 직후의
+  //    렌더에서는 window.location이 아직 옛 값이고 이쪽만 새 값을 안다.
+  //  · useUrlState("tab") — window.location.search를 렌더마다 다시 읽는 값이자 쓰기 창구.
+  //    내부 setTab은 replaceState라 location이 먼저 바뀌고 라우터는 트랜지션으로 뒤따른다.
+  //
+  // 그래서 읽기는 "라우터 값 우선, 없으면 location 값"으로 합친다.
+  //  - Link 이동: 라우터 값이 즉시 새 값 → 지연 없음.
+  //  - 내부 setTab: 기존 tab 파라미터가 없었으면(대화 탭) 라우터 값이 null이라 location 값이 바로 이긴다.
+  //    파라미터가 있었으면 라우터 트랜지션 한 틱만큼 뒤따라온다(값이 어긋난 채 굳는 상태는 없다).
+  // 두 눈이 같은 키(`tab`)만 보므로 어긋나도 항상 같은 값으로 수렴한다.
   const searchParams = useSearchParams()
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>("chat")
+  const [tabParam, setTabParam] = useUrlState("tab", "chat")
+  const rawTab = searchParams.get("tab") ?? tabParam
+  // 미지원 값(?tab=hq · 오타)은 조용히 대화 탭으로 되돌린다 — 빈 화면을 만들지 않는다.
+  const activeTab: WorkspaceTab = WORKSPACE_TAB_VALUES.includes(rawTab as WorkspaceTab)
+    ? (rawTab as WorkspaceTab)
+    : rawTab === LEGACY_ARCHIVE_TAB
+      ? "queue"
+      : "chat"
+  const setActiveTab = useCallback((tab: WorkspaceTab) => setTabParam(tab), [setTabParam])
+  // 본사 확인 화면의 펼친 행을 `conversation` 딥링크로 되비춘다(§5는 이 키를 그대로 두라고 규약한다).
+  // 읽기는 위의 searchParams(라우터 값)가 맡고, 여기서는 쓰기만 쓴다 — 같은 replaceState 창구라
+  // tab과 순서대로 호출하면 두 파라미터가 한 주소에 함께 실린다.
+  const [, setConversationParam] = useUrlState("conversation", "")
+  // 상태 칩은 목록 안쪽 필터라 URL로 올리지 않는다(§5는 `tab`만 규약한다).
+  // 옛 ?tab=archive 북마크만 마운트 시 종료·보관 칩으로 착지시켜 행 집합을 그대로 재현한다.
+  const [queueFilter, setQueueFilter] = useState<QueueStatusFilter>(() =>
+    resolveInitialQueueFilter(rawTab)
+  )
   const [conversations, setConversations] = useState<InternalCsConversation[]>([])
   const [detail, setDetail] = useState<ConversationDetailResponse | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -982,6 +140,11 @@ function InternalCsChatWorkspaceInner() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // 개발 전용 폴백 — loadConversations()가 실패했을 때만 켜진다(아래 catch).
+  // demoMode를 읽는 분기 중 demo-data를 실제로 참조하는 네 곳은 조건에
+  // `process.env.NODE_ENV === "development"`를 함께 둔다. 번들러가 이 리터럴 비교를 정적으로
+  // 접어 프로덕션에서는 분기째 사라지고, 데모 데이터 문자열도 클라이언트 번들에서 빠진다.
+  // (상수로 빼면 접히지 않을 수 있어 조건에 직접 쓴다.)
   const [demoMode, setDemoMode] = useState(false)
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [assetError, setAssetError] = useState<string | null>(null)
@@ -1000,9 +163,9 @@ function InternalCsChatWorkspaceInner() {
   const [regressionCandidates, setRegressionCandidates] = useState<RegressionCandidateItem[]>([])
   const [regressionLoadState, setRegressionLoadState] = useState<AsyncLoadState>("idle")
   const [regressionError, setRegressionError] = useState<string | null>(null)
-  // 운영 데스크 — 브리지 전송 옵션/최근 기록 펼침과 스탯 스트립 → 회귀 섹션 스크롤 타깃.
+  // 운영 데스크 — 브리지 전송 옵션/최근 기록 펼침.
+  // 스탯 스트립 → 회귀 섹션 스크롤 ref는 트리거·타깃이 둘 다 ToolsPanel 안이라 그쪽 로컬에 산다.
   const [bridgeDetailOpen, setBridgeDetailOpen] = useState(false)
-  const regressionSectionRef = useRef<HTMLDivElement | null>(null)
   // 계약 1 — 운영 데스크 지표 카드 행.
   const [csMetrics, setCsMetrics] = useState<InternalCsMetricsResponse | null>(null)
   const [metricsLoadState, setMetricsLoadState] = useState<AsyncLoadState>("idle")
@@ -1015,11 +178,19 @@ function InternalCsChatWorkspaceInner() {
   const [promotingMessageId, setPromotingMessageId] = useState<string | null>(null)
   const [promotionResults, setPromotionResults] = useState<Record<string, PromotionResult>>({})
   const [deepLinkChecked, setDeepLinkChecked] = useState(false)
+  // 본사 확인(tab=hq) — 목록은 이미 받아 둔 conversations를 태그로 거른 것이고,
+  // 행을 펼칠 때만 상세를 가져온다(buildHqTemplate이 messages·assets를 요구한다).
+  // 상세는 여기 캐시에 따로 담는다 — 대화 탭의 detail/finalDraft 상태를 건드리지 않기 위함이다.
+  // 적재는 putHqDetail만 거친다(HQ_DETAIL_CACHE_LIMIT 상한, 오래된 것부터 폐기).
+  const [hqExpandedId, setHqExpandedId] = useState<string | null>(null)
+  const [hqDetails, setHqDetails] = useState<Record<string, ConversationDetailResponse>>({})
+  const [hqDetailError, setHqDetailError] = useState<string | null>(null)
+  const [hqPendingActionId, setHqPendingActionId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isPending, startTransition] = useTransition()
 
   const loadConversation = useCallback(async (id: string) => {
-    if (demoMode && id === DEMO_CONVERSATION.id) {
+    if (process.env.NODE_ENV === "development" && demoMode && id === DEMO_CONVERSATION.id) {
       setDetail(DEMO_DETAIL)
       setSelectedId(id)
       setFinalDraft(DEMO_MESSAGES[1].content)
@@ -1167,6 +338,12 @@ function InternalCsChatWorkspaceInner() {
     }
   }, [conversations.length, detail, error, loadConversations, loading])
 
+  // 레거시 ?tab=archive URL 정규화 — 화면은 이미 대기열 + 종료·보관 칩으로 착지해 있고,
+  // 주소만 새 값으로 바꿔 콘솔 내비 하이라이트(`대기열`)까지 일치시킨다.
+  useEffect(() => {
+    if (tabParam === LEGACY_ARCHIVE_TAB) setTabParam("queue")
+  }, [tabParam, setTabParam])
+
   // 딥링크 수신 — ?conversation=<uuid>. 최초 목록 부트스트랩(loading→false)이 끝난 뒤
   // 한 번만 시도해 기본 선택과의 경합을 피한다. 없는/접근 불가한 id는 조용히 무시하고
   // 부트스트랩이 이미 고른 기본 화면을 그대로 둔다.
@@ -1177,11 +354,51 @@ function InternalCsChatWorkspaceInner() {
     // UUID 형태가 아니면(오타·조작된 값) fetch 경로에 꽂지 않고 조용히 무시한다.
     if (!deepLinkId || !UUID_PATTERN.test(deepLinkId)) return
     loadConversation(deepLinkId)
-      .then(() => setActiveTab("chat"))
+      .then(() => {
+        // §5 — tab이 명시되지 않은 채 conversation만 오면 대화 탭으로 강제한다.
+        // 명시된 tab(예: ?tab=tools&conversation=)은 존중한다: 대화는 뒤에서 열려 있고
+        // 그 탭으로 돌아오면 그대로 보인다.
+        if (!new URLSearchParams(window.location.search).get("tab")) setActiveTab("chat")
+      })
       .catch(() => {
         // 존재하지 않거나 조회 실패한 대화 id — 기본 화면 유지
       })
-  }, [deepLinkChecked, loading, loadConversation, searchParams])
+  }, [deepLinkChecked, loading, loadConversation, searchParams, setActiveTab])
+
+  // ?tab=hq&conversation=<id> — 본사 확인 목록에서 그 행을 펼친 채로 착지시킨다.
+  // 위 승계 로직(tab 미지정일 때만 chat 강제)과 겹치지 않는다: 여기서는 탭을 건드리지 않고
+  // 펼침 대상만 정한다. tab=hq면 아래 목록이 펼쳐진 채로 그려지고, 다른 탭이면 아무 일도 없다.
+  useEffect(() => {
+    const deepLinkId = searchParams.get("conversation")
+    if (!deepLinkId || !UUID_PATTERN.test(deepLinkId)) return
+    setHqExpandedId((current) => current ?? deepLinkId)
+  }, [searchParams])
+
+  // 펼친 행의 상세 로드 — buildHqTemplate은 messages·assets를 읽으므로 목록 응답만으로는 부족하다.
+  // 대화 탭이 이미 같은 대화를 들고 있으면(딥링크 승계 포함) 그 detail을 재사용해 중복 요청을 만들지 않는다.
+  useEffect(() => {
+    const id = hqExpandedId
+    if (!id || hqDetails[id]) return
+    if (detail && detail.conversation.id === id) {
+      setHqDetails((current) => putHqDetail(current, id, detail))
+      return
+    }
+    if (demoMode || !UUID_PATTERN.test(id)) return
+    let cancelled = false
+    adminFetchJson<ConversationDetailResponse>(`/api/admin/cs-chat/conversations/${id}`)
+      .then((loaded) => {
+        if (cancelled) return
+        setHqDetails((current) => putHqDetail(current, id, loaded))
+        setHqDetailError(null)
+      })
+      .catch((loadError) => {
+        if (cancelled) return
+        setHqDetailError(loadError instanceof Error ? loadError.message : "본사 확인 초안을 불러오지 못했습니다.")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [demoMode, detail, hqDetails, hqExpandedId])
 
   useEffect(() => {
     if (activeTab === "tools" && !integrationAttempted && !integrationLoading) {
@@ -1219,14 +436,32 @@ function InternalCsChatWorkspaceInner() {
     })
   }, [assets])
 
+  // 대화 스위처(헤더 드롭다운)는 흡수 전과 같이 살아 있는 대화만 보여준다.
   const queueConversations = useMemo(
     () => conversations.filter((conversation) => conversation.status !== "archived"),
     [conversations]
   )
-  const archivedConversations = useMemo(
-    () => conversations.filter((conversation) => conversation.status === "archived"),
-    [conversations]
-  )
+  // 상태 칩별 건수 — 흡수된 탭의 위첨자 카운트를 대신하는 작업량 신호.
+  const queueChipCounts = useMemo(() => {
+    const counts = {} as Record<QueueStatusFilter, number>
+    for (const chip of QUEUE_STATUS_CHIPS) {
+      counts[chip.value] = conversations.filter((conversation) => chip.match(conversation.status)).length
+    }
+    return counts
+  }, [conversations])
+  const filteredQueueConversations = useMemo(() => {
+    const chip = QUEUE_STATUS_CHIPS.find((item) => item.value === queueFilter) ?? QUEUE_STATUS_CHIPS[0]
+    return conversations.filter((conversation) => chip.match(conversation.status))
+  }, [conversations, queueFilter])
+  // 본사 확인 목록 — 신규 API 없이 같은 status=all 응답을 태그로 거른다(§6).
+  const hqConversations = useMemo(() => selectHqPending(conversations), [conversations])
+  // 펼친 행의 상세. 대화 탭이 마침 같은 대화를 들고 있으면 그 detail을 그대로 쓴다
+  // (딥링크 ?tab=hq&conversation= 로 들어온 경우가 여기에 해당해 추가 요청이 없다).
+  const hqDetail = useMemo(() => {
+    if (!hqExpandedId) return null
+    if (hqDetails[hqExpandedId]) return hqDetails[hqExpandedId]
+    return detail && detail.conversation.id === hqExpandedId ? detail : null
+  }, [detail, hqDetails, hqExpandedId])
   const pendingMessage = useMemo(
     () => [...(detail?.messages ?? [])].reverse().find(
       (message) => message.role === "assistant" && message.review_state === "pending"
@@ -1329,7 +564,7 @@ function InternalCsChatWorkspaceInner() {
   }, [regressionEvalSkipped])
 
   async function handleSelect(conversation: InternalCsConversation) {
-    if (demoMode && conversation.id === DEMO_CONVERSATION.id) {
+    if (process.env.NODE_ENV === "development" && demoMode && conversation.id === DEMO_CONVERSATION.id) {
       setDetail((current) => current ?? DEMO_DETAIL)
       setSelectedId(conversation.id)
       setActiveTab("chat")
@@ -1515,7 +750,7 @@ function InternalCsChatWorkspaceInner() {
     setError(null)
     setNotice(null)
     setComposer("")
-    if (demoMode) {
+    if (process.env.NODE_ENV === "development" && demoMode) {
       const now = new Date().toISOString()
       const previewAssets: InternalCsAsset[] = filesToUpload.map((file, index) => ({
         id: `preview-asset-${Date.now()}-${index}`,
@@ -1601,7 +836,7 @@ function InternalCsChatWorkspaceInner() {
   function rerunWithPro() {
     const question = [...(detail?.messages ?? [])].reverse().find((message) => message.role === "user")?.content
     if (!question || !selectedId || isPending) return
-    if (demoMode) {
+    if (process.env.NODE_ENV === "development" && demoMode) {
       const now = new Date().toISOString()
       const proMessage: InternalCsMessage = {
         ...DEMO_MESSAGES[1],
@@ -1721,6 +956,106 @@ function InternalCsChatWorkspaceInner() {
         setError(reviewError instanceof Error ? reviewError.message : "검토 결과를 저장하지 못했습니다.")
       }
     })
+  }
+
+  // ── 본사 확인 태그 전이(§6) ────────────────────────────────────────────────
+  // 티켓 엔티티를 만들지 않는다. 상태는 tags[] 하나에 살고, 쓰기는 이미 있는
+  // PATCH /api/admin/cs-chat/conversations/[id] { action:"update", tags } 하나뿐이다.
+
+  // 저장된 태그를 목록·대화 상세·본사 확인 캐시 세 곳에 동시에 반영한다.
+  // 전체 재조회(loadConversations) 대신 이 좁은 갱신을 쓰는 이유는 작성 중인 최종 답변 초안을
+  // 날리지 않기 위해서다.
+  //
+  // updated_at도 서버 응답 값으로 함께 덮는다. 태그를 쓰면 updated_at 트리거가 반드시 다시 찍히는데,
+  // 태그만 갈아끼우면 대기 경과가 방금 올린 건에 "7일" 같은 옛 값을 그대로 보여준다.
+  function applyConversationPatch(id: string, patch: Pick<InternalCsConversation, "tags" | "updated_at">) {
+    setConversations((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)))
+    setDetail((current) =>
+      current && current.conversation.id === id
+        ? { ...current, conversation: { ...current.conversation, ...patch } }
+        : current
+    )
+    setHqDetails((current) => {
+      const cached = current[id]
+      if (!cached) return current
+      return { ...current, [id]: { ...cached, conversation: { ...cached.conversation, ...patch } } }
+    })
+  }
+
+  // 펼침 상태를 URL(`conversation`)과 함께 움직인다 — 새로고침·링크 공유에도 같은 행이 열린다.
+  function toggleHqRow(id: string) {
+    const next = hqExpandedId === id ? null : id
+    setHqExpandedId(next)
+    setConversationParam(next ?? "")
+  }
+
+  // 저장된 태그가 기대와 다르면(서버 cleanInternalCsTags의 20개 상한에 걸려 잘린 경우)
+  // 성공으로 위장하지 않고 알린다 — 조용히 목록에서 사라지는 것이 가장 나쁜 실패다.
+  // 그래서 요청 본문이 아니라 응답이 돌려준 tags를 화면의 진실로 삼는다.
+  async function patchConversationTags(id: string, tags: string[], fallback: InternalCsConversation) {
+    if (demoMode) return { tags, updated_at: new Date().toISOString() }
+    const response = await adminFetchJson<{ conversation: InternalCsConversation }>(
+      `/api/admin/cs-chat/conversations/${id}`,
+      { method: "PATCH", body: JSON.stringify({ action: "update", tags }) }
+    )
+    return {
+      tags: response.conversation?.tags ?? [],
+      updated_at: response.conversation?.updated_at ?? fallback.updated_at,
+    }
+  }
+
+  // 대기열·내부 상담 → 본사 확인 대기. 축을 넘는 동선은 이 함수 하나로 모인다.
+  async function requestHqConfirmation(conversation: InternalCsConversation) {
+    if (hqPendingActionId) return
+    // 이미 대기 중이면 태그를 다시 쓰지 않고 화면만 옮긴다.
+    if (isHqPending(conversation)) {
+      setHqExpandedId(conversation.id)
+      setConversationParam(conversation.id)
+      setActiveTab("hq")
+      return
+    }
+    setHqPendingActionId(conversation.id)
+    setError(null)
+    try {
+      const saved = await patchConversationTags(conversation.id, withHqPending(conversation.tags), conversation)
+      if (!saved.tags.includes(HQ_PENDING_TAG)) {
+        setError("본사 확인 태그가 저장되지 않았습니다. 대화 태그 수가 상한에 걸렸는지 확인해 주세요.")
+        return
+      }
+      applyConversationPatch(conversation.id, saved)
+      setHqExpandedId(conversation.id)
+      setConversationParam(conversation.id)
+      setActiveTab("hq")
+      setNotice("본사 확인 대기로 보냈습니다. 초안을 복사해 본사에 전달해 주세요.")
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "본사 확인 요청을 저장하지 못했습니다.")
+    } finally {
+      setHqPendingActionId(null)
+    }
+  }
+
+  // 회신 처리 — evidence:hq_pending을 빼고 evidence:confirmed를 넣으면 목록에서 빠진다.
+  async function resolveHqConfirmation(conversation: InternalCsConversation) {
+    if (hqPendingActionId) return
+    setHqPendingActionId(conversation.id)
+    setError(null)
+    try {
+      const saved = await patchConversationTags(conversation.id, withHqConfirmed(conversation.tags), conversation)
+      if (saved.tags.includes(HQ_PENDING_TAG)) {
+        setError("본사 확인 완료를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+        return
+      }
+      applyConversationPatch(conversation.id, saved)
+      if (hqExpandedId === conversation.id) {
+        setHqExpandedId(null)
+        setConversationParam("")
+      }
+      setNotice("본사 회신을 반영했습니다. 대기 목록에서 제외됩니다.")
+    } catch (resolveError) {
+      setError(resolveError instanceof Error ? resolveError.message : "본사 확인 완료를 저장하지 못했습니다.")
+    } finally {
+      setHqPendingActionId(null)
+    }
   }
 
   // 회귀 패널의 "대화 보기" — 대화 탭으로 전환하고 해당 대화를 직접 로드한다(사이드바 목록 의존 없음).
@@ -1850,7 +1185,9 @@ function InternalCsChatWorkspaceInner() {
     if (demoMode) {
       setDetail((current) => current ? { ...current, conversation: { ...current.conversation, status: "archived" } } : current)
       setConversations((current) => current.map((item) => item.id === detail.conversation.id ? { ...item, status: "archived" } : item))
-      setActiveTab("archive")
+      // 흡수 후 착지점 — 대기열 탭 + 종료·보관 칩(옛 아카이브 탭과 같은 행 집합).
+      setQueueFilter("closed")
+      setActiveTab("queue")
       setNotice("미리보기 대화를 아카이브했습니다.")
       return
     }
@@ -1861,7 +1198,8 @@ function InternalCsChatWorkspaceInner() {
           body: JSON.stringify({ action: "archive", archiveReason: "CS 담당자 수동 아카이브" }),
         })
         await loadConversations(null)
-        setActiveTab("archive")
+        setQueueFilter("closed")
+        setActiveTab("queue")
         setNotice("대화를 아카이브했습니다.")
       } catch (archiveError) {
         setError(archiveError instanceof Error ? archiveError.message : "아카이브하지 못했습니다.")
@@ -1892,1121 +1230,155 @@ function InternalCsChatWorkspaceInner() {
       }
     })
   }
-
   return (
-    <div className="fixed inset-0 z-[80] flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-white font-sans text-[#111110]">
-      <header className="flex h-16 shrink-0 items-center justify-between bg-[#31302E] px-5 text-white sm:px-7">
-        <div className="flex min-w-0 items-center gap-4">
-          <div className="flex items-center gap-2.5">
-            <Sparkles className="h-5 w-5 text-[#6EE7B7]" />
-            <h1 className="whitespace-nowrap text-[19px] font-semibold tracking-[-0.02em]">CS 코파일럿</h1>
-          </div>
-          <span className="hidden h-6 w-px bg-white/20 sm:block" />
-          <p className="hidden truncate text-[12px] text-white/65 sm:block">
-            내부 정보와 본사 소통 기준을 함께 확인합니다
-          </p>
-        </div>
-        <div className="flex items-center gap-1">
-          <Link
-            href="/admin/overview"
-            className="mr-1 inline-flex h-9 items-center gap-1.5 rounded-md border border-white/15 px-2.5 text-[11px] font-semibold text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 sm:px-3 sm:text-[12px]"
-            aria-label="어드민으로 돌아가기"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            어드민
-          </Link>
-          <button
-            type="button"
-            onClick={() => setActiveTab("tools")}
-            className="flex h-9 w-9 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-            aria-label="운영 도구 열기"
-          >
-            <HelpCircle className="h-4.5 w-4.5" />
-          </button>
-          <span className="ml-2 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-[12px] font-semibold">CS</span>
-        </div>
-      </header>
+    // 콘솔 내비는 Suspense 바깥(기본 export)에서 이미 그려졌다 — 여기서는 그 아래 본문만 만든다.
+    <>
+      <WorkspaceHeader
+        loading={loading}
+        isPending={isPending}
+        regressionPendingCount={regressionPendingCount}
+        error={error}
+        notice={notice}
+        onRefresh={() => void loadConversations(selectedId)}
+        onOpenTools={() => setActiveTab("tools")}
+      />
 
-      <nav className="flex h-16 shrink-0 items-center justify-between border-b border-black/[0.08] bg-white px-3 sm:px-5">
-        <div className="flex min-w-0 items-center overflow-x-auto">
-          {WORKSPACE_TABS.map((tab) => (
-            <TabButton
-              key={tab.value}
-              active={activeTab === tab.value}
-              onClick={() => setActiveTab(tab.value)}
-              count={tab.value === "queue" ? queueConversations.length : undefined}
-              dot={tab.value === "tools" && regressionPendingCount > 0}
-            >
-              {tab.label}
-            </TabButton>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => void loadConversations(selectedId)}
-          disabled={loading || isPending}
-          className="mr-2 hidden h-9 items-center gap-2 rounded-md px-3 text-[12px] font-medium text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#111110] disabled:opacity-40 sm:inline-flex"
-        >
-          <RefreshCcw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-          새로고침
-        </button>
-      </nav>
-
-      {error ? (
-        <div className="border-b border-[#F2B8B8] bg-[#FCE9E9] px-5 py-2.5 text-[12px] text-[#8F2C2C]">
-          {error}
-        </div>
-      ) : null}
-      {notice ? (
-        <div className="border-b border-[#BDEFD8] bg-[#ECFDF5] px-5 py-2.5 text-[12px] text-[#084734]">
-          {notice}
-        </div>
-      ) : null}
-
+      {/* 본문 영역 — 검토 드로어의 기준 요소다. 오버레이 시절 드로어는 root(fixed inset-0)에
+          top-16(자체 헤더 높이)으로 걸려 있었는데, 그 헤더가 사라졌으므로 상수 대신
+          "탭 패널이 차지하는 영역" 자체를 기준으로 삼아 inset-y-0로 잡는다. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
       {activeTab === "chat" ? (
-        <div className={cn("flex min-h-0 flex-1 flex-col", reviewOpen && "xl:pr-[438px]")}>
-          <div className="flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-black/[0.08] px-5 py-3 sm:px-7">
-            <div className="flex min-w-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={startNewConversation}
-                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-3 text-[12px] font-semibold transition-colors hover:bg-[#F6F5F4]"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                새 대화
-              </button>
-              <ConversationSwitcher
-                label={detail?.conversation.title ?? "새 내부 CS 상담"}
-                conversations={queueConversations}
-                selectedId={selectedId}
-                onSelect={(conversation) => void handleSelect(conversation)}
-              />
-              {detail ? <StatusBadge status={detail.conversation.status} /> : null}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div
-                className="flex h-9 shrink-0 overflow-hidden rounded-md border border-black/[0.12] bg-white"
-                role="group"
-                aria-label="Gemini 모델 모드"
-              >
-                {MODEL_MODE_SEGMENTS.map((segment, index) => (
-                  <button
-                    key={segment.value}
-                    type="button"
-                    onClick={() => setModelMode(segment.value)}
-                    aria-pressed={modelMode === segment.value}
-                    className={cn(
-                      "px-3 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]",
-                      index > 0 && "border-l border-black/[0.10]",
-                      modelMode === segment.value
-                        ? "bg-[#31302E] text-white"
-                        : "bg-white text-[#615D59] hover:text-[#111110]"
-                    )}
-                  >
-                    {segment.label}
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => setReviewOpen(true)}
-                disabled={!pendingMessage}
-                className="relative inline-flex h-9 items-center gap-2 rounded-md border border-black/[0.08] bg-white px-3 text-[12px] font-semibold transition-colors hover:bg-[#F6F5F4] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <PanelRightOpen className="h-4 w-4" />
-                검토 열기
-                {pendingMessage ? (
-                  <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[#A8741A] ring-2 ring-white" aria-hidden />
-                ) : null}
-              </button>
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto bg-[#FFFFFF] px-5 py-7 sm:px-8">
-            <div className={cn("w-full max-w-[820px] space-y-8", reviewOpen ? "xl:mr-auto xl:ml-0" : "mx-auto")}>
-              {loading && !detail ? (
-                <div className="flex min-h-[360px] items-center justify-center text-[#615D59]">
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  내부 CS 대화를 불러오는 중입니다.
-                </div>
-              ) : detail?.messages.length ? (
-                detail.messages.map((message) => {
-                  const review = REVIEW_META[message.review_state]
-                  const sources = normalizeSourceRefs(message.source_refs)
-                  const isLatestAssistant = latestAssistant?.id === message.id
-                  const visibleContent = message.corrected_content && message.review_state === "approved"
-                    ? message.corrected_content
-                    : message.content
-
-                  return (
-                    <article key={message.id} className="flex gap-3 sm:gap-4">
-                      <span className={cn(
-                        "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-                        message.role === "assistant" ? "bg-[#084734] text-white" : "bg-[#F0EFED] text-[#31302E]"
-                      )}>
-                        {message.role === "assistant" ? <Sparkles className="h-4 w-4" /> : <UserRound className="h-4 w-4" />}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <p className="text-[13px] font-semibold text-[#31302E]">
-                            {message.role === "assistant" ? "AI 답변" : "사용자 질문"}
-                          </p>
-                          <span className="text-[11px] text-[#A39E98]">{formatTime(message.created_at)}</span>
-                          {message.role === "assistant" ? (
-                            <span className={cn("rounded-md px-2 py-1 text-[10px] font-semibold", review.className)}>
-                              {review.label}
-                            </span>
-                          ) : null}
-                        </div>
-
-                        {message.role === "user" ? (
-                          <div className="max-w-[580px] whitespace-pre-wrap rounded-lg border border-black/[0.08] bg-[#FAFAF8] px-4 py-3 text-[14px] leading-6 text-[#31302E]">
-                            {message.content}
-                          </div>
-                        ) : (
-                          <div
-                            className={cn(
-                              "overflow-hidden rounded-lg border border-black/[0.08] bg-white",
-                              // 검토 상태 레일 — 스크롤 중에도 초안/승인 상태가 읽히는 1차 신호.
-                              message.review_state === "pending" && "border-l-[3px] border-l-[#ECD29C]",
-                              message.review_state === "approved" && "border-l-[3px] border-l-[#BDEFD8]",
-                              message.review_state === "changes_requested" && "border-l-[3px] border-l-[#F2B8B8]"
-                            )}
-                          >
-                            <div className="whitespace-pre-wrap px-5 py-4 text-[14px] leading-7 text-[#31302E]">
-                              {visibleContent}
-                              <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-[#A39E98]">
-                                {message.model_name ? <span>{message.model_name}</span> : <span>결정론적 안전 초안</span>}
-                                {message.model_mode ? <span>· {message.model_mode}</span> : null}
-                              </div>
-                              {message.review_state === "approved" && message.corrected_content ? (
-                                <div className="mt-3 border-t border-black/[0.06] pt-3">
-                                  <PromoteKnowledgeControl
-                                    pending={promotingMessageId === message.id}
-                                    result={promotionResults[message.id]}
-                                    onPromote={() => void promoteMessageToKnowledge(message.id)}
-                                  />
-                                </div>
-                              ) : null}
-                            </div>
-
-                            {isLatestAssistant ? (
-                              <div className="border-t border-black/[0.08]">
-                                <div className="flex flex-wrap items-center gap-1 px-3 py-2">
-                                  <AnswerFooterChip
-                                    active={expanded === "sources"}
-                                    onClick={() => setExpanded(expanded === "sources" ? null : "sources")}
-                                    icon={<BookOpen className="h-3.5 w-3.5" />}
-                                  >
-                                    근거 <em className="not-italic font-bold tabular-nums text-[#084734]">{sources.length}</em>
-                                  </AnswerFooterChip>
-                                  <AnswerFooterChip
-                                    active={expanded === "hq"}
-                                    onClick={() => setExpanded(expanded === "hq" ? null : "hq")}
-                                    icon={<MessageSquare className="h-3.5 w-3.5" />}
-                                  >
-                                    소통 초안 3종
-                                  </AnswerFooterChip>
-                                  <AnswerFooterChip
-                                    active={expanded === "regression"}
-                                    onClick={() => setExpanded(expanded === "regression" ? null : "regression")}
-                                    icon={<History className="h-3.5 w-3.5" />}
-                                  >
-                                    회귀 개선
-                                  </AnswerFooterChip>
-                                  <button
-                                    type="button"
-                                    onClick={rerunWithPro}
-                                    disabled={isPending}
-                                    className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-semibold text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734] disabled:opacity-40"
-                                  >
-                                    <FileCheck2 className="h-3.5 w-3.5" />
-                                    Pro로 재검토
-                                  </button>
-                                </div>
-
-                                {expanded === "sources" ? (
-                                  <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-4 py-4">
-                                  {sources.length > 0 ? (
-                                    <div className="space-y-2">
-                                      {sources.map((source) => {
-                                        const href = sourceHref(source)
-                                        const status = sourceStatus(source)
-                                        const content = (
-                                          <>
-                                            <span className="min-w-0 flex-1 truncate">{source.label ?? source.id}</span>
-                                            {status ? (
-                                              <span
-                                                className={cn(
-                                                  "shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold",
-                                                  status.tone === "confirmed"
-                                                    ? "bg-[#ECFDF5] text-[#084734]"
-                                                    : status.tone === "conditional"
-                                                      ? "bg-[#F6F5F4] text-[#615D59]"
-                                                      : "bg-[#FBF1E0] text-[#7A520F]"
-                                                )}
-                                              >
-                                                {status.label}
-                                              </span>
-                                            ) : null}
-                                            {href ? <ExternalLink className="h-3.5 w-3.5 shrink-0" /> : <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-[#A39E98]" />}
-                                          </>
-                                        )
-                                        return href ? (
-                                          <Link
-                                            key={source.id}
-                                            href={href}
-                                            className="flex items-center gap-3 rounded-md border border-black/[0.08] bg-white px-3 py-2.5 text-[12px] text-[#31302E] hover:border-[#084734]/20 hover:text-[#084734]"
-                                          >
-                                            {content}
-                                          </Link>
-                                        ) : (
-                                          <div key={source.id} className="flex items-center gap-3 rounded-md border border-black/[0.08] bg-white px-3 py-2.5 text-[12px] text-[#31302E]">
-                                            {content}
-                                          </div>
-                                        )
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <p className="text-[12px] leading-5 text-[#615D59]">직접 일치하는 문서 근거가 없습니다. 담당자 확인이 필요합니다.</p>
-                                  )}
-                                  </div>
-                                ) : null}
-
-                                {expanded === "hq" ? (
-                                  <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-4 py-4">
-                                  <div className="space-y-3">
-                                    {communicationTemplates.map((template) => (
-                                      <section key={template.id} className="rounded-md border border-black/[0.08] bg-white p-3">
-                                        <div className="flex items-center justify-between gap-3">
-                                          <h4 className="text-[11px] font-semibold text-[#31302E]">{template.label}</h4>
-                                          <button
-                                            type="button"
-                                            onClick={() => void copyText(template.content, `${template.label} 초안을 복사했습니다.`)}
-                                            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-black/[0.08] bg-white px-2.5 text-[10px] font-semibold hover:bg-[#F6F5F4]"
-                                          >
-                                            <Copy className="h-3 w-3" />
-                                            복사
-                                          </button>
-                                        </div>
-                                        <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap font-sans text-[11px] leading-5 text-[#615D59]">
-                                          {template.content}
-                                        </pre>
-                                      </section>
-                                    ))}
-                                  </div>
-                                  </div>
-                                ) : null}
-
-                                {expanded === "regression" ? (
-                                  <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-4 py-4">
-                                  <label className="flex cursor-pointer items-start gap-3 text-[12px] leading-5 text-[#31302E]">
-                                    <input
-                                      type="checkbox"
-                                      checked={regressionCandidate}
-                                      onChange={(event) => setRegressionCandidate(event.target.checked)}
-                                      className="mt-0.5 h-4 w-4 accent-[#084734]"
-                                    />
-                                    <span>
-                                      이 답변을 회귀 개선 후보로 표시합니다.
-                                      <span className="mt-1 block text-[#615D59]">승인 또는 수정 요청 시 담당자 판단과 함께 저장됩니다.</span>
-                                    </span>
-                                  </label>
-                                  </div>
-                                ) : null}
-                              </div>
-                            ) : null}
-                          </div>
-                        )}
-                      </div>
-                    </article>
-                  )
-                })
-              ) : (
-                <div className="flex min-h-[420px] flex-col items-center justify-center text-center">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[#ECFDF5] text-[#084734]">
-                    <Sparkles className="h-5 w-5" />
-                  </span>
-                  <h2 className="mt-5 text-[18px] font-semibold tracking-[-0.02em] text-[#31302E]">내부 CS 질문을 시작하세요</h2>
-                  <p className="mt-2 max-w-md text-[13px] leading-6 text-[#615D59]">
-                    공개 가이드와 내부 운영 기준을 함께 확인하고, 필요한 경우 본사 소통 초안까지 만듭니다.
-                  </p>
-                </div>
-              )}
-
-              {assets.length > 0 ? (
-                <section className="border-t border-black/[0.08] pt-6" aria-label="누적 이미지 분석">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <h2 className="text-[13px] font-semibold text-[#31302E]">누적 이미지 분석</h2>
-                      <p className="mt-1 text-[11px] text-[#615D59]">같은 대화의 사진과 분석 결과를 순서대로 보관합니다.</p>
-                    </div>
-                    <span className="text-[10px] font-medium text-[#A39E98]">{assets.length}개</span>
-                  </div>
-
-                  <div className="mt-3 flex gap-2 overflow-x-auto pb-2">
-                    {assets.map((asset) => {
-                      const preview = assetPreviewUrl(asset)
-                      const status = assetAnalysisStatus(asset).toLowerCase()
-                      const analyzing = ["pending", "processing", "analyzing", "queued"].includes(status)
-                      return (
-                        <button
-                          key={asset.id}
-                          type="button"
-                          onClick={() => setSelectedAssetId(asset.id)}
-                          className={cn(
-                            "group relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-md border bg-[#F6F5F4] text-[#615D59] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]",
-                            selectedAsset?.id === asset.id ? "border-[#084734]" : "border-black/[0.08] hover:border-black/20"
-                          )}
-                          aria-label={`${assetFileName(asset)} 분석 보기`}
-                        >
-                          {preview ? (
-                            <Image
-                              src={preview}
-                              alt=""
-                              fill
-                              unoptimized
-                              sizes="72px"
-                              className="object-cover"
-                            />
-                          ) : (
-                            <span className="flex h-full w-full items-center justify-center">
-                              <ImageIcon className="h-5 w-5" />
-                            </span>
-                          )}
-                          {analyzing ? (
-                            <span className="absolute inset-0 flex items-center justify-center bg-white/80">
-                              <Loader2 className="h-4 w-4 animate-spin text-[#084734]" />
-                            </span>
-                          ) : null}
-                        </button>
-                      )
-                    })}
-                  </div>
-
-                  {selectedAsset ? (
-                    <div className="mt-2 overflow-hidden rounded-lg border border-black/[0.08] bg-[#FAFAF8]">
-                      <div className="flex flex-wrap items-center gap-2 border-b border-black/[0.08] bg-white px-4 py-3">
-                        <ImageIcon className="h-4 w-4 text-[#084734]" />
-                        <p className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[#31302E]">
-                          {assetFileName(selectedAsset)}
-                        </p>
-                        {["pending", "processing", "analyzing", "queued"].includes(assetAnalysisStatus(selectedAsset).toLowerCase()) ? (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-[#F6F5F4] px-2 py-1 text-[10px] font-semibold text-[#615D59]">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            분석 중
-                          </span>
-                        ) : ["failed", "error"].includes(assetAnalysisStatus(selectedAsset).toLowerCase()) ? (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-[#FCE9E9] px-2 py-1 text-[10px] font-semibold text-[#8F2C2C]">
-                            <AlertTriangle className="h-3 w-3" />
-                            분석 실패
-                          </span>
-                        ) : assetNeedsHumanReview(selectedAsset) ? (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-[#FBF1E0] px-2 py-1 text-[10px] font-semibold text-[#7A520F]">
-                            <ShieldCheck className="h-3 w-3" />
-                            담당자 확인 필요
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-[#ECFDF5] px-2 py-1 text-[10px] font-semibold text-[#084734]">
-                            <CheckCircle2 className="h-3 w-3" />
-                            확인 완료
-                          </span>
-                        )}
-                      </div>
-                      <div className="grid gap-4 p-4 sm:grid-cols-[120px_minmax(0,1fr)]">
-                        <div className="relative aspect-square overflow-hidden rounded-md border border-black/[0.08] bg-white">
-                          {assetPreviewUrl(selectedAsset) ? (
-                            <Image
-                              src={assetPreviewUrl(selectedAsset) ?? ""}
-                              alt={assetFileName(selectedAsset)}
-                              fill
-                              unoptimized
-                              sizes="120px"
-                              className="object-cover"
-                            />
-                          ) : (
-                            <span className="flex h-full items-center justify-center text-[#A39E98]">
-                              <ImageIcon className="h-6 w-6" />
-                            </span>
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#A39E98]">AI 분석</p>
-                          <p className="mt-2 whitespace-pre-wrap text-[12px] leading-5 text-[#31302E]">
-                            {assetAnalysis(selectedAsset)}
-                          </p>
-                          {selectedAsset.instruction ? (
-                            <p className="mt-3 border-t border-black/[0.08] pt-3 text-[10px] leading-4 text-[#615D59]">
-                              분석 요청 · {selectedAsset.instruction}
-                            </p>
-                          ) : null}
-                          {assetNeedsHumanReview(selectedAsset)
-                            && ["ready", "completed"].includes(assetAnalysisStatus(selectedAsset).toLowerCase()) ? (
-                            <button
-                              type="button"
-                              onClick={() => void approveSelectedAsset()}
-                              disabled={assetReviewingId === selectedAsset.id}
-                              className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white hover:bg-[#065C41] disabled:opacity-50"
-                            >
-                              {assetReviewingId === selectedAsset.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                              )}
-                              분석 확인
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </section>
-              ) : null}
-            </div>
-          </div>
-
-          <form onSubmit={submitQuestion} className="shrink-0 border-t border-black/[0.08] bg-white px-5 py-4 sm:px-7">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              multiple
-              className="sr-only"
-              onChange={handleAssetFiles}
-              aria-label="CS 분석 이미지 첨부"
-            />
-            {pendingFiles.length > 0 || uploadingAssets || assetError ? (
-              <div className={cn("mb-3", reviewOpen ? "max-w-none" : "mx-auto max-w-[980px]")}>
-                {pendingFiles.length > 0 ? (
-                  <div className="flex gap-2 overflow-x-auto pb-1">
-                    {pendingFiles.map((file) => (
-                      <div
-                        key={fileKey(file)}
-                        className="flex h-10 max-w-[220px] shrink-0 items-center gap-2 rounded-md border border-black/[0.08] bg-[#FAFAF8] px-2.5"
-                      >
-                        <ImageIcon className="h-3.5 w-3.5 shrink-0 text-[#084734]" />
-                        <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-[#31302E]">{file.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => removePendingFile(file)}
-                          disabled={uploadingAssets || isPending}
-                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#A39E98] hover:bg-[#FCE9E9] hover:text-[#8F2C2C] disabled:opacity-40"
-                          aria-label={`${file.name} 첨부 제거`}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                {uploadingAssets ? (
-                  <p className="mt-2 flex items-center gap-2 text-[11px] text-[#084734]">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    사진 분석 중 · {uploadProgress.current}/{uploadProgress.total}
-                  </p>
-                ) : null}
-                {assetError ? (
-                  <p className="mt-2 flex items-start gap-2 text-[11px] text-[#8F2C2C]" role="alert">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    {assetError}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-            <div className={cn(
-              "flex items-end gap-3 rounded-lg border border-black/[0.16] bg-white px-4 py-3 focus-within:border-[#084734]/50 focus-within:ring-2 focus-within:ring-[#084734]/10",
-              reviewOpen ? "max-w-none" : "mx-auto max-w-[980px]"
-            )}>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={pendingFiles.length >= MAX_PENDING_ASSETS || uploadingAssets || isPending}
-                className="mb-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[#615D59] transition-colors hover:bg-[#F6F5F4] hover:text-[#084734] disabled:cursor-not-allowed disabled:opacity-35"
-                aria-label="사진 첨부 또는 촬영"
-                title={`JPG, PNG, WebP · 최대 ${MAX_PENDING_ASSETS}장`}
-              >
-                <Paperclip className="h-4 w-4" />
-              </button>
-              <textarea
-                value={composer}
-                onChange={(event) => setComposer(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault()
-                    event.currentTarget.form?.requestSubmit()
-                  }
-                }}
-                rows={2}
-                maxLength={1000}
-                placeholder="내부 자료와 상담 맥락을 함께 질문하세요"
-                className="max-h-32 min-h-12 flex-1 resize-none bg-transparent text-[14px] leading-6 text-[#31302E] outline-none placeholder:text-[#A39E98]"
-              />
-              <button
-                type="submit"
-                disabled={(!composer.trim() && pendingFiles.length === 0) || isPending || uploadingAssets}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[#31302E] text-white transition-colors hover:bg-[#111110] disabled:cursor-not-allowed disabled:bg-[#D8D5D1]"
-                aria-label="질문 보내기"
-              >
-                {isPending || uploadingAssets ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </button>
-            </div>
-            <p className={cn("mt-2 text-[10px] text-[#A39E98]", reviewOpen ? "max-w-none" : "mx-auto max-w-[980px]")}>
-              사진은 JPG·PNG·WebP 최대 3장 · AI 답변과 이미지 분석은 CS 담당자 승인 전 외부로 전달되지 않습니다.
-            </p>
-          </form>
-        </div>
+        <ChatPanel
+          detail={detail}
+          loading={loading}
+          isPending={isPending}
+          reviewOpen={reviewOpen}
+          setReviewOpen={setReviewOpen}
+          selectedId={selectedId}
+          queueConversations={queueConversations}
+          handleSelect={handleSelect}
+          startNewConversation={startNewConversation}
+          modelMode={modelMode}
+          setModelMode={setModelMode}
+          requestHqConfirmation={requestHqConfirmation}
+          hqPendingActionId={hqPendingActionId}
+          pendingMessage={pendingMessage}
+          latestAssistant={latestAssistant}
+          expanded={expanded}
+          setExpanded={setExpanded}
+          rerunWithPro={rerunWithPro}
+          copyText={copyText}
+          communicationTemplates={communicationTemplates}
+          regressionCandidate={regressionCandidate}
+          setRegressionCandidate={setRegressionCandidate}
+          promotingMessageId={promotingMessageId}
+          promotionResults={promotionResults}
+          promoteMessageToKnowledge={promoteMessageToKnowledge}
+          assets={assets}
+          selectedAsset={selectedAsset}
+          setSelectedAssetId={setSelectedAssetId}
+          assetReviewingId={assetReviewingId}
+          approveSelectedAsset={approveSelectedAsset}
+          submitQuestion={submitQuestion}
+          fileInputRef={fileInputRef}
+          handleAssetFiles={handleAssetFiles}
+          pendingFiles={pendingFiles}
+          removePendingFile={removePendingFile}
+          uploadingAssets={uploadingAssets}
+          uploadProgress={uploadProgress}
+          assetError={assetError}
+          composer={composer}
+          setComposer={setComposer}
+        />
       ) : null}
 
       {activeTab === "queue" ? (
-        <section className="min-h-0 flex-1 overflow-y-auto bg-white">
-          <div className="flex items-center justify-between px-5 py-6 sm:px-7">
-            <div>
-              <h2 className="text-[20px] font-semibold tracking-[-0.02em]">대기열</h2>
-              <p className="mt-1 text-[12px] text-[#615D59]">검토와 담당자 판단이 필요한 내부 CS 대화입니다.</p>
-            </div>
-            <button
-              type="button"
-              onClick={startNewConversation}
-              className="inline-flex h-9 items-center gap-2 rounded-md bg-[#31302E] px-4 text-[12px] font-semibold text-white hover:bg-[#111110]"
-            >
-              <MessageSquare className="h-4 w-4" />
-              새 대화
-            </button>
-          </div>
-          <ConversationTable conversations={queueConversations} emptyLabel="대기 중인 대화가 없습니다." onSelect={(item) => void handleSelect(item)} />
-        </section>
+        <QueuePanel
+          conversations={filteredQueueConversations}
+          filter={queueFilter}
+          chipCounts={queueChipCounts}
+          hqBusyId={hqPendingActionId}
+          onNewConversation={startNewConversation}
+          onFilterChange={setQueueFilter}
+          onSelect={(item) => void handleSelect(item)}
+          onRequestHq={(item) => void requestHqConfirmation(item)}
+        />
       ) : null}
 
-      {activeTab === "archive" ? (
-        <section className="min-h-0 flex-1 overflow-y-auto bg-white">
-          <div className="px-5 py-6 sm:px-7">
-            <h2 className="text-[20px] font-semibold tracking-[-0.02em]">아카이브</h2>
-            <p className="mt-1 text-[12px] text-[#615D59]">종료 후 보관한 상담과 승인 이력을 다시 확인합니다.</p>
-          </div>
-          <ConversationTable conversations={archivedConversations} emptyLabel="아카이브한 대화가 없습니다." onSelect={(item) => void handleSelect(item)} />
-        </section>
+      {activeTab === "hq" ? (
+        <HqPanel
+          conversations={hqConversations}
+          detailError={hqDetailError}
+          expandedId={hqExpandedId}
+          expandedDetail={hqDetail}
+          busyId={hqPendingActionId}
+          onToggleRow={toggleHqRow}
+          onCopy={(text, success) => void copyText(text, success)}
+          onOpenConversation={(conversation) => void handleSelect(conversation)}
+          onResolve={(conversation) => void resolveHqConfirmation(conversation)}
+        />
       ) : null}
 
       {activeTab === "tools" ? (
-        <section className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAF8] px-5 py-7 sm:px-8">
-          <div className="mx-auto max-w-[920px]">
-            <h2 className="text-[20px] font-semibold tracking-[-0.02em]">운영 데스크</h2>
-            <p className="mt-1 text-[12px] text-[#615D59]">오늘 처리할 검수와 큐 상태를 한 화면에서 확인합니다.</p>
-
-            {/* 스탯 스트립 — 라이브 지표가 먼저. 파스텔 채움 없이 흰 카드 + 헤어라인 분할(에디토리얼). */}
-            <div className="mt-5 grid grid-cols-2 overflow-hidden rounded-[10px] border border-black/[0.08] bg-white sm:grid-cols-4">
-              <Link
-                href="/admin/docs?tab=gaps"
-                className="group relative border-b border-black/[0.08] px-5 py-4 transition-colors hover:bg-[#FAFAF8] sm:border-b-0"
-              >
-                <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">보강 큐 · 챗봇</p>
-                <p className="mt-2 text-[27px] font-bold leading-none tracking-[-0.02em] text-[#111110] tabular-nums">
-                  {docsGapsSummary ? `${docsGapsSummary.chatbot}${docsGapsSummary.capped ? "+" : ""}` : "—"}
-                </p>
-                <p className="mt-1.5 truncate text-[10.5px] text-[#A39E98]">
-                  {docsGapsSummary ? `무결과 검색 ${docsGapsSummary.zeroResult} 별도` : "집계 대기"}
-                </p>
-                <ArrowUpRight className="absolute right-4 top-4 h-3.5 w-3.5 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
-              </Link>
-              <Link
-                href="/admin/docs?tab=gaps"
-                className="group relative border-b border-l border-black/[0.08] px-5 py-4 transition-colors hover:bg-[#FAFAF8] sm:border-b-0"
-              >
-                <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">보강 큐 · 내부 CS</p>
-                <p className="mt-2 text-[27px] font-bold leading-none tracking-[-0.02em] text-[#111110] tabular-nums">
-                  {docsGapsSummary ? docsGapsSummary.internalCs : "—"}
-                </p>
-                <p className="mt-1.5 truncate text-[10.5px] text-[#A39E98]">
-                  {docsGapsSummary
-                    ? `폴백 ${docsGapsSummary.internalCsFallback} · 수정 요청 ${docsGapsSummary.internalCsReview}`
-                    : "집계 대기"}
-                </p>
-                <ArrowUpRight className="absolute right-4 top-4 h-3.5 w-3.5 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
-              </Link>
-              <button
-                type="button"
-                onClick={() => regressionSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                className="group relative border-black/[0.08] px-5 py-4 text-left transition-colors hover:bg-[#FAFAF8] sm:border-l"
-              >
-                <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">회귀 검수 대기</p>
-                <p className="mt-2 text-[27px] font-bold leading-none tracking-[-0.02em] text-[#111110] tabular-nums">
-                  {regressionLoadState === "loaded" ? regressionPendingCount : "—"}
-                </p>
-                <p className="mt-1.5 truncate text-[10.5px] text-[#A39E98]">아래에서 바로 판정</p>
-                <ChevronDown className="absolute right-4 top-4 h-3.5 w-3.5 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
-              </button>
-              <div className="relative border-l border-black/[0.08] px-5 py-4">
-                <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#A39E98]">AI 브리지</p>
-                <p className="mt-3.5 flex items-center gap-2 text-[14px] font-bold leading-none text-[#111110]">
-                  <span className={cn("h-[7px] w-[7px] rounded-full", bridgeState.ready ? "bg-[#084734]" : "bg-[#A8741A]")} />
-                  {integrationLoading ? "확인 중" : bridgeState.ready ? "연결됨" : bridgeState.configured ? bridgeState.status : "설정 필요"}
-                </p>
-                <p className="mt-2 truncate text-[10.5px] text-[#A39E98] tabular-nums">
-                  {bridgeState.lastCheckedAt ? `마지막 확인 ${formatTime(bridgeState.lastCheckedAt)}` : "상태 미확인"}
-                </p>
-              </div>
-            </div>
-
-            {/* 코파일럿 운영 지표 (계약 1) — 최근 7일 성과. 큐(스탯 스트립) 다음, 일감(회귀) 이전. */}
-            <div className="mt-8 flex items-baseline justify-between gap-3">
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">
-                운영 지표 <span className="font-medium normal-case tracking-normal text-[#A39E98]">최근 7일</span>
-              </h3>
-              {metricsLoadState === "failed" ? (
-                <button
-                  type="button"
-                  onClick={() => void loadCsMetrics()}
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[10px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
-                >
-                  <RefreshCcw className="h-3 w-3" />
-                  다시 시도
-                </button>
-              ) : null}
-            </div>
-            <div className="mt-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {metricCards.map((card) => (
-                <MetricCard key={card.key} icon={card.icon} label={card.label} value={card.value} sub={card.sub} />
-              ))}
-            </div>
-
-            {/* 회귀 검수 대기 — 링크 목록보다 위, 데스크의 첫 번째 일감. 자동 평가(계약 2)는 제안만 만든다. */}
-            <div ref={regressionSectionRef} className="mt-8 flex flex-wrap scroll-mt-4 items-center justify-between gap-3">
-              <h3 className="flex items-baseline gap-2.5 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">
-                <span>회귀 검수 대기</span>
-                {regressionLoadState === "loaded" ? (
-                  <span className="font-medium normal-case tracking-normal text-[#A39E98] tabular-nums">
-                    미판정 {regressionPendingCount}건 · 전체 {regressionCandidates.length}건
-                  </span>
-                ) : null}
-              </h3>
-              <button
-                type="button"
-                onClick={() => void runRegressionAutoEval()}
-                disabled={
-                  regressionEvalRunState === "running" || regressionLoadState !== "loaded" || regressionCandidates.length === 0
-                }
-                className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[10px] font-semibold text-[#084734] hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:text-[#A39E98] disabled:hover:bg-transparent"
-              >
-                {regressionEvalRunState === "running" ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Sparkles className="h-3 w-3" />
-                )}
-                {regressionEvalRunState === "running" ? "평가 중" : "자동 평가 실행"}
-              </button>
-            </div>
-            <p className="mt-1.5 text-[10px] leading-4 text-[#A39E98]">
-              AI가 통과 / 수정 필요를 참고용으로만 제안합니다. 실제 판정은 행의 버튼으로 직접 확정해야 저장됩니다.
-            </p>
-            {regressionEvalError ? (
-              <p className="mt-1.5 flex items-start gap-2 text-[11px] text-[#8F2C2C]" role="alert">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                {regressionEvalError}
-              </p>
-            ) : null}
-            <div className="mt-2.5 overflow-hidden rounded-[10px] border border-black/[0.08] bg-white">
-              {regressionLoadState === "idle" || regressionLoadState === "loading" ? (
-                <div className="flex items-center justify-center gap-2 px-5 py-8 text-[12px] text-[#615D59]">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  회귀 후보를 불러오는 중입니다.
-                </div>
-              ) : regressionLoadState === "failed" ? (
-                <div className="flex flex-col items-center gap-3 px-5 py-8 text-center">
-                  <p className="text-[12px] text-[#615D59]">회귀 후보 목록을 불러오지 못했습니다.</p>
-                  <button
-                    type="button"
-                    onClick={() => void loadRegressionCandidates()}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] px-3 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
-                  >
-                    <RefreshCcw className="h-3.5 w-3.5" />
-                    다시 시도
-                  </button>
-                </div>
-              ) : regressionCandidates.length === 0 ? (
-                <p className="px-5 py-8 text-center text-[12px] text-[#615D59]">판정이 필요한 회귀 후보가 없습니다.</p>
-              ) : (
-                <ul>
-                  {regressionCandidates.map((item) => {
-                    const judgedChip = regressionOutcomeChip(item.outcome)
-                    const reviewLabel = REVIEW_META[item.reviewState as ReviewState]?.label
-                    const suggestion = regressionSuggestions[item.id]
-                    return (
-                      <li
-                        key={item.id}
-                        className={cn(
-                          "flex flex-col gap-2 border-b border-black/[0.08] px-4 py-2.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between",
-                          judgedChip && "bg-[#FAFAF8]"
-                        )}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className={cn("line-clamp-2 text-[12.5px] leading-5", judgedChip ? "text-[#A39E98]" : "text-[#31302E]")}>
-                            {item.excerpt}
-                          </p>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-[#A39E98]">
-                            {reviewLabel ? (
-                              <span className="inline-flex h-[17px] items-center rounded-full border border-black/[0.10] bg-white px-2 text-[9px] font-semibold text-[#615D59]">
-                                내부CS · {reviewLabel}
-                              </span>
-                            ) : null}
-                            <span className="tabular-nums">{formatDay(item.capturedAt)} {formatTime(item.capturedAt)}</span>
-                            {/* 자동 평가 제안(계약 2) — 판정 전 참고용, 메타 행에 인라인 배지로. 판정이 끝난 행에는 숨긴다. */}
-                            {suggestion && !judgedChip ? (
-                              <span
-                                className={cn(
-                                  "inline-flex h-[17px] items-center gap-1 rounded-full px-2 text-[9px] font-semibold",
-                                  suggestion.suggestedOutcome === "pass"
-                                    ? "bg-[#ECFDF5] text-[#084734]"
-                                    : "bg-[#FBF1E0] text-[#7A520F]"
-                                )}
-                              >
-                                <Sparkles className="h-2.5 w-2.5" />
-                                제안 · {suggestion.suggestedOutcome === "pass" ? "통과" : "수정 필요"}
-                              </span>
-                            ) : null}
-                            <button
-                              type="button"
-                              onClick={() => openConversationById(item.conversationId)}
-                              className="inline-flex items-center gap-1 font-semibold text-[#084734] hover:underline"
-                            >
-                              대화 보기
-                              <ExternalLink className="h-3 w-3" />
-                            </button>
-                          </div>
-                          {suggestion && !judgedChip ? (
-                            <details className="mt-1">
-                              <summary className="cursor-pointer text-[10px] font-medium text-[#084734] hover:underline">
-                                AI 판단 근거
-                              </summary>
-                              <p className="mt-1 max-w-[420px] text-[10px] leading-4 text-[#615D59]">
-                                {suggestion.rationale}
-                              </p>
-                              <p className="mt-1 text-[10px] text-[#A39E98]">판정 모델: {suggestion.judgeModel}</p>
-                            </details>
-                          ) : null}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1.5 self-start sm:self-center">
-                          {judgedChip ? (
-                            <span className={cn("inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-[10px] font-bold", judgedChip.className)}>
-                              <CheckCircle2 className="h-3 w-3" />
-                              {judgedChip.label}
-                            </span>
-                          ) : (
-                            <div className="flex overflow-hidden rounded-[7px] border border-black/[0.12]" role="group" aria-label={`회귀 판정: ${item.excerpt}`}>
-                              {REGRESSION_JUDGE_ACTIONS.map((action, index) => (
-                                <button
-                                  key={action.value}
-                                  type="button"
-                                  onClick={() => void judgeRegressionCandidate(item, action.value)}
-                                  className={cn(
-                                    "h-6 bg-white px-2 text-[10px] font-semibold text-[#31302E] transition-colors",
-                                    index > 0 && "border-l border-black/[0.10]",
-                                    action.hoverClassName
-                                  )}
-                                >
-                                  {action.label}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                          {/* 지식 승격(계약 3) — hasCorrectedContent 부재(구응답)면 approved 휴리스틱만으로 노출.
-                              compact — 판정 버튼(1차 액션) 옆 보조 액션이라 기본 중립, hover에서만 강조색. */}
-                          {item.reviewState === "approved" && (item.hasCorrectedContent ?? true) ? (
-                            <PromoteKnowledgeControl
-                              compact
-                              pending={promotingMessageId === item.id}
-                              result={promotionResults[item.id]}
-                              onPromote={() => void promoteMessageToKnowledge(item.id)}
-                            />
-                          ) : null}
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-            </div>
-            {/* 목록이 비면 "판정이 필요한 회귀 후보가 없습니다" 빈 상태 문구와 모순되므로 skipped 경고를 숨긴다. */}
-            {regressionCandidates.length > 0 && regressionEvalSkippedSummary ? (
-              <p className="mt-2 flex items-start gap-2 text-[11px] text-[#7A520F]" role="status">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                {regressionEvalSkippedSummary}
-              </p>
-            ) : null}
-            {regressionError ? (
-              <p className="mt-2 flex items-start gap-2 text-[11px] text-[#8F2C2C]" role="alert">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                {regressionError}
-              </p>
-            ) : null}
-
-            {/* AI 브리지 — 한 줄 요약 행 + 전송 옵션/최근 기록 펼침. */}
-            <h3 className="mt-8 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">내부 AI/MCP 분석</h3>
-            <div className="mt-2.5 overflow-hidden rounded-[10px] border border-black/[0.08] bg-white">
-              <div className="flex flex-wrap items-center gap-3 px-5 py-3.5">
-                <span className={cn(
-                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
-                  bridgeState.ready ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#F6F5F4] text-[#615D59]"
-                )}>
-                  {integrationLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : bridgeState.ready ? (
-                    <Wifi className="h-4 w-4" />
-                  ) : (
-                    <WifiOff className="h-4 w-4" />
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12.5px] font-semibold text-[#31302E]">{bridgeState.label}</p>
-                  <p className="mt-0.5 truncate text-[10.5px] text-[#A39E98]">{bridgeState.message}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void loadIntegrationStatus()}
-                  disabled={integrationLoading}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-black/[0.08] px-2.5 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E] disabled:opacity-40"
-                >
-                  <RefreshCcw className={cn("h-3.5 w-3.5", integrationLoading && "animate-spin")} />
-                  상태 확인
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBridgeDetailOpen((current) => !current)}
-                  className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-[11px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#31302E]"
-                  aria-expanded={bridgeDetailOpen}
-                >
-                  전송 옵션
-                  <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", bridgeDetailOpen && "rotate-180")} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void dispatchCurrentConversation()}
-                  disabled={!hasDispatchContext || !bridgeState.ready || integrationLoading || dispatching}
-                  className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md bg-[#084734] px-3 text-[11px] font-semibold text-white hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
-                >
-                  {dispatching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                  {dispatching ? "전송 중" : "현재 대화 보내기"}
-                </button>
-              </div>
-
-              {bridgeDetailOpen ? (
-                <div className="border-t border-black/[0.06] bg-[#FAFAF8] px-5 py-4">
-                  <p className="text-[11px] leading-5 text-[#615D59]">
-                    기본 전송은 메시지 맥락과 이미지 분석 텍스트만 포함합니다. 분석 결과는 검토 전 초안으로 돌아옵니다.
-                  </p>
-                  <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] leading-5 text-[#615D59]">
-                    <input
-                      type="checkbox"
-                      checked={includeOriginal}
-                      onChange={(event) => setIncludeOriginal(event.target.checked)}
-                      className="mt-0.5 h-4 w-4 accent-[#084734]"
-                    />
-                    <span>
-                      원본 이미지도 포함
-                      <span className="block text-[10px] text-[#A39E98]">민감정보 포함 가능성을 확인했으며 내부 분석 범위로 전송합니다.</span>
-                    </span>
-                  </label>
-                  {integrationEvents.length > 0 ? (
-                    <>
-                      <div className="mt-4 flex items-center justify-between gap-3">
-                        <p className="text-[11px] font-semibold text-[#31302E]">최근 연동 기록</p>
-                        <span className="text-[10px] text-[#A39E98] tabular-nums">{integrationEvents.length}건</span>
-                      </div>
-                      <ul className="mt-2 space-y-2">
-                        {integrationEvents.slice(0, 5).map((event) => {
-                          const successful = ["sent", "success", "completed", "ok"].includes((event.status ?? "").toLowerCase())
-                          return (
-                            <li key={event.id} className="flex items-start gap-3 rounded-md border border-black/[0.08] bg-white px-3 py-2.5">
-                              {successful ? (
-                                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" />
-                              ) : (
-                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#A8741A]" />
-                              )}
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-[11px] font-semibold text-[#31302E]">
-                                  {event.transport ?? event.integration ?? event.source_system ?? "AI 브리지"} · {event.status ?? "처리 중"}
-                                </p>
-                                <p className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-[#615D59]">{integrationEventSummary(event)}</p>
-                              </div>
-                              <span className="shrink-0 text-[10px] text-[#A39E98]">{formatTime(integrationEventWhen(event))}</span>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    </>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {integrationError ? (
-                <p className="mx-5 mb-4 mt-1 flex items-start gap-2 rounded-md bg-[#FCE9E9] px-3 py-2 text-[11px] text-[#8F2C2C]" role="alert">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                  {integrationError}
-                </p>
-              ) : null}
-            </div>
-
-            {/* 운영 화면 바로가기 — 보조 유틸리티, 2열 컴팩트 그리드로 시각적 무게를 낮춘다. */}
-            <h3 className="mt-8 text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">운영 화면 바로가기</h3>
-            <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {OPERATING_TOOLS.map((tool) => {
-                const Icon = tool.icon
-                return (
-                  <Link
-                    // href 는 중복될 수 있다 (챗봇 운영 현황이 보강 큐 탭에 흡수됨) — title 이 키.
-                    key={tool.title}
-                    href={tool.href}
-                    className="group flex items-center gap-3 rounded-[9px] border border-black/[0.08] bg-white px-3.5 py-3 transition-colors hover:border-[#084734]/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[#F6F5F4] text-[#31302E] transition-colors group-hover:bg-[#ECFDF5] group-hover:text-[#084734]">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12.5px] font-semibold text-[#31302E]">{tool.title}</span>
-                      <span className="mt-0.5 block truncate text-[10.5px] text-[#A39E98]">{tool.description}</span>
-                    </span>
-                    <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-[#D8D5D1] transition-colors group-hover:text-[#084734]" />
-                  </Link>
-                )
-              })}
-            </div>
-          </div>
-        </section>
+        <ToolsPanel
+          docsGapsSummary={docsGapsSummary}
+          regressionLoadState={regressionLoadState}
+          regressionPendingCount={regressionPendingCount}
+          bridgeState={bridgeState}
+          integrationLoading={integrationLoading}
+          metricsLoadState={metricsLoadState}
+          metricCards={metricCards}
+          regressionEvalRunState={regressionEvalRunState}
+          regressionCandidates={regressionCandidates}
+          regressionEvalError={regressionEvalError}
+          regressionSuggestions={regressionSuggestions}
+          regressionEvalSkippedSummary={regressionEvalSkippedSummary}
+          regressionError={regressionError}
+          promotingMessageId={promotingMessageId}
+          promotionResults={promotionResults}
+          bridgeDetailOpen={bridgeDetailOpen}
+          includeOriginal={includeOriginal}
+          integrationEvents={integrationEvents}
+          integrationError={integrationError}
+          hasDispatchContext={hasDispatchContext}
+          dispatching={dispatching}
+          onRetryMetrics={() => void loadCsMetrics()}
+          onRunAutoEval={() => void runRegressionAutoEval()}
+          onRetryRegression={() => void loadRegressionCandidates()}
+          onJudge={(item, outcome) => void judgeRegressionCandidate(item, outcome)}
+          onOpenConversation={openConversationById}
+          onPromote={(messageId) => void promoteMessageToKnowledge(messageId)}
+          onRefreshBridge={() => void loadIntegrationStatus()}
+          onToggleBridgeDetail={() => setBridgeDetailOpen((current) => !current)}
+          onDispatch={() => void dispatchCurrentConversation()}
+          onIncludeOriginalChange={setIncludeOriginal}
+        />
       ) : null}
 
-      {reviewOpen ? (
-        <>
-          <button
-            type="button"
-            className="absolute inset-x-0 top-32 bottom-0 z-30 bg-black/10 xl:hidden"
-            onClick={() => setReviewOpen(false)}
-            aria-label="검토 패널 닫기"
-          />
-          <aside className="absolute top-16 right-0 bottom-0 z-40 flex w-full max-w-[438px] flex-col border-l border-black/[0.08] bg-white shadow-[-14px_0_36px_rgba(0,0,0,0.06)]">
-            <div className="flex h-16 shrink-0 items-center justify-between border-b border-black/[0.08] px-5">
-              <div>
-                <h2 className="text-[16px] font-semibold">검토</h2>
-                <p className="mt-0.5 text-[10px] text-[#A39E98]">최종 판단은 CS 담당자에게 있습니다.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setReviewOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-[#F6F5F4]"
-                aria-label="검토 닫기"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <div className="divide-y divide-black/[0.08] border-b border-black/[0.08]">
-                {([
-                  ["customer", "고객 맥락 확인", "요청 내용과 계정·계약·장비 조건을 확인했습니다.", UserRound],
-                  ["evidence", "정본 근거 확인", "공개 가이드와 내부 정본의 적용 범위를 확인했습니다.", BookOpen],
-                  ["externalScope", "외부 전달 범위 확인", "본사 확인 필요 여부와 공개 가능한 범위를 판단했습니다.", ExternalLink],
-                ] as const).map(([key, title, description, Icon]) => (
-                  <label key={key} className="flex cursor-pointer items-start gap-3 px-5 py-4 hover:bg-[#FAFAF8]">
-                    <input
-                      type="checkbox"
-                      checked={reviewChecks[key]}
-                      onChange={(event) => setReviewChecks((current) => ({ ...current, [key]: event.target.checked }))}
-                      className="mt-1 h-4 w-4 shrink-0 accent-[#084734]"
-                    />
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F6F5F4] text-[#615D59]">
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <span>
-                      <span className="block text-[13px] font-semibold text-[#31302E]">{title}</span>
-                      <span className="mt-1 block text-[11px] leading-4 text-[#615D59]">{description}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-
-              <div className="px-5 py-5">
-                <div className="flex items-center justify-between gap-3">
-                  <label htmlFor="internal-cs-final-answer" className="text-[13px] font-semibold">최종 답변</label>
-                  <span className="text-[10px] text-[#A39E98]">외부 전달용</span>
-                </div>
-                <textarea
-                  id="internal-cs-final-answer"
-                  value={finalDraft}
-                  onChange={(event) => setFinalDraft(event.target.value)}
-                  rows={12}
-                  className="mt-3 w-full resize-y rounded-md border border-black/[0.16] bg-white px-3 py-3 text-[12px] leading-5 text-[#31302E] outline-none focus:border-[#084734]/50 focus:ring-2 focus:ring-[#084734]/10"
-                  placeholder="AI 초안을 검토하고 최종 답변으로 다듬어 주세요."
-                />
-                <div className="mt-4">
-                  <label htmlFor="internal-cs-review-note" className="text-[12px] font-semibold text-[#31302E]">검토 메모</label>
-                  <textarea
-                    id="internal-cs-review-note"
-                    value={reviewNote}
-                    onChange={(event) => setReviewNote(event.target.value)}
-                    rows={3}
-                    className="mt-2 w-full resize-none rounded-md border border-black/[0.12] px-3 py-2 text-[12px] leading-5 outline-none focus:border-[#084734]/50 focus:ring-2 focus:ring-[#084734]/10"
-                    placeholder="수정 이유나 본사 확인 항목을 남기세요."
-                  />
-                </div>
-                {/* 판정 후 자동 처리 — 이 판정이 어떤 후속 파이프라인을 만드는지 묶어서 보여준다. */}
-                <div className="mt-5 overflow-hidden rounded-[9px] border border-black/[0.10]">
-                  <div className="flex items-center justify-between border-b border-black/[0.08] bg-[#FAFAF8] px-3.5 py-2">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#31302E]">판정 후 자동 처리</span>
-                    <span className="text-[9.5px] text-[#A39E98]">수정 요청 시</span>
-                  </div>
-                  <label className="flex cursor-pointer items-start gap-2.5 border-b border-black/[0.06] px-3.5 py-3">
-                    <input
-                      type="checkbox"
-                      checked={regressionCandidate}
-                      onChange={(event) => setRegressionCandidate(event.target.checked)}
-                      className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734]"
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-[12px] font-semibold text-[#31302E]">회귀 개선 후보로 저장</span>
-                      <span className="mt-0.5 block text-[10.5px] leading-4 text-[#A39E98]">이 답변을 운영 데스크의 회귀 검수 대기에 올립니다.</span>
-                    </span>
-                  </label>
-                  <label className="flex cursor-pointer items-start gap-2.5 px-3.5 py-3">
-                    <input
-                      type="checkbox"
-                      checked={!excludeFromGapQueue}
-                      onChange={(event) => setExcludeFromGapQueue(!event.target.checked)}
-                      className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734]"
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-[12px] font-semibold text-[#31302E]">문서 보강 큐로 유입</span>
-                      <span className="mt-0.5 block text-[10.5px] leading-4 text-[#A39E98]">질문을 보강 큐에 자동 등록합니다. 해제하면 이 질문은 유입되지 않습니다.</span>
-                    </span>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            <div className="shrink-0 border-t border-black/[0.08] bg-white p-5">
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => submitReview("changes_requested")}
-                  disabled={!pendingMessage || isPending}
-                  className="h-10 rounded-md border border-black/[0.16] bg-white text-[12px] font-semibold hover:bg-[#F6F5F4] disabled:opacity-40"
-                >
-                  수정 요청
-                </button>
-                <button
-                  type="button"
-                  onClick={() => submitReview("approved")}
-                  disabled={!canApprove || isPending}
-                  className="h-10 rounded-md bg-[#084734] text-[12px] font-semibold text-white hover:bg-[#065C41] disabled:cursor-not-allowed disabled:bg-[#A39E98]"
-                >
-                  승인하고 복사
-                </button>
-              </div>
-              <p className="mt-3 flex items-start gap-2 text-[10px] leading-4 text-[#615D59]">
-                <LockKeyhole className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                승인하면 최종 답변으로 고정되고 클립보드에 복사됩니다. 자동 외부 전송은 하지 않습니다.
-              </p>
-            </div>
-          </aside>
-        </>
+      {/* 검토 드로어는 대화 탭에만 붙는다.
+          드로어 내용(체크 3종·최종 답변·검토 메모)은 지금 열려 있는 그 대화의 검토라,
+          목록(대기열·본사 확인)이나 운영 지표 위에 떠 있으면 가리키는 대상이 화면에 없다.
+          게다가 양보(xl:pr-[438px])는 ChatPanel에만 걸려 있어 다른 탭에서는 본문 우측을
+          그냥 덮었고, xl 미만에서는 스크림까지 얹혀 목록을 통째로 가렸다.
+          reviewOpen/finalDraft/reviewNote는 여기(Inner) 상태라 탭을 다녀와도 그대로 복원된다. */}
+      {activeTab === "chat" && reviewOpen ? (
+        <ReviewDrawer
+          reviewChecks={reviewChecks}
+          finalDraft={finalDraft}
+          reviewNote={reviewNote}
+          regressionCandidate={regressionCandidate}
+          excludeFromGapQueue={excludeFromGapQueue}
+          pendingMessage={pendingMessage}
+          isPending={isPending}
+          canApprove={canApprove}
+          onClose={() => setReviewOpen(false)}
+          onCheckChange={(key, checked) => setReviewChecks((current) => ({ ...current, [key]: checked }))}
+          onFinalDraftChange={setFinalDraft}
+          onReviewNoteChange={setReviewNote}
+          onRegressionCandidateChange={setRegressionCandidate}
+          onExcludeFromGapQueueChange={setExcludeFromGapQueue}
+          onSubmitReview={submitReview}
+        />
       ) : null}
 
       {detail ? (
@@ -3032,15 +1404,17 @@ function InternalCsChatWorkspaceInner() {
           )}
         </div>
       ) : null}
-    </div>
+      </div>
+    </>
   )
 }
 
 // useSearchParams()는 정적 렌더링 시 Suspense 경계를 요구한다. 페이지(app/admin/cs-chatbot/page.tsx)를
 // 바꾸지 않고 이 컴포넌트 내부에서 해결한다.
+// 오버레이 해제 후에는 셸 안쪽에서 본문 높이를 그대로 차지해야 스트리밍 중 점프가 없다.
 function WorkspaceLoadingShell() {
   return (
-    <div className="fixed inset-0 z-[80] flex h-[100dvh] items-center justify-center bg-white">
+    <div className="flex min-h-0 flex-1 items-center justify-center bg-white">
       <Loader2 className="h-5 w-5 animate-spin text-[#084734]" />
     </div>
   )
@@ -3048,8 +1422,15 @@ function WorkspaceLoadingShell() {
 
 export default function InternalCsChatWorkspace() {
   return (
-    <Suspense fallback={<WorkspaceLoadingShell />}>
-      <InternalCsChatWorkspaceInner />
-    </Suspense>
+    // 오버레이(fixed inset-0 z-[80]) 해제 — 어드민 셸 안쪽의 일반 페이지다(§9).
+    // 셸의 main은 lg에서 정확히 100dvh(좌우 패딩만 있고 상하 패딩 0)라 lg:h-[100dvh]가 그대로 맞고,
+    // lg 미만에서는 main의 pt-16 pb-24(=10rem, 모바일 상단바·하단탭바 자리)만큼 빼면 뷰포트에 딱 맞는다.
+    // 콘솔 내비는 Suspense 바깥에 둬서 본문이 스트리밍되는 동안에도 자리를 지킨다.
+    <div className="flex h-[calc(100dvh-10rem)] min-h-[560px] flex-col overflow-hidden bg-white font-sans text-[#111110] lg:h-[100dvh]">
+      <CsConsoleNav className="shrink-0" />
+      <Suspense fallback={<WorkspaceLoadingShell />}>
+        <InternalCsChatWorkspaceInner />
+      </Suspense>
+    </div>
   )
 }

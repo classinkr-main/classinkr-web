@@ -7,6 +7,7 @@ import {
   type NeoCrmCustomerMoneyItem,
 } from "@/lib/admin-crm-customers-neo"
 import { classifyLeadOrigin, type LeadOriginClass } from "@/lib/crm/capture/origin"
+import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { buildLeadPriorityItem } from "@/lib/crm/priority"
 import {
   EMPTY_CRM_ACCOUNT_PRODUCT_SUMMARY,
@@ -14,6 +15,7 @@ import {
   type CrmAccountProductSummary,
 } from "@/lib/repositories/crm-account-money"
 import { deriveServiceRisk, type ServiceRisk } from "@/lib/crm/service-risk"
+import { getCustomerTags } from "@/lib/repositories/crm-customer-tags"
 import { listCrmCustomerEvents, type ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
 import { findConfirmedLeadNeoLink } from "@/lib/repositories/crm-source-links"
 import { listCrmDeals, type ListCrmDealsResult } from "@/lib/repositories/crm-deals"
@@ -68,6 +70,7 @@ export interface Customer360ContactField {
 export interface Customer360Contacts {
   phone: string | null
   email: string | null
+  message: string | null
   extra: Customer360ContactField[]
 }
 
@@ -114,6 +117,8 @@ export interface Customer360 {
   activity: ListCrmCustomerEventsResult
   tasks: ListCrmTasksResult
   deals: ListCrmDealsResult
+  /** 수기 라벨(crm_customer_tags) — 드로어 온-오픈 별도 태그 fetch를 없애기 위한 additive 필드 */
+  tags: string[]
 }
 
 function latestLastClassAt(eeoAccounts: NeoCrmCustomerEeoAccount[]): string | null {
@@ -131,9 +136,22 @@ function latestLastClassAt(eeoAccounts: NeoCrmCustomerEeoAccount[]): string | nu
   return bestIso
 }
 
+function latestEeoSyncedAt(eeoAccounts: NeoCrmCustomerEeoAccount[]): string | null {
+  let latest: string | null = null
+  for (const account of eeoAccounts) {
+    if (!account.syncedAt) continue
+    const time = new Date(account.syncedAt).getTime()
+    if (Number.isNaN(time)) continue
+    if (!latest || time > new Date(latest).getTime()) latest = account.syncedAt
+  }
+  return latest
+}
+
 export interface GetCrmCustomer360Options {
   eventsLimit?: number
   tasksLimit?: number
+  /** 딜 조회 상한. 상세 페이지는 드로어보다 넉넉히 잡아 요약 집계가 전체를 덮게 한다. */
+  dealsLimit?: number
   now?: Date
 }
 
@@ -172,7 +190,7 @@ export function buildLeadHeader(key: string, lead: LeadRecord, now = new Date())
     statusLabel: LEAD_STATUS_LABELS[lead.status] ?? "리드",
     ownerName: lead.assigned_to ?? null,
     ownerKeys: uniqueOwnerKeys([lead.assigned_to]),
-    region: null,
+    region: deriveLeadRegionLabel(lead),
     score: priority?.score ?? null,
     priorityReason: priority?.reason ?? null,
     nextActionLabel: priority?.actionLabel ?? null,
@@ -188,10 +206,10 @@ export function buildLeadContacts(lead: LeadRecord): Customer360Contacts {
   if (lead.size) extra.push({ label: "규모", value: lead.size })
   if (lead.source) extra.push({ label: "유입", value: lead.source_detail ? `${lead.source} · ${lead.source_detail}` : lead.source })
   if (lead.lead_magnet) extra.push({ label: "자료", value: lead.lead_magnet })
-  if (lead.message) extra.push({ label: "메시지", value: lead.message })
   return {
     phone: lead.phone ?? null,
     email: lead.email ?? null,
+    message: lead.message ?? null,
     extra,
   }
 }
@@ -345,7 +363,7 @@ function emptyDealsResult(): ListCrmDealsResult {
   return {
     generatedAt: new Date().toISOString(),
     health: { ok: false, message: "딜을 불러오지 못했습니다." },
-    summary: { total: 0, returned: 0, open: 0, won: 0, lost: 0, openAmount: 0, noNextActionCount: 0 },
+    summary: { total: 0, returned: 0, open: 0, won: 0, lost: 0, openAmount: 0, noNextActionCount: 0, aggregateTruncated: false },
     pagination: { limit: 0, offset: 0, returned: 0, total: 0, hasMore: false, nextOffset: null },
     rows: [],
   }
@@ -358,18 +376,21 @@ export async function getCrmCustomer360(
   const now = options.now ?? new Date()
   const eventsLimit = clampInt(options.eventsLimit, 20, 1, 50)
   const tasksLimit = clampInt(options.tasksLimit, 50, 1, 50)
+  const dealsLimit = clampInt(options.dealsLimit, 20, 1, 200)
   const key = `${parsed.source}:${parsed.entityId}`
   const warnings: string[] = []
 
-  const [headerResult, eventsResult, tasksResult, dealsResult, neoLinkResult] = await Promise.allSettled([
+  const [headerResult, eventsResult, tasksResult, dealsResult, neoLinkResult, tagsResult] = await Promise.allSettled([
     parsed.source === "lead"
       ? getLeadById(parsed.entityId)
       : getNeoCrmCustomerDetail(parsed.entityId),
     listCrmCustomerEvents({ targetType: parsed.targetType, targetId: parsed.entityId, limit: eventsLimit }),
     listCrmTasks({ targetType: parsed.targetType, targetId: parsed.entityId, status: "active", limit: tasksLimit, now }),
-    listCrmDeals({ targetType: parsed.targetType, targetId: parsed.entityId, limit: 20 }),
+    listCrmDeals({ targetType: parsed.targetType, targetId: parsed.entityId, limit: dealsLimit }),
     // 리드 → NEO 등록 확정 여부(드로어 'NEO 등록됨' 액션용). NEO 계정 드로어는 해당 없음.
     parsed.source === "lead" ? findConfirmedLeadNeoLink(parsed.entityId) : Promise.resolve(null),
+    // 수기 라벨 — 드로어가 열릴 때 별도 태그 fetch를 하지 않도록 360에 동승시킨다.
+    getCustomerTags(parsed.targetType, parsed.entityId),
   ])
 
   let header: Customer360Header | null = null
@@ -398,6 +419,7 @@ export async function getCrmCustomer360(
         contacts = {
           phone: detail.account.phone,
           email: null,
+          message: null,
           extra: [{ label: "고객 ID", value: detail.account.accountId }],
         }
         money = summarizeNeoMoney(detail)
@@ -406,7 +428,8 @@ export async function getCrmCustomer360(
           expireAt: nearestExpireAt(detail.eeoAccounts),
           balance: money.totalBalance,
           lastClassAt: latestLastClassAt(detail.eeoAccounts),
-          syncedAt: detail.account.updatedAt,
+          // 만료·잔액 위험의 최신성은 account 메타가 아니라 실제 서비스(Shroff/EEO) 스냅샷 기준.
+          syncedAt: latestEeoSyncedAt(detail.eeoAccounts) ?? detail.account.updatedAt,
           now,
         })
         found = true
@@ -430,6 +453,10 @@ export async function getCrmCustomer360(
   // NEO 등록 확정 링크 — 실패해도 드로어 전체를 막지 않고 미등록으로 폴백(경고만).
   const neoLink = neoLinkResult.status === "fulfilled" ? neoLinkResult.value : null
   if (neoLinkResult.status === "rejected") warnings.push("NEO 등록 여부를 확인하지 못했습니다.")
+
+  // 수기 라벨 — 실패 시 경고 없이 빈 배열. (기존 드로어의 무음 폴백과 동일하게 두어
+  // health.ok(warnings.length===0) 의미가 태그 실패로 바뀌지 않게 한다 — additive 필드 원칙.)
+  const tags = tagsResult.status === "fulfilled" ? tagsResult.value : []
 
   const risk = computeCustomer360Risk({
     overdueTaskCount: tasks.summary.overdue,
@@ -469,5 +496,6 @@ export async function getCrmCustomer360(
     activity,
     tasks,
     deals,
+    tags,
   }
 }

@@ -188,6 +188,11 @@ const FREQUENT_ACTIVITY_SCAN_LIMIT = 2000
 const FREQUENT_CUSTOMER_LIMIT = 5
 const BUSINESS_SNAPSHOT_RPC = "admin_crm_business_overview"
 const BUSINESS_SNAPSHOT_MAX_AGE_SECONDS = 300
+// 라우트의 private max-age(30s)와 맞춘 서버 프로세스 캐시. CRM 홈과 검수 화면이
+// 거의 동시에 같은 무거운 10개 집계를 요청해도 한 번만 계산하고, 새로고침(force)은 우회한다.
+const ADMIN_CRM_OVERVIEW_CACHE_TTL_MS = 30_000
+let adminCrmOverviewCache: { cachedAt: number; value: AdminCrmOverview } | null = null
+let adminCrmOverviewInFlight: Promise<AdminCrmOverview> | null = null
 const BUSINESS_SNAPSHOT_MISSING_WARNING =
   `${BUSINESS_SNAPSHOT_RPC} 함수가 없어 라이브 집계로 대체했습니다. ` +
   "supabase/migrations/20260613_admin_crm_overview_snapshot.sql 적용이 필요합니다."
@@ -1225,7 +1230,7 @@ async function getNeoCrmOverview(options: { force?: boolean } = {}): Promise<Adm
   }
 }
 
-export async function getAdminCrmOverview(options: { force?: boolean } = {}): Promise<AdminCrmOverview> {
+async function buildAdminCrmOverview(options: { force?: boolean } = {}): Promise<AdminCrmOverview> {
   const sb = createSupabaseAdminClient()
 
   const [
@@ -1321,4 +1326,27 @@ export async function getAdminCrmOverview(options: { force?: boolean } = {}): Pr
     writeQueue,
     neoCrm,
   }
+}
+
+export async function getAdminCrmOverview(options: { force?: boolean } = {}): Promise<AdminCrmOverview> {
+  if (options.force) {
+    const fresh = await buildAdminCrmOverview({ force: true })
+    adminCrmOverviewCache = { cachedAt: Date.now(), value: fresh }
+    return fresh
+  }
+
+  const cached = adminCrmOverviewCache
+  if (cached && Date.now() - cached.cachedAt < ADMIN_CRM_OVERVIEW_CACHE_TTL_MS) return cached.value
+  if (adminCrmOverviewInFlight) return adminCrmOverviewInFlight
+
+  const request = buildAdminCrmOverview()
+    .then((value) => {
+      adminCrmOverviewCache = { cachedAt: Date.now(), value }
+      return value
+    })
+    .finally(() => {
+      adminCrmOverviewInFlight = null
+    })
+  adminCrmOverviewInFlight = request
+  return request
 }

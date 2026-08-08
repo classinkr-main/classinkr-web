@@ -17,6 +17,14 @@ const LANDING_SLUGS: Record<string, string> = {
   online: "online",
   landing_online: "online",
   "landing-online": "online",
+  "meets-july": "meets-july",
+  meets: "meets-july",
+  meets7: "meets-july",
+  meets_july: "meets-july",
+  "0730-31": "meets-july",
+  "0730_31": "meets-july",
+  landing_meets: "meets-july",
+  "landing-meets": "meets-july",
 }
 
 export const runtime = "nodejs"

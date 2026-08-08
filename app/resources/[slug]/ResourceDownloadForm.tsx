@@ -1,12 +1,13 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
-import { ArrowRight, CheckCircle2, Loader2, LockKeyhole, Mail } from "lucide-react"
+import { ArrowRight, CheckCircle2, Download, Loader2, LockKeyhole, Mail } from "lucide-react"
 
 import { PublicLoginDialog } from "@/components/auth/PublicLoginDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { trackEvent } from "@/lib/analytics"
+import { getAnonymousId } from "@/lib/consent/consent"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
 import { MaterialDownloadError, requestMaterialDownload } from "@/lib/materials-client"
 import { cn } from "@/lib/utils"
@@ -157,6 +158,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
           currentPage: attribution.currentPage ?? window.location.href,
           landingPage: attribution.landingPage ?? window.location.origin + window.location.pathname,
           referrer: attribution.referrer ?? document.referrer,
+          anonymousId: getAnonymousId(),
           website: form.website,
         }),
       })
@@ -206,16 +208,17 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
   }
 
   return (
-    <div id="download" className="scroll-mt-28">
+    <div id="download" className="scroll-mt-28 lg:h-full">
       <PublicLoginDialog
         open={loginDialogOpen}
         onOpenChange={setLoginDialogOpen}
         nextPath={loginNextPath}
         title="로그인 후 자료 받기"
       />
-      <aside className="border border-black/[0.08] bg-white p-5 shadow-[0_10px_28px_rgba(17,17,16,0.04)] lg:sticky lg:top-28">
+      {/* 섹션 높이에 맞춰 채우고, 내용이 넘치면 입력 영역만 스크롤한다(CTA는 항상 고정). */}
+      <aside className="flex flex-col rounded-[14px] border border-black/[0.08] bg-white p-5 shadow-[0_18px_50px_rgba(17,17,16,0.07)] lg:h-full lg:max-h-[660px] lg:min-h-0">
       {submitted ? (
-        <div className="flex min-h-[360px] flex-col justify-center text-center">
+        <div className="flex min-h-[360px] flex-col justify-center text-center lg:min-h-0 lg:flex-1">
           <div className="mx-auto flex h-12 w-12 items-center justify-center border border-black/[0.08] bg-white text-[#084734]">
             <CheckCircle2 className="h-6 w-6" />
           </div>
@@ -229,7 +232,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
           </Button>
         </div>
       ) : isLoginGate ? (
-        <div className="flex min-h-[360px] flex-col justify-center text-center">
+        <div className="flex min-h-[360px] flex-col justify-center text-center lg:min-h-0 lg:flex-1">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-[#ECFDF5] text-[#084734]">
             <LockKeyhole className="h-6 w-6" />
           </div>
@@ -240,22 +243,18 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
             이 자료는 다운로드 기록과 재열람을 위해 공개 사용자 로그인이 필요합니다. 로그인하면
             자료를 바로 받을 수 있습니다.
           </p>
-          <div className="mt-5 grid grid-cols-3 gap-2 border-y border-black/[0.08] py-4 text-center">
-            <div>
-              <p className="text-[11px] font-bold text-[#084734]/70">형식</p>
-              <p className="mt-1 text-[12px] font-semibold text-[#31302E]">PDF</p>
+          <div className="mt-5 grid shrink-0 grid-cols-3 gap-px overflow-hidden rounded-[8px] border border-black/[0.08] bg-black/[0.08] text-center">
+            <div className="bg-white px-2 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#A39E98]">형식</p>
+              <p className="mt-1 text-[13px] font-bold text-[#31302E]">PDF</p>
             </div>
-            <div>
-              <p className="text-[11px] font-bold text-[#084734]/70">분량</p>
-              <p className="mt-1 text-[12px] font-semibold text-[#31302E]">
-                {resource.itemCount}문항
-              </p>
+            <div className="bg-white px-2 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#A39E98]">분량</p>
+              <p className="mt-1 text-[13px] font-bold text-[#31302E]">{resource.itemCount}문항</p>
             </div>
-            <div>
-              <p className="text-[11px] font-bold text-[#084734]/70">소요</p>
-              <p className="mt-1 text-[12px] font-semibold text-[#31302E]">
-                약 {resource.estimatedMinutes}분
-              </p>
+            <div className="bg-white px-2 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#A39E98]">소요</p>
+              <p className="mt-1 text-[13px] font-bold text-[#31302E]">약 {resource.estimatedMinutes}분</p>
             </div>
           </div>
           {error ? <p className="mt-4 text-sm leading-6 text-[#B85C33]">{error}</p> : null}
@@ -280,39 +279,39 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
         </div>
       ) : (
         <>
-          <div>
-            <p className="text-[12px] font-bold uppercase tracking-[0.16em] text-[#084734]">
-              {resource.hasPdfFile ? "PDF Download" : "PDF Request"}
+          <div className="shrink-0">
+            <p className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.14em] text-[#084734]">
+              <Download className="h-3.5 w-3.5" />
+              {resource.hasPdfFile ? "무료 PDF 받기" : "PDF 자료 신청"}
             </p>
-            <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-[#111110]">
-              업무용 이메일로 자료 받기
+            <h2 className="mt-2.5 text-[19px] font-bold tracking-[-0.02em] text-[#111110]">
+              기본 정보만 남기면 바로 받습니다
             </h2>
-            <p className="mt-3 pr-16 text-sm leading-6 text-[#615D59] sm:pr-0">
-              PDF에는 관련 자료와 상담 링크가 포함됩니다. 다운로드와 관련 소식 안내에 필요한
-              최소 정보만 받습니다.
+            <p className="mt-2 text-[13px] leading-6 text-[#615D59]">
+              이름·이메일·학원명이면 충분합니다. 직책·규모·연락처는 더 정확한 후속 안내가
+              필요할 때만 입력하세요.
             </p>
           </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-2 border-y border-black/[0.08] py-4 text-center">
-            <div>
-              <p className="text-[11px] font-bold text-[#084734]/70">형식</p>
-              <p className="mt-1 text-[12px] font-semibold text-[#31302E]">PDF</p>
+          <div className="mt-5 grid shrink-0 grid-cols-3 gap-px overflow-hidden rounded-[8px] border border-black/[0.08] bg-black/[0.08] text-center">
+            <div className="bg-white px-2 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#A39E98]">형식</p>
+              <p className="mt-1 text-[13px] font-bold text-[#31302E]">PDF</p>
             </div>
-            <div>
-              <p className="text-[11px] font-bold text-[#084734]/70">분량</p>
-              <p className="mt-1 text-[12px] font-semibold text-[#31302E]">
-                {resource.itemCount}문항
-              </p>
+            <div className="bg-white px-2 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#A39E98]">분량</p>
+              <p className="mt-1 text-[13px] font-bold text-[#31302E]">{resource.itemCount}문항</p>
             </div>
-            <div>
-              <p className="text-[11px] font-bold text-[#084734]/70">소요</p>
-              <p className="mt-1 text-[12px] font-semibold text-[#31302E]">
-                약 {resource.estimatedMinutes}분
-              </p>
+            <div className="bg-white px-2 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#A39E98]">소요</p>
+              <p className="mt-1 text-[13px] font-bold text-[#31302E]">약 {resource.estimatedMinutes}분</p>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-5 space-y-3">
+          <form
+            onSubmit={handleSubmit}
+            className="mt-5 flex flex-col space-y-3 lg:min-h-0 lg:flex-1 lg:space-y-0"
+          >
             <input
               className="hidden"
               tabIndex={-1}
@@ -322,7 +321,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
               name="website"
             />
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <div className="grid gap-3 sm:grid-cols-2 lg:min-h-0 lg:flex-1 lg:grid-cols-1 lg:overflow-y-auto lg:pr-1">
               <label className="block">
                 <span className="mb-1.5 block text-[13px] font-semibold text-[#31302E]">
                   이름 *
@@ -347,7 +346,7 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
                     value={form.email}
                     onChange={(event) => updateField("email", event.target.value)}
                     className={cn(inputClassName, "pl-10")}
-                    placeholder="name@classin.com"
+                    placeholder="name@academy.com"
                     required
                   />
                 </div>
@@ -408,32 +407,35 @@ export function ResourceDownloadForm({ resource }: ResourceDownloadFormProps) {
               </label>
             </div>
 
-            <label className="flex gap-2 border border-black/[0.08] bg-[#F6F5F4] p-3 text-[12px] leading-5 text-[#615D59]">
-              <input
-                type="checkbox"
-                checked={form.consent}
-                onChange={(event) => updateField("consent", event.target.checked)}
-                className="mt-0.5 h-4 w-4 accent-[#084734]"
-                required
-              />
-              <span>
-                자료 제공과 Classin 교육 인사이트·제품 소식 수신에 동의합니다. 언제든 수신거부할
-                수 있습니다.
-              </span>
-            </label>
+            {/* 스크롤과 무관하게 동의·CTA는 항상 보이도록 하단 고정 */}
+            <div className="shrink-0 space-y-3 lg:mt-4 lg:border-t lg:border-black/[0.08] lg:pt-4">
+              <label className="flex gap-2 border border-black/[0.08] bg-[#F6F5F4] p-3 text-[12px] leading-5 text-[#615D59]">
+                <input
+                  type="checkbox"
+                  checked={form.consent}
+                  onChange={(event) => updateField("consent", event.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-[#084734]"
+                  required
+                />
+                <span>
+                  자료 제공과 Classin 교육 인사이트·제품 소식 수신에 동의합니다. 언제든 수신거부할
+                  수 있습니다.
+                </span>
+              </label>
 
-            {error ? <p className="text-sm leading-6 text-[#B85C33]">{error}</p> : null}
+              {error ? <p className="text-sm leading-6 text-[#B85C33]">{error}</p> : null}
 
-            <Button type="submit" disabled={loading} className="h-11 w-full">
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  {resource.hasPdfFile ? "PDF 다운로드" : "PDF 자료 신청하기"}
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </Button>
+              <Button type="submit" disabled={loading} className="h-11 w-full">
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    {resource.hasPdfFile ? "PDF 다운로드" : "PDF 자료 신청하기"}
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            </div>
           </form>
         </>
       )}

@@ -19,6 +19,7 @@ const PHONE_REJECT_ANIMATION_MS = 220
 const PHONE_REQUIRED_MESSAGE = "연락처를 입력해주세요."
 const PHONE_INVALID_CHARACTER_MESSAGE = "숫자와 하이픈만 입력할 수 있어요."
 const PHONE_TOO_LONG_MESSAGE = "전화번호는 최대 11자리까지 입력할 수 있어요."
+const LEAD_MAGNET_PATTERN = /^[a-z0-9-]{1,120}$/
 
 // ?topic= 쿼리로 사전 선택 가능한 문의 유형 (가이드 문서 CTA 등에서 사용)
 const VALID_CONTACT_TOPICS = new Set([
@@ -75,6 +76,7 @@ export default function ContactPage() {
     const [phoneRejected, setPhoneRejected] = useState(false)
     const [topic, setTopic] = useState("")
     const [eventSlug, setEventSlug] = useState("")
+    const [leadMagnet, setLeadMagnet] = useState("")
     const [message, setMessage] = useState("")
     const [events, setEvents] = useState<PublicEvent[]>([])
     const [eventsLoaded, setEventsLoaded] = useState(false)
@@ -94,6 +96,7 @@ export default function ContactPage() {
         const sourceParam = params.get("source")?.trim()
         const topicParam = params.get("topic")?.trim()
         const prefillParam = params.get("prefill")?.trim()
+        const leadMagnetParam = params.get("lead_magnet")?.trim()
 
         if (eventParam) {
             setTopic(sourceParam === "seminar" ? "세미나 신청" : "행사 신청")
@@ -104,6 +107,9 @@ export default function ContactPage() {
 
         if (prefillParam) {
             setMessage(prefillParam)
+        }
+        if (leadMagnetParam && LEAD_MAGNET_PATTERN.test(leadMagnetParam)) {
+            setLeadMagnet(leadMagnetParam)
         }
     }, [])
 
@@ -251,6 +257,7 @@ export default function ContactPage() {
                 message,
                 marketingConsent: formData.get("marketing-consent") === "on",
                 eventSlug: selectedEvent?.slug ?? undefined,
+                leadMagnet: leadMagnet || undefined,
                 website: (formData.get("website") as string) || undefined,
             })
 
@@ -262,6 +269,7 @@ export default function ContactPage() {
                 lead_id: data.leadId,
                 stored: data.stored,
                 event_slug: selectedEvent?.slug,
+                lead_magnet: leadMagnet || undefined,
                 event_id: data.conversionEventId,
             })
             // Google Ads 전환: 도입문의 제출 (전환 라벨이 설정된 경우에만 발화)
@@ -579,7 +587,7 @@ export default function ContactPage() {
                                     <div>
                                         <h4 className="font-bold text-slate-900 mb-0.5 text-sm">지사 전화</h4>
                                         <p className="text-slate-600 font-medium">02-6958-8566</p>
-                                        <p className="text-sm text-slate-500 mt-1">평일 09:00 - 18:00 (점심시간 12:00-13:00)</p>
+                                        <p className="text-sm text-slate-500 mt-1">평일 09:00~18:00 (점심시간 12:00~13:00)</p>
                                     </div>
                                 </div>
                                 

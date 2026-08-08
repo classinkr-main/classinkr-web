@@ -3,6 +3,11 @@ import "server-only"
 import { promises as fs } from "fs"
 import path from "path"
 
+import {
+  formatBusinessDateTimeLabel,
+  getBusinessDateParts,
+  toBusinessStorageDateTime,
+} from "@/lib/business-time"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 
@@ -36,7 +41,6 @@ import type {
 } from "./partners-types"
 
 const LOCAL_FILE = path.join(process.cwd(), "data", "partners-workspaces.json")
-const BUSINESS_TIME_ZONE = "Asia/Seoul"
 const PARTNER_STATUSES = ["lead", "active", "paused", "churn_risk"] as const
 const PARTNER_CHANNELS = ["reseller", "referral", "branch", "direct"] as const
 const DEAL_STAGES = ["discovery", "quoted", "contract_sent", "active", "closed_won", "closed_lost"] as const
@@ -329,11 +333,8 @@ function formatDateTime(value: string | null | undefined) {
   const text = toOptionalString(value)
   if (!text) return undefined
 
-  const normalized = text.replace(" ", "T")
-  const match = normalized.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
-  if (match) return `${match[1]} ${match[2]}`
-
-  return text
+  // timestamptz 왕복값(오프셋 포함, 예: '2026-07-27T05:00:00+00:00')은 KST 벽시계로 환산
+  return formatBusinessDateTimeLabel(text)
 }
 
 function formatDate(value: string | null | undefined) {
@@ -425,11 +426,8 @@ function toStorageDateTime(value?: string) {
   const text = toOptionalString(value)
   if (!text) return undefined
 
-  const normalized = text.replace(" ", "T")
-  const match = normalized.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/)
-  if (match) return `${match[1]}T${match[2]}`
-
-  return normalized
+  // 오프셋 없는 datetime-local 입력은 KST 벽시계 — 명시하지 않으면 timestamptz 가 UTC 로 해석해 9시간 스큐
+  return toBusinessStorageDateTime(text)
 }
 
 function makeId(prefix: string) {
@@ -460,23 +458,6 @@ function asArray<T>(value: T[] | null | undefined) {
 
 function sortSchedule(items: PartnerScheduleItem[]) {
   return [...items].sort((a, b) => (a.startsAt || "").localeCompare(b.startsAt || ""))
-}
-
-function getBusinessDateParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date)
-  const year = parts.find((part) => part.type === "year")?.value ?? "0000"
-  const month = parts.find((part) => part.type === "month")?.value ?? "01"
-  const day = parts.find((part) => part.type === "day")?.value ?? "01"
-
-  return {
-    date: `${year}-${month}-${day}`,
-    month: `${year}-${month}`,
-  }
 }
 
 function getMainDeal(deals: PartnerDeal[]) {
@@ -886,20 +867,24 @@ async function querySupabasePartnerWorkspaces(partnerId?: string) {
     filteredActivityLogsQuery,
   ])
 
-  const firstError =
-    partnersError ??
-    contactsError ??
-    dealsError ??
-    documentsError ??
-    documentDeliveriesError ??
-    scheduleError ??
-    salesError ??
-    automationsError ??
-    checklistsError ??
-    issuesError ??
-    activityLogsError
-  if (firstError) {
-    throw new Error(firstError.message)
+  // 어느 테이블이 죽었는지 에러에 남긴다 — 테이블 부재가 무음 폴백 뒤에 숨었던 전례 방지
+  const queryErrors: Array<[table: string, queryError: { message: string } | null]> = [
+    ["partners", partnersError],
+    ["partner_contacts", contactsError],
+    ["partner_deals", dealsError],
+    ["partner_documents", documentsError],
+    ["partner_document_deliveries", documentDeliveriesError],
+    ["partner_schedule_items", scheduleError],
+    ["partner_sales_records", salesError],
+    ["partner_automations", automationsError],
+    ["partner_ops_checklist_items", checklistsError],
+    ["partner_ops_issues", issuesError],
+    ["partner_activity_logs", activityLogsError],
+  ]
+  for (const [table, queryError] of queryErrors) {
+    if (queryError) {
+      throw new Error(`${table}: ${queryError.message}`)
+    }
   }
 
   const normalizedContacts: PartnerContact[] = ((contacts ?? []) as PartnerContactRow[]).map((contact) => ({
@@ -1817,12 +1802,19 @@ async function upsertSupabaseSales(partnerId: string, input: PartnerSalesInput) 
     net_amount: input.netAmount,
   }
 
+  // 신규 저장은 (partner_id, deal_id, sales_month) 유니크 기준 upsert —
+  // 같은 달 실적 재입력이 새 행으로 쌓여 이중계상되지 않게 기존 행을 덮어쓴다.
   const query = input.id
     ? supabase.from("partner_sales_records").update(payload).eq("id", input.id).eq("partner_id", partnerId)
-    : supabase.from("partner_sales_records").insert(payload)
+    : supabase.from("partner_sales_records").upsert(payload, { onConflict: "partner_id,deal_id,sales_month" })
 
   const { error } = await query
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("같은 파트너·거래·월의 실적이 이미 있습니다. 기존 기록을 수정해 주세요.")
+    }
+    throw new Error(error.message)
+  }
   return readUpdatedSupabaseWorkspace(partnerId)
 }
 
@@ -2028,6 +2020,8 @@ export async function listPartnerWorkspacesData(): Promise<PartnerListResult> {
     const workspaces = await querySupabasePartnerWorkspaces()
     return { workspaces, source: "supabase" }
   } catch (error) {
+    // 폴백은 유지하되 서버 로그에는 반드시 남긴다 — 무음 폴백이 스키마 부재를 몇 달 숨긴 전례
+    console.error("[partners-data] Supabase 파트너 목록 조회 실패 — 로컬 JSON 폴백:", error)
     return {
       workspaces: await listLocalPartnerWorkspaces(),
       source: "local",
@@ -2054,6 +2048,7 @@ export async function getPartnerWorkspaceData(id: string): Promise<PartnerDetail
       source: "supabase",
     }
   } catch (error) {
+    console.error(`[partners-data] Supabase 파트너 상세 조회 실패(id=${id}) — 로컬 JSON 폴백:`, error)
     return {
       workspace: await getLocalPartnerWorkspace(id) ?? null,
       source: "local",

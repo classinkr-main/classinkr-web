@@ -154,7 +154,10 @@ interface DocsArticleRow {
   keywords: string[] | null
   symptoms: string[] | null
   chatbot_summary: string | null
-  content_markdown: string | null
+  // 리스트 조회는 본문 대신 생성 컬럼 content_length를 읽는다(과다 페치 제거).
+  // content_markdown은 마이그레이션 미적용 폴백 경로에서만 채워진다.
+  content_length?: number | null
+  content_markdown?: string | null
   updated_at: string | null
   published_at: string | null
   last_reviewed_at: string | null
@@ -520,6 +523,24 @@ function buildChunkRows(
   })
 }
 
+// 리스트 공통 컬럼 — 본문(content_markdown)은 제외하고 생성 컬럼 content_length를 읽는다.
+// (리스트는 트림 길이 하나만 소비하는데 본문 전체를 내려받던 과다 페치 제거 — 감사 2026-07-23 §후속 1)
+const ARTICLE_LIST_BASE_COLUMNS =
+  "id, category_id, slug, title, description, status, visibility, noindex, doc_type, product_area, featured, order_index, tags, keywords, symptoms, chatbot_summary, updated_at, published_at, last_reviewed_at"
+
+// 배포 스큐 감지 — 마이그레이션(20260724_docs_articles_content_length) 미적용 DB에서
+// content_length select가 undefined_column(42703)으로 실패하는 경우.
+function isMissingContentLengthColumn(error: {
+  code?: string
+  message?: string
+  details?: string
+  hint?: string
+}) {
+  if (error.code === "42703") return true
+  const haystack = [error.message, error.details, error.hint].filter(Boolean).join(" ").toLowerCase()
+  return haystack.includes("content_length")
+}
+
 export async function listAdminDocsContent(): Promise<AdminDocsContentResponse> {
   if (!hasSupabaseServerEnv()) {
     return createStaticContentResponse(["Supabase 서버 환경 변수가 없어 정적 문서 목록을 표시합니다."])
@@ -527,25 +548,42 @@ export async function listAdminDocsContent(): Promise<AdminDocsContentResponse> 
 
   try {
     const supabase = createSupabaseAdminClient()
-    const [{ data: categoryRows, error: categoryError }, { data: articleRows, error: articleError }] =
-      await Promise.all([
-        supabase
-          .from("docs_categories")
-          .select("id, title, description, order_index, icon, is_visible, updated_at")
-          .order("order_index", { ascending: true }),
-        supabase
-          .from("docs_articles")
-          .select(
-            "id, category_id, slug, title, description, status, visibility, noindex, doc_type, product_area, featured, order_index, tags, keywords, symptoms, chatbot_summary, content_markdown, updated_at, published_at, last_reviewed_at"
-          )
-          .order("updated_at", { ascending: false }),
-      ])
+    const warnings: string[] = []
+    const [{ data: categoryRows, error: categoryError }, articleResult] = await Promise.all([
+      supabase
+        .from("docs_categories")
+        .select("id, title, description, order_index, icon, is_visible, updated_at")
+        .order("order_index", { ascending: true }),
+      supabase
+        .from("docs_articles")
+        .select(`${ARTICLE_LIST_BASE_COLUMNS}, content_length`)
+        .order("updated_at", { ascending: false }),
+    ])
+
+    let articleRows = (articleResult.data ?? null) as DocsArticleRow[] | null
+    let articleError = articleResult.error
+
+    if (articleError && isMissingContentLengthColumn(articleError)) {
+      // 마이그레이션 미적용 폴백 — 기존 본문 전체 select로 재시도해 리스트가 조용히
+      // 정적 폴백으로 강등되는 일을 막는다. 길이는 아래에서 기존 JS 계산으로 구한다.
+      const legacy = await supabase
+        .from("docs_articles")
+        .select(`${ARTICLE_LIST_BASE_COLUMNS}, content_markdown`)
+        .order("updated_at", { ascending: false })
+
+      if (!legacy.error) {
+        articleRows = (legacy.data ?? null) as DocsArticleRow[] | null
+        articleError = null
+        warnings.push(
+          "docs_articles.content_length 컬럼이 없어 본문 전체로 길이를 계산했습니다 — supabase/migrations/20260724_docs_articles_content_length.sql 적용이 필요합니다."
+        )
+      }
+    }
 
     if (categoryError) throw categoryError
     if (articleError) throw articleError
 
-    const rows = (articleRows ?? []) as DocsArticleRow[]
-    const warnings: string[] = []
+    const rows = articleRows ?? []
     const articleCounts = new Map<string, number>()
 
     for (const article of rows) {
@@ -608,7 +646,12 @@ export async function listAdminDocsContent(): Promise<AdminDocsContentResponse> 
         const tags = article.tags ?? []
         const keywords = article.keywords ?? []
         const symptoms = article.symptoms ?? []
-        const contentLength = article.content_markdown?.trim().length ?? 0
+        // 생성 컬럼(트림 길이) 우선, 폴백 경로에서는 기존 JS 계산 — 두 값의 의미는 동일하며
+        // AI "본문 보강 필요" 플래그(getArticleAiState, <120자) 판정이 여기 걸려 있다.
+        const contentLength =
+          typeof article.content_length === "number"
+            ? article.content_length
+            : article.content_markdown?.trim().length ?? 0
         const noindex = Boolean(article.noindex)
         const aiChunkCount = aiChunkCounts.get(article.id) ?? 0
         const aiState = getArticleAiState({

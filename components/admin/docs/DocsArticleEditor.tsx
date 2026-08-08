@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react"
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -34,7 +35,7 @@ import {
   X,
 } from "lucide-react"
 
-import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
+import { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import {
   DocsArticle,
@@ -1071,6 +1072,11 @@ function FieldLabel({
   )
 }
 
+const RichMarkdownEditor = dynamic(() => import("@/components/admin/RichMarkdownEditor"), {
+  loading: () => <div className="h-[600px] animate-pulse rounded-xl bg-[#f0f0ec]" />,
+  ssr: false,
+})
+
 export default function DocsArticleEditor({ mode, categories, article }: Props) {
   const router = useRouter()
   const editorRef = useRef<RichMarkdownEditorHandle | null>(null)
@@ -1079,6 +1085,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   const [form, setForm] = useState<FormState>(() =>
     initialForm(article, categories[0]?.id ?? "start")
   )
+  // 저장 경로가 editorRef.flush() 직후 최신 본문을 같은 틱에서 읽을 수 있도록 form을 미러링한다.
+  // (커밋 후 effect 동기화 + 에디터 onChange에서 본문만 선행 동기 갱신)
+  const formRef = useRef(form)
   const [lastSavedForm, setLastSavedForm] = useState<FormState>(() =>
     initialForm(article, categories[0]?.id ?? "start")
   )
@@ -1130,9 +1139,10 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     () => markdownToSections(form.contentMarkdown),
     [form.contentMarkdown]
   )
+  // 미리보기 모달(previewOpen)에서만 소비되므로 닫혀 있으면 섹션 오브젝트 빌드를 건너뛴다.
   const previewArticleSections = useMemo(
-    () => toPreviewArticleSections(previewSections),
-    [previewSections]
+    () => (previewOpen ? toPreviewArticleSections(previewSections) : []),
+    [previewOpen, previewSections]
   )
   const previewTocItems = useMemo(
     () => toPreviewTocItems(previewSections),
@@ -1181,6 +1191,8 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   const canMovePreviewDown =
     currentPreviewSidebarIndex >= 0 && currentPreviewSidebarIndex < previewSidebarOrderItems.length - 1
   const previewNavGroups = useMemo<DocsNavGroup[]>(() => {
+    // 미리보기 사이드바(모달 전용)에서만 소비 — 닫혀 있으면 전체 카테고리×문서 매핑을 건너뛴다.
+    if (!previewOpen) return []
     const currentHref = "#preview-current-doc"
     const currentTitle = form.title.trim() || "새 문서"
     const currentOrder = Number.isFinite(form.orderIndex) ? form.orderIndex : 100
@@ -1221,7 +1233,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
           })),
       }
     })
-  }, [categories, form.categoryId, form.orderIndex, form.title, support.articleOptions])
+  }, [previewOpen, categories, form.categoryId, form.orderIndex, form.title, support.articleOptions])
   const chatbotIncluded =
     form.status === "published" && form.visibility !== "internal" && !form.noindex
   const aiChecklist = useMemo(
@@ -1407,6 +1419,10 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       cancelled = true
     }
   }, [mode])
+
+  useEffect(() => {
+    formRef.current = form
+  }, [form])
 
   useEffect(() => {
     if (!isDirty) return
@@ -1779,7 +1795,8 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   }
 
   function buildPayload(overrides: Partial<FormState> = {}): Record<string, unknown> {
-    const next = { ...form, ...overrides }
+    // 클로저 state 대신 ref를 읽는다 — 저장 직전 flush()가 전파한 디바운스 대기 본문 포함.
+    const next = { ...formRef.current, ...overrides }
 
     return {
       categoryId: next.categoryId,
@@ -1829,9 +1846,11 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   }
 
   async function saveDraft(overrides: Partial<FormState> = {}) {
+    // 트레일링 디바운스로 대기 중인 마지막 <200ms 타이핑을 저장 전에 동기 전파한다.
+    editorRef.current?.flush()
     setError(null)
     setSavedMessage(null)
-    const next = { ...form, ...overrides }
+    const next = { ...formRef.current, ...overrides }
 
     if (mode === "create") {
       await save({ ...overrides, status: "draft" })
@@ -1867,9 +1886,11 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   }
 
   async function publishDraft(overrides: Partial<FormState> = {}) {
+    // 공개 반영 전에 디바운스 대기 본문을 동기 전파한다.
+    editorRef.current?.flush()
     setError(null)
     setSavedMessage(null)
-    const next = { ...form, ...overrides }
+    const next = { ...formRef.current, ...overrides }
     const validationError = validate(next)
     if (validationError) {
       setError(validationError)
@@ -1943,9 +1964,11 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   }
 
   async function save(overrides: Partial<FormState> = {}) {
+    // saveDraft/publishDraft(create 모드)를 거치지 않는 직접 호출 대비 — flush는 멱등이라 중복 호출 무해.
+    editorRef.current?.flush()
     setError(null)
     setSavedMessage(null)
-    const next = { ...form, ...overrides }
+    const next = { ...formRef.current, ...overrides }
     const validationError = validate(next)
     if (validationError) {
       setError(validationError)
@@ -2404,7 +2427,11 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                 <RichMarkdownEditor
                   ref={editorRef}
                   value={form.contentMarkdown}
-                  onChange={(markdown) => update("contentMarkdown", markdown)}
+                  onChange={(markdown) => {
+                    // flush() 전파를 저장 경로가 같은 틱에서 읽도록 ref를 setState보다 먼저 갱신한다.
+                    formRef.current = { ...formRef.current, contentMarkdown: markdown }
+                    update("contentMarkdown", markdown)
+                  }}
                   placeholder="본문을 작성해주세요"
                   imageUploadEndpoint="/api/admin/upload"
                   onAiDraftClick={applyArticleDraft}

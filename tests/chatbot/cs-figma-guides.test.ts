@@ -101,11 +101,59 @@ describe("CS Figma guide source", () => {
     })
   })
 
-  it("routes app download questions to the Windows download guide instead of recording data", () => {
+  it("routes app download questions to the current cross-platform install guide instead of recording data", () => {
     expect(findCsFigmaGuideForQuestion("클래스인 다운로드 어디서 해요")).toMatchObject({
-      slug: "cs-figma-digest-1602",
-      title: "Windows용 클래스인",
+      slug: "classin-app-download",
+      title: "클래스인 앱 다운로드와 설치",
     })
+  })
+
+  it("routes newly interpreted onboarding procedures from the current Figma board", () => {
+    expect(findCsFigmaGuideForQuestion("클래스인 회원가입 방법 알려줘")).toMatchObject({
+      slug: "classin-account-signup",
+      title: "클래스인 회원가입",
+    })
+    expect(findCsFigmaGuideForQuestion("클래스인 계정 삭제는 어디서 해요")).toMatchObject({
+      slug: "classin-account-delete",
+      title: "클래스인 계정 삭제와 회원 탈퇴",
+    })
+    expect(findCsFigmaGuideForQuestion("회원가입 때 전화번호나 이메일만 있으면 되나요?")).toBeNull()
+  })
+
+  it("routes newly interpreted admin procedures from the current Figma board", () => {
+    expect(findCsFigmaGuideForQuestion("편입생 등록 방법 알려줘")).toMatchObject({
+      slug: "transfer-student-registration",
+      title: "편입생(참관생) 등록",
+    })
+    expect(findCsFigmaGuideForQuestion("코스 구성원 추가 삭제 순서 알려줘")).toMatchObject({
+      slug: "course-member-management",
+      title: "코스 구성원 추가와 삭제",
+    })
+    expect(findCsFigmaGuideForQuestion("코스 전체 학생 채팅 어디서 끄나요")).toMatchObject({
+      slug: "course-wide-chat-control",
+      title: "코스 전체 학생 채팅 활성화와 비활성화",
+    })
+    expect(findCsFigmaGuideForQuestion("새 코스 만들고 종료하는 방법 알려줘")).toMatchObject({
+      slug: "course-create-and-close",
+      title: "코스 생성과 종료",
+    })
+  })
+
+  it("answers the current transfer-student procedure without external search", async () => {
+    disableExternalChatbotServices()
+
+    const result = await evaluateChatbotQuery("편입생 등록 방법 알려줘", {
+      generateAnswer: false,
+    })
+
+    expect(result.answerMode).toBe("direct_answer")
+    expect(result.sources[0]).toMatchObject({
+      title: "편입생(참관생) 등록",
+      heading: "사용 순서 안내",
+      urlPath: "/docs/admin/cs-transfer-student-registration",
+    })
+    expect(result.answer).toContain("3. 코스 상세 화면에서 편입생 항목을 선택하고 추가를 누릅니다.")
+    expect(result.answer).not.toMatch(/Figma|캡처|고객사/i)
   })
 
   it("answers exact procedural digest guides even when titles include numbering or policy words", () => {
@@ -188,6 +236,47 @@ describe("CS Figma guide source", () => {
       slug: "cs-figma-digest-1102",
       title: "학생 닉네임 동기화 & 추가 안내 가이드",
     })
+  })
+
+  it("routes late-joiner replay questions phrased like real CS messages", () => {
+    const questions = [
+      "학생이 1강 다시보기가 안 뜬다고 합니다",
+      "수업 끝나고 코스에 가입한 학생이 이전 강의를 못 봐요",
+      "나중에 들어온 학생은 과거 수업 다시보기를 어떻게 열어주나요?",
+      "수업 후 가입된 학생들은 이전 수업을 못 보는군요",
+    ]
+
+    for (const question of questions) {
+      expect(findCsFigmaGuideForQuestion(question), question).toMatchObject({
+        slug: "cs-figma-digest-1054",
+        title: "새로 들어온 학생도 수업 다시보기 시청",
+      })
+    }
+
+    expect(findCsFigmaGuideForQuestion("학생 다시보기 시청 기록은 어디서 확인해요")?.slug).not.toBe(
+      "cs-figma-digest-1054"
+    )
+  })
+
+  it("answers late-joiner replay issues with the current setting labels and re-entry step", async () => {
+    disableExternalChatbotServices()
+
+    const result = await evaluateChatbotQuery("학생이 1강 다시보기가 안 뜬다고 합니다", {
+      generateAnswer: false,
+    })
+
+    expect(result.detectedCategory).toBe("classroom")
+    expect(result.answerMode).toBe("direct_answer")
+    expect(result.sources[0]).toMatchObject({
+      title: "새로 들어온 학생도 수업 다시보기 시청",
+      heading: "사용 순서 안내",
+      urlPath: "/docs/admin/cs-figma-digest-1054",
+    })
+    expect(result.answer).toContain("먼저 학생이 해당 수업이 끝난 뒤 코스에 가입했는지 확인해 주세요.")
+    expect(result.answer).toContain("새로 참여한 학생은 이전 수업 데이터를 볼 수 있습니다")
+    expect(result.answer).toContain("대상 학생을 코스에서 내보낸 뒤 다시 추가")
+    expect(result.answer).toContain("위 순서로도 해결되지 않으면 담당자 상담으로 연결해 드릴 수 있어요.")
+    expect(result.answer).not.toMatch(/Figma|원본 캡처|Classin_Hope|EEO-TEST/i)
   })
 
   it("does not turn policy or capability checks into Figma procedure answers", async () => {
@@ -276,7 +365,7 @@ describe("CS Figma guide source", () => {
       const answer = formatCsFigmaGuideAnswer(guide)
       const enrichment = getCsFigmaEnrichment(guide.docSlug)
 
-      for (const [index, step] of guide.steps.entries()) {
+      for (const step of guide.steps) {
         expect(step, guide.slug).toBeTruthy()
       }
 

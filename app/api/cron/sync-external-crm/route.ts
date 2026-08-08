@@ -1,6 +1,15 @@
-import { NextRequest, NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
+import { after, NextRequest, NextResponse } from "next/server"
 
-import { runExternalCrmSyncChain } from "@/lib/external-crm/sync-chain"
+import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
+import {
+  notifyExternalCrmSyncOutcome,
+  runExternalCrmSyncChain,
+} from "@/lib/external-crm/sync-chain"
+import {
+  getExternalCrmSyncHttpStatus,
+  hasFreshExternalCrmSyncData,
+} from "@/lib/external-crm/sync-result"
 
 export async function GET(req: NextRequest) {
   // Vercel 환경에서는 x-vercel-cron 헤더 필수
@@ -14,13 +23,20 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   }
 
+  const startedAt = Date.now()
   const chain = await runExternalCrmSyncChain("cron")
   const result = {
     ...chain.sync,
+    completedAt: new Date().toISOString(),
+    durationMs: Date.now() - startedAt,
     neoCustomerSnapshots: chain.neoCustomerSnapshots ?? null,
     neoCustomerSnapshotsError: chain.neoCustomerSnapshotsError ?? null,
     candidates: chain.candidates ?? null,
     candidatesError: chain.candidatesError ?? null,
   }
-  return NextResponse.json(result, { status: chain.sync.ok ? 200 : chain.sync.skipped ? 409 : 500 })
+  if (hasFreshExternalCrmSyncData(chain.sync)) {
+    revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+  }
+  after(() => notifyExternalCrmSyncOutcome(chain, "cron"))
+  return NextResponse.json(result, { status: getExternalCrmSyncHttpStatus(chain.sync) })
 }

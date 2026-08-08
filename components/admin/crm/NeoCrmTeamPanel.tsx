@@ -125,8 +125,14 @@ export default function NeoCrmTeamPanel({
   const [ownerSort, setOwnerSort] = useState<"amount" | "delta">("amount")
   const [ordersExpanded, setOrdersExpanded] = useState(false)
 
+  // 기간 이동(이전/다음)을 연타하면 요청이 겹친다. 늦게 끝난 이전 기간 응답이 최신 기간 화면을
+  // 덮어쓰면, 헤더는 새 기간인데 매출·오더 숫자는 다른 기간인 채로 남는다(오류 표시도 없다).
+  const requestSeq = useRef(0)
+
   const load = useCallback(
     async (options?: { force?: boolean }) => {
+      const seq = ++requestSeq.current
+      const isLatest = () => requestSeq.current === seq
       const baseUrl = getNeoCrmUrl(granularity, offset)
       const requestUrl = options?.force ? `${baseUrl}&force=1` : baseUrl
       const cachedReport = getCachedAdminJson<NeoCrmTeamReport>(baseUrl, {
@@ -155,13 +161,15 @@ export default function NeoCrmTeamPanel({
             staleWhileRevalidateMs: NEO_CRM_STALE_WHILE_REVALIDATE_MS,
           }
         )
+        if (!isLatest()) return
         setData(next)
         dataRef.current = next
         if (!next.ok && next.error) setError(next.error)
       } catch (err) {
+        if (!isLatest()) return
         setError(err instanceof Error ? err.message : "외부 CRM 동기화 데이터를 불러오지 못했습니다.")
       } finally {
-        setLoading(false)
+        if (isLatest()) setLoading(false)
       }
     },
     [granularity, offset]
@@ -483,7 +491,20 @@ export default function NeoCrmTeamPanel({
                 {(ordersExpanded ? data?.order.recent ?? [] : (data?.order.recent ?? []).slice(0, 5)).map((order) => (
                   <div key={order.key} className="grid grid-cols-[minmax(0,1fr)_92px] gap-2 py-2">
                     <div className="min-w-0">
-                      <p className="truncate text-[12px] font-semibold text-[#111110]">{order.customerName}</p>
+                      {/* 거래 행 → 계정 상세 딥링크(?account= — 고객 화면 빠른 보기, 오더 탭에 이 거래가
+                          있다). 오더 자체 상세 라우트는 없어 계정 착지가 정확한 최소 경로.
+                          accountId 없는(또는 캐시 스큐) 행은 기존 텍스트 그대로. */}
+                      {order.accountId ? (
+                        <Link
+                          href={`/admin/crm/customers/accounts?account=${encodeURIComponent(order.accountId)}`}
+                          title="고객 상세(오더 내역) 열기"
+                          className="block truncate text-[12px] font-semibold text-[#111110] underline-offset-2 hover:text-[#084734] hover:underline"
+                        >
+                          {order.customerName}
+                        </Link>
+                      ) : (
+                        <p className="truncate text-[12px] font-semibold text-[#111110]">{order.customerName}</p>
+                      )}
                       <p className="truncate text-[11px] text-[#1a1a1a]/40">
                         {order.ownerName ?? "담당 미지정"}
                         {order.status ? ` · ${order.status}` : ""}

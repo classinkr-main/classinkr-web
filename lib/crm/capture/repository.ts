@@ -194,9 +194,6 @@ export async function replaceCaptureRows(
   now = new Date()
 ): Promise<CaptureRowRecord[]> {
   const supabase = createSupabaseAdminClient()
-  const { error: deleteError } = await supabase.from("crm_capture_rows").delete().eq("batch_id", batch.id)
-  if (deleteError) throw new Error(`[crm-capture] 기존 행 삭제 실패: ${deleteError.message}`)
-
   const activityType = batch.defaultActivityType
   const hasTemplate = captureTaskTemplate(activityType) != null
   const inserts: CrmCaptureRowInsert[] = matched.map((row, index) => ({
@@ -227,8 +224,18 @@ export async function replaceCaptureRows(
   }))
 
   if (inserts.length > 0) {
-    const { error: insertError } = await supabase.from("crm_capture_rows").insert(inserts)
+    // 먼저 upsert하고 성공 뒤 초과 행만 정리한다. 저장 실패가 기존 검토 데이터를 지우지 않게 한다.
+    const { error: insertError } = await supabase
+      .from("crm_capture_rows")
+      .upsert(inserts, { onConflict: "batch_id,row_index" })
     if (insertError) throw new Error(`[crm-capture] 행 저장 실패: ${insertError.message}`)
+
+    const { error: trimError } = await supabase
+      .from("crm_capture_rows")
+      .delete()
+      .eq("batch_id", batch.id)
+      .gte("row_index", inserts.length)
+    if (trimError) throw new Error(`[crm-capture] 초과 행 정리 실패: ${trimError.message}`)
   }
 
   await supabase

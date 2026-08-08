@@ -142,7 +142,7 @@ OKR/목표(구글시트에만 존재), 예산/집행, 학원 360 통합 뷰, 리
 ---
 
 ## 관련 문서
-- [admin-growth-os-ia.md](./admin-growth-os-ia.md) — 어드민 정보구조
+- [admin-growth-os-ia.md](../archive/admin-growth-os-ia.md) — 과거 어드민 정보구조 기록
 - [crm-sheet-revenue-sync-plan.md](./crm-sheet-revenue-sync-plan.md) — 시트↔매출 싱크(목표 DB 이관과 직접 연관)
 - [korean-crm-admin-integration-plan-2026-06-10.md](./korean-crm-admin-integration-plan-2026-06-10.md) — NEO/샤오셔우이 통합
 - [branch-dashboard-development-log.md](./branch-dashboard-development-log.md) — 브랜치 대시보드 개발 로그

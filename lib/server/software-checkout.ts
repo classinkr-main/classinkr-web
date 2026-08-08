@@ -1,7 +1,8 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
-import { convertCnyToKrw, convertUsdToKrw, getFxRates } from "@/lib/billing/fx"
+// FX 는 구독형(USD 정가 → KRW 승인)에서만 쓴다. 충전형은 2026-07 이후 원화 선충전이라 환산이 없다.
+import { convertUsdToKrw, getFxRates } from "@/lib/billing/fx"
 import {
   clampAccountCount,
   computeSubscriptionAmountUsd,
@@ -26,6 +27,7 @@ import {
   type PromoCode,
 } from "@/lib/billing/promo-codes"
 import type { TossConfirmPaymentResponse } from "@/lib/billing/toss"
+import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -80,11 +82,9 @@ export interface SubscriptionOrderCreated extends SoftwareCheckoutOrder {
 
 export interface BusinessOrderCreated extends SoftwareCheckoutOrder {
   mode: "business"
-  amountCny: number
-  amountCnyBeforeDiscount: number
-  fxRate: number
-  fxFetchedAt: string
-  fxSource: string
+  /** 승인 요청 금액(KRW). order.amount 와 항상 같다 — 환산이 없기 때문. */
+  amountKrw: number
+  amountKrwBeforeDiscount: number
   quoteCode: SoftwareQuoteCode | null
   appliedPromo: PromoCode | null
   discount: {
@@ -147,7 +147,7 @@ function parseAccountCount(value: unknown): number {
   return clampAccountCount(n)
 }
 
-function parseAmountCny(value: unknown): number {
+function parseAmountKrw(value: unknown): number {
   const n = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""))
   return Number.isFinite(n) ? Math.round(n) : Number.NaN
 }
@@ -328,9 +328,9 @@ export async function createBusinessRechargeOrder(raw: unknown): Promise<Busines
 
   const quoteCodeInput = normalizeString(body.quoteCode)
   const promoCodeInput = normalizeString(body.promoCode)
-  const requestedAmountCny = parseAmountCny(body.amountCny)
+  const requestedAmountKrw = parseAmountKrw(body.amountKrw)
 
-  // 견적 코드가 있으면 amountCny 를 견적에서 덮어쓴다.
+  // 견적 코드가 있으면 amountKrw 를 견적에서 덮어쓴다.
   let quoteCode: SoftwareQuoteCode | null = null
   if (quoteCodeInput) {
     const result = await validateQuoteCode(quoteCodeInput, "business_recharge")
@@ -340,50 +340,48 @@ export async function createBusinessRechargeOrder(raw: unknown): Promise<Busines
     quoteCode = result.code
   }
 
-  const baseAmountCny = quoteCode?.amountCny ?? requestedAmountCny
-  if (!Number.isFinite(baseAmountCny) || baseAmountCny <= 0) {
+  const baseAmountKrw = quoteCode?.amountKrw ?? requestedAmountKrw
+  if (!Number.isFinite(baseAmountKrw) || baseAmountKrw <= 0) {
     throw new Error("충전 금액을 입력해 주세요.")
   }
 
   // 견적이 아닌 직접 입력이면 정책 검증.
   if (!quoteCode) {
-    const validation = validateRechargeAmount(baseAmountCny)
+    const validation = validateRechargeAmount(baseAmountKrw)
     if (!validation.ok) {
       throw new Error(validation.reason)
     }
   }
 
   let appliedPromo: PromoCode | null = null
-  let finalAmountCny = baseAmountCny
+  let finalAmountKrw = baseAmountKrw
   let discountAmount = 0
 
   if (promoCodeInput) {
     const promoResult = await validatePromoCode({
       rawCode: promoCodeInput,
       target: "business_recharge",
-      baseAmount: baseAmountCny,
-      currency: "CNY",
+      baseAmount: baseAmountKrw,
+      currency: "KRW",
     })
     if (!promoResult.ok) {
       throw new Error(promoResult.message)
     }
     appliedPromo = promoResult.promo
-    finalAmountCny = promoResult.amountAfter
-    discountAmount = promoResult.discountAmount
+    // percent 할인은 소수점이 남을 수 있다 — Toss 승인 금액은 원 단위 정수여야 하므로 반올림.
+    finalAmountKrw = Math.round(promoResult.amountAfter)
+    discountAmount = Math.round(promoResult.discountAmount)
   }
 
-  if (finalAmountCny <= 0) {
+  if (finalAmountKrw <= 0) {
     throw new Error("할인이 결제 금액을 초과했습니다. 다른 코드를 사용해 주세요.")
   }
 
-  const fx = await getFxRates()
-  const amountKrw = convertCnyToKrw(finalAmountCny, fx.cnyKrw)
-  if (amountKrw <= 0) {
-    throw new Error("결제 금액 환산에 실패했습니다.")
-  }
+  // 환산 없음 — 입력 원화가 곧 Toss 승인 금액이다.
+  const amountKrw = finalAmountKrw
 
   const orderId = createOrderId("sw_biz")
-  const orderName = buildRechargeOrderName(finalAmountCny)
+  const orderName = buildRechargeOrderName(finalAmountKrw)
 
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
@@ -405,18 +403,16 @@ export async function createBusinessRechargeOrder(raw: unknown): Promise<Busines
       quote_code_id: quoteCode?.id ?? null,
       applied_promo_code_id: appliedPromo?.id ?? null,
       raw_prepare: {
-        amountCny: finalAmountCny,
-        amountCnyBeforeDiscount: baseAmountCny,
-        discountAmountCny: discountAmount,
-        fxRate: fx.cnyKrw,
-        fxFetchedAt: fx.fetchedAt,
-        fxSource: fx.source,
+        currency: "KRW",
+        amountKrw: finalAmountKrw,
+        amountKrwBeforeDiscount: baseAmountKrw,
+        discountAmountKrw: discountAmount,
         quoteCode: quoteCode?.code ?? null,
         promoCode: appliedPromo?.code ?? null,
         attribution,
         rules: {
-          baseMinCny: BUSINESS_RECHARGE.baseMinCny,
-          incrementCny: BUSINESS_RECHARGE.incrementCny,
+          baseMinKrw: BUSINESS_RECHARGE.baseMinKrw,
+          incrementKrw: BUSINESS_RECHARGE.incrementKrw,
         },
       },
     })
@@ -429,16 +425,13 @@ export async function createBusinessRechargeOrder(raw: unknown): Promise<Busines
   return {
     ...order,
     mode: "business",
-    amountCny: finalAmountCny,
-    amountCnyBeforeDiscount: baseAmountCny,
-    fxRate: fx.cnyKrw,
-    fxFetchedAt: fx.fetchedAt,
-    fxSource: fx.source,
+    amountKrw: finalAmountKrw,
+    amountKrwBeforeDiscount: baseAmountKrw,
     quoteCode,
     appliedPromo,
     discount:
       discountAmount > 0
-        ? { currency: "CNY", amount: discountAmount }
+        ? { currency: "KRW", amount: discountAmount }
         : null,
   }
 }
@@ -479,6 +472,68 @@ export async function markSoftwareCheckoutOrderFailed(input: {
 
   if (error) throw error
   return data ? mapCheckoutOrder(data as CheckoutOrderRow) : null
+}
+
+// 결제 자체는 이미 완료된 뒤이므로 코드 반영 실패가 confirm 응답을 막아서는 안 된다.
+// emitNotificationEvent 호출 자체가 실패해도(웹훅 설정 누락, DB 오류 등) 여기서 흡수해
+// 결제 confirm 흐름에는 절대 영향을 주지 않는다.
+// NOTE: lib/notifications/types.ts 에는 이 상황 전용 eventType/notificationType 이 없다.
+// 해당 파일은 다른 작업이 동시에 수정 중이라 이번 변경에서는 건드리지 않고,
+// 기존 타입 중 가장 근접한 "warning" + categoryTag "finance" 조합으로 대체한다.
+/** 위컴·알림 payload 에 실을 오류 요약 — 이름 + 본문 앞 120자. DB 내부 상세 노출을 줄인다. */
+const MAX_REDEMPTION_ERROR_CHARS = 120
+
+function summarizeRedemptionError(error: unknown) {
+  const name = error instanceof Error ? error.name : typeof error
+  const raw = error instanceof Error ? error.message : String(error)
+  const flattened = raw.replace(/\s+/g, " ").trim()
+  if (!flattened) return name
+  const body =
+    flattened.length > MAX_REDEMPTION_ERROR_CHARS
+      ? `${flattened.slice(0, MAX_REDEMPTION_ERROR_CHARS)}…`
+      : flattened
+  return `${name}: ${body}`
+}
+
+async function notifyRedemptionFailure(input: {
+  kind: "quote_code" | "promo_code"
+  orderId: string
+  codeId: string | null
+  error: unknown
+}) {
+  const label = input.kind === "quote_code" ? "견적 코드" : "프로모 코드"
+  const errorMessage = summarizeRedemptionError(input.error)
+
+  try {
+    await emitNotificationEvent({
+      eventType: `billing.${input.kind}_redemption_failed`,
+      notificationType: "warning",
+      categoryTag: "finance",
+      severity: "warning",
+      scopeTag: "org_admin",
+      title: `결제 완료 후 ${label} 반영 실패`,
+      message: [
+        `주문 ${input.orderId} 결제는 정상 완료됐지만 ${label} 사용 처리가 실패했습니다.`,
+        `코드 ID: ${input.codeId ?? "unknown"}`,
+        `오류: ${errorMessage}`,
+        "코드가 미반영 상태로 남아있을 수 있으니 수동으로 확인해 주세요.",
+      ].join("\n"),
+      source: "billing",
+      sourceId: input.orderId,
+      payload: {
+        orderId: input.orderId,
+        codeId: input.codeId,
+        kind: input.kind,
+        errorMessage,
+      },
+      channels: ["wecom_webhook"],
+    })
+  } catch (notifyError) {
+    console.error(
+      `[software-checkout] ${label} redemption failure notification error:`,
+      notifyError
+    )
+  }
 }
 
 export async function markSoftwareCheckoutOrderPaid(
@@ -525,6 +580,15 @@ export async function markSoftwareCheckoutOrderPaid(
     }
   } catch (codeError) {
     console.error("[software-checkout] quote code redemption error:", codeError)
+    // 결제는 이미 끝났다 — 알림 외부 호출(위컴)이 confirm 응답을 붙잡지 않게 await 하지 않는다.
+    void notifyRedemptionFailure({
+      kind: "quote_code",
+      orderId: order.orderId,
+      codeId: order.quoteCodeId,
+      error: codeError,
+    }).catch((notifyError) => {
+      console.error("[software-checkout] quote code failure notify error:", notifyError)
+    })
   }
 
   try {
@@ -536,12 +600,12 @@ export async function markSoftwareCheckoutOrderPaid(
       // 구조적으로 subscription 확장이 들어와도 안전하도록 분리.
       let before: number | null = null
       let after: number | null = null
-      let currency: "CNY" | "USD" | "KRW" | null = null
+      let currency: "USD" | "KRW" | null = null
 
       if (order.mode === "business") {
-        before = Number(raw.amountCnyBeforeDiscount ?? 0)
-        after = Number(raw.amountCny ?? 0)
-        currency = "CNY"
+        before = Number(raw.amountKrwBeforeDiscount ?? 0)
+        after = Number(raw.amountKrw ?? 0)
+        currency = "KRW"
       }
       // NOTE: subscription + promo is not yet supported. The prepare route does not
       // apply promos to subscription orders, so appliedPromoCodeId will always be null
@@ -566,6 +630,14 @@ export async function markSoftwareCheckoutOrderPaid(
     }
   } catch (promoError) {
     console.error("[software-checkout] promo redemption error:", promoError)
+    void notifyRedemptionFailure({
+      kind: "promo_code",
+      orderId: order.orderId,
+      codeId: order.appliedPromoCodeId,
+      error: promoError,
+    }).catch((notifyError) => {
+      console.error("[software-checkout] promo failure notify error:", notifyError)
+    })
   }
 
   return order

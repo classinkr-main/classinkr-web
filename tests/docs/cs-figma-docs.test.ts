@@ -50,6 +50,18 @@ describe("CS Figma docs", () => {
     }
   })
 
+  it("publishes current-board guides with the update date and no raw images", () => {
+    const doc = getDocBySlug("cs-course-wide-chat-control", "admin")
+
+    expect(doc).toMatchObject({
+      title: "코스 전체 학생 채팅 활성화와 비활성화",
+      updatedAt: "2026-08-05",
+      visibility: "unlisted",
+      noindex: true,
+    })
+    expect(doc?.sections.flatMap((section) => section.media ?? [])).toEqual([])
+  })
+
   it("attaches matched capture images with consumer-tone alt text and no source filenames", () => {
     const guide = CS_FIGMA_GUIDES.find((item) => item.docSlug === "cs-field-recording-camera-setup")
     expect(guide).toBeTruthy()

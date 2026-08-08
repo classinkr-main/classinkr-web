@@ -35,8 +35,8 @@ interface DocumentTabItem {
 const DOCUMENT_TABS: DocumentTabItem[] = [
   {
     key: "hardware",
-    label: "하드웨어 견적서",
-    description: "품목, 수량, 계약 전환까지 이어지는 매출 견적",
+    label: "견적서",
+    description: "SW·HW 견적을 한 목록에서 — 품목, 수량, 계약 전환까지",
     icon: <FileText className="h-4 w-4" />,
   },
   {
@@ -62,14 +62,15 @@ const DOCUMENT_TABS: DocumentTabItem[] = [
 ]
 
 // href는 렌더에서 소비되지 않는 미사용 필드라 제거 — 북마크 호환은 stub 라우트(redirect)가 담당한다.
-const QUICK_QUOTE_ACTIONS: Array<{
+// SW/HW 대표 버튼은 아래 QuoteCreateButtons가 직접 갖고, 드롭다운은 HW 세부 프리셋만 남긴다.
+const HARDWARE_QUOTE_PRESETS: Array<{
   action: HardwareQuoteQuickAction
   label: string
   description: string
 }> = [
   {
     action: "new",
-    label: "빠른 견적 작성",
+    label: '전자칠판 86" 견적',
     description: "리드 없이 고객명만 입력해 견적을 바로 만듭니다.",
   },
   {
@@ -78,9 +79,14 @@ const QUICK_QUOTE_ACTIONS: Array<{
     description: "86형 보드, T1, 벽걸이, 자동 녹화 1년 패키지",
   },
   {
-    action: "online_suite",
-    label: "AI Suite 견적",
-    description: "월 구독형 통합 학원 패키지 견적",
+    action: "board_75",
+    label: '전자칠판 75" 견적',
+    description: "75형 보드 기준 견적",
+  },
+  {
+    action: "camera_t1",
+    label: "T1 카메라 견적",
+    description: "강사용 모션트래킹 카메라 단품 견적",
   },
 ]
 
@@ -148,7 +154,7 @@ function prefillFromSearch() {
   return prefillFromParams(new URLSearchParams(window.location.search))
 }
 
-function QuoteCreateButton({
+function QuoteCreateButtons({
   onSelect,
 }: {
   onSelect: (action: HardwareQuoteQuickAction) => void
@@ -178,22 +184,33 @@ function QuoteCreateButton({
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="flex items-stretch">
+      <div className="flex items-stretch overflow-hidden rounded-md">
+        {/* SW/HW 는 공급자·품목 체계가 다른 별개 견적이라 진입 버튼을 분리해 둔다. */}
+        <button
+          type="button"
+          onClick={() => onSelect("online_suite")}
+          title="구독형 AI Suite 견적서 작성 (공급자: 클래스인)"
+          className="inline-flex h-9 items-center gap-1.5 bg-[#084734] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1"
+        >
+          <Plus className="h-4 w-4" />
+          SW 견적서
+        </button>
         <button
           type="button"
           onClick={() => onSelect("new")}
-          className="inline-flex h-9 items-center gap-1.5 rounded-l-md bg-[#084734] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1"
+          title="하드웨어 견적서 작성 (공급자: 퀴드러닝)"
+          className="inline-flex h-9 items-center gap-1.5 border-l border-white/20 bg-[#084734] px-3.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1"
         >
           <Plus className="h-4 w-4" />
-          견적서 작성
+          HW 견적서
         </button>
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
           aria-haspopup="menu"
           aria-expanded={open}
-          aria-label="견적 템플릿 선택"
-          className="inline-flex h-9 items-center rounded-r-md border-l border-white/20 bg-[#084734] px-2 text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1"
+          aria-label="HW 견적 템플릿 선택"
+          className="inline-flex h-9 items-center border-l border-white/20 bg-[#084734] px-2 text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-1"
         >
           <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
@@ -204,7 +221,8 @@ function QuoteCreateButton({
           role="menu"
           className="absolute right-0 z-30 mt-1.5 w-64 overflow-hidden rounded-xl border border-[#e8e8e4] bg-white p-1 shadow-[rgba(0,0,0,0.04)_0px_4px_18px,rgba(0,0,0,0.05)_0px_8px_28px]"
         >
-          {QUICK_QUOTE_ACTIONS.map((item) => (
+          <p className="px-3 pb-1 pt-2 text-[11px] font-semibold text-[#1a1a1a]/45">HW 세부 템플릿</p>
+          {HARDWARE_QUOTE_PRESETS.map((item) => (
             <button
               key={item.action}
               type="button"
@@ -296,7 +314,7 @@ export default function QuotesPage() {
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">CRM 고객</span>
             </a>
-            <QuoteCreateButton onSelect={openHardwareQuickAction} />
+            <QuoteCreateButtons onSelect={openHardwareQuickAction} />
           </div>
         </div>
 

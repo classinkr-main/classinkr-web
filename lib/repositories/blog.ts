@@ -8,9 +8,12 @@
 
 import "server-only";
 
+import { cache } from "react";
+
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { BlogPost as SupaBlogPost, BlogPostInsert, BlogPostUpdate } from "@/lib/supabase/database.types";
 import { sanitizePublicUrl } from "@/lib/safe-public-url";
+import { formatBlogDisplayDate, resolveDisplayDateSource } from "@/lib/blog-display";
 
 // 기존 타입 re-export
 export type { BlogPost, BlogPostInput, BlogPostStatus } from "@/lib/blog-types";
@@ -39,7 +42,7 @@ function supabaseToLegacy(row: SupaBlogPost): BlogPost & { _uuid: string } {
     category: row.category ?? "전체",
     tags: row.tags ?? [],
     tag: (row.tags ?? [])[0] ?? "",
-    date: formatDate(row.created_at),
+    date: formatDate(resolveDisplayDateSource(row)),
     publishedAt: row.published_at ?? undefined,
     updatedAt: row.updated_at ?? undefined,
     author: row.author_name ?? "",
@@ -134,6 +137,24 @@ export async function getAllPosts(): Promise<BlogPost[]> {
   return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
 }
 
+// 카운트 소비자용(os-summary 등) — 전체 행 로드(getAllPosts) 없이 발행 글 수만 센다.
+// 술어는 "getAllPosts() 후 status === 'published' 필터"와 동치다:
+// deleted_at null + status ∈ PUBLISHED_STATUS_VALUES(레거시 매핑이 "published"로 접는 값 전부).
+// getPublishedPosts의 publishedAtVisibleFilter(예약 발행 가시성)는 여기 적용하지 않는다 —
+// 기존 os-summary 카운트도 status만 봤으므로 수치 동일성을 유지한다.
+export async function countPublishedPosts(): Promise<number> {
+
+  const supabase = createSupabaseAdminClient();
+  const { count, error } = await supabase
+    .from("blog_posts")
+    .select("id", { count: "exact", head: true })
+    .in("status", PUBLISHED_STATUS_VALUES)
+    .is("deleted_at", null);
+
+  if (error) throw new Error(`[blog] 발행 글 수 조회 실패: ${error.message}`);
+  return count ?? 0;
+}
+
 export async function getPublishedPosts(): Promise<BlogPost[]> {
 
   const supabase = await createSupabaseBlogReadClient();
@@ -145,7 +166,10 @@ export async function getPublishedPosts(): Promise<BlogPost[]> {
       .in("status", PUBLISHED_STATUS_VALUES)
       .is("deleted_at", null)
       .or(publishedAtVisibleFilter())
-      .order("published_at", { ascending: false })
+      // Postgres는 DESC에서 NULL을 맨 앞에 둔다 — published_at 없이 발행된 글이
+      // 목록 최상단에 눌러앉는 걸 막는다. 동일 시각 글은 created_at으로 순서를 고정한다.
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
       .abortSignal(timeout.signal);
 
     if (error && isAbortError(error)) {
@@ -172,8 +196,13 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
   return supabaseToLegacy(data as SupaBlogPost);
 }
 
-export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | null> {
-
+// 조회 실패(timeout·5xx)와 "글이 없음"을 구분해서 던진다. 둘 다 null로 접으면
+// 순간 장애가 notFound()로 렌더되고, revalidate 주기 동안 정상 글이 404로 캐시된다(soft-404 증폭).
+// null은 진짜 미존재일 때만 반환하고, 실패는 throw해서 error 경계가 받게 한다.
+// cache()로 감싸 같은 요청 안의 generateMetadata + page 중복 쿼리를 1회로 줄인다.
+export const getPublishedPostBySlug = cache(async function getPublishedPostBySlug(
+  slug: string,
+): Promise<BlogPost | null> {
   const supabase = await createSupabaseBlogReadClient();
   const timeout = createBlogQueryTimeout();
   try {
@@ -188,15 +217,17 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | n
       .maybeSingle();
 
     if (error && isAbortError(error)) {
-      console.warn(`[blog] 공개 글 상세 조회 timeout after ${PUBLIC_BLOG_QUERY_TIMEOUT_MS}ms`);
-      return null;
+      throw new Error(
+        `[blog] 공개 글 상세 조회 timeout after ${PUBLIC_BLOG_QUERY_TIMEOUT_MS}ms (${slug})`,
+      );
     }
-    if (error || !data) return null;
+    if (error) throw new Error(`[blog] 공개 글 상세 조회 실패(${slug}): ${error.message}`);
+    if (!data) return null;
     return supabaseToLegacy(data as SupaBlogPost);
   } finally {
     timeout.clear();
   }
-}
+});
 
 export async function getPostById(id: number | string): Promise<BlogPost | null> {
 
@@ -403,7 +434,8 @@ export async function getPublishedPostsForStaticSitemap(): Promise<BlogPost[]> {
       .in("status", PUBLISHED_STATUS_VALUES)
       .is("deleted_at", null)
       .or(publishedAtVisibleFilter())
-      .order("published_at", { ascending: false })
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
       .abortSignal(timeout.signal);
 
     if (error) throw new Error(`[blog] sitemap query failed: ${error.message}`);
@@ -501,16 +533,7 @@ function hashUuidToNumber(uuid: string): number {
   return Math.abs(hash);
 }
 
-function formatDate(isoString: string): string {
-  return new Date(isoString)
-    .toLocaleDateString("ko-KR", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-    .replace(/\./g, ". ")
-    .trim();
-}
+const formatDate = formatBlogDisplayDate;
 
 function slugifyTitle(title: string): string {
   return title

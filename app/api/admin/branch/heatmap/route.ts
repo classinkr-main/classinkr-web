@@ -32,6 +32,8 @@ export async function GET(req: NextRequest) {
   if (!periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
   try {
     // summary와 동일 규약: DB-native 액티브 임포트 우선, 시트 미러 폴백 — 탭 간 데이터 정합
+    // CRM 지도 비교는 별도 경량 API에서 병렬로 읽는다. 무거운 전체 매칭이 REV 첫 렌더를
+    // 막지 않게 이 응답은 히트맵 정본 데이터만 기다린다.
     const deals = await readRevDealsPreferActive(fyOf(periodDate), { team })
     const rows = computeHeatmap(deals, period, periodDate, team)
     return adminCachedJson({ rows })

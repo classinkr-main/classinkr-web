@@ -1,3 +1,4 @@
+import { getAnonymousId } from "@/lib/consent/consent"
 import type { LeadPayload } from "@/lib/lead-types"
 import { collectLeadAttribution } from "@/lib/marketing-attribution"
 
@@ -11,6 +12,9 @@ export async function submitLead(data: Omit<LeadPayload, "timestamp"> & { websit
     body: JSON.stringify({
       ...data,
       ...collectLeadAttribution(),
+      // 분석 동의가 있을 때만 값이 나온다(getAnonymousId 가 동의를 확인한다).
+      // 이 값으로 제출 전 익명 활동이 리드에 소급 귀속된다.
+      anonymousId: getAnonymousId(),
     }),
   })
 

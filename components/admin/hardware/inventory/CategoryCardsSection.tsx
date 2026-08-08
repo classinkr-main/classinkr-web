@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import type { LucideIcon } from "lucide-react"
 
 import { formatNumber } from "./shared"
@@ -15,7 +16,7 @@ interface CategoryCard {
   count: number
 }
 
-export default function CategoryCardsSection({ categoryCards }: { categoryCards: CategoryCard[] }) {
+function CategoryCardsSection({ categoryCards }: { categoryCards: CategoryCard[] }) {
   return (
     <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       {categoryCards.map((card) => {
@@ -50,3 +51,5 @@ export default function CategoryCardsSection({ categoryCards }: { categoryCards:
     </section>
   )
 }
+
+export default memo(CategoryCardsSection)

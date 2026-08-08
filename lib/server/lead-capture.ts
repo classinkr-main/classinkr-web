@@ -21,12 +21,6 @@ const VALID_SOURCES = new Set<LeadSource>([
   "newsletter",
   "meta_lead_ads",
 ])
-const WECOM_LEAD_SOURCES = new Set<LeadSource>([
-  "demo_modal",
-  "contact_page",
-  "meta_lead_ads",
-])
-
 // site_inflow 타임라인 이벤트 summary에 쓰는 유입 경로 한글 라벨.
 const SITE_INFLOW_SOURCE_LABELS = {
   demo_modal: "데모 신청",
@@ -122,6 +116,13 @@ export type LeadSubmissionResult =
 
 export interface LeadCaptureContext {
   requestMeta?: MarketingRequestMeta | null
+  deferTask?: (task: () => Promise<void>) => void
+  /**
+   * 상위 플로우가 자체 알림을 이미 소유할 때 lead.created 알림만 생략한다.
+   * (예: 결제창 무결제 도입 신청 — checkout.request_created 1건으로 통일)
+   * 리드 저장·구글시트·채널톡·CRM 타임라인·서버 전환은 그대로 수행한다.
+   */
+  suppressLeadCreatedNotification?: boolean
 }
 
 function normalizeString(value: unknown) {
@@ -197,6 +198,7 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
     size: normalizeString(body.size),
     email: email ?? undefined,
     phone: normalizeString(body.phone),
+    branch: normalizeString(body.branch),
     message: normalizeString(body.message),
     timestamp: new Date().toISOString(),
     marketingConsent: body.marketingConsent === true,
@@ -215,6 +217,7 @@ export function buildLeadPayload(raw: unknown): LeadPayload {
     landingPage: normalizeString(body.landingPage ?? body.landing_page),
     currentPage: normalizeString(body.currentPage ?? body.current_page),
     referrer: normalizeString(body.referrer),
+    anonymousId: normalizeString(body.anonymousId ?? body.anonymous_id),
   }
 
   if (
@@ -330,10 +333,39 @@ export async function submitLeadCapture(
         landing_page: body.landingPage,
         current_page: body.currentPage,
         referrer: body.referrer,
+        anonymous_id: body.anonymousId,
       })
       savedLeadId = savedLead.id
       conversionEventId = `lead:${savedLead.id}`
       stored = true
+
+      // 제출 전에 쌓인 익명 활동을 이 리드로 귀속한다.
+      //
+      // 신원 결합 모듈은 원래부터 있었지만(로그인 콜백·자료 다운로드·뉴스레터에서 호출),
+      // 정작 리드 제출 경로에서는 한 번도 부르지 않았다. 그래서 client_events 2,159행 중
+      // lead_id 가 채워진 행이 0이었고, 리드 참여 신호가 항상 빈손이었다(2026-08-05 실측).
+      //
+      // 응답을 막지 않게 뒤로 미룬다 — 리드 저장은 이미 끝났으므로 실패해도 경고만 남긴다.
+      if (body.anonymousId) {
+        const leadIdForStitch = savedLead.id
+        const anonymousIdForStitch = body.anonymousId
+        const stitchTask = async () => {
+          try {
+            const { stitchIdentity } = await import("@/lib/identity/stitch")
+            const result = await stitchIdentity({
+              anonymousId: anonymousIdForStitch,
+              leadId: leadIdForStitch,
+            })
+            if (result.warnings.length) {
+              console.warn("[lead-capture] identity stitch warnings:", result.warnings.join(" | "))
+            }
+          } catch (error) {
+            console.warn("[lead-capture] identity stitch failed:", error)
+          }
+        }
+        if (context.deferTask) context.deferTask(stitchTask)
+        else void stitchTask()
+      }
     } catch (error) {
       console.error("[lead-capture] saveLead error:", error)
       storageError = "Failed to store the lead record."
@@ -400,45 +432,63 @@ export async function submitLeadCapture(
         console.warn("[lead-capture] server conversion failed:", error)
       })
 
-      void emitNotificationEvent({
-        eventType: "lead.created",
-        notificationType: "action_required",
-        categoryTag: "lead",
-        severity: "info",
-        scopeTag: "org_admin",
-        title: buildLeadNotificationTitle(body),
-        message: buildLeadNotificationMessage(body),
-        routeUrl: "/admin/crm",
-        source: "lead",
-        sourceId: savedLeadId,
-        payload: {
-          leadId: savedLeadId,
-          source: body.source,
-          sourceDetail: body.sourceDetail,
-          leadMagnet: body.leadMagnet,
-          name: body.name,
-          org: body.org,
-          role: body.role,
-          size: body.size,
-          email: body.email,
-          phone: body.phone,
-          utmSource: body.utmSource,
-          utmMedium: body.utmMedium,
-          utmCampaign: body.utmCampaign,
-          utmTerm: body.utmTerm,
-          utmContent: body.utmContent,
-          gclid: body.gclid,
-          fbclid: body.fbclid,
-          msclkid: body.msclkid,
-          ttclid: body.ttclid,
-          landingPage: body.landingPage,
-          currentPage: body.currentPage,
-          referrer: body.referrer,
-        },
-        channels: WECOM_LEAD_SOURCES.has(body.source) ? ["wecom_webhook"] : undefined,
-      }).catch((error) => {
-        console.error("[lead-capture] notification emit failed:", error)
-      })
+      const emitLeadCreatedNotification = async () => {
+        await emitNotificationEvent({
+          eventType: "lead.created",
+          notificationType: "action_required",
+          categoryTag: "lead",
+          severity: "info",
+          scopeTag: "org_admin",
+          title: buildLeadNotificationTitle(body),
+          message: buildLeadNotificationMessage(body),
+          routeUrl: "/admin/crm",
+          source: "lead",
+          sourceId: savedLeadId,
+          payload: {
+            leadId: savedLeadId,
+            source: body.source,
+            sourceDetail: body.sourceDetail,
+            leadMagnet: body.leadMagnet,
+            name: body.name,
+            org: body.org,
+            role: body.role,
+            size: body.size,
+            email: body.email,
+            phone: body.phone,
+            message: body.message,
+            utmSource: body.utmSource,
+            utmMedium: body.utmMedium,
+            utmCampaign: body.utmCampaign,
+            utmTerm: body.utmTerm,
+            utmContent: body.utmContent,
+            gclid: body.gclid,
+            fbclid: body.fbclid,
+            msclkid: body.msclkid,
+            ttclid: body.ttclid,
+            landingPage: body.landingPage,
+            currentPage: body.currentPage,
+            referrer: body.referrer,
+          },
+          // 개별 리드는 관리자 인앱에 즉시 남기되 WeCom은 10:10 일일 카드로 묶는다.
+          channels: [],
+        })
+      }
+      const emitLeadCreatedNotificationSafely = async () => {
+        try {
+          await emitLeadCreatedNotification()
+        } catch (error) {
+          console.error("[lead-capture] notification emit failed:", error)
+        }
+      }
+
+      // 상위 플로우가 알림을 소유하면 건너뛴다 — 여기서 또 보내면 ops 방에 2건이 뜬다.
+      if (!context.suppressLeadCreatedNotification) {
+        if (context.deferTask) {
+          context.deferTask(emitLeadCreatedNotificationSafely)
+        } else {
+          void emitLeadCreatedNotificationSafely()
+        }
+      }
 
       // 홈페이지 유입 자동 타임라인 이벤트 — 실패해도 리드 저장에 영향 없음(스펙 §D).
       const hasAdClickId = Boolean(body.gclid || body.fbclid || body.msclkid || body.ttclid)

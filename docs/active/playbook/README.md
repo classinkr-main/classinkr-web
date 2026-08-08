@@ -1,92 +1,74 @@
-# Classin Home — 파트별 운영 플레이북 (Team Playbook)
+# Classin Home — 파트별 운영 플레이북
 
-> 기준 시점: 2026-06-23 · 목적: **업무를 6개 파트로 나누고, 각 파트마다 "담당 에이전트 + 가이드 문서 + 현재 목표"를 고정**해 두어, 앞으로 어떤 작업이 들어와도 (1) 어느 파트인지 즉시 판별하고 (2) 그 파트의 철칙·핵심 파일·검증 기준을 빠짐없이 적용할 수 있게 한다.
+이 플레이북은 작업을 어느 파트가 맡는지와 모든 파트가 공유하는 안전 규약을 정의한다. 구현 사실은 실제 코드가 우선하며, UI는 `DESIGN.md`, 어드민 운영 정책은 `docs/active/admin-os-operating-decisions-2026-07-11.md`, 어드민 내비 배치는 `components/admin/admin-nav.ts`와 `components/admin/admin-nav-access.ts`를 정본으로 삼는다.
 
-이 플레이북은 "무엇을 먼저 읽고, 무엇을 절대 깨면 안 되는지"를 파트 단위로 정리한 **가이딩 레이어**다. 사실 검증은 항상 실제 코드와 `docs/active/`의 기준 문서로 한다.
+## 1. 사용 순서
 
----
+1. 아래 소유권 표에서 변경할 도메인을 정한다.
+2. 해당 파트 가이드의 도메인 규칙과 실제 구현을 함께 읽는다.
+3. 공용 파일을 바꾸면 영향을 받는 도메인까지 확인한다.
+4. `npm run typecheck` → `npx eslint app components lib --max-warnings=0` → `npm run build` 순으로 검증한다.
 
-## 0. 사용법 — 작업 들어오면 이 순서로
+에이전트 정의(`.claude/agents/`)는 이 플레이북으로 라우팅하는 얇은 진입점이다. 에이전트 파일에 운영 상태나 백로그를 복제하지 않는다.
 
-1. **파트 판별**: 아래 [§2 소유권 매트릭스](#2-소유권-매트릭스-경로--파트)로 건드릴 경로가 어느 파트인지 찾는다. (여러 파트에 걸치면 [§4 크로스컷](#4-크로스컷-의존성)을 본다)
-2. **담당 에이전트 위임**: 해당 파트의 전담 에이전트를 띄운다. 예) 챗봇 작업 → `Agent(subagent_type: "chatbot")`. 각 에이전트는 자기 파트의 스코프·철칙·핵심 파일을 이미 알고 있다. (정의: `.claude/agents/`)
-3. **가이드 정독**: 해당 파트 가이드(`docs/active/playbook/0N-*.md`)의 §4 지침 · §5 절대 금지 · §9 먼저 읽을 것을 본다.
-4. **공통 철칙 적용**: [§3 공통 철칙](#3-공통-철칙-모든-파트-공통)은 모든 파트에 적용된다.
-5. **검증**: 항상 `npx eslint app components lib --max-warnings=0` + `npm run build`. 스키마를 만졌으면 마이그레이션까지.
+## 2. 파트와 소유권
 
----
+소유권은 "그 경로의 모든 규칙을 독점한다"는 뜻이 아니다. 도메인 파트가 화면·API·repository 구현을 소유하고, Admin Core와 Platform은 각각 공통 어드민 규약과 기반 규약을 제공한다.
 
-## 1. 파트 지도
+| 파트 | 구현 소유권 | 가이드 |
+|---|---|---|
+| 홈 및 랜딩 | 공개 마케팅 화면, 공용 공개 UI, SEO·포지셔닝 | [01-home-front.md](./01-home-front.md) |
+| 어드민 코어 | `/admin` 셸·로그인·공통 내비, 관리자 인증/권한, 공통 API 응답·클라이언트 규약, Overview/Ops/Settings/Users/Dev | [02-admin-core.md](./02-admin-core.md) |
+| 콘텐츠 발행 | 공개 docs/blog/events/resources, 콘텐츠 어드민과 그 API, 문서·블로그·행사·리드마그넷 repository, 콘텐츠 인입 파이프라인 | [03-content-pub.md](./03-content-pub.md) |
+| 마케팅/그로스/CRM | 리드·동의·추적·캠페인, CRM·Branch·Calendar 화면과 API, 해당 repository와 외부 CRM/시트 연동 | [04-growth-crm.md](./04-growth-crm.md) |
+| 챗봇/CS | 공개 챗봇 API·위젯, `/admin/chatbot` CS 운영 대시보드, 내부 CS·상담 콘솔, 해당 API와 repository | [05-chatbot.md](./05-chatbot.md) |
+| 플랫폼 & 데이터 | Supabase 클라이언트·마이그레이션, Portal V2 인가, 결제·cron·웹훅·알림·인증/identity, 공용 검증 기반 | [06-platform-data.md](./06-platform-data.md) |
 
-| # | 파트 | 한 줄 정의 | 담당 에이전트 | 가이드 |
-|---|------|-----------|--------------|--------|
-| 1 | **홈 및 랜딩** (Front) | 전환 중심 공개 마케팅 사이트(`/`, `/product`, `/pricing`, 랜딩) | `home-front` | [01-home-front.md](./01-home-front.md) |
-| 2 | **어드민 코어** (Admin) | `/admin` 셸 + 인증·권한·repository 데이터층 + Ops/Settings | `admin-core` | [02-admin-core.md](./02-admin-core.md) |
-| 3 | **컨텐츠 발행** (Content) | 문서센터·블로그·행사·리소스 + 4개 콘텐츠 인입 파이프라인 | `content-pub` | [03-content-pub.md](./03-content-pub.md) |
-| 4 | **마케팅/그로스/CRM** (Growth) | 리드 퍼널·동의·추적·이메일 + CRM·지사·노션 캘린더(ERP) | `growth-crm` | [04-growth-crm.md](./04-growth-crm.md) |
-| 5 | **챗봇** (Chatbot) | 하이브리드 RAG 챗봇 + 상단 퍼널 + 운영 콘솔 | `chatbot` | [05-chatbot.md](./05-chatbot.md) |
-| 6 | **플랫폼 & 데이터** (Platform) | Supabase·마이그레이션·Portal V2 인가·결제·cron·인증 (공유 기반층) | `platform-data` | [06-platform-data.md](./06-platform-data.md) |
+### 경계 규칙
 
----
+- Admin Core는 `app/api/admin/*`, `components/admin/*`, `lib/repositories/*` 전체를 소유하지 않는다. 인증 가드·셸·공통 규약은 Admin Core, 각 라우트·화면·repository의 비즈니스 로직은 해당 도메인 소유다.
+- Platform은 테스트 도구와 공용 품질 게이트를 관리하지만 `tests/*` 전체를 소유하지 않는다. 테스트 소유권은 검증 대상 도메인을 따른다.
+- 공용 설정 파일(`next.config.ts`, `vercel.json`, lint/test 설정)은 변경 목적의 도메인과 Platform이 함께 확인한다.
+- `data/*.json` 듀얼모드의 저장 메커니즘은 Platform 규약을 따르고, 데이터 의미와 마이그레이션 결정은 해당 도메인이 소유한다.
 
-## 2. 소유권 매트릭스 (경로 → 파트)
+## 3. 공통 철칙
 
-| 경로/영역 | 파트 |
-|-----------|------|
-| `app/page.tsx`, `app/{about,product,pricing,contact,faq}`, `app/l/*` | 1 Front |
-| `components/{landing,sections,product,ui,seo,transitions}`, `components/AppChrome.tsx` | 1 Front |
-| `app/globals.css`, `DESIGN.md`, `lib/classin-positioning.ts`, `lib/seo.ts`, `app/{sitemap,robots,opengraph-image}` | 1 Front |
-| `app/admin/{overview,ops,settings,users,dev,analytics,login}`, `app/admin/layout.tsx` | 2 Admin |
-| `lib/admin-auth*.ts`, `lib/admin-client.ts`, `lib/admin-api-response.ts`, `lib/admin-env.ts`, `lib/repositories/*` | 2 Admin |
-| `app/{docs,blog,events,resources,updates}`, `app/admin/{docs,blog,events,lead-magnets,channel-talk}` | 3 Content |
-| `lib/{docs,docs-content,admin-docs,blog-*,cs-figma-*,calendar-data,lead-magnets,materials,patch-notes,roadmap,channel-talk*}.ts`, `scripts/{sync-channel-documents,embed-docs-chunks,seed-docs}.ts` | 3 Content |
-| `app/admin/{crm,marketing,campaigns,branch,calendar}`, `app/api/{lead,identify,consent,track,newsletter,meta}` | 4 Growth |
-| `lib/{admin-crm-*,marketing-*,branch/*,automation-engine,notion-marketing-calendar,analytics*,consent/*,submitLead,lead-*,email,resend,external-crm/*,crm-source-linking}.ts`, `lib/server/lead-capture.ts`, analytics `components/*Script.tsx`+`TrackedLink.tsx` | 4 Growth |
-| `app/api/chatbot/*`, `app/admin/chatbot`, `lib/chatbot/*`, `components/ui/{FloatingChatbot,ChatbotTeaser,useChatbotTeaser}.*` | 5 Chatbot |
-| `lib/supabase/*`, `supabase/migrations/*`, `lib/{db,server,storage,auth,identity,regions}/*`, `lib/portal/*`, `app/api/{portal,billing,webhook,cron}`, `app/{share,checkout,receipt,auth}`, `lib/billing/*`, `lib/notifications/*` | 6 Platform |
-| `data/*.json` 듀얼모드 | 6 Platform(저장소 메커니즘) + 해당 도메인 파트 |
-| `next.config.ts`, `vercel.json`, `eslint.config.mjs`, `vitest.config.ts`, `tests/*` | 6 Platform |
+### 어드민 계정·역할·인가
 
----
+- 운영 계정과 프로필의 정본은 Supabase `admin_profiles`다. `ADMIN_USERS`와 `ADMIN_PASSWORD`는 로컬 개발 또는 전환기 레거시 인증 폴백이며 운영 권한 원장으로 사용하지 않는다.
+- 정규 역할은 `SUPER_ADMIN`, `ADMIN`, `BRANCH`다. `EDITOR`, `VIEWER`, `PARTNER`는 기존 데이터와 세션을 위한 레거시 호환 값이며 새 권한 모델의 기준으로 확장하지 않는다.
+- `nav_preset`과 `nav_overrides`는 사이드바의 상시/기타/숨김 배치를 정하는 UX 설정이다. 보안 경계가 아니다. 실제 접근은 각 `app/api/admin/*` 라우트의 role/capability 검사로 강제한다.
+- 어드민 API는 `verifyAdmin()` 또는 `requireVerifiedAdminContext()`로 인증·역할을 확인하고, 필요한 동작은 capability까지 검사한다. 데이터 접근은 `createSupabaseAdminClient()`를 사용한다.
 
-## 3. 공통 철칙 (모든 파트 공통)
+### 데이터·마이그레이션
 
-이 7가지는 파트를 막론하고 위반 시 무음 사고로 이어진다.
+- 타입이나 INSERT/UPDATE 계약에 컬럼을 추가하면 `supabase/migrations/YYYYMMDD_*.sql`을 함께 만들고 적용 여부를 확인한다.
+- 공개 리드 저장 실패를 성공으로 숨기지 않는다. 저장과 외부 전달이 모두 실패한 요청은 즉시 재시도할 수 있어야 한다.
+- Notion이 원천인 마케팅 캘린더 이벤트는 Supabase에 미러링하거나 양방향 쓰기하지 않는다. 이 규칙은 Classin이 자체 생성·관리하는 `admin_calendar_events`에는 적용되지 않는다.
+- 동의 없는 마케팅 픽셀 발화와 raw PII/IP 저장을 금지한다. 추적 이벤트는 이름과 파라미터 allowlist를 함께 갱신한다.
 
-1. **검증 게이트**: 모든 변경은 `npx eslint app components lib --max-warnings=0` + `npm run build` 통과. (build에 `check:vercel-crons`/`check:public-content` 훅 포함)
-2. **어드민 API = 가드 + admin 클라이언트**: `app/api/admin/*`는 `verifyAdmin()`(또는 `requireVerifiedAdminContext()`)으로 보호하고, 데이터 접근은 항상 `createSupabaseAdminClient()`. server 클라이언트를 어드민 경로에 쓰면 RLS가 전 행 차단 → 빈 배열 무음 반환. (파트 2·4·6)
-3. **마이그레이션 규율**: 타입/INSERT에 컬럼 추가 시 반드시 `supabase/migrations/YYYYMMDD_*.sql`(`ADD COLUMN IF NOT EXISTS`) 동반 + 적용. 누락 시 INSERT가 catch에 먹혀 무음 실패. (파트 6 + 데이터 만지는 모든 파트)
-4. **동의·PII**: 마케팅 픽셀은 `consent.marketing` 없이 발화 금지. 내부 이벤트(`/api/track/event`)는 `ALLOWED_EVENTS`/파라미터 allowlist + PII redaction 통과. raw IP는 해시로만. (파트 1·4)
-5. **노션 마케팅 캘린더 = 라이브 읽기 전용**: Supabase로 복제 금지, 양방향 쓰기 금지, 토큰 클라이언트 노출 금지. (파트 3·4)
-6. **포지셔닝 SSOT**: 공개 카피는 `lib/classin-positioning.ts` + `docs/active/classin-korea-positioning-guidelines.md` 기준. 가격·국내 기관/보드 수 단정 금지 → 상담 연결. (파트 1·5)
-7. **UI 디자인 시스템**: `DESIGN.md` 팔레트만(그린 `#084734`는 액센트로만), 보더 `1px solid rgba(0,0,0,0.08)`, 섹션 배경 `#FFFFFF`↔`#F6F5F4`↔`#ECFDF5`, 모바일 우선. 시안 먼저 보여주고 합의. (파트 1, UI 손대는 모든 파트)
+### UI·검증
 
----
+- UI 색상·상태색·어드민 예외를 포함한 디자인 정본은 `DESIGN.md` 하나다. 플레이북에 팔레트 일부를 별도 요약해 복제하지 않는다.
+- 기본 품질 게이트는 다음 순서다.
 
-## 4. 크로스컷 의존성
+```bash
+npm run typecheck
+npx eslint app components lib --max-warnings=0
+npm run build
+```
 
-파트 경계를 넘나드는 연결. 한쪽을 바꾸면 반대쪽을 확인한다.
+- 스키마, 챗봇 DB 계약, 리드 저장소, cron처럼 전용 검증이 있는 변경은 해당 파트 가이드의 추가 명령도 실행한다.
 
-- **콘텐츠(3) ↔ 챗봇(5)**: 챗봇 KB는 `lib/docs.ts` + `docs_articles`/`docs_ai_chunks`(콘텐츠 파트가 채운다)를 검색한다. 채널톡 동기화/CS-Figma sanitize 경로를 바꾸면 챗봇 출처·중복제거(`selectDiverseSources`)에 영향.
-- **그로스(4) ↔ 플랫폼(6)**: 리드 캡처·CRM·결제·cron이 모두 Supabase 스키마·마이그레이션·인가 위에 올라간다. 새 이벤트/컬럼은 마이그레이션 + allowlist 양쪽.
-- **프론트(1) ↔ 그로스(4)**: CTA·폼·랜딩의 계측(`trackEvent`)과 동의 게이팅은 그로스가 정의한 이벤트/consent 규약을 따른다.
-- **프론트(1) ↔ 챗봇(5)**: `AppChrome`가 챗봇 위젯·teaser 라이프사이클을 마운트. `/pricing` teaser 미노출 등 페이지별 정책은 양쪽 합의.
-- **어드민(2)은 3·4·5의 어드민 화면을 호스팅**: 인증·repository·응답 규약(파트 2)을 공유하되, 각 도메인 로직은 해당 파트 소유.
+## 4. 크로스컷 확인
 
----
+- 콘텐츠 ↔ 챗봇: 문서 본문·청크·동기화 변경은 검색 결과, 출처 중복 제거, 공개 답변 안전성에 영향을 준다.
+- 그로스 ↔ 플랫폼: 리드·CRM·결제·cron은 Supabase 스키마와 인가 위에 올라간다.
+- 프론트 ↔ 그로스: 폼·CTA·랜딩 계측은 consent와 이벤트 allowlist를 따른다.
+- Admin Core ↔ 모든 어드민 도메인: 셸·인증·내비 변경은 각 도메인 화면과 API 권한을 함께 확인한다.
 
-## 5. 지금 공통으로 주시할 것 (cross-part watch, 2026-06-23)
+## 5. 유지보수
 
-- **미적용 성능 마이그레이션**: `supabase/migrations/20260618_admin_dashboard_query_performance.sql`, `20260618_crm_status_counts_rpc.sql` — DB 적용 전엔 어드민/CRM/챗봇 집계가 느린 폴백. (파트 2·4·5·6)
-- **결제 개편 P0**: 마이그레이션 3종 순서 적용 + Vercel 환경변수(KRW/USD) + 견적코드 강화. (파트 6)
-- **`client_events` 마이그레이션**: 내부 이벤트 로깅 테이블 적용 안 되면 INSERT 무음 실패. (파트 4)
-- **CS-Figma 롤아웃 ~114개 대기**, **채널톡 동기화 cron 미구현(수동)**. (파트 3)
-- **챗봇 상단 퍼널 C/D 로드맵** 다음 사이클. (파트 5)
-
----
-
-## 6. 이 플레이북 유지보수
-
-- 파트 구조·철칙이 바뀌면 이 README와 해당 파트 가이드, 그리고 `.claude/agents/`의 대응 에이전트 정의를 **함께** 갱신한다.
-- 각 가이드의 "현재 목표 & 백로그"는 스냅샷이다. 큰 사이클이 끝나면 날짜와 함께 갱신한다.
-- 새 파트가 생기면: 가이드 1개 + 에이전트 1개 + 이 README의 §1·§2 행 추가.
+- 현재 목표, 담당자 대기 사항, 완료율, 미적용 건수 같은 시점성 정보는 이 플레이북에 두지 않는다. 필요하면 날짜가 있는 실행 문서나 이슈에서 관리한다.
+- 규칙이 바뀌면 정본 한 곳을 먼저 수정하고 플레이북은 링크와 소유권만 갱신한다.
+- 새 도메인 화면/API/repository를 추가할 때는 같은 도메인 파트에 함께 배정한다.

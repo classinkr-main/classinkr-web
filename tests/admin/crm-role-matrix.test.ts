@@ -15,6 +15,7 @@ const CRM_DOMAIN_ROUTES = [
   "app/api/admin/leads/[id]/route.ts",
   "app/api/admin/leads/[id]/activity/route.ts",
   "app/api/admin/leads/[id]/convert-v2/route.ts",
+  "app/api/admin/leads/bulk-convert/route.ts",
   "app/api/admin/leads/[id]/logs/route.ts",
   "app/api/admin/leads/activity-summary/route.ts",
   "app/api/admin/crm/customers/unified/route.ts",

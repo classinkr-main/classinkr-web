@@ -30,8 +30,24 @@ export const CRM_SYNC_TONE: Record<
   healthy: { border: "border-[#BDEFD8]", bg: "bg-[#ECFDF5]", text: "text-[#084734]", dot: "bg-[#084734]" },
 }
 
-interface CoverageResponse {
+export interface CrmCoverageResponse {
   revAccounts?: RevSyncCoverageView | null
+}
+
+/** 부모가 이미 커버리지를 들고 있으면 주입 — 스트립 자체 fetch를 생략한다(같은 화면 이중 GET 제거).
+ *  생략(undefined)이면 독립 모드(기존 자체 fetch 동작 그대로). */
+interface CrmSyncStripProps {
+  coverage?: { data: CrmCoverageResponse | null; loading: boolean; error: string | null }
+}
+
+// 응답 → 스트립 상태 접기 — 자체 fetch 성공 경로와 부모 주입 경로가 같은 판정을 공유한다.
+function stripStateFromResponse(response: CrmCoverageResponse | null): StripState {
+  const rev = response?.revAccounts ?? null
+  const summary = buildCrmSyncSummary(rev)
+  if (rev && summary) return { status: "ready", rev, summary }
+  // 확장 필드가 아직 없거나(배포 스큐) 시트가 비어 있으면 조용히 사라진다.
+  if (rev && rev.scannedRows <= 0) return { status: "empty" }
+  return { status: "unavailable" }
 }
 
 const TOP_UNLINKED_DISPLAY = 5
@@ -87,35 +103,42 @@ type StripState =
   | { status: "empty" }
   | { status: "ready"; rev: RevSyncCoverageView; summary: CrmSyncSummary }
 
-export default function CrmSyncStrip() {
-  const [state, setState] = useState<StripState>({ status: "loading" })
+export default function CrmSyncStrip({ coverage }: CrmSyncStripProps = {}) {
+  const [fetched, setFetched] = useState<StripState>({ status: "loading" })
   const [expanded, setExpanded] = useState(false)
+  const injected = coverage !== undefined
 
   useEffect(() => {
+    // 부모 주입 모드 — 자체 fetch 생략(장부 워크벤치가 이미 같은 커버리지를 들고 있어 이중 GET 제거).
+    if (injected) return
     let alive = true
-    adminFetchJson<CoverageResponse>("/api/admin/crm/coverage")
+    adminFetchJson<CrmCoverageResponse>("/api/admin/crm/coverage")
       .then((response) => {
-        if (!alive) return
-        const rev = response?.revAccounts ?? null
-        const summary = buildCrmSyncSummary(rev)
-        if (rev && summary) setState({ status: "ready", rev, summary })
-        // 확장 필드가 아직 없거나(배포 스큐) 시트가 비어 있으면 조용히 사라진다.
-        else if (rev && rev.scannedRows <= 0) setState({ status: "empty" })
-        else setState({ status: "unavailable" })
+        if (alive) setFetched(stripStateFromResponse(response))
       })
       .catch(() => {
-        if (alive) setState({ status: "unavailable" })
+        if (alive) setFetched({ status: "unavailable" })
       })
     return () => {
       alive = false
     }
-  }, [])
+  }, [injected])
+
+  // 주입 모드는 부모 상태에서 매 렌더 파생(자체 상태 없음): 로딩(데이터 전) = loading(미렌더),
+  // 실패 = unavailable 한 줄, 데이터 도착 = 자체 fetch와 동일 판정(stripStateFromResponse).
+  const state: StripState = injected
+    ? coverage.loading && !coverage.data
+      ? { status: "loading" }
+      : coverage.data
+        ? stripStateFromResponse(coverage.data)
+        : { status: "unavailable" }
+    : fetched
 
   // fail-soft — 로딩 중엔 미렌더(레이아웃은 아래 콘텐츠가 그대로 올라와 있다가 준비되면 삽입).
   if (state.status === "loading" || state.status === "empty") return null
   if (state.status === "unavailable") {
     return (
-      <div className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-3.5 py-2 text-[12px] text-[#615D59]">
+      <div className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-2 py-0.5 text-[10.5px] text-[#615D59]">
         CRM 싱크 상태 확인 불가 — 매칭 현황은{" "}
         <Link href="/admin/crm/matching" className="font-semibold text-[#111110] underline underline-offset-2">
           매칭 인박스
@@ -140,16 +163,15 @@ export default function CrmSyncStrip() {
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className={`flex w-full flex-wrap items-center gap-2 px-3.5 py-2 text-left text-[12px] font-semibold ${tone.text}`}
+        className={`flex w-full items-center gap-1 px-2 py-0.5 text-left text-[10.5px] font-semibold ${tone.text}`}
       >
-        <span className={`h-2 w-2 shrink-0 rounded-full ${tone.dot}`} aria-hidden="true" />
-        <span className="tabular-nums">
-          CRM 싱크 — 계정 {summary.accountConnected}/{summary.accountTotal} 연결 · 매출{" "}
-          {summary.revenuePctLabel} ({cny(summary.revenueLinked)} / {cny(summary.revenueTotal)}) · 검토 대기{" "}
-          {summary.rows.review}행
+        <span className={`h-[5px] w-[5px] shrink-0 rounded-full ${tone.dot}`} aria-hidden="true" />
+        <span className="min-w-0 truncate tabular-nums">
+          CRM 싱크 · 계정 {summary.accountConnected}/{summary.accountTotal} · 매출{" "}
+          {summary.revenuePctLabel} · 검토 {summary.rows.review}행
         </span>
         <ChevronDown
-          className={`ml-auto h-3.5 w-3.5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
+          className={`ml-auto h-2.5 w-2.5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}
           aria-hidden="true"
         />
       </button>

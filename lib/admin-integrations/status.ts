@@ -17,6 +17,7 @@ type WebhookSettingKey =
   | "emailWebhookUrl"
   | "wecomOpsWebhookUrl"
   | "wecomCsWebhookUrl"
+  | "wecomLeadReportWebhookUrl"
   | "wecomCriticalWebhookUrl"
   | "kakaoAlimtalkWebhookUrl"
 
@@ -27,6 +28,7 @@ const WEBHOOK_SETTING_ENV_KEYS = {
   emailWebhookUrl: "EMAIL_WEBHOOK_URL",
   wecomOpsWebhookUrl: "WECOM_OPS_WEBHOOK_URL",
   wecomCsWebhookUrl: "WECOM_CS_WEBHOOK_URL",
+  wecomLeadReportWebhookUrl: "WECOM_LEAD_REPORT_WEBHOOK_URL",
   wecomCriticalWebhookUrl: "WECOM_CRITICAL_WEBHOOK_URL",
   kakaoAlimtalkWebhookUrl: "KAKAO_ALIMTALK_WEBHOOK_URL",
 } as const satisfies Record<WebhookSettingKey, string>
@@ -187,6 +189,7 @@ function buildNotificationStatus(settings: SiteSettings): AdminIntegrationStatus
   const webhookKeys: WebhookSettingKey[] = [
     "wecomOpsWebhookUrl",
     "wecomCsWebhookUrl",
+    "wecomLeadReportWebhookUrl",
     "wecomCriticalWebhookUrl",
     "kakaoAlimtalkWebhookUrl",
   ]
@@ -209,6 +212,7 @@ function buildNotificationStatus(settings: SiteSettings): AdminIntegrationStatus
     requiredKeys: [
       "WECOM_OPS_WEBHOOK_URL or site_settings.wecom_ops_webhook_url",
       "WECOM_CS_WEBHOOK_URL or site_settings.wecom_cs_webhook_url",
+      "WECOM_LEAD_REPORT_WEBHOOK_URL or site_settings.wecom_lead_report_webhook_url",
       "WECOM_CRITICAL_WEBHOOK_URL or site_settings.wecom_critical_webhook_url",
       "KAKAO_ALIMTALK_WEBHOOK_URL or site_settings.kakao_alimtalk_webhook_url",
       "NOTIFICATION_DIGEST_EMAIL_LIST or site_settings.notification_digest_email_list",

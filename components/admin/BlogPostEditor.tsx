@@ -1,6 +1,7 @@
 ﻿"use client"
 
 import Image from "next/image"
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import {
   startTransition,
@@ -44,7 +45,7 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { SafeBlogImage } from "@/components/blog/SafeBlogImage"
-import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
+import { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import {
   BLOG_STATUS_OPTIONS,
   CATEGORIES,
@@ -454,6 +455,11 @@ function FieldHint({ children }: { children: ReactNode }) {
   return <p className="text-[11px] leading-relaxed text-[#1a1a1a]/40">{children}</p>
 }
 
+const RichMarkdownEditor = dynamic(() => import("@/components/admin/RichMarkdownEditor"), {
+  loading: () => <div className="h-[600px] animate-pulse rounded-xl bg-[#f0f0ec]" />,
+  ssr: false,
+})
+
 export default function BlogPostEditor({
   mode,
   initialPost,
@@ -489,6 +495,10 @@ export default function BlogPostEditor({
   const undoStackRef = useRef<EditorSnapshot[]>([])
   const redoStackRef = useRef<EditorSnapshot[]>([])
   const skipNextAutosaveRef = useRef(false)
+  // Cmd+S 전역 keydown은 1회만 등록되므로, 항상 최신 렌더의 handleSubmit을 부르도록 ref로 노출한다.
+  const handleSubmitRef = useRef<
+    ((nextStatus?: BlogPostStatus, options?: { publishNow?: boolean }) => Promise<void>) | null
+  >(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLElement>(null)
 
@@ -531,8 +541,14 @@ export default function BlogPostEditor({
   }, [])
 
   const draftStorageKey = `admin-blog-editor-${initialPost?.id ?? "new"}`
-  const filteredPosts = allPosts.filter((post) => post.id !== initialPost?.id)
-  const computedReadTime = estimateReadTime(form.contentMarkdown)
+  const filteredPosts = useMemo(
+    () => allPosts.filter((post) => post.id !== initialPost?.id),
+    [allPosts, initialPost?.id]
+  )
+  const computedReadTime = useMemo(
+    () => estimateReadTime(form.contentMarkdown),
+    [form.contentMarkdown]
+  )
   const coverPreviewUrl = form.heroImageUrl || form.imageUrl
   const authorAvatarSrc = sanitizePublicImageUrl(form.authorAvatarUrl, "")
   const authorInitial = form.author.trim().slice(0, 1) || "C"
@@ -621,7 +637,17 @@ export default function BlogPostEditor({
     const scoreBorder = score >= 80 ? "#bbf7d0" : score >= 50 ? "#fde68a" : "#fecaca"
 
     return { score, checks, scoreLabel, scoreColor, scoreBg, scoreBorder, effectiveTitle, effectiveDesc }
-  }, [form, headings, tagKeywords.length])
+  }, [
+    form.seoTitle,
+    form.title,
+    form.seoDescription,
+    form.excerpt,
+    form.imageUrl,
+    form.heroImageUrl,
+    form.slug,
+    headings,
+    tagKeywords.length,
+  ])
 
   useEffect(() => {
     formRef.current = form
@@ -696,7 +722,9 @@ export default function BlogPostEditor({
       if (!(event.metaKey || event.ctrlKey)) return
       if (event.key.toLowerCase() === "s") {
         event.preventDefault()
-        handleSubmit()
+        // 직접 호출하면 이 effect가 등록 시점(첫 렌더)의 handleSubmit 클로저를 캡처해
+        // 스테일 상태를 저장하게 된다 — ref를 통해 최신 클로저를 부른다.
+        void handleSubmitRef.current?.()
         return
       }
       if (event.key.toLowerCase() !== "z") return
@@ -708,7 +736,7 @@ export default function BlogPostEditor({
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [handleRedo, handleUndo]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [handleRedo, handleUndo])
 
   useEffect(() => {
     const rawDraft = localStorage.getItem(draftStorageKey)
@@ -808,6 +836,11 @@ export default function BlogPostEditor({
     nextStatus?: BlogPostStatus,
     options: { publishNow?: boolean } = {}
   ): BlogPostInput => {
+    // 클로저 state 대신 ref를 읽는다. applySnapshot이 ref를 동기 갱신하므로
+    // 저장 직전 editorRef.flush()로 전파한 디바운스 대기 본문이 같은 틱에서 바로 보인다.
+    const form = formRef.current
+    const tagsInput = tagsInputRef.current
+    const authorAvatarSrc = sanitizePublicImageUrl(form.authorAvatarUrl, "")
     const parsedTags = parseTags(tagsInput)
     const finalTitle = form.title.trim()
     const finalExcerpt = form.excerpt.trim()
@@ -818,7 +851,7 @@ export default function BlogPostEditor({
       excerpt: finalExcerpt,
       tags: parsedTags,
       tag: parsedTags[0] || "",
-      readTime: computedReadTime,
+      readTime: estimateReadTime(form.contentMarkdown),
       imageUrl: form.imageUrl.trim() || form.heroImageUrl.trim(),
       heroImageUrl: form.heroImageUrl.trim() || form.imageUrl.trim(),
       thumbnailAlt: form.thumbnailAlt.trim() || `${finalTitle} 썸네일`,
@@ -879,12 +912,16 @@ export default function BlogPostEditor({
     nextStatus?: BlogPostStatus,
     options: { publishNow?: boolean } = {}
   ) => {
+    if (isSubmitting) return
+    // 트레일링 디바운스로 대기 중인 마지막 <200ms 타이핑을 저장 전에 동기 전파한다.
+    // (onChange → updateEditor → applySnapshot이 formRef를 동기 갱신 → buildPayload가 ref를 읽음)
+    editorRef.current?.flush()
     const payload = buildPayload(nextStatus, options)
     if (!payload.title || !payload.excerpt || !payload.category) {
       setNotice("제목, 요약, 카테고리는 꼭 입력해주세요.")
       return
     }
-    if ((form.authorAvatarUrl ?? "").trim() && !authorAvatarSrc) {
+    if ((formRef.current.authorAvatarUrl ?? "").trim() && !payload.authorAvatarUrl) {
       setNotice("작성자 아바타는 사이트 내부 경로, Supabase Storage, Unsplash 이미지만 사용할 수 있습니다.")
       return
     }
@@ -926,6 +963,10 @@ export default function BlogPostEditor({
       setIsSubmitting(false)
     }
   }
+
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit
+  })
 
   const handleAiAction = async (action: AiAction, params?: { topic: string; tone: string; length: string; reference?: string }, contentOverride?: string) => {
     setAiState({ action, status: "loading", result: "", ...(params ?? {}) })
@@ -1854,35 +1895,6 @@ export default function BlogPostEditor({
             </div>
           </div>
 
-          {/* Benefits */}
-          <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-[#111110]">
-                  이 글을 읽으면 좋은 점
-                  <FieldBadge />
-                </p>
-                <p className="mt-0.5 text-[12px] text-[#1a1a1a]/40">상세 페이지 상단에 노출되는 포인트</p>
-              </div>
-              <span className="rounded-full bg-[#f5f6f1] px-3 py-1 text-[12px] text-[#084734]">최대 3개</span>
-            </div>
-            <div className="space-y-2.5">
-              {form.benefitItems.map((benefit, index) => (
-                <Input
-                  key={index}
-                  value={benefit}
-                  onChange={(event) => updateBenefit(index, event.target.value)}
-                  placeholder={`좋은 점 ${index + 1}`}
-                />
-              ))}
-              <Input
-                value={form.targetReader || ""}
-                onChange={(event) => updateForm("targetReader", event.target.value)}
-                placeholder="추천 독자: 예) 상담 전환율을 높이고 싶은 학원 원장"
-              />
-            </div>
-          </div>
-
           {/* Editor */}
           <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -2057,21 +2069,10 @@ export default function BlogPostEditor({
                         <Wand2 className="h-3 w-3 text-[#084734]" />
                         <p className="text-[12px] font-semibold text-[#111110]">AI</p>
                       </div>
+                      {/* 순서: 초안 생성 → 본문 다듬기.
+                          빈 글에서 시작하는 동작이 먼저 오는 게 실제 작업 순서다
+                          (2026-07-29 회의: "본문 다듬기 초안 생성 먼저 아니에요"). */}
                       <div className="space-y-1.5">
-                        <button
-                          type="button"
-                          disabled={aiState?.status === "loading" || aiState?.status === "streaming"}
-                          onClick={() => handleAiAction("optimize")}
-                          className="flex w-full items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[11px] font-medium text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40 transition-colors"
-                        >
-                          {aiState?.action === "optimize" && (aiState.status === "loading" || aiState.status === "streaming") ? (
-                            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-[#084734]" />
-                          ) : (
-                            <Sparkles className="h-3 w-3 shrink-0 text-[#084734]" />
-                          )}
-                          본문 다듬기
-                        </button>
-
                         {!showInlineDraft ? (
                           <button
                             type="button"
@@ -2083,6 +2084,9 @@ export default function BlogPostEditor({
                           </button>
                         ) : (
                           <div className="space-y-1.5 rounded-lg border border-[#e8e8e4] bg-white p-2.5">
+                            {/* 입력 배경은 흰색이어야 한다. 회색(#f8f8f6)이던 시절 회의에서
+                                "저도 이거 못 바꾸는 줄 알았어"라는 반응이 나왔다 — 회색 입력은
+                                비활성으로 읽힌다. */}
                             <input
                               autoFocus
                               type="text"
@@ -2097,7 +2101,7 @@ export default function BlogPostEditor({
                                 if (e.key === "Escape") { setShowInlineDraft(false); setInlineDraftTopic("") }
                               }}
                               placeholder="주제를 입력하세요"
-                              className="w-full rounded-md border border-[#e8e8e4] bg-[#f8f8f6] px-2 py-1.5 text-[11px] outline-none focus:border-[#084734]"
+                              className="w-full rounded-md border border-[#e8e8e4] bg-white px-2 py-1.5 text-[11px] outline-none focus:border-[#084734]"
                             />
                             <div className="flex gap-1">
                               <button
@@ -2122,6 +2126,27 @@ export default function BlogPostEditor({
                             </div>
                           </div>
                         )}
+
+                        <button
+                          type="button"
+                          disabled={aiState?.status === "loading" || aiState?.status === "streaming"}
+                          onClick={() => handleAiAction("optimize")}
+                          className="flex w-full items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-[11px] font-medium text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40 transition-colors"
+                        >
+                          {aiState?.action === "optimize" && (aiState.status === "loading" || aiState.status === "streaming") ? (
+                            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-[#084734]" />
+                          ) : (
+                            <Sparkles className="h-3 w-3 shrink-0 text-[#084734]" />
+                          )}
+                          본문 다듬기
+                        </button>
+                        {/* 이 버튼은 옵션 선택 없이 전체 본문을 보내고 결과를 바로 적용한다
+                            (handleAiAction의 shouldAutoApplyOptimize). 회의에서 "아무것도 안 눌렀는데
+                            그냥 다듬기 들어가네"라는 반응이 나온 지점이라 무엇이 일어나는지 미리 알린다.
+                            구간만 다듬으려면 에디터에서 텍스트를 선택한 뒤 "선택 구간 다듬기"를 쓴다. */}
+                        <p className="px-0.5 text-[10px] leading-tight text-[#1a1a1a]/35">
+                          전체 본문에 바로 적용됩니다
+                        </p>
                       </div>
                     </div>
 
@@ -2147,6 +2172,35 @@ export default function BlogPostEditor({
                 </div>
               </TabsContent>
             </Tabs>
+          </div>
+
+          {/* Benefits */}
+          <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[#111110]">
+                  이 글을 읽으면 좋은 점
+                  <FieldBadge />
+                </p>
+                <p className="mt-0.5 text-[12px] text-[#1a1a1a]/40">상세 페이지 상단에 노출되는 포인트</p>
+              </div>
+              <span className="rounded-full bg-[#f5f6f1] px-3 py-1 text-[12px] text-[#084734]">최대 3개</span>
+            </div>
+            <div className="space-y-2.5">
+              {form.benefitItems.map((benefit, index) => (
+                <Input
+                  key={index}
+                  value={benefit}
+                  onChange={(event) => updateBenefit(index, event.target.value)}
+                  placeholder={`좋은 점 ${index + 1}`}
+                />
+              ))}
+              <Input
+                value={form.targetReader || ""}
+                onChange={(event) => updateForm("targetReader", event.target.value)}
+                placeholder="추천 독자: 예) 상담 전환율을 높이고 싶은 학원 원장"
+              />
+            </div>
           </div>
         </section>
 

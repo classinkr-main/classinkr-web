@@ -478,6 +478,8 @@ export interface PartnerDocumentListItem {
   deal_title: string;
   document_number: string;
   title?: string;
+  /** 견적 템플릿 id(quote 전용, 목록 select의 JSON 경로 별칭) — SW/HW 유형 확정 판정용. */
+  template_id?: string | null;
   status: string;
   version_count: number;
   total_amount: number | null;

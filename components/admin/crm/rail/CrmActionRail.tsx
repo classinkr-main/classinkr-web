@@ -1,8 +1,8 @@
 "use client"
 
 // CRM 우측 액션 레일 — "생성 및 기록들 보기, 오른쪽 따로 스크롤".
-// 구성(위→아래): ① 기록 빠른 생성(ActivityQuickForm 컴팩트 — hideForm 시 생략) ② 오늘 할 일 요약(crm_tasks 상위 N)
-// ③ 최근 기록 타임라인(targetId 딥링크). 데이터는 전부 자체 fetch(adminFetchJsonCached) —
+// 구성(위→아래): ① 기록 빠른 생성(ActivityQuickForm 컴팩트 — hideForm 시 생략) ② 오늘 할 일 요약(crm_tasks 상위 N, hideTasks 시 생략)
+// ③ 최근 기록 타임라인(targetId 딥링크, hideRecent 시 생략). 데이터는 전부 자체 fetch(adminFetchJsonCached) —
 // 부모와의 결합은 props(고객 프리셀렉트)와 onActivitySaved 콜백뿐이다.
 //
 // 스크롤: xl+에서 sticky + max-h(100dvh-오프셋) + overflow-y-auto로 본문과 독립 스크롤.
@@ -52,6 +52,14 @@ export interface CrmActionRailProps {
   onActivitySaved?: () => void
   /** true면 ① 기록 빠른 생성 카드 생략(기록 탭처럼 본문 컴포저가 따로 있는 표면용) */
   hideForm?: boolean
+  /**
+   * true면 ② 오늘 할 일 카드 생략(fetch도 건너뛴다).
+   * 같은 화면에 CrmWeekAheadPanel(지연·오늘·이번 주·미룬 + 완료/미루기)이 있으면 이 카드는
+   * 그 '오늘' 버킷의 부분집합이라 두 목록이 겹친다 — 그런 표면에서 켠다.
+   */
+  hideTasks?: boolean
+  /** true면 ③ 최근 기록 카드와 요청을 생략한다(본문에 동일 타임라인이 있는 기록 탭용). */
+  hideRecent?: boolean
   className?: string
 }
 
@@ -129,6 +137,8 @@ export default function CrmActionRail({
   customerName,
   onActivitySaved,
   hideForm = false,
+  hideTasks = false,
+  hideRecent = false,
   className = "",
 }: CrmActionRailProps) {
   const scopedTargetId = defaultTargetId?.trim() || ""
@@ -193,12 +203,14 @@ export default function CrmActionRail({
   )
 
   useEffect(() => {
+    if (hideTasks) return
     void loadTasks()
-  }, [loadTasks])
+  }, [loadTasks, hideTasks])
 
   useEffect(() => {
+    if (hideRecent) return
     void loadRecent()
-  }, [loadRecent])
+  }, [hideRecent, loadRecent])
 
   // 상태 전이는 명시 액션 API만 사용한다(complete/snooze) — 임의 상태 PATCH 금지.
   const runTaskAction = useCallback(
@@ -225,10 +237,11 @@ export default function CrmActionRail({
 
   const handleSaved = useCallback(() => {
     // 저장된 기록이 할 일(tasksCreated)도 만들 수 있으므로 두 섹션 모두 강제 갱신.
+    // (할 일 카드를 숨긴 표면에서는 렌더도 fetch도 없으므로 갱신할 것이 없다.)
     void loadRecent({ force: true })
-    void loadTasks({ force: true })
+    if (!hideTasks) void loadTasks({ force: true })
     onActivitySaved?.()
-  }, [loadRecent, loadTasks, onActivitySaved])
+  }, [loadRecent, loadTasks, hideTasks, onActivitySaved])
 
   const now = new Date()
   const railTasks = tasks ? rankRailTasks(tasks.rows, now, RAIL_TASK_LIMIT) : []
@@ -254,6 +267,7 @@ export default function CrmActionRail({
         </RailSection>
       ) : null}
 
+      {!hideTasks ? (
       <RailSection
         icon={<ListChecks className="h-4 w-4" />}
         title="오늘 할 일"
@@ -344,7 +358,9 @@ export default function CrmActionRail({
           </Link>
         </div>
       </RailSection>
+      ) : null}
 
+      {!hideRecent ? (
       <RailSection
         icon={<History className="h-4 w-4" />}
         title="최근 기록"
@@ -416,6 +432,7 @@ export default function CrmActionRail({
           </Link>
         </div>
       </RailSection>
+      ) : null}
     </aside>
   )
 }

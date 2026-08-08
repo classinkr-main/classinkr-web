@@ -3,13 +3,46 @@
 import { useCallback, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Loader2, Sparkles, RefreshCw, ClipboardCopy, Check, Plus, MessageSquare } from "lucide-react"
+import {
+  BarChart3,
+  Check,
+  ClipboardCopy,
+  Inbox,
+  Loader2,
+  MessageSquare,
+  Plus,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react"
 import { adminFetchJson } from "@/lib/admin-client"
 import { buildDocDraftArticlePayload } from "@/lib/chatbot/doc-draft-article"
 import { cn } from "@/lib/utils"
+import AdminTabs from "@/components/admin/AdminTabs"
 import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
+import { useUrlState } from "@/lib/use-url-state"
 
 const GAP_LIST_PAGE_SIZE = 12
+
+// 화면 안쪽 하위탭 — 2단 계약에서 `tab`은 콘솔 메뉴 층, `sub`는 화면 안쪽 층이다
+// (docs/active/cs-admin-console-ia-2026-07-27.md §5 승계).
+//
+// 이 화면에는 결합이 0인 일이 두 개 있었다.
+//  - 처리 큐: 문서 없는 질문 → 결과 없는 검색어 → AI 초안. 두 리스트가 `draft` 상태 슬롯
+//    하나를 공유해 강하게 결합한다 — 절대 쪼개지 않는다.
+//  - 패턴 분석: `회귀 후보` 토글 결과가 자기 로컬 상태(chatbotStats)만 갱신하고 아래로
+//    전혀 흐르지 않는다.
+//
+// 기본값이 queue인 이유: 이 화면의 이름이 `미해결 큐`이고, 인바운드 딥링크
+// (?tab=gaps&source=chatbot|internal_cs)의 소스 칩이 queue 쪽에 있다. sub 없이 들어오면
+// useUrlState가 기본값을 돌려주므로 딥링크는 자동으로 queue에 착지한다.
+const GAP_SUB_TABS = [
+  { value: "queue", label: "처리 큐", icon: Inbox },
+  { value: "patterns", label: "질문 패턴", icon: BarChart3 },
+] as const
+
+type GapSubTab = (typeof GAP_SUB_TABS)[number]["value"]
+
+const DEFAULT_GAP_SUB_TAB: GapSubTab = "queue"
 
 interface GapClusterInternalCsRef {
   conversationId: string
@@ -73,35 +106,6 @@ interface PublishRecommendedResult {
   clusterUpdated?: boolean
 }
 
-interface EvalReport {
-  total: number
-  durationMs: number
-  deterministic: {
-    categoryMatch: number
-    modeOk: number
-    withSources: number
-    categoryMatchRate: number
-    modeOkRate: number
-    sourceRate: number
-  }
-  judge: {
-    enabled: boolean
-    judged: number
-    faithfulRate: number | null
-    hallucinationRate: number | null
-    addressesRate: number | null
-    avgScore: number | null
-  }
-  failures: {
-    id: string
-    question: string
-    detectedCategory: string
-    expectCategory: string
-    answerMode: string
-    flags: string[]
-  }[]
-}
-
 interface ChatbotQuestionStat {
   clusterId: string
   questionLabel: string
@@ -159,35 +163,9 @@ interface ChatbotStats {
   warning?: string
 }
 
-type AlphaReadinessStatus = "ok" | "warning" | "blocked"
-
-interface AlphaReadinessCheck {
-  key: string
-  label: string
-  status: AlphaReadinessStatus
-  detail: string
-  action?: string
-  artifacts?: string[]
-}
-
-interface AlphaReadinessReport {
-  generatedAt: string
-  overallStatus: AlphaReadinessStatus
-  summary: Record<AlphaReadinessStatus, number>
-  checks: AlphaReadinessCheck[]
-  warnings: string[]
-}
-
-const READINESS_PLACEHOLDER_LABELS = [
-  "Supabase 운영 연결",
-  "챗봇 DB 스키마",
-  "Gemini 인식 엔진",
-  "공개 문서 원본",
-  "RAG 문서 청크",
-  "임베딩 백필",
-  "시작 추천 질문",
-  "문서 보강 큐",
-]
+// 알파 준비도·품질 평가는 AI 품질 검수 화면(components/admin/docs/DocsQualityPanel.tsx,
+// /admin/docs?tab=quality)으로 이관됐다 — 이 화면은 미해결 큐만 다룬다
+// (docs/active/cs-admin-console-ia-2026-07-27.md §7 중복 단일화).
 
 function pct(value: number | null | undefined) {
   if (value == null) return "—"
@@ -282,6 +260,13 @@ export default function DocsGapsPanel() {
     readSourceFilterFromParams(searchParams)
   )
 
+  // 하위탭 — 기본값(queue)이면 useUrlState가 파라미터를 URL에서 지운다.
+  // 알 수 없는 값(?sub=bogus)은 기본값으로 흡수해 화면이 비지 않게 한다.
+  const [subParam, setSubParam] = useUrlState("sub", DEFAULT_GAP_SUB_TAB)
+  const activeSub: GapSubTab = GAP_SUB_TABS.some((item) => item.value === subParam)
+    ? (subParam as GapSubTab)
+    : DEFAULT_GAP_SUB_TAB
+
   // 쿼리 전용 이동(예: ?source=chatbot 상태에서 사이드바 "문서 보강 큐" 재클릭, 브라우저
   // 뒤로가기)은 컴포넌트를 유지한 채 searchParams만 바꾼다 — lazy init만으로는 URL과 칩이
   // 어긋나므로 source 변경을 구독해 재적용한다. source 부재 시(null) 현재 칩 상태를 유지한다.
@@ -298,10 +283,6 @@ export default function DocsGapsPanel() {
   const [clusterUpdateWarning, setClusterUpdateWarning] = useState<ClusterUpdateWarning | null>(null)
   const [retryingClusterUpdate, setRetryingClusterUpdate] = useState(false)
 
-  const [evalRunningMode, setEvalRunningMode] = useState<"fast" | "judge" | null>(null)
-  const [evalReport, setEvalReport] = useState<EvalReport | null>(null)
-  const [readiness, setReadiness] = useState<AlphaReadinessReport | null>(null)
-  const [readinessLoading, setReadinessLoading] = useState(true)
   const [chatbotStats, setChatbotStats] = useState<ChatbotStats | null>(null)
   const [chatbotStatsLoading, setChatbotStatsLoading] = useState(true)
   const [promotingClusterId, setPromotingClusterId] = useState<string | null>(null)
@@ -319,18 +300,6 @@ export default function DocsGapsPanel() {
     }
   }, [])
 
-  const loadReadiness = useCallback(async () => {
-    setReadinessLoading(true)
-    try {
-      const data = await adminFetchJson<AlphaReadinessReport>("/api/admin/docs/alpha-readiness")
-      setReadiness(data)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "알파 준비도를 불러오지 못했습니다.")
-    } finally {
-      setReadinessLoading(false)
-    }
-  }, [])
-
   const loadChatbotStats = useCallback(async () => {
     setChatbotStatsLoading(true)
     try {
@@ -345,9 +314,8 @@ export default function DocsGapsPanel() {
 
   const refreshAll = useCallback(() => {
     void loadBacklog()
-    void loadReadiness()
     void loadChatbotStats()
-  }, [loadBacklog, loadChatbotStats, loadReadiness])
+  }, [loadBacklog, loadChatbotStats])
 
   useEffect(() => {
     refreshAll()
@@ -426,21 +394,6 @@ export default function DocsGapsPanel() {
       setError(e instanceof Error ? e.message : "무시 처리하지 못했습니다.")
     } finally {
       setClusterActionId(null)
-    }
-  }
-
-  const runEval = async (judge: boolean) => {
-    setEvalRunningMode(judge ? "judge" : "fast")
-    try {
-      const data = await adminFetchJson<EvalReport>("/api/admin/chatbot/eval", {
-        method: "POST",
-        body: JSON.stringify({ judge }),
-      })
-      setEvalReport(data)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "품질 평가 실행에 실패했습니다.")
-    } finally {
-      setEvalRunningMode(null)
     }
   }
 
@@ -597,103 +550,36 @@ export default function DocsGapsPanel() {
         </p>
       )}
 
-      <AlphaReadinessPanel report={readiness} loading={readinessLoading} onRefresh={loadReadiness} />
-
-      <QuestionPatternPanel
-        stats={chatbotStats}
-        loading={chatbotStatsLoading}
-        promotingClusterId={promotingClusterId}
-        onRefresh={loadChatbotStats}
-        onSetRegressionCandidate={setRegressionCandidate}
+      <AdminTabs
+        className="mt-5"
+        label="미해결 큐 섹션"
+        variant="subtle"
+        items={GAP_SUB_TABS.map((item) => {
+          const Icon = item.icon
+          return {
+            value: item.value,
+            label: item.label,
+            icon: <Icon className="h-4 w-4" />,
+          }
+        })}
+        value={activeSub}
+        onValueChange={setSubParam}
       />
 
-      {/* 품질 평가 */}
-      <section className="mt-6 rounded-[20px] border border-black/[0.08] bg-white p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold">챗봇 품질 평가</h2>
-            <p className="mt-1 text-sm text-[#615D59]">
-              골든셋을 실제 파이프라인에 돌려 회귀 여부와 출처 품질을 확인합니다.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => runEval(false)}
-              disabled={evalRunningMode != null}
-              className="inline-flex items-center gap-2 rounded-full border border-[#084734]/15 bg-white px-4 py-2 text-sm font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5] disabled:opacity-60"
-            >
-              {evalRunningMode === "fast" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              빠른 회귀 평가
-            </button>
-            <button
-              type="button"
-              onClick={() => runEval(true)}
-              disabled={evalRunningMode != null}
-              className="inline-flex items-center gap-2 rounded-full bg-[#084734] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] disabled:opacity-60"
-            >
-              {evalRunningMode === "judge" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              심판 포함 평가
-            </button>
-          </div>
-        </div>
+      {activeSub === "patterns" ? (
+        <QuestionPatternPanel
+          stats={chatbotStats}
+          loading={chatbotStatsLoading}
+          promotingClusterId={promotingClusterId}
+          onRefresh={loadChatbotStats}
+          onSetRegressionCandidate={setRegressionCandidate}
+        />
+      ) : null}
 
-        {evalReport && (
-          <>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <Metric
-                label="카테고리 적중"
-                value={`${pct(evalReport.deterministic.categoryMatchRate)} · ${evalReport.deterministic.categoryMatch}/${evalReport.total}`}
-              />
-              <Metric
-                label="모드 적합"
-                value={`${pct(evalReport.deterministic.modeOkRate)} · ${evalReport.deterministic.modeOk}/${evalReport.total}`}
-              />
-              <Metric
-                label="출처 확보"
-                value={`${pct(evalReport.deterministic.sourceRate)} · ${evalReport.deterministic.withSources}/${evalReport.total}`}
-              />
-              <Metric
-                label={evalReport.judge.enabled ? "근거 충실 (심판)" : "심판 비활성"}
-                value={evalReport.judge.enabled ? pct(evalReport.judge.faithfulRate) : "—"}
-              />
-              {evalReport.judge.enabled && (
-                <>
-                  <Metric label="환각" value={pct(evalReport.judge.hallucinationRate)} />
-                  <Metric label="질문 충족" value={pct(evalReport.judge.addressesRate)} />
-                  <Metric
-                    label="평균 점수"
-                    value={evalReport.judge.avgScore != null ? `${evalReport.judge.avgScore.toFixed(2)}/5` : "—"}
-                  />
-                </>
-              )}
-              <Metric label="케이스" value={`${evalReport.total}개`} />
-              <Metric label="평가 시간" value={ms(evalReport.durationMs)} />
-            </div>
-
-            {evalReport.failures.length > 0 ? (
-              <div className="mt-4 rounded-[14px] border border-[#B85C33]/20 bg-[#FBEAE2] p-3">
-                <p className="text-sm font-semibold text-[#B85C33]">
-                  회귀 확인 필요 {evalReport.failures.length}건
-                </p>
-                <ul className="mt-2 space-y-2">
-                  {evalReport.failures.slice(0, 5).map((failure) => (
-                    <li key={failure.id} className="text-[12px] leading-5 text-[#615D59]">
-                      <span className="font-semibold text-[#111110]">{failure.question}</span>
-                      <span> · {failure.flags.join(", ")}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className="mt-4 rounded-[14px] border border-[#084734]/15 bg-[#ECFDF5] px-3 py-2 text-sm font-semibold text-[#084734]">
-                회귀 실패 없음
-              </p>
-            )}
-          </>
-        )}
-      </section>
-
+      {/* 처리 큐 — 두 리스트와 AI 초안은 `draft` 상태 슬롯 하나를 공유하는 한 흐름이라
+          반드시 같은 탭 안에 있어야 한다(리스트 → 초안 → 문서 저장 → /admin/docs/[id]/edit). */}
+      {activeSub === "queue" ? (
+        <>
       {loading ? (
         <p className="mt-8 flex items-center gap-2 text-sm text-[#615D59]">
           <Loader2 className="h-4 w-4 animate-spin" /> 불러오는 중…
@@ -928,6 +814,8 @@ export default function DocsGapsPanel() {
           </p>
         </section>
       )}
+        </>
+      ) : null}
     </div>
   )
 }
@@ -1032,112 +920,6 @@ function QuestionPatternPanel({
       ) : null}
     </section>
   )
-}
-
-function AlphaReadinessPanel({
-  report,
-  loading,
-  onRefresh,
-}: {
-  report: AlphaReadinessReport | null
-  loading: boolean
-  onRefresh: () => void
-}) {
-  const status = report?.overallStatus ?? "warning"
-  const statusMeta = getReadinessStatusMeta(status)
-  const checks = report?.checks ?? []
-
-  return (
-    <section className="mt-6 rounded-[20px] border border-black/[0.08] bg-[#ECFDF5] p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold">챗봇 알파 준비도</h2>
-            <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusMeta.badgeClass}`}>
-              {loading ? "확인 중" : statusMeta.label}
-            </span>
-          </div>
-          <p className="mt-1 text-sm text-[#615D59]">
-            운영 DB, 문서 근거, 임베딩, 추천 질문, 보강 큐를 한 번에 점검합니다.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[#084734]/15 bg-white px-3 py-1.5 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#F6F5F4] disabled:opacity-60"
-        >
-          {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-          준비도 확인
-        </button>
-      </div>
-
-      {report && (
-        <div className="mt-3 flex flex-wrap gap-2 text-[12px] text-[#615D59]">
-          <span>정상 {report.summary.ok}</span>
-          <span>주의 {report.summary.warning}</span>
-          <span>막힘 {report.summary.blocked}</span>
-          <span>{new Date(report.generatedAt).toLocaleString("ko-KR")}</span>
-        </div>
-      )}
-
-      <div className="mt-4 grid gap-2 md:grid-cols-2">
-        {loading && checks.length === 0
-          ? READINESS_PLACEHOLDER_LABELS.map((label) => (
-              <div key={label} className="rounded-[14px] border border-black/[0.06] bg-white/80 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-[#111110]">{label}</p>
-                  <span className="rounded-full bg-[#F6F5F4] px-2 py-0.5 text-[11px] text-[#615D59]">대기</span>
-                </div>
-                <p className="mt-1 text-[12px] text-[#615D59]">상태를 확인하는 중입니다.</p>
-              </div>
-            ))
-          : checks.map((check) => {
-              const meta = getReadinessStatusMeta(check.status)
-              return (
-                <div key={check.key} className="rounded-[14px] border border-black/[0.06] bg-white p-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-semibold text-[#111110]">{check.label}</p>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${meta.badgeClass}`}>
-                      {meta.label}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[12px] leading-5 text-[#615D59]">{check.detail}</p>
-                  {check.action && <p className="mt-1 text-[12px] font-medium text-[#084734]">{check.action}</p>}
-                  {check.artifacts && check.artifacts.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {check.artifacts.map((artifact) => (
-                        <code
-                          key={artifact}
-                          className="max-w-full rounded-md border border-black/[0.06] bg-[#F6F5F4] px-1.5 py-1 text-[11px] leading-4 text-[#615D59]"
-                        >
-                          {artifact}
-                        </code>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-      </div>
-
-      {(report?.warnings.length ?? 0) > 0 && (
-        <div className="mt-3 rounded-[12px] border border-[#B85C33]/20 bg-[#FBEAE2] px-3 py-2 text-[12px] text-[#B85C33]">
-          {report?.warnings.join(" · ")}
-        </div>
-      )}
-    </section>
-  )
-}
-
-function getReadinessStatusMeta(status: AlphaReadinessStatus) {
-  if (status === "ok") {
-    return { label: "준비됨", badgeClass: "bg-[#ECFDF5] text-[#084734]" }
-  }
-  if (status === "warning") {
-    return { label: "확인 필요", badgeClass: "bg-[#FFF7ED] text-[#B85C33]" }
-  }
-  return { label: "막힘", badgeClass: "bg-[#FBEAE2] text-[#B85C33]" }
 }
 
 function answerModeLabel(key: string) {

@@ -1,4 +1,5 @@
 import { getCachedPublicEventBySlug } from "@/lib/repositories/public-events"
+import { getPublicEventSessionRanges } from "@/lib/public-event-dates"
 import { toAbsoluteUrl } from "@/lib/seo"
 
 export const revalidate = 3600
@@ -35,11 +36,31 @@ export async function GET(
   }
 
   const eventUrl = toAbsoluteUrl(`/events/${event.slug ?? slug}`)
-  const dtStart = toIcsUtc(event.startsAt)
-  // 종료 시각이 없으면 2시간 행사로 가정
-  const dtEnd = event.endsAt
-    ? toIcsUtc(event.endsAt)
-    : toIcsUtc(new Date(new Date(event.startsAt).getTime() + 2 * 60 * 60 * 1000).toISOString())
+  const dtStamp = toIcsUtc(new Date().toISOString())
+  const description = event.description
+    ? `DESCRIPTION:${escapeIcsText(`${event.description}\n${eventUrl}`)}`
+    : `DESCRIPTION:${escapeIcsText(eventUrl)}`
+
+  // 띄엄띄엄 열리는 회차 행사는 회차마다 VEVENT를 따로 내보낸다.
+  // 단일 기간 행사는 구간이 하나뿐이라 기존과 동일한 결과가 나온다.
+  const ranges = getPublicEventSessionRanges(event.startsAt, event.endsAt, event.sessionDates)
+  const isMultiSession = ranges.length > 1
+
+  const vevents = ranges.flatMap((range, index) => [
+    "BEGIN:VEVENT",
+    // 회차별 UID가 달라야 캘린더 앱이 하나로 덮어쓰지 않는다
+    `UID:classin-event-${event.id}${isMultiSession ? `-${range.date}` : ""}@classin.ai.kr`,
+    `DTSTAMP:${dtStamp}`,
+    `DTSTART:${toIcsUtc(range.startIso)}`,
+    `DTEND:${toIcsUtc(range.endIso)}`,
+    `SUMMARY:${escapeIcsText(
+      isMultiSession ? `${event.title} (${index + 1}/${ranges.length}회차)` : event.title
+    )}`,
+    description,
+    event.location ? `LOCATION:${escapeIcsText(event.location)}` : undefined,
+    `URL:${eventUrl}`,
+    "END:VEVENT",
+  ])
 
   const lines = [
     "BEGIN:VCALENDAR",
@@ -47,16 +68,7 @@ export async function GET(
     "PRODID:-//Classin//Events//KO",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
-    "BEGIN:VEVENT",
-    `UID:classin-event-${event.id}@classin.ai.kr`,
-    `DTSTAMP:${toIcsUtc(new Date().toISOString())}`,
-    `DTSTART:${dtStart}`,
-    `DTEND:${dtEnd}`,
-    `SUMMARY:${escapeIcsText(event.title)}`,
-    event.description ? `DESCRIPTION:${escapeIcsText(`${event.description}\n${eventUrl}`)}` : `DESCRIPTION:${escapeIcsText(eventUrl)}`,
-    event.location ? `LOCATION:${escapeIcsText(event.location)}` : undefined,
-    `URL:${eventUrl}`,
-    "END:VEVENT",
+    ...vevents,
     "END:VCALENDAR",
   ].filter(Boolean)
 

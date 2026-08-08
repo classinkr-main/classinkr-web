@@ -86,10 +86,12 @@ describe("장부 필터 로직 — Set 포함 검사로 전환(소스 스캔, �
     expect(fnBody).toContain("if (firstManager) params.set(\"mgr\", firstManager)")
   })
 
-  it("URL 파싱 effect는 mgr/region을 parseMultiFilterParam으로 Set에 채운다(단일값도 그대로 동작)", () => {
+  it("URL 파싱 effect는 mgr/region을 parseMultiFilterParam으로 Set에 채운다(반응형 절대 계약 — 부재 시 기본값 리셋)", () => {
     const source = workbenchSource()
-    expect(source).toContain('if (mgr) setManagerFilter(parseMultiFilterParam(mgr))')
-    expect(source).toContain('if (region) setRegionFilter(parseMultiFilterParam(region))')
+    expect(source).toContain('const nextManagerFilter = parseMultiFilterParam(params.get("mgr"))')
+    expect(source).toContain("setManagerFilter((current) => replaceEquivalentSet(current, nextManagerFilter))")
+    expect(source).toContain('const nextRegionFilter = parseMultiFilterParam(params.get("region"))')
+    expect(source).toContain("setRegionFilter((current) => replaceEquivalentSet(current, nextRegionFilter))")
   })
 
   it("URL 직렬화 effect는 serializeMultiFilterParam으로 mgr/region을 다시 쓴다", () => {

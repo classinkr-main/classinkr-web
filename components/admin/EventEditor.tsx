@@ -31,7 +31,8 @@ import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import { getAdminToken } from "@/lib/admin-client"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
-import { computePublicEventStatus } from "@/lib/public-event-dates"
+import { computePublicEventStatus, formatPublicEventSchedule } from "@/lib/public-event-dates"
+import EventDateField from "@/components/admin/EventDateField"
 import type { PublicEvent, EventCategory, EventPublicationStatus, EventStatus } from "@/lib/types/public-events"
 import { EVENT_CATEGORIES } from "@/lib/types/public-events"
 
@@ -73,6 +74,7 @@ interface FormState {
   tag: string
   startsAt: string
   endsAt: string
+  sessionDates: string[]
   location: string
   ctaLabel: string
   ctaHref: string
@@ -94,6 +96,7 @@ const DEFAULT_FORM: FormState = {
   tag: "",
   startsAt: "",
   endsAt: "",
+  sessionDates: [],
   location: "",
   ctaLabel: "자세히 보기",
   ctaHref: "",
@@ -111,6 +114,7 @@ function eventToForm(event: PublicEvent | undefined): FormState {
     tag: event?.tag ?? DEFAULT_FORM.tag,
     startsAt: toLocalDatetime(event?.startsAt ?? null),
     endsAt: toLocalDatetime(event?.endsAt ?? null),
+    sessionDates: event?.sessionDates ?? DEFAULT_FORM.sessionDates,
     location: event?.location ?? DEFAULT_FORM.location,
     ctaLabel: event?.ctaLabel ?? DEFAULT_FORM.ctaLabel,
     ctaHref: event?.ctaHref ?? DEFAULT_FORM.ctaHref,
@@ -245,6 +249,7 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
         tag: form.tag || null,
         startsAt: localDatetimeToIso(form.startsAt),
         endsAt: form.endsAt ? localDatetimeToIso(form.endsAt) : null,
+        sessionDates: form.sessionDates.length > 0 ? form.sessionDates : null,
         location: form.location || null,
         ctaLabel: form.ctaLabel || "자세히 보기",
         ctaHref: form.ctaHref || "/contact#contact-form",
@@ -374,8 +379,11 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
                       {form.startsAt && (
                         <span className="inline-flex items-center gap-1.5">
                           <CalendarIcon className="h-4 w-4" />
-                          {formatKoreanDate(form.startsAt)}
-                          {form.endsAt ? ` ~ ${formatKoreanDate(form.endsAt)}` : ""}
+                          {form.sessionDates.length > 0
+                            ? formatPublicEventSchedule("", "", form.sessionDates)
+                            : `${formatKoreanDate(form.startsAt)}${
+                                form.endsAt ? ` ~ ${formatKoreanDate(form.endsAt)}` : ""
+                              }`}
                         </span>
                       )}
                       {form.location && (
@@ -840,27 +848,17 @@ export default function EventEditor({ event, mode }: EventEditorProps) {
             <div className="rounded-[24px] border border-[#e8e8e4] bg-white p-5 shadow-sm space-y-4">
               <h2 className="text-[13px] font-semibold uppercase tracking-wide text-[#1a1a1a]/40">일정 · 장소</h2>
 
-              <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">시작일시 *</label>
-                <input
-                  type="datetime-local"
-                  value={form.startsAt}
-                  onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
-                  className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">종료일시</label>
-                <input
-                  type="datetime-local"
-                  value={form.endsAt}
-                  onChange={(e) => setForm({ ...form, endsAt: e.target.value })}
-                  className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
-                />
-                <p className="mt-1.5 text-[11px] leading-5 text-[#615D59]">
-                  비워두면 공개 상태 계산과 캘린더 추가에서는 시작 후 2시간을 기본 종료 시각으로 봅니다.
+              <EventDateField
+                value={{ startsAt: form.startsAt, endsAt: form.endsAt, sessionDates: form.sessionDates }}
+                onChange={(next) => setForm({ ...form, ...next })}
+                inputClassName="w-full rounded-lg border border-[rgba(0,0,0,0.12)] px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
+                labelClassName="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50"
+              />
+              {form.sessionDates.length === 0 && (
+                <p className="text-[11px] leading-5 text-[#615D59]">
+                  종료일시를 비워두면 공개 상태 계산과 캘린더 추가에서는 시작 후 2시간을 기본 종료 시각으로 봅니다.
                 </p>
-              </div>
+              )}
               <div>
                 <label className="mb-1.5 block text-[12px] font-medium text-[#1a1a1a]/50">장소</label>
                 <input

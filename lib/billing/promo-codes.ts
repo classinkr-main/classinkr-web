@@ -179,6 +179,20 @@ export async function validatePromoCode(input: {
     return { ok: false, reason: "wrong_target", message: "다른 상품 전용 코드입니다." }
   }
 
+  // 충전형(business_recharge)은 2026-07 이후 원화 선충전이다 — percent 와 flat_krw 만 허용.
+  // target_product = 'any' 로 발급된 외화 정액 코드가 충전형에 흘러드는 것도 여기서 막는다.
+  // (구독형 경로는 이 가드를 타지 않는다 — 아래 computeDiscountedAmount 의 통화 매칭 그대로.)
+  if (
+    input.target === "business_recharge" &&
+    (promo.discountType === "flat_cny" || promo.discountType === "flat_usd")
+  ) {
+    return {
+      ok: false,
+      reason: "currency_mismatch",
+      message: "이 프로모 코드는 통화가 맞지 않아 충전형에 적용할 수 없습니다.",
+    }
+  }
+
   const applied = computeDiscountedAmount(promo, input.baseAmount, input.currency)
   if (!applied.ok) {
     return {

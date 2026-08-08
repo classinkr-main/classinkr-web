@@ -52,6 +52,7 @@ const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "current_page",
   "referrer",
   "confirmed_at",
+  "anonymous_id",
 ] as const satisfies readonly (keyof LeadInsert)[];
 
 interface SupabaseColumnError {
@@ -97,6 +98,8 @@ export interface LeadRecord {
   // 공개 채널 리드는 검토 전 null(미확인) — "확인" 액션 또는 상태 변경(new 이탈)으로 채워짐.
   // admin_manual(어드민 수기 등록)은 생성 시점에 즉시 채워진다.
   confirmed_at?: string;
+  // 제출 시점의 익명 식별자(cln_aid) — 사이트 활동 귀속의 결합 키.
+  anonymous_id?: string;
 }
 
 export interface LeadActionStats {
@@ -171,10 +174,23 @@ function isMissingLeadColumn(error: SupabaseColumnError, column: keyof LeadInser
   return Boolean(haystack) && haystack.includes(String(column).toLowerCase());
 }
 
-function stripOptionalLeadColumns(insert: LeadInsert) {
+/**
+ * 스키마에 없는 컬럼만 골라 덜어낸다.
+ *
+ * 예전에는 어떤 컬럼 하나가 없으면 선택 컬럼 전부를 버렸다. 그래서 마이그레이션이
+ * 아직 안 걸린 배포 창에서 리드 1건이 utm_source·gclid·landing_page 까지 통째로
+ * 잃었다 — 없는 컬럼 하나 때문에 멀쩡한 귀속 데이터를 버리는 셈이다.
+ * 오류 메시지가 컬럼을 지목하면 그것만 덜고, 못 짚으면 예전처럼 전부 덜어낸다.
+ */
+function stripOptionalLeadColumns(insert: LeadInsert, error?: SupabaseColumnError) {
   const fallbackInsert: Partial<LeadInsert> = { ...insert };
 
-  for (const column of OPTIONAL_LEAD_INSERT_COLUMNS) {
+  const named = error
+    ? OPTIONAL_LEAD_INSERT_COLUMNS.filter((column) => isMissingLeadColumn(error, column))
+    : [];
+  const doomed = named.length > 0 ? named : OPTIONAL_LEAD_INSERT_COLUMNS;
+
+  for (const column of doomed) {
     delete fallbackInsert[column];
   }
 
@@ -213,10 +229,62 @@ function supabaseToLegacy(row: Lead): LeadRecord {
     current_page: row.current_page ?? undefined,
     referrer: row.referrer ?? undefined,
     confirmed_at: row.confirmed_at ?? undefined,
+    anonymous_id: row.anonymous_id ?? undefined,
   };
 }
 
 /* ─── READ ─── */
+
+/**
+ * PostgREST는 서버의 max-rows 설정을 넘는 행을 조용히 잘라 반환한다. 전량이 필요한 화면
+ * (리드 보드·우선순위 큐·캠페인 귀속)에서 이 절단은 에러가 아니라 "그런 리드는 없다"로
+ * 보이므로, 페이지를 끝까지 넘겨 전량을 모은다.
+ *
+ * created_at 하나만으로는 전순서가 아니다 — 동일 시각 리드가 페이지 경계에 걸리면 중복·누락이
+ * 생기므로 id를 타이브레이커로 함께 정렬한다. 페이지 전진은 요청한 크기가 아니라 실제로 받은
+ * 행 수만큼 한다(서버 상한이 요청 크기보다 작아도 건너뛰지 않는다).
+ */
+const LEAD_PAGE_SIZE = 1000;
+/** 폭주 방지용 상한. 실제 리드 규모를 훨씬 넘는 값이다. */
+const LEAD_MAX_ROWS = 100_000;
+
+/** 컬럼 누락 폴백(대시보드 조회)이 원본 오류 모양을 그대로 볼 수 있게 감싸 전달한다. */
+class LeadQueryError extends Error {
+  readonly supabaseError: SupabaseColumnError;
+
+  constructor(message: string, supabaseError: SupabaseColumnError) {
+    super(message);
+    this.name = "LeadQueryError";
+    this.supabaseError = supabaseError;
+  }
+}
+
+async function fetchAllLeadRows(columns: string, label: string): Promise<Lead[]> {
+  const supabase = createSupabaseAdminClient();
+  const rows: Lead[] = [];
+  let total: number | null = null;
+
+  while (rows.length < LEAD_MAX_ROWS) {
+    const isFirstPage = rows.length === 0;
+    const { data, error, count } = await supabase
+      .from("leads")
+      .select(columns, isFirstPage ? { count: "exact" } : undefined)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(rows.length, rows.length + LEAD_PAGE_SIZE - 1);
+
+    if (error) throw new LeadQueryError(`[leads] ${label} 실패: ${error.message}`, error);
+
+    if (isFirstPage) total = typeof count === "number" ? count : null;
+
+    const batch = (data ?? []) as unknown as Lead[];
+    rows.push(...batch);
+    if (batch.length === 0) break;
+    if (total != null && rows.length >= total) break;
+  }
+
+  return rows;
+}
 
 export async function getLeads(): Promise<LeadRecord[]> {
   if (!USE_SUPABASE) {
@@ -224,14 +292,8 @@ export async function getLeads(): Promise<LeadRecord[]> {
     return jsonGetLeads();
   }
 
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("leads")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) throw new Error(`[leads] 조회 실패: ${error.message}`);
-  return (data as Lead[]).map(supabaseToLegacy);
+  const rows = await fetchAllLeadRows("*", "조회");
+  return rows.map(supabaseToLegacy);
 }
 
 /**
@@ -245,24 +307,80 @@ export async function getDashboardLeads(): Promise<LeadRecord[]> {
     return jsonGetLeads();
   }
 
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("leads")
-    .select("id, source, name, org, email, status, branch, created_at, confirmed_at")
-    .order("created_at", { ascending: false });
+  try {
+    const rows = await fetchAllLeadRows(
+      "id, source, name, org, email, status, branch, created_at, confirmed_at",
+      "대시보드 조회"
+    );
+    return rows.map(supabaseToLegacy);
+  } catch (error) {
+    if (!(error instanceof LeadQueryError) || !isMissingLeadColumn(error.supabaseError, "confirmed_at")) {
+      throw error;
+    }
+    const fallback = await fetchAllLeadRows(
+      "id, source, name, org, email, status, branch, created_at",
+      "대시보드 조회"
+    );
+    return fallback.map(supabaseToLegacy);
+  }
+}
 
-  if (error && isMissingLeadColumn(error, "confirmed_at")) {
-    const fallback = await supabase
-      .from("leads")
-      .select("id, source, name, org, email, status, branch, created_at")
-      .order("created_at", { ascending: false });
-
-    if (fallback.error) throw new Error(`[leads] 대시보드 조회 실패: ${fallback.error.message}`);
-    return (fallback.data as Lead[]).map(supabaseToLegacy);
+/**
+ * 캠페인 화면 전용 경량 조회 — 행사↔리드 귀속에 필요한 최소 컬럼만 가져온다.
+ * 귀속 해시는 `${lead.source} ${lead.notes}`(event:<id|slug> 토큰 탐지), 기간 창 매칭은
+ * created_at(timestamp)을 쓴다. dashboard 스코프에는 notes가 없어 재사용할 수 없다
+ * (감사 2026-07-23 §후속 2). status는 LeadRecord 필수 필드 정합용으로 포함한다.
+ * supabaseToLegacy는 미선택 컬럼을 `?? undefined`로 처리하므로 그대로 재사용 가능.
+ */
+export async function getCampaignLeads(): Promise<LeadRecord[]> {
+  if (!USE_SUPABASE) {
+    const { getLeads: jsonGetLeads } = await import("@/lib/db");
+    return jsonGetLeads();
   }
 
-  if (error) throw new Error(`[leads] 대시보드 조회 실패: ${error.message}`);
-  return (data as Lead[]).map(supabaseToLegacy);
+  const rows = await fetchAllLeadRows("id, source, status, notes, created_at", "캠페인 조회");
+  return rows.map(supabaseToLegacy);
+}
+
+/**
+ * 캠페인 허브 "광고 리드" 섹션 전용 조회 — 마케팅 렌즈·트래킹 롤업·전환·CSV가 함께 쓰는 컬럼.
+ *
+ * campaigns 스코프(귀속 5컬럼)로는 부족하다: 렌즈 판정(lib/crm/lead-attribution)이 utm_*·클릭ID·
+ * lead_magnet·landing_page를 보고, 목록은 이름·학원·연락처를, 전환 버튼은 status를 본다.
+ * message를 포함하는 이유는 구버전 Meta 리드애즈 웹훅이 광고·세트명을 message 텍스트에만
+ * 남겼기 때문 — 빼면 그 시절 리드가 캠페인·광고 축 롤업에서 통째로 "미기록"으로 떨어진다.
+ *
+ * 전체(`*`)를 쓰지 않는 이유는 size·referrer·anonymous_id 처럼 이 화면이 쓰지 않는 컬럼과,
+ * 앞으로 늘어날 컬럼까지 캠페인 페이로드에 자동으로 실리는 것을 막기 위함이다.
+ * supabaseToLegacy는 미선택 컬럼을 `?? undefined`로 처리하므로 그대로 재사용 가능.
+ */
+const MARKETING_LEAD_COLUMNS = [
+  "id", "source", "name", "org", "role", "email", "phone", "message", "status",
+  "branch", "notes", "source_detail", "lead_magnet", "follow_up_at", "assigned_to",
+  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+  "gclid", "fbclid", "msclkid", "ttclid", "landing_page", "current_page",
+  "created_at", "confirmed_at",
+].join(", ");
+
+// confirmed_at 마이그레이션 전 배포 창에서도 화면이 깨지지 않게 — 대시보드 조회와 같은 폴백.
+const MARKETING_LEAD_COLUMNS_WITHOUT_CONFIRMED = MARKETING_LEAD_COLUMNS.replace(", confirmed_at", "");
+
+export async function getMarketingLeads(): Promise<LeadRecord[]> {
+  if (!USE_SUPABASE) {
+    const { getLeads: jsonGetLeads } = await import("@/lib/db");
+    return jsonGetLeads();
+  }
+
+  try {
+    const rows = await fetchAllLeadRows(MARKETING_LEAD_COLUMNS, "마케팅 조회");
+    return rows.map(supabaseToLegacy);
+  } catch (error) {
+    if (!(error instanceof LeadQueryError) || !isMissingLeadColumn(error.supabaseError, "confirmed_at")) {
+      throw error;
+    }
+    const fallback = await fetchAllLeadRows(MARKETING_LEAD_COLUMNS_WITHOUT_CONFIRMED, "마케팅 조회");
+    return fallback.map(supabaseToLegacy);
+  }
 }
 
 export async function getLeadById(id: string): Promise<LeadRecord | null> {
@@ -280,6 +398,71 @@ export async function getLeadById(id: string): Promise<LeadRecord | null> {
 
   if (error || !data) return null;
   return supabaseToLegacy(data as Lead);
+}
+
+/**
+ * 등록 전 중복 검사용 — 전화/이메일이 일치할 수 있는 기존 리드의 최소 컬럼만 가져온다.
+ * DB에는 하이픈 포함 전화가 흔해 원문만으로는 "010-1234-5678"과 "01012345678"을 다른
+ * 번호로 오인한다. in 목록에 원문과 숫자만 남긴 정규화형을 함께 넣어 그 차이를 흡수하고,
+ * 최종 판정(정규화 비교)은 호출부가 한다. 이메일도 원문·소문자형을 함께 조회한다.
+ */
+export async function findLeadsByContacts(contacts: {
+  phones: string[];
+  emails: string[];
+}): Promise<Pick<LeadRecord, "id" | "phone" | "email">[]> {
+  const phones = contacts.phones.map((phone) => phone.trim()).filter(Boolean);
+  const emails = contacts.emails.map((email) => email.trim()).filter(Boolean);
+  if (phones.length === 0 && emails.length === 0) return [];
+
+  const digitsOnly = (value: string) => value.replace(/\D/g, "");
+
+  if (!USE_SUPABASE) {
+    const { getLeads: jsonGetLeads } = await import("@/lib/db");
+    const phoneKeys = new Set(phones.map(digitsOnly).filter(Boolean));
+    const emailKeys = new Set(emails.map((email) => email.toLowerCase()));
+    return jsonGetLeads()
+      .filter(
+        (lead) =>
+          (lead.phone && phoneKeys.has(digitsOnly(lead.phone))) ||
+          (lead.email && emailKeys.has(lead.email.toLowerCase()))
+      )
+      .map((lead) => ({ id: lead.id, phone: lead.phone, email: lead.email }));
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const phoneCandidates = Array.from(
+    new Set(phones.flatMap((phone) => [phone, digitsOnly(phone)]).filter(Boolean))
+  );
+  const emailCandidates = Array.from(
+    new Set(emails.flatMap((email) => [email, email.toLowerCase()]))
+  );
+
+  const [phoneRes, emailRes] = await Promise.all([
+    phoneCandidates.length > 0
+      ? supabase.from("leads").select("id, phone, email").in("phone", phoneCandidates)
+      : Promise.resolve({ data: [], error: null }),
+    emailCandidates.length > 0
+      ? supabase.from("leads").select("id, phone, email").in("email", emailCandidates)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  const error = phoneRes.error ?? emailRes.error;
+  if (error) throw new Error(`[leads] 중복 조회 실패: ${error.message}`);
+
+  // 전화·이메일 양쪽에 걸린 리드가 두 번 세이지 않게 id로 합친다.
+  const byId = new Map<string, Pick<LeadRecord, "id" | "phone" | "email">>();
+  for (const row of [...(phoneRes.data ?? []), ...(emailRes.data ?? [])] as Array<{
+    id: string;
+    phone: string | null;
+    email: string | null;
+  }>) {
+    byId.set(row.id, {
+      id: row.id,
+      phone: row.phone ?? undefined,
+      email: row.email ?? undefined,
+    });
+  }
+  return Array.from(byId.values());
 }
 
 /* ─── CREATE ─── */
@@ -328,6 +511,7 @@ export async function saveLead(
     // 호출자가 명시하지 않으면 미확인(null) — 공개 채널 리드의 기본값.
     // 어드민 수기 등록(app/api/admin/leads)만 생성 시점에 confirmed_at을 명시적으로 채운다.
     confirmed_at: lead.confirmed_at ?? null,
+    anonymous_id: lead.anonymous_id ?? null,
   };
 
   const { data, error } = await supabase
@@ -339,21 +523,42 @@ export async function saveLead(
   if (error) {
     if (isMissingOptionalLeadColumn(error)) {
       console.warn(
-        "[leads] optional lead columns are missing; retrying with core lead fields only:",
+        "[leads] optional lead columns are missing; retrying without the named columns:",
         error.message
       );
 
+      // 1차 재시도 — 오류가 지목한 컬럼만 덜어낸다. 나머지 귀속 데이터는 지킨다.
       const fallback = await supabase
         .from("leads")
-        .insert(stripOptionalLeadColumns(insert))
+        .insert(stripOptionalLeadColumns(insert, error))
         .select()
         .single();
 
-      if (fallback.error) {
-        throw new Error(`[leads] 저장 실패: ${fallback.error.message}`);
+      if (!fallback.error) return supabaseToLegacy(fallback.data as Lead);
+
+      // 2차 재시도 — 여러 컬럼이 한꺼번에 없으면(마이그레이션 여러 개 미적용) 오류가
+      // 한 번에 하나씩만 지목한다. 이때는 예전처럼 선택 컬럼을 전부 덜어 저장을 살린다.
+      // 리드를 잃는 것보다 귀속을 잃는 게 낫다.
+      if (isMissingOptionalLeadColumn(fallback.error)) {
+        console.warn(
+          "[leads] still missing optional columns; retrying with core lead fields only:",
+          fallback.error.message
+        );
+
+        const bare = await supabase
+          .from("leads")
+          .insert(stripOptionalLeadColumns(insert))
+          .select()
+          .single();
+
+        if (bare.error) {
+          throw new Error(`[leads] 저장 실패: ${bare.error.message}`);
+        }
+
+        return supabaseToLegacy(bare.data as Lead);
       }
 
-      return supabaseToLegacy(fallback.data as Lead);
+      throw new Error(`[leads] 저장 실패: ${fallback.error.message}`);
     }
 
     throw new Error(`[leads] 저장 실패: ${error.message}`);

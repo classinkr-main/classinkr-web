@@ -15,13 +15,20 @@ import {
   Send,
 } from "lucide-react"
 
+import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
 import QuickQuoteComposer, {
   type QuickQuoteCreatedPayload,
+  type QuickQuoteManagerOption,
   type QuickQuotePrefill,
 } from "@/components/portal/quotes/QuickQuoteComposer"
 import { portalFetch } from "@/lib/portal/portal-fetch"
 import type { PartnerDocumentListItem } from "@/lib/portal/types"
-import type { StandardQuoteTemplateId } from "@/lib/standard-quote-template"
+import {
+  DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID,
+  resolveQuoteProductLine,
+  type QuoteProductLine,
+  type StandardQuoteTemplateId,
+} from "@/lib/standard-quote-template"
 
 type HardwareQuoteRow = {
   id: string
@@ -41,6 +48,8 @@ type HardwareQuoteRow = {
   acceptedAt: string | null
   shareUrl: string | null
   updatedAt: string
+  /** SW/HW 제품군. 목록 API가 templateId를 주지 않아 제목·거래명 기준 추정이다(불명확하면 HW). */
+  productLine: QuoteProductLine
   createdAction?: QuickQuoteCreatedPayload["action"]
 }
 
@@ -85,6 +94,25 @@ const FILTER_OPTIONS: Array<{ key: QuoteFilter; label: string }> = [
   { key: "shared", label: "발송됨" },
   { key: "accepted", label: "동의 완료" },
 ]
+
+const PRODUCT_LINE_OPTIONS: Array<{ key: QuoteProductLine | "all"; label: string }> = [
+  { key: "all", label: "전체" },
+  { key: "software", label: "소프트웨어" },
+  { key: "hardware", label: "하드웨어" },
+]
+
+const PRODUCT_LINE_BADGE: Record<QuoteProductLine, { label: string; className: string; title: string }> = {
+  software: {
+    label: "SW",
+    className: "bg-[#ECFDF5] text-[#084734] ring-[#BDEFD8]",
+    title: "소프트웨어 견적 (공급자: 클래스인)",
+  },
+  hardware: {
+    label: "HW",
+    className: "bg-[#f6f5f2] text-[#615D59] ring-[#e8e8e4]",
+    title: "하드웨어 견적 (공급자: 퀴드러닝)",
+  },
+}
 
 const SORT_OPTIONS: Array<{ key: QuoteSortKey; label: string }> = [
   { key: "recent", label: "최신순" },
@@ -212,6 +240,11 @@ function mapDocumentToQuoteRow(document: PartnerDocumentListItem): HardwareQuote
     acceptedAt: document.accepted_at ?? null,
     shareUrl: null,
     updatedAt: document.updated_at,
+    productLine: resolveQuoteProductLine({
+      templateId: document.template_id ?? null,
+      title: document.title ?? null,
+      dealTitle: document.deal_title ?? null,
+    }),
   }
 }
 
@@ -327,7 +360,7 @@ function getResponseTime(quote: HardwareQuoteRow) {
 }
 
 function templateIdFromQuickAction(action: HardwareQuoteQuickAction): StandardQuoteTemplateId {
-  return action === "new" ? "board_86" : action
+  return action === "new" ? DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID : action
 }
 
 export default function HardwareQuotesPanel({
@@ -336,7 +369,9 @@ export default function HardwareQuotesPanel({
   prefill = null,
 }: HardwareQuotesPanelProps) {
   const [composerOpen, setComposerOpen] = useState(false)
-  const [composerTemplateId, setComposerTemplateId] = useState<StandardQuoteTemplateId>("board_86")
+  const [composerTemplateId, setComposerTemplateId] = useState<StandardQuoteTemplateId>(
+    DEFAULT_HARDWARE_QUOTE_TEMPLATE_ID
+  )
   const [quotes, setQuotes] = useState<HardwareQuoteRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -345,8 +380,31 @@ export default function HardwareQuotesPanel({
   const [notice, setNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [activeFilter, setActiveFilter] = useState<QuoteFilter>("all")
+  const [productLineFilter, setProductLineFilter] = useState<QuoteProductLine | "all">("all")
   const [sortKey, setSortKey] = useState<QuoteSortKey>("recent")
   const handledQuickActionKeyRef = useRef<string | null>(null)
+
+  // 견적 작성기의 "공급자 담당자" 드롭다운 후보. 어드민 전용 훅이라 여기서 읽어 주입한다
+  // (컴포저는 포털에서도 쓰이므로 admin-client 를 직접 import 하지 않는다).
+  const { owners: crmOwners } = useCrmOwners()
+  const supplierManagerOptions = useMemo<QuickQuoteManagerOption[]>(() => {
+    const seen = new Set<string>()
+    const options: QuickQuoteManagerOption[] = []
+
+    for (const owner of crmOwners) {
+      const name = owner.displayName?.trim()
+      if (!name || seen.has(name)) continue
+      seen.add(name)
+      options.push({
+        name,
+        label: owner.teamRoleLabel ? `${name} · ${owner.teamRoleLabel}` : name,
+        // admin_profiles 에 연락처 컬럼이 없다 — 연락처는 작성자가 직접 입력한다.
+        phone: null,
+      })
+    }
+
+    return options
+  }, [crmOwners])
 
   const summary = useMemo(() => {
     return {
@@ -366,11 +424,18 @@ export default function HardwareQuotesPanel({
     accepted: summary.accepted,
   }
 
+  const productLineCounts: Record<QuoteProductLine | "all", number> = {
+    all: quotes.length,
+    software: quotes.filter((quote) => quote.productLine === "software").length,
+    hardware: quotes.filter((quote) => quote.productLine === "hardware").length,
+  }
+
   const visibleQuotes = useMemo(() => {
     const normalizedQuery = searchTerm.trim().toLowerCase()
 
     return quotes
       .filter((quote) => {
+        if (productLineFilter !== "all" && quote.productLine !== productLineFilter) return false
         if (activeFilter === "draft" && quote.status !== "draft" && quote.status !== "pending_approval") return false
         if (activeFilter === "shared" && !isQuoteShared(quote)) return false
         if (activeFilter === "accepted" && quote.status !== "accepted" && !quote.acceptedAt) return false
@@ -391,9 +456,20 @@ export default function HardwareQuotesPanel({
         if (sortKey === "response") return getResponseTime(right) - getResponseTime(left)
         return (Date.parse(right.updatedAt) || 0) - (Date.parse(left.updatedAt) || 0)
       })
-  }, [activeFilter, quotes, searchTerm, sortKey])
+  }, [activeFilter, productLineFilter, quotes, searchTerm, sortKey])
 
-  const hasActiveControls = activeFilter !== "all" || searchTerm.trim().length > 0 || sortKey !== "recent"
+  const hasActiveControls =
+    activeFilter !== "all" ||
+    productLineFilter !== "all" ||
+    searchTerm.trim().length > 0 ||
+    sortKey !== "recent"
+
+  function resetListControls() {
+    setSearchTerm("")
+    setActiveFilter("all")
+    setProductLineFilter("all")
+    setSortKey("recent")
+  }
 
   const recentQuotes = useMemo(
     () =>
@@ -511,6 +587,12 @@ export default function HardwareQuotesPanel({
       acceptedAt: null,
       shareUrl: payload.shareUrl ?? null,
       updatedAt: payload.document.updated_at,
+      // 작성기가 쓴 템플릿을 그대로 받으므로 방금 만든 행은 추정 없이 유형이 확정된다.
+      productLine: resolveQuoteProductLine({
+        templateId: payload.templateId,
+        title: payload.version.title,
+        dealTitle: payload.deal.title,
+      }),
       createdAction: payload.action,
     }
 
@@ -603,6 +685,35 @@ export default function HardwareQuotesPanel({
       )}
 
       <div className="overflow-hidden rounded-lg border border-[#e8e8e4] bg-white">
+        <div className="flex flex-wrap items-center gap-2 border-b border-[#f0f0ec] px-4 py-2.5 sm:px-5">
+          <span className="text-[11px] font-semibold text-[#1a1a1a]/45">유형</span>
+          <div className="inline-flex items-center rounded-full border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
+            {PRODUCT_LINE_OPTIONS.map((option) => {
+              const active = productLineFilter === option.key
+
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setProductLineFilter(option.key)}
+                  aria-pressed={active}
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-medium transition-colors ${
+                    active ? "bg-white text-[#111110] shadow-sm" : "text-[#615D59] hover:text-[#111110]"
+                  }`}
+                >
+                  {option.label}
+                  <span className={`tabular-nums ${active ? "text-[#1a1a1a]/40" : "text-[#1a1a1a]/35"}`}>
+                    {productLineCounts[option.key]}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <span className="text-[11px] text-[#1a1a1a]/35">
+            SW = 구독형(클래스인) · HW = 장비(퀴드러닝)
+          </span>
+        </div>
+
         <div className="admin-scroll-snap-x no-scrollbar flex items-center gap-1.5 overflow-x-auto border-b border-[#f0f0ec] px-4 py-3 sm:px-5">
           {FILTER_OPTIONS.map((option) => {
             const count = filterCounts[option.key]
@@ -665,11 +776,7 @@ export default function HardwareQuotesPanel({
             {hasActiveControls && (
               <button
                 type="button"
-                onClick={() => {
-                  setSearchTerm("")
-                  setActiveFilter("all")
-                  setSortKey("recent")
-                }}
+                onClick={resetListControls}
                 className="h-9 shrink-0 rounded-md border border-[#e8e8e4] bg-white px-3 text-xs font-medium text-[#615D59] transition-colors hover:text-[#111110]"
               >
                 초기화
@@ -713,7 +820,7 @@ export default function HardwareQuotesPanel({
               <FileText className="h-5 w-5" />
             </div>
             <p className="mt-4 text-sm font-medium text-[#111110]">
-              저장된 하드웨어 견적서가 없습니다.
+              저장된 견적서가 없습니다.
             </p>
             <p className="mt-1 text-xs text-[#1a1a1a]/45">
               견적서 작성 후 이 목록에서 발송 링크와 응답 상태를 확인할 수 있습니다.
@@ -725,14 +832,10 @@ export default function HardwareQuotesPanel({
               <Search className="h-5 w-5" />
             </div>
             <p className="mt-4 text-sm font-medium text-[#111110]">조건에 맞는 견적서가 없습니다.</p>
-            <p className="mt-1 text-xs text-[#1a1a1a]/45">검색어 또는 상태 필터를 조정해 보세요.</p>
+            <p className="mt-1 text-xs text-[#1a1a1a]/45">유형·상태 필터나 검색어를 조정해 보세요.</p>
             <button
               type="button"
-              onClick={() => {
-                setSearchTerm("")
-                setActiveFilter("all")
-                setSortKey("recent")
-              }}
+              onClick={resetListControls}
               className="mt-4 rounded-md border border-[#e8e8e4] bg-white px-3 py-2 text-xs font-medium text-[#615D59] hover:text-[#111110]"
             >
               전체 보기
@@ -756,6 +859,12 @@ export default function HardwareQuotesPanel({
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs text-[#1a1a1a]/45">{quote.quoteNumber}</span>
+                      <span
+                        title={PRODUCT_LINE_BADGE[quote.productLine].title}
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${PRODUCT_LINE_BADGE[quote.productLine].className}`}
+                      >
+                        {PRODUCT_LINE_BADGE[quote.productLine].label}
+                      </span>
                       <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${statusMeta.className}`}>
                         {statusMeta.label}
                       </span>
@@ -900,6 +1009,7 @@ export default function HardwareQuotesPanel({
         recentQuotes={recentQuotes}
         apiBase="/api/portal"
         initialTemplateId={composerTemplateId}
+        supplierManagerOptions={supplierManagerOptions}
         prefill={prefill}
         onCreated={handleCreated}
       />

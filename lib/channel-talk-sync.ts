@@ -9,8 +9,8 @@ import "server-only"
 
 import {
   extractUserContact,
-  getUserChatMessages,
   isChannelApiConfigured,
+  listUserChatMessages,
   listUserChats,
   type ChannelMessage,
   type ChannelUser,
@@ -33,7 +33,14 @@ import {
 import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
 
 const DEFAULT_SYNC_LIMIT = 25
-const MESSAGES_PER_CHAT = 50
+// 최근 메시지부터 최대 200개를 페이지로 가져온다. 그 이상이면 partial warning으로 표면화한다.
+const MESSAGES_PER_CHAT = 200
+const CHANNEL_API_PAGE_SIZE = 50
+const ATTACHMENT_PLACEHOLDERS = new Set([
+  "[이미지 첨부]",
+  "[파일 첨부]",
+  "[이미지 첨부] [파일 첨부]",
+])
 const DEFAULT_RECENT_SYNC_TTL_MS = 2 * 60_000
 const ACTIVE_SYNC_STALE_MS = 10 * 60_000
 let activeSync:
@@ -60,6 +67,74 @@ function authorOf(message: ChannelMessage): ChannelConversationAuthor {
   if (message.personType === "user") return "customer"
   if (message.personType === "bot") return "bot"
   return "agent"
+}
+
+function safeMessageText(message: ChannelMessage): string {
+  const plainText = typeof message.plainText === "string" ? message.plainText.trim() : ""
+  if (plainText) return plainText
+
+  const files = Array.isArray(message.files) ? message.files : []
+  const hasImage = files.some(
+    (file) => file?.type === "image" || file?.contentType?.toLowerCase().startsWith("image/")
+  )
+  const hasFile = files.some(
+    (file) => file?.type !== "image" && !file?.contentType?.toLowerCase().startsWith("image/")
+  )
+
+  // 파일 URL·버킷·스토리지 키·파일명은 transcript/청크로 전달하지 않는다.
+  if (hasImage && hasFile) return "[이미지 첨부] [파일 첨부]"
+  if (hasImage) return "[이미지 첨부]"
+  if (hasFile) return "[파일 첨부]"
+  return ""
+}
+
+function chatActivityAt(chat: ChannelUserChat): number {
+  return Math.max(chat.closedAt ?? 0, chat.openedAt ?? 0, chat.createdAt ?? 0)
+}
+
+async function fetchRecentUserChats(limit: number, state?: string): Promise<{
+  chats: ChannelUserChat[]
+  users: ChannelUser[]
+  partial: boolean
+  warnings: string[]
+}> {
+  // Channel API의 state 미지정 기본 동작에 기대지 않는다. 열린 상담과 종료 상담을 각각
+  // 최신순으로 가져온 뒤 전체 limit(페이지별 limit이 아님) 안에서 합치고 id 중복을 제거한다.
+  const states = state ? [state] : ["opened", "closed"]
+  const results = await Promise.all(
+    states.map((targetState) =>
+      listUserChats({
+        state: targetState,
+        limit,
+        pageSize: CHANNEL_API_PAGE_SIZE,
+        sortOrder: "desc",
+      })
+    )
+  )
+
+  const chatsById = new Map<string, ChannelUserChat>()
+  const usersById = new Map<string, ChannelUser>()
+  const warnings: string[] = []
+
+  results.forEach((result, index) => {
+    for (const chat of result.userChats) {
+      const existing = chatsById.get(chat.id)
+      if (!existing || chatActivityAt(chat) > chatActivityAt(existing)) chatsById.set(chat.id, chat)
+    }
+    for (const user of result.users) usersById.set(user.id, user)
+    if (result.complete === false || result.next) {
+      warnings.push(`채널톡 ${states[index]} 상담이 조회 한도에 도달해 일부만 동기화되었습니다.`)
+    }
+  })
+
+  return {
+    chats: [...chatsById.values()]
+      .sort((left, right) => chatActivityAt(right) - chatActivityAt(left) || left.id.localeCompare(right.id))
+      .slice(0, limit),
+    users: [...usersById.values()],
+    partial: warnings.length > 0,
+    warnings,
+  }
 }
 
 interface LeadMatchIndex {
@@ -104,6 +179,8 @@ export interface ChannelSyncResult {
   messageFetches?: number
   reusedTranscripts?: number
   chunksRewritten?: number
+  /** API 페이지/대화 일부가 조회 한도 또는 부분 실패로 빠졌는지 여부. */
+  partial?: boolean
   // 재시도까지 실패한 청크 재생성 대화 수 — best-effort 계약이라 ok 는 유지되고, 운영자는 이 값으로 감지한다.
   chunkFailures?: number
   warning?: string
@@ -184,10 +261,14 @@ async function runChannelConversationSync(
 
   let chats: ChannelUserChat[]
   let users: ChannelUser[]
+  let partial = false
+  const syncWarnings: string[] = []
   try {
-    const list = await listUserChats({ limit, state: options.state })
-    chats = list.userChats
+    const list = await fetchRecentUserChats(limit, options.state)
+    chats = list.chats
     users = list.users
+    partial = list.partial
+    syncWarnings.push(...list.warnings)
   } catch (error) {
     return {
       ok: false,
@@ -237,23 +318,36 @@ async function runChannelConversationSync(
     } else {
       let messages: ChannelMessage[] = []
       try {
-        messages = await getUserChatMessages(chat.id, {
+        const messageResult = await listUserChatMessages(chat.id, {
           limit: MESSAGES_PER_CHAT,
-          sortOrder: "asc",
+          pageSize: CHANNEL_API_PAGE_SIZE,
+          // 긴 상담에서도 최종 진단·조치와 frontMessageId를 우선 보존한다.
+          sortOrder: "desc",
         })
+        messages = [...messageResult.messages].sort(
+          (left, right) =>
+            (left.createdAt ?? 0) - (right.createdAt ?? 0) || left.id.localeCompare(right.id)
+        )
         messageFetches += 1
+        if (messageResult.complete === false || messageResult.next) {
+          partial = true
+          syncWarnings.push(`상담 메시지가 조회 한도에 도달해 일부만 동기화되었습니다: ${chat.id}`)
+        }
       } catch {
         // 개별 대화 메시지 실패는 건너뛰고 기존 transcript가 있으면 재사용한다.
         transcript = existing?.transcript ?? []
+        partial = true
+        syncWarnings.push(`상담 메시지 조회 실패로 기존 내용을 유지했습니다: ${chat.id}`)
       }
 
       if (messages.length > 0) {
         transcript = messages
-          .filter((message) => typeof message.plainText === "string" && message.plainText.trim())
-          .map((message) => ({
+          .map((message) => ({ message, text: safeMessageText(message) }))
+          .filter(({ text }) => Boolean(text))
+          .map(({ message, text }) => ({
             id: message.id,
             author: authorOf(message),
-            text: (message.plainText ?? "").trim(),
+            text,
             at: toIso(message.createdAt) ?? syncedAt,
           }))
         transcriptRefreshed = true
@@ -326,7 +420,15 @@ async function runChannelConversationSync(
   for (const target of chunkRegenTargets) {
     try {
       // 대화 태그 → ChatbotCategory 정규화(topic-crosswalk). 검색 시 주제 필터/배지 근거가 된다.
-      const chunks = buildConversationChunkInputs(target.transcript, redactPii, normalizeTopicTags(target.tags))
+      // 첨부 존재는 transcript 시각 정합용일 뿐 원인 확정 근거가 아니다. 벡터 검색 청크에는 넣지 않는다.
+      const searchableTranscript = target.transcript.filter(
+        (message) => !ATTACHMENT_PLACEHOLDERS.has(message.text)
+      )
+      const chunks = buildConversationChunkInputs(
+        searchableTranscript,
+        redactPii,
+        normalizeTopicTags(target.tags)
+      )
       try {
         await replaceConversationChunks(target.id, chunks)
       } catch {
@@ -335,6 +437,7 @@ async function runChannelConversationSync(
       chunksRewritten += chunks.length
     } catch (error) {
       chunkFailures += 1
+      partial = true
       chunkWarnings.push(`상담 청크 재생성 실패(재시도 포함): ${target.id}`)
       console.error("[channel-talk-sync] 상담 청크 재생성 실패(재시도 포함):", target.id, error)
     }
@@ -370,6 +473,9 @@ async function runChannelConversationSync(
     reusedTranscripts,
     chunksRewritten,
     chunkFailures,
-    ...(chunkWarnings.length > 0 ? { warnings: chunkWarnings } : {}),
+    partial,
+    ...(syncWarnings.length + chunkWarnings.length > 0
+      ? { warnings: [...syncWarnings, ...chunkWarnings] }
+      : {}),
   }
 }

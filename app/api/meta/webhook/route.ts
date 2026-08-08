@@ -215,11 +215,25 @@ function buildLeadCapturePayload(value: MetaLeadValue, detail?: MetaLeadDetail) 
       "전화번호",
       "휴대폰",
     ]),
+    branch: pickField(fields, [
+      "city",
+      "region",
+      "province",
+      "address",
+      "지역",
+      "주소",
+      "도시",
+    ]),
     message: buildMetaMessage(value, detail),
     marketingConsent: hasMarketingConsent(fields),
+    // 광고 계층을 구조화 필드에 저장 — 어드민 리드 보드의 세부유입(광고명) 표시·필터가
+    // message 파싱 없이 바로 작동한다. sourceDetail은 사람이 읽는 라벨이라 이름만 쓴다.
+    sourceDetail: normalizeString(detail?.ad_name),
     utmSource: "meta",
     utmMedium: "lead_ads",
     utmCampaign: detail?.campaign_name ?? detail?.campaign_id,
+    utmTerm: detail?.adset_name ?? detail?.adset_id,
+    utmContent: detail?.ad_name ?? detail?.ad_id ?? value.ad_id,
   }
 }
 

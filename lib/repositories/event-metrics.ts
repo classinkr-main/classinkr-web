@@ -40,6 +40,7 @@ export function getEventMetrics(eventId: string): EventMetrics {
       ...existing,
       eventId,
       adSpendEntries: Array.isArray(existing.adSpendEntries) ? existing.adSpendEntries : [],
+      relatedLinks: Array.isArray(existing.relatedLinks) ? existing.relatedLinks : [],
     }
   }
   return {
@@ -58,6 +59,7 @@ export function getAllEventMetrics(): Record<string, EventMetrics> {
       ...metrics,
       eventId,
       adSpendEntries: Array.isArray(metrics.adSpendEntries) ? metrics.adSpendEntries : [],
+      relatedLinks: Array.isArray(metrics.relatedLinks) ? metrics.relatedLinks : [],
     }
   }
   return result
@@ -80,6 +82,7 @@ export function saveEventMetrics(
     ...patch,
     eventId,
     adSpendEntries: patch.adSpendEntries ?? current.adSpendEntries ?? [],
+    relatedLinks: patch.relatedLinks ?? current.relatedLinks ?? [],
     updatedAt: new Date().toISOString(),
   }
   store[eventId] = merged

@@ -31,6 +31,21 @@ export async function GET(req: NextRequest) {
     tag: tagFilter ?? undefined,
   })
 
+  // ?scope=analytics 는 Analytics 화면 롤업 전용 — 구독자별 추세(createdAt)·활성(status)·
+  // 소스(source) 계산에 전 행이 필요하지만(count로 대체 불가, 감사 2026-07-23 §후속 3)
+  // 그 세 필드 외에는 소비하지 않으므로 행당 필드를 좁혀 페이로드를 줄인다.
+  // 같은 조회 결과를 투영만 하므로 롤업 수치는 전체 응답과 동일하다.
+  if (searchParams.get("scope") === "analytics") {
+    return adminCachedJson({
+      subscribers: subscribers.map((subscriber) => ({
+        createdAt: subscriber.createdAt,
+        status: subscriber.status,
+        source: subscriber.source,
+      })),
+      total: subscribers.length,
+    })
+  }
+
   return adminCachedJson({ subscribers, total: subscribers.length })
 }
 

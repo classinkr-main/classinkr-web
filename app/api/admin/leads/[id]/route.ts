@@ -34,12 +34,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function sanitizeLeadPatch(raw: unknown): { patch?: Partial<LeadRecord>; error?: string } {
-  if (!isRecord(raw)) return { error: "Invalid JSON body" }
+  if (!isRecord(raw)) return { error: "잘못된 요청 형식입니다." }
 
   const patch: Record<string, string | null> = {}
 
   if ("status" in raw) {
-    if (!LEAD_STATUSES.has(raw.status as LeadStatus)) return { error: "Invalid lead status" }
+    if (!LEAD_STATUSES.has(raw.status as LeadStatus)) return { error: "유효하지 않은 리드 상태입니다." }
     patch.status = raw.status as LeadStatus
   }
 
@@ -47,7 +47,7 @@ function sanitizeLeadPatch(raw: unknown): { patch?: Partial<LeadRecord>; error?:
     if (!(field in raw)) continue
     const value = raw[field]
     if (value !== null && typeof value !== "string") {
-      return { error: `${field} must be a string or null` }
+      return { error: `${field} 필드는 문자열 또는 null이어야 합니다.` }
     }
     patch[field] = value
   }
@@ -64,7 +64,7 @@ function sanitizeLeadPatch(raw: unknown): { patch?: Partial<LeadRecord>; error?:
     patch.confirmed_at = new Date().toISOString()
   }
 
-  if (Object.keys(patch).length === 0) return { error: "No supported fields to update" }
+  if (Object.keys(patch).length === 0) return { error: "변경할 필드가 없습니다." }
   return { patch: patch as Partial<LeadRecord> }
 }
 
@@ -79,11 +79,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   try {
     const updated = await updateLead(id, sanitized.patch ?? {})
-    if (!updated) return NextResponse.json({ error: "Not found" }, { status: 404 })
+    if (!updated) return NextResponse.json({ error: "리드를 찾을 수 없습니다." }, { status: 404 })
     return NextResponse.json({ lead: updated })
   } catch (error) {
     console.error(`[PATCH /api/admin/leads/${id}] error:`, error)
-    return NextResponse.json({ error: "Failed to update lead" }, { status: 500 })
+    return NextResponse.json({ error: "리드를 수정하지 못했습니다." }, { status: 500 })
   }
 }
 
@@ -95,10 +95,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   try {
     const ok = await deleteLead(id)
-    if (!ok) return NextResponse.json({ error: "Not found" }, { status: 404 })
+    if (!ok) return NextResponse.json({ error: "리드를 찾을 수 없습니다." }, { status: 404 })
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error(`[DELETE /api/admin/leads/${id}] error:`, error)
-    return NextResponse.json({ error: "Failed to delete lead" }, { status: 500 })
+    return NextResponse.json({ error: "리드를 삭제하지 못했습니다." }, { status: 500 })
   }
 }

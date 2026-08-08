@@ -226,12 +226,6 @@ function latestIso(...values: Array<string | null | undefined>) {
   return values.filter((value): value is string => Boolean(value)).sort().at(-1) ?? null
 }
 
-function earliestIso(left: string | null, right: string | null) {
-  if (!left) return right
-  if (!right) return left
-  return left < right ? left : right
-}
-
 function uniquePush(target: string[], value: string | null | undefined) {
   if (value && !target.includes(value)) target.push(value)
 }
@@ -320,7 +314,9 @@ function aggregateEeo(rows: ShroffSnapshotRow[]) {
     }
 
     existing.balance += balance
-    existing.expireAt = earliestIso(existing.expireAt, expireAt)
+    // 고객 단위 연장 창은 활성 유료 EEO 중 마지막 만료일을 기준으로 잡는다.
+    // 일부 서비스만 먼저 끝나는 다중 EEO 고객을 고객 전체 연장 대상으로 오인하지 않는다.
+    existing.expireAt = latestIso(existing.expireAt, expireAt)
     if (lastClassAt && (!existing.lastClassAt || lastClassAt > existing.lastClassAt)) existing.lastClassAt = lastClassAt
     if (!existing.uid && uid) existing.uid = uid
     existing.syncedAt = latestIso(existing.syncedAt, row.synced_at)

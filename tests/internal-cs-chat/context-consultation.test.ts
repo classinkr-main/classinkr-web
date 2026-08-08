@@ -53,7 +53,7 @@ describe("buildInternalCsCopilotContext — 과거 상담 사례 결합", () => 
         label: expect.stringContaining("[상담]"),
       })
     )
-    expect(result.deterministicFallback).toContain("과거 유사 상담 사례 1건")
+    expect(result.deterministicFallback).toContain("과거 유사 상담 1건")
   })
 
   it("omits the consultation section and notes the absence when there is no evidence", async () => {
@@ -63,7 +63,7 @@ describe("buildInternalCsCopilotContext — 과거 상담 사례 결합", () => 
 
     expect(result.internalContext).not.toContain("[과거 상담 사례]")
     expect(result.sourceRefs.some((ref) => ref.id.startsWith("channel:"))).toBe(false)
-    expect(result.deterministicFallback).toContain("과거 유사 상담 사례는 찾지 못했습니다")
+    expect(result.deterministicFallback).not.toContain("## 참고 사례")
   })
 
   it("stays usable when consultation search rejects (never blocks the copilot)", async () => {
@@ -72,7 +72,7 @@ describe("buildInternalCsCopilotContext — 과거 상담 사례 결합", () => 
     const result = await buildInternalCsCopilotContext("환불 규정 알려줘")
 
     expect(result.internalContext).not.toContain("[과거 상담 사례]")
-    expect(result.deterministicFallback).toContain("과거 유사 상담 사례는 찾지 못했습니다")
+    expect(result.deterministicFallback).not.toContain("## 참고 사례")
   })
 
   it("threads includeInternalDocs into the public retriever only when requested", async () => {

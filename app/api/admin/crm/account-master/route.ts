@@ -10,6 +10,14 @@ export async function GET(req: NextRequest) {
   const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
-  const result = await getAccountMaster()
-  return adminCachedJson(result)
+  // 저장소가 던지면 프레임워크 기본 500이 나가 본문에 { error }가 없다. 클라이언트는
+  // 그 응답에서 사유를 못 읽어 "불러오지 못했습니다"만 띄우고, 서버 로그에도 경로가 안 남는다.
+  // 나머지 CRM 라우트와 같은 형태로 맞춘다.
+  try {
+    const result = await getAccountMaster()
+    return adminCachedJson(result)
+  } catch (error) {
+    console.error("[GET /api/admin/crm/account-master]", error)
+    return NextResponse.json({ error: "Failed to load CRM account master" }, { status: 500 })
+  }
 }

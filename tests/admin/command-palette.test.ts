@@ -6,21 +6,29 @@ import { ADMIN_COMMANDS } from "@/components/admin/AdminCommandPalette"
 describe("admin command palette (admin-nav 파생)", () => {
   const byHref = (href: string) => ADMIN_COMMANDS.filter((cmd) => cmd.href === href)
 
-  it("exposes the docs gap queue as a docs-tab deep link under the cs section label", () => {
-    // IA 재설계(admin-ia-redesign-2026-06-29 §3·§6): 보강 큐는 독립 라우트에서
-    // 문서 센터(/admin/docs)의 "보강 큐" 탭으로 병합됨. nav·팔레트 모두 탭 딥링크로 이동.
-    // nav 재분리(2026-07-17)로 "챗봇 운영·보강 큐" 겸직 라벨은 "문서 보강 큐"로 좁혀졌다.
-    const [gaps] = byHref("/admin/docs?tab=gaps")
-    expect(gaps?.label).toBe("문서 보강 큐")
-    expect(gaps?.group).toBe("고객 지원")
+  it("exposes the CS console as the cs section entry point", () => {
+    // CS 콘솔 IA 재구성(2026-07-27): "챗봇 운영"이 외부 축 전체의 입구인 "CS 콘솔"로 승격.
+    const [console] = byHref("/admin/chatbot")
+    expect(console?.label).toBe("CS 콘솔")
+    expect(console?.group).toBe("고객 지원")
   })
 
-  it("exposes chatbot ops as its own standalone cs command (nav 재분리 2026-07-17)", () => {
-    // 이전에는 /admin/chatbot이 redirect 스텁이라 팔레트 커맨드가 없었다 — 재분리로
-    // "챗봇 운영" 라벨이 문서 보강 큐와 독립된 커맨드로 복원됐다.
-    const [chatbotOps] = byHref("/admin/chatbot")
-    expect(chatbotOps?.label).toBe("챗봇 운영")
-    expect(chatbotOps?.group).toBe("고객 지원")
+  it("keeps the absorbed cs surfaces reachable as ⌘K child commands", () => {
+    // 사이드바 항목에서는 빠졌지만 URL은 그대로다 — 팔레트 도달성이 끊기면 안 된다.
+    // 라벨은 콘솔 가로 메뉴명과 일치시킨다(두 표면의 어휘 단일화).
+    const [gaps] = byHref("/admin/docs?tab=gaps")
+    expect(gaps?.label).toBe("미해결 큐")
+    expect(gaps?.group).toBe("고객 지원")
+
+    const [inbox] = byHref("/admin/channel-talk")
+    expect(inbox?.label).toBe("상담 Inbox (채널톡)")
+    expect(inbox?.group).toBe("고객 지원")
+  })
+
+  it("exposes internal CS as its own cs command", () => {
+    const [internal] = byHref("/admin/cs-chatbot")
+    expect(internal?.label).toBe("내부 CS")
+    expect(internal?.group).toBe("고객 지원")
   })
 
   it("groups commands by sidebar section labels (하드웨어 재고=영업·매출, 가이드 문서=고객 지원)", () => {

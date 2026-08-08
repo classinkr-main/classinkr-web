@@ -11,6 +11,7 @@ export interface NeoCrmCustomerRow {
   ownerId: string | null
   ownerName: string
   phone: string | null
+  regionLabel?: string | null
   balance: number | null
   expireAt: string | null
   lastClassAt: string | null
@@ -61,6 +62,7 @@ export interface NeoCrmCustomerEeoAccount {
   expireAt: string | null
   lastClassAt: string | null
   serviceStatus: string | null
+  syncedAt: string | null
 }
 
 export interface NeoCrmCustomerMoneyItem {
@@ -158,6 +160,7 @@ async function computeNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
       ownerId: row.ownerId,
       ownerName: row.ownerName,
       phone: row.phone,
+      regionLabel: row.regionLabel,
       balance: row.balance,
       expireAt: row.expireAt,
       lastClassAt: row.lastClassAt,
@@ -181,10 +184,11 @@ interface MoneyRecordRow {
   status: string | null
   amount: number | null
   occurred_at: string | null
+  synced_at: string | null
   payload: Record<string, unknown> | null
 }
 
-const DETAIL_RECORD_SELECT = "external_id, display_name, owner_name, status, amount, occurred_at, payload"
+const DETAIL_RECORD_SELECT = "external_id, display_name, owner_name, status, amount, occurred_at, synced_at, payload"
 const DETAIL_LIMIT = 200
 
 // account 1곳의 EEO 계정·오더·수금·성과 drill-down.
@@ -256,6 +260,7 @@ export async function getNeoCrmCustomerDetail(accountId: string): Promise<NeoCrm
     expireAt: payloadIsActivePaidEeo(row.payload) ? payloadExpireAt(row.payload) : null,
     lastClassAt: toIso(row.payload?.["LastClassDate__c"]),
     serviceStatus: row.status,
+    syncedAt: row.synced_at,
   }))
 
   return {
