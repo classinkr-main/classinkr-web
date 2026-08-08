@@ -39,15 +39,17 @@ export type { LeadSourceGroup, MetaAdInfo }
 export const STATUS_LABEL: Record<LeadStatus, string> = {
   new: "신규", contacted: "연락중", converted: "전환", closed: "종료",
 }
+// 상태 색은 STATUS_DOT 색상축(아래) 하나만 쓴다 — pill 채움은 그 색의 옅은 틴트.
+// Tailwind 기본 팔레트(yellow-*, green-*)는 디자인 토큰 밖이라 쓰지 않는다(DESIGN.md §2).
 export const STATUS_COLOR: Record<LeadStatus, string> = {
   new: "bg-[#ECFDF5] text-[#084734]",
-  contacted: "bg-yellow-50 text-yellow-600",
-  converted: "bg-green-50 text-green-600",
+  contacted: "bg-[#FBF1E0] text-[#7A520F]",
+  converted: "bg-[#084734] text-white",
   closed: "bg-[#f0f0ec] text-[#1a1a1a]/40",
 }
 // 목록 행 상태 표시 — 파스텔 채움 대신 점+라벨(아웃라인 취향, 유입 색점과 같은 시스템).
 export const STATUS_DOT: Record<LeadStatus, string> = {
-  new: "#1D9E75", contacted: "#D97706", converted: "#084734", closed: "#9A9A94",
+  new: "#1D9E75", contacted: "#A8741A", converted: "#084734", closed: "#9A9A94",
 }
 
 export function StatusPill({ status }: { status: LeadStatus }) {
@@ -94,9 +96,9 @@ export const LOG_RESULT_LABEL: Record<ContactLogResult, string> = {
   answered: "연결됨", no_answer: "부재중", callback: "콜백 요청", meeting_set: "미팅 확정",
 }
 export const LOG_RESULT_COLOR: Record<ContactLogResult, string> = {
-  answered: "text-green-600",
+  answered: "text-[#084734]",
   no_answer: "text-[#1a1a1a]/40",
-  callback: "text-yellow-600",
+  callback: "text-[#A8741A]",
   meeting_set: "text-[#084734]",
 }
 
@@ -215,20 +217,28 @@ export function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <button
+      type="button"
       onClick={() => { navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
+      aria-label={copied ? "복사됨" : "클립보드에 복사"}
       className="p-1 rounded-md text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60 hover:bg-[#f0f0ec] transition-all"
     >
-      {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+      {copied ? <Check className="w-3.5 h-3.5 text-[#084734]" /> : <Copy className="w-3.5 h-3.5" />}
+      <span aria-live="polite" className="sr-only">{copied ? "복사되었습니다" : ""}</span>
     </button>
   )
 }
 
 // ─── 토스트 ────────────────────────────────────────────────────
-export function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
+// raised: 전환 완료 패널 등 우하단 고정 패널이 떠 있을 때 그 위로 올려 겹침을 피한다.
+export function Toast({ msg, type, raised = false }: { msg: string; type: "success" | "error"; raised?: boolean }) {
   return (
-    <div className={`fixed bottom-6 right-6 z-[60] flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl text-[13px] font-medium ${
-      type === "success" ? "bg-[#111110] text-white" : "bg-[#B85C33] text-white"
-    }`}>
+    <div
+      role="status"
+      aria-live="polite"
+      className={`fixed right-6 z-[70] flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-xl text-[13px] font-medium ${
+        raised ? "bottom-28" : "bottom-6"
+      } ${type === "success" ? "bg-[#111110] text-white" : "bg-[#B85C33] text-white"}`}
+    >
       {msg}
     </div>
   )

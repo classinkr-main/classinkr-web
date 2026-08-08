@@ -894,16 +894,16 @@ function CrmHealthDonut() {
     }
   }, [])
 
-  if (loading) return <div className="h-24 animate-pulse rounded-2xl bg-[#fafaf8]" />
+  if (loading) return <div className="h-24 animate-pulse rounded-2xl bg-[#f0f0ec]" />
   if (!dist || dist.total === 0) return null
 
   const pct = (value: number) => Math.round((value / dist.total) * 100)
   const safePct = pct(dist.safe)
   const watchPct = pct(dist.watch)
-  const gradient = `conic-gradient(#084734 0 ${safePct}%, #E0A33A ${safePct}% ${safePct + watchPct}%, #B85C33 ${safePct + watchPct}% 100%)`
+  const gradient = `conic-gradient(#084734 0 ${safePct}%, #A8741A ${safePct}% ${safePct + watchPct}%, #B85C33 ${safePct + watchPct}% 100%)`
   const legend = [
     { label: "안전", value: dist.safe, color: "#084734" },
-    { label: "주의", value: dist.watch, color: "#E0A33A" },
+    { label: "주의", value: dist.watch, color: "#A8741A" },
     { label: "위험", value: dist.risk, color: "#B85C33" },
   ]
 
@@ -1266,7 +1266,7 @@ function CrmOperationsDashboard({
               // 콜드 로드 — 로그 행 레이아웃과 일치하는 스켈레톤(CRM-5)
               <div className="space-y-2">
                 {[0, 1, 2].map((i) => (
-                  <div key={i} className="h-9 animate-pulse rounded-xl bg-[#fafaf8]" />
+                  <div key={i} className="h-9 animate-pulse rounded-xl bg-[#f0f0ec]" />
                 ))}
               </div>
             ) : (
@@ -1689,7 +1689,8 @@ export default function CrmPage() {
             size="sm"
             onClick={refreshAll}
             disabled={pageRefreshing}
-            className="gap-1.5"
+            // 옆의 수제 h-9 버튼들과 높이·radius·글자크기 정렬(size=sm 기본 h-8·13px 오버라이드).
+            className="h-9 gap-1.5 rounded-lg text-[12px]"
           >
             <RefreshCw className={`w-4 h-4 ${pageRefreshing ? "animate-spin" : ""}`} />새로고침
           </Button>
@@ -1812,7 +1813,7 @@ export default function CrmPage() {
               // 콜드 로드 — 일정 칩 레이아웃과 일치하는 스켈레톤(CRM-5)
               <div className="space-y-2">
                 {[0, 1].map((i) => (
-                  <div key={i} className="h-9 animate-pulse rounded-xl bg-[#fafaf8]" />
+                  <div key={i} className="h-9 animate-pulse rounded-xl bg-[#f0f0ec]" />
                 ))}
               </div>
             ) : (

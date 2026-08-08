@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowRight, ShieldCheck } from "lucide-react"
 
@@ -70,6 +70,8 @@ export default function CrmCoverageStrip() {
   const [data, setData] = useState<Coverage | null>(null)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
+  // 실패 시 인라인 "다시 시도"가 올리는 refetch 트리거 — effect 의존성으로만 쓰인다.
+  const [retryKey, setRetryKey] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -92,6 +94,13 @@ export default function CrmCoverageStrip() {
     return () => {
       alive = false
     }
+  }, [retryKey])
+
+  // 이벤트 핸들러에서 상태 전환 — 재시도 즉시 "계산 중" 카피로 돌아가게 한다.
+  const retry = useCallback(() => {
+    setFailed(false)
+    setLoading(true)
+    setRetryKey((key) => key + 1)
   }, [])
 
   const pct = data?.coveragePct ?? 0
@@ -135,6 +144,17 @@ export default function CrmCoverageStrip() {
         ) : (
           <span className="text-[12px] text-[#1a1a1a]/42">{copy.detail}</span>
         )}
+
+        {/* 실패는 새로고침 강요 없이 스트립 자체에서 복구 — 매칭 인박스 칩과 동일 스타일. */}
+        {state === "failed" ? (
+          <button
+            type="button"
+            onClick={retry}
+            className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-semibold text-[#111110] transition-colors hover:bg-[#e8e8e4]"
+          >
+            다시 시도
+          </button>
+        ) : null}
 
         {showRev && rev ? (
           <span className="flex flex-wrap items-center gap-1.5 text-[12px] text-[#1a1a1a]/45">

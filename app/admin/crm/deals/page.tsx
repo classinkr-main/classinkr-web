@@ -61,7 +61,7 @@ const WRITE_STATUS_LABEL: Record<string, string> = {
 
 const WRITE_STATUS_TONE: Record<string, string> = {
   draft: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
-  approved: "border-amber-100 bg-amber-50 text-amber-700",
+  approved: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
   sent: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/45",
   succeeded: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
   failed: "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]",
@@ -286,7 +286,7 @@ function getReadinessLabel(status: CrmReadinessReport["overallStatus"] | CrmRead
 
 function getReadinessTone(status: CrmReadinessReport["overallStatus"] | CrmReadinessCheck["status"]) {
   if (status === "ok") return STATUS_TONE.connected
-  if (status === "warning") return "border-amber-100 bg-amber-50 text-amber-700"
+  if (status === "warning") return "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
   return STATUS_TONE.error
 }
 
@@ -420,7 +420,7 @@ function ReadinessPanel({
       {report ? (
         <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px]">
           <div className="border-t border-[#D7EBDD] pt-2 text-[#084734]">OK {report.summary.ok}</div>
-          <div className="border-t border-amber-100 pt-2 text-amber-700">주의 {report.summary.warning}</div>
+          <div className="border-t border-[#ECD29C] pt-2 text-[#7A520F]">주의 {report.summary.warning}</div>
           <div className="border-t border-[#F6D5C5] pt-2 text-[#B85C33]">막힘 {report.summary.blocked}</div>
         </div>
       ) : null}
@@ -804,8 +804,8 @@ export default function AdminCrmRevenuePage() {
       ) : null}
 
       {(data?.warnings.length ?? 0) > 0 ? (
-        <div className="mb-6 border-l-2 border-amber-200 pl-3">
-          <div className="flex gap-2 text-[13px] text-amber-800">
+        <div className="mb-6 border-l-2 border-[#ECD29C] pl-3">
+          <div className="flex gap-2 text-[13px] text-[#7A520F]">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="space-y-1">
               {data?.warnings.map((warning) => <p key={warning}>{warning}</p>)}
@@ -1284,7 +1284,7 @@ export default function AdminCrmRevenuePage() {
                                     request.attemptCount >= WRITE_MAX_ATTEMPTS ||
                                     Boolean(request.nextRetryAt && new Date(request.nextRetryAt).getTime() > Date.now())
                                   }
-                                  className="inline-flex h-7 items-center gap-1 rounded-lg border border-amber-100 bg-amber-50 px-2 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+                                  className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-2 text-[11px] font-semibold text-[#7A520F] transition-colors hover:bg-[#ECD29C] disabled:opacity-50"
                                 >
                                   {updatingWriteRequestId === retryKey ? (
                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1418,7 +1418,7 @@ export default function AdminCrmRevenuePage() {
                     ["견적", point.quotedAmount, "bg-[#84827a]"],
                     ["계약", point.contractedAmount, "bg-[#084734]"],
                     ["입금", point.paidAmount, "bg-[#084734]"],
-                    ["예상", point.expectedAmount, "bg-amber-300"],
+                    ["예상", point.expectedAmount, "bg-[#ECD29C]"],
                     ["시트 확정", point.sheetConfirmedAmount, "bg-[#065c41]"],
                     ["시트 임박", point.sheetHighConfidenceAmount, "bg-[#b8b6ae]"],
                     ["시트 예상", point.sheetExpectedAmount, "bg-[#6EE7B7]"],

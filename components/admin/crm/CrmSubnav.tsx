@@ -142,6 +142,7 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
               <Link
                 key={sub.key}
                 href={sub.href}
+                aria-current={isActive ? "page" : undefined}
                 onFocus={() => warmSubtab(sub.href)}
                 onMouseEnter={() => warmSubtab(sub.href)}
                 onPointerDown={() => warmSubtab(sub.href)}
@@ -170,6 +171,7 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
               <Link
                 key={sub.key}
                 href={sub.href}
+                aria-current={isActive ? "page" : undefined}
                 onFocus={() => warmSubtab(sub.href)}
                 onMouseEnter={() => warmSubtab(sub.href)}
                 onPointerDown={() => warmSubtab(sub.href)}

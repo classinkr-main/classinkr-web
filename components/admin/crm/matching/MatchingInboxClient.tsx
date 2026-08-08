@@ -42,7 +42,7 @@ const SOURCE_LABEL: Record<CrmMatchingSourceSystem, string> = {
 }
 
 const SOURCE_TONE: Record<CrmMatchingSourceSystem, string> = {
-  branch_rev_sheet: "border-amber-100 bg-amber-50 text-amber-700",
+  branch_rev_sheet: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
   xiaoshouyi: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
   lead: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
 }
@@ -58,7 +58,7 @@ const STATUS_TONE: Record<CrmSourceLinkStatus, string> = {
   candidate: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
   confirmed: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
   rejected: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/45",
-  stale: "border-amber-100 bg-amber-50 text-amber-700",
+  stale: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
 }
 
 const SOURCE_FILTERS: Array<{ key: SourceFilter; label: string }> = [
@@ -501,7 +501,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           type="button"
           onClick={() => void updateSourceLink(row.linkId as string, "stale")}
           disabled={pendingLinkIds.has(row.linkId as string)}
-          className="inline-flex h-7 items-center gap-1 rounded-lg border border-amber-100 bg-amber-50 px-2 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-50"
+          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-2 text-[11px] font-semibold text-[#7A520F] transition-colors hover:bg-[#ECD29C] disabled:opacity-50"
           title="확정을 되돌리고 재검수로 보냅니다"
         >
           {pendingLinkIds.has(row.linkId as string) ? (
@@ -624,7 +624,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         <div className="mb-6 border-l-2 border-[#D7EBDD] pl-3 text-[13px] text-[#084734]">{notice}</div>
       ) : null}
       {(data?.warnings ?? []).map((warning) => (
-        <div key={warning} className="mb-6 border-l-2 border-amber-200 pl-3 text-[13px] text-amber-800">
+        <div key={warning} className="mb-6 border-l-2 border-[#ECD29C] pl-3 text-[13px] text-[#7A520F]">
           {warning}
         </div>
       ))}
@@ -815,7 +815,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         <table className="min-w-[1240px] w-full text-left">
           <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
             <tr>
-              <th className="py-3 pr-3 font-semibold">
+              <th scope="col" className="py-3 pr-3 font-semibold">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -824,15 +824,15 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
                   className="h-3.5 w-3.5 accent-[#111110]"
                 />
               </th>
-              <th className="py-3 pr-4 font-semibold">소스</th>
-              <th className="py-3 pr-4 font-semibold">상태</th>
-              <th className="py-3 pr-4 font-semibold">원천 레코드</th>
-              <th className="py-3 pr-4 font-semibold">담당</th>
-              <th className="py-3 pr-4 font-semibold">연결 대상</th>
-              <th className="py-3 pr-4 text-right font-semibold">신뢰도</th>
-              <th className="py-3 pr-4 text-right font-semibold">금액</th>
-              <th className="py-3 pl-4 font-semibold">수동 연결</th>
-              <th className="py-3 pl-4 text-right font-semibold">액션</th>
+              <th scope="col" className="py-3 pr-4 font-semibold">소스</th>
+              <th scope="col" className="py-3 pr-4 font-semibold">상태</th>
+              <th scope="col" className="py-3 pr-4 font-semibold">원천 레코드</th>
+              <th scope="col" className="py-3 pr-4 font-semibold">담당</th>
+              <th scope="col" className="py-3 pr-4 font-semibold">연결 대상</th>
+              <th scope="col" className="py-3 pr-4 text-right font-semibold">신뢰도</th>
+              <th scope="col" className="py-3 pr-4 text-right font-semibold">금액</th>
+              <th scope="col" className="py-3 pl-4 font-semibold">수동 연결</th>
+              <th scope="col" className="py-3 pl-4 text-right font-semibold">액션</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#f0f0ec]">

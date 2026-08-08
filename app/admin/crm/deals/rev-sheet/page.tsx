@@ -47,10 +47,10 @@ const STATUS_LABEL: Record<Exclude<RevenueSheetLinkStatus, null>, string> = {
 }
 
 const STATUS_TONE: Record<Exclude<RevenueSheetLinkStatus, null>, string> = {
-  candidate: "border-sky-100 bg-sky-50 text-sky-700",
-  confirmed: "border-emerald-100 bg-emerald-50 text-emerald-700",
+  candidate: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/55",
+  confirmed: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
   rejected: "border-[#e8e8e4] bg-[#fafaf8] text-[#1a1a1a]/45",
-  stale: "border-amber-100 bg-amber-50 text-amber-700",
+  stale: "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]",
 }
 
 const MAX_VISIBLE_ROWS = 80
@@ -371,8 +371,8 @@ export default function AdminCrmRevenueSheetPage() {
       {error ? <div className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">{error}</div> : null}
 
       {(data?.warnings.length ?? 0) > 0 ? (
-        <div className="mb-6 border-l-2 border-amber-200 pl-3">
-          <div className="flex gap-2 text-[13px] text-amber-800">
+        <div className="mb-6 border-l-2 border-[#ECD29C] pl-3">
+          <div className="flex gap-2 text-[13px] text-[#7A520F]">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="space-y-1">{data?.warnings.map((warning) => <p key={warning}>{warning}</p>)}</div>
           </div>
@@ -428,7 +428,7 @@ export default function AdminCrmRevenueSheetPage() {
               <div key={point.month} className="flex min-w-[46px] flex-1 flex-col items-stretch justify-end gap-1">
                 {[
                   ["confirmedAmount", "bg-[#084734]"],
-                  ["highConfidenceAmount", "bg-sky-500"],
+                  ["highConfidenceAmount", "bg-[#1E5DA8]"],
                   ["expectedAmount", "bg-[#6EE7B7]"],
                   ["pastUnconfirmedAmount", "bg-[#B85C33]"],
                 ].map(([field, tone]) => {
@@ -449,7 +449,7 @@ export default function AdminCrmRevenueSheetPage() {
           </div>
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-[#1a1a1a]/45">
             <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-[#084734]" />확정</span>
-            <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-sky-500" />임박</span>
+            <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-[#1E5DA8]" />임박</span>
             <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-[#6EE7B7]" />예정</span>
             <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-[#B85C33]" />전환 대기</span>
           </div>
