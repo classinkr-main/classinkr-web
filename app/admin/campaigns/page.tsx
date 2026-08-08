@@ -171,6 +171,11 @@ export default function AdminCampaignsPage() {
   const [metaUpdatingId, setMetaUpdatingId] = useState<string | null>(null)
   const [emailStats, setEmailStats] = useState<MarketingStatsData | null>(null)
   const [emailStatsError, setEmailStatsError] = useState<string | null>(null)
+  // 광고 리드 섹션(광고 탭) 전용 데이터. 코어 리드(scope=campaigns)는 귀속 5컬럼뿐이라
+  // 트래킹 축·연락처·전환 상태를 못 담는다 — 광고 탭에 들어올 때만 별도 스코프로 지연 조회한다.
+  const [adLeads, setAdLeads] = useState<LeadRecord[]>([])
+  const [adLeadsLoading, setAdLeadsLoading] = useState(false)
+  const [adLeadsError, setAdLeadsError] = useState<string | null>(null)
   const [channelBudgets, setChannelBudgets] = useState<Record<AdChannel, number>>(
     () => Object.fromEntries(AD_CHANNELS.map((c): [AdChannel, number] => [c, 0])) as Record<AdChannel, number>
   )
@@ -302,6 +307,41 @@ export default function AdminCampaignsPage() {
       void loadEmailStats()
     }
   }, [activeTab, loadEmailStats])
+
+  const loadAdLeads = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    setAdLeadsLoading(true)
+    setAdLeadsError(null)
+    try {
+      const data = await adminFetchJsonCached<{ leads: LeadRecord[] }>(
+        "/api/admin/leads?scope=marketing",
+        undefined,
+        { ttlMs: 45_000, force, staleIfError: !force }
+      )
+      setAdLeads(data.leads)
+    } catch (e) {
+      setAdLeadsError(e instanceof Error ? e.message : "광고 리드를 불러오지 못했습니다.")
+    } finally {
+      setAdLeadsLoading(false)
+    }
+  }, [])
+
+  // 전환 결과를 목록에 즉시 반영한다 — 전량 재조회 없이 상태만 갈아끼워 선택·스크롤을 보존한다.
+  const updateAdLeads = useCallback((updater: (prev: LeadRecord[]) => LeadRecord[]) => {
+    setAdLeads(updater)
+  }, [])
+
+  const refreshAdLeads = useCallback(() => {
+    void loadAdLeads({ force: true })
+  }, [loadAdLeads])
+
+  // 광고 탭 첫 진입에만 조회한다 — 탭을 오갈 때마다 다시 부르면 목록이 깜빡이고,
+  // 전환으로 갱신해 둔 로컬 상태(status=converted)도 매번 되감긴다.
+  const adLeadsRequestedRef = useRef(false)
+  useEffect(() => {
+    if (activeTab !== "meta" || adLeadsRequestedRef.current) return
+    adLeadsRequestedRef.current = true
+    void loadAdLeads()
+  }, [activeTab, loadAdLeads])
 
   // 채널 예산(배정)은 광고 탭에서만 필요 — 지연 로드. 실패해도 0으로 유지(무크래시).
   const loadChannelBudgets = useCallback(async () => {
@@ -486,10 +526,15 @@ export default function AdminCampaignsPage() {
 
   const showFilterRow = activeTab === "summary" || activeTab === "events"
   const refreshLoading =
-    activeTab === "meta" ? metaLoading : activeTab === "summary" ? loading || metaLoading : loading
+    activeTab === "meta"
+      ? metaLoading || adLeadsLoading
+      : activeTab === "summary"
+        ? loading || metaLoading
+        : loading
   const refreshCurrent = useCallback(() => {
     if (activeTab === "meta") {
-      void loadMeta({ force: true })
+      // 광고 탭은 Meta 성과와 광고 리드가 나란히 놓이므로 헤더 동기화가 둘 다 새로 받는다.
+      void Promise.all([loadMeta({ force: true }), loadAdLeads({ force: true })])
       return
     }
     if (activeTab === "summary") {
@@ -497,7 +542,7 @@ export default function AdminCampaignsPage() {
       return
     }
     void load({ force: true })
-  }, [activeTab, load, loadMeta])
+  }, [activeTab, load, loadAdLeads, loadMeta])
 
   return (
     <div className="pb-24">
@@ -606,6 +651,16 @@ export default function AdminCampaignsPage() {
           channelBudgets={channelBudgets}
           onBudgetChange={handleChannelBudgetChange}
           aggregate={aggregate}
+          adLeads={adLeads}
+          adLeadsLoading={adLeadsLoading}
+          adLeadsError={adLeadsError}
+          onRefreshAdLeads={refreshAdLeads}
+          onAdLeadsUpdate={updateAdLeads}
+          perEventEcon={perEventEcon}
+          metricsMap={metricsMap}
+          editing={editing}
+          setEditing={setEditing}
+          onMetricsSaved={handleMetricsSaved}
         />
       ) : (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">

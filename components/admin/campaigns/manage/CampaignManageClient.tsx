@@ -7,9 +7,9 @@
 // 크래시/화이트스크린 없이 에러 카드 + 재시도로 그레이스풀 강등(필수).
 // DESIGN.md 팔레트만 사용.
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, ArrowLeft, Plus, RefreshCw } from "lucide-react"
+import { Activity, AlertCircle, ArrowLeft, Plus, RefreshCw, X } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
 import { useToast } from "@/components/ui/toast"
@@ -26,6 +26,25 @@ import CampaignDetailPanel from "./CampaignDetailPanel"
 // 목록 상단 상태 요약의 표시 순서 — 라이브 먼저(진행 → 계획 → 일시중지 → 완료).
 const STATUS_SUMMARY_ORDER: CampaignStatus[] = ["active", "planned", "paused", "done"]
 
+// POST /api/admin/marketing-campaigns/meta-sync 응답 — 결과 배너가 그대로 보여준다.
+interface MetaSyncResult {
+  created: Array<{ campaignId: string; metaId: string; name: string }>
+  updated: Array<{ campaignId: string; name: string; changes: string[] }>
+  failed: Array<{ name: string; error: string }>
+  unchangedMirrorCount: number
+  crossChannelLinkedCount: number
+  unresolvedMirrorCount: number
+  skipped: Array<{ metaId: string; name: string; reason: string }>
+}
+
+// 변경 필드 → 사람이 읽는 라벨(결과 배너의 갱신 행).
+const SYNC_CHANGE_LABEL: Record<string, string> = {
+  name: "이름",
+  status: "상태",
+  startsAt: "시작일",
+  endsAt: "종료일",
+}
+
 export default function CampaignManageClient() {
   const toast = useToast()
   const [campaigns, setCampaigns] = useState<CampaignWithLinks[]>([])
@@ -36,6 +55,11 @@ export default function CampaignManageClient() {
   // 상세 패널이 여는 캠페인(리스트 요약). null = 닫힘. onClose 는 memoized(상세의 load deps 안정).
   const [detail, setDetail] = useState<CampaignWithLinks | null>(null)
   const closeDetail = useCallback(() => setDetail(null), [])
+  // Meta 동기화 — 실행 중 여부 + 마지막 결과 배너(닫기 전까지 유지).
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState<MetaSyncResult | null>(null)
+  // setState 는 비동기라 연타를 못 막는다 — 동기 ref 로 실행 중 잠금(중복 가져오기 방지).
+  const syncingRef = useRef(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -73,6 +97,35 @@ export default function CampaignManageClient() {
     [load, toast],
   )
 
+  // Meta 동기화 — 미링크 Meta 캠페인을 미러로 가져오고, 미러의 이름·상태·기간을 Meta 에 맞춘다.
+  // 서버가 플랜·적용을 모두 담당하므로 여기서는 1콜 + 결과 배너 + 목록 리로드만 한다.
+  const handleMetaSync = useCallback(async () => {
+    if (syncingRef.current) return
+    syncingRef.current = true
+    setSyncing(true)
+    try {
+      const result = await adminFetchJson<MetaSyncResult>(
+        "/api/admin/marketing-campaigns/meta-sync",
+        { method: "POST" },
+      )
+      setSyncResult(result)
+      const changedCount = result.created.length + result.updated.length
+      if (result.failed.length > 0) {
+        toast.error(`Meta 동기화 부분 실패 — 성공 ${changedCount}건 · 실패 ${result.failed.length}건`)
+      } else if (changedCount > 0) {
+        toast.success(`Meta 동기화 완료 — 가져옴 ${result.created.length} · 갱신 ${result.updated.length}`)
+      } else {
+        toast.success("Meta 동기화 완료 — 변경 사항 없음")
+      }
+      await load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Meta 동기화에 실패했습니다.")
+    } finally {
+      syncingRef.current = false
+      setSyncing(false)
+    }
+  }, [load, toast])
+
   return (
     <div className="pb-24">
       {/* 헤더 — 캠페인 허브와 동일한 TopBar 패턴 */}
@@ -97,6 +150,16 @@ export default function CampaignManageClient() {
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleMetaSync()}
+              disabled={syncing || loading}
+              title="미링크 Meta 캠페인을 가져오고, Meta와 1:1로 연결된 캠페인의 이름·상태·기간을 Meta 기준으로 맞춥니다."
+              className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:opacity-60"
+            >
+              <Activity className={`h-3.5 w-3.5 ${syncing ? "animate-pulse" : ""}`} />
+              {syncing ? "동기화 중…" : "Meta 동기화"}
+            </button>
             <button
               type="button"
               onClick={() => void load()}
@@ -130,6 +193,82 @@ export default function CampaignManageClient() {
 
       {/* 본문 */}
       <div className="px-4 pt-6 sm:px-6 lg:px-9">
+        {/* Meta 동기화 결과 배너 — 무엇이 생기고 바뀌었는지 이름 단위로 남긴다(닫기 전까지 유지). */}
+        {syncResult && (
+          <div
+            className={`mb-4 rounded-2xl border px-4 py-3.5 ${
+              syncResult.failed.length > 0
+                ? "border-[#ECD29C] bg-[#FBF1E0]"
+                : "border-[#BDEFD8] bg-[#ECFDF5]"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 text-[12px] leading-relaxed">
+                <p
+                  className={`font-bold ${
+                    syncResult.failed.length > 0 ? "text-[#A8741A]" : "text-[#084734]"
+                  }`}
+                >
+                  Meta 동기화 — 가져옴 {syncResult.created.length} · 갱신 {syncResult.updated.length}
+                  {syncResult.unchangedMirrorCount > 0 ? ` · 변화 없음 ${syncResult.unchangedMirrorCount}` : ""}
+                  {syncResult.failed.length > 0 ? ` · 실패 ${syncResult.failed.length}` : ""}
+                </p>
+                {syncResult.created.length > 0 && (
+                  <p className="mt-1 text-[#084734]/80">
+                    새 캠페인: {syncResult.created.slice(0, 5).map((c) => c.name).join(", ")}
+                    {syncResult.created.length > 5 ? ` 외 ${syncResult.created.length - 5}건` : ""}
+                  </p>
+                )}
+                {syncResult.updated.length > 0 && (
+                  <p className="mt-0.5 text-[#084734]/80">
+                    갱신:{" "}
+                    {syncResult.updated
+                      .slice(0, 5)
+                      .map(
+                        (u) =>
+                          `${u.name} (${u.changes.map((ch) => SYNC_CHANGE_LABEL[ch] ?? ch).join("·")})`,
+                      )
+                      .join(", ")}
+                    {syncResult.updated.length > 5 ? ` 외 ${syncResult.updated.length - 5}건` : ""}
+                  </p>
+                )}
+                {syncResult.failed.length > 0 && (
+                  <p className="mt-0.5 text-[#A8741A]">
+                    실패: {syncResult.failed.map((f) => f.name).join(", ")} — {syncResult.failed[0].error}
+                  </p>
+                )}
+                {(syncResult.crossChannelLinkedCount > 0 ||
+                  syncResult.skipped.length > 0 ||
+                  syncResult.unresolvedMirrorCount > 0) && (
+                  <p className="mt-0.5 text-[11px] text-[#615D59]">
+                    {[
+                      syncResult.crossChannelLinkedCount > 0
+                        ? `크로스채널 연결 ${syncResult.crossChannelLinkedCount}건은 손대지 않음`
+                        : null,
+                      syncResult.skipped.length > 0
+                        ? `보관된 Meta 캠페인 ${syncResult.skipped.length}건 제외`
+                        : null,
+                      syncResult.unresolvedMirrorCount > 0
+                        ? `조회 범위 밖 미러 ${syncResult.unresolvedMirrorCount}건 유지`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setSyncResult(null)}
+                aria-label="동기화 결과 닫기"
+                className="shrink-0 rounded-md p-1 text-[#615D59] transition hover:text-[#111110]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="space-y-1.5" aria-busy="true">
             {[0, 1, 2, 3].map((i) => (

@@ -5,61 +5,10 @@ import { createPortal } from "react-dom"
 import Link from "next/link"
 import { CheckCircle2, ClipboardList, Loader2, Plus, UserPlus, X } from "lucide-react"
 
-import { adminFetchJson } from "@/lib/admin-client"
+import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
-
-interface BulkRow {
-  org?: string
-  name?: string
-  phone?: string
-  email?: string
-}
-
-// 붙여넣기(엑셀/구글시트 TSV·CSV·줄단위)를 리드 행으로. 헤더가 있으면 컬럼 매핑, 없으면 내용으로 추론.
-function parseBulk(text: string): BulkRow[] {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-  if (lines.length === 0) return []
-  const delim = lines[0].includes("\t") ? "\t" : lines[0].includes(",") ? "," : "\t"
-  const firstCols = lines[0].split(delim).map((c) => c.trim().toLowerCase())
-  const headerHit = firstCols.some((c) => /학원|기관|회사|업체|org|이름|name|담당|전화|phone|연락|email|이메일|메일/.test(c))
-
-  const colMap: { org?: number; name?: number; phone?: number; email?: number } = {}
-  let dataLines = lines
-  if (headerHit) {
-    firstCols.forEach((c, i) => {
-      if (colMap.org == null && /학원|기관|회사|업체|org/.test(c)) colMap.org = i
-      else if (colMap.name == null && /이름|name|담당|성함/.test(c)) colMap.name = i
-      else if (colMap.phone == null && /전화|phone|연락|휴대|hp|핸드/.test(c)) colMap.phone = i
-      else if (colMap.email == null && /email|이메일|메일/.test(c)) colMap.email = i
-    })
-    dataLines = lines.slice(1)
-  }
-
-  return dataLines
-    .map<BulkRow>((line) => {
-      const cols = line.split(delim).map((c) => c.trim())
-      if (headerHit) {
-        return {
-          org: colMap.org != null ? cols[colMap.org] || undefined : undefined,
-          name: colMap.name != null ? cols[colMap.name] || undefined : undefined,
-          phone: colMap.phone != null ? cols[colMap.phone] || undefined : undefined,
-          email: colMap.email != null ? cols[colMap.email] || undefined : undefined,
-        }
-      }
-      // 헤더 없음: @=이메일, 숫자많음=전화, 나머지 앞에서부터 학원/이름.
-      let email: string | undefined
-      let phone: string | undefined
-      const rest: string[] = []
-      for (const c of cols) {
-        if (!c) continue
-        if (c.includes("@")) email = email ?? c
-        else if (/^[\d()+\-\s]{8,}$/.test(c)) phone = phone ?? c
-        else rest.push(c)
-      }
-      return { org: rest[0], name: rest[1], phone, email }
-    })
-    .filter((r) => r.org || r.name || r.phone || r.email)
-}
+// 붙여넣기 파서·행 검증은 lib/crm/lead-paste가 SSOT — 캠페인 허브의 리드 가져오기와 공유한다.
+import { checkPastedLeads, parsePastedLeads } from "@/lib/crm/lead-paste"
 
 const EMPTY_SINGLE = { org: "", name: "", phone: "", email: "", source: "", notes: "" }
 
@@ -77,9 +26,24 @@ export default function LeadRegisterModal({
   const [bulkText, setBulkText] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<{ created: number; failed: number; firstId?: string | null } | null>(null)
+  // 단건 중복(409) 시 기존 리드로 바로 이동할 수 있게 id를 따로 든다.
+  const [duplicateId, setDuplicateId] = useState<string | null>(null)
+  const [result, setResult] = useState<{
+    created: number
+    failed: number
+    invalid?: number
+    duplicates?: number
+    firstId?: string | null
+  } | null>(null)
 
-  const bulkRows = useMemo(() => parseBulk(bulkText), [bulkText])
+  const bulkRows = useMemo(() => parsePastedLeads(bulkText), [bulkText])
+  // 행별 검증 — 제외 행도 사유와 함께 미리보기에 남겨 "왜 줄었는지"를 등록 전에 보여준다.
+  const checkedRows = useMemo(() => checkPastedLeads(bulkRows), [bulkRows])
+  const validRows = useMemo(
+    () => checkedRows.filter((checked) => checked.issues.length === 0).map((checked) => checked.row),
+    [checkedRows]
+  )
+  const excludedCount = bulkRows.length - validRows.length
 
   // 작성 중(단건 입력 or 벌크 붙여넣기) 닫기 시 실수로 내용이 날아가지 않게 확인한다.
   const isDirty =
@@ -89,6 +53,7 @@ export default function LeadRegisterModal({
   const close = useCallback(() => {
     if (isDirty && !result && !window.confirm("작성 중인 내용이 있습니다. 닫으면 사라집니다. 닫을까요?")) return
     setError(null)
+    setDuplicateId(null)
     setResult(null)
     setSingle(EMPTY_SINGLE)
     setBulkText("")
@@ -122,14 +87,34 @@ export default function LeadRegisterModal({
     }
     setSubmitting(true)
     setError(null)
+    setDuplicateId(null)
     try {
-      const res = await adminFetchJson<{ created: number; failed: number; firstId?: string | null }>("/api/admin/leads", {
+      // 409(중복)는 본문의 existingId까지 읽어야 해서 예외로 뭉개는 adminFetchJson 대신
+      // 원시 응답을 직접 다룬다.
+      const response = await adminFetch("/api/admin/leads", {
         method: "POST",
         body: JSON.stringify({ ...single, source: single.source || undefined }),
       })
-      setResult({ created: res.created, failed: res.failed, firstId: res.firstId })
+      const data = (await response.json().catch(() => null)) as
+        | { created?: number; failed?: number; invalid?: number; duplicates?: number; firstId?: string | null; error?: string; existingId?: string | null }
+        | null
+      if (response.status === 409) {
+        setDuplicateId(data?.existingId ?? null)
+        setError(data?.error ?? "이미 등록된 리드입니다(전화/이메일 일치).")
+        return
+      }
+      if (!response.ok || !data) {
+        throw new Error(data?.error ?? "리드 등록에 실패했습니다.")
+      }
+      setResult({
+        created: data.created ?? 0,
+        failed: data.failed ?? 0,
+        invalid: data.invalid,
+        duplicates: data.duplicates,
+        firstId: data.firstId,
+      })
       setSingle(EMPTY_SINGLE)
-      onDone?.(res.created)
+      onDone?.(data.created ?? 0)
     } catch (err) {
       setError(err instanceof Error ? err.message : "리드 등록에 실패했습니다.")
     } finally {
@@ -138,18 +123,34 @@ export default function LeadRegisterModal({
   }
 
   const submitBulk = async () => {
-    if (bulkRows.length === 0) {
-      setError("붙여넣은 리드가 없습니다.")
+    if (validRows.length === 0) {
+      setError("붙여넣은 유효한 리드가 없습니다.")
       return
     }
     setSubmitting(true)
     setError(null)
+    setDuplicateId(null)
     try {
-      const res = await adminFetchJson<{ created: number; failed: number; total: number; firstId?: string | null }>("/api/admin/leads", {
+      const res = await adminFetchJson<{
+        created: number
+        failed: number
+        total: number
+        invalid?: number
+        duplicates?: number
+        firstId?: string | null
+      }>("/api/admin/leads", {
         method: "POST",
-        body: JSON.stringify({ leads: bulkRows }),
+        // 형식 불량 행은 서버에서도 거르지만, 미리보기에서 제외로 안내한 행만 보낸다.
+        body: JSON.stringify({ leads: validRows }),
       })
-      setResult({ created: res.created, failed: res.failed, firstId: res.firstId })
+      setResult({
+        created: res.created,
+        failed: res.failed,
+        // 클라이언트에서 이미 제외한 형식 오류 행도 결과에 합산해 보여준다.
+        invalid: (res.invalid ?? 0) + excludedCount,
+        duplicates: res.duplicates,
+        firstId: res.firstId,
+      })
       setBulkText("")
       onDone?.(res.created)
     } catch (err) {
@@ -159,10 +160,14 @@ export default function LeadRegisterModal({
     }
   }
 
+  // label↔input을 id로 묶는다 — 라벨 클릭 포커스와 스크린리더 필드명 낭독이 여기에 걸린다.
   const field = (key: keyof typeof EMPTY_SINGLE, label: string, placeholder: string) => (
     <div>
-      <label className="text-[11px] font-semibold text-[#1a1a1a]/40">{label}</label>
+      <label htmlFor={`crm-lead-field-${key}`} className="text-[11px] font-semibold text-[#1a1a1a]/40">
+        {label}
+      </label>
       <input
+        id={`crm-lead-field-${key}`}
         value={single[key]}
         onChange={(e) => setSingle((s) => ({ ...s, [key]: e.target.value }))}
         placeholder={placeholder}
@@ -199,7 +204,11 @@ export default function LeadRegisterModal({
         </div>
 
         <div className="px-5 pt-4">
-          <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
+          <div
+            role="tablist"
+            aria-label="리드 등록 방식"
+            className="inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5"
+          >
             {(
               [
                 { key: "single", label: "단건", icon: <Plus className="h-3.5 w-3.5" /> },
@@ -209,10 +218,13 @@ export default function LeadRegisterModal({
               <button
                 key={t.key}
                 type="button"
+                role="tab"
+                aria-selected={tab === t.key}
                 onClick={() => {
                   setTab(t.key)
                   setResult(null)
                   setError(null)
+                  setDuplicateId(null)
                 }}
                 className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[12px] font-semibold transition-colors ${
                   tab === t.key ? "bg-[#111110] text-white" : "text-[#1a1a1a]/55 hover:text-[#111110]"
@@ -230,10 +242,16 @@ export default function LeadRegisterModal({
             <div className="rounded-xl border border-[#D7EBDD] bg-[#ECFDF5] px-4 py-4 text-center">
               <CheckCircle2 className="mx-auto h-6 w-6 text-[#084734]" />
               <p className="mt-2 text-[14px] font-bold text-[#111110]">
-                {result.created.toLocaleString("ko-KR")}건 등록 완료
+                {[
+                  `${result.created.toLocaleString("ko-KR")}건 등록`,
+                  result.duplicates ? `중복 ${result.duplicates.toLocaleString("ko-KR")}건 건너뜀` : null,
+                  result.invalid ? `형식 오류 ${result.invalid.toLocaleString("ko-KR")}건` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
               {result.failed > 0 ? (
-                <p className="mt-0.5 text-[12px] text-[#B85C33]">{result.failed}건 실패 (식별자 누락 등)</p>
+                <p className="mt-0.5 text-[12px] text-[#B85C33]">{result.failed}건 저장 실패</p>
               ) : null}
               <div className="mt-3 flex items-center justify-center gap-2">
                 <button
@@ -255,7 +273,7 @@ export default function LeadRegisterModal({
               </div>
             </div>
           ) : tab === "single" ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {field("org", "학원명", "예: 강남청담어학원")}
               {field("name", "담당자 이름", "예: 이수진 원장")}
               {field("phone", "전화", "010-0000-0000")}
@@ -278,18 +296,24 @@ export default function LeadRegisterModal({
               {bulkRows.length > 0 ? (
                 <div className="mt-2">
                   <p className="mb-1 text-[11px] font-semibold text-[#1a1a1a]/45">
-                    미리보기 {bulkRows.length}건 (상위 5)
+                    미리보기 유효 {validRows.length}건
+                    {excludedCount > 0 ? ` · 제외 ${excludedCount}건` : ""} (상위 5)
                   </p>
                   <div className="overflow-hidden rounded-lg border border-[#f0f0ec]">
-                    {bulkRows.slice(0, 5).map((r, i) => (
+                    {checkedRows.slice(0, 5).map(({ row: r, issues }, i) => (
                       <div
                         key={i}
-                        className="flex items-center gap-2 border-b border-[#f5f5f2] px-2.5 py-1.5 text-[12px] last:border-b-0"
+                        className={`flex items-center gap-2 border-b border-[#f5f5f2] px-2.5 py-1.5 text-[12px] last:border-b-0 ${
+                          issues.length > 0 ? "opacity-45" : ""
+                        }`}
                       >
                         <span className="min-w-0 flex-1 truncate font-medium text-[#111110]">
                           {r.org ?? r.name ?? "—"}
                         </span>
                         <span className="truncate text-[#1a1a1a]/45">{r.phone ?? r.email ?? ""}</span>
+                        {issues.length > 0 ? (
+                          <span className="shrink-0 font-semibold text-[#B85C33]">제외 · {issues.join(" · ")}</span>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -299,9 +323,18 @@ export default function LeadRegisterModal({
           )}
 
           {error ? (
-            <p className="mt-3 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
-              {error}
-            </p>
+            <div className="mt-3 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
+              <p>{error}</p>
+              {duplicateId ? (
+                <Link
+                  href={`/admin/crm/customers/leads?lead=${encodeURIComponent(duplicateId)}`}
+                  onClick={() => onClose()}
+                  className="mt-1 inline-flex font-semibold text-[#084734] underline underline-offset-2"
+                >
+                  기존 리드 열기
+                </Link>
+              ) : null}
+            </div>
           ) : null}
         </div>
 
@@ -317,11 +350,12 @@ export default function LeadRegisterModal({
             <button
               type="button"
               onClick={() => void (tab === "single" ? submitSingle() : submitBulk())}
-              disabled={submitting || (tab === "bulk" && bulkRows.length === 0)}
+              disabled={submitting || (tab === "bulk" && validRows.length === 0)}
+              title={tab === "bulk" && validRows.length === 0 ? "붙여넣은 유효한 리드가 없습니다" : undefined}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[#084734] px-4 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             >
               {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
-              {tab === "single" ? "리드 등록" : `${bulkRows.length}건 등록`}
+              {tab === "single" ? "리드 등록" : `${validRows.length}건 등록`}
             </button>
           </div>
         ) : null}

@@ -342,6 +342,47 @@ export async function getCampaignLeads(): Promise<LeadRecord[]> {
   return rows.map(supabaseToLegacy);
 }
 
+/**
+ * 캠페인 허브 "광고 리드" 섹션 전용 조회 — 마케팅 렌즈·트래킹 롤업·전환·CSV가 함께 쓰는 컬럼.
+ *
+ * campaigns 스코프(귀속 5컬럼)로는 부족하다: 렌즈 판정(lib/crm/lead-attribution)이 utm_*·클릭ID·
+ * lead_magnet·landing_page를 보고, 목록은 이름·학원·연락처를, 전환 버튼은 status를 본다.
+ * message를 포함하는 이유는 구버전 Meta 리드애즈 웹훅이 광고·세트명을 message 텍스트에만
+ * 남겼기 때문 — 빼면 그 시절 리드가 캠페인·광고 축 롤업에서 통째로 "미기록"으로 떨어진다.
+ *
+ * 전체(`*`)를 쓰지 않는 이유는 size·referrer·anonymous_id 처럼 이 화면이 쓰지 않는 컬럼과,
+ * 앞으로 늘어날 컬럼까지 캠페인 페이로드에 자동으로 실리는 것을 막기 위함이다.
+ * supabaseToLegacy는 미선택 컬럼을 `?? undefined`로 처리하므로 그대로 재사용 가능.
+ */
+const MARKETING_LEAD_COLUMNS = [
+  "id", "source", "name", "org", "role", "email", "phone", "message", "status",
+  "branch", "notes", "source_detail", "lead_magnet", "follow_up_at", "assigned_to",
+  "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+  "gclid", "fbclid", "msclkid", "ttclid", "landing_page", "current_page",
+  "created_at", "confirmed_at",
+].join(", ");
+
+// confirmed_at 마이그레이션 전 배포 창에서도 화면이 깨지지 않게 — 대시보드 조회와 같은 폴백.
+const MARKETING_LEAD_COLUMNS_WITHOUT_CONFIRMED = MARKETING_LEAD_COLUMNS.replace(", confirmed_at", "");
+
+export async function getMarketingLeads(): Promise<LeadRecord[]> {
+  if (!USE_SUPABASE) {
+    const { getLeads: jsonGetLeads } = await import("@/lib/db");
+    return jsonGetLeads();
+  }
+
+  try {
+    const rows = await fetchAllLeadRows(MARKETING_LEAD_COLUMNS, "마케팅 조회");
+    return rows.map(supabaseToLegacy);
+  } catch (error) {
+    if (!(error instanceof LeadQueryError) || !isMissingLeadColumn(error.supabaseError, "confirmed_at")) {
+      throw error;
+    }
+    const fallback = await fetchAllLeadRows(MARKETING_LEAD_COLUMNS_WITHOUT_CONFIRMED, "마케팅 조회");
+    return fallback.map(supabaseToLegacy);
+  }
+}
+
 export async function getLeadById(id: string): Promise<LeadRecord | null> {
   if (!USE_SUPABASE) {
     const { getLeads: jsonGetLeads } = await import("@/lib/db");
@@ -357,6 +398,71 @@ export async function getLeadById(id: string): Promise<LeadRecord | null> {
 
   if (error || !data) return null;
   return supabaseToLegacy(data as Lead);
+}
+
+/**
+ * 등록 전 중복 검사용 — 전화/이메일이 일치할 수 있는 기존 리드의 최소 컬럼만 가져온다.
+ * DB에는 하이픈 포함 전화가 흔해 원문만으로는 "010-1234-5678"과 "01012345678"을 다른
+ * 번호로 오인한다. in 목록에 원문과 숫자만 남긴 정규화형을 함께 넣어 그 차이를 흡수하고,
+ * 최종 판정(정규화 비교)은 호출부가 한다. 이메일도 원문·소문자형을 함께 조회한다.
+ */
+export async function findLeadsByContacts(contacts: {
+  phones: string[];
+  emails: string[];
+}): Promise<Pick<LeadRecord, "id" | "phone" | "email">[]> {
+  const phones = contacts.phones.map((phone) => phone.trim()).filter(Boolean);
+  const emails = contacts.emails.map((email) => email.trim()).filter(Boolean);
+  if (phones.length === 0 && emails.length === 0) return [];
+
+  const digitsOnly = (value: string) => value.replace(/\D/g, "");
+
+  if (!USE_SUPABASE) {
+    const { getLeads: jsonGetLeads } = await import("@/lib/db");
+    const phoneKeys = new Set(phones.map(digitsOnly).filter(Boolean));
+    const emailKeys = new Set(emails.map((email) => email.toLowerCase()));
+    return jsonGetLeads()
+      .filter(
+        (lead) =>
+          (lead.phone && phoneKeys.has(digitsOnly(lead.phone))) ||
+          (lead.email && emailKeys.has(lead.email.toLowerCase()))
+      )
+      .map((lead) => ({ id: lead.id, phone: lead.phone, email: lead.email }));
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const phoneCandidates = Array.from(
+    new Set(phones.flatMap((phone) => [phone, digitsOnly(phone)]).filter(Boolean))
+  );
+  const emailCandidates = Array.from(
+    new Set(emails.flatMap((email) => [email, email.toLowerCase()]))
+  );
+
+  const [phoneRes, emailRes] = await Promise.all([
+    phoneCandidates.length > 0
+      ? supabase.from("leads").select("id, phone, email").in("phone", phoneCandidates)
+      : Promise.resolve({ data: [], error: null }),
+    emailCandidates.length > 0
+      ? supabase.from("leads").select("id, phone, email").in("email", emailCandidates)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  const error = phoneRes.error ?? emailRes.error;
+  if (error) throw new Error(`[leads] 중복 조회 실패: ${error.message}`);
+
+  // 전화·이메일 양쪽에 걸린 리드가 두 번 세이지 않게 id로 합친다.
+  const byId = new Map<string, Pick<LeadRecord, "id" | "phone" | "email">>();
+  for (const row of [...(phoneRes.data ?? []), ...(emailRes.data ?? [])] as Array<{
+    id: string;
+    phone: string | null;
+    email: string | null;
+  }>) {
+    byId.set(row.id, {
+      id: row.id,
+      phone: row.phone ?? undefined,
+      email: row.email ?? undefined,
+    });
+  }
+  return Array.from(byId.values());
 }
 
 /* ─── CREATE ─── */

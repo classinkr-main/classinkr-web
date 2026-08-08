@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, type Dispatch, type SetStateAction } from "react"
 import dynamic from "next/dynamic"
 import {
   Activity,
@@ -18,16 +18,22 @@ import { ChartSkeleton } from "@/components/admin/viz"
 import { CampaignExportButton } from "@/components/admin/campaigns/CampaignExportButton"
 import type { ExportColumn } from "@/components/admin/campaigns/CampaignExportButton"
 import { ChannelBudgetTable } from "@/components/admin/campaigns/ChannelBudgetTable"
+import { EventMetricsQuickTable } from "@/components/admin/campaigns/EventMetricsQuickTable"
+import AdLeadsPanel from "@/components/admin/campaigns/leads/AdLeadsPanel"
 import type { ChannelEfficiencyRow } from "@/components/admin/campaigns/ChannelEfficiencyChart"
 import type { MetaPerfRow } from "@/components/admin/campaigns/MetaPerformanceCharts"
 import { KRW, compact, formatMetaDate, money } from "@/components/admin/campaigns/event-format"
-import type { AdChannel } from "@/lib/types/event-metrics"
+import type { LeadRecord } from "@/lib/repositories/leads"
+import { DEFAULT_EVENT_METRICS, type AdChannel, type EventMetrics } from "@/lib/types/event-metrics"
+import type { PublicEvent } from "@/lib/types/public-events"
 import { KpiCard } from "./KpiCard"
+import MetricsEditor from "./MetricsEditor"
 import type {
   CampaignAggregate,
   MetaCampaignDashboard,
   MetaCampaignRow,
   MetaDatePreset,
+  PerEventEconRow,
 } from "./types"
 
 const MetaPerformanceCharts = dynamic(
@@ -239,8 +245,8 @@ function MetaCampaignPanel({
   )
 }
 
-// "광고" 탭 패널 — Meta 라이브 캠페인 관리 + 채널 예산·집행 대조.
-// channelEfficiencyData/aggregate는 코어(행사·리드·지표) 파생값이라 페이지에서 내려받는다
+// "광고" 탭 패널 — Meta 라이브 캠페인 관리 + 광고 리드 모아보기·전환 + 채널 예산·집행 + 성과 입력.
+// channelEfficiencyData/aggregate/perEventEcon은 코어(행사·리드·지표) 파생값이라 페이지에서 내려받는다
 // (요약 탭과 공유 — 여기서 재계산하면 두 탭 수치가 어긋날 수 있다).
 export default function MetaTab({
   dashboard,
@@ -256,6 +262,16 @@ export default function MetaTab({
   channelBudgets,
   onBudgetChange,
   aggregate,
+  adLeads,
+  adLeadsLoading,
+  adLeadsError,
+  onRefreshAdLeads,
+  onAdLeadsUpdate,
+  perEventEcon,
+  metricsMap,
+  editing,
+  setEditing,
+  onMetricsSaved,
 }: {
   dashboard: MetaCampaignDashboard | null
   loading: boolean
@@ -272,6 +288,17 @@ export default function MetaTab({
   channelBudgets: Record<AdChannel, number>
   onBudgetChange: (channel: AdChannel, amount: number) => void
   aggregate: CampaignAggregate
+  /** 마케팅 스코프 리드 전량 — 광고 리드 섹션이 렌즈·기간으로 직접 좁힌다(코어 리드와 별도 조회). */
+  adLeads: LeadRecord[]
+  adLeadsLoading: boolean
+  adLeadsError: string | null
+  onRefreshAdLeads: () => void
+  onAdLeadsUpdate: (updater: (prev: LeadRecord[]) => LeadRecord[]) => void
+  perEventEcon: PerEventEconRow[]
+  metricsMap: Record<string, EventMetrics>
+  editing: PublicEvent | null
+  setEditing: Dispatch<SetStateAction<PublicEvent | null>>
+  onMetricsSaved: (metrics: EventMetrics) => void
 }) {
   // Meta 차트용 행
   const metaPerfRows = useMemo<MetaPerfRow[]>(() => {
@@ -344,6 +371,20 @@ export default function MetaTab({
           <MetaPerformanceCharts rows={metaPerfRows} currency={dashboard?.account.currency ?? "USD"} />
         </div>
       )}
+
+      {/* 광고 리드 — 캠페인 성과 바로 아래에 붙여 "이 광고비가 만든 사람들"을 같은 화면에서 본다. */}
+      <div className="mt-8">
+        <AdLeadsPanel
+          leads={adLeads}
+          loading={adLeadsLoading}
+          error={adLeadsError}
+          onRefresh={onRefreshAdLeads}
+          onLeadsUpdate={onAdLeadsUpdate}
+          metaSpend={dashboard?.summary.spend ?? null}
+          metaCurrency={dashboard?.account.currency ?? "USD"}
+        />
+      </div>
+
       <div className="mt-8">
         <div className="mb-3">
           <h2 className="text-[15px] font-semibold text-[#111110]">채널 예산·집행</h2>
@@ -366,6 +407,40 @@ export default function MetaTab({
           />
         )}
       </div>
+
+      {/* 성과 입력 — 위 표들의 "—"가 어느 행사의 미입력에서 나오는지 여기서 바로 채운다. */}
+      <div className="mt-8">
+        <div className="mb-3">
+          <h2 className="text-[15px] font-semibold text-[#111110]">성과 입력</h2>
+          <p className="mt-0.5 text-[12px] text-[#1a1a1a]/50">
+            행사별 광고비·매출·목표를 한 표에서 확인하고 매출·목표는 그 자리에서 고칩니다. 채널별 광고비 배분은 상세 편집에서 다룹니다.
+          </p>
+        </div>
+        {coreLoading ? (
+          <ChartSkeleton className="h-[220px]" />
+        ) : (
+          <EventMetricsQuickTable
+            rows={perEventEcon}
+            onSaved={onMetricsSaved}
+            onOpenFullEditor={setEditing}
+          />
+        )}
+      </div>
+
+      {editing && (
+        <MetricsEditor
+          event={editing}
+          metrics={
+            metricsMap[editing.id] ?? {
+              ...DEFAULT_EVENT_METRICS,
+              eventId: editing.id,
+              updatedAt: "",
+            }
+          }
+          onClose={() => setEditing(null)}
+          onSaved={onMetricsSaved}
+        />
+      )}
     </div>
   )
 }
