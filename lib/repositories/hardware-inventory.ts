@@ -208,6 +208,9 @@ function normalizeLocationName(value: unknown): string | null {
   if (/수리|a\/?s|as센터|repair/i.test(text)) return DEFAULT_REPAIR_LOCATION
   if (/사무실|office/i.test(text)) return "사무실"
   if (/창고|warehouse/i.test(text)) return DEFAULT_STOCK_LOCATION
+  // FPL(풀필먼트) 위탁 창고 — 판매 가능한 창고 풀에 속한다(2026-08 운영 확정: 인천 더조은).
+  // 시트에는 사이트명이 그대로 적히므로 창고로 정규화하고, 원문은 storage_location·raw에 보존한다.
+  if (/인천\s*더조은|\bfpl\b/i.test(text)) return DEFAULT_STOCK_LOCATION
   if (/^외부\/?고객$|^고객$|고객사/i.test(text)) return DEFAULT_CUSTOMER_LOCATION
   return text
 }
@@ -940,6 +943,9 @@ interface ImportMovementRow {
   serials: string[]
   unit_price: number | null
   amount_usd: number | null
+  // 보관처 원문 — FPL 사이트명("인천 더조은")처럼 to_location이 창고로 정규화되는 경우에도
+  // 실제 물리 위치를 잃지 않도록 RPC의 storage_location 컬럼에 그대로 싣는다.
+  storage_location?: string | null
   source_table: string
   source_key: string
   source_digest: string
@@ -1156,6 +1162,7 @@ export async function importHardwareFromBranchSheets(
         status: "입고",
         reference_no: cleanString(row.logistics_no),
         memo: cleanString(row.remarks),
+        storage_location: cleanString(row.storage),
         serials: row.serials ?? [],
         // Inbound cost is imported in USD (hardware is sourced in USD); the parser
         // already stripped any currency symbol so the number is currency-agnostic.

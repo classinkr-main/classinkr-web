@@ -260,6 +260,39 @@ describe("importHardwareFromBranchSheets", () => {
     })
   })
 
+  it("counts FPL consignment sites (인천 더조은) as warehouse stock while preserving the original site name", async () => {
+    listFreshHwInbound.mockResolvedValue([
+      {
+        id: "inbound-fpl",
+        logistics_no: "C1",
+        inbound_date: "2026-07-16",
+        product: "86 IFP",
+        quantity: 40,
+        unit_price: null,
+        amount: null,
+        serials: [],
+        storage: "인천 더조은",
+        importer: "클래스인",
+        remarks: null,
+        raw: { values: ["C1", "2026-07-16", "86 IFP"] },
+      },
+    ])
+    const { importHardwareFromBranchSheets } = await loadRepository()
+
+    await importHardwareFromBranchSheets({ actor: "admin@example.com" })
+
+    const replaceArgs = operations.find(
+      (op) => op.method === "rpc" && op.fn === "replace_hardware_sheet_import"
+    )?.args
+    const rows = replaceArgs?.rows as Array<Record<string, unknown>>
+    // FPL 창고 입고는 판매 가능한 창고 풀로 집계되고(가짜 재고 보정 방지), 물리 사이트명은 남는다.
+    expect(rows[0]).toMatchObject({
+      movement_type: "inbound",
+      to_location: "창고",
+      storage_location: "인천 더조은",
+    })
+  })
+
   it("adds stock reconciliation adjustments for products that also have ledger rows", async () => {
     const inboundRows = [
       {

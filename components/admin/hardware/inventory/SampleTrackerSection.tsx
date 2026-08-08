@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useMemo, useState } from "react"
-import { ChevronRight, PackagePlus } from "lucide-react"
+import { ChevronDown, ChevronRight, PackagePlus } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
 import {
@@ -26,6 +26,10 @@ const FILTERS: Array<{ key: StatusFilter; label: string }> = [
   { key: "retired", label: "폐기" },
 ]
 
+// 홈 위계 보호 — 유닛이 수십 개여도 기본은 행동 필요한 상단(대여중 우선 정렬)만 보여주고,
+// 전체 목록은 명시적 펼침으로만 연다. 필터·정렬·행 클릭 기능은 그대로다.
+const COLLAPSED_ROW_LIMIT = 8
+
 interface RegisterPlanLine {
   itemId: string
   productName: string
@@ -49,6 +53,7 @@ function locationQuantity(row: HardwareStockRow, location: string): number {
 
 function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOpenUnit, onChanged }: SampleTrackerSectionProps) {
   const [filter, setFilter] = useState<StatusFilter>("all")
+  const [showAllRows, setShowAllRows] = useState(false)
   const [registering, setRegistering] = useState(false)
   const [registerError, setRegisterError] = useState<string | null>(null)
 
@@ -191,7 +196,7 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
         </p>
       ) : (
         <div className="border-t border-[rgba(0,0,0,0.06)]">
-          {filtered.map((unit) => {
+          {(showAllRows ? filtered : filtered.slice(0, COLLAPSED_ROW_LIMIT)).map((unit) => {
             const meta = SAMPLE_STATUS_META[unit.status]
             const elapsed = unit.status === "loaned" ? loanElapsedDays(unit.loaned_at) : null
             const latest = latestEvents[unit.id]
@@ -223,6 +228,19 @@ function SampleTrackerSection({ units, latestEvents, loading, error, stock, onOp
               </button>
             )
           })}
+          {filtered.length > COLLAPSED_ROW_LIMIT && (
+            <div className="border-t border-[rgba(0,0,0,0.05)] px-5 py-2.5">
+              <button
+                type="button"
+                onClick={() => setShowAllRows((value) => !value)}
+                aria-expanded={showAllRows}
+                className="inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-[12px] font-semibold text-[#615D59] transition hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+              >
+                {showAllRows ? "접기" : `전체 ${formatNumber(filtered.length)}개 보기 (${formatNumber(filtered.length - COLLAPSED_ROW_LIMIT)}개 더)`}
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAllRows ? "rotate-180" : ""}`} />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </section>

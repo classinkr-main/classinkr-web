@@ -30,7 +30,10 @@ function CategoryCardsSection({ categoryCards }: { categoryCards: CategoryCard[]
               <div className="min-w-0">
                 <p className="text-[11px] font-bold tracking-[0.04em] text-[#615D59]">{card.label}</p>
                 <p className="mt-2 flex items-baseline gap-1.5">
-                  <span className="text-[28px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]">{formatNumber(card.warehouse)}</span>
+                  {/* 음수 창고 = 원장 이상 신호 — Danger 텍스트로 즉시 드러낸다(정상은 중립 유지). */}
+                  <span className={`text-[28px] font-bold leading-none tracking-[-0.03em] tabular-nums ${card.warehouse < 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
+                    {formatNumber(card.warehouse)}
+                  </span>
                   <span className="text-[13px] font-semibold text-[#615D59]">창고</span>
                 </p>
               </div>
@@ -42,8 +45,21 @@ function CategoryCardsSection({ categoryCards }: { categoryCards: CategoryCard[]
               </span>
             </div>
             <div className="mt-3 flex flex-wrap gap-1.5">
-              <span className="rounded-full bg-[#FBF1E0] px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#A8741A]">예정 {formatNumber(card.planned)}</span>
-              <span className="rounded-full bg-[#ECFDF5] px-2.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#084734]">가용 {formatNumber(card.available)}</span>
+              {/* 상태색은 의미 있을 때만 — 예정 0은 중립으로 가라앉히고, 가용 음수는 Danger로 올린다. */}
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                  card.planned > 0 ? "bg-[#FBF1E0] text-[#A8741A]" : "bg-[#F6F5F4] text-[#A39E98]"
+                }`}
+              >
+                예정 {formatNumber(card.planned)}
+              </span>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                  card.available < 0 ? "bg-[#FCE9E9] text-[#B43E3E]" : "bg-[#ECFDF5] text-[#084734]"
+                }`}
+              >
+                가용 {formatNumber(card.available)}
+              </span>
             </div>
           </div>
         )

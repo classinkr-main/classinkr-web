@@ -46,7 +46,7 @@ function LocationMapSection({
               <div key={loc.name}>
                 <div className="flex items-center justify-between gap-3 text-[12px]">
                   <span className="min-w-0 truncate font-semibold text-[#31302E]" title={loc.desc}>{loc.name}</span>
-                  <span className="font-bold tabular-nums text-[#111110]">{formatNumber(loc.quantity)}대</span>
+                  <span className={`font-bold tabular-nums ${loc.quantity < 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>{formatNumber(loc.quantity)}대</span>
                 </div>
                 <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#F6F5F4]">
                   <div className="h-full rounded-full" style={{ backgroundColor: loc.tone, width: loc.pct }} />
@@ -71,22 +71,34 @@ function LocationMapSection({
                   )}
                 </div>
                 <div className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-5">
-                  {row.cells.map((cell) => (
-                    <div key={cell.label} className="min-w-0">
-                      <div className="flex items-center justify-between gap-1 text-[11px]">
-                        <span className="truncate font-semibold text-[#615D59]">{cell.label}</span>
-                        <span className="font-bold tabular-nums text-[#111110]">{formatNumber(cell.qty)}</span>
+                  {row.cells.map((cell) => {
+                    // 가용(=창고−예정)이 이 맵의 의사결정 숫자다 — 값만 한 단계 키우고,
+                    // 음수는 Danger, 0 셀은 딤 처리해 시선이 잔량 있는 칸으로 먼저 가게 한다.
+                    const isAvailable = cell.label === "가용"
+                    const zero = cell.qty === 0
+                    const valueTone = cell.qty < 0 ? "text-[#B43E3E]" : zero ? "text-[#A39E98]" : "text-[#111110]"
+                    return (
+                      <div key={cell.label} className="min-w-0">
+                        <div className="flex items-baseline justify-between gap-1 text-[11px]">
+                          <span className={`truncate font-semibold ${zero ? "text-[#A39E98]" : "text-[#615D59]"}`}>{cell.label}</span>
+                          <span className={`tabular-nums ${isAvailable ? "text-[13px] font-bold" : "font-bold"} ${valueTone}`}>
+                            {formatNumber(cell.qty)}
+                          </span>
+                        </div>
+                        <div className={`mt-1.5 h-2 overflow-hidden rounded-full bg-[#F6F5F4] ${zero ? "opacity-50" : ""}`}>
+                          <div className="h-full rounded-full" style={{ backgroundColor: cell.tone, width: cell.pct }} />
+                        </div>
                       </div>
-                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#F6F5F4]">
-                        <div className="h-full rounded-full" style={{ backgroundColor: cell.tone, width: cell.pct }} />
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
-                <div className="flex min-w-0 justify-start gap-1.5 sm:justify-end">
-                  <QuickMoveButton kind="sale" product={row.product} onClick={() => prepareQuickEntry(row.itemId, "sale")} />
-                  <QuickMoveButton kind="planned" product={row.product} onClick={() => prepareQuickEntry(row.itemId, "planned")} />
-                  <QuickMoveButton kind="inbound" product={row.product} onClick={() => prepareQuickEntry(row.itemId, "inbound")} />
+                {/* 퀵액션은 재고 표와 같은 세그먼트 컨테이너 — 3화면(맵·표·검색)이 같은 문법을 쓴다. */}
+                <div className="flex min-w-0 justify-start sm:justify-end">
+                  <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
+                    <QuickMoveButton kind="sale" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "sale")} />
+                    <QuickMoveButton kind="planned" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "planned")} />
+                    <QuickMoveButton kind="inbound" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "inbound")} />
+                  </div>
                 </div>
               </div>
             ))}

@@ -13,6 +13,21 @@ export interface RunAllResult {
   warnings?: string[]
 }
 
+// Supabase PostgrestError처럼 Error가 아닌 throw를 "[object Object]"로 뭉개지 않는다 —
+// message·code·details·hint를 이어 붙여 동기화 실패 원인이 UI/런 레코드에 그대로 남게 한다.
+function describeError(e: unknown): string {
+  if (e instanceof Error) return e.message
+  if (e && typeof e === "object") {
+    const rec = e as Record<string, unknown>
+    const parts = [rec.message, rec.code, rec.details, rec.hint].filter(
+      (v): v is string => typeof v === "string" && v.length > 0
+    )
+    if (parts.length > 0) return parts.join(" · ")
+    try { return JSON.stringify(e) } catch { /* circular 등 — String 폴백 */ }
+  }
+  return String(e)
+}
+
 export async function runAll(opts: { trigger: SyncTrigger; sources?: Array<"rev"|"hw"> }): Promise<RunAllResult> {
   if (await isAnyRunning()) return { ok: false, skipped: true }
   const sources = opts.sources ?? ["rev", "hw"]
@@ -26,11 +41,11 @@ export async function runAll(opts: { trigger: SyncTrigger; sources?: Array<"rev"
     const warnings: string[] = []
     if (sources.includes("rev")) {
       try { const r = await syncRev(); revRows = r.rows; if (r.warning) warnings.push(r.warning) }
-      catch (e) { errors.push(`rev: ${e instanceof Error ? e.message : String(e)}`) }
+      catch (e) { errors.push(`rev: ${describeError(e)}`) }
     }
     if (sources.includes("hw")) {
       try { hw = await syncHw() }
-      catch (e) { errors.push(`hw: ${e instanceof Error ? e.message : String(e)}`) }
+      catch (e) { errors.push(`hw: ${describeError(e)}`) }
     }
     const total = revRows + (hw ? hw.inbound + hw.outbound + hw.stock + hw.sales : 0)
     // 경고는 branch_sync_runs 레코드(error 필드)에는 쓰지 않는다 — 동기화는 여전히 성공이다.
@@ -44,7 +59,7 @@ export async function runAll(opts: { trigger: SyncTrigger; sources?: Array<"rev"
     await finishSyncRun(id, { status: "success", rows_affected: total })
     return { ok: true, rev: revRows, hw, ...warningsField }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
+    const msg = describeError(e)
     await finishSyncRun(id, { status: "failed", error: msg })
     return { ok: false, error: msg }
   }

@@ -155,12 +155,26 @@ export function readOptionalStringArray(body: JsonObject, key: string, label: st
   return readStringArray(body, key, label)
 }
 
+// Supabase PostgrestError 등 Error가 아닌 throw에서도 message·code·details를 살린다 —
+// 어드민 운영 화면이 "Failed to ..." 폴백만 보면 원인 추적이 불가능하다.
+function describeUnknownError(error: unknown): string | null {
+  if (error instanceof Error) return error.message || null
+  if (error && typeof error === "object") {
+    const rec = error as Record<string, unknown>
+    const parts = [rec.message, rec.code, rec.details, rec.hint].filter(
+      (v): v is string => typeof v === "string" && v.length > 0
+    )
+    if (parts.length > 0) return parts.join(" · ")
+  }
+  return null
+}
+
 export function toErrorResponse(error: unknown, fallbackMessage: string) {
   if (error instanceof HardwareApiValidationError) {
     return NextResponse.json({ error: error.message }, { status: error.status })
   }
 
-  const message = error instanceof Error ? error.message : fallbackMessage
+  const message = describeUnknownError(error) ?? fallbackMessage
   const status =
     /찾을 수 없|찾지 못|not found|does not exist/i.test(message)
       ? 404
