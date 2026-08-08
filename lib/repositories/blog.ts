@@ -8,9 +8,12 @@
 
 import "server-only";
 
+import { cache } from "react";
+
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { BlogPost as SupaBlogPost, BlogPostInsert, BlogPostUpdate } from "@/lib/supabase/database.types";
 import { sanitizePublicUrl } from "@/lib/safe-public-url";
+import { formatBlogDisplayDate, resolveDisplayDateSource } from "@/lib/blog-display";
 
 // 기존 타입 re-export
 export type { BlogPost, BlogPostInput, BlogPostStatus } from "@/lib/blog-types";
@@ -39,7 +42,7 @@ function supabaseToLegacy(row: SupaBlogPost): BlogPost & { _uuid: string } {
     category: row.category ?? "전체",
     tags: row.tags ?? [],
     tag: (row.tags ?? [])[0] ?? "",
-    date: formatDate(row.created_at),
+    date: formatDate(resolveDisplayDateSource(row)),
     publishedAt: row.published_at ?? undefined,
     updatedAt: row.updated_at ?? undefined,
     author: row.author_name ?? "",
@@ -163,7 +166,10 @@ export async function getPublishedPosts(): Promise<BlogPost[]> {
       .in("status", PUBLISHED_STATUS_VALUES)
       .is("deleted_at", null)
       .or(publishedAtVisibleFilter())
-      .order("published_at", { ascending: false })
+      // Postgres는 DESC에서 NULL을 맨 앞에 둔다 — published_at 없이 발행된 글이
+      // 목록 최상단에 눌러앉는 걸 막는다. 동일 시각 글은 created_at으로 순서를 고정한다.
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
       .abortSignal(timeout.signal);
 
     if (error && isAbortError(error)) {
@@ -190,8 +196,13 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
   return supabaseToLegacy(data as SupaBlogPost);
 }
 
-export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | null> {
-
+// 조회 실패(timeout·5xx)와 "글이 없음"을 구분해서 던진다. 둘 다 null로 접으면
+// 순간 장애가 notFound()로 렌더되고, revalidate 주기 동안 정상 글이 404로 캐시된다(soft-404 증폭).
+// null은 진짜 미존재일 때만 반환하고, 실패는 throw해서 error 경계가 받게 한다.
+// cache()로 감싸 같은 요청 안의 generateMetadata + page 중복 쿼리를 1회로 줄인다.
+export const getPublishedPostBySlug = cache(async function getPublishedPostBySlug(
+  slug: string,
+): Promise<BlogPost | null> {
   const supabase = await createSupabaseBlogReadClient();
   const timeout = createBlogQueryTimeout();
   try {
@@ -206,15 +217,17 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPost | n
       .maybeSingle();
 
     if (error && isAbortError(error)) {
-      console.warn(`[blog] 공개 글 상세 조회 timeout after ${PUBLIC_BLOG_QUERY_TIMEOUT_MS}ms`);
-      return null;
+      throw new Error(
+        `[blog] 공개 글 상세 조회 timeout after ${PUBLIC_BLOG_QUERY_TIMEOUT_MS}ms (${slug})`,
+      );
     }
-    if (error || !data) return null;
+    if (error) throw new Error(`[blog] 공개 글 상세 조회 실패(${slug}): ${error.message}`);
+    if (!data) return null;
     return supabaseToLegacy(data as SupaBlogPost);
   } finally {
     timeout.clear();
   }
-}
+});
 
 export async function getPostById(id: number | string): Promise<BlogPost | null> {
 
@@ -421,7 +434,8 @@ export async function getPublishedPostsForStaticSitemap(): Promise<BlogPost[]> {
       .in("status", PUBLISHED_STATUS_VALUES)
       .is("deleted_at", null)
       .or(publishedAtVisibleFilter())
-      .order("published_at", { ascending: false })
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
       .abortSignal(timeout.signal);
 
     if (error) throw new Error(`[blog] sitemap query failed: ${error.message}`);
@@ -519,16 +533,7 @@ function hashUuidToNumber(uuid: string): number {
   return Math.abs(hash);
 }
 
-function formatDate(isoString: string): string {
-  return new Date(isoString)
-    .toLocaleDateString("ko-KR", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-    .replace(/\./g, ". ")
-    .trim();
-}
+const formatDate = formatBlogDisplayDate;
 
 function slugifyTitle(title: string): string {
   return title

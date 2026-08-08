@@ -21,6 +21,14 @@ const siteOrigin = (() => {
     return new URL("https://classin.co.kr");
   }
 })();
+// 자사 도메인 이미지 호스트 — lib/safe-public-url.ts 의 SAFE_SITE_IMAGE_HOSTS 와 반드시 같은 집합이어야 한다.
+// (sanitize는 통과시키는데 remotePatterns/CSP에 없으면 이미지가 조용히 깨진다.)
+// next.config.ts는 앱 모듈을 import하지 않으므로 목록을 복제하고,
+// tests/blog/public-image-hosts.test.ts 가 두 목록의 동기화를 강제한다.
+const siteImageHosts = Array.from(
+  new Set(["classin.co.kr", "classin.ai.kr", siteOrigin.hostname]),
+);
+const siteImageSources = siteImageHosts.map((hostname) => `https://${hostname}`).join(" ");
 const developmentScriptPolicy =
   process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'";
 const googleAdsSources = [
@@ -52,7 +60,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
   "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com",
   // unsplash(블로그 이미지), Supabase Storage, 픽셀/지도/카카오/Google Ads 이미지
-  `img-src 'self' data: blob: https://images.unsplash.com ${supabaseImageSources} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://maps.google.com ${googleAdsSources} ${channelTalkDefaultSources}`,
+  `img-src 'self' data: blob: https://images.unsplash.com ${supabaseImageSources} ${siteImageSources} https://www.facebook.com https://*.kakao.com https://*.daumcdn.net https://www.googletagmanager.com https://maps.google.com ${googleAdsSources} ${channelTalkDefaultSources}`,
   // Supabase API/Realtime, GA/Google Ads 수집, 채널톡 웹소켓, 토스 결제
   `connect-src 'self' ${supabaseHttp} ${supabaseWs} https://www.google-analytics.com https://region1.google-analytics.com ${googleAdsSources} https://www.facebook.com https://*.kakao.com ${channelTalkConnectSources} https://*.tosspayments.com https://cdn.jsdelivr.net`,
   // GTM 미리보기, 구글 지도 embed, 토스 결제창
@@ -83,6 +91,10 @@ const publicAssetCacheHeaders = [
 
 const nextConfig: NextConfig = {
   images: {
+    // 기본값은 webp 단독이다. avif를 앞에 두면 지원 브라우저에서 추가로 ~17% 더 줄어든다.
+    formats: ["image/avif", "image/webp"],
+    // /images/* 는 아래 publicAssetCacheHeaders 로 이미 immutable 이므로 변환본도 길게 잡는다.
+    minimumCacheTTL: 31536000,
     localPatterns: [
       {
         pathname: "/**",
@@ -103,6 +115,9 @@ const nextConfig: NextConfig = {
         hostname: siteOrigin.hostname,
         ...(siteOrigin.port ? { port: siteOrigin.port } : {}),
       },
+      ...siteImageHosts
+        .filter((hostname) => hostname !== siteOrigin.hostname)
+        .map((hostname) => ({ protocol: "https" as const, hostname })),
       ...(supabaseHost
         ? [
             {

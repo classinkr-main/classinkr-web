@@ -1,7 +1,9 @@
 import type { Metadata } from "next"
+import { createElement } from "react"
 import Link from "next/link"
 import { notFound, permanentRedirect } from "next/navigation"
 import { ArrowRight, Clock } from "lucide-react"
+import { getCategoryIcon } from "@/lib/blog-categories"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import { ArticleImageLightbox } from "@/components/blog/ArticleImageLightbox"
 import { ReadingProgress } from "@/components/blog/ReadingProgress"
@@ -154,7 +156,7 @@ export default async function BlogDetailPage({
         <div className="mx-auto max-w-[1200px]">
           <Link
             href="/blog"
-            className="mb-8 inline-flex items-center gap-2 text-sm text-[#1a1a1a]/45 transition-colors hover:text-[#084734]"
+            className="mb-8 inline-flex items-center gap-2 text-sm text-[#615D59] transition-colors hover:text-[#084734]"
           >
             <ArrowRight className="h-4 w-4 rotate-180" />
             블로그로 돌아가기
@@ -163,7 +165,12 @@ export default async function BlogDetailPage({
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-end">
             <div>
               <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px]">
-                <span className="rounded-full bg-[#111110] px-3 py-1 font-medium text-white">
+                {/* 목록의 카테고리 글리프를 상세까지 잇는다 — 같은 부호가 같은 뜻을 유지해야 어휘가 된다. */}
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#111110] px-3 py-1 font-medium text-white">
+                  {createElement(getCategoryIcon(post.category), {
+                    "aria-hidden": true,
+                    className: "h-3.5 w-3.5 text-white/70",
+                  })}
                   {post.category}
                 </span>
                 {post.tags.slice(0, 2).map((tag) => (
@@ -181,11 +188,11 @@ export default async function BlogDetailPage({
               </h1>
 
               {/* 모바일에서 발췌문이 첫 화면을 다 차지하지 않도록 3줄 제한 */}
-              <p className="mt-5 line-clamp-3 max-w-3xl text-[16px] leading-7 text-[#1a1a1a]/55 sm:mt-6 md:line-clamp-none md:text-[20px] md:leading-8">
+              <p className="mt-5 line-clamp-3 max-w-3xl text-[16px] leading-7 text-[#615D59] sm:mt-6 md:line-clamp-none md:text-[20px] md:leading-8">
                 {post.excerpt}
               </p>
 
-              <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[#1a1a1a]/40 sm:mt-8">
+              <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[#615D59] sm:mt-8">
                 <span>{post.date}</span>
                 <span>•</span>
                 <span className="inline-flex items-center gap-1.5">
@@ -225,14 +232,14 @@ export default async function BlogDetailPage({
           <div className="mx-auto max-w-[1200px] rounded-[24px] border border-[#dcebd9] bg-white p-5 shadow-sm md:rounded-[32px] md:p-8">
             <div className="grid gap-6 md:grid-cols-[220px_minmax(0,1fr)] md:items-start">
               <div>
-                <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/55">
+                <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]">
                   Why Read This
                 </p>
                 <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-[#111110]">
                   이 글을 읽으면 좋은 점
                 </h2>
                 {post.targetReader && (
-                  <p className="mt-3 text-sm leading-6 text-[#1a1a1a]/45">
+                  <p className="mt-3 text-sm leading-6 text-[#615D59]">
                     추천 대상: {post.targetReader}
                   </p>
                 )}
@@ -244,7 +251,7 @@ export default async function BlogDetailPage({
                     key={benefit}
                     className="rounded-[24px] border border-[#e8e8e4] bg-[#fcfcfb] p-5"
                   >
-                    <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/45">
+                    <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]">
                       Point {index + 1}
                     </p>
                     <p className="mt-3 text-[15px] leading-7 text-[#1a1a1a]/75">
@@ -267,7 +274,7 @@ export default async function BlogDetailPage({
           {post.pageLayout !== "minimal" && (
             <aside className="hidden lg:block">
               <div className="sticky top-28 rounded-[28px] border border-[#e8e8e4] bg-white p-5 shadow-sm">
-                <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/45">
+                <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]">
                   On This Page
                 </p>
                 <div className="mt-4 space-y-3">
@@ -275,7 +282,7 @@ export default async function BlogDetailPage({
                     <a
                       key={heading.id}
                       href={`#${heading.id}`}
-                      className={`block text-sm leading-6 text-[#1a1a1a]/45 transition-colors hover:text-[#084734] ${
+                      className={`block text-sm leading-6 text-[#615D59] transition-colors hover:text-[#084734] ${
                         heading.level === 3 ? "pl-4" : ""
                       }`}
                     >
@@ -306,7 +313,7 @@ export default async function BlogDetailPage({
                     <a
                       key={heading.id}
                       href={`#${heading.id}`}
-                      className={`block text-sm leading-6 text-[#1a1a1a]/55 transition-colors hover:text-[#084734] ${
+                      className={`block text-sm leading-6 text-[#615D59] transition-colors hover:text-[#084734] ${
                         heading.level === 3 ? "pl-4" : ""
                       }`}
                     >
@@ -347,7 +354,7 @@ export default async function BlogDetailPage({
                   <p className="text-lg font-semibold text-[#111110]">
                     {post.author}
                   </p>
-                  <p className="text-sm text-[#1a1a1a]/45">{post.authorRole}</p>
+                  <p className="text-sm text-[#615D59]">{post.authorRole}</p>
                   <p className="mt-3 text-[15px] leading-7 text-[#1a1a1a]/65">
                     {post.authorBio}
                   </p>
@@ -359,7 +366,7 @@ export default async function BlogDetailPage({
               <div className="mt-12">
                 <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]/45">
+                    <p className="text-[12px] font-medium uppercase tracking-[0.24em] text-[#084734]">
                       Recommended
                     </p>
                     <h2 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[#111110]">
@@ -398,7 +405,7 @@ export default async function BlogDetailPage({
                         <h3 className="mt-2 line-clamp-2 text-lg font-semibold tracking-[-0.02em] text-[#111110]">
                           {relatedPost.title}
                         </h3>
-                        <p className="mt-3 line-clamp-3 text-[14px] leading-6 text-[#1a1a1a]/45">
+                        <p className="mt-3 line-clamp-3 text-[14px] leading-6 text-[#615D59]">
                           {relatedPost.excerpt}
                         </p>
                       </div>

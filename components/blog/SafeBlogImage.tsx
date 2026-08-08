@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import Image, { type ImageProps } from "next/image"
-import { NEUTRAL_BLUR_DATA_URL } from "@/lib/image-blur"
 import { sanitizePublicImageUrl } from "@/lib/safe-public-url"
 
 const FALLBACK_BLOG_IMAGES = [
@@ -20,10 +19,7 @@ const FALLBACK_BLOG_IMAGES = [
   "/images/blog/thumb-12.png",
 ]
 
-type SafeBlogImageProps = Omit<
-  ImageProps,
-  "src" | "alt" | "placeholder" | "blurDataURL" | "onError"
-> & {
+type SafeBlogImageProps = Omit<ImageProps, "src" | "alt" | "onError"> & {
   src: string | null | undefined
   alt: string
   fallbackIndex?: number
@@ -38,10 +34,6 @@ function normalizeBlogImageSrc(src: string | null | undefined, fallbackSrc: stri
   return sanitizePublicImageUrl(src, fallbackSrc)
 }
 
-function shouldBypassImageOptimizer(src: string) {
-  return src.startsWith("/")
-}
-
 export function SafeBlogImage({
   src,
   alt,
@@ -51,7 +43,6 @@ export function SafeBlogImage({
   const fallbackSrc = getFallbackBlogImage(fallbackIndex)
   const normalizedSrc = normalizeBlogImageSrc(src, fallbackSrc)
   const [resolvedSrc, setResolvedSrc] = useState(() => normalizedSrc)
-  const unoptimized = imageProps.unoptimized ?? shouldBypassImageOptimizer(resolvedSrc)
 
   useEffect(() => {
     setResolvedSrc(normalizedSrc)
@@ -62,9 +53,6 @@ export function SafeBlogImage({
       {...imageProps}
       src={resolvedSrc}
       alt={alt}
-      placeholder="blur"
-      blurDataURL={NEUTRAL_BLUR_DATA_URL}
-      unoptimized={unoptimized}
       onError={() => {
         if (resolvedSrc !== fallbackSrc) {
           setResolvedSrc(fallbackSrc)
