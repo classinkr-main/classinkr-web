@@ -37,6 +37,37 @@ export function metaCampaignLabel(row: { id: string; name?: string | null }): st
 }
 
 /* ─────────────────────────────────────────────────────────────
+   Meta objective — 원문 enum("OUTCOME_LEADS")을 사람이 읽는 라벨로.
+   Meta 동기화가 objective 를 그대로 복사하므로 캠페인 관리 목록·상세와
+   광고 탭 테이블이 같은 매핑을 봐야 한다. 미지의 값은 원문 그대로(지어내지 않음).
+   ───────────────────────────────────────────────────────────── */
+
+const META_OBJECTIVE_LABEL: Record<string, string> = {
+  OUTCOME_LEADS: "리드 확보",
+  OUTCOME_TRAFFIC: "트래픽",
+  OUTCOME_AWARENESS: "인지도",
+  OUTCOME_ENGAGEMENT: "참여",
+  OUTCOME_SALES: "판매",
+  OUTCOME_APP_PROMOTION: "앱 홍보",
+  // 구세대 objective — 과거 캠페인이 여전히 이 값을 들고 있다.
+  LEAD_GENERATION: "리드 확보",
+  LINK_CLICKS: "링크 클릭",
+  CONVERSIONS: "전환",
+  BRAND_AWARENESS: "인지도",
+  REACH: "도달",
+  MESSAGES: "메시지",
+  VIDEO_VIEWS: "영상 조회",
+  POST_ENGAGEMENT: "게시물 참여",
+}
+
+/** Meta objective(또는 임의 목표 텍스트)를 표시용으로. 매핑에 없으면 원문 유지. */
+export function metaObjectiveLabel(value: string | null | undefined): string | null {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+  return META_OBJECTIVE_LABEL[trimmed.toUpperCase()] ?? trimmed
+}
+
+/* ─────────────────────────────────────────────────────────────
    링크 라벨 맵 — refType → refId → label
    ───────────────────────────────────────────────────────────── */
 

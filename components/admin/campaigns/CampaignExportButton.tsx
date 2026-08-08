@@ -7,9 +7,14 @@ export interface ExportColumn {
   label: string;
 }
 
+type ExportRows = Array<Record<string, string | number | null>>;
+
 export interface CampaignExportButtonProps {
   columns: ExportColumn[];
-  rows: Array<Record<string, string | number | null>>;
+  /** 배열 또는 지연 생성자 — 큰 목록은 함수로 넘겨 클릭 시점에만 행을 만든다(필터 변경마다 선행 생성 방지). */
+  rows: ExportRows | (() => ExportRows);
+  /** rows 가 함수일 때의 행 수 — 빈 목록 비활성 판정용. 생략하면 항상 활성으로 둔다. */
+  rowCount?: number;
   filename?: string;
   label?: string;
   disabled?: boolean;
@@ -40,17 +45,21 @@ function buildCsv(
 export function CampaignExportButton({
   columns,
   rows,
+  rowCount,
   filename = "campaign-export",
   label = "CSV 내보내기",
   disabled = false,
 }: CampaignExportButtonProps) {
-  const isDisabled = disabled || rows.length === 0 || columns.length === 0;
+  const knownCount = typeof rows === "function" ? rowCount : rows.length;
+  const isDisabled = disabled || knownCount === 0 || columns.length === 0;
 
   function handleExport() {
     if (isDisabled) return;
     if (typeof window === "undefined" || typeof document === "undefined") return;
 
-    const csv = buildCsv(columns, rows);
+    const resolvedRows = typeof rows === "function" ? rows() : rows;
+    if (resolvedRows.length === 0) return;
+    const csv = buildCsv(columns, resolvedRows);
     // Prepend a UTF-8 BOM so Korean text opens correctly in Excel.
     const blob = new Blob([`﻿${csv}`], {
       type: "text/csv;charset=utf-8;",

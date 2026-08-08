@@ -62,11 +62,14 @@ export function BlogThumb({
         tone === "dark" ? "bg-[#084734]" : "bg-[#ECFDF5]"
       }`}
     >
+      {/* 상한을 슬롯 크기에 맞춰 나눈다 — 갤러리 카드(최대 730px)에 64px 상한을 걸면 마크가 붕 뜬다. */}
       {createElement(getCategoryIcon(category), {
         "aria-hidden": true,
         strokeWidth: 1.25,
-        className: `h-[38%] w-[38%] max-h-16 max-w-16 ${
-          tone === "dark" ? "text-white/25" : "text-[#084734]/30"
+        className: `h-[34%] w-[34%] ${
+          tone === "dark"
+            ? "max-h-28 max-w-28 text-white/25"
+            : "max-h-14 max-w-14 text-[#084734]/30"
         }`,
       })}
     </div>

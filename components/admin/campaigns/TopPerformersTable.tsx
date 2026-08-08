@@ -83,25 +83,18 @@ function secondaryStat(row: PerformerRow, metric: Metric): string {
   }
 }
 
+// 채움 색으로 메달을 흉내내지 않는다 — 배경은 웜 뉴트럴 단일(#F6F5F4), 순위는 글자 색·굵기로만 구분.
 const RANK_STYLE: Record<number, string> = {
-  0: "bg-[#FEF3C7] text-[#B8860B]",
-  1: "bg-[#F1F0EE] text-[#615D59]",
-  2: "bg-[#FEF3EE] text-[#B85C33]",
+  0: "font-bold text-[#111110]",
+  1: "font-semibold text-[#615D59]",
 }
 
 function RankBadge({ index }: { index: number }) {
-  const medal = RANK_STYLE[index]
-  if (medal) {
-    return (
-      <span
-        className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-[12px] font-bold tabular-nums ${medal}`}
-      >
-        {index + 1}
-      </span>
-    )
-  }
+  const style = RANK_STYLE[index] ?? "font-semibold text-[#A39E98]"
   return (
-    <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-[12px] font-semibold tabular-nums text-[#1a1a1a]/35">
+    <span
+      className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-[#F6F5F4] text-[12px] tabular-nums ${style}`}
+    >
       {index + 1}
     </span>
   )
@@ -145,7 +138,7 @@ export function TopPerformersTable({ rows }: TopPerformersTableProps) {
       </div>
 
       {isEmpty ? (
-        <p className="py-10 text-center text-[12px] text-[#1a1a1a]/30">표시할 데이터가 없습니다.</p>
+        <p className="py-10 text-center text-[12px] text-[#A39E98]">표시할 데이터가 없습니다.</p>
       ) : (
         <ul className="divide-y divide-[#f0f0ec]">
           {ranked.map((row, index) => (

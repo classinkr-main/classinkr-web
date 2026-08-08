@@ -186,6 +186,14 @@ const ENTRY_PRESETS: Array<{
 // 이 키들은 상세 프리셋 그리드로만 진입하고, 큐(배치)는 지원하지 않는다.
 const DETAIL_PRESET_KEYS = new Set(["sampleReturn", "sampleAssign", "return", "repair", "adjust"])
 
+// 시트 헤더 배지 톤 — 저장될 기록이 원장에서 받을 배지(MOVEMENT_TONE·SALE_TYPE_META)와 같은 어휘.
+// 예정=Warning, 샘플=중립, 그 외는 movementType 톤.
+function presetTone(presetKey: string, movementType: HardwareMovementType): string {
+  if (presetKey === "planned") return "bg-[#FBF1E0] text-[#A8741A]"
+  if (presetKey === "sample") return "bg-[#F6F5F4] text-[#615D59]"
+  return MOVEMENT_TONE[movementType]
+}
+
 // 샘플 대여 출처 선택지 — 기본은 사무실(남은 샘플). 사무실 재고가 없어 창고에서 바로 내보내는 실무도 있어 창고 허용.
 const SAMPLE_SOURCE_OPTIONS = ["사무실", "창고"] as const
 type SampleSource = (typeof SAMPLE_SOURCE_OPTIONS)[number]
@@ -1597,11 +1605,14 @@ export default function HardwareInventoryClient() {
       /카메라|camera/i.test(`${row.category ?? ""} ${row.product}`) || /\bT1\b|\bS1\b/i.test(row.product)
     const isStand = (row: HardwareStockRow) =>
       /스탠드|stand/i.test(`${row.category ?? ""} ${row.product}`) || /\bSTD/i.test(row.product)
+    // 아이콘 칩은 웜 뉴트럴 고정 — 카테고리 구분에 상태색(그린/앰버)을 쓰면 실제 신호(음수·부족)와
+    // 경쟁한다(DESIGN.md: 장식·카테고리 구분엔 웜 뉴트럴). 색은 수치·칩의 상태 표시에만 남긴다.
+    const NEUTRAL_TONE = { bg: "#F6F5F4", fg: "#615D59" }
     return [
-      { key: "ifp86", label: "86인치 전자칠판", icon: Monitor, tone: { bg: "#ECFDF5", fg: "#084734" }, ...sumBy((row) => isCoreIfpProduct(row.product, "86")) },
-      { key: "ifp75", label: "75인치 전자칠판", icon: Monitor, tone: { bg: "#ECFDF5", fg: "#084734" }, ...sumBy((row) => isCoreIfpProduct(row.product, "75")) },
-      { key: "camera", label: "카메라 (T1·S1)", icon: Camera, tone: { bg: "#FBF1E0", fg: "#A8741A" }, ...sumBy(isCamera) },
-      { key: "stand", label: "스탠드 (STD1)", icon: Projector, tone: { bg: "#F6F5F4", fg: "#615D59" }, ...sumBy(isStand) },
+      { key: "ifp86", label: "86인치 전자칠판", icon: Monitor, tone: NEUTRAL_TONE, ...sumBy((row) => isCoreIfpProduct(row.product, "86")) },
+      { key: "ifp75", label: "75인치 전자칠판", icon: Monitor, tone: NEUTRAL_TONE, ...sumBy((row) => isCoreIfpProduct(row.product, "75")) },
+      { key: "camera", label: "카메라 (T1·S1)", icon: Camera, tone: NEUTRAL_TONE, ...sumBy(isCamera) },
+      { key: "stand", label: "스탠드 (STD1)", icon: Projector, tone: NEUTRAL_TONE, ...sumBy(isStand) },
     ]
   }, [data?.stock])
 
@@ -3199,7 +3210,7 @@ export default function HardwareInventoryClient() {
             </div>
           ) : activeTab === "entry" ? (
             <div className="space-y-5" aria-hidden>
-              <div className="h-[68px] animate-pulse rounded-xl bg-[#F6F5F4]" />
+              <div className="h-10 w-full max-w-[340px] animate-pulse rounded-lg bg-[#F6F5F4]" />
               <div className="space-y-3">
                 {Array.from({ length: 4 }).map((_, index) => (
                   <div key={index} className="h-20 animate-pulse rounded-xl bg-[#F6F5F4]" />
@@ -3220,7 +3231,17 @@ export default function HardwareInventoryClient() {
         ) : (
           <>
             {activeTab === "home" && (
-            <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-4">
+            <motion.div
+              id={activePanelId}
+              role="tabpanel"
+              aria-labelledby={activeTabId}
+              className="space-y-5"
+              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
+            >
+            {/* 위계: 현황 요약(카드·판매) → 검색 → 대기 작업(예상 출고) → 재고 상세(위치·표) → 샘플 → 알림·로그.
+                예상 출고는 확정을 기다리는 할 일이라 재고 상세보다 위, 샘플 트래커는 참조 성격이라 아래에 둔다. */}
             <CategoryCardsSection categoryCards={categoryCards} />
 
             <SalesPeriodSummary summary={salesPeriodSummary} onOpenDetail={openOutboundDetail} />
@@ -3242,23 +3263,6 @@ export default function HardwareInventoryClient() {
               setCustomerDetail={setCustomerDetail}
             />
 
-            <LocationMapSection
-              locationMap={locationMap}
-              locationMapExpanded={locationMapExpanded}
-              setLocationMapExpanded={setLocationMapExpanded}
-              prepareQuickEntry={prepareQuickEntry}
-            />
-
-            <SampleTrackerSection
-              units={sampleUnits}
-              latestEvents={sampleLatestEvents}
-              loading={sampleUnitsLoading}
-              error={sampleUnitsError}
-              stock={data?.stock ?? null}
-              onOpenUnit={setSampleUnitSheetId}
-              onChanged={loadSampleUnits}
-            />
-
             <PlannedOutboundPanel
               data={data}
               plannedMovementQuantity={plannedMovementQuantity}
@@ -3278,6 +3282,13 @@ export default function HardwareInventoryClient() {
               confirmPlannedMovement={confirmPlannedMovement}
             />
 
+            <LocationMapSection
+              locationMap={locationMap}
+              locationMapExpanded={locationMapExpanded}
+              setLocationMapExpanded={setLocationMapExpanded}
+              prepareQuickEntry={prepareQuickEntry}
+            />
+
             <StockLevelsSection
               openSections={openSections}
               toggleSection={toggleSection}
@@ -3285,6 +3296,16 @@ export default function HardwareInventoryClient() {
               stockPagination={stockPagination}
               setStockPage={setStockPage}
               prepareQuickEntry={prepareQuickEntry}
+            />
+
+            <SampleTrackerSection
+              units={sampleUnits}
+              latestEvents={sampleLatestEvents}
+              loading={sampleUnitsLoading}
+              error={sampleUnitsError}
+              stock={data?.stock ?? null}
+              onOpenUnit={setSampleUnitSheetId}
+              onChanged={loadSampleUnits}
             />
 
             <AlertsOutboundSections
@@ -3295,43 +3316,54 @@ export default function HardwareInventoryClient() {
               outboundPagination={outboundPagination}
               setOutboundPage={setOutboundPage}
             />
-            </div>
+            </motion.div>
             )}
 
             {activeTab === "entry" && (
-            <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="mt-6 space-y-5">
-              <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-                  <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setEntrySub("inbound")}
-                      className={`cursor-pointer rounded-md px-3.5 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
-                        entrySub === "inbound" ? "bg-white text-[#084734] shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "text-[#615D59] hover:text-[#111110]"
-                      }`}
-                    >
-                      입고 · 물량번호
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEntrySub("outbound")}
-                      className={`cursor-pointer rounded-md px-3.5 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
-                        entrySub === "outbound" ? "bg-white text-[#084734] shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "text-[#615D59] hover:text-[#111110]"
-                      }`}
-                    >
-                      출고 · 기간 집계
-                    </button>
-                  </div>
+            <motion.div
+              id={activePanelId}
+              role="tabpanel"
+              aria-labelledby={activeTabId}
+              className="space-y-5"
+              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
+            >
+              {/* 뷰 전환 줄 — 카드 없이 세그먼트+CTA만. 콘텐츠 카드(물량·집계)가 시각적 주인공이 되도록 한다. */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-white p-0.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]" role="tablist" aria-label="입출고 보기">
                   <button
                     type="button"
-                    onClick={openFreshSheet}
-                    className="inline-flex items-center gap-1.5 cursor-pointer rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
+                    role="tab"
+                    aria-selected={entrySub === "inbound"}
+                    onClick={() => setEntrySub("inbound")}
+                    className={`cursor-pointer rounded-md px-3.5 py-2 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
+                      entrySub === "inbound" ? "bg-[#ECFDF5] text-[#084734]" : "text-[#615D59] hover:text-[#111110]"
+                    }`}
                   >
-                    <Plus className="h-3.5 w-3.5" />
-                    빠른 기록
+                    입고 · 물량번호
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={entrySub === "outbound"}
+                    onClick={() => setEntrySub("outbound")}
+                    className={`cursor-pointer rounded-md px-3.5 py-2 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
+                      entrySub === "outbound" ? "bg-[#ECFDF5] text-[#084734]" : "text-[#615D59] hover:text-[#111110]"
+                    }`}
+                  >
+                    출고 · 기간 집계
                   </button>
                 </div>
-              </section>
+                <button
+                  type="button"
+                  onClick={openFreshSheet}
+                  className="inline-flex items-center gap-1.5 cursor-pointer rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  빠른 기록
+                </button>
+              </div>
 
               {entrySub === "inbound" && (
                 <InboundLotsSection inboundSearch={inboundSearch} setInboundSearch={setInboundSearch} inboundLots={inboundLots} />
@@ -3353,7 +3385,7 @@ export default function HardwareInventoryClient() {
                   전체 내역 →
                 </button>
               </div>
-            </div>
+            </motion.div>
             )}
 
             <AnimatePresence>
@@ -3386,8 +3418,12 @@ export default function HardwareInventoryClient() {
                         <p className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">
                           {editingId ? "기록 수정" : "빠른 기록"}
                         </p>
-                        <p className="mt-0.5 text-[11px] font-semibold text-[#084734]">
-                          {activePreset.label} · {activePreset.from || "-"} → {activePreset.to || "고객사 입력"}
+                        {/* 유형 배지 + 중립 경로 — 저장될 기록의 원장 배지 색을 미리 보여준다. */}
+                        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-[#615D59]">
+                          <span className={`inline-flex rounded-full px-2 py-0.5 text-[10.5px] font-bold ${presetTone(activePresetKey, movementType)}`}>
+                            {activePreset.label}
+                          </span>
+                          <span>{activePreset.from || "—"} → {activePreset.to || "고객사 입력"}</span>
                         </p>
                       </div>
                       <button
@@ -3523,6 +3559,8 @@ export default function HardwareInventoryClient() {
                       <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-1" role="tablist" aria-label="입출고 유형">
                         {([["outbound", "출고", ArrowUpFromLine], ["inbound", "입고", ArrowDownToLine]] as const).map(([axis, label, Icon]) => {
                           const active = axis === "inbound" ? movementType === "inbound" : movementType === "outbound"
+                          // 활성 톤 = 원장 배지 색(출고 Danger·입고 Success) — 방향 오입력을 색으로도 잡는다.
+                          const activeTone = axis === "inbound" ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#FCE9E9] text-[#B43E3E]"
                           return (
                             <button
                               key={axis}
@@ -3531,7 +3569,7 @@ export default function HardwareInventoryClient() {
                               aria-selected={active}
                               onClick={() => selectMovementAxis(axis)}
                               className={`inline-flex min-h-[42px] cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 text-[13px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 ${
-                                active ? "bg-white text-[#084734] shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "text-[#615D59] hover:text-[#111110]"
+                                active ? `${activeTone} shadow-[0_1px_2px_rgba(0,0,0,0.06)]` : "text-[#615D59] hover:text-[#111110]"
                               }`}
                             >
                               <Icon className="h-4 w-4" />
@@ -3545,10 +3583,11 @@ export default function HardwareInventoryClient() {
                         <div className="space-y-2">
                           <div className="grid grid-cols-3 gap-1.5" role="tablist" aria-label="출고 방식">
                             {([
-                              ["actual", "실제", "즉시 재고 반영"],
-                              ["planned", "예정", "가용에서 미리 차감"],
-                              ["sample", "샘플", "사무실·창고 반출"],
-                            ] as const).map(([mode, label, hint]) => {
+                              // 활성 톤 = 저장 후 원장 배지 색(실제 Danger·예정 Warning·샘플 중립)과 같은 어휘.
+                              ["actual", "실제", "즉시 재고 반영", "border-[#F2B8B8] bg-[#FCE9E9] text-[#B43E3E]"],
+                              ["planned", "예정", "가용에서 미리 차감", "border-[#ECD29C] bg-[#FBF1E0] text-[#A8741A]"],
+                              ["sample", "샘플", "사무실·창고 반출", "border-[rgba(0,0,0,0.16)] bg-[#F6F5F4] text-[#31302E]"],
+                            ] as const).map(([mode, label, hint, activeTone]) => {
                               const active = outboundMode === mode
                               return (
                                 <button
@@ -3558,13 +3597,11 @@ export default function HardwareInventoryClient() {
                                   aria-selected={active}
                                   onClick={() => selectOutboundMode(mode)}
                                   className={`flex min-h-[46px] cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md border px-2 py-1.5 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/45 active:scale-[0.98] motion-reduce:active:scale-100 ${
-                                    active
-                                      ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
-                                      : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
+                                    active ? activeTone : "border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] text-[#615D59] hover:bg-white"
                                   }`}
                                 >
                                   <span className="text-[12px] font-bold">{label}</span>
-                                  <span className="text-[10px] leading-tight text-[#A39E98]">{hint}</span>
+                                  <span className={`text-[10px] leading-tight ${active ? "opacity-80" : "text-[#A39E98]"}`}>{hint}</span>
                                 </button>
                               )
                             })}
@@ -4838,7 +4875,15 @@ export default function HardwareInventoryClient() {
             </AnimatePresence>
 
             {activeTab === "history" && (
-            <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="mt-6 space-y-4">
+            <motion.div
+              id={activePanelId}
+              role="tabpanel"
+              aria-labelledby={activeTabId}
+              className="space-y-5"
+              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
+            >
                 <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <label className="relative block min-w-[240px] flex-1 sm:max-w-[440px]">
@@ -5254,7 +5299,7 @@ export default function HardwareInventoryClient() {
                   renderMovementRow={renderMovementRow}
                   setMovementsPage={setMovementsPage}
                 />
-            </div>
+            </motion.div>
             )}
           </>
         )}

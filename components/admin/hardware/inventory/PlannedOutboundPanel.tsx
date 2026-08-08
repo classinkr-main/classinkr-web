@@ -160,26 +160,29 @@ function PlannedOutboundPanel({
                           )}
                         </div>
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
-                          <input
-                            type="number"
-                            min={1}
-                            max={movement.quantity}
-                            value={confirmQtys[movement.id] ?? String(movement.quantity)}
-                            onChange={(event) => setConfirmQtys((current) => ({ ...current, [movement.id]: event.target.value }))}
-                            disabled={plannedConfirmLocked}
-                            aria-label="확정 수량"
-                            title="확정 수량 (부분 확정 가능)"
-                            className="h-8 w-14 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-center text-[11px] font-bold text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 disabled:cursor-not-allowed disabled:bg-[#F6F5F4] disabled:text-[#A39E98]"
-                          />
-                          <input
-                            type="date"
-                            value={confirmDates[movement.id] ?? todayKey()}
-                            onChange={(event) => setConfirmDates((current) => ({ ...current, [movement.id]: event.target.value }))}
-                            disabled={plannedConfirmLocked}
-                            aria-label="출고 확정일"
-                            title="출고 확정일"
-                            className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11px] font-semibold text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 disabled:cursor-not-allowed disabled:bg-[#F6F5F4] disabled:text-[#A39E98]"
-                          />
+                          {/* 라벨 없는 인풋 2개(수량·날짜)가 나란히 있으면 용도를 추측해야 한다 — 마이크로 라벨로 명시. */}
+                          <label className="flex cursor-pointer items-center gap-1" title="확정 수량 (부분 확정 가능)">
+                            <span className="text-[10.5px] font-bold text-[#A39E98]">수량</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={movement.quantity}
+                              value={confirmQtys[movement.id] ?? String(movement.quantity)}
+                              onChange={(event) => setConfirmQtys((current) => ({ ...current, [movement.id]: event.target.value }))}
+                              disabled={plannedConfirmLocked}
+                              className="h-8 w-14 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-center text-[11px] font-bold text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 disabled:cursor-not-allowed disabled:bg-[#F6F5F4] disabled:text-[#A39E98]"
+                            />
+                          </label>
+                          <label className="flex cursor-pointer items-center gap-1" title="출고 확정일">
+                            <span className="text-[10.5px] font-bold text-[#A39E98]">확정일</span>
+                            <input
+                              type="date"
+                              value={confirmDates[movement.id] ?? todayKey()}
+                              onChange={(event) => setConfirmDates((current) => ({ ...current, [movement.id]: event.target.value }))}
+                              disabled={plannedConfirmLocked}
+                              className="h-8 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 text-[11px] font-semibold text-[#111110] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/15 disabled:cursor-not-allowed disabled:bg-[#F6F5F4] disabled:text-[#A39E98]"
+                            />
+                          </label>
                           <button
                             type="button"
                             onClick={() => editMovement(movement)}
@@ -188,11 +191,12 @@ function PlannedOutboundPanel({
                           >
                             수정
                           </button>
+                          {/* 행 확정은 아웃라인 — solid green이 행마다 반복되면 그룹의 "전체 확정"(주 CTA)과 경쟁한다. */}
                           <button
                             type="button"
                             onClick={() => void confirmPlannedMovement(movement)}
                             disabled={plannedConfirmLocked}
-                            className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-[#084734] px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-[#084734] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <CheckCheck className="h-3.5 w-3.5" />
                             {confirmingId === movement.id ? "확정 중" : "출고 확정"}

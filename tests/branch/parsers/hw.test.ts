@@ -20,6 +20,18 @@ describe("hw parsers", () => {
     expect(out[0].remarks).toBe("비고")
   })
 
+  it("inbound demotes non-existent dates (day 00 placeholders) to null instead of crashing sync", () => {
+    const grid: FormattedCell[][] = [
+      Array(11).fill(c("")),
+      [c("C1"), c("2026-08-00"), c("T1"), c(5), c(""), c(""), c(""), c(""), c("창고"), c(""), c("")],
+      [c("C1"), c("2026. 2. 30"), c("S1"), c(2), c(""), c(""), c(""), c(""), c("창고"), c(""), c("")],
+      [c("C1"), c("2026. 8. 5"), c('86" IFP'), c(1), c(""), c(""), c(""), c(""), c("창고"), c(""), c("")],
+    ]
+    const out = parseInbound(grid)
+    expect(out.map((row) => row.inbound_date)).toEqual([null, null, "2026-08-05"])
+    expect(out.map((row) => row.quantity)).toEqual([5, 2, 1])
+  })
+
   it("outbound maps status/type columns and treats muted red status cells as planned", () => {
     const plannedBg = { red: 0.835, green: 0.651, blue: 0.741 }
     const grid: FormattedCell[][] = [

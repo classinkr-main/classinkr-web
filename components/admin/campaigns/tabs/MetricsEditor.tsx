@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 import { adminFetchJson } from "@/lib/admin-client"
+import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import { formatRange } from "@/components/admin/campaigns/event-format"
 import type { PublicEvent } from "@/lib/types/public-events"
 import {
@@ -46,6 +47,33 @@ export default function MetricsEditor({
   const [relatedLinks, setRelatedLinks] = useState<RelatedLink[]>(metrics.relatedLinks ?? [])
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  useDialogFocus(event.id, onClose, closeButtonRef)
+
+  // 같은 화면의 퀵 테이블이 저장한 값(metrics.updatedAt 갱신)이 도착하면 폼을 다시 맞춘다 —
+  // 마운트 시점 스냅샷을 계속 들고 있으면 편집기 저장(전체본 PATCH)이 방금 저장을 옛 값으로 덮는다.
+  // (렌더 중 state 조정 패턴 — prop 변경 감지, useEffect 캐스케이드 없음)
+  const [syncedUpdatedAt, setSyncedUpdatedAt] = useState(metrics.updatedAt)
+  if (metrics.updatedAt !== syncedUpdatedAt) {
+    setSyncedUpdatedAt(metrics.updatedAt)
+    setForm({
+      targetLeads: metrics.targetLeads,
+      targetRevenue: metrics.targetRevenue,
+      impressionsCount: metrics.impressionsCount,
+      applicationsCount: metrics.applicationsCount,
+      qualifiedLeadsCount: metrics.qualifiedLeadsCount,
+      attendeesCount: metrics.attendeesCount,
+      dealsCount: metrics.dealsCount,
+      dealsRevenue: metrics.dealsRevenue,
+      closedCustomerCount: metrics.closedCustomerCount,
+      dealCustomers: metrics.dealCustomers ?? "",
+      notes: metrics.notes ?? "",
+      retrospective: metrics.retrospective ?? "",
+      shareMemo: metrics.shareMemo ?? "",
+    })
+    setAdSpend(metrics.adSpendEntries ?? [])
+    setRelatedLinks(metrics.relatedLinks ?? [])
+  }
 
   const update = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [key]: value }))
@@ -106,7 +134,12 @@ export default function MetricsEditor({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-      <div className="max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${event.title} 성과 입력`}
+        className="max-h-[calc(100dvh-1rem)] w-full max-w-2xl overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
+      >
         <div className="flex items-start justify-between border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
           <div className="min-w-0">
             <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">
@@ -115,14 +148,14 @@ export default function MetricsEditor({
             <h2 className="mt-0.5 truncate text-base font-semibold text-[#111110]">{event.title}</h2>
             <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">{formatRange(event.startsAt, event.endsAt)}</p>
           </div>
-          <button onClick={onClose} aria-label="닫기" className="text-[#1a1a1a]/40 hover:text-[#111110]">
+          <button ref={closeButtonRef} onClick={onClose} aria-label="닫기" className="text-[#1a1a1a]/40 hover:text-[#111110]">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="max-h-[calc(100dvh-9rem)] space-y-5 overflow-y-auto px-4 py-5 sm:px-6">
           {err && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">
+            <div className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[12px] text-[#B43E3E]">
               {err}
             </div>
           )}
@@ -197,7 +230,7 @@ export default function MetricsEditor({
               </button>
             </div>
             {adSpend.length === 0 ? (
-              <p className="py-3 text-center text-[12px] text-[#1a1a1a]/30">
+              <p className="py-3 text-center text-[12px] text-[#A39E98]">
                 채널을 추가하여 광고비를 입력하세요.
               </p>
             ) : (
@@ -240,7 +273,7 @@ export default function MetricsEditor({
                     <button
                       onClick={() => removeAdEntry(idx)}
                       aria-label="채널 삭제"
-                      className="rounded-md p-1.5 text-[#1a1a1a]/40 hover:bg-red-50 hover:text-red-600"
+                      className="rounded-md p-1.5 text-[#1a1a1a]/40 hover:bg-[#FCE9E9] hover:text-[#B43E3E]"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -265,7 +298,7 @@ export default function MetricsEditor({
               </button>
             </div>
             {relatedLinks.length === 0 ? (
-              <p className="py-3 text-center text-[12px] text-[#1a1a1a]/30">
+              <p className="py-3 text-center text-[12px] text-[#A39E98]">
                 블로그·보도자료 등 관련 글 URL을 추가하세요.
               </p>
             ) : (
@@ -294,7 +327,7 @@ export default function MetricsEditor({
                     <button
                       onClick={() => removeRelatedLink(idx)}
                       aria-label="관련 자료 삭제"
-                      className="rounded-md p-1.5 text-[#1a1a1a]/40 hover:bg-red-50 hover:text-red-600"
+                      className="rounded-md p-1.5 text-[#1a1a1a]/40 hover:bg-[#FCE9E9] hover:text-[#B43E3E]"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -351,7 +384,7 @@ export default function MetricsEditor({
           <button
             onClick={handleSave}
             disabled={saving}
-            className="rounded-lg bg-[#111110] px-5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#084734] disabled:opacity-40"
+            className="rounded-md bg-[#084734] px-5 py-2 text-[13px] font-bold text-white transition-colors hover:bg-[#065c41] disabled:opacity-40"
           >
             {saving ? "저장 중..." : "저장"}
           </button>

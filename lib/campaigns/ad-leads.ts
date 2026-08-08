@@ -71,6 +71,18 @@ export const AD_LEAD_PERIOD_OPTIONS: Array<{ value: AdLeadPeriod; label: string 
 
 const PERIOD_DAYS: Record<Exclude<AdLeadPeriod, "all">, number> = { "7d": 7, "30d": 30, "90d": 90 }
 
+/**
+ * 리드 기간 필터 ↔ Meta 대시보드 datePreset 대응. 실측 CPL(광고비 ÷ 리드)은 분자·분모의
+ * 기간이 같을 때만 의미가 있다 — 광고비는 30일치인데 리드만 7일로 좁히면 CPL이 4배로 뛴다.
+ * 대응이 없는 조합(전체·this_month 등)은 null — 호출부가 CPL을 "기간 불일치"로 표시한다.
+ */
+export const AD_LEAD_PERIOD_TO_META_PRESET: Record<AdLeadPeriod, string | null> = {
+  "7d": "last_7d",
+  "30d": "last_30d",
+  "90d": "last_90d",
+  all: null,
+}
+
 /** 유입일(timestamp)이 기간 안인가. 날짜가 깨진 리드는 기간 필터에서 빠진다(전체에서만 보인다). */
 export function leadInPeriod(lead: LeadRecord, period: AdLeadPeriod, nowMs: number): boolean {
   if (period === "all") return true

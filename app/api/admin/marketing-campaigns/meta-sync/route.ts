@@ -4,6 +4,7 @@ import { getMetaCampaignDashboard, MetaConfigError } from "@/lib/meta/marketing"
 import {
   addLink,
   createCampaign,
+  deleteCampaign,
   listCampaigns,
   updateCampaign,
 } from "@/lib/repositories/marketing-campaigns"
@@ -27,7 +28,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const [dashboard, campaigns] = await Promise.all([
-      getMetaCampaignDashboard({ limit: 100 }),
+      // 동기화는 항상 신선한 상태를 기준으로 — 방금 광고 관리자에서 바꾼 상태가 45초 메모에 가려지면 안 된다.
+      getMetaCampaignDashboard({ limit: 100, fresh: true }),
       listCampaigns(),
     ])
 
@@ -35,17 +37,33 @@ export async function POST(req: NextRequest) {
 
     const created: Array<{ campaignId: string; metaId: string; name: string }> = []
     const updated: Array<{ campaignId: string; name: string; changes: string[] }> = []
-    const failed: Array<{ name: string; error: string }> = []
+    const failed: Array<{ name: string; error: string; orphanCampaignId?: string }> = []
 
     for (const item of plan.toCreate) {
+      let createdCampaignId: string | null = null
       try {
         const campaign = await createCampaign(item.input)
-        // 링크까지 되어야 "가져옴"이다 — 링크가 실패하면 다음 동기화가 같은 Meta 캠페인을
-        // 또 가져와 중복 우산을 만들므로, 실패로 보고해 사람이 정리하게 한다.
+        createdCampaignId = campaign.id
+        // 링크까지 되어야 "가져옴"이다 — 링크 없이 남으면 미러로 인식되지 않으면서
+        // linkedMetaIds 에도 안 잡혀, 다음 동기화가 같은 Meta 캠페인을 또 가져온다.
         await addLink(campaign.id, "meta_campaign", item.metaId)
         created.push({ campaignId: campaign.id, metaId: item.metaId, name: item.name })
       } catch (err) {
-        failed.push({ name: item.name, error: err instanceof Error ? err.message : String(err) })
+        // 링크가 실패한 생성 캠페인은 보상 삭제 — 고아를 남기면 동기화를 누를 때마다
+        // 동명 캠페인이 누적된다. 삭제까지 실패하면 정리 대상을 특정할 수 있게 id 를 남긴다.
+        if (createdCampaignId) {
+          try {
+            await deleteCampaign(createdCampaignId)
+            createdCampaignId = null
+          } catch (cleanupErr) {
+            console.warn("[meta-sync] 고아 캠페인 정리 실패", createdCampaignId, cleanupErr)
+          }
+        }
+        failed.push({
+          name: item.name,
+          error: err instanceof Error ? err.message : String(err),
+          ...(createdCampaignId ? { orphanCampaignId: createdCampaignId } : {}),
+        })
       }
     }
 

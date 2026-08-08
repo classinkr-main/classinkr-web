@@ -2,6 +2,7 @@
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import {
   AlertCircle,
   ArrowUpRight,
@@ -22,6 +23,7 @@ import {
   AD_LEAD_CSV_COLUMNS,
   AD_LEAD_LENS_OPTIONS,
   AD_LEAD_PERIOD_OPTIONS,
+  AD_LEAD_PERIOD_TO_META_PRESET,
   AD_LEAD_STATUS_OPTIONS,
   buildAdLeadCsvRows,
   buildAdLeadScopes,
@@ -45,7 +47,7 @@ import {
 import { buildTrackingRollup } from "@/lib/crm/lead-ranking"
 import { getLeadMagnetLabel } from "@/components/admin/crm/leads/shared"
 import type { LeadRecord } from "@/lib/repositories/leads"
-import AdLeadImportDialog from "./AdLeadImportDialog"
+const AdLeadImportDialog = dynamic(() => import("./AdLeadImportDialog"), { ssr: false })
 
 // 광고 탭 안의 "광고 리드" 섹션 — 캠페인 성과 옆에서 리드를 모아보고, 바로 CRM으로 올린다.
 //
@@ -89,10 +91,11 @@ function formatLeadDate(value: string) {
   return Number.isNaN(date.getTime()) ? "—" : DATE.format(date)
 }
 
+// DESIGN.md 운영 상태 스케일 — 연락중=Warning, 전환됨=Success (Tailwind 기본 팔레트 금지).
 const STATUS_TONE: Record<string, string> = {
   new: "border-[#e8e8e4] bg-white text-[#111110]",
-  contacted: "border-amber-200 bg-amber-50 text-amber-700",
-  converted: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  contacted: "border-[#ECD29C] bg-[#FBF1E0] text-[#A8741A]",
+  converted: "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]",
   closed: "border-[#e8e8e4] bg-[#f0f0ec] text-[#1a1a1a]/45",
 }
 
@@ -141,6 +144,7 @@ export default function AdLeadsPanel({
   onLeadsUpdate,
   metaSpend,
   metaCurrency,
+  metaDatePreset,
 }: {
   leads: LeadRecord[]
   loading: boolean
@@ -151,6 +155,8 @@ export default function AdLeadsPanel({
   /** Meta 라이브 광고비 — 실측 CPL 대조용. 통화가 KRW가 아닐 수 있어 표기에 통화를 붙인다. */
   metaSpend: number | null
   metaCurrency: string
+  /** 광고비가 집계된 기간 — 리드 기간 필터와 일치할 때만 CPL을 계산한다(분자·분모 기간 정합). */
+  metaDatePreset: string
 }) {
   const [lens, setLens] = useState<AdLeadLens>("paid")
   const [period, setPeriod] = useState<AdLeadPeriod>("30d")
@@ -166,11 +172,15 @@ export default function AdLeadsPanel({
 
   const deferredSearch = useDeferredValue(search)
 
-  // 기간 필터(7일/30일/90일) 경계가 렌더마다 흔들리지 않도록 now를 60초 틱으로 고정한다
-  // — 리드 보드(LeadsBoardClient)와 같은 패턴.
+  // 기간 필터(7일/30일/90일) 경계가 렌더마다 흔들리지 않도록 now를 고정하되, 상태 변경은
+  // 15분에 한 번만 허용한다 — 60초마다 갱신하면 아래 파생 체인(스코프→통계→롤업)이
+  // 사용자가 아무것도 안 해도 매분 리드 전량을 다시 훑는다. 30일 창에서 15분 오차는 무의미하다.
   const [nowMs, setNowMs] = useState(() => Date.now())
   useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 60_000)
+    const timer = setInterval(
+      () => setNowMs((prev) => (Date.now() - prev >= 15 * 60_000 ? Date.now() : prev)),
+      60_000
+    )
     return () => clearInterval(timer)
   }, [])
 
@@ -194,13 +204,19 @@ export default function AdLeadsPanel({
     [leads, lens, period, status, deferredSearch, trackingKey, getKey, nowMs, includeTestLeads]
   )
 
-  const stats = useMemo(() => buildAdLeadStats(scoped, metaSpend), [scoped, metaSpend])
+  // 실측 CPL 은 광고비(metaDatePreset)와 리드 목록(period)의 기간이 일치할 때만 계산한다.
+  const periodMatchesMetaSpend = AD_LEAD_PERIOD_TO_META_PRESET[period] === metaDatePreset
+  const stats = useMemo(
+    () => buildAdLeadStats(scoped, periodMatchesMetaSpend ? metaSpend : null),
+    [scoped, metaSpend, periodMatchesMetaSpend]
+  )
   const rollup = useMemo(() => buildTrackingRollup(scoped, getKey), [scoped, getKey])
 
   const rowsVisible = useVisibleCount(rows.length, ROW_STEP)
   const rollupVisible = useVisibleCount(rollup.rows.length, ROLLUP_STEP)
 
-  const csvRows = useMemo(() => buildAdLeadCsvRows(rows, getLeadLandingPath), [rows])
+  // CSV 행은 클릭 시점에 생성한다 — 선행 생성하면 내보내기를 안 눌러도 필터 변경마다 전량을 순회한다.
+  const buildCsvRows = useCallback(() => buildAdLeadCsvRows(rows, getLeadLandingPath), [rows])
 
   // 선택은 화면에 보이는 전환 대상만 유효하다 — 필터를 바꿔 사라진 리드가 유령 선택으로
   // 남아 "12건 전환"을 눌렀는데 엉뚱한 리드가 넘어가는 일을 막는다.
@@ -401,7 +417,8 @@ export default function AdLeadsPanel({
             </button>
             <CampaignExportButton
               columns={[...AD_LEAD_CSV_COLUMNS]}
-              rows={csvRows}
+              rows={buildCsvRows}
+              rowCount={rows.length}
               filename="ad-leads"
               label="리드 CSV"
               disabled={loading}
@@ -420,7 +437,7 @@ export default function AdLeadsPanel({
       </div>
 
       {error && (
-        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+        <div className="flex items-start gap-2 rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[13px] text-[#B43E3E]">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -463,7 +480,13 @@ export default function AdLeadsPanel({
                 ? won(stats.cpl)
                 : `${metaCurrency} ${stats.cpl.toFixed(2)}`
           }
-          hint={stats.cpl == null ? "Meta 광고비 연동 대기" : "Meta 광고비 ÷ 이 목록 리드"}
+          hint={
+            stats.cpl != null
+              ? "같은 기간 Meta 광고비 ÷ 목록 리드"
+              : !periodMatchesMetaSpend
+                ? "기간 불일치 — Meta 성과 기간과 맞추면 표시"
+                : "Meta 광고비 연동 대기"
+          }
           loading={loading}
         />
         <StatCell
@@ -591,8 +614,8 @@ export default function AdLeadsPanel({
         <div
           className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border px-4 py-3 text-[12.5px] ${
             outcome.failed > 0
-              ? "border-amber-200 bg-amber-50 text-amber-800"
-              : "border-emerald-200 bg-[#ECFDF5] text-[#084734]"
+              ? "border-[#ECD29C] bg-[#FBF1E0] text-[#A8741A]"
+              : "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
           }`}
         >
           {outcome.failed > 0 ? (
@@ -647,7 +670,7 @@ export default function AdLeadsPanel({
           </div>
 
           <label className="relative ml-auto w-full sm:w-56">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#1a1a1a]/30" />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#A39E98]" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -668,7 +691,7 @@ export default function AdLeadsPanel({
               type="button"
               onClick={handleBulkConvert}
               disabled={converting}
-              className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#063d2a] disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-60"
             >
               {converting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5" />}
               {converting && convertProgress
@@ -686,7 +709,9 @@ export default function AdLeadsPanel({
           </div>
         )}
 
-        {/* header */}
+        {/* header + rows — 6열 고정 그리드는 좁은 화면에서 잘리므로 가로 스크롤 컨테이너로 감싼다. */}
+        <div className="overflow-x-auto">
+        <div className="min-w-[560px]">
         <div className="grid grid-cols-[28px_44px_minmax(0,1.4fr)_minmax(0,1.6fr)_64px_60px] items-center gap-2 border-b border-[#f0f0ec] bg-[#fafaf8] px-3 py-2 text-[10px] uppercase tracking-[0.12em] text-[#1a1a1a]/40 sm:px-4">
           <span className="flex items-center">
             <input
@@ -784,7 +809,7 @@ export default function AdLeadsPanel({
                         전환
                       </button>
                     ) : (
-                      <span className="text-[11px] text-[#1a1a1a]/25">—</span>
+                      <span className="text-[11px] text-[#A39E98]">—</span>
                     )}
                   </span>
                 </div>
@@ -792,6 +817,9 @@ export default function AdLeadsPanel({
             })}
           </div>
         )}
+
+        </div>
+        </div>
 
         <div className="flex flex-col items-center gap-1.5 px-3 py-2.5">
           <p className="text-[10.5px] text-[#1a1a1a]/40">

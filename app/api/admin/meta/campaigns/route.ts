@@ -21,11 +21,16 @@ export async function GET(req: NextRequest) {
   const datePreset = req.nextUrl.searchParams.get("datePreset") ?? "last_30d"
   const limitValue = Number(req.nextUrl.searchParams.get("limit") ?? 50)
   const limit = Number.isFinite(limitValue) ? Math.min(Math.max(limitValue, 1), 100) : 50
+  // 명시 동기화·상태 변경 직후 재조회 — 서버 메모(45초)를 우회해 항상 Graph 를 새로 받는다.
+  // 클라이언트는 헤더로 보낸다: 쿼리로 보내면 캐시 키(URL)가 갈라져 기본 키의 낡은 캐시가 남는다.
+  const fresh =
+    req.nextUrl.searchParams.get("fresh") === "1" || req.headers.get("x-meta-fresh") === "1"
 
   try {
     const dashboard = await getMetaCampaignDashboard({
       datePreset: ALLOWED_DATE_PRESETS.has(datePreset) ? datePreset : "last_30d",
       limit,
+      fresh,
     })
 
     return NextResponse.json({ ok: true, ...dashboard })

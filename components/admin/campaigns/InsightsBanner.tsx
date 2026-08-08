@@ -25,16 +25,16 @@ interface ToneStyle {
 
 const TONE_STYLES: Record<InsightTone, ToneStyle> = {
   positive: {
-    chip: "border-emerald-100 bg-[#ECFDF5]",
+    chip: "border-[#BDEFD8] bg-[#ECFDF5]",
     iconWrap: "bg-white/70 text-[#084734]",
     title: "text-[#084734]",
     body: "text-[#084734]/70",
   },
   warning: {
-    chip: "border-amber-100 bg-amber-50",
-    iconWrap: "bg-white/70 text-amber-700",
-    title: "text-amber-700",
-    body: "text-amber-700/70",
+    chip: "border-[#ECD29C] bg-[#FBF1E0]",
+    iconWrap: "bg-white/70 text-[#A8741A]",
+    title: "text-[#A8741A]",
+    body: "text-[#A8741A]/70",
   },
   neutral: {
     chip: "border-[#e8e8e4] bg-white",

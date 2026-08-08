@@ -113,10 +113,10 @@ function HardwareSearchPanel({
                   <p className="mt-0.5 text-[11px] font-semibold tabular-nums text-[#615D59]">
                     가용 {formatNumber(row.availableStock)} · 예정 {formatNumber(row.plannedOut)} · 창고 {formatNumber(row.warehouseStock)}
                   </p>
-                  <div className="mt-1.5 flex gap-1">
-                    <QuickMoveButton kind="sale" product={row.product} onClick={() => prepareQuickEntry(row.itemId, "sale")} />
-                    <QuickMoveButton kind="planned" product={row.product} onClick={() => prepareQuickEntry(row.itemId, "planned")} />
-                    <QuickMoveButton kind="inbound" product={row.product} onClick={() => prepareQuickEntry(row.itemId, "inbound")} />
+                  <div className="mt-1.5 inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] p-0.5">
+                    <QuickMoveButton kind="sale" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "sale")} />
+                    <QuickMoveButton kind="planned" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "planned")} />
+                    <QuickMoveButton kind="inbound" bare product={row.product} onClick={() => prepareQuickEntry(row.itemId, "inbound")} />
                   </div>
                 </div>
               ))}
@@ -170,7 +170,7 @@ function HardwareSearchPanel({
                       occurredAt: todayKey(),
                     })}
                     disabled={plannedConfirmLocked}
-                    className="mt-1.5 rounded bg-[#084734] px-2 py-1 text-[10px] font-bold text-white disabled:opacity-50"
+                    className="mt-1.5 cursor-pointer rounded-md border border-[#084734] bg-white px-2 py-1 text-[10.5px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     출고 확정
                   </button>

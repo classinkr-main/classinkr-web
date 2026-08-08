@@ -5,10 +5,11 @@
 // (fixed overlay + 모바일 바텀시트). 상세/링크 피커는 D1-6(여기 아님).
 // POST(신규)·PATCH(편집)·DELETE(편집). 저장 실패 시 인라인 에러 + 입력 보존.
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Trash2, X } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
+import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import {
   CAMPAIGN_STATUSES,
   CAMPAIGN_STATUS_LABEL,
@@ -117,11 +118,21 @@ export function CampaignFormDrawer({ initial, onClose, onSuccess }: CampaignForm
 
   const busy = saving || deleting
 
+  // 접근성 — 열릴 때 닫기 버튼으로 포커스 이동, Escape 닫기 + Tab 트랩, 닫히면 이전 포커스 복귀
+  // (AdLeadImportDialog와 동일 패턴).
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  useDialogFocus(true, onClose, closeButtonRef)
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-      <div className="max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={isEdit ? "캠페인 편집" : "새 캠페인"}
+        className="max-h-[calc(100dvh-1rem)] w-full max-w-lg overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
+      >
         {/* 헤더 */}
-        <div className="flex items-start justify-between border-b border-[#e8e8e4] px-4 py-4 sm:px-6">
+        <div className="flex items-start justify-between border-b border-[rgba(0,0,0,0.08)] px-4 py-4 sm:px-6">
           <div className="min-w-0">
             <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[#615D59]">
               {isEdit ? "캠페인 편집" : "새 캠페인"}
@@ -131,6 +142,7 @@ export function CampaignFormDrawer({ initial, onClose, onSuccess }: CampaignForm
             </h2>
           </div>
           <button
+            ref={closeButtonRef}
             onClick={onClose}
             aria-label="닫기"
             className="text-[#615D59] transition-colors hover:text-[#111110]"
@@ -283,7 +295,7 @@ export function CampaignFormDrawer({ initial, onClose, onSuccess }: CampaignForm
         </div>
 
         {/* 푸터 */}
-        <div className="flex items-center justify-between gap-2 border-t border-[#e8e8e4] px-4 py-3 sm:px-6">
+        <div className="flex items-center justify-between gap-2 border-t border-[rgba(0,0,0,0.08)] px-4 py-3 sm:px-6">
           {isEdit ? (
             <button
               onClick={handleDelete}

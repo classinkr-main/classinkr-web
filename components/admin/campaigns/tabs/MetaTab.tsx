@@ -23,11 +23,11 @@ import AdLeadsPanel from "@/components/admin/campaigns/leads/AdLeadsPanel"
 import type { ChannelEfficiencyRow } from "@/components/admin/campaigns/ChannelEfficiencyChart"
 import type { MetaPerfRow } from "@/components/admin/campaigns/MetaPerformanceCharts"
 import { KRW, compact, formatMetaDate, money } from "@/components/admin/campaigns/event-format"
+import { metaObjectiveLabel } from "@/lib/marketing/campaign-labels"
 import type { LeadRecord } from "@/lib/repositories/leads"
 import { DEFAULT_EVENT_METRICS, type AdChannel, type EventMetrics } from "@/lib/types/event-metrics"
 import type { PublicEvent } from "@/lib/types/public-events"
 import { KpiCard } from "./KpiCard"
-import MetricsEditor from "./MetricsEditor"
 import type {
   CampaignAggregate,
   MetaCampaignDashboard,
@@ -35,6 +35,9 @@ import type {
   MetaDatePreset,
   PerEventEconRow,
 } from "./types"
+
+// 성과 편집기는 연필을 누르기 전까지 탭 청크에 실리지 않게 지연 로드한다.
+const MetricsEditor = dynamic(() => import("./MetricsEditor"), { ssr: false })
 
 const MetaPerformanceCharts = dynamic(
   () => import("@/components/admin/campaigns/MetaPerformanceCharts").then((m) => m.MetaPerformanceCharts),
@@ -52,9 +55,9 @@ function MetaStatusPill({ status }: { status?: string }) {
   const normalized = status ?? "UNKNOWN"
   const tone =
     normalized === "ACTIVE"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      ? "border-[#BDEFD8] bg-[#ECFDF5] text-[#084734]"
       : normalized === "PAUSED"
-        ? "border-amber-200 bg-amber-50 text-amber-700"
+        ? "border-[#ECD29C] bg-[#FBF1E0] text-[#A8741A]"
         : "border-[#e8e8e4] bg-[#f0f0ec] text-[#1a1a1a]/45"
 
   return (
@@ -97,7 +100,7 @@ function MetaCampaignPanel({
                 <Activity className="h-4 w-4" />
               </span>
               <div>
-                <h2 className="text-[15px] font-bold text-[#111110]">
+                <h2 className="text-[14px] font-bold text-[#111110]">
                   {dashboard?.account.name ?? "Meta 광고 계정"}
                 </h2>
                 <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">
@@ -105,7 +108,7 @@ function MetaCampaignPanel({
                 </p>
               </div>
               {dashboard && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                <span className="inline-flex items-center gap-1 rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2 py-0.5 text-[10px] font-bold text-[#084734]">
                   <CheckCircle2 className="h-3 w-3" />
                   연결됨
                 </span>
@@ -120,6 +123,7 @@ function MetaCampaignPanel({
                   key={option.value}
                   type="button"
                   onClick={() => onDatePresetChange(option.value)}
+                  aria-pressed={datePreset === option.value}
                   className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${
                     datePreset === option.value ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                   }`}
@@ -142,7 +146,7 @@ function MetaCampaignPanel({
       </div>
 
       {error && (
-        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+        <div className="flex items-start gap-2 rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[13px] text-[#B43E3E]">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -170,9 +174,9 @@ function MetaCampaignPanel({
         </div>
 
         {loading && !dashboard ? (
-          <p className="py-12 text-center text-[12px] text-[#1a1a1a]/30">Meta 캠페인을 불러오는 중입니다.</p>
+          <p className="py-12 text-center text-[12px] text-[#A39E98]">Meta 캠페인을 불러오는 중입니다.</p>
         ) : campaigns.length === 0 ? (
-          <p className="py-12 text-center text-[12px] text-[#1a1a1a]/30">표시할 Meta 캠페인이 없습니다.</p>
+          <p className="py-12 text-center text-[12px] text-[#A39E98]">표시할 Meta 캠페인이 없습니다.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-[#f0f0ec] text-left text-[12px]">
@@ -197,7 +201,7 @@ function MetaCampaignPanel({
                       <td className="max-w-[320px] px-4 py-3">
                         <p className="truncate font-semibold text-[#111110]">{campaign.name}</p>
                         <p className="mt-0.5 text-[10.5px] text-[#1a1a1a]/35">
-                          {campaign.objective ?? "목표 없음"} · 업데이트 {formatMetaDate(campaign.updatedTime)}
+                          {metaObjectiveLabel(campaign.objective) ?? "목표 없음"} · 업데이트 {formatMetaDate(campaign.updatedTime)}
                         </p>
                       </td>
                       <td className="px-4 py-3">
@@ -213,7 +217,7 @@ function MetaCampaignPanel({
                             {money(campaign.insights.spend / campaign.insights.leads, currency)}
                           </span>
                         ) : (
-                          <span className="text-[#1a1a1a]/30">—</span>
+                          <span className="text-[#A39E98]">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -261,6 +265,7 @@ export default function MetaTab({
   channelEfficiencyData,
   channelBudgets,
   onBudgetChange,
+  budgetError,
   aggregate,
   adLeads,
   adLeadsLoading,
@@ -287,6 +292,8 @@ export default function MetaTab({
   channelEfficiencyData: ChannelEfficiencyRow[]
   channelBudgets: Record<AdChannel, number>
   onBudgetChange: (channel: AdChannel, amount: number) => void
+  /** 예산 저장 실패 — 표 바로 위에 표시한다(Meta 대시보드 에러 슬롯과 분리). */
+  budgetError: string | null
   aggregate: CampaignAggregate
   /** 마케팅 스코프 리드 전량 — 광고 리드 섹션이 렌즈·기간으로 직접 좁힌다(코어 리드와 별도 조회). */
   adLeads: LeadRecord[]
@@ -382,16 +389,23 @@ export default function MetaTab({
           onLeadsUpdate={onAdLeadsUpdate}
           metaSpend={dashboard?.summary.spend ?? null}
           metaCurrency={dashboard?.account.currency ?? "USD"}
+          metaDatePreset={datePreset}
         />
       </div>
 
       <div className="mt-8">
         <div className="mb-3">
-          <h2 className="text-[15px] font-semibold text-[#111110]">채널 예산·집행</h2>
+          <h2 className="text-[14px] font-semibold text-[#111110]">채널 예산·집행</h2>
           <p className="mt-0.5 text-[12px] text-[#1a1a1a]/50">
             채널별 배정 예산을 입력하고 집행·전환(추정)·CPL과 대조합니다. 채널 귀속이 불가한 ROI는 종합만 표기합니다.
           </p>
         </div>
+        {budgetError && (
+          <div className="mb-3 flex items-start gap-2 rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[12.5px] text-[#B43E3E]">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{budgetError} — 입력값은 저장 전 상태로 되돌렸습니다.</span>
+          </div>
+        )}
         {coreLoading ? (
           <ChartSkeleton className="h-[220px]" />
         ) : (
@@ -411,7 +425,7 @@ export default function MetaTab({
       {/* 성과 입력 — 위 표들의 "—"가 어느 행사의 미입력에서 나오는지 여기서 바로 채운다. */}
       <div className="mt-8">
         <div className="mb-3">
-          <h2 className="text-[15px] font-semibold text-[#111110]">성과 입력</h2>
+          <h2 className="text-[14px] font-semibold text-[#111110]">성과 입력</h2>
           <p className="mt-0.5 text-[12px] text-[#1a1a1a]/50">
             행사별 광고비·매출·목표를 한 표에서 확인하고 매출·목표는 그 자리에서 고칩니다. 채널별 광고비 배분은 상세 편집에서 다룹니다.
           </p>

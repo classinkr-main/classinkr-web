@@ -104,13 +104,14 @@ function StockLevelsSection({
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-right text-[14px] font-bold tabular-nums text-[#111110]">
+                      {/* 음수 = 원장 이상 신호 — 카테고리 카드와 같은 규칙으로 Danger 텍스트만 적용(값 소스 불변). */}
+                      <td className={`px-4 py-3.5 text-right text-[14px] font-bold tabular-nums ${row.warehouseStock < 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
                         {formatNumber(row.warehouseStock)}
                       </td>
                       <td className="px-4 py-3.5 text-right text-[13px] font-semibold tabular-nums text-[#7A520F]">
                         {formatNumber(row.plannedOut)}
                       </td>
-                      <td className="px-4 py-3.5 text-right text-[16px] font-bold tabular-nums tracking-[-0.02em] text-[#111110]">
+                      <td className={`px-4 py-3.5 text-right text-[16px] font-bold tabular-nums tracking-[-0.02em] ${row.availableStock < 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
                         {formatNumber(row.availableStock)}
                       </td>
                       <td className="px-4 py-3.5 text-right">

@@ -80,6 +80,13 @@ function normalizeLeadInput(raw: unknown): LeadCreateInput | null {
     branch: leadStr(r.branch) ?? leadStr(r.region),
     notes: leadStr(r.notes),
     source_detail: leadStr(r.source_detail) ?? "어드민 수기 등록",
+    // 캠페인 허브 "광고 리드 가져오기"가 매체 표기(utm_medium=cpc·utm_campaign)를 실어 보낸다.
+    // 여기서 떨어뜨리면 방금 가져온 리드가 광고/마케팅 렌즈와 캠페인 축 롤업 어디에도 안 잡힌다.
+    utm_source: leadStr(r.utm_source),
+    utm_medium: leadStr(r.utm_medium),
+    utm_campaign: leadStr(r.utm_campaign),
+    utm_term: leadStr(r.utm_term),
+    utm_content: leadStr(r.utm_content),
     // 어드민이 직접 입력한 리드는 이미 검토된 것 — 공개 폼 확인 게이트 대상이 아니다.
     confirmed_at: new Date().toISOString(),
   }

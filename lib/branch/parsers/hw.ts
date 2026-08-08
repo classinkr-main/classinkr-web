@@ -20,7 +20,14 @@ const n = (v: unknown) => {
 const date = (v: unknown) => {
   const t = s(v); if (!t) return null
   const m = t.match(/^(\d{4})\s*[-/.]\s*(\d{1,2})\s*[-/.]\s*(\d{1,2})/)
-  return m ? `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}` : null
+  if (!m) return null
+  const iso = `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`
+  // 실존 날짜만 통과 — 시트에 "2026-08-00"(일=00) 같은 placeholder가 들어오면 그대로
+  // Postgres date 캐스팅(22008)에서 하드웨어 싱크 전체가 죽는다. 무효 날짜는 빈 값과 같은
+  // "일자 미정"(null)으로 강등하고 원본 문자열은 raw.values에 남긴다.
+  const parsed = new Date(`${iso}T00:00:00Z`)
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== iso) return null
+  return iso
 }
 const arr = (v: unknown): string[] => { const t = s(v); return t ? t.split(/[,;\s]+/).filter(Boolean) : [] }
 const rawValues = (row: FormattedCell[]) => row.map((c) => c?.value ?? null)

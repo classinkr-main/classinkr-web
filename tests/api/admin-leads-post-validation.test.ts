@@ -22,6 +22,7 @@ vi.mock("@/lib/repositories/leads", () => ({
   getLeads,
   getDashboardLeads,
   getCampaignLeads,
+  getMarketingLeads: vi.fn(),
   findLeadsByContacts,
   saveLead,
 }))
@@ -153,5 +154,38 @@ describe("POST /api/admin/leads — 형식 검증·중복 방지 집계", () => 
     const body = await response.json()
     expect(body.error).toContain("최대 500행")
     expect(saveLead).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /api/admin/leads — utm 수용(캠페인 허브 가져오기)", () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+    vi.resetModules()
+  })
+
+  // 가져오기 다이얼로그가 utm_medium=cpc·utm_campaign 을 실어 보낸다. 서버가 이것을
+  // 떨어뜨리면 방금 가져온 리드가 광고/마케팅 렌즈 어디에도 안 잡힌다(회귀 방지).
+  it("utm_* 필드가 저장 입력까지 전달된다", async () => {
+    requireVerifiedAdminContext.mockResolvedValue({ source: "supabase", role: "ADMIN", userId: "admin-1" })
+    findLeadsByContacts.mockResolvedValue([])
+    saveLead.mockImplementation(async (lead: Record<string, unknown>) => ({ ...lead, id: "lead-1", status: "new" }))
+
+    const response = await callPost({
+      leads: [
+        {
+          org: "A학원",
+          phone: "010-1111-2222",
+          source: "admin_manual",
+          utm_medium: "cpc",
+          utm_campaign: "여름 HW",
+          utm_source: "naver",
+        },
+      ],
+    })
+
+    expect(response.status).toBe(200)
+    expect(saveLead).toHaveBeenCalledWith(
+      expect.objectContaining({ utm_medium: "cpc", utm_campaign: "여름 HW", utm_source: "naver" })
+    )
   })
 })

@@ -9,10 +9,11 @@ export default function BlogLoading() {
           <div className="mb-3 h-10 w-[min(100%,26rem)] animate-pulse rounded-lg bg-[#eceae5] md:h-14" />
           <div className="mb-10 h-10 w-[min(100%,20rem)] animate-pulse rounded-lg bg-[#f2f0eb] md:mb-12 md:h-14" />
 
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:grid-rows-2">
-            <div className="animate-pulse rounded-2xl bg-[#eceae5] max-lg:aspect-[16/10] lg:row-span-2" />
-            <div className="animate-pulse rounded-2xl bg-[#eceae5] max-lg:aspect-[16/9] lg:aspect-[16/9]" />
-            <div className="animate-pulse rounded-2xl bg-[#eceae5] max-lg:aspect-[16/9] lg:aspect-[16/9]" />
+          {/* 실제 갤러리와 같은 사다리(1열 → sm 2열 → lg 3열) */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:aspect-[1100/460] lg:grid-cols-3 lg:grid-rows-2">
+            <div className="animate-pulse rounded-2xl bg-[#eceae5] aspect-[16/10] sm:col-span-2 lg:aspect-auto lg:h-full lg:row-span-2" />
+            <div className="animate-pulse rounded-2xl bg-[#eceae5] aspect-[16/10] lg:aspect-auto lg:h-full" />
+            <div className="animate-pulse rounded-2xl bg-[#eceae5] aspect-[16/10] lg:aspect-auto lg:h-full" />
           </div>
         </div>
       </section>
@@ -32,15 +33,15 @@ export default function BlogLoading() {
         {Array.from({ length: 5 }).map((_, index) => (
           <div
             key={index}
-            className="grid grid-cols-1 gap-3 border-b border-[#ebebea] py-5 md:grid-cols-[132px_1fr_200px] md:gap-8 md:py-6"
+            className="grid grid-cols-[1fr_128px] items-center gap-3 border-b border-[#ebebea] py-5 sm:grid-cols-[1fr_160px] sm:gap-5 md:grid-cols-[1fr_200px] md:items-start md:gap-8 md:py-6"
           >
-            <div className="h-3 w-16 animate-pulse rounded bg-[#f2f0eb]" />
             <div className="space-y-2">
+              <div className="h-3 w-20 animate-pulse rounded bg-[#f2f0eb]" />
               <div className="h-5 w-4/5 animate-pulse rounded bg-[#eceae5]" />
-              <div className="h-3 w-full animate-pulse rounded bg-[#f2f0eb]" />
-              <div className="h-3 w-2/3 animate-pulse rounded bg-[#f2f0eb]" />
+              <div className="hidden h-3 w-full animate-pulse rounded bg-[#f2f0eb] sm:block" />
+              <div className="h-3 w-2/5 animate-pulse rounded bg-[#f2f0eb]" />
             </div>
-            <div className="aspect-[4/3] w-full animate-pulse rounded-xl bg-[#eceae5] max-md:order-first md:aspect-[16/10]" />
+            <div className="aspect-[3/2] w-full animate-pulse rounded-xl bg-[#eceae5]" />
           </div>
         ))}
       </section>

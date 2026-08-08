@@ -41,6 +41,10 @@ const LONG_RUNNING_ADMIN_PATHS = [
   "/api/admin/subscribers/bulk",
   "/api/admin/hardware/import-sheet",
   "/api/admin/hardware/import-ledger",
+  // 단체 전환 — 서버가 리드당 대여섯 번 DB 왕복을 25건 순차로 돈다. 45초에 클라이언트만
+  // abort되면 서버는 계속 전환하는데 화면은 전부 실패로 세는 어긋남이 생긴다.
+  "/api/admin/leads/bulk-convert",
+  "/api/admin/marketing-campaigns/meta-sync",
 ]
 // cs-chat AI 초안 생성은 대화 id가 경로 중간에 끼어 있어(/conversations/{id}/generate)
 // 정확한 경로 목록으로 못 잡는다 — 패턴으로 별도 매칭.
