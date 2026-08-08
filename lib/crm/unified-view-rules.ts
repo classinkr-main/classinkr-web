@@ -3,10 +3,14 @@
 // lib/repositories/crm-unified-customers.ts(서버 저장소)가 담당하고, 이 모듈은
 // "어떤 행이 어떤 저장 뷰에 보이는가"라는 규칙만 소유한다(단위 테스트 대상).
 
-import type { CrmPrioritySource } from "@/lib/crm/priority"
+import type { CrmPriorityBucket, CrmPrioritySource } from "@/lib/crm/priority"
 
 // "customer" = 리드 전환(convert-v2)이 만드는 portal customers 테이블의 앱 고객.
 export type CrmUnifiedCustomerSource = CrmPrioritySource | "customer"
+// 돈흐름 "-" 표기가 뭉개던 세 가지 이유의 구분.
+// value=표기할 금액 있음 · zero=원천은 조인됐으나 전부 0원 · unsynced=스냅샷 미조인(EEO/Shroff) ·
+// none=돈흐름 개념이 없는 소스(리드).
+export type CrmUnifiedMoneyState = "value" | "zero" | "unsynced" | "none"
 export type CrmUnifiedLifecycle = "new_lead" | "active_lead" | "account_risk" | "active_account" | "closed"
 export type CrmUnifiedSavedView =
   | "all"
@@ -37,7 +41,15 @@ export interface CrmUnifiedCustomerRow {
   nextActionLabel: string
   priorityReason: string
   score: number
+  /**
+   * 우선순위 엔진(buildLeadPriorityItem/buildNeoAccountPriorityItem)이 판단한 버킷 그대로.
+   * 엔진 미적용 행(전환 고객)·엔진이 null을 준 행(정보 없음 계정, 게이트 탈락 리드)은 null이며
+   * 정렬 시 "watch"로 취급한다. 라벨 문자열에서 재파생하지 않는다(엔진 판단이 SSOT).
+   */
+  bucket: CrmPriorityBucket | null
   moneyLabel: string | null
+  /** moneyLabel이 null("-")일 때의 사유 구분 — 표기는 UI가 결정한다. */
+  moneyState: CrmUnifiedMoneyState
   href: string
   updatedAt: string | null
   expireAt: string | null

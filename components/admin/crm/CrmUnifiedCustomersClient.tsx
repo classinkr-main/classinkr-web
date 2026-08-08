@@ -259,10 +259,128 @@ function formatDate(value: string | null | undefined) {
   }).format(date)
 }
 
-function scoreTone(score: number) {
-  if (score >= 85) return "text-[#B85C33]"
-  if (score >= 68) return "text-[#084734]"
-  return "text-[#1a1a1a]/50"
+// 클라이언트 정렬 — 이 화면은 탐색 전용이라 서버 추천 정렬(버킷→점수→시각)을 기본으로 두고,
+// 헤더 클릭 시 현재 페이지에 로드된 rows(≤200)만 브라우저에서 재정렬한다(서버 재요청 없음).
+// Array.prototype.sort는 안정 정렬이므로 동률 행은 서버 추천 순서를 그대로 유지한다.
+type SortKey = "name" | "status" | "updated" | "owner" | "score"
+type SortDirection = "asc" | "desc"
+interface SortState {
+  key: SortKey
+  direction: SortDirection
+}
+
+const SORT_LABELS: Record<SortKey, string> = {
+  name: "고객명",
+  status: "상태",
+  updated: "최근 업데이트",
+  owner: "담당",
+  score: "점수",
+}
+
+// 컬럼 성격별 첫 클릭 방향 — 이름·상태·담당은 가나다, 시각·점수는 최신·높은 순이 자연스럽다.
+const SORT_DEFAULT_DIRECTION: Record<SortKey, SortDirection> = {
+  name: "asc",
+  status: "asc",
+  updated: "desc",
+  owner: "asc",
+  score: "desc",
+}
+
+function updatedAtMs(row: CrmUnifiedCustomerRow): number | null {
+  if (!row.updatedAt) return null
+  const ms = new Date(row.updatedAt).getTime()
+  return Number.isNaN(ms) ? null : ms
+}
+
+// 담당 미배정·업데이트 시각 없음은 방향과 무관하게 항상 마지막 — 방향을 토글할 때마다
+// 빈 값이 맨 위로 튀어 오르면 탐색 스캔이 끊긴다.
+function sortValueMissing(row: CrmUnifiedCustomerRow, key: SortKey) {
+  if (key === "owner") return !row.ownerName
+  if (key === "updated") return updatedAtMs(row) == null
+  return false
+}
+
+function compareRows(a: CrmUnifiedCustomerRow, b: CrmUnifiedCustomerRow, key: SortKey) {
+  switch (key) {
+    case "name":
+      return a.name.localeCompare(b.name, "ko")
+    case "status":
+      return a.statusLabel.localeCompare(b.statusLabel, "ko")
+    case "updated":
+      return (updatedAtMs(a) ?? 0) - (updatedAtMs(b) ?? 0)
+    case "owner":
+      return (a.ownerName ?? "").localeCompare(b.ownerName ?? "", "ko")
+    case "score":
+      return a.score - b.score
+  }
+}
+
+function sortRows(rows: CrmUnifiedCustomerRow[], sort: SortState) {
+  const sign = sort.direction === "asc" ? 1 : -1
+  return [...rows].sort((a, b) => {
+    const aMissing = sortValueMissing(a, sort.key)
+    const bMissing = sortValueMissing(b, sort.key)
+    if (aMissing !== bMissing) return aMissing ? 1 : -1
+    return sign * compareRows(a, b, sort.key)
+  })
+}
+
+// 정렬 헤더 셀 — 활성 컬럼에만 ▲▼·aria-sort를 노출한다. 기본(추천순)에서는 어느 헤더에도
+// 활성 표시가 없어 "서버 추천 순서 그대로"임이 드러난다.
+function SortableHeaderCell({
+  label,
+  sortKey,
+  sort,
+  onToggle,
+  align = "left",
+}: {
+  label: string
+  sortKey: SortKey
+  sort: SortState | null
+  onToggle: (key: SortKey) => void
+  align?: "left" | "right"
+}) {
+  const active = sort?.key === sortKey
+  return (
+    <th
+      className={`px-4 py-3 ${align === "right" ? "text-right" : ""}`}
+      aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : undefined}
+    >
+      <button
+        type="button"
+        onClick={() => onToggle(sortKey)}
+        title={`${label} 기준 정렬`}
+        className={`inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] ${
+          active ? "text-[#111110]" : "text-[#1a1a1a]/35"
+        }`}
+      >
+        {label}
+        {active ? <span aria-hidden>{sort.direction === "asc" ? "▲" : "▼"}</span> : null}
+      </button>
+    </th>
+  )
+}
+
+// 돈흐름 3상태 표기 — moneyState(lib/crm/unified-view-rules)가 "-"의 사유를 구분한다.
+// value=금액 그대로 · zero=0원(중립) · unsynced=동기화 대기(주의 톤) · none=리드(돈흐름 개념 없음).
+function moneyCell(row: CrmUnifiedCustomerRow) {
+  if (row.moneyState === "value") {
+    return <span className="text-[12px] font-medium text-[#1a1a1a]/55">{row.moneyLabel ?? "-"}</span>
+  }
+  if (row.moneyState === "zero") {
+    return <span className="text-[12px] font-medium text-[#1a1a1a]/40">0원</span>
+  }
+  if (row.moneyState === "unsynced") {
+    return (
+      <span
+        className="text-[11px] font-semibold text-[#A8741A]"
+        title="외부 CRM 잔액·만료 동기화가 아직 안 된 고객입니다"
+      >
+        동기화 대기
+      </span>
+    )
+  }
+  return <span className="text-[12px] font-medium text-[#1a1a1a]/30">—</span>
 }
 
 function normalizeText(value: string | null | undefined) {
@@ -545,7 +663,8 @@ function CustomerSearchPanel({
       ) : null}
 
       {data ? (
-        <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-5 sm:overflow-visible sm:pb-0">
+        // 탐색 전용 화면 — "우선 처리" 타일은 실행 지표라 CRM 홈으로 이관, 여기는 규모 파악 4칸만 남긴다.
+        <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-4 sm:overflow-visible sm:pb-0">
           <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
             <p className="text-[11px] font-semibold text-[#1a1a1a]/35">검색 결과</p>
             <p className="mt-1 text-xl font-bold text-[#111110]">{data.summary.total.toLocaleString("ko-KR")}</p>
@@ -566,17 +685,11 @@ function CustomerSearchPanel({
               {(data.summary.customerCount ?? 0).toLocaleString("ko-KR")}
             </p>
           </div>
-          <div className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
-            <p className="text-[11px] font-semibold text-[#1a1a1a]/35">우선 처리</p>
-            <p className="mt-1 text-xl font-bold text-[#B85C33]">
-              {data.summary.highPriorityCount.toLocaleString("ko-KR")}
-            </p>
-          </div>
         </div>
       ) : loading ? (
-        // 콜드로드 스켈레톤 — 실제 요약 타일 5칸 그리드와 동일 골격(0 플래시·점프 방지).
-        <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-5 sm:overflow-visible sm:pb-0">
-          {Array.from({ length: 5 }).map((_, index) => (
+        // 콜드로드 스켈레톤 — 실제 요약 타일 4칸 그리드와 동일 골격(0 플래시·점프 방지).
+        <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-4 sm:overflow-visible sm:pb-0">
+          {Array.from({ length: 4 }).map((_, index) => (
             <div key={index} className="min-w-[116px] shrink-0 rounded-xl bg-[#fafaf8] p-3 sm:min-w-0">
               <div className="h-3 w-14 animate-pulse rounded bg-[#f0f0ec]" />
               <div className="mt-2 h-6 w-16 animate-pulse rounded bg-[#f0f0ec]" />
@@ -630,6 +743,8 @@ export default function CrmUnifiedCustomersClient() {
   const [owner, setOwner] = useState("")
   const [savedView, setSavedView] = useState<SavedViewFilter>("all")
   const [tagFilter, setTagFilter] = useState("")
+  // 정렬 상태 — null=추천순(서버 버킷→점수→시각 순서 그대로). 탐색용 일회성 상태라 URL·저장소에 영속하지 않는다.
+  const [sort, setSort] = useState<SortState | null>(null)
   const [data, setData] = useState<CrmUnifiedCustomers | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -932,6 +1047,20 @@ export default function CrmUnifiedCustomersClient() {
     setTagFilter("")
   }, [persistOwner, syncViewParam])
 
+  // 같은 키 재클릭=방향 토글, 다른 키=성격별 기본 방향으로 진입. 추천순 복귀는 전용 버튼만 담당한다.
+  const toggleSort = useCallback((key: SortKey) => {
+    setSort((current) =>
+      current?.key === key
+        ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: SORT_DEFAULT_DIRECTION[key] }
+    )
+  }, [])
+
+  const sortedRows = useMemo(() => {
+    const rows = data?.rows ?? []
+    return sort ? sortRows(rows, sort) : rows
+  }, [data?.rows, sort])
+
   return (
     <div className="mx-auto max-w-7xl">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -941,7 +1070,7 @@ export default function CrmUnifiedCustomersClient() {
             </p>
             <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">ClassIn 고객 DB</h1>
             <p className="mt-1 text-[13px] text-[#1a1a1a]/42">
-              ClassIn 고객을 기준으로 운영하고, 리드·외부 CRM 데이터는 동기화 참고자료로 표시합니다.
+              전체 리드·고객을 검색·필터로 탐색합니다. 오늘 할 일은 현황의 &lsquo;오늘 전화할 고객&rsquo;에서.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -1084,21 +1213,55 @@ export default function CrmUnifiedCustomersClient() {
         ) : null}
 
         <section className="rounded-2xl border border-[#e8e8e4] bg-white">
+          {/* 정렬 툴바 — 현재 정렬 상태 표시 + 점수 정렬 진입점. 점수 컬럼은 화면에서 제거됐지만
+              정렬 옵션으로는 유지한다(이 버튼이 유일한 진입점). 추천순 복귀 버튼은 정렬 활성 시에만 노출. */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f0f0ec] px-4 py-2">
+            <p className="text-[11px] font-semibold text-[#1a1a1a]/40">
+              정렬 ·{" "}
+              {sort
+                ? `${SORT_LABELS[sort.key]} ${sort.direction === "asc" ? "오름차순" : "내림차순"}`
+                : "추천순 (기본)"}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => toggleSort("score")}
+                aria-pressed={sort?.key === "score"}
+                title="우선순위 점수 기준 정렬 (기본 내림차순)"
+                className={`h-7 rounded-md border px-2.5 text-[11px] font-semibold transition-colors ${
+                  sort?.key === "score"
+                    ? "border-[#111110] bg-[#111110] text-white"
+                    : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:text-[#111110]"
+                }`}
+              >
+                점수순{sort?.key === "score" ? (sort.direction === "asc" ? " ▲" : " ▼") : ""}
+              </button>
+              {sort ? (
+                <button
+                  type="button"
+                  onClick={() => setSort(null)}
+                  className="h-7 rounded-md border border-[#e8e8e4] bg-white px-2.5 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#ECFDF5]"
+                >
+                  추천순으로 되돌리기
+                </button>
+              ) : null}
+            </div>
+          </div>
           <div className="hidden overflow-hidden lg:block">
             <table className="w-full border-collapse text-left">
               <thead className="bg-[#fafaf8] text-[11px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
                 <tr>
-                  <th className="px-4 py-3">고객</th>
-                  <th className="px-4 py-3">상태</th>
+                  <SortableHeaderCell label="고객" sortKey="name" sort={sort} onToggle={toggleSort} />
+                  <SortableHeaderCell label="상태" sortKey="status" sort={sort} onToggle={toggleSort} />
                   <th className="px-4 py-3">다음 액션</th>
                   <th className="px-4 py-3">돈흐름</th>
-                  <th className="px-4 py-3">담당</th>
-                  <th className="px-4 py-3 text-right">점수</th>
+                  <SortableHeaderCell label="담당" sortKey="owner" sort={sort} onToggle={toggleSort} />
+                  <SortableHeaderCell label="최근 업데이트" sortKey="updated" sort={sort} onToggle={toggleSort} align="right" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f0f0ec]">
                 {loading && !data
-                  ? // 콜드로드 스켈레톤 — 컬럼(고객/상태/다음 액션/돈흐름/담당/점수) 골격 일치.
+                  ? // 콜드로드 스켈레톤 — 컬럼(고객/상태/다음 액션/돈흐름/담당/최근 업데이트) 골격 일치.
                     Array.from({ length: 8 }).map((_, index) => (
                       <tr key={`sk-${index}`}>
                         <td className="px-4 py-3">
@@ -1118,12 +1281,12 @@ export default function CrmUnifiedCustomersClient() {
                           <div className="h-4 w-16 animate-pulse rounded bg-[#f0f0ec]" />
                         </td>
                         <td className="px-4 py-3">
-                          <div className="ml-auto h-5 w-8 animate-pulse rounded bg-[#f0f0ec]" />
+                          <div className="ml-auto h-4 w-14 animate-pulse rounded bg-[#f0f0ec]" />
                         </td>
                       </tr>
                     ))
                   : null}
-                {data?.rows.map((row) => (
+                {sortedRows.map((row) => (
                   <tr
                     key={row.key}
                     onDoubleClick={(event) => handleRowDoubleClick(event, row)}
@@ -1177,13 +1340,13 @@ export default function CrmUnifiedCustomersClient() {
                       <p className="text-[12px] font-semibold text-[#111110]">{row.nextActionLabel}</p>
                       <p className="mt-0.5 max-w-[220px] truncate text-[11px] text-[#1a1a1a]/40">{row.priorityReason}</p>
                     </td>
-                    <td className="px-4 py-3 text-[12px] font-medium text-[#1a1a1a]/55">{row.moneyLabel ?? "-"}</td>
+                    <td className="px-4 py-3">{moneyCell(row)}</td>
                     <td className="px-4 py-3">
                       <p className="text-[12px] font-semibold text-[#111110]">{row.ownerName ?? "미배정"}</p>
-                      <p className="text-[11px] text-[#1a1a1a]/35">{formatDate(row.updatedAt)}</p>
                     </td>
-                    <td className={`px-4 py-3 text-right text-[18px] font-bold tabular-nums ${scoreTone(row.score)}`}>
-                      {row.score}
+                    {/* 점수 컬럼 자리 — 탐색 테이블에서 점수 숫자는 숨기고 최근 업데이트 날짜로 대체. */}
+                    <td className="px-4 py-3 text-right text-[12px] font-medium tabular-nums text-[#1a1a1a]/55">
+                      {formatDate(row.updatedAt)}
                     </td>
                   </tr>
                 ))}
@@ -1206,7 +1369,7 @@ export default function CrmUnifiedCustomersClient() {
                   </div>
                 ))
               : null}
-            {data?.rows.map((row) => (
+            {sortedRows.map((row) => (
               <div key={row.key} className="relative transition-colors hover:bg-[#fafaf8]">
                 {row.source === "customer" ? (
                   <Link href={row.href} aria-label={`${row.name} 상세 보기`} className="absolute inset-0 z-0" />
@@ -1234,7 +1397,10 @@ export default function CrmUnifiedCustomersClient() {
                       </div>
                       <TagChips tags={row.tags} />
                     </div>
-                    <span className={`text-[20px] font-bold tabular-nums ${scoreTone(row.score)}`}>{row.score}</span>
+                    {/* 점수 숫자 숨김(탐색 전용) — 카드 우측 상단은 최근 업데이트 날짜로 대체. */}
+                    <span className="shrink-0 text-[11px] font-medium tabular-nums text-[#1a1a1a]/35">
+                      {formatDate(row.updatedAt)}
+                    </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-[12px]">
                     <div>

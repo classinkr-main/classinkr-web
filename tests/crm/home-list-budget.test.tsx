@@ -21,9 +21,12 @@ describe("CRM 홈 목록 예산", () => {
     expect(html).not.toContain("더 보기")
   })
 
-  it("작업대 패널이 콜드 렌더에서 깨지지 않는다", () => {
+  it("작업대(오늘 전화) 패널이 콜드 렌더에서 깨지지 않는다", () => {
+    // 패널이 "오늘 전화할 N건" 카드로 재편되면서 로딩은 문장 대신 스켈레톤으로 그린다.
     const html = renderToStaticMarkup(<CrmPriorityQueuePanel />)
-    expect(html).toContain("우선순위를 계산 중입니다")
+    expect(html).toContain("오늘 전화할")
+    expect(html).toContain("animate-pulse")
+    // 데이터 도착 전에는 다음 후보를 알릴 대상이 없다 — 펼침 버튼도 없다.
     expect(html).not.toContain("더 보기")
   })
 })

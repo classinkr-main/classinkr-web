@@ -6,10 +6,10 @@ import {
   buildLeadPriorityItem,
   buildNeoAccountPriorityItem,
   sortPriorityItems,
-  type CrmPriorityBucket,
   type CrmPriorityItem,
 } from "@/lib/crm/priority"
 import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
+import { buildDemoSignalIndex } from "@/lib/crm/demo-signal"
 import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { deriveCustomerRegion, REGION_UNSPECIFIED } from "@/lib/crm/region-label"
 import {
@@ -19,8 +19,11 @@ import {
   type CrmUnifiedCustomerRow,
   type CrmUnifiedCustomerSource,
   type CrmUnifiedLifecycle,
+  type CrmUnifiedMoneyState,
   type CrmUnifiedSavedView,
 } from "@/lib/crm/unified-view-rules"
+import { getLeadsActivitySummary } from "@/lib/repositories/lead-activity"
+import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
 import { listAllCustomerListItemsLite } from "@/lib/portal/repositories/customers"
 import type { CustomerListItem } from "@/lib/portal/types"
 import {
@@ -38,7 +41,13 @@ import { getAllCustomerTagsMap } from "./crm-customer-tags"
 // 뷰 규칙(타입+순수 매칭 함수)의 SSOT는 lib/crm/unified-view-rules.ts — 매칭 함수는 그 모듈에서
 // 직접 import한다(여기서는 재수출하지 않음: provisional 게이트 없는 matchesSavedView를 repo 경유로
 // 쓰는 함정 방지). 내부 필터는 rowVisibleInView만 사용하고, 타입은 기존 임포터 호환으로 재수출.
-export type { CrmUnifiedCustomerRow, CrmUnifiedCustomerSource, CrmUnifiedLifecycle, CrmUnifiedSavedView }
+export type {
+  CrmUnifiedCustomerRow,
+  CrmUnifiedCustomerSource,
+  CrmUnifiedLifecycle,
+  CrmUnifiedMoneyState,
+  CrmUnifiedSavedView,
+}
 
 // 칩 카운트를 보여줄 세그먼트(저장 뷰).
 export const CRM_SEGMENT_VIEWS = [
@@ -202,8 +211,9 @@ const SLA_TARGET_LEAD_SOURCES = new Set(["demo_modal", "contact_page", "meta_lea
 function buildPortalCustomerRow(item: CustomerListItem, lastContactAt: string | null): CrmUnifiedCustomerRow {
   const { customer, summary } = item
   const outstanding = summary?.outstanding_amount ?? 0
+  const contracted = summary?.contracted_amount ?? 0
   const activeDeals = summary?.active_deals ?? 0
-  const contractedLabel = formatKRW(summary?.contracted_amount)
+  const contractedLabel = formatKRW(contracted)
   const outstandingLabel = formatKRW(outstanding)
   const region = deriveCustomerRegion([customer.region_label, customer.address])
   return {
@@ -226,6 +236,8 @@ function buildPortalCustomerRow(item: CustomerListItem, lastContactAt: string | 
           ? `진행 중 거래 ${activeDeals}건`
           : "리드 전환으로 생성된 앱 고객",
     score: outstanding > 0 ? 46 : activeDeals > 0 ? 34 : 14,
+    // 우선순위 엔진 미적용 소스 — 엔진 버킷이 없으므로 null(정렬 시 watch 취급).
+    bucket: null,
     moneyLabel:
       contractedLabel && outstandingLabel
         ? `계약 ${contractedLabel} · 미수 ${outstandingLabel}`
@@ -234,6 +246,8 @@ function buildPortalCustomerRow(item: CustomerListItem, lastContactAt: string | 
           : outstandingLabel
             ? `미수 ${outstandingLabel}`
             : null,
+    // 전환 고객은 거래 요약이 항상 조인되는 자사 DB 원천 — unsynced 상태가 없다.
+    moneyState: Number(contracted) !== 0 || Number(outstanding) !== 0 ? "value" : "zero",
     href: `/admin/crm/deals/kpi/${encodeURIComponent(customer.partner_account_id)}`,
     updatedAt: summary?.last_deal_updated_at ?? customer.updated_at ?? customer.created_at,
     expireAt: null,
@@ -278,11 +292,18 @@ function buildOwnerOptions(rows: CrmUnifiedCustomerRow[]) {
     .sort((a, b) => b.count - a.count || a.ownerName.localeCompare(b.ownerName, "ko"))
 }
 
-function sortBucketForRow(row: CrmUnifiedCustomerRow): CrmPriorityBucket {
-  if (row.source === "lead" && row.score >= 42) return "today"
-  if (row.source === "neo_account" && row.nextActionLabel.includes("연장")) return "renewal"
-  if (row.source === "neo_account" && row.nextActionLabel.includes("장기")) return "stale_recovery"
-  return "watch"
+// 계정(neo_account) 돈흐름 상태 — 스냅샷 규약(crm-neo-customer-snapshots의
+// `balance: eeo ? eeo.balance : null`)상 balance null은 "0원"이 아니라 EEO/Shroff 원천이
+// 아직 조인되지 않았다는 뜻이다. 값·전부 0원·미동기화를 구분해 행에 저장한다.
+function accountMoneyState(
+  balance: number | null | undefined,
+  orderAmount: number | null | undefined
+): CrmUnifiedMoneyState {
+  const balanceValue = balance == null ? null : Number(balance)
+  const orderValue = orderAmount == null ? null : Number(orderAmount)
+  if ((balanceValue ?? 0) !== 0 || (orderValue ?? 0) !== 0) return "value"
+  if (balanceValue == null) return "unsynced"
+  return "zero"
 }
 
 function clampInteger(value: number | undefined, fallback: number, min: number, max: number) {
@@ -358,15 +379,32 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
   let portalCustomersOk = true
   let rows: CrmUnifiedCustomerRow[] = []
 
-  const [leadResult, neoResult, portalCustomersResult, convertedLinksResult, neoLinksResult, contactMapsResult] =
-    await Promise.allSettled([
-      getLeads(),
-      getNeoCrmCustomers(),
-      listAllCustomerListItemsLite(),
-      listConfirmedLeadCustomerLinks(),
-      listConfirmedLeadNeoLinkLeadIds(),
-      getCrmCustomerContactMaps(),
-    ])
+  const [
+    leadResult,
+    neoResult,
+    portalCustomersResult,
+    convertedLinksResult,
+    neoLinksResult,
+    contactMapsResult,
+    engagementResult,
+    demoResult,
+  ] = await Promise.allSettled([
+    getLeads(),
+    getNeoCrmCustomers(),
+    listAllCustomerListItemsLite(),
+    listConfirmedLeadCustomerLinks(),
+    listConfirmedLeadNeoLinkLeadIds(),
+    getCrmCustomerContactMaps(),
+    getLeadsActivitySummary(),
+    getShowroomCalendarEvents(),
+  ])
+
+  // 반응 축(연락 후 재방문·자료·로그인)과 데모 신호 — 홈 큐(crm-priority-queue)와 같은 규약으로
+  // 같은 리드가 화면마다 다른 점수를 갖지 않게 한다. 보조 지표라 실패해도 경고 없이 조용히
+  // 생략하고(축만 빠짐), 6개 본 소스의 complete 판정에도 넣지 않는다 — 외부 캘린더 등 보조
+  // 원천의 일시 장애가 60초 캐시를 무력화해 전체 재조립을 반복하게 만들지 않기 위해서다.
+  const engagements = engagementResult.status === "fulfilled" ? engagementResult.value : null
+  const demoIndex = buildDemoSignalIndex(demoResult.status === "fulfilled" ? demoResult.value : [], now)
 
   // 신규 뷰 파생 입력 — 실패해도 목록 자체는 유지(해당 뷰만 부정확)하고 빈 컬렉션 폴백.
   if (neoLinksResult.status === "rejected") {
@@ -387,7 +425,10 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
 
   if (leadResult.status === "fulfilled") {
     for (const lead of leadResult.value) {
-      const priority = buildLeadPriorityItem(lead, now)
+      const priority = buildLeadPriorityItem(lead, now, {
+        engagement: engagements?.[lead.id] ?? null,
+        demoIndex,
+      })
       const hasAdClickId = Boolean(lead.gclid || lead.fbclid || lead.msclkid || lead.ttclid)
       rows.push({
         key: `lead:${lead.id}`,
@@ -404,7 +445,10 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         nextActionLabel: priority?.actionLabel ?? defaultLeadAction(lead),
         priorityReason: priority?.reason ?? "리드 상태 확인",
         score: priority?.score ?? (lead.status === "new" ? 40 : 20),
+        // 엔진 버킷 그대로 — 게이트 탈락(전환·종료·테스트·미확인 저의도) 리드는 null.
+        bucket: priority?.bucket ?? null,
         moneyLabel: null,
+        moneyState: "none",
         href: `/admin/crm/customers/leads?lead=${encodeURIComponent(lead.id)}`,
         updatedAt: lead.follow_up_at ?? lead.timestamp,
         expireAt: null,
@@ -427,7 +471,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
 
   if (neoResult.status === "fulfilled" && neoResult.value.ok) {
     for (const account of neoResult.value.rows) {
-      const priority = buildNeoAccountPriorityItem(account, now)
+      const priority = buildNeoAccountPriorityItem(account, now, { demoIndex })
       const balanceLabel = formatCNY(account.balance)
       const orderLabel = formatUSD(account.orderAmount)
       rows.push({
@@ -445,6 +489,8 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         nextActionLabel: priority?.actionLabel ?? "관계 유지",
         priorityReason: priority?.reason ?? "최근 고객 상태 정상",
         score: priority?.score ?? 10,
+        // 엔진 버킷 그대로 — 엔진이 액션 없음(null)으로 판단한 정상 계정은 null.
+        bucket: priority?.bucket ?? null,
         moneyLabel:
           balanceLabel && orderLabel
             ? `잔액 ${balanceLabel} · 오더 ${orderLabel}`
@@ -453,6 +499,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
               : orderLabel
                 ? `오더 ${orderLabel}`
                 : null,
+        moneyState: accountMoneyState(account.balance, account.orderAmount),
         href: `/admin/crm/customers/accounts?account=${encodeURIComponent(account.accountId)}`,
         updatedAt: account.updatedAt ?? account.lastClassAt ?? account.expireAt,
         expireAt: account.expireAt ?? null,
@@ -579,7 +626,9 @@ export async function getCrmUnifiedCustomers(
   )
 
   const sortedKeys = new Map(sortPriorityItems(filtered.map((row) => {
-    const bucket = sortBucketForRow(row)
+    // 행 생성 시 저장한 엔진 버킷을 그대로 쓴다. 버킷 없는 행(전환 고객·정상 계정·게이트
+    // 탈락 리드)은 관찰(watch)로 정렬 — 엔진이 오늘 처리로 지정한 것만 위로 올라온다.
+    const bucket = row.bucket ?? "watch"
     return {
       id: row.key,
       // 전환 고객은 우선순위 엔진 소스 타입 밖 — 정렬 목적으로 계정 계열로 취급.
@@ -601,6 +650,7 @@ export async function getCrmUnifiedCustomers(
       href: row.href,
       dueAt: row.updatedAt,
       updatedAt: row.updatedAt,
+      sourceKey: null,
     }
   })).map((item, index) => [item.id, index]))
 

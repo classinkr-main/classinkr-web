@@ -24,6 +24,7 @@ function item(overrides: Partial<CrmPriorityItem>): CrmPriorityItem {
     href: "/admin/crm/customers/leads?lead=1",
     dueAt: null,
     updatedAt: null,
+    sourceKey: null,
     ...overrides,
   }
 }

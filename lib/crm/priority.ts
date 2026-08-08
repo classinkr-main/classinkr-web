@@ -43,6 +43,8 @@ export interface CrmPriorityItem {
   href: string
   dueAt: string | null
   updatedAt: string | null
+  /** 리드의 유입 소스 원문(예: meta_lead_ads) — 채널별 분리 표시용. 계정·할 일은 null. */
+  sourceKey: string | null
 }
 
 const RESPONSE_TARGET_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
@@ -94,10 +96,20 @@ function parseTime(value: string | null | undefined) {
   return Number.isNaN(time) ? null : time
 }
 
-function daysFromNow(value: string | null | undefined, nowMs: number) {
+/**
+ * 달력 날짜 차이(로컬 자정 경계 기준). 24시간 단위 나눗셈(floor)은 오후에 잡은
+ * "내일 09:00 팔로업"을 0(오늘)으로 접어 스누즈가 점수를 되올리는 결함을 만들었다 —
+ * 만료 D-N 같은 다른 호출처도 의미상 달력일이 맞다. (테스트를 위해 export)
+ */
+export function daysFromNow(value: string | null | undefined, nowMs: number) {
   const time = parseTime(value)
   if (time == null) return null
-  return Math.floor((time - nowMs) / DAY_MS)
+  const target = new Date(time)
+  const base = new Date(nowMs)
+  const targetMidnight = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime()
+  const baseMidnight = new Date(base.getFullYear(), base.getMonth(), base.getDate()).getTime()
+  // DST 등으로 자정 간격이 정확히 24h가 아닐 수 있어 round 로 흡수한다.
+  return Math.round((targetMidnight - baseMidnight) / DAY_MS)
 }
 
 function hoursSince(value: string | null | undefined, nowMs: number) {
@@ -152,31 +164,43 @@ export function buildLeadPriorityItem(
   let dueAt = lead.follow_up_at ?? null
   let bucket: CrmPriorityBucket = "watch"
 
+  // 미래 팔로업(달력일 기준 내일 이후)이 잡힌 리드는 "예정" 상태 — 담당자가 이미
+  // 날짜를 정한 건이므로 SLA 축이 "오늘 처리"로 되끌어올리면 안 된다.
+  const hasScheduledFollowUp = followUpDays != null && followUpDays >= 1
+
   if (isResponseTargetLead(lead)) {
     action = "respond_lead"
     actionLabel = "첫 응답"
-    bucket = "today"
-    // 봉우리형 — 24~48h 가 최고점이고 그 뒤로는 식는다. 오래 방치됐다는 이유만으로
-    // 살아 있는 거래를 밀어내던 이전 곡선(48h → +35 고정, 총 90점)을 대체한다.
     score = 44
-    if (ageHours >= 48) {
-      const daysPast = (ageHours - 48) / 24
-      score += Math.max(4, Math.round(26 * Math.pow(0.5, daysPast / 3)))
-      const days = Math.floor(ageHours / 24)
-      const cooled = daysPast > UNRESPONDED_COOLED_DAYS
-      reason = cooled ? `${days}일 미응답 · 식음` : "48시간 이상 미응답"
-      // 버킷 정렬이 점수보다 우선하므로(sortPriorityItems), 식은 건을 계속 "오늘 처리"에
-      // 두면 점수를 아무리 낮춰도 살아 있는 거래 위에 그대로 남는다. 라벨과 자리를 맞춘다 —
-      // 닷새 넘게 답 못 한 문의는 오늘의 할 일이 아니라 관찰 대상이다.
-      if (cooled) bucket = "watch"
-    } else if (ageHours >= 24) {
-      score += 26
-      reason = "24시간 이상 미응답"
+    if (hasScheduledFollowUp) {
+      // "내일로" 스누즈가 미응답 가산 위에 팔로업 가산까지 얹어 점수를 되올리던
+      // 결함(94→100 복귀)의 두 번째 축 — 예정 건은 미응답 가산·오늘 강제를 걷어내고
+      // 자리는 아래 팔로업 축(d ≥ 1)이 정한다.
     } else {
-      score += 14
-      reason = "신규 문의 응답 필요"
+      bucket = "today"
+      // 봉우리형 — 24~48h 가 최고점이고 그 뒤로는 식는다. 오래 방치됐다는 이유만으로
+      // 살아 있는 거래를 밀어내던 이전 곡선(48h → +35 고정, 총 90점)을 대체한다.
+      if (ageHours >= 48) {
+        const daysPast = (ageHours - 48) / 24
+        score += Math.max(4, Math.round(26 * Math.pow(0.5, daysPast / 3)))
+        const days = Math.floor(ageHours / 24)
+        const cooled = daysPast > UNRESPONDED_COOLED_DAYS
+        reason = cooled ? `${days}일 미응답 · 식음` : "48시간 이상 미응답"
+        // 버킷 정렬이 점수보다 우선하므로(sortPriorityItems), 식은 건을 계속 "오늘 처리"에
+        // 두면 점수를 아무리 낮춰도 살아 있는 거래 위에 그대로 남는다. 라벨과 자리를 맞춘다 —
+        // 닷새 넘게 답 못 한 문의는 오늘의 할 일이 아니라 관찰 대상이다.
+        if (cooled) bucket = "watch"
+      } else if (ageHours >= 24) {
+        score += 26
+        reason = "24시간 이상 미응답"
+      } else {
+        // 24h 미만 +18 — 갓 들어온 문의가 규모·감도 보정 몇 점에 밀려 하루 늦은
+        // 문의(+26) 아래로 뒤집히는 반전을 완화한다(SLA 위반이 여전히 위이되 격차 축소).
+        score += 18
+        reason = "신규 문의 응답 필요"
+      }
+      dueAt = lead.timestamp
     }
-    dueAt = lead.timestamp
   }
 
   if (followUpDays != null) {
@@ -191,8 +215,9 @@ export function buildLeadPriorityItem(
       reason = "오늘 예정된 팔로업"
       bucket = "today"
     } else if (followUpDays <= 2) {
+      // 임박 예정 건은 소폭만 얹는다 — "오늘 처리"로 승격하지 않는다(예정은 예정일에).
       score += 12
-      reason = `${followUpDays}일 뒤 팔로업 예정`
+      reason = followUpDays === 1 ? "내일 팔로업 예정" : `D-${followUpDays} 팔로업 예정`
     }
   }
 
@@ -261,6 +286,7 @@ export function buildLeadPriorityItem(
     href: `/admin/crm/customers/leads?lead=${encodeURIComponent(lead.id)}`,
     dueAt,
     updatedAt: lead.follow_up_at ?? lead.timestamp,
+    sourceKey: lead.source ?? null,
   }
 }
 
@@ -329,11 +355,23 @@ export function buildNeoAccountPriorityItem(
     riskReasonCodes.has("depleted_balance") ||
     (account.balance != null && Number(account.balance) <= 0)
   ) {
-    action = "renew_account"
-    actionLabel = "충전 안내"
-    bucket = "today"
-    reason = "충전 잔액 소진"
-    score = account.riskLevel === "urgent" ? 82 : 70
+    // 잔액 소진이 곧 충전 수요는 아니다 — 수강권을 다 쓰고 떠난 휴면 고객까지
+    // 일괄 70점으로 올리면 큐가 인플레이션된다. 최근에도 수업을 돌리던(45일 내)
+    // 계정만 진짜 충전 후보로 올리고, 수업 신호가 없거나 끊긴 계정은 관찰로 내린다.
+    const hasRecentClass = inactiveDays != null && inactiveDays <= 45
+    if (hasRecentClass) {
+      action = "renew_account"
+      actionLabel = "충전 안내"
+      bucket = "today"
+      reason = "충전 잔액 소진"
+      score = account.riskLevel === "urgent" ? 82 : 70
+    } else {
+      action = "watch_account"
+      actionLabel = "휴면 점검"
+      bucket = "watch"
+      reason = "잔액 소진 · 최근 수업 없음"
+      score = 38
+    }
     dueAt = account.updatedAt ?? account.lastClassAt ?? null
   }
 
@@ -377,6 +415,7 @@ export function buildNeoAccountPriorityItem(
     href: `/admin/crm/customers/accounts?account=${encodeURIComponent(account.accountId)}`,
     dueAt,
     updatedAt: account.updatedAt ?? account.lastClassAt ?? account.expireAt,
+    sourceKey: null,
   }
 }
 
@@ -482,6 +521,7 @@ export function buildTaskPriorityItem(task: CrmTaskRecord, now = new Date()): Cr
     href: taskHref(task),
     dueAt: effectiveDue,
     updatedAt: task.updatedAt,
+    sourceKey: null,
   }
 }
 

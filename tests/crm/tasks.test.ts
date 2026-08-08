@@ -220,7 +220,11 @@ describe("buildTaskPriorityItem", () => {
   })
 
   it("marks due-today tasks as 오늘 마감 in the today bucket", () => {
-    const item = buildTaskPriorityItem(makeTaskRecord({ dueAt: "2026-06-27T23:00:00.000Z" }), NOW)
+    // daysFromNow 가 24h 나눗셈에서 달력일 기준으로 바뀌며 기존 고정값(27T23:00Z)은
+    // KST 로컬에서 "내일"이 됐다 — 의도("오늘 늦게 마감")를 로컬 달력일로 다시 고정한다.
+    const laterToday = new Date(NOW)
+    laterToday.setHours(23, 0, 0, 0)
+    const item = buildTaskPriorityItem(makeTaskRecord({ dueAt: laterToday.toISOString() }), NOW)
     expect(item?.bucket).toBe("today")
     expect(item?.reason).toBe("오늘 마감")
   })

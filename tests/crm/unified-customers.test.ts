@@ -36,6 +36,9 @@ function neoCustomer(overrides: {
   expireAt?: string | null
   updatedAt?: string | null
   regionLabel?: string | null
+  /** null = 스냅샷 미조인(EEO/Shroff), 0 = 조인됐지만 0원. undefined면 기본 12만. */
+  balance?: number | null
+  orderAmount?: number
 }) {
   return {
     accountId: overrides.accountId,
@@ -44,14 +47,33 @@ function neoCustomer(overrides: {
     ownerName: overrides.ownerName ?? "담당자",
     phone: "010-1111-2222",
     regionLabel: overrides.regionLabel ?? null,
-    balance: 120_000,
+    balance: overrides.balance === undefined ? 120_000 : overrides.balance,
     expireAt: overrides.expireAt ?? "2026-07-05T00:00:00.000Z",
     lastClassAt: "2026-06-20T00:00:00.000Z",
     uid: `uid-${overrides.accountId}`,
-    orderAmount: 1000,
+    orderAmount: overrides.orderAmount === undefined ? 1000 : overrides.orderAmount,
     orderCount: 1,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: overrides.updatedAt ?? "2026-06-20T00:00:00.000Z",
+  }
+}
+
+/** 홈 큐와 같은 반응 축 입력(LeadEngagement) — 기본은 신호 전무. */
+function engagement(partial: {
+  authenticated?: boolean
+  downloadCount?: number
+  contactLogCount?: number
+  lastActivityAt?: string | null
+  lastContactAt?: string | null
+}) {
+  return {
+    authenticated: partial.authenticated ?? false,
+    providers: [],
+    downloadCount: partial.downloadCount ?? 0,
+    eventCount: 0,
+    contactLogCount: partial.contactLogCount ?? 0,
+    lastActivityAt: partial.lastActivityAt ?? null,
+    lastContactAt: partial.lastContactAt ?? null,
   }
 }
 
@@ -119,11 +141,25 @@ async function loadRepository(options?: {
   convertedLinksFail?: boolean
   neoLinksFail?: boolean
   firstResponsesFail?: boolean
+  engagements?: Record<string, ReturnType<typeof engagement>>
+  demoEvents?: Array<{ id: string; title: string; date: string; type: string }>
+  /** 반응 축·데모 캘린더(보조 신호) 동시 실패 시나리오 */
+  activitySignalsFail?: boolean
 }) {
   vi.resetModules()
 
   vi.doMock("@/lib/repositories/leads", () => ({
     getLeads: vi.fn().mockResolvedValue(options?.leads ?? []),
+  }))
+  vi.doMock("@/lib/repositories/lead-activity", () => ({
+    getLeadsActivitySummary: options?.activitySignalsFail
+      ? vi.fn().mockRejectedValue(new Error("lead activity unavailable"))
+      : vi.fn().mockResolvedValue(options?.engagements ?? {}),
+  }))
+  vi.doMock("@/lib/showroom-ics-calendar", () => ({
+    getShowroomCalendarEvents: options?.activitySignalsFail
+      ? vi.fn().mockRejectedValue(new Error("showroom calendar unavailable"))
+      : vi.fn().mockResolvedValue(options?.demoEvents ?? []),
   }))
   vi.doMock("@/lib/portal/repositories/customers", () => ({
     listAllCustomerListItemsLite: options?.portalCustomersFail
@@ -488,5 +524,141 @@ describe("getCrmUnifiedCustomers", () => {
     // 경고 문구는 화면 칩 라벨(홈페이지 유입/미응답)과 같은 이름을 쓴다.
     expect(result.sources.warnings.join(" ")).toContain("홈페이지 유입")
     expect(result.sources.warnings.join(" ")).toContain("미응답")
+  })
+
+  // ── 결함 A 회귀: 엔진 버킷 보존 정렬 ─────────────────────────────────────────
+
+  it("sorts by the engine bucket: a today expired-recovery account outranks today leads and watch leads", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [
+        // 25시간 미응답 신규 문의 — 엔진 버킷 today.
+        lead({ id: "fresh", timestamp: "2026-06-25T08:00:00.000Z" }),
+        // 7일(168h) 미응답 — 엔진이 식었다고 보고 watch로 내린 리드.
+        lead({ id: "cooled", timestamp: "2026-06-19T09:00:00.000Z" }),
+      ],
+      // 나흘 전 만료 — 회복 골든타임, 엔진 버킷 today · 고점수(88+).
+      accounts: [neoCustomer({ accountId: "expired-golden", expireAt: "2026-06-23T00:00:00.000Z" })],
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    const rowsByKey = new Map(result.rows.map((row) => [row.key, row]))
+
+    // 엔진 판단이 행에 그대로 저장된다 — 라벨 문자열 재파생 없음.
+    expect(rowsByKey.get("neo:expired-golden")?.bucket).toBe("today")
+    expect(rowsByKey.get("neo:expired-golden")?.nextActionLabel).toBe("만료 회복")
+    expect(rowsByKey.get("lead:fresh")?.bucket).toBe("today")
+    expect(rowsByKey.get("lead:cooled")?.bucket).toBe("watch")
+
+    // today 버킷 안에서는 점수순(계정 88+ > 리드), watch 리드는 today 계정 아래.
+    expect(result.rows.map((row) => row.key)).toEqual([
+      "neo:expired-golden",
+      "lead:fresh",
+      "lead:cooled",
+    ])
+  })
+
+  it("keeps engine-watch cooled leads (120h+ unanswered) below today rows even at a higher score", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [
+        // 2시간 미응답 신규 문의 — today 버킷, 점수는 아래 리드보다 낮다.
+        lead({ id: "fresh2h", timestamp: "2026-06-26T07:00:00.000Z" }),
+        // 7일 미응답(식음) — 자료 다운로드·로그인 신호로 점수는 높지만 엔진 버킷은 watch.
+        lead({ id: "cooled120h", timestamp: "2026-06-19T09:00:00.000Z" }),
+      ],
+      engagements: {
+        cooled120h: engagement({ downloadCount: 1, authenticated: true }),
+      },
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    const cooled = result.rows.find((row) => row.key === "lead:cooled120h")
+    const fresh = result.rows.find((row) => row.key === "lead:fresh2h")
+
+    expect(cooled?.bucket).toBe("watch")
+    expect(fresh?.bucket).toBe("today")
+    // 점수만 보면 cooled가 위 — 버킷이 정렬을 지배해야 today가 먼저 온다.
+    expect((cooled?.score ?? 0) > (fresh?.score ?? 0)).toBe(true)
+    expect(result.rows.map((row) => row.key)).toEqual(["lead:fresh2h", "lead:cooled120h"])
+  })
+
+  // ── 결함 B 회귀: 홈 큐와 같은 반응 축·데모 신호 입력 ─────────────────────────
+
+  it("feeds engagement and showroom demo signals into row scores like the home queue", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [
+        lead({ id: "revisit", status: "contacted" }),
+        lead({ id: "plain", status: "contacted" }),
+      ],
+      // 데모 신호가 없으면 우선순위가 서지 않는 정상 계정(만료 1년 뒤).
+      accounts: [neoCustomer({ accountId: "acc-demo", expireAt: "2027-07-01T00:00:00.000Z" })],
+      engagements: {
+        revisit: engagement({
+          lastContactAt: "2026-06-24T00:00:00.000Z",
+          lastActivityAt: "2026-06-25T00:00:00.000Z",
+        }),
+      },
+      demoEvents: [{ id: "demo-1", title: "고객 acc-demo 데모", date: "2026-06-28", type: "showroom" }],
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    const revisit = result.rows.find((row) => row.key === "lead:revisit")
+    const plain = result.rows.find((row) => row.key === "lead:plain")
+    const demoAccount = result.rows.find((row) => row.key === "neo:acc-demo")
+
+    // 연락 후 재방문(+16)이 이 화면에서도 살아 있다 — 이유·버킷·점수 모두 반영.
+    expect(revisit?.priorityReason).toBe("연락 후 재방문")
+    expect(revisit?.bucket).toBe("today")
+    expect((revisit?.score ?? 0) > (plain?.score ?? 0)).toBe(true)
+
+    // 쇼룸 데모가 잡힌 계정은 다른 사유 없이도 today로 올라온다.
+    expect(demoAccount?.bucket).toBe("today")
+    expect(demoAccount?.nextActionLabel).toBe("데모")
+    expect(demoAccount?.priorityReason).toContain("데모")
+    expect(demoAccount?.statusLabel).toBe("관리 필요")
+  })
+
+  it("silently degrades when auxiliary signal sources (activity·calendar) fail", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [lead({ id: "1" })],
+      accounts: [neoCustomer({ accountId: "acc-1" })],
+      activitySignalsFail: true,
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+
+    // 행은 그대로 서고(반응 축만 조용히 빠짐) 경고도 추가되지 않는다 — 홈 큐와 동일 규약.
+    expect(new Set(result.rows.map((row) => row.key))).toEqual(new Set(["lead:1", "neo:acc-1"]))
+    expect(result.sources.warnings).toEqual([])
+  })
+
+  // ── 결함 C 회귀: 돈흐름 "-"의 세 가지 이유 구분 ──────────────────────────────
+
+  it("distinguishes moneyState: lead none, unjoined account unsynced, all-zero account zero, valued rows value", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [lead({ id: "plain" })],
+      accounts: [
+        // EEO/Shroff 미조인 — balance null(스냅샷 규약) + 주문액 0.
+        neoCustomer({ accountId: "unjoined", balance: null, orderAmount: 0 }),
+        // 조인은 됐지만 전부 0원.
+        neoCustomer({ accountId: "zeroed", balance: 0, orderAmount: 0 }),
+        // 값 있음.
+        neoCustomer({ accountId: "funded" }),
+      ],
+      portalCustomers: [
+        portalCustomer({ id: "valued" }),
+        portalCustomer({ id: "no-money", summary: null }),
+      ],
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    const rowsByKey = new Map(result.rows.map((row) => [row.key, row]))
+
+    expect(rowsByKey.get("lead:plain")).toMatchObject({ moneyState: "none", moneyLabel: null })
+    expect(rowsByKey.get("neo:unjoined")).toMatchObject({ moneyState: "unsynced", moneyLabel: null })
+    expect(rowsByKey.get("neo:zeroed")).toMatchObject({ moneyState: "zero", moneyLabel: null })
+    expect(rowsByKey.get("neo:funded")?.moneyState).toBe("value")
+    expect(rowsByKey.get("neo:funded")?.moneyLabel).toContain("잔액")
+    expect(rowsByKey.get("customer:valued")?.moneyState).toBe("value")
+    expect(rowsByKey.get("customer:no-money")).toMatchObject({ moneyState: "zero", moneyLabel: null })
   })
 })
