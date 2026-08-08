@@ -30,6 +30,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import { metaObjectiveLabel } from "@/lib/marketing/campaign-labels"
 import {
   CAMPAIGN_STATUS_LABEL,
   type CampaignRollup,
@@ -298,7 +299,7 @@ export function CampaignRow({
 
       {/* 2행: 목표 | 기간 · 담당 */}
       <div className="mt-0.5 flex items-baseline justify-between gap-3 text-[11.5px] text-[#615D59]">
-        <span className="min-w-0 truncate">{campaign.objective ?? ""}</span>
+        <span className="min-w-0 truncate">{metaObjectiveLabel(campaign.objective) ?? ""}</span>
         <span className="shrink-0 tabular-nums">
           {formatCampaignPeriod(campaign.startsAt, campaign.endsAt)}
           {campaign.owner && (

@@ -39,6 +39,9 @@ export function EventOriginMatrix({ className = "" }: { className?: string }) {
   const [matrices, setMatrices] = useState<Record<string, EventAttendanceMatrix> | null>(null)
   const [events, setEvents] = useState<PublicEvent[]>([])
   const [error, setError] = useState<string | null>(null)
+  // 재시도 키 — 에러 상태의 "다시 시도"가 이 값을 올려 fetch 이펙트를 다시 돌린다.
+  // (상태 리셋은 클릭 핸들러에서 수행 — 이펙트 본문 동기 setState 금지 규칙 준수.)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -61,7 +64,7 @@ export function EventOriginMatrix({ className = "" }: { className?: string }) {
     return () => {
       alive = false
     }
-  }, [])
+  }, [reloadKey])
 
   const titleById = useMemo(() => {
     const map = new Map<string, string>()
@@ -78,14 +81,25 @@ export function EventOriginMatrix({ className = "" }: { className?: string }) {
 
   if (error) {
     return (
-      <div className={`rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3 text-[12px] text-[#1a1a1a]/45 ${className}`}>
-        {error}
+      <div className={`flex items-center justify-between gap-3 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3 ${className}`}>
+        <p className="text-[12px] text-[#1a1a1a]/45">{error}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setError(null)
+            setMatrices(null)
+            setReloadKey((k) => k + 1)
+          }}
+          className="shrink-0 text-[12px] font-semibold text-[#084734] hover:underline"
+        >
+          다시 시도
+        </button>
       </div>
     )
   }
 
   if (matrices === null) {
-    return <div className={`h-28 rounded-2xl bg-[#f0f0ec] ${className}`} />
+    return <div aria-busy="true" className={`h-28 animate-pulse rounded-2xl bg-[#f0f0ec] ${className}`} />
   }
 
   return (
@@ -144,7 +158,7 @@ export function EventOriginMatrix({ className = "" }: { className?: string }) {
                     {ORIGIN_COLUMNS.map((c) => {
                       const value = attendedFor(matrix, c.key)
                       return (
-                        <td key={c.key} className={`px-3 py-2.5 text-right tabular-nums ${value > 0 ? "text-[#111110]" : "text-[#1a1a1a]/25"}`}>
+                        <td key={c.key} className={`px-3 py-2.5 text-right tabular-nums ${value > 0 ? "text-[#111110]" : "text-[#A39E98]"}`}>
                           {value > 0 ? value : "—"}
                         </td>
                       )
@@ -152,7 +166,7 @@ export function EventOriginMatrix({ className = "" }: { className?: string }) {
                     <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-[#111110]">{matrix.total}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-[#084734]">{matrix.converted > 0 ? matrix.converted : "—"}</td>
                     <td className="px-3 py-2.5 text-right font-semibold tabular-nums">
-                      {rate != null ? <span className="text-[#084734]">{rate}%</span> : <span className="text-[#1a1a1a]/25">—</span>}
+                      {rate != null ? <span className="text-[#084734]">{rate}%</span> : <span className="text-[#A39E98]">—</span>}
                     </td>
                   </tr>
                 )

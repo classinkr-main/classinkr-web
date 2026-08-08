@@ -621,13 +621,46 @@ export async function getMetaAdAccountStatus(): Promise<MetaAdAccountStatus> {
   }
 }
 
+/**
+ * 대시보드 서버 메모 — 같은 (datePreset, limit) 요청은 45초 동안 Graph 재호출 없이 재사용한다.
+ * 이 대시보드는 요청당 Graph 3콜(account+campaigns+insights)인데, 소비처가 넷이다
+ * (meta/campaigns 라우트 · 캠페인 롤업 · 링크 후보 · meta-sync). 캠페인 관리 목록을 한 번
+ * 여는 것만으로 롤업+상세가 연달아 부르므로 서버 메모가 없으면 콜 수가 소비처 수만큼 배가된다.
+ * 명시 동기화·상태 변경 직후 재조회는 fresh:true 로 우회한다(중지/재개가 45초 늦게 보이면 안 된다).
+ */
+const DASHBOARD_MEMO_TTL_MS = 45_000
+const dashboardMemo = new Map<string, { at: number; promise: Promise<MetaCampaignDashboard> }>()
+
 export async function getMetaCampaignDashboard({
   datePreset = "last_30d",
   limit = 50,
+  fresh = false,
 }: {
   datePreset?: string
   limit?: number
+  fresh?: boolean
 } = {}): Promise<MetaCampaignDashboard> {
+  const memoKey = `${datePreset}:${limit}`
+  if (!fresh) {
+    const hit = dashboardMemo.get(memoKey)
+    if (hit && Date.now() - hit.at < DASHBOARD_MEMO_TTL_MS) return hit.promise
+  }
+  const promise = fetchMetaCampaignDashboard({ datePreset, limit })
+  dashboardMemo.set(memoKey, { at: Date.now(), promise })
+  // 실패한 promise 를 메모에 남기면 45초 동안 모든 소비처가 같은 에러를 재생한다 — 즉시 비운다.
+  promise.catch(() => {
+    if (dashboardMemo.get(memoKey)?.promise === promise) dashboardMemo.delete(memoKey)
+  })
+  return promise
+}
+
+async function fetchMetaCampaignDashboard({
+  datePreset,
+  limit,
+}: {
+  datePreset: string
+  limit: number
+}): Promise<MetaCampaignDashboard> {
   const accountId = getAdAccountId()
   const [account, campaignResponse, insightsResponse] = await Promise.all([
     getMetaAdAccountStatus(),

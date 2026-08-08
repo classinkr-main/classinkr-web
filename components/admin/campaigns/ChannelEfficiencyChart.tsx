@@ -143,7 +143,7 @@ export function ChannelEfficiencyChart({ data }: ChannelEfficiencyChartProps) {
       {!hasSpend ? (
         <div className="flex min-h-[160px] flex-col items-center justify-center rounded-xl bg-[#fafaf8] px-4 py-10 text-center">
           <p className="text-[12px] text-[#1a1a1a]/40">표시할 데이터가 없습니다.</p>
-          <p className="mt-1 text-[11px] text-[#1a1a1a]/30">
+          <p className="mt-1 text-[11px] text-[#A39E98]">
             광고비가 집계된 채널이 없습니다.
           </p>
         </div>

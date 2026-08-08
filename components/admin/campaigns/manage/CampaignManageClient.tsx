@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { Activity, AlertCircle, ArrowLeft, Plus, RefreshCw, X } from "lucide-react"
 
-import { adminFetchJson } from "@/lib/admin-client"
+import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { useToast } from "@/components/ui/toast"
 import {
   CAMPAIGN_STATUS_LABEL,
@@ -52,6 +52,8 @@ export default function CampaignManageClient() {
   const [error, setError] = useState<string | null>(null)
   // "새 캠페인"(생성) 드로어만 여기서 연다 — 편집은 상세 패널이 CampaignFormDrawer 를 재사용한다.
   const [creating, setCreating] = useState(false)
+  // 상태 필터 — 18건+ 목록에서 "진행만" 추리는 용도. 요약 카운트 칩이 토글이다.
+  const [statusFilter, setStatusFilter] = useState<CampaignStatus | "all">("all")
   // 상세 패널이 여는 캠페인(리스트 요약). null = 닫힘. onClose 는 memoized(상세의 load deps 안정).
   const [detail, setDetail] = useState<CampaignWithLinks | null>(null)
   const closeDetail = useCallback(() => setDetail(null), [])
@@ -61,12 +63,16 @@ export default function CampaignManageClient() {
   // setState 는 비동기라 연타를 못 막는다 — 동기 ref 로 실행 중 잠금(중복 가져오기 방지).
   const syncingRef = useRef(false)
 
-  const load = useCallback(async () => {
+  // 목록 라우트는 롤업 포함이라 서버가 Meta Graph 를 부른다 — 30초 캐시로 마운트·재방문
+  // 재조회를 흡수하고, 생성·수정·동기화 직후에만 force 로 우회한다.
+  const load = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     setLoading(true)
     setError(null)
     try {
-      const data = await adminFetchJson<{ campaigns: CampaignWithLinks[] }>(
+      const data = await adminFetchJsonCached<{ campaigns: CampaignWithLinks[] }>(
         "/api/admin/marketing-campaigns",
+        undefined,
+        { ttlMs: 30_000, force, staleIfError: !force },
       )
       setCampaigns(data.campaigns ?? [])
     } catch (e) {
@@ -88,14 +94,22 @@ export default function CampaignManageClient() {
     return acc
   }, [campaigns])
 
+  const visibleCampaigns = useMemo(
+    () => (statusFilter === "all" ? campaigns : campaigns.filter((c) => c.status === statusFilter)),
+    [campaigns, statusFilter],
+  )
+
   const handleSuccess = useCallback(
     async (message: string) => {
       setCreating(false)
-      await load()
+      await load({ force: true })
       toast.success(message)
     },
     [load, toast],
   )
+
+  // 상세 패널(링크 추가·해제 등)이 부르는 목록 갱신 — 변경 직후이므로 캐시 우회.
+  const reloadAfterChange = useCallback(() => load({ force: true }), [load])
 
   // Meta 동기화 — 미링크 Meta 캠페인을 미러로 가져오고, 미러의 이름·상태·기간을 Meta 에 맞춘다.
   // 서버가 플랜·적용을 모두 담당하므로 여기서는 1콜 + 결과 배너 + 목록 리로드만 한다.
@@ -117,7 +131,7 @@ export default function CampaignManageClient() {
       } else {
         toast.success("Meta 동기화 완료 — 변경 사항 없음")
       }
-      await load()
+      await load({ force: true })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Meta 동기화에 실패했습니다.")
     } finally {
@@ -162,7 +176,7 @@ export default function CampaignManageClient() {
             </button>
             <button
               type="button"
-              onClick={() => void load()}
+              onClick={() => void load({ force: true })}
               disabled={loading}
               className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:opacity-60"
             >
@@ -300,32 +314,61 @@ export default function CampaignManageClient() {
           <CampaignManageEmpty onCreate={() => setCreating(true)} />
         ) : (
           <div className="space-y-1.5">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 pb-0.5">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pb-0.5">
               <p className="text-[12px] text-[#615D59]">
                 캠페인 <span className="font-semibold tabular-nums text-[#111110]">{campaigns.length}</span>개
+                {statusFilter !== "all" && (
+                  <>
+                    {" · "}
+                    <button
+                      type="button"
+                      onClick={() => setStatusFilter("all")}
+                      className="font-medium text-[#084734] hover:underline"
+                    >
+                      필터 해제
+                    </button>
+                  </>
+                )}
               </p>
-              <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 text-[11px] text-[#615D59]">
+              {/* 상태 카운트 = 필터 칩 — 숫자를 읽는 자리에서 바로 그 집합으로 좁힌다. */}
+              <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="상태 필터">
                 {STATUS_SUMMARY_ORDER.filter((s) => statusCounts[s] > 0).map((s) => (
-                  <span key={s} className="inline-flex items-baseline gap-1">
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setStatusFilter((prev) => (prev === s ? "all" : s))}
+                    aria-pressed={statusFilter === s}
+                    className={`inline-flex items-baseline gap-1 rounded-full border px-2 py-0.5 text-[11px] transition ${
+                      statusFilter === s
+                        ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
+                        : "border-[rgba(0,0,0,0.08)] bg-white text-[#615D59] hover:border-[#c8c8c4]"
+                    }`}
+                  >
                     {CAMPAIGN_STATUS_LABEL[s]}
                     <b
                       className={`font-semibold tabular-nums ${
-                        s === "active" ? "text-[#084734]" : "text-[#111110]"
+                        s === "active" || statusFilter === s ? "text-[#084734]" : "text-[#111110]"
                       }`}
                     >
                       {statusCounts[s]}
                     </b>
-                  </span>
+                  </button>
                 ))}
               </div>
             </div>
-            {campaigns.map((campaign) => (
-              <CampaignRow
-                key={campaign.id}
-                campaign={campaign}
-                onOpen={() => setDetail(campaign)}
-              />
-            ))}
+            {visibleCampaigns.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] py-8 text-center text-[12.5px] text-[#A39E98]">
+                이 상태의 캠페인이 없습니다.
+              </p>
+            ) : (
+              visibleCampaigns.map((campaign) => (
+                <CampaignRow
+                  key={campaign.id}
+                  campaign={campaign}
+                  onOpen={() => setDetail(campaign)}
+                />
+              ))
+            )}
           </div>
         )}
       </div>
@@ -341,7 +384,7 @@ export default function CampaignManageClient() {
 
       {/* 상세 패널 — 행 클릭 시. 롤업 + 연결된 실행 + 링크 피커 + 편집(폼 드로어 재사용). */}
       {detail && (
-        <CampaignDetailPanel campaign={detail} onClose={closeDetail} onListChanged={load} />
+        <CampaignDetailPanel campaign={detail} onClose={closeDetail} onListChanged={reloadAfterChange} />
       )}
     </div>
   )

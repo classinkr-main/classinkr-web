@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { AlertCircle, Loader2, Plus, RefreshCw } from "lucide-react"
 
-import { adminFetchJson } from "@/lib/admin-client"
+import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { useToast } from "@/components/ui/toast"
 import {
   CAMPAIGN_REF_TYPES,
@@ -51,12 +51,16 @@ export function LinkPicker({ campaignId, existingLinks, onLinked, onClose }: Lin
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<string | null>(null) // `${refType}:${refId}`
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     setLoading(true)
     setError(null)
     try {
-      const data = await adminFetchJson<CandidatesResponse>(
+      // 후보 라우트는 열 때마다 Meta Graph 3콜을 유발한다 — 60초 캐시로 재개봉을 흡수하고
+      // 명시 새로고침만 우회한다(실행 목록이 초단위로 바뀌는 데이터가 아니다).
+      const data = await adminFetchJsonCached<CandidatesResponse>(
         "/api/admin/marketing-campaigns/link-candidates",
+        undefined,
+        { ttlMs: 60_000, force, staleIfError: !force },
       )
       setCandidates(data)
     } catch (e) {
@@ -97,7 +101,7 @@ export function LinkPicker({ campaignId, existingLinks, onLinked, onClose }: Lin
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={() => void load()}
+            onClick={() => void load({ force: true })}
             disabled={loading}
             className="inline-flex items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[11px] font-medium text-[#615D59] transition hover:bg-[#F6F5F4] disabled:opacity-60"
           >

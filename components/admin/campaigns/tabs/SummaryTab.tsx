@@ -27,10 +27,10 @@ import { TopPerformersTable } from "@/components/admin/campaigns/TopPerformersTa
 import type { PerformerRow } from "@/components/admin/campaigns/TopPerformersTable"
 import type { TrendPoint } from "@/components/admin/campaigns/CampaignTrendChart"
 import type { ChannelEfficiencyRow } from "@/components/admin/campaigns/ChannelEfficiencyChart"
-import { buildFunnel } from "@/components/admin/campaigns/EventDetailContent"
 import {
   KRW,
   compact,
+  distinguishingLabels,
   formatRange,
   money,
   pct,
@@ -40,16 +40,12 @@ import type { PublicEvent } from "@/lib/types/public-events"
 import {
   AD_CHANNEL_COLOR,
   AD_CHANNEL_LABEL,
-  computeEconomics,
-  DEFAULT_EVENT_METRICS,
   type AdChannel,
-  type EventMetrics,
 } from "@/lib/types/event-metrics"
 import { KpiCard } from "./KpiCard"
 import type {
   CampaignAggregate,
   CampaignTab,
-  EventLeadStats,
   MarketingStatsData,
   MetaCampaignDashboard,
   MetaDatePreset,
@@ -123,7 +119,7 @@ function MetaLiveSummary({
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-[14px] font-semibold text-[#111110]">Meta 라이브 현황</h2>
               {dashboard && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                <span className="inline-flex items-center gap-1 rounded-full border border-[#BDEFD8] bg-[#ECFDF5] px-2 py-0.5 text-[10px] font-bold text-[#084734]">
                   <CheckCircle2 className="h-3 w-3" />
                   연결됨
                 </span>
@@ -150,7 +146,7 @@ function MetaLiveSummary({
           <button
             type="button"
             onClick={onOpenMeta}
-            className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#063d2a]"
+            className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#065c41]"
           >
             Meta 광고 관리
             <ChevronRight className="h-3.5 w-3.5" />
@@ -159,12 +155,12 @@ function MetaLiveSummary({
       </div>
 
       {error ? (
-        <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12px] text-red-700">
+        <div className="mt-4 flex items-start gap-2 rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[12px] text-[#B43E3E]">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
       ) : loading && !dashboard ? (
-        <p className="mt-4 rounded-xl border border-dashed border-[#e8e8e4] py-8 text-center text-[12px] text-[#1a1a1a]/30">
+        <p className="mt-4 rounded-xl border border-dashed border-[#e8e8e4] py-8 text-center text-[12px] text-[#A39E98]">
           Meta 캠페인 현황을 불러오는 중입니다.
         </p>
       ) : dashboard ? (
@@ -312,6 +308,8 @@ function TimelineRow({ events }: { events: PublicEvent[] }) {
     const sorted = [...events].sort(
       (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
     )
+    // 바 폭이 좁아 CSS 절단이 앞에서부터 일어난다 — 공통 접두어를 벗겨 구분되는 꼬리를 남긴다.
+    const barLabels = distinguishingLabels(sorted.map((event) => event.title), 24)
 
     return (
       <div className="relative px-4 pb-5 pt-4 sm:px-6">
@@ -334,21 +332,22 @@ function TimelineRow({ events }: { events: PublicEvent[] }) {
         </div>
 
         {sorted.length === 0 ? (
-          <p className="py-8 text-center text-[12px] text-[#1a1a1a]/30">표시할 행사가 없습니다.</p>
+          <p className="py-8 text-center text-[12px] text-[#A39E98]">표시할 행사가 없습니다.</p>
         ) : (
           <div className="mt-3 space-y-2">
-            {sorted.map((event) => {
+            {sorted.map((event, index) => {
               const s = new Date(event.startsAt).getTime()
               const e = event.endsAt ? new Date(event.endsAt).getTime() : s + 24 * 3600 * 1000
               const left = Math.max(0, ((s - start.getTime()) / totalMs) * 100)
               const right = Math.min(100, ((e - start.getTime()) / totalMs) * 100)
               const width = Math.max(4, right - left)
+              // 상태색은 DESIGN.md 운영 스케일 — 예정=Warning(#A8741A), 마감=뉴트럴(#A39E98).
               const color =
                 event.status === "진행 중"
                   ? "bg-[#084734]"
                   : event.status === "예정"
-                    ? "bg-[#D97706]"
-                    : "bg-[#84827a]"
+                    ? "bg-[#A8741A]"
+                    : "bg-[#A39E98]"
               return (
                 <div key={event.id} className="relative h-7">
                   <div
@@ -356,7 +355,7 @@ function TimelineRow({ events }: { events: PublicEvent[] }) {
                     style={{ left: cssPercent(left), width: cssPercent(width), minWidth: "60px" }}
                     title={`${event.title} · ${formatRange(event.startsAt, event.endsAt)}`}
                   >
-                    {event.title}
+                    {barLabels[index]}
                   </div>
                 </div>
               )
@@ -392,8 +391,6 @@ export default function SummaryTab({
   loading,
   events,
   filtered,
-  metricsMap,
-  eventLeadStats,
   perEventEcon,
   aggregate,
   channelEfficiencyData,
@@ -410,8 +407,6 @@ export default function SummaryTab({
   loading: boolean
   events: PublicEvent[]
   filtered: PublicEvent[]
-  metricsMap: Record<string, EventMetrics>
-  eventLeadStats: Map<string, EventLeadStats>
   perEventEcon: PerEventEconRow[]
   aggregate: CampaignAggregate
   channelEfficiencyData: ChannelEfficiencyRow[]
@@ -438,57 +433,44 @@ export default function SummaryTab({
     [aggregate.channelTotals]
   )
 
-  const roiChartData = useMemo(
-    () =>
-      filtered
-        .map((ev) => {
-          const metrics = metricsMap[ev.id] ?? { ...DEFAULT_EVENT_METRICS, eventId: ev.id, updatedAt: "" }
-          const leadStats = eventLeadStats.get(ev.id) ?? { attributed: 0, during: 0 }
-          const funnel = buildFunnel(ev, metrics, leadStats.attributed, leadStats.during)
-          const econ = computeEconomics(funnel, metrics)
-          return {
-            name: ev.title.length > 12 ? ev.title.slice(0, 11) + "…" : ev.title,
-            roi: econ.roi,
-          }
-        })
-        .filter((d): d is { name: string; roi: number } => d.roi !== null)
-        .slice(0, 8),
-    [eventLeadStats, filtered, metricsMap]
-  )
+  // 차트 데이터는 페이지 단일 소스(perEventEcon)를 재사용한다 — 여기서 buildFunnel/computeEconomics
+  // 를 다시 돌리면 계산이 3중이 될 뿐 아니라 규칙이 갈라질 통로가 된다.
+  // 라벨은 공통 접두어("Classin Meets ")를 벗겨 만든다 — 앞에서 자르면 축 라벨이 전부 동일해진다.
+  const roiChartData = useMemo(() => {
+    const ranked = perEventEcon
+      .filter((row): row is PerEventEconRow & { econ: { roi: number } } => row.econ.roi !== null)
+      // "행사별 ROI 비교"가 상위 8을 표방하므로 정렬 후 자른다 — API 순서대로 자르면 최고/최저가 빠진다.
+      .sort((a, b) => b.econ.roi - a.econ.roi)
+      .slice(0, 8)
+    const labels = distinguishingLabels(ranked.map((row) => row.event.title), 12)
+    return ranked.map((row, i) => ({ name: labels[i], roi: row.econ.roi }))
+  }, [perEventEcon])
 
-  const compareChartData = useMemo(
-    () =>
-      filtered
-        .map((ev) => {
-          const metrics = metricsMap[ev.id] ?? {
-            ...DEFAULT_EVENT_METRICS,
-            eventId: ev.id,
-            updatedAt: "",
-          }
-          const leadStats = eventLeadStats.get(ev.id) ?? { attributed: 0, during: 0 }
-          const attributed = leadStats.attributed
-          const during = leadStats.during
-          const funnel = buildFunnel(ev, metrics, attributed, during)
-          return {
-            name: ev.title.length > 14 ? ev.title.slice(0, 13) + "…" : ev.title,
-            리드: funnel.leads,
-            신청: funnel.applications,
-            참석: funnel.attendees,
-            딜: funnel.deals,
-          }
-        })
-        .slice(0, 10),
-    [eventLeadStats, filtered, metricsMap]
-  )
+  const compareChartData = useMemo(() => {
+    // 리드 많은 순 상위 10 — 볼 가치가 있는 퍼널부터. 동률(전부 0)일 땐 원래 순서 유지.
+    const ranked = [...perEventEcon].sort((a, b) => b.funnel.leads - a.funnel.leads).slice(0, 10)
+    const labels = distinguishingLabels(ranked.map((row) => row.event.title), 14)
+    return ranked.map((row, i) => ({
+      name: labels[i],
+      리드: row.funnel.leads,
+      신청: row.funnel.applications,
+      참석: row.funnel.attendees,
+      딜: row.funnel.deals,
+    }))
+  }, [perEventEcon])
 
-  const channelEmailStats = emailStats
-    ? {
-        totalSubscribers: emailStats.subscribers.total,
-        activeSubscribers: emailStats.subscribers.active,
-        sentCampaigns: emailStats.campaigns.recentCampaigns.filter((c) => c.status === "sent").length,
-        newThisMonth: emailStats.subscribers.newThisMonth,
-      }
-    : null
+  const channelEmailStats = useMemo(
+    () =>
+      emailStats
+        ? {
+            totalSubscribers: emailStats.subscribers.total,
+            activeSubscribers: emailStats.subscribers.active,
+            sentCampaigns: emailStats.campaigns.recentCampaigns.filter((c) => c.status === "sent").length,
+            newThisMonth: emailStats.subscribers.newThisMonth,
+          }
+        : null,
+    [emailStats]
+  )
 
   // 월별 추이 (YYYY-MM)
   const trendData = useMemo<TrendPoint[]>(() => {
@@ -569,9 +551,9 @@ export default function SummaryTab({
       deals += funnel.deals
     }
     return [
-      { key: "impressions", label: "노출", value: impressions, color: "#84827a" },
+      { key: "impressions", label: "노출", value: impressions, color: "#A39E98" },
       { key: "leads", label: "리드", value: leads, color: "#111110" },
-      { key: "applications", label: "신청", value: applications, color: "#D97706" },
+      { key: "applications", label: "신청", value: applications, color: "#A8741A" },
       { key: "qualifiedLeads", label: "유효 리드", value: qualifiedLeads, color: "#084734" },
       { key: "attendees", label: "참석", value: attendees, color: "#084734" },
       { key: "deals", label: "딜", value: deals, color: "#B85C33" },
@@ -860,7 +842,7 @@ export default function SummaryTab({
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5 lg:col-span-2">
           <h2 className="mb-3 text-[14px] font-semibold text-[#111110]">행사별 퍼널 비교</h2>
           {compareChartData.length === 0 ? (
-            <p className="py-12 text-center text-[12px] text-[#1a1a1a]/30">표시할 데이터가 없습니다.</p>
+            <p className="py-12 text-center text-[12px] text-[#A39E98]">표시할 데이터가 없습니다.</p>
           ) : (
             <div className="h-[260px] w-full">
               <EventFunnelCompareChart data={compareChartData} />
@@ -870,7 +852,7 @@ export default function SummaryTab({
         <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
           <h2 className="mb-3 text-[14px] font-semibold text-[#111110]">광고비 채널 분포</h2>
           {channelChartData.length === 0 ? (
-            <p className="py-12 text-center text-[12px] text-[#1a1a1a]/30">광고비가 입력되지 않았습니다.</p>
+            <p className="py-12 text-center text-[12px] text-[#A39E98]">광고비가 입력되지 않았습니다.</p>
           ) : (
             <>
               <div className="h-[180px] w-full">
@@ -922,26 +904,26 @@ export default function SummaryTab({
       {/* 추천 액션 */}
       {recommendedActions.length > 0 && (
         <div className="mb-5">
-          <h2 className="mb-2 text-[13px] font-semibold text-[#111110]">추천 액션</h2>
+          <h2 className="mb-2 text-[14px] font-semibold text-[#111110]">추천 액션</h2>
           <div className="grid gap-2 sm:grid-cols-2">
             {recommendedActions.map((action) => {
               const toneClass =
                 action.tone === "success"
                   ? "border-emerald-100 bg-[#ECFDF5]"
                   : action.tone === "warn"
-                    ? "border-amber-100 bg-amber-50"
+                    ? "border-[#ECD29C] bg-[#FBF1E0]"
                     : "border-[#e8e8e4] bg-white"
               const titleClass =
                 action.tone === "success"
                   ? "text-[#084734]"
                   : action.tone === "warn"
-                    ? "text-amber-700"
+                    ? "text-[#A8741A]"
                     : "text-[#111110]"
               const detailClass =
                 action.tone === "success"
                   ? "text-[#084734]/60"
                   : action.tone === "warn"
-                    ? "text-amber-600/80"
+                    ? "text-[#A8741A]/80"
                     : "text-[#1a1a1a]/45"
               return (
                 <button

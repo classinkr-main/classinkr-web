@@ -261,28 +261,70 @@ class LeadQueryError extends Error {
 
 async function fetchAllLeadRows(columns: string, label: string): Promise<Lead[]> {
   const supabase = createSupabaseAdminClient();
-  const rows: Lead[] = [];
-  let total: number | null = null;
 
-  while (rows.length < LEAD_MAX_ROWS) {
-    const isFirstPage = rows.length === 0;
-    const { data, error, count } = await supabase
-      .from("leads")
-      .select(columns, isFirstPage ? { count: "exact" } : undefined)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .range(rows.length, rows.length + LEAD_PAGE_SIZE - 1);
+  // 첫 페이지에서 count: "exact" 로 총 행수를 함께 받는다.
+  const {
+    data: firstData,
+    error: firstError,
+    count,
+  } = await supabase
+    .from("leads")
+    .select(columns, { count: "exact" })
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(0, LEAD_PAGE_SIZE - 1);
 
-    if (error) throw new LeadQueryError(`[leads] ${label} 실패: ${error.message}`, error);
+  if (firstError) throw new LeadQueryError(`[leads] ${label} 실패: ${firstError.message}`, firstError);
 
-    if (isFirstPage) total = typeof count === "number" ? count : null;
+  const rows = [...((firstData ?? []) as unknown as Lead[])];
+  const total = typeof count === "number" ? Math.min(count, LEAD_MAX_ROWS) : null;
 
-    const batch = (data ?? []) as unknown as Lead[];
-    rows.push(...batch);
-    if (batch.length === 0) break;
-    if (total != null && rows.length >= total) break;
+  // 순차 폴백 — 페이지 전진은 실제 받은 행 수만큼(서버 상한이 요청 크기보다 작아도 건너뛰지 않는다).
+  const fetchSequentially = async () => {
+    while (rows.length < LEAD_MAX_ROWS) {
+      if (total != null && rows.length >= total) break;
+      const { data, error } = await supabase
+        .from("leads")
+        .select(columns)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(rows.length, rows.length + LEAD_PAGE_SIZE - 1);
+      if (error) throw new LeadQueryError(`[leads] ${label} 실패: ${error.message}`, error);
+      const batch = (data ?? []) as unknown as Lead[];
+      if (batch.length === 0) break;
+      rows.push(...batch);
+    }
+    return rows;
+  };
+
+  if (total == null) return fetchSequentially();
+  if (rows.length >= total || rows.length === 0) return rows;
+
+  // 총 행수를 알았으니 남은 range 를 병렬로 받는다 — 5천 행을 직렬 5왕복으로 기다리지 않는다.
+  // 스텝은 요청 크기(LEAD_PAGE_SIZE)가 아니라 "첫 페이지가 실제로 돌려준 행 수"다 — PostgREST
+  // max-rows 가 요청보다 작게 클램프하면 요청 크기 간격의 range 는 중간 행을 조용히 건너뛴다.
+  // 각 range 쿼리는 같은 정렬(created_at desc, id desc)의 서로 다른 구간이라 이어붙이면 순서가 보존된다.
+  const step = rows.length;
+  const ranges: Array<{ from: number; to: number }> = [];
+  for (let from = step; from < total; from += step) {
+    ranges.push({ from, to: Math.min(from + step, total) - 1 });
   }
+  const pages = await Promise.all(
+    ranges.map(async ({ from, to }) => {
+      const { data, error } = await supabase
+        .from("leads")
+        .select(columns)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to);
+      if (error) throw new LeadQueryError(`[leads] ${label} 실패: ${error.message}`, error);
+      return (data ?? []) as unknown as Lead[];
+    })
+  );
+  for (const page of pages) rows.push(...page);
 
+  // 방어 — 어떤 range 가 기대보다 적게 돌려줬다면(이론상 드묾) 순차로 마저 채워 절단을 막는다.
+  if (rows.length < total) return fetchSequentially();
   return rows;
 }
 

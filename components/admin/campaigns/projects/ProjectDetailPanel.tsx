@@ -463,7 +463,7 @@ export default function ProjectDetailPanel({
                   )}
 
                   {memberCount === 0 ? (
-                    <p className="rounded-xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] px-4 py-6 text-center text-[12px] text-[#615D59]">
+                    <p className="rounded-xl border border-dashed border-[rgba(0,0,0,0.08)] bg-[#fafaf8] px-4 py-6 text-center text-[12px] text-[#615D59]">
                       아직 소속된 캠페인이 없습니다. “캠페인 추가”로 캠페인을 이 프로젝트에 묶어보세요.
                     </p>
                   ) : (

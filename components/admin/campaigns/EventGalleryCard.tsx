@@ -14,7 +14,7 @@ export function EventGalleryCard({
     <button
       type="button"
       onClick={onOpen}
-      className="group overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white text-left transition-shadow hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
+      className="group overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white text-left transition-shadow hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
     >
       <div className="relative h-28 w-full overflow-hidden bg-[#084734]">
         {event.imageUrl ? (

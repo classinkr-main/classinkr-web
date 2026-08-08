@@ -149,7 +149,7 @@ export default function AdLeadImportDialog({
                     reset()
                     onClose()
                   }}
-                  className="rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white hover:bg-[#063d2a]"
+                  className="rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white hover:bg-[#065c41]"
                 >
                   닫기
                 </button>
@@ -252,7 +252,7 @@ export default function AdLeadImportDialog({
                   type="button"
                   onClick={() => void handleSubmit()}
                   disabled={submitting || validRows.length === 0 || overLimit}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white transition hover:bg-[#063d2a] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3 py-2 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                   {validRows.length > 0 ? `${validRows.length}건 등록` : "등록"}

@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, type Dispatch, type SetStateAction } from "react"
+import { useDeferredValue, useMemo, type Dispatch, type SetStateAction } from "react"
+import dynamic from "next/dynamic"
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,7 +15,6 @@ import { EventOriginMatrix } from "@/components/admin/campaigns/EventOriginMatri
 import { EventCardHeader } from "@/components/admin/campaigns/EventCardHeader"
 import { EventDetailContent, buildFunnel } from "@/components/admin/campaigns/EventDetailContent"
 import { EventGalleryCard } from "@/components/admin/campaigns/EventGalleryCard"
-import { EventDetailModal } from "@/components/admin/campaigns/EventDetailModal"
 import { filterEvents } from "@/components/admin/campaigns/filter-events"
 import {
   EVENT_CATEGORIES,
@@ -27,8 +27,18 @@ import {
   DEFAULT_EVENT_METRICS,
   type EventMetrics,
 } from "@/lib/types/event-metrics"
-import MetricsEditor from "./MetricsEditor"
+import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import type { EventLeadStats, EventSortKey, PerEventEconRow, Period } from "./types"
+
+// 상세 모달·성과 편집기는 열기 전까지 탭 청크에 실리지 않게 지연 로드한다.
+const EventDetailModal = dynamic(
+  () => import("@/components/admin/campaigns/EventDetailModal").then((m) => m.EventDetailModal),
+  { ssr: false }
+)
+const MetricsEditor = dynamic(() => import("./MetricsEditor"), { ssr: false })
+
+/** 리스트에서 한 번에 그리는 퍼널 카드 수 — 카드 하나가 무거워(퍼널 시각화) 전량 렌더를 피한다. */
+const EVENT_CARD_STEP = 8
 
 // ─── event card ───────────────────────────────────────────────────────────────
 
@@ -118,6 +128,9 @@ export default function EventsTab({
   setEditing: Dispatch<SetStateAction<PublicEvent | null>>
   onMetricsSaved: (saved: EventMetrics) => void
 }) {
+  // 키 입력마다 목록 필터·CSV 컬럼 재계산이 동기로 돌지 않게 검색어만 지연시킨다.
+  const deferredSearch = useDeferredValue(eventSearch)
+
   const sortedEvents = useMemo(() => {
     if (eventSort === "leads") {
       return [...filtered].sort((a, b) => {
@@ -141,6 +154,8 @@ export default function EventsTab({
         const bS = eventLeadStats.get(b.id) ?? { attributed: 0, during: 0 }
         const aEcon = computeEconomics(buildFunnel(a, aM, aS.attributed, aS.during), aM)
         const bEcon = computeEconomics(buildFunnel(b, bM, bS.attributed, bS.during), bM)
+        // null 은 항상 뒤로 — 둘 다 null 이면 0 을 반환해 비교자 대칭성을 지킨다(정렬 안정성).
+        if (aEcon.roi === null && bEcon.roi === null) return 0
         if (aEcon.roi === null) return 1
         if (bEcon.roi === null) return -1
         return bEcon.roi - aEcon.roi
@@ -152,14 +167,17 @@ export default function EventsTab({
   const visibleEvents = useMemo(
     () =>
       filterEvents(sortedEvents, {
-        search: eventSearch,
+        search: deferredSearch,
         status: eventStatusFilter,
         category: eventCategoryFilter,
       }),
-    [sortedEvents, eventSearch, eventStatusFilter, eventCategoryFilter]
+    [sortedEvents, deferredSearch, eventStatusFilter, eventCategoryFilter]
   )
 
-  // CSV 내보내기 — 행사
+  const cardsVisible = useVisibleCount(visibleEvents.length, EVENT_CARD_STEP)
+
+  // CSV 내보내기 — 화면에 보이는(검색·상태·카테고리 필터 적용) 행과 정확히 같은 집합을 내보낸다.
+  // 필터로 3건만 남겨두고 눌렀는데 전체가 나가면 "보이는 것=받는 것" 계약이 깨진다.
   const eventExport = useMemo(() => {
     const columns: ExportColumn[] = [
       { key: "title", label: "행사" },
@@ -175,7 +193,7 @@ export default function EventsTab({
       { key: "roi", label: "ROI(%)" },
     ]
     const econById = new Map(perEventEcon.map((e) => [e.event.id, e]))
-    const rows: Array<Record<string, string | number | null>> = sortedEvents.map((ev) => {
+    const rows: Array<Record<string, string | number | null>> = visibleEvents.map((ev) => {
       const e =
         econById.get(ev.id) ??
         (() => {
@@ -200,16 +218,17 @@ export default function EventsTab({
       }
     })
     return { columns, rows }
-  }, [perEventEcon, sortedEvents, metricsMap, eventLeadStats])
+  }, [perEventEcon, visibleEvents, metricsMap, eventLeadStats])
 
   return (
     <>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h2 className="flex-1 text-[15px] font-semibold text-[#111110]">행사별 퍼널 상세</h2>
+        <h2 className="flex-1 text-[14px] font-semibold text-[#111110]">행사별 퍼널 상세</h2>
         <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="행사 보기 방식">
           <button
             type="button"
             onClick={() => setViewParam("list")}
+            aria-pressed={!galleryView}
             className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${
               !galleryView ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
             }`}
@@ -220,6 +239,7 @@ export default function EventsTab({
           <button
             type="button"
             onClick={() => setViewParam("gallery")}
+            aria-pressed={galleryView}
             className={`inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${
               galleryView ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
             }`}
@@ -238,22 +258,24 @@ export default function EventsTab({
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-[#f0f0ec] bg-[#fafaf8] px-3 py-2">
-        <div className="flex min-w-[160px] flex-1 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-1.5">
+        <div className="flex min-w-[160px] flex-1 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-1.5 focus-within:border-[#084734]">
           <Search className="h-3.5 w-3.5 text-[#1a1a1a]/35" />
           <input
             type="text"
             value={eventSearch}
             onChange={(e) => setEventSearch(e.target.value)}
             placeholder="행사명 검색..."
+            aria-label="행사명 검색"
             className="w-full text-[12px] outline-none placeholder:text-[#1a1a1a]/35"
           />
         </div>
-        <div className="flex items-center gap-1 rounded-xl border border-[#e8e8e4] bg-white p-0.5">
+        <div className="flex items-center gap-1 rounded-xl border border-[#e8e8e4] bg-white p-0.5" role="group" aria-label="행사 상태 필터">
           {(["all", "진행 중", "예정", "마감"] as const).map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => setEventStatusFilter(s)}
+              aria-pressed={eventStatusFilter === s}
               className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
                 eventStatusFilter === s ? "bg-[#fafaf8] text-[#111110]" : "text-[#1a1a1a]/45 hover:text-[#111110]"
               }`}
@@ -262,10 +284,11 @@ export default function EventsTab({
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-1 rounded-xl border border-[#e8e8e4] bg-white p-0.5">
+        <div className="flex items-center gap-1 rounded-xl border border-[#e8e8e4] bg-white p-0.5" role="group" aria-label="행사 카테고리 필터">
           <button
             type="button"
             onClick={() => setEventCategoryFilter("all")}
+            aria-pressed={eventCategoryFilter === "all"}
             className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
               eventCategoryFilter === "all" ? "bg-[#fafaf8] text-[#111110]" : "text-[#1a1a1a]/45 hover:text-[#111110]"
             }`}
@@ -277,6 +300,7 @@ export default function EventsTab({
               key={c}
               type="button"
               onClick={() => setEventCategoryFilter(c)}
+              aria-pressed={eventCategoryFilter === c}
               className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
                 eventCategoryFilter === c ? "bg-[#fafaf8] text-[#111110]" : "text-[#1a1a1a]/45 hover:text-[#111110]"
               }`}
@@ -286,7 +310,7 @@ export default function EventsTab({
           ))}
         </div>
         <div className="flex-1" />
-        <div className="flex items-center gap-1 rounded-xl border border-[#e8e8e4] bg-white p-0.5">
+        <div className="flex items-center gap-1 rounded-xl border border-[#e8e8e4] bg-white p-0.5" role="group" aria-label="행사 정렬 기준">
           {(["date", "leads", "deals", "roi"] as const).map((s) => {
             const label = { date: "날짜", leads: "리드", deals: "딜", roi: "ROI" }[s]
             return (
@@ -294,6 +318,7 @@ export default function EventsTab({
                 key={s}
                 type="button"
                 onClick={() => setEventSort(s)}
+                aria-pressed={eventSort === s}
                 className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
                   eventSort === s
                     ? "bg-[#fafaf8] text-[#111110] shadow-sm"
@@ -320,8 +345,10 @@ export default function EventsTab({
       <EventOriginMatrix className="mb-4" />
 
       {loading ? (
-        <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] py-16 text-center text-[13px] text-[#1a1a1a]/30">
-          불러오는 중...
+        <div className="space-y-3" aria-busy="true">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-40 animate-pulse rounded-2xl border border-[#e8e8e4] bg-[#f0f0ec]" />
+          ))}
         </div>
       ) : sortedEvents.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] py-12 text-center">
@@ -353,7 +380,7 @@ export default function EventsTab({
         </div>
       ) : (
         <div className="space-y-3">
-          {visibleEvents.map((event) => {
+          {visibleEvents.slice(0, cardsVisible.visible).map((event) => {
             const metrics = metricsMap[event.id] ?? {
               ...DEFAULT_EVENT_METRICS,
               eventId: event.id,
@@ -371,6 +398,17 @@ export default function EventsTab({
               />
             )
           })}
+          {(cardsVisible.canMore || cardsVisible.canCollapse) && (
+            <div className="flex justify-center">
+              <ShowMore
+                visible={cardsVisible.visible}
+                total={visibleEvents.length}
+                step={EVENT_CARD_STEP}
+                onMore={cardsVisible.showMore}
+                onCollapse={cardsVisible.canCollapse ? cardsVisible.collapse : undefined}
+              />
+            </div>
+          )}
         </div>
       )}
 

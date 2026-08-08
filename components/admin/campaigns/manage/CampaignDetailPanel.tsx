@@ -16,6 +16,7 @@
 // DESIGN.md 팔레트만 사용.
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { metaObjectiveLabel } from "@/lib/marketing/campaign-labels"
 import {
   AlertCircle,
   CalendarDays,
@@ -175,7 +176,7 @@ export function CampaignRollupCard({ rollup }: { rollup: CampaignRollup }) {
 
       <p className="mt-3 text-[11px] leading-relaxed text-[#615D59]">
         채널·통화가 달라 종합 합산·수익률 지표는 표기하지 않습니다. 행사 리드는 v1에서 미집계이며, 매출은
-        입력 기준입니다.
+        입력 기준입니다. Meta 집행·리드는 생애 누적이 아니라 최근 30일 · 상위 50개 캠페인 조회 기준입니다.
       </p>
     </section>
   )
@@ -269,14 +270,14 @@ export default function CampaignDetailPanel({
   async function handleEditSuccess(message: string) {
     setEditing(false)
     toast.success(message)
-    await onListChanged()
-    await load() // 삭제였다면 GET 404 → load 가 onClose 를 호출해 패널을 닫는다.
+    // 두 리페치는 각각 Meta Graph 콜을 유발하는 라우트다 — 직렬 대기하면 지연이 배가된다.
+    // 삭제였다면 상세 GET 404 → load 가 onClose 를 호출해 패널을 닫는다(병렬이어도 동일).
+    await Promise.all([onListChanged(), load()])
   }
 
   async function handleLinked() {
-    // 피커가 링크 추가 성공 후 호출 — 상세 리페치(연결 목록·롤업·피커 비활성 갱신) + 부모 리스트.
-    await load()
-    await onListChanged()
+    // 피커가 링크 추가 성공 후 호출 — 상세 리페치(연결 목록·롤업·피커 비활성 갱신) + 부모 리스트 병렬.
+    await Promise.all([load(), onListChanged()])
   }
 
   async function handleRemove(linkId: string) {
@@ -287,8 +288,7 @@ export default function CampaignDetailPanel({
         body: JSON.stringify({ linkId }),
       })
       toast.success("링크를 해제했습니다.")
-      await load()
-      await onListChanged()
+      await Promise.all([load(), onListChanged()])
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "링크 해제에 실패했습니다.")
     } finally {
@@ -323,7 +323,7 @@ export default function CampaignDetailPanel({
                   <h2 className="truncate text-[18px] font-bold text-[#111110]">{head.name}</h2>
                   <CampaignStatusChip status={head.status} />
                 </div>
-                {head.objective && <p className="mt-1 text-[12px] text-[#615D59]">{head.objective}</p>}
+                {head.objective && <p className="mt-1 text-[12px] text-[#615D59]">{metaObjectiveLabel(head.objective)}</p>}
               </div>
               <button
                 type="button"

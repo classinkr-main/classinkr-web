@@ -80,7 +80,7 @@ function NumberCell({
         }}
         placeholder="미입력"
         aria-label={label}
-        className="w-full min-w-0 bg-transparent text-right text-[12px] tabular-nums text-[#111110] outline-none placeholder:text-[11px] placeholder:text-[#1a1a1a]/25 disabled:opacity-50"
+        className="w-full min-w-0 bg-transparent text-right text-[12px] tabular-nums text-[#111110] outline-none placeholder:text-[11px] placeholder:text-[#A39E98] disabled:opacity-50"
       />
     </span>
   )
@@ -95,8 +95,10 @@ export function EventMetricsQuickTable({
   onSaved: (metrics: EventMetrics) => void
   onOpenFullEditor: (event: PublicEvent) => void
 }) {
-  const [savingId, setSavingId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  // 행 단위 상태 — 단일 슬롯이면 두 행을 연속 커밋할 때 먼저 끝난 요청이 다른 행의
+  // 잠금·스피너를 풀고, 에러도 마지막 하나만 남아 다중 실패가 은폐된다.
+  const [savingIds, setSavingIds] = useState<Set<string>>(new Set())
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   // 최근 시작한 행사부터 — 성과를 채워야 할 대상은 대개 방금 끝난 행사다.
   const sorted = useMemo(
@@ -105,11 +107,17 @@ export function EventMetricsQuickTable({
   )
 
   const missingRevenue = sorted.filter((row) => row.metrics.dealsRevenue == null).length
-  const missingSpend = sorted.filter((row) => row.econ.adSpendTotal === 0).length
+  // "미입력"은 채널 항목이 아예 없는 행사다 — 금액 0 을 명시로 넣은 행사를 미입력으로 세지 않는다.
+  const missingSpend = sorted.filter((row) => (row.metrics.adSpendEntries ?? []).length === 0).length
 
   async function saveField(row: PerEventEconRow, field: EditableField, next: number | null) {
-    setSavingId(row.event.id)
-    setError(null)
+    setSavingIds((prev) => new Set(prev).add(row.event.id))
+    setErrors((prev) => {
+      if (!(row.event.id in prev)) return prev
+      const rest = { ...prev }
+      delete rest[row.event.id]
+      return rest
+    })
     try {
       // PATCH는 본문 전체를 정본으로 삼는다(빠진 필드는 null로 초기화된다).
       // 그래서 한 칸만 고쳐도 현재 메트릭 전체를 다시 실어 보낸다 — 부분 전송은 다른 값을 지운다.
@@ -119,25 +127,24 @@ export function EventMetricsQuickTable({
       })
       onSaved(saved)
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? `${row.event.title} · ${FIELD_LABEL[field]} 저장 실패 — ${e.message}`
-          : "성과 저장에 실패했습니다."
-      )
+      setErrors((prev) => ({
+        ...prev,
+        [row.event.id]:
+          e instanceof Error
+            ? `${FIELD_LABEL[field]} 저장 실패 — ${e.message}`
+            : "성과 저장에 실패했습니다.",
+      }))
     } finally {
-      setSavingId(null)
+      setSavingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(row.event.id)
+        return next
+      })
     }
   }
 
   return (
     <div className="space-y-3">
-      {error && (
-        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12.5px] text-red-700">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
       <div className="overflow-x-auto rounded-2xl border border-[#e8e8e4] bg-white">
         <div className="min-w-[760px]">
           <div
@@ -160,10 +167,12 @@ export function EventMetricsQuickTable({
           ) : (
             <div className="divide-y divide-[#f0f0ec]">
               {sorted.map((row) => {
-                const busy = savingId === row.event.id
+                const busy = savingIds.has(row.event.id)
+                const rowError = errors[row.event.id]
                 const spendEntries = row.metrics.adSpendEntries ?? []
                 return (
-                  <div key={row.event.id} className={`${GRID} px-3 py-2`}>
+                  <div key={row.event.id}>
+                  <div className={`${GRID} px-3 py-2`}>
                     <span className="flex min-w-0 flex-col">
                       <span className="truncate text-[12.5px] font-medium text-[#111110]" title={row.event.title}>
                         {row.event.title}
@@ -180,17 +189,17 @@ export function EventMetricsQuickTable({
                             />
                           ))
                         ) : (
-                          <span className="text-[10px] text-[#1a1a1a]/30">채널 미배분</span>
+                          <span className="text-[10px] text-[#A39E98]">채널 미배분</span>
                         )}
                       </span>
                     </span>
 
                     <span
                       className={`text-right text-[12px] tabular-nums ${
-                        row.econ.adSpendTotal > 0 ? "text-[#111110]" : "text-[#1a1a1a]/25"
+                        spendEntries.length > 0 ? "text-[#111110]" : "text-[#A39E98]"
                       }`}
                     >
-                      {row.econ.adSpendTotal > 0 ? won(row.econ.adSpendTotal) : "미입력"}
+                      {spendEntries.length > 0 ? won(row.econ.adSpendTotal) : "미입력"}
                     </span>
 
                     <NumberCell
@@ -218,7 +227,7 @@ export function EventMetricsQuickTable({
                     <span
                       className={`text-right text-[12px] font-semibold tabular-nums ${
                         row.econ.roi == null
-                          ? "text-[#1a1a1a]/25"
+                          ? "text-[#A39E98]"
                           : row.econ.roi >= 0
                             ? "text-[#084734]"
                             : "text-[#B85C33]"
@@ -243,6 +252,13 @@ export function EventMetricsQuickTable({
                         )}
                       </button>
                     </span>
+                  </div>
+                  {rowError && (
+                    <p className="flex items-center gap-1.5 px-3 pb-2 text-[11.5px] text-[#B43E3E]">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      {rowError}
+                    </p>
+                  )}
                   </div>
                 )
               })}

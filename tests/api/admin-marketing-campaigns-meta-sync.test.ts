@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   createCampaign: vi.fn(),
   updateCampaign: vi.fn(),
   addLink: vi.fn(),
+  deleteCampaign: vi.fn(),
   // vi.mock 팩토리는 호이스트되므로 에러 클래스도 함께 호이스트 블록에 둔다.
   MetaConfigError: class FakeMetaConfigError extends Error {},
 }))
@@ -30,6 +31,7 @@ vi.mock("@/lib/repositories/marketing-campaigns", () => ({
   createCampaign: mocks.createCampaign,
   updateCampaign: mocks.updateCampaign,
   addLink: mocks.addLink,
+  deleteCampaign: mocks.deleteCampaign,
 }))
 
 import { POST } from "@/app/api/admin/marketing-campaigns/meta-sync/route"
@@ -82,6 +84,7 @@ beforeEach(() => {
   }))
   mocks.updateCampaign.mockResolvedValue({})
   mocks.addLink.mockResolvedValue({ id: "link-1" })
+  mocks.deleteCampaign.mockResolvedValue(undefined)
 })
 
 describe("POST /api/admin/marketing-campaigns/meta-sync", () => {
@@ -144,7 +147,7 @@ describe("POST /api/admin/marketing-campaigns/meta-sync", () => {
     expect(body.failed).toEqual([{ name: "실패건", error: "insert failed" }])
   })
 
-  it("링크 실패한 생성은 created 가 아니라 failed 다(중복 가져오기 방지 보고)", async () => {
+  it("링크 실패한 생성은 보상 삭제되고 failed 로 보고된다(고아 캠페인 누적 방지)", async () => {
     mocks.getMetaCampaignDashboard.mockResolvedValue({
       account: { id: "act_1" },
       campaigns: [metaCampaign("m-1", { name: "링크실패" })],
@@ -156,6 +159,24 @@ describe("POST /api/admin/marketing-campaigns/meta-sync", () => {
 
     expect(body.created).toEqual([])
     expect(body.failed).toEqual([{ name: "링크실패", error: "link failed" }])
+    // 링크 없는 우산은 다음 동기화가 같은 Meta 캠페인을 또 가져오게 만든다 — 반드시 정리.
+    expect(mocks.deleteCampaign).toHaveBeenCalledWith("new-링크실패")
+  })
+
+  it("보상 삭제까지 실패하면 orphanCampaignId 로 정리 대상을 남긴다", async () => {
+    mocks.getMetaCampaignDashboard.mockResolvedValue({
+      account: { id: "act_1" },
+      campaigns: [metaCampaign("m-1", { name: "고아" })],
+      summary: {},
+    })
+    mocks.addLink.mockRejectedValue(new Error("link failed"))
+    mocks.deleteCampaign.mockRejectedValue(new Error("delete failed"))
+
+    const body = await (await POST(req())).json()
+
+    expect(body.failed).toEqual([
+      { name: "고아", error: "link failed", orphanCampaignId: "new-고아" },
+    ])
   })
 
   it("Meta 미구성이면 503 + configured:false", async () => {

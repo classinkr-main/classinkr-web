@@ -231,7 +231,7 @@ export function ProjectCard({
 
 export function ProjectsEmpty({ onCreate }: { onCreate?: () => void }) {
   return (
-    <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] px-6 py-16 text-center">
+    <div className="rounded-2xl border border-dashed border-[rgba(0,0,0,0.08)] bg-[#fafaf8] px-6 py-16 text-center">
       <div className="mx-auto mb-3 inline-flex rounded-xl border border-[#BDEFD8] bg-[#ECFDF5] p-2.5 text-[#084734]">
         <FolderKanban className="h-5 w-5" />
       </div>

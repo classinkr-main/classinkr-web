@@ -130,7 +130,7 @@ function ChannelCard({
       {cells ? (
         <MiniStatGrid cells={cells} />
       ) : (
-        <p className="py-4 text-center text-[12px] text-[#1a1a1a]/30">{placeholder}</p>
+        <p className="py-4 text-center text-[12px] text-[#A39E98]">{placeholder}</p>
       )}
     </div>
   )
@@ -203,7 +203,7 @@ export function ChannelHubCards({
       />
       <ChannelCard
         icon={<Activity className="h-4 w-4" />}
-        iconBg="bg-[#EEF2FF] text-[#3730a3]"
+        iconBg="bg-[#F6F5F4] text-[#615D59]"
         title="Meta 광고"
         subtitle="Facebook · Instagram · 라이브"
         cells={metaLoading && !metaDashboard ? undefined : metaCells}
@@ -212,11 +212,11 @@ export function ChannelHubCards({
       />
       <ChannelCard
         icon={<Mail className="h-4 w-4" />}
-        iconBg="bg-[#FFF7ED] text-[#B85C33]"
+        iconBg="bg-[#F6F5F4] text-[#615D59]"
         title="이메일"
         subtitle="뉴스레터 · 타겟 발송"
         cells={emailCells}
-        placeholder="이메일 통계 불러오는 중…"
+        placeholder="이메일 지표 미수신 — 상단 배너에서 재시도"
         onDetail={() => onGoTo("email")}
       />
       {metaDashboard && (

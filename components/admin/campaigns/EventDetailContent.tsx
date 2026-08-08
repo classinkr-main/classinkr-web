@@ -156,7 +156,7 @@ export function EventDetailContent({
           <p
             className={`mt-0.5 text-[14px] font-bold ${
               economics.roi == null
-                ? "text-[#1a1a1a]/30"
+                ? "text-[#A39E98]"
                 : economics.roi >= 0
                   ? "text-[#084734]"
                   : "text-[#B85C33]"

@@ -81,7 +81,7 @@ function BudgetInput({
         }}
         placeholder="0"
         aria-label={`${AD_CHANNEL_LABEL[channel]} 배정 예산`}
-        className="w-full min-w-0 bg-transparent text-right text-[12px] tabular-nums text-[#111110] outline-none placeholder:text-[#1a1a1a]/25"
+        className="w-full min-w-0 bg-transparent text-right text-[12px] tabular-nums text-[#111110] outline-none placeholder:text-[#A39E98]"
       />
     </span>
   )
@@ -121,8 +121,8 @@ export function ChannelBudgetTable({
 
   return (
     <div className="space-y-4">
-      {/* 채널별 예산·집행 표 */}
-      <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+      {/* 채널별 예산·집행 표 — 좁은 화면에서 열이 잘려 사라지지 않게 가로 스크롤 허용 */}
+      <div className="overflow-x-auto rounded-2xl border border-[#e8e8e4] bg-white">
         <div className="min-w-[640px]">
           {/* header */}
           <div
@@ -164,7 +164,7 @@ export function ChannelBudgetTable({
                 <span
                   className={`text-right text-[12px] font-semibold tabular-nums ${
                     row.remaining == null
-                      ? "text-[#1a1a1a]/30"
+                      ? "text-[#A39E98]"
                       : row.remaining < 0
                         ? "text-[#B85C33]"
                         : "text-[#084734]"
@@ -194,7 +194,7 @@ export function ChannelBudgetTable({
             <span
               className={`text-right text-[12px] font-semibold tabular-nums ${
                 sumRemaining == null
-                  ? "text-[#1a1a1a]/30"
+                  ? "text-[#A39E98]"
                   : sumRemaining < 0
                     ? "text-[#B85C33]"
                     : "text-[#084734]"
@@ -205,7 +205,7 @@ export function ChannelBudgetTable({
             <span className="text-right text-[12px] font-semibold tabular-nums text-[#111110]">
               {KRW.format(Math.round(sumLeads))}
             </span>
-            <span className="text-right text-[12px] text-[#1a1a1a]/30">—</span>
+            <span className="text-right text-[12px] text-[#A39E98]">—</span>
           </div>
         </div>
       </div>

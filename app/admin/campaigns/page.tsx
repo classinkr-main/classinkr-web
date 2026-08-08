@@ -10,7 +10,7 @@ import { MarketingCrossLinks } from "@/components/admin/MarketingCrossLinks"
 import { ChartSkeleton } from "@/components/admin/viz"
 import type { ChannelEfficiencyRow } from "@/components/admin/campaigns/ChannelEfficiencyChart"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
-import { textMatchesEventToken } from "@/lib/events/attribution"
+import { eventTokenValues } from "@/lib/events/attribution"
 import { buildFunnel } from "@/components/admin/campaigns/EventDetailContent"
 import { useUrlState } from "@/lib/use-url-state"
 import {
@@ -95,11 +95,14 @@ function assignEventLeads(
     // 이후 발생한 무관한 리드를 계속 fallback 집계로 흡수해 매 지표를 부풀린다.
     const endMs = event.endsAt ? new Date(event.endsAt).getTime() : startMs + 24 * 3600 * 1000
     stats.set(event.id, { attributed: 0, during: 0 })
-    return { event, startMs, endMs }
+    // 토큰 검색 문자열은 행사당 1회만 만든다 — 리드×행사 쌍마다 배열을 재생성하면
+    // (수천 리드 × 수십 행사) 기간 토글마다 수십만 회 할당이 돈다.
+    const tokens = eventTokenValues(event).map((value) => `event:${value}`)
+    return { event, startMs, endMs, tokens }
   })
 
   for (const lead of leads) {
-    const tokenHit = windows.find((w) => textMatchesEventToken(lead.haystack, w.event))
+    const tokenHit = windows.find((w) => w.tokens.some((token) => lead.haystack.includes(token)))
     if (tokenHit) {
       stats.get(tokenHit.event.id)!.attributed += 1
       continue
@@ -179,12 +182,16 @@ export default function AdminCampaignsPage() {
   const [channelBudgets, setChannelBudgets] = useState<Record<AdChannel, number>>(
     () => Object.fromEntries(AD_CHANNELS.map((c): [AdChannel, number] => [c, 0])) as Record<AdChannel, number>
   )
+  const [budgetError, setBudgetError] = useState<string | null>(null)
   const [eventSort, setEventSort] = useState<"date" | "leads" | "deals" | "roi">("date")
   const activeTab: CampaignTab = CAMPAIGN_TABS.some((tab) => tab.id === tabParam)
     ? (tabParam as CampaignTab)
     : "summary"
 
-  const load = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+  const load = useCallback(async ({
+    force = false,
+    leadsScope = "campaigns",
+  }: { force?: boolean; leadsScope?: "campaigns" | "marketing" } = {}) => {
     setLoading(true)
     setError(null)
     try {
@@ -196,7 +203,9 @@ export default function AdminCampaignsPage() {
         }),
         // 캠페인은 리드를 귀속 해시(source+notes)·기간 창(timestamp) 계산에만 쓴다 —
         // 전체 select 대신 campaigns 스코프(id·source·status·notes·created_at)로 페이로드를 줄인다.
-        adminFetchJsonCached<{ leads: LeadRecord[] }>("/api/admin/leads?scope=campaigns", undefined, {
+        // 광고 탭 콜드 진입에서는 marketing 스코프(campaigns의 상위집합)를 쓴다 — 같은 URL 을
+        // 광고 리드 로더도 동시에 부르므로 in-flight 중복 제거로 리드 전량 다운로드가 1회가 된다.
+        adminFetchJsonCached<{ leads: LeadRecord[] }>(`/api/admin/leads?scope=${leadsScope}`, undefined, {
           ttlMs: 45_000,
           force,
           staleIfError: !force,
@@ -234,7 +243,8 @@ export default function AdminCampaignsPage() {
     }
     if (coreLoadRequestedRef.current) return
     coreLoadRequestedRef.current = true
-    void load()
+    // 광고 탭 콜드 진입이면 광고 리드 로더와 같은 marketing 스코프로 — 리드 다운로드 1회 공유.
+    void load({ leadsScope: activeTab === "meta" ? "marketing" : "campaigns" })
   }, [activeTab, load])
 
   // 캠페인 메시지 수신자 프리필 딥링크 소모 (message_to / message_name)
@@ -256,7 +266,11 @@ export default function AdminCampaignsPage() {
 
   const consumeMessagePrefill = useCallback(() => setMessagePrefill(null), [])
 
+  // 기간 프리셋 연속 변경 가드 — 프리셋마다 URL 이 달라 in-flight 중복 제거가 안 걸리므로,
+  // 시퀀스 번호로 "마지막 요청"만 화면에 반영한다(90일→7일 연타 시 늦게 온 90일 응답이 덮는 것 방지).
+  const metaRequestSeqRef = useRef(0)
   const loadMeta = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    const seq = ++metaRequestSeqRef.current
     setMetaLoading(true)
     setMetaError(null)
     try {
@@ -265,14 +279,17 @@ export default function AdminCampaignsPage() {
       // 명시 동기화·상태 변경 직후 재조회만 force로 네트워크를 강제한다.
       const data = await adminFetchJsonCached<MetaCampaignDashboard & { ok: boolean }>(
         `/api/admin/meta/campaigns?datePreset=${metaDatePreset}&limit=50`,
-        undefined,
+        // force 는 서버 메모(45초)까지 헤더로 우회한다 — 쿼리로 보내면 캐시 키가 갈라진다.
+        force ? { headers: { "x-meta-fresh": "1" } } : undefined,
         { ttlMs: 60_000, force, staleIfError: !force }
       )
+      if (seq !== metaRequestSeqRef.current) return // 더 최신 요청이 이미 나갔다 — 낡은 응답 폐기
       setMetaDashboard(data)
     } catch (e) {
+      if (seq !== metaRequestSeqRef.current) return
       setMetaError(e instanceof Error ? e.message : "Meta 캠페인 로딩 실패")
     } finally {
-      setMetaLoading(false)
+      if (seq === metaRequestSeqRef.current) setMetaLoading(false)
     }
   }, [metaDatePreset])
 
@@ -331,8 +348,13 @@ export default function AdminCampaignsPage() {
   }, [])
 
   const refreshAdLeads = useCallback(() => {
-    void loadAdLeads({ force: true })
-  }, [loadAdLeads])
+    // 가져오기·전환은 리드 자체를 바꾼다 — 광고 리드 목록만 새로 받으면 요약 탭의
+    // 퍼널·평균 CPL(코어 리드 파생)이 낡은 채 남으므로, 코어를 이미 로드했다면 함께 강제 갱신한다.
+    void Promise.all([
+      loadAdLeads({ force: true }),
+      coreLoadRequestedRef.current ? load({ force: true }) : Promise.resolve(),
+    ])
+  }, [load, loadAdLeads])
 
   // 광고 탭 첫 진입에만 조회한다 — 탭을 오갈 때마다 다시 부르면 목록이 깜빡이고,
   // 전환으로 갱신해 둔 로컬 상태(status=converted)도 매번 되감긴다.
@@ -366,10 +388,15 @@ export default function AdminCampaignsPage() {
         { method: "PATCH", body: JSON.stringify({ channel, amount }) }
       )
       setChannelBudgets(data.budgets)
+      setBudgetError(null)
     } catch (e) {
-      setMetaError(e instanceof Error ? e.message : "채널 예산 저장 실패")
+      // 에러는 사용자가 방금 만진 표(채널 예산) 옆에 떠야 한다 — Meta 대시보드 에러 슬롯에
+      // 실으면 연동 장애로 오독되고 다음 loadMeta 가 지워버린다. 실패한 입력값이 저장된
+      // 것처럼 남지 않게 서버 정본을 다시 받아 입력칸을 되돌린다.
+      setBudgetError(e instanceof Error ? e.message : "채널 예산 저장 실패")
+      void loadChannelBudgets()
     }
-  }, [])
+  }, [loadChannelBudgets])
 
   const toggleMetaCampaignStatus = useCallback(
     async (campaign: MetaCampaignRow) => {
@@ -412,9 +439,12 @@ export default function AdminCampaignsPage() {
     [leads]
   )
 
+  // 배정은 기간 필터와 무관하게 "전체 행사"를 후보로 계산한다 — 필터로 후보를 줄이면
+  // 제외된 행사가 흡수하던 fallback 리드가 남은 행사로 재배정돼, 같은 행사의 리드/CPL이
+  // 기간 토글에 따라 달라진다. 표시는 filtered 행사의 셀만 읽으므로 집계 범위는 그대로다.
   const eventLeadStats = useMemo(
-    () => assignEventLeads(leadLookupRows, filtered),
-    [filtered, leadLookupRows]
+    () => assignEventLeads(leadLookupRows, events),
+    [events, leadLookupRows]
   )
 
   // 집계 (전체 KPI) — 요약 탭과 광고 탭(채널 예산 대조)이 공유하므로 페이지 레벨 유지
@@ -447,7 +477,10 @@ export default function AdminCampaignsPage() {
       totalLeads += funnel.leads
       totalDeals += funnel.deals
       totalAttendees += funnel.attendees
-      if (metrics.dealsRevenue != null) {
+      // 개별 행사 ROI(computeEconomics)와 같은 조건 — 광고비가 있는 행사만 넣는다.
+      // 광고비 0·매출 입력 행사를 분자에 더하면 개별 ROI 는 "—"인데 누적 ROI 만 부풀어
+      // 리더보드 합과 어긋난다.
+      if (metrics.dealsRevenue != null && econ.adSpendTotal > 0) {
         roiSpend += econ.adSpendTotal
         roiRevenue += econ.revenue
       }
@@ -574,7 +607,7 @@ export default function AdminCampaignsPage() {
             </button>
             <Link
               href="/admin/events"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#063d2a]"
+              className="hidden sm:inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#065c41]"
             >
               <Plus className="w-3.5 h-3.5" />
               행사 관리
@@ -604,7 +637,7 @@ export default function AdminCampaignsPage() {
       </header>
 
       {/* Sub-tabs — branch admin 스타일 */}
-      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#EBE8E2] px-2 sm:px-4 lg:px-9">
+      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 sm:px-4 lg:px-9">
         <AdminTabs
           className="-mb-px py-2"
           label="캠페인 보기"
@@ -650,6 +683,7 @@ export default function AdminCampaignsPage() {
           channelEfficiencyData={channelEfficiencyData}
           channelBudgets={channelBudgets}
           onBudgetChange={handleChannelBudgetChange}
+          budgetError={budgetError}
           aggregate={aggregate}
           adLeads={adLeads}
           adLeadsLoading={adLeadsLoading}
@@ -675,8 +709,6 @@ export default function AdminCampaignsPage() {
           loading={loading}
           events={events}
           filtered={filtered}
-          metricsMap={metricsMap}
-          eventLeadStats={eventLeadStats}
           perEventEcon={perEventEcon}
           aggregate={aggregate}
           channelEfficiencyData={channelEfficiencyData}
