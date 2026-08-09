@@ -12,6 +12,7 @@ import {
 import { useBranchJson } from "../client-api"
 import { cny } from "@/lib/branch/money-format"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
+import { normalizeRegionLabel } from "@/lib/regions/korea-regions"
 import type {
   NaverMapCountSummary,
   NaverMapRegionSummaryRow,
@@ -61,15 +62,8 @@ interface HeatmapMapSource {
   warnings: string[]
 }
 
-const REGION_ALIASES: Array<[string, string]> = [
-  ["서울", "서울"], ["인천", "인천"], ["경기", "경기"], ["강원", "강원"],
-  ["충북", "충북"], ["충청북", "충북"], ["충남", "충남"], ["충청남", "충남"],
-  ["세종", "세종"], ["대전", "대전"],
-  ["경북", "경북"], ["경상북", "경북"], ["대구", "대구"], ["울산", "울산"],
-  ["부산", "부산"], ["경남", "경남"], ["경상남", "경남"],
-  ["전북", "전북"], ["전라북", "전북"], ["광주", "광주"], ["전남", "전남"], ["전라남", "전남"],
-  ["제주", "제주"],
-]
+// 지역 정규화는 SSOT(lib/regions)를 쓴다 — 이전의 자체 23행 별칭 표는 시군구를 몰라서
+// "수원"·"강남" 같은 행이 전부 "기타"로 새어 지도에서 사라졌다.
 
 function fmt(n: number) { return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(n) }
 
@@ -126,9 +120,7 @@ function statusOf(p: number): Row["status"] {
   return "critical"
 }
 function canonicalRegion(region: string) {
-  const text = region.trim()
-  const match = REGION_ALIASES.find(([needle]) => text.includes(needle))
-  return match?.[1] ?? null
+  return normalizeRegionLabel(region)
 }
 
 function mergeForMap(rows: Row[]) {
