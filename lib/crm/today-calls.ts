@@ -37,7 +37,7 @@ export interface TodayCallsResult {
   /** 선별에 못 든 다음 후보(분류 유지, 오늘 버킷 우선 정렬). */
   overflow: TodayCall[]
   totals: {
-    /** bucket === "today" 전체 후보 수(메타 제외). */
+    /** 오늘 필수(p0) 후보 수(메타 제외). */
     today: number
     /** 슬롯별 오늘 후보 수(선별 전 모수, 메타 제외). */
     slots: Record<TodayCallSlotKey, number>
@@ -76,20 +76,19 @@ export function classifyTodayCallSlot(item: CrmPriorityItem): TodayCallSlotKey {
   return "new_response"
 }
 
-const BUCKET_RANK: Record<CrmPriorityItem["bucket"], number> = {
-  today: 0,
-  renewal: 1,
-  watch: 2,
-  stale_recovery: 3,
-}
+// 슬롯 내 순서 = 전역 정렬 캐논과 동일(티어 → 돈 → 마감 → 점수). lib/crm/priority.ts 참조.
+const TIER_RANK: Record<CrmPriorityItem["tier"], number> = { p0: 0, p1: 1, p2: 2, p3: 3 }
+const MONEY_RANK: Record<CrmPriorityItem["moneyBand"], number> = { high: 0, mid: 1, low: 2, unknown: 3 }
 
 function compareWithinSlot(a: CrmPriorityItem, b: CrmPriorityItem) {
-  const bucketDiff = BUCKET_RANK[a.bucket] - BUCKET_RANK[b.bucket]
-  if (bucketDiff !== 0) return bucketDiff
-  if (a.score !== b.score) return b.score - a.score
+  const tierDiff = TIER_RANK[a.tier] - TIER_RANK[b.tier]
+  if (tierDiff !== 0) return tierDiff
+  const moneyDiff = MONEY_RANK[a.moneyBand] - MONEY_RANK[b.moneyBand]
+  if (moneyDiff !== 0) return moneyDiff
   const aTime = a.dueAt ? new Date(a.dueAt).getTime() : Number.MAX_SAFE_INTEGER
   const bTime = b.dueAt ? new Date(b.dueAt).getTime() : Number.MAX_SAFE_INTEGER
-  return aTime - bTime
+  if (aTime !== bTime) return aTime - bTime
+  return b.score - a.score
 }
 
 function orgKey(item: CrmPriorityItem): string | null {
@@ -138,11 +137,11 @@ export function pickTodayCalls(
   bySlot.set("new_response", dedupedNewResponse)
 
   const totals: TodayCallsResult["totals"] = {
-    today: candidates.filter((item) => item.bucket === "today").length,
+    today: candidates.filter((item) => item.tier === "p0").length,
     slots: {
-      new_response: (bySlot.get("new_response") ?? []).filter((i) => i.bucket === "today").length,
-      money: (bySlot.get("money") ?? []).filter((i) => i.bucket === "today").length,
-      reengage: (bySlot.get("reengage") ?? []).filter((i) => i.bucket === "today").length,
+      new_response: (bySlot.get("new_response") ?? []).filter((i) => i.tier === "p0").length,
+      money: (bySlot.get("money") ?? []).filter((i) => i.tier === "p0").length,
+      reengage: (bySlot.get("reengage") ?? []).filter((i) => i.tier === "p0").length,
     },
   }
 
@@ -205,7 +204,7 @@ export function pickTodayCalls(
     totals,
     meta: {
       total: metaLeads.length,
-      today: metaLeads.filter((item) => item.bucket === "today").length,
+      today: metaLeads.filter((item) => item.tier === "p0").length,
       top: metaLeads.slice(0, 4),
     },
   }

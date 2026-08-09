@@ -364,7 +364,8 @@ export default function NeoCrmTeamPanel({
           icon={<Building2 className="h-4 w-4" />}
           label="동기화 고객"
           value={loading && !data ? "..." : formatNumber(data?.account.totalCount)}
-          hint={`기간 활동 ${formatNumber(data?.account.activeInPeriodCount)} · 직전 ${formatNumber(
+          // "활동"이 아니라 NEO 레코드가 갱신된 계정 수다 — 실사용 지표로 오독되지 않게 이름을 정확히.
+          hint={`기간 내 NEO 갱신 ${formatNumber(data?.account.activeInPeriodCount)} · 직전 ${formatNumber(
             data?.comparison.account.previousActiveCount
           )}`}
         />

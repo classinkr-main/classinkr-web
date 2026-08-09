@@ -3,14 +3,24 @@ import "server-only"
 import { getNeoCrmCustomers } from "@/lib/admin-crm-customers-neo"
 import {
   CRM_PRIORITY_BUCKET_LABELS,
+  CRM_PRIORITY_TIER_LABELS,
   buildLeadPriorityItem,
   buildNeoAccountPriorityItem,
+  daysFromNow,
   sortPriorityItems,
   type CrmPriorityItem,
 } from "@/lib/crm/priority"
+import { buildAccountOpenTaskDueMap } from "@/lib/repositories/crm-priority-queue"
+import { listCrmTasks } from "@/lib/repositories/crm-tasks"
 import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
-import { buildDemoSignalIndex } from "@/lib/crm/demo-signal"
-import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
+import { buildDemoSignalIndex, findDemoSignal } from "@/lib/crm/demo-signal"
+import { deriveLeadLabels } from "@/lib/crm/lead-labels"
+import {
+  SALES_STAGE_LABELS,
+  deriveAccountSalesStage,
+  deriveLeadSalesStage,
+  derivePortalSalesStage,
+} from "@/lib/crm/sales-stage"
 import { deriveCustomerRegion, REGION_UNSPECIFIED } from "@/lib/crm/region-label"
 import {
   daysUntil,
@@ -193,7 +203,7 @@ function accountLifecycle(priority: CrmPriorityItem | null): CrmUnifiedLifecycle
   return priority && priority.score >= 42 ? "account_risk" : "active_account"
 }
 
-// 리드 전용 파생 필드(origin·NEO등록·SLA 등) — 비리드(neo/portal) 행은 항상 이 기본값.
+// 리드 전용 파생 필드(origin·NEO등록·SLA·과목/유형 라벨 등) — 비리드(neo/portal) 행은 항상 이 기본값.
 const NON_LEAD_ROW_DEFAULTS = {
   origin: null,
   crmRegistered: false,
@@ -201,6 +211,9 @@ const NON_LEAD_ROW_DEFAULTS = {
   slaTarget: false,
   firstResponseAt: null,
   createdAt: null,
+  // 과목·유형은 리드 상호명·폼 응답에서만 파생된다(lib/crm/lead-labels) — 비리드는 항상 null.
+  subjectLabel: null,
+  categoryLabel: null,
 } as const
 
 // 응답 SLA 대상 소스 — 고객이 직접 남긴 유입 채널만(수기 등록·동기화 소스 제외).
@@ -216,6 +229,8 @@ function buildPortalCustomerRow(item: CustomerListItem, lastContactAt: string | 
   const contractedLabel = formatKRW(contracted)
   const outstandingLabel = formatKRW(outstanding)
   const region = deriveCustomerRegion([customer.region_label, customer.address])
+  // 전환 고객 단계 — 딜 진행 여부만으로 판정(수동 stage 원천은 이 lite 목록에 조인되지 않는다).
+  const stage = derivePortalSalesStage({ activeDealCount: activeDeals })
   return {
     key: `customer:${customer.id}`,
     tags: [],
@@ -228,6 +243,8 @@ function buildPortalCustomerRow(item: CustomerListItem, lastContactAt: string | 
     ownerKeys: [],
     lifecycle: "active_account",
     statusLabel: activeDeals > 0 ? "거래 진행 중" : "전환 고객",
+    stage,
+    stageLabel: SALES_STAGE_LABELS[stage],
     nextActionLabel: outstanding > 0 ? "미수 확인" : activeDeals > 0 ? "딜 진행" : "관계 유지",
     priorityReason:
       outstanding > 0
@@ -236,8 +253,11 @@ function buildPortalCustomerRow(item: CustomerListItem, lastContactAt: string | 
           ? `진행 중 거래 ${activeDeals}건`
           : "리드 전환으로 생성된 앱 고객",
     score: outstanding > 0 ? 46 : activeDeals > 0 ? 34 : 14,
-    // 우선순위 엔진 미적용 소스 — 엔진 버킷이 없으므로 null(정렬 시 watch 취급).
+    // 우선순위 엔진 미적용 소스 — 엔진 버킷·티어가 없으므로 null(정렬 시 watch·p3 취급).
     bucket: null,
+    tier: null,
+    trust: null,
+    moneyBand: null,
     moneyLabel:
       contractedLabel && outstandingLabel
         ? `계약 ${contractedLabel} · 미수 ${outstandingLabel}`
@@ -274,7 +294,18 @@ function uniqueOwnerKeys(values: Array<string | null | undefined>) {
 
 function includesQuery(row: CrmUnifiedCustomerRow, query: string) {
   if (!query) return true
-  const haystack = [row.name, row.contact, row.regionLabel, row.ownerName, row.statusLabel, row.priorityReason]
+  // 단계·과목·유형 라벨도 검색 대상 — "부산 수학"처럼 지역·과목 조합 검색이 빠른 필터를 대신한다.
+  const haystack = [
+    row.name,
+    row.contact,
+    row.regionLabel,
+    row.ownerName,
+    row.statusLabel,
+    row.stageLabel,
+    row.subjectLabel,
+    row.categoryLabel,
+    row.priorityReason,
+  ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()
@@ -374,6 +405,8 @@ async function getSourceSnapshot(now: Date, bypassCache: boolean): Promise<CrmUn
 // now 민감 판정은 getCrmUnifiedCustomers가 요청 시각으로 다시 수행한다.
 async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> {
   const warnings: string[] = []
+  // 단계 판정(만료 경과일·자체 컨택 경과일)용 기준 시각 — 행의 점수와 같은 now로 고정된다.
+  const nowMs = now.getTime()
   let leadsOk = true
   let neoAccountsOk = true
   let portalCustomersOk = true
@@ -388,6 +421,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
     contactMapsResult,
     engagementResult,
     demoResult,
+    tasksResult,
   ] = await Promise.allSettled([
     getLeads(),
     getNeoCrmCustomers(),
@@ -397,6 +431,8 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
     getCrmCustomerContactMaps(),
     getLeadsActivitySummary(),
     getShowroomCalendarEvents(),
+    // 계정 자체 예정 작업 — 홈 큐(crm-priority-queue)와 같은 호출·같은 규약.
+    listCrmTasks({ status: "active", limit: 200, now }),
   ])
 
   // 반응 축(연락 후 재방문·자료·로그인)과 데모 신호 — 홈 큐(crm-priority-queue)와 같은 규약으로
@@ -422,6 +458,11 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
     contactMapsResult.status === "fulfilled"
       ? contactMapsResult.value.latestContactByTarget
       : new Map<string, string>()
+  // 계정 열린 할 일 due 맵 — 보조 신호 규약(실패 시 경고 없이 축만 생략).
+  const accountTaskDueMap =
+    tasksResult.status === "fulfilled" && tasksResult.value.health.ok
+      ? buildAccountOpenTaskDueMap(tasksResult.value.rows)
+      : new Map<string, string>()
 
   if (leadResult.status === "fulfilled") {
     for (const lead of leadResult.value) {
@@ -430,6 +471,18 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         demoIndex,
       })
       const hasAdClickId = Boolean(lead.gclid || lead.fbclid || lead.msclkid || lead.ttclid)
+      // 지역·과목·유형 라벨 — 상호명·폼 응답에서 보수적으로 파생(lib/crm/lead-labels가 SSOT).
+      const leadLabels = deriveLeadLabels(lead)
+      // 영업 단계 — 우선순위 게이트(테스트·미확인 탈락)와 무관하게 모든 리드 행에 판정한다.
+      // hasContactLog는 자체 컨택 맵(첫 응답·최근 컨택) 존재 — status 표기가 안 바뀌어도
+      // 기록이 있으면 컨택 중으로 친다(priority.ts와 동일 규칙).
+      const stage = deriveLeadSalesStage({
+        status: lead.status,
+        hasContactLog: Boolean(
+          firstResponseMap.get(lead.id) ?? latestContactMap.get(crmContactTargetKey("lead", lead.id))
+        ),
+        hasDemoSignal: Boolean(findDemoSignal(demoIndex, lead.org ?? lead.name)),
+      })
       rows.push({
         key: `lead:${lead.id}`,
         tags: [],
@@ -437,16 +490,25 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         sourceLabel: leadSourceLabel(lead),
         name: leadName(lead),
         contact: lead.phone ?? lead.email ?? lead.source,
-        regionLabel: deriveLeadRegionLabel(lead),
+        // deriveLeadLabels가 같은 지역 SSOT(deriveLeadRegionLabel)를 이미 호출한다 — 재파싱 방지.
+        regionLabel: leadLabels.region,
         ownerName: lead.assigned_to ?? null,
         ownerKeys: uniqueOwnerKeys([lead.assigned_to]),
         lifecycle: leadLifecycle(lead),
         statusLabel: leadStatusLabel(lead),
+        stage,
+        stageLabel: SALES_STAGE_LABELS[stage],
+        subjectLabel: leadLabels.subjectLabel,
+        categoryLabel: leadLabels.categoryLabel,
         nextActionLabel: priority?.actionLabel ?? defaultLeadAction(lead),
         priorityReason: priority?.reason ?? "리드 상태 확인",
         score: priority?.score ?? (lead.status === "new" ? 40 : 20),
         // 엔진 버킷 그대로 — 게이트 탈락(전환·종료·테스트·미확인 저의도) 리드는 null.
         bucket: priority?.bucket ?? null,
+        // 엔진 티어·머니 밴드·신뢰 그대로 저장(게이트 탈락 리드는 null).
+        tier: priority?.tier ?? null,
+        trust: priority?.trust ?? null,
+        moneyBand: priority?.moneyBand ?? null,
         moneyLabel: null,
         moneyState: "none",
         href: `/admin/crm/customers/leads?lead=${encodeURIComponent(lead.id)}`,
@@ -471,9 +533,33 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
 
   if (neoResult.status === "fulfilled" && neoResult.value.ok) {
     for (const account of neoResult.value.rows) {
-      const priority = buildNeoAccountPriorityItem(account, now, { demoIndex })
+      // 자체 신호(마지막 자체 컨택·열린 예정 작업)를 홈 큐와 같은 키·같은 규약으로 주입한다 —
+      // 같은 계정이 화면마다 다른 티어·점수를 갖지 않게 하기 위한 계약.
+      const lastContactAt =
+        latestContactMap.get(crmContactTargetKey("neo_account", account.accountId)) ?? null
+      const priority = buildNeoAccountPriorityItem(account, now, {
+        demoIndex,
+        ownSignals: {
+          lastContactAt,
+          openTaskDueAt: accountTaskDueMap.get(account.accountId) ?? null,
+        },
+      })
       const balanceLabel = formatCNY(account.balance)
       const orderLabel = formatUSD(account.orderAmount)
+      // 영업 단계 — 결제·만료(신뢰 高) 중심 판정. 만료 경과일은 우선순위 엔진과 같은
+      // 달력일 산식(daysFromNow), 자체 컨택 경과일은 위에서 주입한 같은 컨택 맵을 재사용한다.
+      const lastContactMs = lastContactAt ? new Date(lastContactAt).getTime() : Number.NaN
+      const stage = deriveAccountSalesStage({
+        expiryDays: daysFromNow(account.expireAt, nowMs),
+        // 스냅샷 규약상 balance null은 "0원"이 아니라 원천 미조인 — 단계도 추측하지 않는다.
+        hasBalance: account.balance == null ? null : Number(account.balance) > 0,
+        depleted:
+          Boolean(account.riskReasons?.some((reason) => reason.code === "depleted_balance")) ||
+          (account.balance != null && Number(account.balance) <= 0),
+        ownContactDays: Number.isNaN(lastContactMs)
+          ? null
+          : Math.floor((nowMs - lastContactMs) / 86_400_000),
+      })
       rows.push({
         key: `neo:${account.accountId}`,
         tags: [],
@@ -486,11 +572,17 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         ownerKeys: uniqueOwnerKeys([account.ownerName, account.ownerId]),
         lifecycle: accountLifecycle(priority),
         statusLabel: priority ? "관리 필요" : "활성 고객",
+        stage,
+        stageLabel: SALES_STAGE_LABELS[stage],
         nextActionLabel: priority?.actionLabel ?? "관계 유지",
         priorityReason: priority?.reason ?? "최근 고객 상태 정상",
         score: priority?.score ?? 10,
         // 엔진 버킷 그대로 — 엔진이 액션 없음(null)으로 판단한 정상 계정은 null.
         bucket: priority?.bucket ?? null,
+        // 엔진 티어·머니 밴드·신뢰 그대로 저장(정상 계정은 null).
+        tier: priority?.tier ?? null,
+        trust: priority?.trust ?? null,
+        moneyBand: priority?.moneyBand ?? null,
         moneyLabel:
           balanceLabel && orderLabel
             ? `잔액 ${balanceLabel} · 오더 ${orderLabel}`
@@ -504,8 +596,7 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         updatedAt: account.updatedAt ?? account.lastClassAt ?? account.expireAt,
         expireAt: account.expireAt ?? null,
         balance: account.balance ?? null,
-        lastContactAt:
-          latestContactMap.get(crmContactTargetKey("neo_account", account.accountId)) ?? null,
+        lastContactAt,
         activeDealCount: 0,
         ...NON_LEAD_ROW_DEFAULTS,
       })
@@ -626,9 +717,11 @@ export async function getCrmUnifiedCustomers(
   )
 
   const sortedKeys = new Map(sortPriorityItems(filtered.map((row) => {
-    // 행 생성 시 저장한 엔진 버킷을 그대로 쓴다. 버킷 없는 행(전환 고객·정상 계정·게이트
-    // 탈락 리드)은 관찰(watch)로 정렬 — 엔진이 오늘 처리로 지정한 것만 위로 올라온다.
+    // 행 생성 시 저장한 엔진 판단을 그대로 쓴다. 엔진 미적용 행(전환 고객·정상 계정·게이트
+    // 탈락 리드)은 최하 취급(tier p3 · money unknown · bucket watch) — 정렬 캐논은
+    // 티어 → 머니 밴드 → 마감 → 점수(sortPriorityItems)다.
     const bucket = row.bucket ?? "watch"
+    const tier = row.tier ?? "p3"
     return {
       id: row.key,
       // 전환 고객은 우선순위 엔진 소스 타입 밖 — 정렬 목적으로 계정 계열로 취급.
@@ -651,6 +744,11 @@ export async function getCrmUnifiedCustomers(
       dueAt: row.updatedAt,
       updatedAt: row.updatedAt,
       sourceKey: null,
+      tier,
+      tierLabel: CRM_PRIORITY_TIER_LABELS[tier],
+      moneyBand: row.moneyBand ?? "unknown",
+      moneyLabel: row.moneyLabel,
+      trust: row.trust ?? "high",
     }
   })).map((item, index) => [item.id, index]))
 
@@ -733,7 +831,8 @@ export async function getCrmUnifiedCustomers(
       leadCount: filtered.filter((row) => row.source === "lead").length,
       accountCount: filtered.filter((row) => row.source === "neo_account").length,
       customerCount: filtered.filter((row) => row.source === "customer").length,
-      highPriorityCount: filtered.filter((row) => row.score >= 68).length,
+      // "우선 처리" 정의는 priority 뷰와 동일한 티어 기준(p0·p1) — unified-view-rules 참조.
+      highPriorityCount: filtered.filter((row) => row.tier === "p0" || row.tier === "p1").length,
       ownerCount: owners.length,
       viewCounts,
       availableTags,

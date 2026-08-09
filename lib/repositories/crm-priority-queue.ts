@@ -12,9 +12,14 @@ import {
   type CrmPriorityItem,
   type CrmPriorityLane,
   type CrmPrioritySource,
+  type CrmPriorityTier,
 } from "@/lib/crm/priority"
 import { getLeads } from "@/lib/repositories/leads"
-import { listCrmTasks } from "@/lib/repositories/crm-tasks"
+import {
+  crmContactTargetKey,
+  getCrmCustomerContactMaps,
+} from "@/lib/repositories/crm-events"
+import { listCrmTasks, type CrmTaskRecord } from "@/lib/repositories/crm-tasks"
 import { getLeadsActivitySummary } from "@/lib/repositories/lead-activity"
 import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
 import { buildDemoSignalIndex } from "@/lib/crm/demo-signal"
@@ -52,6 +57,8 @@ export interface CrmPriorityQueue {
     taskCount: number
     ownerCount: number
     bucketCounts: Record<CrmPriorityBucket, number>
+    /** 현재 소스·담당·레인 범위(시점 필터 제외)의 티어 분포 — 티어 탭·요약 배지 기준. */
+    tierCounts: Record<CrmPriorityTier, number>
     laneTotals: Record<CrmPriorityLane, number>
     /** 현재 소스·담당·레인 범위에서 시점 필터와 무관한 긴급 후보 수. */
     laneCritical: number
@@ -122,6 +129,29 @@ function buildBucketCounts(items: CrmPriorityItem[]) {
   return counts
 }
 
+function buildTierCounts(items: CrmPriorityItem[]) {
+  const counts: Record<CrmPriorityTier, number> = { p0: 0, p1: 0, p2: 0, p3: 0 }
+  for (const item of items) counts[item.tier] += 1
+  return counts
+}
+
+/**
+ * 계정(neo_account) 대상 열린(open/snoozed) 할 일의 target_id별 가장 이른 due_at.
+ * 엔진의 자체 예정 작업 축(AccountOwnSignals.openTaskDueAt) 입력이다.
+ * 통합 목록(crm-unified-customers)도 같은 함수를 써서 화면 간 티어가 갈리지 않게 한다.
+ */
+export function buildAccountOpenTaskDueMap(tasks: CrmTaskRecord[]) {
+  const map = new Map<string, string>()
+  for (const task of tasks) {
+    if (task.targetType !== "neo_account" || !task.targetId) continue
+    if (task.status !== "open" && task.status !== "snoozed") continue
+    if (!task.dueAt) continue
+    const current = map.get(task.targetId)
+    if (!current || task.dueAt < current) map.set(task.targetId, task.dueAt)
+  }
+  return map
+}
+
 function buildBucketOptions(counts: Record<CrmPriorityBucket, number>) {
   return (Object.keys(CRM_PRIORITY_BUCKET_LABELS) as CrmPriorityBucket[]).map((bucket) => ({
     bucket,
@@ -168,13 +198,16 @@ export async function getCrmPriorityQueue(
   let neoAccountsOk = true
   let tasksOk = true
 
-  const [leadResult, neoResult, taskResult, engagementResult, demoResult] = await Promise.allSettled([
-    getLeads(),
-    getNeoCrmCustomers(),
-    listCrmTasks({ status: "active", limit: 200, now }),
-    getLeadsActivitySummary(),
-    getShowroomCalendarEvents(),
-  ])
+  const [leadResult, neoResult, taskResult, engagementResult, demoResult, contactMapsResult] =
+    await Promise.allSettled([
+      getLeads(),
+      getNeoCrmCustomers(),
+      listCrmTasks({ status: "active", limit: 200, now }),
+      getLeadsActivitySummary(),
+      getShowroomCalendarEvents(),
+      // 자체 컨택 신호 — 20페이지 초과 시 throw하는 함수라 반드시 allSettled로 감싼다.
+      getCrmCustomerContactMaps(),
+    ])
 
   const items: CrmPriorityItem[] = []
   // 참여 신호는 우선순위를 더 정확하게 만들 뿐 없어도 큐는 서야 한다 —
@@ -185,6 +218,17 @@ export async function getCrmPriorityQueue(
     demoResult.status === "fulfilled" ? demoResult.value : [],
     now
   )
+  // 자체 컨택 기록도 보조 신호 규약 — 실패하면 자체 신호 축만 조용히 빠진다(경고 없음).
+  // 통합 목록(crm-unified-customers)과 동일 규약·동일 키로 주입해 화면 간 점수가 갈리지 않게 한다.
+  const latestContactMap =
+    contactMapsResult.status === "fulfilled"
+      ? contactMapsResult.value.latestContactByTarget
+      : new Map<string, string>()
+  // 계정 열린 할 일 — 이미 로드한 활성 할 일 배열에서 계정별 가장 이른 due를 뽑는다.
+  const accountTaskDueMap =
+    taskResult.status === "fulfilled" && taskResult.value.health.ok
+      ? buildAccountOpenTaskDueMap(taskResult.value.rows)
+      : new Map<string, string>()
 
   if (leadResult.status === "fulfilled") {
     for (const lead of leadResult.value) {
@@ -201,8 +245,22 @@ export async function getCrmPriorityQueue(
 
   if (neoResult.status === "fulfilled" && neoResult.value.ok) {
     for (const account of neoResult.value.rows) {
-      const item = buildNeoAccountPriorityItem(account, now, { demoIndex })
+      const item = buildNeoAccountPriorityItem(account, now, {
+        demoIndex,
+        ownSignals: {
+          lastContactAt:
+            latestContactMap.get(crmContactTargetKey("neo_account", account.accountId)) ?? null,
+          openTaskDueAt: accountTaskDueMap.get(account.accountId) ?? null,
+        },
+      })
       if (item) items.push(item)
+    }
+    // NEO 스냅샷 신선도 — 잔액·만료일이 오래된 채 티어를 매길 수 있으므로 화면에 알린다
+    // (통합 목록과 같은 문구).
+    if (neoResult.value.syncHealth.isShroffAccountStale) {
+      warnings.push(
+        "외부 CRM 고객 동기화가 최신 상태가 아니어서 잔액·만료일·최근 수업 정보가 일부 누락될 수 있습니다."
+      )
     }
   } else {
     neoAccountsOk = false
@@ -242,6 +300,7 @@ export async function getCrmPriorityQueue(
       taskCount: filtered.filter((item) => item.source === "task").length,
       ownerCount: owners.length,
       bucketCounts,
+      tierCounts: buildTierCounts(baseFiltered),
       laneTotals,
       laneCritical: baseFiltered.filter((item) => item.severity === "critical").length,
       sourceTotals: {

@@ -79,6 +79,7 @@ import {
   type LeadPriority,
   type LeadSortKey,
 } from "@/lib/crm/lead-ranking"
+import { deriveLeadLabels } from "@/lib/crm/lead-labels"
 import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 
 // 리드 보드 목록 무한스크롤 대체 — 초기 50건, "더보기"로 50건씩 확장(계획 문서 Phase W1).
@@ -92,6 +93,28 @@ function getLeadSourceSegment(lead: LeadRecord): string | null {
   if (lead.source === "meta_lead_ads") return null
   const label = SOURCE_LABEL[lead.source] ?? lead.source
   return label === SOURCE_GROUP_LABEL[getLeadSourceGroup(lead)] ? null : label
+}
+
+// 지역·과목·유형 칩 — 파생 규칙은 lib/crm/lead-labels(순수 함수·단위 테스트 대상)가 소유하고,
+// 보드는 결과만 그린다. 행 단위 호출이지만 정규식 몇 개짜리 순수 계산이라 렌더 비용은 무시 가능.
+function LeadLabelChips({ lead }: { lead: LeadRecord }) {
+  const labels = deriveLeadLabels(lead)
+  const chips = [labels.region, labels.subjectLabel, labels.categoryLabel].filter(
+    (chip): chip is string => Boolean(chip)
+  )
+  if (chips.length === 0) return null
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-1">
+      {chips.map((chip) => (
+        <span
+          key={chip}
+          className="rounded-md bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55"
+        >
+          {chip}
+        </span>
+      ))}
+    </span>
+  )
 }
 
 // ─── 모아보기 렌즈 ─────────────────────────────────────────────
@@ -1823,17 +1846,22 @@ export default function LeadsBoardClient() {
       showToast("내보낼 리드가 없습니다.", "error")
       return
     }
-    const headers = ["이름", "기관", "전화", "이메일", "상태", "유입 그룹", "세부 유입", "리드마그넷", "담당자", "등록일", "팔로업", "점수", "메모"]
+    // 지역·과목·유형은 화면 칩과 같은 파생(lib/crm/lead-labels) — 시트 쪽 수작업 분류를 대체한다.
+    const headers = ["이름", "기관", "지역", "과목", "유형", "전화", "이메일", "상태", "유입 그룹", "세부 유입", "리드마그넷", "담당자", "등록일", "팔로업", "점수", "메모"]
     const escapeCsv = (value: unknown) => {
       const text = value == null ? "" : String(value)
       return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
     }
     const lines = [headers.join(",")]
     for (const lead of filtered) {
+      const labels = deriveLeadLabels(lead)
       lines.push(
         [
           lead.name,
           lead.org,
+          labels.region,
+          labels.subjectLabel,
+          labels.categoryLabel,
           lead.phone,
           lead.email,
           STATUS_LABEL[lead.status],
@@ -2551,6 +2579,7 @@ export default function LeadsBoardClient() {
                       <p className="mt-1 truncate text-[12px] text-[#1a1a1a]/50">
                         {lead.org ?? lead.phone ?? lead.email ?? "-"}
                       </p>
+                      <LeadLabelChips lead={lead} />
                       {priority && priority.reasons.length > 0 ? (
                         <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/40">
                           {priority.reasons.join(" · ")}
@@ -2774,7 +2803,10 @@ export default function LeadsBoardClient() {
                         <LeadActivityChip badge={activitySummary[lead.id]} />
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-[#1a1a1a]/55">{lead.org ?? "—"}</td>
+                    <td className="px-5 py-4 text-[#1a1a1a]/55">
+                      {lead.org ?? "—"}
+                      <LeadLabelChips lead={lead} />
+                    </td>
                     <td className="px-5 py-4 whitespace-nowrap text-[#1a1a1a]/55">
                       {lead.assigned_to ? (
                         <span className="rounded-md bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/55">

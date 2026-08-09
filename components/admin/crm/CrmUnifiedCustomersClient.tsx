@@ -1220,7 +1220,7 @@ export default function CrmUnifiedCustomersClient() {
               정렬 ·{" "}
               {sort
                 ? `${SORT_LABELS[sort.key]} ${sort.direction === "asc" ? "오름차순" : "내림차순"}`
-                : "추천순 (기본)"}
+                : "우선순위순 (티어 → 돈 → 마감)"}
             </p>
             <div className="flex items-center gap-1.5">
               <button
@@ -1315,6 +1315,12 @@ export default function CrmUnifiedCustomersClient() {
                             <MapPin className="h-3 w-3" />
                             {row.regionLabel ?? "지역 미지정"}
                           </p>
+                          {/* 과목(상호명·폼 응답 추론) — 지역 칩과 같은 표기 계열, 있을 때만. */}
+                          {row.subjectLabel ? (
+                            <span className="ml-1.5 mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#084734]">
+                              {row.subjectLabel}
+                            </span>
+                          ) : null}
                           <div className="mt-1 flex flex-wrap items-center gap-1 empty:hidden">
                             <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
                             <LeadRowBadges row={row} />
@@ -1334,10 +1340,36 @@ export default function CrmUnifiedCustomersClient() {
                       <div className="flex flex-col gap-1">
                         {sourceBadge(row)}
                         <span className="text-[12px] font-medium text-[#111110]">{row.statusLabel}</span>
+                        {/* 영업 단계(파생) — 상태(운영 표기)와 별개의 퍼널 위치. 중립 아웃라인으로 소스 공통 표기. */}
+                        {row.stageLabel ? (
+                          <span className="self-start rounded-full border border-[#e8e8e4] bg-white px-1.5 py-0.5 text-[10px] font-semibold text-[#1a1a1a]/55">
+                            {row.stageLabel}
+                          </span>
+                        ) : null}
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-[12px] font-semibold text-[#111110]">{row.nextActionLabel}</p>
+                      <div className="flex items-center gap-1.5">
+                        {/* 티어 — 우선순위순(기본 정렬)의 근거를 행에서 바로 읽게 한다. p0·p1만 노출(하위는 노이즈). */}
+                        {row.tier === "p0" ? (
+                          <span className="shrink-0 rounded-full bg-[#B85C33] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            오늘 필수
+                          </span>
+                        ) : row.tier === "p1" ? (
+                          <span className="shrink-0 rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-1.5 py-0.5 text-[10px] font-bold text-[#7A520F]">
+                            이번 주
+                          </span>
+                        ) : null}
+                        <p className="text-[12px] font-semibold text-[#111110]">{row.nextActionLabel}</p>
+                        {row.trust === "low" ? (
+                          <span
+                            title="NEO CRM의 수업 기록 날짜에서 파생된 근거입니다 — 미기입·지연이 있을 수 있습니다."
+                            className="shrink-0 rounded-md bg-[#f0f0ec] px-1.5 py-0.5 text-[10px] font-semibold text-[#1a1a1a]/50"
+                          >
+                            NEO 기준
+                          </span>
+                        ) : null}
+                      </div>
                       <p className="mt-0.5 max-w-[220px] truncate text-[11px] text-[#1a1a1a]/40">{row.priorityReason}</p>
                     </td>
                     <td className="px-4 py-3">{moneyCell(row)}</td>
@@ -1384,13 +1416,27 @@ export default function CrmUnifiedCustomersClient() {
                 <div className="pointer-events-none relative z-10 p-4">
                   <div className="mb-2 flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="mb-1">{sourceBadge(row)}</div>
+                      {/* 모바일엔 상태 컬럼이 없다 — 단계 칩은 소스 배지 옆에 붙인다(데스크톱과 같은 표기). */}
+                      <div className="mb-1 flex flex-wrap items-center gap-1">
+                        {sourceBadge(row)}
+                        {row.stageLabel ? (
+                          <span className="rounded-full border border-[#e8e8e4] bg-white px-1.5 py-0.5 text-[10px] font-semibold text-[#1a1a1a]/55">
+                            {row.stageLabel}
+                          </span>
+                        ) : null}
+                      </div>
                       <p className="truncate text-[14px] font-bold text-[#111110]">{row.name}</p>
                       <CrmContactValue value={row.contact} className="pointer-events-auto mt-0.5" />
                       <p className={`mt-1 inline-flex items-center gap-1 text-[11px] font-semibold ${row.regionLabel ? "text-[#084734]" : "text-[#1a1a1a]/30"}`}>
                         <MapPin className="h-3 w-3" />
                         {row.regionLabel ?? "지역 미지정"}
                       </p>
+                      {/* 과목(상호명·폼 응답 추론) — 데스크톱 고객 컬럼과 같은 표기. */}
+                      {row.subjectLabel ? (
+                        <span className="ml-1.5 mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#084734]">
+                          {row.subjectLabel}
+                        </span>
+                      ) : null}
                       <div className="mt-1.5 flex flex-wrap items-center gap-1 empty:hidden">
                         <CrmCustomerFlags flags={rowToFlags(row)} max={4} />
                         <LeadRowBadges row={row} />

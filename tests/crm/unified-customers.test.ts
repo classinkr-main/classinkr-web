@@ -10,6 +10,7 @@ function lead(overrides: {
   assigned_to?: string
   timestamp?: string
   source?: string
+  org?: string
   branch?: string
   message?: string
   confirmed_at?: string | null
@@ -18,7 +19,7 @@ function lead(overrides: {
     id: overrides.id,
     source: overrides.source ?? "contact_page",
     name: `리드 ${overrides.id}`,
-    org: `테스트 학원 ${overrides.id}`,
+    org: overrides.org ?? `테스트 학원 ${overrides.id}`,
     email: `${overrides.id}@example.com`,
     phone: `010-0000-${overrides.id.padStart(4, "0")}`,
     timestamp: overrides.timestamp ?? "2026-06-23T08:00:00.000Z",
@@ -128,6 +129,33 @@ function portalCustomer(overrides: {
   }
 }
 
+/** 계정 자체 예정 작업 축 입력 — buildAccountOpenTaskDueMap이 읽는 필드만 담는다. */
+function accountTask(overrides: { id: string; targetId: string; dueAt: string | null; status?: string }) {
+  return {
+    id: overrides.id,
+    targetType: "neo_account",
+    targetId: overrides.targetId,
+    targetLabel: null,
+    ownerKey: null,
+    ownerNameSnapshot: null,
+    taskType: "call",
+    title: `할 일 ${overrides.id}`,
+    detail: null,
+    dueAt: overrides.dueAt,
+    snoozedUntil: null,
+    priority: "normal",
+    status: overrides.status ?? "open",
+    sourceEventId: null,
+    createdBy: null,
+    assignedBy: null,
+    completedAt: null,
+    completedBy: null,
+    outcome: null,
+    createdAt: "2026-06-01T00:00:00.000Z",
+    updatedAt: "2026-06-01T00:00:00.000Z",
+  }
+}
+
 async function loadRepository(options?: {
   leads?: ReturnType<typeof lead>[]
   accounts?: ReturnType<typeof neoCustomer>[]
@@ -136,11 +164,13 @@ async function loadRepository(options?: {
   neoLinkedLeadIds?: string[]
   firstResponses?: Record<string, string>
   recentContacts?: Record<string, string>
+  tasks?: ReturnType<typeof accountTask>[]
   staleExternalCrm?: boolean
   portalCustomersFail?: boolean
   convertedLinksFail?: boolean
   neoLinksFail?: boolean
   firstResponsesFail?: boolean
+  tasksFail?: boolean
   engagements?: Record<string, ReturnType<typeof engagement>>
   demoEvents?: Array<{ id: string; title: string; date: string; type: string }>
   /** 반응 축·데모 캘린더(보조 신호) 동시 실패 시나리오 */
@@ -173,6 +203,17 @@ async function loadRepository(options?: {
     listConfirmedLeadNeoLinkLeadIds: options?.neoLinksFail
       ? vi.fn().mockRejectedValue(new Error("neo links unavailable"))
       : vi.fn().mockResolvedValue(new Set(options?.neoLinkedLeadIds ?? [])),
+  }))
+  vi.doMock("@/lib/repositories/crm-tasks", () => ({
+    listCrmTasks: options?.tasksFail
+      ? vi.fn().mockRejectedValue(new Error("crm tasks unavailable"))
+      : vi.fn().mockResolvedValue({
+          generatedAt: NOW.toISOString(),
+          health: { ok: true, message: null },
+          summary: { total: 0, returned: 0, open: 0, overdue: 0, dueToday: 0, snoozed: 0, done: 0 },
+          pagination: { limit: 200, offset: 0, returned: 0, total: 0, hasMore: false, nextOffset: null },
+          rows: options?.tasks ?? [],
+        }),
   }))
   vi.doMock("@/lib/repositories/crm-events", () => ({
     crmContactTargetKey: (targetType: string, targetId: string) => `${targetType}:${targetId}`,
@@ -526,38 +567,43 @@ describe("getCrmUnifiedCustomers", () => {
     expect(result.sources.warnings.join(" ")).toContain("미응답")
   })
 
-  // ── 결함 A 회귀: 엔진 버킷 보존 정렬 ─────────────────────────────────────────
+  // ── 결함 A 회귀: 엔진 티어 보존 정렬(티어 → 머니 밴드 → 마감 → 점수) ─────────
 
-  it("sorts by the engine bucket: a today expired-recovery account outranks today leads and watch leads", async () => {
+  it("sorts by the engine tier: a p0 unanswered lead outranks a p1 expired-recovery account, p3 cooled last", async () => {
     const { getCrmUnifiedCustomers } = await loadRepository({
       leads: [
-        // 25시간 미응답 신규 문의 — 엔진 버킷 today.
+        // 25시간 미응답 신규 문의 — SLA가 살아 있는 오늘 필수(p0).
         lead({ id: "fresh", timestamp: "2026-06-25T08:00:00.000Z" }),
-        // 7일(168h) 미응답 — 엔진이 식었다고 보고 watch로 내린 리드.
+        // 7일(168h) 미응답 — 엔진이 식었다고 보고 관찰(p3)로 내린 리드.
         lead({ id: "cooled", timestamp: "2026-06-19T09:00:00.000Z" }),
       ],
-      // 나흘 전 만료 — 회복 골든타임, 엔진 버킷 today · 고점수(88+).
+      // 사흘 전 만료 — 회복 골든타임(이번 주 p1) · 고점수(88+) · 잔액 高.
       accounts: [neoCustomer({ accountId: "expired-golden", expireAt: "2026-06-23T00:00:00.000Z" })],
     })
 
     const result = await getCrmUnifiedCustomers({ now: NOW })
     const rowsByKey = new Map(result.rows.map((row) => [row.key, row]))
 
-    // 엔진 판단이 행에 그대로 저장된다 — 라벨 문자열 재파생 없음.
-    expect(rowsByKey.get("neo:expired-golden")?.bucket).toBe("today")
-    expect(rowsByKey.get("neo:expired-golden")?.nextActionLabel).toBe("만료 회복")
-    expect(rowsByKey.get("lead:fresh")?.bucket).toBe("today")
-    expect(rowsByKey.get("lead:cooled")?.bucket).toBe("watch")
+    // 엔진 판단(티어·머니 밴드·신뢰)이 행에 그대로 저장된다 — 라벨 문자열 재파생 없음.
+    expect(rowsByKey.get("neo:expired-golden")).toMatchObject({
+      tier: "p1",
+      moneyBand: "high",
+      trust: "high",
+      bucket: "today",
+      nextActionLabel: "만료 회복",
+    })
+    expect(rowsByKey.get("lead:fresh")?.tier).toBe("p0")
+    expect(rowsByKey.get("lead:cooled")?.tier).toBe("p3")
 
-    // today 버킷 안에서는 점수순(계정 88+ > 리드), watch 리드는 today 계정 아래.
+    // 티어가 1축 — 점수(계정 88+ > 리드 80)가 아니라 p0 리드가 맨 위에 선다.
     expect(result.rows.map((row) => row.key)).toEqual([
-      "neo:expired-golden",
       "lead:fresh",
+      "neo:expired-golden",
       "lead:cooled",
     ])
   })
 
-  it("keeps engine-watch cooled leads (120h+ unanswered) below today rows even at a higher score", async () => {
+  it("keeps engine-p3 cooled leads (120h+ unanswered) below p0 rows even at a higher score", async () => {
     const { getCrmUnifiedCustomers } = await loadRepository({
       leads: [
         // 2시간 미응답 신규 문의 — today 버킷, 점수는 아래 리드보다 낮다.
@@ -574,9 +620,9 @@ describe("getCrmUnifiedCustomers", () => {
     const cooled = result.rows.find((row) => row.key === "lead:cooled120h")
     const fresh = result.rows.find((row) => row.key === "lead:fresh2h")
 
-    expect(cooled?.bucket).toBe("watch")
-    expect(fresh?.bucket).toBe("today")
-    // 점수만 보면 cooled가 위 — 버킷이 정렬을 지배해야 today가 먼저 온다.
+    expect(cooled?.tier).toBe("p3")
+    expect(fresh?.tier).toBe("p0")
+    // 점수만 보면 cooled가 위 — 티어가 정렬을 지배해야 p0가 먼저 온다.
     expect((cooled?.score ?? 0) > (fresh?.score ?? 0)).toBe(true)
     expect(result.rows.map((row) => row.key)).toEqual(["lead:fresh2h", "lead:cooled120h"])
   })
@@ -660,5 +706,125 @@ describe("getCrmUnifiedCustomers", () => {
     expect(rowsByKey.get("neo:funded")?.moneyLabel).toContain("잔액")
     expect(rowsByKey.get("customer:valued")?.moneyState).toBe("value")
     expect(rowsByKey.get("customer:no-money")).toMatchObject({ moneyState: "zero", moneyLabel: null })
+  })
+
+  // ── 티어 체계 배선: 자체 신호 주입(홈 큐와 동일 규약) + 티어 전파 ─────────────
+
+  it("injects own signals (자체 컨택·열린 예정 작업) into account tiers like the home queue", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      accounts: [
+        // 만료 D-10(p1) + 오늘 due 예정 작업 → p0 승격.
+        neoCustomer({ accountId: "task-due", expireAt: "2026-07-06T09:00:00.000Z" }),
+        // 만료 D-10(p1) + D-5 미래 due — 이미 잡아둔 건이라 p2 강등.
+        neoCustomer({ accountId: "scheduled", expireAt: "2026-07-06T09:00:00.000Z" }),
+        // 잔액 소진 + 30일 전 자체 컨택 → p1 충전 안내(신뢰 高).
+        neoCustomer({
+          accountId: "refill",
+          balance: 0,
+          orderAmount: 0,
+          expireAt: "2026-12-31T00:00:00.000Z",
+        }),
+        // 엔진이 액션 없음(null)으로 본 정상 계정(잔액 보유·만료 원거리) — 티어도 null.
+        neoCustomer({ accountId: "steady", expireAt: "2027-07-01T00:00:00.000Z" }),
+      ],
+      tasks: [
+        accountTask({ id: "t-today", targetId: "task-due", dueAt: "2026-06-26T09:00:00.000Z" }),
+        accountTask({ id: "t-future", targetId: "scheduled", dueAt: "2026-07-01T09:00:00.000Z" }),
+        // done 상태·due 없음 작업은 신호가 아니다.
+        accountTask({ id: "t-done", targetId: "task-due", dueAt: "2026-06-20T09:00:00.000Z", status: "done" }),
+      ],
+      recentContacts: { "neo_account:refill": "2026-05-27T09:00:00.000Z" },
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    const rowsByKey = new Map(result.rows.map((row) => [row.key, row]))
+
+    expect(rowsByKey.get("neo:task-due")).toMatchObject({ tier: "p0", trust: "high" })
+    expect(rowsByKey.get("neo:task-due")?.priorityReason).toContain("오늘 예정 작업")
+    expect(rowsByKey.get("neo:scheduled")?.tier).toBe("p2")
+    expect(rowsByKey.get("neo:scheduled")?.priorityReason).toContain("예정 작업 있음")
+    expect(rowsByKey.get("neo:refill")).toMatchObject({
+      tier: "p1",
+      trust: "high",
+      nextActionLabel: "충전 안내",
+    })
+    expect(rowsByKey.get("neo:steady")).toMatchObject({ tier: null, trust: null, moneyBand: null })
+
+    // "우선 처리" 카운트·뷰는 티어 p0·p1 기준 — 점수 임계가 아니다.
+    expect(result.summary.highPriorityCount).toBe(2)
+    const priorityView = await getCrmUnifiedCustomers({ view: "priority", now: NOW })
+    expect(new Set(priorityView.rows.map((row) => row.key))).toEqual(
+      new Set(["neo:task-due", "neo:refill"])
+    )
+  })
+
+  it("silently degrades account tiers when the task source fails (fail-soft own signals)", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      accounts: [neoCustomer({ accountId: "task-due", expireAt: "2026-07-06T09:00:00.000Z" })],
+      tasksFail: true,
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+
+    // 예정 작업 축만 조용히 빠지고(승격 없음, 만료 축 그대로 p1) 경고도 추가되지 않는다.
+    expect(result.rows.find((row) => row.key === "neo:task-due")?.tier).toBe("p1")
+    expect(result.sources.warnings).toEqual([])
+  })
+
+  // ── 영업 단계·라벨 배선: 행 생성 시 파생 저장(lib/crm/sales-stage·lead-labels) ──────
+
+  it("derives lead sales stages from own records: untouched without contact, contacting with a contact log", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [lead({ id: "quiet" }), lead({ id: "logged" })],
+      recentContacts: { "lead:logged": "2026-06-25T00:00:00.000Z" },
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    const rowsByKey = new Map(result.rows.map((row) => [row.key, row]))
+
+    // status 표기가 new 그대로여도 자체 컨택 기록이 있으면 컨택 중으로 판정한다(priority.ts와 동일 규칙).
+    expect(rowsByKey.get("lead:quiet")).toMatchObject({ stage: "untouched", stageLabel: "접촉 전" })
+    expect(rowsByKey.get("lead:logged")).toMatchObject({ stage: "contacting", stageLabel: "컨택 중" })
+  })
+
+  it("derives account sales stages: renewal within D-30, dormant past the long-recovery line", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      accounts: [
+        // NOW(6/26) 기준 D-9 — 만료 임박은 연장 관리.
+        neoCustomer({ accountId: "renewing", expireAt: "2026-07-05T00:00:00.000Z" }),
+        // 만료 100일 경과 — 장기 회복 진입선(60일)을 넘긴 계정은 휴면.
+        neoCustomer({ accountId: "gone", expireAt: "2026-03-18T00:00:00.000Z" }),
+      ],
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    const rowsByKey = new Map(result.rows.map((row) => [row.key, row]))
+
+    expect(rowsByKey.get("neo:renewing")).toMatchObject({ stage: "renewal", stageLabel: "연장 관리" })
+    expect(rowsByKey.get("neo:gone")).toMatchObject({ stage: "dormant", stageLabel: "휴면" })
+  })
+
+  it("derives subject·category labels from the org name and searches them", async () => {
+    const { getCrmUnifiedCustomers } = await loadRepository({
+      leads: [
+        // 상호가 영문 표기라 원문 검색으로는 "영어"에 안 걸린다 — 라벨이 haystack에 있어야 매칭.
+        lead({ id: "english", org: "신디쌤english" }),
+        lead({ id: "plain" }),
+      ],
+    })
+
+    const result = await getCrmUnifiedCustomers({ now: NOW })
+    const rowsByKey = new Map(result.rows.map((row) => [row.key, row]))
+
+    expect(rowsByKey.get("lead:english")).toMatchObject({ subjectLabel: "영어" })
+    // 기본 픽스처 상호("테스트 학원 …")는 과목 없음 + 학원 유형으로 접힌다.
+    expect(rowsByKey.get("lead:plain")).toMatchObject({
+      subjectLabel: null,
+      categoryLabel: "학원·교습소",
+    })
+
+    // 과목 라벨이 검색 haystack에 들어간다 — 지역·과목 검색이 빠른 필터를 대신하는 계약.
+    const searched = await getCrmUnifiedCustomers({ q: "영어", now: NOW })
+    expect(searched.rows.map((row) => row.key)).toEqual(["lead:english"])
   })
 })
