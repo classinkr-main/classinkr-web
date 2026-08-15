@@ -50,12 +50,17 @@ declare global {
       eventName: GoogleAnalyticsEventName,
       params?: AnalyticsParams
     ) => void
-    fbq?: (
-      command: "track" | "trackCustom",
-      eventName: string,
-      params?: AnalyticsParams,
-      options?: MetaPixelOptions
-    ) => void
+    // 오버로드: 이벤트 전송과 동의 제어(lib/pixels/teardown.ts)를 함께 표현한다.
+    // 전역 선언은 한 곳에만 있어야 하므로(TS2717) 여기서 모든 시그니처를 정의한다.
+    fbq?: {
+      (
+        command: "track" | "trackCustom",
+        eventName: string,
+        params?: AnalyticsParams,
+        options?: MetaPixelOptions
+      ): void
+      (command: "consent", action: "grant" | "revoke"): void
+    }
     kakaoPixel?: (pixelId: string) => KakaoPixelClient
     dataLayer?: Array<Record<string, unknown>>
   }

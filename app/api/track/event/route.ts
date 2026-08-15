@@ -1,5 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import {
+  ANONYMOUS_ID_COOKIE,
+  CONSENT_COOKIE,
+  parseConsent,
+} from "@/lib/consent/consent"
 import { checkRateLimitDistributed, getClientIp } from "@/lib/server/rate-limit"
 import { isCrossOriginRequest } from "@/lib/server/same-origin"
 import { resolveLeadIdForAnonymousId } from "@/lib/identity/stitch"
@@ -81,6 +86,7 @@ const PII_PATTERNS = [
 interface TrackEventBody {
   event?: string
   page?: string
+  /** 클라이언트가 여전히 보내지만 **서버는 무시한다** — cln_aid 쿠키만 신뢰한다. */
   anonymousId?: string | null
   params?: Record<string, string | number | boolean | null | undefined>
 }
@@ -98,6 +104,16 @@ export async function POST(req: NextRequest) {
 
   if (!allowed) {
     return NextResponse.json({ ok: false }, { status: 429 })
+  }
+
+  // 서버측 분석 동의 검증. 지금까지는 lib/analytics.ts의 클라이언트 게이트가 유일한
+  // 방어였는데 브라우저 코드라 우회가 자명하고, Origin 헤더가 없는 비브라우저 요청은
+  // isCrossOriginRequest 도 통과한다. lib/marketing/server-conversions.ts 가 이미
+  // 같은 방식으로 서버에서 동의를 확인하므로 그 패턴을 그대로 따른다.
+  // 추적 실패는 사용자 경험을 막지 않는다는 이 라우트의 계약대로 200을 유지한다.
+  const consent = parseConsent(req.cookies.get(CONSENT_COOKIE)?.value ?? null)
+  if (!consent?.analytics) {
+    return NextResponse.json({ ok: true, stored: false, reason: "no_consent" })
   }
 
   let body: TrackEventBody
@@ -119,8 +135,11 @@ export async function POST(req: NextRequest) {
 
   const referrer = redactPii(req.headers.get("referer") ?? "").slice(0, 500) || null
   const userAgent = redactPii(req.headers.get("user-agent") ?? "").slice(0, 500) || null
-  const anonymousId =
-    typeof body.anonymousId === "string" ? body.anonymousId.slice(0, 100) : null
+  // 익명 식별자는 **쿠키에서만** 읽는다. 본문 값을 신뢰하면 남의 cln_aid 를 알아낸
+  // 호출자가 아래 resolveLeadIdForAnonymousId 를 통해 **타인의 리드에 임의 이벤트를
+  // 귀속**시킬 수 있다. cln_aid 는 분석 동의 시에만 발급되므로(app/api/consent/route.ts)
+  // 위 동의 게이트와 자연스럽게 맞물린다.
+  const anonymousId = req.cookies.get(ANONYMOUS_ID_COOKIE)?.value?.trim() || null
 
   // 이미 리드로 전환된 방문자면 이벤트에 lead_id 를 붙인다. 이게 있어야 "연락 후 재방문"
   // 같은 반응 신호가 잡힌다 — 없으면 전환 이후의 활동이 영영 익명으로 남는다.
