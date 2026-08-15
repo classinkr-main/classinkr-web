@@ -22,10 +22,38 @@ export interface UseConsentResult {
   save: (choice: ConsentChoice) => Promise<ConsentRecord>
 }
 
+interface CookieStoreLike {
+  addEventListener: (type: "change", listener: () => void) => void
+  removeEventListener: (type: "change", listener: () => void) => void
+}
+
+function getCookieStore(): CookieStoreLike | null {
+  const store = (window as unknown as { cookieStore?: CookieStoreLike }).cookieStore
+  return typeof store?.addEventListener === "function" ? store : null
+}
+
+/**
+ * 동의 쿠키는 같은 탭의 `saveConsent` 외에도 바뀔 수 있다 — 다른 탭에서의 동의/철회,
+ * 쿠키 만료, Safari ITP의 삭제. 커스텀 이벤트만 구독하면 그 탭은 새로고침 전까지
+ * 낡은 상태로 픽셀을 계속 돌리거나 배너를 계속 띄운다. 그래서 포커스 복귀와
+ * (지원 시) cookieStore 변경에서도 스냅샷을 다시 읽는다.
+ * 스냅샷이 같은 문자열이면 React가 리렌더를 건너뛰므로 비용은 사실상 없다.
+ */
 function subscribe(onChange: () => void): () => void {
   if (typeof window === "undefined") return () => {}
+
+  const cookieStore = getCookieStore()
   window.addEventListener(CONSENT_CHANGE_EVENT, onChange)
-  return () => window.removeEventListener(CONSENT_CHANGE_EVENT, onChange)
+  window.addEventListener("focus", onChange)
+  document.addEventListener("visibilitychange", onChange)
+  cookieStore?.addEventListener("change", onChange)
+
+  return () => {
+    window.removeEventListener(CONSENT_CHANGE_EVENT, onChange)
+    window.removeEventListener("focus", onChange)
+    document.removeEventListener("visibilitychange", onChange)
+    cookieStore?.removeEventListener("change", onChange)
+  }
 }
 
 /**

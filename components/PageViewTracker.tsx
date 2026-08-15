@@ -12,21 +12,28 @@ export function PageViewTracker() {
   const searchParams = useSearchParams()
   const search = searchParams.toString()
   const { choice } = useConsent()
-  const lastTrackedKeyRef = useRef<string | null>(null)
+  const lastTrackedPathRef = useRef<string | null>(null)
   const path = `${pathname}${search ? `?${search}` : ""}`
 
+  // 마케팅 동의 상태가 바뀌면 어트리뷰션 저장/정리를 다시 평가한다.
+  // (동의 시 적재 시작, 철회 시 저장된 광고 식별자 삭제 — lib/marketing-attribution)
   useEffect(() => {
-    const key = `${path}::analytics=${choice.analytics ? "1" : "0"}`
-    if (lastTrackedKeyRef.current === key) return
-
-    lastTrackedKeyRef.current = key
     collectLeadAttribution()
+  }, [choice.marketing, path])
+
+  // page_view는 **경로당 정확히 한 번**만 발화한다.
+  // 이전에는 dedup 키에 동의 상태가 섞여 있어, 배너에서 동의하는 순간 같은 경로에
+  // 두 번째 page_view가 나가 GA4가 이중 계측했다.
+  useEffect(() => {
+    if (lastTrackedPathRef.current === path) return
+
+    lastTrackedPathRef.current = path
     trackEvent("page_view", {
       path,
       title: document.title,
       referrer: document.referrer || undefined,
     })
-  }, [choice.analytics, path])
+  }, [path])
 
   useEffect(() => {
     if (!choice.analytics) return
