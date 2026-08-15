@@ -41,9 +41,16 @@ function createConsentResponse({
   stored: boolean
 }) {
   const secure = isSecureRequest(req)
-  const response = NextResponse.json({ ok: true, stored, record, anonymous_id: anonymousId })
+  // 감사 로그가 남지 않았으면 s:0으로 표시해 다음 방문에 클라이언트가 재동기화하도록 한다.
+  const storedRecord: ConsentRecord = { ...record, s: stored ? 1 : 0 }
+  const response = NextResponse.json({
+    ok: true,
+    stored,
+    record: storedRecord,
+    anonymous_id: anonymousId,
+  })
 
-  response.cookies.set(CONSENT_COOKIE, JSON.stringify(record), {
+  response.cookies.set(CONSENT_COOKIE, JSON.stringify(storedRecord), {
     httpOnly: false,
     maxAge: CONSENT_COOKIE_MAX_AGE,
     path: "/",
@@ -81,12 +88,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 403 })
   }
 
-  const ip = getClientIp(req)
-  const { allowed } = await checkRateLimitDistributed(ip, "consent", { windowMs: 60_000, max: 30 })
-  if (!allowed) {
-    return NextResponse.json({ ok: false }, { status: 429 })
-  }
-
   let body: ConsentBody
   try {
     body = await req.json()
@@ -94,12 +95,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 400 })
   }
 
-  const policyVersion =
-    typeof body.policy_version === "string" ? body.policy_version.slice(0, 40) : null
-  if (!policyVersion || policyVersion !== CONSENT_POLICY_VERSION) {
-    return NextResponse.json({ ok: false }, { status: 400 })
-  }
-
+  // 정책 버전이 어긋나도 **거부하지 않는다**. 과거에는 400을 반환했는데, 구버전
+  // 클라이언트 번들(롤링 배포 중)이나 env drift 상황에서 동의가 영영 저장되지 않고
+  // 배너가 무한 재노출되는 막다른 길이었다. 서버 정본 버전으로 기록하고 그대로 돌려준다.
   const analytics = Boolean(body.analytics)
   const marketing = Boolean(body.marketing)
   const anonymousId = analytics
@@ -112,6 +110,15 @@ export async function POST(req: NextRequest) {
     analytics,
     marketing,
     ts: Date.now(),
+  }
+
+  // 레이트리밋은 **감사 로그 insert만** 막는다. 동의 쿠키 발급까지 막으면
+  // 학교/학원처럼 NAT 뒤에서 IP를 공유하는 환경에서 동의가 저장되지 않아
+  // 배너가 계속 다시 뜬다. 쿠키는 항상 내려준다.
+  const ip = getClientIp(req)
+  const { allowed } = await checkRateLimitDistributed(ip, "consent", { windowMs: 60_000, max: 60 })
+  if (!allowed) {
+    return createConsentResponse({ req, record, anonymousId, stored: false })
   }
 
   // IP는 원본을 저장하지 않고 해시만 보관한다.

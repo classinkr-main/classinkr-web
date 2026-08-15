@@ -2,16 +2,42 @@
 
 import Image from "next/image"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { X } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import {
   DENIED_CHOICE,
   GRANTED_CHOICE,
   OPEN_CONSENT_EVENT,
+  resyncPendingConsent,
   type ConsentChoice,
 } from "@/lib/consent/consent"
 import { useConsent } from "@/lib/consent/useConsent"
+
+/**
+ * X로 닫은 사실을 세션 단위로 기억한다. 컴포넌트 로컬 state만 쓰면
+ * `/checkout`·`/receipt`·`/admin`(AppChrome이 배너를 언마운트하는 경로)을
+ * 거쳐 돌아올 때마다 배너가 다시 떠서 nag 패턴이 된다.
+ * 세션 저장이므로 브라우저를 다시 열면 정상적으로 재노출된다(옵트인 유지).
+ */
+const DISMISS_SESSION_KEY = "cln:consent-dismissed"
+
+function readSessionDismissed(): boolean {
+  try {
+    return window.sessionStorage.getItem(DISMISS_SESSION_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
+function writeSessionDismissed() {
+  try {
+    window.sessionStorage.setItem(DISMISS_SESSION_KEY, "1")
+  } catch {
+    // 프라이빗 모드 등 저장 실패는 무시 — 배너가 다시 뜰 뿐이다.
+  }
+}
 
 const primaryBtn =
   "inline-flex h-8 min-w-0 items-center justify-center rounded-md bg-[#084734] px-2 text-[12px] font-bold text-white transition-colors hover:bg-[#065c41] sm:h-9 sm:px-4 sm:text-[13px]"
@@ -55,11 +81,23 @@ function ConsentRow({
  */
 export function ConsentBanner() {
   const { decided, choice, save } = useConsent()
+  const pathname = usePathname()
   const [forceOpen, setForceOpen] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
+  const [dismissed, setDismissed] = useState(readSessionDismissed)
   const [showSettings, setShowSettings] = useState(false)
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<ConsentChoice>(DENIED_CHOICE)
+  const dialogRef = useRef<HTMLDivElement | null>(null)
+
+  // open 상태는 렌더에서 파생 — 미결정이면 자동 노출, 닫으면 숨김, 재오픈 시 강제 노출
+  const open = forceOpen || (!decided && !dismissed)
+
+  const dismiss = useCallback(() => {
+    writeSessionDismissed()
+    setForceOpen(false)
+    setDismissed(true)
+    setShowSettings(false)
+  }, [])
 
   // 푸터 "쿠키 설정"에서 재오픈 (이벤트 콜백 내 setState — effect 본문 아님)
   useEffect(() => {
@@ -72,25 +110,41 @@ export function ConsentBanner() {
     return () => window.removeEventListener(OPEN_CONSENT_EVENT, reopen)
   }, [choice.analytics, choice.marketing])
 
-  // open 상태는 렌더에서 파생 — 미결정이면 자동 노출, 닫으면 숨김, 재오픈 시 강제 노출
-  const open = forceOpen || (!decided && !dismissed)
+  // 이전 방문에서 서버 감사 로그가 누락된 동의(s:0)를 조용히 재시도한다.
+  useEffect(() => {
+    void resyncPendingConsent()
+  }, [])
+
+  // 강제 오픈("쿠키 설정")은 페이지를 이동하면 닫는다 — 열린 채 따라다니지 않도록.
+  useEffect(() => {
+    setForceOpen(false)
+  }, [pathname])
+
+  // Escape로 닫기 + 열릴 때 대화상자로 포커스 이동 (키보드/스크린리더)
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") dismiss()
+    }
+    document.addEventListener("keydown", onKeyDown)
+    dialogRef.current?.focus()
+    return () => document.removeEventListener("keydown", onKeyDown)
+  }, [open, dismiss])
+
   if (!open) return null
 
-  const dismiss = () => {
-    setForceOpen(false)
-    setDismissed(true)
-    setShowSettings(false)
-  }
   const commitChoice = async (nextChoice: ConsentChoice) => {
     if (saving) return
     setSaving(true)
     try {
+      // saveConsent는 로컬 우선 저장이라 실패해도 던지지 않는다(선택은 항상 보존).
+      // 방어적으로만 감싸고, 어떤 경우에도 배너는 닫는다.
       await save(nextChoice)
-      dismiss()
     } catch (error) {
       console.warn("[consent] failed to save consent:", error)
     } finally {
       setSaving(false)
+      dismiss()
     }
   }
   const openSettings = () => {
@@ -100,9 +154,12 @@ export function ConsentBanner() {
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
+      aria-modal="false"
       aria-label="쿠키 사용 동의"
-      className="fixed bottom-3 left-3 right-3 z-[120] sm:bottom-6 sm:left-6 sm:right-auto"
+      tabIndex={-1}
+      className="fixed bottom-3 left-3 right-3 z-[120] outline-none sm:bottom-6 sm:left-6 sm:right-auto"
     >
       <div className="relative max-h-[calc(100dvh-24px)] w-full max-w-[360px] overflow-y-auto rounded-lg border border-black/[0.08] bg-[#FFFFFF] p-3 pr-10 shadow-[0_12px_34px_rgba(0,0,0,0.10)] sm:max-w-[392px] sm:p-5 sm:pr-12">
         <button
