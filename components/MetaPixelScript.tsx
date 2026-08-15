@@ -4,8 +4,7 @@ import { usePathname, useSearchParams } from "next/navigation"
 import Script from "next/script"
 import { useEffect } from "react"
 import { META_PIXEL_ID } from "@/lib/analytics-config"
-
-let lastMetaPageViewPath: string | null = null
+import { getLastMetaPageViewPath, setLastMetaPageViewPath } from "@/lib/pixels/teardown"
 
 export function MetaPixelScript() {
   const pathname = usePathname()
@@ -20,7 +19,7 @@ export function MetaPixelScript() {
     if (isInternal || !META_PIXEL_ID) return
 
     const path = `${pathname}${search ? `?${search}` : ""}`
-    if (lastMetaPageViewPath === path) return
+    if (getLastMetaPageViewPath() === path) return
 
     let timeout: ReturnType<typeof setTimeout> | null = null
     let attempts = 0
@@ -28,7 +27,7 @@ export function MetaPixelScript() {
     const trackPageView = () => {
       if (window.fbq) {
         window.fbq("track", "PageView", { path })
-        lastMetaPageViewPath = path
+        setLastMetaPageViewPath(path)
         return
       }
 
