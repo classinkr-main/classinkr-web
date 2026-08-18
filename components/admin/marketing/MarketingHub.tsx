@@ -177,6 +177,11 @@ function TabButton({
 }) {
   return (
     <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      aria-controls="marketing-hub-tabpanel"
+      tabIndex={active ? 0 : -1}
       onClick={onClick}
       className={`group flex min-w-[164px] flex-1 items-center gap-2 rounded-xl border px-3 py-3 text-left transition-all sm:min-w-0 sm:gap-3 sm:rounded-2xl sm:px-4 sm:py-4 ${
         active
@@ -1258,7 +1263,26 @@ export default function MarketingHub({
 
           <div className="sticky top-16 z-20 -mx-4 px-4 pt-2 pb-3 sm:-mx-6 sm:px-6 lg:top-0" style={{ background: "linear-gradient(to bottom, #FAFAF8 85%, transparent)" }}>
             <div className="admin-scroll-snap-x no-scrollbar -mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
-              <div className="flex w-max min-w-full flex-nowrap gap-2 rounded-xl border border-[#e8e8e4] bg-white p-2 shadow-[0_2px_12px_rgba(0,0,0,0.06)] sm:w-full sm:flex-wrap sm:gap-3 sm:rounded-2xl sm:p-3">
+              {/* 허브 내부 탭도 tablist 계약을 지킨다(2026-08-18 a11y) — 상단 AdminTabs와
+                  동일한 roving tabIndex + 좌우 화살표 이동. 버튼 목록은 DOM에서 조회한다. */}
+              <div
+                role="tablist"
+                aria-label="발송 허브 보기"
+                onKeyDown={(event) => {
+                  if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return
+                  const tabs = Array.from(
+                    event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+                  )
+                  const current = tabs.indexOf(document.activeElement as HTMLButtonElement)
+                  if (current === -1) return
+                  event.preventDefault()
+                  const delta = event.key === "ArrowRight" ? 1 : -1
+                  const next = tabs[(current + delta + tabs.length) % tabs.length]
+                  next?.focus()
+                  next?.click()
+                }}
+                className="flex w-max min-w-full flex-nowrap gap-2 rounded-xl border border-[#e8e8e4] bg-white p-2 shadow-[0_2px_12px_rgba(0,0,0,0.06)] sm:w-full sm:flex-wrap sm:gap-3 sm:rounded-2xl sm:p-3"
+              >
                 <TabButton
                   active={activeTab === "subscribers"}
                   icon={<Users className="h-4 w-4" />}
@@ -1291,7 +1315,13 @@ export default function MarketingHub({
           </div>
         </div>
 
-        <div ref={contentRef} className="scroll-mt-4">
+        <div
+          ref={contentRef}
+          id="marketing-hub-tabpanel"
+          role="tabpanel"
+          aria-label={`${activeTab === "subscribers" ? "구독자 관리" : activeTab === "compose" ? "발송 작성" : activeTab === "history" ? "발송 이력" : "자동화"} 탭`}
+          className="scroll-mt-4"
+        >
         {activeTab === "subscribers" && (
           <div className="grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">
             <div className="space-y-6">

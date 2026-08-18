@@ -1,9 +1,15 @@
+// Lead Magnets Repository — JSON ↔ Supabase 듀얼 모드(2026-08-18 이관)
+// 블로그(2026-06 이관)와 같은 모델: 운영(Vercel)에서는 read-only 파일시스템이라 JSON 쓰기가
+// 불가능하므로 항상 Supabase를 쓰고, JSON 모드는 로컬 개발/테스트 전용이다.
+// 문서 구조가 깊어 행 = slug + 전체 JSONB 문서로 저장하고, 읽기는 기존 normalizeLeadMagnet을
+// 그대로 태워 두 모드의 결과가 동일하다. 기존 데이터: scripts/import-lead-magnets.mjs 로 이관.
 import "server-only"
 
 import { readFile, writeFile } from "fs/promises"
 import path from "path"
 
 import { assertLocalJsonWriteAllowed } from "@/lib/server/runtime-persistence"
+import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 import type {
   LeadMagnet,
@@ -25,6 +31,23 @@ import type {
 } from "@/lib/lead-magnets"
 
 const DATA_PATH = path.join(process.cwd(), "data", "lead-magnets.json")
+
+/** 모드 판정 — leads.ts의 shouldUseSupabaseLeads와 동일 규칙(테스트 가능하게 env 주입). */
+export function shouldUseSupabaseLeadMagnets(
+  env: Record<string, string | undefined> = process.env
+) {
+  const isVercelRuntime =
+    env.VERCEL === "1" ||
+    Boolean(env.VERCEL_ENV) ||
+    Boolean(env.VERCEL_URL) ||
+    Boolean(env.NEXT_PUBLIC_VERCEL_URL)
+
+  return env.USE_SUPABASE_LEAD_MAGNETS === "true" || isVercelRuntime
+}
+
+const USE_SUPABASE = shouldUseSupabaseLeadMagnets()
+const TABLE = "lead_magnets"
+const DUPLICATE_SLUG_MESSAGE = "이미 사용 중인 리드마그넷 슬러그입니다."
 
 const STATUS_VALUES = new Set<LeadMagnetStatus>(["draft", "review", "unlisted"])
 const GATE_VALUES = new Set<LeadMagnetGate>(["open", "email", "login"])
@@ -294,11 +317,25 @@ export function normalizeLeadMagnet(input: unknown): LeadMagnet {
   }
 }
 
-export async function getAllLeadMagnets() {
+async function readAllFromJson() {
   const raw = await readFile(DATA_PATH, "utf8")
   const parsed = JSON.parse(raw) as unknown
   if (!Array.isArray(parsed)) throw new Error("[lead-magnets] data file must be an array")
   return parsed.map(normalizeLeadMagnet)
+}
+
+async function readAllFromSupabase() {
+  // created_at 오름차순 = JSON 배열의 삽입 순서 유지(목록·크로스링크 순서 보존).
+  const { data, error } = await createSupabaseAdminClient()
+    .from(TABLE)
+    .select("data")
+    .order("created_at", { ascending: true })
+  if (error) throw new Error(`[lead-magnets] 목록 조회 실패: ${error.message}`)
+  return (data ?? []).map((row) => normalizeLeadMagnet(row.data))
+}
+
+export async function getAllLeadMagnets() {
+  return USE_SUPABASE ? readAllFromSupabase() : readAllFromJson()
 }
 
 export async function getPublishedLeadMagnets() {
@@ -322,36 +359,93 @@ async function writeLeadMagnets(magnets: LeadMagnet[]) {
 }
 
 export async function createLeadMagnet(input: unknown) {
-  const magnets = await getAllLeadMagnets()
   const magnet = normalizeLeadMagnet(input)
-  if (magnets.some((item) => item.slug === magnet.slug)) {
-    throw new Error("이미 사용 중인 리드마그넷 슬러그입니다.")
+
+  if (!USE_SUPABASE) {
+    const magnets = await readAllFromJson()
+    if (magnets.some((item) => item.slug === magnet.slug)) {
+      throw new Error(DUPLICATE_SLUG_MESSAGE)
+    }
+    await writeLeadMagnets([...magnets, magnet])
+    return magnet
   }
-  await writeLeadMagnets([...magnets, magnet])
+
+  const { error } = await createSupabaseAdminClient()
+    .from(TABLE)
+    .insert({ slug: magnet.slug, data: magnet, published: magnet.published })
+  if (error) {
+    if (error.code === "23505") throw new Error(DUPLICATE_SLUG_MESSAGE)
+    throw new Error(`[lead-magnets] 생성 실패: ${error.message}`)
+  }
   return magnet
 }
 
 export async function updateLeadMagnet(slug: string, input: unknown) {
-  const magnets = await getAllLeadMagnets()
-  const index = magnets.findIndex((item) => item.slug === slug)
-  if (index < 0) return null
-
   const updated = normalizeLeadMagnet(input)
-  const conflict = magnets.some((item, itemIndex) => itemIndex !== index && item.slug === updated.slug)
-  if (conflict) {
-    throw new Error("이미 사용 중인 리드마그넷 슬러그입니다.")
+
+  if (!USE_SUPABASE) {
+    const magnets = await readAllFromJson()
+    const index = magnets.findIndex((item) => item.slug === slug)
+    if (index < 0) return null
+
+    const conflict = magnets.some(
+      (item, itemIndex) => itemIndex !== index && item.slug === updated.slug
+    )
+    if (conflict) {
+      throw new Error(DUPLICATE_SLUG_MESSAGE)
+    }
+
+    const next = [...magnets]
+    next[index] = updated
+    await writeLeadMagnets(next)
+    return updated
   }
 
-  const next = [...magnets]
-  next[index] = updated
-  await writeLeadMagnets(next)
+  const sb = createSupabaseAdminClient()
+  const { data: existing, error: readError } = await sb
+    .from(TABLE)
+    .select("slug")
+    .eq("slug", slug)
+    .maybeSingle()
+  if (readError) throw new Error(`[lead-magnets] 조회 실패: ${readError.message}`)
+  if (!existing) return null
+
+  // 슬러그 변경 허용 계약 유지 — PK 교체 전에 충돌을 미리 확인해 기존 오류 문구를 보존한다.
+  if (updated.slug !== slug) {
+    const { data: conflict, error: conflictError } = await sb
+      .from(TABLE)
+      .select("slug")
+      .eq("slug", updated.slug)
+      .maybeSingle()
+    if (conflictError) throw new Error(`[lead-magnets] 조회 실패: ${conflictError.message}`)
+    if (conflict) throw new Error(DUPLICATE_SLUG_MESSAGE)
+  }
+
+  const { error } = await sb
+    .from(TABLE)
+    .update({ slug: updated.slug, data: updated, published: updated.published })
+    .eq("slug", slug)
+  if (error) {
+    if (error.code === "23505") throw new Error(DUPLICATE_SLUG_MESSAGE)
+    throw new Error(`[lead-magnets] 수정 실패: ${error.message}`)
+  }
   return updated
 }
 
 export async function deleteLeadMagnet(slug: string) {
-  const magnets = await getAllLeadMagnets()
-  const next = magnets.filter((item) => item.slug !== slug)
-  if (next.length === magnets.length) return false
-  await writeLeadMagnets(next)
-  return true
+  if (!USE_SUPABASE) {
+    const magnets = await readAllFromJson()
+    const next = magnets.filter((item) => item.slug !== slug)
+    if (next.length === magnets.length) return false
+    await writeLeadMagnets(next)
+    return true
+  }
+
+  const { data, error } = await createSupabaseAdminClient()
+    .from(TABLE)
+    .delete()
+    .eq("slug", slug)
+    .select("slug")
+  if (error) throw new Error(`[lead-magnets] 삭제 실패: ${error.message}`)
+  return (data?.length ?? 0) > 0
 }

@@ -668,6 +668,7 @@ export default function AdminCampaignsPage() {
           }))}
           value={activeTab}
           onValueChange={setTabParam}
+          panelId="campaigns-tabpanel"
         />
       </div>
 
@@ -677,7 +678,13 @@ export default function AdminCampaignsPage() {
         <MarketingCrossLinks currentHref="/admin/campaigns" excludeHrefs={["/admin/events"]} />
       </div>
 
-      {/* Tab content */}
+      {/* Tab content — 단일 tabpanel 컨테이너(2026-08-18 a11y). AdminTabs의 aria-controls가
+          이 컨테이너를 가리키고, 내용은 활성 탭에 따라 교체된다. */}
+      <div
+        id="campaigns-tabpanel"
+        role="tabpanel"
+        aria-label={`${CAMPAIGN_TABS.find((tab) => tab.id === activeTab)?.label ?? activeTab} 탭`}
+      >
       {activeTab === "email" ? (
         <EmailTab
           recipientPrefill={messagePrefill}
@@ -766,6 +773,7 @@ export default function AdminCampaignsPage() {
       )}
         </div>
       )}
+      </div>
     </div>
   )
 }
