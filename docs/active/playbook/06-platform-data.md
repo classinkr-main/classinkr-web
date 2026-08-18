@@ -26,6 +26,9 @@ Platform은 `lib/server/*`, `app/api/*`, `tests/*` 전체를 소유하지 않는
 
 ### 마이그레이션
 
+- 적용·검증 절차는 [DB 마이그레이션 런북](../db-migration-runbook.md)을 따른다. 확인은 `npm run check:db`.
+- 새 migration을 추가하면 `lib/db/schema-contract.ts`의 프로브도 같은 커밋에서 추가한다.
+  프로브가 없으면 적용 여부를 나중에 아무도 확신하지 못한다.
 - 타입과 repository 쿼리는 실제 DB 스키마와 동시에 변경한다.
 - 새 migration은 `supabase/migrations/YYYYMMDD_설명.sql` 형식과 idempotent 구문을 사용한다.
 - 금융·관리자 전용 테이블은 생성 즉시 RLS를 활성화하고 정책을 명시한다.

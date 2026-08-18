@@ -57,7 +57,7 @@ API의 `verifyAdmin()` 또는 `requireVerifiedAdminContext()` 역할 검사와 �
 | 콘텐츠 | `/admin/docs`, 블로그, 행사, 자료 발행 | [콘텐츠 플레이북](playbook/03-content-pub.md) |
 | CRM·그로스 | CRM, 캠페인, 리드, Branch, 캘린더 | [그로스 플레이북](playbook/04-growth-crm.md) |
 | 공개 챗봇·CS 운영 | RAG, 공개 챗봇, 외부 CS 대시보드 | [챗봇 플레이북](playbook/05-chatbot.md), [CS 콘솔 IA](cs-admin-console-ia-2026-07-27.md) |
-| 플랫폼·데이터 | Supabase, migration, cron, 알림, Portal V2 | [플랫폼 플레이북](playbook/06-platform-data.md) |
+| 플랫폼·데이터 | Supabase, migration, cron, 알림, Portal V2 | [플랫폼 플레이북](playbook/06-platform-data.md), [DB 마이그레이션 런북](db-migration-runbook.md) |
 | KR Team·매출 장부 | `/admin/branch`, `/admin/branch/ledger`, 동기화·정합성 | [Classin KR Team 스킬](../../.codex/skills/classin-kr-team/SKILL.md) |
 
 Admin 코어는 `app/api/admin/*`, `components/admin/*`, `lib/repositories/*` 전체를 소유하지 않는다.
