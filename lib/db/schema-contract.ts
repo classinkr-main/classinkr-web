@@ -42,7 +42,26 @@ export interface SchemaRpcProbe {
   impact?: string
 }
 
-export type SchemaProbe = SchemaTableProbe | SchemaRpcProbe
+/**
+ * anon 키로 실제 노출 여부를 확인하는 RLS 프로브.
+ * `pg_class.relrowsecurity` 같은 메타데이터가 아니라 "정말 읽히는가"를 본다 —
+ * RLS가 켜져 있어도 정책이 과하게 열려 있으면 메타데이터는 통과하기 때문이다.
+ *
+ * 판정에 service role 카운트를 함께 쓴다. 대상 행이 애초에 0건이면 anon이 0건을 보는 것은
+ * 아무것도 증명하지 못하므로(위양성) "검증 불가"로 분류한다.
+ */
+export interface SchemaAnonProbe {
+  kind: "anon"
+  table: string
+  label: string
+  /** 이 조건에 해당하는 행은 anon에게 절대 보이면 안 된다. 생략하면 전 행이 대상. */
+  forbidden?: { operator: "eq" | "neq"; column: string; value: string }
+  migration: string
+  severity?: SchemaProbeSeverity
+  impact?: string
+}
+
+export type SchemaProbe = SchemaTableProbe | SchemaRpcProbe | SchemaAnonProbe
 
 export interface SchemaProbeResult {
   name: string
@@ -55,6 +74,12 @@ export interface SchemaProbeResult {
   minimumRows?: number
   seedCommand?: string
   impact?: string
+  /** anon 프로브 전용 — anon 키로 실제로 보인 금지 대상 행 수. */
+  anonVisibleRows?: number
+  /** anon 프로브 전용 — service role 기준 금지 대상 행 수(0이면 검증 불가). */
+  forbiddenRowsExist?: number
+  /** anon 프로브 전용 — anon 키가 없어 건너뛴 경우. */
+  skipped?: boolean
 }
 
 export interface SchemaProbeIssue {
@@ -77,6 +102,7 @@ export interface SchemaProbeSummary {
 export const SCHEMA_CONTRACT_MIGRATIONS = [
   "supabase/migrations/20260818_email_campaign_metrics.sql",
   "supabase/migrations/20260818_lead_magnets.sql",
+  "supabase/migrations/20260818_rls_blog_posts_patch_notes.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -98,6 +124,22 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20260818_email_campaign_metrics.sql",
     impact: "/api/track/click 이 카운트를 못 올린다(리다이렉트는 계속 동작).",
   },
+  // RLS 공백 마감 — 감사에서 149개 테이블 중 이 둘만 RLS가 꺼져 있었다.
+  {
+    kind: "anon",
+    table: "blog_posts",
+    label: "비공개 글(DRAFT·검토·보관) anon 노출 차단",
+    forbidden: { operator: "neq", column: "status", value: "PUBLISHED" },
+    migration: "supabase/migrations/20260818_rls_blog_posts_patch_notes.sql",
+    impact: "발행 전 초안·휴지통 글이 anon 키로 읽히고 쓰기까지 열려 있다.",
+  },
+  {
+    kind: "anon",
+    table: "patch_notes",
+    label: "패치노트 anon 접근 차단(deny-all)",
+    migration: "supabase/migrations/20260818_rls_blog_posts_patch_notes.sql",
+    impact: "내부 패치노트가 anon 키로 읽히고 쓰기까지 열려 있다.",
+  },
   {
     kind: "table",
     table: "lead_magnets",
@@ -112,7 +154,9 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
 ]
 
 export function probeName(probe: SchemaProbe): string {
-  return probe.kind === "table" ? probe.table : `${probe.functionName}()`
+  if (probe.kind === "rpc") return `${probe.functionName}()`
+  if (probe.kind === "anon") return `${probe.table} (anon)`
+  return probe.table
 }
 
 /** PostgREST가 컬럼 부재로 돌려주는 신호 — 테이블 부재(42P01/PGRST205)와 구분한다. */
@@ -144,6 +188,44 @@ export function summarizeSchemaProbes(results: SchemaProbeResult[]): SchemaProbe
   const blocked: SchemaProbeIssue[] = []
 
   for (const result of results) {
+    if (result.skipped) {
+      warning.push({
+        name: result.name,
+        label: result.label,
+        message: "anon 키가 없어 건너뜀",
+        migration: result.migration,
+        remedy: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY 를 설정하면 실제 노출 여부까지 검증합니다.",
+      })
+      continue
+    }
+
+    if (result.anonVisibleRows !== undefined) {
+      if (result.anonVisibleRows > 0) {
+        blocked.push({
+          name: result.name,
+          label: result.label,
+          message: `anon 키로 금지 대상 ${result.anonVisibleRows}건이 읽힙니다`,
+          migration: result.migration,
+          remedy: remedyFor(result, "missing"),
+          impact: result.impact,
+        })
+        continue
+      }
+      // 금지 대상 행이 0건이면 anon이 0건을 보는 것은 아무것도 증명하지 않는다.
+      if (!result.forbiddenRowsExist) {
+        warning.push({
+          name: result.name,
+          label: result.label,
+          message: "검증 불가 — 금지 대상 행이 0건이라 차단 여부를 확인할 수 없습니다",
+          migration: result.migration,
+          remedy: "대상 데이터가 생긴 뒤 다시 실행하거나 RLS 상태를 직접 확인하세요.",
+        })
+        continue
+      }
+      ok.push(result)
+      continue
+    }
+
     if (result.error) {
       const issue: SchemaProbeIssue = {
         name: result.name,

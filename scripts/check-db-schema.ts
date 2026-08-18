@@ -13,7 +13,7 @@
 
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
-import { createClient } from "@supabase/supabase-js"
+import { createClient, type SupabaseClient } from "@supabase/supabase-js"
 
 import {
   SCHEMA_CONTRACT_MIGRATIONS,
@@ -68,6 +68,15 @@ async function main() {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
+  // anon 프로브용 — RLS가 실제로 막는지 확인하려면 service role이 아니라 공개 키로 물어야 한다.
+  const anonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
+    null
+  const anonClient = anonKey
+    ? createClient(url, anonKey, { auth: { autoRefreshToken: false, persistSession: false } })
+    : null
+
   console.log("[check:db] 계약이 검증하는 마이그레이션")
   for (const migration of SCHEMA_CONTRACT_MIGRATIONS) console.log(`  - ${migration}`)
 
@@ -97,8 +106,42 @@ async function main() {
       continue
     }
 
-    const { error } = await supabase.rpc(probe.functionName, probe.args)
-    results.push({ ...base, count: null, error: error ? explain(error.message) : null })
+    if (probe.kind === "rpc") {
+      const { error } = await supabase.rpc(probe.functionName, probe.args)
+      results.push({ ...base, count: null, error: error ? explain(error.message) : null })
+      continue
+    }
+
+    // anon 프로브 — 금지 대상 행을 service role과 anon 양쪽에서 세어 비교한다.
+    if (!anonClient) {
+      results.push({ ...base, count: null, error: null, skipped: true })
+      continue
+    }
+
+    // 금지 대상 필터를 양쪽 클라이언트에 같은 방식으로 건다.
+    // (제네릭 헬퍼는 PostgREST 빌더 타입이 너무 깊어 TS2589가 나므로 인라인으로 분기한다.)
+    const countForbidden = async (client: SupabaseClient) => {
+      const query = client.from(probe.table).select("*", { count: "exact", head: true })
+      if (!probe.forbidden) return query
+      const { operator, column, value } = probe.forbidden
+      return operator === "eq" ? query.eq(column, value) : query.neq(column, value)
+    }
+
+    const admin = await countForbidden(supabase)
+    if (admin.error) {
+      results.push({ ...base, count: null, error: explain(admin.error.message) })
+      continue
+    }
+
+    const anon = await countForbidden(anonClient)
+    // RLS deny-all 은 오류가 아니라 빈 결과로 돌아온다. 권한 오류도 차단으로 친다.
+    results.push({
+      ...base,
+      count: null,
+      error: null,
+      anonVisibleRows: anon.error ? 0 : anon.count ?? 0,
+      forbiddenRowsExist: admin.count ?? 0,
+    })
   }
 
   const summary = summarizeSchemaProbes(results)
@@ -107,6 +150,20 @@ async function main() {
   for (const result of results) {
     if (result.error) {
       console.log(`  x ${result.name} (${result.label}): ${result.error}`)
+      continue
+    }
+    if (result.skipped) {
+      console.log(`  - ${result.name} (${result.label}): anon 키 없음 — 건너뜀`)
+      continue
+    }
+    if (result.anonVisibleRows !== undefined) {
+      const verdict =
+        result.anonVisibleRows > 0
+          ? `anon 노출 ${result.anonVisibleRows}건`
+          : result.forbiddenRowsExist
+            ? `차단 확인(대상 ${result.forbiddenRowsExist}건 중 anon 0건)`
+            : "검증 불가(대상 0건)"
+      console.log(`  ${result.anonVisibleRows > 0 ? "x" : "✓"} ${result.name} (${result.label}): ${verdict}`)
       continue
     }
     const rows = result.count === null ? "호출 가능" : `rows=${result.count}`

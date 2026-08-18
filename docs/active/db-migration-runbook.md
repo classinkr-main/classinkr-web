@@ -33,6 +33,11 @@ Supabase SQL Editor(또는 CLI)에서 미적용 파일을 **파일명 날짜 순
 | --- | --- |
 | `20260818_lead_magnets.sql` | `node --env-file=.env.local scripts/import-lead-magnets.mjs` |
 
+`20260818_rls_blog_posts_patch_notes.sql`은 **살아 있는 테이블의 RLS를 켠다**. 적용 전 확인:
+저장소 안의 `blog_posts`·`patch_notes` 접근은 전부 service role(`createSupabaseAdminClient`)이라
+영향이 없다. 다만 저장소 밖에서 anon 키로 이 두 테이블을 읽는 외부 소비자(내부 대시보드·시트
+연동 등)가 있다면 그쪽이 먼저 끊긴다 — 적용 전에 그런 소비자가 없는지 확인한다.
+
 ## 3. 재확인
 
 ```bash
@@ -56,6 +61,32 @@ npm run check:db --  --strict
 - **새 컬럼 기록은 코어 경로와 분리한다.** 미적용 환경에서 주 기능이 죽지 않도록 별도
   `try/catch`로 best-effort 기록한다. 기준 구현:
   [app/api/admin/email/send/route.ts](../../app/api/admin/email/send/route.ts)의 부분 실패 기록.
+
+## 2026-08-18 스키마 드리프트 감사 결과
+
+마이그레이션 149개 테이블 / 51개 함수 vs 코드의 `.from()` 145개 · `.rpc()` 19개를 전수 대조했다.
+
+**깨끗한 것** — 고아 테이블 0건, 고아 RPC 0건, 확정 고아 컬럼 0건. `email_campaigns` 류의
+"프로덕션에만 있는 테이블"은 더 없다. `ALTER TABLE`만 있고 `CREATE TABLE`이 없는 테이블도 0건이다.
+
+**조치한 것**
+
+| 발견 | 조치 |
+| --- | --- |
+| `blog_posts` RLS 꺼짐 — DRAFT·휴지통 글이 anon 키로 읽히고 쓰기까지 열림 | [20260818_rls_blog_posts_patch_notes.sql](../../supabase/migrations/20260818_rls_blog_posts_patch_notes.sql) — 유예 사유(어드민이 anon 키 사용)가 해소돼 원 계획대로 RLS + 공개 SELECT 정책 |
+| `patch_notes` RLS·정책·revoke 전부 없음 | 같은 마이그레이션에서 deny-all |
+| `hw_sales`·`hw_sale_items` 타입만 존재(테이블 없음) | `lib/supabase/database.types.ts`에서 제거 — 타입 검사를 통과하고 런타임 42P01로 죽는 함정 |
+
+**남은 것(이번에 손대지 않음)**
+
+- **초기 마이그레이션 5종의 멱등성 위반** — `20260402_partner_portal.sql`(가장 심각),
+  `20260427_branch_dashboard.sql`, `20260403_install_schedules.sql`,
+  `20260404_partner_portal_v2_domain.sql`, `20260414_quote_approval_gate.sql` 등에서
+  `CREATE TABLE`·`CREATE TYPE`·`CREATE POLICY`·`ADD CONSTRAINT`가 무가드다.
+  이미 적용된 프로덕션에는 영향이 없고 **새 환경 재현만 불가능**하다. 손대려면 SQL을 실제
+  DB에 돌려 검증할 수 있는 환경이 필요하다 — 검증 없이 일괄 편집하지 않는다.
+- **`product_catalog_items`** — 코드·SQL 함수 어디에서도 쓰이지 않는 데드 테이블
+  (`20260404_partner_portal_v2_domain.sql`). 드롭은 되돌릴 수 없으므로 소유자 확인 후 결정한다.
 
 ## 새 마이그레이션을 추가할 때
 

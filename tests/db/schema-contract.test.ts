@@ -94,3 +94,63 @@ describe("SCHEMA_PROBES 계약", () => {
     }
   })
 })
+
+// RLS anon 프로브(2026-08-18) — 메타데이터가 아니라 실제 노출 여부로 판정한다.
+describe("anon RLS 프로브 판정", () => {
+  const anonBase = {
+    name: "blog_posts (anon)",
+    label: "비공개 글 anon 노출 차단",
+    migration: "supabase/migrations/20260818_rls_blog_posts_patch_notes.sql",
+    severity: "blocker" as const,
+    count: null,
+    error: null,
+  }
+
+  it("blocks when anon can actually read forbidden rows", () => {
+    const summary = summarizeSchemaProbes([
+      { ...anonBase, anonVisibleRows: 12, forbiddenRowsExist: 12 },
+    ])
+    expect(summary.status).toBe("blocked")
+    expect(summary.blocked[0].message).toContain("12건")
+  })
+
+  it("passes only when forbidden rows exist and anon sees none", () => {
+    const summary = summarizeSchemaProbes([
+      { ...anonBase, anonVisibleRows: 0, forbiddenRowsExist: 12 },
+    ])
+    expect(summary.status).toBe("ok")
+  })
+
+  it("refuses to call it verified when there are no forbidden rows to hide", () => {
+    // 대상 행이 0건이면 anon이 0건을 보는 것은 RLS를 증명하지 않는다(위양성 방지).
+    const summary = summarizeSchemaProbes([
+      { ...anonBase, anonVisibleRows: 0, forbiddenRowsExist: 0 },
+    ])
+    expect(summary.status).toBe("warning")
+    expect(summary.warning[0].message).toContain("검증 불가")
+    expect(summary.ok).toHaveLength(0)
+  })
+
+  it("reports a skipped probe as a warning, never as a pass", () => {
+    const summary = summarizeSchemaProbes([{ ...anonBase, skipped: true }])
+    expect(summary.status).toBe("warning")
+    expect(summary.ok).toHaveLength(0)
+  })
+})
+
+describe("SCHEMA_PROBES — RLS 등재", () => {
+  it("covers both tables the audit found without RLS", () => {
+    const anonTables = SCHEMA_PROBES.filter((p) => p.kind === "anon").map((p) => p.table)
+    expect(anonTables).toContain("blog_posts")
+    expect(anonTables).toContain("patch_notes")
+  })
+
+  it("targets non-published posts as the forbidden set for blog_posts", () => {
+    const probe = SCHEMA_PROBES.find((p) => p.kind === "anon" && p.table === "blog_posts")
+    expect(probe?.kind === "anon" && probe.forbidden).toEqual({
+      operator: "neq",
+      column: "status",
+      value: "PUBLISHED",
+    })
+  })
+})
