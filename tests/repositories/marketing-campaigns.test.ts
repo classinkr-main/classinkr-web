@@ -241,11 +241,12 @@ describe("addLink", () => {
 })
 
 describe("removeLink", () => {
-  it("deletes the link by id", async () => {
+  it("deletes the link scoped to its campaign (소속 검증, 2026-08-18)", async () => {
     result = { data: null, error: null }
-    await removeLink("link-7")
+    await removeLink("camp-1", "link-7")
     expect(fromSpy).toHaveBeenCalledWith("campaign_links")
     expect(builder.delete).toHaveBeenCalled()
     expect(builder.eq).toHaveBeenCalledWith("id", "link-7")
+    expect(builder.eq).toHaveBeenCalledWith("campaign_id", "camp-1")
   })
 })

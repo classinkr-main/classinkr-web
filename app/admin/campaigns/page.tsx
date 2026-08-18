@@ -720,7 +720,7 @@ export default function AdminCampaignsPage() {
       ) : (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
           {error && (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+            <div className="mb-4 rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[13px] text-[#B43E3E]">
               {error}
             </div>
           )}

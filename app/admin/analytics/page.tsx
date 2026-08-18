@@ -107,7 +107,7 @@ function getTrend(current: number, previous: number) {
 }
 
 function trendTone(value: number) {
-  if (value > 0) return "text-green-600 bg-green-50"
+  if (value > 0) return "text-[#084734] bg-[#ECFDF5]"
   if (value < 0) return "text-[#B85C33] bg-[#FEF3EE]"
   return "text-[#1a1a1a]/40 bg-[#f0f0ec]"
 }
@@ -159,8 +159,8 @@ function InsightCard({
 }) {
   const toneClasses: Record<NonNullable<typeof tone>, string> = {
     neutral: "bg-[#fafaf8] border-[#e8e8e4]",
-    success: "bg-green-50/70 border-green-100",
-    warning: "bg-amber-50/70 border-amber-100",
+    success: "bg-[#ECFDF5]/70 border-[#BDEFD8]",
+    warning: "bg-[#FBF1E0]/70 border-[#ECD29C]",
     danger: "bg-[#FEF3EE]/70 border-[#F6D5C5]",
     info: "bg-[#ECFDF5]/70 border-[#D1FAE5]",
   }
@@ -218,8 +218,8 @@ const BLOG_STATUS_LABEL: Record<string, string> = {
 }
 
 const BLOG_STATUS_COLOR: Record<string, string> = {
-  draft: "bg-amber-50 text-amber-700",
-  published: "bg-green-50 text-green-700",
+  draft: "bg-[#FBF1E0] text-[#7A520F]",
+  published: "bg-[#ECFDF5] text-[#084734]",
   archived: "bg-[#f0f0ec] text-[#1a1a1a]/40",
 }
 
@@ -635,7 +635,7 @@ export default function AnalyticsPage() {
                         <td className="px-4 py-3">{row.leadCount}</td>
                         <td className="px-4 py-3">{row.convertedCount}</td>
                         <td className="px-4 py-3">
-                          <span className="rounded-md bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
+                          <span className="rounded-md bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-medium text-[#084734]">
                             {row.conversionRate}%
                           </span>
                         </td>
