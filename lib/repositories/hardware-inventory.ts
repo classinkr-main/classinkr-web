@@ -148,6 +148,14 @@ export interface HardwareAlert {
   product: string
   title: string
   detail: string
+  // 미가동 품목의 상시 부족 알림 표시 강등용 — 클라이언트가 접힌 그룹으로 내린다.
+  muted?: boolean
+}
+
+// 미가동(취급 중단) 품목 판정 — 창고가 정확히 0이고 예정·최근 30일 출고가 없으면 "부족" 알림은
+// 상시 소음이다. 음수 창고는 원장 이상 실신호이므로 0 초과·미만이 아닌 0 일치로만 본다.
+export function isDormantStockRow(row: Pick<HardwareStockRow, "warehouseStock" | "plannedOut" | "outbound30d">): boolean {
+  return row.warehouseStock === 0 && row.plannedOut === 0 && row.outbound30d === 0
 }
 
 export interface HardwareDashboard {
@@ -1481,6 +1489,7 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
         product: row.product,
         title: "최소재고 미만",
         detail: `가용 ${row.availableStock}대 / 최소 ${row.reorderPoint}대`,
+        ...(isDormantStockRow(row) ? { muted: true } : {}),
       })
     } else if (row.orderRecommended) {
       alerts.push({
@@ -1502,13 +1511,17 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
     }
   }
 
+  // 실신호가 캡에 밀리지 않게 muted(미가동 품목 소음)와 분리해 각각 캡을 적용한다.
+  const activeAlerts = alerts.filter((alert) => !alert.muted).slice(0, 12)
+  const mutedAlerts = alerts.filter((alert) => alert.muted).slice(0, 12)
+
   return {
     items,
     stock: rows,
     movements: movementRows,
     recentOutbound,
     plannedMovements,
-    alerts: alerts.slice(0, 12),
+    alerts: [...activeAlerts, ...mutedAlerts],
     totals: {
       warehouseStock: rows.reduce((sum, row) => sum + row.warehouseStock, 0),
       availableStock: rows.reduce((sum, row) => sum + row.availableStock, 0),
