@@ -629,44 +629,58 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
               </div>
             ) : (
               <>
-                <div className="space-y-1">
-                  {navAccess.primary.map((item) => {
-                    const isActive = isNavActive(item.href)
+                {/* 상시도 기타와 같은 3범주 소제목으로 묶는다(2026-08-18). 소제목 표시 여부는
+                    resolveNavAccess의 showPrimaryHeaders(SSOT)가 정한다 — 묶음이 선언 순서를
+                    보존하므로 소제목이 꺼져도 항목 순서는 평면 목록과 동일하다. */}
+                <div className={navAccess.showPrimaryHeaders ? "space-y-3" : "space-y-1"}>
+                  {navAccess.primaryGroups.map(({ category, items }) => (
+                    <div key={`mobile-primary-${category}`}>
+                      {navAccess.showPrimaryHeaders && (
+                        <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
+                          {ADMIN_NAV_CATEGORY_META[category].label}
+                        </p>
+                      )}
+                      <div className="space-y-1">
+                        {items.map((item) => {
+                          const isActive = isNavActive(item.href)
 
-                    return (
-                      <Link
-                        key={`mobile-${item.href}`}
-                        href={item.href}
-                        onFocus={() => warmAdminTab(item.href)}
-                        onMouseEnter={() => scheduleWarmAdminTab(item.href)}
-                        onMouseLeave={cancelWarmAdminTab}
-                        onPointerDown={() => warmAdminTab(item.href)}
-                        onTouchStart={() => warmAdminTab(item.href)}
-                        onClick={() => {
-                          warmAdminTab(item.href)
-                          if (item.href === "/admin/crm") setNavView("auto")
-                          setMobileMenuOpen(false)
-                        }}
-                        className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
-                          isActive
-                            ? "bg-[#111110] text-white"
-                            : "text-[#1a1a1a]/65 hover:bg-[#f5f5f2] hover:text-[#111110]"
-                        }`}
-                      >
-                        <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
-                          <item.icon className="h-4 w-4" />
-                        </span>
-                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                        {item.badge ? (
-                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-normal ${
-                            isActive ? "bg-white/15 text-white/80" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
-                          }`}>
-                            {item.badge}
-                          </span>
-                        ) : null}
-                      </Link>
-                    )
-                  })}
+                          return (
+                            <Link
+                              key={`mobile-${item.href}`}
+                              href={item.href}
+                              onFocus={() => warmAdminTab(item.href)}
+                              onMouseEnter={() => scheduleWarmAdminTab(item.href)}
+                              onMouseLeave={cancelWarmAdminTab}
+                              onPointerDown={() => warmAdminTab(item.href)}
+                              onTouchStart={() => warmAdminTab(item.href)}
+                              onClick={() => {
+                                warmAdminTab(item.href)
+                                if (item.href === "/admin/crm") setNavView("auto")
+                                setMobileMenuOpen(false)
+                              }}
+                              className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
+                                isActive
+                                  ? "bg-[#111110] text-white"
+                                  : "text-[#1a1a1a]/65 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                              }`}
+                            >
+                              <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>
+                                <item.icon className="h-4 w-4" />
+                              </span>
+                              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                              {item.badge ? (
+                                <span className={`rounded px-1.5 py-0.5 text-[10px] font-normal ${
+                                  isActive ? "bg-white/15 text-white/80" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
+                                }`}>
+                                  {item.badge}
+                                </span>
+                              ) : null}
+                            </Link>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 {navAccess.folded.length > 0 && (
@@ -948,51 +962,66 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
           </div>
         ) : (
           <>
-            <div className="space-y-0.5">
-              {navAccess.primary.map((item) => {
-                const isActive = isNavActive(item.href)
+            {/* 상시도 기타와 같은 3범주 소제목으로 묶는다(2026-08-18). 소제목 표시 여부는
+                resolveNavAccess의 showPrimaryHeaders(SSOT)가 정하고, 접힌 사이드바에서는 라벨이
+                렌더되지 않아 소제목도 그리지 않는다. 묶음이 선언 순서를 보존하므로 소제목이
+                꺼져도 항목 순서는 평면 목록과 동일하다. */}
+            <div className={navAccess.showPrimaryHeaders && !effectiveCollapsed ? "space-y-3" : "space-y-0.5"}>
+              {navAccess.primaryGroups.map(({ category, items }) => (
+                <div key={`primary-${category}`}>
+                  {navAccess.showPrimaryHeaders && !effectiveCollapsed && (
+                    <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
+                      {ADMIN_NAV_CATEGORY_META[category].label}
+                    </p>
+                  )}
+                  <div className="space-y-0.5">
+                    {items.map((item) => {
+                      const isActive = isNavActive(item.href)
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    title={effectiveCollapsed ? item.label : undefined}
-                    onFocus={() => warmAdminTab(item.href)}
-                    onMouseEnter={() => scheduleWarmAdminTab(item.href)}
-                    onMouseLeave={cancelWarmAdminTab}
-                    onPointerDown={() => warmAdminTab(item.href)}
-                    onTouchStart={() => warmAdminTab(item.href)}
-                    onClick={() => {
-                      warmAdminTab(item.href)
-                      if (item.href === "/admin/crm") setNavView("auto")
-                    }}
-                    className={`group flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors ${
-                      effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
-                    } ${
-                      isActive
-                        ? "bg-[#111110] text-white"
-                        : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
-                    }`}
-                  >
-                    <span className={isActive ? "text-white" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}>
-                      <item.icon className="h-4 w-4" />
-                    </span>
-                    {!effectiveCollapsed && (
-                      <>
-                        <span className="flex-1">{item.label}</span>
-                        {item.badge && (
-                          <span className={`rounded px-1.5 py-0.5 text-[10px] font-normal ${
-                            isActive ? "bg-white/15 text-white/80" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
-                          }`}>
-                            {item.badge}
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          title={effectiveCollapsed ? item.label : undefined}
+                          onFocus={() => warmAdminTab(item.href)}
+                          onMouseEnter={() => scheduleWarmAdminTab(item.href)}
+                          onMouseLeave={cancelWarmAdminTab}
+                          onPointerDown={() => warmAdminTab(item.href)}
+                          onTouchStart={() => warmAdminTab(item.href)}
+                          onClick={() => {
+                            warmAdminTab(item.href)
+                            if (item.href === "/admin/crm") setNavView("auto")
+                          }}
+                          className={`group flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors ${
+                            effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
+                          } ${
+                            isActive
+                              ? "bg-[#111110] text-white"
+                              : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                          }`}
+                        >
+                          <span className={isActive ? "text-white" : "text-[#1a1a1a]/40 group-hover:text-[#111110]"}>
+                            <item.icon className="h-4 w-4" />
                           </span>
-                        )}
-                        {isActive && <ChevronRight className="h-3 w-3 opacity-60" />}
-                      </>
-                    )}
-                  </Link>
-                )
-              })}
+                          {!effectiveCollapsed && (
+                            <>
+                              <span className="flex-1">{item.label}</span>
+                              {item.badge && (
+                                <span className={`rounded px-1.5 py-0.5 text-[10px] font-normal ${
+                                  isActive ? "bg-white/15 text-white/80" : "bg-[#e8e8e4] text-[#1a1a1a]/50"
+                                }`}>
+                                  {item.badge}
+                                </span>
+                              )}
+                              {isActive && <ChevronRight className="h-3 w-3 opacity-60" />}
+                            </>
+                          )}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
 
             {navAccess.folded.length > 0 && (

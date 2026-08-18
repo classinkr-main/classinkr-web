@@ -186,7 +186,12 @@ export async function addLink(
   return rowToLink(data)
 }
 
-export async function removeLink(linkId: string): Promise<void> {
-  const { error } = await sb().from("campaign_links").delete().eq("id", linkId)
+export async function removeLink(campaignId: string, linkId: string): Promise<void> {
+  // 경로의 캠페인 소속을 함께 검증한다(2026-08-18) — 다른 캠페인의 linkId 를 넘겨도 지워지지 않는다.
+  const { error } = await sb()
+    .from("campaign_links")
+    .delete()
+    .eq("id", linkId)
+    .eq("campaign_id", campaignId)
   if (error) throw new Error(`[marketing-campaigns] 링크 해제 실패: ${error.message}`)
 }

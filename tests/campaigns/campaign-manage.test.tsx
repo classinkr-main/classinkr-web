@@ -252,6 +252,9 @@ describe("CampaignManageEmpty", () => {
   it("renders the empty-state copy", () => {
     const html = renderToStaticMarkup(<CampaignManageEmpty />)
     expect(html).toContain("아직 캠페인이 없습니다")
-    expect(html).toContain("새 캠페인으로 시작하세요")
+    // 온보딩 빈 상태(2026-08-18) — 개체 개념(우산)과 3단계(만들기→링크→롤업)를 화면 안에서 배운다.
+    expect(html).toContain("채널 실행을 하나로 묶는 우산")
+    expect(html).toContain("실행(이메일·행사·광고)을 링크")
+    expect(html).toContain("실제 가용한 값만 롤업")
   })
 })

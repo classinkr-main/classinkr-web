@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it } from "vitest"
 import { MarketingCrossLinks } from "@/components/admin/MarketingCrossLinks"
 import { ADMIN_NAV } from "@/components/admin/admin-nav"
+import { visibleMarketingSiblings } from "@/components/admin/MarketingCrossLinks"
 
 const marketingHrefs = ADMIN_NAV.filter((i) => i.section === "marketing").map((i) => i.href)
 
@@ -36,5 +37,37 @@ describe("MarketingCrossLinks", () => {
     expect(html).not.toContain('href="/admin/analytics"')
     // other siblings still present
     expect(html).toContain('href="/admin/blog"')
+  })
+})
+
+// (2026-08-18) 접근 SSOT 필터 — deny 탭은 칩 자체를 그리지 않는다(죽은 진입점 방지).
+describe("visibleMarketingSiblings — 접근 필터", () => {
+  it("hides preset-denied tabs for a non-super marketing member", () => {
+    const hrefs = visibleMarketingSiblings(
+      { role: "ADMIN", preset: "marketing", overrides: {} },
+      "/admin/campaigns"
+    ).map((item) => item.href)
+    // 캠페인 관리·마케팅 프로젝트는 MOON_ONLY, Analytics는 marketing 프리셋 차단(RESTRICTED).
+    expect(hrefs).not.toContain("/admin/campaigns/manage")
+    expect(hrefs).not.toContain("/admin/campaigns/projects")
+    expect(hrefs).not.toContain("/admin/analytics")
+    expect(hrefs).toContain("/admin/blog")
+    expect(hrefs).toContain("/admin/lead-magnets")
+  })
+
+  it("keeps legacy full visibility without session context (SSR·프리셋 미배정)", () => {
+    const hrefs = visibleMarketingSiblings(null, "/admin/campaigns").map((item) => item.href)
+    expect(hrefs).toContain("/admin/campaigns/manage")
+    expect(hrefs).toContain("/admin/analytics")
+  })
+
+  it("keeps every sibling for the super preset", () => {
+    const hrefs = visibleMarketingSiblings(
+      { role: "SUPER_ADMIN", preset: "super", overrides: {} },
+      "/admin/campaigns"
+    ).map((item) => item.href)
+    expect(hrefs).toContain("/admin/campaigns/manage")
+    expect(hrefs).toContain("/admin/campaigns/projects")
+    expect(hrefs).toContain("/admin/analytics")
   })
 })

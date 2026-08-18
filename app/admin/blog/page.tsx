@@ -24,6 +24,7 @@ import {
 import { CATEGORIES } from "@/lib/blog-types"
 import { Button } from "@/components/ui/button"
 import BlogPostTable from "@/components/admin/BlogPostTable"
+import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import DeleteConfirmDialog from "@/components/admin/DeleteConfirmDialog"
 import TopViewedPosts from "@/components/admin/blog/TopViewedPosts"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
@@ -168,6 +169,7 @@ export default function AdminBlogPage() {
     const [deleteTarget, setDeleteTarget] = useState<BlogPost | null>(null)
     const [permanentTarget, setPermanentTarget] = useState<BlogPost | null>(null)
     const [actionError, setActionError] = useState<string | null>(null)
+    const [listError, setListError] = useState<string | null>(null)
 
     const fetchPosts = useCallback(async () => {
         setLoading(true)
@@ -178,8 +180,11 @@ export default function AdminBlogPage() {
             ])
             setPosts(data.posts)
             setTrashedPosts(trashData.posts)
+            setListError(null)
         } catch {
-            // silent
+            // 무음 실패는 빈 목록("등록된 글이 없습니다")으로 위장된다 — 실패를 배너로 구분한다
+            // (2026-08-18, 실패≠빈상태).
+            setListError("글 목록을 불러오지 못했습니다. 표시된 목록이 최신이 아닐 수 있습니다.")
         } finally {
             setLoading(false)
         }
@@ -333,7 +338,9 @@ export default function AdminBlogPage() {
             })
     }, [posts, tab, categoryFilter, searchQuery])
 
-    const displayedPosts = tab === "trash" ? trashedPosts : filteredPosts
+    // 목록 단계 렌더(2026-08-18) — 글이 수백 건이 돼도 전량 렌더하지 않는다. 필터가 바뀌면
+    // useVisibleCount가 total로 클램프하므로 별도 리셋 이펙트가 필요 없다.
+    const postsVisible = useVisibleCount(filteredPosts.length, 30)
 
     const TABS: { key: BlogTab; label: string; count: number }[] = [
         { key: "all", label: "전체", count: posts.length },
@@ -508,6 +515,23 @@ export default function AdminBlogPage() {
                 </div>
             )}
 
+            {/* 목록 조회 실패 배너 — 빈 상태와 구분(재시도 가능) */}
+            {listError && (
+                <div className="mb-4 flex items-start justify-between gap-2 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[13px] text-[#B85C33]">
+                    <span className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                        {listError}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => void fetchPosts()}
+                        className="shrink-0 rounded-md border border-[#F6D5C5] bg-white px-2 py-0.5 text-[12px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FEF3EE]"
+                    >
+                        다시 시도
+                    </button>
+                </div>
+            )}
+
             {/* 목록 액션 실패 배너 */}
             {actionError && (
                 <div className="mb-4 flex items-start justify-between gap-2 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[13px] text-[#B85C33]">
@@ -536,7 +560,7 @@ export default function AdminBlogPage() {
                     />
                 ) : (
                     <BlogPostTable
-                        posts={displayedPosts}
+                        posts={filteredPosts.slice(0, postsVisible.visible)}
                         onEdit={handleEdit}
                         onDelete={setDeleteTarget}
                         onDuplicate={handleDuplicate}
@@ -545,6 +569,18 @@ export default function AdminBlogPage() {
                     />
                 )}
             </div>
+
+            {tab !== "trash" && (postsVisible.canMore || postsVisible.canCollapse) && (
+                <div className="mt-3 flex justify-center">
+                    <ShowMore
+                        visible={postsVisible.visible}
+                        total={filteredPosts.length}
+                        step={30}
+                        onMore={postsVisible.showMore}
+                        onCollapse={postsVisible.canCollapse ? postsVisible.collapse : undefined}
+                    />
+                </div>
+            )}
                 </>
             ) : (
                 <InstagramContentPanel

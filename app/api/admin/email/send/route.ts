@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
-import { createCampaign, updateCampaign, getActiveSubscribersByTags } from "@/lib/repositories/marketing"
-import { sendBatchEmail, wrapCampaignHtml } from "@/lib/email"
-import { createUnsubscribeUrl } from "@/lib/server/security-tokens"
+import {
+  createCampaign,
+  updateCampaign,
+  getActiveSubscribersByTags,
+  findRecentSentCampaign,
+} from "@/lib/repositories/marketing"
+import { sendBatchEmail, wrapCampaignHtml, rewriteCampaignLinksForTracking } from "@/lib/email"
+import { createEmailClickUrl, createUnsubscribeUrl } from "@/lib/server/security-tokens"
 import type { SendEmailRequest } from "@/lib/marketing-types"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -173,6 +178,26 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // 더블클릭·이중 제출 서버 방어(2026-08-18) — 같은 제목이 10분 내 이미 발송됐다면 차단한다.
+    // 클라이언트 sendLoading 은 새로고침·중복 탭을 막지 못한다. force 로 의도적 재발송은 허용.
+    if (!body.force) {
+      try {
+        const recent = await findRecentSentCampaign(body.subject, 10 * 60_000)
+        if (recent) {
+          return NextResponse.json(
+            {
+              error: "같은 제목의 캠페인이 10분 내에 이미 발송됐습니다. 중복 발송이 아니라면 잠시 후 다시 시도하거나 제목을 바꿔주세요.",
+              duplicate: true,
+            },
+            { status: 409 }
+          )
+        }
+      } catch (guardError) {
+        // 가드 조회 실패가 발송 자체를 막으면 안 된다 — 경고만 남기고 진행.
+        console.warn("[email/send] duplicate guard skipped:", guardError)
+      }
+    }
+
     // 캠페인 레코드를 먼저 생성(draft)해서 ID를 확보 — 추적 픽셀 URL에 사용
     const campaign = await createCampaign({
       subject: body.subject,
@@ -185,19 +210,25 @@ export async function POST(req: NextRequest) {
     const baseUrl = req.nextUrl.origin
     const trackingUrl = `${baseUrl}/api/track/open?cid=${campaign.id}`
 
-    // 통합 이메일 엔진으로 발송
+    // 통합 이메일 엔진으로 발송 — 본문 링크는 서명된 클릭 추적 리다이렉트로 치환한다
+    // (2026-08-18 성과 루프). 수신거부·추적 URL 은 원본 유지(토큰 이중 래핑 방지).
     const emails = recipients.map((r) => ({
       to: r.email,
       subject: r.personalizedSubject ?? body.subject,
-      html: wrapCampaignHtml(
-        r.personalizedBody,
-        createUnsubscribeUrl(req.nextUrl.origin, r.email),
-        trackingUrl,
+      html: rewriteCampaignLinksForTracking(
+        wrapCampaignHtml(
+          r.personalizedBody,
+          createUnsubscribeUrl(req.nextUrl.origin, r.email),
+          trackingUrl,
+        ),
+        (url) => createEmailClickUrl(baseUrl, String(campaign.id), url),
+        ["/api/newsletter/unsubscribe", "/api/track/"],
       ),
     }))
 
     const result = await sendBatchEmail(emails)
     const sendStatus = result.failed > 0 && result.sent === 0 ? "failed" : "sent"
+    const sendErrors = (result.errors ?? []).slice(0, 20)
 
     // 발송 결과로 캠페인 레코드 업데이트
     await updateCampaign(campaign.id, {
@@ -206,11 +237,22 @@ export async function POST(req: NextRequest) {
       recipientCount: result.sent,
     })
 
+    // 부분 실패 기록(2026-08-18) — sent>0 이어도 실패 수·오류를 은폐하지 않는다.
+    // 새 컬럼(failed_count·send_errors)이라 마이그레이션 미적용 환경에서도 발송이 죽지 않게
+    // 코어 업데이트와 분리해 best-effort 로 기록한다.
+    try {
+      await updateCampaign(campaign.id, { failedCount: result.failed, sendErrors })
+    } catch (metricsError) {
+      console.warn("[email/send] 부분 실패 기록 실패(마이그레이션 미적용?):", metricsError)
+    }
+
     return NextResponse.json({
       ok: true,
       campaign: { ...campaign, status: sendStatus, recipientCount: result.sent },
       provider: result.provider,
       recipientCount: result.sent,
+      failedCount: result.failed,
+      errors: sendErrors.slice(0, 5),
       status: sendStatus,
     })
   } catch {

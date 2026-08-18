@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
-import { BookOpen, Bot, Headset, MessageSquare, Search } from "lucide-react"
+import { Bot, MessageSquare, Search } from "lucide-react"
 import { describe, expect, it } from "vitest"
 
 import { ADMIN_NAV } from "@/components/admin/admin-nav"
@@ -9,10 +9,11 @@ import { CS_CONSOLE_MODES, resolveCsConsoleMode } from "@/components/admin/cs/Cs
 
 // nav SSOT는 components/admin/admin-nav.ts — 사이드바(AdminSidebar)와
 // 커맨드 팔레트(AdminCommandPalette)가 이를 임포트해 렌더한다.
-// CS 콘솔 IA 재구성(docs/active/cs-admin-console-ia-2026-07-27.md §2)으로 cs 섹션은
-// 5항목 → 3항목이 되고, 보강 큐·채널톡은 콘솔 가로 메뉴(CsConsoleNav)로 옮겨갔다.
+// CS 콘솔 IA 재구성(2026-07-27)으로 cs 섹션이 5항목 → 3항목이 됐고,
+// CS 진입점 단일화(2026-08-18)로 다시 3항목 → CS 콘솔 1항목이 됐다 — 가이드 문서·내부 CS는
+// 콘솔 가로 메뉴(CsConsoleNav)의 하위 메뉴라 최상위 nav에서 내렸다.
 // URL은 하나도 바뀌지 않았으므로 이 테스트는 "이동했지 사라지지 않았다"를 고정한다.
-describe("admin cs nav — 사이드바 3항목 + 콘솔 가로 메뉴", () => {
+describe("admin cs nav — 사이드바 1항목(CS 콘솔) + 콘솔 가로 메뉴", () => {
   const sidebarSource = readFileSync(
     join(process.cwd(), "components/admin/AdminSidebar.tsx"),
     "utf8"
@@ -21,20 +22,19 @@ describe("admin cs nav — 사이드바 3항목 + 콘솔 가로 메뉴", () => {
   const customerItems = CS_CONSOLE_MODES.find((mode) => mode.mode === "customer")!.items
   const internalItems = CS_CONSOLE_MODES.find((mode) => mode.mode === "internal")!.items
 
-  it("reduces the sidebar cs section to guide docs / CS console / internal CS", () => {
-    expect(csNav.map((item) => item.href)).toEqual([
-      "/admin/docs",
-      "/admin/chatbot",
-      "/admin/cs-chatbot",
-    ])
-    expect(csNav.map((item) => item.label)).toEqual(["가이드 문서", "CS 콘솔", "내부 CS"])
-    expect(csNav.map((item) => item.icon)).toEqual([BookOpen, Bot, Headset])
+  it("reduces the sidebar cs section to the single CS console entry", () => {
+    expect(csNav.map((item) => item.href)).toEqual(["/admin/chatbot"])
+    expect(csNav.map((item) => item.label)).toEqual(["CS 콘솔"])
+    expect(csNav.map((item) => item.icon)).toEqual([Bot])
   })
 
-  it("drops the two absorbed sidebar items (they live on the console menu now)", () => {
+  it("drops the absorbed sidebar items (they live on the console menu now)", () => {
     // 화면이 사라진 게 아니라 진입점이 옮겨간 것이다 — 아래 콘솔 메뉴 검증이 짝을 이룬다.
+    // 2026-07-27: 보강 큐·채널톡 / 2026-08-18: 가이드 문서·내부 CS.
     expect(ADMIN_NAV.some((item) => item.href === "/admin/docs?tab=gaps")).toBe(false)
     expect(ADMIN_NAV.some((item) => item.href === "/admin/channel-talk")).toBe(false)
+    expect(ADMIN_NAV.some((item) => item.href === "/admin/docs")).toBe(false)
+    expect(ADMIN_NAV.some((item) => item.href === "/admin/cs-chatbot")).toBe(false)
   })
 
   it("keeps ⌘K searchability for the absorbed surfaces on the CS console item", () => {
@@ -43,6 +43,11 @@ describe("admin cs nav — 사이드바 3항목 + 콘솔 가로 메뉴", () => {
     expect(console?.keywords).toContain("channel talk")
     expect(console?.keywords).toContain("보강")
     expect(console?.keywords).toContain("gaps")
+    // 2026-08-18에 흡수된 두 항목의 검색어도 병합됐다.
+    expect(console?.keywords).toContain("가이드 문서")
+    expect(console?.keywords).toContain("docs")
+    expect(console?.keywords).toContain("내부 cs")
+    expect(console?.keywords).toContain("internal support")
   })
 
   it("exposes the gap queue as the console's 미해결 큐 menu, still deep-linking to the docs tab", () => {
@@ -95,10 +100,9 @@ describe("admin cs nav — 사이드바 3항목 + 콘솔 가로 메뉴", () => {
     expect(resolveCsConsoleMode("/admin/docs")).toBe("customer")
   })
 
-  it("keeps guide docs and gap queue distinguishable via query-aware active matching", () => {
-    const docsItem = ADMIN_NAV.find((item) => item.href === "/admin/docs")
-    expect(docsItem?.label).toBe("가이드 문서")
-    // 사이드바가 tab 쿼리를 읽어 두 항목의 하이라이트를 구분한다(useSearchParams + Suspense 경계).
+  it("keeps query-aware active matching wired (console deep links need it)", () => {
+    // 콘솔 딥링크(?tab=…)가 사이드바 항목과 하이라이트를 다투므로 tab 쿼리 인지가 필요하다
+    // (useSearchParams + Suspense 경계).
     expect(sidebarSource).toContain("useSearchParams")
     expect(sidebarSource).toContain("Suspense")
     // 판정 자체는 nav-active.ts(SSOT)에서 온다 — 사이드바가 자체 구현을 다시 들고 있지 않다.

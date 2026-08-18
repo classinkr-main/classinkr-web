@@ -430,6 +430,15 @@ npx vitest run tests/admin/sidebar-docs-gaps.test.ts tests/admin/command-palette
 모든 프리셋에 열린 `/admin/docs`를 숙주로 사용해 CS 운영 대시보드의 가시성에 종속되지 않는다.
 두 항목의 `section`이 같아(`cs`) 그룹 라벨(`고객 지원`)도 유지된다.
 
+### 14.1.1 2026-08-18 후속 — CS 진입점 단일화
+
+[어드민 탭 재구성 스펙 §12](admin-tab-restructure-2026-07-29.md#12-2026-08-18-후속-결정--cs-진입점-단일화--상시-범주-소제목)가
+이 문서 이후의 결정을 담는다. 요지: 사이드바의 cs 항목은 `CS 콘솔`(`/admin/chatbot`) 하나가
+됐고(가이드 문서·내부 CS nav 항목은 콘솔 가로 메뉴로 흡수), `/admin/chatbot`은 MOON_ONLY에서
+빠져 전 프리셋 접근 + 전원 상시가 됐다. ⌘K 자식 커맨드의 숙주도 `/admin/docs` →
+`/admin/chatbot`으로 다시 옮겨갔다(위 14.1-B의 근거였던 "콘솔은 super 전용" 전제가 사라짐).
+아래 14.2의 가시성 갭 중 대시보드 진입 차단 문제는 이 단일화로 닫혔다.
+
 ### 14.2 콘솔 메뉴 가시성의 현재 경계
 
 콘솔의 `대시보드`는 `/admin/chatbot`을 가리키며 `STAFF_EDITOR + BRANCH` 역할 필터를 사용한다.
