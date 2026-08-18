@@ -17,6 +17,12 @@ import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import type { CalendarEvent, EventSource } from "@/lib/calendar-data"
 import { buildEventsByDate } from "@/lib/admin-calendar/layout"
 import {
+  EMPTY_EVENT_FORM,
+  formatAssignees,
+  parseAssignees,
+  type EventFormData,
+} from "@/lib/admin-calendar/event-form"
+import {
   getViewRange,
   isCalendarViewId,
   isDateString,
@@ -31,7 +37,7 @@ import { AssigneeSwimlane } from "@/components/admin/calendar/AssigneeSwimlane"
 import { CalendarFilterBar, type TeamMemberCount } from "@/components/admin/calendar/CalendarFilterBar"
 import { CalendarToolbar } from "@/components/admin/calendar/CalendarToolbar"
 import { DayDetailPanel } from "@/components/admin/calendar/DayDetailPanel"
-import { EventForm, EMPTY_EVENT_FORM, type EventFormData } from "@/components/admin/calendar/EventForm"
+import { EventForm } from "@/components/admin/calendar/EventForm"
 import { MonthGrid } from "@/components/admin/calendar/MonthGrid"
 import { SourceTimeline } from "@/components/admin/calendar/SourceTimeline"
 import { WeekTimeGrid } from "@/components/admin/calendar/WeekTimeGrid"
@@ -280,9 +286,7 @@ export default function AdminCalendarPage() {
     try {
       const payload = {
         ...data,
-        assignees: data.assignees
-          ? data.assignees.split(",").map((item) => item.trim()).filter(Boolean)
-          : [],
+        assignees: parseAssignees(data.assignees),
         endDate: data.endDate || undefined,
         time: data.time || undefined,
         endTime: data.endTime || undefined,
@@ -350,7 +354,7 @@ export default function AdminCalendarPage() {
         endTime: editingEvent.endTime ?? "",
         type: editingEvent.type,
         description: editingEvent.description ?? "",
-        assignees: (editingEvent.assignees ?? []).join(", "),
+        assignees: formatAssignees(editingEvent.assignees ?? []),
         allDay: editingEvent.allDay ?? false,
       }
     : initialForm
@@ -614,6 +618,7 @@ export default function AdminCalendarPage() {
             }}
             loading={formLoading}
             isEdit={Boolean(editingEvent)}
+            assigneeSuggestions={teamMembers.map((member) => member.name)}
           />
         </DialogContent>
       </Dialog>
