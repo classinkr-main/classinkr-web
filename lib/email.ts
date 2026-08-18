@@ -93,6 +93,26 @@ export function wrapCampaignHtml(body: string, unsubscribeUrl?: string, tracking
 </html>`
 }
 
+/* ── 클릭 추적 링크 재작성(2026-08-18 성과 루프) ─────────────────
+   캠페인 본문의 절대 URL 링크를 클릭 추적 리다이렉트로 치환한다.
+   - href="http(s)://..." 만 대상 — mailto:·tel:·앵커·상대경로는 그대로 둔다.
+   - excludeUrlSubstrings(수신거부·추적 URL 등)는 원본 유지 — 토큰이 실린 URL을
+     이중 리다이렉트로 감싸면 검증이 깨진다.
+   - 서명·URL 조립은 호출부가 buildTrackedUrl 로 주입한다(이 함수는 순수 → 단위테스트 대상).
+   - href 속성값은 HTML 이스케이프(&amp;) 상태일 수 있어 풀고 → 조립 → 다시 이스케이프한다. */
+export function rewriteCampaignLinksForTracking(
+  html: string,
+  buildTrackedUrl: (url: string) => string,
+  excludeUrlSubstrings: readonly string[] = []
+): string {
+  return html.replace(/href="(https?:\/\/[^"]+)"/g, (match, attrUrl: string) => {
+    const rawUrl = attrUrl.replace(/&amp;/g, "&")
+    if (excludeUrlSubstrings.some((fragment) => rawUrl.includes(fragment))) return match
+    const tracked = buildTrackedUrl(rawUrl)
+    return `href="${tracked.replace(/&/g, "&amp;")}"`
+  })
+}
+
 /* ── 알림 메일 래퍼 ───────────────────────────────────────────── */
 
 export function wrapNotificationHtml(title: string, body: string, routeUrl?: string): string {

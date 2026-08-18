@@ -151,7 +151,9 @@ function eventInPeriod(event: PublicEvent, period: Period): boolean {
 
 export default function AdminCampaignsPage() {
   const router = useRouter()
-  const [tabParam, setTabParam] = useUrlState("tab", "summary")
+  // 기본 탭은 광고(meta) — 탭 재구성 스펙 §4.2 "메타 광고를 기본 탭으로" 이행(2026-08-18).
+  // 딥링크(?tab=summary 등)는 그대로 동작하고, 기본값과 같은 meta만 URL에서 생략된다.
+  const [tabParam, setTabParam] = useUrlState("tab", "meta")
   // 고객 360 딥링크(?message_to=&message_name=) 수신자 프리필 — 마운트 시 1회 소모
   const [messagePrefill, setMessagePrefill] = useState<MessagePrefill | null>(null)
   const [events, setEvents] = useState<PublicEvent[]>([])
@@ -186,7 +188,7 @@ export default function AdminCampaignsPage() {
   const [eventSort, setEventSort] = useState<"date" | "leads" | "deals" | "roi">("date")
   const activeTab: CampaignTab = CAMPAIGN_TABS.some((tab) => tab.id === tabParam)
     ? (tabParam as CampaignTab)
-    : "summary"
+    : "meta"
 
   const load = useCallback(async ({
     force = false,
@@ -298,11 +300,12 @@ export default function AdminCampaignsPage() {
     void loadMeta({ force: true })
   }, [loadMeta])
 
-  const loadEmailStats = useCallback(async () => {
+  const loadEmailStats = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     try {
       const data = await adminFetchJsonCached<MarketingStatsData>("/api/admin/marketing/stats", undefined, {
         ttlMs: 60_000,
         staleIfError: true,
+        force,
       })
       setEmailStats(data)
       setEmailStatsError(null)
@@ -365,15 +368,18 @@ export default function AdminCampaignsPage() {
     void loadAdLeads()
   }, [activeTab, loadAdLeads])
 
-  // 채널 예산(배정)은 광고 탭에서만 필요 — 지연 로드. 실패해도 0으로 유지(무크래시).
+  // 채널 예산(배정)은 광고 탭에서만 필요 — 지연 로드.
   const loadChannelBudgets = useCallback(async () => {
     try {
       const data = await adminFetchJson<{ budgets: Record<AdChannel, number> }>(
         "/api/admin/channel-budgets"
       )
       setChannelBudgets(data.budgets)
+      setBudgetError(null)
     } catch {
-      // 보조 데이터 — 조용히 실패, 기존 값(0) 유지
+      // 조용히 0을 확정값처럼 두면 "배정 0원"과 "조회 실패"가 구분되지 않는다 — 저장 실패와
+      // 같은 슬롯(예산표 옆 budgetError)에 표면화한다(2026-08-18, 실패≠빈상태).
+      setBudgetError("채널 예산을 불러오지 못했습니다 — 표시된 배정액(0원 포함)은 확정값이 아닙니다.")
     }
   }, [])
 
@@ -393,7 +399,8 @@ export default function AdminCampaignsPage() {
       // 에러는 사용자가 방금 만진 표(채널 예산) 옆에 떠야 한다 — Meta 대시보드 에러 슬롯에
       // 실으면 연동 장애로 오독되고 다음 loadMeta 가 지워버린다. 실패한 입력값이 저장된
       // 것처럼 남지 않게 서버 정본을 다시 받아 입력칸을 되돌린다.
-      setBudgetError(e instanceof Error ? e.message : "채널 예산 저장 실패")
+      const message = e instanceof Error ? e.message : "채널 예산 저장 실패"
+      setBudgetError(`${message} — 입력값은 저장 전 상태로 되돌렸습니다.`)
       void loadChannelBudgets()
     }
   }, [loadChannelBudgets])
@@ -557,7 +564,9 @@ export default function AdminCampaignsPage() {
     setMetricsMap((m) => ({ ...m, [saved.eventId]: saved }))
   }, [])
 
-  const showFilterRow = activeTab === "summary" || activeTab === "events"
+  // 광고 탭의 채널 집행·성과 표도 이 기간(filtered 파생값)에 종속된다 — 토글을 숨기면
+  // 요약에서 정한 기간이 광고 탭을 조용히 지배하므로 광고 탭에도 노출한다(2026-08-18).
+  const showFilterRow = activeTab === "summary" || activeTab === "events" || activeTab === "meta"
   const refreshLoading =
     activeTab === "meta"
       ? metaLoading || adLeadsLoading
@@ -571,11 +580,13 @@ export default function AdminCampaignsPage() {
       return
     }
     if (activeTab === "summary") {
-      void Promise.all([load({ force: true }), loadMeta({ force: true })])
+      // 요약 헤더의 "동기화"는 화면에 보이는 세 축(행사·Meta·이메일 채널 카드)을 전부 새로 받는다
+      // — 이메일 지표만 캐시에 남으면 동기화 버튼이 거짓말이 된다(2026-08-18).
+      void Promise.all([load({ force: true }), loadMeta({ force: true }), loadEmailStats({ force: true })])
       return
     }
     void load({ force: true })
-  }, [activeTab, load, loadAdLeads, loadMeta])
+  }, [activeTab, load, loadAdLeads, loadEmailStats, loadMeta])
 
   return (
     <div className="pb-24">
@@ -645,6 +656,9 @@ export default function AdminCampaignsPage() {
           items={CAMPAIGN_TABS.map((tab) => ({
             value: tab.id,
             label: tab.label,
+            // 라이브/준비 중 구분(sub)은 선언만 있고 렌더되지 않던 죽은 데이터였다 — 정직 라벨은
+            // 보여야 정직하다(2026-08-18). AdminTabs가 420px 미만에서는 자동으로 숨긴다.
+            description: tab.sub,
             icon:
               tab.id === "meta" ? (
                 <Activity className="h-3.5 w-3.5" />

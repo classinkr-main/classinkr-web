@@ -344,6 +344,32 @@ export const getCachedAllCampaigns = unstable_cache(
   { revalidate: 60, tags: [MARKETING_CAMPAIGNS_CACHE_TAG] },
 );
 
+/**
+ * 같은 제목이 withinMs 안에 이미 발송(sent)됐는지 — 더블클릭·이중 제출의 서버 방어용
+ * (2026-08-18). 클라이언트 sendLoading 만으로는 새로고침·중복 탭을 막지 못한다.
+ * JSON 폴백에서는 검사 없이 통과한다(로컬 개발 전용 경로).
+ */
+export async function findRecentSentCampaign(
+  subject: string,
+  withinMs: number
+): Promise<{ id: string | number; sentAt?: string } | null> {
+  if (!USE_SUPABASE) return null
+
+  const since = new Date(Date.now() - withinMs).toISOString()
+  const { data, error } = await sb()
+    .from("email_campaigns")
+    .select("id, sent_at")
+    .eq("subject", subject)
+    .eq("status", "sent")
+    .gte("sent_at", since)
+    .order("sent_at", { ascending: false })
+    .limit(1)
+  if (error) throw new Error(`[marketing] 최근 발송 조회 실패: ${error.message}`)
+
+  const row = data?.[0]
+  return row ? { id: row.id, sentAt: row.sent_at ?? undefined } : null
+}
+
 export async function createCampaign(
   data: Omit<EmailCampaign, "id" | "createdAt">
 ): Promise<CampaignRow> {
@@ -372,7 +398,9 @@ export async function createCampaign(
 
 export async function updateCampaign(
   id: string | number,
-  data: Partial<Pick<EmailCampaign, "status" | "sentAt" | "recipientCount" | "openCount">>
+  data: Partial<
+    Pick<EmailCampaign, "status" | "sentAt" | "recipientCount" | "openCount" | "failedCount" | "sendErrors">
+  >
 ): Promise<void> {
   if (!USE_SUPABASE) return // JSON 폴백에서는 무시
 
@@ -381,6 +409,8 @@ export async function updateCampaign(
   if (data.sentAt !== undefined) patch.sent_at = data.sentAt
   if (data.recipientCount !== undefined) patch.recipient_count = data.recipientCount
   if (data.openCount !== undefined) patch.open_count = data.openCount
+  if (data.failedCount !== undefined) patch.failed_count = data.failedCount
+  if (data.sendErrors !== undefined) patch.send_errors = data.sendErrors
 
   const { error } = await sb()
     .from("email_campaigns")
@@ -424,6 +454,9 @@ function rowToCampaign(row: any): CampaignRow {
     sentAt: row.sent_at ?? undefined,
     recipientCount: row.recipient_count ?? 0,
     openCount: row.open_count ?? 0,
+    clickCount: row.click_count ?? 0,
+    failedCount: row.failed_count ?? 0,
+    sendErrors: row.send_errors ?? [],
     externalId: row.external_id ?? undefined,
     createdAt: row.created_at,
   };

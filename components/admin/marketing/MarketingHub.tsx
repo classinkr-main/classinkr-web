@@ -1187,12 +1187,25 @@ export default function MarketingHub({
         return
       }
       const result = await res.json()
+      if (res.status === 409) {
+        // 10분 내 같은 제목 재발송 서버 가드(2026-08-18) — 중복이 아니면 제목 변경/잠시 후 재시도.
+        showToast("error", result.error || "같은 제목의 캠페인이 방금 발송됐습니다.")
+        return
+      }
       if (result.ok && result.status !== "failed") {
         await fetchCampaigns()
         setComposerDraft({ ...EMPTY_DRAFT })
         setDraftNotice(null)
         setActiveTab("history")
-        showToast("success", `${result.recipientCount}명에게 발송되었습니다.`)
+        if (typeof result.failedCount === "number" && result.failedCount > 0) {
+          // 부분 실패를 성공 토스트로 덮지 않는다(2026-08-18) — 이력에서 오류 상세 확인 가능.
+          showToast(
+            "error",
+            `${result.recipientCount}명 발송 · ${result.failedCount}명 실패 — 이력에서 오류를 확인하세요.`
+          )
+        } else {
+          showToast("success", `${result.recipientCount}명에게 발송되었습니다.`)
+        }
       } else if (result.status === "failed") {
         await fetchCampaigns()
         setActiveTab("history")

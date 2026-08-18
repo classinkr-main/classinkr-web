@@ -403,7 +403,7 @@ export default function MetaTab({
         {budgetError && (
           <div className="mb-3 flex items-start gap-2 rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[12.5px] text-[#B43E3E]">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>{budgetError} — 입력값은 저장 전 상태로 되돌렸습니다.</span>
+            <span>{budgetError}</span>
           </div>
         )}
         {coreLoading ? (

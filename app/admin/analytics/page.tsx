@@ -250,6 +250,9 @@ export default function AnalyticsPage() {
   const [tabParam, setTabParam] = useUrlState("tab", "leads")
   const [range, setRange] = useState<7 | 14 | 30>(30)
   const [loading, setLoading] = useState(true)
+  // 실패한 데이터 축("리드·구독자" 등) — null이면 전부 정상 수신(2026-08-18, 실패≠빈상태).
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [subscribers, setSubscribers] = useState<AnalyticsSubscriberRow[]>([])
   const [posts, setPosts] = useState<BlogPost[]>([])
@@ -277,6 +280,14 @@ export default function AnalyticsPage() {
       setLeads(leadData?.leads ?? [])
       setSubscribers(subscriberData?.subscribers ?? [])
       setPosts(blogData?.posts ?? [])
+      // fetchJson은 실패를 null로 돌려준다 — 그대로 두면 인증 만료·서버 오류가 "데이터 없음"
+      // 빈 상태로 위장된다. 실패한 축을 배너로 알린다(2026-08-18, 실패≠빈상태).
+      const failedSources = [
+        leadData ? null : "리드",
+        subscriberData ? null : "구독자",
+        blogData ? null : "콘텐츠",
+      ].filter((v): v is string => v !== null)
+      setLoadError(failedSources.length > 0 ? failedSources.join("·") : null)
       setLoading(false)
     }
 
@@ -287,7 +298,7 @@ export default function AnalyticsPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [reloadKey])
 
   const { today, start, previousStart } = getDayWindow(range)
   const nextDay = shiftDays(today, 1)
@@ -408,6 +419,19 @@ export default function AnalyticsPage() {
           ))}
         </div>
       </div>
+
+      {loadError && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[13px] text-[#B43E3E]">
+          <span>{loadError} 데이터를 불러오지 못했습니다 — 아래 수치는 실제보다 적게 보일 수 있습니다.</span>
+          <button
+            type="button"
+            onClick={() => setReloadKey((key) => key + 1)}
+            className="rounded-md border border-[#F2B8B8] bg-white px-2 py-0.5 text-[12px] font-semibold text-[#B43E3E] transition-colors hover:bg-[#FCE9E9]"
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
 
       {/* "오늘 홈 방문자" 카드는 traffic으로 일원화(C3e) — 전용 visitor-stats fetch 제거, 아래 트래픽 크로스링크로 대체. */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
