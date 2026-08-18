@@ -28,6 +28,12 @@ describe("AdminSidebar — 상시/기타 2단 구조", () => {
     expect(sidebar).toContain("ADMIN_NAV_CATEGORY_META")
   })
 
+  it("groups the primary list with the shared category partition (2026-08-18)", () => {
+    // 상시 소제목의 표시 여부·묶음은 사이드바가 자체 계산하지 않고 resolveNavAccess 결과를 쓴다.
+    expect(sidebar).toContain("navAccess.primaryGroups")
+    expect(sidebar).toContain("navAccess.showPrimaryHeaders")
+  })
+
   it("keeps hover warm-up wired on folded items too", () => {
     // 기타 항목도 hover 시 프리페치돼야 한다 — 접혀 있다고 느려도 되는 건 아니다.
     const foldedBlock = sidebar.slice(sidebar.indexOf("navAccess.folded"))
