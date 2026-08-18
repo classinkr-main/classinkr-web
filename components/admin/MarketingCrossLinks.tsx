@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useState } from "react"
+import { ArrowUpRight } from "lucide-react"
 import { ADMIN_NAV, normalizeAdminRole, type AdminNavItem } from "@/components/admin/admin-nav"
 import {
   isNavPresetKey,
@@ -85,10 +86,12 @@ export function MarketingCrossLinks({
           <Link
             key={item.href}
             href={item.href}
-            className="inline-flex items-center gap-1.5 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 text-[12px] font-medium text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
+            className="group inline-flex items-center gap-1.5 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 text-[12px] font-medium text-[#615D59] transition hover:bg-[#F6F5F4] hover:text-[#111110]"
           >
             <Icon className="h-3.5 w-3.5" />
             {item.label}
+            {/* 화면 안 탭바로 오독되는 걸 막는 이동 신호 — 이 칩은 "다른 화면으로 나가는" 링크다. */}
+            <ArrowUpRight className="h-3 w-3 text-[#1a1a1a]/25 transition-colors group-hover:text-[#111110]" />
           </Link>
         )
       })}

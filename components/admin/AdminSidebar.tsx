@@ -636,7 +636,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                   {navAccess.primaryGroups.map(({ category, items }) => (
                     <div key={`mobile-primary-${category}`}>
                       {navAccess.showPrimaryHeaders && (
-                        <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
+                        <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
                           {ADMIN_NAV_CATEGORY_META[category].label}
                         </p>
                       )}
@@ -702,7 +702,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                       <div className="mt-1 space-y-3">
                         {navAccess.folded.map(({ category, items }) => (
                           <div key={`mobile-${category}`}>
-                            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
+                            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
                               {ADMIN_NAV_CATEGORY_META[category].label}
                             </p>
                             <div className="space-y-1">
@@ -970,7 +970,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
               {navAccess.primaryGroups.map(({ category, items }) => (
                 <div key={`primary-${category}`}>
                   {navAccess.showPrimaryHeaders && !effectiveCollapsed && (
-                    <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
+                    <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
                       {ADMIN_NAV_CATEGORY_META[category].label}
                     </p>
                   )}
@@ -1047,7 +1047,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                   <div className="mt-1 space-y-3">
                     {navAccess.folded.map(({ category, items }) => (
                       <div key={category}>
-                        <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/28">
+                        <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/35">
                           {ADMIN_NAV_CATEGORY_META[category].label}
                         </p>
                         <div className="space-y-0.5">

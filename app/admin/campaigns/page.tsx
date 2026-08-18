@@ -163,6 +163,10 @@ export default function AdminCampaignsPage() {
   const [error, setError] = useState<string | null>(null)
   const [period, setPeriod] = useState<Period>("all")
   const [editing, setEditing] = useState<PublicEvent | null>(null)
+  // 요약 탭 "성과 입력 열기" → 광고 탭 성과 입력 표 착지 요청. 증가하는 nonce로 전달한다 —
+  // sessionStorage 플래그는 광고 탭 전환이 유발하는 코어 재조회(coreLoading 사이클)와
+  // strict 이중 마운트에서 소비 시점이 어긋나 스크롤이 유실됐다(2026-08-18 실측).
+  const [metricsFocusNonce, setMetricsFocusNonce] = useState(0)
   const [viewParam, setViewParam] = useUrlState("view", "list")
   const galleryView = viewParam === "gallery"
   const [eventSearch, setEventSearch] = useState("")
@@ -626,9 +630,36 @@ export default function AdminCampaignsPage() {
           </div>
         </div>
 
-        {showFilterRow && (
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="기간 필터">
+      </header>
+
+      {/* Sub-tabs — branch admin 스타일. 기간 토글은 이 띠 안에 함께 둔다(2026-08-18) —
+          헤더에 떠 있으면 "모든 탭에 걸리는 전역 필터"라는 소속이 안 보이고, 표들이 이 기간에
+          조용히 종속된다. 같은 띠에 있으면 탭·기간이 한 묶음의 조회 조건으로 읽힌다. */}
+      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 sm:px-4 lg:px-9">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <AdminTabs
+            className="-mb-px min-w-0 py-2"
+            label="캠페인 보기"
+            variant="subtle"
+            items={CAMPAIGN_TABS.map((tab) => ({
+              value: tab.id,
+              label: tab.label,
+              // 라이브/준비 중 구분(sub)은 선언만 있고 렌더되지 않던 죽은 데이터였다 — 정직 라벨은
+              // 보여야 정직하다(2026-08-18). AdminTabs가 420px 미만에서는 자동으로 숨긴다.
+              description: tab.sub,
+              icon:
+                tab.id === "meta" ? (
+                  <Activity className="h-3.5 w-3.5" />
+                ) : tab.id === "email" ? (
+                  <Mail className="h-3.5 w-3.5" />
+                ) : undefined,
+            }))}
+            value={activeTab}
+            onValueChange={setTabParam}
+            panelId="campaigns-tabpanel"
+          />
+          {showFilterRow && (
+            <div className="inline-flex shrink-0 rounded-lg border border-[rgba(0,0,0,0.08)] p-[3px] max-sm:mb-2" role="group" aria-label="기간 필터">
               {(["active", "30d", "90d", "all"] as Period[]).map((p) => (
                 <button
                   key={p}
@@ -643,33 +674,8 @@ export default function AdminCampaignsPage() {
                 </button>
               ))}
             </div>
-          </div>
-        )}
-      </header>
-
-      {/* Sub-tabs — branch admin 스타일 */}
-      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] px-2 sm:px-4 lg:px-9">
-        <AdminTabs
-          className="-mb-px py-2"
-          label="캠페인 보기"
-          variant="subtle"
-          items={CAMPAIGN_TABS.map((tab) => ({
-            value: tab.id,
-            label: tab.label,
-            // 라이브/준비 중 구분(sub)은 선언만 있고 렌더되지 않던 죽은 데이터였다 — 정직 라벨은
-            // 보여야 정직하다(2026-08-18). AdminTabs가 420px 미만에서는 자동으로 숨긴다.
-            description: tab.sub,
-            icon:
-              tab.id === "meta" ? (
-                <Activity className="h-3.5 w-3.5" />
-              ) : tab.id === "email" ? (
-                <Mail className="h-3.5 w-3.5" />
-              ) : undefined,
-          }))}
-          value={activeTab}
-          onValueChange={setTabParam}
-          panelId="campaigns-tabpanel"
-        />
+          )}
+        </div>
       </div>
 
       {/* 마케팅 워크스페이스 크로스링크 — 형제 마케팅 표면으로 이동(사이드바 그룹 보조).
@@ -716,6 +722,7 @@ export default function AdminCampaignsPage() {
           editing={editing}
           setEditing={setEditing}
           onMetricsSaved={handleMetricsSaved}
+          metricsFocusNonce={metricsFocusNonce}
         />
       ) : (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
@@ -742,6 +749,10 @@ export default function AdminCampaignsPage() {
           metaDatePreset={metaDatePreset}
           onRefreshMeta={refreshMeta}
           onGoToTab={setTabParam}
+          onOpenMetricsInput={() => {
+            setMetricsFocusNonce((nonce) => nonce + 1)
+            setTabParam("meta")
+          }}
         />
       )}
 
