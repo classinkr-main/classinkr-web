@@ -6,6 +6,7 @@ import { AlignLeft, ArrowUpRight, CalendarRange, Clock, Pencil, Plus, Trash2, Us
 import type { CalendarEvent } from "@/lib/calendar-data"
 import { getTeamMemberColor } from "@/lib/team-member-colors"
 
+import { CalendarEmpty } from "./CalendarEmpty"
 import {
   getEventDotColor,
   getEventSource,
@@ -93,7 +94,7 @@ export function DayDetailPanel({
       </div>
 
       {ordered.length === 0 ? (
-        <div className="py-10 text-center text-[13px] text-[#1a1a1a]/30">일정 없음</div>
+        <CalendarEmpty message="일정 없음" compact />
       ) : (
         <div className="max-h-[70vh] divide-y divide-[#f0f0ec] overflow-y-auto">
           {ordered.map((event) => {
@@ -114,9 +115,7 @@ export function DayDetailPanel({
                       <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/55">
                         {getEventSourceLabel(event)}
                       </span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${style.bg} ${style.color}`}
-                      >
+                      <span className="rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/50">
                         {style.label}
                       </span>
                       {event.partnerName && (

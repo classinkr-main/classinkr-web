@@ -7,6 +7,7 @@ import { groupByAssignee, layoutLanes } from "@/lib/admin-calendar/layout"
 import { enumerateDates, getWeekday, type CalendarRange } from "@/lib/admin-calendar/range"
 import { getTeamMemberColor } from "@/lib/team-member-colors"
 
+import { CalendarEmpty } from "./CalendarEmpty"
 import { EventBar } from "./EventChip"
 import { UNASSIGNED_LABEL, getEventSource } from "./event-style"
 
@@ -63,11 +64,7 @@ export function AssigneeSwimlane({
   }, [visibleEvents])
 
   if (rows.length === 0) {
-    return (
-      <div className="py-16 text-center text-[13px] text-[#1a1a1a]/30">
-        이 기간에 표시할 담당자가 없습니다
-      </div>
-    )
+    return <CalendarEmpty message="이 기간에 표시할 담당자가 없습니다" hint="담당자가 지정된 일정이 아직 없습니다" />
   }
 
   return (

@@ -53,7 +53,7 @@ export function MonthGrid({
 
       <div className="grid grid-cols-7">
         {Array.from({ length: firstDay }).map((_, index) => (
-          <div key={`empty-${index}`} className="h-20 border-b border-r border-[#f0f0ec] sm:h-24" />
+          <div key={`empty-${index}`} className="h-20 border-b border-r border-[#f0f0ec] sm:h-28" />
         ))}
 
         {Array.from({ length: daysInMonth }).map((_, index) => {
@@ -79,7 +79,7 @@ export function MonthGrid({
               role="button"
               tabIndex={0}
               aria-label={`${monthLabel} ${day}일 일정 보기`}
-              className={`group relative h-20 cursor-pointer border-b border-r border-[#f0f0ec] p-1 transition-colors sm:h-24 sm:p-1.5 ${
+              className={`group relative h-20 cursor-pointer border-b border-r border-[#f0f0ec] p-1 transition-colors sm:h-28 sm:p-1.5 ${
                 isSelected ? "bg-[#111110]/5" : "hover:bg-[#fafaf8]"
               }`}
             >
@@ -130,7 +130,7 @@ export function MonthGrid({
 
               <div className="hidden space-y-0.5 overflow-hidden sm:block">
                 {dayEvents.slice(0, MAX_CHIPS_PER_CELL).map((event) => (
-                  <EventChip key={event.id} event={event} onClick={() => onSelectDate(dateStr)} />
+                  <EventChip key={event.id} event={event} showTime onClick={() => onSelectDate(dateStr)} />
                 ))}
                 {dayEvents.length > MAX_CHIPS_PER_CELL && (
                   <div className="px-1.5 text-[10px] text-[#1a1a1a]/40">

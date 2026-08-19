@@ -38,8 +38,6 @@ export interface SourceOption {
   label: string
   /** 소스 고정색(hex) */
   dot: string
-  /** 그리드 칩에 붙는 한 글자 배지. 색만으로 부족한 소스에만 준다. */
-  badge?: string
   /** 읽기 전용 소스를 어디서 고치는지 알려주는 안내문 */
   readonlyHelp?: string
   /** 상세 패널의 바깥 링크 라벨 */
@@ -52,7 +50,6 @@ export const SOURCE_OPTIONS: SourceOption[] = [
     value: "partner",
     label: "파트너 일정",
     dot: "#B85C33",
-    badge: "P",
     readonlyHelp: "파트너 일정은 파트너 운영 상세에서 수정합니다.",
     openLabel: "파트너 열기",
   },
@@ -67,7 +64,6 @@ export const SOURCE_OPTIONS: SourceOption[] = [
     value: "notion",
     label: "마케팅(노션)",
     dot: "#0E766E",
-    badge: "M",
     readonlyHelp: "마케팅 캘린더는 노션에서 수정합니다.",
     openLabel: "노션에서 열기",
   },
@@ -75,7 +71,6 @@ export const SOURCE_OPTIONS: SourceOption[] = [
     value: "showroom",
     label: "쇼룸 예약",
     dot: "#5B6470",
-    badge: "S",
     readonlyHelp: "쇼룸 예약은 구글 캘린더에서 수정합니다.",
     openLabel: "구글 캘린더에서 열기",
   },
@@ -83,7 +78,6 @@ export const SOURCE_OPTIONS: SourceOption[] = [
     value: "team_event",
     label: "팀원 행사",
     dot: "#6D4AA8",
-    badge: "행",
     readonlyHelp: "팀원 행사는 구글 캘린더에서 수정합니다.",
     openLabel: "구글 캘린더에서 열기",
   },
@@ -119,10 +113,6 @@ export function getEventDotColor(event: CalendarEvent): string {
   const source = getEventSource(event)
   if (source === "team_event") return getTeamMemberColor(event.assignees?.[0])
   return getSourceColor(source)
-}
-
-export function getEventBadge(event: CalendarEvent): string | null {
-  return SOURCE_BY_VALUE.get(getEventSource(event))?.badge ?? null
 }
 
 export function getReadonlyHelp(event: CalendarEvent): string {

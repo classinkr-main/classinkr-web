@@ -253,3 +253,59 @@ export async function getTeamEventsCalendarEvents(opts: QueryOptions = {}): Prom
   cache.set(cacheKey, { at: nowMs, data: events })
   return events
 }
+
+// ─── 접근 프로브 (연결 상태용) ─────────────────────────────────────────────────
+
+export interface TeamCalendarAccessSummary {
+  /** data/team-calendars.json(또는 env)에 구성된 인원 */
+  configured: number
+  /** 서비스 계정이 실제로 읽을 수 있는 캘린더 수. null = 프로브 자체 실패(자격 미설정 등) */
+  accessible: number | null
+}
+
+interface AccessCacheEntry {
+  at: number
+  data: TeamCalendarAccessSummary
+}
+let accessCache: AccessCacheEntry | null = null
+const ACCESS_CACHE_TTL_MS = 10 * 60_000
+
+/**
+ * 팀원 캘린더 접근 가능 여부 요약 — 연결 상태 화면용.
+ *
+ * 이벤트 조회(getTeamEventsCalendarEvents)는 공유 안 된 캘린더를 조용히 건너뛰므로
+ * "0건"과 "공유 안 됨"이 구분되지 않는다. 여기서는 팀원마다 maxResults=1 로 한 번씩
+ * 두드려 접근 가능 인원을 센다. 결과는 10분 캐시 — 상태 화면은 실시간일 필요가 없다.
+ */
+export async function probeTeamCalendarAccess(): Promise<TeamCalendarAccessSummary> {
+  const members = readMembers()
+  if (!hasServiceAccount()) {
+    return { configured: members.length, accessible: null }
+  }
+  if (members.length === 0) return { configured: 0, accessible: 0 }
+
+  const nowMs = Date.now()
+  if (accessCache && nowMs - accessCache.at < ACCESS_CACHE_TTL_MS) return accessCache.data
+
+  const results = await Promise.all(
+    members.map(async (member) => {
+      try {
+        await googleCalendar.events.list({
+          calendarId: member.email,
+          maxResults: 1,
+          timeMin: new Date(nowMs).toISOString(),
+        })
+        return true
+      } catch {
+        return false
+      }
+    })
+  )
+
+  const data: TeamCalendarAccessSummary = {
+    configured: members.length,
+    accessible: results.filter(Boolean).length,
+  }
+  accessCache = { at: nowMs, data }
+  return data
+}

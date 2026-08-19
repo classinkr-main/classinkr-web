@@ -25,6 +25,12 @@ interface CalendarToolbarProps {
   view: CalendarViewId
   anchor: string
   loading: boolean
+  /**
+   * 현재 기간에 그 뷰가 그릴 데이터가 있는지. false 인 뷰는 흐리게 표시한다 —
+   * 눌러도 빈 레인만 나오는 뷰가 멀쩡한 얼굴로 서 있으면 고장처럼 읽힌다(2026-08-19).
+   * 비활성이 아니라 흐림이다: 눌러서 확인하는 것까지 막지는 않는다.
+   */
+  viewAvailability?: Partial<Record<CalendarViewId, boolean>>
   onViewChange: (view: CalendarViewId) => void
   onStep: (direction: 1 | -1) => void
   onToday: () => void
@@ -35,6 +41,7 @@ export function CalendarToolbar({
   view,
   anchor,
   loading,
+  viewAvailability,
   onViewChange,
   onStep,
   onToday,
@@ -83,17 +90,20 @@ export function CalendarToolbar({
           {VIEW_OPTIONS.map((option) => {
             const Icon = option.icon
             const active = option.value === view
+            const available = viewAvailability?.[option.value] ?? true
             return (
               <button
                 key={option.value}
                 type="button"
                 onClick={() => onViewChange(option.value)}
-                title={option.hint}
+                title={available ? option.hint : `${option.hint} — 이 기간엔 표시할 데이터가 없습니다`}
                 aria-pressed={active}
                 className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
                   active
                     ? "bg-[#111110] text-white"
-                    : "text-[#1a1a1a]/50 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                    : available
+                      ? "text-[#1a1a1a]/50 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                      : "text-[#1a1a1a]/25 hover:bg-[#f5f5f2] hover:text-[#1a1a1a]/50"
                 }`}
               >
                 <Icon className="h-3 w-3" />

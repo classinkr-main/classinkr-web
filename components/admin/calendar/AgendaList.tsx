@@ -1,13 +1,14 @@
 "use client"
 
 import { useMemo } from "react"
-import { CalendarDays, Clock, Users } from "lucide-react"
+import { Clock, Users } from "lucide-react"
 
 import type { CalendarEvent } from "@/lib/calendar-data"
 import { buildEventsByDate } from "@/lib/admin-calendar/layout"
 import { enumerateDates, getWeekday, type CalendarRange } from "@/lib/admin-calendar/range"
 import { getTeamMemberColor } from "@/lib/team-member-colors"
 
+import { CalendarEmpty } from "./CalendarEmpty"
 import {
   getEventDotColor,
   getEventSourceLabel,
@@ -39,12 +40,7 @@ export function AgendaList({ range, todayStr, visibleEvents, onSelectDate }: Age
   }, [visibleEvents, range.from, range.to])
 
   if (groups.length === 0) {
-    return (
-      <div className="py-16 text-center">
-        <CalendarDays className="mx-auto mb-2 h-8 w-8 text-[#1a1a1a]/15" />
-        <p className="text-[13px] text-[#1a1a1a]/30">이 기간에 일정이 없습니다</p>
-      </div>
-    )
+    return <CalendarEmpty message="이 기간에 일정이 없습니다" />
   }
 
   return (
@@ -104,9 +100,7 @@ export function AgendaList({ range, todayStr, visibleEvents, onSelectDate }: Age
                       <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/50">
                         {getEventSourceLabel(event)}
                       </span>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${style.bg} ${style.color}`}
-                      >
+                      <span className="rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/50">
                         {style.label}
                       </span>
                       {event.endDate && event.endDate !== event.date && (

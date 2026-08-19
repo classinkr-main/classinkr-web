@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { ArrowUpRight, CalendarDays } from "lucide-react"
+import { ArrowUpRight } from "lucide-react"
 
 import {
   Dialog,
@@ -15,8 +15,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import type { CalendarEvent, EventSource } from "@/lib/calendar-data"
+import type { CalendarHealthPayload } from "@/lib/admin-calendar/health"
 import { buildEventsByDate } from "@/lib/admin-calendar/layout"
 import {
+  formatRangeLabel,
   getViewRange,
   isCalendarViewId,
   isDateString,
@@ -24,23 +26,23 @@ import {
   toDateString,
   type CalendarViewId,
 } from "@/lib/admin-calendar/range"
-import { getTeamMemberColor } from "@/lib/team-member-colors"
 
 import { AgendaList } from "@/components/admin/calendar/AgendaList"
 import { AssigneeSwimlane } from "@/components/admin/calendar/AssigneeSwimlane"
-import { CalendarFilterBar, type TeamMemberCount } from "@/components/admin/calendar/CalendarFilterBar"
+import { CalendarEmpty } from "@/components/admin/calendar/CalendarEmpty"
+import { CalendarFilterLine, type TeamMemberCount } from "@/components/admin/calendar/CalendarFilterBar"
 import { CalendarToolbar } from "@/components/admin/calendar/CalendarToolbar"
 import { DayDetailPanel } from "@/components/admin/calendar/DayDetailPanel"
 import { EventForm, EMPTY_EVENT_FORM, type EventFormData } from "@/components/admin/calendar/EventForm"
 import { MonthGrid } from "@/components/admin/calendar/MonthGrid"
+import { CalendarRepairPanel, SourceHealthStrip } from "@/components/admin/calendar/SourceHealth"
 import { SourceTimeline } from "@/components/admin/calendar/SourceTimeline"
 import { WeekTimeGrid } from "@/components/admin/calendar/WeekTimeGrid"
 import {
   SOURCE_OPTIONS,
-  UNASSIGNED_LABEL,
+  getEventDotColor,
   getEventSource,
   getEventSourceLabel,
-  getTypeStyle,
   sortEventFirst,
 } from "@/components/admin/calendar/event-style"
 
@@ -96,6 +98,7 @@ export default function AdminCalendarPage() {
   const [formLoading, setFormLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(null)
+  const [health, setHealth] = useState<CalendarHealthPayload | null>(null)
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -208,6 +211,26 @@ export default function AdminCalendarPage() {
     }
   }, [])
 
+  // 소스 연결 상태 — "일정이 없다"와 "연동이 끊겼다"를 화면이 구분하게 한다(2026-08-19).
+  // 실패하면 상태 레이어 없이 캘린더만 뜬다 — 부가 정보가 본 기능(일정 조회)을 막지 않는다.
+  useEffect(() => {
+    let cancelled = false
+    adminFetchJsonCached<CalendarHealthPayload>("/api/admin/calendar/health", undefined, {
+      cacheKey: "calendar:source-health",
+      ttlMs: 300_000,
+      staleWhileRevalidateMs: 600_000,
+    })
+      .then((data) => {
+        if (!cancelled && data && Array.isArray(data.sources)) setHealth(data)
+      })
+      .catch(() => {
+        /* 상태 조회 실패 시 스트립·수리 패널 없이 둔다 */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   // ─── 필터 ────────────────────────────────────────────────────────
   const teamMembers = useMemo<TeamMemberCount[]>(() => {
     const counts = new Map<string, number>()
@@ -259,20 +282,6 @@ export default function AdminCalendarPage() {
       else next.add(name)
       return next
     })
-
-  // ─── 이번 주 담당자 요약 ─────────────────────────────────────────
-  // 담당자 뷰가 이 정보를 훨씬 자세히 보여주므로, 담당자 축이 없는 뷰에서만 띄운다.
-  // 회의: "회의할 때 구글 캘린더 켜놓고 '누구누구 이거 합니다' 이런 거 못 하거든요"
-  const weekStrip = useMemo(() => {
-    if (view === "assignee") return []
-    const counts = new Map<string, number>()
-    for (const event of visibleEvents) {
-      for (const name of event.assignees?.length ? event.assignees : [UNASSIGNED_LABEL]) {
-        counts.set(name, (counts.get(name) ?? 0) + 1)
-      }
-    }
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])
-  }, [visibleEvents, view])
 
   // ─── CRUD ────────────────────────────────────────────────────────
   const handleSave = async (data: EventFormData) => {
@@ -360,93 +369,89 @@ export default function AdminCalendarPage() {
     .filter((event) => (event.endDate ?? event.date) >= todayStr)
     .slice(0, 8)
 
+  // ─── 연결 상태 파생 ──────────────────────────────────────────────
+  const brokenSources = useMemo(
+    () => (health?.sources ?? []).filter((item) => item.status !== "ok"),
+    [health]
+  )
+  // 공휴일은 자동 주입이라 "일정이 있다"는 증거가 못 된다 — 수리 패널 판정에서 뺀다.
+  const nonHolidayCount = useMemo(
+    () => events.filter((event) => getEventSource(event) !== "holiday").length,
+    [events]
+  )
+  const showRepairPanel = !loading && nonHolidayCount === 0 && brokenSources.length > 0
+  const holidayNote = useMemo(() => {
+    const holidays = events.filter((event) => getEventSource(event) === "holiday")
+    if (holidays.length === 0) return undefined
+    const first = holidays[0]
+    const monthDay = `${Number(first.date.slice(5, 7))}/${Number(first.date.slice(8, 10))}`
+    return `공휴일 ${holidays.length}건은 정상 표시 중 · ${monthDay} ${first.title}`
+  }, [events])
+  // 눌러도 빈 레인만 나오는 뷰는 흐리게 — 담당자 뷰는 담당자 있는 일정, 타임라인은 공휴일 외 일정이 기준.
+  const viewAvailability = useMemo(
+    () => ({
+      assignee: visibleEvents.some((event) => (event.assignees?.length ?? 0) > 0),
+      timeline: visibleEvents.some((event) => getEventSource(event) !== "holiday"),
+    }),
+    [visibleEvents]
+  )
+
   const [year, month] = range.from.split("-").map(Number)
 
   return (
     <div className="px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
-      {/* Header */}
-      <div className="mb-5 sm:mb-6">
-        <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin</p>
-        <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">운영 캘린더</h1>
-        <p className="mt-2 text-[13px] leading-6 text-[#1a1a1a]/50">
-          팀 일정과 파트너 운영 일정, 공개 행사, 마케팅(노션), 쇼룸 예약(구글), 팀원 행사(구글)를 함께 보되
-          외부 소스 일정은 읽기 전용으로 표시합니다.
-        </p>
+      {/* Header — 한 줄. 소스 나열·설명은 범례 라인이 대신한다(2026-08-19 다이어트) */}
+      <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <h1 className="text-xl font-bold tracking-[-0.02em] text-[#111110]">운영 캘린더</h1>
+        <p className="text-[12px] text-[#1a1a1a]/45">6개 소스 통합 · 외부 소스는 읽기 전용</p>
       </div>
 
       {errorMessage && (
-        <div className="mb-6 rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-5 py-4 text-[12px] leading-5 text-[#B85C33]">
-          <strong className="mr-2">캘린더 오류:</strong>
-          <span>{errorMessage}</span>
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-[#B43E3E]/30 bg-white px-4 py-3 text-[12px] leading-5">
+          <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#B43E3E]" />
+          <strong className="font-semibold text-[#B43E3E]">캘린더 오류</strong>
+          <span className="text-[#1a1a1a]/60">{errorMessage}</span>
         </div>
       )}
 
-      {/* 미응답 리드 배너 — 0건이면 소음이라 렌더하지 않는다. */}
+      {/* 미응답 리드 배너 — 0건이면 렌더하지 않는다. 신호는 도트·숫자 색으로만(파스텔 채움 금지). */}
       {leadActionKpis && leadActionKpis.unrespondedCount > 0 && (
         <Link
           href="/admin/crm"
-          className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-5 py-3 text-[12px] font-medium text-[#B85C33] transition-colors hover:border-[#B85C33]/35"
+          className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-2.5 text-[12px] transition-colors hover:border-[#B85C33]/40"
         >
-          <span>
-            미응답 리드 <strong className="font-semibold">{leadActionKpis.unrespondedCount}건</strong>
-            {" "}· 데모·문의·Meta 신규 문의가 대기 중입니다
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#B85C33]" />
+            <span className="font-medium text-[#111110]">
+              미응답 리드{" "}
+              <strong className="font-semibold text-[#B85C33]">
+                {leadActionKpis.unrespondedCount}건
+              </strong>
+            </span>
+            <span className="text-[#1a1a1a]/45">데모·문의·Meta 신규 문의 대기</span>
             {leadActionKpis.unresponded24hCount > 0 && (
-              <span className="ml-1 text-[#9A4A27]">(24h+ {leadActionKpis.unresponded24hCount}건)</span>
+              <span className="font-medium text-[#B43E3E]">
+                24h+ {leadActionKpis.unresponded24hCount}건
+              </span>
             )}
           </span>
-          <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px]">
+          <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px] text-[#1a1a1a]/50">
             CRM에서 확인
             <ArrowUpRight className="h-3 w-3" />
           </span>
         </Link>
       )}
 
-      <div className="mb-5">
-        <CalendarFilterBar
-          events={events}
-          visibleEvents={visibleEvents}
-          teamMembers={teamMembers}
-          hiddenSources={hiddenSources}
-          hiddenAssignees={hiddenAssignees}
-          onToggleSource={toggleSource}
-          onToggleAssignee={toggleAssignee}
-          onSetAllSources={(visible) =>
-            setHiddenSources(visible ? new Set() : new Set(SOURCE_OPTIONS.map((option) => option.value)))
-          }
-          onSetAllAssignees={(visible) =>
-            setHiddenAssignees(visible ? new Set() : new Set(teamMembers.map((member) => member.name)))
-          }
-        />
-      </div>
-
-      {weekStrip.length > 0 && (
-        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
-          <span className="mr-1 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
-            담당자별
-          </span>
-          {weekStrip.map(([assignee, count]) => (
-            <span
-              key={assignee}
-              className="inline-flex items-center gap-1.5 rounded-full border border-[#e8e8e4] bg-[#fafaf8] px-2.5 py-1 text-[11px] font-medium text-[#1a1a1a]/70"
-            >
-              <span
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ backgroundColor: getTeamMemberColor(assignee) }}
-              />
-              {assignee}
-              <span className="text-[#1a1a1a]/35">{count}</span>
-            </span>
-          ))}
-        </div>
-      )}
-
       {/* Main */}
       <div className="flex flex-col items-stretch gap-5 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+          {/* 끊긴 소스 요약 — 수리 패널이 뜰 때는 패널이 더 자세히 말하므로 접는다 */}
+          {!showRepairPanel && <SourceHealthStrip broken={brokenSources} />}
           <CalendarToolbar
             view={view}
             anchor={anchor}
             loading={loading}
+            viewAvailability={viewAvailability}
             onViewChange={(next) => {
               setView(next)
               setSelectedDate(null)
@@ -461,7 +466,35 @@ export default function AdminCalendarPage() {
             }}
             onCreate={() => openCreate()}
           />
+          {!showRepairPanel && (
+            <CalendarFilterLine
+              events={events}
+              visibleEvents={visibleEvents}
+              teamMembers={teamMembers}
+              hiddenSources={hiddenSources}
+              hiddenAssignees={hiddenAssignees}
+              onToggleSource={toggleSource}
+              onToggleAssignee={toggleAssignee}
+              onShowAll={() => {
+                setHiddenSources(new Set())
+                setHiddenAssignees(new Set())
+              }}
+              onHideAll={() => {
+                setHiddenSources(new Set(SOURCE_OPTIONS.map((option) => option.value)))
+                setHiddenAssignees(new Set(teamMembers.map((member) => member.name)))
+              }}
+            />
+          )}
 
+          {showRepairPanel ? (
+            <CalendarRepairPanel
+              rangeLabel={formatRangeLabel(view, anchor)}
+              broken={brokenSources}
+              holidayNote={holidayNote}
+              onCreate={() => openCreate()}
+            />
+          ) : (
+            <>
           {view === "month" && (
             <MonthGrid
               year={year}
@@ -508,6 +541,8 @@ export default function AdminCalendarPage() {
               onSelectDate={setSelectedDate}
             />
           )}
+            </>
+          )}
         </div>
 
         {/* Right panel */}
@@ -528,14 +563,10 @@ export default function AdminCalendarPage() {
                 <p className="mt-0.5 text-[11px] text-[#1a1a1a]/35">현재 기간 안에서</p>
               </div>
               {upcomingEvents.length === 0 ? (
-                <div className="py-8 text-center">
-                  <CalendarDays className="mx-auto mb-2 h-8 w-8 text-[#1a1a1a]/15" />
-                  <p className="text-[13px] text-[#1a1a1a]/30">예정된 일정 없음</p>
-                </div>
+                <CalendarEmpty message="예정된 일정 없음" compact />
               ) : (
                 <div className="divide-y divide-[#f0f0ec]">
                   {upcomingEvents.map((event) => {
-                    const style = getTypeStyle(event.type)
                     const daysLeft = Math.round(
                       (Date.parse(`${event.date}T00:00:00Z`) - Date.parse(`${todayStr}T00:00:00Z`)) /
                         86_400_000
@@ -550,7 +581,11 @@ export default function AdminCalendarPage() {
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex min-w-0 items-center gap-2">
-                            <span className={`h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
+                            <span
+                              aria-hidden="true"
+                              className="h-2 w-2 shrink-0 rounded-full"
+                              style={{ backgroundColor: getEventDotColor(event) }}
+                            />
                             <span className="truncate text-[13px] font-medium text-[#111110]">
                               {event.title}
                             </span>

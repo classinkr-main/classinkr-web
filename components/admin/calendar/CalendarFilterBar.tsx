@@ -1,90 +1,67 @@
 "use client"
 
-import Link from "next/link"
-import { Fragment, useMemo } from "react"
-import { ArrowUpRight, Check } from "lucide-react"
+import { useMemo } from "react"
 
 import type { CalendarEvent, EventSource } from "@/lib/calendar-data"
 import { getTeamMemberColor } from "@/lib/team-member-colors"
 
-import { EVENT_TYPES, SOURCE_OPTIONS, getEventSource } from "./event-style"
-
-function CheckChip({
-  checked,
-  label,
-  count,
-  onToggle,
-  dot,
-  avatar,
-  dim,
-}: {
-  checked: boolean
-  label: string
-  count?: number
-  onToggle: () => void
-  dot?: string
-  avatar?: boolean
-  dim?: boolean
-}) {
-  // 소스/그룹 색(dot) — 체크 시 배경·테두리·체크박스를 해당 색 틴트로. 색 없으면 기본 그린.
-  const accent = dot
-  const tinted = checked && Boolean(accent)
-
-  return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={onToggle}
-      style={
-        tinted ? { backgroundColor: `${accent}14`, borderColor: `${accent}59`, color: accent } : undefined
-      }
-      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
-        dim ? "opacity-45" : ""
-      } ${
-        checked
-          ? tinted
-            ? ""
-            : "border-[#084734]/25 bg-[#ECFDF5] text-[#084734]"
-          : "border-[#e8e8e4] bg-white text-[#1a1a1a]/45 hover:border-[#1a1a1a]/20 hover:text-[#111110]"
-      }`}
-    >
-      <span
-        style={tinted ? { backgroundColor: accent, borderColor: accent, color: "#fff" } : undefined}
-        className={`flex h-3 w-3 items-center justify-center rounded-[3px] border transition-colors ${
-          checked ? (tinted ? "" : "border-[#084734] bg-[#084734] text-white") : "border-[#c9c7c2] bg-white"
-        }`}
-      >
-        {checked && <Check className="h-2 w-2" strokeWidth={3.5} />}
-      </span>
-      {dot && !checked && (
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: dot }} />
-      )}
-      {avatar && (
-        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#f0f0ec] text-[9px] font-semibold text-[#615D59]">
-          {label.charAt(0)}
-        </span>
-      )}
-      <span>{label}</span>
-      {typeof count === "number" && (
-        <span
-          style={tinted ? { color: accent, opacity: 0.6 } : undefined}
-          className={tinted ? "" : checked ? "text-[#084734]/55" : "text-[#1a1a1a]/30"}
-        >
-          {count}
-        </span>
-      )}
-    </button>
-  )
-}
+import { SOURCE_OPTIONS, getEventSource } from "./event-style"
 
 export interface TeamMemberCount {
   name: string
   count: number
 }
 
-interface CalendarFilterBarProps {
+/**
+ * 범례 = 필터 (2026-08-19 개편).
+ *
+ * 이전에는 필터바 3단(소스 체크칩 + 담당자 체크칩 + 유형 범례)이 그리드 위에
+ * 가로 밴드로 쌓였고, 체크된 칩마다 소스색 틴트가 채워져 "필터가 캘린더보다
+ * 화려한" 상태였다. 이제 색이 무엇을 뜻하는지 알려주는 범례 한 줄이 곧 토글이다 —
+ * 켜짐 = 실색 도트 + 본문 잉크, 꺼짐 = 빈 도트 + 흐린 텍스트. 채움 틴트는 없다.
+ */
+function LegendToggle({
+  visible,
+  label,
+  count,
+  color,
+  onToggle,
+}: {
+  visible: boolean
+  label: string
+  count: number
+  color: string
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={visible}
+      aria-label={`${label} ${visible ? "숨기기" : "표시"}`}
+      onClick={onToggle}
+      className={`inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] font-medium transition-colors hover:bg-[#f0f0ec] ${
+        visible ? "text-[#3a3733]" : "text-[#1a1a1a]/30"
+      }`}
+    >
+      <span
+        aria-hidden="true"
+        className="h-2 w-2 shrink-0 rounded-full border transition-colors"
+        style={
+          visible
+            ? { backgroundColor: color, borderColor: color }
+            : { backgroundColor: "transparent", borderColor: color }
+        }
+      />
+      <span className={visible ? "" : "line-through decoration-[#1a1a1a]/20"}>{label}</span>
+      <span className={`tabular-nums ${visible ? "text-[#1a1a1a]/35" : "text-[#1a1a1a]/20"}`}>
+        {count}
+      </span>
+    </button>
+  )
+}
+
+interface CalendarFilterLineProps {
   events: CalendarEvent[]
   visibleEvents: CalendarEvent[]
   teamMembers: TeamMemberCount[]
@@ -92,11 +69,11 @@ interface CalendarFilterBarProps {
   hiddenAssignees: Set<string>
   onToggleSource: (source: EventSource) => void
   onToggleAssignee: (name: string) => void
-  onSetAllSources: (visible: boolean) => void
-  onSetAllAssignees: (visible: boolean) => void
+  onShowAll: () => void
+  onHideAll: () => void
 }
 
-export function CalendarFilterBar({
+export function CalendarFilterLine({
   events,
   visibleEvents,
   teamMembers,
@@ -104,9 +81,9 @@ export function CalendarFilterBar({
   hiddenAssignees,
   onToggleSource,
   onToggleAssignee,
-  onSetAllSources,
-  onSetAllAssignees,
-}: CalendarFilterBarProps) {
+  onShowAll,
+  onHideAll,
+}: CalendarFilterLineProps) {
   const sourceCounts = useMemo(() => {
     const map: Record<string, number> = {}
     for (const option of SOURCE_OPTIONS) map[option.value] = 0
@@ -117,99 +94,50 @@ export function CalendarFilterBar({
     return map
   }, [events])
 
-  const allSourcesVisible = hiddenSources.size === 0
-  const allAssigneesVisible = teamMembers.every((member) => !hiddenAssignees.has(member.name))
-  const assigneeSourcesVisible = !hiddenSources.has("team_event")
+  const allVisible = hiddenSources.size === 0 && hiddenAssignees.size === 0
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-      {/* 소스 필터 */}
-      <div className="flex flex-wrap items-center gap-1.5 px-4 py-2.5">
-        <span className="mr-1 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
-          소스
-        </span>
-        {SOURCE_OPTIONS.map((option) => (
-          <Fragment key={option.value}>
-            <CheckChip
-              checked={!hiddenSources.has(option.value)}
-              label={option.label}
-              count={sourceCounts[option.value] ?? 0}
-              onToggle={() => onToggleSource(option.value)}
-              dot={option.dot}
-            />
-            {option.value === "event" && (
-              <Link
-                href="/admin/events"
-                title="공개 행사 관리로 이동"
-                className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-1 text-[10px] font-medium text-[#1a1a1a]/40 transition-colors hover:text-[#111110] hover:underline"
-              >
-                행사 관리
-                <ArrowUpRight className="h-2.5 w-2.5" />
-              </Link>
-            )}
-          </Fragment>
-        ))}
-        <button
-          type="button"
-          onClick={() => onSetAllSources(!allSourcesVisible)}
-          className="ml-auto shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
-        >
-          {allSourcesVisible ? "모두 해제" : "모두 선택"}
-        </button>
-      </div>
+    <div className="flex flex-wrap items-center gap-x-1 gap-y-1 border-b border-[#f0f0ec] bg-[#fcfcfa] px-2.5 py-1.5">
+      {SOURCE_OPTIONS.map((option) => (
+        <LegendToggle
+          key={option.value}
+          visible={!hiddenSources.has(option.value)}
+          label={option.label}
+          count={sourceCounts[option.value] ?? 0}
+          color={option.dot}
+          onToggle={() => onToggleSource(option.value)}
+        />
+      ))}
 
-      {/* 담당자 필터 — 팀(공용) + 팀원 개인. 팀 칩은 팀 일정 소스와 연동 */}
       {teamMembers.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] px-4 py-2.5">
-          <span className="mr-1 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
-            담당자
-          </span>
-          <CheckChip
-            checked={!hiddenSources.has("calendar")}
-            label="팀"
-            count={sourceCounts.calendar ?? 0}
-            onToggle={() => onToggleSource("calendar")}
-            dot="#084734"
-          />
+        <>
+          <span aria-hidden="true" className="mx-1 h-3.5 w-px shrink-0 bg-[#e8e8e4]" />
           {teamMembers.map((member) => (
-            <CheckChip
+            <LegendToggle
               key={member.name}
-              checked={!hiddenAssignees.has(member.name)}
+              visible={!hiddenAssignees.has(member.name)}
               label={member.name}
               count={member.count}
+              color={getTeamMemberColor(member.name)}
               onToggle={() => onToggleAssignee(member.name)}
-              dot={getTeamMemberColor(member.name)}
-              avatar
-              dim={!assigneeSourcesVisible}
             />
           ))}
-          <button
-            type="button"
-            onClick={() => onSetAllAssignees(!allAssigneesVisible)}
-            className="ml-auto shrink-0 rounded-md px-2 py-1 text-[11px] font-medium text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
-          >
-            {allAssigneesVisible ? "모두 해제" : "모두 선택"}
-          </button>
-        </div>
+        </>
       )}
 
-      {/* 요약 + 유형 범례 */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-[#f0f0ec] bg-[#fafaf8] px-4 py-2.5 text-[12px] text-[#1a1a1a]/45">
+      <span className="ml-auto flex shrink-0 items-center gap-2 pl-2 text-[11px] text-[#1a1a1a]/40">
         <span>
-          표시중 <span className="font-semibold text-[#111110]">{visibleEvents.length}개</span>
-          <span className="text-[#1a1a1a]/30"> / 이 기간 {events.length}개</span>
+          표시중 <span className="font-semibold text-[#111110]">{visibleEvents.length}</span>
+          <span className="text-[#1a1a1a]/30"> / {events.length}</span>
         </span>
-        {EVENT_TYPES.slice(0, 4).map((type) => {
-          const count = visibleEvents.filter((event) => event.type === type.value).length
-          if (count === 0) return null
-          return (
-            <span key={type.value} className="flex items-center gap-1.5">
-              <span className={`h-2 w-2 rounded-full ${type.dot}`} />
-              {type.label} {count}
-            </span>
-          )
-        })}
-      </div>
+        <button
+          type="button"
+          onClick={allVisible ? onHideAll : onShowAll}
+          className="rounded-md px-1.5 py-1 font-medium text-[#1a1a1a]/45 transition-colors hover:bg-[#f0f0ec] hover:text-[#111110]"
+        >
+          {allVisible ? "모두 해제" : "모두 표시"}
+        </button>
+      </span>
     </div>
   )
 }

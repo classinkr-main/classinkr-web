@@ -412,7 +412,9 @@ interface PublicEventCalendarRow {
   updated_at: string
 }
 
-async function getPublicEventsAsCalendarEvents(): Promise<CalendarEvent[]> {
+// 연결 상태(/api/admin/calendar/health)가 "미래 회차 존재 여부"를 회차 봉투 해석까지
+// 그대로 재사용할 수 있도록 export 한다 — 날짜 컬럼을 다시 해석하는 사본을 만들지 않는다.
+export async function getPublicEventsAsCalendarEvents(): Promise<CalendarEvent[]> {
   try {
     const supabase = createSupabaseAdminClient()
     const primary = await supabase

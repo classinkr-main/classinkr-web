@@ -2,18 +2,15 @@
 
 import type { CalendarEvent } from "@/lib/calendar-data"
 
-import {
-  getEventBadge,
-  getEventDotColor,
-  getEventSourceLabel,
-  getTypeStyle,
-} from "./event-style"
+import { getEventDotColor, getEventSourceLabel } from "./event-style"
 
 /**
  * 그리드·레인 어디에나 들어가는 한 줄짜리 일정 칩.
  *
- * 왼쪽 inset 라인 = 소스 색, 배경·글자 = 유형 색. 두 축을 겹쳐 쓰는 이유는
- * "어디서 온 일정인가"(소스)와 "무슨 성격인가"(유형)가 독립적이기 때문이다.
+ * 색축은 소스 하나뿐이다(2026-08-19 개편): 왼쪽 레일 = 소스 색, 본문은 뉴트럴.
+ * 이전에는 유형색 배경·유형색 도트가 소스 레일 위에 겹쳐 한 칩에서 색이 세 번
+ * 말을 걸었다 — 유형은 일 상세·목록의 텍스트 라벨로 내려갔다.
+ * 파스텔 채움 없이 흰 바탕 + 헤어라인 보더(아웃라인 지향, DESIGN.md §1).
  */
 export function EventChip({
   event,
@@ -26,8 +23,6 @@ export function EventChip({
   showTime?: boolean
   className?: string
 }) {
-  const style = getTypeStyle(event.type)
-  const badge = getEventBadge(event)
   const label = `${event.title}${event.time ? ` ${event.time}` : ""} · ${getEventSourceLabel(event)}`
 
   return (
@@ -44,19 +39,13 @@ export function EventChip({
       disabled={!onClick}
       title={label}
       aria-label={label}
-      style={{ boxShadow: `inset 2px 0 0 0 ${getEventDotColor(event)}` }}
-      className={`flex w-full items-center gap-1 truncate rounded border py-0.5 pl-2 pr-1.5 text-left text-[10px] font-medium ${style.bg} ${style.color} ${
-        onClick ? "cursor-pointer hover:brightness-95" : "cursor-default"
+      style={{ borderLeftColor: getEventDotColor(event) }}
+      className={`flex w-full items-center gap-1 truncate rounded-[4px] border border-[#ecebe7] border-l-[3px] bg-white py-[2px] pl-1.5 pr-1 text-left text-[10px] font-medium text-[#3a3733] ${
+        onClick ? "cursor-pointer transition-colors hover:bg-[#fafaf8]" : "cursor-default"
       } ${className}`}
     >
-      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
-      {badge && (
-        <span className="rounded bg-white/80 px-1 py-0 text-[9px] font-semibold text-[#111110]/70">
-          {badge}
-        </span>
-      )}
       {showTime && event.time && (
-        <span className="shrink-0 tabular-nums opacity-70">{event.time}</span>
+        <span className="shrink-0 text-[9px] tabular-nums text-[#1a1a1a]/40">{event.time}</span>
       )}
       <span className="truncate">{event.title}</span>
     </button>
@@ -78,7 +67,6 @@ export function EventBar({
   /** 막대가 차지하는 칸 수. 좁으면 시각을 접고 제목만 남긴다. */
   spanDays?: number
 }) {
-  const style = getTypeStyle(event.type)
   const label = `${event.title}${event.time ? ` ${event.time}` : ""} · ${getEventSourceLabel(event)}`
   // 하루짜리 막대는 폭이 한 칸(≈40px)뿐이라 시각을 넣으면 제목이 통째로 밀려난다.
   // 시각은 어차피 일 상세에서 읽으므로, 좁을 때는 무엇인지(제목)를 우선한다.
@@ -92,21 +80,21 @@ export function EventBar({
       title={label}
       aria-label={label}
       style={{
-        backgroundColor: `${getEventDotColor(event)}1F`,
-        borderColor: `${getEventDotColor(event)}59`,
-        borderLeftWidth: clippedStart ? 0 : 3,
-        borderLeftColor: getEventDotColor(event),
+        borderLeftWidth: clippedStart ? 1 : 3,
+        borderLeftColor: clippedStart ? "#ecebe7" : getEventDotColor(event),
         borderTopLeftRadius: clippedStart ? 0 : 4,
         borderBottomLeftRadius: clippedStart ? 0 : 4,
         borderTopRightRadius: clippedEnd ? 0 : 4,
         borderBottomRightRadius: clippedEnd ? 0 : 4,
       }}
-      className={`flex h-full w-full min-w-0 items-center gap-1 overflow-hidden border px-1.5 py-0.5 text-left text-[10px] font-medium ${style.color} ${
-        onClick ? "cursor-pointer hover:brightness-95" : "cursor-default"
+      className={`flex h-full w-full min-w-0 items-center gap-1 overflow-hidden border border-[#ecebe7] bg-white px-1.5 py-0.5 text-left text-[10px] font-medium text-[#3a3733] ${
+        onClick ? "cursor-pointer transition-colors hover:bg-[#fafaf8]" : "cursor-default"
       }`}
     >
       {clippedStart && <span aria-hidden="true" className="shrink-0 opacity-50">‹</span>}
-      {showTime && <span className="shrink-0 tabular-nums opacity-70">{event.time}</span>}
+      {showTime && (
+        <span className="shrink-0 text-[9px] tabular-nums text-[#1a1a1a]/40">{event.time}</span>
+      )}
       <span className="truncate">{event.title}</span>
       {clippedEnd && <span aria-hidden="true" className="ml-auto shrink-0 opacity-50">›</span>}
     </button>
