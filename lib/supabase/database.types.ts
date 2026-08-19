@@ -692,40 +692,10 @@ export interface Receipt {
 }
 
 /* ─── HW Sales Types ─── */
-
-export type HwSaleStatus = "pending" | "shipped" | "delivered" | "cancelled";
-
-export interface HwSale {
-  id: string;
-  sale_number: string;
-  contract_id: string | null;
-  partner_id: string;
-  status: HwSaleStatus;
-  delivery_date: string | null;
-  delivered_at: string | null;
-  installer: string | null;
-  delivery_address: string | null;
-  notes: string | null;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface HwSaleItem {
-  id: string;
-  sale_id: string;
-  sku: string;
-  product_name: string;
-  quantity: number;
-  unit_price: number;
-  serial_notes: string | null;
-  sort_order: number;
-}
-
-export type HwSaleInsert = Omit<HwSale, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string; updated_at?: string };
-export type HwSaleUpdate = Partial<Omit<HwSale, "id" | "created_at">>;
-export type HwSaleItemInsert = Omit<HwSaleItem, "id"> & { id?: string };
-export type HwSaleItemUpdate = Partial<Omit<HwSaleItem, "id">>;
+// (2026-08-18 스키마 드리프트 감사) hw_sales · hw_sale_items 타입을 제거했다.
+// 두 테이블은 어떤 마이그레이션에도 CREATE TABLE 이 없고 코드에서도 .from() 참조가 0건이었다.
+// 타입만 남아 있으면 `.from("hw_sales")` 가 타입 검사를 통과한 뒤 런타임에 42P01 로 죽는다.
+// 하드웨어 판매 실적은 branch_hw_sales_monthly(lib/repositories/branch-hw.ts)가 담당한다.
 
 /* ─── Insert Types (id, created_at 등 자동 생성 필드 제외) ─── */
 
@@ -991,16 +961,6 @@ export interface Database {
         Row: Receipt;
         Insert: ReceiptInsert;
         Update: ReceiptUpdate;
-      };
-      hw_sales: {
-        Row: HwSale;
-        Insert: HwSaleInsert;
-        Update: HwSaleUpdate;
-      };
-      hw_sale_items: {
-        Row: HwSaleItem;
-        Insert: HwSaleItemInsert;
-        Update: HwSaleItemUpdate;
       };
       partner_users: {
         Row: PartnerUser;
