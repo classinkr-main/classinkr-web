@@ -5,6 +5,7 @@ import {
   hardwareCardGroup,
   isCoreIfpProduct,
   isPromotedProduct,
+  periodKey,
 } from "@/components/admin/hardware/inventory/shared"
 
 // 카테고리 카드 단일 분류 회귀 — 서술 명칭 매칭 시절의 오계상(브라켓→카메라, STDM1→스탠드)이
@@ -49,6 +50,23 @@ describe("isPromotedProduct / isCoreIfpProduct", () => {
   it("anchors core IFP matching to the product prefix", () => {
     expect(isCoreIfpProduct('86" IFP', "86")).toBe(true)
     expect(isCoreIfpProduct('책상용 86" IFP 거치대', "86")).toBe(false)
+  })
+})
+
+// 분기·연간 모두 회계연도(4월 시작) 귀속 — 연간만 달력연도라 분기 합 ≠ 연간이던 혼합 회귀 방지.
+describe("periodKey", () => {
+  it("assigns fiscal-year keys so April starts the year and Q1-Q3 belong to it", () => {
+    expect(periodKey("2026-08-10", "year")).toEqual({ key: "FY2026", label: "26-27 회계연도" })
+    expect(periodKey("2026-04-01", "year")).toEqual({ key: "FY2026", label: "26-27 회계연도" })
+  })
+
+  it("attributes January-March to the previous fiscal year for both quarter and year", () => {
+    expect(periodKey("2026-02-10", "year")).toEqual({ key: "FY2025", label: "25-26 회계연도" })
+    expect(periodKey("2026-02-10", "quarter")).toEqual({ key: "2025Q4", label: "25-26 회계연도 4분기" })
+  })
+
+  it("keeps month buckets on calendar months", () => {
+    expect(periodKey("2026-08-10", "month")).toEqual({ key: "2026-08", label: "2026년 8월" })
   })
 })
 

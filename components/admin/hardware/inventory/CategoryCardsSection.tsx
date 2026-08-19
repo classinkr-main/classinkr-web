@@ -100,7 +100,9 @@ function CategoryCardsSection({ categoryCards, etcSummary }: { categoryCards: Ca
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#F6F5F4] text-[#615D59]">
             <Package className="h-4 w-4" />
           </span>
-          <p className="text-[11px] font-bold tracking-[0.04em] text-[#615D59]">액세서리 · 기타</p>
+          <p className="text-[11px] font-bold tracking-[0.04em] text-[#615D59]">
+            액세서리 · 기타 <span className="font-semibold text-[#A39E98]" title="위치맵에서 숨긴 내부 코드(A1·B1·D2)도 이 합계에는 포함됩니다">· 내부 코드 포함</span>
+          </p>
           <p className="text-[12.5px] font-bold tabular-nums text-[#111110]">
             창고 {formatNumber(etcSummary.warehouse)}대
             <span className="ml-1 font-semibold text-[#A39E98]">· {formatNumber(etcSummary.count)}종</span>

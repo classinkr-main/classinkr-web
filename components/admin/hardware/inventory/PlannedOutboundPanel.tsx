@@ -35,6 +35,8 @@ interface PlannedOutboundPanelProps {
   data: HardwareDashboard | null
   plannedMovementQuantity: number
   plannedStaleGroupCount: number
+  // hardware.finalize 표시용 — 없으면 확정 버튼을 비활성+사유 툴팁으로 내린다(강제는 서버 게이트).
+  canFinalize: boolean
   startPlannedEntry: () => void
   plannedConfirmLocked: boolean
   plannedPagination: AdminListPaginationResult<PlannedGroup>
@@ -55,6 +57,7 @@ function PlannedOutboundPanel({
   data,
   plannedMovementQuantity,
   plannedStaleGroupCount,
+  canFinalize,
   startPlannedEntry,
   plannedConfirmLocked,
   plannedPagination,
@@ -146,7 +149,8 @@ function PlannedOutboundPanel({
                     <button
                       type="button"
                       onClick={() => void confirmPlannedGroup(group)}
-                      disabled={plannedConfirmLocked}
+                      disabled={plannedConfirmLocked || !canFinalize}
+                      title={canFinalize ? undefined : "출고 확정에는 확정 권한(hardware.finalize)이 필요합니다"}
                       className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-md bg-[#084734] px-2.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <CheckCheck className="h-3.5 w-3.5" />
@@ -224,7 +228,8 @@ function PlannedOutboundPanel({
                           <button
                             type="button"
                             onClick={() => void confirmPlannedMovement(movement)}
-                            disabled={plannedConfirmLocked}
+                            disabled={plannedConfirmLocked || !canFinalize}
+                            title={canFinalize ? undefined : "출고 확정에는 확정 권한(hardware.finalize)이 필요합니다"}
                             className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-[#084734] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-95 motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             <CheckCheck className="h-3.5 w-3.5" />

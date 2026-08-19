@@ -63,6 +63,30 @@
 - **샘플 에이징 밴드**: 대여중 90일+/1년+/2년+ 카운트 칩 + 필터(선택 시 상태 필터 대여중 고정).
 - 죽은 표면 정리: `HardwareInventoryClient` 재수출 배럴 제거(소비자 없음 확인), `isPromotedProduct`/`isCoreIfpProduct`는 shared로 이동.
 
+### 2-8. 진단 라운드 후속 — 모순 해소·즉시 수리 패키지 (2026-08-19)
+
+운영 결정 3건 반영:
+- **연간 = 회계연도 통일**: `periodKey`(shared로 이동, 테스트 포함)가 분기·연간 모두 4월 시작
+  회계연도로 귀속 — 분기 합 = 연간 성립(FY26: 59+24=83 실측). 달력연도 혼용 제거.
+- **판촉(promoted) = 점검 축**: 판촉 라인은 부족/주문검토 판정에서 제외(`low`/`orderRecommended`
+  false), 음수 창고는 "원장 점검 필요" 알림(critical, 목록 최상단 고정)으로 분리. 위치맵
+  "위치별 총량"도 판촉 제외 + `판촉 별도 창고 N대` 병기.
+- **내부 코드(A1·B1·D2) 노출 = 기타 스트립만**: 위치맵 숨김(사용자 지정)은 유지하고 스트립에
+  `· 내부 코드 포함` 캡션으로 명시.
+
+즉시 수리 패키지:
+- **예정 큐 30행 캡 해제** — 실측 3행(전부 30일+ 방치 딜)이 잘리고 있었음. 큐는 전량 원칙,
+  상한은 movements 2000행 캡이 담당.
+- **update 권한 정렬**: 실현 기록 수정·예정→실현 상태 전환은 `hardware.finalize` 요구
+  (예정 행 편집은 에디터 유지), `hardware.movement.update` 감사 로그 신설 + void 감사에 사유 포함.
+- **클라이언트 capability 반영**: `/api/admin/hardware`가 캐시 밖 `viewer.canFinalize`를 내려주고
+  확정·취소·실현 수정 버튼을 비활성+사유 툴팁으로 표시(강제는 서버 게이트).
+- **write-only 필드 해소**: 상세 시트에 보관 장소·시리얼(N)·취소 정보(사유·취소자·일시) 노출.
+- **검색 디바운스**: `useDeferredValue`로 내역 검색·질문형 검색의 키당 2,000행 정렬 제거.
+- **오버레이 지연 로드**: 상시 마운트 시트 3종(MovementDetail·CustomerHistory·SampleUnit) dynamic 분리.
+- **분류 정본 lib 승격**: `lib/hardware/product.ts`(isPromoted/isCoreIfp/hardwareCardGroup) 신설,
+  shared는 재수출 — 서버(repositories)와 클라이언트가 같은 판정 사용.
+
 ### 검증
 - 게이트: `npx eslint app components lib --max-warnings=0` + `npx tsc --noEmit` + 하드웨어 vitest. (build는 live Supabase 필요라 오프라인 게이트는 lint+tsc+test.)
 

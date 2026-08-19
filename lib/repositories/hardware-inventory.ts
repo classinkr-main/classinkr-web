@@ -3,6 +3,7 @@ import "server-only"
 import { createHash } from "crypto"
 import { revalidateTag, unstable_cache } from "next/cache"
 
+import { isPromotedProduct } from "@/lib/hardware/product"
 import { fetchAllSupabaseRows, listFreshHwInbound, listFreshHwOutbound, listFreshHwStock } from "@/lib/repositories/branch-hw"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
@@ -797,7 +798,8 @@ export async function voidHardwareMovement(
 
 export async function updateHardwareMovement(
   id: string,
-  input: CreateHardwareMovementInput
+  input: CreateHardwareMovementInput,
+  options?: { canFinalize?: boolean }
 ): Promise<HardwareMovement> {
   const productName = normalizeProductName(input.productName)
   if (!productName) throw new Error("제품명은 필수입니다.")
@@ -811,13 +813,15 @@ export async function updateHardwareMovement(
   const sb = createSupabaseAdminClient()
   const { data: existing, error: existingError } = await sb
     .from("hardware_movements")
-    .select("id,source,voided_at,converted_from_movement_id,converted_to_movement_id")
+    .select("id,source,movement_type,status,voided_at,converted_from_movement_id,converted_to_movement_id")
     .eq("id", id)
     .maybeSingle()
   if (existingError) throw existingError
   if (!existing) throw new Error("원장 기록을 찾을 수 없습니다.")
   const row = existing as {
     source: string
+    movement_type: string
+    status: string | null
     voided_at: string | null
     converted_from_movement_id: string | null
     converted_to_movement_id: string | null
@@ -830,6 +834,19 @@ export async function updateHardwareMovement(
   }
   if (row.converted_from_movement_id || row.converted_to_movement_id) {
     throw new Error("전환된 기록은 수정할 수 없습니다.")
+  }
+  // 권한 정렬: 확정·취소가 hardware.finalize인데 update는 무제한이면 실현 원장을 우회 재작성할 수
+  // 있다. 예정(planned) 행 편집은 에디터 업무라 열어두고, (1) 실현 기록 수정과 (2) 예정→실현
+  // 상태 전환(확정 우회)만 finalize를 요구한다.
+  if (options?.canFinalize === false) {
+    const wasPlanned = row.movement_type === "outbound" && isPlannedStatus(row.status)
+    if (!wasPlanned) {
+      throw new Error("실제 반영된 기록 수정은 확정 권한(hardware.finalize)이 필요합니다.")
+    }
+    const staysPlanned = input.movementType === "outbound" && isPlannedStatus(cleanString(input.status))
+    if (!staysPlanned) {
+      throw new Error("예정을 실제 출고로 바꾸는 확정은 확정 권한(hardware.finalize)이 필요합니다.")
+    }
   }
 
   let itemId = input.itemId
@@ -1457,8 +1474,10 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
         weeklyOutboundAvg,
         trendOrderPoint,
         daysUntilStockout,
-        low: availableStock <= item.reorder_point,
-        orderRecommended: availableStock <= trendOrderPoint,
+        // 판촉(promoted) 라인엔 재주문 개념이 없다 — 부족/주문검토 축에서 제외하고,
+        // 음수·이상치는 알림 빌더의 "원장 점검 필요"로 따로 올린다(운영 결정 2026-08-19).
+        low: !isPromotedProduct(item.name) && availableStock <= item.reorder_point,
+        orderRecommended: !isPromotedProduct(item.name) && availableStock <= trendOrderPoint,
         locationBalances: locationRows,
         lotBalances: lotRows,
       }
@@ -1476,13 +1495,27 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
   const recentOutbound = movementRows
     .filter((movement) => movement.movement_type === "outbound")
     .slice(0, 30)
+  // 예정 큐는 확정을 기다리는 할 일 목록 — 최근 N건이 아니라 전량이 원칙이다.
+  // (기존 slice(0,30)은 31건째부터 화면·FIFO 미리보기·확정 대상에서 소리 없이 잘랐다.
+  //  movementRows가 이미 2000건 캡이라 상한은 그쪽이 담당한다.)
   const plannedMovements = movementRows
     .filter((movement) => movement.movement_type === "outbound" && isPlannedStatus(movement.status))
-    .slice(0, 30)
 
   const alerts: HardwareAlert[] = []
   for (const row of rows) {
-    if (row.low) {
+    // 음수 창고 = 부족이 아니라 원장 이상 — 재주문 경보 대신 점검 신호로 올린다.
+    // (현재 실사례: STD1(promoted) −16. 판촉 라인은 low 자체가 꺼져 있어 이 분기가 유일한 경보.)
+    if (row.warehouseStock < 0) {
+      alerts.push({
+        id: `check-${row.itemId}`,
+        severity: "critical",
+        product: row.product,
+        title: "원장 점검 필요",
+        detail: `창고 ${row.warehouseStock}대 · 가용 ${row.availableStock}대 — ${
+          isPromotedProduct(row.product) ? "promoted 판정 또는 시트 수치 정리 필요" : "원장 유형·시트 수치 정리 필요"
+        }`,
+      })
+    } else if (row.low) {
       alerts.push({
         id: `low-${row.itemId}`,
         severity: "critical",
@@ -1512,7 +1545,12 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
   }
 
   // 실신호가 캡에 밀리지 않게 muted(미가동 품목 소음)와 분리해 각각 캡을 적용한다.
-  const activeAlerts = alerts.filter((alert) => !alert.muted).slice(0, 12)
+  // 원장 점검(음수 재고)은 가장 급한 실신호 — 재고행 정렬과 무관하게 목록 최상단에 둔다.
+  const checkAlerts = alerts.filter((alert) => alert.id.startsWith("check-"))
+  const activeAlerts = [
+    ...checkAlerts,
+    ...alerts.filter((alert) => !alert.muted && !alert.id.startsWith("check-")),
+  ].slice(0, 12)
   const mutedAlerts = alerts.filter((alert) => alert.muted).slice(0, 12)
 
   return {

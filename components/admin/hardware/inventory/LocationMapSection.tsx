@@ -15,6 +15,8 @@ interface LocationMapRow {
 
 interface LocationMapData {
   locationTotals: Array<{ name: string; desc: string; quantity: number; tone: string; pct: string }>
+  // 판촉(promoted) 라인 창고 합 — 총량(비판촉)과 분리 병기. 판촉 라인이 없으면 null.
+  promotedWarehouse: number | null
   featuredRows: LocationMapRow[]
   restRows: LocationMapRow[]
 }
@@ -40,7 +42,7 @@ function LocationMapSection({
       </div>
       <div className="grid lg:grid-cols-[280px_minmax(0,1fr)]">
         <div className="border-b border-[rgba(0,0,0,0.08)] px-5 py-[18px] lg:border-b-0 lg:border-r">
-          <p className="text-[12px] font-bold text-[#111110]">위치별 총량</p>
+          <p className="text-[12px] font-bold text-[#111110]">위치별 총량 <span className="font-semibold text-[#A39E98]">· 판촉 제외</span></p>
           <div className="mt-3.5 flex flex-col gap-3">
             {locationMap.locationTotals.map((loc) => (
               <div key={loc.name}>
@@ -53,6 +55,14 @@ function LocationMapSection({
                 </div>
               </div>
             ))}
+            {locationMap.promotedWarehouse != null && (
+              <p
+                className={`text-[11px] font-semibold tabular-nums ${locationMap.promotedWarehouse < 0 ? "text-[#B43E3E]" : "text-[#615D59]"}`}
+                title={locationMap.promotedWarehouse < 0 ? "판촉 라인 창고가 음수 — 원장 점검 필요(알림 참조)" : "판촉(promoted) 라인 창고 합 — 총량과 분리 집계"}
+              >
+                판촉 별도 창고 {formatNumber(locationMap.promotedWarehouse)}대{locationMap.promotedWarehouse < 0 ? " · 점검" : ""}
+              </p>
+            )}
           </div>
         </div>
         <div className="overflow-x-auto">

@@ -8,6 +8,7 @@ import type { ReactNode } from "react"
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
+import { fiscalQuarter } from "@/lib/branch/fiscal"
 
 export type HardwareMovementType = "inbound" | "outbound" | "return" | "transfer" | "repair" | "adjust"
 
@@ -107,6 +108,11 @@ export interface HardwareDashboard {
     rows_skipped: number | null
     error: string | null
   } | null
+  // 요청자별 필드 — API 라우트가 캐시된 대시보드 밖에서 매 요청 계산해 붙인다(Cache-Control private).
+  // 없으면(구버전 응답·테스트) UI는 열어두고 서버 게이트만 믿는다.
+  viewer?: {
+    canFinalize: boolean
+  }
 }
 
 export interface HardwareCrmOrderCandidate {
@@ -282,26 +288,31 @@ export function elapsedDaysSince(dateKey: string | null): number | null {
 }
 
 // ---- 카테고리 카드 단일 분류 ----
-// 제품 분류 정규식이 화면마다 제각각이면 카드·집계·위치맵 수치가 서로 어긋난다(브라켓이 카메라
-// 대수로 계상되는 식). 카드 축은 이 함수 하나만 보고, 서술 명칭("카메라"·"스탠드") 매칭 대신
-// 장비 코드(T1·S1·STD1)로만 판별한다. STDM1(110")·110/65" 보드·터치펜(A1/B1/D2)·OPS/POE/
-// 케이블·브라켓 등 나머지는 전부 "etc"(기타 요약)로 모아 비가시 재고를 없앤다.
-export type HardwareCardGroup = "ifp86" | "ifp75" | "camera" | "stand" | "etc"
+// 정의는 서버(repositories)와 공유하는 lib/hardware/product.ts가 정본 — 여기서는 클라이언트
+// 소비자용 재수출만 한다(shared는 "use client"라 서버 코드가 이 파일을 직접 import하지 않는다).
+export {
+  hardwareCardGroup,
+  isCoreIfpProduct,
+  isPromotedProduct,
+  type HardwareCardGroup,
+} from "@/lib/hardware/product"
 
-export function isPromotedProduct(product: string): boolean {
-  return /\(\s*promoted\s*\)/i.test(product)
-}
-
-export function isCoreIfpProduct(product: string, size: "75" | "86"): boolean {
-  return new RegExp(`^${size}["”]?\\s*IFP`, "i").test(product)
-}
-
-export function hardwareCardGroup(product: string): HardwareCardGroup {
-  if (isCoreIfpProduct(product, "86")) return "ifp86"
-  if (isCoreIfpProduct(product, "75")) return "ifp75"
-  if (/\bT1\b|\bS1\b/i.test(product)) return "camera"
-  if (/\bSTD1\b/i.test(product)) return "stand"
-  return "etc"
+// 출고 기간 집계 버킷 키/라벨 — 홈 판매 요약과 기간 집계가 같은 키를 쓰는 SSOT.
+// 분기·연간 모두 회계연도(4월 시작~3월 종료) 기준으로 귀속한다(운영 결정 2026-08-19 —
+// 연간만 달력연도라 분기 합과 연간이 어긋나던 혼합 해소).
+export function periodKey(date: string, granularity: PeriodGranularity): { key: string; label: string } {
+  const year = date.slice(0, 4)
+  const yearNum = Number(year) || 0
+  const month = Number(date.slice(5, 7)) || 1
+  const fyStartYear = month >= 4 ? yearNum : yearNum - 1
+  const fyLabel = `${String(fyStartYear % 100).padStart(2, "0")}-${String((fyStartYear + 1) % 100).padStart(2, "0")}`
+  if (granularity === "year") return { key: `FY${fyStartYear}`, label: `${fyLabel} 회계연도` }
+  if (granularity === "quarter") {
+    // 4~6월=1분기, 7~9월=2분기, 10~12월=3분기, 1~3월=4분기(직전 4월 시작 회계연도에 귀속).
+    const quarter = fiscalQuarter(month)
+    return { key: `${fyStartYear}Q${quarter}`, label: `${fyLabel} 회계연도 ${quarter}분기` }
+  }
+  return { key: date.slice(0, 7), label: `${year}년 ${month}월` }
 }
 
 export function todayKey() {

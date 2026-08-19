@@ -2,7 +2,7 @@
 
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react"
 import dynamic from "next/dynamic"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import {
   ArrowDownToLine,
@@ -34,7 +34,6 @@ import {
 
 import { adminFetch, adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import { paginateAdminList } from "@/lib/admin-list-pagination"
-import { fiscalQuarter } from "@/lib/branch/fiscal"
 import CategoryCardsSection from "@/components/admin/hardware/inventory/CategoryCardsSection"
 import ImportFreshnessStrip from "@/components/admin/hardware/inventory/ImportFreshnessStrip"
 import SalesPeriodSummary from "@/components/admin/hardware/inventory/SalesPeriodSummary"
@@ -43,10 +42,7 @@ import LocationMapSection from "@/components/admin/hardware/inventory/LocationMa
 import PlannedOutboundPanel from "@/components/admin/hardware/inventory/PlannedOutboundPanel"
 import StockLevelsSection from "@/components/admin/hardware/inventory/StockLevelsSection"
 import AlertsOutboundSections from "@/components/admin/hardware/inventory/AlertsOutboundSections"
-import MovementDetailSheet from "@/components/admin/hardware/inventory/MovementDetailSheet"
-import CustomerHistorySheet from "@/components/admin/hardware/inventory/CustomerHistorySheet"
 import SampleTrackerSection from "@/components/admin/hardware/inventory/SampleTrackerSection"
-import SampleUnitSheet from "@/components/admin/hardware/inventory/SampleUnitSheet"
 import {
   elapsedDaysSince,
   formatCurrency,
@@ -61,6 +57,7 @@ import {
   MOVEMENT_LABEL,
   MOVEMENT_TONE,
   outboundSaleType,
+  periodKey,
   previewFifoLots,
   SALE_TYPE_META,
   todayKey,
@@ -252,22 +249,7 @@ function defaultEntryItemId(items: HardwareItem[]): string {
   return (board86 ?? items[0])?.id ?? ""
 }
 
-// 출고 기간 집계 버킷 키/라벨. occurred_at(YYYY-MM-DD) 문자열 기준.
-function periodKey(date: string, granularity: PeriodGranularity): { key: string; label: string } {
-  const year = date.slice(0, 4)
-  const yearNum = Number(year) || 0
-  const month = Number(date.slice(5, 7)) || 1
-  if (granularity === "year") return { key: year, label: `${year}년` }
-  if (granularity === "quarter") {
-    // 회계연도(4월 시작~3월 종료) 기준 분기 — lib/branch/fiscal SSOT.
-    // 4~6월=1분기, 7~9월=2분기, 10~12월=3분기, 1~3월=4분기(직전 4월 시작 회계연도에 귀속).
-    const quarter = fiscalQuarter(month)
-    const fyStartYear = month >= 4 ? yearNum : yearNum - 1
-    const fyLabel = `${String(fyStartYear % 100).padStart(2, "0")}-${String((fyStartYear + 1) % 100).padStart(2, "0")}`
-    return { key: `${fyStartYear}Q${quarter}`, label: `${fyLabel} 회계연도 ${quarter}분기` }
-  }
-  return { key: date.slice(0, 7), label: `${year}년 ${month}월` }
-}
+// 출고 기간 집계 버킷 키/라벨 — shared.periodKey로 이동(분기·연간 회계연도 SSOT, 테스트 포함).
 
 // 확정 판매·설치 출고만 남긴다(무효·예정·샘플·수리 제외) — 기간별 출고 집계(outboundBuckets)와
 // 홈 판매·설치 요약(salesPeriodSummary)이 같은 모수를 쓰도록 필터를 SSOT로 뽑아둔다.
@@ -622,6 +604,11 @@ function parseHardwareLineText(line: string) {
 
 const CrmConfirmModal = dynamic(() => import("@/components/admin/hardware/inventory/CrmConfirmModal"), { loading: () => null })
 const VoidConfirmModal = dynamic(() => import("@/components/admin/hardware/inventory/VoidConfirmModal"), { loading: () => null })
+// 상시 마운트 오버레이 3종 — 열리기 전까지 null만 그리므로 지연 분리해도 잃는 상태·화면이 없다.
+// 첫 페인트 번들에서 시트 3종(타임라인·거래이력·유닛 시트) 코드를 뺀다(모달 관례와 동일).
+const MovementDetailSheet = dynamic(() => import("@/components/admin/hardware/inventory/MovementDetailSheet"), { loading: () => null })
+const CustomerHistorySheet = dynamic(() => import("@/components/admin/hardware/inventory/CustomerHistorySheet"), { loading: () => null })
+const SampleUnitSheet = dynamic(() => import("@/components/admin/hardware/inventory/SampleUnitSheet"), { loading: () => null })
 
 // 비기본 탭 섹션 코드 스플릿 — 입고/출고 집계(entry)·상세 내역(history)은 첫 페인트("home" 탭)에
 // 없으므로 지연 로드한다. 세 섹션 모두 내부 useState가 없는 프레젠테이션 컴포넌트(검색어·페이지 등
@@ -753,6 +740,12 @@ export default function HardwareInventoryClient() {
   const [inboundSearch, setInboundSearch] = useState("")
   const [hardwareSearch, setHardwareSearch] = useState("")
   const [search, setSearch] = useState("")
+  // 검색 디바운스 — 키 입력마다 2,000행 정렬·전 데이터 순회가 돌지 않게 무거운 파생만 지연값을 본다.
+  // 입력창 자체는 즉시값(search/hardwareSearch)을 유지해 타이핑 반응성은 그대로다.
+  const deferredSearch = useDeferredValue(search)
+  const deferredHardwareSearch = useDeferredValue(hardwareSearch)
+  // 확정·취소 권한(hardware.finalize) — 표시용. viewer가 없으면(구응답·로딩) 열어두고 서버 게이트만 믿는다.
+  const canFinalize = data?.viewer?.canFinalize ?? true
   const [customerFilter, setCustomerFilter] = useState("")
   const [lotFilter, setLotFilter] = useState("")
   // 내역 탭 보조 필터 축 — 상태(완료/배송 예정/취소 포함), 판매유형(출고 전용), 기간(occurred_at 기준).
@@ -1032,7 +1025,7 @@ export default function HardwareInventoryClient() {
         return true
       })
     }
-    const query = search.trim().toLowerCase()
+    const query = deferredSearch.trim().toLowerCase()
     if (query) {
       rows = rows.filter((movement) =>
         [
@@ -1076,7 +1069,7 @@ export default function HardwareInventoryClient() {
     customerFilter,
     historyDateFrom,
     historyDateTo,
-    search,
+    deferredSearch,
     historySort,
   ])
 
@@ -1267,7 +1260,7 @@ export default function HardwareInventoryClient() {
   )
 
   const hardwareSearchResults = useMemo(() => {
-    const rawQuery = hardwareSearch.trim()
+    const rawQuery = deferredHardwareSearch.trim()
     if (!rawQuery) return null
 
     const normalized = normalizeHardwareText(rawQuery)
@@ -1347,7 +1340,7 @@ export default function HardwareInventoryClient() {
         .sort((a, b) => (b.planned + b.outbound) - (a.planned + a.outbound))
         .slice(0, 5),
     }
-  }, [data?.items, data?.movements, data?.plannedMovements, data?.stock, hardwareSearch])
+  }, [data?.items, data?.movements, data?.plannedMovements, data?.stock, deferredHardwareSearch])
 
   const lotOptions = useMemo(() => {
     const lots = new Set<string>()
@@ -1648,11 +1641,17 @@ export default function HardwareInventoryClient() {
       })
       .map((entry) => entry.row)
 
-    // 위치별 총량 = 노출 대상(펼침+접힘 전체) 합산.
+    // 위치별 총량 = 노출 대상(펼침+접힘 전체) 중 비판촉 합산 — 판촉 음수(원장 이상)가 총량을
+    // 오염시키지 않게 카드와 같은 기준으로 분리하고, 판촉분은 별도 한 줄로 병기한다(2026-08-19 결정).
+    const nonPromoted = visible.filter((row) => !isPromotedProduct(row.product))
     const totals: Record<string, number> = {}
     for (const el of BOARD_ELEMENTS) {
-      totals[el.key] = visible.reduce((sum, row) => sum + boardValue(row, el.key), 0)
+      totals[el.key] = nonPromoted.reduce((sum, row) => sum + boardValue(row, el.key), 0)
     }
+    const promotedWarehouse = visible
+      .filter((row) => isPromotedProduct(row.product))
+      .reduce((sum, row) => sum + row.warehouseStock, 0)
+    const hasPromotedRows = visible.some((row) => isPromotedProduct(row.product))
     const maxTotal = Math.max(1, ...BOARD_ELEMENTS.map((el) => totals[el.key]))
     const locationTotals = BOARD_ELEMENTS.map((el) => ({
       name: el.label,
@@ -1675,7 +1674,12 @@ export default function HardwareInventoryClient() {
         })),
       }
     }
-    return { locationTotals, featuredRows: featured.map(toRow), restRows: rest.map(toRow) }
+    return {
+      locationTotals,
+      promotedWarehouse: hasPromotedRows ? promotedWarehouse : null,
+      featuredRows: featured.map(toRow),
+      restRows: rest.map(toRow),
+    }
   }, [data?.stock])
 
   const inboundLots = useMemo(() => {
@@ -1934,6 +1938,17 @@ export default function HardwareInventoryClient() {
         { label: "수량", value: `${formatNumber(detailMovement.quantity)}대` },
         { label: "담당자", value: detailMovement.owner ?? "-" },
         { label: "경로", value: `${detailMovement.from_location ?? "-"} → ${detailMovement.to_location ?? "-"}` },
+        // 받기만 하고 안 보여주던 필드(write-only) 해소 — 값이 있을 때만 노출해 소음을 막는다.
+        ...(detailMovement.storage_location ? [{ label: "보관 장소", value: detailMovement.storage_location }] : []),
+        ...(detailMovement.serials.length > 0 ? [{ label: `시리얼 (${detailMovement.serials.length})`, value: detailMovement.serials.join(", ") }] : []),
+        ...(detailMovement.voided_at
+          ? [
+              {
+                label: "취소 정보",
+                value: `${detailMovement.void_reason?.trim() || "사유 미기재"} · ${detailMovement.voided_by ?? "-"} · ${formatDate(detailMovement.voided_at)}`,
+              },
+            ]
+          : []),
         ...(detailMovement.movement_type === "inbound"
           ? [
               { label: "단가 (USD)", value: detailMovement.unit_price != null ? formatCurrency(detailMovement.unit_price, "USD") : "-" },
@@ -1963,7 +1978,9 @@ export default function HardwareInventoryClient() {
     detailMovement.source === "admin_manual" &&
     detailMovement.voided_at == null &&
     !detailMovement.converted_from_movement_id &&
-    !detailMovement.converted_to_movement_id
+    !detailMovement.converted_to_movement_id &&
+    // 실현(비예정) 기록 수정은 finalize 권한 필요 — 서버 게이트와 같은 기준으로 버튼을 내린다.
+    (isPlannedMovement(detailMovement) || canFinalize)
 
   const quickPickGroups = useMemo(() => {
     const featured: Array<{ row: HardwareStockRow; rank: number }> = []
@@ -3273,6 +3290,7 @@ export default function HardwareInventoryClient() {
               setMovementsPage={setMovementsPage}
               confirmPlannedMovement={confirmPlannedMovement}
               plannedConfirmLocked={plannedConfirmLocked}
+              canFinalize={canFinalize}
               setCustomerDetail={setCustomerDetail}
             />
 
@@ -3280,6 +3298,7 @@ export default function HardwareInventoryClient() {
               data={data}
               plannedMovementQuantity={plannedMovementQuantity}
               plannedStaleGroupCount={plannedStaleGroupCount}
+              canFinalize={canFinalize}
               startPlannedEntry={startPlannedEntry}
               plannedConfirmLocked={plannedConfirmLocked}
               plannedPagination={plannedPagination}
@@ -5329,6 +5348,7 @@ export default function HardwareInventoryClient() {
         detailFacts={detailFacts}
         detailCrm={detailCrm}
         detailCanEdit={detailCanEdit}
+        canFinalize={canFinalize}
         editMovement={editMovement}
         voidMovement={voidMovement}
       />
