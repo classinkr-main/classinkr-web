@@ -6,6 +6,7 @@ import { CheckCheck, Clock3 } from "lucide-react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
 import {
+  elapsedDaysSince,
   formatDate,
   formatLotLabel,
   formatNumber,
@@ -15,6 +16,10 @@ import {
   type HardwareDashboard,
   type HardwareMovement,
 } from "./shared"
+
+// 예정 방치 신호 임계 — 예정일로부터 14일이면 주의, 30일이면 확정·정리가 밀린 것으로 본다.
+const PLANNED_AGING_WARN_DAYS = 14
+const PLANNED_AGING_DANGER_DAYS = 30
 
 interface PlannedGroup {
   key: string
@@ -29,6 +34,7 @@ interface PlannedGroup {
 interface PlannedOutboundPanelProps {
   data: HardwareDashboard | null
   plannedMovementQuantity: number
+  plannedStaleGroupCount: number
   startPlannedEntry: () => void
   plannedConfirmLocked: boolean
   plannedPagination: AdminListPaginationResult<PlannedGroup>
@@ -48,6 +54,7 @@ interface PlannedOutboundPanelProps {
 function PlannedOutboundPanel({
   data,
   plannedMovementQuantity,
+  plannedStaleGroupCount,
   startPlannedEntry,
   plannedConfirmLocked,
   plannedPagination,
@@ -79,6 +86,16 @@ function PlannedOutboundPanel({
           </span>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {/* 방치 요약 — 큐 전체가 한 달 넘게 미확정으로 쌓이는 상황(판매 요약이 0으로 보이는 원인)을
+              헤더에서 바로 드러낸다. */}
+          {plannedStaleGroupCount > 0 && (
+            <span
+              className="rounded-full bg-[#FCE9E9] px-2.5 py-1 text-[11px] font-bold tabular-nums text-[#8F2C2C]"
+              title={`예정일로부터 ${PLANNED_AGING_DANGER_DAYS}일 이상 미확정인 딜 수 — 확정하거나 정리하세요`}
+            >
+              30일+ 미확정 {formatNumber(plannedStaleGroupCount)}딜
+            </span>
+          )}
           <span className="text-[11px] font-semibold text-[#615D59]">
             {formatNumber(data?.plannedMovements.length ?? 0)}건 · {formatNumber(plannedMovementQuantity)}대
           </span>
@@ -100,7 +117,9 @@ function PlannedOutboundPanel({
       ) : (
         <>
           <div className="divide-y divide-[rgba(0,0,0,0.06)]">
-            {plannedPagination.pageItems.map((group) => (
+            {plannedPagination.pageItems.map((group) => {
+              const elapsed = elapsedDaysSince(group.date)
+              return (
               <div key={group.key} data-testid="hardware-planned-info-group" className="px-5 py-3.5">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -111,6 +130,16 @@ function PlannedOutboundPanel({
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+                    {elapsed != null && elapsed >= PLANNED_AGING_WARN_DAYS && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold tabular-nums ${
+                          elapsed >= PLANNED_AGING_DANGER_DAYS ? "bg-[#FCE9E9] text-[#8F2C2C]" : "bg-[#FBF1E0] text-[#7A520F]"
+                        }`}
+                        title="예정일로부터 경과한 일수 — 오래 방치된 예정은 확정하거나 정리하세요"
+                      >
+                        {formatNumber(elapsed)}일 경과
+                      </span>
+                    )}
                     <span className="rounded-full bg-[#FBF1E0] px-2.5 py-1 text-[11px] font-bold tabular-nums text-[#7A520F]">
                       {formatNumber(group.totalQty)}대 · {formatNumber(group.items.length)}품목
                     </span>
@@ -207,7 +236,8 @@ function PlannedOutboundPanel({
                   })}
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
           <PaginationControls pagination={plannedPagination} label="딜" onPageChange={setPlannedPage} />
         </>

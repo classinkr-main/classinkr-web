@@ -20,6 +20,12 @@ interface AdminTabsProps<T extends string = string> {
   label: string
   className?: string
   variant?: "segmented" | "subtle"
+  /**
+   * 탭 내용이 렌더되는 단일 tabpanel 컨테이너의 id(2026-08-18 a11y).
+   * 소비처가 내용 컨테이너에 role="tabpanel" + 이 id를 달면 탭 버튼의 aria-controls가
+   * 그 컨테이너를 가리킨다 — tablist만 절반 구현되던 계약의 나머지 절반.
+   */
+  panelId?: string
 }
 
 export default function AdminTabs<T extends string>({
@@ -29,6 +35,7 @@ export default function AdminTabs<T extends string>({
   label,
   className,
   variant = "segmented",
+  panelId,
 }: AdminTabsProps<T>) {
   const id = useId()
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([])
@@ -101,6 +108,7 @@ export default function AdminTabs<T extends string>({
               type="button"
               role="tab"
               aria-selected={active}
+              aria-controls={panelId}
               tabIndex={active ? 0 : -1}
               onClick={() => selectTab(item.value)}
               className={cn(

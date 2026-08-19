@@ -36,6 +36,7 @@ import { adminFetch, adminFetchJson, adminFetchJsonCached, clearAdminRequestCach
 import { paginateAdminList } from "@/lib/admin-list-pagination"
 import { fiscalQuarter } from "@/lib/branch/fiscal"
 import CategoryCardsSection from "@/components/admin/hardware/inventory/CategoryCardsSection"
+import ImportFreshnessStrip from "@/components/admin/hardware/inventory/ImportFreshnessStrip"
 import SalesPeriodSummary from "@/components/admin/hardware/inventory/SalesPeriodSummary"
 import HardwareSearchPanel from "@/components/admin/hardware/inventory/HardwareSearchPanel"
 import LocationMapSection from "@/components/admin/hardware/inventory/LocationMapSection"
@@ -47,11 +48,15 @@ import CustomerHistorySheet from "@/components/admin/hardware/inventory/Customer
 import SampleTrackerSection from "@/components/admin/hardware/inventory/SampleTrackerSection"
 import SampleUnitSheet from "@/components/admin/hardware/inventory/SampleUnitSheet"
 import {
+  elapsedDaysSince,
   formatCurrency,
   formatDate,
   formatLotLabel,
   formatNumber,
+  hardwareCardGroup,
+  isCoreIfpProduct,
   isPlannedMovement,
+  isPromotedProduct,
   lotFifoRank,
   MOVEMENT_LABEL,
   MOVEMENT_TONE,
@@ -60,6 +65,7 @@ import {
   SALE_TYPE_META,
   todayKey,
   UNSPECIFIED_CUSTOMER,
+  type HardwareCardGroup,
   type HardwareCrmOrderCandidate,
   type HardwareDashboard,
   type HardwareItem,
@@ -74,46 +80,6 @@ import {
   type OutboundSaleType,
   type PeriodGranularity,
   type ProductFilterKey,
-} from "./inventory/shared"
-
-// 공유 심볼 재수출 — 기존 외부 소비자의 import 표면 유지용. 정의는 ./inventory/shared로 물리 이동했다.
-export {
-  ALERT_TONE,
-  confidenceClass,
-  confidenceCopy,
-  formatAvg,
-  formatCurrency,
-  formatDate,
-  formatLotLabel,
-  formatNumber,
-  isPlannedMovement,
-  ledgerHref,
-  MOVEMENT_LABEL,
-  MOVEMENT_TONE,
-  outboundSaleType,
-  PaginationControls,
-  previewFifoLots,
-  QuickMoveButton,
-  SALE_TYPE_META,
-  SectionHeader,
-  statusClass,
-  statusCopy,
-  todayKey,
-  UNSPECIFIED_CUSTOMER,
-} from "./inventory/shared"
-export type {
-  HardwareAlert,
-  HardwareCrmOrderCandidate,
-  HardwareDashboard,
-  HardwareMovement,
-  HardwareMovementDraft,
-  HardwareMovementType,
-  HardwareSectionKey,
-  HardwareStockRow,
-  HardwareTab,
-  OutboundSaleType,
-  PeriodGranularity,
-  ProductFilterKey,
 } from "./inventory/shared"
 
 interface HardwareCrmOrderCandidatesResponse {
@@ -255,7 +221,6 @@ function boardValue(row: HardwareStockRow, key: (typeof BOARD_ELEMENTS)[number][
 
 // 재고 위치 맵에서 숨길 품목(내부 코드/비주력 — 사용자 지정). 품목명 정확 일치, 대소문자 무시.
 const LOCATION_MAP_HIDDEN_PRODUCTS = new Set(["A1", "B1", "D2"])
-const isPromotedProduct = (product: string) => /\(\s*promoted\s*\)/i.test(product)
 
 // 위치 맵 기본 노출(펼침) 품목 순서(사용자 지정): 86" → 75" → T1 → T1(promo) → STD1 → STD1(promo).
 // 여기 해당하면 rank(0~5), 아니면 null → "상세보기"로 접히는 나머지(65"/110"/S1/OPS/액세서리 등).
@@ -511,10 +476,6 @@ function parseOptionalNumber(value: string): number | null {
   if (!trimmed) return null
   const parsed = Number(trimmed)
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
-}
-
-function isCoreIfpProduct(product: string, size: "75" | "86") {
-  return new RegExp(`^${size}["”]?\\s*IFP`, "i").test(product)
 }
 
 // 상세내역 "제품" 필터 — 실데이터에 액세서리(OPS/POE/케이블/터치펜 등)까지 섞여 칩이 20개 가까이
@@ -1298,6 +1259,13 @@ export default function HardwareInventoryClient() {
     [plannedGroups, plannedPage]
   )
 
+  // 예정일로부터 30일 이상 미확정으로 방치된 딜 수 — 큐가 묵으면 판매 요약이 0으로 보이는
+  // 원인이 되므로 패널 헤더에서 바로 드러낸다(페이지가 아닌 전체 큐 기준).
+  const plannedStaleGroupCount = useMemo(
+    () => plannedGroups.filter((group) => (elapsedDaysSince(group.date) ?? 0) >= 30).length,
+    [plannedGroups]
+  )
+
   const hardwareSearchResults = useMemo(() => {
     const rawQuery = hardwareSearch.trim()
     if (!rawQuery) return null
@@ -1405,9 +1373,13 @@ export default function HardwareInventoryClient() {
     return `H${maxH + 1}`
   }, [lotOptions])
 
+  // 미가동 품목 소음(muted)은 목록·페이징에서 분리 — 실신호만 페이지네이션에 태우고
+  // muted는 섹션 하단 접힌 그룹으로 넘긴다.
+  const activeAlerts = useMemo(() => (data?.alerts ?? []).filter((alert) => !alert.muted), [data?.alerts])
+  const mutedAlerts = useMemo(() => (data?.alerts ?? []).filter((alert) => alert.muted), [data?.alerts])
   const alertsPagination = useMemo(
-    () => paginateAdminList(data?.alerts ?? [], { currentPage: alertsPage, pageSize: ALERT_PAGE_SIZE }),
-    [data?.alerts, alertsPage]
+    () => paginateAdminList(activeAlerts, { currentPage: alertsPage, pageSize: ALERT_PAGE_SIZE }),
+    [activeAlerts, alertsPage]
   )
 
   // 상세 내역 로그를 "고객사 + 날짜(=배송/거래 건)" 단위로 묶어 아코디언으로 편다.
@@ -1592,28 +1564,64 @@ export default function HardwareInventoryClient() {
 
   const categoryCards = useMemo(() => {
     const stockRows = data?.stock ?? []
-    const sumBy = (match: (row: HardwareStockRow) => boolean) => {
-      const matched = stockRows.filter(match)
-      return {
-        available: matched.reduce((total, row) => total + row.availableStock, 0),
-        warehouse: matched.reduce((total, row) => total + row.warehouseStock, 0),
-        planned: matched.reduce((total, row) => total + row.plannedOut, 0),
-        count: matched.length,
-      }
+    // 분류는 hardwareCardGroup 단일 기준(shared) — 서술 명칭 매칭으로 브라켓이 카메라 대수에
+    // 계상되던 문제를 막고, 4축 밖 품목은 전부 "기타" 요약으로 모아 비가시 재고를 없앤다.
+    const emptyBucket = () => ({ available: 0, warehouse: 0, planned: 0, count: 0, promoted: 0, hasPromoted: false })
+    const buckets: Record<HardwareCardGroup, ReturnType<typeof emptyBucket>> = {
+      ifp86: emptyBucket(),
+      ifp75: emptyBucket(),
+      camera: emptyBucket(),
+      stand: emptyBucket(),
+      etc: emptyBucket(),
     }
-    const isCamera = (row: HardwareStockRow) =>
-      /카메라|camera/i.test(`${row.category ?? ""} ${row.product}`) || /\bT1\b|\bS1\b/i.test(row.product)
-    const isStand = (row: HardwareStockRow) =>
-      /스탠드|stand/i.test(`${row.category ?? ""} ${row.product}`) || /\bSTD/i.test(row.product)
+    const etcRows: Array<{ product: string; warehouse: number }> = []
+    for (const row of stockRows) {
+      const groupKey = hardwareCardGroup(row.product)
+      const bucket = buckets[groupKey]
+      bucket.count += 1
+      // 판촉(promoted) 라인은 헤드라인과 분리 — 실판매분과 합산하면 promoted 원장 이상(음수)이
+      // 카드 전체를 오염시킨다(STD1 35 + 판촉 −16 = 19로 보이던 문제). 기타 묶음은 분리 없이 합산.
+      if (groupKey !== "etc" && isPromotedProduct(row.product)) {
+        bucket.promoted += row.warehouseStock
+        bucket.hasPromoted = true
+        continue
+      }
+      bucket.available += row.availableStock
+      bucket.warehouse += row.warehouseStock
+      bucket.planned += row.plannedOut
+      if (groupKey === "etc") etcRows.push({ product: row.product, warehouse: row.warehouseStock })
+    }
     // 아이콘 칩은 웜 뉴트럴 고정 — 카테고리 구분에 상태색(그린/앰버)을 쓰면 실제 신호(음수·부족)와
     // 경쟁한다(DESIGN.md: 장식·카테고리 구분엔 웜 뉴트럴). 색은 수치·칩의 상태 표시에만 남긴다.
     const NEUTRAL_TONE = { bg: "#F6F5F4", fg: "#615D59" }
-    return [
-      { key: "ifp86", label: "86인치 전자칠판", icon: Monitor, tone: NEUTRAL_TONE, ...sumBy((row) => isCoreIfpProduct(row.product, "86")) },
-      { key: "ifp75", label: "75인치 전자칠판", icon: Monitor, tone: NEUTRAL_TONE, ...sumBy((row) => isCoreIfpProduct(row.product, "75")) },
-      { key: "camera", label: "카메라 (T1·S1)", icon: Camera, tone: NEUTRAL_TONE, ...sumBy(isCamera) },
-      { key: "stand", label: "스탠드 (STD1)", icon: Projector, tone: NEUTRAL_TONE, ...sumBy(isStand) },
+    const toCard = (bucket: ReturnType<typeof emptyBucket>) => ({
+      available: bucket.available,
+      warehouse: bucket.warehouse,
+      planned: bucket.planned,
+      count: bucket.count,
+      promoted: bucket.hasPromoted ? bucket.promoted : null,
+    })
+    const cards = [
+      { key: "ifp86", label: "86인치 전자칠판", icon: Monitor, tone: NEUTRAL_TONE, ...toCard(buckets.ifp86) },
+      { key: "ifp75", label: "75인치 전자칠판", icon: Monitor, tone: NEUTRAL_TONE, ...toCard(buckets.ifp75) },
+      { key: "camera", label: "카메라 (T1·S1)", icon: Camera, tone: NEUTRAL_TONE, ...toCard(buckets.camera) },
+      { key: "stand", label: "스탠드 (STD1)", icon: Projector, tone: NEUTRAL_TONE, ...toCard(buckets.stand) },
     ]
+    const etcSummary =
+      buckets.etc.count > 0
+        ? {
+            warehouse: buckets.etc.warehouse,
+            planned: buckets.etc.planned,
+            available: buckets.etc.available,
+            count: buckets.etc.count,
+            chips: etcRows
+              .filter((row) => row.warehouse > 0)
+              .sort((a, b) => b.warehouse - a.warehouse)
+              .slice(0, 8)
+              .map((row) => ({ label: row.product, qty: row.warehouse })),
+          }
+        : null
+    return { cards, etcSummary }
   }, [data?.stock])
 
   const locationMap = useMemo(() => {
@@ -1723,6 +1731,9 @@ export default function HardwareInventoryClient() {
       lots,
       latestLot: allLots[0] ?? null,
       totalQty: tally.reduce((total, movement) => total + movement.quantity, 0),
+      // 핵심 3종 밖 품목(A1·OPS·케이블 등)까지 포함한 전 품목 대수 — 헤더에서 병기해
+      // "집계에 안 잡히는 재고"가 생기지 않게 한다(2026-08-08 데이터 판단 문서 #7).
+      totalQtyAll: inbound.reduce((total, movement) => total + movement.quantity, 0),
       totalAmount: tally.reduce((total, movement) => total + (movement.amount_usd ?? 0), 0),
       hasAnyAmount: tally.some((movement) => movement.amount_usd != null),
       totalCny: tally.reduce((total, movement) => total + (movement.amount_cny ?? 0), 0),
@@ -3240,9 +3251,11 @@ export default function HardwareInventoryClient() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
             >
-            {/* 위계: 현황 요약(카드·판매) → 검색 → 대기 작업(예상 출고) → 재고 상세(위치·표) → 샘플 → 알림·로그.
+            {/* 위계: 이관 신선도 → 현황 요약(카드·판매) → 검색 → 대기 작업(예상 출고) → 재고 상세(위치·표) → 샘플 → 알림·로그.
                 예상 출고는 확정을 기다리는 할 일이라 재고 상세보다 위, 샘플 트래커는 참조 성격이라 아래에 둔다. */}
-            <CategoryCardsSection categoryCards={categoryCards} />
+            <ImportFreshnessStrip importRun={data?.importRun ?? null} />
+
+            <CategoryCardsSection categoryCards={categoryCards.cards} etcSummary={categoryCards.etcSummary} />
 
             <SalesPeriodSummary summary={salesPeriodSummary} onOpenDetail={openOutboundDetail} />
 
@@ -3266,6 +3279,7 @@ export default function HardwareInventoryClient() {
             <PlannedOutboundPanel
               data={data}
               plannedMovementQuantity={plannedMovementQuantity}
+              plannedStaleGroupCount={plannedStaleGroupCount}
               startPlannedEntry={startPlannedEntry}
               plannedConfirmLocked={plannedConfirmLocked}
               plannedPagination={plannedPagination}
@@ -3313,6 +3327,7 @@ export default function HardwareInventoryClient() {
               toggleSection={toggleSection}
               alertsPagination={alertsPagination}
               setAlertsPage={setAlertsPage}
+              mutedAlerts={mutedAlerts}
               outboundPagination={outboundPagination}
               setOutboundPage={setOutboundPage}
             />

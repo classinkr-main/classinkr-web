@@ -6,6 +6,7 @@ import dynamic from "next/dynamic"
 import {
   Activity,
   AlertCircle,
+  ArrowUpRight,
   Calendar as CalendarIcon,
   CheckCircle2,
   ChevronRight,
@@ -403,6 +404,7 @@ export default function SummaryTab({
   metaDatePreset,
   onRefreshMeta,
   onGoToTab,
+  onOpenMetricsInput,
 }: {
   loading: boolean
   events: PublicEvent[]
@@ -419,6 +421,8 @@ export default function SummaryTab({
   metaDatePreset: MetaDatePreset
   onRefreshMeta: () => void
   onGoToTab: (tab: CampaignTab) => void
+  /** 광고 탭으로 넘어가 성과 입력 표에 착지 — 착지 타이밍은 MetaTab이 로드 완료 후 처리한다. */
+  onOpenMetricsInput: () => void
 }) {
   const channelChartData = useMemo(
     () =>
@@ -751,6 +755,8 @@ export default function SummaryTab({
               icon={<Wallet className="w-3.5 h-3.5" />}
               label="총 광고비"
               value={won(aggregate.totalSpend)}
+              /* ₩0이 "0원 집행"이 아니라 "아직 입력 전"일 때 그 사실을 카드가 직접 말한다. */
+              hint={aggregate.totalSpend === 0 ? "수기 입력 대기" : undefined}
             />
             <KpiCard
               icon={<TrendingUp className="w-3.5 h-3.5" />}
@@ -781,6 +787,25 @@ export default function SummaryTab({
           </>
         )}
       </div>
+
+      {/* 입력 대기 안내 — 광고비·매출이 전부 0이면 위 스트립이 ₩0·— 투성이가 되는데,
+          그게 "집계 장애"가 아니라 "수기 입력 전"임을 한 줄로 밝히고 입력 표까지 데려간다.
+          실패를 빈 데이터로 위장하지 않는 것과 같은 결로, 빈 데이터를 장애처럼 두지도 않는다. */}
+      {!loading && filtered.length > 0 && aggregate.totalSpend === 0 && aggregate.totalRevenue === 0 && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-2xl border border-[#e8e8e4] bg-[#FAFAF8] px-4 py-3">
+          <p className="text-[12px] text-[#1a1a1a]/60">
+            광고비·매출이 아직 입력 전이라 ₩0·—로 보입니다. 성과 입력에서 채우면 CPL·ROI가 집계됩니다.
+          </p>
+          <button
+            type="button"
+            onClick={onOpenMetricsInput}
+            className="inline-flex items-center gap-1 rounded-full border border-[rgba(0,0,0,0.1)] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#111110] transition hover:bg-[#F6F5F4]"
+          >
+            성과 입력 열기
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* 자동 인사이트 */}
       {summaryInsights.length > 0 && (

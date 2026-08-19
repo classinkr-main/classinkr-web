@@ -39,6 +39,8 @@ const MetricsEditor = dynamic(() => import("./MetricsEditor"), { ssr: false })
 
 /** 리스트에서 한 번에 그리는 퍼널 카드 수 — 카드 하나가 무거워(퍼널 시각화) 전량 렌더를 피한다. */
 const EVENT_CARD_STEP = 8
+// 갤러리는 2·3·4열 그리드라 12단위(공배수)로 펼쳐야 마지막 줄이 들쭉거리지 않는다.
+const GALLERY_STEP = 12
 
 // ─── event card ───────────────────────────────────────────────────────────────
 
@@ -175,6 +177,8 @@ export default function EventsTab({
   )
 
   const cardsVisible = useVisibleCount(visibleEvents.length, EVENT_CARD_STEP)
+  // 갤러리도 전량 렌더하지 않는다(2026-08-18) — 리스트와 같은 단계 렌더.
+  const galleryVisible = useVisibleCount(visibleEvents.length, GALLERY_STEP)
 
   // CSV 내보내기 — 화면에 보이는(검색·상태·카테고리 필터 적용) 행과 정확히 같은 집합을 내보낸다.
   // 필터로 3건만 남겨두고 눌렀는데 전체가 나가면 "보이는 것=받는 것" 계약이 깨진다.
@@ -373,10 +377,23 @@ export default function EventsTab({
           </button>
         </div>
       ) : galleryView ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {visibleEvents.map((event) => (
-            <EventGalleryCard key={event.id} event={event} onOpen={() => setViewingEvent(event)} />
-          ))}
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {visibleEvents.slice(0, galleryVisible.visible).map((event) => (
+              <EventGalleryCard key={event.id} event={event} onOpen={() => setViewingEvent(event)} />
+            ))}
+          </div>
+          {(galleryVisible.canMore || galleryVisible.canCollapse) && (
+            <div className="flex justify-center">
+              <ShowMore
+                visible={galleryVisible.visible}
+                total={visibleEvents.length}
+                step={GALLERY_STEP}
+                onMore={galleryVisible.showMore}
+                onCollapse={galleryVisible.canCollapse ? galleryVisible.collapse : undefined}
+              />
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">

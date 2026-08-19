@@ -343,20 +343,36 @@ export function CampaignRow({
 /* ── 빈 상태(순수) ────────────────────────────────────────────── */
 
 export function CampaignManageEmpty({ onCreate }: { onCreate?: () => void }) {
+  // 행 0의 신규 개체 화면(2026-08-18) — "캠페인 = 채널 실행을 묶는 우산"이라는 개념과
+  // 다음 단계를 화면 안에서 배울 수 있어야 첫 사용이 시작된다(온보딩 빈 상태).
   return (
-    <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] px-6 py-16 text-center">
+    <div className="rounded-2xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] px-6 py-12 text-center">
       <div className="mx-auto mb-3 inline-flex rounded-xl border border-[#BDEFD8] bg-[#ECFDF5] p-2.5 text-[#084734]">
         <Megaphone className="h-5 w-5" />
       </div>
       <p className="text-[14px] font-semibold text-[#111110]">아직 캠페인이 없습니다</p>
-      <p className="mt-1 text-[12px] text-[#615D59]">새 캠페인으로 시작하세요.</p>
+      <p className="mx-auto mt-1 max-w-md text-[12px] leading-relaxed text-[#615D59]">
+        여기의 캠페인은 이메일 발송·행사·Meta 광고 같은 채널 실행을 하나로 묶는 우산입니다.
+        묶어두면 성과가 캠페인 단위로 자동 롤업됩니다.
+      </p>
+      <ol className="mx-auto mt-4 flex max-w-lg flex-col gap-1.5 text-left text-[12px] text-[#615D59] sm:flex-row sm:gap-4 sm:text-center">
+        <li className="flex-1 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2">
+          <b className="text-[#084734]">1</b> 캠페인을 만들고 기간·예산을 적습니다
+        </li>
+        <li className="flex-1 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2">
+          <b className="text-[#084734]">2</b> 상세에서 실행(이메일·행사·광고)을 링크합니다
+        </li>
+        <li className="flex-1 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2">
+          <b className="text-[#084734]">3</b> 지표는 실제 가용한 값만 롤업됩니다
+        </li>
+      </ol>
       {onCreate && (
         <button
           type="button"
           onClick={onCreate}
           className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3.5 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#065c41]"
         >
-          새 캠페인
+          첫 캠페인 만들기
         </button>
       )}
     </div>

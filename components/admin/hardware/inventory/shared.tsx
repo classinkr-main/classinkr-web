@@ -79,6 +79,8 @@ export interface HardwareAlert {
   product: string
   title: string
   detail: string
+  // 취급 중단·미가동 품목(창고 0·예정 0·최근 출고 0)의 상시 부족 알림 — 접힌 그룹으로 강등 표시.
+  muted?: boolean
 }
 
 export interface HardwareDashboard {
@@ -272,6 +274,34 @@ export function loanElapsedDays(loanedAt: string | null): number | null {
   if (Number.isNaN(start)) return null
   const today = new Date(`${todayKey()}T00:00:00Z`).getTime()
   return Math.max(0, Math.round((today - start) / 86400000))
+}
+
+// 경과일(일반) — 예상 출고 큐 방치 표시, 이관 신선도 등 날짜 문자열 기반 경과 계산 공용.
+export function elapsedDaysSince(dateKey: string | null): number | null {
+  return loanElapsedDays(dateKey)
+}
+
+// ---- 카테고리 카드 단일 분류 ----
+// 제품 분류 정규식이 화면마다 제각각이면 카드·집계·위치맵 수치가 서로 어긋난다(브라켓이 카메라
+// 대수로 계상되는 식). 카드 축은 이 함수 하나만 보고, 서술 명칭("카메라"·"스탠드") 매칭 대신
+// 장비 코드(T1·S1·STD1)로만 판별한다. STDM1(110")·110/65" 보드·터치펜(A1/B1/D2)·OPS/POE/
+// 케이블·브라켓 등 나머지는 전부 "etc"(기타 요약)로 모아 비가시 재고를 없앤다.
+export type HardwareCardGroup = "ifp86" | "ifp75" | "camera" | "stand" | "etc"
+
+export function isPromotedProduct(product: string): boolean {
+  return /\(\s*promoted\s*\)/i.test(product)
+}
+
+export function isCoreIfpProduct(product: string, size: "75" | "86"): boolean {
+  return new RegExp(`^${size}["”]?\\s*IFP`, "i").test(product)
+}
+
+export function hardwareCardGroup(product: string): HardwareCardGroup {
+  if (isCoreIfpProduct(product, "86")) return "ifp86"
+  if (isCoreIfpProduct(product, "75")) return "ifp75"
+  if (/\bT1\b|\bS1\b/i.test(product)) return "camera"
+  if (/\bSTD1\b/i.test(product)) return "stand"
+  return "etc"
 }
 
 export function todayKey() {

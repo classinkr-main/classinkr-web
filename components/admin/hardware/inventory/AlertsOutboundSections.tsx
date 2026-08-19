@@ -1,7 +1,8 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useState } from "react"
 import type { Dispatch, SetStateAction } from "react"
+import { ChevronDown } from "lucide-react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
 import {
@@ -20,6 +21,9 @@ interface AlertsOutboundSectionsProps {
   toggleSection: (section: HardwareSectionKey) => void
   alertsPagination: AdminListPaginationResult<HardwareAlert>
   setAlertsPage: Dispatch<SetStateAction<number>>
+  // 미가동 품목(창고 0·예정 0·최근 출고 0)의 상시 부족 알림 — 접힌 그룹으로 강등해
+  // 실신호(음수 재고·재고 있는 부족)가 소음에 묻히지 않게 한다.
+  mutedAlerts: HardwareAlert[]
   outboundPagination: AdminListPaginationResult<HardwareMovement>
   setOutboundPage: Dispatch<SetStateAction<number>>
 }
@@ -29,9 +33,11 @@ function AlertsOutboundSections({
   toggleSection,
   alertsPagination,
   setAlertsPage,
+  mutedAlerts,
   outboundPagination,
   setOutboundPage,
 }: AlertsOutboundSectionsProps) {
+  const [mutedOpen, setMutedOpen] = useState(false)
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section className="min-w-0 rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
@@ -47,7 +53,7 @@ function AlertsOutboundSections({
             <div className="space-y-2 p-4">
               {alertsPagination.totalItems === 0 ? (
                 <div className="rounded-lg bg-[#ECFDF5] px-4 py-3 text-[12px] font-semibold text-[#084734]">
-                  현재 알림이 없습니다.
+                  {mutedAlerts.length > 0 ? "실행이 필요한 알림이 없습니다." : "현재 알림이 없습니다."}
                 </div>
               ) : (
                 alertsPagination.pageItems.map((alert) => (
@@ -59,6 +65,32 @@ function AlertsOutboundSections({
               )}
             </div>
             <PaginationControls pagination={alertsPagination} label="건" onPageChange={setAlertsPage} />
+            {mutedAlerts.length > 0 && (
+              <div className="border-t border-[rgba(0,0,0,0.06)] px-4 py-2.5">
+                <button
+                  type="button"
+                  onClick={() => setMutedOpen((value) => !value)}
+                  aria-expanded={mutedOpen}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-md px-1 py-0.5 text-[11.5px] font-semibold text-[#A39E98] transition hover:text-[#615D59] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40"
+                  title="창고 0 · 예정 0 · 최근 30일 출고 0인 미가동 품목의 상시 부족 알림"
+                >
+                  비활성 품목 알림 {formatNumber(mutedAlerts.length)}건
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${mutedOpen ? "rotate-180" : ""}`} />
+                </button>
+                {mutedOpen && (
+                  <div className="mt-2 space-y-1.5">
+                    {mutedAlerts.map((alert) => (
+                      <div key={alert.id} className="rounded-lg border border-[rgba(0,0,0,0.06)] bg-[#FAFAF8] px-3 py-2">
+                        <p className="text-[11.5px] font-semibold text-[#615D59]">
+                          {alert.product} · {alert.title}
+                          <span className="ml-2 font-normal text-[#A39E98]">{alert.detail}</span>
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </section>

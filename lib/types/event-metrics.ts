@@ -70,6 +70,8 @@ export const AD_CHANNEL_LABEL: Record<AdChannel, string> = {
   other: "기타",
 }
 
+// 제3자 채널 식별색 — DESIGN.md §2 "제3자 채널 식별색" 등재 토큰(2026-08-18).
+// 차트·범례·채널 점 표시에만 쓴다. CTA·버튼·뱃지·텍스트 강조 사용은 팔레트 위반.
 export const AD_CHANNEL_COLOR: Record<AdChannel, string> = {
   google: "#4285F4",
   meta: "#0866FF",
