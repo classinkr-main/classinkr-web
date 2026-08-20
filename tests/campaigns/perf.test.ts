@@ -5,6 +5,7 @@ import {
   computePacing,
   aggregateDailySeries,
   channelSpendFromEventMetrics,
+  resolvePacingBasis,
   shiftDays,
 } from "@/lib/marketing/perf"
 
@@ -99,6 +100,77 @@ describe("shiftDays", () => {
     expect(shiftDays("2026-03-01", -1)).toBe("2026-02-28")
     expect(shiftDays("2028-03-01", -1)).toBe("2028-02-29") // 윤년
     expect(shiftDays("2025-12-31", 1)).toBe("2026-01-01")
+  })
+})
+
+describe("resolvePacingBasis", () => {
+  // 기준 입력 — 전부 Meta 링크, USD 계정, lifetimeBudget 합 300.
+  const usdReady = {
+    links: [
+      { refType: "meta_campaign", refId: "m1" },
+      { refType: "meta_campaign", refId: "m2" },
+    ],
+    budgetKrw: null,
+    metaLifetimeBudgetById: new Map<string, number | null>([
+      ["m1", 300],
+      ["m2", null],
+    ]),
+    metaBudgetIsUsd: true,
+    metaSpendUsd: 120.5,
+    eventAdSpend: null,
+  }
+
+  it("전부 Meta 링크 + USD 계정 + lifetimeBudget 합>0 → USD 기준(비USD 계정이면 금지)", () => {
+    expect(resolvePacingBasis(usdReady)).toEqual({ spend: 120.5, budget: 300, currency: "USD" })
+    // 계정 통화 가드 — lifetimeBudget 이 USD 가 아니면 "USD" 라벨을 지어내지 않는다.
+    expect(resolvePacingBasis({ ...usdReady, metaBudgetIsUsd: false })).toEqual({
+      spend: null,
+      budget: null,
+      currency: null,
+    })
+  })
+
+  it("lifetimeBudget 합 0 → USD 불성립·KRW 조건으로 폴스루(event 링크 없으면 미산정)", () => {
+    expect(
+      resolvePacingBasis({
+        ...usdReady,
+        metaLifetimeBudgetById: new Map<string, number | null>([
+          ["m1", null],
+          ["m2", null],
+        ]),
+      })
+    ).toEqual({ spend: null, budget: null, currency: null })
+  })
+
+  it("KRW 예산 + event 링크 → 링크된 행사 KRW 광고비 합 기준(혼합 링크·중복 링크 1회 계상)", () => {
+    expect(
+      resolvePacingBasis({
+        links: [
+          { refType: "meta_campaign", refId: "m1" }, // 혼합 링크 = 전Meta 아님 → USD 규칙 제외
+          { refType: "event", refId: "ev1" },
+          { refType: "event", refId: "ev1" }, // 동일 행사 중복 링크 — KRW 이중계상 금지
+          { refType: "event", refId: "ev2" },
+        ],
+        budgetKrw: 1_000_000,
+        metaLifetimeBudgetById: new Map<string, number | null>([["m1", 300]]),
+        metaBudgetIsUsd: true,
+        metaSpendUsd: 120.5,
+        eventAdSpend: { ev1: 200_000, ev2: 100_000 },
+      })
+    ).toEqual({ spend: 300_000, budget: 1_000_000, currency: "KRW" })
+  })
+
+  it("어느 규칙에도 안 걸리면 전부 null — 링크·예산 없음(집행률 미산정 정직)", () => {
+    expect(
+      resolvePacingBasis({
+        links: [],
+        budgetKrw: null,
+        metaLifetimeBudgetById: null,
+        metaBudgetIsUsd: false,
+        metaSpendUsd: null,
+        eventAdSpend: null,
+      })
+    ).toEqual({ spend: null, budget: null, currency: null })
   })
 })
 

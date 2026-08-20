@@ -80,6 +80,63 @@ export function computePacing({ startsAt, endsAt, today, spend, budget }: Pacing
   return { elapsedPct, executionPct }
 }
 
+/* ─── 캠페인 페이싱 통화 결정 ─────────────────────────────────── */
+
+export interface PacingBasisInput {
+  /** 캠페인의 채널 실행 링크 — refType/refId 만 본다. */
+  links: ReadonlyArray<{ refType: string; refId: string }>
+  /** 캠페인 KRW 배정 예산(marketing_campaigns.budget). */
+  budgetKrw: number | null
+  /** Meta 캠페인 id → lifetimeBudget(계정 통화 네이티브). 대시보드 소스 실패 시 null. */
+  metaLifetimeBudgetById: ReadonlyMap<string, number | null> | null
+  /** Meta 계정 통화가 실제 USD 인가 — 아니면 "USD" 라벨을 지어내지 않는다(라벨 조작 금지). */
+  metaBudgetIsUsd: boolean
+  /** 현재 기간 링크된 Meta spend 합(USD). insights 소스 실패 시 null(거짓 0% 방지). */
+  metaSpendUsd: number | null
+  /** eventId → KRW 광고비 합(행사 수기 입력). event-metrics 소스 실패 시 null. */
+  eventAdSpend: Record<string, number> | null
+}
+
+export interface PacingBasis {
+  spend: number | null
+  budget: number | null
+  currency: "USD" | "KRW" | null
+}
+
+/**
+ * 캠페인 페이싱(집행률)의 분자·분모·통화 축을 결정한다 — 혼합 통화 집행률 금지:
+ *  (1) 링크가 전부 Meta 이고 계정 통화 USD·lifetimeBudget 합>0 → USD 기준.
+ *      분자는 조회 기간의 Meta spend — lifetime 예산 대비 과소 방향이라 과대포장 없음.
+ *  (2) 캠페인 KRW 예산>0 이고 event 링크가 있으면 → 링크된 행사 KRW 광고비 합 기준
+ *      (동일 행사 중복 링크는 1회만 계상).
+ *  (3) 둘 다 아니면 미산정(전부 null) — 기간 경과율은 호출부(computePacing)가 항상 계산한다.
+ */
+export function resolvePacingBasis(input: PacingBasisInput): PacingBasis {
+  const metaRefIds: string[] = []
+  const eventIds = new Set<string>()
+  for (const link of input.links) {
+    if (link.refType === "meta_campaign") metaRefIds.push(link.refId)
+    else if (link.refType === "event") eventIds.add(link.refId)
+  }
+
+  const allMeta = input.links.length > 0 && metaRefIds.length === input.links.length
+  if (allMeta && input.metaBudgetIsUsd && input.metaSpendUsd != null && input.metaLifetimeBudgetById) {
+    let lifetimeSum = 0
+    for (const id of metaRefIds) lifetimeSum += input.metaLifetimeBudgetById.get(id) ?? 0
+    if (lifetimeSum > 0) {
+      return { spend: input.metaSpendUsd, budget: lifetimeSum, currency: "USD" }
+    }
+  }
+
+  if (input.budgetKrw != null && input.budgetKrw > 0 && eventIds.size > 0 && input.eventAdSpend) {
+    let spendKrw = 0
+    for (const id of eventIds) spendKrw += input.eventAdSpend[id] ?? 0
+    return { spend: spendKrw, budget: input.budgetKrw, currency: "KRW" }
+  }
+
+  return { spend: null, budget: null, currency: null }
+}
+
 export interface DailyPoint {
   date: string
   spend: number
@@ -137,6 +194,7 @@ export interface PerfKpi {
   value: number | null
   previous: number | null
   deltaPct: number | null
+  /** 값의 단위가 아니라 산정 기준 통화 축 — budgetExecutionPct 는 % 값이지만 KRW 축이다(% 에 통화 기호 금지). */
   currency?: "USD" | "KRW"
 }
 

@@ -7,6 +7,8 @@
 // 다른 섹션을 지우거나 전체 응답을 500 으로 만들지 않는다.
 // null = "소스 실패(미측정)", 빈 배열/빈 맵 = "성공했지만 데이터 없음" — KPI 는 이 둘을
 // 구분해, 실패를 0 으로 포장하지 않는다.
+// 단, 계약상 숫자 고정 필드(funnel · 스코어보드 행 leads)는 소스 실패 시 0 으로 강등된다 —
+// 전역 실패 구분은 kpis.spendUsd 의 null + snapshotAt 으로 한다.
 //
 // ── 정직 규칙(위반 금지) ──────────────────────────────────────
 //  - Meta 금액은 USD 네이티브 — KRW 폴딩·환산 금지(KPI·페이싱·채널믹스 전부 통화 분리).
@@ -15,12 +17,13 @@
 
 import "server-only"
 
-import { isConvertedLead } from "@/lib/crm/lead-attribution"
+import { isConvertedLead, isTestLead } from "@/lib/crm/lead-attribution"
 import {
   aggregateDailySeries,
   channelSpendFromEventMetrics,
   computeDeltaPct,
   computePacing,
+  resolvePacingBasis,
   resolvePerfPeriod,
   shiftDays,
   type MarketingPerfResponse,
@@ -119,6 +122,8 @@ export async function assembleMarketingPerf(periodKey: PerfPeriodKey): Promise<M
   const currentLeads: LeadRecord[] = []
   const prevLeads: LeadRecord[] = []
   for (const lead of leads ?? []) {
+    // 테스트 리드(Meta 폼 테스트 도구·E2E)는 전 리드 집계에서 제외 — AdLeadsPanel 기본 뷰와 정합.
+    if (isTestLead(lead)) continue
     const date = kstDateOf(lead.timestamp)
     if (!date) continue
     if (date >= period.since && date <= period.until) currentLeads.push(lead)
@@ -232,39 +237,16 @@ export async function assembleMarketingPerf(periodKey: PerfPeriodKey): Promise<M
       sparkline = sparklineDates.map((date) => ({ date, leads: leadsByDate.get(date) ?? 0 }))
     }
 
-    // 페이싱 통화 결정 — 혼합 통화 집행률 금지:
-    //  (1) 링크가 전부 Meta 이고 lifetimeBudget(계정 통화=USD) 합>0 → USD 기준.
-    //      분자는 조회 기간의 Meta spend — lifetime 예산 대비 과소 방향이라 과대포장 없음.
-    //      insights 소스가 죽었으면 spend 미상이므로 0% 로 포장하지 않고 미산정으로 둔다.
-    //  (2) 캠페인 KRW 예산>0 이고 event 링크가 있으면 → 링크된 행사 KRW 광고비 합 기준.
-    //  (3) 둘 다 아니면 집행률 미산정(null) — 기간 경과율은 항상 계산한다.
-    const allMeta =
-      campaign.links.length > 0 && campaign.links.every((l) => l.refType === "meta_campaign")
-    const eventIds = [
-      ...new Set(campaign.links.filter((l) => l.refType === "event").map((l) => l.refId)),
-    ]
-    let pacingSpend: number | null = null
-    let pacingBudget: number | null = null
-    let pacingCurrency: "USD" | "KRW" | null = null
-    if (allMeta && metaBudgetIsUsd && insightRows) {
-      const lifetimeSum = sum(metaRefIds, (id) => metaBudgetById.get(id) ?? 0)
-      if (lifetimeSum > 0) {
-        pacingSpend = spendSum
-        pacingBudget = lifetimeSum
-        pacingCurrency = "USD"
-      }
-    }
-    if (
-      pacingCurrency === null &&
-      campaign.budget != null &&
-      campaign.budget > 0 &&
-      eventIds.length > 0 &&
-      eventAdSpend
-    ) {
-      pacingSpend = sum(eventIds, (id) => eventAdSpend[id] ?? 0)
-      pacingBudget = campaign.budget
-      pacingCurrency = "KRW"
-    }
+    // 페이싱 통화 결정(혼합 통화 집행률 금지) — 규칙·가드는 resolvePacingBasis(순수) 참조.
+    // insights 소스 실패 시 spend 는 미상(null) — 거짓 0% 집행률을 만들지 않는다.
+    const pacingBasis = resolvePacingBasis({
+      links: campaign.links,
+      budgetKrw: campaign.budget,
+      metaLifetimeBudgetById: metaDash ? metaBudgetById : null,
+      metaBudgetIsUsd,
+      metaSpendUsd: insightRows ? spendSum : null,
+      eventAdSpend,
+    })
 
     const latest = latestByCampaign[campaign.id]
     return {
@@ -275,10 +257,10 @@ export async function assembleMarketingPerf(periodKey: PerfPeriodKey): Promise<M
         startsAt: campaign.startsAt,
         endsAt: campaign.endsAt,
         today,
-        spend: pacingSpend,
-        budget: pacingBudget,
+        spend: pacingBasis.spend,
+        budget: pacingBasis.budget,
       }),
-      pacingCurrency,
+      pacingCurrency: pacingBasis.currency,
       leads: leadsCount,
       cpl: leadsCount > 0 ? round2(spendSum / leadsCount) : null,
       sparkline,
@@ -317,8 +299,8 @@ export async function assembleMarketingPerf(periodKey: PerfPeriodKey): Promise<M
     },
     daily: aggregateDailySeries(currentRows),
     scoreboard,
-    // 퍼널은 계약상 숫자 고정 — 소스 실패 시 0 으로 강등되는 유일한 지점(빈 데이터와 동일 표기).
-    // 실패 여부는 KPI(null)와 snapshotAt 으로 구분 가능하다.
+    // 퍼널은 계약상 숫자 고정 — 소스 실패 시 0 으로 강등된다(스코어보드 행 leads 도 insights
+    // 실패 시 같은 강등 경로 — 헤더 주석 참조). 실패 여부는 kpis 의 null + snapshotAt 으로 구분한다.
     funnel: {
       impressions: sum(currentRows, (r) => r.impressions),
       clicks: sum(currentRows, (r) => r.clicks),
