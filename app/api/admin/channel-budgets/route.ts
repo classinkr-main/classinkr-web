@@ -26,7 +26,7 @@ export function sanitizeChannelBudgetPatch(
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req)
   if (err) return err
-  return NextResponse.json({ budgets: getChannelBudgets() })
+  return NextResponse.json({ budgets: await getChannelBudgets() })
 }
 
 export async function PATCH(req: NextRequest) {
@@ -38,7 +38,7 @@ export async function PATCH(req: NextRequest) {
     if (!patch) {
       return NextResponse.json({ error: "유효하지 않은 채널 예산 입력" }, { status: 400 })
     }
-    const budgets = saveChannelBudget(patch.channel, patch.amount)
+    const budgets = await saveChannelBudget(patch.channel, patch.amount)
     return NextResponse.json({ budgets })
   } catch (error) {
     return NextResponse.json(
