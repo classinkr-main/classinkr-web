@@ -1,6 +1,10 @@
 // lib/marketing/perf.ts
-// 퍼포먼스 대시보드 순수 계산 — 기간 해석·전기 대비 델타·캠페인 페이싱·일자 시리즈.
+// 퍼포먼스 대시보드 순수 계산 — 기간 해석·전기 대비 델타·캠페인 페이싱·일자 시리즈 + 응답 계약.
 // 정직 규칙: 분모 0/미측정 은 0% 가 아니라 null. 통화 혼합 집행률은 호출부에서 null 로 들어온다.
+// 순수 모듈 유지 — 서버 전용 import 금지(타입/상수 전용 모듈만 허용). 조립은 perf-assemble.ts.
+
+import { AD_CHANNELS, type AdChannel } from "@/lib/types/event-metrics"
+import type { CampaignUpdate } from "@/lib/types/marketing-campaign"
 
 export type PerfPeriodKey = "7d" | "30d" | "90d" | "quarter"
 
@@ -20,7 +24,8 @@ function toDate(iso: string): Date {
 function toIso(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
-function shiftDays(iso: string, days: number): string {
+/** ISO 일자(YYYY-MM-DD)를 ±days 만큼 이동한다 — 조립부(스파크라인 창 계산)와 공유. */
+export function shiftDays(iso: string, days: number): string {
   return toIso(new Date(toDate(iso).getTime() + days * DAY_MS))
 }
 
@@ -93,4 +98,87 @@ export function aggregateDailySeries(
     byDate.set(row.date, point)
   }
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/* ─── 채널별 KRW 집행 ─────────────────────────────────────────── */
+
+/**
+ * 행사 수기 광고비(event-metrics adSpendEntries — 전부 KRW)를 채널별 합으로 접는다.
+ * 광고 탭 채널 예산·집행 표(app/admin/campaigns/page.tsx channelEfficiencyData)의 집행
+ * 산식을 그대로 승격한 것 — 두 화면이 같은 숫자를 보게 한다.
+ *
+ * 정직 규칙:
+ *  - 입력이 하나도 없는 채널은 0 이 아니라 null(미측정) — 집행 기록이 없는 채널을
+ *    "0원 집행"으로 단정하지 않는다. 명시 입력된 0원은 측정값 0 으로 유지한다.
+ *  - Meta 라이브 집행(계정 통화 USD)은 여기 절대 섞지 않는다 — 이 표의 meta 는
+ *    행사 단위로 수기 입력된 KRW 광고비다(project-rollup 과 동일 원칙).
+ *  - JSONB 원천이라 enum 밖 채널·비수치 금액은 무시한다(미지 채널을 '기타'로 안 부풀림).
+ */
+export function channelSpendFromEventMetrics(
+  all: Record<string, { adSpendEntries?: ReadonlyArray<{ channel: AdChannel; amount: number }> | null }>
+): Record<AdChannel, number | null> {
+  const out = Object.fromEntries(AD_CHANNELS.map((c) => [c, null])) as Record<AdChannel, number | null>
+  const known = new Set<string>(AD_CHANNELS)
+  for (const metrics of Object.values(all)) {
+    for (const entry of metrics.adSpendEntries ?? []) {
+      if (!known.has(entry.channel)) continue
+      if (typeof entry.amount !== "number" || !Number.isFinite(entry.amount)) continue
+      out[entry.channel] = (out[entry.channel] ?? 0) + entry.amount
+    }
+  }
+  return out
+}
+
+/* ─── perf API 응답 계약 ──────────────────────────────────────── */
+// GET /api/admin/marketing/perf 의 응답 형태 — 조립(perf-assemble)과 UI 가 이 타입 하나를 본다.
+// 통화 분리: Meta 금액은 USD 네이티브(KRW 환산·합산 금지), KRW 지표는 KRW 소스만 합산한다.
+
+export interface PerfKpi {
+  value: number | null
+  previous: number | null
+  deltaPct: number | null
+  currency?: "USD" | "KRW"
+}
+
+export interface PerfScoreboardRow {
+  campaignId: string
+  name: string
+  status: string
+  pacing: Pacing
+  /** 집행률(pacing.executionPct)이 어느 통화 기준인지 — null 이면 통화 정합 실패로 미산정. */
+  pacingCurrency: "USD" | "KRW" | null
+  /** 링크된 Meta 캠페인의 일자 leads 합 — 캠페인 귀속이 가능한 유일 축이라 Meta 카운트를 쓴다. */
+  leads: number
+  /** USD — 링크된 Meta 일자 spend 합 / leads (분모 0 → null). */
+  cpl: number | null
+  /** 최근 14일 날짜별 leads. */
+  sparkline: Array<{ date: string; leads: number }>
+  latestUpdate: { body: string; kind: string; createdAt: string; createdBy: string | null } | null
+  /** Phase 3 전까지 빈 배열. */
+  anomalies: string[]
+}
+
+export interface MarketingPerfResponse {
+  period: PerfPeriod
+  snapshotAt: string | null
+  kpis: {
+    spendUsd: PerfKpi
+    leads: PerfKpi
+    cplUsd: PerfKpi
+    /** 광고 리드 중 전환 비율(%) — lead-attribution isConvertedLead 정의. */
+    leadConversionRate: PerfKpi
+    /** KRW 배정 합 대비 KRW 집행 합(%) — 통화 분리, Meta USD 불포함. */
+    budgetExecutionPct: PerfKpi
+  }
+  daily: DailyPoint[]
+  scoreboard: PerfScoreboardRow[]
+  funnel: { impressions: number; clicks: number; adLeads: number; convertedLeads: number }
+  channelMix: Array<{
+    channel: string
+    budget: number
+    spendKrw: number | null
+    /** meta 채널 행에만 — 현재 기간 Meta 라이브 집행(USD 네이티브, 통화 분리 유지). */
+    metaSpendUsd: number | null
+  }>
+  updatesFeed: CampaignUpdate[]
 }

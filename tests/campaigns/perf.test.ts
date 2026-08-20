@@ -4,6 +4,8 @@ import {
   computeDeltaPct,
   computePacing,
   aggregateDailySeries,
+  channelSpendFromEventMetrics,
+  shiftDays,
 } from "@/lib/marketing/perf"
 
 describe("resolvePerfPeriod", () => {
@@ -88,5 +90,58 @@ describe("aggregateDailySeries", () => {
       { date: "2026-08-18", spend: 15, leads: 3 },
       { date: "2026-08-19", spend: 7, leads: 0 },
     ])
+  })
+})
+
+describe("shiftDays", () => {
+  it("월·연 경계를 넘는 날짜 이동(윤년 포함)", () => {
+    expect(shiftDays("2026-08-20", -13)).toBe("2026-08-07")
+    expect(shiftDays("2026-03-01", -1)).toBe("2026-02-28")
+    expect(shiftDays("2028-03-01", -1)).toBe("2028-02-29") // 윤년
+    expect(shiftDays("2025-12-31", 1)).toBe("2026-01-01")
+  })
+})
+
+describe("channelSpendFromEventMetrics", () => {
+  it("행사 여러 개의 adSpendEntries 를 채널별 KRW 합으로 접는다", () => {
+    const result = channelSpendFromEventMetrics({
+      ev1: {
+        adSpendEntries: [
+          { channel: "meta", amount: 100_000 },
+          { channel: "naver", amount: 50_000 },
+        ],
+      },
+      ev2: { adSpendEntries: [{ channel: "meta", amount: 30_000 }] },
+    })
+    expect(result.meta).toBe(130_000)
+    expect(result.naver).toBe(50_000)
+  })
+  it("입력이 하나도 없는 채널은 0 이 아니라 null(미측정 정직)", () => {
+    const result = channelSpendFromEventMetrics({
+      ev1: { adSpendEntries: [{ channel: "google", amount: 10_000 }] },
+      ev2: { adSpendEntries: [] },
+    })
+    expect(result.google).toBe(10_000)
+    expect(result.kakao).toBeNull()
+    expect(result.offline).toBeNull()
+  })
+  it("명시 입력된 0원은 측정값 0 으로 유지한다(null 과 구분)", () => {
+    const result = channelSpendFromEventMetrics({
+      ev1: { adSpendEntries: [{ channel: "youtube", amount: 0 }] },
+    })
+    expect(result.youtube).toBe(0)
+  })
+  it("enum 밖 채널·비수치 금액은 무시한다(JSONB 원천 방어)", () => {
+    const result = channelSpendFromEventMetrics({
+      // JSONB 라 런타임 데이터가 타입을 배신할 수 있다 — 의도적으로 깨진 입력.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ev1: { adSpendEntries: [{ channel: "tiktok", amount: 999 } as any, { channel: "meta", amount: Number.NaN }] },
+    })
+    expect(result.other).toBeNull() // 미지 채널을 '기타'로 부풀리지 않는다
+    expect(result.meta).toBeNull() // NaN 은 측정으로 치지 않는다
+  })
+  it("빈 입력이면 전 채널 null", () => {
+    const result = channelSpendFromEventMetrics({})
+    expect(Object.values(result).every((v) => v === null)).toBe(true)
   })
 })
