@@ -51,8 +51,10 @@ async function graphGet(path, params) {
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
 const nnum = (v) => (num(v) > 0 ? num(v) : null)
-function extractLeads(actions = []) {
-  const rows = actions.map((a) => ({ type: (a.action_type ?? "").toLowerCase(), value: num(a.value) }))
+function extractLeads(actions) {
+  // 기본 매개변수(= [])는 인자로 null 이 명시적으로 들어오면 못 잡는다 — lib/meta/marketing.ts
+  // extractLeads 와 동일하게 (actions ?? []) 로 방어한다.
+  const rows = (actions ?? []).map((a) => ({ type: (a.action_type ?? "").toLowerCase(), value: num(a.value) }))
   const primary = rows.find((r) => r.type === "lead")
   if (primary) return primary.value
   const grouped = rows.find((r) => r.type === "onsite_conversion.lead_grouped")
@@ -129,14 +131,16 @@ function dedupe(rows) {
   return Array.from(map.values())
 }
 
-async function upsertChunked(rows, currency, syncedAt) {
+async function upsertChunked(rows, currency, syncedAt, since, until) {
   if (rows.length === 0) return 0
   const payload = rows.map((r) => ({ ...r, currency, synced_at: syncedAt }))
   for (let i = 0; i < payload.length; i += 500) {
+    const chunk = payload.slice(i, i + 500)
     const { error } = await sb
       .from("meta_insights_daily")
-      .upsert(payload.slice(i, i + 500), { onConflict: "date,campaign_id" })
-    if (error) throw new Error(`upsert 실패 (rows ${i}~${i + payload.slice(i, i + 500).length}): ${error.message}`)
+      .upsert(chunk, { onConflict: "date,campaign_id" })
+    // 월 컨텍스트(since~until) 없이는 12개월 백필 로그에서 어느 달이 실패했는지 알 수 없다.
+    if (error) throw new Error(`upsert 실패(${since}~${until}, rows ${i}~${i + chunk.length}): ${error.message}`)
   }
   return payload.length
 }
@@ -173,7 +177,7 @@ async function main() {
     if (truncated) truncatedMonths += 1
 
     const deduped = dedupe(rows) // (b) upsert 전 last-wins 디듑.
-    const upserted = await upsertChunked(deduped, currency, syncedAt)
+    const upserted = await upsertChunked(deduped, currency, syncedAt, since, until)
     total += upserted
 
     console.log(`  ${since} ~ ${until}: ${upserted}행${truncated ? " (절단 — 위 경고 참고)" : ""}`)
