@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react"
 import Link from "next/link"
-import { PeriodToggle } from "@/components/admin/PeriodToggle"
 import { EmptyState } from "@/components/admin/viz"
 // Sparkline 은 Recharts 의존이라 viz 배럴 밖 — 직접 경로 import(이 컴포넌트 자체가
 // SummaryTab 에서 dynamic(ssr:false) 청크로 로드된다).
@@ -15,12 +14,14 @@ import {
   type CampaignStatus,
 } from "@/lib/types/marketing-campaign"
 import { ANOMALY_KIND_LABEL, type AnomalyKind } from "@/lib/marketing/anomaly"
-import { sortScoreboardRows, type Pacing, type PerfScoreboardRow } from "@/lib/marketing/perf"
+import { splitScoreboardByActivity, type Pacing, type PerfScoreboardRow } from "@/lib/marketing/perf"
 
 // 캠페인 스코어보드 — 우산 캠페인별 [이름+최근 업데이트 / 페이싱 / 리드 / CPL / 14일 스파크라인].
 // 리드·CPL 은 링크된 Meta 캠페인 귀속 축(응답 계약 주석 참조) — KPI 의 리드와 정의가 다르다.
-
-type ScoreFilter = "ongoing" | "all"
+//
+// 표시는 활동 기준 2그룹(활성 / 접힌 "이전 캠페인")이다. 옛 "진행중 N / 전체 N" 상태 필터는
+// status !== "done" 판정이라 프로덕션에서 양쪽이 항상 같은 수(18/18)로 나와 무의미했다 —
+// 실제로 목록을 파묻던 건 완료가 아니라 몇 달째 멈춘 paused 캠페인이다.
 
 function statusLabel(status: string): string {
   return CAMPAIGN_STATUS_LABEL[status as CampaignStatus] ?? status
@@ -72,12 +73,14 @@ function PacingCell({ pacing, currency }: { pacing: Pacing; currency: "USD" | "K
 
 const ROW_GRID = "grid grid-cols-[minmax(0,1fr)_150px_56px_88px_120px] items-center gap-x-4 px-1"
 
-function ScoreboardRow({ row }: { row: PerfScoreboardRow }) {
+function ScoreboardRow({ row, muted = false }: { row: PerfScoreboardRow; muted?: boolean }) {
   // 빈 배열 = 미측정(insights 소스 실패·Meta 링크 없음), 전부 0 = 실측 0 — 둘을 구분 표기한다.
   const measured = row.sparkline.length > 0
   const hasLeads = row.sparkline.some((point) => point.leads > 0)
   return (
-    <div className={`${ROW_GRID} py-3`}>
+    // 휴면 행은 톤만 눌러 둔다(색 추가 없이 투명도) — 접힘을 펼친 사람에게 "이건 이전 것"임을
+    // 알리되, 읽을 수 없게 만들지는 않는다.
+    <div className={muted ? `${ROW_GRID} py-3 opacity-55` : `${ROW_GRID} py-3`}>
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <p className="truncate text-[13px] font-semibold text-[#111110]">{row.name}</p>
@@ -134,36 +137,43 @@ function ScoreboardRow({ row }: { row: PerfScoreboardRow }) {
   )
 }
 
-export function CampaignScoreboard({ rows }: { rows: PerfScoreboardRow[] }) {
-  // 기본 필터는 진행중(status!=="done") — 완료 캠페인은 전체 토글로만 노출.
-  const [filter, setFilter] = useState<ScoreFilter>("ongoing")
-  // 표시 순서는 리드 내림차순(동률 이름순) 고정 — 원본 rows(API 반환 순서)는 사실상 무작위다.
-  const sortedRows = useMemo(() => sortScoreboardRows(rows), [rows])
-  const ongoing = useMemo(() => sortedRows.filter((row) => row.status !== "done"), [sortedRows])
-  const visible = filter === "all" ? sortedRows : ongoing
+function DisclosureChevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 12 12"
+      className={`h-3 w-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+    >
+      <path
+        d="M4.5 2.5 8 6l-3.5 3.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
 
-  const filterOptions = [
-    { id: "ongoing" as const, label: `진행중 ${ongoing.length}` },
-    { id: "all" as const, label: `전체 ${rows.length}` },
-  ]
+export function CampaignScoreboard({ rows }: { rows: PerfScoreboardRow[] }) {
+  const [showDormant, setShowDormant] = useState(false)
+  // 활동 기준 2그룹(판정 규칙은 splitScoreboardByActivity 참조) — 몇 달 전 중단된 캠페인이
+  // 목록을 채워 실제로 돌아가는 캠페인을 파묻는 것을 막는다. 각 그룹은 리드 내림차순 정렬.
+  // 판정 시각은 rows 가 바뀔 때만 다시 읽는다(리렌더마다 경계 행이 그룹을 오가지 않게).
+  const { active, dormant } = useMemo(() => splitScoreboardByActivity(rows), [rows])
+
+  // 전부 휴면이면 접을 게 아니라 그냥 다 보여준다 — 빈 표는 만들지 않는다.
+  const allDormant = active.length === 0 && dormant.length > 0
+  const primaryRows = allDormant ? dormant : active
 
   return (
     <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5" aria-label="캠페인 스코어보드">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-[14px] font-semibold text-[#111110]">캠페인 스코어보드</h2>
-          <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
-            리드·CPL 은 링크된 Meta 캠페인 귀속 · 스파크라인은 최근 14일 리드
-          </p>
-        </div>
-        {rows.length > 0 && (
-          <PeriodToggle
-            options={filterOptions}
-            value={filter}
-            onChange={setFilter}
-            ariaLabel="캠페인 상태 필터"
-          />
-        )}
+      <div className="mb-3">
+        <h2 className="text-[14px] font-semibold text-[#111110]">캠페인 스코어보드</h2>
+        <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+          리드·CPL 은 링크된 Meta 캠페인 귀속 · 스파크라인은 최근 14일 리드
+        </p>
       </div>
 
       {rows.length === 0 ? (
@@ -179,10 +189,6 @@ export function CampaignScoreboard({ rows }: { rows: PerfScoreboardRow[] }) {
             </Link>
           }
         />
-      ) : visible.length === 0 ? (
-        <p className="rounded-xl bg-[#fafaf8] py-8 text-center text-[12px] text-[#A39E98]">
-          진행 중인 캠페인이 없습니다 — 전체 토글로 완료 캠페인을 볼 수 있습니다.
-        </p>
       ) : (
         <div className="overflow-x-auto">
           <div className="min-w-[680px]">
@@ -193,10 +199,39 @@ export function CampaignScoreboard({ rows }: { rows: PerfScoreboardRow[] }) {
               <span className="text-right">CPL</span>
               <span className="pl-1">리드 14일</span>
             </div>
+
+            {allDormant && (
+              <p className="pt-2.5 text-[11px] text-[#A39E98]">
+                진행 상태·리드·최근 업데이트 중 어느 신호도 없는 캠페인뿐입니다 — 전체{" "}
+                {rows.length}개를 그대로 보여줍니다.
+              </p>
+            )}
+
             <div className="divide-y divide-[#f0f0ec]">
-              {visible.map((row) => (
+              {primaryRows.map((row) => (
                 <ScoreboardRow key={row.campaignId} row={row} />
               ))}
+
+              {!allDormant && dormant.length > 0 && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDormant((open) => !open)}
+                    aria-expanded={showDormant}
+                    className="flex w-full items-center gap-1.5 py-2.5 text-[11.5px] font-medium text-[#1a1a1a]/45 transition hover:text-[#111110]"
+                  >
+                    <DisclosureChevron open={showDormant} />
+                    이전 캠페인 {dormant.length}개
+                  </button>
+                  {showDormant && (
+                    <div className="divide-y divide-[#f0f0ec] border-t border-[#f0f0ec]">
+                      {dormant.map((row) => (
+                        <ScoreboardRow key={row.campaignId} row={row} muted />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

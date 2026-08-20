@@ -9,6 +9,7 @@ import {
   resolvePacingBasis,
   shiftDays,
   sortScoreboardRows,
+  splitScoreboardByActivity,
   type PerfScoreboardRow,
 } from "@/lib/marketing/perf"
 import { isContactedLead, isConvertedLead } from "@/lib/crm/lead-attribution"
@@ -300,5 +301,85 @@ describe("sortScoreboardRows", () => {
       row({ campaignId: "x", name: "나다 캠페인", leads: 5 }),
     ]
     expect(sortScoreboardRows(rows).map((r) => r.campaignId)).toEqual(["y", "x", "z"])
+  })
+})
+
+describe("splitScoreboardByActivity", () => {
+  const NOW = new Date("2026-08-20T00:00:00Z").getTime()
+  const daysAgo = (n: number) => new Date(NOW - n * 86_400_000).toISOString()
+
+  const row = (over: Partial<PerfScoreboardRow> & { campaignId: string }): PerfScoreboardRow => ({
+    name: "캠페인",
+    status: "paused",
+    pacing: { elapsedPct: null, executionPct: null },
+    pacingCurrency: null,
+    leads: 0,
+    cpl: null,
+    sparkline: [],
+    latestUpdate: null,
+    anomalies: [],
+    ...over,
+  })
+
+  const update = (createdAt: string) => ({
+    body: "메모",
+    kind: "note",
+    createdAt,
+    createdBy: null,
+  })
+
+  it("status='active' 면 리드·업데이트가 없어도 활성", () => {
+    const split = splitScoreboardByActivity([row({ campaignId: "a", status: "active" })], { now: NOW })
+    expect(split.active.map((r) => r.campaignId)).toEqual(["a"])
+    expect(split.dormant).toHaveLength(0)
+  })
+
+  it("paused 라도 리드가 나오면 활성 — 실제 신호는 끄지 않는다", () => {
+    const split = splitScoreboardByActivity([row({ campaignId: "b", leads: 4 })], { now: NOW })
+    expect(split.active.map((r) => r.campaignId)).toEqual(["b"])
+  })
+
+  it("paused + 리드 0 + 오래된 업데이트면 이전 그룹", () => {
+    const split = splitScoreboardByActivity(
+      [row({ campaignId: "c", latestUpdate: update(daysAgo(31)) })],
+      { now: NOW }
+    )
+    expect(split.active).toHaveLength(0)
+    expect(split.dormant.map((r) => r.campaignId)).toEqual(["c"])
+  })
+
+  it("최근 30일 이내 업데이트는 활성 — 경계(30일)는 포함", () => {
+    const split = splitScoreboardByActivity(
+      [
+        row({ campaignId: "recent", latestUpdate: update(daysAgo(29)) }),
+        row({ campaignId: "edge", latestUpdate: update(daysAgo(30)) }),
+      ],
+      { now: NOW }
+    )
+    expect(split.active.map((r) => r.campaignId).sort()).toEqual(["edge", "recent"])
+  })
+
+  it("두 그룹 각각 리드 내림차순(동률 이름순) 정렬을 유지한다", () => {
+    const split = splitScoreboardByActivity(
+      [
+        row({ campaignId: "a1", name: "A", status: "active", leads: 16 }),
+        row({ campaignId: "d1", name: "다 휴면", latestUpdate: update(daysAgo(90)) }),
+        row({ campaignId: "a2", name: "B", status: "active", leads: 91 }),
+        row({ campaignId: "d2", name: "가 휴면" }),
+        row({ campaignId: "a3", name: "C", leads: 41 }),
+      ],
+      { now: NOW }
+    )
+    expect(split.active.map((r) => r.campaignId)).toEqual(["a2", "a3", "a1"])
+    // 휴면끼리는 리드가 모두 0 이라 이름 오름차순으로 갈린다.
+    expect(split.dormant.map((r) => r.campaignId)).toEqual(["d2", "d1"])
+  })
+
+  it("깨진 업데이트 타임스탬프는 활동 신호로 세지 않는다", () => {
+    const split = splitScoreboardByActivity(
+      [row({ campaignId: "broken", latestUpdate: update("not-a-date") })],
+      { now: NOW }
+    )
+    expect(split.dormant.map((r) => r.campaignId)).toEqual(["broken"])
   })
 })

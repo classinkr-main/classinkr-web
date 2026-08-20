@@ -254,6 +254,48 @@ export function sortScoreboardRows(rows: PerfScoreboardRow[]): PerfScoreboardRow
   return [...rows].sort((a, b) => b.leads - a.leads || a.name.localeCompare(b.name, "ko"))
 }
 
+/** 최근 업데이트가 "살아 있다"고 볼 기간 — 이보다 오래된 기록은 활동 신호로 세지 않는다. */
+export const SCOREBOARD_RECENT_UPDATE_DAYS = 30
+
+export interface ScoreboardActivitySplit {
+  /** 기본 표시 그룹 — 지금 돌아가고 있거나 신호가 나오는 캠페인. */
+  active: PerfScoreboardRow[]
+  /** 접힘 그룹 — 휴면. 지운 게 아니라 접은 것이므로 토글로 항상 열 수 있어야 한다. */
+  dormant: PerfScoreboardRow[]
+}
+
+/**
+ * 스코어보드를 "활동" 기준으로 두 그룹으로 가른다 — 날짜 기준이 아니다.
+ *
+ * 날짜(ends_at)를 못 쓰는 이유: 프로덕션 캠페인 18개 중 ends_at 이 채워진 건 1개뿐이라
+ * 종료일로는 휴면을 판정할 수 없다. 대신 실제로 관측되는 활동 신호 셋 중 하나라도 있으면
+ * 활성으로 본다:
+ *   (1) status === "active"
+ *   (2) 기간 내 리드 > 0 — 상태가 paused 여도 리드가 나오면 실제 신호다(끄지 않는다)
+ *   (3) 최근 업데이트가 SCOREBOARD_RECENT_UPDATE_DAYS 이내 — 사람이 아직 손대고 있다
+ * 그 외는 휴면(dormant). 두 그룹 모두 표시 정렬(sortScoreboardRows)을 유지한다.
+ *
+ * 판정 기준 시각(now)은 인자로 받는다 — 순수 함수로 두어 경계값을 테스트할 수 있게.
+ */
+export function splitScoreboardByActivity(
+  rows: PerfScoreboardRow[],
+  { now = Date.now() }: { now?: number } = {}
+): ScoreboardActivitySplit {
+  const recentCutoff = now - SCOREBOARD_RECENT_UPDATE_DAYS * DAY_MS
+  const active: PerfScoreboardRow[] = []
+  const dormant: PerfScoreboardRow[] = []
+
+  for (const row of sortScoreboardRows(rows)) {
+    const updatedAt = row.latestUpdate ? new Date(row.latestUpdate.createdAt).getTime() : NaN
+    // 깨진 타임스탬프는 "최근"으로 치지 않는다 — 없는 신호를 만들어 활성으로 올리지 않는다.
+    const recentlyTouched = Number.isFinite(updatedAt) && updatedAt >= recentCutoff
+    if (row.status === "active" || row.leads > 0 || recentlyTouched) active.push(row)
+    else dormant.push(row)
+  }
+
+  return { active, dormant }
+}
+
 export interface MarketingPerfResponse {
   period: PerfPeriod
   snapshotAt: string | null
