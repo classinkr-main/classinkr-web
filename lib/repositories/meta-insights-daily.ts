@@ -32,13 +32,20 @@ function rowToRecord(row: any): MetaInsightsDailyRecord {
   }
 }
 
-/** (date, campaign_id) upsert — 백필 대비 500행 청크. 반환 = 처리 행 수. */
+/**
+ * (date, campaign_id) upsert — 백필 대비 500행 청크. 반환 = 처리 행 수.
+ * 입력을 (date, campaign_id) 키로 먼저 디듑한다(last-wins) — Meta 커서 페이징이 페이지
+ * 경계에서 같은 행을 중복 반환하면, Postgres upsert 는 한 문에서 같은 키를 두 번 건드릴 수
+ * 없어 "cannot affect row a second time"로 청크 전체가 죽는다.
+ */
 export async function upsertMetaInsightsDaily(
   rows: MetaDailyInsightRow[],
   currency: string | null
 ): Promise<number> {
   if (rows.length === 0) return 0
-  const payload = rows.map((r) => ({
+  const syncedAt = new Date().toISOString() // 같은 배치는 같은 synced_at.
+  const deduped = new Map(rows.map((r) => [`${r.date}:${r.campaignId}`, r]))
+  const payload = Array.from(deduped.values()).map((r) => ({
     date: r.date,
     campaign_id: r.campaignId,
     campaign_name: r.campaignName,
@@ -51,7 +58,7 @@ export async function upsertMetaInsightsDaily(
     cpm: r.cpm,
     leads: r.leads,
     currency,
-    synced_at: new Date().toISOString(),
+    synced_at: syncedAt,
   }))
   for (let i = 0; i < payload.length; i += 500) {
     const { error } = await sb()
@@ -77,7 +84,11 @@ export async function getMetaInsightsDailyRange(
   return (data ?? []).map(rowToRecord)
 }
 
-/** 최신 synced_at (대시보드 "스냅샷 시각" 표기용). 행 없으면 null. */
+/**
+ * 최신 synced_at (대시보드 "스냅샷 시각" 표기용).
+ * 행이 없거나 조회 자체가 실패해도 null — 마이그레이션 미적용(테이블 없음) 상태를 그레이스풀
+ * 강등으로 흡수한다(throw 하지 않는다).
+ */
 export async function getLatestSyncedAt(): Promise<string | null> {
   const { data, error } = await sb()
     .from("meta_insights_daily")

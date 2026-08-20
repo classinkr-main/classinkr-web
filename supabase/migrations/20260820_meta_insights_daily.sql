@@ -19,7 +19,6 @@ CREATE TABLE IF NOT EXISTS public.meta_insights_daily (
   PRIMARY KEY (date, campaign_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_meta_insights_daily_date
-  ON public.meta_insights_daily (date);
-
+-- date 단독 인덱스는 두지 않는다 — PRIMARY KEY (date, campaign_id) 의 선행 컬럼이
+-- date 범위 스캔(perf API 의 [since, until] 조회)을 이미 커버한다.
 ALTER TABLE public.meta_insights_daily ENABLE ROW LEVEL SECURITY;

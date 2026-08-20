@@ -167,6 +167,11 @@ interface MetaInsightApiRow {
   actions?: MetaInsightAction[]
 }
 
+// 대시보드(datePreset 롤업)와 일자별(time_increment=1) 두 insights 조회가 공유하는 필드 —
+// 한쪽만 고치고 다른 쪽을 잊는 드리프트를 막는다.
+const CAMPAIGN_INSIGHT_FIELDS =
+  "campaign_id,campaign_name,spend,impressions,reach,clicks,ctr,cpc,cpm,actions"
+
 interface MetaPagingResponse<T> {
   data?: T[]
 }
@@ -685,7 +690,7 @@ async function fetchMetaCampaignDashboard({
     }),
     metaGet<MetaPagingResponse<MetaInsightApiRow>>(`${accountId}/insights`, {
       level: "campaign",
-      fields: "campaign_id,campaign_name,spend,impressions,reach,clicks,ctr,cpc,cpm,actions",
+      fields: CAMPAIGN_INSIGHT_FIELDS,
       date_preset: datePreset,
       limit,
     }),
@@ -849,9 +854,16 @@ export function mapDailyInsightRow(row: MetaDailyInsightApiRow): MetaDailyInsigh
   }
 }
 
+const DAILY_INSIGHTS_PAGE_CAP = 20
+
 /**
  * 캠페인 레벨 일자별 insights — time_increment=1 로 [since, until](YYYY-MM-DD, inclusive)
  * 범위를 조회한다. 행 수 = 일수 × 캠페인 수라 커서 페이징을 따라간다(안전 상한 20페이지).
+ *
+ * truncated=true 인 경우(둘 중 하나):
+ *  1) 20페이지 캡에 도달했는데 다음 페이지(after)가 아직 남아있다 — 큰 범위/캠페인 수로 상한 초과.
+ *  2) Meta 가 다음 페이지 존재(paging.next)만 알리고 커서(cursors.after)를 안 줘 더 따라갈 수 없다.
+ * 두 경우 모두 결과가 무음으로 잘려나간 것이므로, 호출자(크론/백필)가 반드시 확인해야 한다.
  */
 export async function fetchMetaDailyInsights({
   since,
@@ -859,18 +871,19 @@ export async function fetchMetaDailyInsights({
 }: {
   since: string
   until: string
-}): Promise<{ rows: MetaDailyInsightRow[]; currency: string | null }> {
+}): Promise<{ rows: MetaDailyInsightRow[]; currency: string | null; truncated: boolean }> {
   const accountId = getAdAccountId()
   const account = await getMetaAdAccountStatus()
   const rows: MetaDailyInsightRow[] = []
   let after: string | undefined
+  let truncated = false
 
-  for (let page = 0; page < 20; page += 1) {
+  for (let page = 0; page < DAILY_INSIGHTS_PAGE_CAP; page += 1) {
     const response = await metaGet<MetaPagingResponse<MetaDailyInsightApiRow> & MetaCursorPaging>(
       `${accountId}/insights`,
       {
         level: "campaign",
-        fields: "campaign_id,campaign_name,spend,impressions,reach,clicks,ctr,cpc,cpm,actions",
+        fields: CAMPAIGN_INSIGHT_FIELDS,
         time_increment: 1,
         time_range: JSON.stringify({ since, until }),
         limit: 500,
@@ -881,9 +894,22 @@ export async function fetchMetaDailyInsights({
       const mapped = mapDailyInsightRow(raw)
       if (mapped) rows.push(mapped)
     }
-    after = response.paging?.next ? response.paging?.cursors?.after : undefined
-    if (!after) break
+
+    if (!response.paging?.next) {
+      after = undefined
+      break
+    }
+    if (!response.paging?.cursors?.after) {
+      truncated = true
+      break
+    }
+    after = response.paging.cursors.after
+    if (page === DAILY_INSIGHTS_PAGE_CAP - 1) truncated = true
   }
 
-  return { rows, currency: account.currency ?? null }
+  if (truncated) {
+    console.warn("[meta-daily] 페이징 상한 도달 — 결과 절단됨", { since, until })
+  }
+
+  return { rows, currency: account.currency ?? null, truncated }
 }
