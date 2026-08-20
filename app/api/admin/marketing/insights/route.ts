@@ -19,6 +19,10 @@ import { buildMarketingInsight } from "@/lib/marketing/insights/input-builder"
 import { runMarketingInsights } from "@/lib/marketing/insights/runner"
 import { getLatestInsight, type MarketingInsight } from "@/lib/repositories/marketing-insights"
 
+// ?force=1 은 Gemini 왕복(실측 23.6초)이라 기본 실행 상한으로는 배포 후 504 가 난다.
+// 로컬 dev 는 상한이 없어 이 누락이 게이트에 걸리지 않는다 — 다른 Gemini 라우트와 같은 60초.
+export const maxDuration = 60
+
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 export async function GET(req: NextRequest) {
