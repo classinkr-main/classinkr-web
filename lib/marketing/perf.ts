@@ -245,6 +245,15 @@ export interface PerfScoreboardRow {
   anomalies: string[]
 }
 
+/**
+ * 스코어보드 표시 정렬 — 리드 내림차순, 동률이면 이름 오름차순(로케일 비교).
+ * API 반환 순서 그대로(사실상 무작위) 두면 성과 있는 캠페인이 목록에 파묻힌다
+ * (컨트롤러 실측: 캠페인 18개 중 리드 있는 캠페인 4개가 순서 없이 흩어짐).
+ */
+export function sortScoreboardRows(rows: PerfScoreboardRow[]): PerfScoreboardRow[] {
+  return [...rows].sort((a, b) => b.leads - a.leads || a.name.localeCompare(b.name, "ko"))
+}
+
 export interface MarketingPerfResponse {
   period: PerfPeriod
   snapshotAt: string | null

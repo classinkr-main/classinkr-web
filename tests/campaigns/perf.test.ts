@@ -8,6 +8,8 @@ import {
   channelSpendFromEventMetrics,
   resolvePacingBasis,
   shiftDays,
+  sortScoreboardRows,
+  type PerfScoreboardRow,
 } from "@/lib/marketing/perf"
 import { isContactedLead, isConvertedLead } from "@/lib/crm/lead-attribution"
 import type { LeadRecord } from "@/lib/repositories/leads"
@@ -264,5 +266,39 @@ describe("channelSpendFromEventMetrics", () => {
   it("빈 입력이면 전 채널 null", () => {
     const result = channelSpendFromEventMetrics({})
     expect(Object.values(result).every((v) => v === null)).toBe(true)
+  })
+})
+
+describe("sortScoreboardRows", () => {
+  // 정렬 검증에 필요한 필드(leads/name)만 채우고 나머지는 고정 더미값으로 둔다.
+  const row = (over: Partial<PerfScoreboardRow> & { campaignId: string }): PerfScoreboardRow => ({
+    name: "캠페인",
+    status: "active",
+    pacing: { elapsedPct: null, executionPct: null },
+    pacingCurrency: null,
+    leads: 0,
+    cpl: null,
+    sparkline: [],
+    latestUpdate: null,
+    anomalies: [],
+    ...over,
+  })
+
+  it("리드 내림차순으로 정렬한다", () => {
+    const rows = [
+      row({ campaignId: "a", name: "A", leads: 3 }),
+      row({ campaignId: "b", name: "B", leads: 10 }),
+      row({ campaignId: "c", name: "C", leads: 0 }),
+    ]
+    expect(sortScoreboardRows(rows).map((r) => r.campaignId)).toEqual(["b", "a", "c"])
+  })
+
+  it("리드가 같으면 이름 오름차순으로 동률을 가른다", () => {
+    const rows = [
+      row({ campaignId: "z", name: "다나 캠페인", leads: 5 }),
+      row({ campaignId: "y", name: "가나 캠페인", leads: 5 }),
+      row({ campaignId: "x", name: "나다 캠페인", leads: 5 }),
+    ]
+    expect(sortScoreboardRows(rows).map((r) => r.campaignId)).toEqual(["y", "x", "z"])
   })
 })

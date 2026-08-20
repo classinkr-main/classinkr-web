@@ -7,13 +7,14 @@ import { EmptyState } from "@/components/admin/viz"
 // Sparkline 은 Recharts 의존이라 viz 배럴 밖 — 직접 경로 import(이 컴포넌트 자체가
 // SummaryTab 에서 dynamic(ssr:false) 청크로 로드된다).
 import { Sparkline } from "@/components/admin/viz/Sparkline"
+import { CHART } from "@/components/admin/viz/theme"
 import { money } from "@/components/admin/campaigns/event-format"
 import { formatRelativeTime, UpdateKindChip } from "./UpdatesFeed"
 import {
   CAMPAIGN_STATUS_LABEL,
   type CampaignStatus,
 } from "@/lib/types/marketing-campaign"
-import type { Pacing, PerfScoreboardRow } from "@/lib/marketing/perf"
+import { sortScoreboardRows, type Pacing, type PerfScoreboardRow } from "@/lib/marketing/perf"
 
 // 캠페인 스코어보드 — 우산 캠페인별 [이름+최근 업데이트 / 페이싱 / 리드 / CPL / 14일 스파크라인].
 // 리드·CPL 은 링크된 Meta 캠페인 귀속 축(응답 계약 주석 참조) — KPI 의 리드와 정의가 다르다.
@@ -36,13 +37,19 @@ function PacingCell({ pacing, currency }: { pacing: Pacing; currency: "USD" | "K
   if (executionPct != null) parts.push(`집행 ${executionPct}%`)
   if (elapsedPct != null) parts.push(`기간 ${elapsedPct}%`)
   if (executionPct != null && currency) parts.push(currency)
+  // 집행이 기간 경과보다 10%p 넘게 앞서면(과속 집행 — 예산 조기 소진 위험) danger 톤.
+  // 경계값(정확히 10%p)은 아직 정상 톤 — 엄격 부등호.
+  const overPacing = executionPct != null && elapsedPct != null && executionPct - elapsedPct > 10
   return (
     <div>
       <div className="relative h-1.5 overflow-hidden rounded-full bg-[#f0f0ec]">
         {executionPct != null && (
           <div
-            className="h-full rounded-full bg-[#084734]"
-            style={{ width: `${Math.min(100, Math.max(0, executionPct))}%` }}
+            className="h-full rounded-full"
+            style={{
+              width: `${Math.min(100, Math.max(0, executionPct))}%`,
+              backgroundColor: overPacing ? CHART.danger : CHART.brand,
+            }}
           />
         )}
         {elapsedPct != null && (
@@ -124,8 +131,10 @@ function ScoreboardRow({ row }: { row: PerfScoreboardRow }) {
 export function CampaignScoreboard({ rows }: { rows: PerfScoreboardRow[] }) {
   // 기본 필터는 진행중(status!=="done") — 완료 캠페인은 전체 토글로만 노출.
   const [filter, setFilter] = useState<ScoreFilter>("ongoing")
-  const ongoing = useMemo(() => rows.filter((row) => row.status !== "done"), [rows])
-  const visible = filter === "all" ? rows : ongoing
+  // 표시 순서는 리드 내림차순(동률 이름순) 고정 — 원본 rows(API 반환 순서)는 사실상 무작위다.
+  const sortedRows = useMemo(() => sortScoreboardRows(rows), [rows])
+  const ongoing = useMemo(() => sortedRows.filter((row) => row.status !== "done"), [sortedRows])
+  const visible = filter === "all" ? sortedRows : ongoing
 
   const filterOptions = [
     { id: "ongoing" as const, label: `진행중 ${ongoing.length}` },
