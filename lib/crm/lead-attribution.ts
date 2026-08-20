@@ -13,6 +13,21 @@ export const SOURCE_LABEL: Record<string, string> = {
 
 export const RESPONSE_TARGET_SOURCES = new Set(["demo_modal", "contact_page", "meta_lead_ads"])
 
+// ─── 전환 판정 ─────────────────────────────────────────────────
+// 광고 리드 섹션(lib/campaigns/ad-leads → AdLeadsPanel)과 perf 대시보드가 공유하는 단일 정의.
+// bulk-convert(app/api/admin/leads/bulk-convert)가 전환 성공 시 status 를 "converted" 로
+// 바꾸므로, "전환됨" 판정은 그 상태값 하나로 끝난다 — 여기서만 정의하고 재정의하지 않는다.
+
+/** 광고 리드 전환 판정 — status 가 converted 인 리드. */
+export function isConvertedLead(lead: Pick<LeadRecord, "status">): boolean {
+  return lead.status === "converted"
+}
+
+/** 전환 대상(아직 CRM 으로 안 넘어간 살아있는 리드) — converted·closed 만 제외한다. */
+export function isConversionEligibleLead(lead: Pick<LeadRecord, "status">): boolean {
+  return lead.status !== "converted" && lead.status !== "closed"
+}
+
 // ─── 유입 그룹 ──────────────────────────────────────────────────
 // 실제 source 값은 16종+로 잘게 흩어져 있어, 리드 보드 상단 유입 칩 필터는 이 7묶음으로 접는다.
 // 여기가 source→그룹 매핑의 단일 진실원 — 새 유입 채널이 생기면 이 표에만 추가한다.
