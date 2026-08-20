@@ -17,9 +17,10 @@
 
 import "server-only"
 
-import { isConvertedLead, isTestLead } from "@/lib/crm/lead-attribution"
+import { isContactedLead, isConvertedLead, isTestLead } from "@/lib/crm/lead-attribution"
 import {
   aggregateDailySeries,
+  aggregateLeadDailyBySource,
   channelSpendFromEventMetrics,
   computeDeltaPct,
   computePacing,
@@ -121,13 +122,19 @@ export async function assembleMarketingPerf(periodKey: PerfPeriodKey): Promise<M
   // ── 리드: created_at(KST 일자)으로 현재/직전 기간 분할 ──
   const currentLeads: LeadRecord[] = []
   const prevLeads: LeadRecord[] = []
+  // 소스 그룹별 일자 유입용 — KST 일자를 재계산하지 않게 분할 시점에 (date, lead) 쌍으로 보관.
+  const currentLeadDaily: Array<{ date: string; lead: LeadRecord }> = []
   for (const lead of leads ?? []) {
     // 테스트 리드(Meta 폼 테스트 도구·E2E)는 전 리드 집계에서 제외 — AdLeadsPanel 기본 뷰와 정합.
     if (isTestLead(lead)) continue
     const date = kstDateOf(lead.timestamp)
     if (!date) continue
-    if (date >= period.since && date <= period.until) currentLeads.push(lead)
-    else if (date >= period.prevSince && date <= period.prevUntil) prevLeads.push(lead)
+    if (date >= period.since && date <= period.until) {
+      currentLeads.push(lead)
+      currentLeadDaily.push({ date, lead })
+    } else if (date >= period.prevSince && date <= period.prevUntil) {
+      prevLeads.push(lead)
+    }
   }
   const adLeads = currentLeads.filter(isAdLead)
   const prevAdLeads = prevLeads.filter(isAdLead)
@@ -305,8 +312,12 @@ export async function assembleMarketingPerf(periodKey: PerfPeriodKey): Promise<M
       impressions: sum(currentRows, (r) => r.impressions),
       clicks: sum(currentRows, (r) => r.clicks),
       adLeads: adLeads.length,
+      // 누적 단계 해석(isContactedLead) — 전환·종료도 컨택을 거친 것으로 세므로 항상 ≥ convertedLeads.
+      contacted: adLeads.filter(isContactedLead).length,
       convertedLeads: convertedAdLeads.length,
     },
+    // 소스 그룹별 일자 유입 — 분할 루프의 (date, lead) 쌍에서 파생(추가 조회 없음).
+    leadDailyBySource: aggregateLeadDailyBySource(currentLeadDaily),
     channelMix,
     updatesFeed,
   }

@@ -1,8 +1,10 @@
 // lib/marketing/perf.ts
 // 퍼포먼스 대시보드 순수 계산 — 기간 해석·전기 대비 델타·캠페인 페이싱·일자 시리즈 + 응답 계약.
 // 정직 규칙: 분모 0/미측정 은 0% 가 아니라 null. 통화 혼합 집행률은 호출부에서 null 로 들어온다.
-// 순수 모듈 유지 — 서버 전용 import 금지(타입/상수 전용 모듈만 허용). 조립은 perf-assemble.ts.
+// 순수 모듈 유지 — 서버 전용 import 금지(순수 모듈·타입/상수만 허용). 조립은 perf-assemble.ts.
 
+import { getLeadSourceGroup, isTestLead, type LeadSourceGroup } from "@/lib/crm/lead-attribution"
+import type { LeadRecord } from "@/lib/repositories/leads"
 import { AD_CHANNELS, type AdChannel } from "@/lib/types/event-metrics"
 import type { CampaignUpdate } from "@/lib/types/marketing-campaign"
 
@@ -157,6 +159,33 @@ export function aggregateDailySeries(
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
 }
 
+/* ─── 소스 그룹별 일자 유입 ───────────────────────────────────── */
+
+/**
+ * Recharts 스택 막대에 바로 먹이는 형태 — `[{ date: "2026-08-01", meta: 3, homepage: 1 }, …]`.
+ * 리드가 있는 그룹 키만 존재하고(0 채움 없음 — 무근거 0 날조 방지), date 오름차순.
+ * 그룹 축은 lead-attribution 의 SOURCE_GROUP_BY_SOURCE(7그룹) SSOT 를 그대로 쓴다.
+ */
+export type LeadDailyBySourcePoint = { date: string } & Partial<Record<LeadSourceGroup, number>>
+
+/**
+ * (KST 일자, 리드) 쌍을 일자 × 소스 그룹 카운트로 접는다(date asc). 테스트 리드는 호출부의
+ * 선제외와 무관하게 여기서도 제외한다 — 대시보드 리드 집계 전체와 동일 기준(isTestLead).
+ */
+export function aggregateLeadDailyBySource(
+  rows: Array<{ date: string; lead: LeadRecord }>
+): LeadDailyBySourcePoint[] {
+  const byDate = new Map<string, LeadDailyBySourcePoint>()
+  for (const { date, lead } of rows) {
+    if (isTestLead(lead)) continue
+    const group = getLeadSourceGroup(lead)
+    const point: LeadDailyBySourcePoint = byDate.get(date) ?? { date }
+    point[group] = (point[group] ?? 0) + 1
+    byDate.set(date, point)
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
+}
+
 /* ─── 채널별 KRW 집행 ─────────────────────────────────────────── */
 
 /**
@@ -230,7 +259,16 @@ export interface MarketingPerfResponse {
   }
   daily: DailyPoint[]
   scoreboard: PerfScoreboardRow[]
-  funnel: { impressions: number; clicks: number; adLeads: number; convertedLeads: number }
+  /** 퍼널 5단 — contacted 는 누적 해석(신규 status 를 벗어난 광고 리드: 전환·종료 포함, ≥ convertedLeads). */
+  funnel: {
+    impressions: number
+    clicks: number
+    adLeads: number
+    contacted: number
+    convertedLeads: number
+  }
+  /** 현재 기간 소스 그룹별 일자 유입(테스트 리드 제외) — 리드가 있는 날만, 0 채움 없음. */
+  leadDailyBySource: LeadDailyBySourcePoint[]
   channelMix: Array<{
     channel: string
     budget: number

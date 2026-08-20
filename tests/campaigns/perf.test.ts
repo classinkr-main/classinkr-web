@@ -4,10 +4,13 @@ import {
   computeDeltaPct,
   computePacing,
   aggregateDailySeries,
+  aggregateLeadDailyBySource,
   channelSpendFromEventMetrics,
   resolvePacingBasis,
   shiftDays,
 } from "@/lib/marketing/perf"
+import { isContactedLead, isConvertedLead } from "@/lib/crm/lead-attribution"
+import type { LeadRecord } from "@/lib/repositories/leads"
 
 describe("resolvePerfPeriod", () => {
   it("30d — [오늘-29, 오늘] + 직전 30일", () => {
@@ -100,6 +103,52 @@ describe("shiftDays", () => {
     expect(shiftDays("2026-03-01", -1)).toBe("2026-02-28")
     expect(shiftDays("2028-03-01", -1)).toBe("2028-02-29") // 윤년
     expect(shiftDays("2025-12-31", 1)).toBe("2026-01-01")
+  })
+})
+
+describe("aggregateLeadDailyBySource", () => {
+  let seq = 0
+  const lead = (source: string, over: Partial<LeadRecord> = {}): LeadRecord => ({
+    id: `lead-${(seq += 1)}`,
+    source,
+    timestamp: "2026-08-01T00:00:00Z",
+    status: "new",
+    ...over,
+  })
+
+  it("일자 × 소스 그룹으로 접는다 — 리드 있는 날·그룹 키만, date asc(0 채움 없음)", () => {
+    const out = aggregateLeadDailyBySource([
+      { date: "2026-08-02", lead: lead("meta_lead_ads") },
+      { date: "2026-08-01", lead: lead("demo_modal") }, // → homepage 그룹
+      { date: "2026-08-01", lead: lead("meta_lead_ads") },
+      { date: "2026-08-01", lead: lead("meta_lead_ads") },
+      { date: "2026-08-01", lead: lead("unknown_source") }, // 매핑 밖 → manual_etc 흡수
+    ])
+    expect(out).toEqual([
+      { date: "2026-08-01", homepage: 1, meta: 2, manual_etc: 1 },
+      { date: "2026-08-02", meta: 1 },
+    ])
+  })
+
+  it("테스트 리드는 제외한다 — 대시보드 리드 집계 전체와 동일 기준(isTestLead)", () => {
+    const out = aggregateLeadDailyBySource([
+      { date: "2026-08-01", lead: lead("meta_lead_ads", { email: "test@meta.com" }) },
+      { date: "2026-08-01", lead: lead("meta_lead_ads", { org: "<test lead: dummy data>" }) },
+      { date: "2026-08-01", lead: lead("meta_lead_ads") },
+    ])
+    expect(out).toEqual([{ date: "2026-08-01", meta: 1 }])
+  })
+})
+
+describe("isContactedLead — 퍼널 컨택 단계(누적 해석)", () => {
+  it("신규만 제외 — 전환·종료도 컨택을 거친 것으로 세서 contacted ≥ converted 불변식이 성립한다", () => {
+    const statuses = ["new", "contacted", "converted", "closed", "converted", "new"] as const
+    const rows = statuses.map((status) => ({ status }))
+    const contacted = rows.filter(isContactedLead).length
+    const converted = rows.filter(isConvertedLead).length
+    expect(contacted).toBe(4)
+    expect(converted).toBe(2)
+    expect(contacted).toBeGreaterThanOrEqual(converted)
   })
 })
 

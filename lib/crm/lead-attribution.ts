@@ -23,6 +23,14 @@ export function isConvertedLead(lead: Pick<LeadRecord, "status">): boolean {
   return lead.status === "converted"
 }
 
+/**
+ * 컨택 단계 통과 판정 — 신규("new")를 벗어난 리드. 누적 단계 해석이라 전환·종료도
+ * "컨택을 거쳤다"로 센다(퍼널 불변식: contacted ≥ converted 를 구조적으로 보장).
+ */
+export function isContactedLead(lead: Pick<LeadRecord, "status">): boolean {
+  return lead.status !== "new"
+}
+
 /** 전환 대상(아직 CRM 으로 안 넘어간 살아있는 리드) — converted·closed 만 제외한다. */
 export function isConversionEligibleLead(lead: Pick<LeadRecord, "status">): boolean {
   return lead.status !== "converted" && lead.status !== "closed"
