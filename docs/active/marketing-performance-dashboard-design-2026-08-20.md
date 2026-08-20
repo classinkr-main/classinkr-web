@@ -68,7 +68,7 @@ branch_insights 테이블 패턴 미러: id, scope(text, `weekly`), digest(입�
 
 ### 1d. JSON→Supabase 이전 (마이그 2개)
 
-- `event_metrics`: `event_id text primary key, metrics jsonb, updated_at`. `lib/repositories/event-metrics.ts`의 **exported 시그니처 불변** — 내부 저장만 파일→Supabase 교체, `assertLocalJsonWriteAllowed` 제거. 현재 data/event-metrics.json은 `{}`라 데이터 백필 불요.
+- `event_metrics`: `event_id text primary key, metrics jsonb, updated_at`. `lib/repositories/event-metrics.ts`의 함수명·반환 형태는 유지하되 **sync→async 전환**(Supabase 필연) — 소비처 7곳(전부 서버 라우트·async 컨텍스트)에 await 추가. `assertLocalJsonWriteAllowed` 제거. 현재 data/event-metrics.json은 `{}`라 데이터 백필 불요.
 - `channel_budgets`: `channel text primary key, amount bigint not null default 0, updated_at`. `lib/repositories/channel-budgets.ts` 동일 방식. data/channel-budgets.json은 파일 자체가 없어 백필 불요.
 - 효과: 요약 탭 수기 지표(행사 광고비·매출·채널 예산)가 프로덕션에서 처음으로 저장 가능.
 
@@ -79,11 +79,11 @@ branch_insights 테이블 패턴 미러: id, scope(text, `weekly`), digest(입�
 1. **기간 토글** — 공용 `components/admin/PeriodToggle.tsx` 신규 추출(현재 4곳 중복: campaigns page·MetaTab·traffic·AdLeadsPanel — 이번엔 캠페인 허브만 교체, 나머지는 후속). 우측에 마지막 스냅샷 시각.
 2. **KPI 스트립 5칸 + 전주 델타** — 광고비(Meta·USD 표기), 리드(전체), CPL(광고 리드 실측 — AdLeadsPanel 정의 재사용), 리드→딜 전환율(기존 정의), 예산 집행률(KRW 채널만). 델타는 meta_insights_daily + leads.created_at 기반.
 3. **AI 브리핑 카드** — Phase 3 전까지 기존 규칙 기반 인사이트가 같은 자리 유지. Phase 3에서 marketing_insights 최신 1건 + 이상 배지로 교체.
-4. **일자별 추이** — spend+리드 콤보(기존 `ComparisonBarChart`/`TrendAreaChart` 재사용), 소스=meta_insights_daily.
+4. **일자별 추이** — spend+리드 콤보(기존 `ComparisonBarChart`/`TrendAreaChart` 재사용), 소스=meta_insights_daily. **보기 토글 2모드**(2026-08-20 Marketing Hub 시안 대조 채택): [광고비·리드] ↔ [소스 그룹별 유입 스택](leads 테이블 SOURCE_GROUP 7종, perf 응답 `leadDailyBySource`).
 5. **캠페인 스코어보드** — D1 우산 캠페인(`marketing_campaigns`) 행: 이름+최근 업데이트 1줄, **페이싱 바**, 리드, CPL, 스파크라인(`Sparkline` 직접 import), 이상 배지.
    - **페이싱 규칙(통화 정직)**: 기간 경과율은 항상 표시. 집행률은 통화 정합 시만 — Meta 미러 캠페인=USD spend vs Meta 예산(기존 campaigns Graph 호출의 필드 목록에 `lifetime_budget,daily_budget` 추가 fetch), KRW 캠페인=KRW 집행 vs KRW budget. 혼합·산정 불가 시 집행률 "—".
    - 스파크라인 = 링크된 Meta 캠페인 일별 리드 합(meta_insights_daily). 링크 없으면 미표시.
-6. **통합 퍼널 + 채널 믹스 (2단)** — 퍼널: 노출→클릭→리드(광고)→전환 리드→딜 (Meta+leads, 전부 실데이터·`MiniFunnel` 재사용). 채널 믹스: 채널별 spend 분포+CPL(ChannelBudgetTable 데이터, Supabase 전환으로 프로덕션 편집 가능). **채널별 ROAS 미표기 각주 유지.**
+6. **통합 퍼널 + 채널 믹스 (2단)** — 퍼널 5단: **노출→클릭→리드(광고)→컨택→전환** (Meta+leads 실데이터·`MiniFunnel` 재사용). 컨택 = 광고 리드 중 status≠신규(누적 해석, `isContactedLead` SSOT — 2026-08-20 시안 대조 채택). '딜' 단계는 리드-딜 조인 신뢰도 확보 전까지 제외(구현 계획과 정합). 채널 믹스: 채널별 spend 분포+CPL(ChannelBudgetTable 데이터, Supabase 전환으로 프로덕션 편집 가능). **채널별 ROAS 미표기 각주 유지.**
 7. **업데이트 피드** — marketing_campaign_updates 최근 N건 + 작성 폼(캠페인 선택+종류+본문).
 
 기존 요약 탭의 행사 중심 섹션(EventRoiChart·TimelineRow·GoalProgressPanel·행사 퍼널 비교)은 **행사 탭으로 이동**해 중복 정리. ChannelHubCards·MetaLiveSummary는 KPI 스트립에 흡수.
@@ -131,6 +131,12 @@ branch_insights 테이블 패턴 미러: id, scope(text, `weekly`), digest(입�
 ## 비범위
 
 자연어 질문 AI · D4 대량발송/클릭추적 · D5 비-Meta 광고 API · GA4 Data API 읽기 · Meta adset/ad 레벨 insights 수집 · PeriodToggle 전면 교체(캠페인 허브 외 3곳은 후속).
+
+## 백로그 — 실측 수익 렌즈 (2026-08-20 Marketing Hub 시안 대조에서 채택)
+
+레퍼런스 시안(claude.ai/design "마케팅 리드 관리 UI/UX" — Marketing Hub.dc.html)의 "전환·심화지표" 화면 아이디어를 재구성해 등록: 전환 리드별 계약 금액 → 캠페인별 **실측 ROAS/CAC**(구독은 연 환산). 정직 규칙과 양립(귀속 불가 추정이 아니라 입력/실측 기반). 단 **시안의 수기 금액 입력 테이블은 금지** — 계약 금액 정본은 rev-sheet 장부·딜에 있으므로, converted 리드가 bulk-convert 로 만든 **딜 금액의 캠페인별 롤업**으로 구현한다. 선행 조건: 리드→딜 조인 신뢰도 확보(퍼널 딜 단계를 뺀 그 이유). Phase 3 완료 후 별도 라운드.
+
+같은 대조에서 **불채택 확정**: ROAS 전면 표기(추정 ROAS — 정직 규칙 위반)·Google Ads 분석 탭(API 연동 없음, D5 보류)·리드 관리 화면(기존 CRM 리드 보드와 중복 — 정본 분열 금지)·팀 자동 배정 규칙(별도 기획 감)·시각 언어(블루/파스텔/Pretendard — 그린 에디토리얼 취향·DESIGN.md 게이트와 충돌, IA만 참고).
 
 ## 리스크·전제
 
