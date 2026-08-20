@@ -61,7 +61,9 @@ function PacingCell({ pacing, currency }: { pacing: Pacing; currency: "USD" | "K
 const ROW_GRID = "grid grid-cols-[minmax(0,1fr)_150px_56px_88px_120px] items-center gap-x-4 px-1"
 
 function ScoreboardRow({ row }: { row: PerfScoreboardRow }) {
-  const hasSparkline = row.sparkline.some((point) => point.leads > 0)
+  // 빈 배열 = 미측정(insights 소스 실패·Meta 링크 없음), 전부 0 = 실측 0 — 둘을 구분 표기한다.
+  const measured = row.sparkline.length > 0
+  const hasLeads = row.sparkline.some((point) => point.leads > 0)
   return (
     <div className={`${ROW_GRID} py-3`}>
       <div className="min-w-0">
@@ -107,10 +109,12 @@ function ScoreboardRow({ row }: { row: PerfScoreboardRow }) {
         {row.cpl != null ? money(row.cpl, "USD") : "—"}
       </p>
       <div className="pl-1">
-        {hasSparkline ? (
+        {!measured ? (
+          <span className="text-[11px] text-[#A39E98]">—</span>
+        ) : hasLeads ? (
           <Sparkline data={row.sparkline.map((point) => point.leads)} tone="brand" height={28} />
         ) : (
-          <span className="text-[11px] text-[#A39E98]">—</span>
+          <span className="text-[11px] tabular-nums text-[#1a1a1a]/40">리드 0</span>
         )}
       </div>
     </div>
