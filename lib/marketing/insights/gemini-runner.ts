@@ -28,6 +28,24 @@ function resolveModel(envName: "GEMINI_MODEL" | "GEMINI_FAST_MODEL", fallback: s
   return configured
 }
 
+/**
+ * 모델별 thinkingConfig — lib/chatbot/llm.ts 의 buildGenerationConfig 선례와 같은 규약.
+ * 이 규약이 존재하는 이유: 이 저장소는 과거 gemini-2.5-flash 가 thinking 토큰을 다 써버려
+ * 응답 본문이 빈 채로 오는 무음 실패를 겪었다(챗봇이 답변 대신 raw 청크를 노출). 여기서
+ * 실제로 도는 모델도 2.5-flash 라 같은 지뢰를 밟는다. pro 계열은 선례와 동일하게 건드리지
+ * 않는다 — 사고 예산이 품질 모드의 본체다.
+ */
+function thinkingConfigFor(
+  model: string
+): { thinkingBudget?: number; thinkingLevel?: "minimal" | "low" } | undefined {
+  const lower = model.toLowerCase()
+  if (lower.startsWith("gemini-3")) {
+    return { thinkingLevel: lower.includes("pro") ? "low" : "minimal" }
+  }
+  if (lower.startsWith("gemini-2.5-flash")) return { thinkingBudget: 0 }
+  return undefined
+}
+
 export async function callMarketingGemini(
   input: MarketingInsightInput,
   mode: GeminiMode = "quality"
@@ -39,6 +57,7 @@ export async function callMarketingGemini(
       ? resolveModel("GEMINI_FAST_MODEL", DEFAULT_GEMINI_FAST_MODEL)
       : resolveModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+  const thinking = thinkingConfigFor(model)
   const body = {
     systemInstruction: { parts: [{ text: MARKETING_INSIGHT_SYSTEM_PROMPT }] },
     contents: [{ role: "user", parts: [{ text: JSON.stringify(input) }] }],
@@ -46,6 +65,7 @@ export async function callMarketingGemini(
       responseMimeType: "application/json",
       responseSchema: MARKETING_INSIGHT_RESPONSE_SCHEMA,
       temperature: 0.4,
+      ...(thinking ? { thinkingConfig: thinking } : {}),
     },
   }
   const res = await fetch(url, {
