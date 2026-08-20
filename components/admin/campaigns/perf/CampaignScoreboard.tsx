@@ -8,8 +8,8 @@ import { EmptyState } from "@/components/admin/viz"
 // SummaryTab 에서 dynamic(ssr:false) 청크로 로드된다).
 import { Sparkline } from "@/components/admin/viz/Sparkline"
 import { CHART } from "@/components/admin/viz/theme"
-import { money } from "@/components/admin/campaigns/event-format"
-import { formatRelativeTime, UpdateKindChip } from "./UpdatesFeed"
+import { COUNT, money } from "@/components/admin/campaigns/event-format"
+import { formatRelativeTime, UpdateKindChip } from "./format"
 import {
   CAMPAIGN_STATUS_LABEL,
   type CampaignStatus,
@@ -18,8 +18,6 @@ import { sortScoreboardRows, type Pacing, type PerfScoreboardRow } from "@/lib/m
 
 // 캠페인 스코어보드 — 우산 캠페인별 [이름+최근 업데이트 / 페이싱 / 리드 / CPL / 14일 스파크라인].
 // 리드·CPL 은 링크된 Meta 캠페인 귀속 축(응답 계약 주석 참조) — KPI 의 리드와 정의가 다르다.
-
-const COUNT = new Intl.NumberFormat("ko-KR")
 
 type ScoreFilter = "ongoing" | "all"
 
@@ -97,9 +95,9 @@ function ScoreboardRow({ row }: { row: PerfScoreboardRow }) {
         {/* 이상 신호 슬롯 — 지금은 빈 배열(Phase 3 에서 채워진다). */}
         {row.anomalies.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
-            {row.anomalies.map((anomaly) => (
+            {row.anomalies.map((anomaly, index) => (
               <span
-                key={anomaly}
+                key={index}
                 className="rounded border border-[#ECD29C] px-1.5 py-px text-[10px] font-medium text-[#A8741A]"
               >
                 {anomaly}

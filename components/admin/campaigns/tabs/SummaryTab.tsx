@@ -10,7 +10,7 @@ import { FunnelMixSection } from "@/components/admin/campaigns/perf/FunnelMixSec
 import { KpiStrip } from "@/components/admin/campaigns/perf/KpiStrip"
 import { UpdatesFeed } from "@/components/admin/campaigns/perf/UpdatesFeed"
 import type { UpdateSubmitInput } from "@/components/admin/campaigns/perf/UpdatesFeed"
-import { money } from "@/components/admin/campaigns/event-format"
+import { COUNT, PCT1, money } from "@/components/admin/campaigns/event-format"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import type { MarketingPerfResponse, PerfPeriodKey } from "@/lib/marketing/perf"
 
@@ -87,9 +87,6 @@ function usePerf(period: PerfPeriodKey, refreshNonce: number) {
 // 구 InsightsBanner 인사이트 + 추천 액션 규칙의 이식판 — 데이터 축이 행사 수기 집계에서
 // perf 응답(Meta 스냅샷·리드 테이블·캠페인 페이싱)으로 바뀌었으므로 같은 정신(실측된 축만
 // 말하고, null 은 문장으로 만들지 않는다)으로 재구성했다. Phase 3 에서 AI payload 로 교체된다.
-
-const COUNT = new Intl.NumberFormat("ko-KR")
-const PCT1 = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 1 })
 
 const PERIOD_BADGE: Record<PerfPeriodKey, string> = {
   "7d": "최근 7일",
@@ -348,7 +345,10 @@ export default function SummaryTab({
         >
           {/* 재조회 실패 시 화면은 기존 데이터로 유지하되 실패를 밝힌다(무음 강등 금지). */}
           {error && (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e8e8e4] px-4 py-3 text-[12px] text-[#1a1a1a]/55">
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-3 rounded-xl border border-[#e8e8e4] px-4 py-3 text-[12px] text-[#1a1a1a]/55"
+            >
               <span>{error}</span>
               <button
                 type="button"

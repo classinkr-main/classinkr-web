@@ -8,48 +8,13 @@ import {
   type CampaignUpdate,
   type CampaignUpdateKind,
 } from "@/lib/types/marketing-campaign"
+import { formatRelativeTime, UpdateKindChip } from "./format"
 
 // 업데이트 피드 카드 — 캠페인 진행상황 로그 목록 + "업데이트 남기기" 접힘 폼.
 // 표시 컴포넌트 계약: 데이터 fetch 없음. 저장(POST)은 onSubmit 으로 위임하고
 // 성공 시 피드 재조회도 호출부(SummaryTab)가 perf 재조회로 수행한다.
-
-// 상대시각 — Date.now() 는 렌더 본문이 아니라 모듈 헬퍼에 둔다(기존 SummaryTab
-// findUpcomingEvent · SyncStatusBar 와 동일 패턴). perf 데이터는 클라이언트 fetch 후에만
-// 렌더되므로 SSR 하이드레이션 불일치 경로가 없다.
-export function formatRelativeTime(iso: string): string {
-  const t = new Date(iso).getTime()
-  if (Number.isNaN(t)) return "—"
-  const diff = Date.now() - t
-  if (diff < 60_000) return "방금"
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}분 전`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}시간 전`
-  if (diff < 30 * 86_400_000) return `${Math.floor(diff / 86_400_000)}일 전`
-  const d = new Date(t)
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`
-}
-
-// kind 칩 — 어드민 라벨 단순화 원칙(파스텔 채움 대신 글자색+1px 보더)으로 종류만 구분.
-const KIND_CHIP_CLASS: Record<CampaignUpdateKind, string> = {
-  note: "border-[#e8e8e4] text-[#1a1a1a]/50",
-  change: "border-[#ECD29C] text-[#A8741A]",
-  milestone: "border-[#BDEFD8] text-[#084734]",
-}
-
-export function UpdateKindChip({ kind }: { kind: string }) {
-  const known = (CAMPAIGN_UPDATE_KINDS as string[]).includes(kind)
-    ? (kind as CampaignUpdateKind)
-    : null
-  // 미지의 kind 는 라벨을 지어내지 않고 raw 값 그대로 중립 표기한다.
-  const label = known ? CAMPAIGN_UPDATE_KIND_LABEL[known] : kind
-  const cls = known ? KIND_CHIP_CLASS[known] : KIND_CHIP_CLASS.note
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center rounded border px-1.5 py-px text-[10px] font-semibold leading-[1.4] ${cls}`}
-    >
-      {label}
-    </span>
-  )
-}
+// formatRelativeTime·UpdateKindChip 은 ./format 공유 모듈로 옮겼다(CampaignScoreboard 와
+// 공용 — 스코어보드가 이 피드 컴포넌트 모듈을 거꾸로 끌어오지 않게 분리했다).
 
 export interface UpdateSubmitInput {
   campaignId: string
@@ -163,7 +128,7 @@ export function UpdatesFeed({
             className="w-full rounded-md border border-[#E5E5E0] bg-white px-3 py-2 text-[12px] leading-relaxed text-[#111110] outline-none placeholder:text-[#1a1a1a]/30 focus:border-[#084734]"
           />
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[11px] text-[#B43E3E]">{error}</p>
+            <p role="alert" className="text-[11px] text-[#B43E3E]">{error}</p>
             <button
               type="button"
               onClick={() => void handleSubmit()}

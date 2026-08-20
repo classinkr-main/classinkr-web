@@ -15,7 +15,7 @@ import { PeriodToggle } from "@/components/admin/PeriodToggle"
 import { EmptyState } from "@/components/admin/viz"
 import { ComparisonBarChart } from "@/components/admin/viz/ComparisonBarChart"
 import { CHART, gridProps } from "@/components/admin/viz/theme"
-import { money } from "@/components/admin/campaigns/event-format"
+import { COUNT, money } from "@/components/admin/campaigns/event-format"
 import {
   SOURCE_GROUP_DOT,
   SOURCE_GROUP_LABEL,
@@ -41,7 +41,6 @@ const TREND_MODES = [
   { id: "source", label: "소스별 유입" },
 ] as const
 
-const COUNT = new Intl.NumberFormat("ko-KR")
 const USD_COMPACT = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 })
 
 // ComparisonBarChart 의 다크 툴팁과 동일한 시각(viz 토큰) — 스택 차트 쪽 기본 Tooltip 에 적용.

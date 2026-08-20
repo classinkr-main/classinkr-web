@@ -48,9 +48,9 @@ export function BriefingCard({ headline, items, actions, badges }: BriefingConte
 
       {items.length > 0 && (
         <ul className="mt-3 space-y-1">
-          {items.map((item) => (
+          {items.map((item, index) => (
             <li
-              key={item}
+              key={index}
               className="flex gap-2 text-[12px] leading-relaxed text-[#1a1a1a]/60"
             >
               <span aria-hidden className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-[#A39E98]" />
@@ -63,7 +63,7 @@ export function BriefingCard({ headline, items, actions, badges }: BriefingConte
       {actions.length > 0 && (
         <ol className="mt-4 space-y-2 border-t border-[#f0f0ec] pt-3">
           {actions.slice(0, 3).map((action, index) => (
-            <li key={action.title} className="flex items-start gap-2.5">
+            <li key={index} className="flex items-start gap-2.5">
               <span className="mt-px inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-[#BDEFD8] text-[11px] font-bold tabular-nums text-[#084734]">
                 {index + 1}
               </span>

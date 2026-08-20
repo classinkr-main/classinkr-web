@@ -2,15 +2,12 @@
 
 import { ArrowDownRight, ArrowUpRight, Gauge, Minus, Target, TrendingUp, Users, Wallet } from "lucide-react"
 import { StatTile } from "@/components/admin/viz"
-import { money } from "@/components/admin/campaigns/event-format"
+import { COUNT, PCT1, money } from "@/components/admin/campaigns/event-format"
 import type { MarketingPerfResponse, PerfKpi } from "@/lib/marketing/perf"
 
 // 퍼포먼스 대시보드 KPI 스트립 5칸 — perf 응답의 kpis 조각만 받아 그리는 표시 컴포넌트.
 // 통화 분리 엄수: USD 지표(광고비·CPL)에 ₩ 금지, budgetExecutionPct 는 % 값(KRW "축"일 뿐 통화 기호 금지).
 // 값/델타는 전부 null 가능 — null 은 "—" 로 정직 표기하고 0 으로 지어내지 않는다.
-
-const COUNT = new Intl.NumberFormat("ko-KR")
-const PCT1 = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 1 })
 
 // 지표 방향 — 델타 색이 "좋아짐/나빠짐"을 말한다. CPL 은 감소=좋음, 광고비는 방향 가치판단 없음(중립).
 type DeltaValence = "up-good" | "down-good" | "none"
