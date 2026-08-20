@@ -1733,7 +1733,7 @@ export function aggregateAdCreativePerf(leads: LeadRecord[]): AdCreativePerf[] {
   for (const lead of leads) {
     const info = getMetaAdInfo(lead)
     if (!info) continue
-    const key = `${info.campaign ?? ""} ${info.adset ?? ""} ${info.ad ?? ""}`
+    const key = `${info.campaign ?? ""}${info.adset ?? ""}${info.ad ?? ""}`
     const row = byKey.get(key) ?? {
       campaign: info.campaign ?? null,
       adset: info.adset ?? null,
