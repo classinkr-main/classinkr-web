@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { verifyAdmin } from "@/lib/admin-auth"
+import { verifyAdmin, getVerifiedAdminContext } from "@/lib/admin-auth"
 import {
   listCampaignUpdates,
   createCampaignUpdate,
@@ -11,13 +11,14 @@ import { CAMPAIGN_UPDATE_KINDS, type CampaignUpdateKind } from "@/lib/types/mark
 // (단위테스트가 라우트 파일에서 sanitizer 를 가져온다).
 //
 // POST 본문을 검증·정규화한다. 유효하지 않으면 null.
-//   kind      — 미지정이면 note(DB 기본값과 동일), 제공됐는데 미허용이면 거부.
-//   body      — 트림 후 1~2000자. 빈 문자열/과다 길이는 거부(무의미 로그·폭주 방지).
-//   createdBy — 이 라우트 계열은 verifyAdmin 만 써서 세션에서 어드민 표시명을 얻지
-//     않는다(형제 라우트에 그런 관례가 없음) — 본문에 실려 오면 트림해 저장, 없으면 null.
+//   kind — 미지정이면 note(DB 기본값과 동일), 제공됐는데 미허용이면 거부.
+//   body — 트림 후 1~2000자. 빈 문자열/과다 길이는 거부(무의미 로그·폭주 방지).
+// createdBy 는 여기서 다루지 않는다 — 클라이언트가 자기 이름을 자칭하게 두지 않고
+// POST 핸들러가 세션(getVerifiedAdminContext)에서 서버 파생한다
+// (app/api/admin/docs/articles/route.ts 와 동일 관례: verifyAdmin 게이트 + 별도 getVerifiedAdminContext 호출로 표시명 획득).
 export function sanitizeCampaignUpdateInput(
   body: unknown
-): { kind: CampaignUpdateKind; body: string; createdBy: string | null } | null {
+): { kind: CampaignUpdateKind; body: string } | null {
   if (!body || typeof body !== "object") return null
   const b = body as Record<string, unknown>
 
@@ -32,9 +33,13 @@ export function sanitizeCampaignUpdateInput(
   const text = typeof b.body === "string" ? b.body.trim() : ""
   if (!text || text.length > 2000) return null
 
-  const createdBy = typeof b.createdBy === "string" && b.createdBy.trim() ? b.createdBy.trim() : null
+  return { kind, body: text }
+}
 
-  return { kind, body: text, createdBy }
+/** DELETE 쿼리(?updateId=)를 검증한다. 빈 값·공백뿐이면 null(→ 400). */
+export function sanitizeUpdateId(value: string | null): string | null {
+  const trimmed = value?.trim() ?? ""
+  return trimmed.length > 0 ? trimmed : null
 }
 
 /**
@@ -56,11 +61,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 /**
  * POST /api/admin/marketing-campaigns/[id]/updates
- * 진행상황 로그 1건 추가. 본문 { kind?, body, createdBy? } sanitize → 유효하지 않으면 400.
+ * 진행상황 로그 1건 추가. 본문 { kind?, body } sanitize → 유효하지 않으면 400.
+ * createdBy 는 본문을 신뢰하지 않고 세션에서 서버가 파생한다(표시명 없으면 null).
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const authError = await verifyAdmin(req)
   if (authError) return authError
+
+  const admin = await getVerifiedAdminContext(req)
+  const createdBy = admin?.name ?? null
 
   const { id } = await params
   try {
@@ -72,7 +81,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         { status: 400 },
       )
     }
-    const update = await createCampaignUpdate({ campaignId: id, ...input })
+    const update = await createCampaignUpdate({ campaignId: id, ...input, createdBy })
     return NextResponse.json({ update }, { status: 201 })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
@@ -89,7 +98,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const { id } = await params
   try {
-    const updateId = req.nextUrl.searchParams.get("updateId")?.trim() || ""
+    const updateId = sanitizeUpdateId(req.nextUrl.searchParams.get("updateId"))
     if (!updateId) {
       return NextResponse.json({ error: "updateId 가 필요합니다." }, { status: 400 })
     }

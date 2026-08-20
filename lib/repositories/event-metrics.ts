@@ -24,14 +24,17 @@ function normalize(eventId: string, raw: Partial<EventMetrics> | null | undefine
   }
 }
 
-// 조회 실패(테이블 부재 등)는 기존 "파일 없음 → 기본값" 폴백과 동일하게 강등한다 —
-// error 를 의도적으로 무시하고 정규화된 기본값을 반환한다.
+// 행 부재(data=null, error=null)는 여전히 기본값 반환 — 신규 행사 상세를 여는 정상 경로다.
+// 반면 쿼리 자체 실패(테이블 부재·네트워크 등)는 무시하지 않고 throw 한다 — 무시하면
+// saveEventMetrics 의 read-merge-upsert 가 일시 장애 때 기존 데이터를 기본값으로 덮어써
+// 유실시킬 수 있다(부재와 장애를 분리하는 게 목적).
 export async function getEventMetrics(eventId: string): Promise<EventMetrics> {
-  const { data } = await sb()
+  const { data, error } = await sb()
     .from("event_metrics")
     .select("metrics")
     .eq("event_id", eventId)
     .maybeSingle()
+  if (error) throw new Error(`[event-metrics] 조회 실패: ${error.message}`)
   return normalize(eventId, data?.metrics as Partial<EventMetrics> | undefined)
 }
 

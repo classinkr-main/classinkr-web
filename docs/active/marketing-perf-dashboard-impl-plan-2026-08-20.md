@@ -721,11 +721,15 @@ function normalize(eventId: string, raw: Partial<EventMetrics> | null | undefine
 }
 
 export async function getEventMetrics(eventId: string): Promise<EventMetrics> {
-  const { data } = await sb()
+  const { data, error } = await sb()
     .from("event_metrics")
     .select("metrics")
     .eq("event_id", eventId)
     .maybeSingle()
+  // 행 부재(data=null, error=null)는 여전히 기본값 반환 — 부재와 "쿼리 자체 실패"를 분리한다.
+  // error 를 무시하면 일시 장애 때 read-merge-upsert(saveEventMetrics)가 기존 데이터를
+  // 기본값으로 덮어써 유실시킬 수 있다.
+  if (error) throw new Error(`[event-metrics] 조회 실패: ${error.message}`)
   return normalize(eventId, data?.metrics as Partial<EventMetrics> | undefined)
 }
 
