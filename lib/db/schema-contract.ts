@@ -103,6 +103,12 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   "supabase/migrations/20260818_email_campaign_metrics.sql",
   "supabase/migrations/20260818_lead_magnets.sql",
   "supabase/migrations/20260818_rls_blog_posts_patch_notes.sql",
+  // 마케팅 퍼포먼스 대시보드 스파인(2026-08-20) — 5개 신규 테이블. 파일명 사전순(= 적용 순서).
+  "supabase/migrations/20260820_channel_budgets.sql",
+  "supabase/migrations/20260820_event_metrics.sql",
+  "supabase/migrations/20260820_marketing_campaign_updates.sql",
+  "supabase/migrations/20260820_marketing_insights.sql",
+  "supabase/migrations/20260820_meta_insights_daily.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -150,6 +156,50 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     seedCommand: "node --env-file=.env.local scripts/import-lead-magnets.mjs",
     impact:
       "어드민에서 자료 생성·수정이 차단된다. 공개 표면(/resources·자료 다운로드)은 번들 JSON으로 강등돼 계속 뜨지만, 그 상태에서 저장한 편집은 반영되지 않는다.",
+  },
+  // 마케팅 퍼포먼스 대시보드 스파인(2026-08-20) — 5개 신규 테이블, 파일명 사전순(= 적용 순서).
+  {
+    kind: "table",
+    table: "channel_budgets",
+    label: "채널별 배정 예산(KRW)",
+    columns: ["channel", "amount"],
+    migration: "supabase/migrations/20260820_channel_budgets.sql",
+    impact:
+      "채널 예산 배정 조회·저장(GET/PATCH /api/admin/channel-budgets)이 실패해 대시보드 예산 소진율을 계산할 수 없다.",
+  },
+  {
+    kind: "table",
+    table: "event_metrics",
+    label: "행사 캠페인 수기 성과",
+    columns: ["event_id", "metrics"],
+    migration: "supabase/migrations/20260820_event_metrics.sql",
+    impact: "행사 상세의 수기 입력(목표·퍼널·광고비·매출)이 저장되지 않고, 목록·프로젝트 롤업 조회가 실패한다.",
+  },
+  {
+    kind: "table",
+    table: "marketing_campaign_updates",
+    label: "우산 캠페인 진행상황 업데이트 로그",
+    columns: ["id", "campaign_id", "kind", "body", "created_by"],
+    migration: "supabase/migrations/20260820_marketing_campaign_updates.sql",
+    impact: "캠페인 진행상황 로그 조회·기록이 실패한다(스코어보드 최근 업데이트·통합 피드 표시 불가).",
+  },
+  {
+    kind: "table",
+    table: "marketing_insights",
+    label: "마케팅 AI 주간 브리핑 저장",
+    columns: ["id", "scope", "digest", "headline", "payload", "model"],
+    migration: "supabase/migrations/20260820_marketing_insights.sql",
+    impact: "아직 소비 코드가 없다(AI 주간 브리핑 기능의 선행 스키마) — 이후 구현 시 이 프로브가 먼저 걸린다.",
+  },
+  {
+    kind: "table",
+    table: "meta_insights_daily",
+    label: "Meta 캠페인 일자별 성과 스냅샷",
+    // synced_at(동기화 시각) 은 감사용 컬럼이라 제외 — 나머지는 spend/leads 등 실제 지표 컬럼.
+    columns: ["date", "campaign_id", "campaign_name", "spend", "impressions", "reach", "clicks", "ctr", "cpc", "cpm", "leads", "currency"],
+    migration: "supabase/migrations/20260820_meta_insights_daily.sql",
+    impact:
+      "크론(/api/cron/sync-meta-insights)과 백필 스크립트(scripts/backfill-meta-insights.mjs)의 upsert 가 실패해 일자별 스냅샷이 쌓이지 않는다(조회 함수는 아직 라우트에 연결되지 않았다).",
   },
 ]
 
