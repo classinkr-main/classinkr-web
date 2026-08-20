@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react"
+import { useMemo, type Dispatch, type SetStateAction } from "react"
 import dynamic from "next/dynamic"
 import {
   Activity,
@@ -277,7 +277,6 @@ export default function MetaTab({
   editing,
   setEditing,
   onMetricsSaved,
-  metricsFocusNonce,
 }: {
   dashboard: MetaCampaignDashboard | null
   loading: boolean
@@ -307,32 +306,7 @@ export default function MetaTab({
   editing: PublicEvent | null
   setEditing: Dispatch<SetStateAction<PublicEvent | null>>
   onMetricsSaved: (metrics: EventMetrics) => void
-  /** 요약 탭 "성과 입력 열기"의 착지 요청 — 0이면 요청 없음, 증가할 때마다 1회 착지. */
-  metricsFocusNonce?: number
 }) {
-  // 착지는 한 번의 스크롤로 안 된다 — 탭 전환이 코어 재조회(coreLoading 사이클)를 유발해
-  // 위쪽 섹션이 비동기로 자라며 레이아웃이 밀리고, 전환 자체가 스크롤을 초기화하는 것을
-  // 실측했다. 그래서 코어 로딩이 끝난 뒤 같은 앵커에 짧게 몇 번 재스냅해 정착 위치에 선다.
-  // 소비 확정(handledFocusNonce 기록)은 마지막 스냅이 "실행된" 때다 — 이펙트 본문에서
-  // 확정하면 strict 이중 마운트·coreLoading 재사이클의 클린업이 타이머만 지우고 가드는
-  // 남겨 스냅이 전부 유실된다(실측). 시퀀스가 끊기면 가드가 안 잡혀 다음 이펙트가 재예약한다.
-  const handledFocusNonce = useRef(0)
-  useEffect(() => {
-    if (coreLoading) return
-    if (!metricsFocusNonce || metricsFocusNonce === handledFocusNonce.current) return
-    const nonce = metricsFocusNonce
-    const snap = () =>
-      document.getElementById("event-metrics-input")?.scrollIntoView({ behavior: "auto", block: "start" })
-    const delays = [0, 450, 1000, 1700]
-    const timers = delays.map((delay, index) =>
-      window.setTimeout(() => {
-        snap()
-        if (index === delays.length - 1) handledFocusNonce.current = nonce
-      }, delay)
-    )
-    return () => timers.forEach((id) => window.clearTimeout(id))
-  }, [coreLoading, metricsFocusNonce])
-
   // Meta 차트용 행
   const metaPerfRows = useMemo<MetaPerfRow[]>(() => {
     const campaigns = dashboard?.campaigns ?? []
@@ -448,8 +422,7 @@ export default function MetaTab({
         )}
       </div>
 
-      {/* 성과 입력 — 위 표들의 "—"가 어느 행사의 미입력에서 나오는지 여기서 바로 채운다.
-          id는 요약 탭 "성과 입력 열기" CTA의 착지 앵커다(scroll-mt로 상단 여백 확보). */}
+      {/* 성과 입력 — 위 표들의 "—"가 어느 행사의 미입력에서 나오는지 여기서 바로 채운다. */}
       <div id="event-metrics-input" className="mt-8 scroll-mt-24">
         <div className="mb-3">
           <h2 className="text-[14px] font-semibold text-[#111110]">성과 입력</h2>
