@@ -122,7 +122,7 @@ async function gatherEvents(
 ): Promise<void> {
   if (ids.size === 0) return
   try {
-    const all = getAllEventMetrics()
+    const all = await getAllEventMetrics()
     for (const [eventId, m] of Object.entries(all)) {
       if (ids.has(eventId)) {
         sources.eventMetrics[eventId] = {

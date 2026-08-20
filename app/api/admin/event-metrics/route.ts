@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req)
   if (err) return err
   try {
-    const metrics = getAllEventMetrics()
+    const metrics = await getAllEventMetrics()
     return NextResponse.json({ metrics })
   } catch (error) {
     return NextResponse.json(
