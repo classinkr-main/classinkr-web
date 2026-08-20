@@ -19,8 +19,9 @@ export async function GET(req: NextRequest) {
   }
 
   // force=true — 크론은 캐시(digest 히트)를 건너뛰고 주 1회 새 브리핑을 만든다.
+  // mode=quality — 주 1회 백그라운드 실행이라 사람이 화면에서 기다리지 않는다. 지연보다 품질.
   // runner 는 자체 try/catch 로 실패를 stale/error 로 강등하므로 여기서 throw 되지 않는다.
-  const result = await runMarketingInsights(true)
+  const result = await runMarketingInsights({ force: true, mode: "quality" })
 
   // 브리핑 본문은 응답에 싣지 않는다 — 크론 로그는 실행 결과 요약만 남기면 된다
   // (본문은 marketing_insights 에 저장되고 어드민 API 로 조회한다).

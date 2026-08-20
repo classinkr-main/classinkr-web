@@ -29,7 +29,21 @@ export interface RunMarketingInsightsResult {
   retried?: boolean
 }
 
-export async function runMarketingInsights(force = false): Promise<RunMarketingInsightsResult> {
+export interface RunMarketingInsightsOptions {
+  /** digest 캐시를 건너뛰고 새로 생성한다. */
+  force?: boolean
+  /**
+   * 모델 모드 — force 에서 파생하지 않고 호출자가 명시한다. 마케팅의 실호출자는 둘 다
+   * force=true 라(크론 + UI 재생성) force 로 갈랐을 때는 quality 가 영영 실행되지 않았다.
+   * 지연을 사람이 기다리는 경로인지(fast) 아닌지(quality)는 호출자만 안다.
+   */
+  mode?: GeminiMode
+}
+
+export async function runMarketingInsights({
+  force = false,
+  mode = "quality",
+}: RunMarketingInsightsOptions = {}): Promise<RunMarketingInsightsResult> {
   try {
     const input = await buildMarketingInsightInput()
     const digest = digestInput(input)
@@ -40,7 +54,6 @@ export async function runMarketingInsights(force = false): Promise<RunMarketingI
       if (cached) return { from: "cache", insight: cached }
     }
 
-    const mode: GeminiMode = force ? "fast" : "quality"
     let { result, raw, model } = await callMarketingGemini(input, mode)
     let warnings = checkMarketingSanity(input, result)
     let retried = false

@@ -46,8 +46,9 @@ export async function GET(req: NextRequest) {
     const errors: string[] = []
 
     if (force) {
+      // mode=fast — "다시 생성"은 사용자가 화면에서 응답을 기다리는 경로라 품질보다 지연이 먼저다.
       // runner 는 자체 try/catch 로 실패를 stale/error 로 강등한다(throw 하지 않는다).
-      const result = await runMarketingInsights(true)
+      const result = await runMarketingInsights({ force: true, mode: "fast" })
       insight = result.insight ?? null
       from = result.from
       warnings = result.numerical_warnings?.length
