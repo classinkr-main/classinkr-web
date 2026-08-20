@@ -14,10 +14,13 @@ function makeInput(overrides: Partial<MarketingInsightInput> = {}): MarketingIns
     kpis: {
       spend_usd: 1234.56,
       spend_usd_prev: 980.2,
+      spend_usd_delta_pct: 26,
       leads: 108,
       leads_prev: 91,
+      leads_delta_pct: 19,
       cpl_usd: 11.43,
       cpl_usd_prev: 10.77,
+      cpl_usd_delta_pct: 6,
       lead_conversion_rate_pct: 17.9,
       budget_execution_pct_krw: 62,
     },
@@ -84,6 +87,32 @@ describe("checkMarketingSanity", () => {
     )
     expect(warnings).toHaveLength(0)
   })
+
+  it("200% 초과 증가율은 오탐 없이 통과한다 (리드 21→156건 = 643%)", () => {
+    const warnings = checkMarketingSanity(
+      makeInput({ kpis: { ...makeInput().kpis, leads_delta_pct: 643 } }),
+      makeOutput({ headline: "리드 643% 증가" })
+    )
+    expect(warnings).toHaveLength(0)
+  })
+
+  it("음수 델타는 절댓값으로 대조한다 (cpl_usd_delta_pct: -89 → '89% 감소')", () => {
+    const warnings = checkMarketingSanity(
+      makeInput({ kpis: { ...makeInput().kpis, cpl_usd_delta_pct: -89 } }),
+      makeOutput({ headline: "CPL 89% 감소" })
+    )
+    expect(warnings).toHaveLength(0)
+  })
+
+  it("퍼센트 토큰이 퍼센트 아닌 입력값과 우연히 맞아도 여전히 걸린다 (범위 근사 부활 방지)", () => {
+    // spend_usd·leads 는 퍼센트 필드가 아니다 — 156 이 leads 에 있어도 "156%" 는 pcts 후보에 없다.
+    const warnings = checkMarketingSanity(
+      makeInput({ kpis: { ...makeInput().kpis, spend_usd: 1123.3, leads: 156 } }),
+      makeOutput({ headline: "전환율 156% 달성" })
+    )
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toMatchObject({ field: "headline", value: 156 })
+  })
 })
 
 describe("digestInput", () => {
@@ -94,8 +123,11 @@ describe("digestInput", () => {
       snapshot_at: "2026-08-20T21:30:00.000Z",
       kpis: {
         leads_prev: 91,
+        leads_delta_pct: 19,
         spend_usd: 1234.56,
+        spend_usd_delta_pct: 26,
         cpl_usd_prev: 10.77,
+        cpl_usd_delta_pct: 6,
         leads: 108,
         budget_execution_pct_krw: 62,
         spend_usd_prev: 980.2,
