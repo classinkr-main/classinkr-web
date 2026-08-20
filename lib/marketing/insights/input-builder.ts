@@ -14,12 +14,13 @@
 import "server-only"
 import { createHash } from "crypto"
 
+import { detectAnomalies, ANOMALY_KIND_LABEL, type AnomalyFlag } from "@/lib/marketing/anomaly"
+// 창 산술(7일/직전7일/30일)은 스코어보드 조립과 공유하는 순수 모듈에서 온다 —
+// 두 화면의 "이상"이 다른 수치를 근거로 갈라지지 않게 하는 단일 정의.
 import {
-  detectAnomalies,
-  ANOMALY_KIND_LABEL,
-  type AnomalyCampaignInput,
-  type AnomalyFlag,
-} from "@/lib/marketing/anomaly"
+  anomalyLoadSince,
+  buildAnomalyCampaignInputs,
+} from "@/lib/marketing/anomaly-input"
 import { assembleMarketingPerf, kstToday } from "@/lib/marketing/perf-assemble"
 import { shiftDays } from "@/lib/marketing/perf"
 import { listCampaigns } from "@/lib/repositories/marketing-campaigns"
@@ -116,46 +117,54 @@ export function digestInput(input: MarketingInsightInput): string {
   return createHash("sha256").update(stableStringify(stable)).digest("hex")
 }
 
-/* ─── 창(window) 산술 ─────────────────────────────────────────── */
+/* ─── 산술 ────────────────────────────────────────────────────── */
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 const round1 = (n: number) => Math.round(n * 10) / 10
-
-interface MetricWindow {
-  spend: number
-  leads: number
-  impressions: number
-  clicks: number
-}
-
-const EMPTY_WINDOW: MetricWindow = { spend: 0, leads: 0, impressions: 0, clicks: 0 }
-
-function sumWindow(rows: readonly MetaInsightsDailyRecord[], since: string, until: string): MetricWindow {
-  const acc = { ...EMPTY_WINDOW }
-  for (const r of rows) {
-    if (r.date < since || r.date > until) continue
-    acc.spend += r.spend
-    acc.leads += r.leads
-    acc.impressions += r.impressions
-    acc.clicks += r.clicks
-  }
-  return acc
-}
-
-/** CPL = 기간 spend ÷ 기간 leads. 리드 0 이면 "무한대"가 아니라 미산정(null). */
-const cplOf = (w: MetricWindow): number | null => (w.leads > 0 ? round2(w.spend / w.leads) : null)
-/** CTR(%) = clicks ÷ impressions × 100. 노출 0 이면 미산정(null) — 0% 는 거짓이다. */
-const ctrOf = (w: MetricWindow): number | null =>
-  w.impressions > 0 ? round1((w.clicks / w.impressions) * 100) : null
 
 /* ─── 조립 ────────────────────────────────────────────────────── */
 
 const ANOMALY_LABEL_FALLBACK = "이상"
 
+/**
+ * 조립 결과 봉투 — 입력(LLM 에 보낼 평탄 수치)과 감지 플래그(구조화 원본)를 함께 돌려준다.
+ * 입력의 `anomalies` 는 sanity-check 대조를 위해 평탄화된 형태라 campaignId·metric 이 없다.
+ * 브리핑 조회 API 는 "브리핑이 stale 이어도 배지는 최신"이어야 해서 원본 플래그가 필요하다.
+ */
+export interface MarketingInsightBuild {
+  input: MarketingInsightInput
+  flags: AnomalyFlag[]
+}
+
+/* ─── 조립 메모(45초) ─────────────────────────────────────────────
+ * 브리핑 조회 API 는 "최신 브리핑"과 "현재 이상 배지"를 함께 돌려주는데, force 경로에서는
+ * runner 도 같은 입력을 만든다 — 메모가 없으면 한 요청이 같은 조립(perf 집계 + Meta 스냅샷 +
+ * 캠페인 목록)을 두 번 한다. perf 라우트의 perfMemo 와 같은 규약: 실패한 promise 는 즉시
+ * 비운다(남기면 45초 동안 모든 소비처가 같은 에러를 재생한다).
+ */
+const BUILD_MEMO_TTL_MS = 45_000
+let buildMemo: { at: number; promise: Promise<MarketingInsightBuild> } | null = null
+
+export function buildMarketingInsight(): Promise<MarketingInsightBuild> {
+  const hit = buildMemo
+  if (hit && Date.now() - hit.at < BUILD_MEMO_TTL_MS) return hit.promise
+  const promise = assembleMarketingInsightBuild()
+  buildMemo = { at: Date.now(), promise }
+  promise.catch(() => {
+    if (buildMemo?.promise === promise) buildMemo = null
+  })
+  return promise
+}
+
+/** runner·sanity-check 가 쓰는 기존 진입점 — 봉투에서 입력만 꺼낸다. */
 export async function buildMarketingInsightInput(): Promise<MarketingInsightInput> {
+  return (await buildMarketingInsight()).input
+}
+
+async function assembleMarketingInsightBuild(): Promise<MarketingInsightBuild> {
   const today = kstToday()
-  // 최근 37일 = 30일 창 + 직전 7일 창을 모두 덮는 최소 로드 범위.
-  const loadSince = shiftDays(today, -36)
+  // 이상 감지 창(30일 + 직전 7일)을 모두 덮는 로드 범위 — 스코어보드 조립과 같은 상수를 쓴다.
+  const loadSince = anomalyLoadSince(today)
 
   const [perf, dailyRows, campaigns] = await Promise.all([
     assembleMarketingPerf("30d"),
@@ -186,71 +195,17 @@ export async function buildMarketingInsightInput(): Promise<MarketingInsightInpu
     })
   }
 
-  // ── 이상 감지 입력: Meta 일자 스냅샷으로 캠페인별 7일/직전7일/30일 창을 독립 계산 ──
-  // (perf-assemble 은 기간 1개만 계산한다 — 그 모듈을 고치지 않고 여기서 창을 직접 만든다.)
-  const w7 = { since: shiftDays(today, -6), until: today }
-  const wPrev7 = { since: shiftDays(today, -13), until: shiftDays(today, -7) }
-  const w30 = { since: shiftDays(today, -29), until: today }
-
-  const rowsByMetaCampaign = new Map<string, MetaInsightsDailyRecord[]>()
-  const metaNameById = new Map<string, string | null>()
-  for (const row of dailyRows ?? []) {
-    const list = rowsByMetaCampaign.get(row.campaignId)
-    if (list) list.push(row)
-    else rowsByMetaCampaign.set(row.campaignId, [row])
-    if (row.campaignName) metaNameById.set(row.campaignId, row.campaignName)
-  }
-
-  const pacingByCampaignId = new Map(perf.scoreboard.map((r) => [r.campaignId, r.pacing]))
-  const anomalyInputs: AnomalyCampaignInput[] = []
-  const linkedMetaIds = new Set<string>()
-
-  for (const campaign of campaigns) {
-    const metaRefIds = campaign.links.filter((l) => l.refType === "meta_campaign").map((l) => l.refId)
-    for (const id of metaRefIds) linkedMetaIds.add(id)
-    // 소스 실패(dailyRows null)면 창을 지어내지 않는다 — 빈 창으로 두어 CPL/CTR 규칙이 침묵한다.
-    const rows = dailyRows ? metaRefIds.flatMap((id) => rowsByMetaCampaign.get(id) ?? []) : []
-    const has = dailyRows != null && metaRefIds.length > 0
-    const cur7 = sumWindow(rows, w7.since, w7.until)
-    const prev7 = sumWindow(rows, wPrev7.since, wPrev7.until)
-    const cur30 = sumWindow(rows, w30.since, w30.until)
-    const pacing = pacingByCampaignId.get(campaign.id) ?? null
-    anomalyInputs.push({
-      id: campaign.id,
-      name: campaign.name,
-      cpl7d: has ? cplOf(cur7) : null,
-      cpl30d: has ? cplOf(cur30) : null,
-      leads7d: has ? cur7.leads : 0,
-      leadsPrev7d: has ? prev7.leads : 0,
-      ctr7d: has ? ctrOf(cur7) : null,
-      ctr30d: has ? ctrOf(cur30) : null,
-      executionPct: pacing?.executionPct ?? null,
-      elapsedPct: pacing?.elapsedPct ?? null,
-    })
-  }
-
-  // 캠페인 개체에 연결되지 않은 Meta 캠페인 — 실제로 돈을 쓰는 축이므로 감지에서 빼지 않는다.
-  // (페이싱은 우리 예산 개체가 없어 미산정 null — 없는 예산을 지어내지 않는다.)
-  for (const [metaId, rows] of rowsByMetaCampaign) {
-    if (linkedMetaIds.has(metaId)) continue
-    const cur7 = sumWindow(rows, w7.since, w7.until)
-    const prev7 = sumWindow(rows, wPrev7.since, wPrev7.until)
-    const cur30 = sumWindow(rows, w30.since, w30.until)
-    anomalyInputs.push({
-      id: metaId,
-      name: metaNameById.get(metaId) ?? `Meta 캠페인 ${metaId}`,
-      cpl7d: cplOf(cur7),
-      cpl30d: cplOf(cur30),
-      leads7d: cur7.leads,
-      leadsPrev7d: prev7.leads,
-      ctr7d: ctrOf(cur7),
-      ctr30d: ctrOf(cur30),
-      executionPct: null,
-      elapsedPct: null,
-    })
-  }
-
-  const flags = detectAnomalies({ campaigns: anomalyInputs })
+  // ── 이상 감지 입력: 캠페인별 7일/직전7일/30일 창(공용 순수 모듈) ──
+  // 브리핑은 우리 캠페인 개체에 연결되지 않은 Meta 캠페인도 포함한다 — 실제로 돈을 쓰는 축이다.
+  const flags = detectAnomalies({
+    campaigns: buildAnomalyCampaignInputs({
+      today,
+      dailyRows,
+      campaigns,
+      pacingByCampaignId: new Map(perf.scoreboard.map((r) => [r.campaignId, r.pacing])),
+      includeUnlinkedMeta: true,
+    }),
+  })
 
   // ── 퍼널 CTR — 노출 0 이면 미산정(null) ──
   const ctrPct =
@@ -267,7 +222,7 @@ export async function buildMarketingInsightInput(): Promise<MarketingInsightInpu
   if (perf.updatesFeed.length === 0) data_caveats.push("최근 팀 업데이트 로그 없음")
   if (flags.length === 0) data_caveats.push("규칙 기반 이상 감지에서 걸린 항목 없음")
 
-  return {
+  const input: MarketingInsightInput = {
     scope: "weekly",
     generated_for: today,
     period: { key: perf.period.key, since: perf.period.since, until: perf.period.until },
@@ -311,6 +266,7 @@ export async function buildMarketingInsightInput(): Promise<MarketingInsightInpu
     })),
     data_caveats,
   }
+  return { input, flags }
 }
 
 function toInputAnomaly(flag: AnomalyFlag): MarketingInsightAnomaly {
