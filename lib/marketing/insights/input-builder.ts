@@ -67,14 +67,21 @@ export interface MarketingInsightInput {
   snapshot_at: string | null
   currency_note: string
 
-  // 기간 KPI — perf 응답의 봉투를 평탄화(값/직전값만, deltaPct 는 파생이라 제외).
+  // 기간 KPI — perf 응답의 봉투를 평탄화.
+  // deltaPct 도 넣는다: 브리핑은 본래 "얼마나 달라졌나"를 말하는 글이라 증감률을 반드시 인용하는데,
+  // 입력에 없으면 모델이 직접 계산하고(예: 156/21 → 642.86%) 그 값이 sanity check 에 "입력에 없는 숫자"로
+  // 걸린다. 더 나쁜 건 화면 KPI 카드가 쓰는 반올림값(+638%)과 브리핑 문구가 갈린다는 점이다 —
+  // 같은 화면에서 두 숫자가 다르면 그게 곧 신뢰 손상이다. 우리가 계산한 값을 그대로 인용하게 한다.
   kpis: {
     spend_usd: number | null
     spend_usd_prev: number | null
+    spend_usd_delta_pct: number | null
     leads: number | null
     leads_prev: number | null
+    leads_delta_pct: number | null
     cpl_usd: number | null
     cpl_usd_prev: number | null
+    cpl_usd_delta_pct: number | null
     lead_conversion_rate_pct: number | null
     budget_execution_pct_krw: number | null
   }
@@ -253,10 +260,13 @@ async function assembleMarketingInsightBuild(): Promise<MarketingInsightBuild> {
     kpis: {
       spend_usd: perf.kpis.spendUsd.value,
       spend_usd_prev: perf.kpis.spendUsd.previous,
+      spend_usd_delta_pct: perf.kpis.spendUsd.deltaPct,
       leads: perf.kpis.leads.value,
       leads_prev: perf.kpis.leads.previous,
+      leads_delta_pct: perf.kpis.leads.deltaPct,
       cpl_usd: perf.kpis.cplUsd.value,
       cpl_usd_prev: perf.kpis.cplUsd.previous,
+      cpl_usd_delta_pct: perf.kpis.cplUsd.deltaPct,
       lead_conversion_rate_pct: perf.kpis.leadConversionRate.value,
       budget_execution_pct_krw: perf.kpis.budgetExecutionPct.value,
     },
