@@ -43,7 +43,13 @@ export async function listRecentUpdates(limit = 20): Promise<CampaignUpdate[]> {
   return (data ?? []).map(rowToUpdate)
 }
 
-/** 캠페인별 최신 업데이트 1건씩 — 스코어보드 행 표시용. */
+/**
+ * 캠페인별 최신 업데이트 1건씩 — 스코어보드 행 표시용.
+ * 제약: 전역 created_at DESC 로 가져와 JS 에서 캠페인별 첫 등장만 취하는 구조라,
+ * PostgREST 기본 상한(1000행)을 넘으면 업데이트가 뜸한 캠페인의 최신 항목이 그 상한
+ * 밖으로 밀려나 조용히 누락될 수 있다. 캠페인 수·로그 총량이 그 임계에 가까워지면
+ * DISTINCT ON 을 쓰는 RPC 로 교체한다.
+ */
 export async function latestUpdatesByCampaign(
   campaignIds: string[]
 ): Promise<Record<string, CampaignUpdate>> {

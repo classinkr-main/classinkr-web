@@ -1,5 +1,6 @@
 // lib/types/event-metrics.ts
-// 행사(캠페인) 성과 트래킹 — DB 마이그레이션 전 임시 JSON 저장소용
+// 행사(캠페인) 성과 트래킹 — Supabase(event_metrics) 저장소용 타입. 저장소는
+// lib/repositories/event-metrics.ts(2026-08-20 이전 완료), 이 파일은 순수 타입/상수만 둔다.
 
 export type AdChannel = "google" | "meta" | "naver" | "kakao" | "youtube" | "offline" | "other"
 
