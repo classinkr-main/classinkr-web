@@ -121,9 +121,17 @@ function useInsights(refreshNonce: number) {
   const [error, setError] = useState<string | null>(null)
   const [regenerating, setRegenerating] = useState(false)
   const seqRef = useRef(0)
+  // 재생성 연타 방지 — setState 는 비동기라 regenerating 상태만으로는 두 번째 클릭을 못 막는다
+  // (MetaTab 의 AiCreativeSuggestSection.runningRef 와 같은 패턴). ?force=1 만 Gemini 를 부르는
+  // 유료 경로라 이 경로만 잠근다 — 저장분 재조회(fresh)는 값싸고 seqRef 가 이미 레이스를 막는다.
+  const regeneratingRef = useRef(false)
 
   const load = useCallback(
     async ({ fresh = false, regenerate = false }: { fresh?: boolean; regenerate?: boolean } = {}) => {
+      if (regenerate) {
+        if (regeneratingRef.current) return
+        regeneratingRef.current = true
+      }
       const seq = ++seqRef.current
       if (regenerate) setRegenerating(true)
       try {
@@ -144,7 +152,10 @@ function useInsights(refreshNonce: number) {
         setError(e instanceof Error ? e.message : "브리핑 조회 실패")
       } finally {
         // seq 와 무관하게 잠금을 푼다 — 늦게 온 응답 때문에 버튼이 영구히 잠기면 안 된다.
-        if (regenerate) setRegenerating(false)
+        if (regenerate) {
+          regeneratingRef.current = false
+          setRegenerating(false)
+        }
       }
     },
     []

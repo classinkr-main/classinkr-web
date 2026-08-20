@@ -122,6 +122,27 @@ export function digestInput(input: MarketingInsightInput): string {
 const round2 = (n: number) => Math.round(n * 100) / 100
 const round1 = (n: number) => Math.round(n * 10) / 10
 
+/* ─── 프롬프트 입력 위생 ──────────────────────────────────────────
+ * 업데이트 로그 body 와 캠페인명(우리 것 + Meta 것)은 사람이 자유 입력한 텍스트라 그대로
+ * 프롬프트에 실린다. 내부 어드민 입력이라 위험도는 낮지만 방어 비용이 싸다 — 제어문자를
+ * 공백으로 접고 길이를 캡한다(캡은 digest·sanity-check 이전 단계에서 적용되므로 LLM 이 보는
+ * 텍스트와 검증이 대조하는 텍스트가 어긋나지 않는다).
+ */
+const UPDATE_BODY_MAX = 300
+const NAME_MAX = 120
+
+function sanitizeFreeText(value: string, max: number): string {
+  // 제어문자(개행·탭·NUL 포함)를 공백으로 — 프롬프트 구조를 흉내 내는 입력을 평탄화한다.
+  // 정규식 대신 코드포인트 검사(제어문자 리터럴을 소스에 남기지 않는다).
+  let cleaned = ""
+  for (const ch of value) {
+    const code = ch.codePointAt(0) ?? 0
+    cleaned += code < 0x20 || code === 0x7f ? " " : ch
+  }
+  cleaned = cleaned.replace(/\s+/g, " ").trim()
+  return cleaned.length > max ? `${cleaned.slice(0, max)}…` : cleaned
+}
+
 /* ─── 조립 ────────────────────────────────────────────────────── */
 
 const ANOMALY_LABEL_FALLBACK = "이상"
@@ -249,7 +270,7 @@ async function assembleMarketingInsightBuild(): Promise<MarketingInsightBuild> {
       converted_leads: perf.funnel.convertedLeads,
     },
     scoreboard: perf.scoreboard.map((row) => ({
-      name: row.name,
+      name: sanitizeFreeText(row.name, NAME_MAX),
       status: row.status,
       elapsed_pct: row.pacing.elapsedPct,
       execution_pct: row.pacing.executionPct,
@@ -260,9 +281,9 @@ async function assembleMarketingInsightBuild(): Promise<MarketingInsightBuild> {
     anomalies: flags.map(toInputAnomaly),
     updates: perf.updatesFeed.slice(0, 10).map((u) => ({
       kind: u.kind,
-      body: u.body,
+      body: sanitizeFreeText(u.body, UPDATE_BODY_MAX),
       created_at: u.createdAt,
-      created_by: u.createdBy,
+      created_by: u.createdBy == null ? null : sanitizeFreeText(u.createdBy, NAME_MAX),
     })),
     data_caveats,
   }
@@ -273,7 +294,8 @@ function toInputAnomaly(flag: AnomalyFlag): MarketingInsightAnomaly {
   return {
     kind: flag.kind,
     label: ANOMALY_KIND_LABEL[flag.kind] ?? ANOMALY_LABEL_FALLBACK,
-    campaign_name: flag.campaignName,
+    // detail 은 코드가 만든 문장이라 그대로 두고, 캠페인명(자유 텍스트)만 위생 처리한다.
+    campaign_name: flag.campaignName == null ? null : sanitizeFreeText(flag.campaignName, NAME_MAX),
     severity: flag.severity,
     detail: flag.detail,
     current: flag.metric.current,

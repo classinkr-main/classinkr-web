@@ -49,6 +49,11 @@ export async function runMarketingInsights({
     const digest = digestInput(input)
 
     // 같은 입력이면 다시 부르지 않는다(force 는 이 캐시를 건너뛴다).
+    //
+    // 알려진 한계: 이 조회→insert 는 원자적이지 않다. 크론과 수동 재생성이 겹치면 둘 다
+    // 캐시 미스로 판정해 Gemini 를 두 번 부르고 같은 digest 행이 두 개 생길 수 있다.
+    // 현재 스케줄(주 1회 크론 + 사람이 누르는 재생성)에서 충돌 확률이 낮아 감수한다.
+    // 정답은 (scope, digest) unique 제약 + upsert 다 — 발생 빈도가 올라가면 그때 마이그레이션.
     if (!force) {
       const cached = await findInsightByDigest(SCOPE, digest)
       if (cached) return { from: "cache", insight: cached }

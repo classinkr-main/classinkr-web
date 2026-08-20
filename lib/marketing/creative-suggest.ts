@@ -16,7 +16,9 @@ import type { AdCreativePerf } from "@/lib/marketing/creative-input"
 // 모델명 해석·thinkingConfig 판정은 브리핑 호출과 공유하는 SSOT 에서 온다.
 import {
   DEFAULT_GEMINI_MODEL,
+  GEMINI_FETCH_TIMEOUT_MS,
   resolveGeminiModel,
+  rethrowGeminiFetchError,
   thinkingConfigFor,
 } from "@/lib/marketing/gemini-model"
 
@@ -103,11 +105,13 @@ export async function callCreativeSuggestGemini(
     },
   }
 
+  // 라우트 maxDuration(60)에만 기대면 플랫폼이 함수를 죽여 에러 응답조차 못 돌려준다.
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Connection: "close" },
     body: JSON.stringify(body),
-  })
+    signal: AbortSignal.timeout(GEMINI_FETCH_TIMEOUT_MS),
+  }).catch((e: unknown) => rethrowGeminiFetchError(e, model))
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`Gemini ${res.status}: ${text}`)

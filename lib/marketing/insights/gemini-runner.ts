@@ -10,7 +10,9 @@ import "server-only"
 import {
   DEFAULT_GEMINI_FAST_MODEL,
   DEFAULT_GEMINI_MODEL,
+  GEMINI_FETCH_TIMEOUT_MS,
   resolveGeminiModel,
+  rethrowGeminiFetchError,
   thinkingConfigFor,
 } from "@/lib/marketing/gemini-model"
 import { MARKETING_INSIGHT_SYSTEM_PROMPT, MARKETING_INSIGHT_RESPONSE_SCHEMA } from "./prompt"
@@ -46,11 +48,13 @@ export async function callMarketingGemini(
       ...(thinking ? { thinkingConfig: thinking } : {}),
     },
   }
+  // 타임아웃은 플랫폼 상한보다 먼저 끊어야 runner 의 stale 폴백이 돌 기회를 얻는다.
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", Connection: "close" },
     body: JSON.stringify(body),
-  })
+    signal: AbortSignal.timeout(GEMINI_FETCH_TIMEOUT_MS),
+  }).catch((e: unknown) => rethrowGeminiFetchError(e, model))
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`Gemini ${res.status}: ${text}`)
