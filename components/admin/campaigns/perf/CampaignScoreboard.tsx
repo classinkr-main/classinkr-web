@@ -14,6 +14,7 @@ import {
   CAMPAIGN_STATUS_LABEL,
   type CampaignStatus,
 } from "@/lib/types/marketing-campaign"
+import { ANOMALY_KIND_LABEL, type AnomalyKind } from "@/lib/marketing/anomaly"
 import { sortScoreboardRows, type Pacing, type PerfScoreboardRow } from "@/lib/marketing/perf"
 
 // 캠페인 스코어보드 — 우산 캠페인별 [이름+최근 업데이트 / 페이싱 / 리드 / CPL / 14일 스파크라인].
@@ -23,6 +24,12 @@ type ScoreFilter = "ongoing" | "all"
 
 function statusLabel(status: string): string {
   return CAMPAIGN_STATUS_LABEL[status as CampaignStatus] ?? status
+}
+
+// 행의 anomalies 는 계약상 문자열 배열(AnomalyKind) — 라벨 매핑은 SSOT 한 곳만 본다.
+// 모르는 종류가 오면 지어내지 않고 원문 그대로 보여준다.
+function anomalyLabel(kind: string): string {
+  return ANOMALY_KIND_LABEL[kind as AnomalyKind] ?? kind
 }
 
 function PacingCell({ pacing, currency }: { pacing: Pacing; currency: "USD" | "KRW" | null }) {
@@ -92,15 +99,16 @@ function ScoreboardRow({ row }: { row: PerfScoreboardRow }) {
         ) : (
           <p className="mt-1 text-[11px] text-[#A39E98]">업데이트 기록 없음</p>
         )}
-        {/* 이상 신호 슬롯 — 지금은 빈 배열(Phase 3 에서 채워진다). */}
+        {/* 이상 신호 — 규칙 감지(lib/marketing/anomaly.ts)가 걸린 종류만. 파스텔 채움 없이
+            danger 토큰 아웃라인 칩으로만 표시한다(넓은 면적 채색 지양). */}
         {row.anomalies.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
-            {row.anomalies.map((anomaly, index) => (
+            {row.anomalies.map((kind) => (
               <span
-                key={index}
-                className="rounded border border-[#ECD29C] px-1.5 py-px text-[10px] font-medium text-[#A8741A]"
+                key={kind}
+                className="rounded border border-[#F6D5C5] px-1.5 py-px text-[10px] font-medium text-[#B85C33]"
               >
-                {anomaly}
+                {anomalyLabel(kind)}
               </span>
             ))}
           </div>

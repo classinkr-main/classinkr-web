@@ -18,6 +18,8 @@
 import "server-only"
 
 import { isContactedLead, isConvertedLead, isTestLead } from "@/lib/crm/lead-attribution"
+import { detectAnomalies } from "@/lib/marketing/anomaly"
+import { anomalyLoadSince, buildAnomalyCampaignInputs } from "@/lib/marketing/anomaly-input"
 import {
   aggregateDailySeries,
   aggregateLeadDailyBySource,
@@ -95,7 +97,9 @@ export async function assembleMarketingPerf(periodKey: PerfPeriodKey): Promise<M
   // 수 있어 로드 범위를 함께 넓힌다 — 로드하지 않은 날짜를 0 으로 채우는 것은 조작이므로,
   // 채워 그릴 범위만큼 실제로 읽는다(7d/30d/90d 는 prevSince 가 이미 14일 이상을 덮는다).
   const sparklineSince = shiftDays(period.until, -13)
-  const loadSince = sparklineSince < period.prevSince ? sparklineSince : period.prevSince
+  // 이상 감지(7일·직전7일·30일 창)도 같은 1회 조회로 덮는다 — 감지 때문에 DB 를 다시 읽지 않는다.
+  // ISO 일자 문자열은 사전순 = 시간순이라 정렬 첫 값이 가장 이른 날이다.
+  const loadSince = [sparklineSince, period.prevSince, anomalyLoadSince(period.until)].sort()[0]
 
   // ── 소스 수집(병렬 + 개별 격리) ──
   const [insightRows, leads, campaigns, budgets, eventMetricsMap, updatesFeed, snapshotAt] =
@@ -279,9 +283,33 @@ export async function assembleMarketingPerf(periodKey: PerfPeriodKey): Promise<M
             createdBy: latest.createdBy,
           }
         : null,
-      anomalies: [], // Phase 3 전까지 빈 배열
+      anomalies: [], // 아래 2패스에서 채운다(감지에 이 행의 페이싱이 먼저 필요하다).
     }
   })
+
+  // ── 이상 감지: 행 배지 ──────────────────────────────────────
+  // 창 산술은 브리핑 입력과 공유하는 순수 모듈(anomaly-input) — 두 화면의 "이상"이 서로 다른
+  // 수치를 근거로 갈라지지 않게 한다. 로드 범위를 감지 창까지 넓혀 뒀으므로 이미 읽은
+  // insightRows 에서 전부 파생되고, 추가 DB 조회는 없다.
+  // 캠페인 개체에 연결되지 않은 Meta 캠페인은 표시할 행이 없어 제외한다(브리핑 입력은 포함).
+  const anomalyKindsByCampaignId = new Map<string, string[]>()
+  for (const flag of detectAnomalies({
+    campaigns: buildAnomalyCampaignInputs({
+      today,
+      dailyRows: insightRows,
+      campaigns,
+      pacingByCampaignId: new Map(scoreboard.map((row) => [row.campaignId, row.pacing])),
+      includeUnlinkedMeta: false,
+    }),
+  })) {
+    if (!flag.campaignId) continue
+    const kinds = anomalyKindsByCampaignId.get(flag.campaignId)
+    if (!kinds) anomalyKindsByCampaignId.set(flag.campaignId, [flag.kind])
+    else if (!kinds.includes(flag.kind)) kinds.push(flag.kind)
+  }
+  for (const row of scoreboard) {
+    row.anomalies = anomalyKindsByCampaignId.get(row.campaignId) ?? []
+  }
 
   // ── 채널 믹스: 7채널 배정(KRW) vs 수기 집행(KRW), meta 행에만 라이브 USD 를 분리 표기 ──
   const channelMix = budgets

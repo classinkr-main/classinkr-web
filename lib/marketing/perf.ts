@@ -241,7 +241,7 @@ export interface PerfScoreboardRow {
   /** 최근 14일 날짜별 leads. */
   sparkline: Array<{ date: string; leads: number }>
   latestUpdate: { body: string; kind: string; createdAt: string; createdBy: string | null } | null
-  /** Phase 3 전까지 빈 배열. */
+  /** 감지된 이상의 종류(AnomalyKind) — 라벨은 lib/marketing/anomaly.ts 의 ANOMALY_KIND_LABEL. */
   anomalies: string[]
 }
 

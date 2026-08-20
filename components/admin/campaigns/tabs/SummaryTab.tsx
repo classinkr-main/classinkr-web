@@ -5,13 +5,18 @@ import dynamic from "next/dynamic"
 import { PeriodToggle } from "@/components/admin/PeriodToggle"
 import { ChartSkeleton, EmptyState, Skeleton } from "@/components/admin/viz"
 import { BriefingCard } from "@/components/admin/campaigns/perf/BriefingCard"
-import type { BriefingAction, BriefingContent } from "@/components/admin/campaigns/perf/BriefingCard"
+import type {
+  BriefingAction,
+  BriefingCardProps,
+  BriefingContent,
+} from "@/components/admin/campaigns/perf/BriefingCard"
 import { FunnelMixSection } from "@/components/admin/campaigns/perf/FunnelMixSection"
 import { KpiStrip } from "@/components/admin/campaigns/perf/KpiStrip"
 import { UpdatesFeed } from "@/components/admin/campaigns/perf/UpdatesFeed"
 import type { UpdateSubmitInput } from "@/components/admin/campaigns/perf/UpdatesFeed"
 import { COUNT, PCT1, money } from "@/components/admin/campaigns/event-format"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { ANOMALY_KIND_LABEL, type AnomalyFlag, type AnomalyKind } from "@/lib/marketing/anomaly"
 import type { MarketingPerfResponse, PerfPeriodKey } from "@/lib/marketing/perf"
 
 // "요약" 탭 = 마케팅 퍼포먼스 대시보드.
@@ -83,10 +88,88 @@ function usePerf(period: PerfPeriodKey, refreshNonce: number) {
   return { data, loading, error, reload: load }
 }
 
-/* ─── 브리핑 콘텐츠 규칙(Phase 3 전 규칙 기반) ─────────────────────────────────── */
+/* ─── useInsights — AI 주간 브리핑 + 현재 이상 신호 ───────────────────────────── */
+
+/** /api/admin/marketing/insights 응답의 클라이언트 측 최소 사본 — 서버 계약의 정본은
+ *  app/api/admin/marketing/insights/route.ts 다. 저장소 타입(lib/repositories/marketing-insights)은
+ *  server-only 모듈이라 클라이언트 컴포넌트에서 직접 import 하지 않는다. */
+interface MarketingInsightRecord {
+  headline: string
+  created_at: string
+  payload: {
+    highlights?: string[]
+    next_actions?: Array<{ title?: string; why?: string }>
+    /** 브리핑이 실제로 본 기간 — 대시보드 토글과 무관하다(브리핑은 항상 30일 기준). */
+    period?: { key?: string }
+  }
+}
+
+interface MarketingInsightsResponse {
+  insight: MarketingInsightRecord | null
+  /** 브리핑 신선도와 무관한 "현재" 이상 신호 — 서버가 매 요청 계산한다. */
+  anomalies: AnomalyFlag[]
+  from?: string
+  warnings?: number
+  error?: string
+}
+
+// 브리핑은 주 1회 크론이 만든다 — perf(45초)보다 훨씬 길게 잡아도 신선도가 상하지 않는다.
+const INSIGHTS_TTL_MS = 5 * 60_000
+
+function useInsights(refreshNonce: number) {
+  const [data, setData] = useState<MarketingInsightsResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [regenerating, setRegenerating] = useState(false)
+  const seqRef = useRef(0)
+
+  const load = useCallback(
+    async ({ fresh = false, regenerate = false }: { fresh?: boolean; regenerate?: boolean } = {}) => {
+      const seq = ++seqRef.current
+      if (regenerate) setRegenerating(true)
+      try {
+        // ?force=1 만 Gemini 를 부른다. fresh 는 클라이언트 캐시만 우회(저장된 브리핑 재조회).
+        const url = `/api/admin/marketing/insights${regenerate ? "?force=1" : ""}`
+        const response = await adminFetchJsonCached<MarketingInsightsResponse>(url, undefined, {
+          ttlMs: INSIGHTS_TTL_MS,
+          cacheKey: "marketing-insights",
+          force: fresh || regenerate,
+          staleIfError: !regenerate,
+        })
+        if (seq !== seqRef.current) return
+        setData(response)
+        setError(null)
+      } catch (e) {
+        if (seq !== seqRef.current) return
+        // 브리핑은 보조 정보 — 실패해도 대시보드는 그대로 두고 카드만 규칙 기반으로 폴백한다.
+        setError(e instanceof Error ? e.message : "브리핑 조회 실패")
+      } finally {
+        // seq 와 무관하게 잠금을 푼다 — 늦게 온 응답 때문에 버튼이 영구히 잠기면 안 된다.
+        if (regenerate) setRegenerating(false)
+      }
+    },
+    []
+  )
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  // 헤더 "동기화" — 저장된 브리핑만 다시 읽는다(재생성은 카드의 명시 버튼으로만).
+  const handledNonceRef = useRef(refreshNonce)
+  useEffect(() => {
+    if (refreshNonce === handledNonceRef.current) return
+    handledNonceRef.current = refreshNonce
+    void load({ fresh: true })
+  }, [refreshNonce, load])
+
+  return { data, error, regenerating, reload: load }
+}
+
+/* ─── 브리핑 콘텐츠 — AI payload 우선, 실패 시 규칙 기반 폴백 ───────────────────── */
 // 구 InsightsBanner 인사이트 + 추천 액션 규칙의 이식판 — 데이터 축이 행사 수기 집계에서
 // perf 응답(Meta 스냅샷·리드 테이블·캠페인 페이싱)으로 바뀌었으므로 같은 정신(실측된 축만
-// 말하고, null 은 문장으로 만들지 않는다)으로 재구성했다. Phase 3 에서 AI payload 로 교체된다.
+// 말하고, null 은 문장으로 만들지 않는다)으로 재구성했다.
+// AI 브리핑이 없거나 생성에 실패하면 이 규칙 생성기로 폴백한다 — 빈 카드는 만들지 않는다.
 
 const PERIOD_BADGE: Record<PerfPeriodKey, string> = {
   "7d": "최근 7일",
@@ -205,6 +288,82 @@ function buildBriefing(perf: MarketingPerfResponse): BriefingContent {
   }
 }
 
+/** 이상 신호 배지 — 종류별로 접고 2건 이상이면 개수를 붙인다("CPL 급등 2"). */
+function anomalyBadges(flags: readonly AnomalyFlag[]): string[] {
+  const counts = new Map<string, number>()
+  for (const flag of flags) counts.set(flag.kind, (counts.get(flag.kind) ?? 0) + 1)
+  return [...counts].map(([kind, count]) => {
+    const label = ANOMALY_KIND_LABEL[kind as AnomalyKind] ?? kind
+    return count > 1 ? `${label} ${count}` : label
+  })
+}
+
+/** AI payload → 표시 콘텐츠. jsonb 라 형태를 신뢰하지 않고 문자열·객체만 통과시킨다. */
+function briefingFromInsight(insight: MarketingInsightRecord): BriefingContent {
+  const highlights = Array.isArray(insight.payload?.highlights) ? insight.payload.highlights : []
+  const nextActions = Array.isArray(insight.payload?.next_actions)
+    ? insight.payload.next_actions
+    : []
+  // 브리핑이 실제로 본 기간을 그대로 표기한다 — 대시보드 기간 토글과 다를 수 있고(브리핑은
+  // 항상 30일 기준), 선택한 기간 배지를 붙이면 AI 문장을 그 기간 이야기로 오독하게 된다.
+  const insightPeriod = insight.payload?.period?.key
+  const periodBadge =
+    insightPeriod && insightPeriod in PERIOD_BADGE
+      ? PERIOD_BADGE[insightPeriod as PerfPeriodKey]
+      : null
+
+  return {
+    headline: insight.headline,
+    items: highlights.filter((item) => typeof item === "string" && item.trim() !== "").slice(0, 5),
+    actions: nextActions
+      .filter((action): action is { title: string; why?: string } =>
+        Boolean(action && typeof action.title === "string" && action.title.trim() !== "")
+      )
+      .map((action) => ({ title: action.title, why: action.why }))
+      .slice(0, 3),
+    badges: periodBadge ? [periodBadge] : [],
+  }
+}
+
+/**
+ * 카드에 넘길 최종 props — AI 브리핑이 있으면 그것을, 없으면 규칙 기반을 쓰고
+ * 어느 쪽인지·언제 것인지·왜 강등됐는지를 항상 표기한다(무음 폴백 금지).
+ */
+function composeBriefing(
+  perf: MarketingPerfResponse,
+  insights: MarketingInsightsResponse | null,
+  insightsError: string | null
+): BriefingCardProps {
+  const badges = anomalyBadges(insights?.anomalies ?? [])
+  const insight = insights?.insight ?? null
+
+  if (insight) {
+    const content = briefingFromInsight(insight)
+    const stale = insights?.from === "stale"
+    return {
+      ...content,
+      badges: [...content.badges, ...badges],
+      meta: `AI 브리핑 · ${formatKstTime(insight.created_at)} 생성`,
+      note: stale
+        ? `최신 브리핑 재생성에 실패해 ${formatKstTime(insight.created_at)} 기준으로 표시합니다${
+            insights?.error ? ` — ${insights.error}` : ""
+          }`
+        : null,
+    }
+  }
+
+  // 폴백 — 규칙 기반. 왜 AI 가 아닌지를 한 줄로 밝힌다.
+  const content = buildBriefing(perf)
+  let note: string | null = null
+  if (insightsError) note = `AI 브리핑을 불러오지 못했습니다 — ${insightsError}`
+  else if (insights?.from === "error")
+    note = `AI 브리핑 생성에 실패했습니다${insights.error ? ` — ${insights.error}` : ""}`
+  else if (insights?.from === "empty")
+    note = "아직 생성된 AI 브리핑이 없습니다 — 「다시 생성」으로 지금 만들 수 있습니다."
+
+  return { ...content, badges: [...content.badges, ...badges], meta: null, note }
+}
+
 /* ─── 스켈레톤 ────────────────────────────────────────────────────────────────── */
 
 // KpiStrip(StatTile compact, rounded-2xl border p-4)과 같은 셸의 콜드로드 스켈레톤.
@@ -247,7 +406,7 @@ const PERF_PERIOD_OPTIONS = [
   { id: "quarter", label: "분기" },
 ] as const
 
-const SNAPSHOT_TIME = new Intl.DateTimeFormat("ko-KR", {
+const KST_TIME = new Intl.DateTimeFormat("ko-KR", {
   month: "2-digit",
   day: "2-digit",
   hour: "2-digit",
@@ -256,9 +415,10 @@ const SNAPSHOT_TIME = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul",
 })
 
-function formatSnapshotAt(iso: string): string {
+/** 스냅샷 시각·브리핑 생성 시각 공용 표기(KST). 깨진 값은 지어내지 않고 원문 그대로. */
+function formatKstTime(iso: string): string {
   const time = new Date(iso)
-  return Number.isNaN(time.getTime()) ? iso : SNAPSHOT_TIME.format(time)
+  return Number.isNaN(time.getTime()) ? iso : KST_TIME.format(time)
 }
 
 export default function SummaryTab({
@@ -275,12 +435,25 @@ export default function SummaryTab({
   onLoadingChange?: (loading: boolean) => void
 }) {
   const { data, loading, error, reload } = usePerf(period, refreshNonce)
+  const {
+    data: insights,
+    error: insightsError,
+    regenerating,
+    reload: reloadInsights,
+  } = useInsights(refreshNonce)
 
   useEffect(() => {
     onLoadingChange?.(loading)
   }, [loading, onLoadingChange])
 
-  const briefing = useMemo(() => (data ? buildBriefing(data) : null), [data])
+  const briefing = useMemo(
+    () => (data ? composeBriefing(data, insights, insightsError) : null),
+    [data, insights, insightsError]
+  )
+
+  const regenerateBriefing = useCallback(() => {
+    void reloadInsights({ regenerate: true })
+  }, [reloadInsights])
 
   const campaignOptions = useMemo(
     () => (data ? data.scoreboard.map((row) => ({ id: row.campaignId, name: row.name })) : []),
@@ -315,7 +488,7 @@ export default function SummaryTab({
         {data &&
           (data.snapshotAt ? (
             <span className="text-[11px] tabular-nums text-[#1a1a1a]/45">
-              스냅샷 {formatSnapshotAt(data.snapshotAt)}
+              스냅샷 {formatKstTime(data.snapshotAt)}
             </span>
           ) : (
             <span className="text-[11px] text-[#A39E98]">스냅샷 미적재</span>
@@ -363,8 +536,14 @@ export default function SummaryTab({
           {/* 2. KPI 스트립 5칸 */}
           <KpiStrip kpis={data.kpis} />
 
-          {/* 3. 브리핑 카드 — Phase 3 전까지 규칙 기반 콘텐츠 */}
-          {briefing && <BriefingCard {...briefing} />}
+          {/* 3. 브리핑 카드 — AI 주간 브리핑(있으면), 없으면 규칙 기반 폴백 */}
+          {briefing && (
+            <BriefingCard
+              {...briefing}
+              onRegenerate={regenerateBriefing}
+              regenerating={regenerating}
+            />
+          )}
 
           {/* 4. 일자별 추이 */}
           <DailyTrendSection
