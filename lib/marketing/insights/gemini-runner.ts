@@ -6,6 +6,13 @@
 // JSON 스키마 강제·에러 처리는 동일하게 유지하고 타입과 프롬프트만 도메인 것으로 바꾼다.
 
 import "server-only"
+// 모델명 해석·thinkingConfig 판정은 소재 제안과 공유하는 SSOT 에서 온다.
+import {
+  DEFAULT_GEMINI_FAST_MODEL,
+  DEFAULT_GEMINI_MODEL,
+  resolveGeminiModel,
+  thinkingConfigFor,
+} from "@/lib/marketing/gemini-model"
 import { MARKETING_INSIGHT_SYSTEM_PROMPT, MARKETING_INSIGHT_RESPONSE_SCHEMA } from "./prompt"
 import type { MarketingInsightInput } from "./input-builder"
 
@@ -17,35 +24,6 @@ export interface MarketingInsightResult {
 
 export type GeminiMode = "quality" | "fast"
 
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-pro"
-const DEFAULT_GEMINI_FAST_MODEL = "gemini-2.5-flash"
-// 존재하지 않거나 이 호출 형태를 지원하지 않는 모델이 env 에 박혀도 404 로 죽지 않게 방어한다.
-const UNSUPPORTED_GEMINI_MODELS = new Set(["gemini-3.1-pro"])
-
-function resolveModel(envName: "GEMINI_MODEL" | "GEMINI_FAST_MODEL", fallback: string): string {
-  const configured = process.env[envName]?.trim()
-  if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return fallback
-  return configured
-}
-
-/**
- * 모델별 thinkingConfig — lib/chatbot/llm.ts 의 buildGenerationConfig 선례와 같은 규약.
- * 이 규약이 존재하는 이유: 이 저장소는 과거 gemini-2.5-flash 가 thinking 토큰을 다 써버려
- * 응답 본문이 빈 채로 오는 무음 실패를 겪었다(챗봇이 답변 대신 raw 청크를 노출). 여기서
- * 실제로 도는 모델도 2.5-flash 라 같은 지뢰를 밟는다. pro 계열은 선례와 동일하게 건드리지
- * 않는다 — 사고 예산이 품질 모드의 본체다.
- */
-function thinkingConfigFor(
-  model: string
-): { thinkingBudget?: number; thinkingLevel?: "minimal" | "low" } | undefined {
-  const lower = model.toLowerCase()
-  if (lower.startsWith("gemini-3")) {
-    return { thinkingLevel: lower.includes("pro") ? "low" : "minimal" }
-  }
-  if (lower.startsWith("gemini-2.5-flash")) return { thinkingBudget: 0 }
-  return undefined
-}
-
 export async function callMarketingGemini(
   input: MarketingInsightInput,
   mode: GeminiMode = "quality"
@@ -54,8 +32,8 @@ export async function callMarketingGemini(
   if (!apiKey) throw new Error("GEMINI_API_KEY not set")
   const model =
     mode === "fast"
-      ? resolveModel("GEMINI_FAST_MODEL", DEFAULT_GEMINI_FAST_MODEL)
-      : resolveModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+      ? resolveGeminiModel("GEMINI_FAST_MODEL", DEFAULT_GEMINI_FAST_MODEL)
+      : resolveGeminiModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
   const thinking = thinkingConfigFor(model)
   const body = {

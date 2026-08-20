@@ -59,8 +59,9 @@ export function kstToday(offsetDays = 0): string {
   return KST_DATE.format(new Date(Date.now() + offsetDays * 86_400_000))
 }
 
-/** 타임스탬프(ISO)를 KST 일자로 접는다. 깨진 날짜는 null — 기간 분할에서 빠진다. */
-function kstDateOf(iso: string): string | null {
+/** 타임스탬프(ISO)를 KST 일자로 접는다. 깨진 날짜는 null — 기간 분할에서 빠진다.
+ *  리드를 기간으로 자르는 다른 소비처(creative-suggest 라우트)도 같은 규약을 써야 해서 export. */
+export function kstDateOf(iso: string): string | null {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return null
   return KST_DATE.format(d)

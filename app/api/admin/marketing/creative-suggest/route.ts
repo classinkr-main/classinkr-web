@@ -11,7 +11,7 @@ import { verifyAdmin } from "@/lib/admin-auth"
 import { getMetaIntent, isTestLead } from "@/lib/crm/lead-attribution"
 import { aggregateAdCreativePerf } from "@/lib/marketing/creative-input"
 import { callCreativeSuggestGemini, type CreativeSuggestIntentContext } from "@/lib/marketing/creative-suggest"
-import { kstToday } from "@/lib/marketing/perf-assemble"
+import { kstDateOf, kstToday } from "@/lib/marketing/perf-assemble"
 import { resolvePerfPeriod, type PerfPeriodKey } from "@/lib/marketing/perf"
 import { getMarketingLeads, type LeadRecord } from "@/lib/repositories/leads"
 
@@ -23,16 +23,6 @@ const PERIOD_KEYS: readonly CreativeSuggestPeriod[] = ["30d", "90d"]
 const TOP_N = 10
 const BOTTOM_N = 5
 const BOTTOM_MIN_LEADS = 2
-
-// perf-assemble.ts 의 kstToday 와 같은 규약(Asia/Seoul, en-CA=ISO 포맷)의 타임스탬프→KST 일자
-// 변환. 그 파일의 kstDateOf 는 export 되지 않아(읽기 전용 — 수정하지 않는다) 같은 규약으로
-// 여기 다시 둔다.
-const KST_DATE = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" })
-function kstDateOf(iso: string): string | null {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  return KST_DATE.format(d)
-}
 
 function isValidPeriod(value: unknown): value is CreativeSuggestPeriod {
   return typeof value === "string" && (PERIOD_KEYS as readonly string[]).includes(value)

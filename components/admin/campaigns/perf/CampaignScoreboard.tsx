@@ -13,7 +13,7 @@ import {
   CAMPAIGN_STATUS_LABEL,
   type CampaignStatus,
 } from "@/lib/types/marketing-campaign"
-import { ANOMALY_KIND_LABEL, type AnomalyKind } from "@/lib/marketing/anomaly"
+import { ANOMALY_KIND_LABEL, ANOMALY_THRESHOLDS, type AnomalyKind } from "@/lib/marketing/anomaly"
 import { splitScoreboardByActivity, type Pacing, type PerfScoreboardRow } from "@/lib/marketing/perf"
 
 // 캠페인 스코어보드 — 우산 캠페인별 [이름+최근 업데이트 / 페이싱 / 리드 / CPL / 14일 스파크라인].
@@ -43,9 +43,13 @@ function PacingCell({ pacing, currency }: { pacing: Pacing; currency: "USD" | "K
   if (executionPct != null) parts.push(`집행 ${executionPct}%`)
   if (elapsedPct != null) parts.push(`기간 ${elapsedPct}%`)
   if (executionPct != null && currency) parts.push(currency)
-  // 집행이 기간 경과보다 10%p 넘게 앞서면(과속 집행 — 예산 조기 소진 위험) danger 톤.
-  // 경계값(정확히 10%p)은 아직 정상 톤 — 엄격 부등호.
-  const overPacing = executionPct != null && elapsedPct != null && executionPct - elapsedPct > 10
+  // 집행이 기간 경과보다 임계(%p) 넘게 앞서면(과속 집행 — 예산 조기 소진 위험) danger 톤.
+  // 임계는 pacing_over 배지와 같은 SSOT 를 쓴다 — 바가 빨간데 배지는 없는(또는 그 반대) 어긋남 방지.
+  // 경계값(정확히 임계)은 아직 정상 톤 — 감지 규칙과 같은 엄격 부등호.
+  const overPacing =
+    executionPct != null &&
+    elapsedPct != null &&
+    executionPct - elapsedPct > ANOMALY_THRESHOLDS.pacingOverGapPp
   return (
     <div>
       <div className="relative h-1.5 overflow-hidden rounded-full bg-[#f0f0ec]">

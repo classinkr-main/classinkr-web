@@ -1,7 +1,9 @@
 // lib/marketing/creative-suggest.ts
 // AI 소재 제안 Gemini 호출 — lib/marketing/insights/gemini-runner.ts 와 같은 호출 규약
-// (v1beta generateContent, responseSchema 로 JSON 강제, temperature 0.4, GEMINI_MODEL 해석 +
-// 미지원 모델 방어)을 따른다. gemini-runner.ts 를 그대로 재사용하지 않는 이유는 그 모듈이
+// (v1beta generateContent, responseSchema 로 JSON 강제, temperature 0.4)을 따른다. 모델명
+// 해석·미지원 모델 방어·thinkingConfig 판정은 lib/marketing/gemini-model.ts 를 함께 쓴다
+// (예전엔 이 파일이 그 상수들을 복제하고 있었다).
+// gemini-runner.ts 를 그대로 재사용하지 않는 이유는 그 모듈이
 // 주간 브리핑 타입(MarketingInsightInput/Result)에 결합돼 있어서다 — 호출 방식만 미러하고
 // 타입·프롬프트·스키마는 소재 제안 도메인 것으로 새로 둔다.
 //
@@ -11,6 +13,12 @@
 import "server-only"
 
 import type { AdCreativePerf } from "@/lib/marketing/creative-input"
+// 모델명 해석·thinkingConfig 판정은 브리핑 호출과 공유하는 SSOT 에서 온다.
+import {
+  DEFAULT_GEMINI_MODEL,
+  resolveGeminiModel,
+  thinkingConfigFor,
+} from "@/lib/marketing/gemini-model"
 
 export interface CreativeSuggestion {
   headline: string
@@ -74,25 +82,16 @@ const RESPONSE_SCHEMA = {
   required: ["patterns", "suggestions"],
 } as const
 
-const DEFAULT_GEMINI_MODEL = "gemini-2.5-pro"
-// 존재하지 않거나 이 호출 형태를 지원하지 않는 모델이 env 에 박혀도 404 로 죽지 않게 방어한다
-// (gemini-runner.ts 의 UNSUPPORTED_GEMINI_MODELS 미러).
-const UNSUPPORTED_GEMINI_MODELS = new Set(["gemini-3.1-pro"])
-
-function resolveModel(): string {
-  const configured = process.env.GEMINI_MODEL?.trim()
-  if (!configured || UNSUPPORTED_GEMINI_MODELS.has(configured)) return DEFAULT_GEMINI_MODEL
-  return configured
-}
-
 export async function callCreativeSuggestGemini(
   input: CreativeSuggestInput
 ): Promise<{ result: CreativeSuggestResult; model: string }> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error("GEMINI_API_KEY not set")
 
-  const model = resolveModel()
+  const model = resolveGeminiModel("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+  // 기본 모델(2.5-pro)에서는 undefined — env 가 flash·3 계열을 가리킬 때만 붙는다.
+  const thinking = thinkingConfigFor(model)
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
     contents: [{ role: "user", parts: [{ text: JSON.stringify(input) }] }],
@@ -100,6 +99,7 @@ export async function callCreativeSuggestGemini(
       responseMimeType: "application/json",
       responseSchema: RESPONSE_SCHEMA,
       temperature: 0.4,
+      ...(thinking ? { thinkingConfig: thinking } : {}),
     },
   }
 
