@@ -149,6 +149,8 @@ export function DailyTrendSection({
             (payload?.[0]?.payload as DailyPoint | undefined)?.date ?? ""
           }
           showLegend
+          // 지표 대시보드는 즉시 판독이 목적이고, 숨김 탭 마운트 시 애니메이션이 멈춘 프레임에 갇힌다.
+          animate={false}
         />
       )
     }
@@ -196,6 +198,8 @@ export function DailyTrendSection({
                 name={SOURCE_GROUP_LABEL[group]}
                 fill={SOURCE_GROUP_DOT[group]}
                 maxBarSize={22}
+                // 지표 대시보드는 즉시 판독이 목적이고, 숨김 탭 마운트 시 애니메이션이 멈춘 프레임에 갇힌다.
+                isAnimationActive={false}
               />
             ))}
           </BarChart>
