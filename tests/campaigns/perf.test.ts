@@ -21,6 +21,13 @@ describe("resolvePerfPeriod", () => {
     const p = resolvePerfPeriod("quarter", "2026-08-20")
     expect(p.since).toBe("2026-07-01")
     expect(p.until).toBe("2026-08-20")
+    // QTD 51일(7/1~8/20)의 직전 동일 길이 — 리뷰어 프로브로 확정된 경계값.
+    expect(p.prevSince).toBe("2026-05-11")
+    expect(p.prevUntil).toBe("2026-06-30")
+  })
+  it("7d/90d — 일수 삼항 오타 회귀 방지", () => {
+    expect(resolvePerfPeriod("7d", "2026-08-20").since).toBe("2026-08-14")
+    expect(resolvePerfPeriod("90d", "2026-08-20").since).toBe("2026-05-23")
   })
 })
 
@@ -65,6 +72,17 @@ describe("aggregateDailySeries", () => {
       { date: "2026-08-18", campaignId: "a", spend: 10, leads: 2 },
       { date: "2026-08-18", campaignId: "b", spend: 5, leads: 1 },
       { date: "2026-08-19", campaignId: "a", spend: 7, leads: 0 },
+    ]
+    expect(aggregateDailySeries(rows)).toEqual([
+      { date: "2026-08-18", spend: 15, leads: 3 },
+      { date: "2026-08-19", spend: 7, leads: 0 },
+    ])
+  })
+  it("역순 입력도 날짜 오름차순으로 정렬한다(.sort 누락 회귀 방지)", () => {
+    const rows = [
+      { date: "2026-08-19", campaignId: "a", spend: 7, leads: 0 },
+      { date: "2026-08-18", campaignId: "b", spend: 5, leads: 1 },
+      { date: "2026-08-18", campaignId: "a", spend: 10, leads: 2 },
     ]
     expect(aggregateDailySeries(rows)).toEqual([
       { date: "2026-08-18", spend: 15, leads: 3 },

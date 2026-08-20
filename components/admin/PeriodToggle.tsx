@@ -5,6 +5,8 @@
 // 클래스는 app/admin/campaigns/page.tsx 기간 필터 버튼(2026-08-18) 그대로 이식 — 시각 회귀 방지가
 // 목적이라 새 클래스를 짓지 않는다. page.tsx 자체는 이번 라운드에 교체하지 않는다(신규 요약 탭 전용).
 
+import { cn } from "@/lib/utils"
+
 export interface PeriodOption<K extends string = string> {
   id: K
   label: string
@@ -15,17 +17,21 @@ export function PeriodToggle<K extends string>({
   value,
   onChange,
   ariaLabel = "기간 선택",
+  className,
 }: {
-  options: PeriodOption<K>[]
+  options: readonly PeriodOption<K>[]
   value: K
   onChange: (next: K) => void
   ariaLabel?: string
+  className?: string
 }) {
   return (
     <div
       role="group"
       aria-label={ariaLabel}
-      className="inline-flex shrink-0 rounded-lg border border-[rgba(0,0,0,0.08)] p-[3px] max-sm:mb-2"
+      // max-sm:mb-2 는 page.tsx 원본이 놓인 배치 문맥(필터 줄바꿈)의 마진이라 공용 기본값에서 뺐다 —
+      // 필요한 호출부가 className 으로 얹는다(cn 이 뒤에 병합, 없으면 기본 클래스 그대로).
+      className={cn("inline-flex shrink-0 rounded-lg border border-[rgba(0,0,0,0.08)] p-[3px]", className)}
     >
       {options.map((option) => (
         <button
