@@ -100,6 +100,7 @@ branch_insights 테이블 패턴 미러: id, scope(text, `weekly`), digest(입�
 - **출력 스키마**: `{ headline, highlights[], next_actions[{title, why}] }` (액션 최대 3).
 - **크론**: `/api/cron/sync-marketing-insights` 주 1회(월 아침). digest 동일하면 재호출 없음. `?force=1` 수동 재생성 지원.
 - **표시**: 대시보드 AI 브리핑 카드. 검증 실패·미생성 시 규칙 기반 폴백 유지(빈 카드 금지).
+- **정직 가드(2026-08-20 확정)**: 숫자 sanity 경고가 **재시도 후에도 3건 이상이면 저장하지 않고** stale/error 로 강등한다 — 입력에 없는 숫자를 말하는 브리핑은 화면에 올리지 않는다. `callGemini`·`checkNumericalSanity` 는 branch 의 `InsightInput`/`InsightResult` 타입에 결합돼 있어 재사용 불가 → 같은 규약으로 마케팅 타입에 **미러**한다(모델 해석·responseSchema 강제·재시도 규약 동일).
 
 ### 3b. 이상 감지 + 해설 — `lib/marketing/anomaly.ts`
 
