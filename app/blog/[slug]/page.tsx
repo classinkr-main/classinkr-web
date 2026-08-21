@@ -323,7 +323,10 @@ export default async function BlogDetailPage({
                 </div>
               </details>
             )}
-            <div className="rounded-[24px] border border-[#e8e8e4] bg-white px-5 py-7 shadow-sm md:rounded-[36px] md:px-10 md:py-12">
+            {/* 본문은 카드에 담지 않는다 — 페이지 배경 위로 그대로 흐르게 두고,
+                박스가 대신 잡아주던 읽기 너비만 max-w로 남긴다(17px 본문 기준 한 줄 ~44자).
+                카드 패딩을 걷어내면서 본문이 목차·작성자·추천글과 같은 좌측 기준선에 선다. */}
+            <div className="max-w-[760px]">
               <BlogMarkdownRenderer markdown={post.contentMarkdown} />
             </div>
 
@@ -331,35 +334,36 @@ export default async function BlogDetailPage({
               <LeadMagnetGate leadMagnet={leadMagnet} postSlug={post.slug} />
             )}
 
-            <div className="mt-8 rounded-[24px] border border-[#e8e8e4] bg-white p-5 shadow-sm md:mt-10 md:rounded-[32px] md:p-8">
-              <div className="flex flex-col gap-6 md:flex-row md:items-center">
-                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
+            {/* 작성자는 카드가 아니라 본문 끝의 서명이다 — 얇은 구분선 위에 작게 얹는다.
+                역할·소개는 빈 글에서 빈 <p>가 높이만 먹던 걸 막으려 값이 있을 때만 그린다. */}
+            <div className="mt-10 max-w-[760px] border-t border-[#e8e8e4] pt-5 md:mt-12">
+              <div className="flex items-center gap-2.5">
+                <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full bg-[#f0f0ec]">
                   {authorAvatarSrc ? (
                     <SafeBlogImage
                       src={authorAvatarSrc}
                       alt={post.author}
                       fill
                       className="object-cover"
-                      sizes="64px"
+                      sizes="32px"
                       fallbackIndex={post.id}
                     />
                   ) : (
-                    <div className="flex h-full items-center justify-center text-lg font-semibold text-[#084734]">
+                    <div className="flex h-full items-center justify-center text-[13px] font-semibold text-[#084734]">
                       {authorInitial}
                     </div>
                   )}
                 </div>
 
-                <div className="min-w-0">
-                  <p className="text-lg font-semibold text-[#111110]">
-                    {post.author}
-                  </p>
-                  <p className="text-sm text-[#615D59]">{post.authorRole}</p>
-                  <p className="mt-3 text-[15px] leading-7 text-[#1a1a1a]/65">
-                    {post.authorBio}
-                  </p>
-                </div>
+                <p className="min-w-0 text-[13px] text-[#615D59]">
+                  <span className="font-medium text-[#31302E]">{post.author}</span>
+                  {post.authorRole ? <span className="text-[#A39E98]"> · {post.authorRole}</span> : null}
+                </p>
               </div>
+
+              {post.authorBio ? (
+                <p className="mt-2.5 text-[13px] leading-6 text-[#615D59]">{post.authorBio}</p>
+              ) : null}
             </div>
 
             {relatedPosts.length > 0 && (
