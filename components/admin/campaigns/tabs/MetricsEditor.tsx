@@ -17,6 +17,25 @@ import {
 // ─── metrics edit drawer ──────────────────────────────────────────────────────
 // 행사 탭에서만 열리는 성과 입력 모달 — 행사 탭 청크에 함께 실린다.
 
+// 서버 스냅샷 → 폼 상태. 최초 마운트와 "서버 값 불러오기"가 같은 변환을 쓴다.
+function formSnapshot(m: EventMetrics) {
+  return {
+    targetLeads: m.targetLeads,
+    targetRevenue: m.targetRevenue,
+    impressionsCount: m.impressionsCount,
+    applicationsCount: m.applicationsCount,
+    qualifiedLeadsCount: m.qualifiedLeadsCount,
+    attendeesCount: m.attendeesCount,
+    dealsCount: m.dealsCount,
+    dealsRevenue: m.dealsRevenue,
+    closedCustomerCount: m.closedCustomerCount,
+    dealCustomers: m.dealCustomers ?? "",
+    notes: m.notes ?? "",
+    retrospective: m.retrospective ?? "",
+    shareMemo: m.shareMemo ?? "",
+  }
+}
+
 export default function MetricsEditor({
   event,
   metrics,
@@ -28,55 +47,48 @@ export default function MetricsEditor({
   onClose: () => void
   onSaved: (m: EventMetrics) => void
 }) {
-  const [form, setForm] = useState({
-    targetLeads: metrics.targetLeads,
-    targetRevenue: metrics.targetRevenue,
-    impressionsCount: metrics.impressionsCount,
-    applicationsCount: metrics.applicationsCount,
-    qualifiedLeadsCount: metrics.qualifiedLeadsCount,
-    attendeesCount: metrics.attendeesCount,
-    dealsCount: metrics.dealsCount,
-    dealsRevenue: metrics.dealsRevenue,
-    closedCustomerCount: metrics.closedCustomerCount,
-    dealCustomers: metrics.dealCustomers ?? "",
-    notes: metrics.notes ?? "",
-    retrospective: metrics.retrospective ?? "",
-    shareMemo: metrics.shareMemo ?? "",
-  })
+  const [form, setForm] = useState(() => formSnapshot(metrics))
   const [adSpend, setAdSpend] = useState<AdSpendEntry[]>(metrics.adSpendEntries ?? [])
   const [relatedLinks, setRelatedLinks] = useState<RelatedLink[]>(metrics.relatedLinks ?? [])
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  // 사용자가 한 글자라도 고쳤는지. true 면 서버 값이 폼을 자동으로 덮지 못한다.
+  const [dirty, setDirty] = useState(false)
+  // 편집 중인데 서버 쪽이 갱신된 상태 — 덮어쓰는 대신 배너로 알린다.
+  const [stale, setStale] = useState(false)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   useDialogFocus(event.id, onClose, closeButtonRef)
 
   // 같은 화면의 퀵 테이블이 저장한 값(metrics.updatedAt 갱신)이 도착하면 폼을 다시 맞춘다 —
   // 마운트 시점 스냅샷을 계속 들고 있으면 편집기 저장(전체본 PATCH)이 방금 저장을 옛 값으로 덮는다.
+  // 단 편집을 시작한 뒤(dirty)에는 절대 덮지 않는다 — 작성 중이던 한글 장문(성사 고객·메모·회고·
+  // 공유 포인트)과 광고비/링크 배열이 통째로 사라지던 유실 경로였다. 이때는 stale 배너로만 알린다.
   // (렌더 중 state 조정 패턴 — prop 변경 감지, useEffect 캐스케이드 없음)
   const [syncedUpdatedAt, setSyncedUpdatedAt] = useState(metrics.updatedAt)
   if (metrics.updatedAt !== syncedUpdatedAt) {
     setSyncedUpdatedAt(metrics.updatedAt)
-    setForm({
-      targetLeads: metrics.targetLeads,
-      targetRevenue: metrics.targetRevenue,
-      impressionsCount: metrics.impressionsCount,
-      applicationsCount: metrics.applicationsCount,
-      qualifiedLeadsCount: metrics.qualifiedLeadsCount,
-      attendeesCount: metrics.attendeesCount,
-      dealsCount: metrics.dealsCount,
-      dealsRevenue: metrics.dealsRevenue,
-      closedCustomerCount: metrics.closedCustomerCount,
-      dealCustomers: metrics.dealCustomers ?? "",
-      notes: metrics.notes ?? "",
-      retrospective: metrics.retrospective ?? "",
-      shareMemo: metrics.shareMemo ?? "",
-    })
-    setAdSpend(metrics.adSpendEntries ?? [])
-    setRelatedLinks(metrics.relatedLinks ?? [])
+    if (dirty) {
+      setStale(true)
+    } else {
+      setForm(formSnapshot(metrics))
+      setAdSpend(metrics.adSpendEntries ?? [])
+      setRelatedLinks(metrics.relatedLinks ?? [])
+    }
   }
 
-  const update = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
+  // 배너의 "서버 값 불러오기" — 사용자가 명시적으로 눌렀을 때만 폼을 서버 값으로 교체한다.
+  function loadServerValues() {
+    setForm(formSnapshot(metrics))
+    setAdSpend(metrics.adSpendEntries ?? [])
+    setRelatedLinks(metrics.relatedLinks ?? [])
+    setDirty(false)
+    setStale(false)
+  }
+
+  const update = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
+    setDirty(true)
     setForm((f) => ({ ...f, [key]: value }))
+  }
 
   const updateNum = (key: keyof typeof form, v: string) => {
     if (v === "") return update(key, null as never)
@@ -103,6 +115,9 @@ export default function MetricsEditor({
           }),
         }
       )
+      // 저장 성공 시점부터는 방금 보낸 값이 정본 — dirty 를 풀어 다음 서버 값이 정상 반영되게 한다.
+      setDirty(false)
+      setStale(false)
       onSaved(saved)
       onClose()
     } catch (e) {
@@ -113,22 +128,28 @@ export default function MetricsEditor({
   }
 
   function addAdEntry() {
+    setDirty(true)
     setAdSpend((arr) => [...arr, { channel: "google", amount: 0, note: "" }])
   }
   function updateAdEntry(idx: number, patch: Partial<AdSpendEntry>) {
+    setDirty(true)
     setAdSpend((arr) => arr.map((e, i) => (i === idx ? { ...e, ...patch } : e)))
   }
   function removeAdEntry(idx: number) {
+    setDirty(true)
     setAdSpend((arr) => arr.filter((_, i) => i !== idx))
   }
 
   function addRelatedLink() {
+    setDirty(true)
     setRelatedLinks((arr) => [...arr, { label: "", url: "" }])
   }
   function updateRelatedLink(idx: number, patch: Partial<RelatedLink>) {
+    setDirty(true)
     setRelatedLinks((arr) => arr.map((e, i) => (i === idx ? { ...e, ...patch } : e)))
   }
   function removeRelatedLink(idx: number) {
+    setDirty(true)
     setRelatedLinks((arr) => arr.filter((_, i) => i !== idx))
   }
 
@@ -157,6 +178,23 @@ export default function MetricsEditor({
           {err && (
             <div className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] px-3 py-2 text-[12px] text-[#B43E3E]">
               {err}
+            </div>
+          )}
+
+          {/* 편집 중 서버 값이 바뀐 경우 — 덮어쓰지 않고 선택지를 준다(자동 덮어쓰기 = 입력 유실). */}
+          {stale && (
+            <div
+              role="status"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#d8d6cf] bg-white px-3 py-2 text-[12px] text-[#1a1a1a]/70"
+            >
+              <span>다른 곳에서 이 행사 지표가 저장됐습니다. 저장하면 지금 입력한 값으로 덮어씁니다.</span>
+              <button
+                type="button"
+                onClick={loadServerValues}
+                className="shrink-0 rounded-md border border-[#d8d6cf] bg-white px-2.5 py-1 text-[11px] font-medium text-[#111110] transition-colors hover:bg-[#f6f5f2]"
+              >
+                서버 값 불러오기
+              </button>
             </div>
           )}
 
