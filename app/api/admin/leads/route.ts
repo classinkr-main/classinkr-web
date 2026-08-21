@@ -55,6 +55,18 @@ function leadStr(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined
 }
 
+// 첫 팔로업은 "YYYY-MM-DD"(등록 폼의 날짜 입력) 또는 ISO 문자열로 들어온다.
+// 날짜만 온 경우는 리드 보드의 팔로업 규약과 같은 정오(12:00 UTC)로 고정해 저장한다 —
+// 자정으로 두면 타임존에 따라 하루 밀려 "어제 예정"으로 보인다.
+// 선택 입력이므로 형식이 틀리면 행을 죽이지 않고 값만 버린다(연락처 검증과 다른 취급).
+function leadFollowUpAt(value: unknown): string | undefined {
+  const raw = leadStr(value)
+  if (!raw) return undefined
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T12:00:00.000Z` : raw
+  const at = new Date(iso)
+  return Number.isNaN(at.getTime()) ? undefined : at.toISOString()
+}
+
 // 단건/벌크 리드 등록 입력을 정규화한다. 식별자(학원명·이름·전화·이메일) 하나는 있어야 하고,
 // 전화·이메일이 있으면 형식이 맞아야 한다 — 틀리면 행 전체를 invalid로 분류한다.
 function normalizeLeadInput(raw: unknown): LeadCreateInput | null {
@@ -79,6 +91,9 @@ function normalizeLeadInput(raw: unknown): LeadCreateInput | null {
     message: leadStr(r.message) ?? leadStr(r.memo),
     branch: leadStr(r.branch) ?? leadStr(r.region),
     notes: leadStr(r.notes),
+    // 등록 폼이 첫 팔로업·담당자를 함께 보낸다. 파싱하지 않으면 저장소까지 값이 닿지 않는다.
+    assigned_to: leadStr(r.assigned_to),
+    follow_up_at: leadFollowUpAt(r.follow_up_at),
     source_detail: leadStr(r.source_detail) ?? "어드민 수기 등록",
     // 캠페인 허브 "광고 리드 가져오기"가 매체 표기(utm_medium=cpc·utm_campaign)를 실어 보낸다.
     // 여기서 떨어뜨리면 방금 가져온 리드가 광고/마케팅 렌즈와 캠페인 축 롤업 어디에도 안 잡힌다.

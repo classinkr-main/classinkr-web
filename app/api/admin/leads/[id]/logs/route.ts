@@ -9,6 +9,7 @@ import {
   type ContactLogType,
 } from "@/lib/repositories/contact-logs"
 import { buildLeadContactEventInput } from "@/lib/crm/lead-contact-event"
+import { channelCarriesResult } from "@/lib/crm/contact-log"
 import { createCrmCustomerEvent } from "@/lib/repositories/crm-events"
 import { createTasksFromEventNextActions } from "@/lib/repositories/crm-tasks"
 import { getLeadById } from "@/lib/repositories/leads"
@@ -82,9 +83,13 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   try {
+    const logType = type as ContactLogType
     const log = await addContactLog(id, {
-      type: type as ContactLogType,
-      result: result == null ? undefined : (result as ContactLogResult),
+      type: logType,
+      // 카카오·이메일은 통화 결과를 가질 수 없다 — 400으로 막지 않고 조용히 떨어뜨린다.
+      // (이미 그렇게 저장된 기존 행이 있고, 400은 옛 클라이언트의 기록을 통째로 잃게 만든다.)
+      result:
+        result != null && channelCarriesResult(logType) ? (result as ContactLogResult) : undefined,
       notes,
       contacted_by: contactedBy,
       contacted_at: contactedAt,

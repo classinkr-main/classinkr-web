@@ -536,8 +536,10 @@ export async function saveLead(
     notes: lead.notes ?? null,
     source_detail: lead.source_detail ?? null,
     lead_magnet: lead.lead_magnet ?? null,
-    follow_up_at: null,
-    assigned_to: null,
+    // 어드민 등록은 첫 팔로업·담당자를 함께 보낼 수 있다. 여기서 null로 덮으면
+    // 입력 폼이 받은 값이 저장 직전에 조용히 사라진다(공개 제출은 애초에 안 보내므로 무해).
+    follow_up_at: lead.follow_up_at ?? null,
+    assigned_to: lead.assigned_to ?? null,
     utm_source: lead.utm_source ?? null,
     utm_medium: lead.utm_medium ?? null,
     utm_campaign: lead.utm_campaign ?? null,

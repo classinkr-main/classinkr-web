@@ -188,4 +188,37 @@ describe("POST /api/admin/leads — utm 수용(캠페인 허브 가져오기)", 
       expect.objectContaining({ utm_medium: "cpc", utm_campaign: "여름 HW", utm_source: "naver" })
     )
   })
+
+  // 등록 폼이 담당자·첫 팔로업을 함께 보내도 서버가 파싱하지 않아 저장 입력에서 사라졌다.
+  it("assigned_to·follow_up_at 가 저장 입력까지 전달된다", async () => {
+    requireVerifiedAdminContext.mockResolvedValue({ source: "supabase", role: "ADMIN", userId: "admin-1" })
+    findLeadsByContacts.mockResolvedValue([])
+    saveLead.mockImplementation(async (lead: Record<string, unknown>) => ({ ...lead, id: "lead-1", status: "new" }))
+
+    const response = await callPost({
+      org: "B학원",
+      phone: "010-3333-4444",
+      assigned_to: "Chanwoo",
+      follow_up_at: "2026-08-26",
+    })
+
+    expect(response.status).toBe(200)
+    // 날짜만 온 값은 정오(12:00 UTC)로 고정한다 — 자정이면 타임존에 따라 하루 밀린다.
+    expect(saveLead).toHaveBeenCalledWith(
+      expect.objectContaining({ assigned_to: "Chanwoo", follow_up_at: "2026-08-26T12:00:00.000Z" })
+    )
+  })
+
+  it("형식이 틀린 follow_up_at 은 행을 죽이지 않고 값만 버린다", async () => {
+    requireVerifiedAdminContext.mockResolvedValue({ source: "supabase", role: "ADMIN", userId: "admin-1" })
+    findLeadsByContacts.mockResolvedValue([])
+    saveLead.mockImplementation(async (lead: Record<string, unknown>) => ({ ...lead, id: "lead-1", status: "new" }))
+
+    const response = await callPost({ org: "C학원", phone: "010-5555-6666", follow_up_at: "언젠가" })
+
+    expect(response.status).toBe(200)
+    expect(saveLead).toHaveBeenCalledTimes(1)
+    expect(saveLead).toHaveBeenCalledWith(expect.objectContaining({ org: "C학원" }))
+    expect((saveLead.mock.calls[0][0] as Record<string, unknown>).follow_up_at).toBeUndefined()
+  })
 })

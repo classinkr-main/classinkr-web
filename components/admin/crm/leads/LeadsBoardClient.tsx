@@ -80,6 +80,7 @@ import {
   type LeadSortKey,
 } from "@/lib/crm/lead-ranking"
 import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
+import { buildContactLogEntry, channelCarriesResult } from "@/lib/crm/contact-log"
 
 // 리드 보드 목록 무한스크롤 대체 — 초기 50건, "더보기"로 50건씩 확장(계획 문서 Phase W1).
 // 모바일 카드·데스크톱 테이블이 같은 filtered를 그리므로 visible 상한을 공유한다.
@@ -241,7 +242,9 @@ function ContactLogForm({
 
   const handleSave = async () => {
     setSaving(true)
-    await onSave({ type, result, notes: notes || undefined, contacted_by: by || undefined })
+    // 채널↔결과 규약은 lib/crm/contact-log가 단일 진실원 — 카카오·이메일은 결과 칩이 숨겨져도
+    // 직전에 고른 result가 state에 남아 있어 그대로 전송되던 경로를 여기서 막는다.
+    await onSave(buildContactLogEntry({ type, result, notes, contacted_by: by }))
     setSaving(false)
   }
 
@@ -262,8 +265,8 @@ function ContactLogForm({
         ))}
       </div>
 
-      {/* 결과 (전화/문자만) */}
-      {(type === "call" || type === "sms") && (
+      {/* 결과 (전화/문자만) — 표시 조건도 저장 규약과 같은 표를 본다 */}
+      {channelCarriesResult(type) && (
         <div className="flex gap-1.5">
           {(["answered", "no_answer", "callback", "meeting_set"] as ContactLogResult[]).map((r) => (
             <button
@@ -357,7 +360,8 @@ function LeadDrawer({
   const [savingNotes, setSavingNotes] = useState(false)
   const [notesSaved, setNotesSaved] = useState(false)
   const [assignedTo, setAssignedTo] = useState(lead.assigned_to ?? "")
-  const [followUp, setFollowUp] = useState(lead.follow_up_at ? lead.follow_up_at.slice(0, 10) : "")
+  const savedFollowUp = lead.follow_up_at ? lead.follow_up_at.slice(0, 10) : ""
+  const [followUp, setFollowUp] = useState(savedFollowUp)
   const [showLogForm, setShowLogForm] = useState(false)
   const [converting, setConverting] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -744,7 +748,15 @@ function LeadDrawer({
                 type="date"
                 value={followUp}
                 onChange={(e) => setFollowUp(e.target.value)}
-                onBlur={() => onFollowUpChange(lead.id, followUp)}
+                // native date 입력은 "2026-08-"처럼 미완성 상태에서 value로 ""를 돌려준다.
+                // 그걸 그대로 흘려보내면 PATCH가 follow_up_at을 null로 덮어 기존 팔로업이
+                // 무음으로 사라진다(닫기 경로의 강제 blur 때문에 닫을 때마다 재현됐다).
+                // badInput이 그 미완성 상태를 정확히 가리키고, 값이 그대로면 쓰기 자체를 생략한다.
+                onBlur={(event) => {
+                  if (event.currentTarget.validity.badInput) return
+                  if (followUp === savedFollowUp) return
+                  void onFollowUpChange(lead.id, followUp)
+                }}
                 className="w-full text-[13px] bg-[#fafaf8] border border-[#e8e8e4] rounded-xl px-3 py-2 outline-none focus:border-[#c8c8c4] focus:bg-white transition-all"
               />
               {followUp && new Date(followUp) <= new Date() && (
@@ -1144,6 +1156,14 @@ export default function LeadsBoardClient() {
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
   }, [deepLinkedLeadId])
 
+  // 검색어만 300ms 눌러서 URL에 반영한다 — 나머지 축은 클릭 단위라 즉시 반영해도 되지만,
+  // 검색은 키 입력마다 replaceState를 불러 타이핑 중 히스토리 API를 초당 수십 번 두드렸다.
+  const [urlSearchQuery, setUrlSearchQuery] = useState(searchQuery)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setUrlSearchQuery(searchQuery), 300)
+    return () => window.clearTimeout(timer)
+  }, [searchQuery])
+
   // 렌즈·정렬·상태 필터·검색어·유입 그룹을 URL에 반영한다(히스토리를 늘리지 않는 replace) —
   // 링크 공유·새로고침에서 같은 화면. 읽기 쪽(useState 초기값)과 키가 짝을 이룬다.
   useEffect(() => {
@@ -1155,10 +1175,10 @@ export default function LeadsBoardClient() {
     apply("lens", lens, "all")
     apply("sort", sortKey, "priority")
     apply("filter", filter, "all")
-    apply("q", searchQuery.trim(), "")
+    apply("q", urlSearchQuery.trim(), "")
     apply("group", sourceGroup, "all")
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
-  }, [lens, sortKey, filter, searchQuery, sourceGroup])
+  }, [lens, sortKey, filter, urlSearchQuery, sourceGroup])
 
   // 렌즈나 축이 바뀌면 이전 축의 트래킹 선택은 의미를 잃는다 — 조용히 남겨두면 빈 목록이 된다.
   useEffect(() => {
@@ -2915,6 +2935,10 @@ export default function LeadsBoardClient() {
       {/* 드로어 */}
       {selected && (
         <LeadDrawer
+          // 드로어가 열린 채로 다른 행을 클릭하면 인스턴스가 재사용된다 — 메모·담당자·팔로업이
+          // useState 초기값으로만 시드되므로 A의 값이 B에 남고, 닫기 경로의 강제 blur가
+          // 그 값을 B에 저장해 버린다. 리드 id를 key로 걸어 리드마다 상태를 격리한다.
+          key={selected.id}
           lead={selected}
           logs={logs}
           logsLoading={logsLoading}
