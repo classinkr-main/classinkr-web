@@ -4,6 +4,7 @@ import { useRef, useState } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 import { adminFetchJson } from "@/lib/admin-client"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
+import { clampCount, clampMoney } from "@/lib/marketing/input-normalize"
 import { formatRange } from "@/components/admin/campaigns/event-format"
 import type { PublicEvent } from "@/lib/types/public-events"
 import {
@@ -90,10 +91,13 @@ export default function MetricsEditor({
     setForm((f) => ({ ...f, [key]: value }))
   }
 
+  // 숫자 필드는 저장소 정본 규칙(lib/marketing/input-normalize — floor + >=0 클램프)을 따른다.
+  // 목표/딜 매출도 원 단위 정수라 건수와 같은 규칙이다. 빈 문자열만 null(미입력)로 남겨 0 과 구분하고,
+  // 비수치 입력은 기존처럼 무시한다(직전 값 보존).
   const updateNum = (key: keyof typeof form, v: string) => {
-    if (v === "") return update(key, null as never)
-    const n = Number(v)
-    if (Number.isFinite(n)) update(key, n as never)
+    if (v.trim() === "") return update(key, null as never)
+    const n = clampCount(v)
+    if (n != null) update(key, n as never)
   }
 
   async function handleSave() {
@@ -295,9 +299,8 @@ export default function MetricsEditor({
                       placeholder="금액 (원)"
                       aria-label="광고비 금액(원)"
                       value={entry.amount === 0 ? "" : entry.amount}
-                      onChange={(e) =>
-                        updateAdEntry(idx, { amount: e.target.value === "" ? 0 : Number(e.target.value) })
-                      }
+                      // 금액도 정본 규칙(floor + >=0)으로 클램프. amount 는 non-null 필드라 빈값은 0.
+                      onChange={(e) => updateAdEntry(idx, { amount: clampMoney(e.target.value) ?? 0 })}
                       className="rounded-md border border-[#e8e8e4] bg-white px-2 py-1.5 text-[12px]"
                     />
                     <input

@@ -10,6 +10,7 @@ import { Trash2, X } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
+import { BUDGET_INVALID_MESSAGE, parseBudgetInput } from "@/lib/marketing/input-normalize"
 import {
   CAMPAIGN_STATUSES,
   CAMPAIGN_STATUS_LABEL,
@@ -28,15 +29,6 @@ interface CampaignFormDrawerProps {
   onSuccess: (message: string) => void // 부모가 목록 리페치 + 닫기 + 토스트
 }
 
-// budget: 정수 문자열 → number, 빈값 → null. (sanitizer 가 음수/비정수 거부하므로 round)
-function parseBudget(raw: string): number | null {
-  const t = raw.trim()
-  if (!t) return null
-  const n = Number(t)
-  if (!Number.isFinite(n) || n < 0) return null
-  return Math.round(n)
-}
-
 export function CampaignFormDrawer({ initial, onClose, onSuccess }: CampaignFormDrawerProps) {
   const isEdit = initial != null
 
@@ -52,6 +44,7 @@ export function CampaignFormDrawer({ initial, onClose, onSuccess }: CampaignForm
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [budgetInvalid, setBudgetInvalid] = useState(false)
 
   // 편집 시 preset 밖의 기존 채널도 토글로 보이도록 병합(선택 상태 보존).
   const channelOptions = Array.from(new Set([...COMMON_CHANNELS, ...channels]))
@@ -67,6 +60,15 @@ export function CampaignFormDrawer({ initial, onClose, onSuccess }: CampaignForm
       setErr("캠페인 이름은 필수입니다.")
       return
     }
+    // 음수·비수치 예산을 조용히 null(예산 없음)로 바꿔 보내면 유실 사실이 드러나지 않는다 —
+    // 서버 sanitizer 도 하드 게이트로 거부하므로 여기서 폼 검증 에러로 표면화한다.
+    const parsedBudget = parseBudgetInput(budget)
+    if (parsedBudget === "invalid") {
+      setBudgetInvalid(true)
+      setErr(BUDGET_INVALID_MESSAGE)
+      return
+    }
+    setBudgetInvalid(false)
     setSaving(true)
     setErr(null)
 
@@ -77,7 +79,7 @@ export function CampaignFormDrawer({ initial, onClose, onSuccess }: CampaignForm
       channels,
       startsAt: startsAt || null,
       endsAt: endsAt || null,
-      budget: parseBudget(budget),
+      budget: parsedBudget,
       owner: owner.trim() || null,
     }
 
@@ -273,9 +275,15 @@ export function CampaignFormDrawer({ initial, onClose, onSuccess }: CampaignForm
                 min={0}
                 step={1}
                 value={budget}
-                onChange={(e) => setBudget(e.target.value)}
+                aria-invalid={budgetInvalid || undefined}
+                onChange={(e) => {
+                  setBudget(e.target.value)
+                  setBudgetInvalid(false)
+                }}
                 placeholder="0"
-                className="w-full rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-[13px] tabular-nums focus:border-[#084734] focus:outline-none focus:ring-1 focus:ring-[#084734]"
+                className={`w-full rounded-lg border bg-white px-3 py-2 text-[13px] tabular-nums focus:border-[#084734] focus:outline-none focus:ring-1 focus:ring-[#084734] ${
+                  budgetInvalid ? "border-[#F2B8B8]" : "border-[#E5E5E0]"
+                }`}
               />
             </div>
             <div>
