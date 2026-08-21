@@ -5,7 +5,7 @@
 // (fixed overlay + 모바일 바텀시트). POST(신규)·PATCH(편집)·DELETE(편집).
 // 저장 실패 시 인라인 에러 + 입력 보존. 프로젝트는 채널 필드가 없다(멤버 캠페인이 채널을 가진다).
 
-import { useRef, useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import { Trash2, X } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
@@ -18,6 +18,9 @@ import {
   type MarketingProject,
   type ProjectStatus,
 } from "@/lib/types/marketing-campaign"
+
+// 작성 중 닫기 확인 문구 — AdLeadImportDialog(붙여넣기 다이얼로그)와 같은 결.
+const CLOSE_CONFIRM = "입력한 내용이 있습니다. 닫으면 사라집니다. 닫을까요?"
 
 interface ProjectFormDrawerProps {
   initial: MarketingProject | null // null = 생성, 값 = 편집
@@ -40,12 +43,17 @@ export function ProjectFormDrawer({ initial, onClose, onSuccess }: ProjectFormDr
   const [deleting, setDeleting] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [budgetInvalid, setBudgetInvalid] = useState(false)
+  const [nameInvalid, setNameInvalid] = useState(false)
+  // 사용자가 한 필드라도 고쳤는지 — 확인 없이 닫아 입력이 사라지는 것을 막는 데만 쓴다.
+  const [dirty, setDirty] = useState(false)
 
   async function handleSave() {
     if (!name.trim()) {
+      setNameInvalid(true)
       setErr("프로젝트 이름은 필수입니다.")
       return
     }
+    setNameInvalid(false)
     // 음수·비수치 예산을 조용히 null(예산 없음)로 바꿔 보내면 유실 사실이 드러나지 않는다 —
     // 서버 sanitizer 도 하드 게이트로 거부하므로 여기서 폼 검증 에러로 표면화한다.
     const parsedBudget = parseBudgetInput(budget)
@@ -113,7 +121,12 @@ export function ProjectFormDrawer({ initial, onClose, onSuccess }: ProjectFormDr
   // 접근성 — 열릴 때 닫기 버튼으로 포커스 이동, Escape 닫기 + Tab 트랩, 닫히면 이전 포커스 복귀
   // (AdLeadImportDialog와 동일 패턴).
   const closeButtonRef = useRef<HTMLButtonElement>(null)
-  useDialogFocus(true, onClose, closeButtonRef)
+  // 작성 중 닫기(Escape·X·취소)는 확인을 거친다. 저장·삭제 성공 경로는 부모(onSuccess)가 닫으므로 무관.
+  const requestClose = useCallback(() => {
+    if (dirty && !window.confirm(CLOSE_CONFIRM)) return
+    onClose()
+  }, [dirty, onClose])
+  useDialogFocus(true, requestClose, closeButtonRef)
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
@@ -135,7 +148,7 @@ export function ProjectFormDrawer({ initial, onClose, onSuccess }: ProjectFormDr
           </div>
           <button
             ref={closeButtonRef}
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="닫기"
             className="text-[#615D59] transition-colors hover:text-[#111110]"
           >
@@ -160,9 +173,18 @@ export function ProjectFormDrawer({ initial, onClose, onSuccess }: ProjectFormDr
               id="project-name"
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              // 라벨의 * 와 실제 접근성 상태를 맞춘다 — 저장 시 비어 있으면 aria-invalid + 인라인 에러.
+              aria-required="true"
+              aria-invalid={nameInvalid || undefined}
+              onChange={(e) => {
+                setDirty(true)
+                setName(e.target.value)
+                setNameInvalid(false)
+              }}
               placeholder="예: 2026 하반기 신규 학원 확보"
-              className="w-full rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-[13px] focus:border-[#084734] focus:outline-none focus:ring-1 focus:ring-[#084734]"
+              className={`w-full rounded-lg border bg-white px-3 py-2 text-[13px] focus:border-[#084734] focus:outline-none focus:ring-1 focus:ring-[#084734] ${
+                nameInvalid ? "border-[#F2B8B8]" : "border-[#E5E5E0]"
+              }`}
             />
           </div>
 
@@ -174,7 +196,10 @@ export function ProjectFormDrawer({ initial, onClose, onSuccess }: ProjectFormDr
             <textarea
               id="project-objective"
               value={objective}
-              onChange={(e) => setObjective(e.target.value)}
+              onChange={(e) => {
+                setDirty(true)
+                setObjective(e.target.value)
+              }}
               rows={2}
               placeholder="이 프로젝트로 달성하려는 목표"
               className="w-full resize-none rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-[13px] focus:border-[#084734] focus:outline-none focus:ring-1 focus:ring-[#084734]"
@@ -189,7 +214,10 @@ export function ProjectFormDrawer({ initial, onClose, onSuccess }: ProjectFormDr
             <select
               id="project-status"
               value={status}
-              onChange={(e) => setStatus(e.target.value as ProjectStatus)}
+              onChange={(e) => {
+                setDirty(true)
+                setStatus(e.target.value as ProjectStatus)
+              }}
               className="w-full rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-[13px] focus:border-[#084734] focus:outline-none focus:ring-1 focus:ring-[#084734]"
             >
               {CAMPAIGN_STATUSES.map((s) => (
@@ -210,7 +238,10 @@ export function ProjectFormDrawer({ initial, onClose, onSuccess }: ProjectFormDr
                 id="project-starts"
                 type="date"
                 value={startsAt}
-                onChange={(e) => setStartsAt(e.target.value)}
+                onChange={(e) => {
+                  setDirty(true)
+                  setStartsAt(e.target.value)
+                }}
                 className="w-full rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-[13px] focus:border-[#084734] focus:outline-none focus:ring-1 focus:ring-[#084734]"
               />
             </div>
@@ -222,7 +253,10 @@ export function ProjectFormDrawer({ initial, onClose, onSuccess }: ProjectFormDr
                 id="project-ends"
                 type="date"
                 value={endsAt}
-                onChange={(e) => setEndsAt(e.target.value)}
+                onChange={(e) => {
+                  setDirty(true)
+                  setEndsAt(e.target.value)
+                }}
                 className="w-full rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-[13px] focus:border-[#084734] focus:outline-none focus:ring-1 focus:ring-[#084734]"
               />
             </div>
@@ -243,6 +277,7 @@ export function ProjectFormDrawer({ initial, onClose, onSuccess }: ProjectFormDr
                 onWheel={blurOnWheel}
                 aria-invalid={budgetInvalid || undefined}
                 onChange={(e) => {
+                  setDirty(true)
                   setBudget(e.target.value)
                   setBudgetInvalid(false)
                 }}
@@ -260,7 +295,10 @@ export function ProjectFormDrawer({ initial, onClose, onSuccess }: ProjectFormDr
                 id="project-owner"
                 type="text"
                 value={owner}
-                onChange={(e) => setOwner(e.target.value)}
+                onChange={(e) => {
+                  setDirty(true)
+                  setOwner(e.target.value)
+                }}
                 placeholder="담당자 이름"
                 className="w-full rounded-lg border border-[#E5E5E0] bg-white px-3 py-2 text-[13px] focus:border-[#084734] focus:outline-none focus:ring-1 focus:ring-[#084734]"
               />
@@ -284,7 +322,7 @@ export function ProjectFormDrawer({ initial, onClose, onSuccess }: ProjectFormDr
           )}
           <div className="flex items-center gap-3">
             <button
-              onClick={onClose}
+              onClick={requestClose}
               disabled={busy}
               className="px-4 py-2 text-[13px] text-[#615D59] transition-colors hover:text-[#111110] disabled:opacity-40"
             >

@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useCallback, useId, useRef, useState } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 import { adminFetchJson } from "@/lib/admin-client"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
@@ -18,6 +18,19 @@ import {
 
 // ─── metrics edit drawer ──────────────────────────────────────────────────────
 // 행사 탭에서만 열리는 성과 입력 모달 — 행사 탭 청크에 함께 실린다.
+
+// 작성 중 닫기 확인 문구 — AdLeadImportDialog(붙여넣기 다이얼로그)와 같은 결.
+const CLOSE_CONFIRM = "입력한 내용이 있습니다. 닫으면 사라집니다. 닫을까요?"
+
+// 렌더 전용 행 id. key={idx} 는 중간 행을 지우면 인덱스가 밀려 포커스가 엉뚱한 행을 가리킨다.
+// 저장 payload(EventMetrics)에는 절대 나가지 않는다 — 저장 직전 필요한 필드만 골라 보낸다.
+let rowSeq = 0
+const nextRowId = () => `row-${(rowSeq += 1)}`
+type AdSpendRow = AdSpendEntry & { rowId: string }
+type RelatedLinkRow = RelatedLink & { rowId: string }
+function withRowIds<T extends object>(items: T[]): (T & { rowId: string })[] {
+  return items.map((item) => ({ ...item, rowId: nextRowId() }))
+}
 
 // 서버 스냅샷 → 폼 상태. 최초 마운트와 "서버 값 불러오기"가 같은 변환을 쓴다.
 function formSnapshot(m: EventMetrics) {
@@ -50,8 +63,10 @@ export default function MetricsEditor({
   onSaved: (m: EventMetrics) => void
 }) {
   const [form, setForm] = useState(() => formSnapshot(metrics))
-  const [adSpend, setAdSpend] = useState<AdSpendEntry[]>(metrics.adSpendEntries ?? [])
-  const [relatedLinks, setRelatedLinks] = useState<RelatedLink[]>(metrics.relatedLinks ?? [])
+  const [adSpend, setAdSpend] = useState<AdSpendRow[]>(() => withRowIds(metrics.adSpendEntries ?? []))
+  const [relatedLinks, setRelatedLinks] = useState<RelatedLinkRow[]>(() =>
+    withRowIds(metrics.relatedLinks ?? [])
+  )
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   // 사용자가 한 글자라도 고쳤는지. true 면 서버 값이 폼을 자동으로 덮지 못한다.
@@ -59,7 +74,14 @@ export default function MetricsEditor({
   // 편집 중인데 서버 쪽이 갱신된 상태 — 덮어쓰는 대신 배너로 알린다.
   const [stale, setStale] = useState(false)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
-  useDialogFocus(event.id, onClose, closeButtonRef)
+  const fieldId = useId()
+
+  // 작성 중 닫기(Escape·X·취소)는 확인을 거친다 — 저장 경로(handleSave)는 확인 없이 그대로 닫는다.
+  const requestClose = useCallback(() => {
+    if (dirty && !window.confirm(CLOSE_CONFIRM)) return
+    onClose()
+  }, [dirty, onClose])
+  useDialogFocus(event.id, requestClose, closeButtonRef)
 
   // 같은 화면의 퀵 테이블이 저장한 값(metrics.updatedAt 갱신)이 도착하면 폼을 다시 맞춘다 —
   // 마운트 시점 스냅샷을 계속 들고 있으면 편집기 저장(전체본 PATCH)이 방금 저장을 옛 값으로 덮는다.
@@ -73,16 +95,16 @@ export default function MetricsEditor({
       setStale(true)
     } else {
       setForm(formSnapshot(metrics))
-      setAdSpend(metrics.adSpendEntries ?? [])
-      setRelatedLinks(metrics.relatedLinks ?? [])
+      setAdSpend(withRowIds(metrics.adSpendEntries ?? []))
+      setRelatedLinks(withRowIds(metrics.relatedLinks ?? []))
     }
   }
 
   // 배너의 "서버 값 불러오기" — 사용자가 명시적으로 눌렀을 때만 폼을 서버 값으로 교체한다.
   function loadServerValues() {
     setForm(formSnapshot(metrics))
-    setAdSpend(metrics.adSpendEntries ?? [])
-    setRelatedLinks(metrics.relatedLinks ?? [])
+    setAdSpend(withRowIds(metrics.adSpendEntries ?? []))
+    setRelatedLinks(withRowIds(metrics.relatedLinks ?? []))
     setDirty(false)
     setStale(false)
   }
@@ -115,8 +137,9 @@ export default function MetricsEditor({
             notes: form.notes.trim() || null,
             retrospective: form.retrospective.trim() || null,
             shareMemo: form.shareMemo.trim() || null,
-            adSpendEntries: adSpend,
-            relatedLinks,
+            // rowId 는 렌더 전용이라 저장 payload 에서 뺀다 — EventMetrics 형태를 그대로 유지.
+            adSpendEntries: adSpend.map((e) => ({ channel: e.channel, amount: e.amount, note: e.note })),
+            relatedLinks: relatedLinks.map((l) => ({ label: l.label, url: l.url })),
           }),
         }
       )
@@ -134,7 +157,7 @@ export default function MetricsEditor({
 
   function addAdEntry() {
     setDirty(true)
-    setAdSpend((arr) => [...arr, { channel: "google", amount: 0, note: "" }])
+    setAdSpend((arr) => [...arr, { channel: "google", amount: 0, note: "", rowId: nextRowId() }])
   }
   function updateAdEntry(idx: number, patch: Partial<AdSpendEntry>) {
     setDirty(true)
@@ -147,7 +170,7 @@ export default function MetricsEditor({
 
   function addRelatedLink() {
     setDirty(true)
-    setRelatedLinks((arr) => [...arr, { label: "", url: "" }])
+    setRelatedLinks((arr) => [...arr, { label: "", url: "", rowId: nextRowId() }])
   }
   function updateRelatedLink(idx: number, patch: Partial<RelatedLink>) {
     setDirty(true)
@@ -174,7 +197,7 @@ export default function MetricsEditor({
             <h2 className="mt-0.5 truncate text-base font-semibold text-[#111110]">{event.title}</h2>
             <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">{formatRange(event.startsAt, event.endsAt)}</p>
           </div>
-          <button ref={closeButtonRef} onClick={onClose} aria-label="닫기" className="text-[#1a1a1a]/40 hover:text-[#111110]">
+          <button ref={closeButtonRef} onClick={requestClose} aria-label="닫기" className="text-[#1a1a1a]/40 hover:text-[#111110]">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -246,8 +269,14 @@ export default function MetricsEditor({
                 step={1}
               />
               <div>
-                <label className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50">성사 고객 / 기관</label>
+                <label
+                  htmlFor={`${fieldId}-deal-customers`}
+                  className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50"
+                >
+                  성사 고객 / 기관
+                </label>
                 <textarea
+                  id={`${fieldId}-deal-customers`}
                   value={form.dealCustomers}
                   onChange={(e) => update("dealCustomers", e.target.value)}
                   rows={3}
@@ -280,7 +309,7 @@ export default function MetricsEditor({
               <div className="space-y-2">
                 {adSpend.map((entry, idx) => (
                   <div
-                    key={idx}
+                    key={entry.rowId}
                     className="grid grid-cols-[110px_1fr_auto] items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 sm:grid-cols-[140px_1fr_1fr_auto]"
                   >
                     <select
@@ -348,7 +377,7 @@ export default function MetricsEditor({
               <div className="space-y-2">
                 {relatedLinks.map((link, idx) => (
                   <div
-                    key={idx}
+                    key={link.rowId}
                     className="grid grid-cols-[1fr_1.4fr_auto] items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5"
                   >
                     <input
@@ -387,8 +416,11 @@ export default function MetricsEditor({
             </h3>
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50">내부 메모 / 다음 액션</label>
+                <label htmlFor={`${fieldId}-notes`} className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50">
+                  내부 메모 / 다음 액션
+                </label>
                 <textarea
+                  id={`${fieldId}-notes`}
                   value={form.notes}
                   onChange={(e) => update("notes", e.target.value)}
                   rows={3}
@@ -397,8 +429,14 @@ export default function MetricsEditor({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50">회고</label>
+                <label
+                  htmlFor={`${fieldId}-retrospective`}
+                  className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50"
+                >
+                  회고
+                </label>
                 <textarea
+                  id={`${fieldId}-retrospective`}
                   value={form.retrospective}
                   onChange={(e) => update("retrospective", e.target.value)}
                   rows={3}
@@ -407,8 +445,14 @@ export default function MetricsEditor({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50">공유 포인트</label>
+                <label
+                  htmlFor={`${fieldId}-share-memo`}
+                  className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50"
+                >
+                  공유 포인트
+                </label>
                 <textarea
+                  id={`${fieldId}-share-memo`}
                   value={form.shareMemo}
                   onChange={(e) => update("shareMemo", e.target.value)}
                   rows={3}
@@ -421,7 +465,7 @@ export default function MetricsEditor({
         </div>
 
         <div className="flex flex-col-reverse gap-2 border-t border-[#e8e8e4] px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-3 sm:px-6">
-          <button onClick={onClose} className="px-4 py-2 text-[13px] text-[#1a1a1a]/55 hover:text-[#111110]">
+          <button onClick={requestClose} className="px-4 py-2 text-[13px] text-[#1a1a1a]/55 hover:text-[#111110]">
             취소
           </button>
           <button
@@ -450,10 +494,15 @@ function NumInput({
   min?: number
   step?: number
 }) {
+  // 라벨-인풋을 htmlFor/id 로 묶는다 — 형제 div 로만 두면 스크린리더에 이름 없는 필드로 노출된다.
+  const id = useId()
   return (
     <div>
-      <label className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50">{label}</label>
+      <label htmlFor={id} className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50">
+        {label}
+      </label>
       <input
+        id={id}
         type="number"
         value={value == null ? "" : value}
         onChange={(e) => onChange(e.target.value)}
