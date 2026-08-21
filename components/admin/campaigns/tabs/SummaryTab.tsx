@@ -10,7 +10,7 @@ import type {
   BriefingCardProps,
   BriefingContent,
 } from "@/components/admin/campaigns/perf/BriefingCard"
-import { FunnelMixSection } from "@/components/admin/campaigns/perf/FunnelMixSection"
+import { FunnelCard } from "@/components/admin/campaigns/perf/FunnelCard"
 import { KpiStrip } from "@/components/admin/campaigns/perf/KpiStrip"
 import { UpdatesFeed } from "@/components/admin/campaigns/perf/UpdatesFeed"
 import type { UpdateSubmitInput } from "@/components/admin/campaigns/perf/UpdatesFeed"
@@ -544,43 +544,66 @@ export default function SummaryTab({
             </div>
           )}
 
-          {/* 2. KPI 스트립 5칸 */}
-          <KpiStrip kpis={data.kpis} />
+          {/*
+            콕핏 2단 구조 — xl 이상: 좌측 데이터 밀도(KPI·추이·스코어보드) + 우측 384px 고정 레일
+            (브리핑·퍼널·업데이트). xl 미만: 한 컬럼으로 자연 스택하되 브리핑이 KPI 바로 다음
+            (추이보다 먼저) 오도록 순서를 바꾼다 — 서사(현황→판단→근거) 우선, 레일 개념은 없다.
 
-          {/* 3. 브리핑 카드 — AI 주간 브리핑(있으면), 없으면 규칙 기반 폴백 */}
-          {briefing && (
-            <BriefingCard
-              {...briefing}
-              onRegenerate={regenerateBriefing}
-              regenerating={regenerating}
-            />
-          )}
+            좌/우 래퍼는 xl 미만에서 contents(자기 박스를 없애고 자식만 남김)로 접혀 6개 카드가
+            바깥 그리드 하나에 직접 참여한다 — order 로 두 그룹을 가로질러 인터리브하려면 같은
+            그리드의 형제여야 한다(서로 다른 컨테이너의 자식끼리는 order 가 안 먹는다). xl 이상에선
+            각 래퍼가 flex-col 로 복원돼 자기 자식만 쌓는다 — 이때 order 값은 그룹 내부 상대
+            순서(1<3<4, 2<5<6)로만 작동해 DOM 순서와 같은 결과가 된다.
+            *두 블록을 각각 렌더해 CSS로 숨기는 방식은 쓰지 않는다* — DailyTrendSection·
+            CampaignScoreboard는 Recharts 라 숨김 마운트에서 rAF 가 멈춰 얼어붙는 문제가 이미
+            실측된 컴포넌트다(각 파일 주석 참조) — 같은 트리를 두 벌 마운트하는 위험을 감수하지 않는다.
+          */}
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_384px] xl:items-start">
+            {/* 좌측 — 숫자 밀도 */}
+            <div className="contents xl:flex xl:flex-col xl:gap-4">
+              <div className="order-1">
+                <KpiStrip kpis={data.kpis} />
+              </div>
+              <div className="order-3">
+                <DailyTrendSection
+                  daily={data.daily}
+                  leadDailyBySource={data.leadDailyBySource}
+                  period={data.period}
+                  snapshotAt={data.snapshotAt}
+                  leadsMeasured={data.kpis.leads.value != null}
+                />
+              </div>
+              <div className="order-4">
+                <CampaignScoreboard rows={data.scoreboard} />
+              </div>
+            </div>
 
-          {/* 4. 일자별 추이 */}
-          <DailyTrendSection
-            daily={data.daily}
-            leadDailyBySource={data.leadDailyBySource}
-            period={data.period}
-            snapshotAt={data.snapshotAt}
-            leadsMeasured={data.kpis.leads.value != null}
-          />
-
-          {/* 5. 캠페인 스코어보드 */}
-          <CampaignScoreboard rows={data.scoreboard} />
-
-          {/* 6. 퍼널 + 채널 믹스 */}
-          <FunnelMixSection
-            funnel={data.funnel}
-            channelMix={data.channelMix}
-            metaMeasured={metaMeasured}
-          />
-
-          {/* 7. 업데이트 피드 */}
-          <UpdatesFeed
-            updates={data.updatesFeed}
-            campaignOptions={campaignOptions}
-            onSubmit={submitUpdate}
-          />
+            {/* 우측 — 384px 고정 레일. xl 이상에서 sticky — 어드민 셸의 main이 스크롤 컨테이너이고
+                이 페이지 안에는 그 위에 겹치는 고정 헤더가 없어 top-4 로 충분하다
+                (PartnerWorkspaceShell 의 lg:top-4 레일과 동일 조건). */}
+            <div className="contents xl:sticky xl:top-4 xl:flex xl:flex-col xl:gap-4">
+              <div className="order-2">
+                {/* 브리핑 카드 — AI 주간 브리핑(있으면), 없으면 규칙 기반 폴백 */}
+                {briefing && (
+                  <BriefingCard
+                    {...briefing}
+                    onRegenerate={regenerateBriefing}
+                    regenerating={regenerating}
+                  />
+                )}
+              </div>
+              <div className="order-5">
+                <FunnelCard funnel={data.funnel} metaMeasured={metaMeasured} />
+              </div>
+              <div className="order-6">
+                <UpdatesFeed
+                  updates={data.updatesFeed}
+                  campaignOptions={campaignOptions}
+                  onSubmit={submitUpdate}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

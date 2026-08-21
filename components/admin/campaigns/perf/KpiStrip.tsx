@@ -44,8 +44,10 @@ function DeltaHint({ kpi, valence }: { kpi: PerfKpi; valence: DeltaValence }) {
 }
 
 export function KpiStrip({ kpis }: { kpis: MarketingPerfResponse["kpis"] }) {
+  // 콕핏 레이아웃(2026-08)에서 xl 이상은 우측 384px 레일과 폭을 나눠 쓴다 — 5칸이 그 좁아진
+  // 폭에서 부러지지 않도록 5열 전환을 2xl(레일 뺀 폭도 충분히 넓어지는 지점)로 늦췄다.
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-5">
       <StatTile
         compact
         icon={<Wallet className="h-3.5 w-3.5" />}
