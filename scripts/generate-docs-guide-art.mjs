@@ -6,8 +6,9 @@
  *   ... --only=start,teacher      // 일부만
  *   ... --force                   // 이미 있어도 재생성
  *
- * 출력: public/images/docs/guide/intent-<key>.png       (Classin Green #084734)
- *       public/images/docs/guide/intent-<key>-ink.png   (Warm Dark #31302E)
+ * 출력: public/images/docs/guide/intent-<key>.png       (Classin Green #084734 — 현재 카드가 쓰는 것)
+ *       public/images/docs/guide/intent-<key>-ink.png   (Warm Dark #31302E — 대비 컬러웨이, 아직 미사용)
+ * 원본: scripts/assets/docs-guide-raw/intent-<key>.png  (public/ 밖 — 중간 산출물을 공개 서빙하지 않는다)
  *   - 512px 원본에서 잉크만 추출 → 투명 배경, 흰 카드 위에 바로 얹는 상태
  *   - 스타일 계약은 /product/sw 수업 도구 아이콘 세트와 동일 (사이트 전체 라인아트 일관성)
  */
@@ -24,7 +25,9 @@ if (!API_KEY) {
 
 const MODEL = process.env.ICON_MODEL || "gemini-3.1-flash-image"
 const OUT_DIR = path.join(process.cwd(), "public/images/docs/guide")
-const RAW_DIR = path.join(OUT_DIR, "_raw")
+// 원본은 public/ 밖에 둔다 — public/ 안에 있으면 중간 산출물이 그대로 공개 서빙된다.
+// 경로 규약은 scripts/generate-sw-tool-icons.mjs 의 scripts/assets/<name>-raw 와 같다.
+const RAW_DIR = path.join(process.cwd(), "scripts/assets/docs-guide-raw")
 const STYLE_REF = path.join(process.cwd(), "public/images/product/sw/activity-icons/quiz-mono.png")
 const GREEN = { r: 0x08, g: 0x47, b: 0x34 } // DESIGN.md — Classin Green
 const INK = { r: 0x31, g: 0x30, b: 0x2e }   // DESIGN.md — Warm Dark
