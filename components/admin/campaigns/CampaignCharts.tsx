@@ -85,5 +85,6 @@ export function EventRoiChart({
   )
 }
 
-// ChannelSpendPieChart 는 요약 탭 퍼포먼스 대시보드 재편(FunnelMixSection 대체)으로 소비처가
-// 사라져 제거했다 — 채널 배정·집행은 perf/FunnelMixSection 의 가로바가 담당한다.
+// ChannelSpendPieChart 는 요약 탭 퍼포먼스 대시보드 재편으로 소비처가 사라져 제거했다.
+// 채널 배정·집행의 정본은 광고 탭의 ChannelBudgetTable 이다 — 요약 탭은 콕핏 전환(2026-08-21)
+// 때 채널 믹스를 넘기고 우측 레일에 퍼널만 남겼다(perf/FunnelCard).
