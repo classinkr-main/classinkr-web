@@ -378,21 +378,34 @@ export default function AdminCampaignsPage() {
     if (activeTab === "meta") void loadChannelBudgets()
   }, [activeTab, loadChannelBudgets])
 
+  // 채널별 저장 순번 — 같은 채널을 빠르게 두 번 고치면 늦게 도착한 "앞선" 응답이 나중
+  // 응답을 덮어써 화면이 방금 지운 값으로 되돌아간다. usePerf(SummaryTab) 의 seqRef 와 같은
+  // 규약으로 그 채널의 마지막 요청 결과만 상태에 반영한다.
+  const channelBudgetSeqRef = useRef<Partial<Record<AdChannel, number>>>({})
+
   const handleChannelBudgetChange = useCallback(async (channel: AdChannel, amount: number) => {
+    const seq = (channelBudgetSeqRef.current[channel] ?? 0) + 1
+    channelBudgetSeqRef.current[channel] = seq
     try {
       const data = await adminFetchJson<{ budgets: Record<AdChannel, number> }>(
         "/api/admin/channel-budgets",
         { method: "PATCH", body: JSON.stringify({ channel, amount }) }
       )
+      if (channelBudgetSeqRef.current[channel] !== seq) return
       setChannelBudgets(data.budgets)
       setBudgetError(null)
     } catch (e) {
+      if (channelBudgetSeqRef.current[channel] !== seq) return
       // 에러는 사용자가 방금 만진 표(채널 예산) 옆에 떠야 한다 — Meta 대시보드 에러 슬롯에
       // 실으면 연동 장애로 오독되고 다음 loadMeta 가 지워버린다. 실패한 입력값이 저장된
       // 것처럼 남지 않게 서버 정본을 다시 받아 입력칸을 되돌린다.
       const message = e instanceof Error ? e.message : "채널 예산 저장 실패"
       setBudgetError(`${message} — 입력값은 저장 전 상태로 되돌렸습니다.`)
       void loadChannelBudgets()
+      // 상단 배너만으로는 "어느 채널이 실패했는지"가 사라진다 — 표가 만진 행에 인라인 에러를
+      // 붙일 수 있게 실패를 그대로 올려보낸다(ChannelBudgetTable 이 await 하고 잡으므로
+      // 미처리 거절이 되지 않는다).
+      throw e instanceof Error ? e : new Error(message)
     }
   }, [loadChannelBudgets])
 
