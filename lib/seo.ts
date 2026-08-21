@@ -109,6 +109,15 @@ export function createWebsiteJsonLd(): JsonLdNode {
     url: SITE_URL,
     inLanguage: "ko-KR",
     publisher: { "@id": ORGANIZATION_ID },
+    // 사이트 내 검색(Sitelinks Search Box)은 /docs 가이드 검색이 실체다.
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: `${SITE_URL}/docs?q={search_term_string}`,
+      },
+      "query-input": "required name=search_term_string",
+    },
   }
 }
 

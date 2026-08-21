@@ -1,4 +1,3 @@
-import type { LucideIcon } from "lucide-react"
 import type { ReactNode } from "react"
 
 export type DocsHref = string
@@ -9,15 +8,6 @@ export interface DocsLink {
     description?: string
     eyebrow?: string
     isActive?: boolean
-}
-
-export interface DocsCategory {
-    title: string
-    description: string
-    href: DocsHref
-    eyebrow?: string
-    icon?: LucideIcon
-    articles?: DocsLink[]
 }
 
 export interface DocsArticleSummary {

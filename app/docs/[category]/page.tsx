@@ -21,6 +21,14 @@ import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 
 const DOCS_CONTACT_HREF = `/contact?topic=${encodeURIComponent("계정/접속/기술 지원")}&prefill=${encodeURIComponent("가이드에서 찾지 못한 내용을 문의하고 싶습니다.")}#contact-form`
 
+function formatCategoryHeading(title: string): string {
+  const bracketMatch = title.match(/^\[(.+?)\]/)
+  if (bracketMatch) {
+    return `${bracketMatch[1]} 가이드`
+  }
+  return title
+}
+
 interface DocsCategoryPageProps {
   params: Promise<{ category: string }>
   searchParams?: Promise<{ q?: string }>
@@ -117,13 +125,13 @@ export default async function DocsCategoryPage({
 
         <div className="mt-8 max-w-4xl">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#084734]">
-            {category.title}
+            Classin Guide
           </p>
-          <h1 className="mt-4 text-4xl font-black leading-[1.06] tracking-display md:text-6xl">
-            {category.description}
+          <h1 className="mt-4 break-keep text-4xl font-black leading-[1.06] tracking-display md:text-6xl">
+            {formatCategoryHeading(category.title)}
           </h1>
-          <p className="mt-5 text-lg leading-8 text-[#615D59]">
-            필요한 안내를 빠르게 고를 수 있도록 {docs.length}개의 글을 주제별로 정리했습니다.
+          <p className="mt-5 max-w-3xl text-lg leading-8 text-[#615D59]">
+            {category.description}
           </p>
         </div>
 
