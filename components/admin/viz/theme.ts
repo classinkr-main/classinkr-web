@@ -50,6 +50,8 @@ export const CHART = {
   brandSurface: "#D1FAE5",
   neutral: "#111110",
   warmGray: "#84827a",
+  /** 콤보 차트에서 맥락 축(막대)을 뒤로 물리는 웜 라이트 그레이 — 전경 선(brand)과 명도·색상 모두로 분리된다. */
+  barMuted: "#d6d3cc",
   caution: "#D97706",
   danger: "#B85C33",
   grid: "#f0f0ec",

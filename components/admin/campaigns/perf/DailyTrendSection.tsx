@@ -124,6 +124,7 @@ export function DailyTrendSection({
         )
       }
       return (
+        // 관심 지표(리드)가 포화색 전경, 맥락(광고비)이 저채도 배경 — 시선이 선을 따라간다.
         <ComparisonBarChart
           data={spendData}
           xKey="label"
@@ -131,7 +132,7 @@ export function DailyTrendSection({
             {
               key: "spend",
               label: "광고비(USD)",
-              color: CHART.neutral,
+              color: CHART.barMuted,
               formatValue: (value) => money(value, "USD"),
             },
           ]}
@@ -150,6 +151,10 @@ export function DailyTrendSection({
           showLegend
           // 지표 대시보드는 즉시 판독이 목적이고, 숨김 탭 마운트 시 애니메이션이 멈춘 프레임에 갇힌다.
           animate={false}
+          // 막대(맥락)에 밀리지 않게 선(관심 지표)을 굵게 세우고, 흰 테두리 점으로 막대 위에서도 또렷하게.
+          lineStrokeWidth={2.5}
+          lineDotStroke="#ffffff"
+          lineDotStrokeWidth={1.5}
         />
       )
     }
