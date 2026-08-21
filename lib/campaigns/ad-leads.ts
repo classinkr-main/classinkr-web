@@ -9,6 +9,8 @@ import {
   getLeadChannelLabel,
   getLeadSourceGroup,
   getLeadSourceDetail,
+  isConversionEligibleLead,
+  isConvertedLead,
   isMarketingLead,
   isTestLead,
 } from "@/lib/crm/lead-attribution"
@@ -103,10 +105,8 @@ export const AD_LEAD_STATUS_OPTIONS: Array<{ value: AdLeadStatusFilter; label: s
   { value: "converted", label: "전환됨" },
 ]
 
-/** 전환 버튼을 누를 수 있는 리드 — 이미 전환됐거나 종료된 건은 제외한다. */
-export function isConvertibleLead(lead: LeadRecord): boolean {
-  return lead.status !== "converted" && lead.status !== "closed"
-}
+/** 전환 버튼을 누를 수 있는 리드 — 판정식은 lead-attribution SSOT(isConversionEligibleLead)만 쓴다(재정의 금지). */
+export const isConvertibleLead = isConversionEligibleLead
 
 export function matchesAdLeadStatus(lead: LeadRecord, filter: AdLeadStatusFilter): boolean {
   switch (filter) {
@@ -162,7 +162,7 @@ export function buildAdLeadStats(leads: LeadRecord[], spend?: number | null): Ad
   for (const lead of leads) {
     if (lead.status === "new") newCount += 1
     else if (lead.status === "contacted") contacted += 1
-    else if (lead.status === "converted") converted += 1
+    else if (isConvertedLead(lead)) converted += 1
     if (isConvertibleLead(lead)) convertible += 1
     if (!lead.confirmed_at) unconfirmed += 1
     if (getLeadCampaignLabel(lead)) campaignTagged += 1

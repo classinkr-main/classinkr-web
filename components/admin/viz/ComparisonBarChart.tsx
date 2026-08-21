@@ -60,6 +60,13 @@ export interface ComparisonBarChartProps<Row extends object = Record<string, unk
   leftMargin?: number
   /** 좌축(bars) domain — 목표선이 항상 보이도록 상한 확보 등 */
   leftDomain?: [number, number]
+  /**
+   * 등장 애니메이션 on/off (기본 true — 기존 소비처 시각 보존).
+   * 숨김 탭/백그라운드 마운트에서 Recharts rAF가 멈춰 애니메이션 0~2% 프레임(막대 높이 1px
+   * 미만)에 얼어붙는 사례가 실측됐다 — 즉시 판독이 중요한 지표 대시보드는 false로 끈다.
+   * 공용 컴포넌트라 여기 하드코딩하지 않고 소비처가 선택한다.
+   */
+  animate?: boolean
 }
 
 const DARK_TOOLTIP_STYLE = {
@@ -90,6 +97,7 @@ export function ComparisonBarChart<Row extends object>({
   tooltipVariant = "dark",
   leftMargin = 0,
   leftDomain,
+  animate = true,
 }: ComparisonBarChartProps<Row>) {
   const isLight = tooltipVariant === "light"
   const seriesByName = new Map<string, ComparisonBarSeries>([
@@ -159,6 +167,7 @@ export function ComparisonBarChart<Row extends object>({
               fill={series.color}
               radius={[4, 4, 0, 0]}
               maxBarSize={maxBarSize}
+              isAnimationActive={animate}
             >
               {cellColor && seriesIndex === 0
                 ? data.map((row, index) => <Cell key={index} fill={cellColor(row, index)} />)
@@ -190,6 +199,7 @@ export function ComparisonBarChart<Row extends object>({
               strokeWidth={2}
               dot={{ r: 3, fill: line.color, strokeWidth: 0 }}
               activeDot={{ r: 4 }}
+              isAnimationActive={animate}
             />
           ) : null}
         </ComposedChart>

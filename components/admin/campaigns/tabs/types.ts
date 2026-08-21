@@ -53,23 +53,6 @@ export interface MetaCampaignDashboard {
   }
 }
 
-export interface MarketingStatsData {
-  subscribers: { total: number; active: number; unsubscribed: number; newThisMonth: number }
-  campaigns: {
-    total: number
-    recentCampaigns: Array<{
-      id: string | number
-      subject: string
-      sentAt: string | null
-      recipientCount: number
-      status: "draft" | "sent" | "failed"
-      tags: string[]
-    }>
-  }
-  automation: { totalRules: number; activeRules: number }
-  tagDistribution: Array<{ tag: string; count: number }>
-}
-
 export type Period = "active" | "30d" | "90d" | "all"
 
 export type EventSortKey = "date" | "leads" | "deals" | "roi"

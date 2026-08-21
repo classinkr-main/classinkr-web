@@ -19,6 +19,7 @@ import {
   type MessagePrefill,
 } from "@/lib/message-prefill"
 import type { LeadRecord } from "@/lib/db"
+import type { PerfPeriodKey } from "@/lib/marketing/perf"
 import type { EventCategory, EventStatus, PublicEvent } from "@/lib/types/public-events"
 import {
   AD_CHANNEL_COLOR,
@@ -33,7 +34,6 @@ import type {
   CampaignAggregate,
   CampaignTab,
   EventLeadStats,
-  MarketingStatsData,
   MetaCampaignDashboard,
   MetaCampaignRow,
   MetaDatePreset,
@@ -128,8 +128,8 @@ function assignEventLeads(
 // ─── sub-tabs ─────────────────────────────────────────────────────────────────
 
 const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string; sub: string }> = [
-  { id: "summary", label: "요약", sub: "성과 · 전환 · 채널 분포" },
-  { id: "events", label: "행사", sub: "행사별 퍼널 · 딜 전환" },
+  { id: "summary", label: "요약", sub: "퍼포먼스 KPI · 추이 · 캠페인 페이싱" },
+  { id: "events", label: "행사", sub: "행사 성과 비교 · 행사별 퍼널 · 딜 전환" },
   // id는 딥링크(?tab=meta) 호환을 위해 "meta" 유지 — 라벨은 "광고"로 확장하되 sub에서 Meta만 라이브임을 정직하게 표기.
   { id: "meta", label: "광고", sub: "Meta 라이브 · 캠페인·채널 예산·성과" },
   // id는 기존 딥링크(?tab=email) 호환을 위해 "email" 유지 — 내용은 이메일·문자·카카오 발송 허브.
@@ -137,6 +137,10 @@ const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string; sub: string }> = [
 ]
 
 // ─── period filter ────────────────────────────────────────────────────────────
+
+// 요약(퍼포먼스 대시보드) 전용 기간 축 — perf API 의 PerfPeriodKey 를 그대로 쓴다.
+// events/meta 탭의 행사 기간 필터(Period: active/30d/90d/all)와는 별개 축(딥링크도 분리: ?perf=).
+const PERF_PERIOD_KEYS: readonly PerfPeriodKey[] = ["7d", "30d", "90d", "quarter"]
 
 function eventInPeriod(event: PublicEvent, period: Period): boolean {
   if (period === "all") return true
@@ -163,10 +167,15 @@ export default function AdminCampaignsPage() {
   const [error, setError] = useState<string | null>(null)
   const [period, setPeriod] = useState<Period>("all")
   const [editing, setEditing] = useState<PublicEvent | null>(null)
-  // 요약 탭 "성과 입력 열기" → 광고 탭 성과 입력 표 착지 요청. 증가하는 nonce로 전달한다 —
-  // sessionStorage 플래그는 광고 탭 전환이 유발하는 코어 재조회(coreLoading 사이클)와
-  // strict 이중 마운트에서 소비 시점이 어긋나 스크롤이 유실됐다(2026-08-18 실측).
-  const [metricsFocusNonce, setMetricsFocusNonce] = useState(0)
+  // 요약(퍼포먼스 대시보드) 기간 — 딥링크 ?perf= 로 보존. 토글 UI 는 SummaryTab 헤더 행이 그린다.
+  const [perfParam, setPerfParam] = useUrlState("perf", "30d")
+  const perfPeriod: PerfPeriodKey = (PERF_PERIOD_KEYS as readonly string[]).includes(perfParam)
+    ? (perfParam as PerfPeriodKey)
+    : "30d"
+  // 헤더 "동기화" → SummaryTab 내부 usePerf 가 캐시 우회 재조회하도록 nonce 로 전달하고,
+  // perf 로딩 상태는 스피너 표시용으로만 되받는다(fetch 소유는 SummaryTab).
+  const [perfRefreshNonce, setPerfRefreshNonce] = useState(0)
+  const [perfLoading, setPerfLoading] = useState(false)
   const [viewParam, setViewParam] = useUrlState("view", "list")
   const galleryView = viewParam === "gallery"
   const [eventSearch, setEventSearch] = useState("")
@@ -178,8 +187,6 @@ export default function AdminCampaignsPage() {
   const [metaError, setMetaError] = useState<string | null>(null)
   const [metaDatePreset, setMetaDatePreset] = useState<MetaDatePreset>("last_30d")
   const [metaUpdatingId, setMetaUpdatingId] = useState<string | null>(null)
-  const [emailStats, setEmailStats] = useState<MarketingStatsData | null>(null)
-  const [emailStatsError, setEmailStatsError] = useState<string | null>(null)
   // 광고 리드 섹션(광고 탭) 전용 데이터. 코어 리드(scope=campaigns)는 귀속 5컬럼뿐이라
   // 트래킹 축·연락처·전환 상태를 못 담는다 — 광고 탭에 들어올 때만 별도 스코프로 지연 조회한다.
   const [adLeads, setAdLeads] = useState<LeadRecord[]>([])
@@ -233,15 +240,16 @@ export default function AdminCampaignsPage() {
   }, [])
 
   // 코어(행사·리드·지표)는 소비하는 탭에 처음 진입할 때 1회만 조회한다(탭 무관 마운트 즉시 호출 제거).
-  // summary/events가 직접 소비하고, meta도 채널 예산·집행 대조(aggregate·channelEfficiencyData)가
-  // 코어 파생값이라 필요하다. email(메시지 허브)은 MarketingHub가 자체 fetch하므로 코어를 건드리지 않는다.
+  // events가 직접 소비하고, meta도 채널 예산·집행 대조(aggregate·channelEfficiencyData)가
+  // 코어 파생값이라 필요하다. summary(퍼포먼스 대시보드)는 perf 단일 엔드포인트만 쓰고,
+  // email(메시지 허브)은 MarketingHub가 자체 fetch하므로 둘 다 코어를 건드리지 않는다.
   // ref 1회 게이트: 기존 "마운트 시 1회 로드" 의미를 유지해 탭 전환마다 재조회·스켈레톤 깜빡임을 만들지 않는다.
   const coreLoadRequestedRef = useRef(false)
   useEffect(() => {
-    // message_to 프리필 딥링크는 첫 렌더가 summary여도 곧바로 email 탭으로 전환된다(아래 효과).
+    // message_to 프리필 딥링크는 첫 렌더가 어느 탭이어도 곧바로 email 탭으로 전환된다(아래 효과).
     // 그 한 사이클에서 코어 fetch가 새어나가지 않도록 URL의 프리필 파라미터도 함께 게이트한다.
     const pendingMessagePrefill = parseMessagePrefill(window.location.search) !== null
-    if (activeTab === "email" || pendingMessagePrefill) {
+    if (activeTab === "email" || activeTab === "summary" || pendingMessagePrefill) {
       // 코어를 로드하지 않는 경로에서는 초기 loading=true를 내려
       // 헤더 동기화 버튼이 영구 비활성으로 잠기지 않게 한다.
       if (!coreLoadRequestedRef.current) setLoading(false)
@@ -304,33 +312,12 @@ export default function AdminCampaignsPage() {
     void loadMeta({ force: true })
   }, [loadMeta])
 
-  const loadEmailStats = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
-    try {
-      const data = await adminFetchJsonCached<MarketingStatsData>("/api/admin/marketing/stats", undefined, {
-        ttlMs: 60_000,
-        staleIfError: true,
-        force,
-      })
-      setEmailStats(data)
-      setEmailStatsError(null)
-    } catch {
-      // 보조 지표라 화면은 강등해서 계속 쓰되, 무음 대신 실패를 표시한다(재시도 가능).
-      setEmailStatsError("이메일·구독자 지표를 불러오지 못했습니다.")
-    }
-  }, [])
-
   useEffect(() => {
-    if (activeTab === "summary" || activeTab === "meta") {
+    // Meta 라이브 대시보드는 광고 탭 전용 — 요약 탭은 perf 응답(스냅샷 축)만 쓴다.
+    if (activeTab === "meta") {
       loadMeta()
     }
   }, [activeTab, loadMeta])
-
-  useEffect(() => {
-    // 이메일 탭은 MarketingHub가 자체 데이터를 불러온다. 요약 탭 채널 카드용만 여기서 조회.
-    if (activeTab === "summary") {
-      void loadEmailStats()
-    }
-  }, [activeTab, loadEmailStats])
 
   const loadAdLeads = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     setAdLeadsLoading(true)
@@ -568,14 +555,14 @@ export default function AdminCampaignsPage() {
     setMetricsMap((m) => ({ ...m, [saved.eventId]: saved }))
   }, [])
 
-  // 광고 탭의 채널 집행·성과 표도 이 기간(filtered 파생값)에 종속된다 — 토글을 숨기면
-  // 요약에서 정한 기간이 광고 탭을 조용히 지배하므로 광고 탭에도 노출한다(2026-08-18).
-  const showFilterRow = activeTab === "summary" || activeTab === "events" || activeTab === "meta"
+  // 행사 기간 토글(Period)은 코어 파생값(filtered)을 쓰는 events/meta 탭에만 건다 —
+  // 요약 탭은 자체 기간 축(PerfPeriodKey, SummaryTab 헤더 행의 토글)을 쓴다.
+  const showFilterRow = activeTab === "events" || activeTab === "meta"
   const refreshLoading =
     activeTab === "meta"
       ? metaLoading || adLeadsLoading
       : activeTab === "summary"
-        ? loading || metaLoading
+        ? perfLoading
         : loading
   const refreshCurrent = useCallback(() => {
     if (activeTab === "meta") {
@@ -584,13 +571,12 @@ export default function AdminCampaignsPage() {
       return
     }
     if (activeTab === "summary") {
-      // 요약 헤더의 "동기화"는 화면에 보이는 세 축(행사·Meta·이메일 채널 카드)을 전부 새로 받는다
-      // — 이메일 지표만 캐시에 남으면 동기화 버튼이 거짓말이 된다(2026-08-18).
-      void Promise.all([load({ force: true }), loadMeta({ force: true }), loadEmailStats({ force: true })])
+      // 요약 탭 데이터는 SummaryTab 이 소유한다(usePerf) — nonce 로 캐시 우회 재조회를 지시한다.
+      setPerfRefreshNonce((nonce) => nonce + 1)
       return
     }
     void load({ force: true })
-  }, [activeTab, load, loadAdLeads, loadEmailStats, loadMeta])
+  }, [activeTab, load, loadAdLeads, loadMeta])
 
   return (
     <div className="pb-24">
@@ -722,11 +708,12 @@ export default function AdminCampaignsPage() {
           editing={editing}
           setEditing={setEditing}
           onMetricsSaved={handleMetricsSaved}
-          metricsFocusNonce={metricsFocusNonce}
         />
       ) : (
         <div className="px-4 pt-6 sm:px-6 lg:px-9">
-          {error && (
+          {/* 코어(행사·리드·지표) 로딩 에러는 그 데이터를 소비하는 행사 탭에서만 보인다 —
+              요약 탭은 perf 단일 소스라 이 에러와 무관하다(오귀속 방지). */}
+          {activeTab === "events" && error && (
             <div className="mb-4 rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[13px] text-[#B43E3E]">
               {error}
             </div>
@@ -734,25 +721,10 @@ export default function AdminCampaignsPage() {
 
       {activeTab === "summary" && (
         <SummaryTab
-          loading={loading}
-          events={events}
-          filtered={filtered}
-          perEventEcon={perEventEcon}
-          aggregate={aggregate}
-          channelEfficiencyData={channelEfficiencyData}
-          emailStats={emailStats}
-          emailStatsError={emailStatsError}
-          onRetryEmailStats={loadEmailStats}
-          metaDashboard={metaDashboard}
-          metaLoading={metaLoading}
-          metaError={metaError}
-          metaDatePreset={metaDatePreset}
-          onRefreshMeta={refreshMeta}
-          onGoToTab={setTabParam}
-          onOpenMetricsInput={() => {
-            setMetricsFocusNonce((nonce) => nonce + 1)
-            setTabParam("meta")
-          }}
+          period={perfPeriod}
+          onPeriodChange={setPerfParam}
+          refreshNonce={perfRefreshNonce}
+          onLoadingChange={setPerfLoading}
         />
       )}
 

@@ -35,6 +35,14 @@
     {
       "path": "/api/cron/ledger-weekly-close",
       "schedule": "30 14 * * 5"
+    },
+    {
+      "path": "/api/cron/sync-meta-insights",
+      "schedule": "50 20 * * *"
+    },
+    {
+      "path": "/api/cron/sync-marketing-insights",
+      "schedule": "30 22 * * 0"
     }
   ]
 }

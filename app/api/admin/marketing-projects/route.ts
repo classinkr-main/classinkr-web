@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   try {
     const projects = await listProjects()
     // 요청당 1회 — 파일 기반 event-metrics 전량을 eventId별 KRW 광고비 맵으로 변환해 재사용.
-    const eventAdSpend = eventAdSpendFromMetrics(getAllEventMetrics())
+    const eventAdSpend = eventAdSpendFromMetrics(await getAllEventMetrics())
 
     const withRollup: ProjectWithRollup[] = await Promise.all(
       projects.map(async (project) => {

@@ -90,7 +90,7 @@ export async function PATCH(
       retrospective: sanitizeText(body.retrospective),
       shareMemo: sanitizeText(body.shareMemo),
     }
-    const saved = saveEventMetrics(id, patch)
+    const saved = await saveEventMetrics(id, patch)
     return NextResponse.json(saved)
   } catch (error) {
     return NextResponse.json(

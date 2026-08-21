@@ -1,0 +1,65 @@
+// lib/marketing/creative-input.ts
+// 광고 소재별 성과 집계 — 원천은 leads 의 UTM(getMetaAdInfo). 순수 모듈(서버 의존 없음),
+// components/admin/campaigns/leads/AdLeadsPanel 이 쓰는 lib/campaigns/ad-leads.ts 와 같은 결.
+//
+// 정직 규칙: Meta Graph 는 캠페인 레벨 insights 만 수집한다(ad/adset 레벨 insights 미수집) —
+// 그래서 소재별 spend·CPL·ROAS 는 이 저장소 어디에도 존재하지 않는다. 여기서 나오는 것은
+// 순전히 leads 테이블에 남은 UTM(광고명) 기준 "리드·전환 건수" 랭킹뿐이다. 소비처(API 응답·
+// UI·AI 프롬프트)는 이 사실을 반드시 명시해야 한다 — 소재별 광고비·CPL 을 만들어내지 않는다.
+
+import { getMetaAdInfo, isConvertedLead, isTestLead } from "@/lib/crm/lead-attribution"
+import type { LeadRecord } from "@/lib/repositories/leads"
+
+export interface AdCreativePerf {
+  campaign: string | null
+  adset: string | null
+  ad: string | null
+  leads: number
+  converted: number
+}
+
+// 그룹 키 구분자 — 파이프는 캠페인·광고세트·광고명 텍스트에 실제로 나타날 일이 거의 없어
+// 서로 다른 조합이 우연히 같은 키로 접힐 위험이 낮다.
+const KEY_DELIMITER = "|"
+
+/** 그룹 키 — 세 축 중 하나가 비어도(getMetaAdInfo 는 "하나라도 있으면" 반환) 서로 다른 소재로 접히지 않게 구분자로 조인한다. */
+function creativeKey(info: { campaign?: string; adset?: string; ad?: string }): string {
+  return [info.campaign ?? "", info.adset ?? "", info.ad ?? ""].join(KEY_DELIMITER)
+}
+
+/**
+ * 리드를 (캠페인, 광고세트, 광고명) 단위로 접어 리드·전환 건수를 센다.
+ * - Meta 리드애즈가 아니거나(getMetaAdInfo null) 테스트 리드는 제외.
+ * - 정렬은 리드 수 내림차순, 동률이면 광고명(없으면 광고세트→캠페인) 사전순으로 안정화한다.
+ */
+export function aggregateAdCreativePerf(leads: LeadRecord[]): AdCreativePerf[] {
+  const byKey = new Map<string, AdCreativePerf>()
+
+  for (const lead of leads) {
+    if (isTestLead(lead)) continue
+    const info = getMetaAdInfo(lead)
+    if (!info) continue
+
+    const key = creativeKey(info)
+    const row = byKey.get(key)
+    if (row) {
+      row.leads += 1
+      if (isConvertedLead(lead)) row.converted += 1
+    } else {
+      byKey.set(key, {
+        campaign: info.campaign ?? null,
+        adset: info.adset ?? null,
+        ad: info.ad ?? null,
+        leads: 1,
+        converted: isConvertedLead(lead) ? 1 : 0,
+      })
+    }
+  }
+
+  const tieBreakLabel = (row: AdCreativePerf) => row.ad ?? row.adset ?? row.campaign ?? ""
+
+  return Array.from(byKey.values()).sort((a, b) => {
+    if (b.leads !== a.leads) return b.leads - a.leads
+    return tieBreakLabel(a).localeCompare(tieBreakLabel(b))
+  })
+}
