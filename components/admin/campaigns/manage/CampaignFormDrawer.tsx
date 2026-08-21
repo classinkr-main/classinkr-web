@@ -10,6 +10,7 @@ import { Trash2, X } from "lucide-react"
 
 import { adminFetchJson } from "@/lib/admin-client"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
+import { blurOnWheel } from "@/components/admin/number-input-guards"
 import { BUDGET_INVALID_MESSAGE, parseBudgetInput } from "@/lib/marketing/input-normalize"
 import {
   CAMPAIGN_STATUSES,
@@ -275,6 +276,7 @@ export function CampaignFormDrawer({ initial, onClose, onSuccess }: CampaignForm
                 min={0}
                 step={1}
                 value={budget}
+                onWheel={blurOnWheel}
                 aria-invalid={budgetInvalid || undefined}
                 onChange={(e) => {
                   setBudget(e.target.value)

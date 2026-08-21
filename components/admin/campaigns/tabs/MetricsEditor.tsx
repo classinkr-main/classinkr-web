@@ -4,6 +4,7 @@ import { useRef, useState } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 import { adminFetchJson } from "@/lib/admin-client"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
+import { blurOnWheel } from "@/components/admin/number-input-guards"
 import { clampCount, clampMoney } from "@/lib/marketing/input-normalize"
 import { formatRange } from "@/components/admin/campaigns/event-format"
 import type { PublicEvent } from "@/lib/types/public-events"
@@ -301,6 +302,7 @@ export default function MetricsEditor({
                       value={entry.amount === 0 ? "" : entry.amount}
                       // 금액도 정본 규칙(floor + >=0)으로 클램프. amount 는 non-null 필드라 빈값은 0.
                       onChange={(e) => updateAdEntry(idx, { amount: clampMoney(e.target.value) ?? 0 })}
+                      onWheel={blurOnWheel}
                       className="rounded-md border border-[#e8e8e4] bg-white px-2 py-1.5 text-[12px]"
                     />
                     <input
@@ -455,6 +457,7 @@ function NumInput({
         type="number"
         value={value == null ? "" : value}
         onChange={(e) => onChange(e.target.value)}
+        onWheel={blurOnWheel}
         min={min}
         step={step}
         className="w-full rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
