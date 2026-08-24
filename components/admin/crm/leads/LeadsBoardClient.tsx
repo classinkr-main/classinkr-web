@@ -11,6 +11,7 @@ import {
   Clock, Search, Check,
   Activity, Download, LogIn, MousePointerClick, ShieldCheck,
   FileText, Flame, Layers, Megaphone, ArrowUpDown,
+  Columns3, List as ListIcon,
 } from "lucide-react"
 import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
 import LeadTrackingPanel from "@/components/admin/crm/leads/LeadTrackingPanel"
@@ -81,6 +82,16 @@ import {
 } from "@/lib/crm/lead-ranking"
 import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { buildContactLogEntry, channelCarriesResult } from "@/lib/crm/contact-log"
+import {
+  applyLeadsViewParam,
+  appliesAcrossBoardColumns,
+  partitionLeadsToBoardColumns,
+  readLeadsView,
+  resolveBoardColumnFocus,
+  type BoardColumnKey,
+  type LeadsView,
+} from "@/lib/crm/leads-board-state"
+import LeadsBoardView from "./LeadsBoardView"
 
 // 리드 보드 목록 무한스크롤 대체 — 초기 50건, "더보기"로 50건씩 확장(계획 문서 Phase W1).
 // 모바일 카드·데스크톱 테이블이 같은 filtered를 그리므로 visible 상한을 공유한다.
@@ -971,11 +982,14 @@ export default function LeadsBoardClient() {
   const initialSort: LeadSortKey = isLeadSortKey(searchParams.get("sort"))
     ? (searchParams.get("sort") as LeadSortKey)
     : "priority"
+  // 뷰 축 — 콘솔이 기본이라 URL에서 생략된다. 전환은 어떤 상태도 리셋하지 않는다(설계 §2).
+  const initialView: LeadsView = readLeadsView(searchParams.get("view"))
 
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [leadModalOpen, setLeadModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState<LeadFilter>(initialFilter)
+  const [view, setView] = useState<LeadsView>(initialView)
   // 모아보기 렌즈 · 정렬 — URL에 남겨 공유·뒤로가기가 같은 화면을 재현하게 한다.
   const [lens, setLens] = useState<LeadLens>(initialLens)
   const [sortKey, setSortKey] = useState<LeadSortKey>(initialSort)
@@ -1172,13 +1186,14 @@ export default function LeadsBoardClient() {
       if (value === fallback) url.searchParams.delete(key)
       else url.searchParams.set(key, value)
     }
+    applyLeadsViewParam(url, view)
     apply("lens", lens, "all")
     apply("sort", sortKey, "priority")
     apply("filter", filter, "all")
     apply("q", urlSearchQuery.trim(), "")
     apply("group", sourceGroup, "all")
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
-  }, [lens, sortKey, filter, urlSearchQuery, sourceGroup])
+  }, [view, lens, sortKey, filter, urlSearchQuery, sourceGroup])
 
   // 렌즈나 축이 바뀌면 이전 축의 트래킹 선택은 의미를 잃는다 — 조용히 남겨두면 빈 목록이 된다.
   useEffect(() => {
@@ -1544,6 +1559,10 @@ export default function LeadsBoardClient() {
     lensCounts,
     trackingScopeLeads,
     hiddenUnconfirmedCount,
+    boardColumns,
+    boardTotals,
+    boardFocus,
+    boardCrossFilter,
   } = useMemo(() => {
     const now = new Date(nowMs)
     const today = toLocalDateKey(now)
@@ -1693,6 +1712,32 @@ export default function LeadsBoardClient() {
       { key: "converted", label: "전환", count: countForFilter("converted") },
       { key: "closed", label: "종료", count: countForFilter("closed") },
     ]
+    // ─── 보드 뷰 ────────────────────────────────────────────────
+    // 상태 축 필터(신규·연락중·전환·종료·미확인)는 보드에서 행을 지우지 않고 컬럼 포커스로
+    // 강등한다 — 그대로 AND로 걸면 5컬럼 중 4개가 설명 없이 빈다(설계 §2).
+    // 그래서 컬럼 모집단은 상태 필터를 뺀 집합이고, 직교 필터(시간·배정)만 그 위에 AND로 걸린다.
+    //
+    // 확인 게이트는 여기서 걸지 않는다. 미확인 리드는 resolveBoardColumn 이 '미확인' 컬럼으로
+    // 보내고 그 컬럼만 게이트 밖이라는 배지를 단다 — 콘솔의 includeUnconfirmed 토글은 건드리지 않는다.
+    const boardPopulation = lensLeads.filter((lead) => matchesSubFilters(lead))
+    const boardCrossFilter = appliesAcrossBoardColumns(filter)
+    const boardTotals = (() => {
+      const partitioned = partitionLeadsToBoardColumns(boardPopulation)
+      return Object.fromEntries(
+        (Object.keys(partitioned) as BoardColumnKey[]).map((key) => [key, partitioned[key].length])
+      ) as Record<BoardColumnKey, number>
+    })()
+    const boardColumns = partitionLeadsToBoardColumns(
+      sortLeads(
+        boardCrossFilter
+          ? boardPopulation.filter((lead) => matchesStatusFilter(lead, filter))
+          : boardPopulation,
+        sortKey,
+        { engagements: activitySummary, priorities: priorityMap, nowMs }
+      )
+    )
+    const boardFocus = resolveBoardColumnFocus(filter)
+
     // 숫자 진입점은 아래 필터 카운트 카드로 단일화 — 여기서 별도 카드 배열을 만들지 않는다.
     // 필터 카드에 없는 "오늘 예정"(팔로업)만 큐 패널 헤더 배지로 노출한다.
     const todayFollowUpCount = todayFollowUps.length
@@ -1724,6 +1769,10 @@ export default function LeadsBoardClient() {
       lensCounts,
       trackingScopeLeads,
       hiddenUnconfirmedCount,
+      boardColumns,
+      boardTotals,
+      boardFocus,
+      boardCrossFilter,
     }
   }, [
     leads,
@@ -1889,6 +1938,32 @@ export default function LeadsBoardClient() {
           <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin · CRM · 고객</p>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">리드</h1>
           <p className="mt-1 text-[13px] text-[#1a1a1a]/42">신규 유입 → 응대 → 전환 파이프라인</p>
+          {/* 뷰 축은 제목 아래 — 액션 줄에 섞으면 CSV·새로고침과 같은 무게가 된다.
+              전환은 어떤 상태도 리셋하지 않고, 같은 filter 를 뷰마다 다르게 해석할 뿐이다. */}
+          <div
+            role="tablist"
+            aria-label="리드 보기 방식"
+            className="mt-3 inline-flex rounded-lg border border-[#e8e8e4] bg-white p-0.5"
+          >
+            {([
+              { key: "console", label: "콘솔", icon: <ListIcon className="h-3.5 w-3.5" /> },
+              { key: "board", label: "보드", icon: <Columns3 className="h-3.5 w-3.5" /> },
+            ] as const).map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                role="tab"
+                aria-selected={view === option.key}
+                onClick={() => setView(option.key)}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[12px] font-semibold transition-colors ${
+                  view === option.key ? "bg-[#111110] text-white" : "text-[#1a1a1a]/55 hover:text-[#111110]"
+                }`}
+              >
+                {option.icon}
+                {option.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           {/* 지금 보는 숫자가 언제 것인지 — 캐시본/이전 로드와 혼동하지 않게 갱신 시각을 남긴다. */}
@@ -1977,7 +2052,8 @@ export default function LeadsBoardClient() {
       </div>
 
       {/* 마케팅 렌즈에서는 단계·담당자 카드 자리를 트래킹 롤업이 대신한다(패널을 더하지 않고 바꿔 끼운다). */}
-      {lens === "marketing" ? (
+      {/* 보드 뷰에서는 단계가 컬럼으로 서므로 이 패널들을 내린다 — 같은 축을 두 번 그리지 않는다. */}
+      {view !== "console" ? null : lens === "marketing" ? (
         <LeadTrackingPanel
           leads={trackingScopeLeads}
           dimension={trackingDimension}
@@ -2059,7 +2135,7 @@ export default function LeadsBoardClient() {
       )}
 
       {/* 미확인 수신함 — 공개 폼(문의·데모·뉴스레터 등) 원본 유입. 확인해야 아래 리드 목록에 반영된다. */}
-      {unconfirmedLeads.length > 0 && (
+      {view === "console" && unconfirmedLeads.length > 0 && (
         <div id="unconfirmed-inbox" className="mb-6 scroll-mt-24 rounded-2xl border border-[#ECD29C] bg-[#FBF1E0] p-4">
           <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -2125,7 +2201,7 @@ export default function LeadsBoardClient() {
         </div>
       )}
 
-      {pipelineRiskLeads.length > 0 && (
+      {view === "console" && pipelineRiskLeads.length > 0 && (
         <div id="pipeline-risk" className="mb-6 scroll-mt-24 rounded-2xl border border-[#F6D5C5] bg-[#FEF8F5] p-4">
           <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -2344,7 +2420,7 @@ export default function LeadsBoardClient() {
         )}
       </div>
 
-      {selectedLeadIds.size > 0 && (
+      {view === "console" && selectedLeadIds.size > 0 && (
         <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#F6D5C5] bg-[#FEF8F5] px-4 py-3">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -2439,7 +2515,8 @@ export default function LeadsBoardClient() {
         </div>
       )}
 
-      {/* 테이블 */}
+      {/* 목록(콘솔) ↔ 보드 — 같은 모집단을 다른 축으로 눕힌다. */}
+      {view === "console" ? (
       <div className="bg-white rounded-2xl border border-[#e8e8e4] overflow-hidden">
         {loading && leads.length === 0 ? (
           // 콜드로드 스켈레톤 — 리스트 행 골격과 일치(텍스트 로더 대신).
@@ -2931,6 +3008,17 @@ export default function LeadsBoardClient() {
           </>
         )}
       </div>
+      ) : (
+        <LeadsBoardView
+          columns={boardColumns}
+          totals={boardTotals}
+          focus={boardFocus}
+          crossColumnFilter={boardCrossFilter}
+          selectedId={selected?.id}
+          onSelect={setSelected}
+          now={now}
+        />
+      )}
 
       {/* 드로어 */}
       {selected && (

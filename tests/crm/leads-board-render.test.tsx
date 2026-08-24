@@ -86,3 +86,42 @@ describe("리드 보드 골격 (SSR)", () => {
     expect(html).toContain("단계별 현황")
   })
 })
+
+describe("뷰 축 — 콘솔 ↔ 보드", () => {
+  it("기본은 콘솔이라 보드 컬럼이 서지 않는다", () => {
+    const html = render()
+    expect(html).toContain("단계별 현황")
+    expect(html).not.toContain("리드 파이프라인 보드")
+  })
+
+  it("?view=board 면 5컬럼이 서고 콘솔 전용 패널은 내려간다", () => {
+    const html = render("view=board")
+    expect(html).toContain("리드 파이프라인 보드")
+    for (const label of ["미확인", "신규", "연락중", "전환"]) expect(html).toContain(label)
+    // 종료는 기본으로 접힌다 — 폭 예산에서 활성 컬럼 하나와 맞바꾸는 값이다.
+    expect(html).toContain("종료 · 펼치기")
+    // 단계가 컬럼으로 서므로 같은 축을 두 번 그리지 않는다.
+    expect(html).not.toContain("단계별 현황")
+    expect(html).not.toContain("담당자별 보유 리드")
+  })
+
+  it("보드에서도 헤더·필터 카드·검색은 그대로 남는다 — 전환이 상태를 리셋하지 않는다", () => {
+    const html = render("view=board&filter=unresponded_24h&q=청담")
+    expect(html).toContain("리드 등록")
+    expect(html).toContain("24h+")
+    expect(html).toContain("이름·기관·연락처")
+    expect(html).toContain("리드 파이프라인 보드")
+  })
+
+  it("미확인 컬럼은 콘솔 게이트 밖임을 배지로 밝힌다", () => {
+    // 보드가 확인 게이트를 통과시키므로 콘솔 목록 건수와 숫자가 달라질 수 있다 — 숨기지 않는다.
+    const html = render("view=board")
+    expect(html).toContain("게이트 밖")
+  })
+
+  it("모르는 view 값은 콘솔로 떨어진다", () => {
+    const html = render("view=kanban")
+    expect(html).toContain("단계별 현황")
+    expect(html).not.toContain("리드 파이프라인 보드")
+  })
+})
