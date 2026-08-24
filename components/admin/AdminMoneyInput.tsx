@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { Check, Loader2 } from "lucide-react"
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
+import { Check, Loader2, Lock } from "lucide-react"
 
 // 공용 금액 입력 — 어드민의 금액 칸이 파일마다 재구현되며 갈라지던 것을 하나로 모은다.
-// (캠페인 채널 예산 · 행사 성과 퀵 입력이 첫 소비자. 매출 장부 계열은 후속 웨이브.)
+// (캠페인 채널 예산 · 행사 성과 퀵 입력이 첫 소비자. 매출 장부 주차 그리드·입력 레일이 두 번째.)
 //
 // 이 컴포넌트가 없앤 실측 결함 셋:
 //   1) 조합(IME) 삼킴 — onChange 에서 replace(/[^0-9]/g,"") 로 즉시 거르면 한글 조합 중간
@@ -110,6 +110,42 @@ export interface AdminMoneyInputProps {
   invalid?: boolean
   placeholder?: string
   className?: string
+
+  /* ── 아래 6개는 매출 장부(주차 그리드·입력 레일) 요건으로 추가. 전부 기본값이 "기존 동작"이라
+        마케팅 소비처(ChannelBudgetTable·EventMetricsQuickTable)는 한 줄도 바뀌지 않는다. ── */
+
+  /**
+   * 읽기전용 — 확정 값 잠금처럼 "보여주되 못 고치는" 칸용. disabled 로 잠그면 키보드 포커스에서
+   * 빠져 셀 순회 중 그 칸만 건너뛰어지므로(장부 주차 그리드의 ↑/↓ 이동이 무너진다) readOnly 를 쓴다.
+   * 잠금 표식(자물쇠)은 pending/saved 와 같은 후미 슬롯에 렌더한다.
+   */
+  readOnly?: boolean
+  /**
+   * 인풋 DOM 핸들 — 호스트가 셀 간 focus()/select() 이동을 직접 제어해야 할 때.
+   * 콜백 ref 형태만 받는다(ref 객체를 받아 .current를 대신 써주면 prop 변형이라 React 컴파일러가 막는다).
+   */
+  inputRef?: (node: HTMLInputElement | null) => void
+  /**
+   * 호스트 키 핸들러 — 내부 처리(Enter·Backspace)보다 먼저 호출한다.
+   * 호스트가 preventDefault() 하면 내부 처리는 건너뛴다(방향키 셀 이동 등 호스트 우선).
+   */
+  onKeyDown?: (event: ReactKeyboardEvent<HTMLInputElement>) => void
+  /**
+   * 기본 true(Enter = 편집 종료 → blur → 커밋). false 면 커밋만 하고 blur·기본동작을 건드리지 않는다 —
+   * form 안에 있어 Enter 가 곧 "저장 제출"인 호스트용(blur 해버리면 브라우저의 암묵적 제출이 사라진다).
+   */
+  blurOnEnter?: boolean
+  /**
+   * 편집 중(조합 종료 후 정규화 시점)마다 호출 — blur/Enter 를 기다리지 않는 즉시 반영 경로.
+   *
+   * 필요한 이유: 같은 폼의 다른 컨트롤이 이 값에서 파생된 disabled 를 걸고 있으면(장부의 주차 확도
+   * 버튼 = 금액 0이면 비활성, 저장 버튼 = 합계 0이면 비활성) 커밋이 blur 에만 걸릴 때 막다른 길이
+   * 생긴다 — 비활성 버튼은 mousedown 자체를 삼켜 blur 가 일어나지 않고, 그래서 영영 활성화되지 않는다.
+   * 파생 UI 가 없는 호스트는 넘기지 않는 편이 낫다(불필요한 리렌더).
+   */
+  onLiveChange?: (next: number | null) => void
+  /** 높이·폭 등 호스트 레이아웃 정합용 추가 클래스(예: "h-8"). 색·상태 표현은 이 컴포넌트가 소유한다. */
+  fieldClassName?: string
 }
 
 export function AdminMoneyInput({
@@ -125,6 +161,12 @@ export function AdminMoneyInput({
   invalid = false,
   placeholder,
   className = "",
+  readOnly = false,
+  inputRef: externalInputRef,
+  onKeyDown,
+  blurOnEnter = true,
+  onLiveChange,
+  fieldClassName = "",
 }: AdminMoneyInputProps) {
   const [draft, setDraft] = useState(() => toDraft(value, allowNull))
   // 커밋 후 상위가 canonical 값을 되돌려주면(prop 변경) 초안을 다시 맞춘다.
@@ -143,6 +185,14 @@ export function AdminMoneyInput({
   const [hintSeq, setHintSeq] = useState(0)
 
   const inputRef = useRef<HTMLInputElement | null>(null)
+  // 내부 ref(캐럿 복원)와 호스트 ref(셀 이동)를 동시에 채운다 — 둘 중 하나만 살아남지 않게.
+  const attachInput = useCallback(
+    (node: HTMLInputElement | null) => {
+      inputRef.current = node
+      externalInputRef?.(node)
+    },
+    [externalInputRef],
+  )
   const composingRef = useRef(false)
   // 캐럿 위치를 "문자 인덱스"가 아니라 "뒤에 남은 숫자 개수"로 기억한다.
   // 콤마가 몇 개 끼어들든 사용자가 보던 자리 그대로 복원된다.
@@ -182,11 +232,19 @@ export function AdminMoneyInput({
     } else if (hintVisible) {
       setHintVisible(false)
     }
-    setDraft(formatWithCommas(raw))
+    const formatted = formatWithCommas(raw)
+    setDraft(formatted)
     setEditNonce((nonce) => nonce + 1)
+    if (onLiveChange) {
+      const parsed = parseMoneyInput(formatted)
+      onLiveChange(parsed == null && !allowNull ? 0 : parsed)
+    }
   }
 
   function commit() {
+    // 잠긴 칸은 절대 값을 밀어올리지 않는다 — 정규화 결과가 원본과 미세하게 달라도(소수점 내림 등)
+    // 포커스만 스쳐 지나간 확정 값이 조용히 바뀌는 사고를 막는다.
+    if (readOnly) return
     const parsed = parseMoneyInput(draft)
     const next = parsed == null && !allowNull ? 0 : parsed
     setDraft(toDraft(next, allowNull))
@@ -195,14 +253,17 @@ export function AdminMoneyInput({
 
   const borderClass = invalid
     ? "border-[#B43E3E] bg-white"
-    : "border-[#e8e8e4] bg-[#fafaf8] focus-within:border-[#084734] focus-within:bg-white"
+    : readOnly
+      // 잠금 칸 — 포커스해도 색이 살아나지 않아야 "여긴 못 고친다"가 눈으로 읽힌다.
+      ? "border-[#e8e8e4] bg-[#F6F5F4]"
+      : "border-[#e8e8e4] bg-[#fafaf8] focus-within:border-[#084734] focus-within:bg-white"
 
   return (
     <span className={`inline-flex min-w-0 flex-col items-stretch ${className}`}>
       <span
         className={`inline-flex min-w-0 items-center gap-1 rounded-lg border px-2 py-1 transition-colors ${borderClass} ${
           pending ? "opacity-70" : ""
-        }`}
+        } ${fieldClassName}`}
       >
         {prefix && (
           <span aria-hidden className="shrink-0 text-[11px] text-[#1a1a1a]/35">
@@ -210,12 +271,13 @@ export function AdminMoneyInput({
           </span>
         )}
         <input
-          ref={inputRef}
+          ref={attachInput}
           type="text"
           inputMode="numeric"
           autoComplete="off"
           value={draft}
           disabled={disabled}
+          readOnly={readOnly}
           aria-label={ariaLabel}
           aria-invalid={invalid || undefined}
           aria-describedby={ariaDescribedBy}
@@ -239,9 +301,15 @@ export function AdminMoneyInput({
             applyRaw(el.value, el.selectionStart ?? el.value.length)
           }}
           onKeyDown={(e) => {
+            // 호스트 우선 — 방향키 셀 이동 등은 여기서 preventDefault 되고, 그러면 내부 처리는 쉰다.
+            onKeyDown?.(e)
+            if (e.defaultPrevented) return
             if (e.nativeEvent.isComposing || composingRef.current) return
             if (e.key === "Enter") {
-              e.currentTarget.blur()
+              // blurOnEnter=false 인 호스트에서는 blur 하지 않는다 — 폼의 암묵적 제출(=저장)이
+              // 살아 있어야 하기 때문. 대신 값만 즉시 커밋해 제출이 최신값을 보게 한다.
+              if (blurOnEnter) e.currentTarget.blur()
+              else commit()
               return
             }
             const el = e.currentTarget
@@ -255,12 +323,17 @@ export function AdminMoneyInput({
             }
           }}
           onBlur={commit}
-          className="w-full min-w-0 bg-transparent text-right text-[12px] tabular-nums text-[#111110] outline-none placeholder:text-[11px] placeholder:text-[#A39E98] disabled:opacity-50"
+          className={`w-full min-w-0 bg-transparent text-right text-[12px] tabular-nums outline-none placeholder:text-[11px] placeholder:text-[#A39E98] disabled:opacity-50 ${
+            readOnly ? "cursor-not-allowed text-[#615D59]" : "text-[#111110]"
+          }`}
         />
         {pending ? (
           <Loader2 aria-hidden className="h-3 w-3 shrink-0 animate-spin text-[#A39E98]" />
         ) : saved ? (
           <Check aria-hidden className="h-3 w-3 shrink-0 text-[#084734]" />
+        ) : readOnly ? (
+          // 잠금 표식 — 왜 안 고쳐지는지는 호스트가 감싸는 요소의 title 로 설명한다.
+          <Lock aria-hidden className="h-3 w-3 shrink-0 text-[#A39E98]" />
         ) : null}
       </span>
       {/* 항상 렌더된 라이브 리전 — 나중에 삽입된 영역은 스크린리더가 읽지 않는 경우가 있다.
