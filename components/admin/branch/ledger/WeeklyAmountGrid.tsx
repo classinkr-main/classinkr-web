@@ -6,7 +6,8 @@
 // 금액이 0인 주차(zeroWeek)는 확도 토글이 비활성 톤으로 잠긴다(금액을 넣으면 풀린다 —
 // draftWeeklySaveContract가 금액>0 주차의 확도만 기록하는 저장 계약과 대칭).
 //
-// variant로 두 소비처의 시각 차이를 흡수한다(렌더 결과는 리팩터 전과 byte-identical):
+// variant로 두 소비처의 시각 차이를 흡수한다(금액 칸을 공용 AdminMoneyInput으로 바꾼 것 외에는
+// M9-1 통합 당시의 렌더 결과 그대로):
 //   - "rail":    축약 라벨(예/고/확)·소형 버튼, 열 순서 [라벨·확도·금액], 컴팩트 간격(현 InputRailSection).
 //   - "cockpit": 전체 라벨(예정/고확도/확정)·큰 입력, 열 순서 [라벨·금액·확도], 넉넉한 간격(현 CockpitEditor).
 // 확도 활성색은 CONFIDENCE_TOKENS bgClass만 사용(색 리터럴 재정의 금지).
@@ -15,8 +16,8 @@
 // 각 소비처가 그대로 소유한다 — 이 컴포넌트는 "주차 행 5줄"만 그린다.
 
 import { useRef, type KeyboardEvent as ReactKeyboardEvent } from "react"
-import { Lock } from "lucide-react"
 
+import { AdminMoneyInput, parseMoneyInput } from "@/components/admin/AdminMoneyInput"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { DRAFT_CONFIDENCE_OPTIONS, FORECAST_WEEK_RANGE_LABELS, draftWeeklyAmounts, type DraftConfidence } from "./shared"
 
@@ -25,7 +26,7 @@ interface WeeklyAmountGridProps {
   weekly: string[]
   /** W1~W5 주차별 확도 버퍼 5칸(weekly와 병렬) — 부모의 draftForm.weeklyConfidence. */
   weeklyConfidence: DraftConfidence[]
-  /** 주차 금액 변경 — rawValue는 이미 숫자만 남긴 값(그리드에서 [^\d] 제거). 부모는 해당 칸만 세팅한다. */
+  /** 주차 금액 변경 — rawValue는 이미 숫자만 남긴 값(공용 금액 입력이 정규화). 부모는 해당 칸만 세팅한다. */
   onAmountChange: (index: number, rawValue: string) => void
   /** 주차 확도 변경 — 부모는 해당 칸만 세팅한다. */
   onConfidenceChange: (index: number, key: DraftConfidence) => void
@@ -80,49 +81,38 @@ export function WeeklyAmountGrid({
           </span>
         )
 
+        // 금액 칸은 공용 AdminMoneyInput — 예전 인라인 input은 매 keystroke마다 [^\d]를 지워
+        // 한글 IME 조합을 통째로 삼켰다(입력이 빈 문자열이 되고 아무 안내도 없음). 공용 입력은
+        // 조합이 끝난 뒤에만 정규화하고, 걸러낸 입력은 "숫자만 입력할 수 있습니다"로 알린다.
+        // 장부 고유 요건 3가지는 그대로 살린다:
+        //   - locked → readOnly(disabled 아님: 확정 칸도 포커스로 읽고 지나갈 수 있어야 ↑/↓ 순회가 안 끊긴다)
+        //   - inputRef/onKeyDown → 기존 amountRefs + ↑/↓ 세로 이동 그대로
+        //   - blurOnEnter={false} → Enter는 여전히 form submit(M7 저장 계약), 여기서 가로채지 않는다
+        // 부모 버퍼는 계속 문자열(draftForm.weekly)이라 여기서만 숫자↔문자열을 어댑트한다 —
+        // onLiveChange로 매 입력마다 올려야 월 합·확도 seg·저장 버튼이 즉시 따라온다(blur 대기 금지:
+        // 비활성 버튼은 mousedown을 삼켜 blur가 안 나므로 영영 못 누르는 막다른 길이 된다).
+        const pushAmount = (next: number | null) => onAmountChange(index, next == null ? "" : String(next))
         const amountField = (
-          <span className="relative block">
-            <span
-              aria-hidden
-              className={
-                isCockpit
-                  ? "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-[#A39E98]"
-                  : "pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[#A39E98]"
-              }
-            >
-              ¥
-            </span>
-            <input
-              ref={(node) => {
+          <span
+            className="block"
+            // 잠금 사유 툴팁은 감싸는 요소에 둔다 — title은 자손(인풋)에 hover해도 그대로 뜬다.
+            title={locked ? `W${index + 1} 확정 값이라 잠금(실수 방지) — 수정은 REV 렌즈 정정 초안으로` : undefined}
+          >
+            <AdminMoneyInput
+              value={parseMoneyInput(weekly[index] ?? "")}
+              onCommit={pushAmount}
+              onLiveChange={pushAmount}
+              inputRef={(node) => {
                 amountRefs.current[index] = node
               }}
-              value={weekly[index] ?? ""}
-              onChange={(event) => onAmountChange(index, event.target.value.replace(/[^\d]/g, ""))}
               onKeyDown={(event) => onAmountKeyDown(event, index)}
+              blurOnEnter={false}
               readOnly={locked}
-              inputMode="numeric"
-              aria-label={`W${index + 1} 금액`}
-              title={locked ? `W${index + 1} 확정 값이라 잠금(실수 방지) — 수정은 REV 렌즈 정정 초안으로` : undefined}
-              className={
-                locked
-                  ? isCockpit
-                    ? "h-10 w-full cursor-not-allowed rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] pl-7 pr-7 text-right text-[13px] font-semibold tabular-nums text-[#615D59] outline-none"
-                    : "h-8 w-full cursor-not-allowed rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] pl-6 pr-6 text-right text-[12px] font-semibold tabular-nums text-[#615D59] outline-none"
-                  : isCockpit
-                    ? "h-10 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-7 pr-3 text-right text-[13px] font-semibold tabular-nums text-[#111110] outline-none focus:border-[#084734]"
-                    : "h-8 w-full rounded-md border border-[rgba(0,0,0,0.08)] bg-white pl-6 pr-2 text-right text-[12px] font-semibold tabular-nums text-[#111110] outline-none focus:border-[#084734]"
-              }
+              prefix="¥"
+              ariaLabel={`W${index + 1} 금액`}
+              className="w-full"
+              fieldClassName={isCockpit ? "h-10" : "h-8"}
             />
-            {locked && (
-              <Lock
-                aria-hidden
-                className={
-                  isCockpit
-                    ? "pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[#A39E98]"
-                    : "pointer-events-none absolute right-1.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[#A39E98]"
-                }
-              />
-            )}
           </span>
         )
 
