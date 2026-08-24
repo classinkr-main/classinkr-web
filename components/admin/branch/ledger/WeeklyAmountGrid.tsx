@@ -112,6 +112,8 @@ export function WeeklyAmountGrid({
               ariaLabel={`W${index + 1} 금액`}
               className="w-full"
               fieldClassName={isCockpit ? "h-10" : "h-8"}
+              // 장부는 밀집 숫자 그리드라 교체 전 타이포(semibold, 콕핏 13px)를 유지한다.
+              inputClassName={isCockpit ? "text-[13px] font-semibold" : "font-semibold"}
             />
           </span>
         )

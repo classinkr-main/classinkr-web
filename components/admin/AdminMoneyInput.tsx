@@ -146,6 +146,12 @@ export interface AdminMoneyInputProps {
   onLiveChange?: (next: number | null) => void
   /** 높이·폭 등 호스트 레이아웃 정합용 추가 클래스(예: "h-8"). 색·상태 표현은 이 컴포넌트가 소유한다. */
   fieldClassName?: string
+  /**
+   * 인풋 자체에 붙일 클래스. 소비처마다 숫자 타이포가 다르기 때문에 둔다 —
+   * 장부 그리드는 밀집 숫자를 빠르게 훑어야 해서 semibold/13px 를 쓰고,
+   * 마케팅 표는 기본(12px/400)을 쓴다. 기본값은 마케팅 쪽이므로 빈 문자열.
+   */
+  inputClassName?: string
 }
 
 export function AdminMoneyInput({
@@ -167,6 +173,7 @@ export function AdminMoneyInput({
   blurOnEnter = true,
   onLiveChange,
   fieldClassName = "",
+  inputClassName = "",
 }: AdminMoneyInputProps) {
   const [draft, setDraft] = useState(() => toDraft(value, allowNull))
   // 커밋 후 상위가 canonical 값을 되돌려주면(prop 변경) 초안을 다시 맞춘다.
@@ -323,7 +330,7 @@ export function AdminMoneyInput({
             }
           }}
           onBlur={commit}
-          className={`w-full min-w-0 bg-transparent text-right text-[12px] tabular-nums outline-none placeholder:text-[11px] placeholder:text-[#A39E98] disabled:opacity-50 ${
+          className={`w-full min-w-0 bg-transparent text-right text-[12px] tabular-nums outline-none placeholder:text-[11px] placeholder:text-[#A39E98] disabled:opacity-50 ${inputClassName} ${
             readOnly ? "cursor-not-allowed text-[#615D59]" : "text-[#111110]"
           }`}
         />
