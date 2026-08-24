@@ -144,7 +144,10 @@ export default async function DocsCategoryPage({
             placeholder="이 주제에서 궁금한 내용 검색"
             className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
           />
-          <button type="submit" className="text-sm font-semibold text-[#084734]">
+          <button
+            type="submit"
+            className="-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+          >
             검색
           </button>
         </form>

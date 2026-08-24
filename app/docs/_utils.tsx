@@ -267,7 +267,6 @@ export interface GuideIntentCard {
   kicker: string
   title: string
   description: string
-  image: string
   links: GuideLink[]
 }
 
@@ -347,7 +346,6 @@ export function getGuideIntentCards(content = staticDocsContent): GuideIntentCar
         kicker: `${copy?.label ?? intent.title} · ${listed.length}개`,
         title: intent.title,
         description: intent.description,
-        image: `/images/docs/guide/intent-${intent.categoryId}.png`,
         links: ordered.slice(0, 3).map((doc) => ({ title: doc.title, href: getDocPath(doc) })),
       }
     }

@@ -1,5 +1,5 @@
+import type { ReactElement } from "react"
 import type { Metadata } from "next"
-import Image from "next/image"
 import Link from "next/link"
 import type { LucideIcon } from "lucide-react"
 import {
@@ -7,11 +7,11 @@ import {
   CircleHelp,
   Download,
   Headset,
+  History,
   MessageCircle,
   MonitorSpeaker,
   Pencil,
   Search,
-  Sparkles,
 } from "lucide-react"
 
 import { getDocsContent } from "@/lib/docs-content"
@@ -21,6 +21,12 @@ import type { DocsArticleSummary } from "@/components/docs"
 import { SearchHighlight } from "@/components/ui/SearchHighlight"
 import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 import { DocsAskChatbotButton } from "@/components/docs/DocsAskChatbotButton"
+import {
+  GuideJoinIcon,
+  GuideOpsIcon,
+  GuideReviewIcon,
+  GuideTeachIcon,
+} from "@/components/docs/GuideIntentIcons"
 
 import {
   getAllDocsSummaries,
@@ -48,15 +54,6 @@ interface DocsHomePageProps {
   searchParams?: Promise<{ q?: string }>
 }
 
-/** /download PlatformTile 과 같은 타일 그림자 레시피 */
-const TILE_SHADOW = {
-  boxShadow:
-    "rgba(0,0,0,0.03) 0px 3px 14px, rgba(0,0,0,0.02) 0px 1.5px 6px, rgba(0,0,0,0.015) 0px 0.6px 2.2px",
-}
-
-const TILE_HOVER =
-  "transition-shadow duration-300 hover:shadow-[rgba(0,0,0,0.05)_0px_8px_24px,rgba(0,0,0,0.03)_0px_2px_7px]"
-
 const FOCUS_RING =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
 
@@ -64,17 +61,26 @@ const FOCUS_RING =
 const FOCUS_RING_WARM =
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F6F5F4]"
 
-const FOCUS_RING_WHITE =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-
 const SECTION_EYEBROW = "text-[12px] font-semibold uppercase tracking-[0.14em] text-[#615D59]"
 
+/** 블록을 카드가 아니라 얇은 구분선으로 나눈다 — 채움 없이 위계를 만드는 방식. */
+const RULE_BLOCK = "border-t border-black/[0.08] pt-5"
+
 const SEARCH_CHIPS = ["설치", "녹화", "과제", "출결", "전자칠판"]
+
+type IconComponent = (props: { className?: string }) => ReactElement
+
+const INTENT_ICONS: Record<string, IconComponent> = {
+  start: GuideReviewIcon,
+  admin: GuideOpsIcon,
+  teacher: GuideTeachIcon,
+  student: GuideJoinIcon,
+}
 
 const PRODUCT_TILE_ICONS: Partial<Record<string, LucideIcon>> = {
   software: Pencil,
   hardware: MonitorSpeaker,
-  updates: Sparkles,
+  updates: History,
 }
 
 function normalizeQuery(value?: string) {
@@ -140,17 +146,8 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
   const installLinks = getInstallGuideLinks(docsContent)
 
   return (
-    <div className="relative isolate min-h-screen overflow-hidden bg-[#FAFAF8] pb-20 pt-28 text-[#111110] md:pb-24 md:pt-36">
+    <div className="min-h-screen bg-[#FAFAF8] pb-20 pt-28 text-[#111110] md:pb-24 md:pt-36">
       {query && <DocsSearchLogger query={query} resultCount={searchResults.length} />}
-
-      {/* 히어로 뒤 글로우 — 넓은 면은 뉴트럴, 그린은 은은한 액센트로만 */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[720px]"
-      >
-        <div className="absolute left-[-180px] top-[-220px] h-[480px] w-[720px] rounded-full bg-[#ECFDF5] opacity-60 blur-3xl" />
-        <div className="absolute right-[4%] top-[180px] h-[260px] w-[260px] rounded-full bg-[#F6F5F4] opacity-90 blur-3xl" />
-      </div>
 
       <section className="container">
         <p className="hero-soft-enter hero-soft-enter-badge text-[12px] font-semibold uppercase tracking-[0.14em] text-[#084734]">
@@ -165,11 +162,12 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
           도입 검토부터 수업 운영, 문제 해결까지 — 실제 사용 흐름 그대로 정리한 공식 가이드입니다.
         </p>
 
+        {/* 검색도 면을 두지 않는다 — 카테고리 페이지와 같은 밑줄 입력으로 두 화면을 맞춘다. */}
         <form
           id="docs-search"
           action="/docs"
           method="get"
-          className="hero-soft-enter hero-soft-enter-actions mt-8 flex max-w-2xl items-center gap-3 rounded-[12px] border border-black/[0.08] bg-white py-2 pl-5 pr-2 shadow-card focus-within:border-[#084734]/30"
+          className="hero-soft-enter hero-soft-enter-actions mt-8 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-[#084734]/40"
         >
           <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
           <input
@@ -179,21 +177,22 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
             placeholder="궁금한 기능이나 겪는 상황을 검색"
             className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
           />
+          {/* 면은 없애되 히트 영역은 남긴다 — 여백이 없으면 글자 높이(약 20px)가 곧 터치 영역이 된다. */}
           <button
             type="submit"
-            className={`shrink-0 rounded-[8px] bg-[#084734] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] active:scale-[0.98] ${FOCUS_RING_WHITE}`}
+            className={`-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-[#084734] ${FOCUS_RING}`}
           >
             검색
           </button>
         </form>
 
-        <div className="hero-soft-enter hero-soft-enter-actions mt-4 flex flex-wrap items-center gap-2">
+        <div className="hero-soft-enter hero-soft-enter-actions mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="text-xs text-[#A39E98]">자주 찾는 주제</span>
           {SEARCH_CHIPS.map((chip) => (
             <Link
               key={chip}
               href={`/docs?q=${encodeURIComponent(chip)}`}
-              className={`rounded-full border border-black/[0.08] bg-white px-3 py-1 text-[12.5px] font-medium text-[#615D59] transition-colors hover:border-[#084734]/30 hover:text-[#084734] ${FOCUS_RING}`}
+              className={`text-[13px] font-medium text-[#615D59] underline-offset-4 transition-colors hover:text-[#084734] hover:underline ${FOCUS_RING}`}
             >
               {chip}
             </Link>
@@ -215,7 +214,8 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
 
       {query && (
         <section className="container mt-12">
-          <div className="border-t border-black/[0.08] pt-4">
+          {/* 카드를 걷어낸 자리에 읽기 너비만 남긴다 — 박스가 없으면 설명이 컨테이너 끝까지 늘어진다. */}
+          <div className="max-w-[880px] border-t border-black/[0.08] pt-4">
             <p className={SECTION_EYEBROW}>검색 결과</p>
             {searchResults.length > 0 ? (
               <>
@@ -258,84 +258,77 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
         </section>
       )}
 
+      {/* 상황별 진입 — 카드에 담지 않고 규칙선 아래로 흐르게 둔다. */}
       <Reveal as="section" className="container mt-16 md:mt-20">
-        <p className={SECTION_EYEBROW}>어떤 상황이신가요</p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 md:gap-4 xl:grid-cols-4">
-          {intentCards.map((card) => (
-            <div
-              key={card.categoryId}
-              className={`rounded-[16px] border border-black/[0.08] bg-white p-6 ${TILE_HOVER}`}
-              style={TILE_SHADOW}
-            >
-              <Image
-                src={card.image}
-                alt=""
-                aria-hidden
-                width={240}
-                height={240}
-                className="h-14 w-14"
-              />
-              <p className="mt-4 text-[11.5px] font-medium text-[#A39E98]">{card.kicker}</p>
-              <Link
-                href={card.href}
-                className={`mt-0.5 block break-keep text-[17px] font-bold text-[#111110] transition-colors hover:text-[#084734] ${FOCUS_RING}`}
-              >
-                {card.title}
-              </Link>
-              <p className="mt-1.5 text-[13px] leading-5 text-[#615D59]">{card.description}</p>
-              {card.links.length > 0 && (
-                <div className="mt-4 space-y-2 border-t border-black/[0.06] pt-3">
-                  {card.links.map((link) => (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      className={`block truncate text-[13px] font-medium text-[#31302E] transition-colors hover:text-[#084734] ${FOCUS_RING}`}
-                    >
-                      {link.title}
-                    </Link>
-                  ))}
-                </div>
-              )}
-              <Link
-                href={card.href}
-                className={`group mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-[#084734] ${FOCUS_RING}`}
-              >
-                전체 보기
-                <ArrowRight
-                  className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
-                  aria-hidden
-                />
-              </Link>
-            </div>
-          ))}
+        <p className={`${SECTION_EYEBROW} mb-5`}>어떤 상황이신가요</p>
+        <div className="grid gap-x-8 gap-y-9 sm:grid-cols-2 xl:grid-cols-4">
+          {intentCards.map((card) => {
+            const Icon = INTENT_ICONS[card.categoryId]
+
+            return (
+              <div key={card.categoryId} className={RULE_BLOCK}>
+                {Icon ? <Icon className="h-5 w-5 text-[#084734]" /> : null}
+                <p className="mt-3.5 text-[11.5px] font-medium text-[#A39E98]">{card.kicker}</p>
+                <Link
+                  href={card.href}
+                  className={`mt-0.5 block break-keep text-[15px] font-bold text-[#111110] transition-colors hover:text-[#084734] ${FOCUS_RING}`}
+                >
+                  {card.title}
+                </Link>
+                <p className="mt-1 text-[13px] leading-5 text-[#615D59]">{card.description}</p>
+                {card.links.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {card.links.map((link) => (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        className={`block truncate text-[13px] text-[#31302E] transition-colors hover:text-[#084734] ${FOCUS_RING}`}
+                      >
+                        {link.title}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+                <Link
+                  href={card.href}
+                  className={`group mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-[#084734] ${FOCUS_RING}`}
+                >
+                  전체 보기
+                  <ArrowRight
+                    className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
+                    aria-hidden
+                  />
+                </Link>
+              </div>
+            )
+          })}
         </div>
       </Reveal>
 
       {productTiles.length > 0 && (
-        <Reveal as="section" className="container mt-14 md:mt-16">
-          <p className={SECTION_EYEBROW}>제품별로 깊이 보기</p>
-          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3 md:gap-4">
+        <Reveal as="section" className="container mt-16 md:mt-20">
+          <p className={`${SECTION_EYEBROW} mb-2`}>제품별로 깊이 보기</p>
+          <div className="divide-y divide-black/[0.08] border-t border-black/[0.08]">
             {productTiles.map((tile) => {
-              const TileIcon = PRODUCT_TILE_ICONS[tile.categoryId] ?? Sparkles
+              const TileIcon = PRODUCT_TILE_ICONS[tile.categoryId] ?? History
 
               return (
                 <Link
                   key={tile.categoryId}
                   href={tile.href}
-                  className={`group flex items-start justify-between gap-4 rounded-[12px] border border-black/[0.08] bg-white p-5 ${TILE_HOVER} ${FOCUS_RING}`}
-                  style={TILE_SHADOW}
+                  className={`group flex items-center gap-4 py-4 ${FOCUS_RING}`}
                 >
-                  <span className="min-w-0">
-                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border border-black/[0.06] bg-[#F6F5F4] text-[#111110]">
-                      <TileIcon className="h-5 w-5" aria-hidden />
+                  <TileIcon className="h-5 w-5 shrink-0 text-[#084734]" aria-hidden />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[15px] font-bold text-[#111110] transition-colors group-hover:text-[#084734]">
+                      {tile.label}
                     </span>
-                    <span className="mt-3.5 block text-[11.5px] font-medium text-[#A39E98]">
-                      {tile.caption}
-                    </span>
-                    <span className="mt-0.5 block text-[15px] font-bold">{tile.label}</span>
-                    <span className="mt-1 block text-[13px] leading-5 text-[#615D59]">
+                    <span className="mt-0.5 block text-[13px] leading-5 text-[#615D59]">
                       {tile.description}
                     </span>
+                  </span>
+                  <span className="hidden shrink-0 text-[12px] text-[#A39E98] sm:block">
+                    {tile.caption}
                   </span>
                   <ArrowRight
                     className="h-4 w-4 shrink-0 text-[#A39E98] transition-all group-hover:translate-x-0.5 group-hover:text-[#084734]"
@@ -367,7 +360,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
 
       <Reveal as="section">
         <div className="section-warm mt-16 py-14 md:mt-24 md:py-16">
-          <div className="container grid items-center gap-10 md:grid-cols-[minmax(0,1fr)_380px]">
+          <div className="container grid items-start gap-10 md:grid-cols-[minmax(0,1fr)_360px]">
             <div>
               <p className={SECTION_EYEBROW}>설치가 필요하신가요</p>
               <h2 className="mt-3 break-keep text-[1.5rem] font-bold leading-[1.3] md:text-[1.75rem]">
@@ -381,7 +374,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
                 <TrackedLink
                   href="/download"
                   ctaId="docs_install_download"
-                  className={`inline-flex items-center gap-2 rounded-[8px] bg-[#084734] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] active:scale-[0.98] ${FOCUS_RING_WARM}`}
+                  className={`inline-flex items-center gap-2 rounded-[6px] bg-[#084734] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] active:scale-[0.98] ${FOCUS_RING_WARM}`}
                 >
                   <Download className="h-4 w-4" aria-hidden />
                   Classin 다운로드
@@ -390,19 +383,16 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
             </div>
 
             {installLinks.length > 0 && (
-              <div
-                className="rounded-[12px] border border-black/[0.08] bg-white p-5"
-                style={TILE_SHADOW}
-              >
+              <div className="border-t border-black/[0.08] pt-4 md:mt-1">
                 <p className="text-[11.5px] font-medium uppercase tracking-[0.14em] text-[#A39E98]">
                   설치 가이드
                 </p>
-                <div className="mt-3 divide-y divide-black/[0.06]">
+                <div className="mt-1 divide-y divide-black/[0.08]">
                   {installLinks.map((link) => (
                     <Link
                       key={link.href}
                       href={link.href}
-                      className={`group flex items-center justify-between gap-3 py-2.5 text-[13.5px] font-medium text-[#31302E] transition-colors hover:text-[#084734] ${FOCUS_RING_WHITE}`}
+                      className={`group flex items-center justify-between gap-3 py-3 text-[13.5px] text-[#31302E] transition-colors hover:text-[#084734] ${FOCUS_RING_WARM}`}
                     >
                       <span className="truncate">{link.title}</span>
                       <ArrowRight
@@ -419,15 +409,10 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
       </Reveal>
 
       <Reveal as="section" className="container mt-16 md:mt-24">
-        <p className={SECTION_EYEBROW}>그래도 해결되지 않았다면</p>
-        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
-          <div
-            className={`rounded-[12px] border border-black/[0.08] bg-white p-5 ${TILE_HOVER}`}
-            style={TILE_SHADOW}
-          >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border border-black/[0.06] bg-[#F6F5F4] text-[#111110]">
-              <MessageCircle className="h-5 w-5" aria-hidden />
-            </span>
+        <p className={`${SECTION_EYEBROW} mb-5`}>그래도 해결되지 않았다면</p>
+        <div className="grid gap-x-8 gap-y-9 sm:grid-cols-3">
+          <div className={RULE_BLOCK}>
+            <MessageCircle className="h-5 w-5 text-[#084734]" aria-hidden />
             <p className="mt-3.5 text-[15px] font-bold text-[#111110]">챗봇에게 바로 묻기</p>
             <p className="mt-1 text-[13px] leading-5 text-[#615D59]">
               가이드 내용을 학원 상황에 맞춰 바로 답합니다.
@@ -440,13 +425,8 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
             </DocsAskChatbotButton>
           </div>
 
-          <div
-            className={`rounded-[12px] border border-black/[0.08] bg-white p-5 ${TILE_HOVER}`}
-            style={TILE_SHADOW}
-          >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border border-black/[0.06] bg-[#F6F5F4] text-[#111110]">
-              <CircleHelp className="h-5 w-5" aria-hidden />
-            </span>
+          <div className={RULE_BLOCK}>
+            <CircleHelp className="h-5 w-5 text-[#084734]" aria-hidden />
             <p className="mt-3.5 text-[15px] font-bold text-[#111110]">자주 묻는 질문</p>
             <p className="mt-1 text-[13px] leading-5 text-[#615D59]">
               요금, 계정, 수업 운영에서 자주 나오는 질문 모음.
@@ -461,13 +441,8 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
             </TrackedLink>
           </div>
 
-          <div
-            className={`rounded-[12px] border border-black/[0.08] bg-white p-5 ${TILE_HOVER}`}
-            style={TILE_SHADOW}
-          >
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border border-black/[0.06] bg-[#F6F5F4] text-[#111110]">
-              <Headset className="h-5 w-5" aria-hidden />
-            </span>
+          <div className={RULE_BLOCK}>
+            <Headset className="h-5 w-5 text-[#084734]" aria-hidden />
             <p className="mt-3.5 text-[15px] font-bold text-[#111110]">도입·운영 상담</p>
             <p className="mt-1 text-[13px] leading-5 text-[#615D59]">
               우리 학원에 맞는 구성이 궁금하다면 상담으로 이어보세요.
