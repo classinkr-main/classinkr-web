@@ -1,0 +1,45 @@
+<svg viewBox="0 0 1440 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="수업 전 준비, 수업 중 진행, 수업 후 운영이 하나의 수업 OS 흐름으로 연결되는 개념 맵">
+<style>
+text{font-family:"Pretendard Variable",Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+.h{font-size:28px;fill:#111110;font-weight:600}
+.s{font-size:22px;fill:#615D59}
+.box{fill:#FFF;stroke:rgba(0,0,0,0.08);stroke-width:1.5}
+.ln{fill:none;stroke:#31302E;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.hl{fill:none;stroke:rgba(0,0,0,0.08);stroke-width:1.5}
+.ah{fill:#084734}
+</style>
+<rect class="box" x="100" y="140" width="360" height="300" rx="16"/>
+<rect class="box" x="540" y="140" width="360" height="300" rx="16"/>
+<rect class="box" x="980" y="140" width="360" height="300" rx="16"/>
+<text class="h" x="280" y="205" text-anchor="middle">수업 전 · 준비</text>
+<path class="hl" d="M130 232h300"/>
+<circle class="ah" cx="158" cy="278" r="4"/>
+<text class="s" x="178" y="286">EDB 교안 준비</text>
+<circle class="ah" cx="158" cy="328" r="4"/>
+<text class="s" x="178" y="336">수업 예약</text>
+<circle class="ah" cx="158" cy="378" r="4"/>
+<text class="s" x="178" y="386">수업 자료 정리</text>
+<text class="h" x="720" y="205" text-anchor="middle">수업 중 · 진행</text>
+<path class="hl" d="M570 232h300"/>
+<circle class="ah" cx="598" cy="278" r="4"/>
+<text class="s" x="618" y="286">전자칠판 판서</text>
+<circle class="ah" cx="598" cy="328" r="4"/>
+<text class="s" x="618" y="336">수업 녹화</text>
+<circle class="ah" cx="598" cy="378" r="4"/>
+<text class="s" x="618" y="386">수업 도구·상호작용</text>
+<text class="h" x="1160" y="205" text-anchor="middle">수업 후 · 운영</text>
+<path class="hl" d="M1010 232h300"/>
+<circle class="ah" cx="1038" cy="278" r="4"/>
+<text class="s" x="1058" y="286">다시보기 복습</text>
+<circle class="ah" cx="1038" cy="328" r="4"/>
+<text class="s" x="1058" y="336">LMS 숙제·시험</text>
+<circle class="ah" cx="1038" cy="378" r="4"/>
+<text class="s" x="1058" y="386">관리자 데이터</text>
+<path class="ln" d="M470 330h40"/>
+<path class="ah" d="M510 318l22 12-22 12z"/>
+<path class="ln" d="M910 330h40"/>
+<path class="ah" d="M950 318l22 12-22 12z"/>
+<path class="ln" d="M280 440v80M720 440v80M1160 440v80"/>
+<rect x="100" y="520" width="1240" height="90" rx="16" fill="#FFF" stroke="#084734" stroke-width="3"/>
+<text class="h" x="720" y="575" text-anchor="middle">Classin 수업 OS — 준비부터 데이터까지 한 흐름으로 연결</text>
+</svg>

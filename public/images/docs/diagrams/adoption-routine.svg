@@ -1,0 +1,43 @@
+<svg viewBox="0 0 1440 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="판서, 녹화, 다시보기 복습, LMS 숙제·시험으로 이어져 다시 판서로 돌아오는 수업 운영 루틴 루프">
+<style>
+text{font-family:"Pretendard Variable",Pretendard,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+.h{font-size:28px;fill:#111110;font-weight:600}
+.s{font-size:20px;fill:#615D59}
+.n{font-size:20px;fill:#084734;font-weight:700}
+.box{fill:#FFF;stroke:rgba(0,0,0,0.08);stroke-width:1.5}
+.ln{fill:none;stroke:#31302E;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.ah{fill:#084734}
+</style>
+<g transform="translate(0,30)">
+<rect class="box" x="170" y="90" width="340" height="170" rx="16"/>
+<rect class="box" x="930" y="90" width="340" height="170" rx="16"/>
+<rect class="box" x="930" y="440" width="340" height="170" rx="16"/>
+<rect class="box" x="170" y="440" width="340" height="170" rx="16"/>
+<circle cx="212" cy="132" r="17" fill="#FFF" stroke="#084734" stroke-width="3"/>
+<text class="n" x="212" y="139" text-anchor="middle">1</text>
+<text class="h" x="340" y="182" text-anchor="middle">전자칠판 판서</text>
+<text class="s" x="340" y="218" text-anchor="middle">실시간 수업은 판서 중심</text>
+<circle cx="972" cy="132" r="17" fill="#FFF" stroke="#084734" stroke-width="3"/>
+<text class="n" x="972" y="139" text-anchor="middle">2</text>
+<text class="h" x="1100" y="182" text-anchor="middle">수업 녹화</text>
+<text class="s" x="1100" y="218" text-anchor="middle">자동 녹화 상태 점검</text>
+<circle cx="972" cy="482" r="17" fill="#FFF" stroke="#084734" stroke-width="3"/>
+<text class="n" x="972" y="489" text-anchor="middle">3</text>
+<text class="h" x="1100" y="532" text-anchor="middle">다시보기 복습</text>
+<text class="s" x="1100" y="568" text-anchor="middle">결석·복습 학생에게 배포</text>
+<circle cx="212" cy="482" r="17" fill="#FFF" stroke="#084734" stroke-width="3"/>
+<text class="n" x="212" y="489" text-anchor="middle">4</text>
+<text class="h" x="340" y="532" text-anchor="middle">LMS 숙제·시험</text>
+<text class="s" x="340" y="568" text-anchor="middle">숙제·시험으로 루틴 완성</text>
+<path class="ln" d="M520 175h384"/>
+<path class="ah" d="M904 163l24 12-24 12z"/>
+<path class="ln" d="M1100 270v146"/>
+<path class="ah" d="M1088 416l12 24 12-24z"/>
+<path class="ln" d="M920 525H536"/>
+<path class="ah" d="M536 513l-24 12 24 12z"/>
+<path class="ln" d="M340 430V284"/>
+<path class="ah" d="M328 284l12-24 12 24z"/>
+<text class="h" x="720" y="340" text-anchor="middle">매주 반복하는</text>
+<text class="h" x="720" y="378" text-anchor="middle">수업 운영 루틴</text>
+</g>
+</svg>
