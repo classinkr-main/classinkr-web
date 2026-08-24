@@ -114,7 +114,7 @@ export default async function DocsCategoryPage({
   return (
     <div className="min-h-screen bg-[#FAFAF8] pt-28 pb-24 text-[#111110] md:pt-36">
       {query && <DocsSearchLogger query={query} resultCount={filteredDocs.length} />}
-      <section className="container">
+      <section className="container mx-auto max-w-[1080px] px-5">
         <Link
           href="/docs"
           className="inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-[#084734] active:scale-[0.98]"
@@ -167,21 +167,21 @@ export default async function DocsCategoryPage({
         <DocsCategoryNav items={categoryTabs} className="mt-8" />
       </section>
 
-      <section className="container mt-12">
+      <section className="container mx-auto max-w-[1080px] px-5 mt-12">
         <div className="border-t border-black/[0.08] pt-4">
-          <ul className="divide-y divide-black/[0.08]">
+          <ul className="divide-y divide-black/[0.06]">
             {(query ? filteredDocs : articleSummaries).map((article) => (
-              <li key={article.href} className="py-4">
+              <li key={article.href} className="py-5">
                 <Link href={article.href} className="group block origin-center transition-all duration-150 active:scale-[0.98] active:opacity-90">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="break-words text-[15px] font-semibold text-[#111110] group-hover:text-[#084734]">
+                      <p className="break-words text-[16px] font-semibold text-[#111110] group-hover:text-[#084734]">
                         <SearchHighlight text={article.title} query={q} />
                       </p>
-                      <p className="mt-1 max-w-3xl break-words text-sm leading-6 text-[#615D59]">
+                      <p className="mt-1.5 max-w-3xl break-words text-[15px] leading-[26px] text-[#4F4C49]">
                         <SearchHighlight text={article.description} query={q} />
                       </p>
-                      <p className="mt-2 text-xs text-[#A39E98]">
+                      <p className="mt-2.5 text-[13px] text-[#615D59]">
                         {article.readTime} · {article.updatedAt}
                         {article.tags?.length ? ` · ${article.tags.join(" / ")}` : ""}
                       </p>
