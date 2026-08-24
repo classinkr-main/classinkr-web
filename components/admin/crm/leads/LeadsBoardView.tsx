@@ -142,6 +142,7 @@ export default function LeadsBoardView({
   crossColumnFilter,
   selectedId,
   onSelect,
+  onFocusColumn,
   now,
 }: {
   /** 그릴 카드 — 상위에서 정렬·필터를 마친 결과 */
@@ -154,6 +155,8 @@ export default function LeadsBoardView({
   crossColumnFilter: boolean
   selectedId?: string
   onSelect: (lead: LeadRecord) => void
+  /** 컬럼 헤더 클릭 — 이미 포커스된 컬럼을 다시 누르면 해제된다 */
+  onFocusColumn: (key: BoardColumnKey | null) => void
   now: Date
 }) {
   // 종료는 기본으로 접는다 — 폭 예산에서 활성 컬럼 하나와 맞바꾸는 값이라 항상 펼쳐 둘 자리가 없다.
@@ -175,11 +178,16 @@ export default function LeadsBoardView({
               type="button"
               onClick={() => setClosedOpen(true)}
               aria-expanded={false}
-              className="flex w-16 shrink-0 flex-col items-center gap-3 rounded-xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] py-3 text-[#1a1a1a]/45 transition-colors hover:border-[#c8c8c4]"
+              title={`종료 ${total.toLocaleString("ko-KR")}건 펼치기`}
+              className="group flex w-16 shrink-0 flex-col items-stretch text-[#1a1a1a]/45"
             >
-              <span className="text-[13px] font-bold tabular-nums text-[#111110]">{total}</span>
-              <span className="text-[12px] font-semibold [writing-mode:vertical-rl]">
-                {BOARD_COLUMN_LABEL.closed} · 펼치기
+              <span className="mb-2.5 flex h-9 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[13px] font-bold tabular-nums text-[#111110] transition-colors group-hover:border-[#c8c8c4]">
+                {total}
+              </span>
+              <span className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] py-4 transition-colors group-hover:border-[#c8c8c4]">
+                <span className="text-[12px] font-semibold [writing-mode:vertical-rl]">
+                  {BOARD_COLUMN_LABEL.closed} · 펼치기
+                </span>
               </span>
             </button>
           )
@@ -190,13 +198,18 @@ export default function LeadsBoardView({
             key={key}
             className={`flex w-[272px] shrink-0 flex-col transition-opacity ${dimmed ? "opacity-60" : ""}`}
           >
-            <div
-              className={`mb-2.5 flex h-9 items-center gap-2 rounded-lg border px-3 ${
-                key === "unconfirmed"
-                  ? "border-[#ECD29C] bg-[#FBF1E0]"
-                  : focus === key
-                    ? "border-[#111110] bg-white"
-                    : "border-[#e8e8e4] bg-white"
+            {/* 헤더가 곧 포커스 컨트롤 — 상태 축 필터 카드를 내린 자리를 직접 조작이 대신한다. */}
+            <button
+              type="button"
+              onClick={() => onFocusColumn(focus === key ? null : key)}
+              aria-pressed={focus === key}
+              title={focus === key ? `${BOARD_COLUMN_LABEL[key]} 포커스 해제` : `${BOARD_COLUMN_LABEL[key]}만 강조`}
+              className={`mb-2.5 flex h-9 w-full items-center gap-2 rounded-lg border px-3 text-left transition-colors ${
+                focus === key
+                  ? "border-[#111110] bg-white"
+                  : key === "unconfirmed"
+                    ? "border-[#ECD29C] bg-white hover:border-[#d9b76f]"
+                    : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4]"
               }`}
             >
               <span
@@ -213,7 +226,7 @@ export default function LeadsBoardView({
                 // 콘솔 기본 목록은 확인 게이트로 이 리드들을 숨긴다 — 숫자가 달라지는 이유를 배지로 드러낸다.
                 <span
                   title="콘솔 기본 목록의 확인 게이트 밖에 있는 리드입니다."
-                  className="rounded bg-[#f0f0ec] px-1.5 py-0.5 text-[11px] font-semibold text-[#31302E]"
+                  className="rounded border border-[#ECD29C] bg-[#FBF1E0] px-1.5 py-0.5 text-[11px] font-semibold text-[#7A520F]"
                 >
                   게이트 밖
                 </span>
@@ -228,16 +241,25 @@ export default function LeadsBoardView({
                 <span className="text-[11px] tabular-nums text-[#1a1a1a]/35">/{total}</span>
               ) : null}
               {key === "closed" ? (
-                <button
-                  type="button"
-                  onClick={() => setClosedOpen(false)}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setClosedOpen(false)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return
+                    event.preventDefault()
+                    event.stopPropagation()
+                    setClosedOpen(false)
+                  }}
                   className="rounded px-1 text-[11px] text-[#1a1a1a]/40 transition-colors hover:text-[#111110]"
-                  aria-expanded
                 >
                   접기
-                </button>
+                </span>
               ) : null}
-            </div>
+            </button>
 
             {/* 컬럼별 독립 스크롤 — 보드 전체가 페이지를 늘려 컬럼 헤더가 사라지는 것을 막는다.
                 가로 스크롤 컨테이너 안에서는 sticky 헤더가 뷰포트에 붙지 않으므로(overflow-x가

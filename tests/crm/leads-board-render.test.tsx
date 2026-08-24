@@ -119,6 +119,17 @@ describe("뷰 축 — 콘솔 ↔ 보드", () => {
     expect(html).toContain("게이트 밖")
   })
 
+  it("보드는 상태 축 필터 카드를 내리고 직교 축 5개만 남긴다", () => {
+    // 상태 축(미확인·신규·연락중·전환·종료)은 바로 아래 컬럼이 이미 그린다 —
+    // 한 화면에 같은 축을 두 번 두지 않고, 그 자리는 컬럼 헤더 클릭이 대신한다.
+    const board = render("view=board")
+    const console_ = render()
+    const count = (html: string, marker: string) => html.split(marker).length - 1
+    expect(count(console_, "min-h-[62px]")).toBe(10)
+    expect(count(board, "min-h-[54px]")).toBe(5)
+    expect(count(board, "min-h-[62px]")).toBe(0)
+  })
+
   it("모르는 view 값은 콘솔로 떨어진다", () => {
     const html = render("view=kanban")
     expect(html).toContain("단계별 현황")

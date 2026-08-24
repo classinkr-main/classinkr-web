@@ -1930,6 +1930,14 @@ export default function LeadsBoardClient() {
     showToast(`${filtered.length}건을 CSV로 내보냈습니다.`)
   }
 
+  // 보드에서는 상태 축 카드(미확인·신규·연락중·전환·종료)를 내린다 — 바로 아래 컬럼이 같은 축을
+  // 이미 그리고 있어 한 화면에 두 번 나온다. 그 자리는 컬럼 헤더 클릭(포커스)이 대신하고,
+  // 카드로 남는 건 컬럼을 가로지르는 직교 축(응대·배정)뿐이다.
+  const visibleFilterCards =
+    view === "console"
+      ? filterCards
+      : filterCards.filter((item) => item.key === "all" || appliesAcrossBoardColumns(item.key))
+
   return (
     <div data-admin-crm>
       {/* 헤더 */}
@@ -1940,10 +1948,11 @@ export default function LeadsBoardClient() {
           <p className="mt-1 text-[13px] text-[#1a1a1a]/42">신규 유입 → 응대 → 전환 파이프라인</p>
           {/* 뷰 축은 제목 아래 — 액션 줄에 섞으면 CSV·새로고침과 같은 무게가 된다.
               전환은 어떤 상태도 리셋하지 않고, 같은 filter 를 뷰마다 다르게 해석할 뿐이다. */}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
           <div
             role="tablist"
             aria-label="리드 보기 방식"
-            className="mt-3 inline-flex rounded-lg border border-[#e8e8e4] bg-white p-0.5"
+            className="inline-flex rounded-lg border border-[#e8e8e4] bg-white p-0.5"
           >
             {([
               { key: "console", label: "콘솔", icon: <ListIcon className="h-3.5 w-3.5" /> },
@@ -1963,6 +1972,29 @@ export default function LeadsBoardClient() {
                 {option.label}
               </button>
             ))}
+          </div>
+          {/* 보드에서만: 모집단 축(전체/마케팅)을 헤더로 끌어올린다. */}
+          {view === "board" ? (
+            <div className="inline-flex rounded-lg border border-[#e8e8e4] bg-white p-0.5">
+              {LENS_OPTIONS.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  title={option.hint}
+                  aria-pressed={lens === option.key}
+                  onClick={() => setLens(option.key)}
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[12px] font-semibold transition-colors ${
+                    lens === option.key ? "bg-[#f0f0ec] text-[#111110]" : "text-[#1a1a1a]/45 hover:text-[#111110]"
+                  }`}
+                >
+                  {option.label}
+                  <span className="tabular-nums text-[#1a1a1a]/40">
+                  {lensCounts[option.key].toLocaleString("ko-KR")}
+                  </span>
+                  </button>
+              ))}
+            </div>
+          ) : null}
           </div>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
@@ -2018,7 +2050,10 @@ export default function LeadsBoardClient() {
         </div>
       ) : null}
 
-      {/* 모아보기 렌즈 — 목록의 모집단을 정하는 최상위 축. 아래 상태·유입·검색 필터가 이 위에서 돈다. */}
+      {/* 모아보기 렌즈 — 목록의 모집단을 정하는 최상위 축. 아래 상태·유입·검색 필터가 이 위에서 돈다.
+          보드에서는 전폭 바 대신 헤더의 컴팩트 컨트롤이 같은 일을 한다 — 넓은 면을 채우는 요소를
+          컬럼과 경쟁시키지 않는다(DESIGN.md: 넓은 면은 뉴트럴, 채움은 액센트에만). */}
+      {view === "console" && (
       <div className="mb-4 flex flex-col gap-1.5 rounded-2xl border border-[#e8e8e4] bg-white p-2 sm:flex-row sm:items-stretch">
         {LENS_OPTIONS.map((option) => {
           const active = lens === option.key
@@ -2050,6 +2085,7 @@ export default function LeadsBoardClient() {
           )
         })}
       </div>
+      )}
 
       {/* 마케팅 렌즈에서는 단계·담당자 카드 자리를 트래킹 롤업이 대신한다(패널을 더하지 않고 바꿔 끼운다). */}
       {/* 보드 뷰에서는 단계가 컬럼으로 서므로 이 패널들을 내린다 — 같은 축을 두 번 그리지 않는다. */}
@@ -2245,13 +2281,23 @@ export default function LeadsBoardClient() {
         </div>
       )}
 
-      {/* 필터 카운트 카드 */}
-      <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-5 xl:grid-cols-10">
-        {filterCards.map((item) => (
+      {/* 필터 카운트 카드 — 숫자로 들어가는 단일 창구 */}
+      <div
+        className={
+          view === "console"
+            ? "mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-5 xl:grid-cols-10"
+            : // 보드에서는 5분할이라 셀 하나가 콘솔의 두 배 폭이 된다 — 활성 셀의 검은 채움이
+              // 컬럼보다 넓어지므로, 늘리지 않고 내용 폭(140px)에 맞춘 스트립으로 둔다.
+              "mb-4 flex flex-wrap gap-2"
+        }
+      >
+        {visibleFilterCards.map((item) => (
           <button
             key={item.key}
             onClick={() => setFilter(item.key)}
-            className={`min-h-[62px] rounded-xl border px-3 py-2.5 text-left transition-all ${
+            className={`rounded-xl border px-3 py-2 text-left transition-all ${
+              view === "console" ? "min-h-[62px]" : "min-h-[54px] w-[140px]"
+            } ${
               filter === item.key ? "border-[#111110] bg-[#111110] text-white" : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4] hover:shadow-sm"
             }`}
           >
@@ -2261,7 +2307,12 @@ export default function LeadsBoardClient() {
         ))}
       </div>
 
-      <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-3">
+      {/* 유입 칩 + 검색/정렬 — 보드에서는 박스 크롬을 걷어 컬럼과 상자가 겹쳐 보이지 않게 한다. */}
+      <div
+        className={`mb-4 ${
+          view === "console" ? "rounded-2xl border border-[#e8e8e4] bg-white p-3" : "border-b border-[#e8e8e4] pb-3"
+        }`}
+      >
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
         {sourceGroupChips.length > 0 && (
           <>
@@ -3016,6 +3067,7 @@ export default function LeadsBoardClient() {
           crossColumnFilter={boardCrossFilter}
           selectedId={selected?.id}
           onSelect={setSelected}
+          onFocusColumn={(key) => setFilter(key ?? "all")}
           now={now}
         />
       )}
