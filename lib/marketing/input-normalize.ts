@@ -8,6 +8,18 @@
 // 정직 규칙: 0 과 null(미입력)은 반드시 구분한다. 빈 입력은 "0 건"이 아니라 "아직 안 셈"이므로
 // null 을 돌려주고, 소비처(퍼널·경제성 계산)는 그 차이로 "—" 와 "0" 을 갈라 표시한다.
 
+// ── 이 모듈의 경계 (AdminMoneyInput 과 헷갈리기 쉬움) ──────────────────────────
+// 여기(clampCount·clampMoney)는 **이미 숫자꼴인 값**을 정규화한다 — `type="number"` 인풋의
+// e.target.value 나 코드가 만든 number 가 대상이다. 그래서 콤마가 섞인 문자열은 "비수치"로 보고
+// null 을 돌려준다(테스트로 고정된 계약).
+//
+// 반대로 사람이 타이핑·붙여넣기 한 **표시 형식 그대로의 텍스트**("12,000", 유니코드 빼기표,
+// 소수점 포함)를 읽어야 하면 `components/admin/AdminMoneyInput.tsx` 의 `parseMoneyInput` 을 써라.
+// 그쪽이 콤마·부호·소수 절단·상한까지 다룬다.
+//
+// 주의: 이 경계를 모른 채 포맷된 문자열을 clampMoney 에 넘기면 화면의 "12,000" 이 조용히
+// null(미입력)로 저장된다 — 이 파일이 막으려던 silent null 이 되살아난다.
+
 /** 입력값을 숫자로 읽어본다. 빈값/비수치는 null(미입력). */
 function toFiniteNumber(raw: string | number | null | undefined): number | null {
   if (raw == null) return null
