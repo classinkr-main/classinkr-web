@@ -37,11 +37,11 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
     <div className="min-h-screen bg-[#FAFAF8] pb-20 pt-28 text-[#111110] md:pb-24 md:pt-36">
       {query && <DocsSearchLogger query={query} resultCount={results.length} />}
 
-      <section className="container">
+      <section className="container mx-auto max-w-[1080px] px-5">
         <div className="max-w-3xl">
           <Link
             href="/docs"
-            className="inline-flex items-center gap-2 text-sm text-[#615D59] transition-colors hover:text-[#084734]"
+            className="inline-flex items-center gap-2 text-sm text-[#615D59] transition-colors hover:text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
           >
             <ArrowRight className="h-4 w-4 rotate-180" />
             가이드 홈으로
@@ -53,7 +53,7 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
           <form
             action="/docs/search"
             method="get"
-            className="mt-7 flex items-center gap-3 border-b border-black/[0.08] pb-4"
+            className="mt-7 flex items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-[#084734]/40"
           >
             <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
             <input
@@ -64,7 +64,10 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
               placeholder="궁금한 기능, 수업 준비, 문제 상황 검색"
               className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
             />
-            <button type="submit" className="shrink-0 text-sm font-semibold text-[#084734]">
+            <button
+              type="submit"
+              className="-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+            >
               검색
             </button>
           </form>
@@ -83,7 +86,7 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
               가이드 전체에서 검색합니다.
             </p>
           ) : results.length === 0 ? (
-            <div className="rounded-[20px] border border-black/[0.08] bg-white p-6">
+            <div className="rounded-lg border border-black/[0.08] bg-white p-6">
               <p className="text-[15px] font-semibold text-[#111110]">
                 “{query}”에 대한 결과를 찾지 못했습니다.
               </p>
@@ -93,7 +96,7 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
               </p>
               <Link
                 href={DOCS_CONTACT_HREF}
-                className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#084734] px-4 py-2.5 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5"
+                className="mt-4 inline-flex items-center gap-2 rounded-[6px] bg-[#084734] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
               >
                 상담 남기기
                 <ArrowRight className="h-4 w-4" />
@@ -105,17 +108,17 @@ export default async function DocsSearchPage({ searchParams }: DocsSearchPagePro
                 <li key={doc.href}>
                   <Link
                     href={doc.href}
-                    className="group block rounded-[20px] border border-black/[0.08] bg-white p-5 transition-colors hover:border-[#084734]/30"
+                    className="group block rounded-lg border border-black/[0.08] bg-white p-5 transition-colors hover:border-[#084734]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                   >
-                    <div className="flex items-center gap-2 text-[12px] text-[#084734]/70">
+                    <div className="flex items-center gap-2 text-[13px] text-[#615D59]">
                       {doc.category && <span>{doc.category}</span>}
                       {doc.category && <span>·</span>}
                       <span>{doc.readTime}</span>
                     </div>
-                    <h2 className="mt-2 text-lg font-semibold tracking-[-0.02em] text-[#111110]">
+                    <h2 className="mt-2 text-[16px] font-semibold tracking-[-0.02em] text-[#111110]">
                       <SearchHighlight text={doc.title} query={query} />
                     </h2>
-                    <p className="mt-1.5 line-clamp-2 text-sm leading-6 text-[#615D59]">
+                    <p className="mt-1.5 line-clamp-2 text-[15px] leading-[26px] text-[#615D59]">
                       <SearchHighlight text={doc.description} query={query} />
                     </p>
                   </Link>

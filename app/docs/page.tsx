@@ -188,7 +188,7 @@ export default async function DocsHomePage({ searchParams }: DocsHomePageProps) 
         </form>
 
         <div className="hero-soft-enter hero-soft-enter-actions mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <span className="text-xs text-[#A39E98]">자주 찾는 주제</span>
+          <span className="text-xs text-[#615D59]">자주 찾는 주제</span>
           {SEARCH_CHIPS.map((chip) => (
             <Link
               key={chip}

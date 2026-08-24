@@ -135,7 +135,7 @@ export default async function DocsCategoryPage({
           </p>
         </div>
 
-        <form action={`/docs/${categoryParam}`} method="get" className="mt-10 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4">
+        <form action={`/docs/${categoryParam}`} method="get" className="mt-10 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-[#084734]/40">
           <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
           <input
             name="q"
@@ -172,7 +172,7 @@ export default async function DocsCategoryPage({
           <ul className="divide-y divide-black/[0.06]">
             {(query ? filteredDocs : articleSummaries).map((article) => (
               <li key={article.href} className="py-5">
-                <Link href={article.href} className="group block origin-center transition-all duration-150 active:scale-[0.98] active:opacity-90">
+                <Link href={article.href} className="group block origin-center transition-all duration-150 active:scale-[0.98] active:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <p className="break-words text-[16px] font-semibold text-[#111110] group-hover:text-[#084734]">
@@ -203,14 +203,14 @@ export default async function DocsCategoryPage({
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <Link
                   href={searchFallbackHref}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                 >
                   전체 가이드에서 다시 검색
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
                 <Link
                   href={DOCS_CONTACT_HREF}
-                  className="inline-flex h-10 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-4 text-sm font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4]"
+                  className="inline-flex h-10 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-4 text-sm font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                 >
                   상담 남기기
                 </Link>
