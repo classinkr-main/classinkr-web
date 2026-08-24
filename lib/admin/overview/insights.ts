@@ -3,7 +3,8 @@
 // 모든 함수는 입력→출력 순수 함수이며, 현재 시각이 필요한 함수는 Date를 주입받는다(테스트 안정성).
 // W2-3(OV4): C2 revenue-core SSOT 전환의 선행 정지작업 — 신호 정의를 한 곳에서 검증한다.
 
-import { hoursBetween, isUnconfirmedLead, isUnrespondedLead } from "@/components/admin/crm/leads/shared"
+// 순수 규칙은 lib/crm/leads-board-state 가 정본 — 서버 집계가 컴포넌트를 import 하지 않는다.
+import { hoursBetween, isUnconfirmedLead, isUnrespondedLead } from "@/lib/crm/leads-board-state"
 import type { LeadRecord } from "@/lib/site-settings-types"
 import type { AdminIntegrationStatusResponse } from "@/lib/admin-integrations/types"
 import type { CalendarEvent } from "@/lib/calendar-data"
