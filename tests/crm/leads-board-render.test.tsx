@@ -125,9 +125,9 @@ describe("뷰 축 — 콘솔 ↔ 보드", () => {
     const board = render("view=board")
     const console_ = render()
     const count = (html: string, marker: string) => html.split(marker).length - 1
-    expect(count(console_, "min-h-[62px]")).toBe(10)
-    expect(count(board, "min-h-[54px]")).toBe(5)
-    expect(count(board, "min-h-[62px]")).toBe(0)
+    expect(count(console_, "min-h-[72px]")).toBe(10)
+    expect(count(board, "min-h-[64px]")).toBe(5)
+    expect(count(board, "min-h-[72px]")).toBe(0)
   })
 
   it("모르는 view 값은 콘솔로 떨어진다", () => {

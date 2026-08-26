@@ -195,9 +195,6 @@ function CrmActivityClientInner() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">
-            Admin · CRM · 기록
-          </p>
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">기록</h1>
           <p className="mt-1 text-[13px] text-[#1a1a1a]/45">
             녹음파일, 간단 회의록, 고객 메모를 ClassIn 고객 DB의 운영 기록으로 모읍니다.

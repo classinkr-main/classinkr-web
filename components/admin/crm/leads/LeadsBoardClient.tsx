@@ -1943,7 +1943,6 @@ export default function LeadsBoardClient() {
       {/* 헤더 */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin · CRM · 고객</p>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">리드</h1>
           <p className="mt-1 text-[13px] text-[#1a1a1a]/42">신규 유입 → 응대 → 전환 파이프라인</p>
           {/* 뷰 축은 제목 아래 — 액션 줄에 섞으면 CSV·새로고침과 같은 무게가 된다.
@@ -2291,20 +2290,49 @@ export default function LeadsBoardClient() {
               "mb-4 flex flex-wrap gap-2"
         }
       >
-        {visibleFilterCards.map((item) => (
-          <button
-            key={item.key}
-            onClick={() => setFilter(item.key)}
-            className={`rounded-xl border px-3 py-2 text-left transition-all ${
-              view === "console" ? "min-h-[62px]" : "min-h-[54px] w-[140px]"
-            } ${
-              filter === item.key ? "border-[#111110] bg-[#111110] text-white" : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4] hover:shadow-sm"
-            }`}
-          >
-            <p className={`text-[11px] font-medium mb-0.5 ${filter === item.key ? "text-white/60" : "text-[#1a1a1a]/40"}`}>{item.label}</p>
-            <p className="text-xl font-bold tabular-nums">{item.count}</p>
-          </button>
-        ))}
+        {visibleFilterCards.map((item) => {
+          const isActive = filter === item.key
+          // 게이트 면제 필터는 미확인 리드까지 세므로 '전체'와 분모가 다르다 — 그래서
+          // 전체 107 옆에 응대 전 188 이 설 수 있다. 숫자만 키우면 고장으로 읽히니 표식을 단다.
+          // '미확인 포함'이 켜지면 모든 카드가 같은 모집단을 세므로 표식도 사라진다.
+          const offGate = !includeUnconfirmed && CONFIRMATION_GATE_EXEMPT_FILTERS.has(item.key)
+          // 숫자 색이 곧 위계 — 응대 지연은 붉게, 미검토는 노랗게, 나머지는 중립.
+          const tone =
+            item.count === 0
+              ? "text-[#1a1a1a]/30"
+              : item.key === "unresponded" || item.key === "unresponded_24h" || item.key === "unresponded_48h"
+                ? "text-[#B85C33]"
+                : item.key === "unconfirmed"
+                  ? "text-[#7A520F]"
+                  : "text-[#111110]"
+          return (
+            <button
+              key={item.key}
+              onClick={() => setFilter(item.key)}
+              aria-pressed={isActive}
+              title={offGate ? `${item.label} — 확인 게이트 밖(미확인) 리드까지 포함한 수` : undefined}
+              className={`rounded-xl border px-3 py-2.5 text-left transition-all ${
+                view === "console" ? "min-h-[72px]" : "min-h-[64px] w-[140px]"
+              } ${
+                isActive ? "border-[#111110] bg-[#111110] text-white" : "border-[#e8e8e4] bg-white hover:border-[#c8c8c4] hover:shadow-sm"
+              }`}
+            >
+              <p className={`text-[28px] font-bold leading-none tracking-[-0.03em] tabular-nums ${isActive ? "text-white" : tone}`}>
+                {item.count.toLocaleString("ko-KR")}
+              </p>
+              <p className={`mt-1.5 flex items-center gap-1 text-[11px] font-medium ${isActive ? "text-white/60" : "text-[#1a1a1a]/45"}`}>
+                {item.label}
+                {offGate ? (
+                  <span
+                    aria-hidden
+                    className="inline-block h-[5px] w-[5px] shrink-0 rounded-full"
+                    style={{ backgroundColor: isActive ? "rgba(255,255,255,0.55)" : "#ECD29C" }}
+                  />
+                ) : null}
+              </p>
+            </button>
+          )
+        })}
       </div>
 
       {/* 유입 칩 + 검색/정렬 — 보드에서는 박스 크롬을 걷어 컬럼과 상자가 겹쳐 보이지 않게 한다. */}

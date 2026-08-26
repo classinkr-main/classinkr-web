@@ -73,7 +73,7 @@ function LeadCard({
           {lead.name ?? lead.org ?? "이름 없음"}
         </span>
         <span
-          className={`inline-flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+          className={`inline-flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-bold tabular-nums ${
             score >= 70 ? "bg-[#ECFDF5] text-[#084734]" : "bg-[#f0f0ec] text-[#1a1a1a]/60"
           }`}
         >
@@ -181,7 +181,7 @@ export default function LeadsBoardView({
               title={`종료 ${total.toLocaleString("ko-KR")}건 펼치기`}
               className="group flex w-16 shrink-0 flex-col items-stretch text-[#1a1a1a]/45"
             >
-              <span className="mb-2.5 flex h-9 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[13px] font-bold tabular-nums text-[#111110] transition-colors group-hover:border-[#c8c8c4]">
+              <span className="mb-2.5 flex h-11 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[17px] font-bold leading-none tracking-[-0.02em] tabular-nums text-[#111110] transition-colors group-hover:border-[#c8c8c4]">
                 {total}
               </span>
               <span className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] py-4 transition-colors group-hover:border-[#c8c8c4]">
@@ -204,7 +204,7 @@ export default function LeadsBoardView({
               onClick={() => onFocusColumn(focus === key ? null : key)}
               aria-pressed={focus === key}
               title={focus === key ? `${BOARD_COLUMN_LABEL[key]} 포커스 해제` : `${BOARD_COLUMN_LABEL[key]}만 강조`}
-              className={`mb-2.5 flex h-9 w-full items-center gap-2 rounded-lg border px-3 text-left transition-colors ${
+              className={`mb-2.5 flex h-11 w-full items-center gap-2 rounded-lg border px-3 text-left transition-colors ${
                 focus === key
                   ? "border-[#111110] bg-white"
                   : key === "unconfirmed"
@@ -233,12 +233,16 @@ export default function LeadsBoardView({
               ) : null}
               {/* 두 숫자는 직교 필터가 걸려 있을 때만 — 필터가 없으면 n과 N이 같아 군더더기다. */}
               <span
-                className={`text-[14px] font-bold tabular-nums ${key === "unconfirmed" ? "text-[#7A520F]" : "text-[#111110]"}`}
+                className={`text-[19px] font-bold leading-none tracking-[-0.02em] tabular-nums ${
+                  key === "unconfirmed" ? "text-[#7A520F]" : "text-[#111110]"
+                }`}
               >
-                {crossColumnFilter ? cards.length : total}
+                {(crossColumnFilter ? cards.length : total).toLocaleString("ko-KR")}
               </span>
               {crossColumnFilter ? (
-                <span className="text-[11px] tabular-nums text-[#1a1a1a]/35">/{total}</span>
+                <span className="text-[11px] leading-none tabular-nums text-[#1a1a1a]/35">
+                  /{total.toLocaleString("ko-KR")}
+                </span>
               ) : null}
               {key === "closed" ? (
                 <span

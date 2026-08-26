@@ -1644,7 +1644,6 @@ export default function CrmPage() {
     <div>
       {/* 헤더 — 타이틀만. 액션은 아래 sticky 빠른 실행 바로 이동(H2) */}
       <div className="mb-4">
-        <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin · CRM</p>
         <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">CRM 홈</h1>
         <p className="mt-1 text-[13px] text-[#1a1a1a]/42">
           ClassIn 고객 DB 기준 · 시트와 외부 CRM은 동기화 참고자료
