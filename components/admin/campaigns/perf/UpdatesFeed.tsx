@@ -48,12 +48,32 @@ export function UpdatesFeed({
   const [savedFlash, setSavedFlash] = useState(false)
   const bodyRef = useRef<HTMLTextAreaElement | null>(null)
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 빈 상태 CTA로 폼을 열었을 때만 본문에 포커스를 옮긴다. 헤더의 "업데이트 남기기" 토글은
+  // 캠페인·종류부터 고르는 흐름이라 포커스를 빼앗지 않는다(기존 동작 보존).
+  const focusBodyOnOpenRef = useRef(false)
 
   useEffect(() => {
     return () => {
       if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
     }
   }, [])
+
+  // textarea 는 formOpen 이 true 가 된 뒤에야 마운트되므로 포커스는 렌더 후로 미룬다.
+  useEffect(() => {
+    if (!formOpen || !focusBodyOnOpenRef.current) return
+    focusBodyOnOpenRef.current = false
+    bodyRef.current?.focus()
+  }, [formOpen])
+
+  function startFirstEntry() {
+    // 이미 열려 있으면 상태가 안 바뀌어 위 effect 가 안 돌므로 여기서 바로 포커스한다.
+    if (formOpen) {
+      bodyRef.current?.focus()
+      return
+    }
+    focusBodyOnOpenRef.current = true
+    setFormOpen(true)
+  }
 
   const effectiveCampaignId = campaignId || campaignOptions[0]?.id || ""
 
@@ -83,7 +103,8 @@ export function UpdatesFeed({
   }
 
   return (
-    <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5" aria-label="캠페인 업데이트 피드">
+    // 참조·입력용 카드라 배경을 판단 카드(브리핑·스코어보드)보다 한 단 물린다.
+    <section className="rounded-2xl border border-[#f0f0ec] bg-[#fdfdfc] p-4 sm:p-5" aria-label="캠페인 업데이트 피드">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-[14px] font-semibold text-[#111110]">업데이트 피드</h2>
@@ -194,9 +215,29 @@ export function UpdatesFeed({
       )}
 
       {updates.length === 0 ? (
-        <p className="mt-4 rounded-xl bg-[#fafaf8] py-8 text-center text-[12px] text-[#A39E98]">
-          아직 기록된 업데이트가 없습니다 — 첫 진행상황을 남겨보세요.
-        </p>
+        // 빈 상태가 오래 유지되는 카드라 한 줄 안내 대신 다음 행동을 거는 자리로 쓴다.
+        // 설명 문구는 사실이다 — insights/input-builder 가 perf.updatesFeed 최근 10건을
+        // 브리핑 입력 JSON 의 updates 로 실어 보내고, 프롬프트도 "팀 업데이트 로그"를 근거로 명시한다.
+        <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-dashed border-[#e8e8e4] bg-[#fafaf8] px-4 py-7 text-center">
+          <EmptyLogMark />
+          <div>
+            <p className="text-[12px] font-semibold text-[#111110]">아직 기록된 업데이트가 없습니다</p>
+            <p className="mx-auto mt-1 max-w-[19rem] text-[11px] leading-relaxed text-[#615D59]">
+              소재 교체·타깃 변경 같은 작업을 남기면 다음 AI 브리핑이 그 맥락까지 읽습니다.
+            </p>
+          </div>
+          {/* 폼이 이미 열려 있으면 바로 위에 "기록 저장"이 있어 중복이다 — 닫혀 있을 때만 노출. */}
+          {!formOpen && (
+            <button
+              type="button"
+              onClick={startFirstEntry}
+              disabled={campaignOptions.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-md bg-[#084734] px-3 py-1.5 text-[12px] font-bold text-white transition hover:bg-[#065c41] disabled:opacity-50"
+            >
+              첫 기록 남기기
+            </button>
+          )}
+        </div>
       ) : (
         <ul className="mt-2 divide-y divide-[#f0f0ec]">
           {updates.map((update) => (
@@ -219,5 +260,32 @@ export function UpdatesFeed({
         </ul>
       )}
     </section>
+  )
+}
+
+// 빈 상태 라인아트 — 기록(문서) + 추가(+). stroke 만 쓰고 채움은 없다(파스텔 채움 지양).
+// 그린은 "추가" 배지 한 점에만 액센트로 들어가고, 카드·본문 줄은 뉴트럴 두 단계로 물러난다.
+// 배지를 문서와 겹치지 않게 오른쪽 하단에 붙여 세웠다 — 겹치면 선끼리 교차해 지저분해지고,
+// 그걸 가리려면 배경색 채움이 필요해진다.
+function EmptyLogMark() {
+  return (
+    <svg
+      width="56"
+      height="46"
+      viewBox="0 0 56 46"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect x="5.5" y="5.5" width="30" height="35" rx="4" stroke="#d8d6cf" strokeWidth="1.25" />
+      <path
+        d="M12 16h17M12 23h17M12 30h10"
+        stroke="#e8e8e4"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <circle cx="43" cy="33" r="7" stroke="#084734" strokeWidth="1.25" />
+      <path d="M43 29.5v7M39.5 33h7" stroke="#084734" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
   )
 }
