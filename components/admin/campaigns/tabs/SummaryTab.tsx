@@ -385,6 +385,9 @@ function KpiTileSkeleton() {
       <Skeleton className="mb-1.5 h-2.5 w-20" />
       <Skeleton className="h-5 w-16" />
       <Skeleton className="mt-2 h-2.5 w-24" />
+      {/* 스파크라인 자리 — 타일 일부가 미니 추이를 그려 그리드 행 전체가 그만큼 높아진다.
+          자리를 비워두면 콜드로드 → 실데이터 전환에서 스트립이 통째로 밀린다. */}
+      <Skeleton className="mt-3 h-[28px] w-full" />
     </div>
   )
 }
@@ -562,7 +565,15 @@ export default function SummaryTab({
             {/* 좌측 — 숫자 밀도 */}
             <div className="contents xl:flex xl:flex-col xl:gap-4">
               <div className="order-1">
-                <KpiStrip kpis={data.kpis} />
+                {/* 스파크라인 원천 2종을 함께 넘긴다 — 광고비는 Meta 일자 스냅샷(daily),
+                    리드는 우리 leads 테이블 축(leadDailyBySource, 0 채움에 period 필요). */}
+                <KpiStrip
+                  kpis={data.kpis}
+                  daily={data.daily}
+                  leadDailyBySource={data.leadDailyBySource}
+                  period={data.period}
+                  adLeads={data.funnel.adLeads}
+                />
               </div>
               <div className="order-3">
                 <DailyTrendSection
