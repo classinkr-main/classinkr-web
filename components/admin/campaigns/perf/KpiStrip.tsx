@@ -189,76 +189,106 @@ export function KpiStrip({
 
   // 콕핏 레이아웃(2026-08)에서 xl 이상은 우측 384px 레일과 폭을 나눠 쓴다 — 5칸이 그 좁아진
   // 폭에서 부러지지 않도록 5열 전환을 2xl(레일 뺀 폭도 충분히 넓어지는 지점)로 늦췄다.
+  //
+  // 정렬(2026-08-26): 5는 1·5 외의 어떤 열 수로도 나눠떨어지지 않는다. 3열에 두면 2행에 빈 칸이
+  // 남고 행 높이까지 갈렸다(실측 176px vs 141px). 6열 그리드에 span 을 줘 두 행을 각각 꽉 채운다 —
+  // 위 3칸 = 핵심 성과(광고비·리드·CPL), 아래 2칸 = 보조(전환율·예산). 2xl 부터는 한 줄 5칸.
+  // 타일은 span 래퍼 안에서 [&>*]:h-full 로 행 높이를 채운다 — StatTile 은 className 을 받지
+  // 않는다(공용 프리미티브의 시각 규율을 깨지 않으려고 래퍼로 처리).
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-6 2xl:grid-cols-5">
       {/* href 를 주면 StatTile 이 카드 전체를 Link 로 감싸며 hover-lift 시각을 자동 적용한다
           (lift prop 은 href 가 있을 때 중복이라 넘기지 않는다). */}
-      <StatTile
-        compact
-        icon={<Wallet className="h-3.5 w-3.5" />}
-        label="광고비 · Meta USD"
-        value={kpis.spendUsd.value != null ? money(kpis.spendUsd.value, "USD") : "—"}
-        hint={<DeltaHint kpi={kpis.spendUsd} valence="none" />}
-        href={metaTabHref}
-        sparkline={
-          hasShape(spendSeries) ? (
-            // 광고비는 맥락일 뿐 강조 대상이 아니다 — 중립 톤으로 뒤에 둔다.
-            <Sparkline data={spendSeries} tone="neutral" height={SPARK_HEIGHT} />
-          ) : undefined
-        }
-      />
-      <StatTile
-        compact
-        icon={<Users className="h-3.5 w-3.5" />}
-        label="리드"
-        value={kpis.leads.value != null ? COUNT.format(kpis.leads.value) : "—"}
-        hint={<DeltaHint kpi={kpis.leads} valence="up-good" />}
-        tone="brand"
-        href={LEADS_BOARD_HREF}
-        sparkline={
-          hasShape(leadSeries) ? (
-            <Sparkline data={leadSeries} tone="brand" height={SPARK_HEIGHT} />
-          ) : undefined
-        }
-      />
-      <StatTile
-        compact
-        icon={<Target className="h-3.5 w-3.5" />}
-        label="CPL 실측 · USD"
-        value={kpis.cplUsd.value != null ? money(kpis.cplUsd.value, "USD") : "—"}
-        // 스파크라인 없음(파일 상단 정직 규칙) — 개선/악화는 델타 힌트가 말한다.
-        // 델타가 개선(감소)이면 힌트가 이미 그린이다. 타일 톤까지 물들이지는 않는다(과함).
-        hint={<DeltaHint kpi={kpis.cplUsd} valence="down-good" />}
-      />
-      <StatTile
-        compact
-        icon={<TrendingUp className="h-3.5 w-3.5" />}
-        label="리드 전환율"
-        value={
-          kpis.leadConversionRate.value != null
-            ? `${PCT1.format(kpis.leadConversionRate.value)}%`
-            : "—"
-        }
-        tone={conversionStalled ? "danger" : undefined}
-        hint={
-          <span className="inline-flex flex-wrap items-center gap-x-1.5">
-            <DeltaHint kpi={kpis.leadConversionRate} valence="up-good" />
-            <span className="text-[#1a1a1a]/35">광고 리드 기준</span>
-          </span>
-        }
-      />
-      {kpis.budgetExecutionPct.value != null ? (
+      <div className="sm:col-span-2 2xl:col-span-1 [&>*]:h-full">
         <StatTile
           compact
-          icon={<Gauge className="h-3.5 w-3.5" />}
-          label="예산 집행률 · KRW 축"
-          value={`${PCT1.format(kpis.budgetExecutionPct.value)}%`}
-          // 배정·집행이 기간 개념 없는 수기 누적값이라 delta 는 계약상 항상 null — 비교를 시도하지 않는다.
-          hint="KRW 배정 대비 수기 집행 · 기간 비교 없음"
+          icon={<Wallet className="h-3.5 w-3.5" />}
+          label="광고비 · Meta USD"
+          value={kpis.spendUsd.value != null ? money(kpis.spendUsd.value, "USD") : "—"}
+          hint={<DeltaHint kpi={kpis.spendUsd} valence="none" />}
+          href={metaTabHref}
+          sparkline={
+            hasShape(spendSeries) ? (
+              // 광고비는 맥락일 뿐 강조 대상이 아니다 — 중립 톤으로 뒤에 둔다.
+              <Sparkline data={spendSeries} tone="neutral" height={SPARK_HEIGHT} />
+            ) : undefined
+          }
         />
-      ) : (
-        <BudgetEmptyTile href={metaTabHref} />
-      )}
+      </div>
+
+      <div className="sm:col-span-2 2xl:col-span-1 [&>*]:h-full">
+        <StatTile
+          compact
+          icon={<Users className="h-3.5 w-3.5" />}
+          label="리드"
+          value={kpis.leads.value != null ? COUNT.format(kpis.leads.value) : "—"}
+          hint={<DeltaHint kpi={kpis.leads} valence="up-good" />}
+          tone="brand"
+          href={LEADS_BOARD_HREF}
+          sparkline={
+            hasShape(leadSeries) ? (
+              <Sparkline data={leadSeries} tone="brand" height={SPARK_HEIGHT} />
+            ) : undefined
+          }
+        />
+      </div>
+
+      {/* 3번째 칸만 base(2열)에서 col-span-2 다 — 1·2번이 첫 줄을 채우고 나면 혼자 남아
+          모바일에서 구멍이 생긴다. 전폭으로 눕혀 어느 폭에서도 빈 칸이 없게 한다. */}
+      <div className="col-span-2 2xl:col-span-1 [&>*]:h-full">
+        <StatTile
+          compact
+          icon={<Target className="h-3.5 w-3.5" />}
+          label="CPL 실측 · USD"
+          value={kpis.cplUsd.value != null ? money(kpis.cplUsd.value, "USD") : "—"}
+          // 스파크라인 없음(파일 상단 정직 규칙) — 개선/악화는 델타 힌트가 말한다.
+          // 델타가 개선(감소)이면 힌트가 이미 그린이다. 타일 톤까지 물들이지는 않는다(과함).
+          hint={<DeltaHint kpi={kpis.cplUsd} valence="down-good" />}
+          // 슬롯을 비우면 스파크라인 있는 옆 타일과 높이가 갈려 35px 죽은 공간이 남았다.
+          // 채우되 없는 선을 지어내지 않는다 — 같은 자리에 "왜 없는지"를 둔다(상단 정직 규칙).
+          sparkline={
+            <p className="flex h-[28px] items-end text-[10px] leading-tight text-[#1a1a1a]/30">
+              일자별 추이 없음 · 분모 정의 불일치
+            </p>
+          }
+        />
+      </div>
+
+      <div className="col-span-2 sm:col-span-3 2xl:col-span-1 [&>*]:h-full">
+        <StatTile
+          compact
+          icon={<TrendingUp className="h-3.5 w-3.5" />}
+          label="리드 전환율"
+          value={
+            kpis.leadConversionRate.value != null
+              ? `${PCT1.format(kpis.leadConversionRate.value)}%`
+              : "—"
+          }
+          tone={conversionStalled ? "danger" : undefined}
+          hint={
+            <span className="inline-flex flex-wrap items-center gap-x-1.5">
+              <DeltaHint kpi={kpis.leadConversionRate} valence="up-good" />
+              <span className="text-[#1a1a1a]/35">광고 리드 기준</span>
+            </span>
+          }
+        />
+      </div>
+
+      <div className="col-span-2 sm:col-span-3 2xl:col-span-1 [&>*]:h-full">
+        {kpis.budgetExecutionPct.value != null ? (
+          <StatTile
+            compact
+            icon={<Gauge className="h-3.5 w-3.5" />}
+            label="예산 집행률 · KRW 축"
+            value={`${PCT1.format(kpis.budgetExecutionPct.value)}%`}
+            // 배정·집행이 기간 개념 없는 수기 누적값이라 delta 는 계약상 항상 null — 비교를 시도하지 않는다.
+            hint="KRW 배정 대비 수기 집행 · 기간 비교 없음"
+          />
+        ) : (
+          <BudgetEmptyTile href={metaTabHref} />
+        )}
+      </div>
+
     </div>
   )
 }

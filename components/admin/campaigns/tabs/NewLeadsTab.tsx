@@ -48,6 +48,7 @@ import {
   describeLeadActionError,
   filterNewLeads,
   isNewLeadRangePreset,
+  kstDateKey,
   kstToday,
   parseSourceGroupParam,
   resolveLeadDateRange,
@@ -219,6 +220,44 @@ export default function NewLeadsTab({ leads, loading, error, onLeadUpdated }: Ne
 
   const rows = visible.slice(0, list.visible)
 
+  // ─── 상단 수치 ───────────────────────────────────────────────
+  // 아래 칩·검색과 달리 **기간 전체**를 말한다(inRange 기준) — 검색어를 칠 때마다 상단 숫자가
+  // 같이 흔들리면 "이 기간에 몇 건 들어왔나"라는 기준선이 사라진다. 목록 위 요약 줄이
+  // 필터 적용 건수를 따로 말하므로 역할이 겹치지 않는다.
+  // 값은 전부 이미 가진 배열에서 세기만 한다 — 새로 만들어 내는 수치는 없다.
+  const headStats = useMemo(() => {
+    const uncontacted = inRange.filter((lead) => !isContactedLead(lead)).length
+    // 기간이 오늘을 품을 때만 "오늘"이 의미 있다. 과거 구간을 골라 놓고 "오늘 0건"을 띄우면
+    // 참이지만 쓸모없는 숫자다 — 그때는 마지막 유입일을 대신 보여 준다(inRange 는 최신순).
+    const coversToday = range.since <= today && today <= range.until
+    const third = coversToday
+      ? {
+          label: "오늘 유입",
+          value: inRange.filter((lead) => kstDateKey(lead.timestamp) === today).length.toLocaleString("ko-KR"),
+          hint: today,
+        }
+      : {
+          label: "마지막 유입",
+          value: inRange[0] ? (kstDateKey(inRange[0].timestamp) ?? "—") : "—",
+          hint: "이 기간 안에서",
+        }
+    return [
+      {
+        label: "기간 유입",
+        value: inRange.length.toLocaleString("ko-KR"),
+        // MM-DD 압축 — 좁은 폭(모바일 114px)에서 연도까지 넣으면 잘린다. 연도 포함 전체 범위는
+        // 바로 아래 목록 요약 줄이 그대로 말하므로 여기서 빠져도 잃는 정보가 없다.
+        hint: `${range.since.slice(5)} ~ ${range.until.slice(5)}`,
+      },
+      {
+        label: "미연락",
+        value: uncontacted.toLocaleString("ko-KR"),
+        hint: inRange.length > 0 ? `전체의 ${Math.round((uncontacted / inRange.length) * 100)}%` : "—",
+      },
+      third,
+    ]
+  }, [inRange, range.since, range.until, today])
+
   return (
     <section className="mt-1">
       <header className="mb-4">
@@ -229,6 +268,22 @@ export default function NewLeadsTab({ leads, loading, error, onLeadUpdated }: Ne
           광고비·CPL 옆에서 보는 유료 유입과 CRM 딜 전환은 <span className="font-semibold">광고</span> 탭의 광고 리드 섹션이 담당한다.
         </p>
       </header>
+
+      {/* 상단 수치 — 채움 없이 테두리·구분선만. 값은 tabular-nums 로 자릿수를 고정해
+          세 칸의 숫자 밑동이 같은 자리에서 시작하게 한다. */}
+      <div className="mb-3 grid grid-cols-3 divide-x divide-[#f0f0ec] overflow-hidden rounded-xl border border-[#e8e8e4] bg-white">
+        {headStats.map((stat) => (
+          <div key={stat.label} className="px-3.5 py-2.5 sm:px-4">
+            <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-[#A39E98]">
+              {stat.label}
+            </p>
+            <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] tabular-nums text-[#111110]">
+              {stat.value}
+            </p>
+            <p className="mt-1 truncate text-[10.5px] tabular-nums text-[#84827a]">{stat.hint}</p>
+          </div>
+        ))}
+      </div>
 
       {/* ─── 컨트롤 바 ─────────────────────────────────────────── */}
       <div className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] p-3">
