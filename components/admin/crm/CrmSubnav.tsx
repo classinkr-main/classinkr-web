@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 
 import { warmAdminRequestCache } from "@/lib/admin-client"
+import { CRM_CHILD_NAV } from "@/components/admin/admin-nav"
 
 type CrmSection = "home" | "customers" | "activity" | "deals" | "insights" | "sync"
 type DealsSub = "revenue" | "revSheet" | "orders" | "kpi"
@@ -128,12 +129,36 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
   const showDealsSub = section === "deals"
   const showCustomersSub = section === "customers"
 
-  if (!showCustomersSub && !showDealsSub) return null
-
+  // 1차 탭은 조건부일 수 없다 — CRM 하위 9개 화면 중 5개(현황·기록·입력함·검수·인사이트)는
+  // 지금까지 사이드바 드릴인이 유일한 내비였고, 여기서 null 을 뱉으면 그 화면들의 내비가 0이 된다.
   return (
-    <div className="mb-4">
+    <div className="pt-3">
+      {/* 1차 — CRM 하위 5개. 정본은 admin-nav.ts(CRM_CHILD_NAV)라 ⌘K 팔레트와 같은 표를 본다. */}
+      <div className="no-scrollbar -mx-4 flex items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        {CRM_CHILD_NAV.map((child) => {
+          const isActive = child.match(pathname ?? "")
+          return (
+            <Link
+              key={child.href}
+              href={child.href}
+              aria-current={isActive ? "page" : undefined}
+              onFocus={() => warmSubtab(child.href)}
+              onMouseEnter={() => warmSubtab(child.href)}
+              onPointerDown={() => warmSubtab(child.href)}
+              onTouchStart={() => warmSubtab(child.href)}
+              className={`inline-flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[12.5px] font-semibold transition-colors ${
+                isActive
+                  ? "bg-[#111110] text-white"
+                  : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
+              }`}
+            >
+              {child.label}
+            </Link>
+          )
+        })}
+      </div>
       {showCustomersSub ? (
-        <div className="no-scrollbar -mx-4 mt-3 flex items-center gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+        <div className="no-scrollbar -mx-4 mt-1.5 flex items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           <span className="mr-1 hidden shrink-0 text-[11px] font-medium text-[#1a1a1a]/40 sm:inline">고객</span>
           {CUSTOMERS_SUBTABS.map((sub) => {
             const isActive = customersSub === sub.key
@@ -147,14 +172,15 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
                 onMouseEnter={() => warmSubtab(sub.href)}
                 onPointerDown={() => warmSubtab(sub.href)}
                 onTouchStart={() => warmSubtab(sub.href)}
-                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                  isActive
-                    ? "border-[#111110] bg-[#111110] text-white"
-                    : "border-[#e8e8e4] bg-white text-[#1a1a1a]/70 hover:border-[#c8c8c4]"
+                className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors ${
+                  isActive ? "text-[#084734]" : "text-[#1a1a1a]/55 hover:text-[#111110]"
                 }`}
               >
-                <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>{sub.icon}</span>
+                <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/35"}>{sub.icon}</span>
                 {sub.label}
+                {isActive ? (
+                  <span aria-hidden className="absolute inset-x-1.5 bottom-0 h-[2px] rounded-full bg-[#084734]" />
+                ) : null}
               </Link>
             )
           })}
@@ -162,7 +188,7 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
       ) : null}
 
       {showDealsSub ? (
-        <div className="no-scrollbar -mx-4 mt-3 flex items-center gap-1.5 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+        <div className="no-scrollbar -mx-4 mt-1.5 flex items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           <span className="mr-1 hidden shrink-0 text-[11px] font-medium text-[#1a1a1a]/40 sm:inline">돈흐름</span>
           {DEALS_SUBTABS.map((sub) => {
             const isActive = dealsSub === sub.key
@@ -176,14 +202,15 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
                 onMouseEnter={() => warmSubtab(sub.href)}
                 onPointerDown={() => warmSubtab(sub.href)}
                 onTouchStart={() => warmSubtab(sub.href)}
-                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                  isActive
-                    ? "border-[#111110] bg-[#111110] text-white"
-                    : "border-[#e8e8e4] bg-white text-[#1a1a1a]/70 hover:border-[#c8c8c4]"
+                className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors ${
+                  isActive ? "text-[#084734]" : "text-[#1a1a1a]/55 hover:text-[#111110]"
                 }`}
               >
-                <span className={isActive ? "text-white" : "text-[#1a1a1a]/40"}>{sub.icon}</span>
+                <span className={isActive ? "text-[#084734]" : "text-[#1a1a1a]/35"}>{sub.icon}</span>
                 {sub.label}
+                {isActive ? (
+                  <span aria-hidden className="absolute inset-x-1.5 bottom-0 h-[2px] rounded-full bg-[#084734]" />
+                ) : null}
               </Link>
             )
           })}

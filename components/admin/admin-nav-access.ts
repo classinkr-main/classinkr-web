@@ -40,7 +40,9 @@ export interface NavPreset {
 
 // 전원 상시 바닥 — 캘린더는 첫 화면, CS 콘솔은 유일한 CS 진입점(가이드 문서·내부 CS를 품는다).
 // 가이드 문서가 차지하던 "전원 상시" 자리를 콘솔이 승계했다(2026-08-18 CS 진입점 단일화).
-const STAFF_PRIMARY = ["/admin/calendar", "/admin/chatbot"] as const
+// CRM 은 전 프리셋 상시다 — 사이드바가 평평해지면서(드릴인 제거) CRM 이 접힌 '기타' 안에만
+// 있으면 영업 핵심 화면을 메뉴에서 찾을 수 없다. 드릴인이 그동안 이 결함을 가려주고 있었다.
+const STAFF_PRIMARY = ["/admin/calendar", "/admin/chatbot", "/admin/crm"] as const
 
 export const NAV_PRESETS: Record<NavPresetKey, NavPreset> = {
   staff: { label: "기본", primary: STAFF_PRIMARY },
@@ -60,6 +62,7 @@ export const NAV_PRESETS: Record<NavPresetKey, NavPreset> = {
     label: "최고 관리자",
     primary: [
       "/admin/calendar",
+      "/admin/crm",
       "/admin/quotes",
       "/admin/hardware",
       "/admin/campaigns",

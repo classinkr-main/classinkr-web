@@ -17,16 +17,10 @@ import {
   Users,
   X,
 } from "lucide-react"
-import { adminFetchJsonCached, clearAdminSessionStorage, warmAdminRequestCache } from "@/lib/admin-client"
+import { clearAdminSessionStorage, warmAdminRequestCache } from "@/lib/admin-client"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
-import {
-  CRM_SAVED_VIEW_GROUPS,
-  CRM_SAVED_VIEWS,
-  isCrmSavedViewActive,
-  isCrmSavedViewsPath,
-} from "./crm/crm-sidebar-navigation"
 import { useDialogFocus } from "./use-dialog-focus"
 import {
   ADMIN_NAV,
@@ -290,34 +284,9 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
 
   const effectiveCollapsed = isDesktop === true && collapsed
   const inCrm = pathname?.startsWith("/admin/crm") ?? false
-  const showCrmSavedViews = isCrmSavedViewsPath(pathname)
-  const currentCrmSavedView = searchParams.get("view")
-  const hasActiveCrmSavedView =
-    showCrmSavedViews && CRM_SAVED_VIEWS.some(({ view }) => view === currentCrmSavedView)
-  const [crmSegCounts, setCrmSegCounts] = useState<Record<string, number> | null>(null)
-  // CRM 하위탭 접기 — admin layout이 유지 마운트라 네비게이션 동안 상태 보존(하드 리로드만 리셋).
-  // CRM 드릴인 nav — 진입 시 기본 글로벌 탭이 접히고 CRM 하위 패널이 열린다. '← 전체 메뉴'로 복귀.
-  const [navView, setNavView] = useState<"auto" | "global">("auto")
-  const crmDrill = inCrm && navView !== "global" && !effectiveCollapsed
-
-  // 통합 고객 목록에서만 저장 보기 카운트를 1회 lazy 로드한다. 다른 CRM 화면은
-  // 저장 보기를 렌더하지 않으므로 관련 API 요청도 만들지 않는다.
-  useEffect(() => {
-    if (!showCrmSavedViews || crmSegCounts) return
-    let alive = true
-    adminFetchJsonCached<{ summary?: { viewCounts?: Record<string, number> } }>(
-      "/api/admin/crm/customers/unified?limit=1",
-      undefined,
-      { cacheKey: "sidebar:crm-seg-counts", ttlMs: 120_000, staleWhileRevalidateMs: 300_000 }
-    )
-      .then((d) => {
-        if (alive) setCrmSegCounts(d?.summary?.viewCounts ?? null)
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [showCrmSavedViews, crmSegCounts])
+  // CRM 은 평평한 단일 링크다 — 하위 내비게이션은 본문 밴드(CrmSubnav)가 전부 책임진다.
+  // 사이드바 드릴인(전체 메뉴 takeover)과 저장 보기 목록은 그래서 제거됐다. 저장 보기는
+  // 통합 고객 화면이 이미 12종 칩으로 본문에서 제공하므로 잃은 기능이 없다.
 
   const toggle = () => {
     setCollapsed((prev) => {
@@ -528,106 +497,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
           </div>
 
           <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4">
-            {crmDrill ? (
-              <div className="space-y-1">
-                <button
-                  type="button"
-                  onClick={() => setNavView("global")}
-                  className="mb-1 flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-[13px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  전체 메뉴
-                </button>
-                <div className="flex items-center gap-2 px-3 pb-1">
-                  <Users className="h-4 w-4 text-[#1a1a1a]/45" />
-                  <p className="text-[13px] font-bold text-[#111110]">CRM</p>
-                </div>
-                {CRM_CHILD_NAV.map((child) => {
-                  const childActive = child.match(pathname ?? "")
-                  return (
-                    <div key={`mobile-${child.href}`}>
-                      <Link
-                        href={child.href}
-                        onFocus={() => warmAdminTab(child.href)}
-                        onMouseEnter={() => scheduleWarmAdminTab(child.href)}
-                        onMouseLeave={cancelWarmAdminTab}
-                        onPointerDown={() => warmAdminTab(child.href)}
-                        onTouchStart={() => warmAdminTab(child.href)}
-                        onClick={() => {
-                          warmAdminTab(child.href)
-                          setMobileMenuOpen(false)
-                        }}
-                        aria-current={
-                          childActive &&
-                          !(child.href === "/admin/crm/customers/unified" && hasActiveCrmSavedView)
-                            ? "page"
-                            : undefined
-                        }
-                        className={`flex min-h-11 items-center rounded-md px-3 text-[14px] font-medium transition-colors ${
-                          childActive
-                            ? "bg-[#111110] text-white"
-                            : "text-[#1a1a1a]/65 hover:bg-[#f5f5f2] hover:text-[#111110]"
-                        }`}
-                      >
-                        {child.label}
-                      </Link>
-                      {child.href === "/admin/crm/customers/unified" && showCrmSavedViews ? (
-                        <div
-                          className="ml-3 mt-1 space-y-2 border-l border-[#e8e8e4] pb-1 pl-3"
-                          role="group"
-                          aria-label="고객DB 저장 보기"
-                        >
-                          {CRM_SAVED_VIEW_GROUPS.map((group) => (
-                            <div key={`mobile-${group.key}`}>
-                              <p className="px-3 pb-1 pt-1 text-[10px] font-semibold tracking-[0.02em] text-[#1a1a1a]/55">
-                                {group.label}
-                              </p>
-                              <div className="space-y-px">
-                                {group.views.map((seg) => {
-                                  const count = crmSegCounts?.[seg.view]
-                                  const segmentActive = isCrmSavedViewActive(
-                                    pathname,
-                                    currentCrmSavedView,
-                                    seg.view
-                                  )
-                                  return (
-                                    <Link
-                                      key={`mobile-${seg.view}`}
-                                      href={`/admin/crm/customers/unified?view=${seg.view}`}
-                                      onClick={() => setMobileMenuOpen(false)}
-                                      aria-current={segmentActive ? "page" : undefined}
-                                      className={`flex min-h-11 items-center gap-2 rounded-md px-3 text-[12px] transition-colors ${
-                                        segmentActive
-                                          ? "bg-[#ECFDF5] font-semibold text-[#084734]"
-                                          : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
-                                      }`}
-                                    >
-                                      <span className="flex-1 truncate">{seg.label}</span>
-                                      <span
-                                        aria-hidden={count == null}
-                                        className={`min-w-5 rounded-full px-1.5 text-center text-[10px] font-semibold tabular-nums ${
-                                          count == null
-                                            ? "bg-transparent"
-                                            : segmentActive
-                                            ? "bg-white/80 text-[#084734]"
-                                            : "bg-[#f0f0ec] text-[#1a1a1a]/55"
-                                        }`}
-                                      >
-                                        {count ?? ""}
-                                      </span>
-                                    </Link>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
+            {(
               <>
                 {/* 상시도 기타와 같은 3범주 소제목으로 묶는다(2026-08-18). 소제목 표시 여부는
                     resolveNavAccess의 showPrimaryHeaders(SSOT)가 정한다 — 묶음이 선언 순서를
@@ -646,6 +516,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
 
                           return (
                             <Link
+                              aria-current={isActive ? "page" : undefined}
                               key={`mobile-${item.href}`}
                               href={item.href}
                               onFocus={() => warmAdminTab(item.href)}
@@ -655,7 +526,6 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                               onTouchStart={() => warmAdminTab(item.href)}
                               onClick={() => {
                                 warmAdminTab(item.href)
-                                if (item.href === "/admin/crm") setNavView("auto")
                                 setMobileMenuOpen(false)
                               }}
                               className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
@@ -712,6 +582,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
 
                                 return (
                                   <Link
+                                    aria-current={isActive ? "page" : undefined}
                                     key={`mobile-${item.href}`}
                                     href={item.href}
                                     onFocus={() => warmAdminTab(item.href)}
@@ -865,102 +736,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
       </div>
 
       <nav className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-4 ${MINIMAL_SCROLLBAR} ${effectiveCollapsed ? "lg:px-2" : ""}`}>
-        {crmDrill ? (
-          <div className="space-y-0.5">
-            <button
-              type="button"
-              onClick={() => setNavView("global")}
-              className="mb-2 flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              전체 메뉴
-            </button>
-            <div className="mb-1 flex items-center gap-2 px-3">
-              <Users className="h-4 w-4 text-[#1a1a1a]/45" />
-              <p className="text-[13px] font-bold text-[#111110]">CRM</p>
-            </div>
-            {CRM_CHILD_NAV.map((child) => {
-              const childActive = child.match(pathname ?? "")
-              return (
-                <div key={child.href}>
-                  <Link
-                    href={child.href}
-                    onFocus={() => warmAdminTab(child.href)}
-                    onMouseEnter={() => scheduleWarmAdminTab(child.href)}
-                    onMouseLeave={cancelWarmAdminTab}
-                    onPointerDown={() => warmAdminTab(child.href)}
-                    onTouchStart={() => warmAdminTab(child.href)}
-                    onClick={() => warmAdminTab(child.href)}
-                    aria-current={
-                      childActive &&
-                      !(child.href === "/admin/crm/customers/unified" && hasActiveCrmSavedView)
-                        ? "page"
-                        : undefined
-                    }
-                    className={`flex items-center rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
-                      childActive
-                        ? "bg-[#111110] text-white"
-                        : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2] hover:text-[#111110]"
-                    }`}
-                  >
-                    {child.label}
-                  </Link>
-                  {child.href === "/admin/crm/customers/unified" && showCrmSavedViews ? (
-                    <div
-                      className="mb-1 ml-3 mt-1 space-y-1.5 border-l border-[#e8e8e4] pb-1 pl-2.5"
-                      role="group"
-                      aria-label="고객DB 저장 보기"
-                    >
-                      {CRM_SAVED_VIEW_GROUPS.map((group) => (
-                        <div key={group.key}>
-                          <p className="px-2.5 pb-1 pt-1 text-[10px] font-semibold tracking-[0.02em] text-[#1a1a1a]/55">
-                            {group.label}
-                          </p>
-                          <div className="space-y-px">
-                            {group.views.map((seg) => {
-                              const count = crmSegCounts?.[seg.view]
-                              const segmentActive = isCrmSavedViewActive(
-                                pathname,
-                                currentCrmSavedView,
-                                seg.view
-                              )
-                              return (
-                                <Link
-                                  key={seg.view}
-                                  href={`/admin/crm/customers/unified?view=${seg.view}`}
-                                  aria-current={segmentActive ? "page" : undefined}
-                                  className={`flex min-h-7 items-center gap-2 rounded-md px-2.5 py-1 text-[11px] transition-colors ${
-                                    segmentActive
-                                      ? "bg-[#ECFDF5] font-semibold text-[#084734]"
-                                      : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
-                                  }`}
-                                >
-                                  <span className="flex-1 truncate">{seg.label}</span>
-                                  <span
-                                    aria-hidden={count == null}
-                                    className={`min-w-5 rounded-full px-1.5 text-center text-[10px] font-semibold tabular-nums ${
-                                      count == null
-                                        ? "bg-transparent"
-                                        : segmentActive
-                                        ? "bg-white/80 text-[#084734]"
-                                        : "bg-[#f0f0ec] text-[#1a1a1a]/55"
-                                    }`}
-                                  >
-                                    {count ?? ""}
-                                  </span>
-                                </Link>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              )
-            })}
-          </div>
-        ) : (
+        {(
           <>
             {/* 상시도 기타와 같은 3범주 소제목으로 묶는다(2026-08-18). 소제목 표시 여부는
                 resolveNavAccess의 showPrimaryHeaders(SSOT)가 정하고, 접힌 사이드바에서는 라벨이
@@ -980,6 +756,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
 
                       return (
                         <Link
+                          aria-current={isActive ? "page" : undefined}
                           key={item.href}
                           href={item.href}
                           title={effectiveCollapsed ? item.label : undefined}
@@ -990,7 +767,6 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                           onTouchStart={() => warmAdminTab(item.href)}
                           onClick={() => {
                             warmAdminTab(item.href)
-                            if (item.href === "/admin/crm") setNavView("auto")
                           }}
                           className={`group flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors ${
                             effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
@@ -1057,6 +833,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
 
                             return (
                               <Link
+                                aria-current={isActive ? "page" : undefined}
                                 key={item.href}
                                 href={item.href}
                                 onFocus={() => warmAdminTab(item.href)}

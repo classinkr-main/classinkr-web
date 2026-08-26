@@ -169,11 +169,13 @@ describe("resolveNavPlacement", () => {
 })
 
 describe("resolveNavAccess", () => {
-  it("splits the cs preset into 3 primary items in declaration order", () => {
-    // 내부 CS 상시가 콘솔로 흡수돼 cs 프리셋 상시는 캘린더·견적·CS 콘솔 셋이다.
+  it("splits the cs preset into 4 primary items in declaration order", () => {
+    // 내부 CS 상시가 콘솔로 흡수돼 cs 프리셋 상시는 캘린더·견적·CS 콘솔이고,
+    // 사이드바 평탄화(CRM 드릴인 제거)로 CRM 이 전 프리셋 상시에 합류했다.
     const { primary } = resolveNavAccess(ctx({ preset: "cs" }))
     expect(primary.map((item) => item.href)).toEqual([
       "/admin/calendar",
+      "/admin/crm",
       "/admin/quotes",
       "/admin/chatbot",
     ])
@@ -182,7 +184,8 @@ describe("resolveNavAccess", () => {
   it("folds the reachable rest and hides the denied ones", () => {
     const { folded } = resolveNavAccess(ctx({ preset: "cs" }))
     const foldedHrefs = folded.flatMap((group) => group.items.map((item) => item.href))
-    expect(foldedHrefs).toContain("/admin/crm")
+    // CRM 은 상시로 올라가 더는 접히지 않는다.
+    expect(foldedHrefs).not.toContain("/admin/crm")
     expect(foldedHrefs).toContain("/admin/hardware")
     expect(foldedHrefs).not.toContain("/admin/settings")
     expect(foldedHrefs).not.toContain("/admin/branch/ledger")
@@ -196,11 +199,11 @@ describe("resolveNavAccess", () => {
     expect(folded.every((group) => group.items.length > 0)).toBe(true)
   })
 
-  it("gives super 6 primary and 11 folded", () => {
-    // CS 진입점 단일화로 상시 7(가이드 문서·내부 CS 포함) → 6(CS 콘솔), 전체 17 = 6 + 11.
+  it("gives super 7 primary and 10 folded", () => {
+    // CS 진입점 단일화로 상시 7 → 6(CS 콘솔), 여기에 CRM 상시 합류로 7. 전체 17 = 7 + 10.
     const { primary, folded } = resolveNavAccess(ctx({ role: "SUPER_ADMIN", preset: "super" }))
-    expect(primary).toHaveLength(6)
-    expect(folded.flatMap((group) => group.items)).toHaveLength(11)
+    expect(primary).toHaveLength(7)
+    expect(folded.flatMap((group) => group.items)).toHaveLength(10)
   })
 
   // 상시 범주 묶음(2026-08-18) — 소제목 렌더는 이 두 필드가 SSOT다.
