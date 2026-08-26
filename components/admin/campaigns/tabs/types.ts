@@ -4,7 +4,7 @@
 import type { EventEconomics, EventFunnel, EventMetrics, AdChannel } from "@/lib/types/event-metrics"
 import type { PublicEvent } from "@/lib/types/public-events"
 
-export type CampaignTab = "summary" | "events" | "meta" | "email"
+export type CampaignTab = "summary" | "leads" | "events" | "meta" | "email"
 
 export type MetaDatePreset = "last_7d" | "last_30d" | "last_90d" | "this_month"
 

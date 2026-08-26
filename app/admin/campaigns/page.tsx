@@ -74,6 +74,10 @@ const SummaryTab = dynamic(() => import("@/components/admin/campaigns/tabs/Summa
   loading: () => <ChartSkeleton className="h-[480px]" />,
 })
 
+const NewLeadsTab = dynamic(() => import("@/components/admin/campaigns/tabs/NewLeadsTab"), {
+  loading: () => <ChartSkeleton className="h-[480px]" />,
+})
+
 // ─── attribution: 행사 ↔ 리드 ──────────────────────────────────────────────────
 //   1) source/notes 필드에 event:<id> 또는 event:<slug> 토큰이 있으면 우선 매칭
 //   2) 그 외에는 행사 기간 내 발생한 리드를 보조 집계로 사용
@@ -129,6 +133,9 @@ function assignEventLeads(
 
 const CAMPAIGN_TABS: Array<{ id: CampaignTab; label: string; sub: string }> = [
   { id: "summary", label: "요약", sub: "퍼포먼스 KPI · 추이 · 캠페인 페이싱" },
+  // 신규 리드 = 전 소스 신규 유입 + 연락 체크. 광고 탭의 "광고 리드"(유료 유입 + 딜 전환)와
+  // 모집단도 액션도 다르다 — 여기는 처리 큐, 저기는 성과 대조다.
+  { id: "leads", label: "신규 리드", sub: "새로 들어온 리드 · 소스별 · 연락 체크" },
   { id: "events", label: "행사", sub: "행사 성과 비교 · 행사별 퍼널 · 딜 전환" },
   // id는 딥링크(?tab=meta) 호환을 위해 "meta" 유지 — 라벨은 "광고"로 확장하되 sub에서 Meta만 라이브임을 정직하게 표기.
   { id: "meta", label: "광고", sub: "Meta 라이브 · 캠페인·채널 예산·성과" },
@@ -251,7 +258,13 @@ export default function AdminCampaignsPage() {
     // message_to 프리필 딥링크는 첫 렌더가 어느 탭이어도 곧바로 email 탭으로 전환된다(아래 효과).
     // 그 한 사이클에서 코어 fetch가 새어나가지 않도록 URL의 프리필 파라미터도 함께 게이트한다.
     const pendingMessagePrefill = parseMessagePrefill(window.location.search) !== null
-    if (activeTab === "email" || activeTab === "summary" || pendingMessagePrefill) {
+    // 신규 리드 탭은 마케팅 스코프 리드 하나만 쓴다(아래 loadAdLeads) — 행사·성과 지표는 안 본다.
+    if (
+      activeTab === "email" ||
+      activeTab === "summary" ||
+      activeTab === "leads" ||
+      pendingMessagePrefill
+    ) {
       // 코어를 로드하지 않는 경로에서는 초기 loading=true를 내려
       // 헤더 동기화 버튼이 영구 비활성으로 잠기지 않게 한다.
       if (!coreLoadRequestedRef.current) setLoading(false)
@@ -343,6 +356,12 @@ export default function AdminCampaignsPage() {
     setAdLeads(updater)
   }, [])
 
+  // 신규 리드 탭의 "연락함" 체크(낙관적 갱신·롤백 포함) — 해당 1건만 교체한다.
+  // 전체 재조회로 처리하면 목록이 통째로 다시 그려져 스크롤과 더보기 위치가 날아간다.
+  const updateAdLead = useCallback((lead: LeadRecord) => {
+    setAdLeads((prev) => prev.map((row) => (row.id === lead.id ? lead : row)))
+  }, [])
+
   const refreshAdLeads = useCallback(() => {
     // 가져오기·전환은 리드 자체를 바꾼다 — 광고 리드 목록만 새로 받으면 요약 탭의
     // 퍼널·평균 CPL(코어 리드 파생)이 낡은 채 남으므로, 코어를 이미 로드했다면 함께 강제 갱신한다.
@@ -352,11 +371,12 @@ export default function AdminCampaignsPage() {
     ])
   }, [load, loadAdLeads])
 
-  // 광고 탭 첫 진입에만 조회한다 — 탭을 오갈 때마다 다시 부르면 목록이 깜빡이고,
-  // 전환으로 갱신해 둔 로컬 상태(status=converted)도 매번 되감긴다.
+  // 광고·신규 리드 탭 첫 진입에만 조회한다 — 탭을 오갈 때마다 다시 부르면 목록이 깜빡이고,
+  // 전환·연락 체크로 갱신해 둔 로컬 상태(status=converted/contacted)도 매번 되감긴다.
+  // 두 탭이 같은 marketing 스코프 배열을 공유하므로 한쪽에서 찍은 체크가 다른 쪽에도 반영된다.
   const adLeadsRequestedRef = useRef(false)
   useEffect(() => {
-    if (activeTab !== "meta" || adLeadsRequestedRef.current) return
+    if ((activeTab !== "meta" && activeTab !== "leads") || adLeadsRequestedRef.current) return
     adLeadsRequestedRef.current = true
     void loadAdLeads()
   }, [activeTab, loadAdLeads])
@@ -576,10 +596,17 @@ export default function AdminCampaignsPage() {
   const refreshLoading =
     activeTab === "meta"
       ? metaLoading || adLeadsLoading
-      : activeTab === "summary"
-        ? perfLoading
-        : loading
+      : activeTab === "leads"
+        ? adLeadsLoading
+        : activeTab === "summary"
+          ? perfLoading
+          : loading
   const refreshCurrent = useCallback(() => {
+    if (activeTab === "leads") {
+      // 신규 리드 탭은 마케팅 스코프 리드 하나만 본다 — 코어(행사·지표)까지 끌 필요가 없다.
+      void loadAdLeads({ force: true })
+      return
+    }
     if (activeTab === "meta") {
       // 광고 탭은 Meta 성과와 광고 리드가 나란히 놓이므로 헤더 동기화가 둘 다 새로 받는다.
       void Promise.all([loadMeta({ force: true }), loadAdLeads({ force: true })])
@@ -740,6 +767,17 @@ export default function AdminCampaignsPage() {
           onPeriodChange={setPerfParam}
           refreshNonce={perfRefreshNonce}
           onLoadingChange={setPerfLoading}
+        />
+      )}
+
+      {activeTab === "leads" && (
+        // 광고 탭과 같은 marketing 스코프 배열을 그대로 넘긴다(자체 fetch 없음) —
+        // 이름·연락처·UTM·광고명이 다 필요한데 campaigns 스코프에는 그 컬럼이 없다.
+        <NewLeadsTab
+          leads={adLeads}
+          loading={adLeadsLoading}
+          error={adLeadsError}
+          onLeadUpdated={updateAdLead}
         />
       )}
 
