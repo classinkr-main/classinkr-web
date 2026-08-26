@@ -91,6 +91,13 @@ describe("리드 보드 골격 (SSR)", () => {
     for (const color of ["#1D9E75", "#A8741A", "#084734", "#9A9A94"]) expect(html).toContain(color)
   })
 
+  it("담당자 패널도 분모를 드러내고 비율 바를 낸다", () => {
+    // 담당자는 활성 리드를 남김없이 나눈다(미배정도 한 칸) — 단계 패널과 같은 어휘를 쓴다.
+    const html = render()
+    expect(html).toContain("담당자별 보유 리드")
+    expect(html).toContain("활성")
+  })
+
   it("직교 필터 딥링크(24h 미응대)도 같은 골격을 낸다", () => {
     const html = render("filter=unresponded_24h&lens=all&sort=priority")
     expect(html).toContain("24h+")

@@ -97,6 +97,8 @@ import LeadsBoardView from "./LeadsBoardView"
 // 리드 보드 목록 무한스크롤 대체 — 초기 50건, "더보기"로 50건씩 확장(계획 문서 Phase W1).
 // 모바일 카드·데스크톱 테이블이 같은 filtered를 그리므로 visible 상한을 공유한다.
 const LEAD_BOARD_LIST_STEP = 50
+// 담당자 패널에 그리는 행 상한. 넘치는 인원·건수는 각주로 드러낸다(조용히 자르지 않는다).
+const OWNER_ROW_CAP = 6
 
 // 유입 셀의 보조 세그먼트 — 그룹 라벨과 사실상 같은 말이면 생략해 "메타 · Meta 리드" 같은
 // 중복 표기를 막는다(메타는 광고명 칩이 세부를 담당). 그룹 내 소스가 여럿인 경우(홈페이지의
@@ -2167,18 +2169,42 @@ export default function LeadsBoardClient() {
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Owners</p>
               <h2 className="mt-1 text-[17px] font-bold text-[#111110]">담당자별 보유 리드</h2>
             </div>
-            <span className="text-[12px] font-medium text-[#1a1a1a]/40">{ownerSummaries.length}명</span>
+            <span
+              title="아래 비율 바의 분모 — 활성 리드를 담당자가 남김없이 나눈 수입니다(미배정 포함)."
+              className="text-[12px] font-medium text-[#1a1a1a]/40"
+            >
+              {ownerSummaries.length}명 · 활성 {activeLeads.length.toLocaleString("ko-KR")}건
+            </span>
           </div>
           {ownerSummaries.length === 0 ? (
             <p className="rounded-xl bg-[#fafaf8] px-3 py-8 text-center text-[13px] text-[#1a1a1a]/30">활성 리드가 없습니다.</p>
           ) : (
             <div className="space-y-2">
-              {ownerSummaries.slice(0, 6).map((owner) => (
-                <div key={owner.owner} className="rounded-xl border border-[#f0f0ec] px-3 py-2.5">
+              {ownerSummaries.slice(0, OWNER_ROW_CAP).map((owner) => {
+                // 담당자는 활성 리드를 남김없이 나눈다(미배정도 한 칸) — 그래서 비율의 합이 100%다.
+                const share = activeLeads.length > 0 ? (owner.total / activeLeads.length) * 100 : 0
+                const unassigned = owner.owner === "미배정"
+                return (
+                <div
+                  key={owner.owner}
+                  title={`${owner.owner} ${owner.total.toLocaleString("ko-KR")}건 · 활성의 ${share.toFixed(1)}%`}
+                  className="rounded-xl border border-[#f0f0ec] px-3 py-2.5"
+                >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="truncate text-[13px] font-semibold text-[#111110]">{owner.owner}</p>
-                    <p className="text-[15px] font-bold tabular-nums text-[#111110]">{owner.total}</p>
+                    <p className={`truncate text-[13px] font-semibold ${unassigned ? "text-[#B85C33]" : "text-[#111110]"}`}>
+                      {owner.owner}
+                    </p>
+                    <p className={`text-[19px] font-bold leading-none tracking-[-0.02em] tabular-nums ${unassigned ? "text-[#B85C33]" : "text-[#111110]"}`}>
+                      {owner.total.toLocaleString("ko-KR")}
+                    </p>
                   </div>
+                  {/* 비중 — 담당자는 상태 축이 아니라 중립색을 쓰고, 배분 공백(미배정)만 위험색으로 든다. */}
+                  <span aria-hidden className="mt-2 block h-[3px] w-full overflow-hidden rounded-full bg-[#f0f0ec]">
+                    <span
+                      className="block h-full rounded-full"
+                      style={{ width: `${share}%`, backgroundColor: unassigned ? "#B85C33" : "#111110" }}
+                    />
+                  </span>
                   <div className="mt-1.5 flex flex-wrap gap-2 text-[11px] text-[#1a1a1a]/40">
                     <span>신규 {owner.newCount}</span>
                     {owner.unrespondedCount > 0 && <span className="font-medium text-[#B85C33]">응대 전 {owner.unrespondedCount}</span>}
@@ -2187,7 +2213,19 @@ export default function LeadsBoardClient() {
                     {owner.overdueCount > 0 && <span className="font-medium text-[#B85C33]">지연 {owner.overdueCount}</span>}
                   </div>
                 </div>
-              ))}
+                )
+              })}
+              {/* 가려진 담당자를 각주로 드러낸다 — 보이는 바의 합이 100%가 아닌 이유다. */}
+              {ownerSummaries.length > OWNER_ROW_CAP ? (
+                <p className="pt-0.5 text-center text-[11px] text-[#1a1a1a]/40">
+                  +{(ownerSummaries.length - OWNER_ROW_CAP).toLocaleString("ko-KR")}명 ·{" "}
+                  {ownerSummaries
+                    .slice(OWNER_ROW_CAP)
+                    .reduce((sum, owner) => sum + owner.total, 0)
+                    .toLocaleString("ko-KR")}
+                  건 숨김
+                </p>
+              ) : null}
             </div>
           )}
         </div>
