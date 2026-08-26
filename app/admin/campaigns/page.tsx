@@ -155,9 +155,11 @@ function eventInPeriod(event: PublicEvent, period: Period): boolean {
 
 export default function AdminCampaignsPage() {
   const router = useRouter()
-  // 기본 탭은 광고(meta) — 탭 재구성 스펙 §4.2 "메타 광고를 기본 탭으로" 이행(2026-08-18).
-  // 딥링크(?tab=summary 등)는 그대로 동작하고, 기본값과 같은 meta만 URL에서 생략된다.
-  const [tabParam, setTabParam] = useUrlState("tab", "meta")
+  // 기본 탭은 요약 — 마케팅의 홈 화면이다(2026-08-21).
+  // 2026-08-18 에는 광고(meta)가 기본이었는데, 그때는 요약 탭이 행사 중심이라 "지금 어떤가"를
+  // 답하지 못했다. 지금 요약은 광고비·리드·CPL·퍼널·캠페인을 같은 기간축으로 묶는 유일한
+  // 화면이라(perf 단일 응답) 처음 보는 화면이 되는 게 맞다. 딥링크(?tab=meta 등)는 그대로 동작한다.
+  const [tabParam, setTabParam] = useUrlState("tab", "summary")
   // 고객 360 딥링크(?message_to=&message_name=) 수신자 프리필 — 마운트 시 1회 소모
   const [messagePrefill, setMessagePrefill] = useState<MessagePrefill | null>(null)
   const [events, setEvents] = useState<PublicEvent[]>([])
@@ -199,7 +201,7 @@ export default function AdminCampaignsPage() {
   const [eventSort, setEventSort] = useState<"date" | "leads" | "deals" | "roi">("date")
   const activeTab: CampaignTab = CAMPAIGN_TABS.some((tab) => tab.id === tabParam)
     ? (tabParam as CampaignTab)
-    : "meta"
+    : "summary"
 
   const load = useCallback(async ({
     force = false,
