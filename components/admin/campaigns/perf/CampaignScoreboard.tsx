@@ -75,16 +75,33 @@ function PacingCell({ pacing, currency }: { pacing: Pacing; currency: "USD" | "K
   )
 }
 
-const ROW_GRID = "grid grid-cols-[minmax(0,1fr)_150px_56px_88px_120px] items-center gap-x-4 px-1"
+// 좌측 2px 는 이상 스트립 자리 — 헤더와 모든 행이 같은 폭을 예약해야 열이 어긋나지 않는다.
+// 색은 사용처마다 정확히 한 번만 지정한다(border-l-transparent / border-l-[#B85C33]):
+// 같은 class 목록에 border-color 유틸을 둘 넣으면 어느 쪽이 이길지가 Tailwind 의 생성
+// 순서에 달리게 되고, 폭만 두고 색을 빼면 currentColor 가 새어 나온다.
+const ROW_GRID =
+  "grid grid-cols-[minmax(0,1fr)_150px_56px_88px_120px] items-center gap-x-4 border-l-2 px-1"
 
 function ScoreboardRow({ row, muted = false }: { row: PerfScoreboardRow; muted?: boolean }) {
   // 빈 배열 = 미측정(insights 소스 실패·Meta 링크 없음), 전부 0 = 실측 0 — 둘을 구분 표기한다.
   const measured = row.sparkline.length > 0
   const hasLeads = row.sparkline.some((point) => point.leads > 0)
+  // 이상이 하나라도 걸린 행에만 좌측 스트립. 행 계약(anomalies: string[])에는 kind 만 있고
+  // severity(warn/high)가 없으므로 세기를 나누지 않고 유무로만 켠다 — 없는 정보를 색으로
+  // 지어내지 않는다(severity 를 쓰려면 perf-assemble 의 계약부터 바뀌어야 한다).
+  //
+  // 스트립과 배지는 역할이 다르다: 스트립 = "이 행을 보라"(행 단위 환기, 진한 danger 실선
+  // 하나), 배지 = "무엇이 문제인지"(옅은 아웃라인 칩, 종류마다 하나). 배지까지 진하게
+  // 두면 한 행에서 같은 경고를 두 번 외치게 되므로 강도는 스트립에만 준다.
+  const flagged = row.anomalies.length > 0
   return (
     // 휴면 행은 톤만 눌러 둔다(색 추가 없이 투명도) — 접힘을 펼친 사람에게 "이건 이전 것"임을
     // 알리되, 읽을 수 없게 만들지는 않는다.
-    <div className={muted ? `${ROW_GRID} py-3 opacity-55` : `${ROW_GRID} py-3`}>
+    <div
+      className={`${ROW_GRID} py-3 ${
+        flagged ? "border-l-[#B85C33]" : "border-l-transparent"
+      }${muted ? " opacity-55" : ""}`}
+    >
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <p className="truncate text-[13px] font-semibold text-[#111110]">{row.name}</p>
@@ -172,7 +189,12 @@ export function CampaignScoreboard({ rows }: { rows: PerfScoreboardRow[] }) {
   const primaryRows = allDormant ? dormant : active
 
   return (
-    <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5" aria-label="캠페인 스코어보드">
+    // 판단이 걸린 표라 참조용 카드보다 한 단 앞에 세운다 — 보더 대비 한 단(#e8e8e4→#c8c8c4)과
+    // 그림자 1단까지만. 색으로 위계를 만들지는 않는다(채움 없음).
+    <section
+      className="rounded-2xl border border-[#c8c8c4] bg-white p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:p-5"
+      aria-label="캠페인 스코어보드"
+    >
       <div className="mb-3">
         <h2 className="text-[14px] font-semibold text-[#111110]">캠페인 스코어보드</h2>
         <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
@@ -196,7 +218,10 @@ export function CampaignScoreboard({ rows }: { rows: PerfScoreboardRow[] }) {
       ) : (
         <div className="overflow-x-auto">
           <div className="min-w-[680px]">
-            <div className={`${ROW_GRID} border-b border-[#f0f0ec] pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35`}>
+            {/* 헤더도 행과 같은 2px 좌측 폭을 예약한다(투명) — 아니면 열이 행마다 어긋난다.
+                아래 border 는 변이 아니라 각 변을 따로 지정한다: border-[#f0f0ec] 처럼
+                네 변을 한 번에 칠하면 예약해 둔 좌측 2px 까지 회색으로 그어진다. */}
+            <div className={`${ROW_GRID} border-b border-b-[#f0f0ec] border-l-transparent pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35`}>
               <span>캠페인</span>
               <span>페이싱</span>
               <span className="text-right">리드</span>
@@ -222,7 +247,9 @@ export function CampaignScoreboard({ rows }: { rows: PerfScoreboardRow[] }) {
                     type="button"
                     onClick={() => setShowDormant((open) => !open)}
                     aria-expanded={showDormant}
-                    className="flex w-full items-center gap-1.5 py-2.5 text-[11.5px] font-medium text-[#1a1a1a]/45 transition hover:text-[#111110]"
+                    // pl-1.5 = 행의 좌측 2px 스트립 자리 + px-1 — 토글 텍스트가 캠페인
+                    // 이름 열과 같은 선에서 시작하게 맞춘다.
+                    className="flex w-full items-center gap-1.5 py-2.5 pl-1.5 text-[11.5px] font-medium text-[#1a1a1a]/45 transition hover:text-[#111110]"
                   >
                     <DisclosureChevron open={showDormant} />
                     이전 캠페인 {dormant.length}개
