@@ -174,3 +174,46 @@ export function parseSourceGroupParam(value: string | null | undefined): LeadSou
 export function serializeSourceGroupParam(groups: readonly LeadSourceGroup[]): string {
   return SOURCE_GROUP_ORDER.filter((group) => groups.includes(group)).join(",")
 }
+
+// ─── 액션 실패 문구 ────────────────────────────────────────────
+// adminFetchJson 은 실패를 세 갈래로 던진다:
+//  ① 서버가 준 한국어 메시지(`{error}`) — 그대로 쓴다. 가장 구체적이다.
+//  ② `"404 Not Found"` 같은 상태 폴백 — 영문이라 그대로 노출하면 안 된다.
+//  ③ fetch 자체 실패 — 브라우저마다 "Failed to fetch"·"Load failed"·"NetworkError…".
+// ②③ 을 사람 문구로 옮긴다. 원인을 지어내지는 않는다 — 모르면 일반 문구로 떨어뜨린다.
+// 대응 안내(새로고침/재시도)는 **이 문구가 소유**한다. 행 템플릿은 "상태는 되돌렸습니다."만
+// 덧붙이므로 여기서 재시도를 또 적으면 같은 말이 두 번 나온다.
+const HTTP_STATUS_MESSAGE: Record<string, string> = {
+  "400": "요청 형식이 올바르지 않습니다.",
+  "401": "로그인이 풀렸습니다. 새로고침이 필요합니다.",
+  "403": "이 작업을 할 권한이 없습니다.",
+  "404": "이미 삭제된 리드일 수 있습니다. 목록을 새로고침해 주세요.",
+  "409": "다른 곳에서 먼저 처리된 것 같습니다. 목록을 새로고침해 주세요.",
+  "429": "요청이 몰렸습니다. 잠시 후 다시 시도해 주세요.",
+}
+
+const NETWORK_ERROR_PATTERN = /failed to fetch|load failed|networkerror|network request failed|err_internet|dns/i
+
+export const LEAD_ACTION_FALLBACK_MESSAGE = "연락 처리에 실패했습니다. 다시 시도해 주세요."
+
+export function describeLeadActionError(error: unknown): string {
+  const raw = error instanceof Error ? error.message.trim() : typeof error === "string" ? error.trim() : ""
+  if (!raw) return LEAD_ACTION_FALLBACK_MESSAGE
+
+  // ③ 네트워크 — 브라우저 원문은 영문이라 그대로 두면 사용자가 읽을 게 없다.
+  if (NETWORK_ERROR_PATTERN.test(raw)) return "네트워크 연결을 확인해 주세요."
+
+  // ② 상태 폴백("404 Not Found")만 골라낸다 — 서버 한국어 메시지는 건드리지 않는다.
+  // 뒤에 공백이나 문자열 끝이 와야 한다(adminFetchJson 은 `${status} ${statusText}`.trim() 을 던진다).
+  // `\b` 로 끊으면 한글이 비단어 문자라 "500건을 넘겨…" 같은 서버 메시지를 HTTP 500 으로 오인한다.
+  const status = /^(\d{3})(?:\s|$)/.exec(raw)?.[1]
+  if (status) {
+    const known = HTTP_STATUS_MESSAGE[status]
+    if (known) return known
+    if (status.startsWith("5")) return "서버 오류로 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."
+    return LEAD_ACTION_FALLBACK_MESSAGE
+  }
+
+  // ① 서버가 준 메시지 — 한국어 정본이므로 그대로.
+  return raw
+}

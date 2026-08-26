@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  LEAD_ACTION_FALLBACK_MESSAGE,
+  describeLeadActionError,
   countBySourceGroup,
   filterNewLeads,
   kstDateKey,
@@ -178,5 +180,45 @@ describe("countBySourceGroup", () => {
 
   it("빈 배열이면 전 그룹 0", () => {
     expect(Object.values(countBySourceGroup([])).every((count) => count === 0)).toBe(true)
+  })
+})
+
+describe("describeLeadActionError — 실패 문구", () => {
+  it("서버가 준 한국어 메시지는 그대로 쓴다", () => {
+    expect(describeLeadActionError(new Error("리드를 수정하지 못했습니다."))).toBe(
+      "리드를 수정하지 못했습니다."
+    )
+  })
+
+  it("fetch 자체 실패는 네트워크 문구로 옮긴다 — 브라우저별 원문 3종", () => {
+    for (const raw of ["Failed to fetch", "Load failed", "NetworkError when attempting to fetch resource."]) {
+      expect(describeLeadActionError(new Error(raw)), raw).toBe(
+        "네트워크 연결을 확인해 주세요."
+      )
+    }
+  })
+
+  it("상태코드 폴백은 코드별 한국어로 바꾼다", () => {
+    expect(describeLeadActionError(new Error("404 Not Found"))).toContain("삭제된 리드")
+    expect(describeLeadActionError(new Error("403 Forbidden"))).toContain("권한")
+    expect(describeLeadActionError(new Error("500 Internal Server Error"))).toContain("서버 오류")
+    expect(describeLeadActionError(new Error("503 Service Unavailable"))).toContain("서버 오류")
+  })
+
+  it("모르는 상태코드는 지어내지 않고 일반 문구로 떨어뜨린다", () => {
+    expect(describeLeadActionError(new Error("418 I am a teapot"))).toBe(LEAD_ACTION_FALLBACK_MESSAGE)
+  })
+
+  it("숫자로 시작하는 한국어 메시지를 상태코드로 오인하지 않는다", () => {
+    expect(describeLeadActionError(new Error("500건을 넘겨 저장할 수 없습니다."))).toBe(
+      "500건을 넘겨 저장할 수 없습니다."
+    )
+  })
+
+  it("빈 값·Error 아닌 값도 문구를 돌려준다", () => {
+    expect(describeLeadActionError(new Error("   "))).toBe(LEAD_ACTION_FALLBACK_MESSAGE)
+    expect(describeLeadActionError(null)).toBe(LEAD_ACTION_FALLBACK_MESSAGE)
+    expect(describeLeadActionError(undefined)).toBe(LEAD_ACTION_FALLBACK_MESSAGE)
+    expect(describeLeadActionError("직접 던진 문자열")).toBe("직접 던진 문자열")
   })
 })

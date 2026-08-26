@@ -45,6 +45,7 @@ import {
 import {
   NEW_LEAD_RANGE_PRESETS,
   countBySourceGroup,
+  describeLeadActionError,
   filterNewLeads,
   isNewLeadRangePreset,
   kstToday,
@@ -175,10 +176,9 @@ export default function NewLeadsTab({ leads, loading, error, onLeadUpdated }: Ne
         if (data?.lead) onLeadUpdated(data.lead)
       } catch (e) {
         onLeadUpdated(lead)
-        setActionError({
-          leadId: lead.id,
-          message: e instanceof Error ? e.message : "연락 처리에 실패했습니다.",
-        })
+        // 원본 에러 문자열을 그대로 띄우면 진짜 장애 때 "Failed to fetch" 가 뜬다 —
+        // 서버가 준 한국어 메시지는 살리고 네트워크·상태코드만 사람 문구로 옮긴다.
+        setActionError({ leadId: lead.id, message: describeLeadActionError(e) })
       } finally {
         pendingRef.current.delete(lead.id)
         setPendingIds((prev) => prev.filter((id) => id !== lead.id))
@@ -186,6 +186,13 @@ export default function NewLeadsTab({ leads, loading, error, onLeadUpdated }: Ne
     },
     [onLeadUpdated]
   )
+
+  // 실패 문구는 그 행에 붙어 있는데, 필터를 바꾸면 그 행이 목록에서 사라져도 문구만 남았다.
+  // 화면이 갈아엎어지는 시점(기간·묶음·검색·미연락 변경)에 함께 지운다 — 재시도로도 지워지지만
+  // 사용자가 다른 조건으로 넘어가면 이미 지나간 실패다.
+  useEffect(() => {
+    setActionError(null)
+  }, [range.since, range.until, groupsParam, deferredQuery, onlyUncontacted])
 
   const toggleGroup = useCallback(
     (group: LeadSourceGroup) => {
@@ -471,7 +478,7 @@ export default function NewLeadsTab({ leads, loading, error, onLeadUpdated }: Ne
 
                   {rowError && (
                     <p role="alert" className="mt-1.5 text-[11px] font-semibold text-[#B85C33]">
-                      {rowError} — 상태는 되돌렸습니다. 다시 시도해 주세요.
+                      {rowError} — 상태는 되돌렸습니다.
                     </p>
                   )}
                 </li>

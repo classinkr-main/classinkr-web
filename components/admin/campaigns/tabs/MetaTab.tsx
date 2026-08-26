@@ -6,6 +6,8 @@ import {
   Activity,
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   Lightbulb,
   Loader2,
@@ -29,6 +31,7 @@ import { KRW, compact, formatMetaDate, money } from "@/components/admin/campaign
 import { PeriodToggle, type PeriodOption } from "@/components/admin/PeriodToggle"
 import { adminFetchJson } from "@/lib/admin-client"
 import { metaObjectiveLabel } from "@/lib/marketing/campaign-labels"
+import { splitMetaCampaignsByRun } from "@/lib/marketing/meta-campaign-view"
 import type { AdCreativePerf } from "@/lib/marketing/creative-input"
 import type { LeadRecord } from "@/lib/repositories/leads"
 import { DEFAULT_EVENT_METRICS, type AdChannel, type EventMetrics } from "@/lib/types/event-metrics"
@@ -56,6 +59,9 @@ const META_DATE_OPTIONS: Array<{ value: MetaDatePreset; label: string }> = [
   { value: "last_90d", label: "90일" },
   { value: "this_month", label: "이번 달" },
 ]
+
+/** 고정 참조 빈 배열 — 매 렌더 새 배열이면 캠페인 분할 메모가 매번 무효화된다. */
+const EMPTY_CAMPAIGNS: MetaCampaignRow[] = []
 
 function MetaStatusPill({ status }: { status?: string }) {
   const normalized = status ?? "UNKNOWN"
@@ -93,8 +99,19 @@ function MetaCampaignPanel({
   onToggleStatus: (campaign: MetaCampaignRow) => void
 }) {
   const currency = dashboard?.account.currency ?? "USD"
-  const campaigns = dashboard?.campaigns ?? []
+  // `?? []` 를 렌더마다 새로 만들면 아래 useMemo 가 매번 깨진다 — 빈 배열을 고정 참조로 둔다.
+  const campaigns = dashboard?.campaigns ?? EMPTY_CAMPAIGNS
   const summary = dashboard?.summary
+
+  // 표 기본값은 "지금 돌고 있는 광고"만 — 계정에 쌓인 과거 캠페인이 화면을 덮지 않게.
+  // 멈춘 것들은 접어 두되, 그 안에도 이 기간 광고비가 들어 있을 수 있어서 접힘 머리말에
+  // 금액·리드를 표기한다(위 KPI 총액과 표의 합이 말없이 어긋나면 안 된다).
+  const [showStopped, setShowStopped] = useState(false)
+  const { running, stopped, stoppedTotals, allStopped } = useMemo(
+    () => splitMetaCampaignsByRun(campaigns),
+    [campaigns]
+  )
+  const visibleCampaigns = allStopped || showStopped ? [...running, ...stopped] : running
 
   return (
     <div className="space-y-5">
@@ -199,7 +216,7 @@ function MetaCampaignPanel({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f0f0ec]">
-                {campaigns.map((campaign) => {
+                {visibleCampaigns.map((campaign) => {
                   const isActive = campaign.status === "ACTIVE"
                   const nextStatus = isActive ? "PAUSED" : "ACTIVE"
                   return (
@@ -248,6 +265,40 @@ function MetaCampaignPanel({
                 })}
               </tbody>
             </table>
+
+            {/* 멈춘 캠페인 접기/펴기 — 전부 멈춘 계정에서는 접을 게 없으니 띄우지 않는다. */}
+            {!allStopped && stopped.length > 0 && (
+              <div className="border-t border-[#f0f0ec] bg-[#fdfdfc] px-4 py-2.5 sm:px-5">
+                <button
+                  type="button"
+                  onClick={() => setShowStopped((prev) => !prev)}
+                  aria-expanded={showStopped}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-[11.5px] font-semibold text-[#615D59] transition hover:text-[#111110]"
+                >
+                  {showStopped ? (
+                    <ChevronUp aria-hidden className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronDown aria-hidden className="h-3.5 w-3.5" />
+                  )}
+                  중지된 캠페인 {stoppedTotals.count}개 {showStopped ? "접기" : "펼치기"}
+                </button>
+                {/* 접혀 있어도 숨긴 광고비는 밝힌다 — 위 KPI 총액과 표가 어긋나 보이지 않게. */}
+                {stoppedTotals.withSpend > 0 && (
+                  <p className="mt-1 pl-1.5 text-[11px] text-[#84827a]">
+                    이 중 {stoppedTotals.withSpend}개는 조회 기간에 광고비가 있습니다 —{" "}
+                    <span className="font-semibold text-[#615D59]">
+                      {money(stoppedTotals.spend, currency)}
+                    </span>
+                    {stoppedTotals.leads > 0 && <> · 리드 {KRW.format(stoppedTotals.leads)}</>}
+                  </p>
+                )}
+              </div>
+            )}
+            {allStopped && (
+              <div className="border-t border-[#f0f0ec] bg-[#fdfdfc] px-4 py-2.5 text-[11px] text-[#84827a] sm:px-5">
+                지금 집행 중인 캠페인이 없어 전체를 펴 두었습니다.
+              </div>
+            )}
           </div>
         )}
       </div>
