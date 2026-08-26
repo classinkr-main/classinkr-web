@@ -86,6 +86,10 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
   let lastMonthLeads = 0
   let convertedThisMonth = 0
   let convertedLastMonth = 0
+  // 홈페이지 문의(contact_page) 유입 창 — 유입 수 관점이라 todayLeads처럼 확인 게이트를 적용하지 않는다.
+  let contactPageToday = 0
+  let contactPageThisWeek = 0
+  let contactPageTotal = 0
   const sourceMap: Record<string, number> = {}
   const branchMap: Record<string, number> = {}
   const dayCount: Record<string, number> = {}
@@ -100,6 +104,9 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
       else if (l.status === "closed") closedLeads++
     }
 
+    const isContactPage = l.source === "contact_page"
+    if (isContactPage) contactPageTotal++
+
     const t = new Date(l.timestamp).getTime()
     if (!Number.isNaN(t)) {
       const key = new Date(t).toDateString()
@@ -107,6 +114,10 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
       if (key === todayStr) todayLeads++
       if (t >= weekAgoT) thisWeekLeads++
       else if (t >= twoWeeksAgoT) lastWeekLeads++
+      if (isContactPage) {
+        if (key === todayStr) contactPageToday++
+        if (t >= weekAgoT) contactPageThisWeek++
+      }
       if (t >= monthStartT) {
         thisMonthLeads++
         if (l.status === "converted") convertedThisMonth++
@@ -146,6 +157,9 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
     monthTrend: thisMonthLeads - lastMonthLeads,
     convertedThisMonth,
     convertedTrend: convertedThisMonth - convertedLastMonth,
+    contactPageToday,
+    contactPageThisWeek,
+    contactPageTotal,
     pieData,
     recentLeads,
     dayCount,

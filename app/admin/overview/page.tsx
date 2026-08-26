@@ -12,10 +12,12 @@ import {
   Eye,
   AlertCircle,
   ArrowUpRight,
+  Bot,
   CalendarDays,
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Inbox,
   Link2,
   Send,
   ShieldAlert,
@@ -145,6 +147,16 @@ const KPI_STRIP_CLASS =
 // 타일 래퍼 — 모바일은 스냅 카드 폭 고정, md+는 그리드 아이템. 내부 카드/스켈레톤은 높이를 채운다.
 const KPI_TILE_CLASS =
   "w-[76vw] min-w-[220px] max-w-[280px] shrink-0 snap-start md:w-auto md:min-w-0 md:max-w-none [&>*]:h-full"
+// 인바운드 요약 스트립 — 3타일 전용(KPI_STRIP_CLASS는 5열 고정이라 재사용 불가).
+const INBOUND_STRIP_CLASS =
+  "flex snap-x snap-mandatory gap-3 overflow-x-auto pb-1 md:grid md:snap-none md:grid-cols-3 md:overflow-visible md:pb-0"
+
+// 챗봇 stats 응답의 from 파라미터용 로컬 날짜(YYYY-MM-DD).
+function localDateOnly(date: Date) {
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${date.getFullYear()}-${month}-${day}`
+}
 
 interface InstagramOverviewDashboard {
   account: {
@@ -180,6 +192,16 @@ interface OsSummaryPayload {
   events: { count: number; target: number }
 }
 
+// 인바운드 요약 스트립 전용 — /api/admin/chatbot/stats 응답 중 totals만 소비한다.
+interface ChatbotStatsPayload {
+  totals: {
+    questionCount: number
+    unresolvedCount: number
+    handoffCount: number
+    directAnswerCount: number
+  }
+}
+
 interface VisitorStatsPayload {
   today: {
     date: string
@@ -213,6 +235,7 @@ export default function OverviewPage() {
   const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(null)
   const [osSummary, setOsSummary] = useState<OsSummaryPayload | null>(null)
   const [visitorStats, setVisitorStats] = useState<VisitorStatsPayload | null>(null)
+  const [chatbotStats, setChatbotStats] = useState<ChatbotStatsPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [chartRange, setChartRange] = useState<7 | 30>(7)
   const [alertsExpanded, setAlertsExpanded] = useState(false)
@@ -246,6 +269,15 @@ export default function OverviewPage() {
       })
       void fetchJson<VisitorStatsPayload>("/api/admin/visitor-stats?range=7").then((data) => {
         if (!cancelled) setVisitorStats(data ?? null)
+      })
+      // 챗봇 문의 요약 — 무파라미터 stats URL(사이드바 warmup 캐시 키)은 기본 30일 창이라
+      // 인바운드 스트립의 7일 창과 어긋난다 → from을 명시해 별도 키로 조회한다(오늘 포함 7일).
+      const chatbotFrom = new Date()
+      chatbotFrom.setDate(chatbotFrom.getDate() - 6)
+      void fetchJson<ChatbotStatsPayload>(
+        `/api/admin/chatbot/stats?from=${localDateOnly(chatbotFrom)}`
+      ).then((data) => {
+        if (!cancelled) setChatbotStats(data ?? null)
       })
 
       // 대시보드는 앞으로 7일치 일정만 쓰므로 전체 일정 대신 해당 월만 요청한다.
@@ -328,6 +360,9 @@ export default function OverviewPage() {
     thisMonthLeads,
     convertedThisMonth,
     convertedTrend,
+    contactPageToday,
+    contactPageThisWeek,
+    contactPageTotal,
     pieData,
     recentLeads,
   } = leadAgg
@@ -456,6 +491,60 @@ export default function OverviewPage() {
           ))}
         </div>
       </div>
+
+      {/* 인바운드 요약 — 홈페이지 방문·문의(contact)·챗봇 질문을 최상단에 고정한다
+          ('관망 지표 하강 배치' 규칙의 명시적 예외). 세 타일 모두 '최근 7일' 단일 창. */}
+      <section className="relative mb-6">
+        <div className="mb-3 flex items-center gap-2">
+          <h2 className="text-[13px] font-semibold text-[#1a1a1a]/70">인바운드 요약</h2>
+          <span className="text-[11px] text-[#1a1a1a]/40">최근 7일 · 홈페이지 방문 · 문의 · 챗봇</span>
+        </div>
+        <div className={INBOUND_STRIP_CLASS}>
+          <div className={KPI_TILE_CLASS}>
+            {visitorStats ? (
+              <StatCard
+                icon={<Eye className="h-4 w-4" />}
+                label="홈페이지 방문"
+                value={`${visitorStats.totals.homeVisitors.toLocaleString("ko-KR")}명`}
+                sub={`오늘 ${visitorStats.today.homeVisitors} · PV ${visitorStats.totals.homePageViews.toLocaleString("ko-KR")} · 동의 기반`}
+                tone="neutral"
+                sparkline={sparkVisitors.length ? <Sparkline data={sparkVisitors} /> : undefined}
+                href="/admin/traffic"
+              />
+            ) : (
+              <KpiSkeleton />
+            )}
+          </div>
+          <div className={KPI_TILE_CLASS}>
+            {loading ? (
+              <KpiSkeleton />
+            ) : (
+              <StatCard
+                icon={<Inbox className="h-4 w-4" />}
+                label="홈페이지 문의"
+                value={`${contactPageThisWeek}건`}
+                sub={`오늘 ${contactPageToday} · 누적 ${contactPageTotal} · contact 폼`}
+                tone="neutral"
+                href="/admin/crm/customers/leads?source=contact_page"
+              />
+            )}
+          </div>
+          <div className={KPI_TILE_CLASS}>
+            {chatbotStats ? (
+              <StatCard
+                icon={<Bot className="h-4 w-4" />}
+                label="챗봇 문의"
+                value={`${chatbotStats.totals.questionCount.toLocaleString("ko-KR")}건`}
+                sub={`미해결 ${chatbotStats.totals.unresolvedCount} · 상담연결 ${chatbotStats.totals.handoffCount}`}
+                tone="neutral"
+                href="/admin/chatbot"
+              />
+            ) : (
+              <KpiSkeleton />
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* (a) 운영 OS 커맨드 바 — 이 표면의 존재 이유. 신호는 필터드 딥링크로 행동에 직결한다.
           콜드로드: 각 타일은 자기 원천(fetch)이 null이면 '…' 대신 레이아웃 일치 KpiSkeleton을 렌더한다. */}

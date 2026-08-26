@@ -239,6 +239,38 @@ describe("aggregateLeads — 소스·지점·최근 리드", () => {
   })
 })
 
+describe("aggregateLeads — 홈페이지 문의(contact_page) 유입 창", () => {
+  it("contact_page 리드만 오늘·7일·누적으로 센다", () => {
+    const leads = [
+      makeLead({ source: "contact_page", timestamp: localIso(2026, 6, 15, 10) }), // 오늘
+      makeLead({ source: "contact_page", timestamp: localIso(2026, 6, 10, 10) }), // 7일 이내
+      makeLead({ source: "contact_page", timestamp: localIso(2026, 5, 1, 10) }), // 과거(누적만)
+      makeLead({ source: "demo_modal", timestamp: localIso(2026, 6, 15, 10) }), // 다른 소스 제외
+    ]
+    const agg = aggregateLeads(leads, NOW)
+    expect(agg.contactPageToday).toBe(1)
+    expect(agg.contactPageThisWeek).toBe(2)
+    expect(agg.contactPageTotal).toBe(3)
+  })
+
+  it("유입 수 관점이라 확인 게이트와 무관하게 센다", () => {
+    const agg = aggregateLeads(
+      [makeLead({ source: "contact_page", confirmed_at: undefined })],
+      NOW
+    )
+    expect(agg.contactPageToday).toBe(1)
+    expect(agg.contactPageThisWeek).toBe(1)
+    expect(agg.contactPageTotal).toBe(1)
+  })
+
+  it("잘못된 timestamp는 기간 창에서 제외되지만 누적에는 포함된다", () => {
+    const agg = aggregateLeads([makeLead({ source: "contact_page", timestamp: "not-a-date" })], NOW)
+    expect(agg.contactPageToday).toBe(0)
+    expect(agg.contactPageThisWeek).toBe(0)
+    expect(agg.contactPageTotal).toBe(1)
+  })
+})
+
 describe("deriveBlogInsights", () => {
   it("CTA 커버리지는 공개 글 기준 반올림, 미완성 CTA 수를 함께 산출", () => {
     const posts = [
