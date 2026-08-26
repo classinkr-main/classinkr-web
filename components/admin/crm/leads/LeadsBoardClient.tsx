@@ -27,6 +27,7 @@ import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/r
 import type { PublicEvent } from "@/lib/types/public-events"
 import { parseEventToken, setEventToken } from "@/lib/types/event-metrics"
 import {
+  STATUS_DOT,
   STATUS_LABEL,
   STATUS_COLOR,
   StatusPill,
@@ -1552,6 +1553,7 @@ export default function LeadsBoardClient() {
     stalledLeads,
     pipelineRiskLeads,
     stageSummaries,
+    stageTotal,
     ownerSummaries,
     filterCards,
     todayFollowUpCount,
@@ -1740,6 +1742,8 @@ export default function LeadsBoardClient() {
 
     // 숫자 진입점은 아래 필터 카운트 카드로 단일화 — 여기서 별도 카드 배열을 만들지 않는다.
     // 필터 카드에 없는 "오늘 예정"(팔로업)만 큐 패널 헤더 배지로 노출한다.
+    // 비율 바의 분모 — 네 단계 합(= 확인 완료 리드 수). activeLeads 는 전환·종료를 빼므로 분모가 아니다.
+    const stageTotal = stageSummaries.reduce((sum, stage) => sum + stage.count, 0)
     const todayFollowUpCount = todayFollowUps.length
     const filteredIds = filtered.map((lead) => lead.id)
     // 지금 게이트에 걸려 안 보이는 미확인 리드 수 — 숫자를 숨기지 않고 토글 옆에 그대로 붙인다.
@@ -1762,6 +1766,7 @@ export default function LeadsBoardClient() {
       stalledLeads,
       pipelineRiskLeads,
       stageSummaries,
+      stageTotal,
       ownerSummaries,
       filterCards,
       todayFollowUpCount,
@@ -2112,27 +2117,47 @@ export default function LeadsBoardClient() {
                   오늘 예정 {todayFollowUpCount}
                 </span>
               )}
-              <span className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[12px] font-medium text-[#1a1a1a]/55">
-                활성 {activeLeads.length}건
+              <span
+                title="아래 비율 바의 분모 — 확인 완료 리드를 네 단계가 남김없이 나눈 수입니다. '활성'은 여기서 전환·종료를 뺀 수입니다."
+                className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[12px] font-medium text-[#1a1a1a]/55"
+              >
+                활성 {activeLeads.length} / 전체 {stageTotal.toLocaleString("ko-KR")}건
               </span>
             </div>
           </div>
           <div className="divide-y divide-[#f0f0ec]">
-            {stageSummaries.map((stage) => (
-              <button
-                key={stage.status}
-                type="button"
-                onClick={() => setFilter(stage.status)}
-                className="flex w-full items-center justify-between gap-3 px-1 py-2.5 text-left transition-colors hover:bg-[#fafaf8]"
-              >
-                <StatusPill status={stage.status} />
-                <span className="flex items-center gap-3 text-[11px] text-[#1a1a1a]/40">
-                  <span>고득점 {stage.highScore}</span>
-                  {stage.stageOverdue > 0 && <span className="font-medium text-[#B85C33]">지연 {stage.stageOverdue}</span>}
-                  <span className="min-w-[2.5rem] text-right text-[15px] font-bold tabular-nums text-[#111110]">{stage.count}</span>
-                </span>
-              </button>
-            ))}
+            {stageSummaries.map((stage) => {
+              // 네 단계는 확인 완료 리드를 남김없이 나눈다 — 그래서 비율의 합이 정확히 100%다.
+              // (필터 카드는 게이트 면제 때문에 분모가 갈려 바를 못 그린다. 여기만 성립한다.)
+              const share = stageTotal > 0 ? (stage.count / stageTotal) * 100 : 0
+              return (
+                <button
+                  key={stage.status}
+                  type="button"
+                  onClick={() => setFilter(stage.status)}
+                  title={`${STATUS_LABEL[stage.status]} ${stage.count.toLocaleString("ko-KR")}건 · 전체의 ${share.toFixed(1)}%`}
+                  className="block w-full px-1 py-2.5 text-left transition-colors hover:bg-[#fafaf8]"
+                >
+                  <span className="flex items-center justify-between gap-3">
+                    <StatusPill status={stage.status} />
+                    <span className="flex items-center gap-3 text-[11px] text-[#1a1a1a]/40">
+                      <span>고득점 {stage.highScore}</span>
+                      {stage.stageOverdue > 0 && <span className="font-medium text-[#B85C33]">지연 {stage.stageOverdue}</span>}
+                      <span className="min-w-[3rem] text-right text-[19px] font-bold leading-none tracking-[-0.02em] tabular-nums text-[#111110]">
+                        {stage.count.toLocaleString("ko-KR")}
+                      </span>
+                    </span>
+                  </span>
+                  {/* 비중 — 색축은 상태점(STATUS_DOT)과 같은 것을 쓴다. 새 색을 들이지 않는다. */}
+                  <span aria-hidden className="mt-2 block h-[3px] w-full overflow-hidden rounded-full bg-[#f0f0ec]">
+                    <span
+                      className="block h-full rounded-full transition-[width]"
+                      style={{ width: `${share}%`, backgroundColor: STATUS_DOT[stage.status] }}
+                    />
+                  </span>
+                </button>
+              )
+            })}
           </div>
         </div>
 

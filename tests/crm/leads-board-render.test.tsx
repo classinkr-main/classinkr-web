@@ -80,6 +80,17 @@ describe("리드 보드 골격 (SSR)", () => {
     expect(html).toContain('id="lead-queue"')
   })
 
+  it("단계별 현황이 비율 바와 분모를 함께 낸다", () => {
+    // 네 단계는 확인 완료 리드를 남김없이 나누므로 비율의 합이 100%다 — 필터 카드는
+    // 게이트 면제로 분모가 갈려 이 바를 못 그린다. 여기만 성립한다는 게 이 테스트의 요지.
+    const html = render()
+    expect(html).toContain("단계별 현황")
+    // 분모가 화면에 드러나야 바가 읽힌다("활성"은 전환·종료를 뺀 수라 분모가 아니다)
+    expect(html).toContain("전체")
+    // 상태점 색축을 그대로 쓴다 — 바에 새 색을 들이지 않는다
+    for (const color of ["#1D9E75", "#A8741A", "#084734", "#9A9A94"]) expect(html).toContain(color)
+  })
+
   it("직교 필터 딥링크(24h 미응대)도 같은 골격을 낸다", () => {
     const html = render("filter=unresponded_24h&lens=all&sort=priority")
     expect(html).toContain("24h+")
