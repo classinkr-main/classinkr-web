@@ -2172,7 +2172,7 @@ export default function LeadsBoardClient() {
 
       {/* 미확인 수신함 — 공개 폼(문의·데모·뉴스레터 등) 원본 유입. 확인해야 아래 리드 목록에 반영된다. */}
       {view === "console" && unconfirmedLeads.length > 0 && (
-        <div id="unconfirmed-inbox" className="mb-6 scroll-mt-24 rounded-2xl border border-[#ECD29C] bg-[#FBF1E0] p-4">
+        <div id="unconfirmed-inbox" className="mb-6 scroll-mt-24 rounded-2xl border-[1.15px] border-[#ECD29C] bg-transparent p-4">
           <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[#7A520F]/80">Unconfirmed Inbox</p>
@@ -2238,7 +2238,7 @@ export default function LeadsBoardClient() {
       )}
 
       {view === "console" && pipelineRiskLeads.length > 0 && (
-        <div id="pipeline-risk" className="mb-6 scroll-mt-24 rounded-2xl border border-[#F6D5C5] bg-[#FEF8F5] p-4">
+        <div id="pipeline-risk" className="mb-6 scroll-mt-24 rounded-2xl border-[1.15px] border-[#F6D5C5] bg-transparent p-4">
           <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[#B85C33]/70">Pipeline Risk</p>
