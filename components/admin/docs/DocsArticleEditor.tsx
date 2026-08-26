@@ -26,6 +26,7 @@ import {
   Minus,
   Quote,
   RotateCcw,
+  Route,
   Save,
   Sparkles,
   Trash2,
@@ -47,7 +48,22 @@ import {
 } from "@/components/docs"
 import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import type { AdminDocsContentResponse } from "@/lib/admin-docs"
-import { getDocsEditorHelp } from "@/lib/admin/docs-editor-usability"
+import {
+  PATH_STEP_EXAMPLE,
+  PATH_STEP_MARKDOWN,
+  getDocsEditorHelp,
+  restorePathStepMarkup,
+} from "@/lib/admin/docs-editor-usability"
+import {
+  DROPPED_INTRO_WARNING,
+  buildContentJson,
+  estimateReadMinutes,
+  hasDroppedIntroContent,
+  markdownToSections,
+  reconcileSectionsWithPrevious,
+  type StructuredDocMedia,
+  type StructuredDocSection,
+} from "@/lib/admin/docs-markdown"
 import type {
   DocsArticleAnalyticsDetail,
   DocsArticleDetail,
@@ -196,8 +212,6 @@ const DOC_TEMPLATES: DocsArticleTemplate[] = [
     difficulty: "beginner",
     contentMarkdown: `# 새 운영 가이드
 
-이 문서는 운영팀이 같은 기준으로 움직일 수 있도록 상황, 순서, 체크리스트, 안내 문구를 정리합니다.
-
 ## 대상과 사용 시점
 
 누가 읽고 언제 쓰는 문서인지 한 문장으로 정리합니다.
@@ -248,8 +262,6 @@ const DOC_TEMPLATES: DocsArticleTemplate[] = [
     difficulty: "beginner",
     contentMarkdown: `# 새 기능 매뉴얼
 
-이 문서는 특정 기능을 설정하고 결과를 확인하는 방법을 정리합니다.
-
 ## 사용 전 확인
 
 기능을 쓰기 전에 필요한 권한, 계정, 준비 상태를 적습니다.
@@ -292,8 +304,6 @@ const DOC_TEMPLATES: DocsArticleTemplate[] = [
     difficulty: "beginner",
     contentMarkdown: `# 새 FAQ
 
-자주 묻는 질문에 짧고 정확하게 답합니다.
-
 ## 질문
 
 사용자가 실제로 묻는 표현으로 질문을 적습니다.
@@ -328,8 +338,6 @@ const DOC_TEMPLATES: DocsArticleTemplate[] = [
     docType: "troubleshooting",
     difficulty: "beginner",
     contentMarkdown: `# 새 문제 해결 문서
-
-수업 중에는 원인 분석보다 빠른 복구를 우선합니다.
 
 ## 증상
 
@@ -373,8 +381,6 @@ const DOC_TEMPLATES: DocsArticleTemplate[] = [
     docType: "release_note",
     difficulty: "beginner",
     contentMarkdown: `# 새 업데이트 안내
-
-변경된 내용과 운영팀이 확인할 조치를 정리합니다.
 
 ## 변경 내용
 
@@ -682,86 +688,17 @@ function createSummaryDraft(form: Pick<FormState, "description" | "contentMarkdo
   return summary.slice(0, 180)
 }
 
-interface StructuredDocSection {
-  heading: string
-  body: string
-  steps?: string[]
-}
-
-function estimateReadMinutes(markdown: string) {
-  const compact = markdown.replace(/[#*`>\-[\]().]/g, " ").replace(/\s+/g, " ").trim()
-  if (!compact) return 1
-
-  return Math.max(1, Math.ceil(compact.length / 900))
-}
-
-function normalizeMarkdown(markdown: string) {
-  return markdown.replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim()
-}
-
-function buildSection(heading: string, lines: string[]): StructuredDocSection | null {
-  const bodyLines: string[] = []
-  const steps: string[] = []
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    const stepMatch = trimmed.match(/^[-*]\s+(.+)$/)
-
-    if (stepMatch?.[1]) {
-      steps.push(stepMatch[1].trim())
-      continue
-    }
-
-    if (trimmed.startsWith("# ")) continue
-    bodyLines.push(line)
-  }
-
-  const body = normalizeMarkdown(bodyLines.join("\n")) || (steps.length ? "아래 항목을 순서대로 확인하세요." : "")
-  if (!heading.trim() || (!body && steps.length === 0)) return null
-
-  return {
-    heading: heading.trim(),
-    body,
-    ...(steps.length ? { steps } : {}),
-  }
-}
-
-function markdownToSections(markdown: string): StructuredDocSection[] {
-  const lines = markdown.replace(/\r\n/g, "\n").split("\n")
-  const sections: StructuredDocSection[] = []
-  const introLines: string[] = []
-  let currentHeading = ""
-  let currentLines: string[] = []
-
-  const pushCurrent = () => {
-    if (!currentHeading) return
-    const section = buildSection(currentHeading, currentLines)
-    if (section) sections.push(section)
-  }
-
-  for (const line of lines) {
-    const headingMatch = line.match(/^##\s+(.+)$/)
-    if (headingMatch?.[1]) {
-      pushCurrent()
-      currentHeading = headingMatch[1].trim()
-      currentLines = []
-      continue
-    }
-
-    if (currentHeading) {
-      currentLines.push(line)
-      continue
-    }
-
-    introLines.push(line)
-  }
-
-  pushCurrent()
-
-  if (sections.length > 0) return sections
-
-  const intro = buildSection("개요", introLines)
-  return intro ? [intro] : []
+/** 승격된 미디어는 본문에서 빠지므로, 미리보기에서도 공개 화면처럼 figure로 다시 보여준다. */
+function mediaToMarkdown(media: StructuredDocMedia[]) {
+  return media
+    .map((item) => {
+      const title = [item.caption, item.width ? `width=${item.width}` : ""].filter(Boolean).join(" | ")
+      const suffix = title ? ` "${title}"` : ""
+      return item.type === "image"
+        ? `![${item.alt}](${item.src}${suffix})`
+        : `[${item.alt}](${item.src})`
+    })
+    .join("\n\n")
 }
 
 function toPreviewArticleSections(sections: StructuredDocSection[]): DocsArticleSection[] {
@@ -773,6 +710,9 @@ function toPreviewArticleSections(sections: StructuredDocSection[]): DocsArticle
       label: step,
       checked: true,
     })),
+    children: section.media?.length ? (
+      <BlogMarkdownRenderer markdown={mediaToMarkdown(section.media)} />
+    ) : undefined,
   }))
 }
 
@@ -783,28 +723,12 @@ function toPreviewTocItems(sections: StructuredDocSection[]): DocsTocItem[] {
   }))
 }
 
-function buildContentJson(
-  markdown: string,
-  previousContentJson?: Record<string, unknown>
-): Record<string, unknown> {
-  return {
-    ...(previousContentJson ?? {}),
-    source: "admin-editor",
-    readMinutes: estimateReadMinutes(markdown),
-    updatedAt: new Date().toISOString().slice(0, 10),
-    sections: markdownToSections(markdown),
-  }
-}
-
 function createArticleDraft(form: FormState) {
   const title = form.title.trim() || "새 문서"
   const audience = form.audience.trim() || "원장, 운영팀"
-  const context = form.description.trim() || "이 문서의 목적을 한 문장으로 정리합니다."
 
   if (form.docType === "faq") {
     return `# ${title}
-
-${context}
 
 ## 질문
 
@@ -825,8 +749,6 @@ ${context}
 
   if (form.docType === "troubleshooting") {
     return `# ${title}
-
-${context}
 
 ## 증상
 
@@ -850,8 +772,6 @@ ${context}
   }
 
   return `# ${title}
-
-${context}
 
 ## 대상과 사용 시점
 
@@ -1011,15 +931,18 @@ function ToolbarButton({
   onClick,
   children,
   icon,
+  title,
 }: {
   onClick: () => void
   children: string
   icon?: ReactNode
+  title?: string
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      title={title}
       className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors duration-75 hover:border-[#1a1a1a]/20 hover:text-[#111110] active:scale-[0.96] active:bg-[#f7f7f5]"
     >
       {icon}
@@ -1135,9 +1058,22 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       }),
     [form.contentMarkdown, form.description]
   )
+  // WYSIWYG 직렬화가 경로 스텝의 " > "와 [대괄호]를 이스케이프하므로 파서에 넣기 전에 되돌린다
+  // (저장 경로 buildPayload도 같은 정규화를 거친다 — 미리보기와 저장 결과가 갈리면 안 된다).
+  // reconcile까지 걸어야 미리보기가 저장 결과와 같아진다 — 이전 content_json에서 이미지 크기를
+  // 이어받고, resources 전용 블록과 겹치는 "첨부 자료" 섹션을 떨어낸 뒤의 모습이 실제 공개 화면이다.
   const previewSections = useMemo(
-    () => markdownToSections(form.contentMarkdown),
-    [form.contentMarkdown]
+    () =>
+      reconcileSectionsWithPrevious(
+        markdownToSections(restorePathStepMarkup(form.contentMarkdown)),
+        article?.contentJson
+      ),
+    [article?.contentJson, form.contentMarkdown]
+  )
+  // 첫 ## 앞 산문은 저장 시 조용히 사라진다 — 파서 동작은 그대로 두고 편집기에서 경고만 한다.
+  const introDropped = useMemo(
+    () => hasDroppedIntroContent(form.contentMarkdown, form.description),
+    [form.contentMarkdown, form.description]
   )
   // 미리보기 모달(previewOpen)에서만 소비되므로 닫혀 있으면 섹션 오브젝트 빌드를 건너뛴다.
   const previewArticleSections = useMemo(
@@ -1809,7 +1745,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
       symptoms: fromCsv(next.symptomsCsv),
       chatbotSummary: next.chatbotSummary.trim() ? next.chatbotSummary.trim() : null,
       contentMarkdown: next.contentMarkdown,
-      contentJson: buildContentJson(next.contentMarkdown, article?.contentJson),
+      // 마크다운 원문은 그대로 저장한다(이스케이프된 상태도 유효한 마크다운이라 편집기 왕복은 멀쩡하다).
+      // 규약을 문자열로 읽는 sections만 경로 스텝을 되돌려 넘긴다.
+      contentJson: buildContentJson(restorePathStepMarkup(next.contentMarkdown), article?.contentJson),
       productArea: next.productArea,
       docType: next.docType,
       difficulty: next.difficulty,
@@ -2388,6 +2326,13 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     <ToolbarButton onClick={() => editorRef.current?.toggleOrderedList()} icon={<ListOrdered className="h-3 w-3" />}>
                       번호
                     </ToolbarButton>
+                    <ToolbarButton
+                      onClick={() => editorRef.current?.insertMarkdown(PATH_STEP_MARKDOWN)}
+                      icon={<Route className="h-3 w-3" />}
+                      title={`${PATH_STEP_EXAMPLE} — 공개 문서에서 이동 경로 칩으로 보입니다.`}
+                    >
+                      경로
+                    </ToolbarButton>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <ToolbarButton onClick={() => editorRef.current?.insertLink()} icon={<Link2 className="h-3 w-3" />}>
@@ -2422,6 +2367,13 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   />
                 </div>
               </div>
+
+              {introDropped ? (
+                <div className="mb-4 flex items-start gap-2.5 rounded-[8px] border border-[#ECD29C] bg-[#FBF1E0] px-3.5 py-3 text-[11px] leading-4 text-[#7A520F]">
+                  <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>{DROPPED_INTRO_WARNING}</p>
+                </div>
+              ) : null}
 
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
                 <RichMarkdownEditor
@@ -2495,6 +2447,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                       <p>**굵게** · *기울임* · ==강조==</p>
                       <p>{"{{green:브랜드색}} · [링크](url)"}</p>
                       <p>![설명](/images/example.png) · {">"} 인용</p>
+                      <p>- {PATH_STEP_EXAMPLE} → 이동 경로 칩</p>
                     </div>
                   </div>
                 </div>

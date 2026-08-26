@@ -35,6 +35,7 @@ import DocsQualityPanel from "@/components/admin/docs/DocsQualityPanel"
 import DocsRecommendedQuestionsManager from "@/components/admin/docs/DocsRecommendedQuestionsManager"
 import DocsRedirectManager from "@/components/admin/docs/DocsRedirectManager"
 import AdminTabs from "@/components/admin/AdminTabs"
+import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import CsConsoleNav from "@/components/admin/cs/CsConsoleNav"
 import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import type {
@@ -61,6 +62,10 @@ interface SavedDocsView {
   readinessFilter: string
   searchQuery: string
   sortMode?: DocsSortMode
+  // 아래 둘은 나중에 추가된 축이다 — 이전에 저장된 뷰에는 없으므로 optional로 두고
+  // applySavedView에서 기본값(전체 / 끔)으로 되돌린다.
+  visibilityFilter?: string
+  publicGuidesOnly?: boolean
 }
 
 interface InlineArticleDraft {
@@ -153,12 +158,59 @@ const ARTICLE_VISIBILITY_OPTIONS = [
   { value: "internal", label: "내부" },
 ]
 
+// 가시성 축 — 144행 중 공개 60 / 링크 공개 59 / 내부 25 (프로덕션 실측 2026-08-26).
+// 편집자가 실제로 손보는 건 `공개`뿐인데 이 축이 없어서 채널톡 동기화본(링크 공개)과
+// 내부 CS 캐논이 목록에 그대로 섞여 있었다.
+const VISIBILITY_FILTERS = [
+  { value: "all", label: "전체 가시성" },
+  { value: "public", label: "공개" },
+  { value: "unlisted", label: "링크 공개" },
+  { value: "internal", label: "내부" },
+]
+
 const READINESS_FILTERS = [
   { value: "all", label: "전체 준비 상태" },
   { value: "ai-issues", label: "AI 보강 필요" },
   { value: "stale", label: "검수 주기 초과" },
   { value: "featured", label: "대표 문서" },
 ]
+
+// 목록 초기 렌더 행 수 — 144행을 한 번에 그리던 것을 공용 ShowMore로 끊는다.
+const ARTICLE_PAGE_SIZE = 40
+
+/**
+ * 공개 사이트 목록 노출 기준과 같은 조건.
+ * - status: lib/docs-content.ts 가 published만 읽는다.
+ * - visibility === "public" && !noindex: app/docs/_utils.tsx 의 isListedDoc.
+ * 셋 중 하나라도 어긋나면 /docs 목록에 안 뜬다 = 편집자의 작업 대상이 아니다.
+ */
+function isPublicGuide(article: AdminDocsArticleSummary) {
+  return article.status === "published" && article.visibility === "public" && !article.noindex
+}
+
+// updated_by → 출처. 자동 파이프라인 식별자는 고정 문자열이고, 그 밖의 값은 사람 이름이다.
+// 프로덕션 실측(2026-08-26): seed-docs 62 / sync-channel-documents 58 / seed-internal-canon 12 /
+// 사람 12(classin-admin 8·Codex 2·Dev 1·MOON 1).
+const DOC_SOURCE_LABELS: Record<string, string> = {
+  "seed-docs": "정적 원본",
+  "sync-channel-documents": "채널톡 동기화",
+  "seed-internal-canon": "내부 CS",
+  "cs-knowledge-promotion": "내부 CS",
+}
+
+/**
+ * 사람이 손댄 문서는 재시드로 덮으면 안 되는 행이라 편집자에게 가장 중요한 구분이다.
+ * 자동 식별자 목록에 없으면 전부 사람으로 본다(새 편집자 이름이 늘어도 자동으로 잡힌다).
+ */
+function getDocSource(updatedBy: string | null) {
+  const key = updatedBy?.trim()
+  if (!key) return { label: "-", editor: null as string | null, byHuman: false }
+
+  const preset = DOC_SOURCE_LABELS[key]
+  if (preset) return { label: preset, editor: null as string | null, byHuman: false }
+
+  return { label: "직접 편집", editor: key, byHuman: true }
+}
 
 const DOC_SORT_OPTIONS = [
   { value: "public-order", label: "왼쪽 사이드 순서" },
@@ -311,8 +363,11 @@ function AdminDocsPageContent() {
   const [searchQuery, setSearchQuery] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [visibilityFilter, setVisibilityFilter] = useState("all")
   const [docTypeFilter, setDocTypeFilter] = useState("all")
   const [readinessFilter, setReadinessFilter] = useState("all")
+  // 기존 동작 보존 — 기본은 꺼짐(전체 144행 그대로).
+  const [publicGuidesOnly, setPublicGuidesOnly] = useState(false)
   const [sortMode, setSortMode] = useState<DocsSortMode>("public-order")
   const [reindexing, setReindexing] = useState(false)
   const [reindexNotice, setReindexNotice] = useState<{
@@ -385,6 +440,8 @@ function AdminDocsPageContent() {
       readinessFilter,
       searchQuery,
       sortMode,
+      visibilityFilter,
+      publicGuidesOnly,
     }
     persistSavedViews([view, ...savedViews].slice(0, 8))
   }
@@ -395,7 +452,32 @@ function AdminDocsPageContent() {
     setDocTypeFilter(view.docTypeFilter)
     setReadinessFilter(view.readinessFilter)
     setSearchQuery(view.searchQuery)
+    // 축이 늘기 전에 저장된 뷰는 이 값들이 없다 — 없으면 기본값으로 되돌린다.
+    setVisibilityFilter(view.visibilityFilter ?? "all")
+    setPublicGuidesOnly(view.publicGuidesOnly ?? false)
     if (isDocsSortMode(view.sortMode)) setSortMode(view.sortMode)
+  }
+
+  /**
+   * `공개 가이드만` 토글 — status·visibility 셀렉트를 실제로 움직여서 화면에 보이는 값과
+   * 실제 필터가 어긋나지 않게 한다. 이 토글이 두 셀렉트보다 더 좁히는 건 noindex 제외뿐이다.
+   */
+  function togglePublicGuidesOnly() {
+    const next = !publicGuidesOnly
+    setPublicGuidesOnly(next)
+    setStatusFilter(next ? "published" : "all")
+    setVisibilityFilter(next ? "public" : "all")
+  }
+
+  // 셀렉트를 직접 만지면 토글은 더 이상 참이 아니다(빠른 필터는 두 셀렉트의 프리셋이다).
+  function changeStatusFilter(value: string) {
+    setStatusFilter(value)
+    if (value !== "published") setPublicGuidesOnly(false)
+  }
+
+  function changeVisibilityFilter(value: string) {
+    setVisibilityFilter(value)
+    if (value !== "public") setPublicGuidesOnly(false)
   }
 
   const handleReindex = useCallback(async () => {
@@ -667,6 +749,9 @@ function AdminDocsPageContent() {
         const matchesCategory =
           categoryFilter === "all" || article.categoryId === categoryFilter
         const matchesStatus = statusFilter === "all" || article.status === statusFilter
+        const matchesVisibility =
+          visibilityFilter === "all" || article.visibility === visibilityFilter
+        const matchesPublicGuide = !publicGuidesOnly || isPublicGuide(article)
         const matchesType = docTypeFilter === "all" || article.docType === docTypeFilter
         const matchesReadiness =
           readinessFilter === "all" ||
@@ -681,7 +766,15 @@ function AdminDocsPageContent() {
           article.tags.some((tag) => tag.toLowerCase().includes(query)) ||
           article.keywords.some((keyword) => keyword.toLowerCase().includes(query))
 
-        return matchesCategory && matchesStatus && matchesType && matchesReadiness && matchesQuery
+        return (
+          matchesCategory &&
+          matchesStatus &&
+          matchesVisibility &&
+          matchesPublicGuide &&
+          matchesType &&
+          matchesReadiness &&
+          matchesQuery
+        )
       })
       .sort((left, right) => {
         if (sortMode === "updated") {
@@ -709,11 +802,30 @@ function AdminDocsPageContent() {
     categoryOrderById,
     content,
     docTypeFilter,
+    publicGuidesOnly,
     readinessFilter,
     searchQuery,
     sortMode,
     statusFilter,
+    visibilityFilter,
   ])
+
+  const publicGuideCount = useMemo(
+    () => (content?.articles ?? []).filter(isPublicGuide).length,
+    [content]
+  )
+
+  const {
+    visible: visibleArticleCount,
+    showMore: showMoreArticles,
+    collapse: collapseArticles,
+    canCollapse: canCollapseArticles,
+  } = useVisibleCount(filteredArticles.length, ARTICLE_PAGE_SIZE)
+
+  const visibleArticles = useMemo(
+    () => filteredArticles.slice(0, visibleArticleCount),
+    [filteredArticles, visibleArticleCount]
+  )
 
   const warnings = [...(content?.warnings ?? []), ...(analytics?.warnings ?? [])]
   const summary = analytics?.summary
@@ -915,8 +1027,14 @@ function AdminDocsPageContent() {
           <div className="flex flex-col gap-4 border-b border-[#e8e8e4] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-[14px] font-semibold text-[#111110]">문서 목록</h2>
-              <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
+              <p className="mt-0.5 text-[11px] tabular-nums text-[#1a1a1a]/40">
                 {formatNumber(filteredArticles.length)}개 표시
+                {filteredArticles.length > visibleArticles.length
+                  ? ` · ${formatNumber(visibleArticles.length)}개 렌더`
+                  : ""}
+                {filteredArticles.length !== (content?.articles.length ?? 0)
+                  ? ` · 전체 ${formatNumber(content?.articles.length ?? 0)}개`
+                  : ""}
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -931,10 +1049,23 @@ function AdminDocsPageContent() {
               </label>
               <select
                 value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
+                onChange={(event) => changeStatusFilter(event.target.value)}
+                aria-label="상태 필터"
                 className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
               >
                 {STATUS_FILTERS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={visibilityFilter}
+                onChange={(event) => changeVisibilityFilter(event.target.value)}
+                aria-label="가시성 필터"
+                className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] text-[#111110] outline-none transition-colors focus:border-[#084734]"
+              >
+                {VISIBILITY_FILTERS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -992,6 +1123,31 @@ function AdminDocsPageContent() {
 
           <div className="flex flex-col gap-3 border-b border-[#e8e8e4] bg-[#FAFAF8] px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
+              {/* 빠른 필터 — 편집자가 실제로 손보는 문서(= /docs 목록에 뜨는 문서)만 남긴다.
+                  기본은 꺼짐이라 기존 동작이 그대로 유지되고, 켜면 상태·가시성 셀렉트가
+                  published·공개로 함께 움직여 화면에 보이는 값과 실제 필터가 일치한다. */}
+              <button
+                type="button"
+                onClick={togglePublicGuidesOnly}
+                aria-pressed={publicGuidesOnly}
+                title="공개 사이트(/docs) 목록에 노출되는 문서만 봅니다 — 게시됨 · 공개 · 색인 허용."
+                className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-semibold transition-colors ${
+                  publicGuidesOnly
+                    ? "border-[#084734] bg-white text-[#084734]"
+                    : "border-[#e8e8e4] bg-white text-[#1a1a1a]/55 hover:border-[#084734]/30 hover:text-[#084734]"
+                }`}
+              >
+                {publicGuidesOnly ? (
+                  <CheckSquare className="h-3.5 w-3.5" />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" />
+                )}
+                공개 가이드만
+                <span className="tabular-nums font-normal text-[#1a1a1a]/35">
+                  {formatNumber(publicGuideCount)}
+                </span>
+              </button>
+              <span aria-hidden className="h-4 w-px bg-[#e8e8e4]" />
               <button
                 type="button"
                 onClick={saveCurrentView}
@@ -1021,12 +1177,14 @@ function AdminDocsPageContent() {
                   <th className="px-4 py-3 font-semibold">
                     <input
                       type="checkbox"
-                      checked={filteredArticles.length > 0 && filteredArticles.every((article) => selectedArticleIds.includes(article.id))}
+                      // 화면에 그려진 행만 대상으로 한다 — `더보기`로 아직 펼치지 않은 행까지
+                      // 조용히 선택하면 일괄 수정이 보이지 않는 문서에 적용된다.
+                      checked={visibleArticles.length > 0 && visibleArticles.every((article) => selectedArticleIds.includes(article.id))}
                       onChange={(event) => {
                         if (event.target.checked) {
-                          setSelectedArticleIds(Array.from(new Set([...selectedArticleIds, ...filteredArticles.map((article) => article.id)])))
+                          setSelectedArticleIds(Array.from(new Set([...selectedArticleIds, ...visibleArticles.map((article) => article.id)])))
                         } else {
-                          const visibleIds = new Set(filteredArticles.map((article) => article.id))
+                          const visibleIds = new Set(visibleArticles.map((article) => article.id))
                           setSelectedArticleIds((previous) => previous.filter((id) => !visibleIds.has(id)))
                         }
                       }}
@@ -1039,7 +1197,7 @@ function AdminDocsPageContent() {
                   <th className="px-4 py-3 font-semibold">사이드 순서</th>
                   <th className="px-4 py-3 font-semibold">상태</th>
                   <th className="px-4 py-3 font-semibold">유형</th>
-                  <th className="px-4 py-3 font-semibold">업데이트</th>
+                  <th className="px-4 py-3 font-semibold">업데이트 · 출처</th>
                   <th className="w-[176px] px-4 py-3 font-semibold">액션</th>
                 </tr>
               </thead>
@@ -1057,12 +1215,13 @@ function AdminDocsPageContent() {
                     </td>
                   </tr>
                 ) : (
-                  filteredArticles.map((article) => {
+                  visibleArticles.map((article) => {
                     const editHref = `/admin/docs/${article.id}/edit`
                     const isEditing = editingArticleId === article.id
                     const draft = isEditing ? inlineDraft : null
                     const rowSaving = articleSavingId === article.id
                     const orderMeta = getArticleOrderMeta(article, content?.articles ?? [])
+                    const source = getDocSource(article.updatedBy)
                     return (
                     <tr
                       key={article.id}
@@ -1247,8 +1406,31 @@ function AdminDocsPageContent() {
                         <div>{DOC_TYPE_LABELS[article.docType] ?? article.docType}</div>
                         <div className="mt-1 text-[#1a1a1a]/30">{article.productArea}</div>
                       </td>
+                      {/* 업데이트 · 출처 — `유형` 칸과 같은 2단 텍스트 관례(주 값 + 흐린 보조 값).
+                          출처는 배지가 아니라 텍스트다: DESIGN.md `어드민 라벨 단순화`대로
+                          사람이 손댄 행만 글자색 + 왼쪽 1px 선으로 구분한다(재시드 금지 신호).
+                          편집자 이름은 #084734/75(흰 배경 5.25:1) — /60은 3.49:1로 WCAG AA 미달이었다. */}
                       <td className="px-4 py-4 text-[12px] text-[#1a1a1a]/55">
-                        {formatDate(article.updatedAt ?? article.lastReviewedAt)}
+                        <div className="tabular-nums">
+                          {formatDate(article.updatedAt ?? article.lastReviewedAt)}
+                        </div>
+                        {source.byHuman ? (
+                          <div className="mt-1 border-l border-[#084734] pl-1.5 font-semibold text-[#084734]">
+                            {source.label}
+                            {source.editor ? (
+                              <span className="ml-1 font-normal text-[#084734]/75">
+                                {source.editor}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div className="mt-1 text-[#1a1a1a]/30">{source.label}</div>
+                        )}
+                        {article.stale && article.reviewAgeDays !== null ? (
+                          <div className="mt-1 text-[11px] text-[#1a1a1a]/30">
+                            검토 {formatNumber(article.reviewAgeDays)}일 경과
+                          </div>
+                        ) : null}
                       </td>
                       <td className="w-[176px] whitespace-nowrap px-4 py-4">
                         <div className="flex flex-nowrap items-center gap-2">
@@ -1316,6 +1498,20 @@ function AdminDocsPageContent() {
               </tbody>
             </table>
           </div>
+
+          {/* 144행을 한 번에 그리던 자리 — 공용 ShowMore로 끊는다(서버 페이징이 아니라
+              이미 메모리에 있는 배열 슬라이싱이라 필터·정렬 결과는 그대로 유지된다). */}
+          {!loading && filteredArticles.length > ARTICLE_PAGE_SIZE ? (
+            <div className="border-t border-[#e8e8e4] px-4 py-3">
+              <ShowMore
+                visible={visibleArticles.length}
+                total={filteredArticles.length}
+                step={ARTICLE_PAGE_SIZE}
+                onMore={showMoreArticles}
+                onCollapse={canCollapseArticles ? collapseArticles : undefined}
+              />
+            </div>
+          ) : null}
         </div>
 
         <aside className="space-y-6">
