@@ -19,5 +19,6 @@ export function KpiCard({
   tone?: "neutral" | "success" | "warn"
 }) {
   const vizTone = tone === "success" ? "brand" : tone === "warn" ? "danger" : "neutral"
-  return <StatTile icon={icon} label={label} value={value} hint={hint} tone={vizTone} compact />
+  // 대표 숫자는 34px(lg) — 카드 밀도는 compact 로 유지하되 값만 키운다.
+  return <StatTile icon={icon} label={label} value={value} hint={hint} tone={vizTone} compact valueSize="lg" />
 }

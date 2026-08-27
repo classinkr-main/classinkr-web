@@ -119,7 +119,7 @@ function hasShape(series: number[]): boolean {
  * 예산 집행률 미입력 타일 — 값이 null 이면 "—" 만 두지 않고 "채워야 할 자리"로 보이게 한다.
  * 점선 테두리 + 광고 탭(채널 예산·집행 표) 드릴다운 CTA. StatTile 은 점선 변형을 노출하지 않고
  * primitives 는 이번 작업 범위 밖이라, 이 한 곳에만 필요한 빈 상태를 여기서 지역 렌더한다
- * (시각은 StatTile compact 카드와 동일: rounded-2xl · p-4 · 라벨 10px · 값 28px).
+ * (시각은 StatTile compact 카드와 동일: rounded-2xl · p-4 · 라벨 10px · 값 34px).
  */
 function BudgetEmptyTile({ href }: { href: string }) {
   return (
@@ -135,7 +135,7 @@ function BudgetEmptyTile({ href }: { href: string }) {
       <p className="mb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35">
         예산 집행률 · KRW 축
       </p>
-      <p className="text-[22px] font-bold leading-none tracking-[-0.02em] text-[#A39E98]">—</p>
+      <p className="text-[34px] font-bold leading-none tracking-[-0.03em] text-[#A39E98]">—</p>
       <p className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#084734]">
         예산 채우기
         <ArrowRight className="h-3 w-3" />
@@ -202,6 +202,7 @@ export function KpiStrip({
       <div className="sm:col-span-2 2xl:col-span-1 [&>*]:h-full">
         <StatTile
           compact
+          valueSize="lg"
           icon={<Wallet className="h-3.5 w-3.5" />}
           label="광고비 · Meta USD"
           value={kpis.spendUsd.value != null ? money(kpis.spendUsd.value, "USD") : "—"}
@@ -219,6 +220,7 @@ export function KpiStrip({
       <div className="sm:col-span-2 2xl:col-span-1 [&>*]:h-full">
         <StatTile
           compact
+          valueSize="lg"
           icon={<Users className="h-3.5 w-3.5" />}
           label="리드"
           value={kpis.leads.value != null ? COUNT.format(kpis.leads.value) : "—"}
@@ -238,6 +240,7 @@ export function KpiStrip({
       <div className="col-span-2 2xl:col-span-1 [&>*]:h-full">
         <StatTile
           compact
+          valueSize="lg"
           icon={<Target className="h-3.5 w-3.5" />}
           label="CPL 실측 · USD"
           value={kpis.cplUsd.value != null ? money(kpis.cplUsd.value, "USD") : "—"}
@@ -257,6 +260,7 @@ export function KpiStrip({
       <div className="col-span-2 sm:col-span-3 2xl:col-span-1 [&>*]:h-full">
         <StatTile
           compact
+          valueSize="lg"
           icon={<TrendingUp className="h-3.5 w-3.5" />}
           label="리드 전환율"
           value={
@@ -278,6 +282,7 @@ export function KpiStrip({
         {kpis.budgetExecutionPct.value != null ? (
           <StatTile
             compact
+            valueSize="lg"
             icon={<Gauge className="h-3.5 w-3.5" />}
             label="예산 집행률 · KRW 축"
             value={`${PCT1.format(kpis.budgetExecutionPct.value)}%`}

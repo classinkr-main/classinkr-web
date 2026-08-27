@@ -129,11 +129,11 @@ export function StatTile({
   // 일반 StatTile 호출부는 생략 시 기존 flat 카드 스타일을 유지한다.
   lift?: boolean
   // 밀도 높은 대시보드용 컴팩트 변형(p-4 · 라벨 10px) — 구 campaigns KpiCard 시각.
-  // 값은 md와 같은 28px다(2026-08-27: 대표 숫자를 키우면서 22→28). compact가 좁히는 것은
-  // 이제 패딩과 라벨이지 숫자가 아니다 — 스트립이 섞여 있어도 값 열의 크기가 어긋나지 않는다.
+  // 값 크기는 건드리지 않는다(valueSize 소관). compact 가 좁히는 것은 패딩과 라벨뿐이다.
   compact?: boolean
   // 값 타이포 스케일 옵트인. "lg"=34px — '숫자를 화면의 주어로' 스트립(overview 상단)용.
-  // 생략 시 28px 그대로 — 다른 호출부 무손상. lg만 34px로 키운다(compact는 lg를 받지 않는다).
+  // 생략 시 28px. "lg"=34px — 대표 숫자 스트립(overview 상단·campaigns KPI)이 옵트인한다.
+  // compact 와 무관하게 동작한다.
   valueSize?: "md" | "lg"
   // 박스 처리(기본 "card" — 기존 시각과 완전 동일):
   //   card = 흰 배경 + rounded-2xl 테두리(기존 flat/lift 그대로)
@@ -202,11 +202,11 @@ export function StatTile({
       {/* tabular-nums: 스트립에서 카드끼리 자릿수 폭이 같아야 값 열이 정렬된다(숫자 아닌 값엔 무영향). */}
       <p
         className={
-          compact
-            ? "text-[28px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
-            : valueSize === "lg"
-              ? "text-[34px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
-              : "text-[28px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
+          // 값 크기는 밀도(compact)와 분리한다 — compact 는 패딩·라벨만 좁히고, 숫자 크기는
+          // valueSize 가 정한다. 그래야 "빽빽한 카드에 큰 대표 숫자"가 성립한다.
+          valueSize === "lg"
+            ? "text-[34px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
+            : "text-[28px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
         }
       >
         {value}
