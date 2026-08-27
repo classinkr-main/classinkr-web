@@ -119,7 +119,7 @@ function hasShape(series: number[]): boolean {
  * 예산 집행률 미입력 타일 — 값이 null 이면 "—" 만 두지 않고 "채워야 할 자리"로 보이게 한다.
  * 점선 테두리 + 광고 탭(채널 예산·집행 표) 드릴다운 CTA. StatTile 은 점선 변형을 노출하지 않고
  * primitives 는 이번 작업 범위 밖이라, 이 한 곳에만 필요한 빈 상태를 여기서 지역 렌더한다
- * (시각은 StatTile compact 카드와 동일: rounded-2xl · p-4 · 라벨 10px · 값 22px).
+ * (시각은 StatTile compact 카드와 동일: rounded-2xl · p-4 · 라벨 10px · 값 28px).
  */
 function BudgetEmptyTile({ href }: { href: string }) {
   return (
