@@ -174,7 +174,7 @@ const RECENT_OUTBOUND_LIMIT = 30
 
 // 서버는 movements 한 벌만 내려준다(voided 제외 · 처리일 내림차순 · 2000건 캡). 최근 출고와
 // 예정 큐는 그 배열의 부분집합이라 응답에 중복으로 싣지 않고 여기서 같은 규칙으로 파생한다.
-type HardwareDashboardResponse = Omit<HardwareDashboard, "recentOutbound" | "plannedMovements">
+export type HardwareDashboardResponse = Omit<HardwareDashboard, "recentOutbound" | "plannedMovements">
 
 function withDerivedMovementViews(response: HardwareDashboardResponse): HardwareDashboard {
   const outbound = response.movements.filter((movement) => movement.movement_type === "outbound")
@@ -669,10 +669,19 @@ function presetKeyForMovement(movement: HardwareMovement): string {
   }
 }
 
-export default function HardwareInventoryClient() {
+// initialData = 페이지(app/admin/hardware/page.tsx)가 GET /api/admin/hardware와 같은 검증·
+// 같은 lib 함수로 서버에서 미리 만든 첫 화면 응답. 있으면 마운트 왕복을 건너뛰고 바로 그 값으로
+// 시작한다. 없으면(비인증·역할 부족·프리페치 실패) 지금까지와 동일하게 마운트 후 load()가 채운다.
+export default function HardwareInventoryClient({
+  initialData = null,
+}: {
+  initialData?: HardwareDashboardResponse | null
+}) {
   const formRef = useRef<HTMLFormElement | null>(null)
-  const [data, setData] = useState<HardwareDashboard | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState<HardwareDashboard | null>(() =>
+    initialData ? withDerivedMovementViews(initialData) : null
+  )
+  const [loading, setLoading] = useState(initialData == null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -690,7 +699,10 @@ export default function HardwareInventoryClient() {
 
   const [activePresetKey, setActivePresetKey] = useState("sale")
   const [movementType, setMovementType] = useState<HardwareMovementType>("outbound")
-  const [selectedItemId, setSelectedItemId] = useState("")
+  // load()가 첫 응답에서 하는 기본 품목 선택(defaultEntryItemId)을 프리페치 경로에서도 동일하게 건다.
+  const [selectedItemId, setSelectedItemId] = useState(() =>
+    initialData ? defaultEntryItemId(initialData.items) : ""
+  )
   const [customProduct, setCustomProduct] = useState("")
   const [quantity, setQuantity] = useState("1")
   const [occurredAt, setOccurredAt] = useState(todayKey)
@@ -887,7 +899,14 @@ export default function HardwareInventoryClient() {
     }
   }, [])
 
+  // 서버 프리페치가 첫 화면을 이미 채운 경우에만 마운트 1회 왕복을 건너뛴다. 이후 새로고침·
+  // 저장 후 재조회(refresh)는 그대로 load({ force: true })를 탄다.
+  const skipInitialLoadRef = useRef(initialData != null)
   useEffect(() => {
+    if (skipInitialLoadRef.current) {
+      skipInitialLoadRef.current = false
+      return
+    }
     void load()
   }, [load])
 

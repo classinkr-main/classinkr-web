@@ -34,7 +34,7 @@ import {
   Users,
   X,
 } from "lucide-react"
-import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
+import { adminFetchJson, clearBranchRequestCache, useBranchJson, type BranchJsonState } from "./client-api"
 import { useVisibleInterval } from "./use-visible-interval"
 // 서버 입력 큐 훅(초안 CRUD·적용·되돌리기·로컬 폴백·낙관적 잠금)은 ledger/useLedgerDraftQueue로
 // 물리 이동(웨이브 7 2단 F5 — 기계적 분할, 로직 무변경).
@@ -931,7 +931,19 @@ function SelectedWeekBars({ weeks }: { weeks: RevWeekPoint[] }) {
 }
 
 
-export default function SalesLedgerWorkbench() {
+/** 페이지 서버 프리페치가 내려주는 첫 화면 파이프라인 응답 + 그 응답이 대응하는 요청 URL. */
+export interface LedgerPipelinePrefetch {
+  url: string
+  data: BranchPipelineResponse
+}
+
+// initialPipeline이 없으면(비인증·역할 부족·프리페치 실패) 이 화면은 지금까지와 100% 동일하게
+// 마운트 후 클라이언트 페치로만 채워진다.
+export default function SalesLedgerWorkbench({
+  initialPipeline = null,
+}: {
+  initialPipeline?: LedgerPipelinePrefetch | null
+}) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [team, setTeam] = useState<Team>("ALL")
@@ -1516,7 +1528,26 @@ export default function SalesLedgerWorkbench() {
   // 레일 열림 + detail 보기 + 행 선택일 때만 시작한다(콕핏은 detail 레일을 렌더하지 않으므로 제외).
   const kpiNeeded = !sidePanelCollapsed && railView === "detail" && selectedRow != null && lens !== "cockpit"
   const kpi = useBranchJson<BranchKpiResponse>(`/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`, refreshKey, { enabled: kpiNeeded })
-  const pipeline = useBranchJson<BranchPipelineResponse>(`/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`, refreshKey)
+  const pipelineUrl = `/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`
+  // 서버 프리페치 시드 — 페이지(app/admin/branch/ledger/page.tsx)가 라우트와 같은 조립 함수로
+  // 만들어 둔 첫 화면 rows다. 지금 URL·refreshKey와 정확히 일치할 때만 쓰고, 그동안
+  // useBranchJson은 요청 자체를 만들지 않는다(enabled=false). 필터 변경·새로고침으로 키가 한
+  // 번이라도 벗어나면 시드는 폐기되어 다시 살아나지 않는다 — 이후는 전부 기존 페치 경로.
+  const pipelineStateKey = `${refreshKey}:${pipelineUrl}`
+  const [pipelineSeedLive, setPipelineSeedLive] = useState(initialPipeline != null)
+  const pipelineSeed =
+    pipelineSeedLive && initialPipeline && `0:${initialPipeline.url}` === pipelineStateKey
+      ? initialPipeline
+      : null
+  useEffect(() => {
+    if (pipelineSeedLive && pipelineSeed == null) setPipelineSeedLive(false)
+  }, [pipelineSeedLive, pipelineSeed])
+  const pipelineFetched = useBranchJson<BranchPipelineResponse>(pipelineUrl, refreshKey, {
+    enabled: pipelineSeed == null,
+  })
+  const pipeline: BranchJsonState<BranchPipelineResponse> = pipelineSeed
+    ? { key: pipelineStateKey, data: pipelineSeed.data, error: null, loading: false, stale: false, staleSince: null }
+    : pipelineFetched
 
   // 하드웨어 콘솔 역링크 게이팅: 하드웨어 원장에 실제 출고 이력이 있는 고객사만 링크로 건다.
   // 출고 목적지(to_location)가 창고/샘플/고객(generic) 등이 아닌 실제 고객사명인 것만 수집.
