@@ -8,26 +8,44 @@ import {
   ADMIN_NAV_SECTIONS,
   ADMIN_NAV_SECTION_META,
   CRM_CHILD_NAV,
+  type AdminNavItem,
 } from "./admin-nav"
+import {
+  getAccessibleAdminNavItems,
+  isNavPresetKey,
+  normalizeNavOverrides,
+  resolveAdminNavAccess,
+  type NavAccessContext,
+} from "./admin-nav-access"
 import { useDialogFocus } from "./use-dialog-focus"
 
 const PALETTE_LISTBOX_ID = "admin-command-palette-listbox"
 const paletteOptionId = (index: number) => `admin-command-palette-option-${index}`
 
-interface Command {
+export interface AdminCommand {
   label: string
   href: string
   group: string
   keywords?: string
 }
 
-interface AdminCommandPaletteProps {
+export interface AdminCommandPaletteAccessProps {
+  role: string
+  navPreset: string | null
+  navOverrides: Record<string, string>
+}
+
+interface AdminCommandPaletteProps extends AdminCommandPaletteAccessProps {
   open: boolean
   onClose: () => void
 }
 
 // 팔레트 전용 딥링크 — nav에는 없는 하위 라우트·빠른 작업. 부모 nav href 바로 뒤에 이어 붙는다.
-const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<Command, "group">>> = {
+const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<AdminCommand, "group">>> = {
+  "/admin/calendar": [
+    { label: "행사 관리", href: "/admin/events", keywords: "행사 공개 행사 이벤트 웨비나 event 관리" },
+    { label: "새 행사 등록", href: "/admin/events/new", keywords: "새 행사 등록 new event" },
+  ],
   "/admin/crm": [
     // CRM 드릴인 하위 nav(admin-nav SSOT) 파생 — '현황'(/admin/crm)은 부모 항목과 중복이라 제외.
     ...CRM_CHILD_NAV.filter((child) => child.href !== "/admin/crm").map((child) => ({
@@ -37,7 +55,12 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<Command, "group">>> = {
     })),
     { label: "고객 (Accounts)", href: "/admin/crm/customers/accounts", keywords: "고객 거래처 account customer" },
     { label: "리드", href: "/admin/crm/customers/leads", keywords: "리드 잠재고객 lead 문의" },
+    { label: "지도 원천", href: "/admin/crm/customers/map", keywords: "고객 지역 지도 원천 map source" },
     { label: "Deals", href: "/admin/crm/deals", keywords: "딜 거래 오더 order deal" },
+    { label: "REV 스냅샷", href: "/admin/crm/deals/rev-sheet", keywords: "매출 시트 rev snapshot revenue 검수" },
+    { label: "오더·설치", href: "/admin/crm/deals/orders", keywords: "오더 설치 일정 주문 order installation" },
+    { label: "워크스페이스", href: "/admin/crm/deals/kpi", keywords: "파트너 계약 정산 큐 kpi workspace" },
+    { label: "인사이트", href: "/admin/crm/insights", keywords: "crm 인사이트 분석 insight analytics" },
   ],
   "/admin/quotes": [
     { label: "빠른 견적 작성", href: "/admin/quotes/new", keywords: "견적 작성 빠른 견적 quick quote" },
@@ -50,8 +73,8 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<Command, "group">>> = {
   "/admin/blog": [
     { label: "새 블로그 글 작성", href: "/admin/blog/new", keywords: "새글 작성 write new post 블로그" },
   ],
-  "/admin/events": [
-    { label: "새 행사 등록", href: "/admin/events/new", keywords: "새 행사 등록 new event" },
+  "/admin/analytics": [
+    { label: "방문자·트래픽", href: "/admin/traffic", keywords: "방문자 트래픽 홈페이지 흐름 전환 traffic visitor" },
   ],
   // CS 진입점 단일화(2026-08-18) — 사이드바 cs 섹션이 CS 콘솔 1항목이 되면서 가이드 문서·내부 CS의
   // nav 항목도 콘솔 가로 메뉴로 흡수됐다. URL은 전부 그대로이므로 ⌘K 도달성은 자식 커맨드로 보존한다
@@ -63,39 +86,71 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<Command, "group">>> = {
   // 자식들이 이 항목으로 옮겨왔다). section이 같아(cs) 그룹 라벨("고객 지원")은 이관 전후로 동일하다.
   "/admin/chatbot": [
     { label: "가이드 문서", href: "/admin/docs", keywords: "가이드 문서 docs guide 챗봇 faq 카테고리 리디렉트 발행" },
+    { label: "새 가이드 문서", href: "/admin/docs/new", keywords: "가이드 문서 새 문서 작성 new docs guide" },
     { label: "추천 질문 관리", href: "/admin/docs?tab=recommended", keywords: "추천 질문 starter chatbot recommended" },
     { label: "상담 Inbox (채널톡)", href: "/admin/channel-talk", keywords: "채널톡 상담 문의 채팅 channel talk chat inbox" },
     { label: "미해결 큐", href: "/admin/docs?tab=gaps", keywords: "보강 큐 gaps faq 문서 검색 초안 질문 패턴 미해결" },
+    { label: "AI 품질 검수", href: "/admin/docs?tab=quality", keywords: "ai 품질 평가 알파 준비도 quality readiness" },
     { label: "내부 CS", href: "/admin/cs-chatbot", keywords: "내부 cs 챗봇 상담 도우미 소통 가이드 템플릿 대기열 본사 확인 운영 도구 internal support assistant" },
   ],
   "/admin/settings": [
     { label: "통합 설정", href: "/admin/settings?tab=integrations", keywords: "설정 settings integrations webhook api key" },
+    { label: "회원 관리", href: "/admin/settings?tab=members", keywords: "회원 사용자 권한 계정 users members role" },
   ],
 }
 
 // 어드민 전역 이동·검색 대상 — 사이드바 nav(admin-nav SSOT)에서 파생.
 // 그룹은 사이드바 섹션 라벨과 동일해 사이드바와 팔레트의 IA가 항상 일치한다.
-export const ADMIN_COMMANDS: Command[] = ADMIN_NAV_SECTIONS.flatMap((section) => {
-  const group = ADMIN_NAV_SECTION_META[section].label
-  return ADMIN_NAV.filter((item) => item.section === section).flatMap((item) => [
-    { group, label: item.label, href: item.href, keywords: item.keywords },
-    ...(PALETTE_CHILD_COMMANDS[item.href] ?? []).map((child) => ({ group, ...child })),
-  ])
-})
+function buildAdminCommands(items: readonly AdminNavItem[]): AdminCommand[] {
+  const accessibleHrefs = new Set(items.map((item) => item.href))
 
-export default function AdminCommandPalette({ open, onClose }: AdminCommandPaletteProps) {
+  return ADMIN_NAV_SECTIONS.flatMap((section) => {
+    const group = ADMIN_NAV_SECTION_META[section].label
+    return ADMIN_NAV.filter(
+      (item) => item.section === section && accessibleHrefs.has(item.href)
+    ).flatMap((item) => [
+      { group, label: item.label, href: item.href, keywords: item.keywords },
+      ...(PALETTE_CHILD_COMMANDS[item.href] ?? []).map((child) => ({ group, ...child })),
+    ])
+  })
+}
+
+/** 정적 전체 인벤토리 — 문서/회귀 테스트용. 실제 UI는 사용자별 resolveAdminCommands를 쓴다. */
+export const ADMIN_COMMANDS: AdminCommand[] = buildAdminCommands(ADMIN_NAV)
+
+/** 사이드바와 같은 역할 → 프리셋 → 오버라이드 해석을 거친 사용자별 명령 목록. */
+export function resolveAdminCommands(ctx: NavAccessContext): AdminCommand[] {
+  return buildAdminCommands(getAccessibleAdminNavItems(resolveAdminNavAccess(ctx)))
+}
+
+export default function AdminCommandPalette({
+  open,
+  onClose,
+  role,
+  navPreset,
+  navOverrides,
+}: AdminCommandPaletteProps) {
   const router = useRouter()
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const commands = useMemo(
+    () =>
+      resolveAdminCommands({
+        role,
+        preset: isNavPresetKey(navPreset) ? navPreset : null,
+        overrides: normalizeNavOverrides(navOverrides),
+      }),
+    [role, navPreset, navOverrides]
+  )
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return ADMIN_COMMANDS
-    return ADMIN_COMMANDS.filter(
+    if (!q) return commands
+    return commands.filter(
       (cmd) => cmd.label.toLowerCase().includes(q) || (cmd.keywords ?? "").toLowerCase().includes(q)
     )
-  }, [query])
+  }, [commands, query])
 
   // 닫을 때 검색어·선택을 초기화해 다음 열기는 항상 깨끗한 상태로 시작한다.
   const close = useCallback(() => {

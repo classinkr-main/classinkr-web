@@ -43,7 +43,7 @@ export function leadContactNextActions(log: Pick<ContactLogRecord, "result" | "c
 export function buildLeadContactEventInput(
   log: ContactLogRecord,
   leadLabel: string | null
-): CrmCustomerEventCreateInput {
+): CrmCustomerEventCreateInput & { sourceType: "lead_contact_log"; sourceId: string } {
   return {
     targetType: "lead",
     targetId: log.lead_id,

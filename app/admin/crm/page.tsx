@@ -381,14 +381,14 @@ function LeadSummaryPanel({
           variant="bare"
           compact
           href="/admin/crm/customers/leads?filter=unresponded"
-          label="미응답 리드"
+          label="신규 상태 리드"
           value={valueOrSkeleton(
             leadKpis?.unrespondedCount,
             (leadKpis?.unrespondedCount ?? 0) > 0 ? "text-[#B85C33]" : undefined
           )}
           hint={
             <>
-              48h 이상 {loading && !leadKpis ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(leadKpis?.unresponded48hCount)}건
+              48h 이상 {loading && !leadKpis ? <ValueSkeleton className="h-3 w-6" /> : formatNumber(leadKpis?.unresponded48hCount)}건 · 테스트 제외
             </>
           }
         />

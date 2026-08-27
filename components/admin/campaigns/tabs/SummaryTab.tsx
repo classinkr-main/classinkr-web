@@ -14,6 +14,7 @@ import { FunnelCard } from "@/components/admin/campaigns/perf/FunnelCard"
 import { KpiStrip } from "@/components/admin/campaigns/perf/KpiStrip"
 import { UpdatesFeed } from "@/components/admin/campaigns/perf/UpdatesFeed"
 import type { UpdateSubmitInput } from "@/components/admin/campaigns/perf/UpdatesFeed"
+import { WeeklyReportDialog } from "@/components/admin/campaigns/perf/WeeklyReportDialog"
 import { COUNT, PCT1, money } from "@/components/admin/campaigns/event-format"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { ANOMALY_KIND_LABEL, type AnomalyFlag, type AnomalyKind } from "@/lib/marketing/anomaly"
@@ -499,14 +500,17 @@ export default function SummaryTab({
           onChange={onPeriodChange}
           ariaLabel="퍼포먼스 집계 기간"
         />
-        {data &&
-          (data.snapshotAt ? (
-            <span className="text-[11px] tabular-nums text-[#1a1a1a]/45">
-              스냅샷 {formatKstTime(data.snapshotAt)}
-            </span>
-          ) : (
-            <span className="text-[11px] text-[#A39E98]">스냅샷 미적재</span>
-          ))}
+        <div className="flex items-center gap-2">
+          {data &&
+            (data.snapshotAt ? (
+              <span className="text-[11px] tabular-nums text-[#1a1a1a]/45">
+                스냅샷 {formatKstTime(data.snapshotAt)}
+              </span>
+            ) : (
+              <span className="text-[11px] text-[#A39E98]">스냅샷 미적재</span>
+            ))}
+          <WeeklyReportDialog />
+        </div>
       </div>
 
       {error && !data ? (

@@ -35,8 +35,15 @@ export interface SchemaRpcProbe {
   kind: "rpc"
   functionName: string
   label: string
-  /** 부작용이 없어야 한다 — 존재하지 않는 id로 호출해 0행 UPDATE만 나게 한다. */
-  args: Record<string, unknown>
+  /**
+   * 일반 RPC는 존재하지 않는 id로 호출해 0행 UPDATE만 나게 한다.
+   * 잠금/쓰기 함수는 args 대신 catalogIdentityTypes를 써서 호출 없이 검증한다.
+   */
+  args?: Record<string, unknown>
+  /** pg_proc.oidvectortypes 결과. 설정 시 Management API 카탈로그만 읽는다. */
+  catalogIdentityTypes?: string
+  /** service_role만 EXECUTE할 수 있어야 하는 내부 쓰기 RPC. */
+  serviceRoleOnly?: boolean
   migration: string
   severity?: SchemaProbeSeverity
   impact?: string
@@ -78,6 +85,13 @@ export interface SchemaProbeResult {
   anonVisibleRows?: number
   /** anon 프로브 전용 — service role 기준 금지 대상 행 수(0이면 검증 불가). */
   forbiddenRowsExist?: number
+  /**
+   * 금지 대상 행이 0건인 deny-all 테이블의 보조 증거.
+   * Management API로 RLS 활성화 + anon/public SELECT 정책 부재를 직접 확인했을 때만 true다.
+   */
+  metadataProtected?: boolean
+  /** 운영자가 어떤 메타데이터로 판정했는지 확인할 수 있는 짧은 설명. */
+  metadataEvidence?: string
   /** anon 프로브 전용 — anon 키가 없어 건너뛴 경우. */
   skipped?: boolean
 }
@@ -109,6 +123,10 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   "supabase/migrations/20260820_marketing_campaign_updates.sql",
   "supabase/migrations/20260820_marketing_insights.sql",
   "supabase/migrations/20260820_meta_insights_daily.sql",
+  // 스냅샷·선택 행 조건·감사 로그를 한 트랜잭션에서 보장하는 리드 배정 RPC.
+  "supabase/migrations/20260827_guarded_lead_assignment.sql",
+  // 기존 20260818 마이그레이션이 적용됐는데 RPC만 빠진 live DB를 전방향으로 복구한다.
+  "supabase/migrations/20260827_repair_increment_campaign_click_count.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -123,11 +141,21 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
   },
   {
     kind: "rpc",
+    functionName: "assign_leads_guarded",
+    label: "리드 배정 스냅샷·동시성 가드 RPC",
+    // 함수 자체가 테이블 잠금을 잡으므로 실행 프로브를 금지하고 pg_proc/권한만 확인한다.
+    catalogIdentityTypes: "uuid[], text, jsonb, text, text, text, text",
+    serviceRoleOnly: true,
+    migration: "supabase/migrations/20260827_guarded_lead_assignment.sql",
+    impact: "검토 완료 리드를 담당자에게 원자적으로 배정할 수 없고, 배정 화면이 안전하게 실패한다.",
+  },
+  {
+    kind: "rpc",
     functionName: "increment_campaign_click_count",
     label: "클릭 추적 원자 증가 RPC",
     // 존재하지 않는 UUID — WHERE 가 0행이라 부작용이 없다.
     args: { campaign_id: "00000000-0000-4000-8000-000000000000" },
-    migration: "supabase/migrations/20260818_email_campaign_metrics.sql",
+    migration: "supabase/migrations/20260827_repair_increment_campaign_click_count.sql",
     impact: "/api/track/click 이 카운트를 못 올린다(리다이렉트는 계속 동작).",
   },
   // RLS 공백 마감 — 감사에서 149개 테이블 중 이 둘만 RLS가 꺼져 있었다.
@@ -261,8 +289,24 @@ export function summarizeSchemaProbes(results: SchemaProbeResult[]): SchemaProbe
         })
         continue
       }
-      // 금지 대상 행이 0건이면 anon이 0건을 보는 것은 아무것도 증명하지 않는다.
+      // 금지 대상 행이 0건이면 anon이 0건을 보는 것만으로는 아무것도 증명하지 않는다.
+      // 다만 deny-all 프로브는 Management API로 RLS + 공개 SELECT 정책 부재를 직접 확인할 수 있다.
       if (!result.forbiddenRowsExist) {
+        if (result.metadataProtected === true) {
+          ok.push(result)
+          continue
+        }
+        if (result.metadataProtected === false) {
+          blocked.push({
+            name: result.name,
+            label: result.label,
+            message: `RLS 메타데이터 보호 실패${result.metadataEvidence ? ` — ${result.metadataEvidence}` : ""}`,
+            migration: result.migration,
+            remedy: remedyFor(result, "missing"),
+            impact: result.impact,
+          })
+          continue
+        }
         warning.push({
           name: result.name,
           label: result.label,

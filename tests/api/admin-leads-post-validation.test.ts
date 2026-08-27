@@ -18,6 +18,12 @@ vi.mock("@/lib/admin-api-response", () => ({
   adminCachedJson,
 }))
 
+// POST 계약 테스트는 Overview GET 캐시를 사용하지 않는다. 라우트 모듈 import 시
+// unstable_cache와 repository 태그 계약까지 끌어들이지 않도록 경계를 고정한다.
+vi.mock("@/lib/admin/overview/lead-summary-cache", () => ({
+  getCachedOverviewLeadSummary: vi.fn(),
+}))
+
 vi.mock("@/lib/repositories/leads", () => ({
   getLeads,
   getDashboardLeads,

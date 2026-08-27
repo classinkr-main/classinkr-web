@@ -107,9 +107,9 @@ export default function MultiSelect({
         type="button"
         onClick={() => setOpen((v) => !v)}
         disabled={options.length === 0}
-        // 웨이브 7 — U5(터치 타깃). 좁은 뷰포트(<md)에서 min-h-10(40px)로 확대,
+        // 웨이브 7 — U5(터치 타깃). 좁은 뷰포트(<md)에서 44px로 확대,
         // 데스크톱은 md:h-8 md:min-h-0으로 기존 밀도 유지.
-        className="inline-flex h-10 min-h-10 min-w-[7rem] items-center justify-between gap-2 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] outline-none transition hover:border-[#111110]/25 focus:border-[#111110]/30 disabled:cursor-not-allowed disabled:opacity-50 md:h-8 md:min-h-0"
+        className="inline-flex h-11 min-h-11 min-w-[7rem] items-center justify-between gap-2 rounded-full border border-[rgba(0,0,0,0.08)] bg-white px-3 text-[12px] outline-none transition hover:border-[#111110]/25 focus:border-[#111110]/30 disabled:cursor-not-allowed disabled:opacity-50 md:h-8 md:min-h-0"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -123,7 +123,7 @@ export default function MultiSelect({
           disabled={!isPinned && !firstSelected}
           aria-pressed={isPinned}
           title={isPinned ? "기본값 해제" : "현재 선택을 기본값으로 저장"}
-          className={`inline-flex h-10 min-h-10 w-10 min-w-10 shrink-0 items-center justify-center rounded-full border transition disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:min-h-0 md:w-8 md:min-w-0 ${
+          className={`inline-flex h-11 min-h-11 w-11 min-w-11 shrink-0 items-center justify-center rounded-full border transition disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:min-h-0 md:w-8 md:min-w-0 ${
             isPinned
               ? "border-[#084734] bg-[#ECFDF5] text-[#084734]"
               : "border-[rgba(0,0,0,0.08)] bg-white text-[#111110]/35 hover:text-[#111110]/70"
@@ -135,16 +135,16 @@ export default function MultiSelect({
       {open && (
         <div
           role="listbox"
-          // top-11(44px)/md:top-9(36px) — 트리거가 모바일 h-10(40px)/데스크톱 h-8(32px)로
+          // top-12(48px)/md:top-9(36px) — 트리거가 모바일 h-11(44px)/데스크톱 h-8(32px)로
           // 반응형이라(U5) 드롭다운 오프셋도 같은 브레이크포인트에서 맞춰 겹치지 않게 한다.
-          className={`absolute top-11 z-30 max-h-64 ${width} overflow-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-1 shadow-[0_10px_30px_rgba(0,0,0,0.08)] md:top-9 ${align === "right" ? "right-0" : "left-0"}`}
+          className={`absolute top-12 z-30 max-h-64 ${width} overflow-auto rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-1 shadow-[0_10px_30px_rgba(0,0,0,0.08)] md:top-9 ${align === "right" ? "right-0" : "left-0"}`}
         >
           <button
             type="button"
             role="option"
             aria-selected={selected.size === 0}
             onClick={() => onChange(new Set())}
-            className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
+            className={`flex min-h-11 w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition md:min-h-0 ${
               selected.size === 0 ? "bg-[#ECFDF5] text-[#084734]" : "text-[#111110]/65 hover:bg-[#FAFAF8]"
             }`}
           >
@@ -160,7 +160,7 @@ export default function MultiSelect({
                 role="option"
                 aria-selected={checked}
                 onClick={() => toggle(opt)}
-                className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
+                className={`flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] transition md:min-h-0 ${
                   checked ? "bg-[#ECFDF5] text-[#084734]" : "text-[#111110]/75 hover:bg-[#FAFAF8]"
                 }`}
               >

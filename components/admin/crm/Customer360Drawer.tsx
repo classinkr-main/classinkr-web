@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -213,6 +213,7 @@ function CollapsibleSection({
   children: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
+  const contentId = useId()
   return (
     <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
       <button
@@ -220,6 +221,7 @@ function CollapsibleSection({
         onClick={() => setOpen((value) => !value)}
         className="flex w-full items-center justify-between gap-2"
         aria-expanded={open}
+        aria-controls={contentId}
       >
         <span className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-[#1a1a1a]/45">
           {icon}
@@ -229,7 +231,7 @@ function CollapsibleSection({
           className={`h-4 w-4 shrink-0 text-[#1a1a1a]/35 transition-transform ${open ? "" : "-rotate-90"}`}
         />
       </button>
-      {open ? <div className="mt-3">{children}</div> : null}
+      {open ? <div id={contentId} className="mt-3">{children}</div> : null}
     </section>
   )
 }
@@ -849,20 +851,32 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/20" onClick={requestClose} aria-hidden />
       <div
-        className="relative z-10 flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl"
+        className="relative z-10 flex h-full w-full max-w-xl flex-col overflow-hidden bg-white shadow-2xl [&_a]:min-h-11 [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2 [&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2 [&_input]:min-h-11 [&_input]:focus-visible:outline-none [&_input]:focus-visible:ring-2 [&_input]:focus-visible:ring-[#084734] [&_input]:focus-visible:ring-offset-1 [&_select]:min-h-11 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-[#084734] [&_select]:focus-visible:ring-offset-1 sm:[&_a]:min-h-0 sm:[&_button]:min-h-0 sm:[&_button]:min-w-0 sm:[&_input]:min-h-0 sm:[&_select]:min-h-0"
         role="dialog"
         aria-modal="true"
         aria-labelledby="crm-customer-drawer-title"
+        aria-busy={loading || eventsLoading || tagBusy || neoLinkBusy || actingId !== null}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
       >
+        <div className="sr-only" role="status" aria-live="polite">
+          {loading
+            ? `${displayName} 고객 정보를 불러오는 중입니다.`
+            : eventsLoading
+              ? `${displayName} 고객의 활동을 더 불러오는 중입니다.`
+              : tagBusy || neoLinkBusy || actingId !== null
+                ? `${displayName} 고객 정보를 저장하는 중입니다.`
+                : ""}
+        </div>
         {/* 모바일 스와이프-닫기 힌트 — 왼쪽 그랩바(전체 화면 덮는 패널의 탭-투-클로즈 대체) */}
         <button
           type="button"
           onClick={requestClose}
           aria-label="닫기"
-          className="absolute left-1 top-1/2 z-20 h-10 w-1.5 -translate-y-1/2 rounded-full bg-[#1a1a1a]/12 sm:hidden"
-        />
+          className="absolute left-0 top-1/2 z-20 flex h-16 w-11 -translate-y-1/2 items-center justify-start bg-transparent pl-1 sm:hidden"
+        >
+          <span aria-hidden className="h-10 w-1.5 rounded-full bg-[#1a1a1a]/12" />
+        </button>
         {/* header */}
         <div className="sticky top-0 z-10 border-b border-[#e8e8e4] bg-white px-5 py-4">
           <div className="flex items-start justify-between gap-3">
@@ -913,10 +927,11 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
             <button
               type="button"
               onClick={() => void refetch()}
+              disabled={loading}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2]"
-              aria-label="새로고침"
+              aria-label={loading ? "고객 정보 새로고침 중" : "고객 정보 새로고침"}
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw aria-hidden className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </button>
             <button
               ref={closeButtonRef}
@@ -1047,6 +1062,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                   type="button"
                   onClick={() => scrollToSection(tab.id)}
                   aria-current={active ? "true" : undefined}
+                  aria-controls={tab.id}
                   className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-[12px] font-semibold transition-colors ${
                     active
                       ? "border-[#084734] text-[#111110]"
@@ -1149,6 +1165,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               ))}
               <input
                 value={tagInput}
+                aria-label="새 고객 라벨"
                 onChange={(event) => setTagInput(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
@@ -1352,7 +1369,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
           {/* activity timeline + 특이사항 피드 + quick note/회의록 */}
           {data ? (
             <section id="c360-activity" className="scroll-mt-2 rounded-2xl border border-[#e8e8e4] bg-white p-4">
-              <div className="mb-3 inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
+              <div role="tablist" aria-label="고객 활동 보기" className="mb-3 inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
                 {(
                   [
                     { key: "timeline", label: `타임라인${data.activity.summary.total > 0 ? ` ${data.activity.summary.total}` : ""}` },
@@ -1362,6 +1379,8 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                   <button
                     key={tab.key}
                     type="button"
+                    role="tab"
+                    aria-selected={activityTab === tab.key}
                     onClick={() => setActivityTab(tab.key)}
                     className={`h-7 rounded-md px-3 text-[12px] font-semibold transition-colors ${
                       activityTab === tab.key ? "bg-[#111110] text-white" : "text-[#1a1a1a]/55 hover:text-[#111110]"
@@ -1374,7 +1393,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
 
               {/* 출처 필터 — 타임라인에서 메모/회의록만 빠르게 추림. 피드(위험 전용)에는 비표시. */}
               {activityTab === "timeline" ? (
-                <div className="mb-3 inline-flex flex-wrap gap-1">
+                <div role="group" aria-label="고객 활동 출처 필터" className="mb-3 inline-flex flex-wrap gap-1">
                   {(
                     [
                       { key: "all", label: "전체" },
@@ -1385,6 +1404,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                     <button
                       key={opt.key}
                       type="button"
+                      aria-pressed={activitySource === opt.key}
                       onClick={() => setActivitySource(opt.key)}
                       className={`inline-flex h-7 items-center rounded-full border px-2.5 text-[11px] font-semibold transition-colors ${
                         activitySource === opt.key
@@ -1456,6 +1476,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                   type="button"
                   onClick={() => void loadMoreEvents()}
                   disabled={eventsLoading}
+                  aria-busy={eventsLoading}
                   className="mt-2.5 inline-flex w-full items-center justify-center rounded-lg border border-[#e8e8e4] bg-white py-2 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110] disabled:opacity-50"
                 >
                   {eventsLoading ? "불러오는 중..." : "전체 활동 보기 (최대 50)"}
@@ -1496,6 +1517,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                         type="button"
                         onClick={() => void handleCompleteTask(task.id)}
                         disabled={actingId === `task:${task.id}`}
+                        aria-label={`${task.title} 할 일 완료`}
                         className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2 text-[11px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
                       >
                         <CheckCircle2 className="h-3 w-3" />
@@ -1510,6 +1532,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                   <div className="flex flex-col gap-2">
                     <input
                       value={taskTitle}
+                      aria-label="새 할 일 제목"
                       onChange={(event) => setTaskTitle(event.target.value)}
                       placeholder="새 할 일 제목"
                       autoFocus
@@ -1518,6 +1541,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                     <div className="flex flex-wrap gap-2">
                       <select
                         value={taskType}
+                        aria-label="새 할 일 유형"
                         onChange={(event) => setTaskType(event.target.value as CrmTaskType)}
                         className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
                       >
@@ -1530,6 +1554,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                       <input
                         type="date"
                         value={taskDue}
+                        aria-label="새 할 일 기한"
                         onChange={(event) => setTaskDue(event.target.value)}
                         className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none"
                       />
@@ -1555,6 +1580,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                   <button
                     type="button"
                     onClick={() => setTaskFormOpen(true)}
+                    aria-expanded={taskFormOpen}
                     className="inline-flex h-8 items-center gap-1 rounded-lg border border-dashed border-[#dcdcd6] px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#111110] hover:text-[#111110]"
                   >
                     <Plus className="h-3.5 w-3.5" />
@@ -1638,6 +1664,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                   <div className="flex flex-wrap gap-2">
                     <input
                       value={dealTitle}
+                      aria-label="새 딜 제목"
                       onChange={(event) => setDealTitle(event.target.value)}
                       placeholder="새 딜 제목"
                       autoFocus
@@ -1645,6 +1672,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                     />
                     <input
                       value={dealAmount}
+                      aria-label="새 딜 예상 금액"
                       onChange={(event) => setDealAmount(event.target.value)}
                       inputMode="numeric"
                       placeholder="예상금액"
@@ -1652,6 +1680,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                     />
                     <select
                       value={dealStage}
+                      aria-label="새 딜 단계"
                       onChange={(event) => setDealStage(event.target.value as CrmDealStage)}
                       className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] font-semibold text-[#111110] outline-none"
                     >
@@ -1682,6 +1711,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                   <button
                     type="button"
                     onClick={() => setDealFormOpen(true)}
+                    aria-expanded={dealFormOpen}
                     className="inline-flex h-8 items-center gap-1 rounded-lg border border-dashed border-[#dcdcd6] px-3 text-[12px] font-semibold text-[#1a1a1a]/55 transition-colors hover:border-[#111110] hover:text-[#111110]"
                   >
                     <Plus className="h-3.5 w-3.5" />

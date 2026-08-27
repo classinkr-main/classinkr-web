@@ -4,17 +4,14 @@ import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
-  FileText,
   LogOut,
   Menu,
   MoreHorizontal,
   Search,
   SquareChevronLeft,
   SquareChevronRight,
-  Users,
   X,
 } from "lucide-react"
 import { clearAdminSessionStorage, warmAdminRequestCache } from "@/lib/admin-client"
@@ -23,23 +20,22 @@ import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
 import { useDialogFocus } from "./use-dialog-focus"
 import {
-  ADMIN_NAV,
   ADMIN_NAV_CATEGORY_META,
-  CRM_CHILD_NAV,
   normalizeAdminRole,
-  type AdminNavItem,
   type AdminRole,
 } from "./admin-nav"
+import { resolveCrmRouteLabel } from "./crm-route-labels"
 // 상시/기타 배치 SSOT — 사이드바·커맨드 팔레트·권한 설정 미리보기가 전부 이 모듈의
-// resolveNavAccess를 호출해야 세 화면이 어긋나지 않는다(사이드바 자체 계산 금지).
-import { isNavPresetKey, normalizeNavOverrides, resolveNavAccess } from "./admin-nav-access"
-// active 판정(splitNavHref/queryMatches/isNavActive)은 nav-active.ts로 추출됨 — CS 콘솔
-// 가로 메뉴(cs/CsConsoleNav)와 같은 판정을 공유한다. 여기서는 클로저 인자만 채워 넘긴다.
+// resolveAdminNavAccess를 호출해야 사이드바·모바일·팔레트·권한 미리보기가 어긋나지 않는다.
 import {
-  isNavActive as matchNavActive,
-  queryMatches as matchNavQuery,
-  splitNavHref,
-} from "./nav-active"
+  getAccessibleAdminNavItems,
+  isNavPresetKey,
+  normalizeNavOverrides,
+  resolveAdminNavAccess,
+} from "./admin-nav-access"
+// active 판정은 nav-active.ts로 추출됨 — CS 콘솔
+// 가로 메뉴(cs/CsConsoleNav)와 같은 판정을 공유한다. 여기서는 클로저 인자만 채워 넘긴다.
+import { isNavActive as matchNavActive } from "./nav-active"
 
 // NAV(섹션·항목·롤·뱃지)·SECTION_META·CRM 하위 nav는 admin-nav.ts(SSOT)로 추출됨 —
 // 커맨드 팔레트(AdminCommandPalette)와 공유한다. 이 파일은 렌더링·warm-up 등 동작만 담당.
@@ -69,9 +65,9 @@ function overviewCalendarUrls() {
 export const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
   "/admin/overview": () => [
     // overview 페이지가 실제 호출하는 URL과 캐시 키를 맞춰야 hover-warm이 적중한다.
-    "/api/admin/leads?scope=dashboard",
+    "/api/admin/leads?scope=overview",
     "/api/admin/subscribers?count=1",
-    "/api/admin/blog",
+    "/api/admin/blog?scope=overview",
     "/api/admin/email",
     ...overviewCalendarUrls(),
     // overview는 GET /api/admin/settings 대신 env+DB 합성 health를 읽는다 (페이지 주석 참조).
@@ -85,7 +81,7 @@ export const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = 
     "/api/admin/crm/neo?granularity=month&offset=0",
   ],
   "/admin/crm/customers/unified": [
-    "/api/admin/crm/customers/unified?limit=100&offset=0",
+    "/api/admin/crm/customers/unified?limit=50&offset=0",
     "/api/admin/crm/owners",
   ],
   "/admin/crm/activity": [
@@ -97,7 +93,8 @@ export const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = 
   ],
   // 검수 탭(href=/admin/crm/matching)만 warm — deals·insights는 nav에서 내려가 죽은 키라 제거.
   "/admin/crm/matching": [
-    "/api/admin/crm/matching",
+    // 매칭 인박스의 기본 필터·페이지와 문자 단위로 같은 키여야 새 경량 응답 캐시를 소비한다.
+    "/api/admin/crm/matching?source=all&status=review&limit=25&offset=0",
     "/api/admin/crm/overview",
   ],
   // 채널톡 상담도 CS 콘솔 "상담 Inbox" 메뉴로 옮겨갔다 — 라우트·초기 페치가 동일해 키 유지.
@@ -214,11 +211,11 @@ const MINIMAL_SCROLLBAR =
 
 // 현장 사용 빈도 기준 — 2026-07-29 탭 재구성으로 첫 화면이 캘린더가 되면서 Overview를 내렸다.
 // 나머지는 More의 전체 메뉴에서 접근한다.
-const MOBILE_PRIMARY_NAV: AdminNavItem[] = [
-  { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"], section: "sales" },
-  { href: "/admin/quotes", label: "견적", icon: FileText, roles: ["SUPER_ADMIN", "ADMIN", "BRANCH"], section: "sales" },
-  { href: "/admin/crm", label: "CRM", icon: Users, roles: ["SUPER_ADMIN", "ADMIN", "EDITOR", "VIEWER", "BRANCH"], section: "sales" },
-]
+const MOBILE_PRIMARY_NAV = [
+  { href: "/admin/calendar", label: "캘린더" },
+  { href: "/admin/quotes", label: "견적" },
+  { href: "/admin/crm", label: "CRM" },
+] as const
 
 const ROLE_LABEL: Record<AdminRole, string> = {
   SUPER_ADMIN: "최고 관리자",
@@ -327,36 +324,38 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
   }
 
   const normalizedRole = normalizeAdminRole(role)
-  const visibleNav = useMemo(
-    () => ADMIN_NAV.filter((item) => item.roles.includes(normalizedRole)),
-    [normalizedRole]
-  )
-  // 상시/기타 배치는 반드시 resolveNavAccess를 통해서만 계산한다 — 사이드바가 자체 계산을
+  // 상시/기타 배치는 반드시 resolveAdminNavAccess를 통해서만 계산한다 — 사이드바가 자체 계산을
   // 하면 나중에 권한 설정 화면의 미리보기와 어긋난다. preset이 없으면(마이그레이션 미적용·
   // 프리셋 미배정) resolveNavPlacement가 전부 "primary"로 돌려줘 오늘과 동일한 화면을 보장한다.
   const navAccess = useMemo(() => {
     const preset = isNavPresetKey(navPreset) ? navPreset : null
-    return resolveNavAccess(
-      { role: normalizedRole, preset, overrides: normalizeNavOverrides(navOverrides) },
-      visibleNav
-    )
-  }, [normalizedRole, navPreset, navOverrides, visibleNav])
-  const queryMatches = (query: string) => matchNavQuery(query, searchParams)
+    return resolveAdminNavAccess({
+      role: normalizedRole,
+      preset,
+      overrides: normalizeNavOverrides(navOverrides),
+    })
+  }, [normalizedRole, navPreset, navOverrides])
+  const accessibleNav = useMemo(() => getAccessibleAdminNavItems(navAccess), [navAccess])
   const isNavActive = (href: string) =>
-    matchNavActive(href, { pathname, searchParams, siblings: visibleNav })
-  const currentNavItem = visibleNav.find((item) => isNavActive(item.href)) ?? visibleNav[0]
-  const currentCrmChild = inCrm ? CRM_CHILD_NAV.find((item) => item.match(pathname ?? "")) : undefined
-  const mobilePrimaryNav = MOBILE_PRIMARY_NAV.filter((item) => item.roles.includes(normalizedRole))
-  const mobilePrimaryActiveHref = mobilePrimaryNav.reduce<string | null>((bestHref, item) => {
-    const { path, query } = splitNavHref(item.href)
-    const matchesPath = pathname === path || pathname.startsWith(`${path}/`)
-    const matches = matchesPath && (query === null || queryMatches(query))
-    if (!matches) return bestHref
-    if (!bestHref) return item.href
-
-    const bestPath = splitNavHref(bestHref).path
-    return path.length > bestPath.length ? item.href : bestHref
-  }, null)
+    matchNavActive(href, { pathname, searchParams, siblings: accessibleNav })
+  const currentNavItem = accessibleNav.find((item) => isNavActive(item.href)) ?? accessibleNav[0]
+  // 현재 경로의 부모가 기타에 있으면 저장된 접힘 취향과 무관하게 그 범주를 드러낸다.
+  // 그렇지 않으면 active 항목이 DOM에 없어 데스크톱 사이드바에서 현재 위치를 알 수 없다.
+  const foldedHasActiveItem = navAccess.folded.some((group) =>
+    group.items.some((item) => isNavActive(item.href))
+  )
+  const otherExpanded = otherOpen || foldedHasActiveItem
+  const currentCrmRouteLabel = inCrm ? resolveCrmRouteLabel(pathname ?? "") : null
+  const mobilePrimaryNav = useMemo(
+    () =>
+      MOBILE_PRIMARY_NAV.flatMap(({ href, label }) => {
+        const item = accessibleNav.find((entry) => entry.href === href)
+        return item ? [{ ...item, label }] : []
+      }),
+    [accessibleNav]
+  )
+  const mobilePrimaryActiveHref = mobilePrimaryNav.find((item) => isNavActive(item.href))?.href ?? null
+  const mobileMoreActive = Boolean(currentNavItem && mobilePrimaryActiveHref === null)
   const mobileBottomColumns = Math.min(mobilePrimaryNav.length + 1, 5)
 
   const prefetchAdminRoute = useCallback((href: string) => {
@@ -416,7 +415,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
     if (!currentNavItem) return
 
     const run = () => {
-      const sectionItems = visibleNav.filter((item) => item.section === currentNavItem.section)
+      const sectionItems = accessibleNav.filter((item) => item.section === currentNavItem.section)
       const index = sectionItems.findIndex((item) => item.href === currentNavItem.href)
       if (index === -1) return
       for (const neighbor of [sectionItems[index - 1], sectionItems[index + 1]]) {
@@ -435,7 +434,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
 
     const timeoutId = window.setTimeout(run, 650)
     return () => window.clearTimeout(timeoutId)
-  }, [currentNavItem, prefetchAdminRoute, visibleNav])
+  }, [accessibleNav, currentNavItem, prefetchAdminRoute])
 
   return (
     <>
@@ -453,7 +452,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
           Classin Admin
         </p>
         <p className="truncate text-[15px] font-semibold text-[#111110]">
-          {currentCrmChild?.label ?? currentNavItem?.label ?? "Admin"}
+          {currentCrmRouteLabel ?? currentNavItem?.label ?? "Admin"}
         </p>
       </div>
       {isDesktop === false ? <AdminNotificationsBell placement="inline" /> : null}
@@ -558,17 +557,17 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                     <button
                       type="button"
                       onClick={toggleOther}
-                      aria-expanded={otherOpen}
+                      aria-expanded={otherExpanded}
                       className="flex min-h-11 w-full items-center gap-1.5 rounded-md px-3 text-[13px] font-semibold text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
                     >
-                      <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${otherOpen ? "rotate-90" : ""}`} />
+                      <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${otherExpanded ? "rotate-90" : ""}`} />
                       <span className="flex-1 text-left">기타</span>
                       <span className="tabular-nums text-[#1a1a1a]/30">
                         {navAccess.folded.reduce((sum, group) => sum + group.items.length, 0)}
                       </span>
                     </button>
 
-                    {otherOpen && (
+                    {otherExpanded && (
                       <div className="mt-1 space-y-3">
                         {navAccess.folded.map(({ category, items }) => (
                           <div key={`mobile-${category}`}>
@@ -672,9 +671,16 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
-          className="flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+          aria-haspopup="dialog"
+          aria-expanded={mobileMenuOpen}
+          aria-pressed={mobileMoreActive}
+          className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none transition-colors ${
+            mobileMoreActive
+              ? "bg-[#111110] text-white"
+              : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
+          }`}
         >
-          <MoreHorizontal className="h-4 w-4 text-[#1a1a1a]/40" />
+          <MoreHorizontal className={`h-4 w-4 ${mobileMoreActive ? "text-white" : "text-[#1a1a1a]/40"}`} />
           <span>More</span>
         </button>
       </div>
@@ -805,10 +811,10 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                 <button
                   type="button"
                   onClick={toggleOther}
-                  aria-expanded={otherOpen}
+                  aria-expanded={otherExpanded}
                   className="flex w-full items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold text-[#1a1a1a]/45 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
                 >
-                  <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${otherOpen ? "rotate-90" : ""}`} />
+                  <ChevronRight className={`h-3.5 w-3.5 shrink-0 transition-transform ${otherExpanded ? "rotate-90" : ""}`} />
                   {!effectiveCollapsed && (
                     <>
                       <span className="flex-1 text-left">기타</span>
@@ -819,7 +825,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                   )}
                 </button>
 
-                {otherOpen && !effectiveCollapsed && (
+                {otherExpanded && !effectiveCollapsed && (
                   <div className="mt-1 space-y-3">
                     {navAccess.folded.map(({ category, items }) => (
                       <div key={category}>

@@ -274,7 +274,7 @@ function TeamRow({ team, members, defaultOpen, ledgerHref }: {
                   type="button"
                   onClick={cycleMemberSort}
                   disabled={members.length <= 1}
-                  className="inline-flex items-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[10.5px] font-semibold text-[#615D59] transition hover:border-[#111110]/25 hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2 py-1 text-[10.5px] font-semibold text-[#615D59] transition hover:border-[#111110]/25 hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-50 md:min-h-0 md:min-w-0"
                   title="달성률 기준 정렬"
                 >
                   {memberSort === "desc" ? (
@@ -292,7 +292,7 @@ function TeamRow({ team, members, defaultOpen, ledgerHref }: {
                   <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-white p-[3px]">
                     {(["list", "matrix"] as const).map((v) => (
                       <button key={v} type="button" onClick={() => setViewMode(v)}
-                        className={`rounded-[5px] px-2.5 py-1 text-[11px] font-semibold ${
+                        className={`min-h-11 min-w-11 rounded-[5px] px-2.5 py-1 text-[11px] font-semibold md:min-h-0 md:min-w-0 ${
                           viewMode === v ? "bg-[#111110] text-white" : "text-[#615D59]"
                         }`}>
                         {v === "list" ? "리스트" : "매트릭스 %"}
@@ -398,7 +398,7 @@ export default function BranchKpiAccordion({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="담당자 검색"
-                className="h-7 w-36 rounded-full border border-[rgba(0,0,0,0.08)] bg-white pl-8 pr-3 text-[11px] outline-none transition focus:border-[#111110]/30"
+                className="h-11 min-h-11 w-36 rounded-full border border-[rgba(0,0,0,0.08)] bg-white pl-8 pr-3 text-[11px] outline-none transition focus:border-[#111110]/30 md:h-7 md:min-h-0"
               />
             </label>
           )}

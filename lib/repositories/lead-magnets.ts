@@ -59,6 +59,10 @@ const DUPLICATE_SLUG_MESSAGE = "이미 사용 중인 리드마그넷 슬러그�
 const MISSING_TABLE_MESSAGE =
   "lead_magnets 테이블이 없습니다. supabase/migrations/20260818_lead_magnets.sql 적용 후 다시 시도하세요."
 
+export function isLeadMagnetStoreUnavailableError(error: unknown) {
+  return error instanceof Error && error.message === MISSING_TABLE_MESSAGE
+}
+
 /** 테이블 부재 판정 — Postgres(42P01)와 PostgREST 스키마 캐시(PGRST205) 둘 다 본다. */
 export function isMissingTableError(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false
@@ -78,6 +82,17 @@ const CATEGORY_VALUES = new Set<LeadMagnetCategory>([
 ])
 
 export type LeadMagnetInput = LeadMagnet
+
+export interface LeadMagnetStorageState {
+  source: "supabase" | "local-json" | "bundled-json-fallback"
+  writable: boolean
+  reason: "ready" | "local-development" | "table-missing" | "table-empty"
+}
+
+export interface LeadMagnetStoreSnapshot {
+  leadMagnets: LeadMagnet[]
+  storage: LeadMagnetStorageState
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -341,7 +356,7 @@ async function readAllFromJson() {
   return parsed.map(normalizeLeadMagnet)
 }
 
-/** null = Supabase에서 읽을 수 없음(테이블 부재 또는 행 0) → 호출부가 JSON으로 강등한다. */
+/** Supabase 읽기 결과와 폴백 원인을 함께 반환해 Admin이 저장 가능 여부를 숨기지 않게 한다. */
 async function readAllFromSupabase() {
   // created_at 오름차순 = JSON 배열의 삽입 순서 유지(목록·크로스링크 순서 보존).
   const { data, error } = await createSupabaseAdminClient()
@@ -352,21 +367,53 @@ async function readAllFromSupabase() {
   if (error) {
     if (isMissingTableError(error)) {
       console.warn("[lead-magnets] 테이블 미적용 — 번들 JSON으로 읽습니다:", error.message)
-      return null
+      return { leadMagnets: null, fallbackReason: "table-missing" as const }
     }
     throw new Error(`[lead-magnets] 목록 조회 실패: ${error.message}`)
   }
   if (!data || data.length === 0) {
     console.warn("[lead-magnets] 테이블이 비어 있습니다 — scripts/import-lead-magnets.mjs 미실행? 번들 JSON으로 읽습니다.")
-    return null
+    return { leadMagnets: null, fallbackReason: "table-empty" as const }
   }
 
-  return data.map((row) => normalizeLeadMagnet(row.data))
+  return {
+    leadMagnets: data.map((row) => normalizeLeadMagnet(row.data)),
+    fallbackReason: null,
+  }
+}
+
+export async function getLeadMagnetStoreSnapshot(): Promise<LeadMagnetStoreSnapshot> {
+  if (!USE_SUPABASE) {
+    return {
+      leadMagnets: await readAllFromJson(),
+      storage: {
+        source: "local-json",
+        writable: true,
+        reason: "local-development",
+      },
+    }
+  }
+
+  const result = await readAllFromSupabase()
+  if (result.leadMagnets) {
+    return {
+      leadMagnets: result.leadMagnets,
+      storage: { source: "supabase", writable: true, reason: "ready" },
+    }
+  }
+
+  return {
+    leadMagnets: await readAllFromJson(),
+    storage: {
+      source: "bundled-json-fallback",
+      writable: false,
+      reason: result.fallbackReason,
+    },
+  }
 }
 
 export async function getAllLeadMagnets() {
-  if (!USE_SUPABASE) return readAllFromJson()
-  return (await readAllFromSupabase()) ?? readAllFromJson()
+  return (await getLeadMagnetStoreSnapshot()).leadMagnets
 }
 
 export async function getPublishedLeadMagnets() {

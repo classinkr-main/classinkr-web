@@ -236,8 +236,8 @@ export default function AdminNotificationsBell({ placement = "floating" }: BellP
     ? "relative"
     : "fixed right-3 top-2.5 z-50 lg:hidden"
   const buttonClass = placement === "inline"
-    ? "relative flex h-8 w-8 items-center justify-center rounded-md text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-    : "relative flex h-11 w-11 items-center justify-center rounded-md border border-[#e8e8e4] bg-white text-[#111110] shadow-sm transition-colors hover:bg-[#f7f7f4]"
+    ? "relative flex h-11 w-11 items-center justify-center rounded-md text-[#111110] transition-colors hover:bg-[#f5f5f2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+    : "relative flex h-11 w-11 items-center justify-center rounded-md border border-[#e8e8e4] bg-white text-[#111110] shadow-sm transition-colors hover:bg-[#f7f7f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
   const panelClass =
     "max-h-[calc(100dvh-5rem)] overflow-hidden rounded-[16px] border border-[#e8e8e4] bg-white shadow-2xl z-[80]"
 
@@ -274,7 +274,7 @@ export default function AdminNotificationsBell({ placement = "floating" }: BellP
               type="button"
               onClick={() => void handleMarkAllRead()}
               disabled={busy || unreadCount === 0}
-              className="inline-flex items-center gap-1 rounded-full border border-[#e8e8e4] px-3 py-1.5 text-[11px] font-medium text-[#1a1a1a]/65 transition-colors hover:bg-[#f7f7f4] disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex min-h-11 items-center gap-1 rounded-full border border-[#e8e8e4] px-3 py-1.5 text-[11px] font-medium text-[#1a1a1a]/65 transition-colors hover:bg-[#f7f7f4] disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
             >
               {busy ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -306,7 +306,7 @@ export default function AdminNotificationsBell({ placement = "floating" }: BellP
                         type="button"
                         onClick={() => void handleOpenItem(item)}
                         className={cn(
-                          "flex w-full items-start gap-3 px-5 py-4 pr-10 text-left transition-colors",
+                          "flex min-h-11 w-full items-start gap-3 px-5 py-4 pr-16 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734]",
                           tone.panel
                         )}
                       >
@@ -355,7 +355,7 @@ export default function AdminNotificationsBell({ placement = "floating" }: BellP
                       <button
                         type="button"
                         onClick={(e) => void handleDeleteItem(e, item.id)}
-                        className="absolute right-3 top-3 hidden h-6 w-6 items-center justify-center rounded-full text-[#1a1a1a]/30 transition-colors hover:bg-[#f0f0ec] hover:text-[#1a1a1a]/70 group-hover:flex"
+                        className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-full text-[#1a1a1a]/40 transition-colors hover:bg-[#f0f0ec] hover:text-[#1a1a1a]/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] md:right-3 md:top-3 md:h-8 md:w-8 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
                         aria-label="알림 삭제"
                       >
                         <X className="h-3.5 w-3.5" />

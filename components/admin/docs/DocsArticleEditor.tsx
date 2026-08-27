@@ -1,6 +1,15 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -943,7 +952,7 @@ function ToolbarButton({
       type="button"
       onClick={onClick}
       title={title}
-      className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2 py-1.5 text-xs font-medium text-[#1a1a1a]/60 transition-colors duration-75 hover:border-[#1a1a1a]/20 hover:text-[#111110] active:scale-[0.96] active:bg-[#f7f7f5]"
+      className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-2 text-xs font-medium text-[#1a1a1a]/60 transition-colors duration-75 hover:border-[#1a1a1a]/20 hover:text-[#111110] active:scale-[0.96] active:bg-[#f7f7f5]"
     >
       {icon}
       <span>{children}</span>
@@ -960,7 +969,7 @@ function HelpTip({ term }: { term: string }) {
       <button
         type="button"
         aria-label={`${help.title} 도움말`}
-        className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#1a1a1a]/30 transition-colors hover:bg-[#F6F5F4] hover:text-[#084734] focus:bg-[#F6F5F4] focus:text-[#084734] focus:outline-none"
+        className="-my-3 inline-flex h-11 w-11 items-center justify-center rounded-full text-[#1a1a1a]/40 transition-colors hover:bg-[#F6F5F4] hover:text-[#084734] focus:bg-[#F6F5F4] focus:text-[#084734] focus:outline-none"
       >
         <HelpCircle className="h-3.5 w-3.5" />
       </button>
@@ -996,7 +1005,15 @@ function FieldLabel({
 }
 
 const RichMarkdownEditor = dynamic(() => import("@/components/admin/RichMarkdownEditor"), {
-  loading: () => <div className="h-[600px] animate-pulse rounded-xl bg-[#f0f0ec]" />,
+  loading: () => (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label="본문 편집기를 불러오는 중입니다."
+      className="h-[600px] animate-pulse rounded-xl bg-[#f0f0ec]"
+    />
+  ),
   ssr: false,
 })
 
@@ -1004,6 +1021,8 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   const router = useRouter()
   const editorRef = useRef<RichMarkdownEditorHandle | null>(null)
   const markdownFileInputRef = useRef<HTMLInputElement | null>(null)
+  const previewDialogRef = useRef<HTMLDivElement | null>(null)
+  const previewCloseButtonRef = useRef<HTMLButtonElement | null>(null)
   const draftAppliedRef = useRef(false)
   const [form, setForm] = useState<FormState>(() =>
     initialForm(article, categories[0]?.id ?? "start")
@@ -1035,6 +1054,45 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>(
     mode === "create" ? "templates" : "publish"
   )
+
+  useEffect(() => {
+    if (!previewOpen) return
+
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    previewCloseButtonRef.current?.focus()
+
+    const handlePreviewKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        setPreviewOpen(false)
+        return
+      }
+      if (event.key !== "Tab") return
+
+      const focusable = previewDialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+      if (!focusable?.length) return
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener("keydown", handlePreviewKeyDown)
+    return () => {
+      document.removeEventListener("keydown", handlePreviewKeyDown)
+      previouslyFocused?.focus()
+    }
+  }, [previewOpen])
 
   const publicPath = useMemo(
     () => `/docs/${form.categoryId}/${form.slug || article?.slug || "new"}`,
@@ -1222,20 +1280,33 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     [mode]
   )
 
+  const handleSidebarTabKeyDown = useCallback((
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    currentTab: SidebarTab
+  ) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return
+    event.preventDefault()
+
+    const currentIndex = visibleSidebarTabs.findIndex((item) => item.value === currentTab)
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? visibleSidebarTabs.length - 1
+        : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + visibleSidebarTabs.length)
+          % visibleSidebarTabs.length
+    const nextTab = visibleSidebarTabs[nextIndex].value
+    setActiveSidebarTab(nextTab)
+    requestAnimationFrame(() => document.getElementById(`docs-editor-tab-${nextTab}`)?.focus())
+  }, [visibleSidebarTabs])
+
   useEffect(() => {
     if (!previewOpen) return
 
     const previousOverflow = document.body.style.overflow
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPreviewOpen(false)
-    }
-
     document.body.style.overflow = "hidden"
-    window.addEventListener("keydown", handleKeyDown)
 
     return () => {
       document.body.style.overflow = previousOverflow
-      window.removeEventListener("keydown", handleKeyDown)
     }
   }, [previewOpen])
 
@@ -1261,20 +1332,12 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
           versions: [],
           warning: err instanceof Error ? err.message : "버전을 불러오지 못했습니다.",
         })),
-        adminFetchJson<DocsArticleAnalyticsDetail>(`/api/admin/docs/articles/${article.id}/analytics?days=90`).catch(
-          (err) => ({
-            articleId: article.id,
-            feedbackTotal: 0,
-            helpfulTotal: 0,
-            notHelpfulTotal: 0,
-            helpfulRate: null,
-            searchClicks: 0,
-            chatbotCitations: 0,
-            recentFeedback: [],
-            recentSearches: [],
+        adminFetchJson<DocsArticleAnalyticsDetail>(`/api/admin/docs/articles/${article.id}/analytics?days=90`)
+          .then((data) => ({ data, warning: null as string | null }))
+          .catch((err) => ({
+            data: null,
             warning: err instanceof Error ? err.message : "성과를 불러오지 못했습니다.",
-          } as DocsArticleAnalyticsDetail & { warning?: string })
-        ),
+          })),
         adminFetchJson<DraftResponse>(`/api/admin/docs/articles/${article.id}/draft`).catch((err) => ({
           draft: null,
           warning: err instanceof Error ? err.message : "작업 초안을 불러오지 못했습니다.",
@@ -1286,7 +1349,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
         relationsResult.warning,
         versionsResult.warning,
         draftResult.warning,
-        "warning" in analyticsResult ? analyticsResult.warning : null,
+        analyticsResult.warning,
       ].filter((item): item is string => Boolean(item))
 
       if (draftResult.draft && !draftAppliedRef.current) {
@@ -1313,7 +1376,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
           })),
         relations: relationsResult.relations,
         versions: versionsResult.versions,
-        analytics: analyticsResult,
+        analytics: analyticsResult.data,
         draft: draftResult.draft,
         warning: warnings[0] ?? null,
       })
@@ -1971,12 +2034,12 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8]">
+    <div className="min-h-screen bg-[#FAFAF8] [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2 [&_button]:min-h-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2 [&_input:not([type=checkbox])]:min-h-11 [&_input]:focus-visible:outline-none [&_input]:focus-visible:ring-2 [&_input]:focus-visible:ring-[#084734] [&_input]:focus-visible:ring-offset-2 [&_select]:min-h-11 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-[#084734] [&_select]:focus-visible:ring-offset-2 [&_textarea]:focus-visible:outline-none [&_textarea]:focus-visible:ring-2 [&_textarea]:focus-visible:ring-[#084734] [&_textarea]:focus-visible:ring-offset-2">
       <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] bg-white px-6 py-3">
         <div className="flex items-center gap-3">
           <Link
             href="/admin/docs"
-            className="inline-flex items-center gap-1.5 text-[13px] text-[#1a1a1a]/40 transition-colors hover:text-[#111110]"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-1 text-[13px] text-[#1a1a1a]/40 transition-colors hover:text-[#111110]"
           >
             <ArrowLeft className="h-4 w-4" />
             문서 센터
@@ -2008,12 +2071,12 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
             </Link>
           ) : null}
 
-          {error ? <span className="text-[12px] text-red-600">{error}</span> : null}
+          {error ? <span role="alert" className="text-[12px] text-red-600">{error}</span> : null}
           {savedMessage ? (
-            <span className="text-[12px] text-emerald-600">{savedMessage}</span>
+            <span role="status" aria-live="polite" className="text-[12px] text-emerald-600">{savedMessage}</span>
           ) : null}
           {support.warning ? (
-            <span className="max-w-[280px] truncate text-[12px] text-amber-600">{support.warning}</span>
+            <span role="status" className="max-w-[280px] truncate text-[12px] text-amber-600">{support.warning}</span>
           ) : null}
 
           {mode === "edit" && article ? (
@@ -2161,6 +2224,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   제목 *
                 </label>
                 <input
+                  aria-label="제목"
                   type="text"
                   value={form.title}
                   onChange={(event) => {
@@ -2181,6 +2245,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     카테고리 *
                   </label>
                   <select
+                    aria-label="카테고리"
                     value={form.categoryId}
                     onChange={(event) => updateCategoryAndMoveToEnd(event.target.value)}
                     className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
@@ -2197,6 +2262,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     URL 주소(slug)
                   </FieldLabel>
                   <input
+                    aria-label="URL 주소 slug"
                     type="text"
                     value={form.slug}
                     onChange={(event) => update("slug", event.target.value)}
@@ -2212,6 +2278,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   설명 *
                 </label>
                 <textarea
+                  aria-label="설명"
                   value={form.description}
                   onChange={(event) => update("description", event.target.value)}
                   rows={2}
@@ -2226,6 +2293,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     문서 유형
                   </FieldLabel>
                   <select
+                    aria-label="문서 유형"
                     value={form.docType}
                     onChange={(event) => update("docType", event.target.value as DocsArticleDocType)}
                     className="w-full rounded-lg border border-[rgba(0,0,0,0.12)] bg-white px-3 py-2 text-[13px] focus:border-[#111110]/30 focus:outline-none"
@@ -2242,6 +2310,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     제품 영역
                   </FieldLabel>
                   <select
+                    aria-label="제품 영역"
                     value={form.productArea}
                     onChange={(event) =>
                       update("productArea", event.target.value as DocsArticleProductArea)
@@ -2260,6 +2329,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     난이도
                   </label>
                   <select
+                    aria-label="난이도"
                     value={form.difficulty}
                     onChange={(event) =>
                       update("difficulty", event.target.value as DocsArticleDifficulty)
@@ -2552,6 +2622,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   대상 (쉼표 구분)
                 </label>
                 <input
+                  aria-label="대상"
                   type="text"
                   value={form.audience}
                   onChange={(event) => update("audience", event.target.value)}
@@ -2566,6 +2637,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     태그 (쉼표 구분)
                   </label>
                   <input
+                    aria-label="태그"
                     type="text"
                     value={form.tagsCsv}
                     onChange={(event) => update("tagsCsv", event.target.value)}
@@ -2578,6 +2650,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     검색 키워드 (쉼표 구분)
                   </FieldLabel>
                   <input
+                    aria-label="검색 키워드"
                     type="text"
                     value={form.keywordsCsv}
                     onChange={(event) => update("keywordsCsv", event.target.value)}
@@ -2590,6 +2663,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     증상 (문제 해결 전용)
                   </label>
                   <input
+                    aria-label="증상"
                     type="text"
                     value={form.symptomsCsv}
                     onChange={(event) => update("symptomsCsv", event.target.value)}
@@ -2604,6 +2678,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   챗봇 요약
                 </FieldLabel>
                 <textarea
+                  aria-label="챗봇 요약"
                   value={form.chatbotSummary}
                   onChange={(event) => update("chatbotSummary", event.target.value)}
                   rows={3}
@@ -2659,8 +2734,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     {support.relations.map((relation, index) => (
                       <div key={`${relation.relatedArticleId}:${index}`} className="grid gap-2 rounded-xl border border-[#e8e8e4] bg-[#FAFAF8] p-3">
                         <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_140px_84px]">
-                          <select
-                            value={relation.relatedArticleId}
+                      <select
+                        aria-label="관련 문서"
+                        value={relation.relatedArticleId}
                             onChange={(event) => {
                               const option = support.articleOptions.find((item) => item.id === event.target.value)
                               updateRelation(index, "relatedArticleId", event.target.value)
@@ -2676,8 +2752,9 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                               </option>
                             ))}
                           </select>
-                          <select
-                            value={relation.relationType ?? "related"}
+                      <select
+                        aria-label="관련 문서 연결 유형"
+                        value={relation.relationType ?? "related"}
                             onChange={(event) =>
                               updateRelation(index, "relationType", event.target.value as RelationType)
                             }
@@ -2689,15 +2766,17 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                               </option>
                             ))}
                           </select>
-                          <button
-                            type="button"
-                            onClick={() => removeRelation(index)}
+                      <button
+                        type="button"
+                        aria-label="관련 문서 연결 삭제"
+                        onClick={() => removeRelation(index)}
                             className="h-9 rounded-lg border border-[#e8e8e4] bg-white text-[12px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FEF3EE]"
                           >
                             제거
                           </button>
                         </div>
                         <input
+                          aria-label="관련 문서 메모"
                           value={relation.note ?? ""}
                           onChange={(event) => updateRelation(index, "note", event.target.value)}
                           placeholder="내부 메모 또는 연결 이유"
@@ -2716,6 +2795,8 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
             <section className="rounded-2xl border border-[rgba(0,0,0,0.08)] bg-white p-4">
               <div className="rounded-xl bg-[#FAFAF8] p-1">
                 <div
+                  role="tablist"
+                  aria-label="문서 편집 보조 패널"
                   className={`grid gap-1 ${
                     visibleSidebarTabs.length === 4
                       ? "grid-cols-4"
@@ -2727,8 +2808,13 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   {visibleSidebarTabs.map((tab) => (
                     <button
                       key={tab.value}
+                      id={`docs-editor-tab-${tab.value}`}
                       type="button"
+                      role="tab"
+                      aria-selected={activeSidebarTab === tab.value}
+                      tabIndex={activeSidebarTab === tab.value ? 0 : -1}
                       onClick={() => setActiveSidebarTab(tab.value)}
+                      onKeyDown={(event) => handleSidebarTabKeyDown(event, tab.value)}
                       className={`rounded-lg px-2 py-2 text-[12px] font-semibold transition-colors ${
                         activeSidebarTab === tab.value
                           ? "bg-white text-[#111110] shadow-sm"
@@ -2772,6 +2858,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                           <button
                             key={option.value}
                             type="button"
+                            aria-pressed={active}
                             onClick={() => update("status", option.value)}
                             className={`inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-semibold transition-colors ${
                               active
@@ -2792,6 +2879,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                         가시성
                       </FieldLabel>
                       <select
+                        aria-label="가시성"
                         value={form.visibility}
                         onChange={(event) =>
                           update("visibility", event.target.value as DocsArticleVisibility)
@@ -2912,7 +3000,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
 
                   <div className="grid gap-3 rounded-xl bg-[#FAFAF8] p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
+                      <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-[13px] text-[#1a1a1a]/60">
                         <input
                           type="checkbox"
                           checked={form.featured}
@@ -2924,7 +3012,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                       <HelpTip term="featured" />
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <label className="inline-flex items-center gap-2 text-[13px] text-[#1a1a1a]/60">
+                      <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-[13px] text-[#1a1a1a]/60">
                         <input
                           type="checkbox"
                           checked={form.noindex}
@@ -2943,6 +3031,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                         SEO 제목
                       </FieldLabel>
                       <input
+                        aria-label="SEO 제목"
                         type="text"
                         value={form.seoTitle}
                         onChange={(event) => update("seoTitle", event.target.value)}
@@ -2955,6 +3044,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                         SEO 설명
                       </FieldLabel>
                       <input
+                        aria-label="SEO 설명"
                         type="text"
                         value={form.seoDescription}
                         onChange={(event) => update("seoDescription", event.target.value)}
@@ -2989,33 +3079,44 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                     </h2>
                   </div>
                   {supportLoading ? (
-                    <p className="rounded-xl bg-[#FAFAF8] px-4 py-6 text-center text-[13px] text-[#1a1a1a]/35">
+                    <p role="status" aria-live="polite" aria-busy="true" className="rounded-xl bg-[#FAFAF8] px-4 py-6 text-center text-[13px] text-[#1a1a1a]/35">
                       성과를 불러오는 중입니다.
                     </p>
+                  ) : !support.analytics ? (
+                    <div role="alert" className="grid gap-3 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] p-4 text-[12px] text-[#8F2C2C]">
+                      <p>문서 성과를 불러오지 못했습니다. 0건으로 표시하지 않습니다.</p>
+                      <button
+                        type="button"
+                        onClick={() => void loadEditorSupport()}
+                        className="inline-flex w-fit items-center justify-center rounded-lg border border-[#F2B8B8] bg-white px-3 font-semibold transition-colors hover:bg-[#FCE9E9]"
+                      >
+                        다시 시도
+                      </button>
+                    </div>
                   ) : (
                     <>
                       <div className="grid gap-3">
                         <div className="rounded-xl bg-[#FAFAF8] p-3">
                           <p className="text-[11px] text-[#1a1a1a]/35">피드백</p>
-                          <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics?.feedbackTotal ?? 0}</p>
+                          <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics.feedbackTotal}</p>
                           <p className="text-[11px] text-[#1a1a1a]/35">
-                            도움됨 {support.analytics?.helpfulRate ?? "-"}%
+                            도움됨 {support.analytics.helpfulRate ?? "-"}%
                           </p>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="rounded-xl bg-[#FAFAF8] p-3">
                             <p className="text-[11px] text-[#1a1a1a]/35">검색 클릭</p>
-                            <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics?.searchClicks ?? 0}</p>
+                            <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics.searchClicks}</p>
                           </div>
                           <div className="rounded-xl bg-[#FAFAF8] p-3">
                             <p className="text-[11px] text-[#1a1a1a]/35">챗봇 인용</p>
-                            <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics?.chatbotCitations ?? 0}</p>
+                            <p className="mt-1 text-xl font-bold text-[#111110]">{support.analytics.chatbotCitations}</p>
                           </div>
                         </div>
                       </div>
-                      {(support.analytics?.recentFeedback.length ?? 0) > 0 ? (
+                      {support.analytics.recentFeedback.length > 0 ? (
                         <div className="divide-y divide-[#f0f0ec] rounded-xl border border-[#e8e8e4]">
-                          {support.analytics?.recentFeedback.slice(0, 3).map((item) => (
+                          {support.analytics.recentFeedback.slice(0, 3).map((item) => (
                             <div key={item.id} className="p-3">
                               <p className="text-[12px] font-semibold text-[#111110]">
                                 {item.helpful ? "도움됨" : "도움 안 됨"} · {formatDateTime(item.createdAt)}
@@ -3046,6 +3147,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   </div>
                   <div className="grid gap-2">
                     <input
+                      aria-label="스냅샷 메모"
                       value={snapshotNote}
                       onChange={(event) => setSnapshotNote(event.target.value)}
                       className="h-9 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] outline-none focus:border-[#084734]"
@@ -3136,6 +3238,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
 
       {previewOpen ? (
         <div
+          ref={previewDialogRef}
           role="dialog"
           aria-modal="true"
           aria-label="사용자 화면 미리보기"
@@ -3166,9 +3269,10 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
                   </Link>
                 ) : null}
                 <button
+                  ref={previewCloseButtonRef}
                   type="button"
                   onClick={() => setPreviewOpen(false)}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white text-[#1a1a1a]/55 transition-colors hover:bg-[#f5f5f2] hover:text-[#111110]"
                 >
                   <X className="h-4 w-4" />
                   <span className="sr-only">미리보기 닫기</span>

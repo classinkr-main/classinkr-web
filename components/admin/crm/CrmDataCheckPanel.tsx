@@ -47,7 +47,7 @@ export default function CrmDataCheckPanel({
       : overview.xiaoshouyi.missingEnvGroups.join(", ") || "credential 미설정"
     : "-"
   const sourceLinkDetail = overview
-    ? `${overview.sourceLinks.confirmed}/${overview.sourceLinks.total} 확정 · 후보 ${overview.sourceLinks.candidate} · 재검수 ${overview.sourceLinks.stale}`
+    ? `${overview.sourceLinks.confirmed}/${overview.sourceLinks.total} 확정 · 저장 후보 이력 ${overview.sourceLinks.candidate} · 은퇴 이력 ${overview.sourceLinks.stale}`
     : "-"
   const snapshotDetail = overview
     ? `${overview.externalSnapshots.recordCount.toLocaleString("ko-KR")} records · ${overview.externalSnapshots.latestRunObject ?? "sync"} ${overview.externalSnapshots.latestRunStatus ?? "-"}`
@@ -97,7 +97,7 @@ export default function CrmDataCheckPanel({
         {[
           { label: "스키마", value: schemaDetail, tone: overview?.schema.blocked ? "text-[#B85C33]" : "text-[#084734]" },
           { label: "Xiaoshouyi", value: xiaoshouyiCardDetail, tone: hasXiaoshouyiSnapshot || overview?.xiaoshouyi.configured ? "text-[#084734]" : "text-[#B85C33]" },
-          { label: "시트·외부 링크", value: sourceLinkDetail, tone: overview?.sourceLinks.candidate || overview?.sourceLinks.stale ? "text-[#7A520F]" : "text-[#111110]" },
+          { label: "시트·외부 링크 이력", value: sourceLinkDetail, tone: "text-[#111110]" },
           {
             label: `Snapshot · ${formatOverviewDate(overview?.externalSnapshots.latestSyncedAt)}`,
             value: snapshotDetail,

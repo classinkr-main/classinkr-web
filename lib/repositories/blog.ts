@@ -20,10 +20,16 @@ export type { BlogPost, BlogPostInput, BlogPostStatus } from "@/lib/blog-types";
 export { CATEGORIES, BLOG_STATUS_OPTIONS, DEFAULT_BLOG_CTA } from "@/lib/blog-types";
 
 import { DEFAULT_BLOG_CTA, type BlogPost, type BlogPostInput } from "@/lib/blog-types";
+import {
+  buildAdminBlogOverviewSummary,
+  type AdminBlogOverviewSourceRow,
+  type AdminBlogOverviewSummary,
+} from "@/lib/admin/overview/blog-summary";
 
 const BLOG_SLUG_CONFLICT_MESSAGE = "이미 사용 중인 블로그 URL 슬러그입니다.";
 const PUBLISHED_STATUS_VALUES = ["PUBLISHED", "published"] as unknown as SupaBlogPost["status"][];
 const PUBLIC_BLOG_QUERY_TIMEOUT_MS = 6_000;
+const PUBLIC_BLOG_QUERY_ATTEMPTS = 2;
 type BlogSupabaseClient = ReturnType<typeof createSupabaseAdminClient>;
 
 export function isBlogSlugConflictError(error: unknown) {
@@ -137,6 +143,55 @@ export async function getAllPosts(): Promise<BlogPost[]> {
   return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
 }
 
+const OVERVIEW_COLUMNS = [
+  "id",
+  "title",
+  "category",
+  "author_name",
+  "status",
+  "cta_text",
+  "cta_url",
+  "published_at",
+  "updated_at",
+].join(",")
+
+/** Admin Overview가 실제로 렌더하는 집계와 최근 4건만 반환한다. */
+export async function getAdminBlogOverviewSummary(): Promise<AdminBlogOverviewSummary> {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .select(OVERVIEW_COLUMNS)
+    .is("deleted_at", null);
+
+  if (error) throw new Error(`[blog] Overview 조회 실패: ${error.message}`);
+
+  return buildAdminBlogOverviewSummary(
+    ((data ?? []) as unknown as Array<{
+      id: string;
+      title: string;
+      category: string | null;
+      author_name: string | null;
+      status: string | null;
+      cta_text: string | null;
+      cta_url: string | null;
+      published_at: string | null;
+      updated_at: string | null;
+    }>).map(
+      (row): AdminBlogOverviewSourceRow => ({
+        id: row.id,
+        title: row.title,
+        category: row.category,
+        authorName: row.author_name,
+        status: row.status,
+        ctaText: row.cta_text,
+        ctaUrl: row.cta_url,
+        publishedAt: row.published_at,
+        updatedAt: row.updated_at,
+      })
+    )
+  );
+}
+
 // 카운트 소비자용(os-summary 등) — 전체 행 로드(getAllPosts) 없이 발행 글 수만 센다.
 // 술어는 "getAllPosts() 후 status === 'published' 필터"와 동치다:
 // deleted_at null + status ∈ PUBLISHED_STATUS_VALUES(레거시 매핑이 "published"로 접는 값 전부).
@@ -156,11 +211,20 @@ export async function countPublishedPosts(): Promise<number> {
 }
 
 export async function getPublishedPosts(): Promise<BlogPost[]> {
+  return queryPublishedPosts();
+}
 
+/** /about처럼 최근 카드만 필요한 표면은 전체 공개 목록을 내려받지 않는다. */
+export async function getRecentPublishedPosts(limit = 3): Promise<BlogPost[]> {
+  return queryPublishedPosts(Math.max(1, Math.min(12, Math.trunc(limit))));
+}
+
+async function queryPublishedPosts(limit?: number): Promise<BlogPost[]> {
   const supabase = await createSupabaseBlogReadClient();
-  const timeout = createBlogQueryTimeout();
-  try {
-    const { data, error } = await supabase
+  for (let attempt = 1; attempt <= PUBLIC_BLOG_QUERY_ATTEMPTS; attempt += 1) {
+    const timeout = createBlogQueryTimeout();
+    try {
+      let query = supabase
       .from("blog_posts")
       .select(LIST_COLUMNS)
       .in("status", PUBLISHED_STATUS_VALUES)
@@ -169,18 +233,26 @@ export async function getPublishedPosts(): Promise<BlogPost[]> {
       // Postgres는 DESC에서 NULL을 맨 앞에 둔다 — published_at 없이 발행된 글이
       // 목록 최상단에 눌러앉는 걸 막는다. 동일 시각 글은 created_at으로 순서를 고정한다.
       .order("published_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .abortSignal(timeout.signal);
+      .order("created_at", { ascending: false });
 
-    if (error && isAbortError(error)) {
-      console.warn(`[blog] 공개 글 조회 timeout after ${PUBLIC_BLOG_QUERY_TIMEOUT_MS}ms`);
-      return [];
+      if (limit !== undefined) query = query.limit(limit);
+      const { data, error } = await query.abortSignal(timeout.signal);
+
+      if (error && isAbortError(error)) {
+        console.warn(
+          `[blog] 공개 글 조회 timeout after ${PUBLIC_BLOG_QUERY_TIMEOUT_MS}ms (${attempt}/${PUBLIC_BLOG_QUERY_ATTEMPTS})`,
+        );
+        if (attempt < PUBLIC_BLOG_QUERY_ATTEMPTS) continue;
+        throw new Error(`[blog] 공개 글 조회 timeout after ${PUBLIC_BLOG_QUERY_TIMEOUT_MS}ms`);
+      }
+      if (error) throw new Error(`[blog] 공개 글 조회 실패: ${error.message}`);
+      return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
+    } finally {
+      timeout.clear();
     }
-    if (error) throw new Error(`[blog] 공개 글 조회 실패: ${error.message}`);
-    return (data as unknown as SupaBlogPost[]).map(supabaseToLegacy);
-  } finally {
-    timeout.clear();
   }
+
+  throw new Error("[blog] 공개 글 조회 재시도 한도를 초과했습니다.");
 }
 
 export async function getPostBySlug(slug: string): Promise<BlogPost | null> {

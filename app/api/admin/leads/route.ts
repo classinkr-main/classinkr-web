@@ -1,6 +1,7 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
+import { getCachedOverviewLeadSummary } from "@/lib/admin/overview/lead-summary-cache"
 import {
   getLeads,
   getDashboardLeads,
@@ -17,19 +18,23 @@ export async function GET(req: NextRequest) {
 
   try {
     // 스코프별로 화면에 쓰는 컬럼만 가져와 페이로드를 줄인다.
-    // - dashboard: overview/analytics 집계용(id·source·name·org·email·status·branch·created_at·confirmed_at)
+    // - overview: dashboard와 같은 서버 원본을 단 한 번 집계하고 KPI·최근 6건·30일 버킷만 반환
+    // - dashboard: 기존 overview/analytics 소비자용 전량 계약 — 하위호환을 위해 유지
     // - campaigns: 행사↔리드 귀속용(id·source·status·notes·created_at) — 귀속 해시가 notes를 요구한다
     // - marketing: 캠페인 허브 "광고 리드"용(트래킹 축·연락처·전환 상태) — campaigns의 상위집합
     // - 기본(무스코프): 전체 컬럼 — LeadsBoard(검색이 utm_* 필요)는 불변
     const scope = new URL(req.url).searchParams.get("scope")
-    const leads =
-      scope === "dashboard"
-        ? await getDashboardLeads()
-        : scope === "campaigns"
-          ? await getCampaignLeads()
-          : scope === "marketing"
-            ? await getMarketingLeads()
-            : await getLeads()
+    if (scope === "overview") {
+      return adminCachedJson({ overview: await getCachedOverviewLeadSummary() })
+    }
+
+    const leads = scope === "dashboard"
+      ? await getDashboardLeads()
+      : scope === "campaigns"
+        ? await getCampaignLeads()
+        : scope === "marketing"
+          ? await getMarketingLeads()
+          : await getLeads()
     return adminCachedJson({ leads })
   } catch (error) {
     console.error("[GET /api/admin/leads] error:", error)

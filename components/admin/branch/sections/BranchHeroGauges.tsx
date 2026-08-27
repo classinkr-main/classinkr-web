@@ -13,10 +13,11 @@ const TEAM_LABEL: Record<string, { name: string; full: string }> = {
 }
 
 export default function BranchHeroGauges({
-  summary, kpi, periodLabel, error,
+  summary, kpi, loading, periodLabel, error,
 }: {
   summary: BranchSummaryResponse | null
   kpi: BranchKpiResponse | null
+  loading: boolean
   periodLabel: string
   error?: string | null
 }) {
@@ -27,12 +28,17 @@ export default function BranchHeroGauges({
 
   // 에러를 영구 스켈레톤으로 위장하지 않는다(품질 웨이브 5 — 항목 2) — summary fetch가
   // 실패하면 summary는 항상 null이라 아래 !summary 스켈레톤 분기가 계속 돌고 있었다.
-  if (error) return (
+  if (error && !summary) return (
     <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]">
       {error}
     </div>
   )
-  if (!summary) return <div className="h-56 animate-pulse rounded-xl bg-[#f0f0ec]" />
+  if (loading && !summary) return <div className="h-56 animate-pulse rounded-xl bg-[#f0f0ec]" />
+  if (!summary) return (
+    <div role="status" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 text-[12px] text-[#615D59]">
+      표시할 매출 목표 데이터가 없습니다.
+    </div>
+  )
 
   const actual = summary.revenue.confirmed
   const goal = summary.revenue.goal
@@ -62,7 +68,19 @@ export default function BranchHeroGauges({
             </span>
           </div>
         </div>
-        {teams.map((t) => {
+        {loading && !kpi ? (
+          <div role="status" aria-live="polite" className="rounded-lg bg-[#F6F5F4] p-4 text-[11px] text-[#615D59] lg:col-span-3">
+            팀 KPI를 불러오는 중입니다.
+          </div>
+        ) : error && !kpi ? (
+          <div role="alert" className="rounded-lg border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[11px] font-semibold text-[#8F2C2C] lg:col-span-3">
+            팀 KPI를 불러오지 못했습니다 · {error}
+          </div>
+        ) : !kpi || teams.length === 0 ? (
+          <div role="status" className="rounded-lg bg-[#F6F5F4] p-4 text-[11px] text-[#615D59] lg:col-span-3">
+            표시할 팀 KPI 데이터가 없습니다.
+          </div>
+        ) : teams.map((t) => {
           const meta = TEAM_LABEL[t.team]
           if (!meta) return null
           return (

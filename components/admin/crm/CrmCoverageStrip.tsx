@@ -55,8 +55,8 @@ function statusCopy(state: DisplayState) {
   if (state === "loading") return { label: "계산 중", detail: "ClassIn 고객 DB 연결 상태를 확인 중입니다." }
   if (state === "failed") return { label: "확인 실패", detail: "CRM 동기화 상태를 불러오지 못했습니다." }
   if (state === "no_data") return { label: "연동 데이터 없음", detail: "ClassIn 고객 DB와 연결된 외부 원천이 아직 없습니다." }
-  if (state === "partial") return { label: "검토 필요", detail: "외부 원천은 참고용이며 ClassIn 고객 DB 연결 확정이 필요합니다." }
-  return { label: "정상", detail: "ClassIn 고객 DB 기준 연결 상태입니다." }
+  if (state === "partial") return { label: "검토 필요", detail: "현재 저장된 매칭 링크 중 검토와 확정이 필요합니다." }
+  return { label: "정상", detail: "현재 저장된 매칭 링크가 모두 확정됐습니다." }
 }
 
 function valueLabel(value: number | undefined, state: DisplayState, format: (n: number) => string, suffix = "") {
@@ -127,7 +127,7 @@ export default function CrmCoverageStrip() {
         <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">
           Sync
         </span>
-        <span className="text-[13px] font-semibold text-[#111110]">동기화 정합성</span>
+        <span className="text-[13px] font-semibold text-[#111110]">링크 정합성</span>
         <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/55">
           {data?.health?.label ?? copy.label}
         </span>
@@ -135,7 +135,7 @@ export default function CrmCoverageStrip() {
         {showMetrics ? (
           <span className="flex items-center gap-1.5 text-[12px] text-[#1a1a1a]/45">
             <span className="text-[#1a1a1a]/20">·</span>
-            커버리지 <b className={`font-semibold ${COVERAGE_TONE_CLASS[tone]}`}>{pctLabel}</b>
+            링크 확정률 <b className={`font-semibold ${COVERAGE_TONE_CLASS[tone]}`}>{pctLabel}</b>
             <span className="text-[#1a1a1a]/20">·</span>
             확정 <b className="font-semibold text-[#1a1a1a]/70">{valueLabel(data?.linked, state, fmt)}</b>
             <span className="text-[#1a1a1a]/20">·</span>

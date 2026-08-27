@@ -172,7 +172,8 @@ export type LeadAggregates = ReturnType<typeof aggregateLeads>
 /* ─── 미응답 리드 신호 (단일 정의) ──────────────────────────── */
 
 // Overview에서 '미응답'을 표현하는 유일한 정의·유일한 산출 지점(W2-8).
-// 캐논 = action-kpis 라우트(getLeadActionStats): status=new AND source∈{데모·문의·Meta}
+// 캐논 = action-kpis 라우트(getLeadActionStats): 테스트가 아닌 운영 리드 중
+// status=new AND source∈{데모·문의·Meta}
 // (RESPONSE_TARGET_SOURCES). 응대 SLA 관점이라 리드 확인 게이트를 적용하지 않는다 —
 // 보드의 filter=unresponded(CONFIRMATION_GATE_EXEMPT_FILTERS)와 동일 기준.
 export interface UnrespondedSignal {
@@ -402,14 +403,14 @@ export function buildOperationalAlerts(input: OperationalAlertInput): {
       ? {
           id: "lead-followup",
           scope: "CRM",
-          title: "미응답 리드 후속 리스크",
-          description: `응대 전 ${unrespondedCount}건 · 24h+ 경과 ${unresponded24hCount}건 · 데모·문의·Meta 신규 인바운드 기준.`,
+          title: "신규 상태 리드 후속 리스크",
+          description: `신규 상태 ${unrespondedCount}건 · 24h+ 경과 ${unresponded24hCount}건 · 데모·문의·Meta 운영 리드 기준(테스트 제외).`,
           meta: todayLeads > 0 ? `오늘 유입 ${todayLeads}건` : `이번 주 유입 ${thisWeekLeads}건`,
           // 골든타임(24h) 초과가 있으면 타일과 같은 breach 판정으로 danger, 아니면 warning.
           tone: unresponded24hCount > 0 ? ("danger" as const) : ("warning" as const),
-          action: "미응답 보드",
+          action: "24h+ 신규 상태 보드",
           // 리스크 렌즈가 켜진 미응답 보드로 직결 — bare /admin/crm 착지 금지(신호→행동 무손실).
-          href: "/admin/crm/customers/leads?filter=unresponded&focus=risk",
+          href: "/admin/crm/customers/leads?filter=unresponded_24h&focus=risk",
           priority: 100,
         }
       : null,

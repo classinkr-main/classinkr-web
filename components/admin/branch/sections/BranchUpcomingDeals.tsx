@@ -36,12 +36,17 @@ export default function BranchUpcomingDeals({
   onDealClick?: (d: UpcomingDealClick) => void
 }) {
   // 에러를 빈 상태/영구 스켈레톤으로 위장하지 않는다(품질 웨이브 5 — 항목 2).
-  if (error) return (
+  if (error && !data) return (
     <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]">
       {error}
     </div>
   )
-  if (loading || !data) return <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />
+  if (loading && !data) return <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />
+  if (!data) return (
+    <div role="status" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 text-[12px] text-[#615D59]">
+      일정 원천 데이터가 없습니다.
+    </div>
+  )
 
   const items: Item[] = [
     ...data.deals.map((d): Item => ({ kind: "deal", date: d.date, title: d.customer, amount: d.amount })),
@@ -59,7 +64,7 @@ export default function BranchUpcomingDeals({
           <Calendar className="h-4 w-4 text-[#084734]" />
           <h2 className="text-[14px] font-bold tracking-[-0.01em] text-[#111110]">다가오는 일정</h2>
         </div>
-        <Link href="/admin/calendar" className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#615D59] hover:text-[#111110]">
+        <Link href="/admin/calendar" className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 text-[11px] font-semibold text-[#615D59] hover:text-[#111110] md:min-h-0 md:min-w-0">
           캘린더 전체 보기 <ExternalLink className="h-3 w-3" />
         </Link>
       </div>
@@ -93,7 +98,7 @@ export default function BranchUpcomingDeals({
                   onKeyDown={handleKeyDown}
                   role={clickable ? "button" : undefined}
                   tabIndex={clickable ? 0 : undefined}
-                  className={`grid items-center gap-3 rounded-lg px-2 py-2 ${clickable ? "cursor-pointer outline-none hover:bg-[#F6F5F4] focus-visible:ring-2 focus-visible:ring-[#084734]/40" : "hover:bg-[#FAFAF8]"}`}
+                  className={`grid min-h-11 items-center gap-3 rounded-lg px-2 py-2 md:min-h-0 ${clickable ? "cursor-pointer outline-none hover:bg-[#F6F5F4] focus-visible:ring-2 focus-visible:ring-[#084734]/40" : "hover:bg-[#FAFAF8]"}`}
                   style={{ gridTemplateColumns: "44px 1fr auto" }}>
                   <div className="rounded-md py-1 text-center" style={{ background: tone.bg, color: tone.fg }}>
                     <p className="text-[9px] font-semibold">{m}월</p>

@@ -13,6 +13,7 @@ import {
   type CrmPriorityLane,
   type CrmPrioritySource,
 } from "@/lib/crm/priority"
+import { classifyTodayCallSlot, isMetaLeadItem } from "@/lib/crm/today-calls"
 import { getLeads } from "@/lib/repositories/leads"
 import { listCrmTasks } from "@/lib/repositories/crm-tasks"
 import { getLeadsActivitySummary } from "@/lib/repositories/lead-activity"
@@ -159,6 +160,53 @@ function buildOwnerOptions(items: CrmPriorityItem[]) {
     .sort((a, b) => b.count - a.count || a.ownerName.localeCompare(b.ownerName, "ko"))
 }
 
+/**
+ * CRM 홈은 lead + NEO 후보를 한 응답에서 받아 클라이언트가 "오늘 전화" 쿼터를 고른다.
+ * 전역 점수순으로 먼저 limit 하면 한 소스가 50칸을 채운 뒤라 다른 슬롯 후보는 복구할 수 없다.
+ *
+ * 여기서는 정렬을 다시 계산하지 않고, 이미 우선순위순인 배열에서 클라이언트가 실제로 쓰는
+ * 최소 슬롯만 먼저 예약한다. 남은 칸은 원래 전역 순서로 채우므로 기존 우선순위 의미도 유지한다.
+ */
+export function selectVisiblePriorityItems(
+  items: CrmPriorityItem[],
+  limit: number,
+  source: CrmPriorityQueueSource = "all"
+) {
+  if (source !== "customer" || items.length <= limit) return items.slice(0, limit)
+
+  const selectedIds = new Set<string>()
+  const reserve = (predicate: (item: CrmPriorityItem) => boolean, count: number) => {
+    for (const item of items) {
+      if (selectedIds.size >= limit || count <= 0) break
+      if (selectedIds.has(item.id) || !predicate(item)) continue
+      selectedIds.add(item.id)
+      count -= 1
+    }
+  }
+
+  const isNonMetaSlot = (slot: ReturnType<typeof classifyTodayCallSlot>) =>
+    (item: CrmPriorityItem) => !isMetaLeadItem(item) && classifyTodayCallSlot(item) === slot
+
+  // limit이 작아도 신규 응대와 기존 고객이 서로를 완전히 밀어내지 않도록 1칸씩 먼저 잡는다.
+  reserve(isNonMetaSlot("new_response"), 1)
+  reserve(isNonMetaSlot("money"), 1)
+  reserve(isNonMetaSlot("reengage"), 1)
+  reserve(isMetaLeadItem, 1)
+
+  // 기본 5건 쿼터(신규 2 · 돈 2 · 재활성 1)와 메타 요약 top 4에 필요한 추가 후보.
+  reserve(isNonMetaSlot("new_response"), 1)
+  reserve(isNonMetaSlot("money"), 1)
+  reserve(isMetaLeadItem, 3)
+
+  for (const item of items) {
+    if (selectedIds.size >= limit) break
+    selectedIds.add(item.id)
+  }
+
+  // 예약 때문에 먼 후보가 들어와도 반환 순서는 원래 전역 우선순위를 그대로 따른다.
+  return items.filter((item) => selectedIds.has(item.id)).slice(0, limit)
+}
+
 export async function getCrmPriorityQueue(
   options: CrmPriorityQueueOptions = {}
 ): Promise<CrmPriorityQueue> {
@@ -225,7 +273,7 @@ export async function getCrmPriorityQueue(
   const ownerScoped = applyOwnerFilter(sorted, options)
   const laneBaseFiltered = applyLaneBaseFilters(sorted, options)
   const limit = Math.max(1, Math.min(options.limit ?? 12, 50))
-  const visible = filtered.slice(0, limit)
+  const visible = selectVisiblePriorityItems(filtered, limit, options.source)
   const owners = buildOwnerOptions(sorted)
   const bucketCounts = buildBucketCounts(baseFiltered)
   const laneTotals = buildLaneCounts(laneBaseFiltered)

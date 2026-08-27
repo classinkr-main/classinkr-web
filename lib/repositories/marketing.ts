@@ -28,40 +28,199 @@ const sb = () => createSupabaseAdminClient();
 
 /* ─── 구독자 ─────────────────────────────────────────────── */
 
+const SUBSCRIBER_COLUMNS = [
+  "id",
+  "name",
+  "email",
+  "org",
+  "role",
+  "size",
+  "phone",
+  "tags",
+  "status",
+  "source",
+  "opt_in_at",
+  "unsubscribed_at",
+  "created_at",
+  "updated_at",
+].join(", ");
+const SUBSCRIBER_ANALYTICS_COLUMNS = "id, status, source, created_at";
+const SUBSCRIBER_ANALYTICS_PAGE_SIZE = 1_000;
+const SUBSCRIBER_MAX_ANALYTICS_ROWS = 100_000;
+const SUBSCRIBER_QUERY_TIMEOUT_MS = 12_000;
+
+export interface SubscriberPage {
+  subscribers: SubRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+export interface SubscriberAnalyticsRow {
+  createdAt: string;
+  status: Subscriber["status"];
+  source: string;
+}
+
+interface SubscriberKeysetPageResult<T> {
+  data: T[] | null;
+  error: { message: string } | null;
+}
+
+/** 전량 롤업용 id keyset. 고정 1,000건 절단과 깊은 OFFSET 스캔을 모두 피한다. */
+export async function fetchAllSubscriberRowsById<T extends { id: string }>(
+  fetchPage: (afterId: string | null, limit: number) => Promise<SubscriberKeysetPageResult<T>>,
+  options: { pageSize?: number; maxRows?: number } = {}
+): Promise<T[]> {
+  const pageSize = options.pageSize ?? SUBSCRIBER_ANALYTICS_PAGE_SIZE;
+  const maxRows = options.maxRows ?? SUBSCRIBER_MAX_ANALYTICS_ROWS;
+  const rows: T[] = [];
+  let afterId: string | null = null;
+
+  while (true) {
+    const result = await fetchPage(afterId, pageSize);
+    if (result.error) {
+      throw new Error(`[marketing] 구독자 분석 조회 실패: ${result.error.message}`);
+    }
+    const page = result.data ?? [];
+    if (rows.length + page.length > maxRows) {
+      throw new Error(
+        `[marketing] 구독자 분석 행이 안전 상한 ${maxRows.toLocaleString()}건을 초과했습니다.`
+      );
+    }
+    rows.push(...page);
+    if (page.length < pageSize) break;
+
+    const nextCursor = page.at(-1)?.id ?? null;
+    if (!nextCursor || nextCursor === afterId) {
+      throw new Error("[marketing] 구독자 분석 keyset cursor가 전진하지 않았습니다.");
+    }
+    afterId = nextCursor;
+  }
+
+  return rows;
+}
+
+export async function getSubscribersPage(
+  limit = 1_000,
+  offset = 0,
+  filters?: { status?: string; tag?: string }
+): Promise<SubscriberPage> {
+  const safeLimit = Number.isFinite(limit)
+    ? Math.min(Math.max(Math.floor(limit), 1), 1_000)
+    : 1_000;
+  const safeOffset = Number.isFinite(offset) ? Math.max(Math.floor(offset), 0) : 0;
+
+  if (!USE_SUPABASE) {
+    const { getAllSubscribers: jsonGet } = await import("@/lib/marketing-data");
+    let subscribers: SubRow[] = await jsonGet();
+    if (filters?.status) subscribers = subscribers.filter((row) => row.status === filters.status);
+    if (filters?.tag) {
+      const tag = filters.tag;
+      subscribers = subscribers.filter((row) => row.tags.includes(tag));
+    }
+    const total = subscribers.length;
+    const page = subscribers.slice(safeOffset, safeOffset + safeLimit);
+    return {
+      subscribers: page,
+      total,
+      limit: safeLimit,
+      offset: safeOffset,
+      hasMore: safeOffset + page.length < total,
+    };
+  }
+
+  const timeoutController = new AbortController();
+  const timeout = setTimeout(() => timeoutController.abort(), SUBSCRIBER_QUERY_TIMEOUT_MS);
+  try {
+    let query = sb()
+      .from("newsletter_subscribers")
+      .select(SUBSCRIBER_COLUMNS, { count: "exact" })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(safeOffset, safeOffset + safeLimit - 1);
+
+    if (filters?.status) query = query.eq("status", filters.status);
+    if (filters?.tag) query = query.contains("tags", [filters.tag]);
+
+    const { data, error, count } = await query.abortSignal(timeoutController.signal);
+    if (error) throw new Error(`[marketing] 구독자 조회 실패: ${error.message}`);
+    if (typeof count !== "number") {
+      throw new Error("[marketing] 구독자 전체 수를 확인하지 못했습니다.");
+    }
+    const subscribers = (data ?? []).map(rowToSubscriber);
+    return {
+      subscribers,
+      total: count,
+      limit: safeLimit,
+      offset: safeOffset,
+      hasMore: safeOffset + subscribers.length < count,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function getAllSubscribers(
   limit = 1000,
   offset = 0,
   filters?: { status?: string; tag?: string }
 ): Promise<SubRow[]> {
+  return (await getSubscribersPage(limit, offset, filters)).subscribers;
+}
+
+export async function getSubscriberAnalyticsRows(filters?: {
+  status?: string;
+  tag?: string;
+}): Promise<SubscriberAnalyticsRow[]> {
   if (!USE_SUPABASE) {
     const { getAllSubscribers: jsonGet } = await import("@/lib/marketing-data");
     let subscribers: SubRow[] = await jsonGet();
-    if (filters?.status) {
-      subscribers = subscribers.filter((s) => s.status === filters.status);
-    }
+    if (filters?.status) subscribers = subscribers.filter((row) => row.status === filters.status);
     if (filters?.tag) {
       const tag = filters.tag;
-      subscribers = subscribers.filter((s) => s.tags.includes(tag));
+      subscribers = subscribers.filter((row) => row.tags.includes(tag));
     }
-    return subscribers;
+    return subscribers.map((subscriber) => ({
+      createdAt: subscriber.createdAt,
+      status: subscriber.status,
+      source: subscriber.source,
+    }));
   }
 
-  let query = sb()
-    .from("newsletter_subscribers")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
+  const timeoutController = new AbortController();
+  const timeout = setTimeout(() => timeoutController.abort(), SUBSCRIBER_QUERY_TIMEOUT_MS);
+  try {
+    const rows = await fetchAllSubscriberRowsById(async (afterId, limit) => {
+      let query = sb()
+        .from("newsletter_subscribers")
+        .select(SUBSCRIBER_ANALYTICS_COLUMNS)
+        .order("id", { ascending: true })
+        .limit(limit);
+      if (filters?.status) query = query.eq("status", filters.status);
+      if (filters?.tag) query = query.contains("tags", [filters.tag]);
+      if (afterId) query = query.gt("id", afterId);
+      const { data, error } = await query.abortSignal(timeoutController.signal);
+      return {
+        data: (data ?? null) as Array<{
+          id: string;
+          created_at: string;
+          status: Subscriber["status"];
+          source: string;
+        }> | null,
+        error,
+      };
+    });
 
-  if (filters?.status) {
-    query = query.eq("status", filters.status);
+    return rows.map((row) => ({
+      createdAt: row.created_at,
+      status: row.status,
+      source: row.source,
+    }));
+  } finally {
+    clearTimeout(timeout);
   }
-  if (filters?.tag) {
-    query = query.contains("tags", [filters.tag]);
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(`[marketing] 구독자 조회 실패: ${error.message}`);
-  return (data ?? []).map(rowToSubscriber);
 }
 
 /**
@@ -86,20 +245,29 @@ export async function countSubscribers(filters?: {
     return subscribers.length;
   }
 
-  let query = sb()
-    .from("newsletter_subscribers")
-    .select("id", { count: "exact", head: true });
+  const timeoutController = new AbortController();
+  const timeout = setTimeout(() => timeoutController.abort(), SUBSCRIBER_QUERY_TIMEOUT_MS);
+  try {
+    let query = sb()
+      .from("newsletter_subscribers")
+      .select("id", { count: "exact", head: true });
 
-  if (filters?.status) {
-    query = query.eq("status", filters.status);
-  }
-  if (filters?.tag) {
-    query = query.contains("tags", [filters.tag]);
-  }
+    if (filters?.status) {
+      query = query.eq("status", filters.status);
+    }
+    if (filters?.tag) {
+      query = query.contains("tags", [filters.tag]);
+    }
 
-  const { count, error } = await query;
-  if (error) throw new Error(`[marketing] 구독자 수 조회 실패: ${error.message}`);
-  return count ?? 0;
+    const { count, error } = await query.abortSignal(timeoutController.signal);
+    if (error) throw new Error(`[marketing] 구독자 수 조회 실패: ${error.message}`);
+    if (typeof count !== "number") {
+      throw new Error("[marketing] 구독자 전체 수를 확인하지 못했습니다.");
+    }
+    return count;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function getSubscriberByEmail(

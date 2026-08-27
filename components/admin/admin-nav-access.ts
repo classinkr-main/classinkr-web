@@ -1,9 +1,10 @@
 // 어드민 사이드바 접근·배치 SSOT — 스펙 docs/active/admin-tab-restructure-2026-07-29.md §5.
-// 순수 데이터/함수만 둔다(React·브라우저 API 없음). 사이드바·커맨드 팔레트·권한 설정
-// 미리보기가 전부 이 모듈의 resolveNavAccess를 호출해야 세 화면이 어긋나지 않는다.
+// 순수 데이터/함수만 둔다(React·브라우저 API 없음). 실제 사용자 표면은 이 모듈의
+// resolveAdminNavAccess를 호출해야 역할·프리셋·오버라이드가 어긋나지 않는다.
 import {
   ADMIN_NAV,
   ADMIN_NAV_CATEGORIES,
+  normalizeAdminRole,
   type AdminNavCategory,
   type AdminNavItem,
 } from "./admin-nav"
@@ -95,7 +96,7 @@ export function normalizeNavOverrides(value: unknown): Record<string, NavPlaceme
 }
 
 export interface NavAccessContext {
-  /** normalizeAdminRole을 통과한 값. SUPER_ADMIN은 어떤 규칙으로도 차단되지 않는다. */
+  /** resolveAdminNavAccess가 normalizeAdminRole을 적용한다. SUPER_ADMIN은 어떤 규칙으로도 차단되지 않는다. */
   role: string
   /** null이면 레거시(roles 기반) 동작으로 폴백한다. */
   preset: NavPresetKey | null
@@ -195,4 +196,32 @@ export function resolveNavAccess(
     showPrimaryHeaders: primary.length >= 4 && primaryGroups.length >= 2,
     folded: groupNavByCategory(foldedItems),
   }
+}
+
+/**
+ * 실제 사용자 컨텍스트용 단일 진입점.
+ * 역할 가시성 → 프리셋/오버라이드 순서를 사이드바·모바일·팔레트·미리보기가 공유한다.
+ */
+export function resolveAdminNavAccess(ctx: NavAccessContext): ResolvedNavAccess {
+  const role = normalizeAdminRole(ctx.role)
+  const visibleItems = ADMIN_NAV.filter((item) => item.roles.includes(role))
+
+  return resolveNavAccess(
+    {
+      role,
+      preset: ctx.preset,
+      overrides: normalizeNavOverrides(ctx.overrides),
+    },
+    visibleItems
+  )
+}
+
+/** 상시·기타의 렌더 가능한 항목을 ADMIN_NAV 선언 순서로 되돌린다. */
+export function getAccessibleAdminNavItems(access: ResolvedNavAccess): AdminNavItem[] {
+  const accessibleHrefs = new Set([
+    ...access.primary.map((item) => item.href),
+    ...access.folded.flatMap((group) => group.items.map((item) => item.href)),
+  ])
+
+  return ADMIN_NAV.filter((item) => accessibleHrefs.has(item.href))
 }

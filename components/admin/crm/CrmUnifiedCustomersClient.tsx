@@ -79,6 +79,35 @@ interface CrmUnifiedCustomers {
 
 type CustomerSourceStatus = CrmUnifiedCustomers["sources"]["statuses"][number]
 
+function summarizeCustomerSources(statuses: CustomerSourceStatus[]) {
+  const primary = statuses.filter((status) => status.role === "primary")
+  const reference = statuses.filter((status) => status.role === "reference")
+  return {
+    primaryReady: primary.filter((status) => status.ok && !status.partial).length,
+    primaryTotal: primary.length,
+    referenceTotal: reference.length,
+  }
+}
+
+function customerSourceTone(status: CustomerSourceStatus) {
+  if (!status.ok) {
+    return {
+      surface: "border-[#F6D5C5] bg-[#FEF3EE]",
+      text: "text-[#B85C33]",
+    }
+  }
+  if (status.partial) {
+    return {
+      surface: "border-[#ECD29C] bg-[#FBF1E0]",
+      text: "text-[#7A520F]",
+    }
+  }
+  return {
+    surface: "border-[#D7EBDD] bg-[#ECFDF5]",
+    text: "text-[#084734]",
+  }
+}
+
 const SOURCE_FILTERS: Array<{ key: SourceFilter; label: string }> = [
   { key: "all", label: "전체" },
   { key: "lead", label: "리드" },
@@ -196,35 +225,25 @@ function CustomerSourceStatusGrid({
 }) {
   return (
     <div className={`grid gap-2 sm:grid-cols-2 lg:grid-cols-4 ${className}`}>
-      {statuses.map((status) => (
-        <div
-          key={status.key}
-          className={`rounded-xl border px-3 py-2 ${
-            status.ok && !status.partial
-              ? "border-[#D7EBDD] bg-[#ECFDF5]"
-              : "border-[#F6D5C5] bg-[#FEF3EE]"
-          }`}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <p
-              className={`text-[12px] font-bold ${
-                status.ok && !status.partial ? "text-[#084734]" : "text-[#B85C33]"
-              }`}
-            >
-              {status.label}
-            </p>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
-              {status.role === "primary" ? "DB" : "SYNC"}
-            </span>
+      {statuses.map((status) => {
+        const tone = customerSourceTone(status)
+        return (
+          <div key={status.key} className={`rounded-xl border px-3 py-2 ${tone.surface}`}>
+            <div className="flex items-center justify-between gap-2">
+              <p className={`text-[12px] font-bold ${tone.text}`}>{status.label}</p>
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
+                {status.role === "primary" ? "DB" : "SYNC"}
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] leading-4 text-[#1a1a1a]/52">{status.message}</p>
+            {status.latestSyncedAt ? (
+              <p className="mt-1 text-[11px] font-medium text-[#1a1a1a]/35">
+                마지막 동기화 {formatDate(status.latestSyncedAt)}
+              </p>
+            ) : null}
           </div>
-          <p className="mt-1 text-[11px] leading-4 text-[#1a1a1a]/52">{status.message}</p>
-          {status.latestSyncedAt ? (
-            <p className="mt-1 text-[11px] font-medium text-[#1a1a1a]/35">
-              마지막 동기화 {formatDate(status.latestSyncedAt)}
-            </p>
-          ) : null}
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -556,19 +575,26 @@ function CustomerSearchPanel({
   data: CrmUnifiedCustomers | null
   loading: boolean
 }) {
+  const sourceSummary = summarizeCustomerSources(data?.sources.statuses ?? [])
+
   return (
     <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-[minmax(220px,1fr)_auto_auto_auto] lg:items-center">
-        <label className="col-span-2 flex h-10 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 lg:col-span-1">
+        <label className="col-span-2 flex h-11 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-[#fafaf8] px-3 lg:col-span-1 lg:h-10">
           <Search className="h-4 w-4 text-[#1a1a1a]/35" />
           <input
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             className="h-full min-w-0 flex-1 bg-transparent text-[13px] font-medium text-[#111110] outline-none placeholder:text-[#1a1a1a]/30"
             placeholder="이름, 연락처, 지역, 담당자 검색"
+            aria-label="통합 고객 검색"
           />
         </label>
-        <div className="col-span-2 inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1 lg:col-span-1">
+        <div
+          className="col-span-2 inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-1 lg:col-span-1"
+          role="group"
+          aria-label="고객 원천 필터"
+        >
           {SOURCE_FILTERS.map((filter) => (
             <button
               key={filter.key}
@@ -585,7 +611,7 @@ function CustomerSearchPanel({
             </button>
           ))}
         </div>
-        <label className="flex h-10 min-w-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
+        <label className="flex h-11 min-w-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50 lg:h-10">
           <Filter className="h-3.5 w-3.5" />
           <select
             value={lifecycle}
@@ -600,7 +626,7 @@ function CustomerSearchPanel({
             ))}
           </select>
         </label>
-        <label className="flex h-10 min-w-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50">
+        <label className="flex h-11 min-w-0 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#1a1a1a]/50 lg:h-10">
           <Filter className="h-3.5 w-3.5" />
           <select
             value={owner}
@@ -700,11 +726,12 @@ function CustomerSearchPanel({
 
       {data?.sources.statuses.length ? (
         <details className="group mt-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8]">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[12px] font-semibold text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[12px] font-semibold text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] lg:min-h-0">
             <span>
-              데이터 원천 · 정상 {data.sources.statuses.filter((status) => status.ok && !status.partial).length}/
-              {data.sources.statuses.length}
-              <span className="ml-2 font-medium text-[#1a1a1a]/40">운영 기준 DB와 동기화 참고자료</span>
+              데이터 원천 · 기준 DB {sourceSummary.primaryReady}/{sourceSummary.primaryTotal} 정상
+              <span className="ml-2 font-medium text-[#1a1a1a]/40">
+                참고 원천 {sourceSummary.referenceTotal}개 · 상태는 상세에서 확인
+              </span>
             </span>
             <span className="text-[11px] font-medium text-[#1a1a1a]/40 group-open:hidden">상세 보기</span>
             <span className="hidden text-[11px] font-medium text-[#1a1a1a]/40 group-open:inline">접기</span>
@@ -1062,7 +1089,23 @@ export default function CrmUnifiedCustomersClient() {
   }, [data?.rows, sort])
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div
+      className="mx-auto max-w-7xl [&_a]:min-h-11 [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2 [&_button]:min-h-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2 [&_input:not([type=checkbox]):not([type=file])]:min-h-11 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:outline-none [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-2 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-[#084734] [&_select]:min-h-11 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-[#084734] lg:[&_a]:min-h-6 lg:[&_button]:min-h-6 lg:[&_input:not([type=checkbox]):not([type=file])]:min-h-0 lg:[&_select]:min-h-0"
+      aria-busy={loading || loadingMore || refreshing}
+    >
+        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+          {refreshing
+            ? "통합 고객 목록을 새로고치는 중입니다."
+            : loadingMore
+              ? "다음 고객 목록을 불러오는 중입니다."
+              : loading
+                ? "통합 고객 목록을 불러오는 중입니다."
+                : error
+                  ? "통합 고객 목록을 불러오지 못했습니다."
+                  : data
+                    ? `통합 고객 ${data.summary.total.toLocaleString("ko-KR")}명 결과를 불러왔습니다.`
+                    : ""}
+        </div>
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">ClassIn 고객 DB</h1>
@@ -1092,7 +1135,7 @@ export default function CrmUnifiedCustomersClient() {
         </div>
 
         {/* 행동 빈도가 높은 보기만 1차 노출하고, 참조성 보기는 한 묶음으로 접는다. */}
-        <div className="mb-3 flex flex-wrap items-center gap-2" aria-label="빠른 고객 필터">
+        <div className="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="빠른 고객 필터">
           <span className="inline-flex h-8 shrink-0 items-center gap-1.5 text-[12px] font-semibold text-[#1a1a1a]/45">
             <Filter className="h-3.5 w-3.5" />
             빠른 필터
@@ -1109,7 +1152,7 @@ export default function CrmUnifiedCustomersClient() {
             />
           ))}
           <details className="group relative shrink-0">
-            <summary className="flex h-8 cursor-pointer list-none items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/58 transition-colors hover:bg-[#fafaf8] hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734]">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1 rounded-full border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#1a1a1a]/58 transition-colors hover:bg-[#fafaf8] hover:text-[#111110] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#084734] lg:h-8 lg:min-h-0">
               추가 보기
               <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
             </summary>
@@ -1190,26 +1233,50 @@ export default function CrmUnifiedCustomersClient() {
         )}
 
         {error ? (
-          <div className="mb-4 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]">
-            {error}
+          <div
+            className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] font-medium text-[#B85C33]"
+            role="alert"
+            aria-live="assertive"
+          >
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => void loadPage(0, { force: true })}
+              disabled={loading || refreshing}
+              className="inline-flex items-center justify-center rounded-lg border border-[#F6D5C5] bg-white px-3 text-[12px] font-bold text-[#B85C33] transition-colors hover:bg-[#FEF3EE] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              다시 시도
+            </button>
           </div>
         ) : null}
 
         {data?.sources.warnings.length ? (
-          <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]">
+          <div
+            className="mb-4 flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]"
+            role="status"
+            aria-live="polite"
+          >
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{data.sources.warnings.join(" ")}</span>
           </div>
         ) : null}
 
         {ownerHealth?.ok === false && ownerHealth.message ? (
-          <div className="mb-4 flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]">
+          <div
+            className="mb-4 flex items-start gap-2 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-3 py-2 text-[12px] text-[#B85C33]"
+            role="status"
+            aria-live="polite"
+          >
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{ownerHealth.message}</span>
           </div>
         ) : null}
 
-        <section className="rounded-2xl border border-[#e8e8e4] bg-white">
+        <section
+          className="rounded-2xl border border-[#e8e8e4] bg-white"
+          aria-label="통합 고객 검색 결과"
+          aria-busy={loading || loadingMore || refreshing}
+        >
           {/* 정렬 툴바 — 현재 정렬 상태 표시 + 점수 정렬 진입점. 점수 컬럼은 화면에서 제거됐지만
               정렬 옵션으로는 유지한다(이 버튼이 유일한 진입점). 추천순 복귀 버튼은 정렬 활성 시에만 노출. */}
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#f0f0ec] px-4 py-2">
@@ -1246,6 +1313,7 @@ export default function CrmUnifiedCustomersClient() {
           </div>
           <div className="hidden overflow-hidden lg:block">
             <table className="w-full border-collapse text-left">
+              <caption className="sr-only">통합 고객 검색 결과 목록</caption>
               <thead className="bg-[#fafaf8] text-[11px] font-semibold uppercase tracking-[0.12em] text-[#1a1a1a]/35">
                 <tr>
                   <SortableHeaderCell label="고객" sortKey="name" sort={sort} onToggle={toggleSort} />
@@ -1320,8 +1388,8 @@ export default function CrmUnifiedCustomersClient() {
                         </div>
                         <Link
                           href={row.source === "customer" ? row.href : `/admin/crm/customers/${encodeURIComponent(row.key)}`}
-                          className="shrink-0 text-[#1a1a1a]/25 transition-colors hover:text-[#111110]"
-                          aria-label="고객 상세 페이지 열기"
+                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[#1a1a1a]/35 transition-colors hover:bg-[#fafaf8] hover:text-[#111110]"
+                          aria-label={`${row.name} 고객 상세 페이지 열기`}
                         >
                           <ExternalLink className="h-3.5 w-3.5" />
                         </Link>
@@ -1375,7 +1443,7 @@ export default function CrmUnifiedCustomersClient() {
                     type="button"
                     onClick={() => openDrawer(row.key, row.name)}
                     aria-label={`${row.name} 상세 보기`}
-                    className="absolute inset-0 z-0"
+                    className="absolute inset-1 z-0 rounded-xl focus-visible:ring-inset"
                   />
                 )}
                 <div className="pointer-events-none relative z-10 p-4">
@@ -1431,7 +1499,11 @@ export default function CrmUnifiedCustomersClient() {
                   <ChevronLeft className="h-3.5 w-3.5" />
                   이전
                 </button>
-                <span className="px-1.5 text-[12px] font-semibold tabular-nums text-[#1a1a1a]/55">
+                <span
+                  className="px-1.5 text-[12px] font-semibold tabular-nums text-[#1a1a1a]/55"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
                   {Math.floor(data.pagination.offset / PAGE_LIMIT) + 1} /{" "}
                   {Math.max(1, Math.ceil(data.pagination.total / PAGE_LIMIT))}
                 </span>

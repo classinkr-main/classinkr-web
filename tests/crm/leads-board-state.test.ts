@@ -117,6 +117,7 @@ describe("리드 술어", () => {
     expect(isUnrespondedLead(lead({ status: "contacted", source: "contact_page" }))).toBe(false)
     // 뉴스레터처럼 응대 대상이 아닌 유입은 신규여도 미응대가 아니다.
     expect(isUnrespondedLead(lead({ status: "new", source: "newsletter" }))).toBe(false)
+    expect(isUnrespondedLead(lead({ email: "test@meta.com" }))).toBe(false)
   })
 
   it("활성은 전환·종료가 아닌 것", () => {

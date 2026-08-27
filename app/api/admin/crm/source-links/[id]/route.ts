@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import {
+  CrmSourceLinkConflictError,
   type CrmSourceLinkAction,
   updateCrmSourceLinkStatus,
 } from "@/lib/repositories/crm-source-links"
@@ -31,7 +32,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   } catch (error) {
     console.error("[PATCH /api/admin/crm/source-links/[id]]", error)
     const message = error instanceof Error ? error.message : "Failed to update CRM source link"
-    const status = message.includes("not found") ? 404 : 500
+    const status = error instanceof CrmSourceLinkConflictError ? 409 : message.includes("not found") ? 404 : 500
     return NextResponse.json({ error: message }, { status })
   }
 }

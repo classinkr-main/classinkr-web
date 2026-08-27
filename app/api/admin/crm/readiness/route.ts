@@ -9,7 +9,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const report = await getAdminCrmReadinessReport()
-    return NextResponse.json(report)
+    const response = NextResponse.json(report)
+    response.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=120")
+    return response
   } catch (error) {
     console.error("[GET /api/admin/crm/readiness]", error)
     const message = error instanceof Error ? error.message : "Failed to check CRM readiness"

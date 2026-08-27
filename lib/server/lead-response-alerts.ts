@@ -1,5 +1,6 @@
 import "server-only"
 
+import { isUnrespondedLead } from "@/lib/crm/leads-board-state"
 import { emitNotificationEvent } from "@/lib/notifications/emit-event"
 import {
   getLeadAlertState,
@@ -9,7 +10,6 @@ import {
 } from "@/lib/repositories/lead-alert-states"
 import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
 
-const TARGET_SOURCES = new Set(["contact_page", "demo_modal", "meta_lead_ads"])
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
 const AGGREGATE_COOLDOWN_MS = DAY_MS
@@ -32,14 +32,6 @@ export interface LeadResponseAlertScanResult {
     over3Count: boolean
     over5Count: boolean
   }
-}
-
-function isTargetLead(lead: LeadRecord) {
-  return TARGET_SOURCES.has(lead.source)
-}
-
-function isUnrespondedLead(lead: LeadRecord) {
-  return lead.status === "new" && isTargetLead(lead)
 }
 
 function hoursSince(value: string | Date, now = new Date()) {
@@ -99,7 +91,7 @@ async function sendLeadAgeAlert(lead: LeadRecord, alertKey: LeadResponseAlertKey
       `담당자: ${lead.assigned_to?.trim() || "미배정"}`,
       `경로: ${lead.source}`,
     ].join("\n"),
-    routeUrl: "/admin/crm",
+    routeUrl: `/admin/crm/customers/leads?filter=${alertKey}&focus=risk`,
     source: "lead",
     sourceId: lead.id,
     payload: {
@@ -112,7 +104,8 @@ async function sendLeadAgeAlert(lead: LeadRecord, alertKey: LeadResponseAlertKey
       assignedTo: lead.assigned_to,
       createdAt: lead.timestamp,
     },
-    channels: ["wecom_webhook"],
+    channels: ["wecom_lead_report_webhook"],
+    requireSuccessfulDelivery: true,
   })
 
   await markLeadAlertSent({
@@ -154,7 +147,7 @@ async function sendAggregateAlert(
       "오래된 리드:",
       getOldestLeads(unrespondedLeads, now),
     ].join("\n"),
-    routeUrl: "/admin/crm",
+    routeUrl: "/admin/crm/customers/leads?filter=unresponded&focus=risk",
     source: "lead",
     sourceId: "unresponded",
     payload: {
@@ -165,7 +158,8 @@ async function sendAggregateAlert(
       over48h,
       leadIds: unrespondedLeads.map((lead) => lead.id),
     },
-    channels: ["wecom_webhook"],
+    channels: ["wecom_lead_report_webhook"],
+    requireSuccessfulDelivery: true,
   })
 
   await markLeadAlertSent({

@@ -11,8 +11,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 const sb = () => createSupabaseAdminClient()
 
-/** 브리핑 스코프 — 현재는 주간 하나. 일간/캠페인별로 늘어나도 같은 테이블을 쓴다. */
-export type MarketingInsightScope = "weekly"
+/** AI 브리핑과 결정론적 주간 보고서를 같은 보관 테이블에서 스코프로 분리한다. */
+export type MarketingInsightScope = "weekly" | "weekly_report"
 
 export interface MarketingInsightAction {
   title: string

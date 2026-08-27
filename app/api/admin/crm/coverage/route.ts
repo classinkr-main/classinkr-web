@@ -23,14 +23,14 @@ function buildCoverageHealth(coverage: {
     return {
       state: "partial",
       label: "검토 필요",
-      detail: "외부 원천은 참고용이며 ClassIn 고객 DB 연결 확정이 필요합니다.",
+      detail: "현재 저장된 매칭 링크 중 관리자 검토와 연결 확정이 필요한 항목이 있습니다.",
     } as const
   }
 
   return {
     state: "ready",
     label: "정상",
-    detail: "ClassIn 고객 DB 기준 연결 상태입니다.",
+    detail: "현재 저장된 매칭 링크가 ClassIn 고객 DB에 모두 확정됐습니다.",
   } as const
 }
 

@@ -7,6 +7,8 @@
 
 import "server-only";
 
+import { revalidateTag } from "next/cache";
+import { summarizeLeadResponseStatus } from "@/lib/crm/lead-response-status";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Lead, LeadInsert, LeadUpdate } from "@/lib/supabase/database.types";
 
@@ -28,10 +30,9 @@ export function shouldUseSupabaseLeads(
 }
 
 const USE_SUPABASE = shouldUseSupabaseLeads();
+export const ADMIN_LEADS_OVERVIEW_CACHE_TAG = "admin-leads-overview";
 const IS_PRODUCTION_RUNTIME =
   process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
-const RESPONSE_TARGET_SOURCES = ["demo_modal", "contact_page", "meta_lead_ads"] as const;
-const ACTIVE_LEAD_STATUSES = ["new", "contacted"] as const;
 const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "branch",
   "notes",
@@ -62,6 +63,17 @@ interface SupabaseColumnError {
   hint?: string;
 }
 
+function invalidateAdminLeadOverview() {
+  // Overview는 요청자 쿠키와 무관한 서비스 롤 집계라 서버 공용 캐시를 쓴다.
+  // 리드 쓰기 직후에는 다음 읽기가 반드시 새 값을 보도록 즉시 만료한다.
+  revalidateTag(ADMIN_LEADS_OVERVIEW_CACHE_TAG, { expire: 0 });
+}
+
+function returnAfterLeadMutation<T>(value: T): T {
+  invalidateAdminLeadOverview();
+  return value;
+}
+
 /* ─── 기존 LeadRecord ↔ Supabase Lead 변환 ─── */
 
 // 기존 코드와 호환되는 LeadRecord 타입
@@ -76,6 +88,8 @@ export interface LeadRecord {
   phone?: string;
   message?: string;
   timestamp: string;
+  /** 배정 미리보기 이후 동시 변경을 감지하는 서버 버전. JSON 폴백에서는 없을 수 있다. */
+  updated_at?: string;
   status: "new" | "contacted" | "converted" | "closed";
   branch?: string;
   notes?: string;
@@ -121,29 +135,8 @@ function toLocalDateKey(value: string | Date) {
     .slice(0, 10);
 }
 
-function getLocalDayBounds(value: Date) {
-  const [year, month, day] = toLocalDateKey(value).split("-").map(Number);
-  const start = new Date(year, month - 1, day);
-  const end = new Date(year, month - 1, day + 1);
-  return { start, end };
-}
-
 function isActiveLeadStatus(status: LeadRecord["status"]) {
   return status !== "converted" && status !== "closed";
-}
-
-function isResponseTargetSource(source: string) {
-  return RESPONSE_TARGET_SOURCES.includes(source as (typeof RESPONSE_TARGET_SOURCES)[number]);
-}
-
-function isUnrespondedLeadRecord(lead: LeadRecord) {
-  return lead.status === "new" && isResponseTargetSource(lead.source);
-}
-
-function getSupabaseCountError(
-  results: Array<{ error: { message?: string } | null }>
-) {
-  return results.find((result) => result.error)?.error ?? null;
 }
 
 function assertDurableLeadStorage() {
@@ -209,6 +202,7 @@ function supabaseToLegacy(row: Lead): LeadRecord {
     phone: row.phone ?? undefined,
     message: row.message ?? undefined,
     timestamp: row.created_at,
+    updated_at: row.updated_at,
     status: row.status,
     branch: row.branch ?? undefined,
     notes: row.notes ?? undefined,
@@ -516,7 +510,7 @@ export async function saveLead(
 
   if (!USE_SUPABASE) {
     const { saveLead: jsonSaveLead } = await import("@/lib/db");
-    return jsonSaveLead(lead);
+    return returnAfterLeadMutation(jsonSaveLead(lead));
   }
 
   // 공개 리드 제출은 admin 클라이언트 사용 (RLS: anyone can insert)
@@ -578,7 +572,9 @@ export async function saveLead(
         .select()
         .single();
 
-      if (!fallback.error) return supabaseToLegacy(fallback.data as Lead);
+      if (!fallback.error) {
+        return returnAfterLeadMutation(supabaseToLegacy(fallback.data as Lead));
+      }
 
       // 2차 재시도 — 여러 컬럼이 한꺼번에 없으면(마이그레이션 여러 개 미적용) 오류가
       // 한 번에 하나씩만 지목한다. 이때는 예전처럼 선택 컬럼을 전부 덜어 저장을 살린다.
@@ -599,7 +595,7 @@ export async function saveLead(
           throw new Error(`[leads] 저장 실패: ${bare.error.message}`);
         }
 
-        return supabaseToLegacy(bare.data as Lead);
+        return returnAfterLeadMutation(supabaseToLegacy(bare.data as Lead));
       }
 
       throw new Error(`[leads] 저장 실패: ${fallback.error.message}`);
@@ -608,7 +604,7 @@ export async function saveLead(
     throw new Error(`[leads] 저장 실패: ${error.message}`);
   }
 
-  return supabaseToLegacy(data as Lead);
+  return returnAfterLeadMutation(supabaseToLegacy(data as Lead));
 }
 
 /* ─── UPDATE ─── */
@@ -619,7 +615,8 @@ export async function updateLead(
 ): Promise<LeadRecord | null> {
   if (!USE_SUPABASE) {
     const { updateLead: jsonUpdateLead } = await import("@/lib/db");
-    return jsonUpdateLead(id, patch);
+    const updated = jsonUpdateLead(id, patch);
+    return updated ? returnAfterLeadMutation(updated) : null;
   }
 
   const supabase = createSupabaseAdminClient();
@@ -674,14 +671,103 @@ export async function updateLead(
       .single();
 
     if (fallback.error || !fallback.data) return null;
-    return {
+    return returnAfterLeadMutation({
       ...supabaseToLegacy(fallback.data as Lead),
       confirmed_at: patch.confirmed_at ?? undefined,
-    };
+    });
   }
 
   if (error || !data) return null;
-  return supabaseToLegacy(data as Lead);
+  return returnAfterLeadMutation(supabaseToLegacy(data as Lead));
+}
+
+/**
+ * 선택한 리드들의 담당자를 한 번의 저장소 호출로 갱신한다.
+ *
+ * 범용 벌크 PATCH가 아니라 담당자 필드만 열어 둔다. 상태·확인 도장·연락 증빙처럼
+ * 행마다 사전조건이 다른 필드는 단건 라우트의 검증을 우회하면 안 된다.
+ */
+export async function assignLeads(
+  ids: string[],
+  assignedTo: string | null
+): Promise<LeadRecord[]> {
+  const uniqueIds = Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+  if (uniqueIds.length === 0) return [];
+
+  if (!USE_SUPABASE) {
+    const { updateLeads: jsonUpdateLeads } = await import("@/lib/db");
+    const updated = jsonUpdateLeads(uniqueIds, { assigned_to: assignedTo ?? undefined });
+    return updated.length > 0 ? returnAfterLeadMutation(updated) : [];
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .update({ assigned_to: assignedTo })
+    .in("id", uniqueIds)
+    .select();
+
+  if (error) throw new Error(`[leads] 일괄 담당자 배정 실패: ${error.message}`);
+  const updated = ((data ?? []) as Lead[]).map(supabaseToLegacy);
+  return updated.length > 0 ? returnAfterLeadMutation(updated) : [];
+}
+
+interface GuardedLeadAssignmentParams {
+  ids: string[];
+  assignedTo: string;
+  expectedVersions: Record<string, string | null>;
+  actor: {
+    userId: string | null;
+    displayName: string | null;
+    role: string | null;
+  };
+  reasonCode: string;
+}
+
+/**
+ * 모든 리드 버전·선택 행 전제조건·감사 로그를 하나의 DB 트랜잭션에서 검증/저장한다.
+ * 전체 버전 지도를 비교하므로 미리보기 뒤 선택 밖 중복 리드가 추가되는 경쟁도 차단한다.
+ */
+export async function assignLeadsGuarded({
+  ids,
+  assignedTo,
+  expectedVersions,
+  actor,
+  reasonCode,
+}: GuardedLeadAssignmentParams): Promise<LeadRecord[]> {
+  const uniqueIds = Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+  if (uniqueIds.length === 0) return [];
+
+  if (!USE_SUPABASE) {
+    const current = await getLeads();
+    const currentById = new Map(current.map((lead) => [lead.id, lead]));
+    const changed = Object.entries(expectedVersions).some(
+      ([id, version]) => (currentById.get(id)?.updated_at ?? null) !== version
+    );
+    if (changed || current.length !== Object.keys(expectedVersions).length) {
+      throw new Error("[leads] assignment snapshot changed");
+    }
+    const { updateLeads: jsonUpdateLeads } = await import("@/lib/db");
+    const updated = jsonUpdateLeads(uniqueIds, { assigned_to: assignedTo });
+    if (updated.length !== uniqueIds.length) throw new Error("[leads] guarded assignment count mismatch");
+    return returnAfterLeadMutation(updated);
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase.rpc("assign_leads_guarded", {
+    p_ids: uniqueIds,
+    p_assigned_to: assignedTo,
+    p_expected_versions: expectedVersions,
+    p_actor_user_id: actor.userId,
+    p_actor_display_name: actor.displayName,
+    p_actor_role: actor.role,
+    p_reason_code: reasonCode,
+  });
+
+  if (error) throw new Error(`[leads] 안전 담당자 배정 실패: ${error.message}`);
+  const updated = ((data ?? []) as Lead[]).map(supabaseToLegacy);
+  if (updated.length !== uniqueIds.length) throw new Error("[leads] guarded assignment count mismatch");
+  return returnAfterLeadMutation(updated);
 }
 
 /* ─── DELETE ─── */
@@ -689,13 +775,14 @@ export async function updateLead(
 export async function deleteLead(id: string): Promise<boolean> {
   if (!USE_SUPABASE) {
     const { deleteLead: jsonDeleteLead } = await import("@/lib/db");
-    return jsonDeleteLead(id);
+    const deleted = jsonDeleteLead(id);
+    return deleted ? returnAfterLeadMutation(true) : false;
   }
 
   const supabase = createSupabaseAdminClient();
   const { error } = await supabase.from("leads").delete().eq("id", id);
 
-  return !error;
+  return error ? false : returnAfterLeadMutation(true);
 }
 
 /* ─── 집계 ─── */
@@ -741,141 +828,49 @@ export async function getLeadStats() {
 }
 
 export async function getLeadActionStats(now = new Date()): Promise<LeadActionStats> {
+  let leads: LeadRecord[];
   if (!USE_SUPABASE) {
-    const leads = await getLeads();
-    const today = toLocalDateKey(now);
-    const cutoff24h = now.getTime() - 24 * 3_600_000;
-    const cutoff48h = now.getTime() - 48 * 3_600_000;
-    const stats: LeadActionStats = {
-      total: leads.length,
-      byStatus: { new: 0, contacted: 0, converted: 0, closed: 0 },
-      unrespondedCount: 0,
-      unresponded24hCount: 0,
-      unresponded48hCount: 0,
-      todayFollowUpCount: 0,
-      overdueFollowUpCount: 0,
-      unconfirmedCount: 0,
-    };
-
-    for (const lead of leads) {
-      stats.byStatus[lead.status] += 1;
-      if (!lead.confirmed_at) stats.unconfirmedCount += 1;
-      if (isUnrespondedLeadRecord(lead)) {
-        stats.unrespondedCount += 1;
-        const leadTime = new Date(lead.timestamp).getTime();
-        if (leadTime <= cutoff24h) {
-          stats.unresponded24hCount += 1;
-        }
-        if (leadTime <= cutoff48h) {
-          stats.unresponded48hCount += 1;
-        }
+    leads = await getLeads();
+  } else {
+    // 과거 구현은 KPI 하나를 위해 exact count 10개를 병렬 호출해 실제 214행에서도 약 3초가
+    // 걸렸다. 경량 전량 조회 1회로 상태·SLA·팔로업·확인을 같은 스냅샷에서 접어 응답 속도와
+    // 지표 일관성을 함께 지킨다. fetchAllLeadRows가 1천행 경계를 페이지네이션한다.
+    const columns = "id, source, name, org, email, status, created_at, follow_up_at, confirmed_at";
+    try {
+      leads = (await fetchAllLeadRows(columns, "액션 KPI 조회")).map(supabaseToLegacy);
+    } catch (error) {
+      if (!(error instanceof LeadQueryError) || !isMissingLeadColumn(error.supabaseError, "confirmed_at")) {
+        throw error;
       }
-
-      if (!lead.follow_up_at || !isActiveLeadStatus(lead.status)) continue;
-      const followUpDate = toLocalDateKey(lead.follow_up_at);
-      if (followUpDate === today) stats.todayFollowUpCount += 1;
-      if (followUpDate < today) stats.overdueFollowUpCount += 1;
+      leads = (
+        await fetchAllLeadRows(columns.replace(", confirmed_at", ""), "액션 KPI 조회")
+      ).map(supabaseToLegacy);
     }
-
-    return stats;
   }
 
-  const supabase = createSupabaseAdminClient();
-  const { start, end } = getLocalDayBounds(now);
-  const cutoff24h = new Date(now.getTime() - 24 * 3_600_000).toISOString();
-  const cutoff48h = new Date(now.getTime() - 48 * 3_600_000).toISOString();
-
-  const [
-    totalRes,
-    newRes,
-    contactedRes,
-    convertedRes,
-    closedRes,
-    unrespondedRes,
-    unresponded24hRes,
-    unresponded48hRes,
-    todayFollowUpRes,
-    overdueFollowUpRes,
-    unconfirmedRes,
-  ] = await Promise.all([
-    supabase.from("leads").select("id", { count: "exact", head: true }),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "new"),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "contacted"),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "converted"),
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("status", "closed"),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "new")
-      .in("source", [...RESPONSE_TARGET_SOURCES]),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "new")
-      .in("source", [...RESPONSE_TARGET_SOURCES])
-      .lte("created_at", cutoff24h),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "new")
-      .in("source", [...RESPONSE_TARGET_SOURCES])
-      .lte("created_at", cutoff48h),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .in("status", [...ACTIVE_LEAD_STATUSES])
-      .gte("follow_up_at", start.toISOString())
-      .lt("follow_up_at", end.toISOString()),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .in("status", [...ACTIVE_LEAD_STATUSES])
-      .lt("follow_up_at", start.toISOString()),
-    supabase.from("leads").select("id", { count: "exact", head: true }).is("confirmed_at", null),
-  ]);
-
-  const countResults = [
-    totalRes,
-    newRes,
-    contactedRes,
-    convertedRes,
-    closedRes,
-    unrespondedRes,
-    unresponded24hRes,
-    unresponded48hRes,
-    todayFollowUpRes,
-    overdueFollowUpRes,
-  ];
-  const error = getSupabaseCountError(countResults);
-  if (error) throw new Error(`[leads] KPI 조회 실패: ${error.message ?? "unknown database error"}`);
-
-  let unconfirmedCount = unconfirmedRes.count ?? 0;
-  if (unconfirmedRes.error) {
-    // Some PostgREST head-count errors for a missing filter column come back
-    // with an empty message. This branch only covers the confirmed_at probe, so
-    // falling back to row-based counting is safer than failing the whole board.
-    if (unconfirmedRes.error.message && !isMissingLeadColumn(unconfirmedRes.error, "confirmed_at")) {
-      throw new Error(`[leads] KPI 조회 실패: ${unconfirmedRes.error.message ?? "unknown database error"}`);
-    }
-    const leads = await getLeads();
-    unconfirmedCount = leads.filter((lead) => !lead.confirmed_at).length;
-  }
-
-  return {
-    total: totalRes.count ?? 0,
-    byStatus: {
-      new: newRes.count ?? 0,
-      contacted: contactedRes.count ?? 0,
-      converted: convertedRes.count ?? 0,
-      closed: closedRes.count ?? 0,
-    },
-    unrespondedCount: unrespondedRes.count ?? 0,
-    unresponded24hCount: unresponded24hRes.count ?? 0,
-    unresponded48hCount: unresponded48hRes.count ?? 0,
-    todayFollowUpCount: todayFollowUpRes.count ?? 0,
-    overdueFollowUpCount: overdueFollowUpRes.count ?? 0,
-    unconfirmedCount,
+  const today = toLocalDateKey(now);
+  const responseStatus = summarizeLeadResponseStatus(leads, now);
+  const stats: LeadActionStats = {
+    total: leads.length,
+    byStatus: { new: 0, contacted: 0, converted: 0, closed: 0 },
+    unrespondedCount: responseStatus.awaitingResponseCount,
+    unresponded24hCount: responseStatus.over24hCount,
+    unresponded48hCount: responseStatus.over48hCount,
+    todayFollowUpCount: 0,
+    overdueFollowUpCount: 0,
+    unconfirmedCount: 0,
   };
+
+  for (const lead of leads) {
+    stats.byStatus[lead.status] += 1;
+    if (!lead.confirmed_at) stats.unconfirmedCount += 1;
+    if (!lead.follow_up_at || !isActiveLeadStatus(lead.status)) continue;
+    const followUpDate = toLocalDateKey(lead.follow_up_at);
+    if (followUpDate === today) stats.todayFollowUpCount += 1;
+    if (followUpDate < today) stats.overdueFollowUpCount += 1;
+  }
+
+  return stats;
 }
 
 export interface LeadChannelStat {

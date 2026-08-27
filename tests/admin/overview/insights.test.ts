@@ -454,6 +454,7 @@ describe("resolveUnrespondedSignal — 미응답 단일 정의 (W2-8)", () => {
       makeLead({ source: "newsletter" }), // 비대상 소스 제외
       makeLead({ source: "channel_talk" }), // 비대상 소스 제외
       makeLead({ source: "meta_lead_ads", status: "contacted" }), // new 아님 → 제외
+      makeLead({ source: "meta_lead_ads", email: "test@meta.com" }), // 테스트 리드 제외
     ]
     const signal = resolveUnrespondedSignal(null, leads, NOW)
     expect(signal).toEqual({ unrespondedCount: 2, unresponded24hCount: 0, basis: "client" })
@@ -528,7 +529,7 @@ describe("buildOperationalAlerts — tone·임계값·딥링크", () => {
   it("미응답 신호는 필터드 보드 딥링크로 직결된다 (bare /admin/crm 금지)", () => {
     const { alerts } = buildOperationalAlerts(alertInput({ unrespondedCount: 2, todayLeads: 1 }))
     expect(alerts[0].id).toBe("lead-followup")
-    expect(alerts[0].href).toBe("/admin/crm/customers/leads?filter=unresponded&focus=risk")
+    expect(alerts[0].href).toBe("/admin/crm/customers/leads?filter=unresponded_24h&focus=risk")
     expect(alerts[0].tone).toBe("warning")
   })
 
@@ -539,9 +540,10 @@ describe("buildOperationalAlerts — tone·임계값·딥링크", () => {
     expect(alerts[0].id).toBe("lead-followup")
     expect(alerts[0].tone).toBe("danger")
     // 산정 기준 캡션(응대 전·24h+·소스 기준)이 설명에 포함된다.
-    expect(alerts[0].description).toContain("응대 전 2건")
+    expect(alerts[0].description).toContain("신규 상태 2건")
     expect(alerts[0].description).toContain("24h+ 경과 1건")
     expect(alerts[0].description).toContain("데모·문의·Meta")
+    expect(alerts[0].description).toContain("테스트 제외")
   })
 
   it("후속 리스크 meta는 오늘 유입이 있으면 '오늘 유입 N건', 없으면 '이번 주 유입 N건'", () => {

@@ -3,7 +3,7 @@ import dynamic from "next/dynamic"
 import { useSearchParams } from "next/navigation"
 import type { KeyboardEvent } from "react"
 import { useState, useCallback, useEffect, useMemo, useRef } from "react"
-import { CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
+import { AlertTriangle, CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
 import SyncStatusBar from "./SyncStatusBar"
 import type { DealModalDeal } from "./sections/DealModal"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
@@ -64,33 +64,61 @@ function buildMonthOptions(now: Date) {
   }))
 }
 
-const RevenueFlowSection = dynamic(() => import("./sections/RevenueFlowSection"), {
-  loading: () => <div className="h-72 animate-pulse rounded-2xl bg-[#f0f0ec]" />,
-})
+function BranchOverviewLoadError({ message }: { message: string }) {
+  return (
+    <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-5 text-[#8F2C2C]">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <div>
+          <p className="text-[13px] font-bold">개요 화면을 불러오지 못했습니다</p>
+          <p className="mt-1 text-[12px] leading-relaxed">{message}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-3 inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-[#F2B8B8] bg-white px-3 py-1.5 text-[11px] font-bold text-[#8F2C2C] md:min-h-0 md:min-w-0"
+          >
+            페이지 다시 불러오기
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-// 개요도 다른 탭과 같은 지연 로딩 규약을 쓴다. 파이프라인·히트맵·AI 딥링크에서
-// 개요 전용 차트·HW·정합성 UI 번들을 먼저 내려받지 않게 한다.
-const IntegrityStrip = dynamic(() => import("./IntegrityStrip"), {
-  loading: () => <div className="h-16 animate-pulse rounded-xl bg-[#f0f0ec]" />,
-})
-const CoreKpiGrid = dynamic(() => import("./sections/CoreKpiGrid"), {
-  loading: () => <div className="h-32 animate-pulse rounded-xl bg-[#f0f0ec]" />,
-})
-const BranchHeroGauges = dynamic(() => import("./sections/BranchHeroGauges"), {
-  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
-})
-const BranchUpcomingDeals = dynamic(() => import("./sections/BranchUpcomingDeals"), {
-  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
-})
-const CampaignsSection = dynamic(() => import("./sections/CampaignsSection"), {
-  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
-})
-const HardwareSection = dynamic(() => import("./sections/HardwareSection"), {
-  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
-})
-const DealMixSection = dynamic(() => import("./sections/DealMixSection"), {
-  loading: () => <div className="h-64 animate-pulse rounded-xl bg-[#f0f0ec]" />,
-})
+function BranchOverviewFallback() {
+  const [slow, setSlow] = useState(false)
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setSlow(true), 12_000)
+    return () => window.clearTimeout(timeout)
+  }, [])
+
+  if (slow) {
+    return <BranchOverviewLoadError message="화면 구성요소 응답이 12초를 넘었습니다. 네트워크 상태를 확인한 뒤 다시 불러와 주세요." />
+  }
+
+  return (
+    <div role="status" aria-live="polite" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-5">
+      <p className="text-[13px] font-bold text-[#111110]">개요 화면을 준비하는 중</p>
+      <p className="mt-1 text-[12px] text-[#615D59]">KPI와 차트 구성요소를 불러오고 있습니다.</p>
+      <div className="mt-4 h-32 animate-pulse rounded-xl bg-[#f0f0ec]" aria-hidden="true" />
+    </div>
+  )
+}
+
+// 개요 탭 전체를 하나의 지연 청크로 묶는다. 이전의 9개 독립 청크는 dev rebuild나 일시적인
+// chunk 전송 실패 때 일부만 영구 loading fallback에 남을 수 있었다. 다른 탭 딥링크의 초기
+// 번들은 계속 보호하면서 개요 진입의 실패 지점은 하나로 줄이고, 실패·지연을 명시 상태로 끝낸다.
+const BranchOverviewPanel = dynamic(
+  () => import("./BranchOverviewPanel").catch((error: unknown) => ({
+    default: () => (
+      <BranchOverviewLoadError
+        message={error instanceof Error ? error.message : "개요 화면 구성요소를 불러오지 못했습니다."}
+      />
+    ),
+  })),
+  { loading: BranchOverviewFallback },
+)
 const DealModal = dynamic(() => import("./sections/DealModal"))
 
 // 탭 전용 컴포넌트 코드 스플리팅(품질 웨이브 2 — 항목 6) — 개요를 포함한 각 탭의
@@ -319,7 +347,10 @@ export default function BranchDashboardClient() {
   }, [openDealLog])
 
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
-  const summaryUrl = `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}`
+  // 개요는 '다가오는 일정' 상위 8개만 쓰므로 전용 projection으로 전체 회계연도
+  // 딜·행사·캠페인 타임라인 과전송을 막는다. 다른 탭과 장부는 기존 기본 계약 유지.
+  const summaryViewQuery = activeTab === "overview" ? "&view=overview" : ""
+  const summaryUrl = `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}${summaryViewQuery}`
   const kpiUrl = `/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`
   const dataNeeds = getBranchTabDataNeeds(activeTab)
   const summary = useBranchJson<BranchSummaryResponse>(summaryUrl, refreshKey)
@@ -398,7 +429,7 @@ export default function BranchDashboardClient() {
 
           <div className="flex shrink-0 items-center gap-2">
             <button type="button" onClick={onRefresh} disabled={refreshing}
-              className="inline-flex items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:opacity-60">
+              className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-1.5 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] disabled:opacity-60 md:min-h-0 md:min-w-0">
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
               새로고침
             </button>
@@ -413,9 +444,9 @@ export default function BranchDashboardClient() {
                 {TEAMS.map((t) => (
                   <button key={t} type="button" onClick={() => selectTeam(t)}
                     aria-pressed={team === t}
-                    // 웨이브 7 — U5(터치 타깃). 좁은 뷰포트(<md)에서만 min-h-10(40px)로
+                    // 웨이브 7 — U5(터치 타깃). 좁은 뷰포트(<md)에서만 최소 44px로
                     // 확대 — 데스크톱 밀도는 md:min-h-0으로 원복.
-                    className={`inline-flex min-h-10 items-center justify-center rounded-full px-3 py-1.5 text-[12px] font-semibold transition md:min-h-0 ${
+                    className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-full px-3 py-1.5 text-[12px] font-semibold transition md:min-h-0 md:min-w-0 ${
                       team === t ? "bg-[#111110] text-white" : "text-[#615D59] hover:text-[#111110]"
                     }`}>
                     {t === "ALL" ? "KR 전체" : t}
@@ -429,8 +460,8 @@ export default function BranchDashboardClient() {
                   {PERIODS.map((p) => (
                     <button key={p} type="button" onClick={() => selectPeriod(p)}
                       aria-pressed={period === p}
-                      // 웨이브 7 — U5. 팀 필터 칩과 동일 규약(min-h-10 → md:min-h-0).
-                      className={`inline-flex min-h-10 items-center justify-center rounded-md px-3 py-1.5 text-[12px] font-semibold transition md:min-h-0 ${
+                      // 웨이브 7 — U5. 팀 필터 칩과 동일한 모바일 44px 규약.
+                      className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-md px-3 py-1.5 text-[12px] font-semibold transition md:min-h-0 md:min-w-0 ${
                         period === p ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                       }`}>
                       {p}
@@ -438,13 +469,13 @@ export default function BranchDashboardClient() {
                   ))}
                 </div>
                 {period === "M" && (
-                  <label className="inline-flex h-[35px] items-center gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#615D59]">
+                  <label className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-2.5 text-[12px] font-semibold text-[#615D59] md:min-h-0 md:h-[35px]">
                     <CalendarDays className="h-3.5 w-3.5 text-[#084734]" aria-hidden="true" />
                     <span className="sr-only">월 선택</span>
                     <select
                       value={selectedMonth}
                       onChange={(event) => selectMonth(event.target.value)}
-                      className="h-7 bg-transparent pr-1 text-[12px] font-semibold text-[#111110] outline-none"
+                      className="min-h-11 bg-transparent pr-1 text-[12px] font-semibold text-[#111110] outline-none md:min-h-0 md:h-7"
                       aria-label="월별 데이터 월 선택"
                     >
                       {monthOptions.map((option) => (
@@ -481,7 +512,7 @@ export default function BranchDashboardClient() {
                 ref={(node) => { tabRefs.current[index] = node }}
                 onClick={() => selectTab(tab.id)}
                 onKeyDown={(event) => onTabKeyDown(event, index)}
-                className={`relative mt-1 flex shrink-0 flex-col items-start gap-0.5 rounded-t-lg px-4 py-2.5 text-left transition sm:px-5 sm:py-3 ${
+                className={`relative mt-1 flex min-h-11 min-w-11 shrink-0 flex-col items-start justify-center gap-0.5 rounded-t-lg px-4 py-2.5 text-left transition md:min-h-0 md:min-w-0 sm:px-5 sm:py-3 ${
                   active
                     ? "bg-[#FAFAF8] text-[#111110]"
                     : "bg-transparent text-[#615D59] hover:text-[#111110]"
@@ -513,46 +544,23 @@ export default function BranchDashboardClient() {
 
         <div className="mt-6">
           {activeTab === "overview" && (
-            <div id={activePanelId} role="tabpanel" aria-labelledby={activeTabId} className="space-y-6">
-              {/* 정합성 배지 승격(항목 3) — SyncStatusBar 바로 아래, 개요 탭에만.
-                  데이터 품질 상세(구 AI 탭 DataQualityPanel)는 이 스트립의 펼침 하단
-                  "전체 규칙 상세" 토글로 통합됐다(품질 웨이브 2 — 항목 4). */}
-              <IntegrityStrip refreshKey={refreshKey} canRunAdminOperations={canRunAdminOperations} />
-              <CoreKpiGrid data={summary.data} loading={summary.loading} error={summary.error} />
-              {/* D-1: 매출 목표(HeroGauges) 위, 매출 누적 흐름(RevenueFlowSection) 아래 */}
-              {/* 항목 2 수정 — teams는 kpi.data에서 파생되는데 error로는 summary.error만 넘어가고
-                  있었다: kpi fetch만 실패해도(summary는 성공) error가 비어 팀별 게이지가 그냥
-                  0개로 조용히 렌더됐다(BranchHeroGauges teams=[] fallback) — 실패가 스켈레톤/에러
-                  배너 없이 숨겨진 것. kpi.error도 함께 전달해 둘 중 하나라도 실패를 보이게 한다. */}
-              <BranchHeroGauges
-                summary={summary.data}
-                kpi={kpi.data}
+            <div
+              id={activePanelId}
+              role="tabpanel"
+              aria-labelledby={activeTabId}
+              aria-busy={summary.loading && !summary.data}
+            >
+              <BranchOverviewPanel
+                summary={summary}
+                kpi={kpi}
+                team={team}
+                period={period}
+                selectedMonth={selectedMonth}
                 periodLabel={activePeriodLabel}
-                error={summary.error ?? kpi.error}
+                refreshKey={refreshKey}
+                canRunAdminOperations={canRunAdminOperations}
+                onUpcomingDealClick={setSelectedDeal}
               />
-              <DealMixSection summary={summary.data} loading={summary.loading} error={summary.error} />
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)]">
-                <RevenueFlowSection
-                  summary={summary.data}
-                  loading={summary.loading}
-                  team={team}
-                  period={period}
-                  selectedMonth={selectedMonth}
-                  refreshKey={refreshKey}
-                />
-                <BranchUpcomingDeals
-                  data={summary.data?.monthly_series ?? null}
-                  loading={summary.loading}
-                  error={summary.error}
-                  onDealClick={(d) => setSelectedDeal({
-                    id: d.id, customer: d.customer, date: d.date, amount: d.amount,
-                  })}
-                />
-              </div>
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
-                <CampaignsSection rows={summary.data?.campaigns_recent ?? null} loading={summary.loading} error={summary.error} />
-                <HardwareSection refreshKey={refreshKey} />
-              </div>
             </div>
           )}
 
@@ -568,7 +576,7 @@ export default function BranchDashboardClient() {
                   <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">
                     {(["table", "kanban"] as const).map((v) => (
                       <button key={v} type="button" onClick={() => setPipelineView(v)}
-                        className={`rounded-[5px] px-2.5 py-1 text-[11px] font-semibold transition ${
+                        className={`min-h-11 min-w-11 rounded-[5px] px-2.5 py-1 text-[11px] font-semibold transition md:min-h-0 md:min-w-0 ${
                           pipelineView === v ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                         }`}>
                         {v === "table" ? "테이블" : "칸반"}

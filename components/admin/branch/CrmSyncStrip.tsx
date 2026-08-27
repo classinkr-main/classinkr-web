@@ -154,7 +154,6 @@ export default function CrmSyncStrip({ coverage }: CrmSyncStripProps = {}) {
   const rowLinkedPct = summary.rows.matchable > 0 ? (summary.rows.linked / summary.rows.matchable) * 100 : 0
   const rowReviewPct = summary.rows.matchable > 0 ? (summary.rows.review / summary.rows.matchable) * 100 : 0
   const revenuePct = summary.revenueTotal > 0 ? (summary.revenueLinked / summary.revenueTotal) * 100 : 0
-  const hasHygieneIssue = summary.hygiene.orphanCandidates > 0 || summary.hygiene.staleLinks > 0
   const topUnlinked = rev.topUnlinked.slice(0, TOP_UNLINKED_DISPLAY)
 
   return (
@@ -200,21 +199,17 @@ export default function CrmSyncStrip({ coverage }: CrmSyncStripProps = {}) {
               />
 
               <p className="border-t border-dashed border-[rgba(0,0,0,0.08)] pt-2.5 text-[11.5px] text-[#615D59]">
-                위생: 고아 후보{" "}
-                <b className="font-bold tabular-nums text-[#B85C33]">{summary.hygiene.orphanCandidates}</b>
-                건(시트에 없는 행 키) · 스테일 링크{" "}
-                <b className="font-bold tabular-nums text-[#B85C33]">{summary.hygiene.staleLinks}</b>건
-                {hasHygieneIssue && (
-                  <>
-                    {" → "}
-                    <Link
-                      href="/admin/crm/deals/rev-sheet"
-                      className="font-bold text-[#084734] underline underline-offset-2"
-                    >
-                      후보 재생성 권장
-                    </Link>
-                  </>
-                )}
+                연결 이력: 현 시트 키가 없는 과거 후보{" "}
+                <b className="font-bold tabular-nums text-[#111110]">{summary.hygiene.orphanCandidates}</b>행
+                {summary.hygiene.orphanCandidateNames != null
+                  ? `(${summary.hygiene.orphanCandidateNames}개 이름)`
+                  : ""}
+                {" · "}은퇴 링크{" "}
+                <b className="font-bold tabular-nums text-[#111110]">{summary.hygiene.staleLinks}</b>행
+                {summary.hygiene.staleLinkNames != null
+                  ? `(${summary.hygiene.staleLinkNames}개 이름)`
+                  : ""}
+                . 현재 검토 대기와 구분한 누적 기록이며 자동 재생성 대상이 아닙니다.
               </p>
               <p className="text-[10.5px] text-[#615D59]">
                 기준: 시트 동기화 {summary.asOf ? formatAsOf(summary.asOf) : "시각 미확인"} · 플레이스홀더{" "}

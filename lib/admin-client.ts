@@ -66,6 +66,11 @@ export interface AdminFetchInit extends RequestInit {
    * 비활성화된다.
    */
   adminTimeoutMs?: number | false
+  /**
+   * POST처럼 body가 필요한 읽기 전용 요청이 성공해도 관리자 화면 캐시를 무효화하지 않는다.
+   * 실제 쓰기 요청에는 사용하지 않는다.
+   */
+  adminReadOnly?: boolean
 }
 
 function resolveAdminTimeoutMs(input: string, init?: AdminFetchInit): number | false {
@@ -401,7 +406,7 @@ export async function adminFetch(input: string, init?: AdminFetchInit) {
       }
     }
 
-    if (response.ok && method !== "GET") {
+    if (response.ok && method !== "GET" && !init?.adminReadOnly) {
       const scopes = invalidationScopesForUrl(input)
       clearCacheScopes(scopes)
       markAdminMutation(scopes)
@@ -462,7 +467,7 @@ export interface AdminCachedFetchResult<T> {
 
 async function adminFetchJsonCachedInternal<T>(
   input: string,
-  init: RequestInit | undefined,
+  init: AdminFetchInit | undefined,
   options: AdminFetchCacheOptions
 ): Promise<AdminCachedFetchResult<T>> {
   if (!isGetRequest(init)) {
@@ -485,7 +490,7 @@ async function adminFetchJsonCachedInternal<T>(
     const inflight = inflightRequests.get(cacheKey)
     if (inflight) return inflight as Promise<AdminCachedFetchResult<T>>
 
-    const requestInit: RequestInit | undefined = options.force
+    const requestInit: AdminFetchInit | undefined = options.force
       ? { ...init, cache: "no-cache" }
       : init
     const request = adminFetchJson<T>(input, requestInit)
@@ -536,7 +541,7 @@ async function adminFetchJsonCachedInternal<T>(
 
 export async function adminFetchJsonCached<T>(
   input: string,
-  init?: RequestInit,
+  init?: AdminFetchInit,
   options: AdminFetchCacheOptions = {}
 ) {
   const result = await adminFetchJsonCachedInternal<T>(input, init, options)
@@ -547,7 +552,7 @@ export async function adminFetchJsonCached<T>(
  *  기존 adminFetchJsonCached 소비처는 전혀 변경할 필요가 없다. */
 export async function adminFetchJsonCachedWithMeta<T>(
   input: string,
-  init?: RequestInit,
+  init?: AdminFetchInit,
   options: AdminFetchCacheOptions = {}
 ): Promise<AdminCachedFetchResult<T>> {
   return adminFetchJsonCachedInternal<T>(input, init, options)

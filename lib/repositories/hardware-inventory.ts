@@ -4,6 +4,7 @@ import { createHash } from "crypto"
 import { revalidateTag, unstable_cache } from "next/cache"
 
 import { isPromotedProduct } from "@/lib/hardware/product"
+import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { fetchAllSupabaseRows, listFreshHwInbound, listFreshHwOutbound, listFreshHwStock } from "@/lib/repositories/branch-hw"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
@@ -354,6 +355,55 @@ function recoverMoneyFromRaw(rows: HardwareMovement[]): HardwareMovement[] {
 async function listAllHardwareMovements(): Promise<HardwareMovement[]> {
   const rows = await listAll<HardwareMovement>("hardware_movements")
   return recoverMoneyFromRaw(rows)
+}
+
+export interface HardwareCustomerLink {
+  accountKey: string
+  name: string
+}
+
+interface HardwareCustomerMovementRow {
+  id: string
+  to_location: string | null
+  status: string | null
+}
+
+const GENERIC_HARDWARE_DESTINATIONS = new Set(
+  ["창고", "샘플", "고객", "수리", "사무실", "본사", "office", "외부/고객", "외부", "재고"].map((value) =>
+    value.toLocaleLowerCase("ko-KR")
+  )
+)
+
+/**
+ * REV 장부의 하드웨어 역링크용 경량 투영. 실제(non-planned), non-voided 출고의
+ * 고객 목적지만 읽어 전체 재고 대시보드 조립과 600KB 응답을 피한다.
+ */
+export async function getHardwareCustomerLinks(): Promise<HardwareCustomerLink[]> {
+  const sb = createSupabaseAdminClient()
+  const rows = await fetchAllSupabaseRows<HardwareCustomerMovementRow>((afterId, limit) => {
+    let query = sb
+      .from("hardware_movements")
+      .select("id,to_location,status")
+      .eq("movement_type", "outbound")
+      .is("voided_at", null)
+      .order("id", { ascending: true })
+      .limit(limit)
+    if (afterId) query = query.gt("id", afterId)
+    return query
+  })
+
+  const customers = new Map<string, string>()
+  for (const row of rows) {
+    if (isPlannedStatus(row.status)) continue
+    const name = row.to_location?.trim()
+    if (!name || GENERIC_HARDWARE_DESTINATIONS.has(name.toLocaleLowerCase("ko-KR"))) continue
+    const accountKey = normalizedAccountKey(name)
+    if (accountKey && !customers.has(accountKey)) customers.set(accountKey, name)
+  }
+
+  return Array.from(customers, ([accountKey, name]) => ({ accountKey, name })).sort((a, b) =>
+    a.name.localeCompare(b.name, "ko")
+  )
 }
 
 async function getLatestImportRun(): Promise<HardwareDashboard["importRun"]> {

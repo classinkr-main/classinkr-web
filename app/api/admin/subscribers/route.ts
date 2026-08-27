@@ -2,12 +2,19 @@
 import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import {
-  getAllSubscribers,
   countSubscribers,
+  getSubscriberAnalyticsRows,
+  getSubscribersPage,
   upsertSubscriber,
   deleteSubscriber,
 } from "@/lib/repositories/marketing"
 import type { UpsertSubscriberRequest } from "@/lib/marketing-types"
+
+function boundedInteger(value: string | null, fallback: number, min: number, max: number) {
+  const parsed = Number(value ?? fallback)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(min, Math.min(Math.floor(parsed), max))
+}
 
 export async function GET(req: NextRequest) {
   const authError = await verifyAdmin(req)
@@ -16,37 +23,41 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const statusFilter = searchParams.get("status")
   const tagFilter = searchParams.get("tag")
-
-  // ?count=1 은 행을 전송하지 않고 총 구독자 수만 반환한다.(대시보드 KPI용)
-  if (searchParams.get("count") === "1") {
-    const total = await countSubscribers({
-      status: statusFilter ?? undefined,
-      tag: tagFilter ?? undefined,
-    })
-    return adminCachedJson({ subscribers: [], total })
-  }
-
-  const subscribers = await getAllSubscribers(1000, 0, {
+  const filters = {
     status: statusFilter ?? undefined,
     tag: tagFilter ?? undefined,
-  })
-
-  // ?scope=analytics 는 Analytics 화면 롤업 전용 — 구독자별 추세(createdAt)·활성(status)·
-  // 소스(source) 계산에 전 행이 필요하지만(count로 대체 불가, 감사 2026-07-23 §후속 3)
-  // 그 세 필드 외에는 소비하지 않으므로 행당 필드를 좁혀 페이로드를 줄인다.
-  // 같은 조회 결과를 투영만 하므로 롤업 수치는 전체 응답과 동일하다.
-  if (searchParams.get("scope") === "analytics") {
-    return adminCachedJson({
-      subscribers: subscribers.map((subscriber) => ({
-        createdAt: subscriber.createdAt,
-        status: subscriber.status,
-        source: subscriber.source,
-      })),
-      total: subscribers.length,
-    })
   }
 
-  return adminCachedJson({ subscribers, total: subscribers.length })
+  try {
+    // ?count=1 은 행을 전송하지 않고 총 구독자 수만 반환한다.(대시보드 KPI용)
+    if (searchParams.get("count") === "1") {
+      const total = await countSubscribers(filters)
+      return adminCachedJson({ subscribers: [], total })
+    }
+
+    // Analytics는 전량 롤업이 필요하다. 기존 getAllSubscribers(1000) 투영은 1,001번째부터
+    // 조용히 누락했으므로, DB 단계에서 세 필드만 고른 keyset 전량 조회를 사용한다.
+    if (searchParams.get("scope") === "analytics") {
+      const subscribers = await getSubscriberAnalyticsRows(filters)
+      return adminCachedJson({ subscribers, total: subscribers.length })
+    }
+
+    const page = await getSubscribersPage(
+      boundedInteger(searchParams.get("limit"), 1_000, 1, 1_000),
+      boundedInteger(searchParams.get("offset"), 0, 0, 100_000),
+      filters
+    )
+    return adminCachedJson({
+      subscribers: page.subscribers,
+      total: page.total,
+      limit: page.limit,
+      offset: page.offset,
+      hasMore: page.hasMore,
+    })
+  } catch (error) {
+    console.error("[GET /api/admin/subscribers]", error)
+    return NextResponse.json({ error: "Failed to fetch subscribers" }, { status: 500 })
+  }
 }
 
 export async function POST(req: NextRequest) {

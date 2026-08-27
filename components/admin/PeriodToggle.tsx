@@ -39,7 +39,7 @@ export function PeriodToggle<K extends string>({
           type="button"
           aria-pressed={value === option.id}
           onClick={() => onChange(option.id)}
-          className={`rounded-md px-3 py-1.5 text-[12px] font-semibold transition ${
+          className={`min-h-11 rounded-md px-3 py-1.5 text-[12px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 sm:min-h-0 ${
             value === option.id
               ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
               : "text-[#615D59]"

@@ -83,9 +83,22 @@ describe("SCHEMA_PROBES 계약", () => {
   it("keeps RPC probes side-effect free by targeting a non-existent id", () => {
     for (const probe of SCHEMA_PROBES) {
       if (probe.kind !== "rpc") continue
+      if (probe.catalogIdentityTypes) continue
       // 0으로만 이뤄진 UUID — 실제 행과 겹치지 않는다.
-      expect(Object.values(probe.args).join(""), probe.functionName).toMatch(/^0[0-9a-f-]*$/)
+      expect(JSON.stringify(probe.args), probe.functionName).toContain(
+        "00000000-0000-4000-8000-000000000000"
+      )
     }
+  })
+
+  it("checks the guarded assignment RPC through the catalog without executing it", () => {
+    const probe = SCHEMA_PROBES.find(
+      (candidate) => candidate.kind === "rpc" && candidate.functionName === "assign_leads_guarded"
+    )
+    expect(probe?.kind === "rpc" && probe.catalogIdentityTypes).toBe(
+      "uuid[], text, jsonb, text, text, text, text"
+    )
+    expect(probe?.kind === "rpc" && probe.serviceRoleOnly).toBe(true)
   })
 
   it("gives every probe a stable display name", () => {
@@ -129,6 +142,34 @@ describe("anon RLS 프로브 판정", () => {
     expect(summary.status).toBe("warning")
     expect(summary.warning[0].message).toContain("검증 불가")
     expect(summary.ok).toHaveLength(0)
+  })
+
+  it("passes an empty deny-all table when catalog metadata proves RLS and no anon policy", () => {
+    const summary = summarizeSchemaProbes([
+      {
+        ...anonBase,
+        anonVisibleRows: 0,
+        forbiddenRowsExist: 0,
+        metadataProtected: true,
+        metadataEvidence: "RLS ON, anon/public SELECT 정책 0개",
+      },
+    ])
+    expect(summary.status).toBe("ok")
+    expect(summary.ok).toHaveLength(1)
+  })
+
+  it("blocks an empty deny-all table when catalog metadata disproves protection", () => {
+    const summary = summarizeSchemaProbes([
+      {
+        ...anonBase,
+        anonVisibleRows: 0,
+        forbiddenRowsExist: 0,
+        metadataProtected: false,
+        metadataEvidence: "RLS OFF, anon/public SELECT 정책 0개",
+      },
+    ])
+    expect(summary.status).toBe("blocked")
+    expect(summary.blocked[0].message).toContain("RLS OFF")
   })
 
   it("reports a skipped probe as a warning, never as a pass", () => {

@@ -102,6 +102,7 @@ export function StatTile({
   href,
   lift,
   compact,
+  valueSize,
   variant = "card",
   iconLayout = "badge",
 }: {
@@ -129,6 +130,9 @@ export function StatTile({
   lift?: boolean
   // 밀도 높은 대시보드용 컴팩트 변형(p-4 · 값 22px · 라벨 10px) — 구 campaigns KpiCard 시각.
   compact?: boolean
+  // 값 타이포 스케일 옵트인. "lg"=34px — '숫자를 화면의 주어로' 스트립(overview 상단)용.
+  // 생략 시 기존 28px(compact면 22px) 그대로 — 다른 호출부 무손상. compact가 이긴다.
+  valueSize?: "md" | "lg"
   // 박스 처리(기본 "card" — 기존 시각과 완전 동일):
   //   card = 흰 배경 + rounded-2xl 테두리(기존 flat/lift 그대로)
   //   soft = 테두리 없는 rounded-xl 틴트 배경(bg-[#fafaf8]) — 구 CRM MeasureTile류 소형 지표 박스
@@ -193,7 +197,18 @@ export function StatTile({
       {iconLayout !== "inline" && (
         <p className={compact ? "mb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35" : "mb-1 text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/40"}>{label}</p>
       )}
-      <p className={compact ? "text-[22px] font-bold leading-none tracking-[-0.02em] text-[#111110]" : "text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]"}>{value}</p>
+      {/* tabular-nums: 스트립에서 카드끼리 자릿수 폭이 같아야 값 열이 정렬된다(숫자 아닌 값엔 무영향). */}
+      <p
+        className={
+          compact
+            ? "text-[22px] font-bold leading-none tracking-[-0.02em] tabular-nums text-[#111110]"
+            : valueSize === "lg"
+              ? "text-[34px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
+              : "text-[28px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
+        }
+      >
+        {value}
+      </p>
       {hint && (
         <p className={hintMono ? "mt-1.5 font-mono text-[11px] text-[#1a1a1a]/40" : "mt-1.5 text-[11px] text-[#1a1a1a]/40"}>{hint}</p>
       )}

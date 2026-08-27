@@ -195,6 +195,42 @@ function readBreakdownFlag(url: URL): boolean {
   return url.searchParams.get("breakdown") === "1"
 }
 
+// KR Team 개요의 '다가오는 일정'은 세 타임라인을 합친 뒤 오늘 이후 날짜순 8개만
+// 렌더한다. 기본 응답과 장부 계약은 그대로 두고, 명시적인 view=overview 요청에서만
+// 같은 결과 집합을 서버에서 선별해 회계연도 전체 일정의 과전송을 막는다.
+const OVERVIEW_UPCOMING_LIMIT = 8
+
+interface SummaryTimelines {
+  events: Array<{ date: string; title: string }>
+  deals: Array<{ date: string; customer: string; amount: number }>
+  campaigns: Array<{ date: string; name: string }>
+}
+
+function projectOverviewTimelines(timelines: SummaryTimelines, now: Date): SummaryTimelines {
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  const refs = [
+    ...timelines.deals.map((row, index) => ({ kind: "deals" as const, index, date: row.date })),
+    ...timelines.events.map((row, index) => ({ kind: "events" as const, index, date: row.date })),
+    ...timelines.campaigns.map((row, index) => ({ kind: "campaigns" as const, index, date: row.date })),
+  ]
+    .filter((item) => {
+      const date = new Date(item.date)
+      if (Number.isNaN(date.getTime())) return false
+      return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) >= todayUtc
+    })
+    // Array#sort는 안정 정렬이므로 같은 날짜에는 클라이언트와 동일하게 딜→행사→캠페인
+    // 순서를 유지한다(BranchUpcomingDeals의 결합 순서와 같음).
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, OVERVIEW_UPCOMING_LIMIT)
+
+  const selected = new Set(refs.map((item) => `${item.kind}:${item.index}`))
+  return {
+    deals: timelines.deals.filter((_, index) => selected.has(`deals:${index}`)),
+    events: timelines.events.filter((_, index) => selected.has(`events:${index}`)),
+    campaigns: timelines.campaigns.filter((_, index) => selected.has(`campaigns:${index}`)),
+  }
+}
+
 // DSH/KPI는 DB-우선 사다리(액티브 임포트 → 시트 미러 → 라이브 시트 초기 폴백)를 탄다.
 // 계층별 캐시는 read-dsh-kpi.ts / branch-dsh-kpi-mirror.ts 안에 있다. WithSource 변형은
 // "지금 보는 수치가 어느 단계에서, 언제 왔는지"(data_sources)도 함께 반환한다.
@@ -220,6 +256,7 @@ export async function GET(req: NextRequest) {
   const team = readTeamParam(url); if (team instanceof NextResponse) return team
   const period = readPeriodParam(url); if (period instanceof NextResponse) return period
   const includeBreakdown = readBreakdownFlag(url)
+  const overviewView = url.searchParams.get("view") === "overview"
   const currentDate = new Date()
   const periodDate = resolvePeriodDate(period, url.searchParams.get("month"), currentDate)
   if (!periodDate) return NextResponse.json({ error: "Invalid month query" }, { status: 400 })
@@ -302,6 +339,9 @@ export async function GET(req: NextRequest) {
     const campaignsTimeline = campaigns.recent
       .filter((c) => c.sentAt && months.some((mm) => c.sentAt!.startsWith(mm)))
       .map((c) => ({ date: c.sentAt!, name: c.subject }))
+    const timelines = overviewView
+      ? projectOverviewTimelines({ events: eventsTimeline, deals: dealsTimeline, campaigns: campaignsTimeline }, currentDate)
+      : { events: eventsTimeline, deals: dealsTimeline, campaigns: campaignsTimeline }
 
     const breakdown = dsh.breakdown ?? []
 
@@ -430,9 +470,9 @@ export async function GET(req: NextRequest) {
         revenue_cum,
         revenue_trend_cum,
         confirmed_through_index,
-        events: eventsTimeline,
-        deals: dealsTimeline,
-        campaigns: campaignsTimeline,
+        events: timelines.events,
+        deals: timelines.deals,
+        campaigns: timelines.campaigns,
       },
       deal_mix: dealMix,
       // 장부 DSH 수치 그리드 원천 — 파서 breakdown(DshBreakdownRow[])을 그대로 노출한다.

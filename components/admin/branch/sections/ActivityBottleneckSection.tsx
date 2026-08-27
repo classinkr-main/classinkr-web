@@ -81,7 +81,7 @@ export default function ActivityBottleneckSection({
         </div>
         <Link
           href="/admin/branch/ledger"
-          className="inline-flex items-center gap-1 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5]"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-md border border-dashed border-[rgba(0,0,0,0.15)] bg-white px-2.5 py-1.5 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] md:min-h-0 md:min-w-0"
         >
           딜 수치 편집 →
         </Link>
@@ -118,7 +118,7 @@ export default function ActivityBottleneckSection({
                           </span>
                           <Link
                             href={`/admin/branch/ledger?lens=rev&mgr=${encodeURIComponent(row.member)}`}
-                            className="shrink-0 self-start text-[11px] font-medium text-[#084734] opacity-50 transition hover:opacity-100"
+                            className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center self-start text-[11px] font-medium text-[#084734] opacity-50 transition hover:opacity-100 md:min-h-0 md:min-w-0"
                             title="담당자 매출 장부에서 열기"
                           >
                             ↗

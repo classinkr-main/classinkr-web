@@ -104,6 +104,31 @@ export function updateLead(id: string, patch: Partial<LeadRecord>): LeadRecord |
   return leads[index]
 }
 
+/**
+ * 여러 리드를 한 번의 파일 쓰기로 갱신한다.
+ *
+ * 개발용 JSON 모드에서도 일괄 담당자 배정이 리드 수만큼 파일을 다시 쓰지 않게 한다.
+ * 반환 순서는 입력 ID 순서가 아니라 저장된 리드 목록 순서이며, 존재하지 않는 ID는 생략한다.
+ */
+export function updateLeads(ids: string[], patch: Partial<LeadRecord>): LeadRecord[] {
+  const idSet = new Set(ids)
+  if (idSet.size === 0) return []
+
+  const leads = getLeads()
+  const updated: LeadRecord[] = []
+  let changed = false
+  const next = leads.map((lead) => {
+    if (!idSet.has(lead.id)) return lead
+    changed = true
+    const merged = { ...lead, ...patch, id: lead.id }
+    updated.push(merged)
+    return merged
+  })
+
+  if (changed) writeJson("leads.json", next)
+  return updated
+}
+
 export function deleteLead(id: string): boolean {
   const leads = getLeads()
   const next = leads.filter((lead) => lead.id !== id)

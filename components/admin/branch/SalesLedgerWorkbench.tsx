@@ -1505,7 +1505,12 @@ export default function SalesLedgerWorkbench() {
   }, [lens, editingDraftOperation, draftForm.operation, draftForm.weeklyMode, draftForm.week])
 
   const monthQuery = period === "M" ? `&month=${encodeURIComponent(selectedMonth)}` : ""
-  const summary = useBranchJson<BranchSummaryResponse>(`/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}&breakdown=1`, refreshKey)
+  // DSH 팀 그리드만 상세 breakdown을 소비한다. 기본 REV 장부는 93%가 미사용인
+  // breakdown payload를 받지 않고, DSH 렌즈로 전환할 때 같은 summary 계약을 확장한다.
+  const summary = useBranchJson<BranchSummaryResponse>(
+    `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}${lens === "dsh" ? "&breakdown=1" : ""}`,
+    refreshKey
+  )
   // KPI 응답은 이 화면에서 우측 레일 "행 상세"의 담당자 KPI 박스(selectedMember)에만 쓰인다 —
   // 마운트 즉시 fetch하면 접힌 레일만 보다 떠나는 세션에도 항상 요청이 나간다(코덱스 감사).
   // 레일 열림 + detail 보기 + 행 선택일 때만 시작한다(콕핏은 detail 레일을 렌더하지 않으므로 제외).
@@ -1515,19 +1520,17 @@ export default function SalesLedgerWorkbench() {
 
   // 하드웨어 콘솔 역링크 게이팅: 하드웨어 원장에 실제 출고 이력이 있는 고객사만 링크로 건다.
   // 출고 목적지(to_location)가 창고/샘플/고객(generic) 등이 아닌 실제 고객사명인 것만 수집.
-  const hardware = useBranchJson<{ movements?: Array<{ movement_type: string; to_location: string | null }> }>(`/api/admin/hardware`, refreshKey)
+  const hardware = useBranchJson<{ customers?: Array<{ accountKey: string; name: string }> }>(
+    "/api/admin/hardware?scope=customer-links",
+    refreshKey
+  )
   const hardwareCustomerKeys = useMemo(() => {
     const set = new Set<string>()
-    const generic = new Set(["창고", "샘플", "고객", "수리", "사무실", "본사", "office", "외부/고객", "외부", "재고"])
-    for (const movement of hardware.data?.movements ?? []) {
-      if (movement.movement_type !== "outbound") continue
-      const location = movement.to_location?.trim()
-      if (!location || generic.has(location)) continue
-      const key = normalizedAccountKey(location)
-      if (key) set.add(key)
+    for (const customer of hardware.data?.customers ?? []) {
+      if (customer.accountKey) set.add(customer.accountKey)
     }
     return set
-  }, [hardware.data?.movements])
+  }, [hardware.data?.customers])
   // 데이터 로드 전엔 링크 유지(로딩 중 유효 링크가 사라지는 깜빡임 방지), 로드 후엔 연결된 고객만.
   const isHardwareLinked = useCallback(
     (customer: string) => !hardware.data || hardwareCustomerKeys.has(normalizedAccountKey(customer)),

@@ -1,6 +1,6 @@
 import "server-only"
 
-import { getCrmDuplicatePreflightReport } from "@/lib/admin-crm-duplicate-preflight"
+import { getCachedCrmDuplicatePreflightReport } from "@/lib/admin-crm-duplicate-preflight"
 import { getCrmSchemaContractReadiness } from "@/lib/admin-crm-schema-contract"
 import { getXiaoshouyiSyncPreflight, getXiaoshouyiSyncSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-sync"
 import { getXiaoshouyiWriteMetadataPreflight, getXiaoshouyiWriteSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-write"
@@ -98,7 +98,9 @@ export async function getAdminCrmReadinessReport(): Promise<CrmReadinessReport> 
     getXiaoshouyiSyncSchemaReadiness(),
     getXiaoshouyiWriteSchemaReadiness(),
     getCrmSchemaContractReadiness(),
-    getCrmDuplicatePreflightReport(),
+    // 최대 5천 행 x 3축 표본 스캔은 무겁고 5분 내 결과 의미가 바뀌지 않는다.
+    // CRM 홈과 준비도 화면이 같은 preflight를 연달아 다시 읽지 않게 공용 캐시를 쓴다.
+    getCachedCrmDuplicatePreflightReport(),
     checkDatabaseShape(
       "crm_source_links",
       "CRM source link schema",

@@ -8,7 +8,7 @@ const sidebar = readFileSync(join(process.cwd(), "components/admin/AdminSidebar.
 describe("AdminSidebar — 상시/기타 2단 구조", () => {
   it("resolves placement through the shared access module, not a local copy", () => {
     expect(sidebar).toContain('from "./admin-nav-access"')
-    expect(sidebar).toContain("resolveNavAccess(")
+    expect(sidebar).toContain("resolveAdminNavAccess(")
   })
 
   it("stops rendering section headers (기타 범주 소제목이 대신한다)", () => {
@@ -50,8 +50,15 @@ const layout = readFileSync(join(process.cwd(), "app/admin/layout.tsx"), "utf8")
 
 describe("AdminLayout — 차단 탭 라우트 가드", () => {
   it("blocks rendering when the current path resolves to deny", () => {
-    expect(layout).toContain("resolveNavPlacement(")
-    expect(layout).toContain('=== "deny"')
+    expect(layout).toContain("resolveAdminNavParentHref(")
+    expect(layout).toContain("resolveAdminNavAccess(")
+    expect(layout).toContain("getAccessibleAdminNavItems(")
+  })
+
+  it("passes the same session access context to the command palette", () => {
+    expect(layout).toContain("<AdminCommandPaletteLauncher")
+    expect(layout).toContain("navPreset={session.navPreset}")
+    expect(layout).toContain("navOverrides={session.navOverrides}")
   })
 
   it("explains the block instead of silently redirecting", () => {
@@ -73,7 +80,7 @@ describe("MemberNavAccessDrawer", () => {
   it("previews with the shared resolver instead of a second implementation", () => {
     // 미리보기가 자체 계산을 하면 실제 사이드바와 어긋나고, 어긋난 미리보기는
     // 이 기능 전체의 신뢰를 깎는다.
-    expect(drawer).toContain("resolveNavAccess(")
+    expect(drawer).toContain("resolveAdminNavAccess(")
     expect(drawer).toContain('from "@/components/admin/admin-nav-access"')
   })
 

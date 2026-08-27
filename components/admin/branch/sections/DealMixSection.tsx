@@ -138,13 +138,17 @@ export default function DealMixSection({ summary, loading, error }: { summary: B
   const data = summary?.deal_mix ?? null
   // 에러를 빈 상태로 위장하지 않는다(품질 웨이브 5 — 항목 2) — fetch 실패 시 !data가
   // 참이 되어 그냥 null(무표시)로 사라졌다.
-  if (error) return (
+  if (error && !summary) return (
     <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] font-semibold text-[#8F2C2C]">
       {error}
     </div>
   )
-  if (loading) return <div className="h-40 animate-pulse rounded-xl bg-[#f0f0ec]" />
-  if (!data) return null
+  if (loading && !summary) return <div className="h-40 animate-pulse rounded-xl bg-[#f0f0ec]" />
+  if (!data) return (
+    <div role="status" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 text-[12px] text-[#615D59]">
+      표시할 매출 분해 데이터가 없습니다.
+    </div>
+  )
 
   const hwSw = pickPair(data.by_category, "Hardware", "Software")
   const newRenew = pickPair(data.by_status_type, "New", "Renew")
@@ -152,7 +156,11 @@ export default function DealMixSection({ summary, loading, error }: { summary: B
   const kaSme = data.by_segment ? pickPair(data.by_segment, "KA", "SME") : null
 
   const slices = [hwSw, newRenew, channel].filter(Boolean) as Array<{ a: BranchDealMixSlice; b: BranchDealMixSlice }>
-  if (slices.length === 0) return null
+  if (slices.length === 0) return (
+    <div role="status" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 text-[12px] text-[#615D59]">
+      매출 분해 항목이 비어 있습니다.
+    </div>
+  )
 
   const totalActual = slices.reduce((s, p) => s + p.a.actual + p.b.actual, 0) / slices.length
   const totalGoal = slices.reduce((s, p) => s + p.a.goal + p.b.goal, 0) / slices.length

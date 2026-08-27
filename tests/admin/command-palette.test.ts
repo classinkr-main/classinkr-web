@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { ADMIN_COMMANDS } from "@/components/admin/AdminCommandPalette"
+import {
+  ADMIN_COMMANDS,
+  resolveAdminCommands,
+} from "@/components/admin/AdminCommandPalette"
+import type { NavAccessContext } from "@/components/admin/admin-nav-access"
 
 // 팔레트 커맨드는 admin-nav.ts(SSOT)에서 파생된다 — 그룹은 사이드바 섹션 라벨과 동일.
 describe("admin command palette (admin-nav 파생)", () => {
@@ -48,8 +52,73 @@ describe("admin command palette (admin-nav 파생)", () => {
     }
   })
 
+  it("keeps every static CRM back-office surface globally discoverable", () => {
+    for (const href of [
+      "/admin/crm/customers/map",
+      "/admin/crm/deals/rev-sheet",
+      "/admin/crm/deals/orders",
+      "/admin/crm/deals/kpi",
+      "/admin/crm/insights",
+    ]) {
+      expect(byHref(href).length, href).toBeGreaterThan(0)
+      expect(byHref(href)[0]?.group).toBe("영업·매출")
+    }
+  })
+
+  it("exposes creation, quality-review, and member-management deep links", () => {
+    expect(byHref("/admin/docs/new")[0]?.label).toBe("새 가이드 문서")
+    expect(byHref("/admin/docs?tab=quality")[0]?.label).toBe("AI 품질 검수")
+    expect(byHref("/admin/settings?tab=members")[0]?.label).toBe("회원 관리")
+  })
+
   it("keeps command keys (href+label) unique for stable list rendering", () => {
     const keys = ADMIN_COMMANDS.map((cmd) => cmd.href + cmd.label)
     expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it("makes absorbed event routes discoverable by the Korean query '행사'", () => {
+    const matches = ADMIN_COMMANDS.filter((command) =>
+      `${command.label} ${command.keywords ?? ""}`.toLowerCase().includes("행사")
+    )
+
+    expect(matches.map((command) => command.href)).toEqual(
+      expect.arrayContaining(["/admin/events", "/admin/events/new"])
+    )
+  })
+})
+
+describe("admin command palette access parity", () => {
+  const commandsFor = (overrides: Partial<NavAccessContext> = {}) =>
+    resolveAdminCommands({
+      role: "ADMIN",
+      preset: "staff",
+      overrides: {},
+      ...overrides,
+    })
+
+  const hrefsFor = (overrides: Partial<NavAccessContext> = {}) =>
+    commandsFor(overrides).map((command) => command.href)
+
+  it("inherits calendar access for the absorbed event commands", () => {
+    expect(hrefsFor()).toEqual(expect.arrayContaining(["/admin/events", "/admin/events/new"]))
+  })
+
+  it("inherits Analytics access for traffic", () => {
+    expect(hrefsFor()).not.toContain("/admin/traffic")
+    expect(hrefsFor({ preset: "lead" })).toContain("/admin/traffic")
+  })
+
+  it("removes every absorbed CS command when its console parent is denied", () => {
+    const hrefs = hrefsFor({ overrides: { "/admin/chatbot": "deny" } })
+
+    expect(hrefs).not.toContain("/admin/chatbot")
+    expect(hrefs).not.toContain("/admin/docs")
+    expect(hrefs).not.toContain("/admin/channel-talk")
+    expect(hrefs).not.toContain("/admin/cs-chatbot")
+  })
+
+  it("applies role visibility before exposing commands", () => {
+    expect(hrefsFor({ role: "EDITOR", preset: null })).not.toContain("/admin/settings")
+    expect(hrefsFor({ role: "SUPER_ADMIN", preset: null })).toContain("/admin/settings")
   })
 })

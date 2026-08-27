@@ -4,12 +4,33 @@ import {
   getBranchRevSourceRecordKey,
   isInactiveSheetStatus,
   isPlaceholderCrmName,
+  isUnsafeCrmTargetLabel,
   normalizeCrmName,
   normalizeCrmOwnerName,
   scoreCrmEntityMatch,
   type CrmMatchAliasInput,
 } from "@/lib/crm-source-linking"
+import {
+  EXTERNAL_CRM_KOREA_ONLY,
+  getKoreaTeamManagerSet,
+  isKoreaScopedOwner,
+  isKoreaTeamLabel,
+} from "@/lib/admin-crm-scope"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { fetchSupabasePages } from "@/lib/supabase/pagination"
+import {
+  classifyCrmSourceLinkReviewValidation,
+  classifyCrmSourceLinkValidation,
+  getCrmSourceLinkIdentity,
+  getCrmAliasEvidence,
+  LEGACY_ALIAS_VALIDATION_MESSAGE,
+  needsCrmAliasCatalogValidation,
+  RETIRED_SIBLING_VALIDATION_MESSAGE,
+  UNSAFE_MATCHING_EVIDENCE_MESSAGE,
+  type CrmMatchAliasValidationRow,
+  type CrmSourceLinkValidationInput,
+} from "@/lib/crm/source-link-validation"
+import { getExcludedXiaoshouyiOwnerIds } from "@/lib/external-crm/owner-names"
 
 interface BranchRevCandidateSource {
   sheet_row: number
@@ -89,6 +110,8 @@ interface CrmMatchAliasRow {
   confidence_boost: number | null
 }
 
+type CrmMatchAliasSourceSystem = CandidateInsert["source_system"]
+
 interface ConfirmedSourceLinkAliasSeed {
   id: string
   source_system: string
@@ -142,7 +165,39 @@ export interface GenerateAllCrmLinkCandidatesResult {
   xiaoshouyi: GenerateExternalCrmLinkCandidatesResult
 }
 
+export type PreviewBranchRevLinkCandidatesResult = Omit<
+  GenerateBranchRevLinkCandidatesResult,
+  "insertedCandidates" | "autoConfirmed"
+> & {
+  wouldInsertCandidates: number
+  wouldAutoConfirm: number
+}
+
+export type PreviewExternalCrmLinkCandidatesResult = Omit<
+  GenerateExternalCrmLinkCandidatesResult,
+  "insertedCandidates" | "autoConfirmed"
+> & {
+  wouldInsertCandidates: number
+  wouldAutoConfirm: number
+}
+
+export type PreviewLeadLinkCandidatesResult = Omit<
+  GenerateLeadLinkCandidatesResult,
+  "insertedCandidates" | "autoConfirmed"
+> & {
+  wouldInsertCandidates: number
+  wouldAutoConfirm: number
+}
+
+export interface PreviewAllCrmLinkCandidatesResult {
+  branchRev: PreviewBranchRevLinkCandidatesResult
+  leads: PreviewLeadLinkCandidatesResult
+  xiaoshouyi: PreviewExternalCrmLinkCandidatesResult
+}
+
 export type CrmSourceLinkAction = "confirm" | "reject" | "stale"
+
+export class CrmSourceLinkConflictError extends Error {}
 export type CrmManualLinkTargetType = "partner_account" | "customer" | "deal"
 
 export interface CrmManualLinkTargetOption {
@@ -329,21 +384,24 @@ function getExternalCrmRecordLabel(record: ExternalCrmRecordSource) {
   return record.display_name ?? record.normalized_name ?? record.external_id
 }
 
-async function getCrmMatchAliases(): Promise<CrmMatchAliasInput[]> {
+async function getCrmMatchAliases(sourceSystem: CrmMatchAliasSourceSystem): Promise<CrmMatchAliasInput[]> {
   const sb = createSupabaseAdminClient()
   const [aliasResult, confirmedLeadLinksResult] = await Promise.all([
     sb
       .from("crm_match_aliases")
       .select("alias, canonical_name, target_type, target_id, manager_name, confidence_boost")
+      .eq("source_system", sourceSystem)
       .eq("status", "active")
       .limit(5000),
-    sb
-      .from("crm_source_links")
-      .select("normalized_name, target_type, target_id, metadata")
-      .eq("source_system", "lead")
-      .eq("source_object", "leads")
-      .eq("status", "confirmed")
-      .limit(5000),
+    sourceSystem === "lead"
+      ? sb
+          .from("crm_source_links")
+          .select("normalized_name, target_type, target_id, metadata")
+          .eq("source_system", "lead")
+          .eq("source_object", "leads")
+          .eq("status", "confirmed")
+          .limit(5000)
+      : Promise.resolve({ data: [], error: null }),
   ])
 
   const aliases: CrmMatchAliasInput[] = []
@@ -560,7 +618,9 @@ async function findBranchRevSourceByKey(sourceRecordKey: string) {
   ) ?? null
 }
 
-export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchRevLinkCandidatesResult> {
+async function runBranchRevLinkCandidateGeneration(
+  dryRun: boolean
+): Promise<GenerateBranchRevLinkCandidatesResult> {
   const sb = createSupabaseAdminClient()
 
   const [sheetResult, partnerAccountsResult, customersResult, dealsResult, linksResult, aliases, autoConfirmPolicies] = await Promise.all([
@@ -586,7 +646,7 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
       .eq("source_system", "branch_rev_sheet")
       .eq("source_object", "branch_rev_deals")
       .limit(5000),
-    getCrmMatchAliases(),
+    getCrmMatchAliases("branch_rev_sheet"),
     getAutoConfirmPolicies(),
   ])
 
@@ -687,6 +747,7 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
         }
       }),
     ]
+      .filter((target) => !isUnsafeCrmTargetLabel(target.targetLabel))
       .filter(shouldKeepScoredMatch)
       .sort((a, b) => b.confidence - a.confidence)
 
@@ -734,12 +795,14 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
 
   const rowsToInsert = candidates.filter((candidate) => !existingCandidateKeys.has(buildCandidateKey(candidate)))
 
-  if (rowsToInsert.length > 0) {
+  if (!dryRun && rowsToInsert.length > 0) {
     const { error } = await sb.from("crm_source_links").insert(rowsToInsert)
     if (error) throw error
   }
 
-  const autoConfirmed = await applyAutoConfirmDecisions("branch_rev_sheet", autoConfirmDecisions)
+  const autoConfirmed = dryRun
+    ? autoConfirmDecisions.length
+    : await applyAutoConfirmDecisions("branch_rev_sheet", autoConfirmDecisions)
 
   return {
     scannedSheetDeals: sheetDeals.length,
@@ -750,7 +813,23 @@ export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchR
   }
 }
 
-export async function generateExternalCrmLinkCandidates(): Promise<GenerateExternalCrmLinkCandidatesResult> {
+export async function generateBranchRevLinkCandidates(): Promise<GenerateBranchRevLinkCandidatesResult> {
+  return runBranchRevLinkCandidateGeneration(false)
+}
+
+export async function previewBranchRevLinkCandidates(): Promise<PreviewBranchRevLinkCandidatesResult> {
+  const result = await runBranchRevLinkCandidateGeneration(true)
+  const { insertedCandidates, autoConfirmed, ...summary } = result
+  return {
+    ...summary,
+    wouldInsertCandidates: insertedCandidates,
+    wouldAutoConfirm: autoConfirmed,
+  }
+}
+
+async function runExternalCrmLinkCandidateGeneration(
+  dryRun: boolean
+): Promise<GenerateExternalCrmLinkCandidatesResult> {
   const sb = createSupabaseAdminClient()
   const recordsPromise = Promise.all(
     EXTERNAL_CRM_LINK_CANDIDATE_OBJECTS.map((objectApiKey) =>
@@ -769,7 +848,7 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
     return results.flatMap((result) => (result.data ?? []) as ExternalCrmRecordSource[])
   })
 
-  const [records, partnerAccountsResult, customersResult, dealsResult, linksResult, aliases, autoConfirmPolicies] = await Promise.all([
+  const [records, partnerAccountsResult, customersResult, dealsResult, linksResult, aliases, autoConfirmPolicies, excludedOwnerIds] = await Promise.all([
     recordsPromise,
     sb
       .from("partner_accounts")
@@ -788,8 +867,9 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
       .select("source_object, source_record_key, target_type, target_id, status")
       .eq("source_system", "xiaoshouyi")
       .limit(5000),
-    getCrmMatchAliases(),
+    getCrmMatchAliases("xiaoshouyi"),
     getAutoConfirmPolicies(),
+    getExcludedXiaoshouyiOwnerIds(sb),
   ])
 
   if (partnerAccountsResult.error) throw partnerAccountsResult.error
@@ -797,7 +877,9 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
   if (dealsResult.error) throw dealsResult.error
   if (linksResult.error) throw linksResult.error
 
-  const activeRecords = records.filter((record) => !record.is_stale)
+  const activeRecords = records.filter(
+    (record) => !record.is_stale && !excludedOwnerIds.has(record.owner_name?.trim() ?? "")
+  )
   const partnerAccounts = (partnerAccountsResult.data ?? []) as PartnerAccountCandidateTarget[]
   const customers = (customersResult.data ?? []) as CustomerCandidateTarget[]
   const deals = (dealsResult.data ?? []) as DealCandidateTarget[]
@@ -893,6 +975,7 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
           })
         : []),
     ]
+      .filter((target) => !isUnsafeCrmTargetLabel(target.targetLabel))
       .filter(shouldKeepScoredMatch)
       .sort((a, b) => b.confidence - a.confidence)
 
@@ -946,12 +1029,14 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
 
   const rowsToInsert = candidates.filter((candidate) => !existingCandidateKeys.has(buildCandidateKey(candidate)))
 
-  if (rowsToInsert.length > 0) {
+  if (!dryRun && rowsToInsert.length > 0) {
     const { error } = await sb.from("crm_source_links").insert(rowsToInsert)
     if (error) throw error
   }
 
-  const autoConfirmed = await applyAutoConfirmDecisions("xiaoshouyi", autoConfirmDecisions)
+  const autoConfirmed = dryRun
+    ? autoConfirmDecisions.length
+    : await applyAutoConfirmDecisions("xiaoshouyi", autoConfirmDecisions)
 
   return {
     scannedExternalRecords: activeRecords.length,
@@ -962,7 +1047,23 @@ export async function generateExternalCrmLinkCandidates(): Promise<GenerateExter
   }
 }
 
-export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCandidatesResult> {
+export async function generateExternalCrmLinkCandidates(): Promise<GenerateExternalCrmLinkCandidatesResult> {
+  return runExternalCrmLinkCandidateGeneration(false)
+}
+
+export async function previewExternalCrmLinkCandidates(): Promise<PreviewExternalCrmLinkCandidatesResult> {
+  const result = await runExternalCrmLinkCandidateGeneration(true)
+  const { insertedCandidates, autoConfirmed, ...summary } = result
+  return {
+    ...summary,
+    wouldInsertCandidates: insertedCandidates,
+    wouldAutoConfirm: autoConfirmed,
+  }
+}
+
+async function runLeadLinkCandidateGeneration(
+  dryRun: boolean
+): Promise<GenerateLeadLinkCandidatesResult> {
   const sb = createSupabaseAdminClient()
 
   const [leadsResult, partnerAccountsResult, customersResult, dealsResult, linksResult, aliases, autoConfirmPolicies] = await Promise.all([
@@ -989,7 +1090,7 @@ export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCand
       .eq("source_system", "lead")
       .eq("source_object", "leads")
       .limit(5000),
-    getCrmMatchAliases(),
+    getCrmMatchAliases("lead"),
     getAutoConfirmPolicies(),
   ])
 
@@ -1085,6 +1186,7 @@ export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCand
         }
       }),
     ]
+      .filter((target) => !isUnsafeCrmTargetLabel(target.targetLabel))
       .filter(shouldKeepScoredMatch)
       .sort((a, b) => b.confidence - a.confidence)
 
@@ -1136,12 +1238,14 @@ export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCand
 
   const rowsToInsert = candidates.filter((candidate) => !existingCandidateKeys.has(buildCandidateKey(candidate)))
 
-  if (rowsToInsert.length > 0) {
+  if (!dryRun && rowsToInsert.length > 0) {
     const { error } = await sb.from("crm_source_links").insert(rowsToInsert)
     if (error) throw error
   }
 
-  const autoConfirmed = await applyAutoConfirmDecisions("lead", autoConfirmDecisions)
+  const autoConfirmed = dryRun
+    ? autoConfirmDecisions.length
+    : await applyAutoConfirmDecisions("lead", autoConfirmDecisions)
 
   return {
     scannedLeads: leads.length,
@@ -1152,45 +1256,285 @@ export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCand
   }
 }
 
-// Read-only coverage rollup for the matching keystone metric. Pure head/count
-// queries — never loads rows — and degrades to zeros on any query error so
-// callers (e.g. the OS summary route) stay graceful.
-export async function getCrmSourceLinkCoverage(): Promise<{
+export async function generateLeadLinkCandidates(): Promise<GenerateLeadLinkCandidatesResult> {
+  return runLeadLinkCandidateGeneration(false)
+}
+
+export async function previewLeadLinkCandidates(): Promise<PreviewLeadLinkCandidatesResult> {
+  const result = await runLeadLinkCandidateGeneration(true)
+  const { insertedCandidates, autoConfirmed, ...summary } = result
+  return {
+    ...summary,
+    wouldInsertCandidates: insertedCandidates,
+    wouldAutoConfirm: autoConfirmed,
+  }
+}
+
+type CrmSourceLinkCoverageSourceSystem = "branch_rev_sheet" | "xiaoshouyi" | "lead"
+
+interface CrmSourceLinkCoverageRow {
+  id: string
+  source_system: string
+  source_object: string
+  source_record_key: string
+  target_type: string | null
+  target_id: string | null
+  status: string
+  metadata: Record<string, unknown> | null
+}
+
+export interface CrmSourceLinkCoverage {
   total: number
   linked: number
   needsReview: number
   coveragePct: number
-}> {
+  /** 저장 상태 원본과 현재 운영 KPI에서 제외한 이력을 분리해 감사할 수 있게 한다. */
+  diagnostics: {
+    stored: {
+      total: number
+      confirmed: number
+      candidate: number
+      stale: number
+    }
+    excluded: {
+      /** 현재 소스 부재, 무효 alias 또는 confirmed sibling 때문에 처리 대상이 아닌 이력 */
+      reviewHistory: number
+      /** 현재 활성 branch 원천에 없는 과거 확정 링크 */
+      confirmedHistory: number
+      /** matching inbox가 다루지 않는 source_system의 저장 링크 */
+      outOfScope: number
+    }
+    validation: {
+      aliasCatalog: "verified" | "fail_open"
+      branchSource: "verified" | "fail_open"
+      /** Matching inbox와 동일하게 Xiaoshouyi/lead 원천 존재는 링크 행을 기준으로 fail-open한다. */
+      externalSource: "fail_open"
+      warnings: string[]
+    }
+  }
+}
+
+const CRM_SOURCE_LINK_COVERAGE_SYSTEMS = new Set<CrmSourceLinkCoverageSourceSystem>([
+  "branch_rev_sheet",
+  "xiaoshouyi",
+  "lead",
+])
+const CRM_SOURCE_LINK_COVERAGE_ROW_LIMIT = 50_000
+const CRM_SOURCE_LINK_COVERAGE_ALIAS_LIMIT = 20_000
+
+function emptyCrmSourceLinkCoverage(warnings: string[] = []): CrmSourceLinkCoverage {
+  return {
+    total: 0,
+    linked: 0,
+    needsReview: 0,
+    coveragePct: 0,
+    diagnostics: {
+      stored: { total: 0, confirmed: 0, candidate: 0, stale: 0 },
+      excluded: { reviewHistory: 0, confirmedHistory: 0, outOfScope: 0 },
+      validation: {
+        aliasCatalog: "fail_open",
+        branchSource: "fail_open",
+        externalSource: "fail_open",
+        warnings,
+      },
+    },
+  }
+}
+
+function isCrmSourceLinkCoverageSystem(value: string): value is CrmSourceLinkCoverageSourceSystem {
+  return CRM_SOURCE_LINK_COVERAGE_SYSTEMS.has(value as CrmSourceLinkCoverageSourceSystem)
+}
+
+// Read-only coverage rollup for the matching keystone metric. 저장 status 개수가 아니라
+// Admin matching과 같은 current/actionable 경계로 분류한다. branch는 현재 활성 KR 시트
+// 존재를 검증하고, Xiaoshouyi/lead는 matching inbox처럼 링크 행 존재를 fail-open 원천으로
+// 사용한다. 이력/범위 밖 저장 행은 diagnostics에만 보존한다.
+export async function getCrmSourceLinkCoverage(options?: { throwOnError?: boolean }): Promise<CrmSourceLinkCoverage> {
   try {
     const sb = createSupabaseAdminClient()
-    const [linkedRes, needsReviewRes, totalRes] = await Promise.all([
-      sb
-        .from("crm_source_links")
-        .select("id", { count: "exact", head: true })
-        // crm_source_link_status enum에는 'active'가 없다 — 'active'를 넣으면 enum 캐스팅
-        // 에러로 쿼리 전체가 죽고, 아래 에러 가드가 삼켜 커버리지가 상시 0%로 보인다.
-        .eq("status", "confirmed"),
-      sb
-        .from("crm_source_links")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "candidate"),
-      sb
-        .from("crm_source_links")
-        .select("id", { count: "exact", head: true })
-        .neq("status", "rejected"),
+    const [linksResult, branchResult, aliasesResult, excludedOwnerIds] = await Promise.all([
+      fetchSupabasePages<CrmSourceLinkCoverageRow>({
+        maxRows: CRM_SOURCE_LINK_COVERAGE_ROW_LIMIT,
+        fetchPage: (from, to) =>
+          sb
+            .from("crm_source_links")
+            .select(
+              "id, source_system, source_object, source_record_key, target_type, target_id, status, metadata",
+              from === 0 ? { count: "exact" } : undefined
+            )
+            .neq("status", "rejected")
+            .order("id", { ascending: true })
+            .range(from, to),
+      }),
+      fetchSupabasePages<BranchRevCandidateSource & { id: string }>({
+        maxRows: CRM_SOURCE_LINK_COVERAGE_ROW_LIMIT,
+        fetchPage: (from, to) =>
+          sb
+            .from("branch_rev_deals")
+            .select(
+              "id, sheet_row, customer_name, team, manager, status, first_payment, contract_target",
+              from === 0 ? { count: "exact" } : undefined
+            )
+            .order("id", { ascending: true })
+            .range(from, to),
+      }),
+      fetchSupabasePages<CrmMatchAliasValidationRow & { id: string }>({
+        maxRows: CRM_SOURCE_LINK_COVERAGE_ALIAS_LIMIT,
+        fetchPage: (from, to) =>
+          sb
+            .from("crm_match_aliases")
+            .select(
+              "id, source_system, normalized_alias, target_type, target_id, normalized_manager_name",
+              from === 0 ? { count: "exact" } : undefined
+            )
+            .eq("status", "active")
+            .in("source_system", ["branch_rev_sheet", "xiaoshouyi"])
+            .order("id", { ascending: true })
+          .range(from, to),
+      }),
+      getExcludedXiaoshouyiOwnerIds(sb),
     ])
 
-    if (linkedRes.error || needsReviewRes.error || totalRes.error) {
-      return { total: 0, linked: 0, needsReview: 0, coveragePct: 0 }
+    if (linksResult.error) throw new Error(linksResult.error.message ?? "CRM source link coverage unavailable")
+    if (linksResult.truncated) {
+      throw new Error(`CRM source link coverage가 ${CRM_SOURCE_LINK_COVERAGE_ROW_LIMIT}건 상한에서 잘렸습니다.`)
     }
 
-    const linked = linkedRes.count ?? 0
-    const needsReview = needsReviewRes.count ?? 0
-    const total = totalRes.count ?? 0
+    const warnings: string[] = []
+    const canValidateBranchSource = !branchResult.error && !branchResult.truncated
+    const canValidateAliases = !aliasesResult.error && !aliasesResult.truncated
+
+    if (!canValidateBranchSource) {
+      const message = branchResult.error?.message
+        ? `현재 branch 원천을 확인하지 못했습니다: ${branchResult.error.message}`
+        : `현재 branch 원천이 ${CRM_SOURCE_LINK_COVERAGE_ROW_LIMIT}건 상한에서 잘렸습니다.`
+      if (options?.throwOnError) throw new Error(message)
+      warnings.push(`${message} branch 링크는 fail-open으로 집계했습니다.`)
+    }
+    if (!canValidateAliases) {
+      const message = aliasesResult.error?.message
+        ? `활성 별칭을 확인하지 못했습니다: ${aliasesResult.error.message}`
+        : `활성 별칭이 ${CRM_SOURCE_LINK_COVERAGE_ALIAS_LIMIT}건 상한에서 잘렸습니다.`
+      warnings.push(`${message} 별칭 후보는 오탐 제외를 피하기 위해 fail-open했습니다.`)
+    }
+
+    const branchRows = branchResult.data
+    const koreaManagers = getKoreaTeamManagerSet(branchRows)
+    const currentBranchKeys = new Set(
+      branchRows
+        .filter(
+          (row) =>
+            !isInactiveSheetStatus(row.status) &&
+            isKoreaTeamLabel(row.team) &&
+            !isPlaceholderCrmName(row.customer_name)
+        )
+        .map(getBranchRevSourceRecordKey)
+    )
+    const links = linksResult.data
+    const activeAliases = canValidateAliases ? aliasesResult.data : []
+    const confirmedSourceIdentities = new Set(
+      links
+        .filter((link) => link.status === "confirmed")
+        .map((link) =>
+          getCrmSourceLinkIdentity({
+            sourceSystem: link.source_system,
+            sourceObject: link.source_object,
+            sourceRecordKey: link.source_record_key,
+          })
+        )
+    )
+
+    const stored = {
+      total: links.length,
+      confirmed: links.filter((link) => link.status === "confirmed").length,
+      candidate: links.filter((link) => link.status === "candidate").length,
+      stale: links.filter((link) => link.status === "stale").length,
+    }
+    const excluded = { reviewHistory: 0, confirmedHistory: 0, outOfScope: 0 }
+    let linked = 0
+    let needsReview = 0
+
+    for (const link of links) {
+      if (!isCrmSourceLinkCoverageSystem(link.source_system)) {
+        excluded.outOfScope += 1
+        continue
+      }
+
+      if (
+        link.source_system === "xiaoshouyi" &&
+        !EXTERNAL_CRM_KOREA_ONLY &&
+        !isKoreaScopedOwner(
+          typeof link.metadata?.owner_name === "string"
+            ? link.metadata.owner_name
+            : typeof link.metadata?.source_owner === "string"
+              ? link.metadata.source_owner
+              : null,
+          koreaManagers
+        )
+      ) {
+        excluded.outOfScope += 1
+        continue
+      }
+
+      const isCurrentBranchSource =
+        link.source_system !== "branch_rev_sheet" ||
+        !canValidateBranchSource ||
+        (link.source_object === "branch_rev_deals" && currentBranchKeys.has(link.source_record_key))
+      if (!isCurrentBranchSource) {
+        if (link.status === "confirmed") excluded.confirmedHistory += 1
+        else if (link.status === "candidate" || link.status === "stale") excluded.reviewHistory += 1
+        continue
+      }
+
+      if (link.status === "confirmed") {
+        linked += 1
+        continue
+      }
+      if (link.status !== "candidate" && link.status !== "stale") continue
+
+      const validationState = classifyCrmSourceLinkReviewValidation(
+        {
+          sourceSystem: link.source_system,
+          sourceObject: link.source_object,
+          sourceRecordKey: link.source_record_key,
+          targetType: link.target_type,
+          targetId: link.target_id,
+          linkStatus: link.status,
+          metadata: link.metadata,
+        },
+        {
+          confirmedSourceIdentities,
+          activeAliases,
+          canValidateAliases,
+          excludedXiaoshouyiOwnerIds: excludedOwnerIds,
+        }
+      )
+      if (validationState === "valid") needsReview += 1
+      else excluded.reviewHistory += 1
+    }
+
+    const total = linked + needsReview
     const coveragePct = total > 0 ? Math.round((linked / total) * 100) : 0
-    return { total, linked, needsReview, coveragePct }
-  } catch {
-    return { total: 0, linked: 0, needsReview: 0, coveragePct: 0 }
+    return {
+      total,
+      linked,
+      needsReview,
+      coveragePct,
+      diagnostics: {
+        stored,
+        excluded,
+        validation: {
+          aliasCatalog: canValidateAliases ? "verified" : "fail_open",
+          branchSource: canValidateBranchSource ? "verified" : "fail_open",
+          externalSource: "fail_open",
+          warnings,
+        },
+      },
+    }
+  } catch (error) {
+    if (options?.throwOnError) throw error
+    const message = error instanceof Error ? error.message : "CRM source link coverage unavailable"
+    return emptyCrmSourceLinkCoverage([message])
   }
 }
 
@@ -1199,6 +1543,20 @@ export async function generateAllCrmLinkCandidates(): Promise<GenerateAllCrmLink
     generateBranchRevLinkCandidates(),
     generateLeadLinkCandidates(),
     generateExternalCrmLinkCandidates(),
+  ])
+
+  return { branchRev, leads, xiaoshouyi }
+}
+
+/**
+ * 운영 후보 생성과 같은 조회·점수·정책 경로를 사용하되 쓰기를 전혀 실행하지 않는 preview.
+ * wouldAutoConfirm은 DB 오류/동시 변경이 없다고 가정했을 때의 정책상 예상치다.
+ */
+export async function previewAllCrmLinkCandidates(): Promise<PreviewAllCrmLinkCandidatesResult> {
+  const [branchRev, leads, xiaoshouyi] = await Promise.all([
+    previewBranchRevLinkCandidates(),
+    previewLeadLinkCandidates(),
+    previewExternalCrmLinkCandidates(),
   ])
 
   return { branchRev, leads, xiaoshouyi }
@@ -1226,7 +1584,7 @@ export async function searchManualCrmLinkTargets(
       .select("id, customer_id, partner_account_id, title, deal_code")
       .limit(2000),
     sourceRecordKey ? findBranchRevSourceByKey(sourceRecordKey) : Promise.resolve(null),
-    getCrmMatchAliases(),
+    getCrmMatchAliases("branch_rev_sheet"),
   ])
 
   if (partnerAccountsResult.error) throw partnerAccountsResult.error
@@ -1349,7 +1707,7 @@ export async function createManualBranchRevLinkCandidate(input: {
 
   const target = targetResult.data as CustomerCandidateTarget | PartnerAccountCandidateTarget | DealCandidateTarget
   const targetLabel = buildSourceTargetLabel(target)
-  const aliases = await getCrmMatchAliases()
+  const aliases = await getCrmMatchAliases("branch_rev_sheet")
   const match = scoreSourceTargetMatch({
     sourceName: source.customer_name,
     sourceOwner: source.manager ?? source.team,
@@ -1718,6 +2076,95 @@ export async function confirmLeadNeoLink(input: {
   return { created: !existing }
 }
 
+interface ConfirmableSourceLinkRow {
+  id: string
+  source_system: string
+  source_object: string
+  source_record_key: string
+  normalized_name: string | null
+  target_type: string
+  target_id: string
+  status: string
+  metadata: Record<string, unknown> | null
+}
+
+async function assertCrmSourceLinkConfirmable(
+  sb: ReturnType<typeof createSupabaseAdminClient>,
+  link: ConfirmableSourceLinkRow
+) {
+  if (link.status === "confirmed") return
+  if (link.status === "rejected") {
+    throw new CrmSourceLinkConflictError("제외된 연결은 바로 확정할 수 없습니다. 새 후보로 다시 연결해 주세요.")
+  }
+  if (link.status !== "candidate" && link.status !== "stale") {
+    throw new CrmSourceLinkConflictError("현재 상태에서는 이 연결을 확정할 수 없습니다.")
+  }
+
+  const { data: confirmedSibling, error: siblingError } = await sb
+    .from("crm_source_links")
+    .select("id")
+    .eq("source_system", link.source_system)
+    .eq("source_object", link.source_object)
+    .eq("source_record_key", link.source_record_key)
+    .eq("status", "confirmed")
+    .neq("id", link.id)
+    .limit(1)
+
+  if (siblingError) {
+    throw new Error(`기존 확정 연결을 검증하지 못했습니다: ${siblingError.message}`)
+  }
+  if (confirmedSibling?.[0]?.id) {
+    throw new CrmSourceLinkConflictError(RETIRED_SIBLING_VALIDATION_MESSAGE)
+  }
+
+  const validationInput: CrmSourceLinkValidationInput = {
+    sourceSystem: link.source_system,
+    targetType: link.target_type,
+    targetId: link.target_id,
+    linkStatus: link.status,
+    metadata: link.metadata,
+  }
+  const excludedOwnerIds =
+    link.source_system === "xiaoshouyi"
+      ? await getExcludedXiaoshouyiOwnerIds(sb)
+      : new Set<string>()
+  const safetyState = classifyCrmSourceLinkReviewValidation(
+    {
+      ...validationInput,
+      sourceObject: link.source_object,
+      sourceRecordKey: link.source_record_key,
+    },
+    {
+      confirmedSourceIdentities: new Set(),
+      activeAliases: [],
+      canValidateAliases: false,
+      excludedXiaoshouyiOwnerIds: excludedOwnerIds,
+    }
+  )
+  if (safetyState === "unsafe_matching_evidence") {
+    throw new CrmSourceLinkConflictError(UNSAFE_MATCHING_EVIDENCE_MESSAGE)
+  }
+  if (!needsCrmAliasCatalogValidation(validationInput)) return
+
+  const { data: aliases, error: aliasError } = await sb
+    .from("crm_match_aliases")
+    .select("source_system, normalized_alias, target_type, target_id, normalized_manager_name")
+    .eq("source_system", link.source_system)
+    .eq("target_type", link.target_type)
+    .eq("target_id", link.target_id)
+    .eq("status", "active")
+    .in("normalized_alias", getCrmAliasEvidence(link.metadata))
+
+  if (aliasError) {
+    throw new Error(`별칭 근거를 검증하지 못했습니다: ${aliasError.message}`)
+  }
+  if (
+    classifyCrmSourceLinkValidation(validationInput, (aliases ?? []) as CrmMatchAliasValidationRow[]) !== "valid"
+  ) {
+    throw new CrmSourceLinkConflictError(LEGACY_ALIAS_VALIDATION_MESSAGE)
+  }
+}
+
 export async function updateCrmSourceLinkStatus(
   id: string,
   action: CrmSourceLinkAction,
@@ -1726,7 +2173,7 @@ export async function updateCrmSourceLinkStatus(
   const sb = createSupabaseAdminClient()
   const { data: link, error: readError } = await sb
     .from("crm_source_links")
-    .select("id, source_system, source_object, source_record_key, normalized_name, target_type, target_id, metadata")
+    .select("id, source_system, source_object, source_record_key, normalized_name, target_type, target_id, status, metadata")
     .eq("id", id)
     .maybeSingle()
 
@@ -1734,16 +2181,8 @@ export async function updateCrmSourceLinkStatus(
   if (!link) throw new Error("CRM source link not found")
 
   if (action === "confirm") {
-    const { error: staleError } = await sb
-      .from("crm_source_links")
-      .update({ status: "stale", confirmed_by: null, confirmed_at: null })
-      .eq("source_system", link.source_system)
-      .eq("source_object", link.source_object)
-      .eq("source_record_key", link.source_record_key)
-      .neq("id", link.id)
-      .in("status", ["candidate", "confirmed"])
-
-    if (staleError) throw staleError
+    await assertCrmSourceLinkConfirmable(sb, link as ConfirmableSourceLinkRow)
+    if (link.status === "confirmed") return { id: link.id, status: "confirmed" as const }
 
     const { data, error } = await sb
       .from("crm_source_links")
@@ -1753,10 +2192,24 @@ export async function updateCrmSourceLinkStatus(
         confirmed_at: new Date().toISOString(),
       })
       .eq("id", link.id)
+      .eq("status", link.status)
       .select("id, status")
       .single()
 
     if (error) throw error
+
+    // 선택 링크를 먼저 확정한다. 경쟁 확정이 동시에 생기면 DB 유니크 제약이
+    // 선택 업데이트를 거부하므로, 기존 후보들을 먼저 stale로 잃는 부분 실패가 없다.
+    const { error: staleError } = await sb
+      .from("crm_source_links")
+      .update({ status: "stale", confirmed_by: null, confirmed_at: null })
+      .eq("source_system", link.source_system)
+      .eq("source_object", link.source_object)
+      .eq("source_record_key", link.source_record_key)
+      .neq("id", link.id)
+      .eq("status", "candidate")
+
+    if (staleError) throw staleError
     await tryLearnAliasFromConfirmedLink(link as ConfirmedSourceLinkAliasSeed, actorUserId)
     return data
   }

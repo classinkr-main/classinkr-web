@@ -44,6 +44,17 @@ export async function getContactLogs(leadId: string): Promise<ContactLogRecord[]
   return (data as LeadContactLog[]).map(toRecord);
 }
 
+export async function hasContactLog(leadId: string): Promise<boolean> {
+  const supabase = createSupabaseAdminClient();
+  const { count, error } = await supabase
+    .from("lead_contact_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("lead_id", leadId);
+
+  if (error) throw new Error(`[contact-logs] 증거 조회 실패: ${error.message}`);
+  return (count ?? 0) > 0;
+}
+
 export async function addContactLog(
   leadId: string,
   entry: {

@@ -114,7 +114,7 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
             {importStale && (
               <a
                 href="/admin/branch/ledger"
-                className="ml-2 inline-flex items-center rounded-full bg-[#ECD29C]/40 px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F] underline underline-offset-2 hover:bg-[#ECD29C]/60"
+                className="ml-2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full bg-[#ECD29C]/40 px-2 py-0.5 text-[10.5px] font-semibold text-[#7A520F] underline underline-offset-2 hover:bg-[#ECD29C]/60 md:min-h-0 md:min-w-0"
               >
                 장부에서 재동기화 →
               </a>
@@ -129,7 +129,7 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
             type="button"
             disabled={busy}
             onClick={async () => { setBusy(true); try { await onRefresh() } finally { setBusy(false) } }}
-            className="inline-flex items-center gap-1 rounded-full bg-[#111110] px-3 py-1.5 text-[11px] font-medium text-white disabled:opacity-50"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-full bg-[#111110] px-3 py-1.5 text-[11px] font-medium text-white disabled:opacity-50 md:min-h-0 md:min-w-0"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} />
             {busy ? (syncEnabled ? "동기화 중..." : "불러오는 중...") : (syncEnabled ? "지금 동기화" : "다시 불러오기")}
@@ -156,8 +156,8 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
               // <a>라 키보드 포커스가 되고, title은 포커스/호버 양쪽에서 읽힌다.
               <a
                 href="/admin/branch/ledger"
-                title={`계정 ${crmSync.accountConnected}/${crmSync.accountTotal} · 매출 ${formatCNY(crmSync.revenueLinked)}/${formatCNY(crmSync.revenueTotal)} (${crmSync.revenuePctLabel}) · 검토 대기 ${crmSync.rows.review}행 · 고아 후보 ${crmSync.hygiene.orphanCandidates} — 클릭하면 장부의 CRM 싱크 패널`}
-                className={`inline-flex items-center gap-1.5 rounded-full border bg-white px-2 py-0.5 font-semibold ${CRM_CHIP_TONE[crmSync.health].border} ${CRM_CHIP_TONE[crmSync.health].text}`}
+                title={`계정 ${crmSync.accountConnected}/${crmSync.accountTotal} · 매출 ${formatCNY(crmSync.revenueLinked)}/${formatCNY(crmSync.revenueTotal)} (${crmSync.revenuePctLabel}) · 현재 검토 대기 ${crmSync.rows.review}행 · 과거 후보 이력 ${crmSync.hygiene.orphanCandidates}행 — 클릭하면 장부의 CRM 싱크 패널`}
+                className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-full border bg-white px-2 py-0.5 font-semibold md:min-h-0 md:min-w-0 ${CRM_CHIP_TONE[crmSync.health].border} ${CRM_CHIP_TONE[crmSync.health].text}`}
               >
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${CRM_CHIP_TONE[crmSync.health].dot}`}

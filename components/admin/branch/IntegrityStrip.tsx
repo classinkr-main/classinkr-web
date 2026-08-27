@@ -154,7 +154,7 @@ function IntegrityStripPanel({
         <button
           type="button"
           onClick={() => setRetryNonce((n) => n + 1)}
-          className="font-semibold text-[#111110] underline underline-offset-2"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center font-semibold text-[#111110] underline underline-offset-2 md:min-h-0 md:min-w-0"
         >
           다시 시도
         </button>
@@ -191,7 +191,7 @@ function IntegrityStripPanel({
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className={`flex w-full items-center gap-1 px-2 py-0.5 text-left text-[10.5px] font-semibold ${tone.text}`}
+        className={`flex min-h-11 w-full items-center gap-1 px-2 py-0.5 text-left text-[10.5px] font-semibold md:min-h-0 ${tone.text}`}
       >
         <span className={`h-[5px] w-[5px] shrink-0 rounded-full ${tone.dot}`} aria-hidden="true" />
         <span className="min-w-0 truncate">
@@ -228,7 +228,7 @@ function IntegrityStripPanel({
               {typeof issue.sheetRow === "number" && (
                 <Link
                   href={ledgerHref(issue.sheetRow)}
-                  className={`shrink-0 font-semibold underline underline-offset-2 ${tone.text}`}
+                  className={`inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center font-semibold underline underline-offset-2 md:min-h-0 md:min-w-0 ${tone.text}`}
                 >
                   장부에서 열기 →
                 </Link>
@@ -243,7 +243,7 @@ function IntegrityStripPanel({
                 type="button"
                 onClick={() => setShowDetail((v) => !v)}
                 aria-expanded={showDetail}
-                className={`inline-flex items-center gap-1 text-[11.5px] font-bold underline underline-offset-2 ${tone.text}`}
+                className={`inline-flex min-h-11 min-w-11 items-center justify-center gap-1 text-[11.5px] font-bold underline underline-offset-2 md:min-h-0 md:min-w-0 ${tone.text}`}
               >
                 전체 규칙 상세 {showDetail ? "숨기기" : "보기"}
               </button>

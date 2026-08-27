@@ -9,6 +9,7 @@ import {
   type CrmPriorityItem,
 } from "@/lib/crm/priority"
 import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
+import { isTestLead } from "@/lib/crm/lead-attribution"
 import { buildDemoSignalIndex } from "@/lib/crm/demo-signal"
 import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { deriveCustomerRegion, REGION_UNSPECIFIED } from "@/lib/crm/region-label"
@@ -457,7 +458,10 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
         crmRegistered: neoLinkedLeadIds.has(lead.id),
         // 미확인 신규 리드도 행은 만들되 처리 큐 뷰(site_leads/unanswered)에서만 노출된다.
         provisional: !shouldIncludeLeadInUnifiedCustomers(lead),
-        slaTarget: lead.status === "new" && SLA_TARGET_LEAD_SOURCES.has(lead.source),
+        slaTarget:
+          lead.status === "new" &&
+          SLA_TARGET_LEAD_SOURCES.has(lead.source) &&
+          !isTestLead(lead),
         firstResponseAt: firstResponseMap.get(lead.id) ?? null,
         createdAt: lead.timestamp, // timestamp는 leads.created_at 매핑 (lib/repositories/leads.ts 참고)
         lastContactAt: latestContactMap.get(crmContactTargetKey("lead", lead.id)) ?? null,

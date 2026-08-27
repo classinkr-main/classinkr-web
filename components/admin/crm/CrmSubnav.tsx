@@ -42,7 +42,7 @@ const CUSTOMERS_SUBTABS = [
 
 const SUBTAB_WARMUP_REQUESTS: Record<string, string[]> = {
   "/admin/crm/customers/unified": [
-    "/api/admin/crm/customers/unified?limit=100&offset=0",
+    "/api/admin/crm/customers/unified?limit=50&offset=0",
     "/api/admin/crm/owners",
   ],
   "/admin/crm/customers/leads": [
@@ -134,7 +134,10 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
   return (
     <div className="pt-3">
       {/* 1차 — CRM 하위 5개. 정본은 admin-nav.ts(CRM_CHILD_NAV)라 ⌘K 팔레트와 같은 표를 본다. */}
-      <div className="no-scrollbar -mx-4 flex items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <nav
+        aria-label="CRM 주요 메뉴"
+        className="no-scrollbar -mx-4 flex items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+      >
         {CRM_CHILD_NAV.map((child) => {
           const isActive = child.match(pathname ?? "")
           return (
@@ -146,7 +149,7 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
               onMouseEnter={() => warmSubtab(child.href)}
               onPointerDown={() => warmSubtab(child.href)}
               onTouchStart={() => warmSubtab(child.href)}
-              className={`inline-flex min-h-9 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[12.5px] font-semibold transition-colors ${
+              className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] sm:min-h-9 ${
                 isActive
                   ? "bg-[#111110] text-white"
                   : "text-[#1a1a1a]/55 hover:bg-[#f5f5f2] hover:text-[#111110]"
@@ -156,9 +159,12 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
             </Link>
           )
         })}
-      </div>
+      </nav>
       {showCustomersSub ? (
-        <div className="no-scrollbar -mx-4 mt-1.5 flex items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <nav
+          aria-label="CRM 고객 메뉴"
+          className="no-scrollbar -mx-4 mt-1.5 flex items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+        >
           <span className="mr-1 hidden shrink-0 text-[11px] font-medium text-[#1a1a1a]/40 sm:inline">고객</span>
           {CUSTOMERS_SUBTABS.map((sub) => {
             const isActive = customersSub === sub.key
@@ -172,7 +178,7 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
                 onMouseEnter={() => warmSubtab(sub.href)}
                 onPointerDown={() => warmSubtab(sub.href)}
                 onTouchStart={() => warmSubtab(sub.href)}
-                className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors ${
+                className={`relative flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] ${
                   isActive ? "text-[#084734]" : "text-[#1a1a1a]/55 hover:text-[#111110]"
                 }`}
               >
@@ -184,11 +190,14 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
               </Link>
             )
           })}
-        </div>
+        </nav>
       ) : null}
 
       {showDealsSub ? (
-        <div className="no-scrollbar -mx-4 mt-1.5 flex items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <nav
+          aria-label="CRM 돈흐름 메뉴"
+          className="no-scrollbar -mx-4 mt-1.5 flex items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0"
+        >
           <span className="mr-1 hidden shrink-0 text-[11px] font-medium text-[#1a1a1a]/40 sm:inline">돈흐름</span>
           {DEALS_SUBTABS.map((sub) => {
             const isActive = dealsSub === sub.key
@@ -202,7 +211,7 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
                 onMouseEnter={() => warmSubtab(sub.href)}
                 onPointerDown={() => warmSubtab(sub.href)}
                 onTouchStart={() => warmSubtab(sub.href)}
-                className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors ${
+                className={`relative flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] ${
                   isActive ? "text-[#084734]" : "text-[#1a1a1a]/55 hover:text-[#111110]"
                 }`}
               >
@@ -214,7 +223,7 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
               </Link>
             )
           })}
-        </div>
+        </nav>
       ) : null}
     </div>
   )

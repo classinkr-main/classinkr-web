@@ -200,9 +200,10 @@ const MODE_ACCENT: Record<CsConsoleMode, { activeTab: string; activeItem: string
 
 export default function CsConsoleNav(props: CsConsoleNavProps) {
   // useSearchParams는 프리렌더 시 Suspense 경계를 요구한다(AdminSidebar와 같은 이유).
-  // fallback 높이는 실제 2단 바(pt-3 + 36 + mt-1.5 + 36)와 같게 잡아 스트리밍 중 점프를 막는다.
+  // fallback 높이는 실제 2단 바와 맞춘다. 모바일은 44px 터치 타깃 두 줄(106px),
+  // sm 이상은 기존 밀도 36px 두 줄(90px)이라 스트리밍 중에도 점프가 없다.
   return (
-    <Suspense fallback={<div className="h-[90px] border-b border-black/[0.08] bg-white" />}>
+    <Suspense fallback={<div className="h-[106px] border-b border-black/[0.08] bg-white sm:h-[90px]" />}>
       <CsConsoleNavContent {...props} />
     </Suspense>
   )
@@ -304,7 +305,7 @@ function CsConsoleNavContent({ role, contentClassName, className }: CsConsoleNav
                 onFocus={() => scheduleWarm(entry.entryHref)}
                 onMouseLeave={cancelWarm}
                 onBlur={cancelWarm}
-                className={`inline-flex min-h-9 items-center rounded-full px-3.5 text-[12.5px] font-semibold transition-colors ${
+                className={`inline-flex min-h-11 items-center rounded-full px-3.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] sm:min-h-9 ${
                   active
                     ? MODE_ACCENT[entry.mode].activeTab
                     : "text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
@@ -332,7 +333,7 @@ function CsConsoleNavContent({ role, contentClassName, className }: CsConsoleNav
                 onFocus={() => scheduleWarm(item.href)}
                 onMouseLeave={cancelWarm}
                 onBlur={cancelWarm}
-                className={`group relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors ${
+                className={`group relative inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] ${
                   active ? accent.activeItem : "text-[#615D59] hover:text-[#111110]"
                 }`}
               >

@@ -7,7 +7,7 @@ import {
   requireVerifiedAdminContext,
 } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
-import { getHardwareDashboard } from "@/lib/repositories/hardware-inventory"
+import { getHardwareCustomerLinks, getHardwareDashboard } from "@/lib/repositories/hardware-inventory"
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message
@@ -23,6 +23,9 @@ export async function GET(req: NextRequest) {
   if (admin instanceof NextResponse) return admin
 
   try {
+    if (req.nextUrl.searchParams.get("scope") === "customer-links") {
+      return adminCachedJson({ customers: await getHardwareCustomerLinks() })
+    }
     const dashboard = await getHardwareDashboard()
     // viewer = 요청자별 필드 — 캐시되는 대시보드(unstable_cache) 밖에서 매 요청 계산한다.
     // 응답 Cache-Control이 private라 브라우저 캐시에서도 사용자 간 섞이지 않는다.

@@ -257,11 +257,15 @@ export default function CrmPriorityQueuePanel({
       setActingId(`${item.id}:contact`)
       setActionMessage(null)
       setError(null)
-      // 기록 저장과 상태 갱신은 별개의 두 요청이다. 뒤쪽이 실패했을 때 "저장 실패"라고만 하면
-      // 이미 남은 연락 기록을 운영자가 다시 입력해 중복이 생긴다 — 어디까지 됐는지 말한다.
+      // 로그 POST가 연락중 상태까지 한 계약으로 맞춘다. 다음 일정만 별도 PATCH이며,
+      // 그 부분 실패에서는 저장된 기록을 다시 입력하지 않도록 폼을 닫고 범위를 밝힌다.
       let logSaved = false
       try {
-        await adminFetchJsonCached<{ log: unknown }>(`/api/admin/leads/${encodeURIComponent(leadId)}/logs`, {
+        const contactResult = await adminFetchJsonCached<{
+          log: unknown
+          statusSync: "updated" | "unchanged" | "failed"
+          warning?: string
+        }>(`/api/admin/leads/${encodeURIComponent(leadId)}/logs`, {
           method: "POST",
           body: JSON.stringify({
             type: draft.type,
@@ -271,23 +275,25 @@ export default function CrmPriorityQueuePanel({
         })
         logSaved = true
 
-        const patch: { status: "contacted"; follow_up_at?: string | null } = { status: "contacted" }
+        const patch: { follow_up_at?: string | null } = {}
         if (draft.nextSchedule === "tomorrow") patch.follow_up_at = tomorrowMorningIso()
         if (draft.nextSchedule === "clear") patch.follow_up_at = null
-        await adminFetchJsonCached<{ lead: unknown }>(`/api/admin/leads/${encodeURIComponent(leadId)}`, {
-          method: "PATCH",
-          body: JSON.stringify(patch),
-        })
+        if ("follow_up_at" in patch) {
+          await adminFetchJsonCached<{ lead: unknown }>(`/api/admin/leads/${encodeURIComponent(leadId)}`, {
+            method: "PATCH",
+            body: JSON.stringify(patch),
+          })
+        }
 
         setLeadContactDraft(null)
-        setActionMessage("선택한 채널·결과로 연락 기록을 저장했습니다.")
+        setActionMessage(contactResult.warning ?? "선택한 채널·결과로 연락 기록을 저장했습니다.")
         await load({ force: true })
       } catch (err) {
         const detail = err instanceof Error ? err.message : "알 수 없는 오류"
         if (logSaved) {
           // 기록은 남았다 — 폼을 닫아 재입력(중복 기록)을 막고 남은 작업만 알린다.
           setLeadContactDraft(null)
-          setError(`연락 기록은 저장됐지만 상태·다음 일정 반영에 실패했습니다(${detail}). 리드 보드에서 상태를 확인하세요.`)
+          setError(`연락 기록·상태는 저장됐지만 다음 일정 반영에 실패했습니다(${detail}). 리드 보드에서 일정을 확인하세요.`)
           await load({ force: true })
         } else {
           setError(`연락 기록을 저장하지 못했습니다(${detail}). 입력은 그대로 두었으니 다시 시도하세요.`)

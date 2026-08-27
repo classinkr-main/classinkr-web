@@ -169,12 +169,21 @@ export async function POST(req: NextRequest) {
         ),
       }))
       const testResult = await sendBatchEmail(testEmails)
-      return NextResponse.json({
-        ok: true,
+      const testFailed = testResult.sent === 0 && testResult.failed > 0
+      const testResponse = {
+        ok: !testFailed,
         test: true,
         provider: testResult.provider,
         recipientCount: testResult.sent,
-        status: testResult.failed > 0 && testResult.sent === 0 ? "failed" : "sent",
+        failedCount: testResult.failed,
+        errors: (testResult.errors ?? []).slice(0, 5),
+        status: testFailed ? "failed" : "sent",
+        ...(testFailed
+          ? { error: testResult.errors?.[0] ?? "이메일을 발송하지 못했습니다." }
+          : {}),
+      }
+      return NextResponse.json(testResponse, {
+        status: testFailed ? (testResult.provider === "simulation" ? 503 : 502) : 200,
       })
     }
 
@@ -246,14 +255,22 @@ export async function POST(req: NextRequest) {
       console.warn("[email/send] 부분 실패 기록 실패(마이그레이션 미적용?):", metricsError)
     }
 
-    return NextResponse.json({
-      ok: true,
+    const deliveryFailed = result.sent === 0 && result.failed > 0
+    const responseBody = {
+      ok: !deliveryFailed,
       campaign: { ...campaign, status: sendStatus, recipientCount: result.sent },
       provider: result.provider,
       recipientCount: result.sent,
       failedCount: result.failed,
       errors: sendErrors.slice(0, 5),
       status: sendStatus,
+      ...(deliveryFailed
+        ? { error: sendErrors[0] ?? "이메일을 발송하지 못했습니다." }
+        : {}),
+    }
+
+    return NextResponse.json(responseBody, {
+      status: deliveryFailed ? (result.provider === "simulation" ? 503 : 502) : 200,
     })
   } catch {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 })

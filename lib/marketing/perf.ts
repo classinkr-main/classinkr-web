@@ -236,6 +236,8 @@ export interface PerfScoreboardRow {
   pacingCurrency: "USD" | "KRW" | null
   /** 링크된 Meta 캠페인의 일자 leads 합 — 캠페인 귀속이 가능한 유일 축이라 Meta 카운트를 쓴다. */
   leads: number
+  /** USD — 링크된 Meta 일자 spend 합. 소스 실패·Meta 링크 부재는 null. */
+  spendUsd: number | null
   /** USD — 링크된 Meta 일자 spend 합 / leads (분모 0 → null). */
   cpl: number | null
   /** 최근 14일 날짜별 leads. */
@@ -299,9 +301,13 @@ export function splitScoreboardByActivity(
 export interface MarketingPerfResponse {
   period: PerfPeriod
   snapshotAt: string | null
+  /** 조회된 Meta 일별 인사이트 중 가장 최근 일자 — 보고 기간 완결성 판정용. */
+  metaDataThrough: string | null
   kpis: {
     spendUsd: PerfKpi
     leads: PerfKpi
+    /** 우리 leads 테이블의 Meta 리드애즈 유입 — 전체 리드와 분리한 광고 리드 KPI. */
+    adLeads: PerfKpi
     cplUsd: PerfKpi
     /** 광고 리드 중 전환 비율(%) — lead-attribution isConvertedLead 정의. */
     leadConversionRate: PerfKpi

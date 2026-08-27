@@ -55,14 +55,14 @@ describe("웨이브 7 — Q5. MultiSelect 핀 토글", () => {
     expect(effectEnd).toBeGreaterThan(effectStart)
   })
 
-  it("핀 버튼도 U5와 동일 규약(모바일 h-10/w-10 → 데스크톱 md:h-8/md:w-8)을 따른다", () => {
+  it("핀 버튼도 U5와 동일 규약(모바일 44px → 데스크톱 md:h-8/md:w-8)을 따른다", () => {
     const source = read(multiSelectPath)
     const pinButtonIndex = source.indexOf("onClick={togglePin}")
     expect(pinButtonIndex).toBeGreaterThan(-1)
     const classIndex = source.indexOf("className=", pinButtonIndex)
     const classEnd = source.indexOf("`}", classIndex)
     const pinClass = source.slice(classIndex, classEnd)
-    expect(pinClass).toContain("h-10 min-h-10 w-10 min-w-10")
+    expect(pinClass).toContain("h-11 min-h-11 w-11 min-w-11")
     expect(pinClass).toContain("md:h-8 md:min-h-0 md:w-8 md:min-w-0")
   })
 })

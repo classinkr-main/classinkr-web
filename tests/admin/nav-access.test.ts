@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest"
 
 import { ADMIN_NAV } from "@/components/admin/admin-nav"
 import {
+  getAccessibleAdminNavItems,
   NAV_PRESETS,
+  resolveAdminNavAccess,
   resolveNavAccess,
   resolveNavPlacement,
   type NavAccessContext,
@@ -230,6 +232,22 @@ describe("resolveNavAccess", () => {
     for (const key of Object.keys(NAV_PRESETS)) {
       expect(NAV_PRESETS[key as keyof typeof NAV_PRESETS].primary.length, key).toBeGreaterThan(0)
     }
+  })
+})
+
+describe("resolveAdminNavAccess", () => {
+  const hrefs = (over: Partial<NavAccessContext> = {}) =>
+    getAccessibleAdminNavItems(resolveAdminNavAccess(ctx(over))).map((item) => item.href)
+
+  it("applies role visibility before preset placement", () => {
+    expect(hrefs({ role: "EDITOR", preset: null })).not.toContain("/admin/settings")
+    expect(hrefs({ role: "SUPER_ADMIN", preset: null })).toContain("/admin/settings")
+  })
+
+  it("normalizes legacy role casing and overrides", () => {
+    expect(hrefs({ role: "admin", overrides: { "/admin/chatbot": "deny" } })).not.toContain(
+      "/admin/chatbot"
+    )
   })
 })
 

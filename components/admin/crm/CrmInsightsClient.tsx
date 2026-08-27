@@ -365,7 +365,7 @@ export default function CrmInsightsClient() {
               </p>
             </div>
             <div className="rounded-xl bg-[#fafaf8] p-3">
-              <p className="text-[11px] font-semibold text-[#1a1a1a]/35">동기화 정합성</p>
+              <p className="text-[11px] font-semibold text-[#1a1a1a]/35">링크 확정률</p>
               <p
                 className={`mt-1 text-2xl font-bold ${
                   coverageState === "failed"

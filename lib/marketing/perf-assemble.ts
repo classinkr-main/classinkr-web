@@ -90,8 +90,19 @@ function kpi(value: number | null, previous: number | null, currency?: "USD" | "
 /** 광고 리드 판정 — Meta 리드애즈 유입. 전환 판정(isConvertedLead)과 함께 KPI·퍼널의 분모/분자다. */
 const isAdLead = (lead: LeadRecord) => lead.source === "meta_lead_ads"
 
-export async function assembleMarketingPerf(periodKey: PerfPeriodKey): Promise<MarketingPerfResponse> {
-  const today = kstToday()
+export interface AssembleMarketingPerfOptions {
+  /**
+   * KST 집계 끝점. 생략하면 오늘이다. 완료된 과거 주간 보고서처럼 고정된 달력 구간을
+   * 재현할 때만 주입한다. 미래 날짜는 호출부에서 허용하지 않는다.
+   */
+  today?: string
+}
+
+export async function assembleMarketingPerf(
+  periodKey: PerfPeriodKey,
+  options: AssembleMarketingPerfOptions = {},
+): Promise<MarketingPerfResponse> {
+  const today = options.today ?? kstToday()
   const period = resolvePerfPeriod(periodKey, today)
 
   // 스파크라인은 항상 "최근 14일". quarter 초입에는 기간 창(prevSince~until)이 14일보다 짧을
@@ -121,6 +132,13 @@ export async function assembleMarketingPerf(periodKey: PerfPeriodKey): Promise<M
   const currentRows = insightRows?.filter((r) => r.date >= period.since) ?? []
   const prevRows =
     insightRows?.filter((r) => r.date >= period.prevSince && r.date <= period.prevUntil) ?? []
+  const metaDataThrough =
+    insightRows && insightRows.length > 0
+      ? insightRows.reduce(
+          (latest, row) => (row.date > latest ? row.date : latest),
+          insightRows[0].date,
+        )
+      : null
   const currentSpendUsd = insightRows ? sum(currentRows, (r) => r.spend) : null
   const prevSpendUsd = insightRows ? sum(prevRows, (r) => r.spend) : null
 
@@ -153,6 +171,7 @@ export async function assembleMarketingPerf(periodKey: PerfPeriodKey): Promise<M
     "USD"
   )
   const leadsKpi = leads ? kpi(currentLeads.length, prevLeads.length) : kpi(null, null)
+  const adLeadsKpi = leads ? kpi(adLeads.length, prevAdLeads.length) : kpi(null, null)
   // CPL(USD) = 기간 Meta spend 합 ÷ 같은 기간 "우리 leads 테이블"의 광고 리드 수.
   // Meta insights 의 leads 필드가 아니라 실제 유입 리드가 분모다(분자·분모 기간 동일).
   const cplUsdKpi =
@@ -274,6 +293,7 @@ export async function assembleMarketingPerf(periodKey: PerfPeriodKey): Promise<M
       }),
       pacingCurrency: pacingBasis.currency,
       leads: leadsCount,
+      spendUsd: insightRows && metaRefIds.length > 0 ? round2(spendSum) : null,
       cpl: leadsCount > 0 ? round2(spendSum / leadsCount) : null,
       sparkline,
       latestUpdate: latest
@@ -326,9 +346,11 @@ export async function assembleMarketingPerf(periodKey: PerfPeriodKey): Promise<M
   return {
     period,
     snapshotAt,
+    metaDataThrough,
     kpis: {
       spendUsd: spendUsdKpi,
       leads: leadsKpi,
+      adLeads: adLeadsKpi,
       cplUsd: cplUsdKpi,
       leadConversionRate: leadConversionRateKpi,
       budgetExecutionPct: budgetExecutionKpi,

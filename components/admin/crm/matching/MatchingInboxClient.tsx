@@ -19,13 +19,15 @@ import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { StatTile } from "@/components/admin/viz"
 import type {
   AdminCrmMatchingInbox,
+  CrmMatchingSourceFilter,
   CrmMatchingRow,
   CrmMatchingSourceSystem,
+  CrmMatchingStatusFilter,
 } from "@/lib/admin-crm-matching"
 import type { CrmSourceLinkStatus } from "@/lib/admin-crm-revenue-types"
 
-type SourceFilter = "all" | CrmMatchingSourceSystem
-type StatusFilter = "review" | "auto" | "confirmed" | "rejected" | "all"
+type SourceFilter = CrmMatchingSourceFilter
+type StatusFilter = CrmMatchingStatusFilter
 
 interface ManualLinkTargetOption {
   targetType: "partner_account" | "customer" | "deal"
@@ -70,6 +72,7 @@ const SOURCE_FILTERS: Array<{ key: SourceFilter; label: string }> = [
 
 const STATUS_FILTERS: Array<{ key: StatusFilter; label: string }> = [
   { key: "review", label: "처리 필요" },
+  { key: "invalid", label: "검증 제외" },
   { key: "auto", label: "자동 확정" },
   { key: "confirmed", label: "확정" },
   { key: "rejected", label: "제외" },
@@ -77,8 +80,8 @@ const STATUS_FILTERS: Array<{ key: StatusFilter; label: string }> = [
 ]
 
 const HIGH_CONFIDENCE_THRESHOLD = 0.9
-// 한 번에 그리는 행 수 상한 — 무한 스크롤/대량 렌더링 없이 필터로 좁혀 쓰는 UX.
-const MAX_VISIBLE_ROWS = 50
+const MATCHING_FETCH_TIMEOUT_MS = 15_000
+const MATCHING_PAGE_SIZE = 25
 
 // 매칭 인박스 금액(REV 시트·Neo CRM)은 전부 위안화(CNY) — ¥ 만 단위 2자리.
 function formatCurrency(value: number) {
@@ -110,12 +113,16 @@ function formatPercent(value: number | null | undefined) {
 }
 
 function getStatusLabel(row: CrmMatchingRow) {
+  if (row.validationState === "legacy_unscoped_alias") return "과거 별칭 오류"
+  if (row.validationState === "retired_confirmed_sibling") return "확정 경쟁 이력"
   if (row.linkStatus === null) return "미매칭"
   if (row.linkStatus === "confirmed" && row.autoConfirmed) return "자동 확정"
   return STATUS_LABEL[row.linkStatus]
 }
 
 function getStatusTone(row: CrmMatchingRow) {
+  if (row.validationState === "legacy_unscoped_alias") return "border-[#F6D5C5] bg-[#FEF3EE] text-[#8F2C2C]"
+  if (row.validationState === "retired_confirmed_sibling") return "border-[#ECD29C] bg-[#FBF1E0] text-[#7A520F]"
   if (row.linkStatus === null) return "border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33]"
   return STATUS_TONE[row.linkStatus]
 }
@@ -131,16 +138,6 @@ function getTargetLabel(row: CrmMatchingRow) {
           ? "파트너"
           : row.targetType
   return row.targetLabel ? `${typeLabel} · ${row.targetLabel}` : `${typeLabel} ${row.targetId.slice(0, 8)}`
-}
-
-function matchesStatusFilter(row: CrmMatchingRow, filter: StatusFilter) {
-  if (filter === "all") return true
-  // 임시(HW/SW/MKT) 고객은 후순위 — "전체" 필터에서만 노출한다.
-  if (row.placeholder) return false
-  if (filter === "review") return row.linkStatus === null || row.linkStatus === "candidate" || row.linkStatus === "stale"
-  if (filter === "auto") return row.linkStatus === "confirmed" && row.autoConfirmed
-  if (filter === "confirmed") return row.linkStatus === "confirmed"
-  return row.linkStatus === "rejected"
 }
 
 // KPI 타일 로컬 재구현 금지(W2-2b) — 마크업은 viz StatTile(bare 변형)에 위임하는 어댑터.
@@ -179,6 +176,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
   const [notice, setNotice] = useState<string | null>(null)
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("review")
+  const [pageOffset, setPageOffset] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   // 행별 잠금 — 스칼라 하나로 잡으면 B행을 누르는 순간 A행 버튼이 요청 중인데도 다시 활성화돼
   // 같은 링크에 PATCH가 두 번 나갈 수 있다.
@@ -189,22 +187,42 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
   const [searchingSourceKey, setSearchingSourceKey] = useState<string | null>(null)
   const [creatingManualKey, setCreatingManualKey] = useState<string | null>(null)
 
+  // 커버리지 밴드에서 넘어온 이름 필터. 활성일 땐 서버가 상태 필터를 우회한다.
+  const normalizedNameFilter = (nameFilter ?? "").trim().toLowerCase()
+
   const load = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
     setError(null)
+    // 필터/페이지 전환 중에 직전 행을 새 필터 결과처럼 보이지 않게 한다.
+    // 수동 새로고침·뮤테이션 후 force 갱신은 기존 데이터를 보존해 깜빡임을 줄인다.
+    if (!options?.force) setData(null)
     try {
-      const next = await adminFetchJsonCached<AdminCrmMatchingInbox>(`/api/admin/crm/matching`, undefined, {
-        ttlMs: 30_000,
-        force: options?.force,
+      const params = new URLSearchParams({
+        source: sourceFilter,
+        status: statusFilter,
+        limit: String(MATCHING_PAGE_SIZE),
+        offset: String(normalizedNameFilter ? 0 : pageOffset),
       })
+      if (normalizedNameFilter) params.set("name", normalizedNameFilter)
+      // 클라이언트 캐시만 우회하면 서버 30초 스냅샷은 남는다. 뮤테이션 후에는 둘 다 갱신.
+      if (options?.force) params.set("fresh", "1")
+      const next = await adminFetchJsonCached<AdminCrmMatchingInbox>(
+        `/api/admin/crm/matching?${params.toString()}`,
+        { adminTimeoutMs: MATCHING_FETCH_TIMEOUT_MS },
+        {
+          ttlMs: 30_000,
+          force: options?.force,
+        }
+      )
       setData(next)
+      if (next.page.offset !== pageOffset) setPageOffset(next.page.offset)
       setSelectedIds(new Set())
     } catch (err) {
       setError(err instanceof Error ? err.message : "매칭 데이터를 불러오지 못했습니다.")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [normalizedNameFilter, pageOffset, sourceFilter, statusFilter])
 
   useEffect(() => {
     void load()
@@ -257,6 +275,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           body: JSON.stringify({ action }),
         })
         applyRowStatus(linkId, action === "confirm" ? "confirmed" : action === "reject" ? "rejected" : "stale")
+        await load({ force: true })
       } catch (err) {
         setError(err instanceof Error ? err.message : "매칭 상태 변경에 실패했습니다.")
       } finally {
@@ -267,7 +286,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         })
       }
     },
-    [applyRowStatus]
+    [applyRowStatus, load]
   )
 
   // 실패 알림에 쓸 링크 id → 표시 이름. id 앞 8자만 보여주면 어느 행인지 알 수 없다.
@@ -401,21 +420,8 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
     [load]
   )
 
-  // 커버리지 밴드에서 넘어온 이름 필터. 활성일 땐 상태 필터를 우회해 확정 행까지 모두 보여준다.
-  const normalizedNameFilter = (nameFilter ?? "").trim().toLowerCase()
-
-  const filteredRows = useMemo(() => {
-    return (data?.rows ?? []).filter((row) => {
-      if (sourceFilter !== "all" && row.sourceSystem !== sourceFilter) return false
-      if (normalizedNameFilter) {
-        return row.sourceLabel.toLowerCase().includes(normalizedNameFilter)
-      }
-      return matchesStatusFilter(row, statusFilter)
-    })
-  }, [data, sourceFilter, statusFilter, normalizedNameFilter])
-
-  const visibleRows = useMemo(() => filteredRows.slice(0, MAX_VISIBLE_ROWS), [filteredRows])
-  const hiddenRowCount = Math.max(0, filteredRows.length - visibleRows.length)
+  // 서버가 필터링·페이징한 행만 전송한다. 클라이언트 재 slice는 전체 payload를 다시 받는 회귀이다.
+  const visibleRows = useMemo(() => data?.rows ?? [], [data])
 
   const selectableRows = useMemo(
     () =>
@@ -428,12 +434,16 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
   const highConfidenceIds = useMemo(
     () =>
       selectableRows
+        .filter((row) => row.validationState === "valid")
         .filter((row) => (row.confidence ?? 0) >= HIGH_CONFIDENCE_THRESHOLD)
         .map((row) => row.linkId as string),
     [selectableRows]
   )
 
   const allSelected = selectableRows.length > 0 && selectableRows.every((row) => selectedIds.has(row.linkId as string))
+  const selectedHasInvalid = selectableRows.some(
+    (row) => row.validationState !== "valid" && selectedIds.has(row.linkId as string)
+  )
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((current) => {
@@ -458,35 +468,46 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
   }, [])
 
   const totals = data?.totals
-  const actionableCount = useMemo(
-    () => (data?.rows ?? []).filter((row) => matchesStatusFilter(row, "review")).length,
-    [data]
-  )
+  // REV 후보는 "확정 링크 없음"과 "검수 후보"에 동시에 속하므로 두 KPI를 단순 합산하면
+  // 같은 행을 중복 집계한다. 처리 필요는 현재 소스 범위의 고유 review 행 수와 같아야 한다.
+  const actionableCount = data
+    ? normalizedNameFilter || statusFilter === "review"
+      ? data.page.total
+      : sourceFilter === "branch_rev_sheet"
+      ? data.summary.branch_rev_sheet.unmatchedCount
+      : sourceFilter === "xiaoshouyi" || sourceFilter === "lead"
+        ? data.summary[sourceFilter].reviewCount
+        : data.summary.branch_rev_sheet.unmatchedCount
+          + data.summary.xiaoshouyi.reviewCount
+          + data.summary.lead.reviewCount
+    : 0
 
   // 행 액션(확정/제외/되돌리기) — 데스크톱 표 셀과 <sm 카드 폴백이 같은 핸들러·마크업을 공유한다(W2-6).
   const renderRowActions = (row: CrmMatchingRow) => {
     if (row.linkId && (row.linkStatus === "candidate" || row.linkStatus === "stale")) {
       return (
         <div className="flex gap-1.5">
-          <button
-            type="button"
-            onClick={() => void updateSourceLink(row.linkId as string, "confirm")}
-            disabled={pendingLinkIds.has(row.linkId as string)}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
-            title="확정"
-            aria-label="확정"
-          >
-            {pendingLinkIds.has(row.linkId as string) ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Check className="h-3.5 w-3.5" />
-            )}
-          </button>
+          {row.validationState === "valid" ? (
+            <button
+              type="button"
+              onClick={() => void updateSourceLink(row.linkId as string, "confirm")}
+              disabled={pendingLinkIds.has(row.linkId as string)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
+              title="확정"
+              aria-label="확정"
+            >
+              {pendingLinkIds.has(row.linkId as string) ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5" />
+              )}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => void updateSourceLink(row.linkId as string, "reject")}
             disabled={pendingLinkIds.has(row.linkId as string)}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
             title="제외"
             aria-label="제외"
           >
@@ -501,7 +522,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           type="button"
           onClick={() => void updateSourceLink(row.linkId as string, "stale")}
           disabled={pendingLinkIds.has(row.linkId as string)}
-          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-2 text-[11px] font-semibold text-[#7A520F] transition-colors hover:bg-[#ECD29C] disabled:opacity-50"
+          className="inline-flex h-11 items-center gap-1 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-2 text-[11px] font-semibold text-[#7A520F] transition-colors hover:bg-[#ECD29C] disabled:opacity-50"
           title="확정을 되돌리고 재검수로 보냅니다"
         >
           {pendingLinkIds.has(row.linkId as string) ? (
@@ -529,13 +550,13 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
               [row.sourceRecordKey]: event.target.value,
             }))
           }
-          className="h-8 min-w-0 flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none transition-colors focus:border-[#111110]"
+          className="h-11 min-w-0 flex-1 rounded-lg border border-[#e8e8e4] bg-white px-2 text-[12px] text-[#111110] outline-none transition-colors focus:border-[#111110] focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
         />
         <button
           type="button"
           onClick={() => void searchManualTargets(row.sourceRecordKey, row.sourceLabel)}
           disabled={searchingSourceKey === row.sourceRecordKey}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#e8e8e4] text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-[#e8e8e4] text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
           title="검색"
           aria-label="검색"
         >
@@ -579,7 +600,10 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
   )
 
   return (
-    <div>
+    <div
+      aria-busy={loading || generating || bulkPending}
+      className="[&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2 [&_a]:min-h-11 [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-[#084734] [&_a]:focus-visible:ring-offset-2"
+    >
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">CRM Matching</p>
@@ -595,7 +619,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
             type="button"
             onClick={() => void load({ force: true })}
             disabled={loading}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+            className="inline-flex h-11 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             새로고침
@@ -604,14 +628,14 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
             type="button"
             onClick={() => void generateCandidates()}
             disabled={generating || loading}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+            className="inline-flex h-11 items-center gap-2 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
           >
             {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
             후보 생성
           </button>
           <Link
             href="/admin/crm/deals"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
+            className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
           >
             매출·정합성
             <ArrowRight className="h-4 w-4" />
@@ -619,7 +643,15 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         </div>
       </div>
 
-      {error ? <div className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">{error}</div> : null}
+      {error ? (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]"
+        >
+          {error}
+        </div>
+      ) : null}
       {notice ? (
         <div className="mb-6 border-l-2 border-[#D7EBDD] pl-3 text-[13px] text-[#084734]">{notice}</div>
       ) : null}
@@ -632,31 +664,51 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
       <section className="mb-6 grid grid-cols-2 gap-x-4 gap-y-5 border-y border-[#f0f0ec] py-5 xl:grid-cols-4">
         <MetricCard
           label="처리 필요"
-          value={loading && !data ? <ValueSkeleton /> : formatNumber(actionableCount)}
-          hint="현재 필터와 같은 범위 · 미연결 + 후보 + 재검수"
+          value={loading && !data ? <ValueSkeleton /> : error && !data ? "조회 실패" : formatNumber(actionableCount)}
+          hint={error && !data ? "0건이 아니라 확인할 수 없는 상태" : "현재 소스 범위 · 미연결 + 후보 + 재검수"}
         />
         <MetricCard
           label="미매칭 REV"
-          value={loading && !data ? <ValueSkeleton /> : formatNumber(data?.summary.branch_rev_sheet.unmatchedCount ?? 0)}
-          hint={`따로 노는 시트 금액 ${formatCurrency(data?.summary.branch_rev_sheet.unmatchedAmount ?? 0)}`}
+          value={
+            loading && !data
+              ? <ValueSkeleton />
+              : error && !data
+                ? "조회 실패"
+                : formatNumber(data?.summary.branch_rev_sheet.unmatchedCount ?? 0)
+          }
+          hint={
+            error && !data
+              ? "원천 연결 상태를 확인하지 못함"
+              : `따로 노는 시트 금액 ${formatCurrency(data?.summary.branch_rev_sheet.unmatchedAmount ?? 0)}`
+          }
         />
         <MetricCard
           label="후보·재검수"
-          value={loading && !data ? <ValueSkeleton /> : formatNumber(totals?.reviewCount ?? 0)}
-          hint="관리자 판단으로 확정하거나 제외할 연결"
+          value={loading && !data ? <ValueSkeleton /> : error && !data ? "조회 실패" : formatNumber(totals?.reviewCount ?? 0)}
+          hint={
+            error && !data
+              ? "0건이 아니라 확인할 수 없는 상태"
+              : `관리자 판단 대상 · 검증 제외 ${formatNumber(totals?.invalidReviewCount ?? 0)}건 분리`
+          }
         />
         <MetricCard
           label="시트 매칭률"
           value={
             loading && !data ? (
               <ValueSkeleton />
+            ) : error && !data ? (
+              "조회 실패"
             ) : totals?.sheetMatchedRatio == null ? (
               "-"
             ) : (
               formatPercent(totals.sheetMatchedRatio)
             )
           }
-          hint={`확정 ${formatNumber(totals?.confirmedCount ?? 0)}건 · 전체 소스 기준`}
+          hint={
+            error && !data
+              ? "매칭률을 확인하지 못함"
+              : `확정 ${formatNumber(totals?.confirmedCount ?? 0)}건 · 전체 소스 기준`
+          }
         />
       </section>
 
@@ -668,10 +720,11 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
               type="button"
               onClick={() => {
                 setSourceFilter(filter.key)
+                setPageOffset(0)
                 setSelectedIds(new Set())
               }}
               aria-pressed={sourceFilter === filter.key}
-              className={`h-8 rounded-lg border px-3 text-[12px] font-semibold transition-colors ${
+              className={`h-11 rounded-lg border px-3 text-[12px] font-semibold transition-colors ${
                 sourceFilter === filter.key
                   ? "border-[#111110] bg-[#111110] text-white"
                   : "border-[#e8e8e4] bg-white text-[#111110] hover:bg-[#f5f5f2]"
@@ -687,10 +740,11 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
               type="button"
               onClick={() => {
                 setStatusFilter(filter.key)
+                setPageOffset(0)
                 setSelectedIds(new Set())
               }}
               aria-pressed={statusFilter === filter.key}
-              className={`h-8 rounded-lg border px-3 text-[12px] font-semibold transition-colors ${
+              className={`h-11 rounded-lg border px-3 text-[12px] font-semibold transition-colors ${
                 statusFilter === filter.key
                   ? "border-[#111110] bg-[#111110] text-white"
                   : "border-[#e8e8e4] bg-white text-[#111110] hover:bg-[#f5f5f2]"
@@ -704,8 +758,11 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
               <span className="mx-1 h-5 w-px bg-[#e8e8e4]" />
               <button
                 type="button"
-                onClick={() => onClearNameFilter?.()}
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#084734]/25 bg-[#ECFDF5] px-3 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD]"
+                onClick={() => {
+                  setPageOffset(0)
+                  onClearNameFilter?.()
+                }}
+                className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-[#084734]/25 bg-[#ECFDF5] px-3 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD]"
                 title="이름 필터 해제"
               >
                 <Search className="h-3.5 w-3.5" />
@@ -716,8 +773,9 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           ) : null}
         </div>
         <span className="text-[11px] text-[#1a1a1a]/35">
-          {formatNumber(visibleRows.length)}건 표시
-          {hiddenRowCount > 0 ? ` (전체 ${formatNumber(filteredRows.length)}건)` : ""} · {formatDate(data?.generatedAt)}
+          {data?.page.total
+            ? `${formatNumber(data.page.offset + 1)}-${formatNumber(data.page.offset + visibleRows.length)} / ${formatNumber(data.page.total)}건`
+            : "0건"} · {formatDate(data?.generatedAt)}
         </span>
       </div>
 
@@ -725,8 +783,9 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         <button
           type="button"
           onClick={() => void bulkUpdate(Array.from(selectedIds), "confirm")}
-          disabled={bulkPending || selectedIds.size === 0}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2.5 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
+          disabled={bulkPending || selectedIds.size === 0 || selectedHasInvalid}
+          title={selectedHasInvalid ? "검증 제외 후보는 확정할 수 없습니다. 제외를 사용해 주세요." : undefined}
+          className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-[#D7EBDD] bg-[#ECFDF5] px-2.5 text-[12px] font-semibold text-[#084734] transition-colors hover:bg-[#D7EBDD] disabled:opacity-50"
         >
           {bulkPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
           선택 {formatNumber(selectedIds.size)}건 확정
@@ -735,7 +794,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           type="button"
           onClick={() => void bulkUpdate(Array.from(selectedIds), "reject")}
           disabled={bulkPending || selectedIds.size === 0}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-2.5 text-[12px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
+          className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-2.5 text-[12px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FBE8DD] disabled:opacity-50"
         >
           <X className="h-3.5 w-3.5" />
           선택 제외
@@ -744,7 +803,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           type="button"
           onClick={() => void bulkUpdate(highConfidenceIds, "confirm")}
           disabled={bulkPending || highConfidenceIds.length === 0}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
+          className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-50"
         >
           <Sparkles className="h-3.5 w-3.5" />
           고확신({Math.round(HIGH_CONFIDENCE_THRESHOLD * 100)}%↑) {formatNumber(highConfidenceIds.length)}건 일괄 확정
@@ -759,6 +818,19 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
             <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
             매칭 데이터를 불러오는 중입니다.
           </p>
+        ) : error && !data ? (
+          <div className="rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-8 text-center">
+            <p className="text-[13px] font-semibold text-[#8F2C2C]">매칭 데이터를 확인하지 못했습니다.</p>
+            <p className="mt-1 text-[12px] text-[#615D59]">0건이 아니며, 잠시 후 다시 시도해 주세요.</p>
+            <button
+              type="button"
+              onClick={() => void load({ force: true })}
+              className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#F6D5C5] bg-white px-4 text-[12px] font-semibold text-[#8F2C2C] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              다시 시도
+            </button>
+          </div>
         ) : visibleRows.length === 0 ? (
           <p className="rounded-xl bg-[#fafaf8] px-3 py-10 text-center text-[13px] text-[#1a1a1a]/35">
             {statusFilter === "review"
@@ -773,13 +845,15 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
               <div key={row.key} className="rounded-xl border border-[#e8e8e4] bg-white p-3">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {selectable ? (
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(row.linkId as string)}
-                      onChange={() => toggleSelect(row.linkId as string)}
-                      aria-label="선택"
-                      className="h-3.5 w-3.5 accent-[#111110]"
-                    />
+                    <label className="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-lg focus-within:ring-2 focus-within:ring-[#084734] focus-within:ring-offset-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(row.linkId as string)}
+                        onChange={() => toggleSelect(row.linkId as string)}
+                        aria-label="선택"
+                        className="h-4 w-4 accent-[#111110]"
+                      />
+                    </label>
                   ) : null}
                   <StatusBadge label={SOURCE_LABEL[row.sourceSystem]} tone={SOURCE_TONE[row.sourceSystem]} />
                   <StatusBadge label={getStatusLabel(row)} tone={getStatusTone(row)} />
@@ -798,6 +872,9 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
                 <p className="mt-1 text-[11px] text-[#1a1a1a]/45">
                   {getTargetLabel(row)} · 신뢰도 {formatPercent(row.confidence)}
                 </p>
+                {row.validationMessage ? (
+                  <p className="mt-1 text-[11px] leading-relaxed text-[#8F2C2C]">{row.validationMessage}</p>
+                ) : null}
                 {row.linkStatus === "confirmed" && row.confirmedAt ? (
                   <p className="mt-1 text-[11px] text-[#1a1a1a]/30">{formatDate(row.confirmedAt)}</p>
                 ) : null}
@@ -816,13 +893,15 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           <thead className="text-[11px] uppercase tracking-[0.12em] text-[#1a1a1a]/35">
             <tr>
               <th scope="col" className="py-3 pr-3 font-semibold">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleSelectAll}
-                  aria-label="전체 선택"
-                  className="h-3.5 w-3.5 accent-[#111110]"
-                />
+                <label className="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-lg focus-within:ring-2 focus-within:ring-[#084734] focus-within:ring-offset-2">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    aria-label="전체 선택"
+                    className="h-4 w-4 accent-[#111110]"
+                  />
+                </label>
               </th>
               <th scope="col" className="py-3 pr-4 font-semibold">소스</th>
               <th scope="col" className="py-3 pr-4 font-semibold">상태</th>
@@ -843,6 +922,21 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
                   매칭 데이터를 불러오는 중입니다.
                 </td>
               </tr>
+            ) : error && !data ? (
+              <tr>
+                <td colSpan={10} className="py-16 text-center">
+                  <p className="text-[13px] font-semibold text-[#8F2C2C]">매칭 데이터를 확인하지 못했습니다.</p>
+                  <p className="mt-1 text-[12px] text-[#615D59]">0건이 아니며, 잠시 후 다시 시도해 주세요.</p>
+                  <button
+                    type="button"
+                    onClick={() => void load({ force: true })}
+                    className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[#F6D5C5] bg-white px-4 text-[12px] font-semibold text-[#8F2C2C] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    다시 시도
+                  </button>
+                </td>
+              </tr>
             ) : visibleRows.length === 0 ? (
               <tr>
                 <td colSpan={10} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
@@ -859,13 +953,15 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
                   <tr key={row.key} className="align-top">
                     <td className="py-4 pr-3">
                       {selectable ? (
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(row.linkId as string)}
-                          onChange={() => toggleSelect(row.linkId as string)}
-                          aria-label="선택"
-                          className="h-3.5 w-3.5 accent-[#111110]"
-                        />
+                        <label className="inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded-lg focus-within:ring-2 focus-within:ring-[#084734] focus-within:ring-offset-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(row.linkId as string)}
+                            onChange={() => toggleSelect(row.linkId as string)}
+                            aria-label="선택"
+                            className="h-4 w-4 accent-[#111110]"
+                          />
+                        </label>
                       ) : null}
                     </td>
                     <td className="py-4 pr-4">
@@ -890,7 +986,14 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
                       <p>{row.sourceOwner ?? "담당 미지정"}</p>
                       <p className="mt-1 text-[11px] text-[#1a1a1a]/35">{row.sourceStatus ?? "-"}</p>
                     </td>
-                    <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/50">{getTargetLabel(row)}</td>
+                    <td className="py-4 pr-4 text-[12px] text-[#1a1a1a]/50">
+                      {getTargetLabel(row)}
+                      {row.validationMessage ? (
+                        <p className="mt-1 max-w-[240px] text-[11px] leading-relaxed text-[#8F2C2C]">
+                          {row.validationMessage}
+                        </p>
+                      ) : null}
+                    </td>
                     <td className="py-4 pr-4 text-right text-[12px] text-[#1a1a1a]/45">
                       {formatPercent(row.confidence)}
                     </td>
@@ -915,10 +1018,31 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
         </table>
       </div>
 
-      {hiddenRowCount > 0 ? (
-        <p className="mt-4 border-t border-[#f0f0ec] pt-3 text-center text-[12px] text-[#1a1a1a]/40">
-          외 {formatNumber(hiddenRowCount)}건은 표시하지 않았습니다. 소스/상태 필터로 좁혀서 확인하세요.
-        </p>
+      {data && data.page.total > 0 ? (
+        <nav
+          className="mt-4 flex items-center justify-center gap-3 border-t border-[#f0f0ec] pt-4"
+          aria-label="매칭 인박스 페이지"
+        >
+          <button
+            type="button"
+            onClick={() => setPageOffset(Math.max(0, data.page.offset - data.page.limit))}
+            disabled={loading || !data.page.hasPrevious}
+            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-4 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+          >
+            이전
+          </button>
+          <span className="text-[12px] tabular-nums text-[#1a1a1a]/45">
+            {formatNumber(Math.floor(data.page.offset / data.page.limit) + 1)} / {formatNumber(Math.max(1, Math.ceil(data.page.total / data.page.limit)))}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPageOffset(data.page.offset + data.page.limit)}
+            disabled={loading || !data.page.hasMore}
+            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white px-4 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2"
+          >
+            다음
+          </button>
+        </nav>
       ) : null}
     </div>
   )

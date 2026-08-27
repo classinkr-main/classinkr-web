@@ -6,8 +6,14 @@ import { usePathname, useRouter } from "next/navigation"
 
 import AdminSidebar from "@/components/admin/AdminSidebar"
 import AdminCommandPaletteLauncher from "@/components/admin/AdminCommandPaletteLauncher"
-import { ADMIN_NAV, normalizeAdminRole } from "@/components/admin/admin-nav"
-import { isNavPresetKey, normalizeNavOverrides, resolveNavPlacement } from "@/components/admin/admin-nav-access"
+import { ADMIN_NAV } from "@/components/admin/admin-nav"
+import {
+  getAccessibleAdminNavItems,
+  isNavPresetKey,
+  normalizeNavOverrides,
+  resolveAdminNavAccess,
+} from "@/components/admin/admin-nav-access"
+import { resolveAdminNavParentHref } from "@/components/admin/admin-nav-routes"
 import { RouteTransition } from "@/components/transitions/RouteTransition"
 import { clearAdminSessionStorage } from "@/lib/admin-client"
 import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
@@ -242,23 +248,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const blocked = (() => {
     if (!session || isLoginPage) return false
     const preset = isNavPresetKey(session.navPreset) ? session.navPreset : null
-    if (!preset) return false
 
-    // 하위 경로(/admin/crm/customers/...)도 상위 탭의 판정을 따른다.
-    // 가장 긴 매칭을 고르는 이유: /admin/branch 와 /admin/branch/ledger 가 둘 다 매칭될 때
-    // 더 구체적인 쪽(ledger)의 판정이 옳다.
-    const target = ADMIN_NAV.map((item) => item.href.split("?")[0])
-      .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
-      .sort((a, b) => b.length - a.length)[0]
+    // 직접 하위 경로뿐 아니라 사이드바 부모에 흡수된 독립 라우트(events·traffic·CS 계열)도
+    // admin-nav-routes SSOT에서 부모를 찾아 동일한 접근 판정을 상속한다.
+    const target = resolveAdminNavParentHref(
+      pathname,
+      ADMIN_NAV.map((item) => item.href)
+    )
     if (!target) return false
 
-    return (
-      resolveNavPlacement(target, {
-        role: normalizeAdminRole(session.role),
-        preset,
-        overrides: normalizeNavOverrides(session.navOverrides),
-      }) === "deny"
-    )
+    const access = resolveAdminNavAccess({
+      role: session.role,
+      preset,
+      overrides: normalizeNavOverrides(session.navOverrides),
+    })
+
+    return !getAccessibleAdminNavItems(access).some((item) => item.href === target)
   })()
 
   if (isLoginPage) return <>{children}</>
@@ -314,7 +319,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </RouteTransition>
         </div>
       </main>
-      <AdminCommandPaletteLauncher />
+      {session ? (
+        <AdminCommandPaletteLauncher
+          role={session.role}
+          navPreset={session.navPreset}
+          navOverrides={session.navOverrides}
+        />
+      ) : null}
     </div>
   )
 }

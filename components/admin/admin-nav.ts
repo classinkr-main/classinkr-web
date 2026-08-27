@@ -26,8 +26,8 @@ import {
  * 신규 권한 모델의 역할 단계로 취급하지 않는다.
  *
  * 이 roles 필드는 nav 소비자가 적용하는 UX 가시성 메타데이터다. 실제 데이터·동작 권한은
- * 각 API의 관리자 가드와 capability 검사에서 강제해야 한다. 현재 커맨드 팔레트처럼 이 필드를
- * 소비하지 않는 표면도 있으므로 보안 경계로 간주하면 안 된다.
+ * 각 API의 관리자 가드와 capability 검사에서 강제해야 한다. 사이드바·모바일·커맨드 팔레트가
+ * 함께 소비하지만 클라이언트 UI 메타데이터이므로 보안 경계로 간주하면 안 된다.
  */
 export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
 export type AdminNavSection = "home" | "sales" | "marketing" | "cs" | "system"

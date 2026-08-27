@@ -59,6 +59,19 @@ export interface SendResult {
 const RESEND_FROM = process.env.RESEND_FROM ?? "Classin <noreply@classin.ai.kr>"
 const GMAIL_FROM = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ?? ""
 const RESEND_BATCH_SIZE = 100
+const EMAIL_PROVIDER_NOT_CONFIGURED = "이메일 발송 공급자가 설정되지 않았습니다."
+
+function unavailableProviderResult(count: number, context: string): SendResult {
+  // simulation 은 실제 공급자 호출이 아니다. 이를 sent 로 집계하면 캠페인·자동화 로그에
+  // 허위 성공이 남으므로 운영 실패로 명시한다. 수신자 주소는 로그에 남기지 않는다.
+  console.error(`[EMAIL] ${context} 발송 중단: ${EMAIL_PROVIDER_NOT_CONFIGURED} (${count}건)`)
+  return {
+    provider: "simulation",
+    sent: 0,
+    failed: count,
+    errors: [EMAIL_PROVIDER_NOT_CONFIGURED],
+  }
+}
 
 /* ── HTML 래퍼 (캠페인용) ────────────────────────────────────── */
 
@@ -303,12 +316,8 @@ export async function sendBatchEmail(emails: SingleEmail[]): Promise<SendResult>
     return sendViaWebhook(webhookUrl, emails)
   }
 
-  // 3순위: 시뮬레이션
-  console.log(`[EMAIL-SIM] ${emails.length}건 발송 시뮬레이션 (Resend·Webhook 모두 미설정)`)
-  emails.slice(0, 3).forEach((e) => console.log(`  → ${e.to}: ${e.subject}`))
-  if (emails.length > 3) console.log(`  ... 외 ${emails.length - 3}건`)
-
-  return { provider: "simulation", sent: emails.length, failed: 0 }
+  // 3순위: 공급자 미설정. simulation 은 실제 발송 성공으로 집계하지 않는다.
+  return unavailableProviderResult(emails.length, "캠페인")
 }
 
 /**
@@ -352,7 +361,6 @@ export async function sendInternalNotification(params: {
     return sendViaResend(emails)
   }
 
-  // 3순위: 시뮬레이션
-  console.log(`[EMAIL-SIM] 내부 알림 ${emails.length}건 시뮬레이션`)
-  return { provider: "simulation", sent: emails.length, failed: 0 }
+  // 3순위: 공급자 미설정. 내부 알림도 실제 발송 성공으로 집계하지 않는다.
+  return unavailableProviderResult(emails.length, "내부 알림")
 }

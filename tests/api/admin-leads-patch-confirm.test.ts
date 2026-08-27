@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 
-// 캠페인 허브 "신규 리드" 탭의 연락함 체크는 PATCH 한 번에 전부를 건다 —
-// {status:"contacted"} 만 보내고, "확인 도장"(confirmed_at)은 라우트가 서버 시각으로 찍는다.
-// 이 계약이 조용히 깨지면 화면은 멀쩡한데 CRM 확인 신호만 사라지므로 여기서 고정한다.
+// contacted 상태는 실제 연락 로그가 있을 때만 허용한다. 확인 도장은 서버 시각을 쓴다.
 const requireVerifiedAdminContext = vi.fn()
 const updateLead = vi.fn()
 const deleteLead = vi.fn()
+const hasContactLog = vi.fn()
 
 vi.mock("@/lib/admin-auth", () => ({
   CRM_STAFF_ADMIN_API_ROLES: ["SUPER_ADMIN", "ADMIN", "BRANCH"],
@@ -17,6 +16,7 @@ vi.mock("@/lib/repositories/leads", () => ({
   updateLead,
   deleteLead,
 }))
+vi.mock("@/lib/repositories/contact-logs", () => ({ hasContactLog }))
 
 function patchRequest(body: unknown) {
   return new NextRequest("https://classin.kr/api/admin/leads/lead-1", {
@@ -39,6 +39,7 @@ function sentPatch() {
 describe("PATCH /api/admin/leads/[id] — 연락 체크와 확인 도장", () => {
   beforeEach(() => {
     requireVerifiedAdminContext.mockResolvedValue({ source: "supabase", role: "ADMIN", userId: "admin-1" })
+    hasContactLog.mockResolvedValue(true)
     updateLead.mockImplementation(async (id: string, patch: Record<string, unknown>) => ({
       id,
       source: "meta_lead_ads",
@@ -74,6 +75,15 @@ describe("PATCH /api/admin/leads/[id] — 연락 체크와 확인 도장", () =>
     expect(body.lead.confirmed_at).toBe(patch.confirmed_at)
   })
 
+  it("연락 로그 없이 contacted 상태만 만드는 요청은 409로 거부한다", async () => {
+    hasContactLog.mockResolvedValueOnce(false)
+
+    const res = await callPatch({ status: "contacted" })
+
+    expect(res.status).toBe(409)
+    expect(updateLead).not.toHaveBeenCalled()
+  })
+
   it("converted·closed로 바뀔 때도 확인 도장을 찍는다", async () => {
     for (const status of ["converted", "closed"] as const) {
       await callPatch({ status })
@@ -102,6 +112,12 @@ describe("PATCH /api/admin/leads/[id] — 연락 체크와 확인 도장", () =>
 
   it("유효하지 않은 상태는 400 — 저장소를 부르지 않는다", async () => {
     const res = await callPatch({ status: "연락함" })
+    expect(res.status).toBe(400)
+    expect(updateLead).not.toHaveBeenCalled()
+  })
+
+  it("담당자 임의 문자열은 일반 PATCH를 우회하지 못한다", async () => {
+    const res = await callPatch({ assigned_to: "임의 담당자" })
     expect(res.status).toBe(400)
     expect(updateLead).not.toHaveBeenCalled()
   })

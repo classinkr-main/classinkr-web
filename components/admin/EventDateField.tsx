@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useId, useMemo, useState } from "react"
 import { CalendarDays, ChevronLeft, ChevronRight, X } from "lucide-react"
 
 /**
@@ -52,6 +52,7 @@ export default function EventDateField({
   inputClassName,
   labelClassName,
 }: EventDateFieldProps) {
+  const fieldId = useId()
   const [mode, setMode] = useState<"range" | "sessions">(
     value.sessionDates.length > 0 ? "sessions" : "range"
   )
@@ -141,7 +142,11 @@ export default function EventDateField({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-1 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-0.5">
+      <div
+        role="group"
+        aria-label="행사 일정 입력 방식"
+        className="flex items-center gap-1 rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-0.5"
+      >
         {(
           [
             { key: "range" as const, label: "기간" },
@@ -153,7 +158,7 @@ export default function EventDateField({
             type="button"
             onClick={() => switchMode(option.key)}
             aria-pressed={mode === option.key}
-            className={`flex-1 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
+            className={`min-h-11 flex-1 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 sm:min-h-9 ${
               mode === option.key
                 ? "bg-white text-[#111110] shadow-sm"
                 : "text-[#1a1a1a]/45 hover:text-[#111110]"
@@ -167,21 +172,23 @@ export default function EventDateField({
       {mode === "range" ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className={labelClassName}>시작일시 *</label>
+            <label htmlFor={`${fieldId}-range-start`} className={labelClassName}>시작일시 *</label>
             <input
+              id={`${fieldId}-range-start`}
               type="datetime-local"
               value={value.startsAt}
               onChange={(e) => onChange({ ...value, startsAt: e.target.value, sessionDates: [] })}
-              className={inputClassName}
+              className={`${inputClassName} min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2`}
             />
           </div>
           <div>
-            <label className={labelClassName}>종료일시</label>
+            <label htmlFor={`${fieldId}-range-end`} className={labelClassName}>종료일시</label>
             <input
+              id={`${fieldId}-range-end`}
               type="datetime-local"
               value={value.endsAt}
               onChange={(e) => onChange({ ...value, endsAt: e.target.value, sessionDates: [] })}
-              className={inputClassName}
+              className={`${inputClassName} min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2`}
             />
           </div>
         </div>
@@ -193,7 +200,7 @@ export default function EventDateField({
                 type="button"
                 onClick={() => shiftMonth(-1)}
                 aria-label="이전 달"
-                className="rounded-md p-1 text-[#1a1a1a]/40 transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
+                className="flex h-11 w-11 items-center justify-center rounded-md text-[#1a1a1a]/40 transition-colors hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] sm:h-9 sm:w-9"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -204,52 +211,60 @@ export default function EventDateField({
                 type="button"
                 onClick={() => shiftMonth(1)}
                 aria-label="다음 달"
-                className="rounded-md p-1 text-[#1a1a1a]/40 transition-colors hover:bg-[#F6F5F4] hover:text-[#111110]"
+                className="flex h-11 w-11 items-center justify-center rounded-md text-[#1a1a1a]/40 transition-colors hover:bg-[#F6F5F4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] sm:h-9 sm:w-9"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="mb-1 grid grid-cols-7 gap-0.5">
-              {WEEKDAYS.map((weekday) => (
-                <div
-                  key={weekday}
-                  className="py-1 text-center text-[10px] font-medium text-[#1a1a1a]/35"
-                >
-                  {weekday}
+            <div className="-mx-1 overflow-x-auto px-1 pb-1">
+              <div className="min-w-80 sm:min-w-0">
+                <div className="mb-1 grid grid-cols-7 gap-0.5">
+                  {WEEKDAYS.map((weekday) => (
+                    <div
+                      key={weekday}
+                      className="py-1 text-center text-[10px] font-medium text-[#1a1a1a]/35"
+                    >
+                      {weekday}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            <div className="grid grid-cols-7 gap-0.5">
-              {monthCells.map((dateKey, index) => {
-                if (!dateKey) return <div key={`blank-${index}`} />
-                const isSelected = selected.includes(dateKey)
-                const isToday = dateKey === todayKey
-                return (
-                  <button
-                    key={dateKey}
-                    type="button"
-                    onClick={() => toggleDate(dateKey)}
-                    aria-pressed={isSelected}
-                    aria-label={`${dateKey}${isSelected ? " 선택 해제" : " 선택"}`}
-                    className={`aspect-square rounded-md text-[12px] transition-colors ${
-                      isSelected
-                        ? "bg-[#084734] font-semibold text-white"
-                        : `text-[#111110] hover:bg-[#F6F5F4] ${
-                            isToday ? "ring-1 ring-inset ring-[#084734]/30" : ""
-                          }`
-                    }`}
-                  >
-                    {Number(dateKey.slice(8, 10))}
-                  </button>
-                )
-              })}
+                <div className="grid grid-cols-7 gap-0.5">
+                  {monthCells.map((dateKey, index) => {
+                    if (!dateKey) return <div key={`blank-${index}`} aria-hidden="true" />
+                    const isSelected = selected.includes(dateKey)
+                    const isToday = dateKey === todayKey
+                    return (
+                      <button
+                        key={dateKey}
+                        type="button"
+                        onClick={() => toggleDate(dateKey)}
+                        aria-pressed={isSelected}
+                        aria-label={`${dateKey}${isSelected ? " 선택 해제" : " 선택"}`}
+                        className={`aspect-square min-h-11 min-w-11 rounded-md text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] sm:min-h-0 sm:min-w-0 ${
+                          isSelected
+                            ? "bg-[#084734] font-semibold text-white"
+                            : `text-[#111110] hover:bg-[#F6F5F4] ${
+                                isToday ? "ring-1 ring-inset ring-[#084734]/30" : ""
+                              }`
+                        }`}
+                      >
+                        {Number(dateKey.slice(8, 10))}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
           {selected.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div
+              aria-live="polite"
+              aria-label={`선택한 행사 날짜 ${selected.length}개`}
+              className="flex flex-wrap items-center gap-1.5"
+            >
               <span className="text-[11px] font-medium text-[#1a1a1a]/45">
                 {selected.length}회
               </span>
@@ -263,7 +278,7 @@ export default function EventDateField({
                     type="button"
                     onClick={() => toggleDate(dateKey)}
                     aria-label={`${dateKey} 제거`}
-                    className="rounded-full p-0.5 transition-colors hover:bg-[#084734]/10"
+                    className="-my-2 -mr-1 inline-flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-[#084734]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] sm:my-0 sm:h-7 sm:w-7"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -272,7 +287,7 @@ export default function EventDateField({
               <button
                 type="button"
                 onClick={() => emitSessions([], times.start, times.end)}
-                className="ml-1 text-[11px] text-[#1a1a1a]/35 underline underline-offset-2 transition-colors hover:text-[#111110]"
+                className="ml-1 inline-flex min-h-11 items-center px-2 text-[11px] text-[#1a1a1a]/35 underline underline-offset-2 transition-colors hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] sm:min-h-7"
               >
                 모두 지우기
               </button>
@@ -286,21 +301,23 @@ export default function EventDateField({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className={labelClassName}>시작 시간 *</label>
+              <label htmlFor={`${fieldId}-session-start`} className={labelClassName}>시작 시간 *</label>
               <input
+                id={`${fieldId}-session-start`}
                 type="time"
                 value={times.start}
                 onChange={(e) => emitSessions(selected, e.target.value, times.end)}
-                className={inputClassName}
+                className={`${inputClassName} min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2`}
               />
             </div>
             <div>
-              <label className={labelClassName}>종료 시간</label>
+              <label htmlFor={`${fieldId}-session-end`} className={labelClassName}>종료 시간</label>
               <input
+                id={`${fieldId}-session-end`}
                 type="time"
                 value={times.end}
                 onChange={(e) => emitSessions(selected, times.start, e.target.value)}
-                className={inputClassName}
+                className={`${inputClassName} min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2`}
               />
             </div>
           </div>

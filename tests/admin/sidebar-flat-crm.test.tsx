@@ -14,15 +14,35 @@ vi.mock("next/navigation", () => ({
 
 import AdminSidebar from "@/components/admin/AdminSidebar"
 
-function render(pathname: string, navPreset: string | null = null) {
+function render(
+  pathname: string,
+  navPreset: string | null = null,
+  options: { role?: string; navOverrides?: Record<string, string> } = {}
+) {
   routerState.pathname = pathname
   return renderToStaticMarkup(
-    <AdminSidebar role="SUPER_ADMIN" name="테스터" email="t@classin.com" navPreset={navPreset} navOverrides={{}} />
+    <AdminSidebar
+      role={options.role ?? "SUPER_ADMIN"}
+      name="테스터"
+      email="t@classin.com"
+      navPreset={navPreset}
+      navOverrides={options.navOverrides ?? {}}
+    />
   )
 }
 
 function navHrefs(html: string) {
   return [...html.matchAll(/href="(\/admin[^"]*)"/g)].map((m) => m[1])
+}
+
+function activeNavHrefs(html: string) {
+  return [...html.matchAll(/<a\b[^>]*>/g)]
+    .filter(([tag]) => tag.includes('aria-current="page"'))
+    .flatMap(([tag]) => tag.match(/href="([^"]+)"/)?.[1] ?? [])
+}
+
+function mobileHeader(html: string) {
+  return html.match(/<header\b[^>]*>[\s\S]*?<\/header>/)?.[0] ?? ""
 }
 
 describe("사이드바 CRM 평탄화", () => {
@@ -67,5 +87,38 @@ describe("사이드바 CRM 평탄화", () => {
   it("프리셋 사용자에게도 CRM 이 접히지 않고 상시로 보인다", () => {
     // 평평해진 뒤 CRM 이 '기타' 안에만 있으면 영업 핵심 화면을 메뉴에서 못 찾는다.
     expect(navHrefs(render("/admin/calendar", "cs"))).toContain("/admin/crm")
+  })
+
+  it.each([
+    ["/admin/events/new", "/admin/calendar", "캘린더"],
+    ["/admin/traffic", "/admin/analytics", "Analytics"],
+    ["/admin/docs", "/admin/chatbot", "CS 콘솔"],
+    ["/admin/channel-talk", "/admin/chatbot", "CS 콘솔"],
+    ["/admin/cs-chatbot", "/admin/chatbot", "CS 콘솔"],
+  ])("흡수 경로 %s에서 부모 %s를 활성화한다", (pathname, parentHref, mobileLabel) => {
+    const html = render(pathname, "super")
+
+    expect(activeNavHrefs(html)).toContain(parentHref)
+    expect(mobileHeader(html)).toContain(mobileLabel)
+  })
+
+  it("모바일 바로가기에도 프리셋 오버라이드 차단을 적용한다", () => {
+    const html = render("/admin/calendar", "sales", {
+      role: "ADMIN",
+      navOverrides: { "/admin/quotes": "deny" },
+    })
+
+    expect(navHrefs(html)).not.toContain("/admin/quotes")
+  })
+
+  it.each([
+    ["/admin/crm/customers/customer-1", "고객 360"],
+    ["/admin/crm/deals/rev-sheet", "REV 스냅샷"],
+    ["/admin/crm/deals/orders", "오더·설치"],
+    ["/admin/crm/deals/kpi", "워크스페이스"],
+    ["/admin/crm/matching", "데이터 매칭"],
+    ["/admin/crm/insights", "인사이트"],
+  ])("모바일 헤더가 CRM 세부 작업면 %s의 실제 이름을 표시한다", (pathname, label) => {
+    expect(mobileHeader(render(pathname))).toContain(label)
   })
 })

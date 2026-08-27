@@ -1,6 +1,12 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
-import { createPost, getAllPosts, getTrashedPosts, isBlogSlugConflictError } from "@/lib/repositories/blog"
+import {
+  createPost,
+  getAdminBlogOverviewSummary,
+  getAllPosts,
+  getTrashedPosts,
+  isBlogSlugConflictError,
+} from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { validatePublicMarkdownContent } from "@/lib/admin/public-content-validation"
@@ -20,6 +26,10 @@ export async function GET(req: NextRequest) {
 
   try {
     const trash = req.nextUrl.searchParams.get("trash") === "1"
+    const scope = req.nextUrl.searchParams.get("scope")
+    if (!trash && scope === "overview") {
+      return adminCachedJson({ overview: await getAdminBlogOverviewSummary() })
+    }
     const posts = trash ? await getTrashedPosts() : await getAllPosts()
     return adminCachedJson({ posts })
   } catch {

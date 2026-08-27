@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { runMarketingInsights } from "@/lib/marketing/insights/runner"
+import { persistWeeklyAdLeadReport } from "@/lib/marketing/weekly-report-store"
 
 // Gemini 왕복 + 숫자 검증 실패 시 1회 재시도까지 들어갈 수 있어 기본(10초)으로는 모자란다.
 export const maxDuration = 60
@@ -21,7 +22,11 @@ export async function GET(req: NextRequest) {
   // force=true — 크론은 캐시(digest 히트)를 건너뛰고 주 1회 새 브리핑을 만든다.
   // mode=quality — 주 1회 백그라운드 실행이라 사람이 화면에서 기다리지 않는다. 지연보다 품질.
   // runner 는 자체 try/catch 로 실패를 stale/error 로 강등하므로 여기서 throw 되지 않는다.
-  const result = await runMarketingInsights({ force: true, mode: "quality" })
+  // AI 브리핑과 결정론적 보고서를 병렬·독립 실행한다. 한쪽 장애가 다른 산출물을 지우지 않는다.
+  const [result, reportResult] = await Promise.all([
+    runMarketingInsights({ force: true, mode: "quality" }),
+    persistWeeklyAdLeadReport(),
+  ])
 
   // 브리핑 본문은 응답에 싣지 않는다 — 크론 로그는 실행 결과 요약만 남기면 된다
   // (본문은 marketing_insights 에 저장되고 어드민 API 로 조회한다).
@@ -30,5 +35,10 @@ export async function GET(req: NextRequest) {
     error: result.error ?? null,
     retried: result.retried ?? false,
     warnings: result.numerical_warnings?.length ?? 0,
+    report: {
+      from: reportResult.from,
+      period: reportResult.report?.period ?? null,
+      error: reportResult.error ?? null,
+    },
   })
 }

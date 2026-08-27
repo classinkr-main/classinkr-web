@@ -8,21 +8,18 @@
 //  - 이 탭 = **전 소스 신규 유입 + 연락 체크**. 메타·구글·홈페이지·자료실을 가리지 않고
 //    "이 기간에 새로 들어온 것"을 모아 보고, 액션은 연락 여부 도장 하나다.
 //
-// 체크 버튼은 PATCH /api/admin/leads/{id} 로 status="contacted" 를 보낸다. 라우트가
-// status 가 "new" 를 벗어나면 confirmed_at 을 서버 시각으로 함께 찍으므로(app/api/admin/
-// leads/[id]/route.ts sanitizeLeadPatch), 이 한 번의 요청으로 "확인 도장"까지 끝난다.
+// 연락 여부는 상태 버튼이 아니라 실제 연락 로그를 근거로 한다. 이 탭에서는 리드 상세의
+// 연락 기록 폼으로 이동하고, 로그 저장 API가 상태를 연락중으로 함께 맞춘다.
 //
 // 필터·기간은 전부 URL 에 보존한다(?nlRange=30d&nlFrom=&nlTo=&nlGroups=…&nlQ=&nlOnly=1).
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useDeferredValue, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   AlertCircle,
   ArrowUpRight,
-  Check,
   CheckCircle2,
   Inbox,
-  Loader2,
   Search,
 } from "lucide-react"
 
@@ -30,7 +27,6 @@ import { PeriodToggle } from "@/components/admin/PeriodToggle"
 import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import { Skeleton } from "@/components/admin/viz"
 import { formatRelativeTime } from "@/components/admin/campaigns/perf/format"
-import { adminFetchJson } from "@/lib/admin-client"
 import { getLeadMagnetTitle } from "@/lib/lead-magnets"
 import { useUrlState } from "@/lib/use-url-state"
 import {
@@ -45,7 +41,6 @@ import {
 import {
   NEW_LEAD_RANGE_PRESETS,
   countBySourceGroup,
-  describeLeadActionError,
   filterNewLeads,
   isNewLeadRangePreset,
   kstDateKey,
@@ -53,7 +48,6 @@ import {
   parseSourceGroupParam,
   resolveLeadDateRange,
   serializeSourceGroupParam,
-  type LeadDateRange,
   type NewLeadRangePreset,
 } from "@/lib/marketing/new-leads"
 import type { LeadRecord } from "@/lib/repositories/leads"
@@ -97,7 +91,7 @@ export interface NewLeadsTabProps {
   onLeadUpdated: (lead: LeadRecord) => void
 }
 
-export default function NewLeadsTab({ leads, loading, error, onLeadUpdated }: NewLeadsTabProps) {
+export default function NewLeadsTab({ leads, loading, error }: NewLeadsTabProps) {
   // ─── 필터 상태(전부 URL 보존) ────────────────────────────────
   const [rangeParam, setRangeParam] = useUrlState("nlRange", "30d")
   const [fromParam, setFromParam] = useUrlState("nlFrom", "")
@@ -119,13 +113,9 @@ export default function NewLeadsTab({ leads, loading, error, onLeadUpdated }: Ne
     () => resolveLeadDateRange(preset, { from: fromParam, to: toParam }, today),
     [preset, fromParam, toParam, today]
   )
-  // 커스텀 범위가 깨진 동안에는 목록을 비우지 않고 직전 유효 범위를 유지한다.
-  const lastValidRangeRef = useRef<LeadDateRange | null>(null)
-  useEffect(() => {
-    if (resolvedRange) lastValidRangeRef.current = resolvedRange
-  }, [resolvedRange])
+  // 커스텀 범위가 깨진 동안에도 목록을 비우지 않고 안전한 기본 30일 범위를 보여 준다.
   const fallbackRange = useMemo(() => resolveLeadDateRange("30d", null, today)!, [today])
-  const range = resolvedRange ?? lastValidRangeRef.current ?? fallbackRange
+  const range = resolvedRange ?? fallbackRange
   const customInvalid = preset === "custom" && resolvedRange === null
 
   // ─── 파생 목록 ───────────────────────────────────────────────
@@ -150,50 +140,6 @@ export default function NewLeadsTab({ leads, loading, error, onLeadUpdated }: Ne
   )
 
   const list = useVisibleCount(visible.length, PAGE_STEP)
-
-  // ─── 연락함 체크 ─────────────────────────────────────────────
-  // setState 는 비동기라 상태만으로는 연타 중 두 번째 요청을 못 막는다 — 동기 ref 로 잠근다
-  // (MetaTab 의 runningRef · AdLeadsPanel 의 convertingRef 와 같은 패턴).
-  const pendingRef = useRef<Set<string>>(new Set())
-  const [pendingIds, setPendingIds] = useState<readonly string[]>([])
-  const [actionError, setActionError] = useState<{ leadId: string; message: string } | null>(null)
-
-  const markContacted = useCallback(
-    async (lead: LeadRecord) => {
-      if (pendingRef.current.has(lead.id) || isContactedLead(lead)) return
-      pendingRef.current.add(lead.id)
-      setPendingIds((prev) => [...prev, lead.id])
-      setActionError((prev) => (prev?.leadId === lead.id ? null : prev))
-
-      // 낙관적 갱신 — 체크 표시가 즉시 뜬다. confirmed_at 은 서버 시각이 정본이라 여기서
-      // 만든 값은 응답이 오면 그대로 갈아끼운다(실패하면 원본으로 되돌린다).
-      onLeadUpdated({ ...lead, status: "contacted", confirmed_at: new Date().toISOString() })
-
-      try {
-        const data = await adminFetchJson<{ lead: LeadRecord }>(`/api/admin/leads/${lead.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ status: "contacted" }),
-        })
-        if (data?.lead) onLeadUpdated(data.lead)
-      } catch (e) {
-        onLeadUpdated(lead)
-        // 원본 에러 문자열을 그대로 띄우면 진짜 장애 때 "Failed to fetch" 가 뜬다 —
-        // 서버가 준 한국어 메시지는 살리고 네트워크·상태코드만 사람 문구로 옮긴다.
-        setActionError({ leadId: lead.id, message: describeLeadActionError(e) })
-      } finally {
-        pendingRef.current.delete(lead.id)
-        setPendingIds((prev) => prev.filter((id) => id !== lead.id))
-      }
-    },
-    [onLeadUpdated]
-  )
-
-  // 실패 문구는 그 행에 붙어 있는데, 필터를 바꾸면 그 행이 목록에서 사라져도 문구만 남았다.
-  // 화면이 갈아엎어지는 시점(기간·묶음·검색·미연락 변경)에 함께 지운다 — 재시도로도 지워지지만
-  // 사용자가 다른 조건으로 넘어가면 이미 지나간 실패다.
-  useEffect(() => {
-    setActionError(null)
-  }, [range.since, range.until, groupsParam, deferredQuery, onlyUncontacted])
 
   const toggleGroup = useCallback(
     (group: LeadSourceGroup) => {
@@ -462,10 +408,8 @@ export default function NewLeadsTab({ leads, loading, error, onLeadUpdated }: Ne
             {rows.map((lead) => {
               const group = getLeadSourceGroup(lead)
               const contacted = isContactedLead(lead)
-              const pending = pendingIds.includes(lead.id)
               const adLabel = adLabelOf(lead)
               const contact = lead.phone?.trim() || lead.email?.trim() || null
-              const rowError = actionError?.leadId === lead.id ? actionError.message : null
 
               return (
                 <li key={lead.id} className="px-3.5 py-2.5">
@@ -514,28 +458,16 @@ export default function NewLeadsTab({ leads, loading, error, onLeadUpdated }: Ne
                         연락함
                       </span>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => void markContacted(lead)}
-                        disabled={pending}
-                        aria-label={`${lead.org?.trim() || lead.name?.trim() || "이 리드"} 연락함으로 표시`}
+                      <Link
+                        href={`/admin/crm/customers/leads?lead=${encodeURIComponent(lead.id)}&action=contact`}
+                        aria-label={`${lead.org?.trim() || lead.name?.trim() || "이 리드"} 연락 기록 남기기`}
                         className="inline-flex shrink-0 items-center gap-1 rounded-md border border-[#e8e8e4] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#111110] transition hover:border-[#084734] hover:text-[#084734] disabled:opacity-60"
                       >
-                        {pending ? (
-                          <Loader2 aria-hidden className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Check aria-hidden className="h-3.5 w-3.5" />
-                        )}
-                        연락함
-                      </button>
+                        <ArrowUpRight aria-hidden className="h-3.5 w-3.5" />
+                        연락 기록
+                      </Link>
                     )}
                   </div>
-
-                  {rowError && (
-                    <p role="alert" className="mt-1.5 text-[11px] font-semibold text-[#B85C33]">
-                      {rowError} — 상태는 되돌렸습니다.
-                    </p>
-                  )}
                 </li>
               )
             })}

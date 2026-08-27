@@ -46,11 +46,12 @@ describe("CrmSyncStrip — 낮음 상태 렌더 규약", () => {
     expect(summary?.rows.review).toBe(13)
   })
 
-  it("펼침은 버튼+aria-expanded, 미연결 상위는 ?name= 딥링크, 위생은 rev-sheet 링크(실행 버튼 없음)", () => {
+  it("펼침은 버튼+aria-expanded, 미연결 상위는 ?name= 딥링크, 과거 이력을 현재 액션으로 오인시키지 않는다", () => {
     const source = readFileSync(stripPath, "utf8")
     expect(source).toContain("aria-expanded={expanded}")
     expect(source).toContain("/admin/crm/matching?name=")
-    expect(source).toContain('href="/admin/crm/deals/rev-sheet"')
+    expect(source).toContain("자동 재생성 대상이 아닙니다")
+    expect(source).not.toContain("후보 재생성 권장")
     expect(source).toContain('href="/admin/crm/matching"')
     // "후보 재생성"은 실행 버튼이 아니라 링크여야 한다 — 이 컴포넌트에서 쓰기 요청 금지.
     expect(source).not.toContain('method: "POST"')

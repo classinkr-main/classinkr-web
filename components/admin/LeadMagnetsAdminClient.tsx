@@ -42,6 +42,7 @@ import {
   type LeadMagnetStatus,
   type LeadMagnetTier,
 } from "@/lib/lead-magnets"
+import type { LeadMagnetStorageState } from "@/lib/repositories/lead-magnets"
 
 type EditorTab = "basic" | "copy" | "content" | "sales" | "routing"
 
@@ -76,10 +77,12 @@ const EDITOR_TABS: Array<{ value: EditorTab; label: string }> = [
 
 interface Props {
   initialLeadMagnets: LeadMagnet[]
+  initialStorage: LeadMagnetStorageState
 }
 
 interface LeadMagnetsResponse {
   leadMagnets: LeadMagnet[]
+  storage: LeadMagnetStorageState
 }
 
 interface LeadMagnetMetricRow {
@@ -321,7 +324,7 @@ function selectValue<T extends string>(
       id={id}
       value={value}
       onChange={(event) => onChange(event.target.value as T)}
-      className="h-10 w-full rounded-[6px] border border-black/[0.08] bg-white px-3 text-sm outline-none focus:border-[#084734]"
+      className="h-11 w-full rounded-[6px] border border-black/[0.08] bg-white px-3 text-sm outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/20"
     >
       {options.map((option) => (
         <option key={option.value} value={option.value}>
@@ -435,6 +438,7 @@ function PerformancePanel({
   onRefresh: () => void
   onSelect: (leadMagnet: LeadMagnet) => void
 }) {
+  const [showMobileRows, setShowMobileRows] = useState(false)
   const titleBySlug = new Map(leadMagnets.map((item) => [item.slug, item.title]))
   const metricBySlug = new Map(metrics?.byLeadMagnet.map((item) => [item.slug, item]) ?? [])
   const rows = leadMagnets.map((item) => ({
@@ -478,7 +482,7 @@ function PerformancePanel({
               key={option}
               type="button"
               onClick={() => onDaysChange(option)}
-              className={`h-8 rounded-[6px] border px-3 text-[12px] font-semibold ${
+              className={`min-h-11 rounded-[6px] border px-3 text-[12px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25 ${
                 days === option
                   ? "border-[#084734]/20 bg-[#ECFDF5] text-[#084734]"
                   : "border-black/[0.08] bg-white text-[#615D59] hover:bg-[#F6F5F4]"
@@ -491,7 +495,7 @@ function PerformancePanel({
             type="button"
             onClick={onRefresh}
             disabled={loading}
-            className="flex h-8 items-center gap-1.5 rounded-[6px] border border-black/[0.08] bg-white px-3 text-[12px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] disabled:opacity-50"
+            className="flex min-h-11 items-center gap-1.5 rounded-[6px] border border-black/[0.08] bg-white px-3 text-[12px] font-semibold text-[#615D59] hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25 disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
             갱신
@@ -533,7 +537,17 @@ function PerformancePanel({
             </div>
           </div>
 
-          <div className="mt-5 overflow-hidden rounded-xl border border-black/[0.08]">
+          <button
+            type="button"
+            aria-expanded={showMobileRows}
+            onClick={() => setShowMobileRows((value) => !value)}
+            className="mt-5 flex min-h-11 w-full items-center justify-between rounded-[6px] border border-black/[0.08] bg-white px-3 text-[12px] font-bold text-[#31302E] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25 xl:hidden"
+          >
+            <span>자료별 성과 {rows.length}개</span>
+            <span>{showMobileRows ? "접기" : "보기"}</span>
+          </button>
+
+          <div className={`${showMobileRows ? "mt-2 block" : "hidden"} overflow-hidden rounded-xl border border-black/[0.08] xl:mt-5 xl:block`}>
             <div className="grid grid-cols-[minmax(180px,1.7fr)_repeat(9,minmax(64px,0.7fr))_96px] gap-2 bg-[#F6F5F4] px-4 py-2 text-[11px] font-bold text-[#615D59] max-xl:hidden">
               <span>자료</span>
               <span>노출</span>
@@ -637,7 +651,7 @@ function TrackingLinkRow({
           <p className="text-[12px] font-bold text-[#111110]">{label}</p>
           <p className="mt-1 truncate text-[12px] text-[#615D59]">{value}</p>
         </div>
-        <Button type="button" variant="outline" onClick={onCopy} className="h-9 shrink-0">
+        <Button type="button" variant="outline" onClick={onCopy} className="h-11 shrink-0">
           <Copy className="h-4 w-4" />
           복사
         </Button>
@@ -675,8 +689,9 @@ function OperationCheckPanel({ issues }: { issues: string[] }) {
   )
 }
 
-export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
+export default function LeadMagnetsAdminClient({ initialLeadMagnets, initialStorage }: Props) {
   const [leadMagnets, setLeadMagnets] = useState<LeadMagnet[]>(initialLeadMagnets)
+  const [storage, setStorage] = useState(initialStorage)
   const [selectedSlug, setSelectedSlug] = useState(initialLeadMagnets[0]?.slug ?? "")
   const [draft, setDraft] = useState<LeadMagnet>(() =>
     initialLeadMagnets[0] ? cloneLeadMagnet(initialLeadMagnets[0]) : emptyLeadMagnet()
@@ -776,6 +791,7 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
         { ttlMs: 30_000, force: !showLoading }
       )
       setLeadMagnets(data.leadMagnets)
+      setStorage(data.storage)
       const current = data.leadMagnets.find((item) => item.slug === selectedSlug) ?? data.leadMagnets[0]
       if (current && !selectedSlug) syncEditor(current)
     } catch {
@@ -820,6 +836,7 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
   }
 
   function createNew() {
+    if (!storage.writable) return
     const next = emptyLeadMagnet()
     syncEditor(next, "")
     setTab("basic")
@@ -828,6 +845,7 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
   }
 
   function duplicateCurrent() {
+    if (!storage.writable) return
     const baseSlug = `${draft.slug}-copy`
     const slug = slugify(baseSlug)
     const next = {
@@ -878,6 +896,7 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
   }
 
   async function save() {
+    if (!storage.writable) return
     setSaving(true)
     setNotice("")
     setError("")
@@ -907,6 +926,7 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
   }
 
   async function remove() {
+    if (!storage.writable) return
     if (!originalSlug) {
       createNew()
       return
@@ -954,6 +974,31 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
 
   return (
     <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[360px_minmax(0,1fr)] lg:p-8">
+      {storage.source !== "supabase" ? (
+        <div
+          role={storage.writable ? "status" : "alert"}
+          className={`flex gap-3 rounded-xl border p-4 text-[13px] leading-5 lg:col-span-2 ${
+            storage.writable
+              ? "border-[#084734]/15 bg-[#ECFDF5] text-[#084734]"
+              : "border-[#B85C33]/20 bg-[#FFF7ED] text-[#8A4526]"
+          }`}
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-bold">
+              {storage.writable ? "로컬 개발 저장소" : "읽기 전용 폴백"}
+            </p>
+            <p className="mt-1">
+              {storage.writable
+                ? "현재 data/lead-magnets.json에 저장합니다. 이 변경은 배포 데이터베이스와 자동 동기화되지 않습니다."
+                : storage.reason === "table-missing"
+                  ? "운영 lead_magnets 테이블이 없어 번들 JSON을 표시 중입니다. 마이그레이션과 초기 데이터 이관 전에는 생성·수정·삭제할 수 없습니다."
+                  : "운영 lead_magnets 테이블이 비어 있어 번들 JSON을 표시 중입니다. 초기 데이터 이관 전에는 생성·수정·삭제할 수 없습니다."}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       <PerformancePanel
         leadMagnets={leadMagnets}
         selectedSlug={selectedSlug}
@@ -992,17 +1037,33 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
             </div>
           </div>
           <div className="mt-4 flex gap-2">
-            <Button type="button" onClick={createNew} className="h-10 flex-1">
+            <Button type="button" onClick={createNew} disabled={!storage.writable} className="h-11 flex-1">
               <Plus className="h-4 w-4" />
               새 자료
             </Button>
-            <Button type="button" variant="outline" onClick={() => refresh()} disabled={loading} className="h-10">
+            <Button type="button" variant="outline" onClick={() => refresh()} disabled={loading} className="h-11">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "새로고침"}
             </Button>
           </div>
         </div>
 
-        <div className="space-y-2">
+        <label className="block space-y-1.5 lg:hidden">
+          <span className="text-[12px] font-bold text-[#31302E]">편집할 자료</span>
+          <select
+            value={selectedSlug}
+            onChange={(event) => {
+              const selected = leadMagnets.find((item) => item.slug === event.target.value)
+              if (selected) selectMagnet(selected)
+            }}
+            className="h-11 w-full rounded-[6px] border border-black/[0.08] bg-white px-3 text-sm text-[#31302E] outline-none focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/20"
+          >
+            {leadMagnets.map((item) => (
+              <option key={item.slug} value={item.slug}>{item.title}</option>
+            ))}
+          </select>
+        </label>
+
+        <div className="hidden space-y-2 lg:block">
           {leadMagnets.map((item) => (
             <button
               key={item.slug}
@@ -1058,22 +1119,22 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
           </div>
           <div className="flex flex-wrap gap-2">
             {draft.resourceUrl ? (
-              <Button asChild type="button" variant="outline" className="h-10">
+              <Button asChild type="button" variant="outline" className="h-11">
                 <Link href={draft.resourceUrl} target="_blank">
                   <ArrowUpRight className="h-4 w-4" />
                   보기
                 </Link>
               </Button>
             ) : null}
-            <Button type="button" variant="outline" onClick={duplicateCurrent} className="h-10">
+            <Button type="button" variant="outline" onClick={duplicateCurrent} disabled={!storage.writable} className="h-11">
               <Copy className="h-4 w-4" />
               복사
             </Button>
-            <Button type="button" variant="outline" onClick={remove} disabled={saving} className="h-10 text-[#B85C33]">
+            <Button type="button" variant="outline" onClick={remove} disabled={saving || !storage.writable} className="h-11 text-[#B85C33]">
               <Trash2 className="h-4 w-4" />
               삭제
             </Button>
-            <Button type="button" onClick={save} disabled={saving} className="h-10">
+            <Button type="button" onClick={save} disabled={saving || !storage.writable} className="h-11">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               저장
             </Button>
@@ -1093,7 +1154,7 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
               key={item.value}
               type="button"
               onClick={() => setTab(item.value)}
-              className={`h-9 shrink-0 rounded-[6px] border px-4 text-sm font-semibold ${
+              className={`h-11 shrink-0 rounded-[6px] border px-4 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25 ${
                 tab === item.value
                   ? "border-[#084734]/20 bg-[#ECFDF5] text-[#084734]"
                   : "border-black/[0.08] bg-white text-[#615D59] hover:bg-[#F6F5F4]"
@@ -1105,6 +1166,7 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
         </div>
 
         <div className="space-y-6 p-4 sm:p-6">
+          <fieldset disabled={!storage.writable} className="contents">
           {tab === "basic" && (
             <div className="grid gap-5 xl:grid-cols-2">
               <Field label="제목">
@@ -1146,7 +1208,7 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
                   onChange={(event) => updateDraft({ estimatedMinutes: Number(event.target.value) || 1 })}
                 />
               </Field>
-              <label className="flex min-h-10 items-center gap-2 rounded-[6px] border border-black/[0.08] px-3 text-sm font-semibold text-[#31302E]">
+              <label className="flex min-h-11 items-center gap-2 rounded-[6px] border border-black/[0.08] px-3 text-sm font-semibold text-[#31302E]">
                 <input
                   type="checkbox"
                   checked={draft.published}
@@ -1332,6 +1394,7 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets }: Props) {
               </div>
             </div>
           )}
+          </fieldset>
         </div>
       </main>
     </div>

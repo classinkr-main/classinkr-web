@@ -1,5 +1,6 @@
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import { RESPONSE_TARGET_SOURCES } from "@/lib/crm/lead-attribution"
+import { isLeadAwaitingResponse } from "@/lib/crm/lead-response-status"
 
 // 리드 보드의 순수 규칙 — 뷰 축·필터 축·컬럼 분배·시간 술어.
 //
@@ -48,7 +49,7 @@ export function isResponseTargetLead(lead: LeadRecord) {
 }
 
 export function isUnrespondedLead(lead: LeadRecord) {
-  return lead.status === "new" && isResponseTargetLead(lead)
+  return isLeadAwaitingResponse(lead)
 }
 
 // 공개 채널(문의·데모·뉴스레터·Meta 리드애즈 등)에서 들어와 아직 검토되지 않은 리드.
