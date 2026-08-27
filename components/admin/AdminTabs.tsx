@@ -8,7 +8,10 @@ import { cn } from "@/lib/utils"
 export interface AdminTabItem<T extends string = string> {
   value: T
   label: string
+  /** 탭 아래 보조 설명. 띠가 2줄이 되므로 상시 노출이 필요한 곳에만 쓴다 — 그 외에는 title. */
   description?: string
+  /** 호버·포커스 시에만 뜨는 설명. 띠 높이를 늘리지 않는다. */
+  title?: string
   icon?: ReactNode
   badge?: ReactNode
 }
@@ -111,6 +114,7 @@ export default function AdminTabs<T extends string>({
               aria-controls={panelId}
               tabIndex={active ? 0 : -1}
               onClick={() => selectTab(item.value)}
+              title={item.title}
               className={cn(
                 "inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 sm:flex-none",
                 active

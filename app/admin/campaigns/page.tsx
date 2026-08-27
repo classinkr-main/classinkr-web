@@ -6,7 +6,6 @@ import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { Activity, Mail, Plus, RefreshCw } from "lucide-react"
 import AdminTabs from "@/components/admin/AdminTabs"
-import { MarketingCrossLinks } from "@/components/admin/MarketingCrossLinks"
 import { ChartSkeleton } from "@/components/admin/viz"
 import type { ChannelEfficiencyRow } from "@/components/admin/campaigns/ChannelEfficiencyChart"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
@@ -626,14 +625,9 @@ export default function AdminCampaignsPage() {
       <header className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 pb-5 pt-6 sm:px-6 lg:px-9 lg:pt-8">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#615D59]">
-              <span>ADMIN</span>
-              <span className="opacity-50">›</span>
-              <span>그로스</span>
-              <span className="opacity-50">›</span>
-              <span>캠페인</span>
-            </div>
-            <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[30px]">
+            {/* 브레드크럼 제거(2026-08-27 크롬 다이어트) — 사이드바가 '캠페인'을 활성으로
+                표시하고 바로 아래 h1 이 같은 말을 반복했다. 경로를 세 번 말할 이유가 없다. */}
+            <h1 className="text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[30px]">
               캠페인
             </h1>
           </div>
@@ -672,9 +666,9 @@ export default function AdminCampaignsPage() {
             items={CAMPAIGN_TABS.map((tab) => ({
               value: tab.id,
               label: tab.label,
-              // 라이브/준비 중 구분(sub)은 선언만 있고 렌더되지 않던 죽은 데이터였다 — 정직 라벨은
-              // 보여야 정직하다(2026-08-18). AdminTabs가 420px 미만에서는 자동으로 숨긴다.
-              description: tab.sub,
+              // 설명(sub)은 처음 한 번만 쓸모 있고 그 뒤로는 탭 띠를 2줄로 만드는 비용이다
+              // (2026-08-27 크롬 다이어트). 정보는 버리지 않고 title 로 내린다.
+              title: tab.sub,
               icon:
                 tab.id === "meta" ? (
                   <Activity className="h-3.5 w-3.5" />
@@ -704,12 +698,6 @@ export default function AdminCampaignsPage() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* 마케팅 워크스페이스 크로스링크 — 형제 마케팅 표면으로 이동(사이드바 그룹 보조).
-          공개 행사는 헤더 "행사 관리" CTA로 이미 도달 가능하므로 여기선 제외(한 목적지 중복 라벨 방지). */}
-      <div className="border-b border-[rgba(0,0,0,0.08)] bg-[#FAFAF8] px-4 py-2.5 sm:px-6 lg:px-9">
-        <MarketingCrossLinks currentHref="/admin/campaigns" excludeHrefs={["/admin/events"]} />
       </div>
 
       {/* Tab content — 단일 tabpanel 컨테이너(2026-08-18 a11y). AdminTabs의 aria-controls가
