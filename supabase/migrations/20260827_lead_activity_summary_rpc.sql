@@ -36,7 +36,11 @@ as $$
   profiles as (
     select
       p.lead_id,
-      array_agg(distinct p.provider) filter (where p.provider is not null) as providers
+      -- order by 를 빼면 array_agg 순서가 실행계획에 따라 달라진다. 이 배열은 보드 배지
+      -- 툴팁에서 그대로 join 되므로 순서가 곧 화면 문자열이고, 앱 폴백(sortProviders)도
+      -- 같은 사전순을 쓴다 — 두 경로가 같은 문자열을 만들어야 한다.
+      array_agg(distinct p.provider order by p.provider)
+        filter (where p.provider is not null) as providers
     from public.user_profiles p
     where p.lead_id is not null
     group by p.lead_id

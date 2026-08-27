@@ -63,11 +63,24 @@ interface SupabaseColumnError {
   hint?: string;
 }
 
+/**
+ * 리드 사본을 들고 캐시하는 소비자(CRM 홈 우선순위 큐 등)가 구독한다.
+ * 리스너는 자기 모듈 캐시를 비우기만 한다 — I/O·await 금지(여기서 던지면 쓰기가 깨진다).
+ * 구독 방향이 반대면(소비자를 여기서 import) 소비자가 이미 이 모듈을 읽고 있어 순환이 된다.
+ */
+type LeadMutationListener = () => void;
+const leadMutationListeners = new Set<LeadMutationListener>();
+
+export function onLeadsMutated(listener: LeadMutationListener) {
+  leadMutationListeners.add(listener);
+}
+
 function invalidateLeadReadCaches() {
   // Overview는 요청자 쿠키와 무관한 서비스 롤 집계라 서버 공용 캐시를 쓴다.
   // 리드 쓰기 직후에는 다음 읽기가 반드시 새 값을 보도록 즉시 만료한다.
   revalidateTag(ADMIN_LEADS_OVERVIEW_CACHE_TAG, { expire: 0 });
   leadRowsMemo.clear();
+  for (const listener of leadMutationListeners) listener();
 }
 
 function returnAfterLeadMutation<T>(value: T): T {

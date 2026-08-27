@@ -1,6 +1,7 @@
 "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { fetchAllSupabaseRows } from "@/lib/repositories/branch-hw"
 
 export type DocsArticleStatus = "draft" | "review" | "published" | "archived"
 export type DocsArticleVisibility = "public" | "unlisted" | "internal"
@@ -223,7 +224,6 @@ type DocsArticleVersionListRow = Omit<DocsArticleVersionRow, "content_markdown" 
 
 const VERSION_LIST_COLUMNS =
   "id, article_id, version_number, title, description, change_note, created_by, created_at"
-const VERSION_LIST_LIMIT = 50
 
 interface DocsArticleDraftRow {
   article_id: string
@@ -626,19 +626,25 @@ export async function createDocsArticleVersionSnapshot(
   return writeVersionSnapshot(detail, changeNote, createdBy)
 }
 
+// 본문 2컬럼을 뺀 뒤로는 무거움 없이 전량 반환 가능 — PostgREST 1000행 캡은 id 키셋으로
+// 우회하고(fetchAllSupabaseRows), 캡 없이는 버전 51개 이후로 롤백이 막혔었다.
+// 커서는 id 오름차순으로 읽으므로 소비자가 기대하는 version_number 내림차순은 JS 에서 재정렬한다.
 export async function listDocsArticleVersions(
   articleId: string
 ): Promise<DocsArticleVersionListItem[]> {
   const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase
-    .from("docs_article_versions")
-    .select(VERSION_LIST_COLUMNS)
-    .eq("article_id", articleId)
-    .order("version_number", { ascending: false })
-    .limit(VERSION_LIST_LIMIT)
-  if (error) throw error
+  const rows = await fetchAllSupabaseRows<DocsArticleVersionListRow>((afterId, limit) => {
+    let query = supabase
+      .from("docs_article_versions")
+      .select(VERSION_LIST_COLUMNS)
+      .eq("article_id", articleId)
+    if (afterId) query = query.gt("id", afterId)
+    return query.order("id", { ascending: true }).limit(limit)
+  })
 
-  return ((data ?? []) as DocsArticleVersionListRow[]).map(rowToVersionListItem)
+  return rows
+    .sort((left, right) => right.version_number - left.version_number)
+    .map(rowToVersionListItem)
 }
 
 export async function rollbackDocsArticleToVersion(

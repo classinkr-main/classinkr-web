@@ -501,6 +501,36 @@ export async function getAllCampaigns(limit = 200, offset = 0): Promise<Campaign
   return (data ?? []).map(rowToCampaign);
 }
 
+export interface CampaignLinkLabel {
+  id: string | number;
+  subject: string | null;
+}
+
+/**
+ * 링크 피커(D1-6)용 경량 캠페인 라벨 조회 — subject만 필요한 소비처가
+ * getAllCampaigns()의 select("*")(본문 HTML 포함)를 끌어오지 않도록 분리한다.
+ * getAllCampaigns()와 동일한 USE_SUPABASE 모드 분기·JSON 폴백을 따른다 —
+ * 폴백을 우회하면 Supabase 미구성 로컬 환경에서 이메일 캠페인이 조용히 사라진다.
+ */
+export async function listCampaignLinkLabels(limit = 200): Promise<CampaignLinkLabel[]> {
+  if (!USE_SUPABASE) {
+    const { getAllCampaigns: jsonGet } = await import("@/lib/marketing-data");
+    const campaigns = await jsonGet();
+    return campaigns.slice(0, limit).map((c) => ({ id: c.id, subject: c.subject ?? null }));
+  }
+
+  const { data, error } = await sb()
+    .from("email_campaigns")
+    .select("id, subject")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`[marketing] 캠페인 라벨 조회 실패: ${error.message}`);
+  return ((data ?? []) as { id: string | number; subject: string | null }[]).map((row) => ({
+    id: row.id,
+    subject: row.subject ?? null,
+  }));
+}
+
 export const MARKETING_CAMPAIGNS_CACHE_TAG = "marketing-campaigns";
 
 // summarizeCampaigns(branch summary의 "최근 30일 캠페인" 위젯)처럼 초단위 신선도가

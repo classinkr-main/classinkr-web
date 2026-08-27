@@ -3,6 +3,7 @@ import { verifyAdmin } from "@/lib/admin-auth"
 import { getAllEventsForAdmin } from "@/lib/repositories/public-events"
 import { getMetaCampaignDashboard } from "@/lib/meta/marketing"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { listCampaignLinkLabels } from "@/lib/repositories/marketing"
 import {
   emailCampaignLabel,
   eventLabel,
@@ -31,14 +32,10 @@ type SmsRow = { id: string | number; message?: string | null }
 
 async function safeEmailCandidates(): Promise<Candidate[]> {
   try {
-    // 라벨(subject)만 필요 — getAllCampaigns()의 select("*")는 이메일 본문 HTML까지
-    // 끌어온다. campaign-rollup-sources.ts:79 선례와 같은 좁은 select로 직접 조회한다.
-    const { data } = await createSupabaseAdminClient()
-      .from("email_campaigns")
-      .select("id, subject")
-      .order("created_at", { ascending: false })
-      .limit(200)
-    return ((data ?? []) as { id: string | number; subject?: string | null }[]).map((row) => ({
+    // 라벨(subject)만 필요 — listCampaignLinkLabels()가 getAllCampaigns()와 같은
+    // USE_SUPABASE 모드 분기(JSON 폴백 포함)를 따르면서 좁은 select로 조회한다.
+    const campaigns = await listCampaignLinkLabels()
+    return campaigns.map((row) => ({
       id: String(row.id),
       label: emailCampaignLabel(row),
     }))

@@ -9,6 +9,7 @@ import { getVerifiedAdminContextForPage } from "@/lib/admin/page-auth"
 import { getAdminVisitorStats, type VisitorStatsPayload } from "@/lib/admin-visitor-stats"
 import type { OverviewLeadSummary } from "@/lib/admin/overview/lead-summary"
 import { getCachedOverviewLeadSummary } from "@/lib/admin/overview/lead-summary-cache"
+import { getCachedOsSummary, type OsSummary } from "@/lib/admin/overview/os-summary"
 import { getLeadActionStats } from "@/lib/repositories/leads"
 
 /**
@@ -18,6 +19,7 @@ import { getLeadActionStats } from "@/lib/repositories/leads"
  *  - leadOverview   ← /api/admin/leads?scope=overview  (getCachedOverviewLeadSummary)
  *  - visitorStats   ← /api/admin/visitor-stats?range=7 (getAdminVisitorStats)
  *  - leadActionKpis ← /api/admin/crm/action-kpis       (getLeadActionStats)
+ *  - osSummary      ← /api/admin/os-summary            (getCachedOsSummary)
  *
  * 보안: 이 저장소에는 middleware가 없고 app/admin/layout.tsx의 가드는 보안 경계가 아니다.
  * 실제 차단은 각 라우트의 verifyAdmin/requireVerifiedAdminContext이므로, 프리페치도
@@ -30,12 +32,15 @@ export interface OverviewInitialData {
   visitorStats: VisitorStatsPayload | null
   /** 화면이 실제로 소비하는 두 수치만 — 나머지 LeadActionStats 필드는 RSC 페이로드에 싣지 않는다. */
   leadActionKpis: { unrespondedCount: number; unresponded24hCount: number } | null
+  /** 라우트 응답과 같은 객체 — 소스별 health를 포함해야 실패를 0으로 오인하지 않는다. */
+  osSummary: OsSummary | null
 }
 
 const EMPTY_INITIAL_DATA: OverviewInitialData = {
   leadOverview: null,
   visitorStats: null,
   leadActionKpis: null,
+  osSummary: null,
 }
 
 // 서버 프리페치가 첫 HTML을 붙잡지 않게 하는 상한.
@@ -76,15 +81,18 @@ export async function prefetchOverviewInitialData(): Promise<OverviewInitialData
 
   // 라우트별 허용 역할과 문자 그대로 같은 목록을 쓴다.
   // - leads?scope=overview·crm/action-kpis: requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
-  // - visitor-stats: verifyAdmin(req) → GET 기본값 = BRANCH_READ_ADMIN_API_ROLES
+  // - visitor-stats·os-summary: verifyAdmin(req) → GET 기본값 = BRANCH_READ_ADMIN_API_ROLES
   const crmAllowed = hasAdminApiRole(admin.role, CRM_STAFF_ADMIN_API_ROLES)
   const readAllowed = hasAdminApiRole(admin.role, BRANCH_READ_ADMIN_API_ROLES)
 
-  const [leadOverview, visitorStats, leadActions] = await Promise.all([
+  const [leadOverview, visitorStats, leadActions, osSummary] = await Promise.all([
     crmAllowed ? settleWithinBudget(() => getCachedOverviewLeadSummary()) : null,
     // 클라이언트가 부르는 URL은 ?range=7 — parseVisitorStatsRange("7")과 같은 값을 넘긴다.
     readAllowed ? settleWithinBudget(() => getAdminVisitorStats(7)) : null,
     crmAllowed ? settleWithinBudget(() => getLeadActionStats()) : null,
+    // 라우트가 부르는 것과 같은 캐시 엔트리 — 콜드 미스여도 예산을 넘기면 null로 떨어져
+    // 클라이언트가 기존대로 /api/admin/os-summary를 탄다(그때는 이 계산이 이미 웜).
+    readAllowed ? settleWithinBudget(() => getCachedOsSummary()) : null,
   ])
 
   return {
@@ -96,5 +104,6 @@ export async function prefetchOverviewInitialData(): Promise<OverviewInitialData
           unresponded24hCount: leadActions.unresponded24hCount,
         }
       : null,
+    osSummary,
   }
 }

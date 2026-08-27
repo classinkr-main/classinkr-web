@@ -6,7 +6,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { AlertTriangle, CalendarDays, ChevronLeft, RefreshCw } from "lucide-react"
 import SyncStatusBar from "./SyncStatusBar"
 import type { DealModalDeal } from "./sections/DealModal"
-import { adminFetchJson, clearBranchRequestCache, useBranchJson } from "./client-api"
+import { adminFetchJson, clearBranchRequestCache, useBranchJson, type BranchJsonState } from "./client-api"
 import { adminFetchJsonCached } from "@/lib/admin-client"
 import { buildCrmSyncSummary, type CrmSyncSummary, type RevSyncCoverageView } from "@/lib/crm/rev-sync-health"
 import { PERIODS, PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
@@ -143,7 +143,19 @@ const BranchAiInsights = dynamic(() => import("./sections/BranchAiInsights"), {
   loading: () => <div className="h-96 animate-pulse rounded-xl bg-[#f0f0ec]" />,
 })
 
-export default function BranchDashboardClient() {
+/** 페이지 서버 프리페치가 내려주는 첫 화면 summary 응답 + 그 응답이 대응하는 요청 URL. */
+export interface BranchSummaryPrefetch {
+  url: string
+  data: BranchSummaryResponse
+}
+
+// initialData가 없으면(비인증·역할 부족·프리페치 실패·기본 조합이 아닌 딥링크) 이 화면은
+// 지금까지와 100% 동일하게 마운트 후 클라이언트 페치로만 채워진다.
+export default function BranchDashboardClient({
+  initialData = null,
+}: {
+  initialData?: BranchSummaryPrefetch | null
+}) {
   // 장부 등 외부에서 `?tab=pipeline&team=BD&period=M&month=2026-06` 딥링크로 진입할 수 있게
   // 초기 필터를 URL에서 결정한다(탭과 동일 패턴 — 마운트 시 1회 파싱).
   const searchParams = useSearchParams()
@@ -353,7 +365,25 @@ export default function BranchDashboardClient() {
   const summaryUrl = `/api/admin/branch/summary?team=${team}&period=${period}${monthQuery}${summaryViewQuery}`
   const kpiUrl = `/api/admin/branch/kpi?team=${team}&period=${period}${monthQuery}`
   const dataNeeds = getBranchTabDataNeeds(activeTab)
-  const summary = useBranchJson<BranchSummaryResponse>(summaryUrl, refreshKey)
+  // 서버 프리페치 시드 — 페이지(app/admin/branch/page.tsx)가 라우트와 같은 조립 함수로
+  // 만들어 둔 첫 화면 summary다. 지금 URL·refreshKey와 정확히 일치할 때만 쓰고, 그동안
+  // useBranchJson은 요청 자체를 만들지 않는다(enabled=false). 필터·탭 변경이나 새로고침으로
+  // 키가 한 번이라도 벗어나면 시드는 폐기되어 다시 살아나지 않는다 — 이후는 전부 기존 페치 경로.
+  const summaryStateKey = `${refreshKey}:${summaryUrl}`
+  const [summarySeedLive, setSummarySeedLive] = useState(initialData != null)
+  const summarySeed =
+    summarySeedLive && initialData && `0:${initialData.url}` === summaryStateKey
+      ? initialData
+      : null
+  useEffect(() => {
+    if (summarySeedLive && summarySeed == null) setSummarySeedLive(false)
+  }, [summarySeedLive, summarySeed])
+  const summaryFetched = useBranchJson<BranchSummaryResponse>(summaryUrl, refreshKey, {
+    enabled: summarySeed == null,
+  })
+  const summary: BranchJsonState<BranchSummaryResponse> = summarySeed
+    ? { key: summaryStateKey, data: summarySeed.data, error: null, loading: false, stale: false, staleSince: null }
+    : summaryFetched
   const kpi = useBranchJson<BranchKpiResponse>(kpiUrl, refreshKey, { enabled: dataNeeds.kpi })
   const monthOptions = useMemo(() => buildMonthOptions(new Date()), [])
   const activePeriodLabel = period === "M" ? formatMonthLabel(selectedMonth) : PERIOD_LABEL[period]

@@ -15,8 +15,9 @@ import {
   type CrmPrioritySource,
 } from "@/lib/crm/priority"
 import { classifyTodayCallSlot, isMetaLeadItem } from "@/lib/crm/today-calls"
-import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
-import { listCrmTasks, type CrmTaskRecord } from "@/lib/repositories/crm-tasks"
+import { getLeads, onLeadsMutated, type LeadRecord } from "@/lib/repositories/leads"
+import { listCrmTasks, onCrmTasksMutated, type CrmTaskRecord } from "@/lib/repositories/crm-tasks"
+import { onContactLogsMutated } from "@/lib/repositories/contact-logs"
 import { getLeadsActivitySummary, type LeadActivityBadge } from "@/lib/repositories/lead-activity"
 import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
 import { buildDemoSignalIndex } from "@/lib/crm/demo-signal"
@@ -220,7 +221,9 @@ export function selectVisiblePriorityItems(
 // - 참여 신호·데모 일정은 원래도 보조 지표라 실패해도 경고 없이 빈 값으로 빠지며,
 //   complete 판정에도 넣지 않는다(원본 동작 유지).
 // - options.now가 주어진 호출(테스트·고정 시각)은 캐시를 읽지도 쓰지도 않는다.
-// - 이 파일에는 쓰기 경로가 없다 — 리드 상태 등 소스 쓰기는 TTL(≤60초)로 수렴한다.
+// - 이 파일에는 쓰기 경로가 없다. 대신 소스 모듈의 쓰기 알림을 구독해(파일 하단)
+//   할 일 완료·리드 변경·컨택 로그 직후 스냅샷을 버린다 — TTL만 믿으면 이미 끝낸
+//   할 일이 "오늘 전화" 패널에 최대 60초 되살아난다.
 interface CrmPrioritySourceSnapshot {
   leads: LeadRecord[]
   leadsOk: boolean
@@ -236,7 +239,19 @@ interface CrmPrioritySourceSnapshot {
 
 let sourceSnapshotCache: { at: number; value: CrmPrioritySourceSnapshot } | null = null
 let sourceSnapshotInFlight: Promise<CrmPrioritySourceSnapshot> | null = null
+// 무효화 시점 이전에 시작된 수집이 뒤늦게 캐시를 되채우는 걸 막는 세대 표식.
+let sourceSnapshotGeneration = 0
 const SOURCE_SNAPSHOT_TTL_MS = 60_000
+
+/**
+ * 소스 스냅샷을 즉시 버린다. 의존성 없이 모듈 캐시만 만지므로 어느 쓰기 경로에서
+ * 불러도 안전하다(파일 하단에서 리드·할 일·컨택 로그 쓰기에 구독으로 연결한다).
+ */
+export function invalidateCrmPrioritySourceSnapshot() {
+  sourceSnapshotGeneration += 1
+  sourceSnapshotCache = null
+  sourceSnapshotInFlight = null
+}
 
 async function getSourceSnapshot(bypassCache: boolean): Promise<CrmPrioritySourceSnapshot> {
   if (bypassCache) return loadSourceSnapshot()
@@ -245,13 +260,17 @@ async function getSourceSnapshot(bypassCache: boolean): Promise<CrmPrioritySourc
   if (cached && Date.now() - cached.at < SOURCE_SNAPSHOT_TTL_MS) return cached.value
   if (sourceSnapshotInFlight) return sourceSnapshotInFlight
 
+  const generation = sourceSnapshotGeneration
   const request = loadSourceSnapshot()
     .then((value) => {
-      if (value.complete) sourceSnapshotCache = { at: Date.now(), value }
+      // 수집 도중 쓰기가 들어왔다면 이 결과는 이미 낡았다 — 반환만 하고 캐시하지 않는다.
+      if (value.complete && generation === sourceSnapshotGeneration) {
+        sourceSnapshotCache = { at: Date.now(), value }
+      }
       return value
     })
     .finally(() => {
-      sourceSnapshotInFlight = null
+      if (sourceSnapshotInFlight === request) sourceSnapshotInFlight = null
     })
   sourceSnapshotInFlight = request
   return request
@@ -386,3 +405,11 @@ export async function getCrmPriorityQueue(
     items: visible,
   }
 }
+
+// 소스 쓰기 구독 — 방향은 "소비자가 생산자를 구독"이다. 반대로 leads/crm-tasks 쪽에서
+// 이 모듈을 import 하면 이미 여기가 그 둘을 읽고 있어 순환 import가 되고, 쓰기 라우트가
+// 큐의 무거운 소스 그래프(NEO·쇼룸 ICS 등)까지 끌어오게 된다.
+// 이 모듈이 로드되지 않은 프로세스에서는 구독도 없지만 캐시도 비어 있어 무효화할 것이 없다.
+onLeadsMutated(invalidateCrmPrioritySourceSnapshot)
+onCrmTasksMutated(invalidateCrmPrioritySourceSnapshot)
+onContactLogsMutated(invalidateCrmPrioritySourceSnapshot)

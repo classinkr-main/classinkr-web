@@ -1219,6 +1219,13 @@ export default function LeadsBoardClient() {
     return () => { cancelled = true }
   }, [])
 
+  // 백그라운드 갱신(SWR) 결과가 화면이 사라진 뒤 도착할 수 있다 — 언마운트 후 setState 방지.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
+
   // 언마운트 후 setState(경고) 방지 + 토스트가 연달아 뜰 때 이전 타이머가 새 토스트를 지우지 않게.
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => () => {
@@ -1241,6 +1248,19 @@ export default function LeadsBoardClient() {
         force: options?.force,
         persist: false,
         staleWhileRevalidateMs: LEADS_CACHE_SWR_MS,
+        // SWR 고속 경로로 옛 목록을 먼저 그린 회차는 여기로 갱신 결과가 온다. 이 화면은
+        // 마운트 시 1회만 로드하므로 이 콜백이 없으면 갱신분이 화면에 도달하지 못하고
+        // 세션 내내 최대 TTL+SWR(150초)만큼 옛 목록이 남는다.
+        onRevalidated: ({ data, error }) => {
+          if (!mountedRef.current) return
+          if (error || !data) {
+            setLoadError("리드 목록을 새로 받지 못했습니다.")
+            return
+          }
+          setLeads(data.leads)
+          setLoadError(null)
+          setLastLoadedAt(new Date())
+        },
       })
       setLeads(result.data.leads)
       setLoadError(result.staleReason === "error" ? "리드 목록을 새로 받지 못했습니다." : null)

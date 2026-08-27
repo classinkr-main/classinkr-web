@@ -297,6 +297,12 @@ export default function MarketingHub({
 
   const contentRef = useRef<HTMLDivElement>(null)
   const isInitialMount = useRef(true)
+  // 백그라운드 갱신(SWR) 결과가 화면이 사라진 뒤 도착할 수 있다 — 언마운트 후 setState 방지.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   useEffect(() => {
     if (isInitialMount.current) {
@@ -336,6 +342,14 @@ export default function MarketingHub({
         // 최대 1,000행 + 이름·이메일·전화까지 실린 목록이라 세션 스토리지에는 남기지 않는다
         // (상한 350k자를 넘나들어 직렬화가 버려지고, 개인정보가 탭 스토리지에 잔류한다).
         persist: false,
+        // SWR 고속 경로로 옛 목록을 먼저 그린 회차 — 마운트 1회 로드 화면이라 이 콜백이
+        // 없으면 백그라운드 갱신분이 화면에 도달하지 못한다. 실패는 위 catch와 같은 규약으로
+        // 조용히 무시한다(구독자 목록은 비우지 않는다).
+        onRevalidated: ({ data: fresh, error }) => {
+          if (!mountedRef.current || error) return
+          setSubscribers(fresh?.subscribers ?? [])
+          setLastSyncedAt(new Date())
+        },
       })
       setSubscribers(data?.subscribers ?? [])
       // 캐시로 응답한 회차는 그 캐시가 저장된 시각을 표기한다 — 헤더 "마지막 동기화"가 실제보다 최신으로 보이지 않게.
@@ -354,7 +368,20 @@ export default function MarketingHub({
       const data = await adminFetchJsonCached<{ campaigns?: EmailCampaign[] } | null>(
         "/api/admin/email",
         undefined,
-        { ttlMs: MARKETING_LIST_CACHE_TTL_MS, force, staleIfError: !force }
+        {
+          ttlMs: MARKETING_LIST_CACHE_TTL_MS,
+          force,
+          staleIfError: !force,
+          onRevalidated: ({ data: fresh, error }) => {
+            if (!mountedRef.current) return
+            if (error) {
+              setCampaignsError("캠페인 이력을 불러오지 못했습니다.")
+              return
+            }
+            setCampaigns(fresh?.campaigns ?? [])
+            setCampaignsError(null)
+          },
+        }
       )
       setCampaigns(data?.campaigns ?? [])
     } catch {

@@ -278,14 +278,17 @@ const ACTIVITY_SUMMARY_TTL_MS = 45_000
 
 let activitySummaryCache: { at: number; value: Record<string, LeadActivityBadge> } | null = null
 let activitySummaryInFlight: Promise<Record<string, LeadActivityBadge>> | null = null
+// 무효화 시점 이전에 시작된 집계가 뒤늦게 캐시를 되채우는 걸 막는 세대 표식.
+let activitySummaryGeneration = 0
 
 /**
  * 이 맵의 입력(연락 로그·다운로드·이벤트)을 쓰는 경로가 즉시 반영을 원하면 호출한다.
- * 쓰기는 이 모듈 밖(lib/repositories/contact-logs.ts 등)에 있고 여기를 부르지 않으므로,
- * 현재 갱신 경로는 TTL 만료뿐이다.
+ * lib/repositories/contact-logs.ts 의 연락 로그 쓰기가 이 경로로 들어온다.
  */
 export function invalidateLeadsActivitySummary() {
+  activitySummaryGeneration += 1
   activitySummaryCache = null
+  activitySummaryInFlight = null
 }
 
 /**
@@ -300,14 +303,18 @@ export async function getLeadsActivitySummary(): Promise<Record<string, LeadActi
   if (cached && Date.now() - cached.at < ACTIVITY_SUMMARY_TTL_MS) return cached.value
   if (activitySummaryInFlight) return activitySummaryInFlight
 
+  const generation = activitySummaryGeneration
   const request = loadLeadsActivitySummary()
     .then(({ map, complete }) => {
       // 신호 하나가 빠진 반쪽 집계는 캐시하지 않는다 — 일시적 실패가 45초간 굳는다.
-      if (complete) activitySummaryCache = { at: Date.now(), value: map }
+      // 집계 도중 쓰기가 들어온 경우도 마찬가지다(이미 낡은 값이라 반환만 한다).
+      if (complete && generation === activitySummaryGeneration) {
+        activitySummaryCache = { at: Date.now(), value: map }
+      }
       return map
     })
     .finally(() => {
-      activitySummaryInFlight = null
+      if (activitySummaryInFlight === request) activitySummaryInFlight = null
     })
   activitySummaryInFlight = request
   return request
@@ -346,6 +353,19 @@ function toIsoOrNull(value: unknown) {
 }
 
 /**
+ * providers 순서 규약 — 사전순(코드포인트).
+ *
+ * 이 배열은 보드 배지 툴팁에서 그대로 join 되므로 순서가 곧 화면 문자열이다. RPC는
+ * array_agg(distinct ... order by provider), 폴백은 행 등장 순이라 그냥 두면 마이그
+ * 적용 여부에 따라 같은 리드가 "구글, 네이버"와 "네이버, 구글"로 갈렸다. 두 경로를
+ * 여기 하나로 모아 맞춘다. localeCompare 가 아니라 코드포인트 비교인 이유는 SQL 쪽
+ * 정렬(provider 는 소문자 ASCII 슬러그)과 규칙을 같게 두기 위해서다.
+ */
+function sortProviders(values: string[]) {
+  return values.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+}
+
+/**
  * GROUP BY 한 번으로 끝나는 경로. 실패하면 null 을 돌려 행 집계 폴백으로 넘긴다 —
  * 함수 부재(마이그 전)든 다른 오류든, 배지가 통째로 비는 것보다 느린 정답이 낫다.
  */
@@ -371,7 +391,9 @@ async function loadActivitySummaryViaRpc(
     map[leadId] = {
       authenticated: row.authenticated === true,
       providers: Array.isArray(row.providers)
-        ? row.providers.filter((value): value is string => typeof value === "string" && !!value)
+        ? sortProviders(
+            row.providers.filter((value): value is string => typeof value === "string" && !!value)
+          )
         : [],
       downloadCount: Number(row.downloadCount) || 0,
       eventCount: Number(row.eventCount) || 0,
@@ -504,6 +526,9 @@ async function loadActivitySummaryFromRows(supabase: SupabaseAdminClient): Promi
     entry.contactLogCount += 1
     entry.lastContactAt = maxIso(entry.lastContactAt, row.contacted_at)
   }
+
+  // 행 등장 순으로 쌓인 providers 를 RPC 와 같은 사전순으로 맞춘다.
+  for (const entry of Object.values(map)) sortProviders(entry.providers)
 
   return { map, complete }
 }

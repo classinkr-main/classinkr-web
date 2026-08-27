@@ -97,6 +97,7 @@ const EMPTY_PREFETCH: OverviewInitialData = {
   leadOverview: null,
   visitorStats: null,
   leadActionKpis: null,
+  osSummary: null,
 }
 
 // 서버가 이미 채워 보낸 소스는 처음부터 ready로 시작한다 — 실데이터를 들고 있으면서
@@ -109,6 +110,7 @@ function seededSourceStates(
     ...(initialData.leadOverview ? { leads: "ready" as const } : {}),
     ...(initialData.visitorStats ? { visitor: "ready" as const } : {}),
     ...(initialData.leadActionKpis ? { leadActions: "ready" as const } : {}),
+    ...(initialData.osSummary ? { os: "ready" as const } : {}),
   }
 }
 
@@ -356,7 +358,7 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
   const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(
     initialData.leadActionKpis
   )
-  const [osSummary, setOsSummary] = useState<OsSummaryPayload | null>(null)
+  const [osSummary, setOsSummary] = useState<OsSummaryPayload | null>(initialData.osSummary)
   const [visitorStats, setVisitorStats] = useState<VisitorStatsPayload | null>(
     initialData.visitorStats
   )
@@ -422,7 +424,9 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       }
       // v3는 소스별 health와 current/actionable 링크 확정률을 포함한다. 쿼리 버전으로
       // 구 클라이언트 session cache(raw 링크 이력 기반)를 분리한다.
-      void loadSource<OsSummaryPayload>("os", "/api/admin/os-summary?contract=v3", setOsSummary)
+      if (!prefetched.osSummary) {
+        void loadSource<OsSummaryPayload>("os", "/api/admin/os-summary?contract=v3", setOsSummary)
+      }
       if (!prefetched.visitorStats) {
         void loadSource<VisitorStatsPayload>("visitor", "/api/admin/visitor-stats?range=7", setVisitorStats)
       }

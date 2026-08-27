@@ -86,7 +86,7 @@ interface AdminCacheEntry<T> {
   savedAt: number
 }
 
-interface AdminFetchCacheOptions {
+interface AdminFetchCacheOptions<T = unknown> {
   cacheKey?: string
   ttlMs?: number
   persist?: boolean
@@ -98,6 +98,18 @@ interface AdminFetchCacheOptions {
    * 기본 5분. 0을 주면 비활성화.
    */
   staleWhileRevalidateMs?: number
+  /**
+   * stale-while-revalidate 고속 경로(TTL 만료 + SWR 창 안)로 오래된 캐시를 즉시 돌려준
+   * 회차에서, 뒤이은 백그라운드 갱신이 끝나면 그 결과를 알려준다.
+   * 마운트 시 1회만 로드하는 화면은 이 콜백 없이는 갱신 결과를 영영 못 받는다
+   * (effect가 다시 돌지 않으므로 최대 `ttlMs + staleWhileRevalidateMs`만큼 stale).
+   * - 성공: `{ data }` — 새로 받은 데이터.
+   * - 실패: `{ error }` — 화면은 기존 stale 데이터를 그대로 들고 있다.
+   * 호출 규약: 한 회차당 최대 1회. SWR 고속 경로를 타지 않은 회차(신선한 캐시 적중·
+   * force·네트워크 직행)에는 호출하지 않는다 — 그때는 반환값 자체가 최신이다.
+   * 갱신이 도는 사이 이 캐시 키가 무효화됐다면(= 뮤테이션 발생) 호출하지 않는다.
+   */
+  onRevalidated?: (result: { data?: T; error?: unknown }) => void
 }
 
 const memoryCache = new Map<string, AdminCacheEntry<unknown>>()
@@ -155,6 +167,24 @@ function shouldBypassBrowserCache(url: string) {
     if (scope === GLOBAL_CACHE_SCOPE || url.includes(scope)) bypass = true
   }
   return bypass
+}
+
+// 백그라운드 갱신이 도는 사이 이 캐시 키가 무효화됐는지 되짚는다.
+// 캐시 엔트리 자체로는 못 되짚는다 — 갱신이 성공하면 같은 키를 다시 채워 넣기 때문이다.
+// 대신 mutationScopeAt을 본다: clearCacheScopes(캐시 삭제)는 두 호출부(clearAdminRequestCache,
+// adminFetch의 비-GET 성공 처리) 모두에서 markAdminMutation과 짝으로만 실행되므로
+// 무효화 이력의 충실한 사본이다. 스코프 매칭도 clearCacheScopes와 같은 술어(key.includes)를 쓴다.
+// 한계: mutationScopeAt 항목은 60초(BROWSER_CACHE_BYPASS_MS)가 지나면 정리될 수 있다.
+// 어드민 GET은 기본 45초에 타임아웃되므로 실제 갱신 구간은 그 창 안이지만,
+// 타임아웃이 꺼진 장기 경로(LONG_RUNNING_ADMIN_PATHS)라면 60초 이전의 무효화는 놓칠 수 있다.
+function wasCacheKeyInvalidatedSince(cacheKey: string, since: number) {
+  for (const [scope, at] of mutationScopeAt) {
+    // 같은 ms에 찍힌 무효화는 무효화 쪽으로 센다 — 순서를 가릴 수 없을 때는
+    // "갱신 결과를 한 번 버리는" 쪽이 "저장한 내용을 되돌리는" 쪽보다 안전하다.
+    if (at < since) continue
+    if (scope === GLOBAL_CACHE_SCOPE || cacheKey.includes(scope)) return true
+  }
+  return false
 }
 
 function clearCacheScopes(scopes: string[]) {
@@ -463,12 +493,52 @@ export interface AdminCachedFetchResult<T> {
    *  "revalidate"=TTL은 지났지만 stale-while-revalidate 창 안이라 의도적으로 즉시 서빙
    *  (백그라운드 갱신 진행 중 — 정상 동작, 실패 아님). */
   staleReason?: "error" | "revalidate"
+  /** staleReason이 "error"일 때 캐시로 대체하게 만든 원인 오류. 표시용이 아니라
+   *  onRevalidated로 실패 원인을 전달하기 위한 통로다(기존 소비처는 읽지 않는다). */
+  staleError?: unknown
+}
+
+// SWR 고속 경로가 띄운 백그라운드 갱신의 결말을 소비처에 알린다.
+// 콜백이 없으면 기존과 동일하게 결과·예외를 모두 삼킨다(unhandled rejection 방지).
+function notifyRevalidation<T>(
+  revalidation: Promise<AdminCachedFetchResult<T>>,
+  cacheKey: string,
+  onRevalidated: ((result: { data?: T; error?: unknown }) => void) | undefined
+) {
+  if (!onRevalidated) {
+    void revalidation.catch(() => undefined)
+    return
+  }
+
+  const startedAt = Date.now()
+  const notify = (result: { data?: T; error?: unknown }) => {
+    // 갱신이 도는 사이 이 키가 무효화됐다면 결과를 버린다. 서버가 뮤테이션 이전 상태를
+    // 응답했을 수 있고, 그대로 반영하면 방금 저장한 내용을 화면에서 되돌리게 된다.
+    if (wasCacheKeyInvalidatedSince(cacheKey, startedAt)) return
+    try {
+      onRevalidated(result)
+    } catch {
+      /* 소비처 콜백의 예외가 백그라운드 갱신을 unhandled rejection으로 만들지 않게 한다 */
+    }
+  }
+
+  void revalidation.then(
+    (result) => {
+      // staleIfError 폴백으로 살아 돌아온 회차는 새 데이터가 아니라 갱신 실패다.
+      if (result.staleReason === "error") {
+        notify({ error: result.staleError ?? new Error("최신 데이터를 받지 못했습니다.") })
+        return
+      }
+      notify({ data: result.data })
+    },
+    (error) => notify({ error })
+  )
 }
 
 async function adminFetchJsonCachedInternal<T>(
   input: string,
   init: AdminFetchInit | undefined,
-  options: AdminFetchCacheOptions
+  options: AdminFetchCacheOptions<T>
 ): Promise<AdminCachedFetchResult<T>> {
   if (!isGetRequest(init)) {
     const data = await adminFetchJson<T>(input, init)
@@ -507,7 +577,9 @@ async function adminFetchJsonCachedInternal<T>(
       })
       .catch((error): AdminCachedFetchResult<T> => {
         const stale = staleIfError ? readAdminCache<T>(cacheKey, true) : null
-        if (stale) return { data: stale.data, stale: true, staleSince: stale.savedAt, staleReason: "error" }
+        if (stale) {
+          return { data: stale.data, stale: true, staleSince: stale.savedAt, staleReason: "error", staleError: error }
+        }
         throw error
       })
       .finally(() => {
@@ -530,7 +602,7 @@ async function adminFetchJsonCachedInternal<T>(
     if (staleWindowMs > 0) {
       const stale = readAdminCache<T>(cacheKey, true)
       if (stale && Date.now() - stale.savedAt <= staleWindowMs) {
-        void startRequest().catch(() => undefined)
+        notifyRevalidation(startRequest(), cacheKey, options.onRevalidated)
         return { data: stale.data, stale: true, staleSince: stale.savedAt, staleReason: "revalidate" }
       }
     }
@@ -542,7 +614,7 @@ async function adminFetchJsonCachedInternal<T>(
 export async function adminFetchJsonCached<T>(
   input: string,
   init?: AdminFetchInit,
-  options: AdminFetchCacheOptions = {}
+  options: AdminFetchCacheOptions<T> = {}
 ) {
   const result = await adminFetchJsonCachedInternal<T>(input, init, options)
   return result.data
@@ -553,7 +625,7 @@ export async function adminFetchJsonCached<T>(
 export async function adminFetchJsonCachedWithMeta<T>(
   input: string,
   init?: AdminFetchInit,
-  options: AdminFetchCacheOptions = {}
+  options: AdminFetchCacheOptions<T> = {}
 ): Promise<AdminCachedFetchResult<T>> {
   return adminFetchJsonCachedInternal<T>(input, init, options)
 }

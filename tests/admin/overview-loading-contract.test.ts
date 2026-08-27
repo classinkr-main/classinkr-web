@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
-const source = readFileSync(join(process.cwd(), "app/admin/overview/page.tsx"), "utf8")
+// page.tsx는 서버 프리페치 래퍼만 남았고 화면 로직은 전부 OverviewClient로 옮겨졌다.
+const source = readFileSync(join(process.cwd(), "app/admin/overview/OverviewClient.tsx"), "utf8")
 
 describe("admin overview loading and failure contract", () => {
   it("bounds admin requests and keeps a stale cache path for fast revisits", () => {

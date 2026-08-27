@@ -265,7 +265,10 @@ async function countKoreaScopedAccountTotal(
   }
 
   const excludedResult = await baseQuery().in("owner_name", excludeList)
-  const excluded = excludedResult.error ? 0 : excludedResult.count ?? 0
+  if (excludedResult.error) {
+    return { data: [], error: excludedResult.error, count: 0, truncated: false, pages: 1 }
+  }
+  const excluded = excludedResult.count ?? 0
   return { data: [], error: null, count: Math.max(0, total - excluded), truncated: false, pages: 1 }
 }
 
