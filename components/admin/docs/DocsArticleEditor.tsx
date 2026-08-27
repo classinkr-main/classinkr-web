@@ -55,7 +55,7 @@ import {
   type DocsNavGroup,
   type DocsTocItem,
 } from "@/components/docs"
-import { adminFetch, adminFetchJson } from "@/lib/admin-client"
+import { adminFetch, adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import type { AdminDocsContentResponse } from "@/lib/admin-docs"
 import {
   PATH_STEP_EXAMPLE,
@@ -83,6 +83,7 @@ import type {
   DocsArticleProductArea,
   DocsArticleStatus,
   DocsArticleVersionDetail,
+  DocsArticleVersionListItem,
   DocsArticleVisibility,
 } from "@/lib/repositories/docs-articles"
 
@@ -118,7 +119,7 @@ interface RelationsResponse {
 }
 
 interface VersionsResponse {
-  versions: DocsArticleVersionDetail[]
+  versions: DocsArticleVersionListItem[]
   warning?: string
 }
 
@@ -130,7 +131,7 @@ interface DraftResponse {
 interface EditorSupportState {
   articleOptions: ArticleOption[]
   relations: DocsArticleRelationDetail[]
-  versions: DocsArticleVersionDetail[]
+  versions: DocsArticleVersionListItem[]
   analytics: DocsArticleAnalyticsDetail | null
   draft: DocsArticleDraftDetail | null
   warning: string | null
@@ -1316,7 +1317,8 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     setSupportLoading(true)
     try {
       const [contentResult, relationsResult, versionsResult, analyticsResult, draftResult] = await Promise.all([
-        adminFetchJson<AdminDocsContentResponse>("/api/admin/docs").catch((err) => ({
+        // page.tsx가 같은 URL을 60초 TTL로 캐시하므로 문자열·TTL을 맞춰 캐시를 공유한다(레버 08).
+        adminFetchJsonCached<AdminDocsContentResponse>("/api/admin/docs", undefined, { ttlMs: 60_000 }).catch((err) => ({
           configured: false,
           status: "unconfigured",
           generatedAt: new Date().toISOString(),
@@ -1768,7 +1770,7 @@ export default function DocsArticleEditor({ mode, categories, article }: Props) 
     }
   }
 
-  async function rollbackToVersion(version: DocsArticleVersionDetail) {
+  async function rollbackToVersion(version: DocsArticleVersionListItem) {
     if (!article) return
     if (!window.confirm(`v${version.versionNumber} 버전으로 본문을 되돌립니다. 현재 내용은 백업 스냅샷으로 저장됩니다.`)) return
 

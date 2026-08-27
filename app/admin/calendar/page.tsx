@@ -32,6 +32,7 @@ import {
   toDateString,
   type CalendarViewId,
 } from "@/lib/admin-calendar/range"
+import { buildAdminCalendarUrl } from "@/lib/admin/calendar-range"
 
 import { AgendaList } from "@/components/admin/calendar/AgendaList"
 import { AssigneeSwimlane } from "@/components/admin/calendar/AssigneeSwimlane"
@@ -100,7 +101,7 @@ export default function AdminCalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [hiddenSources, setHiddenSources] = useState<Set<EventSource>>(new Set())
   const [hiddenAssignees, setHiddenAssignees] = useState<Set<string>>(new Set())
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [formLoading, setFormLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(null)
@@ -176,11 +177,14 @@ export default function AdminCalendarPage() {
   }, [prefsHydrated, view, anchor])
 
   // ─── 데이터 ──────────────────────────────────────────────────────
+  // 기간 경계(from·to)만 의존값으로 잡는다 — range 객체 정체성이 아니라 실제 조회 구간이
+  // 바뀔 때만 재조회해야 사이드바 예열이 만든 캐시 키를 그대로 맞힌다.
+  const { from: rangeFrom, to: rangeTo } = range
   const fetchEvents = useCallback(async () => {
     setLoading(true)
     try {
       const data = await adminFetchJsonCached<CalendarEvent[]>(
-        `/api/admin/calendar?from=${range.from}&to=${range.to}`,
+        buildAdminCalendarUrl({ from: rangeFrom, to: rangeTo }),
         undefined,
         { ttlMs: 60_000 }
       )
@@ -191,7 +195,7 @@ export default function AdminCalendarPage() {
     } finally {
       setLoading(false)
     }
-  }, [range.from, range.to])
+  }, [rangeFrom, rangeTo])
 
   useEffect(() => {
     fetchEvents()

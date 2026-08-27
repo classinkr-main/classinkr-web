@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react"
 import { clearAdminSessionStorage, warmAdminRequestCache } from "@/lib/admin-client"
+import { buildAdminCalendarUrl, getDefaultAdminCalendarRange } from "@/lib/admin/calendar-range"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
@@ -101,11 +102,9 @@ export const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = 
   // 두 URL 모두 화면이 adminFetchJsonCached로 소비한다(상담 목록은 cache:"no-cache" 직페치에서
   // 캐시 소비로 바꿔 이 warm이 실제로 적중하게 했다 — P6). 동기화 버튼은 force로 우회한다.
   "/admin/channel-talk": ["/api/admin/channel-talk", "/api/admin/channel-talk/mine"],
-  "/admin/calendar": () => {
-    // 캘린더 페이지 초기 로드는 항상 현재 연/월 쿼리를 붙인다.
-    const now = new Date()
-    return [`/api/admin/calendar?year=${now.getFullYear()}&month=${now.getMonth() + 1}`]
-  },
+  // 캘린더 페이지의 첫 렌더(view=month · anchor=오늘) 실호출과 문자 그대로 같은 URL이어야
+  // adminFetchJsonCached 캐시 키가 맞는다 — 산출은 lib/admin/calendar-range.ts(SSOT) 공유.
+  "/admin/calendar": () => [buildAdminCalendarUrl(getDefaultAdminCalendarRange())],
   // /admin/quotes 기본 탭은 portalFetch(/api/portal/documents?type=quote)라 admin 캐시를 읽지 않는다 — warm 대상 아님.
   "/admin/campaigns": [
     "/api/admin/email",

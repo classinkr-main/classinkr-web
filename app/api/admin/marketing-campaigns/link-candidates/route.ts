@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { verifyAdmin } from "@/lib/admin-auth"
-import { getAllCampaigns } from "@/lib/repositories/marketing"
 import { getAllEventsForAdmin } from "@/lib/repositories/public-events"
 import { getMetaCampaignDashboard } from "@/lib/meta/marketing"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -32,8 +31,17 @@ type SmsRow = { id: string | number; message?: string | null }
 
 async function safeEmailCandidates(): Promise<Candidate[]> {
   try {
-    const all = await getAllCampaigns()
-    return all.map((c) => ({ id: String(c.id), label: emailCampaignLabel(c) }))
+    // 라벨(subject)만 필요 — getAllCampaigns()의 select("*")는 이메일 본문 HTML까지
+    // 끌어온다. campaign-rollup-sources.ts:79 선례와 같은 좁은 select로 직접 조회한다.
+    const { data } = await createSupabaseAdminClient()
+      .from("email_campaigns")
+      .select("id, subject")
+      .order("created_at", { ascending: false })
+      .limit(200)
+    return ((data ?? []) as { id: string | number; subject?: string | null }[]).map((row) => ({
+      id: String(row.id),
+      label: emailCampaignLabel(row),
+    }))
   } catch {
     return []
   }

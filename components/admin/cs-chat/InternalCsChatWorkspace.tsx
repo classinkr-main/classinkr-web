@@ -25,7 +25,7 @@ import {
 } from "react"
 
 import CsConsoleNav from "@/components/admin/cs/CsConsoleNav"
-import { adminFetchJson } from "@/lib/admin-client"
+import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { useUrlState } from "@/lib/use-url-state"
 
 import WorkspaceHeader from "./components/WorkspaceHeader"
@@ -91,6 +91,11 @@ import type {
   ReviewChecks,
   WorkspaceTab,
 } from "./types"
+
+// 목록성 GET(대화 목록·회귀 후보·독스 갭·지표) 캐시 TTL — 실시간성 표면이라 짧게 둔다.
+// 대화 목록·회귀 후보 URL은 AdminSidebar.tsx:168-171의 hover 예열과 문자열이 같아야
+// 캐시 키(GET:input)가 일치해 예열된 응답을 그대로 소비한다.
+const LIST_CACHE_TTL_MS = 20_000
 
 function InternalCsChatWorkspaceInner() {
   // 이 화면에는 URL을 보는 눈이 둘이고, 둘은 서로 다른 순간에 진실이다.
@@ -246,7 +251,10 @@ function InternalCsChatWorkspaceInner() {
       return
     }
     try {
-      const response = await adminFetchJson<DocGapsSummaryResponse>("/api/admin/docs/gaps")
+      const response = await adminFetchJsonCached<DocGapsSummaryResponse>("/api/admin/docs/gaps", undefined, {
+        ttlMs: LIST_CACHE_TTL_MS,
+        persist: false,
+      })
       setDocsGapsSummary(summarizeDocsGaps(response))
     } catch {
       setDocsGapsSummary(null)
@@ -271,7 +279,11 @@ function InternalCsChatWorkspaceInner() {
     }
     setRegressionLoadState("loading")
     try {
-      const response = await adminFetchJson<RegressionCandidatesResponse>("/api/admin/cs-chat/regression-candidates")
+      const response = await adminFetchJsonCached<RegressionCandidatesResponse>(
+        "/api/admin/cs-chat/regression-candidates",
+        undefined,
+        { ttlMs: LIST_CACHE_TTL_MS, persist: false }
+      )
       const items = Array.isArray(response.items) ? response.items : []
       setRegressionCandidates(items)
       const liveIds = new Set(items.map((item) => item.id))
@@ -296,7 +308,11 @@ function InternalCsChatWorkspaceInner() {
     }
     setMetricsLoadState("loading")
     try {
-      const response = await adminFetchJson<InternalCsMetricsResponse>("/api/admin/cs-chat/metrics?days=7")
+      const response = await adminFetchJsonCached<InternalCsMetricsResponse>(
+        "/api/admin/cs-chat/metrics?days=7",
+        undefined,
+        { ttlMs: LIST_CACHE_TTL_MS, persist: false }
+      )
       setCsMetrics(response)
       setMetricsLoadState("loaded")
     } catch {
@@ -308,8 +324,10 @@ function InternalCsChatWorkspaceInner() {
   const loadConversations = useCallback(async (preferredId?: string | null) => {
     setLoading(true)
     try {
-      const response = await adminFetchJson<ConversationListResponse>(
-        "/api/admin/cs-chat/conversations?status=all&limit=100"
+      const response = await adminFetchJsonCached<ConversationListResponse>(
+        "/api/admin/cs-chat/conversations?status=all&limit=100",
+        undefined,
+        { ttlMs: LIST_CACHE_TTL_MS, persist: false }
       )
       setConversations(response.conversations)
       const nextId = preferredId ?? selectedId ?? response.conversations.find((item) => item.status !== "archived")?.id
@@ -413,12 +431,15 @@ function InternalCsChatWorkspaceInner() {
   }, [activeTab, docsGapsAttempted, loadDocsGapsSummary])
 
   // 회귀 후보는 탭 진입 전에 로드한다 — "운영 도구" 탭의 판정 대기 점(dot)이 이 데이터로 켜진다.
-  // 초기 부트스트랩(loading)이 끝난 뒤 시작해 demoMode 판별과의 경합을 피한다.
+  // 대화 목록·상세와 무관한 별도 자원이라 그 부트스트랩(loading)을 기다리지 않고 1파와 동시에 쏜다.
+  // demoMode는 최초 렌더에서 false로 시작하므로(초기값), 실제 백엔드가 아예 죽어 있는 드문 경우에만
+  // 이 요청이 demoMode 확정 전에 실패한 채로 남는다 — 그때도 "운영 도구" 탭에는 재시도 버튼이 뜨고
+  // 재시도 시점엔 demoMode가 이미 true라 빈 상태로 정상 수렴한다.
   useEffect(() => {
-    if (!loading && regressionLoadState === "idle") {
+    if (regressionLoadState === "idle") {
       void loadRegressionCandidates()
     }
-  }, [loading, regressionLoadState, loadRegressionCandidates])
+  }, [regressionLoadState, loadRegressionCandidates])
 
   useEffect(() => {
     if (activeTab === "tools" && metricsLoadState === "idle") {

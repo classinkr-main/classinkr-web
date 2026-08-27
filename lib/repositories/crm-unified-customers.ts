@@ -329,11 +329,31 @@ function rowHealthBand(row: CrmUnifiedCustomerRow, nowMs: number): CustomerHealt
   }).band
 }
 
+// 활성 고객(neo_account) 건강도 분포 집계 — 전역(필터 무관). getCrmUnifiedCustomers()의
+// healthDistribution 필드와 getCrmUnifiedHealthDistribution() 경량 경로가 공유하는 단일 산식.
+// 태그 부착 여부와 무관(rowHealthBand는 tags를 보지 않음)하므로 태그 없는 스냅샷 원본 rows에
+// 바로 적용해도 의미 동일.
+function computeHealthDistribution(
+  rows: CrmUnifiedCustomerRow[],
+  nowMs: number
+): CrmHealthDistribution {
+  return rows.reduce<CrmHealthDistribution>(
+    (acc, row) => {
+      if (row.source !== "neo_account") return acc
+      acc.total += 1
+      acc[rowHealthBand(row, nowMs)] += 1
+      return acc
+    },
+    { total: 0, safe: 0, watch: 0, risk: 0 }
+  )
+}
+
 // ── 소스 스냅샷 60초 모듈 캐시 (7-23 감사 3-A 서버 메모이제이션) ──────────────
-// 필터/검색/페이지/뷰가 바뀔 때마다 — limit=1 헬스 집계 호출까지 — 6개 소스를 전부
-// 다시 모아 행을 재조립했다(실측 0.8~1.6s). 조립 결과는 옵션과 무관한 "필터 이전"
-// 스냅샷이므로 한 번 만들어 60초 공유한다. NEO 모듈 캐시
-// (lib/admin-crm-customers-neo.ts:132)와 같은 패턴·같은 TTL.
+// 필터/검색/페이지/뷰가 바뀔 때마다 6개 소스를 전부 다시 모아 행을 재조립했다
+// (실측 0.8~1.6s). 조립 결과는 옵션과 무관한 "필터 이전" 스냅샷이므로 한 번 만들어
+// 60초 공유한다. NEO 모듈 캐시(lib/admin-crm-customers-neo.ts:132)와 같은 패턴·같은
+// TTL. health-distribution 라우트는 getCrmUnifiedHealthDistribution()으로 이 스냅샷만
+// 태우고 필터·정렬 등 후처리는 건너뛴다(하단 참고).
 // - 태그는 스냅샷에 넣지 않는다 — 요청마다 getAllCustomerTagsMap(자체 30초 캐시,
 //   쓰기 시 즉시 무효화)을 읽어 부착하므로 태그 추가/삭제가 이 TTL을 기다리지 않는다.
 // - 모든 소스가 성공했을 때만 저장(NEO의 `if (value.ok)`와 동일 원칙) — 부분 실패
@@ -354,6 +374,9 @@ interface CrmUnifiedSourceSnapshot {
 }
 
 let sourceSnapshotCache: { at: number; value: CrmUnifiedSourceSnapshot } | null = null
+// TTL 만료 직후 동시 요청(코크핏 도넛·통합 목록이 겹쳐 뜨는 경우 등)이 각각 전량
+// 재수집하는 창을 닫는다 — lib/repositories/crm-priority-queue.ts의 in-flight 패턴과 동일.
+let sourceSnapshotInFlight: Promise<CrmUnifiedSourceSnapshot> | null = null
 const SOURCE_SNAPSHOT_TTL_MS = 60_000
 
 export function invalidateCrmUnifiedSourceSnapshot() {
@@ -361,13 +384,22 @@ export function invalidateCrmUnifiedSourceSnapshot() {
 }
 
 async function getSourceSnapshot(now: Date, bypassCache: boolean): Promise<CrmUnifiedSourceSnapshot> {
-  if (!bypassCache) {
-    const cached = sourceSnapshotCache
-    if (cached && Date.now() - cached.at < SOURCE_SNAPSHOT_TTL_MS) return cached.value
-  }
-  const value = await loadSourceSnapshot(now)
-  if (!bypassCache && value.complete) sourceSnapshotCache = { at: Date.now(), value }
-  return value
+  if (bypassCache) return loadSourceSnapshot(now)
+
+  const cached = sourceSnapshotCache
+  if (cached && Date.now() - cached.at < SOURCE_SNAPSHOT_TTL_MS) return cached.value
+  if (sourceSnapshotInFlight) return sourceSnapshotInFlight
+
+  const request = loadSourceSnapshot(now)
+    .then((value) => {
+      if (value.complete) sourceSnapshotCache = { at: Date.now(), value }
+      return value
+    })
+    .finally(() => {
+      sourceSnapshotInFlight = null
+    })
+  sourceSnapshotInFlight = request
+  return request
 }
 
 // 소스 수집 + 행 조립 + 전환 중복 접기까지의 "필터 이전" 단계. 행의 우선순위 점수는
@@ -664,15 +696,7 @@ export async function getCrmUnifiedCustomers(
     return aIndex - bIndex
   })
   // 활성 고객 건강도 분포 — 전역(필터 무관). 코크핏 도넛이 읽는 단일 진실원.
-  const healthDistribution = rows.reduce<CrmHealthDistribution>(
-    (acc, row) => {
-      if (row.source !== "neo_account") return acc
-      acc.total += 1
-      acc[rowHealthBand(row, nowMs)] += 1
-      return acc
-    },
-    { total: 0, safe: 0, watch: 0, risk: 0 }
-  )
+  const healthDistribution = computeHealthDistribution(rows, nowMs)
 
   // 내부 일괄 매칭은 전체 고객 집합을 읽어야 한다. 외부 API 상한(200)은 라우트에서 별도로 유지한다.
   const limit = clampInteger(options.limit, 100, 1, 2_000)
@@ -754,4 +778,17 @@ export async function getCrmUnifiedCustomers(
     owners,
     rows: pageRows,
   }
+}
+
+// health-distribution 라우트 전용 최소 경로 — 소스 스냅샷(60초 캐시 + in-flight dedupe)만
+// 태우고, 도넛 숫자와 무관한 후처리(태그 부착·필터·세그먼트별 viewCounts 8회 재순회·
+// sortPriorityItems 전량 정렬·오너 집계)는 전부 건너뛴다. 카운트 산식은
+// computeHealthDistribution을 그대로 재사용해 getCrmUnifiedCustomers().healthDistribution과
+// 동일한 값을 낸다.
+export async function getCrmUnifiedHealthDistribution(
+  options: { now?: Date } = {}
+): Promise<CrmHealthDistribution> {
+  const now = options.now ?? new Date()
+  const snapshot = await getSourceSnapshot(now, options.now != null)
+  return computeHealthDistribution(snapshot.rows, now.getTime())
 }

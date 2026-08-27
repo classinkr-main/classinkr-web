@@ -1920,7 +1920,12 @@ export async function listConfirmedLeadCustomerLinks(): Promise<Map<string, stri
 const LEAD_NEO_LINK_PAGE_SIZE = 1000
 const LEAD_NEO_LINK_MAX_PAGES = 20
 
-/** NEO 등록 확정된 리드 id 집합 — source_object='leads' → target_type='external_account' confirmed. */
+/**
+ * NEO 등록 확정된 리드 id 집합 — source_object='leads' → target_type='external_account' confirmed.
+ * source_system='lead'은 결과를 바꾸지 않는다(leads 링크의 유일한 소스 시스템). 다만
+ * crm_source_links_source_idx(source_system, source_object, status)의 선두 컬럼이라
+ * 이게 빠지면 인덱스를 못 타고 전 테이블을 훑는다.
+ */
 export async function listConfirmedLeadNeoLinkLeadIds(): Promise<Set<string>> {
   const sb = createSupabaseAdminClient()
   const ids = new Set<string>()
@@ -1938,6 +1943,7 @@ export async function listConfirmedLeadNeoLinkLeadIds(): Promise<Set<string>> {
     const { data, error } = await sb
       .from("crm_source_links")
       .select("source_record_key")
+      .eq("source_system", "lead")
       .eq("source_object", "leads")
       .eq("target_type", "external_account")
       .eq("status", "confirmed")
@@ -1955,8 +1961,13 @@ export async function listConfirmedLeadNeoLinkLeadIds(): Promise<Set<string>> {
 
 /**
  * 이 리드가 NEO 계정으로 등록 확정됐는지 단건 조회 (360 드로어용 — 벌크 Set 스캔 금지).
- * 조회 모양은 listConfirmedLeadNeoLinkLeadIds와 동일(source_object='leads',
- * target_type='external_account', status='confirmed')하되 리드 1건으로 좁힌다.
+ * 겨냥하는 링크 집합은 listConfirmedLeadNeoLinkLeadIds와 같고(source_system='lead',
+ * source_object='leads', target_type='external_account', status='confirmed') 리드 1건으로
+ * 좁힌다. source_system 술어는 결과를 바꾸지 않지만(leads 링크의 유일한 소스 시스템)
+ * crm_source_links_source_idx(source_system, source_object, status)와
+ * crm_source_links_unique_candidate의 선두 컬럼이라 이게 빠지면 인덱스를 못 탄다.
+ * tests/repositories/crm-source-links-find-neo-link.test.ts가 이 eq 호출 목록을 그대로
+ * 검증하므로 필터를 더하거나 빼려면 그 테스트를 함께 고쳐야 한다.
  */
 export async function findConfirmedLeadNeoLink(leadId: string): Promise<{ targetId: string } | null> {
   const sourceRecordKey = leadId.trim()
@@ -1966,6 +1977,7 @@ export async function findConfirmedLeadNeoLink(leadId: string): Promise<{ target
   const { data, error } = await sb
     .from("crm_source_links")
     .select("target_id")
+    .eq("source_system", "lead")
     .eq("source_object", "leads")
     .eq("source_record_key", sourceRecordKey)
     .eq("target_type", "external_account")
@@ -1993,8 +2005,9 @@ const CRM_LINK_TARGET_TYPE_KO: Record<string, string> = {
  * 비확정 후보가 있으면 확정으로 갱신하고, 없으면 확정 행을 새로 만든다 —
  * unique 제약(source_system,source_object,source_record_key,target_type,target_id)이
  * select-then-insert 레이스를 upsert로 흡수한다. 확정된 행은 그대로
- * listConfirmedLeadNeoLinkLeadIds의 조회 모양(source_object='leads',
- * target_type='external_account', status='confirmed')에 잡힌다.
+ * listConfirmedLeadNeoLinkLeadIds의 조회 모양(source_system='lead', source_object='leads',
+ * target_type='external_account', status='confirmed')에 잡힌다 — source_system을 다른 값으로
+ * 쓰면 그 lookup에서 조용히 사라진다.
  */
 export async function confirmLeadNeoLink(input: {
   leadId: string

@@ -63,14 +63,15 @@ interface SupabaseColumnError {
   hint?: string;
 }
 
-function invalidateAdminLeadOverview() {
+function invalidateLeadReadCaches() {
   // Overview는 요청자 쿠키와 무관한 서비스 롤 집계라 서버 공용 캐시를 쓴다.
   // 리드 쓰기 직후에는 다음 읽기가 반드시 새 값을 보도록 즉시 만료한다.
   revalidateTag(ADMIN_LEADS_OVERVIEW_CACHE_TAG, { expire: 0 });
+  leadRowsMemo.clear();
 }
 
 function returnAfterLeadMutation<T>(value: T): T {
-  invalidateAdminLeadOverview();
+  invalidateLeadReadCaches();
   return value;
 }
 
@@ -253,7 +254,35 @@ class LeadQueryError extends Error {
   }
 }
 
+const LEAD_ROWS_MEMO_TTL_MS = 30_000;
+
+/**
+ * 전량 조회 메모 — 같은 컬럼셋을 짧은 창 안에 다시 읽으면 테이블을 다시 훑지 않는다.
+ *
+ * next/cache 대신 프로세스 메모인 이유: 리드 전량 페이로드는 ISR 캐시 아이템 한도(2MB)를
+ * 넘길 수 있고, 넘기면 캐싱이 조용히 무산된다. 키가 컬럼 문자열이라 스코프와 컬럼 폴백
+ * 경로가 자연히 분리된다. 값에 진행 중 promise를 담아 동시 요청이 한 왕복을 나눠 쓰고,
+ * 실패한 엔트리는 지워 오류를 캐시하지 않는다. 만료 기준 시각은 응답이 아니라 요청 시작이다.
+ */
+const leadRowsMemo = new Map<string, { startedAt: number; rows: Promise<Lead[]> }>();
+
 async function fetchAllLeadRows(columns: string, label: string): Promise<Lead[]> {
+  const cached = leadRowsMemo.get(columns);
+  if (cached && Date.now() - cached.startedAt < LEAD_ROWS_MEMO_TTL_MS) {
+    // 호출부가 정렬 등 제자리 변형을 해도 캐시가 오염되지 않게 배열은 매번 새로 준다.
+    return [...(await cached.rows)];
+  }
+
+  const entry = { startedAt: Date.now(), rows: loadAllLeadRows(columns, label) };
+  leadRowsMemo.set(columns, entry);
+  entry.rows.catch(() => {
+    if (leadRowsMemo.get(columns) === entry) leadRowsMemo.delete(columns);
+  });
+
+  return [...(await entry.rows)];
+}
+
+async function loadAllLeadRows(columns: string, label: string): Promise<Lead[]> {
   const supabase = createSupabaseAdminClient();
 
   // 첫 페이지에서 count: "exact" 로 총 행수를 함께 받는다.

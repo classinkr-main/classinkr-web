@@ -163,9 +163,9 @@ export function isDormantStockRow(row: Pick<HardwareStockRow, "warehouseStock" |
 export interface HardwareDashboard {
   items: HardwareItem[]
   stock: HardwareStockRow[]
+  // 최근 출고·예정 큐는 이 배열의 부분집합이라 따로 싣지 않는다 — 클라이언트가
+  // movement_type/isPlannedMovement로 그대로 파생한다(정렬·voided 제외는 여기서 끝난 상태).
   movements: HardwareMovement[]
-  recentOutbound: HardwareMovement[]
-  plannedMovements: HardwareMovement[]
   alerts: HardwareAlert[]
   totals: {
     warehouseStock: number
@@ -301,10 +301,15 @@ function defaultCategory(product: string, category: string | null) {
 
 // 전량 조회 — PostgREST 1000행 캡을 id 키셋 페이지네이션으로 우회한다(fetchAllSupabaseRows).
 // 키셋은 id 오름차순으로 읽으므로, 기존 반환 순서 계약(order 컬럼 기준)은 JS 재정렬로 유지한다.
-async function listAll<T extends { id: string }>(table: string, order = "created_at", ascending = false): Promise<T[]> {
+async function listAll<T extends { id: string }>(
+  table: string,
+  columns = "*",
+  order = "created_at",
+  ascending = false
+): Promise<T[]> {
   const sb = createSupabaseAdminClient()
   const rows = await fetchAllSupabaseRows<T>((afterId, limit) => {
-    let query = sb.from(table).select("*").order("id", { ascending: true }).limit(limit)
+    let query = sb.from(table).select(columns).order("id", { ascending: true }).limit(limit)
     if (afterId) query = query.gt("id", afterId)
     return query
   })
@@ -352,9 +357,52 @@ function recoverMoneyFromRaw(rows: HardwareMovement[]): HardwareMovement[] {
   })
 }
 
+// 대시보드가 읽지 않는 임포트 계보 컬럼(source_table·source_key·import_run_id)은 빼고 읽는다.
+// 시트 임포트 경로는 listCurrentSheetImportMovements가 따로 전량(select "*")을 읽으므로 무관하다.
+const DASHBOARD_MOVEMENT_COLUMNS = [
+  "id",
+  "item_id",
+  "product_name",
+  "movement_type",
+  "quantity",
+  "occurred_at",
+  "from_location",
+  "to_location",
+  "owner",
+  "status",
+  "reference_no",
+  "memo",
+  "serials",
+  "lot_no",
+  "unit_price",
+  "amount_usd",
+  "amount_cny",
+  "storage_location",
+  "importer",
+  "source",
+  "raw",
+  "created_by",
+  "created_at",
+  "voided_at",
+  "voided_by",
+  "void_reason",
+  "converted_from_movement_id",
+  "converted_to_movement_id",
+].join(",")
+
 async function listAllHardwareMovements(): Promise<HardwareMovement[]> {
-  const rows = await listAll<HardwareMovement>("hardware_movements")
+  const rows = await listAll<HardwareMovement>("hardware_movements", DASHBOARD_MOVEMENT_COLUMNS)
   return recoverMoneyFromRaw(rows)
+}
+
+// 응답에 실리는 raw 투영. 클라이언트가 raw에서 읽는 값은 crmLink 하나뿐인데(shared.tsx
+// extractCrmLink), 시트 임포트 행의 raw는 원본 시트 행 전체를 담고 있어 응답 대부분을 차지한다.
+// recoverMoneyFromRaw가 이미 금액·수입자를 컬럼으로 끌어올린 뒤라 여기서 버려도 안전하다.
+// 수정 API는 raw를 patch로 받을 때만 덮어쓰고 클라이언트는 보내지 않으므로 저장본은 그대로다.
+function projectMovementRaw(movement: HardwareMovement): HardwareMovement {
+  const raw = isRecord(movement.raw) ? movement.raw : null
+  const crmLink = raw && isRecord(raw.crmLink) ? raw.crmLink : null
+  return { ...movement, raw: crmLink ? { crmLink } : null }
 }
 
 export interface HardwareCustomerLink {
@@ -378,7 +426,7 @@ const GENERIC_HARDWARE_DESTINATIONS = new Set(
  * REV 장부의 하드웨어 역링크용 경량 투영. 실제(non-planned), non-voided 출고의
  * 고객 목적지만 읽어 전체 재고 대시보드 조립과 600KB 응답을 피한다.
  */
-export async function getHardwareCustomerLinks(): Promise<HardwareCustomerLink[]> {
+async function getHardwareCustomerLinksUncached(): Promise<HardwareCustomerLink[]> {
   const sb = createSupabaseAdminClient()
   const rows = await fetchAllSupabaseRows<HardwareCustomerMovementRow>((afterId, limit) => {
     let query = sb
@@ -404,6 +452,18 @@ export async function getHardwareCustomerLinks(): Promise<HardwareCustomerLink[]
   return Array.from(customers, ([accountKey, name]) => ({ accountKey, name })).sort((a, b) =>
     a.name.localeCompare(b.name, "ko")
   )
+}
+
+// 장부 워크벤치가 콜드로드마다 부르는데 출고 전량 키셋 스캔이다 — 대시보드와 같은 무효화
+// 태그를 달아, 원장 쓰기 6경로가 즉시 갱신하고 그 사이 반복 호출은 캐시가 받는다.
+const getHardwareCustomerLinksCached = unstable_cache(
+  () => getHardwareCustomerLinksUncached(),
+  ["hardware-customer-links"],
+  { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 120 }
+)
+
+export function getHardwareCustomerLinks(): Promise<HardwareCustomerLink[]> {
+  return getHardwareCustomerLinksCached()
 }
 
 async function getLatestImportRun(): Promise<HardwareDashboard["importRun"]> {
@@ -1538,18 +1598,14 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
       return a.product.localeCompare(b.product, "ko")
     })
 
+  // 최근 출고(30건)·예정 큐는 이 배열의 부분집합이라 여기서 만들지 않는다 — 클라이언트가
+  // 같은 순서·같은 판정으로 파생한다. 예정 큐는 확정을 기다리는 할 일 목록이라 상한이
+  // 따로 없고, 2000건 캡만 그 상한 역할을 한다.
   const movementRows = activeMovements
     .slice()
     .sort((a, b) => movementDate(b) - movementDate(a))
     .slice(0, 2000)
-  const recentOutbound = movementRows
-    .filter((movement) => movement.movement_type === "outbound")
-    .slice(0, 30)
-  // 예정 큐는 확정을 기다리는 할 일 목록 — 최근 N건이 아니라 전량이 원칙이다.
-  // (기존 slice(0,30)은 31건째부터 화면·FIFO 미리보기·확정 대상에서 소리 없이 잘랐다.
-  //  movementRows가 이미 2000건 캡이라 상한은 그쪽이 담당한다.)
-  const plannedMovements = movementRows
-    .filter((movement) => movement.movement_type === "outbound" && isPlannedStatus(movement.status))
+    .map(projectMovementRaw)
 
   const alerts: HardwareAlert[] = []
   for (const row of rows) {
@@ -1607,8 +1663,6 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
     items,
     stock: rows,
     movements: movementRows,
-    recentOutbound,
-    plannedMovements,
     alerts: [...activeAlerts, ...mutedAlerts],
     totals: {
       warehouseStock: rows.reduce((sum, row) => sum + row.warehouseStock, 0),

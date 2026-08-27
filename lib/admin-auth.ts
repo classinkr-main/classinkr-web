@@ -310,10 +310,13 @@ function getLegacyAdminContext(req: NextRequest): VerifiedAdminContext | null {
 // 동일 세션 쿠키에 대해 짧게 캐시한다. (권한 회수 반영 지연 최대 60초)
 const SUPABASE_ADMIN_CONTEXT_TTL_MS = 60_000
 const SUPABASE_ADMIN_CONTEXT_CACHE_MAX = 200
-const supabaseAdminContextCache = new Map<
-  string,
-  { context: VerifiedAdminContext; expiresAt: number }
->()
+// 콜드 스타트에서 한 화면이 여러 어드민 API를 동시에 때리므로 완료된 결과뿐 아니라
+// 진행 중 요청도 같은 키로 공유한다.
+type SupabaseAdminContextEntry = {
+  promise: Promise<VerifiedAdminContext | null>
+  expiresAt: number
+}
+const supabaseAdminContextCache = new Map<string, SupabaseAdminContextEntry>()
 
 function getSupabaseAuthCookieKey(req: NextRequest): string | null {
   const authCookies = req.cookies
@@ -337,23 +340,41 @@ async function getSupabaseAdminContext(
 
   const cached = supabaseAdminContextCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) {
-    return cached.context
+    return cached.promise
   }
 
-  const context = await fetchSupabaseAdminContext(req)
-  if (context) {
-    if (supabaseAdminContextCache.size >= SUPABASE_ADMIN_CONTEXT_CACHE_MAX) {
-      supabaseAdminContextCache.clear()
+  if (supabaseAdminContextCache.size >= SUPABASE_ADMIN_CONTEXT_CACHE_MAX) {
+    supabaseAdminContextCache.clear()
+  }
+
+  const request = fetchSupabaseAdminContext(req).then(
+    (context) => {
+      const entry = supabaseAdminContextCache.get(cacheKey)
+      if (entry?.promise === request) {
+        if (context) {
+          entry.expiresAt = Date.now() + SUPABASE_ADMIN_CONTEXT_TTL_MS
+        } else {
+          supabaseAdminContextCache.delete(cacheKey)
+        }
+      }
+      return context
+    },
+    (error) => {
+      const entry = supabaseAdminContextCache.get(cacheKey)
+      if (entry?.promise === request) {
+        supabaseAdminContextCache.delete(cacheKey)
+      }
+      throw error
     }
-    supabaseAdminContextCache.set(cacheKey, {
-      context,
-      expiresAt: Date.now() + SUPABASE_ADMIN_CONTEXT_TTL_MS,
-    })
-  } else {
-    supabaseAdminContextCache.delete(cacheKey)
-  }
+  )
 
-  return context
+  // 진행 중 엔트리도 같은 TTL을 달아 둔다. 응답이 끝내 안 오면 60초 뒤 새 요청이 뜨도록.
+  supabaseAdminContextCache.set(cacheKey, {
+    promise: request,
+    expiresAt: Date.now() + SUPABASE_ADMIN_CONTEXT_TTL_MS,
+  })
+
+  return request
 }
 
 async function fetchSupabaseAdminContext(

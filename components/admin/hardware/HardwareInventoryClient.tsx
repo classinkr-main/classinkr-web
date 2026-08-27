@@ -170,6 +170,21 @@ const OUTBOUND_PAGE_SIZE = 6
 const ALERT_PAGE_SIZE = 5
 const LOG_GROUP_PAGE_SIZE = 8
 const PLANNED_PAGE_SIZE = 5
+const RECENT_OUTBOUND_LIMIT = 30
+
+// 서버는 movements 한 벌만 내려준다(voided 제외 · 처리일 내림차순 · 2000건 캡). 최근 출고와
+// 예정 큐는 그 배열의 부분집합이라 응답에 중복으로 싣지 않고 여기서 같은 규칙으로 파생한다.
+type HardwareDashboardResponse = Omit<HardwareDashboard, "recentOutbound" | "plannedMovements">
+
+function withDerivedMovementViews(response: HardwareDashboardResponse): HardwareDashboard {
+  const outbound = response.movements.filter((movement) => movement.movement_type === "outbound")
+  return {
+    ...response,
+    recentOutbound: outbound.slice(0, RECENT_OUTBOUND_LIMIT),
+    // 예정 큐는 확정을 기다리는 할 일 목록 — 최근 N건이 아니라 전량이 원칙이다(상한은 2000건 캡).
+    plannedMovements: outbound.filter(isPlannedMovement),
+  }
+}
 
 // 하위 탭은 지사 대시보드(BranchDashboardClient)와 같은 폴더형 규약을 쓴다 — 라벨 + 부제 2줄,
 // 활성 탭은 본문 배경(#FAFAF8)으로 채워 #EBE8E2 스트립에서 앞으로 튀어나온 것처럼 보이게 한다.
@@ -858,9 +873,11 @@ export default function HardwareInventoryClient() {
       // 재방문·뒤로가기는 공용 클라이언트 캐시(45s TTL + stale-while-revalidate)로 즉시 페인트한다
       // (서버도 이미 max-age=30/swr=120을 보낸다). 새로고침·저장 후 재조회는 force로 우회한다 —
       // CRM 화면들의 load({ force: true }) 관례와 동일.
-      const next = await adminFetchJsonCached<HardwareDashboard>("/api/admin/hardware", undefined, {
-        force: options.force,
-      })
+      const next = withDerivedMovementViews(
+        await adminFetchJsonCached<HardwareDashboardResponse>("/api/admin/hardware", undefined, {
+          force: options.force,
+        })
+      )
       setData(next)
       setSelectedItemId((current) => current || defaultEntryItemId(next.items))
     } catch (err) {
@@ -889,8 +906,10 @@ export default function HardwareInventoryClient() {
   const [sampleUnitsLoading, setSampleUnitsLoading] = useState(false)
   const [sampleUnitsError, setSampleUnitsError] = useState<string | null>(null)
   const [sampleUnitSheetId, setSampleUnitSheetId] = useState<string | null>(null)
+  const sampleUnitsRequestedRef = useRef(false)
 
   const loadSampleUnits = useCallback(async () => {
+    sampleUnitsRequestedRef.current = true
     setSampleUnitsLoading(true)
     try {
       const result = await adminFetchJson<{
@@ -907,9 +926,16 @@ export default function HardwareInventoryClient() {
     }
   }, [])
 
+  // 샘플 유닛을 읽는 화면은 홈 탭 트래커와 빠른 기록 시트(대여/반환 유닛 선택)뿐이다.
+  // ?tab=history·?tab=entry 딥링크로 들어오면 왕복을 아예 쓰지 않고, 탭 전환이나 시트 열기로
+  // 처음 필요해지는 순간 한 번만 받아온다(이후 갱신은 저장 후 loadSampleUnits 재호출).
+  // urlReady를 함께 보는 이유: activeTab 초기값이 "home"이라, URL의 tab을 반영하기 전에
+  // 판단하면 내역 탭 딥링크도 첫 커밋에서 한 번 받아버린다.
+  const sampleUnitsNeeded = urlReady && (activeTab === "home" || sheetOpen)
   useEffect(() => {
+    if (!sampleUnitsNeeded || sampleUnitsRequestedRef.current) return
     void loadSampleUnits()
-  }, [loadSampleUnits])
+  }, [sampleUnitsNeeded, loadSampleUnits])
 
   const selectedSampleUnit = useMemo(
     () => sampleUnits?.find((unit) => unit.id === sampleUnitSheetId) ?? null,
@@ -3124,7 +3150,9 @@ export default function HardwareInventoryClient() {
               type="button"
               onClick={() => {
                 void refresh()
-                void loadSampleUnits()
+                // 샘플은 아직 한 번도 안 받았고 지금 필요하지도 않으면 굳이 받지 않는다
+                // (내역 탭 딥링크에서 새로고침을 눌러도 왕복이 늘지 않게).
+                if (sampleUnitsNeeded || sampleUnitsRequestedRef.current) void loadSampleUnits()
               }}
               disabled={loading || busy != null}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[12px] font-bold text-[#111110] transition hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-60"

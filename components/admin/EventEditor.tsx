@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Image from "next/image"
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -28,7 +29,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
-import RichMarkdownEditor, { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
+import { type RichMarkdownEditorHandle } from "@/components/admin/RichMarkdownEditor"
 import { getAdminToken } from "@/lib/admin-client"
 import { extractMarkdownHeadings } from "@/lib/blog-markdown"
 import { computePublicEventStatus, formatPublicEventSchedule } from "@/lib/public-event-dates"
@@ -163,6 +164,11 @@ function adminUpload(url: string, formData: FormData) {
     body: formData,
   })
 }
+
+const RichMarkdownEditor = dynamic(() => import("@/components/admin/RichMarkdownEditor"), {
+  loading: () => <div className="h-[600px] animate-pulse rounded-xl bg-[#f0f0ec]" />,
+  ssr: false,
+})
 
 export default function EventEditor({ event, mode }: EventEditorProps) {
   const router = useRouter()

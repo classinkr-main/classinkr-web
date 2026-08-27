@@ -1,6 +1,7 @@
 import "server-only"
 
-import { getNeoCrmCustomers } from "@/lib/admin-crm-customers-neo"
+import { getNeoCrmCustomers, type NeoCrmCustomerRow } from "@/lib/admin-crm-customers-neo"
+import type { CalendarEvent } from "@/lib/calendar-data"
 import {
   buildLeadPriorityItem,
   buildNeoAccountPriorityItem,
@@ -14,9 +15,9 @@ import {
   type CrmPrioritySource,
 } from "@/lib/crm/priority"
 import { classifyTodayCallSlot, isMetaLeadItem } from "@/lib/crm/today-calls"
-import { getLeads } from "@/lib/repositories/leads"
-import { listCrmTasks } from "@/lib/repositories/crm-tasks"
-import { getLeadsActivitySummary } from "@/lib/repositories/lead-activity"
+import { getLeads, type LeadRecord } from "@/lib/repositories/leads"
+import { listCrmTasks, type CrmTaskRecord } from "@/lib/repositories/crm-tasks"
+import { getLeadsActivitySummary, type LeadActivityBadge } from "@/lib/repositories/lead-activity"
 import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
 import { buildDemoSignalIndex } from "@/lib/crm/demo-signal"
 
@@ -207,10 +208,56 @@ export function selectVisiblePriorityItems(
   return items.filter((item) => selectedIds.has(item.id)).slice(0, limit)
 }
 
-export async function getCrmPriorityQueue(
-  options: CrmPriorityQueueOptions = {}
-): Promise<CrmPriorityQueue> {
-  const now = options.now ?? new Date()
+// ── 소스 스냅샷 60초 모듈 캐시 (레버 05) ────────────────────────────────────
+// CRM 홈 필터·담당자 토글마다 leads+NEO+할일 200건+참여요약+쇼룸 ICS를 매번
+// 전량 재수집했다(실측 병목). 여기서 캐시하는 건 "소스 수집" 결과뿐이다 — 점수
+// 계산(buildXPriorityItem)·필터·정렬은 이 아래에서 요청마다 다시 실행되며 그때의
+// now를 쓰므로, 캐시가 최대 60초 묵어도 점수·버킷 판정 자체는 staleness가 없다
+// (묵는 건 원본 데이터뿐). 선례: lib/repositories/crm-unified-customers.ts의
+// sourceSnapshotCache/SOURCE_SNAPSHOT_TTL_MS 구조를 그대로 따른다.
+// - 3개 필수 소스가 전부 성공했을 때만 저장한다(complete) — 부분 실패 스냅샷을
+//   60초 고정하지 않고 다음 요청이 즉시 재시도한다(실패 캐시 금지).
+// - 참여 신호·데모 일정은 원래도 보조 지표라 실패해도 경고 없이 빈 값으로 빠지며,
+//   complete 판정에도 넣지 않는다(원본 동작 유지).
+// - options.now가 주어진 호출(테스트·고정 시각)은 캐시를 읽지도 쓰지도 않는다.
+// - 이 파일에는 쓰기 경로가 없다 — 리드 상태 등 소스 쓰기는 TTL(≤60초)로 수렴한다.
+interface CrmPrioritySourceSnapshot {
+  leads: LeadRecord[]
+  leadsOk: boolean
+  neoRows: NeoCrmCustomerRow[]
+  neoAccountsOk: boolean
+  tasks: CrmTaskRecord[]
+  tasksOk: boolean
+  engagements: Record<string, LeadActivityBadge> | null
+  demoEvents: CalendarEvent[]
+  warnings: string[]
+  complete: boolean
+}
+
+let sourceSnapshotCache: { at: number; value: CrmPrioritySourceSnapshot } | null = null
+let sourceSnapshotInFlight: Promise<CrmPrioritySourceSnapshot> | null = null
+const SOURCE_SNAPSHOT_TTL_MS = 60_000
+
+async function getSourceSnapshot(bypassCache: boolean): Promise<CrmPrioritySourceSnapshot> {
+  if (bypassCache) return loadSourceSnapshot()
+
+  const cached = sourceSnapshotCache
+  if (cached && Date.now() - cached.at < SOURCE_SNAPSHOT_TTL_MS) return cached.value
+  if (sourceSnapshotInFlight) return sourceSnapshotInFlight
+
+  const request = loadSourceSnapshot()
+    .then((value) => {
+      if (value.complete) sourceSnapshotCache = { at: Date.now(), value }
+      return value
+    })
+    .finally(() => {
+      sourceSnapshotInFlight = null
+    })
+  sourceSnapshotInFlight = request
+  return request
+}
+
+async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
   const warnings: string[] = []
   let leadsOk = true
   let neoAccountsOk = true
@@ -219,52 +266,82 @@ export async function getCrmPriorityQueue(
   const [leadResult, neoResult, taskResult, engagementResult, demoResult] = await Promise.allSettled([
     getLeads(),
     getNeoCrmCustomers(),
-    listCrmTasks({ status: "active", limit: 200, now }),
+    listCrmTasks({ status: "active", limit: 200 }),
     getLeadsActivitySummary(),
     getShowroomCalendarEvents(),
   ])
 
-  const items: CrmPriorityItem[] = []
-  // 참여 신호는 우선순위를 더 정확하게 만들 뿐 없어도 큐는 서야 한다 —
-  // 실패하면 반응 축만 조용히 빠지고 경고도 띄우지 않는다(보조 지표).
-  const engagements = engagementResult.status === "fulfilled" ? engagementResult.value : null
-  // 데모 일정도 마찬가지 — 캘린더가 죽어도 큐는 선다.
-  const demoIndex = buildDemoSignalIndex(
-    demoResult.status === "fulfilled" ? demoResult.value : [],
-    now
-  )
-
+  let leads: LeadRecord[] = []
   if (leadResult.status === "fulfilled") {
-    for (const lead of leadResult.value) {
-      const item = buildLeadPriorityItem(lead, now, {
-        engagement: engagements?.[lead.id] ?? null,
-        demoIndex,
-      })
-      if (item) items.push(item)
-    }
+    leads = leadResult.value
   } else {
     leadsOk = false
     warnings.push("리드 우선순위를 불러오지 못했습니다.")
   }
 
+  let neoRows: NeoCrmCustomerRow[] = []
   if (neoResult.status === "fulfilled" && neoResult.value.ok) {
-    for (const account of neoResult.value.rows) {
-      const item = buildNeoAccountPriorityItem(account, now, { demoIndex })
-      if (item) items.push(item)
-    }
+    neoRows = neoResult.value.rows
   } else {
     neoAccountsOk = false
     warnings.push("동기화 고객 참고 데이터를 불러오지 못했습니다.")
   }
 
+  let tasks: CrmTaskRecord[] = []
   if (taskResult.status === "fulfilled" && taskResult.value.health.ok) {
-    for (const task of taskResult.value.rows) {
-      const item = buildTaskPriorityItem(task, now)
-      if (item) items.push(item)
-    }
+    tasks = taskResult.value.rows
   } else {
     tasksOk = false
     warnings.push("CRM 할 일을 불러오지 못했습니다.")
+  }
+
+  // 참여 신호·데모 일정은 우선순위를 더 정확하게 만들 뿐 없어도 큐는 서야 한다 —
+  // 실패하면 조용히 빈 값으로 빠지고 경고도 띄우지 않는다(보조 지표).
+  const engagements = engagementResult.status === "fulfilled" ? engagementResult.value : null
+  const demoEvents = demoResult.status === "fulfilled" ? demoResult.value : []
+
+  return {
+    leads,
+    leadsOk,
+    neoRows,
+    neoAccountsOk,
+    tasks,
+    tasksOk,
+    engagements,
+    demoEvents,
+    warnings,
+    complete: leadsOk && neoAccountsOk && tasksOk,
+  }
+}
+
+export async function getCrmPriorityQueue(
+  options: CrmPriorityQueueOptions = {}
+): Promise<CrmPriorityQueue> {
+  const now = options.now ?? new Date()
+  const snapshot = await getSourceSnapshot(options.now != null)
+  const { leadsOk, neoAccountsOk, tasksOk } = snapshot
+  const warnings = [...snapshot.warnings]
+
+  const items: CrmPriorityItem[] = []
+  const engagements = snapshot.engagements
+  const demoIndex = buildDemoSignalIndex(snapshot.demoEvents, now)
+
+  for (const lead of snapshot.leads) {
+    const item = buildLeadPriorityItem(lead, now, {
+      engagement: engagements?.[lead.id] ?? null,
+      demoIndex,
+    })
+    if (item) items.push(item)
+  }
+
+  for (const account of snapshot.neoRows) {
+    const item = buildNeoAccountPriorityItem(account, now, { demoIndex })
+    if (item) items.push(item)
+  }
+
+  for (const task of snapshot.tasks) {
+    const item = buildTaskPriorityItem(task, now)
+    if (item) items.push(item)
   }
 
   const sorted = sortPriorityItems(items)

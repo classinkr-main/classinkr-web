@@ -88,6 +88,12 @@ export interface DocsArticleVersionDetail {
   createdAt: string
 }
 
+/**
+ * 버전 목록 전용(본문 미포함) — DocsArticleEditor 버전 기록 패널은 versionNumber/title/
+ * changeNote/createdAt만 렌더하고, 롤백은 versionId만 POST해 서버가 재조회한다(레버 08).
+ */
+export type DocsArticleVersionListItem = Omit<DocsArticleVersionDetail, "contentMarkdown" | "contentJson">
+
 export interface DocsArticleDraftDetail {
   articleId: string
   draftPayload: DocsArticlePatchInput
@@ -213,6 +219,12 @@ interface DocsArticleVersionRow {
   created_at: string
 }
 
+type DocsArticleVersionListRow = Omit<DocsArticleVersionRow, "content_markdown" | "content_json">
+
+const VERSION_LIST_COLUMNS =
+  "id, article_id, version_number, title, description, change_note, created_by, created_at"
+const VERSION_LIST_LIMIT = 50
+
 interface DocsArticleDraftRow {
   article_id: string
   draft_payload: unknown
@@ -304,6 +316,19 @@ function rowToVersion(row: DocsArticleVersionRow): DocsArticleVersionDetail {
     description: row.description,
     contentMarkdown: row.content_markdown ?? "",
     contentJson: getContentJson(row.content_json),
+    changeNote: row.change_note,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  }
+}
+
+function rowToVersionListItem(row: DocsArticleVersionListRow): DocsArticleVersionListItem {
+  return {
+    id: row.id,
+    articleId: row.article_id,
+    versionNumber: row.version_number,
+    title: row.title,
+    description: row.description,
     changeNote: row.change_note,
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -603,16 +628,17 @@ export async function createDocsArticleVersionSnapshot(
 
 export async function listDocsArticleVersions(
   articleId: string
-): Promise<DocsArticleVersionDetail[]> {
+): Promise<DocsArticleVersionListItem[]> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
     .from("docs_article_versions")
-    .select("id, article_id, version_number, title, description, content_markdown, content_json, change_note, created_by, created_at")
+    .select(VERSION_LIST_COLUMNS)
     .eq("article_id", articleId)
     .order("version_number", { ascending: false })
+    .limit(VERSION_LIST_LIMIT)
   if (error) throw error
 
-  return ((data ?? []) as DocsArticleVersionRow[]).map(rowToVersion)
+  return ((data ?? []) as DocsArticleVersionListRow[]).map(rowToVersionListItem)
 }
 
 export async function rollbackDocsArticleToVersion(

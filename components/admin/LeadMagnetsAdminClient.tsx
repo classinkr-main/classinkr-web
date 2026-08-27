@@ -27,21 +27,23 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import type {
+  LeadMagnet,
+  LeadMagnetActionStep,
+  LeadMagnetCategory,
+  LeadMagnetGate,
+  LeadMagnetScoreBand,
+  LeadMagnetSection,
+  LeadMagnetSourceLink,
+  LeadMagnetStatus,
+  LeadMagnetTier,
+} from "@/lib/lead-magnets"
 import {
   getLeadMagnetCategoryLabel,
   getLeadMagnetGateLabel,
   getLeadMagnetItemCount,
   getLeadMagnetStatusLabel,
-  type LeadMagnet,
-  type LeadMagnetActionStep,
-  type LeadMagnetCategory,
-  type LeadMagnetGate,
-  type LeadMagnetScoreBand,
-  type LeadMagnetSection,
-  type LeadMagnetSourceLink,
-  type LeadMagnetStatus,
-  type LeadMagnetTier,
-} from "@/lib/lead-magnets"
+} from "@/lib/lead-magnets-helpers"
 import type { LeadMagnetStorageState } from "@/lib/repositories/lead-magnets"
 
 type EditorTab = "basic" | "copy" | "content" | "sales" | "routing"

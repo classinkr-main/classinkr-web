@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react"
 import type { ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
@@ -26,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
+import { adminFetch, adminFetchJsonCached, adminFetchJsonCachedWithMeta } from "@/lib/admin-client"
 import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import SubscriberTable from "@/components/admin/marketing/SubscriberTable"
 import SubscriberForm from "@/components/admin/marketing/SubscriberForm"
@@ -68,6 +68,16 @@ const AutomationTab = dynamic(() => import("@/components/admin/marketing/tabs/Au
 
 // 발송 상태 캐시 TTL — 60초 stale 허용(같은 URL을 쓰는 다른 화면과 캐시 키 공유, CMP-2).
 const MESSAGING_STATUS_CACHE_TTL_MS = 60_000
+
+// 구독자·캠페인 목록 캐시 TTL — 같은 페이지 코어 로더(app/admin/campaigns/page.tsx)의 60초 규약과 맞춘다.
+// 추가·삭제·일괄편집·발송은 adminFetch가 리소스 스코프(/api/admin/subscribers · /api/admin/email)째로
+// 캐시를 비우므로, 뮤테이션 직후 재조회는 이 TTL과 무관하게 항상 네트워크를 탄다.
+const MARKETING_LIST_CACHE_TTL_MS = 60_000
+
+// 활성 탭이 아닐 때 파생 목록이 돌려주는 고정 빈 배열 — 렌더마다 새 배열을 만들면
+// 이 값을 의존성으로 쓰는 하위 메모가 그대로 무효화된다.
+const NO_SUBSCRIBERS: Subscriber[] = []
+const NO_CAMPAIGNS: EmailCampaign[] = []
 
 type Tab = "subscribers" | "compose" | "history" | "automation"
 type SubscriberStatusFilter = "all" | Subscriber["status"]
@@ -252,7 +262,8 @@ export default function MarketingHub({
   const [messagingStatusLoaded, setMessagingStatusLoaded] = useState(false)
   const [composerDraft, setComposerDraft] = useState<EmailDraft>(EMPTY_DRAFT)
   const [savedSegments, setSavedSegments] = useState<SavedEmailSegment[]>(() => readSavedSegmentsStorage())
-  const [loading, setLoading] = useState(false)
+  // 첫 페인트부터 로딩 — false로 두면 구독자 페치가 끝나기 전에 "아직 구독자가 없습니다" 빈 상태가 확정 렌더된다.
+  const [loading, setLoading] = useState(true)
   const [formLoading, setFormLoading] = useState(false)
   const [sendLoading, setSendLoading] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -311,52 +322,55 @@ export default function MarketingHub({
     window.setTimeout(() => setToast(null), 2600)
   }, [])
 
-  const fetchSubscribers = useCallback(async () => {
+  // 401은 adminFetch 계층이 세션 정리 + /admin/login 하드 리다이렉트로 전역 처리한다
+  // (fetchMessagingStatus와 동일 규약) — 캐시 경유 호출은 상태 코드 대신 예외로만 도달한다.
+  const fetchSubscribers = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     setLoading(true)
     try {
-      const res = await adminFetch("/api/admin/subscribers")
-      if (res.status === 401) {
-        handleUnauthorized()
-        return
-      }
-      if (res.ok) {
-        const data = await res.json()
-        setSubscribers(data.subscribers ?? [])
-        setLastSyncedAt(new Date())
-      }
+      const { data, stale, staleSince } = await adminFetchJsonCachedWithMeta<{
+        subscribers?: Subscriber[]
+      } | null>("/api/admin/subscribers", undefined, {
+        ttlMs: MARKETING_LIST_CACHE_TTL_MS,
+        force,
+        staleIfError: !force,
+        // 최대 1,000행 + 이름·이메일·전화까지 실린 목록이라 세션 스토리지에는 남기지 않는다
+        // (상한 350k자를 넘나들어 직렬화가 버려지고, 개인정보가 탭 스토리지에 잔류한다).
+        persist: false,
+      })
+      setSubscribers(data?.subscribers ?? [])
+      // 캐시로 응답한 회차는 그 캐시가 저장된 시각을 표기한다 — 헤더 "마지막 동기화"가 실제보다 최신으로 보이지 않게.
+      setLastSyncedAt(stale && staleSince ? new Date(staleSince) : new Date())
+    } catch {
+      // 조회 실패 시 화면의 기존 목록을 비우지 않는다(기존 !res.ok 경로와 동일).
     } finally {
       setLoading(false)
     }
-  }, [handleUnauthorized])
+  }, [])
 
-  const fetchCampaigns = useCallback(async () => {
+  const fetchCampaigns = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     setCampaignsLoading(true)
     setCampaignsError(null)
     try {
-      const res = await adminFetch("/api/admin/email")
-      if (res.status === 401) {
-        handleUnauthorized()
-        return
-      }
-      if (res.ok) {
-        const data = await res.json()
-        setCampaigns(data.campaigns ?? [])
-      } else {
-        setCampaignsError("캠페인 이력을 불러오지 못했습니다.")
-      }
+      const data = await adminFetchJsonCached<{ campaigns?: EmailCampaign[] } | null>(
+        "/api/admin/email",
+        undefined,
+        { ttlMs: MARKETING_LIST_CACHE_TTL_MS, force, staleIfError: !force }
+      )
+      setCampaigns(data?.campaigns ?? [])
     } catch {
       setCampaignsError("캠페인 이력을 불러오지 못했습니다.")
     } finally {
       setCampaignsLoading(false)
     }
-  }, [handleUnauthorized])
+  }, [])
 
-  const fetchMessagingStatus = useCallback(async () => {
+  const fetchMessagingStatus = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     try {
       // 같은 URL을 조회하는 다른 화면(예: ChannelStatusStrip을 쓰는 곳)과 캐시 키가
       // 같아 동시 마운트 시 in-flight dedupe로 왕복 1회에 수렴한다(CMP-2).
       const json = await adminFetchJsonCached<unknown>("/api/admin/messaging/status", undefined, {
         ttlMs: MESSAGING_STATUS_CACHE_TTL_MS,
+        force,
       })
       const status = unwrapMessagingData<MessagingStatus>(json)
       if (status && status.provider === "solapi") {
@@ -640,23 +654,37 @@ export default function MarketingHub({
     }
   }
 
-  const activeCount = subscribers.filter((s) => s.status === "active").length
-  const unsubscribedCount = subscribers.length - activeCount
-  const draftCount = campaigns.filter((c) => c.status === "draft").length
+  // 아래 파생들이 각자 subscribers/campaigns를 다시 훑지 않도록 공용 1패스를 먼저 만든다.
+  const activeSubscribers = useMemo(() => subscribers.filter((s) => s.status === "active"), [subscribers])
 
-  // 헤더 "도달 채널" 스탯 — 활성 구독자 중 실제로 이메일/휴대폰이 채워진 수(실데이터 집계)
-  const { headerEmailReach, headerPhoneReach } = useMemo(() => {
-    const active = subscribers.filter((s) => s.status === "active")
-    return {
-      headerEmailReach: active.filter((s) => (s.email ?? "").trim().length > 0).length,
-      headerPhoneReach: active.filter((s) => (s.phone ?? "").trim().length > 0).length,
-    }
-  }, [subscribers])
-
-  const latestCampaign = useMemo(
-    () => [...campaigns].sort((a, b) => safeTime(b.sentAt ?? b.createdAt) - safeTime(a.sentAt ?? a.createdAt))[0],
+  // 최신순 캠페인 + 비교 키(정규화 제목·발송 시각) 사전 계산. 초안 검증이 타이핑 한 글자마다
+  // 200건을 복사·정렬하고 제목을 다시 정규화하던 자리라, 키는 campaigns가 바뀔 때만 만든다.
+  const campaignRecency = useMemo(
+    () =>
+      campaigns
+        .map((campaign) => ({
+          campaign,
+          at: safeTime(campaign.sentAt ?? campaign.createdAt),
+          subjectKey: normalizeSubject(campaign.subject),
+        }))
+        .sort((a, b) => b.at - a.at),
     [campaigns]
   )
+
+  const activeCount = activeSubscribers.length
+  const unsubscribedCount = subscribers.length - activeCount
+  const draftCount = useMemo(() => campaigns.filter((c) => c.status === "draft").length, [campaigns])
+
+  // 헤더 "도달 채널" 스탯 — 활성 구독자 중 실제로 이메일/휴대폰이 채워진 수(실데이터 집계)
+  const { headerEmailReach, headerPhoneReach } = useMemo(
+    () => ({
+      headerEmailReach: activeSubscribers.filter((s) => (s.email ?? "").trim().length > 0).length,
+      headerPhoneReach: activeSubscribers.filter((s) => (s.phone ?? "").trim().length > 0).length,
+    }),
+    [activeSubscribers]
+  )
+
+  const latestCampaign = campaignRecency[0]?.campaign
   const latestSubscriber = useMemo(
     () => [...subscribers].sort((a, b) => safeTime(b.createdAt) - safeTime(a.createdAt))[0],
     [subscribers]
@@ -687,21 +715,34 @@ export default function MarketingHub({
   }, [subscribers])
 
   const recentCampaigns = useMemo(
-    () => [...campaigns].sort((a, b) => safeTime(b.sentAt ?? b.createdAt) - safeTime(a.sentAt ?? a.createdAt)).slice(0, 4),
-    [campaigns]
+    () => campaignRecency.slice(0, 4).map((entry) => entry.campaign),
+    [campaignRecency]
   )
 
-  const filteredSubscribers = subscribers.filter((subscriber) => {
-    const matchesQuery =
-      !query.trim() ||
-      [subscriber.name, subscriber.email, subscriber.org, subscriber.role, subscriber.phone, subscriber.tags.join(" ")]
-        .filter(Boolean)
-        .some((field) => field!.toLowerCase().includes(query.toLowerCase()))
+  // 검색 입력은 지연값으로 거른다 — 한 글자마다 전체 구독자 배열을 다시 훑지 않고,
+  // 타이핑이 잦아들면 그때 목록이 따라온다(EventsTab·신규 리드 패널과 같은 규약).
+  const deferredQuery = useDeferredValue(query)
 
-    const matchesStatus = statusFilter === "all" || subscriber.status === statusFilter
-    const matchesSource = sourceFilter === "all" || subscriber.source === sourceFilter
-    return matchesQuery && matchesStatus && matchesSource
-  })
+  // 구독자 탭이 아닐 때는 계산 자체를 건너뛴다 — 이 목록의 유일한 소비처가 구독자 탭이라
+  // 발송 작성 탭에서 타이핑할 때까지 필터를 돌릴 이유가 없다.
+  const filteredSubscribers = useMemo(() => {
+    if (activeTab !== "subscribers") return NO_SUBSCRIBERS
+
+    const needle = deferredQuery.trim().toLowerCase()
+    return subscribers.filter((subscriber) => {
+      if (statusFilter !== "all" && subscriber.status !== statusFilter) return false
+      if (sourceFilter !== "all" && subscriber.source !== sourceFilter) return false
+      if (!needle) return true
+      return [
+        subscriber.name,
+        subscriber.email,
+        subscriber.org,
+        subscriber.role,
+        subscriber.phone,
+        subscriber.tags.join(" "),
+      ].some((field) => field && field.toLowerCase().includes(needle))
+    })
+  }, [activeTab, subscribers, deferredQuery, statusFilter, sourceFilter])
 
   const {
     visible: visibleSubscriberCount,
@@ -715,21 +756,23 @@ export default function MarketingHub({
   // 이전 필터에서 펼쳐둔 범위가 무관한 새 결과에 그대로 남지 않도록.
   useEffect(() => {
     collapseSubscribers()
-  }, [query, statusFilter, sourceFilter, collapseSubscribers])
+  }, [deferredQuery, statusFilter, sourceFilter, collapseSubscribers])
 
-  const filteredCampaigns = campaigns.filter((campaign) => campaignStatusFilter === "all" || campaign.status === campaignStatusFilter)
+  const filteredCampaigns = useMemo(() => {
+    if (activeTab !== "history") return NO_CAMPAIGNS
+    return campaigns.filter((campaign) => campaignStatusFilter === "all" || campaign.status === campaignStatusFilter)
+  }, [activeTab, campaigns, campaignStatusFilter])
 
   // 태그별 active 구독자 수 맵 (TagSelector countMap용)
   const tagCountMap = useMemo(() => {
     const map: Record<string, number> = {}
-    for (const s of subscribers) {
-      if (s.status !== "active") continue
+    for (const s of activeSubscribers) {
       for (const tag of s.tags) {
         map[tag] = (map[tag] ?? 0) + 1
       }
     }
     return map
-  }, [subscribers])
+  }, [activeSubscribers])
 
   const activeSegment = useMemo(
     () => savedSegments.find((segment) => areTagsEqual(segment.targetTags, composerDraft.targetTags)) ?? null,
@@ -742,31 +785,34 @@ export default function MarketingHub({
     persistSavedSegmentsStorage(sorted)
   }, [])
 
-  const countSelectedAudience = useCallback(
+  // 태그 조건에 맞는 활성 구독자 — 대상 수와 변수 빈 값 집계가 같은 결과를 나눠 쓴다
+  // (태그 미선택이면 활성 전체가 그대로 대상이라 새 배열도 만들지 않는다).
+  const selectRecipients = useCallback(
     (targetTags: string[]) => {
-      if (targetTags.length === 0) return activeCount
-      return subscribers.filter(
-        (subscriber) =>
-          subscriber.status === "active" &&
-          subscriber.tags.some((tag) => targetTags.includes(tag))
-      ).length
+      if (targetTags.length === 0) return activeSubscribers
+      return activeSubscribers.filter((subscriber) =>
+        subscriber.tags.some((tag) => targetTags.includes(tag))
+      )
     },
-    [activeCount, subscribers]
+    [activeSubscribers]
+  )
+
+  const countSelectedAudience = useCallback(
+    (targetTags: string[]) => selectRecipients(targetTags).length,
+    [selectRecipients]
   )
 
   const evaluateDraft = useCallback(
     (draft: EmailDraft) => {
       const normalizedSubject = normalizeSubject(draft.subject)
       const length = bodyLength(draft.body)
-      const selectedAudience = countSelectedAudience(draft.targetTags)
+      const draftRecipients = selectRecipients(draft.targetTags)
+      const selectedAudience = draftRecipients.length
 
-      const recentDuplicateCampaign = [...campaigns]
-        .sort((a, b) => safeTime(b.sentAt ?? b.createdAt) - safeTime(a.sentAt ?? a.createdAt))
-        .find((campaign) => {
-          if (normalizeSubject(campaign.subject) !== normalizedSubject) return false
-          const sentTime = safeTime(campaign.sentAt ?? campaign.createdAt)
-          return sentTime > 0 && Date.now() - sentTime <= 30 * 24 * 60 * 60 * 1000
-        })
+      const recentDuplicateCampaign = campaignRecency.find((entry) => {
+        if (entry.subjectKey !== normalizedSubject) return false
+        return entry.at > 0 && Date.now() - entry.at <= 30 * 24 * 60 * 60 * 1000
+      })?.campaign
 
       const ctaMatch = draft.body.match(/(https?:\/\/[^\s<)"]+|www\.[^\s<)"]+|#\w+)/i)
       const ctaDetected = hasLikelyLink(draft.body)
@@ -781,12 +827,6 @@ export default function MarketingHub({
       const usedKnown = knownVariableKeys.filter((key) => tokenKeys.includes(key))
       const unknownTokens = Array.from(new Set(tokenKeys.filter((key) => !knownVariableKeys.includes(key as (typeof knownVariableKeys)[number]))))
       const hasAiBlock = /\{ai:/i.test(draftText)
-      const draftRecipients =
-        draft.targetTags.length === 0
-          ? subscribers.filter((s) => s.status === "active")
-          : subscribers.filter(
-              (s) => s.status === "active" && s.tags.some((tag) => draft.targetTags.includes(tag))
-            )
       const emptyValueNotes: string[] = []
       if (usedKnown.includes("org")) {
         const empties = draftRecipients.filter((s) => !(s.org ?? "").trim()).length
@@ -915,7 +955,7 @@ export default function MarketingHub({
         bodyLength: length,
       }
     },
-    [activeCount, campaigns, countSelectedAudience, subscribers, unsubscribedCount]
+    [activeCount, campaignRecency, selectRecipients, unsubscribedCount]
   )
 
   const composerReview = useMemo(() => evaluateDraft(composerDraft), [composerDraft, evaluateDraft])
@@ -930,10 +970,11 @@ export default function MarketingHub({
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
   }, [])
 
+  // 헤더 "동기화"는 사용자가 신선도를 요구한 순간이다 — 캐시를 우회해 실제로 다시 받아온다.
   const handleRefreshAll = useCallback(() => {
-    void fetchSubscribers()
-    void fetchCampaigns()
-    void fetchMessagingStatus()
+    void fetchSubscribers({ force: true })
+    void fetchCampaigns({ force: true })
+    void fetchMessagingStatus({ force: true })
   }, [fetchSubscribers, fetchCampaigns, fetchMessagingStatus])
 
   useEffect(() => {
@@ -1434,7 +1475,7 @@ export default function MarketingHub({
                     <SubscriberTable
                       subscribers={filteredSubscribers}
                       visibleCount={visibleSubscriberCount}
-                      filterSignature={`${query}|${statusFilter}|${sourceFilter}`}
+                      filterSignature={`${deferredQuery}|${statusFilter}|${sourceFilter}`}
                       onDelete={setDeleteTarget}
                       onCompose={handleComposeFromSubscriber}
                       onAddSubscriber={() => setIsFormOpen(true)}
@@ -1552,7 +1593,7 @@ export default function MarketingHub({
             onCampaignStatusFilterChange={setCampaignStatusFilter}
             campaignsLoading={campaignsLoading}
             campaignsError={campaignsError}
-            onRetryCampaigns={() => void fetchCampaigns()}
+            onRetryCampaigns={() => void fetchCampaigns({ force: true })}
             recentCampaigns={recentCampaigns}
             recentDraftCampaigns={recentDraftCampaigns}
             recentFailedCampaigns={recentFailedCampaigns}

@@ -20,7 +20,7 @@ import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import LeadMessageCard from "@/components/admin/crm/LeadMessageCard"
 import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 
-import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
+import { adminFetch, adminFetchJsonCached, adminFetchJsonCachedWithMeta } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
 import type { LeadActivity, LeadActivityBadge } from "@/lib/repositories/lead-activity"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
@@ -105,6 +105,16 @@ import LeadsBoardView from "./LeadsBoardView"
 const LEAD_BOARD_LIST_STEP = 50
 // 담당자 패널에 그리는 행 상한. 넘치는 인원·건수는 각주로 드러낸다(조용히 자르지 않는다).
 const OWNER_ROW_CAP = 6
+
+// 리드 목록 캐시 — CrmSubnav의 hover 예열(warmAdminRequestCache, ttl 60s)과 같은 캐시 키를
+// 쓰므로 TTL을 0으로 두면 예열이 100% 헛돈다. persist는 계속 false: 리드 전량 페이로드가
+// sessionStorage 쿼터를 위협하므로 메모리 캐시만 쓴다.
+const LEADS_CACHE_TTL_MS = 30_000
+const LEADS_CACHE_SWR_MS = 120_000
+
+// now 틱 주기. 틱 한 번이 전 리드 우선순위 재계산 + 필터·정렬 + 보드 재렌더를 부르므로
+// 1분은 비싸다. 우선순위 감쇠가 최대 5분 늦게 반영되는 건 감수한 트레이드오프.
+const NOW_TICK_MS = 300_000
 
 interface LeadAssignmentPreviewResponse extends LeadAssignmentPolicyPreview {
   snapshotToken: string
@@ -1224,16 +1234,17 @@ export default function LeadsBoardClient() {
   const fetchLeads = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
     try {
-      const data = await adminFetchJsonCached<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, {
-        ttlMs: 0,
+      // WithMeta를 쓰는 이유: staleIfError 폴백(갱신 실패 → 예전 캐시)이 조용히 성공처럼
+      // 보이면 안 된다. 실패로 대체된 경우에만 배너를 띄우고, 갱신 시각도 실제 저장 시각으로 적는다.
+      const result = await adminFetchJsonCachedWithMeta<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, {
+        ttlMs: LEADS_CACHE_TTL_MS,
         force: options?.force,
         persist: false,
-        staleIfError: false,
-        staleWhileRevalidateMs: 0,
+        staleWhileRevalidateMs: LEADS_CACHE_SWR_MS,
       })
-      setLeads(data.leads)
-      setLoadError(null)
-      setLastLoadedAt(new Date())
+      setLeads(result.data.leads)
+      setLoadError(result.staleReason === "error" ? "리드 목록을 새로 받지 못했습니다." : null)
+      setLastLoadedAt(result.staleSince === null ? new Date() : new Date(result.staleSince))
     } catch (err) {
       const message = err instanceof Error ? err.message : "리드를 불러오지 못했습니다."
       setLoadError(message)
@@ -1780,11 +1791,36 @@ export default function LeadsBoardClient() {
 
   const deferredSearch = useDeferredValue(searchQuery)
 
-  // 시간 버킷(24h/48h·오늘/지연 판정)이 렌더마다 흔들리지 않도록 now를 60초 틱으로 고정한다.
+  // 시간 버킷(24h/48h·오늘/지연 판정)이 렌더마다 흔들리지 않도록 now를 틱으로 고정한다.
+  // 숨은 탭에서는 아무도 안 보는 재계산이므로 틱을 멈추고, 돌아오면 즉시 한 번 맞춘 뒤 재개한다.
   const [nowMs, setNowMs] = useState(() => Date.now())
   useEffect(() => {
-    const timer = setInterval(() => setNowMs(Date.now()), 60_000)
-    return () => clearInterval(timer)
+    let timer: ReturnType<typeof setInterval> | null = null
+
+    const stop = () => {
+      if (!timer) return
+      clearInterval(timer)
+      timer = null
+    }
+    const start = () => {
+      if (timer) return
+      timer = setInterval(() => setNowMs(Date.now()), NOW_TICK_MS)
+    }
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stop()
+        return
+      }
+      setNowMs(Date.now())
+      start()
+    }
+
+    if (!document.hidden) start()
+    document.addEventListener("visibilitychange", handleVisibility)
+    return () => {
+      stop()
+      document.removeEventListener("visibilitychange", handleVisibility)
+    }
   }, [])
 
   // 리드 파생 집계 — 렌더마다 재계산하지 않도록 입력(리드·필터·지연검색·now틱)에만 반응해 memo한다.
