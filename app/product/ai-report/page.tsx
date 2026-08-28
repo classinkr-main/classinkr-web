@@ -174,18 +174,24 @@ const BENEFITS = [
         title: "좋은 수업이 강사가 아니라 학원에 남습니다",
         body: "에이스 강사가 퇴사하면 그 반이 흔들립니다. 잘 되던 수업이 어떤 흐름이었는지가 그 사람 머릿속에만 있었기 때문입니다. 녹화와 리포트가 쌓이면 그 흐름이 학원의 기록이 됩니다. 다음 강사는 백지가 아니라 그 기록에서 시작합니다.",
         gains: ["강사 이직에 흔들리는 폭이 줄어듭니다", "신입 강사가 참고할 실제 수업이 생깁니다"],
+        image: "/images/product/ai-report/benefit-archive.png",
+        imageAlt: "수업 기록 카드가 차곡차곡 쌓이는 모습의 선화 일러스트",
     },
     {
         numeral: "02",
         title: "상담이 인상에서 근거로 바뀝니다",
         body: "“잘 하고 있어요”와 “지난 3주 동안 이 개념을 이렇게 다뤘고, 지금은 여기까지 왔습니다”는 학부모에게 완전히 다르게 들립니다. 수업 리포트는 상담 테이블에 올려놓을 근거가 됩니다.",
         gains: ["재등록 상담의 설득력이 올라갑니다", "학부모 클레임에 기록으로 대응합니다"],
+        image: "/images/product/ai-report/benefit-evidence.png",
+        imageAlt: "테이블을 사이에 두고 마주 앉은 두 사람과 그 위에 놓인 수업 리포트 선화 일러스트",
     },
     {
         numeral: "03",
         title: "매주 반복되던 일이 사라집니다",
         body: "녹화 파일을 찾아 옮기고, 결석생 보강 시간을 따로 잡고, 무슨 수업이었는지 강사에게 다시 묻는 일 — 학원에서 매주 반복되는 이 업무들이 자동으로 처리됩니다.",
         gains: ["강사가 수업에 쓸 시간이 늘어납니다", "실장의 응대 업무가 가벼워집니다"],
+        image: "/images/product/ai-report/benefit-time.png",
+        imageAlt: "시계 둘레를 되돌아가는 화살표로 시간이 돌아옴을 나타낸 선화 일러스트",
     },
 ]
 
@@ -667,17 +673,31 @@ function BenefitsSection() {
                     </p>
                 </motion.div>
 
-                <div className="max-w-4xl mx-auto space-y-20 md:space-y-28">
+                <div className="max-w-5xl mx-auto space-y-24 md:space-y-32">
                     {BENEFITS.map((benefit, i) => (
                         <motion.div
                             key={benefit.numeral}
                             {...stagger(i)}
-                            className="flex flex-col md:flex-row md:items-start gap-6 md:gap-14"
+                            // 좌우 교차 배치로 긴 섹션에 리듬을 준다
+                            className={`flex flex-col md:items-center gap-10 md:gap-20 ${
+                                i % 2 === 1 ? "md:flex-row-reverse" : "md:flex-row"
+                            }`}
                         >
-                            <span className="text-5xl md:text-6xl font-bold text-[#084734]/25 tabular-nums leading-none shrink-0 md:w-24">
-                                {benefit.numeral}
-                            </span>
+                            <div className="w-full md:w-[36%] shrink-0">
+                                <div className="relative aspect-square w-full max-w-[240px] mx-auto">
+                                    <Image
+                                        src={benefit.image}
+                                        alt={benefit.imageAlt}
+                                        fill
+                                        sizes="240px"
+                                        className="object-contain"
+                                    />
+                                </div>
+                            </div>
                             <div className="flex-1 min-w-0">
+                                <span className="block text-4xl font-bold text-[#084734]/25 tabular-nums leading-none mb-5">
+                                    {benefit.numeral}
+                                </span>
                                 <h3 className="text-2xl md:text-3xl font-bold text-[#111110] leading-snug mb-5">
                                     {benefit.title}
                                 </h3>
