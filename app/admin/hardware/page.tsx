@@ -1,5 +1,6 @@
 import HardwareInventoryClient, { type HardwareDashboardResponse } from "@/components/admin/hardware/HardwareInventoryClient"
 import { getVerifiedAdminContextForPage } from "@/lib/admin/page-auth"
+import { settleWithinBudget } from "@/lib/admin/prefetch-budget"
 import {
   BRANCH_READ_ADMIN_API_ROLES,
   HARDWARE_FINALIZE_CAPABILITY,
@@ -30,13 +31,11 @@ async function prefetchHardwareDashboard(): Promise<HardwareDashboardResponse | 
 }
 
 export default async function AdminHardwarePage() {
-  let initialData: HardwareDashboardResponse | null = null
-  try {
-    initialData = await prefetchHardwareDashboard()
-  } catch {
-    // 프리페치 실패는 화면을 죽이지 않는다 — 데이터 없이 렌더하고 클라이언트가 다시 받아온다.
-    initialData = null
-  }
+  // 프리페치는 공용 예산(1.2초) 안에서만 기다린다. 이 페이지는 force-dynamic이라 프리페치가
+  // 끝나야 HTML이 흐르는데, getHardwareDashboard 콜드 미스(원장 전체 스캔)가 TTFB를 무제한
+  // 붙잡으면 스켈레톤 대신 빈 탭을 오래 보게 된다. 초과·실패는 모두 null =
+  // "프리페치 없음"으로 떨어져 지금까지처럼 클라이언트 페치 경로를 탄다.
+  const initialData: HardwareDashboardResponse | null = await settleWithinBudget(prefetchHardwareDashboard)
 
   return <HardwareInventoryClient initialData={initialData} />
 }

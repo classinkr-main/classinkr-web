@@ -605,6 +605,23 @@ export function isPinSeedEligible(alreadyAttempted: boolean, searchParamsString:
   return !alreadyAttempted && searchParamsString === ""
 }
 
+// 서버 프리페치 시드 게이트용 — URL 복원이 끝난 뒤 이 화면이 실제로 요청하게 될 파이프라인
+// URL을 검색 파라미터만으로 미리 계산한다. 정규화(team/period 화이트리스트, month 형식,
+// period !== "M"이면 month를 URL에 넣지 않음)는 URL 복원 effect·아래 pipelineUrl 조립과
+// 문자 그대로 같아야 한다 — 어긋나면 시드가 맞는데도 버려지거나(성능 손실), 틀린데도
+// 적용된다(잘못된 행 표시).
+export function pipelineUrlForSearchParams(searchParamsString: string, defaultMonth: string): string {
+  const params = new URLSearchParams(searchParamsString)
+  const teamParam = params.get("team")
+  const team = teamParam && (TEAMS as readonly string[]).includes(teamParam) ? teamParam : "ALL"
+  const periodParam = params.get("period")
+  const period = periodParam && (PERIODS as readonly string[]).includes(periodParam) ? periodParam : "Q"
+  const monthParam = params.get("month")
+  const month = monthParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthParam) ? monthParam : defaultMonth
+  const monthQuery = period === "M" ? `&month=${encodeURIComponent(month)}` : ""
+  return `/api/admin/branch/pipeline?team=${team}&period=${period}${monthQuery}`
+}
+
 function metadataNumberString(metadata: Record<string, unknown> | null | undefined, key: string): string {
   const value = metadata?.[key]
   if (typeof value === "number" && Number.isFinite(value)) return String(value)
@@ -1533,8 +1550,19 @@ export default function SalesLedgerWorkbench({
   // 만들어 둔 첫 화면 rows다. 지금 URL·refreshKey와 정확히 일치할 때만 쓰고, 그동안
   // useBranchJson은 요청 자체를 만들지 않는다(enabled=false). 필터 변경·새로고침으로 키가 한
   // 번이라도 벗어나면 시드는 폐기되어 다시 살아나지 않는다 — 이후는 전부 기존 페치 경로.
+  //
+  // 딥링크 플래시 차단: team/period/month 상태는 URL 복원 effect가 마운트 이후에 채우므로
+  // 첫 프레임의 pipelineUrl은 항상 기본 조합(ALL·Q)이다. 그래서 ?team=BD&period=M 딥링크에서도
+  // 시드 키가 일치해 "다른 팀의 행"이 한 프레임 그려졌다가 교체됐다. 시드를 켤지 말지만
+  // URL에서 동기적으로 판정해(상태 흐름·복원 effect는 그대로 둔다) 딥링크면 처음부터 끄고
+  // 스켈레톤 → 올바른 데이터로 간다. 이 페이지는 force-dynamic이라 서버 렌더도 같은 파라미터를
+  // 보므로(useSearchParams) SSR HTML부터 시드가 빠진다 — 하이드레이션 불일치 없음.
   const pipelineStateKey = `${refreshKey}:${pipelineUrl}`
-  const [pipelineSeedLive, setPipelineSeedLive] = useState(initialPipeline != null)
+  const [pipelineSeedLive, setPipelineSeedLive] = useState(
+    () =>
+      initialPipeline != null &&
+      pipelineUrlForSearchParams(searchParams.toString(), defaultMonthRef.current) === initialPipeline.url,
+  )
   const pipelineSeed =
     pipelineSeedLive && initialPipeline && `0:${initialPipeline.url}` === pipelineStateKey
       ? initialPipeline

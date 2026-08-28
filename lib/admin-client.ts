@@ -169,7 +169,10 @@ function shouldBypassBrowserCache(url: string) {
   return bypass
 }
 
-// 백그라운드 갱신이 도는 사이 이 캐시 키가 무효화됐는지 되짚는다.
+// 어떤 요청이 시작된 뒤 이 캐시 키가 무효화됐는지 되짚는다. 소비처는 둘 — 콜백 통지
+// (notifyRevalidation)와 응답 성공 시의 캐시 쓰기(startRequest) 양쪽을 같은 술어로 가드한다.
+// 콜백만 막으면 절반이다: 화면에는 안 보여줘도 memoryCache/sessionStorage에는 뮤테이션 이전
+// 응답이 그대로 들어앉아, 다음 읽기가 방금 저장한 내용을 되돌린 상태로 시작한다.
 // 캐시 엔트리 자체로는 못 되짚는다 — 갱신이 성공하면 같은 키를 다시 채워 넣기 때문이다.
 // 대신 mutationScopeAt을 본다: clearCacheScopes(캐시 삭제)는 두 호출부(clearAdminRequestCache,
 // adminFetch의 비-GET 성공 처리) 모두에서 markAdminMutation과 짝으로만 실행되므로
@@ -563,22 +566,43 @@ async function adminFetchJsonCachedInternal<T>(
     const requestInit: AdminFetchInit | undefined = options.force
       ? { ...init, cache: "no-cache" }
       : init
+    // 캐시 쓰기 가드의 기준 시각 — fetch를 띄우기 직전에 잡는다. 이 시각 **이후**의 무효화
+    // (뮤테이션)는 "이 응답은 이미 낡았다"는 뜻이므로 캐시에 되쓰지 않는다.
+    // 포그라운드 최초 요청(뮤테이션 → 즉시 재조회 포함)은 무효화가 끝난 뒤에 시작되므로
+    // requestStartedAt > 무효화 시각이 되어 가드에 걸리지 않는다 — 새 데이터를 캐시하는
+    // 정상 흐름은 그대로다. 걸리는 건 요청이 도는 **사이**에 무효화가 끼어든 회차뿐이고,
+    // 그건 사실상 SWR 백그라운드 갱신 경로다.
+    // 대가: 무효화와 요청 시작이 같은 ms에 겹치면(예: clearBranchRequestCache 직후 바로
+    // 나가는 새로고침 요청) 술어가 "무효화됨"으로 세어 이 응답을 캐시하지 않는다 —
+    // 데이터는 그대로 반환되고 다음 읽기가 한 번 더 네트워크를 탈 뿐이라, 저장한 내용을
+    // 되돌릴 위험보다 이쪽을 택한다(wasCacheKeyInvalidatedSince 주석의 같은 정책).
+    const requestStartedAt = Date.now()
     const request = adminFetchJson<T>(input, requestInit)
       .then((data): AdminCachedFetchResult<T> => {
-        const entry: AdminCacheEntry<T> = {
-          data,
-          expiresAt: Date.now() + ttlMs,
-          savedAt: Date.now(),
+        if (!wasCacheKeyInvalidatedSince(cacheKey, requestStartedAt)) {
+          const entry: AdminCacheEntry<T> = {
+            data,
+            expiresAt: Date.now() + ttlMs,
+            savedAt: Date.now(),
+          }
+          memoryCache.set(cacheKey, entry)
+          pruneMemoryCache()
+          if (persist) writeSessionCache(cacheKey, entry)
         }
-        memoryCache.set(cacheKey, entry)
-        pruneMemoryCache()
-        if (persist) writeSessionCache(cacheKey, entry)
         return { data, stale: false, staleSince: null }
       })
       .catch((error): AdminCachedFetchResult<T> => {
         const stale = staleIfError ? readAdminCache<T>(cacheKey, true) : null
         if (stale) {
-          return { data: stale.data, stale: true, staleSince: stale.savedAt, staleReason: "error", staleError: error }
+          return {
+            data: stale.data,
+            stale: true,
+            staleSince: stale.savedAt,
+            staleReason: "error",
+            // undefined여도 키가 생기면(항상 열거형) 콜백을 쓰지 않는 소비처의 결과
+            // 직렬화 형태가 바뀐다 — 값이 있을 때만 실어 기본 shape을 유지한다.
+            ...(error === undefined ? {} : { staleError: error }),
+          }
         }
         throw error
       })

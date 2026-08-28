@@ -6,6 +6,7 @@ import {
   hasAdminApiRole,
 } from "@/lib/admin-auth"
 import { getVerifiedAdminContextForPage } from "@/lib/admin/page-auth"
+import { settleWithinBudget } from "@/lib/admin/prefetch-budget"
 import { getAdminVisitorStats, type VisitorStatsPayload } from "@/lib/admin-visitor-stats"
 import type { OverviewLeadSummary } from "@/lib/admin/overview/lead-summary"
 import { getCachedOverviewLeadSummary } from "@/lib/admin/overview/lead-summary-cache"
@@ -43,29 +44,8 @@ const EMPTY_INITIAL_DATA: OverviewInitialData = {
   osSummary: null,
 }
 
-// 서버 프리페치가 첫 HTML을 붙잡지 않게 하는 상한.
-//
-// 이 페이지는 force-dynamic이라 프리페치가 끝날 때까지 RSC 응답이 나가지 않는다 —
-// 상한이 없으면 콜드 미스(리드 전량 스캔·RPC) 대기가 그대로 TTFB가 되어, 지금의
-// "스켈레톤 즉시 → 채움"보다 체감이 나빠진다. 웜 캐시 적중은 ms 단위라 1.2초면 대부분
-// 통과하고, 넘긴 소스는 null로 내려 기존 클라이언트 페치 경로를 그대로 탄다.
-// 넘긴 뒤에도 서버 쿼리는 계속 돌아 캐시를 데우므로 뒤이은 그 요청이 웜 결과를 받는다.
-const PREFETCH_BUDGET_MS = 1_200
-
-function settleWithinBudget<T>(run: () => Promise<T>): Promise<T | null> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  // 실패는 프리페치 없음(null)과 같게 취급한다 — 페이지를 500으로 만들지 않는다.
-  const task = run().then(
-    (value) => value,
-    () => null
-  )
-  const budget = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), PREFETCH_BUDGET_MS)
-  })
-  return Promise.race([task, budget]).finally(() => {
-    if (timer !== undefined) clearTimeout(timer)
-  })
-}
+// 서버 프리페치가 첫 HTML을 붙잡지 않게 하는 상한은 lib/admin/prefetch-budget으로 공용화했다
+// (하드웨어·KR Team·장부 페이지가 같은 1.2초 예산을 쓴다). 근거·동작은 그 파일 주석 참조.
 
 export async function prefetchOverviewInitialData(): Promise<OverviewInitialData> {
   // 검증 경로 자체가 던지면(예: Supabase env 부재) 페이지를 500으로 만들지 않고
