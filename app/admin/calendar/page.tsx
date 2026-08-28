@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ArrowUpRight } from "lucide-react"
 
 import {
@@ -34,6 +34,21 @@ import {
 } from "@/lib/admin-calendar/range"
 import { buildAdminCalendarUrl } from "@/lib/admin/calendar-range"
 
+import {
+  createRequestGeneration,
+  type RequestGeneration,
+} from "@/lib/admin-calendar/request-generation"
+
+import {
+  CALENDAR_EVENTS_CACHE_TTL_MS,
+  computeAdjacentPrefetchRanges,
+  scheduleIdlePrefetch,
+  type CancelIdlePrefetch,
+} from "@/components/admin/calendar/calendar-prefetch"
+import {
+  decodeHiddenSourcesParam,
+  encodeHiddenSourcesParam,
+} from "@/components/admin/calendar/calendar-hidden-sources-url"
 import { AgendaList } from "@/components/admin/calendar/AgendaList"
 import { AssigneeSwimlane } from "@/components/admin/calendar/AssigneeSwimlane"
 import { CalendarEmpty } from "@/components/admin/calendar/CalendarEmpty"
@@ -108,6 +123,9 @@ export default function AdminCalendarPage() {
   const [hiddenSources, setHiddenSources] = useState<Set<EventSource>>(new Set())
   const [hiddenAssignees, setHiddenAssignees] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
+  // 최초 로드가 끝났는지 — 이후의 기간 이동/뷰 전환은 "새로고침"으로 취급해 이전 데이터를
+  // 화면에 그대로 둔 채 조용한 인디케이터만 보여준다(첫 로드만 기존 빈 상태 표시를 허용).
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(null)
@@ -127,6 +145,10 @@ export default function AdminCalendarPage() {
     const params = new URLSearchParams(window.location.search)
     const urlView = params.get("view")
     const urlAnchor = params.get("anchor")
+    // hiddenSources는 URL(`hidden`)이 있으면 그 값이 우선(공유·새로고침 딥링크) — 없을 때만
+    // 아래에서 localStorage 값으로 폴백한다. hiddenAssignees는 URL 대상이 아니라 항상
+    // localStorage에서만 복원한다(요청 범위 — 담당자 필터는 이름이 URL에 노출되지 않게 둔다).
+    const hiddenSourcesFromUrl = decodeHiddenSourcesParam(params.get("hidden"))
 
     if (isCalendarViewId(urlView)) setView(urlView)
     else {
@@ -143,7 +165,7 @@ export default function AdminCalendarPage() {
       const raw = localStorage.getItem(FILTER_STORAGE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw) as { hiddenSources?: unknown; hiddenAssignees?: unknown }
-        if (Array.isArray(parsed.hiddenSources)) {
+        if (!hiddenSourcesFromUrl && Array.isArray(parsed.hiddenSources)) {
           setHiddenSources(new Set(parsed.hiddenSources as EventSource[]))
         }
         if (Array.isArray(parsed.hiddenAssignees)) {
@@ -153,6 +175,8 @@ export default function AdminCalendarPage() {
     } catch {
       /* 파싱 실패 시 기본(전체 표시) 유지 */
     }
+    if (hiddenSourcesFromUrl) setHiddenSources(hiddenSourcesFromUrl)
+
     setPrefsHydrated(true)
   }, [])
 
@@ -173,38 +197,80 @@ export default function AdminCalendarPage() {
     }
   }, [prefsHydrated, hiddenSources, hiddenAssignees, view])
 
-  // 뷰·기간을 주소에 반영해 새로고침·공유가 같은 화면을 연다. 히스토리는 쌓지 않는다.
+  // 뷰·기간·소스 필터를 주소에 반영해 새로고침·공유가 같은 화면을 연다. 히스토리는 쌓지 않는다.
   useEffect(() => {
     if (!prefsHydrated) return
     const params = new URLSearchParams(window.location.search)
     params.set("view", view)
     params.set("anchor", anchor)
+    const hiddenParam = encodeHiddenSourcesParam(hiddenSources)
+    if (hiddenParam) params.set("hidden", hiddenParam)
+    else params.delete("hidden")
     window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`)
-  }, [prefsHydrated, view, anchor])
+  }, [prefsHydrated, view, anchor, hiddenSources])
 
   // ─── 데이터 ──────────────────────────────────────────────────────
   // 기간 경계(from·to)만 의존값으로 잡는다 — range 객체 정체성이 아니라 실제 조회 구간이
   // 바뀔 때만 재조회해야 사이드바 예열이 만든 캐시 키를 그대로 맞힌다.
   const { from: rangeFrom, to: rangeTo } = range
+  // 늦게 끝난 이전 기간 응답이 현재 화면을 덮지 않게 하는 문지기(lib/admin-calendar/request-generation.ts).
+  const eventsGenerationRef = useRef<RequestGeneration | null>(null)
+  // idle 프리페치는 항상 최신 예약 하나만 살아 있는다 — 지나간 기간까지 깨어나 요청하지 않도록.
+  const prefetchCancelRef = useRef<CancelIdlePrefetch | null>(null)
+
   const fetchEvents = useCallback(async () => {
+    const generation = (eventsGenerationRef.current ??= createRequestGeneration())
+    const token = generation.next()
     setLoading(true)
     try {
       const data = await adminFetchJsonCached<CalendarEvent[]>(
         buildAdminCalendarUrl({ from: rangeFrom, to: rangeTo }),
         undefined,
-        { ttlMs: 60_000 }
+        {
+          ttlMs: CALENDAR_EVENTS_CACHE_TTL_MS,
+          // TTL이 지난 캐시로 화면을 먼저 채운 회차는 뒤에서 갱신이 돈다. 그 결과를 받지
+          // 않으면 이 페이지를 열어 둔 내내 오래된 일정이 남는다(effect는 다시 돌지 않는다).
+          onRevalidated: ({ data: fresh }) => {
+            if (fresh && generation.isCurrent(token)) setEvents(fresh)
+          },
+        }
       )
+      // 이 응답이 최신 기간의 것이 아니면 화면에 손대지 않는다.
+      if (!generation.isCurrent(token)) return
       setEvents(data)
       setErrorMessage(null)
+      // 현재 기간이 성공적으로 뜬 뒤에만, 유휴 시간에 인접 기간을 조용히 데운다 — 지금 화면이
+      // 기다리는 요청과 대역폭을 다투지 않는다. 실패는 완전 무음(사용자 조회에 영향 없음).
+      prefetchCancelRef.current?.()
+      prefetchCancelRef.current = scheduleIdlePrefetch(() => {
+        for (const adjacent of computeAdjacentPrefetchRanges({ from: rangeFrom, to: rangeTo })) {
+          void adminFetchJsonCached<CalendarEvent[]>(buildAdminCalendarUrl(adjacent), undefined, {
+            ttlMs: CALENDAR_EVENTS_CACHE_TTL_MS,
+          }).catch(() => {
+            /* 프리페치 실패는 무음 — 본 조회는 이미 끝났다 */
+          })
+        }
+      })
     } catch (error) {
+      if (!generation.isCurrent(token)) return
       setErrorMessage(error instanceof Error ? error.message : "캘린더 데이터를 불러오지 못했습니다.")
     } finally {
-      setLoading(false)
+      // 먼저 끝난 옛 요청이 loading을 내리면, 아직 도는 현재 요청이 있는데도 새로고침 표시가
+      // 꺼져 거짓 빈 상태가 노출된다 — 최신 요청만 이 스위치를 만진다.
+      if (generation.isCurrent(token)) {
+        setLoading(false)
+        setHasLoadedOnce(true)
+      }
     }
   }, [rangeFrom, rangeTo])
 
   useEffect(() => {
     fetchEvents()
+    // 기간이 바뀌거나 화면을 떠나면 이전 기간의 예열 예약을 취소한다.
+    return () => {
+      prefetchCancelRef.current?.()
+      prefetchCancelRef.current = null
+    }
   }, [fetchEvents])
 
   // Overview가 하던 "홈페이지 리드 대응" 진입점을 캘린더로 이관 — 기간 이동과 무관하게 한 번만.
@@ -233,14 +299,18 @@ export default function AdminCalendarPage() {
   // 실패하면 상태 레이어 없이 캘린더만 뜬다 — 부가 정보가 본 기능(일정 조회)을 막지 않는다.
   useEffect(() => {
     let cancelled = false
+    const applyHealth = (data: CalendarHealthPayload | undefined) => {
+      if (!cancelled && data && Array.isArray(data.sources)) setHealth(data)
+    }
     adminFetchJsonCached<CalendarHealthPayload>("/api/admin/calendar/health", undefined, {
       cacheKey: "calendar:source-health",
       ttlMs: 300_000,
       staleWhileRevalidateMs: 600_000,
+      // 이벤트 조회와 같은 이유 — 오래된 캐시로 먼저 그린 회차의 백그라운드 갱신 결과를
+      // 받지 않으면, 서버가 이미 감지한 연동 장애가 이 페이지 세션 내내 안 보인다.
+      onRevalidated: ({ data }) => applyHealth(data),
     })
-      .then((data) => {
-        if (!cancelled && data && Array.isArray(data.sources)) setHealth(data)
-      })
+      .then(applyHealth)
       .catch(() => {
         /* 상태 조회 실패 시 스트립·수리 패널 없이 둔다 */
       })
@@ -384,6 +454,11 @@ export default function AdminCalendarPage() {
   const upcomingEvents = visibleEvents
     .filter((event) => (event.endDate ?? event.date) >= todayStr)
     .slice(0, 8)
+
+  // 최초 로드 이후의 기간 이동/뷰 전환 중 배경 새로고침인가 — 담당자·타임라인·목록 뷰는
+  // 필터링 결과가 0건이면 "일정이 없다"고 단정하는데, 새 기간 데이터가 아직 안 왔을 뿐인
+  // 이 구간에는 그 단정이 거짓일 수 있다(이전 기간 이벤트가 새 기간 날짜와 안 맞아떨어짐).
+  const isBackgroundRefresh = loading && hasLoadedOnce
 
   // ─── 연결 상태 파생 ──────────────────────────────────────────────
   const brokenSources = useMemo(
@@ -539,6 +614,7 @@ export default function AdminCalendarPage() {
               todayStr={todayStr}
               visibleEvents={visibleEvents}
               onSelectDate={setSelectedDate}
+              refreshing={isBackgroundRefresh}
             />
           )}
           {view === "timeline" && (
@@ -547,6 +623,7 @@ export default function AdminCalendarPage() {
               todayStr={todayStr}
               visibleEvents={visibleEvents}
               onSelectDate={setSelectedDate}
+              refreshing={isBackgroundRefresh}
             />
           )}
           {view === "agenda" && (
@@ -555,6 +632,7 @@ export default function AdminCalendarPage() {
               todayStr={todayStr}
               visibleEvents={visibleEvents}
               onSelectDate={setSelectedDate}
+              refreshing={isBackgroundRefresh}
             />
           )}
             </>

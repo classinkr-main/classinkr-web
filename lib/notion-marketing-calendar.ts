@@ -3,25 +3,37 @@
  *
  * 노션이 이 캘린더의 system-of-record다. 서버에서 NOTION_API_TOKEN으로 직접 읽어
  * CalendarEvent로 매핑만 한다. Supabase 복제/백업 없음(읽기 전용).
- * 인메모리 TTL 캐시만 사용한다(서버리스 인스턴스 한정, 비영속 허용 — 영속 저장 아님).
+ *
+ * 캐시는 두 겹이다(2026-08-28):
+ *   1) 공용 SWR 인메모리(lib/admin-calendar/source-cache.ts) — 스테일 즉시 반환 + 백그라운드 갱신,
+ *      콜드 3.5초 마감. 노션이 느려도 캘린더의 나머지 소스는 그대로 뜬다.
+ *   2) next 데이터 캐시(revalidate 300) — 서버리스 인스턴스가 바뀌어도 살아남는다.
+ *      페이로드 크기 근거: MAX_ROWS=300 상한, 이벤트 1건 ~500B → 최악 ~150KB.
+ *      저장소가 금지하는 대형 페이로드(리드 전량, MB급)와 자릿수가 다르다.
  *
  * 이 모듈은 서버 전용이다. NOTION_API_TOKEN은 절대 클라이언트로 노출되지 않는다.
  */
 import type { CalendarEvent } from "@/lib/calendar-data"
 import { normalizeAssigneeNames } from "@/lib/admin-calendar/people"
+import {
+  EXTERNAL_SOURCE_HARD_TIMEOUT_MS,
+  EXTERNAL_SOURCE_STALE_MS,
+  EXTERNAL_SOURCE_TIMEOUT_MS,
+  EXTERNAL_SOURCE_TTL_MS,
+  sourceIdentityFingerprint,
+  swrSource,
+  withPersistentSourceCache,
+} from "@/lib/admin-calendar/source-cache"
 
 const NOTION_VERSION = "2022-06-28"
 const NOTION_API = "https://api.notion.com/v1"
 // 마케팅 운영 캘린더 DB. 비밀이 아니므로 코드 기본값 + env 오버라이드.
 const DEFAULT_DB_ID = "2b29585602f9806bbef0e250df7df14d"
-const CACHE_TTL_MS = 5 * 60_000
+const CACHE_TTL_MS = EXTERNAL_SOURCE_TTL_MS
 const MAX_ROWS = 300
 
-interface CacheEntry {
-  at: number
-  data: CalendarEvent[]
-}
-const cache = new Map<string, CacheEntry>()
+/** 실패해도 캘린더가 비지 않도록 공유하는 빈 결과(fallback) */
+const EMPTY: CalendarEvent[] = []
 
 function getToken(): string | null {
   const t = process.env.NOTION_API_TOKEN?.trim()
@@ -117,7 +129,9 @@ async function notionQuery(body: Record<string, unknown>): Promise<NotionQueryRe
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
-    cache: "no-store", // 우리 TTL 캐시가 권위를 갖도록 Next fetch 캐시 비활성
+    cache: "no-store", // 우리 SWR/데이터 캐시가 권위를 갖도록 Next fetch 캐시 비활성
+    // 원천 하드 마감. 응답 마감(3.5초)보다 넉넉해 늦게 끝나도 캐시에는 앉는다.
+    signal: AbortSignal.timeout(EXTERNAL_SOURCE_HARD_TIMEOUT_MS),
   })
   if (!res.ok) throw new Error(`notion query failed: ${res.status}`)
   return (await res.json()) as NotionQueryResponse
@@ -217,28 +231,39 @@ function mapRow(row: NotionRow): CalendarEvent | null {
 }
 
 /**
+ * 원천 1회 조회 + 매핑. 인스턴스를 넘겨 사는 next 데이터 캐시로 승격한다(revalidate 300).
+ * 인자는 캐시 키가 되므로 원시값만 받는다(년·월).
+ */
+const loadNotionEvents = withPersistentSourceCache(
+  async (year?: number, month?: number): Promise<CalendarEvent[]> => {
+    const rows = await queryRows({ year, month })
+    return rows.map(mapRow).filter((event): event is CalendarEvent => event !== null)
+  },
+  // 원천 identity(노션 DB ID)를 키에 함께 넣는다 — DB를 갈아끼웠는데 옛 DB의 캐시가 계속
+  // 나오는 걸 막는다. 원문이 아니라 지문이다(캐시 키는 로그에 노출될 수 있다).
+  ["admin-calendar-notion-v1", sourceIdentityFingerprint(getDbId())],
+  Math.round(CACHE_TTL_MS / 1000)
+)
+
+/**
  * 마케팅 운영 캘린더(노션) 이벤트를 CalendarEvent[]로 반환한다.
- * - 토큰 미설정/네트워크 오류 시 빈 배열(다른 캘린더 소스를 깨지 않음).
- * - 5분 TTL 인메모리 캐시. 오류 시 직전 캐시가 있으면 그걸 제공(graceful).
+ * - 토큰 미설정 시 빈 배열(다른 캘린더 소스를 깨지 않음).
+ * - 캐시 규약은 lib/admin-calendar/source-cache.ts 한 곳에 있다: 신선 즉시 / 스테일 즉시+백그라운드
+ *   갱신(6시간) / 콜드 3.5초 마감. 마감 초과·실패는 빈 배열(다른 소스 유지).
  */
 export async function getNotionMarketingCalendarEvents(
   opts: NotionCalendarQueryOptions = {}
 ): Promise<CalendarEvent[]> {
   if (!getToken()) return []
   const key = opts.year && opts.month ? `${opts.year}-${String(opts.month).padStart(2, "0")}` : "all"
-  const cached = cache.get(key)
-  const nowMs = Date.now()
-  if (cached && nowMs - cached.at < CACHE_TTL_MS) return cached.data
-  try {
-    const rows = await queryRows(opts)
-    const events = rows
-      .map(mapRow)
-      .filter((event): event is CalendarEvent => event !== null)
-    cache.set(key, { at: nowMs, data: events })
-    return events
-  } catch {
-    // 오류 시 직전 캐시가 있으면 stale로 제공, 없으면 빈 배열
-    if (cached) return cached.data
-    return []
-  }
+  const result = await swrSource<CalendarEvent[]>({
+    key: `notion:${key}`,
+    label: "notion",
+    ttlMs: CACHE_TTL_MS,
+    staleMs: EXTERNAL_SOURCE_STALE_MS,
+    timeoutMs: EXTERNAL_SOURCE_TIMEOUT_MS,
+    fallback: EMPTY,
+    fetcher: () => loadNotionEvents(opts.year, opts.month),
+  })
+  return result.data
 }

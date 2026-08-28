@@ -37,6 +37,7 @@ import { getTeamEventsCalendarEvents } from "@/lib/team-member-calendars"
 import { getKoreaHolidayEvents } from "@/lib/korea-holidays"
 import { normalizeAssigneeNames } from "@/lib/admin-calendar/people"
 import { enumerateMonths, overlapsRange } from "@/lib/admin-calendar/range"
+import { readSourceCacheStats } from "@/lib/admin-calendar/source-cache"
 import {
   deleteStoredCalendarEvent,
   getStoredCalendarEvent,
@@ -515,7 +516,61 @@ export async function getAllEvents(): Promise<CalendarEvent[]> {
   ].sort(compareEvents)
 }
 
-export async function getEventsByMonth(year: number, month: number): Promise<CalendarEvent[]> {
+/** 소스별 실측 — 어느 소스가 화면을 잡고 있는지 말하는 관측 데이터(이벤트 내용에는 영향 없음). */
+export interface CalendarSourceDiagnostic {
+  source: EventSource
+  count: number
+  /** 이번 요청에서 그 소스를 기다린 시간(ms) */
+  durationMs: number
+  /** 확정된 최신이 아님(콜드 실패·마감 초과·직전 갱신 실패) */
+  degraded: boolean
+  /** 돌려준 데이터의 캐시 나이(ms). null = 캐시를 두지 않는 소스(Supabase 직조회) */
+  ageMs: number | null
+}
+
+/** 한 번의 range 조회 안에서 월마다 다시 긁지 않아도 되는 것들을 공유한다. */
+interface MonthQueryContext {
+  /** 공개 행사는 월 필터가 없는 전량 조회다 — 3개월 뷰가 같은 스캔을 3번 돌 이유가 없다. */
+  publicEvents?: Promise<CalendarEvent[]>
+}
+
+async function measure<T>(promise: Promise<T>): Promise<{ value: T; durationMs: number }> {
+  const startedAt = Date.now()
+  const value = await promise
+  return { value, durationMs: Date.now() - startedAt }
+}
+
+/**
+ * 소스별 상태는 공용 SWR 캐시(lib/admin-calendar/source-cache.ts)가 라벨별로 남긴 마지막
+ * 관측치에서 읽는다. 어댑터 시그니처를 건드리지 않으려는 선택이라, 같은 소스를 동시에
+ * 여러 달로 부르면 마지막 값이 남는다 — 관측 전용이며 이벤트 데이터에는 영향이 없다.
+ */
+function diagnose(
+  source: EventSource,
+  events: CalendarEvent[],
+  durationMs: number
+): CalendarSourceDiagnostic {
+  const stats = readSourceCacheStats(source)
+  return {
+    source,
+    count: events.length,
+    durationMs,
+    degraded: stats?.degraded ?? false,
+    ageMs: stats?.ageMs ?? null,
+  }
+}
+
+export interface CalendarMonthResult {
+  events: CalendarEvent[]
+  diagnostics: CalendarSourceDiagnostic[]
+}
+
+/** getEventsByMonth 와 같은 경로 — 소스별 타이밍·상태까지 함께 돌려준다(연결 상태 라우트용). */
+export async function getEventsByMonthWithDiagnostics(
+  year: number,
+  month: number,
+  context?: MonthQueryContext
+): Promise<CalendarMonthResult> {
   const prefix = getMonthPrefix(year, month)
   const [
     storedEvents,
@@ -527,30 +582,51 @@ export async function getEventsByMonth(year: number, month: number): Promise<Cal
     holidayEvents,
     compassEvents,
   ] = await Promise.all([
-    getStoredEvents({
-      from: `${prefix}-01`,
-      to: `${prefix}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`,
-    }),
-    getPartnerCalendarEvents({ year, month }),
-    getPublicEventsAsCalendarEvents(),
-    getNotionMarketingCalendarEvents({ year, month }),
-    getShowroomCalendarEvents({ year, month }),
-    getTeamEventsCalendarEvents({ year, month }),
-    getKoreaHolidayEvents({ year, month }),
-    getCompassDemoCalendarEvents({ year, month }),
+    measure(
+      getStoredEvents({
+        from: `${prefix}-01`,
+        to: `${prefix}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`,
+      })
+    ),
+    measure(getPartnerCalendarEvents({ year, month })),
+    measure(context?.publicEvents ?? getPublicEventsAsCalendarEvents()),
+    measure(getNotionMarketingCalendarEvents({ year, month })),
+    measure(getShowroomCalendarEvents({ year, month })),
+    measure(getTeamEventsCalendarEvents({ year, month })),
+    measure(getKoreaHolidayEvents({ year, month })),
+    measure(getCompassDemoCalendarEvents({ year, month })),
   ])
-  return [
-    ...storedEvents,
-    ...partnerEvents,
-    ...publicEvents,
-    ...notionEvents,
-    ...showroomEvents,
-    ...teamEventEvents,
-    ...holidayEvents,
-    ...compassEvents,
+
+  const events = [
+    ...storedEvents.value,
+    ...partnerEvents.value,
+    ...publicEvents.value,
+    ...notionEvents.value,
+    ...showroomEvents.value,
+    ...teamEventEvents.value,
+    ...holidayEvents.value,
+    ...compassEvents.value,
   ]
     .filter((event) => isEventVisibleInMonth(event, year, month) || event.date.startsWith(prefix))
     .sort(compareEvents)
+
+  return {
+    events,
+    diagnostics: [
+      diagnose("calendar", storedEvents.value, storedEvents.durationMs),
+      diagnose("partner", partnerEvents.value, partnerEvents.durationMs),
+      diagnose("event", publicEvents.value, publicEvents.durationMs),
+      diagnose("notion", notionEvents.value, notionEvents.durationMs),
+      diagnose("showroom", showroomEvents.value, showroomEvents.durationMs),
+      diagnose("team_event", teamEventEvents.value, teamEventEvents.durationMs),
+      diagnose("holiday", holidayEvents.value, holidayEvents.durationMs),
+      diagnose("compass_demo", compassEvents.value, compassEvents.durationMs),
+    ],
+  }
+}
+
+export async function getEventsByMonth(year: number, month: number): Promise<CalendarEvent[]> {
+  return (await getEventsByMonthWithDiagnostics(year, month)).events
 }
 
 /**
@@ -558,15 +634,20 @@ export async function getEventsByMonth(year: number, month: number): Promise<Cal
  *
  * 소스 어댑터(노션·쇼룸·구글·공휴일·파트너)는 전부 월 단위 시그니처라, 새 축을 만드는
  * 대신 걸치는 달들을 각각 조회해 id 로 합친다. 8주여도 최대 3개월이고, 각 어댑터의
- * 인메모리 캐시가 월 키로 잡혀 있어 뷰를 오가도 같은 달은 다시 안 부른다.
+ * 캐시가 월 키로 잡혀 있어 뷰를 오가도 같은 달은 다시 안 부른다.
+ *
+ * 월 필터가 없는 공개 행사만 이 호출 안에서 한 번으로 접는다 — 예전엔 같은 전량 스캔을
+ * 걸치는 달 수만큼 반복했다.
  */
 export async function getEventsByRange(from: string, to: string): Promise<CalendarEvent[]> {
   const months = enumerateMonths({ from, to })
   if (months.length === 0) return []
 
-  const perMonth = await Promise.all(
-    months.map(({ year, month }) => getEventsByMonth(year, month))
+  const context: MonthQueryContext = { publicEvents: getPublicEventsAsCalendarEvents() }
+  const perMonthResults = await Promise.all(
+    months.map(({ year, month }) => getEventsByMonthWithDiagnostics(year, month, context))
   )
+  const perMonth = perMonthResults.map((result) => result.events)
 
   // 멀티데이 일정은 걸치는 달마다 중복해서 나오므로 id 로 한 번 눌러준다.
   const byId = new Map<string, CalendarEvent>()

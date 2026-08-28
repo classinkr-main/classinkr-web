@@ -17,6 +17,13 @@
 import "server-only"
 
 import { normalizeAssigneeNames } from "@/lib/admin-calendar/people"
+import {
+  EXTERNAL_SOURCE_HARD_TIMEOUT_MS,
+  EXTERNAL_SOURCE_STALE_MS,
+  EXTERNAL_SOURCE_TIMEOUT_MS,
+  EXTERNAL_SOURCE_TTL_MS,
+  swrSource,
+} from "@/lib/admin-calendar/source-cache"
 import { getCompassCalEvents, type CompassCalEventRow } from "@/lib/compass/bridge"
 import { compassLeadUrl } from "@/lib/compass/normalize"
 import type { CalendarEvent } from "@/lib/calendar-data"
@@ -24,17 +31,13 @@ import type { CalendarEvent } from "@/lib/calendar-data"
 /** 소스 라벨 = 원본 구글 캘린더 이름. 화면 범례(event-style.ts)와 같은 문자열이어야 한다. */
 export const COMPASS_CALENDAR_SOURCE_LABEL = "MKT 데모일정"
 
-const CACHE_TTL_MS = 5 * 60_000
+const CACHE_TTL_MS = EXTERNAL_SOURCE_TTL_MS
 /** 월 지정 없는 호출(getAllEvents)의 조회 창 */
 const ALL_LOOKBACK_DAYS = 90
 const ALL_LOOKAHEAD_DAYS = 180
 
-interface CacheEntry {
-  at: number
-  data: CalendarEvent[]
-  down: boolean
-}
-const cache = new Map<string, CacheEntry>()
+/** 실패해도 캘린더가 비지 않도록 공유하는 빈 결과(fallback) */
+const EMPTY: CalendarEvent[] = []
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -106,31 +109,82 @@ function resolveRange(opts: CompassCalendarQueryOptions, nowMs: number) {
   }
 }
 
-/** 이벤트 + 연결 상태. 캘린더 화면은 이벤트만, 연결 상태 라우트는 down 도 읽는다. */
+/** 브리지가 끊긴 상태를 캐시에 굳히지 않기 위한 마커 — 공용 SWR이 degraded 로 받는다. */
+class CompassBridgeDown extends Error {
+  constructor(detail?: string) {
+    super(`[compass-calendar] bridge down${detail ? `: ${detail}` : ""}`)
+    this.name = "CompassBridgeDown"
+  }
+}
+
+/** 하드 마감 초과 마커. down 과 같은 취급(값을 못 받았다)이고 캐시를 덮지 않는다. */
+class CompassBridgeTimeout extends Error {
+  constructor(timeoutMs: number) {
+    super(`[compass-calendar] bridge exceeded ${timeoutMs}ms hard deadline`)
+    this.name = "CompassBridgeTimeout"
+  }
+}
+
+/**
+ * 원천 호출의 하드 마감.
+ *
+ * 공용 SWR은 응답 마감(3.5초)에서 fallback을 내주되 원 약속은 취소하지 않는다 — 늦게라도
+ * 끝나면 캐시에 앉히려는 의도다. 문제는 "늦게라도 끝난다"가 보장되지 않을 때다: Supabase
+ * 왕복이 영영 안 끝나면 그 약속이 inFlight 맵에 남고, 같은 월의 이후 요청은 전부 그 시체를
+ * 재사용해 인스턴스 수명 내내 Compass가 회복하지 못한다(2026-08-28 교차리뷰 #2).
+ *
+ * 다른 어댑터는 원천 클라이언트에 마감을 건다(gaxios timeout·AbortSignal). 브리지
+ * (lib/compass/bridge.ts)는 여러 도메인이 함께 쓰는 공용 함수라 시그니처를 바꾸지 않고,
+ * 여기서 레이스로 접는다. 접힌 시도는 실패이므로 캐시를 덮지 않고, inFlight 에서도 빠져
+ * 다음 요청이 새 시도를 띄운다 — 그게 이 마감의 핵심이다.
+ */
+function withHardDeadline<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new CompassBridgeTimeout(timeoutMs)), timeoutMs)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
+}
+
+/**
+ * 이벤트 + 연결 상태. 캘린더 화면은 이벤트만, 연결 상태 라우트는 down 도 읽는다.
+ *
+ * down 의 의미는 공용 SWR의 degraded 와 같다 — "이 값은 방금 확인된 최신이 아니다".
+ * 브리지 실패는 캐시를 덮지 않으므로, 받아 둔 값이 있으면 그대로 보여주되 down 을 올린다.
+ */
 export async function getCompassCalendarEventsWithHealth(
   opts: CompassCalendarQueryOptions = {}
 ): Promise<{ events: CalendarEvent[]; down: boolean }> {
-  const nowMs = Date.now()
-  const { key, from, to } = resolveRange(opts, nowMs)
+  const { key, from, to } = resolveRange(opts, Date.now())
 
-  const cached = cache.get(key)
-  if (cached && nowMs - cached.at < CACHE_TTL_MS) {
-    return { events: cached.data, down: cached.down }
-  }
+  const result = await swrSource<CalendarEvent[]>({
+    key: `compass_demo:${key}`,
+    label: "compass_demo",
+    ttlMs: CACHE_TTL_MS,
+    staleMs: EXTERNAL_SOURCE_STALE_MS,
+    timeoutMs: EXTERNAL_SOURCE_TIMEOUT_MS,
+    fallback: EMPTY,
+    fetcher: async () => {
+      const bridge = await withHardDeadline(
+        getCompassCalEvents(from, to),
+        EXTERNAL_SOURCE_HARD_TIMEOUT_MS
+      )
+      if (bridge.down) throw new CompassBridgeDown(bridge.error)
+      return bridge.rows
+        .map(mapCompassCalEvent)
+        .filter((event): event is CalendarEvent => event !== null)
+    },
+  })
 
-  const result = await getCompassCalEvents(from, to)
-  if (result.down) {
-    // 브리지가 끊긴 상태를 5분 캐시로 굳히지 않는다 — 다음 요청이 즉시 재시도한다.
-    // 이전에 받아 둔 값이 있으면 그대로 보여주되 down 은 정직하게 올린다.
-    return { events: cached?.data ?? [], down: true }
-  }
-
-  const events = result.rows
-    .map(mapCompassCalEvent)
-    .filter((event): event is CalendarEvent => event !== null)
-
-  cache.set(key, { at: nowMs, data: events, down: false })
-  return { events, down: false }
+  return { events: result.data, down: result.degraded }
 }
 
 /** 캘린더 소스 어댑터 — 다른 소스와 같은 시그니처. 실패는 빈 배열(다른 소스를 깨지 않는다). */

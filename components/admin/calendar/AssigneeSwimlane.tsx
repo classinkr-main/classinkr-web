@@ -27,6 +27,8 @@ interface AssigneeSwimlaneProps {
   todayStr: string
   visibleEvents: CalendarEvent[]
   onSelectDate: (date: string) => void
+  /** 최초 로드 이후의 배경 새로고침 중인가 — AgendaList와 같은 이유로 거짓 빈 상태를 막는다. */
+  refreshing?: boolean
 }
 
 export function AssigneeSwimlane({
@@ -34,6 +36,7 @@ export function AssigneeSwimlane({
   todayStr,
   visibleEvents,
   onSelectDate,
+  refreshing = false,
 }: AssigneeSwimlaneProps) {
   const days = useMemo(() => enumerateDates(range.from, range.to), [range.from, range.to])
 
@@ -64,6 +67,7 @@ export function AssigneeSwimlane({
   }, [visibleEvents])
 
   if (rows.length === 0) {
+    if (refreshing) return null
     return <CalendarEmpty message="이 기간에 표시할 담당자가 없습니다" hint="담당자가 지정된 일정이 아직 없습니다" />
   }
 
