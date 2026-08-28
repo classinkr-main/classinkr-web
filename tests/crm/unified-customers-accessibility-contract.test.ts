@@ -1,12 +1,17 @@
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { resolve } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
-const clientSource = readFileSync(
-  resolve(process.cwd(), "components/admin/crm/CrmUnifiedCustomersClient.tsx"),
-  "utf8"
-)
+// 본체는 components/admin/crm/unified/* 로 분해됐다(2026-08-28) — 계약은 화면 단위로
+// 유지해야 하므로 본체 + 분해 모듈 전체를 합쳐 검사한다.
+const unifiedDir = resolve(process.cwd(), "components/admin/crm/unified")
+const clientSource = [
+  readFileSync(resolve(process.cwd(), "components/admin/crm/CrmUnifiedCustomersClient.tsx"), "utf8"),
+  ...readdirSync(unifiedDir)
+    .sort()
+    .map((name) => readFileSync(resolve(unifiedDir, name), "utf8")),
+].join("\n")
 const pageSource = readFileSync(resolve(process.cwd(), "app/admin/crm/customers/unified/page.tsx"), "utf8")
 
 describe("CRM 통합 고객 접근성 계약", () => {
