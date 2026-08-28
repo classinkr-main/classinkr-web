@@ -24,6 +24,8 @@ export interface NeoCrmCustomerRow {
   riskReasons?: Array<{ code?: string; label?: string }>
   riskConfidence?: "high" | "medium" | "low"
   freshnessLabel?: string | null
+  /** 소진 예상일. 표본이 부족하면 null — 라벨에서 재파생하지 말 것. */
+  depletionInDays?: number | null
 }
 
 export interface NeoCrmCustomerOwnerOption {
