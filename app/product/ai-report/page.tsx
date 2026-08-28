@@ -3,10 +3,15 @@
 import { motion, useReducedMotion } from "framer-motion"
 import {
     ArrowRight, BadgeCheck, CalendarX, CheckCircle2, Cloud, Copyright,
-    Eye, FileText, Lock, Mic, MonitorPlay, Play, Sparkles, Users, Video,
+    Download, Eye, FileText, Laptop, Lock, Mic, MonitorPlay, Play,
+    Presentation, Sparkles, Users, Video,
 } from "lucide-react"
 
+import Image from "next/image"
+
 import { TrackedLink } from "@/components/TrackedLink"
+import { trackEvent } from "@/lib/analytics"
+import { BROCHURE_URL } from "@/lib/marketing-links"
 
 const ease = [0.22, 1, 0.36, 1] as const
 
@@ -54,11 +59,37 @@ const PAIN_POINTS = [
     "결석생 보강은 매번 강사의 개인 부담입니다",
 ]
 
+// 진입 경로가 SW·HW 두 갈래라, 온라인/대면 어느 쪽이든 녹화된다는 사실을 먼저 못박는다
+const RECORDING_PATHS = [
+    {
+        icon: Laptop,
+        badge: "온라인 수업",
+        title: "Classin 소프트웨어가 녹화합니다",
+        detail:
+            "화면, 음성, 판서가 그대로 담깁니다. 별도 녹화 프로그램이나 저장 장치가 필요 없습니다.",
+        points: ["화면 · 음성 · 판서 동시 기록", "수업 종료와 동시에 클라우드 저장"],
+        image: "/images/product/hw/features/feature-interactive.webp",
+        imageAlt: "원격 학생 화면이 상단에 표시된 Classin 보드 앞에서 수업하는 강사",
+        imagePosition: "center",
+    },
+    {
+        icon: Presentation,
+        badge: "대면 교실 수업",
+        title: "전자칠판과 AI 카메라가 녹화합니다",
+        detail:
+            "AI 카메라가 강사를 자동으로 따라가며 촬영하고, 칠판 판서까지 함께 캡처합니다. 촬영 담당자가 필요 없습니다.",
+        points: ["강사 자동 추적 촬영 · 자동 줌", "판서 자동 캡처 · 수업 영상 자동 생성"],
+        image: "/images/case-studies/busan-gwasaram.jpg",
+        imageAlt: "전자칠판 두 대에 판서하며 대면 수업을 진행하는 학원 교실",
+        imagePosition: "center",
+    },
+]
+
 const RECORDING_FEATURES = [
     {
         icon: Video,
-        label: "자동 시작",
-        detail: "수업이 시작되면 녹화도 시작됩니다. 강사가 잊어도 누락되는 수업이 없습니다.",
+        label: "빠짐없이 쌓입니다",
+        detail: "강사가 잊어도, 바쁜 날에도 누락되는 수업이 없습니다. 모든 수업이 자동으로 기록됩니다.",
     },
     {
         icon: Cloud,
@@ -103,6 +134,8 @@ const SCENARIO_CARDS = [
         headline: "신입 강사의 수업,\n리포트로 먼저 봅니다",
         detail:
             "모든 수업을 참관할 수는 없습니다. 리포트로 수업 흐름을 먼저 파악하고, 필요한 수업만 녹화로 확인하세요. 코칭에 근거가 생깁니다.",
+        before: "가끔 참관하거나, 강사 말에 의존",
+        after: "전 수업 리포트로 확인 후 필요한 수업만 열람",
     },
     {
         icon: Users,
@@ -110,6 +143,8 @@ const SCENARIO_CARDS = [
         headline: "“오늘 뭐 배웠어요?”에\n기록으로 답합니다",
         detail:
             "학부모 문의에 기억으로 답하는 학원과 기록으로 답하는 학원은 신뢰가 다릅니다. 수업 리포트가 상담의 근거가 됩니다.",
+        before: "강사에게 다시 묻고, 기억에 의존해 전달",
+        after: "그날 수업 리포트를 근거로 바로 답변",
     },
     {
         icon: CalendarX,
@@ -117,6 +152,8 @@ const SCENARIO_CARDS = [
         headline: "보강 요청에\n링크 하나로 답합니다",
         detail:
             "결석한 학생에게 녹화와 리포트를 함께 보내면, 보강의 상당 부분이 그것으로 해결됩니다. 강사의 반복 부담이 줄어듭니다.",
+        before: "강사가 따로 시간을 내어 보강 진행",
+        after: "녹화와 리포트 전달 후, 남은 질문만 보강",
     },
 ]
 
@@ -162,9 +199,9 @@ function HeroSection() {
                         그 수업이 어땠는지 <span className="text-[#084734]">아무도 모릅니다</span>
                     </h1>
                     <p className="mt-6 text-base sm:text-lg text-[#615D59] leading-relaxed max-w-2xl mx-auto">
-                        이제는 다릅니다. 모든 수업이 자동으로 녹화되고, 음성인식이 수업 내용을
-                        리포트로 정리합니다. 원장님이 교실에 없어도, 학원의 모든 수업이 보이기
-                        시작합니다.
+                        이제는 다릅니다. 온라인 수업도, 대면 교실 수업도 자동으로 녹화되고,
+                        음성인식이 수업 내용을 리포트로 정리합니다. 원장님이 교실에 없어도,
+                        학원의 모든 수업이 보이기 시작합니다.
                     </p>
                 </motion.div>
 
@@ -180,6 +217,23 @@ function HeroSection() {
                         </motion.div>
                     ))}
                 </div>
+
+                {/* 수업이 끝난 교실 — 문제를 눈으로 보여주는 자리 */}
+                <motion.div {...fadeUp} className="mt-14 max-w-4xl mx-auto">
+                    <div className="relative aspect-[16/9] rounded-2xl overflow-hidden border border-black/[0.08] bg-[#F0F0EC]">
+                        <Image
+                            src="/images/case-studies/cheonan-jayscan.jpg"
+                            alt="수업이 끝나 학생들이 모두 떠난 학원 교실"
+                            fill
+                            priority
+                            sizes="(min-width: 896px) 896px, 100vw"
+                            className="object-cover"
+                        />
+                    </div>
+                    <p className="mt-4 text-center text-sm text-[#A39E98]">
+                        수업이 끝난 교실. 오늘 여기서 어떤 수업이 있었는지는, 강사에게 묻는 수밖에 없습니다.
+                    </p>
+                </motion.div>
 
                 {/* 파이프라인 프리뷰 */}
                 <motion.div {...fadeUp} className="mt-14 max-w-3xl mx-auto">
@@ -224,21 +278,71 @@ function RecordingSection() {
     return (
         <section id="auto-recording" className="py-24 md:py-32 bg-[#F6F5F4] scroll-mt-24">
             <div className="container mx-auto px-4 lg:px-8">
+                {/* 섹션 헤더 */}
+                <motion.div {...fadeUp} className="max-w-2xl mx-auto text-center mb-14">
+                    <Eyebrow>Step 1 — 자동 녹화</Eyebrow>
+                    <h2 className="mt-5 text-3xl sm:text-4xl md:text-5xl font-bold text-[#111110] leading-tight">
+                        누르지 않아도,
+                        <br />
+                        <span className="text-[#084734]">녹화되고 있습니다</span>
+                    </h2>
+                    <p className="mt-5 text-base sm:text-lg text-[#615D59] leading-relaxed">
+                        녹화는 사람이 챙기는 순간 구멍이 납니다. Classin은 수업 자체가
+                        녹화의 시작 버튼입니다.
+                    </p>
+                </motion.div>
+
+                {/* 녹화 경로 2종 — 온라인이든 대면이든 녹화된다 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-5xl mx-auto mb-20">
+                    {RECORDING_PATHS.map((path, i) => (
+                        <motion.div
+                            key={path.badge}
+                            {...stagger(i)}
+                            className="rounded-2xl bg-white border border-black/[0.08] overflow-hidden"
+                        >
+                            {/* 각 경로가 실제로 어떤 교실인지 사진으로 증명한다 */}
+                            <div className="relative aspect-[16/9] bg-[#F0F0EC]">
+                                <Image
+                                    src={path.image}
+                                    alt={path.imageAlt}
+                                    fill
+                                    sizes="(min-width: 768px) 50vw, 100vw"
+                                    className="object-cover"
+                                    style={{ objectPosition: path.imagePosition }}
+                                />
+                            </div>
+                            <div className="p-7 sm:p-8">
+                            <div className="flex items-center gap-3 mb-5">
+                                <div className="w-10 h-10 rounded-xl bg-[#ECFDF5] flex items-center justify-center shrink-0">
+                                    <path.icon className="w-5 h-5 text-[#084734]" />
+                                </div>
+                                <span className="text-xs font-semibold tracking-wider uppercase text-[#084734]">
+                                    {path.badge}
+                                </span>
+                            </div>
+                            <h3 className="text-lg sm:text-xl font-bold text-[#111110] leading-snug mb-3">
+                                {path.title}
+                            </h3>
+                            <p className="text-sm text-[#615D59] leading-relaxed mb-5">{path.detail}</p>
+                            <ul className="space-y-2 pt-5 border-t border-black/[0.06]">
+                                {path.points.map((point) => (
+                                    <li key={point} className="flex items-start gap-2.5 text-sm text-[#31302E]">
+                                        <CheckCircle2 className="w-4 h-4 text-[#084734] shrink-0 mt-0.5" />
+                                        {point}
+                                    </li>
+                                ))}
+                            </ul>
+                            </div>
+                        </motion.div>
+                    ))}
+                </div>
+
                 <div className="flex flex-col lg:flex-row items-center gap-14 lg:gap-20 max-w-6xl mx-auto">
                     {/* 카피 */}
                     <div className="flex-1 max-w-xl">
-                        <motion.div {...fadeUp}>
-                            <Eyebrow>Step 1 — 자동 녹화</Eyebrow>
-                            <h2 className="mt-5 text-3xl sm:text-4xl md:text-5xl font-bold text-[#111110] leading-tight">
-                                누르지 않아도,
-                                <br />
-                                <span className="text-[#084734]">녹화되고 있습니다</span>
-                            </h2>
-                            <p className="mt-5 text-base sm:text-lg text-[#615D59] leading-relaxed mb-10">
-                                녹화는 사람이 챙기는 순간 구멍이 납니다. Classin은 수업 자체가
-                                녹화의 시작 버튼입니다.
-                            </p>
-                        </motion.div>
+                        <motion.h3 {...fadeUp} className="text-2xl sm:text-3xl font-bold text-[#111110] leading-tight mb-8">
+                            어느 쪽이든, 그다음은 똑같습니다
+                        </motion.h3>
                         <div className="space-y-4">
                             {RECORDING_FEATURES.map((feature, i) => (
                                 <motion.div
@@ -500,6 +604,22 @@ function ScenarioSection() {
                                 {card.headline}
                             </h3>
                             <p className="text-sm text-[#615D59] leading-relaxed flex-1">{card.detail}</p>
+
+                            {/* 지금 방식 → Classin 대조 — 전환 이유를 눈에 보이게 */}
+                            <div className="pt-5 border-t border-black/[0.06] space-y-2.5">
+                                <div className="flex items-start gap-2.5">
+                                    <span className="text-[10px] font-bold tracking-wider uppercase text-[#A39E98] shrink-0 w-11 pt-0.5">
+                                        지금
+                                    </span>
+                                    <span className="text-xs text-[#A39E98] leading-relaxed">{card.before}</span>
+                                </div>
+                                <div className="flex items-start gap-2.5">
+                                    <span className="text-[10px] font-bold tracking-wider uppercase text-[#084734] shrink-0 w-11 pt-0.5">
+                                        Classin
+                                    </span>
+                                    <span className="text-xs text-[#31302E] font-medium leading-relaxed">{card.after}</span>
+                                </div>
+                            </div>
                         </motion.div>
                     ))}
                 </div>
@@ -541,7 +661,24 @@ function ClosingSection() {
 
                 {/* CTA */}
                 <motion.div {...fadeUp} className="mt-16 text-center">
-                    <ContactCta ctaId="ai_report_bottom_contact">도입 상담 신청</ContactCta>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                        <ContactCta ctaId="ai_report_bottom_contact">도입 상담 신청</ContactCta>
+                        <a
+                            href={BROCHURE_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() =>
+                                trackEvent("download_materials", {
+                                    button: "ai_report_brochure",
+                                    page: "/product/ai-report",
+                                })
+                            }
+                            className="inline-flex items-center justify-center gap-2 rounded-md border border-black/[0.08] bg-white px-7 py-3.5 text-base font-semibold text-[#31302E] hover:bg-[#F6F5F4] transition-colors"
+                        >
+                            <Download className="w-4 h-4" />
+                            제품 소개서 먼저 보기
+                        </a>
+                    </div>
                     <p className="mt-4 text-sm text-[#A39E98]">
                         학원 규모에 맞는 구성과 견적을 상담으로 안내해 드립니다.
                     </p>
