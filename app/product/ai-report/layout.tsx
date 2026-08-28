@@ -1,4 +1,5 @@
 import { JsonLd } from "@/components/seo/JsonLd"
+import { AI_REPORT_QA } from "@/lib/ai-report-content"
 import {
   createBreadcrumbJsonLd,
   createFaqJsonLd,
@@ -13,25 +14,6 @@ export const metadata = createPublicMetadata({
   path: "/product/ai-report",
   keywords: ["수업 녹화", "학원 수업 녹화", "AI 수업 리포트", "수업 음성인식", "학원 수업 관리"],
 })
-
-// FAQ 텍스트는 page.tsx의 FAQ_ITEMS와 동일하게 유지한다 (한쪽 수정 시 함께 수정)
-const FAQ_JSON_LD_ITEMS = [
-  {
-    question: "수업 녹화본의 저작권은 누가 갖나요?",
-    answer:
-      "녹화본의 저작권은 해당 기관과 강사에게 있습니다. Classin은 앱 내 재생만 허용하고 외부 다운로드를 차단하며, 재생 시 워터마크를 제공해 무단 배포를 막습니다.",
-  },
-  {
-    question: "도입이 복잡하지 않나요?",
-    answer:
-      "녹화와 AI 리포트는 Classin 소프트웨어에 포함된 흐름입니다. 별도 장비나 프로그램 없이 1개 교실 파일럿부터 시작할 수 있습니다.",
-  },
-  {
-    question: "비용은 어떻게 되나요?",
-    answer:
-      "학원 규모와 구성에 따라 달라집니다. 상담을 통해 학원에 맞는 구성과 견적을 안내해 드립니다.",
-  },
-]
 
 export default function AiReportLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -49,7 +31,7 @@ export default function AiReportLayout({ children }: { children: React.ReactNode
             { name: "제품 소개", path: "/product" },
             { name: "녹화 · AI 리포트", path: "/product/ai-report" },
           ]),
-          createFaqJsonLd(FAQ_JSON_LD_ITEMS),
+          createFaqJsonLd(AI_REPORT_QA),
         ]}
       />
       {children}
