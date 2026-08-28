@@ -10,6 +10,7 @@ import EventDateField from "@/components/admin/EventDateField"
 import { formatPublicEventSchedule } from "@/lib/public-event-dates"
 import type { PublicEvent, EventCategory, EventPublicationStatus, EventStatus } from "@/lib/types/public-events"
 import { EVENT_CATEGORIES } from "@/lib/types/public-events"
+import AdminErrorBanner from "@/components/admin/ui/AdminErrorBanner"
 
 function adminUpload(url: string, formData: FormData) {
   return fetch(url, {
@@ -261,11 +262,7 @@ export default function AdminEventsPage() {
         </button>
       </div>
 
-      {error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 text-red-700 text-[13px] rounded-lg border border-red-200">
-          {error}
-        </div>
-      )}
+      {error && <AdminErrorBanner message={error} className="mb-4" />}
 
       {loading ? (
         <div className="py-16 text-center text-[13px] text-[#1a1a1a]/30">불러오는 중...</div>
@@ -376,11 +373,7 @@ export default function AdminEventsPage() {
             </div>
 
             <div className="max-h-[calc(100dvh-9rem)] space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
-              {saveError && (
-                <div className="px-4 py-3 bg-red-50 text-red-700 text-[13px] rounded-lg border border-red-200">
-                  {saveError}
-                </div>
-              )}
+              {saveError && <AdminErrorBanner message={saveError} />}
 
               <div>
                 <label className="block text-[12px] font-medium text-[#1a1a1a]/50 mb-1.5">제목 *</label>

@@ -52,6 +52,7 @@ import {
   getEventSourceLabel,
   sortEventFirst,
 } from "@/components/admin/calendar/event-style"
+import AdminErrorBanner from "@/components/admin/ui/AdminErrorBanner"
 
 const FILTER_STORAGE_KEY = "admin.calendar.filters.v1"
 const VIEW_STORAGE_KEY = "admin.calendar.view.v1"
@@ -422,13 +423,7 @@ export default function AdminCalendarPage() {
         <p className="text-[12px] text-[#1a1a1a]/45">8개 소스 통합 · 외부 소스는 읽기 전용</p>
       </div>
 
-      {errorMessage && (
-        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-[#B43E3E]/30 bg-white px-4 py-3 text-[12px] leading-5">
-          <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#B43E3E]" />
-          <strong className="font-semibold text-[#B43E3E]">캘린더 오류</strong>
-          <span className="text-[#1a1a1a]/60">{errorMessage}</span>
-        </div>
-      )}
+      {errorMessage && <AdminErrorBanner title="캘린더 오류" message={errorMessage} className="mb-4" />}
 
       {/* 미응답 리드 배너 — 0건이면 렌더하지 않는다. 신호는 도트·숫자 색으로만(파스텔 채움 금지). */}
       {leadActionKpis && leadActionKpis.unrespondedCount > 0 && (

@@ -34,6 +34,7 @@ import type {
   NeoCrmCustomerRow,
 } from "@/lib/admin-crm-customers-neo"
 import type { CrmCustomerEventRecord, ListCrmCustomerEventsResult } from "@/lib/repositories/crm-events"
+import AdminErrorBanner from "@/components/admin/ui/AdminErrorBanner"
 
 type SortKey = "balance" | "expire" | "order" | "lastClass" | "name"
 
@@ -821,7 +822,7 @@ export default function NeoCrmCustomersClient() {
         </button>
       </div>
 
-      {error ? <div className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">{error}</div> : null}
+      {error ? <AdminErrorBanner message={error} className="mb-6" /> : null}
       {syncHealth?.isShroffAccountStale ? (
         <div className="mb-6 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[12px] leading-relaxed text-[#7A520F]">
           잔액·만료 원천 데이터가 {formatAgeHours(syncHealth.shroffAccountAgeHours)} 데이터입니다. 만료일·잔액이 외부 CRM과

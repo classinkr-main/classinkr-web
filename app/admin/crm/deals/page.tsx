@@ -37,6 +37,7 @@ import type {
   CrmRevenueSource,
   CrmRevenueSourceStatus,
 } from "@/lib/admin-crm-revenue-types"
+import AdminErrorBanner from "@/components/admin/ui/AdminErrorBanner"
 
 const STATUS_TONE: Record<CrmRevenueSourceStatus, string> = {
   connected: "border-[#D7EBDD] bg-[#ECFDF5] text-[#084734]",
@@ -733,11 +734,7 @@ export default function AdminCrmRevenuePage() {
         </div>
       ) : null}
 
-      {error ? (
-        <div className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">
-          {error}
-        </div>
-      ) : null}
+      {error ? <AdminErrorBanner message={error} className="mb-6" /> : null}
 
       {(data?.warnings.length ?? 0) > 0 ? (
         <div className="mb-6 border-l-2 border-amber-200 pl-3">
