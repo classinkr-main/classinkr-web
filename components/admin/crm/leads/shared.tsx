@@ -89,6 +89,23 @@ export const CONFIRMATION_GATE_EXEMPT_FILTERS = new Set<LeadFilter>([
   "unconfirmed", "unresponded", "unresponded_24h", "unresponded_48h",
 ])
 
+// ─── NEO 등록 필터 ─────────────────────────────────────────────
+// 판정 원천은 crm_source_links 확정 링크(external_account+external_lead 합산 —
+// listConfirmedLeadNeoLinks)를 서버가 합쳐 내린 집합 하나다. 상태·유입 축과 독립인 세 번째 축.
+export type NeoRegistrationFilter = "all" | "registered" | "unregistered"
+export const NEO_REGISTRATION_FILTER_LABEL: Record<NeoRegistrationFilter, string> = {
+  all: "NEO 전체", registered: "등록됨", unregistered: "미등록",
+}
+
+export function matchesNeoRegistrationFilter(
+  leadId: string,
+  filter: NeoRegistrationFilter,
+  registeredLeadIds: ReadonlySet<string>
+): boolean {
+  if (filter === "all") return true
+  return (filter === "registered") === registeredLeadIds.has(leadId)
+}
+
 export const LOG_TYPE_LABEL: Record<ContactLogType, string> = {
   call: "전화", sms: "문자", kakao: "카카오", email: "이메일",
 }

@@ -22,6 +22,7 @@ import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
 import type { LeadActivity, LeadActivityBadge } from "@/lib/repositories/lead-activity"
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
+import type { LeadNeoLink } from "@/lib/repositories/crm-source-links"
 import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/repositories/contact-logs"
 import type { PublicEvent } from "@/lib/types/public-events"
 import { parseEventToken, setEventToken } from "@/lib/types/event-metrics"
@@ -36,6 +37,9 @@ import {
   LEAD_FILTER_KEYS,
   CONFIRMATION_GATE_EXEMPT_FILTERS,
   type LeadFilter,
+  NEO_REGISTRATION_FILTER_LABEL,
+  matchesNeoRegistrationFilter,
+  type NeoRegistrationFilter,
   calcScore,
   ScoreBadge,
   readAdminResponse,
@@ -319,6 +323,8 @@ function LeadDrawer({
   events,
   activity,
   activityLoading,
+  neoLink,
+  neoLookupFailed,
   onClose,
   onStatusChange,
   onNotesChange,
@@ -336,6 +342,10 @@ function LeadDrawer({
   events: PublicEvent[]
   activity: LeadActivity | null
   activityLoading: boolean
+  /** NEO(본사 CRM) 등록 링크 — external_lead(도구 등록)와 external_account(수동 계정 연결)를 구분 표기 */
+  neoLink: LeadNeoLink | null
+  /** 링크 조회 실패 시 미등록으로 단정하지 않고 표기를 숨긴다 */
+  neoLookupFailed: boolean
   onClose: () => void
   onStatusChange: (id: string, status: LeadStatus) => void
   onNotesChange: (id: string, notes: string) => Promise<void>
@@ -470,6 +480,30 @@ function LeadDrawer({
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#1a1a1a]/50 font-medium">
                 {SOURCE_LABEL[lead.source] ?? lead.source}
               </span>
+              {/* NEO(본사 CRM) 등록 상태 — external_lead=도구 등록(초록), external_account=수동 계정
+                  연결(회색 채움)로 구분. 조회 실패면 미등록으로 단정하지 않고 숨긴다. */}
+              {!neoLookupFailed &&
+                (neoLink ? (
+                  neoLink.targetType === "external_lead" ? (
+                    <span
+                      title={`NEO CRM 리드로 등록됨 (id ${neoLink.targetId})`}
+                      className="inline-flex items-center gap-1 rounded-full bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-medium text-[#084734]"
+                    >
+                      NEO 등록됨 ·{neoLink.targetId.slice(-8)}
+                    </span>
+                  ) : (
+                    <span
+                      title={`NEO 계정에 수동 연결됨 (id ${neoLink.targetId})`}
+                      className="inline-flex items-center gap-1 rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/60"
+                    >
+                      NEO 계정 연결 ·{neoLink.targetId.slice(-8)}
+                    </span>
+                  )
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/40">
+                    NEO 미등록
+                  </span>
+                ))}
               {unconfirmed && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-[#FBF1E0] px-2 py-0.5 text-[11px] font-medium text-[#7A520F]">
                   미확인
@@ -961,6 +995,9 @@ export default function LeadsBoardClient() {
     : "priority"
 
   const [leads, setLeads] = useState<LeadRecord[]>([])
+  // NEO 등록 링크 — /api/admin/leads가 crm_source_links 확정 링크를 합쳐 내린다.
+  // null = 링크 조회 실패(필터 비활성), []= 등록 리드 없음.
+  const [neoLinks, setNeoLinks] = useState<LeadNeoLink[] | null>(null)
   const [leadModalOpen, setLeadModalOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState<LeadFilter>(initialFilter)
@@ -970,6 +1007,7 @@ export default function LeadsBoardClient() {
   // 확인 게이트 우회 토글. 기본은 기존 규칙(미확인 숨김) 그대로 두되, 한 번의 클릭으로
   // "정말 전부" 볼 수 있게 한다 — 모아보기의 전제.
   const [includeUnconfirmed, setIncludeUnconfirmed] = useState(false)
+  const [neoFilter, setNeoFilter] = useState<NeoRegistrationFilter>("all")
   const [trackingDimension, setTrackingDimension] = useState<TrackingDimension>("channel")
   const [trackingKey, setTrackingKey] = useState<string | null>(null)
   // 검색어·유입 그룹도 URL에서 복원한다 — 렌즈·정렬처럼 공유·새로고침에서 같은 화면.
@@ -1064,7 +1102,7 @@ export default function LeadsBoardClient() {
   const fetchLeads = useCallback(async (options?: { force?: boolean }) => {
     setLoading(true)
     try {
-      const data = await adminFetchJsonCached<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, {
+      const data = await adminFetchJsonCached<{ leads: LeadRecord[]; neoLinks?: LeadNeoLink[] | null }>("/api/admin/leads", undefined, {
         ttlMs: 0,
         force: options?.force,
         persist: false,
@@ -1072,6 +1110,7 @@ export default function LeadsBoardClient() {
         staleWhileRevalidateMs: 0,
       })
       setLeads(data.leads)
+      setNeoLinks(Array.isArray(data.neoLinks) ? data.neoLinks : null)
       setLoadError(null)
       setLastLoadedAt(new Date())
     } catch (err) {
@@ -1108,6 +1147,19 @@ export default function LeadsBoardClient() {
   useEffect(() => {
     void fetchLeads()
   }, [fetchLeads])
+
+  // 리드별 NEO 링크 색인 — 필터 판정(Set)과 드로어 표기(target id·type)가 같은 원천을 본다.
+  const neoLinkMap = useMemo(() => {
+    const map = new Map<string, LeadNeoLink>()
+    for (const link of neoLinks ?? []) if (!map.has(link.leadId)) map.set(link.leadId, link)
+    return map
+  }, [neoLinks])
+  const neoRegisteredIds = useMemo(() => new Set(neoLinkMap.keys()), [neoLinkMap])
+  // 링크 조회가 실패하면(null) 판정 자체가 불가 — 필터를 전체로 되돌리고 컨트롤을 잠근다.
+  const neoFilterDisabled = neoLinks === null
+  useEffect(() => {
+    if (neoFilterDisabled) setNeoFilter("all")
+  }, [neoFilterDisabled])
 
   // ?focus=risk 딥링크 — 데이터 로드 후 리스크 밴드로 스크롤
   useEffect(() => {
@@ -1524,6 +1576,7 @@ export default function LeadsBoardClient() {
     lensCounts,
     trackingScopeLeads,
     hiddenUnconfirmedCount,
+    neoCounts,
   } = useMemo(() => {
     const now = new Date(nowMs)
     const today = toLocalDateKey(now)
@@ -1561,8 +1614,9 @@ export default function LeadsBoardClient() {
     }
     // 상태 외 필터(유입·세부유입·채널·마그넷·트래킹·검색) 술어 — 필터 카드·유입 칩 카운트가
     // "그 카드를 눌렀을 때 실제로 보게 될 건수"를 보여주기 위해 공유한다.
-    const matchesSubFilters = (lead: LeadRecord, options?: { skipSourceGroup?: boolean }) => {
+    const matchesSubFilters = (lead: LeadRecord, options?: { skipSourceGroup?: boolean; skipNeo?: boolean }) => {
       if (!options?.skipSourceGroup && sourceGroup !== "all" && getLeadSourceGroup(lead) !== sourceGroup) return false
+      if (!options?.skipNeo && !matchesNeoRegistrationFilter(lead.id, neoFilter, neoRegisteredIds)) return false
       if (sourceDetailFilter !== "all" && getLeadSourceDetail(lead) !== sourceDetailFilter) return false
       if (channelSource && lead.source !== channelSource) return false
       if (leadMagnetFilter !== "all" && lead.lead_magnet !== leadMagnetFilter) return false
@@ -1593,6 +1647,7 @@ export default function LeadsBoardClient() {
     // (트래킹 키 자체는 제외 — 롤업 표가 키별 건수를 보여주는 모집단이므로.)
     const trackingScopeLeads = statusFiltered.filter((lead) => {
       if (sourceGroup !== "all" && getLeadSourceGroup(lead) !== sourceGroup) return false
+      if (!matchesNeoRegistrationFilter(lead.id, neoFilter, neoRegisteredIds)) return false
       if (sourceDetailFilter !== "all" && getLeadSourceDetail(lead) !== sourceDetailFilter) return false
       if (channelSource && lead.source !== channelSource) return false
       if (leadMagnetFilter !== "all" && lead.lead_magnet !== leadMagnetFilter) return false
@@ -1677,6 +1732,16 @@ export default function LeadsBoardClient() {
     // 필터 카드에 없는 "오늘 예정"(팔로업)만 큐 패널 헤더 배지로 노출한다.
     const todayFollowUpCount = todayFollowUps.length
     const filteredIds = filtered.map((lead) => lead.id)
+    // NEO 축 패싯 카운트 — 자신(NEO)을 뺀 나머지 활성 필터를 적용한 모집단에서 센다.
+    // 라벨 숫자와 "그 버튼을 눌렀을 때의 목록 건수"가 일치한다(유입 칩과 같은 규칙).
+    const neoScope = statusFiltered.filter((lead) => matchesSubFilters(lead, { skipNeo: true }))
+    let neoRegisteredCount = 0
+    for (const lead of neoScope) if (neoRegisteredIds.has(lead.id)) neoRegisteredCount += 1
+    const neoCounts = {
+      all: neoScope.length,
+      registered: neoRegisteredCount,
+      unregistered: neoScope.length - neoRegisteredCount,
+    }
     // 지금 게이트에 걸려 안 보이는 미확인 리드 수 — 숫자를 숨기지 않고 토글 옆에 그대로 붙인다.
     const hiddenUnconfirmedCount =
       !includeUnconfirmed && !CONFIRMATION_GATE_EXEMPT_FILTERS.has(filter)
@@ -1704,6 +1769,7 @@ export default function LeadsBoardClient() {
       lensCounts,
       trackingScopeLeads,
       hiddenUnconfirmedCount,
+      neoCounts,
     }
   }, [
     leads,
@@ -1720,6 +1786,8 @@ export default function LeadsBoardClient() {
     leadMagnetFilter,
     deferredSearch,
     nowMs,
+    neoFilter,
+    neoRegisteredIds,
   ])
 
   // 더보기(클라 배열 슬라이싱) — 모바일 카드·데스크톱 테이블이 공유한다.
@@ -2205,6 +2273,34 @@ export default function LeadsBoardClient() {
             })}
           </>
         )}
+          {/* NEO 등록 축 — 본사 CRM(XiaoshouYi) 등록 여부. 판정은 서버가 합쳐 내린 확정 링크 집합 하나. */}
+          <div
+            role="group"
+            aria-label="NEO 등록 여부 필터"
+            title={neoFilterDisabled ? "NEO 등록 링크 조회에 실패해 필터를 쓸 수 없습니다." : "본사 CRM(NEO) 등록 여부로 좁힙니다."}
+            className={`inline-flex h-[30px] shrink-0 items-center overflow-hidden rounded-full border border-[#e8e8e4] bg-white ${neoFilterDisabled ? "opacity-40" : ""}`}
+          >
+            {(Object.keys(NEO_REGISTRATION_FILTER_LABEL) as NeoRegistrationFilter[]).map((key) => {
+              const active = neoFilter === key
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  disabled={neoFilterDisabled}
+                  aria-pressed={active}
+                  onClick={() => setNeoFilter(key)}
+                  className={`inline-flex h-full items-center gap-1 px-3 text-[12px] font-medium transition-colors disabled:cursor-not-allowed ${
+                    active ? "bg-[#111110] text-white" : "text-[#1a1a1a]/60 hover:bg-[#f5f5f2]"
+                  }`}
+                >
+                  {NEO_REGISTRATION_FILTER_LABEL[key]}
+                  <span className={`tabular-nums ${active ? "text-white/55" : "text-[#1a1a1a]/35"}`}>
+                    {neoCounts[key]}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
           {/* 확인 게이트 우회 — 기본은 규칙대로 숨기되, 가려진 건수를 옆에 붙여 한 번에 열 수 있게 한다. */}
           <button
             type="button"
@@ -2921,6 +3017,8 @@ export default function LeadsBoardClient() {
           events={events}
           activity={activity}
           activityLoading={activityLoading}
+          neoLink={neoLinkMap.get(selected.id) ?? null}
+          neoLookupFailed={neoFilterDisabled}
           onClose={closeSelectedLead}
           onStatusChange={handleStatus}
           onNotesChange={handleNotes}

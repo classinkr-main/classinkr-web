@@ -1562,10 +1562,24 @@ export async function listConfirmedLeadCustomerLinks(): Promise<Map<string, stri
 const LEAD_NEO_LINK_PAGE_SIZE = 1000
 const LEAD_NEO_LINK_MAX_PAGES = 20
 
-/** NEO 등록 확정된 리드 id 집합 — source_object='leads' → target_type='external_account' confirmed. */
-export async function listConfirmedLeadNeoLinkLeadIds(): Promise<Set<string>> {
+/** NEO 등록 마커로 인정되는 target_type — 데이터 계약(2026-08-28 확정):
+ *  external_lead = 밀어넣기 도구(lead-db-push)가 만든 CRM lead 링크,
+ *  external_account = 360 드로어 수동 'NEO 등록됨' 액션의 계정 링크.
+ *  배지·미등록 필터는 둘을 함께 '등록됨'으로 센다. */
+export const LEAD_NEO_LINK_TARGET_TYPES = ["external_account", "external_lead"] as const
+export type LeadNeoLinkTargetType = (typeof LEAD_NEO_LINK_TARGET_TYPES)[number]
+
+export type LeadNeoLink = {
+  leadId: string
+  targetId: string
+  targetType: LeadNeoLinkTargetType
+}
+
+/** NEO 등록 확정 링크 전체 — source_object='leads' → external_account|external_lead confirmed.
+ *  리드 보드 필터·드로어 표기가 target_id(CRM id 뒤 8자리 표기)까지 필요해 상세로 내린다. */
+export async function listConfirmedLeadNeoLinks(): Promise<LeadNeoLink[]> {
   const sb = createSupabaseAdminClient()
-  const ids = new Set<string>()
+  const links: LeadNeoLink[] = []
 
   // PostgREST는 요청당 기본 1000행에서 조용히 절단한다 — 절단되면 등록된 리드가
   // '등록 대기'로 오판된다. 결정적 정렬(id) + range로 짧은 페이지가 나올 때까지
@@ -1579,20 +1593,37 @@ export async function listConfirmedLeadNeoLinkLeadIds(): Promise<Set<string>> {
     const from = page * LEAD_NEO_LINK_PAGE_SIZE
     const { data, error } = await sb
       .from("crm_source_links")
-      .select("source_record_key")
+      .select("source_record_key, target_id, target_type")
       .eq("source_object", "leads")
-      .eq("target_type", "external_account")
+      .in("target_type", [...LEAD_NEO_LINK_TARGET_TYPES])
       .eq("status", "confirmed")
       .order("id", { ascending: true })
       .range(from, from + LEAD_NEO_LINK_PAGE_SIZE - 1)
 
     if (error) throw new Error(`crm_source_links lead→neo 조회 실패: ${error.message}`)
 
-    const rows = data ?? []
-    for (const row of rows) ids.add(String(row.source_record_key))
+    const rows = (data ?? []) as Array<{
+      source_record_key: string | null
+      target_id: string | null
+      target_type: string | null
+    }>
+    for (const row of rows) {
+      if (!row.source_record_key || !row.target_id) continue
+      links.push({
+        leadId: String(row.source_record_key),
+        targetId: String(row.target_id),
+        targetType: (row.target_type === "external_lead" ? "external_lead" : "external_account"),
+      })
+    }
     if (rows.length < LEAD_NEO_LINK_PAGE_SIZE) break
   }
-  return ids
+  return links
+}
+
+/** NEO 등록 확정된 리드 id 집합 — 위 상세 조회와 같은 질의 하나를 공유한다(판정 이원화 방지). */
+export async function listConfirmedLeadNeoLinkLeadIds(): Promise<Set<string>> {
+  const links = await listConfirmedLeadNeoLinks()
+  return new Set(links.map((link) => link.leadId))
 }
 
 /**

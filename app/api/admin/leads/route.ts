@@ -10,6 +10,7 @@ import {
   saveLead,
   type LeadRecord,
 } from "@/lib/repositories/leads"
+import { listConfirmedLeadNeoLinks } from "@/lib/repositories/crm-source-links"
 
 export async function GET(req: NextRequest) {
   const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
@@ -22,15 +23,21 @@ export async function GET(req: NextRequest) {
     // - marketing: 캠페인 허브 "광고 리드"용(트래킹 축·연락처·전환 상태) — campaigns의 상위집합
     // - 기본(무스코프): 전체 컬럼 — LeadsBoard(검색이 utm_* 필요)는 불변
     const scope = new URL(req.url).searchParams.get("scope")
-    const leads =
-      scope === "dashboard"
-        ? await getDashboardLeads()
-        : scope === "campaigns"
-          ? await getCampaignLeads()
-          : scope === "marketing"
-            ? await getMarketingLeads()
-            : await getLeads()
-    return adminCachedJson({ leads })
+    if (scope === "dashboard") return adminCachedJson({ leads: await getDashboardLeads() })
+    if (scope === "campaigns") return adminCachedJson({ leads: await getCampaignLeads() })
+    if (scope === "marketing") return adminCachedJson({ leads: await getMarketingLeads() })
+
+    // 기본(무스코프) = 리드 보드. NEO 등록 링크(crm_source_links 확정, external_account+external_lead)를
+    // 서버에서 합쳐 내린다 — 클라이언트가 링크 테이블을 직접 때리지 않게 하는 유일한 경로.
+    // 링크 조회 실패는 보드 전체를 죽이지 않고 null로 내려 필터만 비활성화한다.
+    const [leads, neoLinks] = await Promise.all([
+      getLeads(),
+      listConfirmedLeadNeoLinks().catch((error) => {
+        console.error("[GET /api/admin/leads] neo links error:", error)
+        return null
+      }),
+    ])
+    return adminCachedJson({ leads, neoLinks })
   } catch (error) {
     console.error("[GET /api/admin/leads] error:", error)
     return NextResponse.json({ error: "리드를 불러오지 못했습니다." }, { status: 500 })
