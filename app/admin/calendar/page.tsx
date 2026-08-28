@@ -23,15 +23,18 @@ import {
 } from "@/lib/admin-calendar/event-form"
 import {
   addDays,
+  DEFAULT_TIMELINE_SPAN,
   formatRangeLabel,
   getViewRange,
   getWeekday,
   isCalendarViewId,
   isDateString,
+  isTimelineSpan,
   startOfWeek,
   stepAnchor,
   toDateString,
   type CalendarViewId,
+  type TimelineSpan,
 } from "@/lib/admin-calendar/range"
 import {
   buildAssigneeLoad,
@@ -44,6 +47,7 @@ import {
   createRequestGeneration,
   type RequestGeneration,
 } from "@/lib/admin-calendar/request-generation"
+import { resolveHotkey } from "@/lib/admin-calendar/hotkeys"
 
 import {
   CALENDAR_EVENTS_CACHE_TTL_MS,
@@ -70,6 +74,7 @@ import { WeekTimeGrid } from "@/components/admin/calendar/WeekTimeGrid"
 import {
   SOURCE_OPTIONS,
   getEventSource,
+  getEventSourceLabel,
   sortEventFirst,
 } from "@/components/admin/calendar/event-style"
 import AdminErrorBanner from "@/components/admin/ui/AdminErrorBanner"
@@ -77,6 +82,7 @@ import AdminErrorBanner from "@/components/admin/ui/AdminErrorBanner"
 const FILTER_STORAGE_KEY = "admin.calendar.filters.v1"
 const VIEW_STORAGE_KEY = "admin.calendar.view.v1"
 const DENSITY_STORAGE_KEY = "admin.calendar.density.v1"
+const TIMELINE_SPAN_STORAGE_KEY = "admin.calendar.timelineSpan.v1"
 
 /** 담당자 개념이 없는 소스 — 담당자 필터를 적용하지 않는다. */
 const ASSIGNEE_FILTERED_SOURCES = new Set<EventSource>([
@@ -131,6 +137,10 @@ export default function AdminCalendarPage() {
   const [healthLoading, setHealthLoading] = useState(false)
   // 월 그리드 밀도(3차 개편) — "detail"=솔리드 바, "summary"=도트. 월 뷰에서만 의미가 있다.
   const [density, setDensity] = useState<"detail" | "summary">("detail")
+  // 타임라인이 담는 범위. 8주 고정이 바코드를 만들어 고를 수 있게 했다(2026-08-28).
+  const [timelineSpan, setTimelineSpan] = useState<TimelineSpan>(DEFAULT_TIMELINE_SPAN)
+  // 제목·담당자·소스 라벨 부분일치. 조회 중인 기간 안에서만 걸린다(범위 밖은 별도 조회).
+  const [query, setQuery] = useState("")
   // 이번 주 스트립 데이터 — 월 조회 범위(=사이드바 예열이 데운 캐시 키)를 넓히지 않고
   // 주 범위를 따로 당긴다. 월말 주가 다음 달로 걸쳐도 스트립이 거짓으로 비지 않는다.
   const [stripEvents, setStripEvents] = useState<CalendarEvent[]>([])
@@ -140,7 +150,16 @@ export default function AdminCalendarPage() {
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CalendarEvent | null>(null)
 
-  const range = useMemo(() => getViewRange(view, anchor), [view, anchor])
+  const range = useMemo(
+    () => getViewRange(view, anchor, { timelineSpan }),
+    [view, anchor, timelineSpan]
+  )
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  /**
+   * 단축키 N이 부를 "새 일정". openCreate 는 이 훅보다 아래에서 선언되므로 ref 로 건넨다 —
+   * 매 렌더 최신 값을 담아 두면 effect 를 openCreate 때문에 다시 붙일 필요도 없다.
+   */
+  const openCreateRef = useRef<(date?: string) => void>(() => {})
 
   // ─── 저장된 화면 상태 복원 ───────────────────────────────────────
   // 초기 렌더는 기본값(이번 달)으로 두고 마운트 후에 URL·localStorage 를 반영한다 —
@@ -170,6 +189,18 @@ export default function AdminCalendarPage() {
       if (storedDensity === "detail" || storedDensity === "summary") setDensity(storedDensity)
     } catch {
       /* localStorage 불가 시 기본 밀도 유지 */
+    }
+
+    // 범위는 URL(공유·새로고침 딥링크)이 우선, 없으면 localStorage.
+    const urlSpan = params.get("span")
+    if (isTimelineSpan(urlSpan)) setTimelineSpan(urlSpan)
+    else {
+      try {
+        const storedSpan = localStorage.getItem(TIMELINE_SPAN_STORAGE_KEY)
+        if (isTimelineSpan(storedSpan)) setTimelineSpan(storedSpan)
+      } catch {
+        /* localStorage 불가 시 기본 범위 유지 */
+      }
     }
 
     try {
@@ -204,10 +235,11 @@ export default function AdminCalendarPage() {
       )
       localStorage.setItem(VIEW_STORAGE_KEY, view)
       localStorage.setItem(DENSITY_STORAGE_KEY, density)
+      localStorage.setItem(TIMELINE_SPAN_STORAGE_KEY, timelineSpan)
     } catch {
       /* 저장 실패는 무시 */
     }
-  }, [prefsHydrated, hiddenSources, hiddenAssignees, view, density])
+  }, [prefsHydrated, hiddenSources, hiddenAssignees, view, density, timelineSpan])
 
   // 뷰·기간·소스 필터를 주소에 반영해 새로고침·공유가 같은 화면을 연다. 히스토리는 쌓지 않는다.
   useEffect(() => {
@@ -218,8 +250,11 @@ export default function AdminCalendarPage() {
     const hiddenParam = encodeHiddenSourcesParam(hiddenSources)
     if (hiddenParam) params.set("hidden", hiddenParam)
     else params.delete("hidden")
+    // 범위는 타임라인에서만 의미가 있다 — 다른 뷰의 주소에 남기면 무슨 뜻인지 읽히지 않는다.
+    if (view === "timeline") params.set("span", timelineSpan)
+    else params.delete("span")
     window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`)
-  }, [prefsHydrated, view, anchor, hiddenSources])
+  }, [prefsHydrated, view, anchor, hiddenSources, timelineSpan])
 
   // ─── 데이터 ──────────────────────────────────────────────────────
   // 기간 경계(from·to)만 의존값으로 잡는다 — range 객체 정체성이 아니라 실제 조회 구간이
@@ -369,6 +404,48 @@ export default function AdminCalendarPage() {
     }
   }, [])
 
+  // ─── 단축키 ──────────────────────────────────────────────────────
+  // 해석은 lib/admin-calendar/hotkeys.ts(순수)가 하고, 여기서는 구독과 분기만 한다.
+  // 다이얼로그가 떠 있는 동안은 키를 넘기지 않는다 — 폼이 키의 주인이다.
+  const dialogOpen = showForm || Boolean(deleteTarget)
+  useEffect(() => {
+    if (dialogOpen) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      const action = resolveHotkey({
+        key: event.key,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+        target: event.target,
+      })
+      if (!action) return
+      event.preventDefault()
+      switch (action.kind) {
+        case "step":
+          setAnchor((current) => stepAnchor(view, current, action.direction, { timelineSpan }))
+          setSelectedDate(null)
+          break
+        case "today":
+          setAnchor(todayStr)
+          setSelectedDate(todayStr)
+          break
+        case "view":
+          setView(action.view)
+          setSelectedDate(null)
+          break
+        case "create":
+          openCreateRef.current()
+          break
+        case "search":
+          searchInputRef.current?.focus()
+          break
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [dialogOpen, view, timelineSpan, todayStr])
+
   // ─── 필터 ────────────────────────────────────────────────────────
   const teamMembers = useMemo<TeamMemberCount[]>(() => {
     const counts = new Map<string, number>()
@@ -397,7 +474,25 @@ export default function AdminCalendarPage() {
     [hiddenSources, hiddenAssignees]
   )
 
-  const visibleEvents = useMemo(() => events.filter(isEventVisible), [events, isEventVisible])
+  // 검색은 소스·담당자 필터 뒤에 걸린다 — 꺼 둔 소스가 검색으로 되살아나면 필터가 거짓말이 된다.
+  const matchesQuery = useCallback(
+    (event: CalendarEvent) => {
+      const keyword = query.trim().toLowerCase()
+      if (!keyword) return true
+      const haystack = [
+        event.title,
+        getEventSourceLabel(event),
+        ...(event.assignees ?? []),
+      ].join(" ").toLowerCase()
+      return haystack.includes(keyword)
+    },
+    [query]
+  )
+
+  const visibleEvents = useMemo(
+    () => events.filter((event) => isEventVisible(event) && matchesQuery(event)),
+    [events, isEventVisible, matchesQuery]
+  )
   // 스트립도 같은 필터를 통과한다 — 본 그리드에서 숨긴 소스가 스트립에만 남으면 필터가 거짓말이 된다.
   const visibleStripEvents = useMemo(
     () => stripEvents.filter(isEventVisible),
@@ -483,6 +578,8 @@ export default function AdminCalendarPage() {
     setShowForm(true)
     if (date) setSelectedDate(date)
   }
+
+  openCreateRef.current = openCreate
 
   const openEdit = (event: CalendarEvent) => {
     if (event.readonly) return
@@ -593,12 +690,20 @@ export default function AdminCalendarPage() {
             viewAvailability={viewAvailability}
             density={density}
             onDensityChange={view === "month" ? setDensity : undefined}
+            timelineSpan={timelineSpan}
+            onTimelineSpanChange={view === "timeline" ? setTimelineSpan : undefined}
+            range={range}
+            todayStr={todayStr}
+            onJump={(date) => {
+              setAnchor(date)
+              setSelectedDate(null)
+            }}
             onViewChange={(next) => {
               setView(next)
               setSelectedDate(null)
             }}
             onStep={(direction) => {
-              setAnchor((current) => stepAnchor(view, current, direction))
+              setAnchor((current) => stepAnchor(view, current, direction, { timelineSpan }))
               setSelectedDate(null)
             }}
             onToday={() => {
@@ -614,6 +719,9 @@ export default function AdminCalendarPage() {
               teamMembers={teamMembers}
               hiddenSources={hiddenSources}
               hiddenAssignees={hiddenAssignees}
+              query={query}
+              onQueryChange={setQuery}
+              searchInputRef={searchInputRef}
               onToggleSource={toggleSource}
               onToggleAssignee={toggleAssignee}
               onShowAll={() => {
@@ -629,7 +737,7 @@ export default function AdminCalendarPage() {
 
           {showRepairPanel ? (
             <CalendarRepairPanel
-              rangeLabel={formatRangeLabel(view, anchor)}
+              rangeLabel={formatRangeLabel(view, anchor, { timelineSpan })}
               broken={brokenSources}
               holidayNote={holidayNote}
               onCreate={() => openCreate()}
@@ -685,6 +793,7 @@ export default function AdminCalendarPage() {
             <SourceTimeline
               range={range}
               todayStr={todayStr}
+              span={timelineSpan}
               visibleEvents={visibleEvents}
               onSelectDate={setSelectedDate}
               refreshing={isBackgroundRefresh}

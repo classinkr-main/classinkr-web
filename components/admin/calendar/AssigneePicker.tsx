@@ -5,6 +5,8 @@ import { X } from "lucide-react"
 
 import { getTeamMemberColor } from "@/lib/team-member-colors"
 
+import { getAssigneeInitial } from "./event-style"
+
 interface AssigneePickerProps {
   /** 선택된 담당자 이름들 */
   value: string[]
@@ -24,7 +26,7 @@ function NameDot({ name }: { name: string }) {
       className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold text-white"
       style={{ backgroundColor: getTeamMemberColor(name) }}
     >
-      {name.charAt(0)}
+      {getAssigneeInitial(name)}
     </span>
   )
 }

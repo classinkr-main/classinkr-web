@@ -45,11 +45,20 @@ describe("computeAdjacentPrefetchRanges", () => {
     expect(adjacent).toEqual([expectedPrev, expectedNext])
   })
 
-  it("타임라인 범위는 다음 구간만 예열한다(절반씩 겹치며 전진)", () => {
-    const range = getViewRange("timeline", anchor)
+  it("타임라인 넓게 보기(8주)는 다음 구간만 예열한다(절반씩 겹치며 전진)", () => {
+    const span = { timelineSpan: "wide" } as const
+    const range = getViewRange("timeline", anchor, span)
     const adjacent = computeAdjacentPrefetchRanges(range)
-    const expectedNext = getViewRange("timeline", stepAnchor("timeline", anchor, 1))
+    const expectedNext = getViewRange("timeline", stepAnchor("timeline", anchor, 1, span), span)
     expect(adjacent).toEqual([expectedNext])
+  })
+
+  it("타임라인 주·월 범위는 주·월 뷰와 같은 모양이라 예열이 그대로 따라온다", () => {
+    // 범위를 주/월 모양으로 잡은 이유가 이것이다 — 예열 규칙을 새로 만들지 않는다.
+    expect(computeAdjacentPrefetchRanges(getViewRange("timeline", anchor, { timelineSpan: "week" })))
+      .toEqual(computeAdjacentPrefetchRanges(getViewRange("week", anchor)))
+    expect(computeAdjacentPrefetchRanges(getViewRange("timeline", anchor, { timelineSpan: "month" })))
+      .toEqual(computeAdjacentPrefetchRanges(getViewRange("month", anchor)))
   })
 
   it("담당자 뷰(1주, 3차 개편)는 주 뷰와 같은 모양이라 이전·다음 주를 예열한다", () => {
