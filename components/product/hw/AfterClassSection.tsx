@@ -1,7 +1,9 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { BookOpen, Users, Star } from "lucide-react"
+import { ArrowRight, BookOpen, Users, Star } from "lucide-react"
+
+import { TrackedLink } from "@/components/TrackedLink"
 
 const ease = [0.22, 1, 0.36, 1] as const
 
@@ -122,6 +124,18 @@ export default function AfterClassSection() {
                         )
                     })}
                 </div>
+
+                {/* 녹화·AI 리포트 딥다이브 진입 */}
+                <motion.div {...fadeUp} className="mt-10 text-center">
+                    <TrackedLink
+                        href="/product/ai-report"
+                        ctaId="hw_ai_report_deep_dive"
+                        className="inline-flex items-center gap-2 rounded-md border border-[#084734]/25 px-5 py-3 text-sm font-semibold text-[#084734] hover:bg-[#ECFDF5] transition-colors"
+                    >
+                        녹화 · AI 리포트 자세히 보기
+                        <ArrowRight className="w-4 h-4" />
+                    </TrackedLink>
+                </motion.div>
             </div>
         </section>
     )
