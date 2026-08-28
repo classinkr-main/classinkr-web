@@ -419,7 +419,7 @@ export default function AdminCalendarPage() {
     <div className="px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
       {/* Header — 한 줄. 소스 나열·설명은 범례 라인이 대신한다(2026-08-19 다이어트) */}
       <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-        <h1 className="text-xl font-bold tracking-[-0.02em] text-[#111110]">운영 캘린더</h1>
+        <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">운영 캘린더</h1>
         <p className="text-[12px] text-[#1a1a1a]/45">8개 소스 통합 · 외부 소스는 읽기 전용</p>
       </div>
 

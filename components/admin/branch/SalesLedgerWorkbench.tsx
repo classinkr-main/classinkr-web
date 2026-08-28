@@ -2625,7 +2625,7 @@ export default function SalesLedgerWorkbench({
               {/* 구 IA 시절 영문 라벨("Sales Ledger") 잔재 — 현재 admin-nav 섹션 라벨(sales="영업·매출")로 정정. */}
               <span>영업·매출</span>
             </div>
-            <h1 className="mt-2 text-[28px] font-bold tracking-[-0.02em] text-[#111110] sm:text-[32px]">
+            <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[30px]">
               매출 장부
             </h1>
             <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[#615D59]">

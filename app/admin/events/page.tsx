@@ -225,7 +225,7 @@ export default function AdminEventsPage() {
     <div className="mx-auto max-w-5xl px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-[#111110]">공개 행사 관리</h1>
+          <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">공개 행사 관리</h1>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Link

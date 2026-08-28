@@ -1774,9 +1774,9 @@ export default function DevPage() {
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
-          <h1 className="text-2xl font-bold text-gray-900">Dev Mode</h1>
+          <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Dev Mode</h1>
         </div>
-        <p className="text-sm text-gray-500">프로젝트 현황 · 공개 기준 · 버그 추적 · 데이터 품질 · 배포 이력</p>
+        <p className="text-[13px] text-[#1a1a1a]/45">프로젝트 현황 · 공개 기준 · 버그 추적 · 데이터 품질 · 배포 이력</p>
       </div>
 
       {/* Tabs */}
