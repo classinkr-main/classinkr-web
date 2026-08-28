@@ -7,19 +7,18 @@ import { useState, useEffect, useCallback, useDeferredValue, useMemo, useRef } f
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import {
-  RefreshCw, X, Trash2,
-  Mail, Building2, Users,
-  Loader2,
-  PhoneCall, UserPlus, ExternalLink,
-  Clock, Search, Check,
+  RefreshCw, X,
+  Building2,
+  UserPlus, ExternalLink,
+  Search, Check,
   Download,
-  FileText, Flame, Layers, Megaphone, ArrowUpDown,
+  FileText, Layers, Megaphone, ArrowUpDown,
   Columns3, List as ListIcon,
 } from "lucide-react"
 import LeadRegisterModal from "@/components/admin/crm/LeadRegisterModal"
 import LeadTrackingPanel from "@/components/admin/crm/leads/LeadTrackingPanel"
 import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"
-import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
+import { useVisibleCount } from "@/components/admin/ui/ShowMore"
 
 import { adminFetch, adminFetchJsonCached, adminFetchJsonCachedWithMeta } from "@/lib/admin-client"
 import { Button } from "@/components/ui/button"
@@ -28,25 +27,19 @@ import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/repositories/contact-logs"
 import type { PublicEvent } from "@/lib/types/public-events"
 import {
-  STATUS_DOT,
   STATUS_LABEL,
-  StatusPill,
-  SOURCE_LABEL,
   LEAD_FILTER_KEYS,
   CONFIRMATION_GATE_EXEMPT_FILTERS,
   type LeadFilter,
   calcScore,
-  ScoreBadge,
   readAdminResponse,
   toLocalDateKey,
   toFollowUpTimestamp,
   daysBetween,
   isActiveLead,
-  isResponseTargetLead,
   isUnrespondedLead,
   isUnconfirmedLead,
   hoursBetween,
-  formatResponseAge,
   getLeadOwner,
   getLeadSourceDetail,
   getLeadMagnetLabel,
@@ -60,7 +53,6 @@ import {
 } from "@/components/admin/crm/leads/shared"
 import {
   isMarketingLead,
-  isTestLead,
   getLeadTrackingKey,
   TRACKING_DIMENSIONS,
   type TrackingDimension,
@@ -89,23 +81,20 @@ import {
   type BoardColumnKey,
   type LeadsView,
 } from "@/lib/crm/leads-board-state"
-import { CompassBridgeDownNote, CompassLeadChip } from "@/components/admin/compass/CompassLeadChip"
+import { CompassBridgeDownNote } from "@/components/admin/compass/CompassLeadChip"
 import { useCompassOverlay } from "@/components/admin/compass/use-compass-overlay"
 import LeadsBoardView from "./LeadsBoardView"
 import LeadDrawer from "./board/LeadDrawer"
+import LeadsBulkBar from "./board/LeadsBulkBar"
+import LeadsConsoleList from "./board/LeadsConsoleList"
+import { PipelineRiskPanel, StageOwnerPanels, UnconfirmedInbox } from "./board/LeadsConsolePanels"
 import {
   LEAD_BOARD_LIST_STEP,
   LEADS_CACHE_SWR_MS,
   LEADS_CACHE_TTL_MS,
   LENS_OPTIONS,
   NOW_TICK_MS,
-  OWNER_ROW_CAP,
-  LeadActivityChip,
-  PriorityCell,
-  getLeadSourceSegment,
   isLeadLens,
-  priorityBreakdownTitle,
-  priorityToneClass,
   type ConvertLeadResponse,
   type ConvertResultState,
   type LeadAssignmentPreviewResponse,
@@ -1458,243 +1447,36 @@ export default function LeadsBoardClient() {
           onSelectKey={setTrackingKey}
         />
       ) : (
-      /* 파이프라인 단계 + 담당자 — 숫자·필터 진입은 아래 카운트 카드가 단일 창구.
-         여기는 카드에 없는 부가 정보(단계별 고득점·지연, 오늘 예정, 담당자 분포)만 남긴다. */
-      <div id="lead-queue" className="mb-4 grid gap-3 lg:grid-cols-2 scroll-mt-24">
-        <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Pipeline</p>
-              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">단계별 현황</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              {todayFollowUpCount > 0 && (
-                <span className="rounded-full border border-[#D7EBDD] px-3 py-1 text-[12px] font-medium text-[#084734]">
-                  오늘 예정 {todayFollowUpCount}
-                </span>
-              )}
-              <span
-                title="아래 비율 바의 분모 — 확인 완료 리드를 네 단계가 남김없이 나눈 수입니다. '활성'은 여기서 전환·종료를 뺀 수입니다."
-                className="rounded-full bg-[#f0f0ec] px-3 py-1 text-[12px] font-medium text-[#1a1a1a]/55"
-              >
-                활성 {activeLeads.length} / 전체 {stageTotal.toLocaleString("ko-KR")}건
-              </span>
-            </div>
-          </div>
-          <div className="divide-y divide-[#f0f0ec]">
-            {stageSummaries.map((stage) => {
-              // 네 단계는 확인 완료 리드를 남김없이 나눈다 — 그래서 비율의 합이 정확히 100%다.
-              // (필터 카드는 게이트 면제 때문에 분모가 갈려 바를 못 그린다. 여기만 성립한다.)
-              const share = stageTotal > 0 ? (stage.count / stageTotal) * 100 : 0
-              return (
-                <button
-                  key={stage.status}
-                  type="button"
-                  onClick={() => setFilter(stage.status)}
-                  title={`${STATUS_LABEL[stage.status]} ${stage.count.toLocaleString("ko-KR")}건 · 전체의 ${share.toFixed(1)}%`}
-                  className="block w-full px-1 py-2.5 text-left transition-colors hover:bg-[#fafaf8]"
-                >
-                  <span className="flex items-center justify-between gap-3">
-                    <StatusPill status={stage.status} />
-                    <span className="flex items-center gap-3 text-[11px] text-[#1a1a1a]/40">
-                      <span>고득점 {stage.highScore}</span>
-                      {stage.stageOverdue > 0 && <span className="font-medium text-[#B85C33]">지연 {stage.stageOverdue}</span>}
-                      <span className="min-w-[3rem] text-right text-[19px] font-bold leading-none tracking-[-0.02em] tabular-nums text-[#111110]">
-                        {stage.count.toLocaleString("ko-KR")}
-                      </span>
-                    </span>
-                  </span>
-                  {/* 비중 — 색축은 상태점(STATUS_DOT)과 같은 것을 쓴다. 새 색을 들이지 않는다. */}
-                  <span aria-hidden className="mt-2 block h-[3px] w-full overflow-hidden rounded-full bg-[#f0f0ec]">
-                    <span
-                      className="block h-full rounded-full transition-[width]"
-                      style={{ width: `${share}%`, backgroundColor: STATUS_DOT[stage.status] }}
-                    />
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Owners</p>
-              <h2 className="mt-1 text-[17px] font-bold text-[#111110]">담당자별 보유 리드</h2>
-            </div>
-            <span
-              title="아래 비율 바의 분모 — 활성 리드를 담당자가 남김없이 나눈 수입니다(미배정 포함)."
-              className="text-[12px] font-medium text-[#1a1a1a]/40"
-            >
-              {ownerSummaries.length}명 · 활성 {activeLeads.length.toLocaleString("ko-KR")}건
-            </span>
-          </div>
-          {ownerSummaries.length === 0 ? (
-            <p className="rounded-xl bg-[#fafaf8] px-3 py-8 text-center text-[13px] text-[#1a1a1a]/30">활성 리드가 없습니다.</p>
-          ) : (
-            <div className="space-y-2">
-              {ownerSummaries.slice(0, OWNER_ROW_CAP).map((owner) => {
-                // 담당자는 활성 리드를 남김없이 나눈다(미배정도 한 칸) — 그래서 비율의 합이 100%다.
-                const share = activeLeads.length > 0 ? (owner.total / activeLeads.length) * 100 : 0
-                const unassigned = owner.owner === "미배정"
-                return (
-                <div
-                  key={owner.owner}
-                  title={`${owner.owner} ${owner.total.toLocaleString("ko-KR")}건 · 활성의 ${share.toFixed(1)}%`}
-                  className="rounded-xl border border-[#f0f0ec] px-3 py-2.5"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className={`truncate text-[13px] font-semibold ${unassigned ? "text-[#B85C33]" : "text-[#111110]"}`}>
-                      {owner.owner}
-                    </p>
-                    <p className={`text-[19px] font-bold leading-none tracking-[-0.02em] tabular-nums ${unassigned ? "text-[#B85C33]" : "text-[#111110]"}`}>
-                      {owner.total.toLocaleString("ko-KR")}
-                    </p>
-                  </div>
-                  {/* 비중 — 담당자는 상태 축이 아니라 중립색을 쓰고, 배분 공백(미배정)만 위험색으로 든다. */}
-                  <span aria-hidden className="mt-2 block h-[3px] w-full overflow-hidden rounded-full bg-[#f0f0ec]">
-                    <span
-                      className="block h-full rounded-full"
-                      style={{ width: `${share}%`, backgroundColor: unassigned ? "#B85C33" : "#111110" }}
-                    />
-                  </span>
-                  <div className="mt-1.5 flex flex-wrap gap-2 text-[11px] text-[#1a1a1a]/40">
-                    <span>신규 {owner.newCount}</span>
-                    {owner.unrespondedCount > 0 && <span className="font-medium text-[#B85C33]">응대 전 {owner.unrespondedCount}</span>}
-                    <span>연락중 {owner.contactedCount}</span>
-                    <span>고득점 {owner.highScoreCount}</span>
-                    {owner.overdueCount > 0 && <span className="font-medium text-[#B85C33]">지연 {owner.overdueCount}</span>}
-                  </div>
-                </div>
-                )
-              })}
-              {/* 가려진 담당자를 각주로 드러낸다 — 보이는 바의 합이 100%가 아닌 이유다. */}
-              {ownerSummaries.length > OWNER_ROW_CAP ? (
-                <p className="pt-0.5 text-center text-[11px] text-[#1a1a1a]/40">
-                  +{(ownerSummaries.length - OWNER_ROW_CAP).toLocaleString("ko-KR")}명 ·{" "}
-                  {ownerSummaries
-                    .slice(OWNER_ROW_CAP)
-                    .reduce((sum, owner) => sum + owner.total, 0)
-                    .toLocaleString("ko-KR")}
-                  건 숨김
-                </p>
-              ) : null}
-            </div>
-          )}
-        </div>
-      </div>
+      <StageOwnerPanels
+        stageSummaries={stageSummaries}
+        stageTotal={stageTotal}
+        activeCount={activeLeads.length}
+        ownerSummaries={ownerSummaries}
+        todayFollowUpCount={todayFollowUpCount}
+        onSelectStage={(status) => setFilter(status)}
+      />
       )}
 
       {/* 미확인 수신함 — 공개 폼(문의·데모·뉴스레터 등) 원본 유입. 확인해야 아래 리드 목록에 반영된다. */}
       {view === "console" && unconfirmedLeads.length > 0 && (
-        <div id="unconfirmed-inbox" className="mb-6 scroll-mt-24 rounded-2xl border-[1.15px] border-[#ECD29C] bg-transparent p-4">
-          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#7A520F]/80">Unconfirmed Inbox</p>
-              <h2 className="text-[16px] font-bold text-[#111110]">새 유입 · 미확인 {unconfirmedLeads.length}건</h2>
-              <p className="mt-0.5 text-[12px] text-[#1a1a1a]/45">
-                공개 폼(문의·데모·뉴스레터 등)으로 들어온 리드 — 확인하면 아래 리드 목록·집계에 반영됩니다.
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setFilter("unconfirmed")}
-                className="text-[12px] font-medium text-[#7A520F] hover:underline"
-              >
-                전체 보기
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleConfirmMany(unconfirmedLeads.map((lead) => lead.id))}
-                disabled={confirmingIds.size > 0}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[#7A520F] px-3 py-1.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-              >
-                {confirmingIds.size > 0 ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                전체 확인
-              </button>
-            </div>
-          </div>
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
-            {unconfirmedLeads.slice(0, 5).map((lead) => (
-              <div key={lead.id} className="rounded-xl border border-[#ECD29C] bg-white px-3 py-3">
-                <button type="button" onClick={() => setSelected(lead)} className="block w-full text-left">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-[13px] font-semibold text-[#111110]">{lead.name ?? lead.org ?? "이름 없음"}</p>
-                    <ScoreBadge score={calcScore(lead)} />
-                  </div>
-                  {/* 세부 유입(메타는 광고명)이 있으면 그쪽이 더 정보값 — 없을 때만 소스 라벨 */}
-                  <p className="mt-1 truncate text-[12px] text-[#1a1a1a]/45">
-                    {getLeadSourceDetail(lead) || (SOURCE_LABEL[lead.source] ?? lead.source)}
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleConfirmMany([lead.id])}
-                  disabled={confirmingIds.has(lead.id)}
-                  className="mt-2 inline-flex items-center gap-1 rounded-md bg-[#FBF1E0] px-2 py-1 text-[11px] font-semibold text-[#7A520F] transition-colors hover:bg-[#ECD29C] disabled:opacity-40"
-                >
-                  {confirmingIds.has(lead.id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                  확인
-                </button>
-              </div>
-            ))}
-          </div>
-          {unconfirmedLeads.length > 5 && (
-            <button
-              type="button"
-              onClick={() => setFilter("unconfirmed")}
-              className="mt-3 text-[12px] font-medium text-[#7A520F] hover:underline"
-            >
-              +{unconfirmedLeads.length - 5}건 더 보기
-            </button>
-          )}
-        </div>
+        <UnconfirmedInbox
+          unconfirmedLeads={unconfirmedLeads}
+          confirmingIds={confirmingIds}
+          onShowAll={() => setFilter("unconfirmed")}
+          onConfirmMany={(ids) => void handleConfirmMany(ids)}
+          onSelect={setSelected}
+        />
       )}
 
       {view === "console" && pipelineRiskLeads.length > 0 && (
-        <div id="pipeline-risk" className="mb-6 scroll-mt-24 rounded-2xl border-[1.15px] border-[#F6D5C5] bg-transparent p-4">
-          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#B85C33]/70">Pipeline Risk</p>
-              <h2 className="text-[16px] font-bold text-[#111110]">오래 멈춘 리드 / 지연 리드</h2>
-            </div>
-            <button
-              onClick={() => setFilter("contacted")}
-              className="text-left text-[12px] font-medium text-[#B85C33] hover:text-[#9A4A27]"
-            >
-              지연 {overdueFollowUps.length}건 · 7일 이상 정체 {stalledLeads.length}건
-            </button>
-          </div>
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
-            {pipelineRiskLeads.map((lead) => {
-              const followUpKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
-              const overdueDays = followUpKey && followUpKey < today ? daysBetween(lead.follow_up_at!) : 0
-              const ageDays = daysBetween(lead.timestamp)
-              return (
-                <button
-                  key={lead.id}
-                  type="button"
-                  onClick={() => setSelected(lead)}
-                  className="rounded-xl border border-[#F6D5C5] bg-white px-3 py-3 text-left transition-colors hover:bg-[#fffaf7]"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-[13px] font-semibold text-[#111110]">{lead.name ?? lead.org ?? "이름 없음"}</p>
-                    <ScoreBadge score={calcScore(lead)} />
-                  </div>
-                  <p className="mt-1 truncate text-[12px] text-[#1a1a1a]/45">{lead.org ?? getLeadOwner(lead)}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                    <span className="rounded-md bg-[#FEF3EE] px-2 py-0.5 font-medium text-[#B85C33]">
-                      {overdueDays > 0 ? `${overdueDays}일 지연` : `${ageDays}일 정체`}
-                    </span>
-                    <span className="rounded-md bg-[#f0f0ec] px-2 py-0.5 text-[#1a1a1a]/45">{getLeadOwner(lead)}</span>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </div>
+        <PipelineRiskPanel
+          pipelineRiskLeads={pipelineRiskLeads}
+          overdueCount={overdueFollowUps.length}
+          stalledCount={stalledLeads.length}
+          today={today}
+          onFilterContacted={() => setFilter("contacted")}
+          onSelect={setSelected}
+        />
       )}
 
       {/* 필터 카운트 카드 — 숫자로 들어가는 단일 창구 */}
@@ -1922,188 +1704,34 @@ export default function LeadsBoardClient() {
       </div>
 
       {view === "console" && selectedLeadIds.size > 0 && (
-        <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-[#F6D5C5] bg-[#FEF8F5] px-4 py-3">
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[13px] font-semibold text-[#111110]">
-                {selectedFilteredCount}건 선택됨
-                {selectedBeyondVisibleCount > 0 ? (
-                  <span className="ml-1.5 font-medium text-[#B85C33]">
-                    (화면 밖 {selectedBeyondVisibleCount}건 포함)
-                  </span>
-                ) : null}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {selectedFilteredCount < filtered.length && filtered.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => handleToggleFilteredSelection(true)}
-                  title="더보기로 아직 화면에 그리지 않은 리드까지 포함해 현재 조건의 결과 전체를 선택합니다."
-                  className="rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4]"
-                >
-                  결과 전체 {filtered.length}건 선택
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setSelectedLeadIds(new Set())}
-                className="rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/55 transition-colors hover:border-[#c8c8c4] hover:text-[#111110]"
-              >
-                선택 해제
-              </button>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 border-t border-[#F6D5C5]/60 pt-2.5">
-            {selectedUnconfirmedIds.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => void handleConfirmMany(selectedUnconfirmedIds)}
-                disabled={bulkWorking}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[#084734] px-3 py-2 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Check className="h-3.5 w-3.5" />
-                미확인 {selectedUnconfirmedIds.length}건 확인
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setBulkAssignOpen((open) => !open)}
-              disabled={bulkWorking}
-              aria-expanded={bulkAssignOpen}
-              aria-controls="bulk-lead-assignment"
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#111110] transition-colors hover:border-[#c8c8c4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Users className="h-3.5 w-3.5" />
-              담당자 지정
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleBulkStatus(Array.from(selectedLeadIds), "closed")}
-              disabled={bulkWorking}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#e8e8e4] bg-white px-3 py-2 text-[12px] font-medium text-[#1a1a1a]/60 transition-colors hover:border-[#c8c8c4] hover:text-[#111110] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              종료 처리
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleDeleteMany(Array.from(selectedLeadIds))}
-              disabled={selectedDeleting || bulkWorking}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-[#B85C33] px-3 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-[#9A4A27] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {selectedDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-              선택 삭제
-            </button>
-          </div>
-          {bulkAssignOpen ? (
-            <div
-              id="bulk-lead-assignment"
-              className="grid gap-3 border-t border-[#F6D5C5]/60 pt-3 lg:grid-cols-[minmax(220px,360px)_auto_1fr] lg:items-end"
-            >
-              <label className="grid gap-1.5 text-[12px] font-semibold text-[#111110]">
-                배정할 담당자
-                <select
-                  value={bulkOwnerKey}
-                  onChange={(event) => setBulkOwnerKey(event.target.value)}
-                  disabled={bulkWorking || crmOwnerHealth?.ok !== true || crmOwners.length === 0}
-                  className="h-11 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[13px] font-medium text-[#111110] focus:border-[#084734] focus:outline-none focus:ring-2 focus:ring-[#084734]/15 disabled:cursor-not-allowed disabled:bg-[#F6F5F4]"
-                >
-                  <option value="">담당자를 선택하세요</option>
-                  {crmOwners.map((owner) => (
-                    <option key={owner.ownerKey} value={owner.ownerKey}>
-                      {owner.displayName} · {owner.teamRoleLabel}{owner.branchName ? ` · ${owner.branchName}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleBulkAssign(Array.from(selectedLeadIds), bulkOwnerKey)}
-                  disabled={bulkWorking || assignmentPreviewLoading || !bulkOwnerKey || !assignmentApplyReady}
-                  className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-[#084734] px-4 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/30 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  {bulkWorking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
-                  {selectedFilteredCount}건 배정
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!confirm(`선택한 ${selectedFilteredCount}건의 담당자 배정을 해제할까요?`)) return
-                    void handleBulkAssign(Array.from(selectedLeadIds), null)
-                  }}
-                  disabled={bulkWorking}
-                  className="min-h-11 rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-medium text-[#1a1a1a]/60 hover:border-[#c8c8c4] hover:text-[#111110] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]/25 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  배정 해제
-                </button>
-              </div>
-              <p className="text-[11px] leading-relaxed text-[#1a1a1a]/50 lg:pb-3">
-                {crmOwnerHealth?.ok === false
-                  ? crmOwnerHealth.message ?? "담당자 정본 명단 상태를 확인해 주세요."
-                  : crmOwners.length > 0
-                  ? `활성 CRM 담당자 ${crmOwners.length}명 중 선택합니다. 한 번의 서버 요청으로 적용됩니다.`
-                  : crmOwnerHealth?.message ?? "CRM 담당자 명단을 불러오는 중입니다."}
-              </p>
-              <div className="grid grid-cols-2 gap-2 lg:col-span-3 lg:grid-cols-4" aria-busy={assignmentPreviewLoading}>
-                {[
-                  ["자동 근거 있음", assignmentPreview?.automaticEvidenceReady ?? 0, "현재 권위 있는 owner 연결 없음"],
-                  ["검토 후 지정 가능", assignmentPreview?.manualReviewReady ?? 0, "확인·최근성·중복 조건 통과"],
-                  ["확인 필요", assignmentPreview?.blockerCounts.unconfirmed ?? 0, "확인 전에는 배정 차단"],
-                  ["기타 차단", assignmentPreviewOtherBlockers, "테스트·부분 중복·30일+ 등"],
-                ].map(([label, value, hint]) => (
-                  <div key={String(label)} className="rounded-xl border border-black/[0.08] bg-white px-3 py-2.5">
-                    <p className="text-[10px] font-semibold text-[#1a1a1a]/45">{label}</p>
-                    <p className="mt-1 text-[20px] font-semibold tabular-nums text-[#111110]">
-                      {assignmentPreviewLoading ? "…" : value}
-                    </p>
-                    <p className="mt-0.5 text-[10px] leading-relaxed text-[#1a1a1a]/40">{hint}</p>
-                  </div>
-                ))}
-              </div>
-              {assignmentPreviewError ? (
-                <p role="alert" className="rounded-lg border border-[#F6D5C5] bg-white px-3 py-2 text-[11px] text-[#B85C33] lg:col-span-3">
-                  {assignmentPreviewError}
-                </p>
-              ) : null}
-              {assignmentPreview && assignmentPreview.blockedLeadIds.length > 0 ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#F6D5C5] bg-white px-3 py-2 lg:col-span-3">
-                  <p className="text-[11px] leading-relaxed text-[#8A4529]">
-                    선택 중 {assignmentPreview.blockedLeadIds.length}건은 안전 조건을 통과하지 못해 전체 배정이 차단됩니다.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedLeadIds(new Set(assignmentPreview.safeLeadIds))}
-                    disabled={assignmentPreview.safeLeadIds.length === 0 || bulkWorking}
-                    className="min-h-9 rounded-lg border border-[#F6D5C5] bg-[#FFF9F5] px-3 text-[11px] font-semibold text-[#8A4529] disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    안전 대상 {assignmentPreview.safeLeadIds.length}건만 선택
-                  </button>
-                </div>
-              ) : assignmentPreview && assignmentApplyReady ? (
-                <p role="status" className="rounded-lg border border-[#DDEBE5] bg-[#F7FBF9] px-3 py-2 text-[11px] text-[#084734] lg:col-span-3">
-                  선택한 {assignmentPreview.manualReviewReady}건이 수동 검토 배정 조건을 통과했습니다. 적용 직전에 서버가 다시 검증합니다.
-                </p>
-              ) : null}
-              {selectedAssignmentProfile ? (
-                <div
-                  role={selectedAssignmentProfile.duplicateClusters > 0 ? "alert" : "status"}
-                  className={`rounded-lg border px-3 py-2 text-[11px] leading-relaxed lg:col-span-3 ${
-                    selectedAssignmentProfile.duplicateClusters > 0
-                      ? "border-[#F6D5C5] bg-[#FFF9F5] text-[#8A4529]"
-                      : "border-[#DDEBE5] bg-[#F7FBF9] text-[#084734]"
-                  }`}
-                >
-                  <span className="font-semibold">배정 전 선택 구성</span>
-                  <span className="ml-1.5">{formatLeadAssignmentProfile(selectedAssignmentProfile)}</span>
-                  {selectedAssignmentProfile.duplicateClusters > 0 ? (
-                    <span className="ml-1.5 font-medium">선택 밖 중복 상대까지 서버가 다시 확인합니다.</span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
+        <LeadsBulkBar
+          selectedFilteredCount={selectedFilteredCount}
+          selectedBeyondVisibleCount={selectedBeyondVisibleCount}
+          filteredCount={filtered.length}
+          selectedUnconfirmedIds={selectedUnconfirmedIds}
+          selectedDeleting={selectedDeleting}
+          bulkWorking={bulkWorking}
+          bulkAssignOpen={bulkAssignOpen}
+          bulkOwnerKey={bulkOwnerKey}
+          crmOwners={crmOwners}
+          crmOwnerHealth={crmOwnerHealth}
+          assignmentPreview={assignmentPreview}
+          assignmentPreviewLoading={assignmentPreviewLoading}
+          assignmentPreviewError={assignmentPreviewError}
+          assignmentPreviewOtherBlockers={assignmentPreviewOtherBlockers}
+          assignmentApplyReady={assignmentApplyReady}
+          selectedAssignmentProfile={selectedAssignmentProfile}
+          onSelectAllFiltered={() => handleToggleFilteredSelection(true)}
+          onClearSelection={() => setSelectedLeadIds(new Set())}
+          onConfirmSelectedUnconfirmed={() => void handleConfirmMany(selectedUnconfirmedIds)}
+          onToggleAssignOpen={() => setBulkAssignOpen((open) => !open)}
+          onOwnerKeyChange={setBulkOwnerKey}
+          onAssign={() => void handleBulkAssign(Array.from(selectedLeadIds), bulkOwnerKey)}
+          onUnassign={() => void handleBulkAssign(Array.from(selectedLeadIds), null)}
+          onCloseSelected={() => void handleBulkStatus(Array.from(selectedLeadIds), "closed")}
+          onDeleteSelected={() => void handleDeleteMany(Array.from(selectedLeadIds))}
+          onSelectSafeTargets={(safeLeadIds) => setSelectedLeadIds(new Set(safeLeadIds))}
+        />
       )}
 
       {/* Compass 브리지 장애 — 칩이 사라진 이유를 말한다(칩 없음 ≠ 마케팅팀 미접촉). */}
@@ -2111,514 +1739,50 @@ export default function LeadsBoardClient() {
 
       {/* 목록(콘솔) ↔ 보드 — 같은 모집단을 다른 축으로 눕힌다. */}
       {view === "console" ? (
-      <div className="bg-white rounded-2xl border border-[#e8e8e4] overflow-hidden">
-        {loading && leads.length === 0 ? (
-          // 콜드로드 스켈레톤 — 리스트 행 골격과 일치(텍스트 로더 대신).
-          <div className="divide-y divide-[#f0f0ec] px-5" aria-hidden="true">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <div key={`sk-${index}`} className="flex items-center gap-4 py-4">
-                <div className="h-4 w-4 shrink-0 animate-pulse rounded bg-[#f0f0ec]" />
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="h-4 w-1/3 animate-pulse rounded bg-[#f0f0ec]" />
-                  <div className="h-3 w-1/2 animate-pulse rounded bg-[#f5f5f2]" />
-                </div>
-                <div className="hidden h-5 w-16 shrink-0 animate-pulse rounded-full bg-[#f0f0ec] sm:block" />
-                <div className="hidden h-5 w-14 shrink-0 animate-pulse rounded-full bg-[#f5f5f2] sm:block" />
-              </div>
-            ))}
-          </div>
-        ) : loadError && leads.length === 0 ? (
-          // 장애 상태 — 빈 목록과 구분해 "등록된 리드가 없습니다"로 오인되지 않게 한다.
-          <div role="alert" aria-live="assertive" className="px-6 py-14 text-center">
-            <p className="text-[13px] font-semibold text-[#B85C33]">리드를 불러오지 못했습니다.</p>
-            <p className="mt-1 text-[12px] text-[#1a1a1a]/45">{loadError}</p>
-            <button
-              type="button"
-              onClick={() => void fetchLeads({ force: true })}
-              className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#F6D5C5] bg-white px-3 text-[12px] font-semibold text-[#B85C33] transition-colors hover:bg-[#FEF3EE]"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              다시 시도
-            </button>
-          </div>
-        ) : filtered.length === 0 ? (
-          // 빈 상태 — 다음 행동 안내(리드 등록 / 조건 초기화).
-          <div className="px-6 py-14 text-center">
-            <p className="text-[13px] font-semibold text-[#111110]">
-              {leads.length === 0 ? "등록된 리드가 없습니다." : "조건에 맞는 리드가 없습니다."}
-            </p>
-            <p className="mt-1 text-[12px] text-[#1a1a1a]/45">
-              {leads.length === 0
-                ? "리드를 등록하면 응대 큐와 파이프라인 집계가 시작됩니다."
-                : "필터를 조정하거나 전체 리드에서 다시 확인하세요."}
-            </p>
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-              {leads.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLens("all")
-                    setFilter("all")
-                    setSearchQuery("")
-                    setSourceGroup("all")
-                    setSourceDetailFilter("all")
-                    setLeadMagnetFilter("all")
-                    setChannelSource("")
-                    setTrackingKey(null)
-                  }}
-                  className="inline-flex h-8 items-center rounded-lg border border-[#e8e8e4] bg-white px-3 text-[12px] font-semibold text-[#111110] transition-colors hover:bg-[#f5f5f2]"
-                >
-                  전체 리드 보기
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setLeadModalOpen(true)}
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-[#084734] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-                리드 등록
-              </button>
-            </div>
-          </div>
-        ) : (
-          <>
-          <div className="divide-y divide-[#f0f0ec] sm:hidden">
-            {filtered.slice(0, visibleLeadCount).map((lead) => {
-              const followUpDateKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
-              const isOverdue = Boolean(followUpDateKey && followUpDateKey < today && lead.status !== "converted" && lead.status !== "closed")
-              const isTodayFollowUp = followUpDateKey === today
-              const ageDays = daysBetween(lead.timestamp)
-              const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp, now) : null
-              const sourceDetail = getLeadSourceDetail(lead)
-              const sourceSegment = getLeadSourceSegment(lead)
-              const priority = priorityMap.get(lead.id)
-              const compassEntry = compass.lookup(lead)
-
-              return (
-                <div
-                  key={`mobile-${lead.id}`}
-                  className={`block w-full px-4 py-4 text-left transition-colors ${
-                    selected?.id === lead.id ? "bg-[#f0f0ec]" : "hover:bg-[#fafaf8]"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <label
-                      className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#e8e8e4] bg-white sm:h-8 sm:w-8"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedLeadIds.has(lead.id)}
-                        onChange={(event) => handleToggleLeadSelection(lead.id, event.target.checked)}
-                        aria-label={`${getLeadDisplayName(lead)} 선택`}
-                        className="h-4 w-4 accent-[#084734]"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setSelected(lead)}
-                      aria-label={`${getLeadDisplayName(lead)} 상세 열기`}
-                      className="min-w-0 flex-1 rounded-lg text-left"
-                    >
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-[14px] font-semibold text-[#111110]">
-                          {lead.name ?? "No name"}
-                        </p>
-                        {priority ? (
-                          <span
-                            title={priorityBreakdownTitle(priority)}
-                            className={`inline-flex shrink-0 items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${priorityToneClass(priority.total)}`}
-                          >
-                            <Flame className="h-2.5 w-2.5" />
-                            {priority.total}
-                          </span>
-                        ) : null}
-                        <LeadActivityChip badge={activitySummary[lead.id]} />
-                      </div>
-                      <p className="mt-1 truncate text-[12px] text-[#1a1a1a]/50">
-                        {lead.org ?? lead.phone ?? lead.email ?? "-"}
-                      </p>
-                      {priority && priority.reasons.length > 0 ? (
-                        <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/40">
-                          {priority.reasons.join(" · ")}
-                        </p>
-                      ) : null}
-                      {/* 조상이 <button>이라 링크가 아닌 표시형 칩으로 그린다(중첩 인터랙티브 금지). */}
-                      {compassEntry ? (
-                        <span className="mt-1 flex">
-                          <CompassLeadChip entry={compassEntry} interactive={false} />
-                        </span>
-                      ) : null}
-                    </button>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {isUnconfirmedLead(lead) && (
-                        <span className="rounded-full bg-[#FBF1E0] px-2 py-0.5 text-[11px] font-medium text-[#7A520F]">
-                          미확인
-                        </span>
-                      )}
-                      <StatusPill status={lead.status} />
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void handleDelete(lead.id)
-                        }}
-                        disabled={deletingIds.has(lead.id)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#F6D5C5] bg-white text-[#B85C33] transition-colors hover:bg-[#FEF3EE] disabled:cursor-not-allowed disabled:opacity-50"
-                        aria-label={`${getLeadDisplayName(lead)} 삭제`}
-                        title="삭제"
-                      >
-                        {deletingIds.has(lead.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[#1a1a1a]/45">
-                    <span className="inline-flex items-center gap-1.5 rounded-md bg-[#f0f0ec] px-2 py-1">
-                      <SourceGroupDot group={getLeadSourceGroup(lead)} size={6} />
-                      {SOURCE_GROUP_LABEL[getLeadSourceGroup(lead)]}
-                      {sourceSegment ? ` · ${sourceSegment}` : ""}
-                    </span>
-                    {sourceDetail ? (
-                      <span className="rounded-md bg-[#ECFDF5] px-2 py-1 text-[#084734]">
-                        {sourceDetail}
-                      </span>
-                    ) : null}
-                    {lead.lead_magnet ? (
-                      <span className="rounded-md bg-[#FBF1E0] px-2 py-1 text-[#7A520F]">
-                        {getLeadMagnetLabel(lead.lead_magnet)}
-                      </span>
-                    ) : null}
-                    {unrespondedHours !== null ? (
-                      <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium ${
-                        unrespondedHours >= 48
-                          ? "bg-[#FEF3EE] text-[#B85C33]"
-                          : unrespondedHours >= 24
-                            ? "bg-[#FBF1E0] text-[#7A520F]"
-                            : "bg-[#f0f0ec] text-[#1a1a1a]/45"
-                      }`}>
-                        <Clock className="h-3 w-3" />
-                        미응대 {formatResponseAge(unrespondedHours)}
-                      </span>
-                    ) : null}
-                    <span>
-                      {new Date(lead.timestamp).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
-                    </span>
-                    {lead.follow_up_at ? (
-                      <span className={isOverdue ? "font-medium text-[#B85C33]" : isTodayFollowUp ? "font-medium text-[#084734]" : ""}>
-                        {isOverdue ? "지연 " : isTodayFollowUp ? "오늘 " : ""}
-                        {new Date(lead.follow_up_at).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
-                      </span>
-                    ) : null}
-                    {lead.assigned_to ? <span>{lead.assigned_to}</span> : null}
-                    {ageDays >= 7 && isActiveLead(lead.status) ? (
-                      <span className="font-medium text-[#B85C33]">{ageDays}일 정체</span>
-                    ) : null}
-                  </div>
-
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelected(lead)}
-                      className="inline-flex items-center justify-center rounded-md border border-[#D7EBDD] bg-[#ECFDF5] px-3 text-[12px] font-medium text-[#084734]"
-                    >
-                      상세 보기
-                    </button>
-                    {lead.phone ? (
-                      <a
-                        href={`tel:${lead.phone}`}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          setContactDraft({ leadId: lead.id, type: "call" })
-                          setSelected(lead)
-                        }}
-                        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md bg-[#084734] px-3 text-[12px] font-medium text-white"
-                      >
-                        <PhoneCall className="h-3.5 w-3.5" />
-                        Call
-                      </a>
-                    ) : null}
-                    {lead.email ? (
-                      <a
-                        href={`mailto:${lead.email}`}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          setContactDraft({ leadId: lead.id, type: "email" })
-                          setSelected(lead)
-                        }}
-                        className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-md border border-[#e8e8e4] bg-white px-3 text-[12px] font-medium text-[#111110]"
-                      >
-                        <Mail className="h-3.5 w-3.5" />
-                        Email
-                      </a>
-                    ) : null}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-          <div className="hidden overflow-x-auto sm:block">
-          <table className="min-w-[1400px] w-full text-[13px]">
-            <thead>
-              <tr className="border-b border-[#e8e8e4] bg-[#fafaf8]">
-                <th scope="col" className="w-12 px-5 py-3.5">
-                  <input
-                    type="checkbox"
-                    // 일부만 선택된 상태를 "선택 안 됨"으로 그리면, 클릭이 전체 선택인지 전체 해제인지
-                    // 예측할 수 없다. 부분 선택은 indeterminate로 드러낸다.
-                    // 범위는 "화면에 그려진 행"만 — 더보기 밖 리드까지 조용히 선택되지 않는다.
-                    ref={(node) => {
-                      if (node) node.indeterminate = !allVisibleSelected && selectedVisibleCount > 0
-                    }}
-                    checked={allVisibleSelected}
-                    disabled={visibleIds.length === 0}
-                    onChange={(event) => handleToggleVisibleSelection(event.target.checked)}
-                    aria-label={
-                      allVisibleSelected
-                        ? "화면에 표시된 리드 전체 선택 해제"
-                        : `화면에 표시된 ${visibleIds.length}건 전체 선택 (현재 ${selectedVisibleCount}건 선택됨)`
-                    }
-                    className="h-4 w-4 accent-[#084734] disabled:opacity-30"
-                  />
-                </th>
-                {["우선순위", "시간", "응대", "유입", "이름", "기관", "담당자", "연락처", "팔로업", "정체", "상태"].map((h) => (
-                  <th key={h} scope="col" className="text-left px-5 py-3.5 font-medium text-[#1a1a1a]/40 whitespace-nowrap text-[12px]">{h}</th>
-                ))}
-                <th scope="col" className="w-16 px-5 py-3.5 text-right text-[12px] font-medium text-[#1a1a1a]/40">관리</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.slice(0, visibleLeadCount).map((lead) => {
-                const followUpDateKey = lead.follow_up_at ? toLocalDateKey(lead.follow_up_at) : null
-                const isOverdue = Boolean(followUpDateKey && followUpDateKey < today && lead.status !== "converted" && lead.status !== "closed")
-                const isTodayFollowUp = followUpDateKey === today
-                const ageDays = daysBetween(lead.timestamp)
-                const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp, now) : null
-                const sourceDetail = getLeadSourceDetail(lead)
-                const sourceSegment = getLeadSourceSegment(lead)
-                const priority = priorityMap.get(lead.id)
-                const compassEntry = compass.lookup(lead)
-                return (
-                  <tr
-                    key={lead.id}
-                    onClick={() => setSelected(lead)}
-                    // 행 자체가 상세 진입점이므로 키보드로도 열 수 있어야 한다(모바일 카드와 동일 규약).
-                    tabIndex={0}
-                    onKeyDown={(event) => {
-                      if (event.target !== event.currentTarget) return
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault()
-                        setSelected(lead)
-                      }
-                    }}
-                    aria-label={`${getLeadDisplayName(lead)} 상세 열기`}
-                    className={`border-b border-[#e8e8e4] last:border-0 cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-[#084734] focus-visible:-outline-offset-2 ${
-                      selected?.id === lead.id ? "bg-[#f0f0ec]" : "hover:bg-[#fafaf8]"
-                    }`}
-                  >
-                    <td className="px-5 py-4">
-                      <input
-                        type="checkbox"
-                        checked={selectedLeadIds.has(lead.id)}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(event) => handleToggleLeadSelection(lead.id, event.target.checked)}
-                        aria-label={`${getLeadDisplayName(lead)} 선택`}
-                        className="h-4 w-4 accent-[#084734]"
-                      />
-                    </td>
-                    <td className="px-5 py-4">
-                      {priority ? <PriorityCell priority={priority} /> : <span className="text-[#1a1a1a]/30">—</span>}
-                    </td>
-                    <td className="px-5 py-4 text-[#1a1a1a]/40 whitespace-nowrap text-[12px] tabular-nums">
-                      {new Date(lead.timestamp).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-[12px]">
-                      {unrespondedHours !== null ? (
-                        <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium ${
-                          unrespondedHours >= 48
-                            ? "bg-[#FEF3EE] text-[#B85C33]"
-                            : unrespondedHours >= 24
-                              ? "bg-[#FBF1E0] text-[#7A520F]"
-                              : "bg-[#f0f0ec] text-[#1a1a1a]/45"
-                        }`}>
-                          <Clock className="h-3 w-3" />
-                          {formatResponseAge(unrespondedHours)}
-                        </span>
-                      ) : isResponseTargetLead(lead) ? (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-[#ECFDF5] px-2 py-0.5 font-medium text-[#084734]">
-                          <Check className="h-3 w-3" />
-                          완료
-                        </span>
-                      ) : (
-                        <span className="text-[#1a1a1a]/30">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap">
-                      <div className="flex max-w-[240px] flex-col items-start gap-1">
-                        <span className="inline-flex items-center gap-1.5 text-[12px] text-[#111110]">
-                          <SourceGroupDot group={getLeadSourceGroup(lead)} />
-                          {SOURCE_GROUP_LABEL[getLeadSourceGroup(lead)]}
-                          {sourceSegment ? (
-                            <>
-                              <span className="text-[#1a1a1a]/30">·</span>
-                              <span className="max-w-[120px] truncate text-[#1a1a1a]/45">{sourceSegment}</span>
-                            </>
-                          ) : null}
-                        </span>
-                        {sourceDetail ? (
-                          <span className="max-w-full truncate rounded-md bg-[#ECFDF5] px-2 py-0.5 text-[11px] font-medium text-[#084734]">
-                            {sourceDetail}
-                          </span>
-                        ) : null}
-                        {lead.lead_magnet ? (
-                          <span className="max-w-full truncate rounded-md bg-[#FBF1E0] px-2 py-0.5 text-[11px] font-medium text-[#7A520F]">
-                            {getLeadMagnetLabel(lead.lead_magnet)}
-                          </span>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 font-medium text-[#111110]">
-                      <div className="flex items-center gap-1.5">
-                        {lead.name ?? "—"}
-                        <LeadActivityChip badge={activitySummary[lead.id]} />
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-[#1a1a1a]/55">{lead.org ?? "—"}</td>
-                    <td className="px-5 py-4 whitespace-nowrap text-[#1a1a1a]/55">
-                      {lead.assigned_to ? (
-                        <span className="rounded-md bg-[#f0f0ec] px-2 py-0.5 text-[11px] font-medium text-[#1a1a1a]/55">
-                          {lead.assigned_to}
-                        </span>
-                      ) : (
-                        <span className="rounded-md bg-[#FEF3EE] px-2 py-0.5 text-[11px] font-medium text-[#B85C33]">미배정</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-[#1a1a1a]/55">{lead.phone ?? lead.email ?? "—"}</td>
-                    <td className="px-5 py-4 whitespace-nowrap text-[12px]">
-                      {lead.follow_up_at ? (
-                        <span className={isOverdue ? "text-[#B85C33] font-medium" : isTodayFollowUp ? "text-[#084734] font-medium" : "text-[#1a1a1a]/40"}>
-                          {isOverdue ? "지연 " : isTodayFollowUp ? "오늘 " : ""}
-                          {new Date(lead.follow_up_at).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" })}
-                        </span>
-                      ) : (
-                        <span className="text-[#1a1a1a]/30">—</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-[12px] tabular-nums">
-                      {isActiveLead(lead.status) && ageDays >= 7 ? (
-                        <span className="font-medium text-[#B85C33]">{ageDays}일</span>
-                      ) : (
-                        <span className="text-[#1a1a1a]/40">{ageDays}일</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {isUnconfirmedLead(lead) && (
-                          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#FBF1E0] text-[#7A520F]">
-                            미확인
-                          </span>
-                        )}
-                        <StatusPill status={lead.status} />
-                        {/* 우리 상태 옆에 마케팅팀 상태를 병기 — 덮어쓰지 않는다. */}
-                        {compassEntry ? <CompassLeadChip entry={compassEntry} /> : null}
-                        {/*
-                          상태 전환은 드로어를 열고 스크롤해야만 가능했다. 그래서 리드
-                          115건이 전부 new 로 남아 있었고(2026-08-05 실측), 컨택 신호가
-                          우선순위에서 아무 일도 하지 못했다. 목록에서 한 번에 넘긴다.
-                        */}
-                        {lead.status === "new" && !isTestLead(lead) && (
-                          <button
-                            type="button"
-                             onClick={(event) => {
-                               event.stopPropagation()
-                               setContactDraft({ leadId: lead.id, type: "call" })
-                               setSelected(lead)
-                             }}
-                            title="상세에서 연락 기록 남기기"
-                            className="inline-flex items-center gap-1 rounded-full border border-[#D7EBDD] bg-white px-2 py-0.5 text-[11px] font-medium text-[#084734] transition-colors hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <PhoneCall className="h-3 w-3" />
-                            연락 기록
-                          </button>
-                        )}
-                        {lead.status === "converted" && (
-                          <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#ECFDF5] text-[#084734] border border-[#D7EBDD]">
-                            CRM 전환
-                          </span>
-                        )}
-                        {lead.notes && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#1a1a1a]/20 shrink-0" title="메모 있음" />
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <div className="inline-flex items-center gap-1.5">
-                        {/* 전환도 삭제처럼 목록에서 바로 — 드로어를 열고 스크롤하는 3단계 동선을 없앤다.
-                            고객·딜이 실제로 생성되므로 실행 전에 확인을 받는다. */}
-                        {lead.status !== "converted" && !isUnconfirmedLead(lead) && !isTestLead(lead) && (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              if (
-                                confirm(
-                                  `"${getLeadDisplayName(lead)}" 리드를 고객·거래로 전환할까요? CRM에 고객사와 딜이 생성됩니다.`
-                                )
-                              )
-                                void handleConvert(lead)
-                            }}
-                            disabled={convertingIds.has(lead.id)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#D7EBDD] bg-white text-[#084734] transition-colors hover:bg-[#ECFDF5] disabled:cursor-not-allowed disabled:opacity-50"
-                            aria-label={`${getLeadDisplayName(lead)} 고객·거래로 전환`}
-                            title="고객·거래 등록"
-                          >
-                            {convertingIds.has(lead.id) ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <UserPlus className="h-3.5 w-3.5" />
-                            )}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            void handleDelete(lead.id)
-                          }}
-                          disabled={deletingIds.has(lead.id)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#F6D5C5] bg-white text-[#B85C33] transition-colors hover:bg-[#FEF3EE] disabled:cursor-not-allowed disabled:opacity-50"
-                          aria-label={`${getLeadDisplayName(lead)} 삭제`}
-                          title="삭제"
-                        >
-                          {deletingIds.has(lead.id) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-          </div>
-          {(canMoreLeads || canCollapseLeads) && (
-            <div className="flex flex-col items-center gap-2 border-t border-[#e8e8e4] bg-[#fafaf8] px-5 py-4">
-              <p role="status" className="text-[11px] font-medium tabular-nums text-[#1a1a1a]/45">
-                {visibleLeadCount.toLocaleString("ko-KR")} / 총{" "}
-                {filtered.length.toLocaleString("ko-KR")}건 표시
-              </p>
-              <ShowMore
-                visible={visibleLeadCount}
-                total={filtered.length}
-                step={LEAD_BOARD_LIST_STEP}
-                onMore={showMoreLeads}
-                onCollapse={canCollapseLeads ? collapseLeads : undefined}
-              />
-            </div>
-          )}
-          </>
-        )}
-      </div>
+        <LeadsConsoleList
+          filtered={filtered}
+          totalLeadCount={leads.length}
+          loading={loading}
+          loadError={loadError}
+          visibleLeadCount={visibleLeadCount}
+          canMoreLeads={canMoreLeads}
+          canCollapseLeads={canCollapseLeads}
+          onShowMore={showMoreLeads}
+          onCollapse={collapseLeads}
+          selectedId={selected?.id}
+          selectedLeadIds={selectedLeadIds}
+          deletingIds={deletingIds}
+          convertingIds={convertingIds}
+          activitySummary={activitySummary}
+          priorityMap={priorityMap}
+          today={today}
+          now={now}
+          compassLookup={compass.lookup}
+          allVisibleSelected={allVisibleSelected}
+          selectedVisibleCount={selectedVisibleCount}
+          visibleIds={visibleIds}
+          onSelect={setSelected}
+          onToggleLeadSelection={handleToggleLeadSelection}
+          onToggleVisibleSelection={handleToggleVisibleSelection}
+          onDelete={(id) => void handleDelete(id)}
+          onConvert={(lead) => void handleConvert(lead)}
+          onContactAction={(lead, type) => {
+            setContactDraft({ leadId: lead.id, type })
+            setSelected(lead)
+          }}
+          onRetry={() => void fetchLeads({ force: true })}
+          onOpenLeadModal={() => setLeadModalOpen(true)}
+          onResetAllFilters={() => {
+            setLens("all")
+            setFilter("all")
+            setSearchQuery("")
+            setSourceGroup("all")
+            setSourceDetailFilter("all")
+            setLeadMagnetFilter("all")
+            setChannelSource("")
+            setTrackingKey(null)
+          }}
+        />
       ) : (
         <LeadsBoardView
           columns={boardColumns}
