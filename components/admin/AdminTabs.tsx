@@ -22,7 +22,11 @@ interface AdminTabsProps<T extends string = string> {
   onValueChange: (value: T) => void
   label: string
   className?: string
-  variant?: "segmented" | "subtle"
+  /**
+   * segmented(기본)=검은 필 세그먼트, subtle=저채도 세그먼트,
+   * underline=밑줄 탭(quotes 등 기존 밑줄형 탭 행과 동일 시각 — 기계만 통일, 2026-08-28 감사 [2]).
+   */
+  variant?: "segmented" | "subtle" | "underline"
   /**
    * 탭 내용이 렌더되는 단일 tabpanel 컨테이너의 id(2026-08-18 a11y).
    * 소비처가 내용 컨테이너에 role="tabpanel" + 이 id를 달면 탭 버튼의 aria-controls가
@@ -95,7 +99,9 @@ export default function AdminTabs<T extends string>({
         aria-busy={isPending || undefined}
         onKeyDown={handleKeyDown}
         className={cn(
-          "inline-flex min-w-full gap-1 rounded-xl border border-black/[0.08] bg-white p-1 sm:min-w-0",
+          variant === "underline"
+            ? "inline-flex min-w-full gap-0.5 sm:min-w-0"
+            : "inline-flex min-w-full gap-1 rounded-xl border border-black/[0.08] bg-white p-1 sm:min-w-0",
           variant === "subtle" && "border-transparent bg-[#F6F5F4]"
         )}
       >
@@ -116,13 +122,32 @@ export default function AdminTabs<T extends string>({
               onClick={() => selectTab(item.value)}
               title={item.title}
               className={cn(
-                "inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 sm:flex-none",
-                active
-                  ? "bg-[#111110] text-white"
-                  : "text-[#1a1a1a]/55 hover:bg-[#F6F5F4] hover:text-[#111110]"
+                "inline-flex min-h-11 items-center gap-2 text-[13px] font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2",
+                variant === "underline"
+                  ? cn(
+                      "shrink-0 justify-start whitespace-nowrap border-b-2 px-3",
+                      active
+                        ? "border-[#084734] text-[#111110]"
+                        : "border-transparent text-[#1a1a1a]/45 hover:text-[#111110]"
+                    )
+                  : cn(
+                      "flex-1 justify-center rounded-lg px-3 py-2 sm:flex-none",
+                      active
+                        ? "bg-[#111110] text-white"
+                        : "text-[#1a1a1a]/55 hover:bg-[#F6F5F4] hover:text-[#111110]"
+                    )
               )}
             >
-              {item.icon ? <span aria-hidden="true">{item.icon}</span> : null}
+              {item.icon ? (
+                <span
+                  aria-hidden="true"
+                  className={
+                    variant === "underline" ? (active ? "text-[#084734]" : "text-[#1a1a1a]/40") : undefined
+                  }
+                >
+                  {item.icon}
+                </span>
+              ) : null}
               <span className="min-w-0">
                 <span className="block whitespace-nowrap">{item.label}</span>
                 {item.description ? (
