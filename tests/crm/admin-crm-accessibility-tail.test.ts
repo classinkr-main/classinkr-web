@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 
 import { describe, expect, it } from "vitest"
@@ -7,8 +7,20 @@ function read(relativePath: string) {
   return readFileSync(join(process.cwd(), relativePath), "utf8")
 }
 
+// 분해된 모듈 폴더까지 합쳐 화면 단위 계약을 유지한다.
+function readWithModuleDir(mainPath: string, dirPath: string) {
+  const dir = join(process.cwd(), dirPath)
+  return [
+    read(mainPath),
+    ...readdirSync(dir)
+      .sort()
+      .map((name) => readFileSync(join(dir, name), "utf8")),
+  ].join("\n")
+}
+
 const leadsBoard = read("components/admin/crm/leads/LeadsBoardClient.tsx")
-const customer360 = read("components/admin/crm/Customer360Drawer.tsx")
+// 드로어 본체는 components/admin/crm/drawer/* 로 분해됐다(2026-08-28).
+const customer360 = readWithModuleDir("components/admin/crm/Customer360Drawer.tsx", "components/admin/crm/drawer")
 
 describe("Admin CRM mobile interaction accessibility contract", () => {
   it("keeps lead controls touch-safe on mobile without changing desktop density", () => {
