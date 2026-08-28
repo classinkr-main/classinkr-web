@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { trackEvent } from "@/lib/analytics"
 import { BROCHURE_URL } from "@/lib/marketing-links"
+import { TESTIMONIALS } from "@/lib/testimonials"
 import { motion, useInView } from "framer-motion"
 import {
     ArrowRight, PenTool, Eye, Share2,
@@ -630,40 +631,31 @@ function LessonTimelineSection() {
 }
 
 /* ── Section: Testimonials ───────────────────────────────────────── */
-const testimonials = [
-    {
-        quote: "판서가 학생 태블릿에 바로 떠요. 맨 뒷자리 학생들 표정이 달라졌습니다. 수업 집중도가 눈에 보인다고 처음 느꼈어요.",
-        name: "김지수 선생님",
-        school: "서울 ○○중학교 수학",
-        model: "S86 도입",
-        rating: 5,
-    },
-    {
-        quote: "원격 수업 때 AI 카메라가 저를 따라다니니까 따로 누가 카메라를 잡아줄 필요가 없어요. 혼자서도 완전한 하이브리드 수업이 됩니다.",
-        name: "박현수 선생님",
-        school: "경기 ○○고등학교 과학",
-        model: "S110 도입",
-        rating: 5,
-    },
-    {
-        quote: "NFC로 로그인하고 바로 수업에 들어가는 게 처음엔 신기했는데, 이제 없으면 불편할 것 같아요. 아이들도 칠판 앞에 나와서 직접 씁니다.",
-        name: "이민정 선생님",
-        school: "부산 ○○초등학교",
-        model: "S75 도입",
-        rating: 5,
-    },
-]
+// 후기 콘텐츠(발화자·인용·평점)는 lib/testimonials.ts — 실사용 고객 후기를 익명화한 단일 소스 — 에서만 가져온다.
+// 이 페이지는 노출 순서만 정의한다. 도입 하드웨어 모델은 후기에 기록된 사실이 아니므로 배지로 표기하지 않는다.
+const HW_TESTIMONIAL_IDS = ["imisook-korean-ceo", "olm-eng-director", "yerim-edu"]
+
+const testimonials = HW_TESTIMONIAL_IDS.flatMap((id) => {
+    const source = TESTIMONIALS.find((item) => item.id === id)
+    if (!source) return []
+    return [{
+        quote: source.quote,
+        name: source.role,
+        badge: source.badge,
+        rating: source.rating ?? 5,
+    }]
+})
 
 function TestimonialSection() {
     return (
         <section className="py-24 md:py-32 bg-white">
             <div className="container mx-auto px-4 lg:px-8">
                 <motion.div className="text-center mb-14" {...fadeUp}>
-                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">VOICES FROM CLASSROOMS</p>
+                    <p className="text-sm font-semibold text-[#084734] tracking-wider uppercase mb-3">VOICES FROM THE FIELD</p>
                     <h2 className="text-3xl md:text-4xl text-[#1a1a19] leading-tight">
-                        이미 수업에서 경험한
+                        클래스인으로 수업을 바꾼
                         <br />
-                        <span className="text-[#084734]">선생님들이 말합니다</span>
+                        <span className="text-[#084734]">현장의 목소리</span>
                     </h2>
                 </motion.div>
 
@@ -684,9 +676,8 @@ function TestimonialSection() {
                             </p>
                             <div className="border-t border-black/[0.08] pt-5">
                                 <div className="font-bold text-[#111110] text-sm">{t.name}</div>
-                                <div className="text-xs text-[#A39E98] mt-0.5">{t.school}</div>
-                                <div className="inline-flex mt-2.5 px-2.5 py-1 rounded-full bg-[#ECFDF5] text-[#084734] text-[10px] font-bold border border-[#084734]/15">
-                                    {t.model}
+                                <div className="inline-flex mt-2 px-2.5 py-1 rounded-full bg-[#ECFDF5] text-[#084734] text-[10px] font-bold border border-[#084734]/15">
+                                    {t.badge}
                                 </div>
                             </div>
                         </motion.div>
