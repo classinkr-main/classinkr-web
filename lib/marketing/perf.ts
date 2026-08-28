@@ -10,12 +10,20 @@ import type { CampaignUpdate } from "@/lib/types/marketing-campaign"
 
 export type PerfPeriodKey = "7d" | "30d" | "90d" | "quarter"
 
+/**
+ * 직전 구간을 어떤 기준으로 잡았는지 — 표시 문구·프롬프트가 비교 축을 정확히 말하기 위한 라벨.
+ *  - `trailing`: 현재 창 바로 앞의 같은 길이 창(7d/30d/90d 처럼 이미 완결된 롤링 창).
+ *  - `calendar_aligned`: 달력 구간의 같은 위치·같은 일수(진행 중인 QTD 는 전분기 1~N일).
+ */
+export type PerfPrevBasis = "trailing" | "calendar_aligned"
+
 export interface PerfPeriod {
   key: PerfPeriodKey
   since: string
   until: string
   prevSince: string
   prevUntil: string
+  prevBasis: PerfPrevBasis
 }
 
 const DAY_MS = 86_400_000
@@ -31,21 +39,57 @@ export function shiftDays(iso: string, days: number): string {
   return toIso(new Date(toDate(iso).getTime() + days * DAY_MS))
 }
 
-/** today(YYYY-MM-DD, KST 기준 오늘) 를 끝점으로 기간과 직전 동일 길이 기간을 해석한다. */
+/** ISO 일자가 속한 달력 분기의 첫날. */
+function quarterStartOf(iso: string): string {
+  const d = toDate(iso)
+  return toIso(new Date(Date.UTC(d.getUTCFullYear(), Math.floor(d.getUTCMonth() / 3) * 3, 1)))
+}
+
+/** 두 ISO 일자 사이의 일수(양끝 포함). */
+function inclusiveDays(fromIso: string, toIsoDay: string): number {
+  return Math.round((toDate(toIsoDay).getTime() - toDate(fromIso).getTime()) / DAY_MS) + 1
+}
+
+/**
+ * today(YYYY-MM-DD, KST 기준 오늘) 를 끝점으로 기간과 비교 기간을 해석한다.
+ *
+ * 비교 기간(prev)의 기준은 현재 창이 "롤링"인지 "진행 중인 달력 구간"인지로 갈린다:
+ *
+ *  · 7d/30d/90d — 오늘로 끝나는 고정 길이 롤링 창이다. 바로 앞의 같은 길이 창과 비교하면
+ *    길이도 위치도 대등하므로 기존 로직 그대로 둔다(prevBasis="trailing").
+ *
+ *  · quarter — 분기 시작~오늘(QTD)이라 기간이 매일 자라는 "진행 중인 달력 구간"이다.
+ *    직전 창(분기 시작 직전 N일)과 비교하면 분기 초입 N일 대 분기 말미 N일을 맞대는 꼴이라
+ *    비교가 위치 편향을 탄다 — 월 지표로 치면 "8/1~8/20"을 "7/12~7/31"과 견주는 셈이다.
+ *    그래서 전분기의 같은 위치·같은 일수(전분기 1일차~N일차, 월로 치면 전월 1~N일)를 쓴다
+ *    (prevBasis="calendar_aligned").
+ *    전분기가 N일보다 짧으면(예: 91일 Q2 완결 vs 90일 Q1) 전분기 마지막 날에서 자른다 —
+ *    비교 창이 현재 분기로 넘어와 자기 자신과 비교하는 일은 절대 만들지 않는다.
+ */
 export function resolvePerfPeriod(key: PerfPeriodKey, today: string): PerfPeriod {
-  let since: string
   if (key === "quarter") {
-    const d = toDate(today)
-    const qStartMonth = Math.floor(d.getUTCMonth() / 3) * 3
-    since = toIso(new Date(Date.UTC(d.getUTCFullYear(), qStartMonth, 1)))
-  } else {
-    const days = key === "7d" ? 7 : key === "90d" ? 90 : 30
-    since = shiftDays(today, -(days - 1))
+    const since = quarterStartOf(today)
+    const lengthDays = inclusiveDays(since, today)
+    // 현재 분기 시작 직전 날 = 전분기 마지막 날.
+    const prevQuarterEnd = shiftDays(since, -1)
+    const prevSince = quarterStartOf(prevQuarterEnd)
+    const wantedUntil = shiftDays(prevSince, lengthDays - 1)
+    const prevUntil = wantedUntil <= prevQuarterEnd ? wantedUntil : prevQuarterEnd
+    return { key, since, until: today, prevSince, prevUntil, prevBasis: "calendar_aligned" }
   }
-  const lengthDays = Math.round((toDate(today).getTime() - toDate(since).getTime()) / DAY_MS) + 1
+
+  const days = key === "7d" ? 7 : key === "90d" ? 90 : 30
+  const since = shiftDays(today, -(days - 1))
   const prevUntil = shiftDays(since, -1)
-  const prevSince = shiftDays(prevUntil, -(lengthDays - 1))
-  return { key, since, until: today, prevSince, prevUntil }
+  const prevSince = shiftDays(prevUntil, -(days - 1))
+  return { key, since, until: today, prevSince, prevUntil, prevBasis: "trailing" }
+}
+
+/** 비교 축 표기 — KPI 델타 툴팁·AI 프롬프트가 같은 문장을 쓰게 하는 SSOT. */
+export function prevBasisLabel(period: Pick<PerfPeriod, "prevBasis">): string {
+  return period.prevBasis === "calendar_aligned"
+    ? "전분기 같은 일수(1일차~N일차)"
+    : "직전 동일 길이"
 }
 
 /** 전기 대비 증감률(%). 이전이 0/null 이거나 현재가 null 이면 null. */

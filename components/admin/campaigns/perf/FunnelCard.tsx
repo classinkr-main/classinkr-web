@@ -72,7 +72,7 @@ export function FunnelCard({
       <div className="mb-4">
         <h2 className="text-[14px] font-semibold text-[#111110]">광고 퍼널</h2>
         <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
-          노출·클릭은 Meta 스냅샷, 리드 이후는 리드 테이블(광고 리드) 기준
+          노출·클릭 Meta · 리드 이후 리드DB
         </p>
       </div>
 

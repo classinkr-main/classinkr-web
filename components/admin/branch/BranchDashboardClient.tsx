@@ -18,11 +18,11 @@ import { ADMIN_NAV, ADMIN_NAV_SECTION_META } from "../admin-nav"
 const BRANCH_NAV_ITEM = ADMIN_NAV.find((item) => item.href === "/admin/branch")
 const BRANCH_SECTION_LABEL = BRANCH_NAV_ITEM ? ADMIN_NAV_SECTION_META[BRANCH_NAV_ITEM.section].label : "영업·매출"
 
-const BRANCH_TABS: Array<{ id: BranchTab; label: string; sub: string }> = [
-  { id: "overview", label: "개요", sub: "실적 · 팀 · 재고 · 캠페인" },
-  { id: "pipeline", label: "파이프라인", sub: "단계별 딜 보드 · 팀 KPI" },
-  { id: "heatmap", label: "지역별 히트맵", sub: "KR 지역별 매출 · 딜 분포" },
-  { id: "ai", label: "AI 인사이트", sub: "내부 인사이트 · 본사 보고서" },
+const BRANCH_TABS: Array<{ id: BranchTab; label: string }> = [
+  { id: "overview", label: "개요" },
+  { id: "pipeline", label: "파이프라인" },
+  { id: "heatmap", label: "지역별 히트맵" },
+  { id: "ai", label: "AI 인사이트" },
 ]
 
 const PERIOD_LABEL: Record<Period, string> = { M: "이번 달", Q: "이번 분기", Y: "연간 누적" }
@@ -452,9 +452,6 @@ export default function BranchDashboardClient({
             <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em] text-[#111110] sm:text-[30px]">
               KR Team
             </h1>
-            <p className="mt-2 max-w-[720px] text-[13px] leading-relaxed text-[#615D59]">
-              KR 지사의 전체 매출 흐름과 BD · MKT · CSM 팀의 실적, 재고, 일정과 행사를 한 화면에서 확인합니다.
-            </p>
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
@@ -549,7 +546,6 @@ export default function BranchDashboardClient({
                 }`}
               >
                 <span className="whitespace-nowrap text-[13px] font-bold tracking-[-0.01em]">{tab.label}</span>
-                <span className="hidden whitespace-nowrap text-[10.5px] font-medium text-[#615D59] min-[420px]:block">{tab.sub}</span>
                 {active && (
                   <span className="absolute inset-x-3 -bottom-px h-[2.5px] rounded-sm bg-[#084734]" />
                 )}

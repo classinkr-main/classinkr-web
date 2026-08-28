@@ -9,8 +9,49 @@ import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 // 붙여넣기 파서·행 검증은 lib/crm/lead-paste가 SSOT — 캠페인 허브의 리드 가져오기와 공유한다.
 import { checkPastedLeads, parsePastedLeads } from "@/lib/crm/lead-paste"
+import type { CompassDuplicateWarning } from "@/lib/compass/overlay"
 
 const EMPTY_SINGLE = { org: "", name: "", phone: "", email: "", source: "", notes: "" }
+
+/**
+ * Compass 교차 중복 경고 — 우리 테이블 중복(409)과 다른 축이다.
+ * 우리 쪽에 없어도 마케팅팀이 이미 콜을 돌리고 있으면 알린다. **차단이 아니라 경고**라
+ * 등록은 이미 끝났거나 그대로 진행된다. 톤은 아웃라인 주의색(채움 금지).
+ */
+function CompassDuplicateNotice({
+  warning,
+  extraCount = 0,
+  registered,
+}: {
+  warning: CompassDuplicateWarning
+  extraCount?: number
+  /** 이 요청으로 실제 등록이 일어났는지 — 409(우리 쪽 중복)로 막힌 경우와 문구를 나눈다. */
+  registered: boolean
+}) {
+  const who = warning.academy || warning.name || "학원명 미기재"
+  const staff = warning.caller || warning.owner
+  const parts = [who, warning.stageLabel, staff ? `담당 ${staff}` : null].filter(Boolean)
+  return (
+    <div className="mt-3 rounded-lg border border-[#ECD29C] bg-white px-3 py-2 text-left">
+      <p className="text-[12px] font-semibold text-[#7A520F]">
+        이미 마케팅팀이 콜 진행 중 — {parts.join(" · ")}
+      </p>
+      <p className="mt-0.5 text-[11px] text-[#1a1a1a]/50">
+        {registered ? "등록은 그대로 진행됐습니다. " : ""}
+        같은 학원을 두 원장에서 따로 굴리지 않도록 Compass 쪽 진행 상황을 먼저 확인하세요.
+        {extraCount > 1 ? ` (이 요청에서 Compass에 이미 있는 건 ${extraCount.toLocaleString("ko-KR")}건)` : ""}
+      </p>
+      <a
+        href={warning.url}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-1 inline-flex font-semibold text-[12px] text-[#7A520F] underline underline-offset-2"
+      >
+        Compass에서 열기
+      </a>
+    </div>
+  )
+}
 
 export default function LeadRegisterModal({
   open,
@@ -28,6 +69,11 @@ export default function LeadRegisterModal({
   const [error, setError] = useState<string | null>(null)
   // 단건 중복(409) 시 기존 리드로 바로 이동할 수 있게 id를 따로 든다.
   const [duplicateId, setDuplicateId] = useState<string | null>(null)
+  // Compass(마케팅팀 앱) 교차 중복 — 등록을 막지 않고 병기하는 경고.
+  const [compassDuplicate, setCompassDuplicate] = useState<CompassDuplicateWarning | null>(null)
+  const [compassDuplicateCount, setCompassDuplicateCount] = useState(0)
+  // 브리지 장애로 대조를 못 한 경우 — "겹치는 리드 없음"과 구분해서 말한다.
+  const [compassDown, setCompassDown] = useState(false)
   const [result, setResult] = useState<{
     created: number
     failed: number
@@ -54,6 +100,9 @@ export default function LeadRegisterModal({
     if (isDirty && !result && !window.confirm("작성 중인 내용이 있습니다. 닫으면 사라집니다. 닫을까요?")) return
     setError(null)
     setDuplicateId(null)
+    setCompassDuplicate(null)
+    setCompassDuplicateCount(0)
+    setCompassDown(false)
     setResult(null)
     setSingle(EMPTY_SINGLE)
     setBulkText("")
@@ -88,6 +137,9 @@ export default function LeadRegisterModal({
     setSubmitting(true)
     setError(null)
     setDuplicateId(null)
+    setCompassDuplicate(null)
+    setCompassDuplicateCount(0)
+    setCompassDown(false)
     try {
       // 409(중복)는 본문의 existingId까지 읽어야 해서 예외로 뭉개는 adminFetchJson 대신
       // 원시 응답을 직접 다룬다.
@@ -96,16 +148,33 @@ export default function LeadRegisterModal({
         body: JSON.stringify({ ...single, source: single.source || undefined }),
       })
       const data = (await response.json().catch(() => null)) as
-        | { created?: number; failed?: number; invalid?: number; duplicates?: number; firstId?: string | null; error?: string; existingId?: string | null }
+        | {
+            created?: number
+            failed?: number
+            invalid?: number
+            duplicates?: number
+            firstId?: string | null
+            error?: string
+            existingId?: string | null
+            compassDuplicate?: CompassDuplicateWarning | null
+            compassDuplicates?: number
+            compassDown?: boolean
+          }
         | null
       if (response.status === 409) {
         setDuplicateId(data?.existingId ?? null)
+        setCompassDuplicate(data?.compassDuplicate ?? null)
+        setCompassDuplicateCount(data?.compassDuplicates ?? 0)
+        setCompassDown(Boolean(data?.compassDown))
         setError(data?.error ?? "이미 등록된 리드입니다(전화/이메일 일치).")
         return
       }
       if (!response.ok || !data) {
         throw new Error(data?.error ?? "리드 등록에 실패했습니다.")
       }
+      setCompassDuplicate(data.compassDuplicate ?? null)
+      setCompassDuplicateCount(data.compassDuplicates ?? 0)
+      setCompassDown(Boolean(data.compassDown))
       setResult({
         created: data.created ?? 0,
         failed: data.failed ?? 0,
@@ -130,6 +199,9 @@ export default function LeadRegisterModal({
     setSubmitting(true)
     setError(null)
     setDuplicateId(null)
+    setCompassDuplicate(null)
+    setCompassDuplicateCount(0)
+    setCompassDown(false)
     try {
       const res = await adminFetchJson<{
         created: number
@@ -138,11 +210,17 @@ export default function LeadRegisterModal({
         invalid?: number
         duplicates?: number
         firstId?: string | null
+        compassDuplicate?: CompassDuplicateWarning | null
+        compassDuplicates?: number
+        compassDown?: boolean
       }>("/api/admin/leads", {
         method: "POST",
         // 형식 불량 행은 서버에서도 거르지만, 미리보기에서 제외로 안내한 행만 보낸다.
         body: JSON.stringify({ leads: validRows }),
       })
+      setCompassDuplicate(res.compassDuplicate ?? null)
+      setCompassDuplicateCount(res.compassDuplicates ?? 0)
+      setCompassDown(Boolean(res.compassDown))
       setResult({
         created: res.created,
         failed: res.failed,
@@ -225,6 +303,9 @@ export default function LeadRegisterModal({
                   setResult(null)
                   setError(null)
                   setDuplicateId(null)
+                  setCompassDuplicate(null)
+                  setCompassDuplicateCount(0)
+                  setCompassDown(false)
                 }}
                 className={`inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[12px] font-semibold transition-colors ${
                   tab === t.key ? "bg-[#111110] text-white" : "text-[#1a1a1a]/55 hover:text-[#111110]"
@@ -252,6 +333,14 @@ export default function LeadRegisterModal({
               </p>
               {result.failed > 0 ? (
                 <p className="mt-0.5 text-[12px] text-[#B85C33]">{result.failed}건 저장 실패</p>
+              ) : null}
+              {compassDuplicate ? (
+                <CompassDuplicateNotice warning={compassDuplicate} extraCount={compassDuplicateCount} registered />
+              ) : compassDown ? (
+                <p className="mt-2 text-[11px] text-[#84827a]">
+                  Compass 연결 끊김 — 마케팅팀이 이미 콜 중인 학원인지 대조하지 못했습니다(겹치는 리드가 없다는
+                  뜻이 아닙니다).
+                </p>
               ) : null}
               <div className="mt-3 flex items-center justify-center gap-2">
                 <button
@@ -335,6 +424,15 @@ export default function LeadRegisterModal({
                 </Link>
               ) : null}
             </div>
+          ) : null}
+
+          {/* 등록 실패(에러 블록)와 별개 축 — 우리 쪽 결과와 무관하게 Compass 상태를 알린다. */}
+          {!result && compassDuplicate ? (
+            <CompassDuplicateNotice
+              warning={compassDuplicate}
+              extraCount={compassDuplicateCount}
+              registered={false}
+            />
           ) : null}
         </div>
 

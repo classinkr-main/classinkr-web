@@ -3,8 +3,10 @@ import "server-only"
 import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
+import { getCompassRevenue } from "@/lib/compass/bridge"
 import type {
   AdminCrmRevenueSheetBreakdownRow,
+  AdminCrmRevenueSheetCompassCompare,
   AdminCrmRevenueSheetMonthPoint,
   AdminCrmRevenueSheetRow,
   AdminCrmRevenueSheetWorkspace,
@@ -128,6 +130,35 @@ function addMonth(
     }
   current[field] += amount
   map.set(month, current)
+}
+
+// M8 — rev-sheet "Compass 대조" 배지. 어드민이 실제로 데이터를 가진 달(monthlyPoints)만
+// Compass에 물어본다(전체 연혁을 다 끌어오지 않음). month 키는 두 쪽 모두 "YYYY-MM" 실측 확인됨
+// (2026-08-28, compass_revenue_v.month 표본 조회) — 별도 포맷 변환 없이 그대로 매칭한다.
+// down이면 compassAmount/diffAmount를 0으로 두고 down 플래그만 화면에 전달한다(무음 오염 금지).
+export async function getCompassRevenueCompare(
+  monthlyPoints: AdminCrmRevenueSheetMonthPoint[]
+): Promise<AdminCrmRevenueSheetCompassCompare> {
+  const months = monthlyPoints.map((point) => point.month)
+  const adminAmount = monthlyPoints.reduce((sum, point) => sum + point.scheduledAmount, 0)
+
+  if (months.length === 0) {
+    return { down: false, months, adminAmount, compassAmount: 0, diffAmount: 0 }
+  }
+
+  const result = await getCompassRevenue(months)
+  if (result.down) {
+    return { down: true, months, adminAmount, compassAmount: 0, diffAmount: 0 }
+  }
+
+  // 요청한 달 밖의(또는 month가 비어 있는) 행은 방어적으로 제외한다 — getCompassRevenue가
+  // 이미 .in("month", months)로 거르지만, 브리지 계약이 바뀌어도 합계가 조용히 부풀지 않게 한다.
+  const monthSet = new Set(months)
+  const compassAmount = result.rows.reduce((sum, row) => {
+    if (!row.month || !monthSet.has(row.month)) return sum
+    return sum + numberValue(row.amount)
+  }, 0)
+  return { down: false, months, adminAmount, compassAmount, diffAmount: compassAmount - adminAmount }
 }
 
 function getTargetLabel(
@@ -309,6 +340,9 @@ export async function getAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenu
     return new Date(row.syncedAt).getTime() > new Date(latest).getTime() ? row.syncedAt : latest
   }, null)
 
+  const monthly = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month))
+  const compass = await getCompassRevenueCompare(monthly)
+
   return {
     generatedAt: new Date().toISOString(),
     currentMonth,
@@ -332,7 +366,8 @@ export async function getAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenu
     teams: Array.from(teamMap.values()).sort((a, b) => b.scheduledAmount - a.scheduledAmount),
     managers: Array.from(managerMap.values()).sort((a, b) => b.scheduledAmount - a.scheduledAmount).slice(0, 12),
     statuses: Array.from(statusMap.values()).sort((a, b) => b.scheduledAmount - a.scheduledAmount),
-    monthly: Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month)),
+    monthly,
+    compass,
     warnings,
   }
 }

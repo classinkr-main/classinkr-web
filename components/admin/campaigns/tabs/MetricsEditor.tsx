@@ -245,14 +245,16 @@ export default function MetricsEditor({
             <div className="grid gap-3 sm:grid-cols-3">
               <NumInput label="노출 수" value={form.impressionsCount} onChange={(v) => updateNum("impressionsCount", v)} />
               <NumInput label="신청자 수" value={form.applicationsCount} onChange={(v) => updateNum("applicationsCount", v)} />
-              <NumInput label="유효 리드 수" value={form.qualifiedLeadsCount} onChange={(v) => updateNum("qualifiedLeadsCount", v)} />
+              <NumInput
+                label="유효 리드 수"
+                value={form.qualifiedLeadsCount}
+                onChange={(v) => updateNum("qualifiedLeadsCount", v)}
+                hint="리드 DB 자동 집계"
+              />
               <NumInput label="참석자 수" value={form.attendeesCount} onChange={(v) => updateNum("attendeesCount", v)} />
               <NumInput label="딜 수" value={form.dealsCount} onChange={(v) => updateNum("dealsCount", v)} />
               <NumInput label="딜 매출 (원)" value={form.dealsRevenue} onChange={(v) => updateNum("dealsRevenue", v)} />
             </div>
-            <p className="mt-1.5 text-[11px] text-[#1a1a1a]/40">
-              ※ 리드 수는 리드 DB에서 자동 집계됩니다 (수동 입력 불필요).
-            </p>
           </section>
 
           {/* 딜 성과 */}
@@ -487,19 +489,23 @@ function NumInput({
   onChange,
   min,
   step,
+  hint,
 }: {
   label: string
   value: number | null
   onChange: (v: string) => void
   min?: number
   step?: number
+  /** 라벨 옆 짧은 캡션 — 이 필드가 왜 그렇게 동작하는지 한 단어로 밝힐 때만 사용. */
+  hint?: string
 }) {
   // 라벨-인풋을 htmlFor/id 로 묶는다 — 형제 div 로만 두면 스크린리더에 이름 없는 필드로 노출된다.
   const id = useId()
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-[11px] font-medium text-[#1a1a1a]/50">
+      <label htmlFor={id} className="mb-1 flex items-baseline gap-1 text-[11px] font-medium text-[#1a1a1a]/50">
         {label}
+        {hint && <span className="font-normal text-[#1a1a1a]/35">({hint})</span>}
       </label>
       <input
         id={id}

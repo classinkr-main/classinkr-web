@@ -27,6 +27,9 @@ import { PeriodToggle } from "@/components/admin/PeriodToggle"
 import ShowMore, { useVisibleCount } from "@/components/admin/ui/ShowMore"
 import { Skeleton } from "@/components/admin/viz"
 import { formatRelativeTime } from "@/components/admin/campaigns/perf/format"
+import { CompassBridgeDownNote, CompassLeadChip } from "@/components/admin/compass/CompassLeadChip"
+import { useCompassOverlay } from "@/components/admin/compass/use-compass-overlay"
+import { buildReinflowIndex, countReinflow } from "@/lib/crm/lead-reinflow"
 import { getLeadMagnetTitle } from "@/lib/lead-magnets"
 import { useUrlState } from "@/lib/use-url-state"
 import {
@@ -141,6 +144,16 @@ export default function NewLeadsTab({ leads, loading, error }: NewLeadsTabProps)
 
   const list = useVisibleCount(visible.length, PAGE_STEP)
 
+  // Compass(마케팅팀 앱) 콜 상태 병기 — 전량 배열로 한 번 조회하고, 아래 필터는 요청을 유발하지 않는다.
+  const compass = useCompassOverlay(leads)
+
+  // 재유입 축 — 판정은 **전량**에서 하고(기간 밖 선행 유입을 놓치지 않게), 세는 것만 화면 집합으로 한다.
+  const reinflowIndex = useMemo(() => buildReinflowIndex(leads), [leads])
+  const reinflowVisible = useMemo(
+    () => countReinflow(visible, reinflowIndex),
+    [visible, reinflowIndex]
+  )
+
   const toggleGroup = useCallback(
     (group: LeadSourceGroup) => {
       const next = selectedGroups.includes(group)
@@ -209,9 +222,7 @@ export default function NewLeadsTab({ leads, loading, error }: NewLeadsTabProps)
       <header className="mb-4">
         <h2 className="text-[15px] font-bold tracking-[-0.01em] text-[#111110]">신규 리드</h2>
         <p className="mt-1 text-[12px] leading-[1.6] text-[#615D59]">
-          기간 안에 새로 들어온 리드를 유입 채널 가리지 않고 모아 본다 — 메타·홈페이지·자료실·뉴스레터·채널톡·챗봇·수기까지.{" "}
-          여기서의 액션은 <strong className="font-semibold text-[#111110]">연락 여부 체크</strong> 하나다.{" "}
-          광고비·CPL 옆에서 보는 유료 유입과 CRM 딜 전환은 <span className="font-semibold">광고</span> 탭의 광고 리드 섹션이 담당한다.
+          전 소스 신규 유입 — 액션은 연락 체크. 유료 성과는 광고 탭.
         </p>
       </header>
 
@@ -396,12 +407,22 @@ export default function NewLeadsTab({ leads, loading, error }: NewLeadsTabProps)
         </div>
       ) : (
         <>
-          <div className="mt-4 flex items-center justify-between gap-2 px-0.5">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-0.5">
             <p className="text-[11px] font-semibold text-[#615D59]">
               {range.since} ~ {range.until} ·{" "}
               <span className="tabular-nums text-[#111110]">{visible.length.toLocaleString("ko-KR")}</span>건
               {onlyUncontacted ? " (미연락)" : ""}
+              {/* 재유입 = 같은 전화·이메일의 더 이른 리드가 이미 있는 건. 0이면 아예 말하지 않는다. */}
+              {reinflowVisible > 0 ? (
+                <span
+                  title="같은 전화·이메일로 더 이른 리드가 이미 있는 건수입니다. 자체 리드는 재제출 시 행을 새로 만들기 때문에 같은 학원이 여러 행으로 남습니다."
+                  className="ml-1.5 inline-flex items-center rounded-md border border-[#e8e8e4] bg-white px-1.5 py-0.5 text-[10.5px] font-medium tabular-nums text-[#84827a]"
+                >
+                  재유입 {reinflowVisible.toLocaleString("ko-KR")} 포함
+                </span>
+              ) : null}
             </p>
+            {compass.down ? <CompassBridgeDownNote /> : null}
           </div>
 
           <ul className="mt-1.5 divide-y divide-[#f0f0ec] overflow-hidden rounded-xl border border-[#e8e8e4] bg-white">
@@ -410,6 +431,8 @@ export default function NewLeadsTab({ leads, loading, error }: NewLeadsTabProps)
               const contacted = isContactedLead(lead)
               const adLabel = adLabelOf(lead)
               const contact = lead.phone?.trim() || lead.email?.trim() || null
+              const compassEntry = compass.lookup(lead)
+              const reinflow = reinflowIndex.has(lead.id)
 
               return (
                 <li key={lead.id} className="px-3.5 py-2.5">
@@ -426,6 +449,14 @@ export default function NewLeadsTab({ leads, loading, error }: NewLeadsTabProps)
                           <SourceDot group={group} />
                           {SOURCE_GROUP_LABEL[group]}
                         </span>
+                        {reinflow && (
+                          <span
+                            title="같은 전화·이메일의 더 이른 리드가 이미 있습니다(첫 유입이 아님)."
+                            className="inline-flex items-center rounded-md border border-[#e8e8e4] bg-white px-1.5 py-0.5 text-[10.5px] font-medium text-[#84827a]"
+                          >
+                            재유입
+                          </span>
+                        )}
                       </div>
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[#A39E98]">
                         <span className="tabular-nums">{formatRelativeTime(lead.timestamp)}</span>
@@ -442,6 +473,12 @@ export default function NewLeadsTab({ leads, loading, error }: NewLeadsTabProps)
                           </>
                         )}
                       </div>
+                      {/* Compass 병기 — 매칭이 있을 때만. 링크는 새 탭으로 마케팅팀 리드 상세를 연다. */}
+                      {compassEntry && (
+                        <div className="mt-1 flex">
+                          <CompassLeadChip entry={compassEntry} />
+                        </div>
+                      )}
                     </div>
 
                     <Link

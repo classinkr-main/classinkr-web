@@ -108,7 +108,6 @@ export function UpdatesFeed({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-[14px] font-semibold text-[#111110]">업데이트 피드</h2>
-          <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">캠페인 진행상황 수동 기록 — 최신순</p>
         </div>
         <button
           type="button"
@@ -222,9 +221,6 @@ export function UpdatesFeed({
           <EmptyLogMark />
           <div>
             <p className="text-[12px] font-semibold text-[#111110]">아직 기록된 업데이트가 없습니다</p>
-            <p className="mx-auto mt-1 max-w-[19rem] text-[11px] leading-relaxed text-[#615D59]">
-              소재 교체·타깃 변경 같은 작업을 남기면 다음 AI 브리핑이 그 맥락까지 읽습니다.
-            </p>
           </div>
           {/* 폼이 이미 열려 있으면 바로 위에 "기록 저장"이 있어 중복이다 — 닫혀 있을 때만 노출. */}
           {!formOpen && (

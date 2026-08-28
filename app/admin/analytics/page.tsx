@@ -400,7 +400,7 @@ export default function AnalyticsPage() {
           <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin</p>
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Analytics</h1>
           <p className="mt-2 max-w-2xl text-[13px] text-[#1a1a1a]/45">
-            리드·소스·콘텐츠 비즈니스 분석에 집중합니다. 행사·이메일 성과는 캠페인, 홈페이지 흐름·트래픽은 트래픽 화면에서 봅니다.
+            리드·소스·콘텐츠 비즈니스 분석
           </p>
         </div>
         <div className="grid w-full grid-cols-3 gap-1 rounded-lg bg-[#f0f0ec] p-1 sm:w-auto sm:grid-cols-3">
@@ -482,8 +482,7 @@ export default function AnalyticsPage() {
               <Mail className="h-4 w-4" />
             </span>
             <div>
-              <p className="text-[13px] font-semibold text-[#084734]">행사 퍼널·이메일 캠페인 성과는 캠페인에서 봅니다</p>
-              <p className="mt-0.5 text-[12px] text-[#084734]/70">
+              <p className="text-[13px] font-semibold text-[#084734]">
                 행사 리드 → 딜 퍼널과 이메일 발송 성과를 한 화면에 모았습니다.
               </p>
             </div>
@@ -502,8 +501,7 @@ export default function AnalyticsPage() {
               <BarChart2 className="h-4 w-4" />
             </span>
             <div>
-              <p className="text-[13px] font-semibold text-[#111110]">방문자·홈 흐름·전환 픽셀은 트래픽에서 봅니다</p>
-              <p className="mt-0.5 text-[12px] text-[#1a1a1a]/45">
+              <p className="text-[13px] font-semibold text-[#111110]">
                 오늘 방문자, 페이지 흐름, CTA 클릭 계측을 트래픽 화면에 단일화했습니다.
               </p>
             </div>
@@ -680,12 +678,6 @@ export default function AnalyticsPage() {
                   <p className="text-[12px] font-medium text-[#111110]">구독자 전환</p>
                   <p className="mt-1 text-[18px] font-bold tracking-[-0.02em] text-[#111110]">{activeSubscribers.length}명</p>
                   <p className="mt-1 text-[12px] text-[#1a1a1a]/40">현재 활성 구독자 기준입니다.</p>
-                </div>
-                <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-4">
-                  <p className="text-[12px] font-medium text-[#111110]">운영 메모</p>
-                  <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                    소스별 유입량만이 아니라 전환율과 구독자 축적까지 같이 보는 것이 중요합니다.
-                  </p>
                 </div>
               </div>
             </Panel>

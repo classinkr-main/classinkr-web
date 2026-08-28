@@ -14,6 +14,7 @@
 import "server-only"
 import { createHash } from "crypto"
 
+import { getCompassAdsDaily } from "@/lib/compass/bridge"
 import { detectAnomalies, ANOMALY_KIND_LABEL, type AnomalyFlag } from "@/lib/marketing/anomaly"
 // 창 산술(7일/직전7일/30일)은 스코어보드 조립과 공유하는 순수 모듈에서 온다 —
 // 두 화면의 "이상"이 다른 수치를 근거로 갈라지지 않게 하는 단일 정의.
@@ -21,6 +22,7 @@ import {
   anomalyLoadSince,
   buildAnomalyCampaignInputs,
 } from "@/lib/marketing/anomaly-input"
+import { aggregateCompassCreatives } from "@/lib/marketing/compass-creative"
 import { assembleMarketingPerf, kstToday } from "@/lib/marketing/perf-assemble"
 import { shiftDays } from "@/lib/marketing/perf"
 import { listCampaigns } from "@/lib/repositories/marketing-campaigns"
@@ -47,6 +49,16 @@ export interface MarketingInsightScoreboardRow {
   execution_pct: number | null
   pacing_currency: "USD" | "KRW" | null
   leads: number
+  cpl_usd: number | null
+}
+
+/** 소재(광고) 단위 실측 — Compass 브리지(compass_ads_v). 두 리드 축이 다르다는 사실도 함께 싣는다. */
+export interface MarketingInsightCreative {
+  ad_name: string
+  /** Meta 리포트 리드(Compass 수집분) — perf 의 리드(우리 leads 테이블)와 모집단이 다르다. */
+  leads: number
+  spend_usd: number
+  /** spend_usd ÷ leads(둘 다 Compass 축). 분모 0 이면 null. */
   cpl_usd: number | null
 }
 
@@ -96,6 +108,16 @@ export interface MarketingInsightInput {
     converted_leads: number
   }
   scoreboard: MarketingInsightScoreboardRow[]
+  /**
+   * 소재별 실측(Compass 수집분) — 리드 상위와 CPL 최악을 각각 소수만.
+   * measured=false 면 브리지가 죽었거나 기간 내 소재 행이 없다는 뜻이고, 그때 배열은 비어 있다
+   * ("소재 성과 없음"이 아니라 "미집계" — data_caveats 가 같은 사실을 문장으로도 말한다).
+   */
+  creatives: {
+    measured: boolean
+    top: MarketingInsightCreative[]
+    worst_cpl: MarketingInsightCreative[]
+  }
   anomalies: MarketingInsightAnomaly[]
   updates: Array<{ kind: string; body: string; created_at: string; created_by: string | null }>
   data_caveats: string[]
@@ -137,6 +159,14 @@ const round1 = (n: number) => Math.round(n * 10) / 10
  */
 const UPDATE_BODY_MAX = 300
 const NAME_MAX = 120
+
+/* ─── 소재 입력 규모 ──────────────────────────────────────────
+ * 브리핑은 문장 몇 줄이라 전체 소재를 실을 이유가 없다. 리드 상위 소수 + CPL 최악 소수만 —
+ * 다 실으면 프롬프트가 커지는 만큼 sanity-check 의 "인용 가능한 숫자" 집합도 넓어져
+ * 환각을 잡아내는 힘이 떨어진다(대조 후보가 많을수록 우연히 맞을 확률이 오른다). */
+const CREATIVE_TOP_N = 5
+const CREATIVE_WORST_N = 3
+const CREATIVE_WORST_MIN_LEADS = 3
 
 function sanitizeFreeText(value: string, max: number): string {
   // 제어문자(개행·탭·NUL 포함)를 공백으로 — 프롬프트 구조를 흉내 내는 입력을 평탄화한다.
@@ -201,6 +231,29 @@ async function assembleMarketingInsightBuild(): Promise<MarketingInsightBuild> {
     listCampaigns().catch((): CampaignWithLinks[] => []),
   ])
 
+  // ── 소재별 실측(Compass 브리지) ─────────────────────────────
+  // perf 기간과 같은 창을 쓴다 — 브리핑 문장이 KPI 와 다른 기간을 근거로 들지 않게.
+  // 브리지 다운은 caveat 으로 흡수한다(브리핑 자체를 막지 않는다).
+  const compassAds = await getCompassAdsDaily(perf.period.since, perf.period.until)
+  const creativeRows = compassAds.down
+    ? []
+    : aggregateCompassCreatives(compassAds.rows, {
+        since: perf.period.since,
+        until: perf.period.until,
+      }).rows
+  const toCreative = (row: (typeof creativeRows)[number]): MarketingInsightCreative => ({
+    ad_name: sanitizeFreeText(row.adName ?? row.adId, NAME_MAX),
+    leads: row.leads,
+    spend_usd: row.spendUsd,
+    cpl_usd: row.cplUsd,
+  })
+  // 최악 CPL 은 리드 표본이 너무 작으면 잡음이라(1건짜리 소재가 항상 1등) 최소 표본을 건다.
+  const worstCpl = creativeRows
+    .filter((row) => row.cplUsd != null && row.leads >= CREATIVE_WORST_MIN_LEADS)
+    .sort((a, b) => (b.cplUsd ?? 0) - (a.cplUsd ?? 0))
+    .slice(0, CREATIVE_WORST_N)
+    .map(toCreative)
+
   // ── 주간 집계(최근 4주) — perf.daily 에서 파생. 행이 없는 날은 실측 무집행이다
   //    (로드 범위가 기간 전체를 덮으므로 결측이 아니다 — perf-assemble 스파크라인과 같은 규약).
   const weekly: MarketingInsightWeek[] = []
@@ -247,6 +300,10 @@ async function assembleMarketingInsightBuild(): Promise<MarketingInsightBuild> {
   if (perf.kpis.budgetExecutionPct.value == null)
     data_caveats.push("KRW 채널 예산 집행률 미측정 — 집행 기록이 없거나 배정 예산 미입력")
   if (campaigns.length === 0) data_caveats.push("등록된 캠페인 개체가 없음")
+  if (compassAds.down)
+    data_caveats.push("Compass 소재 뷰 조회 실패 — 소재별 지출·CPL 미집계(0 아님)")
+  else if (creativeRows.length === 0)
+    data_caveats.push("기간 내 Compass 소재 행 없음 — 소재 단위 판단 근거 없음")
   if (perf.updatesFeed.length === 0) data_caveats.push("최근 팀 업데이트 로그 없음")
   if (flags.length === 0) data_caveats.push("규칙 기반 이상 감지에서 걸린 항목 없음")
 
@@ -256,7 +313,8 @@ async function assembleMarketingInsightBuild(): Promise<MarketingInsightBuild> {
     period: { key: perf.period.key, since: perf.period.since, until: perf.period.until },
     snapshot_at: perf.snapshotAt,
     currency_note:
-      "Meta 광고비·CPL 은 USD 네이티브다. 원화로 환산하지 말 것. KRW 예산 집행률은 별개 축이며 USD 와 합산 불가.",
+      "Meta 광고비·CPL 은 USD 네이티브다. 원화로 환산하지 말 것. KRW 예산 집행률은 별개 축이며 USD 와 합산 불가. " +
+      "creatives 의 leads 는 Meta 리포트 축(Compass 수집분)이고 kpis.leads 는 우리 리드 DB 축이라 모집단이 다르다 — 두 숫자를 같은 것으로 말하지 말 것.",
     kpis: {
       spend_usd: perf.kpis.spendUsd.value,
       spend_usd_prev: perf.kpis.spendUsd.previous,
@@ -288,6 +346,12 @@ async function assembleMarketingInsightBuild(): Promise<MarketingInsightBuild> {
       leads: row.leads,
       cpl_usd: row.cpl,
     })),
+    creatives: {
+      measured: !compassAds.down && creativeRows.length > 0,
+      // creativeRows 는 이미 리드 내림차순(aggregateCompassCreatives 정렬 계약).
+      top: creativeRows.slice(0, CREATIVE_TOP_N).map(toCreative),
+      worst_cpl: worstCpl,
+    },
     anomalies: flags.map(toInputAnomaly),
     updates: perf.updatesFeed.slice(0, 10).map((u) => ({
       kind: u.kind,

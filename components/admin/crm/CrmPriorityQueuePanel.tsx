@@ -54,7 +54,7 @@ interface CrmPriorityQueue {
     laneTotals: Record<CrmPriorityLane, number>
     laneCritical: number
     sourceTotals?: { lead: number; neoAccount: number; task: number }
-    demo?: { total: number; matched: number; unmatched: number }
+    demo?: { total: number; matched: number; unmatched: number; down?: boolean }
   }
   buckets: Array<{ bucket: CrmPriorityBucket; label: string; count: number }>
   lanes: Array<{ lane: CrmPriorityLane; label: string; count: number }>
@@ -386,15 +386,24 @@ export default function CrmPriorityQueuePanel({
       </div>
 
       {/*
-        쇼룸 캘린더 일정 중 고객을 못 붙인 건 — 제목이 자유 텍스트라 전수 매칭이 안 된다.
-        조용히 버리면 "데모가 없다"로 오인되므로 건수를 그대로 드러낸다.
+        Compass 실측 데모 중 우리 리드/계정 전화로 붙지 않은 건 — 조용히 버리면
+        "데모가 없다"로 오인되므로 건수를 그대로 드러낸다. 연결이 끊긴 것과 데모가
+        없는 것도 구분해서 말한다.
       */}
-      {data?.summary.demo && data.summary.demo.unmatched > 0 ? (
+      {data?.summary.demo?.down ? (
+        <div className="mb-3 flex items-start gap-2 border-l-2 border-[#B85C33] px-3 py-2 text-[12px] text-[#1a1a1a]/55">
+          <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#B85C33]" />
+          <span>
+            Compass 연결이 끊겨 데모 신호가 빠졌습니다 — 데모가 없는 것이 아니라 확인할 수 없는
+            상태입니다.
+          </span>
+        </div>
+      ) : data?.summary.demo && data.summary.demo.unmatched > 0 ? (
         <div className="mb-3 flex items-start gap-2 border-l-2 border-[#A39E98] px-3 py-2 text-[12px] text-[#1a1a1a]/55">
           <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/35" />
           <span>
-            쇼룸 캘린더 데모 {data.summary.demo.total}건 중 {data.summary.demo.unmatched}건은 고객을
-            찾지 못해 우선순위에 반영되지 않았습니다 — 캘린더 제목에 고객명이 없거나 표기가 다릅니다.
+            Compass 데모 {data.summary.demo.total}건 중 {data.summary.demo.unmatched}건은 전화가
+            일치하는 리드·고객이 없어 우선순위에 반영되지 않았습니다.
           </span>
         </div>
       ) : null}

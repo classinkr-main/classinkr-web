@@ -104,6 +104,14 @@ function collectInputNumbers(input: MarketingInsightInput): CollectedInputNumber
     pushAll(row.cpl_usd)
   }
 
+  // 소재별 실측(Compass) — 건수·USD 금액이라 전부 비-퍼센트다. pushPct 로 올리면 퍼센트
+  // 대조 후보가 오염돼 "전환율 320%" 같은 환각이 소재 지출값과 우연히 맞아 통과할 수 있다.
+  for (const row of [...input.creatives.top, ...input.creatives.worst_cpl]) {
+    pushAll(row.leads)
+    pushAll(row.spend_usd)
+    pushAll(row.cpl_usd)
+  }
+
   for (const a of input.anomalies) {
     const push = PCT_ANOMALY_KINDS.has(a.kind) ? pushPct : pushAll
     push(a.current)

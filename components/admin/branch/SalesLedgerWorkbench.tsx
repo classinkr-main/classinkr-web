@@ -3335,10 +3335,6 @@ export default function SalesLedgerWorkbench({
               </button>
             ))}
           </div>
-          {/* 활성 lens 부제 상시 렌더 — hover title에만 있던 설명을 터치·랩탑에서도 읽히게(SL-7). */}
-          <p className="px-1 text-[10.5px] font-semibold text-[#A39E98]">
-            {LENSES.find((item) => item.id === lens)?.description}
-          </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-lg border border-[rgba(0,0,0,0.08)] bg-white px-3 py-2 text-[11px] text-[#615D59]">
@@ -3502,19 +3498,16 @@ export default function SalesLedgerWorkbench({
                   view={dshGridView}
                   onViewChange={setDshGridView}
                   loading={summary.loading && !summary.data}
-                  dataSource={summary.data?.data_sources?.dsh ?? null}
                 />
 
                 <DshMonthlyPace
                   breakdown={summary.data?.dsh_breakdown ?? []}
                   loading={summary.loading && !summary.data}
-                  dataSource={summary.data?.data_sources?.dsh ?? null}
                 />
 
                 <DshTeamGrid
                   rows={summary.data?.dsh_rows ?? []}
                   loading={summary.loading && !summary.data}
-                  dataSource={summary.data?.data_sources?.dsh ?? null}
                 />
 
                 <WeeklyCloseSection

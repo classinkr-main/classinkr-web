@@ -2,10 +2,16 @@
 // 광고 소재별 성과 집계 — 원천은 leads 의 UTM(getMetaAdInfo). 순수 모듈(서버 의존 없음),
 // components/admin/campaigns/leads/AdLeadsPanel 이 쓰는 lib/campaigns/ad-leads.ts 와 같은 결.
 //
-// 정직 규칙: Meta Graph 는 캠페인 레벨 insights 만 수집한다(ad/adset 레벨 insights 미수집) —
-// 그래서 소재별 spend·CPL·ROAS 는 이 저장소 어디에도 존재하지 않는다. 여기서 나오는 것은
-// 순전히 leads 테이블에 남은 UTM(광고명) 기준 "리드·전환 건수" 랭킹뿐이다. 소비처(API 응답·
-// UI·AI 프롬프트)는 이 사실을 반드시 명시해야 한다 — 소재별 광고비·CPL 을 만들어내지 않는다.
+// 이 모듈이 만드는 것은 "우리 leads 테이블 기준" 리드·전환 건수 랭킹뿐이다 — 여기서 금액은
+// 나오지 않는다(이 모듈의 입력에 금액이 없다).
+//
+// 소재별 광고비·CPL 은 별개 원천에 있다: 우리 Meta 수집(meta_insights_daily)은 여전히 캠페인
+// 레벨이지만, 마케팅팀 앱 Compass 가 같은 광고 계정에서 ad 레벨 insights 를 수집해 읽기 전용
+// 뷰(compass_ads_v)로 연결돼 있다. 그 값을 이 랭킹에 붙이는 조인은
+// lib/marketing/compass-creative.ts 의 attachCompassSpend 다(2026-08-28).
+//
+// 여전히 없는 것: 소재별 매출·ROAS. 소비처(API 응답·UI·AI 프롬프트)는 지출/CPL 은 Compass
+// 수집분임을 밝히고, 매출·ROAS 는 계산도 언급도 하지 않는다.
 
 import { getMetaAdInfo, isConvertedLead, isTestLead } from "@/lib/crm/lead-attribution"
 import type { LeadRecord } from "@/lib/repositories/leads"

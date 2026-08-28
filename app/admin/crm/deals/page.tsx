@@ -661,7 +661,7 @@ export default function AdminCrmRevenuePage() {
             매출·연결 대시보드
           </h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            견적, 계약, 수납, V2 거래 파이프라인을 한 번에 집계하고 회사 CRM·시트 연결 상태를 함께 확인합니다.
+            견적·계약·수납·V2 파이프라인 집계 + CRM·시트 연결 상태
           </p>
         </div>
 
@@ -1047,15 +1047,10 @@ export default function AdminCrmRevenuePage() {
           </div>
 
 
-          <div className="mt-6 flex flex-col gap-3 rounded-xl bg-[#fafaf8] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[13px] font-semibold text-[#111110]">매칭 검수는 데이터 매칭 인박스로 이동했습니다</p>
-              <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/45">
-                REV 시트 행, 외부 CRM 후보, 리드 연결을 한 화면에서 일괄 확정/제외하고 자동 확정 내역을 검토합니다.
-              </p>
-            </div>
+          <div className="mt-6 flex items-center justify-end rounded-xl bg-[#fafaf8] px-4 py-4">
             <Link
               href="/admin/crm/matching"
+              title="매칭 검수는 데이터 매칭 인박스로 이동했습니다"
               className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-[#111110] bg-[#111110] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#2a2a28]"
             >
               매칭 인박스 열기

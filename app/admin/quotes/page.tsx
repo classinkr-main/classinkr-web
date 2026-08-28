@@ -302,9 +302,6 @@ export default function QuotesPage() {
             <h1 className="text-lg font-bold tracking-[-0.02em] text-[#111110] sm:text-xl">
               견적·문서
             </h1>
-            <span className="hidden truncate text-[12px] text-[#1a1a1a]/45 sm:inline">
-              견적 · 계약 · 수납을 한 흐름으로
-            </span>
           </div>
           <div className="flex items-center gap-2">
             <a

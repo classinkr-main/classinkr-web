@@ -6,6 +6,7 @@ import {
   aggregateDailySeries,
   aggregateLeadDailyBySource,
   channelSpendFromEventMetrics,
+  prevBasisLabel,
   resolvePacingBasis,
   shiftDays,
   sortScoreboardRows,
@@ -16,7 +17,7 @@ import { isContactedLead, isConvertedLead } from "@/lib/crm/lead-attribution"
 import type { LeadRecord } from "@/lib/repositories/leads"
 
 describe("resolvePerfPeriod", () => {
-  it("30d — [오늘-29, 오늘] + 직전 30일", () => {
+  it("30d — [오늘-29, 오늘] + 직전 30일(롤링은 trailing 기준 유지)", () => {
     const p = resolvePerfPeriod("30d", "2026-08-20")
     expect(p).toEqual({
       key: "30d",
@@ -24,19 +25,67 @@ describe("resolvePerfPeriod", () => {
       until: "2026-08-20",
       prevSince: "2026-06-22",
       prevUntil: "2026-07-21",
+      prevBasis: "trailing",
     })
   })
-  it("quarter — 분기 시작~오늘 + 직전 동일 길이", () => {
+  it("7d/90d — 일수 삼항 오타 회귀 방지 + trailing 기준", () => {
+    expect(resolvePerfPeriod("7d", "2026-08-20").since).toBe("2026-08-14")
+    expect(resolvePerfPeriod("90d", "2026-08-20").since).toBe("2026-05-23")
+    expect(resolvePerfPeriod("90d", "2026-08-20").prevBasis).toBe("trailing")
+  })
+
+  // ── 진행 중인 달력 구간(QTD)은 동일 일수·동일 위치 비교로 보정한다 ────────────
+  // 직전 창(분기 시작 직전 N일)과 견주면 "분기 초입 N일 vs 분기 말미 N일"이 돼 위치 편향을
+  // 탄다. 월로 치면 8/1~8/20 을 7/12~7/31 과 견주는 셈 — 전월 1~20일이 맞는 비교다.
+  it("quarter — 전분기 1일차부터 같은 일수(달력 정렬)", () => {
     const p = resolvePerfPeriod("quarter", "2026-08-20")
     expect(p.since).toBe("2026-07-01")
     expect(p.until).toBe("2026-08-20")
-    // QTD 51일(7/1~8/20)의 직전 동일 길이 — 리뷰어 프로브로 확정된 경계값.
-    expect(p.prevSince).toBe("2026-05-11")
-    expect(p.prevUntil).toBe("2026-06-30")
+    expect(p.prevBasis).toBe("calendar_aligned")
+    // QTD 51일(7/1~8/20) → 전분기(Q2) 1일차부터 51일 = 4/1~5/21.
+    expect(p.prevSince).toBe("2026-04-01")
+    expect(p.prevUntil).toBe("2026-05-21")
   })
-  it("7d/90d — 일수 삼항 오타 회귀 방지", () => {
-    expect(resolvePerfPeriod("7d", "2026-08-20").since).toBe("2026-08-14")
-    expect(resolvePerfPeriod("90d", "2026-08-20").since).toBe("2026-05-23")
+
+  it("quarter — 분기 첫날이면 전분기 첫날 하루와 비교한다", () => {
+    const p = resolvePerfPeriod("quarter", "2026-07-01")
+    expect(p.since).toBe("2026-07-01")
+    expect(p.prevSince).toBe("2026-04-01")
+    expect(p.prevUntil).toBe("2026-04-01")
+  })
+
+  it("quarter — 전분기가 더 짧으면 전분기 마지막 날에서 자른다(현재 분기 침범 금지)", () => {
+    // Q2 2026 완결(4/1~6/30, 91일) vs 전분기 Q1(1/1~3/31, 90일) — 91일째는 4/1 이라 잘라야 한다.
+    const p = resolvePerfPeriod("quarter", "2026-06-30")
+    expect(p.prevSince).toBe("2026-01-01")
+    expect(p.prevUntil).toBe("2026-03-31")
+  })
+
+  it("quarter — 연 경계에서 전년 4분기로 넘어간다", () => {
+    const p = resolvePerfPeriod("quarter", "2026-01-10")
+    expect(p.since).toBe("2026-01-01")
+    expect(p.prevSince).toBe("2025-10-01")
+    expect(p.prevUntil).toBe("2025-10-10")
+  })
+
+  it("비교 창 길이는 현재 창을 넘지 않는다(전 기간 공통 불변식)", () => {
+    const days = (a: string, b: string) =>
+      Math.round((new Date(`${b}T00:00:00Z`).getTime() - new Date(`${a}T00:00:00Z`).getTime()) / 86_400_000) + 1
+    for (const today of ["2026-01-10", "2026-06-30", "2026-08-20", "2026-12-31"]) {
+      for (const key of ["7d", "30d", "90d", "quarter"] as const) {
+        const p = resolvePerfPeriod(key, today)
+        expect(days(p.prevSince, p.prevUntil)).toBeLessThanOrEqual(days(p.since, p.until))
+        // 비교 창이 현재 창과 겹치면 자기 자신과 비교하는 꼴이 된다.
+        expect(p.prevUntil < p.since).toBe(true)
+      }
+    }
+  })
+})
+
+describe("prevBasisLabel", () => {
+  it("기준별 문구 — 표시층과 프롬프트가 같은 문장을 쓴다", () => {
+    expect(prevBasisLabel({ prevBasis: "trailing" })).toBe("직전 동일 길이")
+    expect(prevBasisLabel({ prevBasis: "calendar_aligned" })).toBe("전분기 같은 일수(1일차~N일차)")
   })
 })
 

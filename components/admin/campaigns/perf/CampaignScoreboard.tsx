@@ -198,7 +198,7 @@ export function CampaignScoreboard({ rows }: { rows: PerfScoreboardRow[] }) {
       <div className="mb-3">
         <h2 className="text-[14px] font-semibold text-[#111110]">캠페인 스코어보드</h2>
         <p className="mt-0.5 text-[11px] text-[#1a1a1a]/40">
-          리드·CPL 은 링크된 Meta 캠페인 귀속 · 스파크라인은 최근 14일 리드
+          리드·CPL Meta 링크 귀속 · 14일 스파크라인
         </p>
       </div>
 

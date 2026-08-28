@@ -248,12 +248,9 @@ interface DshNumericGridProps {
   view: DshGridView
   onViewChange: (view: DshGridView) => void
   loading?: boolean
-  // 카드 헤더 레벨 계보(항목 2) — summary.data_sources.dsh를 옵션으로 전달받아
-  // 헤더 캡션에 원천 kind·asOf를 짧게 표기한다. 신규 fetch 없음, additive.
-  dataSource?: BranchDataSourceInfo | null
 }
 
-export function DshNumericGrid({ breakdown, view, onViewChange, loading = false, dataSource = null }: DshNumericGridProps) {
+export function DshNumericGrid({ breakdown, view, onViewChange, loading = false }: DshNumericGridProps) {
   // Rate 뷰는 셀 형태(원값 쌍+달성률)가 달라 별도 집계를 태운다 — 둘 다 순수 함수라
   // 비활성 뷰 쪽 memo는 null로 스킵된다(불필요 계산 없음).
   const numeric = useMemo(
@@ -279,10 +276,6 @@ export function DshNumericGrid({ breakdown, view, onViewChange, loading = false,
             <span className="font-semibold text-[#615D59]">
               {view === "rate" ? "(달성률 %)" : showRawValue ? "(원값)" : "(단위: 천)"}
             </span>
-          </p>
-          <p className="mt-0.5 text-[11px] text-[#615D59]">
-            시트 &lsquo;1. DSH&rsquo; 미러 · Team KR 전사 — 팀 필터와 무관 · 숫자가 정본
-            {dataSource && <> · 원천 {dshSourceLabel(dataSource)}</>}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

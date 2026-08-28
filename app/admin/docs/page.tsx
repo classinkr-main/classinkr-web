@@ -875,9 +875,6 @@ function AdminDocsPageContent() {
             <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">
               문서 센터 관리
             </h1>
-            <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-              공개 문서 카테고리와 문서 상태, 검색·피드백 성과를 확인합니다.
-            </p>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

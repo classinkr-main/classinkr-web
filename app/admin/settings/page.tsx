@@ -1262,7 +1262,7 @@ export default function SettingsPage() {
           <p className="text-[11px] font-medium text-[#1a1a1a]/30 uppercase tracking-widest mb-1">Admin</p>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">Settings</h1>
           <p className="text-[13px] text-[#1a1a1a]/45 mt-2 max-w-2xl">
-            배포 없이 바꾸는 운영 제어판입니다. 일반·리드·연동·알림·보안 설정은 저장 즉시 반영됩니다.
+            배포 없이 저장 즉시 반영되는 운영 제어판
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:min-w-[280px]">
@@ -1358,13 +1358,6 @@ export default function SettingsPage() {
               )
             })}
           </nav>
-
-          <div className="rounded-2xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-4">
-            <p className="text-[12px] font-medium text-[#111110]">운영 메모</p>
-            <p className="text-[12px] text-[#1a1a1a]/45 mt-1 leading-relaxed">
-              주소 탭은 복사 전용이고, 보안 탭의 비밀번호 변경은 별도로 즉시 적용됩니다. CTA·변경 이력은 데이터 모델 연결 전까지 카테고리에서 숨겨둡니다.
-            </p>
-          </div>
         </aside>
 
         <main className="space-y-6 min-w-0">

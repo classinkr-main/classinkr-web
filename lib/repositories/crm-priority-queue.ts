@@ -1,7 +1,6 @@
 import "server-only"
 
 import { getNeoCrmCustomers, type NeoCrmCustomerRow } from "@/lib/admin-crm-customers-neo"
-import type { CalendarEvent } from "@/lib/calendar-data"
 import {
   buildLeadPriorityItem,
   buildNeoAccountPriorityItem,
@@ -19,8 +18,12 @@ import { getLeads, onLeadsMutated, type LeadRecord } from "@/lib/repositories/le
 import { listCrmTasks, onCrmTasksMutated, type CrmTaskRecord } from "@/lib/repositories/crm-tasks"
 import { onContactLogsMutated } from "@/lib/repositories/contact-logs"
 import { getLeadsActivitySummary, type LeadActivityBadge } from "@/lib/repositories/lead-activity"
-import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
-import { buildDemoSignalIndex } from "@/lib/crm/demo-signal"
+import {
+  EMPTY_COMPASS_DEMO_SOURCE,
+  buildCompassDemoIndex,
+  type CompassDemoSource,
+} from "@/lib/crm/compass-demo-signal"
+import { loadCompassDemoSource } from "@/lib/crm/compass-demo-source"
 
 /**
  * "customer" 는 리드 + ClassIn 고객을 한 묶음으로 보는 가상 소스다.
@@ -64,10 +67,11 @@ export interface CrmPriorityQueue {
      */
     sourceTotals: { lead: number; neoAccount: number; task: number }
     /**
-     * 쇼룸 캘린더 데모 현황. unmatched 는 일정은 있는데 고객을 못 붙인 건수다 —
-     * 제목이 자유 텍스트라 전수 매칭이 안 되므로, 조용히 버리지 않고 화면에 노출한다.
+     * Compass 실측 데모 현황. unmatched 는 데모 기록은 있는데 우리 리드/계정의 전화로
+     * 붙지 않은 건수다 — 조용히 버리지 않고 화면에 건수로 노출한다.
+     * down=true 면 "데모 0건"이 아니라 "Compass 연결 끊김"이다.
      */
-    demo: { total: number; matched: number; unmatched: number }
+    demo: { total: number; matched: number; unmatched: number; down: boolean }
   }
   buckets: Array<{ bucket: CrmPriorityBucket; label: string; count: number }>
   lanes: Array<{ lane: CrmPriorityLane; label: string; count: number }>
@@ -232,7 +236,7 @@ interface CrmPrioritySourceSnapshot {
   tasks: CrmTaskRecord[]
   tasksOk: boolean
   engagements: Record<string, LeadActivityBadge> | null
-  demoEvents: CalendarEvent[]
+  demoSource: CompassDemoSource
   warnings: string[]
   complete: boolean
 }
@@ -282,12 +286,11 @@ async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
   let neoAccountsOk = true
   let tasksOk = true
 
-  const [leadResult, neoResult, taskResult, engagementResult, demoResult] = await Promise.allSettled([
+  const [leadResult, neoResult, taskResult, engagementResult] = await Promise.allSettled([
     getLeads(),
     getNeoCrmCustomers(),
     listCrmTasks({ status: "active", limit: 200 }),
     getLeadsActivitySummary(),
-    getShowroomCalendarEvents(),
   ])
 
   let leads: LeadRecord[] = []
@@ -314,10 +317,16 @@ async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
     warnings.push("CRM 할 일을 불러오지 못했습니다.")
   }
 
-  // 참여 신호·데모 일정은 우선순위를 더 정확하게 만들 뿐 없어도 큐는 서야 한다 —
+  // 참여 신호·데모 실측은 우선순위를 더 정확하게 만들 뿐 없어도 큐는 서야 한다 —
   // 실패하면 조용히 빈 값으로 빠지고 경고도 띄우지 않는다(보조 지표).
   const engagements = engagementResult.status === "fulfilled" ? engagementResult.value : null
-  const demoEvents = demoResult.status === "fulfilled" ? demoResult.value : []
+
+  // Compass 데모 조인은 우리 쪽 전화 목록을 입력으로 받으므로 위 수집 뒤에 한 번 더 간다.
+  // 기간에 데모가 없으면 전화 조회 없이 끝난다(loadCompassDemoSource 참고).
+  const demoSource = await loadCompassDemoSource([
+    ...leads.map((lead) => lead.phone),
+    ...neoRows.map((row) => row.phone),
+  ]).catch(() => ({ ...EMPTY_COMPASS_DEMO_SOURCE, down: true }))
 
   return {
     leads,
@@ -327,7 +336,7 @@ async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
     tasks,
     tasksOk,
     engagements,
-    demoEvents,
+    demoSource,
     warnings,
     complete: leadsOk && neoAccountsOk && tasksOk,
   }
@@ -343,7 +352,7 @@ export async function getCrmPriorityQueue(
 
   const items: CrmPriorityItem[] = []
   const engagements = snapshot.engagements
-  const demoIndex = buildDemoSignalIndex(snapshot.demoEvents, now)
+  const demoIndex = buildCompassDemoIndex(snapshot.demoSource, now)
 
   for (const lead of snapshot.leads) {
     const item = buildLeadPriorityItem(lead, now, {
@@ -395,8 +404,9 @@ export async function getCrmPriorityQueue(
       },
       demo: {
         total: demoIndex.total,
-        matched: demoIndex.byName.size,
-        unmatched: demoIndex.unmatched.length,
+        matched: demoIndex.byPhoneKey.size,
+        unmatched: demoIndex.unmatched,
+        down: demoIndex.down,
       },
     },
     buckets: buildBucketOptions(bucketCounts),

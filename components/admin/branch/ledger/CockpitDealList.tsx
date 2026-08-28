@@ -347,10 +347,6 @@ export function CockpitDealList({
           </ul>
         )}
       </div>
-
-      <p className="border-t border-[rgba(0,0,0,0.08)] px-4 py-2.5 text-[10.5px] font-semibold text-[#A39E98]">
-        확도 톤은 매트릭스·보드와 동일 산식(확정=녹색·고확도=파랑·예정=앰버) · 선택 월 {formatMonthLabel(selectedMonth)} 기준
-      </p>
     </section>
   )
 }

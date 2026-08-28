@@ -152,11 +152,13 @@ export default function SendCenterHeader({
       {/* DB 스트립 — 시안 1a의 "구독자 DB 연동됨" 행. 실데이터(Supabase subscribers) 기준. */}
       <div className="flex flex-col gap-2 border-t border-[#e8e8e4] bg-[#fafaf8] px-4 py-2.5 sm:flex-row sm:items-center sm:px-6">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-1 text-[11.5px]">
-          <span className="inline-flex items-center gap-1.5 font-semibold text-[#111110]">
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-0.5 font-semibold text-[#111110]"
+            title="Supabase subscribers 테이블 연동됨"
+          >
             <Database className="h-3.5 w-3.5 text-[#084734]" />
-            구독자 DB 연동됨
+            구독자 {totalSubscribers}명
           </span>
-          <span className="text-[#1a1a1a]/45">Supabase · subscribers · {totalSubscribers}명</span>
           <span className="inline-flex items-center gap-1.5 font-medium text-[#084734]">
             <span className="h-1.5 w-1.5 rounded-full bg-[#084734]" />
             {formatSyncTime(lastSyncedAt)}

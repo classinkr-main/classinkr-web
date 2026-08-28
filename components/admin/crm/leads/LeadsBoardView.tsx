@@ -3,6 +3,9 @@
 import { useState } from "react"
 import { Clock, Flame } from "lucide-react"
 
+import { CompassLeadChip } from "@/components/admin/compass/CompassLeadChip"
+import { normalizePhoneKey } from "@/lib/compass/normalize"
+import type { CompassOverlayEntry, CompassOverlayMap } from "@/lib/compass/overlay"
 import type { LeadRecord } from "@/lib/repositories/leads"
 import {
   BOARD_COLUMN_LABEL,
@@ -45,12 +48,15 @@ function LeadCard({
   onSelect,
   today,
   now,
+  compassEntry,
 }: {
   lead: LeadRecord
   selected: boolean
   onSelect: (lead: LeadRecord) => void
   today: string
   now: Date
+  /** Compass 매칭이 있을 때만 전달된다 — 없으면 칩 자체가 그려지지 않는다. */
+  compassEntry?: CompassOverlayEntry
 }) {
   const score = calcScore(lead)
   const unrespondedHours = isUnrespondedLead(lead) ? hoursBetween(lead.timestamp, now) : null
@@ -113,6 +119,12 @@ function LeadCard({
           </span>
         ) : null}
       </div>
+      {/* Compass 병기 — 카드가 <button>이라 표시형(비인터랙티브) 칩으로만 그린다. */}
+      {compassEntry ? (
+        <div className="mt-1.5 flex">
+          <CompassLeadChip entry={compassEntry} interactive={false} />
+        </div>
+      ) : null}
       <div className="mt-2 flex items-center gap-2 border-t border-[#f0f0ec] pt-2">
         <span
           className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
@@ -144,6 +156,7 @@ export default function LeadsBoardView({
   onSelect,
   onFocusColumn,
   now,
+  compassOverlay,
 }: {
   /** 그릴 카드 — 상위에서 정렬·필터를 마친 결과 */
   columns: Record<BoardColumnKey, LeadRecord[]>
@@ -158,6 +171,8 @@ export default function LeadsBoardView({
   /** 컬럼 헤더 클릭 — 이미 포커스된 컬럼을 다시 누르면 해제된다 */
   onFocusColumn: (key: BoardColumnKey | null) => void
   now: Date
+  /** Compass 콜 상태 병기 맵(phone_key 키). 없으면 칩 없이 그대로 그린다. */
+  compassOverlay?: CompassOverlayMap
 }) {
   // 종료는 기본으로 접는다 — 폭 예산에서 활성 컬럼 하나와 맞바꾸는 값이라 항상 펼쳐 둘 자리가 없다.
   const [closedOpen, setClosedOpen] = useState(false)
@@ -282,16 +297,20 @@ export default function LeadsBoardView({
                 </div>
               ) : (
                 <>
-                  {cards.slice(0, COLUMN_CARD_CAP).map((lead) => (
-                    <LeadCard
-                      key={lead.id}
-                      lead={lead}
-                      selected={lead.id === selectedId}
-                      onSelect={onSelect}
-                      today={today}
-                      now={now}
-                    />
-                  ))}
+                  {cards.slice(0, COLUMN_CARD_CAP).map((lead) => {
+                    const phoneKey = normalizePhoneKey(lead.phone)
+                    return (
+                      <LeadCard
+                        key={lead.id}
+                        lead={lead}
+                        selected={lead.id === selectedId}
+                        onSelect={onSelect}
+                        today={today}
+                        now={now}
+                        compassEntry={phoneKey ? compassOverlay?.[phoneKey] : undefined}
+                      />
+                    )
+                  })}
                   {cards.length > COLUMN_CARD_CAP ? (
                     <p className="py-1 text-center text-[11px] text-[#1a1a1a]/40">
                       +{(cards.length - COLUMN_CARD_CAP).toLocaleString("ko-KR")}건 · 컬럼 스크롤 밖

@@ -470,7 +470,7 @@ function PerformancePanel({
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[#A39E98]" /> : null}
           </div>
           <p className="mt-1 text-[12px] leading-5 text-[#615D59]">
-            조회, 신청, 자료 열람, 상담 CTA 클릭을 최근 기간 기준으로 집계합니다.
+            조회·신청·열람·CTA 클릭 최근 기간 집계
           </p>
           {metrics?.generatedAt ? (
             <p className="mt-1 text-[11px] text-[#A39E98]">
@@ -1022,7 +1022,7 @@ export default function LeadMagnetsAdminClient({ initialLeadMagnets, initialStor
             리드마그넷 편집
           </h1>
           <p className="mt-2 text-[13px] leading-6 text-[#615D59]">
-            자료실, 블로그 게이트, CRM 리드 태그에 연결되는 자료 콘텐츠를 관리합니다.
+            자료실·블로그 게이트·CRM 리드 태그 연결 콘텐츠
           </p>
           <div className="mt-5 grid grid-cols-3 gap-2 text-center">
             <div className="rounded-xl bg-[#F6F5F4] p-3">

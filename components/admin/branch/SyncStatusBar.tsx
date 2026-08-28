@@ -109,7 +109,7 @@ export default function SyncStatusBar({ lastSync, lastError, sheetModifiedAt, da
                     ? "임포트가 시트 동기화보다 오래됨 — 장부에서 재동기화 필요"
                     : sheetAhead
                       ? `시트가 ${relativeTime(sheetModifiedAt!, now)} 수정 — DB는 ${relativeTime(lastSync!, now)} 동기화`
-                      : `마지막 동기화: ${lastSync ? relativeTime(lastSync, now) : "없음"}`}
+                      : `동기화 ${lastSync ? relativeTime(lastSync, now) : "없음"}`}
             </span>
             {importStale && (
               <a

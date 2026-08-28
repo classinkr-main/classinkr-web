@@ -1109,9 +1109,6 @@ export default function CrmUnifiedCustomersClient() {
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">ClassIn 고객 DB</h1>
-            <p className="mt-1 text-[13px] text-[#1a1a1a]/42">
-              전체 리드·고객을 검색·필터로 탐색합니다. 오늘 할 일은 현황의 &lsquo;오늘 전화할 고객&rsquo;에서.
-            </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button

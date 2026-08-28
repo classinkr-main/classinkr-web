@@ -12,6 +12,7 @@ import type {
 } from "@/components/admin/campaigns/perf/BriefingCard"
 import { FunnelCard } from "@/components/admin/campaigns/perf/FunnelCard"
 import { KpiStrip } from "@/components/admin/campaigns/perf/KpiStrip"
+import { TodayIntakeCard } from "@/components/admin/campaigns/perf/TodayIntakeCard"
 import { UpdatesFeed } from "@/components/admin/campaigns/perf/UpdatesFeed"
 import type { UpdateSubmitInput } from "@/components/admin/campaigns/perf/UpdatesFeed"
 import { WeeklyReportDialog } from "@/components/admin/campaigns/perf/WeeklyReportDialog"
@@ -32,6 +33,11 @@ const DailyTrendSection = dynamic(
 const CampaignScoreboard = dynamic(
   () => import("@/components/admin/campaigns/perf/CampaignScoreboard").then((m) => m.CampaignScoreboard),
   { ssr: false, loading: () => <ChartSkeleton className="h-[280px]" /> }
+)
+// 소재별 CPL(Compass 브리지) — 행마다 스파크라인이 있어 Recharts 를 끈다. 같은 청크 규약.
+const CreativeCplCard = dynamic(
+  () => import("@/components/admin/campaigns/perf/CreativeCplCard").then((m) => m.CreativeCplCard),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[300px]" /> }
 )
 
 /* ─── usePerf — perf 응답 fetch + 기간 레이스 가드 ────────────────────────────── */
@@ -355,7 +361,7 @@ function composeBriefing(
     return {
       ...content,
       badges: [...content.badges, ...badges],
-      meta: `AI 브리핑 · ${formatKstTime(insight.created_at)} 생성`,
+      meta: `AI · ${formatKstTime(insight.created_at)} 생성`,
       note: stale
         ? `최신 브리핑 재생성에 실패해 ${formatKstTime(insight.created_at)} 기준으로 표시합니다${
             insights?.error ? ` — ${insights.error}` : ""
@@ -371,7 +377,7 @@ function composeBriefing(
   else if (insights?.from === "error")
     note = `AI 브리핑 생성에 실패했습니다${insights.error ? ` — ${insights.error}` : ""}`
   else if (insights?.from === "empty")
-    note = "아직 생성된 AI 브리핑이 없습니다 — 「다시 생성」으로 지금 만들 수 있습니다."
+    note = "AI 브리핑 없음 — 「다시 생성」으로 생성"
 
   return { ...content, badges: [...content.badges, ...badges], meta: null, note }
 }
@@ -404,6 +410,8 @@ function PerfSkeleton() {
       <ChartSkeleton className="h-[140px]" />
       <ChartSkeleton className="h-[380px]" />
       <ChartSkeleton className="h-[280px]" />
+      {/* 소재별 CPL 자리 — 콜드로드에서 이 카드만큼 레이아웃이 밀리지 않게 높이를 예약한다. */}
+      <ChartSkeleton className="h-[300px]" />
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartSkeleton className="h-[260px]" />
         <ChartSkeleton className="h-[260px]" />
@@ -556,11 +564,13 @@ export default function SummaryTab({
             (브리핑·퍼널·업데이트). xl 미만: 한 컬럼으로 자연 스택하되 브리핑이 KPI 바로 다음
             (추이보다 먼저) 오도록 순서를 바꾼다 — 서사(현황→판단→근거) 우선, 레일 개념은 없다.
 
-            좌/우 래퍼는 xl 미만에서 contents(자기 박스를 없애고 자식만 남김)로 접혀 6개 카드가
+            좌/우 래퍼는 xl 미만에서 contents(자기 박스를 없애고 자식만 남김)로 접혀 8개 카드가
             바깥 그리드 하나에 직접 참여한다 — order 로 두 그룹을 가로질러 인터리브하려면 같은
             그리드의 형제여야 한다(서로 다른 컨테이너의 자식끼리는 order 가 안 먹는다). xl 이상에선
             각 래퍼가 flex-col 로 복원돼 자기 자식만 쌓는다 — 이때 order 값은 그룹 내부 상대
-            순서(1<3<4, 2<5<6)로만 작동해 DOM 순서와 같은 결과가 된다.
+            순서(좌 1<4<5<6, 우 2<3<7<8)로만 작동해 DOM 순서와 같은 결과가 된다.
+            한 줄 스택 순서: KPI → 브리핑 → 오늘 유입 → 추이 → 스코어보드 → 소재 CPL →
+            퍼널 → 업데이트(현황 → 판단 → 지금 → 근거 → 참조).
             *두 블록을 각각 렌더해 CSS로 숨기는 방식은 쓰지 않는다* — DailyTrendSection·
             CampaignScoreboard는 Recharts 라 숨김 마운트에서 rAF 가 멈춰 얼어붙는 문제가 이미
             실측된 컴포넌트다(각 파일 주석 참조) — 같은 트리를 두 벌 마운트하는 위험을 감수하지 않는다.
@@ -579,7 +589,7 @@ export default function SummaryTab({
                   adLeads={data.funnel.adLeads}
                 />
               </div>
-              <div className="order-3">
+              <div className="order-4">
                 <DailyTrendSection
                   daily={data.daily}
                   leadDailyBySource={data.leadDailyBySource}
@@ -588,8 +598,15 @@ export default function SummaryTab({
                   leadsMeasured={data.kpis.leads.value != null}
                 />
               </div>
-              <div className="order-4">
+              <div className="order-5">
                 <CampaignScoreboard rows={data.scoreboard} />
+              </div>
+              {/* 소재별 CPL — 스코어보드(캠페인 단위) 바로 아래에 둔다. 같은 질문의 한 단 더
+                  아래 해상도라, 떨어뜨려 놓으면 두 표를 눈으로 잇지 못한다.
+                  기간은 대시보드 토글과 같은 축을 쓰고 데이터는 자기 엔드포인트로 가져온다
+                  (Compass 브리지는 perf 조립과 원천이 달라 한 응답에 섞지 않는다). */}
+              <div className="order-6">
+                <CreativeCplCard period={period} refreshNonce={refreshNonce} />
               </div>
             </div>
 
@@ -607,10 +624,15 @@ export default function SummaryTab({
                   />
                 )}
               </div>
-              <div className="order-5">
+              {/* 오늘 유입 — 기간 토글과 무관한 "지금" 축이라 판단(브리핑) 바로 다음에 둔다.
+                  기간 지표들 사이에 끼우면 30일 숫자로 오독된다. */}
+              <div className="order-3">
+                <TodayIntakeCard refreshNonce={refreshNonce} />
+              </div>
+              <div className="order-7">
                 <FunnelCard funnel={data.funnel} metaMeasured={metaMeasured} />
               </div>
-              <div className="order-6">
+              <div className="order-8">
                 <UpdatesFeed
                   updates={data.updatesFeed}
                   campaignOptions={campaignOptions}

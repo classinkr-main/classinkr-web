@@ -365,9 +365,6 @@ export default function AdminBlogPage() {
                         </a>
                     </div>
                     <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">콘텐츠 관리</h1>
-                    <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-                        새 글 작성은 전체 에디터로 연결되며, 에디터 안에서 임시저장 자동 복원과 이어쓰기 기능을 사용할 수 있습니다.
-                    </p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                     <Button
@@ -392,18 +389,16 @@ export default function AdminBlogPage() {
             {contentView === "blog" && <TopViewedPosts posts={posts} />}
 
             {contentView === "blog" && (
-            <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <p className="text-[12px] font-semibold text-[#111110]">에디터 사용 흐름</p>
-                        <p className="mt-1 text-[12px] leading-relaxed text-[#1a1a1a]/42">
-                            목록에서는 상태를 보고, 실제 작성과 임시저장 복원은 전용 에디터에서 이어갑니다.
-                        </p>
-                    </div>
-                    <Button size="sm" variant="outline" onClick={() => router.push("/admin/blog/new")} className="w-full md:w-auto">
-                        에디터 바로 열기
-                    </Button>
-                </div>
+            <div className="mb-4 flex justify-end rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
+                <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => router.push("/admin/blog/new")}
+                    title="목록에서는 상태를 보고, 실제 작성과 임시저장 복원은 전용 에디터에서 이어갑니다."
+                    className="w-full md:w-auto"
+                >
+                    에디터 바로 열기
+                </Button>
             </div>
             )}
 

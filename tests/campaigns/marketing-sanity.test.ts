@@ -47,6 +47,11 @@ function makeInput(overrides: Partial<MarketingInsightInput> = {}): MarketingIns
         cpl_usd: 15.2,
       },
     ],
+    creatives: {
+      measured: true,
+      top: [{ ad_name: "여름_원장ROI_A", leads: 34, spend_usd: 402.8, cpl_usd: 11.85 }],
+      worst_cpl: [{ ad_name: "여름_체험_B", leads: 4, spend_usd: 188.4, cpl_usd: 47.1 }],
+    },
     anomalies: [],
     updates: [],
     data_caveats: [],
@@ -102,6 +107,37 @@ describe("checkMarketingSanity", () => {
       makeOutput({ headline: "CPL 89% 감소" })
     )
     expect(warnings).toHaveLength(0)
+  })
+
+  it("소재별 지출·CPL(Compass)을 인용해도 경고 0 — 새 입력 필드가 등록돼 있다", () => {
+    const warnings = checkMarketingSanity(
+      makeInput(),
+      makeOutput({
+        highlights: [
+          "여름_원장ROI_A 가 리드 34건·지출 402.8달러로 선두",
+          "여름_체험_B 는 CPL 47.1달러로 가장 비싸다",
+        ],
+      })
+    )
+    expect(warnings).toHaveLength(0)
+  })
+
+  it("소재 수치는 퍼센트 후보로 등록하지 않는다 (금액이 비율 환각을 통과시키면 안 됨)", () => {
+    const warnings = checkMarketingSanity(
+      makeInput(),
+      // 402.8 은 입력에 있지만 spend_usd(금액)라 "402.8%" 는 대조 후보가 없어야 한다.
+      makeOutput({ headline: "전환율 402.8% 달성" })
+    )
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toMatchObject({ field: "headline", value: 402.8 })
+  })
+
+  it("소재 미집계(빈 배열)면 소재 수치 인용은 경고로 걸린다", () => {
+    const warnings = checkMarketingSanity(
+      makeInput({ creatives: { measured: false, top: [], worst_cpl: [] } }),
+      makeOutput({ highlights: ["여름_원장ROI_A 지출 402.8달러"] })
+    )
+    expect(warnings.length).toBeGreaterThanOrEqual(1)
   })
 
   it("퍼센트 토큰이 퍼센트 아닌 입력값과 우연히 맞아도 여전히 걸린다 (범위 근사 부활 방지)", () => {

@@ -50,7 +50,7 @@ describe("CrmSyncStrip — 낮음 상태 렌더 규약", () => {
     const source = readFileSync(stripPath, "utf8")
     expect(source).toContain("aria-expanded={expanded}")
     expect(source).toContain("/admin/crm/matching?name=")
-    expect(source).toContain("자동 재생성 대상이 아닙니다")
+    expect(source).toContain("자동 재생성 대상 아님")
     expect(source).not.toContain("후보 재생성 권장")
     expect(source).toContain('href="/admin/crm/matching"')
     // "후보 재생성"은 실행 버튼이 아니라 링크여야 한다 — 이 컴포넌트에서 쓰기 요청 금지.

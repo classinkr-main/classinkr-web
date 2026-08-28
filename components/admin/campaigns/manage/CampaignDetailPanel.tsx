@@ -176,8 +176,8 @@ export function CampaignRollupCard({ rollup }: { rollup: CampaignRollup }) {
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-[#615D59]">
-        채널·통화가 달라 종합 합산·수익률 지표는 표기하지 않습니다. 행사 리드는 v1에서 미집계이며, 매출은
-        입력 기준입니다. Meta 집행·리드는 생애 누적이 아니라 최근 30일 · 상위 50개 캠페인 조회 기준입니다.
+        채널·통화가 달라 합산·수익률은 표기하지 않습니다. 행사 리드는 v1 미집계(매출은 입력 기준) ·
+        Meta는 최근 30일·상위 50개 캠페인 기준입니다.
       </p>
     </section>
   )

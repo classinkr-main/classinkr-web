@@ -18,6 +18,7 @@ import { StatTile } from "@/components/admin/viz"
 import { COUNT, PCT1, money } from "@/components/admin/campaigns/event-format"
 import { SOURCE_GROUP_ORDER } from "@/lib/crm/lead-attribution"
 import {
+  prevBasisLabel,
   shiftDays,
   type DailyPoint,
   type LeadDailyBySourcePoint,
@@ -57,9 +58,19 @@ const LEADS_BOARD_HREF = "/admin/crm/customers/leads"
 // 지표 방향 — 델타 색이 "좋아짐/나빠짐"을 말한다. CPL 은 감소=좋음, 광고비는 방향 가치판단 없음(중립).
 type DeltaValence = "up-good" | "down-good" | "none"
 
-function DeltaHint({ kpi, valence }: { kpi: PerfKpi; valence: DeltaValence }) {
-  // 델타 라벨은 항상 "이전 기간 대비"(직전 동일 길이) — quarter 에서도 거짓말이 되지 않는 표현.
-  const title = "이전 기간(직전 동일 길이) 대비"
+function DeltaHint({
+  kpi,
+  valence,
+  basis,
+}: {
+  kpi: PerfKpi
+  valence: DeltaValence
+  /** 비교 축 문구 — 기간마다 다르다(롤링=직전 동일 길이, QTD=전분기 같은 일수). */
+  basis: string
+}) {
+  // 화면 문구는 "이전 기간 대비"로 짧게 두되, 툴팁은 어느 창과 견줬는지를 정확히 말한다 —
+  // quarter 는 직전 창이 아니라 전분기의 같은 일수와 비교한다(resolvePerfPeriod 참조).
+  const title = `이전 기간(${basis}) 대비`
   if (kpi.deltaPct == null) {
     return (
       <span title={title} className="text-[#1a1a1a]/35">
@@ -187,6 +198,9 @@ export function KpiStrip({
   // 강등되는 계약 필드지만, 그때는 전환율이 0 이 아니라 null 이라 이 조건이 먼저 걸러진다.
   const conversionStalled = kpis.leadConversionRate.value === 0 && adLeads > 0
 
+  // 델타 툴팁이 말할 비교 축 — 기간 계약(period.prevBasis)에서 그대로 파생한다(SSOT: perf.ts).
+  const deltaBasis = prevBasisLabel(period)
+
   // 콕핏 레이아웃(2026-08)에서 xl 이상은 우측 384px 레일과 폭을 나눠 쓴다 — 5칸이 그 좁아진
   // 폭에서 부러지지 않도록 5열 전환을 2xl(레일 뺀 폭도 충분히 넓어지는 지점)로 늦췄다.
   //
@@ -206,7 +220,7 @@ export function KpiStrip({
           icon={<Wallet className="h-3.5 w-3.5" />}
           label="광고비 · Meta USD"
           value={kpis.spendUsd.value != null ? money(kpis.spendUsd.value, "USD") : "—"}
-          hint={<DeltaHint kpi={kpis.spendUsd} valence="none" />}
+          hint={<DeltaHint kpi={kpis.spendUsd} valence="none" basis={deltaBasis} />}
           href={metaTabHref}
           sparkline={
             hasShape(spendSeries) ? (
@@ -224,7 +238,7 @@ export function KpiStrip({
           icon={<Users className="h-3.5 w-3.5" />}
           label="리드"
           value={kpis.leads.value != null ? COUNT.format(kpis.leads.value) : "—"}
-          hint={<DeltaHint kpi={kpis.leads} valence="up-good" />}
+          hint={<DeltaHint kpi={kpis.leads} valence="up-good" basis={deltaBasis} />}
           tone="brand"
           href={LEADS_BOARD_HREF}
           sparkline={
@@ -246,7 +260,7 @@ export function KpiStrip({
           value={kpis.cplUsd.value != null ? money(kpis.cplUsd.value, "USD") : "—"}
           // 스파크라인 없음(파일 상단 정직 규칙) — 개선/악화는 델타 힌트가 말한다.
           // 델타가 개선(감소)이면 힌트가 이미 그린이다. 타일 톤까지 물들이지는 않는다(과함).
-          hint={<DeltaHint kpi={kpis.cplUsd} valence="down-good" />}
+          hint={<DeltaHint kpi={kpis.cplUsd} valence="down-good" basis={deltaBasis} />}
           // 슬롯을 비우면 스파크라인 있는 옆 타일과 높이가 갈려 35px 죽은 공간이 남았다.
           // 채우되 없는 선을 지어내지 않는다 — 같은 자리에 "왜 없는지"를 둔다(상단 정직 규칙).
           sparkline={
@@ -271,7 +285,7 @@ export function KpiStrip({
           tone={conversionStalled ? "danger" : undefined}
           hint={
             <span className="inline-flex flex-wrap items-center gap-x-1.5">
-              <DeltaHint kpi={kpis.leadConversionRate} valence="up-good" />
+              <DeltaHint kpi={kpis.leadConversionRate} valence="up-good" basis={deltaBasis} />
               <span className="text-[#1a1a1a]/35">광고 리드 기준</span>
             </span>
           }

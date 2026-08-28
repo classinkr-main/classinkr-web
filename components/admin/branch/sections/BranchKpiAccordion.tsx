@@ -8,9 +8,6 @@ import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import { matchesTokens, tokenize } from "../search-tokens"
 import MoneyValue from "../MoneyValue"
 
-const numberFmt = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 })
-const fmt = (n: number) => numberFmt.format(n)
-
 const KPI_LABELS: Record<string, string> = {
   lead: "리드",
   account: "계정",
@@ -405,7 +402,6 @@ export default function BranchKpiAccordion({
         </div>
         <p className="text-right text-[10.5px] text-[#615D59]">
           {hasInactiveKpiTeam && <span className="block">KPI 목표는 현재 BD팀만 운영</span>}
-          <span className={`font-semibold ${CONFIDENCE_TOKENS.confirmed.textClass}`}>그린 = 확정 매출</span>
         </p>
       </div>
       <div className="px-5 pb-2 pt-1">
@@ -426,5 +422,3 @@ export default function BranchKpiAccordion({
     </section>
   )
 }
-
-export { fmt }

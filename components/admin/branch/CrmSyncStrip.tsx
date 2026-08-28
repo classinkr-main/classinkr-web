@@ -199,7 +199,7 @@ export default function CrmSyncStrip({ coverage }: CrmSyncStripProps = {}) {
               />
 
               <p className="border-t border-dashed border-[rgba(0,0,0,0.08)] pt-2.5 text-[11.5px] text-[#615D59]">
-                연결 이력: 현 시트 키가 없는 과거 후보{" "}
+                연결 이력: 과거 후보{" "}
                 <b className="font-bold tabular-nums text-[#111110]">{summary.hygiene.orphanCandidates}</b>행
                 {summary.hygiene.orphanCandidateNames != null
                   ? `(${summary.hygiene.orphanCandidateNames}개 이름)`
@@ -209,12 +209,11 @@ export default function CrmSyncStrip({ coverage }: CrmSyncStripProps = {}) {
                 {summary.hygiene.staleLinkNames != null
                   ? `(${summary.hygiene.staleLinkNames}개 이름)`
                   : ""}
-                . 현재 검토 대기와 구분한 누적 기록이며 자동 재생성 대상이 아닙니다.
+                {" — "}누적 기록, 자동 재생성 대상 아님
               </p>
               <p className="text-[10.5px] text-[#615D59]">
-                기준: 시트 동기화 {summary.asOf ? formatAsOf(summary.asOf) : "시각 미확인"} · 플레이스홀더{" "}
-                {summary.placeholderRows.toLocaleString("ko-KR")}행({cny(summary.placeholderRevenue)})은 매칭 대상에서
-                제외됨
+                기준: {summary.asOf ? formatAsOf(summary.asOf) : "시각 미확인"} 동기화 · 플레이스홀더{" "}
+                {summary.placeholderRows.toLocaleString("ko-KR")}행({cny(summary.placeholderRevenue)}) 매칭 제외
               </p>
             </div>
 

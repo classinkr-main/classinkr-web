@@ -33,6 +33,14 @@ const USE_SUPABASE = shouldUseSupabaseLeads();
 export const ADMIN_LEADS_OVERVIEW_CACHE_TAG = "admin-leads-overview";
 const IS_PRODUCTION_RUNTIME =
   process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+/**
+ * leads에 last_inflow_at(재유입 축, 20260828 마이그레이션)이 추가됐지만
+ * database.types.ts는 다른 작업과 충돌을 피하려 재생성하지 않았다. 생성 타입에 없는
+ * 컬럼 하나만 구조적으로 얹어 쓴다 — any 캐스팅 없이 타입이 계속 성립한다.
+ */
+type LeadInsertWithInflow = LeadInsert & { last_inflow_at?: string | null };
+type LeadRowWithInflow = Lead & { last_inflow_at?: string | null };
+
 const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "branch",
   "notes",
@@ -54,7 +62,9 @@ const OPTIONAL_LEAD_INSERT_COLUMNS = [
   "referrer",
   "confirmed_at",
   "anonymous_id",
-] as const satisfies readonly (keyof LeadInsert)[];
+  // 마이그레이션 미적용 환경에서도 리드 저장이 통째로 죽지 않게 선택 컬럼으로 다룬다.
+  "last_inflow_at",
+] as const satisfies readonly (keyof LeadInsertWithInflow)[];
 
 interface SupabaseColumnError {
   code?: string;
@@ -128,6 +138,9 @@ export interface LeadRecord {
   confirmed_at?: string;
   // 제출 시점의 익명 식별자(cln_aid) — 사이트 활동 귀속의 결합 키.
   anonymous_id?: string;
+  // 마지막 유입 시각(재유입 축, 20260828 마이그레이션). 저장 경로가 행을 병합하지 않으므로
+  // 지금은 생성 시각과 같다 — 재유입 판정은 lib/crm/lead-reinflow가 연락처 중복으로 도출한다.
+  last_inflow_at?: string;
 }
 
 export interface LeadActionStats {
@@ -172,7 +185,7 @@ function isMissingOptionalLeadColumn(error: SupabaseColumnError) {
   );
 }
 
-function isMissingLeadColumn(error: SupabaseColumnError, column: keyof LeadInsert) {
+function isMissingLeadColumn(error: SupabaseColumnError, column: keyof LeadInsertWithInflow) {
   const haystack = [error.code, error.message, error.details, error.hint]
     .filter(Boolean)
     .join(" ")
@@ -189,8 +202,8 @@ function isMissingLeadColumn(error: SupabaseColumnError, column: keyof LeadInser
  * 잃었다 — 없는 컬럼 하나 때문에 멀쩡한 귀속 데이터를 버리는 셈이다.
  * 오류 메시지가 컬럼을 지목하면 그것만 덜고, 못 짚으면 예전처럼 전부 덜어낸다.
  */
-function stripOptionalLeadColumns(insert: LeadInsert, error?: SupabaseColumnError) {
-  const fallbackInsert: Partial<LeadInsert> = { ...insert };
+function stripOptionalLeadColumns(insert: LeadInsertWithInflow, error?: SupabaseColumnError) {
+  const fallbackInsert: Partial<LeadInsertWithInflow> = { ...insert };
 
   const named = error
     ? OPTIONAL_LEAD_INSERT_COLUMNS.filter((column) => isMissingLeadColumn(error, column))
@@ -204,7 +217,7 @@ function stripOptionalLeadColumns(insert: LeadInsert, error?: SupabaseColumnErro
   return fallbackInsert;
 }
 
-function supabaseToLegacy(row: Lead): LeadRecord {
+function supabaseToLegacy(row: LeadRowWithInflow): LeadRecord {
   return {
     id: row.id,
     source: row.source,
@@ -238,6 +251,8 @@ function supabaseToLegacy(row: Lead): LeadRecord {
     referrer: row.referrer ?? undefined,
     confirmed_at: row.confirmed_at ?? undefined,
     anonymous_id: row.anonymous_id ?? undefined,
+    // 스코프 조회(대시보드·마케팅)는 이 컬럼을 select하지 않는다 — 그때는 undefined다.
+    last_inflow_at: row.last_inflow_at ?? undefined,
   };
 }
 
@@ -558,7 +573,7 @@ export async function saveLead(
   // 공개 리드 제출은 admin 클라이언트 사용 (RLS: anyone can insert)
   const supabase = createSupabaseAdminClient();
 
-  const insert: LeadInsert = {
+  const insert: LeadInsertWithInflow = {
     source: lead.source,
     name: lead.name ?? null,
     org: lead.org ?? null,
@@ -592,6 +607,10 @@ export async function saveLead(
     // 어드민 수기 등록(app/api/admin/leads)만 생성 시점에 confirmed_at을 명시적으로 채운다.
     confirmed_at: lead.confirmed_at ?? null,
     anonymous_id: lead.anonymous_id ?? null,
+    // 재유입 축의 시작점. 마이그레이션 백필은 기존 행만 채웠으므로 여기서 안 넣으면
+    // 신규 행은 전부 NULL로 남아 컬럼이 죽는다. 자체 저장 경로는 같은 연락처가 다시 와도
+    // 행을 새로 만들기 때문에(병합 없음) 최초값 = 생성 시각이 맞다.
+    last_inflow_at: lead.last_inflow_at ?? new Date().toISOString(),
   };
 
   const { data, error } = await supabase

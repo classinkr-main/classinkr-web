@@ -171,7 +171,7 @@ export default function CampaignManageClient() {
               캠페인 관리
             </h1>
             <p className="mt-1.5 text-[13px] text-[#615D59]">
-              채널별 실행(이메일·문자·행사·Meta)을 묶는 크로스채널 캠페인을 만들고 관리합니다.
+              이메일·문자·행사·Meta를 묶는 크로스채널 캠페인
             </p>
           </div>
 

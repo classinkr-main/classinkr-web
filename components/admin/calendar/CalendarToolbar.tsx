@@ -4,7 +4,7 @@ import { CalendarDays, ChevronLeft, ChevronRight, Columns3, List, Plus, Rows3, T
 import type { LucideIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { CALENDAR_VIEWS, formatRangeLabel, type CalendarViewId } from "@/lib/admin-calendar/range"
+import { formatRangeLabel, type CalendarViewId } from "@/lib/admin-calendar/range"
 
 interface ViewOption {
   value: CalendarViewId
@@ -134,5 +134,3 @@ export function CalendarToolbar({
     </div>
   )
 }
-
-export { CALENDAR_VIEWS }

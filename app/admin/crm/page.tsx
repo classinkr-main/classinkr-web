@@ -62,11 +62,20 @@ const NeoCrmTeamPanel = dynamic(() => import("@/components/admin/crm/NeoCrmTeamP
 
 const CRM_ACTION_KPIS_URL = "/api/admin/crm/action-kpis"
 const CRM_OVERVIEW_URL = "/api/admin/crm/overview"
+const CRM_COMPASS_PIPELINE_URL = "/api/admin/crm/compass-pipeline"
 // 월 키를 모듈 로드 시점에 굳히면, 탭을 켜 둔 채 달이 바뀐 세션이 지난달 KPI를 이번 달로
 // 계속 보여준다. 조회 시점마다 다시 계산한다.
 const branchKpiUrl = (month: string) => `/api/admin/branch/kpi?team=ALL&period=M&month=${month}`
 const CRM_HOME_TTL_MS = 120_000
 const CRM_HOME_STALE_WHILE_REVALIDATE_MS = 10 * 60_000
+
+// Compass(mkt.classin.co.kr) 딥링크 — 실측 확인된 것은 lib/compass/normalize.ts의
+// compassLeadUrl(개별 리드 상세)뿐이다. 아래는 crm.stages 실측 어휘(new/demo/bd/quote/won/lost)를
+// 따른 최선 추정 필터 URL이며, Compass 쪽 라우팅이 바뀌면 깨질 수 있다(마케팅팀 확인 필요).
+const COMPASS_LEADS_BASE_URL = "https://mkt.classin.co.kr/leads"
+const COMPASS_DEMO_TODAY_URL = `${COMPASS_LEADS_BASE_URL}?stage=demo`
+const COMPASS_UPCOMING_ACTIONS_URL = `${COMPASS_LEADS_BASE_URL}?sort=next_action_at`
+const COMPASS_BD_OPEN_URL = `${COMPASS_LEADS_BASE_URL}?stage=bd`
 
 type CrmOverviewStatus = "ok" | "warning" | "blocked"
 type AdminCrmCustomerLogKind = "call" | "visit" | "quote" | "order" | "payment" | "activity"
@@ -81,6 +90,15 @@ interface LeadActionKpis {
   todayFollowUpCount: number
   overdueFollowUpCount: number
   unconfirmedCount: number
+}
+
+// /api/admin/crm/compass-pipeline 응답 — M7 "마케팅 파이프라인(Compass)" 밴드.
+interface CompassPipelineKpis {
+  down: boolean
+  todayDemoCount: number
+  upcomingActionCount: number
+  bdOpenCount: number
+  generatedAt: string
 }
 
 interface BranchKpiMemberRow {
@@ -426,6 +444,66 @@ function LeadSummaryPanel({
   )
 }
 
+// M7 — 마케팅 파이프라인(Compass) 한 줄 밴드. 리드 요약과 같은 카드 껍데기(rounded-2xl·white·p-4)를
+// 쓰지만 3항목을 한 행에 눕힌다. 각 항목은 mkt.classin.co.kr 새 탭 딥링크라 StatTile(href)이 쓰는
+// next/link로는 target="_blank"를 못 붙여 순수 <a>로 직접 구성한다(그래도 bare 변형과 같은 타이포).
+// down이면 무음 실패 금지 — 숫자 자리를 전부 걷어내고 무채색 한 줄 "Compass 연결 끊김"로 강등한다.
+function CompassPipelineBand({
+  data,
+  loading,
+  error,
+  onRetry,
+}: {
+  data: CompassPipelineKpis | null
+  loading: boolean
+  error: string | null
+  onRetry: () => void
+}) {
+  const showDown = (error && !data) || data?.down
+
+  return (
+    <section className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">마케팅 파이프라인(Compass)</p>
+        {showDown ? (
+          <button type="button" onClick={onRetry} className="text-[11px] font-semibold text-[#084734] underline underline-offset-2">
+            다시 확인
+          </button>
+        ) : null}
+      </div>
+
+      {showDown ? (
+        <p className="text-[13px] text-[#1a1a1a]/35">Compass 연결 끊김</p>
+      ) : (
+        <div className="flex flex-wrap items-stretch gap-4">
+          {[
+            { key: "demo", label: "오늘 데모", hint: "Compass 데모 일정", value: data?.todayDemoCount, href: COMPASS_DEMO_TODAY_URL },
+            { key: "next", label: "다음 액션 임박", hint: "48시간 이내", value: data?.upcomingActionCount, href: COMPASS_UPCOMING_ACTIONS_URL },
+            { key: "bd", label: "BD인계 진행", hint: "수금 대기", value: data?.bdOpenCount, href: COMPASS_BD_OPEN_URL },
+          ].map((item) => (
+            <a
+              key={item.key}
+              href={item.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-w-[168px] flex-1 items-center justify-between gap-3 border-t border-[#f0f0ec] pt-3 transition-opacity hover:opacity-70"
+            >
+              <span>
+                <span className="block text-[11px] font-medium uppercase tracking-[0.1em] text-[#1a1a1a]/40">{item.label}</span>
+                <span className="mt-0.5 block text-[11px] text-[#1a1a1a]/35">{item.hint}</span>
+              </span>
+              <span className="flex items-center gap-1 text-[28px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#084734]">
+                {loading && !data ? <ValueSkeleton className="h-7 w-10" /> : formatNumber(item.value)}
+                <ExternalLink className="h-3.5 w-3.5 text-[#1a1a1a]/30" />
+              </span>
+            </a>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 // KPI 타일 로컬 재구현 금지(W2-2b) — 마크업은 viz StatTile(bare 변형)에 위임하는 어댑터.
 // tone은 값 색만 바꾸는 기존 계약을 유지한다(값·라벨·캡션 불변).
 function CrmMetricTile({
@@ -635,7 +713,7 @@ function CrmTeamKpiBoard({
           <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1a1a1a]/30">Performance KPI</p>
           <h2 className="mt-1 text-[17px] font-bold text-[#111110]">KPI · 총 · 팀별 · 개인별</h2>
           <p className="mt-1 text-[12px] text-[#1a1a1a]/40">
-            {month} · 외부 CRM 동기화 완료량 기준 · 기준/완료/달성률
+            {month} · 외부 CRM 동기화 완료량 기준
           </p>
         </div>
         <span className="inline-flex h-8 items-center rounded-full bg-[#ECFDF5] px-3 text-[12px] font-semibold text-[#084734]">
@@ -823,7 +901,7 @@ function CrmCockpitHero({
           수금 {pending ? <ValueSkeleton className="h-3 w-10" /> : formatCNY(neoKpis?.collectionAmountMonth)}
         </p>
         <p className="mt-1 text-[10px] leading-relaxed text-[#1a1a1a]/35">
-          Neo CRM 동기화 완료분 합계 · 이번 달 기준
+          Neo CRM 동기화 · 이번 달
         </p>
       </div>
 
@@ -911,7 +989,7 @@ function CrmHealthDonut() {
     <section className="rounded-2xl border border-[#e8e8e4] bg-white p-4">
       <div className="mb-3">
         <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#1a1a1a]/40">고객 건강도</p>
-        <p className="text-[10px] text-[#1a1a1a]/35">활성 고객 {formatNumber(dist.total)} · 규칙 기반 분포</p>
+        <p className="text-[10px] text-[#1a1a1a]/35">활성 고객 {formatNumber(dist.total)} · 규칙 기반</p>
       </div>
       <div className="flex items-center gap-4">
         <div className="relative h-24 w-24 shrink-0 rounded-full" style={{ background: gradient }}>
@@ -1024,7 +1102,7 @@ function CrmRankingBoard({ branchKpis }: { branchKpis: BranchKpiResponse | null 
       <div className="mb-3">
         <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#1a1a1a]/40">Performance Ranking</p>
         <h3 className="mt-0.5 text-[15px] font-bold text-[#111110]">활동 목표 달성 랭킹</h3>
-        <p className="text-[11px] text-[#1a1a1a]/35">5지표(리드·고객·확정·솔루션·방문) 합산 달성률 · 규칙 기반</p>
+        <p className="text-[11px] text-[#1a1a1a]/35">5지표 합산 달성률 · 규칙 기반</p>
       </div>
       <div className="divide-y divide-[#f0f0ec]">
         {ranked.slice(0, 10).map((row, index) => (
@@ -1499,6 +1577,9 @@ export default function CrmPage() {
   const [leadKpis, setLeadKpis] = useState<LeadActionKpis | null>(null)
   const [leadKpisLoading, setLeadKpisLoading] = useState(true)
   const [leadKpisError, setLeadKpisError] = useState<string | null>(null)
+  const [compassPipeline, setCompassPipeline] = useState<CompassPipelineKpis | null>(null)
+  const [compassPipelineLoading, setCompassPipelineLoading] = useState(true)
+  const [compassPipelineError, setCompassPipelineError] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [drawerTarget, setDrawerTarget] = useState<{ key: string; name: string } | null>(null)
@@ -1562,6 +1643,32 @@ export default function CrmPage() {
     }
   }, [showToast])
 
+  // M7 — Compass 브리지가 죽어도 다른 밴드를 물들이지 않도록 별도 상태·에러 채널로 분리.
+  // down=true는 API 응답 필드(요청 자체는 성공)이므로 catch가 아니라 setCompassPipeline에서 처리한다.
+  const fetchCompassPipeline = useCallback(async (options?: { force?: boolean }) => {
+    const requestUrl = options?.force ? `${CRM_COMPASS_PIPELINE_URL}?force=1` : CRM_COMPASS_PIPELINE_URL
+    const hasCached = Boolean(
+      getCachedAdminJson<CompassPipelineKpis>(CRM_COMPASS_PIPELINE_URL, {
+        cacheKey: CRM_COMPASS_PIPELINE_URL,
+      })
+    )
+    setCompassPipelineLoading(options?.force || !hasCached)
+    setCompassPipelineError(null)
+    try {
+      const data = await adminFetchJsonCached<CompassPipelineKpis>(requestUrl, undefined, {
+        cacheKey: CRM_COMPASS_PIPELINE_URL,
+        ttlMs: CRM_HOME_TTL_MS,
+        force: options?.force,
+        staleWhileRevalidateMs: CRM_HOME_STALE_WHILE_REVALIDATE_MS,
+      })
+      setCompassPipeline(data)
+    } catch (err) {
+      setCompassPipelineError(err instanceof Error ? err.message : "마케팅 파이프라인(Compass)을 불러오지 못했습니다.")
+    } finally {
+      setCompassPipelineLoading(false)
+    }
+  }, [])
+
   const fetchCrmOverview = useCallback(async (options?: { force?: boolean }) => {
     const requestUrl = options?.force ? `${CRM_OVERVIEW_URL}?force=1` : CRM_OVERVIEW_URL
     const hasCached = Boolean(
@@ -1612,7 +1719,8 @@ export default function CrmPage() {
   useEffect(() => {
     void fetchLeadKpis()
     void fetchCrmOverview()
-  }, [fetchLeadKpis, fetchCrmOverview])
+    void fetchCompassPipeline()
+  }, [fetchLeadKpis, fetchCrmOverview, fetchCompassPipeline])
 
   useEffect(() => {
     if (!reportOpen || reportTab !== "team") return
@@ -1625,9 +1733,10 @@ export default function CrmPage() {
   const refreshAll = useCallback(() => {
     void fetchLeadKpis({ force: true })
     void fetchCrmOverview({ force: true })
+    void fetchCompassPipeline({ force: true })
     if (reportOpen && reportTab === "team") void fetchBranchKpis({ force: true })
     setNeoCrmRefreshKey((current) => current + 1)
-  }, [fetchLeadKpis, fetchCrmOverview, fetchBranchKpis, reportOpen, reportTab])
+  }, [fetchLeadKpis, fetchCrmOverview, fetchCompassPipeline, fetchBranchKpis, reportOpen, reportTab])
 
   // 기록 입력은 /activity의 단일 컴포저가 소유한다. 홈 우측 레일과 기록 화면에 같은 폼을
   // 중복 노출하면 우선순위 큐가 좁아지고 사용자는 저장 위치를 다시 판단해야 한다.
@@ -1704,6 +1813,15 @@ export default function CrmPage() {
         onRetry={() => void fetchLeadKpis({ force: true })}
       />
 
+      {/* M7 — 리드 요약(자체 유입) 바로 아래에 Compass(마케팅팀 앱) 파이프라인 한 줄을 붙인다.
+          같은 아침 지휘대 안에서 자체 리드와 Compass 딜 흐름을 한 시야에 둔다. */}
+      <CompassPipelineBand
+        data={compassPipeline}
+        loading={compassPipelineLoading}
+        error={compassPipelineError}
+        onRetry={() => void fetchCompassPipeline({ force: true })}
+      />
+
       {/* 리드 요약 다음에 오늘의 행동 큐를 붙여 숫자 확인 → 처리 흐름을 한 축으로 만든다. */}
       <CrmPriorityQueuePanel refreshKey={neoCrmRefreshKey} />
 
@@ -1732,16 +1850,6 @@ export default function CrmPage() {
             setSearchQuery("")
           }}
         />
-        <p className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-[#1a1a1a]/35">
-          학원명·이름·전화로 검색해 바로 고객 카드를 엽니다.
-          <span className="inline-flex items-center gap-1">
-            어디서든
-            <kbd className="rounded border border-[#e8e8e4] bg-[#fafaf8] px-1 py-0.5 text-[10px] font-semibold text-[#1a1a1a]/45">
-              ⌘K
-            </kbd>
-            로 빠른 이동·검색
-          </span>
-        </p>
         {recentCustomers.length > 0 ? (
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-[#f0f0ec] pt-2.5">
             <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#1a1a1a]/30">최근 본 고객</span>

@@ -81,6 +81,15 @@ export const SOURCE_OPTIONS: SourceOption[] = [
     readonlyHelp: "팀원 행사는 구글 캘린더에서 수정합니다.",
     openLabel: "구글 캘린더에서 열기",
   },
+  {
+    // 라벨은 원본 구글 캘린더 이름 그대로. 이 소스에는 데모 외 MKT 회의·연락 리마인더도
+    // 섞여 있어서(2026-08-28 실측), 우리가 "데모"로 재분류하지 않는다.
+    value: "compass_demo",
+    label: "MKT 데모일정",
+    dot: "#2F5D8C",
+    readonlyHelp: "MKT 데모일정은 Compass(마케팅팀 앱)와 원본 구글 캘린더에서 수정합니다.",
+    openLabel: "Compass에서 열기",
+  },
   { value: "holiday", label: "공휴일", dot: "#B43E3E", readonlyHelp: "공휴일은 자동으로 채워집니다." },
 ]
 
@@ -123,6 +132,11 @@ export function getReadonlyHelp(event: CalendarEvent): string {
 }
 
 export function getOpenLabel(event: CalendarEvent): string {
+  // MKT 데모일정은 리드가 붙은 행만 Compass 상세로 가고, 나머지는 구글 캘린더 원본으로 간다 —
+  // 링크가 가리키는 곳과 라벨이 어긋나지 않게 목적지를 보고 말한다.
+  if (getEventSource(event) === "compass_demo" && event.href && !event.href.includes("mkt.classin.co.kr")) {
+    return "구글 캘린더에서 열기"
+  }
   return SOURCE_BY_VALUE.get(getEventSource(event))?.openLabel ?? "원본 열기"
 }
 

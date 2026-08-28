@@ -401,8 +401,7 @@ export function ForecastBoard({
       </div>
 
       <p className="border-t border-[rgba(0,0,0,0.08)] px-4 py-2.5 text-[10.5px] font-semibold text-[#A39E98]">
-        확도 산식은 매트릭스와 동일(확정=녹색·고확도=파랑·예정=빗금/점선) · &lsquo;월합계만&rsquo;은 주차 미배정 행 —
-        카드를 눌러 빠른 입력에서 주차를 배정하세요 · 추정=결제 시작일 기반 배치
+        확도 톤은 매트릭스와 동일 · &lsquo;월합계만&rsquo;은 카드로 주차 배정 · 추정=결제 시작일 기반 배치
       </p>
     </section>
   )

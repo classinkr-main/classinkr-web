@@ -128,7 +128,7 @@ export default function RevenueFlowSection({
             <>
               {pipeline.stale ? (
                 <div role="status" className="mb-2 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[10.5px] text-[#7A520F]">
-                  갱신에 실패해 저장된 REV 데이터를 표시합니다.
+                  갱신 실패 — 저장된 데이터 표시 중
                 </div>
               ) : null}
               <RevWeekForecastChart data={weekProjection} monthGoal={monthGoal} />

@@ -12,6 +12,7 @@ import {
 } from "@/lib/admin-calendar/health"
 import { getBusinessDateParts } from "@/lib/business-time"
 import { getPublicEventsAsCalendarEvents, type CalendarEvent } from "@/lib/calendar-data"
+import { getCompassCalendarEventsWithHealth } from "@/lib/compass/calendar"
 import { getNotionMarketingCalendarEvents } from "@/lib/notion-marketing-calendar"
 import { probeTeamCalendarAccess } from "@/lib/team-member-calendars"
 import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
@@ -60,6 +61,25 @@ async function feedDatesByMonths(
   return eventDates(Array.from(byId.values()))
 }
 
+/**
+ * Compass 브리지는 "일정이 없다"와 "연결이 끊겼다"가 다른 사실이다 —
+ * down 이면 날짜가 0건이어도 dead("연결 끊김")로 말하고, 정상이면 다른 외부 피드와
+ * 같은 최근성 규칙(deriveFeedHealth)을 쓴다.
+ */
+async function compassCalendarDates(
+  months: Array<{ year: number; month: number }>
+): Promise<{ dates: string[]; down: boolean }> {
+  const results = await Promise.all(
+    months.map((m) => getCompassCalendarEventsWithHealth(m).catch(() => ({ events: [], down: true })))
+  )
+  const byId = new Map<string, CalendarEvent>()
+  for (const result of results) for (const event of result.events) byId.set(event.id, event)
+  return {
+    dates: eventDates(Array.from(byId.values())),
+    down: results.some((result) => result.down),
+  }
+}
+
 async function partnerScheduleSummary(): Promise<{ count: number; lastDate: string | null }> {
   const supabase = createSupabaseAdminClient()
   const [countRes, latestRes] = await Promise.all([
@@ -89,7 +109,7 @@ export async function GET(req: NextRequest) {
       ? `https://www.notion.so/${notionDbId.replace(/-/g, "")}`
       : undefined
 
-    const [stored, partner, publicEvents, notionDates, showroomDates, teamAccess] =
+    const [stored, partner, publicEvents, notionDates, showroomDates, teamAccess, compass] =
       await Promise.all([
         summarizeStoredCalendarEvents().catch(() => null),
         partnerScheduleSummary().catch(() => null),
@@ -97,6 +117,7 @@ export async function GET(req: NextRequest) {
         feedDatesByMonths(getNotionMarketingCalendarEvents, months).catch(() => null),
         feedDatesByMonths(getShowroomCalendarEvents, months).catch(() => null),
         probeTeamCalendarAccess().catch(() => null),
+        compassCalendarDates(months).catch(() => null),
       ])
 
     const sources: SourceHealth[] = [
@@ -136,6 +157,21 @@ export async function GET(req: NextRequest) {
           })
         : unknownHealth("showroom"),
       teamAccess ? deriveTeamAccessHealth(teamAccess) : unknownHealth("team_event"),
+      !compass
+        ? unknownHealth("compass_demo")
+        : compass.down
+          ? {
+              source: "compass_demo",
+              status: "dead",
+              headline: "Compass 연결 끊김",
+              detail: "브리지 뷰 조회 실패",
+            }
+          : deriveFeedHealth({
+              source: "compass_demo",
+              dates: compass.dates,
+              today,
+              lookbackMonths: FEED_LOOKBACK_MONTHS,
+            }),
       { source: "holiday", status: "ok", headline: "자동 제공" },
     ]
 

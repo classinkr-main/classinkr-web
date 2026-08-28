@@ -32,6 +32,7 @@ import { PeriodToggle, type PeriodOption } from "@/components/admin/PeriodToggle
 import { adminFetchJson } from "@/lib/admin-client"
 import { metaObjectiveLabel } from "@/lib/marketing/campaign-labels"
 import { splitMetaCampaignsByRun } from "@/lib/marketing/meta-campaign-view"
+import type { RankedCreativeWithSpend } from "@/lib/marketing/compass-creative"
 import type { AdCreativePerf } from "@/lib/marketing/creative-input"
 import type { LeadRecord } from "@/lib/repositories/leads"
 import { DEFAULT_EVENT_METRICS, type AdChannel, type EventMetrics } from "@/lib/types/event-metrics"
@@ -307,10 +308,11 @@ function MetaCampaignPanel({
 }
 
 // ─── AI 소재 제안 ─────────────────────────────────────────────────────────
-// 정직 규칙: Meta Graph 는 캠페인 레벨 insights 만 수집한다 — 소재(ad)별 광고비·CPL 은 어디에도
-// 없다. 이 섹션이 보여주는 건 leads UTM 기준 "리드·전환 건수" 랭킹과 그걸 근거로 한 AI 제안뿐이다.
-// 각주로 매번 명시한다(components/admin/campaigns/tabs/MetaTab.tsx 소유 — 서버는
-// app/api/admin/marketing/creative-suggest, 집계는 lib/marketing/creative-input).
+// 랭킹 뼈대는 leads UTM 기준 "리드·전환 건수"이고, 여기에 Compass 브리지(compass_ads_v,
+// ad 레벨 Meta insights)의 소재별 지출·CPL 을 광고명으로 조인해 얹는다(2026-08-28).
+// 정직 규칙: 조인 실패는 "—"(미집계)이지 0 이 아니고, CPL 은 Compass 축끼리 나눈 값이며,
+// 매출·ROAS 는 여전히 없다. 각주(note)가 매칭 건수와 원천을 매번 밝힌다
+// (서버는 app/api/admin/marketing/creative-suggest, 조인은 lib/marketing/compass-creative).
 
 type CreativeSuggestPeriod = "30d" | "90d"
 
@@ -326,7 +328,7 @@ interface CreativeSuggestionCard {
 }
 
 interface CreativeSuggestResponse {
-  ranked: { top: AdCreativePerf[]; bottom: AdCreativePerf[] }
+  ranked: { top: RankedCreativeWithSpend[]; bottom: RankedCreativeWithSpend[] }
   patterns: string[]
   suggestions: CreativeSuggestionCard[]
   model: string
@@ -337,7 +339,7 @@ function creativeRowLabel(row: AdCreativePerf): string {
   return row.ad || row.adset || row.campaign || "미확인 소재"
 }
 
-function AdCreativeRankRow({ row }: { row: AdCreativePerf }) {
+function AdCreativeRankRow({ row }: { row: RankedCreativeWithSpend }) {
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 text-[12px]">
       <span
@@ -347,6 +349,11 @@ function AdCreativeRankRow({ row }: { row: AdCreativePerf }) {
         {creativeRowLabel(row)}
       </span>
       <span className="flex shrink-0 items-center gap-3 tabular-nums text-[11px] text-[#1a1a1a]/45">
+        {/* CPL 은 Compass 축(지출 ÷ Meta 리포트 리드) — 옆의 리드 수와 분모가 달라 나눠 떨어지지
+            않는 것이 정상이다. 매칭 실패는 "—"(미집계)로 두고 0 으로 채우지 않는다. */}
+        <span title="Compass 수집 지출 ÷ Meta 리포트 리드">
+          CPL {row.cpl_usd != null ? money(row.cpl_usd, "USD") : "—"}
+        </span>
         <span className={row.converted > 0 ? "font-semibold text-[#084734]" : ""}>전환 {row.converted}</span>
         <span className="min-w-[2rem] text-right text-[12px] font-bold text-[#111110]">{row.leads}</span>
       </span>
@@ -391,9 +398,6 @@ function AiCreativeSuggestSection() {
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-[14px] font-semibold text-[#111110]">AI 소재 제안</h2>
-          <p className="mt-0.5 text-[12px] text-[#1a1a1a]/50">
-            리드에 남은 광고명(UTM)을 기준으로 잘 되는 소재의 패턴을 뽑고 다음 소재를 제안합니다.
-          </p>
         </div>
         <div className="flex items-center gap-2">
           <PeriodToggle
@@ -690,9 +694,6 @@ export default function MetaTab({
       <div id="event-metrics-input" className="mt-8 scroll-mt-24">
         <div className="mb-3">
           <h2 className="text-[14px] font-semibold text-[#111110]">성과 입력</h2>
-          <p className="mt-0.5 text-[12px] text-[#1a1a1a]/50">
-            행사별 광고비·매출·목표를 한 표에서 확인하고 매출·목표는 그 자리에서 고칩니다. 채널별 광고비 배분은 상세 편집에서 다룹니다.
-          </p>
         </div>
         {coreLoading ? (
           <ChartSkeleton className="h-[220px]" />

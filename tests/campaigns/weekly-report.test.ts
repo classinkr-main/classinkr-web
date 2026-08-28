@@ -41,6 +41,8 @@ function makePerf(overrides: Partial<MarketingPerfResponse> = {}): MarketingPerf
       until: "2026-08-16",
       prevSince: "2026-08-03",
       prevUntil: "2026-08-09",
+      // 롤링 창(7d)은 직전 동일 길이 비교 — resolvePerfPeriod 의 기본 기준.
+      prevBasis: "trailing",
     },
     snapshotAt: "2026-08-17T00:10:00.000Z",
     metaDataThrough: "2026-08-16",

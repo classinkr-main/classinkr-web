@@ -32,6 +32,7 @@ import {
 } from "@/lib/public-event-dates"
 import { getNotionMarketingCalendarEvents } from "@/lib/notion-marketing-calendar"
 import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
+import { getCompassDemoCalendarEvents } from "@/lib/compass/calendar"
 import { getTeamEventsCalendarEvents } from "@/lib/team-member-calendars"
 import { getKoreaHolidayEvents } from "@/lib/korea-holidays"
 import { normalizeAssigneeNames } from "@/lib/admin-calendar/people"
@@ -48,7 +49,16 @@ import {
 const FILE = path.join(process.cwd(), "data", "calendar-events.json")
 
 export type EventType = "team" | "deadline" | "meeting" | "launch" | "holiday" | "other"
-export type EventSource = "calendar" | "partner" | "event" | "notion" | "showroom" | "team_event" | "holiday"
+export type EventSource =
+  | "calendar"
+  | "partner"
+  | "event"
+  | "notion"
+  | "showroom"
+  | "team_event"
+  | "holiday"
+  // Compass(마케팅팀 앱)가 미러하는 구글 'MKT 데모일정' 캘린더. 읽기 전용 — lib/compass/calendar.ts
+  | "compass_demo"
 
 export interface CalendarEvent {
   id: string
@@ -474,7 +484,16 @@ export async function getPublicEventsAsCalendarEvents(): Promise<CalendarEvent[]
 }
 
 export async function getAllEvents(): Promise<CalendarEvent[]> {
-  const [storedEvents, partnerEvents, publicEvents, notionEvents, showroomEvents, teamEventEvents, holidayEvents] = await Promise.all([
+  const [
+    storedEvents,
+    partnerEvents,
+    publicEvents,
+    notionEvents,
+    showroomEvents,
+    teamEventEvents,
+    holidayEvents,
+    compassEvents,
+  ] = await Promise.all([
     getStoredEvents(),
     getPartnerCalendarEvents(),
     getPublicEventsAsCalendarEvents(),
@@ -482,13 +501,32 @@ export async function getAllEvents(): Promise<CalendarEvent[]> {
     getShowroomCalendarEvents(),
     getTeamEventsCalendarEvents(),
     getKoreaHolidayEvents(),
+    getCompassDemoCalendarEvents(),
   ])
-  return [...storedEvents, ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents, ...teamEventEvents, ...holidayEvents].sort(compareEvents)
+  return [
+    ...storedEvents,
+    ...partnerEvents,
+    ...publicEvents,
+    ...notionEvents,
+    ...showroomEvents,
+    ...teamEventEvents,
+    ...holidayEvents,
+    ...compassEvents,
+  ].sort(compareEvents)
 }
 
 export async function getEventsByMonth(year: number, month: number): Promise<CalendarEvent[]> {
   const prefix = getMonthPrefix(year, month)
-  const [storedEvents, partnerEvents, publicEvents, notionEvents, showroomEvents, teamEventEvents, holidayEvents] = await Promise.all([
+  const [
+    storedEvents,
+    partnerEvents,
+    publicEvents,
+    notionEvents,
+    showroomEvents,
+    teamEventEvents,
+    holidayEvents,
+    compassEvents,
+  ] = await Promise.all([
     getStoredEvents({
       from: `${prefix}-01`,
       to: `${prefix}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`,
@@ -499,8 +537,18 @@ export async function getEventsByMonth(year: number, month: number): Promise<Cal
     getShowroomCalendarEvents({ year, month }),
     getTeamEventsCalendarEvents({ year, month }),
     getKoreaHolidayEvents({ year, month }),
+    getCompassDemoCalendarEvents({ year, month }),
   ])
-  return [...storedEvents, ...partnerEvents, ...publicEvents, ...notionEvents, ...showroomEvents, ...teamEventEvents, ...holidayEvents]
+  return [
+    ...storedEvents,
+    ...partnerEvents,
+    ...publicEvents,
+    ...notionEvents,
+    ...showroomEvents,
+    ...teamEventEvents,
+    ...holidayEvents,
+    ...compassEvents,
+  ]
     .filter((event) => isEventVisibleInMonth(event, year, month) || event.date.startsWith(prefix))
     .sort(compareEvents)
 }

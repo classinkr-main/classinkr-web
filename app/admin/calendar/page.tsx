@@ -57,7 +57,13 @@ const FILTER_STORAGE_KEY = "admin.calendar.filters.v1"
 const VIEW_STORAGE_KEY = "admin.calendar.view.v1"
 
 /** 담당자 개념이 없는 소스 — 담당자 필터를 적용하지 않는다. */
-const ASSIGNEE_FILTERED_SOURCES = new Set<EventSource>(["team_event", "notion", "showroom", "calendar"])
+const ASSIGNEE_FILTERED_SOURCES = new Set<EventSource>([
+  "team_event",
+  "notion",
+  "showroom",
+  "calendar",
+  "compass_demo",
+])
 
 function todayString() {
   const now = new Date()
@@ -208,7 +214,9 @@ export default function AdminCalendarPage() {
     adminFetchJsonCached<{ leads: LeadActionKpisPayload }>(
       "/api/admin/crm/action-kpis",
       undefined,
-      { cacheKey: "calendar:lead-action-kpis", ttlMs: 120_000, staleWhileRevalidateMs: 300_000 }
+      // CRM 홈(app/admin/crm/page.tsx CRM_ACTION_KPIS_URL)과 동일한 URL 키를 써서
+      // 같은 엔드포인트를 두 화면이 각자 다른 캐시 슬롯으로 이중 적재하지 않게 한다.
+      { cacheKey: "/api/admin/crm/action-kpis", ttlMs: 120_000, staleWhileRevalidateMs: 300_000 }
     )
       .then((data) => {
         if (!cancelled) setLeadActionKpis(data?.leads ?? null)
@@ -411,7 +419,7 @@ export default function AdminCalendarPage() {
       {/* Header — 한 줄. 소스 나열·설명은 범례 라인이 대신한다(2026-08-19 다이어트) */}
       <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
         <h1 className="text-xl font-bold tracking-[-0.02em] text-[#111110]">운영 캘린더</h1>
-        <p className="text-[12px] text-[#1a1a1a]/45">6개 소스 통합 · 외부 소스는 읽기 전용</p>
+        <p className="text-[12px] text-[#1a1a1a]/45">8개 소스 통합 · 외부 소스는 읽기 전용</p>
       </div>
 
       {errorMessage && (
@@ -568,7 +576,6 @@ export default function AdminCalendarPage() {
             <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
               <div className="border-b border-[#e8e8e4] px-4 py-3">
                 <p className="text-[13px] font-semibold text-[#111110]">다가오는 일정</p>
-                <p className="mt-0.5 text-[11px] text-[#1a1a1a]/35">현재 기간 안에서</p>
               </div>
               {upcomingEvents.length === 0 ? (
                 <CalendarEmpty message="예정된 일정 없음" compact />

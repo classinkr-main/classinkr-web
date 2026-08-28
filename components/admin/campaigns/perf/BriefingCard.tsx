@@ -45,7 +45,7 @@ export function BriefingCard({
   regenerating = false,
 }: BriefingCardProps) {
   // AI 브리핑인지 규칙 기반 폴백인지 — 이 컴포넌트가 가진 신호는 meta 하나다.
-  // SummaryTab composeBriefing 이 AI insight 가 있을 때만 "AI 브리핑 · 08/20 07:30 생성"을
+  // SummaryTab composeBriefing 이 AI insight 가 있을 때만 "AI · 08/20 07:30 생성"을
   // 채우고, 폴백은 meta:null 로 내려보낸다. 승격 여부를 이 한 신호에만 걸어 두면
   // 새 prop 없이도 두 경로가 절대 같은 무게로 보이지 않는다.
   const aiSourced = typeof meta === "string" && meta.trim() !== ""

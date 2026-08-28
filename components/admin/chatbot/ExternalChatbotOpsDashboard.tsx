@@ -201,9 +201,6 @@ export default function ExternalChatbotOpsDashboard() {
         {/* 1. 헤더 */}
         <header>
           <h1 className="text-2xl font-bold tracking-[-0.02em]">챗봇 운영 (외부)</h1>
-          <p className="mt-1.5 text-sm text-[#615D59]">
-            공개 챗봇의 질문 흐름과 상담 이관 신호를 확인합니다. 카드를 누르면 해당 화면으로 이동합니다.
-          </p>
         </header>
 
         {/* 2. 지표 카드 행 — 각 카드는 그 숫자를 처리하는 화면으로 가는 딥링크 */}

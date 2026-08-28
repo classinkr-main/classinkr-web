@@ -10,7 +10,8 @@ import {
 } from "@/lib/crm/priority"
 import { classifyLeadOrigin } from "@/lib/crm/capture/origin"
 import { isTestLead } from "@/lib/crm/lead-attribution"
-import { buildDemoSignalIndex } from "@/lib/crm/demo-signal"
+import { EMPTY_COMPASS_DEMO_SOURCE, buildCompassDemoIndex } from "@/lib/crm/compass-demo-signal"
+import { loadCompassDemoSource } from "@/lib/crm/compass-demo-source"
 import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 import { deriveCustomerRegion, REGION_UNSPECIFIED } from "@/lib/crm/region-label"
 import {
@@ -24,7 +25,6 @@ import {
   type CrmUnifiedSavedView,
 } from "@/lib/crm/unified-view-rules"
 import { getLeadsActivitySummary } from "@/lib/repositories/lead-activity"
-import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
 import { listAllCustomerListItemsLite } from "@/lib/portal/repositories/customers"
 import type { CustomerListItem } from "@/lib/portal/types"
 import {
@@ -420,7 +420,6 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
     neoLinksResult,
     contactMapsResult,
     engagementResult,
-    demoResult,
   ] = await Promise.allSettled([
     getLeads(),
     getNeoCrmCustomers(),
@@ -429,15 +428,22 @@ async function loadSourceSnapshot(now: Date): Promise<CrmUnifiedSourceSnapshot> 
     listConfirmedLeadNeoLinkLeadIds(),
     getCrmCustomerContactMaps(),
     getLeadsActivitySummary(),
-    getShowroomCalendarEvents(),
   ])
 
   // 반응 축(연락 후 재방문·자료·로그인)과 데모 신호 — 홈 큐(crm-priority-queue)와 같은 규약으로
   // 같은 리드가 화면마다 다른 점수를 갖지 않게 한다. 보조 지표라 실패해도 경고 없이 조용히
-  // 생략하고(축만 빠짐), 6개 본 소스의 complete 판정에도 넣지 않는다 — 외부 캘린더 등 보조
-  // 원천의 일시 장애가 60초 캐시를 무력화해 전체 재조립을 반복하게 만들지 않기 위해서다.
+  // 생략하고(축만 빠짐), 6개 본 소스의 complete 판정에도 넣지 않는다 — 외부 원천의 일시
+  // 장애가 60초 캐시를 무력화해 전체 재조립을 반복하게 만들지 않기 위해서다.
   const engagements = engagementResult.status === "fulfilled" ? engagementResult.value : null
-  const demoIndex = buildDemoSignalIndex(demoResult.status === "fulfilled" ? demoResult.value : [], now)
+
+  // Compass 실측 데모 — 조인 키가 우리 쪽 전화라 위 수집 결과를 입력으로 받는다(순차 1회).
+  const snapshotLeads = leadResult.status === "fulfilled" ? leadResult.value : []
+  const snapshotNeoRows = neoResult.status === "fulfilled" && neoResult.value.ok ? neoResult.value.rows : []
+  const demoSource = await loadCompassDemoSource([
+    ...snapshotLeads.map((lead) => lead.phone),
+    ...snapshotNeoRows.map((row) => row.phone),
+  ]).catch(() => ({ ...EMPTY_COMPASS_DEMO_SOURCE, down: true }))
+  const demoIndex = buildCompassDemoIndex(demoSource, now)
 
   // 신규 뷰 파생 입력 — 실패해도 목록 자체는 유지(해당 뷰만 부정확)하고 빈 컬렉션 폴백.
   if (neoLinksResult.status === "rejected") {

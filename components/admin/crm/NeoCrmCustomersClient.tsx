@@ -803,7 +803,7 @@ export default function NeoCrmCustomersClient() {
           <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Customer Sync · 외부 CRM</p>
           <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">고객 원천 데이터</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            외부 CRM에서 동기화된 고객 참고자료입니다. ClassIn 고객 DB의 보조 원천으로 사용합니다.
+            외부 CRM 동기화 참고자료 — ClassIn 고객 DB 보조 원천
           </p>
           <p className="mt-1 text-[11px] text-[#1a1a1a]/35">
             잔액·만료 원천 sync {formatDateTime(syncHealth?.shroffAccountSyncedAt)}

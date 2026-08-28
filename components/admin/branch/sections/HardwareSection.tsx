@@ -171,7 +171,7 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
       <div className="p-5">
         {hw.stale ? (
           <div role="status" className="mb-3 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[10.5px] text-[#7A520F]">
-            갱신에 실패해 저장된 재고 데이터를 표시합니다.
+            갱신 실패 — 저장된 데이터 표시 중
           </div>
         ) : null}
         {data.stock.length === 0 ? (

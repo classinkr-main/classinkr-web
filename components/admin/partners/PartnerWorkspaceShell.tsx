@@ -728,9 +728,6 @@ export default function PartnerWorkspaceShell({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1a1a1a]/30">빠른 액션</p>
-            <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/45">
-              상세를 열지 않고도 바로 이어서 처리할 작업만 모았습니다.
-            </p>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <Button size="sm" className="justify-center gap-1.5" onClick={() => onCreateDeal(createActionContext(mainDeal, "deal-flow"))}>

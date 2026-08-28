@@ -7,12 +7,14 @@
 // 주간 브리핑 타입(MarketingInsightInput/Result)에 결합돼 있어서다 — 호출 방식만 미러하고
 // 타입·프롬프트·스키마는 소재 제안 도메인 것으로 새로 둔다.
 //
-// 정직 규칙: 입력에는 소재별 광고비·CPL·ROAS 가 없다(리드·전환 건수뿐) — 시스템 프롬프트가
-// 이 제약을 명시하고, 스키마도 그 수치를 담을 자리를 아예 주지 않는다.
+// 정직 규칙(2026-08-28 갱신): 입력에는 소재별 광고비·CPL 이 있다 — Compass 브리지(ad 레벨
+// Meta insights)에서 광고명으로 조인한 실측값이다. 매칭 실패는 null(미집계)이지 0 이 아니다.
+// 여전히 없는 것은 매출·ROAS 뿐이며, 시스템 프롬프트가 그 제약과 두 리드 축(우리 leads 테이블
+// vs Meta 리포트)의 차이를 명시한다. 스키마는 어느 수치도 담을 자리를 주지 않는다(문장만 받는다).
 
 import "server-only"
 
-import type { AdCreativePerf } from "@/lib/marketing/creative-input"
+import type { RankedCreativeWithSpend } from "@/lib/marketing/compass-creative"
 // 모델명 해석·thinkingConfig 판정은 브리핑 호출과 공유하는 SSOT 에서 온다.
 import {
   DEFAULT_GEMINI_MODEL,
@@ -40,22 +42,35 @@ export interface CreativeSuggestIntentContext {
 
 export interface CreativeSuggestInput {
   period: "30d" | "90d"
-  top: AdCreativePerf[]
-  bottom: AdCreativePerf[]
+  top: RankedCreativeWithSpend[]
+  bottom: RankedCreativeWithSpend[]
   /** 구매 의도 라벨 참고 컨텍스트 — lib/crm/lead-attribution 의 META_INTENT_RULES 를
    *  getMetaIntent 로 파생한, 이번 기간에 실제로 감지된 라벨만. 없으면 빈 배열. */
   intentContext: CreativeSuggestIntentContext[]
+  /** 지출/CPL 이 붙은 소재 수 — 프롬프트가 "몇 개나 금액을 아는지"를 사실대로 말하게 한다. */
+  spendMatchedCount: number
 }
 
 const SYSTEM_PROMPT = `너는 클래스인 KR 지사의 퍼포먼스 마케터다.
-아래 JSON 데이터는 Meta 광고 소재(광고명) 단위로 집계한 리드·전환 "건수" 랭킹이다 — 이번 기간
-상위(top) 소재와 하위(bottom, 리드 2건 이상인 것만) 소재, 그리고 캠페인·소재명 텍스트에서
-감지된 구매 의도 라벨(intentContext, 참고용)이 함께 주어진다.
+아래 JSON 데이터는 Meta 광고 소재(광고명) 단위 랭킹이다 — 이번 기간 상위(top) 소재와
+하위(bottom, 리드 2건 이상인 것만) 소재, 그리고 캠페인·소재명 텍스트에서 감지된 구매 의도
+라벨(intentContext, 참고용)이 함께 주어진다.
+
+각 소재 행의 필드:
+- leads / converted: 우리 리드 DB 기준 유입·전환 "건수".
+- compass_leads: Meta 리포트가 센 리드 수(Compass 수집분). leads 와 모집단이 달라 값이 다르다.
+- spend_usd: 그 소재의 광고비(USD, Compass 수집분). null 이면 금액 미집계다.
+- cpl_usd: spend_usd ÷ compass_leads. 즉 Meta 리포트 축끼리 나눈 CPL이다.
+- spend_matched: false 면 금액을 못 붙였다는 뜻.
 
 규칙:
-- 입력에는 광고비·CPL·ROAS·매출이 없다. 어떤 형태로든 이 수치를 만들어내거나 언급하지 않는다.
-- 오직 "리드 수"와 "전환 수" 만으로 판단한다. 리드가 적은(특히 5건 미만) 소재의 전환율은
-  표본이 작아 신뢰도가 낮다는 점을 감안해서 말한다.
+- spend_usd·cpl_usd 는 입력에 있는 값만 인용한다. null 인 소재는 "광고비 0" 이 아니라
+  "미집계"다 — 0 으로 말하지 않는다. 직접 나눗셈해서 새 CPL 을 만들지 않는다.
+- 매출·ROAS 는 입력에 없다. 어떤 형태로도 만들어내거나 언급하지 않는다.
+- CPL 을 비교할 때는 cpl_usd 끼리만 비교한다. spend_usd 를 leads(우리 DB 축)로 나눈 값을
+  만들지 않는다 — 분자와 분모의 모집단이 다르다.
+- 리드가 적은(특히 5건 미만) 소재의 전환율·CPL 은 표본이 작아 신뢰도가 낮다는 점을 감안해 말한다.
+- USD 를 원화로 환산하지 않는다.
 - 잘 전환되는 소재의 공통 패턴을 먼저 뽑는다(patterns, 최대 5개) — 어투·소구점·타깃 키워드 등
   소재명 텍스트에서 실제로 드러나는 특징만 쓴다. 근거 없는 일반론 금지.
 - 다음에 집행할 신규 소재 제안 3~5개(suggestions)를 쓴다. 각 제안은

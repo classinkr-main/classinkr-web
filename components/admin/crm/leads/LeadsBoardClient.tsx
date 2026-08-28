@@ -98,6 +98,8 @@ import {
   type BoardColumnKey,
   type LeadsView,
 } from "@/lib/crm/leads-board-state"
+import { CompassBridgeDownNote, CompassLeadChip } from "@/components/admin/compass/CompassLeadChip"
+import { useCompassOverlay } from "@/components/admin/compass/use-compass-overlay"
 import LeadsBoardView from "./LeadsBoardView"
 
 // 리드 보드 목록 무한스크롤 대체 — 초기 50건, "더보기"로 50건씩 확장(계획 문서 Phase W1).
@@ -1174,6 +1176,8 @@ export default function LeadsBoardClient() {
   const [dismissedDeepLinkedLeadId, setDismissedDeepLinkedLeadId] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const { owners: crmOwners, health: crmOwnerHealth } = useCrmOwners()
+  // Compass(마케팅팀 앱) 콜 상태 병기 — 읽기 전용 오버레이. 우리 리드 상태는 건드리지 않는다.
+  const compass = useCompassOverlay(leads)
 
   // "/" 로 검색창 포커스 — 목록을 훑다가 손을 옮기지 않고 바로 좁힐 수 있게.
   useEffect(() => {
@@ -2296,7 +2300,6 @@ export default function LeadsBoardClient() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#111110] tracking-[-0.02em]">리드</h1>
-          <p className="mt-1 text-[13px] text-[#1a1a1a]/42">신규 유입 → 응대 → 전환 파이프라인</p>
           {/* 뷰 축은 제목 아래 — 액션 줄에 섞으면 CSV·새로고침과 같은 무게가 된다.
               전환은 어떤 상태도 리셋하지 않고, 같은 filter 를 뷰마다 다르게 해석할 뿐이다. */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -2924,9 +2927,6 @@ export default function LeadsBoardClient() {
                   </span>
                 ) : null}
               </p>
-              <p className="mt-0.5 text-[11px] text-[#1a1a1a]/45">
-                선택한 리드에 상태 변경·담당자 배정·확인·삭제를 일괄 적용합니다.
-              </p>
             </div>
             <div className="flex flex-wrap gap-2">
               {selectedFilteredCount < filtered.length && filtered.length > 0 ? (
@@ -3100,6 +3100,9 @@ export default function LeadsBoardClient() {
         </div>
       )}
 
+      {/* Compass 브리지 장애 — 칩이 사라진 이유를 말한다(칩 없음 ≠ 마케팅팀 미접촉). */}
+      {compass.down && leads.length > 0 ? <CompassBridgeDownNote className="mb-2 px-0.5" /> : null}
+
       {/* 목록(콘솔) ↔ 보드 — 같은 모집단을 다른 축으로 눕힌다. */}
       {view === "console" ? (
       <div className="bg-white rounded-2xl border border-[#e8e8e4] overflow-hidden">
@@ -3184,6 +3187,7 @@ export default function LeadsBoardClient() {
               const sourceDetail = getLeadSourceDetail(lead)
               const sourceSegment = getLeadSourceSegment(lead)
               const priority = priorityMap.get(lead.id)
+              const compassEntry = compass.lookup(lead)
 
               return (
                 <div
@@ -3233,6 +3237,12 @@ export default function LeadsBoardClient() {
                         <p className="mt-0.5 truncate text-[11px] text-[#1a1a1a]/40">
                           {priority.reasons.join(" · ")}
                         </p>
+                      ) : null}
+                      {/* 조상이 <button>이라 링크가 아닌 표시형 칩으로 그린다(중첩 인터랙티브 금지). */}
+                      {compassEntry ? (
+                        <span className="mt-1 flex">
+                          <CompassLeadChip entry={compassEntry} interactive={false} />
+                        </span>
                       ) : null}
                     </button>
                     <div className="flex shrink-0 items-center gap-2">
@@ -3382,6 +3392,7 @@ export default function LeadsBoardClient() {
                 const sourceDetail = getLeadSourceDetail(lead)
                 const sourceSegment = getLeadSourceSegment(lead)
                 const priority = priorityMap.get(lead.id)
+                const compassEntry = compass.lookup(lead)
                 return (
                   <tr
                     key={lead.id}
@@ -3503,6 +3514,8 @@ export default function LeadsBoardClient() {
                           </span>
                         )}
                         <StatusPill status={lead.status} />
+                        {/* 우리 상태 옆에 마케팅팀 상태를 병기 — 덮어쓰지 않는다. */}
+                        {compassEntry ? <CompassLeadChip entry={compassEntry} /> : null}
                         {/*
                           상태 전환은 드로어를 열고 스크롤해야만 가능했다. 그래서 리드
                           115건이 전부 new 로 남아 있었고(2026-08-05 실측), 컨택 신호가
@@ -3610,6 +3623,7 @@ export default function LeadsBoardClient() {
           onSelect={setSelected}
           onFocusColumn={(key) => setFilter(key ?? "all")}
           now={now}
+          compassOverlay={compass.overlay}
         />
       )}
 

@@ -38,6 +38,11 @@ import {
   type CrmMoney,
 } from "@/lib/crm/money-format"
 import { pushRecentCustomer } from "@/lib/crm/recent-customers"
+import {
+  COMPASS_TIMELINE_SOURCE_LABEL,
+  mergeCompassTimeline,
+  type CompassTimelineEntry,
+} from "@/lib/crm/compass-timeline"
 import CrmCustomerFlags from "./CrmCustomerFlags"
 import CrmContactValue from "./CrmContactValue"
 import CrmCustomerPicker from "./CrmCustomerPicker"
@@ -242,6 +247,55 @@ function SectionTitle({ icon, children }: { icon: React.ReactNode; children: Rea
       {icon}
       {children}
     </h3>
+  )
+}
+
+/**
+ * Compass(마케팅팀 앱) 활동 한 줄. 우리 원장 기록과 섞이므로 소스 라벨을 항상 붙인다.
+ * actor 는 표시용 문자열 — Compass는 공용 계정 앱이라 신원 증거가 아니다(매핑 금지).
+ * 장문은 3줄로 접고 펼칠 수 있게 한다.
+ */
+function CompassTimelineRow({ entry }: { entry: CompassTimelineEntry }) {
+  const [expanded, setExpanded] = useState(false)
+  const body = entry.body
+  const isLong = Boolean(body && (body.length > 120 || body.split("\n").length > 3))
+
+  return (
+    <li className="flex gap-2.5">
+      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-[#2F5D8C]/25 text-[10px] font-bold text-[#2F5D8C]">
+        C
+      </span>
+      <div className="min-w-0 flex-1 border-b border-[#f5f5f2] pb-2.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-semibold text-[#2F5D8C]">
+            {COMPASS_TIMELINE_SOURCE_LABEL} · {entry.kindLabel}
+          </span>
+          <span className="text-[11px] text-[#1a1a1a]/35">{formatDate(entry.occurredAt)}</span>
+          {entry.actor ? <span className="text-[11px] text-[#1a1a1a]/35">· {entry.actor}</span> : null}
+        </div>
+        {body ? (
+          <>
+            <p
+              className={`mt-0.5 whitespace-pre-wrap text-[12px] text-[#1a1a1a]/55 ${
+                isLong && !expanded ? "line-clamp-3" : ""
+              }`}
+            >
+              {body}
+            </p>
+            {isLong ? (
+              <button
+                type="button"
+                onClick={() => setExpanded((prev) => !prev)}
+                aria-expanded={expanded}
+                className="mt-0.5 text-[11px] font-semibold text-[#1a1a1a]/45 transition-colors hover:text-[#111110]"
+              >
+                {expanded ? "접기" : "펼치기"}
+              </button>
+            ) : null}
+          </>
+        ) : null}
+      </div>
+    </li>
   )
 }
 
@@ -696,6 +750,21 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
     return base.filter((event) => event.sourceType === activitySource)
   }, [activityTab, activitySource, feedRows, data])
 
+  // Compass(마케팅팀 앱) 활동을 같은 타임라인에 시간순으로 얹는다. 피드 탭은 위험 신호
+  // 전용인데 Compass 기록에는 sentiment 축이 없어서 넣지 않는다(없는 판정을 지어내지 않는다).
+  const visibleCompass = useMemo(() => {
+    const entries = data?.compass.entries ?? []
+    if (activityTab === "feed") return []
+    if (activitySource === "manual_note") return entries.filter((entry) => entry.kind === "note")
+    if (activitySource === "meeting_minutes") return entries.filter((entry) => entry.kind === "meeting")
+    return entries
+  }, [activityTab, activitySource, data])
+
+  const mergedActivity = useMemo(
+    () => mergeCompassTimeline(visibleActivity, visibleCompass),
+    [visibleActivity, visibleCompass]
+  )
+
   // 다음 액션 추천 — 규칙 기반(nextAction·우선순위 사유·서비스 위험 합성). AI 아님, 출처 표시.
   const recommendation = useMemo(() => {
     if (!data?.found) return null
@@ -1136,7 +1205,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
             <section className="rounded-2xl border border-[#D7EBDD] bg-[#ECFDF5] p-4">
               <div className="mb-1 flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5 text-[#084734]" />
-                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#084734]">고객 요약 · 규칙 기반</span>
+                <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#084734]" title="규칙 기반 파생 — AI/LLM 아님">고객 요약</span>
               </div>
               <p className="text-[13px] leading-relaxed text-[#1d1d1b]">{derivedSummary}</p>
             </section>
@@ -1187,7 +1256,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                 </button>
               ) : null}
             </div>
-            <p className="mt-1.5 text-[10px] text-[#1a1a1a]/35">수기 라벨 — 시스템 자동 플래그와 별개로 직접 분류·세그먼트</p>
+            <p className="mt-1.5 text-[10px] text-[#1a1a1a]/35">수기 라벨 — 자동 플래그와 별개</p>
           </section>
 
           {/* 다음 액션 추천 — 규칙 기반 파생(Derived). 공식 데이터를 대체하지 않는다. */}
@@ -1372,7 +1441,15 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               <div role="tablist" aria-label="고객 활동 보기" className="mb-3 inline-flex rounded-lg border border-[#e8e8e4] bg-[#fafaf8] p-0.5">
                 {(
                   [
-                    { key: "timeline", label: `타임라인${data.activity.summary.total > 0 ? ` ${data.activity.summary.total}` : ""}` },
+                    {
+                      key: "timeline",
+                      // Compass 병합분까지 세야 탭 숫자와 실제로 보이는 줄 수가 어긋나지 않는다.
+                      label: `타임라인${
+                        data.activity.summary.total + data.compass.entries.length > 0
+                          ? ` ${data.activity.summary.total + data.compass.entries.length}`
+                          : ""
+                      }`,
+                    },
                     { key: "feed", label: `특이사항 피드${feedRows.length > 0 ? ` ${feedRows.length}` : ""}` },
                   ] as const
                 ).map((tab) => (
@@ -1418,7 +1495,14 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                 </div>
               ) : null}
 
-              {visibleActivity.length === 0 ? (
+              {/* 연결이 끊긴 것과 활동이 없는 것을 구분해 말한다 */}
+              {data.compass.down ? (
+                <p className="mb-2 border-l-2 border-[#B85C33] px-2.5 py-1.5 text-[12px] text-[#1a1a1a]/55">
+                  Compass 연결이 끊겨 마케팅 활동을 병합하지 못했습니다.
+                </p>
+              ) : null}
+
+              {mergedActivity.length === 0 ? (
                 <p className="text-[12px] text-[#1a1a1a]/40">
                   {activityTab === "feed"
                     ? "특이사항(위험) 기록이 없습니다."
@@ -1430,7 +1514,11 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                 </p>
               ) : (
                 <ul className="space-y-2.5">
-                  {visibleActivity.map((event) => {
+                  {mergedActivity.map((item) => {
+                    if (item.kind === "compass") {
+                      return <CompassTimelineRow key={item.entry.id} entry={item.entry} />
+                    }
+                    const event = item.event
                     // 메모·회의록은 본문이 핵심 — 클램프 없이 펼쳐 보여주고, 그 외는 요약 2줄로 압축.
                     const isMemo = event.sourceType === "manual_note" || event.sourceType === "meeting_minutes"
                     const memoText = event.body ?? event.summary
@@ -1483,13 +1571,27 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
                 </button>
               ) : null}
               {/* 활동 페이지 딥링크 — 이 고객으로 필터된 전체 활동(드로어 밖 상세 동선) */}
-              <Link
-                href={`/admin/crm/activity?targetType=${encodeURIComponent(targetType)}&targetId=${encodeURIComponent(entityId)}`}
-                className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734] transition-colors hover:underline"
-              >
-                이 고객 활동 전체보기
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </Link>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                <Link
+                  href={`/admin/crm/activity?targetType=${encodeURIComponent(targetType)}&targetId=${encodeURIComponent(entityId)}`}
+                  className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#084734] transition-colors hover:underline"
+                >
+                  이 고객 활동 전체보기
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+                {/* 전화가 일치한 Compass 리드가 있을 때만 — 없으면 링크를 지어내지 않는다. */}
+                {data.compass.href ? (
+                  <a
+                    href={data.compass.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#2F5D8C] transition-colors hover:underline"
+                  >
+                    Compass 리드 열기
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </a>
+                ) : null}
+              </div>
             </section>
           ) : null}
 
@@ -1749,7 +1851,7 @@ export default function Customer360Drawer({ customerKey, name, onClose, onDirtyC
               </div>
               {productMatched ? (
                 <p className="mt-1.5 text-[10px] text-[#1a1a1a]/35">
-                  REV 원장 결제 누적(¥ CNY) · 칠판 대수는 HW 출고(배송예정 제외) · 계정키 조인
+                  REV 원장 결제 누적 · 칠판 대수는 HW 출고(배송예정 제외) · 계정키 조인
                 </p>
               ) : (
                 <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-[#fafaf8] px-2.5 py-1.5">

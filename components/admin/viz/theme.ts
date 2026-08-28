@@ -60,9 +60,6 @@ export const CHART = {
   tooltipBg: "#111110",
 } as const
 
-// 멀티시리즈 차트용 순서 팔레트 — 파랑 0%. (EventCompare/Meta/Campaign 교체용)
-export const SERIES_PALETTE = ["#084734", "#111110", "#B85C33", "#84827a", "#6EE7B7", "#D97706"]
-
 // 도넛/분포 차트용 — overview DONUT_COLORS, analytics CHART_COLORS 대체.
 export const SOURCE_PALETTE = ["#111110", "#084734", "#6EE7B7", "#B85C33", "#84827a"]
 

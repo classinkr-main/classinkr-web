@@ -1656,7 +1656,7 @@ function ReleaseCriteriaTab({
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]/60">Release gate</p>
         <h2 className="mt-1 text-lg font-bold text-[#084734]">공개는 체크리스트가 아니라 증거로 승인합니다.</h2>
         <p className="mt-2 text-[13px] leading-6 text-[#084734]/75">
-          아래 네 영역의 근거가 모두 있고 차단급 버그가 없을 때만 공개합니다. 현재 오픈 버그는 {openBugCount}건입니다.
+          근거 4종 + 차단급 버그 0건일 때만 공개 — 오픈 {openBugCount}건
         </p>
       </div>
 
