@@ -122,8 +122,21 @@ const XIAOSHOUYI_WRITE_POLICIES: Record<string, XiaoshouyiWriteObjectPolicy> = {
   lead: {
     label: "리드",
     operations: new Set(["create", "update", "transfer_owner"]),
-    allowedFields: new Set(["leadName", "name", "company", "mobile", "phone", "email", "ownerId", "source", "remark"]),
-    requiredCreateFields: ["leadName"],
+    // 실제 lead 객체 스키마로 검증(2026-08-28, describe 337필드 + 생성 성공 실측).
+    // 옛 목록의 leadName/company/source/remark 는 존재하지 않는 필드였다 — 진짜 이름은
+    // name/companyName 이고 소스 계열은 Original_Source__c 등 커스텀이다.
+    allowedFields: new Set([
+      "name",
+      "companyName",
+      "mobile",
+      "phone",
+      "email",
+      "ownerId",
+      "entityType",
+      "dimDepart",
+      "territoryHighSeaId",
+    ]),
+    requiredCreateFields: ["name", "companyName", "entityType"],
     ownerTransferField: "ownerId",
   },
   opportunity: {
