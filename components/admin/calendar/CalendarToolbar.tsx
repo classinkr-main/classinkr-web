@@ -16,7 +16,7 @@ interface ViewOption {
 export const VIEW_OPTIONS: ViewOption[] = [
   { value: "month", label: "월", icon: CalendarDays, hint: "한 달 전체를 격자로" },
   { value: "week", label: "주", icon: Columns3, hint: "월~일, 시간축 포함" },
-  { value: "assignee", label: "담당자", icon: Rows3, hint: "누가 무엇을 맡는지 2주" },
+  { value: "assignee", label: "담당자", icon: Rows3, hint: "누가 무엇을 맡는지 한 주" },
   { value: "timeline", label: "타임라인", icon: Table2, hint: "소스별 8주 기간 겹침" },
   { value: "agenda", label: "목록", icon: List, hint: "날짜순 목록" },
 ]
@@ -31,6 +31,13 @@ interface CalendarToolbarProps {
    * 비활성이 아니라 흐림이다: 눌러서 확인하는 것까지 막지는 않는다.
    */
   viewAvailability?: Partial<Record<CalendarViewId, boolean>>
+  /**
+   * 월 뷰 밀도(3차 개편, 2026-08-28). "detail"=솔리드 바, "summary"=도트 요약.
+   * onDensityChange 가 없으면 토글 자체를 그리지 않는다 — 밀도 개념이 없는 뷰에서까지
+   * 죽은 컨트롤이 서 있으면 안 된다.
+   */
+  density?: "detail" | "summary"
+  onDensityChange?: (density: "detail" | "summary") => void
   onViewChange: (view: CalendarViewId) => void
   onStep: (direction: 1 | -1) => void
   onToday: () => void
@@ -42,6 +49,8 @@ export function CalendarToolbar({
   anchor,
   loading,
   viewAvailability,
+  density = "detail",
+  onDensityChange,
   onViewChange,
   onStep,
   onToday,
@@ -86,6 +95,33 @@ export function CalendarToolbar({
 
       {/* 뷰 전환 — 데스크톱은 세그먼트, 모바일은 셀렉트 */}
       <div className="ml-auto flex items-center gap-2">
+        {onDensityChange && (
+          <div className="hidden items-center rounded-lg border border-[#e8e8e4] p-0.5 md:flex">
+            {(
+              [
+                { value: "detail", label: "자세히" },
+                { value: "summary", label: "요약" },
+              ] as const
+            ).map((option) => {
+              const active = option.value === density
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onDensityChange(option.value)}
+                  aria-pressed={active}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                    active
+                      ? "bg-[#111110] text-white"
+                      : "text-[#1a1a1a]/50 hover:bg-[#f5f5f2] hover:text-[#111110]"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
         <div className="hidden items-center rounded-lg border border-[#e8e8e4] p-0.5 md:flex">
           {VIEW_OPTIONS.map((option) => {
             const Icon = option.icon

@@ -5,8 +5,8 @@
  * 페이지의 fetchEvents는 view/anchor 가 아니라 실제 조회 구간(from·to)만 의존값으로 잡는다
  * (사이드바 예열이 만든 캐시 키를 그대로 맞히기 위해서 — page.tsx 상단 주석 참고). 프리페치도
  * 같은 이유로 view 문자열을 따로 받지 않고, 이미 계산된 range(from·to)의 모양만으로 뷰 종류를
- * 되짚는다 — 월/목록(같은 모양) · 정확히 7일(주) · 정확히 55일(8주 타임라인) 세 가지만 알아본다.
- * 그 외 모양(예: 담당자 뷰의 14일)은 명세에 없으므로 프리페치하지 않는다.
+ * 되짚는다 — 월/목록(같은 모양) · 정확히 7일(주·담당자, 3차 개편에서 담당자 뷰도 1주가 됐다) ·
+ * 정확히 55일(8주 타임라인) 세 가지만 알아본다. 그 외 모양은 명세에 없으므로 프리페치하지 않는다.
  */
 import {
   addDays,
@@ -25,7 +25,7 @@ function isFullMonthRange(range: CalendarRange): boolean {
   return range.from === startOfMonth(range.from) && range.to === endOfMonth(range.from)
 }
 
-/** 주 뷰(월~일)의 일수 차이. daysBetween은 포함 경계라 6. */
+/** 주·담당자 뷰(월~일)의 일수 차이. daysBetween은 포함 경계라 6. */
 const WEEK_SPAN_DAYS = 6
 /** 8주 타임라인의 일수 차이(56일 - 1). */
 const TIMELINE_SPAN_DAYS = 55
@@ -37,10 +37,10 @@ const TIMELINE_STEP_DAYS = 28
  * range 문자열만 반환한다.
  *
  * - 월(및 같은 모양의 목록) 범위: 이전 달 + 다음 달
- * - 정확히 7일(주 뷰): 이전 주 + 다음 주
+ * - 정확히 7일(주·담당자 뷰 — 이동 폭도 7일로 같다): 이전 주 + 다음 주
  * - 정확히 55일(8주 타임라인): 다음 구간만 — 절반씩 겹치며 전진하는 뷰라 "이전"은
  *   이미 현재 범위 안에 절반 겹쳐 있다
- * - 그 외(담당자 2주 뷰 등 명세에 없는 모양): 빈 배열 — 프리페치하지 않는다
+ * - 그 외(명세에 없는 모양): 빈 배열 — 프리페치하지 않는다
  */
 export function computeAdjacentPrefetchRanges(range: CalendarRange): CalendarRange[] {
   if (isFullMonthRange(range)) {

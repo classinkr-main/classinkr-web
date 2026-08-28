@@ -85,10 +85,10 @@ describe("뷰별 기간", () => {
     expect(getViewRange("week", anchor)).toEqual({ from: "2026-08-03", to: "2026-08-09" })
   })
 
-  it("담당자는 월요일부터 14일이다", () => {
+  it("담당자는 월요일부터 7일이다", () => {
     const range = getViewRange("assignee", anchor)
-    expect(range).toEqual({ from: "2026-08-03", to: "2026-08-16" })
-    expect(enumerateDates(range.from, range.to)).toHaveLength(14)
+    expect(range).toEqual({ from: "2026-08-03", to: "2026-08-09" })
+    expect(enumerateDates(range.from, range.to)).toHaveLength(7)
   })
 
   it("타임라인은 월요일부터 8주다", () => {
@@ -103,7 +103,7 @@ describe("뷰별 기간", () => {
     const nextWeek = getViewRange("week", stepAnchor("week", anchor, 1))
     expect(nextWeek.from).toBe(addDays(week.to, 1))
 
-    // 담당자: 2주씩 이동.
+    // 담당자: 1주씩 이동.
     const assignee = getViewRange("assignee", anchor)
     const nextAssignee = getViewRange("assignee", stepAnchor("assignee", anchor, 1))
     expect(nextAssignee.from).toBe(addDays(assignee.to, 1))

@@ -2,7 +2,7 @@
 
 import type { CalendarEvent } from "@/lib/calendar-data"
 
-import { getEventDotColor, getEventSourceLabel } from "./event-style"
+import { getAssigneeInitial, getEventDotColor, getEventSourceLabel } from "./event-style"
 
 /**
  * 그리드·레인 어디에나 들어가는 한 줄짜리 일정 칩.
@@ -97,6 +97,86 @@ export function EventBar({
       )}
       <span className="truncate">{event.title}</span>
       {clippedEnd && <span aria-hidden="true" className="ml-auto shrink-0 opacity-50">›</span>}
+    </button>
+  )
+}
+
+/**
+ * 솔리드 일정 바 — 2026-08-28 3차 개편(2b×1c 통합안)의 칩 문법.
+ *
+ * 아웃라인 칩(EventChip)과 반대 방향: 배경을 소스색(팀원 행사·compass 다중 표기는
+ * getEventDotColor 규칙 그대로)으로 가득 칠하고 텍스트는 흰색이다. "누구·어디 것인지"가
+ * 칠해진 면으로 즉시 갈리는 것이 목적. 월 그리드·이번 주 스트립·담당자 스윔레인이 공유한다.
+ *
+ * 다중 담당자(동행 데모 실측 ~10%): 이니셜 아바타를 최대 2개 겹쳐 찍고 나머지는 +N.
+ * 이니셜은 getAssigneeInitial(이름 첫 자) — 성 충돌(김정무·김민재) 때문에 성을 안 쓴다.
+ * excludeAssignee 는 스윔레인용 — 자기 레인 사람은 빼고 "같이 가는" 사람만 보여준다.
+ */
+export function SolidEventBar({
+  event,
+  onClick,
+  showTime = true,
+  showAssignees = true,
+  excludeAssignee,
+  className = "",
+}: {
+  event: CalendarEvent
+  onClick?: () => void
+  showTime?: boolean
+  /** 담당자 이니셜 아바타 표시 여부 */
+  showAssignees?: boolean
+  /** 이 이름은 아바타에서 제외한다(스윔레인 자기 행) */
+  excludeAssignee?: string
+  className?: string
+}) {
+  const color = getEventDotColor(event)
+  const assignees = (event.assignees ?? []).filter((name) => name !== excludeAssignee)
+  const shownInitials = showAssignees ? assignees.slice(0, 2) : []
+  const extraCount = showAssignees ? assignees.length - shownInitials.length : 0
+  const label = `${event.title}${event.time ? ` ${event.time}` : ""} · ${getEventSourceLabel(event)}${
+    event.assignees?.length ? ` · ${event.assignees.join(", ")}` : ""
+  }`
+
+  return (
+    <button
+      type="button"
+      onClick={
+        onClick
+          ? (mouseEvent) => {
+              mouseEvent.stopPropagation()
+              onClick()
+            }
+          : undefined
+      }
+      disabled={!onClick}
+      title={label}
+      aria-label={label}
+      style={{ backgroundColor: color }}
+      className={`flex w-full min-w-0 items-center gap-1 rounded-[3px] px-[7px] py-[2.5px] text-left text-[10.5px] font-medium text-white transition-[filter] ${
+        onClick ? "cursor-pointer hover:brightness-110" : "cursor-default"
+      } ${className}`}
+    >
+      {showTime && event.time && (
+        <span className="shrink-0 tabular-nums opacity-75">{event.time}</span>
+      )}
+      <span className="min-w-0 flex-1 truncate">{event.title}</span>
+      {shownInitials.length > 0 && (
+        <span aria-hidden="true" className="flex shrink-0 items-center">
+          {shownInitials.map((name, index) => (
+            <span
+              key={name}
+              className={`flex h-[14px] w-[14px] items-center justify-center rounded-full bg-white/28 text-[9px] font-semibold leading-none ${
+                index > 0 ? "-ml-1 ring-1 ring-inset ring-white/40" : ""
+              }`}
+            >
+              {getAssigneeInitial(name)}
+            </span>
+          ))}
+          {extraCount > 0 && (
+            <span className="ml-0.5 text-[8.5px] font-semibold opacity-80">+{extraCount}</span>
+          )}
+        </span>
+      )}
     </button>
   )
 }

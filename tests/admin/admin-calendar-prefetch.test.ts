@@ -52,9 +52,18 @@ describe("computeAdjacentPrefetchRanges", () => {
     expect(adjacent).toEqual([expectedNext])
   })
 
-  it("담당자(14일) 범위 등 명세에 없는 모양은 예열하지 않는다", () => {
+  it("담당자 뷰(1주, 3차 개편)는 주 뷰와 같은 모양이라 이전·다음 주를 예열한다", () => {
     const range = getViewRange("assignee", anchor)
-    expect(computeAdjacentPrefetchRanges(range)).toEqual([])
+    const adjacent = computeAdjacentPrefetchRanges(range)
+    const expectedPrev = getViewRange("assignee", stepAnchor("assignee", anchor, -1))
+    const expectedNext = getViewRange("assignee", stepAnchor("assignee", anchor, 1))
+    expect(adjacent).toEqual([expectedPrev, expectedNext])
+  })
+
+  it("명세에 없는 모양(예: 10일 구간)은 예열하지 않는다", () => {
+    expect(
+      computeAdjacentPrefetchRanges({ from: "2026-08-03", to: "2026-08-12" })
+    ).toEqual([])
   })
 })
 

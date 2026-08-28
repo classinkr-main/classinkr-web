@@ -1,8 +1,6 @@
 "use client"
 
-import Link from "next/link"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ArrowUpRight } from "lucide-react"
 
 import {
   Dialog,
@@ -24,14 +22,22 @@ import {
   type EventFormData,
 } from "@/lib/admin-calendar/event-form"
 import {
+  addDays,
   formatRangeLabel,
   getViewRange,
+  getWeekday,
   isCalendarViewId,
   isDateString,
+  startOfWeek,
   stepAnchor,
   toDateString,
   type CalendarViewId,
 } from "@/lib/admin-calendar/range"
+import {
+  buildAssigneeLoad,
+  buildSourceStats,
+  buildWeekStripDays,
+} from "@/lib/admin-calendar/insights"
 import { buildAdminCalendarUrl } from "@/lib/admin/calendar-range"
 
 import {
@@ -50,8 +56,9 @@ import {
   encodeHiddenSourcesParam,
 } from "@/components/admin/calendar/calendar-hidden-sources-url"
 import { AgendaList } from "@/components/admin/calendar/AgendaList"
+import { CalendarRail } from "@/components/admin/calendar/CalendarRail"
+import { WeekStrip } from "@/components/admin/calendar/WeekStrip"
 import { AssigneeSwimlane } from "@/components/admin/calendar/AssigneeSwimlane"
-import { CalendarEmpty } from "@/components/admin/calendar/CalendarEmpty"
 import { CalendarFilterLine, type TeamMemberCount } from "@/components/admin/calendar/CalendarFilterBar"
 import { CalendarToolbar } from "@/components/admin/calendar/CalendarToolbar"
 import { DayDetailPanel } from "@/components/admin/calendar/DayDetailPanel"
@@ -62,15 +69,14 @@ import { SourceTimeline } from "@/components/admin/calendar/SourceTimeline"
 import { WeekTimeGrid } from "@/components/admin/calendar/WeekTimeGrid"
 import {
   SOURCE_OPTIONS,
-  getEventDotColor,
   getEventSource,
-  getEventSourceLabel,
   sortEventFirst,
 } from "@/components/admin/calendar/event-style"
 import AdminErrorBanner from "@/components/admin/ui/AdminErrorBanner"
 
 const FILTER_STORAGE_KEY = "admin.calendar.filters.v1"
 const VIEW_STORAGE_KEY = "admin.calendar.view.v1"
+const DENSITY_STORAGE_KEY = "admin.calendar.density.v1"
 
 /** 담당자 개념이 없는 소스 — 담당자 필터를 적용하지 않는다. */
 const ASSIGNEE_FILTERED_SOURCES = new Set<EventSource>([
@@ -84,15 +90,6 @@ const ASSIGNEE_FILTERED_SOURCES = new Set<EventSource>([
 function todayString() {
   const now = new Date()
   return toDateString(now.getFullYear(), now.getMonth() + 1, now.getDate())
-}
-
-function formatDateLabel(dateStr: string) {
-  return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString("ko-KR", {
-    timeZone: "UTC",
-    month: "long",
-    day: "numeric",
-    weekday: "short",
-  })
 }
 
 async function readJsonOrThrow<T>(response: Response): Promise<T> {
@@ -131,6 +128,12 @@ export default function AdminCalendarPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(null)
   const [health, setHealth] = useState<CalendarHealthPayload | null>(null)
+  const [healthLoading, setHealthLoading] = useState(false)
+  // 월 그리드 밀도(3차 개편) — "detail"=솔리드 바, "summary"=도트. 월 뷰에서만 의미가 있다.
+  const [density, setDensity] = useState<"detail" | "summary">("detail")
+  // 이번 주 스트립 데이터 — 월 조회 범위(=사이드바 예열이 데운 캐시 키)를 넓히지 않고
+  // 주 범위를 따로 당긴다. 월말 주가 다음 달로 걸쳐도 스트립이 거짓으로 비지 않는다.
+  const [stripEvents, setStripEvents] = useState<CalendarEvent[]>([])
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -163,6 +166,13 @@ export default function AdminCalendarPage() {
     if (isDateString(urlAnchor)) setAnchor(urlAnchor)
 
     try {
+      const storedDensity = localStorage.getItem(DENSITY_STORAGE_KEY)
+      if (storedDensity === "detail" || storedDensity === "summary") setDensity(storedDensity)
+    } catch {
+      /* localStorage 불가 시 기본 밀도 유지 */
+    }
+
+    try {
       const raw = localStorage.getItem(FILTER_STORAGE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw) as { hiddenSources?: unknown; hiddenAssignees?: unknown }
@@ -193,10 +203,11 @@ export default function AdminCalendarPage() {
         })
       )
       localStorage.setItem(VIEW_STORAGE_KEY, view)
+      localStorage.setItem(DENSITY_STORAGE_KEY, density)
     } catch {
       /* 저장 실패는 무시 */
     }
-  }, [prefsHydrated, hiddenSources, hiddenAssignees, view])
+  }, [prefsHydrated, hiddenSources, hiddenAssignees, view, density])
 
   // 뷰·기간·소스 필터를 주소에 반영해 새로고침·공유가 같은 화면을 연다. 히스토리는 쌓지 않는다.
   useEffect(() => {
@@ -320,6 +331,44 @@ export default function AdminCalendarPage() {
     }
   }, [])
 
+  // ─── 이번 주 스트립 데이터 ───────────────────────────────────────
+  // todayStr 는 마운트 시 고정이므로 주 경계도 고정 — 재조회는 CRUD 직후에만 명시적으로.
+  const stripFrom = useMemo(() => startOfWeek(todayStr), [todayStr])
+  const stripTo = useMemo(() => addDays(stripFrom, 6), [stripFrom])
+  const fetchStripEvents = useCallback(async () => {
+    const apply = (data: CalendarEvent[] | undefined) => {
+      if (Array.isArray(data)) setStripEvents(data)
+    }
+    try {
+      apply(
+        await adminFetchJsonCached<CalendarEvent[]>(
+          buildAdminCalendarUrl({ from: stripFrom, to: stripTo }),
+          undefined,
+          { ttlMs: CALENDAR_EVENTS_CACHE_TTL_MS, onRevalidated: ({ data }) => apply(data) }
+        )
+      )
+    } catch {
+      /* 스트립은 부가 밴드 — 실패 시 조용히 비워 두고 본 캘린더를 막지 않는다 */
+    }
+  }, [stripFrom, stripTo])
+  useEffect(() => {
+    void fetchStripEvents()
+  }, [fetchStripEvents])
+
+  // 소스 연결 상태 수동 새로고침 — 레일의 새로고침 버튼. 캐시를 우회해 지금 상태를 다시 본다.
+  const refreshHealth = useCallback(async () => {
+    setHealthLoading(true)
+    try {
+      const response = await adminFetch("/api/admin/calendar/health")
+      const data = (await response.json().catch(() => null)) as CalendarHealthPayload | null
+      if (response.ok && data && Array.isArray(data.sources)) setHealth(data)
+    } catch {
+      /* 수동 새로고침 실패 시 기존 표시를 유지한다 */
+    } finally {
+      setHealthLoading(false)
+    }
+  }, [])
+
   // ─── 필터 ────────────────────────────────────────────────────────
   const teamMembers = useMemo<TeamMemberCount[]>(() => {
     const counts = new Map<string, number>()
@@ -332,21 +381,27 @@ export default function AdminCalendarPage() {
       .sort((a, b) => a.name.localeCompare(b.name, "ko"))
   }, [events])
 
-  const visibleEvents = useMemo(
-    () =>
-      events.filter((event) => {
-        const source = getEventSource(event)
-        if (hiddenSources.has(source)) return false
-        if (ASSIGNEE_FILTERED_SOURCES.has(source)) {
-          const assignees = event.assignees ?? []
-          // 담당자가 있는 일정은 담당자 필터를 적용 — 표시 담당자가 하나도 없으면 숨김
-          if (assignees.length > 0 && !assignees.some((name) => !hiddenAssignees.has(name))) {
-            return false
-          }
+  const isEventVisible = useCallback(
+    (event: CalendarEvent) => {
+      const source = getEventSource(event)
+      if (hiddenSources.has(source)) return false
+      if (ASSIGNEE_FILTERED_SOURCES.has(source)) {
+        const assignees = event.assignees ?? []
+        // 담당자가 있는 일정은 담당자 필터를 적용 — 표시 담당자가 하나도 없으면 숨김
+        if (assignees.length > 0 && !assignees.some((name) => !hiddenAssignees.has(name))) {
+          return false
         }
-        return true
-      }),
-    [events, hiddenSources, hiddenAssignees]
+      }
+      return true
+    },
+    [hiddenSources, hiddenAssignees]
+  )
+
+  const visibleEvents = useMemo(() => events.filter(isEventVisible), [events, isEventVisible])
+  // 스트립도 같은 필터를 통과한다 — 본 그리드에서 숨긴 소스가 스트립에만 남으면 필터가 거짓말이 된다.
+  const visibleStripEvents = useMemo(
+    () => stripEvents.filter(isEventVisible),
+    [stripEvents, isEventVisible]
   )
 
   const eventsByDate = useMemo(() => {
@@ -398,6 +453,7 @@ export default function AdminCalendarPage() {
       setEditingEvent(null)
       setErrorMessage(null)
       await fetchEvents()
+      void fetchStripEvents()
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "일정 저장에 실패했습니다.")
     } finally {
@@ -414,6 +470,7 @@ export default function AdminCalendarPage() {
       setDeleteTarget(null)
       setErrorMessage(null)
       await fetchEvents()
+      void fetchStripEvents()
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "일정 삭제에 실패했습니다.")
     } finally {
@@ -452,9 +509,31 @@ export default function AdminCalendarPage() {
     : initialForm
 
   const selectedEvents = selectedDate ? (eventsByDate[selectedDate] ?? []) : []
-  const upcomingEvents = visibleEvents
-    .filter((event) => (event.endDate ?? event.date) >= todayStr)
-    .slice(0, 8)
+
+  // ─── 이번 주 스트립·우측 레일 파생값 ─────────────────────────────
+  const stripDays = useMemo(
+    () => buildWeekStripDays(visibleStripEvents, { from: stripFrom, to: stripTo }),
+    [visibleStripEvents, stripFrom, stripTo]
+  )
+  const stripTotal = useMemo(() => stripDays.reduce((sum, day) => sum + day.count, 0), [stripDays])
+  const stripRangeLabel = useMemo(() => {
+    const WD = "일월화수목금토"
+    const fmt = (date: string) =>
+      `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일 (${WD[getWeekday(date)]})`
+    return `${fmt(stripFrom)} – ${fmt(stripTo)}`
+  }, [stripFrom, stripTo])
+
+  // 레일 통계는 필터와 무관한 "이 기간의 사실"이다 — 숨긴 소스도 수치에는 남는다.
+  const sourceStats = useMemo(() => buildSourceStats(events), [events])
+  const assigneeLoad = useMemo(() => buildAssigneeLoad(events), [events])
+  const publicEventCount = useMemo(
+    () => events.filter((event) => getEventSource(event) === "event").length,
+    [events]
+  )
+  const notionCount = useMemo(
+    () => events.filter((event) => getEventSource(event) === "notion").length,
+    [events]
+  )
 
   // 최초 로드 이후의 기간 이동/뷰 전환 중 배경 새로고침인가 — 담당자·타임라인·목록 뷰는
   // 필터링 결과가 0건이면 "일정이 없다"고 단정하는데, 새 기간 데이터가 아직 안 왔을 뿐인
@@ -500,33 +579,7 @@ export default function AdminCalendarPage() {
 
       {errorMessage && <AdminErrorBanner title="캘린더 오류" message={errorMessage} className="mb-4" />}
 
-      {/* 미응답 리드 배너 — 0건이면 렌더하지 않는다. 신호는 도트·숫자 색으로만(파스텔 채움 금지). */}
-      {leadActionKpis && leadActionKpis.unrespondedCount > 0 && (
-        <Link
-          href="/admin/crm"
-          className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-2.5 text-[12px] transition-colors hover:border-[#B85C33]/40"
-        >
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#B85C33]" />
-            <span className="font-medium text-[#111110]">
-              미응답 리드{" "}
-              <strong className="font-semibold text-[#B85C33]">
-                {leadActionKpis.unrespondedCount}건
-              </strong>
-            </span>
-            <span className="text-[#1a1a1a]/45">데모·문의·Meta 신규 문의 대기</span>
-            {leadActionKpis.unresponded24hCount > 0 && (
-              <span className="font-medium text-[#B43E3E]">
-                24h+ {leadActionKpis.unresponded24hCount}건
-              </span>
-            )}
-          </span>
-          <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px] text-[#1a1a1a]/50">
-            CRM에서 확인
-            <ArrowUpRight className="h-3 w-3" />
-          </span>
-        </Link>
-      )}
+      {/* 미응답 리드 진입점은 우측 레일 퀵링크로 이관했다(3차 개편) — 배너 자리를 그리드에 돌려준다. */}
 
       {/* Main */}
       <div className="flex flex-col items-stretch gap-5 xl:flex-row xl:items-start">
@@ -538,6 +591,8 @@ export default function AdminCalendarPage() {
             anchor={anchor}
             loading={loading}
             viewAvailability={viewAvailability}
+            density={density}
+            onDensityChange={view === "month" ? setDensity : undefined}
             onViewChange={(next) => {
               setView(next)
               setSelectedDate(null)
@@ -582,15 +637,29 @@ export default function AdminCalendarPage() {
           ) : (
             <>
           {view === "month" && (
-            <MonthGrid
-              year={year}
-              month={month}
-              todayStr={todayStr}
-              selectedDate={selectedDate}
-              eventsByDate={eventsByDate}
-              onSelectDate={setSelectedDate}
-              onCreateAt={openCreate}
-            />
+            <>
+              {/* 이번 주 스트립 — 표시 중인 달에 오늘이 있을 때만. 다른 달을 볼 때 "이번 주"가
+                  끼어들면 어느 달을 보고 있는지 헷갈린다. */}
+              {range.from.slice(0, 7) === todayStr.slice(0, 7) && stripDays.length > 0 && (
+                <WeekStrip
+                  days={stripDays}
+                  todayStr={todayStr}
+                  rangeLabel={stripRangeLabel}
+                  total={stripTotal}
+                  onSelectDate={setSelectedDate}
+                />
+              )}
+              <MonthGrid
+                year={year}
+                month={month}
+                todayStr={todayStr}
+                selectedDate={selectedDate}
+                eventsByDate={eventsByDate}
+                onSelectDate={setSelectedDate}
+                onCreateAt={openCreate}
+                density={density}
+              />
+            </>
           )}
           {view === "week" && (
             <WeekTimeGrid
@@ -634,8 +703,8 @@ export default function AdminCalendarPage() {
           )}
         </div>
 
-        {/* Right panel */}
-        <div className="w-full shrink-0 space-y-4 xl:w-90">
+        {/* Right rail — 기본은 수집 상태·통계·부하(3차 개편), 날짜 선택 시 일 상세로 교대 */}
+        <div className="w-full shrink-0 space-y-4 xl:w-[264px]">
           {selectedDate ? (
             <DayDetailPanel
               date={selectedDate}
@@ -646,66 +715,18 @@ export default function AdminCalendarPage() {
               onDelete={setDeleteTarget}
             />
           ) : (
-            <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-              <div className="border-b border-[#e8e8e4] px-4 py-3">
-                <p className="text-[13px] font-semibold text-[#111110]">다가오는 일정</p>
-              </div>
-              {upcomingEvents.length === 0 ? (
-                <CalendarEmpty message="예정된 일정 없음" compact />
-              ) : (
-                <div className="divide-y divide-[#f0f0ec]">
-                  {upcomingEvents.map((event) => {
-                    const daysLeft = Math.round(
-                      (Date.parse(`${event.date}T00:00:00Z`) - Date.parse(`${todayStr}T00:00:00Z`)) /
-                        86_400_000
-                    )
-                    return (
-                      <button
-                        key={event.id}
-                        type="button"
-                        className="w-full px-4 py-2.5 text-left transition-colors hover:bg-[#fafaf8]"
-                        onClick={() => setSelectedDate(event.date)}
-                        aria-label={`${event.title} 일정 보기`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span
-                              aria-hidden="true"
-                              className="h-2 w-2 shrink-0 rounded-full"
-                              style={{ backgroundColor: getEventDotColor(event) }}
-                            />
-                            <span className="truncate text-[13px] font-medium text-[#111110]">
-                              {event.title}
-                            </span>
-                          </div>
-                          <span
-                            className={`shrink-0 text-[11px] ${
-                              daysLeft <= 0 ? "font-semibold text-[#B85C33]" : "text-[#1a1a1a]/35"
-                            }`}
-                          >
-                            {daysLeft <= 0 ? "오늘" : `D-${daysLeft}`}
-                          </span>
-                        </div>
-                        <div className="ml-4 mt-0.5 flex flex-wrap items-center gap-1.5">
-                          <p className="text-[11px] text-[#1a1a1a]/40">
-                            {formatDateLabel(event.date)}
-                            {event.time ? ` · ${event.time}` : ""}
-                          </p>
-                          <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/50">
-                            {getEventSourceLabel(event)}
-                          </span>
-                          {event.partnerName && (
-                            <span className="rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[10px] text-[#1a1a1a]/45">
-                              {event.partnerName}
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
+            <CalendarRail
+              health={health}
+              healthLoading={healthLoading}
+              onRefreshHealth={refreshHealth}
+              sourceStats={sourceStats}
+              assigneeLoad={assigneeLoad}
+              monthLabel={`${month}월`}
+              totalCount={events.length}
+              leadKpis={leadActionKpis}
+              publicEventCount={publicEventCount}
+              notionCount={notionCount}
+            />
           )}
         </div>
       </div>

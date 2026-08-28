@@ -167,3 +167,19 @@ export function sortByTimeOfDay(list: CalendarEvent[]): CalendarEvent[] {
     return 0
   })
 }
+
+/**
+ * 담당자 이니셜 — 솔리드 칩·스윔레인 아바타 공용 규칙.
+ *
+ * 성(name[0])이 아니라 "이름 첫 자"를 쓴다: 김정무·김민재가 둘 다 "김"이 되는
+ * 성 충돌이 명부에 실재한다(2026-08-28). 이름 첫 자는 현 명부에서 전원 유일하다
+ * (정·민·찬·소·준·희·규·왕·한). 팀 호칭 관례(찬우·소망)와도 같은 축이다.
+ *  - 한글 2자 이상: 두 번째 글자(성 제외 이름 첫 자)
+ *  - 한글 1자·비한글(명부 미매칭 원문): 첫 글자 대문자
+ */
+export function getAssigneeInitial(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) return "?"
+  if (/^[가-힣]{2,}/.test(trimmed)) return trimmed[1]
+  return trimmed[0].toUpperCase()
+}

@@ -20,8 +20,8 @@ export interface CalendarRange {
   to: string
 }
 
-/** 담당자 뷰가 한 화면에 담는 일수. 2주 = 이번 주와 다음 주. */
-export const ASSIGNEE_VIEW_DAYS = 14
+/** 담당자 뷰가 한 화면에 담는 일수. 1주 — 3b 디자인이 주 단위. */
+export const ASSIGNEE_VIEW_DAYS = 7
 /** 타임라인 뷰가 한 화면에 담는 주 수. */
 export const TIMELINE_VIEW_WEEKS = 8
 
