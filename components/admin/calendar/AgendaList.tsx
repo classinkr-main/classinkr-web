@@ -24,6 +24,12 @@ interface AgendaListProps {
   todayStr: string
   visibleEvents: CalendarEvent[]
   onSelectDate: (date: string) => void
+  /**
+   * 최초 로드 이후의 배경 새로고침 중인가(기간 이동/뷰 전환 직후, 새 데이터 도착 전).
+   * visibleEvents는 아직 이전 기간의 결과라 range와 안 맞아떨어져 0건으로 보일 수 있다 —
+   * 그 순간에는 "일정이 없다"고 단정하지 않고 조용히 비워 둔다(거짓 빈 상태 방지).
+   */
+  refreshing?: boolean
 }
 
 /**
@@ -31,7 +37,7 @@ interface AgendaListProps {
  * 빈 날까지 그리면 스크롤만 길어지고 "언제 뭐가 있나"가 안 읽힌다.
  * 모바일에서 월 그리드보다 훨씬 쓸모 있다(셀이 좁아 제목이 안 보이므로).
  */
-export function AgendaList({ range, todayStr, visibleEvents, onSelectDate }: AgendaListProps) {
+export function AgendaList({ range, todayStr, visibleEvents, onSelectDate, refreshing = false }: AgendaListProps) {
   const groups = useMemo(() => {
     const byDate = buildEventsByDate(visibleEvents)
     return enumerateDates(range.from, range.to)
@@ -40,6 +46,7 @@ export function AgendaList({ range, todayStr, visibleEvents, onSelectDate }: Age
   }, [visibleEvents, range.from, range.to])
 
   if (groups.length === 0) {
+    if (refreshing) return null
     return <CalendarEmpty message="이 기간에 일정이 없습니다" />
   }
 

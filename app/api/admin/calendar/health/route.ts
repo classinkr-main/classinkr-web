@@ -9,9 +9,15 @@ import {
   deriveTeamAccessHealth,
   type CalendarHealthPayload,
   type SourceHealth,
+  type SourceTiming,
 } from "@/lib/admin-calendar/health"
+import { readSourceCacheStats } from "@/lib/admin-calendar/source-cache"
 import { getBusinessDateParts } from "@/lib/business-time"
-import { getPublicEventsAsCalendarEvents, type CalendarEvent } from "@/lib/calendar-data"
+import {
+  getPublicEventsAsCalendarEvents,
+  type CalendarEvent,
+  type EventSource,
+} from "@/lib/calendar-data"
 import { getCompassCalendarEventsWithHealth } from "@/lib/compass/calendar"
 import { getNotionMarketingCalendarEvents } from "@/lib/notion-marketing-calendar"
 import { probeTeamCalendarAccess } from "@/lib/team-member-calendars"
@@ -96,6 +102,35 @@ async function partnerScheduleSummary(): Promise<{ count: number; lastDate: stri
   return { count: countRes.count ?? 0, lastDate: lastIso ? lastIso.slice(0, 10) : null }
 }
 
+/**
+ * 소스별 타이밍 수집 — 판정과 분리된 관측 레이어다.
+ * 대기 시간은 여기서 재고, 캐시 나이·degraded 는 공용 SWR 캐시가 남긴 마지막 관측치에서 읽는다.
+ * 팀원 행사의 사실 원천은 접근 프로브라 그 라벨(team_event_access)의 캐시 상태를 본다.
+ */
+const CACHE_LABEL_BY_SOURCE: Partial<Record<EventSource, string>> = {
+  notion: "notion",
+  showroom: "showroom",
+  holiday: "holiday",
+  compass_demo: "compass_demo",
+  team_event: "team_event_access",
+}
+
+async function timed<T>(promise: Promise<T>): Promise<{ value: T; durationMs: number }> {
+  const startedAt = Date.now()
+  const value = await promise
+  return { value, durationMs: Date.now() - startedAt }
+}
+
+function timingFor(source: EventSource, durationMs: number): SourceTiming {
+  const label = CACHE_LABEL_BY_SOURCE[source]
+  const stats = label ? readSourceCacheStats(label) : null
+  return {
+    durationMs,
+    ageMs: stats?.ageMs ?? null,
+    degraded: stats?.degraded ?? false,
+  }
+}
+
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req)
   if (err) return err
@@ -111,55 +146,59 @@ export async function GET(req: NextRequest) {
 
     const [stored, partner, publicEvents, notionDates, showroomDates, teamAccess, compass] =
       await Promise.all([
-        summarizeStoredCalendarEvents().catch(() => null),
-        partnerScheduleSummary().catch(() => null),
-        getPublicEventsAsCalendarEvents().catch(() => null),
-        feedDatesByMonths(getNotionMarketingCalendarEvents, months).catch(() => null),
-        feedDatesByMonths(getShowroomCalendarEvents, months).catch(() => null),
-        probeTeamCalendarAccess().catch(() => null),
-        compassCalendarDates(months).catch(() => null),
+        timed(summarizeStoredCalendarEvents().catch(() => null)),
+        timed(partnerScheduleSummary().catch(() => null)),
+        timed(getPublicEventsAsCalendarEvents().catch(() => null)),
+        timed(feedDatesByMonths(getNotionMarketingCalendarEvents, months).catch(() => null)),
+        timed(feedDatesByMonths(getShowroomCalendarEvents, months).catch(() => null)),
+        timed(probeTeamCalendarAccess().catch(() => null)),
+        timed(compassCalendarDates(months).catch(() => null)),
       ])
 
     const sources: SourceHealth[] = [
-      stored
-        ? deriveStoredHealth({ source: "calendar", count: stored.count, lastDate: stored.lastDate })
+      stored.value
+        ? deriveStoredHealth({
+            source: "calendar",
+            count: stored.value.count,
+            lastDate: stored.value.lastDate,
+          })
         : unknownHealth("calendar"),
-      partner
+      partner.value
         ? deriveStoredHealth({
             source: "partner",
-            count: partner.count,
-            lastDate: partner.lastDate,
+            count: partner.value.count,
+            lastDate: partner.value.lastDate,
             href: "/admin/partners",
           })
         : unknownHealth("partner"),
-      publicEvents
+      publicEvents.value
         ? derivePublicEventsHealth({
-            dates: eventDates(publicEvents),
+            dates: eventDates(publicEvents.value),
             today,
             href: "/admin/events",
           })
         : unknownHealth("event"),
-      notionDates
+      notionDates.value
         ? deriveFeedHealth({
             source: "notion",
-            dates: notionDates,
+            dates: notionDates.value,
             today,
             lookbackMonths: FEED_LOOKBACK_MONTHS,
             href: notionHref,
           })
         : unknownHealth("notion"),
-      showroomDates
+      showroomDates.value
         ? deriveFeedHealth({
             source: "showroom",
-            dates: showroomDates,
+            dates: showroomDates.value,
             today,
             lookbackMonths: FEED_LOOKBACK_MONTHS,
           })
         : unknownHealth("showroom"),
-      teamAccess ? deriveTeamAccessHealth(teamAccess) : unknownHealth("team_event"),
-      !compass
+      teamAccess.value ? deriveTeamAccessHealth(teamAccess.value) : unknownHealth("team_event"),
+      !compass.value
         ? unknownHealth("compass_demo")
-        : compass.down
+        : compass.value.down
           ? {
               source: "compass_demo",
               status: "dead",
@@ -168,14 +207,33 @@ export async function GET(req: NextRequest) {
             }
           : deriveFeedHealth({
               source: "compass_demo",
-              dates: compass.dates,
+              dates: compass.value.dates,
               today,
               lookbackMonths: FEED_LOOKBACK_MONTHS,
             }),
       { source: "holiday", status: "ok", headline: "자동 제공" },
     ]
 
-    const payload: CalendarHealthPayload = { checkedAt: new Date().toISOString(), sources }
+    // 판정은 위에서 끝났다 — 아래는 관측치만 얹는다(status/headline 불변).
+    const durationBySource = new Map<EventSource, number>([
+      ["calendar", stored.durationMs],
+      ["partner", partner.durationMs],
+      ["event", publicEvents.durationMs],
+      ["notion", notionDates.durationMs],
+      ["showroom", showroomDates.durationMs],
+      ["team_event", teamAccess.durationMs],
+      ["compass_demo", compass.durationMs],
+      // 공휴일은 이 라우트가 조회하지 않는다(자동 제공) — 캐시 상태만 있으면 함께 싣는다.
+      ["holiday", 0],
+    ])
+
+    const payload: CalendarHealthPayload = {
+      checkedAt: new Date().toISOString(),
+      sources: sources.map((source) => ({
+        ...source,
+        timing: timingFor(source.source, durationBySource.get(source.source) ?? 0),
+      })),
+    }
     return adminCachedJson(payload)
   } catch (error) {
     return NextResponse.json(

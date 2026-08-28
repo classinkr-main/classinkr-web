@@ -10,6 +10,19 @@ import type { EventSource } from "@/lib/calendar-data"
 
 export type SourceHealthStatus = "ok" | "stale" | "dead"
 
+/**
+ * 소스별 실측(관측 전용). status/headline 판정에는 관여하지 않는다 —
+ * "왜 느린가"를 답하기 위한 부가 정보이며, 화면은 무시해도 된다.
+ */
+export interface SourceTiming {
+  /** 이번 점검에서 그 소스를 기다린 시간(ms) */
+  durationMs: number
+  /** 돌려준 데이터의 캐시 나이(ms). null = 캐시를 두지 않는 소스(Supabase 직조회) */
+  ageMs: number | null
+  /** 확정된 최신이 아님(콜드 실패·마감 초과·직전 갱신 실패) */
+  degraded: boolean
+}
+
 export interface SourceHealth {
   source: EventSource
   status: SourceHealthStatus
@@ -19,6 +32,8 @@ export interface SourceHealth {
   detail?: string
   /** 원본으로 가는 수리 링크(없으면 화면 밖 과제) */
   href?: string
+  /** 소스별 타이밍·캐시 상태(관측 전용, 없을 수 있음) */
+  timing?: SourceTiming
 }
 
 export interface CalendarHealthPayload {

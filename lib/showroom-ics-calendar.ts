@@ -2,20 +2,34 @@
  * showroom-ics-calendar.ts — 쇼룸 예약 구글 캘린더(ICS) 읽기 전용 연동
  *
  * 구글 캘린더 비공개 ICS 주소를 서버에서 직접 fetch → VEVENT 파싱 → CalendarEvent 매핑.
- * Supabase 복제 없음(읽기 전용). 5분 TTL 인메모리 캐시.
+ * Supabase 복제 없음(읽기 전용).
+ *
+ * 캐시는 두 겹이다(2026-08-28):
+ *   1) 공용 SWR 인메모리(lib/admin-calendar/source-cache.ts) — ICS 전체를 "all" 키 하나로 담고
+ *      월 필터는 메모리에서 건다. 스테일 즉시 반환 + 백그라운드 갱신, 콜드 3.5초 마감.
+ *   2) next 데이터 캐시(revalidate 300) — 인스턴스가 바뀌어도 살아남는다.
+ *      페이로드 크기 근거: VEVENT 500건 상한, 1건 ~500B → 최악 ~250KB(대형 페이로드 금지선과 자릿수 차이).
+ *
+ * ICS fetch에는 AbortSignal 하드 마감을 건다 — 예전엔 마감이 없어 원천이 늘어지면 요청도 늘어졌다.
  * SHOWROOM_CALENDAR_ICS_URL은 절대 클라이언트로 노출되지 않는다.
  */
 import type { CalendarEvent } from "@/lib/calendar-data"
 import { normalizeAssigneeNames } from "@/lib/admin-calendar/people"
+import {
+  EXTERNAL_SOURCE_HARD_TIMEOUT_MS,
+  EXTERNAL_SOURCE_STALE_MS,
+  EXTERNAL_SOURCE_TIMEOUT_MS,
+  EXTERNAL_SOURCE_TTL_MS,
+  sourceIdentityFingerprint,
+  swrSource,
+  withPersistentSourceCache,
+} from "@/lib/admin-calendar/source-cache"
 
-const CACHE_TTL_MS = 5 * 60_000
+const CACHE_TTL_MS = EXTERNAL_SOURCE_TTL_MS
 const MAX_EVENTS = 500
 
-interface CacheEntry {
-  at: number
-  data: CalendarEvent[]
-}
-const cache = new Map<string, CacheEntry>()
+/** 실패해도 캘린더가 비지 않도록 공유하는 빈 결과(fallback) */
+const EMPTY: CalendarEvent[] = []
 
 function getIcsUrl(): string | null {
   const url = process.env.SHOWROOM_CALENDAR_ICS_URL?.trim()
@@ -252,22 +266,20 @@ function isInMonth(event: CalendarEvent, year: number, month: number): boolean {
 
 // ─── 메인 export ──────────────────────────────────────────────────────────────
 
-export async function getShowroomCalendarEvents(opts: QueryOptions = {}): Promise<CalendarEvent[]> {
-  const icsUrl = getIcsUrl()
-  if (!icsUrl) return []
+/**
+ * ICS 원천 1회 조회 + 파싱. 인스턴스를 넘겨 사는 next 데이터 캐시로 승격한다(revalidate 300).
+ * 인자가 없다 — ICS는 전체를 한 번 받고 월 필터는 메모리에서 건다(기존 동작 그대로).
+ */
+const loadShowroomEvents = withPersistentSourceCache(
+  async (): Promise<CalendarEvent[]> => {
+    const icsUrl = getIcsUrl()
+    if (!icsUrl) return []
 
-  const cacheKey = "all"  // 전체 캐시 후 클라이언트 측 월 필터
-  const cached = cache.get(cacheKey)
-  const nowMs = Date.now()
-
-  if (cached && nowMs - cached.at < CACHE_TTL_MS) {
-    return opts.year && opts.month
-      ? cached.data.filter((ev) => isInMonth(ev, opts.year!, opts.month!))
-      : cached.data
-  }
-
-  try {
-    const res = await fetch(icsUrl, { cache: "no-store" })
+    const res = await fetch(icsUrl, {
+      cache: "no-store",
+      // 원천 하드 마감. 응답 마감(3.5초)보다 넉넉해 늦게 끝나도 캐시에는 앉는다.
+      signal: AbortSignal.timeout(EXTERNAL_SOURCE_HARD_TIMEOUT_MS),
+    })
     if (!res.ok) throw new Error(`showroom ICS fetch failed: ${res.status}`)
     const text = await res.text()
     const vevents = extractVEvents(text)
@@ -276,22 +288,28 @@ export async function getShowroomCalendarEvents(opts: QueryOptions = {}): Promis
       console.warn(`[showroom-ics-calendar] fetched ${vevents.length} VEVENT rows; check for unexpected growth`)
     }
 
-    const events = vevents
-      .map(mapVEvent)
-      .filter((ev): ev is CalendarEvent => ev !== null)
+    return vevents.map(mapVEvent).filter((ev): ev is CalendarEvent => ev !== null)
+  },
+  // 원천 identity(ICS 주소)를 키에 함께 넣는다 — 주소를 바꿨는데 옛 캘린더의 캐시가 계속
+  // 나오는 걸 막는다. ICS 주소에는 비공개 토큰이 섞여 있으므로 원문이 아니라 지문만 넣는다.
+  ["admin-calendar-showroom-v1", sourceIdentityFingerprint(getIcsUrl())],
+  Math.round(CACHE_TTL_MS / 1000)
+)
 
-    cache.set(cacheKey, { at: nowMs, data: events })
+export async function getShowroomCalendarEvents(opts: QueryOptions = {}): Promise<CalendarEvent[]> {
+  if (!getIcsUrl()) return []
 
-    return opts.year && opts.month
-      ? events.filter((ev) => isInMonth(ev, opts.year!, opts.month!))
-      : events
-  } catch {
-    // 오류 시 stale 캐시 제공, 없으면 빈 배열 (다른 소스를 깨지 않음)
-    if (cached) {
-      return opts.year && opts.month
-        ? cached.data.filter((ev) => isInMonth(ev, opts.year!, opts.month!))
-        : cached.data
-    }
-    return []
-  }
+  const result = await swrSource<CalendarEvent[]>({
+    key: "showroom:all", // 전체를 한 번 담고 월 필터는 아래에서 — 뷰를 오가도 원천은 한 번
+    label: "showroom",
+    ttlMs: CACHE_TTL_MS,
+    staleMs: EXTERNAL_SOURCE_STALE_MS,
+    timeoutMs: EXTERNAL_SOURCE_TIMEOUT_MS,
+    fallback: EMPTY,
+    fetcher: loadShowroomEvents,
+  })
+
+  return opts.year && opts.month
+    ? result.data.filter((ev) => isInMonth(ev, opts.year!, opts.month!))
+    : result.data
 }

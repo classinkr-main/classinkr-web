@@ -19,6 +19,8 @@ interface SourceTimelineProps {
   todayStr: string
   visibleEvents: CalendarEvent[]
   onSelectDate: (date: string) => void
+  /** 최초 로드 이후의 배경 새로고침 중인가 — AgendaList와 같은 이유로 거짓 빈 상태를 막는다. */
+  refreshing?: boolean
 }
 
 /**
@@ -33,6 +35,7 @@ export function SourceTimeline({
   todayStr,
   visibleEvents,
   onSelectDate,
+  refreshing = false,
 }: SourceTimelineProps) {
   const days = useMemo(() => enumerateDates(range.from, range.to), [range.from, range.to])
 
@@ -56,6 +59,7 @@ export function SourceTimeline({
   )
 
   if (rows.length === 0) {
+    if (refreshing) return null
     return <CalendarEmpty message="이 기간에 표시할 일정이 없습니다" />
   }
 
