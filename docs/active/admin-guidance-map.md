@@ -11,8 +11,9 @@
 1. 저장소 공통 규칙: [AGENTS.md](../../AGENTS.md)
 2. Admin 역할·권한·데이터·상태 정책: [Admin OS 운영 결정](admin-os-operating-decisions-2026-07-11.md)
 3. 현재 탭 배치·프리셋: [어드민 탭 재구성 스펙](admin-tab-restructure-2026-07-29.md)
-4. 도메인 세부 기준: 아래 [작업 라우팅](#4-작업-라우팅)의 해당 문서와 스킬
-5. 현재 동작 확인: 실제 코드와 검증 결과
+4. 홈페이지·Admin 실행/배포 경계 변경: [홈페이지·Admin 실행 경계 분리 계획](site-admin-separation-plan-2026-08-28.md)
+5. 도메인 세부 기준: 아래 [작업 라우팅](#4-작업-라우팅)의 해당 문서와 스킬
+6. 현재 동작 확인: 실제 코드와 검증 결과
 
 문서와 코드가 다르면 둘을 억지로 섞지 않는다.
 
@@ -54,6 +55,7 @@ API의 `verifyAdmin()` 또는 `requireVerifiedAdminContext()` 역할 검사와 �
 | 작업면 | 소유 범위 | 먼저 볼 기준 |
 | --- | --- | --- |
 | Admin 코어 | 셸, 로그인, 인증·권한, nav, 공용 요청·응답 규약 | [Admin 코어 플레이북](playbook/02-admin-core.md) |
+| Site/Admin 실행 경계 | 루트·공개·Admin 레이아웃, 공용 패키지, 앱·Vercel 분리, Cron·Webhook 소유권 | [홈페이지·Admin 실행 경계 분리 계획](site-admin-separation-plan-2026-08-28.md), [ADR-009](../adr/ADR-009-site-admin-deployment-boundary.md) |
 | 콘텐츠 | `/admin/docs`, 블로그, 행사, 자료 발행 | [콘텐츠 플레이북](playbook/03-content-pub.md) |
 | CRM·그로스 | CRM, 캠페인, 리드, Branch, 캘린더 | [그로스 플레이북](playbook/04-growth-crm.md) |
 | 공개 챗봇·CS 운영 | RAG, 공개 챗봇, 외부 CS 대시보드 | [챗봇 플레이북](playbook/05-chatbot.md), [CS 콘솔 IA](cs-admin-console-ia-2026-07-27.md) |
