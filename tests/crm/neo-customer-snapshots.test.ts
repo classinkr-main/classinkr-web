@@ -31,7 +31,7 @@ describe("CRM NEO customer snapshot read model", () => {
           last_seen_run_id: "run-shroff",
           payload: {
             Account__c: "acc-1",
-            CurrencyAmount__c: 0,
+            currencyShow__c: 0,
             expireTime__c: "2026-07-20T00:00:00.000Z",
             LastClassDate__c: "2026-06-10T00:00:00.000Z",
             uid__c: "uid-1",
@@ -124,7 +124,7 @@ describe("CRM NEO customer snapshot read model", () => {
           last_seen_run_id: "run-shroff",
           payload: {
             Account__c: "acc-multi",
-            CurrencyAmount__c: 100,
+            currencyShow__c: 100,
             expireTime__c: "2026-06-29T00:00:00.000Z",
             serviceState__c: "1",
           },
@@ -135,7 +135,7 @@ describe("CRM NEO customer snapshot read model", () => {
           last_seen_run_id: "run-shroff",
           payload: {
             Account__c: "acc-multi",
-            CurrencyAmount__c: 200,
+            currencyShow__c: 200,
             expireTime__c: "2026-12-31T00:00:00.000Z",
             serviceState__c: "1",
           },
@@ -151,6 +151,44 @@ describe("CRM NEO customer snapshot read model", () => {
     expect(rows[0]?.risk_reasons).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ code: "subscription_expiring" })])
     )
+  })
+
+  it("여신이 섞인 CurrencyAmount__c 를 잔액으로 쓰지 않는다", () => {
+    // 프로덕션 실측 사례: 실제 잔액 -107.29 元인데 CurrencyAmount__c 는 99,893(여신 10만 포함).
+    // 과거에는 이 계정이 큰 흑자로 보여 충전 안내 대상에서 빠졌다.
+    const rows = buildCrmNeoCustomerSnapshotInserts({
+      now: NOW,
+      accounts: [
+        {
+          external_id: "acc-credit",
+          display_name: "여신 보유 계정",
+          owner_name: "owner-1",
+          occurred_at: "2026-06-25T00:00:00.000Z",
+          synced_at: "2026-06-26T08:00:00.000Z",
+          last_seen_run_id: "run-account",
+          payload: { accountName: "여신 보유 계정" },
+        },
+      ],
+      shroffAccounts: [
+        {
+          external_id: "eeo-credit",
+          synced_at: "2026-06-26T08:10:00.000Z",
+          last_seen_run_id: "run-shroff",
+          payload: {
+            Account__c: "acc-credit",
+            currencyShow__c: -107.29,
+            currency__c: -10729,
+            CurrencyAmount__c: 99893,
+            serviceState__c: "1",
+          },
+        },
+      ],
+      opportunities: [],
+      ownerNames: new Map([["owner-1", "김담당"]]),
+      excludedOwnerIds: new Set(),
+    })
+
+    expect(rows[0]?.balance).toBeCloseTo(-107.29)
   })
 
   it("stores region from a confirmed REV sheet mapping on the CRM-owned snapshot", () => {
@@ -180,6 +218,7 @@ describe("CRM NEO customer snapshot read model", () => {
               source: "branch_rev_confirmed_link",
               sourceRecordKey: "rev:12:대치스파르타:2026-06-01:1000",
               customerName: "대치스파르타",
+              productVersion: null,
             },
           ],
         ]),
@@ -222,6 +261,7 @@ describe("CRM NEO customer snapshot read model", () => {
               source: "branch_rev_exact_name",
               sourceRecordKey: "rev:20:일산수학:2026-06-01:1000",
               customerName: "일산수학학원",
+              productVersion: null,
             },
           ],
         ]),

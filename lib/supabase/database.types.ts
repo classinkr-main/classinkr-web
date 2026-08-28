@@ -307,6 +307,10 @@ export type CrmTaskInsert = Omit<CrmTask, "id" | "created_at" | "updated_at"> & 
 };
 export type CrmTaskUpdate = Partial<Omit<CrmTask, "id" | "created_at">>;
 
+export type CrmNeoBurnConfidence = "high" | "medium" | "none";
+
+export type CrmNeoBillingMode = "consumption" | "subscription" | "hardware" | "unknown";
+
 export interface CrmNeoCustomerSnapshot {
   source_system: string;
   account_id: string;
@@ -316,7 +320,16 @@ export interface CrmNeoCustomerSnapshot {
   phone: string | null;
   uid: string | null;
   region_label: string | null;
+  /** 과금 유형. 원천은 매출시트 J열(branch_rev_deals.product_version). */
+  billing_mode: CrmNeoBillingMode;
   balance: number | null;
+  /** 최근 90일 일평균 차감액(元). 표본 부족이면 null. */
+  daily_burn: number | null;
+  /** 잔액 소진까지 남은 일수 추정. */
+  depletion_in_days: number | null;
+  /** 창 안 차감 건수 — 예상일의 신뢰 근거. */
+  burn_event_count: number;
+  burn_confidence: CrmNeoBurnConfidence;
   expire_at: string | null;
   last_class_at: string | null;
   order_amount: number;
