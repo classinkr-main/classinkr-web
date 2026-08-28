@@ -102,6 +102,7 @@ export function StatTile({
   href,
   lift,
   compact,
+  valueSize,
   variant = "card",
   iconLayout = "badge",
 }: {
@@ -127,8 +128,13 @@ export function StatTile({
   // true면 href 유무와 무관하게 hover-lift+shadow 카드 스타일(구 StatCard 시각) 적용.
   // 일반 StatTile 호출부는 생략 시 기존 flat 카드 스타일을 유지한다.
   lift?: boolean
-  // 밀도 높은 대시보드용 컴팩트 변형(p-4 · 값 22px · 라벨 10px) — 구 campaigns KpiCard 시각.
+  // 밀도 높은 대시보드용 컴팩트 변형(p-4 · 라벨 10px) — 구 campaigns KpiCard 시각.
+  // 값 크기는 건드리지 않는다(valueSize 소관). compact 가 좁히는 것은 패딩과 라벨뿐이다.
   compact?: boolean
+  // 값 타이포 스케일 옵트인. "lg"=34px — '숫자를 화면의 주어로' 스트립(overview 상단)용.
+  // 생략 시 28px. "lg"=34px — 대표 숫자 스트립(overview 상단·campaigns KPI)이 옵트인한다.
+  // compact 와 무관하게 동작한다.
+  valueSize?: "md" | "lg"
   // 박스 처리(기본 "card" — 기존 시각과 완전 동일):
   //   card = 흰 배경 + rounded-2xl 테두리(기존 flat/lift 그대로)
   //   soft = 테두리 없는 rounded-xl 틴트 배경(bg-[#fafaf8]) — 구 CRM MeasureTile류 소형 지표 박스
@@ -193,7 +199,18 @@ export function StatTile({
       {iconLayout !== "inline" && (
         <p className={compact ? "mb-1 text-[10px] font-medium uppercase tracking-[0.2em] text-[#1a1a1a]/35" : "mb-1 text-[11px] font-medium uppercase tracking-wide text-[#1a1a1a]/40"}>{label}</p>
       )}
-      <p className={compact ? "text-[22px] font-bold leading-none tracking-[-0.02em] text-[#111110]" : "text-[28px] font-bold leading-none tracking-[-0.03em] text-[#111110]"}>{value}</p>
+      {/* tabular-nums: 스트립에서 카드끼리 자릿수 폭이 같아야 값 열이 정렬된다(숫자 아닌 값엔 무영향). */}
+      <p
+        className={
+          // 값 크기는 밀도(compact)와 분리한다 — compact 는 패딩·라벨만 좁히고, 숫자 크기는
+          // valueSize 가 정한다. 그래야 "빽빽한 카드에 큰 대표 숫자"가 성립한다.
+          valueSize === "lg"
+            ? "text-[34px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
+            : "text-[28px] font-bold leading-none tracking-[-0.03em] tabular-nums text-[#111110]"
+        }
+      >
+        {value}
+      </p>
       {hint && (
         <p className={hintMono ? "mt-1.5 font-mono text-[11px] text-[#1a1a1a]/40" : "mt-1.5 text-[11px] text-[#1a1a1a]/40"}>{hint}</p>
       )}

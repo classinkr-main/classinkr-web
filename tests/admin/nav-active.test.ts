@@ -123,6 +123,28 @@ describe("isNavActive", () => {
     ).toBe(false)
   })
 
+  it.each([
+    ["/admin/calendar", "/admin/events"],
+    ["/admin/calendar", "/admin/events/new"],
+    ["/admin/analytics", "/admin/traffic"],
+    ["/admin/chatbot", "/admin/docs"],
+    ["/admin/chatbot", "/admin/docs/new"],
+    ["/admin/chatbot", "/admin/channel-talk"],
+    ["/admin/chatbot", "/admin/cs-chatbot"],
+  ])("activates absorbed parent %s on %s", (href, pathname) => {
+    expect(
+      isNavActive(href, {
+        pathname,
+        searchParams: params(""),
+        siblings: [
+          { href: "/admin/calendar" },
+          { href: "/admin/analytics" },
+          { href: "/admin/chatbot" },
+        ],
+      })
+    ).toBe(true)
+  })
+
   // KR Team(/admin/branch) vs 매출 장부(/admin/branch/ledger) — 동시 하이라이트 방지.
   const branchSiblings = [{ href: "/admin/branch" }, { href: "/admin/branch/ledger" }]
 

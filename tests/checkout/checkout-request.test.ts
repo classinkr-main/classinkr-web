@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 /**
  * 결제창 무결제 도입 신청(POST /api/checkout/request) 백엔드.
@@ -6,6 +6,14 @@ import { afterEach, describe, expect, it, vi } from "vitest"
  */
 
 const OPS_WEBHOOK_URL = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=ops-room"
+
+/**
+ * 시계 고정 — desiredDate 검증은 KST 오늘(now) 기준 [내일, +365일] 창과 비교하는데,
+ * submitCheckoutRequest 는 now 주입 인자가 없어 실제 시계를 타면 아래 리터럴 픽스처
+ * 날짜가 언젠가 과거가 되어 파일 전체가 죽는다. setSystemTime 은 Date 만 모킹하므로
+ * 타이머·프로미스는 실제로 돈다. 명시적 now 를 넘기는 KST 경계 테스트에는 영향이 없다.
+ */
+const FIXED_NOW = new Date("2026-08-01T09:00:00+09:00")
 
 /** 하드웨어 라인은 실제 카탈로그 sku 여야 통과한다(서버가 SSOT 와 대조한다). */
 const VALID_PAYLOAD = {
@@ -25,7 +33,7 @@ const VALID_PAYLOAD = {
   email: "won@happy.co.kr",
   installType: "wall",
   address: "서울시 강남구 테헤란로 123, 4층",
-  desiredDate: "2026-08-10",
+  desiredDate: "2026-08-10", // FIXED_NOW(KST 8/1) 기준 +9일 — 검증 창 [내일, +365일] 안
   memo: "2층 교실 먼저 설치 희망",
   sourcePage: "/product/hw",
   consent: true,
@@ -182,7 +190,12 @@ function createDeferred() {
   }
 }
 
+beforeEach(() => {
+  vi.setSystemTime(FIXED_NOW)
+})
+
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   vi.resetModules()
 })

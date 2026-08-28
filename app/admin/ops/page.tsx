@@ -210,7 +210,7 @@ export default function AdminOpsPage() {
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#615D59]">Admin</p>
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Ops Health</h1>
           <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[#615D59]">
-            통합 설정, 자동화 실행, 크론 운영 리스크를 한 화면에서 점검합니다. 장애가 날 가능성이 높은 항목부터 위에 올립니다.
+            통합·자동화·크론 리스크 점검 — 위험도 높은 항목부터
           </p>
         </div>
         <button
@@ -413,12 +413,7 @@ export default function AdminOpsPage() {
 
         <div className="rounded-2xl border border-black/[0.08] bg-[#ECFDF5] p-5">
           <h2 className="text-[15px] font-bold text-[#111110]">운영 루틴</h2>
-          <div className="mt-4 space-y-3 text-[13px] leading-relaxed text-[#084734]">
-            <p>1. error 항목은 배포 전까지 해결하고, warning 항목은 실제 운영 영향이 있는지 확인합니다.</p>
-            <p>2. Cron 관련 warning은 Vercel 플랜과 실행 빈도를 함께 확인합니다.</p>
-            <p>3. 자동화 실패가 생기면 템플릿, 세그먼트, 발송 공급자 순서로 점검합니다.</p>
-          </div>
-          <div className="mt-5 grid gap-2 sm:grid-cols-3">
+          <div className="mt-4 grid gap-2 sm:grid-cols-3">
             <Link
               href="/admin/settings?tab=integrations"
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#084734] px-3 text-[13px] font-semibold text-white transition-colors hover:bg-[#065c41]"

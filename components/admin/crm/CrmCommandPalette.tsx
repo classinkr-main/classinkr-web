@@ -63,9 +63,14 @@ type CmdItem =
   | { kind: "nav"; id: string; label: string; sub: string; icon: ReactNode; href: string }
   | { kind: "customer"; id: string; label: string; sub: string; icon: ReactNode; key: string; href?: string }
 
-export default function CrmCommandPalette() {
+interface CrmCommandPaletteProps {
+  /** 지연 런처가 첫 입력을 잃지 않고 곧바로 열린 팔레트를 마운트할 때 사용한다. */
+  initiallyOpen?: boolean
+}
+
+export default function CrmCommandPalette({ initiallyOpen = false }: CrmCommandPaletteProps) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(initiallyOpen)
   const [query, setQuery] = useState("")
   const [rows, setRows] = useState<CustomerRow[]>([])
   // 고객 검색 fetch 진행/실패 표시 — "일치하는 결과가 없습니다" 선행 깜빡임과 침묵 실패 방지.

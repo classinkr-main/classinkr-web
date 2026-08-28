@@ -50,6 +50,8 @@ export const CHART = {
   brandSurface: "#D1FAE5",
   neutral: "#111110",
   warmGray: "#84827a",
+  /** 콤보 차트에서 맥락 축(막대)을 뒤로 물리는 웜 라이트 그레이 — 전경 선(brand)과 명도·색상 모두로 분리된다. */
+  barMuted: "#d6d3cc",
   caution: "#D97706",
   danger: "#B85C33",
   grid: "#f0f0ec",
@@ -57,9 +59,6 @@ export const CHART = {
   cursor: "#e8e8e4",
   tooltipBg: "#111110",
 } as const
-
-// 멀티시리즈 차트용 순서 팔레트 — 파랑 0%. (EventCompare/Meta/Campaign 교체용)
-export const SERIES_PALETTE = ["#084734", "#111110", "#B85C33", "#84827a", "#6EE7B7", "#D97706"]
 
 // 도넛/분포 차트용 — overview DONUT_COLORS, analytics CHART_COLORS 대체.
 export const SOURCE_PALETTE = ["#111110", "#084734", "#6EE7B7", "#B85C33", "#84827a"]

@@ -1,6 +1,7 @@
 "server-only";
 
 import { scoreCrmNameMatch } from "@/lib/crm-source-linking";
+import { fetchAllSupabaseRows } from "@/lib/repositories/branch-hw";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { InsertCustomer, UpdateCustomer } from "@/lib/supabase/database.types.v2";
 import type {
@@ -691,62 +692,52 @@ async function buildCustomerListDecorations(
   const supabase = createSupabaseAdminClient();
   const nowIso = new Date().toISOString();
 
-  let activityQuery = supabase
-    .from("activity_logs")
-    .select("customer_id, created_at")
-    .in("customer_id", customerIds)
-    .order("created_at", { ascending: false });
-
-  if (partnerAccountId) {
-    activityQuery = activityQuery.eq("partner_account_id", partnerAccountId);
-  }
-
-  let eventQuery = supabase
-    .from("calendar_events")
-    .select("customer_id, deal_id, source_type, starts_at, ends_at, status")
-    .in("customer_id", customerIds)
-    .eq("status", "active")
-    .gte("ends_at", nowIso)
-    .order("starts_at", { ascending: true });
-
-  if (partnerAccountId) {
-    eventQuery = eventQuery.eq("partner_account_id", partnerAccountId);
-  }
-
-  let dealsQuery = supabase
-    .from("deals")
-    .select("id, customer_id, title, current_stage, status, updated_at")
-    .in("customer_id", customerIds)
-    .order("updated_at", { ascending: false })
-    .limit(5000);
-
-  if (partnerAccountId) {
-    dealsQuery = dealsQuery.eq("partner_account_id", partnerAccountId);
-  }
-
-  const [dealsResult, activityResult, eventResult] = await Promise.all([
-    dealsQuery,
-    activityQuery,
-    eventQuery,
+  // 세 쿼리 모두 고객 전체를 대상으로 하므로 PostgREST 1000행 캡에 걸리면 뒤로 밀린 고객의
+  // 최근 활동·다음 일정이 에러 없이 사라진다(= attention 배지가 조용히 틀어짐).
+  // id 키셋으로 전량 읽고, 소비가 기대하는 순서는 아래에서 JS로 다시 세운다.
+  const [deals, activityRows, eventRows] = await Promise.all([
+    fetchAllSupabaseRows<CustomerDecorationDeal>((afterId, limit) => {
+      let query = supabase
+        .from("deals")
+        .select("id, customer_id, title, current_stage, status, updated_at")
+        .in("customer_id", customerIds);
+      if (partnerAccountId) query = query.eq("partner_account_id", partnerAccountId);
+      if (afterId) query = query.gt("id", afterId);
+      return query.order("id", { ascending: true }).limit(limit);
+    }),
+    fetchAllSupabaseRows<Pick<ActivityLog, "id" | "customer_id" | "created_at">>(
+      (afterId, limit) => {
+        let query = supabase
+          .from("activity_logs")
+          .select("id, customer_id, created_at")
+          .in("customer_id", customerIds);
+        if (partnerAccountId) query = query.eq("partner_account_id", partnerAccountId);
+        if (afterId) query = query.gt("id", afterId);
+        return query.order("id", { ascending: true }).limit(limit);
+      }
+    ),
+    fetchAllSupabaseRows<
+      Pick<
+        CalendarEvent,
+        "id" | "customer_id" | "deal_id" | "source_type" | "starts_at" | "ends_at" | "status"
+      >
+    >((afterId, limit) => {
+      let query = supabase
+        .from("calendar_events")
+        .select("id, customer_id, deal_id, source_type, starts_at, ends_at, status")
+        .in("customer_id", customerIds)
+        .eq("status", "active")
+        .gte("ends_at", nowIso);
+      if (partnerAccountId) query = query.eq("partner_account_id", partnerAccountId);
+      if (afterId) query = query.gt("id", afterId);
+      return query.order("id", { ascending: true }).limit(limit);
+    }),
   ]);
 
-  if (dealsResult.error) throw dealsResult.error;
-  if (activityResult.error) throw activityResult.error;
-  if (eventResult.error) throw eventResult.error;
+  // 고객별 push 순서가 그대로 최신순이어야 primaryDeal/미리보기가 최신 거래를 잡는다
+  deals.sort((left, right) => compareIsoAsc(right.updated_at, left.updated_at));
+  eventRows.sort((left, right) => compareIsoAsc(left.starts_at, right.starts_at));
 
-  const deals = (dealsResult.data ?? []) as CustomerDecorationDeal[];
-
-  const activityRows = (activityResult.data ?? []) as Array<
-    Pick<ActivityLog, "customer_id" | "created_at">
-  >;
-  const eventRows = (eventResult.data ?? []) as Array<
-    Pick<
-      CalendarEvent,
-      "customer_id" | "deal_id" | "source_type" | "starts_at" | "ends_at" | "status"
-    >
-  >;
-
-  // 쿼리에서 updated_at desc로 정렬되어 오므로 고객별 push 순서가 그대로 최신순
   const dealsByCustomerId = new Map<string, CustomerDecorationDeal[]>();
   for (const deal of deals) {
     if (!customerIdSet.has(deal.customer_id)) continue;
@@ -757,8 +748,11 @@ async function buildCustomerListDecorations(
 
   const recentActivityByCustomerId = new Map<string, string>();
   for (const row of activityRows) {
-    if (!row.customer_id || recentActivityByCustomerId.has(row.customer_id)) continue;
-    recentActivityByCustomerId.set(row.customer_id, row.created_at);
+    if (!row.customer_id) continue;
+    const current = recentActivityByCustomerId.get(row.customer_id);
+    if (!current || compareIsoAsc(current, row.created_at) < 0) {
+      recentActivityByCustomerId.set(row.customer_id, row.created_at);
+    }
   }
 
   const nextEventByCustomerId = new Map<
@@ -905,11 +899,29 @@ export async function listAllCustomerListItems(
   }));
 }
 
+// Lite 목록 소비처(개요 metrics·PortalHome 기관 카드·CRM 통합 고객 행)가 읽는 컬럼만.
+// notes/business_number/created_by 는 세 소비처 어디도 읽지 않는다 — Row 캐스팅 구조라
+// 새 소비처가 그 셋을 읽으면 여기에 먼저 넣어야 하고, 아니면 무음 undefined 가 된다.
+const CUSTOMER_LITE_COLUMNS =
+  "id, partner_account_id, name, contact_name, email, phone, address, campus_name, region_label, created_at, updated_at";
+
+async function listCustomersLite(): Promise<Customer[]> {
+  const supabase = createSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from("customers")
+    .select(CUSTOMER_LITE_COLUMNS)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+
+  return (data ?? []) as Customer[];
+}
+
 // 개요 화면처럼 insight/deal_previews가 필요 없는 호출자용 —
-// decoration 쿼리(거래·활동·일정 3회 왕복)를 건너뛴다.
+// decoration 쿼리(거래·활동·일정 3회 왕복)를 건너뛰고 컬럼도 좁혀 읽는다.
 export async function listAllCustomerListItemsLite(): Promise<CustomerListItem[]> {
   const [customers, summaries] = await Promise.all([
-    listCustomers(),
+    listCustomersLite(),
     listCustomerDealSummaries(),
   ]);
 

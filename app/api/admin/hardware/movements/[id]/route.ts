@@ -62,6 +62,8 @@ export async function PATCH(
     }
 
     if (action === "update") {
+      // 예정 행 편집은 에디터 업무 — 실현 기록 수정·예정→실현 전환만 finalize 요구(리포에서 판정).
+      const canFinalize = !requireAdminCapability(admin, HARDWARE_FINALIZE_CAPABILITY)
       const movement = await updateHardwareMovement(id, {
         itemId: readOptionalString(body, "itemId", "품목 ID"),
         productName: readRequiredString(body, "productName", "제품명"),
@@ -82,6 +84,20 @@ export async function PATCH(
         importer: readOptionalString(body, "importer", "수입자"),
         serials: readStringArray(body, "serials", "시리얼 번호"),
         createdBy: admin.name ?? admin.userId ?? admin.role,
+      }, { canFinalize })
+      // 원장 재작성도 확정·취소와 같은 감사 대상 — 무엇이 어떻게 바뀌었는지 최소 페이로드를 남긴다.
+      await logAdminAudit({
+        admin,
+        action: "hardware.movement.update",
+        targetType: "hardware_movement",
+        targetId: id,
+        payload: {
+          productName: movement.product_name,
+          movementType: movement.movement_type,
+          quantity: movement.quantity,
+          occurredAt: movement.occurred_at,
+          status: movement.status,
+        },
       })
       return NextResponse.json({ movement })
     }
@@ -98,6 +114,7 @@ export async function PATCH(
       action: "hardware.movement.void",
       targetType: "hardware_movement",
       targetId: id,
+      payload: { reason: readOptionalString(body, "reason", "취소 사유") },
     })
     return NextResponse.json({ movement })
   } catch (error) {

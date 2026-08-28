@@ -391,6 +391,100 @@ export async function listDurableConversations(
   }
 }
 
+/**
+ * 목록 전용(transcript 미포함) 레코드 — 상세/sync 경로(ChannelConversationRecord)와 달리
+ * 상담 전문을 담지 않는다. app/api/admin/channel-talk/route.ts 전용.
+ */
+export type ChannelConversationListRecord = Omit<ChannelConversationRecord, "transcript">
+
+const LIST_LITE_COLUMNS =
+  "id, name, email, phone, state, tags, first_question, matched_lead_id, matched_org, last_message_at, message_count, last_message_text, synced_at"
+
+interface SupabaseChannelConversationListRow {
+  id: string
+  name: string | null
+  email: string | null
+  phone: string | null
+  state: string | null
+  tags: string[] | null
+  first_question: string | null
+  matched_lead_id: string | null
+  matched_org: string | null
+  last_message_at: string | null
+  message_count: number | null
+  last_message_text: string | null
+  synced_at: string | null
+}
+
+// 배포 스큐 감지 — 마이그레이션(20260827_channel_conv_list_columns) 미적용 DB에서
+// message_count/last_message_text select가 undefined_column(42703)으로 실패하는 경우.
+// 선례: lib/admin-docs.ts 의 isMissingContentLengthColumn.
+function isMissingListColumns(error: { code?: string; message?: string; details?: string; hint?: string }) {
+  if (error.code === "42703") return true
+  const haystack = [error.message, error.details, error.hint].filter(Boolean).join(" ").toLowerCase()
+  return haystack.includes("message_count") || haystack.includes("last_message_text")
+}
+
+function supabaseListRowToRecord(row: SupabaseChannelConversationListRow): ChannelConversationListRecord {
+  return {
+    id: row.id,
+    userChatId: row.id,
+    name: row.name ?? undefined,
+    email: row.email ?? undefined,
+    phone: row.phone ?? undefined,
+    state: toRecordState(row.state),
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    messageCount: row.message_count ?? 0,
+    firstQuestion: row.first_question ?? undefined,
+    lastMessageText: row.last_message_text ?? undefined,
+    lastMessageAt: row.last_message_at ?? undefined,
+    matchedLeadId: row.matched_lead_id ?? undefined,
+    matchedLeadOrg: row.matched_org ?? undefined,
+    syncedAt: row.synced_at ?? new Date(0).toISOString(),
+  }
+}
+
+/**
+ * 어드민 상담 목록(app/api/admin/channel-talk/route.ts) 전용 경량 조회 — transcript(상담 전문 jsonb)를
+ * select 하지 않고 생성 컬럼(message_count/last_message_text)만 읽는다.
+ * 컬럼 미적용(42703) 시 listDurableConversations() 전체 경로로 재시도해 transcript만 걷어낸다
+ * (JSON 폴백보다 우선 — 같은 Supabase 데이터를 그대로 쓴다). 그 외 실패/미설정 시 null.
+ */
+export async function listDurableConversationsLite(
+  limit = 500
+): Promise<ChannelConversationListRecord[] | null> {
+  if (!channelConversationsSupabaseEnabled()) return null
+
+  try {
+    const supabase = createSupabaseAdminClient()
+    const { data, error } = await supabase
+      .from("channel_conversations")
+      .select(LIST_LITE_COLUMNS)
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+      .limit(limit)
+
+    if (error) {
+      if (isMissingListColumns(error)) {
+        const full = await listDurableConversations(limit)
+        if (!full) return null
+        return full.map(({ transcript, ...rest }) => {
+          void transcript
+          return rest
+        })
+      }
+      throw new Error(error.message)
+    }
+
+    return ((data ?? []) as SupabaseChannelConversationListRow[]).map(supabaseListRowToRecord)
+  } catch (error) {
+    console.warn(
+      "[channel-conversations] Supabase 경량 목록 조회 실패, JSON 폴백:",
+      error instanceof Error ? error.message : error
+    )
+    return null
+  }
+}
+
 export async function getDurableConversationSyncMeta(): Promise<ChannelConversationSyncMeta> {
   if (channelConversationsSupabaseEnabled()) {
     try {

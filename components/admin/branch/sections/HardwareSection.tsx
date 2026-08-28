@@ -130,9 +130,13 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
   const hw = useBranchJson<HardwareResponse>("/api/admin/branch/hw", refreshKey)
   const data = hw.data
 
-  if (hw.loading) return <div className="h-48 animate-pulse rounded-xl bg-[#f0f0ec]" />
-  if (hw.error) return <div className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] text-[#B43E3E]">{hw.error}</div>
-  if (!data) return null
+  if (hw.loading && !data) return <div className="h-48 animate-pulse rounded-xl bg-[#f0f0ec]" />
+  if (hw.error && !data) return <div role="alert" className="rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] p-4 text-[12px] text-[#B43E3E]">{hw.error}</div>
+  if (!data) return (
+    <div role="status" className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white p-4 text-[12px] text-[#615D59]">
+      표시할 HW 재고 데이터가 없습니다.
+    </div>
+  )
   return (
     <section className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
       <div className="flex items-center justify-between gap-3 border-b border-[rgba(0,0,0,0.08)] px-5 py-3.5">
@@ -149,13 +153,13 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/admin/hardware" className="rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5]">
+          <Link href="/admin/hardware" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-[rgba(0,0,0,0.08)] bg-white px-2.5 py-1 text-[11px] font-bold text-[#084734] transition hover:bg-[#ECFDF5] md:min-h-0 md:min-w-0">
             운영 열기
           </Link>
           <div className="inline-flex rounded-md border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]">
             {(["table", "gauge"] as const).map((v) => (
               <button key={v} type="button" onClick={() => setView(v)}
-                className={`rounded-[5px] px-2.5 py-1 text-[11px] font-semibold transition ${
+                className={`min-h-11 min-w-11 rounded-[5px] px-2.5 py-1 text-[11px] font-semibold transition md:min-h-0 md:min-w-0 ${
                   view === v ? "bg-white text-[#111110] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#615D59]"
                 }`}>
                 {v === "table" ? "테이블" : "비교 게이지"}
@@ -165,6 +169,11 @@ export default function HardwareSection({ refreshKey }: { refreshKey: number }) 
         </div>
       </div>
       <div className="p-5">
+        {hw.stale ? (
+          <div role="status" className="mb-3 rounded-lg border border-[#ECD29C] bg-[#FBF1E0] px-3 py-2 text-[10.5px] text-[#7A520F]">
+            갱신 실패 — 저장된 데이터 표시 중
+          </div>
+        ) : null}
         {data.stock.length === 0 ? (
           <p className="text-[11px] text-[#615D59]">재고 데이터 없음</p>
         ) : view === "table" ? <TableView rows={data.stock} /> : <GaugeView rows={data.stock} />}

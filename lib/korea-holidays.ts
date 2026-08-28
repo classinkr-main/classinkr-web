@@ -16,6 +16,14 @@ import type { calendar_v3 } from "googleapis"
 
 import type { CalendarEvent } from "@/lib/calendar-data"
 import { calendar as googleCalendar } from "@/lib/google"
+import {
+  EXTERNAL_SOURCE_HARD_TIMEOUT_MS,
+  EXTERNAL_SOURCE_STALE_MS,
+  EXTERNAL_SOURCE_TIMEOUT_MS,
+  sourceIdentityFingerprint,
+  swrSource,
+  withPersistentSourceCache,
+} from "@/lib/admin-calendar/source-cache"
 
 export const KOREA_HOLIDAY_CALENDAR_ID = "ko.south_korea#holiday@group.v.calendar.google.com"
 
@@ -25,11 +33,8 @@ const CACHE_TTL_MS = 60 * 60_000
 // MAX_PER_CALENDAR(개인 일정, 250)보다 훨씬 낮게 잡아도 안전하다.
 const MAX_RESULTS = 100
 
-interface CacheEntry {
-  at: number
-  data: CalendarEvent[]
-}
-const cache = new Map<string, CacheEntry>()
+/** 실패해도 캘린더가 비지 않도록 공유하는 빈 결과(fallback) */
+const EMPTY: CalendarEvent[] = []
 
 function hasServiceAccount(): boolean {
   return Boolean(
@@ -68,50 +73,72 @@ interface QueryOptions {
 }
 
 // KST 월 경계를 UTC ISO로 변환 (KST = UTC+9) — team-member-calendars.ts의 monthRangeIso와 동일 공식.
+/** UTC 자정으로 내림 — 지속 캐시 키가 요청마다 달라지지 않게 하는 양자화 */
+function floorToUtcDay(ms: number): string {
+  return new Date(Math.floor(ms / 86_400_000) * 86_400_000).toISOString()
+}
+
 function monthRangeIso(year: number, month: number): { timeMin: string; timeMax: string } {
   const startUtcMs = Date.UTC(year, month - 1, 1, 0, 0, 0) - 9 * 3_600_000
   const endUtcMs = Date.UTC(year, month, 1, 0, 0, 0) - 9 * 3_600_000
   return { timeMin: new Date(startUtcMs).toISOString(), timeMax: new Date(endUtcMs).toISOString() }
 }
 
+/**
+ * 원천 1회 조회 + 매핑. 인스턴스를 넘겨 사는 next 데이터 캐시로 승격한다(revalidate 3600).
+ * 페이로드 크기 근거: MAX_RESULTS=100 상한 × 공휴일 1건 ~200B → 최악 ~20KB.
+ * 자격증명이 필요하긴 하지만 내용 자체는 공개 캘린더라 인스턴스 간 공유해도 안전하다.
+ */
+const loadHolidayEvents = withPersistentSourceCache(
+  async (timeMin: string, timeMax: string): Promise<CalendarEvent[]> => {
+    const res = await googleCalendar.events.list(
+      {
+        calendarId: KOREA_HOLIDAY_CALENDAR_ID,
+        singleEvents: true,
+        orderBy: "startTime",
+        maxResults: MAX_RESULTS,
+        timeMin,
+        timeMax,
+      },
+      // 원천 하드 마감 — 응답 마감(3.5초)보다 넉넉해 늦게 끝나도 캐시에는 앉는다.
+      { timeout: EXTERNAL_SOURCE_HARD_TIMEOUT_MS }
+    )
+
+    return (res.data.items ?? [])
+      .map(toHolidayEvent)
+      .filter((event): event is CalendarEvent => event !== null)
+  },
+  // 원천 identity(공휴일 캘린더 ID)를 키에 함께 넣는다 — 다른 캘린더로 바꾸면 키도 바뀐다.
+  ["admin-calendar-holidays-v1", sourceIdentityFingerprint(KOREA_HOLIDAY_CALENDAR_ID)],
+  Math.round(CACHE_TTL_MS / 1000)
+)
+
 export async function getKoreaHolidayEvents(opts: QueryOptions = {}): Promise<CalendarEvent[]> {
   // 자격 없으면 조용히 빈 배열 — team-member-calendars와 같은 규약(화면 전체를 막지 않는다).
   if (!hasServiceAccount()) return []
 
   const { year, month } = opts
-  const cacheKey = year && month ? `${year}-${month}` : "all"
-  const cached = cache.get(cacheKey)
   const nowMs = Date.now()
-  if (cached && nowMs - cached.at < CACHE_TTL_MS) return cached.data
+  const cacheKey = year && month ? `${year}-${month}` : "all"
 
   // 월 지정이 없으면(getAllEvents) 최근 30일 ~ 향후 180일 창으로 제한 — team-member-calendars와 동일.
+  // 경계는 UTC 자정으로 눕힌다: 밀리초마다 달라지는 창은 지속 캐시 키를 매번 새로 만든다.
   const range =
     year && month
       ? monthRangeIso(year, month)
       : {
-          timeMin: new Date(nowMs - 30 * 86_400_000).toISOString(),
-          timeMax: new Date(nowMs + 180 * 86_400_000).toISOString(),
+          timeMin: floorToUtcDay(nowMs - 30 * 86_400_000),
+          timeMax: floorToUtcDay(nowMs + 180 * 86_400_000),
         }
 
-  try {
-    const res = await googleCalendar.events.list({
-      calendarId: KOREA_HOLIDAY_CALENDAR_ID,
-      singleEvents: true,
-      orderBy: "startTime",
-      maxResults: MAX_RESULTS,
-      timeMin: range.timeMin,
-      timeMax: range.timeMax,
-    })
-
-    const events = (res.data.items ?? [])
-      .map(toHolidayEvent)
-      .filter((event): event is CalendarEvent => event !== null)
-
-    cache.set(cacheKey, { at: nowMs, data: events })
-    return events
-  } catch (error) {
-    // 실패해도 캘린더의 나머지 소스는 살아야 하므로 빈 배열로 물러난다(다른 소스와 동일 규약).
-    console.warn("[korea-holidays] failed to fetch holiday calendar:", error)
-    return []
-  }
+  const result = await swrSource<CalendarEvent[]>({
+    key: `holiday:${cacheKey}`,
+    label: "holiday",
+    ttlMs: CACHE_TTL_MS,
+    staleMs: EXTERNAL_SOURCE_STALE_MS,
+    timeoutMs: EXTERNAL_SOURCE_TIMEOUT_MS,
+    fallback: EMPTY,
+    fetcher: () => loadHolidayEvents(range.timeMin, range.timeMax),
+  })
+  return result.data
 }

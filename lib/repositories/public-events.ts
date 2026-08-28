@@ -258,6 +258,42 @@ export async function listPublicEvents(): Promise<PublicEvent[]> {
   }
 }
 
+/**
+ * 숫자만 필요한 소비자용 경량 조회.
+ *
+ * listPublicEvents()는 카드 렌더링에 필요한 전체 열(content_markdown 포함)을 읽고 각 행을
+ * PublicEvent로 변환한다. OS 요약처럼 발행 행사 수만 필요한 곳에서는 head count를 써서
+ * 행 payload와 객체 변환을 없앤다. publication_status 마이그레이션 전에는 기존 목록 조회와
+ * 같은 의미(전체 행 = 공개 행사)로 폴백한다.
+ */
+export async function countPublicEvents(): Promise<number> {
+  const supabase = createSupabaseAdminClient()
+  const timeout = createPublicEventQueryTimeout()
+  try {
+    const { count, error } = await supabase
+      .from("public_events")
+      .select("id", { count: "exact", head: true })
+      .in("publication_status", PUBLISHED_PUBLICATION_STATUS_VALUES)
+      .abortSignal(timeout.signal)
+
+    if (error && isAbortError(error)) {
+      throw new Error(`공개 행사 수 조회 timeout after ${PUBLIC_EVENT_QUERY_TIMEOUT_MS}ms`)
+    }
+    if (isMissingPublicationStatusColumn(error)) {
+      const legacy = await supabase
+        .from("public_events")
+        .select("id", { count: "exact", head: true })
+        .abortSignal(timeout.signal)
+      if (legacy.error) throw legacy.error
+      return legacy.count ?? 0
+    }
+    if (error) throw error
+    return count ?? 0
+  } finally {
+    timeout.clear()
+  }
+}
+
 export async function listPublicEventSlugs(): Promise<string[]> {
   const supabase = createSupabaseAdminClient()
   const timeout = createPublicEventQueryTimeout()

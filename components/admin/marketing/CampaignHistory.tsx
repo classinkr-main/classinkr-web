@@ -23,15 +23,23 @@ interface Props {
   onViewSubscribers?: () => void
 }
 
+// DESIGN.md 운영 상태 스케일(Success/Danger/Warning) — Tailwind 기본 팔레트를 쓰지 않는다.
 const STATUS_STYLE: Record<string, string> = {
-  sent: "bg-green-50 text-green-700",
-  failed: "bg-[#FEF3EE] text-[#B85C33]",
-  draft: "bg-amber-50 text-amber-700",
+  sent: "bg-[#ECFDF5] text-[#084734]",
+  failed: "bg-[#FCE9E9] text-[#B43E3E]",
+  draft: "bg-[#FBF1E0] text-[#7A520F]",
 }
 const STATUS_LABEL: Record<string, string> = {
   sent: "발송완료",
   failed: "실패",
   draft: "임시저장",
+}
+
+// 오픈·클릭율 — 발송 수가 있을 때만 %를 붙인다(분모 0 방어).
+function fmtRate(count: number | undefined, recipients: number) {
+  const n = count ?? 0
+  if (recipients <= 0) return `${n}`
+  return `${n} (${Math.round((n / recipients) * 100)}%)`
 }
 
 function fmtDate(v?: string) {
@@ -78,6 +86,8 @@ export default function CampaignHistory({
               <th className="text-left px-4 py-3 font-medium text-[#1a1a1a]/50">제목</th>
               <th className="text-left px-4 py-3 font-medium text-[#1a1a1a]/50 whitespace-nowrap">상태</th>
               <th className="text-left px-4 py-3 font-medium text-[#1a1a1a]/50 whitespace-nowrap hidden sm:table-cell">발송 수</th>
+              {/* 성과 루프(2026-08-18) — 적재만 되고 미표시이던 오픈 수 + 신규 클릭 수 */}
+              <th className="text-left px-4 py-3 font-medium text-[#1a1a1a]/50 whitespace-nowrap hidden sm:table-cell">오픈 · 클릭</th>
               <th className="text-left px-4 py-3 font-medium text-[#1a1a1a]/50 hidden md:table-cell">대상 태그</th>
               <th className="text-left px-4 py-3 font-medium text-[#1a1a1a]/50 whitespace-nowrap hidden lg:table-cell">발송일</th>
               {(onDuplicate || onCopy) && <th className="text-right px-4 py-3 font-medium text-[#1a1a1a]/50"></th>}
@@ -103,9 +113,19 @@ export default function CampaignHistory({
                   </span>
                 </td>
 
-                {/* 발송 수 */}
+                {/* 발송 수 — 부분 실패는 성공 안에 숨기지 않는다 */}
                 <td className="px-4 py-3 text-[12px] text-[#1a1a1a]/60 whitespace-nowrap hidden sm:table-cell">
                   {c.recipientCount}명
+                  {(c.failedCount ?? 0) > 0 && (
+                    <span className="ml-1.5 inline-flex items-center rounded-full bg-[#FCE9E9] px-1.5 py-0.5 text-[10px] font-semibold text-[#B43E3E]">
+                      실패 {c.failedCount}
+                    </span>
+                  )}
+                </td>
+
+                {/* 오픈 · 클릭 */}
+                <td className="px-4 py-3 text-[12px] text-[#1a1a1a]/60 whitespace-nowrap hidden sm:table-cell">
+                  {c.status === "sent" ? `${fmtRate(c.openCount, c.recipientCount)} · ${c.clickCount ?? 0}` : "—"}
                 </td>
 
                 {/* 대상 태그 */}
@@ -207,7 +227,34 @@ export default function CampaignHistory({
                   <p className="text-[10px] font-medium text-[#1a1a1a]/35 uppercase tracking-wider">발송일</p>
                   <p className="mt-1 text-[12px] text-[#111110]">{fmtDate(detail.sentAt)}</p>
                 </div>
+                {/* 성과 루프(2026-08-18) — 오픈(픽셀)·클릭(서명 리다이렉트)·실패 */}
+                <div className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2.5">
+                  <p className="text-[10px] font-medium text-[#1a1a1a]/35 uppercase tracking-wider">오픈</p>
+                  <p className="mt-1 text-[15px] font-bold text-[#111110]">{fmtRate(detail.openCount, detail.recipientCount)}</p>
+                </div>
+                <div className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2.5">
+                  <p className="text-[10px] font-medium text-[#1a1a1a]/35 uppercase tracking-wider">클릭</p>
+                  <p className="mt-1 text-[15px] font-bold text-[#111110]">{fmtRate(detail.clickCount, detail.recipientCount)}</p>
+                </div>
+                <div className="rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-3 py-2.5">
+                  <p className="text-[10px] font-medium text-[#1a1a1a]/35 uppercase tracking-wider">실패</p>
+                  <p className={`mt-1 text-[15px] font-bold ${(detail.failedCount ?? 0) > 0 ? "text-[#B43E3E]" : "text-[#111110]"}`}>
+                    {detail.failedCount ?? 0}명
+                  </p>
+                </div>
               </div>
+
+              {/* 발송 오류 상세 — 부분 실패의 근거(최대 20건 저장) */}
+              {(detail.sendErrors?.length ?? 0) > 0 && (
+                <div>
+                  <p className="text-[11px] font-medium text-[#B43E3E] mb-2">발송 오류</p>
+                  <ul className="space-y-1 rounded-xl border border-[#F2B8B8] bg-[#FCE9E9] px-4 py-3 text-[12px] leading-relaxed text-[#B43E3E]">
+                    {detail.sendErrors!.map((message, index) => (
+                      <li key={index} className="break-all">{message}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* 대상 태그 */}
               <div>

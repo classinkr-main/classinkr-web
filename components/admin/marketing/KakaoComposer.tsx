@@ -15,7 +15,6 @@ import {
   AlertTriangle,
   ArrowUpRight,
   CheckCircle2,
-  Info,
   Loader2,
   MessageCircle,
   Send,
@@ -318,7 +317,7 @@ export default function KakaoComposer({
                         ))
                       ) : (
                         <span className="text-[#3C1E1E]/40">
-                          변수를 입력하면 치환 값이 여기에 표시됩니다. 실제 문구는 승인된 템플릿 본문을 따릅니다.
+                          변수를 입력하면 치환 값이 여기에 표시됩니다.
                         </span>
                       )}
                     </p>
@@ -373,12 +372,12 @@ export default function KakaoComposer({
           </StepCard>
 
           {/* 대량 발송 — 백엔드 준비중 (정직하게 비활성) */}
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
-            <div className="flex items-start gap-2 text-[12px] text-[#1a1a1a]/50">
-              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/35" />
-              <span>대량 발송은 백엔드 준비 중입니다. 현재는 테스트 발송으로 문구·변수를 검증할 수 있습니다.</span>
-            </div>
-            <Button disabled className="shrink-0 cursor-not-allowed bg-[#084734] text-white opacity-40">
+          <div className="flex items-center justify-end gap-3 rounded-xl border border-[#e8e8e4] bg-[#fafaf8] px-4 py-3">
+            <Button
+              disabled
+              title="백엔드 준비 중 — 테스트 발송으로 검증하세요"
+              className="shrink-0 cursor-not-allowed bg-[#084734] text-white opacity-40"
+            >
               <Send className="mr-1.5 h-3.5 w-3.5" />
               대량 발송
             </Button>

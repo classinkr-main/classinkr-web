@@ -5,7 +5,8 @@ import { createHash } from "node:crypto"
 import {
   NAVER_MAP_SOURCE_OBJECT,
   NAVER_MAP_SOURCE_SYSTEM,
-  assessNaverMapPlaceMatch,
+  assessNaverMapPlaceMatchWithIndex,
+  buildNaverMapMatchIndex,
   deriveNaverMapRegion,
   normalizeNaverMapPlace,
   parseNaverMapFolderId,
@@ -464,6 +465,8 @@ async function loadCrmNaverMapSource(): Promise<CrmNaverMapSourceList> {
   const records = (recordsResult.data ?? []) as ExternalMapRecordRow[]
   const links = (linksResult.error ? [] : linksResult.data ?? []) as ConfirmedMapLinkRow[]
   const linkByExternalId = new Map(links.map((link) => [link.source_record_key, link]))
+  // 장소마다 후보 2만여 건을 다시 정규화하지 않도록 색인은 목록당 한 번만 만든다.
+  const matchIndex = buildNaverMapMatchIndex(targets.crmTargets, targets.revTargets)
 
   const rows = records.map((record): CrmNaverMapRow => {
     const payload = record.payload ?? {}
@@ -471,11 +474,7 @@ async function loadCrmNaverMapSource(): Promise<CrmNaverMapSourceList> {
     const address = payloadString(payload, "address_raw") ?? ""
     const derivedRegion = deriveNaverMapRegion(address)
     const regionLabel = payloadString(payload, "region_label") ?? derivedRegion.regionLabel
-    const assessment = assessNaverMapPlaceMatch(
-      { name, regionLabel },
-      targets.crmTargets,
-      targets.revTargets
-    )
+    const assessment = assessNaverMapPlaceMatchWithIndex({ name, regionLabel }, matchIndex)
     const link = linkByExternalId.get(record.external_id) ?? null
 
     return {

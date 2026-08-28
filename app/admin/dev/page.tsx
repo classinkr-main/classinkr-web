@@ -12,7 +12,7 @@ import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 
 // 데이터 품질 패널은 dev의 한 탭에서만 쓰는 무거운 branch 컴포넌트 — 코드 스플릿(감사 3-B).
 const DataQualityPanel = dynamic(() => import("@/components/admin/branch/sections/DataQualityPanel"), {
-  loading: () => <div className="text-center py-12 text-[#1a1a1a]/40 text-[13px]">데이터 품질 패널 로딩중...</div>,
+  loading: () => <DevLoadingState label="데이터 품질 패널을 불러오는 중입니다." />,
 })
 
 // ─── Types ───────────────────────────────────────────────
@@ -79,15 +79,56 @@ const GITLOG_CACHE_TTL_MS = 5 * 60_000
 function RefreshBtn({ onClick, refreshing }: { onClick: () => void; refreshing: boolean }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={refreshing}
-      className="flex items-center gap-1.5 text-[11px] text-[#1a1a1a]/50 hover:text-[#1a1a1a]/80 bg-[#f5f5f2] hover:bg-[#ededea] px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40"
+      aria-busy={refreshing}
+      className="flex min-h-11 items-center gap-1.5 rounded-lg bg-[#f5f5f2] px-3 py-2 text-[11px] text-[#1a1a1a]/50 transition-colors hover:bg-[#ededea] hover:text-[#1a1a1a]/80 disabled:opacity-40"
     >
-      <svg className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg aria-hidden="true" className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
       </svg>
       {refreshing ? "갱신중" : "새로고침"}
     </button>
+  )
+}
+
+function DevLoadingState({ label }: { label: string }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className="rounded-xl border border-[#e8e8e4] bg-white py-12 text-center text-[13px] text-[#1a1a1a]/50"
+    >
+      {label}
+    </div>
+  )
+}
+
+function DevLoadError({
+  message,
+  onRetry,
+  hasStaleData = false,
+}: {
+  message: string
+  onRetry: () => void
+  hasStaleData?: boolean
+}) {
+  return (
+    <div
+      role="alert"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-[13px] text-[#8F2C2C]"
+    >
+      <span>{message}{hasStaleData ? " 이전에 불러온 데이터를 유지합니다." : ""}</span>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#F2B8B8] bg-white px-3 text-[12px] font-semibold text-[#8F2C2C] transition-colors hover:bg-[#FCE9E9]"
+      >
+        다시 시도
+      </button>
+    </div>
   )
 }
 
@@ -98,8 +139,8 @@ type Notify = (msg: string, type?: ToastKind) => void
 function DevToast({ msg, type }: { msg: string; type: ToastKind }) {
   return (
     <div
-      role="status"
-      aria-live="polite"
+      role={type === "error" ? "alert" : "status"}
+      aria-live={type === "error" ? "assertive" : "polite"}
       className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl px-4 py-3 text-[13px] font-medium shadow-xl ${
         type === "success" ? "bg-[#111110] text-white" : "bg-[#B85C33] text-white"
       }`}
@@ -180,6 +221,7 @@ function RoadmapTab({ notify }: { notify: Notify }) {
   const [versions, setVersions] = useState<RoadmapVersion[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState("")
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
@@ -190,15 +232,21 @@ function RoadmapTab({ notify }: { notify: Notify }) {
 
   const load = useCallback(async (force = false) => {
     if (force) setRefreshing(true)
-    const data = await adminFetchJsonCached<RoadmapVersion[]>("/api/admin/roadmap", undefined, {
-      ttlMs: DEV_CACHE_TTL_MS,
-      force,
-    }).catch(() => [])
-    const list = Array.isArray(data) ? data : []
-    setVersions(list)
-    setExpanded(new Set(list.filter((v: RoadmapVersion) => v.status === "in-progress").map((v: RoadmapVersion) => v.id)))
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      const data = await adminFetchJsonCached<RoadmapVersion[]>("/api/admin/roadmap", undefined, {
+        ttlMs: DEV_CACHE_TTL_MS,
+        force,
+      })
+      if (!Array.isArray(data)) throw new Error("Invalid roadmap response")
+      setVersions(data)
+      setExpanded(new Set(data.filter((v: RoadmapVersion) => v.status === "in-progress").map((v: RoadmapVersion) => v.id)))
+      setLoadError("")
+    } catch {
+      setLoadError("로드맵을 불러오지 못했습니다.")
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -270,7 +318,7 @@ function RoadmapTab({ notify }: { notify: Notify }) {
     await persistFeatures(ver, updated, "기능 추가를 저장하지 못했습니다.")
   }
 
-  if (loading) return <div className="text-center py-12 text-[#1a1a1a]/40 text-[13px]">로드맵 로딩중...</div>
+  if (loading) return <DevLoadingState label="로드맵을 불러오는 중입니다." />
 
   const totalFeatures = versions.flatMap((v) => v.features)
   const doneCount = totalFeatures.filter((f) => f.status === "done").length
@@ -278,8 +326,15 @@ function RoadmapTab({ notify }: { notify: Notify }) {
 
   return (
     <div className="space-y-5">
+      {loadError ? (
+        <DevLoadError
+          message={loadError}
+          onRetry={() => void load(true)}
+          hasStaleData={versions.length > 0}
+        />
+      ) : null}
       {/* Progress + 버전 추가 */}
-      <div className="bg-white rounded-2xl border border-[#e8e8e4] p-5 flex items-center gap-5">
+      <div className="flex flex-col gap-4 rounded-2xl border border-[#e8e8e4] bg-white p-5 sm:flex-row sm:items-center sm:gap-5">
         <div className="flex-1">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[13px] font-semibold text-[#111110]">전체 진행률</span>
@@ -290,7 +345,7 @@ function RoadmapTab({ notify }: { notify: Notify }) {
           </div>
         </div>
         <span className="text-2xl font-bold text-[#111110] shrink-0">{progress}%</span>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <RefreshBtn onClick={() => load(true)} refreshing={refreshing} />
           <button onClick={openCreate} className="px-3 py-1.5 bg-[#111110] text-white text-[12px] font-medium rounded-xl hover:bg-[#1a1a1a] transition-colors">
             + 버전 추가
@@ -303,18 +358,18 @@ function RoadmapTab({ notify }: { notify: Notify }) {
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-[#e8e8e4] p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-[13px] font-semibold text-[#111110]">{editId ? "버전 수정" : "새 버전"}</h3>
-            <button type="button" onClick={() => setShowForm(false)} className="text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60">
+            <button type="button" aria-label="버전 작성 폼 닫기" onClick={() => setShowForm(false)} className="min-w-11 text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">버전</label>
               <input value={form.version} onChange={(e) => setForm(f => ({ ...f, version: e.target.value }))} placeholder="v2.0.0" required className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] font-mono focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]" />
             </div>
             <div>
               <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">상태</label>
-              <select value={form.status} onChange={(e) => setForm(f => ({ ...f, status: e.target.value as RoadmapVersion["status"] }))} className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]">
+              <select aria-label="버전 상태" value={form.status} onChange={(e) => setForm(f => ({ ...f, status: e.target.value as RoadmapVersion["status"] }))} className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]">
                 <option value="planned">예정</option>
                 <option value="in-progress">진행중</option>
                 <option value="done">완료</option>
@@ -325,14 +380,14 @@ function RoadmapTab({ notify }: { notify: Notify }) {
             <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">타이틀</label>
             <input value={form.title} onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))} placeholder="예: Supabase 백엔드 전환" required className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">시작일</label>
-              <input type="date" value={form.startDate} onChange={(e) => setForm(f => ({ ...f, startDate: e.target.value }))} className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]" />
+              <input aria-label="버전 시작일" type="date" value={form.startDate} onChange={(e) => setForm(f => ({ ...f, startDate: e.target.value }))} className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]" />
             </div>
             <div>
               <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">목표일</label>
-              <input type="date" value={form.targetDate} onChange={(e) => setForm(f => ({ ...f, targetDate: e.target.value }))} className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]" />
+              <input aria-label="버전 목표일" type="date" value={form.targetDate} onChange={(e) => setForm(f => ({ ...f, targetDate: e.target.value }))} className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]" />
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-1">
@@ -342,7 +397,7 @@ function RoadmapTab({ notify }: { notify: Notify }) {
         </form>
       )}
 
-      {versions.length === 0 && !showForm && (
+      {versions.length === 0 && !showForm && !loadError && (
         <div className="text-center py-16 bg-white rounded-2xl border border-[#e8e8e4]">
           <p className="text-[13px] text-[#1a1a1a]/40 mb-4">로드맵이 없습니다.</p>
           <button onClick={openCreate} className="text-[12px] text-[#111110] font-medium underline underline-offset-2">첫 버전 추가하기</button>
@@ -385,18 +440,26 @@ function RoadmapTab({ notify }: { notify: Notify }) {
 
               {/* Card */}
               <div className="flex-1 mb-4 bg-white rounded-2xl border border-[#e8e8e4] overflow-hidden">
-                <div className="flex items-center gap-3 px-5 py-3.5 cursor-pointer hover:bg-[#fafaf8] transition-colors" onClick={() => toggleExpand(ver.id)}>
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${sc.badge}`}>{sc.label}</span>
-                  <span className="font-mono text-[12px] font-bold text-[#111110]">{ver.version}</span>
-                  <span className="text-[13px] text-[#1a1a1a]/70 flex-1 min-w-0 truncate">{ver.title}</span>
-                  <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                <div className="flex flex-wrap items-center gap-2 px-3 py-2 sm:flex-nowrap sm:px-5">
+                  <button
+                    type="button"
+                    aria-expanded={isExpanded}
+                    aria-label={`${ver.version} ${ver.title} 기능 목록 ${isExpanded ? "접기" : "펼치기"}`}
+                    onClick={() => toggleExpand(ver.id)}
+                    className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-lg px-2 text-left transition-colors hover:bg-[#fafaf8]"
+                  >
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${sc.badge}`}>{sc.label}</span>
+                    <span className="font-mono text-[12px] font-bold text-[#111110]">{ver.version}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-[#1a1a1a]/70">{ver.title}</span>
+                    <svg aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/35 transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
                     {(ver.startDate || ver.targetDate) && (
-                      <span className="text-[11px] text-[#1a1a1a]/30">{fmtDate(ver.startDate)} ~ {fmtDate(ver.targetDate)}</span>
+                      <span className="hidden text-[11px] text-[#1a1a1a]/30 md:inline">{fmtDate(ver.startDate)} ~ {fmtDate(ver.targetDate)}</span>
                     )}
                     <span className="text-[11px] font-medium text-[#615D59]">{vProgress}%</span>
-                    <button onClick={() => openEdit(ver)} className="text-[10px] px-2 py-0.5 rounded-full border border-[#e8e8e4] text-[#1a1a1a]/40 hover:border-[#c8c8c4] hover:text-[#111110] transition-all">수정</button>
+                    <button type="button" onClick={() => openEdit(ver)} className="rounded-lg border border-[#e8e8e4] px-3 text-[11px] text-[#1a1a1a]/50 transition-all hover:border-[#c8c8c4] hover:text-[#111110]">수정</button>
                   </div>
-                  <svg className={`w-3.5 h-3.5 text-[#1a1a1a]/25 transition-transform shrink-0 ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </div>
 
                 {isExpanded && (
@@ -415,6 +478,7 @@ function RoadmapTab({ notify }: { notify: Notify }) {
                             <span className="flex-1 text-[13px] text-[#1a1a1a]/80">{feat.title}</span>
                             {feat.assignee && <span className="text-[11px] text-[#1a1a1a]/30">{feat.assignee}</span>}
                             <select
+                              aria-label={`${feat.title} 상태`}
                               value={feat.status}
                               onChange={(e) => updateFeatureStatus(ver, feat.id, e.target.value as RoadmapFeature["status"])}
                               className={`text-[11px] font-medium px-1 py-0.5 focus:outline-none cursor-pointer bg-transparent ${fs.text}`}
@@ -423,7 +487,12 @@ function RoadmapTab({ notify }: { notify: Notify }) {
                               <option value="in-progress">진행중</option>
                               <option value="done">완료</option>
                             </select>
-                            <button onClick={() => deleteFeat(ver, feat.id)} className="opacity-0 group-hover:opacity-100 text-[#1a1a1a]/20 hover:text-[#B85C33] transition-all p-0.5">
+                            <button
+                              type="button"
+                              aria-label={`${feat.title} 기능 삭제`}
+                              onClick={() => deleteFeat(ver, feat.id)}
+                              className="min-w-11 p-0.5 text-[#1a1a1a]/35 opacity-100 transition-all hover:text-[#B85C33] sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                            >
                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                           </div>
@@ -435,16 +504,16 @@ function RoadmapTab({ notify }: { notify: Notify }) {
                     </div>
 
                     {addingFeat === ver.id ? (
-                      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#f0f0ec]">
+                      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#f0f0ec] pt-3">
                         <input autoFocus value={featForm.title} onChange={(e) => setFeatForm(f => ({ ...f, title: e.target.value }))} placeholder="기능명" className="flex-1 border border-[#e8e8e4] rounded-lg px-2.5 py-1.5 text-[12px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]" />
                         <input value={featForm.assignee} onChange={(e) => setFeatForm(f => ({ ...f, assignee: e.target.value }))} placeholder="담당자" className="w-20 border border-[#e8e8e4] rounded-lg px-2.5 py-1.5 text-[12px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]" />
-                        <select value={featForm.status} onChange={(e) => setFeatForm(f => ({ ...f, status: e.target.value as RoadmapFeature["status"] }))} className="border border-[#e8e8e4] rounded-lg px-2 py-1.5 text-[12px] focus:outline-none bg-[#fafaf8]">
+                        <select aria-label="새 기능 상태" value={featForm.status} onChange={(e) => setFeatForm(f => ({ ...f, status: e.target.value as RoadmapFeature["status"] }))} className="border border-[#e8e8e4] rounded-lg px-2 py-1.5 text-[12px] focus:outline-none bg-[#fafaf8]">
                           <option value="planned">예정</option>
                           <option value="in-progress">진행중</option>
                           <option value="done">완료</option>
                         </select>
                         <button type="button" onClick={() => addFeat(ver)} className="text-[11px] px-2.5 py-1.5 bg-[#111110] text-white rounded-lg hover:bg-[#1a1a1a] transition-colors">추가</button>
-                        <button type="button" onClick={() => { setAddingFeat(null); setFeatForm({ title: "", status: "planned", assignee: "" }) }} className="text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60">
+                        <button type="button" aria-label="기능 추가 취소" onClick={() => { setAddingFeat(null); setFeatForm({ title: "", status: "planned", assignee: "" }) }} className="min-w-11 text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                       </div>
@@ -468,6 +537,7 @@ function RoadmapTab({ notify }: { notify: Notify }) {
 function BugsTab({ userName, notify, onCountChange }: { userName: string; notify: Notify; onCountChange?: (n: number) => void }) {
   const [bugs, setBugs] = useState<BugReport[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | BugReport["status"]>("all")
   const [severityFilter, setSeverityFilter] = useState<"all" | BugReport["severity"]>("all")
   const [showForm, setShowForm] = useState(false)
@@ -482,15 +552,21 @@ function BugsTab({ userName, notify, onCountChange }: { userName: string; notify
 
   const load = useCallback(async (force = false) => {
     if (force) setRefreshing(true)
-    const data = await adminFetchJsonCached<BugReport[]>("/api/admin/bugs", undefined, {
-      ttlMs: DEV_CACHE_TTL_MS,
-      force,
-    }).catch(() => [])
-    const list = Array.isArray(data) ? data : []
-    setBugs(list)
-    onCountChange?.(list.filter((b: BugReport) => b.status === "open").length)
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      const data = await adminFetchJsonCached<BugReport[]>("/api/admin/bugs", undefined, {
+        ttlMs: DEV_CACHE_TTL_MS,
+        force,
+      })
+      if (!Array.isArray(data)) throw new Error("Invalid bugs response")
+      setBugs(data)
+      onCountChange?.(data.filter((b: BugReport) => b.status === "open").length)
+      setLoadError("")
+    } catch {
+      setLoadError("버그 리포트를 불러오지 못했습니다.")
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [onCountChange])
 
   useEffect(() => {
@@ -558,18 +634,25 @@ function BugsTab({ userName, notify, onCountChange }: { userName: string; notify
     .filter((b) => statusFilter === "all" || b.status === statusFilter)
     .filter((b) => severityFilter === "all" || b.severity === severityFilter)
 
-  if (loading) return <div className="text-center py-12 text-[#1a1a1a]/40 text-[13px]">로딩중...</div>
+  if (loading) return <DevLoadingState label="버그 리포트를 불러오는 중입니다." />
 
   return (
     <div className="space-y-4">
+      {loadError ? (
+        <DevLoadError
+          message={loadError}
+          onRetry={() => void load(true)}
+          hasStaleData={bugs.length > 0}
+        />
+      ) : null}
       {/* Filters + 등록 버튼 */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             {(["all", "open", "in-progress", "resolved", "closed"] as const).map((s) => {
               const count = s === "all" ? bugs.length : bugs.filter((b) => b.status === s).length
               return (
-                <button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-1.5 text-[12px] font-medium rounded-lg border transition-colors ${statusFilter === s ? "bg-[#111110] text-white border-[#111110]" : "bg-white text-[#1a1a1a]/60 border-[#e8e8e4] hover:border-[#c8c8c4]"}`}>
+                <button key={s} type="button" aria-pressed={statusFilter === s} onClick={() => setStatusFilter(s)} className={`px-3 py-1.5 text-[12px] font-medium rounded-lg border transition-colors ${statusFilter === s ? "bg-[#111110] text-white border-[#111110]" : "bg-white text-[#1a1a1a]/60 border-[#e8e8e4] hover:border-[#c8c8c4]"}`}>
                   {s === "all" ? "전체" : BUG_STATUS_CONFIG[s].label}{count > 0 ? ` (${count})` : ""}
                 </button>
               )
@@ -577,7 +660,7 @@ function BugsTab({ userName, notify, onCountChange }: { userName: string; notify
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             {(["all", "critical", "high", "medium", "low"] as const).map((sv) => (
-              <button key={sv} onClick={() => setSeverityFilter(sv)} className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-colors ${severityFilter === sv ? "bg-[#111110] text-white border-[#111110]" : "bg-white text-[#1a1a1a]/50 border-[#e8e8e4] hover:border-[#c8c8c4]"}`}>
+              <button key={sv} type="button" aria-pressed={severityFilter === sv} onClick={() => setSeverityFilter(sv)} className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-colors ${severityFilter === sv ? "bg-[#111110] text-white border-[#111110]" : "bg-white text-[#1a1a1a]/50 border-[#e8e8e4] hover:border-[#c8c8c4]"}`}>
                 {sv === "all" ? "전체 심각도" : SEVERITY_CONFIG[sv].label}
               </button>
             ))}
@@ -596,18 +679,18 @@ function BugsTab({ userName, notify, onCountChange }: { userName: string; notify
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-[#e8e8e4] p-5 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-[13px] font-semibold text-[#111110]">새 버그 리포트</h3>
-            <button type="button" onClick={() => setShowForm(false)} className="text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60">
+            <button type="button" aria-label="버그 작성 폼 닫기" onClick={() => setShowForm(false)} className="min-w-11 text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="col-span-2">
               <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">제목 *</label>
               <input value={form.title} onChange={(e) => setForm(f => ({ ...f, title: e.target.value }))} required placeholder="버그 제목을 입력하세요" className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]" />
             </div>
             <div>
               <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">심각도</label>
-              <select value={form.severity} onChange={(e) => setForm(f => ({ ...f, severity: e.target.value as BugReport["severity"] }))} className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]">
+              <select aria-label="버그 심각도" value={form.severity} onChange={(e) => setForm(f => ({ ...f, severity: e.target.value as BugReport["severity"] }))} className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]">
                 <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option>
               </select>
             </div>
@@ -635,7 +718,7 @@ function BugsTab({ userName, notify, onCountChange }: { userName: string; notify
         </form>
       )}
 
-      {filtered.length === 0 && (
+      {filtered.length === 0 && !loadError && (
         <div className="text-center py-16 bg-white rounded-2xl border border-[#e8e8e4]">
           <p className="text-[13px] text-[#1a1a1a]/40">{bugs.length === 0 ? "버그 리포트가 없습니다" : "해당 조건의 버그가 없습니다"}</p>
         </div>
@@ -648,7 +731,7 @@ function BugsTab({ userName, notify, onCountChange }: { userName: string; notify
           const isDeleting = deleteConfirm === bug.id
           return (
             <div key={bug.id} className="bg-white rounded-2xl border border-[#e8e8e4] p-4">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${sc.bg}`}>{sc.label}</span>
@@ -671,7 +754,7 @@ function BugsTab({ userName, notify, onCountChange }: { userName: string; notify
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <select value={bug.status} onChange={(e) => updateStatus(bug.id, e.target.value as BugReport["status"])} className="text-[11px] border border-[#e8e8e4] rounded-lg px-2 py-1 focus:outline-none bg-[#fafaf8] cursor-pointer">
+                  <select aria-label={`${bug.title} 상태`} value={bug.status} onChange={(e) => updateStatus(bug.id, e.target.value as BugReport["status"])} className="text-[11px] border border-[#e8e8e4] rounded-lg px-2 py-1 focus:outline-none bg-[#fafaf8] cursor-pointer">
                     <option value="open">오픈</option>
                     <option value="in-progress">진행중</option>
                     <option value="resolved">해결됨</option>
@@ -683,7 +766,7 @@ function BugsTab({ userName, notify, onCountChange }: { userName: string; notify
                       <button onClick={() => setDeleteConfirm(null)} className="text-[10px] px-2 py-1 border border-[#e8e8e4] rounded-lg hover:bg-[#fafaf8] transition-colors">취소</button>
                     </div>
                   ) : (
-                    <button onClick={() => setDeleteConfirm(bug.id)} className="text-[#1a1a1a]/20 hover:text-[#B85C33] transition-colors p-1">
+                    <button type="button" aria-label={`${bug.title} 삭제 확인 열기`} onClick={() => setDeleteConfirm(bug.id)} className="min-w-11 p-1 text-[#1a1a1a]/35 transition-colors hover:text-[#B85C33]">
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                   )}
@@ -725,6 +808,7 @@ const EMPTY_FORM = {
 function PatchNotesTab({ notify }: { notify: Notify }) {
   const [notes, setNotes] = React.useState<PatchNote[]>([])
   const [loading, setLoading] = React.useState(true)
+  const [loadError, setLoadError] = React.useState("")
   const [showForm, setShowForm] = React.useState(false)
   const [editId, setEditId] = React.useState<string | null>(null)
   const [form, setForm] = React.useState({ ...EMPTY_FORM })
@@ -735,14 +819,20 @@ function PatchNotesTab({ notify }: { notify: Notify }) {
 
   const load = React.useCallback(async (force = false) => {
     if (force) setRefreshing(true)
-    const data = await adminFetchJsonCached<PatchNote[]>("/api/admin/patch-notes", undefined, {
-      ttlMs: DEV_CACHE_TTL_MS,
-      force,
-    }).catch(() => [])
-    const list = Array.isArray(data) ? data : []
-    setNotes(list)
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      const data = await adminFetchJsonCached<PatchNote[]>("/api/admin/patch-notes", undefined, {
+        ttlMs: DEV_CACHE_TTL_MS,
+        force,
+      })
+      if (!Array.isArray(data)) throw new Error("Invalid patch notes response")
+      setNotes(data)
+      setLoadError("")
+    } catch {
+      setLoadError("패치노트를 불러오지 못했습니다.")
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [])
 
   React.useEffect(() => {
@@ -844,12 +934,19 @@ function PatchNotesTab({ notify }: { notify: Notify }) {
     }
   }
 
-  if (loading) return <div className="text-center py-12 text-gray-400">로딩 중...</div>
+  if (loading) return <DevLoadingState label="패치노트를 불러오는 중입니다." />
 
   return (
     <div className="space-y-4">
+      {loadError ? (
+        <DevLoadError
+          message={loadError}
+          onRetry={() => void load(true)}
+          hasStaleData={notes.length > 0}
+        />
+      ) : null}
       {/* 헤더 */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <p className="text-sm text-gray-500">릴리즈별 변경사항을 기록하고 관리합니다.</p>
         </div>
@@ -874,7 +971,7 @@ function PatchNotesTab({ notify }: { notify: Notify }) {
             <h3 className="text-[14px] font-semibold text-[#111110]">
               {editId ? "패치노트 수정" : "새 패치노트"}
             </h3>
-            <button type="button" onClick={closeForm} className="text-[#1a1a1a]/30 hover:text-[#1a1a1a]/60 transition-colors">
+            <button type="button" aria-label="패치노트 작성 폼 닫기" onClick={closeForm} className="min-w-11 text-[#1a1a1a]/30 transition-colors hover:text-[#1a1a1a]/60">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -882,7 +979,7 @@ function PatchNotesTab({ notify }: { notify: Notify }) {
           </div>
 
           {/* 기본 정보 */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid gap-3 sm:grid-cols-3">
             <div>
               <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">버전</label>
               <input
@@ -896,6 +993,7 @@ function PatchNotesTab({ notify }: { notify: Notify }) {
             <div>
               <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">릴리즈 날짜</label>
               <input
+                aria-label="릴리즈 날짜"
                 type="date"
                 value={form.date}
                 onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
@@ -906,6 +1004,7 @@ function PatchNotesTab({ notify }: { notify: Notify }) {
             <div>
               <label className="block text-[11px] font-medium text-[#1a1a1a]/40 mb-1.5 uppercase tracking-wide">상태</label>
               <select
+                aria-label="패치노트 상태"
                 value={form.status}
                 onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as NoteStatus }))}
                 className="w-full border border-[#e8e8e4] rounded-xl px-3 py-2 text-[13px] focus:outline-none focus:border-[#c8c8c4] bg-[#fafaf8]"
@@ -945,8 +1044,9 @@ function PatchNotesTab({ notify }: { notify: Notify }) {
                 </p>
               )}
               {form.changes.map((c) => (
-                <div key={c.id} className="flex items-center gap-2">
+                <div key={c.id} className="grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)_44px] sm:items-center">
                   <select
+                    aria-label="변경사항 유형"
                     value={c.type}
                     onChange={(e) => updateChange(c.id, { type: e.target.value as ChangeType })}
                     className="border border-[#e8e8e4] rounded-lg px-2 py-1.5 text-[12px] focus:outline-none bg-[#fafaf8] shrink-0"
@@ -964,8 +1064,9 @@ function PatchNotesTab({ notify }: { notify: Notify }) {
                   />
                   <button
                     type="button"
+                    aria-label="변경사항 항목 삭제"
                     onClick={() => removeChange(c.id)}
-                    className="text-[#1a1a1a]/20 hover:text-[#B85C33] transition-colors p-1 shrink-0"
+                    className="min-w-11 shrink-0 p-1 text-[#1a1a1a]/35 transition-colors hover:text-[#B85C33]"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -997,7 +1098,7 @@ function PatchNotesTab({ notify }: { notify: Notify }) {
       )}
 
       {/* 빈 상태 */}
-      {notes.length === 0 && !showForm && (
+      {notes.length === 0 && !showForm && !loadError && (
         <div className="text-center py-16 bg-white rounded-2xl border border-[#e8e8e4]">
           <div className="text-4xl mb-3">📋</div>
           <p className="text-[13px] text-[#1a1a1a]/40 mb-4">아직 패치노트가 없습니다.</p>
@@ -1048,10 +1149,14 @@ function PatchNotesTab({ notify }: { notify: Notify }) {
                 isPublished ? "border-[#e8e8e4]" : "border-dashed border-[#d0d0cc]"
               }`}>
                 {/* 헤더 */}
-                <div
-                  className="flex items-center gap-3 px-5 py-3.5 cursor-pointer hover:bg-[#fafaf8] transition-colors"
-                  onClick={() => toggleExpand(note.id)}
-                >
+                <div className="flex flex-wrap items-center gap-2 px-3 py-2 sm:flex-nowrap sm:px-5">
+                  <button
+                    type="button"
+                    aria-expanded={isExpanded}
+                    aria-label={`${note.version} ${note.title} 변경사항 ${isExpanded ? "접기" : "펼치기"}`}
+                    onClick={() => toggleExpand(note.id)}
+                    className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-lg px-2 text-left transition-colors hover:bg-[#fafaf8]"
+                  >
                   <span className="font-mono text-[12px] font-bold text-[#111110] bg-[#f0f0ec] px-2 py-0.5 rounded-md shrink-0">
                     {note.version}
                   </span>
@@ -1078,33 +1183,38 @@ function PatchNotesTab({ notify }: { notify: Notify }) {
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-50 text-green-600 font-medium">개선 {improves.length}</span>
                     )}
                   </div>
+                  <svg aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/35 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  </button>
                   {/* 액션 */}
-                  <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex shrink-0 items-center gap-1.5">
                     <button
+                      type="button"
                       onClick={() => toggleStatus(note)}
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-all hover:opacity-80 ${sc.bg}`}
+                      className={`rounded-lg px-3 text-[10px] font-medium transition-all hover:opacity-80 ${sc.bg}`}
                     >
                       {sc.label}
                     </button>
                     <button
+                      type="button"
                       onClick={() => openEdit(note)}
-                      className="text-[10px] px-2 py-0.5 rounded-full border border-[#e8e8e4] text-[#1a1a1a]/50 hover:border-[#c8c8c4] hover:text-[#111110] transition-all"
+                      className="rounded-lg border border-[#e8e8e4] px-3 text-[10px] text-[#1a1a1a]/50 transition-all hover:border-[#c8c8c4] hover:text-[#111110]"
                     >
                       수정
                     </button>
                     <button
+                      type="button"
+                      aria-label={`${note.title} 패치노트 삭제`}
                       onClick={() => handleDelete(note.id)}
-                      className="text-[#1a1a1a]/20 hover:text-[#B85C33] transition-colors p-1"
+                      className="min-w-11 p-1 text-[#1a1a1a]/35 transition-colors hover:text-[#B85C33]"
                     >
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
                   </div>
-                  <svg className={`w-3.5 h-3.5 text-[#1a1a1a]/25 transition-transform shrink-0 ${isExpanded ? "rotate-180" : ""}`}
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
                 </div>
 
                 {/* 변경사항 상세 */}
@@ -1271,13 +1381,13 @@ function ArchitectureTab() {
         </div>
         <div className="p-4">
           {loading ? (
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div role="status" aria-live="polite" aria-busy="true" aria-label="연동 상태를 불러오는 중입니다." className="grid gap-2 sm:grid-cols-2">
               {[0, 1, 2, 3].map((i) => (
                 <div key={i} className="h-[58px] rounded-xl border border-[#e8e8e4] bg-[#fafaf8] animate-pulse" />
               ))}
             </div>
           ) : statusError ? (
-            <div className="rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-[12px] text-[#B85C33]">
+            <div role="alert" className="rounded-lg border border-[#F6D5C5] bg-[#FEF3EE] px-4 py-3 text-[12px] text-[#B85C33]">
               {statusError}
             </div>
           ) : items.length === 0 ? (
@@ -1382,9 +1492,9 @@ function GitLogTab() {
 
   useEffect(() => { fetchCommits() }, [fetchCommits])
 
-  if (loading) return <div className="text-center py-12 text-[#1a1a1a]/40 text-[13px]">git log 로딩중...</div>
-  if (error) return (
-    <div className="bg-[#FEF3EE] border border-[#F6D5C5] rounded-xl p-5 text-[#B85C33] text-[13px]">{error}</div>
+  if (loading) return <DevLoadingState label="배포 이력을 불러오는 중입니다." />
+  if (error && commits.length === 0) return (
+    <DevLoadError message={error} onRetry={() => void fetchCommits(true)} />
   )
 
   const getCommitType = (message: string) => {
@@ -1417,7 +1527,14 @@ function GitLogTab() {
     })
 
   return (
-    <div>
+    <div className="space-y-4">
+      {error ? (
+        <DevLoadError
+          message={error}
+          onRetry={() => void fetchCommits(true)}
+          hasStaleData
+        />
+      ) : null}
       <div className="flex items-center justify-between mb-5">
         <p className="text-[12px] text-[#1a1a1a]/40">최근 {commits.length}개 커밋</p>
         <div className="flex items-center gap-3">
@@ -1453,8 +1570,11 @@ function GitLogTab() {
                     {!(isLastInGroup && isLastGroup) && <div className="w-px flex-1 min-h-[16px] bg-[#f0f0ec]" />}
                   </div>
 
-                  <div
-                    className="flex-1 flex items-start gap-3 py-2.5 border-b border-[#f5f5f2] last:border-0 cursor-pointer hover:bg-[#fafaf8] -mx-2 px-2 rounded-lg transition-colors"
+                  <button
+                    type="button"
+                    aria-expanded={isExpanded}
+                    aria-label={`${commit.message} 커밋 상세 ${isExpanded ? "접기" : "펼치기"}`}
+                    className="-mx-2 flex min-h-11 flex-1 cursor-pointer items-start gap-3 rounded-lg border-b border-[#f5f5f2] px-2 py-2.5 text-left transition-colors last:border-0 hover:bg-[#fafaf8]"
                     onClick={() => toggleCommit(commit.hash)}
                   >
                     <span className="font-mono text-[11px] text-[#1a1a1a]/30 bg-[#f5f5f2] px-1.5 py-0.5 rounded shrink-0 mt-0.5">
@@ -1488,7 +1608,7 @@ function GitLogTab() {
                         )}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 </div>
               )
             })}
@@ -1536,7 +1656,7 @@ function ReleaseCriteriaTab({
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#084734]/60">Release gate</p>
         <h2 className="mt-1 text-lg font-bold text-[#084734]">공개는 체크리스트가 아니라 증거로 승인합니다.</h2>
         <p className="mt-2 text-[13px] leading-6 text-[#084734]/75">
-          아래 네 영역의 근거가 모두 있고 차단급 버그가 없을 때만 공개합니다. 현재 오픈 버그는 {openBugCount}건입니다.
+          근거 4종 + 차단급 버그 0건일 때만 공개 — 오픈 {openBugCount}건
         </p>
       </div>
 
@@ -1596,6 +1716,21 @@ export default function DevPage() {
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
   }, [])
 
+  const handleTabKeyDown = useCallback((event: React.KeyboardEvent<HTMLButtonElement>, currentTab: Tab) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return
+    event.preventDefault()
+
+    const currentIndex = TABS.findIndex((item) => item.id === currentTab)
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? TABS.length - 1
+        : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + TABS.length) % TABS.length
+    const nextTab = TABS[nextIndex].id
+    selectTab(nextTab)
+    requestAnimationFrame(() => document.getElementById(`dev-tab-${nextTab}`)?.focus())
+  }, [selectTab])
+
   useEffect(() => {
     // dev 환경 자동 스킵
     if (process.env.NEXT_PUBLIC_SKIP_ADMIN_AUTH === "true") {
@@ -1621,7 +1756,7 @@ export default function DevPage() {
     return () => window.removeEventListener("popstate", handlePopState)
   }, [])
 
-  if (!token) return null
+  if (!token) return <DevLoadingState label="개발 도구 접근 권한을 확인하는 중입니다." />
 
   // Branch users can't access dev mode
   if (role === "branch") {
@@ -1635,18 +1770,18 @@ export default function DevPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="mx-auto max-w-5xl px-4 sm:px-0 [&_button]:min-h-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_button]:focus-visible:ring-offset-2 [&_input]:min-h-11 [&_input]:focus-visible:outline-none [&_input]:focus-visible:ring-2 [&_input]:focus-visible:ring-[#084734] [&_input]:focus-visible:ring-offset-2 [&_select]:min-h-11 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-[#084734] [&_select]:focus-visible:ring-offset-2 [&_textarea]:focus-visible:outline-none [&_textarea]:focus-visible:ring-2 [&_textarea]:focus-visible:ring-[#084734] [&_textarea]:focus-visible:ring-offset-2">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
-          <h1 className="text-2xl font-bold text-gray-900">Dev Mode</h1>
+          <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">Dev Mode</h1>
         </div>
-        <p className="text-sm text-gray-500">프로젝트 현황 · 공개 기준 · 버그 추적 · 데이터 품질 · 배포 이력</p>
+        <p className="text-[13px] text-[#1a1a1a]/45">프로젝트 현황 · 공개 기준 · 버그 추적 · 데이터 품질 · 배포 이력</p>
       </div>
 
       {/* Tabs */}
       <div
-        className="mb-4 grid gap-1 rounded-2xl border border-[#e8e8e4] bg-[#f0f0ec] p-1 sm:grid-cols-2 lg:grid-cols-7"
+        className="mb-4 grid grid-cols-2 gap-1 rounded-2xl border border-[#e8e8e4] bg-[#f0f0ec] p-1 lg:grid-cols-7"
         role="tablist"
         aria-label="Dev Mode sections"
       >
@@ -1658,7 +1793,9 @@ export default function DevPage() {
             role="tab"
             aria-selected={tab === t.id}
             aria-controls={`dev-panel-${t.id}`}
+            tabIndex={tab === t.id ? 0 : -1}
             onClick={() => selectTab(t.id)}
+            onKeyDown={(event) => handleTabKeyDown(event, t.id)}
             className={`relative min-h-11 rounded-xl px-3 py-2 text-left text-[13px] font-semibold transition-colors ${
               tab === t.id
                 ? "bg-white text-[#111110] shadow-sm"

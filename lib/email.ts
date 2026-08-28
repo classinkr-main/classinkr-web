@@ -59,6 +59,19 @@ export interface SendResult {
 const RESEND_FROM = process.env.RESEND_FROM ?? "Classin <noreply@classin.ai.kr>"
 const GMAIL_FROM = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ?? ""
 const RESEND_BATCH_SIZE = 100
+const EMAIL_PROVIDER_NOT_CONFIGURED = "이메일 발송 공급자가 설정되지 않았습니다."
+
+function unavailableProviderResult(count: number, context: string): SendResult {
+  // simulation 은 실제 공급자 호출이 아니다. 이를 sent 로 집계하면 캠페인·자동화 로그에
+  // 허위 성공이 남으므로 운영 실패로 명시한다. 수신자 주소는 로그에 남기지 않는다.
+  console.error(`[EMAIL] ${context} 발송 중단: ${EMAIL_PROVIDER_NOT_CONFIGURED} (${count}건)`)
+  return {
+    provider: "simulation",
+    sent: 0,
+    failed: count,
+    errors: [EMAIL_PROVIDER_NOT_CONFIGURED],
+  }
+}
 
 /* ── HTML 래퍼 (캠페인용) ────────────────────────────────────── */
 
@@ -91,6 +104,26 @@ export function wrapCampaignHtml(body: string, unsubscribeUrl?: string, tracking
   ${trackingPixel}
 </body>
 </html>`
+}
+
+/* ── 클릭 추적 링크 재작성(2026-08-18 성과 루프) ─────────────────
+   캠페인 본문의 절대 URL 링크를 클릭 추적 리다이렉트로 치환한다.
+   - href="http(s)://..." 만 대상 — mailto:·tel:·앵커·상대경로는 그대로 둔다.
+   - excludeUrlSubstrings(수신거부·추적 URL 등)는 원본 유지 — 토큰이 실린 URL을
+     이중 리다이렉트로 감싸면 검증이 깨진다.
+   - 서명·URL 조립은 호출부가 buildTrackedUrl 로 주입한다(이 함수는 순수 → 단위테스트 대상).
+   - href 속성값은 HTML 이스케이프(&amp;) 상태일 수 있어 풀고 → 조립 → 다시 이스케이프한다. */
+export function rewriteCampaignLinksForTracking(
+  html: string,
+  buildTrackedUrl: (url: string) => string,
+  excludeUrlSubstrings: readonly string[] = []
+): string {
+  return html.replace(/href="(https?:\/\/[^"]+)"/g, (match, attrUrl: string) => {
+    const rawUrl = attrUrl.replace(/&amp;/g, "&")
+    if (excludeUrlSubstrings.some((fragment) => rawUrl.includes(fragment))) return match
+    const tracked = buildTrackedUrl(rawUrl)
+    return `href="${tracked.replace(/&/g, "&amp;")}"`
+  })
 }
 
 /* ── 알림 메일 래퍼 ───────────────────────────────────────────── */
@@ -283,12 +316,8 @@ export async function sendBatchEmail(emails: SingleEmail[]): Promise<SendResult>
     return sendViaWebhook(webhookUrl, emails)
   }
 
-  // 3순위: 시뮬레이션
-  console.log(`[EMAIL-SIM] ${emails.length}건 발송 시뮬레이션 (Resend·Webhook 모두 미설정)`)
-  emails.slice(0, 3).forEach((e) => console.log(`  → ${e.to}: ${e.subject}`))
-  if (emails.length > 3) console.log(`  ... 외 ${emails.length - 3}건`)
-
-  return { provider: "simulation", sent: emails.length, failed: 0 }
+  // 3순위: 공급자 미설정. simulation 은 실제 발송 성공으로 집계하지 않는다.
+  return unavailableProviderResult(emails.length, "캠페인")
 }
 
 /**
@@ -332,7 +361,6 @@ export async function sendInternalNotification(params: {
     return sendViaResend(emails)
   }
 
-  // 3순위: 시뮬레이션
-  console.log(`[EMAIL-SIM] 내부 알림 ${emails.length}건 시뮬레이션`)
-  return { provider: "simulation", sent: emails.length, failed: 0 }
+  // 3순위: 공급자 미설정. 내부 알림도 실제 발송 성공으로 집계하지 않는다.
+  return unavailableProviderResult(emails.length, "내부 알림")
 }

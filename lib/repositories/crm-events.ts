@@ -448,8 +448,9 @@ export async function listCrmCustomerEvents(
   }
 }
 
-// 팀 응답으로 치는 기록 종류 allowlist — 사람이 남긴 기록만.
-const RESPONSE_SOURCE_TYPES = ["manual_note", "call", "sms", "meeting_minutes", "recording", "lead_contact_log"] as const
+// 실제 접촉으로 치는 기록 종류 allowlist. 내부 메모(manual_note)는 사람이 남겨도 고객과
+// 접촉했다는 증거가 아니므로 최초 응답·최근 컨택에서 제외한다.
+const RESPONSE_SOURCE_TYPES = ["call", "sms", "meeting_minutes", "recording", "lead_contact_log"] as const
 const CONTACT_PAGE_SIZE = 1000
 const CONTACT_MAX_PAGES = 20
 
@@ -460,6 +461,16 @@ export interface CrmCustomerContactMaps {
 
 export function crmContactTargetKey(targetType: CrmCustomerEventTargetType, targetId: string) {
   return `${targetType}:${targetId}`
+}
+
+function earlierContact(left: string | undefined, right: string) {
+  if (!left) return right
+  return new Date(right).getTime() < new Date(left).getTime() ? right : left
+}
+
+function laterContact(left: string | undefined, right: string) {
+  if (!left) return right
+  return new Date(right).getTime() > new Date(left).getTime() ? right : left
 }
 
 /**
@@ -497,11 +508,40 @@ export async function getCrmCustomerContactMaps(): Promise<CrmCustomerContactMap
       const id = String(row.target_id)
       const targetType = row.target_type as CrmCustomerEventTargetType
       const occurredAt = String(row.occurred_at)
-      if (targetType === "lead" && !firstResponseByLead.has(id)) {
-        firstResponseByLead.set(id, occurredAt)
+      if (targetType === "lead") {
+        firstResponseByLead.set(id, earlierContact(firstResponseByLead.get(id), occurredAt))
       }
-      // 오름차순으로 읽으므로 같은 대상의 마지막 대입이 최신 컨택이다.
-      latestContactByTarget.set(crmContactTargetKey(targetType, id), occurredAt)
+      const targetKey = crmContactTargetKey(targetType, id)
+      latestContactByTarget.set(targetKey, laterContact(latestContactByTarget.get(targetKey), occurredAt))
+    }
+    if (rows.length < CONTACT_PAGE_SIZE) break
+  }
+
+  // 연락 로그가 1차 증거이고 crm_customer_events는 파생 미러다. 미러가 fail-soft로
+  // 실패해도 최초 응답·최근 컨택이 사라지지 않도록 원본 로그를 직접 병합한다.
+  for (let page = 0; ; page += 1) {
+    if (page >= CONTACT_MAX_PAGES) {
+      throw new Error(
+        `리드 연락 기록 조회가 ${CONTACT_MAX_PAGES}페이지(${CONTACT_MAX_PAGES * CONTACT_PAGE_SIZE}행)를 초과했습니다 — 페이지 상한을 재검토하세요.`
+      )
+    }
+    const from = page * CONTACT_PAGE_SIZE
+    const { data, error } = await supabase
+      .from("lead_contact_logs")
+      .select("lead_id, contacted_at")
+      .order("contacted_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + CONTACT_PAGE_SIZE - 1)
+
+    if (error) throw new Error(`리드 연락 기록 조회 실패: ${error.message}`)
+
+    const rows = data ?? []
+    for (const row of rows) {
+      const leadId = String(row.lead_id)
+      const contactedAt = String(row.contacted_at)
+      firstResponseByLead.set(leadId, earlierContact(firstResponseByLead.get(leadId), contactedAt))
+      const targetKey = crmContactTargetKey("lead", leadId)
+      latestContactByTarget.set(targetKey, laterContact(latestContactByTarget.get(targetKey), contactedAt))
     }
     if (rows.length < CONTACT_PAGE_SIZE) break
   }

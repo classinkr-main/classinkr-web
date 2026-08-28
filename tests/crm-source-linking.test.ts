@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest"
-import { isPlaceholderCrmName } from "@/lib/crm-source-linking"
+import {
+  isPlaceholderCrmName,
+  isUnsafeCrmTargetLabel,
+  scoreCrmEntityMatch,
+} from "@/lib/crm-source-linking"
 
 describe("isPlaceholderCrmName", () => {
   it("matches the existing HW/SW/MKT prefix placeholders", () => {
@@ -39,5 +43,48 @@ describe("isPlaceholderCrmName", () => {
     expect(isPlaceholderCrmName(null)).toBe(false)
     expect(isPlaceholderCrmName(undefined)).toBe(false)
     expect(isPlaceholderCrmName("")).toBe(false)
+  })
+})
+
+describe("CRM alias safety", () => {
+  it("does not let generic class/classin aliases promote an unrelated source to 90%", () => {
+    const match = scoreCrmEntityMatch({
+      sourceName: "갈무",
+      targetName: "Classin 내부 테스트",
+      targetType: "partner_account",
+      targetId: "test-account",
+      aliases: [
+        {
+          alias: "classin",
+          targetType: "partner_account",
+          targetId: "test-account",
+          confidenceBoost: 0.12,
+        },
+      ],
+    })
+
+    expect(match.strategy).not.toBe("alias")
+    expect(match.evidence).not.toContain("alias:classin")
+    expect(match.score).toBeLessThan(0.9)
+  })
+
+  it("does not use a two-character alias without owner scope", () => {
+    const match = scoreCrmEntityMatch({
+      sourceName: "갈무",
+      targetName: "정상 고객",
+      targetType: "customer",
+      targetId: "customer-1",
+      aliases: [{ alias: "갈무", targetType: "customer", targetId: "customer-1" }],
+    })
+
+    expect(match.strategy).not.toBe("alias")
+    expect(match.score).toBeLessThan(0.9)
+  })
+
+  it("recognizes internal Classin and generic test-deal targets without blocking testbed names", () => {
+    expect(isUnsafeCrmTargetLabel("Classin 내부 테스트")).toBe(true)
+    expect(isUnsafeCrmTargetLabel("클래스인 테스트 고객")).toBe(true)
+    expect(isUnsafeCrmTargetLabel("테스트 딜")).toBe(true)
+    expect(isUnsafeCrmTargetLabel("테스트베드 아카데미")).toBe(false)
   })
 })

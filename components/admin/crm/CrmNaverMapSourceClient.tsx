@@ -412,7 +412,7 @@ export default function CrmNaverMapSourceClient() {
             지도 원천
           </h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-6 text-[#1a1a1a]/55">
-            네이버 공유지도를 CRM 정본과 분리해 보관하고, 주소 기반 지역 라벨과 기존 고객·REV 매칭 후보를 검수합니다.
+            네이버 공유지도 원천 — 지역 라벨·고객/REV 매칭 후보 검수
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -456,7 +456,7 @@ export default function CrmNaverMapSourceClient() {
             <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[#084734]" />
           </a>
           <p className="mt-1 text-[12px] leading-5 text-[#1a1a1a]/45">
-            URL은 원천 위치를 가리키는 참조값입니다. 장소 목록은 스냅샷으로 가져온 뒤 기존 CRM·REV와 비교합니다.
+            참조 URL · 스냅샷으로 가져와 기존 CRM·REV와 비교
           </p>
         </div>
         <div className={`rounded-lg border px-3 py-2 text-left sm:text-right ${data?.summary.total ? "border-[#D7EBDD] bg-[#ECFDF5]" : "border-[#E9D8B4] bg-[#FFF9ED]"}`}>

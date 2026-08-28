@@ -38,8 +38,6 @@ export interface SourceOption {
   label: string
   /** 소스 고정색(hex) */
   dot: string
-  /** 그리드 칩에 붙는 한 글자 배지. 색만으로 부족한 소스에만 준다. */
-  badge?: string
   /** 읽기 전용 소스를 어디서 고치는지 알려주는 안내문 */
   readonlyHelp?: string
   /** 상세 패널의 바깥 링크 라벨 */
@@ -52,7 +50,6 @@ export const SOURCE_OPTIONS: SourceOption[] = [
     value: "partner",
     label: "파트너 일정",
     dot: "#B85C33",
-    badge: "P",
     readonlyHelp: "파트너 일정은 파트너 운영 상세에서 수정합니다.",
     openLabel: "파트너 열기",
   },
@@ -67,7 +64,6 @@ export const SOURCE_OPTIONS: SourceOption[] = [
     value: "notion",
     label: "마케팅(노션)",
     dot: "#0E766E",
-    badge: "M",
     readonlyHelp: "마케팅 캘린더는 노션에서 수정합니다.",
     openLabel: "노션에서 열기",
   },
@@ -75,7 +71,6 @@ export const SOURCE_OPTIONS: SourceOption[] = [
     value: "showroom",
     label: "쇼룸 예약",
     dot: "#5B6470",
-    badge: "S",
     readonlyHelp: "쇼룸 예약은 구글 캘린더에서 수정합니다.",
     openLabel: "구글 캘린더에서 열기",
   },
@@ -83,9 +78,17 @@ export const SOURCE_OPTIONS: SourceOption[] = [
     value: "team_event",
     label: "팀원 행사",
     dot: "#6D4AA8",
-    badge: "행",
     readonlyHelp: "팀원 행사는 구글 캘린더에서 수정합니다.",
     openLabel: "구글 캘린더에서 열기",
+  },
+  {
+    // 라벨은 원본 구글 캘린더 이름 그대로. 이 소스에는 데모 외 MKT 회의·연락 리마인더도
+    // 섞여 있어서(2026-08-28 실측), 우리가 "데모"로 재분류하지 않는다.
+    value: "compass_demo",
+    label: "MKT 데모일정",
+    dot: "#2F5D8C",
+    readonlyHelp: "MKT 데모일정은 Compass(마케팅팀 앱)와 원본 구글 캘린더에서 수정합니다.",
+    openLabel: "Compass에서 열기",
   },
   { value: "holiday", label: "공휴일", dot: "#B43E3E", readonlyHelp: "공휴일은 자동으로 채워집니다." },
 ]
@@ -121,10 +124,6 @@ export function getEventDotColor(event: CalendarEvent): string {
   return getSourceColor(source)
 }
 
-export function getEventBadge(event: CalendarEvent): string | null {
-  return SOURCE_BY_VALUE.get(getEventSource(event))?.badge ?? null
-}
-
 export function getReadonlyHelp(event: CalendarEvent): string {
   return (
     SOURCE_BY_VALUE.get(getEventSource(event))?.readonlyHelp ??
@@ -133,6 +132,11 @@ export function getReadonlyHelp(event: CalendarEvent): string {
 }
 
 export function getOpenLabel(event: CalendarEvent): string {
+  // MKT 데모일정은 리드가 붙은 행만 Compass 상세로 가고, 나머지는 구글 캘린더 원본으로 간다 —
+  // 링크가 가리키는 곳과 라벨이 어긋나지 않게 목적지를 보고 말한다.
+  if (getEventSource(event) === "compass_demo" && event.href && !event.href.includes("mkt.classin.co.kr")) {
+    return "구글 캘린더에서 열기"
+  }
   return SOURCE_BY_VALUE.get(getEventSource(event))?.openLabel ?? "원본 열기"
 }
 
@@ -162,4 +166,20 @@ export function sortByTimeOfDay(list: CalendarEvent[]): CalendarEvent[] {
     if (aTimed && bTimed) return (a.time ?? "").localeCompare(b.time ?? "")
     return 0
   })
+}
+
+/**
+ * 담당자 이니셜 — 솔리드 칩·스윔레인 아바타 공용 규칙.
+ *
+ * 성(name[0])이 아니라 "이름 첫 자"를 쓴다: 김정무·김민재가 둘 다 "김"이 되는
+ * 성 충돌이 명부에 실재한다(2026-08-28). 이름 첫 자는 현 명부에서 전원 유일하다
+ * (정·민·찬·소·준·희·규·왕·한). 팀 호칭 관례(찬우·소망)와도 같은 축이다.
+ *  - 한글 2자 이상: 두 번째 글자(성 제외 이름 첫 자)
+ *  - 한글 1자·비한글(명부 미매칭 원문): 첫 글자 대문자
+ */
+export function getAssigneeInitial(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) return "?"
+  if (/^[가-힣]{2,}/.test(trimmed)) return trimmed[1]
+  return trimmed[0].toUpperCase()
 }

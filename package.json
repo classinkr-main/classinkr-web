@@ -22,6 +22,9 @@
     "import:cs-figma-assets": "node scripts/import-cs-figma-assets.mjs",
     "check:cs-figma-assets": "node scripts/check-cs-figma-assets.mjs",
     "check:alpha-db": "npx tsx scripts/check-alpha-db.ts",
+    "check:db": "npx tsx scripts/check-db-schema.ts",
+    "preview:crm-matching": "npx --node-options=--conditions=react-server tsx scripts/preview-crm-link-candidates.ts",
+    "preview:lead-magnets": "node --env-file=.env.local scripts/import-lead-magnets.mjs --dry-run",
     "sync:neo:mcp": "node scripts/sync-neo-via-mcp.mjs",
     "check:admin-rbac": "npx tsx scripts/check-admin-rbac-readiness.ts",
     "sync:channel-docs": "npx tsx scripts/sync-channel-documents.ts"

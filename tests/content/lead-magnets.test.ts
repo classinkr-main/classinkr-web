@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { getLeadMagnetItemCount, leadMagnets } from "@/lib/lead-magnets"
+import { leadMagnets } from "@/lib/lead-magnets"
+import { getLeadMagnetItemCount } from "@/lib/lead-magnets-helpers"
 
 describe("lead magnet content quality", () => {
   it("keeps the pre-adoption resource as a self-assessment kit, not a thin checklist", () => {

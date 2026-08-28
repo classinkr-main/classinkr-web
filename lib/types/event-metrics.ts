@@ -1,5 +1,6 @@
 // lib/types/event-metrics.ts
-// 행사(캠페인) 성과 트래킹 — DB 마이그레이션 전 임시 JSON 저장소용
+// 행사(캠페인) 성과 트래킹 — Supabase(event_metrics) 저장소용 타입. 저장소는
+// lib/repositories/event-metrics.ts(2026-08-20 이전 완료), 이 파일은 순수 타입/상수만 둔다.
 
 export type AdChannel = "google" | "meta" | "naver" | "kakao" | "youtube" | "offline" | "other"
 
@@ -70,6 +71,8 @@ export const AD_CHANNEL_LABEL: Record<AdChannel, string> = {
   other: "기타",
 }
 
+// 제3자 채널 식별색 — DESIGN.md §2 "제3자 채널 식별색" 등재 토큰(2026-08-18).
+// 차트·범례·채널 점 표시에만 쓴다. CTA·버튼·뱃지·텍스트 강조 사용은 팔레트 위반.
 export const AD_CHANNEL_COLOR: Record<AdChannel, string> = {
   google: "#4285F4",
   meta: "#0866FF",

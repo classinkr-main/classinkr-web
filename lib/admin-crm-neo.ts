@@ -1,6 +1,7 @@
 import "server-only"
 
 import {
+  EXTERNAL_CRM_KOREA_ONLY,
   getKoreaTeamManagerSet,
   isKoreaScopedExternalRecord,
 } from "@/lib/admin-crm-scope"
@@ -10,7 +11,7 @@ import {
   resolveOwnerName,
 } from "@/lib/external-crm/owner-names"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
-import { fetchSupabasePages } from "@/lib/supabase/pagination"
+import { fetchSupabasePages, type SupabasePagedResult } from "@/lib/supabase/pagination"
 import { getFxRates } from "@/lib/billing/fx"
 
 export type NeoCrmGranularity = "week" | "month" | "quarter" | "year"
@@ -135,6 +136,14 @@ function groupByOwner(
     .sort((a, b) => b.amount - a.amount)
 }
 const PERIOD_SCAN_LIMIT = 5000
+// isScoped은 KOREA_ONLY일 때 payload를 보지 않으므로 그 경우 select에서 뺀다.
+// 플래그가 false로 돌아오면 휴리스틱이 payload를 다시 필요로 하니 컬럼을 되살린다.
+const MONEY_WINDOW_SCOPE_SELECT = EXTERNAL_CRM_KOREA_ONLY
+  ? "owner_name, amount, occurred_at, display_name, status, external_id, object_api_key"
+  : "owner_name, payload, amount, occurred_at, display_name, status, external_id, object_api_key"
+const ACCOUNT_SCOPE_SELECT = EXTERNAL_CRM_KOREA_ONLY
+  ? "owner_name, amount, occurred_at"
+  : "owner_name, payload, amount, occurred_at"
 const RECENT_ORDER_LIMIT = 12
 const TEAM_REVENUE_ROW_LIMIT = 50
 const RECENT_ORDER_CANDIDATE_PAGE_SIZE = 1000
@@ -226,6 +235,41 @@ function fetchExternalCrmPages<T>(
       return query.range(from, to)
     },
   })
+}
+
+// KOREA_ONLY 스코프에서 accountTotal은 owner_name 제외 목록만 반영하면 되므로(payload
+// 휴리스틱 불필요) 전 행을 끌어와 filter(isScoped).length 하는 대신 count head 왕복으로 센다.
+// 제외 목록이 있으면 전체 카운트에서 제외분 카운트를 빼(둘 다 head count) NULL owner_name
+// 행이 NOT IN 쿼리에서 암묵적으로 걸러지는 함정을 피한다.
+async function countKoreaScopedAccountTotal(
+  sb: SupabaseAdminClient,
+  excludedOwnerIds: Set<string>
+): Promise<SupabasePagedResult<ScopedAmountRecord>> {
+  const baseQuery = () =>
+    sb
+      .from("external_crm_records")
+      .select("*", { count: "exact", head: true })
+      .eq("source_system", "xiaoshouyi")
+      .eq("object_api_key", "account")
+      .eq("is_stale", false)
+
+  const totalResult = await baseQuery()
+  if (totalResult.error) {
+    return { data: [], error: totalResult.error, count: 0, truncated: false, pages: 1 }
+  }
+  const total = totalResult.count ?? 0
+
+  const excludeList = Array.from(excludedOwnerIds)
+  if (excludeList.length === 0) {
+    return { data: [], error: null, count: total, truncated: false, pages: 1 }
+  }
+
+  const excludedResult = await baseQuery().in("owner_name", excludeList)
+  if (excludedResult.error) {
+    return { data: [], error: excludedResult.error, count: 0, truncated: false, pages: 1 }
+  }
+  const excluded = excludedResult.count ?? 0
+  return { data: [], error: null, count: Math.max(0, total - excluded), truncated: false, pages: 1 }
 }
 
 function pad2(value: number) {
@@ -377,10 +421,41 @@ async function computeNeoCrmTeamReport(input: {
   const moneyWindowSelect = (objectApiKey: string) =>
     fetchExternalCrmPages<ScopedOrderRecord>(sb, {
       objectApiKey,
-      select: "owner_name, payload, amount, occurred_at, display_name, status, external_id, object_api_key",
+      select: MONEY_WINDOW_SCOPE_SELECT,
       startIso: windowStartIso,
       endIso,
     })
+
+  // koreaManagers는 isKoreaScopedExternalRecord가 KOREA_ONLY일 때 무조건 true를 반환해
+  // 참고조차 안 한다 — branch_rev_deals 전량 스캔을 아예 건너뛴다. 플래그가 false로
+  // 돌아오면 휴리스틱이 다시 이 시트를 필요로 하니 스캔을 복구한다.
+  const teamManagerResultPromise = EXTERNAL_CRM_KOREA_ONLY
+    ? Promise.resolve({
+        data: [] as Array<{ team: string | null; manager: string | null }>,
+        error: null,
+        count: null,
+        truncated: false,
+        pages: 0,
+      })
+    : fetchSupabasePages<{ team: string | null; manager: string | null }>({
+        maxRows: PERIOD_SCAN_LIMIT,
+        fetchPage: (from, to) =>
+          sb
+            .from("branch_rev_deals")
+            .select("team, manager")
+            .range(from, to),
+      })
+
+  // excludedOwnerIds는 isScoped 전반에서 쓰이는 데다, KOREA_ONLY일 때 accountTotal의
+  // head-count 쿼리도 이 값을 먼저 알아야 조립된다. 프라미스를 미리 만들어 두 자리에서
+  // 재사용하면(await은 한 번) 실제 네트워크 호출은 하나로 유지되면서 배치 병렬성도 보존된다.
+  const excludedOwnerIdsPromise = getExcludedXiaoshouyiOwnerIds(sb)
+  const accountTotalPromise = EXTERNAL_CRM_KOREA_ONLY
+    ? excludedOwnerIdsPromise.then((ids) => countKoreaScopedAccountTotal(sb, ids))
+    : fetchExternalCrmPages<ScopedAmountRecord>(sb, {
+        objectApiKey: "account",
+        select: ACCOUNT_SCOPE_SELECT,
+      })
 
   const [
     teamManagerResult,
@@ -397,25 +472,15 @@ async function computeNeoCrmTeamReport(input: {
     ownerNames,
     excludedOwnerIds,
   ] = await Promise.all([
-    fetchSupabasePages<{ team: string | null; manager: string | null }>({
-      maxRows: PERIOD_SCAN_LIMIT,
-      fetchPage: (from, to) =>
-        sb
-          .from("branch_rev_deals")
-          .select("team, manager")
-          .range(from, to),
-    }),
+    teamManagerResultPromise,
     moneyWindowSelect("SalesPerformance__c"),
     moneyWindowSelect("opportunity"),
     listRecentOpportunityRows(sb),
     moneyWindowSelect("Collection__c"),
+    accountTotalPromise,
     fetchExternalCrmPages<ScopedAmountRecord>(sb, {
       objectApiKey: "account",
-      select: "owner_name, payload, amount, occurred_at",
-    }),
-    fetchExternalCrmPages<ScopedAmountRecord>(sb, {
-      objectApiKey: "account",
-      select: "owner_name, payload, amount, occurred_at",
+      select: ACCOUNT_SCOPE_SELECT,
       startIso: windowStartIso,
       endIso,
     }),
@@ -437,7 +502,7 @@ async function computeNeoCrmTeamReport(input: {
       .order("synced_at", { ascending: false })
       .limit(1),
     getXiaoshouyiOwnerNameMap(sb),
-    getExcludedXiaoshouyiOwnerIds(sb),
+    excludedOwnerIdsPromise,
   ])
 
   const blockingError =
@@ -559,9 +624,11 @@ async function computeNeoCrmTeamReport(input: {
     .filter((row) => isPrevPace(row.occurred_at))
     .reduce((total, row) => total + (Number(row.amount) || 0), 0)
 
-  const accountTotal = (
-    (accountTotalResult.data ?? []) as Array<{ owner_name: string | null; payload: Record<string, unknown> | null }>
-  ).filter(isScoped).length
+  const accountTotal = EXTERNAL_CRM_KOREA_ONLY
+    ? accountTotalResult.count ?? 0
+    : (
+        (accountTotalResult.data ?? []) as Array<{ owner_name: string | null; payload: Record<string, unknown> | null }>
+      ).filter(isScoped).length
   const accountWindow = (
     (accountWindowResult.error ? [] : accountWindowResult.data ?? []) as Array<{
       owner_name: string | null

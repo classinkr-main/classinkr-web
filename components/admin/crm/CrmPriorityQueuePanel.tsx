@@ -54,7 +54,7 @@ interface CrmPriorityQueue {
     laneTotals: Record<CrmPriorityLane, number>
     laneCritical: number
     sourceTotals?: { lead: number; neoAccount: number; task: number }
-    demo?: { total: number; matched: number; unmatched: number }
+    demo?: { total: number; matched: number; unmatched: number; down?: boolean }
   }
   buckets: Array<{ bucket: CrmPriorityBucket; label: string; count: number }>
   lanes: Array<{ lane: CrmPriorityLane; label: string; count: number }>
@@ -257,11 +257,15 @@ export default function CrmPriorityQueuePanel({
       setActingId(`${item.id}:contact`)
       setActionMessage(null)
       setError(null)
-      // 기록 저장과 상태 갱신은 별개의 두 요청이다. 뒤쪽이 실패했을 때 "저장 실패"라고만 하면
-      // 이미 남은 연락 기록을 운영자가 다시 입력해 중복이 생긴다 — 어디까지 됐는지 말한다.
+      // 로그 POST가 연락중 상태까지 한 계약으로 맞춘다. 다음 일정만 별도 PATCH이며,
+      // 그 부분 실패에서는 저장된 기록을 다시 입력하지 않도록 폼을 닫고 범위를 밝힌다.
       let logSaved = false
       try {
-        await adminFetchJsonCached<{ log: unknown }>(`/api/admin/leads/${encodeURIComponent(leadId)}/logs`, {
+        const contactResult = await adminFetchJsonCached<{
+          log: unknown
+          statusSync: "updated" | "unchanged" | "failed"
+          warning?: string
+        }>(`/api/admin/leads/${encodeURIComponent(leadId)}/logs`, {
           method: "POST",
           body: JSON.stringify({
             type: draft.type,
@@ -271,23 +275,25 @@ export default function CrmPriorityQueuePanel({
         })
         logSaved = true
 
-        const patch: { status: "contacted"; follow_up_at?: string | null } = { status: "contacted" }
+        const patch: { follow_up_at?: string | null } = {}
         if (draft.nextSchedule === "tomorrow") patch.follow_up_at = tomorrowMorningIso()
         if (draft.nextSchedule === "clear") patch.follow_up_at = null
-        await adminFetchJsonCached<{ lead: unknown }>(`/api/admin/leads/${encodeURIComponent(leadId)}`, {
-          method: "PATCH",
-          body: JSON.stringify(patch),
-        })
+        if ("follow_up_at" in patch) {
+          await adminFetchJsonCached<{ lead: unknown }>(`/api/admin/leads/${encodeURIComponent(leadId)}`, {
+            method: "PATCH",
+            body: JSON.stringify(patch),
+          })
+        }
 
         setLeadContactDraft(null)
-        setActionMessage("선택한 채널·결과로 연락 기록을 저장했습니다.")
+        setActionMessage(contactResult.warning ?? "선택한 채널·결과로 연락 기록을 저장했습니다.")
         await load({ force: true })
       } catch (err) {
         const detail = err instanceof Error ? err.message : "알 수 없는 오류"
         if (logSaved) {
           // 기록은 남았다 — 폼을 닫아 재입력(중복 기록)을 막고 남은 작업만 알린다.
           setLeadContactDraft(null)
-          setError(`연락 기록은 저장됐지만 상태·다음 일정 반영에 실패했습니다(${detail}). 리드 보드에서 상태를 확인하세요.`)
+          setError(`연락 기록·상태는 저장됐지만 다음 일정 반영에 실패했습니다(${detail}). 리드 보드에서 일정을 확인하세요.`)
           await load({ force: true })
         } else {
           setError(`연락 기록을 저장하지 못했습니다(${detail}). 입력은 그대로 두었으니 다시 시도하세요.`)
@@ -380,15 +386,24 @@ export default function CrmPriorityQueuePanel({
       </div>
 
       {/*
-        쇼룸 캘린더 일정 중 고객을 못 붙인 건 — 제목이 자유 텍스트라 전수 매칭이 안 된다.
-        조용히 버리면 "데모가 없다"로 오인되므로 건수를 그대로 드러낸다.
+        Compass 실측 데모 중 우리 리드/계정 전화로 붙지 않은 건 — 조용히 버리면
+        "데모가 없다"로 오인되므로 건수를 그대로 드러낸다. 연결이 끊긴 것과 데모가
+        없는 것도 구분해서 말한다.
       */}
-      {data?.summary.demo && data.summary.demo.unmatched > 0 ? (
+      {data?.summary.demo?.down ? (
+        <div className="mb-3 flex items-start gap-2 border-l-2 border-[#B85C33] px-3 py-2 text-[12px] text-[#1a1a1a]/55">
+          <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#B85C33]" />
+          <span>
+            Compass 연결이 끊겨 데모 신호가 빠졌습니다 — 데모가 없는 것이 아니라 확인할 수 없는
+            상태입니다.
+          </span>
+        </div>
+      ) : data?.summary.demo && data.summary.demo.unmatched > 0 ? (
         <div className="mb-3 flex items-start gap-2 border-l-2 border-[#A39E98] px-3 py-2 text-[12px] text-[#1a1a1a]/55">
           <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#1a1a1a]/35" />
           <span>
-            쇼룸 캘린더 데모 {data.summary.demo.total}건 중 {data.summary.demo.unmatched}건은 고객을
-            찾지 못해 우선순위에 반영되지 않았습니다 — 캘린더 제목에 고객명이 없거나 표기가 다릅니다.
+            Compass 데모 {data.summary.demo.total}건 중 {data.summary.demo.unmatched}건은 전화가
+            일치하는 리드·고객이 없어 우선순위에 반영되지 않았습니다.
           </span>
         </div>
       ) : null}

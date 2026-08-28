@@ -406,7 +406,7 @@ function ChannelTalkInbox() {
           </p>
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">채널톡 상담</h1>
           <p className="mt-1 text-[13px] text-[#615D59]">
-            상담 대화를 CRM 리드와 매칭하고, 자주 묻는 질문을 챗봇 학습 후보로 끌어옵니다.
+            상담 → CRM 매칭 · FAQ → 챗봇 학습 후보
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

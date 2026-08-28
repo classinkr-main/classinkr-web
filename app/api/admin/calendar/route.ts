@@ -9,6 +9,15 @@ import { daysBetween, isDateString } from "@/lib/admin-calendar/range"
 /** 한 번에 끌어올 수 있는 최대 기간. 8주 타임라인(56일)에 여유를 둔 상한. */
 const MAX_RANGE_DAYS = 120
 
+/**
+ * 캐시 층 세 겹 — 서로 어긋나지 않게 한 곳에 적어 둔다.
+ *  1) 화면: adminFetchJsonCached(ttl 60초) — 뷰를 오가도 같은 기간은 재요청하지 않는다.
+ *  2) 응답: adminCachedJson = private, max-age=30, stale-while-revalidate=120(어드민 공통 규약).
+ *     변경 직후엔 lib/admin-client.ts가 no-cache로 우회하므로 오래된 값이 남지 않는다.
+ *  3) 서버: 소스별 SWR 캐시(lib/admin-calendar/source-cache.ts) — 이 라우트의 콜드 비용을
+ *     결정하는 층이다. 1·2가 비어도 여기서 대부분 즉시 응답한다.
+ */
+
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req)
   if (err) return err

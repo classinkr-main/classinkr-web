@@ -1,14 +1,17 @@
 "use client"
 
-import { useDeferredValue, useMemo, type Dispatch, type SetStateAction } from "react"
+import { useDeferredValue, useMemo, useSyncExternalStore, type Dispatch, type SetStateAction } from "react"
+import Link from "next/link"
 import dynamic from "next/dynamic"
 import {
+  Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
   List as ListIcon,
   Search,
 } from "lucide-react"
+import { ChartSkeleton } from "@/components/admin/viz"
 import { CampaignExportButton } from "@/components/admin/campaigns/CampaignExportButton"
 import type { ExportColumn } from "@/components/admin/campaigns/CampaignExportButton"
 import { EventOriginMatrix } from "@/components/admin/campaigns/EventOriginMatrix"
@@ -16,6 +19,11 @@ import { EventCardHeader } from "@/components/admin/campaigns/EventCardHeader"
 import { EventDetailContent, buildFunnel } from "@/components/admin/campaigns/EventDetailContent"
 import { EventGalleryCard } from "@/components/admin/campaigns/EventGalleryCard"
 import { filterEvents } from "@/components/admin/campaigns/filter-events"
+import { GoalProgressPanel } from "@/components/admin/campaigns/GoalProgressPanel"
+import type { GoalEventRow } from "@/components/admin/campaigns/GoalProgressPanel"
+import { TopPerformersTable } from "@/components/admin/campaigns/TopPerformersTable"
+import type { PerformerRow } from "@/components/admin/campaigns/TopPerformersTable"
+import { distinguishingLabels, formatRange } from "@/components/admin/campaigns/event-format"
 import {
   EVENT_CATEGORIES,
   type EventCategory,
@@ -37,8 +45,155 @@ const EventDetailModal = dynamic(
 )
 const MetricsEditor = dynamic(() => import("./MetricsEditor"), { ssr: false })
 
+// 행사 성과 비교 차트(구 요약 탭에서 이동) — Recharts 청크는 표시 시점에만 로드한다.
+const EventFunnelCompareChart = dynamic(
+  () => import("@/components/admin/campaigns/CampaignCharts").then((m) => m.EventFunnelCompareChart),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[260px]" /> }
+)
+const EventRoiChart = dynamic(
+  () => import("@/components/admin/campaigns/CampaignCharts").then((m) => m.EventRoiChart),
+  { ssr: false, loading: () => <ChartSkeleton className="h-[200px]" /> }
+)
+
+// ─── timeline (calendar bar) — 구 요약 탭 TimelineRow 이동 ─────────────────────
+
+function cssPercent(value: number) {
+  return `${value.toFixed(3)}%`
+}
+
+let browserTimelineNow: Date | null = null
+
+function subscribeTimelineNow() {
+  return () => {}
+}
+
+function getBrowserTimelineNow() {
+  if (typeof window === "undefined") return null
+  browserTimelineNow ??= new Date()
+  return browserTimelineNow
+}
+
+function getServerTimelineNow() {
+  return null
+}
+
+function TimelineRow({ events }: { events: PublicEvent[] }) {
+  const timelineNow = useSyncExternalStore(
+    subscribeTimelineNow,
+    getBrowserTimelineNow,
+    getServerTimelineNow
+  )
+
+  function renderTimelineBody() {
+    if (!timelineNow) {
+      return (
+        <div className="relative px-4 pb-5 pt-4 sm:px-6" aria-hidden="true">
+          <div className="relative h-6 border-b border-dashed border-[#e8e8e4]" />
+          <div className="mt-3 space-y-2">
+            <div className="h-7 w-3/5 rounded-md bg-[#f0f0ec]" />
+            <div className="h-7 w-2/5 rounded-md bg-[#f0f0ec]" />
+          </div>
+        </div>
+      )
+    }
+
+    // 표시 범위: 현재 월 ±2개월 (5개월)
+    const start = new Date(timelineNow.getFullYear(), timelineNow.getMonth() - 2, 1)
+    const end = new Date(timelineNow.getFullYear(), timelineNow.getMonth() + 3, 0)
+    const totalMs = end.getTime() - start.getTime()
+    const months: { label: string; left: number }[] = []
+    for (let m = -2; m <= 2; m++) {
+      const d = new Date(timelineNow.getFullYear(), timelineNow.getMonth() + m, 1)
+      months.push({
+        label: `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}`,
+        left: ((d.getTime() - start.getTime()) / totalMs) * 100,
+      })
+    }
+    const todayLeft = Math.max(0, Math.min(100, ((timelineNow.getTime() - start.getTime()) / totalMs) * 100))
+
+    const sorted = [...events].sort(
+      (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+    )
+    // 바 폭이 좁아 CSS 절단이 앞에서부터 일어난다 — 공통 접두어를 벗겨 구분되는 꼬리를 남긴다.
+    const barLabels = distinguishingLabels(sorted.map((event) => event.title), 24)
+
+    return (
+      <div className="relative px-4 pb-5 pt-4 sm:px-6">
+        {/* month grid */}
+        <div className="relative h-6 border-b border-dashed border-[#e8e8e4]">
+          {months.map((m) => (
+            <div
+              key={m.label}
+              className="absolute top-0 -translate-x-1/2 text-[10px] font-medium text-[#1a1a1a]/40"
+              style={{ left: cssPercent(m.left) }}
+            >
+              {m.label}
+            </div>
+          ))}
+          {/* today marker */}
+          <div
+            className="absolute top-0 h-full w-px bg-[#B85C33]"
+            style={{ left: cssPercent(todayLeft) }}
+          />
+        </div>
+
+        {sorted.length === 0 ? (
+          <p className="py-8 text-center text-[12px] text-[#A39E98]">표시할 행사가 없습니다.</p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {sorted.map((event, index) => {
+              const s = new Date(event.startsAt).getTime()
+              const e = event.endsAt ? new Date(event.endsAt).getTime() : s + 24 * 3600 * 1000
+              const left = Math.max(0, ((s - start.getTime()) / totalMs) * 100)
+              const right = Math.min(100, ((e - start.getTime()) / totalMs) * 100)
+              const width = Math.max(4, right - left)
+              // 상태색은 DESIGN.md 운영 스케일 — 예정=Warning(#A8741A), 마감=뉴트럴(#A39E98).
+              const color =
+                event.status === "진행 중"
+                  ? "bg-[#084734]"
+                  : event.status === "예정"
+                    ? "bg-[#A8741A]"
+                    : "bg-[#A39E98]"
+              return (
+                <div key={event.id} className="relative h-7">
+                  <div
+                    className={`absolute top-1/2 -translate-y-1/2 rounded-md ${color} px-2 py-1 text-[11px] font-medium text-white truncate shadow-sm`}
+                    style={{ left: cssPercent(left), width: cssPercent(width), minWidth: "60px" }}
+                    title={`${event.title} · ${formatRange(event.startsAt, event.endsAt)}`}
+                  >
+                    {barLabels[index]}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#e8e8e4] bg-white">
+      <div className="flex items-center justify-between border-b border-[#e8e8e4] px-4 py-3 sm:px-6">
+        <h2 className="text-[14px] font-semibold text-[#111110]">캘린더 타임라인</h2>
+        <Link
+          href="/admin/calendar"
+          className="inline-flex items-center gap-1 rounded-lg border border-[#e8e8e4] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[#1a1a1a]/60 hover:text-[#111110]"
+        >
+          <CalendarIcon className="w-3.5 h-3.5" />
+          전체 캘린더
+        </Link>
+      </div>
+
+      {renderTimelineBody()}
+    </div>
+  )
+}
+
 /** 리스트에서 한 번에 그리는 퍼널 카드 수 — 카드 하나가 무거워(퍼널 시각화) 전량 렌더를 피한다. */
 const EVENT_CARD_STEP = 8
+// 갤러리는 2·3·4열 그리드라 12단위(공배수)로 펼쳐야 마지막 줄이 들쭉거리지 않는다.
+const GALLERY_STEP = 12
 
 // ─── event card ───────────────────────────────────────────────────────────────
 
@@ -131,6 +286,83 @@ export default function EventsTab({
   // 키 입력마다 목록 필터·CSV 컬럼 재계산이 동기로 돌지 않게 검색어만 지연시킨다.
   const deferredSearch = useDeferredValue(eventSearch)
 
+  // ─── 행사 성과 비교(구 요약 탭 이동) — 전부 perEventEcon/filtered 파생값 ─────────
+  // 요약 탭이 퍼포먼스 대시보드(perf 응답)로 재편되면서, 행사 수기 집계 기반 비교 시각화는
+  // 데이터 소유자인 이 탭으로 왔다. 파생 규칙은 구 SummaryTab 과 동일(재계산 이중화 금지).
+
+  // 리드 많은 순 상위 10 — 볼 가치가 있는 퍼널부터. 동률(전부 0)일 땐 원래 순서 유지.
+  // 라벨은 공통 접두어("Classin Meets ")를 벗겨 만든다 — 앞에서 자르면 축 라벨이 전부 동일해진다.
+  const compareChartData = useMemo(() => {
+    const ranked = [...perEventEcon].sort((a, b) => b.funnel.leads - a.funnel.leads).slice(0, 10)
+    const labels = distinguishingLabels(ranked.map((row) => row.event.title), 14)
+    return ranked.map((row, i) => ({
+      name: labels[i],
+      리드: row.funnel.leads,
+      신청: row.funnel.applications,
+      참석: row.funnel.attendees,
+      딜: row.funnel.deals,
+    }))
+  }, [perEventEcon])
+
+  const roiChartData = useMemo(() => {
+    const ranked = perEventEcon
+      .filter((row): row is PerEventEconRow & { econ: { roi: number } } => row.econ.roi !== null)
+      // "행사별 ROI 비교"가 상위 8을 표방하므로 정렬 후 자른다 — API 순서대로 자르면 최고/최저가 빠진다.
+      .sort((a, b) => b.econ.roi - a.econ.roi)
+      .slice(0, 8)
+    const labels = distinguishingLabels(ranked.map((row) => row.event.title), 12)
+    return ranked.map((row, i) => ({ name: labels[i], roi: row.econ.roi }))
+  }, [perEventEcon])
+
+  // 목표 달성 (targetLeads / targetRevenue 보유 행사만)
+  const goalData = useMemo(() => {
+    let targetLeads = 0
+    let actualLeads = 0
+    let targetRevenue = 0
+    let actualRevenue = 0
+    const perEvent: GoalEventRow[] = []
+    for (const { event, metrics, funnel, econ } of perEventEcon) {
+      const hasLeadTarget = metrics.targetLeads != null && metrics.targetLeads > 0
+      const hasRevTarget = metrics.targetRevenue != null && metrics.targetRevenue > 0
+      if (!hasLeadTarget && !hasRevTarget) continue
+      if (hasLeadTarget) {
+        targetLeads += metrics.targetLeads as number
+        actualLeads += funnel.leads
+      }
+      if (hasRevTarget) {
+        targetRevenue += metrics.targetRevenue as number
+        actualRevenue += econ.revenue
+      }
+      perEvent.push({
+        id: event.id,
+        title: event.title,
+        targetLeads: hasLeadTarget ? metrics.targetLeads : null,
+        actualLeads: funnel.leads,
+        targetRevenue: hasRevTarget ? metrics.targetRevenue : null,
+        actualRevenue: econ.revenue,
+      })
+    }
+    return {
+      leads: { target: targetLeads, actual: actualLeads },
+      revenue: { target: targetRevenue, actual: actualRevenue },
+      perEvent,
+    }
+  }, [perEventEcon])
+
+  // 리더보드 행 (컴포넌트가 자체 정렬·top8)
+  const performerRows = useMemo<PerformerRow[]>(() => {
+    return perEventEcon.map(({ event, funnel, econ }) => ({
+      id: event.id,
+      title: event.title,
+      leads: funnel.leads,
+      deals: funnel.deals,
+      revenue: econ.revenue,
+      spend: econ.adSpendTotal,
+      roi: econ.roi,
+      cpl: econ.cpl,
+    }))
+  }, [perEventEcon])
+
   const sortedEvents = useMemo(() => {
     if (eventSort === "leads") {
       return [...filtered].sort((a, b) => {
@@ -175,6 +407,8 @@ export default function EventsTab({
   )
 
   const cardsVisible = useVisibleCount(visibleEvents.length, EVENT_CARD_STEP)
+  // 갤러리도 전량 렌더하지 않는다(2026-08-18) — 리스트와 같은 단계 렌더.
+  const galleryVisible = useVisibleCount(visibleEvents.length, GALLERY_STEP)
 
   // CSV 내보내기 — 화면에 보이는(검색·상태·카테고리 필터 적용) 행과 정확히 같은 집합을 내보낸다.
   // 필터로 3건만 남겨두고 눌렀는데 전체가 나가면 "보이는 것=받는 것" 계약이 깨진다.
@@ -222,6 +456,52 @@ export default function EventsTab({
 
   return (
     <>
+      {/* 행사 성과 비교 — 구 요약 탭에서 이동한 행사 수기 집계 시각화 묶음 */}
+      <section className="mb-6" aria-label="행사 성과 비교">
+        <h2 className="mb-3 text-[14px] font-semibold text-[#111110]">행사 성과 비교</h2>
+        {loading ? (
+          <div className="space-y-4" aria-busy="true">
+            <ChartSkeleton className="h-[140px]" />
+            <div className="grid gap-4 lg:grid-cols-2">
+              <ChartSkeleton className="h-[300px]" />
+              <ChartSkeleton className="h-[300px]" />
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="mb-4">
+              <TimelineRow events={filtered} />
+            </div>
+            <div className="mb-4 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
+                <h3 className="mb-3 text-[14px] font-semibold text-[#111110]">행사별 퍼널 비교</h3>
+                {compareChartData.length === 0 ? (
+                  <p className="py-12 text-center text-[12px] text-[#A39E98]">표시할 데이터가 없습니다.</p>
+                ) : (
+                  <div className="h-[260px] w-full">
+                    <EventFunnelCompareChart data={compareChartData} />
+                  </div>
+                )}
+              </div>
+              <GoalProgressPanel
+                leads={goalData.leads}
+                revenue={goalData.revenue}
+                perEvent={goalData.perEvent}
+              />
+            </div>
+            {roiChartData.length > 0 && (
+              <div className="mb-4 rounded-2xl border border-[#e8e8e4] bg-white p-4 sm:p-5">
+                <h3 className="mb-3 text-[14px] font-semibold text-[#111110]">행사별 ROI 비교</h3>
+                <div className="h-[200px] w-full">
+                  <EventRoiChart data={roiChartData} />
+                </div>
+              </div>
+            )}
+            <TopPerformersTable rows={performerRows} />
+          </>
+        )}
+      </section>
+
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h2 className="flex-1 text-[14px] font-semibold text-[#111110]">행사별 퍼널 상세</h2>
         <div className="inline-flex rounded-lg border border-[rgba(0,0,0,0.08)] bg-[#F6F5F4] p-[3px]" role="group" aria-label="행사 보기 방식">
@@ -373,10 +653,23 @@ export default function EventsTab({
           </button>
         </div>
       ) : galleryView ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {visibleEvents.map((event) => (
-            <EventGalleryCard key={event.id} event={event} onOpen={() => setViewingEvent(event)} />
-          ))}
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {visibleEvents.slice(0, galleryVisible.visible).map((event) => (
+              <EventGalleryCard key={event.id} event={event} onOpen={() => setViewingEvent(event)} />
+            ))}
+          </div>
+          {(galleryVisible.canMore || galleryVisible.canCollapse) && (
+            <div className="flex justify-center">
+              <ShowMore
+                visible={galleryVisible.visible}
+                total={visibleEvents.length}
+                step={GALLERY_STEP}
+                onMore={galleryVisible.showMore}
+                onCollapse={galleryVisible.canCollapse ? galleryVisible.collapse : undefined}
+              />
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">

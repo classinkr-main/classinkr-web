@@ -1,23 +1,9 @@
 import Image from "next/image"
-import type { LucideIcon } from "lucide-react"
-import {
-  ClipboardList,
-  GraduationCap,
-  LifeBuoy,
-  MonitorSpeaker,
-  BookOpen,
-  Presentation,
-  Rocket,
-  ShieldCheck,
-  Sparkles,
-  Wrench,
-} from "lucide-react"
 
 import BlogMarkdownRenderer from "@/components/blog/BlogMarkdownRenderer"
 import type {
   DocsArticleSection,
   DocsArticleSummary,
-  DocsCategory,
   DocsCategoryNavItem,
   DocsNavGroup,
   DocsTocItem,
@@ -39,66 +25,9 @@ const staticDocsContent: DocsContent = {
   docs: listDocs(),
 }
 
-const categoryIcons: Partial<Record<DocCategoryId, LucideIcon>> = {
-  "quick-start": Rocket,
-  guides: BookOpen,
-  manual: ClipboardList,
-  help: LifeBuoy,
-  troubleshooting: LifeBuoy,
-  updates: Sparkles,
-  start: Rocket,
-  software: Sparkles,
-  admin: ShieldCheck,
-  teacher: Presentation,
-  student: GraduationCap,
-  hardware: MonitorSpeaker,
-  board: Wrench,
-}
-
-const categoryEyebrows: Partial<Record<DocCategoryId, string>> = {
-  "quick-start": "Quick Start",
-  guides: "Guide",
-  manual: "Manual",
-  help: "Help",
-  troubleshooting: "Troubleshooting",
-  updates: "Updates",
-  start: "Start Here",
-  software: "Software",
-  admin: "Admin",
-  teacher: "Teacher",
-  student: "Student",
-  hardware: "Hardware",
-  board: "Smart Board",
-}
-
 const categoryNavCopy: Partial<
   Record<DocCategoryId, { label: string; scope: string; summary: string }>
 > = {
-  "quick-start": {
-    label: "빠른 시작",
-    scope: "Quick Start",
-    summary: "처음 확인할 설치와 가입 흐름을 봅니다.",
-  },
-  guides: {
-    label: "가이드",
-    scope: "Guide",
-    summary: "역할과 상황별 안내를 이어서 확인합니다.",
-  },
-  manual: {
-    label: "매뉴얼",
-    scope: "Manual",
-    summary: "제품 사용 기준과 세부 절차를 확인합니다.",
-  },
-  help: {
-    label: "도움말",
-    scope: "Help",
-    summary: "자주 묻는 질문과 기본 해결 방법을 봅니다.",
-  },
-  troubleshooting: {
-    label: "문제 해결",
-    scope: "Troubleshooting",
-    summary: "접속, 장비, 수업 중 문제를 빠르게 좁힙니다.",
-  },
   updates: {
     label: "업데이트",
     scope: "변경",
@@ -185,47 +114,6 @@ export function formatDocDate(date: string) {
   })
 }
 
-export function getCategoryIcon(categoryId: DocCategoryId) {
-  return categoryIcons[categoryId] ?? ClipboardList
-}
-
-export function DocsCategoryIcon({
-  categoryId,
-  className,
-}: {
-  categoryId: DocCategoryId
-  className?: string
-}) {
-  switch (categoryId) {
-    case "start":
-    case "quick-start":
-      return <Rocket className={className} aria-hidden />
-    case "guides":
-      return <BookOpen className={className} aria-hidden />
-    case "manual":
-      return <ClipboardList className={className} aria-hidden />
-    case "help":
-    case "troubleshooting":
-      return <LifeBuoy className={className} aria-hidden />
-    case "updates":
-      return <Sparkles className={className} aria-hidden />
-    case "software":
-      return <Sparkles className={className} aria-hidden />
-    case "admin":
-      return <ShieldCheck className={className} aria-hidden />
-    case "teacher":
-      return <Presentation className={className} aria-hidden />
-    case "student":
-      return <GraduationCap className={className} aria-hidden />
-    case "hardware":
-      return <MonitorSpeaker className={className} aria-hidden />
-    case "board":
-      return <Wrench className={className} aria-hidden />
-    default:
-      return <ClipboardList className={className} aria-hidden />
-  }
-}
-
 export function toArticleSummary(
   doc: DocArticle,
   categories = docsCategories
@@ -241,28 +129,6 @@ export function toArticleSummary(
     updatedAt: formatDocDate(doc.updatedAt),
     tags: doc.tags,
     searchText: getDocSearchText(doc),
-  }
-}
-
-export function toCategoryCard(
-  category: DocCategory,
-  content = staticDocsContent
-): DocsCategory {
-  const articles = content.docs
-    .filter((doc) => doc.category === category.id && isListedDoc(doc))
-    .slice(0, 3)
-
-  return {
-    title: category.title,
-    description: category.description,
-    href: getDocCategoryPath(category.id),
-    eyebrow: categoryEyebrows[category.id] ?? category.title,
-    icon: categoryIcons[category.id],
-    articles: articles.map((doc) => ({
-      title: doc.title,
-      href: getDocPath(doc),
-      description: doc.description,
-    })),
   }
 }
 
@@ -390,30 +256,179 @@ export function getDocsCategoryNavItems(
     }))
 }
 
-export function getDocsCategoryCards(content = staticDocsContent) {
-  return content.categories.map((category) => toCategoryCard(category, content))
+export interface GuideLink {
+  title: string
+  href: string
 }
 
-export const docsTrustCards = [
+export interface GuideIntentCard {
+  categoryId: DocCategoryId
+  href: string
+  kicker: string
+  title: string
+  description: string
+  links: GuideLink[]
+}
+
+export interface GuideProductTile {
+  categoryId: DocCategoryId
+  href: string
+  caption: string
+  label: string
+  description: string
+  count: number
+}
+
+const GUIDE_INTENT_COPY: Array<{
+  categoryId: DocCategoryId
+  title: string
+  description: string
+}> = [
   {
-    title: "역할별로 바로 찾을 수 있게",
-    description:
-      "관리자·교사·학생 누구든 맡은 역할에 맞춰 필요한 안내를 한곳에서 찾아볼 수 있게 정리했습니다.",
-    icon: Wrench,
+    categoryId: "start",
+    title: "도입을 검토하고 있어요",
+    description: "설치와 가입부터 도입 전 확인 사항까지",
   },
   {
-    title: "수업 중 막히는 순간에도 빠르게",
-    description:
-      "장비 설정, 접속, 자료 활용처럼 자주 만나는 상황은 단계별 절차로 정리해 즉시 따라 할 수 있습니다.",
-    icon: LifeBuoy,
+    categoryId: "admin",
+    title: "학원을 운영하고 있어요",
+    description: "기관 설정, 코스·교사·학생 관리, 통계",
   },
   {
-    title: "공식 채널 가이드와 한 흐름으로",
-    description:
-      "channel.io의 공식 가이드 내용을 기반으로 정리해 가장 최신 사용 방법을 그대로 확인할 수 있습니다.",
-    icon: Sparkles,
+    categoryId: "teacher",
+    title: "수업을 진행해요",
+    description: "교실 설정, 학습 활동, 수업 도구",
+  },
+  {
+    categoryId: "student",
+    title: "수업에 참여해요",
+    description: "코스 참여, 수업 듣기, 과제 제출",
   },
 ]
+
+const GUIDE_PRODUCT_LABELS: Array<{ categoryId: DocCategoryId; label: string }> = [
+  { categoryId: "software", label: "소프트웨어 가이드" },
+  { categoryId: "hardware", label: "하드웨어 가이드" },
+  { categoryId: "updates", label: "업데이트" },
+]
+
+// 라운드로빈 큐레이션 순서 — 역할(시작/운영/수업)을 먼저 노출하고 제품·학생·업데이트로 채운다.
+const CURATED_FEATURED_ORDER: DocCategoryId[] = [
+  "start",
+  "admin",
+  "teacher",
+  "software",
+  "hardware",
+  "student",
+  "updates",
+]
+
+// 설치 안내는 시작하기 → 하드웨어 순으로 노출한다(소프트웨어 설치가 먼저 필요한 동선).
+const INSTALL_CATEGORY_ORDER: DocCategoryId[] = ["start", "hardware"]
+
+function getListedDocsByCategory(content: DocsContent, categoryId: DocCategoryId) {
+  return content.docs.filter((doc) => doc.category === categoryId && isListedDoc(doc))
+}
+
+export function getGuideIntentCards(content = staticDocsContent): GuideIntentCard[] {
+  const availableCategoryIds = new Set(content.categories.map((category) => category.id))
+
+  return GUIDE_INTENT_COPY.filter((intent) => availableCategoryIds.has(intent.categoryId)).map(
+    (intent) => {
+      const listed = getListedDocsByCategory(content, intent.categoryId)
+      // featured 를 앞으로 끌어올리되 원래 정렬 순서는 유지한다.
+      const ordered = [...listed.filter((doc) => doc.featured), ...listed.filter((doc) => !doc.featured)]
+      const copy = categoryNavCopy[intent.categoryId]
+
+      return {
+        categoryId: intent.categoryId,
+        href: getDocCategoryPath(intent.categoryId),
+        kicker: `${copy?.label ?? intent.title} · ${listed.length}개`,
+        title: intent.title,
+        description: intent.description,
+        links: ordered.slice(0, 3).map((doc) => ({ title: doc.title, href: getDocPath(doc) })),
+      }
+    }
+  )
+}
+
+export function getGuideProductTiles(content = staticDocsContent): GuideProductTile[] {
+  // updates 는 Supabase 병합 콘텐츠에만 있을 수 있어 카테고리 존재 여부를 먼저 확인한다.
+  const availableCategoryIds = new Set(content.categories.map((category) => category.id))
+
+  return GUIDE_PRODUCT_LABELS.filter((tile) => availableCategoryIds.has(tile.categoryId))
+    .map((tile) => {
+      const count = getListedDocsByCategory(content, tile.categoryId).length
+      const copy = categoryNavCopy[tile.categoryId]
+
+      return {
+        categoryId: tile.categoryId,
+        href: getDocCategoryPath(tile.categoryId),
+        caption: `${copy?.scope ?? "가이드"} · ${count}개`,
+        label: tile.label,
+        description: copy?.summary ?? "",
+        count,
+      }
+    })
+    .filter((tile) => tile.count > 0)
+}
+
+export function getCuratedFeaturedSummaries(
+  content = staticDocsContent,
+  limit = 6
+): DocsArticleSummary[] {
+  const pools = new Map<DocCategoryId, { featured: DocArticle[]; rest: DocArticle[] }>()
+  for (const categoryId of CURATED_FEATURED_ORDER) {
+    const listed = getListedDocsByCategory(content, categoryId)
+    pools.set(categoryId, {
+      featured: listed.filter((doc) => doc.featured),
+      rest: listed.filter((doc) => !doc.featured),
+    })
+  }
+
+  const picked: DocArticle[] = []
+  const usedHrefs = new Set<string>()
+  let progressed = true
+
+  // 카테고리를 한 바퀴씩 돌며 featured 를 우선 소진하고, 없으면 남은 문서로 채운다.
+  while (picked.length < limit && progressed) {
+    progressed = false
+
+    for (const categoryId of CURATED_FEATURED_ORDER) {
+      if (picked.length >= limit) break
+
+      const pool = pools.get(categoryId)
+      const next = pool?.featured.shift() ?? pool?.rest.shift()
+      if (!next) continue
+
+      progressed = true
+      const href = getDocPath(next)
+      if (usedHrefs.has(href)) continue
+
+      usedHrefs.add(href)
+      picked.push(next)
+    }
+  }
+
+  return picked.map((doc) => toArticleSummary(doc, content.categories))
+}
+
+export function getInstallGuideLinks(content = staticDocsContent, limit = 3): GuideLink[] {
+  return content.docs
+    .filter((doc) => isListedDoc(doc) && doc.title.includes("설치"))
+    .map((doc, index) => ({ doc, index }))
+    .sort((a, b) => {
+      // 순서 밖 카테고리는 뒤로 밀되 원래 등장 순서를 유지한다.
+      const rankA = INSTALL_CATEGORY_ORDER.indexOf(a.doc.category)
+      const rankB = INSTALL_CATEGORY_ORDER.indexOf(b.doc.category)
+      const normalizedA = rankA === -1 ? INSTALL_CATEGORY_ORDER.length : rankA
+      const normalizedB = rankB === -1 ? INSTALL_CATEGORY_ORDER.length : rankB
+      if (normalizedA !== normalizedB) return normalizedA - normalizedB
+      return a.index - b.index
+    })
+    .slice(0, limit)
+    .map(({ doc }) => ({ title: doc.title, href: getDocPath(doc) }))
+}
 
 export function scoreDocsArticle(doc: DocsArticleSummary, query: string): number {
   const tokens = query.split(/\s+/).filter(Boolean)

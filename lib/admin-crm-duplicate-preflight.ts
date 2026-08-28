@@ -105,8 +105,11 @@ export async function getCrmDuplicatePreflightReport(): Promise<CrmDuplicatePref
       fetchPage: (from, to) =>
         sb
           .from("external_crm_records")
-          .select("source_system, object_api_key, external_id")
+          .select("id, source_system, object_api_key, external_id")
           .order("synced_at", { ascending: false })
+          // synced_at은 한 번의 스냅샷에서 대량 동률이다. offset 페이지 경계가 동률 행을
+          // 중복 반환하지 않도록 row id까지 전순서를 만든다.
+          .order("id", { ascending: false })
           .range(from, to),
     }),
     sb
@@ -117,8 +120,11 @@ export async function getCrmDuplicatePreflightReport(): Promise<CrmDuplicatePref
       fetchPage: (from, to) =>
         sb
           .from("crm_source_links")
-          .select("source_system, source_object, source_record_key, target_type, target_id")
+          .select("id, source_system, source_object, source_record_key, target_type, target_id")
           .order("updated_at", { ascending: false })
+          // updated_at 동률은 흔하다. id tie-breaker가 없으면 페이지 사이에서 같은 행이
+          // 재등장해 실제 DB 중복이 아닌 duplicate group을 만들 수 있다.
+          .order("id", { ascending: false })
           .range(from, to),
     }),
     sb
@@ -129,9 +135,10 @@ export async function getCrmDuplicatePreflightReport(): Promise<CrmDuplicatePref
       fetchPage: (from, to) =>
         sb
           .from("crm_source_links")
-          .select("source_system, source_object, source_record_key")
+          .select("id, source_system, source_object, source_record_key")
           .eq("status", "confirmed")
           .order("updated_at", { ascending: false })
+          .order("id", { ascending: false })
           .range(from, to),
     }),
     sb
@@ -175,6 +182,6 @@ export async function getCrmDuplicatePreflightReport(): Promise<CrmDuplicatePref
 
 export const getCachedCrmDuplicatePreflightReport = unstable_cache(
   getCrmDuplicatePreflightReport,
-  ["crm-duplicate-preflight"],
+  ["crm-duplicate-preflight-v2"],
   { revalidate: 300, tags: ["crm-duplicate-preflight"] },
 )

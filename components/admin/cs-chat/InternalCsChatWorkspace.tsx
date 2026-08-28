@@ -25,7 +25,7 @@ import {
 } from "react"
 
 import CsConsoleNav from "@/components/admin/cs/CsConsoleNav"
-import { adminFetchJson } from "@/lib/admin-client"
+import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
 import { useUrlState } from "@/lib/use-url-state"
 
 import WorkspaceHeader from "./components/WorkspaceHeader"
@@ -91,6 +91,11 @@ import type {
   ReviewChecks,
   WorkspaceTab,
 } from "./types"
+
+// 목록성 GET(대화 목록·회귀 후보·독스 갭·지표) 캐시 TTL — 실시간성 표면이라 짧게 둔다.
+// 대화 목록·회귀 후보 URL은 AdminSidebar.tsx:168-171의 hover 예열과 문자열이 같아야
+// 캐시 키(GET:input)가 일치해 예열된 응답을 그대로 소비한다.
+const LIST_CACHE_TTL_MS = 20_000
 
 function InternalCsChatWorkspaceInner() {
   // 이 화면에는 URL을 보는 눈이 둘이고, 둘은 서로 다른 순간에 진실이다.
@@ -187,6 +192,12 @@ function InternalCsChatWorkspaceInner() {
   const [hqDetailError, setHqDetailError] = useState<string | null>(null)
   const [hqPendingActionId, setHqPendingActionId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // 백그라운드 갱신(SWR) 결과가 화면이 사라진 뒤 도착할 수 있다 — 언마운트 후 setState 방지.
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
   const [isPending, startTransition] = useTransition()
 
   const loadConversation = useCallback(async (id: string) => {
@@ -246,7 +257,17 @@ function InternalCsChatWorkspaceInner() {
       return
     }
     try {
-      const response = await adminFetchJson<DocGapsSummaryResponse>("/api/admin/docs/gaps")
+      const response = await adminFetchJsonCached<DocGapsSummaryResponse>("/api/admin/docs/gaps", undefined, {
+        ttlMs: LIST_CACHE_TTL_MS,
+        persist: false,
+        // SWR 고속 경로로 옛 캐시를 먼저 그린 회차 — 이 로더는 마운트 시 1회만 도므로
+        // 이 콜백이 없으면 백그라운드 갱신분이 화면에 도달하지 못한다.
+        // 갱신 실패는 이미 그려진 숫자를 "—"로 되돌리지 않고 그대로 둔다.
+        onRevalidated: ({ data, error: revalidateError }) => {
+          if (!mountedRef.current || revalidateError || !data) return
+          setDocsGapsSummary(summarizeDocsGaps(data))
+        },
+      })
       setDocsGapsSummary(summarizeDocsGaps(response))
     } catch {
       setDocsGapsSummary(null)
@@ -271,14 +292,36 @@ function InternalCsChatWorkspaceInner() {
     }
     setRegressionLoadState("loading")
     try {
-      const response = await adminFetchJson<RegressionCandidatesResponse>("/api/admin/cs-chat/regression-candidates")
-      const items = Array.isArray(response.items) ? response.items : []
-      setRegressionCandidates(items)
-      const liveIds = new Set(items.map((item) => item.id))
-      setRegressionSuggestions((current) =>
-        Object.fromEntries(Object.entries(current).filter(([id]) => liveIds.has(id)))
+      const applyCandidates = (items: RegressionCandidateItem[]) => {
+        setRegressionCandidates(items)
+        const liveIds = new Set(items.map((item) => item.id))
+        setRegressionSuggestions((current) =>
+          Object.fromEntries(Object.entries(current).filter(([id]) => liveIds.has(id)))
+        )
+        setRegressionLoadState("loaded")
+      }
+      const response = await adminFetchJsonCached<RegressionCandidatesResponse>(
+        "/api/admin/cs-chat/regression-candidates",
+        undefined,
+        {
+          ttlMs: LIST_CACHE_TTL_MS,
+          persist: false,
+          // SWR 고속 경로로 옛 목록을 먼저 그린 회차의 갱신 결과. 실패는 regressionError
+          // 한 줄로만 알린다 — loadState를 "failed"로 돌리면 이미 보고 있던 후보 목록이
+          // 재시도 안내로 통째로 교체돼, 조용한 배경 갱신이 검수 작업을 끊는다.
+          onRevalidated: ({ data, error: revalidateError }) => {
+            if (!mountedRef.current) return
+            if (revalidateError || !data) {
+              setRegressionError("회귀 후보 목록을 새로 받지 못했습니다.")
+              return
+            }
+            // 성공 시 regressionError를 지우지 않는다 — 판정 저장 실패 메시지를 공유하는
+            // 자리라, 사용자가 아직 못 읽은 다른 실패를 배경 갱신이 치워버리면 안 된다.
+            applyCandidates(Array.isArray(data.items) ? data.items : [])
+          },
+        }
       )
-      setRegressionLoadState("loaded")
+      applyCandidates(Array.isArray(response.items) ? response.items : [])
     } catch {
       setRegressionCandidates([])
       setRegressionSuggestions({})
@@ -296,7 +339,27 @@ function InternalCsChatWorkspaceInner() {
     }
     setMetricsLoadState("loading")
     try {
-      const response = await adminFetchJson<InternalCsMetricsResponse>("/api/admin/cs-chat/metrics?days=7")
+      const response = await adminFetchJsonCached<InternalCsMetricsResponse>(
+        "/api/admin/cs-chat/metrics?days=7",
+        undefined,
+        {
+          ttlMs: LIST_CACHE_TTL_MS,
+          persist: false,
+          // SWR 고속 경로로 옛 지표를 먼저 그린 회차의 갱신 결과. 실패는 loadState만
+          // "failed"로 돌려 "다시 시도"를 띄우고, 이미 보이는 카드 숫자는 지우지 않는다
+          //  (위 catch의 setCsMetrics(null)은 최초 로드 실패용 — 여기서 재현하면 갱신 실패가
+          //   멀쩡한 숫자를 "—"로 만든다).
+          onRevalidated: ({ data, error: revalidateError }) => {
+            if (!mountedRef.current) return
+            if (revalidateError || !data) {
+              setMetricsLoadState("failed")
+              return
+            }
+            setCsMetrics(data)
+            setMetricsLoadState("loaded")
+          },
+        }
+      )
       setCsMetrics(response)
       setMetricsLoadState("loaded")
     } catch {
@@ -308,8 +371,25 @@ function InternalCsChatWorkspaceInner() {
   const loadConversations = useCallback(async (preferredId?: string | null) => {
     setLoading(true)
     try {
-      const response = await adminFetchJson<ConversationListResponse>(
-        "/api/admin/cs-chat/conversations?status=all&limit=100"
+      const response = await adminFetchJsonCached<ConversationListResponse>(
+        "/api/admin/cs-chat/conversations?status=all&limit=100",
+        undefined,
+        {
+          ttlMs: LIST_CACHE_TTL_MS,
+          persist: false,
+          // SWR 고속 경로로 옛 목록을 먼저 그린 회차의 갱신 결과 — 목록만 갈아 끼운다.
+          // loadConversation은 절대 다시 부르지 않는다: 사용자가 이미 다른 대화를 열고
+          // 초안을 쓰고 있을 수 있는데, 배경 갱신이 선택과 초안을 덮어쓰면 안 된다.
+          // 성공 시 error도 지우지 않는다 — 저장 실패 같은 다른 메시지를 공유하는 자리다.
+          onRevalidated: ({ data, error: revalidateError }) => {
+            if (!mountedRef.current) return
+            if (revalidateError || !data) {
+              setError("내부 CS 대화 목록을 새로 받지 못했습니다.")
+              return
+            }
+            setConversations(data.conversations)
+          },
+        }
       )
       setConversations(response.conversations)
       const nextId = preferredId ?? selectedId ?? response.conversations.find((item) => item.status !== "archived")?.id
@@ -413,12 +493,15 @@ function InternalCsChatWorkspaceInner() {
   }, [activeTab, docsGapsAttempted, loadDocsGapsSummary])
 
   // 회귀 후보는 탭 진입 전에 로드한다 — "운영 도구" 탭의 판정 대기 점(dot)이 이 데이터로 켜진다.
-  // 초기 부트스트랩(loading)이 끝난 뒤 시작해 demoMode 판별과의 경합을 피한다.
+  // 대화 목록·상세와 무관한 별도 자원이라 그 부트스트랩(loading)을 기다리지 않고 1파와 동시에 쏜다.
+  // demoMode는 최초 렌더에서 false로 시작하므로(초기값), 실제 백엔드가 아예 죽어 있는 드문 경우에만
+  // 이 요청이 demoMode 확정 전에 실패한 채로 남는다 — 그때도 "운영 도구" 탭에는 재시도 버튼이 뜨고
+  // 재시도 시점엔 demoMode가 이미 true라 빈 상태로 정상 수렴한다.
   useEffect(() => {
-    if (!loading && regressionLoadState === "idle") {
+    if (regressionLoadState === "idle") {
       void loadRegressionCandidates()
     }
-  }, [loading, regressionLoadState, loadRegressionCandidates])
+  }, [regressionLoadState, loadRegressionCandidates])
 
   useEffect(() => {
     if (activeTab === "tools" && metricsLoadState === "idle") {

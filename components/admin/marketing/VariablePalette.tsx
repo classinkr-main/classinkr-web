@@ -40,7 +40,7 @@ export const VARIABLE_GROUPS = [
 export const ALL_VARIABLES: Array<{ key: string; label: string; example: string }> =
   (VARIABLE_GROUPS as ReadonlyArray<{ vars: ReadonlyArray<{ key: string; label: string; example: string }> }>).flatMap((g) => [...g.vars])
 
-export const SAMPLE_VALUES: Record<string, string> = Object.fromEntries(
+const SAMPLE_VALUES: Record<string, string> = Object.fromEntries(
   ALL_VARIABLES.map((v) => [v.key, v.example])
 )
 

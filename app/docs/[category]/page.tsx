@@ -21,6 +21,14 @@ import { DocsSearchLogger } from "@/components/docs/DocsSearchLogger"
 
 const DOCS_CONTACT_HREF = `/contact?topic=${encodeURIComponent("계정/접속/기술 지원")}&prefill=${encodeURIComponent("가이드에서 찾지 못한 내용을 문의하고 싶습니다.")}#contact-form`
 
+function formatCategoryHeading(title: string): string {
+  const bracketMatch = title.match(/^\[(.+?)\]/)
+  if (bracketMatch) {
+    return `${bracketMatch[1]} 가이드`
+  }
+  return title
+}
+
 interface DocsCategoryPageProps {
   params: Promise<{ category: string }>
   searchParams?: Promise<{ q?: string }>
@@ -106,7 +114,7 @@ export default async function DocsCategoryPage({
   return (
     <div className="min-h-screen bg-[#FAFAF8] pt-28 pb-24 text-[#111110] md:pt-36">
       {query && <DocsSearchLogger query={query} resultCount={filteredDocs.length} />}
-      <section className="container">
+      <section className="container mx-auto max-w-[1080px] px-5">
         <Link
           href="/docs"
           className="inline-flex origin-left items-center gap-2 text-sm font-medium text-[#1a1a1a]/45 transition-all duration-150 hover:text-[#084734] active:scale-[0.98]"
@@ -117,17 +125,17 @@ export default async function DocsCategoryPage({
 
         <div className="mt-8 max-w-4xl">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#084734]">
-            {category.title}
+            Classin Guide
           </p>
-          <h1 className="mt-4 text-4xl font-black leading-[1.06] tracking-display md:text-6xl">
-            {category.description}
+          <h1 className="mt-4 break-keep text-4xl font-black leading-[1.06] tracking-display md:text-6xl">
+            {formatCategoryHeading(category.title)}
           </h1>
-          <p className="mt-5 text-lg leading-8 text-[#615D59]">
-            필요한 안내를 빠르게 고를 수 있도록 {docs.length}개의 글을 주제별로 정리했습니다.
+          <p className="mt-5 max-w-3xl text-lg leading-8 text-[#615D59]">
+            {category.description}
           </p>
         </div>
 
-        <form action={`/docs/${categoryParam}`} method="get" className="mt-10 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4">
+        <form action={`/docs/${categoryParam}`} method="get" className="mt-10 flex max-w-2xl items-center gap-3 border-b border-black/[0.08] pb-4 transition-colors focus-within:border-[#084734]/40">
           <Search className="h-4 w-4 shrink-0 text-[#A39E98]" aria-hidden />
           <input
             name="q"
@@ -136,7 +144,10 @@ export default async function DocsCategoryPage({
             placeholder="이 주제에서 궁금한 내용 검색"
             className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#A39E98]"
           />
-          <button type="submit" className="text-sm font-semibold text-[#084734]">
+          <button
+            type="submit"
+            className="-mr-2 shrink-0 rounded-[6px] px-2 py-2.5 text-sm font-semibold text-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
+          >
             검색
           </button>
         </form>
@@ -156,21 +167,21 @@ export default async function DocsCategoryPage({
         <DocsCategoryNav items={categoryTabs} className="mt-8" />
       </section>
 
-      <section className="container mt-12">
+      <section className="container mx-auto max-w-[1080px] px-5 mt-12">
         <div className="border-t border-black/[0.08] pt-4">
-          <ul className="divide-y divide-black/[0.08]">
+          <ul className="divide-y divide-black/[0.06]">
             {(query ? filteredDocs : articleSummaries).map((article) => (
-              <li key={article.href} className="py-4">
-                <Link href={article.href} className="group block origin-center transition-all duration-150 active:scale-[0.98] active:opacity-90">
+              <li key={article.href} className="py-5">
+                <Link href={article.href} className="group block origin-center transition-all duration-150 active:scale-[0.98] active:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="break-words text-[15px] font-semibold text-[#111110] group-hover:text-[#084734]">
+                      <p className="break-words text-[16px] font-semibold text-[#111110] group-hover:text-[#084734]">
                         <SearchHighlight text={article.title} query={q} />
                       </p>
-                      <p className="mt-1 max-w-3xl break-words text-sm leading-6 text-[#615D59]">
+                      <p className="mt-1.5 max-w-3xl break-words text-[15px] leading-[26px] text-[#4F4C49]">
                         <SearchHighlight text={article.description} query={q} />
                       </p>
-                      <p className="mt-2 text-xs text-[#A39E98]">
+                      <p className="mt-2.5 text-[13px] text-[#615D59]">
                         {article.readTime} · {article.updatedAt}
                         {article.tags?.length ? ` · ${article.tags.join(" / ")}` : ""}
                       </p>
@@ -192,14 +203,14 @@ export default async function DocsCategoryPage({
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                 <Link
                   href={searchFallbackHref}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41]"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-[6px] bg-[#084734] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                 >
                   전체 가이드에서 다시 검색
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
                 <Link
                   href={DOCS_CONTACT_HREF}
-                  className="inline-flex h-10 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-4 text-sm font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4]"
+                  className="inline-flex h-10 items-center justify-center rounded-[6px] border border-black/[0.08] bg-white px-4 text-sm font-semibold text-[#111110] transition-colors hover:bg-[#F6F5F4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAFAF8]"
                 >
                   상담 남기기
                 </Link>

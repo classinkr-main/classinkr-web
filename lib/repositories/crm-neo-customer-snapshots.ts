@@ -3,6 +3,8 @@ import "server-only"
 import { deriveCustomerRegion, regionCandidatesFromPayload } from "@/lib/crm/region-label"
 import { getBranchRevSourceRecordKey, normalizeCrmName } from "@/lib/crm-source-linking"
 import { deriveServiceRisk, type ServiceRiskConfidence, type ServiceRiskLevel } from "@/lib/crm/service-risk"
+import { deriveEeoBillingMode, readEeoBalance } from "@/lib/crm/eeo-account-fields"
+import { deriveConsumptionForecast, type ConsumptionEvent } from "@/lib/crm/eeo-consumption"
 import {
   getExcludedXiaoshouyiOwnerIds,
   getXiaoshouyiOwnerNameMap,
@@ -20,6 +22,7 @@ const SOURCE_SYSTEM = "xiaoshouyi"
 const SHROFF_OBJECT_API_KEY = "ShroffAccount__c"
 const ACCOUNT_OBJECT_API_KEY = "account"
 const OPPORTUNITY_OBJECT_API_KEY = "opportunity"
+const FINANCIAL_OBJECT_API_KEY = "FinancialInformation__c"
 const REFRESH_SCAN_LIMIT = 20_000
 const LIST_LIMIT = 10_000
 const UPSERT_CHUNK_SIZE = 500
@@ -47,6 +50,11 @@ interface ShroffSnapshotRow {
   payload: Record<string, unknown> | null
 }
 
+interface FinancialSnapshotRow {
+  external_id: string
+  payload: Record<string, unknown> | null
+}
+
 interface OpportunitySnapshotRow {
   external_id: string
   amount: number | string | null
@@ -59,6 +67,7 @@ interface BranchRevRegionRow {
   sheet_row: number
   customer_name: string
   region: string | null
+  product_version: string | null
   first_payment: string | null
   contract_target: number | string | null
 }
@@ -70,10 +79,13 @@ interface SourceLinkRow {
 }
 
 export interface CrmNeoCustomerRegionHint {
-  label: string
+  /** 지역 라벨. 시트에 지역이 비어 있고 과금 유형만 있는 행도 있으므로 null 을 허용한다. */
+  label: string | null
   source: "branch_rev_confirmed_link" | "branch_rev_exact_name"
   sourceRecordKey: string | null
   customerName: string | null
+  /** 매출시트 J열 원문. 과금 유형(충전제/구독제) 판별의 유일한 원천. */
+  productVersion: string | null
 }
 
 export interface CrmNeoCustomerRegionHints {
@@ -116,6 +128,7 @@ export interface CrmNeoCustomerSnapshotRecord {
   hasEeo: boolean
   riskLevel: ServiceRiskLevel
   riskReasons: Array<{ code?: string; label?: string }>
+  depletionInDays: number | null
   expireInDays: number | null
   riskConfidence: ServiceRiskConfidence
   freshnessLabel: string | null
@@ -193,11 +206,6 @@ function payloadString(payload: Record<string, unknown> | null, key: string): st
   return value == null || value === "" ? null : String(value)
 }
 
-function payloadNumber(payload: Record<string, unknown> | null, key: string): number | null {
-  const value = payload?.[key]
-  const numeric = typeof value === "number" ? value : Number(value)
-  return Number.isFinite(numeric) ? numeric : null
-}
 
 function rowNumber(value: number | string | null | undefined) {
   const numeric = typeof value === "number" ? value : Number(value ?? 0)
@@ -290,12 +298,35 @@ function fetchExternalRows<T>(
   })
 }
 
+/**
+ * 입출금 원장을 EEO(ShroffAccount) 단위로 모은다.
+ * 소진 예상일의 유일한 돈 단위 원천 — ResourceInformation__c 는 단위가 뒤섞여 쓸 수 없다.
+ */
+function aggregateFinancialEvents(rows: FinancialSnapshotRow[]) {
+  const byShroff = new Map<string, ConsumptionEvent[]>()
+  for (const row of rows) {
+    const shroffId = payloadString(row.payload, "ShroffAccInfor__c")
+    if (!shroffId) continue
+    const amount = row.payload?.["AmountReal__c"]
+    const occurredAt = row.payload?.["GetDate__c"]
+    const list = byShroff.get(shroffId)
+    const event: ConsumptionEvent = {
+      amount: typeof amount === "number" ? amount : Number(amount ?? Number.NaN),
+      occurredAt: typeof occurredAt === "number" || typeof occurredAt === "string" ? occurredAt : null,
+    }
+    if (list) list.push(event)
+    else byShroff.set(shroffId, [event])
+  }
+  return byShroff
+}
+
 function aggregateEeo(rows: ShroffSnapshotRow[]) {
   const byAccount = new Map<string, EeoAggregate>()
   for (const row of rows) {
     const accountId = payloadString(row.payload, "Account__c")
     if (!accountId) continue
-    const balance = payloadNumber(row.payload, "CurrencyAmount__c") ?? 0
+    // 잔액은 여신이 섞이지 않은 표시 정본에서 읽는다 — lib/crm/eeo-account-fields 참고.
+    const balance = readEeoBalance(row.payload) ?? 0
     const expireAt = payloadIsActivePaidEeo(row.payload) ? payloadExpireAt(row.payload) : null
     const lastClassAt = toIso(row.payload?.["LastClassDate__c"])
     const uid = payloadString(row.payload, "uid__c")
@@ -390,7 +421,7 @@ export async function loadBranchRevRegionHints(sb: SupabaseAdminClient): Promise
   const [revResult, branchLinksResult, neoLinksResult] = await Promise.all([
     sb
       .from("branch_rev_deals")
-      .select("sheet_row, customer_name, region, first_payment, contract_target")
+      .select("sheet_row, customer_name, region, product_version, first_payment, contract_target")
       .limit(5000),
     sb
       .from("crm_source_links")
@@ -417,7 +448,10 @@ export async function loadBranchRevRegionHints(sb: SupabaseAdminClient): Promise
 
   for (const row of (revResult.data ?? []) as BranchRevRegionRow[]) {
     const label = normalizeRegionLabel(row.region)
-    if (!label) continue
+    const productVersion = row.product_version?.trim() || null
+    // 지역만 보던 시절엔 지역 없는 행을 버렸다. 이제 과금 유형도 실어 나르므로
+    // 둘 중 하나라도 있으면 힌트를 만든다.
+    if (!label && !productVersion) continue
 
     const sourceRecordKey = getBranchRevSourceRecordKey({
       sheet_row: row.sheet_row,
@@ -429,6 +463,7 @@ export async function loadBranchRevRegionHints(sb: SupabaseAdminClient): Promise
       label,
       sourceRecordKey,
       customerName: row.customer_name,
+      productVersion,
     }
     revHintsBySourceKey.set(sourceRecordKey, { ...baseHint, source: "branch_rev_confirmed_link" })
 
@@ -466,6 +501,8 @@ export function buildCrmNeoCustomerSnapshotInserts(input: {
   ownerNames: Map<string, string>
   excludedOwnerIds: Set<string>
   regionHints?: CrmNeoCustomerRegionHints
+  /** ShroffAccount external_id → 입출금 원장 이벤트. 없으면 소진 예상일을 내지 않는다. */
+  financialEvents?: Map<string, ConsumptionEvent[]>
   now?: Date
   sourceSystem?: string
   partialReason?: string | null
@@ -495,12 +532,28 @@ export function buildCrmNeoCustomerSnapshotInserts(input: {
     const regionSource = revRegionHint?.source ?? (payloadRegion.source === "unspecified" ? null : `neo_payload_${payloadRegion.source}`)
     const accountSyncedAt = account.synced_at ?? account.occurred_at ?? null
     const sourceSyncedAt = latestIso(accountSyncedAt, eeo?.syncedAt, order?.syncedAt)
+    const billingMode = deriveEeoBillingMode(revRegionHint?.productVersion)
+    // 한 고객이 EEO 계정을 여럿 가질 수 있어, 소속 계정의 원장을 합쳐 하나의 소비 흐름으로 본다.
+    const ledgerEvents: ConsumptionEvent[] = []
+    if (input.financialEvents && eeo) {
+      for (const shroffId of eeo.externalIds) {
+        const events = input.financialEvents.get(shroffId)
+        if (events) ledgerEvents.push(...events)
+      }
+    }
+    const forecast = deriveConsumptionForecast({
+      balance: eeo ? eeo.balance : null,
+      events: ledgerEvents,
+      now,
+    })
     const risk = deriveServiceRisk({
       hasNeoData: Boolean(eeo),
       expireAt: eeo?.expireAt ?? null,
       balance: eeo ? eeo.balance : null,
       lastClassAt: eeo?.lastClassAt ?? null,
       syncedAt: eeo?.syncedAt ?? accountSyncedAt,
+      billingMode,
+      depletionInDays: forecast.daysLeft,
       now,
     })
 
@@ -513,7 +566,12 @@ export function buildCrmNeoCustomerSnapshotInserts(input: {
       phone: payloadString(account.payload, "phone"),
       uid: eeo?.uid ?? null,
       region_label: regionLabel,
+      billing_mode: billingMode,
       balance: eeo ? eeo.balance : null,
+      daily_burn: forecast.dailyBurn,
+      depletion_in_days: forecast.daysLeft,
+      burn_event_count: forecast.eventCount,
+      burn_confidence: forecast.confidence,
       expire_at: eeo?.expireAt ?? null,
       last_class_at: eeo?.lastClassAt ?? null,
       order_amount: order?.amount ?? 0,
@@ -577,7 +635,7 @@ export async function refreshCrmNeoCustomerSnapshotsFromExternalRecords(options:
   const generatedAt = now.toISOString()
   const sourceSystem = options.sourceSystem ?? SOURCE_SYSTEM
 
-  const [accountResult, shroffResult, opportunityResult, ownerNames, excludedOwnerIds, regionHints] = await Promise.all([
+  const [accountResult, shroffResult, opportunityResult, financialResult, ownerNames, excludedOwnerIds, regionHints] = await Promise.all([
     fetchExternalRows<AccountSnapshotRow>(
       sb,
       ACCOUNT_OBJECT_API_KEY,
@@ -596,6 +654,12 @@ export async function refreshCrmNeoCustomerSnapshotsFromExternalRecords(options:
       "external_id, amount, synced_at, last_seen_run_id, payload",
       sourceSystem
     ),
+    fetchExternalRows<FinancialSnapshotRow>(
+      sb,
+      FINANCIAL_OBJECT_API_KEY,
+      "external_id, payload",
+      sourceSystem
+    ),
     getXiaoshouyiOwnerNameMap(sb),
     getExcludedXiaoshouyiOwnerIds(sb),
     loadBranchRevRegionHints(sb),
@@ -612,6 +676,8 @@ export async function refreshCrmNeoCustomerSnapshotsFromExternalRecords(options:
   const partialReason = partialReasonFor(partialParts)
 
   const rows = buildCrmNeoCustomerSnapshotInserts({
+    // 원장은 소진 예상일에만 쓰는 보조 신호다. 읽지 못해도 스냅샷 자체는 만든다.
+    financialEvents: aggregateFinancialEvents(financialResult.error ? [] : financialResult.data),
     accounts: accountResult.data,
     shroffAccounts: shroffResult.error ? [] : shroffResult.data,
     opportunities: opportunityResult.error ? [] : opportunityResult.data,
@@ -675,6 +741,7 @@ export function toCrmNeoCustomerSnapshotRecord(row: CrmNeoCustomerSnapshot): Crm
     hasEeo: row.has_eeo,
     riskLevel: row.risk_level,
     riskReasons: row.risk_reasons as Array<{ code?: string; label?: string }>,
+    depletionInDays: row.depletion_in_days,
     expireInDays: row.expire_in_days,
     riskConfidence: row.risk_confidence,
     freshnessLabel: row.freshness_label,
@@ -726,6 +793,7 @@ function snapshotInsertToRecord(
     hasEeo: row.has_eeo,
     riskLevel: row.risk_level,
     riskReasons: row.risk_reasons as Array<{ code?: string; label?: string }>,
+    depletionInDays: row.depletion_in_days,
     expireInDays: row.expire_in_days,
     riskConfidence: row.risk_confidence,
     freshnessLabel: row.freshness_label,
@@ -815,7 +883,7 @@ async function listCrmNeoCustomerSnapshotsFromExternalRecords(
   const limit = clampInteger(options.limit, LIST_LIMIT, 1, LIST_LIMIT)
   const offset = clampInteger(options.offset, 0, 0, 100_000)
 
-  const [accountResult, shroffResult, opportunityResult, ownerNames, excludedOwnerIds, regionHints] = await Promise.all([
+  const [accountResult, shroffResult, opportunityResult, financialResult, ownerNames, excludedOwnerIds, regionHints] = await Promise.all([
     fetchExternalRows<AccountSnapshotRow>(
       sb,
       ACCOUNT_OBJECT_API_KEY,
@@ -832,6 +900,12 @@ async function listCrmNeoCustomerSnapshotsFromExternalRecords(
       sb,
       OPPORTUNITY_OBJECT_API_KEY,
       "external_id, amount, synced_at, last_seen_run_id, payload",
+      sourceSystem
+    ),
+    fetchExternalRows<FinancialSnapshotRow>(
+      sb,
+      FINANCIAL_OBJECT_API_KEY,
+      "external_id, payload",
       sourceSystem
     ),
     getXiaoshouyiOwnerNameMap(sb),
@@ -853,6 +927,8 @@ async function listCrmNeoCustomerSnapshotsFromExternalRecords(
   const ownerFilter = new Set(options.ownerKeys ?? [])
   const search = safeSearch(options.q)
   const rows = buildCrmNeoCustomerSnapshotInserts({
+    // 원장은 소진 예상일에만 쓰는 보조 신호다. 읽지 못해도 스냅샷 자체는 만든다.
+    financialEvents: aggregateFinancialEvents(financialResult.error ? [] : financialResult.data),
     accounts: accountResult.data,
     shroffAccounts: shroffResult.error ? [] : shroffResult.data,
     opportunities: opportunityResult.error ? [] : opportunityResult.data,

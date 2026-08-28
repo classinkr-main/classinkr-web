@@ -85,16 +85,29 @@ describe("뷰별 기간", () => {
     expect(getViewRange("week", anchor)).toEqual({ from: "2026-08-03", to: "2026-08-09" })
   })
 
-  it("담당자는 월요일부터 14일이다", () => {
+  it("담당자는 월요일부터 7일이다", () => {
     const range = getViewRange("assignee", anchor)
-    expect(range).toEqual({ from: "2026-08-03", to: "2026-08-16" })
-    expect(enumerateDates(range.from, range.to)).toHaveLength(14)
+    expect(range).toEqual({ from: "2026-08-03", to: "2026-08-09" })
+    expect(enumerateDates(range.from, range.to)).toHaveLength(7)
   })
 
-  it("타임라인은 월요일부터 8주다", () => {
-    const range = getViewRange("timeline", anchor)
-    expect(range.from).toBe("2026-08-03")
-    expect(enumerateDates(range.from, range.to)).toHaveLength(56)
+  it("타임라인 기본 범위는 그 달이다", () => {
+    // 8주 고정이던 것을 고를 수 있게 하며 기본을 월로 낮췄다(2026-08-28) —
+    // 56칸으로 쪼개면 하루가 22px라 막대에 글자가 안 들어간다.
+    expect(getViewRange("timeline", anchor)).toEqual({ from: "2026-08-01", to: "2026-08-31" })
+  })
+
+  it("타임라인 범위 3종은 주·월 뷰와 같은 모양을 쓴다", () => {
+    // 같은 모양이어야 calendar-prefetch 가 모양으로 뷰를 되짚어 인접 기간을 예열한다.
+    expect(getViewRange("timeline", anchor, { timelineSpan: "week" })).toEqual(
+      getViewRange("week", anchor)
+    )
+    expect(getViewRange("timeline", anchor, { timelineSpan: "month" })).toEqual(
+      getViewRange("month", anchor)
+    )
+    const wide = getViewRange("timeline", anchor, { timelineSpan: "wide" })
+    expect(wide.from).toBe("2026-08-03")
+    expect(enumerateDates(wide.from, wide.to)).toHaveLength(56)
   })
 
   it("이동 폭이 뷰가 담는 기간과 맞아 빈틈이 안 생긴다", () => {
@@ -103,7 +116,7 @@ describe("뷰별 기간", () => {
     const nextWeek = getViewRange("week", stepAnchor("week", anchor, 1))
     expect(nextWeek.from).toBe(addDays(week.to, 1))
 
-    // 담당자: 2주씩 이동.
+    // 담당자: 1주씩 이동.
     const assignee = getViewRange("assignee", anchor)
     const nextAssignee = getViewRange("assignee", stepAnchor("assignee", anchor, 1))
     expect(nextAssignee.from).toBe(addDays(assignee.to, 1))
@@ -113,10 +126,23 @@ describe("뷰별 기간", () => {
     expect(getViewRange("month", stepAnchor("month", anchor, -1)).from).toBe("2026-07-01")
   })
 
-  it("타임라인은 절반씩 겹치게 이동한다", () => {
-    // 8주를 담되 4주씩 움직여 앞뒤 맥락이 이어진다.
-    const next = stepAnchor("timeline", anchor, 1)
-    expect(daysBetween(anchor, next)).toBe(28)
+  it("타임라인 이동 폭은 고른 범위를 따라간다", () => {
+    // 넓게 보기(8주)만 절반씩 겹친다 — 기간 기획은 앞뒤 맥락이 함께 보여야 한다.
+    expect(daysBetween(anchor, stepAnchor("timeline", anchor, 1, { timelineSpan: "wide" }))).toBe(28)
+    // 주·월은 각 뷰와 똑같이 빈틈 없이 이동한다.
+    expect(stepAnchor("timeline", anchor, 1, { timelineSpan: "week" })).toBe(
+      stepAnchor("week", anchor, 1)
+    )
+    expect(stepAnchor("timeline", anchor, 1, { timelineSpan: "month" })).toBe(
+      stepAnchor("month", anchor, 1)
+    )
+    const month = getViewRange("timeline", anchor, { timelineSpan: "month" })
+    const nextMonth = getViewRange(
+      "timeline",
+      stepAnchor("timeline", anchor, 1, { timelineSpan: "month" }),
+      { timelineSpan: "month" }
+    )
+    expect(nextMonth.from).toBe(addDays(month.to, 1))
   })
 
   it("월 이동을 반복해도 되돌아온다", () => {
@@ -129,7 +155,9 @@ describe("뷰별 기간", () => {
     expect(formatRangeLabel("month", anchor)).toBe("2026년 8월")
     expect(formatRangeLabel("week", anchor)).toContain("2026년 8월 3일")
     // 연말을 걸치면 끝 날짜에도 연도가 붙는다.
-    expect(formatRangeLabel("timeline", "2026-12-15")).toMatch(/2027년/)
+    expect(formatRangeLabel("timeline", "2026-12-15", { timelineSpan: "wide" })).toMatch(/2027년/)
+    // 달 경계에 딱 맞는 기간은 날짜 범위 대신 "몇 년 몇 월"로 읽힌다.
+    expect(formatRangeLabel("timeline", anchor, { timelineSpan: "month" })).toBe("2026년 8월")
   })
 
   it("범위가 걸치는 달을 모두 센다", () => {
@@ -137,8 +165,10 @@ describe("뷰별 기간", () => {
       { year: 2026, month: 8 },
       { year: 2026, month: 9 },
     ])
-    // 8주 타임라인은 최대 3개월에 걸친다.
-    expect(enumerateMonths(getViewRange("timeline", "2026-08-31"))).toHaveLength(3)
+    // 넓게 보기(8주)는 최대 3개월에 걸친다.
+    expect(
+      enumerateMonths(getViewRange("timeline", "2026-08-31", { timelineSpan: "wide" }))
+    ).toHaveLength(3)
     expect(enumerateMonths({ from: "2026-12-28", to: "2027-01-03" })).toEqual([
       { year: 2026, month: 12 },
       { year: 2027, month: 1 },

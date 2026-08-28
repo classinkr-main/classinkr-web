@@ -149,13 +149,13 @@ export function resolveCsConsoleMode(pathname: string): CsConsoleMode {
  * 지금 `roles`를 미리 좁히지 않는 이유 두 가지.
  *  1. 그쪽 §5.3-1이 `nav_preset` NULL이면 기존 roles 동작을 유지하도록 못 박았고
  *     배포 시점에는 전원 NULL이다(§8). 지금 좁히면 그쪽 P4("기본값은 무변화")를 먼저 깬다.
- *  2. 롤 배열로는 그 모델을 표현할 수 없다. `/admin/chatbot`은 MOON_ONLY지만
- *     §5.3-3의 오버라이드가 비-super에게도 열어줄 수 있어, `["SUPER_ADMIN"]`로 굳히면
- *     오버라이드로 부여받은 사람을 잘못 막는다.
+ *  2. 롤 배열로는 그 모델을 표현할 수 없다. §5.3-3의 오버라이드가 기본 차단 항목을
+ *     특정인에게만 열어줄 수 있어, 특정 href를 `["SUPER_ADMIN"]`로 굳히면 오버라이드로
+ *     부여받은 사람을 잘못 막는다.
  *
- * 교체 후 `대시보드`(/admin/chatbot)가 비-super에게서 빠져도 외부 축은 살아 있다 —
- * `/admin/docs`가 그쪽 `OPEN` 묶음이자 `staff` 프리셋 상시라 전 프리셋이 그 화면에서
- * 이 내비를 타고 형제 메뉴로 간다(정본 §14).
+ * (2026-08-18 CS 진입점 단일화) `/admin/chatbot`은 MOON_ONLY에서 풀려 전 프리셋 접근 +
+ * `staff` 프리셋 상시가 됐고, 사이드바의 가이드 문서·내부 CS 항목이 이 콘솔로 흡수됐다 —
+ * 사이드바의 CS 항목은 콘솔 하나이므로, CS 화면 간 이동은 전부 이 내비가 담당한다.
  * ───────────────────────────────────────────────────────────────────────────
  */
 export function isCsConsoleItemVisible(item: CsConsoleNavItem, role: AdminRole): boolean {
@@ -200,9 +200,10 @@ const MODE_ACCENT: Record<CsConsoleMode, { activeTab: string; activeItem: string
 
 export default function CsConsoleNav(props: CsConsoleNavProps) {
   // useSearchParams는 프리렌더 시 Suspense 경계를 요구한다(AdminSidebar와 같은 이유).
-  // fallback 높이는 실제 2단 바(pt-3 + 36 + mt-1.5 + 36)와 같게 잡아 스트리밍 중 점프를 막는다.
+  // fallback 높이는 실제 2단 바와 맞춘다. 모바일은 44px 터치 타깃 두 줄(106px),
+  // sm 이상은 기존 밀도 36px 두 줄(90px)이라 스트리밍 중에도 점프가 없다.
   return (
-    <Suspense fallback={<div className="h-[90px] border-b border-black/[0.08] bg-white" />}>
+    <Suspense fallback={<div className="h-[106px] border-b border-black/[0.08] bg-white sm:h-[90px]" />}>
       <CsConsoleNavContent {...props} />
     </Suspense>
   )
@@ -304,7 +305,7 @@ function CsConsoleNavContent({ role, contentClassName, className }: CsConsoleNav
                 onFocus={() => scheduleWarm(entry.entryHref)}
                 onMouseLeave={cancelWarm}
                 onBlur={cancelWarm}
-                className={`inline-flex min-h-9 items-center rounded-full px-3.5 text-[12.5px] font-semibold transition-colors ${
+                className={`inline-flex min-h-11 items-center rounded-full px-3.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] sm:min-h-9 ${
                   active
                     ? MODE_ACCENT[entry.mode].activeTab
                     : "text-[#615D59] hover:bg-[#F6F5F4] hover:text-[#111110]"
@@ -332,7 +333,7 @@ function CsConsoleNavContent({ role, contentClassName, className }: CsConsoleNav
                 onFocus={() => scheduleWarm(item.href)}
                 onMouseLeave={cancelWarm}
                 onBlur={cancelWarm}
-                className={`group relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors ${
+                className={`group relative inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] ${
                   active ? accent.activeItem : "text-[#615D59] hover:text-[#111110]"
                 }`}
               >

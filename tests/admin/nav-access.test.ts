@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest"
 
 import { ADMIN_NAV } from "@/components/admin/admin-nav"
 import {
+  getAccessibleAdminNavItems,
   NAV_PRESETS,
+  resolveAdminNavAccess,
   resolveNavAccess,
   resolveNavPlacement,
   type NavAccessContext,
@@ -24,7 +26,8 @@ describe("admin nav — 기타 범주 메타", () => {
       "/admin/campaigns/manage": "growth",
       "/admin/campaigns/projects": "growth",
       "/admin/overview": "system",
-      "/admin/chatbot": "system",
+      // CS 콘솔은 일상 고객 지원 업무면이라 customer(2026-08-18, 진입점 단일화와 함께 재범주화).
+      "/admin/chatbot": "customer",
       "/admin/ops": "system",
       "/admin/settings": "system",
       "/admin/dev": "system",
@@ -57,25 +60,45 @@ describe("admin nav — 기타 범주 메타", () => {
 
   // resolveNavAccess(Task 2)는 ADMIN_NAV 선언 순서를 그대로 상시 목록 순서로 쓴다.
   // 따라서 사이드바 순서는 이 배열 순서로만 표현된다 — 렌더에서 다시 정렬하지 않는다.
-  it("declares the 7 primary candidates in sidebar order, 캘린더 first", () => {
+  it("declares the 6 primary candidates in sidebar order, 캘린더 first", () => {
+    // CS 진입점 단일화(2026-08-18): 가이드 문서·내부 CS 상시 후보가 CS 콘솔 하나로 흡수됐다.
+    // CS 콘솔은 고객·매출 범주라 그 블록 끝(하드웨어 재고 뒤)에 선언된다 — 선언이 범주 연속
+    // 블록이어야 상시 범주 묶음(primaryGroups)이 재정렬 없는 분할로 남는다.
     const primaryCandidates = [
       "/admin/calendar",
       "/admin/quotes",
       "/admin/hardware",
+      "/admin/chatbot",
       "/admin/campaigns",
       "/admin/blog",
-      // 가이드 문서가 내부 CS보다 위다. 두 가지 이유가 겹친다:
-      //  (1) 가이드 문서는 전원 상시, 내부 CS는 cs 프리셋 전용 — 보편적인 쪽이 위로 간다.
-      //  (2) sidebar-docs-gaps.test.ts가 cs 섹션 선언 순서를 [docs, chatbot, cs-chatbot]로
-      //      고정하고 있어 docs < cs-chatbot이 강제된다. 두 계약이 같은 배열을 filter로
-      //      읽으므로 반대 순서는 애초에 표현 불가능하다.
-      "/admin/docs",
-      "/admin/cs-chatbot",
     ]
     const declared = ADMIN_NAV.map((item) => item.href).filter((href) =>
       primaryCandidates.includes(href)
     )
     expect(declared).toEqual(primaryCandidates)
+  })
+
+  // 상시 범주 소제목(2026-08-18)이 "묶기 = 재정렬"이 되지 않기 위한 전제 —
+  // 선언 순서가 범주(고객·매출 → 마케팅·분석 → 시스템) 연속 블록이어야 한다.
+  it("declares ADMIN_NAV in contiguous category blocks", () => {
+    const categories = ADMIN_NAV.map((item) => item.category ?? "system")
+    const firstIndex = new Map<string, number>()
+    categories.forEach((category, index) => {
+      if (!firstIndex.has(category)) firstIndex.set(category, index)
+    })
+    // 같은 범주는 반드시 연속 구간이다 — 범주가 한 번 바뀌면 이전 범주로 돌아오지 않는다.
+    let previous = ""
+    for (const category of categories) {
+      if (category !== previous) {
+        expect(firstIndex.get(category), category).toBeDefined()
+        previous = category
+      }
+    }
+    const seen: string[] = []
+    for (const category of categories) {
+      if (seen[seen.length - 1] !== category) seen.push(category)
+    }
+    expect(seen).toEqual(["customer", "growth", "system"])
   })
 })
 
@@ -97,7 +120,14 @@ describe("resolveNavPlacement", () => {
     for (const preset of ["staff", "sales", "marketing", "cs", "lead", "branch"] as const) {
       expect(resolveNavPlacement("/admin/settings", ctx({ preset })), preset).toBe("deny")
       expect(resolveNavPlacement("/admin/overview", ctx({ preset })), preset).toBe("deny")
-      expect(resolveNavPlacement("/admin/chatbot", ctx({ preset })), preset).toBe("deny")
+    }
+  })
+
+  it("keeps the CS console open and primary for every preset (2026-08-18 진입점 단일화)", () => {
+    // 가이드 문서·내부 CS의 nav 항목이 콘솔로 흡수됐다 — 콘솔이 유일한 CS 진입점이므로
+    // 어떤 프리셋도 차단하지 않고, "전원 상시"(구 가이드 문서 자리)를 승계한다.
+    for (const preset of ["staff", "sales", "marketing", "cs", "lead", "branch", "super"] as const) {
+      expect(resolveNavPlacement("/admin/chatbot", ctx({ preset })), preset).toBe("primary")
     }
   })
 
@@ -142,19 +172,22 @@ describe("resolveNavPlacement", () => {
 
 describe("resolveNavAccess", () => {
   it("splits the cs preset into 4 primary items in declaration order", () => {
+    // 내부 CS 상시가 콘솔로 흡수돼 cs 프리셋 상시는 캘린더·견적·CS 콘솔이고,
+    // 사이드바 평탄화(CRM 드릴인 제거)로 CRM 이 전 프리셋 상시에 합류했다.
     const { primary } = resolveNavAccess(ctx({ preset: "cs" }))
     expect(primary.map((item) => item.href)).toEqual([
       "/admin/calendar",
+      "/admin/crm",
       "/admin/quotes",
-      "/admin/docs",
-      "/admin/cs-chatbot",
+      "/admin/chatbot",
     ])
   })
 
   it("folds the reachable rest and hides the denied ones", () => {
     const { folded } = resolveNavAccess(ctx({ preset: "cs" }))
     const foldedHrefs = folded.flatMap((group) => group.items.map((item) => item.href))
-    expect(foldedHrefs).toContain("/admin/crm")
+    // CRM 은 상시로 올라가 더는 접히지 않는다.
+    expect(foldedHrefs).not.toContain("/admin/crm")
     expect(foldedHrefs).toContain("/admin/hardware")
     expect(foldedHrefs).not.toContain("/admin/settings")
     expect(foldedHrefs).not.toContain("/admin/branch/ledger")
@@ -162,22 +195,59 @@ describe("resolveNavAccess", () => {
 
   it("orders folded groups 고객·매출 → 마케팅·분석 → 시스템 and drops empty ones", () => {
     const { folded } = resolveNavAccess(ctx({ preset: "cs" }))
-    // cs 프리셋에서 시스템 범주 항목은 전부 차단(overview·chatbot·ops·settings·dev)이거나
-    // 상시(docs·cs-chatbot)라 시스템 그룹은 비어 사라진다.
+    // cs 프리셋에서 시스템 범주 항목(overview·ops·settings·dev)은 전부 차단이라
+    // 시스템 그룹은 비어 사라진다.
     expect(folded.map((group) => group.category)).toEqual(["customer", "growth"])
     expect(folded.every((group) => group.items.length > 0)).toBe(true)
   })
 
-  it("gives super 7 primary and 12 folded", () => {
+  it("gives super 7 primary and 10 folded", () => {
+    // CS 진입점 단일화로 상시 7 → 6(CS 콘솔), 여기에 CRM 상시 합류로 7. 전체 17 = 7 + 10.
     const { primary, folded } = resolveNavAccess(ctx({ role: "SUPER_ADMIN", preset: "super" }))
     expect(primary).toHaveLength(7)
-    expect(folded.flatMap((group) => group.items)).toHaveLength(12)
+    expect(folded.flatMap((group) => group.items)).toHaveLength(10)
+  })
+
+  // 상시 범주 묶음(2026-08-18) — 소제목 렌더는 이 두 필드가 SSOT다.
+  it("partitions primary into category groups without reordering", () => {
+    const access = resolveNavAccess(ctx({ role: "SUPER_ADMIN", preset: "super" }))
+    expect(access.primaryGroups.flatMap((group) => group.items)).toEqual(access.primary)
+    expect(access.primaryGroups.map((group) => group.category)).toEqual(["customer", "growth"])
+  })
+
+  it("shows primary headers only for 2+ groups and 4+ items", () => {
+    // staff(2항목)·cs(3항목)는 평면 — 항목보다 헤더가 많아지는 걸 막는다(§4.1).
+    expect(resolveNavAccess(ctx({ preset: "staff" })).showPrimaryHeaders).toBe(false)
+    expect(resolveNavAccess(ctx({ preset: "cs" })).showPrimaryHeaders).toBe(false)
+    // sales는 4항목이지만 전부 고객·매출 한 범주라 소제목이 무의미하다 — 평면.
+    expect(resolveNavAccess(ctx({ preset: "sales" })).showPrimaryHeaders).toBe(false)
+    // super·lead(6항목·2범주)는 소제목을 켠다.
+    expect(resolveNavAccess(ctx({ role: "SUPER_ADMIN", preset: "super" })).showPrimaryHeaders).toBe(true)
+    expect(resolveNavAccess(ctx({ preset: "lead" })).showPrimaryHeaders).toBe(true)
+    // 프리셋 미배정(레거시)은 전 항목 상시 — 17항목 3범주라 소제목이 켜진다.
+    expect(resolveNavAccess(ctx({ preset: null })).showPrimaryHeaders).toBe(true)
   })
 
   it("declares a primary set for every preset key", () => {
     for (const key of Object.keys(NAV_PRESETS)) {
       expect(NAV_PRESETS[key as keyof typeof NAV_PRESETS].primary.length, key).toBeGreaterThan(0)
     }
+  })
+})
+
+describe("resolveAdminNavAccess", () => {
+  const hrefs = (over: Partial<NavAccessContext> = {}) =>
+    getAccessibleAdminNavItems(resolveAdminNavAccess(ctx(over))).map((item) => item.href)
+
+  it("applies role visibility before preset placement", () => {
+    expect(hrefs({ role: "EDITOR", preset: null })).not.toContain("/admin/settings")
+    expect(hrefs({ role: "SUPER_ADMIN", preset: null })).toContain("/admin/settings")
+  })
+
+  it("normalizes legacy role casing and overrides", () => {
+    expect(hrefs({ role: "admin", overrides: { "/admin/chatbot": "deny" } })).not.toContain(
+      "/admin/chatbot"
+    )
   })
 })
 

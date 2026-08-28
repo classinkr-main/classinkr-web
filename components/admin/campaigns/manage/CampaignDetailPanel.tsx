@@ -15,7 +15,7 @@
 //  - 연결된 실행: API 가 붙여준 label 우선, 없으면 raw refId 폴백(라벨 조작 금지).
 // DESIGN.md 팔레트만 사용.
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { metaObjectiveLabel } from "@/lib/marketing/campaign-labels"
 import {
   AlertCircle,
@@ -32,6 +32,7 @@ import {
 
 import { adminFetch, adminFetchJson } from "@/lib/admin-client"
 import { useToast } from "@/components/ui/toast"
+import { useDialogFocus } from "@/components/admin/use-dialog-focus"
 import {
   CAMPAIGN_REF_TYPES,
   CAMPAIGN_REF_TYPE_LABEL,
@@ -175,8 +176,8 @@ export function CampaignRollupCard({ rollup }: { rollup: CampaignRollup }) {
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-[#615D59]">
-        채널·통화가 달라 종합 합산·수익률 지표는 표기하지 않습니다. 행사 리드는 v1에서 미집계이며, 매출은
-        입력 기준입니다. Meta 집행·리드는 생애 누적이 아니라 최근 30일 · 상위 50개 캠페인 조회 기준입니다.
+        채널·통화가 달라 합산·수익률은 표기하지 않습니다. 행사 리드는 v1 미집계(매출은 입력 기준) ·
+        Meta는 최근 30일·상위 50개 캠페인 기준입니다.
       </p>
     </section>
   )
@@ -237,20 +238,22 @@ export default function CampaignDetailPanel({
     void load()
   }, [load])
 
-  // Escape: 편집 중이면 폼 드로어가 우선(자체 X 로 닫음) → 무시. 피커 열림 → 피커 닫기. 그 외 → 상세 닫기.
+  // 포커스 트랩·복귀·Escape(2026-08-18 a11y) — role=dialog 선언만 있고 포커스가 배경에 남던
+  // 문제를 공용 훅으로 마감한다. 자식 오버레이(폼 드로어·피커)가 열려 있는 동안은 훅을
+  // 비활성화해 자식의 키 처리에 양보한다(폼 드로어는 자체 useDialogFocus 보유).
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  useDialogFocus(!editing && !pickerOpen, onClose, closeButtonRef)
+
+  // Escape: 편집 중이면 폼 드로어가 우선(자체 훅으로 닫음) → 무시. 피커 열림 → 피커만 닫는다.
+  // 기본 케이스(상세 닫기)는 위 useDialogFocus가 담당한다.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key !== "Escape") return
-      if (editing) return
-      if (pickerOpen) {
-        setPickerOpen(false)
-        return
-      }
-      onClose()
+      if (e.key !== "Escape" || !pickerOpen) return
+      setPickerOpen(false)
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [editing, pickerOpen, onClose])
+  }, [pickerOpen])
 
   // 헤더·링크는 fetch 전엔 리스트 요약으로 폴백해 빈 화면 깜빡임을 막는다.
   const head = data?.campaign ?? campaign
@@ -326,6 +329,7 @@ export default function CampaignDetailPanel({
                 {head.objective && <p className="mt-1 text-[12px] text-[#615D59]">{metaObjectiveLabel(head.objective)}</p>}
               </div>
               <button
+                ref={closeButtonRef}
                 type="button"
                 onClick={onClose}
                 aria-label="닫기"

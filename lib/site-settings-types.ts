@@ -18,6 +18,8 @@ export interface LeadRecord {
   notes?: string
   source_detail?: string
   lead_magnet?: string
+  follow_up_at?: string
+  assigned_to?: string
   utm_source?: string
   utm_medium?: string
   utm_campaign?: string
@@ -31,6 +33,7 @@ export interface LeadRecord {
   current_page?: string
   referrer?: string
   confirmed_at?: string
+  anonymous_id?: string
 }
 
 export interface SiteSettings {

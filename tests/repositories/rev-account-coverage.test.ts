@@ -22,6 +22,18 @@ interface SheetRow {
 interface LinkRow {
   source_record_key: string
   status: string
+  normalized_name?: string | null
+  target_type?: string | null
+  target_id?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+interface AliasRow {
+  source_system: string | null
+  normalized_alias: string
+  target_type: string | null
+  target_id: string | null
+  normalized_manager_name: string | null
 }
 
 function tableClient<T>(rows: T[]) {
@@ -30,19 +42,23 @@ function tableClient<T>(rows: T[]) {
     eq: () => builder,
     neq: () => builder,
     limit: () => builder,
-    then(resolve: (value: { data: T[]; error: null }) => void) {
-      resolve({ data: rows, error: null })
+    then(resolve: (value: { data: T[]; error: null; count: number }) => void) {
+      resolve({ data: rows, error: null, count: rows.length })
     },
   }
   return builder
 }
 
-async function loadCoverage(sheetRows: SheetRow[], linkRows: LinkRow[]) {
+async function loadCoverage(sheetRows: SheetRow[], linkRows: LinkRow[], aliasRows: AliasRow[] = []) {
   vi.resetModules()
   vi.doMock("@/lib/supabase/admin", () => ({
     createSupabaseAdminClient: vi.fn(() => ({
       from: vi.fn((table: string) =>
-        table === "branch_rev_deals" ? tableClient(sheetRows) : tableClient(linkRows)
+        table === "branch_rev_deals"
+          ? tableClient(sheetRows)
+          : table === "crm_source_links"
+            ? tableClient(linkRows)
+            : tableClient(aliasRows)
       ),
     })),
   }))
@@ -155,7 +171,12 @@ describe("getRevAccountCoverage — CRM 싱크 additive 확장", () => {
     expect(coverage.asOf).toBe("2026-07-18T00:33:00.000Z")
 
     // 위생 — 고아 후보 1(유령 키), 스테일 1. 비활성 행 키 후보는 고아가 아니다.
-    expect(coverage.hygiene).toEqual({ orphanCandidates: 1, staleLinks: 1 })
+    expect(coverage.hygiene).toEqual({
+      orphanCandidates: 1,
+      orphanCandidateNames: 1,
+      staleLinks: 1,
+      staleLinkNames: 1,
+    })
 
     // health — 연결 계정(전행+부분) 1 / 전체 3 = 33.3% → partial.
     expect(coverage.health).toBe("partial")
@@ -169,11 +190,79 @@ describe("getRevAccountCoverage — CRM 싱크 additive 확장", () => {
     ])
   })
 
+  it("현재 원천의 활성 별칭으로 입증되지 않은 과거 alias 후보를 미연결로 되돌린다", async () => {
+    const invalidAliasCandidate: LinkRow = {
+      source_record_key: getBranchRevSourceRecordKey(ROW_B),
+      status: "candidate",
+      target_type: "partner_account",
+      target_id: "internal-test-account",
+      metadata: {
+        source_owner: "MKT · MKT Gyusung",
+        match_strategy: "alias",
+        match_evidence: ["name:char_overlap:0.38", "alias:class"],
+      },
+    }
+
+    const coverage = await loadCoverage([ROW_B], [invalidAliasCandidate])
+
+    expect(coverage.accounts).toMatchObject({ total: 1, needsReview: 0, unlinked: 1 })
+    expect(coverage.rows).toEqual({ matchable: 1, linked: 0, review: 0, unlinked: 1 })
+    expect(coverage.topUnlinked).toEqual([
+      expect.objectContaining({ name: "다라어학원", unlinkedRevenue: 500 }),
+    ])
+  })
+
+  it("같은 원천·타깃·담당 범위의 활성 별칭이 남은 후보만 현재 검토로 센다", async () => {
+    const aliasCandidate: LinkRow = {
+      source_record_key: getBranchRevSourceRecordKey(ROW_B),
+      status: "candidate",
+      target_type: "partner_account",
+      target_id: "account-1",
+      metadata: {
+        source_owner: "MKT Gyusung",
+        match_strategy: "alias",
+        match_evidence: ["alias:class"],
+      },
+    }
+    const alias: AliasRow = {
+      source_system: "branch_rev_sheet",
+      normalized_alias: "class",
+      target_type: "partner_account",
+      target_id: "account-1",
+      normalized_manager_name: "mktgyusung",
+    }
+
+    const coverage = await loadCoverage([ROW_B], [aliasCandidate], [alias])
+
+    expect(coverage.accounts).toMatchObject({ total: 1, needsReview: 1, unlinked: 0 })
+    expect(coverage.rows).toEqual({ matchable: 1, linked: 0, review: 1, unlinked: 0 })
+  })
+
+  it("확정 sibling이 있는 stale 후보는 은퇴 이력으로 보고 actionable 검토에서 제외한다", async () => {
+    const sourceRecordKey = getBranchRevSourceRecordKey(ROW_A)
+    const coverage = await loadCoverage(
+      [ROW_A],
+      [
+        { source_record_key: sourceRecordKey, status: "stale", target_type: "customer", target_id: "old" },
+        { source_record_key: sourceRecordKey, status: "confirmed", target_type: "customer", target_id: "current" },
+      ]
+    )
+
+    expect(coverage.accounts).toMatchObject({ total: 1, linked: 1, needsReview: 0, unlinked: 0 })
+    expect(coverage.rows).toEqual({ matchable: 1, linked: 1, review: 0, unlinked: 0 })
+    expect(coverage.hygiene.staleLinks).toBe(1)
+  })
+
   it("링크가 하나도 없으면 low — 분모가 있어도 연결 0", async () => {
     const coverage = await loadCoverage([ROW_A, ROW_B, ROW_C], [])
     expect(coverage.health).toBe("low")
     expect(coverage.rows).toEqual({ matchable: 3, linked: 0, review: 0, unlinked: 3 })
-    expect(coverage.hygiene).toEqual({ orphanCandidates: 0, staleLinks: 0 })
+    expect(coverage.hygiene).toEqual({
+      orphanCandidates: 0,
+      orphanCandidateNames: 0,
+      staleLinks: 0,
+      staleLinkNames: 0,
+    })
   })
 
   it("시트가 비어 있으면 asOf null·health low로 접힌다", async () => {

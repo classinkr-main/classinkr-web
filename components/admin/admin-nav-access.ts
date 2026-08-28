@@ -1,9 +1,10 @@
 // 어드민 사이드바 접근·배치 SSOT — 스펙 docs/active/admin-tab-restructure-2026-07-29.md §5.
-// 순수 데이터/함수만 둔다(React·브라우저 API 없음). 사이드바·커맨드 팔레트·권한 설정
-// 미리보기가 전부 이 모듈의 resolveNavAccess를 호출해야 세 화면이 어긋나지 않는다.
+// 순수 데이터/함수만 둔다(React·브라우저 API 없음). 실제 사용자 표면은 이 모듈의
+// resolveAdminNavAccess를 호출해야 역할·프리셋·오버라이드가 어긋나지 않는다.
 import {
   ADMIN_NAV,
   ADMIN_NAV_CATEGORIES,
+  normalizeAdminRole,
   type AdminNavCategory,
   type AdminNavItem,
 } from "./admin-nav"
@@ -11,10 +12,14 @@ import {
 export type NavPlacement = "primary" | "folded" | "deny"
 export type NavPresetKey = "staff" | "sales" | "marketing" | "cs" | "lead" | "branch" | "super"
 
-/** 문준혁(SUPER_ADMIN) 전용 — 다른 프리셋에는 열리지 않는다(사람별 오버라이드로만 예외 부여). */
+/**
+ * 문준혁(SUPER_ADMIN) 전용 — 다른 프리셋에는 열리지 않는다(사람별 오버라이드로만 예외 부여).
+ * /admin/chatbot(CS 콘솔)은 2026-08-18 CS 진입점 단일화로 이 목록에서 빠졌다 — 가이드 문서·
+ * 내부 CS의 nav 항목이 콘솔 가로 메뉴로 흡수되면서 콘솔이 전 프리셋의 유일한 CS 진입점이 됐고,
+ * 진입점을 차단하면 팀원의 CS 표면 전체가 사라진다.
+ */
 export const MOON_ONLY_HREFS: readonly string[] = [
   "/admin/overview",
-  "/admin/chatbot",
   "/admin/ops",
   "/admin/settings",
   "/admin/dev",
@@ -34,13 +39,18 @@ export interface NavPreset {
   primary: readonly string[]
 }
 
-const STAFF_PRIMARY = ["/admin/calendar", "/admin/docs"] as const
+// 전원 상시 바닥 — 캘린더는 첫 화면, CS 콘솔은 유일한 CS 진입점(가이드 문서·내부 CS를 품는다).
+// 가이드 문서가 차지하던 "전원 상시" 자리를 콘솔이 승계했다(2026-08-18 CS 진입점 단일화).
+// CRM 은 전 프리셋 상시다 — 사이드바가 평평해지면서(드릴인 제거) CRM 이 접힌 '기타' 안에만
+// 있으면 영업 핵심 화면을 메뉴에서 찾을 수 없다. 드릴인이 그동안 이 결함을 가려주고 있었다.
+const STAFF_PRIMARY = ["/admin/calendar", "/admin/chatbot", "/admin/crm"] as const
 
 export const NAV_PRESETS: Record<NavPresetKey, NavPreset> = {
   staff: { label: "기본", primary: STAFF_PRIMARY },
   sales: { label: "영업", primary: [...STAFF_PRIMARY, "/admin/quotes", "/admin/hardware"] },
   marketing: { label: "마케팅", primary: [...STAFF_PRIMARY, "/admin/campaigns", "/admin/blog"] },
-  cs: { label: "고객 지원", primary: [...STAFF_PRIMARY, "/admin/quotes", "/admin/cs-chatbot"] },
+  // 내부 CS 별도 상시는 콘솔(STAFF_PRIMARY의 /admin/chatbot)로 흡수됐다 — 콘솔 내부 축이 그 화면이다.
+  cs: { label: "고객 지원", primary: [...STAFF_PRIMARY, "/admin/quotes"] },
   lead: {
     label: "총괄",
     primary: [...STAFF_PRIMARY, "/admin/quotes", "/admin/hardware", "/admin/campaigns", "/admin/blog"],
@@ -53,12 +63,12 @@ export const NAV_PRESETS: Record<NavPresetKey, NavPreset> = {
     label: "최고 관리자",
     primary: [
       "/admin/calendar",
+      "/admin/crm",
       "/admin/quotes",
       "/admin/hardware",
       "/admin/campaigns",
       "/admin/blog",
-      "/admin/docs",
-      "/admin/cs-chatbot",
+      "/admin/chatbot",
     ],
   },
 }
@@ -86,7 +96,7 @@ export function normalizeNavOverrides(value: unknown): Record<string, NavPlaceme
 }
 
 export interface NavAccessContext {
-  /** normalizeAdminRole을 통과한 값. SUPER_ADMIN은 어떤 규칙으로도 차단되지 않는다. */
+  /** resolveAdminNavAccess가 normalizeAdminRole을 적용한다. SUPER_ADMIN은 어떤 규칙으로도 차단되지 않는다. */
   role: string
   /** null이면 레거시(roles 기반) 동작으로 폴백한다. */
   preset: NavPresetKey | null
@@ -125,40 +135,93 @@ export interface FoldedNavGroup {
 }
 
 export interface ResolvedNavAccess {
+  /** 상시 항목 — ADMIN_NAV 선언 순서 그대로(렌더에서 재정렬하지 않는다). */
   primary: AdminNavItem[]
+  /**
+   * primary를 기타와 같은 3범주로 묶은 것 — 상시 범주 소제목 렌더용(2026-08-18).
+   * ADMIN_NAV 선언이 범주 연속 블록이라 이 묶음은 재정렬 없는 분할이며,
+   * 항목을 이어 붙이면 primary와 순서가 완전히 같다.
+   */
+  primaryGroups: FoldedNavGroup[]
+  /**
+   * 상시 목록에 범주 소제목을 렌더할지 — 2범주 이상 + 4항목 이상일 때만.
+   * 소형 프리셋에서 항목보다 헤더가 많아지는 문제(스펙 §4.1이 섹션 헤더를 없앤 이유)를 피한다.
+   * 사이드바·권한 미리보기가 각자 판단하면 어긋나므로 여기서 한 번만 계산한다.
+   */
+  showPrimaryHeaders: boolean
   folded: FoldedNavGroup[]
 }
 
-/**
- * 롤 필터를 통과한 항목들을 상시/기타로 나눈다.
- * 상시 순서는 ADMIN_NAV 선언 순서를 그대로 따르고(렌더에서 재정렬하지 않는다),
- * 기타는 범주 선언 순서(고객·매출 → 마케팅·분석 → 시스템)로 묶는다. 빈 범주는 사라진다.
- */
-export function resolveNavAccess(
-  ctx: NavAccessContext,
-  items: readonly AdminNavItem[] = ADMIN_NAV
-): ResolvedNavAccess {
-  const primary: AdminNavItem[] = []
+/** 항목들을 범주 선언 순서(고객·매출 → 마케팅·분석 → 시스템)로 묶는다. 빈 범주는 사라진다. */
+function groupNavByCategory(items: readonly AdminNavItem[]): FoldedNavGroup[] {
   const byCategory = new Map<AdminNavCategory, AdminNavItem[]>()
 
   for (const item of items) {
-    const placement = resolveNavPlacement(item.href, ctx)
-    if (placement === "deny") continue
-    if (placement === "primary") {
-      primary.push(item)
-      continue
-    }
-
     const category = item.category ?? "system"
     const bucket = byCategory.get(category)
     if (bucket) bucket.push(item)
     else byCategory.set(category, [item])
   }
 
-  const folded = ADMIN_NAV_CATEGORIES.flatMap((category) => {
+  return ADMIN_NAV_CATEGORIES.flatMap((category) => {
     const group = byCategory.get(category)
     return group && group.length > 0 ? [{ category, items: group }] : []
   })
+}
 
-  return { primary, folded }
+/**
+ * 롤 필터를 통과한 항목들을 상시/기타로 나눈다.
+ * 상시 순서는 ADMIN_NAV 선언 순서를 그대로 따르고(렌더에서 재정렬하지 않는다),
+ * 상시·기타 모두 같은 3범주로 묶는다(2026-08-18 — "순서를 더 쓰고 범주화" 결정).
+ */
+export function resolveNavAccess(
+  ctx: NavAccessContext,
+  items: readonly AdminNavItem[] = ADMIN_NAV
+): ResolvedNavAccess {
+  const primary: AdminNavItem[] = []
+  const foldedItems: AdminNavItem[] = []
+
+  for (const item of items) {
+    const placement = resolveNavPlacement(item.href, ctx)
+    if (placement === "deny") continue
+    if (placement === "primary") primary.push(item)
+    else foldedItems.push(item)
+  }
+
+  const primaryGroups = groupNavByCategory(primary)
+
+  return {
+    primary,
+    primaryGroups,
+    showPrimaryHeaders: primary.length >= 4 && primaryGroups.length >= 2,
+    folded: groupNavByCategory(foldedItems),
+  }
+}
+
+/**
+ * 실제 사용자 컨텍스트용 단일 진입점.
+ * 역할 가시성 → 프리셋/오버라이드 순서를 사이드바·모바일·팔레트·미리보기가 공유한다.
+ */
+export function resolveAdminNavAccess(ctx: NavAccessContext): ResolvedNavAccess {
+  const role = normalizeAdminRole(ctx.role)
+  const visibleItems = ADMIN_NAV.filter((item) => item.roles.includes(role))
+
+  return resolveNavAccess(
+    {
+      role,
+      preset: ctx.preset,
+      overrides: normalizeNavOverrides(ctx.overrides),
+    },
+    visibleItems
+  )
+}
+
+/** 상시·기타의 렌더 가능한 항목을 ADMIN_NAV 선언 순서로 되돌린다. */
+export function getAccessibleAdminNavItems(access: ResolvedNavAccess): AdminNavItem[] {
+  const accessibleHrefs = new Set([
+    ...access.primary.map((item) => item.href),
+    ...access.folded.flatMap((group) => group.items.map((item) => item.href)),
+  ])
+
+  return ADMIN_NAV.filter((item) => accessibleHrefs.has(item.href))
 }

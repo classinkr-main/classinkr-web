@@ -27,6 +27,8 @@ export interface MetaCampaignRow {
   updatedTime?: string
   startTime?: string
   stopTime?: string
+  lifetimeBudget: number | null
+  dailyBudget: number | null
   insights: {
     spend: number
     impressions: number
@@ -143,6 +145,8 @@ interface MetaCampaignApiRow {
   updated_time?: string
   start_time?: string
   stop_time?: string
+  lifetime_budget?: string
+  daily_budget?: string
 }
 
 interface MetaInsightAction {
@@ -162,6 +166,11 @@ interface MetaInsightApiRow {
   cpm?: string
   actions?: MetaInsightAction[]
 }
+
+// 대시보드(datePreset 롤업)와 일자별(time_increment=1) 두 insights 조회가 공유하는 필드 —
+// 한쪽만 고치고 다른 쪽을 잊는 드리프트를 막는다.
+const CAMPAIGN_INSIGHT_FIELDS =
+  "campaign_id,campaign_name,spend,impressions,reach,clicks,ctr,cpc,cpm,actions"
 
 interface MetaPagingResponse<T> {
   data?: T[]
@@ -266,6 +275,17 @@ function toNumber(value: unknown) {
 function toNullableNumber(value: unknown) {
   const parsed = toNumber(value)
   return parsed > 0 ? parsed : null
+}
+
+// Meta 예산 필드(lifetime_budget 등)는 통화 최소 단위 문자열이다.
+// 무소수점 통화(KRW·JPY 등)는 오프셋 1, 그 외 기본 100(센트).
+const CURRENCY_MINOR_UNIT_OFFSET: Record<string, number> = { KRW: 1, JPY: 1, TWD: 1, VND: 1 }
+
+export function normalizeBudgetAmount(raw: unknown, currency: string | null | undefined): number | null {
+  const value = toNumber(raw)
+  if (value <= 0) return null
+  const offset = (currency && CURRENCY_MINOR_UNIT_OFFSET[currency]) || 100
+  return value / offset
 }
 
 function buildUrl(
@@ -665,12 +685,12 @@ async function fetchMetaCampaignDashboard({
   const [account, campaignResponse, insightsResponse] = await Promise.all([
     getMetaAdAccountStatus(),
     metaGet<MetaPagingResponse<MetaCampaignApiRow>>(`${accountId}/campaigns`, {
-      fields: "id,name,status,effective_status,objective,buying_type,created_time,updated_time,start_time,stop_time",
+      fields: "id,name,status,effective_status,objective,buying_type,created_time,updated_time,start_time,stop_time,lifetime_budget,daily_budget",
       limit,
     }),
     metaGet<MetaPagingResponse<MetaInsightApiRow>>(`${accountId}/insights`, {
       level: "campaign",
-      fields: "campaign_id,campaign_name,spend,impressions,reach,clicks,ctr,cpc,cpm,actions",
+      fields: CAMPAIGN_INSIGHT_FIELDS,
       date_preset: datePreset,
       limit,
     }),
@@ -695,6 +715,8 @@ async function fetchMetaCampaignDashboard({
       updatedTime: campaign.updated_time,
       startTime: campaign.start_time,
       stopTime: campaign.stop_time,
+      lifetimeBudget: normalizeBudgetAmount(campaign.lifetime_budget, account.currency),
+      dailyBudget: normalizeBudgetAmount(campaign.daily_budget, account.currency),
       insights: {
         spend: toNumber(insight?.spend),
         impressions: toNumber(insight?.impressions),
@@ -788,4 +810,106 @@ export async function getMetaInstagramDashboard({
     followerGrowth,
     summary: summarizeInstagram(media, followerGrowth),
   }
+}
+
+/* ─── 일자별 insights (meta_insights_daily 스냅샷용) ─────────── */
+
+export interface MetaDailyInsightRow {
+  date: string          // date_start — 광고 계정 타임존 기준 일자
+  campaignId: string
+  campaignName: string | null
+  spend: number
+  impressions: number
+  reach: number
+  clicks: number
+  ctr: number | null
+  cpc: number | null
+  cpm: number | null
+  leads: number
+}
+
+interface MetaDailyInsightApiRow extends MetaInsightApiRow {
+  date_start?: string
+  date_stop?: string
+}
+
+interface MetaCursorPaging {
+  paging?: { cursors?: { after?: string }; next?: string }
+}
+
+export function mapDailyInsightRow(row: MetaDailyInsightApiRow): MetaDailyInsightRow | null {
+  if (!row.campaign_id || !row.date_start) return null
+  return {
+    date: row.date_start,
+    campaignId: row.campaign_id,
+    campaignName: row.campaign_name ?? null,
+    spend: toNumber(row.spend),
+    impressions: toNumber(row.impressions),
+    reach: toNumber(row.reach),
+    clicks: toNumber(row.clicks),
+    ctr: toNullableNumber(row.ctr),
+    cpc: toNullableNumber(row.cpc),
+    cpm: toNullableNumber(row.cpm),
+    leads: extractLeads(row.actions),
+  }
+}
+
+const DAILY_INSIGHTS_PAGE_CAP = 20
+
+/**
+ * 캠페인 레벨 일자별 insights — time_increment=1 로 [since, until](YYYY-MM-DD, inclusive)
+ * 범위를 조회한다. 행 수 = 일수 × 캠페인 수라 커서 페이징을 따라간다(안전 상한 20페이지).
+ *
+ * truncated=true 인 경우(둘 중 하나):
+ *  1) 20페이지 캡에 도달했는데 다음 페이지(after)가 아직 남아있다 — 큰 범위/캠페인 수로 상한 초과.
+ *  2) Meta 가 다음 페이지 존재(paging.next)만 알리고 커서(cursors.after)를 안 줘 더 따라갈 수 없다.
+ * 두 경우 모두 결과가 무음으로 잘려나간 것이므로, 호출자(크론/백필)가 반드시 확인해야 한다.
+ */
+export async function fetchMetaDailyInsights({
+  since,
+  until,
+}: {
+  since: string
+  until: string
+}): Promise<{ rows: MetaDailyInsightRow[]; currency: string | null; truncated: boolean }> {
+  const accountId = getAdAccountId()
+  const account = await getMetaAdAccountStatus()
+  const rows: MetaDailyInsightRow[] = []
+  let after: string | undefined
+  let truncated = false
+
+  for (let page = 0; page < DAILY_INSIGHTS_PAGE_CAP; page += 1) {
+    const response = await metaGet<MetaPagingResponse<MetaDailyInsightApiRow> & MetaCursorPaging>(
+      `${accountId}/insights`,
+      {
+        level: "campaign",
+        fields: CAMPAIGN_INSIGHT_FIELDS,
+        time_increment: 1,
+        time_range: JSON.stringify({ since, until }),
+        limit: 500,
+        after,
+      }
+    )
+    for (const raw of response.data ?? []) {
+      const mapped = mapDailyInsightRow(raw)
+      if (mapped) rows.push(mapped)
+    }
+
+    if (!response.paging?.next) {
+      after = undefined
+      break
+    }
+    if (!response.paging?.cursors?.after) {
+      truncated = true
+      break
+    }
+    after = response.paging.cursors.after
+    if (page === DAILY_INSIGHTS_PAGE_CAP - 1) truncated = true
+  }
+
+  if (truncated) {
+    console.warn("[meta-daily] 페이징 상한 도달 — 결과 절단됨", { since, until })
+  }
+
+  return { rows, currency: account.currency ?? null, truncated }
 }

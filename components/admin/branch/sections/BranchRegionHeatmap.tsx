@@ -819,5 +819,3 @@ export default function BranchRegionHeatmap({ team, period, selectedMonth, refre
     </section>
   )
 }
-
-export { fmt as fmtNumber }

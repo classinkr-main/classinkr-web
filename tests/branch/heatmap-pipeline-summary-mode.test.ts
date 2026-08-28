@@ -50,9 +50,10 @@ describe("웨이브 7 — F3. PipelineTable summaryMode", () => {
     const idx = source.lastIndexOf("전체 파이프라인에서 보기 →")
     expect(idx).toBeGreaterThan(-1)
     // 그 버튼이 onViewFullPipeline을 호출해야 한다(같은 페이지 탭 전환 — Link href 아님).
-    const onClickIdx = source.lastIndexOf("onClick={onViewFullPipeline}", idx)
-    expect(onClickIdx).toBeGreaterThan(-1)
-    expect(idx - onClickIdx).toBeLessThan(200)
+    const buttonStart = source.lastIndexOf("<button", idx)
+    expect(buttonStart).toBeGreaterThan(-1)
+    const buttonBlock = source.slice(buttonStart, idx)
+    expect(buttonBlock).toContain("onClick={onViewFullPipeline}")
   })
 
   it("summaryMode·hideHeader와 무관하게 행 클릭(onRowClick)은 그대로 살아있다", () => {

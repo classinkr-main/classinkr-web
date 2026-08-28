@@ -59,11 +59,8 @@ import {
   extractMarkdownHeadings,
   slugify,
 } from "@/lib/blog-markdown"
-import {
-  getLeadMagnetGateLabel,
-  getLeadMagnetStatusLabel,
-  leadMagnetOptions,
-} from "@/lib/lead-magnets"
+import { leadMagnetOptions } from "@/lib/lead-magnets"
+import { getLeadMagnetGateLabel, getLeadMagnetStatusLabel } from "@/lib/lead-magnets-helpers"
 import { sanitizePublicImageUrl } from "@/lib/safe-public-url"
 import { adminFetch, getAdminToken } from "@/lib/admin-client"
 

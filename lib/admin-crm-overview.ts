@@ -105,8 +105,10 @@ export interface AdminCrmOverview {
     ok: boolean
     total: number
     confirmed: number
+    /** 저장된 status 원본 이력. 현재 actionable review 수가 아니다. */
     candidate: number
     rejected: number
+    /** 저장된 status 원본 이력. 현재 actionable review 수가 아니다. */
     stale: number
     error: string | null
   }
@@ -1145,8 +1147,6 @@ function getOverallStatus(input: {
   externalSnapshotsOk: boolean
   writeQueueOk: boolean
   businessOk: boolean
-  sourceCandidates: number
-  sourceStale: number
   snapshotStale: number
   failedWrites: number
 }): AdminCrmOverviewStatus {
@@ -1161,8 +1161,6 @@ function getOverallStatus(input: {
   }
   if (
     !input.xiaoshouyiConfigured ||
-    input.sourceCandidates > 0 ||
-    input.sourceStale > 0 ||
     input.snapshotStale > 0 ||
     input.failedWrites > 0
   ) {
@@ -1301,8 +1299,6 @@ async function buildAdminCrmOverview(options: { force?: boolean } = {}): Promise
       externalSnapshotsOk: externalSnapshots.ok,
       writeQueueOk: writeQueue.ok,
       businessOk: business.ok,
-      sourceCandidates: sourceLinks.candidate,
-      sourceStale: sourceLinks.stale,
       snapshotStale: externalSnapshots.staleCount,
       failedWrites: writeQueue.failed,
     }),

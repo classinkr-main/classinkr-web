@@ -24,6 +24,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - **Admin OS 현재 운영 결정.** 관리자 역할·기능 권한, V2 정본, CRM 5작업면, 상태·삭제·공개 기준의 최우선 문서.
 - [active/admin-tab-restructure-2026-07-29.md](./active/admin-tab-restructure-2026-07-29.md)
   - **Admin UI 구조 정본.** 상시 탭과 기타 메뉴, 모바일 내비게이션, 경로별 화면 배치 기준.
+- [active/site-admin-separation-plan-2026-08-28.md](./active/site-admin-separation-plan-2026-08-28.md)
+  - **홈페이지·Admin 실행 경계 분리 계획.** 단일 저장소·DB를 유지하면서 레이아웃, 앱, Vercel, Cron·Webhook을 단계적으로 분리하는 실행 기준.
 - [active/cs-admin-console-ia-2026-07-27.md](./active/cs-admin-console-ia-2026-07-27.md)
   - **CS 영역 IA 정본.** CS 콘솔의 정보 구조, 작업 큐, 상세 화면 관계 기준.
 - [active/playbook/README.md](./active/playbook/README.md)
@@ -100,6 +102,10 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
 
 ## 3. Architecture
 
+- [active/site-admin-separation-plan-2026-08-28.md](./active/site-admin-separation-plan-2026-08-28.md)
+  - 홈페이지와 Admin의 레이아웃·앱·배포 경계, 공용 패키지, Cron·Webhook 이전 순서
+- [adr/ADR-009-site-admin-deployment-boundary.md](./adr/ADR-009-site-admin-deployment-boundary.md)
+  - 한 저장소·한 Supabase 정본을 유지하고 Site/Admin 실행·배포 경계를 단계적으로 분리하는 결정
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
   - 엔티티와 스키마 관점의 입구
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)

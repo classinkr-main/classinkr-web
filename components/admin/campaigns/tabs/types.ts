@@ -4,7 +4,7 @@
 import type { EventEconomics, EventFunnel, EventMetrics, AdChannel } from "@/lib/types/event-metrics"
 import type { PublicEvent } from "@/lib/types/public-events"
 
-export type CampaignTab = "summary" | "events" | "meta" | "email"
+export type CampaignTab = "summary" | "leads" | "events" | "meta" | "email"
 
 export type MetaDatePreset = "last_7d" | "last_30d" | "last_90d" | "this_month"
 
@@ -51,23 +51,6 @@ export interface MetaCampaignDashboard {
     cpc: number | null
     cpm: number | null
   }
-}
-
-export interface MarketingStatsData {
-  subscribers: { total: number; active: number; unsubscribed: number; newThisMonth: number }
-  campaigns: {
-    total: number
-    recentCampaigns: Array<{
-      id: string | number
-      subject: string
-      sentAt: string | null
-      recipientCount: number
-      status: "draft" | "sent" | "failed"
-      tags: string[]
-    }>
-  }
-  automation: { totalRules: number; activeRules: number }
-  tagDistribution: Array<{ tag: string; count: number }>
 }
 
 export type Period = "active" | "30d" | "90d" | "all"

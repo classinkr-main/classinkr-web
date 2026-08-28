@@ -646,8 +646,7 @@ function ApiKeyStatusPanel({ items }: { items: AdminIntegrationStatusItem[] }) {
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#084734]" />
           <p className="text-[12px] leading-relaxed text-[#1a1a1a]/55">
-            API 키 교체는 암호화 저장소와 감사 로그가 붙은 write-only endpoint가 준비된 뒤 연결합니다.
-            지금 화면은 키 원문을 저장하거나 표시하지 않고, 서버가 판정한 설정 상태만 보여줍니다.
+            API 키 교체는 암호화 저장소·감사 로그 준비 후 연결 — 지금은 키 원문 없이 상태만 표시합니다.
           </p>
         </div>
       </div>

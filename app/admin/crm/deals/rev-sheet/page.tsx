@@ -20,6 +20,7 @@ import { StatTile } from "@/components/admin/viz"
 import { CONFIDENCE_TOKENS } from "@/lib/branch/confidence-tokens"
 import type {
   AdminCrmRevenueSheetBreakdownRow,
+  AdminCrmRevenueSheetCompassCompare,
   AdminCrmRevenueSheetRow,
   AdminCrmRevenueSheetWorkspace,
   RevenueSheetLinkStatus,
@@ -52,6 +53,7 @@ const STATUS_TONE: Record<Exclude<RevenueSheetLinkStatus, null>, string> = {
 }
 
 const MAX_VISIBLE_ROWS = 80
+const MOBILE_VISIBLE_ROWS = 25
 
 function formatCny(value: number | null | undefined) {
   const amount = Number(value ?? 0)
@@ -114,6 +116,35 @@ function StatusBadge({ status }: { status: RevenueSheetLinkStatus }) {
   return (
     <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusTone(status)}`}>
       {getStatusLabel(status)}
+    </span>
+  )
+}
+
+// M8 — Compass(마케팅팀 앱) 대조 배지. "월별 매출시트 흐름"이 실제로 표시하는 달들의 합계
+// (scheduledAmount, 어드민 monthly 밴드와 같은 기준)를 Compass 쪽 같은 달 합계와 병기한다.
+// 차이가 0이 아니면 주의 톤 — 두 앱 다 같은 REV 원장을 읽으므로 차이는 버그가 아니라 셀 색
+// 해석·동기화 지연 문제일 가능성이 높다(캡션에 명시).
+function CompassCompareBadge({ compass, loading }: { compass: AdminCrmRevenueSheetCompassCompare | undefined; loading: boolean }) {
+  if (loading && !compass) {
+    return <ValueSkeleton className="h-5 w-28" />
+  }
+  if (!compass) return null
+  if (compass.down) {
+    return (
+      <span className="inline-flex items-center rounded-full border border-[#e8e8e4] bg-[#fafaf8] px-2.5 py-1 text-[11px] font-medium text-[#1a1a1a]/40">
+        Compass 연결 끊김
+      </span>
+    )
+  }
+  const mismatched = compass.diffAmount !== 0
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+        mismatched ? "border-amber-200 bg-amber-50 text-amber-800" : "border-[#D6E8DE] bg-[#ECFDF5] text-[#084734]"
+      }`}
+    >
+      Compass {formatCny(compass.compassAmount)}
+      {mismatched ? ` · 차이 ${formatCny(Math.abs(compass.diffAmount))}` : " · 일치"}
     </span>
   )
 }
@@ -283,22 +314,21 @@ export default function AdminCrmRevenueSheetPage() {
   }, [data?.monthly])
 
   return (
-    <div>
+    <div className="[&_button]:min-h-11 [&_button]:min-w-11 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-[#084734] [&_input:not([type=checkbox]):not([type=file])]:min-h-11 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:outline-none [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-2 [&_input:not([type=checkbox]):not([type=file])]:focus-visible:ring-[#084734] [&_section_a]:inline-flex [&_section_a]:min-h-11 [&_section_a]:min-w-11 [&_section_a]:items-center [&_section_a]:focus-visible:outline-none [&_section_a]:focus-visible:ring-2 [&_section_a]:focus-visible:ring-[#084734] [&_select]:min-h-11 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-[#084734] sm:[&_button]:min-h-0 sm:[&_button]:min-w-0 sm:[&_input:not([type=checkbox]):not([type=file])]:min-h-0 sm:[&_section_a]:min-h-0 sm:[&_section_a]:min-w-0 sm:[&_select]:min-h-0">
       {/* 역할 배너 — 매출시트 = REV 분석·검수 READ 표면, 링크 확정 액션은 매칭 인박스(CRM-1 역할 확정) */}
       <p className="mb-4 border-b border-[#f0f0ec] pb-3 text-[12px] text-[#1a1a1a]/45">
-        <span className="font-semibold text-[#111110]">여기선 분석·검수</span> — REV 행을 읽고 대조하는 표면입니다.
-        CRM 연결(링크) 확정은{" "}
-        <Link href="/admin/crm/matching" className="font-semibold text-[#084734] underline-offset-2 hover:underline">
+        <span className="font-semibold text-[#111110]">분석·검수 전용</span> — 링크 확정은{" "}
+        <Link href="/admin/crm/matching" className="inline-flex min-h-11 items-center font-semibold text-[#084734] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734] sm:min-h-0">
           매칭 인박스 ↗
         </Link>
-        에서 합니다.
+        에서.
       </p>
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin 3.0 Revenue Sheet</p>
           <h1 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[#111110]">매출시트</h1>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#1a1a1a]/45">
-            기존 REV 시트 행을 어드민 안에서 운영합니다. 지금은 동기화본을 기준으로 읽고, 매칭·통계·CRM 연결을 먼저 안정화한 뒤 자체 매출 원장으로 승격합니다.
+            동기화본 기준 운영 — 매칭·통계·CRM 연결 안정화 후 자체 원장으로 승격 예정
           </p>
         </div>
 
@@ -333,8 +363,8 @@ export default function AdminCrmRevenueSheetPage() {
         </div>
       </div>
 
-      {notice ? <div className="mb-6 border-l-2 border-[#D6EFE5] pl-3 text-[13px] text-[#084734]">{notice}</div> : null}
-      {error ? <div className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">{error}</div> : null}
+      {notice ? <div role="status" aria-live="polite" className="mb-6 border-l-2 border-[#D6EFE5] pl-3 text-[13px] text-[#084734]">{notice}</div> : null}
+      {error ? <div role="alert" className="mb-6 border-l-2 border-[#F6D5C5] pl-3 text-[13px] text-[#B85C33]">{error}</div> : null}
 
       {(data?.warnings.length ?? 0) > 0 ? (
         <div className="mb-6 border-l-2 border-amber-200 pl-3">
@@ -385,9 +415,11 @@ export default function AdminCrmRevenueSheetPage() {
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-[14px] font-semibold text-[#111110]">월별 매출시트 흐름</h2>
-              <p className="mt-1 text-[12px] text-[#1a1a1a]/42">확정·임박·예정·전환 대기를 한 달 단위로 분리해서 봅니다.</p>
             </div>
-            <span className="text-[11px] text-[#1a1a1a]/35">current {data?.currentMonth ?? "-"}</span>
+            <div className="flex flex-col items-end gap-1.5">
+              <span className="text-[11px] text-[#1a1a1a]/35">current {data?.currentMonth ?? "-"}</span>
+              <CompassCompareBadge compass={data?.compass} loading={loading} />
+            </div>
           </div>
           <div className="flex h-64 items-end gap-2 overflow-x-auto border-b border-[#f0f0ec] pb-4">
             {(data?.monthly ?? []).map((point) => (
@@ -419,6 +451,11 @@ export default function AdminCrmRevenueSheetPage() {
             <span className="inline-flex items-center gap-1"><i className={`h-2 w-2 rounded-sm ${CONFIDENCE_TOKENS.expected.bgClass}`} />예정</span>
             <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-sm bg-[#B85C33]" />전환 대기</span>
           </div>
+          {data?.compass && !data.compass.down ? (
+            <p className="mt-2 text-[10.5px] leading-relaxed text-[#1a1a1a]/35">
+              두 앱이 같은 원장을 읽지만 셀 색 해석이 달라 차이가 날 수 있음 · 시간당 동기화분
+            </p>
+          ) : null}
         </div>
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1">
@@ -501,7 +538,7 @@ export default function AdminCrmRevenueSheetPage() {
               표시할 REV 행이 없습니다.
             </p>
           ) : (
-            visibleRows.slice(0, MAX_VISIBLE_ROWS).map((row) => (
+            visibleRows.slice(0, MOBILE_VISIBLE_ROWS).map((row) => (
               <div key={row.id} className="rounded-xl border border-[#e8e8e4] bg-white p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -565,6 +602,12 @@ export default function AdminCrmRevenueSheetPage() {
             ))
           )}
         </div>
+
+        {visibleRows.length > MOBILE_VISIBLE_ROWS ? (
+          <p className="mt-4 border-t border-[#f0f0ec] pt-3 text-center text-[12px] text-[#1a1a1a]/40 sm:hidden">
+            우선순위 상위 {formatNumber(MOBILE_VISIBLE_ROWS)}건을 표시합니다. 나머지 {formatNumber(visibleRows.length - MOBILE_VISIBLE_ROWS)}건은 검색·필터로 좁혀 확인하세요.
+          </p>
+        ) : null}
 
         <div className="hidden overflow-x-auto sm:block">
           <table className="min-w-[1320px] w-full text-left">
@@ -652,7 +695,7 @@ export default function AdminCrmRevenueSheetPage() {
         </div>
 
         {visibleRows.length > MAX_VISIBLE_ROWS ? (
-          <p className="mt-4 border-t border-[#f0f0ec] pt-3 text-center text-[12px] text-[#1a1a1a]/40">
+          <p className="mt-4 hidden border-t border-[#f0f0ec] pt-3 text-center text-[12px] text-[#1a1a1a]/40 sm:block">
             외 {formatNumber(visibleRows.length - MAX_VISIBLE_ROWS)}건은 표시하지 않았습니다. 검색/필터로 좁혀 확인하세요.
           </p>
         ) : null}

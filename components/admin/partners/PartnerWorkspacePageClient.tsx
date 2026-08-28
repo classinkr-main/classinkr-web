@@ -5,7 +5,6 @@ import { useDeferredValue, useState } from "react"
 import {
   AlertTriangle,
   ArrowRight,
-  BellRing,
   CheckCircle2,
   ClipboardList,
   Handshake,
@@ -380,27 +379,11 @@ export default function PartnerWorkspacePageClient({
         <div className="max-w-4xl">
           <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin</p>
           <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">처리 큐</h1>
-          <p className="mt-2 text-[13px] leading-6 text-[#1a1a1a]/55">
-            등록된 계정 목록보다 <strong className="text-[#111110]">지금 손이 가야 하는 계약, 설치, 정산, 이슈</strong>가 먼저 보이도록 큐 중심으로 재정렬합니다.
-            운영자는 이 화면에서 계약 대기, 실행 중, 정산 지연, 리스크 상태를 빠르게 훑고 바로 상세로 들어갑니다.
-          </p>
         </div>
         <Button onClick={openCreateDialog} className="gap-1.5 self-start" disabled={saving}>
           <Plus className="h-4 w-4" />
           계정 추가
         </Button>
-      </div>
-
-      <div className="mb-6 rounded-2xl border border-[#dce8ff] bg-[#f7faff] px-5 py-4">
-        <div className="flex items-start gap-3">
-          <BellRing className="mt-0.5 h-4 w-4 shrink-0 text-[#2f6fed]" />
-          <div>
-            <p className="text-[13px] font-semibold text-[#173b8f]">처리 큐 기준</p>
-            <p className="mt-1 text-[12px] leading-5 text-[#3052a0]">
-              `계약 대기`, `설치 진행`, `정산 지연`, `이슈 필요`를 처리 큐로 두고, 검색과 상태 필터는 보조 수단으로 사용합니다.
-            </p>
-          </div>
-        </div>
       </div>
 
       {warning && (

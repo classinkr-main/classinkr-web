@@ -28,40 +28,199 @@ const sb = () => createSupabaseAdminClient();
 
 /* ─── 구독자 ─────────────────────────────────────────────── */
 
+const SUBSCRIBER_COLUMNS = [
+  "id",
+  "name",
+  "email",
+  "org",
+  "role",
+  "size",
+  "phone",
+  "tags",
+  "status",
+  "source",
+  "opt_in_at",
+  "unsubscribed_at",
+  "created_at",
+  "updated_at",
+].join(", ");
+const SUBSCRIBER_ANALYTICS_COLUMNS = "id, status, source, created_at";
+const SUBSCRIBER_ANALYTICS_PAGE_SIZE = 1_000;
+const SUBSCRIBER_MAX_ANALYTICS_ROWS = 100_000;
+const SUBSCRIBER_QUERY_TIMEOUT_MS = 12_000;
+
+export interface SubscriberPage {
+  subscribers: SubRow[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
+export interface SubscriberAnalyticsRow {
+  createdAt: string;
+  status: Subscriber["status"];
+  source: string;
+}
+
+interface SubscriberKeysetPageResult<T> {
+  data: T[] | null;
+  error: { message: string } | null;
+}
+
+/** 전량 롤업용 id keyset. 고정 1,000건 절단과 깊은 OFFSET 스캔을 모두 피한다. */
+export async function fetchAllSubscriberRowsById<T extends { id: string }>(
+  fetchPage: (afterId: string | null, limit: number) => Promise<SubscriberKeysetPageResult<T>>,
+  options: { pageSize?: number; maxRows?: number } = {}
+): Promise<T[]> {
+  const pageSize = options.pageSize ?? SUBSCRIBER_ANALYTICS_PAGE_SIZE;
+  const maxRows = options.maxRows ?? SUBSCRIBER_MAX_ANALYTICS_ROWS;
+  const rows: T[] = [];
+  let afterId: string | null = null;
+
+  while (true) {
+    const result = await fetchPage(afterId, pageSize);
+    if (result.error) {
+      throw new Error(`[marketing] 구독자 분석 조회 실패: ${result.error.message}`);
+    }
+    const page = result.data ?? [];
+    if (rows.length + page.length > maxRows) {
+      throw new Error(
+        `[marketing] 구독자 분석 행이 안전 상한 ${maxRows.toLocaleString()}건을 초과했습니다.`
+      );
+    }
+    rows.push(...page);
+    if (page.length < pageSize) break;
+
+    const nextCursor = page.at(-1)?.id ?? null;
+    if (!nextCursor || nextCursor === afterId) {
+      throw new Error("[marketing] 구독자 분석 keyset cursor가 전진하지 않았습니다.");
+    }
+    afterId = nextCursor;
+  }
+
+  return rows;
+}
+
+export async function getSubscribersPage(
+  limit = 1_000,
+  offset = 0,
+  filters?: { status?: string; tag?: string }
+): Promise<SubscriberPage> {
+  const safeLimit = Number.isFinite(limit)
+    ? Math.min(Math.max(Math.floor(limit), 1), 1_000)
+    : 1_000;
+  const safeOffset = Number.isFinite(offset) ? Math.max(Math.floor(offset), 0) : 0;
+
+  if (!USE_SUPABASE) {
+    const { getAllSubscribers: jsonGet } = await import("@/lib/marketing-data");
+    let subscribers: SubRow[] = await jsonGet();
+    if (filters?.status) subscribers = subscribers.filter((row) => row.status === filters.status);
+    if (filters?.tag) {
+      const tag = filters.tag;
+      subscribers = subscribers.filter((row) => row.tags.includes(tag));
+    }
+    const total = subscribers.length;
+    const page = subscribers.slice(safeOffset, safeOffset + safeLimit);
+    return {
+      subscribers: page,
+      total,
+      limit: safeLimit,
+      offset: safeOffset,
+      hasMore: safeOffset + page.length < total,
+    };
+  }
+
+  const timeoutController = new AbortController();
+  const timeout = setTimeout(() => timeoutController.abort(), SUBSCRIBER_QUERY_TIMEOUT_MS);
+  try {
+    let query = sb()
+      .from("newsletter_subscribers")
+      .select(SUBSCRIBER_COLUMNS, { count: "exact" })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(safeOffset, safeOffset + safeLimit - 1);
+
+    if (filters?.status) query = query.eq("status", filters.status);
+    if (filters?.tag) query = query.contains("tags", [filters.tag]);
+
+    const { data, error, count } = await query.abortSignal(timeoutController.signal);
+    if (error) throw new Error(`[marketing] 구독자 조회 실패: ${error.message}`);
+    if (typeof count !== "number") {
+      throw new Error("[marketing] 구독자 전체 수를 확인하지 못했습니다.");
+    }
+    const subscribers = (data ?? []).map(rowToSubscriber);
+    return {
+      subscribers,
+      total: count,
+      limit: safeLimit,
+      offset: safeOffset,
+      hasMore: safeOffset + subscribers.length < count,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function getAllSubscribers(
   limit = 1000,
   offset = 0,
   filters?: { status?: string; tag?: string }
 ): Promise<SubRow[]> {
+  return (await getSubscribersPage(limit, offset, filters)).subscribers;
+}
+
+export async function getSubscriberAnalyticsRows(filters?: {
+  status?: string;
+  tag?: string;
+}): Promise<SubscriberAnalyticsRow[]> {
   if (!USE_SUPABASE) {
     const { getAllSubscribers: jsonGet } = await import("@/lib/marketing-data");
     let subscribers: SubRow[] = await jsonGet();
-    if (filters?.status) {
-      subscribers = subscribers.filter((s) => s.status === filters.status);
-    }
+    if (filters?.status) subscribers = subscribers.filter((row) => row.status === filters.status);
     if (filters?.tag) {
       const tag = filters.tag;
-      subscribers = subscribers.filter((s) => s.tags.includes(tag));
+      subscribers = subscribers.filter((row) => row.tags.includes(tag));
     }
-    return subscribers;
+    return subscribers.map((subscriber) => ({
+      createdAt: subscriber.createdAt,
+      status: subscriber.status,
+      source: subscriber.source,
+    }));
   }
 
-  let query = sb()
-    .from("newsletter_subscribers")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
+  const timeoutController = new AbortController();
+  const timeout = setTimeout(() => timeoutController.abort(), SUBSCRIBER_QUERY_TIMEOUT_MS);
+  try {
+    const rows = await fetchAllSubscriberRowsById(async (afterId, limit) => {
+      let query = sb()
+        .from("newsletter_subscribers")
+        .select(SUBSCRIBER_ANALYTICS_COLUMNS)
+        .order("id", { ascending: true })
+        .limit(limit);
+      if (filters?.status) query = query.eq("status", filters.status);
+      if (filters?.tag) query = query.contains("tags", [filters.tag]);
+      if (afterId) query = query.gt("id", afterId);
+      const { data, error } = await query.abortSignal(timeoutController.signal);
+      return {
+        data: (data ?? null) as Array<{
+          id: string;
+          created_at: string;
+          status: Subscriber["status"];
+          source: string;
+        }> | null,
+        error,
+      };
+    });
 
-  if (filters?.status) {
-    query = query.eq("status", filters.status);
+    return rows.map((row) => ({
+      createdAt: row.created_at,
+      status: row.status,
+      source: row.source,
+    }));
+  } finally {
+    clearTimeout(timeout);
   }
-  if (filters?.tag) {
-    query = query.contains("tags", [filters.tag]);
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(`[marketing] 구독자 조회 실패: ${error.message}`);
-  return (data ?? []).map(rowToSubscriber);
 }
 
 /**
@@ -86,20 +245,29 @@ export async function countSubscribers(filters?: {
     return subscribers.length;
   }
 
-  let query = sb()
-    .from("newsletter_subscribers")
-    .select("id", { count: "exact", head: true });
+  const timeoutController = new AbortController();
+  const timeout = setTimeout(() => timeoutController.abort(), SUBSCRIBER_QUERY_TIMEOUT_MS);
+  try {
+    let query = sb()
+      .from("newsletter_subscribers")
+      .select("id", { count: "exact", head: true });
 
-  if (filters?.status) {
-    query = query.eq("status", filters.status);
-  }
-  if (filters?.tag) {
-    query = query.contains("tags", [filters.tag]);
-  }
+    if (filters?.status) {
+      query = query.eq("status", filters.status);
+    }
+    if (filters?.tag) {
+      query = query.contains("tags", [filters.tag]);
+    }
 
-  const { count, error } = await query;
-  if (error) throw new Error(`[marketing] 구독자 수 조회 실패: ${error.message}`);
-  return count ?? 0;
+    const { count, error } = await query.abortSignal(timeoutController.signal);
+    if (error) throw new Error(`[marketing] 구독자 수 조회 실패: ${error.message}`);
+    if (typeof count !== "number") {
+      throw new Error("[marketing] 구독자 전체 수를 확인하지 못했습니다.");
+    }
+    return count;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function getSubscriberByEmail(
@@ -333,6 +501,36 @@ export async function getAllCampaigns(limit = 200, offset = 0): Promise<Campaign
   return (data ?? []).map(rowToCampaign);
 }
 
+export interface CampaignLinkLabel {
+  id: string | number;
+  subject: string | null;
+}
+
+/**
+ * 링크 피커(D1-6)용 경량 캠페인 라벨 조회 — subject만 필요한 소비처가
+ * getAllCampaigns()의 select("*")(본문 HTML 포함)를 끌어오지 않도록 분리한다.
+ * getAllCampaigns()와 동일한 USE_SUPABASE 모드 분기·JSON 폴백을 따른다 —
+ * 폴백을 우회하면 Supabase 미구성 로컬 환경에서 이메일 캠페인이 조용히 사라진다.
+ */
+export async function listCampaignLinkLabels(limit = 200): Promise<CampaignLinkLabel[]> {
+  if (!USE_SUPABASE) {
+    const { getAllCampaigns: jsonGet } = await import("@/lib/marketing-data");
+    const campaigns = await jsonGet();
+    return campaigns.slice(0, limit).map((c) => ({ id: c.id, subject: c.subject ?? null }));
+  }
+
+  const { data, error } = await sb()
+    .from("email_campaigns")
+    .select("id, subject")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`[marketing] 캠페인 라벨 조회 실패: ${error.message}`);
+  return ((data ?? []) as { id: string | number; subject: string | null }[]).map((row) => ({
+    id: row.id,
+    subject: row.subject ?? null,
+  }));
+}
+
 export const MARKETING_CAMPAIGNS_CACHE_TAG = "marketing-campaigns";
 
 // summarizeCampaigns(branch summary의 "최근 30일 캠페인" 위젯)처럼 초단위 신선도가
@@ -343,6 +541,32 @@ export const getCachedAllCampaigns = unstable_cache(
   ["marketing-campaigns-default"],
   { revalidate: 60, tags: [MARKETING_CAMPAIGNS_CACHE_TAG] },
 );
+
+/**
+ * 같은 제목이 withinMs 안에 이미 발송(sent)됐는지 — 더블클릭·이중 제출의 서버 방어용
+ * (2026-08-18). 클라이언트 sendLoading 만으로는 새로고침·중복 탭을 막지 못한다.
+ * JSON 폴백에서는 검사 없이 통과한다(로컬 개발 전용 경로).
+ */
+export async function findRecentSentCampaign(
+  subject: string,
+  withinMs: number
+): Promise<{ id: string | number; sentAt?: string } | null> {
+  if (!USE_SUPABASE) return null
+
+  const since = new Date(Date.now() - withinMs).toISOString()
+  const { data, error } = await sb()
+    .from("email_campaigns")
+    .select("id, sent_at")
+    .eq("subject", subject)
+    .eq("status", "sent")
+    .gte("sent_at", since)
+    .order("sent_at", { ascending: false })
+    .limit(1)
+  if (error) throw new Error(`[marketing] 최근 발송 조회 실패: ${error.message}`)
+
+  const row = data?.[0]
+  return row ? { id: row.id, sentAt: row.sent_at ?? undefined } : null
+}
 
 export async function createCampaign(
   data: Omit<EmailCampaign, "id" | "createdAt">
@@ -372,7 +596,9 @@ export async function createCampaign(
 
 export async function updateCampaign(
   id: string | number,
-  data: Partial<Pick<EmailCampaign, "status" | "sentAt" | "recipientCount" | "openCount">>
+  data: Partial<
+    Pick<EmailCampaign, "status" | "sentAt" | "recipientCount" | "openCount" | "failedCount" | "sendErrors">
+  >
 ): Promise<void> {
   if (!USE_SUPABASE) return // JSON 폴백에서는 무시
 
@@ -381,6 +607,8 @@ export async function updateCampaign(
   if (data.sentAt !== undefined) patch.sent_at = data.sentAt
   if (data.recipientCount !== undefined) patch.recipient_count = data.recipientCount
   if (data.openCount !== undefined) patch.open_count = data.openCount
+  if (data.failedCount !== undefined) patch.failed_count = data.failedCount
+  if (data.sendErrors !== undefined) patch.send_errors = data.sendErrors
 
   const { error } = await sb()
     .from("email_campaigns")
@@ -424,6 +652,9 @@ function rowToCampaign(row: any): CampaignRow {
     sentAt: row.sent_at ?? undefined,
     recipientCount: row.recipient_count ?? 0,
     openCount: row.open_count ?? 0,
+    clickCount: row.click_count ?? 0,
+    failedCount: row.failed_count ?? 0,
+    sendErrors: row.send_errors ?? [],
     externalId: row.external_id ?? undefined,
     createdAt: row.created_at,
   };

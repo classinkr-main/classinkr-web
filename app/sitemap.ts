@@ -17,6 +17,7 @@ const staticRoutes: Array<{
   { path: "/product", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
   { path: "/product/sw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
   { path: "/product/hw", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-05-20" },
+  { path: "/product/ai-report", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-08-28" },
   { path: "/pricing", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-06-10" },
   { path: "/contact", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-04-01" },
   { path: "/privacy", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-04-01" },

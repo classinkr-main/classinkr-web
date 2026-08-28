@@ -3,6 +3,8 @@ import "server-only"
 import { createHash } from "crypto"
 import { revalidateTag, unstable_cache } from "next/cache"
 
+import { isPromotedProduct } from "@/lib/hardware/product"
+import { normalizedAccountKey } from "@/lib/branch/account-key"
 import { fetchAllSupabaseRows, listFreshHwInbound, listFreshHwOutbound, listFreshHwStock } from "@/lib/repositories/branch-hw"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
@@ -148,14 +150,22 @@ export interface HardwareAlert {
   product: string
   title: string
   detail: string
+  // 미가동 품목의 상시 부족 알림 표시 강등용 — 클라이언트가 접힌 그룹으로 내린다.
+  muted?: boolean
+}
+
+// 미가동(취급 중단) 품목 판정 — 창고가 정확히 0이고 예정·최근 30일 출고가 없으면 "부족" 알림은
+// 상시 소음이다. 음수 창고는 원장 이상 실신호이므로 0 초과·미만이 아닌 0 일치로만 본다.
+export function isDormantStockRow(row: Pick<HardwareStockRow, "warehouseStock" | "plannedOut" | "outbound30d">): boolean {
+  return row.warehouseStock === 0 && row.plannedOut === 0 && row.outbound30d === 0
 }
 
 export interface HardwareDashboard {
   items: HardwareItem[]
   stock: HardwareStockRow[]
+  // 최근 출고·예정 큐는 이 배열의 부분집합이라 따로 싣지 않는다 — 클라이언트가
+  // movement_type/isPlannedMovement로 그대로 파생한다(정렬·voided 제외는 여기서 끝난 상태).
   movements: HardwareMovement[]
-  recentOutbound: HardwareMovement[]
-  plannedMovements: HardwareMovement[]
   alerts: HardwareAlert[]
   totals: {
     warehouseStock: number
@@ -291,10 +301,15 @@ function defaultCategory(product: string, category: string | null) {
 
 // 전량 조회 — PostgREST 1000행 캡을 id 키셋 페이지네이션으로 우회한다(fetchAllSupabaseRows).
 // 키셋은 id 오름차순으로 읽으므로, 기존 반환 순서 계약(order 컬럼 기준)은 JS 재정렬로 유지한다.
-async function listAll<T extends { id: string }>(table: string, order = "created_at", ascending = false): Promise<T[]> {
+async function listAll<T extends { id: string }>(
+  table: string,
+  columns = "*",
+  order = "created_at",
+  ascending = false
+): Promise<T[]> {
   const sb = createSupabaseAdminClient()
   const rows = await fetchAllSupabaseRows<T>((afterId, limit) => {
-    let query = sb.from(table).select("*").order("id", { ascending: true }).limit(limit)
+    let query = sb.from(table).select(columns).order("id", { ascending: true }).limit(limit)
     if (afterId) query = query.gt("id", afterId)
     return query
   })
@@ -342,9 +357,113 @@ function recoverMoneyFromRaw(rows: HardwareMovement[]): HardwareMovement[] {
   })
 }
 
+// 대시보드가 읽지 않는 임포트 계보 컬럼(source_table·source_key·import_run_id)은 빼고 읽는다.
+// 시트 임포트 경로는 listCurrentSheetImportMovements가 따로 전량(select "*")을 읽으므로 무관하다.
+const DASHBOARD_MOVEMENT_COLUMNS = [
+  "id",
+  "item_id",
+  "product_name",
+  "movement_type",
+  "quantity",
+  "occurred_at",
+  "from_location",
+  "to_location",
+  "owner",
+  "status",
+  "reference_no",
+  "memo",
+  "serials",
+  "lot_no",
+  "unit_price",
+  "amount_usd",
+  "amount_cny",
+  "storage_location",
+  "importer",
+  "source",
+  "raw",
+  "created_by",
+  "created_at",
+  "voided_at",
+  "voided_by",
+  "void_reason",
+  "converted_from_movement_id",
+  "converted_to_movement_id",
+].join(",")
+
 async function listAllHardwareMovements(): Promise<HardwareMovement[]> {
-  const rows = await listAll<HardwareMovement>("hardware_movements")
+  const rows = await listAll<HardwareMovement>("hardware_movements", DASHBOARD_MOVEMENT_COLUMNS)
   return recoverMoneyFromRaw(rows)
+}
+
+// 응답에 실리는 raw 투영. 클라이언트가 raw에서 읽는 값은 crmLink 하나뿐인데(shared.tsx
+// extractCrmLink), 시트 임포트 행의 raw는 원본 시트 행 전체를 담고 있어 응답 대부분을 차지한다.
+// recoverMoneyFromRaw가 이미 금액·수입자를 컬럼으로 끌어올린 뒤라 여기서 버려도 안전하다.
+// 수정 API는 raw를 patch로 받을 때만 덮어쓰고 클라이언트는 보내지 않으므로 저장본은 그대로다.
+function projectMovementRaw(movement: HardwareMovement): HardwareMovement {
+  const raw = isRecord(movement.raw) ? movement.raw : null
+  const crmLink = raw && isRecord(raw.crmLink) ? raw.crmLink : null
+  return { ...movement, raw: crmLink ? { crmLink } : null }
+}
+
+export interface HardwareCustomerLink {
+  accountKey: string
+  name: string
+}
+
+interface HardwareCustomerMovementRow {
+  id: string
+  to_location: string | null
+  status: string | null
+}
+
+const GENERIC_HARDWARE_DESTINATIONS = new Set(
+  ["창고", "샘플", "고객", "수리", "사무실", "본사", "office", "외부/고객", "외부", "재고"].map((value) =>
+    value.toLocaleLowerCase("ko-KR")
+  )
+)
+
+/**
+ * REV 장부의 하드웨어 역링크용 경량 투영. 실제(non-planned), non-voided 출고의
+ * 고객 목적지만 읽어 전체 재고 대시보드 조립과 600KB 응답을 피한다.
+ */
+async function getHardwareCustomerLinksUncached(): Promise<HardwareCustomerLink[]> {
+  const sb = createSupabaseAdminClient()
+  const rows = await fetchAllSupabaseRows<HardwareCustomerMovementRow>((afterId, limit) => {
+    let query = sb
+      .from("hardware_movements")
+      .select("id,to_location,status")
+      .eq("movement_type", "outbound")
+      .is("voided_at", null)
+      .order("id", { ascending: true })
+      .limit(limit)
+    if (afterId) query = query.gt("id", afterId)
+    return query
+  })
+
+  const customers = new Map<string, string>()
+  for (const row of rows) {
+    if (isPlannedStatus(row.status)) continue
+    const name = row.to_location?.trim()
+    if (!name || GENERIC_HARDWARE_DESTINATIONS.has(name.toLocaleLowerCase("ko-KR"))) continue
+    const accountKey = normalizedAccountKey(name)
+    if (accountKey && !customers.has(accountKey)) customers.set(accountKey, name)
+  }
+
+  return Array.from(customers, ([accountKey, name]) => ({ accountKey, name })).sort((a, b) =>
+    a.name.localeCompare(b.name, "ko")
+  )
+}
+
+// 장부 워크벤치가 콜드로드마다 부르는데 출고 전량 키셋 스캔이다 — 대시보드와 같은 무효화
+// 태그를 달아, 원장 쓰기 6경로가 즉시 갱신하고 그 사이 반복 호출은 캐시가 받는다.
+const getHardwareCustomerLinksCached = unstable_cache(
+  () => getHardwareCustomerLinksUncached(),
+  ["hardware-customer-links"],
+  { tags: [HARDWARE_INVENTORY_CACHE_TAG], revalidate: 120 }
+)
+
+export function getHardwareCustomerLinks(): Promise<HardwareCustomerLink[]> {
+  return getHardwareCustomerLinksCached()
 }
 
 async function getLatestImportRun(): Promise<HardwareDashboard["importRun"]> {
@@ -789,7 +908,8 @@ export async function voidHardwareMovement(
 
 export async function updateHardwareMovement(
   id: string,
-  input: CreateHardwareMovementInput
+  input: CreateHardwareMovementInput,
+  options?: { canFinalize?: boolean }
 ): Promise<HardwareMovement> {
   const productName = normalizeProductName(input.productName)
   if (!productName) throw new Error("제품명은 필수입니다.")
@@ -803,13 +923,15 @@ export async function updateHardwareMovement(
   const sb = createSupabaseAdminClient()
   const { data: existing, error: existingError } = await sb
     .from("hardware_movements")
-    .select("id,source,voided_at,converted_from_movement_id,converted_to_movement_id")
+    .select("id,source,movement_type,status,voided_at,converted_from_movement_id,converted_to_movement_id")
     .eq("id", id)
     .maybeSingle()
   if (existingError) throw existingError
   if (!existing) throw new Error("원장 기록을 찾을 수 없습니다.")
   const row = existing as {
     source: string
+    movement_type: string
+    status: string | null
     voided_at: string | null
     converted_from_movement_id: string | null
     converted_to_movement_id: string | null
@@ -822,6 +944,19 @@ export async function updateHardwareMovement(
   }
   if (row.converted_from_movement_id || row.converted_to_movement_id) {
     throw new Error("전환된 기록은 수정할 수 없습니다.")
+  }
+  // 권한 정렬: 확정·취소가 hardware.finalize인데 update는 무제한이면 실현 원장을 우회 재작성할 수
+  // 있다. 예정(planned) 행 편집은 에디터 업무라 열어두고, (1) 실현 기록 수정과 (2) 예정→실현
+  // 상태 전환(확정 우회)만 finalize를 요구한다.
+  if (options?.canFinalize === false) {
+    const wasPlanned = row.movement_type === "outbound" && isPlannedStatus(row.status)
+    if (!wasPlanned) {
+      throw new Error("실제 반영된 기록 수정은 확정 권한(hardware.finalize)이 필요합니다.")
+    }
+    const staysPlanned = input.movementType === "outbound" && isPlannedStatus(cleanString(input.status))
+    if (!staysPlanned) {
+      throw new Error("예정을 실제 출고로 바꾸는 확정은 확정 권한(hardware.finalize)이 필요합니다.")
+    }
   }
 
   let itemId = input.itemId
@@ -1449,8 +1584,10 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
         weeklyOutboundAvg,
         trendOrderPoint,
         daysUntilStockout,
-        low: availableStock <= item.reorder_point,
-        orderRecommended: availableStock <= trendOrderPoint,
+        // 판촉(promoted) 라인엔 재주문 개념이 없다 — 부족/주문검토 축에서 제외하고,
+        // 음수·이상치는 알림 빌더의 "원장 점검 필요"로 따로 올린다(운영 결정 2026-08-19).
+        low: !isPromotedProduct(item.name) && availableStock <= item.reorder_point,
+        orderRecommended: !isPromotedProduct(item.name) && availableStock <= trendOrderPoint,
         locationBalances: locationRows,
         lotBalances: lotRows,
       }
@@ -1461,26 +1598,37 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
       return a.product.localeCompare(b.product, "ko")
     })
 
+  // 최근 출고(30건)·예정 큐는 이 배열의 부분집합이라 여기서 만들지 않는다 — 클라이언트가
+  // 같은 순서·같은 판정으로 파생한다. 예정 큐는 확정을 기다리는 할 일 목록이라 상한이
+  // 따로 없고, 2000건 캡만 그 상한 역할을 한다.
   const movementRows = activeMovements
     .slice()
     .sort((a, b) => movementDate(b) - movementDate(a))
     .slice(0, 2000)
-  const recentOutbound = movementRows
-    .filter((movement) => movement.movement_type === "outbound")
-    .slice(0, 30)
-  const plannedMovements = movementRows
-    .filter((movement) => movement.movement_type === "outbound" && isPlannedStatus(movement.status))
-    .slice(0, 30)
+    .map(projectMovementRaw)
 
   const alerts: HardwareAlert[] = []
   for (const row of rows) {
-    if (row.low) {
+    // 음수 창고 = 부족이 아니라 원장 이상 — 재주문 경보 대신 점검 신호로 올린다.
+    // (현재 실사례: STD1(promoted) −16. 판촉 라인은 low 자체가 꺼져 있어 이 분기가 유일한 경보.)
+    if (row.warehouseStock < 0) {
+      alerts.push({
+        id: `check-${row.itemId}`,
+        severity: "critical",
+        product: row.product,
+        title: "원장 점검 필요",
+        detail: `창고 ${row.warehouseStock}대 · 가용 ${row.availableStock}대 — ${
+          isPromotedProduct(row.product) ? "promoted 판정 또는 시트 수치 정리 필요" : "원장 유형·시트 수치 정리 필요"
+        }`,
+      })
+    } else if (row.low) {
       alerts.push({
         id: `low-${row.itemId}`,
         severity: "critical",
         product: row.product,
         title: "최소재고 미만",
         detail: `가용 ${row.availableStock}대 / 최소 ${row.reorderPoint}대`,
+        ...(isDormantStockRow(row) ? { muted: true } : {}),
       })
     } else if (row.orderRecommended) {
       alerts.push({
@@ -1502,13 +1650,20 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
     }
   }
 
+  // 실신호가 캡에 밀리지 않게 muted(미가동 품목 소음)와 분리해 각각 캡을 적용한다.
+  // 원장 점검(음수 재고)은 가장 급한 실신호 — 재고행 정렬과 무관하게 목록 최상단에 둔다.
+  const checkAlerts = alerts.filter((alert) => alert.id.startsWith("check-"))
+  const activeAlerts = [
+    ...checkAlerts,
+    ...alerts.filter((alert) => !alert.muted && !alert.id.startsWith("check-")),
+  ].slice(0, 12)
+  const mutedAlerts = alerts.filter((alert) => alert.muted).slice(0, 12)
+
   return {
     items,
     stock: rows,
     movements: movementRows,
-    recentOutbound,
-    plannedMovements,
-    alerts: alerts.slice(0, 12),
+    alerts: [...activeAlerts, ...mutedAlerts],
     totals: {
       warehouseStock: rows.reduce((sum, row) => sum + row.warehouseStock, 0),
       availableStock: rows.reduce((sum, row) => sum + row.availableStock, 0),

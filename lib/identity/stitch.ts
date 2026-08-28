@@ -217,6 +217,23 @@ export async function stitchIdentity(input: StitchIdentityInput): Promise<Stitch
         .eq("anonymous_id", anonymousId)
         .is("lead_id", null)
       await captureWarning("material_downloads anonymous backfill", downloads, warnings)
+
+      // 이 브라우저를 리드에 각인한다 — 여기서만 소급 백필로 끝내면 로그인 "이후"에
+      // 새로 쌓이는 이벤트가 다시 익명으로 떨어진다(track/event 의
+      // resolveLeadIdForAnonymousId 는 leads.anonymous_id 로만 찾는다).
+      //
+      // 특히 광고 유입 리드(meta_lead_ads 등)는 서버 웹훅으로 들어와 브라우저 세션이
+      // 없으므로 캡처 시점에 anonymous_id 를 가질 수 없다. 그런 리드가 사이트에서
+      // 신원을 밝히는 순간이 바로 여기이고, 이 한 줄이 없으면 그 리드의 anonymous_id 는
+      // 영원히 비어 정방향 귀속이 켜지지 않는다.
+      //
+      // 캡처 시점에 이미 값이 있으면 덮지 않는다 — 그쪽이 더 강한 근거다.
+      const stamp = supabase
+        .from("leads")
+        .update({ anonymous_id: anonymousId })
+        .eq("id", leadId)
+        .is("anonymous_id", null)
+      await captureWarning("leads anonymous_id stamp", stamp, warnings)
     }
   }
 

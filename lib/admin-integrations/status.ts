@@ -678,10 +678,11 @@ function buildOpsScheduleStatus(): AdminIntegrationStatus {
     category: "ops",
     configured,
     source: sourceFromEnv(["CRON_SECRET"]),
-    health: configured ? "warning" : "error",
+    health: configured ? "ok" : "error",
+    description:
+      "Cron 인증 설정 여부를 표시합니다. 실제 최근 실행 성공은 각 동기화 run 이력과 Vercel 호출 로그에서 확인합니다.",
     requiredKeys: ["CRON_SECRET"],
-    lastErrorSummary:
-      "vercel.json에 /api/cron/sync-branch 하루 3회, /api/cron/sync-external-crm 하루 4회가 등록되어 Hobby 기준 확인이 필요합니다.",
+    lastErrorSummary: configured ? undefined : "CRON_SECRET이 없어 예약 실행 요청을 인증할 수 없습니다.",
     adminHref: "/admin/settings?tab=integrations&section=connectors",
   }
 }
@@ -748,7 +749,8 @@ export async function getAdminIntegrationStatusResponse(): Promise<AdminIntegrat
   ].map((item) => ({
     ...item,
     lastCheckedAt: generatedAt,
-    lastSuccessAt: item.health === "ok" ? generatedAt : undefined,
+    // env/config 존재 확인 시각을 실제 외부 호출 성공 시각으로 위조하지 않는다.
+    // lastSuccessAt은 각 connector가 실제 run history를 연결했을 때만 채운다.
   }))
 
   return {

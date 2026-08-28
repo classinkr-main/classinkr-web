@@ -9,9 +9,10 @@ import {
   type ContactLogType,
 } from "@/lib/repositories/contact-logs"
 import { buildLeadContactEventInput } from "@/lib/crm/lead-contact-event"
-import { createCrmCustomerEvent } from "@/lib/repositories/crm-events"
+import { channelCarriesResult } from "@/lib/crm/contact-log"
+import { getOrCreateCrmCustomerEventBySource } from "@/lib/repositories/crm-events"
 import { createTasksFromEventNextActions } from "@/lib/repositories/crm-tasks"
-import { getLeadById } from "@/lib/repositories/leads"
+import { getLeadById, updateLead } from "@/lib/repositories/leads"
 
 // 연락 로그를 CRM 활동 타임라인 + 다음 액션 task로 미러링한다.
 // CRM 측 실패가 연락 로그 저장을 깨뜨리면 안 되므로 fail-soft.
@@ -19,8 +20,10 @@ async function mirrorContactLogToCrm(leadId: string, log: ContactLogRecord) {
   try {
     const lead = await getLeadById(leadId).catch(() => null)
     const label = lead?.org || lead?.name || null
-    const event = await createCrmCustomerEvent(buildLeadContactEventInput(log, label))
-    await createTasksFromEventNextActions(event, { createdBy: log.contacted_by })
+    const event = await getOrCreateCrmCustomerEventBySource(buildLeadContactEventInput(log, label))
+    if (event.created) {
+      await createTasksFromEventNextActions(event.record, { createdBy: log.contacted_by })
+    }
   } catch (error) {
     console.error("[POST /api/admin/leads/:id/logs] mirror to CRM event", error)
   }
@@ -82,30 +85,79 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   try {
+    const lead = await getLeadById(id)
+    if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 })
+
+    const contactTime = contactedAt ? new Date(contactedAt).getTime() : Date.now()
+    const leadTime = new Date(lead.timestamp).getTime()
+    if (contactTime > Date.now() + 5 * 60_000) {
+      return NextResponse.json({ error: "contacted_at cannot be in the future" }, { status: 400 })
+    }
+    if (Number.isFinite(leadTime) && contactTime < leadTime - 5 * 60_000) {
+      return NextResponse.json({ error: "contacted_at cannot be before the lead was created" }, { status: 400 })
+    }
+
+    const logType = type as ContactLogType
     const log = await addContactLog(id, {
-      type: type as ContactLogType,
-      result: result == null ? undefined : (result as ContactLogResult),
+      type: logType,
+      // 카카오·이메일은 통화 결과를 가질 수 없다 — 400으로 막지 않고 조용히 떨어뜨린다.
+      // (이미 그렇게 저장된 기존 행이 있고, 400은 옛 클라이언트의 기록을 통째로 잃게 만든다.)
+      result:
+        result != null && channelCarriesResult(logType) ? (result as ContactLogResult) : undefined,
       notes,
-      contacted_by: contactedBy,
+      contacted_by: contactedBy ?? admin.name ?? admin.userId ?? admin.role,
       contacted_at: contactedAt,
     })
+    let statusSync: "updated" | "unchanged" | "failed" = "unchanged"
+    if (lead.status === "new") {
+      try {
+        const updated = await updateLead(id, {
+          status: "contacted",
+          confirmed_at: new Date().toISOString(),
+        })
+        statusSync = updated ? "updated" : "failed"
+      } catch (error) {
+        // 연락 증거는 이미 저장됐다. 500을 반환하면 클라이언트 재시도로 같은 로그가
+        // 중복 저장될 수 있으므로 상태 동기화만 fail-soft로 보고한다.
+        console.error("[POST /api/admin/leads/:id/logs] sync lead status", error)
+        statusSync = "failed"
+      }
+    }
     await mirrorContactLogToCrm(id, log)
-    return NextResponse.json({ log })
+    return NextResponse.json({
+      log,
+      statusSync,
+      ...(statusSync === "failed"
+        ? { warning: "연락 기록은 저장됐지만 리드 상태를 연락중으로 맞추지 못했습니다." }
+        : {}),
+    })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: "Failed to add log" }, { status: 500 })
   }
 }
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest, { params }: Params) {
   const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
+  const { id } = await params
   const { searchParams } = new URL(req.url)
   const logId = searchParams.get("logId")
   if (!logId) return NextResponse.json({ error: "logId required" }, { status: 400 })
 
   try {
+    const [lead, logs] = await Promise.all([getLeadById(id), getContactLogs(id)])
+    if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 })
+    if (!logs.some((log) => log.id === logId)) {
+      return NextResponse.json({ error: "Contact log not found" }, { status: 404 })
+    }
+    if (lead.status === "contacted" && logs.length <= 1) {
+      return NextResponse.json(
+        { error: "연락중 상태의 마지막 연락 기록은 삭제할 수 없습니다." },
+        { status: 409 }
+      )
+    }
     await deleteContactLog(logId)
     return NextResponse.json({ ok: true })
   } catch (e) {

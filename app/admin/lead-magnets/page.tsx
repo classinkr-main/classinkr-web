@@ -1,8 +1,8 @@
 import LeadMagnetsAdminClient from "@/components/admin/LeadMagnetsAdminClient"
-import { getAllLeadMagnets } from "@/lib/repositories/lead-magnets"
+import { getLeadMagnetStoreSnapshot } from "@/lib/repositories/lead-magnets"
 
 export default async function AdminLeadMagnetsPage() {
-  const leadMagnets = await getAllLeadMagnets()
+  const { leadMagnets, storage } = await getLeadMagnetStoreSnapshot()
 
-  return <LeadMagnetsAdminClient initialLeadMagnets={leadMagnets} />
+  return <LeadMagnetsAdminClient initialLeadMagnets={leadMagnets} initialStorage={storage} />
 }

@@ -4,14 +4,12 @@ import type { LucideIcon } from "lucide-react"
 import {
   Activity,
   BarChart2,
-  BookOpen,
   Bot,
   Building2,
   CalendarDays,
   Code2,
   FileText,
   FolderKanban,
-  Headset,
   Layers,
   LayoutDashboard,
   Magnet,
@@ -28,8 +26,8 @@ import {
  * 신규 권한 모델의 역할 단계로 취급하지 않는다.
  *
  * 이 roles 필드는 nav 소비자가 적용하는 UX 가시성 메타데이터다. 실제 데이터·동작 권한은
- * 각 API의 관리자 가드와 capability 검사에서 강제해야 한다. 현재 커맨드 팔레트처럼 이 필드를
- * 소비하지 않는 표면도 있으므로 보안 경계로 간주하면 안 된다.
+ * 각 API의 관리자 가드와 capability 검사에서 강제해야 한다. 사이드바·모바일·커맨드 팔레트가
+ * 함께 소비하지만 클라이언트 UI 메타데이터이므로 보안 경계로 간주하면 안 된다.
  */
 export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
 export type AdminNavSection = "home" | "sales" | "marketing" | "cs" | "system"
@@ -99,9 +97,13 @@ export function normalizeAdminRole(role: string): AdminRole {
 // 캘린더가 첫 화면이라 맨 앞으로 올렸다. section 필드는 팔레트 그룹 라벨용으로 그대로 둔다.
 // 상시 후보에도 category를 붙인다 — 프리셋에 따라 이 항목들이 기타로 내려갈 수 있고,
 // 그때 범주가 없으면 "시스템" 폴백에 걸려 하드웨어 재고가 시스템 그룹에 박힌다.
+// (2026-08-18 CS 진입점 단일화 + 범주 정렬) cs 섹션 3항목 → CS 콘솔 1항목(아래 CS 콘솔 주석 참조).
+// 같은 결정으로 상시 목록도 기타처럼 범주 소제목으로 묶어 렌더한다(resolveNavAccess의 primaryGroups).
+// 선언 순서를 범주 연속 블록(고객·매출 → 마케팅·분석 → 시스템)으로 정리해 "범주 묶음 = 재정렬 없는
+// 분할"을 유지한다 — Overview가 시스템 블록으로, CS 콘솔이 고객·매출 블록으로 옮겨 선언된 이유.
+// section 필드는 계속 팔레트 그룹 라벨용이다.
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, roles: [...ALL_STAFF, "BRANCH"], section: "sales", category: "customer", keywords: "캘린더 일정 calendar schedule 행사 이벤트 event 웨비나 공개 행사" },
-  { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, roles: [...ALL_STAFF, "BRANCH"], section: "home", category: "system", keywords: "홈 대시보드 overview home" },
 
   // 영업·매출 — 성과(KR Team)·검수(매출 장부)·파이프라인(CRM)·산출물(견적)·재고(하드웨어)
   // (2026-07-18 재정렬) KR Team·매출 장부를 섹션 상단으로 — 사이드바 탭 우선순위 요청 반영.
@@ -111,6 +113,16 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: "/admin/quotes", label: "견적·문서", icon: FileText, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", category: "customer", keywords: "견적 계약 영수증 quote contract receipt" },
   // 하드웨어 재고는 견적서 산출물과 바로 이어지는 재고 검증 표면이라 견적·문서 바로 아래에 둔다(2026-07-18 재배치, 이전엔 system 섹션).
   { href: "/admin/hardware", label: "하드웨어 재고", icon: PackageCheck, roles: [...STAFF_ADMIN, "BRANCH"], section: "sales", category: "customer", keywords: "하드웨어 재고 입고 출고 hardware inventory stock ops" },
+
+  // CS 콘솔 — 고객 지원 진입점 단일화(2026-08-18). 사이드바의 CS 항목은 이것 하나다.
+  // 가이드 문서(/admin/docs)·내부 CS(/admin/cs-chatbot)는 콘솔 가로 메뉴
+  // (components/admin/cs/CsConsoleNav.tsx)의 하위 메뉴로 이미 들어간 화면이라 최상위 nav에서
+  // 내렸다 — 공개 행사·트래픽과 같은 "다른 화면의 하위 메뉴가 된 표면은 최상위에 중복 노출하지
+  // 않는다" 원칙. 라우트·딥링크는 그대로 살아 있고, ⌘K는 이 항목의 자식 커맨드
+  // (AdminCommandPalette의 PALETTE_CHILD_COMMANDS)로 두 화면을 계속 노출한다.
+  // /admin/chatbot은 외부(고객)·내부(사내) 두 축을 잇는 콘솔의 첫 화면이라 진입점으로 삼는다.
+  // category가 customer인 이유 — CS는 일상 고객 지원 업무면이지 시스템 관리면이 아니다.
+  { href: "/admin/chatbot", label: "CS 콘솔", icon: Bot, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", category: "customer", keywords: "cs 콘솔 고객 지원 챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops console 채널톡 상담 문의 채팅 channel talk chat inbox 보강 큐 미해결 gaps 질문 패턴 가이드 문서 docs guide faq 추천질문 카테고리 리디렉트 내부 cs 상담 도우미 대기열 본사 확인 운영 도구 internal support assistant" },
 
   // 마케팅·분석 — 캠페인·콘텐츠·리드 + 웹/비즈니스 분석
   // 메시지 발송 허브(이메일·문자·카카오, /admin/marketing)는 캠페인의 "메시지" 탭으로 흡수 — 라우트는 redirect 유지.
@@ -126,26 +138,8 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // 방문자/트래픽(/admin/traffic)은 nav에서만 내렸다. 화면·라우트는 독립 유지하며 Analytics가 링크한다.
   { href: "/admin/analytics", label: "Analytics", icon: BarChart2, roles: [...ALL_STAFF, "BRANCH"], section: "marketing", category: "growth", keywords: "analytics 분석 통계 방문자 트래픽 traffic 추적 pixel 계측 홈페이지 흐름" },
 
-  // 고객 지원 — CS 콘솔 IA 재구성(2026-07-27, docs/active/cs-admin-console-ia-2026-07-27.md §2)으로
-  // 5항목 → 3항목. 사라진 화면은 없고, 진입점이 콘솔 가로 메뉴(components/admin/cs/CsConsoleNav.tsx)로
-  // 옮겨갔다. 흡수 관계:
-  //   문서 보강 큐(/admin/docs?tab=gaps) → 콘솔 외부 축 "미해결 큐"
-  //   채널톡 상담(/admin/channel-talk)   → 콘솔 외부 축 "상담 Inbox"
-  // 두 URL은 그대로 살아 있고(딥링크·북마크 무손실) ⌘K 팔레트에도 자식 커맨드로 남아 있다.
-  // 가이드 문서는 콘텐츠 파트 공용 표면이라 사이드바에도 유지한다(§2 흡수 관계 표).
-  { href: "/admin/docs", label: "가이드 문서", icon: BookOpen, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", category: "system", keywords: "가이드 문서 docs guide 챗봇 chatbot faq 추천질문 카테고리 리디렉트" },
-  // CS 콘솔 — 외부(고객용) 축의 첫 화면. 대시보드·상담 Inbox·미해결 큐·품질 검수·가이드 문서·추천 질문이
-  // 이 화면 상단의 콘솔 가로 메뉴로 이어진다(구 "챗봇 운영"). redirect 스텁이 아닌 운영 대시보드다.
-  { href: "/admin/chatbot", label: "CS 콘솔", icon: Bot, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", category: "system", keywords: "cs 콘솔 챗봇 운영 지표 골든셋 품질 평가 알파 준비도 chatbot ops console 채널톡 상담 문의 채팅 channel talk chat inbox 보강 큐 미해결 gaps 질문 패턴" },
-  // 내부 CS — 내부(사내) 축 전체의 진입점. 상담원용 워크스페이스(AI 초안·대기열·운영 도구).
-  // (2026-07-29) 이 항목은 반드시 "가이드 문서" 아래에 남아야 한다. sidebar-docs-gaps.test.ts가
-  // cs 섹션 선언 순서를 [docs, chatbot, cs-chatbot]로 고정하고 있고, 상시 목록도 같은 배열을
-  // filter로 읽어 선언 순서를 그대로 쓴다 — 둘 다 순서를 보존하므로 "cs-chatbot이 docs보다 앞"은
-  // 표현 자체가 불가능하다. IA상으로도 이게 맞다: 가이드 문서는 전원 상시, 내부 CS는 cs 프리셋 전용이라
-  // 보편적인 쪽이 위로 간다.
-  { href: "/admin/cs-chatbot", label: "내부 CS", icon: Headset, roles: [...STAFF_EDITOR, "BRANCH"], section: "cs", category: "system", keywords: "내부 cs 챗봇 상담 도우미 소통 가이드 템플릿 큐 아카이브 대기열 본사 확인 internal support assistant" },
-
-  // 운영·시스템
+  // 운영·시스템 — Overview는 시스템 범주라 선언도 이 블록에 둔다(범주 연속 블록 정리, 상단 주석).
+  { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, roles: [...ALL_STAFF, "BRANCH"], section: "home", category: "system", keywords: "홈 대시보드 overview home" },
   { href: "/admin/ops", label: "운영 상태", icon: Activity, roles: [...STAFF_ADMIN, "BRANCH"], section: "system", category: "system", keywords: "ops health 상태 통합 크론 cron automation" },
   // 회원 관리는 Settings "회원" 탭(?tab=members)으로 흡수됨 — /admin/users는 그 탭으로 redirect 스텁.
   // ⌘K 검색어(회원·사용자·권한)를 Settings 항목 keywords에 병합해 검색성 보존.
@@ -158,7 +152,7 @@ export const ADMIN_NAV_SECTION_META: Record<AdminNavSection, { label: string; de
   home: { label: "홈", description: "오늘 먼저 볼 운영 허브" },
   sales: { label: "영업·매출", description: "CRM·견적·하드웨어 재고·매출 성과·장부" },
   marketing: { label: "마케팅·분석", description: "캠페인·콘텐츠·리드·웹 분석" },
-  cs: { label: "고객 지원", description: "가이드 문서·CS 콘솔(외부)·내부 CS" },
+  cs: { label: "고객 지원", description: "CS 콘솔 — 외부(고객)·내부(사내) 축 가로 메뉴" },
   system: { label: "운영·시스템", description: "상태·설정·권한" },
 }
 

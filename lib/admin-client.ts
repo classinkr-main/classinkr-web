@@ -66,6 +66,11 @@ export interface AdminFetchInit extends RequestInit {
    * 비활성화된다.
    */
   adminTimeoutMs?: number | false
+  /**
+   * POST처럼 body가 필요한 읽기 전용 요청이 성공해도 관리자 화면 캐시를 무효화하지 않는다.
+   * 실제 쓰기 요청에는 사용하지 않는다.
+   */
+  adminReadOnly?: boolean
 }
 
 function resolveAdminTimeoutMs(input: string, init?: AdminFetchInit): number | false {
@@ -81,7 +86,7 @@ interface AdminCacheEntry<T> {
   savedAt: number
 }
 
-interface AdminFetchCacheOptions {
+interface AdminFetchCacheOptions<T = unknown> {
   cacheKey?: string
   ttlMs?: number
   persist?: boolean
@@ -93,6 +98,18 @@ interface AdminFetchCacheOptions {
    * 기본 5분. 0을 주면 비활성화.
    */
   staleWhileRevalidateMs?: number
+  /**
+   * stale-while-revalidate 고속 경로(TTL 만료 + SWR 창 안)로 오래된 캐시를 즉시 돌려준
+   * 회차에서, 뒤이은 백그라운드 갱신이 끝나면 그 결과를 알려준다.
+   * 마운트 시 1회만 로드하는 화면은 이 콜백 없이는 갱신 결과를 영영 못 받는다
+   * (effect가 다시 돌지 않으므로 최대 `ttlMs + staleWhileRevalidateMs`만큼 stale).
+   * - 성공: `{ data }` — 새로 받은 데이터.
+   * - 실패: `{ error }` — 화면은 기존 stale 데이터를 그대로 들고 있다.
+   * 호출 규약: 한 회차당 최대 1회. SWR 고속 경로를 타지 않은 회차(신선한 캐시 적중·
+   * force·네트워크 직행)에는 호출하지 않는다 — 그때는 반환값 자체가 최신이다.
+   * 갱신이 도는 사이 이 캐시 키가 무효화됐다면(= 뮤테이션 발생) 호출하지 않는다.
+   */
+  onRevalidated?: (result: { data?: T; error?: unknown }) => void
 }
 
 const memoryCache = new Map<string, AdminCacheEntry<unknown>>()
@@ -150,6 +167,27 @@ function shouldBypassBrowserCache(url: string) {
     if (scope === GLOBAL_CACHE_SCOPE || url.includes(scope)) bypass = true
   }
   return bypass
+}
+
+// 어떤 요청이 시작된 뒤 이 캐시 키가 무효화됐는지 되짚는다. 소비처는 둘 — 콜백 통지
+// (notifyRevalidation)와 응답 성공 시의 캐시 쓰기(startRequest) 양쪽을 같은 술어로 가드한다.
+// 콜백만 막으면 절반이다: 화면에는 안 보여줘도 memoryCache/sessionStorage에는 뮤테이션 이전
+// 응답이 그대로 들어앉아, 다음 읽기가 방금 저장한 내용을 되돌린 상태로 시작한다.
+// 캐시 엔트리 자체로는 못 되짚는다 — 갱신이 성공하면 같은 키를 다시 채워 넣기 때문이다.
+// 대신 mutationScopeAt을 본다: clearCacheScopes(캐시 삭제)는 두 호출부(clearAdminRequestCache,
+// adminFetch의 비-GET 성공 처리) 모두에서 markAdminMutation과 짝으로만 실행되므로
+// 무효화 이력의 충실한 사본이다. 스코프 매칭도 clearCacheScopes와 같은 술어(key.includes)를 쓴다.
+// 한계: mutationScopeAt 항목은 60초(BROWSER_CACHE_BYPASS_MS)가 지나면 정리될 수 있다.
+// 어드민 GET은 기본 45초에 타임아웃되므로 실제 갱신 구간은 그 창 안이지만,
+// 타임아웃이 꺼진 장기 경로(LONG_RUNNING_ADMIN_PATHS)라면 60초 이전의 무효화는 놓칠 수 있다.
+function wasCacheKeyInvalidatedSince(cacheKey: string, since: number) {
+  for (const [scope, at] of mutationScopeAt) {
+    // 같은 ms에 찍힌 무효화는 무효화 쪽으로 센다 — 순서를 가릴 수 없을 때는
+    // "갱신 결과를 한 번 버리는" 쪽이 "저장한 내용을 되돌리는" 쪽보다 안전하다.
+    if (at < since) continue
+    if (scope === GLOBAL_CACHE_SCOPE || cacheKey.includes(scope)) return true
+  }
+  return false
 }
 
 function clearCacheScopes(scopes: string[]) {
@@ -401,7 +439,7 @@ export async function adminFetch(input: string, init?: AdminFetchInit) {
       }
     }
 
-    if (response.ok && method !== "GET") {
+    if (response.ok && method !== "GET" && !init?.adminReadOnly) {
       const scopes = invalidationScopesForUrl(input)
       clearCacheScopes(scopes)
       markAdminMutation(scopes)
@@ -458,12 +496,52 @@ export interface AdminCachedFetchResult<T> {
    *  "revalidate"=TTL은 지났지만 stale-while-revalidate 창 안이라 의도적으로 즉시 서빙
    *  (백그라운드 갱신 진행 중 — 정상 동작, 실패 아님). */
   staleReason?: "error" | "revalidate"
+  /** staleReason이 "error"일 때 캐시로 대체하게 만든 원인 오류. 표시용이 아니라
+   *  onRevalidated로 실패 원인을 전달하기 위한 통로다(기존 소비처는 읽지 않는다). */
+  staleError?: unknown
+}
+
+// SWR 고속 경로가 띄운 백그라운드 갱신의 결말을 소비처에 알린다.
+// 콜백이 없으면 기존과 동일하게 결과·예외를 모두 삼킨다(unhandled rejection 방지).
+function notifyRevalidation<T>(
+  revalidation: Promise<AdminCachedFetchResult<T>>,
+  cacheKey: string,
+  onRevalidated: ((result: { data?: T; error?: unknown }) => void) | undefined
+) {
+  if (!onRevalidated) {
+    void revalidation.catch(() => undefined)
+    return
+  }
+
+  const startedAt = Date.now()
+  const notify = (result: { data?: T; error?: unknown }) => {
+    // 갱신이 도는 사이 이 키가 무효화됐다면 결과를 버린다. 서버가 뮤테이션 이전 상태를
+    // 응답했을 수 있고, 그대로 반영하면 방금 저장한 내용을 화면에서 되돌리게 된다.
+    if (wasCacheKeyInvalidatedSince(cacheKey, startedAt)) return
+    try {
+      onRevalidated(result)
+    } catch {
+      /* 소비처 콜백의 예외가 백그라운드 갱신을 unhandled rejection으로 만들지 않게 한다 */
+    }
+  }
+
+  void revalidation.then(
+    (result) => {
+      // staleIfError 폴백으로 살아 돌아온 회차는 새 데이터가 아니라 갱신 실패다.
+      if (result.staleReason === "error") {
+        notify({ error: result.staleError ?? new Error("최신 데이터를 받지 못했습니다.") })
+        return
+      }
+      notify({ data: result.data })
+    },
+    (error) => notify({ error })
+  )
 }
 
 async function adminFetchJsonCachedInternal<T>(
   input: string,
-  init: RequestInit | undefined,
-  options: AdminFetchCacheOptions
+  init: AdminFetchInit | undefined,
+  options: AdminFetchCacheOptions<T>
 ): Promise<AdminCachedFetchResult<T>> {
   if (!isGetRequest(init)) {
     const data = await adminFetchJson<T>(input, init)
@@ -485,24 +563,47 @@ async function adminFetchJsonCachedInternal<T>(
     const inflight = inflightRequests.get(cacheKey)
     if (inflight) return inflight as Promise<AdminCachedFetchResult<T>>
 
-    const requestInit: RequestInit | undefined = options.force
+    const requestInit: AdminFetchInit | undefined = options.force
       ? { ...init, cache: "no-cache" }
       : init
+    // 캐시 쓰기 가드의 기준 시각 — fetch를 띄우기 직전에 잡는다. 이 시각 **이후**의 무효화
+    // (뮤테이션)는 "이 응답은 이미 낡았다"는 뜻이므로 캐시에 되쓰지 않는다.
+    // 포그라운드 최초 요청(뮤테이션 → 즉시 재조회 포함)은 무효화가 끝난 뒤에 시작되므로
+    // requestStartedAt > 무효화 시각이 되어 가드에 걸리지 않는다 — 새 데이터를 캐시하는
+    // 정상 흐름은 그대로다. 걸리는 건 요청이 도는 **사이**에 무효화가 끼어든 회차뿐이고,
+    // 그건 사실상 SWR 백그라운드 갱신 경로다.
+    // 대가: 무효화와 요청 시작이 같은 ms에 겹치면(예: clearBranchRequestCache 직후 바로
+    // 나가는 새로고침 요청) 술어가 "무효화됨"으로 세어 이 응답을 캐시하지 않는다 —
+    // 데이터는 그대로 반환되고 다음 읽기가 한 번 더 네트워크를 탈 뿐이라, 저장한 내용을
+    // 되돌릴 위험보다 이쪽을 택한다(wasCacheKeyInvalidatedSince 주석의 같은 정책).
+    const requestStartedAt = Date.now()
     const request = adminFetchJson<T>(input, requestInit)
       .then((data): AdminCachedFetchResult<T> => {
-        const entry: AdminCacheEntry<T> = {
-          data,
-          expiresAt: Date.now() + ttlMs,
-          savedAt: Date.now(),
+        if (!wasCacheKeyInvalidatedSince(cacheKey, requestStartedAt)) {
+          const entry: AdminCacheEntry<T> = {
+            data,
+            expiresAt: Date.now() + ttlMs,
+            savedAt: Date.now(),
+          }
+          memoryCache.set(cacheKey, entry)
+          pruneMemoryCache()
+          if (persist) writeSessionCache(cacheKey, entry)
         }
-        memoryCache.set(cacheKey, entry)
-        pruneMemoryCache()
-        if (persist) writeSessionCache(cacheKey, entry)
         return { data, stale: false, staleSince: null }
       })
       .catch((error): AdminCachedFetchResult<T> => {
         const stale = staleIfError ? readAdminCache<T>(cacheKey, true) : null
-        if (stale) return { data: stale.data, stale: true, staleSince: stale.savedAt, staleReason: "error" }
+        if (stale) {
+          return {
+            data: stale.data,
+            stale: true,
+            staleSince: stale.savedAt,
+            staleReason: "error",
+            // undefined여도 키가 생기면(항상 열거형) 콜백을 쓰지 않는 소비처의 결과
+            // 직렬화 형태가 바뀐다 — 값이 있을 때만 실어 기본 shape을 유지한다.
+            ...(error === undefined ? {} : { staleError: error }),
+          }
+        }
         throw error
       })
       .finally(() => {
@@ -525,7 +626,7 @@ async function adminFetchJsonCachedInternal<T>(
     if (staleWindowMs > 0) {
       const stale = readAdminCache<T>(cacheKey, true)
       if (stale && Date.now() - stale.savedAt <= staleWindowMs) {
-        void startRequest().catch(() => undefined)
+        notifyRevalidation(startRequest(), cacheKey, options.onRevalidated)
         return { data: stale.data, stale: true, staleSince: stale.savedAt, staleReason: "revalidate" }
       }
     }
@@ -536,8 +637,8 @@ async function adminFetchJsonCachedInternal<T>(
 
 export async function adminFetchJsonCached<T>(
   input: string,
-  init?: RequestInit,
-  options: AdminFetchCacheOptions = {}
+  init?: AdminFetchInit,
+  options: AdminFetchCacheOptions<T> = {}
 ) {
   const result = await adminFetchJsonCachedInternal<T>(input, init, options)
   return result.data
@@ -547,8 +648,8 @@ export async function adminFetchJsonCached<T>(
  *  기존 adminFetchJsonCached 소비처는 전혀 변경할 필요가 없다. */
 export async function adminFetchJsonCachedWithMeta<T>(
   input: string,
-  init?: RequestInit,
-  options: AdminFetchCacheOptions = {}
+  init?: AdminFetchInit,
+  options: AdminFetchCacheOptions<T> = {}
 ): Promise<AdminCachedFetchResult<T>> {
   return adminFetchJsonCachedInternal<T>(input, init, options)
 }

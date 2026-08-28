@@ -3,7 +3,8 @@
 // 모든 함수는 입력→출력 순수 함수이며, 현재 시각이 필요한 함수는 Date를 주입받는다(테스트 안정성).
 // W2-3(OV4): C2 revenue-core SSOT 전환의 선행 정지작업 — 신호 정의를 한 곳에서 검증한다.
 
-import { hoursBetween, isUnconfirmedLead, isUnrespondedLead } from "@/components/admin/crm/leads/shared"
+// 순수 규칙은 lib/crm/leads-board-state 가 정본 — 서버 집계가 컴포넌트를 import 하지 않는다.
+import { hoursBetween, isUnconfirmedLead, isUnrespondedLead } from "@/lib/crm/leads-board-state"
 import type { LeadRecord } from "@/lib/site-settings-types"
 import type { AdminIntegrationStatusResponse } from "@/lib/admin-integrations/types"
 import type { CalendarEvent } from "@/lib/calendar-data"
@@ -85,6 +86,10 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
   let lastMonthLeads = 0
   let convertedThisMonth = 0
   let convertedLastMonth = 0
+  // 홈페이지 문의(contact_page) 유입 창 — 유입 수 관점이라 todayLeads처럼 확인 게이트를 적용하지 않는다.
+  let contactPageToday = 0
+  let contactPageThisWeek = 0
+  let contactPageTotal = 0
   const sourceMap: Record<string, number> = {}
   const branchMap: Record<string, number> = {}
   const dayCount: Record<string, number> = {}
@@ -99,6 +104,9 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
       else if (l.status === "closed") closedLeads++
     }
 
+    const isContactPage = l.source === "contact_page"
+    if (isContactPage) contactPageTotal++
+
     const t = new Date(l.timestamp).getTime()
     if (!Number.isNaN(t)) {
       const key = new Date(t).toDateString()
@@ -106,6 +114,10 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
       if (key === todayStr) todayLeads++
       if (t >= weekAgoT) thisWeekLeads++
       else if (t >= twoWeeksAgoT) lastWeekLeads++
+      if (isContactPage) {
+        if (key === todayStr) contactPageToday++
+        if (t >= weekAgoT) contactPageThisWeek++
+      }
       if (t >= monthStartT) {
         thisMonthLeads++
         if (l.status === "converted") convertedThisMonth++
@@ -145,6 +157,9 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
     monthTrend: thisMonthLeads - lastMonthLeads,
     convertedThisMonth,
     convertedTrend: convertedThisMonth - convertedLastMonth,
+    contactPageToday,
+    contactPageThisWeek,
+    contactPageTotal,
     pieData,
     recentLeads,
     dayCount,
@@ -157,7 +172,8 @@ export type LeadAggregates = ReturnType<typeof aggregateLeads>
 /* ─── 미응답 리드 신호 (단일 정의) ──────────────────────────── */
 
 // Overview에서 '미응답'을 표현하는 유일한 정의·유일한 산출 지점(W2-8).
-// 캐논 = action-kpis 라우트(getLeadActionStats): status=new AND source∈{데모·문의·Meta}
+// 캐논 = action-kpis 라우트(getLeadActionStats): 테스트가 아닌 운영 리드 중
+// status=new AND source∈{데모·문의·Meta}
 // (RESPONSE_TARGET_SOURCES). 응대 SLA 관점이라 리드 확인 게이트를 적용하지 않는다 —
 // 보드의 filter=unresponded(CONFIRMATION_GATE_EXEMPT_FILTERS)와 동일 기준.
 export interface UnrespondedSignal {
@@ -387,14 +403,14 @@ export function buildOperationalAlerts(input: OperationalAlertInput): {
       ? {
           id: "lead-followup",
           scope: "CRM",
-          title: "미응답 리드 후속 리스크",
-          description: `응대 전 ${unrespondedCount}건 · 24h+ 경과 ${unresponded24hCount}건 · 데모·문의·Meta 신규 인바운드 기준.`,
+          title: "신규 상태 리드 후속 리스크",
+          description: `신규 상태 ${unrespondedCount}건 · 24h+ 경과 ${unresponded24hCount}건 · 데모·문의·Meta 운영 리드 기준(테스트 제외).`,
           meta: todayLeads > 0 ? `오늘 유입 ${todayLeads}건` : `이번 주 유입 ${thisWeekLeads}건`,
           // 골든타임(24h) 초과가 있으면 타일과 같은 breach 판정으로 danger, 아니면 warning.
           tone: unresponded24hCount > 0 ? ("danger" as const) : ("warning" as const),
-          action: "미응답 보드",
+          action: "24h+ 신규 상태 보드",
           // 리스크 렌즈가 켜진 미응답 보드로 직결 — bare /admin/crm 착지 금지(신호→행동 무손실).
-          href: "/admin/crm/customers/leads?filter=unresponded&focus=risk",
+          href: "/admin/crm/customers/leads?filter=unresponded_24h&focus=risk",
           priority: 100,
         }
       : null,

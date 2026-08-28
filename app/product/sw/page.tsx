@@ -19,6 +19,7 @@ import { useRef, useEffect, useState, useMemo, useCallback, useSyncExternalStore
 
 import { HeroVideoBackdrop } from "@/components/media/HeroVideoBackdrop"
 import { KeyUseCases } from "@/components/sections/KeyUseCases"
+import { TrackedLink } from "@/components/TrackedLink"
 
 // below-the-fold 섹션은 dynamic import로 메인 번들에서 분리 (SSR은 유지되어 초기 HTML 동일)
 const OnboardingRoadmap = nextDynamic(() => import("@/components/product/sw/OnboardingRoadmap"))
@@ -2045,6 +2046,16 @@ export default function ProductPage() {
                                     </motion.div>
                                 ))}
                             </div>
+                            <motion.div {...fadeUp} className="mt-8">
+                                <TrackedLink
+                                    href="/product/ai-report"
+                                    ctaId="sw_ai_report_deep_dive"
+                                    className="inline-flex items-center gap-2 rounded-md border border-[#084734]/25 px-5 py-3 text-sm font-semibold text-[#084734] hover:bg-[#ECFDF5] transition-colors"
+                                >
+                                    녹화 · AI 리포트 자세히 보기
+                                    <ArrowRight className="w-4 h-4" />
+                                </TrackedLink>
+                            </motion.div>
                         </div>
 
                         {/* Analytics mockup — enhanced */}

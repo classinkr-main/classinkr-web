@@ -8,6 +8,7 @@ import type { ReactNode } from "react"
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
 
 import type { AdminListPaginationResult } from "@/lib/admin-list-pagination"
+import { fiscalQuarter } from "@/lib/branch/fiscal"
 
 export type HardwareMovementType = "inbound" | "outbound" | "return" | "transfer" | "repair" | "adjust"
 
@@ -79,6 +80,8 @@ export interface HardwareAlert {
   product: string
   title: string
   detail: string
+  // 취급 중단·미가동 품목(창고 0·예정 0·최근 출고 0)의 상시 부족 알림 — 접힌 그룹으로 강등 표시.
+  muted?: boolean
 }
 
 export interface HardwareDashboard {
@@ -105,6 +108,11 @@ export interface HardwareDashboard {
     rows_skipped: number | null
     error: string | null
   } | null
+  // 요청자별 필드 — API 라우트가 캐시된 대시보드 밖에서 매 요청 계산해 붙인다(Cache-Control private).
+  // 없으면(구버전 응답·테스트) UI는 열어두고 서버 게이트만 믿는다.
+  viewer?: {
+    canFinalize: boolean
+  }
 }
 
 export interface HardwareCrmOrderCandidate {
@@ -272,6 +280,39 @@ export function loanElapsedDays(loanedAt: string | null): number | null {
   if (Number.isNaN(start)) return null
   const today = new Date(`${todayKey()}T00:00:00Z`).getTime()
   return Math.max(0, Math.round((today - start) / 86400000))
+}
+
+// 경과일(일반) — 예상 출고 큐 방치 표시, 이관 신선도 등 날짜 문자열 기반 경과 계산 공용.
+export function elapsedDaysSince(dateKey: string | null): number | null {
+  return loanElapsedDays(dateKey)
+}
+
+// ---- 카테고리 카드 단일 분류 ----
+// 정의는 서버(repositories)와 공유하는 lib/hardware/product.ts가 정본 — 여기서는 클라이언트
+// 소비자용 재수출만 한다(shared는 "use client"라 서버 코드가 이 파일을 직접 import하지 않는다).
+export {
+  hardwareCardGroup,
+  isCoreIfpProduct,
+  isPromotedProduct,
+  type HardwareCardGroup,
+} from "@/lib/hardware/product"
+
+// 출고 기간 집계 버킷 키/라벨 — 홈 판매 요약과 기간 집계가 같은 키를 쓰는 SSOT.
+// 분기·연간 모두 회계연도(4월 시작~3월 종료) 기준으로 귀속한다(운영 결정 2026-08-19 —
+// 연간만 달력연도라 분기 합과 연간이 어긋나던 혼합 해소).
+export function periodKey(date: string, granularity: PeriodGranularity): { key: string; label: string } {
+  const year = date.slice(0, 4)
+  const yearNum = Number(year) || 0
+  const month = Number(date.slice(5, 7)) || 1
+  const fyStartYear = month >= 4 ? yearNum : yearNum - 1
+  const fyLabel = `${String(fyStartYear % 100).padStart(2, "0")}-${String((fyStartYear + 1) % 100).padStart(2, "0")}`
+  if (granularity === "year") return { key: `FY${fyStartYear}`, label: `${fyLabel} 회계연도` }
+  if (granularity === "quarter") {
+    // 4~6월=1분기, 7~9월=2분기, 10~12월=3분기, 1~3월=4분기(직전 4월 시작 회계연도에 귀속).
+    const quarter = fiscalQuarter(month)
+    return { key: `${fyStartYear}Q${quarter}`, label: `${fyLabel} 회계연도 ${quarter}분기` }
+  }
+  return { key: date.slice(0, 7), label: `${year}년 ${month}월` }
 }
 
 export function todayKey() {

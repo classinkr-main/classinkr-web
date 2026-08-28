@@ -1,8 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { AlertCircle, Loader2, PencilLine } from "lucide-react"
 
+import { AdminMoneyInput } from "@/components/admin/AdminMoneyInput"
 import { KRW, pct, won } from "@/components/admin/campaigns/event-format"
 import { adminFetchJson } from "@/lib/admin-client"
 import { AD_CHANNEL_COLOR, AD_CHANNEL_LABEL, type EventMetrics } from "@/lib/types/event-metrics"
@@ -29,62 +30,14 @@ const FIELD_LABEL: Record<EditableField, string> = {
   targetRevenue: "목표 매출",
 }
 
-/** 인라인 숫자 입력 — blur/Enter에서만 커밋한다. 표시는 원시 정수(콤마 없음)로 편집 마찰을 줄인다. */
-function NumberCell({
-  value,
-  label,
-  disabled,
-  onCommit,
-}: {
-  value: number | null
-  label: string
-  disabled: boolean
-  onCommit: (next: number | null) => void
-}) {
-  const [draft, setDraft] = useState(value == null ? "" : String(value))
-  // 저장 후 상위가 canonical 값을 되돌려주면 편집 초안을 다시 맞춘다.
-  // (렌더 중 state 조정 패턴 — useEffect 캐스케이드를 만들지 않는다.)
-  const [syncedValue, setSyncedValue] = useState(value)
-  if (value !== syncedValue) {
-    setSyncedValue(value)
-    setDraft(value == null ? "" : String(value))
-  }
-
-  const commit = () => {
-    const trimmed = draft.trim()
-    // 빈 칸은 0이 아니라 "미입력"(null)이다 — 0으로 저장하면 ROI 분모·목표 달성률이
-    // "입력됐는데 성과가 0"으로 잘못 잡힌다.
-    const next = trimmed === "" ? null : Math.max(0, Math.floor(Number(trimmed)))
-    const safe = next != null && Number.isFinite(next) ? next : null
-    setDraft(safe == null ? "" : String(safe))
-    if (safe !== value) onCommit(safe)
-  }
-
-  return (
-    <span
-      className={`inline-flex w-full items-center gap-1 rounded-lg border px-2 py-1 ${
-        value == null
-          ? "border-dashed border-[#e0dfd9] bg-white"
-          : "border-[#e8e8e4] bg-[#fafaf8]"
-      } focus-within:border-[#084734] focus-within:bg-white`}
-    >
-      <input
-        type="text"
-        inputMode="numeric"
-        value={draft}
-        disabled={disabled}
-        onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ""))}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur()
-        }}
-        placeholder="미입력"
-        aria-label={label}
-        className="w-full min-w-0 bg-transparent text-right text-[12px] tabular-nums text-[#111110] outline-none placeholder:text-[11px] placeholder:text-[#A39E98] disabled:opacity-50"
-      />
-    </span>
-  )
+// 금액 칸에만 통화 기호를 붙인다 — 목표 리드는 건수(카운트)라 ₩ 가 붙으면 단위를 오독한다.
+const FIELD_PREFIX: Record<EditableField, string | undefined> = {
+  dealsRevenue: "₩",
+  targetLeads: undefined,
+  targetRevenue: "₩",
 }
+
+const SAVED_MS = 1500
 
 export function EventMetricsQuickTable({
   rows,
@@ -97,8 +50,19 @@ export function EventMetricsQuickTable({
 }) {
   // 행 단위 상태 — 단일 슬롯이면 두 행을 연속 커밋할 때 먼저 끝난 요청이 다른 행의
   // 잠금·스피너를 풀고, 에러도 마지막 하나만 남아 다중 실패가 은폐된다.
-  const [savingIds, setSavingIds] = useState<Set<string>>(new Set())
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  // 필드까지 함께 들고 있는 이유: 실패한 칸에 표식을 붙이지 않으면 "저장된 값"과
+  // "실패해 안 실린 값"이 화면에서 똑같이 보인다.
+  const [savingField, setSavingField] = useState<Record<string, EditableField>>({})
+  const [savedField, setSavedField] = useState<Record<string, EditableField>>({})
+  const [errors, setErrors] = useState<Record<string, { field: EditableField; message: string }>>({})
+  const savedTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+
+  useEffect(() => {
+    const timers = savedTimersRef.current
+    return () => {
+      for (const timer of Object.values(timers)) clearTimeout(timer)
+    }
+  }, [])
 
   // 최근 시작한 행사부터 — 성과를 채워야 할 대상은 대개 방금 끝난 행사다.
   const sorted = useMemo(
@@ -111,34 +75,57 @@ export function EventMetricsQuickTable({
   const missingSpend = sorted.filter((row) => (row.metrics.adSpendEntries ?? []).length === 0).length
 
   async function saveField(row: PerEventEconRow, field: EditableField, next: number | null) {
-    setSavingIds((prev) => new Set(prev).add(row.event.id))
-    setErrors((prev) => {
-      if (!(row.event.id in prev)) return prev
+    const id = row.event.id
+    const savedTimer = savedTimersRef.current[id]
+    if (savedTimer) clearTimeout(savedTimer)
+    setSavingField((prev) => ({ ...prev, [id]: field }))
+    setSavedField((prev) => {
+      if (!(id in prev)) return prev
       const rest = { ...prev }
-      delete rest[row.event.id]
+      delete rest[id]
+      return rest
+    })
+    setErrors((prev) => {
+      if (!(id in prev)) return prev
+      const rest = { ...prev }
+      delete rest[id]
       return rest
     })
     try {
       // PATCH는 본문 전체를 정본으로 삼는다(빠진 필드는 null로 초기화된다).
       // 그래서 한 칸만 고쳐도 현재 메트릭 전체를 다시 실어 보낸다 — 부분 전송은 다른 값을 지운다.
-      const saved = await adminFetchJson<EventMetrics>(`/api/admin/event-metrics/${row.event.id}`, {
+      const saved = await adminFetchJson<EventMetrics>(`/api/admin/event-metrics/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ ...row.metrics, [field]: next }),
       })
       onSaved(saved)
+      // 짧은 성공 확인 — 값이 그대로 보이는 칸에서는 "저장됐다"가 화면에 전혀 안 남는다.
+      setSavedField((prev) => ({ ...prev, [id]: field }))
+      savedTimersRef.current[id] = setTimeout(() => {
+        setSavedField((prev) => {
+          if (prev[id] !== field) return prev
+          const rest = { ...prev }
+          delete rest[id]
+          return rest
+        })
+      }, SAVED_MS)
     } catch (e) {
       setErrors((prev) => ({
         ...prev,
-        [row.event.id]:
-          e instanceof Error
-            ? `${FIELD_LABEL[field]} 저장 실패 — ${e.message}`
-            : "성과 저장에 실패했습니다.",
+        [id]: {
+          field,
+          message:
+            e instanceof Error
+              ? `${FIELD_LABEL[field]} 저장 실패 — ${e.message}`
+              : "성과 저장에 실패했습니다.",
+        },
       }))
     } finally {
-      setSavingIds((prev) => {
-        const next = new Set(prev)
-        next.delete(row.event.id)
-        return next
+      setSavingField((prev) => {
+        if (!(id in prev)) return prev
+        const rest = { ...prev }
+        delete rest[id]
+        return rest
       })
     }
   }
@@ -167,9 +154,25 @@ export function EventMetricsQuickTable({
           ) : (
             <div className="divide-y divide-[#f0f0ec]">
               {sorted.map((row) => {
-                const busy = savingIds.has(row.event.id)
+                const pendingField = savingField[row.event.id]
+                const busy = pendingField != null
                 const rowError = errors[row.event.id]
+                const errorId = `event-metric-error-${row.event.id}`
                 const spendEntries = row.metrics.adSpendEntries ?? []
+                // 세 칸의 공통 배선 — value/label/prefix 만 다르고 상태 규칙은 같다.
+                const cellProps = (field: EditableField, label: string) => ({
+                  allowNull: true as const,
+                  prefix: FIELD_PREFIX[field],
+                  placeholder: "미입력",
+                  ariaLabel: `${row.event.title} ${label}`,
+                  ariaDescribedBy: rowError?.field === field ? errorId : undefined,
+                  disabled: busy,
+                  pending: pendingField === field,
+                  saved: savedField[row.event.id] === field,
+                  invalid: rowError?.field === field,
+                  className: "w-full",
+                  onCommit: (next: number | null) => void saveField(row, field, next),
+                })
                 return (
                   <div key={row.event.id}>
                   <div className={`${GRID} px-3 py-2`}>
@@ -202,24 +205,11 @@ export function EventMetricsQuickTable({
                       {spendEntries.length > 0 ? won(row.econ.adSpendTotal) : "미입력"}
                     </span>
 
-                    <NumberCell
-                      value={row.metrics.dealsRevenue}
-                      label={`${row.event.title} 매출`}
-                      disabled={busy}
-                      onCommit={(next) => void saveField(row, "dealsRevenue", next)}
-                    />
-                    <NumberCell
-                      value={row.metrics.targetLeads}
-                      label={`${row.event.title} 목표 리드`}
-                      disabled={busy}
-                      onCommit={(next) => void saveField(row, "targetLeads", next)}
-                    />
-                    <NumberCell
-                      value={row.metrics.targetRevenue}
-                      label={`${row.event.title} 목표 매출`}
-                      disabled={busy}
-                      onCommit={(next) => void saveField(row, "targetRevenue", next)}
-                    />
+                    {/* allowNull — 빈 칸은 0이 아니라 "미입력"이다. 0으로 저장하면 ROI 분모·
+                        목표 달성률이 "입력됐는데 성과가 0"으로 잘못 잡힌다. */}
+                    <AdminMoneyInput value={row.metrics.dealsRevenue} {...cellProps("dealsRevenue", "매출")} />
+                    <AdminMoneyInput value={row.metrics.targetLeads} {...cellProps("targetLeads", "목표 리드")} />
+                    <AdminMoneyInput value={row.metrics.targetRevenue} {...cellProps("targetRevenue", "목표 매출")} />
 
                     <span className="text-right text-[12px] tabular-nums text-[#1a1a1a]/60">
                       {KRW.format(row.funnel.leads)}
@@ -254,9 +244,13 @@ export function EventMetricsQuickTable({
                     </span>
                   </div>
                   {rowError && (
-                    <p className="flex items-center gap-1.5 px-3 pb-2 text-[11.5px] text-[#B43E3E]">
-                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                      {rowError}
+                    <p
+                      id={errorId}
+                      role="alert"
+                      className="flex items-center gap-1.5 px-3 pb-2 text-[11.5px] text-[#B43E3E]"
+                    >
+                      <AlertCircle aria-hidden className="h-3.5 w-3.5 shrink-0" />
+                      {rowError.message}
                     </p>
                   )}
                   </div>

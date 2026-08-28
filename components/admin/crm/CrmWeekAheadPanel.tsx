@@ -184,9 +184,6 @@ export default function CrmWeekAheadPanel({
             </span>
             <div>
               <h2 className="text-[15px] font-bold text-[#111110]">이번 주 해야 할 일</h2>
-              {compact ? null : (
-                <p className="text-[11px] text-[#1a1a1a]/40">지연 · 오늘 · 이번 주 · 미룬 일을 한 번에.</p>
-              )}
             </div>
           </div>
         )}

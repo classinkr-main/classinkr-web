@@ -33,6 +33,23 @@ export const CRM_TASK_STATUSES = ["open", "done", "snoozed", "canceled"] as cons
 
 const NOT_READY_MESSAGE = "CRM task DB 마이그레이션이 아직 적용되지 않았습니다."
 
+/**
+ * 할 일 사본을 들고 캐시하는 소비자(CRM 홈 우선순위 큐 등)가 구독한다.
+ * 리스너는 자기 모듈 캐시를 비우기만 한다 — I/O·await 금지(여기서 던지면 쓰기가 깨진다).
+ * 구독 방향이 반대면(소비자를 여기서 import) 소비자가 이미 이 모듈을 읽고 있어 순환이 된다.
+ */
+type CrmTaskMutationListener = () => void
+
+const crmTaskMutationListeners = new Set<CrmTaskMutationListener>()
+
+export function onCrmTasksMutated(listener: CrmTaskMutationListener) {
+  crmTaskMutationListeners.add(listener)
+}
+
+function notifyCrmTasksMutated() {
+  for (const listener of crmTaskMutationListeners) listener()
+}
+
 export interface CrmTaskRecord {
   id: string
   targetType: CrmTaskTargetType
@@ -354,6 +371,7 @@ export async function createCrmTask(input: CrmTaskCreateInput): Promise<CrmTaskR
     if (isMissingCrmTasksTableError(error)) throw new Error(NOT_READY_MESSAGE)
     throw new Error(`[crm-tasks] 저장 실패: ${error.message}`)
   }
+  notifyCrmTasksMutated()
   return toCrmTaskRecord(data as CrmTask)
 }
 
@@ -378,6 +396,7 @@ export async function listActiveTasksForDealByType(
   return ((data ?? []) as CrmTask[]).map(toCrmTaskRecord)
 }
 
+// 완료·미루기·취소·재개·재배정·편집이 전부 이 한 곳을 지난다 — 무효화도 여기 한 번만 건다.
 async function applyTaskUpdate(id: string, patch: CrmTaskUpdate): Promise<CrmTaskRecord | null> {
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase.from("crm_tasks").update(patch).eq("id", id).select("*").maybeSingle()
@@ -385,6 +404,7 @@ async function applyTaskUpdate(id: string, patch: CrmTaskUpdate): Promise<CrmTas
     if (isMissingCrmTasksTableError(error)) throw new Error(NOT_READY_MESSAGE)
     throw new Error(`[crm-tasks] 수정 실패: ${error.message}`)
   }
+  if (data) notifyCrmTasksMutated()
   return data ? toCrmTaskRecord(data as CrmTask) : null
 }
 

@@ -60,6 +60,19 @@ export interface ComparisonBarChartProps<Row extends object = Record<string, unk
   leftMargin?: number
   /** 좌축(bars) domain — 목표선이 항상 보이도록 상한 확보 등 */
   leftDomain?: [number, number]
+  /**
+   * 등장 애니메이션 on/off (기본 true — 기존 소비처 시각 보존).
+   * 숨김 탭/백그라운드 마운트에서 Recharts rAF가 멈춰 애니메이션 0~2% 프레임(막대 높이 1px
+   * 미만)에 얼어붙는 사례가 실측됐다 — 즉시 판독이 중요한 지표 대시보드는 false로 끈다.
+   * 공용 컴포넌트라 여기 하드코딩하지 않고 소비처가 선택한다.
+   */
+  animate?: boolean
+  /** 우축 선 굵기 — 기본 2(기존 소비처 시각 보존). 막대와 겹치는 콤보에서 선을 전경으로 세울 때만 올린다. */
+  lineStrokeWidth?: number
+  /** 선 점(dot) 테두리 색 — 기본 미지정(strokeWidth 0과 맞물려 기존과 동일하게 무테두리). 막대 위에서도 점이 도드라지게 하려면 흰색 등을 지정. */
+  lineDotStroke?: string
+  /** 선 점(dot) 테두리 굵기 — 기본 0(기존 소비처 시각 보존). lineDotStroke와 함께 지정한다. */
+  lineDotStrokeWidth?: number
 }
 
 const DARK_TOOLTIP_STYLE = {
@@ -90,6 +103,10 @@ export function ComparisonBarChart<Row extends object>({
   tooltipVariant = "dark",
   leftMargin = 0,
   leftDomain,
+  animate = true,
+  lineStrokeWidth = 2,
+  lineDotStroke,
+  lineDotStrokeWidth = 0,
 }: ComparisonBarChartProps<Row>) {
   const isLight = tooltipVariant === "light"
   const seriesByName = new Map<string, ComparisonBarSeries>([
@@ -159,6 +176,7 @@ export function ComparisonBarChart<Row extends object>({
               fill={series.color}
               radius={[4, 4, 0, 0]}
               maxBarSize={maxBarSize}
+              isAnimationActive={animate}
             >
               {cellColor && seriesIndex === 0
                 ? data.map((row, index) => <Cell key={index} fill={cellColor(row, index)} />)
@@ -187,9 +205,10 @@ export function ComparisonBarChart<Row extends object>({
               dataKey={line.key}
               name={line.label}
               stroke={line.color}
-              strokeWidth={2}
-              dot={{ r: 3, fill: line.color, strokeWidth: 0 }}
+              strokeWidth={lineStrokeWidth}
+              dot={{ r: 3, fill: line.color, stroke: lineDotStroke ?? line.color, strokeWidth: lineDotStrokeWidth }}
               activeDot={{ r: 4 }}
+              isAnimationActive={animate}
             />
           ) : null}
         </ComposedChart>

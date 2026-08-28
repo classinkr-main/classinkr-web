@@ -1,8 +1,6 @@
 "use client"
 
-import Link from "next/link"
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { ArrowUpRight, CalendarDays } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import {
   Dialog,
@@ -15,53 +13,89 @@ import {
 import { Button } from "@/components/ui/button"
 import { adminFetch, adminFetchJsonCached } from "@/lib/admin-client"
 import type { CalendarEvent, EventSource } from "@/lib/calendar-data"
+import type { CalendarHealthPayload } from "@/lib/admin-calendar/health"
 import { buildEventsByDate } from "@/lib/admin-calendar/layout"
 import {
+  EMPTY_EVENT_FORM,
+  formatAssignees,
+  parseAssignees,
+  type EventFormData,
+} from "@/lib/admin-calendar/event-form"
+import {
+  addDays,
+  DEFAULT_TIMELINE_SPAN,
+  formatRangeLabel,
   getViewRange,
+  getWeekday,
   isCalendarViewId,
   isDateString,
+  isTimelineSpan,
+  startOfWeek,
   stepAnchor,
   toDateString,
   type CalendarViewId,
+  type TimelineSpan,
 } from "@/lib/admin-calendar/range"
-import { getTeamMemberColor } from "@/lib/team-member-colors"
+import {
+  buildAssigneeLoad,
+  buildSourceStats,
+  buildWeekStripDays,
+} from "@/lib/admin-calendar/insights"
+import { buildAdminCalendarUrl } from "@/lib/admin/calendar-range"
 
+import {
+  createRequestGeneration,
+  type RequestGeneration,
+} from "@/lib/admin-calendar/request-generation"
+import { resolveHotkey } from "@/lib/admin-calendar/hotkeys"
+
+import {
+  CALENDAR_EVENTS_CACHE_TTL_MS,
+  computeAdjacentPrefetchRanges,
+  scheduleIdlePrefetch,
+  type CancelIdlePrefetch,
+} from "@/components/admin/calendar/calendar-prefetch"
+import {
+  decodeHiddenSourcesParam,
+  encodeHiddenSourcesParam,
+} from "@/components/admin/calendar/calendar-hidden-sources-url"
 import { AgendaList } from "@/components/admin/calendar/AgendaList"
+import { CalendarRail } from "@/components/admin/calendar/CalendarRail"
+import { WeekStrip } from "@/components/admin/calendar/WeekStrip"
 import { AssigneeSwimlane } from "@/components/admin/calendar/AssigneeSwimlane"
-import { CalendarFilterBar, type TeamMemberCount } from "@/components/admin/calendar/CalendarFilterBar"
+import { CalendarFilterLine, type TeamMemberCount } from "@/components/admin/calendar/CalendarFilterBar"
 import { CalendarToolbar } from "@/components/admin/calendar/CalendarToolbar"
 import { DayDetailPanel } from "@/components/admin/calendar/DayDetailPanel"
-import { EventForm, EMPTY_EVENT_FORM, type EventFormData } from "@/components/admin/calendar/EventForm"
+import { EventForm } from "@/components/admin/calendar/EventForm"
 import { MonthGrid } from "@/components/admin/calendar/MonthGrid"
+import { CalendarRepairPanel, SourceHealthStrip } from "@/components/admin/calendar/SourceHealth"
 import { SourceTimeline } from "@/components/admin/calendar/SourceTimeline"
 import { WeekTimeGrid } from "@/components/admin/calendar/WeekTimeGrid"
 import {
   SOURCE_OPTIONS,
-  UNASSIGNED_LABEL,
   getEventSource,
   getEventSourceLabel,
-  getTypeStyle,
   sortEventFirst,
 } from "@/components/admin/calendar/event-style"
+import AdminErrorBanner from "@/components/admin/ui/AdminErrorBanner"
 
 const FILTER_STORAGE_KEY = "admin.calendar.filters.v1"
 const VIEW_STORAGE_KEY = "admin.calendar.view.v1"
+const DENSITY_STORAGE_KEY = "admin.calendar.density.v1"
+const TIMELINE_SPAN_STORAGE_KEY = "admin.calendar.timelineSpan.v1"
 
 /** 담당자 개념이 없는 소스 — 담당자 필터를 적용하지 않는다. */
-const ASSIGNEE_FILTERED_SOURCES = new Set<EventSource>(["team_event", "notion", "showroom", "calendar"])
+const ASSIGNEE_FILTERED_SOURCES = new Set<EventSource>([
+  "team_event",
+  "notion",
+  "showroom",
+  "calendar",
+  "compass_demo",
+])
 
 function todayString() {
   const now = new Date()
   return toDateString(now.getFullYear(), now.getMonth() + 1, now.getDate())
-}
-
-function formatDateLabel(dateStr: string) {
-  return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString("ko-KR", {
-    timeZone: "UTC",
-    month: "long",
-    day: "numeric",
-    weekday: "short",
-  })
 }
 
 async function readJsonOrThrow<T>(response: Response): Promise<T> {
@@ -92,17 +126,40 @@ export default function AdminCalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [hiddenSources, setHiddenSources] = useState<Set<EventSource>>(new Set())
   const [hiddenAssignees, setHiddenAssignees] = useState<Set<string>>(new Set())
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  // 최초 로드가 끝났는지 — 이후의 기간 이동/뷰 전환은 "새로고침"으로 취급해 이전 데이터를
+  // 화면에 그대로 둔 채 조용한 인디케이터만 보여준다(첫 로드만 기존 빈 상태 표시를 허용).
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [leadActionKpis, setLeadActionKpis] = useState<LeadActionKpisPayload | null>(null)
+  const [health, setHealth] = useState<CalendarHealthPayload | null>(null)
+  const [healthLoading, setHealthLoading] = useState(false)
+  // 월 그리드 밀도(3차 개편) — "detail"=솔리드 바, "summary"=도트. 월 뷰에서만 의미가 있다.
+  const [density, setDensity] = useState<"detail" | "summary">("detail")
+  // 타임라인이 담는 범위. 8주 고정이 바코드를 만들어 고를 수 있게 했다(2026-08-28).
+  const [timelineSpan, setTimelineSpan] = useState<TimelineSpan>(DEFAULT_TIMELINE_SPAN)
+  // 제목·담당자·소스 라벨 부분일치. 조회 중인 기간 안에서만 걸린다(범위 밖은 별도 조회).
+  const [query, setQuery] = useState("")
+  // 이번 주 스트립 데이터 — 월 조회 범위(=사이드바 예열이 데운 캐시 키)를 넓히지 않고
+  // 주 범위를 따로 당긴다. 월말 주가 다음 달로 걸쳐도 스트립이 거짓으로 비지 않는다.
+  const [stripEvents, setStripEvents] = useState<CalendarEvent[]>([])
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CalendarEvent | null>(null)
 
-  const range = useMemo(() => getViewRange(view, anchor), [view, anchor])
+  const range = useMemo(
+    () => getViewRange(view, anchor, { timelineSpan }),
+    [view, anchor, timelineSpan]
+  )
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  /**
+   * 단축키 N이 부를 "새 일정". openCreate 는 이 훅보다 아래에서 선언되므로 ref 로 건넨다 —
+   * 매 렌더 최신 값을 담아 두면 effect 를 openCreate 때문에 다시 붙일 필요도 없다.
+   */
+  const openCreateRef = useRef<(date?: string) => void>(() => {})
 
   // ─── 저장된 화면 상태 복원 ───────────────────────────────────────
   // 초기 렌더는 기본값(이번 달)으로 두고 마운트 후에 URL·localStorage 를 반영한다 —
@@ -111,6 +168,10 @@ export default function AdminCalendarPage() {
     const params = new URLSearchParams(window.location.search)
     const urlView = params.get("view")
     const urlAnchor = params.get("anchor")
+    // hiddenSources는 URL(`hidden`)이 있으면 그 값이 우선(공유·새로고침 딥링크) — 없을 때만
+    // 아래에서 localStorage 값으로 폴백한다. hiddenAssignees는 URL 대상이 아니라 항상
+    // localStorage에서만 복원한다(요청 범위 — 담당자 필터는 이름이 URL에 노출되지 않게 둔다).
+    const hiddenSourcesFromUrl = decodeHiddenSourcesParam(params.get("hidden"))
 
     if (isCalendarViewId(urlView)) setView(urlView)
     else {
@@ -124,10 +185,29 @@ export default function AdminCalendarPage() {
     if (isDateString(urlAnchor)) setAnchor(urlAnchor)
 
     try {
+      const storedDensity = localStorage.getItem(DENSITY_STORAGE_KEY)
+      if (storedDensity === "detail" || storedDensity === "summary") setDensity(storedDensity)
+    } catch {
+      /* localStorage 불가 시 기본 밀도 유지 */
+    }
+
+    // 범위는 URL(공유·새로고침 딥링크)이 우선, 없으면 localStorage.
+    const urlSpan = params.get("span")
+    if (isTimelineSpan(urlSpan)) setTimelineSpan(urlSpan)
+    else {
+      try {
+        const storedSpan = localStorage.getItem(TIMELINE_SPAN_STORAGE_KEY)
+        if (isTimelineSpan(storedSpan)) setTimelineSpan(storedSpan)
+      } catch {
+        /* localStorage 불가 시 기본 범위 유지 */
+      }
+    }
+
+    try {
       const raw = localStorage.getItem(FILTER_STORAGE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw) as { hiddenSources?: unknown; hiddenAssignees?: unknown }
-        if (Array.isArray(parsed.hiddenSources)) {
+        if (!hiddenSourcesFromUrl && Array.isArray(parsed.hiddenSources)) {
           setHiddenSources(new Set(parsed.hiddenSources as EventSource[]))
         }
         if (Array.isArray(parsed.hiddenAssignees)) {
@@ -137,6 +217,8 @@ export default function AdminCalendarPage() {
     } catch {
       /* 파싱 실패 시 기본(전체 표시) 유지 */
     }
+    if (hiddenSourcesFromUrl) setHiddenSources(hiddenSourcesFromUrl)
+
     setPrefsHydrated(true)
   }, [])
 
@@ -152,40 +234,90 @@ export default function AdminCalendarPage() {
         })
       )
       localStorage.setItem(VIEW_STORAGE_KEY, view)
+      localStorage.setItem(DENSITY_STORAGE_KEY, density)
+      localStorage.setItem(TIMELINE_SPAN_STORAGE_KEY, timelineSpan)
     } catch {
       /* 저장 실패는 무시 */
     }
-  }, [prefsHydrated, hiddenSources, hiddenAssignees, view])
+  }, [prefsHydrated, hiddenSources, hiddenAssignees, view, density, timelineSpan])
 
-  // 뷰·기간을 주소에 반영해 새로고침·공유가 같은 화면을 연다. 히스토리는 쌓지 않는다.
+  // 뷰·기간·소스 필터를 주소에 반영해 새로고침·공유가 같은 화면을 연다. 히스토리는 쌓지 않는다.
   useEffect(() => {
     if (!prefsHydrated) return
     const params = new URLSearchParams(window.location.search)
     params.set("view", view)
     params.set("anchor", anchor)
+    const hiddenParam = encodeHiddenSourcesParam(hiddenSources)
+    if (hiddenParam) params.set("hidden", hiddenParam)
+    else params.delete("hidden")
+    // 범위는 타임라인에서만 의미가 있다 — 다른 뷰의 주소에 남기면 무슨 뜻인지 읽히지 않는다.
+    if (view === "timeline") params.set("span", timelineSpan)
+    else params.delete("span")
     window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`)
-  }, [prefsHydrated, view, anchor])
+  }, [prefsHydrated, view, anchor, hiddenSources, timelineSpan])
 
   // ─── 데이터 ──────────────────────────────────────────────────────
+  // 기간 경계(from·to)만 의존값으로 잡는다 — range 객체 정체성이 아니라 실제 조회 구간이
+  // 바뀔 때만 재조회해야 사이드바 예열이 만든 캐시 키를 그대로 맞힌다.
+  const { from: rangeFrom, to: rangeTo } = range
+  // 늦게 끝난 이전 기간 응답이 현재 화면을 덮지 않게 하는 문지기(lib/admin-calendar/request-generation.ts).
+  const eventsGenerationRef = useRef<RequestGeneration | null>(null)
+  // idle 프리페치는 항상 최신 예약 하나만 살아 있는다 — 지나간 기간까지 깨어나 요청하지 않도록.
+  const prefetchCancelRef = useRef<CancelIdlePrefetch | null>(null)
+
   const fetchEvents = useCallback(async () => {
+    const generation = (eventsGenerationRef.current ??= createRequestGeneration())
+    const token = generation.next()
     setLoading(true)
     try {
       const data = await adminFetchJsonCached<CalendarEvent[]>(
-        `/api/admin/calendar?from=${range.from}&to=${range.to}`,
+        buildAdminCalendarUrl({ from: rangeFrom, to: rangeTo }),
         undefined,
-        { ttlMs: 60_000 }
+        {
+          ttlMs: CALENDAR_EVENTS_CACHE_TTL_MS,
+          // TTL이 지난 캐시로 화면을 먼저 채운 회차는 뒤에서 갱신이 돈다. 그 결과를 받지
+          // 않으면 이 페이지를 열어 둔 내내 오래된 일정이 남는다(effect는 다시 돌지 않는다).
+          onRevalidated: ({ data: fresh }) => {
+            if (fresh && generation.isCurrent(token)) setEvents(fresh)
+          },
+        }
       )
+      // 이 응답이 최신 기간의 것이 아니면 화면에 손대지 않는다.
+      if (!generation.isCurrent(token)) return
       setEvents(data)
       setErrorMessage(null)
+      // 현재 기간이 성공적으로 뜬 뒤에만, 유휴 시간에 인접 기간을 조용히 데운다 — 지금 화면이
+      // 기다리는 요청과 대역폭을 다투지 않는다. 실패는 완전 무음(사용자 조회에 영향 없음).
+      prefetchCancelRef.current?.()
+      prefetchCancelRef.current = scheduleIdlePrefetch(() => {
+        for (const adjacent of computeAdjacentPrefetchRanges({ from: rangeFrom, to: rangeTo })) {
+          void adminFetchJsonCached<CalendarEvent[]>(buildAdminCalendarUrl(adjacent), undefined, {
+            ttlMs: CALENDAR_EVENTS_CACHE_TTL_MS,
+          }).catch(() => {
+            /* 프리페치 실패는 무음 — 본 조회는 이미 끝났다 */
+          })
+        }
+      })
     } catch (error) {
+      if (!generation.isCurrent(token)) return
       setErrorMessage(error instanceof Error ? error.message : "캘린더 데이터를 불러오지 못했습니다.")
     } finally {
-      setLoading(false)
+      // 먼저 끝난 옛 요청이 loading을 내리면, 아직 도는 현재 요청이 있는데도 새로고침 표시가
+      // 꺼져 거짓 빈 상태가 노출된다 — 최신 요청만 이 스위치를 만진다.
+      if (generation.isCurrent(token)) {
+        setLoading(false)
+        setHasLoadedOnce(true)
+      }
     }
-  }, [range.from, range.to])
+  }, [rangeFrom, rangeTo])
 
   useEffect(() => {
     fetchEvents()
+    // 기간이 바뀌거나 화면을 떠나면 이전 기간의 예열 예약을 취소한다.
+    return () => {
+      prefetchCancelRef.current?.()
+      prefetchCancelRef.current = null
+    }
   }, [fetchEvents])
 
   // Overview가 하던 "홈페이지 리드 대응" 진입점을 캘린더로 이관 — 기간 이동과 무관하게 한 번만.
@@ -195,7 +327,9 @@ export default function AdminCalendarPage() {
     adminFetchJsonCached<{ leads: LeadActionKpisPayload }>(
       "/api/admin/crm/action-kpis",
       undefined,
-      { cacheKey: "calendar:lead-action-kpis", ttlMs: 120_000, staleWhileRevalidateMs: 300_000 }
+      // CRM 홈(app/admin/crm/page.tsx CRM_ACTION_KPIS_URL)과 동일한 URL 키를 써서
+      // 같은 엔드포인트를 두 화면이 각자 다른 캐시 슬롯으로 이중 적재하지 않게 한다.
+      { cacheKey: "/api/admin/crm/action-kpis", ttlMs: 120_000, staleWhileRevalidateMs: 300_000 }
     )
       .then((data) => {
         if (!cancelled) setLeadActionKpis(data?.leads ?? null)
@@ -207,6 +341,110 @@ export default function AdminCalendarPage() {
       cancelled = true
     }
   }, [])
+
+  // 소스 연결 상태 — "일정이 없다"와 "연동이 끊겼다"를 화면이 구분하게 한다(2026-08-19).
+  // 실패하면 상태 레이어 없이 캘린더만 뜬다 — 부가 정보가 본 기능(일정 조회)을 막지 않는다.
+  useEffect(() => {
+    let cancelled = false
+    const applyHealth = (data: CalendarHealthPayload | undefined) => {
+      if (!cancelled && data && Array.isArray(data.sources)) setHealth(data)
+    }
+    adminFetchJsonCached<CalendarHealthPayload>("/api/admin/calendar/health", undefined, {
+      cacheKey: "calendar:source-health",
+      ttlMs: 300_000,
+      staleWhileRevalidateMs: 600_000,
+      // 이벤트 조회와 같은 이유 — 오래된 캐시로 먼저 그린 회차의 백그라운드 갱신 결과를
+      // 받지 않으면, 서버가 이미 감지한 연동 장애가 이 페이지 세션 내내 안 보인다.
+      onRevalidated: ({ data }) => applyHealth(data),
+    })
+      .then(applyHealth)
+      .catch(() => {
+        /* 상태 조회 실패 시 스트립·수리 패널 없이 둔다 */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // ─── 이번 주 스트립 데이터 ───────────────────────────────────────
+  // todayStr 는 마운트 시 고정이므로 주 경계도 고정 — 재조회는 CRUD 직후에만 명시적으로.
+  const stripFrom = useMemo(() => startOfWeek(todayStr), [todayStr])
+  const stripTo = useMemo(() => addDays(stripFrom, 6), [stripFrom])
+  const fetchStripEvents = useCallback(async () => {
+    const apply = (data: CalendarEvent[] | undefined) => {
+      if (Array.isArray(data)) setStripEvents(data)
+    }
+    try {
+      apply(
+        await adminFetchJsonCached<CalendarEvent[]>(
+          buildAdminCalendarUrl({ from: stripFrom, to: stripTo }),
+          undefined,
+          { ttlMs: CALENDAR_EVENTS_CACHE_TTL_MS, onRevalidated: ({ data }) => apply(data) }
+        )
+      )
+    } catch {
+      /* 스트립은 부가 밴드 — 실패 시 조용히 비워 두고 본 캘린더를 막지 않는다 */
+    }
+  }, [stripFrom, stripTo])
+  useEffect(() => {
+    void fetchStripEvents()
+  }, [fetchStripEvents])
+
+  // 소스 연결 상태 수동 새로고침 — 레일의 새로고침 버튼. 캐시를 우회해 지금 상태를 다시 본다.
+  const refreshHealth = useCallback(async () => {
+    setHealthLoading(true)
+    try {
+      const response = await adminFetch("/api/admin/calendar/health")
+      const data = (await response.json().catch(() => null)) as CalendarHealthPayload | null
+      if (response.ok && data && Array.isArray(data.sources)) setHealth(data)
+    } catch {
+      /* 수동 새로고침 실패 시 기존 표시를 유지한다 */
+    } finally {
+      setHealthLoading(false)
+    }
+  }, [])
+
+  // ─── 단축키 ──────────────────────────────────────────────────────
+  // 해석은 lib/admin-calendar/hotkeys.ts(순수)가 하고, 여기서는 구독과 분기만 한다.
+  // 다이얼로그가 떠 있는 동안은 키를 넘기지 않는다 — 폼이 키의 주인이다.
+  const dialogOpen = showForm || Boolean(deleteTarget)
+  useEffect(() => {
+    if (dialogOpen) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      const action = resolveHotkey({
+        key: event.key,
+        metaKey: event.metaKey,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+        target: event.target,
+      })
+      if (!action) return
+      event.preventDefault()
+      switch (action.kind) {
+        case "step":
+          setAnchor((current) => stepAnchor(view, current, action.direction, { timelineSpan }))
+          setSelectedDate(null)
+          break
+        case "today":
+          setAnchor(todayStr)
+          setSelectedDate(todayStr)
+          break
+        case "view":
+          setView(action.view)
+          setSelectedDate(null)
+          break
+        case "create":
+          openCreateRef.current()
+          break
+        case "search":
+          searchInputRef.current?.focus()
+          break
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [dialogOpen, view, timelineSpan, todayStr])
 
   // ─── 필터 ────────────────────────────────────────────────────────
   const teamMembers = useMemo<TeamMemberCount[]>(() => {
@@ -220,21 +458,45 @@ export default function AdminCalendarPage() {
       .sort((a, b) => a.name.localeCompare(b.name, "ko"))
   }, [events])
 
-  const visibleEvents = useMemo(
-    () =>
-      events.filter((event) => {
-        const source = getEventSource(event)
-        if (hiddenSources.has(source)) return false
-        if (ASSIGNEE_FILTERED_SOURCES.has(source)) {
-          const assignees = event.assignees ?? []
-          // 담당자가 있는 일정은 담당자 필터를 적용 — 표시 담당자가 하나도 없으면 숨김
-          if (assignees.length > 0 && !assignees.some((name) => !hiddenAssignees.has(name))) {
-            return false
-          }
+  const isEventVisible = useCallback(
+    (event: CalendarEvent) => {
+      const source = getEventSource(event)
+      if (hiddenSources.has(source)) return false
+      if (ASSIGNEE_FILTERED_SOURCES.has(source)) {
+        const assignees = event.assignees ?? []
+        // 담당자가 있는 일정은 담당자 필터를 적용 — 표시 담당자가 하나도 없으면 숨김
+        if (assignees.length > 0 && !assignees.some((name) => !hiddenAssignees.has(name))) {
+          return false
         }
-        return true
-      }),
-    [events, hiddenSources, hiddenAssignees]
+      }
+      return true
+    },
+    [hiddenSources, hiddenAssignees]
+  )
+
+  // 검색은 소스·담당자 필터 뒤에 걸린다 — 꺼 둔 소스가 검색으로 되살아나면 필터가 거짓말이 된다.
+  const matchesQuery = useCallback(
+    (event: CalendarEvent) => {
+      const keyword = query.trim().toLowerCase()
+      if (!keyword) return true
+      const haystack = [
+        event.title,
+        getEventSourceLabel(event),
+        ...(event.assignees ?? []),
+      ].join(" ").toLowerCase()
+      return haystack.includes(keyword)
+    },
+    [query]
+  )
+
+  const visibleEvents = useMemo(
+    () => events.filter((event) => isEventVisible(event) && matchesQuery(event)),
+    [events, isEventVisible, matchesQuery]
+  )
+  // 스트립도 같은 필터를 통과한다 — 본 그리드에서 숨긴 소스가 스트립에만 남으면 필터가 거짓말이 된다.
+  const visibleStripEvents = useMemo(
+    () => stripEvents.filter(isEventVisible),
+    [stripEvents, isEventVisible]
   )
 
   const eventsByDate = useMemo(() => {
@@ -260,29 +522,13 @@ export default function AdminCalendarPage() {
       return next
     })
 
-  // ─── 이번 주 담당자 요약 ─────────────────────────────────────────
-  // 담당자 뷰가 이 정보를 훨씬 자세히 보여주므로, 담당자 축이 없는 뷰에서만 띄운다.
-  // 회의: "회의할 때 구글 캘린더 켜놓고 '누구누구 이거 합니다' 이런 거 못 하거든요"
-  const weekStrip = useMemo(() => {
-    if (view === "assignee") return []
-    const counts = new Map<string, number>()
-    for (const event of visibleEvents) {
-      for (const name of event.assignees?.length ? event.assignees : [UNASSIGNED_LABEL]) {
-        counts.set(name, (counts.get(name) ?? 0) + 1)
-      }
-    }
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])
-  }, [visibleEvents, view])
-
   // ─── CRUD ────────────────────────────────────────────────────────
   const handleSave = async (data: EventFormData) => {
     setFormLoading(true)
     try {
       const payload = {
         ...data,
-        assignees: data.assignees
-          ? data.assignees.split(",").map((item) => item.trim()).filter(Boolean)
-          : [],
+        assignees: parseAssignees(data.assignees),
         endDate: data.endDate || undefined,
         time: data.time || undefined,
         endTime: data.endTime || undefined,
@@ -302,6 +548,7 @@ export default function AdminCalendarPage() {
       setEditingEvent(null)
       setErrorMessage(null)
       await fetchEvents()
+      void fetchStripEvents()
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "일정 저장에 실패했습니다.")
     } finally {
@@ -318,6 +565,7 @@ export default function AdminCalendarPage() {
       setDeleteTarget(null)
       setErrorMessage(null)
       await fetchEvents()
+      void fetchStripEvents()
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "일정 삭제에 실패했습니다.")
     } finally {
@@ -330,6 +578,8 @@ export default function AdminCalendarPage() {
     setShowForm(true)
     if (date) setSelectedDate(date)
   }
+
+  openCreateRef.current = openCreate
 
   const openEdit = (event: CalendarEvent) => {
     if (event.readonly) return
@@ -350,109 +600,110 @@ export default function AdminCalendarPage() {
         endTime: editingEvent.endTime ?? "",
         type: editingEvent.type,
         description: editingEvent.description ?? "",
-        assignees: (editingEvent.assignees ?? []).join(", "),
+        assignees: formatAssignees(editingEvent.assignees ?? []),
         allDay: editingEvent.allDay ?? false,
       }
     : initialForm
 
   const selectedEvents = selectedDate ? (eventsByDate[selectedDate] ?? []) : []
-  const upcomingEvents = visibleEvents
-    .filter((event) => (event.endDate ?? event.date) >= todayStr)
-    .slice(0, 8)
+
+  // ─── 이번 주 스트립·우측 레일 파생값 ─────────────────────────────
+  const stripDays = useMemo(
+    () => buildWeekStripDays(visibleStripEvents, { from: stripFrom, to: stripTo }),
+    [visibleStripEvents, stripFrom, stripTo]
+  )
+  const stripTotal = useMemo(() => stripDays.reduce((sum, day) => sum + day.count, 0), [stripDays])
+  const stripRangeLabel = useMemo(() => {
+    const WD = "일월화수목금토"
+    const fmt = (date: string) =>
+      `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일 (${WD[getWeekday(date)]})`
+    return `${fmt(stripFrom)} – ${fmt(stripTo)}`
+  }, [stripFrom, stripTo])
+
+  // 레일 통계는 필터와 무관한 "이 기간의 사실"이다 — 숨긴 소스도 수치에는 남는다.
+  const sourceStats = useMemo(() => buildSourceStats(events), [events])
+  const assigneeLoad = useMemo(() => buildAssigneeLoad(events), [events])
+  const publicEventCount = useMemo(
+    () => events.filter((event) => getEventSource(event) === "event").length,
+    [events]
+  )
+  const notionCount = useMemo(
+    () => events.filter((event) => getEventSource(event) === "notion").length,
+    [events]
+  )
+
+  // 최초 로드 이후의 기간 이동/뷰 전환 중 배경 새로고침인가 — 담당자·타임라인·목록 뷰는
+  // 필터링 결과가 0건이면 "일정이 없다"고 단정하는데, 새 기간 데이터가 아직 안 왔을 뿐인
+  // 이 구간에는 그 단정이 거짓일 수 있다(이전 기간 이벤트가 새 기간 날짜와 안 맞아떨어짐).
+  const isBackgroundRefresh = loading && hasLoadedOnce
+
+  // ─── 연결 상태 파생 ──────────────────────────────────────────────
+  const brokenSources = useMemo(
+    () => (health?.sources ?? []).filter((item) => item.status !== "ok"),
+    [health]
+  )
+  // 공휴일은 자동 주입이라 "일정이 있다"는 증거가 못 된다 — 수리 패널 판정에서 뺀다.
+  const nonHolidayCount = useMemo(
+    () => events.filter((event) => getEventSource(event) !== "holiday").length,
+    [events]
+  )
+  const showRepairPanel = !loading && nonHolidayCount === 0 && brokenSources.length > 0
+  const holidayNote = useMemo(() => {
+    const holidays = events.filter((event) => getEventSource(event) === "holiday")
+    if (holidays.length === 0) return undefined
+    const first = holidays[0]
+    const monthDay = `${Number(first.date.slice(5, 7))}/${Number(first.date.slice(8, 10))}`
+    return `공휴일 ${holidays.length}건은 정상 표시 중 · ${monthDay} ${first.title}`
+  }, [events])
+  // 눌러도 빈 레인만 나오는 뷰는 흐리게 — 담당자 뷰는 담당자 있는 일정, 타임라인은 공휴일 외 일정이 기준.
+  const viewAvailability = useMemo(
+    () => ({
+      assignee: visibleEvents.some((event) => (event.assignees?.length ?? 0) > 0),
+      timeline: visibleEvents.some((event) => getEventSource(event) !== "holiday"),
+    }),
+    [visibleEvents]
+  )
 
   const [year, month] = range.from.split("-").map(Number)
 
   return (
     <div className="px-4 pt-6 pb-24 sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-20">
-      {/* Header */}
-      <div className="mb-5 sm:mb-6">
-        <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">Admin</p>
+      {/* Header — 한 줄. 소스 나열·설명은 범례 라인이 대신한다(2026-08-19 다이어트) */}
+      <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
         <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">운영 캘린더</h1>
-        <p className="mt-2 text-[13px] leading-6 text-[#1a1a1a]/50">
-          팀 일정과 파트너 운영 일정, 공개 행사, 마케팅(노션), 쇼룸 예약(구글), 팀원 행사(구글)를 함께 보되
-          외부 소스 일정은 읽기 전용으로 표시합니다.
-        </p>
+        <p className="text-[12px] text-[#1a1a1a]/45">8개 소스 통합 · 외부 소스는 읽기 전용</p>
       </div>
 
-      {errorMessage && (
-        <div className="mb-6 rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-5 py-4 text-[12px] leading-5 text-[#B85C33]">
-          <strong className="mr-2">캘린더 오류:</strong>
-          <span>{errorMessage}</span>
-        </div>
-      )}
+      {errorMessage && <AdminErrorBanner title="캘린더 오류" message={errorMessage} className="mb-4" />}
 
-      {/* 미응답 리드 배너 — 0건이면 소음이라 렌더하지 않는다. */}
-      {leadActionKpis && leadActionKpis.unrespondedCount > 0 && (
-        <Link
-          href="/admin/crm"
-          className="mb-5 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[#F6D5C5] bg-[#FEF3EE] px-5 py-3 text-[12px] font-medium text-[#B85C33] transition-colors hover:border-[#B85C33]/35"
-        >
-          <span>
-            미응답 리드 <strong className="font-semibold">{leadActionKpis.unrespondedCount}건</strong>
-            {" "}· 데모·문의·Meta 신규 문의가 대기 중입니다
-            {leadActionKpis.unresponded24hCount > 0 && (
-              <span className="ml-1 text-[#9A4A27]">(24h+ {leadActionKpis.unresponded24hCount}건)</span>
-            )}
-          </span>
-          <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px]">
-            CRM에서 확인
-            <ArrowUpRight className="h-3 w-3" />
-          </span>
-        </Link>
-      )}
-
-      <div className="mb-5">
-        <CalendarFilterBar
-          events={events}
-          visibleEvents={visibleEvents}
-          teamMembers={teamMembers}
-          hiddenSources={hiddenSources}
-          hiddenAssignees={hiddenAssignees}
-          onToggleSource={toggleSource}
-          onToggleAssignee={toggleAssignee}
-          onSetAllSources={(visible) =>
-            setHiddenSources(visible ? new Set() : new Set(SOURCE_OPTIONS.map((option) => option.value)))
-          }
-          onSetAllAssignees={(visible) =>
-            setHiddenAssignees(visible ? new Set() : new Set(teamMembers.map((member) => member.name)))
-          }
-        />
-      </div>
-
-      {weekStrip.length > 0 && (
-        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-[#e8e8e4] bg-white px-4 py-3">
-          <span className="mr-1 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-[#1a1a1a]/35">
-            담당자별
-          </span>
-          {weekStrip.map(([assignee, count]) => (
-            <span
-              key={assignee}
-              className="inline-flex items-center gap-1.5 rounded-full border border-[#e8e8e4] bg-[#fafaf8] px-2.5 py-1 text-[11px] font-medium text-[#1a1a1a]/70"
-            >
-              <span
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ backgroundColor: getTeamMemberColor(assignee) }}
-              />
-              {assignee}
-              <span className="text-[#1a1a1a]/35">{count}</span>
-            </span>
-          ))}
-        </div>
-      )}
+      {/* 미응답 리드 진입점은 우측 레일 퀵링크로 이관했다(3차 개편) — 배너 자리를 그리드에 돌려준다. */}
 
       {/* Main */}
       <div className="flex flex-col items-stretch gap-5 xl:flex-row xl:items-start">
         <div className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
+          {/* 끊긴 소스 요약 — 수리 패널이 뜰 때는 패널이 더 자세히 말하므로 접는다 */}
+          {!showRepairPanel && <SourceHealthStrip broken={brokenSources} />}
           <CalendarToolbar
             view={view}
             anchor={anchor}
             loading={loading}
+            viewAvailability={viewAvailability}
+            density={density}
+            onDensityChange={view === "month" ? setDensity : undefined}
+            timelineSpan={timelineSpan}
+            onTimelineSpanChange={view === "timeline" ? setTimelineSpan : undefined}
+            range={range}
+            todayStr={todayStr}
+            onJump={(date) => {
+              setAnchor(date)
+              setSelectedDate(null)
+            }}
             onViewChange={(next) => {
               setView(next)
               setSelectedDate(null)
             }}
             onStep={(direction) => {
-              setAnchor((current) => stepAnchor(view, current, direction))
+              setAnchor((current) => stepAnchor(view, current, direction, { timelineSpan }))
               setSelectedDate(null)
             }}
             onToday={() => {
@@ -461,17 +712,62 @@ export default function AdminCalendarPage() {
             }}
             onCreate={() => openCreate()}
           />
-
-          {view === "month" && (
-            <MonthGrid
-              year={year}
-              month={month}
-              todayStr={todayStr}
-              selectedDate={selectedDate}
-              eventsByDate={eventsByDate}
-              onSelectDate={setSelectedDate}
-              onCreateAt={openCreate}
+          {!showRepairPanel && (
+            <CalendarFilterLine
+              events={events}
+              visibleEvents={visibleEvents}
+              teamMembers={teamMembers}
+              hiddenSources={hiddenSources}
+              hiddenAssignees={hiddenAssignees}
+              query={query}
+              onQueryChange={setQuery}
+              searchInputRef={searchInputRef}
+              onToggleSource={toggleSource}
+              onToggleAssignee={toggleAssignee}
+              onShowAll={() => {
+                setHiddenSources(new Set())
+                setHiddenAssignees(new Set())
+              }}
+              onHideAll={() => {
+                setHiddenSources(new Set(SOURCE_OPTIONS.map((option) => option.value)))
+                setHiddenAssignees(new Set(teamMembers.map((member) => member.name)))
+              }}
             />
+          )}
+
+          {showRepairPanel ? (
+            <CalendarRepairPanel
+              rangeLabel={formatRangeLabel(view, anchor, { timelineSpan })}
+              broken={brokenSources}
+              holidayNote={holidayNote}
+              onCreate={() => openCreate()}
+            />
+          ) : (
+            <>
+          {view === "month" && (
+            <>
+              {/* 이번 주 스트립 — 표시 중인 달에 오늘이 있을 때만. 다른 달을 볼 때 "이번 주"가
+                  끼어들면 어느 달을 보고 있는지 헷갈린다. */}
+              {range.from.slice(0, 7) === todayStr.slice(0, 7) && stripDays.length > 0 && (
+                <WeekStrip
+                  days={stripDays}
+                  todayStr={todayStr}
+                  rangeLabel={stripRangeLabel}
+                  total={stripTotal}
+                  onSelectDate={setSelectedDate}
+                />
+              )}
+              <MonthGrid
+                year={year}
+                month={month}
+                todayStr={todayStr}
+                selectedDate={selectedDate}
+                eventsByDate={eventsByDate}
+                onSelectDate={setSelectedDate}
+                onCreateAt={openCreate}
+                density={density}
+              />
+            </>
           )}
           {view === "week" && (
             <WeekTimeGrid
@@ -490,14 +786,17 @@ export default function AdminCalendarPage() {
               todayStr={todayStr}
               visibleEvents={visibleEvents}
               onSelectDate={setSelectedDate}
+              refreshing={isBackgroundRefresh}
             />
           )}
           {view === "timeline" && (
             <SourceTimeline
               range={range}
               todayStr={todayStr}
+              span={timelineSpan}
               visibleEvents={visibleEvents}
               onSelectDate={setSelectedDate}
+              refreshing={isBackgroundRefresh}
             />
           )}
           {view === "agenda" && (
@@ -506,12 +805,15 @@ export default function AdminCalendarPage() {
               todayStr={todayStr}
               visibleEvents={visibleEvents}
               onSelectDate={setSelectedDate}
+              refreshing={isBackgroundRefresh}
             />
+          )}
+            </>
           )}
         </div>
 
-        {/* Right panel */}
-        <div className="w-full shrink-0 space-y-4 xl:w-90">
+        {/* Right rail — 기본은 수집 상태·통계·부하(3차 개편), 날짜 선택 시 일 상세로 교대 */}
+        <div className="w-full shrink-0 space-y-4 xl:w-[264px]">
           {selectedDate ? (
             <DayDetailPanel
               date={selectedDate}
@@ -522,67 +824,18 @@ export default function AdminCalendarPage() {
               onDelete={setDeleteTarget}
             />
           ) : (
-            <div className="overflow-hidden rounded-2xl border border-[#e8e8e4] bg-white">
-              <div className="border-b border-[#e8e8e4] px-4 py-3">
-                <p className="text-[13px] font-semibold text-[#111110]">다가오는 일정</p>
-                <p className="mt-0.5 text-[11px] text-[#1a1a1a]/35">현재 기간 안에서</p>
-              </div>
-              {upcomingEvents.length === 0 ? (
-                <div className="py-8 text-center">
-                  <CalendarDays className="mx-auto mb-2 h-8 w-8 text-[#1a1a1a]/15" />
-                  <p className="text-[13px] text-[#1a1a1a]/30">예정된 일정 없음</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-[#f0f0ec]">
-                  {upcomingEvents.map((event) => {
-                    const style = getTypeStyle(event.type)
-                    const daysLeft = Math.round(
-                      (Date.parse(`${event.date}T00:00:00Z`) - Date.parse(`${todayStr}T00:00:00Z`)) /
-                        86_400_000
-                    )
-                    return (
-                      <button
-                        key={event.id}
-                        type="button"
-                        className="w-full px-4 py-2.5 text-left transition-colors hover:bg-[#fafaf8]"
-                        onClick={() => setSelectedDate(event.date)}
-                        aria-label={`${event.title} 일정 보기`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className={`h-2 w-2 shrink-0 rounded-full ${style.dot}`} />
-                            <span className="truncate text-[13px] font-medium text-[#111110]">
-                              {event.title}
-                            </span>
-                          </div>
-                          <span
-                            className={`shrink-0 text-[11px] ${
-                              daysLeft <= 0 ? "font-semibold text-[#B85C33]" : "text-[#1a1a1a]/35"
-                            }`}
-                          >
-                            {daysLeft <= 0 ? "오늘" : `D-${daysLeft}`}
-                          </span>
-                        </div>
-                        <div className="ml-4 mt-0.5 flex flex-wrap items-center gap-1.5">
-                          <p className="text-[11px] text-[#1a1a1a]/40">
-                            {formatDateLabel(event.date)}
-                            {event.time ? ` · ${event.time}` : ""}
-                          </p>
-                          <span className="rounded-full bg-[#f0f0ec] px-2 py-0.5 text-[10px] font-medium text-[#1a1a1a]/50">
-                            {getEventSourceLabel(event)}
-                          </span>
-                          {event.partnerName && (
-                            <span className="rounded-full border border-[#e8e8e4] px-2 py-0.5 text-[10px] text-[#1a1a1a]/45">
-                              {event.partnerName}
-                            </span>
-                          )}
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
+            <CalendarRail
+              health={health}
+              healthLoading={healthLoading}
+              onRefreshHealth={refreshHealth}
+              sourceStats={sourceStats}
+              assigneeLoad={assigneeLoad}
+              monthLabel={`${month}월`}
+              totalCount={events.length}
+              leadKpis={leadActionKpis}
+              publicEventCount={publicEventCount}
+              notionCount={notionCount}
+            />
           )}
         </div>
       </div>
@@ -614,6 +867,7 @@ export default function AdminCalendarPage() {
             }}
             loading={formLoading}
             isEdit={Boolean(editingEvent)}
+            assigneeSuggestions={teamMembers.map((member) => member.name)}
           />
         </DialogContent>
       </Dialog>

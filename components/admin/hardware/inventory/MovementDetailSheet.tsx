@@ -24,6 +24,8 @@ interface MovementDetailSheetProps {
   detailFacts: Array<{ label: string; value: string }>
   detailCrm: { label: string; reference: string | null; href: string | null } | null
   detailCanEdit: boolean
+  // hardware.finalize 표시용 — 취소 버튼 비활성 판단(강제는 서버 게이트).
+  canFinalize: boolean
   editMovement: (movement: HardwareMovement) => void
   voidMovement: (movement: HardwareMovement) => void
 }
@@ -37,6 +39,7 @@ function MovementDetailSheet({
   detailFacts,
   detailCrm,
   detailCanEdit,
+  canFinalize,
   editMovement,
   voidMovement,
 }: MovementDetailSheetProps) {
@@ -183,7 +186,9 @@ function MovementDetailSheet({
                       setDetailId(null)
                       voidMovement(target)
                     }}
-                    className="inline-flex h-10 flex-1 cursor-pointer items-center justify-center rounded-md border border-[#F2B8B8] bg-white text-[13px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43E3E]/40 active:scale-[0.98] motion-reduce:active:scale-100"
+                    disabled={!canFinalize}
+                    title={canFinalize ? undefined : "기록 취소에는 확정 권한(hardware.finalize)이 필요합니다"}
+                    className="inline-flex h-10 flex-1 cursor-pointer items-center justify-center rounded-md border border-[#F2B8B8] bg-white text-[13px] font-bold text-[#B43E3E] transition hover:bg-[#FCE9E9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B43E3E]/40 active:scale-[0.98] motion-reduce:active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     기록 취소
                   </button>

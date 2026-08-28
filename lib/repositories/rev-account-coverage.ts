@@ -7,6 +7,10 @@ import {
   isPlaceholderCrmName,
 } from "@/lib/crm-source-linking"
 import {
+  classifyCrmSourceLinkValidation,
+  type CrmMatchAliasValidationRow,
+} from "@/lib/crm/source-link-validation"
+import {
   revSyncHealth,
   type RevSyncHealth,
   type RevSyncHygiene,
@@ -119,17 +123,26 @@ function rowRevenue(row: RevCoverageSheetRow): number {
 export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
   const sb = createSupabaseAdminClient()
 
-  const [sheetResult, linksResult] = await Promise.all([
+  const [sheetResult, linksResult, aliasesResult] = await Promise.all([
     sb
       .from("branch_rev_deals")
       .select("sheet_row, customer_name, team, manager, status, first_payment, contract_target, monthly_payments, synced_at")
       .limit(1000),
     sb
       .from("crm_source_links")
-      .select("source_record_key, status, target_type, target_id, target_label:metadata->>target_label")
+      .select("source_record_key, normalized_name, status, target_type, target_id, metadata, target_label:metadata->>target_label")
       .eq("source_system", "branch_rev_sheet")
       .eq("source_object", "branch_rev_deals")
       .neq("status", "rejected")
+      .limit(5000),
+    sb
+      .from("crm_match_aliases")
+      .select(
+        "source_system, normalized_alias, target_type, target_id, normalized_manager_name",
+        { count: "exact" }
+      )
+      .eq("source_system", "branch_rev_sheet")
+      .eq("status", "active")
       .limit(5000),
   ])
 
@@ -138,15 +151,50 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
 
   const linkRows = (linksResult.data ?? []) as Array<{
     source_record_key: string
+    normalized_name?: string | null
     status: string
     target_type?: string | null
     target_id?: string | null
+    metadata?: Record<string, unknown> | null
     target_label?: string | null
   }>
 
-  // 같은 source_record_key에 링크가 여러 개면 가장 강한 상태(확정 > 후보)를 취한다.
+  // Admin matching과 같은 fail-open 경계다. 별칭 카탈로그가 실패하거나 서버 행 상한으로
+  // 잘렸다면 정상 후보를 오탐으로 숨기지 않는다. 완전한 스냅샷일 때만 과거 cross-source
+  // alias 후보를 현재 검토 큐에서 제외한다.
+  const aliasRows = (aliasesResult.data ?? []) as CrmMatchAliasValidationRow[]
+  const aliasCount = aliasesResult.count
+  const canValidateAliases =
+    !aliasesResult.error && (aliasCount == null || aliasCount <= aliasRows.length)
+  const activeAliases = canValidateAliases ? aliasRows : []
+  const confirmedSourceKeys = new Set(
+    linkRows
+      .filter((link) => LINKED_STATUSES.has(link.status))
+      .map((link) => link.source_record_key)
+  )
+
+  function isActionableReviewLink(link: (typeof linkRows)[number]) {
+    if (link.status !== "candidate" && link.status !== "stale") return false
+    // Admin matching의 retired_confirmed_sibling과 동일: 이미 확정 sibling이 있으면
+    // stale/candidate 행은 현재 검토가 아니라 은퇴 경쟁 이력이다.
+    if (confirmedSourceKeys.has(link.source_record_key)) return false
+    if (!canValidateAliases) return true
+    return classifyCrmSourceLinkValidation(
+      {
+        sourceSystem: "branch_rev_sheet",
+        targetType: link.target_type ?? null,
+        targetId: link.target_id ?? null,
+        linkStatus: link.status,
+        metadata: link.metadata ?? null,
+      },
+      activeAliases
+    ) === "valid"
+  }
+
+  // 같은 source_record_key에 링크가 여러 개면 가장 강한 상태(확정 > 검증된 후보)를 취한다.
   // linked 링크의 target은 record key당 첫 해석 가능한 것(customer/partner_account/deal +
   // target_id 존재)만 담는다 — candidate/stale은 target 후보에서 제외(P0-2 additive).
+  // 무효 alias 후보와 확정 sibling이 있는 stale은 상태 맵에 넣지 않아 현재 미연결로 되돌린다.
   const linkStateByKey = new Map<string, RowLinkState>()
   const linkedTargetByRecordKey = new Map<
     string,
@@ -165,10 +213,13 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
         })
       }
     }
-    const state: RowLinkState = isLinked ? "linked" : "candidate"
     const prev = linkStateByKey.get(link.source_record_key)
     if (prev === "linked") continue
-    linkStateByKey.set(link.source_record_key, state)
+    if (isLinked) {
+      linkStateByKey.set(link.source_record_key, "linked")
+    } else if (isActionableReviewLink(link)) {
+      linkStateByKey.set(link.source_record_key, "candidate")
+    }
   }
 
   interface AccountAgg {
@@ -249,13 +300,27 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
   }
 
   // 링크 위생 — 집계 로직과 독립인 카운트 전용(같은 fetch 재사용, 추가 쿼리 없음).
-  const hygiene: RevSyncHygiene = { orphanCandidates: 0, staleLinks: 0 }
+  const orphanCandidateNames = new Set<string>()
+  const staleLinkNames = new Set<string>()
+  const hygiene: RevSyncHygiene = {
+    orphanCandidates: 0,
+    orphanCandidateNames: 0,
+    staleLinks: 0,
+    staleLinkNames: 0,
+  }
   for (const link of linkRows) {
-    if (link.status === "stale") hygiene.staleLinks += 1
+    const historyName = link.normalized_name?.trim() || link.source_record_key
+    if (link.status === "stale") {
+      hygiene.staleLinks += 1
+      staleLinkNames.add(historyName)
+    }
     else if (link.status === "candidate" && !sheetKeys.has(link.source_record_key)) {
       hygiene.orphanCandidates += 1
+      orphanCandidateNames.add(historyName)
     }
   }
+  hygiene.orphanCandidateNames = orphanCandidateNames.size
+  hygiene.staleLinkNames = staleLinkNames.size
 
   const accounts = {
     total: accountsByKey.size,

@@ -20,7 +20,13 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode; count?: (
   { key: "overview", label: "개요", icon: <LayoutDashboard className="h-3.5 w-3.5" /> },
   { key: "money", label: "Revenue", icon: <Coins className="h-3.5 w-3.5" /> },
   { key: "deals", label: "딜", icon: <Briefcase className="h-3.5 w-3.5" />, count: (d) => d.deals.summary.total },
-  { key: "activity", label: "활동·메모", icon: <ClipboardList className="h-3.5 w-3.5" />, count: (d) => d.activity.summary.total },
+  {
+    key: "activity",
+    label: "활동·메모",
+    icon: <ClipboardList className="h-3.5 w-3.5" />,
+    // 탭 배지도 병합 기준으로 센다 — 탭을 열었을 때 보이는 건수와 어긋나지 않게.
+    count: (d) => d.activity.summary.total + d.compass.entries.length,
+  },
   { key: "tasks", label: "태스크", icon: <ListChecks className="h-3.5 w-3.5" />, count: (d) => d.tasks.summary.total },
 ]
 
@@ -76,7 +82,7 @@ export default function Customer360DetailClient({ data, customerKey }: Props) {
       case "deals":
         return <Customer360DetailDeals deals={data.deals} />
       case "activity":
-        return <Customer360DetailActivity activity={data.activity} />
+        return <Customer360DetailActivity activity={data.activity} compass={data.compass} />
       case "tasks":
         return <Customer360DetailTasks tasks={data.tasks} />
       case "overview":

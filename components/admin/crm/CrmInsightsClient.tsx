@@ -219,12 +219,9 @@ export default function CrmInsightsClient() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-[#1a1a1a]/30">
-              Admin · CRM · Insights
-            </p>
             <h1 className="text-2xl font-bold tracking-[-0.02em] text-[#111110]">CRM 인사이트</h1>
             <p className="mt-1 text-[13px] text-[#1a1a1a]/42">
-              ClassIn 고객 DB 기준 리스크와 기회를 운영 액션으로 묶어 봅니다.
+              리스크·기회를 운영 액션으로 묶어 봅니다.
             </p>
           </div>
           <button
@@ -368,7 +365,7 @@ export default function CrmInsightsClient() {
               </p>
             </div>
             <div className="rounded-xl bg-[#fafaf8] p-3">
-              <p className="text-[11px] font-semibold text-[#1a1a1a]/35">동기화 정합성</p>
+              <p className="text-[11px] font-semibold text-[#1a1a1a]/35">링크 확정률</p>
               <p
                 className={`mt-1 text-2xl font-bold ${
                   coverageState === "failed"

@@ -1,9 +1,23 @@
+// Lead Magnets Repository — JSON ↔ Supabase 듀얼 모드(2026-08-18 이관)
+// 블로그(2026-06 이관)와 같은 모델: 운영(Vercel)에서는 read-only 파일시스템이라 JSON 쓰기가
+// 불가능하므로 쓰기는 항상 Supabase를 쓰고, JSON 쓰기 모드는 로컬 개발/테스트 전용이다.
+// 문서 구조가 깊어 행 = slug + 전체 JSONB 문서로 저장하고, 읽기는 기존 normalizeLeadMagnet을
+// 그대로 태워 두 모드의 결과가 동일하다. 기존 데이터: scripts/import-lead-magnets.mjs 로 이관.
+//
+// ⚠️ 읽기는 배포 순서와 무관하게 살아 있어야 한다.
+// 이 저장소를 읽는 공개 표면이 6곳이다 — /resources, /resources/[slug], /blog/[slug] 자료 CTA,
+// /account 다운로드 이력, /api/materials/[slug]/download(리드 확보 퍼널), lib/crm/lead-conversion.
+// 마이그레이션 적용 전에 코드만 먼저 배포되면 이 전부가 죽는다. read-only 파일시스템이 막는 것은
+// 쓰기뿐이고 번들된 JSON 읽기는 Vercel에서도 안전하므로, 읽기 경로는 테이블 부재·행 0에서
+// JSON으로 강등한다(무음 아님 — console.warn 으로 어느 경로를 탔는지 남긴다).
+// 그 외 오류는 삼키지 않고 던진다.
 import "server-only"
 
 import { readFile, writeFile } from "fs/promises"
 import path from "path"
 
 import { assertLocalJsonWriteAllowed } from "@/lib/server/runtime-persistence"
+import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 import type {
   LeadMagnet,
@@ -26,6 +40,36 @@ import type {
 
 const DATA_PATH = path.join(process.cwd(), "data", "lead-magnets.json")
 
+/** 모드 판정 — leads.ts의 shouldUseSupabaseLeads와 동일 규칙(테스트 가능하게 env 주입). */
+export function shouldUseSupabaseLeadMagnets(
+  env: Record<string, string | undefined> = process.env
+) {
+  const isVercelRuntime =
+    env.VERCEL === "1" ||
+    Boolean(env.VERCEL_ENV) ||
+    Boolean(env.VERCEL_URL) ||
+    Boolean(env.NEXT_PUBLIC_VERCEL_URL)
+
+  return env.USE_SUPABASE_LEAD_MAGNETS === "true" || isVercelRuntime
+}
+
+const USE_SUPABASE = shouldUseSupabaseLeadMagnets()
+const TABLE = "lead_magnets"
+const DUPLICATE_SLUG_MESSAGE = "이미 사용 중인 리드마그넷 슬러그입니다."
+const MISSING_TABLE_MESSAGE =
+  "lead_magnets 테이블이 없습니다. supabase/migrations/20260818_lead_magnets.sql 적용 후 다시 시도하세요."
+
+export function isLeadMagnetStoreUnavailableError(error: unknown) {
+  return error instanceof Error && error.message === MISSING_TABLE_MESSAGE
+}
+
+/** 테이블 부재 판정 — Postgres(42P01)와 PostgREST 스키마 캐시(PGRST205) 둘 다 본다. */
+export function isMissingTableError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false
+  if (error.code === "42P01" || error.code === "PGRST205") return true
+  return /could not find the table|relation .* does not exist/i.test(error.message ?? "")
+}
+
 const STATUS_VALUES = new Set<LeadMagnetStatus>(["draft", "review", "unlisted"])
 const GATE_VALUES = new Set<LeadMagnetGate>(["open", "email", "login"])
 const TIER_VALUES = new Set<LeadMagnetTier>(["basic", "advanced"])
@@ -38,6 +82,17 @@ const CATEGORY_VALUES = new Set<LeadMagnetCategory>([
 ])
 
 export type LeadMagnetInput = LeadMagnet
+
+export interface LeadMagnetStorageState {
+  source: "supabase" | "local-json" | "bundled-json-fallback"
+  writable: boolean
+  reason: "ready" | "local-development" | "table-missing" | "table-empty"
+}
+
+export interface LeadMagnetStoreSnapshot {
+  leadMagnets: LeadMagnet[]
+  storage: LeadMagnetStorageState
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -294,11 +349,71 @@ export function normalizeLeadMagnet(input: unknown): LeadMagnet {
   }
 }
 
-export async function getAllLeadMagnets() {
+async function readAllFromJson() {
   const raw = await readFile(DATA_PATH, "utf8")
   const parsed = JSON.parse(raw) as unknown
   if (!Array.isArray(parsed)) throw new Error("[lead-magnets] data file must be an array")
   return parsed.map(normalizeLeadMagnet)
+}
+
+/** Supabase 읽기 결과와 폴백 원인을 함께 반환해 Admin이 저장 가능 여부를 숨기지 않게 한다. */
+async function readAllFromSupabase() {
+  // created_at 오름차순 = JSON 배열의 삽입 순서 유지(목록·크로스링크 순서 보존).
+  const { data, error } = await createSupabaseAdminClient()
+    .from(TABLE)
+    .select("data")
+    .order("created_at", { ascending: true })
+
+  if (error) {
+    if (isMissingTableError(error)) {
+      console.warn("[lead-magnets] 테이블 미적용 — 번들 JSON으로 읽습니다:", error.message)
+      return { leadMagnets: null, fallbackReason: "table-missing" as const }
+    }
+    throw new Error(`[lead-magnets] 목록 조회 실패: ${error.message}`)
+  }
+  if (!data || data.length === 0) {
+    console.warn("[lead-magnets] 테이블이 비어 있습니다 — scripts/import-lead-magnets.mjs 미실행? 번들 JSON으로 읽습니다.")
+    return { leadMagnets: null, fallbackReason: "table-empty" as const }
+  }
+
+  return {
+    leadMagnets: data.map((row) => normalizeLeadMagnet(row.data)),
+    fallbackReason: null,
+  }
+}
+
+export async function getLeadMagnetStoreSnapshot(): Promise<LeadMagnetStoreSnapshot> {
+  if (!USE_SUPABASE) {
+    return {
+      leadMagnets: await readAllFromJson(),
+      storage: {
+        source: "local-json",
+        writable: true,
+        reason: "local-development",
+      },
+    }
+  }
+
+  const result = await readAllFromSupabase()
+  if (result.leadMagnets) {
+    return {
+      leadMagnets: result.leadMagnets,
+      storage: { source: "supabase", writable: true, reason: "ready" },
+    }
+  }
+
+  return {
+    leadMagnets: await readAllFromJson(),
+    storage: {
+      source: "bundled-json-fallback",
+      writable: false,
+      reason: result.fallbackReason,
+    },
+  }
+}
+
+export async function getAllLeadMagnets() {
+  return (await getLeadMagnetStoreSnapshot()).leadMagnets
 }
 
 export async function getPublishedLeadMagnets() {
@@ -322,36 +437,102 @@ async function writeLeadMagnets(magnets: LeadMagnet[]) {
 }
 
 export async function createLeadMagnet(input: unknown) {
-  const magnets = await getAllLeadMagnets()
   const magnet = normalizeLeadMagnet(input)
-  if (magnets.some((item) => item.slug === magnet.slug)) {
-    throw new Error("이미 사용 중인 리드마그넷 슬러그입니다.")
+
+  if (!USE_SUPABASE) {
+    const magnets = await readAllFromJson()
+    if (magnets.some((item) => item.slug === magnet.slug)) {
+      throw new Error(DUPLICATE_SLUG_MESSAGE)
+    }
+    await writeLeadMagnets([...magnets, magnet])
+    return magnet
   }
-  await writeLeadMagnets([...magnets, magnet])
+
+  const { error } = await createSupabaseAdminClient()
+    .from(TABLE)
+    .insert({ slug: magnet.slug, data: magnet, published: magnet.published })
+  if (error) {
+    if (error.code === "23505") throw new Error(DUPLICATE_SLUG_MESSAGE)
+    // 쓰기는 강등하지 않는다 — JSON에 써도 Vercel에서는 유실되므로 원인을 그대로 알린다.
+    if (isMissingTableError(error)) throw new Error(MISSING_TABLE_MESSAGE)
+    throw new Error(`[lead-magnets] 생성 실패: ${error.message}`)
+  }
   return magnet
 }
 
 export async function updateLeadMagnet(slug: string, input: unknown) {
-  const magnets = await getAllLeadMagnets()
-  const index = magnets.findIndex((item) => item.slug === slug)
-  if (index < 0) return null
-
   const updated = normalizeLeadMagnet(input)
-  const conflict = magnets.some((item, itemIndex) => itemIndex !== index && item.slug === updated.slug)
-  if (conflict) {
-    throw new Error("이미 사용 중인 리드마그넷 슬러그입니다.")
+
+  if (!USE_SUPABASE) {
+    const magnets = await readAllFromJson()
+    const index = magnets.findIndex((item) => item.slug === slug)
+    if (index < 0) return null
+
+    const conflict = magnets.some(
+      (item, itemIndex) => itemIndex !== index && item.slug === updated.slug
+    )
+    if (conflict) {
+      throw new Error(DUPLICATE_SLUG_MESSAGE)
+    }
+
+    const next = [...magnets]
+    next[index] = updated
+    await writeLeadMagnets(next)
+    return updated
   }
 
-  const next = [...magnets]
-  next[index] = updated
-  await writeLeadMagnets(next)
+  const sb = createSupabaseAdminClient()
+  const { data: existing, error: readError } = await sb
+    .from(TABLE)
+    .select("slug")
+    .eq("slug", slug)
+    .maybeSingle()
+  if (readError) {
+    if (isMissingTableError(readError)) throw new Error(MISSING_TABLE_MESSAGE)
+    throw new Error(`[lead-magnets] 조회 실패: ${readError.message}`)
+  }
+  if (!existing) return null
+
+  // 슬러그 변경 허용 계약 유지 — PK 교체 전에 충돌을 미리 확인해 기존 오류 문구를 보존한다.
+  if (updated.slug !== slug) {
+    const { data: conflict, error: conflictError } = await sb
+      .from(TABLE)
+      .select("slug")
+      .eq("slug", updated.slug)
+      .maybeSingle()
+    if (conflictError) throw new Error(`[lead-magnets] 조회 실패: ${conflictError.message}`)
+    if (conflict) throw new Error(DUPLICATE_SLUG_MESSAGE)
+  }
+
+  const { error } = await sb
+    .from(TABLE)
+    .update({ slug: updated.slug, data: updated, published: updated.published })
+    .eq("slug", slug)
+  if (error) {
+    if (error.code === "23505") throw new Error(DUPLICATE_SLUG_MESSAGE)
+    if (isMissingTableError(error)) throw new Error(MISSING_TABLE_MESSAGE)
+    throw new Error(`[lead-magnets] 수정 실패: ${error.message}`)
+  }
   return updated
 }
 
 export async function deleteLeadMagnet(slug: string) {
-  const magnets = await getAllLeadMagnets()
-  const next = magnets.filter((item) => item.slug !== slug)
-  if (next.length === magnets.length) return false
-  await writeLeadMagnets(next)
-  return true
+  if (!USE_SUPABASE) {
+    const magnets = await readAllFromJson()
+    const next = magnets.filter((item) => item.slug !== slug)
+    if (next.length === magnets.length) return false
+    await writeLeadMagnets(next)
+    return true
+  }
+
+  const { data, error } = await createSupabaseAdminClient()
+    .from(TABLE)
+    .delete()
+    .eq("slug", slug)
+    .select("slug")
+  if (error) {
+    if (isMissingTableError(error)) throw new Error(MISSING_TABLE_MESSAGE)
+    throw new Error(`[lead-magnets] 삭제 실패: ${error.message}`)
+  }
+  return (data?.length ?? 0) > 0
 }

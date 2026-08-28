@@ -34,12 +34,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 /**
  * DELETE /api/admin/marketing-campaigns/[id]/links
- * 링크 해제. 본문 { linkId }. (경로 [id] 는 라우트 위치 식별용 — 삭제는 linkId 기준.)
+ * 링크 해제. 본문 { linkId }. 경로 [id] 의 캠페인 소속을 함께 검증한다(2026-08-18).
  */
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const authError = await verifyAdmin(req)
   if (authError) return authError
 
+  const { id } = await params
   try {
     const body = await req.json().catch(() => null)
     const raw = body && typeof body === "object" ? (body as Record<string, unknown>) : null
@@ -47,7 +48,7 @@ export async function DELETE(req: NextRequest) {
     if (!linkId) {
       return NextResponse.json({ error: "linkId 가 필요합니다." }, { status: 400 })
     }
-    await removeLink(linkId)
+    await removeLink(id, linkId)
     return NextResponse.json({ ok: true })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })

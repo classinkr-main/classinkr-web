@@ -5,8 +5,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Pie,
-  PieChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -14,16 +12,6 @@ import {
   YAxis,
 } from "recharts"
 import { CHART, gridProps } from "../viz/theme"
-
-const KRW_CURRENCY = new Intl.NumberFormat("ko-KR", {
-  style: "currency",
-  currency: "KRW",
-  maximumFractionDigits: 0,
-})
-
-function won(value: number | null | undefined) {
-  return value == null ? "-" : KRW_CURRENCY.format(Math.round(value))
-}
 
 const DARK_TOOLTIP_STYLE = {
   backgroundColor: CHART.tooltipBg,
@@ -97,27 +85,6 @@ export function EventRoiChart({
   )
 }
 
-export function ChannelSpendPieChart({
-  data,
-}: {
-  data: Array<{ channel: string; name: string; value: number; color: string }>
-}) {
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <PieChart>
-        <Pie data={data} dataKey="value" nameKey="name" innerRadius={45} outerRadius={75} paddingAngle={2}>
-          {data.map((entry) => (
-            <Cell key={entry.channel} fill={entry.color} />
-          ))}
-        </Pie>
-        <Tooltip
-          formatter={(value: number | string | Array<number | string> | undefined) => {
-            if (Array.isArray(value)) return value.join(", ")
-            return won(typeof value === "number" ? value : Number(value))
-          }}
-          contentStyle={DARK_TOOLTIP_STYLE}
-        />
-      </PieChart>
-    </ResponsiveContainer>
-  )
-}
+// ChannelSpendPieChart 는 요약 탭 퍼포먼스 대시보드 재편으로 소비처가 사라져 제거했다.
+// 채널 배정·집행의 정본은 광고 탭의 ChannelBudgetTable 이다 — 요약 탭은 콕핏 전환(2026-08-21)
+// 때 채널 믹스를 넘기고 우측 레일에 퍼널만 남겼다(perf/FunnelCard).

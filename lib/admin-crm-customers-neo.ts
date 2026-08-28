@@ -1,6 +1,7 @@
 import "server-only"
 
 import { deriveCustomerRegion, regionCandidatesFromPayload } from "@/lib/crm/region-label"
+import { readEeoBalance } from "@/lib/crm/eeo-account-fields"
 import { getXiaoshouyiOwnerNameMap, resolveOwnerName } from "@/lib/external-crm/owner-names"
 import { listCrmNeoCustomerSnapshots } from "@/lib/repositories/crm-neo-customer-snapshots"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -24,6 +25,8 @@ export interface NeoCrmCustomerRow {
   riskReasons?: Array<{ code?: string; label?: string }>
   riskConfidence?: "high" | "medium" | "low"
   freshnessLabel?: string | null
+  /** 소진 예상일. 표본이 부족하면 null — 라벨에서 재파생하지 말 것. */
+  depletionInDays?: number | null
 }
 
 export interface NeoCrmCustomerOwnerOption {
@@ -107,11 +110,6 @@ function payloadString(payload: Record<string, unknown> | null, key: string): st
   return value == null || value === "" ? null : String(value)
 }
 
-function payloadNumber(payload: Record<string, unknown> | null, key: string): number | null {
-  const value = payload?.[key]
-  const numeric = typeof value === "number" ? value : Number(value)
-  return Number.isFinite(numeric) ? numeric : null
-}
 
 function payloadIsActivePaidEeo(payload: Record<string, unknown> | null) {
   const serviceVersion = payloadString(payload, "service_version__c")
@@ -171,6 +169,7 @@ async function computeNeoCrmCustomers(): Promise<NeoCrmCustomerList> {
       updatedAt: row.sourceSyncedAt ?? row.updatedAt,
       riskLevel: row.riskLevel,
       riskReasons: row.riskReasons,
+      depletionInDays: row.depletionInDays,
       riskConfidence: row.riskConfidence,
       freshnessLabel: row.freshnessLabel,
     })),
@@ -256,7 +255,7 @@ export async function getNeoCrmCustomerDetail(accountId: string): Promise<NeoCrm
     id: row.external_id,
     name: row.display_name ?? row.external_id,
     uid: payloadString(row.payload, "uid__c"),
-    balance: payloadNumber(row.payload, "CurrencyAmount__c"),
+    balance: readEeoBalance(row.payload),
     expireAt: payloadIsActivePaidEeo(row.payload) ? payloadExpireAt(row.payload) : null,
     lastClassAt: toIso(row.payload?.["LastClassDate__c"]),
     serviceStatus: row.status,

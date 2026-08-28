@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { buildLeadPriorityItem, buildNeoAccountPriorityItem, daysFromNow, sortPriorityItems } from "@/lib/crm/priority"
+import { buildCompassDemoIndex } from "@/lib/crm/compass-demo-signal"
 import type { LeadRecord } from "@/lib/repositories/leads"
 import type { NeoCrmCustomerRow } from "@/lib/admin-crm-customers-neo"
 
@@ -152,29 +153,42 @@ describe("CRM priority rules", () => {
   })
 
   it("promotes a purchased customer's demo into the additional-sales lane", () => {
-    const item = buildNeoAccountPriorityItem(account(), NOW, {
-      demoIndex: {
-        byName: new Map([
-          [
-            "classin학원",
-            {
-              title: "ClassIn 학원 데모",
-              customerName: "ClassIn 학원",
-              date: "2026-06-27",
-              phase: "upcoming",
-              daysFromNow: 1,
-            },
+    // 매칭은 전화 정규화 키 동등 비교 — account() 의 phone 과 같은 키에만 붙는다.
+    const item = buildNeoAccountPriorityItem(account({ phone: "010-1234-5678" }), NOW, {
+      demoIndex: buildCompassDemoIndex(
+        {
+          demos: [
+            { id: 1, lead_id: 77, day: "2026-06-27", status: "booked", owner: "진소망", day_approx: false },
           ],
-        ]),
-        unmatched: [],
-        total: 1,
-      },
+          phoneKeysByCompassLeadId: new Map([[77, ["01012345678"]]]),
+          down: false,
+        },
+        NOW
+      ),
     })
 
     expect(item?.lane).toBe("sales")
     expect(item?.laneLabel).toBe("신규·추가 매출")
     expect(item?.actionLabel).toBe("데모")
     expect(item?.reason).toBe("내일 데모")
+  })
+
+  it("전화가 다르면 데모 신호가 붙지 않는다 — 이름 유사도로 번지지 않는다", () => {
+    const item = buildNeoAccountPriorityItem(account({ phone: "010-9999-0000" }), NOW, {
+      demoIndex: buildCompassDemoIndex(
+        {
+          demos: [
+            { id: 1, lead_id: 77, day: "2026-06-27", status: "booked", owner: null, day_approx: false },
+          ],
+          phoneKeysByCompassLeadId: new Map([[77, ["01012345678"]]]),
+          down: false,
+        },
+        NOW
+      ),
+    })
+
+    expect(item?.lane).not.toBe("sales")
+    expect(item?.reason).not.toContain("데모")
   })
 
   it("sorts higher score before older due date", () => {
@@ -287,5 +301,51 @@ describe("CRM priority rules", () => {
 
     expect(sorted[0]?.id).toBe("lead:today")
     expect(sorted[1]?.bucket).toBe("stale_recovery")
+  })
+})
+
+describe("buildNeoAccountPriorityItem — 재충전 임박", () => {
+  const base = {
+    accountId: "acc-recharge",
+    name: "충전제 학원",
+    ownerId: "owner-1",
+    ownerName: "김담당",
+    phone: null,
+    balance: 300,
+    expireAt: null,
+    lastClassAt: "2026-08-20T00:00:00.000Z",
+    uid: "uid-1",
+    orderAmount: 0,
+    orderCount: 0,
+    createdAt: null,
+    updatedAt: "2026-08-25T00:00:00.000Z",
+    riskLevel: "soon" as const,
+    riskReasons: [{ code: "recharge_due", label: "재충전 임박 D-12" }],
+    depletionInDays: 12,
+  }
+  const NOW = new Date("2026-08-28T00:00:00.000Z")
+
+  it("잔액이 남아 있어도 소진이 다가오면 연장 레인에 올린다", () => {
+    const item = buildNeoAccountPriorityItem(base, NOW)
+    expect(item?.action).toBe("recharge_account")
+    expect(item?.lane).toBe("renewal")
+    expect(item?.bucket).toBe("renewal")
+    expect(item?.reason).toBe("잔액 소진 D-12")
+  })
+
+  it("일주일 안이면 오늘 처리로 올라온다", () => {
+    const item = buildNeoAccountPriorityItem({ ...base, depletionInDays: 3, riskReasons: [{ code: "recharge_due" }] }, NOW)
+    expect(item?.bucket).toBe("today")
+    expect(item?.score).toBeGreaterThan(90)
+  })
+
+  it("만료가 더 급하면 만료가 이긴다", () => {
+    const item = buildNeoAccountPriorityItem({ ...base, expireAt: "2026-09-02T00:00:00.000Z" }, NOW)
+    expect(item?.action).toBe("renew_account")
+  })
+
+  it("예상일이 없으면 재충전 액션을 만들지 않는다", () => {
+    const item = buildNeoAccountPriorityItem({ ...base, depletionInDays: null }, NOW)
+    expect(item?.action).not.toBe("recharge_account")
   })
 })
