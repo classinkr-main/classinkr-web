@@ -1945,7 +1945,10 @@ export async function listConfirmedLeadNeoLinkLeadIds(): Promise<Set<string>> {
       .select("source_record_key")
       .eq("source_system", "lead")
       .eq("source_object", "leads")
-      .eq("target_type", "external_account")
+      // external_account = 360 드로어의 수동 'NEO 등록됨'(계정 링크),
+      // external_lead    = 밀어넣기 도구가 CRM lead 를 생성·대사하며 남기는 링크.
+      // 둘 다 "NEO 에 등록된 리드"라는 같은 사실이므로 배지는 함께 센다.
+      .in("target_type", ["external_account", "external_lead"])
       .eq("status", "confirmed")
       .order("id", { ascending: true })
       .range(from, from + LEAD_NEO_LINK_PAGE_SIZE - 1)
