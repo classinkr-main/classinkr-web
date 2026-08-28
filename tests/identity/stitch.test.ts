@@ -202,10 +202,19 @@ describe("stitchIdentity verification gate", () => {
       emailVerified: true,
     })
 
-    const updates = leadsUpdateOps()
-    expect(updates).toHaveLength(1)
-    expect(updates[0].filters["eq:email"]).toBe("owner@example.com")
-    expect(updates[0].filters["is:user_id"]).toBeNull()
+    // 이메일 결합(=이 리드가 이 사람이다)과 익명 id 각인(=이 브라우저가 이 리드다)은
+    // 서로 다른 UPDATE 다. 광고 유입 리드가 온사이트 행동을 갖게 되는 경로가 정확히
+    // 이 조합이라, 둘 다 일어나야 한다.
+    const associations = leadsUpdateOps().filter((op) => "eq:email" in op.filters)
+    expect(associations).toHaveLength(1)
+    expect(associations[0].filters["eq:email"]).toBe("owner@example.com")
+    expect(associations[0].filters["is:user_id"]).toBeNull()
+
+    const stamp = leadsUpdateOps().find(
+      (op) => (op.payload as { anonymous_id?: string })?.anonymous_id === "anon-verified-0001"
+    )
+    expect(stamp).toBeDefined()
+    expect(stamp?.filters["is:anonymous_id"]).toBeNull()
   })
 
   it("writes one identity_stitch_logs audit row best-effort", async () => {
@@ -295,6 +304,29 @@ describe("리드 제출 경로 신원 결합 (2026-08-05 갭)", () => {
   it("리드를 모르면 자료 다운로드는 건드리지 않는다", async () => {
     await stitchIdentity({ anonymousId: "anon-no-lead", userId: USER_ID })
     expect(ops.some((op) => op.table === "material_downloads")).toBe(false)
+  })
+
+  it("리드에 익명 id 를 각인한다 — 로그인 이후 이벤트의 정방향 귀속", async () => {
+    // 소급 백필만으로는 로그인 "이후" 이벤트가 다시 익명으로 떨어진다.
+    // track/event 의 resolveLeadIdForAnonymousId 는 leads.anonymous_id 로만 찾으므로,
+    // 광고 유입 리드(서버 웹훅이라 캡처 시점 anonymous_id 가 없다)는 이 각인이 없으면
+    // 정방향 귀속이 영원히 켜지지 않는다.
+    await stitchIdentity({ anonymousId: "anon-stamp", leadId: LEAD_A })
+
+    const stamp = leadsUpdateOps().find(
+      (op) => (op.payload as { anonymous_id?: string })?.anonymous_id === "anon-stamp"
+    )
+    expect(stamp).toBeDefined()
+    expect(stamp?.filters["eq:id"]).toBe(LEAD_A)
+    // 캡처 시점 값이 이미 있으면 덮지 않는다 — 그쪽이 더 강한 근거다.
+    expect(stamp?.filters["is:anonymous_id"]).toBeNull()
+  })
+
+  it("리드를 모르면 각인도 하지 않는다", async () => {
+    await stitchIdentity({ anonymousId: "anon-no-lead", userId: USER_ID })
+    expect(
+      leadsUpdateOps().some((op) => "anonymous_id" in ((op.payload ?? {}) as object))
+    ).toBe(false)
   })
 })
 
