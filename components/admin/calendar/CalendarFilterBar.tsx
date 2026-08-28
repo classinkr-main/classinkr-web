@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, type RefObject } from "react"
+import { Search, X } from "lucide-react"
 
 import type { CalendarEvent, EventSource } from "@/lib/calendar-data"
 import { getTeamMemberColor } from "@/lib/team-member-colors"
@@ -71,6 +72,11 @@ interface CalendarFilterLineProps {
   onToggleAssignee: (name: string) => void
   onShowAll: () => void
   onHideAll: () => void
+  /** 조회 중인 기간 안에서만 찾는 검색어. 필터링 자체는 page.tsx가 한다 — 이 컴포넌트는 인풋만 그린다. */
+  query: string
+  onQueryChange: (next: string) => void
+  /** 검색 인풋에 포커스를 걸기 위한 ref (단축키 "/" 가 쓴다) */
+  searchInputRef?: RefObject<HTMLInputElement | null>
 }
 
 export function CalendarFilterLine({
@@ -83,6 +89,9 @@ export function CalendarFilterLine({
   onToggleAssignee,
   onShowAll,
   onHideAll,
+  query,
+  onQueryChange,
+  searchInputRef,
 }: CalendarFilterLineProps) {
   const sourceCounts = useMemo(() => {
     const map: Record<string, number> = {}
@@ -126,6 +135,31 @@ export function CalendarFilterLine({
       )}
 
       <span className="ml-auto flex shrink-0 items-center gap-2 pl-2 text-[11px] text-[#1a1a1a]/40">
+        <span className="relative flex shrink-0 items-center">
+          <Search
+            aria-hidden="true"
+            className="pointer-events-none absolute left-2 h-3 w-3 text-[#1a1a1a]/35"
+          />
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="이 기간에서 검색"
+            aria-label="이 기간에서 검색"
+            className="h-7 w-40 rounded-md border border-[#e8e8e4] bg-white pl-6 pr-6 text-[11px] text-[#111110] outline-none placeholder:text-[#1a1a1a]/35 focus:border-[#084734] focus:ring-2 focus:ring-[#084734]/20"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => onQueryChange("")}
+              aria-label="검색어 지우기"
+              className="absolute right-1.5 rounded-full p-0.5 text-[#1a1a1a]/35 transition-colors hover:bg-[#f0f0ec] hover:text-[#111110]"
+            >
+              <X className="h-3 w-3" strokeWidth={2.5} />
+            </button>
+          )}
+        </span>
         <span>
           표시중 <span className="font-semibold text-[#111110]">{visibleEvents.length}</span>
           <span className="text-[#1a1a1a]/30"> / {events.length}</span>
