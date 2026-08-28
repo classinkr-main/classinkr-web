@@ -1,15 +1,22 @@
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
-const source = readFileSync(
-  join(process.cwd(), "components/admin/crm/leads/LeadsBoardClient.tsx"),
-  "utf8"
-)
+// 리드 보드 본체는 components/admin/crm/leads/board/* 로 분해됐다(2026-08-28) —
+// 계약은 화면 단위로 유지해야 하므로 본체 + 분해 모듈 전체를 합쳐 검사한다.
+const boardDir = join(process.cwd(), "components/admin/crm/leads/board")
+const source = [
+  readFileSync(join(process.cwd(), "components/admin/crm/leads/LeadsBoardClient.tsx"), "utf8"),
+  ...readdirSync(boardDir)
+    .sort()
+    .map((name) => readFileSync(join(boardDir, name), "utf8")),
+].join("\n")
 
 describe("CRM lead bulk assignment UX contract", () => {
   it("uses the verified CRM owner directory instead of free-text prompt assignment", () => {
-    expect(source).toContain('import { useCrmOwners, type CrmOwnerOption } from "@/components/admin/crm/useCrmOwners"')
+    // 분해 후: 훅은 본체가, 타입은 드로어가 각각 정본 디렉터리에서 가져온다.
+    expect(source).toContain('import { useCrmOwners } from "@/components/admin/crm/useCrmOwners"')
+    expect(source).toContain('import type { CrmOwnerOption } from "@/components/admin/crm/useCrmOwners"')
     expect(source).toContain("const { owners: crmOwners, health: crmOwnerHealth } = useCrmOwners()")
     expect(source).toContain('id="bulk-lead-assignment"')
     expect(source).toContain("담당자를 선택하세요")

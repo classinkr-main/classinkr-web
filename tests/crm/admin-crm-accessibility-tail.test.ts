@@ -18,7 +18,11 @@ function readWithModuleDir(mainPath: string, dirPath: string) {
   ].join("\n")
 }
 
-const leadsBoard = read("components/admin/crm/leads/LeadsBoardClient.tsx")
+// 리드 보드 본체는 components/admin/crm/leads/board/* 로 분해됐다(2026-08-28).
+const leadsBoard = readWithModuleDir(
+  "components/admin/crm/leads/LeadsBoardClient.tsx",
+  "components/admin/crm/leads/board"
+)
 // 드로어 본체는 components/admin/crm/drawer/* 로 분해됐다(2026-08-28).
 const customer360 = readWithModuleDir("components/admin/crm/Customer360Drawer.tsx", "components/admin/crm/drawer")
 

@@ -1,11 +1,16 @@
-import { readFileSync } from "node:fs"
+import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 
-const board = readFileSync(
-  join(process.cwd(), "components/admin/crm/leads/LeadsBoardClient.tsx"),
-  "utf8"
-)
+// 리드 보드 본체는 components/admin/crm/leads/board/* 로 분해됐다(2026-08-28) —
+// 계약은 화면 단위로 유지해야 하므로 본체 + 분해 모듈 전체를 합쳐 검사한다.
+const boardDir = join(process.cwd(), "components/admin/crm/leads/board")
+const board = [
+  readFileSync(join(process.cwd(), "components/admin/crm/leads/LeadsBoardClient.tsx"), "utf8"),
+  ...readdirSync(boardDir)
+    .sort()
+    .map((name) => readFileSync(join(boardDir, name), "utf8")),
+].join("\n")
 const campaignLeads = readFileSync(
   join(process.cwd(), "components/admin/campaigns/tabs/NewLeadsTab.tsx"),
   "utf8"
