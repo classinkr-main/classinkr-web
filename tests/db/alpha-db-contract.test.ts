@@ -56,6 +56,21 @@ describe("alpha DB contract", () => {
     )
   })
 
+  it("probes the consultation search RPC so a re-broken overload fails the gate", () => {
+    // 20260716_channel_conversations.sql 이 동일 인자명의 vector/text 오버로드를 만들어 PostgREST 가
+    // 후보를 못 고르는 사고가 있었다. 목킹된 유닛 테스트로는 절대 잡히지 않으므로 라이브 RPC 프로브로 고정한다.
+    const probe = ALPHA_DB_RPC_PROBES.find(
+      (candidate) => candidate.functionName === "match_channel_conversation_chunks"
+    )
+
+    expect(probe).toBeDefined()
+    expect(probe!.migration).toBe("supabase/migrations/20260828_channel_match_rpc_single_overload.sql")
+    // 런타임(lib/internal-cs-chat/consultation-search.ts)과 같은 3-인자 문자열 임베딩 호출 모양이어야
+    // 오버로드 해석 경로를 실제로 밟는다.
+    expect(Object.keys(probe!.args).sort()).toEqual(["match_count", "min_similarity", "query_embedding"])
+    expect(JSON.parse(probe!.args.query_embedding as string)).toHaveLength(768)
+  })
+
   it("builds targeted Supabase selects so missing runtime columns fail fast", () => {
     const docsArticles = ALPHA_DB_TABLE_PROBES.find((probe) => probe.table === "docs_articles")
 

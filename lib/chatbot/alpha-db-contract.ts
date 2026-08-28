@@ -51,6 +51,8 @@ export const ALPHA_DB_MIGRATIONS = [
   "supabase/migrations/20260616_public_material_downloads_hardening.sql",
   "supabase/migrations/20260616_docs_chunk_vector_rpc_text_compat.sql",
   "supabase/migrations/20260616_chatbot_channel_talk_handoffs.sql",
+  "supabase/migrations/20260716_channel_conversations.sql",
+  "supabase/migrations/20260828_channel_match_rpc_single_overload.sql",
 ]
 
 export const ALPHA_DB_TABLE_PROBES: AlphaDbTableProbe[] = [
@@ -156,6 +158,18 @@ export const ALPHA_DB_RPC_PROBES: AlphaDbRpcProbe[] = [
       match_count: 1,
     },
     migration: "supabase/migrations/20260616_docs_chunk_vector_rpc_text_compat.sql",
+  },
+  {
+    functionName: "match_channel_conversation_chunks",
+    label: "상담 사례 벡터 검색 RPC",
+    // 런타임(lib/internal-cs-chat/consultation-search.ts)과 동일한 3-인자 문자열 임베딩 호출 모양.
+    // 인자명이 겹치는 오버로드가 다시 생기면 PostgREST 가 후보를 못 골라 여기서 즉시 blocked 로 잡힌다.
+    args: {
+      query_embedding: buildVectorProbeEmbedding(768),
+      match_count: 1,
+      min_similarity: 0,
+    },
+    migration: "supabase/migrations/20260828_channel_match_rpc_single_overload.sql",
   },
 ]
 
