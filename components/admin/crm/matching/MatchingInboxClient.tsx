@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached } from "@/lib/admin-client"
+import { formatCNY } from "@/lib/crm/money-format"
 import { StatTile } from "@/components/admin/viz"
 import type {
   AdminCrmMatchingInbox,
@@ -110,6 +111,73 @@ function formatDate(value: string | null | undefined) {
 function formatPercent(value: number | null | undefined) {
   if (value == null) return "-"
   return `${Math.round(value * 100)}%`
+}
+
+const SERVICE_DAY_MS = 24 * 60 * 60 * 1000
+
+/** 달력일 기준 D-day. 오후에 잡힌 만료를 하루 당겨 보이지 않게 자정 경계로 센다. */
+function daysUntilCalendar(value: string | null) {
+  if (!value) return null
+  const target = new Date(value)
+  if (Number.isNaN(target.getTime())) return null
+  const now = new Date()
+  const targetMidnight = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime()
+  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  return Math.round((targetMidnight - nowMidnight) / SERVICE_DAY_MS)
+}
+
+function formatDay(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat("ko-KR", { year: "2-digit", month: "2-digit", day: "2-digit" }).format(date)
+}
+
+/** 잔액·서비스 기간이 언제 찍힌 값인지. 외부 CRM 동기화는 수동이라 며칠 묵을 수 있다. */
+function formatServiceFreshness(syncedAt: string | null) {
+  if (!syncedAt) return "동기화 시각 불명"
+  const time = new Date(syncedAt).getTime()
+  if (Number.isNaN(time)) return "동기화 시각 불명"
+  const days = Math.floor((Date.now() - time) / SERVICE_DAY_MS)
+  if (days <= 0) return "NEO 오늘"
+  if (days === 1) return "NEO 어제"
+  return `NEO ${days}일 전`
+}
+
+/**
+ * 연결 확정 전에 확인해야 하는 두 값 — 서비스 기간(만료 전 연장 조치)과
+ * 계정 잔액(충전제의 남은 사용량). 링크가 EEO 계정까지 이어지지 않으면 값을 지어내지 않는다.
+ */
+function AccountServiceCell({ row }: { row: CrmMatchingRow }) {
+  if (row.accountBalance == null && !row.accountExpireAt) {
+    return <span className="text-[11px] text-[#1a1a1a]/25">EEO 미연결</span>
+  }
+
+  const days = daysUntilCalendar(row.accountExpireAt)
+  const stale = formatServiceFreshness(row.accountSyncedAt)
+
+  return (
+    <div className="min-w-[132px] space-y-1">
+      {row.accountExpireAt && days !== null ? (
+        days < 0 ? (
+          <span className="inline-flex items-center rounded-full border border-[#F6D5C5] bg-[#FEF3EE] px-2 py-0.5 text-[11px] font-semibold text-[#B85C33]">
+            만료 {formatDay(row.accountExpireAt)}
+          </span>
+        ) : days <= 60 ? (
+          <span className="inline-flex items-center rounded-full border border-[#ECD29C] bg-[#FBF1E0] px-2 py-0.5 text-[11px] font-semibold text-[#7A520F]">
+            D-{days} · {formatDay(row.accountExpireAt)}
+          </span>
+        ) : (
+          <span className="text-[12px] text-[#1a1a1a]/55">{formatDay(row.accountExpireAt)}</span>
+        )
+      ) : (
+        <span className="text-[11px] text-[#1a1a1a]/30">서비스 기간 없음</span>
+      )}
+      <p className="whitespace-nowrap text-[11px] text-[#1a1a1a]/45">
+        잔액 {formatCNY(row.accountBalance)}
+        <span className="ml-1 text-[#1a1a1a]/25">· {stale}</span>
+      </p>
+    </div>
+  )
 }
 
 function getStatusLabel(row: CrmMatchingRow) {
@@ -908,6 +976,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
               <th scope="col" className="py-3 pr-4 font-semibold">원천 레코드</th>
               <th scope="col" className="py-3 pr-4 font-semibold">담당</th>
               <th scope="col" className="py-3 pr-4 font-semibold">연결 대상</th>
+              <th scope="col" className="py-3 pr-4 font-semibold">서비스 기간 · 잔액</th>
               <th scope="col" className="py-3 pr-4 text-right font-semibold">신뢰도</th>
               <th scope="col" className="py-3 pr-4 text-right font-semibold">금액</th>
               <th scope="col" className="py-3 pl-4 font-semibold">수동 연결</th>
@@ -917,14 +986,14 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
           <tbody className="divide-y divide-[#f0f0ec]">
             {loading && !data ? (
               <tr>
-                <td colSpan={10} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
+                <td colSpan={11} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
                   <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
                   매칭 데이터를 불러오는 중입니다.
                 </td>
               </tr>
             ) : error && !data ? (
               <tr>
-                <td colSpan={10} className="py-16 text-center">
+                <td colSpan={11} className="py-16 text-center">
                   <p className="text-[13px] font-semibold text-[#8F2C2C]">매칭 데이터를 확인하지 못했습니다.</p>
                   <p className="mt-1 text-[12px] text-[#615D59]">0건이 아니며, 잠시 후 다시 시도해 주세요.</p>
                   <button
@@ -939,7 +1008,7 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
               </tr>
             ) : visibleRows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
+                <td colSpan={11} className="py-16 text-center text-[13px] text-[#1a1a1a]/35">
                   {statusFilter === "review"
                     ? "처리할 매칭이 없습니다. 모두 정리됐어요."
                     : "표시할 매칭 데이터가 없습니다."}
@@ -993,6 +1062,9 @@ export default function MatchingInboxClient({ nameFilter, onClearNameFilter }: M
                           {row.validationMessage}
                         </p>
                       ) : null}
+                    </td>
+                    <td className="py-4 pr-4">
+                      <AccountServiceCell row={row} />
                     </td>
                     <td className="py-4 pr-4 text-right text-[12px] text-[#1a1a1a]/45">
                       {formatPercent(row.confidence)}

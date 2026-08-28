@@ -31,6 +31,9 @@ function row(index: number, overrides: Partial<CrmMatchingRow> = {}): CrmMatchin
     placeholder: false,
     validationState: "valid",
     validationMessage: null,
+    accountBalance: null,
+    accountExpireAt: null,
+    accountSyncedAt: null,
     ...overrides,
   }
 }

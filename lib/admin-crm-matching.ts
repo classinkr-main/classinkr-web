@@ -10,6 +10,12 @@ import {
   type CrmMatchAliasValidationRow,
   type CrmSourceLinkValidationState,
 } from "@/lib/crm/source-link-validation"
+import {
+  buildMatchingAccountServiceIndex,
+  resolveMatchingAccountService,
+  type MatchingAccountServiceIndex,
+  type MatchingAccountServiceRow,
+} from "@/lib/crm/matching-account-service"
 import type { CrmSourceLinkStatus } from "@/lib/admin-crm-revenue-types"
 import { EXTERNAL_CRM_KOREA_ONLY, getKoreaTeamManagerSet, isKoreaScopedOwner, isKoreaTeamLabel } from "@/lib/admin-crm-scope"
 import { resolveOwnerName } from "@/lib/external-crm/owner-names"
@@ -40,6 +46,15 @@ export interface CrmMatchingRow {
   placeholder: boolean
   validationState: CrmSourceLinkValidationState
   validationMessage: string | null
+  /**
+   * 연결 확정 전에 확인해야 하는 EEO 계정 두 값 — 서비스 기간과 계정 잔액.
+   * 링크가 EEO 계정까지 이어지지 않는 행은 null 이며, 화면은 값을 지어내지 않는다.
+   * accountSyncedAt 은 이 두 값이 언제 찍힌 것인지 — 외부 CRM 동기화는 수동이라
+   * 며칠 묵은 값일 수 있어 신선도를 함께 노출한다.
+   */
+  accountBalance: number | null
+  accountExpireAt: string | null
+  accountSyncedAt: string | null
 }
 
 export interface CrmMatchingSourceSummary {
@@ -358,7 +373,7 @@ async function buildAdminCrmMatchingSnapshot(): Promise<AdminCrmMatchingSnapshot
   const sb = createSupabaseAdminClient()
   const warnings: string[] = []
 
-  const [sheetResult, linksResult, aliasesResult] = await Promise.all([
+  const [sheetResult, linksResult, aliasesResult, accountServiceResult] = await Promise.all([
     fetchSupabasePages<SheetDealRow>({
       maxRows: MATCHING_SOURCE_ROW_LIMIT,
       fetchPage: (from, to) =>
@@ -399,6 +414,18 @@ async function buildAdminCrmMatchingSnapshot(): Promise<AdminCrmMatchingSnapshot
           .order("id", { ascending: true })
           .range(from, to),
     }),
+    fetchSupabasePages<MatchingAccountServiceRow>({
+      maxRows: MATCHING_LOOKUP_ROW_LIMIT,
+      fetchPage: (from, to) =>
+        sb
+          .from("crm_neo_customer_snapshots")
+          .select(
+            "account_id, balance, expire_at, source_synced_at, source_refs",
+            from === 0 ? { count: "exact" } : undefined
+          )
+          .order("account_id", { ascending: true })
+          .range(from, to),
+    }),
   ])
 
   // 핵심 모수·링크가 잘리거나 실패하면 0건으로 위장하지 않고 라우트 오류로 올린다.
@@ -427,6 +454,17 @@ async function buildAdminCrmMatchingSnapshot(): Promise<AdminCrmMatchingSnapshot
     if (result.error) warnings.push(`${label} 표시명을 읽지 못해 ID로 표시합니다.`)
     else if (result.truncated) warnings.push(`${label} 표시명이 ${MATCHING_LOOKUP_ROW_LIMIT}건 상한에서 잘렸습니다.`)
   }
+
+  // 잔액·서비스 기간은 검수 보조 정보라, 읽지 못해도 매칭 자체를 막지 않는다.
+  // 다만 "값이 없는 것"과 "못 읽은 것"을 구별해야 하므로 경고로 남긴다.
+  if (accountServiceResult.error) {
+    warnings.push("EEO 계정 잔액·서비스 기간을 읽지 못해 연결 확정 화면에서 생략합니다.")
+  } else if (accountServiceResult.truncated) {
+    warnings.push(`EEO 계정 잔액·서비스 기간이 ${MATCHING_LOOKUP_ROW_LIMIT}건 상한에서 잘렸습니다.`)
+  }
+  const accountServiceIndex: MatchingAccountServiceIndex = buildMatchingAccountServiceIndex(
+    accountServiceResult.error ? [] : accountServiceResult.data
+  )
 
   const rawSheetDeals = sheetResult.data
   const koreaManagers = getKoreaTeamManagerSet(rawSheetDeals)
@@ -480,6 +518,13 @@ async function buildAdminCrmMatchingSnapshot(): Promise<AdminCrmMatchingSnapshot
   }
 
   function toRow(link: SourceLinkRow, sourceSystem: CrmMatchingSourceSystem, overrides?: Partial<CrmMatchingRow>): CrmMatchingRow {
+    const accountService = resolveMatchingAccountService(accountServiceIndex, {
+      sourceSystem,
+      sourceObject: link.source_object,
+      sourceRecordKey: link.source_record_key,
+      targetType: link.target_type,
+      targetId: link.target_id,
+    })
     const validationState = classifyCrmSourceLinkReviewValidation(
       {
         sourceSystem,
@@ -537,6 +582,9 @@ async function buildAdminCrmMatchingSnapshot(): Promise<AdminCrmMatchingSnapshot
           : validationState === "retired_confirmed_sibling"
             ? RETIRED_SIBLING_VALIDATION_MESSAGE
             : null,
+      accountBalance: accountService?.balance ?? null,
+      accountExpireAt: accountService?.expireAt ?? null,
+      accountSyncedAt: accountService?.syncedAt ?? null,
       ...overrides,
     }
   }
@@ -600,6 +648,10 @@ async function buildAdminCrmMatchingSnapshot(): Promise<AdminCrmMatchingSnapshot
         placeholder,
         validationState: "valid",
         validationMessage: null,
+        // 시트 단독(미매칭) 행은 아직 어떤 EEO 계정에도 닿지 않았다.
+        accountBalance: null,
+        accountExpireAt: null,
+        accountSyncedAt: null,
       }
 
     if (dealLinks.length === 0) {
