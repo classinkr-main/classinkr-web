@@ -140,6 +140,27 @@ const XIAOSHOUYI_WRITE_POLICIES: Record<string, XiaoshouyiWriteObjectPolicy> = {
     requiredCreateFields: ["name"],
     ownerTransferField: "ownerId",
   },
+  activityrecord: {
+    label: "활동 기록",
+    // 추가만 하는 로그라 write-back 을 여기서 시작한다. update/delete 는 열지 않는다 —
+    // 우리가 만든 기록만 우리가 만들고, 남이 적은 기록은 건드리지 않는다.
+    operations: new Set(["create"]),
+    allowedFields: new Set([
+      "content",
+      "startTime",
+      "endTime",
+      "entityType",
+      "groupId",
+      "dimDepart",
+      "belongId",
+      "activityRecordFrom",
+      "activityRecordFrom_data",
+      "itemId",
+      "dbcRelation26",
+      "ownerId",
+    ]),
+    requiredCreateFields: ["content", "dbcRelation26"],
+  },
   ShroffAccount__c: {
     label: "EEO 계정",
     operations: new Set([]),
