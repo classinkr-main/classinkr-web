@@ -75,6 +75,17 @@ export const SOURCE_OPTIONS: SourceOption[] = [
     openLabel: "구글 캘린더에서 열기",
   },
   {
+    // 우리 DB 의 접수(showroom_bookings). 위 "showroom"(구글 ICS 확정 일정)과 다른 소스다.
+    // 색: DESIGN.md §2 Status 스케일의 Warning 강조(`#7A520F`). 이 소스는 장식 카테고리가
+    // 아니라 "아직 담당자가 확정하지 않은 요청"이라는 상태 축이라 Warning(예정·검토)이 맞다.
+    // 공개 행사(#A8741A)와 같은 앰버 계열이지만 명도가 갈려 점만 찍히는 뷰에서도 구분된다.
+    value: "showroom_booking",
+    label: "쇼룸 예약 요청",
+    dot: "#7A520F",
+    readonlyHelp: "쇼룸 예약 요청은 접수 상태 전이(확정·완료)로만 바뀝니다.",
+    openLabel: "리드 열기",
+  },
+  {
     value: "team_event",
     label: "팀원 행사",
     dot: "#6D4AA8",

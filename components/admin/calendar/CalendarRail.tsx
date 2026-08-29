@@ -13,7 +13,7 @@ import { SOURCE_OPTIONS, getSourceColor, getSourceOption } from "./event-style"
  * CalendarRail.tsx — 우측 264px 레일 카드 (3차 개편 P4, 월 뷰 기본 패널).
  *
  * 데이터 수집 상태 · {monthLabel} 소스별 통계 · 담당자 부하 · 퀵링크 3줄을 한 카드에 모은다.
- * 색·라벨·순서는 이 파일에서 새로 정의하지 않는다 — event-style.ts(SOURCE_OPTIONS 8종)와
+ * 색·라벨·순서는 이 파일에서 새로 정의하지 않는다 — event-style.ts(SOURCE_OPTIONS 전체 목록)와
  * lib/team-member-colors.ts(getTeamMemberColor)가 SSOT다. 연결 상태(ok/stale/dead) 판정도
  * lib/admin-calendar/health.ts가 SSOT — 이 파일은 그 값을 문구·색으로 옮기기만 한다.
  */
@@ -90,7 +90,7 @@ function QuickLinkRow({ href, children }: { href: string; children: React.ReactN
   )
 }
 
-/** 3개 스켈레톤 줄 — health===null && healthLoading일 때만(그 외엔 8종 목록을 "—"로 그대로 보여준다) */
+/** 3개 스켈레톤 줄 — health===null && healthLoading일 때만(그 외엔 소스 전체 목록을 "—"로 그대로 보여준다) */
 function HealthSkeleton() {
   return (
     <div className="space-y-2" aria-hidden="true">

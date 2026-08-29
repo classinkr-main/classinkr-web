@@ -23,6 +23,7 @@ import { getNotionMarketingCalendarEvents } from "@/lib/notion-marketing-calenda
 import { probeTeamCalendarAccess } from "@/lib/team-member-calendars"
 import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
 import { summarizeStoredCalendarEvents } from "@/lib/repositories/admin-calendar-events"
+import { summarizeShowroomBookings } from "@/lib/repositories/showroom-bookings"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 /**
@@ -30,7 +31,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin"
  *
  * 캘린더가 비어 있을 때 "일정이 없는 것"과 "연동이 끊긴 것"을 화면이 구분하게 하는
  * 유일한 데이터 경로. 소스마다 가장 싼 진실을 묻는다:
- *   팀·파트너 = 테이블 전량 카운트, 공개 행사 = 회차 날짜 전체,
+ *   팀·파트너·쇼룸 예약 요청 = 테이블 전량 카운트, 공개 행사 = 회차 날짜 전체,
  *   노션·쇼룸 = 최근 3개월+다음 달 윈도(월 캐시 재사용), 팀원 행사 = 접근 프로브.
  * 개별 소스 조회 실패는 그 소스만 "확인 불가"로 눕히고 나머지는 살린다.
  */
@@ -144,16 +145,25 @@ export async function GET(req: NextRequest) {
       ? `https://www.notion.so/${notionDbId.replace(/-/g, "")}`
       : undefined
 
-    const [stored, partner, publicEvents, notionDates, showroomDates, teamAccess, compass] =
-      await Promise.all([
-        timed(summarizeStoredCalendarEvents().catch(() => null)),
-        timed(partnerScheduleSummary().catch(() => null)),
-        timed(getPublicEventsAsCalendarEvents().catch(() => null)),
-        timed(feedDatesByMonths(getNotionMarketingCalendarEvents, months).catch(() => null)),
-        timed(feedDatesByMonths(getShowroomCalendarEvents, months).catch(() => null)),
-        timed(probeTeamCalendarAccess().catch(() => null)),
-        timed(compassCalendarDates(months).catch(() => null)),
-      ])
+    const [
+      stored,
+      partner,
+      publicEvents,
+      notionDates,
+      showroomDates,
+      showroomBookings,
+      teamAccess,
+      compass,
+    ] = await Promise.all([
+      timed(summarizeStoredCalendarEvents().catch(() => null)),
+      timed(partnerScheduleSummary().catch(() => null)),
+      timed(getPublicEventsAsCalendarEvents().catch(() => null)),
+      timed(feedDatesByMonths(getNotionMarketingCalendarEvents, months).catch(() => null)),
+      timed(feedDatesByMonths(getShowroomCalendarEvents, months).catch(() => null)),
+      timed(summarizeShowroomBookings().catch(() => null)),
+      timed(probeTeamCalendarAccess().catch(() => null)),
+      timed(compassCalendarDates(months).catch(() => null)),
+    ])
 
     const sources: SourceHealth[] = [
       stored.value
@@ -195,6 +205,14 @@ export async function GET(req: NextRequest) {
             lookbackMonths: FEED_LOOKBACK_MONTHS,
           })
         : unknownHealth("showroom"),
+      // 우리 테이블이라 전량 카운트가 가장 싼 진실이다(팀·파트너와 같은 규약).
+      showroomBookings.value
+        ? deriveStoredHealth({
+            source: "showroom_booking",
+            count: showroomBookings.value.count,
+            lastDate: showroomBookings.value.lastDate,
+          })
+        : unknownHealth("showroom_booking"),
       teamAccess.value ? deriveTeamAccessHealth(teamAccess.value) : unknownHealth("team_event"),
       !compass.value
         ? unknownHealth("compass_demo")
@@ -221,6 +239,7 @@ export async function GET(req: NextRequest) {
       ["event", publicEvents.durationMs],
       ["notion", notionDates.durationMs],
       ["showroom", showroomDates.durationMs],
+      ["showroom_booking", showroomBookings.durationMs],
       ["team_event", teamAccess.durationMs],
       ["compass_demo", compass.durationMs],
       // 공휴일은 이 라우트가 조회하지 않는다(자동 제공) — 캐시 상태만 있으면 함께 싣는다.

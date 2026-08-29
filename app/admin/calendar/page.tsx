@@ -83,6 +83,9 @@ const ASSIGNEE_FILTERED_SOURCES = new Set<EventSource>([
   "team_event",
   "notion",
   "showroom",
+  // 접수의 assigned_to 를 담당자로 올린다(lib/showroom/calendar-source.ts) —
+  // 담당자 미지정 요청은 필터에 걸리지 않고 그대로 보인다.
+  "showroom_booking",
   "calendar",
   "compass_demo",
 ])

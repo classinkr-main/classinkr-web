@@ -32,6 +32,7 @@ import {
 } from "@/lib/public-event-dates"
 import { getNotionMarketingCalendarEvents } from "@/lib/notion-marketing-calendar"
 import { getShowroomCalendarEvents } from "@/lib/showroom-ics-calendar"
+import { getShowroomBookingCalendarEvents } from "@/lib/showroom/calendar-source"
 import { getCompassDemoCalendarEvents } from "@/lib/compass/calendar"
 import { getTeamEventsCalendarEvents } from "@/lib/team-member-calendars"
 import { getKoreaHolidayEvents } from "@/lib/korea-holidays"
@@ -56,6 +57,10 @@ export type EventSource =
   | "event"
   | "notion"
   | "showroom"
+  // 우리 DB 의 쇼룸 예약 접수(showroom_bookings). 위 "showroom"(구글 ICS)과 **다른 원천**이다 —
+  // 확정된 일정과 담당자 확정을 기다리는 요청은 같은 점으로 보이면 안 된다.
+  // 어댑터: lib/showroom/calendar-source.ts
+  | "showroom_booking"
   | "team_event"
   | "holiday"
   // Compass(마케팅팀 앱)가 미러하는 구글 'MKT 데모일정' 캘린더. 읽기 전용 — lib/compass/calendar.ts
@@ -491,6 +496,7 @@ export async function getAllEvents(): Promise<CalendarEvent[]> {
     publicEvents,
     notionEvents,
     showroomEvents,
+    showroomBookingEvents,
     teamEventEvents,
     holidayEvents,
     compassEvents,
@@ -500,6 +506,7 @@ export async function getAllEvents(): Promise<CalendarEvent[]> {
     getPublicEventsAsCalendarEvents(),
     getNotionMarketingCalendarEvents(),
     getShowroomCalendarEvents(),
+    getShowroomBookingCalendarEvents(),
     getTeamEventsCalendarEvents(),
     getKoreaHolidayEvents(),
     getCompassDemoCalendarEvents(),
@@ -510,6 +517,7 @@ export async function getAllEvents(): Promise<CalendarEvent[]> {
     ...publicEvents,
     ...notionEvents,
     ...showroomEvents,
+    ...showroomBookingEvents,
     ...teamEventEvents,
     ...holidayEvents,
     ...compassEvents,
@@ -578,6 +586,7 @@ export async function getEventsByMonthWithDiagnostics(
     publicEvents,
     notionEvents,
     showroomEvents,
+    showroomBookingEvents,
     teamEventEvents,
     holidayEvents,
     compassEvents,
@@ -592,6 +601,7 @@ export async function getEventsByMonthWithDiagnostics(
     measure(context?.publicEvents ?? getPublicEventsAsCalendarEvents()),
     measure(getNotionMarketingCalendarEvents({ year, month })),
     measure(getShowroomCalendarEvents({ year, month })),
+    measure(getShowroomBookingCalendarEvents({ year, month })),
     measure(getTeamEventsCalendarEvents({ year, month })),
     measure(getKoreaHolidayEvents({ year, month })),
     measure(getCompassDemoCalendarEvents({ year, month })),
@@ -603,6 +613,7 @@ export async function getEventsByMonthWithDiagnostics(
     ...publicEvents.value,
     ...notionEvents.value,
     ...showroomEvents.value,
+    ...showroomBookingEvents.value,
     ...teamEventEvents.value,
     ...holidayEvents.value,
     ...compassEvents.value,
@@ -618,6 +629,11 @@ export async function getEventsByMonthWithDiagnostics(
       diagnose("event", publicEvents.value, publicEvents.durationMs),
       diagnose("notion", notionEvents.value, notionEvents.durationMs),
       diagnose("showroom", showroomEvents.value, showroomEvents.durationMs),
+      diagnose(
+        "showroom_booking",
+        showroomBookingEvents.value,
+        showroomBookingEvents.durationMs
+      ),
       diagnose("team_event", teamEventEvents.value, teamEventEvents.durationMs),
       diagnose("holiday", holidayEvents.value, holidayEvents.durationMs),
       diagnose("compass_demo", compassEvents.value, compassEvents.durationMs),
