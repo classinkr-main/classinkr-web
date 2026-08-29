@@ -8,29 +8,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Mail, MapPin, Phone, ArrowRight, MessageSquare, CheckCircle2, Loader2 } from "lucide-react"
 import Image from "next/image"
 import { motion } from "framer-motion"
+import Link from "next/link"
 import { submitLead } from "@/lib/submitLead"
 import { trackDemoRequestAdsConversion, trackEvent } from "@/lib/analytics"
 import { useToast } from "@/components/ui/toast"
+import { CONTACT_TOPICS, EVENT_CONTACT_TOPICS, isContactTopic } from "@/lib/contact/topics"
 import type { PublicEvent } from "@/lib/types/public-events"
 
-const EVENT_TOPICS = new Set(["행사 신청", "세미나 신청"])
 const PHONE_ALLOWED_INPUT_PATTERN = /^[\d\s-]*$/
 const PHONE_REJECT_ANIMATION_MS = 220
 const PHONE_REQUIRED_MESSAGE = "연락처를 입력해주세요."
 const PHONE_INVALID_CHARACTER_MESSAGE = "숫자와 하이픈만 입력할 수 있어요."
 const PHONE_TOO_LONG_MESSAGE = "전화번호는 최대 11자리까지 입력할 수 있어요."
+const PRIVACY_CONSENT_REQUIRED_MESSAGE = "개인정보 수집·이용에 동의해 주세요."
 const LEAD_MAGNET_PATTERN = /^[a-z0-9-]{1,120}$/
-
-// ?topic= 쿼리로 사전 선택 가능한 문의 유형 (가이드 문서 CTA 등에서 사용)
-const VALID_CONTACT_TOPICS = new Set([
-    "도입 상담",
-    "수업 운영 상담",
-    "결제/영수증/계약",
-    "계정/접속/기술 지원",
-    "하드웨어/설치/AS",
-    "행사 신청",
-    "세미나 신청",
-])
 
 function getPhoneDigits(value: string) {
     return value.replace(/\D/g, "")
@@ -78,6 +69,8 @@ export default function ContactPage() {
     const [eventSlug, setEventSlug] = useState("")
     const [leadMagnet, setLeadMagnet] = useState("")
     const [message, setMessage] = useState("")
+    const [privacyConsent, setPrivacyConsent] = useState(false)
+    const [privacyConsentError, setPrivacyConsentError] = useState("")
     const [events, setEvents] = useState<PublicEvent[]>([])
     const [eventsLoaded, setEventsLoaded] = useState(false)
     const formRef = useRef<HTMLFormElement>(null)
@@ -87,7 +80,7 @@ export default function ContactPage() {
     const errorMessageId = error ? "contact-form-error" : undefined
     const phoneErrorMessageId = phoneError ? "contact-phone-error" : undefined
 
-    const showEventPicker = EVENT_TOPICS.has(topic)
+    const showEventPicker = EVENT_CONTACT_TOPICS.has(topic)
     const eventPickerCategory = topic === "세미나 신청" ? "웨비나" : null
 
     useEffect(() => {
@@ -101,7 +94,7 @@ export default function ContactPage() {
         if (eventParam) {
             setTopic(sourceParam === "seminar" ? "세미나 신청" : "행사 신청")
             setEventSlug(eventParam)
-        } else if (topicParam && VALID_CONTACT_TOPICS.has(topicParam)) {
+        } else if (isContactTopic(topicParam)) {
             setTopic(topicParam)
         }
 
@@ -164,6 +157,8 @@ export default function ContactPage() {
         setTopic("")
         setEventSlug("")
         setMessage("")
+        setPrivacyConsent(false)
+        setPrivacyConsentError("")
         formRef.current?.reset()
     }
 
@@ -220,7 +215,7 @@ export default function ContactPage() {
 
         try {
             const topicValue = (formData.get("topic") as string) || topic
-            const isEventTopic = EVENT_TOPICS.has(topicValue)
+            const isEventTopic = EVENT_CONTACT_TOPICS.has(topicValue)
             const selectedEvent = isEventTopic
                 ? events.find((e) => e.slug === eventSlug)
                 : undefined
@@ -235,6 +230,13 @@ export default function ContactPage() {
             const phoneValidationMessage = getPhoneValidationMessage(phone)
             if (phoneValidationMessage) {
                 rejectPhoneInput(phoneValidationMessage)
+                setLoading(false)
+                return
+            }
+
+            if (!privacyConsent) {
+                setPrivacyConsentError(PRIVACY_CONSENT_REQUIRED_MESSAGE)
+                triggerShake()
                 setLoading(false)
                 return
             }
@@ -483,13 +485,11 @@ export default function ContactPage() {
                                         }}
                                     >
                                         <option value="" disabled>문의 유형을 선택해주세요</option>
-                                        <option value="도입 상담">도입 상담</option>
-                                        <option value="수업 운영 상담">수업 운영 상담</option>
-                                        <option value="결제/영수증/계약">결제/영수증/계약</option>
-                                        <option value="계정/접속/기술 지원">계정/접속/기술 지원</option>
-                                        <option value="하드웨어/설치/AS">하드웨어/설치/AS</option>
-                                        <option value="행사 신청">행사 신청</option>
-                                        <option value="세미나 신청">세미나 신청</option>
+                                        {CONTACT_TOPICS.map((contactTopic) => (
+                                            <option key={contactTopic.value} value={contactTopic.value}>
+                                                {contactTopic.label}
+                                            </option>
+                                        ))}
                                     </select>
                                 </div>
                                 {showEventPicker && (
@@ -541,16 +541,55 @@ export default function ContactPage() {
                                         aria-describedby={errorMessageId}
                                     />
                                 </div>
-                                <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm text-slate-600">
+                                {/* 개인정보 수집·이용 동의는 필수다. 문구(항목·목적·보유 기간)는 /privacy 2·4·5절과 같은 값을 쓴다 */}
+                                <label
+                                    htmlFor="privacy-consent"
+                                    className={`flex w-full cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 text-sm transition-colors ${privacyConsentError ? "border-[#B43E3E]" : "border-black/[0.08] hover:bg-[#F6F5F4]"}`}
+                                >
+                                    <input
+                                        id="privacy-consent"
+                                        name="privacy-consent"
+                                        type="checkbox"
+                                        checked={privacyConsent}
+                                        onChange={(e) => {
+                                            setPrivacyConsent(e.target.checked)
+                                            if (e.target.checked) setPrivacyConsentError("")
+                                        }}
+                                        aria-invalid={!!privacyConsentError}
+                                        aria-describedby={privacyConsentError ? "contact-privacy-error" : undefined}
+                                        className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                                    />
+                                    <span className="text-[#44514A]">
+                                        상담 진행을 위한 개인정보 수집·이용에 동의합니다.
+                                        <span className="ml-1 text-[#084734]">*</span>
+                                        <span className="mt-1 block text-[12px] leading-5 text-[#615D59]">
+                                            수집 항목: 이름, 소속 기관, 연락처, 이메일, 문의 내용 · 이용 목적: 도입 상담과 고객 지원 · 보유 기간: 마지막 상담일로부터 최대 3년.{" "}
+                                            <Link
+                                                href="/privacy"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="font-medium text-[#084734] underline underline-offset-2"
+                                            >
+                                                개인정보처리방침
+                                            </Link>
+                                        </span>
+                                    </span>
+                                </label>
+                                {privacyConsentError && (
+                                    <p id="contact-privacy-error" role="alert" aria-live="polite" className="w-full px-1 text-sm font-medium text-[#B43E3E]">
+                                        {privacyConsentError}
+                                    </p>
+                                )}
+                                <label className="flex w-full items-start gap-3 rounded-2xl border border-black/[0.08] bg-[#F6F5F4] px-4 py-3 text-sm text-[#44514A]">
                                     <input
                                         id="marketing-consent"
                                         name="marketing-consent"
                                         type="checkbox"
-                                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#084734] focus:ring-[#084734]"
+                                        className="mt-0.5 h-4 w-4 shrink-0 accent-[#084734] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
                                     />
                                     <span>
                                         제품 업데이트와 교육 운영 인사이트를 이메일로 받아보겠습니다.
-                                        <span className="ml-1 text-slate-400">(선택)</span>
+                                        <span className="ml-1 text-[#A39E98]">(선택)</span>
                                     </span>
                                 </label>
                                 {error && (

@@ -25,7 +25,7 @@
 | 축 | 지금 있는 것 | 비어 있는 것 | 성격 |
 |---|---|---|---|
 | 쇼룸 예약 | 구글 캘린더 ICS 읽기 전용 연동([lib/showroom-ics-calendar.ts](../../lib/showroom-ics-calendar.ts)), 어드민 캘린더 노출, 구글 캘린더 **쓰기** 헬퍼([lib/google.ts](../../lib/google.ts)) | 공개 예약 화면, 예약 저장 테이블, 슬롯·영업일 개념 전부 | **신규 구축** |
-| 구매 페이지 | 무결제 신청 파이프라인 완성(`checkout_requests` + WeCom + 리드 미러), 토스 결제 코드 완성(플래그 OFF), 하드웨어 가격 SSOT | 가격을 볼 수 있는 **공개·색인 가능한 화면**, 카탈로그 결손(S110·S65·스탠드·벽걸이), 가격 SSOT 단일화 | **노출·정합성** |
+| 구매 화면 | 무결제 신청 파이프라인 완성(`checkout_requests` + WeCom + 리드 미러), 토스 결제 코드 완성(플래그 OFF), 하드웨어 가격 SSOT | 가격·스펙 SSOT 단일화(6곳 중복), 카탈로그 결손(S110·S65·스탠드·벽걸이), `/checkout` 화면 완성도 | **정합성** |
 | 문의 페이지 | 리드 캡처 파이프라인(저장·웹훅·CRM·서버전환·신원결합) | 개인정보 수집·이용 동의, 쇼룸 유형, 리드 자격 필드(`role`/`size`), 서버 allowlist | **결손 보완** |
 
 전략 문서 3종이 "목동 쇼룸이 가장 강한 CTA"라고 명시하는데, 제품에는 쇼룸 예약 경로가 존재하지 않는다. 이번 작업의 최대 기대효과는 여기에 있다.
@@ -89,7 +89,7 @@
 
 4. **쇼룸 의향이 데이터에서 소실된다.** 쇼룸 CTA가 `?topic=하드웨어/설치/AS`로 들어와 AS 문의와 같은 `source_detail` 값으로 뭉개진다. `idx_leads_source_detail` 인덱스가 있어도 분리 집계가 불가능하다.
 5. **`/contact`가 `role`·`size`를 받지 않아 리드 스코어가 구조적으로 낮다.** [lib/crm/lead-ranking.ts](../../lib/crm/lead-ranking.ts)는 `size`만으로 최대 +34점을 준다. `leads.size`가 항상 NULL이라 같은 품질의 리드가 `demo_modal` 대비 항상 낮게 랭크된다.
-6. **가격을 볼 수 있는 공개 페이지가 없다.** `/pricing`·`/product/hw`에 가격이 없고, 가격이 있는 `/checkout`은 robots로 차단돼 있다. "전자칠판 얼마" 검색 의도를 받을 표면이 없다.
+6. **가격 정보가 6곳에 중복돼 있다.** 소프트웨어는 `lib/billing/plans.ts`·`app/product/sw/page.tsx`(JSX 하드코딩)·`components/sections/PricingCalculator.tsx`, 하드웨어는 `lib/billing/hardware-catalog.ts`·`lib/product-templates.ts`·`public/l/omo1/index.html`. 한 곳을 고치면 나머지가 조용히 어긋난다. (공개 가격 페이지 부재는 §6 D3 에서 **의도된 상태**로 확정했다.)
 7. **설치 유형이 가격에 반영되지 않는다.** 스탠드/벽걸이는 [components/checkout/CheckoutRequestForm.tsx](../../components/checkout/CheckoutRequestForm.tsx)의 라디오일 뿐인데, [lib/product-templates.ts](../../lib/product-templates.ts)에는 각 ₩500,000으로 잡혀 있다. 공개 화면에서 무료처럼 보인다.
 8. **카탈로그 결손.** S110·S65가 공개 카탈로그에 없어 `/product/hw`가 보여주는 4모델 중 2개만 신청 가능하다. 스탠드·벽걸이·녹화 1년권은 어드민 견적에만 있다.
 
@@ -115,12 +115,21 @@
 
 폼이 8곳으로 늘기 전에 공통 계약을 먼저 세운다.
 
+**P0 3건은 적용 완료(2026-08-29).**
+
+| 항목 | 적용 내용 |
+|---|---|
+| 개인정보 수집·이용 동의 | `/contact` 폼에 필수 체크박스 추가. 항목·목적·보유 기간 문구는 `/privacy` 2·4·5절 값을 그대로 쓰고 방침을 링크한다. 미동의 시 제출 차단 |
+| 문의 유형 SSOT + 서버 검증 | `lib/contact/topics.ts` 신설. 화면의 중복 정의(검증용 Set + 옵션 JSX)를 제거하고, 공개 무인증 `POST /api/lead` 경계에서 `contact_page` 리드의 유형을 검증한다 |
+| 하드웨어 스펙 SSOT화 + 교정 | `lib/hardware/board-specs.ts` 신설. S86 모델명 `BS86A`→`BS86C`, S110 전체 길이 `2,620.55`→`2,520.55mm`, S75·S86 치수·두께 교정. S110 내장 마이크는 `—`(미탑재로 읽힘)→`별도 확인`. 문서 정본 표를 파싱해 대조하는 테스트를 걸었다 |
+
+서버 검증을 **라우트 경계에만** 건 이유: `submitLeadCapture()` 자체를 조이면 서버 내부 호출자(`checkout_request:{kind}`, meets-july 랜딩의 `landing:...`, 외부 밀어넣기 `app/api/webhook/page`)가 함께 막힌다. 그들은 이 라우트를 거치지 않는다.
+
+남은 항목:
+
 | 항목 | 산출물 |
 |---|---|
-| 문의 유형 SSOT 추출 | `lib/contact/topics.ts` — 유형 정의, 라벨, 그룹, 라우팅 대상. `app/contact/page.tsx`의 `VALID_CONTACT_TOPICS` Set과 `<option>` 목록 중복 제거 |
-| 서버 allowlist | [lib/server/lead-capture.ts](../../lib/server/lead-capture.ts)가 `sourceDetail`을 위 SSOT로 검증. 미등록 값은 400 |
-| 개인정보 동의 | `/contact` 폼에 필수 체크박스 + `/privacy` 링크. `CheckoutRequestForm` 패턴 그대로 |
-| 리드 자격 필드 | `role`(직책), `size`(규모) 수집. `size` 옵션은 `ResourceDownloadForm`의 4단계 재사용(100명 이하 / 100~300 / 300~500 / 500명 이상) |
+| 리드 자격 필드 | `role`(직책), `size`(규모) 수집. `size` 옵션은 `ResourceDownloadForm`의 4단계 재사용(100명 이하 / 100~300 / 300~500 / 500명 이상). 현재 `leads.size`가 항상 NULL 이라 리드 스코어가 최대 34점 손실된다 |
 | 공용 폼 프리미티브 정착 | 신규 화면은 [components/ui/marketing-form.tsx](../../components/ui/marketing-form.tsx) + `CheckoutRequestForm` 클래스 조합을 따른다. `/contact`의 색·클래스는 참조하지 않는다 |
 
 ### Phase 1 — 쇼룸 상담 예약
@@ -201,29 +210,27 @@ created_at / updated_at timestamptz
 
 **Phase 2 후보** — 확정 시 [lib/google.ts](../../lib/google.ts)의 `createCalendarEvent()`로 구글 쇼룸 캘린더에 직접 쓰기(스코프는 이미 확보), 방문 전 리마인더, 슬롯 배타 제약(`EXCLUDE USING gist`).
 
-### Phase 2 — 전자칠판 · 소프트웨어 구매 페이지
+### Phase 2 — 전자칠판 · 소프트웨어 구매 화면
 
-**핵심 판단: `/pricing`을 "가격·구매" 페이지로 승격한다.**
+**확정(2026-08-29): 구매 화면은 공개·색인하지 않는다. 기존 `/checkout`을 디벨롭한다.**
 
-새 라우트(`/store`)를 만들지 않는 이유: `/pricing`은 이미 sitemap에 등록돼 SEO 자산이 있고, "가격"은 한국 사용자의 실제 검색 의도다. 새 라우트를 만들면 `/pricing`과 역할이 겹쳐 IA가 흐려진다.
+즉 §3의 진단 6번(가격을 볼 수 있는 공개 페이지가 없음)은 **고칠 문제가 아니라 의도된 상태**로 확정한다. 가격 노출은 캠페인 랜딩(`public/l/omo1/index.html`)과 상담 경로가 계속 담당하고, `/pricing`은 현행 라우팅 카드 역할로 둔다. `/checkout`의 `robots: noindex` + `DISALLOW_PATHS`도 그대로 유지한다.
 
-**역할 분담**
+`lib/classin-positioning.ts`의 가격 답변 원칙("최종 견적과 구체 금액은 단정하지 않고 상담 연결")과도 이 방향이 맞는다.
 
-| 라우트 | 역할 | 색인 |
+**따라서 작업 범위는 노출 확대가 아니라 정합성과 화면 완성도다.**
+
+| # | 작업 | 등급 |
 |---|---|---|
-| `/product/hw`, `/product/sw` | 제품 설득. 하단에 가격 요약 + `/pricing` 연결 | O |
-| `/pricing` | **가격 정본.** 하드웨어 가격표 + 소프트웨어 플랜표 + 충전형 규칙. 항목별 "구성 담기" → `/checkout` | O |
-| `/checkout` | 담기·합계·신청(현행). 결제가 켜지면 여기서 결제 | X (현행 유지) |
+| 1 | **하드웨어 스펙 SSOT화 + 교정** — `/product/hw`가 스펙을 페이지 안에 들고 있어 규격서 교정을 놓쳤다. 구조화 정본 모듈로 내리고 문서 정본과 대조하는 테스트를 건다 | P0 |
+| 2 | **가격 SSOT 단일화** — 소프트웨어 가격이 3곳(`lib/billing/plans.ts` / `app/product/sw/page.tsx` JSX 하드코딩 / `components/sections/PricingCalculator.tsx`), 하드웨어 가격이 3곳(`lib/billing/hardware-catalog.ts` / `lib/product-templates.ts` / `public/l/omo1/index.html`)에 중복된다 | P1 |
+| 3 | **설치 유형을 가격에 반영** — 스탠드/벽걸이가 라디오일 뿐인데 `lib/product-templates.ts`에는 각 ₩500,000이다. 공개 화면에서 무료처럼 보인다 | P1 |
+| 4 | **카탈로그 결손 정리** — S110·S65가 공개 카탈로그에 없어 `/product/hw`가 보여주는 4모델 중 2개만 신청 가능하다. 스탠드·벽걸이·녹화 1년권도 어드민 견적에만 있다 | P1 |
+| 5 | **`/checkout` 화면 완성도** — 장바구니 상태가 `useState`뿐이라 새로고침하면 사라진다. SW+HW 혼합 주문 불가(`kind`가 택1) | P2 |
+| 6 | **부가세 표기 기준** — 소프트웨어는 VAT 언급 자체가 없고 하드웨어는 "부가세 별도" 한 줄뿐이다 | P2 |
+| 7 | **`checkout_requests` 어드민 조회 화면** — 신청 건이 리드 미러링으로만 발견된다 | P2 |
 
-**작업**
-
-1. **가격 SSOT 단일화 (P0).** 현재 소프트웨어 가격이 3곳(`lib/billing/plans.ts` / `app/product/sw/page.tsx` JSX 하드코딩 / `components/sections/PricingCalculator.tsx`), 하드웨어 가격이 3곳(`lib/billing/hardware-catalog.ts` / `lib/product-templates.ts` / `public/l/omo1/index.html`)에 중복된다. `/pricing`·`/product/sw`·시뮬레이터가 모두 `plans.ts`·`hardware-catalog.ts`에서 파생하도록 바꾼다.
-2. **하드웨어 스펙 교정 (P0).** `app/product/hw/page.tsx`의 `specGroups`를 [classin-software-feature-inventory.md](./classin-software-feature-inventory.md) §8 또는 [lib/docs.ts](../../lib/docs.ts)의 `board-lineup-specs`에서 파생시킨다.
-3. **카탈로그 보강.** S110·S65 취급 여부, 스탠드/벽걸이 별도 라인(각 ₩500,000), 녹화 1년권(₩300,000)의 공개 노출 여부를 확정한다(§6 열린 결정).
-4. **부가세 표기 기준.** 소프트웨어는 VAT 언급 자체가 없고 하드웨어는 "부가세 별도" 텍스트 한 줄뿐이다. 공개 가격 페이지를 만들면 공급가/부가세 표기 규칙을 정해야 한다.
-5. **`/pricing`의 `/checkout` 링크 문제.** 공개 색인 페이지가 robots 차단 페이지를 가리키는 현재 구조를 정리한다. 가격은 `/pricing`에서 다 보이고, `/checkout`은 "담기·신청" 트랜잭션으로만 남긴다.
-
-카피는 [brand-canon/voice-charter.md](./brand-canon/voice-charter.md)의 제품 표면 톤("자신감 있는 차별화 / 운영 흐름 중심 / 스펙 나열만 금지")과 `lib/classin-positioning.ts`의 가격 답변 원칙("최종 견적과 구체 금액은 단정하지 않고 상담 연결")을 따른다. 즉 **표준 구성 가격은 공개하되, 최종 견적은 상담으로 연결**한다.
+카피는 [brand-canon/voice-charter.md](./brand-canon/voice-charter.md)의 제품 표면 톤("자신감 있는 차별화 / 운영 흐름 중심 / 스펙 나열만 금지")을 따른다.
 
 ### Phase 3 — 문의 페이지 항목 정리
 
@@ -243,7 +250,7 @@ created_at / updated_at timestamptz
 |---|---|---|---|
 | 도입 검토 | 도입 상담 / 견적 요청 | 규모, 직책, 관심 제품(HW/SW/둘 다) | 영업 |
 | 방문·체험 | 쇼룸 방문 예약 | → `/showroom` 브릿지 | 영업 |
-| 구매 | 구매·주문 문의 | → `/pricing` 브릿지 | 영업 |
+| 구매 | 구매·주문 문의 | → `/checkout` 브릿지 | 영업 |
 | 사용 중 | 수업 운영 상담 / 계정·기술 지원 / 하드웨어 설치·AS | — | CS |
 | 정산 | 결제·영수증·계약 | — | CS |
 | 행사 | 행사 신청 / 세미나 신청 | 행사 선택(현행) | 마케팅 |
@@ -267,7 +274,7 @@ Phase 0  공통 기반          — 폼이 8곳으로 늘기 전에 계약을 �
    ↓
 Phase 1  쇼룸 예약          — 기대효과 최대. 전략 문서가 요구하는데 제품에 없다
    ↓
-Phase 2  구매 페이지        — 가격 SSOT 정리가 선행되어야 화면이 안 어긋난다
+Phase 2  구매 화면          — 가격·스펙 SSOT 를 모아야 화면이 다시 안 어긋난다
    ↓
 Phase 3  문의 폼 재구성      — 1·2가 있어야 "어디로 보낼지"가 정해진다
 ```
@@ -276,19 +283,26 @@ Phase 0의 P0 3건(개인정보 동의 · 서버 allowlist · 하드웨어 스�
 
 ---
 
-## 6. 착수 전 확정이 필요한 결정
+## 6. 확정된 결정과 남은 결정
+
+### 확정 (2026-08-29)
+
+| # | 결정 | 확정 내용 |
+|---|---|---|
+| D2 | 쇼룸 예약 확정 방식 | **요청형** — 고객이 날짜·시간대를 고르면 접수되고, 담당자가 확인 후 확정 연락. ICS가 읽기 전용 5분 캐시라 실시간 확정은 더블부킹 위험 |
+| D3 | 구매 화면 노출 | **공개하지 않는다.** `/pricing` 승격도 `/store` 신설도 하지 않고, 기존 `/checkout`을 디벨롭한다. noindex·robots 차단 유지 |
+| — | 착수 순서 | Phase 0의 P0 3건(개인정보 동의 · 서버 allowlist · 하드웨어 스펙 교정) 먼저 |
+
+### 남은 결정
 
 | # | 결정 | 기본 제안 |
 |---|---|---|
 | D1 | 쇼룸 운영 슬롯 — 요일·시간대·1회 소요시간·동시 접수 가능 팀 수 | 평일 10/11/14/15/16시, 60분, 동시 1팀 |
-| D2 | 예약 확정 방식 — 1차 요청형 vs 처음부터 확정형 | 요청형(담당자 확정) |
-| D3 | 구매 페이지 라우트 — `/pricing` 승격 vs `/store` 신설 | `/pricing` 승격 |
 | D4 | S110·S65 공개 카탈로그 취급 여부 | 상담 전용 유지(현행) |
-| D5 | 스탠드·벽걸이·녹화 1년권 공개 가격 노출 여부 | 노출(설치 유형이 가격에 반영되어야 함) |
+| D5 | 스탠드·벽걸이·녹화 1년권을 `/checkout` 주문 라인에 노출할지 | 노출(설치 유형이 가격에 반영되어야 함) |
 | D6 | 공개 가격의 부가세 표기 — 별도 vs 포함 | 별도 표기 통일 |
 | D7 | 쇼룸 예약 어드민 화면 위치 — `/admin/crm` vs `/admin/calendar` 레일 | 캘린더 레일에 요청 큐 + CRM 리드 미러 |
-
----
+| D8 | S65 스펙 — 규격서 미확보로 미검증인 수치를 계속 공개할지 | 규격서 확보 후 갱신, 그전까지 현행 유지 |
 
 ## 7. 검증 기준
 
