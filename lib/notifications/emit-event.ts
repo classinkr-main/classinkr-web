@@ -364,6 +364,32 @@ function buildCheckoutRequestWecomText(input: EmitNotificationEventInput) {
   ]).join("\n")
 }
 
+/**
+ * 쇼룸 방문 예약 접수(showroom.booking_requested) — 1차는 요청형이라 담당자가 확정
+ * 연락을 해야 끝난다. 창을 열지 않고도 바로 전화할 수 있게 일시·연락처·관심사를 다 편다.
+ */
+function buildShowroomBookingWecomText(input: EmitNotificationEventInput) {
+  const role = getPayloadValue(input, "role")
+  const name = getPayloadValue(input, "name")
+
+  return compactLines([
+    "목동 쇼룸 방문 예약이 1건 들어왔습니다 (확정 연락 필요)",
+    "",
+    labeledLine("희망 일시", getPayloadValue(input, "visitLabel")),
+    labeledLine("학원", getPayloadValue(input, "org")),
+    labeledLine("담당자", name && role ? `${name} (${role})` : name),
+    labeledLine("연락처", getPayloadValue(input, "phone")),
+    labeledLine("이메일", getPayloadValue(input, "email")),
+    labeledLine("방문 인원", countLabel(getPayloadValue(input, "visitorCount"))),
+    labeledLine("학원 규모", getPayloadValue(input, "academySize")),
+    labeledLine("보고 싶은 것", getPayloadValue(input, "interests")),
+    labeledLine("메모", getPayloadValue(input, "memo")),
+    labeledLine("접수 경로", getPayloadValue(input, "sourcePage")),
+    labeledLine("접수 번호", getPayloadValue(input, "bookingId")),
+    labeledLine("확인", formatRouteUrl(input.routeUrl)),
+  ]).join("\n")
+}
+
 function buildCsNoticeWecomText(input: EmitNotificationEventInput) {
   if (input.eventType === "channel_talk.message") {
     return compactLines([
@@ -420,6 +446,15 @@ function buildWecomPayload(input: EmitNotificationEventInput) {
       msgtype: "text",
       text: {
         content: buildCheckoutRequestWecomText(input),
+      },
+    }
+  }
+
+  if (input.eventType === "showroom.booking_requested") {
+    return {
+      msgtype: "text",
+      text: {
+        content: buildShowroomBookingWecomText(input),
       },
     }
   }

@@ -256,6 +256,8 @@ export default function ContactPage() {
                 name: formData.get("name") as string,
                 phone,
                 email: (formData.get("email") as string) || undefined,
+                role: (formData.get("role") as string) || undefined,
+                size: (formData.get("size") as string) || undefined,
                 message,
                 marketingConsent: formData.get("marketing-consent") === "on",
                 eventSlug: selectedEvent?.slug ?? undefined,
@@ -467,6 +469,26 @@ export default function ContactPage() {
                                     <div className="space-y-3 w-full">
                                         <Label htmlFor="email" className="text-slate-700 font-bold ml-1">이메일 (선택)</Label>
                                         <Input id="email" name="email" placeholder="example@classin.com" type="email" className="w-full bg-white border-slate-200 focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base" />
+                                    </div>
+                                </div>
+                                <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-3 w-full">
+                                        <Label htmlFor="role" className="text-[#111110] font-bold ml-1">직책 (선택)</Label>
+                                        <Input id="role" name="role" placeholder="예: 원장, 부원장, 운영실장" className="w-full bg-white border-[#E5E5E0] focus-visible:ring-[#084734] h-11 rounded-xl shadow-sm text-base" />
+                                    </div>
+                                    <div className="space-y-3 w-full">
+                                        <Label htmlFor="size" className="text-[#111110] font-bold ml-1">학원 규모 (선택)</Label>
+                                        <select
+                                            id="size"
+                                            name="size"
+                                            className="h-11 w-full rounded-xl border border-[#E5E5E0] bg-white px-4 text-base shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#084734]"
+                                        >
+                                            <option value="">학원 규모를 선택해주세요</option>
+                                            <option value="100명 이하">100명 이하</option>
+                                            <option value="100~300명">100~300명</option>
+                                            <option value="300~500명">300~500명</option>
+                                            <option value="500명 이상">500명 이상</option>
+                                        </select>
                                     </div>
                                 </div>
                                 <div className="space-y-3 w-full">

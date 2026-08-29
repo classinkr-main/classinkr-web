@@ -6,6 +6,7 @@ import {
   buildMonthGrid,
   clampToRange,
   compareIsoDate,
+  type DesiredDateRange,
   formatDesiredDateLabel,
   formatMonthLabel,
   getKstToday,
@@ -107,6 +108,74 @@ describe("선택 가능 범위", () => {
     expect(clampToRange("2030-01-01", range)).toBe(range.maxIso)
     expect(clampToRange("2026-08-15", range)).toBe("2026-08-15")
     expect(clampToRange("nope", range)).toBe(range.minIso)
+  })
+})
+
+/**
+ * disabledIsoDates — 쇼룸 예약(/showroom)이 주말·공휴일·마감된 날짜를 개별로 막는 데 쓸
+ * 선택적 필드. /checkout 은 이 필드를 넘기지 않으므로 위 "선택 가능 범위" 블록의 모든
+ * 테스트가 그대로 하위 호환 증거이기도 하다 — 여기서는 새 필드 자체의 동작만 고정한다.
+ */
+describe("disabledIsoDates — 개별 날짜 차단(쇼룸 예약용)", () => {
+  const todayIso = "2026-07-27"
+  const baseRange: DesiredDateRange = {
+    minIso: getMinDesiredDate(todayIso), // 2026-07-28
+    maxIso: getMaxDesiredDate(todayIso),
+  }
+
+  it("안 넘기면(undefined) 기존과 완전히 동일하게 동작한다 — 하위 호환", () => {
+    expect(isDesiredDateSelectable("2026-07-28", baseRange)).toBe(true)
+    expect(isDesiredDateSelectable("2026-07-27", baseRange)).toBe(false) // 오늘은 여전히 최소 미만
+    expect(isDesiredDateSelectable(baseRange.maxIso, baseRange)).toBe(true)
+  })
+
+  it("빈 Set 을 넘겨도 기존과 동일하다", () => {
+    const range: DesiredDateRange = { ...baseRange, disabledIsoDates: new Set() }
+    expect(isDesiredDateSelectable("2026-07-28", range)).toBe(true)
+    expect(isDesiredDateSelectable("2026-08-01", range)).toBe(true)
+  })
+
+  it("집합에 든 날짜는 범위 안이어도 선택 불가로 판정된다", () => {
+    const range: DesiredDateRange = {
+      ...baseRange,
+      disabledIsoDates: new Set(["2026-08-01", "2026-08-02"]), // 예: 주말이라 가정
+    }
+    expect(isDesiredDateSelectable("2026-08-01", range)).toBe(false)
+    expect(isDesiredDateSelectable("2026-08-02", range)).toBe(false)
+    // 집합에 없는 날짜는 여전히 선택 가능 — 다른 날짜에 영향이 새지 않는다.
+    expect(isDesiredDateSelectable("2026-07-31", range)).toBe(true)
+    expect(isDesiredDateSelectable("2026-08-03", range)).toBe(true)
+  })
+
+  it("min/max 범위 밖 판정은 disabledIsoDates 유무와 무관하게 그대로다", () => {
+    const range: DesiredDateRange = {
+      ...baseRange,
+      disabledIsoDates: new Set(["2026-08-01"]),
+    }
+    expect(isDesiredDateSelectable(todayIso, range)).toBe(false)
+    expect(isDesiredDateSelectable(addDays(baseRange.maxIso, 1), range)).toBe(false)
+    // 범위 안 + 집합에 없는 날짜는 여전히 선택 가능.
+    expect(isDesiredDateSelectable(baseRange.minIso, range)).toBe(true)
+  })
+
+  it("선택 불가 날짜와 범위 밖이 겹쳐도 결과는 같다(둘 다 false)", () => {
+    const outOfRange = addDays(baseRange.maxIso, 5)
+    const range: DesiredDateRange = {
+      ...baseRange,
+      // 범위 밖 날짜와 오늘(최소 미만)을 disabledIsoDates 에도 중복으로 넣어본다.
+      disabledIsoDates: new Set([outOfRange, todayIso]),
+    }
+    expect(isDesiredDateSelectable(outOfRange, range)).toBe(false)
+    expect(isDesiredDateSelectable(todayIso, range)).toBe(false)
+  })
+
+  it("형식이 깨진 값은 disabledIsoDates 와 무관하게 여전히 선택 불가다", () => {
+    const range: DesiredDateRange = {
+      ...baseRange,
+      disabledIsoDates: new Set(["2026-02-30"]),
+    }
+    expect(isDesiredDateSelectable("2026-02-30", range)).toBe(false)
+    expect(isDesiredDateSelectable("", range)).toBe(false)
   })
 })
 
