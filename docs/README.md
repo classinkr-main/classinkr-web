@@ -87,6 +87,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 견적 작성/저장/발송/기록/응답/열람 기능축별 결손과 구현 우선순위
 - [active/software-checkout-revamp-plan.md](./active/software-checkout-revamp-plan.md)
   - /checkout 구독형/충전형 재정렬 실행안
+- [active/contact-showroom-store-develop-plan-2026-08-29.md](./active/contact-showroom-store-develop-plan-2026-08-29.md)
+  - **컨택·쇼룸 예약·구매 화면 실행 기준.** /contact 항목 재편, 신설 /showroom 예약(슬롯·스키마·가용성), /pricing 가격 페이지 승격과 가격 SSOT 단일화. 결제 활성화 이전 단계까지가 범위
 - [active/docs-center-db-design.md](./active/docs-center-db-design.md)
   - 공개 가이드/매뉴얼/도움말/문제 해결/업데이트 문서센터와 챗봇 지식 베이스 설계
 - [active/docs-center-content-guidelines.md](./active/docs-center-content-guidelines.md)
