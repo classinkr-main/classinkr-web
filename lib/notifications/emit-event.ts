@@ -115,6 +115,11 @@ function countLabel(value?: string) {
   return `${value ?? "0"}개`
 }
 
+/** 사람 수 단위. countLabel 은 "개"라 인원에는 쓸 수 없다. */
+function peopleLabel(value?: string) {
+  return value ? `${value}명` : undefined
+}
+
 function formatDigestDelta(value?: string) {
   if (!value) return "0"
   const delta = Number(value)
@@ -380,7 +385,7 @@ function buildShowroomBookingWecomText(input: EmitNotificationEventInput) {
     labeledLine("담당자", name && role ? `${name} (${role})` : name),
     labeledLine("연락처", getPayloadValue(input, "phone")),
     labeledLine("이메일", getPayloadValue(input, "email")),
-    labeledLine("방문 인원", countLabel(getPayloadValue(input, "visitorCount"))),
+    labeledLine("방문 인원", peopleLabel(getPayloadValue(input, "visitorCount"))),
     labeledLine("학원 규모", getPayloadValue(input, "academySize")),
     labeledLine("보고 싶은 것", getPayloadValue(input, "interests")),
     labeledLine("메모", getPayloadValue(input, "memo")),
