@@ -1,5 +1,7 @@
 import type { Metadata } from "next"
 
+import { BOARD_MODEL_NAMES, BOARD_SPEC_MODELS } from "@/lib/hardware/board-specs"
+
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://classin.co.kr").replace(/\/$/, "")
 export const SITE_NAME = "Classin"
 export const DEFAULT_SITE_TITLE = "Classin — 학원 운영의 새로운 기준"
@@ -319,7 +321,9 @@ export function createHardwareProductJsonLd(): JsonLdNode {
     category: "교육용 전자칠판",
     description:
       "Classin Board는 판서, 4K AI 카메라 자동 추적, 수업 영상 업로드, 판서 PDF 공유, Classin 소프트웨어 연동을 제공하는 교육용 전자칠판입니다.",
-    model: ["BS110A", "BS86A", "BS75A", "BS65A"],
+    // 모델명 정본은 lib/hardware/board-specs.ts 다. 여기에 다시 적으면 검색엔진이
+    // 읽는 면에서 조용히 갈라진다(BS86A ↔ BS86C 로 실제 갈라진 적이 있다).
+    model: BOARD_SPEC_MODELS.map((model) => BOARD_MODEL_NAMES[model]),
     additionalProperty: [
       { "@type": "PropertyValue", name: "화면 크기", value: "65, 75, 86, 110인치" },
       { "@type": "PropertyValue", name: "터치 포인트", value: "최대 50점" },

@@ -37,11 +37,23 @@ export const BOARD_SPEC_VERIFIED: Record<BoardSpecModel, boolean> = {
   s65: false,
 }
 
+/**
+ * 규격서 기준 모델명. 스펙표와 `/product/hw` JSON-LD(`lib/seo.ts`)가 **같은 값을 써야 한다** —
+ * JSON-LD 는 검색엔진이 읽는 면이라 여기서 갈라지면 잘못된 모델명이 색인된다.
+ * 실제로 BS86A(정본 BS86C)가 양쪽에 각각 박혀 있었다.
+ */
+export const BOARD_MODEL_NAMES: Record<BoardSpecModel, string> = {
+  s110: "BS110A",
+  s86: "BS86C",
+  s75: "BS75A",
+  s65: "BS65A",
+}
+
 export const BOARD_SPEC_GROUPS: readonly BoardSpecGroup[] = [
   {
     category: "제품 사양",
     rows: [
-      { label: "모델명", s110: "BS110A", s86: "BS86C", s75: "BS75A", s65: "BS65A" },
+      { label: "모델명", ...BOARD_MODEL_NAMES },
       { label: "화면 크기", s110: '110"', s86: '86"', s75: '75"', s65: '65"' },
       // 전체 크기는 가로 × 세로(높이) × 두께. 규격서 기준값이다.
       { label: "전체 길이", s110: "2,520.55mm", s86: "1,964.08mm", s75: "1,718.18mm", s65: "1,508.71mm" },

@@ -3,7 +3,8 @@ import { fileURLToPath } from "node:url"
 
 import { describe, expect, it } from "vitest"
 
-import { BOARD_SPEC_GROUPS, type BoardSpecModel } from "@/lib/hardware/board-specs"
+import { BOARD_MODEL_NAMES, BOARD_SPEC_GROUPS, type BoardSpecModel } from "@/lib/hardware/board-specs"
+import { createHardwareProductJsonLd } from "@/lib/seo"
 
 /**
  * `/product/hw` 스펙표가 문서 정본과 갈라지는 것을 막는다.
@@ -103,6 +104,19 @@ describe("Classin Board 스펙표 ↔ 문서 정본", () => {
     // 규격서에 기재가 없을 뿐이다. "—" 로 두면 미탑재로 읽힌다.
     expect(readDocRow("마이크").s110).toContain("미기재")
     expect(readSpecRow("내장 마이크").s110).toBe("별도 확인")
+  })
+
+  it("JSON-LD 모델명이 스펙표와 같은 값을 쓴다", () => {
+    // 검색엔진이 읽는 면이라 여기서 갈라지면 잘못된 모델명이 색인된다.
+    const jsonLd = createHardwareProductJsonLd() as { model?: unknown }
+    expect(jsonLd.model).toEqual([
+      BOARD_MODEL_NAMES.s110,
+      BOARD_MODEL_NAMES.s86,
+      BOARD_MODEL_NAMES.s75,
+      BOARD_MODEL_NAMES.s65,
+    ])
+    // 정본과 어긋났던 값이 되살아나지 않는지 직접 확인한다.
+    expect(jsonLd.model).not.toContain("BS86A")
   })
 
   it("모든 그룹의 행이 네 모델 값을 빠짐없이 갖는다", () => {
