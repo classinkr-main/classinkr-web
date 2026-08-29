@@ -668,11 +668,20 @@ export default function ContactPage() {
                                         <MapPin className="w-[17px] h-[17px]" strokeWidth={1.8} />
                                     </div>
                                     <div>
-                                        <h4 className="font-bold text-slate-900 mb-0.5 text-sm">오피스 위치</h4>
+                                        <h4 className="font-bold text-slate-900 mb-0.5 text-sm">목동 쇼룸 · 한국 지사</h4>
                                         <p className="text-slate-600 font-medium leading-relaxed">
                                             서울시 양천구 목동동로 233-1<br />
                                             806호
                                         </p>
+                                        {/* 쇼룸 방문은 날짜·시간대를 골라야 해서 문의 폼과 필드가 다르다 — 전용 예약 화면으로 보낸다. */}
+                                        <Link
+                                            href="/showroom"
+                                            onClick={() => trackEvent("click_cta", { button: "contact_showroom_booking", page: "/contact" })}
+                                            className="mt-2 inline-flex items-center gap-1.5 rounded-[6px] text-sm font-semibold text-[#084734] underline underline-offset-4 transition-colors hover:text-[#065c41] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#084734]"
+                                        >
+                                            쇼룸 방문 예약하기
+                                            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                                        </Link>
                                     </div>
                                 </div>
                             </div>

@@ -5260,7 +5260,7 @@ const docs: DocArticle[] = [
     resources: [
       { label: "수업 시스템 OS 진단 체크리스트", href: "/resources/academy-system-checklist", description: "수업·녹화·교안·과제·학생 관리가 흩어져 있는지 점검하는 진단 자료입니다." },
       { label: "Zoom·전자칠판·LMS 비교 도입 워크시트", href: "/resources/academy-software-selection-worksheet", description: "줌·전자칠판·LMS와 클래스인을 기능명이 아니라 운영 흐름으로 비교합니다." },
-      { label: "목동 쇼룸 상담 신청", href: "/contact", description: "우리 학원 수업 한 편을 기준으로 도구 분산 문제와 도입 범위를 점검합니다." }
+      { label: "목동 쇼룸 방문 예약", href: "/showroom", description: "우리 학원 수업 한 편을 기준으로 도구 분산 문제와 도입 범위를 점검합니다." }
     ],
     relatedSlugs: ["academy-system-os-positioning","customer-stories","value-and-cost-framing","software-overview","board-overview"],
     status: "published",
@@ -5313,7 +5313,7 @@ const docs: DocArticle[] = [
       { label: "클래스인 패키지·가격 안내 (Education OS)", href: "https://classin.ai.kr/l/omo1", description: "학원 규모·상황별 패키지 구성을 한눈에 볼 수 있는 안내 페이지입니다." },
       { label: "강사 리소스 절감 계산 워크시트", href: "/resources/academy-resource-reduction-calculator", description: "가격 부담을 줄어드는 강사 리소스와 반복 업무 시간 관점으로 환산해 봅니다." },
       { label: "전자칠판, 카메라, 스탠드/벽걸이, 소프트웨어 포함 견적 상담", href: "/contact", description: "교실 환경과 도입 범위를 공유하면 구성과 정확한 견적을 안내합니다." },
-      { label: "목동 쇼룸에서 실제 수업 흐름 보기", href: "/contact", description: "OPS 내장 통합형 보드의 판서·녹화·소프트웨어 흐름을 직접 확인할 수 있습니다." },
+      { label: "목동 쇼룸에서 실제 수업 흐름 보기", href: "/showroom", description: "OPS 내장 통합형 보드의 판서·녹화·소프트웨어 흐름을 직접 확인할 수 있습니다." },
       { label: "ClassIn API 공식 문서", href: "https://docs.eeo.cn/api/en/", description: "결제·고급 리포트 등 약한 영역을 외부 시스템과 연동할 때 참고합니다." }
     ],
     relatedSlugs: ["academy-system-os-positioning","board-lineup-specs","board-install-readiness","billing-upgrade","why-classin-needs"],
@@ -5354,7 +5354,7 @@ const docs: DocArticle[] = [
       { label: "ClassIn 90일 파일럿 도입 로드맵", href: "/resources/classin-90-day-adoption-roadmap", description: "도입 일정이 구체화된 학원을 위한 30/60/90일 파일럿 순서와 기준입니다." },
       { label: "수업 시스템 OS 진단 체크리스트", href: "/resources/academy-system-checklist", description: "진단 단계에서 우리 학원의 수업·녹화·과제·관리가 한 시스템으로 이어지는지 점검합니다." },
       { label: "ClassIn EDB 파일 만들기 공식 가이드", href: "https://www.classin.com/kr/how-to-create-edb-files/", description: "온보딩 단계의 EDB 교안 전환에서 참고할 공식 자료입니다." },
-      { label: "목동 쇼룸·도입 상담 신청", href: "/contact", description: "파일럿 교실과 90일 일정, 패키지 범위를 함께 잡습니다." }
+      { label: "목동 쇼룸 방문 예약", href: "/showroom", description: "파일럿 교실과 90일 일정, 패키지 범위를 함께 잡습니다." }
     ],
     relatedSlugs: ["academy-system-os-positioning","board-install-readiness","teacher-onboarding","student-onboarding","admin-operation-standardization"],
   },

@@ -20,6 +20,7 @@ const staticRoutes: Array<{
   { path: "/product/ai-report", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-08-28" },
   { path: "/pricing", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-06-10" },
   { path: "/contact", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-04-01" },
+  { path: "/showroom", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-08-29" },
   { path: "/privacy", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-04-01" },
   { path: "/terms", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-04-01" },
   { path: "/data-deletion", changeFrequency: "yearly", priority: 0.5, lastModified: "2026-04-01" },

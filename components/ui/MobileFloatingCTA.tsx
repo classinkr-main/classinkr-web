@@ -56,7 +56,10 @@ export function MobileFloatingCTA() {
         pathname.startsWith("/checkout") ||
         pathname.startsWith("/contact") ||
         pathname.startsWith("/pricing") ||
-        pathname.startsWith("/receipt")
+        pathname.startsWith("/receipt") ||
+        // 쇼룸은 페이지 자체가 예약 폼을 들고 있다 — 떠 있는 문의 CTA 와 겹치면
+        // 같은 화면에서 서로 다른 전환 경로를 두 개 제시하게 된다.
+        pathname.startsWith("/showroom")
     ) {
         return null
     }

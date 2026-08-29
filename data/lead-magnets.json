@@ -184,8 +184,8 @@
         "description": "운영 누수 진단 후 대표 수업으로 실제 흐름을 검증할 준비를 합니다."
       },
       {
-        "label": "목동 쇼룸 상담 신청",
-        "href": "/contact#contact-form",
+        "label": "목동 쇼룸 방문 예약",
+        "href": "/showroom",
         "description": "우리 학원 수업 한 편을 기준으로 하드웨어와 소프트웨어 조합을 검토합니다."
       },
       {
