@@ -6,6 +6,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { ExternalLink } from "lucide-react"
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 import { formatNumber } from "./shared"
 
 // 고객 건강도 도넛 — 활성 고객(neo_account)의 안전/주의/위험 실분포(computeCustomerHealth SSOT).
@@ -25,8 +26,11 @@ export default function CrmHealthDonut() {
     let alive = true
     adminFetchJsonCached<{ distribution: CrmHealthDist }>("/api/admin/crm/health-distribution", undefined, {
       cacheKey: "/api/admin/crm/health-distribution",
-      ttlMs: 120_000,
-      staleWhileRevalidateMs: 300_000,
+      ttlMs: CRM_CACHE_TTL_MS,
+      staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+      onRevalidated: ({ data: fresh }) => {
+        if (alive && fresh) setDist(fresh.distribution)
+      },
     })
       .then((res) => {
         if (alive) {

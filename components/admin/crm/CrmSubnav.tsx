@@ -37,7 +37,7 @@ const CUSTOMERS_SUBTABS = [
   { key: "unified", href: "/admin/crm/customers/unified", label: "통합", icon: <Users className="h-3.5 w-3.5" /> },
   { key: "leads", href: "/admin/crm/customers/leads", label: "리드", icon: <PhoneCall className="h-3.5 w-3.5" /> },
   { key: "accounts", href: "/admin/crm/customers/accounts", label: "원천 고객", icon: <Building2 className="h-3.5 w-3.5" /> },
-  { key: "map", href: "/admin/crm/customers/map", label: "지도 원천", icon: <MapPinned className="h-3.5 w-3.5" /> },
+  { key: "map", href: "/admin/crm/customers/map", label: "지도", icon: <MapPinned className="h-3.5 w-3.5" /> },
 ] satisfies Array<{ key: CustomersSub; href: string; label: string; icon: ReactNode }>
 
 const SUBTAB_WARMUP_REQUESTS: Record<string, string[]> = {
@@ -50,7 +50,7 @@ const SUBTAB_WARMUP_REQUESTS: Record<string, string[]> = {
     "/api/admin/leads/activity-summary",
   ],
   "/admin/crm/customers/accounts": ["/api/admin/crm/customers-neo"],
-  "/admin/crm/customers/map": ["/api/admin/crm/map-source"],
+  "/admin/crm/customers/map": ["/api/admin/crm/region-map", "/api/admin/crm/map-source"],
   "/admin/crm/deals": [
     "/api/admin/crm/revenue?months=6",
     "/api/admin/crm/readiness",

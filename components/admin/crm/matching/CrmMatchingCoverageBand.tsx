@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Layers } from "lucide-react"
 
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
 import { coverageTone, COVERAGE_TONE_CLASS } from "@/lib/crm/coverage"
 import { formatCNY } from "@/lib/crm/money-format"
 
@@ -67,7 +68,10 @@ export default function CrmMatchingCoverageBand({ onSelectAccount, activeName }:
     adminFetchJsonCached<CoverageResponse>("/api/admin/crm/coverage", undefined, {
       cacheKey: "/api/admin/crm/coverage",
       ttlMs: 90_000,
-      staleWhileRevalidateMs: 5 * 60_000,
+      staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+      onRevalidated: ({ data: fresh }) => {
+        if (alive && fresh) setRev(fresh.revAccounts ?? null)
+      },
     })
       .then((data) => {
         if (!alive) return

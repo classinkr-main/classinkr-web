@@ -13,7 +13,7 @@ const CRM_ROUTE_LABEL_RULES: readonly CrmRouteLabelRule[] = [
   { prefix: "/admin/crm/customers/unified", label: "통합 고객" },
   { prefix: "/admin/crm/customers/leads", label: "리드" },
   { prefix: "/admin/crm/customers/accounts", label: "원천 고객" },
-  { prefix: "/admin/crm/customers/map", label: "지도 원천" },
+  { prefix: "/admin/crm/customers/map", label: "지도" },
   { prefix: "/admin/crm/customers", label: "고객 360" },
   { prefix: "/admin/crm/partners/customers", label: "원천 고객" },
   { prefix: "/admin/crm/deals/rev-sheet", label: "REV 스냅샷" },

@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowUpRight, Link2, MapPin, MapPinned, Minus, Plus, Rot
 import {
   KOREA_PROVINCE_BY_LABEL,
   KOREA_PROVINCE_HEIGHT,
+  KOREA_PROVINCE_LABEL_NUDGE as LABEL_NUDGE,
   KOREA_PROVINCE_SHAPES,
   KOREA_PROVINCE_WIDTH,
 } from "@/lib/branch/korea-province-map"
@@ -174,17 +175,6 @@ const DIMMED_FILL = "#D5D2CB"
 // Manual offsets for metropolitan-city labels that would otherwise collide
 // with their surrounding province (e.g., 서울 sits inside 경기, 대전 inside 충남).
 // Values are in SVG units (viewBox 130×121.52).
-const LABEL_NUDGE: Record<string, { dx: number; dy: number }> = {
-  "서울": { dx: -3.5, dy: -2 },
-  "인천": { dx: -4, dy: -1.5 },
-  "세종": { dx: -1, dy: -3 },
-  "대전": { dx: 0, dy: 3 },
-  "광주": { dx: -3, dy: 0 },
-  "대구": { dx: 0, dy: -1.5 },
-  "울산": { dx: 2.5, dy: -1 },
-  "부산": { dx: 1.5, dy: 2 },
-}
-
 const ZOOM_MIN = 1
 const ZOOM_MAX = 4
 const ZOOM_STEP = 1.4

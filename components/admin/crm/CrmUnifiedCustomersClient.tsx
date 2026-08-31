@@ -9,6 +9,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { AlertTriangle, ChevronRight, Filter, RefreshCw, UserPlus } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
 import type { CrmUnifiedCustomerRow } from "@/lib/repositories/crm-unified-customers"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
 import Account360Lens from "./Account360Lens"
@@ -221,8 +222,14 @@ export default function CrmUnifiedCustomersClient() {
           {
             cacheKey: url,
             ttlMs: CACHE_TTL_MS,
-            staleWhileRevalidateMs: 5 * 60_000,
+            staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
             force: options?.force,
+            // 배경 갱신도 포그라운드와 같은 병합 규칙을 탄다 — 더 늦게 시작한 요청이
+            // 이미 화면을 갈아치웠다면(필터 변경·다음 페이지) 이 결과는 버린다.
+            onRevalidated: ({ data: fresh }) => {
+              if (!fresh || requestId !== requestSeq.current) return
+              setData((current) => mergePage(current, fresh, append))
+            },
           }
         )
         if (requestId !== requestSeq.current) return

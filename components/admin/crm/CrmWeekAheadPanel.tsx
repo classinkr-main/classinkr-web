@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { CalendarClock, CheckCircle2, Clock3, Filter, ListTodo, RefreshCw } from "lucide-react"
 
 import { adminFetchJson, adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
 import {
   WEEK_AHEAD_PREVIEW_ROWS,
   budgetWeekAheadBuckets,
@@ -69,7 +70,7 @@ export default function CrmWeekAheadPanel({
     void adminFetchJsonCached<unknown>(OWNERS_URL, undefined, {
       cacheKey: OWNERS_URL,
       ttlMs: OWNERS_TTL_MS,
-      staleWhileRevalidateMs: 5 * 60_000,
+      staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
     })
       .catch(() => null)
       .then(() => {
@@ -114,7 +115,15 @@ export default function CrmWeekAheadPanel({
         const next = await adminFetchJsonCached<ListCrmTasksResult>(
           options?.force ? `${url}&force=1` : url,
           undefined,
-          { cacheKey: url, ttlMs: TTL_MS, staleWhileRevalidateMs: 5 * 60_000, force: options?.force }
+          {
+            cacheKey: url,
+            ttlMs: TTL_MS,
+            staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+            force: options?.force,
+            onRevalidated: ({ data: fresh }) => {
+              if (fresh && isLatest()) setData(fresh)
+            },
+          }
         )
         if (!isLatest()) return
         setData(next)

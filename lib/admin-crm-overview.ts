@@ -190,9 +190,14 @@ const FREQUENT_ACTIVITY_SCAN_LIMIT = 2000
 const FREQUENT_CUSTOMER_LIMIT = 5
 const BUSINESS_SNAPSHOT_RPC = "admin_crm_business_overview"
 const BUSINESS_SNAPSHOT_MAX_AGE_SECONDS = 300
-// 라우트의 private max-age(30s)와 맞춘 서버 프로세스 캐시. CRM 홈과 검수 화면이
-// 거의 동시에 같은 무거운 10개 집계를 요청해도 한 번만 계산하고, 새로고침(force)은 우회한다.
-const ADMIN_CRM_OVERVIEW_CACHE_TTL_MS = 30_000
+// 서버 프로세스 캐시. CRM 홈과 검수 화면이 거의 동시에 같은 무거운 10개 집계를 요청해도
+// 한 번만 계산하고, 새로고침(force)은 우회한다.
+//
+// 창을 클라이언트 TTL(CRM_CACHE_TTL_MS = 120초)·라우트 max-age와 같은 120초로 맞춘다.
+// CRM 홈은 force-dynamic RSC라 **탭에 들어올 때마다** 서버 프리페치가 이 집계를 부른다 —
+// 30초 창에서는 조금만 자리를 비워도 DB 왕복 30회를 다시 돌며 TTFB를 붙잡았다.
+// 대가는 최대 지연이 늘어나는 것뿐이고, 새로고침 버튼이 force로 우회한다.
+const ADMIN_CRM_OVERVIEW_CACHE_TTL_MS = 120_000
 let adminCrmOverviewCache: { cachedAt: number; value: AdminCrmOverview } | null = null
 let adminCrmOverviewInFlight: Promise<AdminCrmOverview> | null = null
 const BUSINESS_SNAPSHOT_MISSING_WARNING =

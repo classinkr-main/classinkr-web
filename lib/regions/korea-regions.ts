@@ -116,11 +116,77 @@ const SIGUNGU_GROUPS: Record<string, string[]> = {
 }
 
 /**
+ * 시군구(로마자) → 시도 매핑.
+ *
+ * 위 SIGUNGU_GROUPS와 **같은 항목**을 로마자로 덮는다. 두 표의 커버리지가 어긋나면
+ * "한글로 쓰면 잡히고 영문으로 쓰면 안 잡히는" 비대칭이 생긴다 — 실제로 리드 유입값
+ * 103건 중 22건이 그 비대칭으로 미매칭이었고 절반 이상이 로마자 시군구였다
+ * (Suwon · Changwon · Cheongju · Uijeongbu · Icheon · Gwangmyeong · Siheung · Miryang ·
+ *  Gyeryong · Yongin · Gwangjin District · Yeongdeungpo District).
+ *
+ * 표기는 국어의 로마자 표기법(Revised Romanization) 기준이다. 시도명 자체는
+ * KOREA_PROVINCES.english/aliases가 이미 처리하므로 여기 넣지 않는다.
+ * 모호 토큰(Jung/Seo/Dong/Nam/Buk/Gangseo/Goseong)은 한글과 똑같이 제외한다.
+ */
+const SIGUNGU_ROMAN_GROUPS: Record<string, string[]> = {
+  서울: [
+    "Gangnam", "Gangdong", "Gangbuk", "Gwanak", "Gwangjin", "Guro", "Geumcheon",
+    "Nowon", "Dobong", "Dongdaemun", "Dongjak", "Mapo", "Seodaemun", "Seocho",
+    "Seongdong", "Seongbuk", "Songpa", "Yangcheon", "Yeongdeungpo", "Yongsan",
+    "Eunpyeong", "Jongno", "Jungnang",
+  ],
+  부산: ["Haeundae", "Saha", "Sasang", "Geumjeong", "Yeonje", "Suyeong", "Busanjin", "Dongnae", "Yeongdo", "Gijang"],
+  대구: ["Suseong", "Dalseo", "Dalseong", "Gunwi"],
+  인천: ["Bupyeong", "Gyeyang", "Yeonsu", "Michuhol", "Namdong", "Ganghwa", "Ongjin"],
+  광주: ["Gwangsan"],
+  대전: ["Yuseong", "Daedeok"],
+  울산: ["Ulju"],
+  경기: [
+    "Suwon", "Seongnam", "Bundang", "Yongin", "Goyang", "Ilsan", "Bucheon", "Anyang",
+    "Pyeongchon", "Ansan", "Hwaseong", "Namyangju", "Uijeongbu", "Pyeongtaek", "Siheung",
+    "Paju", "Gimpo", "Gwangmyeong", "Gunpo", "Hanam", "Osan", "Icheon", "Yangju", "Guri",
+    "Anseong", "Pocheon", "Uiwang", "Yeoju", "Dongducheon", "Gwacheon", "Gapyeong",
+    "Yangpyeong", "Yeoncheon",
+  ],
+  강원: [
+    "Chuncheon", "Wonju", "Gangneung", "Donghae", "Taebaek", "Sokcho", "Samcheok",
+    "Hongcheon", "Hoengseong", "Yeongwol", "Pyeongchang", "Jeongseon", "Cheorwon",
+    "Hwacheon", "Yanggu", "Inje", "Yangyang",
+  ],
+  충북: ["Cheongju", "Chungju", "Jecheon", "Boeun", "Okcheon", "Yeongdong", "Jeungpyeong", "Jincheon", "Goesan", "Eumseong", "Danyang"],
+  충남: [
+    "Cheonan", "Gongju", "Boryeong", "Asan", "Seosan", "Nonsan", "Gyeryong", "Dangjin",
+    "Geumsan", "Buyeo", "Seocheon", "Cheongyang", "Hongseong", "Yesan", "Taean",
+  ],
+  전북: [
+    "Jeonju", "Gunsan", "Iksan", "Jeongeup", "Namwon", "Gimje", "Wanju", "Jinan",
+    "Muju", "Jangsu", "Imsil", "Sunchang", "Gochang", "Buan",
+  ],
+  전남: [
+    "Mokpo", "Yeosu", "Suncheon", "Naju", "Gwangyang", "Damyang", "Gokseong", "Gurye",
+    "Goheung", "Boseong", "Hwasun", "Jangheung", "Gangjin", "Haenam", "Yeongam", "Muan",
+    "Hampyeong", "Yeonggwang", "Jangseong", "Wando", "Jindo", "Sinan",
+  ],
+  경북: [
+    "Pohang", "Gyeongju", "Gimcheon", "Andong", "Gumi", "Yeongju", "Yeongcheon", "Sangju",
+    "Mungyeong", "Gyeongsan", "Uiseong", "Cheongsong", "Yeongyang", "Yeongdeok", "Cheongdo",
+    "Goryeong", "Seongju", "Chilgok", "Yecheon", "Bonghwa", "Uljin", "Ulleung",
+  ],
+  경남: [
+    "Changwon", "Masan", "Jinhae", "Jinju", "Tongyeong", "Sacheon", "Gimhae", "Miryang",
+    "Geoje", "Yangsan", "Uiryeong", "Haman", "Changnyeong", "Namhae", "Hadong", "Sancheong",
+    "Hamyang", "Geochang", "Hapcheon",
+  ],
+  제주: ["Seogwipo"],
+}
+
+/**
  * 여러 시도에 동시에 존재해 단독으로는 시도를 특정할 수 없는 자치구/군명.
  * 자동 매핑하지 않고 null 로 둔다(진단에서 수집 후 컨텍스트로 보정).
  */
 export const AMBIGUOUS_DISTRICT_NAMES: string[] = [
   "중구", "서구", "동구", "남구", "북구", "강서", "고성",
+  "Jung", "Seo", "Dong", "Nam", "Buk", "Gangseo", "Goseong",
 ]
 
 const SPACE_RE = /\s+/g
@@ -141,11 +207,13 @@ const ALIAS_INDEX: Map<string, string> = (() => {
   return idx
 })()
 
-/** 시군구(약식) → 시도 라벨 인덱스. */
+/** 시군구(약식) → 시도 라벨 인덱스. 한글·로마자 두 표를 같은 인덱스에 담는다. */
 const SIGUNGU_INDEX: Map<string, string> = (() => {
   const idx = new Map<string, string>()
-  for (const [sido, names] of Object.entries(SIGUNGU_GROUPS)) {
-    for (const name of names) idx.set(normKey(name), sido)
+  for (const groups of [SIGUNGU_GROUPS, SIGUNGU_ROMAN_GROUPS]) {
+    for (const [sido, names] of Object.entries(groups)) {
+      for (const name of names) idx.set(normKey(name), sido)
+    }
   }
   return idx
 })()
@@ -156,6 +224,27 @@ const AMBIGUOUS_KEYS: Set<string> = new Set(AMBIGUOUS_DISTRICT_NAMES.map(normKey
 function stripDistrictSuffix(raw: string): string | null {
   if (raw.length >= 3 && /[시군구]$/.test(raw)) return raw.slice(0, -1)
   return null
+}
+
+// 영문 행정 접미사 — normKey(소문자·공백제거) 이후 형태 기준.
+// "Gwangjin District" → "gwangjindistrict" → "gwangjin", "Jung-gu" → "jung"(모호 → null).
+const ROMAN_ADMIN_SUFFIX_RE = /(?:-?(?:district|county|city|gu|si|gun|do))$/
+
+/**
+ * 로마자 표기 이형. 영(Yeong)·용(Yong)을 둘 다 "Young"으로 적는 관행이 흔해
+ * (실측: 용인을 "Youngin"으로 기재), 원문 키로 못 찾으면 두 해석을 모두 시도한다.
+ * 표에 있는 항목만 맞히므로 "Young…"이 우연히 다른 지역으로 붙을 위험은 없다.
+ */
+function romanKeyVariants(key: string): string[] {
+  const stripped = key.replace(ROMAN_ADMIN_SUFFIX_RE, "")
+  const bases = stripped && stripped !== key ? [key, stripped] : [key]
+  const out: string[] = []
+  for (const base of bases) {
+    for (const variant of [base, base.replace(/young/g, "yong"), base.replace(/young/g, "yeong")]) {
+      if (variant.length >= 3 && !out.includes(variant)) out.push(variant)
+    }
+  }
+  return out
 }
 
 /** 부분일치: 입력 문자열에서 가장 앞에 등장하는 시도명을 채택. */
@@ -218,6 +307,17 @@ export function normalizeRegionLabel(input: string | null | undefined): string |
       const sg2 = SIGUNGU_INDEX.get(sk)
       if (sg2) return sg2
     }
+  }
+
+  // 3-b) 로마자 접미사 제거·표기 이형 후 재시도("Gwangjin District"→Gwangjin, "Youngin"→Yongin).
+  // 모호 토큰은 여기서도 똑같이 막는다("Jung-gu"→jung → null).
+  for (const variant of romanKeyVariants(key)) {
+    if (variant === key) continue
+    const direct3 = ALIAS_INDEX.get(variant)
+    if (direct3) return direct3
+    if (AMBIGUOUS_KEYS.has(variant)) return null
+    const sg3 = SIGUNGU_INDEX.get(variant)
+    if (sg3) return sg3
   }
 
   // 4) 부분일치

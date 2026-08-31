@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
 import type { CrmPriorityBucket, CrmPriorityItem, CrmPriorityLane } from "@/lib/crm/priority"
 import { TODAY_CALL_SLOTS, pickTodayCalls, type TodayCall, type TodayCallSlotKey } from "@/lib/crm/today-calls"
 import { buildOwnerSelectOptions, useCrmOwners } from "./useCrmOwners"
@@ -175,8 +176,13 @@ export default function CrmPriorityQueuePanel({
           {
             cacheKey: url,
             ttlMs: QUEUE_TTL_MS,
-            staleWhileRevalidateMs: 5 * 60_000,
+            staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
             force: options?.force,
+            // 캐시를 즉시 보여준 회차의 백그라운드 갱신 결과를 화면에 반영한다.
+            // 이 통로가 없으면 SWR 창 길이만큼 낡은 큐를 들고 있게 된다.
+            onRevalidated: ({ data: fresh }) => {
+              if (fresh && isLatest()) setData(fresh)
+            },
           }
         )
         if (!isLatest()) return

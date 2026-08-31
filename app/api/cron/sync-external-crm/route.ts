@@ -12,10 +12,8 @@ import {
 } from "@/lib/external-crm/sync-result"
 
 export async function GET(req: NextRequest) {
-  // Vercel 환경에서는 x-vercel-cron 헤더 필수
-  if (process.env.VERCEL && !req.headers.get("x-vercel-cron")) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-  }
+  // 인증은 아래 CRON_SECRET Bearer 하나뿐이다 — Vercel 이 크론에 붙이는 건 그 헤더이지
+  // x-vercel-cron 이 아니다. 근거는 app/api/cron/sync-branch/route.ts 주석 참조. (2026-08-28)
   const expected = process.env.CRON_SECRET
   const auth = req.headers.get("authorization") ?? ""
 

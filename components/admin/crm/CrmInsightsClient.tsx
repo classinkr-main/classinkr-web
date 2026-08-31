@@ -5,6 +5,7 @@ import Link from "next/link"
 import { AlertTriangle, CalendarClock, ChevronDown, ExternalLink, FileText, RefreshCw, ShieldCheck, TrendingUp } from "lucide-react"
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
 import type {
   CrmInsightListItem,
   CrmInsights,
@@ -135,8 +136,11 @@ export default function CrmInsightsClient() {
         {
           cacheKey: INSIGHTS_URL,
           ttlMs: CACHE_TTL_MS,
-          staleWhileRevalidateMs: 5 * 60_000,
+          staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
           force: options?.force,
+          onRevalidated: ({ data: fresh }) => {
+            if (fresh) setData(fresh)
+          },
         }
       )
       setData(next)

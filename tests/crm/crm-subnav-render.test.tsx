@@ -56,12 +56,12 @@ describe("CRM 본문 내비 밴드", () => {
 
   it("고객 섹션에서는 2차 서브탭이 함께 선다", () => {
     const html = render("/admin/crm/customers/leads")
-    for (const label of ["통합", "리드", "원천 고객", "지도 원천"]) expect(html).toContain(label)
+    for (const label of ["통합", "리드", "원천 고객", "지도"]) expect(html).toContain(label)
   })
 
   it("2차가 없는 화면에서도 1차는 남는다", () => {
     const html = render("/admin/crm/activity")
     expect(html).toContain("기록")
-    expect(html).not.toContain("지도 원천")
+    expect(html).not.toContain("원천 고객")
   })
 })

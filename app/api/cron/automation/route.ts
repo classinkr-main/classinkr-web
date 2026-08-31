@@ -65,10 +65,8 @@ async function isDue(rule: AutomationRule): Promise<boolean> {
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // ── 인증 ──────────────────────────────────────────────────
-  // Vercel 환경에서는 x-vercel-cron 헤더 필수
-  if (process.env.VERCEL && !request.headers.get("x-vercel-cron")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  // 인증은 아래 CRON_SECRET Bearer 하나뿐이다 — Vercel 이 크론에 붙이는 건 그 헤더이지
+  // x-vercel-cron 이 아니다. 근거는 app/api/cron/sync-branch/route.ts 주석 참조. (2026-08-28)
 
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret) {

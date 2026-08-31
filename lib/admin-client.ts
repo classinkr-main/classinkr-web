@@ -18,7 +18,16 @@ const DEFAULT_ADMIN_CACHE_TTL_MS = 45_000
 const DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS = 5 * 60_000
 const ADMIN_MEMORY_CACHE_LIMIT = 90
 const ADMIN_SESSION_CACHE_LIMIT = 70
+// localStorage 계층은 브라우저 재시작을 넘어 살아남으므로 세션 계층보다 작게 잡는다.
+const ADMIN_LOCAL_CACHE_LIMIT = 60
 const MAX_SESSION_CACHE_CHARS = 350_000
+// 엔트리별 보존창의 상한. 호출부가 staleWhileRevalidateMs를 아무리 크게 줘도 캐시가
+// 무한히 남지는 않게 한다 — 프루너는 이 상한 안에서 엔트리 자신의 창을 존중한다.
+const MAX_CACHE_RETENTION_MS = 30 * 60_000
+// localStorage로 승격하는 스코프. CRM 작업면은 탭 전환·브라우저 재시작을 넘어 즉시
+// 그려야 해서 여기 둔다. 지속성의 상한은 인증 수명(admin_session 쿠키 7일)이고,
+// 로그아웃·인증 실패는 clearAdminSessionStorage → clearAdminRequestCache로 함께 비운다.
+const LOCAL_PERSIST_SCOPES = ["/api/admin/crm", "/api/admin/leads"] as const
 
 // 품질 웨이브 4 — 항목 3. 응답이 영원히 오지 않는 요청(네트워크 끊김·서버 행)을 방지하는
 // 클라이언트 타임아웃. 대부분의 어드민 요청은 45s면 충분하지만, 외부 동기화·가져오기·
@@ -84,12 +93,59 @@ interface AdminCacheEntry<T> {
   data: T
   expiresAt: number
   savedAt: number
+  /**
+   * 이 엔트리를 언제까지 들고 있어야 하는지(ms epoch). 프루너는 전역 상수가 아니라 이 값을
+   * 본다 — 호출부가 요청한 stale-while-revalidate 창이 청소기에 잘리지 않게 하는 유일한
+   * 근거다(그 전에는 전역 5분이 10분 요청을 절반에서 잘랐다).
+   * 값이 없는 레거시 엔트리(이전 버전이 남긴 sessionStorage 항목)는 기존 동작 그대로
+   * savedAt + DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS로 취급한다.
+   */
+  keepUntil?: number
 }
+
+type AdminPersistTier = "session" | "local"
+
+/** 엔트리를 언제까지 보관해야 하는가 — 레거시 엔트리는 기존 전역 창으로 폴백. */
+function retentionDeadline(entry: Pick<AdminCacheEntry<unknown>, "savedAt" | "keepUntil">) {
+  return entry.keepUntil ?? entry.savedAt + DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS
+}
+
+function computeKeepUntil(savedAt: number, ttlMs: number, staleWindowMs: number) {
+  const window = Math.max(ttlMs, staleWindowMs, DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS)
+  return savedAt + Math.min(window, MAX_CACHE_RETENTION_MS)
+}
+
+/** 지속 계층 결정 — 명시 옵션 우선, 없으면 URL 스코프. */
+function resolvePersistTier(cacheKey: string, explicit?: AdminPersistTier): AdminPersistTier {
+  if (explicit) return explicit
+  return LOCAL_PERSIST_SCOPES.some((scope) => cacheKey.includes(scope)) ? "local" : "session"
+}
+
+/** 브라우저 밖(SSR)에서는 null. 두 계층을 같은 코드로 다루기 위한 접근자. */
+function storageFor(tier: AdminPersistTier): Storage | null {
+  if (typeof window === "undefined") return null
+  try {
+    return tier === "local" ? window.localStorage : window.sessionStorage
+  } catch {
+    // 사파리 프라이빗 모드 등 저장소 접근 자체가 던지는 환경 — 메모리 캐시만으로 동작한다.
+    return null
+  }
+}
+
+const PERSIST_TIERS: Array<{ tier: AdminPersistTier; limit: number }> = [
+  { tier: "session", limit: ADMIN_SESSION_CACHE_LIMIT },
+  { tier: "local", limit: ADMIN_LOCAL_CACHE_LIMIT },
+]
 
 interface AdminFetchCacheOptions<T = unknown> {
   cacheKey?: string
   ttlMs?: number
   persist?: boolean
+  /**
+   * 지속 계층을 명시한다. 생략하면 URL 스코프로 결정한다
+   * (LOCAL_PERSIST_SCOPES → "local", 그 외 → "session").
+   */
+  persistTo?: AdminPersistTier
   force?: boolean
   staleIfError?: boolean
   /**
@@ -202,9 +258,13 @@ function clearCacheScopes(scopes: string[]) {
   }
 
   if (typeof window === "undefined") return
-  for (const key of Object.keys(sessionStorage)) {
-    if (key.startsWith(ADMIN_REQUEST_CACHE_PREFIX) && matches(key)) {
-      sessionStorage.removeItem(key)
+  for (const { tier } of PERSIST_TIERS) {
+    const storage = storageFor(tier)
+    if (!storage) continue
+    for (const key of Object.keys(storage)) {
+      if (key.startsWith(ADMIN_REQUEST_CACHE_PREFIX) && matches(key)) {
+        storage.removeItem(key)
+      }
     }
   }
 }
@@ -223,10 +283,8 @@ function getSessionCacheKey(cacheKey: string) {
 }
 
 function pruneMemoryCache(now = Date.now()) {
-  const staleRetentionCutoff = now - DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS
-
   for (const [key, entry] of memoryCache) {
-    if (entry.savedAt < staleRetentionCutoff) {
+    if (retentionDeadline(entry) <= now) {
       memoryCache.delete(key)
     }
   }
@@ -242,39 +300,44 @@ function pruneMemoryCache(now = Date.now()) {
   }
 }
 
-function pruneSessionCache(now = Date.now()) {
-  if (typeof window === "undefined") return
+function pruneStorageTier(tier: AdminPersistTier, limit: number, now: number) {
+  const storage = storageFor(tier)
+  if (!storage) return
 
-  const staleRetentionCutoff = now - DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS
   const entries: Array<{ key: string; savedAt: number }> = []
 
-  for (const key of Object.keys(sessionStorage)) {
+  for (const key of Object.keys(storage)) {
     if (!key.startsWith(ADMIN_REQUEST_CACHE_PREFIX)) continue
 
     try {
-      const entry = JSON.parse(sessionStorage.getItem(key) ?? "null") as AdminCacheEntry<unknown> | null
+      const entry = JSON.parse(storage.getItem(key) ?? "null") as AdminCacheEntry<unknown> | null
       if (!entry || typeof entry.savedAt !== "number") {
-        sessionStorage.removeItem(key)
+        storage.removeItem(key)
         continue
       }
 
-      if (entry.savedAt < staleRetentionCutoff) {
-        sessionStorage.removeItem(key)
+      // 전역 5분이 아니라 엔트리가 요청한 창까지 살려 둔다.
+      if (retentionDeadline(entry) <= now) {
+        storage.removeItem(key)
         continue
       }
 
       entries.push({ key, savedAt: entry.savedAt })
     } catch {
-      sessionStorage.removeItem(key)
+      storage.removeItem(key)
     }
   }
 
-  if (entries.length <= ADMIN_SESSION_CACHE_LIMIT) return
+  if (entries.length <= limit) return
 
   entries
     .sort((a, b) => a.savedAt - b.savedAt)
-    .slice(0, entries.length - ADMIN_SESSION_CACHE_LIMIT)
-    .forEach((entry) => sessionStorage.removeItem(entry.key))
+    .slice(0, entries.length - limit)
+    .forEach((entry) => storage.removeItem(entry.key))
+}
+
+function pruneSessionCache(now = Date.now()) {
+  for (const { tier, limit } of PERSIST_TIERS) pruneStorageTier(tier, limit, now)
 }
 
 function scheduleAdminCachePrune() {
@@ -299,11 +362,16 @@ function scheduleAdminCachePrune() {
   window.setTimeout(run, 500)
 }
 
-function readSessionCache<T>(cacheKey: string, allowExpired = false): AdminCacheEntry<T> | null {
-  if (typeof window === "undefined") return null
+function readStorageTier<T>(
+  tier: AdminPersistTier,
+  cacheKey: string,
+  allowExpired: boolean
+): AdminCacheEntry<T> | null {
+  const storage = storageFor(tier)
+  if (!storage) return null
 
   try {
-    const raw = sessionStorage.getItem(getSessionCacheKey(cacheKey))
+    const raw = storage.getItem(getSessionCacheKey(cacheKey))
     if (!raw) return null
 
     const entry = JSON.parse(raw) as AdminCacheEntry<T>
@@ -312,27 +380,53 @@ function readSessionCache<T>(cacheKey: string, allowExpired = false): AdminCache
 
     return entry
   } catch {
-    sessionStorage.removeItem(getSessionCacheKey(cacheKey))
+    storage.removeItem(getSessionCacheKey(cacheKey))
     return null
   }
 }
 
-function writeSessionCache(cacheKey: string, entry: AdminCacheEntry<unknown>) {
-  if (typeof window === "undefined") return
+/**
+ * 두 지속 계층을 모두 본다. 스코프 정책이 바뀌어도(예: 어떤 URL이 session → local로 옮겨가도)
+ * 이전 계층에 남은 엔트리를 버리지 않고 이어 쓰기 위해서다. 둘 다 있으면 최신 것을 택한다.
+ */
+function readPersistedCache<T>(cacheKey: string, allowExpired = false): AdminCacheEntry<T> | null {
+  let best: AdminCacheEntry<T> | null = null
+  for (const { tier } of PERSIST_TIERS) {
+    const entry = readStorageTier<T>(tier, cacheKey, allowExpired)
+    if (entry && (!best || entry.savedAt > best.savedAt)) best = entry
+  }
+  return best
+}
+
+function writePersistedCache(
+  cacheKey: string,
+  entry: AdminCacheEntry<unknown>,
+  tier: AdminPersistTier
+) {
+  const storage = storageFor(tier)
+  if (!storage) return
+
+  const storageKey = getSessionCacheKey(cacheKey)
+
+  // 계층이 바뀐 키는 반대편에 남은 옛 사본을 지운다 — readPersistedCache가 둘 다 보므로,
+  // 방치하면 오래된 쪽이 최신 쪽을 이길 일은 없어도 저장소 예산만 갉아먹는다.
+  for (const { tier: other } of PERSIST_TIERS) {
+    if (other === tier) continue
+    storageFor(other)?.removeItem(storageKey)
+  }
 
   try {
     const serialized = JSON.stringify(entry)
-    const sessionKey = getSessionCacheKey(cacheKey)
 
     if (serialized.length > MAX_SESSION_CACHE_CHARS) {
-      sessionStorage.removeItem(sessionKey)
+      storage.removeItem(storageKey)
       return
     }
 
-    sessionStorage.setItem(sessionKey, serialized)
+    storage.setItem(storageKey, serialized)
     scheduleAdminCachePrune()
   } catch {
-    sessionStorage.removeItem(getSessionCacheKey(cacheKey))
+    storage.removeItem(storageKey)
   }
 }
 
@@ -344,10 +438,10 @@ function readAdminCache<T>(cacheKey: string, allowExpired = false): AdminCacheEn
     return memoryEntry
   }
 
-  const sessionEntry = readSessionCache<T>(cacheKey, allowExpired)
-  if (sessionEntry && (!memoryEntry || sessionEntry.savedAt >= memoryEntry.savedAt)) {
-    memoryCache.set(cacheKey, sessionEntry)
-    return sessionEntry
+  const persistedEntry = readPersistedCache<T>(cacheKey, allowExpired)
+  if (persistedEntry && (!memoryEntry || persistedEntry.savedAt >= memoryEntry.savedAt)) {
+    memoryCache.set(cacheKey, persistedEntry)
+    return persistedEntry
   }
 
   return null
@@ -471,6 +565,37 @@ export async function adminFetchJson<T>(input: string, init?: AdminFetchInit) {
   return data as T
 }
 
+/**
+ * 서버(RSC)가 이미 만들어 내려보낸 응답을 클라이언트 캐시에 그대로 심는다.
+ * 첫 화면은 prop으로 그리고, **같은 화면을 떠났다 돌아왔을 때**도 네트워크 없이 즉시
+ * 그려지게 하는 것이 목적이다(prop은 그 회차 렌더에만 존재한다).
+ *
+ * 네트워크 응답과 동일한 규약을 따른다 — 같은 cacheKey, 같은 TTL/보존창 계산, 같은 계층 선택.
+ * 이미 더 최신 엔트리가 있으면(사용자가 새로고침을 눌러 방금 받아온 경우) 덮어쓰지 않는다.
+ */
+export function seedAdminRequestCache<T>(
+  input: string,
+  data: T,
+  options: { cacheKey?: string; ttlMs?: number; staleWhileRevalidateMs?: number; persistTo?: AdminPersistTier } = {}
+) {
+  const cacheKey = getAdminRequestCacheKey(input, undefined, options.cacheKey)
+  const ttlMs = options.ttlMs ?? DEFAULT_ADMIN_CACHE_TTL_MS
+  const staleWindowMs = options.staleWhileRevalidateMs ?? DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS
+  const savedAt = Date.now()
+
+  const existing = readAdminCache<T>(cacheKey, true)
+  if (existing && existing.savedAt >= savedAt) return
+
+  const entry: AdminCacheEntry<T> = {
+    data,
+    expiresAt: savedAt + ttlMs,
+    savedAt,
+    keepUntil: computeKeepUntil(savedAt, ttlMs, staleWindowMs),
+  }
+  memoryCache.set(cacheKey, entry)
+  writePersistedCache(cacheKey, entry, resolvePersistTier(cacheKey, options.persistTo))
+}
+
 export function getCachedAdminJson<T>(
   input: string,
   options: { cacheKey?: string; allowExpired?: boolean } = {}
@@ -551,6 +676,10 @@ async function adminFetchJsonCachedInternal<T>(
   const ttlMs = options.ttlMs ?? DEFAULT_ADMIN_CACHE_TTL_MS
   const persist = options.persist ?? true
   const staleIfError = options.staleIfError ?? true
+  // 아래 SWR 고속 경로와 엔트리 보존창(keepUntil)이 같은 값을 봐야 한다 —
+  // "즉시 서빙하기로 한 창"과 "그때까지 안 지우는 창"이 어긋나면 A-1 버그가 재발한다.
+  const staleWindowMs =
+    options.staleWhileRevalidateMs ?? DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS
 
   if (ttlMs <= 0) {
     const data = await adminFetchJson<T>(input, init)
@@ -580,14 +709,18 @@ async function adminFetchJsonCachedInternal<T>(
     const request = adminFetchJson<T>(input, requestInit)
       .then((data): AdminCachedFetchResult<T> => {
         if (!wasCacheKeyInvalidatedSince(cacheKey, requestStartedAt)) {
+          const savedAt = Date.now()
           const entry: AdminCacheEntry<T> = {
             data,
-            expiresAt: Date.now() + ttlMs,
-            savedAt: Date.now(),
+            expiresAt: savedAt + ttlMs,
+            savedAt,
+            keepUntil: computeKeepUntil(savedAt, ttlMs, staleWindowMs),
           }
           memoryCache.set(cacheKey, entry)
           pruneMemoryCache()
-          if (persist) writeSessionCache(cacheKey, entry)
+          if (persist) {
+            writePersistedCache(cacheKey, entry, resolvePersistTier(cacheKey, options.persistTo))
+          }
         }
         return { data, stale: false, staleSince: null }
       })
@@ -621,8 +754,6 @@ async function adminFetchJsonCachedInternal<T>(
     const inflight = inflightRequests.get(cacheKey)
     if (inflight) return inflight as Promise<AdminCachedFetchResult<T>>
 
-    const staleWindowMs =
-      options.staleWhileRevalidateMs ?? DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS
     if (staleWindowMs > 0) {
       const stale = readAdminCache<T>(cacheKey, true)
       if (stale && Date.now() - stale.savedAt <= staleWindowMs) {

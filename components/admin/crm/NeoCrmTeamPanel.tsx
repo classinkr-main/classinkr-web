@@ -19,9 +19,10 @@ import {
 
 import { adminFetchJsonCached, getCachedAdminJson } from "@/lib/admin-client"
 import type { NeoCrmGranularity, NeoCrmTeamReport } from "@/lib/admin-crm-neo"
+import { CRM_CACHE_SWR_MS, CRM_CACHE_TTL_MS } from "@/lib/crm/client-cache"
 
-const NEO_CRM_CACHE_TTL_MS = 120_000
-const NEO_CRM_STALE_WHILE_REVALIDATE_MS = 10 * 60_000
+const NEO_CRM_CACHE_TTL_MS = CRM_CACHE_TTL_MS
+const NEO_CRM_STALE_WHILE_REVALIDATE_MS = CRM_CACHE_SWR_MS
 
 function getNeoCrmUrl(granularity: NeoCrmGranularity, offset: number) {
   return `/api/admin/crm/neo?granularity=${granularity}&offset=${offset}`
@@ -159,6 +160,12 @@ export default function NeoCrmTeamPanel({
             ttlMs: NEO_CRM_CACHE_TTL_MS,
             force: options?.force,
             staleWhileRevalidateMs: NEO_CRM_STALE_WHILE_REVALIDATE_MS,
+            onRevalidated: ({ data: fresh }) => {
+              if (!fresh || !isLatest()) return
+              setData(fresh)
+              dataRef.current = fresh
+              if (!fresh.ok && fresh.error) setError(fresh.error)
+            },
           }
         )
         if (!isLatest()) return

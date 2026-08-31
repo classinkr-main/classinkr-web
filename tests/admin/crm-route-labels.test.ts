@@ -8,7 +8,7 @@ describe("CRM mobile route labels", () => {
     ["/admin/crm/customers/customer-1", "고객 360"],
     ["/admin/crm/customers/leads", "리드"],
     ["/admin/crm/customers/accounts", "원천 고객"],
-    ["/admin/crm/customers/map", "지도 원천"],
+    ["/admin/crm/customers/map", "지도"],
     ["/admin/crm/deals", "매출"],
     ["/admin/crm/deals/rev-sheet", "REV 스냅샷"],
     ["/admin/crm/deals/orders", "오더·설치"],

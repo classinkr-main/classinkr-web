@@ -55,7 +55,7 @@ const PALETTE_CHILD_COMMANDS: Record<string, Array<Omit<AdminCommand, "group">>>
     })),
     { label: "고객 (Accounts)", href: "/admin/crm/customers/accounts", keywords: "고객 거래처 account customer" },
     { label: "리드", href: "/admin/crm/customers/leads", keywords: "리드 잠재고객 lead 문의" },
-    { label: "지도 원천", href: "/admin/crm/customers/map", keywords: "고객 지역 지도 원천 map source" },
+    { label: "지도", href: "/admin/crm/customers/map", keywords: "고객 지역 지도 분포 지역분포 원천 map source region" },
     { label: "Deals", href: "/admin/crm/deals", keywords: "딜 거래 오더 order deal" },
     { label: "REV 스냅샷", href: "/admin/crm/deals/rev-sheet", keywords: "매출 시트 rev snapshot revenue 검수" },
     { label: "오더·설치", href: "/admin/crm/deals/orders", keywords: "오더 설치 일정 주문 order installation" },

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowRight, ShieldCheck } from "lucide-react"
 
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { CRM_CACHE_SWR_MS } from "@/lib/crm/client-cache"
 import { coverageTone, COVERAGE_TONE_CLASS } from "@/lib/crm/coverage"
 import { formatCNY } from "@/lib/crm/money-format"
 
@@ -78,7 +79,12 @@ export default function CrmCoverageStrip() {
     adminFetchJsonCached<Coverage>("/api/admin/crm/coverage", undefined, {
       cacheKey: "/api/admin/crm/coverage",
       ttlMs: 90_000,
-      staleWhileRevalidateMs: 5 * 60_000,
+      staleWhileRevalidateMs: CRM_CACHE_SWR_MS,
+      onRevalidated: ({ data: fresh }) => {
+        if (!alive || !fresh) return
+        setData(fresh)
+        setFailed(false)
+      },
     })
       .then((d: Coverage | null) => {
         if (!alive) return
