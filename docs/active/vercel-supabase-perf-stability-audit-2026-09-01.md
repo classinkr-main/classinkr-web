@@ -10,6 +10,8 @@
 
 느린 원인은 기능 수도, 코드 구조도 아니다. **인프라 설정 3개(리전·미들웨어·캐시 헤더), 미디어 자산 341MB, 인덱스 누락 11종**이 대부분이다. 그리고 안정성 쪽에는 **Supabase 클라이언트에 타임아웃이 없다**는 단일 장애점이 있다.
 
+그중에서도 가장 큰 단일 항목은 **함수가 미국 동부(iad1)에서 실행되는데 Supabase는 싱가포르(ap-southeast-1)에 있다**는 것이다. DB 왕복 1회에 약 230ms가 붙고, 어드민 경로는 이 왕복이 3회 직렬로 쌓인다. 수정은 `vercel.json` 한 줄이다 — 다만 답은 서울이 아니라 **싱가포르**다(§1.5).
+
 가장 큰 체감 이득 6건이 전부 **한 줄~네 줄 수정**이다(Phase 0).
 
 ---
@@ -92,6 +94,55 @@
 
 ---
 
+## 1.5 리전 배치 — 함수는 사용자 옆이 아니라 DB 옆에 둔다
+
+Supabase가 **ap-southeast-1(싱가포르)** 으로 확인되면서, 이 항목이 감사 전체에서 단일 최대 지연 요인이 됐다. 그리고 직관과 반대되는 결론이 나온다.
+
+### 현재 상태
+
+`vercel.json`에 `regions`가 없어 함수가 기본 리전 **iad1(미국 동부)** 에서 실행된다. 즉 한국 사용자의 요청이 이렇게 돈다.
+
+```
+한국 사용자 ──180ms──▶ Vercel 함수(미국 동부) ──230ms/왕복──▶ Supabase(싱가포르)
+```
+
+DB가 지구 반대편에 있다. **왕복 1회당 약 230ms**다.
+
+### 왜 서울(icn1)이 답이 아닌가
+
+핵심은 **사용자↔함수 지연은 요청당 1회지만, 함수↔DB 지연은 쿼리 왕복 횟수만큼 곱해진다**는 점이다. 그리고 이 저장소의 어드민 경로는 왕복이 직렬로 쌓인다 — `proxy.ts:135-155`가 `auth.getUser()` + `admin_profiles` 조회로 2왕복, 그 뒤 라우트 핸들러가 `lib/admin-auth.ts:375`에서 `getUser()`를 다시 호출해 1왕복 더, 총 3왕복이다.
+
+세 선택지의 지연 하한(왕복 횟수별):
+
+| 배치 | 사용자↔함수 | 함수↔DB(1회) | **DB 1왕복 총합** | **DB 3왕복 총합** |
+|---|---|---|---|---|
+| 현재 — iad1 | ~180ms | ~230ms | ~410ms | **~870ms** |
+| icn1 (서울) | ~10ms | ~75ms | ~85ms | ~235ms |
+| **sin1 (싱가포르)** | ~75ms | ~2ms | **~77ms** | **~81ms** |
+
+(RTT는 통상적인 공개 관측 범위 기준의 근사치다. 정확한 값은 배포 후 실측해야 한다.)
+
+**`sin1`이 어느 경우에도 나쁘지 않고, 왕복이 늘수록 격차가 벌어진다.** 왕복 1회짜리 가벼운 라우트에서는 icn1과 사실상 동률이지만, 왕복이 쌓이는 어드민·CRM 경로에서는 3배 가까이 앞선다.
+
+### 사용자를 미국에서 싱가포르로 옮기는 것이 공개 사이트를 느리게 하지 않는가
+
+하지 않는다. 공개 페이지 대부분은 정적/ISR이고(§0 선행 문서 기준 `app/blog`, `app/about`, `app/events`, `app/resources`, `app/updates` 등이 `revalidate` 보유), **정적·ISR 응답은 함수 리전이 아니라 사용자에게 가장 가까운 Vercel CDN 엣지에서 서빙된다.** 한국 사용자는 이미 서울 엣지에서 받고 있고, `regions` 설정은 이를 바꾸지 않는다. 리전이 결정하는 것은 **동적 함수 실행 위치**뿐이며, 그 함수들은 예외 없이 Supabase를 친다.
+
+### 권고
+
+1. **지금: `vercel.json`에 `regions: ["sin1"]`.** 한 줄이고, Phase 0 다음으로 큰 이득이다.
+   ```json
+   { "regions": ["sin1"], "crons": [ ... 기존 그대로 ... ] }
+   ```
+2. **이후: Phase 1-2(proxy matcher 축소)의 가치가 함께 올라간다.** 중복 `getUser()` 왕복 1회가 현재 ~230ms짜리이기 때문이다. 리전을 옮기면 그 왕복은 ~2ms가 되지만, 왕복 자체를 없애는 것이 여전히 옳다.
+3. **장기 이상형: Supabase를 서울로 옮기고 Vercel도 `icn1`.** 사용자 ~10ms + DB ~2ms로 모든 항목에서 최적이 된다. 다만 Supabase 프로젝트 리전 변경은 마이그레이션 작업이므로 별도 결정 사항으로 남긴다. **이 감사에서 그 이전에 할 일이 충분히 많다.**
+
+### 가설 B와의 관계
+
+§1 가설 B에서 "공개/어드민 분리는 속도 목적으로 근거가 없다"고 결론지었는데, 이 항목이 그 판단을 보강한다. 공개 사이트가 느렸던 실제 이유는 어드민과 한 프로젝트에 있어서가 아니라 **함수가 DB에서 지구 반 바퀴 떨어져 있었기 때문**이다. 그리고 그 수정은 프로젝트 분리가 아니라 `vercel.json` 한 줄이다.
+
+---
+
 ## 2. 실행 계획
 
 ### Phase 0 — 즉시 (총 약 10줄, 위험 거의 0)
@@ -111,9 +162,9 @@
 
 | # | 항목 | 근거 | 효과 |
 |---|---|---|---|
-| 1-1 | `vercel.json`에 `regions` 지정 | 현재 `crons`만 있고 `regions` 없음, `preferredRegion` 앱 전역 0건 → 기본 리전(iad1) 실행 | **선행 확인 필요**(§3). Supabase가 서울이면 DB 왕복 ~190ms → ~10ms, 어드민 콜드 **-400~600ms** |
+| 1-1 | **`vercel.json`에 `regions: ["sin1"]`** | 현재 `crons`만 있고 `regions` 없음, `preferredRegion` 앱 전역 0건 → 기본 리전(iad1, 미국 동부) 실행. Supabase는 **ap-southeast-1(싱가포르)** 확정 | 이 감사 **단일 최대 항목**. 근거는 §1.5 |
 | 1-2 | `proxy.ts:200-204` matcher 축소 | 현재 공개 페이지 전체 + `/api/**` 205개가 미들웨어를 통과. `lib/supabase/middleware.ts:41` `getUser()` 1왕복 + 라우트의 `lib/admin-auth.ts:375` `getUser()` 재호출 = 중복 | 공개 TTFB **-5~30ms**(웜)/**-100~300ms**(콜드). admin API 중복 auth 왕복 제거. **주의:** 축소 시 API만 호출하는 장기 세션의 토큰 갱신 경로를 함께 검증할 것 |
-| 1-3 | 크론 9개에 `runtime`·`maxDuration` 명시 | 현재 `maxDuration` 선언은 저장소 전체 4곳뿐, 크론은 0개 | 절단으로 인한 동기화 유실 감소 |
+| 1-3 | 크론 9개에 `runtime`·`maxDuration` 명시 + **배치 분할** | 현재 `maxDuration` 선언은 저장소 전체 4곳뿐(전부 `= 60`), 크론은 0개. **Hobby 확정**이므로 `maxDuration=300`은 선택지가 아니다 | 절단으로 인한 동기화 유실 감소. `lib/external-crm/xiaoshouyi-sync.ts:363`이 이미 env로 페이지 상한을 읽으므로 배치 축소가 가능하다 |
 | 1-4 | `lib/branch/insights/gemini-runner.ts:38-42`에 타임아웃 | 저장소 다른 Gemini 호출은 전부 타임아웃이 있는데(`lib/chatbot/llm.ts:42` 2500ms) 여기만 무제한 | hang으로 인한 크론 무한 절단 제거 |
 | 1-5 | `app/api/cron/sync-branch-insights/route.ts:17-22` 병렬화 | 4개 팀 스코프를 순차 루프로 실행, 각각 Gemini 호출 | 벽시계 **~4배 단축** |
 | 1-6 | `lib/google.ts:34-40` lazy 로딩 | `googleapis` 배럴 + 클라이언트 4개를 모듈 로드 시점에 생성. `lib/calendar-data.ts:19,35,36`이 3중으로 끌어와, 캘린더를 안 쓰는 라우트도 전부 파싱 | 콜드스타트 **-300~800ms** |
@@ -156,11 +207,34 @@
 
 ---
 
-## 3. 착수 전 확인 필요
+## 3. 확정된 전제와 남은 확인 항목
 
-1. **Supabase 프로젝트 리전.** 저장소만으로 확정 불가(`.env.local.example:7`이 플레이스홀더, `supabase/`에는 migrations만). Phase 1-1의 방향이 여기서 갈린다 — Supabase가 서울이면 `icn1`이 정답이고, `us-east-1`이면 `icn1` 전환은 **역효과**다. 둘을 같은 리전으로 맞추는 것이 최적.
-2. **Vercel 플랜.** `AGENTS.md`는 명시 확인 전까지 Hobby로 본다. Pro면 크론에 `maxDuration=300`을 주면 끝이고, Hobby면 배치 크기를 줄여 나눠 처리해야 한다(`lib/external-crm/xiaoshouyi-sync.ts:363`이 이미 env로 페이지 상한을 읽는다). 참고로 `app/api/admin/blog/ai/route.ts:8`의 `maxDuration = 60`은 이미 Hobby 가정과 어긋난다.
-3. **`images/blog/imported/**` 삭제 가부.** 본문이 Supabase `blog_posts`에 있어 코드 grep으로 판정 불가(3-2).
+### 3.1 확정 (2026-09-01 확인)
+
+| 항목 | 값 | 영향 |
+|---|---|---|
+| Supabase 프로젝트 리전 | **ap-southeast-1 (싱가포르)** | Phase 1-1의 답이 `icn1`이 아니라 **`sin1`**으로 바뀐다. §1.5 참조 |
+| Vercel 플랜 | **Hobby** | Phase 1-3에서 `maxDuration=300` 불가. 크론을 배치로 쪼개야 한다. 아래 3.2-a는 이 때문에 새로 생긴 최우선 확인 항목 |
+
+### 3.2 남은 확인 항목
+
+**a. Hobby 플랜의 cron job 개수 제한 — 최우선.**
+
+`vercel.json`에는 크론이 **9개** 등록되어 있다. Vercel Hobby는 cron job 개수에 제한이 있으므로, **등록된 9개 중 일부가 애초에 실행되지 않고 있을 가능성**이 있다. 그렇다면 이 감사의 크론 관련 항목(1-3~1-5) 이전에 훨씬 근본적인 문제가 있는 것이다 — 주간/월간 다이제스트, 외부 CRM 동기화, 지점 동기화가 **한 번도 돌지 않았을 수 있다.**
+
+`scripts/check-vercel-crons.mjs`는 `MAX_DAILY_RUNS_PER_CRON = 1`로 **빈도만** 검증하고 **개수는 검증하지 않는다.** 따라서 이 게이트는 통과하면서도 크론이 실행되지 않을 수 있다.
+
+확인 방법: Vercel 대시보드 → 프로젝트 → Settings → Cron Jobs에서 실제 등록·실행 이력을 본다. 제한에 걸린다면 선택지는 (1) 필수 크론만 남기고 나머지를 하나의 디스패처 라우트로 통합, (2) 외부 스케줄러로 이관, (3) Pro 전환이다. 통합이 가장 싸다 — `AGENTS.md`의 "sub-daily 실행이 필요하면 vercel.json에 직접 추가하지 말고 외부 스케줄러·큐·Pro 전환을 먼저 확정한다" 규칙과도 맞는다.
+
+확인 후에는 `scripts/check-vercel-crons.mjs`에 개수 상한 검증을 추가해 같은 실수가 반복되지 않게 한다.
+
+**b. Hobby의 함수 실행 시간 상한.**
+
+`app/api/admin/blog/ai/route.ts:8`, `app/api/admin/marketing/ai/route.ts:6`, `app/api/admin/hardware/import-ledger/route.ts:20`, `app/api/admin/cs-chat/regression-eval/route.ts:11` 네 곳이 `maxDuration = 60`을 선언하고 있다. 이 값이 Hobby에서 실제로 허용되는지 확인해야 한다. 허용되지 않으면 네 라우트 모두 선언이 무시되고 기본값에서 잘린다.
+
+같은 확인이 **챗봇 예산에도 직결**된다. `app/api/chatbot/query/route.ts:7`의 라우트 예산은 13초인데 `maxDuration` 선언이 없다. Hobby 기본 상한이 13초보다 작으면, `lib/chatbot/service.ts`가 정교하게 만들어 둔 deterministic fallback이 **나가기 전에 504가 된다.** 즉 CLAUDE.md의 챗봇 규칙("느린 RAG/LLM 호출이 있어도 500으로 끊기지 않아야 한다")이 코드상으로는 지켜지는데 플랫폼 설정 때문에 무너지는 상태일 수 있다. 상한을 확인한 뒤 `CHATBOT_ROUTE_TIMEOUT_MS` 기본값을 그보다 확실히 작게(예: 8초) 낮추는 것이 안전하다.
+
+**c. `images/blog/imported/**` 삭제 가부.** 본문이 Supabase `blog_posts`에 있어 코드 grep으로 판정 불가(3-2 항목).
 
 ---
 
