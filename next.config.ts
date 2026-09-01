@@ -141,6 +141,13 @@ const nextConfig: NextConfig = {
         source: "/video/:path*",
         headers: publicAssetCacheHeaders,
       },
+      // 광고 랜딩(public/l/<slug>/assets/**)의 배경·이미지 자산.
+      // 랜딩 HTML(/l/<slug>)은 app/l/[slug]/route.ts 가 자체 Cache-Control 을 설정하므로
+      // 여기서 immutable 을 씌우면 안 된다 — 재배포해도 URL 이 그대로라 갱신이 막힌다.
+      {
+        source: "/l/:slug/assets/:path*",
+        headers: publicAssetCacheHeaders,
+      },
       {
         source: "/docs/files/classin-verification-business-registration.pdf",
         headers: [

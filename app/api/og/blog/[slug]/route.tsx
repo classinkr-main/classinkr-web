@@ -8,6 +8,10 @@
 import { ImageResponse } from "next/og"
 import { getPublishedPostBySlug } from "@/lib/repositories/blog"
 
+// 공유 미리보기 크롤러(카카오톡·슬랙·검색봇)가 같은 URL을 반복 요청한다.
+// 캐시가 없으면 매번 Supabase 조회 + PNG 재렌더라 미리보기 타임아웃으로 이어진다.
+export const revalidate = 86400
+
 const WIDTH = 1200
 const HEIGHT = 630
 

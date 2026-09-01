@@ -116,7 +116,7 @@ export default function ContactPage() {
     useEffect(() => {
         if (!showEventPicker || eventsLoaded) return
         let cancelled = false
-        fetch("/api/events", { cache: "no-store" })
+        fetch("/api/events")
             .then((res) => (res.ok ? res.json() : []))
             .then((data) => {
                 if (cancelled) return

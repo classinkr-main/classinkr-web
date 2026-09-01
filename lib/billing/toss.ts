@@ -24,6 +24,24 @@ export interface TossConfirmPaymentResponse {
   [key: string]: unknown
 }
 
+// 토스 승인은 비멱등이다. 응답이 없다고 해서 "승인되지 않았다"고 단정하면
+// 실제로는 승인된 결제를 실패로 처리하게 되므로, 타임아웃은 일반 실패와 구별해서 던진다.
+// 호출부는 이 에러를 받으면 결제 상태를 조회해 화해(reconcile)해야 하며,
+// 그냥 실패로 응답하거나 승인을 재시도해서는 안 된다.
+const TOSS_CONFIRM_TIMEOUT_MS = Number(
+  process.env.TOSS_CONFIRM_TIMEOUT_MS ?? 8_000
+)
+
+export class TossConfirmTimeoutError extends Error {
+  readonly orderId: string
+
+  constructor(orderId: string) {
+    super("결제 승인 결과를 확인하지 못했습니다. 잠시 후 결제 내역을 확인해 주세요.")
+    this.name = "TossConfirmTimeoutError"
+    this.orderId = orderId
+  }
+}
+
 function buildBasicAuth(secretKey: string) {
   return Buffer.from(`${secretKey}:`).toString("base64")
 }
@@ -46,15 +64,26 @@ export async function confirmTossPayment(input: {
 }) {
   const secretKey = getTossSecretKey()
 
-  const response = await fetch("https://api.tosspayments.com/v1/payments/confirm", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${buildBasicAuth(secretKey)}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(input),
-    cache: "no-store",
-  })
+  let response: Response
+  try {
+    response = await fetch("https://api.tosspayments.com/v1/payments/confirm", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${buildBasicAuth(secretKey)}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(input),
+      cache: "no-store",
+      signal: AbortSignal.timeout(TOSS_CONFIRM_TIMEOUT_MS),
+    })
+  } catch (error) {
+    // AbortError(타임아웃) 및 네트워크 단절 — 승인 여부를 알 수 없는 상태다.
+    console.error("[toss] 승인 응답 확인 실패", {
+      orderId: input.orderId,
+      reason: error instanceof Error ? error.name : "unknown",
+    })
+    throw new TossConfirmTimeoutError(input.orderId)
+  }
 
   const payload = (await response.json().catch(() => null)) as
     | TossConfirmPaymentResponse

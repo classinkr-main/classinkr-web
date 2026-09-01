@@ -299,7 +299,6 @@ function DocsSectionMedia({ media }: { media: DocMedia[] }) {
               width={item.width ?? 1440}
               height={item.height ?? 900}
               sizes="(min-width: 1024px) 760px, calc(100vw - 32px)"
-              unoptimized={item.src.startsWith("/")}
               className={
                 item.width && item.height && item.height > item.width
                   ? "mx-auto h-auto max-h-[640px] w-auto max-w-full object-contain"

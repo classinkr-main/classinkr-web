@@ -238,6 +238,58 @@ DB가 지구 반대편에 있다. **왕복 1회당 약 230ms**다.
 
 ---
 
+## 3.5 적용 결과 — Phase 0 (2026-09-01)
+
+8개 파일, +89/-14. 계획 대비 두 곳에서 **범위를 좁히거나 넓혔고**, 그 이유를 아래에 남긴다.
+
+### 적용됨
+
+| 파일 | 변경 |
+|---|---|
+| `vercel.json` | `"regions": ["sin1"]` — §1.5 근거 |
+| `app/docs/_utils.tsx` | `unoptimized` prop 제거 |
+| `next.config.ts` | `/l/:slug/assets/:path*` 에 immutable 캐시 헤더 |
+| `app/api/events/route.ts` | `listCachedPublicEvents` + `s-maxage=300, stale-while-revalidate=3600` |
+| `app/contact/page.tsx` | `/api/events` 호출에서 `cache: "no-store"` 제거 |
+| `app/api/og/blog/[slug]/route.tsx` | `revalidate = 86400` |
+| `lib/supabase/admin.ts` | `global.fetch` 기본 타임아웃 10초 |
+| `lib/billing/toss.ts` | 승인 요청 타임아웃 8초 + `TossConfirmTimeoutError` |
+
+### 계획에서 벗어난 두 곳
+
+**1. `/l/:path*` → `/l/:slug/assets/:path*` 로 좁혔다.**
+
+원안대로 `/l/:path*` 에 `max-age=31536000, immutable` 을 걸면 **랜딩 HTML 자체까지 1년 immutable 이 된다.** `public/l/<slug>/index.html` 이 그 경로에 있고, `/l/<slug>` 는 재배포해도 URL 이 바뀌지 않으므로 랜딩을 수정해도 방문자에게 영원히 반영되지 않는다. 실제 문제였던 18MB 배경 이미지는 전부 `assets/` 하위(`public/l/kids/assets`, `public/l/meets-july/assets`)이므로 그쪽만 대상으로 한다. HTML 의 캐시 정책은 `app/l/[slug]/route.ts:65` 가 계속 소유한다.
+
+**2. Supabase 타임아웃에 Storage 예외와 5초 → 10초 상향.**
+
+- **Storage 제외:** `lib/storage/blog-images.ts:54`, `lib/storage/internal-cs-assets.ts:88`, `lib/storage/crm-recordings.ts:81`, `app/api/admin/events/upload/route.ts:44`, `app/api/portal/contracts/[id]/sign/route.ts:59` 등이 같은 admin 클라이언트로 **파일을 업로드**한다. 쿼리용 상한을 걸면 정상 업로드가 끊긴다. `/storage/v1/` 경로는 우회시킨다.
+- **10초:** 현재 함수가 iad1, DB 가 싱가포르라 무거운 어드민 쿼리는 지금도 수 초가 걸린다. 5초로 조이면 **지금 되던 화면이 깨진다.** 이 변경의 목적은 SLA 강제가 아니라 **무한 대기 차단**이므로 10초로 잡고 `SUPABASE_QUERY_TIMEOUT_MS` 로 조정 가능하게 했다. `regions` 이전이 함께 배포되면 실제 소요는 크게 줄어들므로, 안정화 후 하향을 검토한다.
+- 개별 쿼리가 이미 자체 `signal` 을 넘기면 존중한다(`lib/repositories/blog.ts:512`, `lib/repositories/public-events.ts:47` 의 6초 예산).
+
+**토스 타임아웃을 단순 `signal` 추가로 끝내지 않은 이유:** 승인은 비멱등이라 "응답 없음"을 실패로 단정하면 **실제로 승인된 결제를 실패 처리**하게 된다. 타임아웃을 `TossConfirmTimeoutError` 로 구별해 던져, 화해(reconcile) 경로를 붙일 자리를 만들었다. 화해 자체는 Phase 4 몫이다.
+
+### 남은 리스크
+
+1. **`unoptimized` 제거의 배포 후 확인 1건.** `public/docs` 이미지 121개 중 4MB 초과는 2개다(`클래스인x-삭제-재설치-전자칠판.png` 8.9MB, `학원a-...-녹화-수업-생성하기.png` 5.4MB). 이미지 최적화기가 이 크기를 처리하는지는 배포 후 해당 문서 페이지에서 확인해야 한다. 실패하면 되돌리기는 한 줄이며, 정답은 Phase 3 의 원본 축소다.
+2. **토스 잔여 위험은 "주문 정체"이지 "이중 청구"가 아니다.** 타임아웃 후 재시도하면 토스가 `ALREADY_PROCESSED_PAYMENT` 를 반환하므로 중복 청구는 없고, 대신 주문이 `pending` 에 머문다. Phase 4 의 화해 크론이 이를 해소한다.
+3. **`listCachedPublicEvents` 는 조회 실패를 `[]` 로 흡수한다**(`lib/repositories/public-events.ts:306-312`). 실패는 `logPublicEventReadFailure` 로 남고, `/events` 페이지가 이미 같은 동작이라 일관성은 맞다.
+
+### 게이트 결과
+
+| 게이트 | 결과 |
+|---|---|
+| `npm run check:vercel-crons` | 통과 (9 entries) |
+| `npm run typecheck` | 통과 |
+| `npx eslint app components lib --max-warnings=0` | 통과 |
+| `npm run build` | **컨테이너 제약으로 완주 불가** — 아래 참조 |
+
+빌드는 `Compiled successfully` + `Finished TypeScript` 까지 통과하고 정적 생성 단계(472 페이지)에서 `/admin/blog/new` **한 페이지**만 실패한다. 원인은 이 컨테이너에 Supabase 자격증명이 없어 DNS/연결이 실패하는 것이며, **변경 전 원본 트리에서도 동일하게 같은 페이지에서 실패**함을 확인했다. 나머지 471 페이지는 DB 도달 불가 상태에서도 정상 처리됐다.
+
+> **부수 발견(기존 문제, 이번 변경과 무관).** `/admin/blog/new` 는 빌드 시점에 프리렌더되면서 Supabase 도달을 요구하고, 실패하면 **빌드 전체를 중단시킨다.** 즉 배포 중 Supabase 가 불안정하면 배포가 깨진다. 이 페이지를 `dynamic = "force-dynamic"` 으로 두거나 조회 실패에 폴백을 주는 편이 안전하다. Phase 4 후보로 기록한다.
+
+---
+
 ## 4. 검증
 
 기본 품질 게이트(`AGENTS.md`)를 순서대로 유지한다.
