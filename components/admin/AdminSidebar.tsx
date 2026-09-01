@@ -63,7 +63,11 @@ function overviewCalendarUrls() {
 // 키를 지우면 "어느 화면이 어떤 API를 먼저 부르는지"의 유일한 기록이 사라져
 // P1에서 다시 유추해야 하고, 그때 키가 어긋나면 warm이 조용히 빗나간다(이 파일 상단 경고).
 // 그래서 남겨두고 export만 열어 콘솔 내비가 같은 맵을 그대로 쓸 수 있게 한다.
-export const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = {
+// 캐시 키가 URL과 다른 소비처(예: SummaryTab의 usePerf/useInsights)를 데우려면
+// {url, cacheKey} 형태를 쓴다. 나머지는 기존처럼 문자열 URL 하나로 충분하다(캐시 키=URL 기본값).
+type WarmupEntry = string | { url: string; cacheKey: string }
+
+export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEntry[])> = {
   "/admin/overview": () => [
     // overview 페이지가 실제 호출하는 URL과 캐시 키를 맞춰야 hover-warm이 적중한다.
     "/api/admin/leads?scope=overview",
@@ -116,6 +120,11 @@ export const NAV_WARMUP_REQUESTS: Record<string, string[] | (() => string[])> = 
     "/api/admin/meta/campaigns?datePreset=last_30d&limit=50",
     // 메시지 발송 허브(구 /admin/marketing)가 캠페인 탭으로 흡수되며 채널 상태도 함께 데운다.
     "/api/admin/messaging/status",
+    // 기본 탭 "요약"(마케팅 퍼포먼스 대시보드, 2026-08-21~)이 실제로 쓰는 두 건 — 지금까지
+    // 빠져 있어 요약 탭은 hover-warm 대상에서 늘 제외됐다(진입마다 콜드 로딩). usePerf/useInsights가
+    // cacheKey를 URL과 다르게 지정하므로(marketing-perf:<period>·marketing-insights) 그대로 맞춘다.
+    { url: "/api/admin/marketing/perf?period=30d", cacheKey: "marketing-perf:30d" },
+    { url: "/api/admin/marketing/insights", cacheKey: "marketing-insights" },
   ],
   "/admin/lead-magnets": [
     "/api/admin/lead-magnets",
@@ -376,8 +385,10 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
 
     const warmupEntry = NAV_WARMUP_REQUESTS[href]
     const warmupUrls = typeof warmupEntry === "function" ? warmupEntry() : warmupEntry ?? []
-    for (const url of warmupUrls) {
-      void warmAdminRequestCache(url, { ttlMs: 60_000 })
+    for (const entry of warmupUrls) {
+      const url = typeof entry === "string" ? entry : entry.url
+      const cacheKey = typeof entry === "string" ? undefined : entry.cacheKey
+      void warmAdminRequestCache(url, { ttlMs: 60_000, cacheKey })
     }
   }, [prefetchAdminRoute])
 

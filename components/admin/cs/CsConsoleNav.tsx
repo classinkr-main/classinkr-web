@@ -273,8 +273,10 @@ function CsConsoleNavContent({ role, contentClassName, className }: CsConsoleNav
 
         const entry = NAV_WARMUP_REQUESTS[href]
         const urls = typeof entry === "function" ? entry() : entry ?? []
-        for (const url of urls) {
-          void warmAdminRequestCache(url, { ttlMs: 60_000 })
+        for (const urlEntry of urls) {
+          const url = typeof urlEntry === "string" ? urlEntry : urlEntry.url
+          const cacheKey = typeof urlEntry === "string" ? undefined : urlEntry.cacheKey
+          void warmAdminRequestCache(url, { ttlMs: 60_000, cacheKey })
         }
       }, 180)
     },
