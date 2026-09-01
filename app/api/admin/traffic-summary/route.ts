@@ -5,6 +5,7 @@ import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { buildHomepageFlowFromRows } from "@/lib/admin-homepage-flow"
+import { buildLeadConversions, type LeadConversionRow } from "@/lib/admin/traffic-lead-conversions"
 import {
   buildVisitorStatsFromRows,
   getVisitorStatsSinceIso,
@@ -107,15 +108,30 @@ async function computeTrafficSummary(rangeDays: VisitorStatsRangeDays) {
   const sinceIso = rollingSinceIso < kstSinceIso ? rollingSinceIso : kstSinceIso
 
   const supabase = createSupabaseAdminClient()
-  const { data, error } = await supabase
-    .from("client_events")
-    .select("event_name, page, params, anonymous_id, button, created_at")
-    .gte("created_at", sinceIso)
-    .order("created_at", { ascending: false })
-    .limit(SCAN_LIMIT)
+  // 전환 지표는 leads 에서, 나머지 트래픽 지표는 client_events 에서 온다. 두 조회를 나란히 던진다.
+  // leads 는 source/created_at 두 컬럼만 가져오고 즉시 숫자로 접는다 — 응답에 리드 행이 실리면
+  // unstable_cache 항목이 커진다(리드 전량은 2MB 상한을 위협한다).
+  const [eventsResult, leadsResult] = await Promise.all([
+    supabase
+      .from("client_events")
+      .select("event_name, page, params, anonymous_id, button, created_at")
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .limit(SCAN_LIMIT),
+    supabase
+      .from("leads")
+      .select("source, created_at")
+      .gte("created_at", rollingSinceIso)
+      .limit(SCAN_LIMIT),
+  ])
 
-  if (error) throw error
-  const rows = (data ?? []) as TrafficEventRow[]
+  if (eventsResult.error) throw eventsResult.error
+  const rows = (eventsResult.data ?? []) as TrafficEventRow[]
+  // 리드 조회 실패는 트래픽 요약 전체를 죽이지 않는다 — 방문자·이벤트 지표는 그대로 쓸 수 있다.
+  if (leadsResult.error) {
+    console.error("[GET /api/admin/traffic-summary] lead conversions:", leadsResult.error.message)
+  }
+  const leadRows = (leadsResult.data ?? []) as LeadConversionRow[]
 
   // ISO 오프셋 표기가 소스마다 다를 수 있어 문자열이 아닌 epoch로 자른다.
   const kstSinceMs = new Date(kstSinceIso).getTime()
@@ -140,6 +156,9 @@ async function computeTrafficSummary(rangeDays: VisitorStatsRangeDays) {
       rows.filter((row) => new Date(row.created_at).getTime() >= rollingSinceMs),
       rangeDays
     ),
+    leadConversions: buildLeadConversions(leadRows, rangeDays, now),
+    /** 리드 조회가 실패해 leadConversions 가 0으로 보이는 상태인지. 화면이 0과 미상을 구분한다. */
+    leadConversionsUnavailable: Boolean(leadsResult.error),
   }
 }
 

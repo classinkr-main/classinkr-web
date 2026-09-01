@@ -521,9 +521,10 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     thisMonthLeads,
     convertedThisMonth,
     convertedTrend,
-    contactPageToday,
-    contactPageThisWeek,
-    contactPageTotal,
+    homepageToday,
+    homepageThisWeek,
+    homepageTotal,
+    homepageUnconfirmed,
   } = leadOverview?.metrics ?? {
     newLeads: 0,
     contactedLeads: 0,
@@ -537,9 +538,10 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
     thisMonthLeads: 0,
     convertedThisMonth: 0,
     convertedTrend: 0,
-    contactPageToday: 0,
-    contactPageThisWeek: 0,
-    contactPageTotal: 0,
+    homepageToday: 0,
+    homepageThisWeek: 0,
+    homepageTotal: 0,
+    homepageUnconfirmed: 0,
   }
   const pieData = leadOverview?.sources ?? []
   const recentLeads = leadOverview?.recentLeads ?? []
@@ -748,12 +750,19 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
             ) : (
               <StatCard
                 icon={<Inbox className="h-4 w-4" />}
-                label="홈페이지 문의"
-                value={`${contactPageThisWeek}건`}
-                sub={`오늘 ${contactPageToday} · 누적 ${contactPageTotal}`}
+                label="홈페이지 유입"
+                value={`${homepageThisWeek}건`}
+                sub={
+                  // 누적 옆에 미확인 건수를 같이 낸다. 이 타일은 확인 게이트를 안 걸고 세는데
+                  // 눌러서 착지하는 리드 보드는 걸기 때문에, 이 수를 안 밝히면 "타일 4건 →
+                  // 목록 3건"이 아무 설명 없이 어긋난다. 링크도 게이트를 연 채로 착지시킨다.
+                  homepageUnconfirmed > 0
+                    ? `오늘 ${homepageToday} · 누적 ${homepageTotal} · 미확인 ${homepageUnconfirmed}`
+                    : `오늘 ${homepageToday} · 누적 ${homepageTotal}`
+                }
                 tone="neutral"
                 valueSize="lg"
-                href="/admin/crm/customers/leads?source=contact_page"
+                href="/admin/crm/customers/leads?group=homepage&unconfirmed=1"
               />
             )}
           </div>

@@ -27,6 +27,11 @@ import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
 import type { ContactLogRecord, ContactLogType, ContactLogResult } from "@/lib/repositories/contact-logs"
 import type { PublicEvent } from "@/lib/types/public-events"
 import {
+  matchesLeadScopeFilters,
+  selectScopedUnconfirmedLeads,
+  type LeadScopeCriteria,
+} from "@/lib/crm/leads-board-state"
+import {
   STATUS_LABEL,
   LEAD_FILTER_KEYS,
   CONFIRMATION_GATE_EXEMPT_FILTERS,
@@ -62,7 +67,6 @@ import {
   calcLeadPriority,
   getEngagement,
   isLeadSortKey,
-  matchesLeadSearch,
   sortLeads,
   tokenizeLeadSearch,
   type LeadPriority,
@@ -129,7 +133,13 @@ export default function LeadsBoardClient() {
   const [sortKey, setSortKey] = useState<LeadSortKey>(initialSort)
   // 확인 게이트 우회 토글. 기본은 기존 규칙(미확인 숨김) 그대로 두되, 한 번의 클릭으로
   // "정말 전부" 볼 수 있게 한다 — 모아보기의 전제.
-  const [includeUnconfirmed, setIncludeUnconfirmed] = useState(false)
+  //
+  // ?unconfirmed=1 로 열어 둔 채 착지할 수 있다. Overview '홈페이지 유입' 타일처럼 게이트를
+  // 안 걸고 센 숫자에서 넘어오는 링크가 게이트 걸린 목록에 떨어지면, 타일과 목록 건수가
+  // 아무 설명 없이 어긋난다.
+  const [includeUnconfirmed, setIncludeUnconfirmed] = useState(
+    searchParams.get("unconfirmed") === "1"
+  )
   const [trackingDimension, setTrackingDimension] = useState<TrackingDimension>("channel")
   const [trackingKey, setTrackingKey] = useState<string | null>(null)
   // 검색어·유입 그룹도 URL에서 복원한다 — 렌즈·정렬처럼 공유·새로고침에서 같은 화면.
@@ -368,8 +378,9 @@ export default function LeadsBoardClient() {
     apply("filter", filter, "all")
     apply("q", urlSearchQuery.trim(), "")
     apply("group", sourceGroup, "all")
+    apply("unconfirmed", includeUnconfirmed ? "1" : "0", "0")
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`)
-  }, [view, lens, sortKey, filter, urlSearchQuery, sourceGroup])
+  }, [view, lens, sortKey, filter, urlSearchQuery, sourceGroup, includeUnconfirmed])
 
   // 렌즈나 축이 바뀌면 이전 축의 트래킹 선택은 의미를 잃는다 — 조용히 남겨두면 빈 목록이 된다.
   useEffect(() => {
@@ -887,7 +898,6 @@ export default function LeadsBoardClient() {
     const lensLeads = lens === "marketing" ? marketingLeads : leads
     // 미확인(공개 채널, 검토 전) 리드는 별도 수신함으로 취급 — "활성/단계별" 집계에서 제외해
     // 실제로 다루고 있는 리드 수만 반영한다. 응대 SLA(미응답 큐)는 확인 여부와 무관하게 잡는다.
-    const unconfirmedLeads = lensLeads.filter(isUnconfirmedLead)
     const confirmedLeads = lensLeads.filter((l) => !isUnconfirmedLead(l))
     const activeLeads = confirmedLeads.filter((l) => isActiveLead(l.status))
     const sourceDetailOptions = Array.from(
@@ -897,6 +907,19 @@ export default function LeadsBoardClient() {
       new Set(lensLeads.map((lead) => lead.lead_magnet?.trim()).filter(Boolean) as string[])
     ).sort((a, b) => a.localeCompare(b, "ko"))
     const searchTokens = tokenizeLeadSearch(deferredSearch)
+    // 상태와 직교하는 범위 축 한 벌. 유입 칩·트래킹 롤업·미확인 수신함이 같은 판정을 본다
+    // (규칙 정본: lib/crm/leads-board-state.matchesLeadScopeFilters).
+    const scopeCriteria: LeadScopeCriteria = {
+      sourceGroup,
+      sourceDetail: sourceDetailFilter,
+      channelSource,
+      leadMagnet: leadMagnetFilter,
+      trackingDimension,
+      trackingKey,
+      searchTokens,
+    }
+    // 수신함·게이트 배지가 세는 모집단 — 지금 화면이 보고 있는 범위 그대로.
+    const unconfirmedLeads = selectScopedUnconfirmedLeads(lensLeads, scopeCriteria)
     // 상태별 필터 술어 — 목록·필터 카드 카운트가 같은 판정을 공유한다(카운트≠목록 어긋남 방지).
     const matchesStatusFilter = (lead: LeadRecord, key: LeadFilter) => {
       if (key === "all") return true
@@ -909,14 +932,8 @@ export default function LeadsBoardClient() {
     }
     // 상태 외 필터(유입·세부유입·채널·마그넷·트래킹·검색) 술어 — 필터 카드·유입 칩 카운트가
     // "그 카드를 눌렀을 때 실제로 보게 될 건수"를 보여주기 위해 공유한다.
-    const matchesSubFilters = (lead: LeadRecord, options?: { skipSourceGroup?: boolean }) => {
-      if (!options?.skipSourceGroup && sourceGroup !== "all" && getLeadSourceGroup(lead) !== sourceGroup) return false
-      if (sourceDetailFilter !== "all" && getLeadSourceDetail(lead) !== sourceDetailFilter) return false
-      if (channelSource && lead.source !== channelSource) return false
-      if (leadMagnetFilter !== "all" && lead.lead_magnet !== leadMagnetFilter) return false
-      if (trackingKey && getLeadTrackingKey(lead, trackingDimension) !== trackingKey) return false
-      return matchesLeadSearch(lead, searchTokens)
-    }
+    const matchesSubFilters = (lead: LeadRecord, options?: { skipSourceGroup?: boolean }) =>
+      matchesLeadScopeFilters(lead, scopeCriteria, options)
     // 상태/SLA 필터까지만 적용한 중간 집합 — 아래 유입·검색 필터는 이 집합 위에서 돈다.
     const statusFiltered = lensLeads.filter((lead) => {
       // 응대 SLA 큐·미확인 큐가 아니면 검토 전 리드는 기본 화면에서 숨긴다("미확인 포함"으로 해제).
@@ -939,13 +956,9 @@ export default function LeadsBoardClient() {
       .filter((chip) => chip.count > 0 || chip.group === sourceGroup)
     // 트래킹 롤업이 보는 집합 — 렌즈+상태+유입+검색까지. 롤업 행을 고르면 여기서 한 겹 더 좁힌다.
     // (트래킹 키 자체는 제외 — 롤업 표가 키별 건수를 보여주는 모집단이므로.)
-    const trackingScopeLeads = statusFiltered.filter((lead) => {
-      if (sourceGroup !== "all" && getLeadSourceGroup(lead) !== sourceGroup) return false
-      if (sourceDetailFilter !== "all" && getLeadSourceDetail(lead) !== sourceDetailFilter) return false
-      if (channelSource && lead.source !== channelSource) return false
-      if (leadMagnetFilter !== "all" && lead.lead_magnet !== leadMagnetFilter) return false
-      return matchesLeadSearch(lead, searchTokens)
-    })
+    const trackingScopeLeads = statusFiltered.filter((lead) =>
+      matchesLeadScopeFilters(lead, scopeCriteria, { skipTracking: true })
+    )
     const filtered = sortLeads(
       trackingKey
         ? trackingScopeLeads.filter(

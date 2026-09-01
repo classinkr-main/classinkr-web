@@ -4,6 +4,7 @@
 // W2-3(OV4): C2 revenue-core SSOT 전환의 선행 정지작업 — 신호 정의를 한 곳에서 검증한다.
 
 // 순수 규칙은 lib/crm/leads-board-state 가 정본 — 서버 집계가 컴포넌트를 import 하지 않는다.
+import { getLeadSourceGroup } from "@/lib/crm/lead-attribution"
 import { hoursBetween, isUnconfirmedLead, isUnrespondedLead } from "@/lib/crm/leads-board-state"
 import type { LeadRecord } from "@/lib/site-settings-types"
 import type { AdminIntegrationStatusResponse } from "@/lib/admin-integrations/types"
@@ -86,10 +87,16 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
   let lastMonthLeads = 0
   let convertedThisMonth = 0
   let convertedLastMonth = 0
-  // 홈페이지 문의(contact_page) 유입 창 — 유입 수 관점이라 todayLeads처럼 확인 게이트를 적용하지 않는다.
-  let contactPageToday = 0
-  let contactPageThisWeek = 0
-  let contactPageTotal = 0
+  // 홈페이지 유입 창 — 유입 수 관점이라 todayLeads처럼 확인 게이트를 적용하지 않는다.
+  // 모집단은 유입 그룹 매핑(getLeadSourceGroup)의 homepage 그룹 = 문의 폼 + 데모 모달 +
+  // 홈 리드마그넷·최종 CTA. 예전에는 contact_page 한 소스만 세서, 홈 Hero·Comparison·FinalCTA에
+  // 붙은 데모 모달로 들어온 문의가 타일에서 통째로 빠졌다.
+  let homepageToday = 0
+  let homepageThisWeek = 0
+  let homepageTotal = 0
+  // 그 중 확인 게이트 밖(미확인)인 건수. 타일을 눌러 착지하는 리드 보드는 게이트를 걸기 때문에,
+  // 이 수를 같이 들고 있어야 "타일은 4건인데 목록은 3건" 같은 침묵하는 차이를 화면이 말할 수 있다.
+  let homepageUnconfirmed = 0
   const sourceMap: Record<string, number> = {}
   const branchMap: Record<string, number> = {}
   const dayCount: Record<string, number> = {}
@@ -104,8 +111,11 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
       else if (l.status === "closed") closedLeads++
     }
 
-    const isContactPage = l.source === "contact_page"
-    if (isContactPage) contactPageTotal++
+    const isHomepageLead = getLeadSourceGroup(l) === "homepage"
+    if (isHomepageLead) {
+      homepageTotal++
+      if (isUnconfirmedLead(l)) homepageUnconfirmed++
+    }
 
     const t = new Date(l.timestamp).getTime()
     if (!Number.isNaN(t)) {
@@ -114,9 +124,9 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
       if (key === todayStr) todayLeads++
       if (t >= weekAgoT) thisWeekLeads++
       else if (t >= twoWeeksAgoT) lastWeekLeads++
-      if (isContactPage) {
-        if (key === todayStr) contactPageToday++
-        if (t >= weekAgoT) contactPageThisWeek++
+      if (isHomepageLead) {
+        if (key === todayStr) homepageToday++
+        if (t >= weekAgoT) homepageThisWeek++
       }
       if (t >= monthStartT) {
         thisMonthLeads++
@@ -157,9 +167,10 @@ export function aggregateLeads(leads: LeadRecord[], now: Date = new Date()) {
     monthTrend: thisMonthLeads - lastMonthLeads,
     convertedThisMonth,
     convertedTrend: convertedThisMonth - convertedLastMonth,
-    contactPageToday,
-    contactPageThisWeek,
-    contactPageTotal,
+    homepageToday,
+    homepageThisWeek,
+    homepageTotal,
+    homepageUnconfirmed,
     pieData,
     recentLeads,
     dayCount,

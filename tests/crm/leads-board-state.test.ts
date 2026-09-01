@@ -15,9 +15,12 @@ import {
   readLeadsView,
   resolveBoardColumn,
   resolveBoardColumnFocus,
+  matchesLeadScopeFilters,
+  selectScopedUnconfirmedLeads,
   toFollowUpTimestamp,
   toLocalDateKey,
   type LeadFilter,
+  type LeadScopeCriteria,
 } from "@/lib/crm/leads-board-state"
 import type { LeadRecord } from "@/lib/repositories/leads"
 
@@ -148,5 +151,87 @@ describe("시간 헬퍼", () => {
   it("날짜 키는 로컬 기준으로 뽑는다", () => {
     const local = new Date(2026, 7, 20, 23, 30) // 로컬 8/20 23:30
     expect(toLocalDateKey(local)).toBe("2026-08-20")
+  })
+})
+
+
+describe("범위 필터 (상태와 직교하는 축)", () => {
+  const ANY: LeadScopeCriteria = {
+    sourceGroup: "all",
+    sourceDetail: "all",
+    channelSource: "",
+    leadMagnet: "all",
+    trackingDimension: "channel",
+    trackingKey: null,
+    searchTokens: [],
+  }
+
+  it("아무 축도 안 걸면 전부 통과한다", () => {
+    expect(matchesLeadScopeFilters(lead({ source: "meta_lead_ads" }), ANY)).toBe(true)
+  })
+
+  it("유입 그룹 축은 소스가 아니라 그룹으로 판정한다 — 데모 모달도 홈페이지다", () => {
+    const criteria = { ...ANY, sourceGroup: "homepage" as const }
+    expect(matchesLeadScopeFilters(lead({ source: "contact_page" }), criteria)).toBe(true)
+    expect(matchesLeadScopeFilters(lead({ source: "demo_modal" }), criteria)).toBe(true)
+    expect(matchesLeadScopeFilters(lead({ source: "meta_lead_ads" }), criteria)).toBe(false)
+  })
+
+  it("skipSourceGroup 은 유입 축만 뺀다 — 칩 패싯 카운트가 자기 축에 갇히지 않게", () => {
+    const criteria = { ...ANY, sourceGroup: "homepage" as const, channelSource: "meta_lead_ads" }
+    const metaLead = lead({ source: "meta_lead_ads" })
+    expect(matchesLeadScopeFilters(metaLead, criteria)).toBe(false)
+    expect(matchesLeadScopeFilters(metaLead, criteria, { skipSourceGroup: true })).toBe(true)
+  })
+
+  it("skipTracking 은 트래킹 축만 뺀다", () => {
+    const criteria = { ...ANY, trackingDimension: "channel" as const, trackingKey: "없는채널" }
+    const l = lead({ source: "contact_page" })
+    expect(matchesLeadScopeFilters(l, criteria)).toBe(false)
+    expect(matchesLeadScopeFilters(l, criteria, { skipTracking: true })).toBe(true)
+  })
+
+  it("채널·마그넷 축은 그대로 원본 값으로 판정한다", () => {
+    expect(matchesLeadScopeFilters(lead({ source: "newsletter" }), { ...ANY, channelSource: "newsletter" })).toBe(true)
+    expect(matchesLeadScopeFilters(lead({ source: "newsletter" }), { ...ANY, channelSource: "contact_page" })).toBe(false)
+    const magnetLead = lead({ lead_magnet: "omo-guide" } as Partial<LeadRecord>)
+    expect(matchesLeadScopeFilters(magnetLead, { ...ANY, leadMagnet: "omo-guide" })).toBe(true)
+    expect(matchesLeadScopeFilters(magnetLead, { ...ANY, leadMagnet: "다른자료" })).toBe(false)
+  })
+})
+
+describe("미확인 수신함 모집단", () => {
+  const ANY: LeadScopeCriteria = {
+    sourceGroup: "all",
+    sourceDetail: "all",
+    channelSource: "",
+    leadMagnet: "all",
+    trackingDimension: "channel",
+    trackingKey: null,
+    searchTokens: [],
+  }
+  const confirmed = { confirmed_at: "2026-08-19T01:00:00.000Z" } as Partial<LeadRecord>
+
+  it("확인된 리드는 빠진다", () => {
+    const leads = [lead({ id: "a" }), lead({ id: "b", ...confirmed })]
+    expect(selectScopedUnconfirmedLeads(leads, ANY).map((l) => l.id)).toEqual(["a"])
+  })
+
+  it("화면에 걸린 범위 필터를 그대로 따른다 — 배지 숫자가 목록과 어긋나지 않게", () => {
+    // 실측 재현: 홈페이지 유입만 보는 화면인데 배지가 광고 리드까지 세어 160을 말했다.
+    const leads = [
+      lead({ id: "home", source: "contact_page" }),
+      lead({ id: "ad-1", source: "meta_lead_ads" }),
+      lead({ id: "ad-2", source: "meta_lead_ads" }),
+    ]
+    expect(selectScopedUnconfirmedLeads(leads, ANY)).toHaveLength(3)
+    expect(
+      selectScopedUnconfirmedLeads(leads, { ...ANY, sourceGroup: "homepage" }).map((l) => l.id)
+    ).toEqual(["home"])
+  })
+
+  it("상태 축은 적용하지 않는다 — 미확인은 상태와 직교한 큐다", () => {
+    const leads = [lead({ id: "n", status: "new" }), lead({ id: "c", status: "contacted" })]
+    expect(selectScopedUnconfirmedLeads(leads, ANY).map((l) => l.id)).toEqual(["n", "c"])
   })
 })

@@ -72,8 +72,12 @@ const SOURCE_GROUP_BY_SOURCE: Record<string, LeadSourceGroup> = {
 }
 
 // 매핑에 없는 source는 전부 '수기·기타'로 흡수 — 칩에서 리드가 새지 않게 한다.
+export function getSourceGroup(source: string | null | undefined): LeadSourceGroup {
+  return SOURCE_GROUP_BY_SOURCE[(source ?? "").trim()] ?? "manual_etc"
+}
+
 export function getLeadSourceGroup(lead: LeadRecord): LeadSourceGroup {
-  return SOURCE_GROUP_BY_SOURCE[lead.source] ?? "manual_etc"
+  return getSourceGroup(lead.source)
 }
 
 // ─── Meta 광고 식별 ────────────────────────────────────────────

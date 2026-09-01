@@ -187,6 +187,46 @@ describe("aggregateLeads — 리드 확인 게이트", () => {
   })
 })
 
+describe("aggregateLeads — 홈페이지 유입 집계", () => {
+  // 타일이 "홈페이지 문의"라고 말하면서 실제로는 contact_page 한 소스만 셌다. 홈페이지에는
+  // 데모 모달(Hero·Comparison·FinalCTA 세 곳)과 리드마그넷 CTA도 붙어 있어, 그 폼으로 들어온
+  // 문의는 타일에서 조용히 사라졌다. 유입 그룹 매핑(getLeadSourceGroup)이 정본이다.
+  it("contact_page 뿐 아니라 홈페이지 그룹 전체를 센다", () => {
+    const leads = [
+      makeLead({ source: "contact_page" }),
+      makeLead({ source: "demo_modal" }),
+      makeLead({ source: "home_lead_magnet" }),
+      makeLead({ source: "meta_lead_ads" }),
+      makeLead({ source: "newsletter" }),
+    ]
+    const agg = aggregateLeads(leads, NOW)
+    expect(agg.homepageTotal).toBe(3)
+    expect(agg.homepageToday).toBe(3)
+    expect(agg.homepageThisWeek).toBe(3)
+  })
+
+  // 타일은 확인 게이트를 안 걸고(유입 수 관점), 타일을 눌러 착지하는 리드 보드는 건다.
+  // 그래서 "누적 4"라고 써 놓고 눌러 들어가면 3건만 나왔다. 타일이 게이트 밖 건수를
+  // 따로 들고 있어야 화면이 그 차이를 말할 수 있다.
+  it("게이트 밖(미확인) 홈페이지 유입 건수를 따로 낸다", () => {
+    const leads = [
+      makeLead({ source: "contact_page" }),
+      makeLead({ source: "contact_page", confirmed_at: undefined }),
+      makeLead({ source: "demo_modal", confirmed_at: undefined }),
+      makeLead({ source: "meta_lead_ads", confirmed_at: undefined }),
+    ]
+    const agg = aggregateLeads(leads, NOW)
+    expect(agg.homepageTotal).toBe(3)
+    expect(agg.homepageUnconfirmed).toBe(2)
+  })
+
+  it("홈페이지 유입이 없으면 0으로 떨어진다", () => {
+    const agg = aggregateLeads([makeLead({ source: "meta_lead_ads" })], NOW)
+    expect(agg.homepageTotal).toBe(0)
+    expect(agg.homepageUnconfirmed).toBe(0)
+  })
+})
+
 describe("aggregateLeads — 기간 버킷 (Date 주입)", () => {
   it("오늘/이번 주/지난주/이번 달/지난달 경계와 추이를 판정한다", () => {
     const leads = [
@@ -239,18 +279,19 @@ describe("aggregateLeads — 소스·지점·최근 리드", () => {
   })
 })
 
-describe("aggregateLeads — 홈페이지 문의(contact_page) 유입 창", () => {
-  it("contact_page 리드만 오늘·7일·누적으로 센다", () => {
+describe("aggregateLeads — 홈페이지 유입 창", () => {
+  it("홈페이지 그룹 리드를 오늘·7일·누적으로 센다", () => {
     const leads = [
       makeLead({ source: "contact_page", timestamp: localIso(2026, 6, 15, 10) }), // 오늘
+      makeLead({ source: "demo_modal", timestamp: localIso(2026, 6, 15, 10) }), // 오늘(같은 그룹)
       makeLead({ source: "contact_page", timestamp: localIso(2026, 6, 10, 10) }), // 7일 이내
       makeLead({ source: "contact_page", timestamp: localIso(2026, 5, 1, 10) }), // 과거(누적만)
-      makeLead({ source: "demo_modal", timestamp: localIso(2026, 6, 15, 10) }), // 다른 소스 제외
+      makeLead({ source: "meta_lead_ads", timestamp: localIso(2026, 6, 15, 10) }), // 다른 그룹 제외
     ]
     const agg = aggregateLeads(leads, NOW)
-    expect(agg.contactPageToday).toBe(1)
-    expect(agg.contactPageThisWeek).toBe(2)
-    expect(agg.contactPageTotal).toBe(3)
+    expect(agg.homepageToday).toBe(2)
+    expect(agg.homepageThisWeek).toBe(3)
+    expect(agg.homepageTotal).toBe(4)
   })
 
   it("유입 수 관점이라 확인 게이트와 무관하게 센다", () => {
@@ -258,16 +299,17 @@ describe("aggregateLeads — 홈페이지 문의(contact_page) 유입 창", () =
       [makeLead({ source: "contact_page", confirmed_at: undefined })],
       NOW
     )
-    expect(agg.contactPageToday).toBe(1)
-    expect(agg.contactPageThisWeek).toBe(1)
-    expect(agg.contactPageTotal).toBe(1)
+    expect(agg.homepageToday).toBe(1)
+    expect(agg.homepageThisWeek).toBe(1)
+    expect(agg.homepageTotal).toBe(1)
+    expect(agg.homepageUnconfirmed).toBe(1)
   })
 
   it("잘못된 timestamp는 기간 창에서 제외되지만 누적에는 포함된다", () => {
     const agg = aggregateLeads([makeLead({ source: "contact_page", timestamp: "not-a-date" })], NOW)
-    expect(agg.contactPageToday).toBe(0)
-    expect(agg.contactPageThisWeek).toBe(0)
-    expect(agg.contactPageTotal).toBe(1)
+    expect(agg.homepageToday).toBe(0)
+    expect(agg.homepageThisWeek).toBe(0)
+    expect(agg.homepageTotal).toBe(1)
   })
 })
 

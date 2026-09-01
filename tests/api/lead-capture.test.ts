@@ -217,12 +217,38 @@ describe("submitLeadCapture site_inflow auto event", () => {
     )
   })
 
-  it("does not record site_inflow for ad-click leads (gclid)", async () => {
+  // 설계 스펙 §D는 판정 기준을 "lead.source가 site 계열인가" 하나로 못박았다
+  // (docs/superpowers/specs/2026-07-16-crm-structure-develop-design.md).
+  // 구현이 거기에 광고 클릭 식별자 조건을 얹으면서, 광고를 타고 들어와 홈페이지 폼을 채운
+  // 사람의 문의가 CRM 타임라인에 한 줄도 안 남았다 — 유료 트래픽 비중을 생각하면 사실상
+  // 홈페이지 문의 대부분이다(2026-09-01 실측: 8/29 메가클럽 건이 gclid 때문에 누락).
+  // 클릭 식별자는 "어느 경로로 왔나"이지 "어느 폼을 채웠나"가 아니므로 판정에서 뺀다.
+  it("records site_inflow for a homepage form lead that arrived through an ad click (gclid)", async () => {
     const { submitLeadCapture, saveLead, createCrmCustomerEvent } = await loadLeadCapture()
     saveLead.mockResolvedValue({ id: "lead-ad-1" })
 
     const result = await submitLeadCapture({
       ...baseLead,
+      gclid: "test-click-id",
+    })
+
+    expect(result.status).toBe(200)
+    expect(createCrmCustomerEvent).toHaveBeenCalledTimes(1)
+    expect(createCrmCustomerEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ targetId: "lead-ad-1", sourceType: "site_inflow" })
+    )
+  })
+
+  it("still skips site_inflow for ad-platform leads even without a click id", async () => {
+    // 광고 플랫폼이 직접 밀어 넣는 리드(meta_lead_ads 등)는 홈페이지 폼 제출이 아니다 —
+    // source 기준 판정이 이 구분을 계속 지킨다.
+    const { submitLeadCapture, saveLead, createCrmCustomerEvent } = await loadLeadCapture()
+    saveLead.mockResolvedValue({ id: "lead-ad-2" })
+
+    const result = await submitLeadCapture({
+      source: "meta_lead_ads",
+      email: "ad-lead@example.com",
+      name: "\uad11\uace0 \ub9ac\ub4dc",
       gclid: "test-click-id",
     })
 

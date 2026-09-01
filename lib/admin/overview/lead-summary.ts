@@ -16,9 +16,12 @@ export interface OverviewLeadMetrics {
   monthTrend: number
   convertedThisMonth: number
   convertedTrend: number
-  contactPageToday: number
-  contactPageThisWeek: number
-  contactPageTotal: number
+  /** 홈페이지 유입(문의 폼·데모 모달·홈 CTA 등 homepage 그룹) — 확인 게이트 미적용. */
+  homepageToday: number
+  homepageThisWeek: number
+  homepageTotal: number
+  /** 그 중 아직 확인 전이라 리드 보드 기본 화면에서는 빠지는 건수. */
+  homepageUnconfirmed: number
   /** action-kpis 실패 시 쓰는 동일 캐논 폴백(status=new + 응대 대상 source). */
   unrespondedCount: number
   unresponded24hCount: number
@@ -102,9 +105,10 @@ export function buildOverviewLeadSummary(
       monthTrend: aggregate.monthTrend,
       convertedThisMonth: aggregate.convertedThisMonth,
       convertedTrend: aggregate.convertedTrend,
-      contactPageToday: aggregate.contactPageToday,
-      contactPageThisWeek: aggregate.contactPageThisWeek,
-      contactPageTotal: aggregate.contactPageTotal,
+      homepageToday: aggregate.homepageToday,
+      homepageThisWeek: aggregate.homepageThisWeek,
+      homepageTotal: aggregate.homepageTotal,
+      homepageUnconfirmed: aggregate.homepageUnconfirmed,
       unrespondedCount: unresponded.unrespondedCount,
       unresponded24hCount: unresponded.unresponded24hCount,
       topBranch: aggregate.topBranch ?? null,

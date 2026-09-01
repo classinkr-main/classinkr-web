@@ -101,6 +101,14 @@ interface TrafficSummary {
   visitorStats: VisitorStats
   homepageFlow: HomepageFlow
   eventCounts: ClientEventCounts
+  /** 전환 지표의 정본 — 동의 게이트가 걸린 client_events 가 아니라 leads 에서 센다. */
+  leadConversions?: {
+    rangeDays: number
+    homepage: number
+    newsletter: number
+    total: number
+  }
+  leadConversionsUnavailable?: boolean
 }
 
 interface MarketingConversionStatus {
@@ -292,6 +300,8 @@ export default function TrafficPage() {
     useState<TrafficDetailTab>("conversions")
   const [visitorStats, setVisitorStats] = useState<VisitorStats | null>(null)
   const [homepageFlow, setHomepageFlow] = useState<HomepageFlow | null>(null)
+  const [leadConversions, setLeadConversions] = useState<TrafficSummary["leadConversions"] | null>(null)
+  const [leadConversionsUnavailable, setLeadConversionsUnavailable] = useState(false)
   const [eventCounts, setEventCounts] = useState<ClientEventCounts | null>(
     null
   )
@@ -344,6 +354,8 @@ export default function TrafficPage() {
       setVisitorStats(summary?.visitorStats ?? null)
       setHomepageFlow(summary?.homepageFlow ?? null)
       setEventCounts(summary?.eventCounts ?? null)
+      setLeadConversions(summary?.leadConversions ?? null)
+      setLeadConversionsUnavailable(Boolean(summary?.leadConversionsUnavailable))
       setConversionStatus(status ?? null)
       setGeneratedAt(summary?.generatedAt ?? null)
       setLoadError(summary === null)
@@ -676,11 +688,15 @@ export default function TrafficPage() {
         onTabChange={handleDetailTabChange}
         loading={loading}
         metrics={{
+          // CTA 클릭·자료 다운로드는 리드를 남기지 않는 행동이라 client_events 가 유일한 출처다
+          // (그래서 분석 동의한 방문자만 잡힌다 — 패널이 그 사실을 라벨로 밝힌다).
+          // 상담·구독 전환은 동의와 무관하게 leads 에 남으므로 그쪽을 정본으로 쓴다.
           cta: eventCountByName.get("click_cta") ?? 0,
-          demo: eventCountByName.get("submit_demo_request") ?? 0,
-          newsletter: eventCountByName.get("submit_newsletter") ?? 0,
+          demo: leadConversions?.homepage ?? 0,
+          newsletter: leadConversions?.newsletter ?? 0,
           download: eventCountByName.get("download_materials") ?? 0,
         }}
+        leadConversionsUnavailable={leadConversionsUnavailable}
         eventTotal={eventCounts?.total ?? 0}
         eventRows={eventCounts?.byEvent ?? []}
         buttonRows={eventCounts?.byButton ?? []}

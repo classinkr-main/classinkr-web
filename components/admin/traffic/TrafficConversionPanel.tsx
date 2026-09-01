@@ -54,6 +54,8 @@ interface TrafficConversionPanelProps {
     newsletter: number
     download: number
   }
+  /** 리드 조회 실패로 전환 수치가 0으로 보이는 상태. 0건과 "모름"을 구분해 말한다. */
+  leadConversionsUnavailable?: boolean
   eventTotal: number
   eventRows: EventCountRow[]
   buttonRows: ButtonCountRow[]
@@ -116,6 +118,7 @@ export function TrafficConversionPanel({
   onTabChange,
   loading,
   metrics,
+  leadConversionsUnavailable = false,
   eventTotal,
   eventRows,
   buttonRows,
@@ -193,19 +196,27 @@ export function TrafficConversionPanel({
                   icon={<MousePointerClick aria-hidden="true" className="h-4 w-4" />}
                   label="CTA 클릭"
                   value={`${metrics.cta.toLocaleString("ko-KR")}회`}
-                  detail="공개 사이트의 click_cta 이벤트"
+                  detail="click_cta 이벤트 · 분석 동의한 방문자만"
                 />
                 <Metric
                   icon={<Users aria-hidden="true" className="h-4 w-4" />}
-                  label="데모 신청"
-                  value={`${metrics.demo.toLocaleString("ko-KR")}회`}
-                  detail={`뉴스레터 구독 ${metrics.newsletter.toLocaleString("ko-KR")}회`}
+                  label="홈페이지 상담 신청"
+                  value={
+                    leadConversionsUnavailable
+                      ? "—"
+                      : `${metrics.demo.toLocaleString("ko-KR")}건`
+                  }
+                  detail={
+                    leadConversionsUnavailable
+                      ? "리드 조회 실패 — 수치를 신뢰할 수 없음"
+                      : `저장된 리드 기준 · 뉴스레터 ${metrics.newsletter.toLocaleString("ko-KR")}건`
+                  }
                 />
                 <Metric
                   icon={<Download aria-hidden="true" className="h-4 w-4" />}
                   label="자료 다운로드"
                   value={`${metrics.download.toLocaleString("ko-KR")}회`}
-                  detail="download_materials 이벤트"
+                  detail="download_materials 이벤트 · 분석 동의한 방문자만"
                 />
               </div>
 

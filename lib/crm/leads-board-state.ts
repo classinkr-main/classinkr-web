@@ -1,6 +1,14 @@
 import type { LeadRecord, LeadStatus } from "@/lib/repositories/leads"
-import { RESPONSE_TARGET_SOURCES } from "@/lib/crm/lead-attribution"
+import {
+  RESPONSE_TARGET_SOURCES,
+  getLeadSourceDetail,
+  getLeadSourceGroup,
+  getLeadTrackingKey,
+  type LeadSourceGroup,
+  type TrackingDimension,
+} from "@/lib/crm/lead-attribution"
 import { isLeadAwaitingResponse } from "@/lib/crm/lead-response-status"
+import { matchesLeadSearch } from "@/lib/crm/lead-ranking"
 
 // 리드 보드의 순수 규칙 — 뷰 축·필터 축·컬럼 분배·시간 술어.
 //
@@ -79,6 +87,65 @@ export const LEAD_FILTER_KEYS: LeadFilter[] = [
 export const CONFIRMATION_GATE_EXEMPT_FILTERS = new Set<LeadFilter>([
   "unconfirmed", "unresponded", "unresponded_24h", "unresponded_48h",
 ])
+
+// ─── 범위 축 (상태와 직교) ─────────────────────────────────────
+// 유입 그룹·세부 유입·채널·리드마그넷·트래킹·검색. 상태/SLA 필터와 달리 "지금 화면이 보고 있는
+// 모집단"을 정하는 축이라, 유입 칩·트래킹 롤업·미확인 수신함이 전부 같은 판정을 써야 한다.
+// 예전에는 세 곳이 각자 인라인으로 조건을 나열했고, 미확인 수신함만 이 축을 통째로 빼먹어서
+// "문의만 보기"로 좁혀 놓아도 무관한 리드까지 세는 숫자가 나왔다.
+
+export interface LeadScopeCriteria {
+  sourceGroup: LeadSourceGroup | "all"
+  sourceDetail: string
+  /** 인사이트 '채널별 전환율'에서 넘어오는 원본 source 값. 빈 문자열이면 미적용. */
+  channelSource: string
+  leadMagnet: string
+  trackingDimension: TrackingDimension
+  /** null이면 트래킹 축 미적용. */
+  trackingKey: string | null
+  /** tokenizeLeadSearch 결과. */
+  searchTokens: string[]
+}
+
+export interface LeadScopeOptions {
+  /** 유입 칩 패싯 카운트용 — 자기 축은 빼고 나머지만 적용한다. */
+  skipSourceGroup?: boolean
+  /** 트래킹 롤업 모집단용 — 키별 건수를 보여주는 표이므로 자기 축은 뺀다. */
+  skipTracking?: boolean
+}
+
+export function matchesLeadScopeFilters(
+  lead: LeadRecord,
+  criteria: LeadScopeCriteria,
+  options?: LeadScopeOptions
+): boolean {
+  if (!options?.skipSourceGroup && criteria.sourceGroup !== "all" && getLeadSourceGroup(lead) !== criteria.sourceGroup)
+    return false
+  if (criteria.sourceDetail !== "all" && getLeadSourceDetail(lead) !== criteria.sourceDetail) return false
+  if (criteria.channelSource && lead.source !== criteria.channelSource) return false
+  if (criteria.leadMagnet !== "all" && lead.lead_magnet !== criteria.leadMagnet) return false
+  if (
+    !options?.skipTracking &&
+    criteria.trackingKey &&
+    getLeadTrackingKey(lead, criteria.trackingDimension) !== criteria.trackingKey
+  )
+    return false
+  return matchesLeadSearch(lead, criteria.searchTokens)
+}
+
+/**
+ * 미확인 수신함과 확인 게이트 배지가 세는 모집단.
+ *
+ * 상태 축과는 직교하므로 상태/SLA 필터는 적용하지 않되, 화면에 걸린 범위 필터는 그대로 건다 —
+ * 그러지 않으면 "홈페이지 유입만 보기"로 들어와도 배지가 전체 미확인 수를 말하고, 수신함에는
+ * 지금 보고 있는 것과 무관한 리드가 뜬다(2026-09-01: 문의 1건이 가려진 화면에서 배지가 160).
+ */
+export function selectScopedUnconfirmedLeads(
+  leads: readonly LeadRecord[],
+  criteria: LeadScopeCriteria
+): LeadRecord[] {
+  return leads.filter((lead) => isUnconfirmedLead(lead) && matchesLeadScopeFilters(lead, criteria))
+}
 
 // ─── 뷰 축 ─────────────────────────────────────────────────────
 
