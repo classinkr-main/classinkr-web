@@ -26,9 +26,12 @@ class MemoryStorage {
 }
 
 const CACHE_PREFIX = "admin_request_cache:"
+// 지속 키에는 배포 토큰(NEXT_PUBLIC_ADMIN_CACHE_BUILD)이 섞인다. 테스트 환경에는 값이 없어
+// 폴백 "dev"가 쓰인다 — admin-client의 ADMIN_CACHE_BUILD 폴백과 같은 값이어야 한다.
+const CACHE_BUILD = "dev"
 const CRM_URL = "/api/admin/crm/overview"
 const OTHER_URL = "/api/admin/blog/posts"
-const storageKey = (url: string) => `${CACHE_PREFIX}GET:${url}`
+const storageKey = (url: string) => `${CACHE_PREFIX}${CACHE_BUILD}:GET:${url}`
 
 let sessionStore: MemoryStorage
 let localStore: MemoryStorage
@@ -161,6 +164,69 @@ describe("무효화", () => {
 
     expect(localStore.getItem(storageKey(CRM_URL))).toBeNull()
     expect(sessionStore.getItem(storageKey(OTHER_URL))).toBeNull()
+  })
+})
+
+describe("배포 토큰(캐시 스키마 버전)", () => {
+  /** 이전 배포가 남긴 엔트리 — 읽기 키의 배포 토큰만 다르다. */
+  function seedPreviousDeployEntry(url: string, data: unknown, store: MemoryStorage = localStore) {
+    const savedAt = Date.now()
+    store.setItem(
+      `${CACHE_PREFIX}previous:GET:${url}`,
+      JSON.stringify({ data, expiresAt: savedAt + 120_000, savedAt, keepUntil: savedAt + 600_000 })
+    )
+  }
+
+  it("쓰기 키에 배포 토큰이 들어간다 — 토큰을 빼면 이 테스트가 깨진다", () => {
+    client.seedAdminRequestCache(CRM_URL, { homepageTotal: 4 }, { ttlMs: 120_000 })
+
+    expect(localStore.getItem(storageKey(CRM_URL))).not.toBeNull()
+    // 버전 없는 옛 키 자리에는 쓰지 않는다(= 옛 배포와 슬롯을 공유하지 않는다).
+    expect(localStore.getItem(`${CACHE_PREFIX}GET:${CRM_URL}`)).toBeNull()
+  })
+
+  it("버전 없이 저장된 옛 배포 엔트리는 읽지 않는다 — 이번 배포가 곧 이 상황이다", () => {
+    // 이 변경 이전 코드가 쓰던 키 형식 그대로. 필드명이 바뀐 응답이 여기 남아 있었다.
+    const savedAt = Date.now()
+    localStore.setItem(
+      `${CACHE_PREFIX}GET:${CRM_URL}`,
+      JSON.stringify({ data: { contactPageTotal: 4 }, expiresAt: savedAt + 120_000, savedAt })
+    )
+
+    expect(client.getCachedAdminJson(CRM_URL, { allowExpired: true })).toBeNull()
+  })
+
+  it("다른 배포 토큰으로 저장된 엔트리도 읽지 않는다", () => {
+    seedPreviousDeployEntry(CRM_URL, { contactPageTotal: 4 })
+
+    expect(client.getCachedAdminJson(CRM_URL, { allowExpired: true })).toBeNull()
+  })
+
+  it("그래도 스코프 무효화는 이전 배포 엔트리까지 지운다 — 고정 접두사로 훑기 때문", () => {
+    seedPreviousDeployEntry(CRM_URL, { contactPageTotal: 4 })
+
+    client.clearAdminRequestCache("/api/admin/crm")
+
+    expect(localStore.getItem(`${CACHE_PREFIX}previous:GET:${CRM_URL}`)).toBeNull()
+  })
+
+  it("로그아웃 정리도 이전 배포 엔트리를 남기지 않는다", () => {
+    seedPreviousDeployEntry(CRM_URL, { contactPageTotal: 4 })
+    seedPreviousDeployEntry(OTHER_URL, { legacy: true }, sessionStore)
+
+    client.clearAdminSessionStorage()
+
+    expect(localStore.getItem(`${CACHE_PREFIX}previous:GET:${CRM_URL}`)).toBeNull()
+    expect(sessionStore.getItem(`${CACHE_PREFIX}previous:GET:${OTHER_URL}`)).toBeNull()
+  })
+
+  it("프루너가 보존창을 넘긴 이전 배포 엔트리를 스스로 정리한다(저장소에 영구 적재 방지)", () => {
+    seedPreviousDeployEntry(CRM_URL, { contactPageTotal: 4 })
+
+    vi.advanceTimersByTime(11 * 60_000)
+    runScheduledPrune()
+
+    expect(localStore.getItem(`${CACHE_PREFIX}previous:GET:${CRM_URL}`)).toBeNull()
   })
 })
 

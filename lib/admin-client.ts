@@ -11,7 +11,21 @@ const STORAGE_KEYS = [
   "admin_nav_overrides",
 ] as const
 
+// 정리·무효화 매칭용 고정 접두사. **여기에 배포 토큰을 섞지 않는다** — 프루너·스코프
+// 무효화·로그아웃 정리가 전부 이 접두사로 키를 훑으므로, 접두사가 배포마다 바뀌면 이전
+// 배포가 남긴 엔트리를 아무도 못 지워 저장소에 영구히 쌓이고 로그아웃해도 남는다.
 const ADMIN_REQUEST_CACHE_PREFIX = "admin_request_cache:"
+// 배포마다 달라지는 캐시 스키마 토큰 — 읽기 키에만 섞는다(getSessionCacheKey).
+//
+// 지속 캐시(session/local)에 남은 **이전 배포의 응답 모양**을 새 코드가 읽는 사고를 막는다.
+// 실제 사고(2026-09-01): Overview 리드 요약의 필드명이 contactPage* → homepage* 로 바뀌었는데
+// /api/admin/leads 스코프는 localStorage에 SWR 10분으로 남는다. 배포 직후 그 캐시를 든 화면이
+// 새 필드를 못 찾아 "undefined건"을 그렸고, 마운트 1회 로드 화면이라 그 방문 내내 복구되지 않았다.
+// (개별 URL에 ?contract=v3 처럼 손으로 버전을 붙여 온 관례가 있었지만, 붙이는 걸 잊으면 그대로 사고다.)
+//
+// 이전 배포 엔트리는 고정 접두사에 계속 걸리므로 프루너가 보존창(최대 30분) 안에 스스로 정리한다.
+// 로컬 개발은 토큰이 "dev"로 고정돼 기존 동작 그대로다.
+const ADMIN_CACHE_BUILD = process.env.NEXT_PUBLIC_ADMIN_CACHE_BUILD || "dev"
 const DEFAULT_ADMIN_CACHE_TTL_MS = 45_000
 // TTL이 지나도 이 시간 안의 데이터면 즉시 보여주고 백그라운드에서 갱신한다.
 // (mutation 시 clearAdminRequestCache로 전체 캐시가 비워지므로 편집 직후 staleness 없음)
@@ -279,7 +293,7 @@ function getAdminRequestCacheKey(input: string, init?: RequestInit, cacheKey?: s
 }
 
 function getSessionCacheKey(cacheKey: string) {
-  return `${ADMIN_REQUEST_CACHE_PREFIX}${cacheKey}`
+  return `${ADMIN_REQUEST_CACHE_PREFIX}${ADMIN_CACHE_BUILD}:${cacheKey}`
 }
 
 function pruneMemoryCache(now = Date.now()) {

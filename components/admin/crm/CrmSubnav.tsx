@@ -16,6 +16,7 @@ import {
 
 import { warmAdminRequestCache } from "@/lib/admin-client"
 import { CRM_CHILD_NAV } from "@/components/admin/admin-nav"
+import { NAV_WARMUP_REQUESTS } from "@/components/admin/AdminSidebar"
 
 type CrmSection = "home" | "customers" | "activity" | "deals" | "insights" | "sync"
 type DealsSub = "revenue" | "revSheet" | "orders" | "kpi"
@@ -40,32 +41,16 @@ const CUSTOMERS_SUBTABS = [
   { key: "map", href: "/admin/crm/customers/map", label: "지도", icon: <MapPinned className="h-3.5 w-3.5" /> },
 ] satisfies Array<{ key: CustomersSub; href: string; label: string; icon: ReactNode }>
 
-const SUBTAB_WARMUP_REQUESTS: Record<string, string[]> = {
-  "/admin/crm/customers/unified": [
-    "/api/admin/crm/customers/unified?limit=50&offset=0",
-    "/api/admin/crm/owners",
-  ],
-  "/admin/crm/customers/leads": [
-    "/api/admin/leads",
-    "/api/admin/leads/activity-summary",
-  ],
-  "/admin/crm/customers/accounts": ["/api/admin/crm/customers-neo"],
-  "/admin/crm/customers/map": ["/api/admin/crm/region-map", "/api/admin/crm/map-source"],
-  "/admin/crm/deals": [
-    "/api/admin/crm/revenue?months=6",
-    "/api/admin/crm/readiness",
-  ],
-  "/admin/crm/deals/rev-sheet": ["/api/admin/crm/revenue-sheet"],
-  "/admin/crm/deals/orders": ["/api/portal/overview?shape=partner"],
-  "/admin/crm/deals/kpi": [
-    "/api/admin/crm/revenue?months=6",
-    "/api/portal/overview?shape=partner",
-  ],
-}
-
+// 예열 표는 NAV_WARMUP_REQUESTS(SSOT) 하나다 — 여기 사본을 두던 시절에는 같은 URL이 두 파일에
+// 복제되고 사이드바 쪽 CRM 하위 키는 아무도 조회하지 않는 사문으로 남았다.
+// 항목이 {url, cacheKey} 형태일 수 있다(캐시 키가 URL과 다른 소비처).
 function warmSubtab(href: string) {
-  for (const url of SUBTAB_WARMUP_REQUESTS[href] ?? []) {
-    void warmAdminRequestCache(url, { ttlMs: 60_000 })
+  const entry = NAV_WARMUP_REQUESTS[href]
+  const entries = typeof entry === "function" ? entry() : entry ?? []
+  for (const item of entries) {
+    const url = typeof item === "string" ? item : item.url
+    const cacheKey = typeof item === "string" ? undefined : item.cacheKey
+    void warmAdminRequestCache(url, { ttlMs: 60_000, cacheKey })
   }
 }
 

@@ -22,7 +22,6 @@ import {
   type EventFormData,
 } from "@/lib/admin-calendar/event-form"
 import {
-  addDays,
   DEFAULT_TIMELINE_SPAN,
   formatRangeLabel,
   getViewRange,
@@ -30,7 +29,6 @@ import {
   isCalendarViewId,
   isDateString,
   isTimelineSpan,
-  startOfWeek,
   stepAnchor,
   toDateString,
   type CalendarViewId,
@@ -41,7 +39,7 @@ import {
   buildSourceStats,
   buildWeekStripDays,
 } from "@/lib/admin-calendar/insights"
-import { buildAdminCalendarUrl } from "@/lib/admin/calendar-range"
+import { buildAdminCalendarUrl, getAdminCalendarWeekStripRange } from "@/lib/admin/calendar-range"
 
 import {
   createRequestGeneration,
@@ -371,8 +369,10 @@ export default function AdminCalendarPage() {
 
   // ─── 이번 주 스트립 데이터 ───────────────────────────────────────
   // todayStr 는 마운트 시 고정이므로 주 경계도 고정 — 재조회는 CRUD 직후에만 명시적으로.
-  const stripFrom = useMemo(() => startOfWeek(todayStr), [todayStr])
-  const stripTo = useMemo(() => addDays(stripFrom, 6), [stripFrom])
+  // 범위 산출은 calendar-range.ts(SSOT) — 사이드바 hover 예열이 같은 함수로 같은 URL을 만든다.
+  const stripRange = useMemo(() => getAdminCalendarWeekStripRange(todayStr), [todayStr])
+  const stripFrom = stripRange.from
+  const stripTo = stripRange.to
   const fetchStripEvents = useCallback(async () => {
     const apply = (data: CalendarEvent[] | undefined) => {
       if (Array.isArray(data)) setStripEvents(data)

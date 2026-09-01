@@ -90,6 +90,15 @@ const publicAssetCacheHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // 어드민 지속 캐시(session/localStorage)의 스키마 토큰 — lib/admin-client.ts가 읽기 키에 섞는다.
+  // 배포마다 값이 달라져야 이전 배포의 응답 모양을 새 코드가 읽지 않는다(그 주석의 사고 참조).
+  // Vercel이 주는 커밋 SHA를 쓰고, 없으면 "dev"로 고정해 로컬 개발 동작을 바꾸지 않는다.
+  env: {
+    NEXT_PUBLIC_ADMIN_CACHE_BUILD:
+      process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) ??
+      process.env.VERCEL_DEPLOYMENT_ID ??
+      "dev",
+  },
   images: {
     // 기본값은 webp 단독이다. avif를 앞에 두면 지원 브라우저에서 추가로 ~17% 더 줄어든다.
     formats: ["image/avif", "image/webp"],

@@ -8,11 +8,33 @@
  * 타게 한다. 페이지가 이 기본값과 다른 뷰/기간으로 이동한 뒤의 URL은 buildAdminCalendarUrl만
  * 공유하면 된다 — 사이드바는 진입 케이스만 알면 된다.
  */
-import { getViewRange, toDateString, type CalendarRange } from "@/lib/admin-calendar/range"
+import {
+  addDays,
+  getViewRange,
+  startOfWeek,
+  toDateString,
+  type CalendarRange,
+} from "@/lib/admin-calendar/range"
+
+function todayDateString(now: Date): string {
+  return toDateString(now.getFullYear(), now.getMonth() + 1, now.getDate())
+}
 
 export function getDefaultAdminCalendarRange(now: Date = new Date()): CalendarRange {
-  const todayStr = toDateString(now.getFullYear(), now.getMonth() + 1, now.getDate())
-  return getViewRange("month", todayStr)
+  return getViewRange("month", todayDateString(now))
+}
+
+/**
+ * 첫 화면 상단 주간 스트립이 쓰는 기간(이번 주 시작 ~ +6일).
+ *
+ * 페이지가 자체 계산하고 사이드바는 몰라서, 월 범위만 예열되고 스트립은 매 진입 콜드였다.
+ * 위 주석의 이유(캐시 키 = URL 문자열 그대로)로 두 소비처가 같은 함수를 타야 한다.
+ */
+export function getAdminCalendarWeekStripRange(
+  todayStr: string = todayDateString(new Date())
+): CalendarRange {
+  const from = startOfWeek(todayStr)
+  return { from, to: addDays(from, 6) }
 }
 
 export function buildAdminCalendarUrl(range: CalendarRange): string {

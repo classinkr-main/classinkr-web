@@ -8,6 +8,10 @@ const workbench = readFileSync(
 )
 const hardwareRoute = readFileSync(join(process.cwd(), "app/api/admin/hardware/route.ts"), "utf8")
 const crmSubnav = readFileSync(join(process.cwd(), "components/admin/crm/CrmSubnav.tsx"), "utf8")
+const sidebarSource = readFileSync(
+  join(process.cwd(), "components/admin/AdminSidebar.tsx"),
+  "utf8"
+)
 
 describe("branch and CRM cold-load contracts", () => {
   it("requests branch breakdown only for the DSH lens", () => {
@@ -22,7 +26,12 @@ describe("branch and CRM cold-load contracts", () => {
   })
 
   it("keeps CRM subnav warmup on the real 50-row unified key", () => {
-    expect(crmSubnav).toContain('"/api/admin/crm/customers/unified?limit=50&offset=0"')
-    expect(crmSubnav).not.toContain('"/api/admin/crm/customers/unified?limit=100&offset=0"')
+    // 예열 표는 NAV_WARMUP_REQUESTS(AdminSidebar) 하나로 합쳐졌다 — CrmSubnav가 들고 있던
+    // 사본은 같은 URL을 두 파일에 복제해 두 표가 갈릴 수 있었다. 키는 그 SSOT에서 검사한다.
+    expect(sidebarSource).toContain('"/api/admin/crm/customers/unified?limit=50&offset=0"')
+    expect(sidebarSource).not.toContain('"/api/admin/crm/customers/unified?limit=100&offset=0"')
+    // CrmSubnav는 자체 표 없이 SSOT를 조회하기만 한다.
+    expect(crmSubnav).toContain("NAV_WARMUP_REQUESTS")
+    expect(crmSubnav).not.toContain("SUBTAB_WARMUP_REQUESTS")
   })
 })

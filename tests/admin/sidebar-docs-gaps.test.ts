@@ -4,8 +4,16 @@ import { join } from "node:path"
 import { Bot, MessageSquare, Search } from "lucide-react"
 import { describe, expect, it } from "vitest"
 
+import { NAV_WARMUP_REQUESTS } from "@/components/admin/AdminSidebar"
 import { ADMIN_NAV } from "@/components/admin/admin-nav"
 import { CS_CONSOLE_MODES, resolveCsConsoleMode } from "@/components/admin/cs/CsConsoleNav"
+
+/** warm 항목은 문자열이거나 {url, cacheKey}다 — URL만 비교한다. */
+function warmupUrls(href: string) {
+  const entry = NAV_WARMUP_REQUESTS[href]
+  const entries = typeof entry === "function" ? entry() : (entry ?? [])
+  return entries.map((item) => (typeof item === "string" ? item : item.url))
+}
 
 // nav SSOT는 components/admin/admin-nav.ts — 사이드바(AdminSidebar)와
 // 커맨드 팔레트(AdminCommandPalette)가 이를 임포트해 렌더한다.
@@ -123,9 +131,15 @@ describe("admin cs nav — 사이드바 1항목(CS 콘솔) + 콘솔 가로 메�
   // 적중하고, warm은 adminFetchJsonCached가 읽는 캐시에만 들어간다. 그래서
   // "소비 쪽이 adminFetchJson(직페치)이면 데워도 못 읽는다"가 판정 기준이다.
   it("drops warm-up URLs whose consumers never read the admin cache", () => {
-    // DocsGapsPanel은 docs/gaps·chatbot/stats를 adminFetchJson으로 직접 받는다 —
-    // ?tab=gaps 키에서 데워도 적중하지 않는다(소비 변경은 그 패널의 결정이라 하지 않았다).
-    expect(sidebarSource).not.toContain('"/api/admin/docs/gaps"')
+    // 판정 기준은 "**그 화면의** 소비처가 캐시를 읽는가"다 — 파일 전체 문자열 금지가 아니다.
+    // DocsGapsPanel(= /admin/docs?tab=gaps)은 docs/gaps·chatbot/stats를 adminFetchJson으로
+    // 직접 받으므로 그 키에서 데워도 적중하지 않는다(소비 변경은 그 패널의 결정이라 하지 않았다).
+    expect(warmupUrls("/admin/docs?tab=gaps")).not.toContain("/api/admin/docs/gaps")
+    expect(warmupUrls("/admin/docs?tab=gaps")).not.toContain("/api/admin/chatbot/stats")
+    // 반대로 같은 엔드포인트라도 캐시로 소비하는 화면에서는 데우는 것이 맞다 —
+    // 외부 챗봇 대시보드와 내부 CS 운영 도구 탭은 adminFetchJsonCached로 읽는다.
+    expect(warmupUrls("/admin/chatbot")).toContain("/api/admin/docs/gaps?limit=5")
+    expect(warmupUrls("/admin/cs-chatbot?tab=tools")).toContain("/api/admin/docs/gaps")
     // 알파 준비도는 이제 ?tab=quality 한 곳에서만 데운다 — 대시보드·문서 기본 탭에서는 뺐다.
     // 등재 여부는 따옴표까지 포함한 리터럴로 센다(설명 주석에 같은 경로가 나와도 오탐하지 않게).
     expect(sidebarSource.match(/"\/api\/admin\/docs\/alpha-readiness"/g)).toHaveLength(1)

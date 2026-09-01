@@ -15,7 +15,11 @@ import {
   X,
 } from "lucide-react"
 import { clearAdminSessionStorage, warmAdminRequestCache } from "@/lib/admin-client"
-import { buildAdminCalendarUrl, getDefaultAdminCalendarRange } from "@/lib/admin/calendar-range"
+import {
+  buildAdminCalendarUrl,
+  getAdminCalendarWeekStripRange,
+  getDefaultAdminCalendarRange,
+} from "@/lib/admin/calendar-range"
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser"
 import { hasSupabaseBrowserEnv } from "@/lib/supabase/public-env"
 import AdminNotificationsBell from "./AdminNotificationsBell"
@@ -44,6 +48,16 @@ import { isNavActive as matchNavActive } from "./nav-active"
 // hover warm-up은 페이지가 실제 호출하는 URL과 캐시 키(쿼리스트링 포함)가 완전히 같아야 적중한다.
 // 날짜 파라미터가 붙는 URL은 hover 시점에 페이지와 같은 계산식으로 만들어야 하므로 함수 항목을 허용한다.
 
+// Overview 인바운드 스트립의 챗봇 7일 창 — 페이지의 localDateOnly(오늘-6)와 같은 산식이어야
+// 캐시 키가 맞는다(무파라미터 stats URL은 기본 30일 창이라 다른 슬롯이다).
+function overviewChatbotStatsUrl() {
+  const from = new Date()
+  from.setDate(from.getDate() - 6)
+  const month = String(from.getMonth() + 1).padStart(2, "0")
+  const day = String(from.getDate()).padStart(2, "0")
+  return `/api/admin/chatbot/stats?from=${from.getFullYear()}-${month}-${day}`
+}
+
 // /admin/overview 대시보드와 동일한 계산식 — 현재 월 + (7일 뒤가 다른 달에 걸치면) 그 달.
 function overviewCalendarUrls() {
   const now = new Date()
@@ -67,6 +81,12 @@ function overviewCalendarUrls() {
 // {url, cacheKey} 형태를 쓴다. 나머지는 기존처럼 문자열 URL 하나로 충분하다(캐시 키=URL 기본값).
 type WarmupEntry = string | { url: string; cacheKey: string }
 
+// 내부 CS 워크스페이스의 탭 무관 마운트 페치 — 아래 ?tab= 키 넷이 공유한다.
+const INTERNAL_CS_WARMUP: WarmupEntry[] = [
+  "/api/admin/cs-chat/conversations?status=all&limit=100",
+  "/api/admin/cs-chat/regression-candidates",
+]
+
 export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEntry[])> = {
   "/admin/overview": () => [
     // overview 페이지가 실제 호출하는 URL과 캐시 키를 맞춰야 hover-warm이 적중한다.
@@ -79,52 +99,102 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
     "/api/admin/settings/integrations/status",
     "/api/admin/bugs",
     "/api/admin/patch-notes",
+    // 아래 셋은 프리페치 유무와 무관하게 항상 나가는데 빠져 있었다.
+    // 인스타·운영 OS 스트립은 외부 합성이라 느린 축이고, 챗봇 7일 창은 KR Team warm(period=Q)이나
+    // 무파라미터 stats URL과 캐시 키가 갈린다 — 페이지와 같은 날짜 산식이어야 적중한다.
+    "/api/admin/meta/instagram?datePreset=last_30d&limit=25",
+    "/api/admin/branch/summary?team=ALL&period=Y",
+    overviewChatbotStatsUrl(),
   ],
+  // CRM 홈은 첫 화면에서 8건을 띄우는데 서버 프리페치는 셋(action-kpis·overview·
+  // compass-pipeline)만 덮는다 — 나머지는 여기서 데워야 콜드를 면한다. 우선순위 큐가 이
+  // 화면의 주 작업대라 가장 중요하다(URL은 CrmPriorityQueuePanel의 조립 결과와 문자 일치).
+  // neo(외부 집계)는 뺐다 — 소비처 NeoCrmTeamPanel은 기본 접힌 리포트 아코디언의 team 탭에서만
+  // 렌더돼(기본 탭 revenue) 진입만으로는 청크조차 안 내려온다. 비싼 축을 hover마다 태우던 낭비다.
   "/admin/crm": [
     "/api/admin/crm/action-kpis",
     "/api/admin/crm/overview",
-    "/api/admin/crm/neo?granularity=month&offset=0",
+    "/api/admin/crm/home/priority-queue?limit=50&source=customer&v=3",
+    "/api/admin/crm/tasks?status=active&limit=100",
+    "/api/admin/crm/owners",
+    "/api/admin/crm/health-distribution",
+    "/api/admin/crm/coverage",
   ],
   "/admin/crm/customers/unified": [
     "/api/admin/crm/customers/unified?limit=50&offset=0",
     "/api/admin/crm/owners",
   ],
+  // 기본 필터가 scope=work 라 실호출에는 &scope=work 가 붙는다 — 이 조각이 빠져 100% 미스였다.
   "/admin/crm/activity": [
-    "/api/admin/crm/events?limit=50&offset=0",
+    "/api/admin/crm/events?limit=50&offset=0&scope=work",
+    // 우측 액션 레일(hideRecent라 tasks만 나간다).
+    "/api/admin/crm/tasks?status=active&limit=30",
   ],
-  "/admin/crm/capture": [
-    "/api/admin/events",
-    "/api/admin/crm/capture/batches",
-  ],
+  // batches 는 adminFetchJson(직페치)이라 예열이 원리적으로 적중할 수 없다 — 넣어도 낭비다.
+  "/admin/crm/capture": ["/api/admin/events"],
   // 검수 탭(href=/admin/crm/matching)만 warm — deals·insights는 nav에서 내려가 죽은 키라 제거.
   "/admin/crm/matching": [
     // 매칭 인박스의 기본 필터·페이지와 문자 단위로 같은 키여야 새 경량 응답 캐시를 소비한다.
     "/api/admin/crm/matching?source=all&status=review&limit=25&offset=0",
-    "/api/admin/crm/overview",
+    // 이 화면의 overview 소비처는 전용 cacheKey를 쓴다 — URL만 맞추면 다른 슬롯에 들어간다.
+    { url: "/api/admin/crm/overview", cacheKey: "/api/admin/crm/overview:data-check" },
+    "/api/admin/crm/coverage",
+    "/api/admin/crm/reconcile/hw-rev",
+  ],
+  // ── CRM 하위 탭 — 예열을 거는 곳은 사이드바가 아니라 본문 밴드(CrmSubnav)다.
+  // 그동안 CrmSubnav가 자기 사본(SUBTAB_WARMUP_REQUESTS)을 들고 있어 같은 URL이 두 파일에
+  // 복제돼 있었고, 이 파일의 CRM 하위 키는 아무도 조회하지 않는 사문이었다. 표를 여기로 합쳐
+  // "어느 화면이 어떤 API를 먼저 부르는지"의 기록을 하나로 되돌린다.
+  "/admin/crm/customers/leads": [
+    "/api/admin/leads",
+    "/api/admin/leads/activity-summary",
+  ],
+  "/admin/crm/customers/accounts": ["/api/admin/crm/customers-neo"],
+  "/admin/crm/customers/map": ["/api/admin/crm/region-map", "/api/admin/crm/map-source"],
+  "/admin/crm/deals": [
+    "/api/admin/crm/revenue?months=6",
+    "/api/admin/crm/readiness",
+  ],
+  "/admin/crm/deals/rev-sheet": ["/api/admin/crm/revenue-sheet"],
+  "/admin/crm/deals/orders": ["/api/portal/overview?shape=partner"],
+  "/admin/crm/deals/kpi": [
+    "/api/admin/crm/revenue?months=6",
+    "/api/portal/overview?shape=partner",
   ],
   // 채널톡 상담도 CS 콘솔 "상담 Inbox" 메뉴로 옮겨갔다 — 라우트·초기 페치가 동일해 키 유지.
   // 두 URL 모두 화면이 adminFetchJsonCached로 소비한다(상담 목록은 cache:"no-cache" 직페치에서
   // 캐시 소비로 바꿔 이 warm이 실제로 적중하게 했다 — P6). 동기화 버튼은 force로 우회한다.
-  "/admin/channel-talk": ["/api/admin/channel-talk", "/api/admin/channel-talk/mine"],
+  "/admin/channel-talk": [
+    "/api/admin/channel-talk",
+    "/api/admin/channel-talk/mine",
+    // 같은 Promise.allSettled의 세 번째 항목 — 목록·내 담당과 함께 첫 화면을 막는다.
+    "/api/admin/chatbot/recommended-questions?placement=starter&status=all",
+  ],
   // 캘린더 페이지의 첫 렌더(view=month · anchor=오늘) 실호출과 문자 그대로 같은 URL이어야
   // adminFetchJsonCached 캐시 키가 맞는다 — 산출은 lib/admin/calendar-range.ts(SSOT) 공유.
-  "/admin/calendar": () => [buildAdminCalendarUrl(getDefaultAdminCalendarRange())],
+  // 캘린더는 2026-07-29 재구성 이후 로그인 첫 화면이고 서버 프리페치가 없다(순수 클라이언트).
+  // 마운트 블로킹 로드 4건을 모두 데운다 — 월 격자·주간 스트립·리드 대응 배너·연동 상태 스트립.
+  // 범위 두 건은 lib/admin/calendar-range.ts(SSOT)를 페이지와 공유해 문자 불일치를 원천 차단한다.
+  "/admin/calendar": () => [
+    buildAdminCalendarUrl(getDefaultAdminCalendarRange()),
+    buildAdminCalendarUrl(getAdminCalendarWeekStripRange()),
+    // CRM 홈과 같은 슬롯을 쓰도록 페이지가 cacheKey를 URL로 고정해 뒀다 — 문자열 항목으로 충분.
+    "/api/admin/crm/action-kpis",
+    // 연동 상태는 cacheKey가 URL과 다르다 — 객체 항목이 아니면 조용히 빗나간다.
+    { url: "/api/admin/calendar/health", cacheKey: "calendar:source-health" },
+  ],
   // /admin/quotes 기본 탭은 portalFetch(/api/portal/documents?type=quote)라 admin 캐시를 읽지 않는다 — warm 대상 아님.
+  // 기본 탭은 "요약"(마케팅 퍼포먼스 대시보드, 2026-08-21~)이고 그 탭이 쓰는 건 아래 넷뿐이다.
+  // 예전 목록에 있던 email·subscribers·leads?scope=campaigns·events·event-metrics·
+  // meta/campaigns·messaging/status 7건은 전부 광고·메시지·행사 탭 전용이라 기본 진입에선
+  // 호출되지 않는다(페이지의 코어 로더가 summary면 early return한다) — 이 파일이 /admin/docs·
+  // /admin/cs-chatbot에 이미 적용한 "안 여는 탭을 데우면 대역폭만 쓴다" 원칙을 캠페인에도 적용.
+  // 넷 다 cacheKey가 URL과 다르므로 객체 항목이어야 적중한다.
   "/admin/campaigns": [
-    "/api/admin/email",
-    "/api/admin/subscribers",
-    // 캠페인 페이지의 리드 귀속 소비는 scope=campaigns(경량 컬럼) — warm 키 일치 필수.
-    "/api/admin/leads?scope=campaigns",
-    "/api/admin/events",
-    "/api/admin/event-metrics",
-    "/api/admin/meta/campaigns?datePreset=last_30d&limit=50",
-    // 메시지 발송 허브(구 /admin/marketing)가 캠페인 탭으로 흡수되며 채널 상태도 함께 데운다.
-    "/api/admin/messaging/status",
-    // 기본 탭 "요약"(마케팅 퍼포먼스 대시보드, 2026-08-21~)이 실제로 쓰는 두 건 — 지금까지
-    // 빠져 있어 요약 탭은 hover-warm 대상에서 늘 제외됐다(진입마다 콜드 로딩). usePerf/useInsights가
-    // cacheKey를 URL과 다르게 지정하므로(marketing-perf:<period>·marketing-insights) 그대로 맞춘다.
     { url: "/api/admin/marketing/perf?period=30d", cacheKey: "marketing-perf:30d" },
     { url: "/api/admin/marketing/insights", cacheKey: "marketing-insights" },
+    { url: "/api/admin/marketing/intake-today", cacheKey: "marketing-intake-today" },
+    { url: "/api/admin/compass/ads?period=30d", cacheKey: "compass-ads:30d" },
   ],
   "/admin/lead-magnets": [
     "/api/admin/lead-magnets",
@@ -165,25 +235,43 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
   // CS 콘솔 IA 재구성 이후 이 href는 외부 축의 첫 화면("대시보드")이자 사이드바 "CS 콘솔" 항목이다.
   // 알파 준비도는 §7 중복 단일화로 AI 품질 검수 탭(위 ?tab=quality 키)으로 넘어갔고
   // ExternalChatbotOpsDashboard는 더 이상 호출하지 않는다 — 죽은 키라 뺀다(P6).
+  // 대시보드의 마운트 effect는 지표와 보강 큐 미리보기를 **함께** 받는다(예전 주석의
+  // "유일한 마운트 페치"는 틀렸다) — 둘 다 데워야 첫 화면이 온전히 캐시에 얹힌다.
   "/admin/chatbot": [
     "/api/admin/chatbot/stats",
+    "/api/admin/docs/gaps?limit=5",
   ],
   // 내부 CS 워크스페이스 — 마운트 시점에 실제로 나가는 두 요청만 데운다.
   // conversations는 첫 화면을 막는 블로킹 로드이고, regression-candidates는
   // "운영 도구" 탭 진입 전에 미리 받는다(InternalCsChatWorkspace의 두 mount effect).
   // integrations/status·docs/gaps·cs-chat/metrics는 tools 탭에 들어가야 호출되므로 제외 —
   // 안 여는 탭을 데우면 대역폭만 쓴다. (P2가 탭을 URL 상태로 옮기면 ?tab=tools 키를 따로 잡으면 된다.)
-  "/admin/cs-chatbot": [
-    "/api/admin/cs-chat/conversations?status=all&limit=100",
-    "/api/admin/cs-chat/regression-candidates",
+  // 내부 CS는 사이드바에서 내려가 CS 콘솔 가로 메뉴가 유일한 진입이고, 그 href는 전부
+  // ?tab= 을 달고 있다. 조회는 완전일치라 bare 키 하나로는 **어느 링크도 맞지 않았다**
+  // (예전 주석의 "P2가 탭을 URL 상태로 옮기면 키를 따로 잡으면 된다"는 이미 실현된 상태).
+  // 두 기본 페치는 탭과 무관한 마운트 로드라 네 키가 같은 배열을 공유한다.
+  "/admin/cs-chatbot": INTERNAL_CS_WARMUP,
+  "/admin/cs-chatbot?tab=chat": INTERNAL_CS_WARMUP,
+  "/admin/cs-chatbot?tab=queue": INTERNAL_CS_WARMUP,
+  "/admin/cs-chatbot?tab=hq": INTERNAL_CS_WARMUP,
+  // 운영 도구 탭에서만 나가는 두 건을 얹는다(integrations/status는 직페치라 예열 불가).
+  "/admin/cs-chatbot?tab=tools": [
+    ...INTERNAL_CS_WARMUP,
+    "/api/admin/docs/gaps",
+    "/api/admin/cs-chat/metrics?days=7",
   ],
+  // 기본 탭 overview는 summary를 전용 projection(&view=overview)으로 부른다 —
+  // 그 조각이 빠져 있어 예열이 100% 빗나갔을 뿐 아니라, projection으로 없애려던 전체
+  // 회계연도 타임라인을 서버에 매번 다시 조립시키는 역효과까지 냈다(BranchDashboardClient).
   "/admin/branch": [
-    "/api/admin/branch/summary?team=ALL&period=Q",
+    "/api/admin/branch/summary?team=ALL&period=Q&view=overview",
     "/api/admin/branch/kpi?team=ALL&period=Q",
+    "/api/admin/crm/coverage",
   ],
+  // 장부는 view projection을 쓰지 않는다(기본 계약 유지). kpi는 뺐다 — 소비 조건이
+  // "행 선택 + 상세 레일 펼침"이라 진입만으로는 절대 호출되지 않는다(SalesLedgerWorkbench).
   "/admin/branch/ledger": [
     "/api/admin/branch/summary?team=ALL&period=Q",
-    "/api/admin/branch/kpi?team=ALL&period=Q",
     "/api/admin/branch/pipeline?team=ALL&period=Q",
   ],
   "/admin/hardware": ["/api/admin/hardware"],
@@ -193,24 +281,23 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
     "/api/admin/traffic-summary?range=30",
     "/api/admin/marketing/conversions/status",
   ],
+  // 페이지가 실제로 부르는 건 셋뿐이다 — email·events·event-metrics·event-counts는
+  // 소비처가 사라졌는데 목록에만 남아 hover마다 헛 요청을 보내고 있었다.
   "/admin/analytics": [
-    // 페이지 소비가 스코프 파라미터로 좁혀짐 — warm 키를 소비 URL과 일치시킨다.
     "/api/admin/leads?scope=dashboard",
     "/api/admin/subscribers?scope=analytics",
-    "/api/admin/email",
     "/api/admin/blog",
-    "/api/admin/events",
-    "/api/admin/event-metrics",
-    "/api/admin/event-counts?range=30",
   ],
   "/admin/ops": [
     "/api/admin/settings/integrations/status",
     "/api/admin/automation/rules",
     "/api/admin/automation/logs",
   ],
-  // 회원 관리는 Settings "회원" 탭으로 흡수됨 — Settings warm-up에 회원 디렉터리도 함께 데운다.
-  "/admin/settings": ["/api/admin/settings", "/api/admin/users"],
-  "/admin/dev": ["/api/admin/roadmap", "/api/admin/bugs", "/api/admin/patch-notes"],
+  // 회원 관리는 Settings "회원" 탭으로 흡수됐지만, 그 패널은 ?tab=members 일 때만 렌더된다 —
+  // 기본 진입(general)에서 /api/admin/users는 호출되지 않으므로 데우지 않는다.
+  "/admin/settings": ["/api/admin/settings"],
+  // 기본 탭 roadmap. bugs·patch-notes는 각 탭 컴포넌트가 렌더될 때만 부른다.
+  "/admin/dev": ["/api/admin/roadmap"],
 }
 
 // 사이드바 nav 전용 초미니멀 스크롤바: 4px 폭 + 투명 트랙 + hover 시에만 또렷한 thumb.
