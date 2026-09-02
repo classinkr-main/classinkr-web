@@ -299,15 +299,67 @@ async function fetchDocsContentFromSupabase(): Promise<DocsContent> {
   return { categories, docs }
 }
 
+// ── 서버 메모이제이션(인스턴스 단위) ──────────────────────────────────────────
+// 아래 getDocsContent 의 React cache()는 요청 스코프라, 요청마다 발행 문서 전부(본문 포함)를
+// 다시 읽었다 — 2026-09-02 프로덕션 pg_stat_statements 에서 이 로드가 12,359콜 × 138ms = 1,710초로
+// 단일 문장 1위였다(콜당 1,696 블록). 문서·검색·사이트맵·/updates·챗봇 폴백이 전부 이 경로다.
+// 인스턴스 메모(TTL 60초 + 진행 중 promise 공유)로 접는다. 공개 문서라 최대 60초 지연은 허용되고,
+// 관리자 발행·수정 경로(app/api/admin/docs/articles/_revalidate.ts)는 invalidateDocsContentCache()로
+// 같은 인스턴스의 값을 즉시 비운다(다른 인스턴스는 TTL 로 수렴).
+// Data Cache(unstable_cache)를 쓰지 않는 이유: 발행 문서 본문 합계가 이미 1MB 를 넘어(실측 1,082kB)
+// 항목당 2MB 한도의 절벽이 가깝다 — 그 캐시는 크기를 넘기면 조용히 캐시를 멈추지만 메모는 절벽이 없다.
+// 실패(예외)는 캐시하지 않는다 — 폴백은 요청마다 정적 콘텐츠로 내려가고 다음 요청이 재시도한다.
+const DOCS_CONTENT_MEMO_TTL_MS = 60_000
+
+let docsContentMemo: { value: DocsContent; expiresAt: number } | null = null
+let docsContentInflight: Promise<DocsContent> | null = null
+// 무효화 세대 — 로드 중에 무효화되면 그 로드의 결과는 메모에 싣지 않는다(발행 직후 stale 방지).
+let docsContentGeneration = 0
+
+function loadDocsContentMemoized(): Promise<DocsContent> {
+  if (docsContentMemo && docsContentMemo.expiresAt > Date.now()) {
+    return Promise.resolve(docsContentMemo.value)
+  }
+  if (docsContentInflight) return docsContentInflight
+
+  const generation = docsContentGeneration
+  const pending = fetchDocsContentFromSupabase()
+    .then((incoming) => {
+      const merged = mergeDocsContent(staticDocsContent, incoming)
+      if (generation === docsContentGeneration) {
+        docsContentMemo = { value: merged, expiresAt: Date.now() + DOCS_CONTENT_MEMO_TTL_MS }
+      }
+      return merged
+    })
+    .finally(() => {
+      if (docsContentInflight === pending) docsContentInflight = null
+    })
+  docsContentInflight = pending
+  return pending
+}
+
+/** 관리자 발행·수정·삭제 뒤 같은 인스턴스의 메모를 즉시 비운다. */
+export function invalidateDocsContentCache() {
+  docsContentGeneration += 1
+  docsContentMemo = null
+  docsContentInflight = null
+}
+
+/** 테스트 전용 — 모듈 상태를 초기화한다. */
+export function __resetDocsContentCacheForTests() {
+  invalidateDocsContentCache()
+}
+
 // /docs/[category]·[slug] 등은 generateMetadata와 본문에서 같은 콘텐츠를 두 번 fetch한다.
-// 요청 스코프 cache()로 요청당 1회 fetch+머지로 합침(폴백/머지 동작은 그대로).
+// 요청 스코프 cache()로 요청당 1회로 합치고, 원격 로드 자체는 위 인스턴스 메모가 접는다
+// (폴백/머지 동작은 그대로).
 export const getDocsContent = cache(async (): Promise<DocsContent> => {
   if (!shouldUseSupabaseDocs()) {
     return staticDocsContent
   }
 
   try {
-    return mergeDocsContent(staticDocsContent, await fetchDocsContentFromSupabase())
+    return await loadDocsContentMemoized()
   } catch (error) {
     console.warn(
       "Falling back to static docs content:",
