@@ -1,5 +1,6 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
 import { getCachedCrmDuplicatePreflightReport } from "@/lib/admin-crm-duplicate-preflight"
 import { getCrmSchemaContractReadiness } from "@/lib/admin-crm-schema-contract"
 import { getXiaoshouyiSyncPreflight, getXiaoshouyiSyncSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-sync"
@@ -79,7 +80,7 @@ async function checkDatabaseShape(
   }
 }
 
-export async function getAdminCrmReadinessReport(): Promise<CrmReadinessReport> {
+async function computeAdminCrmReadinessReport(): Promise<CrmReadinessReport> {
   const sb = createSupabaseAdminClient()
 
   const [
@@ -287,4 +288,22 @@ export async function getAdminCrmReadinessReport(): Promise<CrmReadinessReport> 
     summary,
     checks,
   }
+}
+
+export const ADMIN_CRM_READINESS_CACHE_TAG = "admin-crm-readiness"
+
+// 스키마 shape probe 6종 + preflight 3종을 매 호출 병렬 실행하는 무거운 조립이라 60초 캐시한다.
+// 인자 없이 admin service-role 클라이언트만 쓰고 cookies()/headers()는 읽지 않는다(하위
+// preflight/schema-contract 모듈도 grep으로 확인). env 참조가 있다면 프로세스 수명 동안
+// 상수이므로 캐시 안에서 읽어도 안전하다.
+const getCachedAdminCrmReadinessReport = unstable_cache(
+  computeAdminCrmReadinessReport,
+  ["admin-crm-readiness"],
+  { revalidate: 60, tags: [ADMIN_CRM_READINESS_CACHE_TAG] }
+)
+
+// 함수 시그니처·이름 불변 유지: 소유 밖 호출부(app/api/admin/crm/readiness/route.ts)가
+// 이 이름으로 그대로 가져다 쓰므로, 캐시 배선은 내부 위임으로만 추가한다.
+export async function getAdminCrmReadinessReport(): Promise<CrmReadinessReport> {
+  return getCachedAdminCrmReadinessReport()
 }

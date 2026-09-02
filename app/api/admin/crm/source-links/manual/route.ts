@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
 
 import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { ADMIN_CRM_COVERAGE_CACHE_TAG, ADMIN_OS_SUMMARY_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
 import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
 import {
   createManualBranchRevLinkCandidate,
@@ -40,6 +41,10 @@ export async function POST(req: NextRequest) {
     })
 
     revalidateTag(ADMIN_CRM_REVENUE_CACHE_TAG, "max")
+
+    revalidateTag(ADMIN_CRM_COVERAGE_CACHE_TAG, "max")
+
+    revalidateTag(ADMIN_OS_SUMMARY_CACHE_TAG, "max")
     return NextResponse.json({ ok: true, link })
   } catch (error) {
     console.error("[POST /api/admin/crm/source-links/manual]", error)
