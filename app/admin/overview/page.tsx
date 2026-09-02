@@ -38,17 +38,19 @@ import {
   aggregateLeads,
   buildOperationalAlerts,
   computePipelineCoverage,
-  deriveBlogInsights,
+  deriveBlogInsightsFromSummary,
   deriveBugInsights,
   deriveCampaignInsights,
   deriveConnections,
   deriveEventInsights,
   deriveLatestPatchNote,
+  EMPTY_OVERVIEW_BLOG_SUMMARY,
   formatDateShort,
   formatDateTime,
   resolveUnrespondedSignal,
   SOURCE_LABEL,
   type BranchMonthlySeries,
+  type OverviewBlogSummary,
   type OverviewSignalTone,
 } from "@/lib/admin/overview/insights"
 import type { AdminIntegrationStatusResponse } from "@/lib/admin-integrations/types"
@@ -202,7 +204,8 @@ interface VisitorStatsPayload {
 export default function OverviewPage() {
   const [leads, setLeads] = useState<LeadRecord[]>([])
   const [subscriberCount, setSubscriberCount] = useState(0)
-  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([])
+  // 블로그는 전 포스트 대신 서버 요약(카운트 4종 + 최근 4건)만 받는다 — T5-B.
+  const [blogSummary, setBlogSummary] = useState<OverviewBlogSummary>(EMPTY_OVERVIEW_BLOG_SUMMARY)
   const [campaigns, setCampaigns] = useState<EmailCampaign[]>([])
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([])
   const [integrationStatus, setIntegrationStatus] = useState<AdminIntegrationStatusResponse | null>(null)
@@ -269,8 +272,9 @@ export default function OverviewPage() {
       ] = await Promise.all([
         fetchJson<{ leads: LeadRecord[] }>("/api/admin/leads?scope=dashboard"),
         fetchJson<{ subscribers: unknown[]; total: number }>("/api/admin/subscribers?count=1"),
-        fetchJson<{ posts: BlogPost[] }>("/api/admin/blog"),
-        fetchJson<{ campaigns: EmailCampaign[] }>("/api/admin/email"),
+        fetchJson<OverviewBlogSummary>("/api/admin/blog?scope=overview"),
+        // summary 스코프 — 캠페인 HTML 본문(body)은 이 화면에서 읽지 않는다.
+        fetchJson<{ campaigns: EmailCampaign[] }>("/api/admin/email?scope=summary"),
         Promise.all(
           calendarMonths.map(({ year, month }) =>
             fetchJson<CalendarEvent[]>(`/api/admin/calendar?year=${year}&month=${month}`)
@@ -286,14 +290,15 @@ export default function OverviewPage() {
         // env+DB 합성 health(integrations/status)를 사용한다. (ops/settings와 동일 소스)
         fetchJson<AdminIntegrationStatusResponse>("/api/admin/settings/integrations/status"),
         fetchJson<BugReport[]>("/api/admin/bugs"),
-        fetchJson<PatchNote[]>("/api/admin/patch-notes"),
+        // 최신 1건의 id/version/title/date/status만 쓴다 — changes(jsonb)·전체 목록 불필요.
+        fetchJson<PatchNote[]>("/api/admin/patch-notes?limit=1&summary=1"),
       ])
 
       if (cancelled) return
 
       setLeads(leadsData?.leads ?? [])
       setSubscriberCount(subscribersData?.total ?? 0)
-      setBlogPosts(blogData?.posts ?? [])
+      setBlogSummary(blogData ?? EMPTY_OVERVIEW_BLOG_SUMMARY)
       setCampaigns(campaignData?.campaigns ?? [])
       setCalendarEvents(calendarData ?? [])
       setIntegrationStatus(integrationStatusData ?? null)
@@ -346,9 +351,9 @@ export default function OverviewPage() {
   )
   const chartTotal = useMemo(() => chartData.reduce((sum, point) => sum + point.count, 0), [chartData])
 
-  const { publishedBlogPosts, ctaCoverage, recentPosts, publishedPostsWithoutCta } = useMemo(
-    () => deriveBlogInsights(blogPosts),
-    [blogPosts]
+  const { totalBlogPosts, publishedBlogPostCount, ctaCoverage, recentPosts, publishedPostsWithoutCta } = useMemo(
+    () => deriveBlogInsightsFromSummary(blogSummary),
+    [blogSummary]
   )
 
   const { recentCampaigns, draftCampaigns, sentCampaigns, latestFailedCampaign } = useMemo(
@@ -405,7 +410,7 @@ export default function OverviewPage() {
       missingConnectionLabels: missingConnections.map((connection) => connection.label),
       openBugs,
       criticalOpenBugs,
-      publishedBlogPostCount: publishedBlogPosts.length,
+      publishedBlogPostCount,
       publishedPostsWithoutCta,
       ctaCoverage,
       draftCampaignCount: draftCampaigns.length,
@@ -1125,7 +1130,7 @@ export default function OverviewPage() {
               <StatCard
                 icon={<FileText className="h-4 w-4" />}
                 label="블로그"
-                value={blogPosts.length}
+                value={totalBlogPosts}
                 sub="발행된 포스트"
                 tone="neutral"
                 href="/admin/blog"

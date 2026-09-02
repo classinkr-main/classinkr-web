@@ -5,13 +5,16 @@ import {
   buildOperationalAlerts,
   computePipelineCoverage,
   deriveBlogInsights,
+  deriveBlogInsightsFromSummary,
   deriveBugInsights,
   deriveCampaignInsights,
   deriveConnections,
   deriveEventInsights,
   deriveLatestPatchNote,
   resolveUnrespondedSignal,
+  EMPTY_OVERVIEW_BLOG_SUMMARY,
   type OperationalAlertInput,
+  type OverviewBlogSummary,
 } from "@/lib/admin/overview/insights"
 import type { LeadRecord } from "@/lib/site-settings-types"
 import type { BlogPost } from "@/lib/blog-types"
@@ -262,6 +265,89 @@ describe("deriveBlogInsights", () => {
     const derived = deriveBlogInsights(posts)
     expect(derived.recentPosts).toHaveLength(4)
     expect(derived.recentPosts[0].slug).toBe("p-4")
+  })
+})
+
+// T5-B: overview는 전 포스트 대신 서버 요약(/api/admin/blog?scope=overview)을 받는다.
+// 같은 데이터를 (a) 전체 목록 → deriveBlogInsights, (b) 요약 → deriveBlogInsightsFromSummary로
+// 파생했을 때 출력 수치·최근 4건이 동치여야 한다(커버리지 반올림·정렬·컷 규칙 공유).
+describe("deriveBlogInsightsFromSummary", () => {
+  function summarize(posts: BlogPost[]): OverviewBlogSummary {
+    const published = posts.filter((post) => post.status === "published")
+    const withoutCta = published.filter((post) => {
+      const cta = post.cta
+      return !(cta?.title?.trim() && cta?.buttonLabel?.trim() && cta?.buttonHref?.trim())
+    })
+    return {
+      totalCount: posts.length,
+      publishedCount: published.length,
+      draftCount: posts.filter((post) => post.status === "draft").length,
+      publishedWithoutCtaCount: withoutCta.length,
+      // 서버는 updated_at 내림차순 4건만 보낸다 — 여기서도 같은 컷을 흉내 낸다.
+      recent: [...posts]
+        .sort((a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime())
+        .slice(0, 4)
+        .map((post) => ({
+          id: post.id,
+          title: post.title,
+          status: post.status,
+          category: post.category,
+          author: post.author,
+          updatedAt: post.updatedAt,
+          publishedAt: post.publishedAt,
+        })),
+    }
+  }
+
+  it("동일 픽스처에서 전체 목록 파생과 같은 수치·최근 4건을 낸다", () => {
+    const posts = [
+      makePost({ updatedAt: localIso(2026, 6, 1) }),
+      makePost({ updatedAt: localIso(2026, 6, 5) }),
+      makePost({
+        updatedAt: localIso(2026, 6, 3),
+        cta: { eyebrow: "", title: "CTA", description: "", buttonLabel: "신청", buttonHref: "  " },
+      }),
+      makePost({ status: "draft", updatedAt: localIso(2026, 6, 9) }),
+      makePost({ status: "review", updatedAt: localIso(2026, 6, 7) }),
+      makePost({ status: "archived", updatedAt: localIso(2026, 6, 2) }),
+    ]
+    const full = deriveBlogInsights(posts)
+    const fromSummary = deriveBlogInsightsFromSummary(summarize(posts))
+
+    expect(fromSummary.totalBlogPosts).toBe(posts.length)
+    expect(fromSummary.publishedBlogPostCount).toBe(full.publishedBlogPosts.length)
+    expect(fromSummary.draftBlogPosts).toBe(full.draftBlogPosts)
+    expect(fromSummary.ctaCoverage).toBe(full.ctaCoverage)
+    expect(fromSummary.publishedPostsWithoutCta).toBe(full.publishedPostsWithoutCta)
+    expect(fromSummary.recentPosts.map((post) => post.id)).toEqual(full.recentPosts.map((post) => post.id))
+    expect(fromSummary.recentPosts.map((post) => post.status)).toEqual(
+      full.recentPosts.map((post) => post.status)
+    )
+    // 수치 스냅샷 — round(2/3*100)=67, 미완성 1건, 초안 1건
+    expect(fromSummary.ctaCoverage).toBe(67)
+    expect(fromSummary.publishedPostsWithoutCta).toBe(1)
+    expect(fromSummary.draftBlogPosts).toBe(1)
+  })
+
+  it("빈 요약은 전체 목록 [] 파생과 같다 — 커버리지 0, 최근 글 없음", () => {
+    const full = deriveBlogInsights([])
+    const fromSummary = deriveBlogInsightsFromSummary(EMPTY_OVERVIEW_BLOG_SUMMARY)
+    expect(fromSummary.totalBlogPosts).toBe(0)
+    expect(fromSummary.publishedBlogPostCount).toBe(full.publishedBlogPosts.length)
+    expect(fromSummary.ctaCoverage).toBe(full.ctaCoverage)
+    expect(fromSummary.publishedPostsWithoutCta).toBe(full.publishedPostsWithoutCta)
+    expect(fromSummary.recentPosts).toEqual([])
+  })
+
+  it("서버 카운트가 어긋나도(미완성 > 공개) 음수·100% 초과가 나오지 않는다", () => {
+    const derived = deriveBlogInsightsFromSummary({
+      ...EMPTY_OVERVIEW_BLOG_SUMMARY,
+      totalCount: 3,
+      publishedCount: 2,
+      publishedWithoutCtaCount: 5,
+    })
+    expect(derived.publishedPostsWithoutCta).toBe(2)
+    expect(derived.ctaCoverage).toBe(0)
   })
 })
 

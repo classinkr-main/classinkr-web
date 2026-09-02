@@ -14,6 +14,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { BlogPost as SupaBlogPost, BlogPostInsert, BlogPostUpdate } from "@/lib/supabase/database.types";
 import { sanitizePublicUrl } from "@/lib/safe-public-url";
 import { formatBlogDisplayDate, resolveDisplayDateSource } from "@/lib/blog-display";
+import type { OverviewBlogRecentPost, OverviewBlogSummary } from "@/lib/admin/overview/insights";
 
 // 기존 타입 re-export
 export type { BlogPost, BlogPostInput, BlogPostStatus } from "@/lib/blog-types";
@@ -153,6 +154,69 @@ export async function countPublishedPosts(): Promise<number> {
 
   if (error) throw new Error(`[blog] 발행 글 수 조회 실패: ${error.message}`);
   return count ?? 0;
+}
+
+// /admin/overview 전용 요약 — 전 포스트(LIST_COLUMNS 24컬럼)를 내려받는 대신 head 카운트 4개 +
+// 최근 수정 4건(7컬럼)만 받는다. 각 수치는 "getAllPosts() 후 JS 파생(deriveBlogInsights)"과 동치:
+//   totalCount               = getAllPosts().length             (deleted_at null, status 무관 —
+//                              overview "발행된 포스트" StatCard가 실제로 보여주던 값 그대로)
+//   publishedCount           = status === "published" 수         (countPublishedPosts와 같은 술어)
+//   draftCount               = status === "draft" 수              (dbStatusToLegacy가 draft로 접는 나머지 전부)
+//   publishedWithoutCtaCount = 공개 글 중 cta.title/buttonLabel/buttonHref 중 하나라도 공백인 수.
+//                              supabaseToLegacy는 cta_text→title·buttonLabel, cta_url→buttonHref로 매핑하고
+//                              null이면 기본 문구/링크로 채우므로, "미완성"은 컬럼이 null이 아닌 공백 문자열일 때뿐이다.
+//   recent                   = updated_at 내림차순 4건(nulls last, 동률은 created_at 내림차순)
+const OVERVIEW_RECENT_COLUMNS = "id,title,status,category,author_name,updated_at,published_at,created_at";
+const OVERVIEW_RECENT_LIMIT = 4;
+const NON_DRAFT_STATUS_VALUES = "(IN_REVIEW,PUBLISHED,ARCHIVED,in_review,published,archived)";
+const BLANK_CTA_FILTER = "cta_text.match.^\\s*$,cta_url.match.^\\s*$";
+
+export async function getOverviewBlogSummary(): Promise<OverviewBlogSummary> {
+  const supabase = createSupabaseAdminClient();
+  const countQuery = () => supabase.from("blog_posts").select("id", { count: "exact", head: true });
+
+  const [total, published, draft, publishedWithoutCta, recent] = await Promise.all([
+    countQuery().is("deleted_at", null),
+    countQuery().is("deleted_at", null).in("status", PUBLISHED_STATUS_VALUES),
+    countQuery().is("deleted_at", null).not("status", "in", NON_DRAFT_STATUS_VALUES),
+    countQuery().is("deleted_at", null).in("status", PUBLISHED_STATUS_VALUES).or(BLANK_CTA_FILTER),
+    supabase
+      .from("blog_posts")
+      .select(OVERVIEW_RECENT_COLUMNS)
+      .is("deleted_at", null)
+      .order("updated_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(OVERVIEW_RECENT_LIMIT),
+  ]);
+
+  const failed = [total, published, draft, publishedWithoutCta, recent].find((result) => result.error);
+  if (failed?.error) throw new Error(`[blog] overview 요약 조회 실패: ${failed.error.message}`);
+
+  return {
+    totalCount: total.count ?? 0,
+    publishedCount: published.count ?? 0,
+    draftCount: draft.count ?? 0,
+    publishedWithoutCtaCount: publishedWithoutCta.count ?? 0,
+    recent: ((recent.data ?? []) as unknown as OverviewRecentRow[]).map(rowToOverviewRecentPost),
+  };
+}
+
+type OverviewRecentRow = Pick<
+  SupaBlogPost,
+  "id" | "title" | "status" | "category" | "author_name" | "updated_at" | "published_at"
+>;
+
+// supabaseToLegacy와 같은 매핑 규칙(id 해시·status 변환·category/author 기본값)만 최소 컬럼에 적용한다.
+function rowToOverviewRecentPost(row: OverviewRecentRow): OverviewBlogRecentPost {
+  return {
+    id: hashUuidToNumber(row.id),
+    title: row.title,
+    status: dbStatusToLegacy(row.status),
+    category: row.category ?? "전체",
+    author: row.author_name ?? "",
+    updatedAt: row.updated_at ?? undefined,
+    publishedAt: row.published_at ?? undefined,
+  };
 }
 
 export async function getPublishedPosts(): Promise<BlogPost[]> {

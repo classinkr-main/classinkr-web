@@ -220,6 +220,62 @@ export function deriveBlogInsights(blogPosts: BlogPost[]) {
   }
 }
 
+// /api/admin/blog?scope=overview 응답 계약 — lib/repositories/blog.ts getOverviewBlogSummary가 생산한다.
+// recent는 BlogPost 중 overview 렌더가 실제로 읽는 7필드만(레거시 number id 포함).
+export interface OverviewBlogRecentPost {
+  id: number
+  title: string
+  status: BlogPost["status"]
+  category: string
+  author: string
+  updatedAt?: string
+  publishedAt?: string
+}
+
+export interface OverviewBlogSummary {
+  /** 삭제되지 않은 전체 포스트 수(status 무관) — 기존 blogPosts.length와 동일 의미 */
+  totalCount: number
+  publishedCount: number
+  draftCount: number
+  /** 공개 글 중 CTA(title/buttonLabel/buttonHref) 하나라도 공백인 수 */
+  publishedWithoutCtaCount: number
+  /** 최근 수정순 최대 4건 */
+  recent: OverviewBlogRecentPost[]
+}
+
+export const EMPTY_OVERVIEW_BLOG_SUMMARY: OverviewBlogSummary = {
+  totalCount: 0,
+  publishedCount: 0,
+  draftCount: 0,
+  publishedWithoutCtaCount: 0,
+  recent: [],
+}
+
+// deriveBlogInsights(전체 목록)와 같은 수치를 서버 요약에서 파생한다 — 커버리지 반올림·정렬·4건 컷·
+// 음수 방어 규칙을 그대로 둬서 두 경로의 출력이 동치가 되게 한다(tests/admin/overview에서 고정).
+// publishedBlogPosts 배열은 요약에서 만들 수 없으므로 길이(publishedBlogPostCount)로 대체한다.
+export function deriveBlogInsightsFromSummary(summary: OverviewBlogSummary) {
+  const publishedBlogPostCount = Math.max(0, summary.publishedCount)
+  const publishedPostsWithoutCta = Math.min(
+    publishedBlogPostCount,
+    Math.max(0, summary.publishedWithoutCtaCount)
+  )
+  const publishedPostsWithCta = publishedBlogPostCount - publishedPostsWithoutCta
+  const ctaCoverage =
+    publishedBlogPostCount > 0 ? Math.round((publishedPostsWithCta / publishedBlogPostCount) * 100) : 0
+  const recentPosts = [...summary.recent]
+    .sort((a, b) => scoreDate(b.updatedAt ?? b.publishedAt) - scoreDate(a.updatedAt ?? a.publishedAt))
+    .slice(0, 4)
+  return {
+    totalBlogPosts: Math.max(0, summary.totalCount),
+    draftBlogPosts: Math.max(0, summary.draftCount),
+    publishedBlogPostCount,
+    ctaCoverage,
+    recentPosts,
+    publishedPostsWithoutCta,
+  }
+}
+
 export function deriveCampaignInsights(campaigns: EmailCampaign[]) {
   const recentCampaigns = [...campaigns]
     .sort((a, b) => scoreDate(b.sentAt ?? b.createdAt) - scoreDate(a.sentAt ?? a.createdAt))

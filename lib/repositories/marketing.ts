@@ -318,19 +318,31 @@ export async function deleteSubscriber(id: string | number): Promise<boolean> {
 
 /* ─── 이메일 캠페인 ──────────────────────────────────────── */
 
-export async function getAllCampaigns(limit = 200, offset = 0): Promise<CampaignRow[]> {
+// "summary"는 목록·집계 소비처(overview 등)용 — HTML 메일 본문(body)을 빼고 7컬럼만 받는다.
+// 기본값 "full"은 기존 select("*") 경로 그대로(호출자 무변경 = 응답 동일).
+export type CampaignScope = "full" | "summary";
+
+const CAMPAIGN_SUMMARY_COLUMNS =
+  "id,subject,status,recipient_count,target_tags,sent_at,created_at";
+
+export async function getAllCampaigns(
+  limit = 200,
+  offset = 0,
+  scope: CampaignScope = "full"
+): Promise<CampaignRow[]> {
   if (!USE_SUPABASE) {
     const { getAllCampaigns: jsonGet } = await import("@/lib/marketing-data");
-    return jsonGet();
+    const campaigns = await jsonGet();
+    return scope === "summary" ? campaigns.map(campaignToSummary) : campaigns;
   }
 
   const { data, error } = await sb()
     .from("email_campaigns")
-    .select("*")
+    .select(scope === "summary" ? CAMPAIGN_SUMMARY_COLUMNS : "*")
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
   if (error) throw new Error(`[marketing] 캠페인 조회 실패: ${error.message}`);
-  return (data ?? []).map(rowToCampaign);
+  return (data ?? []).map(scope === "summary" ? rowToCampaignSummary : rowToCampaign);
 }
 
 export const MARKETING_CAMPAIGNS_CACHE_TAG = "marketing-campaigns";
@@ -426,5 +438,35 @@ function rowToCampaign(row: any): CampaignRow {
     openCount: row.open_count ?? 0,
     externalId: row.external_id ?? undefined,
     createdAt: row.created_at,
+  };
+}
+
+// summary 스코프 투영 — EmailCampaign 타입은 body가 필수 string이라 빈 문자열로 채운다.
+// openCount/externalId는 select하지 않으므로 넣지 않는다(optional).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToCampaignSummary(row: any): CampaignRow {
+  return {
+    id: row.id,
+    subject: row.subject,
+    body: "",
+    targetTags: row.target_tags ?? [],
+    status: row.status,
+    sentAt: row.sent_at ?? undefined,
+    recipientCount: row.recipient_count ?? 0,
+    createdAt: row.created_at,
+  };
+}
+
+// JSON 폴백(로컬)에서도 summary 스코프는 Supabase 경로와 같은 필드만 돌려준다.
+function campaignToSummary(campaign: CampaignRow): CampaignRow {
+  return {
+    id: campaign.id,
+    subject: campaign.subject,
+    body: "",
+    targetTags: campaign.targetTags ?? [],
+    status: campaign.status,
+    sentAt: campaign.sentAt,
+    recipientCount: campaign.recipientCount ?? 0,
+    createdAt: campaign.createdAt,
   };
 }

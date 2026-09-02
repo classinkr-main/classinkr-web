@@ -1,6 +1,12 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
 import { revalidatePath } from "next/cache"
-import { createPost, getAllPosts, getTrashedPosts, isBlogSlugConflictError } from "@/lib/repositories/blog"
+import {
+  createPost,
+  getAllPosts,
+  getOverviewBlogSummary,
+  getTrashedPosts,
+  isBlogSlugConflictError,
+} from "@/lib/repositories/blog"
 import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { validatePublicMarkdownContent } from "@/lib/admin/public-content-validation"
@@ -19,7 +25,12 @@ export async function GET(req: NextRequest) {
   if (authError) return authError
 
   try {
-    const trash = req.nextUrl.searchParams.get("trash") === "1"
+    const params = req.nextUrl.searchParams
+    // ?scope=overview — /admin/overview 전용 카운트+최근 4건 요약. 미전달이면 기존 { posts } 응답.
+    if (params.get("scope") === "overview") {
+      return adminCachedJson(await getOverviewBlogSummary())
+    }
+    const trash = params.get("trash") === "1"
     const posts = trash ? await getTrashedPosts() : await getAllPosts()
     return adminCachedJson({ posts })
   } catch {
