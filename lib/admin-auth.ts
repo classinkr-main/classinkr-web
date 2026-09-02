@@ -9,6 +9,9 @@ import {
 import type { AdminCapability } from "@/lib/admin-capabilities"
 import { isAdminAuthBypassEnabled } from "@/lib/admin-env"
 import type { AdminProfile, Database } from "@/lib/supabase/database.types"
+// 토큰 검증 규칙(getClaims 우선 + getUser 폴백)은 프록시와 API 가드가 공유한다.
+// 정본은 lib/supabase/middleware.ts에 있고, 이 모듈은 그 규칙을 그대로 쓴다.
+import { verifySupabaseAuthUser } from "@/lib/supabase/middleware"
 import {
   getSupabaseBrowserEnv,
   hasSupabaseBrowserEnv,
@@ -306,8 +309,11 @@ function getLegacyAdminContext(req: NextRequest): VerifiedAdminContext | null {
   }
 }
 
-// Supabase 관리자 컨텍스트는 요청마다 auth + admin_profiles 왕복이 필요하므로
-// 동일 세션 쿠키에 대해 짧게 캐시한다. (권한 회수 반영 지연 최대 60초)
+// Supabase 관리자 컨텍스트는 요청마다 admin_profiles 왕복이 필요하므로 동일 세션 쿠키에
+// 대해 짧게 캐시한다. (관리자 권한 회수 반영 지연 최대 60초)
+// 토큰 검증은 verifySupabaseAuthUser()가 담당한다. 비대칭 서명 키 프로젝트에서는 JWKS
+// 로컬 검증이라 캐시 미스에도 GoTrue 왕복이 없고, 사용자 삭제·차단은 토큰 만료(최대 1시간)
+// 까지 반영이 늦어질 수 있다. 자세한 신뢰 모델은 verifySupabaseAuthUser() 주석 참고.
 const SUPABASE_ADMIN_CONTEXT_TTL_MS = 60_000
 const SUPABASE_ADMIN_CONTEXT_CACHE_MAX = 200
 // 콜드 스타트에서 한 화면이 여러 어드민 API를 동시에 때리므로 완료된 결과뿐 아니라
@@ -390,11 +396,8 @@ async function fetchSupabaseAdminContext(
     },
   })
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
-  if (userError || !user) return null
+  const user = await verifySupabaseAuthUser(supabase.auth)
+  if (!user) return null
 
   const { data: profile, error: profileError } = await supabase
     .from("admin_profiles")
