@@ -239,7 +239,7 @@ Notion 구조 × Apple 공백 × Classin Green.
 
 | 자동화됨 | 수동/미완 |
 |----------|-----------|
-| 매칭 자동확정(customer/partner), 우선순위 큐 룰스코어링+실 mutation, 싱크 체이닝(sync→후보→알림), NEO sync cron(01:00 UTC), 리드 미응답 알림 크론, 동의 기반(P0 배너+Consent Mode v2+cln_aid) | 매출 자체DB 적재(설계만), 리드스코어링 2축 엔진(설계), 공개 소셜로그인(Google/Naver, 설계), 자료 게이팅 3단(설계), crm_tasks 정식 승격, deal 매칭 확정, STT/AI 요약/통화분석(LLM 보류), 이메일 발송(코드 완성·서비스 대기) |
+| 매칭 자동확정(customer/partner), 우선순위 큐 룰스코어링+실 mutation, 싱크 체이닝(sync→후보→알림), NEO sync cron(01:00 UTC), 리드 아침 공지 크론, 동의 기반(P0 배너+Consent Mode v2+cln_aid) | 매출 자체DB 적재(설계만), 리드스코어링 2축 엔진(설계), 공개 소셜로그인(Google/Naver, 설계), 자료 게이팅 3단(설계), crm_tasks 정식 승격, deal 매칭 확정, STT/AI 요약/통화분석(LLM 보류), 이메일 발송(코드 완성·서비스 대기) |
 
 ---
 
@@ -367,7 +367,7 @@ Notion 구조 × Apple 공백 × Classin Green.
 
 | 데이터소스 | 트리거 | 산출물 |
 |-----------|--------|--------|
-| `leads.assigned_to` + `lead_contact_logs` | 48h+ 무응답 감지 크론(`app/api/cron/lead-response-alerts`) | 담당자 알림 + 우선순위 큐 상단 배치(가동, priority.ts 룰가중) |
+| `leads.assigned_to` + `lead_contact_logs` | Admin 미응답 필터·우선순위 큐 | 우선순위 큐 상단 배치(`priority.ts` 룰가중). 24/48시간·누적 건수 외부 알림은 제거됨 |
 | `client_events` 행동 이벤트 | Fit+Engagement 엔진 증분 계산, MQL/SQL 임계 도달 | 자동화(`lib/repositories/automation.ts`) + 영업 배정 알림(설계) |
 | `external_crm_records`/REV 시트 sync | 후보생성(confidence≥0.92·갭≥0.15) | customer/partner 자동 confirm + `/admin/crm/matching` 인박스(sync-chain.ts, 가동) |
 | NEO sync cron(01:00 UTC) 직후 transform | `external_crm_records` 정제(owner/status/통화/날짜) | `crm_orders` upsert → 성과분석 재소스(설계, 구현 대기) |

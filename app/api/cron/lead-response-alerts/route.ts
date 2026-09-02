@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { sendLeadMorningBrief } from "@/lib/server/lead-morning-brief"
-import { scanLeadResponseAlerts } from "@/lib/server/lead-response-alerts"
 
 export async function GET(request: NextRequest) {
   // 인증은 아래 CRON_SECRET Bearer 하나뿐이다 — Vercel 이 크론에 붙이는 건 그 헤더이지
@@ -21,12 +20,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [meta, homepage, responseAlerts] = await Promise.allSettled([
+    // 이 크론은 Meta/홈페이지 아침 공지만 발송한다.
+    const [meta, homepage] = await Promise.allSettled([
       sendLeadMorningBrief("meta"),
       sendLeadMorningBrief("homepage"),
-      scanLeadResponseAlerts(),
     ])
-    const taskResults = { meta, homepage, responseAlerts }
+    const taskResults = { meta, homepage }
     const errors = Object.entries(taskResults)
       .filter(([, result]) => result.status === "rejected")
       .map(([task, result]) => ({
@@ -42,8 +41,6 @@ export async function GET(request: NextRequest) {
       ok: errors.length === 0,
       meta: meta.status === "fulfilled" ? meta.value : null,
       homepage: homepage.status === "fulfilled" ? homepage.value : null,
-      responseAlerts:
-        responseAlerts.status === "fulfilled" ? responseAlerts.value : null,
       errors,
     }
 
