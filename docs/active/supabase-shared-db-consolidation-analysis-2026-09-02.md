@@ -26,7 +26,7 @@
 | 항목 | Classin Home + Admin (이 저장소) | Compass (`classinkr-main/crm`) |
 |---|---|---|
 | DB 접근 | supabase-js, `createSupabaseAdminClient()` service role. `pg`·`DATABASE_URL` 참조 0건 | `pg` Pool(max 3) + `DATABASE_URL`(Supabase pooler), `ssl.rejectUnauthorized=false` |
-| 스키마 | `public`, 분석 기준 마이그레이션 163개 파일(+레거시 SQL 3개), 테이블 154개, RLS 선언 154개 테이블(100%), 인덱스 약 380개, 함수 53개, 뷰 14개, DROP TABLE 0건. 분석 중 원격에 `20260829_showroom_bookings.sql`이 추가돼 테이블은 155개가 됐고 새 테이블도 RLS를 켠다 | `crm`, `scripts/schema.sql` 410줄(append-only), CREATE TABLE 21개, `scripts/migrate.mjs`가 전체 재실행(버전 테이블 없음) |
+| 스키마 | `public`, 분석 기준 마이그레이션 163개 파일(+레거시 SQL 3개), 테이블 154개, RLS 선언 154개 테이블(100%), 인덱스 약 380개, 함수 53개, 뷰 14개, DROP TABLE 0건. 분석 중 원격에 `20260828_crm_region_assignments.sql`, `20260829_showroom_bookings.sql`이 추가돼 테이블은 156개가 됐고 새 테이블도 RLS를 켠다 | `crm`, `scripts/schema.sql` 410줄(append-only), CREATE TABLE 21개, `scripts/migrate.mjs`가 전체 재실행(버전 테이블 없음) |
 | 스키마 검증 | `lib/db/schema-contract.ts` 프로브 + `npm run check:db` | 없음 |
 | 크론 | `vercel.json` 11개(모두 하루 1회 이하) | `vercel.json` 2개 + GitHub Actions 매시 호출 2개 워크플로 + 외부 POST 진입점 |
 | 웹훅 | channel-talk, internal-cs, page | meta(Lead Ads), page-visit |
@@ -275,7 +275,7 @@ create index concurrently leads_email_lower_idx on crm.leads(lower(email)) where
 
 ### 8.1 규모와 도메인 분포
 
-분석 기준 마이그레이션 163개 + 레거시 SQL 3개에서 테이블 154개, 인덱스 약 380개, 함수 53개(문장 77개), 뷰 14개가 만들어진다. DROP TABLE은 0건이다. 분석 중 원격에 추가된 `20260829_showroom_bookings.sql`(테이블 1개, RLS 선언)은 아래 집계에 넣지 않았다.
+분석 기준 마이그레이션 163개 + 레거시 SQL 3개에서 테이블 154개, 인덱스 약 380개, 함수 53개(문장 77개), 뷰 14개가 만들어진다. DROP TABLE은 0건이다. 분석 중 원격에 추가된 `20260828_crm_region_assignments.sql`(테이블 1개), `20260829_showroom_bookings.sql`(테이블 1개)은 모두 RLS를 켜며, 아래 집계에는 넣지 않았다.
 
 | 도메인 | 테이블 수 | 비고 |
 |---|---|---|
