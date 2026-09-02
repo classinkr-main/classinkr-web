@@ -204,6 +204,8 @@ ADMIN_BASE_URL=https://<배포 도메인> ADMIN_COOKIE='<cookie>' npm run measur
 | Supabase 플랜·컴퓨트, CPU·API 지연 리포트 | Pro 전환 판단 근거 | Supabase → Reports |
 | 2026-09-02 마이그레이션 적용 | 인덱스·프로브 | `npm run check:db` |
 
+이 세션에서 직접 확인한 것과 못 한 것: Compass GitHub Actions 실행 이력과 잡 로그는 확인했다(공용 DB 분석 문서 §5.5). 운영 도메인(classin.co.kr, mkt.classin.co.kr, Supabase)으로의 요청은 이 실행 환경의 네트워크 정책이 차단해 `measure:admin` 실측과 JWKS 조회를 수행하지 못했고, Vercel·Supabase 대시보드는 자격증명이 없어 열지 못했다. 위 표의 항목은 운영자 로그인으로 확인해야 한다.
+
 ## 7. 다음 단계
 
 1. 배포 후 `measure:admin`으로 실측하고 이 문서에 날짜별 결과 파일 경로를 링크한다.
