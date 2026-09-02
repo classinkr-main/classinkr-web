@@ -182,7 +182,7 @@ ADR-009의 "Cron은 항상 한 프로젝트만 소유"를 외부 원천 단위�
 - `hourly-sync`와 `revenue-sync`는 둘 다 매시 실행되며 최근 실행 대부분이 성공이다. `revenue-sync`는 `curl -sf`로 200을 받아야 성공하므로 두 워크플로의 시크릿 값은 같고, 매출 동기화는 실제로 매시 3회 실행된다(sheet 크론 편승 1회 + hourly-sync 3단계 1회 + revenue-sync 1회). 다만 GitHub 스케줄 지터가 커서 같은 분에 겹치는 빈도는 확률적이다(예: 03:55와 04:02).
 - 최근 성공 응답: sheet 크론 `sheetRows 671, newLeads 0`, 매출 `periods 15, kpiRows 104, revRows 33, baseline 12`, 캘린더 `events 169`(약 150일 범위). `revenue_deals`는 33행 규모라 교체 창은 짧지만, 구조적 위험(무트랜잭션 전량 교체, 동시 실행)은 규모와 무관하다.
 - 2026-08-31 01:18 실행은 Google Sheets가 "The caller does not have permission"을 돌려줘 sheet 크론 응답의 `revenue.ok=false`와 revenue 단계 실패로 끝났다. 시트 공유 권한이 간헐적으로 흔들린다는 뜻이며, 이 경우 예외가 쓰기 전에 나므로 미러는 보존된다. 새 코드의 0건 가드와 트랜잭션은 이 경로를 그대로 지킨다.
-- Compass P0 패치는 [classinkr-main/crm#1](https://github.com/classinkr-main/crm/pull/1)로 올렸다. 적용 순서와 롤백은 그 PR 본문과 Compass 저장소의 `docs/p0-sync-safety-2026-09-02.md`에 있다.
+- Compass P0 패치는 [classinkr-main/crm#1](https://github.com/classinkr-main/crm/pull/1)로 올렸다. 적용 순서와 롤백은 그 PR 본문과 Compass 저장소의 `docs/p0-sync-safety-2026-09-02.md`에 있다. Vercel이 이 PR 브랜치를 Ready로 빌드했고(2026-09-02 05:11 UTC) 머지 상태는 clean이다. 즉 패치 세트는 Compass의 실제 빌드 환경에서 컴파일·배포가 확인됐다.
 
 ## 6. 거버넌스·인증·연동 평가 (S3, 정정 반영)
 
