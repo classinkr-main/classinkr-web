@@ -202,7 +202,7 @@ interface SupabaseChannelConversationRow {
   matched_lead_id: string | null
   matched_org: string | null
   last_message_at: string | null
-  transcript: unknown
+  transcript?: unknown
   synced_at: string | null
 }
 
@@ -366,22 +366,29 @@ export interface ChannelConversationSyncMeta {
  * 미설정/실패 시 null 을 돌려 호출자(라우트)가 레거시 JSON 으로 폴백하게 한다(무음 빈 배열 금지).
  */
 export async function listDurableConversations(
-  limit = 500
+  limit = 500,
+  options: { withTranscript?: boolean } = {}
 ): Promise<ChannelConversationRecord[] | null> {
   if (!channelConversationsSupabaseEnabled()) return null
+
+  const { withTranscript = true } = options
+  const columns: string = withTranscript
+    ? "id, name, email, phone, state, tags, first_question, matched_lead_id, matched_org, last_message_at, transcript, synced_at"
+    : "id, name, email, phone, state, tags, first_question, matched_lead_id, matched_org, last_message_at, synced_at"
 
   try {
     const supabase = createSupabaseAdminClient()
     const { data, error } = await supabase
       .from("channel_conversations")
-      .select(
-        "id, name, email, phone, state, tags, first_question, matched_lead_id, matched_org, last_message_at, transcript, synced_at"
-      )
+      .select(columns)
       .order("last_message_at", { ascending: false, nullsFirst: false })
       .limit(limit)
     if (error) throw new Error(error.message)
 
-    return ((data ?? []) as SupabaseChannelConversationRow[]).map(supabaseRowToRecord)
+    // columns 가 withTranscript 분기로 동적 조립되어 postgrest-js 가 리터럴 파싱을 못 한다
+    // (GenericStringError) — 런타임 셰이프는 SupabaseChannelConversationRow 와 동일하므로
+    // unknown 경유 캐스팅으로 명시한다.
+    return ((data ?? []) as unknown as SupabaseChannelConversationRow[]).map(supabaseRowToRecord)
   } catch (error) {
     console.warn(
       "[channel-conversations] Supabase 목록 조회 실패, JSON 폴백:",
