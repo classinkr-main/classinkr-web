@@ -26,7 +26,7 @@
 | 항목 | Classin Home + Admin (이 저장소) | Compass (`classinkr-main/crm`) |
 |---|---|---|
 | DB 접근 | supabase-js, `createSupabaseAdminClient()` service role. `pg`·`DATABASE_URL` 참조 0건 | `pg` Pool(max 3) + `DATABASE_URL`(Supabase pooler), `ssl.rejectUnauthorized=false` |
-| 스키마 | `public`, 마이그레이션 163개 파일(+레거시 SQL 3개), 테이블 154개, RLS 선언 154개 테이블(100%), 인덱스 약 380개, 함수 53개, 뷰 14개, DROP TABLE 0건 | `crm`, `scripts/schema.sql` 410줄(append-only), CREATE TABLE 21개, `scripts/migrate.mjs`가 전체 재실행(버전 테이블 없음) |
+| 스키마 | `public`, 분석 기준 마이그레이션 163개 파일(+레거시 SQL 3개), 테이블 154개, RLS 선언 154개 테이블(100%), 인덱스 약 380개, 함수 53개, 뷰 14개, DROP TABLE 0건. 분석 중 원격에 `20260829_showroom_bookings.sql`이 추가돼 테이블은 155개가 됐고 새 테이블도 RLS를 켠다 | `crm`, `scripts/schema.sql` 410줄(append-only), CREATE TABLE 21개, `scripts/migrate.mjs`가 전체 재실행(버전 테이블 없음) |
 | 스키마 검증 | `lib/db/schema-contract.ts` 프로브 + `npm run check:db` | 없음 |
 | 크론 | `vercel.json` 11개(모두 하루 1회 이하) | `vercel.json` 2개 + GitHub Actions 매시 호출 2개 워크플로 + 외부 POST 진입점 |
 | 웹훅 | channel-talk, internal-cs, page | meta(Lead Ads), page-visit |
@@ -123,7 +123,7 @@ A분류(진짜 중복)는 3.5개다. 매출원장 미러, NeoCRM 쓰기, 담당�
 
 | 구분 | 이 저장소 | Compass |
 |---|---|---|
-| 스케줄 쓰기 | Vercel 크론 11개(`x-vercel-cron` 헤더 + Bearer 이중 검증) | Vercel 크론 2개 + GitHub Actions 매시 호출 3단계(sheet → calendar-sync → revenue) + 중복 워크플로 1개 |
+| 스케줄 쓰기 | Vercel 크론 11개(Bearer `CRON_SECRET` 단일 검증. 2026-08-28 커밋이 `x-vercel-cron` 헤더 게이트를 제거했고, 라우트 주석은 그 게이트가 Vercel 실제 요청과 맞지 않아 크론 11종이 401로 멈춰 있던 기간이 있었다고 기록한다) | Vercel 크론 2개 + GitHub Actions 매시 호출 3단계(sheet → calendar-sync → revenue) + 중복 워크플로 1개 |
 | 웹훅 쓰기 | 3개. channel-talk·internal-cs는 timing-safe HMAC, page는 평문 비교 | 2개. meta는 HMAC이지만 시크릿 미설정 시 검증 생략, page-visit은 토큰 평문 비교 |
 | 사용자 쓰기 | Admin API(RBAC + RLS) | 서버 액션 모듈 3개(`leads/actions.ts` 32개 액션, `tasks/actions.ts`, `ads/actions.ts`), 경로 기반 역할 제한만 |
 | 로컬 쓰기 | 없음 | 백필 스크립트 18개가 노트북에서 `.env.local`의 `DATABASE_URL`로 직접 쓰기 |
@@ -147,7 +147,7 @@ A분류(진짜 중복)는 3.5개다. 매출원장 미러, NeoCRM 쓰기, 담당�
 | R12 | P2 | Meta API를 두 앱이 10분 간격으로 각각 소비한다 | 이 저장소 `sync-meta-insights` 20:50, Compass `cron/meta` 21:00(UTC). 같은 광고 계정 여부는 추정 | 레이트리밋 시 R7의 무음 break | 외부 원천 단일 소유자화(§5.4) | M |
 | R13 | P2 | Bearer 비교가 timing-safe하지 않다 | 이 저장소 크론 11개, Compass 크론 7개, 양쪽 page 웹훅 모두 `!==` 비교. `webhook/channel-talk`의 `safeEquals`는 이미 존재 | 실무 위험 낮음, 규약 불일치 | 공용 유틸화 | S |
 | R14 | P2 | 브리지 뷰 권한이 롤 두 개만 회수한다 | `20260828_compass_bridge_views.sql`: REVOKE 대상이 anon/authenticated뿐, `compass_activities_v`는 통화 기록 `body`까지 노출 | 지금은 안전. 향후 `GRANT … ON ALL TABLES IN SCHEMA public`이 들어오면 Compass PII가 무음 개방 | `ALTER DEFAULT PRIVILEGES` 명시, `body` 분리, 권한 회귀 테스트 | S |
-| R15 | P3 | 크론 개수 상한을 아무도 검사하지 않는다 | `scripts/check-vercel-crons.mjs`는 크론당 빈도만 검사. `vercel.json` 11개 vs AGENTS.md "Hobby 기준". Compass 워크플로 주석은 "Hobby 2개 한도"를 실제로 겪은 흔적 | Pro라면 규칙 문서가 낡은 것, Hobby라면 크론 9개가 조용히 미실행 | 대시보드에서 두 프로젝트 플랜과 크론 실행 로그 확인 후 개수 assert 추가 | S |
+| R15 | P3 | 크론 개수 상한을 아무도 검사하지 않는다 | `scripts/check-vercel-crons.mjs`는 크론당 빈도만 검사. `vercel.json` 11개 vs AGENTS.md "Hobby 기준". Compass 워크플로 주석은 "Hobby 2개 한도"를 실제로 겪은 흔적 | Pro라면 규칙 문서가 낡은 것, Hobby라면 크론 일부가 조용히 미실행. 참고로 `sync-branch` 라우트 주석(2026-08-28)은 게이트 없는 배포에서 크론이 매일 실행됐다고 기록하므로 Vercel이 11개를 스케줄한다는 정황은 있다. 다만 같은 주석은 2026-06-24~07-02, 07-07~08-28 사이 크론 전체가 401로 멈춰 있었다고도 기록하므로, 지난 두 달의 크론 산출물(다이제스트·동기화 run)은 결손 구간이 있다고 봐야 한다 | 대시보드에서 두 프로젝트 플랜과 크론 실행 로그 확인 후 개수 assert 추가. 결손 구간의 재실행 필요 여부를 크론별로 판정 | S |
 | R16 | P3 | 자동화 크론이 규칙마다 로그 전량을 읽는다 | `app/api/cron/automation/route.ts` `isDue()` | N+1 | `limit 1` 또는 `last_run_at` 컬럼 | S |
 | R17 | P3 | Compass BD 계정 제한이 경로 기반이라 서버 액션에는 닿지 않는다 | Compass `proxy.ts` `BD_ALLOWED` 정규식 vs 액션 ID 디스패치 | `/leads/care` 허용 계정이 모든 액션 호출 가능 | 액션 내부 역할 게이트 | M |
 
@@ -275,7 +275,7 @@ create index concurrently leads_email_lower_idx on crm.leads(lower(email)) where
 
 ### 8.1 규모와 도메인 분포
 
-마이그레이션 163개 + 레거시 SQL 3개에서 테이블 154개, 인덱스 약 380개, 함수 53개(문장 77개), 뷰 14개가 만들어진다. DROP TABLE은 0건이다.
+분석 기준 마이그레이션 163개 + 레거시 SQL 3개에서 테이블 154개, 인덱스 약 380개, 함수 53개(문장 77개), 뷰 14개가 만들어진다. DROP TABLE은 0건이다. 분석 중 원격에 추가된 `20260829_showroom_bookings.sql`(테이블 1개, RLS 선언)은 아래 집계에 넣지 않았다.
 
 | 도메인 | 테이블 수 | 비고 |
 |---|---|---|
@@ -416,7 +416,7 @@ create index if not exists idx_leads_email_lower on public.leads (lower(email)) 
 
 | 항목 | 왜 필요한가 | 확인 위치 |
 |---|---|---|
-| 두 Vercel 프로젝트의 플랜과 크론 실행 로그 | Hobby라면 이 저장소 크론 9개가 조용히 미실행일 수 있다 | Vercel 대시보드 |
+| 두 Vercel 프로젝트의 플랜과 크론 실행 로그 | 이 저장소 크론은 2026-08-28까지 헤더 게이트 때문에 401로 멈춰 있던 기간이 있다. 현재 11개가 모두 실행되는지, 결손 구간 재실행이 필요한지 확인한다 | Vercel 대시보드 |
 | Compass `DATABASE_URL`의 pooler 모드·포트·DB 롤 | 동시 연결 한도 판단과 역방향 뷰 GRANT 대상 결정 | Supabase 커넥션 설정 |
 | `crm.activities.deleted_at` 실재 여부 | 없으면 `compass_activities_v`가 깨져 있다 | `information_schema.columns` |
 | Meta 앱 leadgen 웹훅 구독 URL 목록 | 광고 리드 이중 수신 여부 | Meta for Developers |
