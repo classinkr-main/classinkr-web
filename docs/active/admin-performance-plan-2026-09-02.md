@@ -213,3 +213,64 @@ ADMIN_BASE_URL=https://<배포 도메인> ADMIN_COOKIE='<cookie>' npm run measur
 3. DB CPU가 상한이면 Supabase Pro와 컴퓨트 애드온을 올린다. 그 전에 올리는 것은 비용만 늘린다.
 4. Compass 공유 항목은 통폐합 분석 문서의 로드맵을 따른다. 브리지 `phone_key`는 Compass 쪽 생성 컬럼과 인덱스로 옮기는 것이 정답이다.
 5. 클라이언트 레이아웃의 첫 진입 `getUser()` + `admin_profiles` 브라우저 조회는 서버 컴포넌트 레이아웃으로 옮기면 사라진다. site/admin 분리 계획의 레이아웃 단계와 함께 다룬다.
+
+## 8. 후속 — 2026-09-02 오후, 프로덕션 실측과 hom_v4 병합
+
+§6이 "운영자가 확인해야 한다"고 남긴 항목을 같은 날 오후에 Supabase Management API(읽기 전용 SQL)와 Vercel API로 직접 실측했고, 이 문서의 브랜치(home_v3-3 = origin/home_v3)를 로컬 작업 브랜치 hom_v4에 병합했다. 아래 수치는 코드 추정이 아니라 실측이다.
+
+### 8.1 실측 결과
+
+| 항목 | 실측 | 판정 |
+|---|---|---|
+| JWT 서명 키 | ES256 `in_use`, HS256 `previously_used` | §4.1 인증 최적화의 이득 조건 충족. 최근 24시간 최다 API 경로가 `/auth/v1/user`(1,555건, 2위 leads 396건)라 효과가 가장 큰 축이다 |
+| Vercel | 팀 플랜 Hobby, Fluid Compute ON, 프로덕션 regions `sin1`(프로젝트 기본값은 iad1이지만 vercel.json이 이긴다), 크론 11개 등록 | 모듈 메모 공유 전제 성립 |
+| Supabase | ap-southeast-1, PG 17.6, 컴퓨트 애드온 없음(Nano), 커넥션 24/60, DB 209MB | Pro 전환은 아직 근거 없음(§0 순서 유지) |
+| 20260902 인덱스 4종 | 미적용. 대상 행 수 leads 271, admin_calendar_events 1, crm_tasks 0 | 무해하지만 현재 규모에서는 효과 0. 운영자 스크립트로 함께 적용 |
+| `showroom_bookings` | 프로덕션에 테이블 없음(20260829 마이그 미적용). `/api/showroom/availability` 500 실측, `/showroom` 페이지는 200 | **P0.** `npm run check:db`가 이번 프로브 추가 덕에 이 누락을 잡는다 |
+| DB 시간 1위 그룹(pg_stat_statements 3/23~) | `external_crm_records` 페이지당 exact count 재실행·`ORDER BY synced_at` 전량 정렬 7문, 평균 0.35~2.5초, 합계 약 5,000초 | 이 문서 범위 밖이었다 → §8.2 |
+| 단일 문장 1위 | `docs_articles` 전문 20컬럼 로드(`lib/docs-content.ts` getDocsContent) 12,359콜 × 138ms = 1,710초, 콜당 1,696블록 | 공개 문서·챗봇 폴백 경로. 요청 스코프 cache()뿐이었다 → §8.2 |
+| 이상 이력 | 롤백 트랜잭션 30,002,074건 ≈ `public.leads` 순차 스캔 30,006,815회(전체 트랜잭션의 75.6%). 실패 문장은 pg_stat_statements에 남지 않아 원인 문장 미상. 현재는 정지(25분간 +1, 최근 24시간 leads API 396건) | 재발 시 postgres_logs(보존 1일)를 즉시 조회 |
+
+### 8.2 이번 후속에서 적용한 것
+
+- **병합** `d876325f`: home_v3-3 → hom_v4. 충돌 4파일(AdminSidebar·CrmSubnav·nav-warmup 계약 테스트·next.config)은 "로컬의 {url, cacheKey} SSOT 표 + 원격의 CLICK_SKIP_WARMUP_URLS·동시성 3 큐"로 합쳤다. 양쪽이 각자 추가한 `overviewChatbotStatsUrl` 중복 정의 1건 제거. 게이트: typecheck·eslint·build(+check:public-content)·vitest 3,748 통과.
+- **문서 콘텐츠 메모** `257cf087`: `lib/docs-content.ts`에 인스턴스 메모(TTL 60초, 진행 중 promise 공유, 실패 미캐시, 무효화 세대). 관리자 발행·수정 경로(`_revalidate.ts`)가 `invalidateDocsContentCache()`를 함께 호출. Data Cache를 쓰지 않은 이유는 발행 본문 합계가 실측 1,082kB라 항목당 2MB 절벽이 가깝기 때문. 테스트 7건(RED→GREEN).
+- **마이그레이션 파일** `9e0a0f3c`: 보안 하드닝 1차(`20260902_security_definer_access_hardening.sql`, 운영 하드닝 계획 §PR 3)와 `compass_leads_v`의 phone_key 컬럼 전환(`20260902_compass_leads_v_phone_key_column.sql`, Compass 컬럼이 있을 때만 뷰 교체).
+- **external_crm_records·리뷰 브랜치 재적용**: 별도 브랜치에서 진행한 결과를 아래 8.4에 기록한다.
+
+### 8.3 운영자가 실행할 것(이 세션이 실행하지 못한 것)
+
+프로덕션 DDL·배포·외부 저장소 push는 실행 환경의 자동 승인 정책이 차단했다. 전부 스크립트로 준비했고 실행은 한 줄이다.
+
+| 순서 | 명령 | 하는 일 |
+|---|---|---|
+| 1 | `node tmp/apply-db-2026-09-02.mjs` | 쇼룸 테이블 → 인덱스 4종 → 보안 하드닝 → compass 뷰(컬럼 없으면 NOTICE만) 순으로 멱등 적용 후 검증 쿼리 출력. `--verify`면 확인만 |
+| 2 | `node tmp/deploy-production.mjs` | hom_v4 HEAD를 Vercel 프로덕션으로 빌드·배포하고 READY까지 폴링 |
+| 3 | `ADMIN_COOKIE=… npm run measure:admin -- --runs=5` | §5의 실측. 배포 전 값이 없으므로 이번 값이 베이스라인이다 |
+| 4 | Compass 저장소에서 `git apply tmp/compass-leads-phone-key.patch` → PR → `node scripts/migrate.mjs` → 1번 스크립트 재실행 | crm.leads.phone_key 생성 컬럼 + 인덱스, 그 뒤 브리지 뷰 교체 |
+
+### 8.4 별도 브랜치에서 진행해 병합한 것
+
+**external_crm_records(84,937행, 113MB) DB 시간 제거** — 커밋 `1da959a1`, 서브 에이전트 워크트리(TDD, 신규 테스트 6파일).
+
+| 파일 | 변경 | DB에서 사라지는 것 |
+|---|---|---|
+| `lib/admin-crm-duplicate-preflight.ts` | external_crm_records 페이지 스캔과 무필터 exact count 삭제. UNIQUE 제약 `external_crm_records_unique_source`가 그 검사를 이미 보증하므로 `ok`로 보고(검사 key·label 유지) | preflight당 84K행 `synced_at, id` 정렬 5회(문장 1,347ms × 5) + exact count 1회(2.5초). 이 스캔은 애초에 중복을 찾을 수 없었다 |
+| `lib/repositories/crm-neo-customer-snapshots.ts` | `fetchExternalRows`가 첫 페이지에만 `count: "exact"` | 객체당 (페이지 수 − 1)회의 84K행 집계 |
+| `lib/external-crm/latest-synced-at.ts` 신규 + `lib/admin-crm-neo.ts` | 테이블 전체 `ORDER BY synced_at` 대신 객체 키별 `LIMIT 1` 병렬 → 최댓값(`external_crm_records_object_idx`) | 리포트당 85K 인덱스 엔트리 정렬 + 힙 1만 회(2,421ms) → 1.4ms 프로브 10회 |
+| `lib/external-crm/object-snapshot.ts` 신규 + `lib/admin-crm-overview.ts` | `getExternalSnapshotOverview`가 `external_crm_object_snapshot` 뷰 1회를 읽고 요청 키만 합산. 뷰 오류 시 이전 3쿼리로 폴백 | 개요당 84K행 스캔 3회(약 4.7초) → 뷰 1회(약 614ms) |
+
+하지 않은 것: `lib/external-crm/owner-names.ts`의 User 이름 맵 페이징(문장 D, 1,703콜 × 552ms)은 60초 메모와 NEO 리포트 캐시 뒤에 있어 하루 약 2.6회 빌드라 그대로 둔다. 후속으로 하려면 `is_stale` 무필터 keyset(UNIQUE 인덱스 경로)이 맞다 — `is_stale=false`로 좁히면 퇴사 담당자의 이름을 잃는다.
+
+**리뷰 브랜치(`claude/supabase-optimization-review-yestaz`) perf 커밋 재적용** — 병합 `96dab0c0`(4커밋).
+
+| 원본 | 결과 |
+|---|---|
+| T5-A 하드웨어 payload 슬림 | 적응 적용 `f99d2d9a`. hom_v4에 병렬 구현이 이미 있어 잔여분(6컬럼 제외 원장 select, `raw`→`{crmLink}`, 서버 `planned` 플래그)만 얹고 클라이언트 타입을 정리. 마이그 `20260902_hardware_movements_active_date_idx.sql` 포함(운영자 스크립트 5번째 항목) |
+| T5-B overview 스코프 | 부분 적용 `a47faf6c`. `/api/admin/email?scope=summary`(본문 제외 7컬럼, 60초 캐시 인자별 엔트리)·`/api/admin/patch-notes?limit=1&summary=1`. 소비처(OverviewClient)·예열 표(AdminSidebar) URL을 문자 단위로 함께 바꿨다. blog는 hom_v4가 이미 `?scope=overview` 서버 투영을 제공해 미적용 |
+| T5-C 채널톡 transcript 제외 | 스킵 — 목록 라우트가 이미 `listDurableConversationsLite`로 더 강한 형태를 구현 |
+| T10 파트너 포털 팬아웃 상한 | 그대로 적용 `5547f4be`(deal 상세 20건 상한 + 개요 병렬) |
+| T11 크론 시(hour) 분리 | 적용 `0fb5d4b2`. sync-branch-insights 08:30→09:30, lead-response-alerts 01:10→02:10(UTC) + insights 라우트가 24시간 내 성공 런이 없으면 200 `skipped`로 자기 방어. `check:vercel-crons` 11건 통과 |
+| T2-S 리드 보드 TTL | 스킵 — 현재 보드는 이미 ttl 30초·SWR 120초 |
+
+Compass P0 PR(`classinkr-main/crm#1`)은 mergeable이지만 두 가지를 먼저 확인해야 한다. `crm.revenue_deals`에 업무 유니크 키 중복 그룹이 1건(초과 행 1) 있어 PR의 유니크 인덱스 생성이 그대로는 실패한다(코드는 인덱스 없이도 동작). Meta 리드 웹훅이 fail-closed로 바뀌므로 Compass Vercel 프로젝트에 `META_APP_SECRET`이 있어야 한다 — 없으면 머지 직후 광고 리드가 503으로 유실된다.
