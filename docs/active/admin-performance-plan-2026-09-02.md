@@ -242,6 +242,8 @@ ADMIN_BASE_URL=https://<배포 도메인> ADMIN_COOKIE='<cookie>' npm run measur
 
 프로덕션 DDL·배포·외부 저장소 push는 실행 환경의 자동 승인 정책이 차단했다. 전부 스크립트로 준비했고 실행은 한 줄이다.
 
+**실행 결과(2026-09-02 저녁, 운영자 실행 후 재검증):** 1·2번 완료. `check:db` "DB가 repo 마이그레이션까지 최신", `showroom_bookings` 존재(RLS on, 인덱스 3+pk), 20260902 인덱스 4종 존재, 두 뷰 `security_invoker=true`, RPC 3종 실행 권한 `postgres·service_role`만. 프로덕션 배포는 `d9caeee8`(hom_v4) READY, 크론 11개 등록. `/api/showroom/availability` 200(슬롯 정상), `/showroom` 200, `/docs` 200. compass 뷰는 Compass 컬럼이 아직 없어 예정대로 미교체(4번 뒤 1번 재실행).
+
 | 순서 | 명령 | 하는 일 |
 |---|---|---|
 | 1 | `node tmp/apply-db-2026-09-02.mjs` | 쇼룸 테이블 → 인덱스 4종 → 보안 하드닝 → compass 뷰(컬럼 없으면 NOTICE만) 순으로 멱등 적용 후 검증 쿼리 출력. `--verify`면 확인만 |
