@@ -12,14 +12,14 @@ import { fiscalQuarter } from "@/lib/branch/fiscal"
 
 export type HardwareMovementType = "inbound" | "outbound" | "return" | "transfer" | "repair" | "adjust"
 
+// /api/admin/hardware 응답의 item 형태(lib HardwareItemView) — 화면이 읽지 않는 sku/active/created_at/
+// updated_at은 서버가 싣지 않는다(T5-A). 활성 필터는 서버 stock 집계에서 이미 끝난 상태.
 export interface HardwareItem {
   id: string
   name: string
-  sku: string | null
   category: string | null
   reorder_point: number
   lead_time_days: number
-  active: boolean
   source_aliases: string[]
 }
 
@@ -44,13 +44,17 @@ export interface HardwareMovement {
   storage_location: string | null
   importer: string | null
   source: "admin_manual" | "sheet_import"
-  // 대시보드 payload에 그대로 실려 오는 원본 레코드 — 구조화 CRM 링크(raw.crmLink)를 여기서 읽는다.
+  // 대시보드 payload의 raw는 서버가 { crmLink }만 남긴 투영(lib HardwareMovementView) — 구조화 CRM 링크를
+  // 여기서 읽는다. 시트 원본 행 등 나머지 raw는 응답에 실리지 않는다(T5-A).
   raw?: unknown
-  created_by: string | null
+  // 서버 isPlannedStatus 판정(예정/예약/대기/planned) — isPlannedMovement가 status 정규식보다 먼저 본다.
+  planned?: boolean
   created_at: string
   voided_at: string | null
-  voided_by: string | null
-  void_reason: string | null
+  // 대시보드 payload는 voided 행을 싣지 않으므로 취소 메타(voided_by·void_reason·created_by)도 내려오지 않는다.
+  // 취소 정보 표시 분기는 전체 원장 행을 받는 경로를 위해 남겨 두고, 여기서는 선택 필드로만 둔다.
+  voided_by?: string | null
+  void_reason?: string | null
   converted_from_movement_id: string | null
   converted_to_movement_id: string | null
 }
@@ -325,10 +329,11 @@ export function formatDate(value: string | null) {
 }
 
 // 배송 예정(예약) 출고 판별 — 서버 집계 isPlannedStatus와 같은 규약(예정/예약/대기/planned).
-// 상세 로그에서 실제 출고와 시각적으로 구분하기 위한 표시 전용 헬퍼.
-// 주의: DB에서 온 HardwareMovement에는 isPlanned 필드가 없으므로 status 정규식만 본다.
+// 대시보드 payload는 서버가 확정한 planned 플래그를 실어 보내므로 그 값을 먼저 쓰고, 없는 행
+// (구버전 응답·테스트 픽스처)만 같은 규약의 status 정규식으로 판정한다.
 export function isPlannedMovement(movement: HardwareMovement): boolean {
-  return movement.movement_type === "outbound" && /예정|예약|대기|planned/i.test(movement.status ?? "")
+  if (movement.movement_type !== "outbound") return false
+  return movement.planned ?? /예정|예약|대기|planned/i.test(movement.status ?? "")
 }
 
 // 기술 메타 전용 mono/tabular 유틸 토큰 — lot 코드·YYYY-MM-DD 날짜·'마지막 이관'·스냅샷 해시 같은

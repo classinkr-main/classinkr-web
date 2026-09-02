@@ -464,7 +464,9 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
           : fetchJson<AdminLeadsOverviewResponse>("/api/admin/leads?scope=overview", { fresh }),
         fetchJson<{ subscribers: unknown[]; total: number }>("/api/admin/subscribers?count=1", { fresh }),
         fetchJson<{ overview: AdminBlogOverviewSummary }>("/api/admin/blog?scope=overview", { fresh }),
-        fetchJson<{ campaigns: EmailCampaign[] }>("/api/admin/email", { fresh }),
+        // summary 스코프 — 캠페인 HTML 본문(body)은 이 화면에서 읽지 않는다(T5-B). URL은
+        // AdminSidebar NAV_WARMUP_REQUESTS["/admin/overview"]의 항목과 문자 그대로 같아야 예열이 적중한다.
+        fetchJson<{ campaigns: EmailCampaign[] }>("/api/admin/email?scope=summary", { fresh }),
         Promise.all(
           calendarMonths.map(({ year, month }) =>
             fetchJson<CalendarEvent[]>(`/api/admin/calendar?year=${year}&month=${month}`, { fresh })
@@ -480,7 +482,8 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
         // env+DB 합성 health(integrations/status)를 사용한다. (ops/settings와 동일 소스)
         fetchJson<AdminIntegrationStatusResponse>("/api/admin/settings/integrations/status", { fresh }),
         fetchJson<BugReport[]>("/api/admin/bugs", { fresh }),
-        fetchJson<PatchNote[]>("/api/admin/patch-notes", { fresh }),
+        // 최신 1건의 id/version/title/date/status만 쓴다 — changes(jsonb)·전체 목록 불필요(T5-B).
+        fetchJson<PatchNote[]>("/api/admin/patch-notes?limit=1&summary=1", { fresh }),
       ])
 
       if (cancelled) return

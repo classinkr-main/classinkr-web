@@ -486,19 +486,31 @@ export async function deleteSubscriber(id: string | number): Promise<boolean> {
 
 /* ─── 이메일 캠페인 ──────────────────────────────────────── */
 
-export async function getAllCampaigns(limit = 200, offset = 0): Promise<CampaignRow[]> {
+// "summary"는 목록·집계 소비처(overview 등)용 — HTML 메일 본문(body)을 빼고 7컬럼만 받는다.
+// 기본값 "full"은 기존 select("*") 경로 그대로(호출자 무변경 = 응답 동일).
+export type CampaignScope = "full" | "summary";
+
+const CAMPAIGN_SUMMARY_COLUMNS =
+  "id,subject,status,recipient_count,target_tags,sent_at,created_at";
+
+export async function getAllCampaigns(
+  limit = 200,
+  offset = 0,
+  scope: CampaignScope = "full"
+): Promise<CampaignRow[]> {
   if (!USE_SUPABASE) {
     const { getAllCampaigns: jsonGet } = await import("@/lib/marketing-data");
-    return jsonGet();
+    const campaigns = await jsonGet();
+    return scope === "summary" ? campaigns.map(campaignToSummary) : campaigns;
   }
 
   const { data, error } = await sb()
     .from("email_campaigns")
-    .select("*")
+    .select(scope === "summary" ? CAMPAIGN_SUMMARY_COLUMNS : "*")
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
   if (error) throw new Error(`[marketing] 캠페인 조회 실패: ${error.message}`);
-  return (data ?? []).map(rowToCampaign);
+  return (data ?? []).map(scope === "summary" ? rowToCampaignSummary : rowToCampaign);
 }
 
 export interface CampaignLinkLabel {
@@ -536,8 +548,10 @@ export const MARKETING_CAMPAIGNS_CACHE_TAG = "marketing-campaigns";
 // summarizeCampaigns(branch summary의 "최근 30일 캠페인" 위젯)처럼 초단위 신선도가
 // 필요 없는 소비처용 60초 캐시. getAllCampaigns의 기본 인자(limit=200, offset=0) 호출만
 // 캐시한다 — createCampaign/updateCampaign이 뮤테이션마다 태그를 무효화한다.
+// scope(기본 "full")는 unstable_cache 인자 키로 엔트리가 갈리고, 두 스코프 모두 같은 태그를 달아
+// 뮤테이션 무효화가 함께 닿는다(T5-B: /api/admin/email?scope=summary).
 export const getCachedAllCampaigns = unstable_cache(
-  async () => getAllCampaigns(),
+  async (scope: CampaignScope = "full") => getAllCampaigns(200, 0, scope),
   ["marketing-campaigns-default"],
   { revalidate: 60, tags: [MARKETING_CAMPAIGNS_CACHE_TAG] },
 );
@@ -657,5 +671,35 @@ function rowToCampaign(row: any): CampaignRow {
     sendErrors: row.send_errors ?? [],
     externalId: row.external_id ?? undefined,
     createdAt: row.created_at,
+  };
+}
+
+// summary 스코프 투영 — EmailCampaign 타입은 body가 필수 string이라 빈 문자열로 채운다.
+// openCount/externalId는 select하지 않으므로 넣지 않는다(optional).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToCampaignSummary(row: any): CampaignRow {
+  return {
+    id: row.id,
+    subject: row.subject,
+    body: "",
+    targetTags: row.target_tags ?? [],
+    status: row.status,
+    sentAt: row.sent_at ?? undefined,
+    recipientCount: row.recipient_count ?? 0,
+    createdAt: row.created_at,
+  };
+}
+
+// JSON 폴백(로컬)에서도 summary 스코프는 Supabase 경로와 같은 필드만 돌려준다.
+function campaignToSummary(campaign: CampaignRow): CampaignRow {
+  return {
+    id: campaign.id,
+    subject: campaign.subject,
+    body: "",
+    targetTags: campaign.targetTags ?? [],
+    status: campaign.status,
+    sentAt: campaign.sentAt,
+    recipientCount: campaign.recipientCount ?? 0,
+    createdAt: campaign.createdAt,
   };
 }
