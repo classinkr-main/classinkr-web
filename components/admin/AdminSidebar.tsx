@@ -95,12 +95,13 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
     "/api/admin/leads?scope=overview",
     "/api/admin/subscribers?count=1",
     "/api/admin/blog?scope=overview",
-    "/api/admin/email",
+    // email·patch-notes는 OverviewClient가 요약 스코프로만 부른다(T5-B) — 전체 응답 키를 데우면 미스다.
+    "/api/admin/email?scope=summary",
     ...overviewCalendarUrls(),
     // overview는 GET /api/admin/settings 대신 env+DB 합성 health를 읽는다 (페이지 주석 참조).
     "/api/admin/settings/integrations/status",
     "/api/admin/bugs",
-    "/api/admin/patch-notes",
+    "/api/admin/patch-notes?limit=1&summary=1",
     // 아래 다섯은 OverviewClient.tsx의 인바운드/운영 OS 스트립이 마운트 즉시(코어 Promise.all과
     // 별개로) 부르는 URL — 지금까지 예열 목록에 없어 첫 진입마다 무조건 콜드 페치였다.
     // visitor-stats·os-summary는 leads?scope=overview와 같은 이유로 RSC 프리페치가 이미
