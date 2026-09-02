@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr"
 import { createHmac, timingSafeEqual } from "crypto"
+import { cookies } from "next/headers"
 import { NextRequest, NextResponse } from "next/server"
 
 import {
@@ -324,16 +325,20 @@ type SupabaseAdminContextEntry = {
 }
 const supabaseAdminContextCache = new Map<string, SupabaseAdminContextEntry>()
 
-function getSupabaseAuthCookieKey(req: NextRequest): string | null {
-  const authCookies = req.cookies
-    .getAll()
-    .filter(({ name }) => name.startsWith("sb-"))
+function toSupabaseAuthCookieKey(
+  allCookies: readonly { name: string; value: string }[]
+): string | null {
+  const authCookies = allCookies.filter(({ name }) => name.startsWith("sb-"))
   if (authCookies.length === 0) return null
 
   return authCookies
     .map(({ name, value }) => `${name}=${value}`)
     .sort()
     .join(";")
+}
+
+function getSupabaseAuthCookieKey(req: NextRequest): string | null {
+  return toSupabaseAuthCookieKey(req.cookies.getAll())
 }
 
 async function getSupabaseAdminContext(
@@ -419,6 +424,200 @@ async function fetchSupabaseAdminContext(
     name: adminProfile.display_name,
     userId: adminProfile.user_id,
     capabilities: adminProfile.capabilities,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 어드민 셸(사이드바 + 커맨드 팔레트) 서버 부트스트랩
+// ---------------------------------------------------------------------------
+
+/**
+ * 어드민 셸이 첫 렌더에 필요한 최소 세션. 클라이언트 SessionInfo와 같은 모양이며,
+ * `source`는 하이드레이션할 sessionStorage 토큰 값을 고르는 데 쓴다.
+ *
+ * 이 값은 업무 표면 가드(사이드바 구성·차단 안내)용이지 보안 경계가 아니다.
+ * 실제 데이터 차단은 각 API의 requireVerifiedAdminContext가 담당한다.
+ */
+export interface AdminShellSession {
+  role: string
+  name: string
+  email: string
+  navPreset: string | null
+  navOverrides: Record<string, string>
+  /** 레거시 세션에만 있다. Supabase 경로는 항상 undefined. */
+  branch?: string
+  source: "supabase" | "legacy"
+}
+
+/**
+ * `cookies()`(RSC)와 테스트 스텁이 모두 만족하는 최소 쿠키 저장소 모양.
+ * Next 내부 타입에 의존하지 않으려고 구조적으로만 좁힌다.
+ */
+type AdminCookieStore = {
+  get: (name: string) => { value: string } | undefined
+  getAll: () => { name: string; value: string }[]
+}
+
+// 셸 세션은 admin_profiles에서 nav_preset/nav_overrides까지 읽어 컬럼 셋이
+// getSupabaseAdminContext()와 다르다. 같은 Map을 공유하면 서로의 결과를 덮어쓰므로
+// TTL·상한 처리는 같게 두고 Map만 분리한다. (권한 회수 반영 지연 최대 60초)
+const ADMIN_SHELL_SESSION_TTL_MS = 60_000
+const ADMIN_SHELL_SESSION_CACHE_MAX = 200
+type AdminShellSessionEntry = {
+  promise: Promise<AdminShellSession | null>
+  expiresAt: number
+}
+const adminShellSessionCache = new Map<string, AdminShellSessionEntry>()
+
+type AdminShellProfileRow = Pick<AdminProfile, "display_name" | "role" | "status"> &
+  Partial<Pick<AdminProfile, "nav_preset" | "nav_overrides">>
+
+/**
+ * 서버(레이아웃 RSC)에서 어드민 셸 세션을 해석한다.
+ *
+ * 브라우저가 마운트 후에 하던 `getUser()` + `admin_profiles` 왕복 2회를 서버 렌더로
+ * 옮겨, 첫 진입에서 사이드바 스켈레톤 없이 바로 그릴 수 있게 한다.
+ *
+ * 계약:
+ * - 절대 throw하지 않는다. 실패·미인증은 전부 null이고, 그때 클라이언트가 기존 경로를 탄다.
+ * - sb-* 쿠키가 없으면 원격 왕복 0회로 즉시 null이다(로그인 페이지 비용 ≈ 0).
+ * - dev 바이패스에서는 null을 돌려 클라이언트가 자기 페르소나(NEXT_PUBLIC_DEV_*)를 쓰게 둔다.
+ * - JWT를 decode만 하고 신뢰하지 않는다. 토큰 검증은 verifySupabaseAuthUser()
+ *   (getClaims 로컬 검증 + getUser 폴백)가, 레거시 쿠키는 decodeSession()의
+ *   HMAC 서명·만료 검사가 담당한다. 미들웨어가 넘긴 헤더를 믿는 경로는 없다.
+ */
+export async function resolveAdminShellSession(): Promise<AdminShellSession | null> {
+  if (isAdminAuthBypassEnabled()) return null
+
+  try {
+    const store = (await cookies()) as AdminCookieStore
+
+    const supabaseSession = await getSupabaseShellSession(store)
+    if (supabaseSession) return supabaseSession
+
+    return getLegacyShellSession(store)
+  } catch {
+    // 셸 부트스트랩 실패로 어드민 전체가 렌더 에러가 되면 안 된다 — 조용히 기존 경로로 넘긴다.
+    return null
+  }
+}
+
+async function getSupabaseShellSession(
+  store: AdminCookieStore
+): Promise<AdminShellSession | null> {
+  if (!hasSupabaseBrowserEnv()) return null
+
+  const cacheKey = toSupabaseAuthCookieKey(store.getAll())
+  if (!cacheKey) return null
+
+  const cached = adminShellSessionCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.promise
+  }
+
+  if (adminShellSessionCache.size >= ADMIN_SHELL_SESSION_CACHE_MAX) {
+    adminShellSessionCache.clear()
+  }
+
+  const request = fetchAdminShellSession(store).then(
+    (session) => {
+      const entry = adminShellSessionCache.get(cacheKey)
+      if (entry?.promise === request) {
+        if (session) {
+          entry.expiresAt = Date.now() + ADMIN_SHELL_SESSION_TTL_MS
+        } else {
+          adminShellSessionCache.delete(cacheKey)
+        }
+      }
+      return session
+    },
+    (error) => {
+      const entry = adminShellSessionCache.get(cacheKey)
+      if (entry?.promise === request) {
+        adminShellSessionCache.delete(cacheKey)
+      }
+      throw error
+    }
+  )
+
+  // 진행 중 엔트리도 같은 TTL을 달아 둔다(동시 렌더가 같은 왕복을 나눠 쓰도록).
+  adminShellSessionCache.set(cacheKey, {
+    promise: request,
+    expiresAt: Date.now() + ADMIN_SHELL_SESSION_TTL_MS,
+  })
+
+  return request
+}
+
+async function fetchAdminShellSession(
+  store: AdminCookieStore
+): Promise<AdminShellSession | null> {
+  const { url, publishableKey } = getSupabaseBrowserEnv()
+  const supabase = createServerClient<Database>(url, publishableKey, {
+    cookies: {
+      getAll() {
+        return store.getAll()
+      },
+      // RSC는 쿠키를 쓸 수 없다. 토큰 회전은 프록시(updateSupabaseSession)가 담당한다.
+      setAll() {},
+    },
+  })
+
+  const user = await verifySupabaseAuthUser(supabase.auth)
+  if (!user) return null
+
+  // nav_preset/nav_overrides는 20260729 마이그레이션 이후에만 존재한다.
+  // 미적용 환경에서 select 하나가 실패해 셸이 통째로 비지 않도록 3컬럼으로 폴백한다
+  // (= preset 없음 = 마이그레이션 이전과 동일한 동작). 클라이언트 로직과 같은 규칙이다.
+  const extended = await supabase
+    .from("admin_profiles")
+    .select("display_name, role, status, nav_preset, nav_overrides")
+    .eq("user_id", user.id)
+    .single()
+
+  const fallback = extended.error
+    ? await supabase
+        .from("admin_profiles")
+        .select("display_name, role, status")
+        .eq("user_id", user.id)
+        .single()
+    : null
+
+  const profile = ((fallback ? fallback.data : extended.data) ??
+    null) as AdminShellProfileRow | null
+
+  if (!profile || profile.status !== "ACTIVE") return null
+
+  return {
+    role: profile.role,
+    name: profile.display_name,
+    email: user.email ?? "",
+    navPreset: profile.nav_preset ?? null,
+    navOverrides: profile.nav_overrides ?? {},
+    source: "supabase",
+  }
+}
+
+function getLegacyShellSession(store: AdminCookieStore): AdminShellSession | null {
+  // 레거시 로그인은 프로덕션에서 꺼져 있다(/api/admin/auth GET도 410). 셸도 같은 기준을 쓴다.
+  if (!isLegacyAdminAuthEnabled()) return null
+
+  const cookie = store.get("admin_session")?.value
+  if (!cookie) return null
+
+  // decodeSession()이 HMAC 서명과 exp를 함께 검증한다 — decode만 하고 믿는 경로가 아니다.
+  const session = decodeSession(cookie)
+  if (!session) return null
+
+  return {
+    role: session.role,
+    name: session.name,
+    email: "",
+    // 레거시 세션은 admin_profiles를 거치지 않아 프리셋 데이터가 없다.
+    navPreset: null,
+    navOverrides: {},
+    branch: session.branch,
+    source: "legacy",
   }
 }
 

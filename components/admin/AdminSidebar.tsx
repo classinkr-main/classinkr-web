@@ -343,10 +343,14 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   // 기타 접힘 패널 펼침 상태 — 새로고침에도 유지. 로그아웃 정리(clearAdminSessionStorage) 대상이
   // 아니다 — 세션 신원이 아니라 UI 취향이라 계정이 바뀌어도 지울 이유가 없다.
-  const [otherOpen, setOtherOpen] = useState(() => {
-    if (typeof window === "undefined") return false
-    return localStorage.getItem("admin_sidebar_other_open") === "true"
-  })
+  // 서버 렌더(AdminShell이 서버 세션으로 사이드바를 SSR한다)와 첫 클라이언트 렌더가 같아야
+  // 하이드레이션 불일치가 없다 — localStorage 값은 마운트 후에만 반영한다. (collapsed는
+  // effectiveCollapsed가 isDesktop === true 게이트를 타므로 초기화 시점 값이 마크업에 안 실린다.)
+  const [otherOpen, setOtherOpen] = useState(false)
+  useEffect(() => {
+    if (localStorage.getItem("admin_sidebar_other_open") !== "true") return
+    queueMicrotask(() => setOtherOpen(true))
+  }, [])
   const mobileDrawerCloseRef = useRef<HTMLButtonElement | null>(null)
   // 모바일 드로어 접근성(품질 웨이브 3 — 항목 5) — Escape 닫기 + 열릴 때 닫기 버튼으로
   // 포커스 이동 · 닫힐 때 이전 포커스 복귀. DealModal과 동일한 공용 훅.
