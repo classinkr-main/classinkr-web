@@ -489,9 +489,12 @@ type AdminShellProfileRow = Pick<AdminProfile, "display_name" | "role" | "status
 export async function resolveAdminShellSession(): Promise<AdminShellSession | null> {
   if (isAdminAuthBypassEnabled()) return null
 
-  try {
-    const store = (await cookies()) as AdminCookieStore
+  // cookies()는 try 밖에서 부른다. 빌드 시 정적 사전 렌더 중이면 Next가 "동적 렌더로 전환"
+  // 신호를 예외로 던지는데, 이를 catch로 삼키면 어드민 페이지가 세션 null이 박힌 정적 HTML로
+  // 굳는다. 그 신호는 그대로 위로 흘려보내야 한다(unstable_rethrow 규약과 같은 이유).
+  const store = (await cookies()) as AdminCookieStore
 
+  try {
     const supabaseSession = await getSupabaseShellSession(store)
     if (supabaseSession) return supabaseSession
 
