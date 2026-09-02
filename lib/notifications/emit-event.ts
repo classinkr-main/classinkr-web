@@ -145,41 +145,6 @@ function buildLeadCreatedWecomText(input: EmitNotificationEventInput) {
   ]).join("\n")
 }
 
-function buildLeadAgeWecomText(input: EmitNotificationEventInput) {
-  const thresholdHours = input.eventType.endsWith("unresponded_48h") ? 48 : 24
-  const ageHours = getPayloadValue(input, "ageHours")
-  const leadName =
-    getPayloadValue(input, "org") ??
-    getPayloadValue(input, "name") ??
-    normalizeWebhookValue(input.sourceId)
-  const assignedTo = getPayloadValue(input, "assignedTo") ?? "미배정"
-  const sourceLabel = getLeadSourceLabel(getPayloadValue(input, "source"))
-
-  return compactLines([
-    `${sourceLabel} 리드가 ${thresholdHours}시간째 반응이 없습니다`,
-    "",
-    labeledLine("리드", leadName),
-    labeledLine("담당자", assignedTo),
-    labeledLine("경과", ageHours ? `${ageHours}시간` : undefined),
-    labeledLine("확인", formatRouteUrl(input.routeUrl)),
-  ]).join("\n")
-}
-
-function buildLeadAggregateWecomText(input: EmitNotificationEventInput) {
-  const count = getPayloadValue(input, "unrespondedCount")
-  const over24h = getPayloadValue(input, "over24h")
-  const over48h = getPayloadValue(input, "over48h")
-
-  return compactLines([
-    `홈페이지 미응답 리드가 ${count ?? "여러"}개 쌓였습니다`,
-    "",
-    labeledLine("24시간 초과", over24h ? `${over24h}개` : undefined),
-    labeledLine("48시간 초과", over48h ? `${over48h}개` : undefined),
-    input.message,
-    labeledLine("확인", formatRouteUrl(input.routeUrl)),
-  ]).join("\n")
-}
-
 function buildLeadDigestWecomCard(input: EmitNotificationEventInput) {
   const period = getPayloadValue(input, "period") === "monthly" ? "monthly" : "weekly"
   const routeUrl = formatRouteUrl(input.routeUrl) ?? "https://classin.co.kr/admin/crm"
@@ -320,20 +285,6 @@ function buildLeadMorningWecomCard(input: EmitNotificationEventInput) {
 
 function buildLeadWecomText(input: EmitNotificationEventInput) {
   if (input.eventType === "lead.created") return buildLeadCreatedWecomText(input)
-
-  if (
-    input.eventType === "lead.unresponded_24h" ||
-    input.eventType === "lead.unresponded_48h"
-  ) {
-    return buildLeadAgeWecomText(input)
-  }
-
-  if (
-    input.eventType === "lead.unresponded_count_3" ||
-    input.eventType === "lead.unresponded_count_5"
-  ) {
-    return buildLeadAggregateWecomText(input)
-  }
 
   return null
 }
