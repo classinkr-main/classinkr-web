@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import type { ReactNode } from "react"
+import { useCallback, useEffect, useRef, type ReactNode } from "react"
 import {
   Building2,
   CircleDollarSign,
@@ -14,7 +14,7 @@ import {
   Users,
 } from "lucide-react"
 
-import { warmAdminRequestCache } from "@/lib/admin-client"
+import { warmAdminRequestCacheQueued } from "@/lib/admin-client"
 import { CRM_CHILD_NAV } from "@/components/admin/admin-nav"
 
 type CrmSection = "home" | "customers" | "activity" | "deals" | "insights" | "sync"
@@ -63,10 +63,37 @@ const SUBTAB_WARMUP_REQUESTS: Record<string, string[]> = {
   ],
 }
 
-function warmSubtab(href: string) {
-  for (const url of SUBTAB_WARMUP_REQUESTS[href] ?? []) {
-    void warmAdminRequestCache(url, { ttlMs: 60_000 })
-  }
+// AdminSidebar(warmAdminTab/scheduleWarmAdminTab)와 같은 규약 — hover 180ms 디바운스 + href당
+// 1회 예열. admin-client의 inflight 중복 제거가 있어 이게 없어도 네트워크가 중복되지는 않지만,
+// 사이드바와 같은 규약으로 맞춰 마우스가 탭 여러 개를 훑고 지나갈 때의 타이머·핸들러 비용을
+// 줄인다(§7). 동시성 3 큐(warmAdminRequestCacheQueued)도 사이드바와 동일하게 사용한다.
+function useSubtabWarmup() {
+  const warmedHrefs = useRef(new Set<string>())
+  const timerRef = useRef<number | null>(null)
+
+  const warm = useCallback((href: string) => {
+    if (warmedHrefs.current.has(href)) return
+    warmedHrefs.current.add(href)
+    warmAdminRequestCacheQueued(SUBTAB_WARMUP_REQUESTS[href] ?? [], { ttlMs: 60_000 })
+  }, [])
+
+  const scheduleWarm = useCallback((href: string) => {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+    timerRef.current = window.setTimeout(() => {
+      warm(href)
+      timerRef.current = null
+    }, 180)
+  }, [warm])
+
+  const cancelWarm = useCallback(() => {
+    if (timerRef.current === null) return
+    window.clearTimeout(timerRef.current)
+    timerRef.current = null
+  }, [])
+
+  useEffect(() => () => cancelWarm(), [cancelWarm])
+
+  return { warm, scheduleWarm, cancelWarm }
 }
 
 function resolveSection(pathname: string | null): CrmSection | null {
@@ -123,6 +150,7 @@ function resolveDealsSub(pathname: string | null): DealsSub | null {
 
 export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
   const pathname = usePathname()
+  const { warm: warmSubtab, scheduleWarm: scheduleWarmSubtab, cancelWarm: cancelWarmSubtab } = useSubtabWarmup()
   const section = active ?? resolveSection(pathname)
   const dealsSub = section === "deals" ? resolveDealsSub(pathname) : null
   const customersSub = section === "customers" ? resolveCustomersSub(pathname) : null
@@ -146,7 +174,8 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
               href={child.href}
               aria-current={isActive ? "page" : undefined}
               onFocus={() => warmSubtab(child.href)}
-              onMouseEnter={() => warmSubtab(child.href)}
+              onMouseEnter={() => scheduleWarmSubtab(child.href)}
+              onMouseLeave={cancelWarmSubtab}
               onPointerDown={() => warmSubtab(child.href)}
               onTouchStart={() => warmSubtab(child.href)}
               className={`inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full px-3.5 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] sm:min-h-9 ${
@@ -175,7 +204,8 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
                 href={sub.href}
                 aria-current={isActive ? "page" : undefined}
                 onFocus={() => warmSubtab(sub.href)}
-                onMouseEnter={() => warmSubtab(sub.href)}
+                onMouseEnter={() => scheduleWarmSubtab(sub.href)}
+                onMouseLeave={cancelWarmSubtab}
                 onPointerDown={() => warmSubtab(sub.href)}
                 onTouchStart={() => warmSubtab(sub.href)}
                 className={`relative flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] ${
@@ -208,7 +238,8 @@ export default function CrmSubnav({ active }: { active?: CrmSection } = {}) {
                 href={sub.href}
                 aria-current={isActive ? "page" : undefined}
                 onFocus={() => warmSubtab(sub.href)}
-                onMouseEnter={() => warmSubtab(sub.href)}
+                onMouseEnter={() => scheduleWarmSubtab(sub.href)}
+                onMouseLeave={cancelWarmSubtab}
                 onPointerDown={() => warmSubtab(sub.href)}
                 onTouchStart={() => warmSubtab(sub.href)}
                 className={`relative flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#084734] ${
