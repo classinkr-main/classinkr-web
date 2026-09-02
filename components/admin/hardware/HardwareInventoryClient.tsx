@@ -706,9 +706,33 @@ function presetKeyForMovement(movement: HardwareMovement): string {
   }
 }
 
+// /api/admin/hardware 응답 형태(T5-A, docs/active/supabase-optimization-execution-plan-2026-09-02.md).
+// 서버는 recentOutbound·plannedMovements를 더 보내지 않고(movements의 순수 부분집합), 각 movement에
+// planned 플래그(서버 isPlannedStatus)와 raw: { crmLink } | null만 싣는다. 하위 섹션들은 기존
+// HardwareDashboard 형태를 그대로 받으므로 컴포넌트 안에서 두 부분집합을 파생해 합친다.
+type HardwareMovementPayload = HardwareMovement & { planned: boolean }
+type HardwareDashboardPayload = Omit<HardwareDashboard, "movements" | "recentOutbound" | "plannedMovements"> & {
+  movements: HardwareMovementPayload[]
+}
+
 export default function HardwareInventoryClient() {
   const formRef = useRef<HTMLFormElement | null>(null)
-  const [data, setData] = useState<HardwareDashboard | null>(null)
+  const [payload, setPayload] = useState<HardwareDashboardPayload | null>(null)
+  const movements = payload?.movements
+  // 서버가 내려주던 것과 같은 규칙: movements(무효 제외·최신순 상위 2000행)에서 출고 상위 30건,
+  // 그중 예정(planned) 상위 30건.
+  const recentOutbound = useMemo(
+    () => (movements ?? []).filter((movement) => movement.movement_type === "outbound").slice(0, 30),
+    [movements]
+  )
+  const plannedMovements = useMemo(
+    () => (movements ?? []).filter((movement) => movement.movement_type === "outbound" && movement.planned).slice(0, 30),
+    [movements]
+  )
+  const data = useMemo<HardwareDashboard | null>(
+    () => (payload ? { ...payload, recentOutbound, plannedMovements } : null),
+    [payload, recentOutbound, plannedMovements]
+  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -904,10 +928,10 @@ export default function HardwareInventoryClient() {
       // 재방문·뒤로가기는 공용 클라이언트 캐시(45s TTL + stale-while-revalidate)로 즉시 페인트한다
       // (서버도 이미 max-age=30/swr=120을 보낸다). 새로고침·저장 후 재조회는 force로 우회한다 —
       // CRM 화면들의 load({ force: true }) 관례와 동일.
-      const next = await adminFetchJsonCached<HardwareDashboard>("/api/admin/hardware", undefined, {
+      const next = await adminFetchJsonCached<HardwareDashboardPayload>("/api/admin/hardware", undefined, {
         force: options.force,
       })
-      setData(next)
+      setPayload(next)
       setSelectedItemId((current) => current || defaultEntryItemId(next.items))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))

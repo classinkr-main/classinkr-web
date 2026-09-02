@@ -66,6 +66,29 @@ export interface HardwareMovement {
   converted_to_movement_id: string | null
 }
 
+// 대시보드 원장 읽기 컬럼(T5-A, docs/active/supabase-optimization-execution-plan-2026-09-02.md).
+// 대시보드가 읽지 않는 6컬럼(source_table, source_key, import_run_id, created_by, voided_by, void_reason)은
+// select에서 제외한다. raw는 서버 recoverMoneyFromRaw용으로 읽되 응답 직전 { crmLink }로 축소한다.
+export const HARDWARE_MOVEMENT_LEDGER_COLUMNS =
+  "id,item_id,product_name,movement_type,quantity,occurred_at,from_location,to_location,owner,status,reference_no,memo,serials,lot_no,unit_price,amount_usd,amount_cny,storage_location,importer,source,raw,created_at,voided_at,converted_from_movement_id,converted_to_movement_id"
+
+export type HardwareMovementLedgerRow = Omit<
+  HardwareMovement,
+  "source_table" | "source_key" | "import_run_id" | "created_by" | "voided_by" | "void_reason"
+>
+
+// 대시보드 응답용 movement — raw는 클라이언트가 읽는 crmLink만 남기고, planned는 서버 isPlannedStatus로 확정한다.
+export type HardwareMovementView = Omit<HardwareMovementLedgerRow, "raw"> & {
+  raw: { crmLink: Record<string, unknown> } | null
+  planned: boolean
+}
+
+// 대시보드 응답용 item — 클라이언트 미사용 sku/active/created_at/updated_at 제외.
+export type HardwareItemView = Pick<
+  HardwareItem,
+  "id" | "name" | "category" | "reorder_point" | "lead_time_days" | "source_aliases"
+>
+
 export interface CreateHardwareMovementInput {
   itemId?: string
   productName: string
@@ -151,11 +174,10 @@ export interface HardwareAlert {
 }
 
 export interface HardwareDashboard {
-  items: HardwareItem[]
+  items: HardwareItemView[]
   stock: HardwareStockRow[]
-  movements: HardwareMovement[]
-  recentOutbound: HardwareMovement[]
-  plannedMovements: HardwareMovement[]
+  // 최신순 상위 2000행. recentOutbound·plannedMovements는 이 배열의 부분집합이라 클라이언트가 파생한다(T5-A).
+  movements: HardwareMovementView[]
   alerts: HardwareAlert[]
   totals: {
     warehouseStock: number
@@ -249,7 +271,7 @@ function isPlannedStatus(status: string | null | undefined) {
   return /예정|예약|대기|planned/i.test(text)
 }
 
-function movementLotKey(movement: HardwareMovement): string | null {
+function movementLotKey(movement: Pick<HardwareMovement, "lot_no" | "source" | "reference_no">): string | null {
   const direct = cleanString(movement.lot_no)
   if (direct) return direct
   // Sheet-imported inbound/outbound rows carry the logistics number (물류No) in reference_no.
@@ -291,10 +313,16 @@ function defaultCategory(product: string, category: string | null) {
 
 // 전량 조회 — PostgREST 1000행 캡을 id 키셋 페이지네이션으로 우회한다(fetchAllSupabaseRows).
 // 키셋은 id 오름차순으로 읽으므로, 기존 반환 순서 계약(order 컬럼 기준)은 JS 재정렬로 유지한다.
-async function listAll<T extends { id: string }>(table: string, order = "created_at", ascending = false): Promise<T[]> {
+// columns: 명시 컬럼 목록(기본 "*"). id는 키셋 페이지네이션에 필요하므로 목록에 반드시 포함해야 한다.
+async function listAll<T extends { id: string }>(
+  table: string,
+  order = "created_at",
+  ascending = false,
+  columns = "*"
+): Promise<T[]> {
   const sb = createSupabaseAdminClient()
   const rows = await fetchAllSupabaseRows<T>((afterId, limit) => {
-    let query = sb.from(table).select("*").order("id", { ascending: true }).limit(limit)
+    let query = sb.from(table).select(columns).order("id", { ascending: true }).limit(limit)
     if (afterId) query = query.gt("id", afterId)
     return query
   })
@@ -321,7 +349,7 @@ export async function listHardwareItems(): Promise<HardwareItem[]> {
 // The live sheet-import RPC doesn't persist amount_usd/unit_price/importer (the costing
 // migration is pending on prod), so file-imported movements stash those in `raw`. Recover
 // them here when the dedicated column is null — a no-op once the migration is applied.
-function recoverMoneyFromRaw(rows: HardwareMovement[]): HardwareMovement[] {
+function recoverMoneyFromRaw<T extends Pick<HardwareMovement, "raw" | "amount_usd" | "amount_cny" | "unit_price" | "importer">>(rows: T[]): T[] {
   return rows.map((row) => {
     const raw = isRecord(row.raw) ? row.raw : {}
     const rawNum = (key: string): number | null => {
@@ -342,8 +370,8 @@ function recoverMoneyFromRaw(rows: HardwareMovement[]): HardwareMovement[] {
   })
 }
 
-async function listAllHardwareMovements(): Promise<HardwareMovement[]> {
-  const rows = await listAll<HardwareMovement>("hardware_movements")
+async function listAllHardwareMovements(): Promise<HardwareMovementLedgerRow[]> {
+  const rows = await listAll<HardwareMovementLedgerRow>("hardware_movements", "created_at", false, HARDWARE_MOVEMENT_LEDGER_COLUMNS)
   return recoverMoneyFromRaw(rows)
 }
 
@@ -1333,10 +1361,34 @@ function applyLocationDelta(map: Map<string, number>, location: string | null | 
   map.set(key, (map.get(key) ?? 0) + delta)
 }
 
-function movementDate(movement: HardwareMovement) {
+function movementDate(movement: Pick<HardwareMovement, "occurred_at" | "created_at">) {
   const value = movement.occurred_at ?? movement.created_at
   const time = new Date(value).getTime()
   return Number.isFinite(time) ? time : 0
+}
+
+// 클라이언트 extractCrmLink(HardwareInventoryClient.tsx)와 같은 판정 — raw가 객체이고 raw.crmLink가 객체일 때만 유지.
+// 시트 임포트 원본 행 등 나머지 raw는 응답에서 버린다(payload의 최대 필드).
+function extractRawCrmLink(raw: unknown): HardwareMovementView["raw"] {
+  if (!isRecord(raw)) return null
+  const crmLink = raw.crmLink
+  return isRecord(crmLink) ? { crmLink } : null
+}
+
+function toMovementView(movement: HardwareMovementLedgerRow): HardwareMovementView {
+  const { raw, ...rest } = movement
+  return { ...rest, raw: extractRawCrmLink(raw), planned: isPlannedStatus(movement.status) }
+}
+
+function toItemView(item: HardwareItem): HardwareItemView {
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    reorder_point: item.reorder_point,
+    lead_time_days: item.lead_time_days,
+    source_aliases: item.source_aliases,
+  }
 }
 
 async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
@@ -1350,7 +1402,7 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
 
   // item_id별로 한 번만 버킷팅 — 기존 items.map 안 activeMovements.filter는 O(items×movements).
   // activeMovements 순서를 유지하며 push하므로 항목별 정렬은 filter와 동일.
-  const movementsByItem = new Map<string, HardwareMovement[]>()
+  const movementsByItem = new Map<string, HardwareMovementLedgerRow[]>()
   for (const movement of activeMovements) {
     const id = movement.item_id
     if (!id) continue
@@ -1465,12 +1517,7 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
     .slice()
     .sort((a, b) => movementDate(b) - movementDate(a))
     .slice(0, 2000)
-  const recentOutbound = movementRows
-    .filter((movement) => movement.movement_type === "outbound")
-    .slice(0, 30)
-  const plannedMovements = movementRows
-    .filter((movement) => movement.movement_type === "outbound" && isPlannedStatus(movement.status))
-    .slice(0, 30)
+    .map(toMovementView)
 
   const alerts: HardwareAlert[] = []
   for (const row of rows) {
@@ -1503,11 +1550,9 @@ async function getHardwareDashboardUncached(): Promise<HardwareDashboard> {
   }
 
   return {
-    items,
+    items: items.map(toItemView),
     stock: rows,
     movements: movementRows,
-    recentOutbound,
-    plannedMovements,
     alerts: alerts.slice(0, 12),
     totals: {
       warehouseStock: rows.reduce((sum, row) => sum + row.warehouseStock, 0),
