@@ -286,9 +286,11 @@ function fetchExternalRows<T>(
   return fetchSupabasePages<T>({
     maxRows: REFRESH_SCAN_LIMIT,
     fetchPage: async (from, to) => {
+      // exact count 는 첫 페이지에서만 요청한다. fetchSupabasePages 는 첫 count 만 채택하므로
+      // 이후 페이지의 count 는 버려지는데도 84K행 테이블 집계(≈1.2s)를 페이지마다 더 얹고 있었다.
       const { data, error, count } = await sb
         .from("external_crm_records")
-        .select(select, { count: "exact" })
+        .select(select, from === 0 ? { count: "exact" } : undefined)
         .eq("source_system", sourceSystem)
         .eq("object_api_key", objectApiKey)
         .eq("is_stale", false)
