@@ -817,3 +817,51 @@ describe("WeCom ops 알림 본문", () => {
     expect(content).toContain("합계: ₩14,000")
   })
 })
+
+describe("설치 라인 서버 검증", () => {
+  /**
+   * 설치는 화면 카드가 아니라 신청 단계에서 고르는 방식이라 HARDWARE_CATALOG 밖에 있다.
+   * 서버는 getHardwareItem 으로 하드웨어 라인의 단가를 핀하는데, 설치 sku 가 거기서
+   * 안 잡히면 라인이 조용히 버려져 설치비가 0원으로 접수된다.
+   */
+  it("설치 라인을 카탈로그 단가로 핀해서 받는다", async () => {
+    const { normalizeCheckoutRequest } = await loadWithMockedNotifications()
+    const result = normalizeCheckoutRequest(
+      {
+        ...VALID_PAYLOAD,
+        items: [
+          { sku: "hw-board-86", name: '86" Classin 전자칠판', qty: 2, unitAmount: 6_300_000, currency: "KRW" },
+          { sku: "hw-install-wall", name: "벽걸이 설치", qty: 2, unitAmount: 500_000, currency: "KRW" },
+        ],
+      },
+      FIXED_NOW
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    const installLine = result.value.items.find((item) => item.sku === "hw-install-wall")
+    expect(installLine).toBeDefined()
+    expect(installLine?.unitAmount).toBe(500_000)
+    expect(installLine?.lineAmount).toBe(1_000_000)
+    // 630만원 × 2 + 설치 50만원 × 2
+    expect(result.value.totalAmount).toBe(13_600_000)
+  })
+
+  it("클라이언트가 설치 단가를 낮춰 보내도 카탈로그 값으로 되돌린다", async () => {
+    const { normalizeCheckoutRequest } = await loadWithMockedNotifications()
+    const result = normalizeCheckoutRequest(
+      {
+        ...VALID_PAYLOAD,
+        items: [
+          { sku: "hw-install-stand", name: "이동형 스탠드 설치", qty: 1, unitAmount: 1, currency: "KRW" },
+        ],
+      },
+      FIXED_NOW
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.value.items[0].unitAmount).toBe(500_000)
+  })
+})

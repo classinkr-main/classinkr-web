@@ -27,7 +27,8 @@
     "preview:lead-magnets": "node --env-file=.env.local scripts/import-lead-magnets.mjs --dry-run",
     "sync:neo:mcp": "node scripts/sync-neo-via-mcp.mjs",
     "check:admin-rbac": "npx tsx scripts/check-admin-rbac-readiness.ts",
-    "sync:channel-docs": "npx tsx scripts/sync-channel-documents.ts"
+    "sync:channel-docs": "npx tsx scripts/sync-channel-documents.ts",
+    "measure:admin": "node scripts/measure-admin-api.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

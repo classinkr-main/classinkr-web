@@ -1,5 +1,6 @@
 import "server-only"
 
+import { fetchSupabasePages } from "@/lib/supabase/pagination"
 import { normalizedAccountKey } from "@/lib/branch/account-key"
 import {
   getBranchRevSourceRecordKey,
@@ -105,6 +106,19 @@ export interface RevAccountCoverage {
 
 const LINKED_STATUSES = new Set(["confirmed", "active"])
 const TOP_UNLINKED_LIMIT = 8
+// PostgREST max-rows(1000) 상한을 넘어 조용히 절단되지 않도록 fetchSupabasePages로 페이지네이션한다.
+const CRM_SOURCE_LINK_ROW_LIMIT = 5000
+const CRM_MATCH_ALIAS_ROW_LIMIT = 5000
+
+interface RevCoverageLinkRow {
+  source_record_key: string
+  normalized_name?: string | null
+  status: string
+  target_type?: string | null
+  target_id?: string | null
+  metadata?: Record<string, unknown> | null
+  target_label?: string | null
+}
 
 function asLinkedTargetType(value: string | null | undefined): RevSyncLinkedTargetType | null {
   return value === "customer" || value === "partner_account" || value === "deal" ? value : null
@@ -128,45 +142,71 @@ export async function getRevAccountCoverage(): Promise<RevAccountCoverage> {
       .from("branch_rev_deals")
       .select("sheet_row, customer_name, team, manager, status, first_payment, contract_target, monthly_payments, synced_at")
       .limit(1000),
-    sb
-      .from("crm_source_links")
-      .select("source_record_key, normalized_name, status, target_type, target_id, metadata, target_label:metadata->>target_label")
-      .eq("source_system", "branch_rev_sheet")
-      .eq("source_object", "branch_rev_deals")
-      .neq("status", "rejected")
-      .limit(5000),
-    sb
-      .from("crm_match_aliases")
-      .select(
-        "source_system, normalized_alias, target_type, target_id, normalized_manager_name",
-        { count: "exact" }
-      )
-      .eq("source_system", "branch_rev_sheet")
-      .eq("status", "active")
-      .limit(5000),
+    // crm_source_links는 5,000건까지 볼 수 있어야 하지만 PostgREST max-rows가 1,000이라
+    // 단일 .limit(5000)은 앞 1,000건만 돌려주고 조용히 잘린다. fetchSupabasePages로
+    // 1,000행씩 이어 읽고, order("id")를 전순서 커서로 써서 페이지 경계에서 행이 누락/중복되지 않게 한다.
+    fetchSupabasePages<RevCoverageLinkRow & { id: string }>({
+      maxRows: CRM_SOURCE_LINK_ROW_LIMIT,
+      fetchPage: (from, to) =>
+        sb
+          .from("crm_source_links")
+          .select(
+            "id, source_record_key, normalized_name, status, target_type, target_id, metadata, target_label:metadata->>target_label",
+            from === 0 ? { count: "exact" } : undefined
+          )
+          .eq("source_system", "branch_rev_sheet")
+          .eq("source_object", "branch_rev_deals")
+          .neq("status", "rejected")
+          .order("id", { ascending: true })
+          .range(from, to),
+    }),
+    // crm_match_aliases도 같은 절단 위험이 있다 — fail-open 판단(canValidateAliases)이
+    // truncated 플래그를 직접 근거로 쓰도록 아래에서 정리한다.
+    fetchSupabasePages<CrmMatchAliasValidationRow & { id: string }>({
+      maxRows: CRM_MATCH_ALIAS_ROW_LIMIT,
+      fetchPage: (from, to) =>
+        sb
+          .from("crm_match_aliases")
+          .select(
+            "id, source_system, normalized_alias, target_type, target_id, normalized_manager_name",
+            from === 0 ? { count: "exact" } : undefined
+          )
+          .eq("source_system", "branch_rev_sheet")
+          .eq("status", "active")
+          .order("id", { ascending: true })
+          .range(from, to),
+    }),
   ])
 
   if (sheetResult.error) throw sheetResult.error
-  if (linksResult.error) throw linksResult.error
+  if (linksResult.error) {
+    throw new Error(`[rev-account-coverage] crm_source_links 조회 실패: ${linksResult.error.message ?? "unknown error"}`)
+  }
+  // crm_source_links는 linked/candidate 판정의 원천이라 절단되면 실제로 연결된 계정이
+  // "미연결"로 잘못 집계된다 — admin-crm-matching.ts의 sheetResult/linksResult truncated 처리와
+  // 동일하게 부분 스냅샷으로 계산을 계속하지 않고 하드 실패한다(호출부 route가 이미 격리 처리).
+  if (linksResult.truncated) {
+    throw new Error(
+      `[rev-account-coverage] crm_source_links가 상한 ${CRM_SOURCE_LINK_ROW_LIMIT.toLocaleString()}건에서 잘렸습니다.`
+    )
+  }
 
-  const linkRows = (linksResult.data ?? []) as Array<{
-    source_record_key: string
-    normalized_name?: string | null
-    status: string
-    target_type?: string | null
-    target_id?: string | null
-    metadata?: Record<string, unknown> | null
-    target_label?: string | null
-  }>
+  const linkRows = linksResult.data
 
   // Admin matching과 같은 fail-open 경계다. 별칭 카탈로그가 실패하거나 서버 행 상한으로
   // 잘렸다면 정상 후보를 오탐으로 숨기지 않는다. 완전한 스냅샷일 때만 과거 cross-source
   // alias 후보를 현재 검토 큐에서 제외한다.
-  const aliasRows = (aliasesResult.data ?? []) as CrmMatchAliasValidationRow[]
-  const aliasCount = aliasesResult.count
-  const canValidateAliases =
-    !aliasesResult.error && (aliasCount == null || aliasCount <= aliasRows.length)
-  const activeAliases = canValidateAliases ? aliasRows : []
+  if (aliasesResult.error) {
+    console.warn(
+      `[rev-account-coverage] crm_match_aliases 조회 실패 — fail-open으로 계속합니다: ${aliasesResult.error.message ?? "unknown error"}`
+    )
+  } else if (aliasesResult.truncated) {
+    console.warn(
+      `[rev-account-coverage] crm_match_aliases가 상한 ${CRM_MATCH_ALIAS_ROW_LIMIT.toLocaleString()}건에서 잘렸습니다 — fail-open으로 계속합니다.`
+    )
+  }
+  const canValidateAliases = !aliasesResult.error && !aliasesResult.truncated
+  const activeAliases = canValidateAliases ? aliasesResult.data : []
   const confirmedSourceKeys = new Set(
     linkRows
       .filter((link) => LINKED_STATUSES.has(link.status))

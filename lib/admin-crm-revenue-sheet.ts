@@ -1,5 +1,6 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
 import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
@@ -178,7 +179,7 @@ function getTargetLabel(
   return null
 }
 
-export async function getAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSheetWorkspace> {
+async function computeAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSheetWorkspace> {
   const sb = createSupabaseAdminClient()
   const warnings: string[] = []
   const currentMonth = getCurrentMonthKey()
@@ -370,4 +371,22 @@ export async function getAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenu
     compass,
     warnings,
   }
+}
+
+export const ADMIN_CRM_REVENUE_SHEET_CACHE_TAG = "admin-crm-revenue-sheet"
+
+// REV 시트 전행(최대 QUERY_LIMIT) + 매칭 링크(×3) + 라벨 조회 3종을 매 호출 병렬 실행하는
+// 무거운 조립이라 60초 캐시한다. Compass 브리지 호출(getCompassRevenueCompare)도 down 플래그가
+// 결과(compass.down)에 그대로 담기므로 캐시 안에 포함해도 안전하다. cookies()/headers()는 읽지
+// 않고(admin service-role 클라이언트만 사용) 인자도 없어 unstable_cache에 안전하다.
+const getCachedAdminCrmRevenueSheetWorkspace = unstable_cache(
+  computeAdminCrmRevenueSheetWorkspace,
+  ["admin-crm-revenue-sheet"],
+  { revalidate: 60, tags: [ADMIN_CRM_REVENUE_SHEET_CACHE_TAG] }
+)
+
+// 함수 시그니처·이름 불변 유지: 소유 밖 호출부(app/api/admin/crm/revenue-sheet/route.ts)가
+// 이 이름으로 그대로 가져다 쓰므로, 캐시 배선은 내부 위임으로만 추가한다.
+export async function getAdminCrmRevenueSheetWorkspace(): Promise<AdminCrmRevenueSheetWorkspace> {
+  return getCachedAdminCrmRevenueSheetWorkspace()
 }

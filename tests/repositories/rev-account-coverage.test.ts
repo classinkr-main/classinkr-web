@@ -36,12 +36,18 @@ interface AliasRow {
   normalized_manager_name: string | null
 }
 
+// order()/range() — rev-account-coverage.ts가 crm_source_links·crm_match_aliases를
+// fetchSupabasePages(id 전순서 커서)로 읽도록 바뀌어(2026-09-02, PostgREST max-rows 절단 방지)
+// 체이닝에 추가됐다. 목은 페이지네이션을 흉내내지 않고 항상 rows 전체를 한 페이지로 돌려준다 —
+// 테스트 표본이 항상 1,000행보다 훨씬 작아 fetchSupabasePages가 첫 페이지에서 바로 종료한다.
 function tableClient<T>(rows: T[]) {
   const builder = {
     select: () => builder,
     eq: () => builder,
     neq: () => builder,
     limit: () => builder,
+    order: () => builder,
+    range: () => builder,
     then(resolve: (value: { data: T[]; error: null; count: number }) => void) {
       resolve({ data: rows, error: null, count: rows.length })
     },

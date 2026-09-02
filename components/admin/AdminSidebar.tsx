@@ -14,7 +14,7 @@ import {
   SquareChevronRight,
   X,
 } from "lucide-react"
-import { clearAdminSessionStorage, warmAdminRequestCache } from "@/lib/admin-client"
+import { clearAdminSessionStorage, warmAdminRequestCacheQueued } from "@/lib/admin-client"
 import {
   buildAdminCalendarUrl,
   getAdminCalendarWeekStripRange,
@@ -90,6 +90,8 @@ const INTERNAL_CS_WARMUP: WarmupEntry[] = [
 export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEntry[])> = {
   "/admin/overview": () => [
     // overview 페이지가 실제 호출하는 URL과 캐시 키를 맞춰야 hover-warm이 적중한다.
+    // leads?scope=overview는 app/admin/overview/page.tsx의 RSC 프리페치(lib/admin/overview/
+    // prefetch.ts)가 이미 서버에서 계산한다 — CLICK_SKIP_WARMUP_URLS에 등록해 click만 건너뛴다.
     "/api/admin/leads?scope=overview",
     "/api/admin/subscribers?count=1",
     "/api/admin/blog?scope=overview",
@@ -99,12 +101,17 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
     "/api/admin/settings/integrations/status",
     "/api/admin/bugs",
     "/api/admin/patch-notes",
-    // 아래 셋은 프리페치 유무와 무관하게 항상 나가는데 빠져 있었다.
-    // 인스타·운영 OS 스트립은 외부 합성이라 느린 축이고, 챗봇 7일 창은 KR Team warm(period=Q)이나
-    // 무파라미터 stats URL과 캐시 키가 갈린다 — 페이지와 같은 날짜 산식이어야 적중한다.
-    "/api/admin/meta/instagram?datePreset=last_30d&limit=25",
+    // 아래 다섯은 OverviewClient.tsx의 인바운드/운영 OS 스트립이 마운트 즉시(코어 Promise.all과
+    // 별개로) 부르는 URL — 지금까지 예열 목록에 없어 첫 진입마다 무조건 콜드 페치였다.
+    // visitor-stats·os-summary는 leads?scope=overview와 같은 이유로 RSC 프리페치가 이미
+    // 계산한다(prefetch.ts, CLICK_SKIP_WARMUP_URLS 참조). branch/summary(연간)·chatbot/stats·
+    // meta/instagram은 "외부 API라 느릴 수 있어 핵심 대시보드와 분리 로드"(OverviewClient 주석)라
+    // RSC 예산 밖이다 — click에서도 그대로 예열한다.
+    "/api/admin/visitor-stats?range=7",
+    "/api/admin/os-summary?contract=v3",
     "/api/admin/branch/summary?team=ALL&period=Y",
     overviewChatbotStatsUrl(),
+    "/api/admin/meta/instagram?datePreset=last_30d&limit=25",
   ],
   // CRM 홈은 첫 화면에서 8건을 띄우는데 서버 프리페치는 셋(action-kpis·overview·
   // compass-pipeline)만 덮는다 — 나머지는 여기서 데워야 콜드를 면한다. 우선순위 큐가 이
@@ -112,13 +119,25 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
   // neo(외부 집계)는 뺐다 — 소비처 NeoCrmTeamPanel은 기본 접힌 리포트 아코디언의 team 탭에서만
   // 렌더돼(기본 탭 revenue) 진입만으로는 청크조차 안 내려온다. 비싼 축을 hover마다 태우던 낭비다.
   "/admin/crm": [
+    // action-kpis·overview는 CRM 홈(app/admin/crm/page.tsx)의 RSC 프리페치
+    // (lib/admin/crm/home-prefetch.ts)가 이미 서버에서 계산한다 — click은 곧장 그 프리페치를
+    // 다시 태우는 네비게이션으로 이어지므로 클릭 시점 예열은 서버 이중 계산만 낳는다
+    // (CLICK_SKIP_WARMUP_URLS에 등록). hover/focus/pointerdown은 그대로 예열해 RSC가 예산
+    // 초과·미인증으로 비었을 때의 클라이언트 폴백 값을 살린다.
     "/api/admin/crm/action-kpis",
     "/api/admin/crm/overview",
-    "/api/admin/crm/home/priority-queue?limit=50&source=customer&v=3",
-    "/api/admin/crm/tasks?status=active&limit=100",
-    "/api/admin/crm/owners",
-    "/api/admin/crm/health-distribution",
-    "/api/admin/crm/coverage",
+    // crm/neo(팀 KPI)는 제거 — CrmHomeReportSection.tsx의 접힌 리포트 아코디언에서 "팀 KPI"
+    // 탭을 열어야 마운트되는 NeoCrmTeamPanel(dynamic())만 쓴다. CRM 홈 첫 화면(스크롤 없이
+    // 보이는 영역)은 이 URL을 전혀 호출하지 않는다 — 예열해도 쓰이지 않는 낭비였다(P6).
+    // 그 서브탭 hover 예열로 옮기는 것은 CrmHomeReportSection.tsx가 이 작업 소유 파일 밖이라
+    // 하지 않는다.
+    // 아래 다섯은 CRM 홈 첫 화면이 무조건 마운트하는 하위 컴포넌트의 fetch — 지금까지 예열
+    // 목록에 없어 매 진입마다 콜드 페치였다(각 컴포넌트에서 cacheKey=URL로 확인).
+    "/api/admin/crm/coverage", // CrmCoverageStrip
+    "/api/admin/crm/home/priority-queue?limit=50&source=customer&v=3", // CrmPriorityQueuePanel
+    "/api/admin/crm/owners", // CrmPriorityQueuePanel(useCrmOwners)·CrmWeekAheadPanel
+    "/api/admin/crm/tasks?status=active&limit=100", // CrmWeekAheadPanel(compact)
+    "/api/admin/crm/health-distribution", // CrmHealthDonut
   ],
   "/admin/crm/customers/unified": [
     "/api/admin/crm/customers/unified?limit=50&offset=0",
@@ -264,16 +283,27 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
   // 그 조각이 빠져 있어 예열이 100% 빗나갔을 뿐 아니라, projection으로 없애려던 전체
   // 회계연도 타임라인을 서버에 매번 다시 조립시키는 역효과까지 냈다(BranchDashboardClient).
   "/admin/branch": [
+    // BranchDashboardClient의 기본 탭(overview)은 &view=overview 프로젝션을 추가로 요청한다
+    // (BranchDashboardClient.tsx summaryViewQuery) — 그 쿼리 없이 예열하면 캐시 키가 갈라져
+    // 첫 진입이 항상 콜드 페치였다. 이 URL은 app/admin/branch/page.tsx의 RSC 프리페치가
+    // 이미 같은 조립 함수(buildBranchSummaryPayload)로 서버에서 계산하므로, CRM 홈과 같은
+    // 이유로 CLICK_SKIP_WARMUP_URLS에 등록해 click만 건너뛴다.
     "/api/admin/branch/summary?team=ALL&period=Q&view=overview",
     "/api/admin/branch/kpi?team=ALL&period=Q",
+    // BranchDashboardClient가 마운트 시 무조건 fetch하는 CRM 싱크 칩 데이터 — /admin/crm의
+    // CrmCoverageStrip과 같은 URL·cacheKey를 공유한다(BranchDashboardClient.tsx 주석 참조).
     "/api/admin/crm/coverage",
   ],
   // 장부는 view projection을 쓰지 않는다(기본 계약 유지). kpi는 뺐다 — 소비 조건이
   // "행 선택 + 상세 레일 펼침"이라 진입만으로는 절대 호출되지 않는다(SalesLedgerWorkbench).
   "/admin/branch/ledger": [
     "/api/admin/branch/summary?team=ALL&period=Q",
+    // app/admin/branch/ledger/page.tsx의 RSC 프리페치(readBranchPipelineRows)가 이미 같은
+    // URL을 서버에서 계산한다 — /admin/branch·crm과 같은 이유로 click만 건너뛴다.
     "/api/admin/branch/pipeline?team=ALL&period=Q",
   ],
+  // app/admin/hardware/page.tsx의 RSC 프리페치가 GET /api/admin/hardware 전체를 이미 같은
+  // 조립 함수(getHardwareDashboard)로 서버에서 계산한다 — click만 건너뛴다.
   "/admin/hardware": ["/api/admin/hardware"],
   "/admin/traffic": [
     // 3중 스캔(visitor-stats/homepage-flow/event-counts)은 단일 집계 traffic-summary로 대체됨 —
@@ -298,6 +328,31 @@ export const NAV_WARMUP_REQUESTS: Record<string, WarmupEntry[] | (() => WarmupEn
   "/admin/settings": ["/api/admin/settings"],
   // 기본 탭 roadmap. bugs·patch-notes는 각 탭 컴포넌트가 렌더될 때만 부른다.
   "/admin/dev": ["/api/admin/roadmap"],
+}
+
+// RSC 프리페치가 이미 같은 데이터를 그 화면 자신의 서버 컴포넌트(app/admin/**\/page.tsx)에서
+// 계산하는 (href, URL) 쌍 — click 트리거에서는 건너뛴다. click은 곧장 그 프리페치를 다시
+// 태우는 네비게이션으로 이어지므로 클릭 시점의 추가 fetch는 서버 이중 계산만 낳는다.
+// hover/focus/pointerdown은 그대로 예열한다(클릭으로 이어질지 불확실한 신호라, RSC가 예산
+// 초과·미인증으로 비었을 때의 클라이언트 폴백 값을 살려 둘 가치가 있다).
+// href로 스코프하는 이유 — crm/overview처럼 같은 URL이 여러 href에 등장할 수 있다
+// (/admin/crm/matching도 crm/overview를 데우지만 그 화면엔 RSC 프리페치가 없다). URL만으로
+// 전역 판단하면 RSC가 없는 화면에서도 잘못 건너뛴다.
+const CLICK_SKIP_WARMUP_URLS: Record<string, string[]> = {
+  // lib/admin/overview/prefetch.ts → prefetchOverviewInitialData
+  "/admin/overview": [
+    "/api/admin/leads?scope=overview",
+    "/api/admin/visitor-stats?range=7",
+    "/api/admin/os-summary?contract=v3",
+  ],
+  // lib/admin/crm/home-prefetch.ts → prefetchCrmHomeInitialData
+  "/admin/crm": ["/api/admin/crm/action-kpis", "/api/admin/crm/overview"],
+  // app/admin/branch/page.tsx → prefetchBranchSummary(buildBranchSummaryPayload)
+  "/admin/branch": ["/api/admin/branch/summary?team=ALL&period=Q&view=overview"],
+  // app/admin/branch/ledger/page.tsx → prefetchLedgerPipeline(readBranchPipelineRows)
+  "/admin/branch/ledger": ["/api/admin/branch/pipeline?team=ALL&period=Q"],
+  // app/admin/hardware/page.tsx → prefetchHardwareDashboard(getHardwareDashboard)
+  "/admin/hardware": ["/api/admin/hardware"],
 }
 
 // 사이드바 nav 전용 초미니멀 스크롤바: 4px 폭 + 투명 트랙 + hover 시에만 또렷한 thumb.
@@ -355,10 +410,14 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   // 기타 접힘 패널 펼침 상태 — 새로고침에도 유지. 로그아웃 정리(clearAdminSessionStorage) 대상이
   // 아니다 — 세션 신원이 아니라 UI 취향이라 계정이 바뀌어도 지울 이유가 없다.
-  const [otherOpen, setOtherOpen] = useState(() => {
-    if (typeof window === "undefined") return false
-    return localStorage.getItem("admin_sidebar_other_open") === "true"
-  })
+  // 서버 렌더(AdminShell이 서버 세션으로 사이드바를 SSR한다)와 첫 클라이언트 렌더가 같아야
+  // 하이드레이션 불일치가 없다 — localStorage 값은 마운트 후에만 반영한다. (collapsed는
+  // effectiveCollapsed가 isDesktop === true 게이트를 타므로 초기화 시점 값이 마크업에 안 실린다.)
+  const [otherOpen, setOtherOpen] = useState(false)
+  useEffect(() => {
+    if (localStorage.getItem("admin_sidebar_other_open") !== "true") return
+    queueMicrotask(() => setOtherOpen(true))
+  }, [])
   const mobileDrawerCloseRef = useRef<HTMLButtonElement | null>(null)
   // 모바일 드로어 접근성(품질 웨이브 3 — 항목 5) — Escape 닫기 + 열릴 때 닫기 버튼으로
   // 포커스 이동 · 닫힐 때 이전 포커스 복귀. DealModal과 동일한 공용 훅.
@@ -464,19 +523,26 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
     }
   }, [router])
 
-  const warmAdminTab = useCallback((href: string) => {
+  // trigger="click"은 CLICK_SKIP_WARMUP_URLS[href]에 등록된 URL(그 화면 자신의 RSC 프리페치가
+  // 이미 담당)을 건너뛴다 — click은 곧장 그 프리페치를 다시 태우는 네비게이션으로 이어지므로
+  // 클릭 시점의 추가 fetch는 서버 이중 계산만 낳는다. hover/focus/pointerdown(기본값)은 전부
+  // 예열한다 — 클릭으로 이어질지 불확실한 신호라 RSC가 비었을 때의 폴백 값을 살려 둘 가치가 있다.
+  const warmAdminTab = useCallback((href: string, trigger: "click" | "hover" = "hover") => {
     prefetchAdminRoute(href)
 
     if (warmedHrefs.current.has(href)) return
     warmedHrefs.current.add(href)
 
     const warmupEntry = NAV_WARMUP_REQUESTS[href]
-    const warmupUrls = typeof warmupEntry === "function" ? warmupEntry() : warmupEntry ?? []
-    for (const entry of warmupUrls) {
-      const url = typeof entry === "string" ? entry : entry.url
-      const cacheKey = typeof entry === "string" ? undefined : entry.cacheKey
-      void warmAdminRequestCache(url, { ttlMs: 60_000, cacheKey })
-    }
+    const rawEntries = typeof warmupEntry === "function" ? warmupEntry() : warmupEntry ?? []
+    const skipOnClick = trigger === "click" ? CLICK_SKIP_WARMUP_URLS[href] : undefined
+    const items = skipOnClick
+      ? rawEntries.filter((entry) => !skipOnClick.includes(typeof entry === "string" ? entry : entry.url))
+      : rawEntries
+    // 동시성 3 — 탭 하나의 URL 전체를 같은 틱에 몰아치지 않는다(lib/admin-client.ts 주석 참조).
+    // 항목이 {url, cacheKey}면 그 캐시 키로 데운다 — 소비 측이 커스텀 cacheKey를 쓰는 URL
+    // (캠페인 요약의 perf·insights, 캘린더 연동 상태 등)은 표의 항목 자체가 키를 들고 있다.
+    warmAdminRequestCacheQueued(items, { ttlMs: 60_000 })
   }, [prefetchAdminRoute])
 
   const scheduleWarmAdminTab = useCallback((href: string) => {
@@ -621,7 +687,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                               onPointerDown={() => warmAdminTab(item.href)}
                               onTouchStart={() => warmAdminTab(item.href)}
                               onClick={() => {
-                                warmAdminTab(item.href)
+                                warmAdminTab(item.href, "click")
                                 setMobileMenuOpen(false)
                               }}
                               className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
@@ -687,7 +753,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                                     onPointerDown={() => warmAdminTab(item.href)}
                                     onTouchStart={() => warmAdminTab(item.href)}
                                     onClick={() => {
-                                      warmAdminTab(item.href)
+                                      warmAdminTab(item.href, "click")
                                       setMobileMenuOpen(false)
                                     }}
                                     className={`flex min-h-11 items-center gap-3 rounded-md px-3 text-[14px] font-medium transition-colors ${
@@ -751,7 +817,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
               onMouseLeave={cancelWarmAdminTab}
               onPointerDown={() => warmAdminTab(item.href)}
               onTouchStart={() => warmAdminTab(item.href)}
-              onClick={() => warmAdminTab(item.href)}
+              onClick={() => warmAdminTab(item.href, "click")}
               className={`flex min-h-[52px] flex-col items-center justify-center gap-1 rounded-md px-1 text-[10px] font-medium leading-none transition-colors ${
                 isActive
                   ? "bg-[#111110] text-white"
@@ -869,7 +935,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                           onPointerDown={() => warmAdminTab(item.href)}
                           onTouchStart={() => warmAdminTab(item.href)}
                           onClick={() => {
-                            warmAdminTab(item.href)
+                            warmAdminTab(item.href, "click")
                           }}
                           className={`group flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-colors ${
                             effectiveCollapsed ? "justify-center px-2 py-2.5" : "px-3 py-2"
@@ -944,7 +1010,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
                                 onMouseLeave={cancelWarmAdminTab}
                                 onPointerDown={() => warmAdminTab(item.href)}
                                 onTouchStart={() => warmAdminTab(item.href)}
-                                onClick={() => warmAdminTab(item.href)}
+                                onClick={() => warmAdminTab(item.href, "click")}
                                 className={`group flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
                                   isActive
                                     ? "bg-[#111110] text-white"

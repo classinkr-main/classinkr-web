@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { trackEvent } from "@/lib/analytics"
+import { formatUsd, getSelfServeSoftwarePlan, getSoftwarePlan } from "@/lib/billing/plans"
 import { BROCHURE_URL } from "@/lib/marketing-links"
 import { TESTIMONIALS } from "@/lib/testimonials"
 import { motion, useInView, useMotionValue, useTransform, useScroll, useMotionValueEvent, animate } from "framer-motion"
@@ -1407,6 +1408,13 @@ function CaseStudiesSection() {
 }
 
 /* ── ④ 가격 가치 제안 섹션 ───────────────────────────────────── */
+// 가격 SSOT는 lib/billing/plans.ts. 여기서는 값을 다시 적지 않고 파생만 한다 —
+// /checkout 과 시뮬레이터가 같은 상수에서 갈라지지 않도록 하기 위함 (env override 포함).
+const PRICING_VALUE_STANDARD_PLAN = getSelfServeSoftwarePlan("standard")
+const PRICING_VALUE_PLUS_PLAN = getSelfServeSoftwarePlan("plus")
+// Enterprise 는 checkout 과 동일하게 가격을 노출하지 않고 "맞춤 견적"으로만 표기한다.
+const PRICING_VALUE_ENTERPRISE_PLAN = getSoftwarePlan("enterprise")
+
 const INCLUDED = [
     "양방향 블랙보드 · 50페이지 판서 공간",
     "30가지 인터랙티브 수업 도구",
@@ -1513,21 +1521,21 @@ function PricingValueSection() {
                         <div className="flex flex-col items-center gap-2 lg:flex-1">
                             <div className="flex items-center gap-5 sm:gap-7">
                                 <div className="text-center">
-                                    <p className="text-[11px] text-white/50 uppercase tracking-[0.16em] mb-1">Standard</p>
+                                    <p className="text-[11px] text-white/50 uppercase tracking-[0.16em] mb-1">{PRICING_VALUE_STANDARD_PLAN.title}</p>
                                     <p className="text-lg font-sans font-bold tabular-nums text-white whitespace-nowrap">
-                                        $99<span className="text-xs text-white/70 font-medium ml-0.5">/계정/월</span>
+                                        {formatUsd(PRICING_VALUE_STANDARD_PLAN.monthly.amount)}<span className="text-xs text-white/70 font-medium ml-0.5">/계정/월</span>
                                     </p>
                                 </div>
                                 <div className="w-px h-10 bg-white/10" />
                                 <div className="text-center">
-                                    <p className="text-[11px] text-white/50 uppercase tracking-[0.16em] mb-1">Plus</p>
+                                    <p className="text-[11px] text-white/50 uppercase tracking-[0.16em] mb-1">{PRICING_VALUE_PLUS_PLAN.title}</p>
                                     <p className="text-lg font-sans font-bold tabular-nums text-white whitespace-nowrap">
-                                        $199<span className="text-xs text-white/70 font-medium ml-0.5">/계정/월</span>
+                                        {formatUsd(PRICING_VALUE_PLUS_PLAN.monthly.amount)}<span className="text-xs text-white/70 font-medium ml-0.5">/계정/월</span>
                                     </p>
                                 </div>
                                 <div className="w-px h-10 bg-white/10" />
                                 <div className="text-center">
-                                    <p className="text-[11px] text-white/50 uppercase tracking-[0.16em] mb-1">Enterprise</p>
+                                    <p className="text-[11px] text-white/50 uppercase tracking-[0.16em] mb-1">{PRICING_VALUE_ENTERPRISE_PLAN.title}</p>
                                     <p className="text-lg font-bold text-white whitespace-nowrap">맞춤 견적</p>
                                 </div>
                             </div>

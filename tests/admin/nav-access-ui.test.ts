@@ -46,27 +46,44 @@ describe("AdminSidebar — 상시/기타 2단 구조", () => {
   })
 })
 
-const layout = readFileSync(join(process.cwd(), "app/admin/layout.tsx"), "utf8")
+// 셸 본문은 app/admin/layout.tsx에서 components/admin/AdminShell.tsx로 옮겼다.
+// (레이아웃은 서버에서 세션을 확정해 넘기는 얇은 RSC가 됐다 — 아래 두 번째 describe)
+const shell = readFileSync(join(process.cwd(), "components/admin/AdminShell.tsx"), "utf8")
 
-describe("AdminLayout — 차단 탭 라우트 가드", () => {
+describe("AdminShell — 차단 탭 라우트 가드", () => {
   it("blocks rendering when the current path resolves to deny", () => {
-    expect(layout).toContain("resolveAdminNavParentHref(")
-    expect(layout).toContain("resolveAdminNavAccess(")
-    expect(layout).toContain("getAccessibleAdminNavItems(")
+    expect(shell).toContain("resolveAdminNavParentHref(")
+    expect(shell).toContain("resolveAdminNavAccess(")
+    expect(shell).toContain("getAccessibleAdminNavItems(")
   })
 
   it("passes the same session access context to the command palette", () => {
-    expect(layout).toContain("<AdminCommandPaletteLauncher")
-    expect(layout).toContain("navPreset={session.navPreset}")
-    expect(layout).toContain("navOverrides={session.navOverrides}")
+    expect(shell).toContain("<AdminCommandPaletteLauncher")
+    expect(shell).toContain("navPreset={session.navPreset}")
+    expect(shell).toContain("navOverrides={session.navOverrides}")
   })
 
   it("explains the block instead of silently redirecting", () => {
     // 조용한 리다이렉트는 "왜 튕겼지"를 남긴다 — 문구로 알린다.
-    expect(layout).toContain("접근 권한이 없습니다")
+    expect(shell).toContain("접근 권한이 없습니다")
   })
 
   it("states plainly that this is a surface guard, not a security boundary", () => {
+    expect(shell).toContain("보안 경계가 아니다")
+  })
+})
+
+const layout = readFileSync(join(process.cwd(), "app/admin/layout.tsx"), "utf8")
+
+describe("AdminLayout — 서버 셸 부트스트랩", () => {
+  it("stays a server component that resolves the session before render", () => {
+    // "use client"가 다시 붙으면 첫 진입 왕복 2회가 그대로 돌아온다.
+    expect(layout).not.toContain('"use client"')
+    expect(layout).toContain("await resolveAdminShellSession()")
+    expect(layout).toContain("<AdminShell initialSession={initialSession}>")
+  })
+
+  it("keeps the surface-guard note where the guard is bootstrapped", () => {
     expect(layout).toContain("보안 경계가 아니다")
   })
 })

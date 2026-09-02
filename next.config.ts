@@ -99,6 +99,11 @@ const nextConfig: NextConfig = {
       process.env.VERCEL_DEPLOYMENT_ID ??
       "dev",
   },
+  // googleapis·exceljs는 순수 JS 대용량 패키지다. 서버 번들에 포함하지 않고 런타임에 Node가
+  // node_modules에서 require하게 두면 빌드가 가벼워지고, lib/google.ts·xlsx-grid.ts의 지연
+  // import(첫 호출 시 로드)와 합쳐져 서버 함수 콜드 스타트 번들이 줄어든다. 출력 파일 트레이싱은
+  // external 패키지도 배포 아티팩트에 포함하므로 런타임 해석에는 영향이 없다.
+  serverExternalPackages: ["googleapis", "exceljs"],
   images: {
     // 기본값은 webp 단독이다. avif를 앞에 두면 지원 브라우저에서 추가로 ~17% 더 줄어든다.
     formats: ["image/avif", "image/webp"],

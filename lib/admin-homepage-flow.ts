@@ -1,5 +1,6 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 
 export type HomepageFlowRangeDays = 7 | 14 | 30 | 90
@@ -322,7 +323,9 @@ export function buildHomepageFlowFromRows(
   }
 }
 
-export async function getAdminHomepageFlow(rangeDays: HomepageFlowRangeDays) {
+async function fetchAdminHomepageFlow(
+  rangeDays: HomepageFlowRangeDays
+): Promise<HomepageFlowPayload> {
   const sinceIso = getHomepageFlowSinceIso(rangeDays)
   const supabase = createSupabaseAdminClient()
   const { data, error } = await supabase
@@ -335,4 +338,23 @@ export async function getAdminHomepageFlow(rangeDays: HomepageFlowRangeDays) {
 
   if (error) throw error
   return buildHomepageFlowFromRows((data ?? []) as ClientEventRow[], rangeDays)
+}
+
+export const ADMIN_HOMEPAGE_FLOW_CACHE_TAG = "admin-homepage-flow"
+
+// client_events를 매 호출 최대 10만 행 스캔하는 무거운 집계라 60초 캐시한다.
+// rangeDays는 함수 인자로 남겨 unstable_cache 키에 자동 포함시킨다(range별 캐시 분기).
+// 이 함수는 cookies()/headers()를 읽지 않고 요청 무관 admin 클라이언트만 쓰므로 캐시에 안전하다.
+const getCachedAdminHomepageFlow = unstable_cache(
+  fetchAdminHomepageFlow,
+  ["admin-homepage-flow"],
+  { revalidate: 60, tags: [ADMIN_HOMEPAGE_FLOW_CACHE_TAG] }
+)
+
+// 함수 시그니처·이름 불변 유지: 소유 밖 호출부(app/api/admin/homepage-flow/route.ts)가
+// 이 이름으로 그대로 가져다 쓰므로, 캐시 배선은 내부 위임으로만 추가한다.
+export async function getAdminHomepageFlow(
+  rangeDays: HomepageFlowRangeDays
+): Promise<HomepageFlowPayload> {
+  return getCachedAdminHomepageFlow(rangeDays)
 }

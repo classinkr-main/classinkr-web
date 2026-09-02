@@ -86,7 +86,7 @@ export default function AdminNotificationsBell({ placement = "floating" }: BellP
       if (document.hidden) return
       if (open) void load(true)
       else void loadUnreadCount()
-    }, 60_000)
+    }, 90_000)
 
     return () => window.clearInterval(timer)
   }, [load, loadUnreadCount, open])

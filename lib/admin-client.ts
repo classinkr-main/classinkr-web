@@ -821,3 +821,39 @@ export function warmAdminRequestCache(input: string, options: AdminFetchCacheOpt
     () => undefined
   )
 }
+
+/** warmAdminRequestCacheQueued 항목 — URL만 주면 캐시 키도 URL(기본 규약)이지만, 소비 측이
+ *  adminFetchJsonCached에 커스텀 cacheKey를 넘기는 URL(예: 캠페인 요약의 marketing/perf·insights)은
+ *  같은 cacheKey를 함께 줘야 예열이 소비 측이 읽는 캐시 슬롯과 맞는다. */
+export interface AdminWarmQueueItem {
+  url: string
+  cacheKey?: string
+}
+
+const WARM_QUEUE_CONCURRENCY = 3
+
+/**
+ * warmAdminTab(AdminSidebar)·warmSubtab(CrmSubnav)처럼 탭 하나가 URL 여러 개를 한 번에
+ * 예열할 때, 동시성을 3으로 제한해 같은 틱에 몰아치지 않게 한다. 각 항목은 그대로
+ * warmAdminRequestCache로 위임하므로 document.hidden/saveData 스킵·실패 삼킴("Prefetch is
+ * an optimization only")은 항목별로 동일하게 적용된다 — 여기서는 순서·동시성만 관리한다.
+ * fire-and-forget이라 반환값은 없다(호출부는 await하지 않는다).
+ */
+export function warmAdminRequestCacheQueued(
+  items: Array<string | AdminWarmQueueItem>,
+  options: AdminFetchCacheOptions = {}
+) {
+  const queue = items.map((item) => (typeof item === "string" ? { url: item } : item))
+  let cursor = 0
+
+  const runNext = async (): Promise<void> => {
+    const index = cursor++
+    if (index >= queue.length) return
+    const { url, cacheKey } = queue[index]
+    await warmAdminRequestCache(url, cacheKey ? { ...options, cacheKey } : options)
+    return runNext()
+  }
+
+  const workerCount = Math.min(WARM_QUEUE_CONCURRENCY, queue.length)
+  for (let i = 0; i < workerCount; i++) void runNext()
+}

@@ -107,6 +107,21 @@ describe("admin nav warm-up cache-key parity", () => {
     expect(warmupUrls("/admin/crm").some((url) => url.startsWith("/api/admin/crm/neo"))).toBe(false)
   })
 
+  // 캠페인 기본 진입 탭은 요약(SummaryTab.tsx)이고, 그 탭이 마운트 즉시 부르는 URL은
+  // usePerf/useInsights의 perf(기본 기간 30d)·insights 단둘뿐이다(events/meta/email/leads
+  // 탭 전용 코어 로드는 activeTab 게이트 뒤에 있어 요약 진입에서는 호출되지 않는다) — 이 값이
+  // 바뀌면 예열이 조용히 안 쓰이는 탭만 데우게 된다.
+  it("warms exactly the Summary tab's default-entry endpoints, not the other campaign tabs' core load", () => {
+    const urls = warmupUrls("/admin/campaigns")
+    expect(urls).toContain("/api/admin/marketing/perf?period=30d")
+    expect(urls).toContain("/api/admin/marketing/insights")
+    // 다른 탭 전용(events/meta/email/leads 코어 로드) 키는 요약 탭에서 안 쓰이므로 없어야 한다.
+    expect(urls).not.toContain("/api/admin/events")
+    expect(urls).not.toContain("/api/admin/event-metrics")
+    expect(urls).not.toContain("/api/admin/messaging/status")
+    expect(urls.some((url) => url.startsWith("/api/admin/meta/campaigns"))).toBe(false)
+  })
+
   it("keys internal CS by the tab hrefs the console nav actually links to", () => {
     // 콘솔 메뉴 href 는 전부 ?tab= 을 달고 있다 — bare 키만 있으면 어느 링크도 조회하지 못한다.
     for (const href of [

@@ -127,6 +127,17 @@ export const SCHEMA_CONTRACT_MIGRATIONS = [
   "supabase/migrations/20260827_guarded_lead_assignment.sql",
   // 기존 20260818 마이그레이션이 적용됐는데 RPC만 빠진 live DB를 전방향으로 복구한다.
   "supabase/migrations/20260827_repair_increment_campaign_click_count.sql",
+  // Compass(마케팅팀 앱) crm 스키마 연결 + NEO 소진 예보 + 지역 배정 + 쇼룸 예약(2026-08-28~29).
+  // 파일명 사전순(= 적용 순서).
+  "supabase/migrations/20260828_admin_neo_owner_link.sql",
+  "supabase/migrations/20260828_compass_bridge_views.sql",
+  "supabase/migrations/20260828_crm_neo_billing_mode.sql",
+  "supabase/migrations/20260828_crm_neo_consumption_forecast.sql",
+  "supabase/migrations/20260828_crm_region_assignments.sql",
+  "supabase/migrations/20260829_showroom_bookings.sql",
+  // 리드 중복 탐지 + 어드민 핫패스 인덱스(2026-09-02). 인덱스 전용 마이그레이션이라
+  // 프로브의 한계는 SCHEMA_PROBES 쪽 주석 참고.
+  "supabase/migrations/20260902_leads_dedupe_and_admin_hot_path_indexes.sql",
 ] as const
 
 export const SCHEMA_PROBES: SchemaProbe[] = [
@@ -228,6 +239,162 @@ export const SCHEMA_PROBES: SchemaProbe[] = [
     migration: "supabase/migrations/20260820_meta_insights_daily.sql",
     impact:
       "크론(/api/cron/sync-meta-insights)과 백필 스크립트(scripts/backfill-meta-insights.mjs)의 upsert 가 실패해 일자별 스냅샷이 쌓이지 않는다(조회 함수는 아직 라우트에 연결되지 않았다).",
+  },
+  // ── 어드민 담당자 ↔ NEO 연결(2026-08-28) ──────────────────────────────
+  // 이 마이그레이션은 UPDATE 10건뿐인 데이터 백필이다 — neo_owner_id 컬럼 자체는
+  // 20260626_admin_profiles_crm_assignments.sql에서 이미 생겼다. 그래서 REST 컬럼 프로브는
+  // "이 마이그레이션이 실제로 적용돼 10명의 값이 채워졌는지"는 구분하지 못하고 컬럼이
+  // 살아있는지만 본다(REST에는 특정 user_id 10건의 값을 확인할 WHERE 프로브 kind가 없다).
+  // severity를 warning으로 둔 이유도 이것 — 이 프로브의 "ok"가 백필 완료를 보장하지 않는다.
+  {
+    kind: "table",
+    table: "admin_profiles",
+    label: "어드민 프로필 ↔ NEO 담당자 id 연결(데이터 백필, 컬럼 자체는 사전 존재)",
+    columns: ["user_id", "neo_owner_id"],
+    migration: "supabase/migrations/20260828_admin_neo_owner_link.sql",
+    severity: "warning",
+    impact:
+      "10명 담당자의 neo_owner_id 백필이 안 됐다면(이 프로브로는 확인 불가) 재연결 알림이 담당자 개인이 아니라 관리자 전체로만 간다.",
+  },
+  // ── Compass 브리지 뷰 7개(2026-08-28) ──────────────────────────────────
+  // 원천은 마케팅팀 앱이 소유한 crm 스키마 — service_role만 SELECT 가능(anon/authenticated는
+  // REVOKE). 뷰가 깨지면 lib/compass/bridge.ts의 isCompassBridgeDown()이 감지해 소비 화면을
+  // "Compass 연결 끊김" 배지로 강등한다(fail loud 설계, 무음 오염 금지).
+  {
+    kind: "table",
+    table: "compass_leads_v",
+    label: "Compass 리드 브리지 뷰(상태·재유입·NeoCRM 표식·담당 3역할)",
+    columns: ["id", "phone_key", "email_key", "stage", "owner", "team", "created_at"],
+    migration: "supabase/migrations/20260828_compass_bridge_views.sql",
+    impact:
+      "Compass 리드 오버레이(app/api/admin/compass/leads-overlay)와 전화번호 대조가 깨지고, isCompassBridgeDown() 감지로 관련 화면이 'Compass 연결 끊김' 배지로 강등된다.",
+  },
+  {
+    kind: "table",
+    table: "compass_activities_v",
+    label: "Compass 활동 타임라인 브리지 뷰",
+    columns: ["id", "lead_id", "kind", "body", "created_at"],
+    migration: "supabase/migrations/20260828_compass_bridge_views.sql",
+    impact: "고객 360(lib/repositories/crm-customer-360.ts) 병합 타임라인에서 Compass 쪽 활동 기록이 빠진다.",
+  },
+  {
+    kind: "table",
+    table: "compass_ads_v",
+    label: "Compass 광고 소재 단위 일별 성과 브리지 뷰",
+    columns: ["day", "ad_id", "ad_name", "campaign_id", "spend_usd", "leads"],
+    migration: "supabase/migrations/20260828_compass_bridge_views.sql",
+    impact: "app/api/admin/compass/ads 조회와 creative-suggest 크리에이티브 추천이 실패한다.",
+  },
+  {
+    kind: "table",
+    table: "compass_adsets_v",
+    label: "Compass 광고세트 단위 일별 성과 브리지 뷰",
+    columns: ["day", "adset_id", "campaign_id", "spend_usd", "leads"],
+    migration: "supabase/migrations/20260828_compass_bridge_views.sql",
+    impact: "광고세트 레벨 성과 조회가 실패한다(캠페인 레벨만 가능했던 이전 상태로 되돌아간다).",
+  },
+  {
+    kind: "table",
+    table: "compass_demos_v",
+    label: "Compass 데모 실측 브리지 뷰",
+    columns: ["id", "lead_id", "day", "status", "owner"],
+    migration: "supabase/migrations/20260828_compass_bridge_views.sql",
+    impact:
+      "lib/crm/compass-demo-source.ts의 데모 실측 신호가 끊겨 어드민 캘린더가 다시 키워드 추측(오차 3/7) 방식으로 되돌아간다.",
+  },
+  {
+    kind: "table",
+    table: "compass_cal_events_v",
+    label: "Compass 캘린더 미러 브리지 뷰('MKT 데모일정' 원본)",
+    columns: ["key", "day", "time", "title", "lead_id"],
+    migration: "supabase/migrations/20260828_compass_bridge_views.sql",
+    impact: "lib/compass/calendar.ts가 소비하는 'MKT 데모일정' 캘린더 소스가 어드민 캘린더에서 사라진다.",
+  },
+  {
+    kind: "table",
+    table: "compass_revenue_v",
+    label: "Compass 매출 결제 스냅샷 브리지 뷰(rev-sheet 대조용)",
+    columns: ["id", "month", "customer", "status", "amount"],
+    migration: "supabase/migrations/20260828_compass_bridge_views.sql",
+    impact: "lib/admin-crm-revenue-sheet.ts의 매출 대조 배지가 깨진다.",
+  },
+  // ── NEO 고객 스냅샷 과금 유형 + 소진 예보(2026-08-28) ───────────────────
+  // 둘 다 lib/crm/renewal-alert-dispatch.ts 의 같은 select 문 하나에 함께 들어 있어
+  // (billing_mode, ..., depletion_in_days) 두 마이그레이션 중 하나만 빠져도 그 select 전체가
+  // 42703으로 실패한다 — impact가 사실상 같은 이유다.
+  {
+    kind: "table",
+    table: "crm_neo_customer_snapshots",
+    label: "NEO 고객 스냅샷 과금 유형(충전제/구독제/하드웨어) 컬럼",
+    columns: ["account_id", "billing_mode"],
+    migration: "supabase/migrations/20260828_crm_neo_billing_mode.sql",
+    impact:
+      "renewal-alert-dispatch의 select가 billing_mode를 명시 요청하므로, 컬럼이 없으면 갱신 알림 스냅샷 조회 전체가 42703으로 실패해 충전 잔액 소진 알림이 나가지 않는다.",
+  },
+  {
+    kind: "table",
+    table: "crm_neo_customer_snapshots",
+    label: "NEO 고객 소진 예상일 파생 컬럼(daily_burn/depletion_in_days 등)",
+    columns: ["account_id", "daily_burn", "depletion_in_days", "burn_event_count", "burn_confidence"],
+    migration: "supabase/migrations/20260828_crm_neo_consumption_forecast.sql",
+    impact:
+      "같은 select에 depletion_in_days가 함께 있어 컬럼이 없으면 위 billing_mode와 동일하게 갱신 알림 스냅샷 조회 자체가 실패한다(재충전 임박 신호도 계산 불가).",
+  },
+  // ── CRM 지역 배정(2026-08-28) ──────────────────────────────────────────
+  {
+    kind: "table",
+    table: "crm_region_assignments",
+    label: "CRM 지역 배정(시도별 담당자 1명) 표",
+    columns: ["id", "region_label", "owner_key", "effective_from", "effective_to"],
+    migration: "supabase/migrations/20260828_crm_region_assignments.sql",
+    impact:
+      "lib/crm/lead-assignment-policy.ts가 '권위 있는 owner 연결 없음'을 이유로 자동 배정 후보를 구조적으로 0으로 막아둔 상태가 풀리지 않아, 신규 리드 자동 배정이 계속 전량 미배정으로 쌓인다.",
+  },
+  // ── 목동 쇼룸 상담 예약 접수(2026-08-29) ────────────────────────────────
+  {
+    kind: "table",
+    table: "showroom_bookings",
+    label: "목동 쇼룸 상담 예약 접수 저장소",
+    columns: ["id", "visit_date", "visit_time", "org", "name", "phone", "status", "lead_id"],
+    migration: "supabase/migrations/20260829_showroom_bookings.sql",
+    impact: "공개 쇼룸 예약 접수(app/api/showroom)가 저장할 곳이 없어 실패하고, 리드 큐 미러링(lead_id)도 되지 않는다.",
+  },
+  // ── 리드 중복 탐지 + 어드민 핫패스 인덱스(2026-09-02) ───────────────────
+  // 인덱스 자체의 존재는 PostgREST/REST 경로로 확인할 수 없다(pg_indexes에 REST로 접근할
+  // 방법이 없고, 이 저장소의 기존 마이그레이션 중 순수 인덱스 추가 건은 애초에 SCHEMA_PROBES
+  // 대상이 아니었다 — 20260827_admin_perf_indexes.sql도 프로브가 없다). 아래 3개는 그
+  // 대체재로, 인덱스가 걸린 컬럼 자체가 살아있는지만 본다 — "ok"가 인덱스 생성까지
+  // 보장하지는 않으므로 severity를 warning으로 둔다. 실제 지연 확인은
+  // scripts/measure-admin-api.mjs로 별도 측정한다.
+  {
+    kind: "table",
+    table: "leads",
+    label: "리드 중복 탐지 대상 컬럼(phone/email) — 인덱스 존재는 이 프로브로 확인 불가",
+    columns: ["id", "phone", "email"],
+    migration: "supabase/migrations/20260902_leads_dedupe_and_admin_hot_path_indexes.sql",
+    severity: "warning",
+    impact:
+      "idx_leads_phone/idx_leads_email이 없어도 기능은 정상이나, 리드 제출마다 중복 탐지 쿼리가 leads 전체 스캔으로 느려진다.",
+  },
+  {
+    kind: "table",
+    table: "admin_calendar_events",
+    label: "캘린더 멀티데이 일정 범위 조회 컬럼(end_date) — 인덱스 존재는 이 프로브로 확인 불가",
+    columns: ["id", "date", "end_date"],
+    migration: "supabase/migrations/20260902_leads_dedupe_and_admin_hot_path_indexes.sql",
+    severity: "warning",
+    impact:
+      "idx_admin_calendar_events_end_date가 없어도 기능은 정상이나, 멀티데이 일정이 걸치는 기간 조회(app/api/admin/calendar)가 end_date 전체 스캔으로 느려진다.",
+  },
+  {
+    kind: "table",
+    table: "crm_tasks",
+    label: "매니저 리포트 완료 건수 집계 컬럼(status/completed_at) — 인덱스 존재는 이 프로브로 확인 불가",
+    columns: ["id", "status", "completed_at"],
+    migration: "supabase/migrations/20260902_leads_dedupe_and_admin_hot_path_indexes.sql",
+    severity: "warning",
+    impact:
+      "idx_crm_tasks_status_completed_at이 없어도 기능은 정상이나, /api/admin/crm/manager-report의 기간 내 완료 집계가 done 누적 전체 스캔이 되고 그 비용은 시간이 지날수록 커진다.",
   },
 ]
 

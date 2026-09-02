@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { adminCachedJson } from "@/lib/admin-api-response"
 import { getAdminRecipientSelectors } from "@/lib/notifications/recipient-selectors"
 import {
   countUnreadNotificationsForRecipients,
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
   const selectors = getAdminRecipientSelectors(admin)
   if (countOnly) {
     const unreadCount = await countUnreadNotificationsForRecipients(selectors)
-    return NextResponse.json({ unreadCount })
+    return adminCachedJson({ unreadCount })
   }
 
   const [items, unreadCount] = await Promise.all([
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
     countUnreadNotificationsForRecipients(selectors),
   ])
 
-  return NextResponse.json({ items, unreadCount })
+  return adminCachedJson({ items, unreadCount })
 }
 
 export async function PATCH(req: NextRequest) {
