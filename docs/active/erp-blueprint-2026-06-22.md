@@ -52,7 +52,8 @@ OKR/목표(구글시트에만 존재), 예산/집행, 학원 360 통합 뷰, 리
 
 ### Phase 0 — 무마이그 퀵윈 + 키스톤 측정 (지금)
 - [ ] **(S) `crm_source_links` 커버리지 지표** — verified/needs_review/unmatched %(매출보유 학원 기준)를 `/admin/crm/matching` 또는 `/admin/overview`에 노출. *모든 통합 숫자의 신뢰 전제. 가장 먼저.*
-- [ ] **(S) 골든타임 24h 노출** — 이미 계산됨(`unresponded_24h` 상태/`lead-response-alerts`). `/admin/crm` 액션밴드에 24h 카드만 추가. (신규 빌드 아님)
+- [ ] **(S) 골든타임 24h 노출** — CRM 데이터에서 계산해 `/admin/crm` 액션밴드에 24h 카드를
+  노출한다. 폐기된 `unresponded_24h` Webhook 상태와 `lead-response-alerts` 발송 모듈에 의존하지 않는다.
 - [ ] **(S) 파이프라인 커버리지 타일** — open 파이프라인 ÷ (목표−확정), 2.0배 미만 빨강. `/admin/branch` CoreKpiGrid + `/api/admin/branch/summary`.
 - [ ] **(S) HW 218세트 진척바 + Direct YoY 라벨** — `branch_hw_outbound`/`by_channel` 이미 적재. HardwareSection·DealMixSection.
 - [ ] **(M) 채널 리드 KPI(UTM 정규화)** — analytics 소스 그룹핑을 자유문자 source → `utm_source/utm_medium` 채널(meta/naver/kakao/youtube/google)로. 목표 Meta20/N15/K10/Y5 대비. (leads UTM 컬럼 존재 → 무마이그)

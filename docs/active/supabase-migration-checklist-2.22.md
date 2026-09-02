@@ -15,7 +15,8 @@ CRM 운영 통합(`crm_source_links`, Xiaoshouyi snapshot, write-back 승인 큐
 ### 적용 확인
 
 - `docs_articles.visibility`, `docs_articles.noindex`: 적용됨.
-- `lead_alert_states`: 적용됨.
+- `lead_alert_states`: 적용됨. 다만 관련 미응답 Webhook 런타임은 2026-09-02 폐기됐고 테이블은
+  역사 데이터·스키마 호환을 위해 보존 중이다.
 - `leads.follow_up_at`, `leads.assigned_to`: 적용됨.
 - `leads.source_detail`, `leads.lead_magnet`, 전체 UTM/click/referrer 컬럼: 적용됨.
 - `customers`, `deals`, `quote_documents`, `quote_document_versions`: 기본 테이블 적용됨.
@@ -263,7 +264,8 @@ select to_regclass('public.docs_article_drafts');
 
 확인 이유:
 
-- WeCom 리드 미응답/주간/월간 digest alert가 같은 조건을 매번 반복 발송하지 않게 dedupe state를 저장한다.
+- 과거 WeCom 리드 미응답 alert의 dedupe state와 마이그레이션 이력을 보존한다. 현재 미응답 Webhook은
+  발송하지 않으며, 주간·월간 digest의 중복 방지는 각 현행 구현을 별도로 확인한다.
 
 ## 3. 콘텐츠 배포 상태 기준
 

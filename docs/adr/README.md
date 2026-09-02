@@ -1,6 +1,6 @@
 # ADR Notes
 
-기준 시점: 2026-04-15  
+기준 시점: 2026-09-02
 문서 목적: 여러 제품/코드/운영 문서에 반복해서 등장하는 결정을 짧고 안정적으로 기록한다.
 
 ## 언제 ADR을 만든다
@@ -22,15 +22,12 @@
 4. Related docs/code
 5. Status: `proposed`, `accepted`, `superseded`
 
-## 이 저장소에서 먼저 만들 후보
+## 현재 ADR
 
-- `ADR-001 customer-vs-deal-is-operational-unit`
-- `ADR-002 document-links-are-version-fixed`
-- `ADR-003 installations-use-start-end-datetime`
-- `ADR-004 payments-are-partial-by-default`
-- `ADR-005 homepage-lead-capture-success-criteria`
-- `ADR-006 marketing-storage-mode-json-vs-supabase`
-- `ADR-007 admin-auth-model`
+- [ADR-007 Admin identity와 RBAC](ADR-007-admin-identity-rbac.md)
+- [ADR-008 Korea Sales Ledger 운영 정본](ADR-008-korea-sales-ledger-operating-record.md)
+- [ADR-009 홈페이지와 Admin 배포 경계](ADR-009-site-admin-deployment-boundary.md)
+- [ADR-010 예약 작업·외부 의존성 장애 격리](ADR-010-operational-failure-containment.md)
 
 ## 작성 규칙
 

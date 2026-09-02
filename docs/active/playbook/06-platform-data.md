@@ -45,9 +45,19 @@ Platform은 `lib/server/*`, `app/api/*`, `tests/*` 전체를 소유하지 않는
 
 - 결제 confirm은 저장 금액, 요청 금액, 결제사 응답 금액, checkout token, 최종 상태를 교차 검증하고 멱등성을 유지한다.
 - 사용 횟수처럼 경쟁 조건이 있는 카운터는 원자적 RPC/트랜잭션을 사용한다.
-- cron은 `CRON_SECRET`과 Vercel cron 요청 여부를 검증한다.
+- 상세 운영 기준은 [운영 장애·Cron·Webhook 안전 지침](../operational-failure-handling-guidelines.md)과
+  [ADR-010](../../adr/ADR-010-operational-failure-containment.md)을 따른다.
+- Vercel cron은 `Authorization: Bearer ${CRON_SECRET}`만 검증한다. `x-vercel-cron`은 Vercel의
+  전송 계약이 아니므로 인증 또는 추가 실행 조건으로 사용하지 않는다.
 - Vercel 플랜은 명시 확인 전 Hobby로 보고 각 `vercel.json` cron은 하루 1회 이하로 둔다. sub-daily 작업은 외부 스케줄러나 플랜 결정을 먼저 한다.
+- 외부 발송 cron은 at-least-once 실행을 가정하고 멱등 키, backlog dry-run, lookback·실행당 발송량
+  상한, 부분 성공 테스트와 circuit breaker를 갖춘다. 인증 수리·장기 중단 후 첫 실행에 과거분을
+  자동으로 전량 재생하지 않는다.
 - 웹훅은 공급자 계약에 맞는 HMAC/서명 검증과 timing-safe 비교를 사용한다.
+- Webhook 목적지는 용도별로 분리하고 configured/enabled/healthy 상태를 구분한다. URL·key·token은
+  로그·문서·오류 응답에 남기지 않는다.
+- `미응답누적`, `24시간 미응답`, `48시간 미응답` Webhook 알림은 폐기 상태다. CRM 지표·필터와
+  아침 공지는 유지하지만 미응답 이벤트를 외부 발송으로 다시 연결하지 않는다.
 
 ## 3. 도메인 경계
 
@@ -78,6 +88,8 @@ npm run check:vercel-crons
 - Portal 변경: 다른 partner account의 직접 접근이 403인지 확인
 - 결제 변경: 금액 불일치, 중복 confirm, 잘못된 token/status 회귀 확인
 - cron 변경: `npm run check:vercel-crons` 필수
+- 외부 발송 cron 변경: 무인증·잘못된 Bearer·정상 Bearer, 중복 실행, 장기 중단 후 첫 실행,
+  부분 성공·상한 초과 테스트 추가
 - 챗봇 DB/RPC 변경: `npm run check:alpha-db` 추가
 
 ## 5. 먼저 읽을 것
@@ -86,4 +98,5 @@ npm run check:vercel-crons
 2. `lib/portal/portal-context.ts`, `lib/portal/portal-authorize.ts`
 3. 변경 대상의 repository와 관련 migration
 4. 결제 변경이면 `lib/server/software-checkout.ts`, `lib/billing/*`
-5. cron 변경이면 `vercel.json`과 `scripts/check-vercel-crons.mjs`
+5. cron·Webhook 변경이면 `vercel.json`, `scripts/check-vercel-crons.mjs`,
+   [운영 장애·Cron·Webhook 안전 지침](../operational-failure-handling-guidelines.md)

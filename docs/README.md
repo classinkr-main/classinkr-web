@@ -1,6 +1,6 @@
 # Docs Index
 
-기준 시점: 2026-08-07
+기준 시점: 2026-09-02
 문서 목적: 현재 저장소에서 무엇을 먼저 읽어야 하는지, 어떤 문서를 믿어야 하는지, 어떤 문서가 역사 기록인지 빠르게 구분한다.
 
 ## Admin OS 정본 우선순위
@@ -122,6 +122,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - 챗봇 지식베이스, 질문 이벤트, FAQ 통계 스키마와 API 설계
 - [adr/README.md](./adr/README.md)
   - ADR 작성 규칙과 초기 백로그
+- [adr/ADR-010-operational-failure-containment.md](./adr/ADR-010-operational-failure-containment.md)
+  - **Cron 인증·복구 실행·Webhook·외부 의존성의 폭주와 유실 방지 결정.**
 
 ## 4. Domains
 
@@ -137,6 +139,11 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
 
 ## 5. Runbooks And Incidents
 
+- [active/operational-failure-handling-guidelines.md](./active/operational-failure-handling-guidelines.md)
+  - **운영 장애·Cron·Webhook 현재 지침.** 미응답 Webhook 폐기 상태, Cron 인증·백로그 상한,
+    비밀값, Supabase·외부 API·캐시·배포 장애의 공통 대응 기준.
+- [active/supabase-operational-recovery-hardening-plan-2026-09-01.md](./active/supabase-operational-recovery-hardening-plan-2026-09-01.md)
+  - **Supabase 운영 복구·하드닝 현재 실행 계획.** 2026-09-01 Admin 접속 장애의 인과관계, 즉시 복구, 실패 의미·캐시·권한·토큰 키·CRM 성능 개선의 독립 배포 순서와 종료 조건.
 - [active/cs-ops-standard-runbook-2026-08.md](./active/cs-ops-standard-runbook-2026-08.md)
   - CS 운영 데스크, 문서 보강 큐, 회귀 검수와 채널톡 실제 원인 검토 절차
 - [archive/repository-status-2026-06-08.md](./archive/repository-status-2026-06-08.md)

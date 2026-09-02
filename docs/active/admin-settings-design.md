@@ -804,7 +804,7 @@ Settings 안에 `운영 스케줄` 요약을 추가하면 좋다. 단, cron 자�
 
 - cron path
 - schedule
-- 인증 방식: `x-vercel-cron`, `CRON_SECRET`, 또는 둘 다
+- 인증 방식: `Authorization: Bearer ${CRON_SECRET}`. `x-vercel-cron`은 인증 조건으로 사용하지 않는다.
 - 마지막 실행 상태
 - 최근 실패 요약
 - Hobby 플랜 안전성 경고

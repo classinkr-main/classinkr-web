@@ -54,7 +54,8 @@
 - `leads` 모델에 UTM·gclid·fbclid·msclkid·ttclid·landing_page·referrer·lead_magnet·source_detail **어트리뷰션 이미 존재** (`lib/repositories/leads.ts`)
 - 캡처: `POST /api/lead`, `POST /api/newsletter/subscribe`, Meta webhook → `lib/server/lead-capture.ts`(rate-limit·허니팟·중복·자동화·구독 동기화)
 - CRM: `app/admin/crm/`(leads/customers/deals/quotes/contracts/revenue/matching), 상호작용 `lead_contact_logs`
-- 일일 크론 `app/api/cron/lead-response-alerts/route.ts` (`lib/server/lead-response-alerts.ts`) — 미응답 리드 알림
+- 일일 크론 `app/api/cron/lead-response-alerts/route.ts` — Meta·홈페이지 리드 아침 공지.
+  `lib/server/lead-response-alerts.ts`와 미응답누적·24/48시간 Webhook 발송은 2026-09-02 폐기됐다.
 
 ### 3.4 리드스코어링 — 초보 수준
 - `components/admin/crm/leads/shared.tsx`의 `calcScore()`: 출처(데모40/문의25/Meta25/뉴스10) + 연락처(전화20/이메일5) + 규모 + org, 최대 100.
@@ -242,7 +243,8 @@ sequenceDiagram
 3. **계산 트리거**
    - 증분: `app/api/track/event/route.ts`·`lib/server/lead-capture.ts`·다운로드 시 해당 리드 점수 갱신.
    - 배치: 신규 일일 크론 `app/api/cron/lead-scoring/route.ts` — 전량 재계산 + 감쇠(Hobby 일 1회).
-4. **임계 → 액션:** MQL/SQL 도달 시 기존 자동화(`lib/repositories/automation.ts`)·알림(`lib/server/lead-response-alerts.ts`) 연계, 영업 배정.
+4. **임계 → 액션:** MQL/SQL 도달 시 기존 자동화(`lib/repositories/automation.ts`)·CRM 작업 큐에 연계,
+   영업 배정. 폐기된 미응답 Webhook 모듈에는 연결하지 않는다.
 5. **피드백 루프:** 마감(`converted`/`closed`) 리드의 점수 분포 추적 → 임계·가중치 보정 근거(대시보드).
 6. **CRM 표면화:** `components/admin/crm/leads/shared.tsx`의 `calcScore()`를 엔진 호출로 교체, 리드보드에 등급·라이프사이클·점수 추이 표시.
 
