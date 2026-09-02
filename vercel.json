@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/lead-response-alerts",
-      "schedule": "10 1 * * *"
+      "schedule": "10 2 * * *"
     },
     {
       "path": "/api/cron/lead-weekly-digest",
@@ -22,7 +22,7 @@
     },
     {
       "path": "/api/cron/sync-branch-insights",
-      "schedule": "30 8 * * *"
+      "schedule": "30 9 * * *"
     },
     {
       "path": "/api/cron/sync-external-crm",
