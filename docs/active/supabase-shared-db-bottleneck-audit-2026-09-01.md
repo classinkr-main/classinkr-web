@@ -3,6 +3,7 @@
 작성: 2026-09-01 · 서브에이전트 4팀 병렬 정찰(앱 쿼리 / 스키마·인덱스·RLS / crm 저장소 / 인프라·크론) + 작성자 직접 코드 교차검증
 대상: classinkr-main/classinkr-web @ 60b5ec6, classinkr-main/crm @ eb39a3a
 관련 문서: admin-perf-quality-audit-2026-07-23.md(선행 감사, Wave 1~3 적용 완료), admin-money-mesh-2026-07-03.md
+후속 실행 설계: supabase-optimization-execution-plan-2026-09-02.md
 -->
 
 # 공용 Supabase DB 병목 감사 및 분리 여부 평가 (2026-09-01)
@@ -183,10 +184,16 @@ REVOKE ALL ON SCHEMA public FROM crm_app;
 
 정직하게 말하면 **요금제를 저장소에서 판정할 수 없다.** 다음 3개는 대시보드 확인이 필요하고, 이게 다른 모든 판단의 입력값이다.
 
-**① Vercel 플랜 — 모순이 있다.**
-`docs/active/admin-settings-design.md:812`는 *"Vercel 플랜은 명시 확인 전까지 Hobby 기준으로 본다"*고 적었고, `scripts/check-vercel-crons.mjs:5`가 `MAX_DAILY_RUNS_PER_CRON = 1`로 prebuild에서 이를 강제한다. **그런데 `vercel.json`에는 cron이 9개 있다.** Hobby의 cron 개수 한도(2개)를 넘는다.
+**① Vercel 플랜 — Hobby와 일관되지만, Hobby의 시간 정밀도가 정합성 버그를 만든다.**
 
-→ 실제로는 Pro거나, **일부 크론이 조용히 실행되지 않고 있다.** 후자라면 `sync-external-crm`·`sync-branch` 같은 데이터 동기화가 안 돌고 있다는 뜻이라 성능이 아니라 **데이터 정합성 사고**다. **최우선 확인 항목.**
+> **정정(2026-09-02):** 초판은 "cron 9개가 Hobby 한도 2개를 초과"라고 썼으나 틀렸다. Vercel은 2026-01부터 모든 플랜에서 프로젝트당 cron 100개를 허용한다. `scripts/check-vercel-crons.mjs:5`가 강제하는 "1일 1회" 제약이 현행 Hobby 규칙과 정확히 일치하며, 저장소는 일관돼 있다.
+
+`docs/active/admin-settings-design.md:812`는 *"Vercel 플랜은 명시 확인 전까지 Hobby 기준으로 본다"*고 적었다. 문제는 개수가 아니라 **정밀도**다. Hobby는 지정 시각이 아니라 **그 시(hour) 안 임의 시점**에 실행한다.
+
+- `sync-branch` 08:00과 `sync-branch-insights` 08:30은 **둘 다 08시대** → **실행 순서가 보장되지 않는다.** insights가 먼저 돌면 전날 데이터로 인사이트를 생성하고 Gemini 비용을 쓴 뒤 틀린 값을 저장한다.
+- `sync-external-crm` 01:00과 `lead-response-alerts` 01:10도 같은 01시대 → 임의 겹침.
+
+이건 성능이 아니라 **데이터 정합성 버그**이고, Vercel Pro의 분 단위 정밀도 또는 서로 다른 시(hour)로의 재배치가 해결한다(실행 계획 T11 참조).
 
 또한 Hobby는 약관상 상업적 사용이 불가하다. 회사 제품이 Hobby에 올라가 있다면 성능과 무관하게 정리해야 한다.
 
