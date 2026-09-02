@@ -85,6 +85,23 @@ import { deriveLeadRegionLabel } from "@/lib/crm/lead-message"
 // 모바일 카드·데스크톱 테이블이 같은 filtered를 그리므로 visible 상한을 공유한다.
 const LEAD_BOARD_LIST_STEP = 50
 
+// CrmSubnav.tsx가 hover 시 /api/admin/leads를 ttlMs: 60_000으로 미리 워밍해 두는데,
+// 여기서 ttlMs: 0으로 받으면 그 워밍 캐시를 무시하고 탭 진입마다 전체 테이블을 다시
+// 받아 다운로드가 2회(hover + 마운트)가 됐다. 30s로 맞춰 워밍 캐시를 그대로 활용한다
+// (persist는 여전히 false — 전체 테이블을 sessionStorage에 넣지 않는다).
+// 뮤테이션 시 별도 무효화 호출은 불필요 — adminFetch가 성공한 non-GET 요청마다
+// invalidationScopesForUrl로 "/api/admin/leads" 프리픽스를 자동으로 지운다
+// (lib/admin-client.ts:100-140의 resourceBaseFromUrl/invalidationScopesForUrl,
+// :400-410의 adminFetch 내 clearCacheScopes 호출 참고). 보드의 모든 뮤테이션
+// (handleStatus/handleNotes/handleFollowUp/handleAssignedTo, 로그, 전환, 삭제)이
+// adminFetch를 거치므로 이 자동 무효화 대상이다.
+export const LEADS_BOARD_FETCH_OPTIONS = {
+  ttlMs: 30_000,
+  persist: false,
+  staleIfError: true,
+  staleWhileRevalidateMs: 60_000,
+} as const
+
 // 유입 셀의 보조 세그먼트 — 그룹 라벨과 사실상 같은 말이면 생략해 "메타 · Meta 리드" 같은
 // 중복 표기를 막는다(메타는 광고명 칩이 세부를 담당). 그룹 내 소스가 여럿인 경우(홈페이지의
 // 데모/문의/CTA 등)에만 구분값으로 노출한다.
@@ -1065,11 +1082,8 @@ export default function LeadsBoardClient() {
     setLoading(true)
     try {
       const data = await adminFetchJsonCached<{ leads: LeadRecord[] }>("/api/admin/leads", undefined, {
-        ttlMs: 0,
+        ...LEADS_BOARD_FETCH_OPTIONS,
         force: options?.force,
-        persist: false,
-        staleIfError: false,
-        staleWhileRevalidateMs: 0,
       })
       setLeads(data.leads)
       setLoadError(null)
