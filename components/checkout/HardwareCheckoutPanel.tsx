@@ -12,11 +12,13 @@ import { Label } from "@/components/ui/label"
 import { CheckoutRequestForm } from "@/components/checkout/CheckoutRequestForm"
 import {
   HARDWARE_CATALOG,
+  HARDWARE_INSTALL_NOTE,
   HARDWARE_ORDER_NOTE,
   HARDWARE_QTY_MAX,
   HARDWARE_QTY_MIN,
   buildHardwareRequestItems,
   clampHardwareQty,
+  countInstallRequiredUnits,
   computeHardwareTotalKrw,
   countHardwareUnits,
   createEmptyHardwareQuantities,
@@ -187,6 +189,8 @@ export function HardwareCheckoutPanel() {
   const totalKrw = useMemo(() => computeHardwareTotalKrw(quantities), [quantities])
   const unitCount = useMemo(() => countHardwareUnits(quantities), [quantities])
   const requestItems = useMemo(() => buildHardwareRequestItems(quantities), [quantities])
+  // 설치가 따로 필요한 대수(전자칠판 단품). 패키지는 벽걸이를 이미 포함해 세지 않는다.
+  const installUnitCount = useMemo(() => countInstallRequiredUnits(quantities), [quantities])
   const hasSelection = requestItems.length > 0
 
   function setQty(sku: string, next: number) {
@@ -286,6 +290,11 @@ export function HardwareCheckoutPanel() {
           <p className="mt-3 text-[11px] leading-relaxed text-[#7C8A83]">
             <span className="text-[#084734]">*</span> {HARDWARE_ORDER_NOTE}
           </p>
+          {installUnitCount > 0 ? (
+            <p className="mt-1.5 text-[11px] leading-relaxed text-[#7C8A83]">
+              <span className="text-[#084734]">*</span> {HARDWARE_INSTALL_NOTE}
+            </p>
+          ) : null}
         </div>
 
         <div className="rounded-2xl border border-black/[0.08] bg-white p-6">
@@ -398,6 +407,8 @@ export function HardwareCheckoutPanel() {
         summaryValue={formatHardwareKrw(totalKrw)}
         summaryNote={HARDWARE_ORDER_NOTE}
         initialContact={buyer}
+        hardwareQuantities={quantities}
+        installUnitCount={installUnitCount}
       />
     </div>
   )
