@@ -6,6 +6,10 @@ import {
   isKoreaScopedExternalRecord,
 } from "@/lib/admin-crm-scope"
 import {
+  EXTERNAL_CRM_SNAPSHOT_OBJECT_KEYS,
+  getExternalCrmLatestSyncedAt,
+} from "@/lib/external-crm/latest-synced-at"
+import {
   getExcludedXiaoshouyiOwnerIds,
   getXiaoshouyiOwnerNameMap,
   resolveOwnerName,
@@ -495,12 +499,12 @@ async function computeNeoCrmTeamReport(input: {
       .gte("created_at", windowStartIso)
       .lt("created_at", startIso),
     sb.from("leads").select("id", { count: "exact", head: true }),
-    sb
-      .from("external_crm_records")
-      .select("synced_at")
-      .eq("source_system", "xiaoshouyi")
-      .order("synced_at", { ascending: false })
-      .limit(1),
+    // 최신 동기화 시각: source_system 만 건 테이블 전체 synced_at 정렬(2.4s) 대신
+    // 객체 키별 인덱스 프로브(1.4ms)의 최댓값 — 같은 행 집합이라 값은 동일하다.
+    getExternalCrmLatestSyncedAt(sb, {
+      sourceSystem: "xiaoshouyi",
+      objectApiKeys: EXTERNAL_CRM_SNAPSHOT_OBJECT_KEYS,
+    }),
     getXiaoshouyiOwnerNameMap(sb),
     excludedOwnerIdsPromise,
   ])
@@ -639,7 +643,7 @@ async function computeNeoCrmTeamReport(input: {
   const accountActiveInPeriod = accountWindow.filter((row) => isCurrent(row.occurred_at)).length
   const accountActivePrevious = accountWindow.filter((row) => isPrevPace(row.occurred_at)).length
 
-  const latestRow = latestResult.error ? null : latestResult.data?.[0]
+  const latestSyncedAt = latestResult.error ? null : latestResult.latestSyncedAt
   const fx = await getFxRates()
   const usdCnyRate = fx.usdKrw / fx.cnyKrw
 
@@ -647,7 +651,7 @@ async function computeNeoCrmTeamReport(input: {
     ok: true,
     error: null,
     usdCnyRate,
-    latestSyncedAt: latestRow && typeof latestRow.synced_at === "string" ? latestRow.synced_at : null,
+    latestSyncedAt,
     granularity,
     offset,
     period: {

@@ -6,6 +6,8 @@ import {
 } from "@/lib/admin-crm-duplicate-preflight"
 import { getNeoCrmTeamReport } from "@/lib/admin-crm-neo"
 import { getCrmSchemaContractReadiness } from "@/lib/admin-crm-schema-contract"
+import { EXTERNAL_CRM_SNAPSHOT_OBJECT_KEYS } from "@/lib/external-crm/latest-synced-at"
+import { getExternalCrmObjectSnapshotTotals } from "@/lib/external-crm/object-snapshot"
 import { getXiaoshouyiSyncPreflight, getXiaoshouyiSyncSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-sync"
 import { getXiaoshouyiWriteSchemaReadiness } from "@/lib/external-crm/xiaoshouyi-write"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -169,18 +171,6 @@ type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>
 
 const SOURCE_LINK_STATUSES = ["confirmed", "candidate", "rejected", "stale"] as const
 const WRITE_REQUEST_STATUSES = ["draft", "approved", "sent", "failed", "succeeded", "cancelled"] as const
-const EXTERNAL_CRM_OVERVIEW_OBJECTS = [
-  "User",
-  "account",
-  "contact",
-  "opportunity",
-  "ShroffAccount__c",
-  "Collection__c",
-  "SalesPerformance__c",
-  "CollectionPlan__c",
-  "FinancialInformation__c",
-  "ResourceInformation__c",
-] as const
 const BUSINESS_QUERY_LIMIT = 5000
 const RECENT_BUSINESS_LOG_LIMIT = 12
 const RECENT_ACTIVITY_DAYS = 7
@@ -1079,28 +1069,14 @@ async function getWriteQueueCounts(sb: SupabaseAdminClient) {
 }
 
 async function getExternalSnapshotOverview(sb: SupabaseAdminClient): Promise<AdminCrmOverview["externalSnapshots"]> {
-  // P4: 개요는 객체별 합계·최댓값만 쓰므로 3×N 라운드트립을 4개 쿼리로 합친다(의미 동일).
-  const objectKeys = [...EXTERNAL_CRM_OVERVIEW_OBJECTS]
-  const [activeCountResult, staleCountResult, latestSyncedResult, latestRunResult] = await Promise.all([
-    sb
-      .from("external_crm_records")
-      .select("id", { count: "exact", head: true })
-      .eq("source_system", "xiaoshouyi")
-      .in("object_api_key", objectKeys)
-      .eq("is_stale", false),
-    sb
-      .from("external_crm_records")
-      .select("id", { count: "exact", head: true })
-      .eq("source_system", "xiaoshouyi")
-      .in("object_api_key", objectKeys)
-      .eq("is_stale", true),
-    sb
-      .from("external_crm_records")
-      .select("synced_at")
-      .eq("source_system", "xiaoshouyi")
-      .in("object_api_key", objectKeys)
-      .order("synced_at", { ascending: false })
-      .limit(1),
+  // 개요는 객체별 합계·최댓값만 쓴다. external_crm_records 를 세 번 훑던 집계(활성 head count ·
+  // stale head count · synced_at 정렬 — 합쳐 84K행 스캔 3회, ≈4.7s)를 집계 뷰 1회 읽기로 바꾸고,
+  // 뷰가 없으면 헬퍼가 이전과 같은 의미로 폴백한다. external_crm_sync_runs 조회는 그대로다.
+  const [totalsResult, latestRunResult] = await Promise.all([
+    getExternalCrmObjectSnapshotTotals(sb, {
+      sourceSystem: "xiaoshouyi",
+      objectApiKeys: EXTERNAL_CRM_SNAPSHOT_OBJECT_KEYS,
+    }),
     sb
       .from("external_crm_sync_runs")
       .select("status, object_api_key, finished_at, started_at, error")
@@ -1114,22 +1090,16 @@ async function getExternalSnapshotOverview(sb: SupabaseAdminClient): Promise<Adm
   const latestRunError = latestRun && typeof latestRun.error === "string" && latestRun.error.trim()
     ? latestRun.error.trim()
     : null
-  const firstCountError = firstError([
-    activeCountResult.error,
-    staleCountResult.error,
-    latestSyncedResult.error,
-    latestRunResult.error,
-  ])
-  const latestSyncedRow = latestSyncedResult.error ? null : latestSyncedResult.data?.[0]
+  const firstCountError = firstError([totalsResult.error, latestRunResult.error])
   const latestSyncedAt = maxDate([
     latestRun && typeof latestRun.finished_at === "string" ? latestRun.finished_at : null,
-    latestSyncedRow && typeof latestSyncedRow.synced_at === "string" ? latestSyncedRow.synced_at : null,
+    totalsResult.latestSyncedAt,
   ])
 
   return {
     ok: !firstCountError && !latestRunFailed,
-    recordCount: activeCountResult.error ? 0 : activeCountResult.count ?? 0,
-    staleCount: staleCountResult.error ? 0 : staleCountResult.count ?? 0,
+    recordCount: totalsResult.activeCount,
+    staleCount: totalsResult.staleCount,
     latestSyncedAt,
     latestRunStatus: latestRun && typeof latestRun.status === "string" ? latestRun.status : null,
     latestRunObject: latestRun && typeof latestRun.object_api_key === "string" ? latestRun.object_api_key : null,
