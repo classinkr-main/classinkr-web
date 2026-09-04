@@ -16,8 +16,11 @@ describe("CRM matching backend scalability contract", () => {
   })
 
   it("shares one bounded snapshot and treats critical truncation as failure rather than zero", () => {
-    expect(repository).toContain("const MATCHING_SNAPSHOT_TTL_MS = 30_000")
-    expect(repository).toContain("matchingSnapshotMemo")
+    // 30초 unstable_cache(admin-crm-matching-snapshot 태그)가 인스턴스 모듈 메모를 대체한다 —
+    // 콜드 인스턴스에서도 인스턴스 간 공유되는 단일 스냅샷이라는 성질은 그대로다.
+    expect(repository).toContain("const MATCHING_SNAPSHOT_REVALIDATE_SECONDS = 30")
+    expect(repository).toContain("ADMIN_CRM_MATCHING_SNAPSHOT_CACHE_TAG")
+    expect(repository).toContain("getCachedAdminCrmMatchingSnapshot = unstable_cache(")
     expect(repository).toContain("if (sheetResult.truncated) throw new Error")
     expect(repository).toContain("if (linksResult.truncated) throw new Error")
   })

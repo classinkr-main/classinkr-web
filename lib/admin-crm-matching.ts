@@ -1,5 +1,7 @@
 import "server-only"
 
+import { unstable_cache, revalidateTag } from "next/cache"
+
 import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import {
   classifyCrmSourceLinkReviewValidation,
@@ -147,11 +149,14 @@ const SHEET_INACTIVE_PATTERN = /취소|해지|드랍|드롭|중단|보류|cancel
 const SOURCE_SYSTEMS: CrmMatchingSourceSystem[] = ["branch_rev_sheet", "xiaoshouyi", "lead"]
 const MATCHING_PAGE_DEFAULT = 50
 const MATCHING_PAGE_MAX = 100
-const MATCHING_SNAPSHOT_TTL_MS = 30_000
+const MATCHING_SNAPSHOT_REVALIDATE_SECONDS = 30
 const MATCHING_SOURCE_ROW_LIMIT = 50_000
 const MATCHING_LOOKUP_ROW_LIMIT = 20_000
 
-let matchingSnapshotMemo: { expiresAt: number; promise: Promise<AdminCrmMatchingSnapshot> } | null = null
+// getAdminCrmMatchingInbox가 쓰는 unstable_cache 태그(하단 getCachedAdminCrmMatchingSnapshot).
+// 낮은 우선순위 레버(T4) — Vercel Fluid 인스턴스가 콜드일 때마다 비어 있던 인스턴스 모듈
+// 메모(matchingSnapshotMemo, 30초 TTL)를 대체한다.
+export const ADMIN_CRM_MATCHING_SNAPSHOT_CACHE_TAG = "admin-crm-matching-snapshot"
 
 function emptyPagedResult<T>(): SupabasePagedResult<T> {
   return { data: [], error: null, count: 0, truncated: false, pages: 0 }
@@ -792,18 +797,29 @@ export function paginateAdminCrmMatchingInbox(
   }
 }
 
+// 9-테이블 스냅샷을 unstable_cache(30초)로 감싼다. buildAdminCrmMatchingSnapshot는 요청 무관
+// 서비스 롤 클라이언트(createSupabaseAdminClient)만 쓰는 순수 함수라 캐시 안에서 안전하다
+// (lib/admin-crm-overview.ts·lib/admin-crm-revenue.ts와 동일 논리). 예전 인스턴스 모듈
+// 메모(matchingSnapshotMemo)는 실패한 빌드를 자체적으로 캐시에서 지웠는데, unstable_cache는
+// throw한 호출을 애초에 캐시에 쓰지 않으므로(성공 값만 저장) 별도 처리가 필요 없다.
+const getCachedAdminCrmMatchingSnapshot = unstable_cache(
+  buildAdminCrmMatchingSnapshot,
+  [ADMIN_CRM_MATCHING_SNAPSHOT_CACHE_TAG],
+  { revalidate: MATCHING_SNAPSHOT_REVALIDATE_SECONDS, tags: [ADMIN_CRM_MATCHING_SNAPSHOT_CACHE_TAG] }
+)
+
 async function getAdminCrmMatchingSnapshot(fresh: boolean) {
-  if (fresh) matchingSnapshotMemo = null
-  if (matchingSnapshotMemo && matchingSnapshotMemo.expiresAt > Date.now()) {
-    return matchingSnapshotMemo.promise
+  if (fresh) {
+    const value = await buildAdminCrmMatchingSnapshot()
+    // 새로고침 직후 다음 읽기는 반드시 새 값을 봐야 한다 — T1의 force와 같은 컨벤션:
+    // revalidateTag(tag, { expire: 0 })로 태그를 즉시 하드 만료해 다음
+    // getCachedAdminCrmMatchingSnapshot() 호출이 재계산하게 한다
+    // (docs/active/admin-performance-plan-2026-09-02.md §4.4).
+    revalidateTag(ADMIN_CRM_MATCHING_SNAPSHOT_CACHE_TAG, { expire: 0 })
+    return value
   }
 
-  const promise = buildAdminCrmMatchingSnapshot().catch((error) => {
-    matchingSnapshotMemo = null
-    throw error
-  })
-  matchingSnapshotMemo = { expiresAt: Date.now() + MATCHING_SNAPSHOT_TTL_MS, promise }
-  return promise
+  return getCachedAdminCrmMatchingSnapshot()
 }
 
 export async function getAdminCrmMatchingInbox(

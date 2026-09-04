@@ -1,6 +1,9 @@
 import "server-only"
 
+import { unstable_cache, revalidateTag } from "next/cache"
+
 import { getNeoCrmCustomers, type NeoCrmCustomerRow } from "@/lib/admin-crm-customers-neo"
+import { ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
 import {
   buildLeadPriorityItem,
   buildNeoAccountPriorityItem,
@@ -213,21 +216,31 @@ export function selectVisiblePriorityItems(
   return items.filter((item) => selectedIds.has(item.id)).slice(0, limit)
 }
 
-// ── 소스 스냅샷 60초 모듈 캐시 (레버 05) ────────────────────────────────────
+// ── 소스 스냅샷 Data Cache (레버 05 → 콜드 인스턴스 대응 승격) ──────────────
 // CRM 홈 필터·담당자 토글마다 leads+NEO+할일 200건+참여요약+쇼룸 ICS를 매번
 // 전량 재수집했다(실측 병목). 여기서 캐시하는 건 "소스 수집" 결과뿐이다 — 점수
 // 계산(buildXPriorityItem)·필터·정렬은 이 아래에서 요청마다 다시 실행되며 그때의
 // now를 쓰므로, 캐시가 최대 60초 묵어도 점수·버킷 판정 자체는 staleness가 없다
-// (묵는 건 원본 데이터뿐). 선례: lib/repositories/crm-unified-customers.ts의
-// sourceSnapshotCache/SOURCE_SNAPSHOT_TTL_MS 구조를 그대로 따른다.
+// (묵는 건 원본 데이터뿐). 선례: lib/repositories/crm-unified-customers.ts와 같은 구조.
+//
+// 예전엔 인스턴스 모듈 메모(sourceSnapshotCache + sourceSnapshotInFlight +
+// sourceSnapshotGeneration, 60초 TTL)였다 — Vercel Fluid 인스턴스가 콜드일 때마다
+// 비어 있어 매 요청이 전량 재수집을 물었다. unstable_cache(Data Cache)는 인스턴스
+// 간 공유되고 Next 16에서 stale-while-revalidate라 콜드 인스턴스에서도 다른 인스턴스가
+// 데운 값을 즉시 돌려준다.
 // - 3개 필수 소스가 전부 성공했을 때만 저장한다(complete) — 부분 실패 스냅샷을
-//   60초 고정하지 않고 다음 요청이 즉시 재시도한다(실패 캐시 금지).
+//   60초 고정하지 않고 다음 요청이 즉시 재시도한다(실패 캐시 금지). unstable_cache는
+//   throw한 호출을 캐시에 쓰지 않으므로, incomplete면 여기서 던져 이 성질을 지킨다.
 // - 참여 신호·데모 일정은 원래도 보조 지표라 실패해도 경고 없이 빈 값으로 빠지며,
 //   complete 판정에도 넣지 않는다(원본 동작 유지).
 // - options.now가 주어진 호출(테스트·고정 시각)은 캐시를 읽지도 쓰지도 않는다.
 // - 이 파일에는 쓰기 경로가 없다. 대신 소스 모듈의 쓰기 알림을 구독해(파일 하단)
-//   할 일 완료·리드 변경·컨택 로그 직후 스냅샷을 버린다 — TTL만 믿으면 이미 끝낸
+//   할 일 완료·리드 변경·컨택 로그 직후 태그를 SWR 무효화한다 — TTL만 믿으면 이미 끝낸
 //   할 일이 "오늘 전화" 패널에 최대 60초 되살아난다.
+// - "무효화 시점 이전에 시작된 수집이 뒤늦게 캐시를 되채우는" 구 generation 가드는
+//   캐시 저장 여부를 이 파일이 더 이상 직접 결정하지 않으므로(unstable_cache가 대신함)
+//   제거했다. 남는 차이는 "완전히 빈 캐시에 두 요청이 동시에 도착하는" 드문 경합에서
+//   중복 계산이 한 번 더 일어날 수 있다는 것뿐이고, 하루 수십 건 트래픽에서는 감수할 만하다.
 interface CrmPrioritySourceSnapshot {
   leads: LeadRecord[]
   leadsOk: boolean
@@ -241,43 +254,41 @@ interface CrmPrioritySourceSnapshot {
   complete: boolean
 }
 
-let sourceSnapshotCache: { at: number; value: CrmPrioritySourceSnapshot } | null = null
-let sourceSnapshotInFlight: Promise<CrmPrioritySourceSnapshot> | null = null
-// 무효화 시점 이전에 시작된 수집이 뒤늦게 캐시를 되채우는 걸 막는 세대 표식.
-let sourceSnapshotGeneration = 0
-const SOURCE_SNAPSHOT_TTL_MS = 60_000
+// 부분 실패 스냅샷을 감싸 unstable_cache가 캐시하지 않고 던지게 하되, 호출부는 이 값을
+// 그대로 반환할 수 있도록 스냅샷 자체를 실어 나른다(에러 텍스트만 던지면 값이 사라진다).
+class IncompleteCrmPrioritySnapshotError extends Error {
+  constructor(readonly snapshot: CrmPrioritySourceSnapshot) {
+    super("crm priority queue snapshot incomplete; skip Data Cache write")
+  }
+}
+
+const getCachedSourceSnapshot = unstable_cache(
+  async () => {
+    const snapshot = await loadSourceSnapshot()
+    if (!snapshot.complete) throw new IncompleteCrmPrioritySnapshotError(snapshot)
+    return snapshot
+  },
+  [ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG],
+  { revalidate: 60, tags: [ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG] }
+)
 
 /**
- * 소스 스냅샷을 즉시 버린다. 의존성 없이 모듈 캐시만 만지므로 어느 쓰기 경로에서
- * 불러도 안전하다(파일 하단에서 리드·할 일·컨택 로그 쓰기에 구독으로 연결한다).
+ * 소스 스냅샷 태그를 SWR로 무효화한다. 의존성 없이 next/cache만 만지므로 어느 쓰기
+ * 경로에서 불러도 안전하다(파일 하단에서 리드·할 일·컨택 로그 쓰기에 구독으로 연결한다).
  */
 export function invalidateCrmPrioritySourceSnapshot() {
-  sourceSnapshotGeneration += 1
-  sourceSnapshotCache = null
-  sourceSnapshotInFlight = null
+  revalidateTag(ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG, "max")
 }
 
 async function getSourceSnapshot(bypassCache: boolean): Promise<CrmPrioritySourceSnapshot> {
   if (bypassCache) return loadSourceSnapshot()
 
-  const cached = sourceSnapshotCache
-  if (cached && Date.now() - cached.at < SOURCE_SNAPSHOT_TTL_MS) return cached.value
-  if (sourceSnapshotInFlight) return sourceSnapshotInFlight
-
-  const generation = sourceSnapshotGeneration
-  const request = loadSourceSnapshot()
-    .then((value) => {
-      // 수집 도중 쓰기가 들어왔다면 이 결과는 이미 낡았다 — 반환만 하고 캐시하지 않는다.
-      if (value.complete && generation === sourceSnapshotGeneration) {
-        sourceSnapshotCache = { at: Date.now(), value }
-      }
-      return value
-    })
-    .finally(() => {
-      if (sourceSnapshotInFlight === request) sourceSnapshotInFlight = null
-    })
-  sourceSnapshotInFlight = request
-  return request
+  try {
+    return await getCachedSourceSnapshot()
+  } catch (error) {
+    if (error instanceof IncompleteCrmPrioritySnapshotError) return error.snapshot
+    throw error
+  }
 }
 
 async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {

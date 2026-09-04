@@ -8,6 +8,7 @@
 import "server-only";
 
 import { revalidateTag } from "next/cache";
+import { ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG } from "@/lib/admin/crm/cache-tags";
 import { summarizeLeadResponseStatus } from "@/lib/crm/lead-response-status";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { Lead, LeadInsert, LeadUpdate } from "@/lib/supabase/database.types";
@@ -89,6 +90,12 @@ function invalidateLeadReadCaches() {
   // Overview는 요청자 쿠키와 무관한 서비스 롤 집계라 서버 공용 캐시를 쓴다.
   // 리드 쓰기 직후에는 다음 읽기가 반드시 새 값을 보도록 즉시 만료한다.
   revalidateTag(ADMIN_LEADS_OVERVIEW_CACHE_TAG, { expire: 0 });
+  // 리드는 crm-unified-customers.ts 소스 스냅샷(unstable_cache)의 입력이기도 하다. 그
+  // 스냅샷은 이 리포지토리를 import해 쓰므로(순환 방지) 여기서 직접 구독을 걸 수 없어
+  // (onLeadsMutated 같은 리스너 대신) 태그를 바로 SWR 무효화한다 — 쓰기 직후 클라이언트가
+  // 자체 mutationScopeAt으로 재조회하므로 "max"(하드 만료 아님)가 맞는 톤이다
+  // (docs/active/admin-performance-plan-2026-09-02.md §4.4).
+  revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max");
   leadRowsMemo.clear();
   for (const listener of leadMutationListeners) listener();
 }
