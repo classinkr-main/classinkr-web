@@ -28,6 +28,14 @@ vi.mock("@/lib/supabase/admin", () => ({
     throw new Error("no supabase in tests")
   }),
 }))
+// calendar-data.ts가 월별 이벤트 조립을 unstable_cache로 감싸고, 그 안에서
+// getPublicEventsAsCalendarEvents(그 자체도 unstable_cache)를 부른다(2026-09-04) — 이 중첩
+// 호출은 next/cache를 목킹하지 않으면 실제 Next 런타임 밖(vitest)에서 "incrementalCache
+// missing"으로 던진다. 이 파일은 캐싱 자체가 아니라 소스 병합을 검증하므로 그대로 통과시킨다
+// (캐싱 배선 자체는 tests/admin/calendar-events-cache.test.ts가 고정).
+vi.mock("next/cache", () => ({
+  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
+}))
 
 import { SOURCE_OPTIONS, getSourceColor } from "@/components/admin/calendar/event-style"
 import type { CalendarEvent } from "@/lib/calendar-data"
