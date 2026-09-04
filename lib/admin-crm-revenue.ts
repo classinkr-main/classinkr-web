@@ -1,6 +1,7 @@
 import "server-only"
 
 import { unstable_cache } from "next/cache"
+import { shareInFlight } from "@/lib/server/share-in-flight"
 
 import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -1553,7 +1554,8 @@ async function assembleAdminCrmRevenueDashboard(): Promise<CrmRevenueDashboard> 
 // months로 좁히는 건 이 아래 deriveRevenueDashboardForMonths가 캐시 밖에서 순수 슬라이스로
 // 처리한다 — T1/T2와 같은 "인자 없는" unstable_cache 패턴으로 수렴시킨 것이 수정이다.
 const getCachedAdminCrmRevenueDashboard = unstable_cache(
-  assembleAdminCrmRevenueDashboard,
+  // 같은 인스턴스의 동시 미스는 shareInFlight 로 한 번만 조립한다(14-테이블 병렬 스캔).
+  () => shareInFlight(ADMIN_CRM_REVENUE_CACHE_TAG, assembleAdminCrmRevenueDashboard),
   [ADMIN_CRM_REVENUE_CACHE_TAG],
   { revalidate: ADMIN_CRM_REVENUE_REVALIDATE_SECONDS, tags: [ADMIN_CRM_REVENUE_CACHE_TAG] },
 )

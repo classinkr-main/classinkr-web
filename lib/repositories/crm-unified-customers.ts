@@ -1,6 +1,7 @@
 import "server-only"
 
 import { unstable_cache, revalidateTag } from "next/cache"
+import { shareInFlight } from "@/lib/server/share-in-flight"
 
 import { getNeoCrmCustomers } from "@/lib/admin-crm-customers-neo"
 import { ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
@@ -396,7 +397,11 @@ class IncompleteCrmUnifiedSnapshotError extends Error {
 
 const getCachedSourceSnapshot = unstable_cache(
   async () => {
-    const snapshot = await loadSourceSnapshot(new Date())
+    // customers/unified 와 health-distribution 이 같은 콜드 인스턴스에서 동시에 미스하면
+    // 스냅샷을 두 번 수집한다 — shareInFlight 로 한 번만(구 in-flight promise 공유의 복원).
+    const snapshot = await shareInFlight(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, () =>
+      loadSourceSnapshot(new Date())
+    )
     if (!snapshot.complete) throw new IncompleteCrmUnifiedSnapshotError(snapshot)
     return snapshot
   },

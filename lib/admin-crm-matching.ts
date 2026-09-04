@@ -1,6 +1,7 @@
 import "server-only"
 
 import { unstable_cache, revalidateTag } from "next/cache"
+import { shareInFlight } from "@/lib/server/share-in-flight"
 
 import { getBranchRevSourceRecordKey, isPlaceholderCrmName } from "@/lib/crm-source-linking"
 import {
@@ -803,7 +804,8 @@ export function paginateAdminCrmMatchingInbox(
 // 메모(matchingSnapshotMemo)는 실패한 빌드를 자체적으로 캐시에서 지웠는데, unstable_cache는
 // throw한 호출을 애초에 캐시에 쓰지 않으므로(성공 값만 저장) 별도 처리가 필요 없다.
 const getCachedAdminCrmMatchingSnapshot = unstable_cache(
-  buildAdminCrmMatchingSnapshot,
+  // 같은 인스턴스의 동시 미스는 shareInFlight 로 한 번만 계산한다(9-테이블 스냅샷).
+  () => shareInFlight(ADMIN_CRM_MATCHING_SNAPSHOT_CACHE_TAG, buildAdminCrmMatchingSnapshot),
   [ADMIN_CRM_MATCHING_SNAPSHOT_CACHE_TAG],
   { revalidate: MATCHING_SNAPSHOT_REVALIDATE_SECONDS, tags: [ADMIN_CRM_MATCHING_SNAPSHOT_CACHE_TAG] }
 )

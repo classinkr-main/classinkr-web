@@ -1,6 +1,7 @@
 import "server-only"
 
 import { unstable_cache, revalidateTag } from "next/cache"
+import { shareInFlight } from "@/lib/server/share-in-flight"
 
 import { getNeoCrmCustomers, type NeoCrmCustomerRow } from "@/lib/admin-crm-customers-neo"
 import { ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
@@ -264,7 +265,10 @@ class IncompleteCrmPrioritySnapshotError extends Error {
 
 const getCachedSourceSnapshot = unstable_cache(
   async () => {
-    const snapshot = await loadSourceSnapshot()
+    // 같은 인스턴스의 동시 미스(홈 첫 화면 + 예열)는 shareInFlight 로 한 번만 수집한다.
+    const snapshot = await shareInFlight(ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG, () =>
+      loadSourceSnapshot()
+    )
     if (!snapshot.complete) throw new IncompleteCrmPrioritySnapshotError(snapshot)
     return snapshot
   },

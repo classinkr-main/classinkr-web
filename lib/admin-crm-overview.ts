@@ -1,6 +1,7 @@
 import "server-only"
 
 import { unstable_cache, revalidateTag } from "next/cache"
+import { shareInFlight } from "@/lib/server/share-in-flight"
 
 import {
   getCachedCrmDuplicatePreflightReport,
@@ -1310,7 +1311,9 @@ async function buildAdminCrmOverview(options: { force?: boolean } = {}): Promise
 // cookies()/headers()를 읽지 않는 순수 함수라 unstable_cache 안에서 안전하다(lib/admin-crm-
 // revenue.ts:1534, lib/admin/overview/os-summary.ts 동일 논리). 인자 없이 호출하는 이 캐시된
 // 경로는 options.force가 항상 undefined이므로 "비-force" 계산만 감싼다.
-const getCachedAdminCrmOverview = unstable_cache(buildAdminCrmOverview, ["admin-crm-overview"], {
+// 같은 인스턴스의 동시 미스·재검증(hover FULL 프리페치 + API 예열, RSC 프리페치 + 라우트)은
+// shareInFlight 로 한 번만 계산한다 — unstable_cache 는 인스턴스 안 동시 호출을 합치지 않는다.
+const getCachedAdminCrmOverview = unstable_cache(() => shareInFlight("admin-crm-overview", () => buildAdminCrmOverview()), ["admin-crm-overview"], {
   revalidate: 120,
   tags: [ADMIN_CRM_OVERVIEW_CACHE_TAG],
 })
