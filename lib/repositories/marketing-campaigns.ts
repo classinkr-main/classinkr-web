@@ -13,7 +13,9 @@
  */
 
 import "server-only"
+import { revalidateTag } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { MARKETING_PERF_CACHE_TAG } from "@/lib/repositories/marketing"
 import type {
   MarketingCampaign,
   CampaignLink,
@@ -126,6 +128,9 @@ export async function createCampaign(input: CreateCampaignInput): Promise<Market
     .select()
     .single()
   if (error) throw new Error(`[marketing-campaigns] 캠페인 생성 실패: ${error.message}`)
+  // perf 대시보드 스코어보드는 캠페인 개체 목록(listCampaigns)을 그대로 반영한다 — 새 캠페인이
+  // 최대 60초(getCachedMarketingPerf) 동안 안 보이지 않도록 즉시 무효화한다.
+  revalidateTag(MARKETING_PERF_CACHE_TAG, "max")
   return rowToCampaign(data)
 }
 
@@ -151,6 +156,7 @@ export async function updateCampaign(
     .select()
     .single()
   if (error) throw new Error(`[marketing-campaigns] 캠페인 수정 실패: ${error.message}`)
+  revalidateTag(MARKETING_PERF_CACHE_TAG, "max")
   return rowToCampaign(data)
 }
 
@@ -158,6 +164,7 @@ export async function deleteCampaign(id: string): Promise<void> {
   // campaign_links 는 FK ON DELETE CASCADE 로 함께 제거된다.
   const { error } = await sb().from("marketing_campaigns").delete().eq("id", id)
   if (error) throw new Error(`[marketing-campaigns] 캠페인 삭제 실패: ${error.message}`)
+  revalidateTag(MARKETING_PERF_CACHE_TAG, "max")
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -183,6 +190,9 @@ export async function addLink(
     .select()
     .single()
   if (error) throw new Error(`[marketing-campaigns] 링크 추가 실패: ${error.message}`)
+  // 스코어보드 행의 spend/leads/pacing 은 링크된 Meta 캠페인을 통해서만 나온다 — 링크 추가는
+  // perf 수치 자체를 바꾸므로(캠페인 개체 메타데이터만 바뀌는 rename 등과 다름) 반드시 무효화.
+  revalidateTag(MARKETING_PERF_CACHE_TAG, "max")
   return rowToLink(data)
 }
 
@@ -194,4 +204,5 @@ export async function removeLink(campaignId: string, linkId: string): Promise<vo
     .eq("id", linkId)
     .eq("campaign_id", campaignId)
   if (error) throw new Error(`[marketing-campaigns] 링크 해제 실패: ${error.message}`)
+  revalidateTag(MARKETING_PERF_CACHE_TAG, "max")
 }

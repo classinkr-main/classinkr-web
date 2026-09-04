@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { unstable_cache } from "next/cache"
 
 import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
@@ -12,6 +13,7 @@ import {
   type SourceTiming,
 } from "@/lib/admin-calendar/health"
 import { readSourceCacheStats } from "@/lib/admin-calendar/source-cache"
+import { ADMIN_CALENDAR_HEALTH_CACHE_TAG } from "@/lib/admin-calendar/cache-tags"
 import { getBusinessDateParts } from "@/lib/business-time"
 import {
   getPublicEventsAsCalendarEvents,
@@ -132,126 +134,145 @@ function timingFor(source: EventSource, durationMs: number): SourceTiming {
   }
 }
 
-export async function GET(req: NextRequest) {
-  const err = await verifyAdmin(req)
-  if (err) return err
+/**
+ * 캐시 가능한 8소스(팀원 개인 캘린더 접근 프로브 제외) 조립 — 자격증명에 종속된 소스는
+ * source-cache.ts의 "자격증명에 종속된 소스" 규약과 같은 이유로 여기 들어가지 않는다
+ * (아래 GET에서 매 요청 새로 조회). timing(ageMs/degraded/durationMs)까지 이 안에서
+ * 확정한다 — 캐시가 히트하면 계산 당시의 실측이 최대 120초간 그대로 보인다(체크한 시각도
+ * 함께 얼어 있다는 뜻이며, 이 라우트를 통째로 캐시하는 이상 감내하는 트레이드오프다).
+ */
+async function assembleCacheableCalendarHealth(): Promise<SourceHealth[]> {
+  const { date: today, month: todayMonth } = getBusinessDateParts()
+  const months = monthWindow(todayMonth, FEED_LOOKBACK_MONTHS, 1)
 
-  try {
-    const { date: today, month: todayMonth } = getBusinessDateParts()
-    const months = monthWindow(todayMonth, FEED_LOOKBACK_MONTHS, 1)
+  const notionDbId = process.env.NOTION_MARKETING_CALENDAR_DB_ID?.trim()
+  const notionHref = notionDbId
+    ? `https://www.notion.so/${notionDbId.replace(/-/g, "")}`
+    : undefined
 
-    const notionDbId = process.env.NOTION_MARKETING_CALENDAR_DB_ID?.trim()
-    const notionHref = notionDbId
-      ? `https://www.notion.so/${notionDbId.replace(/-/g, "")}`
-      : undefined
-
-    const [
-      stored,
-      partner,
-      publicEvents,
-      notionDates,
-      showroomDates,
-      showroomBookings,
-      teamAccess,
-      compass,
-    ] = await Promise.all([
+  const [stored, partner, publicEvents, notionDates, showroomDates, showroomBookings, compass] =
+    await Promise.all([
       timed(summarizeStoredCalendarEvents().catch(() => null)),
       timed(partnerScheduleSummary().catch(() => null)),
       timed(getPublicEventsAsCalendarEvents().catch(() => null)),
       timed(feedDatesByMonths(getNotionMarketingCalendarEvents, months).catch(() => null)),
       timed(feedDatesByMonths(getShowroomCalendarEvents, months).catch(() => null)),
       timed(summarizeShowroomBookings().catch(() => null)),
-      timed(probeTeamCalendarAccess().catch(() => null)),
       timed(compassCalendarDates(months).catch(() => null)),
     ])
 
-    const sources: SourceHealth[] = [
-      stored.value
-        ? deriveStoredHealth({
-            source: "calendar",
-            count: stored.value.count,
-            lastDate: stored.value.lastDate,
-          })
-        : unknownHealth("calendar"),
-      partner.value
-        ? deriveStoredHealth({
-            source: "partner",
-            count: partner.value.count,
-            lastDate: partner.value.lastDate,
-            href: "/admin/partners",
-          })
-        : unknownHealth("partner"),
-      publicEvents.value
-        ? derivePublicEventsHealth({
-            dates: eventDates(publicEvents.value),
-            today,
-            href: "/admin/events",
-          })
-        : unknownHealth("event"),
-      notionDates.value
-        ? deriveFeedHealth({
-            source: "notion",
-            dates: notionDates.value,
+  const sources: SourceHealth[] = [
+    stored.value
+      ? deriveStoredHealth({
+          source: "calendar",
+          count: stored.value.count,
+          lastDate: stored.value.lastDate,
+        })
+      : unknownHealth("calendar"),
+    partner.value
+      ? deriveStoredHealth({
+          source: "partner",
+          count: partner.value.count,
+          lastDate: partner.value.lastDate,
+          href: "/admin/partners",
+        })
+      : unknownHealth("partner"),
+    publicEvents.value
+      ? derivePublicEventsHealth({
+          dates: eventDates(publicEvents.value),
+          today,
+          href: "/admin/events",
+        })
+      : unknownHealth("event"),
+    notionDates.value
+      ? deriveFeedHealth({
+          source: "notion",
+          dates: notionDates.value,
+          today,
+          lookbackMonths: FEED_LOOKBACK_MONTHS,
+          href: notionHref,
+        })
+      : unknownHealth("notion"),
+    showroomDates.value
+      ? deriveFeedHealth({
+          source: "showroom",
+          dates: showroomDates.value,
+          today,
+          lookbackMonths: FEED_LOOKBACK_MONTHS,
+        })
+      : unknownHealth("showroom"),
+    // 우리 테이블이라 전량 카운트가 가장 싼 진실이다(팀·파트너와 같은 규약).
+    showroomBookings.value
+      ? deriveStoredHealth({
+          source: "showroom_booking",
+          count: showroomBookings.value.count,
+          lastDate: showroomBookings.value.lastDate,
+        })
+      : unknownHealth("showroom_booking"),
+    !compass.value
+      ? unknownHealth("compass_demo")
+      : compass.value.down
+        ? {
+            source: "compass_demo",
+            status: "dead",
+            headline: "Compass 연결 끊김",
+            detail: "브리지 뷰 조회 실패",
+          }
+        : deriveFeedHealth({
+            source: "compass_demo",
+            dates: compass.value.dates,
             today,
             lookbackMonths: FEED_LOOKBACK_MONTHS,
-            href: notionHref,
-          })
-        : unknownHealth("notion"),
-      showroomDates.value
-        ? deriveFeedHealth({
-            source: "showroom",
-            dates: showroomDates.value,
-            today,
-            lookbackMonths: FEED_LOOKBACK_MONTHS,
-          })
-        : unknownHealth("showroom"),
-      // 우리 테이블이라 전량 카운트가 가장 싼 진실이다(팀·파트너와 같은 규약).
-      showroomBookings.value
-        ? deriveStoredHealth({
-            source: "showroom_booking",
-            count: showroomBookings.value.count,
-            lastDate: showroomBookings.value.lastDate,
-          })
-        : unknownHealth("showroom_booking"),
-      teamAccess.value ? deriveTeamAccessHealth(teamAccess.value) : unknownHealth("team_event"),
-      !compass.value
-        ? unknownHealth("compass_demo")
-        : compass.value.down
-          ? {
-              source: "compass_demo",
-              status: "dead",
-              headline: "Compass 연결 끊김",
-              detail: "브리지 뷰 조회 실패",
-            }
-          : deriveFeedHealth({
-              source: "compass_demo",
-              dates: compass.value.dates,
-              today,
-              lookbackMonths: FEED_LOOKBACK_MONTHS,
-            }),
-      { source: "holiday", status: "ok", headline: "자동 제공" },
-    ]
+          }),
+    { source: "holiday", status: "ok", headline: "자동 제공" },
+  ]
 
-    // 판정은 위에서 끝났다 — 아래는 관측치만 얹는다(status/headline 불변).
-    const durationBySource = new Map<EventSource, number>([
-      ["calendar", stored.durationMs],
-      ["partner", partner.durationMs],
-      ["event", publicEvents.durationMs],
-      ["notion", notionDates.durationMs],
-      ["showroom", showroomDates.durationMs],
-      ["showroom_booking", showroomBookings.durationMs],
-      ["team_event", teamAccess.durationMs],
-      ["compass_demo", compass.durationMs],
-      // 공휴일은 이 라우트가 조회하지 않는다(자동 제공) — 캐시 상태만 있으면 함께 싣는다.
-      ["holiday", 0],
+  // 판정은 위에서 끝났다 — 아래는 관측치만 얹는다(status/headline 불변).
+  const durationBySource = new Map<EventSource, number>([
+    ["calendar", stored.durationMs],
+    ["partner", partner.durationMs],
+    ["event", publicEvents.durationMs],
+    ["notion", notionDates.durationMs],
+    ["showroom", showroomDates.durationMs],
+    ["showroom_booking", showroomBookings.durationMs],
+    ["compass_demo", compass.durationMs],
+    // 공휴일은 이 라우트가 조회하지 않는다(자동 제공) — 캐시 상태만 있으면 함께 싣는다.
+    ["holiday", 0],
+  ])
+
+  return sources.map((source) => ({
+    ...source,
+    timing: timingFor(source.source, durationBySource.get(source.source) ?? 0),
+  }))
+}
+
+// 콜드 Fluid 인스턴스 재계산 방지 — 이 라우트는 쿼리 파라미터가 없어 인자·캐시 키도 고정이다.
+const getCachedCalendarHealthCore = unstable_cache(
+  assembleCacheableCalendarHealth,
+  ["admin-calendar-health-core-v1"],
+  { revalidate: 120, tags: [ADMIN_CALENDAR_HEALTH_CACHE_TAG] },
+)
+
+export async function GET(req: NextRequest) {
+  const err = await verifyAdmin(req)
+  if (err) return err
+
+  try {
+    // 팀원 개인 Google 캘린더 접근 프로브는 캐시 밖에서 매 요청 새로 부른다 — 실시간
+    // 연결 상태를 보는 것 자체가 이 소스의 목적이라 120초 지연을 감내할 수 없다.
+    const [cacheableSources, teamAccess] = await Promise.all([
+      getCachedCalendarHealthCore(),
+      timed(probeTeamCalendarAccess().catch(() => null)),
     ])
+
+    const teamEventHealth = teamAccess.value ? deriveTeamAccessHealth(teamAccess.value) : unknownHealth("team_event")
 
     const payload: CalendarHealthPayload = {
       checkedAt: new Date().toISOString(),
-      sources: sources.map((source) => ({
-        ...source,
-        timing: timingFor(source.source, durationBySource.get(source.source) ?? 0),
-      })),
+      sources: [
+        ...cacheableSources,
+        { ...teamEventHealth, timing: timingFor("team_event", teamAccess.durationMs) },
+      ],
     }
     return adminCachedJson(payload)
   } catch (error) {

@@ -2,31 +2,20 @@
 // 마케팅 퍼포먼스 대시보드의 단일 집계 엔드포인트 — 조립은 lib/marketing/perf-assemble.
 
 import { NextRequest, NextResponse } from "next/server"
+import { revalidateTag } from "next/cache"
 import { verifyAdmin } from "@/lib/admin-auth"
-import type { MarketingPerfResponse, PerfPeriodKey } from "@/lib/marketing/perf"
-import { assembleMarketingPerf } from "@/lib/marketing/perf-assemble"
+import type { PerfPeriodKey } from "@/lib/marketing/perf"
+import { getCachedMarketingPerf } from "@/lib/marketing/perf-assemble"
+import { MARKETING_PERF_CACHE_TAG } from "@/lib/repositories/marketing"
 
 const PERIOD_KEYS: readonly PerfPeriodKey[] = ["7d", "30d", "90d", "quarter"]
 
-// 서버 메모 45초 — 같은 period 요청은 조립(DB 5~6콜 + Meta 메모)을 재사용한다.
-// lib/meta/marketing 의 dashboardMemo 패턴 미러: 실패 promise 는 즉시 비운다(남기면
-// 45초 동안 모든 소비처가 같은 에러를 재생한다). 명시 새로고침은 ?fresh=1 로 우회.
-const PERF_MEMO_TTL_MS = 45_000
-const perfMemo = new Map<string, { at: number; promise: Promise<MarketingPerfResponse> }>()
-
-function getMarketingPerf(period: PerfPeriodKey, fresh: boolean): Promise<MarketingPerfResponse> {
-  if (!fresh) {
-    const hit = perfMemo.get(period)
-    if (hit && Date.now() - hit.at < PERF_MEMO_TTL_MS) return hit.promise
-  }
-  const promise = assembleMarketingPerf(period)
-  perfMemo.set(period, { at: Date.now(), promise })
-  promise.catch(() => {
-    if (perfMemo.get(period)?.promise === promise) perfMemo.delete(period)
-  })
-  return promise
-}
-
+// 조립(lib/marketing/perf-assemble.ts의 getCachedMarketingPerf)이 60초 Data Cache를 든다 —
+// 예전 route-local 45초 Map(perfMemo)은 Vercel Fluid 콜드 인스턴스마다 비어 있었고, insights
+// 빌더의 별도 45초 Map과도 캐시를 공유하지 못했다. 이 라우트는 이제 그 캐시된 함수를 그대로
+// 호출하기만 한다 — 실패 시 즉시 비우기(옛 "실패 promise 즉시 비움") 로직도 필요 없다.
+// unstable_cache는 함수가 던지면(reject) 아무 값도 저장하지 않으므로, 다음 호출이 저절로
+// 재시도한다.
 export async function GET(req: NextRequest) {
   const err = await verifyAdmin(req)
   if (err) return err
@@ -38,10 +27,16 @@ export async function GET(req: NextRequest) {
       { status: 400 }
     )
   }
+  const period = rawPeriod as PerfPeriodKey
   const fresh = req.nextUrl.searchParams.get("fresh") === "1"
 
   try {
-    return NextResponse.json(await getMarketingPerf(rawPeriod as PerfPeriodKey, fresh))
+    // fresh=1: 먼저 태그를 하드 만료시킨다({expire:0} — lib/repositories/leads.ts의 쓰기 직후
+    // 즉시 만료 패턴과 동일 프로필). 그 직후 호출하는 getCachedMarketingPerf는 무효화된 항목을
+    // 보고 재계산해 응답하며, 계산한 새 값을 캐시에 다시 채워 넣는다 — 다른 소비처(insights
+    // 빌더 등)도 곧바로 이 새 값을 본다.
+    if (fresh) revalidateTag(MARKETING_PERF_CACHE_TAG, { expire: 0 })
+    return NextResponse.json(await getCachedMarketingPerf(period))
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "perf 집계 실패" },

@@ -12,9 +12,19 @@ type Result = { data: unknown; error: unknown }
 let result: Result
 let builder: ReturnType<typeof makeBuilder>
 const fromSpy = vi.fn(() => builder)
+// vi.mock 팩토리는 호이스트되므로, 팩토리 안에서 참조할 변수는 vi.hoisted로 함께 끌어올린다.
+const { revalidateTag } = vi.hoisted(() => ({ revalidateTag: vi.fn() }))
 
 vi.mock("@/lib/supabase/admin", () => ({
   createSupabaseAdminClient: vi.fn(() => ({ from: fromSpy })),
+}))
+// 쓰기 함수들이 perf 캐시 태그(marketing-perf)를 무효화한다 — 회귀 가드는 아래 각
+// describe 에서 확인한다(2026-09-04, perf 조립을 unstable_cache로 감싼 라운드).
+// MARKETING_PERF_CACHE_TAG를 얻으려 lib/repositories/marketing.ts를 임포트하는데, 그 파일이
+// 자체 getCachedAllCampaigns를 모듈 스코프에서 unstable_cache로 감싸므로 함께 목킹해야 한다.
+vi.mock("next/cache", () => ({
+  revalidateTag,
+  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
 }))
 
 import {
@@ -47,6 +57,7 @@ beforeEach(() => {
   result = { data: null, error: null }
   builder = makeBuilder()
   fromSpy.mockClear()
+  revalidateTag.mockClear()
 })
 
 describe("listCampaigns", () => {
@@ -169,6 +180,8 @@ describe("createCampaign", () => {
     expect(created.channels).toEqual(["sms"])
     expect(created.budget).toBe(500000)
     expect(created.status).toBe("planned")
+    // perf 대시보드 스코어보드가 캠페인 개체 목록을 그대로 반영한다 — 생성 직후 무효화.
+    expect(revalidateTag).toHaveBeenCalledWith("marketing-perf", "max")
   })
 })
 
@@ -197,6 +210,7 @@ describe("updateCampaign", () => {
     expect(fromSpy).toHaveBeenCalledWith("marketing_campaigns")
     expect(builder.update).toHaveBeenCalledWith({ status: "paused", starts_at: "2026-07-05" })
     expect(builder.eq).toHaveBeenCalledWith("id", "camp-1")
+    expect(revalidateTag).toHaveBeenCalledWith("marketing-perf", "max")
   })
 })
 
@@ -207,6 +221,7 @@ describe("deleteCampaign", () => {
     expect(fromSpy).toHaveBeenCalledWith("marketing_campaigns")
     expect(builder.delete).toHaveBeenCalled()
     expect(builder.eq).toHaveBeenCalledWith("id", "camp-1")
+    expect(revalidateTag).toHaveBeenCalledWith("marketing-perf", "max")
   })
 })
 
@@ -237,6 +252,7 @@ describe("addLink", () => {
       refId: "23851234567890",
       createdAt: "2026-07-24T00:00:00Z",
     })
+    expect(revalidateTag).toHaveBeenCalledWith("marketing-perf", "max")
   })
 })
 
@@ -248,5 +264,6 @@ describe("removeLink", () => {
     expect(builder.delete).toHaveBeenCalled()
     expect(builder.eq).toHaveBeenCalledWith("id", "link-7")
     expect(builder.eq).toHaveBeenCalledWith("campaign_id", "camp-1")
+    expect(revalidateTag).toHaveBeenCalledWith("marketing-perf", "max")
   })
 })

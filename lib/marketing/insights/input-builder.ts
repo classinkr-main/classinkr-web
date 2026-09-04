@@ -23,7 +23,7 @@ import {
   buildAnomalyCampaignInputs,
 } from "@/lib/marketing/anomaly-input"
 import { aggregateCompassCreatives } from "@/lib/marketing/compass-creative"
-import { assembleMarketingPerf, kstToday } from "@/lib/marketing/perf-assemble"
+import { getCachedMarketingPerf, kstToday } from "@/lib/marketing/perf-assemble"
 import { shiftDays } from "@/lib/marketing/perf"
 import { listCampaigns } from "@/lib/repositories/marketing-campaigns"
 import {
@@ -197,8 +197,11 @@ export interface MarketingInsightBuild {
 /* ─── 조립 메모(45초) ─────────────────────────────────────────────
  * 브리핑 조회 API 는 "최신 브리핑"과 "현재 이상 배지"를 함께 돌려주는데, force 경로에서는
  * runner 도 같은 입력을 만든다 — 메모가 없으면 한 요청이 같은 조립(perf 집계 + Meta 스냅샷 +
- * 캠페인 목록)을 두 번 한다. perf 라우트의 perfMemo 와 같은 규약: 실패한 promise 는 즉시
- * 비운다(남기면 45초 동안 모든 소비처가 같은 에러를 재생한다).
+ * 캠페인 목록)을 두 번 한다. 실패한 promise 는 즉시 비운다(남기면 45초 동안 모든 소비처가
+ * 같은 에러를 재생한다). 이 메모는 조립 전체(이상 감지·소재 집계 포함)를 덮는 인스턴스
+ * 로컬 캐시이고, 아래 perf 집계 한 단계만은 getCachedMarketingPerf(60초 Data Cache, perf
+ * 라우트와 공유하는 엔트리)를 거친다 — 콜드 인스턴스에서 이 메모가 비어 있어도 perf 부분은
+ * 다른 인스턴스가 이미 데워 둔 값을 즉시 받을 수 있다.
  */
 const BUILD_MEMO_TTL_MS = 45_000
 let buildMemo: { at: number; promise: Promise<MarketingInsightBuild> } | null = null
@@ -225,7 +228,7 @@ async function assembleMarketingInsightBuild(): Promise<MarketingInsightBuild> {
   const loadSince = anomalyLoadSince(today)
 
   const [perf, dailyRows, campaigns] = await Promise.all([
-    assembleMarketingPerf("30d"),
+    getCachedMarketingPerf("30d"),
     // 소스 실패는 섹션 강등(caveat)으로 흡수 — 이상 감지 창이 통째로 사라져도 브리핑은 만든다.
     getMetaInsightsDailyRange(loadSince, today).catch((): MetaInsightsDailyRecord[] | null => null),
     listCampaigns().catch((): CampaignWithLinks[] => []),

@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createHmac } from "crypto"
+import { unstable_cache } from "next/cache"
 
 export class MetaConfigError extends Error {}
 
@@ -742,15 +743,11 @@ export async function updateMetaCampaignStatus(id: string, status: "ACTIVE" | "P
   return metaPost<{ success?: boolean }>(id, { status })
 }
 
-export async function getMetaInstagramDashboard({
-  datePreset = "last_30d",
-  limit = 25,
-}: {
-  datePreset?: string
-  limit?: number
-} = {}): Promise<MetaInstagramDashboard> {
+async function fetchMetaInstagramDashboard(
+  datePreset: string,
+  safeLimit: number,
+): Promise<MetaInstagramDashboard> {
   const igUserId = await resolveInstagramAccountId()
-  const safeLimit = Math.min(Math.max(limit, 1), 50)
 
   const [account, mediaResponse, followerGrowth] = await Promise.all([
     metaGet<MetaInstagramAccountApiRow>(
@@ -810,6 +807,34 @@ export async function getMetaInstagramDashboard({
     followerGrowth,
     summary: summarizeInstagram(media, followerGrowth),
   }
+}
+
+/**
+ * 콜드 Fluid 인스턴스 재계산 방지 — 이전에는 이 함수에 아무 캐시도 없었다(형제 함수
+ * getMetaCampaignDashboard의 45초 dashboardMemo와 달리, Instagram 대시보드는 매 요청
+ * Graph API를 다시 불렀다: 계정 1콜 + 미디어 목록 1콜 + 미디어당 인사이트 콜(최대 limit개) +
+ * 팔로워 성장 1콜). revalidate=300(외부 데이터라 몇 분 단위로도 잘 안 바뀐다 — 캠페인
+ * 대시보드의 45초보다 길게 잡는다). 실패는 캐시하지 않는다 — unstable_cache는 함수가
+ * reject하면 값을 저장하지 않으므로, 기존 모듈 메모가 쓰던 "실패 promise 즉시 비움" 방어
+ * 코드가 여기선 필요 없다(구조적으로 같은 효과).
+ */
+const META_INSTAGRAM_DASHBOARD_CACHE_TAG = "meta-instagram-dashboard"
+
+const getCachedMetaInstagramDashboard = unstable_cache(
+  fetchMetaInstagramDashboard,
+  ["meta-instagram-dashboard-v1"],
+  { revalidate: 300, tags: [META_INSTAGRAM_DASHBOARD_CACHE_TAG] },
+)
+
+export async function getMetaInstagramDashboard({
+  datePreset = "last_30d",
+  limit = 25,
+}: {
+  datePreset?: string
+  limit?: number
+} = {}): Promise<MetaInstagramDashboard> {
+  const safeLimit = Math.min(Math.max(limit, 1), 50)
+  return getCachedMetaInstagramDashboard(datePreset, safeLimit)
 }
 
 /* ─── 일자별 insights (meta_insights_daily 스냅샷용) ─────────── */

@@ -3,7 +3,9 @@
 // RLS admin-only(deny-all) — admin 클라이언트 전용. KRW 0 이상 정수로 정규화.
 
 import "server-only"
+import { revalidateTag } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { MARKETING_PERF_CACHE_TAG } from "@/lib/repositories/marketing"
 import { AD_CHANNELS, type AdChannel } from "@/lib/types/event-metrics"
 
 const sb = () => createSupabaseAdminClient()
@@ -40,5 +42,8 @@ export async function saveChannelBudget(
       { onConflict: "channel" }
     )
   if (error) throw new Error(`[channel-budgets] 저장 실패: ${error.message}`)
+  // perf의 budgetExecutionPct KPI(배정 대비 집행률)가 이 배정을 분모로 쓴다 — 저장 직후
+  // 최대 60초(getCachedMarketingPerf) 동안 옛 배정으로 계산된 집행률이 보이지 않게 무효화.
+  revalidateTag(MARKETING_PERF_CACHE_TAG, "max")
   return getChannelBudgets()
 }

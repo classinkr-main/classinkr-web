@@ -3,7 +3,9 @@
 // RLS admin-only(deny-all) — 반드시 admin(service-role) 클라이언트로만 접근.
 
 import "server-only"
+import { revalidateTag } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { MARKETING_PERF_CACHE_TAG } from "@/lib/repositories/marketing"
 import type { MetaDailyInsightRow } from "@/lib/meta/marketing"
 
 const sb = () => createSupabaseAdminClient()
@@ -66,6 +68,10 @@ export async function upsertMetaInsightsDaily(
       .upsert(payload.slice(i, i + 500), { onConflict: "date,campaign_id" })
     if (error) throw new Error(`[meta-insights-daily] upsert 실패: ${error.message}`)
   }
+  // perf의 spendUsd/cplUsd/daily/scoreboard가 이 스냅샷을 읽는다 — 동기화 직후 최대 60초
+  // (getCachedMarketingPerf) 동안 어제 스냅샷으로 보이지 않도록 무효화한다. 위의 빈 배열
+  // 조기 반환(rows.length === 0)은 쓴 행이 없으므로 여기까지 오지 않는다.
+  revalidateTag(MARKETING_PERF_CACHE_TAG, "max")
   return payload.length
 }
 
