@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useDeferredValue, useState } from "react"
+import { useRouter } from "next/navigation"
+import { useDeferredValue, useEffect, useRef, useState } from "react"
 import {
   AlertTriangle,
   ArrowRight,
@@ -19,12 +20,15 @@ import PartnerFormDialog from "@/components/admin/partners/PartnerFormDialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { adminFetchJson } from "@/lib/admin-client"
+import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 import type { PartnerDataSource, PartnerSummaryInput, PartnerWorkspace } from "@/lib/partners-types"
 
 interface PartnerWorkspacePageClientProps {
   initialWorkspaces: PartnerWorkspace[]
   initialSource: PartnerDataSource
   initialWarning?: string
+  /** 서버(page.tsx)가 initialWorkspaces를 만든 시각(ms epoch). 라우터 캐시 재사용 판정용. */
+  generatedAt?: number
 }
 
 type QueueView =
@@ -210,10 +214,35 @@ export default function PartnerWorkspacePageClient({
   initialWorkspaces,
   initialSource,
   initialWarning,
+  generatedAt,
 }: PartnerWorkspacePageClientProps) {
+  const router = useRouter()
   const [workspaces, setWorkspaces] = useState(initialWorkspaces)
   const [source, setSource] = useState(initialSource)
   const [warning, setWarning] = useState(initialWarning)
+
+  // staleTimes.dynamic(180초) 때문에 이 페이지의 RSC 응답은 탭 재방문 시 클라이언트 라우터
+  // 캐시에서 재사용될 수 있다. 다른 프리페치 페이지는 마운트 시 자체 재페치가 있어 오래된
+  // 시드를 알아서 갱신하지만, 이 화면은 서버 props가 유일한 데이터 경로다. 그래서 재사용된
+  // (10초보다 오래된) payload로 마운트되면 즉시 그리되 한 번 router.refresh()로 서버 렌더를
+  // 다시 받아, 다른 화면에서 바꾼 파트너 상태가 최대 180초 동안 예전 값으로 보이지 않게 한다.
+  const refreshRequestedRef = useRef(false)
+  useEffect(() => {
+    if (refreshRequestedRef.current) return
+    refreshRequestedRef.current = true
+    if (!isPrefetchFresh(generatedAt)) router.refresh()
+  }, [generatedAt, router])
+
+  // router.refresh()로 새 서버 props가 내려오면(generatedAt이 바뀌면) 상태를 그 값으로 맞춘다.
+  // 편집 중인 폼 상태(formOpen·editingWorkspace)는 건드리지 않는다.
+  const appliedGeneratedAtRef = useRef(generatedAt)
+  useEffect(() => {
+    if (generatedAt === appliedGeneratedAtRef.current) return
+    appliedGeneratedAtRef.current = generatedAt
+    setWorkspaces(initialWorkspaces)
+    setSource(initialSource)
+    setWarning(initialWarning)
+  }, [generatedAt, initialWorkspaces, initialSource, initialWarning])
   const [formOpen, setFormOpen] = useState(false)
   const [formError, setFormError] = useState<string>()
   const [saving, setSaving] = useState(false)
