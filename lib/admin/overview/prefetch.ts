@@ -35,6 +35,14 @@ export interface OverviewInitialData {
   leadActionKpis: { unrespondedCount: number; unresponded24hCount: number } | null
   /** 라우트 응답과 같은 객체 — 소스별 health를 포함해야 실패를 0으로 오인하지 않는다. */
   osSummary: OsSummary | null
+  /**
+   * 이 프리페치가 서버에서 만들어진 시각(ms epoch). staleTimes.dynamic(180초)로 클라이언트
+   * 라우터 캐시가 이 RSC 응답을 재사용할 수 있게 되면서, OverviewClient가 받는 initialData가
+   * 실제로는 최대 180초 전에 계산된 값일 수 있다 — lib/admin/prefetch-freshness.ts의
+   * isPrefetchFresh가 이 값으로 "지금 마운트 페치를 건너뛰어도 되는지"를 판정한다.
+   * 인증 실패 등으로 아예 프리페치를 못 한 EMPTY_INITIAL_DATA는 0(항상 stale 취급).
+   */
+  generatedAt: number
 }
 
 const EMPTY_INITIAL_DATA: OverviewInitialData = {
@@ -42,6 +50,7 @@ const EMPTY_INITIAL_DATA: OverviewInitialData = {
   visitorStats: null,
   leadActionKpis: null,
   osSummary: null,
+  generatedAt: 0,
 }
 
 // 서버 프리페치가 첫 HTML을 붙잡지 않게 하는 상한은 lib/admin/prefetch-budget으로 공용화했다
@@ -85,5 +94,7 @@ export async function prefetchOverviewInitialData(): Promise<OverviewInitialData
         }
       : null,
     osSummary,
+    // 개별 소스가 예산을 넘겨 null이어도 이 프리페치 자체는 지금 "settle"됐다 — 그 시각을 찍는다.
+    generatedAt: Date.now(),
   }
 }

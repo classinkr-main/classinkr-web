@@ -53,6 +53,7 @@ import { ledgerRowHasColor } from "@/lib/branch/computations/revenue-core"
 import { dealHasColorData, splitMonthConfidence } from "@/lib/branch/computations/rev-confirmed"
 import { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import { isSheetAheadOfSync } from "@/lib/branch/sheet-freshness"
+import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 // ledger/ 섹션 파일들이 워크벤치를 단일 진입점으로 import — 포매터 SSOT는 lib/branch/ledger-format
 export { formatMoney, formatPercent } from "@/lib/branch/ledger-format"
 import {
@@ -984,12 +985,20 @@ export default function SalesLedgerWorkbench({
   useEffect(() => {
     if (pipelineSeedLive && pipelineSeed == null) setPipelineSeedLive(false)
   }, [pipelineSeedLive, pipelineSeed])
+  // T3 — staleTimes.dynamic(180초)로 재사용된 RSC 프리페치는 pipelineSeed가 있어도 최대
+  // 180초 전 값일 수 있다. pipelineSeed는(스켈레톤 방지를 위해) 신선도와 무관하게 계속 첫
+  // 렌더 값으로 쓰되, useBranchJson의 실제 요청은 신선할 때만 건너뛴다 — 오래됐으면 페치가
+  // 그대로 돌아 캐시/네트워크가 최신 여부를 정하고, 응답이 도착하면 아래 병합이 그쪽으로 넘어간다.
+  const pipelineSeedFresh = pipelineSeed != null && isPrefetchFresh(pipelineSeed.generatedAt)
   const pipelineFetched = useBranchJson<BranchPipelineResponse>(pipelineUrl, refreshKey, {
-    enabled: pipelineSeed == null,
+    enabled: pipelineSeed == null || !pipelineSeedFresh,
   })
-  const pipeline: BranchJsonState<BranchPipelineResponse> = pipelineSeed
-    ? { key: pipelineStateKey, data: pipelineSeed.data, error: null, loading: false, stale: false, staleSince: null }
-    : pipelineFetched
+  const pipeline: BranchJsonState<BranchPipelineResponse> =
+    pipelineFetched.data != null || pipelineFetched.error != null
+      ? pipelineFetched
+      : pipelineSeed
+        ? { key: pipelineStateKey, data: pipelineSeed.data, error: null, loading: false, stale: false, staleSince: null }
+        : pipelineFetched
 
   // 하드웨어 콘솔 역링크 게이팅: 하드웨어 원장에 실제 출고 이력이 있는 고객사만 링크로 건다.
   // 출고 목적지(to_location)가 창고/샘플/고객(generic) 등이 아닌 실제 고객사명인 것만 수집.

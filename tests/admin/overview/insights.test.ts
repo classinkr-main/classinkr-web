@@ -11,8 +11,10 @@ import {
   deriveEventInsights,
   deriveLatestPatchNote,
   resolveUnrespondedSignal,
+  shouldUsePrefetchedSource,
   type OperationalAlertInput,
 } from "@/lib/admin/overview/insights"
+import { ADMIN_PREFETCH_FRESH_MS } from "@/lib/admin/prefetch-freshness"
 import type { LeadRecord } from "@/lib/site-settings-types"
 import type { BlogPost } from "@/lib/blog-types"
 import type { EmailCampaign } from "@/lib/marketing-types"
@@ -666,5 +668,35 @@ describe("computePipelineCoverage", () => {
       computePipelineCoverage({ goal_cum: [100], revenue_cum: [120], revenue_trend_cum: [130] })
     ).toBeNull()
     expect(computePipelineCoverage({ goal_cum: [], revenue_cum: [], revenue_trend_cum: [] })).toBeNull()
+  })
+})
+
+// T3/T6(d) — OverviewClient의 "서버가 채워 준 소스는 페치를 건너뛴다" 판정을 뽑아낸 순수 헬퍼.
+// staleTimes.dynamic(180초)로 재사용된 RSC 프리페치가 있으므로, refreshKey === 0(첫 마운트)
+// 만으로는 부족하고 generatedAt이 신선해야(ADMIN_PREFETCH_FRESH_MS 이내) 페치를 건너뛴다.
+describe("shouldUsePrefetchedSource", () => {
+  const NOW = 1_800_000_000_000
+
+  it("첫 마운트(refreshKey===0) + 신선한 generatedAt이면 페치를 건너뛴다", () => {
+    expect(shouldUsePrefetchedSource(0, NOW, NOW)).toBe(true)
+    expect(shouldUsePrefetchedSource(0, NOW - ADMIN_PREFETCH_FRESH_MS, NOW)).toBe(true)
+  })
+
+  it("첫 마운트여도 generatedAt이 신선 기준을 넘기면 페치를 건너뛰지 않는다", () => {
+    expect(shouldUsePrefetchedSource(0, NOW - ADMIN_PREFETCH_FRESH_MS - 1, NOW)).toBe(false)
+    // staleTimes.dynamic 상한(180초)까지 재사용된 극단적인 경우도 마찬가지.
+    expect(shouldUsePrefetchedSource(0, NOW - 180_000, NOW)).toBe(false)
+  })
+
+  it("첫 마운트여도 generatedAt이 없으면(EMPTY_PREFETCH) 페치를 건너뛰지 않는다", () => {
+    expect(shouldUsePrefetchedSource(0, null, NOW)).toBe(false)
+    expect(shouldUsePrefetchedSource(0, undefined, NOW)).toBe(false)
+    expect(shouldUsePrefetchedSource(0, 0, NOW)).toBe(false)
+  })
+
+  it("재시도(refreshKey>0)는 generatedAt이 아무리 신선해도 항상 다시 받는다", () => {
+    // "다시 시도"가 같은 값을 되돌려주면 버튼이 거짓말이 된다 — OverviewClient의 기존 계약.
+    expect(shouldUsePrefetchedSource(1, NOW, NOW)).toBe(false)
+    expect(shouldUsePrefetchedSource(2, NOW, NOW)).toBe(false)
   })
 })

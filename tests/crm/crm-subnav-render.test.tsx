@@ -9,8 +9,12 @@ import { CRM_CHILD_NAV } from "@/components/admin/admin-nav"
 // 이 파일이 그 회귀를 잡는다. CrmSubnav 렌더 테스트는 이전까지 0건이었다.
 const routerState = vi.hoisted(() => ({ pathname: "/admin/crm" }))
 
+// useRouter — CrmSubnav의 useSubtabWarmup이 T2(hover FULL 프리페치)로 router.prefetch를
+// 부른다. renderToStaticMarkup은 이벤트 핸들러를 실행하지 않으므로 실제로 호출되진 않지만,
+// 훅이 렌더 중에 useRouter()를 참조하므로 모킹이 없으면 렌더 자체가 실패한다.
 vi.mock("next/navigation", () => ({
   usePathname: () => routerState.pathname,
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
 }))
 
 import CrmSubnav from "@/components/admin/crm/CrmSubnav"

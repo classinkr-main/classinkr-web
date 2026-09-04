@@ -692,6 +692,8 @@ function SelectedWeekBars({ weeks }: { weeks: RevWeekPoint[] }) {
 export interface LedgerPipelinePrefetch {
   url: string
   data: BranchPipelineResponse
+  /** 이 프리페치가 서버에서 만들어진 시각(ms epoch) — isPrefetchFresh 판정용(T3). */
+  generatedAt: number
 }
 
 

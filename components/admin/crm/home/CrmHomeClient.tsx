@@ -231,7 +231,15 @@ export default function CrmHomeClient({ initialData }: { initialData?: CrmHomeIn
   // (효과는 선언 순서대로 실행) 그 회차의 요청이 캐시 적중으로 끝난다.
   useEffect(() => {
     if (!initialData) return
-    const seed = { ttlMs: CRM_HOME_TTL_MS, staleWhileRevalidateMs: CRM_HOME_STALE_WHILE_REVALIDATE_MS }
+    // generatedAt(T3/T4) — 이 프리페치가 서버에서 실제로 만들어진 시각을 시드의 savedAt으로
+    // 넘긴다. staleTimes.dynamic(180초)로 재사용된 RSC 응답이면 이 값이 과거라, 아래 seed의
+    // ttlMs를 이미 넘겨 "만료됐지만 SWR 창 안"으로 떨어진다 — fetchXXX가 그 상태를 즉시
+    // 서빙(스켈레톤 없음)하면서도 백그라운드로 진짜 재검증을 돈다(lib/admin-client.ts 참조).
+    const seed = {
+      ttlMs: CRM_HOME_TTL_MS,
+      staleWhileRevalidateMs: CRM_HOME_STALE_WHILE_REVALIDATE_MS,
+      generatedAt: initialData.generatedAt,
+    }
     // 라우트 응답과 **같은 shape**으로 심는다 — action-kpis는 { leads } 로 감싸 내려온다.
     if (initialData.leadActionKpis) {
       seedAdminRequestCache(CRM_ACTION_KPIS_URL, { leads: initialData.leadActionKpis }, seed)

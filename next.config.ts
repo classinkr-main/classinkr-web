@@ -144,6 +144,22 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     optimizePackageImports: ["framer-motion", "lucide-react"],
+    // /admin 은 app/admin/layout.tsx가 force-dynamic이라 전 페이지가 dynamic이다. Next의
+    // 클라이언트 라우터 캐시는 dynamic 페이지를 staleTimes.dynamic초만 보관하는데 기본값이
+    // 0이라, 사이드바 탭을 클릭할 때마다(hover로 미리 받아 둔 것까지) RSC payload를
+    // 서버에 다시 요청하고 loading.tsx 스켈레톤이 매번 뜬다 — 특히 서버 프리페치가 있는
+    // 5개 화면(overview·CRM 홈·branch·branch/ledger·hardware)은 그 왕복에 1.2초 예산의
+    // 서버 프리페치(lib/admin/prefetch-budget.ts)까지 얹혀 있어 Vercel Fluid의 콜드
+    // 인스턴스에서 체감이 크다(로컬 실측 1~2.5초/재방문).
+    // 180초는 "재사용된 서버 시드 initialData를 화면에 즉시 보여줘도 되는" 상한일 뿐이다 —
+    // 뮤테이션 이후의 신선도는 여전히 lib/admin-client.ts의 클라이언트 SWR 캐시가 책임진다.
+    // 재사용된 payload는 항상 "시드"로만 취급한다(lib/admin/prefetch-freshness.ts,
+    // ADMIN_PREFETCH_FRESH_MS=10초보다 오래되면 각 소비 컴포넌트가 평소의 마운트 페치/재검증을
+    // 그대로 수행한다) — 그래서 낡은 RSC payload가 더 신선한 클라이언트 데이터를 덮어쓰거나
+    // 재검증을 막는 일은 없다. static은 기본값(300초)을 그대로 둔다.
+    staleTimes: {
+      dynamic: 180,
+    },
   },
   async headers() {
     return [

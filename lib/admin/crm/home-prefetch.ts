@@ -37,12 +37,21 @@ export interface CrmHomeInitialData {
   leadActionKpis: LeadActionKpis | null
   overview: AdminCrmOverview | null
   compassPipeline: CompassPipelineKpis | null
+  /**
+   * 이 프리페치가 서버에서 만들어진 시각(ms epoch). staleTimes.dynamic(180초)로 클라이언트
+   * 라우터 캐시가 이 RSC 응답을 재사용할 수 있어, CrmHomeClient가 받는 initialData가 실제로는
+   * 최대 180초 전에 계산된 값일 수 있다 — CrmHomeClient가 seedAdminRequestCache에 그대로
+   * 넘겨(lib/admin-client.ts) 클라이언트 SWR 캐시의 savedAt/keepUntil로 이어진다.
+   * 인증 실패 등으로 프리페치를 못 한 EMPTY_INITIAL_DATA는 0.
+   */
+  generatedAt: number
 }
 
 const EMPTY_INITIAL_DATA: CrmHomeInitialData = {
   leadActionKpis: null,
   overview: null,
   compassPipeline: null,
+  generatedAt: 0,
 }
 
 export async function prefetchCrmHomeInitialData(): Promise<CrmHomeInitialData> {
@@ -63,5 +72,5 @@ export async function prefetchCrmHomeInitialData(): Promise<CrmHomeInitialData> 
     settleWithinBudget(() => buildCompassPipelineBand()),
   ])
 
-  return { leadActionKpis, overview, compassPipeline }
+  return { leadActionKpis, overview, compassPipeline, generatedAt: Date.now() }
 }
