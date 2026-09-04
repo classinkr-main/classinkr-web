@@ -213,6 +213,7 @@ ADMIN_BASE_URL=https://<배포 도메인> ADMIN_COOKIE='<cookie>' npm run measur
 3. DB CPU가 상한이면 Supabase Pro와 컴퓨트 애드온을 올린다. 그 전에 올리는 것은 비용만 늘린다.
 4. Compass 공유 항목은 통폐합 분석 문서의 로드맵을 따른다. 브리지 `phone_key`는 Compass 쪽 생성 컬럼과 인덱스로 옮기는 것이 정답이다.
 5. 클라이언트 레이아웃의 첫 진입 `getUser()` + `admin_profiles` 브라우저 조회는 서버 컴포넌트 레이아웃으로 옮기면 사라진다. site/admin 분리 계획의 레이아웃 단계와 함께 다룬다.
+6. (2026-09-04) 다음 라운드는 [Admin 속도 2라운드](./admin-performance-round2-2026-09-04.md)로 이어진다 — 탭 전환마다 반복되는 RSC 왕복(라우터 캐시 `staleTimes`·hover 전체 프리페치)과 콜드 인스턴스에서 비는 모듈 메모(Data Cache 승격)가 대상이다.
 
 ## 8. 후속 — 2026-09-02 오후, 프로덕션 실측과 hom_v4 병합
 

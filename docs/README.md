@@ -112,6 +112,8 @@ Admin 관련 작업은 [Admin 지침 맵](./active/admin-guidance-map.md)에서 
   - Compass 마케팅 앱과 공유하는 Supabase DB의 동기화·스키마·거버넌스 감사, 도메인별 통폐합 판정과 4단계 로드맵
 - [active/admin-performance-plan-2026-09-02.md](./active/admin-performance-plan-2026-09-02.md)
   - Admin 속도 가설 판정(인증 왕복·팬아웃·메모이제이션·플랜), 적용한 조치와 측정 방법, 운영 확인 목록
+- [active/admin-performance-round2-2026-09-04.md](./active/admin-performance-round2-2026-09-04.md)
+  - Admin 속도 2라운드: 탭 전환 RSC 왕복 제거(라우터 캐시·hover 전체 프리페치·시드 신선도)와 콜드 인스턴스 모듈 메모의 Data Cache 승격, 전후 실측
 - [active/architecture-schema-erd.md](./active/architecture-schema-erd.md)
   - 엔티티와 스키마 관점의 입구
 - [active/internal-crm-backend-operating-plan-2026-06-26.md](./active/internal-crm-backend-operating-plan-2026-06-26.md)
