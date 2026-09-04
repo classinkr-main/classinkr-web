@@ -74,6 +74,38 @@ export const EMPTY_COMPASS_DEMO_SOURCE: CompassDemoSource = {
   down: false,
 }
 
+/**
+ * CompassDemoSource의 JSON 안전 형태 — Data Cache(unstable_cache)는 값을 JSON으로 저장하므로
+ * Map을 그대로 넣으면 캐시 적중 뒤 `{}`가 되어 `.get`이 터진다(2026-09-04 우선순위 큐 500 사고).
+ * 캐시 경계에서는 이 형태로 바꿔 저장하고, 읽는 쪽이 hydrateCompassDemoSource로 되돌린다.
+ */
+export interface CompassDemoSourceJson {
+  demos: CompassDemoLike[]
+  /** Map 엔트리 배열 — JSON 왕복에 안전 */
+  phoneKeysByCompassLeadId: Array<[number, string[]]>
+  down: boolean
+}
+
+export function serializeCompassDemoSource(source: CompassDemoSource): CompassDemoSourceJson {
+  return {
+    demos: source.demos,
+    phoneKeysByCompassLeadId: Array.from(source.phoneKeysByCompassLeadId.entries()),
+    down: source.down,
+  }
+}
+
+export function hydrateCompassDemoSource(json: CompassDemoSourceJson): CompassDemoSource {
+  const raw: unknown = json.phoneKeysByCompassLeadId
+  // 방어: 아직 Map인 값(캐시를 안 거친 경로)도, JSON 왕복으로 `{}`가 된 옛 엔트리도 깨지지 않게 한다.
+  const entries: Array<[number, string[]]> =
+    raw instanceof Map ? Array.from(raw.entries()) : Array.isArray(raw) ? raw : []
+  return {
+    demos: json.demos,
+    phoneKeysByCompassLeadId: new Map(entries),
+    down: json.down,
+  }
+}
+
 export const EMPTY_COMPASS_DEMO_INDEX: CompassDemoIndex = {
   byPhoneKey: new Map(),
   unmatched: 0,

@@ -25,7 +25,9 @@ import { getLeadsActivitySummary, type LeadActivityBadge } from "@/lib/repositor
 import {
   EMPTY_COMPASS_DEMO_SOURCE,
   buildCompassDemoIndex,
-  type CompassDemoSource,
+  hydrateCompassDemoSource,
+  serializeCompassDemoSource,
+  type CompassDemoSourceJson,
 } from "@/lib/crm/compass-demo-signal"
 import { loadCompassDemoSource } from "@/lib/crm/compass-demo-source"
 
@@ -250,7 +252,8 @@ interface CrmPrioritySourceSnapshot {
   tasks: CrmTaskRecord[]
   tasksOk: boolean
   engagements: Record<string, LeadActivityBadge> | null
-  demoSource: CompassDemoSource
+  /** Data Cache(JSON) 경계라 Map 대신 엔트리 배열 형태 — 읽는 쪽이 hydrateCompassDemoSource로 되돌린다. */
+  demoSource: CompassDemoSourceJson
   warnings: string[]
   complete: boolean
 }
@@ -272,7 +275,8 @@ const getCachedSourceSnapshot = unstable_cache(
     if (!snapshot.complete) throw new IncompleteCrmPrioritySnapshotError(snapshot)
     return snapshot
   },
-  [ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG],
+  // "json-v2": demoSource가 Map이던 엔트리(`{}`로 깨진 채 저장됨)를 건너뛰기 위한 키 버전.
+  [ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG, "json-v2"],
   { revalidate: 60, tags: [ADMIN_CRM_PRIORITY_QUEUE_SNAPSHOT_CACHE_TAG] }
 )
 
@@ -351,7 +355,8 @@ async function loadSourceSnapshot(): Promise<CrmPrioritySourceSnapshot> {
     tasks,
     tasksOk,
     engagements,
-    demoSource,
+    // unstable_cache는 JSON으로 저장한다 — Map을 그대로 넣으면 적중 뒤 `.get`이 터진다(2026-09-04 500 사고).
+    demoSource: serializeCompassDemoSource(demoSource),
     warnings,
     complete: leadsOk && neoAccountsOk && tasksOk,
   }
@@ -367,7 +372,7 @@ export async function getCrmPriorityQueue(
 
   const items: CrmPriorityItem[] = []
   const engagements = snapshot.engagements
-  const demoIndex = buildCompassDemoIndex(snapshot.demoSource, now)
+  const demoIndex = buildCompassDemoIndex(hydrateCompassDemoSource(snapshot.demoSource), now)
 
   for (const lead of snapshot.leads) {
     const item = buildLeadPriorityItem(lead, now, {

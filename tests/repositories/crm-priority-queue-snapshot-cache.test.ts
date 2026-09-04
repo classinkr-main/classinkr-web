@@ -33,7 +33,7 @@ const CACHED_SENTINEL_SNAPSHOT = {
   tasks: [],
   tasksOk: true,
   engagements: null,
-  demoSource: { demos: [], phoneKeysByCompassLeadId: new Map(), down: false },
+  demoSource: { demos: [], phoneKeysByCompassLeadId: [], down: false },
   warnings: ["센티널: 캐시에서 왔음"],
   complete: true,
 }
@@ -80,7 +80,7 @@ describe("crm-priority-queue 소스 스냅샷 캐시 배선", () => {
     expect(mocks.unstableCache).toHaveBeenCalledTimes(1)
     const [fn, keyParts, options] = mocks.unstableCache.mock.calls[0]
     expect(typeof fn).toBe("function")
-    expect(keyParts).toEqual(["admin-crm-priority-queue-snapshot"])
+    expect(keyParts).toEqual(["admin-crm-priority-queue-snapshot", "json-v2"])
     expect(options).toEqual({ revalidate: 60, tags: ["admin-crm-priority-queue-snapshot"] })
   })
 
