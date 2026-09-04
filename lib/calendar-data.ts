@@ -13,6 +13,7 @@ import fs from "fs"
 import path from "path"
 
 import { unstable_cache, revalidateTag } from "next/cache"
+import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 
 import {
@@ -512,7 +513,8 @@ async function getPublicEventsAsCalendarEventsUncached(): Promise<CalendarEvent[
  * 판단 — 필요해지면 콘텐츠 발행 파트와 함께 그 쓰기 경로에도 이 태그를 걸면 된다.
  */
 export const getPublicEventsAsCalendarEvents = unstable_cache(
-  getPublicEventsAsCalendarEventsUncached,
+  async (...args: Parameters<typeof getPublicEventsAsCalendarEventsUncached>) =>
+    assertJsonSafeInDev("admin-calendar-public-events", await getPublicEventsAsCalendarEventsUncached(...args)),
   ["admin-calendar-public-events-v1"],
   { revalidate: 60, tags: [ADMIN_CALENDAR_EVENTS_CACHE_TAG] },
 )

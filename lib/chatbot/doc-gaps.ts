@@ -12,6 +12,7 @@
 import "server-only"
 
 import { unstable_cache } from "next/cache"
+import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { DOC_GAP_BACKLOG_CACHE_TAG } from "@/lib/chatbot/cache-tags"
@@ -209,7 +210,7 @@ async function computeDocGapBacklog(limit: number): Promise<DocGapBacklog> {
 }
 
 const getCachedDocGapBacklog = unstable_cache(
-  computeDocGapBacklog,
+  async (limit: number) => assertJsonSafeInDev("chatbot-doc-gap-backlog", await computeDocGapBacklog(limit)),
   ["chatbot-doc-gap-backlog-v1"],
   { revalidate: 60, tags: [DOC_GAP_BACKLOG_CACHE_TAG] }
 )

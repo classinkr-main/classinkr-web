@@ -2,6 +2,7 @@ import "server-only"
 
 import { createHmac } from "crypto"
 import { unstable_cache } from "next/cache"
+import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 
 export class MetaConfigError extends Error {}
 
@@ -821,7 +822,8 @@ async function fetchMetaInstagramDashboard(
 const META_INSTAGRAM_DASHBOARD_CACHE_TAG = "meta-instagram-dashboard"
 
 const getCachedMetaInstagramDashboard = unstable_cache(
-  fetchMetaInstagramDashboard,
+  async (...args: Parameters<typeof fetchMetaInstagramDashboard>) =>
+    assertJsonSafeInDev("meta-instagram-dashboard", await fetchMetaInstagramDashboard(...args)),
   ["meta-instagram-dashboard-v1"],
   { revalidate: 300, tags: [META_INSTAGRAM_DASHBOARD_CACHE_TAG] },
 )

@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { revalidateTag, unstable_cache } from "next/cache"
+import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 
 import { verifyAdmin } from "@/lib/admin-auth"
 import { getCompassAdsDaily } from "@/lib/compass/bridge"
@@ -73,7 +74,8 @@ async function loadCompassAds(periodKey: PerfPeriodKey): Promise<CompassAdsRespo
 const COMPASS_ADS_CACHE_TAG = "compass-ads"
 
 const getCachedCompassAds = unstable_cache(
-  loadCompassAds,
+  async (...args: Parameters<typeof loadCompassAds>) =>
+    assertJsonSafeInDev("compass-ads", await loadCompassAds(...args)),
   ["compass-ads-v1"],
   { revalidate: 60, tags: [COMPASS_ADS_CACHE_TAG] },
 )

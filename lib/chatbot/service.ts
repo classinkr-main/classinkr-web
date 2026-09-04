@@ -1,6 +1,7 @@
 import "server-only"
 
 import { unstable_cache, revalidateTag } from "next/cache"
+import { assertJsonSafeInDev } from "@/lib/server/json-safe"
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
 import { CHATBOT_STATS_CACHE_TAG, DOC_GAP_BACKLOG_CACHE_TAG } from "@/lib/chatbot/cache-tags"
@@ -4362,7 +4363,8 @@ async function computeChatbotStats(from: string, to: string | undefined) {
 }
 
 const getCachedChatbotStats = unstable_cache(
-  computeChatbotStats,
+  async (from: string, to: string | undefined) =>
+    assertJsonSafeInDev("chatbot-stats", await computeChatbotStats(from, to)),
   ["chatbot-stats-v1"],
   { revalidate: 60, tags: [CHATBOT_STATS_CACHE_TAG] }
 )
