@@ -1,6 +1,9 @@
 import "server-only"
 
+import { unstable_cache, revalidateTag } from "next/cache"
+
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { CHATBOT_STATS_CACHE_TAG, DOC_GAP_BACKLOG_CACHE_TAG } from "@/lib/chatbot/cache-tags"
 import { getDocPath, listDocs, type DocArticle } from "@/lib/docs"
 import { getDocsContent } from "@/lib/docs-content"
 import { CLASSIN_POSITIONING } from "@/lib/classin-positioning"
@@ -3981,6 +3984,12 @@ export async function saveChatbotFeedback(raw: unknown) {
 
   if (error) throw new Error(error.message)
 
+  // 피드백 저장(=고객 응답 해소) 은 answer event 유입만큼 잦지 않고, 운영자가 방금 남긴
+  // 피드백을 대시보드에서 바로 확인하고 싶어할 만한 이벤트라 캐시를 즉시 무효화한다.
+  // 반면 매 질의마다 쌓이는 answer event 자체는 무효화하지 않고 60초 TTL에만 맡긴다
+  // (getChatbotStats 캐시 정의부 주석 참고) — 그렇게 하지 않으면 트래픽마다 캐시가 무의미해진다.
+  revalidateTag(CHATBOT_STATS_CACHE_TAG, "max")
+
   try {
     await maybeCreateChannelTalkFeedbackHandoff(answerEventId, {
       rating,
@@ -4192,10 +4201,14 @@ function aggregateQuestionRows(rows: DailyStatsRow[], regressionCandidateCluster
   }))
 }
 
-export async function getChatbotStats(params: URLSearchParams) {
-  const from = toDateOnlyParam(params.get("from")) ?? getDefaultFromDate()
-  const to = toDateOnlyParam(params.get("to"))
-
+// getChatbotStats 는 기존에 서버 캐시가 전혀 없었다 — /admin/chatbot 을 열 때마다(콜드
+// Fluid 인스턴스 포함) daily 통계·feedback 통계·chatbot_answer_events 1000행 읽기까지 매번
+// 다시 실행됐다. unstable_cache(Next Data Cache)는 인스턴스 간 공유되고 stale-while-revalidate
+// 로 응답하므로 60초 안에서는 재방문·다른 콜드 인스턴스 모두 DB 왕복 없이 같은 값을 받는다.
+// from/to 는 URLSearchParams 자체가 아니라 이미 정규화한 문자열로 넘겨야 unstable_cache 의
+// 인자 기반 캐시 키가 실제로 요청 범위별로 갈린다(URLSearchParams 인스턴스는 매번 새 객체라
+// 키로 쓸 수 없다). 반환값은 숫자·문자열·배열로만 구성돼 JSON 직렬화 가능하고 크기도 작다.
+async function computeChatbotStats(from: string, to: string | undefined) {
   if (!hasSupabaseServerEnv()) {
     return {
       range: { from, to: to ?? null },
@@ -4348,6 +4361,18 @@ export async function getChatbotStats(params: URLSearchParams) {
   }
 }
 
+const getCachedChatbotStats = unstable_cache(
+  computeChatbotStats,
+  ["chatbot-stats-v1"],
+  { revalidate: 60, tags: [CHATBOT_STATS_CACHE_TAG] }
+)
+
+export async function getChatbotStats(params: URLSearchParams) {
+  const from = toDateOnlyParam(params.get("from")) ?? getDefaultFromDate()
+  const to = toDateOnlyParam(params.get("to"))
+  return getCachedChatbotStats(from, to)
+}
+
 const QUESTION_CLUSTER_STATUSES = new Set([
   "candidate",
   "approved",
@@ -4496,6 +4521,12 @@ export async function updateQuestionCluster(id: string, raw: unknown) {
     .single()
 
   if (error) throw new Error(error.message)
+
+  // 상태 변경/문서 매핑(merge)/회귀 후보 승격 — 문서 보강 큐(listDocGapBacklog)가 읽는
+  // question_clusters 를 어드민이 직접 큐레이션하는 경로다. upsertQuestionCluster(공개 챗봇
+  // 응답 저장 + 내부 CS 유입)는 훨씬 고빈도라 그대로 TTL(60초)에 맡기지만, 이 경로는 어드민의
+  // 명시적 조작이라 즉시 반영이 운영자 눈에 자연스럽다 — "max"로 다음 조회부터 바로 신선화한다.
+  revalidateTag(DOC_GAP_BACKLOG_CACHE_TAG, "max")
 
   return { cluster: data }
 }
