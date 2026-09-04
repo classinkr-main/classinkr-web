@@ -1,7 +1,10 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+// PrefetchKind는 next/navigation이 재수출하지 않는 런타임 enum이라 내부 경로에서 직접
+// 가져온다(AdminSidebar.tsx와 같은 이유 — 값이 필요해 type-only import로는 안 된다).
+import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types"
 import { useCallback, useEffect, useRef, type ReactNode } from "react"
 import {
   Building2,
@@ -55,14 +58,33 @@ function resolveSubtabWarmupEntries(href: string) {
 // 사이드바와 같은 규약으로 맞춰 마우스가 탭 여러 개를 훑고 지나갈 때의 타이머·핸들러 비용을
 // 줄인다(§7). 동시성 3 큐(warmAdminRequestCacheQueued)도 사이드바와 동일하게 사용한다.
 function useSubtabWarmup() {
+  const router = useRouter()
   const warmedHrefs = useRef(new Set<string>())
   const timerRef = useRef<number | null>(null)
+  // href당 30초 스로틀(T2, AdminSidebar의 fullPrefetchThrottleRef와 같은 규약) — Next가 신선한
+  // FULL 엔트리는 중복 요청을 스스로 스킵하므로 href당 1회로 막지 않고, hover 폭주만 막는다.
+  const fullPrefetchThrottleRef = useRef(new Map<string, number>())
 
   const warm = useCallback((href: string) => {
+    // T2 — 이 화면들도 layout.tsx의 force-dynamic을 그대로 물려받는 dynamic 페이지다.
+    // hover 완료·focus·pointerdown·touchstart(=이동 의도) 시점에 FULL 프리페치를 태워
+    // 서버 왕복(그 화면의 RSC 프리페치 포함)을 클릭 이전으로 앞당긴다 — click은 이 화면에
+    // 별도 핸들러가 없어(<Link> 네비게이션이 곧장 처리) 여기서 걸러낼 대상이 없다.
+    const now = Date.now()
+    const last = fullPrefetchThrottleRef.current.get(href)
+    if (last === undefined || now - last >= 30_000) {
+      fullPrefetchThrottleRef.current.set(href, now)
+      try {
+        router.prefetch(href, { kind: PrefetchKind.FULL })
+      } catch {
+        // Prefetch is an optimization only.
+      }
+    }
+
     if (warmedHrefs.current.has(href)) return
     warmedHrefs.current.add(href)
     warmAdminRequestCacheQueued(resolveSubtabWarmupEntries(href), { ttlMs: 60_000 })
-  }, [])
+  }, [router])
 
   const scheduleWarm = useCallback((href: string) => {
     if (timerRef.current !== null) window.clearTimeout(timerRef.current)

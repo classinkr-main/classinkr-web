@@ -43,7 +43,10 @@ async function prefetchBranchSummary(): Promise<BranchSummaryPrefetch | null> {
     now,
     skipSheetFreshness: true,
   })
-  return { url: INITIAL_SUMMARY_URL, data }
+  // generatedAt(T3) — 이 프리페치가 지금 settle된 시각. staleTimes.dynamic(180초)로 클라이언트
+  // 라우터 캐시가 이 RSC 응답을 재사용하면, BranchDashboardClient가 받는 시점엔 이미 오래된
+  // 값일 수 있다 — isPrefetchFresh(lib/admin/prefetch-freshness.ts)가 이 값으로 판정한다.
+  return { url: INITIAL_SUMMARY_URL, data, generatedAt: Date.now() }
 }
 
 export default async function BranchDashboardPage() {

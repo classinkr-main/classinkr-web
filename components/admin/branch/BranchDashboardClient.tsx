@@ -8,6 +8,7 @@ import SyncStatusBar from "./SyncStatusBar"
 import type { DealModalDeal } from "./sections/DealModal"
 import { adminFetchJson, clearBranchRequestCache, useBranchJson, type BranchJsonState } from "./client-api"
 import { adminFetchJsonCached } from "@/lib/admin-client"
+import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 import { buildCrmSyncSummary, type CrmSyncSummary, type RevSyncCoverageView } from "@/lib/crm/rev-sync-health"
 import { PERIODS, PIPELINE_MANAGER_DEFAULT_STORAGE_KEY, TEAMS, type BranchKpiResponse, type BranchSummaryResponse, type Period, type Team } from "./types"
 import { getBranchTabDataNeeds, type BranchTab } from "./tab-data-needs"
@@ -147,6 +148,8 @@ const BranchAiInsights = dynamic(() => import("./sections/BranchAiInsights"), {
 export interface BranchSummaryPrefetch {
   url: string
   data: BranchSummaryResponse
+  /** 이 프리페치가 서버에서 만들어진 시각(ms epoch) — isPrefetchFresh 판정용(T3). */
+  generatedAt: number
 }
 
 // initialData가 없으면(비인증·역할 부족·프리페치 실패·기본 조합이 아닌 딥링크) 이 화면은
@@ -378,12 +381,20 @@ export default function BranchDashboardClient({
   useEffect(() => {
     if (summarySeedLive && summarySeed == null) setSummarySeedLive(false)
   }, [summarySeedLive, summarySeed])
+  // T3 — staleTimes.dynamic(180초)로 재사용된 RSC 프리페치는 summarySeed가 있어도 최대
+  // 180초 전 값일 수 있다. summarySeed는(스켈레톤 방지를 위해) 신선도와 무관하게 계속 첫
+  // 렌더 값으로 쓰되, useBranchJson의 실제 요청은 신선할 때만 건너뛴다 — 오래됐으면 페치가
+  // 그대로 돌아 캐시/네트워크가 최신 여부를 정하고, 응답이 도착하면 아래 병합이 그쪽으로 넘어간다.
+  const summarySeedFresh = summarySeed != null && isPrefetchFresh(summarySeed.generatedAt)
   const summaryFetched = useBranchJson<BranchSummaryResponse>(summaryUrl, refreshKey, {
-    enabled: summarySeed == null,
+    enabled: summarySeed == null || !summarySeedFresh,
   })
-  const summary: BranchJsonState<BranchSummaryResponse> = summarySeed
-    ? { key: summaryStateKey, data: summarySeed.data, error: null, loading: false, stale: false, staleSince: null }
-    : summaryFetched
+  const summary: BranchJsonState<BranchSummaryResponse> =
+    summaryFetched.data != null || summaryFetched.error != null
+      ? summaryFetched
+      : summarySeed
+        ? { key: summaryStateKey, data: summarySeed.data, error: null, loading: false, stale: false, staleSince: null }
+        : summaryFetched
   const kpi = useBranchJson<BranchKpiResponse>(kpiUrl, refreshKey, { enabled: dataNeeds.kpi })
   const monthOptions = useMemo(() => buildMonthOptions(new Date()), [])
   const activePeriodLabel = period === "M" ? formatMonthLabel(selectedMonth) : PERIOD_LABEL[period]

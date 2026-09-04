@@ -6,6 +6,7 @@
 // 순수 규칙은 lib/crm/leads-board-state 가 정본 — 서버 집계가 컴포넌트를 import 하지 않는다.
 import { getLeadSourceGroup } from "@/lib/crm/lead-attribution"
 import { hoursBetween, isUnconfirmedLead, isUnrespondedLead } from "@/lib/crm/leads-board-state"
+import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 import type { LeadRecord } from "@/lib/site-settings-types"
 import type { AdminIntegrationStatusResponse } from "@/lib/admin-integrations/types"
 import type { CalendarEvent } from "@/lib/calendar-data"
@@ -543,4 +544,21 @@ export function computePipelineCoverage(series: BranchMonthlySeries | null | und
   const pipelineTotal = last(series.revenue_trend_cum) - confirmed
   const remaining = last(series.goal_cum) - confirmed
   return remaining > 0 ? pipelineTotal / remaining : null
+}
+
+/* ─── 서버 프리페치 재사용 판정(T3) ─────────────────────────── */
+
+// OverviewClient의 마운트 effect가 "서버가 채워 준 소스는 페치를 건너뛴다"를 결정하는 술어.
+// staleTimes.dynamic(180초)으로 클라이언트 라우터 캐시가 예전 RSC 응답(그 안의 initialData)을
+// 재사용할 수 있게 되면서, refreshKey === 0(첫 마운트)이라는 조건만으로는 "이 initialData가
+// 지금 만들어졌다"를 보장하지 못한다 — 재사용된 payload는 최대 180초 전 것일 수 있다.
+// 그래서 refreshKey === 0 이고 *또한* isPrefetchFresh(generatedAt)일 때만 페치를 건너뛴다.
+// 재시도(refreshKey > 0)는 오늘과 동일하게 무조건 다시 받는다("다시 시도"가 같은 값을
+// 되돌려주면 버튼이 거짓말이 된다 — 기존 주석과 동일한 이유).
+export function shouldUsePrefetchedSource(
+  refreshKey: number,
+  generatedAt: number | null | undefined,
+  now: number = Date.now()
+): boolean {
+  return refreshKey === 0 && isPrefetchFresh(generatedAt, now)
 }

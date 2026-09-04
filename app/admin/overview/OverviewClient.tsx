@@ -53,6 +53,7 @@ import {
   formatDateShort,
   formatDateTime,
   resolveUnrespondedSignal,
+  shouldUsePrefetchedSource,
   SOURCE_LABEL,
   type BranchMonthlySeries,
   type OverviewSignalTone,
@@ -98,6 +99,7 @@ const EMPTY_PREFETCH: OverviewInitialData = {
   visitorStats: null,
   leadActionKpis: null,
   osSummary: null,
+  generatedAt: 0,
 }
 
 // 서버가 이미 채워 보낸 소스는 처음부터 ready로 시작한다 — 실데이터를 들고 있으면서
@@ -390,14 +392,23 @@ export default function OverviewClient({ initialData }: { initialData: OverviewI
       setSourceStates((current) => ({ ...current, [key]: "ready" }))
     }
 
-    // 서버가 채워 준 소스는 첫 로드에서만 페치를 건너뛴다. 재시도(refreshKey↑)는
-    // 프리페치를 무시하고 전 소스를 다시 받는다 — "다시 시도"가 같은 값을 되돌려주면
-    // 버튼이 거짓말이 된다.
-    const prefetched = refreshKey === 0 ? initialDataRef.current : EMPTY_PREFETCH
+    // 화면에 스켈레톤 없이 바로 보여줄 시드 — "첫 마운트에 initialData가 있었는가"만 본다
+    // (신선도 무관). 재시도(refreshKey↑)는 오늘과 동일하게 EMPTY — "다시 시도"를 눌렀는데
+    // sourceStates가 곧장 ready로 되돌아가면 버튼이 거짓말이 된다.
+    const seedForDisplay = refreshKey === 0 ? initialDataRef.current : EMPTY_PREFETCH
+    // 서버가 채워 준 소스의 페치를 건너뛸지는 신선도까지 함께 본다(T3). staleTimes.dynamic
+    // (180초)로 클라이언트 라우터 캐시가 예전 RSC 응답을 재사용할 수 있어, refreshKey === 0
+    // (첫 마운트)이라도 initialData가 최대 180초 전 값일 수 있다 —
+    // shouldUsePrefetchedSource(lib/admin/overview/insights.ts)가 generatedAt까지 함께
+    // 본다. 신선하지 않으면 화면은 여전히 seedForDisplay로 즉시 그리되(스켈레톤 없음),
+    // 아래 소스별 페치는 전부 정상 수행돼 최신 여부를 SWR 캐시/네트워크가 결정한다.
+    const prefetched = shouldUsePrefetchedSource(refreshKey, initialDataRef.current.generatedAt)
+      ? initialDataRef.current
+      : EMPTY_PREFETCH
 
     const load = async () => {
       setLoading(true)
-      setSourceStates(seededSourceStates(prefetched))
+      setSourceStates(seededSourceStates(seedForDisplay))
 
       // Instagram은 외부 Meta API라 느리거나 미설정일 수 있으므로
       // 핵심 대시보드 로딩을 막지 않도록 분리해서 로드한다.

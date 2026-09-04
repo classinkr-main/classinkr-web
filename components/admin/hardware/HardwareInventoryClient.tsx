@@ -34,6 +34,7 @@ import {
 
 import { adminFetch, adminFetchJson, adminFetchJsonCached, clearAdminRequestCache } from "@/lib/admin-client"
 import { paginateAdminList } from "@/lib/admin-list-pagination"
+import { isPrefetchFresh } from "@/lib/admin/prefetch-freshness"
 import CategoryCardsSection from "@/components/admin/hardware/inventory/CategoryCardsSection"
 import ImportFreshnessStrip from "@/components/admin/hardware/inventory/ImportFreshnessStrip"
 import SalesPeriodSummary from "@/components/admin/hardware/inventory/SalesPeriodSummary"
@@ -175,6 +176,18 @@ const RECENT_OUTBOUND_LIMIT = 30
 // 서버는 movements 한 벌만 내려준다(voided 제외 · 처리일 내림차순 · 2000건 캡). 최근 출고와
 // 예정 큐는 그 배열의 부분집합이라 응답에 중복으로 싣지 않고 여기서 같은 규칙으로 파생한다.
 export type HardwareDashboardResponse = Omit<HardwareDashboard, "recentOutbound" | "plannedMovements">
+
+/**
+ * 페이지 서버 프리페치(app/admin/hardware/page.tsx)가 내려주는 첫 화면 wrapper.
+ * generatedAt은 이 프리페치가 서버에서 만들어진 시각(ms epoch) — isPrefetchFresh 판정용(T3).
+ * HardwareDashboardResponse 자체(=/api/admin/hardware 응답과 같은 shape)에 얹지 않고 따로
+ * 감싼 이유: 그 타입은 실제 API 응답 shape을 그대로 미러링해야 하는데, generatedAt은 그
+ * 응답이 아니라 "이 프리페치 호출"에만 속하는 메타데이터라서다.
+ */
+export interface HardwareDashboardPrefetch {
+  data: HardwareDashboardResponse
+  generatedAt: number
+}
 
 function withDerivedMovementViews(response: HardwareDashboardResponse): HardwareDashboard {
   const outbound = response.movements.filter((movement) => movement.movement_type === "outbound")
@@ -670,16 +683,17 @@ function presetKeyForMovement(movement: HardwareMovement): string {
 }
 
 // initialData = 페이지(app/admin/hardware/page.tsx)가 GET /api/admin/hardware와 같은 검증·
-// 같은 lib 함수로 서버에서 미리 만든 첫 화면 응답. 있으면 마운트 왕복을 건너뛰고 바로 그 값으로
-// 시작한다. 없으면(비인증·역할 부족·프리페치 실패) 지금까지와 동일하게 마운트 후 load()가 채운다.
+// 같은 lib 함수로 서버에서 미리 만든 첫 화면 응답. 있으면(신선도와 무관하게) 마운트 즉시
+// 그 값으로 그린다 — 없으면(비인증·역할 부족·프리페치 실패) 지금까지와 동일하게 마운트 후
+// load()가 채운다. 왕복을 실제로 건너뛸지는 아래 skipInitialLoadRef가 신선도까지 본다(T3).
 export default function HardwareInventoryClient({
   initialData = null,
 }: {
-  initialData?: HardwareDashboardResponse | null
+  initialData?: HardwareDashboardPrefetch | null
 }) {
   const formRef = useRef<HTMLFormElement | null>(null)
   const [data, setData] = useState<HardwareDashboard | null>(() =>
-    initialData ? withDerivedMovementViews(initialData) : null
+    initialData ? withDerivedMovementViews(initialData.data) : null
   )
   const [loading, setLoading] = useState(initialData == null)
   const [error, setError] = useState<string | null>(null)
@@ -701,7 +715,7 @@ export default function HardwareInventoryClient({
   const [movementType, setMovementType] = useState<HardwareMovementType>("outbound")
   // load()가 첫 응답에서 하는 기본 품목 선택(defaultEntryItemId)을 프리페치 경로에서도 동일하게 건다.
   const [selectedItemId, setSelectedItemId] = useState(() =>
-    initialData ? defaultEntryItemId(initialData.items) : ""
+    initialData ? defaultEntryItemId(initialData.data.items) : ""
   )
   const [customProduct, setCustomProduct] = useState("")
   const [quantity, setQuantity] = useState("1")
@@ -899,9 +913,16 @@ export default function HardwareInventoryClient({
     }
   }, [])
 
-  // 서버 프리페치가 첫 화면을 이미 채운 경우에만 마운트 1회 왕복을 건너뛴다. 이후 새로고침·
-  // 저장 후 재조회(refresh)는 그대로 load({ force: true })를 탄다.
-  const skipInitialLoadRef = useRef(initialData != null)
+  // 서버 프리페치가 첫 화면을 이미 채웠고 *또한* 아직 신선할 때만 마운트 1회 왕복을
+  // 건너뛴다(T3) — staleTimes.dynamic(180초)로 재사용된 RSC 프리페치는 initialData가
+  // 있어도 최대 180초 전 값일 수 있다. 신선하지 않으면 위 data state는 여전히
+  // initialData로 채워 스켈레톤 없이 그리되(위 useState 초기값), 아래 load()가 정상
+  // 수행돼 캐시/네트워크가 최신 여부를 정한다(load 내부는 loading && !data로 게이트되므로
+  // 이미 data가 있으면 스피너만 돌고 스켈레톤은 뜨지 않는다). 이후 새로고침·저장 후
+  // 재조회(refresh)는 그대로 load({ force: true })를 탄다.
+  const skipInitialLoadRef = useRef(
+    initialData != null && isPrefetchFresh(initialData.generatedAt)
+  )
   useEffect(() => {
     if (skipInitialLoadRef.current) {
       skipInitialLoadRef.current = false

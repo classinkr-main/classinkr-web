@@ -5,8 +5,12 @@
  * 실제 차단은 각 API 라우트의 requireVerifiedAdminContext이므로, 첫 화면을 서버에서
  * 미리 만드는 이 경로도 **같은 검증·같은 역할 목록**을 통과해야만 데이터를 만들어야 한다.
  * 여기서 고정하는 것: 미검증·역할 부족이면 무거운 집계를 아예 부르지 않고 전부 null.
+ *
+ * generatedAt(T3 — 재사용된 RSC 프리페치의 신선도 판정용)도 여기서 함께 고정한다:
+ * EMPTY_INITIAL_DATA 경로는 0, 정상 조립 경로는 settle 시각(Date.now()) — 그래서 시계를
+ * 고정해 둔다.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const getVerifiedAdminContextForPage = vi.fn()
 const getLeadActionStats = vi.fn()
@@ -21,6 +25,7 @@ vi.mock("@/lib/compass/home-band", () => ({ buildCompassPipelineBand }))
 const LEAD_KPIS = { unrespondedCount: 3, unresponded24hCount: 1 }
 const OVERVIEW = { generatedAt: "2026-08-28T00:00:00.000Z" }
 const COMPASS = { down: false, todayDemoCount: 2, upcomingActionCount: 5, bdOpenCount: 7 }
+const NOW = new Date("2026-08-28T00:00:00.000Z")
 
 async function loadPrefetch() {
   const mod = await import("@/lib/admin/crm/home-prefetch")
@@ -28,10 +33,16 @@ async function loadPrefetch() {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(NOW)
   vi.clearAllMocks()
   getLeadActionStats.mockResolvedValue(LEAD_KPIS)
   getAdminCrmOverview.mockResolvedValue(OVERVIEW)
   buildCompassPipelineBand.mockResolvedValue(COMPASS)
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe("prefetchCrmHomeInitialData 보안 게이트", () => {
@@ -39,7 +50,12 @@ describe("prefetchCrmHomeInitialData 보안 게이트", () => {
     getVerifiedAdminContextForPage.mockResolvedValue(null)
 
     const prefetch = await loadPrefetch()
-    expect(await prefetch()).toEqual({ leadActionKpis: null, overview: null, compassPipeline: null })
+    expect(await prefetch()).toEqual({
+      leadActionKpis: null,
+      overview: null,
+      compassPipeline: null,
+      generatedAt: 0,
+    })
 
     expect(getLeadActionStats).not.toHaveBeenCalled()
     expect(getAdminCrmOverview).not.toHaveBeenCalled()
@@ -50,7 +66,12 @@ describe("prefetchCrmHomeInitialData 보안 게이트", () => {
     getVerifiedAdminContextForPage.mockResolvedValue({ role: "PARTNER", userId: "u1" })
 
     const prefetch = await loadPrefetch()
-    expect(await prefetch()).toEqual({ leadActionKpis: null, overview: null, compassPipeline: null })
+    expect(await prefetch()).toEqual({
+      leadActionKpis: null,
+      overview: null,
+      compassPipeline: null,
+      generatedAt: 0,
+    })
 
     expect(getAdminCrmOverview).not.toHaveBeenCalled()
   })
@@ -60,7 +81,12 @@ describe("prefetchCrmHomeInitialData 보안 게이트", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
 
     const prefetch = await loadPrefetch()
-    expect(await prefetch()).toEqual({ leadActionKpis: null, overview: null, compassPipeline: null })
+    expect(await prefetch()).toEqual({
+      leadActionKpis: null,
+      overview: null,
+      compassPipeline: null,
+      generatedAt: 0,
+    })
 
     errorSpy.mockRestore()
   })
@@ -75,6 +101,7 @@ describe("prefetchCrmHomeInitialData 데이터 조립", () => {
       leadActionKpis: LEAD_KPIS,
       overview: OVERVIEW,
       compassPipeline: COMPASS,
+      generatedAt: NOW.getTime(),
     })
   })
 
@@ -87,6 +114,7 @@ describe("prefetchCrmHomeInitialData 데이터 조립", () => {
       leadActionKpis: LEAD_KPIS,
       overview: null,
       compassPipeline: COMPASS,
+      generatedAt: NOW.getTime(),
     })
   })
 })

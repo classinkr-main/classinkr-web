@@ -196,6 +196,11 @@ export default function AdminShell({
           if (!response.ok || !data) {
             clearAdminSessionStorage()
             router.replace("/admin/login")
+            // T5 — staleTimes.dynamic(180초)로 클라이언트 라우터 캐시가 이전에 이 세션으로
+            // 받은 admin 페이지의 RSC 응답을 최대 180초까지 재사용할 수 있다. refresh()로
+            // 그 캐시를 비워야 이후 다른 admin 경로로의 소프트 내비게이션이 서버에서 다시
+            // 인증을 확인한다(AdminSidebar의 handleLogout과 같은 규약).
+            router.refresh()
             return
           }
 
@@ -221,6 +226,8 @@ export default function AdminShell({
         } catch {
           clearAdminSessionStorage()
           router.replace("/admin/login")
+          // T5 — 위와 같은 이유(라우터 캐시 재사용 차단).
+          router.refresh()
         }
 
         return
@@ -234,6 +241,8 @@ export default function AdminShell({
       if (!user) {
         clearAdminSessionStorage()
         router.replace("/admin/login")
+        // T5 — 위와 같은 이유(라우터 캐시 재사용 차단).
+        router.refresh()
         return
       }
 
@@ -258,6 +267,8 @@ export default function AdminShell({
         clearAdminSessionStorage()
         await supabase.auth.signOut()
         router.replace("/admin/login")
+        // T5 — 위와 같은 이유(라우터 캐시 재사용 차단).
+        router.refresh()
         return
       }
 

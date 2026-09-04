@@ -2,6 +2,10 @@
 
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
+// PrefetchKind는 next/navigation이 재수출하지 않는 런타임 enum이라 내부 경로에서 직접 가져온다
+// (next.config.ts·이 파일의 T2 주석 참조 — AUTO는 정적 셸만, FULL은 이 dynamic 페이지의
+// 서버 프리페치까지 포함해 받는다). 값(런타임 enum)이 필요해 type-only import로는 안 된다.
+import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types"
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ChevronLeft,
@@ -403,6 +407,11 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
   const prefetchedHrefs = useRef(new Set<string>())
   const warmedHrefs = useRef(new Set<string>())
   const warmupTimerRef = useRef<number | null>(null)
+  // href -> 마지막 FULL 프리페치 시각(ms epoch). prefetchedHrefs와 달리 href당 1회로 막지
+  // 않는다(T2) — Next가 신선한 FULL 엔트리는 중복 요청을 스킵하고 오래된 엔트리는 알아서
+  // 갱신해 주므로, 이 Map은 마우스가 같은 탭을 여러 번 훑고 지나가는 hover 폭주만 30초
+  // 간격으로 누른다.
+  const fullPrefetchThrottleRef = useRef(new Map<string, number>())
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false
     return localStorage.getItem("admin_sidebar_collapsed") === "true"
@@ -524,12 +533,42 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
     }
   }, [router])
 
+  // T2 — hover/focus/pointerdown(=이동 의도) 시점에 AUTO(정적 셸)뿐 아니라 FULL 프리페치도
+  // 태운다. /admin은 layout.tsx가 force-dynamic이라 클릭 시점에만 AUTO를 쏘면 그 페이지의
+  // 서버 프리페치(overview·CRM·branch 등 1.2초 예산 포함)까지 클릭 뒤에야 시작돼 매번
+  // loading.tsx 스켈레톤을 본다 — FULL은 동적 데이터까지 포함해 미리 받아 두므로 그 서버
+  // 왕복이 hover 시점으로 앞당겨지고 클릭은 이미 받아 둔 캐시로 즉시 이동한다. FULL 엔트리는
+  // staleTimes.static(기본 300초) 동안 라우터 캐시에 남는다.
+  // prefetchedHrefs(AUTO, href당 1회)와 달리 이 호출은 href당으로 막지 않는다 — Next가 신선한
+  // FULL 엔트리는 중복 요청을 스스로 스킵하고 오래된 엔트리는 갱신해 주므로, 대신 위
+  // fullPrefetchThrottleRef로 href당 30초 스로틀만 걸어 hover 폭주를 막는다.
+  const prefetchAdminRouteFull = useCallback((href: string) => {
+    const now = Date.now()
+    const last = fullPrefetchThrottleRef.current.get(href)
+    if (last !== undefined && now - last < 30_000) return
+    fullPrefetchThrottleRef.current.set(href, now)
+
+    try {
+      router.prefetch(href, { kind: PrefetchKind.FULL })
+    } catch {
+      // Prefetch is an optimization only.
+    }
+  }, [router])
+
   // trigger="click"은 CLICK_SKIP_WARMUP_URLS[href]에 등록된 URL(그 화면 자신의 RSC 프리페치가
   // 이미 담당)을 건너뛴다 — click은 곧장 그 프리페치를 다시 태우는 네비게이션으로 이어지므로
   // 클릭 시점의 추가 fetch는 서버 이중 계산만 낳는다. hover/focus/pointerdown(기본값)은 전부
   // 예열한다 — 클릭으로 이어질지 불확실한 신호라 RSC가 비었을 때의 폴백 값을 살려 둘 가치가 있다.
   const warmAdminTab = useCallback((href: string, trigger: "click" | "hover" = "hover") => {
     prefetchAdminRoute(href)
+
+    // click은 그 자체가 네비게이션이라 서버 왕복을 이미 태운다 — FULL을 또 쏘지 않는다(T2).
+    // hover 완료(scheduleWarmAdminTab의 180ms 디바운스 뒤 여기로 옴)·focus·pointerdown·
+    // touchstart는 전부 이동 의도이므로 FULL을 태운다. warmedHrefs 이하(href당 1회) 가드보다
+    // 먼저 둬서, 같은 탭을 다시 hover해도(30초 지났으면) FULL이 다시 나가게 한다.
+    if (trigger !== "click") {
+      prefetchAdminRouteFull(href)
+    }
 
     if (warmedHrefs.current.has(href)) return
     warmedHrefs.current.add(href)
@@ -544,7 +583,7 @@ function AdminSidebarContent({ role, name, email, navPreset, navOverrides }: Pro
     // 항목이 {url, cacheKey}면 그 캐시 키로 데운다 — 소비 측이 커스텀 cacheKey를 쓰는 URL
     // (캠페인 요약의 perf·insights, 캘린더 연동 상태 등)은 표의 항목 자체가 키를 들고 있다.
     warmAdminRequestCacheQueued(items, { ttlMs: 60_000 })
-  }, [prefetchAdminRoute])
+  }, [prefetchAdminRoute, prefetchAdminRouteFull])
 
   const scheduleWarmAdminTab = useCallback((href: string) => {
     prefetchAdminRoute(href)

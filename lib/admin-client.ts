@@ -585,17 +585,38 @@ export async function adminFetchJson<T>(input: string, init?: AdminFetchInit) {
  * 그려지게 하는 것이 목적이다(prop은 그 회차 렌더에만 존재한다).
  *
  * 네트워크 응답과 동일한 규약을 따른다 — 같은 cacheKey, 같은 TTL/보존창 계산, 같은 계층 선택.
- * 이미 더 최신 엔트리가 있으면(사용자가 새로고침을 눌러 방금 받아온 경우) 덮어쓰지 않는다.
+ *
+ * generatedAt(T4) — 이 프리페치가 서버에서 실제로 만들어진 시각(ms epoch)을 넘기면 그 값이
+ * savedAt이 된다(생략 시 지금까지처럼 Date.now()). staleTimes.dynamic(180초)로 클라이언트
+ * 라우터 캐시가 예전 RSC 응답을 재사용할 수 있어, 이 함수가 호출되는 시점과 그 데이터가
+ * 실제로 만들어진 시점이 최대 180초 어긋날 수 있다 — generatedAt을 savedAt으로 써야
+ * expiresAt/keepUntil이 "언제 실제로 계산됐는가" 기준으로 계산되고, 오래된 시드는
+ * (ttlMs는 지났지만 keepUntil 안에 있는) "만료됐지만 SWR 가능" 상태로 정확히 떨어진다 —
+ * 소비처는 그 상태를 stale-while-revalidate로 즉시 서빙하면서 백그라운드로 재검증한다
+ * (adminFetchJsonCachedInternal 참조). 신선하다고 우기지 않는다.
+ *
+ * 아래 가드(이미 더 최신 엔트리가 있으면 덮어쓰지 않는다)는 generatedAt이 없던 시절에는
+ * 사실상 무의미했다 — savedAt이 매 호출마다 Date.now()였으므로 "기존 엔트리가 이번
+ * savedAt보다 같거나 늦다"는 같은 밀리초에 두 번 불릴 때만 우연히 성립했다(동일 컴포넌트가
+ * 같은 렌더에서 중복 호출하는 경우의 방어 정도). generatedAt을 넘기는 호출부터는 진짜
+ * 의미가 생긴다 — 재사용된 오래된 RSC 시드가, 그 사이 사용자가 새로고침해 이미 받아온
+ * 더 최신 네트워크 응답을 덮어쓰는 것을 막는다.
  */
 export function seedAdminRequestCache<T>(
   input: string,
   data: T,
-  options: { cacheKey?: string; ttlMs?: number; staleWhileRevalidateMs?: number; persistTo?: AdminPersistTier } = {}
+  options: {
+    cacheKey?: string
+    ttlMs?: number
+    staleWhileRevalidateMs?: number
+    persistTo?: AdminPersistTier
+    generatedAt?: number
+  } = {}
 ) {
   const cacheKey = getAdminRequestCacheKey(input, undefined, options.cacheKey)
   const ttlMs = options.ttlMs ?? DEFAULT_ADMIN_CACHE_TTL_MS
   const staleWindowMs = options.staleWhileRevalidateMs ?? DEFAULT_ADMIN_STALE_WHILE_REVALIDATE_MS
-  const savedAt = Date.now()
+  const savedAt = options.generatedAt ?? Date.now()
 
   const existing = readAdminCache<T>(cacheKey, true)
   if (existing && existing.savedAt >= savedAt) return

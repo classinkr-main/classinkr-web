@@ -243,3 +243,47 @@ describe("서버 프리페치 시드", () => {
     expect(client.getCachedAdminJson(CRM_URL)).toEqual({ fresh: true })
   })
 })
+
+// T4 — generatedAt(재사용된 RSC 프리페치가 실제로 만들어진 시각)을 넘기면 savedAt이 그 값이
+// 된다. 이전(옵션 없이 항상 Date.now())에는 "이미 더 최신 엔트리가 있으면 덮어쓰지 않는다"
+// 가드가 사실상 무의미했다 — 두 호출의 savedAt이 둘 다 "지금"이라 같은 밀리초에 불릴 때만
+// 우연히 성립했다. generatedAt을 넘겨야 진짜 과거/미래를 비교할 수 있다.
+describe("generatedAt 기반 시드 신선도(T4)", () => {
+  it("기존 엔트리보다 오래된 generatedAt으로 심으면 덮어쓰지 않는다", () => {
+    const newer = Date.now()
+    const older = newer - 60_000
+
+    // 더 최신 엔트리(예: 사용자가 새로고침해 방금 받은 네트워크 응답)가 이미 있는 상태에서,
+    // staleTimes.dynamic으로 재사용된 오래된 RSC 시드가 뒤늦게 도착한 경우를 흉내낸다.
+    client.seedAdminRequestCache(CRM_URL, { v: "network-fresh" }, { ttlMs: 120_000, generatedAt: newer })
+    client.seedAdminRequestCache(CRM_URL, { v: "stale-rsc-seed" }, { ttlMs: 120_000, generatedAt: older })
+
+    expect(client.getCachedAdminJson(CRM_URL)).toEqual({ v: "network-fresh" })
+  })
+
+  it("기존 엔트리보다 새로운 generatedAt으로 심으면 덮어쓴다", () => {
+    const older = Date.now() - 60_000
+    const newer = Date.now()
+
+    client.seedAdminRequestCache(CRM_URL, { v: "old-seed" }, { ttlMs: 120_000, generatedAt: older })
+    client.seedAdminRequestCache(CRM_URL, { v: "new-seed" }, { ttlMs: 120_000, generatedAt: newer })
+
+    expect(client.getCachedAdminJson(CRM_URL)).toEqual({ v: "new-seed" })
+  })
+
+  it("과거 generatedAt으로 심은 엔트리는 ttl은 지났어도 keepUntil 안에서는 allowExpired로 읽힌다", () => {
+    // staleTimes.dynamic(180초)로 재사용된 RSC 시드가 실제로는 60초 전 것이었던 경우.
+    const generatedAt = Date.now() - 60_000
+    client.seedAdminRequestCache(
+      CRM_URL,
+      { v: "aged-seed" },
+      { ttlMs: 10_000, staleWhileRevalidateMs: 300_000, generatedAt }
+    )
+
+    // ttlMs(10초)는 이미 지났다 — "신선함"을 주장하지 않는다.
+    expect(client.getCachedAdminJson(CRM_URL, { allowExpired: false })).toBeNull()
+    // 그러나 keepUntil(생성 시점 + 300초 ≈ 지금부터 240초 뒤)까지는 살아 있어
+    // stale-while-revalidate로 즉시 서빙할 수 있다.
+    expect(client.getCachedAdminJson(CRM_URL, { allowExpired: true })).toEqual({ v: "aged-seed" })
+  })
+})
