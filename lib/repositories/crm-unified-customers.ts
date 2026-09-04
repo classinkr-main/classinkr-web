@@ -1,6 +1,9 @@
 import "server-only"
 
+import { unstable_cache, revalidateTag } from "next/cache"
+
 import { getNeoCrmCustomers } from "@/lib/admin-crm-customers-neo"
+import { ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG } from "@/lib/admin/crm/cache-tags"
 import {
   CRM_PRIORITY_BUCKET_LABELS,
   buildLeadPriorityItem,
@@ -348,19 +351,29 @@ function computeHealthDistribution(
   )
 }
 
-// ── 소스 스냅샷 60초 모듈 캐시 (7-23 감사 3-A 서버 메모이제이션) ──────────────
+// ── 소스 스냅샷 Data Cache (7-23 감사 3-A 서버 메모이제이션 → 콜드 인스턴스 대응 승격) ──
 // 필터/검색/페이지/뷰가 바뀔 때마다 6개 소스를 전부 다시 모아 행을 재조립했다
 // (실측 0.8~1.6s). 조립 결과는 옵션과 무관한 "필터 이전" 스냅샷이므로 한 번 만들어
-// 60초 공유한다. NEO 모듈 캐시(lib/admin-crm-customers-neo.ts:132)와 같은 패턴·같은
-// TTL. health-distribution 라우트는 getCrmUnifiedHealthDistribution()으로 이 스냅샷만
+// 60초 공유한다. NEO 모듈 캐시(lib/admin-crm-customers-neo.ts:132)와 같은 TTL.
+// health-distribution 라우트는 getCrmUnifiedHealthDistribution()으로 이 스냅샷만
 // 태우고 필터·정렬 등 후처리는 건너뛴다(하단 참고).
+//
+// 예전엔 인스턴스 모듈 메모(let 캐시 + in-flight promise + generation 유사 가드)였다 —
+// Vercel Fluid 인스턴스가 콜드일 때마다 비어 있어 매 요청이 6개 소스 전량 재수집을 물었다.
+// unstable_cache(Data Cache)는 인스턴스 간 공유되고 Next 16에서 stale-while-revalidate라
+// 콜드 인스턴스에서도 다른 인스턴스가 데운 값을 즉시 돌려준다. 동시 요청 중복 계산 방지
+// (구 in-flight promise)는 unstable_cache가 대신하므로 별도 가드를 두지 않는다 — 남는 차이는
+// "완전히 빈 캐시에 동시에 두 요청이 도착하는" 드문 경합에서 중복 계산이 한 번 더 일어날 수
+// 있다는 것뿐이고, 하루 수십 건 수준의 어드민 트래픽에서는 감수할 만하다.
 // - 태그는 스냅샷에 넣지 않는다 — 요청마다 getAllCustomerTagsMap(자체 30초 캐시,
 //   쓰기 시 즉시 무효화)을 읽어 부착하므로 태그 추가/삭제가 이 TTL을 기다리지 않는다.
 // - 모든 소스가 성공했을 때만 저장(NEO의 `if (value.ok)`와 동일 원칙) — 부분 실패
-//   스냅샷을 60초 고정하지 않고 다음 요청이 즉시 재시도한다.
+//   스냅샷을 60초 고정하지 않고 다음 요청이 즉시 재시도한다. unstable_cache는 throw한
+//   호출을 캐시에 쓰지 않으므로(성공 값만 저장), incomplete면 여기서 던져 이 성질을 지킨다.
 // - options.now가 주어진 호출(테스트·고정 시각)은 캐시를 읽지도 쓰지도 않는다.
-// - 이 파일에는 쓰기 경로가 없다. 리드 상태 등 소스 쓰기는 TTL(≤60초)로 수렴하며,
-//   즉시 반영이 필요한 쓰기 라우트가 생기면 invalidateCrmUnifiedSourceSnapshot() 호출.
+// - 리드 쓰기(lib/repositories/leads.ts의 invalidateLeadReadCaches)와 소스 링크 확정/해제/
+//   생성 라우트(app/api/admin/crm/source-links/*)가 이 태그를 revalidateTag(tag, "max")로
+//   건다 — 쓰기 직후 다음 읽기가 SWR로 재계산을 트리거한다.
 interface CrmUnifiedSourceSnapshot {
   rows: CrmUnifiedCustomerRow[]
   warnings: string[]
@@ -373,33 +386,37 @@ interface CrmUnifiedSourceSnapshot {
   complete: boolean
 }
 
-let sourceSnapshotCache: { at: number; value: CrmUnifiedSourceSnapshot } | null = null
-// TTL 만료 직후 동시 요청(코크핏 도넛·통합 목록이 겹쳐 뜨는 경우 등)이 각각 전량
-// 재수집하는 창을 닫는다 — lib/repositories/crm-priority-queue.ts의 in-flight 패턴과 동일.
-let sourceSnapshotInFlight: Promise<CrmUnifiedSourceSnapshot> | null = null
-const SOURCE_SNAPSHOT_TTL_MS = 60_000
+// 부분 실패 스냅샷을 감싸 unstable_cache가 캐시하지 않고 던지게 하되, 호출부는 이 값을
+// 그대로 반환할 수 있도록 스냅샷 자체를 실어 나른다(에러 텍스트만 던지면 값이 사라진다).
+class IncompleteCrmUnifiedSnapshotError extends Error {
+  constructor(readonly snapshot: CrmUnifiedSourceSnapshot) {
+    super("crm unified customers snapshot incomplete; skip Data Cache write")
+  }
+}
+
+const getCachedSourceSnapshot = unstable_cache(
+  async () => {
+    const snapshot = await loadSourceSnapshot(new Date())
+    if (!snapshot.complete) throw new IncompleteCrmUnifiedSnapshotError(snapshot)
+    return snapshot
+  },
+  [ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG],
+  { revalidate: 60, tags: [ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG] }
+)
 
 export function invalidateCrmUnifiedSourceSnapshot() {
-  sourceSnapshotCache = null
+  revalidateTag(ADMIN_CRM_UNIFIED_SNAPSHOT_CACHE_TAG, "max")
 }
 
 async function getSourceSnapshot(now: Date, bypassCache: boolean): Promise<CrmUnifiedSourceSnapshot> {
   if (bypassCache) return loadSourceSnapshot(now)
 
-  const cached = sourceSnapshotCache
-  if (cached && Date.now() - cached.at < SOURCE_SNAPSHOT_TTL_MS) return cached.value
-  if (sourceSnapshotInFlight) return sourceSnapshotInFlight
-
-  const request = loadSourceSnapshot(now)
-    .then((value) => {
-      if (value.complete) sourceSnapshotCache = { at: Date.now(), value }
-      return value
-    })
-    .finally(() => {
-      sourceSnapshotInFlight = null
-    })
-  sourceSnapshotInFlight = request
-  return request
+  try {
+    return await getCachedSourceSnapshot()
+  } catch (error) {
+    if (error instanceof IncompleteCrmUnifiedSnapshotError) return error.snapshot
+    throw error
+  }
 }
 
 // 소스 수집 + 행 조립 + 전환 중복 접기까지의 "필터 이전" 단계. 행의 우선순위 점수는
@@ -786,7 +803,7 @@ export async function getCrmUnifiedCustomers(
   }
 }
 
-// health-distribution 라우트 전용 최소 경로 — 소스 스냅샷(60초 캐시 + in-flight dedupe)만
+// health-distribution 라우트 전용 최소 경로 — 소스 스냅샷(unstable_cache 60초, Data Cache)만
 // 태우고, 도넛 숫자와 무관한 후처리(태그 부착·필터·세그먼트별 viewCounts 8회 재순회·
 // sortPriorityItems 전량 정렬·오너 집계)는 전부 건너뛴다. 카운트 산식은
 // computeHealthDistribution을 그대로 재사용해 getCrmUnifiedCustomers().healthDistribution과
