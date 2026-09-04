@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { unstable_cache } from "next/cache"
+import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { selectKpiRows, KPI_METRICS } from "@/lib/branch/parsers/kpi"
@@ -101,7 +102,8 @@ async function assembleBranchKpiPayload(team: BranchTeam, period: BranchPeriod, 
 }
 
 const getCachedBranchKpiPayload = unstable_cache(
-  assembleBranchKpiPayload,
+  // 같은 인스턴스의 동시 미스·재검증은 shareInFlightByArgs 로 한 번만 계산한다(unstable_cache 는 인스턴스 안 동시 호출을 합치지 않는다).
+  shareInFlightByArgs("branch-kpi-assembled-v1", assembleBranchKpiPayload),
   ["branch-kpi-assembled-v1"],
   {
     revalidate: 60,

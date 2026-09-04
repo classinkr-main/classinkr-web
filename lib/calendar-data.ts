@@ -13,6 +13,7 @@ import fs from "fs"
 import path from "path"
 
 import { unstable_cache, revalidateTag } from "next/cache"
+import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 
 import {
   deleteGoogleCalendarEvent,
@@ -557,7 +558,8 @@ async function assembleCacheableAllEvents(): Promise<CacheableEventsBundle> {
 // Cache로 감싼다. 팀원 개인 Google 캘린더(getTeamEventsCalendarEvents)는 자격증명에 종속된
 // 소스라 source-cache.ts의 규약대로 캐시 밖에 남기고 getAllEvents에서 매번 새로 부른다.
 const getCachedAllCacheableEvents = unstable_cache(
-  assembleCacheableAllEvents,
+  // 같은 인스턴스의 동시 미스·재검증은 shareInFlightByArgs 로 한 번만 계산한다(unstable_cache 는 인스턴스 안 동시 호출을 합치지 않는다).
+  shareInFlightByArgs("admin-calendar-all-events-v1", assembleCacheableAllEvents),
   ["admin-calendar-all-events-v1"],
   { revalidate: 60, tags: [ADMIN_CALENDAR_EVENTS_CACHE_TAG] },
 )
@@ -672,7 +674,8 @@ async function assembleCacheableMonthEvents(year: number, month: number): Promis
 // durationMs/count 등 타이밍 필드는 캐시가 쓰여진 시점의 실측값이 최대 60초간 그대로
 // 보인다 — 이 조립 전체를 캐시하는 이상 감내하는 트레이드옵(health 라우트와 동일 논리).
 const getCachedMonthEvents = unstable_cache(
-  assembleCacheableMonthEvents,
+  // 같은 인스턴스의 동시 미스·재검증은 shareInFlightByArgs 로 한 번만 계산한다(unstable_cache 는 인스턴스 안 동시 호출을 합치지 않는다).
+  shareInFlightByArgs("admin-calendar-month-events-v1", assembleCacheableMonthEvents),
   ["admin-calendar-month-events-v1"],
   { revalidate: 60, tags: [ADMIN_CALENDAR_EVENTS_CACHE_TAG] },
 )

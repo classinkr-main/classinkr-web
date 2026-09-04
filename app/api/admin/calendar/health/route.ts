@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { unstable_cache } from "next/cache"
+import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 
 import { verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
@@ -248,7 +249,8 @@ async function assembleCacheableCalendarHealth(): Promise<SourceHealth[]> {
 
 // 콜드 Fluid 인스턴스 재계산 방지 — 이 라우트는 쿼리 파라미터가 없어 인자·캐시 키도 고정이다.
 const getCachedCalendarHealthCore = unstable_cache(
-  assembleCacheableCalendarHealth,
+  // 같은 인스턴스의 동시 미스·재검증은 shareInFlightByArgs 로 한 번만 계산한다(unstable_cache 는 인스턴스 안 동시 호출을 합치지 않는다).
+  shareInFlightByArgs("admin-calendar-health-core-v1", assembleCacheableCalendarHealth),
   ["admin-calendar-health-core-v1"],
   { revalidate: 120, tags: [ADMIN_CALENDAR_HEALTH_CACHE_TAG] },
 )

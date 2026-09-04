@@ -46,3 +46,23 @@ describe("shareInFlight", () => {
     expect(run).toHaveBeenCalledTimes(2)
   })
 })
+
+describe("shareInFlightByArgs", () => {
+  it("같은 인자끼리만 합치고 인자를 그대로 전달한다", async () => {
+    const { shareInFlightByArgs } = await import("@/lib/server/share-in-flight")
+    let resolveA!: (v: string) => void
+    const run = vi.fn((team: string, period: string) =>
+      team === "ALL" ? new Promise<string>((r) => { resolveA = r }) : Promise.resolve(`${team}:${period}`)
+    )
+    const shared = shareInFlightByArgs("k", run)
+    const a1 = shared("ALL", "Q")
+    const a2 = shared("ALL", "Q")
+    const b = shared("MKT", "Q")
+    expect(a2).toBe(a1)
+    expect(run).toHaveBeenCalledTimes(2)
+    expect(run).toHaveBeenCalledWith("ALL", "Q")
+    resolveA("all:q")
+    await expect(a1).resolves.toBe("all:q")
+    await expect(b).resolves.toBe("MKT:Q")
+  })
+})

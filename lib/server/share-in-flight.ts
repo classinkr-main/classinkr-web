@@ -26,6 +26,17 @@ export function shareInFlight<T>(key: string, run: () => Promise<T>): Promise<T>
   return promise
 }
 
+/**
+ * 인자를 받는 계산용 — 인자를 JSON 으로 키에 섞어 같은 인자끼리만 합친다.
+ * unstable_cache 콜백 자리에 그대로 끼워 넣는 용도(인자는 unstable_cache 와 같은 직렬화 규약).
+ */
+export function shareInFlightByArgs<A extends unknown[], T>(
+  key: string,
+  run: (...args: A) => Promise<T>
+): (...args: A) => Promise<T> {
+  return (...args: A) => shareInFlight(`${key}:${JSON.stringify(args)}`, () => run(...args))
+}
+
 /** 테스트 전용 — 인스턴스 상태를 비운다. */
 export function __resetShareInFlightForTests() {
   inFlight.clear()

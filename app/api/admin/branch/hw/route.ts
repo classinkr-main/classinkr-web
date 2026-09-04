@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { unstable_cache } from "next/cache"
+import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 import { BRANCH_READ_ADMIN_API_ROLES, verifyAdmin } from "@/lib/admin-auth"
 import { adminCachedJson } from "@/lib/admin-api-response"
 import { listHwInbound, listHwOutbound, listHwStock, BRANCH_HW_CACHE_TAG } from "@/lib/repositories/branch-hw"
@@ -104,7 +105,8 @@ async function assembleBranchHwPayload() {
 }
 
 const getCachedBranchHwPayload = unstable_cache(
-  assembleBranchHwPayload,
+  // 같은 인스턴스의 동시 미스·재검증은 shareInFlightByArgs 로 한 번만 계산한다(unstable_cache 는 인스턴스 안 동시 호출을 합치지 않는다).
+  shareInFlightByArgs("branch-hw-assembled-v1", assembleBranchHwPayload),
   ["branch-hw-assembled-v1"],
   { revalidate: 60, tags: [BRANCH_HW_CACHE_TAG, HARDWARE_INVENTORY_CACHE_TAG] },
 )

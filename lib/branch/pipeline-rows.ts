@@ -1,6 +1,7 @@
 import "server-only"
 
 import { unstable_cache } from "next/cache"
+import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 
 import { listBranchRevDeals, BRANCH_REV_DEALS_CACHE_TAG } from "@/lib/repositories/branch-deals"
 import {
@@ -65,7 +66,8 @@ async function assembleBranchPipelineRows(
 }
 
 const getCachedBranchPipelineRows = unstable_cache(
-  assembleBranchPipelineRows,
+  // 같은 인스턴스의 동시 미스·재검증은 shareInFlightByArgs 로 한 번만 계산한다(unstable_cache 는 인스턴스 안 동시 호출을 합치지 않는다).
+  shareInFlightByArgs("branch-pipeline-rows-v1", assembleBranchPipelineRows),
   ["branch-pipeline-rows-v1"],
   { revalidate: 60, tags: [SALES_LEDGER_IMPORTS_CACHE_TAG, BRANCH_REV_DEALS_CACHE_TAG] },
 )

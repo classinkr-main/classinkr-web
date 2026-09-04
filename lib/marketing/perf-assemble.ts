@@ -18,6 +18,7 @@
 import "server-only"
 
 import { unstable_cache } from "next/cache"
+import { shareInFlightByArgs } from "@/lib/server/share-in-flight"
 
 import { isContactedLead, isConvertedLead, isTestLead } from "@/lib/crm/lead-attribution"
 import { detectAnomalies } from "@/lib/marketing/anomaly"
@@ -399,7 +400,8 @@ export async function assembleMarketingPerf(
  * 직접 하드 만료시킨 뒤 이 함수를 부른다(아래 perf 라우트 참조).
  */
 export const getCachedMarketingPerf = unstable_cache(
-  (periodKey: PerfPeriodKey) => assembleMarketingPerf(periodKey),
+  // 같은 인스턴스의 동시 미스·재검증은 shareInFlightByArgs 로 한 번만 계산한다(unstable_cache 는 인스턴스 안 동시 호출을 합치지 않는다).
+  shareInFlightByArgs("marketing-perf-v1", (periodKey: PerfPeriodKey) => assembleMarketingPerf(periodKey)),
   ["marketing-perf-v1"],
   { revalidate: 60, tags: [MARKETING_PERF_CACHE_TAG] },
 )
