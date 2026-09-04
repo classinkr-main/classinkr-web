@@ -545,6 +545,13 @@ export async function listCampaignLinkLabels(limit = 200): Promise<CampaignLinkL
 
 export const MARKETING_CAMPAIGNS_CACHE_TAG = "marketing-campaigns";
 
+// perf 대시보드(/api/admin/marketing/perf)·insights 브리핑(lib/marketing/insights/
+// input-builder.ts)이 공유하는 assembleMarketingPerf 조립 캐시 태그 — 캐시된 함수 자체는
+// lib/marketing/perf-assemble.ts에 있다(순환 임포트를 피해 태그 문자열만 여기 둔다).
+// lib/repositories/marketing-campaigns.ts(캠페인 CRUD·링크)·channel-budgets.ts(예산 저장)·
+// meta-insights-daily.ts(Meta insights 동기화 크론)가 쓰기 성공 시 이 태그를 무효화한다.
+export const MARKETING_PERF_CACHE_TAG = "marketing-perf";
+
 // summarizeCampaigns(branch summary의 "최근 30일 캠페인" 위젯)처럼 초단위 신선도가
 // 필요 없는 소비처용 60초 캐시. getAllCampaigns의 기본 인자(limit=200, offset=0) 호출만
 // 캐시한다 — createCampaign/updateCampaign이 뮤테이션마다 태그를 무효화한다.

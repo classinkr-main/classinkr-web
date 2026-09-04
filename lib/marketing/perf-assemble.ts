@@ -17,6 +17,8 @@
 
 import "server-only"
 
+import { unstable_cache } from "next/cache"
+
 import { isContactedLead, isConvertedLead, isTestLead } from "@/lib/crm/lead-attribution"
 import { detectAnomalies } from "@/lib/marketing/anomaly"
 import { anomalyLoadSince, buildAnomalyCampaignInputs } from "@/lib/marketing/anomaly-input"
@@ -40,6 +42,7 @@ import { latestUpdatesByCampaign, listRecentUpdates } from "@/lib/repositories/c
 import { getChannelBudgets } from "@/lib/repositories/channel-budgets"
 import { getAllEventMetrics } from "@/lib/repositories/event-metrics"
 import { getMarketingLeads, type LeadRecord } from "@/lib/repositories/leads"
+import { MARKETING_PERF_CACHE_TAG } from "@/lib/repositories/marketing"
 import { listCampaigns } from "@/lib/repositories/marketing-campaigns"
 import {
   getLatestSyncedAt,
@@ -373,3 +376,30 @@ export async function assembleMarketingPerf(
     updatesFeed,
   }
 }
+
+/**
+ * 콜드 Fluid 인스턴스 재계산 방지 — 이전에는 perf 라우트의 route-local 45초 Map(perfMemo)과
+ * insights 빌더의 별도 45초 Map(buildMemo)이 같은 period="30d" 조립(리드·캠페인·Meta 스냅샷
+ * 등 7~9쿼리)을 "따로" 다시 계산했다. 둘 다 모듈 메모라 인스턴스마다 비어 있었고, 두 소비처가
+ * 캐시 엔트리를 공유하지도 못했다. unstable_cache(Data Cache)로 감싸면 인스턴스를 넘어 공유되고,
+ * 두 소비처(perf 라우트·insights 빌더)가 같은 (period) 인자로 부르면 한 엔트리를 같이 쓴다.
+ *
+ * today 옵션은 캐시 인자에 넣지 않는다 — 과거 확정 주간을 재현하는 weekly-report-builder
+ * 전용 경로이고, 그 호출부는 지금처럼 assembleMarketingPerf를 직접 부른다(이 캐시를 거치지
+ * 않음 — 고정된 과거 기간은 매번 같은 결과라 캐시 이득이 없고, today를 키에 넣으면 "오늘"이
+ * 바뀔 때마다 엔트리가 갈려 정작 실시간 조회(오늘 기준)의 캐시 재사용률만 떨어뜨린다).
+ *
+ * 페이로드는 JSON 직렬화 가능(숫자·문자열·중첩 객체·배열만) — 기준 응답 크기 ~16KB로 Data
+ * Cache 엔트리 상한에 여유가 크다.
+ *
+ * 무효화: 이 조립이 읽는 원천에 쓰는 경로가 MARKETING_PERF_CACHE_TAG를 revalidateTag("max")
+ * 한다 — lib/repositories/marketing-campaigns.ts(캠페인 CRUD·링크), channel-budgets.ts
+ * (채널 예산 저장, budgetExecutionPct KPI), meta-insights-daily.ts(Meta insights 동기화
+ * 크론의 upsertMetaInsightsDaily). 라우트의 fresh=1은 revalidateTag(tag, {expire:0})로
+ * 직접 하드 만료시킨 뒤 이 함수를 부른다(아래 perf 라우트 참조).
+ */
+export const getCachedMarketingPerf = unstable_cache(
+  (periodKey: PerfPeriodKey) => assembleMarketingPerf(periodKey),
+  ["marketing-perf-v1"],
+  { revalidate: 60, tags: [MARKETING_PERF_CACHE_TAG] },
+)
