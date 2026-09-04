@@ -11,7 +11,10 @@
 
 import "server-only"
 
+import { unstable_cache } from "next/cache"
+
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
+import { DOC_GAP_BACKLOG_CACHE_TAG } from "@/lib/chatbot/cache-tags"
 import { evaluateChatbotQuery } from "./service"
 
 const DRAFT_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-pro"
@@ -114,9 +117,15 @@ export function filterMappedZeroResultSearches(
   return searches.filter((search) => !mapped.has(normalizeGapQuery(search.query)))
 }
 
-export async function listDocGapBacklog(options: { limit?: number } = {}): Promise<DocGapBacklog> {
-  const limit = options.limit ?? 30
-
+// listDocGapBacklog 는 기존에 서버 캐시가 전혀 없었다 — 문서 센터 "보강 큐" 탭과 알파 준비도
+// 패널을 열 때마다(콜드 인스턴스 포함) question_clusters 조회 + docs_search_events 500행 읽기 +
+// 매핑된 클러스터 1000행 읽기까지 3개 쿼리를 매번 다시 실행했다. unstable_cache(Next Data
+// Cache)는 인스턴스 간 공유되고 stale-while-revalidate 로 응답하므로 60초 안에서는 재방문·
+// 다른 콜드 인스턴스 모두 DB 왕복 없이 같은 값을 받는다. limit 은 호출자마다 달라
+// (gaps 라우트=기본 30, alpha-readiness=100) 인자로 그대로 넘겨 캐시 키가 limit 별로 갈리게
+// 한다. 실패 시의 warning 폴백도 함께 캐시되지만 os-summary(getCachedOsSummary)와 같은 의도적
+// 선택이다 — 장애 중에도 60초 동안은 재조회를 막아 DB 부하를 늘리지 않는다.
+async function computeDocGapBacklog(limit: number): Promise<DocGapBacklog> {
   try {
     const supabase = createSupabaseAdminClient()
 
@@ -197,6 +206,17 @@ export async function listDocGapBacklog(options: { limit?: number } = {}): Promi
           : "문서 보강 큐를 조회하지 못했습니다.",
     }
   }
+}
+
+const getCachedDocGapBacklog = unstable_cache(
+  computeDocGapBacklog,
+  ["chatbot-doc-gap-backlog-v1"],
+  { revalidate: 60, tags: [DOC_GAP_BACKLOG_CACHE_TAG] }
+)
+
+export async function listDocGapBacklog(options: { limit?: number } = {}): Promise<DocGapBacklog> {
+  const limit = options.limit ?? 30
+  return getCachedDocGapBacklog(limit)
 }
 
 export interface DocDraft {
