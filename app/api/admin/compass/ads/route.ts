@@ -9,6 +9,7 @@
 // 소비 카드가 "Compass 연결 끊김"으로 강등 표시하기 위한 계약이다(무음 0 강등 금지).
 
 import { NextRequest, NextResponse } from "next/server"
+import { revalidateTag, unstable_cache } from "next/cache"
 
 import { verifyAdmin } from "@/lib/admin-auth"
 import { getCompassAdsDaily } from "@/lib/compass/bridge"
@@ -40,10 +41,6 @@ export interface CompassAdsResponse extends Partial<CompassCreativeAggregate> {
   error?: string
 }
 
-// perf 라우트와 같은 45초 서버 메모 — 실패 promise 는 즉시 비운다(에러 재생 방지).
-const MEMO_TTL_MS = 45_000
-const memo = new Map<string, { at: number; promise: Promise<CompassAdsResponse> }>()
-
 async function loadCompassAds(periodKey: PerfPeriodKey): Promise<CompassAdsResponse> {
   const period = resolvePerfPeriod(periodKey, kstToday())
   // 스파크라인 창(최근 14일)이 기간보다 앞설 수 있다(7d) — 채워 그릴 범위만큼 실제로 읽는다.
@@ -68,18 +65,18 @@ async function loadCompassAds(periodKey: PerfPeriodKey): Promise<CompassAdsRespo
   }
 }
 
-function getCompassAds(periodKey: PerfPeriodKey, fresh: boolean): Promise<CompassAdsResponse> {
-  if (!fresh) {
-    const hit = memo.get(periodKey)
-    if (hit && Date.now() - hit.at < MEMO_TTL_MS) return hit.promise
-  }
-  const promise = loadCompassAds(periodKey)
-  memo.set(periodKey, { at: Date.now(), promise })
-  promise.catch(() => {
-    if (memo.get(periodKey)?.promise === promise) memo.delete(periodKey)
-  })
-  return promise
-}
+// perf 라우트(app/api/admin/marketing/perf/route.ts)와 같은 배선 — route-local 45초
+// Map(memo)은 Vercel Fluid 콜드 인스턴스마다 비어 있었다. unstable_cache(60초)로 교체한다.
+// 이 라우트 파일은 핸들러 외 export가 금지되므로 태그를 여기 모듈 스코프 상수로만 둔다
+// (다른 쓰기 경로가 이 태그를 무효화할 일이 없다 — Compass 브리지는 우리가 쓰지 않는
+// 읽기 전용 외부 뷰라 fresh=1 수동 새로고침이 유일한 갱신 트리거다).
+const COMPASS_ADS_CACHE_TAG = "compass-ads"
+
+const getCachedCompassAds = unstable_cache(
+  loadCompassAds,
+  ["compass-ads-v1"],
+  { revalidate: 60, tags: [COMPASS_ADS_CACHE_TAG] },
+)
 
 export async function GET(req: NextRequest) {
   const authError = await verifyAdmin(req)
@@ -92,10 +89,15 @@ export async function GET(req: NextRequest) {
       { status: 400 }
     )
   }
+  const period = rawPeriod as PerfPeriodKey
   const fresh = req.nextUrl.searchParams.get("fresh") === "1"
 
   try {
-    return NextResponse.json(await getCompassAds(rawPeriod as PerfPeriodKey, fresh))
+    // fresh=1: 태그를 먼저 하드 만료시킨다({expire:0}) — 그 직후 부르는 getCachedCompassAds가
+    // 무효화된 항목을 보고 재계산하며, 계산한 새 값을 캐시에 다시 채워 넣는다(perf 라우트와
+    // 동일 패턴).
+    if (fresh) revalidateTag(COMPASS_ADS_CACHE_TAG, { expire: 0 })
+    return NextResponse.json(await getCachedCompassAds(period))
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Compass 소재 집계 실패" },
