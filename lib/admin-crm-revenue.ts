@@ -198,10 +198,12 @@ interface QueryResult<T> {
   limit: number | null
 }
 
-// 대시보드 조립은 14개 테이블을 병렬 스캔하는 무거운 경로다. months별로 짧은 TTL 캐시를 씌워
+// 대시보드 조립은 14개 테이블을 병렬 스캔하는 무거운 경로다. 짧은 TTL 캐시를 씌워
 // 연속 요청(폴링·새로고침)의 Supabase 왕복을 없앤다. 앱 밖(임포트/동기화) 변경은 최대 45초 지연 허용.
 export const ADMIN_CRM_REVENUE_CACHE_TAG = "admin-crm-revenue"
 const ADMIN_CRM_REVENUE_REVALIDATE_SECONDS = 45
+// getAdminCrmRevenueDashboard(months)가 받는 범위의 상한(=clamp 상한과 동일).
+const ADMIN_CRM_REVENUE_MAX_MONTHS = 12
 
 // 시트 status는 자유 입력이라 enum이 없다. 취소·중단 계열 키워드만 예상 매출에서 제외한다.
 const SHEET_INACTIVE_PATTERN = /취소|해지|드랍|드롭|중단|보류|cancel|drop|lost/i
@@ -782,8 +784,11 @@ function getPartnerAccumulator(
   return next
 }
 
-async function assembleAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenueDashboard> {
-  const safeMonths = Math.min(12, Math.max(3, Math.floor(months)))
+// 캐시된 조립은 항상 최대 범위(12개월)로 계산한다 — 아래 getAdminCrmRevenueDashboard(months)
+// 참고: 14개 테이블 쿼리가 전부 updated_at 최신순 limit이라 이 조립 자체는 months와 무관하게
+// 같은 행을 읽으므로, 인자를 받지 않아야 unstable_cache가 요청마다 다른 캐시 키를 만들지 않는다.
+async function assembleAdminCrmRevenueDashboard(): Promise<CrmRevenueDashboard> {
+  const safeMonths = ADMIN_CRM_REVENUE_MAX_MONTHS
   const monthKeys = getMonthKeys(safeMonths)
   const monthly = new Map<string, CrmRevenueMonthlyPoint>(
     monthKeys.map((month) => [
@@ -1531,18 +1536,50 @@ async function assembleAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenueD
   }
 }
 
-// months별로 무거운 조립 결과를 45초 캐시한다. Supabase admin 클라이언트는 모듈 레벨에서
+// 무거운 조립 결과를 45초 캐시한다. Supabase admin 클라이언트는 모듈 레벨에서
 // 서비스 롤 secret key로 생성되는 요청 무관(non-cookie) 클라이언트라 unstable_cache가 안전하다.
 // generatedAt은 캐시 본문에서 뺐으므로 캐시 body는 순수하게 유지된다.
+//
+// T3 근본 원인(admin-performance-plan 다음 라운드): 이전엔 이 unstable_cache 콜백이
+// safeMonths를 인자로 받았다 — assembleAdminCrmRevenueDashboard의 14개 테이블 쿼리는 전부
+// updated_at 최신순 limit이라 months와 무관하게 같은 행을 읽는데도, unstable_cache는
+// 인자를 캐시 키의 일부로 삼으므로(JSON.stringify(args)) months=3/6/12별로 최대 10갈래
+// 캐시 엔트리가 생겨 같은 45초 창을 나눠 썼다 — months=6 요청만 반복해도 사이에 다른
+// months 요청이 섞이면 콜드로 돌아갔다(측정: p50 1.1s, p95 9.1s — 사실상 거의 매번 재조립).
+// 실제로 months에 의존하는 건 monthly[]/range뿐이고(addMonthlyAmountByKey가 유일한 월
+// 종속 지점), 그마저도 12개월 슈퍼셋의 접미부 슬라이스로 표현할 수 있다(getMonthKeys는
+// "지금"에서 역산하는 연속 월이라 6개월 창은 12개월 창의 마지막 6개와 같다). 그래서
+// assembleAdminCrmRevenueDashboard를 인자 없이(12개월 고정) 단일 키로 캐시하고, 요청
+// months로 좁히는 건 이 아래 deriveRevenueDashboardForMonths가 캐시 밖에서 순수 슬라이스로
+// 처리한다 — T1/T2와 같은 "인자 없는" unstable_cache 패턴으로 수렴시킨 것이 수정이다.
 const getCachedAdminCrmRevenueDashboard = unstable_cache(
-  async (safeMonths: number) => assembleAdminCrmRevenueDashboard(safeMonths),
+  assembleAdminCrmRevenueDashboard,
   [ADMIN_CRM_REVENUE_CACHE_TAG],
   { revalidate: ADMIN_CRM_REVENUE_REVALIDATE_SECONDS, tags: [ADMIN_CRM_REVENUE_CACHE_TAG] },
 )
 
+// 캐시된 12개월 대시보드에서 요청 months만큼 접미부를 잘라낸다. monthly[]·range 외의 모든
+// 필드(summary·partners·risks·documents·sheetMatches·sources·identity·externalSnapshot 등)는
+// months에 의존하지 않으므로 그대로 통과시킨다.
+function deriveRevenueDashboardForMonths(
+  dashboard: CrmRevenueDashboard,
+  months: number
+): CrmRevenueDashboard {
+  const safeMonths = Math.min(ADMIN_CRM_REVENUE_MAX_MONTHS, Math.max(3, Math.floor(months)))
+  const monthly = dashboard.monthly.slice(-safeMonths)
+  const startMonth = monthly[0]?.month ?? dashboard.range.startMonth
+  const endMonth = monthly[monthly.length - 1]?.month ?? dashboard.range.endMonth
+
+  return {
+    ...dashboard,
+    range: { months: safeMonths, startMonth, endMonth },
+    monthly,
+  }
+}
+
 export async function getAdminCrmRevenueDashboard(months = 6): Promise<CrmRevenueDashboard> {
-  const safeMonths = Math.min(12, Math.max(3, Math.floor(months)))
-  const dashboard = await getCachedAdminCrmRevenueDashboard(safeMonths)
+  const dashboard = await getCachedAdminCrmRevenueDashboard()
+  const scoped = deriveRevenueDashboardForMonths(dashboard, months)
   // 캐시된 순수 body에 요청 시각을 찍는다(캐시 히트여도 최신 timestamp 반환).
-  return { ...dashboard, generatedAt: new Date().toISOString() }
+  return { ...scoped, generatedAt: new Date().toISOString() }
 }
