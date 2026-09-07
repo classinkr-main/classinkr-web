@@ -91,9 +91,8 @@ const CONTACT_RESULT_LABELS: Record<ContactLogResult, string> = {
 export interface ActivityWritebackTarget {
   /**
    * 외부 CRM 대상 레코드 id. `fromLead` 가 true 면 **리드 id**, 아니면 고객(account) id.
-   * 외부 CRM 은 리드용 별도 관계 필드를 두지 않고, 같은 3개 필드
-   * (activityRecordFrom_data / itemId / dbcRelation26)에 id 를 넣고
-   * `activityRecordFrom` 으로 리드/고객을 구분한다.
+   * 관계의 정본은 `activityRecordFrom`(다형 참조 — 허용 목록에 lead 포함) +
+   * `activityRecordFrom_data`(값) 쌍이다. `dbcRelation26` 은 고객 전용이라 리드에는 넣지 않는다.
    */
   externalAccountId: string | null
   /** 외부 CRM 담당자 id. 비우면 실행 계정이 담당자가 된다. */
@@ -121,10 +120,18 @@ export interface ActivityRecordPayload {
   dimDepart: string
   belongId: number
   activityRecordFrom: number
-  /** 연관 레코드 id. 복합 필드(activityRecordFrom_compound)로 보내면 타입 불일치로 거절된다. */
+  /**
+   * 연관 레코드 id — `activityRecordFrom` 과 짝을 이루는 다형 참조의 값 쪽.
+   * 복합 필드(`activityRecordFrom_compound`)로 묶어 보내면 타입 불일치로 거절된다.
+   */
   activityRecordFrom_data: string
   itemId: string
-  dbcRelation26: string
+  /**
+   * 고객(account) 전용 참조. describe 상 `referObjectApiKey: "account"` 이고,
+   * 실제 리드 출처 레코드(`activityRecordFrom = 11`)에서는 전부 null 이다(2026-09-07 실측).
+   * 그래서 **리드에 붙일 때는 넣지 않는다** — 리드 id 를 넣으면 고객 참조에 리드 id 가 들어간다.
+   */
+  dbcRelation26?: string
   ownerId?: string
 }
 
@@ -185,8 +192,9 @@ function buildActivityRecord(input: {
     activityRecordFrom: target.fromLead ? XIAOSHOUYI_ACTIVITY_FROM.lead : XIAOSHOUYI_ACTIVITY_FROM.account,
     activityRecordFrom_data: target.externalAccountId,
     itemId: target.externalAccountId,
-    dbcRelation26: target.externalAccountId,
   }
+  // 고객 참조는 고객일 때만. 리드 id 를 여기 넣으면 account 참조에 리드 id 가 들어간다.
+  if (!target.fromLead) payload.dbcRelation26 = target.externalAccountId
   if (target.externalOwnerId) payload.ownerId = target.externalOwnerId
 
   return { ok: true, payload }

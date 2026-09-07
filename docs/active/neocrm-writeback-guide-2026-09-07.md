@@ -75,34 +75,58 @@ Compass(`mkt.classin.co.kr`, `classinkr-main/crm`)도 같은 CRM에 같은 계�
 | 필드 | 값 | 타입 함정 |
 | --- | --- | --- |
 | `content` | 본문 한 줄 | 목록에서 한 줄로 보인다 — 줄바꿈은 접고 길면 자른다 |
-| `startTime` / `endTime` | **ms 숫자** 타임스탬프 | 문자열로 보내면 `5000047`. `endTime`을 비워도 거절된다 |
+| `startTime` | **ms 숫자** 타임스탬프 | **필수**. 문자열로 보내면 `5000047` |
 | `entityType` | 아래 3종 중 하나 | 활동에서는 *활동 유형*을 뜻한다 — 리드의 `entityType`과 의미가 다르다 |
-| `groupId` | 대상 레코드의 피드 그룹 id | **틀려도 에러가 안 난다.** §3 참고 |
+| `groupId` · `endTime` · `belongId` · `itemId` | 우리가 보내는 값들 | **describe 102필드에 없다** — §2-4. `groupId` 는 틀려도 에러가 안 난다(§3) |
 | `dimDepart` | `3632980020953825` | 필수, 자동 주입 아님 |
 | `belongId` | `1` | |
-| `activityRecordFrom` | `11`=리드, `1`=고객 | |
-| `activityRecordFrom_data` · `itemId` · `dbcRelation26` | **모두 같은 대상 id 문자열** | 복합 필드(`activityRecordFrom_compound`)로 보내면 타입 불일치로 거절 |
-| `ownerId` | 담당자 id (선택) | 비우면 실행 계정 |
+| `activityRecordFrom` | `11`=리드, `1`=고객 | 다형 참조 — 허용 목록에 `lead` 포함(§2-3) |
+| `activityRecordFrom_data` | 대상 id **문자열** | `activityRecordFrom` 과 짝을 이루는 다형 참조의 값. 복합 필드(`activityRecordFrom_compound`)로 묶어 보내면 타입 불일치로 거절 |
+| `dbcRelation26` | 고객 id — **리드면 넣지 않는다** | describe 상 `referObjectApiKey: "account"` 전용 |
+| `ownerId` | 담당자 id | **필수**(describe). 비우면 자동 주입돼 실행 계정 소유가 된다 |
 
 활동 유형 3종 (`XIAOSHOUYI_ACTIVITY_ENTITY_TYPE`):
 
 - `11010011100001` 快速沟通 — 전화·문자·카톡·메일 등 **원격 접촉**
-- `11010011100002` 线下拜访 — **우리가 고객에게 간** 방문
-- `3588972666094228` 公司参访 — **고객이 우리에게 온** 내방
+- `11010011100002` 线下拜访 — 한국팀 실사용은 **설치·배송·세팅 점검 등 현장 작업**이다
+  (실제 content: "전자칠판 설치", "하드웨어 배송을 보조함", "설치후 세팅 점검")
+- `3588972666094228` 公司参访 — 라벨은 "회사 방문". **한국팀 실사용은 방문 데모·영업 방문**이다
+  (실제 content: "7/22 방문데모…", "리첸 방문하여 추가 설명 진행"). 라벨의 문자 뜻으로 방향을 단정하지 마라.
 
 > **"데모"에 해당하는 전용 유형은 없다.** 데모는 방향에 따라 위 둘 중 하나로 접힌다.
 > 우리 `crm_tasks`에는 방향 칼럼이 없으므로 **호출자가 정해야 하고, 모르면 만들지 않는다**(`unknown_kind`).
 
 ### 2-3. 리드에 활동을 붙이는 법
 
-Compass의 조사 문서는 *"리드를 가리키는 필드 이름을 모른다"*를 단일 블로커로 잡고 있다.
-**별도 필드가 있는 게 아니다.** 같은 세 필드(`activityRecordFrom_data`/`itemId`/`dbcRelation26`)에
-리드 id를 넣고 `activityRecordFrom=11`로 구분한다.
+**2026-09-07 실측으로 확정됐다.** `activityRecordFrom` 은 다형 참조(`referObjectApiKey: "xobject"`)이고
+`multiReferObjectApiKeys` 허용 목록에 **`lead` 가 들어 있다.** 값 쪽은 `activityRecordFrom_data` 다.
 
-⚠️ 다만 **우리도 이 경로를 실행해 본 적이 없다.** `fromLead: true` 분기는 코드와 테스트에만 있고
-실제 생성으로 확인되지 않았다. 켜기 전에 §8의 확인 절차를 먼저 밟아라.
+라이브 레코드 대조:
+
+| 출처 | `activityRecordFrom` | `activityRecordFrom_data` | `dbcRelation26` |
+| --- | --- | --- | --- |
+| 리드 | `11` | 리드 id | **`null`** |
+| 고객 | `1` | 고객 id | 같은 고객 id(중복 기재) |
+
+즉 **`dbcRelation26` 은 고객 전용**이고 리드 출처 레코드에서는 전부 비어 있다.
+리드에 붙일 때 여기에 리드 id 를 넣으면 고객 참조에 리드 id 가 들어간다 — 넣지 마라.
+
+⚠️ 여전히 **실제 생성은 해 보지 않았다.** 위는 기존 레코드 조회로 확인한 것이고,
+`fromLead: true` 로 만든 payload 가 실제로 통과하는지는 미확인이다.
 
 ---
+
+### 2-4. describe 실측 (2026-09-07, 102필드)
+
+**생성 필수**: `content`, `dimDepart`, `ownerId`, `startTime`, `entityType`
+(`createdAt` 도 required 지만 `creatable: false` 라 시스템이 채운다).
+
+→ **`ownerId` 는 선택이 아니라 필수다.** 비우면 자동 주입에 기대게 되는데, 그러면 실행 계정 소유가 된다.
+
+⚠️ **`groupId` · `itemId` · `endTime` · `belongId` 는 102개 필드 목록에 없다.**
+우리 payload 는 이 넷을 보내고 있고 코드 주석은 실측이라고 적혀 있다. 레코드 조회로는 보이는 값이
+describe 에 없을 수 있으므로(피드/시스템 필드) 당장 빼지는 않았지만, **검증된 계약이 아니다.**
+첫 실제 생성 때 이 넷을 넣은 경우와 뺀 경우를 각각 시험해 확정할 것.
 
 ## 3. `groupId` — 가장 위험한 필드
 

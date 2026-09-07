@@ -4,7 +4,8 @@
 // 여기서 지키려는 것은 두 가지다.
 //   1) 모르면 만들지 않는다 — groupId·방향(kind)·시각이 없으면 payload 를 안 만든다.
 //      틀린 groupId 로도 생성은 "성공"하고 남의 피드에 꽂혀 사라지기 때문에, 조용한 실패가 최악이다.
-//   2) 리드에 붙일 때도 관계 3필드는 같은 id 를 쓰고 activityRecordFrom 으로만 갈린다.
+//   2) 관계의 정본은 activityRecordFrom(다형 참조) + activityRecordFrom_data 쌍이고,
+//      dbcRelation26 은 고객 전용이라 리드에는 넣지 않는다(2026-09-07 실측).
 
 import { describe, expect, it } from "vitest"
 
@@ -108,27 +109,27 @@ describe("buildCustomerEventWritebackPayload", () => {
     expect(result.payload.entityType).toBe(XIAOSHOUYI_ACTIVITY_ENTITY_TYPE.inboundVisit)
   })
 
-  it("관계 3필드는 모두 대상 id 를 쓴다 — 복합 필드로 보내면 타입 불일치로 거절된다", () => {
+  it("고객이면 다형 참조 쌍 + 고객 참조를 함께 쓴다 — 복합 필드로 보내면 타입 불일치로 거절된다", () => {
     const result = buildCustomerEventWritebackPayload(eventInput())
     expect(result.ok).toBe(true)
     if (!result.ok) return
 
+    expect(result.payload.activityRecordFrom).toBe(XIAOSHOUYI_ACTIVITY_FROM.account)
     expect(result.payload.activityRecordFrom_data).toBe(TARGET.externalAccountId)
-    expect(result.payload.itemId).toBe(TARGET.externalAccountId)
     expect(result.payload.dbcRelation26).toBe(TARGET.externalAccountId)
     expect(result.payload).not.toHaveProperty("activityRecordFrom_compound")
   })
 
-  it("리드에 붙일 때도 필드는 같고 activityRecordFrom 만 11 로 갈린다", () => {
-    const account = buildCustomerEventWritebackPayload(eventInput())
+  // 2026-09-07 실측: activityRecordFrom = 11 인 실제 레코드는 dbcRelation26 이 전부 null 이다.
+  // describe 에서도 dbcRelation26 은 referObjectApiKey = "account" 로 고객 전용이다.
+  it("리드면 dbcRelation26 을 넣지 않는다 — 고객 참조에 리드 id 가 들어가면 안 된다", () => {
     const lead = buildCustomerEventWritebackPayload(eventInput({ fromLead: true }))
-    expect(account.ok && lead.ok).toBe(true)
-    if (!account.ok || !lead.ok) return
+    expect(lead.ok).toBe(true)
+    if (!lead.ok) return
 
-    expect(account.payload.activityRecordFrom).toBe(XIAOSHOUYI_ACTIVITY_FROM.account)
     expect(lead.payload.activityRecordFrom).toBe(XIAOSHOUYI_ACTIVITY_FROM.lead)
-    expect(lead.payload.dbcRelation26).toBe(account.payload.dbcRelation26)
-    expect(lead.payload.itemId).toBe(account.payload.itemId)
+    expect(lead.payload.activityRecordFrom_data).toBe(TARGET.externalAccountId)
+    expect(lead.payload).not.toHaveProperty("dbcRelation26")
   })
 
   it("담당자를 안 주면 필드 자체를 빼서 실행 계정에 맡긴다", () => {
