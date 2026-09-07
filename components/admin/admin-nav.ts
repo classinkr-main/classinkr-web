@@ -32,7 +32,7 @@ import {
 export type AdminRole = "SUPER_ADMIN" | "ADMIN" | "EDITOR" | "VIEWER" | "BRANCH" | "PARTNER"
 export type AdminNavSection = "home" | "sales" | "marketing" | "cs" | "system"
 
-export type AdminNavCategory = "customer" | "growth" | "system"
+export type AdminNavCategory = "home" | "customer" | "growth" | "system"
 
 export interface AdminNavItem {
   href: string
@@ -54,6 +54,7 @@ export interface AdminNavItem {
 }
 
 export const ADMIN_NAV_CATEGORY_META: Record<AdminNavCategory, { label: string }> = {
+  home: { label: "홈" },
   customer: { label: "고객·매출" },
   growth: { label: "마케팅·분석" },
   system: { label: "시스템" },
@@ -87,7 +88,6 @@ export function normalizeAdminRole(role: string): AdminRole {
 // IA 재편(2026-07-04): 6섹션 → 4섹션 병합. "너무 세분화" 해소 — 비즈니스 분석(Analytics)은
 // marketing으로, 매출 성과(KR Team·매출 장부)는 sales로 옮겨 잡탕이던 "분석" 섹션을 해체.
 // 트래픽은 nav에서만 내렸고 /admin/traffic 독립 화면을 유지한다. Analytics가 그 화면으로 링크한다.
-// Overview는 헤더 없는 최상위 단독 항목으로 렌더(AdminSidebar가 home 섹션 헤더를 생략).
 // 섹션 부제(설명 줄)는 사이드바에서 미렌더 — 시각 밀도만 낮춘다(팔레트 그룹은 label만 사용).
 // (이전 재편) 자료 퍼널=/lead-magnets 통일, 하드웨어=SCM 운영 콘솔이라 system, 챗봇→docs?tab=gaps 흡수.
 // (2026-07-17) CS 탭 외부/내부 이원화 — "챗봇 운영·보강 큐" 겸직 항목을 "챗봇 운영"(/admin/chatbot,
@@ -100,9 +100,16 @@ export function normalizeAdminRole(role: string): AdminRole {
 // (2026-08-18 CS 진입점 단일화 + 범주 정렬) cs 섹션 3항목 → CS 콘솔 1항목(아래 CS 콘솔 주석 참조).
 // 같은 결정으로 상시 목록도 기타처럼 범주 소제목으로 묶어 렌더한다(resolveNavAccess의 primaryGroups).
 // 선언 순서를 범주 연속 블록(고객·매출 → 마케팅·분석 → 시스템)으로 정리해 "범주 묶음 = 재정렬 없는
-// 분할"을 유지한다 — Overview가 시스템 블록으로, CS 콘솔이 고객·매출 블록으로 옮겨 선언된 이유.
+// 분할"을 유지한다 — CS 콘솔이 고객·매출 블록(하드웨어 재고 뒤)으로 옮겨 선언된 이유.
 // section 필드는 계속 팔레트 그룹 라벨용이다.
+// (2026-09-01 Overview 최상단 고정 — 사이드바 정렬 요청) Overview 전용 "home" 범주를 신설해
+// ADMIN_NAV_CATEGORY_META 맨 앞에 두고 선언도 배열 맨 앞으로 옮겼다. groupNavByCategory가 범주
+// 선언 순서로 그룹을 내보내므로, 상시 목록이든 기타(super 프리셋에서 Overview가 접히는 경우)든
+// Overview의 그룹이 항상 첫 그룹으로 렌더된다. 프리셋별 상시/기타/차단 배치(NAV_PRESETS·
+// MOON_ONLY_HREFS)는 그대로다 — 이번 변경은 노출 여부가 아니라 순서만 바꾼다.
 export const ADMIN_NAV: AdminNavItem[] = [
+  { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, roles: [...ALL_STAFF, "BRANCH"], section: "home", category: "home", keywords: "홈 대시보드 overview home" },
+
   { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, roles: [...ALL_STAFF, "BRANCH"], section: "sales", category: "customer", keywords: "캘린더 일정 calendar schedule 행사 이벤트 event 웨비나 공개 행사" },
 
   // 영업·매출 — 성과(KR Team)·검수(매출 장부)·파이프라인(CRM)·산출물(견적)·재고(하드웨어)
@@ -138,8 +145,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   // 방문자/트래픽(/admin/traffic)은 nav에서만 내렸다. 화면·라우트는 독립 유지하며 Analytics가 링크한다.
   { href: "/admin/analytics", label: "Analytics", icon: BarChart2, roles: [...ALL_STAFF, "BRANCH"], section: "marketing", category: "growth", keywords: "analytics 분석 통계 방문자 트래픽 traffic 추적 pixel 계측 홈페이지 흐름" },
 
-  // 운영·시스템 — Overview는 시스템 범주라 선언도 이 블록에 둔다(범주 연속 블록 정리, 상단 주석).
-  { href: "/admin/overview", label: "Overview", icon: LayoutDashboard, roles: [...ALL_STAFF, "BRANCH"], section: "home", category: "system", keywords: "홈 대시보드 overview home" },
+  // 운영·시스템 — Overview는 맨 위 "home" 범주로 옮겨졌다(2026-09-01, 배열 상단 주석 참조).
   { href: "/admin/ops", label: "운영 상태", icon: Activity, roles: [...STAFF_ADMIN, "BRANCH"], section: "system", category: "system", keywords: "ops health 상태 통합 크론 cron automation" },
   // 회원 관리는 Settings "회원" 탭(?tab=members)으로 흡수됨 — /admin/users는 그 탭으로 redirect 스텁.
   // ⌘K 검색어(회원·사용자·권한)를 Settings 항목 keywords에 병합해 검색성 보존.

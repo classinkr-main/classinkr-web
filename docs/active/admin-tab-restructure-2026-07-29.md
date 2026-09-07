@@ -414,3 +414,22 @@ npm run build
   CS 콘솔은 고객·매출 블록(하드웨어 재고 뒤)으로 이동했다. CS 콘솔의 범주도 `system` →
   `customer`로 바꿨다: 일상 고객 지원 업무면이지 시스템 관리면이 아니다.
 - 캘린더 첫 화면 원칙은 유지된다 — 고객·매출 범주가 첫 블록이고 캘린더가 그 블록의 첫 선언이다.
+
+## 13. 2026-09-01 후속 결정 — Overview 정렬 최상단 고정
+
+이 섹션이 위 §12까지의 내용과 다른 부분에서는 이 섹션이 우선한다. 코드 SSOT는 동일하게
+`components/admin/admin-nav.ts`(범주 선언)·`components/admin/admin-nav-access.ts`(그룹 렌더)다.
+
+§12.2까지는 Overview를 시스템 블록(운영 상태·설정·개발 도구와 같은 범주)에 두고 있었다 — §4의
+"오버뷰가 저도 애매해서" 판단에 따라 기타 › 시스템 맨 뒤로 내렸던 결정의 연장이었다. 사이드바
+정렬 요청에 따라 그 노출 판단(여전히 `super` 프리셋 전용, 여전히 상시 승격 없음)은 그대로 두고
+**순서만** 바꿨다:
+
+- Overview 전용 `home` 범주를 신설해 `ADMIN_NAV_CATEGORY_META`(따라서 `ADMIN_NAV_CATEGORIES`)
+  맨 앞에 선언했다. `groupNavByCategory`가 범주 선언 순서로 그룹을 내보내므로 Overview가 속한
+  그룹은 상시 목록에서든 기타 패널에서든 항상 첫 그룹으로 렌더된다.
+- `ADMIN_NAV` 배열에서도 Overview 선언을 맨 앞(캘린더보다 앞)으로 옮겨 배열 = 범주 연속 블록
+  불변식을 유지했다(`home → customer → growth → system`).
+- 프리셋별 상시/기타/차단 배치(`NAV_PRESETS`·`MOON_ONLY_HREFS`)는 손대지 않았다 — `super` 외
+  프리셋에서는 여전히 차단(deny)이고 `super`에서는 여전히 기타로 접힌다. preset이 없는 레거시
+  계정(전 항목 상시)에서만 Overview가 사이드바 맨 위에 직접 노출된다.

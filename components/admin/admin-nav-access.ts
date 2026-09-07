@@ -61,7 +61,13 @@ export const NAV_PRESETS: Record<NavPresetKey, NavPreset> = {
   },
   super: {
     label: "최고 관리자",
+    // Overview 를 상시 맨 앞에 둔다(2026-09-04). ADMIN_NAV 선언을 배열 맨 앞으로 올리고
+    // "home" 범주를 신설한 것만으로는 부족했다 — 이 목록에 없으면 resolveNavPlacement 가
+    // folded 를 돌려주고, Overview 는 접힌 '기타' 안에서만 첫 항목이 된다(사이드바 첫 항목은
+    // 계속 캘린더). 상시 목록에 넣어야 home 그룹이 상시 첫 그룹으로 렌더된다.
+    // 다른 프리셋은 그대로다 — Overview 는 MOON_ONLY_HREFS 라 비 SUPER_ADMIN 은 여전히 deny.
     primary: [
+      "/admin/overview",
       "/admin/calendar",
       "/admin/crm",
       "/admin/quotes",

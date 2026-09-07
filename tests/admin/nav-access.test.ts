@@ -13,7 +13,7 @@ import {
   type NavAccessContext,
 } from "@/components/admin/admin-nav-access"
 
-// 기타 그룹은 3범주(고객·매출 / 마케팅·분석 / 시스템)로 묶인다.
+// 기타 그룹은 범주(홈 / 고객·매출 / 마케팅·분석 / 시스템)로 묶인다.
 // 범주는 전 항목에 붙는다 — 프리셋에 따라 상시 후보도 기타로 내려가기 때문(Task 2 Step 0).
 describe("admin nav — 기타 범주 메타", () => {
   it("assigns a category to every tab that can be folded", () => {
@@ -25,7 +25,7 @@ describe("admin nav — 기타 범주 메타", () => {
       "/admin/analytics": "growth",
       "/admin/campaigns/manage": "growth",
       "/admin/campaigns/projects": "growth",
-      "/admin/overview": "system",
+      "/admin/overview": "home",
       // CS 콘솔은 일상 고객 지원 업무면이라 customer(2026-08-18, 진입점 단일화와 함께 재범주화).
       "/admin/chatbot": "customer",
       "/admin/ops": "system",
@@ -98,7 +98,7 @@ describe("admin nav — 기타 범주 메타", () => {
     for (const category of categories) {
       if (seen[seen.length - 1] !== category) seen.push(category)
     }
-    expect(seen).toEqual(["customer", "growth", "system"])
+    expect(seen).toEqual(["home", "customer", "growth", "system"])
   })
 })
 
@@ -201,18 +201,34 @@ describe("resolveNavAccess", () => {
     expect(folded.every((group) => group.items.length > 0)).toBe(true)
   })
 
-  it("gives super 7 primary and 10 folded", () => {
-    // CS 진입점 단일화로 상시 7 → 6(CS 콘솔), 여기에 CRM 상시 합류로 7. 전체 17 = 7 + 10.
+  it("gives super 8 primary and 9 folded", () => {
+    // CS 진입점 단일화로 상시 7 → 6(CS 콘솔), 여기에 CRM 상시 합류로 7,
+    // Overview 상시 승격(2026-09-04)으로 8. 전체 17 = 8 + 9.
     const { primary, folded } = resolveNavAccess(ctx({ role: "SUPER_ADMIN", preset: "super" }))
-    expect(primary).toHaveLength(7)
-    expect(folded.flatMap((group) => group.items)).toHaveLength(10)
+    expect(primary).toHaveLength(8)
+    expect(folded.flatMap((group) => group.items)).toHaveLength(9)
+  })
+
+  it("puts Overview first in super's primary list", () => {
+    // 선언 순서(ADMIN_NAV 맨 앞 + home 범주)만으로는 부족하다 — NAV_PRESETS.super.primary 에
+    // 없으면 folded 로 떨어져 사이드바 첫 항목이 캘린더가 된다. 이 테스트가 그 회귀를 막는다.
+    const access = resolveNavAccess(ctx({ role: "SUPER_ADMIN", preset: "super" }))
+    expect(access.primary[0]?.href).toBe("/admin/overview")
+    expect(access.primaryGroups[0]?.category).toBe("home")
+    expect(access.folded.flatMap((group) => group.items).map((item) => item.href)).not.toContain(
+      "/admin/overview"
+    )
   })
 
   // 상시 범주 묶음(2026-08-18) — 소제목 렌더는 이 두 필드가 SSOT다.
   it("partitions primary into category groups without reordering", () => {
     const access = resolveNavAccess(ctx({ role: "SUPER_ADMIN", preset: "super" }))
     expect(access.primaryGroups.flatMap((group) => group.items)).toEqual(access.primary)
-    expect(access.primaryGroups.map((group) => group.category)).toEqual(["customer", "growth"])
+    expect(access.primaryGroups.map((group) => group.category)).toEqual([
+      "home",
+      "customer",
+      "growth",
+    ])
   })
 
   it("shows primary headers only for 2+ groups and 4+ items", () => {
