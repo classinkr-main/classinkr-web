@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { revalidateTag } from "next/cache"
 
-import { requireVerifiedAdminContext } from "@/lib/admin-auth"
+import {
+  CRM_STAFF_ADMIN_API_ROLES,
+  STAFF_ADMIN_API_ROLES,
+  requireVerifiedAdminContext,
+} from "@/lib/admin-auth"
 import { ADMIN_CRM_REVENUE_CACHE_TAG } from "@/lib/admin-crm-revenue"
 import { updateCrmWriteRequestStatus } from "@/lib/external-crm/xiaoshouyi-write"
 import { createSupabaseAdminClient } from "@/lib/supabase/admin"
@@ -15,7 +19,7 @@ function isWriteRequestAction(value: unknown): value is "approve" | "cancel" | "
 }
 
 export async function GET(req: NextRequest, context: RouteContext) {
-  const admin = await requireVerifiedAdminContext(req)
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   const { id } = await context.params
@@ -54,8 +58,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
   })
 }
 
+// 승인은 바깥으로 나가는 것을 허가하는 행위다 — 관리자만.
 export async function PATCH(req: NextRequest, context: RouteContext) {
-  const admin = await requireVerifiedAdminContext(req)
+  const admin = await requireVerifiedAdminContext(req, STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   const { id } = await context.params

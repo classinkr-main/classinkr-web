@@ -1,4 +1,12 @@
 import "server-only"
+import {
+  fetchXiaoshouyi,
+  getAccessToken,
+  getXiaoshouyiConfig,
+  readEnv,
+  type XiaoshouyiConfig,
+} from "@/lib/external-crm/xiaoshouyi-request"
+
 
 import { createHash } from "crypto"
 
@@ -24,14 +32,6 @@ interface XiaoshouyiObjectConfig {
   catalogSource?: "database" | "runtime"
 }
 
-interface XiaoshouyiConfig {
-  baseUrl: string
-  accessToken?: string
-  clientId?: string
-  clientSecret?: string
-  username?: string
-  password?: string
-}
 
 interface ExternalRecordRow {
   source_system: "xiaoshouyi"
@@ -297,30 +297,6 @@ const DEFAULT_OBJECTS: XiaoshouyiObjectConfig[] = [
   },
 ]
 
-function readEnv(name: string) {
-  const value = process.env[name]?.trim()
-  return value && value.length > 0 ? value : null
-}
-
-function getXiaoshouyiConfig(): XiaoshouyiConfig | null {
-  const baseUrl =
-    readEnv("XIAOSHOUYI_BASE_URL") ??
-    readEnv("XIAOSHOUYI_API_BASE_URL") ??
-    readEnv("XIAOSHOUYI_API_URL") ??
-    readEnv("COMPANY_CRM_API_URL") ??
-    readEnv("CRM_API_URL")
-
-  if (!baseUrl) return null
-
-  return {
-    baseUrl: baseUrl.replace(/\/+$/, ""),
-    accessToken: readEnv("XIAOSHOUYI_ACCESS_TOKEN") ?? readEnv("XIAOSHOUYI_SERVICE_ACCESS_TOKEN") ?? undefined,
-    clientId: readEnv("XIAOSHOUYI_CLIENT_ID") ?? undefined,
-    clientSecret: readEnv("XIAOSHOUYI_CLIENT_SECRET") ?? undefined,
-    username: readEnv("XIAOSHOUYI_USERNAME") ?? readEnv("XIAOSHOUYI_SERVICE_USERNAME") ?? undefined,
-    password: readEnv("XIAOSHOUYI_PASSWORD") ?? readEnv("XIAOSHOUYI_SERVICE_PASSWORD") ?? undefined,
-  }
-}
 
 function getSelectedObjects() {
   const selected = getSelectedObjectKeys()
@@ -651,64 +627,6 @@ function hashPayload(record: Record<string, unknown>) {
   return createHash("sha256").update(JSON.stringify(record)).digest("hex")
 }
 
-const FETCH_TIMEOUT_MS = 30_000
-const FETCH_RETRY_DELAYS_MS = [200, 800, 2000]
-
-// 외부 CRM API 호출 공통 래퍼 — 타임아웃 + 일시 오류(네트워크/429/5xx)에 지수 백오프 재시도.
-// 4xx는 자격/쿼리 문제라 재시도하지 않는다.
-async function fetchXiaoshouyi(url: string | URL, init: RequestInit): Promise<Response> {
-  let lastError: unknown = null
-
-  for (let attempt = 0; attempt <= FETCH_RETRY_DELAYS_MS.length; attempt++) {
-    if (attempt > 0) {
-      await new Promise((resolve) => setTimeout(resolve, FETCH_RETRY_DELAYS_MS[attempt - 1]))
-    }
-
-    try {
-      const response = await fetch(url, {
-        ...init,
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      })
-      if (response.status === 429 || response.status >= 500) {
-        lastError = new Error(`Xiaoshouyi transient HTTP ${response.status}`)
-        continue
-      }
-      return response
-    } catch (error) {
-      lastError = error
-    }
-  }
-
-  throw lastError instanceof Error
-    ? lastError
-    : new Error(`Xiaoshouyi request failed: ${String(lastError)}`)
-}
-
-async function getAccessToken(config: XiaoshouyiConfig) {
-  if (config.accessToken) return config.accessToken
-  if (!config.clientId || !config.clientSecret || !config.username || !config.password) return null
-
-  const body = new URLSearchParams({
-    grant_type: "password",
-    client_id: config.clientId,
-    client_secret: config.clientSecret,
-    username: config.username,
-    password: config.password,
-  })
-
-  const response = await fetchXiaoshouyi(`${config.baseUrl}/oauth2/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  })
-
-  if (!response.ok) {
-    throw new Error(`Xiaoshouyi token request failed: ${response.status}`)
-  }
-
-  const payload = (await response.json()) as { access_token?: unknown }
-  return typeof payload.access_token === "string" ? payload.access_token : null
-}
 
 async function queryXiaoshouyiRecords(
   config: XiaoshouyiConfig,

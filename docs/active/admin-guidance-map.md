@@ -58,6 +58,7 @@ API의 `verifyAdmin()` 또는 `requireVerifiedAdminContext()` 역할 검사와 �
 | Site/Admin 실행 경계 | 루트·공개·Admin 레이아웃, 공용 패키지, 앱·Vercel 분리, Cron·Webhook 소유권 | [홈페이지·Admin 실행 경계 분리 계획](site-admin-separation-plan-2026-08-28.md), [ADR-009](../adr/ADR-009-site-admin-deployment-boundary.md) |
 | 콘텐츠 | `/admin/docs`, 블로그, 행사, 자료 발행 | [콘텐츠 플레이북](playbook/03-content-pub.md) |
 | CRM·그로스 | CRM, 캠페인, 리드, Branch, 캘린더 | [그로스 플레이북](playbook/04-growth-crm.md) |
+| 외부 네오CRM 되밀기 | 리드 등록, 콜·데모·방문·메모 쓰기, 승인 큐 | [네오CRM 되밀기 지침](neocrm-writeback-guide-2026-09-07.md) |
 | 공개 챗봇·CS 운영 | RAG, 공개 챗봇, 외부 CS 대시보드 | [챗봇 플레이북](playbook/05-chatbot.md), [CS 콘솔 IA](cs-admin-console-ia-2026-07-27.md) |
 | 플랫폼·데이터 | Supabase, migration, cron, 알림, Portal V2 | [플랫폼 플레이북](playbook/06-platform-data.md), [운영 장애·Cron·Webhook 지침](operational-failure-handling-guidelines.md), [ADR-010](../adr/ADR-010-operational-failure-containment.md), [DB 마이그레이션 런북](db-migration-runbook.md), [Supabase 운영 복구·하드닝 계획](supabase-operational-recovery-hardening-plan-2026-09-01.md) |
 | KR Team·매출 장부 | `/admin/branch`, `/admin/branch/ledger`, 동기화·정합성 | [Classin KR Team 스킬](../../.codex/skills/classin-kr-team/SKILL.md) |

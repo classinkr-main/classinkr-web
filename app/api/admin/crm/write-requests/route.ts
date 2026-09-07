@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { requireVerifiedAdminContext } from "@/lib/admin-auth"
+import { CRM_STAFF_ADMIN_API_ROLES, requireVerifiedAdminContext } from "@/lib/admin-auth"
 import {
   buildCrmWritePreview,
   createCrmWriteRequest,
@@ -17,8 +17,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
 
+// 역할 게이트를 명시한다 — 예전엔 인자를 비워 메서드 기본값에 맡겼는데, 그러면 GET 이
+// VIEWER 까지 열리고(외부 CRM 에 나갈 대기열은 고객 정보다) 의도가 코드에 안 남는다.
+// 읽기·초안 작성은 CRM 실무자(EDITOR 포함 8명), 승인·전송은 관리자만 — 되돌릴 수 없는
+// 바깥 행위와 그렇지 않은 것을 갈라 둔다.
 export async function GET(req: NextRequest) {
-  const admin = await requireVerifiedAdminContext(req)
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   if (req.nextUrl.searchParams.get("preflight") === "metadata") {
@@ -58,7 +62,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const admin = await requireVerifiedAdminContext(req)
+  // 초안 작성까지는 CRM 실무자. 실제 전송은 execute 라우트에서 관리자만 한다.
+  const admin = await requireVerifiedAdminContext(req, CRM_STAFF_ADMIN_API_ROLES)
   if (admin instanceof NextResponse) return admin
 
   const body = (await req.json().catch(() => null)) as {
