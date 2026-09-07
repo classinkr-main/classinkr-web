@@ -20,34 +20,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // 이 크론은 Meta/홈페이지 아침 공지만 발송한다.
-    const [meta, homepage] = await Promise.allSettled([
-      sendLeadMorningBrief("meta"),
-      sendLeadMorningBrief("homepage"),
-    ])
-    const taskResults = { meta, homepage }
-    const errors = Object.entries(taskResults)
-      .filter(([, result]) => result.status === "rejected")
-      .map(([task, result]) => ({
-        task,
-        error:
-          result.status === "rejected"
-            ? result.reason instanceof Error
-              ? result.reason.message
-              : String(result.reason)
-            : undefined,
-      }))
-    const response = {
-      ok: errors.length === 0,
-      meta: meta.status === "fulfilled" ? meta.value : null,
-      homepage: homepage.status === "fulfilled" ? homepage.value : null,
-      errors,
-    }
-
-    return NextResponse.json(response, { status: errors.length > 0 ? 500 : 200 })
+    // 이 크론은 Meta·홈페이지를 합친 아침 카드 한 장만 발송한다.
+    const report = await sendLeadMorningBrief()
+    return NextResponse.json({ ok: true, report })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error("[cron/lead-response-alerts] failed:", message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ ok: false, error: message }, { status: 500 })
   }
 }

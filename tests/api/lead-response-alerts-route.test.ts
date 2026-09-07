@@ -4,9 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 async function loadRoute() {
   vi.resetModules()
 
-  const sendLeadMorningBrief = vi.fn().mockImplementation((reportType: string) =>
-    Promise.resolve({ status: "sent", reportType })
-  )
+  const sendLeadMorningBrief = vi
+    .fn()
+    .mockResolvedValue({ status: "sent", eventId: "event-daily", totalLeads: 4 })
 
   vi.doMock("@/lib/server/lead-morning-brief", () => ({ sendLeadMorningBrief }))
 
@@ -24,7 +24,7 @@ describe("lead response alerts cron route", () => {
     vi.resetModules()
   })
 
-  it("sends only the two morning briefs", async () => {
+  it("sends the one merged morning brief", async () => {
     process.env.CRON_SECRET = "test-cron-secret"
     const { GET, sendLeadMorningBrief } = await loadRoute()
     const request = new NextRequest("https://classin.co.kr/api/cron/lead-response-alerts", {
@@ -35,10 +35,11 @@ describe("lead response alerts cron route", () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(sendLeadMorningBrief).toHaveBeenCalledTimes(2)
-    expect(sendLeadMorningBrief).toHaveBeenNthCalledWith(1, "meta")
-    expect(sendLeadMorningBrief).toHaveBeenNthCalledWith(2, "homepage")
-    expect(body).toMatchObject({ ok: true, errors: [] })
+    expect(sendLeadMorningBrief).toHaveBeenCalledTimes(1)
+    expect(body).toMatchObject({ ok: true, report: { status: "sent", totalLeads: 4 } })
+    // 2장 체제의 응답 키는 사라졌다.
+    expect(body).not.toHaveProperty("meta")
+    expect(body).not.toHaveProperty("homepage")
     expect(body).not.toHaveProperty("responseAlerts")
   })
 })

@@ -5,10 +5,7 @@ async function loadMorningBrief() {
 
   const postJson = vi.fn().mockResolvedValue({ ok: true, status: 200 })
   const createDeliveryLog = vi.fn().mockResolvedValue(undefined)
-  const createNotificationEvent = vi
-    .fn()
-    .mockResolvedValueOnce({ id: "event-meta" })
-    .mockResolvedValueOnce({ id: "event-homepage" })
+  const createNotificationEvent = vi.fn().mockResolvedValue({ id: "event-daily" })
   const markLeadDigestRunSent = vi.fn().mockResolvedValue(undefined)
   const claimLeadDigestRun = vi.fn().mockImplementation(({ reportType }) =>
     Promise.resolve({
@@ -128,7 +125,7 @@ describe("10:10 KST lead morning brief", () => {
     vi.resetModules()
   })
 
-  it("sends separate Meta and homepage cards for one fixed 24-hour window", async () => {
+  it("Meta 와 홈페이지를 카드 한 장으로 합쳐 보낸다 — 홈페이지는 서브 요소", async () => {
     const {
       sendLeadMorningBrief,
       postJson,
@@ -137,73 +134,139 @@ describe("10:10 KST lead morning brief", () => {
     } = await loadMorningBrief()
     const now = new Date("2026-08-07T01:15:00.000Z")
 
-    const meta = await sendLeadMorningBrief("meta", now)
-    const homepage = await sendLeadMorningBrief("homepage", now)
+    const result = await sendLeadMorningBrief(now)
 
-    expect(meta).toMatchObject({
+    expect(result).toMatchObject({
       status: "sent",
-      totalLeads: 2,
+      totalLeads: 4,
+      metaLeadAdsLeadCount: 2,
+      homepageLeadCount: 2,
+      contactPageLeadCount: 1,
+      demoModalLeadCount: 1,
+      metaAttributedWebsiteLeadCount: 1,
+      unrespondedCount: 2,
+      contactedCount: 1,
+      convertedCount: 1,
       topCampaignLabel: "여름 캠페인",
       windowStart: "2026-08-06T01:10:00.000Z",
       windowEnd: "2026-08-07T01:10:00.000Z",
     })
-    expect(homepage).toMatchObject({
-      status: "sent",
-      totalLeads: 2,
-      contactPageLeadCount: 1,
-      demoModalLeadCount: 1,
-      metaAttributedWebsiteLeadCount: 1,
-    })
-    expect(claimLeadDigestRun).toHaveBeenNthCalledWith(
-      1,
+
+    // 창별 실행 레코드도 한 줄 — report_type 은 'daily'.
+    expect(claimLeadDigestRun).toHaveBeenCalledTimes(1)
+    expect(claimLeadDigestRun).toHaveBeenCalledWith(
       expect.objectContaining({
-        reportType: "meta",
+        reportType: "daily",
         windowStart: new Date("2026-08-06T01:10:00.000Z"),
         windowEnd: new Date("2026-08-07T01:10:00.000Z"),
       })
     )
 
-    const payloads = postJson.mock.calls.map((call) => call[1])
-    expect(payloads).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          msgtype: "template_card",
-          template_card: expect.objectContaining({
-            main_title: expect.objectContaining({ title: "Meta 광고 리드 · 일일 리포트" }),
-            emphasis_content: { title: "2", desc: "전체 접수" },
-            horizontal_content_list: [
-              { keyname: "미응대", value: "1개" },
-              { keyname: "상담 진행", value: "1개" },
-              { keyname: "전환", value: "0개" },
-              { keyname: "주요 캠페인", value: "여름 캠페인" },
-            ],
-          }),
-        }),
-        expect.objectContaining({
-          msgtype: "template_card",
-          template_card: expect.objectContaining({
-            main_title: expect.objectContaining({ title: "홈페이지 리드 · 아침 공지" }),
-            emphasis_content: { title: "2", desc: "전체 접수" },
-            horizontal_content_list: [
-              { keyname: "홈페이지 문의", value: "1개" },
-              { keyname: "데모 신청", value: "1개" },
-              { keyname: "Meta 광고 경유", value: "1개" },
-              { keyname: "미응대", value: "1개" },
-              { keyname: "전환", value: "1개" },
-            ],
-          }),
-        }),
-      ])
+    // 위컴에도 한 번만 나간다.
+    expect(postJson).toHaveBeenCalledTimes(1)
+    expect(postJson.mock.calls[0][1]).toMatchObject({
+      msgtype: "template_card",
+      template_card: {
+        main_title: expect.objectContaining({ title: "리드 일일 리포트" }),
+        emphasis_content: { title: "4", desc: "전체 접수" },
+        sub_title_text: "미응대 2개 / 상담 진행 1개 / 전환 1개",
+        horizontal_content_list: [
+          { keyname: "Meta 광고 리드", value: "2개" },
+          { keyname: "주요 캠페인", value: "여름 캠페인" },
+          { keyname: "홈페이지 문의", value: "1개" },
+          { keyname: "홈페이지 데모 신청", value: "1개" },
+          { keyname: "홈페이지 Meta 경유", value: "1개" },
+        ],
+      },
+    })
+    expect(markLeadDigestRunSent).toHaveBeenCalledTimes(1)
+  })
+
+  it("주말(토·일 KST)에는 일일 보고를 발송하지 않는다", async () => {
+    const { sendLeadMorningBrief, postJson, claimLeadDigestRun } = await loadMorningBrief()
+
+    // 2026-08-08 10:15 KST = 토요일, 2026-08-09 10:15 KST = 일요일
+    const saturday = await sendLeadMorningBrief(new Date("2026-08-08T01:15:00.000Z"))
+    const sunday = await sendLeadMorningBrief(new Date("2026-08-09T01:15:00.000Z"))
+
+    expect(saturday).toMatchObject({ status: "skipped", reason: "weekend" })
+    expect(sunday).toMatchObject({ status: "skipped", reason: "weekend" })
+    // 주말 구간은 실행 레코드조차 남기지 않는다 — 월요일 발송을 막지 않기 위해서다.
+    expect(claimLeadDigestRun).not.toHaveBeenCalled()
+    expect(postJson).not.toHaveBeenCalled()
+  })
+
+  it("월요일에는 일요일 구간을 담은 보고를 정상 발송한다", async () => {
+    const { sendLeadMorningBrief, postJson } = await loadMorningBrief()
+
+    const monday = await sendLeadMorningBrief(new Date("2026-08-10T01:15:00.000Z"))
+
+    expect(monday).toMatchObject({
+      status: "sent",
+      windowStart: "2026-08-09T01:10:00.000Z",
+      windowEnd: "2026-08-10T01:10:00.000Z",
+    })
+    expect(postJson).toHaveBeenCalled()
+  })
+})
+
+describe("주간 보고서가 쓰는 '마지막 일일 보고 이후' 구간", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.resetModules()
+  })
+
+  it("월요일 아침에는 금요일 10:10 KST 를 가리킨다 — 토·일 카드는 나가지 않았으므로", async () => {
+    const { getLastSentLeadMorningWindowEnd } = await loadMorningBrief()
+
+    // 2026-09-07(월) 09:20 KST — 그날 일일 카드(11:10)가 나가기 전
+    const since = getLastSentLeadMorningWindowEnd(new Date("2026-09-07T00:20:00.000Z"))
+
+    // 2026-09-04(금) 10:10 KST
+    expect(since.toISOString()).toBe("2026-09-04T01:10:00.000Z")
+  })
+
+  it("평일 오후에는 그날 아침 카드의 창 끝을 가리킨다", async () => {
+    const { getLastSentLeadMorningWindowEnd } = await loadMorningBrief()
+
+    // 2026-09-09(수) 18:00 KST
+    const since = getLastSentLeadMorningWindowEnd(new Date("2026-09-09T09:00:00.000Z"))
+
+    expect(since.toISOString()).toBe("2026-09-09T01:10:00.000Z")
+  })
+
+  it("구간 집계는 일일 카드와 같은 소스·테스트 리드 규칙을 쓴다", async () => {
+    const { summarizeLeadIntake } = await loadMorningBrief()
+    const start = new Date("2026-09-04T01:10:00.000Z")
+    const end = new Date("2026-09-07T00:20:00.000Z")
+
+    const counts = summarizeLeadIntake(
+      [
+        { id: "a", source: "meta_lead_ads", timestamp: "2026-09-05T02:00:00.000Z", status: "new" },
+        { id: "b", source: "contact_page", timestamp: "2026-09-06T02:00:00.000Z", status: "contacted" },
+        { id: "c", source: "demo_modal", timestamp: "2026-09-06T05:00:00.000Z", status: "new" },
+        // 테스트 리드는 빠진다
+        {
+          id: "d",
+          source: "meta_lead_ads",
+          timestamp: "2026-09-06T06:00:00.000Z",
+          status: "new",
+          name: "<test lead: dummy data>",
+        },
+        // 보고 대상 소스가 아니다
+        { id: "e", source: "chatbot", timestamp: "2026-09-06T07:00:00.000Z", status: "new" },
+        // 구간 밖(금요일 카드가 이미 보고함)
+        { id: "f", source: "contact_page", timestamp: "2026-09-04T00:00:00.000Z", status: "new" },
+      ] as never,
+      start,
+      end
     )
-    expect(payloads).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          template_card: expect.objectContaining({
-            sub_title_text: expect.any(String),
-          }),
-        }),
-      ])
-    )
-    expect(markLeadDigestRunSent).toHaveBeenCalledTimes(2)
+
+    expect(counts).toEqual({
+      totalLeads: 3,
+      metaLeadAdsLeadCount: 1,
+      homepageLeadCount: 2,
+      unrespondedCount: 2,
+    })
   })
 })

@@ -222,63 +222,67 @@ function buildLeadDigestWecomCard(input: EmitNotificationEventInput) {
   }
 }
 
+/**
+ * 아침 리드 카드 — Meta 광고와 홈페이지를 한 장으로 합친다(2026-09-07).
+ * 강조 숫자는 두 축 합계, 홈페이지는 "홈페이지 " 접두 행 셋으로 Meta 아래 서브 요소로 붙는다.
+ * horizontal_content_list 는 위컴이 6행까지만 그리므로 응대 상태는 sub_title_text 로 뺀다.
+ */
 function buildLeadMorningWecomCard(input: EmitNotificationEventInput) {
-  const reportType = getPayloadValue(input, "reportType") === "meta" ? "meta" : "homepage"
   const routeUrl = formatRouteUrl(input.routeUrl) ?? "https://classin.co.kr/admin/crm"
-  const totalLeads = getPayloadValue(input, "totalLeads") ?? "0"
-  const common = {
-    card_type: "text_notice",
-    source: {
-      desc: reportType === "meta" ? "Classin Marketing" : "Classin CRM",
-      desc_color: 3,
-    },
-    main_title: {
-      title: input.title,
-      desc: getPayloadValue(input, "periodLabel"),
-    },
-    emphasis_content: {
-      title: totalLeads,
-      desc: "전체 접수",
-    },
-    jump_list: [
-      {
-        type: 1,
-        title: "리드 보드 보기",
-        url: routeUrl,
-      },
-    ],
-    card_action: {
-      type: 1,
-      url: routeUrl,
-    },
-  }
-
-  const metaRows = [
-    { keyname: "미응대", value: countLabel(getPayloadValue(input, "unrespondedCount")) },
-    { keyname: "상담 진행", value: countLabel(getPayloadValue(input, "contactedCount")) },
-    { keyname: "전환", value: countLabel(getPayloadValue(input, "convertedCount")) },
-    {
-      keyname: "주요 캠페인",
-      value: getPayloadValue(input, "topCampaignLabel") ?? "없음",
-    },
-  ]
-
-  const homepageRows = [
-    { keyname: "홈페이지 문의", value: countLabel(getPayloadValue(input, "contactPageLeadCount")) },
-    { keyname: "데모 신청", value: countLabel(getPayloadValue(input, "demoModalLeadCount")) },
-    {
-      keyname: "Meta 광고 경유",
-      value: countLabel(getPayloadValue(input, "metaAttributedWebsiteLeadCount")),
-    },
-    { keyname: "미응대", value: countLabel(getPayloadValue(input, "unrespondedCount")) },
-    { keyname: "전환", value: countLabel(getPayloadValue(input, "convertedCount")) },
-  ]
+  const unresponded = countLabel(getPayloadValue(input, "unrespondedCount"))
+  const contacted = countLabel(getPayloadValue(input, "contactedCount"))
+  const converted = countLabel(getPayloadValue(input, "convertedCount"))
 
   return {
     msgtype: "template_card",
     template_card: {
-      ...common,
-      horizontal_content_list: reportType === "meta" ? metaRows : homepageRows,
+      card_type: "text_notice",
+      source: {
+        desc: "Classin CRM",
+        desc_color: 3,
+      },
+      main_title: {
+        title: input.title,
+        desc: getPayloadValue(input, "periodLabel"),
+      },
+      emphasis_content: {
+        title: getPayloadValue(input, "totalLeads") ?? "0",
+        desc: "전체 접수",
+      },
+      sub_title_text: `미응대 ${unresponded} / 상담 진행 ${contacted} / 전환 ${converted}`,
+      horizontal_content_list: [
+        {
+          keyname: "Meta 광고 리드",
+          value: countLabel(getPayloadValue(input, "metaLeadAdsLeadCount")),
+        },
+        {
+          keyname: "주요 캠페인",
+          value: getPayloadValue(input, "topCampaignLabel") ?? "없음",
+        },
+        {
+          keyname: "홈페이지 문의",
+          value: countLabel(getPayloadValue(input, "contactPageLeadCount")),
+        },
+        {
+          keyname: "홈페이지 데모 신청",
+          value: countLabel(getPayloadValue(input, "demoModalLeadCount")),
+        },
+        {
+          keyname: "홈페이지 Meta 경유",
+          value: countLabel(getPayloadValue(input, "metaAttributedWebsiteLeadCount")),
+        },
+      ],
+      jump_list: [
+        {
+          type: 1,
+          title: "리드 보드 보기",
+          url: routeUrl,
+        },
+      ],
+      card_action: {
+        type: 1,
+        url: routeUrl,
+      },
     },
   }
 }
@@ -383,10 +387,7 @@ function buildCsNoticeWecomText(input: EmitNotificationEventInput) {
 }
 
 function buildWecomPayload(input: EmitNotificationEventInput) {
-  if (
-    input.eventType === "lead.digest.daily.meta" ||
-    input.eventType === "lead.digest.daily.homepage"
-  ) {
+  if (input.eventType === "lead.digest.daily") {
     return buildLeadMorningWecomCard(input)
   }
 

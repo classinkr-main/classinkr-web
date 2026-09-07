@@ -10,7 +10,18 @@
 
 ## 1. 현재 알림 계약
 
-- `app/api/cron/lead-response-alerts/route.ts`는 이름과 달리 Meta·홈페이지 리드 **아침 공지**만 보낸다.
+- `app/api/cron/lead-response-alerts/route.ts`는 이름과 달리 리드 **아침 공지**만 보낸다.
+- 아침 공지는 **카드 한 장**이다(2026-09-07 병합). 강조 숫자는 Meta 리드 광고 + 홈페이지
+  문의·데모의 합계이고, 홈페이지는 `홈페이지 …` 접두 행 셋으로 Meta 아래 서브 요소로 붙는다.
+  그 전에는 Meta 카드와 홈페이지 카드가 따로 나갔다.
+  - 실행 레코드도 창당 한 줄이다 — `lead_digest_runs.report_type = 'daily'`.
+    `meta`/`homepage` 값은 병합 이전 과거 행에만 남는다.
+  - 위컴 `horizontal_content_list`는 6행까지만 그린다. 행을 늘리려면 무엇을
+    `sub_title_text`로 내릴지 먼저 정한다.
+- 이 아침 공지는 **KST 토·일에 발송하지 않는다**(2026-09-07). 크론은 매일 그대로 돌지만
+  `sendLeadMorningBrief`가 주말이면 `skipped/weekend`로 반환한다. 주말 구간은 실행 레코드도
+  남기지 않으므로 나중에 되살리거나 수동 발송할 때 `already_sent`로 막히지 않는다.
+  일요일 구간은 월요일 보고에 담긴다.
 - `미응답누적`, `24시간 미응답`, `48시간 미응답` Webhook 알림은 2026-09-02 폐기했다.
 - 미응답 시간과 건수는 CRM 우선순위·필터·운영 지표로 계속 사용할 수 있다. 다만 이를 외부
   Webhook 발송 이벤트로 다시 연결하지 않는다.
