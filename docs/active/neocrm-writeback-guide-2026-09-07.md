@@ -114,8 +114,6 @@ Compass(`mkt.classin.co.kr`, `classinkr-main/crm`)도 같은 CRM에 같은 계�
 ⚠️ 여전히 **실제 생성은 해 보지 않았다.** 위는 기존 레코드 조회로 확인한 것이고,
 `fromLead: true` 로 만든 payload 가 실제로 통과하는지는 미확인이다.
 
----
-
 ### 2-4. describe 실측 (2026-09-07, 102필드)
 
 **생성 필수**: `content`, `dimDepart`, `ownerId`, `startTime`, `entityType`
@@ -127,6 +125,8 @@ Compass(`mkt.classin.co.kr`, `classinkr-main/crm`)도 같은 CRM에 같은 계�
 우리 payload 는 이 넷을 보내고 있고 코드 주석은 실측이라고 적혀 있다. 레코드 조회로는 보이는 값이
 describe 에 없을 수 있으므로(피드/시스템 필드) 당장 빼지는 않았지만, **검증된 계약이 아니다.**
 첫 실제 생성 때 이 넷을 넣은 경우와 뺀 경우를 각각 시험해 확정할 것.
+
+---
 
 ## 3. `groupId` — 가장 위험한 필드
 
@@ -184,6 +184,9 @@ const groupId = config && token
 
 `ownerId`는 **지정된다.** 외부 CRM 클라이언트가 `if (!data.ownerId) data.ownerId = <로그인 계정>`으로
 채우기 때문에, 명시하면 명시값이 이긴다.
+
+⚠️ 다만 **`ownerId`는 describe 상 필수 필드다**(§2-4). "안 주면 실행 계정" 은 자동 주입에 기대는 것이지
+선택이라는 뜻이 아니다. 되밀기에서는 **항상 명시해라** — 안 그러면 전부 실행 계정 소유로 쌓인다.
 
 **작성자(`createdBy`)는 못 바꾼다.** impersonate/runAs 기능이 없다. 즉 네오CRM에서는
 "실행 계정이 만든, 담당자가 다른 사람인 기록"으로 보인다. 감사 관점에서 이건 의도된 모델이다.
@@ -265,12 +268,18 @@ EEOCRM_DIR=/path/to/eeocrm-personal bash scripts/neocrm-test/run.sh
 전부 **읽기 전용**이다. 로컬 MCP 서버(`eeocrm-personal`)가 필요하고, 로그인은 사람이 해야 한다
 (브라우저 OAuth, 토큰 2시간, 자격증명이 `hostname + OS 사용자명`에 묶여 있어 다른 기계로 복사되지 않는다).
 
-1. `crm_describe_fields({ objectApiKey: "activityrecord" })`
-   → `referObjectApiKey === "lead"`인 필드가 있는지 확인한다. 없으면 §2-3의 "같은 3필드 + `activityRecordFrom=11`"이
-   유일한 경로임이 확정된다.
-2. `crm_get_record`로 기존 활동 1건을 읽어 `groupId`와 `entityType-label`을 대조한다.
-3. 리드 1건을 읽어 `groupId`가 리드에도 있는지 확인한다 — 없으면 리드 대상 활동은 애초에 불가능하다.
-4. 그다음에야 테스트 리드 1건으로 활동 1건을 생성해 본다. **프로덕션 리드로 시험하지 마라.**
+1. ~~`crm_describe_fields({ objectApiKey: "activityrecord" })`~~ — **완료(2026-09-07).**
+   리드 전용 참조 필드는 없고 `activityRecordFrom` 이 다형 참조로 `lead` 를 받는다. §2-3 참고.
+2. ~~`activityRecordFrom = 11` 레코드 대조~~ — **완료.** `activityRecordFrom_data` 에 리드 id,
+   `dbcRelation26` 은 null. entityType 라벨도 `crm_entity_type_map` 으로 확정했다.
+3. **남음 —** 리드 1건을 단건 조회해 `groupId` 가 리드에도 있는지 확인한다.
+   없으면 리드 대상 활동에 `groupId` 를 못 채운다.
+4. **남음 —** 테스트 리드 1건으로 활동 1건 생성. `groupId`·`endTime`·`belongId`·`itemId` 를
+   넣은 경우와 뺀 경우를 각각 시험해 §2-4 를 확정한다. **프로덕션 리드로 시험하지 마라.**
+
+실행 환경(2026-09-07 실측): MCP 서버는 로컬 **3010** 포트에 뜬다(스크립트 기본값 3001 아님).
+`MCP_URL=http://localhost:3010/sse`, `EEOCRM_DIR=~/Desktop/Projects/eeocrm-personal` 로 넘겨야 붙는다.
+로그인 계정이 곧 작성자가 되므로, 누구 계정으로 로그인했는지 확인하고 시작할 것.
 
 ---
 
