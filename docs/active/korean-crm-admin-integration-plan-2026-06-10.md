@@ -11,6 +11,12 @@ related:
 
 # 한국 CRM 데이터 어드민 통합 감사 및 적용 계획
 
+> **상태 주석 (2026-09-07 추가).** 이 문서는 2026-06-10 기준 **감사·적용 계획**이다. 현재 동작의 근거로
+> 쓰지 말 것(`docs/active/admin-guidance-map.md` §1). 그 뒤 실제로 구현·실측된 것은 다음이 정본이다:
+> - 외부 네오CRM 필드 계약·순서·권한·테스트: [네오CRM 되밀기 지침](neocrm-writeback-guide-2026-09-07.md)
+> - 아래 §1 결론표의 "아직 미연동"은 이 문서 Phase 3 서술과도 어긋나 있어 2026-09-07 에 바로잡았다.
+
+
 목표: 한국 CRM 데이터가 `/admin/crm` 하위 탭에서 빠짐없이 파악되고, 수정 가능한 데이터와 읽기/검수 전용 데이터가 명확히 구분되며, 외부 CRM/시트/앱 DB가 중복 집계 없이 정리되는 상태를 만든다.
 
 운영 적용 순서와 readiness 해제 절차는 별도 runbook을 기준으로 한다: [`korean-crm-operational-unblock-runbook-2026-06-10.md`](./korean-crm-operational-unblock-runbook-2026-06-10.md)
@@ -24,7 +30,7 @@ related:
 | 홈페이지 리드 | 가능 | 가능 | `/admin/crm` | 리드 cockpit은 있음. 전환 대상이 V2 고객/딜이 아니라 legacy partner로 향해 수정 필요 |
 | 앱 내부 CRM/포털 DB | 가능 | 가능 | `/admin/crm/partners`, `/partners/customers`, `/partners/portal`, `/revenue` | V2 `customers/deals`를 canonical CRM 모델로 삼아야 함 |
 | 브랜치 REV 시트 | 가능 | 앱에서는 읽기/재동기화만 | `/admin/crm/revenue`에 비교 지표 반영 중 | `branch_rev_deals`를 통해 Phase 0 연결됨. 이름 매칭 테이블이 다음 병목 |
-| 외부 Xiaoshouyi/eeoCRM | 코드상 가능 | 코드상 가능, 운영상 제한 필요 | 아직 미연동 | MCP는 라이브 조작 도구다. 앱에는 read-only snapshot부터 넣어야 함 |
+| 외부 Xiaoshouyi/eeoCRM | 가능 | 가능(승인 큐 경유) | **연동됨** — 읽기는 일일 크론, 쓰기는 `crm_write_requests` 승인 큐 | 이 표는 2026-06-10 시점 판단이다. 같은 문서 Phase 3(아래)이 이미 구현된 큐를 설명한다 |
 
 운영 원칙:
 

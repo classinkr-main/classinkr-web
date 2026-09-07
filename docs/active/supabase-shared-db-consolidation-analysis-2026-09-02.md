@@ -168,6 +168,11 @@ ADR-009의 "Cron은 항상 한 프로젝트만 소유"를 외부 원천 단위�
 | 광고 리드 구글시트 | Compass 매시 | Compass 유지 | 리드 원본 소유권 | `compass_leads_v` |
 | Google Calendar 'MKT 데모일정' | Compass 매시 | Compass 유지 | 워크스페이스 정책상 사람 계정 OAuth만 쓰기 가능 | `compass_cal_events_v` |
 | NeoCRM(销售易) | 이 저장소 01:00 읽기 + Compass 로컬 MCP 쓰기 | 정본 결정 필요(§4) | 방향이 반대 | — |
+
+> **정정(2026-09-07).** 위 "이 저장소 01:00 읽기"는 **작동하지 않고 있었다.** 프로덕션에 `XIAOSHOUYI_BASE_URL`이
+> 없어 크론이 이 문서 기준일인 2026-09-02 부터 HTTP 200 + `skipped` 로 끝났고, `external_crm_records` 는
+> 2026-08-28 에 멈춰 있다. 이 표를 근거로 "읽기는 살아 있다"고 판단하지 말 것 —
+> 상세는 [네오CRM 되밀기 지침](neocrm-writeback-guide-2026-09-07.md) §1.
 | Channel Talk | 이 저장소 | 유지 | Compass는 라벨만 있고 API 연동 없음 | — |
 | 리드 유입 웹훅 | 양쪽 | 분리 유지 | 원천이 다름(Meta Lead Ads vs 홈페이지 폼) | `compass_leads_v.phone_key`로 상호 dedupe |
 
